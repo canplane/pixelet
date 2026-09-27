@@ -2,16 +2,17 @@
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useUiStore } from "@/app/store/ui-store.ts";
 import { alpha, color, textEdge, textStyle, weight } from "@/shared/ui/theme.ts";
+import { useWindowSize } from "@platform/viewport.ts";
 
 /** The lines said so far, fading with age; a pointer over them brings them
  * all back up to be read. */
 export function DummyChatText() {
   const { t } = useTranslation();
-  const { width } = useWindowDimensions();
+  const { width } = useWindowSize();
   const chatLines = useUiStore((s) => s.chatLines);
   const [hovered, setHovered] = useState(false);
 

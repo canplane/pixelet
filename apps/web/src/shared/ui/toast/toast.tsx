@@ -1,13 +1,14 @@
 // @pxl/web/shared/ui/toast/toast.tsx
 
 import { useEffect, useState } from "react";
-import { type GestureResponderHandlers, PixelRatio, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { type GestureResponderHandlers, PixelRatio, StyleSheet, Text, View } from "react-native";
 
 import type { f64 } from "@xpute/core/abi/word.ts";
 import { Spinner } from "@platform/icon.tsx";
 import { Motion } from "@platform/motion.tsx";
 import { LABEL, STATUS } from "@platform/palette.ts";
 import { Pill } from "@platform/pill.tsx";
+import { useWindowSize } from "@platform/viewport.ts";
 import { BackingPlace } from "@/shared/ui/backing-place.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
 import { Swap } from "@/shared/ui/motion/presence.tsx";
@@ -66,7 +67,7 @@ interface ToastProps extends ToastSpec {
  */
 export function Toast({ message, tone, fade, fadeTransition, touch }: ToastProps) {
   const error = tone === ToastTone.Error;
-  const span = useWindowDimensions().width;
+  const span = useWindowSize().width;
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState<f64>(SIDE);
 

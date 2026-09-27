@@ -1,10 +1,10 @@
 // @pxl/web/feature/map/ui/overlay/top-overlays.tsx
 
 import { useTranslation } from "react-i18next";
-import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { Defs, LinearGradient, Mask, Rect, Stop, Svg } from "react-native-svg";
 
-import { useViewportTop } from "@platform/viewport.ts";
+import { useViewportTop, useWindowSize } from "@platform/viewport.ts";
 import { useAppContext } from "@/app/provider/context.ts";
 import { useKernel } from "@/kernel/shell.ts";
 import { Presence } from "@/shared/ui/motion/presence.tsx";
@@ -28,7 +28,7 @@ export function TopOverlays() {
 
   const addressLabel = useReverseGeocode();
   const zooming = useKernel((s) => s.zooming);
-  const { width } = useWindowDimensions();
+  const { width } = useWindowSize();
   const scrimDepth = top + chrome.control + SCRIM_TAIL;
   // The fade across runs from `from` to the plateau's edge and back on the
   // other side. On a phone the plateau is the whole width, and the fades lie

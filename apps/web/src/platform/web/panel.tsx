@@ -17,11 +17,12 @@
  */
 
 import { useContext, useRef, useState } from "react";
-import { PanResponder, Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
+import { PanResponder, Pressable, StyleSheet, View } from "react-native";
 
 import type { f64 } from "@xpute/core/abi/word.ts";
 import { Motion } from "@platform/motion.tsx";
 import { useSafeArea } from "@platform/safe-area.ts";
+import { useWindowSize } from "@platform/viewport.ts";
 import { ease, SLIDE, SLIDE_AWAY } from "@/shared/ui/motion/transition.ts";
 import { PANEL_HEAD_HEIGHT, PanelPresence, type PanelProps, SHEET_RADIUS } from "@/shared/ui/panel.tsx";
 import { alpha, chrome, color } from "@/shared/ui/theme.ts";
@@ -40,7 +41,7 @@ const HANDLE = { width: 36, height: 4 };
 const TAP_SLOP = 8;
 
 export function Panel({ label, onClose, half, children }: PanelProps) {
-  const window = useWindowDimensions();
+  const window = useWindowSize();
   const { top } = useSafeArea();
   const { open, gone } = useContext(PanelPresence);
   const width = Math.min(window.width, MAX_WIDTH);
