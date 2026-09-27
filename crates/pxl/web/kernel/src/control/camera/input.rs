@@ -688,7 +688,13 @@ pub fn camera_input_step() {
             dist: Some(camera.view_state.dist * (delta_y * DOLLY_GAIN).exp()),
             ..Default::default()
         });
+        camera.wheel_zooming = true;
     }
+}
+
+/// Two fingers are on the canvas, zooming, tilting or twisting it.
+pub fn pinching() -> bool {
+    input().drag_mode == DragMode::Pinch
 }
 
 /// What the last pointer event held: what the hover cursor previews.

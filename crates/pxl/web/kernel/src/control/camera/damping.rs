@@ -122,6 +122,9 @@ pub fn camera_step(ctx: &mut TickContext) {
     if (view_state.dist - s.dist).abs() > DIST_EPS || (view_state.polar - s.polar).abs() > POLAR_EPS {
         ctx.invalidate();
     }
+    if (view_state.dist - s.dist).abs() <= DIST_EPS {
+        camera_store().wheel_zooming = false;
+    }
 
     // `climb` grants the control and answers terrain by pitching the view up
     // instead. dist stays exactly what the scale bar reads; only the angle

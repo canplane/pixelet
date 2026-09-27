@@ -16,6 +16,7 @@ use xpute_core::wire::xtp::PacketWriter;
 
 pub use crate::abi::cmd::Tracking;
 use crate::abi::cmd::{CompanionState, LocationState, LonLat, MapState, OrientationState, PlaceName, PlacePart, ScaleBar, Snapshot};
+use crate::control::camera::input::pinching;
 use crate::control::camera::store::{camera_store, CameraStatus, ViewPatch};
 use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::device_orientation::{orientation_close, orientation_open, request_orientation};
@@ -115,12 +116,12 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         azimuth: camera.view_state.azimuth,
         is_follow_mode: camera.is_follow_mode,
         camera_busy: camera.camera_status != CameraStatus::Idle,
+        zooming: pinching() || camera.wheel_zooming,
         show_compass: show_compass(),
         settings: &values,
         scale_bar: ScaleBar {
             total_meters: bar.total_meters,
             bar_width_px: bar.bar_width_px,
-            is_default_zoom: bar.is_default_zoom,
         },
         place: &|each| place_parts(page, zoom, each),
         object_sizes: &crate::layer::object::size::OBJECT_SIZES,
@@ -187,12 +188,10 @@ pub fn set_view(dist: Option<f64>, polar: Option<f64>) {
     camera_store().set_view_state(ViewPatch { dist, azimuth: None, polar });
 }
 
-/// The sensor button. Where iOS gates the compass, the shell prompted in the
-/// click and this starts nothing for it; its answer arrives on its own.
-pub fn sensors_enable() {
-    let platform = world_platform();
-    request_orientation(platform.orientation);
-    start_watching(platform.geolocation);
+/// The location card: the location alone, the compass being asked for where
+/// it is used (`tracking_action`).
+pub fn location_enable() {
+    start_watching(world_platform().geolocation);
 }
 
 /// The map is on screen and wants the sensors.

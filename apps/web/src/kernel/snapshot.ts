@@ -22,9 +22,10 @@ const INITIAL: Snapshot = {
   azimuth: 0,
   is_follow_mode: false,
   camera_busy: false,
+  zooming: false,
   show_compass: false,
   settings: [],
-  scale_bar: { total_meters: 0, bar_width_px: 0, is_default_zoom: true },
+  scale_bar: { total_meters: 0, bar_width_px: 0 },
   place: [],
   object_sizes: [],
 };

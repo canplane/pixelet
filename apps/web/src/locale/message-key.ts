@@ -40,8 +40,6 @@ export function messageKey(message: Message): string | null {
     case Message.GeolocationGenericError:
       return "device.geolocation.generic_error";
 
-    case Message.OrientationUnsupported:
-      return "device.orientation.unsupported";
     case Message.OrientationPermissionError:
       return "device.orientation.permission_error";
     case Message.OrientationPermissionDenied:

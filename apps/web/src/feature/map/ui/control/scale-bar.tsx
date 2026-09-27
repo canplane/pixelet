@@ -1,52 +1,40 @@
 // @pxl/web/feature/map/ui/control/scale-bar.tsx
 
-import { useTranslation } from "react-i18next";
-import { Pressable, StyleSheet } from "react-native";
+import { StyleSheet } from "react-native";
 import { Path, Svg, Text as SvgText } from "react-native-svg";
 
-import { Command } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_command, useKernel } from "@/kernel/shell.ts";
+import { useKernel } from "@/kernel/shell.ts";
 
 import { Presence } from "@/shared/ui/motion/presence.tsx";
-import { after, ARRIVE, SNAP } from "@/shared/ui/motion/transition.ts";
+import { LEAVE, SETTLE, SNAP } from "@/shared/ui/motion/transition.ts";
 import { useVeil } from "@/shared/ui/motion/veil.ts";
 import { Motion } from "@platform/motion.tsx";
-import { color, font } from "@/shared/ui/theme.ts";
+import { color, edge, font } from "@/shared/ui/theme.ts";
 
-const TICK_PX = 6;
+const TICK_PX = 8;
 /** Room around the strokes for their edge. */
 const PAD_PX = 3;
-const LABEL_PX = 8;
+const LABEL_PX = 11;
 /** Where the label's baseline stands below the bar's box: tucked up under
  * it, as a label sits under a map's scale. */
-const LABEL_BASELINE_PX = 5;
-/** The narrowest the control is, so a short bar still has a label and a tap
- * target under it. */
+const LABEL_BASELINE_PX = 7;
+/** The narrowest the bar is, so a short one still has room for its label. */
 const MIN_WIDTH_PX = 44;
-/** The dark edge every stroke and the label are drawn on, so the bar reads
- * over any ground. */
-const EDGE = "rgba(0, 0, 0, 0.9)";
-/** The bar as it leaves, the zoom back at its default: the one moment it is
- * shown in a color, which says what the tap did. */
-const RESET = color.reset;
 
-/** How far a distance on the map spans on screen, at the camera's zoom; a
- * tap puts the zoom back. Hidden at the default zoom.
+/** How far a distance on the map spans on screen, at the camera's zoom.
  *
  * Drawn as one path stroked twice — the edge wide and dark, the line over it
  * — so the edge runs unbroken round the ticks and the line where they meet,
  * and the label as text stroked the same way: a crisp outline on every
  * platform, where a device's text takes one soft shadow. */
-export function MapScaleBar() {
-  const { t } = useTranslation();
-  const { total_meters, bar_width_px, is_default_zoom } = useKernel((s) => s.scale_bar);
+export function MapScaleBar({ show }: { show: boolean }) {
+  const { total_meters, bar_width_px } = useKernel((s) => s.scale_bar);
   // Dimmed with the chrome around it, as a surface of its own.
   const veil = useVeil(1, SNAP);
 
   // SI units are case-sensitive: m (meter) != M (mega), km != KM — the
   // label must not be forced to upper case.
   const label: string = total_meters >= 1000 ? `${total_meters / 1000}km` : `${total_meters}m`;
-  const ink = is_default_zoom ? RESET : color.white;
 
   const width = Math.max(bar_width_px + PAD_PX * 2, MIN_WIDTH_PX);
   const barHeight = TICK_PX + PAD_PX * 2;
@@ -61,28 +49,20 @@ export function MapScaleBar() {
 
   return (
     <Presence
-      show={!is_default_zoom}
-      from={{ opacity: 0, translateY: 15 }}
-      exit={{ opacity: 0, translateY: 10 }}
-      transition={after(ARRIVE, 200)}
-      exitTransition={ARRIVE}
+      show={show}
+      from={{ opacity: 0 }}
+      exit={{ opacity: 0 }}
+      transition={SETTLE}
+      exitTransition={LEAVE}
     >
-      <Pressable
-        onPress={() => kernel_command(Command.INPUT_RESET_DIST)}
-        accessibilityRole="button"
-        accessibilityLabel={t("map.scale_bar.reset_zoom")}
-      >
-        {({ pressed }) => (
-          <Motion to={{ scale: pressed ? 0.95 : 1, opacity: veil.level }} transition={veil.transition} style={styles.root}>
-            <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-              <Path d={d} stroke={EDGE} strokeWidth={3.5} fill="none" strokeLinecap="square" />
-              <Path d={d} stroke={ink} strokeWidth={1.5} fill="none" strokeLinecap="square" />
-              <SvgText {...text} stroke={EDGE} strokeWidth={2} strokeLinejoin="round" fill={EDGE}>{label}</SvgText>
-              <SvgText {...text} fill={ink}>{label}</SvgText>
-            </Svg>
-          </Motion>
-        )}
-      </Pressable>
+      <Motion to={{ opacity: veil.level }} transition={veil.transition} style={styles.root}>
+        <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+          <Path d={d} stroke={edge} strokeWidth={3.5} fill="none" strokeLinecap="square" />
+          <Path d={d} stroke={color.white} strokeWidth={1.5} fill="none" strokeLinecap="square" />
+          <SvgText {...text} stroke={edge} strokeWidth={2} strokeLinejoin="round" fill={edge}>{label}</SvgText>
+          <SvgText {...text} fill={color.white}>{label}</SvgText>
+        </Svg>
+      </Motion>
     </Presence>
   );
 }

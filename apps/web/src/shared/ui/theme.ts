@@ -63,8 +63,6 @@ export const color = {
   send: SYSTEM.orange,
   /** One's own name in the chat. */
   self: SYSTEM.orange,
-  /** The scale bar as it leaves, the zoom put back. */
-  reset: SYSTEM.yellow,
   /** A status: something ready, as a sensor or the world is; something on
    * its way; a report that something failed, with the failure's ground and
    * edge. */
@@ -73,6 +71,9 @@ export const color = {
   alarm: SYSTEM.red,
   alarmGround: tint(SYSTEM.red, 0.06),
   alarmEdge: tint(SYSTEM.red, 0.3),
+  /** A failure's glyph over the map: its red lightened toward the white of
+   * the glyphs beside it, so it tells without shouting. */
+  alarmGlyph: tint(SYSTEM.red, 0.6),
 
   // The panels' surface: a warm paper and its bark-brown text.
   paper: "#fcf8f1",
@@ -96,6 +97,10 @@ export const color = {
   profilerGoInk: SYSTEM.green,
   profilerHaltInk: SYSTEM.yellow,
 } as const;
+
+/** The dark rim what floats over the map is drawn on — the scale, the address
+ * and the glyphs beside it — so it reads over any ground. */
+export const edge = alpha(color.black, 0.9);
 
 /** A panel's hairlines: its text, faint. */
 export const hairline = alpha(color.text, 0.1);

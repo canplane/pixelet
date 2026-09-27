@@ -191,8 +191,8 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             }
             Ok(Some(0))
         }
-        Command::SENSOR_ENABLE => {
-            ui::sensors_enable();
+        Command::SENSOR_ENABLE_LOCATION => {
+            ui::location_enable();
             applied(s)
         }
         Command::SENSOR_OPEN => {

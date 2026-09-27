@@ -12,7 +12,7 @@ use crate::control::camera::config::camera_cfg;
 use crate::control::camera::store::camera_store;
 use crate::shell::map_store::map_store;
 
-pub const SCALE_BAR_MAX_WIDTH_PX: f64 = 56.0;
+pub const SCALE_BAR_MAX_WIDTH_PX: f64 = 80.0;
 
 pub fn round_to_nice_scale(raw: f64) -> f64 {
     if raw.is_nan() || raw <= 0.0 {
@@ -37,7 +37,6 @@ pub fn round_to_nice_scale(raw: f64) -> f64 {
 pub struct ScaleBar {
     pub total_meters: f64,
     pub bar_width_px: f64,
-    pub is_default_zoom: bool,
 }
 
 /// The scale bar for a viewport `screen_height` CSS pixels tall.
@@ -62,7 +61,6 @@ pub fn mercator_zoom(screen_height: f64) -> f64 {
 }
 
 pub fn scale_bar(screen_height: f64) -> ScaleBar {
-    let dist = camera_store().view_state.dist;
     let planar_m_per_px = planar_m_per_px(screen_height);
     let mercator_scale = match map_store().map_center {
         Some(c) => {
@@ -77,6 +75,5 @@ pub fn scale_bar(screen_height: f64) -> ScaleBar {
     ScaleBar {
         total_meters,
         bar_width_px: if real_m_per_px > 0.0 { total_meters / real_m_per_px } else { 0.0 },
-        is_default_zoom: (dist - camera_cfg::view::DEFAULT_DIST).abs() < 1.0,
     }
 }

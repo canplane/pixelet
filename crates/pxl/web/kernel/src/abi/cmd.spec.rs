@@ -405,7 +405,7 @@ impl MapStatus {
     }
 }
 
-/// Where a sensor's reading is: none asked for, asked for, arriving, or failed.
+/// Where a sensor's reading is: none asked for, asked for, arriving, failed, or none to be had, the device having no such sensor.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[repr(u32)]
 pub enum DevicePoseStatus {
@@ -414,10 +414,17 @@ pub enum DevicePoseStatus {
     Loading = 1,
     Ready = 2,
     Error = 3,
+    Unavailable = 4,
 }
 
 impl DevicePoseStatus {
-    pub const ALL: [DevicePoseStatus; 4] = [DevicePoseStatus::Idle, DevicePoseStatus::Loading, DevicePoseStatus::Ready, DevicePoseStatus::Error];
+    pub const ALL: [DevicePoseStatus; 5] = [
+        DevicePoseStatus::Idle,
+        DevicePoseStatus::Loading,
+        DevicePoseStatus::Ready,
+        DevicePoseStatus::Error,
+        DevicePoseStatus::Unavailable,
+    ];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<DevicePoseStatus> {
@@ -458,14 +465,13 @@ pub enum Message {
     GeolocationGenericError = 0x0207,
 
     // ---- 0x03 which way the device is facing ----
-    OrientationUnsupported = 0x0301,
     OrientationPermissionError = 0x0302,
     OrientationPermissionDenied = 0x0303,
     OrientationSignalLost = 0x0304,
 }
 
 impl Message {
-    pub const ALL: [Message; 16] = [
+    pub const ALL: [Message; 15] = [
         Message::None,
         Message::MapLoading,
         Message::MapLoadError,
@@ -478,7 +484,6 @@ impl Message {
         Message::GeolocationPositionUnavailable,
         Message::GeolocationTimeout,
         Message::GeolocationGenericError,
-        Message::OrientationUnsupported,
         Message::OrientationPermissionError,
         Message::OrientationPermissionDenied,
         Message::OrientationSignalLost,
@@ -533,9 +538,10 @@ pub enum Command {
     /// The tab's visibility; the host rings the doorbell for it at once, since a hidden
     /// page gets no frame and hiding is the save's last sure moment.
     SENSOR_VISIBILITY = 0x1d13,
-    /// The sensor button: both sensors asked for. Where iOS gates the compass, the shell
-    /// prompted in the click and this starts nothing for it; its answer arrives on its own.
-    SENSOR_ENABLE = 0x1d14,
+    /// The search panel's location card: the location asked for. The compass is asked for
+    /// where it is used, entering follow mode (TRACKING), and never alone: nothing reads it
+    /// without the location.
+    SENSOR_ENABLE_LOCATION = 0x1d14,
     /// The map is on screen and wants the sensors.
     SENSOR_OPEN = 0x1d15,
     /// The map is gone, and the sensors are let go.
@@ -623,7 +629,7 @@ impl Command {
         Command::SENSOR_ORIENTATION,
         Command::SENSOR_PERMISSION,
         Command::SENSOR_VISIBILITY,
-        Command::SENSOR_ENABLE,
+        Command::SENSOR_ENABLE_LOCATION,
         Command::SENSOR_OPEN,
         Command::SENSOR_CLOSE,
         Command::SENSOR_ORIENTATION_LOST,
@@ -670,6 +676,8 @@ pub struct Snapshot<'a> {
     pub azimuth: f64,
     pub is_follow_mode: bool,
     pub camera_busy: bool,
+    /// A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is.
+    pub zooming: bool,
     pub show_compass: bool,
     /// Every setting's value by its SettingKey, as SETTING_UPDATE carries one.
     pub settings: &'a [u32],
@@ -684,7 +692,7 @@ pub struct Snapshot<'a> {
 
 impl Snapshot<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 12;
+    pub const FIELDS: u32 = 13;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.branch(MapState::FIELDS, |w| self.map.write(w));
@@ -694,6 +702,7 @@ impl Snapshot<'_> {
         w.f64(Some(self.azimuth));
         w.bool(Some(self.is_follow_mode));
         w.bool(Some(self.camera_busy));
+        w.bool(Some(self.zooming));
         w.bool(Some(self.show_compass));
         w.u32_array(Some(self.settings));
         w.branch(ScaleBar::FIELDS, |w| self.scale_bar.write(w));
@@ -799,17 +808,15 @@ impl OrientationState {
 pub struct ScaleBar {
     pub total_meters: f64,
     pub bar_width_px: f64,
-    pub is_default_zoom: bool,
 }
 
 impl ScaleBar {
     /// The children it is written as.
-    pub const FIELDS: u32 = 3;
+    pub const FIELDS: u32 = 2;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.f64(Some(self.total_meters));
         w.f64(Some(self.bar_width_px));
-        w.bool(Some(self.is_default_zoom));
     }
 }
 

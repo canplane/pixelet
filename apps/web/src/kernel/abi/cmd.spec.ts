@@ -174,12 +174,13 @@ export const enum MapStatus {
   Error = 3,
 }
 
-/** Where a sensor's reading is: none asked for, asked for, arriving, or failed. */
+/** Where a sensor's reading is: none asked for, asked for, arriving, failed, or none to be had, the device having no such sensor. */
 export const enum DevicePoseStatus {
   Idle = 0,
   Loading = 1,
   Ready = 2,
   Error = 3,
+  Unavailable = 4,
 }
 
 /** A message the kernel raises and the shell shows.
@@ -216,7 +217,6 @@ export const enum Message {
 
   // ---- 0x03 which way the device is facing ----
 
-  OrientationUnsupported = 0x0301,
   OrientationPermissionError = 0x0302,
   OrientationPermissionDenied = 0x0303,
   OrientationSignalLost = 0x0304,
@@ -264,9 +264,10 @@ export const enum Command {
   /** The tab's visibility; the host rings the doorbell for it at once, since a hidden
    * page gets no frame and hiding is the save's last sure moment. */
   SENSOR_VISIBILITY = 0x1d13,
-  /** The sensor button: both sensors asked for. Where iOS gates the compass, the shell
-   * prompted in the click and this starts nothing for it; its answer arrives on its own. */
-  SENSOR_ENABLE = 0x1d14,
+  /** The search panel's location card: the location asked for. The compass is asked for
+   * where it is used, entering follow mode (TRACKING), and never alone: nothing reads it
+   * without the location. */
+  SENSOR_ENABLE_LOCATION = 0x1d14,
   /** The map is on screen and wants the sensors. */
   SENSOR_OPEN = 0x1d15,
   /** The map is gone, and the sensors are let go. */
@@ -358,6 +359,8 @@ export interface Snapshot {
   azimuth: f64;
   is_follow_mode: boolean;
   camera_busy: boolean;
+  /** A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is. */
+  zooming: boolean;
   show_compass: boolean;
   /** Every setting's value by its SettingKey, as SETTING_UPDATE carries one. */
   settings: u32[];
@@ -379,11 +382,12 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     azimuth: b.at(4).get<f64>(),
     is_follow_mode: b.at(5).get<boolean>(),
     camera_busy: b.at(6).get<boolean>(),
-    show_compass: b.at(7).get<boolean>(),
-    settings: Array.from(b.at(8).get<U32Array>()),
-    scale_bar: read_scale_bar(b.at_branch(9)),
-    place: list(b.at_branch(10), read_place_part),
-    object_sizes: Array.from(b.at(11).get<F64Array>()),
+    zooming: b.at(7).get<boolean>(),
+    show_compass: b.at(8).get<boolean>(),
+    settings: Array.from(b.at(9).get<U32Array>()),
+    scale_bar: read_scale_bar(b.at_branch(10)),
+    place: list(b.at_branch(11), read_place_part),
+    object_sizes: Array.from(b.at(12).get<F64Array>()),
   };
 }
 
@@ -442,11 +446,10 @@ export function read_orientation_state(b: BranchCursor): OrientationState {
 export interface ScaleBar {
   total_meters: f64;
   bar_width_px: f64;
-  is_default_zoom: boolean;
 }
 
 export function read_scale_bar(b: BranchCursor): ScaleBar {
-  return { total_meters: b.at(0).get<f64>(), bar_width_px: b.at(1).get<f64>(), is_default_zoom: b.at(2).get<boolean>() };
+  return { total_meters: b.at(0).get<f64>(), bar_width_px: b.at(1).get<f64>() };
 }
 
 /** One rung of the place, in every language the provider had rather than one resolved
