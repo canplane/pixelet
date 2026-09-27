@@ -128,6 +128,11 @@ export const surface = {
   alarm: { glass: alpha(SYSTEM.red, 0.15), fill: tint(SYSTEM.red, 0.06), edge: tint(SYSTEM.red, 0.3), shadow: alpha(SYSTEM.red, 0.15) },
 } as const;
 
+/** A control that takes no press: what it holds at this opacity, its ground
+ * as it is, as iOS dims a disabled button — the glass left whole, which an
+ * opacity or a clear style would read as the button gone rather than off. */
+export const disabledContent = 0.4;
+
 /** A floating control's lift off the map. */
 export const shadow = { lift: "0 6px 20px rgba(0, 0, 0, 0.25)" } as const;
 

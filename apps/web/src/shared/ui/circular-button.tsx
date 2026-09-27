@@ -8,7 +8,7 @@ import { Backing, SYSTEM_BACKING } from "@platform/backing.tsx";
 import { BackingPlace } from "@/shared/ui/backing-place.ts";
 import { Motion } from "@platform/motion.tsx";
 import { SNAP } from "@/shared/ui/motion/transition.ts";
-import { chrome, color, surface } from "@/shared/ui/theme.ts";
+import { chrome, color, disabledContent, surface } from "@/shared/ui/theme.ts";
 
 interface CircularButtonProps {
   children: ReactNode;
@@ -42,20 +42,17 @@ export function CircularButton({ children, onPress, label, isActive, disabled }:
             tint={isActive ? surface.chosen.glass : undefined}
             place={BackingPlace.OverMap}
             interactive={!disabled}
-            // Disabled, it is dimmed as a presence of its glass, not an
-            // opacity over it (shared/ui/motion/veil.ts).
-            fade={disabled ? DISABLED : 1}
             style={styles.face}
           >
-            {children}
+            <Motion to={{ opacity: disabled ? disabledContent : 1 }} transition={SNAP} style={styles.content}>
+              {children}
+            </Motion>
           </Backing>
         </Motion>
       )}
     </Pressable>
   );
 }
-
-const DISABLED = 0.4;
 
 const styles = StyleSheet.create({
   disc: {
@@ -65,4 +62,5 @@ const styles = StyleSheet.create({
   },
   press: { flex: 1 },
   face: { flex: 1, borderRadius: chrome.control / 2, alignItems: "center", justifyContent: "center" },
+  content: { alignItems: "center", justifyContent: "center" },
 });
