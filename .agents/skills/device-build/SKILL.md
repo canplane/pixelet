@@ -1,6 +1,6 @@
 ---
 name: device-build
-description: Build the device app (apps/native) and put it on an iPhone, the iOS simulator, an Android emulator or an Android phone — the one-time setup of each machine, the Debug and Release builds, install and launch, and the failures each has had. Use when a device build is asked for, when one fails, or when a machine is set up for one.
+description: Build the device app (apps/native) and put it on an iPhone, the iOS simulator, an Android emulator, an Android phone or a Meta Quest — the one-time setup of each machine, the Debug and Release builds, install and launch, and the failures each has had. Use when a device build is asked for, when one fails, or when a machine is set up for one.
 ---
 
 # Building for a device
@@ -109,18 +109,28 @@ words go (`[pxl] …`).
 ABI and an APK carrying one without it dies on those phones, and Android 10
 (API 29) and later, for Vulkan.
 
+expo-horizon-core's plugin splits the app into two flavors, `mobile` for a
+phone and `quest` for a Meta Quest, so every variant is named for both:
+`mobileRelease`, `questDebug`. The `quest` flavor's own manifest
+(`android/app/src/quest/`) removes the permissions Horizon's store refuses and
+requires head tracking, which no phone has, so a phone takes only `mobile`.
+`android-build.js` names the flavors' debug variants to React Native as
+debug builds, since it knows a debug build only by its whole name and bundles
+any other.
+
 ### Build, install, launch
 
 From `apps/native/android`, with `ANDROID_HOME=~/Library/Android/sdk` and
 the platform tools' `adb`:
 
 ```bash
-jenv exec ./gradlew :app:assembleRelease
-adb install -r app/build/outputs/apk/release/app-release.apk
+jenv exec ./gradlew :app:assembleMobileRelease
+adb install -r app/build/outputs/apk/mobile/release/app-mobile-release.apk
 adb shell am start -S -n me.plei.pixelet/.MainActivity
 ```
 
-`./gradlew :app:installRelease` builds and installs in one. The kernel's last
+`./gradlew :app:installMobileRelease` builds and installs in one; a bare
+`installRelease` is ambiguous between the flavors and fails. The kernel's last
 words and panics go to logcat under the tag `pxl`:
 `adb logcat -d | grep -E "FATAL| pxl |ReactNativeJS"`.
 
@@ -128,6 +138,29 @@ On an emulator: grant location (`adb shell pm grant me.plei.pixelet
 android.permission.ACCESS_FINE_LOCATION`), and put it where there is data —
 `adb emu geo fix 126.9780 37.5665` is Seoul; its default is outside Korea,
 which draws no terrain. `adb exec-out screencap -p > shot.png` for a look.
+
+### A Meta Quest
+
+The `quest` flavor is the same app as a 2D panel on Horizon OS, which is
+Android: `assembleQuestRelease`, or `assembleQuestDebug` for one that asks
+Metro, and `adb` as for a phone. It is made for a Quest 3 and 3S alone
+(`supportedDevices` in `app.json`): a Quest 2 is left out by choice, not
+for anything found failing on one. What differs is the device:
+
+- **Location** comes through expo-horizon-location, expo-location's fork,
+  since Horizon OS has no Google Play Services. A Quest has no GPS: the
+  position is the network's, and its updates come minutes apart.
+- **No compass**: `headingAvailable` finds neither sensor, and the kernel
+  never listens for a heading.
+- **Getting one on a headset** is not yet done here. A headset takes
+  `adb` once its developer mode is on (the Meta Horizon phone app, under a
+  Meta developer account) and it is plugged in and trusted. Without one,
+  Meta's Spatial Simulator is an emulator for 2D panel apps, installed
+  through the Meta Horizon Android Studio plugin or the `metavr` CLI
+  (`metavr tools install spatialsim`, `metavr ssim start`, `metavr app
+  install <apk>`); it asks for a Meta sign-in and apps targeting API 34 and
+  later. Neither path has been run against this app; what fails on it
+  belongs below once one has.
 
 ### What has gone wrong
 

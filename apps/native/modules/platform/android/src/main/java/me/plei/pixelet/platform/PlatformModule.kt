@@ -82,7 +82,7 @@ class PlatformModule : Module() {
 
     // ---- the compass (platform/sensor.ts) ----
 
-    /** Whether the device has a compass at all, which expo-location only says
+    /** Whether the device has a compass at all, which expo-horizon-location only says
      * by failing a watch — and a failed watch reads as a compass lost, not
      * one never there. */
     Function("headingAvailable") {

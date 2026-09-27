@@ -1,10 +1,14 @@
 // @pxl/native/platform/sensor.ts
 
 /**
- * The device's two sensors as the OS grants them, through expo-location: the
- * position the kernel's geolocation watches and the heading its compass
- * does (crates/pxl/web/kernel/src/control/sensor). Each crosses as the page's
- * do (platform/web/sensor.ts), so the kernel hears a device and a browser the
+ * The device's two sensors as the OS grants them, through
+ * expo-horizon-location: the position the kernel's geolocation watches and
+ * the heading its compass does (crates/pxl/web/kernel/src/control/sensor).
+ * It is expo-location, forked so a Quest build reads the position without
+ * Google Play Services, which Horizon OS has none of; a Quest has no GPS
+ * either, and answers from the network, and no compass, which
+ * `headingAvailable` says. Each crosses as the page's do
+ * (platform/web/sensor.ts), so the kernel hears a device and a browser the
  * same way — the heading in the place Safari's `webkitCompassHeading` takes.
  *
  * The OS asks for the one permission both need, on the first watch. A watch
@@ -16,7 +20,7 @@
  */
 
 import { AppState } from "react-native";
-import * as Location from "expo-location";
+import * as Location from "expo-horizon-location";
 
 import { Command, encode_sensor_error, encode_sensor_orientation, encode_sensor_permission, encode_sensor_update, GeolocationErrorCode, PermissionAnswer, Sensor } from "@/kernel/abi/cmd.spec.ts";
 import { CORE_DOORBELL } from "@/kernel/mem.ts";
