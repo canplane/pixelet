@@ -140,7 +140,7 @@ On Android the platform module's Kotlin half stands where its Swift does, and th
 
 ```bash
 (cd apps/native && deno run -A npm:expo@57.0.25 prebuild --platform android --no-install)
-(cd apps/native/android && ./gradlew :app:installRelease)   # a phone or an emulator adb sees
+(cd apps/native/android && ./gradlew :app:installMobileRelease)   # a phone or an emulator adb sees
 ```
 
 A device draws its text at the size the phone's Text Size setting asks for, which a page ignores, so a view that fits on a page can overflow on a device set larger. The simulator takes the setting from the command line; the two ends are the ones worth a look:
