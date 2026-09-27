@@ -16,5 +16,6 @@ channel = "1.98.1"
 profile = "minimal"
 components = ["clippy", "rustfmt"]
 # The module's target, and a device's: an iPhone and the simulator on an
-# Apple silicon Mac (pxl-native).
-targets = ["wasm32-unknown-unknown", "aarch64-apple-ios", "aarch64-apple-ios-sim"]
+# Apple silicon Mac, and an Android phone and the emulator on one
+# (pxl-native).
+targets = ["wasm32-unknown-unknown", "aarch64-apple-ios", "aarch64-apple-ios-sim", "aarch64-linux-android"]

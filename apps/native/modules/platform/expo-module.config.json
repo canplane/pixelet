@@ -1,6 +1,9 @@
 {
-  "platforms": ["apple"],
+  "platforms": ["apple", "android"],
   "apple": {
     "modules": ["PlatformModule"]
+  },
+  "android": {
+    "modules": ["me.plei.pixelet.platform.PlatformModule"]
   }
 }
