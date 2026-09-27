@@ -12,8 +12,8 @@ let kept = false;
  * A touch's start is offered to every view above the one touched, outermost
  * first, before any takes it; a kept view marks it as it passes and takes
  * nothing, so the view touched does what it does. Where a view lies is never
- * asked: a kept view may stand on the keyboard, lifted by a transform no
- * measure sees (KeyboardDock).
+ * asked: a kept view may stand on the keyboard, lifted while the keys move by
+ * a transform no measure sees (KeyboardDock).
  */
 export const KEEPS_KEYBOARD: ViewProps = { onStartShouldSetResponderCapture: () => keepKeyboard() };
 

@@ -114,6 +114,7 @@ class PlatformModule : Module() {
     // ---- the keyboard (platform/above-keyboard.tsx, KeyboardDock.kt) ----
 
     View(KeyboardDock::class) {
+      Events("onLift")
       // The shell's lengths are in density-independent pixels, the view's in
       // the screen's.
       Prop("clearance") { view: KeyboardDock, clearance: Double ->
@@ -121,6 +122,9 @@ class PlatformModule : Module() {
       }
       Prop("rest") { view: KeyboardDock, rest: Double ->
         view.rest = (rest * view.resources.displayMetrics.density).toInt()
+      }
+      Prop("applied") { view: KeyboardDock, applied: Double ->
+        view.applied = (applied * view.resources.displayMetrics.density).toInt()
       }
     }
   }
