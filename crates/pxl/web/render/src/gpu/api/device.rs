@@ -182,8 +182,14 @@ fn device() -> Option<&'static mut Device> {
 }
 
 /// The format a surface is drawn in, and what the renderer's CANVAS means: the
-/// page's WebGPU prefers it too, so the shaders write the same values.
+/// one the system prefers, as the page takes the browser's
+/// (`getPreferredCanvasFormat`, which answers the same on each) — BGRA on
+/// Apple's, RGBA on Android's, whose Vulkan surfaces offer no BGRA. The
+/// shaders write the same values in either.
+#[cfg(target_vendor = "apple")]
 const SURFACE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8Unorm;
+#[cfg(not(target_vendor = "apple"))]
+const SURFACE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
 /// Opens the device, once: the adapter the system prefers, asked for the
 /// limits it has — the simulator's Metal falls short of WebGPU's defaults and

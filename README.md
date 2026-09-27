@@ -134,7 +134,14 @@ To measure the client, use `preview` (`localhost:4173`). It is the bundle as the
 deno task dev:native       # Metro
 ```
 
-`apps/native/ios/` is generated from `app.json` and the module under `modules/platform/`, and is not kept. `pod install` and Xcode both run Node: put it on `PATH` for the first, and name it in `ios/.xcode.env.local` (`export NODE_BINARY=…`) for the second. Then build `ios/pixelet.xcworkspace` from Xcode, with a team to sign with for a phone. The kernel is built with the app, by a phase of the platform module's pod (`apps/native/script/build-native.ts`), for the configuration and the device or simulator the app is: a Debug build's with the kernel's dev settings, a Release build's without, as a deployed page's is. The phase finds cargo and Deno where their installers put them, `~/.cargo/bin` and `~/.deno/bin`. The app is built for iOS alone: `modules/platform` has no Android half.
+`apps/native/ios/` is generated from `app.json` and the module under `modules/platform/`, and is not kept. `pod install` and Xcode both run Node: put it on `PATH` for the first, and name it in `ios/.xcode.env.local` (`export NODE_BINARY=…`) for the second. Then build `ios/pixelet.xcworkspace` from Xcode, with a team to sign with for a phone. The kernel is built with the app, by a phase of the platform module's pod (`apps/native/script/build-native.ts`), for the configuration and the device or simulator the app is: a Debug build's with the kernel's dev settings, a Release build's without, as a deployed page's is. The phase finds cargo and Deno where their installers put them, `~/.cargo/bin` and `~/.deno/bin`.
+
+On Android the platform module's Kotlin half stands where its Swift does, and the app needs Android Studio's SDK with the NDK, and JDK 17 — `apps/native/.java-version` names it for jenv, since the NDK's native build fails under a newer one. The kernel is built with the app the same way, by the module's Gradle build before a variant's native libraries are merged, for arm64 alone (`plugin/android-build.js` packs no other ABI) and Android 10 and later, whose Vulkan it draws through.
+
+```bash
+(cd apps/native && deno run -A npm:expo@57.0.25 prebuild --platform android --no-install)
+(cd apps/native/android && ./gradlew :app:installRelease)   # a phone or an emulator adb sees
+```
 
 A device draws its text at the size the phone's Text Size setting asks for, which a page ignores, so a view that fits on a page can overflow on a device set larger. The simulator takes the setting from the command line; the two ends are the ones worth a look:
 

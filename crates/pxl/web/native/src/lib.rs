@@ -11,6 +11,8 @@
 //! thread `Global` is sound for. What reaches nothing a `Global` holds stays
 //! on the caller's: an image decoded (image.rs), behind a lock of its own.
 
+#[cfg(target_os = "android")]
+mod android;
 mod image;
 mod memory;
 mod surface;
@@ -35,13 +37,18 @@ fn heap_stat() -> pxl_kernel::host::HeapStat {
     memory::ALLOC.stat()
 }
 
-/// The process's error stream: the kernel stops with the app, before the
-/// shell could run the report's record.
+/// The process's error stream, or Android's log where that stream goes
+/// nowhere: the kernel stops with the app, before the shell could run the
+/// report's record.
 fn last_words(stop: Stop<'_>) {
-    match stop {
-        Stop::Bug { errno, at, a, b } => eprintln!("[pxl] {errno:?} at {}:{}:{} ({a}, {b})", at.file(), at.line(), at.column()),
-        Stop::Panic(info) => eprintln!("[pxl] {info}"),
-    }
+    let line = match stop {
+        Stop::Bug { errno, at, a, b } => format!("[pxl] {errno:?} at {}:{}:{} ({a}, {b})", at.file(), at.line(), at.column()),
+        Stop::Panic(info) => format!("[pxl] {info}"),
+    };
+    #[cfg(target_os = "android")]
+    android::say(&line);
+    #[cfg(not(target_os = "android"))]
+    eprintln!("{line}");
 }
 
 /// What a device gives the kernel: the region, the clock and the allocator.

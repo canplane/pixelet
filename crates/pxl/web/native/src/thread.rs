@@ -42,6 +42,9 @@ struct Handoff {
 static KERNEL: OnceLock<Mutex<Handoff>> = OnceLock::new();
 
 thread_local! {
+    // Initialized in a const block already; Android's expansion of the macro
+    // is what the lint misreads as one that is not.
+    #[cfg_attr(target_os = "android", allow(clippy::missing_const_for_thread_local, reason = "already const; the lint misreads Android's expansion"))]
     static ON_KERNEL: Cell<bool> = const { Cell::new(false) };
 }
 

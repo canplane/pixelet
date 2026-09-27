@@ -21,7 +21,6 @@
 //! part of: a device's row reads higher than a page's by what its driver
 //! holds.
 
-use core::cell::UnsafeCell;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use std::alloc::{GlobalAlloc, Layout, System};
 
@@ -111,22 +110,61 @@ impl HeapBounds for RegionBounds {
     }
 }
 
-/// The system's lock for this (`os_unfair_lock`, libSystem's): it allocates
-/// nothing, where std's `Mutex` may box its pthread mutex on first use —
-/// inside the allocator, a call back into itself — and it lends its holder
-/// the waiter's priority, where a spin lock leaves a low-priority holder
-/// preempted by the high-priority thread spinning for it.
+/// The system's lock for this. It must allocate nothing — it is taken
+/// inside the allocator, where an allocation is a call back into itself —
+/// and should lend its holder the waiter's priority, where a spin lock leaves
+/// a low-priority holder preempted by the high-priority thread spinning for
+/// it. On an iPhone that is `os_unfair_lock`, libSystem's, since std's
+/// `Mutex` there may box its pthread mutex on first use.
+#[cfg(target_vendor = "apple")]
 #[repr(C)]
-struct UnfairLock(UnsafeCell<u32>);
+struct SysLock(core::cell::UnsafeCell<u32>);
 
+#[cfg(target_vendor = "apple")]
 extern "C" {
     fn os_unfair_lock_lock(lock: *mut u32);
     fn os_unfair_lock_unlock(lock: *mut u32);
 }
 
+#[cfg(target_vendor = "apple")]
+impl SysLock {
+    const fn new() -> Self {
+        Self(core::cell::UnsafeCell::new(0))
+    }
+
+    fn hold<R>(&self, f: impl FnOnce() -> R) -> R {
+        // SAFETY: a lock in a static, never moved, locked and unlocked on the
+        // same thread.
+        unsafe { os_unfair_lock_lock(self.0.get()) };
+        let r = f();
+        // SAFETY: as above.
+        unsafe { os_unfair_lock_unlock(self.0.get()) };
+        r
+    }
+}
+
+/// On Android std's `Mutex` is the lock: a futex word, which allocates
+/// nothing.
+#[cfg(not(target_vendor = "apple"))]
+struct SysLock(std::sync::Mutex<()>);
+
+#[cfg(not(target_vendor = "apple"))]
+impl SysLock {
+    const fn new() -> Self {
+        Self(std::sync::Mutex::new(()))
+    }
+
+    fn hold<R>(&self, f: impl FnOnce() -> R) -> R {
+        // A panic under the lock stops the kernel; a poisoned lock is still
+        // the slab's.
+        let _held = self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        f()
+    }
+}
+
 /// The slab behind the system's lock.
 pub struct Locked {
-    lock: UnfairLock,
+    lock: SysLock,
     slab: KernelAlloc<RegionBounds>,
 }
 
@@ -135,13 +173,7 @@ unsafe impl Sync for Locked {}
 
 impl Locked {
     fn with<R>(&self, f: impl FnOnce(&KernelAlloc<RegionBounds>) -> R) -> R {
-        // SAFETY: a lock in a static, never moved, locked and unlocked on the
-        // same thread.
-        unsafe { os_unfair_lock_lock(self.lock.0.get()) };
-        let r = f(&self.slab);
-        // SAFETY: as above.
-        unsafe { os_unfair_lock_unlock(self.lock.0.get()) };
-        r
+        self.lock.hold(|| f(&self.slab))
     }
 
     /// The allocator's reading, for the profiler and the heap's row.
@@ -215,6 +247,6 @@ unsafe impl GlobalAlloc for Locked {
 /// The library's one allocator.
 #[global_allocator]
 pub static ALLOC: Locked = Locked {
-    lock: UnfairLock(UnsafeCell::new(0)),
+    lock: SysLock::new(),
     slab: KernelAlloc::new(),
 };
