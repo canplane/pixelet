@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 
 import type { BaseModalProps } from "@/app/type/ui.type.ts";
 import { Panel } from "@platform/panel.tsx";
-import { PANEL_CONTROL, PANEL_EDGE, PANEL_HEADER, PanelBody, PanelClose } from "@/shared/ui/panel.tsx";
+import { PANEL_CONTENT_TOP, PANEL_CONTROL, PANEL_EDGE, PANEL_HEADER, PANEL_SECTION_GAP, PanelBody, PanelClose } from "@/shared/ui/panel.tsx";
 import { KEEPS_KEYBOARD } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
 import { alpha, chrome, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
@@ -113,7 +113,9 @@ function poseColor(status: DevicePoseStatus): string {
   }
 }
 
-const LOCATE_HEIGHT = 44;
+/** The hand-drawn clear's circle, where the field has none of its own. */
+const CLEAR = 16;
+const LOCATE_HEIGHT = chrome.target;
 /** The card's gap from the keyboard or the bottom, and from the last result. */
 const LOCATE_INSET = 16;
 
@@ -230,7 +232,7 @@ export function SearchModal(props: BaseModalProps) {
                 {!SYSTEM_CLEAR && query.length > 0 && (
                   <Pressable
                     onPress={() => setQuery("")}
-                    hitSlop={14}
+                    hitSlop={(chrome.target - CLEAR) / 2}
                     accessibilityRole="button"
                     accessibilityLabel={t("map.search.clear_aria_label")}
                     style={styles.clear}
@@ -277,17 +279,28 @@ const styles = StyleSheet.create({
   locateLabel: { flex: 1, ...textStyle.body, color: LABEL.primary },
   locateAction: { ...textStyle.body, fontWeight: weight.semibold, color: color.action },
   // Room under the last result for the card that floats over it.
-  resultsRoom: { paddingBottom: LOCATE_HEIGHT + 2 * LOCATE_INSET },
+  resultsRoom: { paddingTop: PANEL_CONTENT_TOP, paddingBottom: LOCATE_HEIGHT + 2 * LOCATE_INSET, gap: PANEL_SECTION_GAP },
   headerRow: { ...PANEL_HEADER, gap: chrome.controlGap },
-  well: { flex: 1, minWidth: 0, height: PANEL_CONTROL, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderRadius: PANEL_CONTROL / 2 },
+  // The magnifier and the clear each centered on the round end it stands in,
+  // concentric with the field's capsule.
+  well: {
+    flex: 1,
+    minWidth: 0,
+    height: PANEL_CONTROL,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingLeft: (PANEL_CONTROL - chrome.glyph) / 2,
+    paddingRight: (PANEL_CONTROL - CLEAR) / 2,
+    borderRadius: PANEL_CONTROL / 2,
+  },
   field: { flex: 1, minWidth: 0, color: LABEL.primary },
-  clear: { width: 16, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: LABEL.tertiary },
+  clear: { width: CLEAR, height: CLEAR, borderRadius: CLEAR / 2, alignItems: "center", justifyContent: "center", backgroundColor: LABEL.tertiary },
   results: { flex: 1 },
-  empty: { paddingHorizontal: PANEL_EDGE, paddingVertical: 12, ...textStyle.footnote, color: LABEL.secondary },
+  empty: { paddingHorizontal: PANEL_EDGE, ...textStyle.footnote, color: LABEL.secondary },
   sectionHeader: {
     paddingHorizontal: PANEL_EDGE,
-    paddingTop: 12,
-    paddingBottom: 6,
+    paddingBottom: 8,
     ...sectionTitle,
     color: LABEL.secondary,
   },

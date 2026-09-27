@@ -34,7 +34,7 @@ export const MODE_BAR_HEIGHT_PX = chrome.control;
  * pitch and no wider — past it, it overlaps a neighbor and the later
  * one in the tree takes the tap — so a swatch smaller than the pitch is a
  * transparent box at full pitch with its shape centered. */
-const PITCH = 44;
+const PITCH = chrome.target;
 /** A glyph, and a pick's swatch, as every control's. */
 const GLYPH = chrome.glyph;
 /** The capsule a tool in hand is lit on, a step inside its slot: concentric

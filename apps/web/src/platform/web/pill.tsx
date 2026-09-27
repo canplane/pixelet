@@ -33,11 +33,16 @@ import { Motion } from "@platform/motion.tsx";
 import { SNAP } from "@/shared/ui/motion/transition.ts";
 import { useVeil } from "@/shared/ui/motion/veil.ts";
 import type { PillProps } from "@/shared/ui/pill.ts";
+import type { f64 } from "@xpute/core/abi/word.ts";
+import { chrome } from "@/shared/ui/theme.ts";
 
 /** Room for a shadow around a piece, inside the clip that holds it. */
 const SHADOW_ROOM = 32;
-/** How far past its edge a touch still lands on it. */
-const TOUCH_SLOP = 8;
+/** How far past its edge a touch lands on a pill `height` tall: out to the
+ * least target. */
+function touchSlop(height: f64): f64 {
+  return Math.max(0, (chrome.target - height) / 2);
+}
 
 // A page's backing is its fill (backing.tsx), so `tint`, `place` and
 // `interactive`, which are the system's backing's, only apply on a device.
@@ -54,7 +59,7 @@ export function Pill({ x, width, height, span, fill, border, shadow, fade = 1, f
   return (
     <Motion to={{ translateX: x }} transition={transition} style={styles.at}>
       <Motion from={fadeFrom === undefined ? undefined : { opacity: fadeFrom }} to={{ opacity: veil.level }} transition={veil.transition} style={styles.fade}>
-        <View {...touch} hitSlop={touch && TOUCH_SLOP} style={[styles.box, { width, height }]}>
+        <View {...touch} hitSlop={touch && touchSlop(height)} style={[styles.box, { width, height }]}>
           {shadow && (
             <>
               <View style={[styles.clip, clipLeft]}>

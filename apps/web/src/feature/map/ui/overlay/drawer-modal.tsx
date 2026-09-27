@@ -36,7 +36,7 @@ for (const cube of placeableCubes) {
 // A catalog entry's three sizes (issue/20260928-three-sizes-of-a-control.md):
 // a press lands on its 44 cell; the tile one sees is 40, a block's top as a
 // rounded square, where a circle cut its texture away; a decor's glyph is 20.
-const CELL = 44;
+const CELL = chrome.target;
 const TILE = 40;
 const TILE_RADIUS = 10;
 

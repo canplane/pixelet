@@ -10,8 +10,8 @@ import { chrome, color, textStyle } from "@/shared/ui/theme.ts";
 import { LABEL } from "@platform/palette.ts";
 
 /** Height of the controls on a sheet (close button, search field, segmented
- * control): 44, iOS's least target, a step under a map control's 48. */
-export const PANEL_CONTROL = 44;
+ * control): the least target, a step under a map control's 48. */
+export const PANEL_CONTROL = chrome.target;
 /** Top row height, the same as an iOS navigation bar. */
 const ROW = 44;
 /** Distance of the top row's controls from the sheet's side and top edges,
@@ -37,16 +37,19 @@ const STACK_GAP = chrome.controlGap;
  * part theirs. */
 export const PANEL_SECTION_GAP = 24;
 /** Gap between the tabs and the first row of content. */
-const CONTENT_GAP = 16;
+const CONTENT_GAP = 20;
 /** Height of the header area: PANEL_EDGE above and below the round
  * controls. Content scrolls only below it, and a sheet is dragged by it. */
 export const PANEL_HEAD_HEIGHT = PANEL_EDGE + PANEL_CONTROL + PANEL_EDGE;
 /** Top of the floating tabs, measured from the sheet's top: STACK_GAP under
  * the top row's controls, so they straddle the header's bottom edge. */
 const TABS_TOP = PANEL_EDGE + PANEL_CONTROL + STACK_GAP;
-/** Top padding a panel's scroll content needs to start below the part of
- * the tabs that hangs into the scroll area. */
-export const PANEL_TABS_ROOM = TABS_TOP + PANEL_CONTROL + CONTENT_GAP - PANEL_HEAD_HEIGHT;
+/** Top padding of a panel's scroll content: CONTENT_GAP under the header's
+ * controls, of which the header already holds PANEL_EDGE. */
+export const PANEL_CONTENT_TOP = CONTENT_GAP - PANEL_EDGE;
+/** The same with tabs floating over the content: CONTENT_GAP under the tabs
+ * instead, which stand STACK_GAP under the header's controls. */
+export const PANEL_TABS_ROOM = PANEL_CONTENT_TOP + STACK_GAP + PANEL_CONTROL;
 
 /** Corner radius of a sheet's top corners: PANEL_EDGE plus the controls' radius,
  * so the corners are concentric with the round controls in the top row. */

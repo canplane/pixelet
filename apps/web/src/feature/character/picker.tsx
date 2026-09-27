@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { alpha, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
 import { CharacterPreview } from "@/feature/character/preview.tsx";
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { Command, encode_setting_update } from "@/kernel/abi/cmd.spec.ts";
@@ -31,7 +31,7 @@ const CHIP_HEIGHT = 32;
 /** A companion's preview, a square. */
 const PREVIEW = 96;
 const CHIP_GAP_X = 8;
-const CHIP_GAP_Y = 44 - CHIP_HEIGHT;
+const CHIP_GAP_Y = chrome.target - CHIP_HEIGHT;
 const CHIP_SLOP = { top: CHIP_GAP_Y / 2, bottom: CHIP_GAP_Y / 2, left: CHIP_GAP_X / 2, right: CHIP_GAP_X / 2 };
 
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
