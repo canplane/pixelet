@@ -2,14 +2,14 @@
 
 import type { f64 } from "@xpute/core/abi/word.ts";
 import { useEffect, useState } from "react";
-import { ChevronLeft, Locate, X } from "lucide-react-native";
+import { Locate, Search, X } from "lucide-react-native";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { round } from "@xpute/core/math/scalar.ts";
 import { useTranslation } from "react-i18next";
 
 import type { BaseModalProps } from "@/app/type/ui.type.ts";
-import { useSafeArea } from "@platform/safe-area.ts";
-import { Panel, PANEL_HEADER_PX, Side } from "@/shared/ui/panel.tsx";
+import { Panel } from "@platform/panel.tsx";
+import { PANEL_CONTROL, PANEL_HEADER, PanelClose } from "@/shared/ui/panel.tsx";
 import { KEEPS_KEYBOARD } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
 import { alpha, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
@@ -18,7 +18,9 @@ import { kernel_command, kernel_enable_location, kernel_snapshot } from "@/kerne
 import { useSensors } from "@/feature/map/ui/overlay/sensor-status.tsx";
 import { LABEL, STATUS } from "@platform/palette.ts";
 import { AboveKeyboard } from "@platform/above-keyboard.tsx";
+import { SYSTEM_CLEAR } from "@platform/text-field.ts";
 import { Glass } from "@platform/glass.tsx";
+import { GlassVariant } from "@/shared/ui/glass-variant.ts";
 import { resolvePoiBadge } from "@/feature/search/poi-badge.ts";
 import { assembleLabel } from "@/feature/map/geocode/label.ts";
 import { fetchSearch, type SearchResult } from "@/feature/search/repository.ts";
@@ -95,7 +97,7 @@ function SectionHeader(props: { label: string }) {
 /**
  * Forward search — the one world/ feature with no static bake behind it
  * (repository.ts's own top comment), so this always round-trips to the
- * live API. Lives in a right-side panel (same ModalManager-hosted pattern
+ * live API. Lives in a panel (same ModalManager-hosted pattern
  * as SettingsModal/DrawerModal) rather than an always-visible floating bar
  * on the map itself — opened from CurrentAddress's own trigger
  * (top-overlays.tsx), since "where am I" and "where do I want to go" are
@@ -125,7 +127,7 @@ function LocateCard() {
   if (location === DevicePoseStatus.Ready) return null;
   return (
     <AboveKeyboard inset={16}>
-      <Glass fill={color.white} interactive style={styles.locateCard}>
+      <Glass fill={color.white} variant={GlassVariant.Clear} interactive style={styles.locateCard}>
         <Pressable onPress={kernel_enable_location} accessibilityRole="button" style={styles.locateRow}>
           <Locate size={18} color={poseColor(location)} />
           <Text numberOfLines={1} style={styles.locateLabel}>{t("map.sensors.label")}</Text>
@@ -139,7 +141,6 @@ function LocateCard() {
 export function SearchModal(props: BaseModalProps) {
   const { onClose } = props;
   const { t, i18n } = useTranslation();
-  const { top } = useSafeArea();
   const lang = i18n.language.split("-")[0].toLowerCase();
 
   const [query, setQuery] = useState("");
@@ -201,44 +202,38 @@ export function SearchModal(props: BaseModalProps) {
   const poiResults = results.filter((r) => r.kind === "poi");
 
   return (
-    <Panel side={Side.Right} width={380} label={t("map.search.placeholder")} onClose={() => onClose()} dismissOnOutside>
-      <View style={[styles.header, { paddingTop: top }]}>
+    <Panel label={t("map.search.placeholder")} onClose={() => onClose()}>
+      {
+        /* The field and its clear: a touch there leaves the keyboard up;
+          one on a result, the list or anywhere else is done typing. */
+      }
+      <View {...KEEPS_KEYBOARD} style={styles.headerRow}>
         {
-          /* The field and its clear: a touch there leaves the keyboard up;
-            one on a result, the list or anywhere else is done typing. */
+          /* Search field (glass capsule with the magnifier and the clear
+            button inside), then the panel's close button. The clear is a
+            small filled circle inside the field and the close is a separate
+            round button, so the two X's are not confused. */
         }
-        <View {...KEEPS_KEYBOARD} style={styles.headerRow}>
-          {
-            /* Doubles as the panel's own close trigger — a leading
-            magnifying-glass icon here was purely decorative, and a trailing
-            close beside it was a second X right next to the "clear query"
-            X, reading as one button doing nothing. One `<` in the corner a
-            search UI's own back-navigation slot already occupies reads
-            unambiguously as "leave", with no second X anywhere in the row. */
-          }
-          <Pressable onPress={() => onClose()} accessibilityRole="button" accessibilityLabel={t("settings.close")} style={styles.back}>
-            <ChevronLeft size={20} color={color.textMuted} />
-          </Pressable>
+        <Glass fill={color.faint} variant={GlassVariant.Clear} style={styles.well}>
+          <Search size={16} color={color.textMuted} />
           <TextField
             value={query}
             onChangeText={setQuery}
             placeholder={t("map.search.placeholder")}
             placeholderTextColor={color.textMuted}
+            clearButtonMode={SYSTEM_CLEAR ? "while-editing" : undefined}
             style={styles.field}
           />
           {
-            /* Lucide has no filled circle-X glyph (it's a pure
-            outline/stroke icon set) — composed by hand: a solid circle
-            with a smaller X cut into it in the background color, the
-            familiar "clear field" shape (iOS/macOS search fields) rather
-            than a bare X that reads more like "close" than "clear". */
+            /* Where the field has no clear of its own. Lucide has no filled
+              circle-X glyph (it's a pure outline/stroke icon set) — composed
+              by hand: a solid circle with a smaller X cut into it in the
+              background color, the familiar "clear field" shape (iOS/macOS
+              search fields). The results follow the emptied query. */
           }
-          {query.length > 0 && (
+          {!SYSTEM_CLEAR && query.length > 0 && (
             <Pressable
-              onPress={() => {
-                setQuery("");
-                setResults([]);
-              }}
+              onPress={() => setQuery("")}
               hitSlop={12}
               accessibilityRole="button"
               accessibilityLabel={t("map.search.clear_aria_label")}
@@ -247,7 +242,8 @@ export function SearchModal(props: BaseModalProps) {
               <X size={10} strokeWidth={3} color={color.paper} />
             </Pressable>
           )}
-        </View>
+        </Glass>
+        <PanelClose label={t("settings.close")} onClose={() => onClose()} />
       </View>
 
       <ScrollView style={styles.results} contentContainerStyle={styles.resultsRoom} keyboardShouldPersistTaps="handled">
@@ -305,15 +301,14 @@ export function SearchModal(props: BaseModalProps) {
 }
 
 const styles = StyleSheet.create({
-  header: { borderBottomWidth: 1, borderBottomColor: alpha(color.text, 0.06) },
   locateCard: { borderRadius: 22, pointerEvents: "auto", boxShadow: "0 6px 20px rgba(0, 0, 0, 0.12)" },
   locateRow: { height: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16 },
   locateLabel: { flex: 1, ...textStyle.body, color: color.text },
-  locateAction: { ...textStyle.body, fontWeight: weight.semibold, color: color.chosen },
+  locateAction: { ...textStyle.body, fontWeight: weight.semibold, color: color.action },
   // Room under the last result for the card that floats over it.
   resultsRoom: { paddingBottom: 76 },
-  headerRow: { height: PANEL_HEADER_PX, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16 },
-  back: { width: 42, height: 42, marginLeft: -10, borderRadius: 21, alignItems: "center", justifyContent: "center" },
+  headerRow: { ...PANEL_HEADER, gap: 8 },
+  well: { flex: 1, minWidth: 0, height: PANEL_CONTROL, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderRadius: PANEL_CONTROL / 2 },
   field: { flex: 1, minWidth: 0, color: color.text },
   clear: { width: 16, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: alpha(color.textMuted, 0.5) },
   results: { flex: 1 },

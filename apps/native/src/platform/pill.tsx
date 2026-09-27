@@ -10,8 +10,8 @@
  *
  * What it holds stands at its left end, clipped to its round shape, so the
  * content is revealed as the pill opens and hidden as it closes. Its presence
- * is the glass's to show (glass.tsx), and what it holds fades by opacity
- * beside the glass, never over it.
+ * is the glass's to show (glass.tsx), and what it holds fades by opacity on
+ * the glass, never over it.
  */
 
 import { useRef } from "react";
@@ -19,9 +19,7 @@ import { LayoutAnimation, type LayoutAnimationConfig, StyleSheet, View } from "r
 
 import type { f64 } from "@xpute/core/abi/word.ts";
 import { Glass } from "@platform/glass.tsx";
-import { Motion } from "@platform/motion.tsx";
 import { SNAP } from "@/shared/ui/motion/transition.ts";
-import { useVeil } from "@/shared/ui/motion/veil.ts";
 import type { PillProps } from "@/shared/ui/pill.ts";
 
 /** How far past its edge a touch still lands on it. */
@@ -35,7 +33,7 @@ const MOVE: LayoutAnimationConfig = {
   update: { type: "spring", springDamping: 1 },
 };
 
-export function Pill({ x, width, height, fill, tint, border, shadow, fade = 1, fadeFrom, fadeTransition = SNAP, touch, children, onContentWidth }: PillProps) {
+export function Pill({ x, width, height, fill, tint, variant, interactive, border, shadow, fade = 1, fadeFrom, fadeTransition = SNAP, touch, children, onContentWidth }: PillProps) {
   // Asked for in render, before the commit that lays the new frame out: a
   // layout animation applies to the next commit, and after this one's is too
   // late. The same on a second render of the same props.
@@ -43,26 +41,28 @@ export function Pill({ x, width, height, fill, tint, border, shadow, fade = 1, f
   if (last.current !== null && (last.current[0] !== x || last.current[1] !== width)) LayoutAnimation.configureNext(MOVE);
   last.current = [x, width];
 
-  const veil = useVeil(fade, fadeTransition);
-  const from = fadeFrom === undefined ? undefined : { opacity: fadeFrom };
   const r = height / 2;
+  // What it holds stands in the glass rather than beside it: a touch reaches
+  // the glass only through what the glass contains, and interactive glass
+  // answers no touch it is not given.
   return (
     <View {...touch} hitSlop={touch && TOUCH_SLOP} style={[styles.at, { left: x, width, height }]}>
       <Glass
         fill={fill}
         tint={tint}
+        variant={variant}
+        interactive={interactive}
         fade={fade}
         fadeFrom={fadeFrom}
         transition={fadeTransition}
         style={[StyleSheet.absoluteFill, { borderRadius: r }, border && { borderWidth: border.width, borderColor: border.color }, shadow ? { boxShadow: shadow } : null]}
-      />
-      <View style={[StyleSheet.absoluteFill, styles.clip, { borderRadius: r }]}>
-        <Motion from={from} to={{ opacity: veil.level }} transition={veil.transition} style={[StyleSheet.absoluteFill, styles.clip]}>
+      >
+        <View style={[StyleSheet.absoluteFill, styles.clip, { borderRadius: r }]}>
           <View onLayout={onContentWidth && ((e) => onContentWidth(e.nativeEvent.layout.width))} style={[styles.content, { height }]}>
             {children}
           </View>
-        </Motion>
-      </View>
+        </View>
+      </Glass>
     </View>
   );
 }

@@ -132,10 +132,10 @@ The rules below keep it one thing. They come from finding it several.
 - **Dev is guarded like terrain.** The tile server answers no page above
   `--top-level`, and that is the whole guard for every pyramid layer; no
   feature carries a dev exception of its own.
-- **No test-only API, no generality one caller does not use, no adapter
-  kept past the change that needed it.** Tests keep the shared algebraic
-  laws (a fold's fixed point, the lattice), the wire and storage contracts,
-  and stated invariants; one that restates an implementation goes with it.
+- **No test-only API, no adapter kept past the change that needed it.**
+  Tests keep the shared algebraic laws (a fold's fixed point, the lattice),
+  the wire and storage contracts, and stated invariants; one that restates
+  an implementation goes with it.
 - **Before calling it done, audit the symmetry of the whole tree**: terrain,
   POI and objects side by side, for anything one does its own way. An
   asymmetry is removed or explained.
@@ -337,7 +337,6 @@ size.
   `// removed:` marker.
 - **Keep mechanisms orthogonal.** Gestures, animation and styling stay
   independently verifiable; never fuse them into one library mechanism.
-- Type-level generics that compile to nothing are fine with one consumer.
 - **Design in the conversation, not in a planning artifact.** Plan documents,
   approval gates and agent fan-outs are overhead here; skip them unless asked.
 - Code, comments and documentation stay in English.

@@ -18,7 +18,7 @@ export interface BaseModalProps {
 export interface ModalController {
   openSettingsModal: () => void; // Opens the settings modal (rendering effects / debug / license)
   openDrawerModal: () => void; // Opens the full cube/decor/character catalog drawer (mode-bar.tsx's own hotbar stays separate)
-  openSearchModal: () => void; // Opens forward search (right-side sheet, triggered from CurrentAddress)
+  openSearchModal: () => void; // Opens forward search (a sheet, triggered from CurrentAddress)
 }
 
 /**

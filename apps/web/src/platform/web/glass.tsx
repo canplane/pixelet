@@ -14,6 +14,7 @@ import type { f64 } from "@xpute/core/abi/word.ts";
 import { Motion } from "@platform/motion.tsx";
 import { SNAP, type Transition } from "@/shared/ui/motion/transition.ts";
 import { useVeil } from "@/shared/ui/motion/veil.ts";
+import type { GlassVariant } from "@/shared/ui/glass-variant.ts";
 
 export interface GlassProps {
   /** The ground where there is no glass. */
@@ -22,6 +23,8 @@ export interface GlassProps {
   tint?: ColorValue;
   /** Whether the glass answers a touch, as a control's does. */
   interactive?: boolean;
+  /** The glass thickness, ignored on the web (shared/ui/glass-variant.ts). */
+  variant: GlassVariant;
   /** How present it is, from 1 to 0 (gone); and what it mounts at. */
   fade?: f64;
   fadeFrom?: f64;

@@ -15,6 +15,7 @@ import type { ColorValue, GestureResponderHandlers } from "react-native";
 
 import type { f64 } from "@xpute/core/abi/word.ts";
 import type { Transition } from "@/shared/ui/motion/transition.ts";
+import type { GlassVariant } from "@/shared/ui/glass-variant.ts";
 
 export interface PillProps {
   /** Where its left end stands, in its container. */
@@ -27,6 +28,11 @@ export interface PillProps {
   fill: ColorValue;
   /** The glass's tint, where there is glass. */
   tint?: ColorValue;
+  /** The glass thickness (shared/ui/glass-variant.ts). */
+  variant: GlassVariant;
+  /** Whether the glass answers a touch, where there is glass: a pill that is
+   * one button, not one that holds several, whose own buttons answer. */
+  interactive?: boolean;
   border?: { width: f64; color: ColorValue };
   shadow?: string;
   /** How present it is, from 1 to 0 (gone), what it mounts at, and how a

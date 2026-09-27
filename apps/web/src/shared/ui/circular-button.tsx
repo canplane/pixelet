@@ -6,6 +6,7 @@ import type { f64 } from "@xpute/core/abi/word.ts";
 import { Pressable, type StyleProp, StyleSheet, type ViewStyle } from "react-native";
 
 import { Glass } from "@platform/glass.tsx";
+import { GlassVariant } from "@/shared/ui/glass-variant.ts";
 import { Motion } from "@platform/motion.tsx";
 import { SNAP, type Transition } from "@/shared/ui/motion/transition.ts";
 import { alpha, chrome, color } from "@/shared/ui/theme.ts";
@@ -43,6 +44,7 @@ export function CircularButton({ children, onPress, label, isActive, disabled, f
           <Glass
             fill={isActive ? color.lit : color.cream}
             tint={isActive ? alpha(color.glow, 0.25) : undefined}
+            variant={GlassVariant.Regular}
             interactive={!disabled}
             // Disabled, it is dimmed as a presence of its glass, not an
             // opacity over it (shared/ui/motion/veil.ts).
