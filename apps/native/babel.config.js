@@ -20,14 +20,14 @@ const root = path.resolve(__dirname, "../..");
  * one file at a time cannot inline a name declared in another, and Babel's
  * TypeScript transform emits the enum as an object instead — every command's
  * and errno's name as a string, reverse mapping and all. So the declarations
- * are read up front, as vite.config.ts's const_enum did, and `inline_enums`
+ * are read up front, as vite.config.ts's const_enum did, and `inlineEnums`
  * below does the rest.
  *
  * It refuses rather than guesses: a member whose value is not a plain
  * literal or arithmetic over literals leaves its whole enum alone, and is
  * named in `refused` so that leaving it is not taken for a table gone stale.
  */
-function read_enums() {
+function readEnums() {
   const DECL = /export\s+const\s+enum\s+(\w+)\s*\{([^}]*)\}/g;
   const VALUE = /^(?:0x[0-9a-fA-F]+|\d+|"[^"\\]*"|'[^'\\]*'|[-+*/|&^~()<>\s])+$/;
   const enums = new Map();
@@ -64,7 +64,7 @@ function read_enums() {
   walk(path.join(root, "packages"));
   return { enums, refused };
 }
-const { enums: ENUMS, refused: REFUSED } = read_enums();
+const { enums: ENUMS, refused: REFUSED } = readEnums();
 
 /** The table is read once, when Metro loads this file, so an enum or a member
  * added since — a spec regenerated under a running Metro — is not in it. Left
@@ -77,7 +77,7 @@ const stale = (what) => `${what} is not in the const enum table Metro read when 
  * TypeScript transform's other type-only imports. A use of an enum as a
  * value that is left — `Command[x]`, the enum handed on whole — is a build
  * error, never a bundle that reaches a device and throws. */
-const inline_enums = ({ types: t }) => ({
+const inlineEnums = ({ types: t }) => ({
   visitor: {
     MemberExpression(p, state) {
       const { object, property, computed } = p.node;
@@ -160,5 +160,5 @@ module.exports = (api) => {
   // has a `Slot` of its own, which the enum pass took for the mode bar's.
   // A function and not a RegExp: Metro reads the config with no file for its
   // cache key, and Babel refuses a RegExp it has nothing to test against.
-  return { presets: [preset], overrides: [{ exclude: (file) => /[\\/]node_modules[\\/]/.test(file ?? ""), plugins: [define, inline_enums] }] };
+  return { presets: [preset], overrides: [{ exclude: (file) => /[\\/]node_modules[\\/]/.test(file ?? ""), plugins: [define, inlineEnums] }] };
 };

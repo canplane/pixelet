@@ -36,7 +36,7 @@ const FROM_APP = path.join(__dirname, "index.ts");
  * that build. Written once, when Metro starts: a dev server's stamp is the
  * one it started under.
  */
-function build_stamp() {
+function buildStamp() {
   const { execSync } = require("node:child_process");
   const fs = require("node:fs");
   let id = "unknown";
@@ -62,13 +62,13 @@ function build_stamp() {
   );
   return file;
 }
-const BUILD_STAMP = build_stamp();
+const BUILD_STAMP = buildStamp();
 
 /** A platform module as the system being built has it: `x.android.tsx` beside
  * `x.tsx` is Android's, and `x.tsx` every other's. The shell names a module
  * with its extension, which Metro's own `.android` lookup does not take, so it
  * is looked for here. */
-function own_platform(file, platform) {
+function ownPlatform(file, platform) {
   if (!platform) return file;
   const ext = path.extname(file);
   const own = `${file.slice(0, -ext.length)}.${platform}${ext}`;
@@ -87,7 +87,7 @@ config.resolver.resolveRequest = (context, name, platform) => {
     return context.resolveRequest({ ...context, originModulePath: FROM_APP }, name, platform);
   }
   if (name.startsWith("@platform/")) {
-    return context.resolveRequest(context, own_platform(path.join(__dirname, "src/platform/") + name.slice("@platform/".length), platform), platform);
+    return context.resolveRequest(context, ownPlatform(path.join(__dirname, "src/platform/") + name.slice("@platform/".length), platform), platform);
   }
   for (const [prefix, dir] of PREFIXES) {
     if (name.startsWith(prefix)) return context.resolveRequest(context, dir + name.slice(prefix.length), platform);
