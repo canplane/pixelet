@@ -2,10 +2,9 @@
 
 import { Languages } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
-import { SectionTitle } from "@/feature/setting/row.tsx";
-import { alpha, color, textStyle, weight } from "@/shared/ui/theme.ts";
+import { SectionTitle, SettingChoiceRow } from "@/feature/setting/row.tsx";
 
 const SUPPORTED_LANGUAGES = [
   { code: "en", labelKey: "settings.language.english" },
@@ -21,17 +20,7 @@ export function LanguageSection() {
       <View style={styles.choices}>
         {SUPPORTED_LANGUAGES.map(({ code, labelKey }) => {
           const on = i18n.resolvedLanguage === code;
-          return (
-            <Pressable
-              key={code}
-              onPress={() => i18n.changeLanguage(code)}
-              accessibilityRole="radio"
-              aria-checked={on}
-              style={[styles.choice, on ? styles.on : styles.off]}
-            >
-              <Text style={[styles.label, on && styles.labelOn]}>{t(labelKey)}</Text>
-            </Pressable>
-          );
+          return <SettingChoiceRow key={code} label={t(labelKey)} selected={on} onSelect={() => i18n.changeLanguage(code)} />;
         })}
       </View>
     </View>
@@ -40,10 +29,6 @@ export function LanguageSection() {
 
 const styles = StyleSheet.create({
   section: { gap: 4 },
-  choices: { flexDirection: "row", gap: 6 },
-  choice: { flex: 1, height: 32, alignItems: "center", justifyContent: "center", borderRadius: 16, borderWidth: 1, paddingHorizontal: 8 },
-  on: { borderColor: color.chosen, backgroundColor: alpha(color.chosen, 0.1) },
-  off: { borderColor: "transparent", backgroundColor: alpha(color.wash, 0.3) },
-  label: { ...textStyle.footnote, fontWeight: weight.medium, color: color.textMuted },
-  labelOn: { color: color.text },
+  // A row reaches past the panel's padding to its edge, as a setting's does.
+  choices: { marginHorizontal: -12 },
 });

@@ -1,8 +1,10 @@
 // @pxl/web/feature/setting/row.tsx
 
-import type { LucideIcon } from "lucide-react-native";
+import { Check, type LucideIcon } from "lucide-react-native";
 import type { ReactNode } from "react";
-import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+
+import { ToggleRow } from "@platform/toggle-row.tsx";
 
 import type { SettingCost } from "@/feature/setting/schema.ts";
 import { alpha, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
@@ -15,7 +17,7 @@ const COST_COLOR: Record<SettingCost, string> = {
 
 function Badge({ text, tint }: { text: string; tint: string }) {
   return (
-    <View style={[styles.badge, { borderColor: alpha(tint, 0.3), backgroundColor: alpha(tint, 0.1) }]}>
+    <View style={[styles.badge, { backgroundColor: alpha(tint, 0.15) }]}>
       <Text style={[styles.badgeText, { color: tint }]}>{text}</Text>
     </View>
   );
@@ -29,8 +31,8 @@ function DevBadge() {
   return <Badge text="DEV" tint={color.dev} />;
 }
 
-/** A name, its badges, and what it does under it. */
-function Described({ label, description, cost, dev }: { label: string; description: string; cost?: SettingCost; dev?: boolean }) {
+/** A name, its badges, and an optional description under it. */
+function Described({ label, description, cost, dev }: { label: string; description?: string; cost?: SettingCost; dev?: boolean }) {
   return (
     <View style={styles.described}>
       <View style={styles.nameLine}>
@@ -38,7 +40,7 @@ function Described({ label, description, cost, dev }: { label: string; descripti
         {dev && <DevBadge />}
         {cost && <CostBadge cost={cost} />}
       </View>
-      <Text style={styles.description}>{description}</Text>
+      {description && <Text style={styles.description}>{description}</Text>}
     </View>
   );
 }
@@ -47,34 +49,22 @@ interface SettingRowProps {
   label: string;
   description: string;
   active: boolean;
-  onToggle: () => void;
+  /** Called with the switch's new value, which is sent to the kernel as is.
+   * Sending a flip instead would depend on the current value having arrived
+   * already. */
+  onChange: (active: boolean) => void;
   cost?: SettingCost;
   /** Marks a setting only a development build offers (schema.json's `dev`) — the table decides whether the row is there at all, this just labels it once shown. */
   dev?: boolean;
 }
 
-/** A toggle: the whole row is its switch, and the switch in it only shows
- * which way it is. A switch that took the press as well would turn with the
- * row and back: a click on it would be two toggles, and only a drag, which
- * cancels the row's press, would seem to work. */
+/** A toggle: the platform's row for a switch (platform toggle-row.tsx). */
 export function SettingRow(props: SettingRowProps) {
-  const { label, description, active, onToggle, cost, dev } = props;
+  const { label, description, active, onChange, cost, dev } = props;
   return (
-    <Pressable onPress={onToggle} accessibilityRole="switch" aria-checked={active} style={[styles.row, styles.bleed]}>
+    <ToggleRow value={active} onValueChange={onChange} style={[styles.row, styles.bleed]}>
       <Described label={label} description={description} cost={cost} dev={dev} />
-      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.shown}>
-        <Switch
-          value={active}
-          trackColor={{ false: color.track, true: color.chosen }}
-          thumbColor={color.white}
-          {
-            // react-native-web colors an on thumb by this alone, and teal where
-            // it is not given; React Native's types do not name it.
-            ...{ activeThumbColor: color.white }
-          }
-        />
-      </View>
-    </Pressable>
+    </ToggleRow>
   );
 }
 
@@ -115,23 +105,25 @@ export function SettingGroup(props: SettingGroupProps) {
   );
 }
 
-interface SettingRadioRowProps {
+interface SettingChoiceRowProps {
   label: string;
-  description: string;
+  description?: string;
   selected: boolean;
   onSelect: () => void;
   cost?: SettingCost;
 }
 
-/** One answer of a choice — the same layout as SettingRow, with a radio
- * mark, since picking one answer here drops the others. It sits inside its
- * group's box, so it does not bleed to the panel's edge as a row does. */
-export function SettingRadioRow(props: SettingRadioRowProps) {
+/** One option of a single choice (a setting's options, the language list).
+ * Same layout as SettingRow; the selected option shows a check, the others
+ * nothing. The check slot keeps its width when empty so selecting does not
+ * rewrap the text. Unlike SettingRow it does not extend to the panel edge:
+ * its group box or list handles that. */
+export function SettingChoiceRow(props: SettingChoiceRowProps) {
   const { label, description, selected, onSelect, cost } = props;
   return (
     <Pressable onPress={onSelect} accessibilityRole="radio" aria-checked={selected} style={styles.row}>
       <Described label={label} description={description} cost={cost} />
-      <View style={[styles.radio, selected && styles.radioOn]}>{selected && <View style={styles.radioDot} />}</View>
+      <View style={styles.check}>{selected && <Check size={18} strokeWidth={2.5} color={color.chosen} />}</View>
     </Pressable>
   );
 }
@@ -163,8 +155,6 @@ export const settingText = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  // What the row's press reaches through: the switch takes none of its own.
-  shown: { pointerEvents: "none" },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8 },
   // A row reaches past the panel's padding to its edge, so its own padding
   // lines its words up with the section title's.
@@ -174,11 +164,13 @@ const styles = StyleSheet.create({
   name: { ...textStyle.body, color: color.text },
   description: { ...textStyle.caption, color: color.textMuted },
 
-  badge: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 4, paddingVertical: 2 },
+  // iOS's tinted style: the tint as a faint ground and the words in it, no
+  // edge — a full fill is what a chosen chip says.
+  badge: { borderRadius: 999, paddingHorizontal: 5, paddingVertical: 3 },
   // Under the smallest style on purpose: a badge is a tag, read as a shape at
   // a glance and not as text, the size iOS's own tab labels and an app's
   // counters go down to. Its capitals, weight and color carry it. With the
-  // badge's padding and border it stands 16 tall, Material's badge height.
+  // badge's padding it stands 16 tall, Material's badge height.
   badgeText: { ...textStyle.caption2, fontSize: 9, lineHeight: 10, letterSpacing: 0.4 },
 
   group: { marginTop: 16, marginBottom: 10, borderWidth: 1, borderColor: hairline, borderRadius: 10, padding: 4, paddingTop: 10 },
@@ -195,9 +187,7 @@ const styles = StyleSheet.create({
   legendText: { ...textStyle.caption, fontWeight: weight.medium, color: color.text },
   answers: { gap: 2 },
 
-  radio: { width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, borderColor: color.track, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  radioOn: { borderColor: color.chosen },
-  radioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: color.chosen },
+  check: { width: 18, height: 18, flexShrink: 0 },
 
   titleBlock: { gap: 4, marginBottom: 4 },
   titleLine: { flexDirection: "row", alignItems: "center", gap: 6 },

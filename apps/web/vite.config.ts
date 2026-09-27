@@ -228,7 +228,11 @@ function const_enum(roots: string[]): Plugin {
       const struck: string[] = [];
       for (const [name, members] of enums) {
         if (!out.includes(name)) continue;
-        for (const [key, value] of members) out = out.replaceAll(`${name}.${key}`, value);
+        // Whole names only: a member that is a prefix of another — a table
+        // read before SENSOR_ENABLE became SENSOR_ENABLE_LOCATION — would
+        // otherwise leave `7444_LOCATION` for the parser instead of a name
+        // the stale check below can say.
+        out = out.replace(new RegExp(`\\b${name}\\.(\\w+)\\b`, "g"), (whole, key: string) => members.get(key) ?? whole);
         struck.push(name);
       }
       if (!struck.length) return null;

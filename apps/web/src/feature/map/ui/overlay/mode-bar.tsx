@@ -8,6 +8,7 @@ import { PAN_X } from "@platform/gesture.ts";
 
 import type { f64, u32, u8 } from "@xpute/core/abi/word.ts";
 import { Glass, SYSTEM_GLASS } from "@platform/glass.tsx";
+import { GlassVariant } from "@/shared/ui/glass-variant.ts";
 import { Motion } from "@platform/motion.tsx";
 import { LABEL } from "@platform/palette.ts";
 import { Pill } from "@platform/pill.tsx";
@@ -115,6 +116,7 @@ function SizeFlyout({ shown, hover }: { shown: boolean; hover: u32 | null }) {
   return (
     <Glass
       fill={alpha(color.band, 0.8)}
+      variant={GlassVariant.Regular}
       fade={shown ? 1 : 0}
       fadeFrom={0}
       transition={shown ? SNAP : LEAVE}
@@ -371,6 +373,9 @@ export function ModeBar() {
   // instead of to one shared control. Reviewed and kept on purpose: a
   // rework does not drop it without raising it.
   const showSendInPaletteSlot = messageExpanded && messageText.trim() !== "";
+  // The send button is the palette pill's glass tinted with the send color;
+  // without glass, the same color is the fill.
+  const sendTint = showSendInPaletteSlot ? color.send : undefined;
 
   // Where each pill stands and how wide it shows. The open pill takes what
   // the other's circle and the gap leave, up to its own width; the pair is
@@ -388,7 +393,16 @@ export function ModeBar() {
     <View ref={bar} {...putAway.panHandlers} onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)} style={styles.bar}>
       {barWidth > 0 && (
         <>
-          <Pill x={messageX} width={messageWidth} height={MODE_BAR_HEIGHT_PX} span={barWidth} fill={color.white} shadow="0 6px 20px rgba(0, 0, 0, 0.25)">
+          <Pill
+            x={messageX}
+            width={messageWidth}
+            height={MODE_BAR_HEIGHT_PX}
+            span={barWidth}
+            fill={color.white}
+            variant={GlassVariant.Regular}
+            interactive={!messageExpanded}
+            shadow="0 6px 20px rgba(0, 0, 0, 0.25)"
+          >
             <Pressable
               onPress={() => setMessageExpanded(true)}
               accessibilityRole="button"
@@ -424,7 +438,10 @@ export function ModeBar() {
             width={paletteWidth}
             height={MODE_BAR_HEIGHT_PX}
             span={barWidth}
-            fill={color.band}
+            fill={sendTint ?? color.band}
+            tint={sendTint}
+            variant={GlassVariant.Regular}
+            interactive={!paletteExpanded}
             shadow="0 3px 6px rgba(0, 0, 0, 0.25)"
             onContentWidth={setStripWidth}
           >
@@ -496,7 +513,7 @@ export function ModeBar() {
                     disabled={isSending}
                     accessibilityRole="button"
                     accessibilityLabel={t("map.mode_bar.send")}
-                    style={({ pressed }) => [styles.slotButton, styles.send, pressed && styles.sendPressed]}
+                    style={({ pressed }) => [styles.slotButton, pressed && styles.sendPressed]}
                   >
                     <ArrowUp size={GLYPH} strokeWidth={2.75} color={color.white} />
                   </Pressable>
@@ -563,10 +580,6 @@ const styles = StyleSheet.create({
   messageInput: { width: "100%", color: LABEL.primary },
 
   slotButton: { ...PILL, position: "absolute", left: 0, top: 0, width: MODE_BAR_HEIGHT_PX, alignItems: "center", justifyContent: "center" },
-  // A message app's send: the field's one action, so filled rather than
-  // tinted — an arrow up in a circle of the send color, dimmed while pressed.
-  // No glow of its own; the pill it stands in already casts one.
-  send: { backgroundColor: color.send },
   sendPressed: { opacity: 0.7 },
 
   strip: { ...PILL, flexDirection: "row", alignItems: "center" },
