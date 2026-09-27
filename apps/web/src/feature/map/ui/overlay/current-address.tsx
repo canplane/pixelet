@@ -5,7 +5,7 @@ import { StyleSheet } from "react-native";
 import { Motion } from "@platform/motion.tsx";
 import type { LonLat } from "@/kernel/abi/cmd.spec.ts";
 import { useKernel } from "@/kernel/shell.ts";
-import { LEAVE } from "@/shared/ui/motion/transition.ts";
+import { FADE } from "@/shared/ui/motion/transition.ts";
 import { HaloText } from "@/shared/ui/halo.tsx";
 import { color, textStyle, weight } from "@/shared/ui/theme.ts";
 
@@ -25,7 +25,7 @@ export function CurrentAddress(props: CurrentAddressProps) {
   if (!text) return null;
 
   return (
-    <Motion key={label ?? ""} from={{ opacity: 0 }} to={{}} transition={{ ...LEAVE, durationMs: 200 }} style={styles.shrink}>
+    <Motion key={label ?? ""} from={{ opacity: 0 }} to={{}} transition={FADE} style={styles.shrink}>
       <HaloText style={[styles.label, !label && styles.numbers]}>{text}</HaloText>
     </Motion>
   );

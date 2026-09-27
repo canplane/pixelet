@@ -11,7 +11,7 @@ import { Panel } from "@platform/panel.tsx";
 import { PANEL_CONTROL, PANEL_EDGE, PANEL_HEADER, PanelBody, PanelClose } from "@/shared/ui/panel.tsx";
 import { KEEPS_KEYBOARD } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
-import { color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
+import { alpha, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
 import { Command, DevicePoseStatus, encode_input_go_to } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, kernel_enable_location, kernel_snapshot } from "@/kernel/shell.ts";
 import { useSensors } from "@/feature/map/ui/overlay/sensor-status.tsx";
@@ -25,10 +25,8 @@ import { resolvePoiBadge } from "@/feature/search/poi-badge.ts";
 import { assembleLabel } from "@/feature/map/geocode/label.ts";
 import { fetchSearch, type SearchResult } from "@/feature/search/repository.ts";
 
-// Debounced like use-reverse-geocode.ts's own DEBOUNCE_MS, but shorter:
-// that one waits for panning to *settle* on a new page; this waits for
-// typing to pause, which is a much shorter, more familiar rhythm for a
-// search box.
+// Shorter than use-reverse-geocode.ts's: that one waits for a pan to settle
+// on a new page, this for typing to pause.
 const DEBOUNCE_MS = 300;
 
 interface LonLat {
@@ -64,47 +62,45 @@ function formatDistance(m: f64): string {
   return `${round(m / 1000).toLocaleString()}km`;
 }
 
-// Same "pick a language against i18n.language, fall back to the given
-// name" rule label.ts's own displayPartName() applies to a PlacePart —
-// SearchResult's `common` is the identical shape for exactly the same
-// reason (division results share the same multilingual source).
-// Never touches `name` itself for a "poi" result (always null there) or
-// The subtitle is the same for both kinds: where the point actually is,
-// resolved from its coordinates. It replaced Overture's own address text,
-// which arrived in a different shape from every contributor and could name
-// a different city than the geometry beside it.
+/** A result's name in the reader's language where it has one, as label.ts
+ * picks a place part's. */
 function displayName(result: SearchResult, lang: string): string {
   return result.common?.[lang] ?? result.name;
 }
 
-/** The row under a result's name: where it is on the left, how far away on
- * the right. Rendered whenever either half has something to say, so a result
- * with no resolved context still gets its distance. */
-function SubtitleRow(props: { label: string; distance: string | null }) {
-  if (props.label === "" && props.distance === null) return null;
+/** One result: its name, and under it where it is on the left and how far
+ * away on the right. Where it is comes from its coordinates, never from a
+ * source's own address text, which came in a different shape from every
+ * contributor and could name another city than the point. A place has a
+ * badge of its kind; an area has none, the section already says what it is. */
+function ResultRow({ result, lang, distance, onPress }: { result: SearchResult; lang: string; distance: string | null; onPress: () => void }) {
+  const where = result.context.length > 0 ? assembleLabel(result.context, lang) : "";
+  // poi-badge.ts says why an emoji beats a glyph at this size.
+  const badge = result.kind === "poi" ? resolvePoiBadge(result.category) : null;
   return (
-    <View style={styles.subtitle}>
-      <Text numberOfLines={1} style={[styles.small, styles.context]}>{props.label}</Text>
-      {props.distance !== null && <Text style={[styles.small, styles.distance]}>{props.distance}</Text>}
-    </View>
+    <Pressable onPress={onPress} accessibilityRole="button" style={styles.row}>
+      {badge && (
+        <View style={[styles.badge, { backgroundColor: alpha(badge.color, 0.2) }]}>
+          <Text style={styles.badgeIcon}>{badge.icon}</Text>
+        </View>
+      )}
+      <View style={styles.rowText}>
+        <Text numberOfLines={1} style={styles.name}>{displayName(result, lang)}</Text>
+        {(where !== "" || distance !== null) && (
+          <View style={styles.subtitle}>
+            <Text numberOfLines={1} style={[styles.small, styles.context]}>{where}</Text>
+            {distance !== null && <Text style={[styles.small, styles.distance]}>{distance}</Text>}
+          </View>
+        )}
+      </View>
+    </Pressable>
   );
 }
 
-function SectionHeader(props: { label: string }) {
-  return <Text style={styles.sectionHeader}>{props.label}</Text>;
-}
-
-/**
- * Forward search — the one world/ feature with no static bake behind it
- * (repository.ts's own top comment), so this always round-trips to the
- * live API. Lives in a panel (same ModalManager-hosted pattern
- * as SettingsModal/DrawerModal) rather than an always-visible floating bar
- * on the map itself — opened from CurrentAddress's own trigger
- * (top-overlays.tsx), since "where am I" and "where do I want to go" are
- * the same mental slot for a map. It is mounted fresh each time it opens,
- * so a returning search starts empty: the last thing it almost never wants
- * is last session's list for a place already visited.
- */
+const SECTIONS = [
+  { kind: "division", label: "map.search.section_areas" },
+  { kind: "poi", label: "map.search.section_places" },
+] as const;
 
 function poseColor(status: DevicePoseStatus): string {
   switch (status) {
@@ -117,6 +113,10 @@ function poseColor(status: DevicePoseStatus): string {
   }
 }
 
+const LOCATE_HEIGHT = 44;
+/** The card's gap from the keyboard or the bottom, and from the last result. */
+const LOCATE_INSET = 16;
+
 /** Turns the location on, floating over the results while it is off: the
  * search is where "near me" is asked, and a place's distance is measured
  * from it. The compass is not asked for here — nothing reads it without the
@@ -126,7 +126,7 @@ function LocateCard() {
   const { location } = useSensors();
   if (location === DevicePoseStatus.Ready) return null;
   return (
-    <AboveKeyboard inset={16}>
+    <AboveKeyboard inset={LOCATE_INSET}>
       <Backing fill={color.white} place={BackingPlace.OnSheet} interactive style={styles.locateCard}>
         <Pressable onPress={kernel_enable_location} accessibilityRole="button" style={styles.locateRow}>
           <Glyph glyph="location" size={18} color={poseColor(location)} />
@@ -138,53 +138,51 @@ function LocateCard() {
   );
 }
 
+/** What a query found, and where its distances are measured from: frozen at
+ * the moment it ran, the point the API ranked against, so the numbers agree
+ * with the order and a camera drifting behind the panel cannot renumber the
+ * list being read. */
+interface Found {
+  query: string;
+  results: SearchResult[];
+  origin: LonLat | null;
+}
+
+/**
+ * Forward search, which always asks the live API: nothing is baked for it
+ * (repository.ts). Opened from the address title (top-overlays.tsx), since
+ * where one is and where one wants to go are the same slot on a map. It
+ * mounts fresh each time, so a search starts empty rather than on the last
+ * place's list.
+ */
 export function SearchModal(props: BaseModalProps) {
   const { onClose } = props;
   const { t, i18n } = useTranslation();
   const lang = i18n.language.split("-")[0].toLowerCase();
 
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResult[]>([]);
-  // Where the distances on the rows are measured from, frozen at the moment
-  // the query ran rather than read live. It is the same point the API ranked
-  // against, so the numbers shown always agree with the order they are shown
-  // in — and a camera still drifting behind the open panel cannot renumber a
-  // list the reader is looking at.
-  const [origin, setOrigin] = useState<LonLat | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [found, setFound] = useState<Found>({ query: "", results: [], origin: null });
+  const q = query.trim();
+  // The last list stands while the next is on its way.
+  const results = q === "" ? [] : found.results;
+  const loading = q !== "" && found.query !== q;
 
   useEffect(() => {
-    const q = query.trim();
-    if (q.length === 0) {
-      setResults([]);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-
+    if (q === "") return;
     // Latest wins: the next keystroke's query aborts this one.
     const controller = new AbortController();
-    const signal = controller.signal;
     const timer = setTimeout(() => {
       // The kernel's map center, in degrees.
       const near = kernel_snapshot().map.center ?? undefined;
-      fetchSearch(q, { near, signal })
-        .then((found) => {
-          setOrigin(near ?? null);
-          setResults(found);
-        })
-        .catch(() => {})
-        .finally(() => {
-          if (!signal.aborted) setLoading(false);
-        });
+      fetchSearch(q, { near, signal: controller.signal })
+        .then((results) => controller.signal.aborted || setFound({ query: q, results, origin: near ?? null }))
+        .catch(() => controller.signal.aborted || setFound({ query: q, results: [], origin: null }));
     }, DEBOUNCE_MS);
-
     return () => {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query]);
+  }, [q]);
 
   function select(result: SearchResult) {
     // The kernel's map center: it grounds the jump the way a pan is, stops
@@ -195,11 +193,8 @@ export function SearchModal(props: BaseModalProps) {
   }
 
   function distanceOf(result: SearchResult): string | null {
-    return origin === null ? null : formatDistance(groundDistanceM(origin, { lon: result.lon, lat: result.lat }));
+    return found.origin === null ? null : formatDistance(groundDistanceM(found.origin, { lon: result.lon, lat: result.lat }));
   }
-
-  const divisionResults = results.filter((r) => r.kind === "division");
-  const poiResults = results.filter((r) => r.kind === "poi");
 
   return (
     <Panel label={t("map.search.placeholder")} onClose={() => onClose()}>
@@ -212,10 +207,10 @@ export function SearchModal(props: BaseModalProps) {
             }
             <View {...KEEPS_KEYBOARD} style={styles.headerRow}>
               {
-                /* Search field (glass capsule with the magnifier and the clear
-                  button inside), then the panel's close button. The clear is a
-                  small filled circle inside the field and the close is a separate
-                  round button, so the two X's are not confused. */
+                /* The field with its magnifier and clear, then the panel's
+                  close: the clear a small filled circle inside the field, the
+                  close a round button of its own, so the two X's are not
+                  confused. */
               }
               <Backing fill={color.faint} place={BackingPlace.OnSheet} style={styles.well}>
                 <Glyph glyph="magnifyingglass" size={16} color={LABEL.secondary} />
@@ -228,11 +223,9 @@ export function SearchModal(props: BaseModalProps) {
                   style={styles.field}
                 />
                 {
-                  /* Where the field has no clear of its own. Lucide has no filled
-                    circle-X glyph (it's a pure outline/stroke icon set) — composed
-                    by hand: a solid circle with a smaller X cut into it in the
-                    background color, the familiar "clear field" shape (iOS/macOS
-                    search fields). The results follow the emptied query. */
+                  // Where the field has no clear of its own: a filled circle
+                  // with an X in the paper's color, as a system search
+                  // field's is.
                 }
                 {!SYSTEM_CLEAR && query.length > 0 && (
                   <Pressable
@@ -252,50 +245,22 @@ export function SearchModal(props: BaseModalProps) {
         }
       >
         <ScrollView style={styles.results} contentContainerStyle={styles.resultsRoom} keyboardShouldPersistTaps="handled">
-          {query.trim().length > 0 && results.length === 0 && <Text style={styles.empty}>{loading ? t("map.search.loading") : t("map.search.no_results")}</Text>}
+          {q !== "" && results.length === 0 && <Text style={styles.empty}>{loading ? t("map.search.loading") : t("map.search.no_results")}</Text>}
 
           {
-            /* Divisions first — the backend already orders them that way
-          (search/provider/overture_provider.ts's own top comment: a
-          name matching an admin area is rare enough to surface ahead of
-          whatever POI happens to contain the same substring), and a
-          section header on each group makes that ordering legible
-          instead of just an unlabeled jump from areas to places. */
+            // Areas first, as the backend orders them: a name matching an
+            // area is rare enough to lead whatever places contain it
+            // (pxl-geo search/overture.rs). Each group has a header,
+            // so the change from areas to places reads.
           }
-          {divisionResults.length > 0 && <SectionHeader label={t("map.search.section_areas")} />}
-          {divisionResults.map((r) => (
-            <Pressable key={r.gers_id} onPress={() => select(r)} accessibilityRole="button" style={styles.row}>
-              {
-                /* No icon here, unlike a POI row — a division doesn't
-              have a "kind of place" to badge the way a category does,
-              and the section header already says what these are. */
-              }
-              <View style={styles.rowText}>
-                <Text numberOfLines={1} style={styles.name}>{displayName(r, lang)}</Text>
-                <SubtitleRow label={r.context.length > 0 ? assembleLabel(r.context, lang) : ""} distance={distanceOf(r)} />
-              </View>
-            </Pressable>
-          ))}
-
-          {poiResults.length > 0 && <SectionHeader label={t("map.search.section_places")} />}
-          {poiResults.map((r) => {
-            // poi-badge.ts says why an emoji beats a Lucide glyph at this size.
-            const badge = resolvePoiBadge(r.category);
+          {SECTIONS.map(({ kind, label }) => {
+            const rows = results.filter((r) => r.kind === kind);
+            if (rows.length === 0) return null;
             return (
-              <Pressable key={r.gers_id} onPress={() => select(r)} accessibilityRole="button" style={styles.row}>
-                <View style={[styles.badge, { backgroundColor: `${badge.color}33` }]}>
-                  <Text style={styles.badgeIcon}>{badge.icon}</Text>
-                </View>
-                {
-                  /* Grows, or the column sizes to its own text and the
-                distance ends up beside the address instead of at the
-                row's right edge. */
-                }
-                <View style={styles.rowText}>
-                  <Text numberOfLines={1} style={styles.name}>{displayName(r, lang)}</Text>
-                  <SubtitleRow label={r.context.length > 0 ? assembleLabel(r.context, lang) : ""} distance={distanceOf(r)} />
-                </View>
-              </Pressable>
+              <View key={kind}>
+                <Text style={styles.sectionHeader}>{t(label)}</Text>
+                {rows.map((r) => <ResultRow key={r.gers_id} result={r} lang={lang} distance={distanceOf(r)} onPress={() => select(r)} />)}
+              </View>
             );
           })}
         </ScrollView>
@@ -308,11 +273,11 @@ export function SearchModal(props: BaseModalProps) {
 
 const styles = StyleSheet.create({
   locateCard: { borderRadius: 22, pointerEvents: "auto", boxShadow: "0 6px 20px rgba(0, 0, 0, 0.12)" },
-  locateRow: { height: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16 },
+  locateRow: { height: LOCATE_HEIGHT, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16 },
   locateLabel: { flex: 1, ...textStyle.body, color: LABEL.primary },
   locateAction: { ...textStyle.body, fontWeight: weight.semibold, color: color.action },
   // Room under the last result for the card that floats over it.
-  resultsRoom: { paddingBottom: 76 },
+  resultsRoom: { paddingBottom: LOCATE_HEIGHT + 2 * LOCATE_INSET },
   headerRow: { ...PANEL_HEADER, gap: 8 },
   well: { flex: 1, minWidth: 0, height: PANEL_CONTROL, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderRadius: PANEL_CONTROL / 2 },
   field: { flex: 1, minWidth: 0, color: LABEL.primary },

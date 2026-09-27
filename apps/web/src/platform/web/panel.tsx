@@ -44,21 +44,27 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
   const halfHeight = window.height / 2;
 
   const [full, setFull] = useState(!half);
+  // The content area is laid out full height from the moment the sheet
+  // grows, and back at half once it has slid down (header comment).
+  const [bodyFull, setBodyFull] = useState(full);
   const [drag, setDrag] = useState<f64 | null>(null);
   const shown = full ? fullHeight : halfHeight;
-  const [bodyHeight, setBodyHeight] = useState(shown);
 
-  const toFull = () => {
-    setFull(true);
-    setBodyHeight(fullHeight);
+  const detent = (toFull: boolean) => {
+    setFull(toFull);
+    if (toFull) setBodyFull(true);
   };
-  const toHalf = () => setFull(false);
+  /** Where a release can settle, lowest first: closed, half when the panel
+   * has one, full. */
+  const stops = [
+    { height: 0, settle: onClose },
+    ...(half ? [{ height: halfHeight, settle: () => detent(false) }] : []),
+    { height: fullHeight, settle: () => detent(true) },
+  ];
 
-  // Read by the responder, which is made once.
-  const now = useRef({ shown, half, fullHeight, halfHeight, windowHeight: window.height });
-  now.current = { shown, half, fullHeight, halfHeight, windowHeight: window.height };
-  const act = useRef({ toFull, toHalf, onClose });
-  act.current = { toFull, toHalf, onClose };
+  // What the responder, made once, reads of the latest render.
+  const live = useRef({ top: window.height - shown, shown, stops });
+  live.current = { top: window.height - shown, shown, stops };
 
   const responder = useRef(
     PanResponder.create({
@@ -66,24 +72,19 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
       // element under the pointer, which is the map once a drag upward leaves
       // the sheet. Bubbling, so the close button and the handle, which are
       // deeper, still take their taps.
-      onStartShouldSetPanResponder: (e) => {
-        const { shown, windowHeight } = now.current;
-        return e.nativeEvent.pageY - (windowHeight - shown) < PANEL_HEAD_HEIGHT;
-      },
+      onStartShouldSetPanResponder: (e) => e.nativeEvent.pageY - live.current.top < PANEL_HEAD_HEIGHT,
       onPanResponderTerminationRequest: () => false,
       onPanResponderMove: (_, g) => setDrag(g.dy),
       onPanResponderRelease: (_, g) => {
         setDrag(null);
-        const { shown, half, fullHeight, halfHeight } = now.current;
+        const { shown, stops } = live.current;
         const height = shown - g.dy;
-        const stops = half ? [0, halfHeight, fullHeight] : [0, fullHeight];
-        let stop: f64;
-        if (g.vy < -FLING) stop = stops.find((s) => s > shown) ?? shown;
-        else if (g.vy > FLING) stop = [...stops].reverse().find((s) => s < shown) ?? 0;
-        else stop = stops.reduce((a, b) => (Math.abs(b - height) < Math.abs(a - height) ? b : a));
-        if (stop === 0) act.current.onClose();
-        else if (stop === fullHeight) act.current.toFull();
-        else act.current.toHalf();
+        const stop = g.vy < -FLING
+          ? stops.find((s) => s.height > shown)
+          : g.vy > FLING
+          ? stops.findLast((s) => s.height < shown)
+          : stops.reduce((a, b) => (Math.abs(b.height - height) < Math.abs(a.height - height) ? b : a));
+        stop?.settle();
       },
       onPanResponderTerminate: () => setDrag(null),
     }),
@@ -105,14 +106,14 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
         from={away}
         to={open ? { translateY: offset } : away}
         transition={drag !== null ? FOLLOW : open ? SLIDE : SLIDE_AWAY}
-        onSettled={open ? () => drag === null && !full && setBodyHeight(halfHeight) : gone}
+        onSettled={open ? () => drag === null && setBodyFull(full) : gone}
         style={[styles.sheet, { width, height: fullHeight, left: (window.width - width) / 2 }]}
       >
-        <View {...responder.panHandlers} accessibilityViewIsModal accessibilityLabel={label} style={[styles.body, { height: bodyHeight }]}>
+        <View {...responder.panHandlers} accessibilityViewIsModal accessibilityLabel={label} style={[styles.body, { height: bodyFull ? fullHeight : halfHeight }]}>
           {children}
           {half && (
             <Pressable
-              onPress={full ? toHalf : toFull}
+              onPress={() => detent(!full)}
               accessibilityRole="adjustable"
               accessibilityLabel={label}
               hitSlop={8}

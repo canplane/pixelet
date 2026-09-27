@@ -25,12 +25,15 @@ function Badge({ text, tint }: { text: string; tint: string }) {
   );
 }
 
-function CostBadge(props: { cost: SettingCost }) {
-  return <Badge text={props.cost.toUpperCase()} tint={COST_COLOR[props.cost]} />;
-}
-
-function DevBadge() {
-  return <Badge text="DEV" tint={color.dev} />;
+/** A setting's badges: that only a development build offers it, and what it
+ * costs the device. */
+function Badges({ cost, dev }: { cost?: SettingCost; dev?: boolean }) {
+  return (
+    <>
+      {dev && <Badge text="DEV" tint={color.dev} />}
+      {cost && <Badge text={cost.toUpperCase()} tint={COST_COLOR[cost]} />}
+    </>
+  );
 }
 
 /** A name, its badges, and an optional description under it. */
@@ -39,10 +42,9 @@ function Described({ label, description, cost, dev }: { label: string; descripti
     <View style={styles.described}>
       <View style={styles.nameLine}>
         <Text style={styles.name}>{label}</Text>
-        {dev && <DevBadge />}
-        {cost && <CostBadge cost={cost} />}
+        <Badges cost={cost} dev={dev} />
       </View>
-      {description && <Text style={styles.description}>{description}</Text>}
+      {description && <Text style={settingText.small}>{description}</Text>}
     </View>
   );
 }
@@ -77,30 +79,18 @@ interface SettingGroupProps {
   children: ReactNode;
 }
 
-/** A choice's answers in one box, with the setting's name let into the line
- * that draws it — a fieldset's legend, drawn rather than declared. The
- * answers each name an answer and nothing said what they were answers to; a
- * name floating above the box would have been a second thing to place, so
- * the name sits on the border itself, carrying the panel's own background
- * so the line appears to run through it on either side. The box takes the
- * top padding the name needs to clear the first answer, and the name is
- * inset to the left rather than centered, since every other line in the
- * panel starts at the left — by its own padding, so the name starts exactly
- * where the answers' names start.
- *
- * The box stands away from the rows it sits among — a switch's row has only
- * the section's own gap around it, which left this one reading as another
- * row rather than as a box of answers. More above than below, because the
- * name rises out of the box by half its height and would otherwise close on
- * whatever is over it. */
+/** A choice's answers in one box, the setting's name set into its border as a
+ * fieldset's legend: on the panel's ground, so the line seems to run behind
+ * it, and at the left, where the answers' names start. The box stands apart
+ * from the rows around it so it reads as a box and not another row, more
+ * above than below, since the name rises out of it by half its height. */
 export function SettingGroup(props: SettingGroupProps) {
   const { label, cost, dev, children } = props;
   return (
     <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[styles.group, styles.bleed]}>
       <View style={styles.legend}>
         <Text style={styles.legendText}>{label}</Text>
-        {dev && <DevBadge />}
-        {cost && <CostBadge cost={cost} />}
+        <Badges cost={cost} dev={dev} />
       </View>
       <View style={styles.answers}>{children}</View>
     </View>
@@ -144,7 +134,7 @@ export function SectionTitle(props: SectionTitleProps) {
         {icon && <Glyph glyph={icon} size={16} color={LABEL.secondary} />}
         <Text accessibilityRole="header" style={styles.title}>{children}</Text>
       </View>
-      {caption && <Text style={styles.caption}>{caption}</Text>}
+      {caption && <Text style={settingText.faint}>{caption}</Text>}
     </View>
   );
 }
@@ -164,7 +154,6 @@ const styles = StyleSheet.create({
   described: { flexShrink: 1, minWidth: 0, gap: 4 },
   nameLine: { flexDirection: "row", alignItems: "center", gap: 6 },
   name: { ...textStyle.body, color: LABEL.primary },
-  description: { ...textStyle.caption, color: LABEL.secondary },
 
   // iOS's tinted style: the tint as a faint ground and the words in it, no
   // edge — a full fill is what a chosen chip says.
@@ -178,7 +167,8 @@ const styles = StyleSheet.create({
   group: { marginTop: 16, marginBottom: 10, borderWidth: 1, borderColor: hairline, borderRadius: 10, padding: 4, paddingTop: 10 },
   legend: {
     position: "absolute",
-    top: -7,
+    // The name's middle on the box's one-point border.
+    top: 1 - textStyle.caption.lineHeight / 2,
     left: 8,
     flexDirection: "row",
     alignItems: "center",
@@ -194,5 +184,4 @@ const styles = StyleSheet.create({
   titleBlock: { gap: 4, marginBottom: 4 },
   titleLine: { flexDirection: "row", alignItems: "center", gap: 6 },
   title: { ...sectionTitle, color: LABEL.secondary },
-  caption: { ...textStyle.caption2, fontWeight: weight.regular, color: LABEL.secondary },
 });

@@ -6,7 +6,7 @@ import { type StyleProp, StyleSheet, Text, type TextStyle, View, type ViewStyle 
 import type { f64 } from "@xpute/core/abi/word.ts";
 import type { IconProps } from "@platform/icon.tsx";
 import { Glyph } from "@/shared/ui/glyph.tsx";
-import { color as theme, halo } from "@/shared/ui/theme.ts";
+import { color as theme, halo, haloRings } from "@/shared/ui/theme.ts";
 
 /**
  * What floats over the map, in the halo it stands in (theme.ts `halo`):
@@ -21,7 +21,7 @@ import { color as theme, halo } from "@/shared/ui/theme.ts";
 function Halo({ style, draw }: { style: StyleProp<ViewStyle>; draw: (ink?: string) => ReactNode }) {
   return (
     <View style={style}>
-      {halo.rings.map((px) => (
+      {haloRings.map((px) => (
         <View key={px} aria-hidden style={[StyleSheet.absoluteFill, { opacity: halo.ring }]}>
           {around(px).map(([x, y], i) => (
             <View key={i} style={[StyleSheet.absoluteFill, { transform: [{ translateX: x }, { translateY: y }] }]}>
@@ -41,8 +41,8 @@ export function HaloIcon({ struck, ...icon }: IconProps & { struck?: boolean }) 
   return <Halo style={{ width: icon.size, height: icon.size }} draw={(ink) => <Glyph {...icon} color={ink ?? icon.color} struck={struck} />} />;
 }
 
-/** One line of text over the map in the halo. Every copy wraps and ends as
- * the line does. */
+/** One line of text over the map in the halo. Every copy is cut short where
+ * the line is. */
 export function HaloText({ style, children }: { style: StyleProp<TextStyle>; children: ReactNode }) {
   return (
     <Halo

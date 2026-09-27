@@ -11,10 +11,11 @@ import { LABEL, NORTH } from "@platform/palette.ts";
 import { CircularButton } from "@/shared/ui/circular-button.tsx";
 import { Presence } from "@/shared/ui/motion/presence.tsx";
 import { after, ARRIVE } from "@/shared/ui/motion/transition.ts";
+import { chrome } from "@/shared/ui/theme.ts";
 import type { f64 } from "@xpute/core/abi/word.ts";
 
 /** The face the needle is drawn on: the button's. */
-const DIAL = 48;
+const DIAL = chrome.control;
 /** A lozenge, widest at the pivot and pointed at both ends, each half cut
  * into a lit face and a shaded one along its ridge, as a machined needle
  * catches the light. Its colors are the system's, as a system compass's are:
@@ -29,9 +30,10 @@ const LIT = 0.75;
 const NEEDLE_ROUND = 2;
 /** Printed on the face: a hairline at every eighth of the turn, the four
  * quarters heavier and a step stronger than the eighths between them, both
- * weaker than the needle they stand behind. */
-const TICK_FROM = 18.5;
-const TICK_TO = 21;
+ * weaker than the needle they stand behind. Each runs out to 3 inside the
+ * button's rim. */
+const TICK_TO = DIAL / 2 - 3;
+const TICK_FROM = TICK_TO - 2.5;
 const QUARTER_STROKE = 1.5;
 const EIGHTH_STROKE = 0.75;
 const [QUARTERS, EIGHTHS] = [0, 1].map((odd) =>
@@ -68,22 +70,17 @@ export function MapCompass() {
   return (
     <Presence
       show={showCompass}
-      from={{ scale: 0.8, rotate: -45, translateY: 10 }}
-      exit={{ scale: 0.5, rotate: 45 }}
+      // It turns in and grows from next to nothing, and turns on and shrinks
+      // away. Its glass is never faded: the glass steps through a darker style
+      // on its way in and out, which read as the button darkening. Not from
+      // zero, whose transform has no inverse for UIKit to hit-test and draw
+      // an effect view through.
+      from={{ scale: 0.01, rotate: -45, translateY: 10 }}
+      exit={{ scale: 0.01, rotate: 45 }}
       transition={after(ARRIVE, 400)}
       exitTransition={ARRIVE}
     >
-      {
-        // Faded by its glass, not by the presence around it
-        // (shared/ui/motion/veil.ts).
-      }
-      <CircularButton
-        onPress={() => kernel_command(Command.INPUT_COMPASS_RESET)}
-        label={t("map.controls.reset_orientation")}
-        fade={showCompass ? 1 : 0}
-        fadeFrom={0}
-        fadeTransition={showCompass ? after(ARRIVE, 400) : ARRIVE}
-      >
+      <CircularButton onPress={() => kernel_command(Command.INPUT_COMPASS_RESET)} label={t("map.controls.reset_orientation")}>
         <View style={{ width: DIAL, height: DIAL }}>
           <Svg width={DIAL} height={DIAL} viewBox={BOX} style={StyleSheet.absoluteFill}>
             <Path d={QUARTERS} stroke={LABEL.secondary} strokeWidth={QUARTER_STROKE} strokeLinecap="round" />
