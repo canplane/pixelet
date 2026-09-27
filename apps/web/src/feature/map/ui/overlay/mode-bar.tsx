@@ -34,8 +34,12 @@ export const MODE_BAR_HEIGHT_PX = chrome.control;
  * pitch and no wider — past it, it overlaps a neighbor and the later
  * one in the tree takes the tap — so a swatch smaller than the pitch is a
  * transparent box at full pitch with its shape centered. */
-const PITCH = 38;
-const GLYPH = 20;
+const PITCH = 44;
+/** A glyph, and a pick's swatch, as every control's. */
+const GLYPH = chrome.glyph;
+/** The capsule a tool in hand is lit on, a step inside its slot: concentric
+ * with the pill, as far in from its edge as the capsule is from the slot's. */
+const HELD_PX = 36;
 const PILL_GAP = chrome.controlGap;
 /** The message field's width where the bar leaves it room. */
 const FIELD_PX = 384;
@@ -261,8 +265,8 @@ function DecorIconButton({ kind }: { kind: u8 }) {
 /** A round slot in the strip, lit while its tool is the one in hand. */
 function ToolButton({ label, active, onPress, children }: { label: string; active?: boolean; onPress: () => void; children: React.ReactNode }) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={[styles.slot, styles.round, active && styles.toolActive]}>
-      {children}
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={styles.slot}>
+      <View style={[styles.held, active && styles.toolActive]}>{children}</View>
     </Pressable>
   );
 }
@@ -574,14 +578,14 @@ const styles = StyleSheet.create({
   // tools inherit (feature/map/ui/busy-dim.tsx).
   pass: { pointerEvents: "box-none" },
   block: { pointerEvents: "none" },
-  group: { flexDirection: "row", alignItems: "center", padding: 4, flexShrink: 0 },
+  group: { flexDirection: "row", alignItems: "center", padding: (MODE_BAR_HEIGHT_PX - PITCH) / 2, flexShrink: 0 },
   divider: { width: 1, height: 28, backgroundColor: STRIP.line, flexShrink: 0 },
   picks: { flexShrink: 1, minWidth: 0 },
-  picksContent: { alignItems: "center", paddingHorizontal: 4 },
+  picksContent: { alignItems: "center", paddingHorizontal: (MODE_BAR_HEIGHT_PX - PITCH) / 2 },
 
   slot: { width: PITCH, height: PITCH, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   swatchSlot: PAN_X,
-  round: { borderRadius: PITCH / 2 },
+  held: { width: HELD_PX, height: HELD_PX, borderRadius: HELD_PX / 2, alignItems: "center", justifyContent: "center" },
   toolActive: { backgroundColor: STRIP.held },
   swatchIdle: { boxShadow: `0 0 0 1px ${STRIP.line}` },
   swatchSelected: { boxShadow: heldRing(STRIP.ground, STRIP.mark, 1) },

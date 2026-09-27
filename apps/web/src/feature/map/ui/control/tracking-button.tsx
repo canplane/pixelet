@@ -5,6 +5,7 @@ import { View } from "react-native";
 
 import { type GlyphName, Spinner } from "@platform/icon.tsx";
 import { LABEL } from "@platform/palette.ts";
+import { chrome } from "@/shared/ui/theme.ts";
 
 import { DevicePoseStatus, Tracking } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_tracking, useKernel } from "@/kernel/shell.ts";
@@ -21,7 +22,7 @@ const PRESS: Record<Tracking, { glyph: GlyphName; label: string }> = {
   [Tracking.Unfollow]: { glyph: "location.north.line.fill", label: "map.controls.exit_compass_mode" },
 };
 
-const GLYPH = 20;
+const GLYPH = chrome.glyph;
 
 export function TrackingButton() {
   const { t } = useTranslation();

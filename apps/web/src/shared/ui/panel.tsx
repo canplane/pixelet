@@ -1,23 +1,17 @@
 // @pxl/web/shared/ui/panel.tsx
 
 import { createContext, type ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { Backing } from "@platform/backing.tsx";
 import { BackingPlace } from "@/shared/ui/backing-place.ts";
-import { Glyph } from "@/shared/ui/glyph.tsx";
+import { CircularButton } from "@/shared/ui/circular-button.tsx";
 import { chrome, color, textStyle } from "@/shared/ui/theme.ts";
 import { LABEL } from "@platform/palette.ts";
 
 /** Height of the controls on a sheet (close button, search field, segmented
- * control), a step under a map control's 48; a press lands on 44, iOS's
- * least target (PANEL_TOUCH_SLOP). */
-export const PANEL_CONTROL = 40;
-/** A glyph on a sheet's control: two fifths of it, as a map control's 20 is
- * of its 48. */
-export const PANEL_GLYPH = 16;
-/** How far past a sheet control's edge a press still lands on it. */
-const PANEL_TOUCH_SLOP = (44 - PANEL_CONTROL) / 2;
+ * control): 44, iOS's least target, a step under a map control's 48. */
+export const PANEL_CONTROL = 44;
 /** Top row height, the same as an iOS navigation bar. */
 const ROW = 44;
 /** Distance of the top row's controls from the sheet's side and top edges,
@@ -105,15 +99,9 @@ export function PanelBody({ header, tabs, children }: { header: ReactNode; tabs?
 }
 
 /** A panel's close button: a round glass button with an X, as on iOS 26
- * sheets. */
+ * sheets, a sheet control's size. */
 export function PanelClose({ label, onClose }: { label: string; onClose: () => void }) {
-  return (
-    <Pressable onPress={onClose} hitSlop={PANEL_TOUCH_SLOP} accessibilityRole="button" accessibilityLabel={label} style={styles.close}>
-      <Backing fill={color.faint} place={BackingPlace.OnSheet} interactive style={styles.closeFace}>
-        <Glyph glyph="xmark" size={PANEL_GLYPH} color={LABEL.primary} />
-      </Backing>
-    </Pressable>
-  );
+  return <CircularButton glyph="xmark" size={PANEL_CONTROL} place={BackingPlace.OnSheet} onPress={onClose} label={label} />;
 }
 
 const styles = StyleSheet.create({
@@ -134,6 +122,4 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
   },
-  close: { width: PANEL_CONTROL, height: PANEL_CONTROL, borderRadius: PANEL_CONTROL / 2 },
-  closeFace: { flex: 1, borderRadius: PANEL_CONTROL / 2, alignItems: "center", justifyContent: "center" },
 });

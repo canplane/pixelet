@@ -195,4 +195,7 @@ export const chrome = {
    * side or stacked. */
   control: 48,
   controlGap: 10,
+  /** A control's glyph, one size whatever the control's: a map control's 48,
+   * a sheet's 44, a slot in the strip. */
+  glyph: 20,
 } as const;

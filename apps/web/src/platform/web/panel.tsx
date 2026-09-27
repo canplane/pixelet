@@ -116,7 +116,6 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
               onPress={() => detent(!full)}
               accessibilityRole="adjustable"
               accessibilityLabel={label}
-              hitSlop={8}
               style={styles.handleArea}
             >
               <View style={styles.handle} />
@@ -146,7 +145,8 @@ const styles = StyleSheet.create({
     backgroundColor: color.paper,
     boxShadow: "0 -4px 20px rgba(0, 0, 0, 0.12)",
   },
-  // iOS's sheet handle: 36 × 5, 5 below the top edge.
-  handleArea: { position: "absolute", top: 0, left: "50%", marginLeft: -24, width: 48, height: 15, alignItems: "center", paddingTop: 5 },
+  // iOS's sheet handle: 36 × 5, 5 below the top edge, in a 44 square a press
+  // lands on.
+  handleArea: { position: "absolute", top: 0, left: "50%", marginLeft: -22, width: 44, height: 44, alignItems: "center", paddingTop: 5 },
   handle: { width: 36, height: 5, borderRadius: 2.5, backgroundColor: LABEL.tertiary },
 });

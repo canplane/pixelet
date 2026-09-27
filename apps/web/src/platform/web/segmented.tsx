@@ -33,8 +33,9 @@ export function Segmented<T extends string | number>({ segments, value, onChange
   );
 }
 
-/** Gap between the track and the selected segment. */
-const INSET = 3;
+/** Gap between the track and the selected segment: the segment stands 36
+ * tall, as a tool in hand is lit in the strip. */
+const INSET = (PANEL_CONTROL - 36) / 2;
 
 const styles = StyleSheet.create({
   // Track and segment are both capsules; the segment's radius is the track's

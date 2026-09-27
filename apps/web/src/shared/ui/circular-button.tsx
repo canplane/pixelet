@@ -4,14 +4,27 @@ import type { ReactNode } from "react";
 
 import { Pressable, StyleSheet } from "react-native";
 
+import type { f64 } from "@xpute/core/abi/word.ts";
 import { Backing, SYSTEM_BACKING } from "@platform/backing.tsx";
+import type { GlyphName } from "@platform/icon.tsx";
+import { LABEL } from "@platform/palette.ts";
 import { BackingPlace } from "@/shared/ui/backing-place.ts";
+import { Glyph } from "@/shared/ui/glyph.tsx";
 import { Motion } from "@platform/motion.tsx";
 import { SNAP } from "@/shared/ui/motion/transition.ts";
 import { chrome, color, disabledContent, surface } from "@/shared/ui/theme.ts";
 
 interface CircularButtonProps {
-  children: ReactNode;
+  /** The glyph it holds, drawn `glyphSize` in the label color; or what it
+   * holds instead, a face of its own (the compass) or a glyph that moves. */
+  glyph?: GlyphName;
+  children?: ReactNode;
+  /** Its side: a map control's by default. */
+  size?: f64;
+  glyphSize?: f64;
+  /** Where it stands, which is what its backing is: over the map by default,
+   * or on a sheet, where the glass is clear and the fill faint. */
+  place?: BackingPlace;
   onPress: () => void;
   /** What assistive technology reads it as. */
   label: string;
@@ -19,11 +32,14 @@ interface CircularButtonProps {
   disabled?: boolean;
 }
 
-/** A round map control: a disc of the platform's glass, or its fill where it
- * has none, holding one glyph. Switched on, the disc takes the chosen coral,
- * as a tint on the glass or as the fill. A press shrinks the disc where there
- * is no glass; the glass answers a press itself. */
-export function CircularButton({ children, onPress, label, isActive, disabled }: CircularButtonProps) {
+/** A round control: a disc of the platform's glass, or its fill where it has
+ * none, holding one glyph. Switched on, the disc takes the chosen coral, as a
+ * tint on the glass or as the fill. A press shrinks the disc where there is
+ * no glass; the glass answers a press itself. */
+export function CircularButton(
+  { glyph, children, size = chrome.control, glyphSize = chrome.glyph, place = BackingPlace.OverMap, onPress, label, isActive, disabled }: CircularButtonProps,
+) {
+  const round = { width: size, height: size, borderRadius: size / 2 };
   return (
     <Pressable
       // Disabled, it still takes a touch and does nothing with it: a
@@ -33,19 +49,19 @@ export function CircularButton({ children, onPress, label, isActive, disabled }:
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled }}
-      style={styles.disc}
+      style={round}
     >
       {({ pressed }) => (
         <Motion to={{ scale: pressed && !disabled && !SYSTEM_BACKING ? 0.95 : 1 }} transition={SNAP} style={styles.press}>
           <Backing
-            fill={isActive ? surface.chosen.fill : color.ground}
+            fill={isActive ? surface.chosen.fill : place === BackingPlace.OnSheet ? color.faint : color.ground}
             tint={isActive ? surface.chosen.glass : undefined}
-            place={BackingPlace.OverMap}
+            place={place}
             interactive={!disabled}
-            style={styles.face}
+            style={[styles.face, { borderRadius: size / 2 }]}
           >
             <Motion to={{ opacity: disabled ? disabledContent : 1 }} transition={SNAP} style={styles.content}>
-              {children}
+              {glyph ? <Glyph glyph={glyph} size={glyphSize} color={LABEL.primary} /> : children}
             </Motion>
           </Backing>
         </Motion>
@@ -55,12 +71,7 @@ export function CircularButton({ children, onPress, label, isActive, disabled }:
 }
 
 const styles = StyleSheet.create({
-  disc: {
-    width: chrome.control,
-    height: chrome.control,
-    borderRadius: chrome.control / 2,
-  },
   press: { flex: 1 },
-  face: { flex: 1, borderRadius: chrome.control / 2, alignItems: "center", justifyContent: "center" },
+  face: { flex: 1, alignItems: "center", justifyContent: "center" },
   content: { alignItems: "center", justifyContent: "center" },
 });

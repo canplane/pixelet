@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 
 import type { BaseModalProps } from "@/app/type/ui.type.ts";
 import { Panel } from "@platform/panel.tsx";
-import { PANEL_CONTROL, PANEL_EDGE, PANEL_GLYPH, PANEL_HEADER, PanelBody, PanelClose } from "@/shared/ui/panel.tsx";
+import { PANEL_CONTROL, PANEL_EDGE, PANEL_HEADER, PanelBody, PanelClose } from "@/shared/ui/panel.tsx";
 import { KEEPS_KEYBOARD } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
 import { alpha, chrome, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
@@ -213,7 +213,7 @@ export function SearchModal(props: BaseModalProps) {
                   confused. */
               }
               <Backing fill={color.faint} place={BackingPlace.OnSheet} style={styles.well}>
-                <Glyph glyph="magnifyingglass" size={PANEL_GLYPH} color={LABEL.secondary} />
+                <Glyph glyph="magnifyingglass" size={chrome.glyph} color={LABEL.secondary} />
                 <TextField
                   value={query}
                   onChangeText={setQuery}
@@ -230,7 +230,7 @@ export function SearchModal(props: BaseModalProps) {
                 {!SYSTEM_CLEAR && query.length > 0 && (
                   <Pressable
                     onPress={() => setQuery("")}
-                    hitSlop={12}
+                    hitSlop={14}
                     accessibilityRole="button"
                     accessibilityLabel={t("map.search.clear_aria_label")}
                     style={styles.clear}
