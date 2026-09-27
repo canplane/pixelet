@@ -74,6 +74,6 @@ export function MapScaleBar({ show }: { show: boolean }) {
 
 const styles = StyleSheet.create({
   root: { alignItems: "center" },
-  label: { ...textStyle.caption2, fontWeight: weight.semibold, fontVariant: ["tabular-nums"], color: color.white },
+  label: { ...textStyle.caption2, fontWeight: weight.semibold, letterSpacing: 0.8, fontVariant: ["tabular-nums"], color: color.white },
   bar: { marginTop: LABEL_GAP_PX - PAD_PX },
 });
