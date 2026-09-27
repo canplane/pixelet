@@ -511,6 +511,20 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   the scheduler only by its order's unit tests and core_sched.test.ts's
   cases — worth a trace-driven comparison if its behavior is ever in doubt.
 
+- **The const enum pass, once.** Asked 2026-09-27, not now. Vite
+  (`apps/web/vite.config.ts` `const_enum`) and Metro
+  (`apps/native/babel.config.js` `inline_enums`) each read every
+  `export const enum` into a table of their own, a near copy, and already
+  drift: one holds values as source text, the other as values. The reading
+  goes to one file under `apps/web/script/`, plain JavaScript, since Metro
+  `require`s the Babel config under Deno — whether CommonJS there can
+  `require` an ES module is to be tried first. Vite's replacement is text:
+  a member that prefixes another (`SENSOR_ENABLE` under a table read before
+  it became `SENSOR_ENABLE_LOCATION`) left `7444_LOCATION` for the parser
+  until the match was held to whole names. Replacing on the syntax tree, as
+  Babel does, takes strings, comments and prefixes out of it as a class, for
+  a parse per module on Vite's path.
+
 ## Parked, with the reason on file
 
 - **`ds/treap_set` and `kit/comp`'s Rust side, removed from the pair.**
