@@ -9,7 +9,7 @@ import { Glass } from "@platform/glass.tsx";
 import { GlassVariant } from "@/shared/ui/glass-variant.ts";
 import { Motion } from "@platform/motion.tsx";
 import { SNAP, type Transition } from "@/shared/ui/motion/transition.ts";
-import { alpha, chrome, color } from "@/shared/ui/theme.ts";
+import { chrome, color, surface } from "@/shared/ui/theme.ts";
 
 interface CircularButtonProps {
   children: ReactNode;
@@ -28,7 +28,7 @@ interface CircularButtonProps {
   style?: StyleProp<ViewStyle>;
 }
 
-/** A round map control: a disc of the platform's glass, or cream where it
+/** A round map control: a disc of the platform's glass, or white where it
  * has none, holding one glyph. */
 export function CircularButton({ children, onPress, label, isActive, disabled, fade = 1, fadeFrom, fadeTransition, shadow = false, style }: CircularButtonProps) {
   return (
@@ -42,8 +42,8 @@ export function CircularButton({ children, onPress, label, isActive, disabled, f
       {({ pressed }) => (
         <Motion to={{ scale: pressed ? 0.95 : 1 }} transition={SNAP} style={styles.ground}>
           <Glass
-            fill={isActive ? color.lit : color.cream}
-            tint={isActive ? alpha(color.glow, 0.25) : undefined}
+            fill={isActive ? surface.on.fill : color.ground}
+            tint={isActive ? surface.on.glass : undefined}
             variant={GlassVariant.Regular}
             interactive={!disabled}
             // Disabled, it is dimmed as a presence of its glass, not an
@@ -72,5 +72,5 @@ const styles = StyleSheet.create({
   ground: { flex: 1 },
   face: { flex: 1, borderRadius: chrome.control / 2, alignItems: "center", justifyContent: "center" },
   lifted: { boxShadow: "0 6px 20px rgba(0, 0, 0, 0.25)" },
-  active: { boxShadow: `0 0 0 2px ${alpha(color.glow, 0.6)}` },
+  active: { boxShadow: `0 0 0 2px ${surface.on.edge}` },
 });

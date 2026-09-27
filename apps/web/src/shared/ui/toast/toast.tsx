@@ -11,7 +11,7 @@ import { Pill } from "@platform/pill.tsx";
 import { GlassVariant } from "@/shared/ui/glass-variant.ts";
 import { Swap } from "@/shared/ui/motion/presence.tsx";
 import { LEAVE, SNAP, spring, type Transition } from "@/shared/ui/motion/transition.ts";
-import { alpha, color, textStyle, weight } from "@/shared/ui/theme.ts";
+import { alpha, color, surface, textStyle, weight } from "@/shared/ui/theme.ts";
 import { type ToastSpec, ToastTone } from "./store.ts";
 
 const SIDE = 32;
@@ -89,13 +89,13 @@ export function Toast({ message, tone, fade, fadeTransition, touch }: ToastProps
       width={width}
       height={SIDE}
       span={span}
-      fill={error ? color.alarmGround : color.cream}
+      fill={error ? surface.alarm.fill : color.ground}
       // On glass the tint is all the color it carries: the system draws the
       // rim, and a border is the fill's alone (platform glass.tsx).
-      tint={error ? alpha(color.alarm, 0.15) : undefined}
+      tint={error ? surface.alarm.glass : undefined}
       variant={GlassVariant.Regular}
-      border={{ width: 2, color: error ? color.alarmEdge : alpha(color.white, 0.9) }}
-      shadow={error ? `0 6px 20px ${alpha(color.alarm, 0.15)}` : "0 6px 20px rgba(0, 0, 0, 0.25)"}
+      border={{ width: 2, color: error ? surface.alarm.edge : alpha(color.white, 0.9) }}
+      shadow={error ? `0 6px 20px ${surface.alarm.shadow}` : "0 6px 20px rgba(0, 0, 0, 0.25)"}
       fade={fade}
       fadeFrom={0}
       fadeTransition={fadeTransition}

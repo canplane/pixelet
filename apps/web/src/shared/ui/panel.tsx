@@ -7,6 +7,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Glass } from "@platform/glass.tsx";
 import { GlassVariant } from "@/shared/ui/glass-variant.ts";
 import { color, textStyle } from "@/shared/ui/theme.ts";
+import { LABEL } from "@platform/palette.ts";
 
 /** Height of the controls on a sheet (close button, search field, segmented
  * control); the same as an iOS search bar. */
@@ -102,7 +103,7 @@ export function PanelClose({ label, onClose }: { label: string; onClose: () => v
   return (
     <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={label} style={styles.close}>
       <Glass fill={color.faint} variant={GlassVariant.Clear} interactive style={styles.closeFace}>
-        <X size={18} color={color.text} />
+        <X size={18} color={LABEL.primary} />
       </Glass>
     </Pressable>
   );
@@ -112,7 +113,7 @@ const styles = StyleSheet.create({
   headerRow: { ...PANEL_HEADER, justifyContent: "flex-end" },
   // Spans the whole row so the title is centered on the sheet, not on the
   // space left of the close button.
-  title: { position: "absolute", left: 0, right: 0, textAlign: "center", pointerEvents: "none", ...textStyle.title, color: color.text },
+  title: { position: "absolute", left: 0, right: 0, textAlign: "center", pointerEvents: "none", ...textStyle.title, color: LABEL.primary },
   body: { flex: 1 },
   head: { height: PANEL_HEAD_HEIGHT },
   scroll: { flex: 1, overflow: "hidden" },

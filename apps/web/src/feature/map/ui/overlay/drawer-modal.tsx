@@ -18,6 +18,7 @@ import { color, hairline, sectionTitle, textStyle } from "@/shared/ui/theme.ts";
 import { CharacterPicker } from "@/feature/character/picker.tsx";
 import { CubeSwatch } from "./cube-swatch.tsx";
 import { DECOR_ICONS } from "./mode-bar.tsx";
+import { LABEL } from "@platform/palette.ts";
 
 /** The full catalog's own grouping — mode-bar.tsx's hotbar stays a flat
  * scrolling strip (no sections, that's the point of a hotbar), but a grid
@@ -84,7 +85,7 @@ function DecorGridButton({ kind, onPick }: { kind: u8; onPick: (kind: u8) => voi
   return (
     <GridButton label={t(`decors.${name}`)} active={active} onPress={() => onPick(kind)}>
       <View style={[styles.decor, active ? [styles.markOn, styles.decorOn] : styles.markOff]}>
-        <Icon size={16} strokeWidth={2} color={color.text} />
+        <Icon size={16} strokeWidth={2} color={LABEL.primary} />
       </View>
     </GridButton>
   );
@@ -171,13 +172,13 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: PANEL_EDGE, paddingTop: PANEL_TABS_ROOM, gap: 16 },
   section: { gap: 8 },
-  sectionTitle: { ...sectionTitle, color: color.textMuted },
+  sectionTitle: { ...sectionTitle, color: LABEL.secondary },
   // Five to a row, as the catalog was laid out.
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
   cell: { width: "18.4%", alignItems: "center", gap: 4, padding: 6, borderRadius: 20 },
-  cellLabel: { width: "100%", textAlign: "center", ...textStyle.caption2, color: color.textMuted },
+  cellLabel: { width: "100%", textAlign: "center", ...textStyle.caption2, color: LABEL.secondary },
   markOff: { boxShadow: `0 0 0 1px ${hairline}` },
-  markOn: { boxShadow: `0 0 0 1px ${color.paper}, 0 0 0 3px ${color.text}`, transform: [{ scale: 1.05 }] },
+  markOn: { boxShadow: `0 0 0 1px ${color.paper}, 0 0 0 3px ${color.black}`, transform: [{ scale: 1.05 }] },
   decor: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   decorOn: { backgroundColor: color.faint },
 });

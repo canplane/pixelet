@@ -5,10 +5,11 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { SectionTitle, settingText } from "@/feature/setting/row.tsx";
 import { BrandSymbol } from "@/shared/ui/brand-symbol.tsx";
-import { color, textStyle } from "@/shared/ui/theme.ts";
+import { textStyle } from "@/shared/ui/theme.ts";
 import { APP_ENV, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/config/deploy.ts";
 import { PUBLISHED_VERSION } from "@/config/route.ts";
 import { storage, STORAGE_KEYS } from "@/kernel/abi/host.spec.ts";
+import { LABEL } from "@platform/palette.ts";
 
 /** The environments worth abbreviating; anything else is shown as it is set. */
 const ENV_SHORT: Record<string, string> = { development: "dev", staging: "stg" };
@@ -45,7 +46,7 @@ export function AboutSection() {
       <SectionTitle>{t("settings.about.section_title")}</SectionTitle>
       <View style={styles.body}>
         <View style={styles.name}>
-          <BrandSymbol size={20} color={color.text} />
+          <BrandSymbol size={20} color={LABEL.primary} />
           <Text style={styles.nameText}>pixelet</Text>
         </View>
 
@@ -70,5 +71,5 @@ const styles = StyleSheet.create({
   section: { gap: 4 },
   body: { gap: 8, paddingVertical: 4 },
   name: { flexDirection: "row", alignItems: "center", gap: 8 },
-  nameText: { ...textStyle.title, color: color.text },
+  nameText: { ...textStyle.title, color: LABEL.primary },
 });

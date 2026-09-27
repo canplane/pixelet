@@ -12,7 +12,7 @@ import { Panel } from "@platform/panel.tsx";
 import { PANEL_CONTROL, PANEL_EDGE, PANEL_HEADER, PanelBody, PanelClose } from "@/shared/ui/panel.tsx";
 import { KEEPS_KEYBOARD } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
-import { alpha, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
+import { color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
 import { Command, DevicePoseStatus, encode_input_go_to } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, kernel_enable_location, kernel_snapshot } from "@/kernel/shell.ts";
 import { useSensors } from "@/feature/map/ui/overlay/sensor-status.tsx";
@@ -218,12 +218,12 @@ export function SearchModal(props: BaseModalProps) {
                   round button, so the two X's are not confused. */
               }
               <Glass fill={color.faint} variant={GlassVariant.Clear} style={styles.well}>
-                <Search size={16} color={color.textMuted} />
+                <Search size={16} color={LABEL.secondary} />
                 <TextField
                   value={query}
                   onChangeText={setQuery}
                   placeholder={t("map.search.placeholder")}
-                  placeholderTextColor={color.textMuted}
+                  placeholderTextColor={LABEL.placeholder}
                   clearButtonMode={SYSTEM_CLEAR ? "while-editing" : undefined}
                   style={styles.field}
                 />
@@ -309,28 +309,28 @@ export function SearchModal(props: BaseModalProps) {
 const styles = StyleSheet.create({
   locateCard: { borderRadius: 22, pointerEvents: "auto", boxShadow: "0 6px 20px rgba(0, 0, 0, 0.12)" },
   locateRow: { height: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16 },
-  locateLabel: { flex: 1, ...textStyle.body, color: color.text },
+  locateLabel: { flex: 1, ...textStyle.body, color: LABEL.primary },
   locateAction: { ...textStyle.body, fontWeight: weight.semibold, color: color.action },
   // Room under the last result for the card that floats over it.
   resultsRoom: { paddingBottom: 76 },
   headerRow: { ...PANEL_HEADER, gap: 8 },
   well: { flex: 1, minWidth: 0, height: PANEL_CONTROL, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderRadius: PANEL_CONTROL / 2 },
-  field: { flex: 1, minWidth: 0, color: color.text },
-  clear: { width: 16, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: alpha(color.textMuted, 0.5) },
+  field: { flex: 1, minWidth: 0, color: LABEL.primary },
+  clear: { width: 16, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: LABEL.tertiary },
   results: { flex: 1 },
-  empty: { paddingHorizontal: PANEL_EDGE, paddingVertical: 12, ...textStyle.footnote, color: color.textMuted },
+  empty: { paddingHorizontal: PANEL_EDGE, paddingVertical: 12, ...textStyle.footnote, color: LABEL.secondary },
   sectionHeader: {
     paddingHorizontal: PANEL_EDGE,
     paddingTop: 12,
     paddingBottom: 6,
     ...sectionTitle,
-    color: alpha(color.textMuted, 0.7),
+    color: LABEL.secondary,
   },
   row: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: PANEL_EDGE, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: hairline },
   rowText: { flex: 1, minWidth: 0, gap: 2 },
-  name: { ...textStyle.body, color: color.text },
+  name: { ...textStyle.body, color: LABEL.primary },
   subtitle: { flexDirection: "row", alignItems: "baseline", gap: 8 },
-  small: { ...textStyle.caption, color: color.textMuted },
+  small: { ...textStyle.caption, color: LABEL.secondary },
   context: { flexShrink: 1 },
   distance: { marginLeft: "auto", flexShrink: 0, fontVariant: ["tabular-nums"] },
   badge: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", flexShrink: 0 },

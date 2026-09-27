@@ -11,6 +11,7 @@ import { Command, encode_setting_update } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, useKernel } from "@/kernel/shell.ts";
 import { SETTINGS } from "@/feature/setting/schema.ts";
 import { findPersonVariant, findPetVariant, type Gender, genderOf, GENDERS, personVariantNumbered, personVariantsOf, PET_VARIANTS } from "@/feature/character/variant.ts";
+import { LABEL } from "@platform/palette.ts";
 
 // Not a setting: person/pet variant is a companion *appearance* pick, the
 // same "which of these do I want equipped" shape as a cube color or decor
@@ -125,7 +126,7 @@ export function CharacterPicker() {
 const styles = StyleSheet.create({
   pickers: { gap: 16 },
   picker: { gap: 8 },
-  pickerLabel: { ...sectionTitle, color: color.textMuted },
+  pickerLabel: { ...sectionTitle, color: LABEL.secondary },
   pickerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   preview: { width: 80, height: 80, flexShrink: 0, borderRadius: 10, overflow: "hidden", backgroundColor: alpha(color.wash, 0.4) },
   chipColumn: { flexShrink: 1, minWidth: 0, gap: 6 },
@@ -133,7 +134,7 @@ const styles = StyleSheet.create({
   rule: { height: 1, backgroundColor: hairline },
   chip: { borderRadius: 999, paddingHorizontal: 11, paddingVertical: 5, backgroundColor: color.faint },
   chipOn: { backgroundColor: color.chosen },
-  chipText: { ...textStyle.footnote, fontWeight: weight.medium, color: color.text },
+  chipText: { ...textStyle.footnote, fontWeight: weight.medium, color: LABEL.primary },
   chipTextOn: { fontWeight: weight.semibold, color: color.paper },
   sizer: { opacity: 0 },
   label: { position: "absolute", left: 0, right: 0, top: 5, textAlign: "center" },

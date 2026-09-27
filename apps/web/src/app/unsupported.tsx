@@ -5,6 +5,7 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { color, textStyle } from "@/shared/ui/theme.ts";
 import { useUnsupportedStore } from "./store/unsupported-store.ts";
+import { LABEL } from "@platform/palette.ts";
 
 /**
  * The end of the session, when the device turns out not to be able to run
@@ -39,6 +40,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     backgroundColor: color.paper,
   },
-  title: { ...textStyle.title, textAlign: "center", color: color.text },
-  body: { maxWidth: 384, ...textStyle.body, textAlign: "center", color: color.textMuted },
+  title: { ...textStyle.title, textAlign: "center", color: LABEL.primary },
+  body: { maxWidth: 384, ...textStyle.body, textAlign: "center", color: LABEL.secondary },
 });

@@ -16,7 +16,7 @@ import { Presence, Swap } from "@/shared/ui/motion/presence.tsx";
 import { LEAVE, SNAP } from "@/shared/ui/motion/transition.ts";
 import { keepKeyboard } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
-import { alpha, color } from "@/shared/ui/theme.ts";
+import { alpha, color, strip } from "@/shared/ui/theme.ts";
 import { useAppContext } from "@/app/provider/context.ts";
 import { useUiStore } from "@/app/store/ui-store.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
@@ -115,7 +115,7 @@ function SizeFlyout({ shown, hover }: { shown: boolean; hover: u32 | null }) {
 
   return (
     <Glass
-      fill={alpha(color.band, 0.8)}
+      fill={STRIP.flyout}
       variant={GlassVariant.Regular}
       fade={shown ? 1 : 0}
       fadeFrom={0}
@@ -438,7 +438,7 @@ export function ModeBar() {
             width={paletteWidth}
             height={MODE_BAR_HEIGHT_PX}
             span={barWidth}
-            fill={sendTint ?? color.band}
+            fill={sendTint ?? STRIP.ground}
             tint={sendTint}
             variant={GlassVariant.Regular}
             interactive={!paletteExpanded}
@@ -561,13 +561,12 @@ const PILL = { height: MODE_BAR_HEIGHT_PX, borderRadius: MODE_BAR_HEIGHT_PX / 2 
  * page, a device without the system's glass — a dark band with white glyphs.
  * On the system's glass, a toolbar as the platform draws one over light
  * content: the glass untinted, its glyphs the label color as every
- * control's are (@platform palette.ts), the tool in hand on a faint capsule. Glass painted dark to pass for the band only clouded it: a tint
+ * control's are, the tool in hand on a faint capsule. Glass painted dark to
+ * pass for the band only clouded it: a tint
  * is for what a surface means, and the glass decides its own light and dark
  * from what is under it.
  */
-const STRIP = SYSTEM_GLASS
-  ? { glyph: LABEL.primary, glyphOn: LABEL.primary, held: alpha(color.black, 0.08), line: alpha(color.black, 0.1), ink: color.black, ground: color.white }
-  : { glyph: alpha(color.white, 0.6), glyphOn: color.white, held: alpha(color.white, 0.2), line: alpha(color.white, 0.15), ink: color.white, ground: color.band };
+const STRIP = SYSTEM_GLASS ? strip.glass : strip.band;
 
 const styles = StyleSheet.create({
   // As tall as the pills and as wide as the row: the pills stand on it by
