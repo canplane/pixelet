@@ -33,6 +33,12 @@ class KeyboardDock(context: Context, appContext: AppContext) : ExpoView(context,
     }
 
   init {
+    // A LinearLayout clips what it holds to its bounds, and the dock is only
+    // as tall as what stands on it: a shadow drawn past a pill's body — the
+    // toasts', the mode bar's — was cut at the dock's edge. Neither the page
+    // nor an iPhone's view clips there.
+    clipChildren = false
+    clipToPadding = false
     ViewCompat.setWindowInsetsAnimationCallback(
       this,
       object : WindowInsetsAnimationCompat.Callback(DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
