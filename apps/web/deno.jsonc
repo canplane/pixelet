@@ -46,7 +46,7 @@
     // A catalog entry is a number, an id and a name in every locale; the first
     // two are written from the JSON under spec/, the last is people's.
     "check:locale": "./script/locale.ts",
-    "check": { "command": "deno check src/main.tsx", "dependencies": ["check:locale"] },
+    "check": { "command": "deno check src/main.tsx cloudflare-worker/index.ts", "dependencies": ["check:locale"] },
     // Pure-logic modules: none of them touches the DOM or the GPU, so plain
     // `deno test` works with no browser harness, over the module built for
     // it. What needs a canvas is verified live.

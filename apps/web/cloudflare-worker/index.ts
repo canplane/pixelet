@@ -37,7 +37,9 @@ declare global {
     encodeBody?: "auto" | "manual";
   }
   /** Workers' edge cache; `default` is the shared per-colo cache. */
-  const caches: { default: { match(r: Request): Promise<Response | undefined>; put(r: Request, res: Response): Promise<void> } };
+  interface CacheStorage {
+    readonly default: Cache;
+  }
 }
 
 /** Third handler argument: `waitUntil` keeps work alive past the response. */
@@ -52,6 +54,8 @@ export type Env = {
    * (wrangler.jsonc's own `vars`), not a literal here, so pointing this at
    * a different box never needs a code change. */
   API_ORIGIN: string;
+  /** The geo server's origin, set the same way. */
+  GEO_ORIGIN: string;
 };
 
 import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.ts";
