@@ -23,7 +23,7 @@ const HEMISPHERE = array<vec3f, 8>(
 );
 
 fn depth_at(p: vec2i) -> f32 {
-  return textureLoad(half_depth, clamp(p, vec2i(0), vec2i(ao().half) - 1), 0).r;
+  return textureLoad(half_depth, clamp(p, vec2i(0), vec2i(ao_half()) - 1), 0).r;
 }
 
 fn rotation_z(theta: f32) -> mat3x3f {
@@ -40,7 +40,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   if (depth == 0.0) {
     return vec4f(1.0);
   }
-  let uv = i.clip.xy / ao().half;
+  let uv = i.clip.xy / ao_half();
   let pos = view_pos(depth, uv);
   let normal = t.gba;
   let noise = textureLoad(blue_noise, hp & vec2i(AO_NOISE_MASK), 0);
@@ -64,11 +64,11 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
     let move_amount = fract(offset_move);
     offset_move += offset_step;
     let sample_pos = pos + AO_RADIUS * move_amount * dir;
-    let o = ao().proj * vec4f(sample_pos, 1.0);
+    let o = ao_proj() * vec4f(sample_pos, 1.0);
     let ndc = o.xyz / o.w;
     let s = vec2f(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
     if (all(s * (1.0 - s) > vec2f(0.0)) && ndc.z > 0.0 && ndc.z < 1.0) {
-      let texel = floor(s * ao().half);
+      let texel = floor(s * ao_half());
       let sample_depth = textureLoad(half_depth, vec2i(texel), 0).r;
       if (sample_depth > 0.0) {
         let dist_sample = view_dist(sample_depth);

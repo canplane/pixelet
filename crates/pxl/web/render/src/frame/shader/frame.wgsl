@@ -44,47 +44,45 @@ struct Frame {
   globe: vec4f,
 };
 
-// Held as vec4 words and read back by `frame()`: what the host and a shader
-// share has no room inside it for a driver to lay out its own way
-// (issue/20260927-a-matrix-the-driver-reads-its-own-way.md).
+// Held as vec4 words, each field read from its own by `frame_<field>()`:
+// what the host and a shader share has no room inside it for a driver to
+// lay out its own way (issue/20260927-a-matrix-the-driver-reads-its-own-way.md),
+// and nothing builds the struct back, with which Safari's WebGPU lost its
+// GPU process.
 @group(0) @binding(0) var<uniform> frame_words: array<vec4f, 21>;
 
-fn frame() -> Frame {
-  return Frame(
-    mat4x4f(frame_words[0], frame_words[1], frame_words[2], frame_words[3]),
-    frame_words[4].xyz,
-    frame_words[4].w,
-    frame_words[5].xyz,
-    frame_words[5].w,
-    frame_words[6].xyz,
-    frame_words[6].w,
-    frame_words[7].xyz,
-    frame_words[7].w,
-    frame_words[8].xyz,
-    frame_words[8].w,
-    frame_words[9].xyz,
-    frame_words[9].w,
-    frame_words[10].xyz,
-    frame_words[10].w,
-    frame_words[11].xy,
-    frame_words[11].z,
-    frame_words[11].w,
-    frame_words[12].x,
-    frame_words[12].y,
-    frame_words[12].z,
-    frame_words[12].w,
-    mat4x4f(frame_words[13], frame_words[14], frame_words[15], frame_words[16]),
-    frame_words[17].xyz,
-    frame_words[17].w,
-    frame_words[18].xyz,
-    frame_words[18].w,
-    frame_words[19],
-    frame_words[20],
-  );
-}
+fn frame_view_proj() -> mat4x4f { return mat4x4f(frame_words[0], frame_words[1], frame_words[2], frame_words[3]); }
+fn frame_camera_pos() -> vec3f { return frame_words[4].xyz; }
+fn frame_edge_strength() -> f32 { return frame_words[4].w; }
+fn frame_sun_dir() -> vec3f { return frame_words[5].xyz; }
+fn frame_low_spec() -> f32 { return frame_words[5].w; }
+fn frame_sun_color() -> vec3f { return frame_words[6].xyz; }
+fn frame_fog_near() -> f32 { return frame_words[6].w; }
+fn frame_ambient() -> vec3f { return frame_words[7].xyz; }
+fn frame_fog_far() -> f32 { return frame_words[7].w; }
+fn frame__p6() -> vec3f { return frame_words[8].xyz; }
+fn frame_floor() -> f32 { return frame_words[8].w; }
+fn frame__p7() -> vec3f { return frame_words[9].xyz; }
+fn frame_edge_width() -> f32 { return frame_words[9].w; }
+fn frame__p5() -> vec3f { return frame_words[10].xyz; }
+fn frame_rim_intensity() -> f32 { return frame_words[10].w; }
+fn frame_viewport() -> vec2f { return frame_words[11].xy; }
+fn frame_shadow_strength() -> f32 { return frame_words[11].z; }
+fn frame_shadow_texel() -> f32 { return frame_words[11].w; }
+fn frame_vignette() -> f32 { return frame_words[12].x; }
+fn frame_ao_strength() -> f32 { return frame_words[12].y; }
+fn frame_screen_ao() -> f32 { return frame_words[12].z; }
+fn frame_air_at_vertices() -> f32 { return frame_words[12].w; }
+fn frame_light_view_proj() -> mat4x4f { return mat4x4f(frame_words[13], frame_words[14], frame_words[15], frame_words[16]); }
+fn frame_other_dir() -> vec3f { return frame_words[17].xyz; }
+fn frame__p3() -> f32 { return frame_words[17].w; }
+fn frame_other_color() -> vec3f { return frame_words[18].xyz; }
+fn frame__p4() -> f32 { return frame_words[18].w; }
+fn frame_planet() -> vec4f { return frame_words[19]; }
+fn frame_globe() -> vec4f { return frame_words[20]; }
 
 // A point of the flat map where the planet has it, by the frame's values
 // (globe.wgsl).
 fn on_globe(p: vec3f) -> vec3f {
-  return on_globe_of(p, frame().planet, frame().globe);
+  return on_globe_of(p, frame_planet(), frame_globe());
 }

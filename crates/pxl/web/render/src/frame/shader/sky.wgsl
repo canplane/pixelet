@@ -18,18 +18,16 @@ struct Sky {
   mapped: f32,
 };
 
-// Held as vec4 words and read back by `sky()`: what the host and a shader
-// share has no room inside it for a driver to lay out its own way
-// (issue/20260927-a-matrix-the-driver-reads-its-own-way.md).
+// Held as vec4 words, each field read from its own by `sky_<field>()`:
+// what the host and a shader share has no room inside it for a driver to
+// lay out its own way (issue/20260927-a-matrix-the-driver-reads-its-own-way.md),
+// and nothing builds the struct back, with which Safari's WebGPU lost its
+// GPU process.
 @group(0) @binding(1) var<uniform> sky_words: array<vec4f, 4>;
 
-fn sky() -> Sky {
-  return Sky(
-    mat3x3f(sky_words[0].xyz, sky_words[1].xyz, sky_words[2].xyz),
-    sky_words[3].xyz,
-    sky_words[3].w,
-  );
-}
+fn sky_ray() -> mat3x3f { return mat3x3f(sky_words[0].xyz, sky_words[1].xyz, sky_words[2].xyz); }
+fn sky_pole() -> vec3f { return sky_words[3].xyz; }
+fn sky_mapped() -> f32 { return sky_words[3].w; }
 
 @group(0) @binding(2) var moon_map: texture_2d_array<f32>;
 @group(0) @binding(3) var moon_sampler: sampler;
@@ -89,8 +87,8 @@ fn vs(@builtin(vertex_index) i: u32) -> VertexOut {
 // darkened, through the air in front of it, its edge a pixel soft. Nothing
 // where the planet stands in the way.
 fn sun_disc(dir: vec3f, r: f32, a: f32, w: f32) -> vec3f {
-  let mu = dot(dir, atmos().up);
-  if (meets_ground(r, mu) || dot(dir, atmos().sun_dir) <= 0.0 || a >= 1.0 + w) {
+  let mu = dot(dir, atmos_up());
+  if (meets_ground(r, mu) || dot(dir, atmos_sun_dir()) <= 0.0 || a >= 1.0 + w) {
     return vec3f(0.0);
   }
   let inside = min(a, 1.0);
@@ -110,8 +108,8 @@ fn sun_disc(dir: vec3f, r: f32, a: f32, w: f32) -> vec3f {
 // is. Its limb is a pixel's soft edge. Nothing where the planet stands in
 // the way.
 fn moon_disc(dir: vec3f, r: f32, across: vec3f, a: f32, w: f32) -> vec3f {
-  let axis = atmos().moon_dir;
-  let mu = dot(dir, atmos().up);
+  let axis = atmos_moon_dir();
+  let mu = dot(dir, atmos_up());
   if (meets_ground(r, mu) || dot(dir, axis) <= 0.0 || a >= 1.0 + w) {
     return vec3f(0.0);
   }
@@ -121,25 +119,25 @@ fn moon_disc(dir: vec3f, r: f32, across: vec3f, a: f32, w: f32) -> vec3f {
 
   // Selenographic: north toward the pole, east to the right as the Earth
   // sees it, and the near side's center toward the Earth.
-  let north = normalize(sky().pole - dot(sky().pole, axis) * axis);
+  let north = normalize(sky_pole() - dot(sky_pole(), axis) * axis);
   let east = cross(axis, north);
   let lon = atan2(dot(normal, east), -dot(normal, axis));
   let lat = asin(clamp(dot(normal, north), -1.0, 1.0));
   var face = MOON_MAP_MEAN;
-  if (sky().mapped > 0.5) {
+  if (sky_mapped() > 0.5) {
     let uv = vec2f(lon / PI + 0.5, 0.5 - lat / PI);
     let lod = log2(max(MOON_MAP_RADIUS_TEXELS * w, 1e-6));
     face = textureSampleLevel(moon_map, moon_sampler, uv, 0, lod).r;
   }
   let albedo = MOON_ALBEDO * face / MOON_MAP_MEAN;
 
-  let sun = atmos().sun_dir;
+  let sun = atmos_sun_dir();
   let lit = max(dot(normal, sun), 0.0);
   let seen = max(-dot(normal, dir), 1e-4);
   let radiance = albedo / PI * 2.0 * lit / (lit + seen);
-  let shown_at = atmos().white * min(exposure(), MOON_FACE_SHOWN * PI / MOON_ALBEDO);
+  let shown_at = atmos_white() * min(exposure(), MOON_FACE_SHOWN * PI / MOON_ALBEDO);
   var light = radiance * shown_at;
-  if (atmos().moon_light > 0.0) {
+  if (atmos_moon_light() > 0.0) {
     let earth = 0.5 * (1.0 + dot(sun, axis));
     light += vec3f(EARTHSHINE_SHOWN * earth * face / MOON_MAP_MEAN);
   }
@@ -148,13 +146,13 @@ fn moon_disc(dir: vec3f, r: f32, across: vec3f, a: f32, w: f32) -> vec3f {
 
 @fragment
 fn fs(v: VertexOut) -> @location(0) vec4f {
-  let dir = normalize(sky().ray * vec3f(v.ndc, 1.0));
+  let dir = normalize(sky_ray() * vec3f(v.ndc, 1.0));
   let r = camera_r();
   // The ray's place on each disc, in its radii, and how far that moves
   // across a pixel: a derivative, so taken here, where every pixel takes it.
-  let sun_a = length(cross(dir, atmos().sun_dir)) / (atmos().sun_angular_radius * DISC_SCALE);
+  let sun_a = length(cross(dir, atmos_sun_dir())) / (atmos_sun_angular_radius() * DISC_SCALE);
   let sun_w = max(fwidth(sun_a), 1e-4);
-  let across = (dir - dot(dir, atmos().moon_dir) * atmos().moon_dir) / (MOON_ANGULAR_RADIUS * DISC_SCALE);
+  let across = (dir - dot(dir, atmos_moon_dir()) * atmos_moon_dir()) / (MOON_ANGULAR_RADIUS * DISC_SCALE);
   let moon_a = length(across);
   let moon_w = max(fwidth(moon_a), 1e-4);
   var color = beyond(air_along(dir)) + sun_disc(dir, r, sun_a, sun_w) + moon_disc(dir, r, across, moon_a, moon_w) + glare(dir);

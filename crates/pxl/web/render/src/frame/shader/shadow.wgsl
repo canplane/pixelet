@@ -9,12 +9,12 @@
 @group(0) @binding(2) var shadow_sampler: sampler_comparison;
 
 fn sun_lit(world_pos: vec3f, n: vec3f) -> f32 {
-  if (frame().shadow_strength <= 0.0) {
+  if (frame_shadow_strength() <= 0.0) {
     return 1.0;
   }
   // Pushed along the normal by a texel, so a surface does not shadow
   // itself where the map's texel straddles it.
-  let p = frame().light_view_proj * vec4f(world_pos + n * frame().shadow_texel, 1.0);
+  let p = frame_light_view_proj() * vec4f(world_pos + n * frame_shadow_texel(), 1.0);
   let ndc = p.xyz / p.w;
   let uv = vec2f(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
   if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0)) || ndc.z > 1.0 || ndc.z < 0.0) {
@@ -27,5 +27,5 @@ fn sun_lit(world_pos: vec3f, n: vec3f) -> f32 {
       lit += textureSampleCompareLevel(shadow_map, shadow_sampler, uv + vec2f(f32(x), f32(y)) * step, ndc.z);
     }
   }
-  return mix(1.0, lit / 9.0, frame().shadow_strength);
+  return mix(1.0, lit / 9.0, frame_shadow_strength());
 }

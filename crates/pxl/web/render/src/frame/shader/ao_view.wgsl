@@ -26,23 +26,21 @@ struct Ao {
   _p1: f32,
 };
 
-// Held as vec4 words and read back by `ao()`: what the host and a shader
-// share has no room inside it for a driver to lay out its own way
-// (issue/20260927-a-matrix-the-driver-reads-its-own-way.md).
+// Held as vec4 words, each field read from its own by `ao_<field>()`:
+// what the host and a shader share has no room inside it for a driver to
+// lay out its own way (issue/20260927-a-matrix-the-driver-reads-its-own-way.md),
+// and nothing builds the struct back, with which Safari's WebGPU lost its
+// GPU process.
 @group(0) @binding(0) var<uniform> ao_words: array<vec4f, 10>;
 
-fn ao() -> Ao {
-  return Ao(
-    mat4x4f(ao_words[0], ao_words[1], ao_words[2], ao_words[3]),
-    mat4x4f(ao_words[4], ao_words[5], ao_words[6], ao_words[7]),
-    ao_words[8].xy,
-    ao_words[8].zw,
-    ao_words[9].x,
-    ao_words[9].y,
-    ao_words[9].z,
-    ao_words[9].w,
-  );
-}
+fn ao_proj() -> mat4x4f { return mat4x4f(ao_words[0], ao_words[1], ao_words[2], ao_words[3]); }
+fn ao_inv_proj() -> mat4x4f { return mat4x4f(ao_words[4], ao_words[5], ao_words[6], ao_words[7]); }
+fn ao_full() -> vec2f { return ao_words[8].xy; }
+fn ao_half() -> vec2f { return ao_words[8].zw; }
+fn ao_fog_near() -> f32 { return ao_words[9].x; }
+fn ao_fog_far() -> f32 { return ao_words[9].y; }
+fn ao__p0() -> f32 { return ao_words[9].z; }
+fn ao__p1() -> f32 { return ao_words[9].w; }
 
 const AO_RADIUS: f32 = 1.5;
 const AO_DISTANCE_FALLOFF: f32 = 1.0;
@@ -70,13 +68,13 @@ fn vs(@builtin(vertex_index) vi: u32) -> VertexOut {
 // The view-space point at depth `d` (reversed, as the buffer holds it)
 // seen through the pixel at `uv`, y down as a texture has it.
 fn view_pos(d: f32, uv: vec2f) -> vec3f {
-  let p = ao().inv_proj * vec4f(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, d, 1.0);
+  let p = ao_inv_proj() * vec4f(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, d, 1.0);
   return p.xyz / p.w;
 }
 
 // The distance along the view axis at depth `d`.
 fn view_dist(d: f32) -> f32 {
-  let p = ao().inv_proj * vec4f(0.0, 0.0, d, 1.0);
+  let p = ao_inv_proj() * vec4f(0.0, 0.0, d, 1.0);
   return -p.z / p.w;
 }
 

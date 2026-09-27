@@ -11,9 +11,9 @@
 const RIM_POWER: f32 = 1.0;
 
 fn rim_light(n: vec3f, world_pos: vec3f) -> vec3f {
-  let view_dir = normalize(frame().camera_pos - world_pos);
+  let view_dir = normalize(frame_camera_pos() - world_pos);
   let rim = pow(1.0 - max(dot(n, view_dir), 0.0), RIM_POWER);
-  return vec3f(1.0) * rim * frame().rim_intensity;
+  return vec3f(1.0) * rim * frame_rim_intensity();
 }
 
 // `open` is how much of the ambient sky the point sees, per channel, 1 for
@@ -31,13 +31,13 @@ fn shade(albedo: vec3f, n: vec3f, world_pos: vec3f, lit: f32, open: vec3f, seen:
   // hemisphere irradiance alike; the emissive floor is added as it is. The
   // two directional lights are summed as three summed them; the shadow is
   // the brighter's.
-  let sun = frame().sun_color * max(dot(n, frame().sun_dir), 0.0) * lit;
-  let other = frame().other_color * max(dot(n, frame().other_dir), 0.0);
+  let sun = frame_sun_color() * max(dot(n, frame_sun_dir()), 0.0) * lit;
+  let other = frame_other_color() * max(dot(n, frame_other_dir()), 0.0);
   // The hemisphere: the ground's bounce below, the sky's own light above,
   // both the air's (atmos_view.wgsl's ground_bounce and sky_fill, the latter
   // as the vertices took it).
   let hemi = mix(ground_bounce(seen.fill), seen.fill, n.z * 0.5 + 0.5);
-  var color = albedo * (sun + (other + frame().ambient + hemi) * open) / PI + albedo * frame().floor * open;
+  var color = albedo * (sun + (other + frame_ambient() + hemi) * open) / PI + albedo * frame_floor() * open;
   color += rim_light(n, world_pos);
   color = color * seen.through + seen.scattered;
   // Past the band the ground is not drawn, so it fades out before it ends:
@@ -49,6 +49,6 @@ fn shade(albedo: vec3f, n: vec3f, world_pos: vec3f, lit: f32, open: vec3f, seen:
   // has hidden the ground, toward every corner of the screen as toward its
   // middle — where a depth along the view axis reaches a corner's ground
   // further out than its middle's.
-  let fade = smoothstep(frame().fog_near, frame().fog_far, length(world_pos - frame().camera_pos));
+  let fade = smoothstep(frame_fog_near(), frame_fog_far(), length(world_pos - frame_camera_pos()));
   return mix(color, seen.past, fade);
 }

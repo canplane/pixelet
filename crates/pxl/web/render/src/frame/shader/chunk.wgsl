@@ -191,7 +191,7 @@ fn chunk_vertex(v: u32, words: BoxWords, fine: bool) -> VertexOut {
   let position = vec3f(b.min_xy, b.z.x) + size * 0.5 + local * size;
   let normal = FACE_NORMAL[face];
   let world = on_globe(position + d.place.xyz);
-  o.clip = frame().view_proj * vec4f(world, 1.0);
+  o.clip = frame_view_proj() * vec4f(world, 1.0);
   o.rgb = srgb_to_linear(unpack4x8unorm(b.rgb).xyz);
   o.layer_taps = unpack4x8unorm(b.taps) * 255.0;
   o.local_pos = local;
@@ -246,7 +246,7 @@ fn crease_dist(d: f32, convex: bool, concave: bool) -> f32 {
 // cell at (d + n) is solid (the surface turns inward). Flat ground has no
 // creases and stays seamless.
 fn edge_factor(local_pos: vec3f, box_scale: vec3f, normal: vec3f, faces: u32) -> f32 {
-  if (frame().edge_strength <= 0.0) {
+  if (frame_edge_strength() <= 0.0) {
     return 0.0;
   }
   let is_side = abs(normal.z) < 0.5;
@@ -286,7 +286,7 @@ fn edge_factor(local_pos: vec3f, box_scale: vec3f, normal: vec3f, faces: u32) ->
     }
     d = min(d, crease_dist(horiz, horiz_convex, face_bit(faces, diag)));
   }
-  let t = 1.0 - smoothstep(0.0, frame().edge_width, d);
+  let t = 1.0 - smoothstep(0.0, frame_edge_width(), d);
   return t * t;
 }
 
@@ -320,7 +320,7 @@ fn occlusion_of(d: f32) -> f32 {
 }
 
 fn occlusion(local_pos: vec3f, box_scale: vec3f, normal: vec3f, faces: u32) -> f32 {
-  if (frame().ao_strength <= 0.0) {
+  if (frame_ao_strength() <= 0.0) {
     return 0.0;
   }
   let is_side = abs(normal.z) < 0.5;
@@ -426,7 +426,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   // every tier over a leaf's own cells, which are the only ones the texture
   // pack is for (mesh/chunk_mesher.rs). The four samples are skipped with
   // it, not taken and thrown away.
-  let textured = i.layer_taps.x < NO_LAYER - 0.5 && frame().low_spec < 0.5;
+  let textured = i.layer_taps.x < NO_LAYER - 0.5 && frame_low_spec() < 0.5;
   let ddx = dpdx(i.box_uv);
   let ddy = dpdy(i.box_uv);
   var taps = i.rgb;
@@ -441,14 +441,14 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
     discard;
   }
   var base = taps;
-  base = base * mix(1.0, 1.0 - frame().edge_strength, edge_factor(i.local_pos, i.box_scale, i.normal, i.faces));
+  base = base * mix(1.0, 1.0 - frame_edge_strength(), edge_factor(i.local_pos, i.box_scale, i.normal, i.faces));
 
   // A box the ground was shrunk into is lit under as it is lit over: what
   // lies below it is the rest of that ground, not a hollow (faces.wgsl).
   let under = i.normal.z < -0.5 && face_bit(i.faces, UNDER_AS_TOP);
   let n = normalize(select(i.normal, vec3f(i.normal.xy, -i.normal.z), under));
   // Darkened by k, and warmed by the same k, so a fully open face is untouched.
-  let k = frame().ao_strength * occlusion(i.local_pos, i.box_scale, i.normal, i.faces);
+  let k = frame_ao_strength() * occlusion(i.local_pos, i.box_scale, i.normal, i.faces);
   let open = (1.0 - k) * mix(vec3f(1.0), AO_TINT, k);
   let color = screen_ao(shade(base, n, i.world_pos, sun_lit(i.world_pos, n), open, Seen(i.through, i.scattered, i.past, i.fill)), i.clip.xy);
   return vec4f(finish(color, i.clip.xy), d.measure.x);

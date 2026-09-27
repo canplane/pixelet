@@ -38,8 +38,8 @@ fn fs(v: TableOut) -> @location(0) vec4f {
   let s = sin(view_zenith);
   let dir = vec3f(s * light_cos, s * sqrt(max(1.0 - light_cos * light_cos, 0.0)), mu);
 
-  let toward = select(atmos().sun_dir, atmos().moon_dir, light.x > 0.5);
-  let mu_s = clamp(dot(toward, atmos().up), -1.0, 1.0);
+  let toward = select(atmos_sun_dir(), atmos_moon_dir(), light.x > 0.5);
+  let mu_s = clamp(dot(toward, atmos_up()), -1.0, 1.0);
   let sun = vec3f(sqrt(max(1.0 - mu_s * mu_s, 0.0)), 0.0, mu_s);
   let c = dot(dir, sun);
   let phase_r = rayleigh_phase(c);
@@ -49,8 +49,8 @@ fn fs(v: TableOut) -> @location(0) vec4f {
   // From above the atmosphere the march starts where the ray enters it,
   // and a ray that passes it by has no air at all.
   var start = 0.0;
-  if (r > atmos().top_radius) {
-    let disc = r * r * (mu * mu - 1.0) + atmos().top_radius * atmos().top_radius;
+  if (r > atmos_top_radius()) {
+    let disc = r * r * (mu * mu - 1.0) + atmos_top_radius() * atmos_top_radius();
     if (disc < 0.0 || mu > 0.0) {
       return vec4f(0.0, 0.0, 0.0, 1.0);
     }
@@ -73,7 +73,7 @@ fn fs(v: TableOut) -> @location(0) vec4f {
     let pr = length(p);
     let up = p / pr;
     let local_mu_s = dot(up, sun);
-    let m = medium_at(pr - atmos().bottom_radius);
+    let m = medium_at(pr - atmos_bottom_radius());
     let lit = sun_transmittance(pr, local_mu_s);
     let source = lit * (m.rayleigh * phase_r + m.mie * phase_m) + multiscatter(pr, local_mu_s) * m.scattering;
     let step = exp(-m.extinction * dt);

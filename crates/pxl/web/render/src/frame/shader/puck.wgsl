@@ -10,16 +10,14 @@ struct Draw {
   night: f32,
 };
 
-// Held as vec4 words and read back by `draw()`: what the host and a shader
-// share has no room inside it for a driver to lay out its own way
-// (issue/20260927-a-matrix-the-driver-reads-its-own-way.md).
+// Held as vec4 words, each field read from its own by `draw_<field>()`:
+// what the host and a shader share has no room inside it for a driver to
+// lay out its own way (issue/20260927-a-matrix-the-driver-reads-its-own-way.md),
+// and nothing builds the struct back, with which Safari's WebGPU lost its
+// GPU process.
 @group(1) @binding(0) var<uniform> draw_words: array<vec4f, 2>;
 
-fn draw() -> Draw {
-  return Draw(
-    draw_words[0].xyz,
-    draw_words[0].w,
-    draw_words[1].xyz,
-    draw_words[1].w,
-  );
-}
+fn draw_translation() -> vec3f { return draw_words[0].xyz; }
+fn draw_fourth() -> f32 { return draw_words[0].w; }
+fn draw_color() -> vec3f { return draw_words[1].xyz; }
+fn draw_night() -> f32 { return draw_words[1].w; }

@@ -100,18 +100,14 @@ sheet's `Entry`. Each is now bound as what it is on the wire, `vec4` words:
 ```wgsl
 struct Frame { view_proj: mat4x4f, camera_pos: vec3f, edge_strength: f32, … };
 @group(0) @binding(0) var<uniform> frame_words: array<vec4f, 21>;
-fn frame() -> Frame {
-  return Frame(
-    mat4x4f(frame_words[0], frame_words[1], frame_words[2], frame_words[3]),
-    frame_words[4].xyz,
-    frame_words[4].w,
-    …
-  );
-}
+fn frame_view_proj() -> mat4x4f { return mat4x4f(frame_words[0], frame_words[1], frame_words[2], frame_words[3]); }
+fn frame_camera_pos() -> vec3f { return frame_words[4].xyz; }
+fn frame_edge_strength() -> f32 { return frame_words[4].w; }
+…
 ```
 
-and read as `frame().camera_pos` where it was `frame.camera_pos`. The struct
-stays as it was, now the shader's own, so the tests that hold the Rust's
+and read as `frame_camera_pos()` where it was `frame.camera_pos`. The struct
+stays as it was, the layout the functions are held to, so the tests that hold the Rust's
 offsets against it (`frame_layout_matches_the_struct`,
 `the_skys_layouts_match_their_structs`) keep their meaning, and the bytes the
 Rust writes did not move: every field already sat where the words put it.
@@ -120,23 +116,33 @@ the size.
 
 The other way considered was to rename the fields to the words
 (`frame.camera.xyz`, `frame.camera.w` for the edge strength) and drop the
-struct. It loses every name a shader reads, some two hundred of them, to save
-a function per block — and the function is where the layout is written down
-once, beside the words.
+struct. It loses every name a shader reads, some two hundred of them — and the
+functions are where the layout is written down once, beside the words.
+
+A field is read by a function of its own, never by one that builds the whole
+struct back from the words. The first version did (`fn frame() -> Frame`,
+read as `frame().camera_pos`), and Safari's WebGPU, on a Mac and on an
+iPhone, lost its GPU process on the terrain's pipeline: every tab's device
+went with it, and no adapter answered for a while after. Cut on the real
+shader, one pipeline and one block at a time: the terrain's alone killed it,
+with either of its blocks built back; built once per invocation it still
+died; read field by field, nothing did. Chrome, the S23 and the iPhone app
+compiled it either way. A field's function is also a single load where the
+builder was a struct's worth of them for one field.
 
 **The check.** A rule kept by memory is kept until the next shader. Two tests
 beside `every_pipeline_matches_its_shader` parse every module with naga:
 
 - `what_a_shader_shares_with_the_host_has_no_room_inside_it` walks every
   uniform and storage global's type to its leaves and refuses a gap anywhere;
-- `every_block_reads_each_field_from_where_it_lies` follows each unpacking
-  function's constructor back to the words, and holds every field to the word
-  and lane WGSL lays it at — a lane off by one in `frame()` fails as
-  `Frame.edge_strength`.
+- `every_block_reads_each_field_from_where_it_lies` follows each field's
+  function back to the words, holds it to the word and lane WGSL lays that
+  field at — a lane off by one in `frame_screen_ao()` fails as
+  `Frame.screen_ao` — and refuses a function that builds the struct back.
 
 Both were checked against the fault they are for: the palette put back as
-`array<mat4x4f>` fails the first, and one lane moved in `frame()` fails the
-second.
+`array<mat4x4f>` fails the first, and one lane moved in a field's function
+fails the second.
 
 ## Where it stands
 

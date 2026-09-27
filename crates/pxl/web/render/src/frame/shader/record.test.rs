@@ -482,10 +482,12 @@ fn floats_of(module: &Module, ty: naga::Handle<naga::Type>, offset: u32) -> Vec<
     }
 }
 
-/// Each shared block read back by its function (`frame()` for the `Frame`
-/// its words hold): every field is the word and the lane WGSL lays that
-/// field at, so the struct the Rust's offsets are held against by the tests
-/// above is the struct the shader reads.
+/// Each shared block read field by field (`frame_camera_pos()` for the
+/// `Frame` its words hold): every field's function reads the word and the
+/// lane WGSL lays that field at, so the struct the Rust's offsets are held
+/// against by the tests above is the struct the shader reads, and no
+/// function builds the struct back, with which Safari's WebGPU lost its GPU
+/// process (issue/20260927-a-matrix-the-driver-reads-its-own-way.md).
 #[test]
 fn every_block_reads_each_field_from_where_it_lies() {
     let blocks = [
@@ -502,33 +504,38 @@ fn every_block_reads_each_field_from_where_it_lies() {
         (SHADER_SKY, "sky", "Sky"),
         (SHADER_STARS, "stars", "Stars"),
     ];
-    for (kind, fun, block) in blocks {
+    for (kind, prefix, block) in blocks {
         let (module, _) = compile(kind);
-        let (_, f) = module
-            .functions
+        let ty = module
+            .types
             .iter()
-            .find(|(_, f)| f.name.as_deref() == Some(fun))
-            .unwrap_or_else(|| panic!("shader {kind}: fn {fun}"));
-        let ty = f.result.as_ref().expect("a block").ty;
-        assert_eq!(module.types[ty].name.as_deref(), Some(block), "shader {kind}: {fun}() is a {block}");
+            .find(|(_, t)| t.name.as_deref() == Some(block))
+            .unwrap_or_else(|| panic!("shader {kind}: struct {block}"))
+            .0;
         let TypeInner::Struct { ref members, .. } = module.types[ty].inner else {
             panic!("{block} is a struct")
         };
-        let value = f
-            .body
-            .iter()
-            .find_map(|st| match st {
-                naga::Statement::Return { value } => *value,
-                _ => None,
-            })
-            .expect("a return");
-        let naga::Expression::Compose { ref components, .. } = f.expressions[value] else {
-            panic!("{fun}() returns a {block} it builds")
-        };
-        assert_eq!(components.len(), members.len(), "shader {kind}: {fun}() gives every field");
-        for (m, c) in members.iter().zip(components) {
+        for f in module.functions.iter().map(|(_, f)| f) {
+            let returns_block = f.result.as_ref().is_some_and(|r| r.ty == ty);
+            assert!(!returns_block, "shader {kind}: {} builds a {block} back", f.name.as_deref().unwrap_or("?"));
+        }
+        for m in members {
             let name = m.name.as_deref().unwrap_or("?");
-            assert_eq!(floats_read(f, *c), floats_of(&module, m.ty, m.offset), "shader {kind}: {block}.{name} is read from where it lies");
+            let fun = format!("{prefix}_{name}");
+            let (_, f) = module
+                .functions
+                .iter()
+                .find(|(_, f)| f.name.as_deref() == Some(fun.as_str()))
+                .unwrap_or_else(|| panic!("shader {kind}: fn {fun}"));
+            let value = f
+                .body
+                .iter()
+                .find_map(|st| match st {
+                    naga::Statement::Return { value } => *value,
+                    _ => None,
+                })
+                .expect("a return");
+            assert_eq!(floats_read(f, value), floats_of(&module, m.ty, m.offset), "shader {kind}: {block}.{name} is read from where it lies");
         }
     }
 }
