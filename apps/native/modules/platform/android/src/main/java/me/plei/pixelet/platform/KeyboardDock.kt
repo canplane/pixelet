@@ -12,8 +12,9 @@ import expo.modules.kotlin.views.ExpoView
 /**
  * A view that stands on the keyboard (apps/native/src/platform/above-keyboard.tsx),
  * KeyboardDock.swift's on Android. Its layout is the shell's, where it stands
- * with no keyboard up; while one is, the view is lifted by as much of it as
- * covers the system's bars. Android says where the keyboard is every frame it
+ * with no keyboard up: `clearance` from the bottom edge, or on the system's bars
+ * where they are higher. While a keyboard is up, the view is lifted to stand
+ * `clearance` above it. Android says where the keyboard is every frame it
  * moves, so the view is moved on each of them rather than animated towards
  * where the keyboard is going: it keeps to the keys however they move,
  * a finger dragging them down included.
@@ -23,6 +24,14 @@ import expo.modules.kotlin.views.ExpoView
  * other.
  */
 class KeyboardDock(context: Context, appContext: AppContext) : ExpoView(context, appContext) {
+  /** The gap the shell keeps from the bottom edge and from the keyboard, in
+   * pixels. */
+  var clearance: Int = 0
+    set(value) {
+      field = value
+      ViewCompat.getRootWindowInsets(this)?.let(::lift)
+    }
+
   init {
     ViewCompat.setWindowInsetsAnimationCallback(
       this,
@@ -44,6 +53,6 @@ class KeyboardDock(context: Context, appContext: AppContext) : ExpoView(context,
   private fun lift(insets: WindowInsetsCompat) {
     val keyboard = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
     val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom
-    translationY = -maxOf(0, keyboard - bars).toFloat()
+    translationY = -maxOf(0, keyboard + clearance - maxOf(clearance, bars)).toFloat()
   }
 }

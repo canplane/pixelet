@@ -118,7 +118,11 @@ public class PlatformModule: Module {
     // The surface stays the first view, the one the module's name alone
     // reaches; this one is asked for by its own.
 
-    View(KeyboardDock.self) {}
+    View(KeyboardDock.self) {
+      Prop("clearance") { (view: KeyboardDock, clearance: Double) in
+        view.clearance = clearance
+      }
+    }
   }
 }
 

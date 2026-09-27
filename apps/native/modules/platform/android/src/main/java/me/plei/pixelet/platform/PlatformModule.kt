@@ -99,7 +99,13 @@ class PlatformModule : Module() {
 
     // ---- the keyboard (platform/above-keyboard.tsx, KeyboardDock.kt) ----
 
-    View(KeyboardDock::class) {}
+    View(KeyboardDock::class) {
+      // The shell's clearance is in density-independent pixels, the view's in
+      // the screen's.
+      Prop("clearance") { view: KeyboardDock, clearance: Double ->
+        view.clearance = (clearance * view.resources.displayMetrics.density).toInt()
+      }
+    }
   }
 
   private fun preferences() = context.getSharedPreferences("pxl", Context.MODE_PRIVATE)
