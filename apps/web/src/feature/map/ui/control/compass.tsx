@@ -11,7 +11,7 @@ import { kernel_command, useKernel } from "@/kernel/shell.ts";
 import { LABEL, NORTH } from "@platform/palette.ts";
 import { CircularButton } from "@/shared/ui/circular-button.tsx";
 import { Presence } from "@/shared/ui/motion/presence.tsx";
-import { ARRIVE } from "@/shared/ui/motion/transition.ts";
+import { LEAVE, SETTLE } from "@/shared/ui/motion/transition.ts";
 import { chrome } from "@/shared/ui/theme.ts";
 import type { f64 } from "@xpute/core/abi/word.ts";
 
@@ -63,8 +63,10 @@ function face(end: f64, side: f64): string {
 /** How long the kernel's word on the compass must stand before the button
  * follows it, in and out alike: a map turned past the threshold for a moment
  * does not flash the button, nor a map settling back on north take it away
- * mid-glance. */
-const HOLD_MS = 400;
+ * mid-glance. As long as the button takes to arrive, which is how the chrome
+ * over the map comes and goes (the address and the scale by SETTLE and
+ * LEAVE, as this). */
+const HOLD_MS = SETTLE.durationMs;
 
 /** `value` once it has stood `ms` unchanged. */
 function useHeld(value: boolean, ms: f64): boolean {
@@ -96,8 +98,8 @@ export function MapCompass() {
       // an effect view through.
       from={{ scale: 0.01, rotate: -45, translateY: 10 }}
       exit={{ scale: 0.01, rotate: 45 }}
-      transition={ARRIVE}
-      exitTransition={ARRIVE}
+      transition={SETTLE}
+      exitTransition={LEAVE}
     >
       {
         // Following the heading, it shows where north is, dimmed and taking
