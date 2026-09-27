@@ -9,7 +9,7 @@ import { useKernel } from "@/kernel/shell.ts";
 
 import { HANDHELD } from "@platform/core.ts";
 import type { GlyphName } from "@platform/icon.tsx";
-import { HaloIcon } from "@/shared/ui/halo.tsx";
+import { haloGap, HaloIcon } from "@/shared/ui/halo.tsx";
 import { color } from "@/shared/ui/theme.ts";
 
 /** Where the two sensors stand: read by the glyphs over the map and by the
@@ -40,10 +40,11 @@ const LOOK: Record<DevicePoseStatus, { color: string; presence: f64 }> = {
 export function SensorStatus() {
   const { location, orientation, hasCompass } = useSensors();
 
-  // The glyph is faded whole, its halo with it. A failed one is also crossed
-  // out, so the state does not rest on color alone.
+  // The glyph is faded whole, its halo with it, as one layer: faded apart,
+  // the halo showed through the glyph and greyed it. A failed one is also
+  // crossed out, so the state does not rest on color alone.
   const icon = (glyph: GlyphName, status: DevicePoseStatus) => (
-    <View style={{ opacity: LOOK[status].presence }}>
+    <View needsOffscreenAlphaCompositing style={{ opacity: LOOK[status].presence }}>
       <HaloIcon glyph={glyph} size={12} color={LOOK[status].color} struck={status === DevicePoseStatus.Error} />
     </View>
   );
@@ -57,5 +58,5 @@ export function SensorStatus() {
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", gap: 8 },
+  row: { flexDirection: "row", alignItems: "center", gap: haloGap(8) },
 });

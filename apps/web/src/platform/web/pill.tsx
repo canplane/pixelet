@@ -51,43 +51,55 @@ export function Pill({ x, width, height, span, fill, border, shadow, fade = 1, f
 
   return (
     <Motion to={{ translateX: x }} transition={transition} style={styles.at}>
-      <Motion from={fadeFrom === undefined ? undefined : { opacity: fadeFrom }} to={{ opacity: veil.level }} transition={veil.transition} style={styles.fade}>
-        {
-          /* What a finger lands on reaches the least target around the pill,
+      {
+        /* As large as all it can draw, shadows and the widest it opens to:
+          a device fades it as one layer, cut at its bounds (@platform
+          motion.tsx). What it holds stands back at the pill's corner. */
+      }
+      <Motion
+        from={fadeFrom === undefined ? undefined : { opacity: fadeFrom }}
+        to={{ opacity: veil.level }}
+        transition={veil.transition}
+        style={[styles.fade, { width: span + 2 * SHADOW_ROOM, height: height + 2 * SHADOW_ROOM }]}
+      >
+        <View style={styles.corner}>
+          {
+            /* What a finger lands on reaches the least target around the pill,
             and holds it, so a touch on what the pill holds is the pill's. */
-        }
-        <View {...touch} style={[touch ? styles.reach : styles.box, { left: -reach, top: -reach, width: width + 2 * reach, height: height + 2 * reach }]}>
-          <View style={[styles.box, { left: reach, top: reach, width, height }]}>
-            {shadow && (
-              <>
-                <View style={[styles.clip, clipLeft]}>
-                  <View style={{ position: "absolute", left: SHADOW_ROOM, top: SHADOW_ROOM, width: height, height, borderRadius: r, boxShadow: shadow }} />
-                </View>
-                <View style={[styles.clip, clipRight]}>
-                  <Motion to={{ translateX: slide }} transition={transition} style={body}>
-                    <View style={[styles.fill, { borderRadius: r, boxShadow: shadow }]} />
-                  </Motion>
-                </View>
-              </>
-            )}
+          }
+          <View {...touch} style={[touch ? styles.reach : styles.box, { left: -reach, top: -reach, width: width + 2 * reach, height: height + 2 * reach }]}>
+            <View style={[styles.box, { left: reach, top: reach, width, height }]}>
+              {shadow && (
+                <>
+                  <View style={[styles.clip, clipLeft]}>
+                    <View style={{ position: "absolute", left: SHADOW_ROOM, top: SHADOW_ROOM, width: height, height, borderRadius: r, boxShadow: shadow }} />
+                  </View>
+                  <View style={[styles.clip, clipRight]}>
+                    <Motion to={{ translateX: slide }} transition={transition} style={body}>
+                      <View style={[styles.fill, { borderRadius: r, boxShadow: shadow }]} />
+                    </Motion>
+                  </View>
+                </>
+              )}
 
-            <View style={[edge, styles.circle, { width: height, height, backgroundColor: fill }]} />
-            <View style={[styles.clip, clipRight]}>
-              <Motion to={{ translateX: slide }} transition={transition} style={body}>
-                <View style={[edge, styles.fill, { backgroundColor: fill }]} />
+              <View style={[edge, styles.circle, { width: height, height, backgroundColor: fill }]} />
+              <View style={[styles.clip, clipRight]}>
+                <Motion to={{ translateX: slide }} transition={transition} style={body}>
+                  <View style={[edge, styles.fill, { backgroundColor: fill }]} />
+                </Motion>
+              </View>
+
+              <Motion to={{ translateX: slide }} transition={transition} style={[styles.window, { width: span, height }]}>
+                <Motion
+                  to={{ translateX: -slide }}
+                  transition={transition}
+                  onLayout={onContentWidth && ((e) => onContentWidth(e.nativeEvent.layout.width))}
+                  style={[styles.content, { height }]}
+                >
+                  {children}
+                </Motion>
               </Motion>
             </View>
-
-            <Motion to={{ translateX: slide }} transition={transition} style={[styles.window, { width: span, height }]}>
-              <Motion
-                to={{ translateX: -slide }}
-                transition={transition}
-                onLayout={onContentWidth && ((e) => onContentWidth(e.nativeEvent.layout.width))}
-                style={[styles.content, { height }]}
-              >
-                {children}
-              </Motion>
-            </Motion>
           </View>
         </View>
       </Motion>
@@ -97,7 +109,8 @@ export function Pill({ x, width, height, span, fill, border, shadow, fade = 1, f
 
 const styles = StyleSheet.create({
   at: { position: "absolute", left: 0, top: 0, pointerEvents: "box-none" },
-  fade: { pointerEvents: "box-none" },
+  fade: { position: "absolute", left: -SHADOW_ROOM, top: -SHADOW_ROOM, pointerEvents: "box-none" },
+  corner: { position: "absolute", left: SHADOW_ROOM, top: SHADOW_ROOM, pointerEvents: "box-none" },
   // From the sheet: an inline `box-none` is drawn as a `none` the content
   // inherits (feature/map/ui/busy-dim.tsx).
   box: { position: "absolute", pointerEvents: "box-none" },
