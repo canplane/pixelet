@@ -30,7 +30,7 @@ use crate::layer::terrain::elevation::{ground_at, ground_or_raw};
 use crate::sched::turn::world_platform;
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::{settings_store, SettingKey};
-use crate::shell::ui::compass::show_compass;
+use crate::shell::ui::compass::compass_state;
 use crate::shell::ui::scale_bar::{mercator_zoom, scale_bar};
 use crate::world::frame::view::view;
 
@@ -117,7 +117,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         is_follow_mode: camera.is_follow_mode,
         camera_busy: camera.camera_status != CameraStatus::Idle,
         zooming: pinching() || camera.wheel_zooming,
-        show_compass: show_compass(),
+        compass: compass_state(),
         settings: &values,
         scale_bar: ScaleBar {
             total_meters: bar.total_meters,

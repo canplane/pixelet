@@ -13,9 +13,9 @@ import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { useSafeArea } from "@platform/safe-area.ts";
 import { Panel } from "@platform/panel.tsx";
 import { Glyph } from "@/shared/ui/glyph.tsx";
-import { PANEL_EDGE, PANEL_TABS_ROOM, PanelBody, PanelHeader } from "@/shared/ui/panel.tsx";
+import { PANEL_EDGE, PANEL_SECTION_GAP, PANEL_TABS_ROOM, PanelBody, PanelHeader } from "@/shared/ui/panel.tsx";
 import { Segmented } from "@platform/segmented.tsx";
-import { color, hairline, sectionTitle, textStyle } from "@/shared/ui/theme.ts";
+import { chrome, color, hairline, sectionTitle, textStyle } from "@/shared/ui/theme.ts";
 import { CharacterPicker } from "@/feature/character/picker.tsx";
 import { cubeLabel, CubeSwatch, DECOR_GLYPH, heldRing } from "./cube-swatch.tsx";
 import { LABEL } from "@platform/palette.ts";
@@ -33,13 +33,32 @@ for (const cube of placeableCubes) {
   SECTIONS.set(section, [...(SECTIONS.get(section) ?? []), cube]);
 }
 
-/** A catalog entry: a picture over its name, lit while it is in hand. */
+// A catalog entry's three sizes (issue/20260928-three-sizes-of-a-control.md):
+// a press lands on its 44 cell; the tile one sees is 40, a block's top as a
+// rounded square, where a circle cut its texture away; a decor's glyph is 20.
+const CELL = chrome.target;
+const TILE = 40;
+const TILE_RADIUS = 10;
+
+/** A catalog entry: its picture alone, lit while it is in hand. Its name is
+ * read out, and shown by its section once it is the one in hand; a grid of
+ * names under every tile read as a list, where the tiles tell most apart. */
 function GridButton({ label, active, onPress, children }: { label: string; active: boolean; onPress: () => void; children: React.ReactNode }) {
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} aria-selected={active} style={styles.cell}>
       {children}
-      <Text numberOfLines={1} style={styles.cellLabel}>{label}</Text>
     </Pressable>
+  );
+}
+
+/** A section's title, and the name of what is in hand when it is one of its
+ * own. */
+function SectionHead({ title, held }: { title?: string; held: string | null }) {
+  return (
+    <View style={styles.sectionHead}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {held !== null && <Text numberOfLines={1} style={styles.held}>{held}</Text>}
+    </View>
   );
 }
 
@@ -49,7 +68,7 @@ function CubeSwatchButton({ cube, onPick }: { cube: PlaceableCube; onPick: (cube
 
   return (
     <GridButton label={cubeLabel(t, cube)} active={active} onPress={() => onPick(cube)}>
-      <CubeSwatch cube={cube} size={32} radius={16} style={active ? styles.markOn : styles.markOff} />
+      <CubeSwatch cube={cube} size={TILE} radius={TILE_RADIUS} style={active ? styles.markOn : styles.markOff} />
     </GridButton>
   );
 }
@@ -62,7 +81,7 @@ function DecorGridButton({ kind, onPick }: { kind: u8; onPick: (kind: u8) => voi
   return (
     <GridButton label={t(`decors.${name}`)} active={active} onPress={() => onPick(kind)}>
       <View style={[styles.decor, active ? [styles.markOn, styles.decorOn] : styles.markOff]}>
-        <Glyph glyph={DECOR_GLYPH[name]} size={16} color={LABEL.primary} />
+        <Glyph glyph={DECOR_GLYPH[name]} size={chrome.glyph} color={LABEL.primary} />
       </View>
     </GridButton>
   );
@@ -87,6 +106,10 @@ export function DrawerModal(props: BaseModalProps) {
   const [tab, setTab] = useState<DrawerTab>(DrawerTab.Cube);
   const selectCube = useUiStore.getState().selectCube;
   const selectDecor = useUiStore.getState().selectDecor;
+  const activeTool = useUiStore((s) => s.activeTool);
+  const heldCube = useUiStore((s) => s.cube);
+  const heldDecor = useUiStore((s) => s.decor);
+  const heldSection = activeTool === ActiveTool.Object ? placeableCubeChannel(heldCube) : null;
 
   function pickCube(cube: PlaceableCube): void {
     selectCube(cube);
@@ -120,7 +143,7 @@ export function DrawerModal(props: BaseModalProps) {
             if (!cubes) return null;
             return (
               <View key={section} style={styles.section}>
-                <Text style={styles.sectionTitle}>{t(`drawer_modal.sections.${section}`)}</Text>
+                <SectionHead title={t(`drawer_modal.sections.${section}`)} held={section === heldSection ? cubeLabel(t, heldCube) : null} />
                 <View style={styles.grid}>
                   {cubes.map((cube) => <CubeSwatchButton key={placeableCubeId(cube)} cube={cube} onPick={pickCube} />)}
                 </View>
@@ -129,8 +152,11 @@ export function DrawerModal(props: BaseModalProps) {
           })}
 
           {tab === DrawerTab.Decor && (
-            <View style={styles.grid}>
-              {decorKinds.map((kind) => <DecorGridButton key={kind} kind={kind} onPick={pickDecor} />)}
+            <View style={styles.section}>
+              <SectionHead held={activeTool === ActiveTool.Decor ? t(`decors.${decorName(heldDecor)}`) : null} />
+              <View style={styles.grid}>
+                {decorKinds.map((kind) => <DecorGridButton key={kind} kind={kind} onPick={pickDecor} />)}
+              </View>
             </View>
           )}
 
@@ -143,15 +169,15 @@ export function DrawerModal(props: BaseModalProps) {
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: PANEL_EDGE, paddingTop: PANEL_TABS_ROOM, gap: 16 },
+  scrollContent: { paddingHorizontal: PANEL_EDGE, paddingTop: PANEL_TABS_ROOM, gap: PANEL_SECTION_GAP },
   section: { gap: 8 },
+  sectionHead: { flexDirection: "row", alignItems: "baseline", gap: 8 },
   sectionTitle: { ...sectionTitle, color: LABEL.secondary },
-  // Five to a row: a fifth of the row less a share of the four 4-point gaps.
+  held: { flex: 1, textAlign: "right", ...textStyle.caption, color: LABEL.primary },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
-  cell: { width: "18.4%", alignItems: "center", gap: 4, padding: 6, borderRadius: 20 },
-  cellLabel: { width: "100%", textAlign: "center", ...textStyle.caption2, color: LABEL.secondary },
+  cell: { width: CELL, height: CELL, alignItems: "center", justifyContent: "center" },
   markOff: { boxShadow: `0 0 0 1px ${hairline}` },
   markOn: { boxShadow: heldRing(color.paper, color.black, 2), transform: [{ scale: 1.05 }] },
-  decor: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  decor: { width: TILE, height: TILE, borderRadius: TILE_RADIUS, alignItems: "center", justifyContent: "center" },
   decorOn: { backgroundColor: color.faint },
 });

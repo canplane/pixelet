@@ -1,24 +1,24 @@
 // @pxl/web/shared/ui/panel.tsx
 
 import { createContext, type ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { Backing } from "@platform/backing.tsx";
 import { BackingPlace } from "@/shared/ui/backing-place.ts";
-import { Glyph } from "@/shared/ui/glyph.tsx";
-import { color, textStyle } from "@/shared/ui/theme.ts";
+import { CircularButton } from "@/shared/ui/circular-button.tsx";
+import { chrome, color, textStyle } from "@/shared/ui/theme.ts";
 import { LABEL } from "@platform/palette.ts";
 
 /** Height of the controls on a sheet (close button, search field, segmented
- * control); the same as an iOS search bar. */
-export const PANEL_CONTROL = 36;
+ * control): the least target, a step under a map control's 48. */
+export const PANEL_CONTROL = chrome.target;
 /** Top row height, the same as an iOS navigation bar. */
 const ROW = 44;
 /** Distance of the top row's controls from the sheet's side and top edges,
- * and the side inset of a panel's content. iOS draws the sheet's drag handle
- * 5pt from the top and 5pt tall, so this leaves 10pt between the handle and
- * the controls. */
-export const PANEL_EDGE = 20;
+ * and the side inset of a panel's content: iOS 26's, as its Maps' sheet
+ * stands its search field and close. The drag handle, 5 from the top and 5
+ * tall, leaves 6 above the controls. */
+export const PANEL_EDGE = 16;
 
 /** A sheet's top row. */
 export const PANEL_HEADER = {
@@ -29,19 +29,27 @@ export const PANEL_HEADER = {
   alignItems: "center",
 } as const;
 
-/** Gap between the top row's controls and the floating tabs under them. */
-const STACK_GAP = 8;
+/** Gap between the top row's controls and the floating tabs under them: the
+ * one between any two controls. */
+const STACK_GAP = chrome.controlGap;
+/** Gap between two sections of a panel's content, a step over the gap inside
+ * one, so where one ends and the next begins reads, as iOS's grouped lists
+ * part theirs. */
+export const PANEL_SECTION_GAP = 24;
 /** Gap between the tabs and the first row of content. */
-const CONTENT_GAP = 16;
+const CONTENT_GAP = 20;
 /** Height of the header area: PANEL_EDGE above and below the round
  * controls. Content scrolls only below it, and a sheet is dragged by it. */
 export const PANEL_HEAD_HEIGHT = PANEL_EDGE + PANEL_CONTROL + PANEL_EDGE;
 /** Top of the floating tabs, measured from the sheet's top: STACK_GAP under
  * the top row's controls, so they straddle the header's bottom edge. */
 const TABS_TOP = PANEL_EDGE + PANEL_CONTROL + STACK_GAP;
-/** Top padding a panel's scroll content needs to start below the part of
- * the tabs that hangs into the scroll area. */
-export const PANEL_TABS_ROOM = TABS_TOP + PANEL_CONTROL + CONTENT_GAP - PANEL_HEAD_HEIGHT;
+/** Top padding of a panel's scroll content: CONTENT_GAP under the header's
+ * controls, of which the header already holds PANEL_EDGE. */
+export const PANEL_CONTENT_TOP = CONTENT_GAP - PANEL_EDGE;
+/** The same with tabs floating over the content: CONTENT_GAP under the tabs
+ * instead, which stand STACK_GAP under the header's controls. */
+export const PANEL_TABS_ROOM = PANEL_CONTENT_TOP + STACK_GAP + PANEL_CONTROL;
 
 /** Corner radius of a sheet's top corners: PANEL_EDGE plus the controls' radius,
  * so the corners are concentric with the round controls in the top row. */
@@ -98,15 +106,9 @@ export function PanelBody({ header, tabs, children }: { header: ReactNode; tabs?
 }
 
 /** A panel's close button: a round glass button with an X, as on iOS 26
- * sheets. */
+ * sheets, a sheet control's size. */
 export function PanelClose({ label, onClose }: { label: string; onClose: () => void }) {
-  return (
-    <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={label} style={styles.close}>
-      <Backing fill={color.faint} place={BackingPlace.OnSheet} interactive style={styles.closeFace}>
-        <Glyph glyph="xmark" size={18} color={LABEL.primary} />
-      </Backing>
-    </Pressable>
-  );
+  return <CircularButton glyph="xmark" size={PANEL_CONTROL} place={BackingPlace.OnSheet} onPress={onClose} label={label} />;
 }
 
 const styles = StyleSheet.create({
@@ -127,6 +129,4 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
   },
-  close: { width: PANEL_CONTROL, height: PANEL_CONTROL, borderRadius: PANEL_CONTROL / 2 },
-  closeFace: { flex: 1, borderRadius: PANEL_CONTROL / 2, alignItems: "center", justifyContent: "center" },
 });

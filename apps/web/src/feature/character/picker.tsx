@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { alpha, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
 import { CharacterPreview } from "@/feature/character/preview.tsx";
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { Command, encode_setting_update } from "@/kernel/abi/cmd.spec.ts";
@@ -12,6 +12,7 @@ import { kernel_command, useKernel } from "@/kernel/shell.ts";
 import { SETTINGS } from "@/feature/setting/schema.ts";
 import { findPersonVariant, findPetVariant, type Gender, genderOf, GENDERS, personVariantNumbered, personVariantsOf, PET_VARIANTS } from "@/feature/character/variant.ts";
 import { LABEL } from "@platform/palette.ts";
+import { PANEL_EDGE, PANEL_SECTION_GAP } from "@/shared/ui/panel.tsx";
 
 // Not a setting: person/pet variant is a companion *appearance* pick, the
 // same "which of these do I want equipped" shape as a cube color or decor
@@ -21,9 +22,21 @@ import { LABEL } from "@platform/palette.ts";
 // Every chip in this component — gender, person variant, pet variant alike —
 // is this one component, not a look-alike, since a gender chip and a variant
 // chip are literally the same kind of control.
+// Its three sizes (issue/20260928-three-sizes-of-a-control.md): a press lands
+// on 44, the least target, reaching into the gaps around it by half, which
+// the gaps are sized to hold so no two chips' targets meet; the chip one sees
+// is 32, as a Material chip is, a choice set in a panel; its words are the
+// footnote's.
+const CHIP_HEIGHT = 32;
+/** A companion's preview, a square. */
+const PREVIEW = 96;
+const CHIP_GAP_X = 8;
+const CHIP_GAP_Y = chrome.target - CHIP_HEIGHT;
+const CHIP_SLOP = { top: CHIP_GAP_Y / 2, bottom: CHIP_GAP_Y / 2, left: CHIP_GAP_X / 2, right: CHIP_GAP_X / 2 };
+
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="radio" aria-checked={active} style={[styles.chip, active && styles.chipOn]}>
+    <Pressable onPress={onPress} hitSlop={CHIP_SLOP} accessibilityRole="radio" aria-checked={active} style={[styles.chip, active && styles.chipOn]}>
       {
         /* The chip is as wide as its label in the heavier weight, whichever it
       shows: a pick that widened its chip would rewrap the row under the
@@ -124,18 +137,19 @@ export function CharacterPicker() {
 }
 
 const styles = StyleSheet.create({
-  pickers: { gap: 16 },
+  pickers: { gap: PANEL_SECTION_GAP },
   picker: { gap: 8 },
   pickerLabel: { ...sectionTitle, color: LABEL.secondary },
-  pickerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  preview: { width: 80, height: 80, flexShrink: 0, borderRadius: 10, overflow: "hidden", backgroundColor: alpha(color.fill, 0.4) },
-  chipColumn: { flexShrink: 1, minWidth: 0, gap: 6 },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  // The preview stands off the chips by the sheet's own edge.
+  pickerRow: { flexDirection: "row", alignItems: "flex-start", gap: PANEL_EDGE },
+  preview: { width: PREVIEW, height: PREVIEW, flexShrink: 0, borderRadius: 12, overflow: "hidden", backgroundColor: alpha(color.fill, 0.4) },
+  chipColumn: { flexShrink: 1, minWidth: 0, gap: CHIP_GAP_Y },
+  chips: { flexDirection: "row", flexWrap: "wrap", columnGap: CHIP_GAP_X, rowGap: CHIP_GAP_Y },
   rule: { height: 1, backgroundColor: hairline },
-  chip: { borderRadius: 999, paddingHorizontal: 11, paddingVertical: 5, backgroundColor: color.faint },
+  chip: { height: CHIP_HEIGHT, justifyContent: "center", borderRadius: CHIP_HEIGHT / 2, paddingHorizontal: 12, backgroundColor: color.faint },
   chipOn: { backgroundColor: color.chosen },
   chipText: { ...textStyle.footnote, fontWeight: weight.medium, color: LABEL.primary },
   chipTextOn: { fontWeight: weight.semibold, color: color.paper },
   sizer: { opacity: 0 },
-  label: { position: "absolute", left: 0, right: 0, top: 5, textAlign: "center" },
+  label: { position: "absolute", left: 0, right: 0, top: (CHIP_HEIGHT - textStyle.footnote.lineHeight) / 2, textAlign: "center" },
 });

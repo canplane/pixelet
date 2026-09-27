@@ -226,6 +226,20 @@
       ]
     },
     {
+      "name": "CompassState",
+      "doc": ["The compass over the map (shell/ui/compass.rs), as the kernel decides it."],
+      "format": "dec",
+      "entries": [
+        { "name": "Hidden", "value": 0, "doc": ["The map is north up, near enough."] },
+        { "name": "Shown", "value": 1, "doc": ["The map is turned; a press turns it north up again."] },
+        {
+          "name": "Following",
+          "value": 2,
+          "doc": ["The map follows the device's heading: shown for where north is, dimmed and taking no press, since north up is the tracking button's to ask."]
+        }
+      ]
+    },
+    {
       "name": "GeolocationErrorCode",
       "doc": ["The browser's PositionError codes."],
       "format": "dec",
@@ -732,7 +746,7 @@
         { "name": "is_follow_mode", "type": "bool" },
         { "name": "camera_busy", "type": "bool" },
         { "name": "zooming", "type": "bool", "doc": ["A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is."] },
-        { "name": "show_compass", "type": "bool" },
+        { "name": "compass", "type": "CompassState" },
         { "name": "settings", "type": "u32", "list": true, "doc": ["Every setting's value by its SettingKey, as SETTING_UPDATE carries one."] },
         { "name": "scale_bar", "type": "ScaleBar" },
         {

@@ -697,6 +697,11 @@ pub fn pinching() -> bool {
     input().drag_mode == DragMode::Pinch
 }
 
+/// A finger or a button is on the canvas, moving the map in any way.
+pub fn dragging() -> bool {
+    input().drag_mode != DragMode::None
+}
+
 /// What the last pointer event held: what the hover cursor previews.
 pub fn holding() -> Holding {
     input().holding

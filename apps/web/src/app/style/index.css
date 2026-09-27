@@ -69,3 +69,9 @@ input:focus,
 textarea:focus {
   outline: none;
 }
+
+/* A scroll's bar as a phone's is, thin, where a desktop draws its system's
+   full gutter inside a sheet. Safari keeps its own overlay bar either way. */
+* {
+  scrollbar-width: thin;
+}

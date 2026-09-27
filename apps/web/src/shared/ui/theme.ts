@@ -122,11 +122,17 @@ export const color = {
  * surface drawn where there is no glass.
  */
 export const surface = {
-  /** A control switched on: the coral of whatever is chosen. */
-  chosen: { glass: alpha(CORAL.base, 0.25), fill: tint(CORAL.base, 0.1) },
+  /** A control switched on: the coral of whatever is chosen, and a ring of it
+   * around the control. */
+  chosen: { glass: alpha(CORAL.base, 0.25), fill: tint(CORAL.base, 0.1), edge: alpha(CORAL.base, 0.6) },
   /** A report that something failed. */
   alarm: { glass: alpha(SYSTEM.red, 0.15), fill: tint(SYSTEM.red, 0.06), edge: tint(SYSTEM.red, 0.3), shadow: alpha(SYSTEM.red, 0.15) },
 } as const;
+
+/** A control that takes no press: what it holds at this opacity, its ground
+ * as it is, as iOS dims a disabled button — the glass left whole, which an
+ * opacity or a clear style would read as the button gone rather than off. */
+export const disabledContent = 0.4;
 
 /** A floating control's lift off the map. */
 export const shadow = { lift: "0 6px 20px rgba(0, 0, 0, 0.25)" } as const;
@@ -190,4 +196,10 @@ export const chrome = {
    * side or stacked. */
   control: 48,
   controlGap: 10,
+  /** The least a press lands on, whatever the control one sees: iOS's 44
+   * (issue/20260928-three-sizes-of-a-control.md). */
+  target: 44,
+  /** A control's glyph, one size whatever the control's: a map control's 48,
+   * a sheet's 44, a slot in the strip. */
+  glyph: 20,
 } as const;

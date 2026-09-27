@@ -22,7 +22,7 @@ function Halo({ style, draw }: { style: StyleProp<ViewStyle>; draw: (ink?: strin
   return (
     <View style={style}>
       {haloRings.map((px) => (
-        <View key={px} aria-hidden style={[StyleSheet.absoluteFill, { opacity: halo.ring }]}>
+        <View key={px} aria-hidden needsOffscreenAlphaCompositing style={[StyleSheet.absoluteFill, { opacity: halo.ring }]}>
           {around(px).map(([x, y], i) => (
             <View key={i} style={[StyleSheet.absoluteFill, { transform: [{ translateX: x }, { translateY: y }] }]}>
               {draw(theme.black)}
@@ -30,7 +30,12 @@ function Halo({ style, draw }: { style: StyleProp<ViewStyle>; draw: (ink?: strin
           ))}
         </View>
       ))}
-      {draw()}
+      {
+        // In a view of its own: on a page, a positioned box paints over an
+        // unpositioned one whatever their order, and a bare glyph is an SVG
+        // with no position, so the rings would lie over it and grey it.
+      }
+      <View>{draw()}</View>
     </View>
   );
 }

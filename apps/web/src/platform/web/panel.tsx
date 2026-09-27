@@ -24,7 +24,7 @@ import { Motion } from "@platform/motion.tsx";
 import { useSafeArea } from "@platform/safe-area.ts";
 import { ease, SLIDE, SLIDE_AWAY } from "@/shared/ui/motion/transition.ts";
 import { PANEL_HEAD_HEIGHT, PanelPresence, type PanelProps, SHEET_RADIUS } from "@/shared/ui/panel.tsx";
-import { alpha, color } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color } from "@/shared/ui/theme.ts";
 import { LABEL } from "@platform/palette.ts";
 
 const MAX_WIDTH = 540;
@@ -116,7 +116,6 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
               onPress={() => detent(!full)}
               accessibilityRole="adjustable"
               accessibilityLabel={label}
-              hitSlop={8}
               style={styles.handleArea}
             >
               <View style={styles.handle} />
@@ -146,7 +145,8 @@ const styles = StyleSheet.create({
     backgroundColor: color.paper,
     boxShadow: "0 -4px 20px rgba(0, 0, 0, 0.12)",
   },
-  // iOS's sheet handle: 36 × 5, 5 below the top edge.
-  handleArea: { position: "absolute", top: 0, left: "50%", marginLeft: -24, width: 48, height: 15, alignItems: "center", paddingTop: 5 },
+  // iOS's sheet handle: 36 × 5, 5 below the top edge, in a square a press
+  // lands on.
+  handleArea: { position: "absolute", top: 0, left: "50%", marginLeft: -chrome.target / 2, width: chrome.target, height: chrome.target, alignItems: "center", paddingTop: 5 },
   handle: { width: 36, height: 5, borderRadius: 2.5, backgroundColor: LABEL.tertiary },
 });

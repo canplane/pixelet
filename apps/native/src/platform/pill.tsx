@@ -21,9 +21,13 @@ import type { f64 } from "@xpute/core/abi/word.ts";
 import { Backing } from "@platform/backing.tsx";
 import { SNAP } from "@/shared/ui/motion/transition.ts";
 import type { PillProps } from "@/shared/ui/pill.ts";
+import { chrome } from "@/shared/ui/theme.ts";
 
-/** How far past its edge a touch still lands on it. */
-const TOUCH_SLOP = 8;
+/** How far past its edge a touch lands on a pill `height` tall: out to the
+ * least target. */
+function touchSlop(height: f64): f64 {
+  return Math.max(0, (chrome.target - height) / 2);
+}
 
 /** A control's move, as long as the page's (shared/ui/motion/transition.ts).
  * Only what changes size or place is animated: a view that comes or goes in
@@ -46,7 +50,7 @@ export function Pill({ x, width, height, fill, tint, place, interactive, border,
   // the glass only through what the glass contains, and interactive glass
   // answers no touch it is not given.
   return (
-    <View {...touch} hitSlop={touch && TOUCH_SLOP} style={[styles.at, { left: x, width, height }]}>
+    <View {...touch} hitSlop={touch && touchSlop(height)} style={[styles.at, { left: x, width, height }]}>
       <Backing
         fill={fill}
         tint={tint}

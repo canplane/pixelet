@@ -23,7 +23,7 @@ import { ChevronDown, ChevronUp } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { alpha, color } from "@/shared/ui/theme.ts";
+import { alpha, color, disabledContent } from "@/shared/ui/theme.ts";
 import { gauge, Head, ProfilerGauge } from "./gauge.tsx";
 import { profilerLog } from "./log.ts";
 import { profilerReportCopy, profilerReportText } from "./report.ts";
@@ -85,7 +85,7 @@ function PanelButton({ label, hint, tint = Tint.Plain, onPress, onHint, disabled
       accessibilityHint={hint}
       style={({ pressed }) => [styles.button, { borderColor: t.border, backgroundColor: hovered || pressed ? t.lit : t.ground }]}
     >
-      {({ pressed }) => <Text style={[gauge.text, { color: hovered || pressed ? t.litInk : t.ink }]}>{label}</Text>}
+      {({ pressed }) => <Text style={[gauge.text, { color: hovered || pressed ? t.litInk : t.ink }, disabled && { opacity: disabledContent }]}>{label}</Text>}
     </Pressable>
   );
 }
