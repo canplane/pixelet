@@ -34,7 +34,7 @@ interface CircularButtonProps {
 
 /** A round control: a disc of the platform's glass, or its fill where it has
  * none, holding one glyph. Switched on, the disc takes the chosen coral, as a
- * tint on the glass or as the fill. A press shrinks the disc where there is
+ * tint on the glass or as the fill, ringed in it. A press shrinks the disc where there is
  * no glass; the glass answers a press itself. */
 export function CircularButton(
   { glyph, children, size = chrome.control, glyphSize = chrome.glyph, place = BackingPlace.OverMap, onPress, label, isActive, disabled }: CircularButtonProps,
@@ -49,7 +49,7 @@ export function CircularButton(
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled }}
-      style={round}
+      style={[round, isActive && styles.chosen]}
     >
       {({ pressed }) => (
         <Motion to={{ scale: pressed && !disabled && !SYSTEM_BACKING ? 0.95 : 1 }} transition={SNAP} style={styles.press}>
@@ -72,6 +72,7 @@ export function CircularButton(
 
 const styles = StyleSheet.create({
   press: { flex: 1 },
+  chosen: { boxShadow: `0 0 0 2px ${surface.chosen.edge}` },
   face: { flex: 1, alignItems: "center", justifyContent: "center" },
   content: { alignItems: "center", justifyContent: "center" },
 });

@@ -122,8 +122,9 @@ export const color = {
  * surface drawn where there is no glass.
  */
 export const surface = {
-  /** A control switched on: the coral of whatever is chosen. */
-  chosen: { glass: alpha(CORAL.base, 0.25), fill: tint(CORAL.base, 0.1) },
+  /** A control switched on: the coral of whatever is chosen, and a ring of it
+   * around the control. */
+  chosen: { glass: alpha(CORAL.base, 0.25), fill: tint(CORAL.base, 0.1), edge: alpha(CORAL.base, 0.6) },
   /** A report that something failed. */
   alarm: { glass: alpha(SYSTEM.red, 0.15), fill: tint(SYSTEM.red, 0.06), edge: tint(SYSTEM.red, 0.3), shadow: alpha(SYSTEM.red, 0.15) },
 } as const;
