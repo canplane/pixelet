@@ -2,6 +2,7 @@
 
 import CoreLocation
 import ExpoModulesCore
+import ExpoUI
 import PxlNative
 import UIKit
 
@@ -17,6 +18,15 @@ import UIKit
 public class PlatformModule: Module {
   public func definition() -> ModuleDefinition {
     Name("PxlPlatform")
+
+    // ---- @expo/ui modifiers the shell names (SheetContent.swift) ----
+
+    OnCreate {
+      ViewModifierRegistry.register(contentScrollsModifier) { _, _, _ in ContentScrollsModifier() }
+    }
+    OnDestroy {
+      ViewModifierRegistry.unregister(contentScrollsModifier)
+    }
 
     // ---- the kernel (platform/core.ts, gpu.ts, image.ts) ----
 

@@ -13,23 +13,38 @@ import { color, textStyle } from "@/shared/ui/theme.ts";
 export const PANEL_CONTROL = 36;
 /** Top row height, the same as an iOS navigation bar. */
 const ROW = 44;
-/** Distance of the top row's controls from the sheet's side and top edges.
- * iOS draws the sheet's drag handle 5pt from the top and 5pt tall, so this
- * leaves 10pt between the handle and the controls. */
-const EDGE = 20;
+/** Distance of the top row's controls from the sheet's side and top edges,
+ * and the side inset of a panel's content. iOS draws the sheet's drag handle
+ * 5pt from the top and 5pt tall, so this leaves 10pt between the handle and
+ * the controls. */
+export const PANEL_EDGE = 20;
 
-/** A sheet's top row. No divider under it, as on iOS 26 sheets. */
+/** A sheet's top row. */
 export const PANEL_HEADER = {
-  marginTop: EDGE - (ROW - PANEL_CONTROL) / 2,
+  marginTop: PANEL_EDGE - (ROW - PANEL_CONTROL) / 2,
   height: ROW,
-  paddingHorizontal: EDGE,
+  paddingHorizontal: PANEL_EDGE,
   flexDirection: "row",
   alignItems: "center",
 } as const;
 
-/** Corner radius of a sheet's top corners: EDGE plus the controls' radius,
+/** Gap between the top row's controls and the floating tabs under them. */
+const STACK_GAP = 8;
+/** Gap between the tabs and the first row of content. */
+const CONTENT_GAP = 16;
+/** Height of the header area: PANEL_EDGE above and below the round
+ * controls. Content scrolls only below it, and a sheet is dragged by it. */
+export const PANEL_HEAD_HEIGHT = PANEL_EDGE + PANEL_CONTROL + PANEL_EDGE;
+/** Top of the floating tabs, measured from the sheet's top: STACK_GAP under
+ * the top row's controls, so they straddle the header's bottom edge. */
+const TABS_TOP = PANEL_EDGE + PANEL_CONTROL + STACK_GAP;
+/** Top padding a panel's scroll content needs to start below the part of
+ * the tabs that hangs into the scroll area. */
+export const PANEL_TABS_ROOM = TABS_TOP + PANEL_CONTROL + CONTENT_GAP - PANEL_HEAD_HEIGHT;
+
+/** Corner radius of a sheet's top corners: PANEL_EDGE plus the controls' radius,
  * so the corners are concentric with the round controls in the top row. */
-export const SHEET_RADIUS = EDGE + PANEL_CONTROL / 2;
+export const SHEET_RADIUS = PANEL_EDGE + PANEL_CONTROL / 2;
 
 /** Props of a panel, a bottom sheet over the map (platform/web/panel.tsx,
  * and the device app's platform/panel.tsx). */
@@ -62,6 +77,25 @@ export function PanelHeader({ title, closeLabel, onClose }: { title: string; clo
   );
 }
 
+/** A panel's body: the header area (`header`, PANEL_HEAD_HEIGHT tall) and under it the
+ * scroll area (`children`), so content never scrolls behind the header.
+ * The tabs float across the boundary between the two, on Regular glass,
+ * since content moves behind their lower part; scroll content that has tabs
+ * above it pads its top by PANEL_TABS_ROOM. No divider between the two. */
+export function PanelBody({ header, tabs, children }: { header: ReactNode; tabs?: ReactNode; children: ReactNode }) {
+  return (
+    <View style={styles.body}>
+      <View style={styles.head}>{header}</View>
+      <View style={styles.scroll}>{children}</View>
+      {tabs && (
+        <Glass fill={color.paper} variant={GlassVariant.Regular} style={styles.tabs}>
+          {tabs}
+        </Glass>
+      )}
+    </View>
+  );
+}
+
 /** A panel's close button: a round glass button with an X, as on iOS 26
  * sheets. */
 export function PanelClose({ label, onClose }: { label: string; onClose: () => void }) {
@@ -79,6 +113,19 @@ const styles = StyleSheet.create({
   // Spans the whole row so the title is centered on the sheet, not on the
   // space left of the close button.
   title: { position: "absolute", left: 0, right: 0, textAlign: "center", pointerEvents: "none", ...textStyle.title, color: color.text },
+  body: { flex: 1 },
+  head: { height: PANEL_HEAD_HEIGHT },
+  scroll: { flex: 1, overflow: "hidden" },
+  tabs: {
+    position: "absolute",
+    top: TABS_TOP,
+    left: PANEL_EDGE,
+    right: PANEL_EDGE,
+    height: PANEL_CONTROL,
+    borderRadius: PANEL_CONTROL / 2,
+    justifyContent: "center",
+    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
+  },
   close: { width: PANEL_CONTROL, height: PANEL_CONTROL, borderRadius: PANEL_CONTROL / 2 },
   closeFace: { flex: 1, borderRadius: PANEL_CONTROL / 2, alignItems: "center", justifyContent: "center" },
 });

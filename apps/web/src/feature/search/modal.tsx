@@ -9,7 +9,7 @@ import { useTranslation } from "react-i18next";
 
 import type { BaseModalProps } from "@/app/type/ui.type.ts";
 import { Panel } from "@platform/panel.tsx";
-import { PANEL_CONTROL, PANEL_HEADER, PanelClose } from "@/shared/ui/panel.tsx";
+import { PANEL_CONTROL, PANEL_EDGE, PANEL_HEADER, PanelBody, PanelClose } from "@/shared/ui/panel.tsx";
 import { KEEPS_KEYBOARD } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
 import { alpha, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
@@ -203,97 +203,103 @@ export function SearchModal(props: BaseModalProps) {
 
   return (
     <Panel label={t("map.search.placeholder")} onClose={() => onClose()}>
-      {
-        /* The field and its clear: a touch there leaves the keyboard up;
-          one on a result, the list or anywhere else is done typing. */
-      }
-      <View {...KEEPS_KEYBOARD} style={styles.headerRow}>
-        {
-          /* Search field (glass capsule with the magnifier and the clear
-            button inside), then the panel's close button. The clear is a
-            small filled circle inside the field and the close is a separate
-            round button, so the two X's are not confused. */
+      <PanelBody
+        header={
+          <>
+            {
+              /* The field and its clear: a touch there leaves the keyboard up;
+                one on a result, the list or anywhere else is done typing. */
+            }
+            <View {...KEEPS_KEYBOARD} style={styles.headerRow}>
+              {
+                /* Search field (glass capsule with the magnifier and the clear
+                  button inside), then the panel's close button. The clear is a
+                  small filled circle inside the field and the close is a separate
+                  round button, so the two X's are not confused. */
+              }
+              <Glass fill={color.faint} variant={GlassVariant.Clear} style={styles.well}>
+                <Search size={16} color={color.textMuted} />
+                <TextField
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder={t("map.search.placeholder")}
+                  placeholderTextColor={color.textMuted}
+                  clearButtonMode={SYSTEM_CLEAR ? "while-editing" : undefined}
+                  style={styles.field}
+                />
+                {
+                  /* Where the field has no clear of its own. Lucide has no filled
+                    circle-X glyph (it's a pure outline/stroke icon set) — composed
+                    by hand: a solid circle with a smaller X cut into it in the
+                    background color, the familiar "clear field" shape (iOS/macOS
+                    search fields). The results follow the emptied query. */
+                }
+                {!SYSTEM_CLEAR && query.length > 0 && (
+                  <Pressable
+                    onPress={() => setQuery("")}
+                    hitSlop={12}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("map.search.clear_aria_label")}
+                    style={styles.clear}
+                  >
+                    <X size={10} strokeWidth={3} color={color.paper} />
+                  </Pressable>
+                )}
+              </Glass>
+              <PanelClose label={t("settings.close")} onClose={() => onClose()} />
+            </View>
+          </>
         }
-        <Glass fill={color.faint} variant={GlassVariant.Clear} style={styles.well}>
-          <Search size={16} color={color.textMuted} />
-          <TextField
-            value={query}
-            onChangeText={setQuery}
-            placeholder={t("map.search.placeholder")}
-            placeholderTextColor={color.textMuted}
-            clearButtonMode={SYSTEM_CLEAR ? "while-editing" : undefined}
-            style={styles.field}
-          />
+      >
+        <ScrollView style={styles.results} contentContainerStyle={styles.resultsRoom} keyboardShouldPersistTaps="handled">
+          {query.trim().length > 0 && results.length === 0 && <Text style={styles.empty}>{loading ? t("map.search.loading") : t("map.search.no_results")}</Text>}
+
           {
-            /* Where the field has no clear of its own. Lucide has no filled
-              circle-X glyph (it's a pure outline/stroke icon set) — composed
-              by hand: a solid circle with a smaller X cut into it in the
-              background color, the familiar "clear field" shape (iOS/macOS
-              search fields). The results follow the emptied query. */
-          }
-          {!SYSTEM_CLEAR && query.length > 0 && (
-            <Pressable
-              onPress={() => setQuery("")}
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel={t("map.search.clear_aria_label")}
-              style={styles.clear}
-            >
-              <X size={10} strokeWidth={3} color={color.paper} />
-            </Pressable>
-          )}
-        </Glass>
-        <PanelClose label={t("settings.close")} onClose={() => onClose()} />
-      </View>
-
-      <ScrollView style={styles.results} contentContainerStyle={styles.resultsRoom} keyboardShouldPersistTaps="handled">
-        {query.trim().length > 0 && results.length === 0 && <Text style={styles.empty}>{loading ? t("map.search.loading") : t("map.search.no_results")}</Text>}
-
-        {
-          /* Divisions first — the backend already orders them that way
+            /* Divisions first — the backend already orders them that way
           (search/provider/overture_provider.ts's own top comment: a
           name matching an admin area is rare enough to surface ahead of
           whatever POI happens to contain the same substring), and a
           section header on each group makes that ordering legible
           instead of just an unlabeled jump from areas to places. */
-        }
-        {divisionResults.length > 0 && <SectionHeader label={t("map.search.section_areas")} />}
-        {divisionResults.map((r) => (
-          <Pressable key={r.gers_id} onPress={() => select(r)} accessibilityRole="button" style={styles.row}>
-            {
-              /* No icon here, unlike a POI row — a division doesn't
+          }
+          {divisionResults.length > 0 && <SectionHeader label={t("map.search.section_areas")} />}
+          {divisionResults.map((r) => (
+            <Pressable key={r.gers_id} onPress={() => select(r)} accessibilityRole="button" style={styles.row}>
+              {
+                /* No icon here, unlike a POI row — a division doesn't
               have a "kind of place" to badge the way a category does,
               and the section header already says what these are. */
-            }
-            <View style={styles.rowText}>
-              <Text numberOfLines={1} style={styles.name}>{displayName(r, lang)}</Text>
-              <SubtitleRow label={r.context.length > 0 ? assembleLabel(r.context, lang) : ""} distance={distanceOf(r)} />
-            </View>
-          </Pressable>
-        ))}
-
-        {poiResults.length > 0 && <SectionHeader label={t("map.search.section_places")} />}
-        {poiResults.map((r) => {
-          // poi-badge.ts says why an emoji beats a Lucide glyph at this size.
-          const badge = resolvePoiBadge(r.category);
-          return (
-            <Pressable key={r.gers_id} onPress={() => select(r)} accessibilityRole="button" style={styles.row}>
-              <View style={[styles.badge, { backgroundColor: `${badge.color}33` }]}>
-                <Text style={styles.badgeIcon}>{badge.icon}</Text>
-              </View>
-              {
-                /* Grows, or the column sizes to its own text and the
-                distance ends up beside the address instead of at the
-                row's right edge. */
               }
               <View style={styles.rowText}>
                 <Text numberOfLines={1} style={styles.name}>{displayName(r, lang)}</Text>
                 <SubtitleRow label={r.context.length > 0 ? assembleLabel(r.context, lang) : ""} distance={distanceOf(r)} />
               </View>
             </Pressable>
-          );
-        })}
-      </ScrollView>
+          ))}
+
+          {poiResults.length > 0 && <SectionHeader label={t("map.search.section_places")} />}
+          {poiResults.map((r) => {
+            // poi-badge.ts says why an emoji beats a Lucide glyph at this size.
+            const badge = resolvePoiBadge(r.category);
+            return (
+              <Pressable key={r.gers_id} onPress={() => select(r)} accessibilityRole="button" style={styles.row}>
+                <View style={[styles.badge, { backgroundColor: `${badge.color}33` }]}>
+                  <Text style={styles.badgeIcon}>{badge.icon}</Text>
+                </View>
+                {
+                  /* Grows, or the column sizes to its own text and the
+                distance ends up beside the address instead of at the
+                row's right edge. */
+                }
+                <View style={styles.rowText}>
+                  <Text numberOfLines={1} style={styles.name}>{displayName(r, lang)}</Text>
+                  <SubtitleRow label={r.context.length > 0 ? assembleLabel(r.context, lang) : ""} distance={distanceOf(r)} />
+                </View>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </PanelBody>
 
       <LocateCard />
     </Panel>
@@ -312,15 +318,15 @@ const styles = StyleSheet.create({
   field: { flex: 1, minWidth: 0, color: color.text },
   clear: { width: 16, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: alpha(color.textMuted, 0.5) },
   results: { flex: 1 },
-  empty: { paddingHorizontal: 16, paddingVertical: 12, ...textStyle.footnote, color: color.textMuted },
+  empty: { paddingHorizontal: PANEL_EDGE, paddingVertical: 12, ...textStyle.footnote, color: color.textMuted },
   sectionHeader: {
-    paddingHorizontal: 16,
+    paddingHorizontal: PANEL_EDGE,
     paddingTop: 12,
     paddingBottom: 6,
     ...sectionTitle,
     color: alpha(color.textMuted, 0.7),
   },
-  row: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: hairline },
+  row: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: PANEL_EDGE, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: hairline },
   rowText: { flex: 1, minWidth: 0, gap: 2 },
   name: { ...textStyle.body, color: color.text },
   subtitle: { flexDirection: "row", alignItems: "baseline", gap: 8 },

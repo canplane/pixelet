@@ -8,7 +8,7 @@ import type { BaseModalProps } from "@/app/type/ui.type.ts";
 
 import { useSafeArea } from "@platform/safe-area.ts";
 import { Panel } from "@platform/panel.tsx";
-import { PanelHeader } from "@/shared/ui/panel.tsx";
+import { PANEL_EDGE, PANEL_TABS_ROOM, PanelBody, PanelHeader } from "@/shared/ui/panel.tsx";
 import { Segmented } from "@platform/segmented.tsx";
 import { hairline } from "@/shared/ui/theme.ts";
 import { SettingsSection } from "./section.tsx";
@@ -50,48 +50,48 @@ export function SettingsModal(props: BaseModalProps) {
 
   return (
     <Panel label={t("settings.title")} onClose={onClose}>
-      <PanelHeader title={t("settings.title")} closeLabel={t("settings.close")} onClose={onClose} />
-
-      <View style={styles.tabs}>
-        <Segmented
-          value={tab}
-          onChange={setTab}
-          segments={[
-            { value: SettingsTab.Effects, label: t("settings.tabs.effects") },
-            { value: SettingsTab.Info, label: t("settings.tabs.info") },
-          ]}
-        />
-      </View>
-
-      {tab === SettingsTab.Effects
-        ? (
-          <TabScroll key={SettingsTab.Effects}>
-            <Text style={settingText.faint}>{t("settings.cost_legend")}</Text>
-            <Separator />
-            <SettingsSection section="display" />
-            <SettingsSection section="camera" />
-            <SettingsSection section="editing" />
-            <SettingsSection section="lighting" />
-            <SettingsSection section="quality" />
-            <SettingsSection section="debug" />
-          </TabScroll>
-        )
-        : (
-          <TabScroll key={SettingsTab.Info}>
-            <LanguageSection />
-            <Separator />
-            <DisclaimerSection />
-            <AttributionSection />
-            <AboutSection />
-          </TabScroll>
-        )}
+      <PanelBody
+        header={<PanelHeader title={t("settings.title")} closeLabel={t("settings.close")} onClose={onClose} />}
+        tabs={
+          <Segmented
+            value={tab}
+            onChange={setTab}
+            segments={[
+              { value: SettingsTab.Effects, label: t("settings.tabs.effects") },
+              { value: SettingsTab.Info, label: t("settings.tabs.info") },
+            ]}
+          />
+        }
+      >
+        {tab === SettingsTab.Effects
+          ? (
+            <TabScroll key={SettingsTab.Effects}>
+              <Text style={settingText.faint}>{t("settings.cost_legend")}</Text>
+              <Separator />
+              <SettingsSection section="display" />
+              <SettingsSection section="camera" />
+              <SettingsSection section="editing" />
+              <SettingsSection section="lighting" />
+              <SettingsSection section="quality" />
+              <SettingsSection section="debug" />
+            </TabScroll>
+          )
+          : (
+            <TabScroll key={SettingsTab.Info}>
+              <LanguageSection />
+              <Separator />
+              <DisclaimerSection />
+              <AttributionSection />
+              <AboutSection />
+            </TabScroll>
+          )}
+      </PanelBody>
     </Panel>
   );
 }
 
 const styles = StyleSheet.create({
-  tabs: { paddingHorizontal: 20, paddingTop: 16 },
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 16, gap: 16 },
+  scrollContent: { paddingHorizontal: PANEL_EDGE, paddingTop: PANEL_TABS_ROOM, gap: 16 },
   separator: { height: 1, backgroundColor: hairline },
 });

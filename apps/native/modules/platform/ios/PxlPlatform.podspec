@@ -23,6 +23,7 @@ Pod::Spec.new do |s|
   s.swift_version = '5.9'
 
   s.dependency 'ExpoModulesCore'
+  s.dependency 'ExpoUI'
   s.source_files = '*.swift'
 
   # Run on every build: cargo is what knows whether the kernel is current,
@@ -37,8 +38,12 @@ Pod::Spec.new do |s|
   s.pod_target_xcconfig = {
     'SWIFT_INCLUDE_PATHS' => '"$(PODS_TARGET_SRCROOT)/../../../../../crates/pxl/web/native/include"',
   }
+  # The simulator the kernel is built for is an Apple silicon Mac's, arm64
+  # alone (build-native.ts); a Release build makes every architecture it is
+  # not told otherwise, and an Intel slice would link no kernel.
   s.user_target_xcconfig = {
     'LIBRARY_SEARCH_PATHS' => '$(inherited) "$(PODS_CONFIGURATION_BUILD_DIR)/PxlNative"',
     'OTHER_LDFLAGS' => '$(inherited) -lpxl_native',
+    'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'x86_64',
   }
 end

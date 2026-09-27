@@ -16,7 +16,7 @@
 import { useContext, useEffect, useRef } from "react";
 import { Platform, StyleSheet, View } from "react-native";
 import { BottomSheet, Group, Host, RNHostView } from "@expo/ui/swift-ui";
-import { ignoreSafeArea, presentationBackground, presentationDetents, presentationDragIndicator } from "@expo/ui/swift-ui/modifiers";
+import { createModifier, ignoreSafeArea, presentationBackground, presentationDetents, presentationDragIndicator } from "@expo/ui/swift-ui/modifiers";
 import { Column, Host as ComposeHost, ModalBottomSheet, type ModalBottomSheetRef, RNHostView as ComposeRNHostView } from "@expo/ui/jetpack-compose";
 import { fillMaxHeight } from "@expo/ui/jetpack-compose/modifiers";
 
@@ -34,6 +34,9 @@ function SheetPanel({ label, onClose, half, children }: PanelProps) {
             presentationDetents(half ? ["medium", "large"] : ["large"]),
             presentationDragIndicator("visible"),
             presentationBackground(color.paper),
+            // Dragging the content scrolls it; only the handle and header
+            // resize or dismiss the sheet (modules/platform/ios/SheetContent.swift).
+            createModifier("pxlContentScrolls"),
             // Content scrolls down to the sheet's bottom edge, under the home
             // indicator; each panel's scroll content pads its own end for it.
             ignoreSafeArea({ regions: "container", edges: "bottom" }),

@@ -12,7 +12,7 @@ import { useUiStore } from "@/app/store/ui-store.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { useSafeArea } from "@platform/safe-area.ts";
 import { Panel } from "@platform/panel.tsx";
-import { PanelHeader } from "@/shared/ui/panel.tsx";
+import { PANEL_EDGE, PANEL_TABS_ROOM, PanelBody, PanelHeader } from "@/shared/ui/panel.tsx";
 import { Segmented } from "@platform/segmented.tsx";
 import { color, hairline, sectionTitle, textStyle } from "@/shared/ui/theme.ts";
 import { CharacterPicker } from "@/feature/character/picker.tsx";
@@ -126,50 +126,50 @@ export function DrawerModal(props: BaseModalProps) {
 
   return (
     <Panel label={t("drawer_modal.title")} onClose={onClose} half>
-      <PanelHeader title={t("drawer_modal.title")} closeLabel={t("drawer_modal.close")} onClose={onClose} />
-
-      <View style={styles.tabs}>
-        <Segmented
-          value={tab}
-          onChange={setTab}
-          segments={[
-            { value: DrawerTab.Cube, label: t("drawer_modal.tabs.cube") },
-            { value: DrawerTab.Decor, label: t("drawer_modal.tabs.decor") },
-            { value: DrawerTab.Character, label: t("drawer_modal.tabs.character") },
-          ]}
-        />
-      </View>
-
-      <ScrollView key={tab} style={styles.scroll} contentContainerStyle={[styles.scrollContent, { paddingBottom: bottom + 16 }]}>
-        {tab === DrawerTab.Cube && SECTION_ORDER.map((section) => {
-          const cubes = sections.get(section);
-          if (!cubes || cubes.length === 0) return null;
-          return (
-            <View key={section} style={styles.section}>
-              <Text style={styles.sectionTitle}>{t(`drawer_modal.sections.${section}`)}</Text>
-              <View style={styles.grid}>
-                {cubes.map((cube) => <CubeSwatchButton key={placeableCubeId(cube)} cube={cube} onPick={pickCube} />)}
+      <PanelBody
+        header={<PanelHeader title={t("drawer_modal.title")} closeLabel={t("drawer_modal.close")} onClose={onClose} />}
+        tabs={
+          <Segmented
+            value={tab}
+            onChange={setTab}
+            segments={[
+              { value: DrawerTab.Cube, label: t("drawer_modal.tabs.cube") },
+              { value: DrawerTab.Decor, label: t("drawer_modal.tabs.decor") },
+              { value: DrawerTab.Character, label: t("drawer_modal.tabs.character") },
+            ]}
+          />
+        }
+      >
+        <ScrollView key={tab} style={styles.scroll} contentContainerStyle={[styles.scrollContent, { paddingBottom: bottom + 16 }]}>
+          {tab === DrawerTab.Cube && SECTION_ORDER.map((section) => {
+            const cubes = sections.get(section);
+            if (!cubes || cubes.length === 0) return null;
+            return (
+              <View key={section} style={styles.section}>
+                <Text style={styles.sectionTitle}>{t(`drawer_modal.sections.${section}`)}</Text>
+                <View style={styles.grid}>
+                  {cubes.map((cube) => <CubeSwatchButton key={placeableCubeId(cube)} cube={cube} onPick={pickCube} />)}
+                </View>
               </View>
+            );
+          })}
+
+          {tab === DrawerTab.Decor && (
+            <View style={styles.grid}>
+              {decor_kinds.map((kind) => <DecorGridButton key={kind} kind={kind} onPick={pickDecor} />)}
             </View>
-          );
-        })}
+          )}
 
-        {tab === DrawerTab.Decor && (
-          <View style={styles.grid}>
-            {decor_kinds.map((kind) => <DecorGridButton key={kind} kind={kind} onPick={pickDecor} />)}
-          </View>
-        )}
-
-        {tab === DrawerTab.Character && <CharacterPicker />}
-      </ScrollView>
+          {tab === DrawerTab.Character && <CharacterPicker />}
+        </ScrollView>
+      </PanelBody>
     </Panel>
   );
 }
 
 const styles = StyleSheet.create({
-  tabs: { paddingHorizontal: 20, paddingTop: 16 },
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 16, gap: 16 },
+  scrollContent: { paddingHorizontal: PANEL_EDGE, paddingTop: PANEL_TABS_ROOM, gap: 16 },
   section: { gap: 8 },
   sectionTitle: { ...sectionTitle, color: color.textMuted },
   // Five to a row, as the catalog was laid out.
