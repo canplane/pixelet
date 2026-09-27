@@ -63,10 +63,6 @@ export const enum Missing {
   Gpu = "gpu",
 }
 
-/** The adapter the check below found, held for the first device request so
- * it is not asked for twice. */
-let checked: GPUAdapter | null = null;
-
 /** What the browser is missing, asked once before anything is started: a
  * property of the browser, which is why nothing after boot asks it again. A
  * device lost later is a moment, and is asked for again (gpu.ts).
@@ -76,15 +72,14 @@ let checked: GPUAdapter | null = null;
  * dev server's LAN address over http. */
 export async function whatIsMissing(): Promise<Missing | null> {
   if (!("gpu" in navigator)) return isSecureContext ? Missing.WebGpu : Missing.Insecure;
-  checked = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
-  return checked ? null : Missing.Gpu;
+  const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+  return adapter ? null : Missing.Gpu;
 }
 
 /** The device, once the browser answers, or null while no adapter does.
  * `lost` hears it go. */
 export async function acquireDevice(lost: () => void): Promise<DeviceInfo | null> {
-  const adapter = checked ?? await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
-  checked = null;
+  const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
   if (!adapter) return null;
   const timestamps = adapter.features.has("timestamp-query");
   const d = await adapter.requestDevice({ requiredFeatures: timestamps ? ["timestamp-query"] : [] });
@@ -112,7 +107,9 @@ export async function acquireDevice(lost: () => void): Promise<DeviceInfo | null
     );
   }
   d.lost.then((info) => {
-    if (info.reason !== "destroyed") console.error(`[gpu] device lost: ${info.message}`);
+    // Said whatever the reason: nothing here destroys the device, so a
+    // "destroyed" is the browser taking it back, and is worth reading too.
+    console.warn(`[gpu] device lost (${info.reason}): ${info.message}`);
     if (device !== d) return;
     device = null;
     objects.length = 0;
