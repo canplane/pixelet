@@ -33,14 +33,14 @@ const STACK_GAP = 8;
 /** Gap between the tabs and the first row of content. */
 const CONTENT_GAP = 16;
 /** Height of the header area: PANEL_EDGE above and below the round
- * controls. Content scrolls only below it. */
-const HEAD = PANEL_EDGE + PANEL_CONTROL + PANEL_EDGE;
+ * controls. Content scrolls only below it, and a sheet is dragged by it. */
+export const PANEL_HEAD_HEIGHT = PANEL_EDGE + PANEL_CONTROL + PANEL_EDGE;
 /** Top of the floating tabs, measured from the sheet's top: STACK_GAP under
  * the top row's controls, so they straddle the header's bottom edge. */
 const TABS_TOP = PANEL_EDGE + PANEL_CONTROL + STACK_GAP;
 /** Top padding a panel's scroll content needs to start below the part of
  * the tabs that hangs into the scroll area. */
-export const PANEL_TABS_ROOM = TABS_TOP + PANEL_CONTROL + CONTENT_GAP - HEAD;
+export const PANEL_TABS_ROOM = TABS_TOP + PANEL_CONTROL + CONTENT_GAP - PANEL_HEAD_HEIGHT;
 
 /** Corner radius of a sheet's top corners: PANEL_EDGE plus the controls' radius,
  * so the corners are concentric with the round controls in the top row. */
@@ -77,7 +77,7 @@ export function PanelHeader({ title, closeLabel, onClose }: { title: string; clo
   );
 }
 
-/** A panel's body: the header area (`header`, HEAD tall) and under it the
+/** A panel's body: the header area (`header`, PANEL_HEAD_HEIGHT tall) and under it the
  * scroll area (`children`), so content never scrolls behind the header.
  * The tabs float across the boundary between the two, on Regular glass,
  * since content moves behind their lower part; scroll content that has tabs
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
   // space left of the close button.
   title: { position: "absolute", left: 0, right: 0, textAlign: "center", pointerEvents: "none", ...textStyle.title, color: color.text },
   body: { flex: 1 },
-  head: { height: HEAD },
+  head: { height: PANEL_HEAD_HEIGHT },
   scroll: { flex: 1, overflow: "hidden" },
   tabs: {
     position: "absolute",
