@@ -15,13 +15,13 @@ import { SNAP } from "@/shared/ui/motion/transition.ts";
 import { chrome, color, disabledContent, surface } from "@/shared/ui/theme.ts";
 
 interface CircularButtonProps {
-  /** The glyph it holds, drawn `glyphSize` in the label color; or what it
-   * holds instead, a face of its own (the compass) or a glyph that moves. */
+  /** The glyph it holds, drawn in the label color at every control's glyph
+   * size; or what it holds instead, a face of its own (the compass) or a
+   * glyph that moves. */
   glyph?: GlyphName;
   children?: ReactNode;
   /** Its side: a map control's by default. */
   size?: f64;
-  glyphSize?: f64;
   /** Where it stands, which is what its backing is: over the map by default,
    * or on a sheet, where the glass is clear and the fill faint. */
   place?: BackingPlace;
@@ -37,7 +37,7 @@ interface CircularButtonProps {
  * tint on the glass or as the fill, ringed in it. A press shrinks the disc where there is
  * no glass; the glass answers a press itself. */
 export function CircularButton(
-  { glyph, children, size = chrome.control, glyphSize = chrome.glyph, place = BackingPlace.OverMap, onPress, label, isActive, disabled }: CircularButtonProps,
+  { glyph, children, size = chrome.control, place = BackingPlace.OverMap, onPress, label, isActive, disabled }: CircularButtonProps,
 ) {
   const round = { width: size, height: size, borderRadius: size / 2 };
   return (
@@ -49,10 +49,15 @@ export function CircularButton(
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled }}
-      style={[round, isActive && styles.chosen]}
+      style={round}
     >
       {({ pressed }) => (
-        <Motion to={{ scale: pressed && !disabled && !SYSTEM_BACKING ? 0.95 : 1 }} transition={SNAP} style={styles.press}>
+        // The ring stands on what a press shrinks, so the two shrink as one.
+        <Motion
+          to={{ scale: pressed && !disabled && !SYSTEM_BACKING ? 0.95 : 1 }}
+          transition={SNAP}
+          style={[styles.press, { borderRadius: size / 2 }, isActive && styles.chosen]}
+        >
           <Backing
             fill={isActive ? surface.chosen.fill : place === BackingPlace.OnSheet ? color.faint : color.ground}
             tint={isActive ? surface.chosen.glass : undefined}
@@ -61,7 +66,7 @@ export function CircularButton(
             style={[styles.face, { borderRadius: size / 2 }]}
           >
             <Motion to={{ opacity: disabled ? disabledContent : 1 }} transition={SNAP} style={styles.content}>
-              {glyph ? <Glyph glyph={glyph} size={glyphSize} color={LABEL.primary} /> : children}
+              {glyph ? <Glyph glyph={glyph} size={chrome.glyph} color={LABEL.primary} /> : children}
             </Motion>
           </Backing>
         </Motion>

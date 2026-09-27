@@ -35,7 +35,7 @@ function Separator() {
 function TabScroll({ children }: { children: React.ReactNode }) {
   const { bottom } = useSafeArea();
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, { paddingBottom: bottom + 16 }]}>
+    <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, { paddingBottom: bottom + PANEL_EDGE }]}>
       {children}
     </ScrollView>
   );

@@ -28,12 +28,16 @@ import { alpha, chrome, color } from "@/shared/ui/theme.ts";
 import { LABEL } from "@platform/palette.ts";
 
 const MAX_WIDTH = 540;
-/** Gap between the safe-area top and a full-height sheet, as on iOS. */
-const WHOLE_GAP = 10;
+/** Gap between the safe-area top and a full-height sheet. */
+const WHOLE_GAP = 12;
 /** Release speed, in points per millisecond, that counts as a fling. */
 const FLING = 0.5;
 /** Follows the finger with no delay. */
 const FOLLOW = ease(0, [0, 0, 1, 1]);
+/** The handle's bar. */
+const HANDLE = { width: 36, height: 4 };
+/** How far a press may wander and still be a tap rather than a drag. */
+const TAP_SLOP = 8;
 
 export function Panel({ label, onClose, half, children }: PanelProps) {
   const window = useWindowDimensions();
@@ -63,21 +67,29 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
   ];
 
   // What the responder, made once, reads of the latest render.
-  const live = useRef({ top: window.height - shown, shown, stops });
-  live.current = { top: window.height - shown, shown, stops };
+  const live = useRef({ top: window.height - shown, center: window.width / 2, shown, full, half, stops });
+  live.current = { top: window.height - shown, center: window.width / 2, shown, full, half, stops };
 
   const responder = useRef(
     PanResponder.create({
       // Claimed at the press, not at the first move: a move is offered to the
       // element under the pointer, which is the map once a drag upward leaves
-      // the sheet. Bubbling, so the close button and the handle, which are
-      // deeper, still take their taps.
+      // the sheet. Bubbling, so the close button, which is deeper, still
+      // takes its taps. The handle is no button of its own: one would take
+      // every press in its square, drags as well.
       onStartShouldSetPanResponder: (e) => e.nativeEvent.pageY - live.current.top < PANEL_HEAD_HEIGHT,
       onPanResponderTerminationRequest: () => false,
       onPanResponderMove: (_, g) => setDrag(g.dy),
       onPanResponderRelease: (_, g) => {
         setDrag(null);
-        const { shown, stops } = live.current;
+        const { top, center, shown, full, half, stops } = live.current;
+        const tap = Math.abs(g.dx) < TAP_SLOP && Math.abs(g.dy) < TAP_SLOP;
+        if (tap) {
+          // A tap on the handle's square toggles half and full.
+          const onHandle = g.y0 - top < chrome.target && Math.abs(g.x0 - center) < chrome.target / 2;
+          if (half && onHandle) detent(!full);
+          return;
+        }
         const height = shown - g.dy;
         const stop = g.vy < -FLING
           ? stops.find((s) => s.height > shown)
@@ -111,16 +123,7 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
       >
         <View {...responder.panHandlers} accessibilityViewIsModal accessibilityLabel={label} style={[styles.body, { height: bodyFull ? fullHeight : halfHeight }]}>
           {children}
-          {half && (
-            <Pressable
-              onPress={() => detent(!full)}
-              accessibilityRole="adjustable"
-              accessibilityLabel={label}
-              style={styles.handleArea}
-            >
-              <View style={styles.handle} />
-            </Pressable>
-          )}
+          {half && <View style={styles.handle} />}
         </View>
       </Motion>
     </View>
@@ -142,11 +145,10 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderTopLeftRadius: SHEET_RADIUS,
     borderTopRightRadius: SHEET_RADIUS,
-    backgroundColor: color.paper,
+    backgroundColor: color.ground,
     boxShadow: "0 -4px 20px rgba(0, 0, 0, 0.12)",
   },
-  // iOS's sheet handle: 36 × 5, 5 below the top edge, in a square a press
-  // lands on.
-  handleArea: { position: "absolute", top: 0, left: "50%", marginLeft: -chrome.target / 2, width: chrome.target, height: chrome.target, alignItems: "center", paddingTop: 5 },
-  handle: { width: 36, height: 5, borderRadius: 2.5, backgroundColor: LABEL.tertiary },
+  // The sheet's handle, 4 below the top edge. A tap lands on the
+  // least target's square around it (the responder's release).
+  handle: { position: "absolute", top: 4, left: "50%", marginLeft: -HANDLE.width / 2, ...HANDLE, borderRadius: HANDLE.height / 2, pointerEvents: "none", backgroundColor: LABEL.tertiary },
 });

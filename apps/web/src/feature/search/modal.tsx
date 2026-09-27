@@ -116,8 +116,9 @@ function poseColor(status: DevicePoseStatus): string {
 /** The hand-drawn clear's circle, where the field has none of its own. */
 const CLEAR = 16;
 const LOCATE_HEIGHT = chrome.target;
-/** The card's gap from the keyboard or the bottom, and from the last result. */
-const LOCATE_INSET = 16;
+/** The card's gap from the keyboard or the bottom, and from the last result:
+ * the sheet's own edge. */
+const LOCATE_INSET = PANEL_EDGE;
 
 /** Turns the location on, floating over the results while it is off: the
  * search is where "near me" is asked, and a place's distance is measured
@@ -129,9 +130,9 @@ function LocateCard() {
   if (location === DevicePoseStatus.Ready) return null;
   return (
     <AboveKeyboard inset={LOCATE_INSET}>
-      <Backing fill={color.white} place={BackingPlace.OnSheet} interactive style={styles.locateCard}>
+      <Backing fill={color.ground} place={BackingPlace.OnSheet} interactive style={styles.locateCard}>
         <Pressable onPress={kernel_enable_location} accessibilityRole="button" style={styles.locateRow}>
-          <Glyph glyph="location" size={18} color={poseColor(location)} />
+          <Glyph glyph="location" size={chrome.glyph} color={poseColor(location)} />
           <Text numberOfLines={1} style={styles.locateLabel}>{t("map.sensors.label")}</Text>
           <Text style={styles.locateAction}>{t("map.sensors.turn_on")}</Text>
         </Pressable>
@@ -226,18 +227,19 @@ export function SearchModal(props: BaseModalProps) {
                 />
                 {
                   // Where the field has no clear of its own: a filled circle
-                  // with an X in the paper's color, as a system search
+                  // with an X in the ground's color, as a system search
                   // field's is.
                 }
                 {!SYSTEM_CLEAR && query.length > 0 && (
                   <Pressable
                     onPress={() => setQuery("")}
-                    hitSlop={(chrome.target - CLEAR) / 2}
                     accessibilityRole="button"
                     accessibilityLabel={t("map.search.clear_aria_label")}
-                    style={styles.clear}
+                    style={styles.clearReach}
                   >
-                    <Glyph glyph="xmark" size={10} weight="heavy" color={color.paper} />
+                    <View style={styles.clear}>
+                      <Glyph glyph="xmark" size={10} weight="heavy" color={color.ground} />
+                    </View>
                   </Pressable>
                 )}
               </Backing>
@@ -274,8 +276,9 @@ export function SearchModal(props: BaseModalProps) {
 }
 
 const styles = StyleSheet.create({
-  locateCard: { borderRadius: 22, pointerEvents: "auto", boxShadow: "0 6px 20px rgba(0, 0, 0, 0.12)" },
-  locateRow: { height: LOCATE_HEIGHT, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16 },
+  locateCard: { borderRadius: LOCATE_HEIGHT / 2, pointerEvents: "auto", boxShadow: "0 6px 20px rgba(0, 0, 0, 0.12)" },
+  // The glyph concentric with the card's round end, as the field's are.
+  locateRow: { height: LOCATE_HEIGHT, flexDirection: "row", alignItems: "center", gap: 12, paddingLeft: (LOCATE_HEIGHT - chrome.glyph) / 2, paddingRight: PANEL_EDGE },
   locateLabel: { flex: 1, ...textStyle.body, color: LABEL.primary },
   locateAction: { ...textStyle.body, fontWeight: weight.semibold, color: color.action },
   // Room under the last result for the card that floats over it.
@@ -289,12 +292,21 @@ const styles = StyleSheet.create({
     height: PANEL_CONTROL,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
     paddingLeft: (PANEL_CONTROL - chrome.glyph) / 2,
     paddingRight: (PANEL_CONTROL - CLEAR) / 2,
     borderRadius: PANEL_CONTROL / 2,
   },
   field: { flex: 1, minWidth: 0, color: LABEL.primary },
+  // A press lands on the least target around the circle, laid out over the
+  // field's end and the well's round end by as much as it reaches.
+  clearReach: {
+    width: chrome.target,
+    height: chrome.target,
+    marginHorizontal: -(chrome.target - CLEAR) / 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   clear: { width: CLEAR, height: CLEAR, borderRadius: CLEAR / 2, alignItems: "center", justifyContent: "center", backgroundColor: LABEL.tertiary },
   results: { flex: 1 },
   empty: { paddingHorizontal: PANEL_EDGE, ...textStyle.footnote, color: LABEL.secondary },
@@ -304,8 +316,8 @@ const styles = StyleSheet.create({
     ...sectionTitle,
     color: LABEL.secondary,
   },
-  row: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: PANEL_EDGE, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: hairline },
-  rowText: { flex: 1, minWidth: 0, gap: 2 },
+  row: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: PANEL_EDGE, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: hairline },
+  rowText: { flex: 1, minWidth: 0, gap: 4 },
   name: { ...textStyle.body, color: LABEL.primary },
   subtitle: { flexDirection: "row", alignItems: "baseline", gap: 8 },
   small: { ...textStyle.caption, color: LABEL.secondary },

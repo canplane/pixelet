@@ -12,7 +12,7 @@ import { BackingPlace } from "@/shared/ui/backing-place.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
 import { Swap } from "@/shared/ui/motion/presence.tsx";
 import { FADE, SNAP, spring, type Transition } from "@/shared/ui/motion/transition.ts";
-import { alpha, color, shadow, surface, textStyle, weight } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color, shadow, surface, textStyle, weight } from "@/shared/ui/theme.ts";
 import { type ToastSpec, ToastTone } from "./store.ts";
 
 const SIDE = 32;
@@ -40,10 +40,10 @@ const TONE: Record<ToastTone, { mark: "checkmark" | "xmark" | null; status: stri
 
 function ToneGlyph({ tone }: { tone: ToastTone }) {
   const { mark, status } = TONE[tone];
-  if (!mark) return <Spinner size={16} color={LABEL.primary} />;
+  if (!mark) return <Spinner size={chrome.glyph} color={LABEL.primary} />;
   return (
     <View style={[styles.disc, { backgroundColor: status }]}>
-      <Glyph glyph={mark} size={11} weight="black" color={color.white} />
+      <Glyph glyph={mark} size={12} weight="black" color={color.white} />
     </View>
   );
 }
@@ -122,7 +122,7 @@ export function Toast({ message, tone, fade, fadeTransition, touch }: ToastProps
 const styles = StyleSheet.create({
   slot: { width: SIDE, height: SIDE, alignItems: "center", justifyContent: "center" },
   glyph: { position: "absolute" },
-  disc: { width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  disc: { width: chrome.glyph, height: chrome.glyph, borderRadius: chrome.glyph / 2, alignItems: "center", justifyContent: "center" },
   message: { ...textStyle.footnote, fontWeight: weight.semibold, letterSpacing: -0.3, color: LABEL.primary, paddingHorizontal: MESSAGE_PAD },
-  dot: { width: 6, height: 6, borderRadius: 3 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
 });

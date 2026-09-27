@@ -21,7 +21,7 @@ const LINE_PX = 1;
 /** Room around the strokes for their halo. */
 const PAD_PX = LINE_PX + halo.reach + 1;
 /** From the bottom of the label's line box down to the line. */
-const LABEL_GAP_PX = 6;
+const LABEL_GAP_PX = 8;
 
 /** How far a distance on the map spans on screen, at the camera's zoom.
  *

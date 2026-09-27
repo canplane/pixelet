@@ -15,7 +15,7 @@ import { Toast } from "./toast.tsx";
 /** Cards drawn behind the front one; one queued further back is kept in the
  * deck, and comes forward as the deck turns, but is not drawn. */
 const MAX_STACK_DEPTH = 2;
-const STACK_PEEK_PX = 6;
+const STACK_PEEK_PX = 8;
 const STACK_OPACITY = [1, 0.6, 0.3];
 const STACK_SCALE = [1, 0.94, 0.88];
 

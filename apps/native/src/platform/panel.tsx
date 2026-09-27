@@ -30,7 +30,7 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
           modifiers={[
             presentationDetents(half ? ["medium", "large"] : ["large"]),
             presentationDragIndicator("visible"),
-            presentationBackground(color.paper),
+            presentationBackground(color.ground),
             // Dragging the content scrolls it; only the handle and header
             // resize or dismiss the sheet (modules/platform/ios/SheetContent.swift).
             createModifier("pxlContentScrolls"),

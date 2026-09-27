@@ -12,18 +12,17 @@ import { LABEL } from "@platform/palette.ts";
 /** Height of the controls on a sheet (close button, search field, segmented
  * control): the least target, a step under a map control's 48. */
 export const PANEL_CONTROL = chrome.target;
-/** Top row height, the same as an iOS navigation bar. */
-const ROW = 44;
 /** Distance of the top row's controls from the sheet's side and top edges,
  * and the side inset of a panel's content: iOS 26's, as its Maps' sheet
- * stands its search field and close. The drag handle, 5 from the top and 5
- * tall, leaves 6 above the controls. */
+ * stands its search field and close. The drag handle, 4 from the top and 4
+ * tall, leaves 8 above the controls. */
 export const PANEL_EDGE = 16;
 
-/** A sheet's top row. */
+/** A sheet's top row: its controls' height, as tall as an iOS navigation
+ * bar. */
 export const PANEL_HEADER = {
-  marginTop: PANEL_EDGE - (ROW - PANEL_CONTROL) / 2,
-  height: ROW,
+  marginTop: PANEL_EDGE,
+  height: PANEL_CONTROL,
   paddingHorizontal: PANEL_EDGE,
   flexDirection: "row",
   alignItems: "center",
@@ -36,8 +35,10 @@ const STACK_GAP = chrome.controlGap;
  * one, so where one ends and the next begins reads, as iOS's grouped lists
  * part theirs. */
 export const PANEL_SECTION_GAP = 24;
-/** Gap between the tabs and the first row of content. */
-const CONTENT_GAP = 20;
+/** Gap between what stands last over a panel's content (its header's
+ * controls, or its tabs) and the content's first row: a section's gap, as if
+ * the controls were the section before. */
+const CONTENT_GAP = PANEL_SECTION_GAP;
 /** Height of the header area: PANEL_EDGE above and below the round
  * controls. Content scrolls only below it, and a sheet is dragged by it. */
 export const PANEL_HEAD_HEIGHT = PANEL_EDGE + PANEL_CONTROL + PANEL_EDGE;
@@ -97,7 +98,7 @@ export function PanelBody({ header, tabs, children }: { header: ReactNode; tabs?
       <View style={styles.head}>{header}</View>
       <View style={styles.scroll}>{children}</View>
       {tabs && (
-        <Backing fill={color.paper} place={BackingPlace.OverContent} style={styles.tabs}>
+        <Backing fill={color.ground} place={BackingPlace.OverContent} style={styles.tabs}>
           {tabs}
         </Backing>
       )}

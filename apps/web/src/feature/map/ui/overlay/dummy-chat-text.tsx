@@ -31,7 +31,7 @@ export function DummyChatText() {
 
 const styles = StyleSheet.create({
   lines: { alignItems: "flex-start", gap: 4 },
-  line: { flexDirection: "row", alignItems: "baseline", gap: 6, maxWidth: "100%" },
+  line: { flexDirection: "row", alignItems: "baseline", gap: 8, maxWidth: "100%" },
   // A dark edge so white words read over any ground.
   text: {
     ...textStyle.caption,

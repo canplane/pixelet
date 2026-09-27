@@ -16,6 +16,15 @@ import type { ColorValue, GestureResponderHandlers } from "react-native";
 import type { f64 } from "@xpute/core/abi/word.ts";
 import type { Transition } from "@/shared/ui/motion/transition.ts";
 import type { BackingPlace } from "@/shared/ui/backing-place.ts";
+import { chrome } from "@/shared/ui/theme.ts";
+
+/** How far past its edge a touch lands on a pill `height` tall: out to the
+ * least target. Laid out as a box that large around it, not a `hitSlop`,
+ * which a page's views do not honor (react-native-web keeps it to the old
+ * Touchable). */
+export function touchReach(height: f64): f64 {
+  return Math.max(0, (chrome.target - height) / 2);
+}
 
 export interface PillProps {
   /** Where its left end stands, in its container. */

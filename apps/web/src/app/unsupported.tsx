@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 12,
     paddingHorizontal: 32,
-    backgroundColor: color.paper,
+    backgroundColor: color.ground,
   },
   title: { ...textStyle.title, textAlign: "center", color: LABEL.primary },
   body: { maxWidth: 384, ...textStyle.body, textAlign: "center", color: LABEL.secondary },
