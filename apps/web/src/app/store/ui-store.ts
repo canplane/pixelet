@@ -4,11 +4,11 @@ import { create } from "zustand";
 
 import type { u32, u8 } from "@xpute/core/abi/word.ts";
 import { cube_types, GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
-import { decor_kinds, placeable_cubes, type PlaceableCube, sameCube } from "@/catalog/cell/mod.ts";
+import { decorKinds, type PlaceableCube, placeableCubes, sameCube } from "@/catalog/cell/mod.ts";
 import { ActiveTool, Command, encode_chat_create } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command } from "@/kernel/shell.ts";
 import { kernel_hold } from "@/kernel/shell.ts";
-import { storage_get, storage_set } from "@platform/storage.ts";
+import { storageGet, storageSet } from "@platform/storage.ts";
 
 interface ChatLine {
   id: number;
@@ -41,8 +41,8 @@ function isSamePick(a: RecentPick, b: RecentPick): boolean {
 // no longer gives out — dropped here rather than trusted as-is, so a stale
 // entry can't leave a dead one sitting in the hotbar forever.
 function isKnownPick(pick: RecentPick): boolean {
-  if (pick.tool === ActiveTool.Object) return placeable_cubes.some((cube) => sameCube(cube, pick.cube));
-  return pick.tool === ActiveTool.Decor && decor_kinds.includes(pick.kind);
+  if (pick.tool === ActiveTool.Object) return placeableCubes.some((cube) => sameCube(cube, pick.cube));
+  return pick.tool === ActiveTool.Decor && decorKinds.includes(pick.kind);
 }
 
 // Only ever inserts a genuinely new pick at the front — re-picking one
@@ -64,8 +64,8 @@ interface UiState {
   cube: PlaceableCube;
 
   /** The object size, by its tier in the kernel's `object_sizes`. */
-  object_tier: u32;
-  setObjectTier: (object_tier: u32) => void;
+  objectTier: u32;
+  setObjectTier: (objectTier: u32) => void;
 
   /** The decor kind the decor tool holds, by its number. */
   decor: u8;
@@ -81,7 +81,7 @@ interface UiState {
   selectDecor: (kind: u8) => void;
 
   chatLines: ChatLine[];
-  append_chat_line: (text: string) => void;
+  appendChatLine: (text: string) => void;
 }
 
 // One representative per placeable genre, not the first 5 flat colors — a
@@ -102,7 +102,7 @@ const SEED: readonly RecentPick[] = [
   { tool: ActiveTool.Object, cube: { channel: GroundChannelKey.TRANSPORT, type: cube_types.transport.road_default } },
   { tool: ActiveTool.Object, cube: { channel: null, type: cube_types.block.red } },
   { tool: ActiveTool.Object, cube: { channel: null, type: cube_types.block.blue } },
-  { tool: ActiveTool.Decor, kind: decor_kinds[0] },
+  { tool: ActiveTool.Decor, kind: decorKinds[0] },
 ];
 
 // Stored (platform/web/storage.ts) by the catalog's numbers: the cube, the decor kind
@@ -120,7 +120,7 @@ interface Stored {
 function load(): Stored {
   let stored: Partial<Stored> | null = null;
   try {
-    stored = JSON.parse(storage_get(STORAGE_KEY) ?? "null");
+    stored = JSON.parse(storageGet(STORAGE_KEY) ?? "null");
   } catch { /* nothing stored that reads */ }
   const picks = Array.isArray(stored?.picks) ? stored.picks.filter((p) => typeof p === "object" && p !== null && isKnownPick(p)) : [];
   // A short list is padded from the seed rather than left short. The strip is
@@ -132,13 +132,13 @@ function load(): Stored {
     if (picks.length >= MAX_RECENT_PICKS) break;
     if (!picks.some((pick) => isSamePick(pick, seed))) picks.push(seed);
   }
-  const cube = placeable_cubes.find((c) => stored?.cube !== undefined && sameCube(c, stored.cube)) ?? { channel: null, type: cube_types.block.red };
-  const decor = decor_kinds.find((kind) => kind === stored?.decor) ?? decor_kinds[0];
+  const cube = placeableCubes.find((c) => stored?.cube !== undefined && sameCube(c, stored.cube)) ?? { channel: null, type: cube_types.block.red };
+  const decor = decorKinds.find((kind) => kind === stored?.decor) ?? decorKinds[0];
   return { cube, decor, picks };
 }
 
 function save(s: UiState): void {
-  storage_set(STORAGE_KEY, JSON.stringify({ cube: s.cube, decor: s.decor, picks: s.recentPicks } satisfies Stored));
+  storageSet(STORAGE_KEY, JSON.stringify({ cube: s.cube, decor: s.decor, picks: s.recentPicks } satisfies Stored));
 }
 
 const stored = load();
@@ -151,9 +151,9 @@ export const useUiStore = create<UiState>()((set) => ({
 
   cube: stored.cube,
 
-  object_tier: 0,
-  setObjectTier: (object_tier) => {
-    set({ object_tier });
+  objectTier: 0,
+  setObjectTier: (objectTier) => {
+    set({ objectTier });
   },
 
   decor: stored.decor,
@@ -175,7 +175,7 @@ export const useUiStore = create<UiState>()((set) => ({
   },
 
   chatLines: [],
-  append_chat_line: (text) => {
+  appendChatLine: (text) => {
     set((state) => ({
       chatLines: [...state.chatLines, { id: nextChatLineId++, text }].slice(-MAX_CHAT_LINES),
     }));
@@ -188,12 +188,12 @@ export const useUiStore = create<UiState>()((set) => ({
 // the catalog's numbers: the object tool holds the cube, the decor tool the
 // decor kind.
 function hold(s: UiState): void {
-  if (s.activeTool === ActiveTool.Object) kernel_hold(s.activeTool, s.cube.channel, s.cube.type, s.object_tier);
-  else kernel_hold(s.activeTool, null, s.activeTool === ActiveTool.Decor ? s.decor : 0, s.object_tier);
+  if (s.activeTool === ActiveTool.Object) kernel_hold(s.activeTool, s.cube.channel, s.cube.type, s.objectTier);
+  else kernel_hold(s.activeTool, null, s.activeTool === ActiveTool.Decor ? s.decor : 0, s.objectTier);
 }
 
 hold(useUiStore.getState());
 useUiStore.subscribe((s, prev) => {
-  if (s.activeTool !== prev.activeTool || s.cube !== prev.cube || s.decor !== prev.decor || s.object_tier !== prev.object_tier) hold(s);
+  if (s.activeTool !== prev.activeTool || s.cube !== prev.cube || s.decor !== prev.decor || s.objectTier !== prev.objectTier) hold(s);
   if (s.cube !== prev.cube || s.decor !== prev.decor || s.recentPicks !== prev.recentPicks) save(s);
 });

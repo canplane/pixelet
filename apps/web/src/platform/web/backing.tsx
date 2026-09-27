@@ -1,10 +1,10 @@
-// @pxl/web/platform/web/glass.tsx
+// @pxl/web/platform/web/backing.tsx
 
 /**
- * A floating control's ground, on the web: its fill. A device draws the
- * system's glass in this place where it has one (Liquid Glass, from iOS 26);
- * a page has no system glass, so the control stays the solid it was designed
- * as, and its presence (shared/ui/motion/veil.ts) is its opacity.
+ * What a floating control stands on — its backing — on the web: its fill.
+ * An iPhone draws the system's glass here (Liquid Glass, from iOS 26); a page
+ * has none, so the control stays the solid it was designed as, and its
+ * presence (shared/ui/motion/veil.ts) is its opacity. Android draws this one.
  */
 
 import type { ReactNode } from "react";
@@ -14,17 +14,18 @@ import type { f64 } from "@xpute/core/abi/word.ts";
 import { Motion } from "@platform/motion.tsx";
 import { SNAP, type Transition } from "@/shared/ui/motion/transition.ts";
 import { useVeil } from "@/shared/ui/motion/veil.ts";
-import type { GlassVariant } from "@/shared/ui/glass-variant.ts";
+import type { BackingPlace } from "@/shared/ui/backing-place.ts";
 
-export interface GlassProps {
-  /** The ground where there is no glass. */
+export interface BackingProps {
+  /** The backing where the system draws none. */
   fill: ColorValue;
-  /** The glass's tint where there is glass. */
+  /** The tint of a backing the system draws. */
   tint?: ColorValue;
-  /** Whether the glass answers a touch, as a control's does. */
+  /** Whether a backing the system draws answers a touch, as a control's does. */
   interactive?: boolean;
-  /** The glass thickness, ignored on the web (shared/ui/glass-variant.ts). */
-  variant: GlassVariant;
+  /** Where it stands (shared/ui/backing-place.ts), which a system's backing
+   * is drawn by and a page's is not. */
+  place: BackingPlace;
   /** How present it is, from 1 to 0 (gone); and what it mounts at. */
   fade?: f64;
   fadeFrom?: f64;
@@ -35,10 +36,10 @@ export interface GlassProps {
   children?: ReactNode;
 }
 
-/** Whether a surface here is the system's glass: a page has none. */
-export const SYSTEM_GLASS: boolean = false;
+/** Whether the backing here is the system's: a page's never is. */
+export const SYSTEM_BACKING: boolean = false;
 
-export function Glass({ fill, fade = 1, fadeFrom, transition = SNAP, style, children }: GlassProps) {
+export function Backing({ fill, fade = 1, fadeFrom, transition = SNAP, style, children }: BackingProps) {
   const veil = useVeil(fade, transition);
   return (
     <Motion

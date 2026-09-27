@@ -23,8 +23,8 @@ declare global {
   const __PUBLISHED_TILES__: boolean;
 }
 
-/** What a build is, from vite.config.ts#build_stamp on a page and the device
- * app's metro.config.js#build_stamp on a device: read through
+/** What a build is, from vite.config.ts#buildStamp on a page and the device
+ * app's metro.config.js#buildStamp on a device: read through
  * config/deploy.ts, which names each. */
 declare module "virtual:pxl-build" {
   /** ISO-8601 UTC. */

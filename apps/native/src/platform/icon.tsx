@@ -4,14 +4,14 @@ import { SymbolView, type SymbolViewProps } from "expo-symbols";
 import { ActivityIndicator, View } from "react-native";
 
 import type { f64 } from "@xpute/core/abi/word.ts";
-import type { Glyph, GlyphWeight, IconProps } from "../../../web/src/platform/web/icon.tsx";
+import type { GlyphName, GlyphWeight, IconProps } from "../../../web/src/platform/web/icon.tsx";
 
-export type { Glyph, GlyphWeight, IconProps };
+export type { GlyphName, GlyphWeight, IconProps };
 export { strokeOf } from "../../../web/src/platform/web/icon.tsx";
 
 /** Every glyph the chrome names is a symbol an iPhone has: the names are
  * SF Symbols' own, and a name that is not one fails here. */
-const symbol = (glyph: Glyph): SymbolViewProps["name"] => glyph;
+const symbol = (glyph: GlyphName): SymbolViewProps["name"] => glyph;
 
 /** An iPhone's glyph, the SF Symbol itself (the page's is lucide's nearest,
  * platform/web/icon.tsx), in the weight the chrome asks for. */

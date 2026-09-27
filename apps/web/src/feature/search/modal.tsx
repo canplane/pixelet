@@ -18,8 +18,8 @@ import { useSensors } from "@/feature/map/ui/overlay/sensor-status.tsx";
 import { LABEL, STATUS } from "@platform/palette.ts";
 import { AboveKeyboard } from "@platform/above-keyboard.tsx";
 import { SYSTEM_CLEAR } from "@platform/text-field.ts";
-import { Glass } from "@platform/glass.tsx";
-import { GlassVariant } from "@/shared/ui/glass-variant.ts";
+import { Backing } from "@platform/backing.tsx";
+import { BackingPlace } from "@/shared/ui/backing-place.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
 import { resolvePoiBadge } from "@/feature/search/poi-badge.ts";
 import { assembleLabel } from "@/feature/map/geocode/label.ts";
@@ -127,13 +127,13 @@ function LocateCard() {
   if (location === DevicePoseStatus.Ready) return null;
   return (
     <AboveKeyboard inset={16}>
-      <Glass fill={color.white} variant={GlassVariant.Clear} interactive style={styles.locateCard}>
+      <Backing fill={color.white} place={BackingPlace.OnSheet} interactive style={styles.locateCard}>
         <Pressable onPress={kernel_enable_location} accessibilityRole="button" style={styles.locateRow}>
           <Glyph glyph="location" size={18} color={poseColor(location)} />
           <Text numberOfLines={1} style={styles.locateLabel}>{t("map.sensors.label")}</Text>
           <Text style={styles.locateAction}>{t("map.sensors.turn_on")}</Text>
         </Pressable>
-      </Glass>
+      </Backing>
     </AboveKeyboard>
   );
 }
@@ -217,7 +217,7 @@ export function SearchModal(props: BaseModalProps) {
                   small filled circle inside the field and the close is a separate
                   round button, so the two X's are not confused. */
               }
-              <Glass fill={color.faint} variant={GlassVariant.Clear} style={styles.well}>
+              <Backing fill={color.faint} place={BackingPlace.OnSheet} style={styles.well}>
                 <Glyph glyph="magnifyingglass" size={16} color={LABEL.secondary} />
                 <TextField
                   value={query}
@@ -245,7 +245,7 @@ export function SearchModal(props: BaseModalProps) {
                     <Glyph glyph="xmark" size={10} weight="heavy" color={color.paper} />
                   </Pressable>
                 )}
-              </Glass>
+              </Backing>
               <PanelClose label={t("settings.close")} onClose={() => onClose()} />
             </View>
           </>

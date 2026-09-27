@@ -21,7 +21,7 @@ import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { round } from "@xpute/core/math/scalar.ts";
 
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
-import { save_file } from "@platform/save.ts";
+import { saveFile } from "@platform/save.ts";
 
 import { type Frame, isList, LANES, LIST_NAMES } from "./lane.ts";
 import { failText } from "./report.ts";
@@ -54,7 +54,7 @@ function event(name: string, cat: string, ph: string, ts: f64, dur: f64 | null, 
   return { name, cat, ph, ts, ...(dur === null ? {} : { dur }), pid: PID, tid, ...(args ? { args } : {}) };
 }
 
-const thread_name = (tid: u32, name: string) => event("thread_name", "__metadata", "M", 0, null, tid, { name });
+const threadName = (tid: u32, name: string) => event("thread_name", "__metadata", "M", 0, null, tid, { name });
 
 /** One frame's numbers as trace args — the counter track and the worst-frame
  * spans both carry them, so the two never disagree on what a frame was. Every
@@ -90,7 +90,7 @@ function profilerTraceJson(): string {
     if (tid === undefined) {
       tid = TID_TASK_BASE + catTid.size;
       catTid.set(r.category, tid);
-      events.push(thread_name(tid, `task: ${r.category}`));
+      events.push(threadName(tid, `task: ${r.category}`));
     }
     const args: Args = {
       outcome: r.outcome,
@@ -109,7 +109,7 @@ function profilerTraceJson(): string {
 
   // ---- per-frame counters (Perfetto graphs these) ----
   if (frames.length > 0) {
-    events.push(thread_name(TID_FRAMES, "frames"));
+    events.push(threadName(TID_FRAMES, "frames"));
     for (const f of frames) {
       const ts = us(f.t);
       events.push(event("frame", "frame", "C", ts, null, TID_FRAMES, frameArgs(f)));
@@ -123,7 +123,7 @@ function profilerTraceJson(): string {
   // Already on the counter track above; repeated as labeled spans so a
   // stall can be found without scrubbing, at its real timestamp.
   if (worst.length > 0) {
-    events.push(thread_name(TID_WORST, "worst frames"));
+    events.push(threadName(TID_WORST, "worst frames"));
     for (const w of worst) {
       const f = w.sample;
       const args = frameArgs(f);
@@ -135,7 +135,7 @@ function profilerTraceJson(): string {
 
   // ---- long animation frames ----
   if (longs.length > 0) {
-    events.push(thread_name(TID_LONG, "LoAF"));
+    events.push(threadName(TID_LONG, "LoAF"));
     for (const l of longs) {
       const args = { blockingMs: fixed(l.blockingMs, 1), scriptMs: fixed(l.scriptMs, 1), renderMs: fixed(l.renderMs, 1) };
       events.push(event(`long frame ${l.durationMs.toFixed(0)}ms`, "loaf", "X", us(l.t), us(l.durationMs), TID_LONG, args));
@@ -153,7 +153,7 @@ export async function profilerTraceSave(): Promise<string> {
   const mb = `${(json.length / 1e6).toFixed(1)} MB`;
   const name = `pxl-profiler-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
   try {
-    await save_file(name, json, "application/json");
+    await saveFile(name, json, "application/json");
     console.log(`[profiler] trace saved as ${name} · ${mb} — open it at ui.perfetto.dev`);
     return `trace saved · ${mb}`;
   } catch (err) {

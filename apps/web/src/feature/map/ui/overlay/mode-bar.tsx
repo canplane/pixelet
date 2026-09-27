@@ -6,9 +6,9 @@ import { Keyboard, PanResponder, PixelRatio, Pressable, ScrollView, StyleSheet, 
 import { PAN_X } from "@platform/gesture.ts";
 
 import type { f64, u32, u8 } from "@xpute/core/abi/word.ts";
-import { Glass, SYSTEM_GLASS } from "@platform/glass.tsx";
-import type { Glyph as GlyphName } from "@platform/icon.tsx";
-import { GlassVariant } from "@/shared/ui/glass-variant.ts";
+import { Backing, SYSTEM_BACKING } from "@platform/backing.tsx";
+import type { GlyphName } from "@platform/icon.tsx";
+import { BackingPlace } from "@/shared/ui/backing-place.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
 import { Motion } from "@platform/motion.tsx";
 import { LABEL } from "@platform/palette.ts";
@@ -111,13 +111,13 @@ function tierAt(at: FlyoutAt, count: u32, x: f64, y: f64): u32 | null {
  * on. Drawn from the bar rather than from the swatch, which sits in a
  * horizontally scrolling strip that clips what stands outside it. */
 function SizeFlyout({ shown, hover }: { shown: boolean; hover: u32 | null }) {
-  const object_tier = useUiStore((s) => s.object_tier);
+  const objectTier = useUiStore((s) => s.objectTier);
   const sizes = useKernel((s) => s.object_sizes);
 
   return (
-    <Glass
+    <Backing
       fill={STRIP.flyout}
-      variant={GlassVariant.Regular}
+      place={BackingPlace.OverMap}
       fade={shown ? 1 : 0}
       fadeFrom={0}
       transition={shown ? SNAP : LEAVE}
@@ -131,14 +131,14 @@ function SizeFlyout({ shown, hover }: { shown: boolean; hover: u32 | null }) {
               <View
                 style={[
                   { width: mark, height: mark, borderRadius: mark / 2 },
-                  hover === tier ? styles.markHover : object_tier === tier ? styles.markHeld : styles.markIdle,
+                  hover === tier ? styles.markHover : objectTier === tier ? styles.markHeld : styles.markIdle,
                 ]}
               />
             </Motion>
           </View>
         );
       })}
-    </Glass>
+    </Backing>
   );
 }
 
@@ -314,7 +314,7 @@ export function ModeBar() {
   const activeTool = useUiStore((s) => s.activeTool);
   const set_activeTool = useUiStore.getState().set_activeTool;
   const recentPicks = useUiStore((s) => s.recentPicks);
-  const append_chat_line = useUiStore.getState().append_chat_line;
+  const appendChatLine = useUiStore.getState().appendChatLine;
   const setObjectTier = useUiStore.getState().setObjectTier;
   const sizeCount = useKernel((s) => s.object_sizes.length);
   const [messageText, setMessageText] = useState("");
@@ -334,7 +334,7 @@ export function ModeBar() {
     if (text === "" || isSending) return;
     setIsSending(true);
     setTimeout(() => {
-      append_chat_line(text);
+      appendChatLine(text);
       setMessageText("");
       setIsSending(false);
       inputRef.current?.focus();
@@ -399,7 +399,7 @@ export function ModeBar() {
             height={MODE_BAR_HEIGHT_PX}
             span={barWidth}
             fill={color.white}
-            variant={GlassVariant.Regular}
+            place={BackingPlace.OverMap}
             interactive={!messageExpanded}
             shadow="0 6px 20px rgba(0, 0, 0, 0.25)"
           >
@@ -440,7 +440,7 @@ export function ModeBar() {
             span={barWidth}
             fill={sendTint ?? STRIP.ground}
             tint={sendTint}
-            variant={GlassVariant.Regular}
+            place={BackingPlace.OverMap}
             interactive={!paletteExpanded}
             shadow="0 3px 6px rgba(0, 0, 0, 0.25)"
             onContentWidth={setStripWidth}
@@ -561,12 +561,12 @@ const PILL = { height: MODE_BAR_HEIGHT_PX, borderRadius: MODE_BAR_HEIGHT_PX / 2 
  * page, a device without the system's glass — a dark band with white glyphs.
  * On the system's glass, a toolbar as the platform draws one over light
  * content: the glass untinted, its glyphs the label color as every
- * control's are, the tool in hand on a faint capsule. Glass painted dark to
+ * control's are, the tool in hand on a faint capsule. Backing painted dark to
  * pass for the band only clouded it: a tint
  * is for what a surface means, and the glass decides its own light and dark
  * from what is under it.
  */
-const STRIP = SYSTEM_GLASS ? strip.glass : strip.band;
+const STRIP = SYSTEM_BACKING ? strip.glass : strip.band;
 
 const styles = StyleSheet.create({
   // As tall as the pills and as wide as the row: the pills stand on it by

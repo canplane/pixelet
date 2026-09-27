@@ -4,14 +4,14 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { View } from "react-native";
 
-import type { Glyph } from "@platform/icon.tsx";
+import type { GlyphName } from "@platform/icon.tsx";
 
 import { type Setting, type SettingName, SETTINGS, type SettingSection, settingsIn } from "@/feature/setting/schema.ts";
 import { SectionTitle, SettingChoiceRow, SettingGroup, SettingRow } from "./row.tsx";
 import { Command, encode_setting_update } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, useKernel } from "@/kernel/shell.ts";
 
-const SECTION_ICONS: Partial<Record<SettingSection, Glyph>> = {
+const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {
   display: "eye",
   camera: "move.3d",
   editing: "hammer",

@@ -28,20 +28,20 @@ import { storage } from "@/kernel/abi/host.spec.ts";
 import { stored } from "@/kernel/host.ts";
 import { hold_body } from "@/kernel/module.ts";
 import {
-  geolocation_start,
-  geolocation_stop,
-  geolocation_supported,
-  orientation_listen,
-  orientation_needs_permission,
-  orientation_remove,
-  orientation_silence_is_loss,
-  orientation_supported,
+  geolocationStart,
+  geolocationStop,
+  geolocationSupported,
+  orientationListen,
+  orientationNeedsPermission,
+  orientationRemove,
+  orientationSilenceIsLoss,
+  orientationSupported,
 } from "@platform/sensor.ts";
 import { abort_fetch, run_fetch } from "@/kernel/io/fetch.ts";
 import { load_image, load_model } from "@/kernel/io/load.ts";
 import { CORE, CORE_DOORBELL, load_core } from "@/kernel/mem.ts";
 import { bytes_at } from "@/kernel/module.ts";
-import { gpu_boot } from "@platform/gpu.ts";
+import { gpuBoot } from "@platform/gpu.ts";
 import { HANDHELD } from "@platform/core.ts";
 import { start_sched } from "@/kernel/sched.ts";
 import { kernel_snapshot, set_snapshot, subscribe_snapshot } from "@/kernel/snapshot.ts";
@@ -60,12 +60,12 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
     case Command.WORLD_UPDATE:
       return;
     case Command.SENSOR_CREATE:
-      if (read_sensor_create(f!).sensor === Sensor.Geolocation) geolocation_start();
-      else orientation_listen();
+      if (read_sensor_create(f!).sensor === Sensor.Geolocation) geolocationStart();
+      else orientationListen();
       return;
     case Command.SENSOR_DELETE:
-      if (read_sensor_delete(f!).sensor === Sensor.Geolocation) geolocation_stop();
-      else orientation_remove();
+      if (read_sensor_delete(f!).sensor === Sensor.Geolocation) geolocationStop();
+      else orientationRemove();
       return;
     case Command.FETCH_CREATE: {
       const { key, bake, name } = read_fetch_create(f!);
@@ -100,16 +100,16 @@ export async function boot_kernel(): Promise<void> {
   await load_core();
   start_sched();
   CORE_DOORBELL.signal = on_signal;
-  gpu_boot();
+  gpuBoot();
   CORE_DOORBELL.call(
     Command.WORLD_CREATE,
     encode_world_create({
       development: __IS_DEV__,
       handheld: HANDHELD,
-      geolocation: geolocation_supported(),
-      orientation: orientation_supported(),
-      orientation_permission: orientation_needs_permission(),
-      orientation_silence_is_loss: orientation_silence_is_loss(),
+      geolocation: geolocationSupported(),
+      orientation: orientationSupported(),
+      orientation_permission: orientationNeedsPermission(),
+      orientation_silence_is_loss: orientationSilenceIsLoss(),
       settings: storedSettings(),
       ...objects_body(),
     }),

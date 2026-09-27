@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import type { u8 } from "@xpute/core/abi/word.ts";
-import { type ChannelName, decor_kinds, decorName, placeable_cubes, type PlaceableCube, placeableCubeChannel, placeableCubeId, sameCube } from "@/catalog/cell/mod.ts";
+import { type ChannelName, decorKinds, decorName, type PlaceableCube, placeableCubeChannel, placeableCubeId, placeableCubes, sameCube } from "@/catalog/cell/mod.ts";
 
 import type { BaseModalProps } from "@/app/type/ui.type.ts";
 import { useUiStore } from "@/app/store/ui-store.ts";
@@ -113,7 +113,7 @@ export function DrawerModal(props: BaseModalProps) {
   const selectCube = useUiStore.getState().selectCube;
   const selectDecor = useUiStore.getState().selectDecor;
 
-  const sections = groupBySection(placeable_cubes);
+  const sections = groupBySection(placeableCubes);
 
   function pickCube(cube: PlaceableCube): void {
     selectCube(cube);
@@ -157,7 +157,7 @@ export function DrawerModal(props: BaseModalProps) {
 
           {tab === DrawerTab.Decor && (
             <View style={styles.grid}>
-              {decor_kinds.map((kind) => <DecorGridButton key={kind} kind={kind} onPick={pickDecor} />)}
+              {decorKinds.map((kind) => <DecorGridButton key={kind} kind={kind} onPick={pickDecor} />)}
             </View>
           )}
 

@@ -10,7 +10,7 @@
  * a glass toast fading out stood solid and then vanished. So whatever fades —
  * a toast's card, the chrome dimmed while the camera is busy — says how
  * present it is, and each surface under it shows that its own way
- * (@platform glass.tsx and pill.tsx): a page by opacity, a device's glass by
+ * (@platform backing.tsx and pill.tsx): a page by opacity, a device's glass by
  * its own style, animated by the system.
  */
 

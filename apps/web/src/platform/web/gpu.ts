@@ -9,25 +9,25 @@
 
 import { Command, encode_gpu_create } from "@/kernel/abi/cmd.spec.ts";
 import { CORE_DOORBELL } from "@/kernel/mem.ts";
-import { acquire_device, missing_before_boot } from "@/platform/web/webgpu.ts";
+import { acquireDevice, missingBeforeBoot } from "@/platform/web/webgpu.ts";
 import { request_frame } from "@/kernel/sched.ts";
 import { declareUnsupported, type UnsupportedReason } from "@/app/store/unsupported-store.ts";
 
 /** Why this browser cannot draw at all, before anything is started: what it
  * lacks outright, where the device's answer need not be waited for. */
-export function gpu_missing(): UnsupportedReason | null {
-  return missing_before_boot();
+export function gpuMissing(): UnsupportedReason | null {
+  return missingBeforeBoot();
 }
 
 /** Asks for a device and tells the kernel when one answers, and again after
  * one is lost. */
-export function gpu_boot(): void {
+export function gpuBoot(): void {
   const lost = () => {
     CORE_DOORBELL.send(0, Command.GPU_DELETE);
-    gpu_boot();
+    gpuBoot();
     request_frame();
   };
-  void acquire_device(lost).then((info) => {
+  void acquireDevice(lost).then((info) => {
     if ("reason" in info) {
       // The same end as a browser that cannot read the wire: nothing here is a
       // moment to recover from, so it is said once, in front of everything,

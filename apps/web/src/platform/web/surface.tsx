@@ -19,7 +19,7 @@ import { kernel_open, kernel_pointer, kernel_rect, kernel_visible, kernel_wheel 
 import { surface_role } from "@/kernel/render/gpu/api.spec.ts";
 import { surface_create, surface_delete, surface_size } from "@/kernel/render/surface.ts";
 import { request_frame } from "@/kernel/sched.ts";
-import { bind_surface, unbind_surface } from "@/platform/web/webgpu.ts";
+import { bindSurface, unbindSurface } from "@/platform/web/webgpu.ts";
 
 const FILL = { position: "absolute", inset: 0, width: "100%", height: "100%" } as const;
 
@@ -39,97 +39,97 @@ function dpr(): f64 {
  * does not (Safari), the CSS box times the pixel ratio stands in, and a zoom —
  * which changes the ratio and not the box — is caught by the window's resize.
  */
-function open_surface(canvas: HTMLCanvasElement, role: u32): { handle: u32; close: () => void } {
+function openSurface(canvas: HTMLCanvasElement, role: u32): { handle: u32; close: () => void } {
   const handle = surface_create(role);
   if (handle === 0) return { handle, close: () => {} };
-  bind_surface(handle, canvas);
+  bindSurface(handle, canvas);
   const send = (width: u32, height: u32) => surface_size(handle, width, height, dpr());
-  const send_box = () => send(round(canvas.clientWidth * dpr()), round(canvas.clientHeight * dpr()));
+  const sendBox = () => send(round(canvas.clientWidth * dpr()), round(canvas.clientHeight * dpr()));
   const observer = new ResizeObserver((entries) => {
     const entry = entries[entries.length - 1];
     const exact = entry.devicePixelContentBoxSize?.[0];
     if (exact) send(exact.inlineSize, exact.blockSize);
-    else send_box();
+    else sendBox();
   });
   try {
     observer.observe(canvas, { box: "device-pixel-content-box" });
   } catch {
     observer.observe(canvas);
   }
-  globalThis.addEventListener("resize", send_box);
+  globalThis.addEventListener("resize", sendBox);
   return {
     handle,
     close: () => {
-      globalThis.removeEventListener("resize", send_box);
+      globalThis.removeEventListener("resize", sendBox);
       observer.disconnect();
       surface_delete(handle);
-      unbind_surface(handle);
+      unbindSurface(handle);
     },
   };
 }
 
-function pointer_kind(e: PointerEvent): PointerKind {
+function pointerKind(e: PointerEvent): PointerKind {
   return e.pointerType === "touch" ? PointerKind.Touch : e.pointerType === "pen" ? PointerKind.Pen : PointerKind.Mouse;
 }
 
 /** Drives the kernel from `canvas`: its box, the pointer over it, the wheel,
  * the tab's visibility. What it returns lets all of it go. */
 function drive(canvas: HTMLCanvasElement): () => void {
-  const send_rect = () => {
+  const sendRect = () => {
     const r = canvas.getBoundingClientRect();
     kernel_rect(r.left, r.top, r.width, r.height);
   };
-  const pointer = (phase: PointerPhase) => (e: PointerEvent) => kernel_pointer(phase, pointer_kind(e), e.pointerId, e.button, e.clientX, e.clientY);
-  const on_move = pointer(PointerPhase.Move);
-  const on_up = pointer(PointerPhase.Up);
-  const on_leave = pointer(PointerPhase.Out);
-  const on_down = (e: PointerEvent) => {
-    send_rect();
-    kernel_pointer(PointerPhase.Down, pointer_kind(e), e.pointerId, e.button, e.clientX, e.clientY);
+  const pointer = (phase: PointerPhase) => (e: PointerEvent) => kernel_pointer(phase, pointerKind(e), e.pointerId, e.button, e.clientX, e.clientY);
+  const onMove = pointer(PointerPhase.Move);
+  const onUp = pointer(PointerPhase.Up);
+  const onLeave = pointer(PointerPhase.Out);
+  const onDown = (e: PointerEvent) => {
+    sendRect();
+    kernel_pointer(PointerPhase.Down, pointerKind(e), e.pointerId, e.button, e.clientX, e.clientY);
   };
-  const on_wheel = (e: WheelEvent) => {
+  const onWheel = (e: WheelEvent) => {
     if (e.ctrlKey) e.preventDefault();
     kernel_wheel(e.deltaY);
   };
-  const on_context_menu = (e: MouseEvent) => e.preventDefault();
-  const on_resize = () => {
-    send_rect();
+  const onContextMenu = (e: MouseEvent) => e.preventDefault();
+  const onResize = () => {
+    sendRect();
     request_frame();
   };
-  const on_visibility = () => kernel_visible(document.visibilityState === "visible");
-  const on_page_hide = () => kernel_visible(false);
+  const onVisibility = () => kernel_visible(document.visibilityState === "visible");
+  const onPageHide = () => kernel_visible(false);
 
-  canvas.addEventListener("pointerdown", on_down);
-  canvas.addEventListener("pointermove", on_move);
-  canvas.addEventListener("pointerleave", on_leave);
-  canvas.addEventListener("contextmenu", on_context_menu);
-  canvas.addEventListener("wheel", on_wheel, { passive: false });
-  globalThis.addEventListener("resize", on_resize);
-  globalThis.addEventListener("scroll", on_resize, true);
-  globalThis.addEventListener("pointerup", on_up);
-  globalThis.addEventListener("pointercancel", on_up);
-  document.addEventListener("visibilitychange", on_visibility);
-  globalThis.addEventListener("pagehide", on_page_hide);
-  const observer = new ResizeObserver(on_resize);
+  canvas.addEventListener("pointerdown", onDown);
+  canvas.addEventListener("pointermove", onMove);
+  canvas.addEventListener("pointerleave", onLeave);
+  canvas.addEventListener("contextmenu", onContextMenu);
+  canvas.addEventListener("wheel", onWheel, { passive: false });
+  globalThis.addEventListener("resize", onResize);
+  globalThis.addEventListener("scroll", onResize, true);
+  globalThis.addEventListener("pointerup", onUp);
+  globalThis.addEventListener("pointercancel", onUp);
+  document.addEventListener("visibilitychange", onVisibility);
+  globalThis.addEventListener("pagehide", onPageHide);
+  const observer = new ResizeObserver(onResize);
   observer.observe(canvas);
 
-  send_rect();
+  sendRect();
   const close = kernel_open(() => ({ width: canvas.clientWidth, height: canvas.clientHeight, dpr: dpr() }));
 
   return () => {
     close();
     observer.disconnect();
-    globalThis.removeEventListener("pagehide", on_page_hide);
-    document.removeEventListener("visibilitychange", on_visibility);
-    globalThis.removeEventListener("pointercancel", on_up);
-    globalThis.removeEventListener("pointerup", on_up);
-    globalThis.removeEventListener("scroll", on_resize, true);
-    globalThis.removeEventListener("resize", on_resize);
-    canvas.removeEventListener("wheel", on_wheel);
-    canvas.removeEventListener("contextmenu", on_context_menu);
-    canvas.removeEventListener("pointerleave", on_leave);
-    canvas.removeEventListener("pointermove", on_move);
-    canvas.removeEventListener("pointerdown", on_down);
+    globalThis.removeEventListener("pagehide", onPageHide);
+    document.removeEventListener("visibilitychange", onVisibility);
+    globalThis.removeEventListener("pointercancel", onUp);
+    globalThis.removeEventListener("pointerup", onUp);
+    globalThis.removeEventListener("scroll", onResize, true);
+    globalThis.removeEventListener("resize", onResize);
+    canvas.removeEventListener("wheel", onWheel);
+    canvas.removeEventListener("contextmenu", onContextMenu);
+    canvas.removeEventListener("pointerleave", onLeave);
+    canvas.removeEventListener("pointermove", onMove);
+    canvas.removeEventListener("pointerdown", onDown);
   };
 }
 
@@ -140,7 +140,7 @@ export function WorldSurface() {
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
-    const surface = open_surface(canvas, surface_role.WORLD);
+    const surface = openSurface(canvas, surface_role.WORLD);
     const stop = drive(canvas);
     return () => {
       stop();
@@ -162,7 +162,7 @@ export function CaseSurface({ onOpen, openKey }: { onOpen: (surface: u32) => () 
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
-    const surface = open_surface(canvas, surface_role.CASE);
+    const surface = openSurface(canvas, surface_role.CASE);
     const close = surface.handle !== 0 ? open.current(surface.handle) : () => {};
     return () => {
       close();

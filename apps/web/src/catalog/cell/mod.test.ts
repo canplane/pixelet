@@ -3,12 +3,12 @@
 import { assert, assertEquals } from "@std/assert";
 
 import { cube_types, GroundChannelKey } from "./cube_type.spec.ts";
-import { decor_kinds, decorName, placeable_cubes, placeableCubeHex, placeableCubeId } from "./mod.ts";
+import { decorKinds, decorName, placeableCubeHex, placeableCubeId, placeableCubes } from "./mod.ts";
 import { decor_types } from "./decor.spec.ts";
 
 Deno.test("placeable_cubes - every cube is spelled once and has a color to swatch", () => {
   const seen = new Set<string>();
-  for (const cube of placeable_cubes) {
+  for (const cube of placeableCubes) {
     const id = placeableCubeId(cube);
     assert(!seen.has(id), `a cube spelled twice: ${id}`);
     seen.add(id);
@@ -26,6 +26,6 @@ Deno.test("placeableCubeId - a cube is spelled by its channel's name and its typ
 });
 
 Deno.test("decor_kinds - every kind by number, named back as decor.json names it", () => {
-  assertEquals(decor_kinds.map(decorName).sort(), Object.keys(decor_types).sort());
-  for (const kind of decor_kinds) assertEquals(decor_types[decorName(kind)], kind);
+  assertEquals(decorKinds.map(decorName).sort(), Object.keys(decor_types).sort());
+  for (const kind of decorKinds) assertEquals(decor_types[decorName(kind)], kind);
 });

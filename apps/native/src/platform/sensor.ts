@@ -12,7 +12,7 @@
  * a dead geolocation watch: the kernel's next start begins a new one rather
  * than finding the old one still held. The compass is where a device and a
  * browser part: Core Location speaks only when the heading turns and says
- * when it fails, so its silence is no loss (`orientation_silence_is_loss`).
+ * when it fails, so its silence is no loss (`orientationSilenceIsLoss`).
  */
 
 import { AppState } from "react-native";
@@ -23,28 +23,28 @@ import { CORE_DOORBELL } from "@/kernel/mem.ts";
 import { request_frame, ring_now } from "@/kernel/sched.ts";
 import { PLATFORM } from "./module.ts";
 
-export function geolocation_supported(): boolean {
+export function geolocationSupported(): boolean {
   return true;
 }
 
-export function orientation_supported(): boolean {
+export function orientationSupported(): boolean {
   return PLATFORM.headingAvailable();
 }
 
 /** The heading needs no prompt of its own: the location permission covers it. */
-export function orientation_needs_permission(): boolean {
+export function orientationNeedsPermission(): boolean {
   return false;
 }
 
-export function orientation_silence_is_loss(): boolean {
+export function orientationSilenceIsLoss(): boolean {
   return false;
 }
 
-export function orientation_permit(): Promise<boolean> {
+export function orientationPermit(): Promise<boolean> {
   return Promise.resolve(true);
 }
 
-function send_permission(sensor: Sensor, answer: PermissionAnswer): void {
+function sendPermission(sensor: Sensor, answer: PermissionAnswer): void {
   CORE_DOORBELL.send(0, Command.SENSOR_PERMISSION, encode_sensor_permission({ sensor, answer }));
   request_frame();
 }
@@ -73,7 +73,7 @@ async function permitted(): Promise<boolean> {
  * permission `change` does (platform/web/sensor.ts), the one way back from a
  * refusal, since nothing else would ask again. What it returns stops
  * following. */
-export function permission_follow(): () => void {
+export function permissionFollow(): () => void {
   const back = AppState.addEventListener("change", (state) => {
     if (state === "active") recheck();
   });
@@ -85,8 +85,8 @@ function recheck(): void {
   void Location.getForegroundPermissionsAsync().then(({ status }) => {
     if (granted !== false || status !== Location.PermissionStatus.GRANTED) return;
     granted = true;
-    send_permission(Sensor.Geolocation, PermissionAnswer.Granted);
-    send_permission(Sensor.Orientation, PermissionAnswer.Granted);
+    sendPermission(Sensor.Geolocation, PermissionAnswer.Granted);
+    sendPermission(Sensor.Orientation, PermissionAnswer.Granted);
   });
 }
 
@@ -98,7 +98,7 @@ interface Watch {
   stopped: boolean;
 }
 
-function watch_end(watch: Watch): void {
+function watchEnd(watch: Watch): void {
   watch.stopped = true;
   watch.subscription?.remove();
   watch.subscription = null;
@@ -108,20 +108,20 @@ let geolocation: Watch | null = null;
 
 /** The watch ended on its own: let go of it, and the kernel hears why. A
  * watch already stopped or replaced says nothing. */
-function geolocation_fail(watch: Watch, code: GeolocationErrorCode): void {
+function geolocationFail(watch: Watch, code: GeolocationErrorCode): void {
   if (geolocation !== watch) return;
-  watch_end(watch);
+  watchEnd(watch);
   geolocation = null;
   CORE_DOORBELL.send(0, Command.SENSOR_ERROR, encode_sensor_error({ code }));
   request_frame();
 }
 
-export function geolocation_start(): void {
+export function geolocationStart(): void {
   if (geolocation !== null) return;
   const watch: Watch = { subscription: null, stopped: false };
   geolocation = watch;
   void (async () => {
-    if (!(await permitted())) return geolocation_fail(watch, GeolocationErrorCode.PermissionDenied);
+    if (!(await permitted())) return geolocationFail(watch, GeolocationErrorCode.PermissionDenied);
     const subscription = await Location.watchPositionAsync(
       { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
       (pos) => {
@@ -129,16 +129,16 @@ export function geolocation_start(): void {
         CORE_DOORBELL.send(0, Command.SENSOR_UPDATE, encode_sensor_update({ lon: longitude, lat: latitude, altitude, accuracy: accuracy ?? Infinity, heading }));
         request_frame();
       },
-      () => geolocation_fail(watch, GeolocationErrorCode.PositionUnavailable),
+      () => geolocationFail(watch, GeolocationErrorCode.PositionUnavailable),
     );
     if (watch.stopped) subscription.remove();
     else watch.subscription = subscription;
-  })().catch(() => geolocation_fail(watch, GeolocationErrorCode.Other));
+  })().catch(() => geolocationFail(watch, GeolocationErrorCode.Other));
 }
 
-export function geolocation_stop(): void {
+export function geolocationStop(): void {
   if (geolocation === null) return;
-  watch_end(geolocation);
+  watchEnd(geolocation);
   geolocation = null;
 }
 
@@ -146,20 +146,20 @@ let orientation: Watch | null = null;
 
 /** The compass ended on its own: a refusal is the permission's answer, and a
  * failure is the compass lost. */
-function orientation_fail(watch: Watch, refused: boolean): void {
+function orientationFail(watch: Watch, refused: boolean): void {
   if (orientation !== watch) return;
-  watch_end(watch);
+  watchEnd(watch);
   orientation = null;
-  if (refused) send_permission(Sensor.Orientation, PermissionAnswer.Denied);
+  if (refused) sendPermission(Sensor.Orientation, PermissionAnswer.Denied);
   else ring_now(Command.SENSOR_ORIENTATION_LOST);
 }
 
-export function orientation_listen(): void {
+export function orientationListen(): void {
   if (orientation !== null) return;
   const watch: Watch = { subscription: null, stopped: false };
   orientation = watch;
   void (async () => {
-    if (!(await permitted())) return orientation_fail(watch, true);
+    if (!(await permitted())) return orientationFail(watch, true);
     const subscription = await Location.watchHeadingAsync(
       (h) => {
         // True north where the OS has a fix to correct by, magnetic otherwise.
@@ -169,19 +169,19 @@ export function orientation_listen(): void {
       },
       (reason) => {
         console.error("[sensor] heading:", reason);
-        orientation_fail(watch, false);
+        orientationFail(watch, false);
       },
     );
     if (watch.stopped) subscription.remove();
     else watch.subscription = subscription;
   })().catch((err) => {
     console.error("[sensor] heading:", err);
-    orientation_fail(watch, false);
+    orientationFail(watch, false);
   });
 }
 
-export function orientation_remove(): void {
+export function orientationRemove(): void {
   if (orientation === null) return;
-  watch_end(orientation);
+  watchEnd(orientation);
   orientation = null;
 }

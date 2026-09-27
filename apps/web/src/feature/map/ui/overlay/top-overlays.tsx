@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Defs, LinearGradient, Mask, Rect, Stop, Svg } from "react-native-svg";
 
-import { useViewportTop } from "@platform/visual-viewport.ts";
+import { useViewportTop } from "@platform/viewport.ts";
 import { useAppContext } from "@/app/provider/context.ts";
 import { useKernel } from "@/kernel/shell.ts";
 import { Presence } from "@/shared/ui/motion/presence.tsx";

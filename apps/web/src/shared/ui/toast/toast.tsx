@@ -8,7 +8,7 @@ import { Spinner } from "@platform/icon.tsx";
 import { Motion } from "@platform/motion.tsx";
 import { LABEL, STATUS } from "@platform/palette.ts";
 import { Pill } from "@platform/pill.tsx";
-import { GlassVariant } from "@/shared/ui/glass-variant.ts";
+import { BackingPlace } from "@/shared/ui/backing-place.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
 import { Swap } from "@/shared/ui/motion/presence.tsx";
 import { LEAVE, SNAP, spring, type Transition } from "@/shared/ui/motion/transition.ts";
@@ -88,9 +88,9 @@ export function Toast({ message, tone, fade, fadeTransition, touch }: ToastProps
       span={span}
       fill={error ? surface.alarm.fill : color.ground}
       // On glass the tint is all the color it carries: the system draws the
-      // rim, and a border is the fill's alone (platform glass.tsx).
+      // rim, and a border is the fill's alone (platform backing.tsx).
       tint={error ? surface.alarm.glass : undefined}
-      variant={GlassVariant.Regular}
+      place={BackingPlace.OverMap}
       border={{ width: 2, color: error ? surface.alarm.edge : alpha(color.white, 0.9) }}
       shadow={error ? `0 6px 20px ${surface.alarm.shadow}` : "0 6px 20px rgba(0, 0, 0, 0.25)"}
       fade={fade}

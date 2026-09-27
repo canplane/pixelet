@@ -17,7 +17,7 @@ interface AboveKeyboardProps {
  * A layer across the bottom of the screen that rests where the bottom chrome
  * does (shared/ui/bottom-rest.ts), and stands `inset` over the keyboard
  * while one is open and reaches higher: on the web, over what the visual
- * viewport has lost to it (`--vv-bottom`, visual-viewport.ts). A CSS variable rather than a value
+ * viewport has lost to it (`--vv-bottom`, viewport.ts). A CSS variable rather than a value
  * the layer re-renders on, since it follows the keyboard every frame. A
  * device's keyboard reports its own frame, and its build puts that here.
  *

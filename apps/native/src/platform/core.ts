@@ -19,8 +19,8 @@ export const HANDHELD: boolean = true;
 
 /** The core, booted: its first turn lays the memory out before anything reads
  * the boot block. */
-export function open_core(): Promise<Core> {
+export function openCore(): Promise<Core> {
   const buffer = PLATFORM.memory();
   PLATFORM.interrupt(0);
-  return Promise.resolve({ buffer, interrupt: (quota_ms: f64) => PLATFORM.interrupt(quota_ms) });
+  return Promise.resolve({ buffer, interrupt: (quotaMs: f64) => PLATFORM.interrupt(quotaMs) });
 }

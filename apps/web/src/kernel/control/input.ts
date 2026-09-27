@@ -16,7 +16,7 @@
 import type { f64, i32, u32 } from "@xpute/core/abi/word.ts";
 import { ActiveTool, Command, encode_input_pointer, encode_input_update, encode_input_wheel, encode_sensor_visibility, PointerKind, PointerPhase } from "@/kernel/abi/cmd.spec.ts";
 import type { GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
-import { permission_follow } from "@platform/sensor.ts";
+import { permissionFollow } from "@platform/sensor.ts";
 import { CORE_DOORBELL } from "@/kernel/mem.ts";
 import { request_frame, ring_now, set_driver, strobe, type Viewport } from "@/kernel/sched.ts";
 
@@ -80,7 +80,7 @@ export function kernel_open(viewport: () => Viewport): () => void {
   set_driver(viewport);
   ring_now(Command.SENSOR_OPEN);
   strobe.start();
-  const unfollow = permission_follow();
+  const unfollow = permissionFollow();
   return () => {
     unfollow();
     strobe.stop();

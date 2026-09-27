@@ -20,34 +20,34 @@ interface IOSOrientationEvent extends DeviceOrientationEvent {
 }
 type IOSOrientationEventCtor = typeof DeviceOrientationEvent & { requestPermission?: () => Promise<"granted" | "denied"> };
 
-export function geolocation_supported(): boolean {
+export function geolocationSupported(): boolean {
   return "geolocation" in navigator;
 }
 
-export function orientation_supported(): boolean {
+export function orientationSupported(): boolean {
   return typeof DeviceOrientationEvent !== "undefined";
 }
 
-export function orientation_needs_permission(): boolean {
-  return orientation_supported() && typeof (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission === "function";
+export function orientationNeedsPermission(): boolean {
+  return orientationSupported() && typeof (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission === "function";
 }
 
 /** A browser dispatches orientation while the device lies still and never
  * says the listener stopped hearing, so silence is how a loss shows. */
-export function orientation_silence_is_loss(): boolean {
+export function orientationSilenceIsLoss(): boolean {
   return true;
 }
 
-let geolocation_watch: number | null = null;
+let geolocationWatch: number | null = null;
 
-export function geolocation_stop(): void {
-  if (geolocation_watch !== null) navigator.geolocation.clearWatch(geolocation_watch);
-  geolocation_watch = null;
+export function geolocationStop(): void {
+  if (geolocationWatch !== null) navigator.geolocation.clearWatch(geolocationWatch);
+  geolocationWatch = null;
 }
 
-export function geolocation_start(): void {
-  if (geolocation_watch !== null || !("geolocation" in navigator)) return;
-  geolocation_watch = navigator.geolocation.watchPosition(
+export function geolocationStart(): void {
+  if (geolocationWatch !== null || !("geolocation" in navigator)) return;
+  geolocationWatch = navigator.geolocation.watchPosition(
     (pos) => {
       const { latitude, longitude, altitude, accuracy, heading } = pos.coords;
       CORE_DOORBELL.send(0, Command.SENSOR_UPDATE, encode_sensor_update({ lon: longitude, lat: latitude, altitude, accuracy, heading }));
@@ -56,7 +56,7 @@ export function geolocation_start(): void {
     (err) => {
       // The dead watch is cleared, not just forgotten: it keeps calling back,
       // and a later start would race it.
-      geolocation_stop();
+      geolocationStop();
       const code = err.code === err.PERMISSION_DENIED
         ? GeolocationErrorCode.PermissionDenied
         : err.code === err.POSITION_UNAVAILABLE
@@ -71,25 +71,25 @@ export function geolocation_start(): void {
   );
 }
 
-let orientation_event: string | null = null;
+let orientationEvent: string | null = null;
 
-function on_orientation(e: Event): void {
+function onOrientation(e: Event): void {
   const o = e as IOSOrientationEvent;
   CORE_DOORBELL.send(0, Command.SENSOR_ORIENTATION, encode_sensor_orientation({ webkit_compass_heading: o.webkitCompassHeading ?? null, alpha: o.alpha, beta: o.beta, gamma: o.gamma }));
   request_frame();
 }
 
-function listen_orientation(name: string): void {
-  if (orientation_event !== null) return;
-  orientation_event = name;
-  globalThis.addEventListener(name, on_orientation, true);
+function listenOrientation(name: string): void {
+  if (orientationEvent !== null) return;
+  orientationEvent = name;
+  globalThis.addEventListener(name, onOrientation, true);
 }
 
-export function orientation_listen(): void {
-  listen_orientation("ondeviceorientationabsolute" in globalThis ? "deviceorientationabsolute" : "deviceorientation");
+export function orientationListen(): void {
+  listenOrientation("ondeviceorientationabsolute" in globalThis ? "deviceorientationabsolute" : "deviceorientation");
 }
 
-function send_permission(sensor: Sensor, answer: PermissionAnswer): void {
+function sendPermission(sensor: Sensor, answer: PermissionAnswer): void {
   CORE_DOORBELL.send(0, Command.SENSOR_PERMISSION, encode_sensor_permission({ sensor, answer }));
   request_frame();
 }
@@ -98,18 +98,18 @@ function send_permission(sensor: Sensor, answer: PermissionAnswer): void {
  * outside the app — the browser's site settings — reaches the kernel the
  * moment it is made, since nothing else would ask again after a refusal.
  * What it returns stops following. */
-export function permission_follow(): () => void {
+export function permissionFollow(): () => void {
   let status: PermissionStatus | null = null;
   let stopped = false;
-  const on_change = () => send_permission(Sensor.Geolocation, status?.state === "granted" ? PermissionAnswer.Granted : PermissionAnswer.Denied);
+  const onChange = () => sendPermission(Sensor.Geolocation, status?.state === "granted" ? PermissionAnswer.Granted : PermissionAnswer.Denied);
   navigator.permissions?.query({ name: "geolocation" }).then((s) => {
     if (stopped) return;
     status = s;
-    s.addEventListener("change", on_change);
+    s.addEventListener("change", onChange);
   }).catch(() => {});
   return () => {
     stopped = true;
-    status?.removeEventListener("change", on_change);
+    status?.removeEventListener("change", onChange);
   };
 }
 
@@ -118,26 +118,26 @@ export function permission_follow(): () => void {
  * prompt is called before anything is awaited, so it stays inside the gesture
  * that called this; a listener already running needs no prompt.
  */
-export function orientation_permit(): Promise<boolean> {
-  if (!orientation_needs_permission() || orientation_event !== null) return Promise.resolve(true);
+export function orientationPermit(): Promise<boolean> {
+  if (!orientationNeedsPermission() || orientationEvent !== null) return Promise.resolve(true);
   const prompt = (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission!();
-  send_permission(Sensor.Orientation, PermissionAnswer.Asking);
+  sendPermission(Sensor.Orientation, PermissionAnswer.Asking);
   return prompt.then(
     (permission) => {
       const granted = permission === "granted";
-      if (granted) listen_orientation("deviceorientation");
-      send_permission(Sensor.Orientation, granted ? PermissionAnswer.Granted : PermissionAnswer.Denied);
+      if (granted) listenOrientation("deviceorientation");
+      sendPermission(Sensor.Orientation, granted ? PermissionAnswer.Granted : PermissionAnswer.Denied);
       return granted;
     },
     (err) => {
       console.error("[kernel] orientation permission error:", err);
-      send_permission(Sensor.Orientation, PermissionAnswer.Failed);
+      sendPermission(Sensor.Orientation, PermissionAnswer.Failed);
       return false;
     },
   );
 }
 
-export function orientation_remove(): void {
-  if (orientation_event !== null) globalThis.removeEventListener(orientation_event, on_orientation, true);
-  orientation_event = null;
+export function orientationRemove(): void {
+  if (orientationEvent !== null) globalThis.removeEventListener(orientationEvent, onOrientation, true);
+  orientationEvent = null;
 }

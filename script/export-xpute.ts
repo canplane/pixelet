@@ -105,7 +105,7 @@ function resolves(sha: string): boolean {
 }
 
 /** Which commit this export was taken from, `-dirty` when the tree held
- * uncommitted changes — the same claim `build_id()` makes about a build, and
+ * uncommitted changes — the same claim `buildId()` makes about a build, and
  * for the same reason: a name that does not resolve back to these bytes is
  * worth saying out loud. */
 function stamp(): string {
@@ -271,8 +271,8 @@ function relink(md: string): string {
  * point of the `.xpute` infix is that dropping it is the whole migration. */
 function readme(at: string): string {
   const doc = relink(Deno.readTextFileSync(join(ROOT, "README.xpute.md")));
-  const at_license = doc.indexOf("## License");
-  if (at_license < 0) die("README.xpute.md has no License section to splice the provenance before");
+  const atLicense = doc.indexOf("## License");
+  if (atLicense < 0) die("README.xpute.md has no License section to splice the provenance before");
   const provenance = `## Where this comes from
 
 This is a copy. xpute is developed inside pixelet, a closed application that is its only consumer so far, and exported here whole — the layout is pixelet's own, so the day it moves for real nothing has to change. Pull requests are welcome as conversation, but the change has to land upstream.
@@ -284,7 +284,7 @@ Taken from **${at}**.
 The four files generated from \`spec/xpute/\` — the errno table and the fetch ABI, on both sides — are checked in as pixelet generates them. The generator itself knows every one of pixelet's specs and did not come along, so this copy reads but does not regenerate them.
 
 `;
-  return doc.slice(0, at_license) + provenance + doc.slice(at_license);
+  return doc.slice(0, atLicense) + provenance + doc.slice(atLicense);
 }
 
 /** The stamp the copy already carries, read before it is overwritten. It is

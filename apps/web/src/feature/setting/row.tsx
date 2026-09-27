@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import type { Glyph as GlyphName } from "@platform/icon.tsx";
+import type { GlyphName } from "@platform/icon.tsx";
 import { ToggleRow } from "@platform/toggle-row.tsx";
 
 import type { SettingCost } from "@/feature/setting/schema.ts";

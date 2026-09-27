@@ -34,7 +34,7 @@ export function ToastController() {
   // world I'm looking at actually ready yet"), unlike locationStatus
   // (device GPS sensor state, a genuinely separate concern that keeps its
   // own toast).
-  const companion_loading: boolean = useKernel((s) => !s.companion.person_ready || !s.companion.pet_ready);
+  const companionLoading: boolean = useKernel((s) => !s.companion.person_ready || !s.companion.pet_ready);
 
   const shownLocationToastRef = useRef(false);
   // t via a ref, not a dependency — react-i18next hands back a new function
@@ -88,13 +88,13 @@ export function ToastController() {
   // person_ready/pet_ready dip is from the user swapping a variant in
   // settings (the companion replaces its walker on a variant switch, and a
   // new one starts unloaded) — a costume change, not the world going unready —
-  // so companion_loading stops feeding this toast after that point.
+  // so companionLoading stops feeding this toast after that point.
   const companionFirstLoadDoneRef = useRef(false);
   useEffect(() => {
     const isMapLoading = mapStatus === MapStatus.Loading;
     const isError = mapStatus === MapStatus.Error;
-    const relevantCompanionLoading = companion_loading && !companionFirstLoadDoneRef.current;
-    if (!companion_loading) companionFirstLoadDoneRef.current = true;
+    const relevantCompanionLoading = companionLoading && !companionFirstLoadDoneRef.current;
+    if (!companionLoading) companionFirstLoadDoneRef.current = true;
     const isLoading = isMapLoading || relevantCompanionLoading;
 
     // A page already announced is one the user has been told about, and what
@@ -114,7 +114,7 @@ export function ToastController() {
       }
       // Map load takes priority in the message when both are in flight —
       // it's the more foundational "is there a world to stand on at all"
-      // concern; companion_loading only surfaces once mapStatus has
+      // concern; companionLoading only surfaces once mapStatus has
       // nothing left to report.
       const messageKey = isError ? "toast.map_load_error" : isMapLoading ? "toast.map_loading" : "toast.companion_loading";
       shownWorldToastRef.current = true;
@@ -136,7 +136,7 @@ export function ToastController() {
       toastDismiss(Report.World);
       shownWorldToastRef.current = false;
     }, 3000);
-  }, [mapStatus, companion_loading, mapPage]);
+  }, [mapStatus, companionLoading, mapPage]);
 
   return null;
 }

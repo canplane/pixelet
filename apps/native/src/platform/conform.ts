@@ -16,7 +16,7 @@
 
 import type * as WebAboveKeyboard from "../../../web/src/platform/web/above-keyboard.tsx";
 import type * as WebCore from "../../../web/src/platform/web/core.ts";
-import type * as WebGlass from "../../../web/src/platform/web/glass.tsx";
+import type * as WebBacking from "../../../web/src/platform/web/backing.tsx";
 import type * as WebIcon from "../../../web/src/platform/web/icon.tsx";
 import type * as WebGesture from "../../../web/src/platform/web/gesture.ts";
 import type * as WebGpu from "../../../web/src/platform/web/gpu.ts";
@@ -37,11 +37,11 @@ import type * as WebText from "../../../web/src/platform/web/text.ts";
 import type * as WebToggleRow from "../../../web/src/platform/web/toggle-row.tsx";
 import type * as WebTextField from "../../../web/src/platform/web/text-field.ts";
 import type * as WebTypeface from "../../../web/src/platform/web/typeface.ts";
-import type * as WebVisualViewport from "../../../web/src/platform/web/visual-viewport.ts";
+import type * as WebVisualViewport from "../../../web/src/platform/web/viewport.ts";
 
 import * as AboveKeyboard from "./above-keyboard.tsx";
 import * as Core from "./core.ts";
-import * as Glass from "./glass.tsx";
+import * as Backing from "./backing.tsx";
 import * as Icon from "./icon.tsx";
 import * as Gesture from "./gesture.ts";
 import * as Gpu from "./gpu.ts";
@@ -62,8 +62,8 @@ import * as Text from "./text.ts";
 import * as ToggleRow from "./toggle-row.tsx";
 import * as TextField from "./text-field.ts";
 import * as Typeface from "./typeface.ts";
-import * as VisualViewport from "./visual-viewport.ts";
-import * as GlassAndroid from "./glass.android.tsx";
+import * as VisualViewport from "./viewport.ts";
+import * as BackingAndroid from "./backing.android.tsx";
 import * as IconAndroid from "./icon.android.tsx";
 import * as PaletteAndroid from "./palette.android.ts";
 import * as PanelAndroid from "./panel.android.tsx";
@@ -75,7 +75,7 @@ import * as TextFieldAndroid from "./text-field.android.ts";
 export const CONFORMS = [
   AboveKeyboard satisfies typeof WebAboveKeyboard,
   Core satisfies typeof WebCore,
-  Glass satisfies typeof WebGlass,
+  Backing satisfies typeof WebBacking,
   Icon satisfies typeof WebIcon,
   Gesture satisfies typeof WebGesture,
   Gpu satisfies typeof WebGpu,
@@ -97,7 +97,7 @@ export const CONFORMS = [
   TextField satisfies typeof WebTextField,
   Typeface satisfies typeof WebTypeface,
   VisualViewport satisfies typeof WebVisualViewport,
-  GlassAndroid satisfies typeof WebGlass,
+  BackingAndroid satisfies typeof WebBacking,
   IconAndroid satisfies typeof WebIcon,
   PaletteAndroid satisfies typeof WebPalette,
   PanelAndroid satisfies typeof WebPanel,

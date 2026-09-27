@@ -13,7 +13,7 @@ import { requireNativeModule } from "expo";
 interface PxlPlatform {
   /** The kernel's memory, as one buffer over the region the core took. */
   memory(): ArrayBuffer;
-  interrupt(quota_ms: f64): f64;
+  interrupt(quotaMs: f64): f64;
   /** The device's uniform offset alignment and whether it times its passes,
    * or null where the system has no GPU. */
   gpuOpen(): [u32, u32] | null;

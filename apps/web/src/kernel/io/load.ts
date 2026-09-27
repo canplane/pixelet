@@ -16,20 +16,20 @@
 
 import type { u32, u64 } from "@xpute/core/abi/word.ts";
 import { Command, encode_load_delete, encode_load_image, encode_load_update } from "@/kernel/abi/cmd.spec.ts";
-import { load_key } from "@/catalog/asset/load.ts";
-import { origin_get } from "@platform/origin.ts";
-import { asset_url } from "@/config/route.ts";
+import { loadKey } from "@/catalog/asset/load.ts";
+import { originGet } from "@platform/origin.ts";
+import { assetUrl } from "@/config/route.ts";
 import { begin_read } from "@/kernel/io/fetch.ts";
 import { CORE_DOORBELL } from "@/kernel/mem.ts";
 import { hold_body } from "@/kernel/module.ts";
-import { hold_image } from "@platform/image.ts";
+import { holdImage } from "@platform/image.ts";
 import { request_frame } from "@/kernel/sched.ts";
 
 /** The bytes a load names: the kernel says a number, the shell knows the URL. */
 async function fetch_load(load: u32, signal: AbortSignal): Promise<Response> {
-  const key = load_key(load);
+  const key = loadKey(load);
   if (key === null) throw new Error(`load ${load} names no asset`);
-  const res = await origin_get(asset_url(key), signal);
+  const res = await originGet(assetUrl(key), signal);
   if (!res.ok) throw new Error(`${key} ${res.status}`);
   return res;
 }
@@ -74,7 +74,7 @@ export function load_model(key: u64, load: u32): Promise<void> {
  * row first, no color conversion and no premultiplied alpha. */
 export function load_image(key: u64, load: u32): Promise<void> {
   return read(key, load, async (res) => {
-    const handle = await hold_image(res);
+    const handle = await holdImage(res);
     // An image that does not decode is refused, as a failed read is.
     return () => handle === null ? refuse(key) : CORE_DOORBELL.send(0, Command.LOAD_IMAGE, encode_load_image({ key, handle }));
   });

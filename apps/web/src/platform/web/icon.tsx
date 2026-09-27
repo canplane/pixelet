@@ -61,7 +61,7 @@ const LUCIDE = {
   "xmark": [X, false],
 } as const satisfies Record<string, readonly [LucideIcon, boolean]>;
 
-export type Glyph = keyof typeof LUCIDE;
+export type GlyphName = keyof typeof LUCIDE;
 
 /** How heavy a glyph's strokes are, by SF Symbols' names for the weights. */
 export type GlyphWeight = "regular" | "semibold" | "bold" | "heavy" | "black";
@@ -70,7 +70,7 @@ export type GlyphWeight = "regular" | "semibold" | "bold" | "heavy" | "black";
 const STROKE: Record<GlyphWeight, f64> = { regular: 2, semibold: 2.5, bold: 2.75, heavy: 3, black: 3.5 };
 
 export interface IconProps {
-  glyph: Glyph;
+  glyph: GlyphName;
   /** The glyph's box, a side. */
   size: f64;
   color: string;

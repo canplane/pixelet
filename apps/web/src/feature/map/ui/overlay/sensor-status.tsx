@@ -8,7 +8,7 @@ import { DevicePoseStatus } from "@/kernel/abi/cmd.spec.ts";
 import { useKernel } from "@/kernel/shell.ts";
 
 import { HANDHELD } from "@platform/core.ts";
-import type { Glyph } from "@platform/icon.tsx";
+import type { GlyphName } from "@platform/icon.tsx";
 import { HaloIcon } from "@/shared/ui/halo.tsx";
 import { color } from "@/shared/ui/theme.ts";
 
@@ -61,7 +61,7 @@ export function SensorStatus() {
   // failed takes a color, and a failed one is also crossed out, so the state
   // does not rest on color alone — the location as its symbol's own `.slash`
   // is, and the compass, whose symbol has none, the same way.
-  const icon = (glyph: Glyph, status: DevicePoseStatus) => (
+  const icon = (glyph: GlyphName, status: DevicePoseStatus) => (
     <View style={{ opacity: presence(status) }}>
       <HaloIcon glyph={glyph} size={12} color={statusColor(status)} struck={status === DevicePoseStatus.Error} />
     </View>

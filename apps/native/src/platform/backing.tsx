@@ -1,15 +1,15 @@
-// @pxl/native/platform/glass.tsx
+// @pxl/native/platform/backing.tsx
 
 /**
- * A floating control's ground, on a device: the system's glass where it has
- * one — Liquid Glass, from iOS 26, which bends and lights what is under it,
- * the map included. Where there is no system glass it draws the fill
- * instead, as the web does.
+ * What a floating control stands on — its backing — on an iPhone: the
+ * system's glass, Liquid Glass from iOS 26, which bends and lights what is
+ * under it, the map included. Where the system has none it draws the fill,
+ * as the page does (platform/web/backing.tsx, which Android draws).
  *
  * Its presence (shared/ui/motion/veil.ts) is never an opacity on the glass or
  * above it: UIKit renders a visual effect wrongly under any alpha below one,
  * or skips it and never installs it again. So presence is shown by the
- * glass style instead: the variant's style when fully present, "clear"
+ * glass style instead: its place's style when fully present, "clear"
  * while fading, "none" when gone. The system animates between them.
  * The content on the glass fades by opacity, which is safe.
  *
@@ -26,17 +26,18 @@ import type { f64 } from "@xpute/core/abi/word.ts";
 import { Motion } from "@platform/motion.tsx";
 import { SNAP, type Transition } from "@/shared/ui/motion/transition.ts";
 import { useVeil } from "@/shared/ui/motion/veil.ts";
-import { GlassVariant } from "@/shared/ui/glass-variant.ts";
+import { BackingPlace } from "@/shared/ui/backing-place.ts";
 
-export interface GlassProps {
-  /** The ground where there is no glass. */
+export interface BackingProps {
+  /** The backing where the system draws none. */
   fill: ColorValue;
-  /** The glass's tint where there is glass. */
+  /** The glass's tint. */
   tint?: ColorValue;
   /** Whether the glass answers a touch, as a control's does. */
   interactive?: boolean;
-  /** The glass thickness (shared/ui/glass-variant.ts). */
-  variant: GlassVariant;
+  /** Where it stands (shared/ui/backing-place.ts): clear glass on a sheet,
+   * regular over the map. */
+  place: BackingPlace;
   /** How present it is, from 1 to 0 (gone); and what it mounts at. */
   fade?: f64;
   fadeFrom?: f64;
@@ -47,26 +48,26 @@ export interface GlassProps {
   children?: ReactNode;
 }
 
-/** Whether a surface here is the system's glass. Asked once: the OS does
+/** Whether the backing here is the system's glass. Asked once: the OS does
  * not gain or lose glass while the app runs. */
-export const SYSTEM_GLASS = isLiquidGlassAvailable();
+export const SYSTEM_BACKING = isLiquidGlassAvailable();
 
 type Effect = "none" | "clear" | "regular";
 
-/** expo-glass-effect's style for a variant at a presence level: "none" at 0,
- * "clear" while fading, the variant's own style at 1. */
-function effectAt(level: f64, variant: GlassVariant): Effect {
+/** expo-glass-effect's style for a place at a presence level: "none" at 0,
+ * "clear" while fading, the place's own style at 1. */
+function effectAt(level: f64, place: BackingPlace): Effect {
   if (level <= 0) return "none";
-  if (level < 1 || variant === GlassVariant.Clear) return "clear";
+  if (level < 1 || place === BackingPlace.OnSheet) return "clear";
   return "regular";
 }
 
-export function Glass({ fill, tint, interactive, variant, fade = 1, fadeFrom, transition = SNAP, style, children }: GlassProps) {
+export function Backing({ fill, tint, interactive, place, fade = 1, fadeFrom, transition = SNAP, style, children }: BackingProps) {
   const veil = useVeil(fade, transition);
   const from = fadeFrom === undefined ? undefined : { opacity: fadeFrom };
 
-  const target = effectAt(veil.level, variant);
-  const [shown, setShown] = useState<Effect>(fadeFrom === undefined ? target : effectAt(fadeFrom, variant));
+  const target = effectAt(veil.level, place);
+  const [shown, setShown] = useState<Effect>(fadeFrom === undefined ? target : effectAt(fadeFrom, place));
   // A style is applied only once the glass has been laid out: the native view
   // installs its effect in its first layout, and a style set before that is
   // installed as it is, without the animation: glass meant to materialize
@@ -81,7 +82,7 @@ export function Glass({ fill, tint, interactive, variant, fade = 1, fadeFrom, tr
     return () => clearTimeout(timer);
   }, [target, laidOut]);
 
-  if (!SYSTEM_GLASS) {
+  if (!SYSTEM_BACKING) {
     return (
       <Motion from={from} to={{ opacity: veil.level }} transition={veil.transition} style={[style, { backgroundColor: fill }]}>
         {children}

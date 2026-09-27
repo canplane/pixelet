@@ -28,7 +28,7 @@ import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { reserve_memory } from "@xpute/runtime/mem/reserve.ts";
 import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@/kernel/mem/mem.spec.ts";
 import { BOOT, boot_block, type Core } from "@/kernel/module.ts";
-import { run_gpu_stream } from "@/platform/web/webgpu.ts";
+import { runGpuStream } from "@/platform/web/webgpu.ts";
 import { DEV_BUNDLE } from "@/config/bundle.ts";
 
 /**
@@ -65,7 +65,7 @@ const CORE_BYTES: u32 = HANDHELD ? PHONE_BYTES : DESKTOP_BYTES;
 const KERNEL_WASM_URL = new URL("../../kernel/kernel.wasm", import.meta.url);
 
 /** Reserves the memory and instantiates the module over it, booted. */
-export async function open_core(): Promise<Core> {
+export async function openCore(): Promise<Core> {
   const memory = reserve_memory([CORE_BYTES / REGION_BYTES], REGION_BYTES);
   // Not from the HTTP cache in development: the dev server rebuilds the
   // module under the same URL, and a cached one silently runs yesterday's
@@ -86,9 +86,9 @@ export async function open_core(): Promise<Core> {
   // A module reaches WebGPU no other way than through the page, so the calls
   // its renderer recorded in a turn are made as the turn returns.
   const gpu = boot_block(buffer)[BOOT.gpu];
-  const interrupt = (quota_ms: f64) => {
-    const wake = turn(quota_ms);
-    run_gpu_stream(buffer, gpu);
+  const interrupt = (quotaMs: f64) => {
+    const wake = turn(quotaMs);
+    runGpuStream(buffer, gpu);
     return wake;
   };
   return { buffer, interrupt };

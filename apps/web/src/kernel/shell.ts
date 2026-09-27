@@ -12,7 +12,7 @@ import type { U8Array } from "@xpute/core/abi/array.ts";
 import { Command, encode_input_tracking, Tracking } from "@/kernel/abi/cmd.spec.ts";
 import { CORE_DOORBELL } from "@/kernel/mem.ts";
 import { request_frame, ring_now, strobe } from "@/kernel/sched.ts";
-import { orientation_permit } from "@platform/sensor.ts";
+import { orientationPermit } from "@platform/sensor.ts";
 
 export { kernel_snapshot, useKernel } from "@/kernel/snapshot.ts";
 export { kernel_hold } from "@/kernel/control/input.ts";
@@ -28,7 +28,7 @@ export function kernel_command(cmd: Command, pkt?: U8Array): void {
  * page's handler awaits `requestPermission` and the browser only reports the
  * outcome. */
 export async function kernel_tracking(tracking: Tracking): Promise<void> {
-  if (tracking === Tracking.Follow && !(await orientation_permit())) {
+  if (tracking === Tracking.Follow && !(await orientationPermit())) {
     console.error("[orientation] could not start the sensor.");
     return;
   }

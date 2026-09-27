@@ -13,13 +13,13 @@ import { request_frame } from "@/kernel/sched.ts";
 import { declareUnsupported, UnsupportedReason } from "@/app/store/unsupported-store.ts";
 
 /** A device that runs the app has a GPU to ask for; whether it answers is
- * `gpu_boot`'s. */
-export function gpu_missing(): UnsupportedReason | null {
+ * `gpuBoot`'s. */
+export function gpuMissing(): UnsupportedReason | null {
   return null;
 }
 import { PLATFORM } from "./module.ts";
 
-export function gpu_boot(): void {
+export function gpuBoot(): void {
   const info = PLATFORM.gpuOpen();
   if (info === null) {
     console.error("[gpu] the system has no GPU; nothing can be drawn");
