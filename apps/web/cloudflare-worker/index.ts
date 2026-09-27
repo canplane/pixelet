@@ -21,6 +21,7 @@
 
 type R2Object = {
   body: ReadableStream;
+  arrayBuffer(): Promise<ArrayBuffer>;
   httpEtag: string;
   writeHttpMetadata(headers: Headers): void;
 };
@@ -132,7 +133,7 @@ const STORED_ENCODING = "x-pxl-stored-encoding";
  * browser's. Every variant was refused when it was tried, `*` and `zstd`
  * included. Whatever refuses a client for its encoding has to run where the
  * client's own header is still intact, which is not here. */
-function serve(body: ReadableStream | null, from: Headers): Response {
+function serve(body: ArrayBuffer | ReadableStream | null, from: Headers): Response {
   const headers = new Headers(from);
   const encoding = headers.get(STORED_ENCODING);
   if (encoding) {
@@ -239,11 +240,19 @@ export default {
       headers.set(STORED_ENCODING, encoding);
     }
 
-    // The body is stored as it lies. `encodeBody: "manual"` is not needed on
-    // this one — there is no `content-encoding` for the runtime to act on —
-    // and it would not survive `clone()` into the cache anyway.
-    const stored = new Response(object.body, { headers });
-    ctx.waitUntil(cache.put(request, stored.clone()));
-    return serve(stored.body, headers);
+    // Read whole before anything is answered, so what goes out is a body of
+    // a known length. A stream carried no length, and one cut short — an R2
+    // read that failed, a proxy restarted mid-body — ended as if it were
+    // done: a browser stored the short or empty body under `immutable` for a
+    // year, and the asset stayed blank through every reload (2026-09-28). A
+    // body of a known length is one a client can tell was cut, and never
+    // stores; an R2 read that fails here throws, and no 200 goes out at all.
+    // It also leaves no stream to tee for the cache. The bytes are the
+    // stored ones, packed as they lie, so the length is theirs: `serve`
+    // sends them as they are. `encodeBody: "manual"` is not needed on the
+    // cache's copy — there is no `content-encoding` for the runtime to act on.
+    const bytes = await object.arrayBuffer();
+    ctx.waitUntil(cache.put(request, new Response(bytes, { headers })));
+    return serve(bytes, headers);
   },
 };
