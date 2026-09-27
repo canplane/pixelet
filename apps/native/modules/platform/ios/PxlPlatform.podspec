@@ -23,6 +23,7 @@ Pod::Spec.new do |s|
   s.swift_version = '5.9'
 
   s.dependency 'ExpoModulesCore'
+  s.dependency 'ExpoUI'
   s.source_files = '*.swift'
 
   # Run on every build: cargo is what knows whether the kernel is current,
