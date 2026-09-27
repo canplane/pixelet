@@ -1,6 +1,6 @@
 // @pxl/web/vite.config.ts
 
-import { defineConfig, type HmrContext, loadEnv, type Plugin } from "vite";
+import { defineConfig, type HmrContext, loadEnv, type Plugin, type ProxyOptions } from "vite";
 import deno from "@deno/vite-plugin";
 import { execSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
@@ -365,9 +365,22 @@ export default defineConfig(({ mode }) => {
   const published = mode === "production" || remote;
 
   const remoteOrigin = remote ? (env.VITE_REMOTE_ORIGIN || remoteOriginDefault) : "";
+  // What the proxy hands the page is never stored. The objects behind it are
+  // `immutable` for a year, which a deployment means; here a restart of this
+  // server cuts a body in flight, and a browser kept the empty one as the
+  // asset under that header through every reload (2026-09-28).
+  const noStore: ProxyOptions["configure"] = (proxy) => {
+    proxy.on("proxyRes", (res) => {
+      res.headers["cache-control"] = "no-store";
+    });
+  };
   const proxy = Object.fromEntries(DEV_PROXY_ROUTES.map((route) => [
     route.path,
-    remoteOrigin && route.published ? { target: remoteOrigin, changeOrigin: true } : { target: route.tiles ? tileBase : route.app ? apiBase : geoBase, changeOrigin: true },
+    {
+      target: remoteOrigin && route.published ? remoteOrigin : route.tiles ? tileBase : route.app ? apiBase : geoBase,
+      changeOrigin: true,
+      configure: noStore,
+    },
   ]));
 
   return {
