@@ -329,6 +329,11 @@ size.
   trip is finer than anyone reads. **Then one commit per thing worth reverting
   or reading on its own** — several fixes in one layer together, an infra
   repair and an unrelated tool apart.
+- **A branch that is kept is named for why it is kept.** `original/<date>-<name>`
+  is the history a squash replaced, pushed before the squash and never moved,
+  as git keeps a rewritten branch's under `refs/original/`;
+  `checkpoint/<date>-<name>` is a point on main worth coming back to;
+  `archive/<date>-<name>` is a line of work set aside rather than merged.
 - **A commit's subject is `type(scope): a sentence`.** Conventional Commits'
   prefix — `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`,
   `build`, `ci` — then a lowercase sentence saying what the change is and

@@ -1,7 +1,7 @@
 # What is left in the April build, and where it belongs
 
 **2026-09-09** — a salvage audit of `checkpoint/20260405-xpute` and
-`checkpoint/20260409-wasm-aborted`, prompted by finding that the API had
+`archive/20260409-wasm-aborted`, prompted by finding that the API had
 silently lost its Vite build (and with it `__IS_DEV__`) during the August
 restructure. Those branches hold a substantial parked design and nobody had
 written down what is still worth taking from it.
