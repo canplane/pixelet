@@ -247,7 +247,6 @@
   },
   "device": {
     "orientation": {
-      "unsupported": "이 환경에서는 방향 센서를 사용할 수 없습니다.",
       "permission_denied": "방향 센서 권한이 거부되었습니다.",
       "permission_error": "방향 센서 권한을 요청하는 중 오류가 발생했습니다.",
       "signal_lost": "방향 센서 신호가 끊겼습니다."
@@ -288,7 +287,8 @@
       "exit_compass_mode": "나침반 모드 종료"
     },
     "sensors": {
-      "enable": "위치·방향 센서 사용"
+      "label": "내 위치 사용",
+      "turn_on": "켜기"
     },
     "search": {
       "trigger_aria_label": "장소 검색",

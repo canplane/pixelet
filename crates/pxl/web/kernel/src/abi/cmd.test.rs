@@ -24,7 +24,7 @@ fn every_number_is_its_major_and_minor() {
         (SENSOR_ORIENTATION, Major::SENSOR as u32, SensorMinor::ORIENTATION as u32),
         (SENSOR_PERMISSION, Major::SENSOR as u32, SensorMinor::PERMISSION as u32),
         (SENSOR_VISIBILITY, Major::SENSOR as u32, SensorMinor::VISIBILITY as u32),
-        (SENSOR_ENABLE, Major::SENSOR as u32, SensorMinor::ENABLE as u32),
+        (SENSOR_ENABLE_LOCATION, Major::SENSOR as u32, SensorMinor::ENABLE as u32),
         (SENSOR_OPEN, Major::SENSOR as u32, SensorMinor::OPEN as u32),
         (SENSOR_CLOSE, Major::SENSOR as u32, SensorMinor::CLOSE as u32),
         (SENSOR_ORIENTATION_LOST, Major::SENSOR as u32, SensorMinor::ORIENTATION_LOST as u32),

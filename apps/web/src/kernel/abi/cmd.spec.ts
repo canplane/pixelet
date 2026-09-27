@@ -174,12 +174,13 @@ export const enum MapStatus {
   Error = 3,
 }
 
-/** Where a sensor's reading is: none asked for, asked for, arriving, or failed. */
+/** Where a sensor's reading is: none asked for, asked for, arriving, failed, or none to be had, the device having no such sensor. */
 export const enum DevicePoseStatus {
   Idle = 0,
   Loading = 1,
   Ready = 2,
   Error = 3,
+  Unavailable = 4,
 }
 
 /** A message the kernel raises and the shell shows.
@@ -216,7 +217,6 @@ export const enum Message {
 
   // ---- 0x03 which way the device is facing ----
 
-  OrientationUnsupported = 0x0301,
   OrientationPermissionError = 0x0302,
   OrientationPermissionDenied = 0x0303,
   OrientationSignalLost = 0x0304,
@@ -264,9 +264,10 @@ export const enum Command {
   /** The tab's visibility; the host rings the doorbell for it at once, since a hidden
    * page gets no frame and hiding is the save's last sure moment. */
   SENSOR_VISIBILITY = 0x1d13,
-  /** The sensor button: both sensors asked for. Where iOS gates the compass, the shell
-   * prompted in the click and this starts nothing for it; its answer arrives on its own. */
-  SENSOR_ENABLE = 0x1d14,
+  /** The search panel's location card: the location asked for. The compass is asked for
+   * where it is used, entering follow mode (TRACKING), and never alone: nothing reads it
+   * without the location. */
+  SENSOR_ENABLE_LOCATION = 0x1d14,
   /** The map is on screen and wants the sensors. */
   SENSOR_OPEN = 0x1d15,
   /** The map is gone, and the sensors are let go. */

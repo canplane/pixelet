@@ -2,7 +2,7 @@
 
 import type { f64 } from "@xpute/core/abi/word.ts";
 import { useEffect, useState } from "react";
-import { ChevronLeft, X } from "lucide-react-native";
+import { ChevronLeft, Locate, X } from "lucide-react-native";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { round } from "@xpute/core/math/scalar.ts";
 import { useTranslation } from "react-i18next";
@@ -12,9 +12,13 @@ import { useSafeArea } from "@platform/safe-area.ts";
 import { Panel, PANEL_HEADER_PX, Side } from "@/shared/ui/panel.tsx";
 import { KEEPS_KEYBOARD } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
-import { alpha, color, hairline, sectionTitle, textStyle } from "@/shared/ui/theme.ts";
-import { Command, encode_input_go_to } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_command, kernel_snapshot } from "@/kernel/shell.ts";
+import { alpha, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
+import { Command, DevicePoseStatus, encode_input_go_to } from "@/kernel/abi/cmd.spec.ts";
+import { kernel_command, kernel_enable_location, kernel_snapshot } from "@/kernel/shell.ts";
+import { useSensors } from "@/feature/map/ui/overlay/sensor-status.tsx";
+import { LABEL, STATUS } from "@platform/palette.ts";
+import { AboveKeyboard } from "@platform/above-keyboard.tsx";
+import { Glass } from "@platform/glass.tsx";
 import { resolvePoiBadge } from "@/feature/search/poi-badge.ts";
 import { assembleLabel } from "@/feature/map/geocode/label.ts";
 import { fetchSearch, type SearchResult } from "@/feature/search/repository.ts";
@@ -99,6 +103,39 @@ function SectionHeader(props: { label: string }) {
  * so a returning search starts empty: the last thing it almost never wants
  * is last session's list for a place already visited.
  */
+
+function poseColor(status: DevicePoseStatus): string {
+  switch (status) {
+    case DevicePoseStatus.Loading:
+      return STATUS.pending;
+    case DevicePoseStatus.Error:
+      return STATUS.failed;
+    default:
+      return LABEL.secondary;
+  }
+}
+
+/** Turns the location on, floating over the results while it is off: the
+ * search is where "near me" is asked, and a place's distance is measured
+ * from it. The compass is not asked for here — nothing reads it without the
+ * location, and it is asked for where it is used, entering follow mode. */
+function LocateCard() {
+  const { t } = useTranslation();
+  const { location } = useSensors();
+  if (location === DevicePoseStatus.Ready) return null;
+  return (
+    <AboveKeyboard inset={16}>
+      <Glass fill={color.white} interactive style={styles.locateCard}>
+        <Pressable onPress={kernel_enable_location} accessibilityRole="button" style={styles.locateRow}>
+          <Locate size={18} color={poseColor(location)} />
+          <Text numberOfLines={1} style={styles.locateLabel}>{t("map.sensors.label")}</Text>
+          <Text style={styles.locateAction}>{t("map.sensors.turn_on")}</Text>
+        </Pressable>
+      </Glass>
+    </AboveKeyboard>
+  );
+}
+
 export function SearchModal(props: BaseModalProps) {
   const { onClose } = props;
   const { t, i18n } = useTranslation();
@@ -213,7 +250,7 @@ export function SearchModal(props: BaseModalProps) {
         </View>
       </View>
 
-      <ScrollView style={styles.results} keyboardShouldPersistTaps="handled">
+      <ScrollView style={styles.results} contentContainerStyle={styles.resultsRoom} keyboardShouldPersistTaps="handled">
         {query.trim().length > 0 && results.length === 0 && <Text style={styles.empty}>{loading ? t("map.search.loading") : t("map.search.no_results")}</Text>}
 
         {
@@ -261,12 +298,20 @@ export function SearchModal(props: BaseModalProps) {
           );
         })}
       </ScrollView>
+
+      <LocateCard />
     </Panel>
   );
 }
 
 const styles = StyleSheet.create({
   header: { borderBottomWidth: 1, borderBottomColor: alpha(color.text, 0.06) },
+  locateCard: { borderRadius: 22, pointerEvents: "auto", boxShadow: "0 6px 20px rgba(0, 0, 0, 0.12)" },
+  locateRow: { height: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16 },
+  locateLabel: { flex: 1, ...textStyle.body, color: color.text },
+  locateAction: { ...textStyle.body, fontWeight: weight.semibold, color: color.chosen },
+  // Room under the last result for the card that floats over it.
+  resultsRoom: { paddingBottom: 76 },
   headerRow: { height: PANEL_HEADER_PX, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16 },
   back: { width: 42, height: 42, marginLeft: -10, borderRadius: 21, alignItems: "center", justifyContent: "center" },
   field: { flex: 1, minWidth: 0, color: color.text },

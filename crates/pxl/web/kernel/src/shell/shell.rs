@@ -188,12 +188,10 @@ pub fn set_view(dist: Option<f64>, polar: Option<f64>) {
     camera_store().set_view_state(ViewPatch { dist, azimuth: None, polar });
 }
 
-/// The sensor button. Where iOS gates the compass, the shell prompted in the
-/// click and this starts nothing for it; its answer arrives on its own.
-pub fn sensors_enable() {
-    let platform = world_platform();
-    request_orientation(platform.orientation);
-    start_watching(platform.geolocation);
+/// The location card: the location alone, the compass being asked for where
+/// it is used (`tracking_action`).
+pub fn location_enable() {
+    start_watching(world_platform().geolocation);
 }
 
 /// The map is on screen and wants the sensors.

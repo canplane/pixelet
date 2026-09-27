@@ -37,11 +37,8 @@ export async function kernel_tracking(tracking: Tracking): Promise<void> {
   request_frame();
 }
 
-/** The sensor button: the compass's prompt, where a platform gates it, is
- * raised synchronously in the press — Safari consumes the gesture's
- * activation, so one reached after an await can be refused — and the rest
- * follows. */
-export function kernel_enable_sensors(): void {
-  void orientation_permit();
-  ring_now(Command.SENSOR_ENABLE);
+/** The location card: the location alone. The compass's prompt is raised
+ * where the compass is used, entering follow mode (kernel_tracking). */
+export function kernel_enable_location(): void {
+  ring_now(Command.SENSOR_ENABLE_LOCATION);
 }

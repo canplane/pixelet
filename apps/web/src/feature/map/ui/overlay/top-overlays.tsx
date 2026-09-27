@@ -55,22 +55,17 @@ export function TopOverlays() {
         <Presence show={!zooming} from={{ opacity: 0 }} exit={{ opacity: 0 }} transition={SETTLE} exitTransition={LEAVE} style={styles.place}>
           {
             /* Opens forward search — the current-address label and "where
-            do I want to go" share the same mental slot on a map, so this
-            is the one trigger for both rather than a separate
-            always-visible search bar. A sibling of SensorStatus, which is
-            its own button, rather than a wrapper around both. */
+            do I want to go" share the same mental slot on a map, so the
+            whole title, the sensors under it with it, is the one trigger
+            for both rather than a separate always-visible search bar. */
           }
-          <Pressable onPress={ui.openSearchModal} accessibilityRole="button" accessibilityLabel={t("map.search.trigger_aria_label")} style={styles.search}>
-            {
-              /* Always visible, unlike the address text (CurrentAddress
-              renders nothing until a label resolves) — without this the
-              whole trigger would be an invisible tap target on first
-              load or over unmapped water. SensorStatus's icon size. */
-            }
-            <OutlinedIcon icon={Search} size={14} color={color.white} />
-            <CurrentAddress label={addressLabel} />
+          <Pressable onPress={ui.openSearchModal} accessibilityRole="button" accessibilityLabel={t("map.search.trigger_aria_label")} style={styles.title}>
+            <View style={styles.search}>
+              <OutlinedIcon icon={Search} size={14} color={color.white} />
+              <CurrentAddress label={addressLabel} />
+            </View>
+            <SensorStatus />
           </Pressable>
-          <SensorStatus />
         </Presence>
         <View style={styles.scale}>
           <MapScaleBar show={zooming} />
@@ -117,7 +112,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   right: { position: "absolute", right: chrome.inset, zIndex: 50, alignItems: "center", gap: chrome.controlGap },
-  place: { maxWidth: "100%", alignItems: "center", gap: 6 },
+  place: { maxWidth: "100%" },
+  title: { alignItems: "center", gap: 6 },
   search: { flexDirection: "row", alignItems: "center", gap: 6, minWidth: 0, flexShrink: 1 },
   // Where the address stood: the scale takes its place while the zoom moves.
   scale: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, alignItems: "center", justifyContent: "center", pointerEvents: "box-none" },

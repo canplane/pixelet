@@ -71,6 +71,9 @@ export const color = {
   alarm: SYSTEM.red,
   alarmGround: tint(SYSTEM.red, 0.06),
   alarmEdge: tint(SYSTEM.red, 0.3),
+  /** A failure's glyph over the map: its red lightened toward the white of
+   * the glyphs beside it, so it tells without shouting. */
+  alarmGlyph: tint(SYSTEM.red, 0.6),
 
   // The panels' surface: a warm paper and its bark-brown text.
   paper: "#fcf8f1",
