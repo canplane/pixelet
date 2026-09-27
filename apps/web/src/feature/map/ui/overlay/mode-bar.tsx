@@ -263,7 +263,12 @@ function DecorIconButton({ kind }: { kind: u8 }) {
 function ToolButton({ label, active, onPress, children }: { label: string; active?: boolean; onPress: () => void; children: React.ReactNode }) {
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={styles.slot}>
-      <View style={[styles.held, active && styles.toolActive]}>{children}</View>
+      {
+        /* A view from the start, though unlit it draws nothing: a view with
+        nothing to draw is left out of the native tree, and Android, making
+        it once it is lit, drew its ground without its corners. */
+      }
+      <View collapsable={false} style={[styles.held, active && styles.toolActive]}>{children}</View>
     </Pressable>
   );
 }
