@@ -20,7 +20,7 @@ body,
 /* The window a device's root fills: react-native-web lays its root view
    out as a flex child, and `flex: 1` under a block has nothing to fill.
 
-   Fixed to the viewport's edges, and black: Safari on iOS 26 extends the
+   Fixed to the viewport's edges, and black: Safari extends the
    color of a fixed element that meets an edge into the bars over it, and
    where none meets it, treats the page as a document scrolling under the
    bars and lays a soft blur along the top. react-native-web positions
