@@ -35,6 +35,11 @@ export const MODE_BAR_HEIGHT_PX = chrome.control;
  * one in the tree takes the tap — so a swatch smaller than the pitch is a
  * transparent box at full pitch with its shape centered. */
 const PITCH = chrome.target;
+/** A pick in the strip, a cube's swatch or a decor's disc: a round item, a
+ * step over a tool's glyph, since it is a thing and not an action. */
+const ITEM = 24;
+/** A decor's glyph on its disc. */
+const ITEM_GLYPH = 16;
 /** The capsule a tool in hand is lit on, centered in its slot. */
 const HELD_PX = chrome.selection;
 const PILL_GAP = chrome.controlGap;
@@ -238,13 +243,13 @@ function ColorSwatchButton({ cube, sizes }: { cube: PlaceableCube; sizes: Omit<S
   return (
     <View ref={ref} {...handlers} accessibilityRole="button" accessibilityLabel={cubeLabel(t, cube)} style={[styles.slot, styles.swatchSlot]}>
       <Motion to={{ scale: selected ? 1.1 : 1 }} transition={SNAP}>
-        <CubeSwatch cube={cube} size={chrome.glyph} radius={chrome.glyph / 2} style={selected ? styles.swatchSelected : styles.swatchIdle} />
+        <CubeSwatch cube={cube} size={ITEM} radius={ITEM / 2} style={selected ? styles.swatchSelected : styles.swatchIdle} />
       </Motion>
     </View>
   );
 }
 
-/** A decor kind in the strip: a plain tap, since a decor has one size
+/** A decor kind in the strip, on a disc as a cube's swatch is: a plain tap, since a decor has one size
  * (DECOR_SIZE, pxl-kernel layer/object/size.rs) and so no flyout. */
 function DecorIconButton({ kind }: { kind: u8 }) {
   const { t } = useTranslation();
@@ -253,9 +258,13 @@ function DecorIconButton({ kind }: { kind: u8 }) {
   const active = useInHand({ tool: ActiveTool.Decor, kind });
 
   return (
-    <ToolButton label={t(`decors.${name}`)} active={active} onPress={() => selectDecor(kind)}>
-      <Glyph glyph={DECOR_GLYPH[name]} size={chrome.glyph} color={active ? STRIP.glyphOn : STRIP.glyph} />
-    </ToolButton>
+    <Pressable onPress={() => selectDecor(kind)} accessibilityRole="button" accessibilityLabel={t(`decors.${name}`)} style={styles.slot}>
+      <Motion to={{ scale: active ? 1.1 : 1 }} transition={SNAP}>
+        <View style={[styles.decorDisc, active ? styles.swatchSelected : styles.swatchIdle]}>
+          <Glyph glyph={DECOR_GLYPH[name]} size={ITEM_GLYPH} color={active ? STRIP.glyphOn : STRIP.glyph} />
+        </View>
+      </Motion>
+    </Pressable>
   );
 }
 
@@ -589,6 +598,7 @@ const styles = StyleSheet.create({
   swatchSlot: PAN_X,
   held: { width: HELD_PX, height: HELD_PX, borderRadius: HELD_PX / 2, alignItems: "center", justifyContent: "center" },
   toolActive: { backgroundColor: STRIP.held },
+  decorDisc: { width: ITEM, height: ITEM, borderRadius: ITEM / 2, alignItems: "center", justifyContent: "center", backgroundColor: STRIP.held },
   swatchIdle: { boxShadow: `0 0 0 1px ${STRIP.line}` },
   swatchSelected: { boxShadow: heldRing(STRIP.ground, STRIP.mark, 1) },
 

@@ -72,7 +72,7 @@ export function TopOverlays() {
           }
           <Pressable onPress={ui.openSearchModal} accessibilityRole="button" accessibilityLabel={t("map.search.trigger_aria_label")} style={styles.title}>
             <View style={styles.search}>
-              <HaloIcon glyph="magnifyingglass" size={14} weight="semibold" color={color.white} />
+              <HaloIcon glyph="magnifyingglass" size={12} weight="semibold" color={color.white} />
               <CurrentAddress label={addressLabel} />
             </View>
             <SensorStatus />
