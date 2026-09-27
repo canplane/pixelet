@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
-import { gpu_missing } from "@platform/gpu.ts";
+import { gpuMissing } from "@platform/gpu.ts";
 import { boot_kernel } from "@/kernel/kernel.ts";
 import { declareUnsupported } from "@/app/store/unsupported-store.ts";
 import { bootstrapI18n } from "@/locale/i18n.ts";
@@ -26,7 +26,7 @@ export function bootstrapApp(): void {
   // A platform that cannot draw is told so instead of being started, since
   // the kernel would otherwise fetch its core, open a world and raise toasts
   // about loading it, under a notice saying none of it can be shown.
-  const missing = gpu_missing();
+  const missing = gpuMissing();
   if (missing) {
     declareUnsupported(missing);
     return;

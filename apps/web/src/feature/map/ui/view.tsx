@@ -12,7 +12,7 @@ import { StyleSheet, View } from "react-native";
 
 import { AboveKeyboard } from "@platform/above-keyboard.tsx";
 import { useSafeArea } from "@platform/safe-area.ts";
-import { useViewportTop } from "@platform/visual-viewport.ts";
+import { useViewportTop } from "@platform/viewport.ts";
 import { WorldSurface } from "@platform/surface.tsx";
 import { ProfilerOverlay } from "@/feature/debug/profiler/overlay.tsx";
 import { bottomRest } from "@/shared/ui/bottom-rest.ts";

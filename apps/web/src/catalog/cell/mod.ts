@@ -59,7 +59,7 @@ export function placeableCubeHex(cube: PlaceableCube): string | null {
 
 /** Every cube the catalog gives out: the flat colors by number, then each
  * ground channel's types, the channels in their own order. */
-export const placeable_cubes: readonly PlaceableCube[] = [
+export const placeableCubes: readonly PlaceableCube[] = [
   ...Object.values(cube_types.block).sort((a, b) => a - b).map((type) => ({ channel: null, type })),
   ...ground_pack.channels.flatMap((name, channel) => Object.values(cube_types[name]).map((type) => ({ channel: channel as GroundChannelKey, type }))),
 ];
@@ -67,7 +67,7 @@ export const placeable_cubes: readonly PlaceableCube[] = [
 const DECOR_NAME = Object.fromEntries(Object.entries(decor_types).map(([name, n]) => [n, name])) as Record<number, DecorId>;
 
 /** Every decor kind, by number. */
-export const decor_kinds: readonly u8[] = Object.values(decor_types).sort((a, b) => a - b);
+export const decorKinds: readonly u8[] = Object.values(decor_types).sort((a, b) => a - b);
 
 /** A decor kind's name, for its icon and its locale entry. */
 export function decorName(kind: u8): DecorId {

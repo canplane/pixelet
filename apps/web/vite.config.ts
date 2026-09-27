@@ -29,7 +29,7 @@ const apiBaseDefault = "http://127.0.0.1:3002";
  * which main's is here as a matter of course, and the hash was the identity
  * either way.
  */
-function build_id(): string {
+function buildId(): string {
   try {
     const git = (args: string) => execSync(`git ${args}`, { cwd: __dirname, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
     const dirty = git("status --porcelain") !== "" ? "-dirty" : "";
@@ -50,7 +50,7 @@ function build_id(): string {
  * it, written by `deno task deploy` and by any read of
  * `./script/build-log.ts`.
  */
-function build_number(id: string): string {
+function buildNumber(id: string): string {
   const official = process.env.PXL_BUILD_NUMBER;
   if (official) return `#${official}`;
   try {
@@ -83,7 +83,7 @@ function build_number(id: string): string {
  * — a plugin's `configureServer` never runs for a build. */
 const CONSOLE_LOG = "./.dev-console.log";
 
-function remote_console(): Plugin {
+function remoteConsole(): Plugin {
   return {
     name: "pxl-remote-console",
     configureServer(server) {
@@ -114,7 +114,7 @@ function remote_console(): Plugin {
   };
 }
 
-function build_stamp(): Plugin {
+function buildStamp(): Plugin {
   const id = "virtual:pxl-build";
   const resolved = "\0" + id;
   return {
@@ -124,10 +124,10 @@ function build_stamp(): Plugin {
     },
     load(source) {
       if (source !== resolved) return undefined;
-      const id = build_id();
+      const id = buildId();
       return `export const time = ${JSON.stringify(new Date().toISOString())};\n` +
         `export const id = ${JSON.stringify(id)};\n` +
-        `export const number = ${JSON.stringify(build_number(id))};\n`;
+        `export const number = ${JSON.stringify(buildNumber(id))};\n`;
     },
     configureServer(server) {
       server.middlewares.use((req, _res, next) => {
@@ -164,7 +164,7 @@ function build_stamp(): Plugin {
  * so an enum declared since, or a member added to one, is the same error,
  * saying the server has to be restarted.
  */
-function const_enum(roots: string[]): Plugin {
+function constEnum(roots: string[]): Plugin {
   const DECL = /export\s+const\s+enum\s+(\w+)\s*\{([^}]*)\}/g;
   /** Numbers, strings and arithmetic over them, and nothing that runs. */
   const VALUE = /^(?:0x[0-9a-fA-F]+|\d+|"[^"\\]*"|'[^'\\]*'|[-+*/|&^~()<>\s])+$/;
@@ -213,14 +213,14 @@ function const_enum(roots: string[]): Plugin {
   // silent and asymmetric: the file holding the declaration is reached under
   // its plain path and loses it, while the importer keeps the name it can no
   // longer bind.
-  const source_of = (id: string) => id.split("?")[0].split("#")[0];
+  const sourceOf = (id: string) => id.split("?")[0].split("#")[0];
 
   return {
     name: "const-enum",
     // Before the transpiler reaches the types: the declarations are still here.
     enforce: "pre",
     transform(code, id) {
-      if (!/\.tsx?$/.test(source_of(id)) || id.includes("node_modules")) return null;
+      if (!/\.tsx?$/.test(sourceOf(id)) || id.includes("node_modules")) return null;
       for (const [, name] of code.matchAll(DECL)) {
         if (!enums.has(name) && !refused.has(name)) throw new Error(`${stale(`const enum ${name}`)} (${id})`);
       }
@@ -377,9 +377,9 @@ export default defineConfig(({ mode }) => {
     clearScreen: false,
 
     plugins: [
-      build_stamp(),
-      remote_console(),
-      const_enum([path.resolve(__dirname, "src"), path.resolve(__dirname, "..", "..", "packages")]),
+      buildStamp(),
+      remoteConsole(),
+      constEnum([path.resolve(__dirname, "src"), path.resolve(__dirname, "..", "..", "packages")]),
       deno(),
       react(),
       svgr({ svgrOptions: { titleProp: true } }), // SVGR

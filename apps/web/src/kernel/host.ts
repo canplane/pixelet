@@ -15,8 +15,8 @@ import { bytes_of, each_record } from "@xpute/runtime/ipc/stream.ts";
 
 import { op, STORAGE_KEYS, stream } from "@/kernel/abi/host.spec.ts";
 import { take_body, text_at } from "@/kernel/module.ts";
-import { storage_get, storage_set } from "@platform/storage.ts";
-import { text_raster, text_width } from "@platform/text.ts";
+import { storageGet, storageSet } from "@platform/storage.ts";
+import { textRaster, textWidth } from "@platform/text.ts";
 
 const utf8 = new TextDecoder();
 
@@ -70,7 +70,7 @@ function line_ends(text: string, max_width: number, width: (s: string) => number
 
 /** What storage keeps under `storage`'s key (host.json), or none. */
 export function stored(storage: u32): string | null {
-  return storage_get(STORAGE_KEYS[storage]);
+  return storageGet(STORAGE_KEYS[storage]);
 }
 
 /** Runs the records the turn just returned left in the host stream at `at`. */
@@ -84,12 +84,12 @@ export function run_host_stream(memory: ArrayBuffer, at: u32): void {
         break;
       }
       case op.STORAGE_SET:
-        storage_set(STORAGE_KEYS[w[a]], text_at(memory, w[a + 1], w[a + 2]));
+        storageSet(STORAGE_KEYS[w[a]], text_at(memory, w[a + 1], w[a + 2]));
         break;
       case op.TEXT_LAYOUT: {
         const [weight, px, max_width, at, lines] = [w[a], float(w[a + 1]), float(w[a + 2]), w[a + 3], w[a + 4]];
         const text = utf8.decode(bytes_of(w, a + 5));
-        const width = (s: string) => text_width(weight, px, s);
+        const width = (s: string) => textWidth(weight, px, s);
         const ends = line_ends(text, max_width, width).slice(0, lines);
         const out = new DataView(memory, at, 4 * (1 + 2 * lines));
         out.setUint32(0, ends.length, true);
@@ -103,7 +103,7 @@ export function run_host_stream(memory: ArrayBuffer, at: u32): void {
       }
       case op.TEXT_RASTER: {
         const [weight, px, rgba, at, width, height, x] = [w[a], float(w[a + 1]), w[a + 2], w[a + 3], w[a + 4], w[a + 5], float(w[a + 6])];
-        text_raster(weight, px, rgba, utf8.decode(bytes_of(w, a + 7)), x, width, height, new Uint8Array(memory, at, width * height * 4));
+        textRaster(weight, px, rgba, utf8.decode(bytes_of(w, a + 7)), x, width, height, new Uint8Array(memory, at, width * height * 4));
         break;
       }
       case op.PANIC: {

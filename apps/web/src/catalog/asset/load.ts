@@ -15,7 +15,7 @@ const KEYS: readonly string[] = Object.values(INGESTED).map((a) => a.key);
 
 /** The bucket key a load number names, or null for a number the table does
  * not give out. */
-export function load_key(number: u32): string | null {
+export function loadKey(number: u32): string | null {
   if (number === KEYS.length) return SHEET.key;
   return KEYS[number] ?? null;
 }

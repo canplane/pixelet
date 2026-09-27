@@ -10,7 +10,7 @@
  *
  * What it holds stands at its left end, clipped to its round shape, so the
  * content is revealed as the pill opens and hidden as it closes. Its presence
- * is the glass's to show (glass.tsx), and what it holds fades by opacity on
+ * is the glass's to show (backing.tsx), and what it holds fades by opacity on
  * the glass, never over it.
  */
 
@@ -18,7 +18,7 @@ import { useRef } from "react";
 import { LayoutAnimation, type LayoutAnimationConfig, StyleSheet, View } from "react-native";
 
 import type { f64 } from "@xpute/core/abi/word.ts";
-import { Glass } from "@platform/glass.tsx";
+import { Backing } from "@platform/backing.tsx";
 import { SNAP } from "@/shared/ui/motion/transition.ts";
 import type { PillProps } from "@/shared/ui/pill.ts";
 
@@ -33,7 +33,7 @@ const MOVE: LayoutAnimationConfig = {
   update: { type: "spring", springDamping: 1 },
 };
 
-export function Pill({ x, width, height, fill, tint, variant, interactive, border, shadow, fade = 1, fadeFrom, fadeTransition = SNAP, touch, children, onContentWidth }: PillProps) {
+export function Pill({ x, width, height, fill, tint, place, interactive, border, shadow, fade = 1, fadeFrom, fadeTransition = SNAP, touch, children, onContentWidth }: PillProps) {
   // Asked for in render, before the commit that lays the new frame out: a
   // layout animation applies to the next commit, and after this one's is too
   // late. The same on a second render of the same props.
@@ -47,10 +47,10 @@ export function Pill({ x, width, height, fill, tint, variant, interactive, borde
   // answers no touch it is not given.
   return (
     <View {...touch} hitSlop={touch && TOUCH_SLOP} style={[styles.at, { left: x, width, height }]}>
-      <Glass
+      <Backing
         fill={fill}
         tint={tint}
-        variant={variant}
+        place={place}
         interactive={interactive}
         fade={fade}
         fadeFrom={fadeFrom}
@@ -62,7 +62,7 @@ export function Pill({ x, width, height, fill, tint, variant, interactive, borde
             {children}
           </View>
         </View>
-      </Glass>
+      </Backing>
     </View>
   );
 }

@@ -23,7 +23,7 @@ const TOP_TILE = new Map<string, u32>(SHEET.faces.filter(([, , face]) => face ==
 
 /** The shipped image a cube kind wears on top, by its bucket key; none where
  * the pack has none for it, and it draws as its color. */
-export function shippedTopTextureKey(channel: string, type_name: string): string | null {
-  const n = TOP_TILE.get(`${channel}/${type_name.toLowerCase()}`);
+export function shippedTopTextureKey(channel: string, typeName: string): string | null {
+  const n = TOP_TILE.get(`${channel}/${typeName.toLowerCase()}`);
   return n === undefined ? null : INGESTED[SHEET.tiles[n]]?.key ?? null;
 }

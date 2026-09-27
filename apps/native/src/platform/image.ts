@@ -13,7 +13,7 @@ import { PLATFORM } from "./module.ts";
  * kernel names it by, or none for a file the core does not decode. The
  * file's own pixels, top row first, no color conversion and no premultiplied
  * alpha. */
-export async function hold_image(res: Response): Promise<u32 | null> {
+export async function holdImage(res: Response): Promise<u32 | null> {
   const handle = await PLATFORM.imageHold(new Uint8Array(await res.arrayBuffer()));
   return handle === 0 ? null : handle;
 }

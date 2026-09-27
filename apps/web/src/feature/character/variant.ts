@@ -15,7 +15,7 @@
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
 
 import { INGESTED } from "@/catalog/asset/ingested.spec.ts";
-import { asset_url } from "@/config/route.ts";
+import { assetUrl } from "@/config/route.ts";
 import { DEFAULT_PERSON_VARIANT_KEY as PERSON_KEY, DEFAULT_PET_VARIANT_KEY as PET_KEY, Group, groups, PERSON_GENDER_PREFIXES } from "./variant.spec.ts";
 
 export interface CharacterVariant {
@@ -34,7 +34,7 @@ export interface CharacterVariant {
 function shippedAssetUrl(path: string): string {
   const row = INGESTED[path];
   if (!row) throw new Error(`${path} is not in the asset table — run the asset ingest`);
-  return asset_url(row.key);
+  return assetUrl(row.key);
 }
 
 interface GroupSpec {

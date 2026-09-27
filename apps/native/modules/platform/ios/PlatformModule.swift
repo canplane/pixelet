@@ -119,11 +119,27 @@ public class PlatformModule: Module {
     // reaches; this one is asked for by its own.
 
     View(KeyboardDock.self) {
+      Events("onLift")
       Prop("clearance") { (view: KeyboardDock, clearance: Double) in
         view.clearance = clearance
       }
       Prop("rest") { (view: KeyboardDock, rest: Double) in
         view.rest = rest
+      }
+      Prop("applied") { (view: KeyboardDock, applied: Double) in
+        view.applied = applied
+      }
+    }
+
+    // ---- the segmented control (platform/segmented.tsx, SegmentedControl.swift) ----
+
+    View(SegmentedControl.self) {
+      Events("onPick")
+      Prop("labels") { (view: SegmentedControl, labels: [String]) in
+        view.labels = labels
+      }
+      Prop("selectedIndex") { (view: SegmentedControl, index: Int) in
+        view.selectedIndex = index
       }
     }
   }

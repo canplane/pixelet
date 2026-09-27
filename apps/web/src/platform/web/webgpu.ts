@@ -41,7 +41,7 @@ interface Surface {
 }
 
 let device: GPUDevice | null = null;
-let canvas_format: GPUTextureFormat = "bgra8unorm";
+let canvasFormat: GPUTextureFormat = "bgra8unorm";
 const objects: (GpuObject | undefined)[] = [];
 const surfaces: (Surface | undefined)[] = [];
 /** A canvas transfers once: an effect mounted again is handed the same one. */
@@ -70,14 +70,14 @@ interface NoDevice {
  *
  * Whether an adapter answers is not knowable here: it is a question for the
  * device request, and by then the module is loaded either way. */
-export function missing_before_boot(): UnsupportedReason | null {
+export function missingBeforeBoot(): UnsupportedReason | null {
   if ("gpu" in navigator) return null;
   return isSecureContext ? UnsupportedReason.WebGpu : UnsupportedReason.Insecure;
 }
 
 /** The device, once the browser answers, or why there is none. `lost` hears
  * it go. */
-export async function acquire_device(lost: () => void): Promise<DeviceInfo | NoDevice> {
+export async function acquireDevice(lost: () => void): Promise<DeviceInfo | NoDevice> {
   // `navigator.gpu` is exposed to a secure context and nowhere else, so the
   // same browser on the same machine has WebGPU at localhost and none at the
   // dev server's LAN address over http.
@@ -123,12 +123,12 @@ export async function acquire_device(lost: () => void): Promise<DeviceInfo | NoD
   });
   d.onuncapturederror = (e) => console.error(`[gpu] ${e.error.message}`);
   device = d;
-  canvas_format = navigator.gpu.getPreferredCanvasFormat();
+  canvasFormat = navigator.gpu.getPreferredCanvasFormat();
   return { align: d.limits.minUniformBufferOffsetAlignment, timestamps };
 }
 
 /** A canvas as the kernel's surface `handle`. */
-export function bind_surface(handle: u32, canvas: HTMLCanvasElement): void {
+export function bindSurface(handle: u32, canvas: HTMLCanvasElement): void {
   let offscreen = transferred.get(canvas);
   if (!offscreen) {
     offscreen = canvas.transferControlToOffscreen();
@@ -137,12 +137,12 @@ export function bind_surface(handle: u32, canvas: HTMLCanvasElement): void {
   surfaces[handle_slot(handle)] = { canvas: offscreen, context: null };
 }
 
-export function unbind_surface(handle: u32): void {
+export function unbindSurface(handle: u32): void {
   surfaces[handle_slot(handle)] = undefined;
 }
 
 /** An image a load decoded, by the handle the kernel names it by. */
-export function register_image(handle: u32, image: ImageBitmap): void {
+export function registerImage(handle: u32, image: ImageBitmap): void {
   images.set(handle, image);
 }
 
@@ -166,16 +166,16 @@ const ADD_BLEND: GPUBlendState = {
 /** A record's blend code's state; none over what is opaque. */
 const BLEND: Record<number, GPUBlendState | undefined> = { [record.OPAQUE]: undefined, [record.ALPHA]: ALPHA_BLEND, [record.ADD]: ADD_BLEND };
 
-const word_f32 = new Float32Array(1);
-const word_u32 = new Uint32Array(word_f32.buffer);
+const wordF32 = new Float32Array(1);
+const wordU32 = new Uint32Array(wordF32.buffer);
 
 /** A word's bits as a float. */
 function float(word: u32): f32 {
-  word_u32[0] = word;
-  return word_f32[0];
+  wordU32[0] = word;
+  return wordF32[0];
 }
 
-function texture_format(code: u32): GPUTextureFormat {
+function textureFormat(code: u32): GPUTextureFormat {
   switch (code) {
     case format.RGBA8_SRGB:
       return "rgba8unorm-srgb";
@@ -190,7 +190,7 @@ function texture_format(code: u32): GPUTextureFormat {
     case format.RGBA16F:
       return "rgba16float";
     default:
-      return canvas_format;
+      return canvasFormat;
   }
 }
 
@@ -207,7 +207,7 @@ function gpu(): GPUDevice {
   return device;
 }
 
-function layout_entries(words: U32Array): GPUBindGroupLayoutEntry[] {
+function layoutEntries(words: U32Array): GPUBindGroupLayoutEntry[] {
   const out: GPUBindGroupLayoutEntry[] = [];
   for (let k = 0; k < words.length; k += 3) {
     const [binding, stages, kind] = [words[k], words[k + 1], words[k + 2]];
@@ -230,7 +230,7 @@ function layout_entries(words: U32Array): GPUBindGroupLayoutEntry[] {
 const VERTEX_ENTRY = ["vs", "vs_coarse"];
 
 /** A pipeline record's words (crates/pxl/web/render/src/frame/shader.rs) as WebGPU's descriptor. */
-function pipeline_descriptor(words: U32Array, layouts: GPUBindGroupLayout[], module: GPUShaderModule, target: GPUTextureFormat): GPURenderPipelineDescriptor {
+function pipelineDescriptor(words: U32Array, layouts: GPUBindGroupLayout[], module: GPUShaderModule, target: GPUTextureFormat): GPURenderPipelineDescriptor {
   let at = record.HEAD;
   const next = () => words[at++];
   const buffers: GPUVertexBufferLayout[] = Array.from({ length: next() }, () => {
@@ -251,7 +251,7 @@ function pipeline_descriptor(words: U32Array, layouts: GPUBindGroupLayout[], mod
   return descriptor;
 }
 
-function group_entries(words: U32Array): GPUBindGroupEntry[] {
+function groupEntries(words: U32Array): GPUBindGroupEntry[] {
   const out: GPUBindGroupEntry[] = [];
   for (let k = 0; k < words.length; k += 5) {
     const [binding, kind, id, offset, size] = [words[k], words[k + 1], words[k + 2], words[k + 3], words[k + 4]];
@@ -262,7 +262,7 @@ function group_entries(words: U32Array): GPUBindGroupEntry[] {
   return out;
 }
 
-function begin_pass(encoder: GPUCommandEncoder, w: U32Array): GPURenderPassEncoder {
+function beginPass(encoder: GPUCommandEncoder, w: U32Array): GPURenderPassEncoder {
   const [color, color_load, r, g, b, a, depth, depth_load, depth_clear, query_set, begin, end] = w;
   const descriptor: GPURenderPassDescriptor = { colorAttachments: [] };
   if (color !== 0) {
@@ -290,13 +290,13 @@ function begin_pass(encoder: GPUCommandEncoder, w: U32Array): GPURenderPassEncod
 let stamps: { count: u32; resolve: GPUBuffer; read: GPUBuffer[]; pending: Set<GPUBuffer> } | null = null;
 /** Where the last frame read goes: the stream's head, from GPU_MS — each
  * span's time, then the frame's whole — where the kernel reads it in a turn. */
-let gpu_ms_at: { memory: ArrayBuffer; at: u32 } | null = null;
+let gpuMsAt: { memory: ArrayBuffer; at: u32 } | null = null;
 
 /** Resolves the timestamps an encoder's passes wrote into `set`, a begin and
  * an end a span, and reads them once the GPU has them, a few frames behind.
  * `written` says which spans' pairs this frame wrote: a query no pass wrote
  * keeps what an earlier frame left in it, so the rest are not read. */
-function read_timestamps(encoder: GPUCommandEncoder, set: GPUQuerySet, written: u32): void {
+function readTimestamps(encoder: GPUCommandEncoder, set: GPUQuerySet, written: u32): void {
   const d = gpu();
   const count = set.count;
   if (stamps?.count !== count) {
@@ -330,7 +330,7 @@ function read_timestamps(encoder: GPUCommandEncoder, set: GPUQuerySet, written: 
         if (e > last) last = e;
       }
       spans.push(Number(last - first) / 1e6);
-      if (gpu_ms_at) new Float64Array(gpu_ms_at.memory, gpu_ms_at.at, spans.length).set(spans);
+      if (gpuMsAt) new Float64Array(gpuMsAt.memory, gpuMsAt.at, spans.length).set(spans);
       read.unmap();
       s.pending.delete(read);
     }, () => s.pending.delete(read))
@@ -340,8 +340,8 @@ function read_timestamps(encoder: GPUCommandEncoder, set: GPUQuerySet, written: 
 /** Runs the records the turn just returned left in the stream at `at`. With
  * no device they are dropped whole: the kernel hears the device went and
  * makes everything again on the next one. */
-export function run_gpu_stream(memory: ArrayBuffer, at: u32): void {
-  gpu_ms_at ??= { memory, at: at + stream.GPU_MS * 4 };
+export function runGpuStream(memory: ArrayBuffer, at: u32): void {
+  gpuMsAt ??= { memory, at: at + stream.GPU_MS * 4 };
   if (device === null) return;
   const d = device;
   each_record(memory, at, stream.HEAD, (code, w, a, n) => {
@@ -379,7 +379,7 @@ export function run_gpu_stream(memory: ArrayBuffer, at: u32): void {
       case op.TEXTURE:
         put(
           w[a],
-          d.createTexture({ size: { width: w[a + 1], height: w[a + 2], depthOrArrayLayers: w[a + 3] }, format: texture_format(w[a + 4]), mipLevelCount: w[a + 5], usage: w[a + 6] }),
+          d.createTexture({ size: { width: w[a + 1], height: w[a + 2], depthOrArrayLayers: w[a + 3] }, format: textureFormat(w[a + 4]), mipLevelCount: w[a + 5], usage: w[a + 6] }),
         );
         break;
       case op.IMAGE_TEXTURE: {
@@ -426,16 +426,16 @@ export function run_gpu_stream(memory: ArrayBuffer, at: u32): void {
         put(w[a], d.createShaderModule({ code: utf8.decode(bytes_of(w, a + 1)) }));
         break;
       case op.LAYOUT:
-        put(w[a], d.createBindGroupLayout({ entries: layout_entries(w.subarray(a + 1, k)) }));
+        put(w[a], d.createBindGroupLayout({ entries: layoutEntries(w.subarray(a + 1, k)) }));
         break;
       case op.PIPELINE: {
         const [id, module, fmt, len] = [w[a], w[a + 1], w[a + 2], w[a + 3]];
         const layouts = Array.from(w.subarray(a + 4 + len, k), (l) => get<GPUBindGroupLayout>(l));
-        put(id, d.createRenderPipeline(pipeline_descriptor(w.subarray(a + 4, a + 4 + len), layouts, get<GPUShaderModule>(module), texture_format(fmt))));
+        put(id, d.createRenderPipeline(pipelineDescriptor(w.subarray(a + 4, a + 4 + len), layouts, get<GPUShaderModule>(module), textureFormat(fmt))));
         break;
       }
       case op.BIND_GROUP:
-        put(w[a], d.createBindGroup({ layout: get<GPUBindGroupLayout>(w[a + 1]), entries: group_entries(w.subarray(a + 2, k)) }));
+        put(w[a], d.createBindGroup({ layout: get<GPUBindGroupLayout>(w[a + 1]), entries: groupEntries(w.subarray(a + 2, k)) }));
         break;
       case op.DESTROY: {
         const slot = handle_slot(w[a]);
@@ -460,7 +460,7 @@ export function run_gpu_stream(memory: ArrayBuffer, at: u32): void {
         );
         break;
       case op.PASS:
-        put(w[a], begin_pass(get<GPUCommandEncoder>(w[a + 1]), w.subarray(a + 2, k)));
+        put(w[a], beginPass(get<GPUCommandEncoder>(w[a + 1]), w.subarray(a + 2, k)));
         break;
       case op.SET_PIPELINE:
         get<GPURenderPassEncoder>(w[a]).setPipeline(get<GPURenderPipeline>(w[a + 1]));
@@ -500,7 +500,7 @@ export function run_gpu_stream(memory: ArrayBuffer, at: u32): void {
         const s = surfaces[handle_slot(w[a])];
         if (!s) break;
         s.context ??= s.canvas.getContext("webgpu");
-        s.context?.configure({ device: d, format: canvas_format, alphaMode: "premultiplied" });
+        s.context?.configure({ device: d, format: canvasFormat, alphaMode: "premultiplied" });
         break;
       }
       case op.RESIZE: {
@@ -519,7 +519,7 @@ export function run_gpu_stream(memory: ArrayBuffer, at: u32): void {
         put(w[a], d.createQuerySet({ type: "timestamp", count: w[a + 1] }));
         break;
       case op.TIMESTAMPS:
-        read_timestamps(get<GPUCommandEncoder>(w[a]), get<GPUQuerySet>(w[a + 1]), w[a + 2]);
+        readTimestamps(get<GPUCommandEncoder>(w[a]), get<GPUQuerySet>(w[a + 1]), w[a + 2]);
         break;
       default:
         throw new Error(`[gpu] record ${code}`);

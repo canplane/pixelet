@@ -2,7 +2,7 @@
 
 import type { LanguageDetectorModule } from "i18next";
 
-import { storage_get, storage_set } from "./storage.ts";
+import { storageGet, storageSet } from "./storage.ts";
 
 /** Where a pick is kept, the key the page's detector keeps it under. */
 const KEY = "pxl:lang";
@@ -11,8 +11,8 @@ const KEY = "pxl:lang";
  * device's own. */
 export const languageDetector: LanguageDetectorModule = {
   type: "languageDetector",
-  detect: () => storage_get(KEY) ?? Intl.DateTimeFormat().resolvedOptions().locale,
-  cacheUserLanguage: (lng) => storage_set(KEY, lng),
+  detect: () => storageGet(KEY) ?? Intl.DateTimeFormat().resolvedOptions().locale,
+  cacheUserLanguage: (lng) => storageSet(KEY, lng),
 };
 
 /** A device's app has no document to label. */

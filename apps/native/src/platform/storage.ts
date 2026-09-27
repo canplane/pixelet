@@ -10,11 +10,11 @@
 import { PLATFORM } from "./module.ts";
 
 /** What is kept under `key`, or none. */
-export function storage_get(key: string): string | null {
+export function storageGet(key: string): string | null {
   return PLATFORM.storageGet(key);
 }
 
 /** Keeps `value` under `key`. */
-export function storage_set(key: string, value: string): void {
+export function storageSet(key: string, value: string): void {
   PLATFORM.storageSet(key, value);
 }

@@ -1,6 +1,5 @@
 // @pxl/web/feature/setting/section/language.tsx
 
-import { Languages } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, View } from "react-native";
 
@@ -16,7 +15,7 @@ export function LanguageSection() {
 
   return (
     <View style={styles.section}>
-      <SectionTitle icon={Languages}>{t("settings.language.section_title")}</SectionTitle>
+      <SectionTitle icon="globe">{t("settings.language.section_title")}</SectionTitle>
       <View style={styles.choices}>
         {SUPPORTED_LANGUAGES.map(({ code, labelKey }) => {
           const on = i18n.resolvedLanguage === code;

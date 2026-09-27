@@ -1,21 +1,69 @@
 // @pxl/web/feature/map/ui/control/compass.tsx
 
 import { useTranslation } from "react-i18next";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { Path, Svg } from "react-native-svg";
 
 import { Command } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, useKernel } from "@/kernel/shell.ts";
 
-import { LABEL } from "@platform/palette.ts";
+import { LABEL, NORTH } from "@platform/palette.ts";
 import { CircularButton } from "@/shared/ui/circular-button.tsx";
 import { Presence } from "@/shared/ui/motion/presence.tsx";
 import { after, ARRIVE } from "@/shared/ui/motion/transition.ts";
-import { alpha, color, textStyle } from "@/shared/ui/theme.ts";
+import type { f64 } from "@xpute/core/abi/word.ts";
+
+/** The face the needle is drawn on: the button's. */
+const DIAL = 48;
+/** A lozenge, widest at the pivot and pointed at both ends, each half cut
+ * into a lit face and a shaded one along its ridge, as a machined needle
+ * catches the light. Its colors are the system's, as a system compass's are:
+ * north its red, south the glyph color every other round control draws in. */
+const NEEDLE_HALF = 20;
+const NEEDLE_WIDTH = 10;
+/** The lit face of each half is its shaded face's color let through this
+ * much: one step lighter, the same hue. */
+const LIT = 0.75;
+/** How far back along the ridge from each point the needle's end turns
+ * round. */
+const NEEDLE_ROUND = 2;
+/** Printed on the face: a hairline at every eighth of the turn, the four
+ * quarters heavier and a step stronger than the eighths between them, both
+ * weaker than the needle they stand behind. */
+const TICK_FROM = 18.5;
+const TICK_TO = 21;
+const QUARTER_STROKE = 1.5;
+const EIGHTH_STROKE = 0.75;
+const [QUARTERS, EIGHTHS] = [0, 1].map((odd) =>
+  Array.from({ length: 4 }, (_, i) => {
+    const a = ((2 * i + odd) * Math.PI) / 4;
+    const [x, y] = [Math.sin(a), -Math.cos(a)];
+    return `M${TICK_FROM * x} ${TICK_FROM * y}L${TICK_TO * x} ${TICK_TO * y}`;
+  }).join("")
+);
+const BOX = `${-DIAL / 2} ${-DIAL / 2} ${DIAL} ${DIAL}`;
+
+/** One face of the needle: from the pivot out to its corner at `side`, along
+ * the edge towards the point at `end`, then round on a curve that meets the
+ * ridge square, and back down the ridge. Its mirror face meets it there with
+ * the same tangent, so the two curves make one smooth rounded end. The curve
+ * leaves the edge where it is as far from the corner of the turn as the ridge
+ * is, so it bends evenly. */
+function face(end: f64, side: f64): string {
+  const ridge = end - Math.sign(end) * NEEDLE_ROUND;
+  const turn = (side * NEEDLE_ROUND) / Math.abs(end);
+  const edge = Math.hypot(side, end);
+  const [x, y] = [turn + (side / edge) * Math.abs(turn), ridge - (end / edge) * Math.abs(turn)];
+  return `M0 0L${side} 0L${x} ${y}Q${turn} ${ridge} 0 ${ridge}Z`;
+}
 
 export function MapCompass() {
   const { t } = useTranslation();
   const azimuth = useKernel((s) => s.azimuth);
   const showCompass = useKernel((s) => s.show_compass);
+  // Clockwise on the screen, as the view turns.
+  const turn = -azimuth;
+  const w = NEEDLE_WIDTH / 2;
 
   return (
     <Presence
@@ -36,25 +84,26 @@ export function MapCompass() {
         fadeFrom={0}
         fadeTransition={showCompass ? after(ARRIVE, 400) : ARRIVE}
       >
-        <Text style={styles.north}>N</Text>
-        <View style={[styles.needle, { transform: [{ rotate: `${(-azimuth * 180) / Math.PI}deg` }] }]}>
-          <View style={styles.tip} />
-          <View style={styles.tail} />
+        <View style={{ width: DIAL, height: DIAL }}>
+          <Svg width={DIAL} height={DIAL} viewBox={BOX} style={StyleSheet.absoluteFill}>
+            <Path d={QUARTERS} stroke={LABEL.secondary} strokeWidth={QUARTER_STROKE} strokeLinecap="round" />
+            <Path d={EIGHTHS} stroke={LABEL.tertiary} strokeWidth={EIGHTH_STROKE} strokeLinecap="round" />
+          </Svg>
+          {
+            // Turned by the view around it, in React Native's own transform:
+            // a CSS string on the SVG is the page's, and a device's SVG
+            // refuses it.
+          }
+          <View style={[StyleSheet.absoluteFill, { transform: [{ rotate: `${turn}rad` }] }]}>
+            <Svg width={DIAL} height={DIAL} viewBox={BOX}>
+              <Path d={face(-NEEDLE_HALF, -w)} fill={NORTH} fillOpacity={LIT} />
+              <Path d={face(-NEEDLE_HALF, w)} fill={NORTH} />
+              <Path d={face(NEEDLE_HALF, -w)} fill={LABEL.primary} fillOpacity={LIT} />
+              <Path d={face(NEEDLE_HALF, w)} fill={LABEL.primary} />
+            </Svg>
+          </View>
         </View>
       </CircularButton>
     </Presence>
   );
 }
-
-const styles = StyleSheet.create({
-  north: {
-    position: "absolute",
-    top: 2,
-    ...textStyle.caption2,
-    letterSpacing: -0.5,
-    color: LABEL.secondary,
-  },
-  needle: { width: 2, height: 24 },
-  tip: { flex: 1, backgroundColor: alpha(color.north, 0.8), borderTopLeftRadius: 1, borderTopRightRadius: 1, boxShadow: `0 0 12px ${alpha(color.north, 0.4)}` },
-  tail: { flex: 1, backgroundColor: LABEL.secondary, borderBottomLeftRadius: 1, borderBottomRightRadius: 1 },
-});

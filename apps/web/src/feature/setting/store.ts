@@ -26,7 +26,7 @@
 import type { u32 } from "@xpute/core/abi/word.ts";
 
 import { storage, STORAGE_KEYS } from "@/kernel/abi/host.spec.ts";
-import { storage_get, storage_set } from "@platform/storage.ts";
+import { storageGet, storageSet } from "@platform/storage.ts";
 import { type Setting, SETTINGS } from "./schema.ts";
 
 /** A setting storage kept nothing for, as WORLD_CREATE carries it (the
@@ -60,7 +60,7 @@ export function storedSettings(): u32[] {
   const values: u32[] = new Array(Math.max(...ROWS.map(([, row]) => row.key)) + 1).fill(NONE);
   let kept: Record<string, unknown> = {};
   try {
-    const raw = storage_get(KEY);
+    const raw = storageGet(KEY);
     if (raw) kept = JSON.parse(raw);
   } catch {
     // Unreadable storage is none: every setting at its default, and the
@@ -84,5 +84,5 @@ export function keepSettings(values: readonly u32[]): void {
   const json = JSON.stringify(out);
   if (json === written) return;
   written = json;
-  storage_set(KEY, json);
+  storageSet(KEY, json);
 }

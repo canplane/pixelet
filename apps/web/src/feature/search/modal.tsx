@@ -2,7 +2,6 @@
 
 import type { f64 } from "@xpute/core/abi/word.ts";
 import { useEffect, useState } from "react";
-import { Locate, Search, X } from "lucide-react-native";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { round } from "@xpute/core/math/scalar.ts";
 import { useTranslation } from "react-i18next";
@@ -12,15 +11,16 @@ import { Panel } from "@platform/panel.tsx";
 import { PANEL_CONTROL, PANEL_EDGE, PANEL_HEADER, PanelBody, PanelClose } from "@/shared/ui/panel.tsx";
 import { KEEPS_KEYBOARD } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
-import { alpha, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
+import { color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
 import { Command, DevicePoseStatus, encode_input_go_to } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, kernel_enable_location, kernel_snapshot } from "@/kernel/shell.ts";
 import { useSensors } from "@/feature/map/ui/overlay/sensor-status.tsx";
 import { LABEL, STATUS } from "@platform/palette.ts";
 import { AboveKeyboard } from "@platform/above-keyboard.tsx";
 import { SYSTEM_CLEAR } from "@platform/text-field.ts";
-import { Glass } from "@platform/glass.tsx";
-import { GlassVariant } from "@/shared/ui/glass-variant.ts";
+import { Backing } from "@platform/backing.tsx";
+import { BackingPlace } from "@/shared/ui/backing-place.ts";
+import { Glyph } from "@/shared/ui/glyph.tsx";
 import { resolvePoiBadge } from "@/feature/search/poi-badge.ts";
 import { assembleLabel } from "@/feature/map/geocode/label.ts";
 import { fetchSearch, type SearchResult } from "@/feature/search/repository.ts";
@@ -127,13 +127,13 @@ function LocateCard() {
   if (location === DevicePoseStatus.Ready) return null;
   return (
     <AboveKeyboard inset={16}>
-      <Glass fill={color.white} variant={GlassVariant.Clear} interactive style={styles.locateCard}>
+      <Backing fill={color.white} place={BackingPlace.OnSheet} interactive style={styles.locateCard}>
         <Pressable onPress={kernel_enable_location} accessibilityRole="button" style={styles.locateRow}>
-          <Locate size={18} color={poseColor(location)} />
+          <Glyph glyph="location" size={18} color={poseColor(location)} />
           <Text numberOfLines={1} style={styles.locateLabel}>{t("map.sensors.label")}</Text>
           <Text style={styles.locateAction}>{t("map.sensors.turn_on")}</Text>
         </Pressable>
-      </Glass>
+      </Backing>
     </AboveKeyboard>
   );
 }
@@ -217,13 +217,13 @@ export function SearchModal(props: BaseModalProps) {
                   small filled circle inside the field and the close is a separate
                   round button, so the two X's are not confused. */
               }
-              <Glass fill={color.faint} variant={GlassVariant.Clear} style={styles.well}>
-                <Search size={16} color={color.textMuted} />
+              <Backing fill={color.faint} place={BackingPlace.OnSheet} style={styles.well}>
+                <Glyph glyph="magnifyingglass" size={16} color={LABEL.secondary} />
                 <TextField
                   value={query}
                   onChangeText={setQuery}
                   placeholder={t("map.search.placeholder")}
-                  placeholderTextColor={color.textMuted}
+                  placeholderTextColor={LABEL.placeholder}
                   clearButtonMode={SYSTEM_CLEAR ? "while-editing" : undefined}
                   style={styles.field}
                 />
@@ -242,10 +242,10 @@ export function SearchModal(props: BaseModalProps) {
                     accessibilityLabel={t("map.search.clear_aria_label")}
                     style={styles.clear}
                   >
-                    <X size={10} strokeWidth={3} color={color.paper} />
+                    <Glyph glyph="xmark" size={10} weight="heavy" color={color.paper} />
                   </Pressable>
                 )}
-              </Glass>
+              </Backing>
               <PanelClose label={t("settings.close")} onClose={() => onClose()} />
             </View>
           </>
@@ -309,28 +309,28 @@ export function SearchModal(props: BaseModalProps) {
 const styles = StyleSheet.create({
   locateCard: { borderRadius: 22, pointerEvents: "auto", boxShadow: "0 6px 20px rgba(0, 0, 0, 0.12)" },
   locateRow: { height: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16 },
-  locateLabel: { flex: 1, ...textStyle.body, color: color.text },
+  locateLabel: { flex: 1, ...textStyle.body, color: LABEL.primary },
   locateAction: { ...textStyle.body, fontWeight: weight.semibold, color: color.action },
   // Room under the last result for the card that floats over it.
   resultsRoom: { paddingBottom: 76 },
   headerRow: { ...PANEL_HEADER, gap: 8 },
   well: { flex: 1, minWidth: 0, height: PANEL_CONTROL, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderRadius: PANEL_CONTROL / 2 },
-  field: { flex: 1, minWidth: 0, color: color.text },
-  clear: { width: 16, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: alpha(color.textMuted, 0.5) },
+  field: { flex: 1, minWidth: 0, color: LABEL.primary },
+  clear: { width: 16, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: LABEL.tertiary },
   results: { flex: 1 },
-  empty: { paddingHorizontal: PANEL_EDGE, paddingVertical: 12, ...textStyle.footnote, color: color.textMuted },
+  empty: { paddingHorizontal: PANEL_EDGE, paddingVertical: 12, ...textStyle.footnote, color: LABEL.secondary },
   sectionHeader: {
     paddingHorizontal: PANEL_EDGE,
     paddingTop: 12,
     paddingBottom: 6,
     ...sectionTitle,
-    color: alpha(color.textMuted, 0.7),
+    color: LABEL.secondary,
   },
   row: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: PANEL_EDGE, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: hairline },
   rowText: { flex: 1, minWidth: 0, gap: 2 },
-  name: { ...textStyle.body, color: color.text },
+  name: { ...textStyle.body, color: LABEL.primary },
   subtitle: { flexDirection: "row", alignItems: "baseline", gap: 8 },
-  small: { ...textStyle.caption, color: color.textMuted },
+  small: { ...textStyle.caption, color: LABEL.secondary },
   context: { flexShrink: 1 },
   distance: { marginLeft: "auto", flexShrink: 0, fontVariant: ["tabular-nums"] },
   badge: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", flexShrink: 0 },

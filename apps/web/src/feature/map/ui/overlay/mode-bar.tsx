@@ -1,14 +1,15 @@
 // @pxl/web/feature/map/ui/overlay/mode-bar.tsx
 
 import { useRef, useState } from "react";
-import { ArrowUp, Eraser, LayoutGrid, MessageCircle, MousePointer, Palette, TreePine } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { Keyboard, PanResponder, PixelRatio, Pressable, ScrollView, StyleSheet, type TextInput, View } from "react-native";
 import { PAN_X } from "@platform/gesture.ts";
 
 import type { f64, u32, u8 } from "@xpute/core/abi/word.ts";
-import { Glass, SYSTEM_GLASS } from "@platform/glass.tsx";
-import { GlassVariant } from "@/shared/ui/glass-variant.ts";
+import { Backing, SYSTEM_BACKING } from "@platform/backing.tsx";
+import type { GlyphName } from "@platform/icon.tsx";
+import { BackingPlace } from "@/shared/ui/backing-place.ts";
+import { Glyph } from "@/shared/ui/glyph.tsx";
 import { Motion } from "@platform/motion.tsx";
 import { LABEL } from "@platform/palette.ts";
 import { Pill } from "@platform/pill.tsx";
@@ -16,7 +17,7 @@ import { Presence, Swap } from "@/shared/ui/motion/presence.tsx";
 import { LEAVE, SNAP } from "@/shared/ui/motion/transition.ts";
 import { keepKeyboard } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
-import { alpha, color } from "@/shared/ui/theme.ts";
+import { alpha, color, strip } from "@/shared/ui/theme.ts";
 import { useAppContext } from "@/app/provider/context.ts";
 import { useUiStore } from "@/app/store/ui-store.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
@@ -110,13 +111,13 @@ function tierAt(at: FlyoutAt, count: u32, x: f64, y: f64): u32 | null {
  * on. Drawn from the bar rather than from the swatch, which sits in a
  * horizontally scrolling strip that clips what stands outside it. */
 function SizeFlyout({ shown, hover }: { shown: boolean; hover: u32 | null }) {
-  const object_tier = useUiStore((s) => s.object_tier);
+  const objectTier = useUiStore((s) => s.objectTier);
   const sizes = useKernel((s) => s.object_sizes);
 
   return (
-    <Glass
-      fill={alpha(color.band, 0.8)}
-      variant={GlassVariant.Regular}
+    <Backing
+      fill={STRIP.flyout}
+      place={BackingPlace.OverMap}
       fade={shown ? 1 : 0}
       fadeFrom={0}
       transition={shown ? SNAP : LEAVE}
@@ -130,14 +131,14 @@ function SizeFlyout({ shown, hover }: { shown: boolean; hover: u32 | null }) {
               <View
                 style={[
                   { width: mark, height: mark, borderRadius: mark / 2 },
-                  hover === tier ? styles.markHover : object_tier === tier ? styles.markHeld : styles.markIdle,
+                  hover === tier ? styles.markHover : objectTier === tier ? styles.markHeld : styles.markIdle,
                 ]}
               />
             </Motion>
           </View>
         );
       })}
-    </Glass>
+    </Backing>
   );
 }
 
@@ -258,12 +259,11 @@ function DecorIconButton({ kind }: { kind: u8 }) {
   const held = useUiStore((s) => s.decor);
   const selectDecor = useUiStore.getState().selectDecor;
   const name = decorName(kind);
-  const Icon = DECOR_ICONS[name];
   const active = activeTool === ActiveTool.Decor && held === kind;
 
   return (
     <ToolButton label={t(`decors.${name}`)} active={active} onPress={() => selectDecor(kind)}>
-      <Icon size={GLYPH} strokeWidth={2} color={active ? STRIP.glyphOn : STRIP.glyph} />
+      <Glyph glyph={DECOR_ICONS[name]} size={GLYPH} color={active ? STRIP.glyphOn : STRIP.glyph} />
     </ToolButton>
   );
 }
@@ -274,8 +274,8 @@ function DecorIconButton({ kind }: { kind: u8 }) {
 // is one consumer) and is also imported by drawer-modal.tsx's own
 // DecorGridButton, so a new decor kind's icon shows up in both the hotbar
 // and the drawer for free.
-export const DECOR_ICONS: Record<DecorId, typeof TreePine> = {
-  tree: TreePine,
+export const DECOR_ICONS: Record<DecorId, GlyphName> = {
+  tree: "tree",
 };
 
 /** A round slot in the dark strip, lit while its tool is the one in hand. */
@@ -314,7 +314,7 @@ export function ModeBar() {
   const activeTool = useUiStore((s) => s.activeTool);
   const set_activeTool = useUiStore.getState().set_activeTool;
   const recentPicks = useUiStore((s) => s.recentPicks);
-  const append_chat_line = useUiStore.getState().append_chat_line;
+  const appendChatLine = useUiStore.getState().appendChatLine;
   const setObjectTier = useUiStore.getState().setObjectTier;
   const sizeCount = useKernel((s) => s.object_sizes.length);
   const [messageText, setMessageText] = useState("");
@@ -334,7 +334,7 @@ export function ModeBar() {
     if (text === "" || isSending) return;
     setIsSending(true);
     setTimeout(() => {
-      append_chat_line(text);
+      appendChatLine(text);
       setMessageText("");
       setIsSending(false);
       inputRef.current?.focus();
@@ -399,7 +399,7 @@ export function ModeBar() {
             height={MODE_BAR_HEIGHT_PX}
             span={barWidth}
             fill={color.white}
-            variant={GlassVariant.Regular}
+            place={BackingPlace.OverMap}
             interactive={!messageExpanded}
             shadow="0 6px 20px rgba(0, 0, 0, 0.25)"
           >
@@ -409,7 +409,7 @@ export function ModeBar() {
               accessibilityLabel={t("map.mode_bar.message_tooltip")}
               style={styles.messageIcon}
             >
-              <MessageCircle size={GLYPH} strokeWidth={2} color={LABEL.primary} />
+              <Glyph glyph="bubble.left" size={GLYPH} color={LABEL.primary} />
             </Pressable>
             <Presence
               show={messageExpanded}
@@ -438,9 +438,9 @@ export function ModeBar() {
             width={paletteWidth}
             height={MODE_BAR_HEIGHT_PX}
             span={barWidth}
-            fill={sendTint ?? color.band}
+            fill={sendTint ?? STRIP.ground}
             tint={sendTint}
-            variant={GlassVariant.Regular}
+            place={BackingPlace.OverMap}
             interactive={!paletteExpanded}
             shadow="0 3px 6px rgba(0, 0, 0, 0.25)"
             onContentWidth={setStripWidth}
@@ -452,10 +452,10 @@ export function ModeBar() {
             >
               <View style={styles.group}>
                 <ToolButton label={t("map.mode_bar.pointer")} active={activeTool === ActiveTool.Pointer} onPress={() => set_activeTool(ActiveTool.Pointer)}>
-                  <MousePointer size={GLYPH} strokeWidth={2} color={activeTool === ActiveTool.Pointer ? STRIP.glyphOn : STRIP.glyph} />
+                  <Glyph glyph="hand.point.up.left" size={GLYPH} color={activeTool === ActiveTool.Pointer ? STRIP.glyphOn : STRIP.glyph} />
                 </ToolButton>
                 <ToolButton label={t("map.mode_bar.eraser")} active={activeTool === ActiveTool.Eraser} onPress={() => set_activeTool(ActiveTool.Eraser)}>
-                  <Eraser size={GLYPH} strokeWidth={2} color={activeTool === ActiveTool.Eraser ? STRIP.glyphOn : STRIP.glyph} />
+                  <Glyph glyph="eraser" size={GLYPH} color={activeTool === ActiveTool.Eraser ? STRIP.glyphOn : STRIP.glyph} />
                 </ToolButton>
               </View>
 
@@ -487,7 +487,7 @@ export function ModeBar() {
               }
               <View style={styles.group}>
                 <ToolButton label={t("map.mode_bar.catalog_tooltip")} onPress={ui.openDrawerModal}>
-                  <LayoutGrid size={GLYPH} strokeWidth={2} color={STRIP.glyph} />
+                  <Glyph glyph="square.grid.2x2" size={GLYPH} color={STRIP.glyph} />
                 </ToolButton>
               </View>
             </Motion>
@@ -515,7 +515,7 @@ export function ModeBar() {
                     accessibilityLabel={t("map.mode_bar.send")}
                     style={({ pressed }) => [styles.slotButton, pressed && styles.sendPressed]}
                   >
-                    <ArrowUp size={GLYPH} strokeWidth={2.75} color={color.white} />
+                    <Glyph glyph="arrow.up" size={GLYPH} weight="bold" color={color.white} />
                   </Pressable>
                 )
                 : (
@@ -528,7 +528,7 @@ export function ModeBar() {
                     accessibilityLabel={t("map.mode_bar.palette_tooltip")}
                     style={styles.slotButton}
                   >
-                    <Palette size={GLYPH} strokeWidth={2} color={STRIP.glyph} />
+                    <Glyph glyph="paintpalette" size={GLYPH} color={STRIP.glyph} />
                   </Pressable>
                 )}
             </Swap>
@@ -561,13 +561,12 @@ const PILL = { height: MODE_BAR_HEIGHT_PX, borderRadius: MODE_BAR_HEIGHT_PX / 2 
  * page, a device without the system's glass — a dark band with white glyphs.
  * On the system's glass, a toolbar as the platform draws one over light
  * content: the glass untinted, its glyphs the label color as every
- * control's are (@platform palette.ts), the tool in hand on a faint capsule. Glass painted dark to pass for the band only clouded it: a tint
+ * control's are, the tool in hand on a faint capsule. Backing painted dark to
+ * pass for the band only clouded it: a tint
  * is for what a surface means, and the glass decides its own light and dark
  * from what is under it.
  */
-const STRIP = SYSTEM_GLASS
-  ? { glyph: LABEL.primary, glyphOn: LABEL.primary, held: alpha(color.black, 0.08), line: alpha(color.black, 0.1), ink: color.black, ground: color.white }
-  : { glyph: alpha(color.white, 0.6), glyphOn: color.white, held: alpha(color.white, 0.2), line: alpha(color.white, 0.15), ink: color.white, ground: color.band };
+const STRIP = SYSTEM_BACKING ? strip.glass : strip.band;
 
 const styles = StyleSheet.create({
   // As tall as the pills and as wide as the row: the pills stand on it by

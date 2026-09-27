@@ -30,7 +30,7 @@ const wrangler = (...args: string[]) => ["run", "-A", "--node-modules-dir=auto",
 console.log(number ? `[deploy] build #${number}` : "[deploy] no PXL_BUILD_NUMBER: publishing an unnumbered build");
 
 // What the build id is about to call this tree. `git status --porcelain` from
-// here is exactly what vite.config.ts's build_id() asks, and it answers with
+// here is exactly what vite.config.ts's buildId() asks, and it answers with
 // paths — so a build that would otherwise only say `-dirty` says which files
 // made it so. Worth printing on every deploy and not only when one is being
 // chased: a CI build reports `-dirty` today and nothing local reproduces it,

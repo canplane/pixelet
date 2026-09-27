@@ -21,7 +21,7 @@ export { API_PREFIX, API_ROOT, ASSET_PREFIX, ASSET_ROOT, GEO_PREFIX, GEO_ROOT, S
  * deployment fact and belongs on this side with the rest of them: a dev server
  * bakes on demand and has no versions, a published one requests the prefix
  * `PUBLISHED_VERSION` names. */
-export function tile_url(kind: BakeKind, name: string, published: boolean): string {
+export function tileUrl(kind: BakeKind, name: string, published: boolean): string {
   return published ? `${TILE_ROOT}/${kind}/${PUBLISHED_VERSION[kind]}/${name}` : `${TILE_ROOT}/${kind}/${name}`;
 }
 
@@ -30,7 +30,7 @@ export function tile_url(kind: BakeKind, name: string, published: boolean): stri
  * own prefix are the same word deliberately, so the URL is the key with a
  * leading slash and the edge's mapping back is that slash removed. No version:
  * the key is the content, so the URL is as immutable as one gets. */
-export function asset_url(key: string): string {
+export function assetUrl(key: string): string {
   return `/${key}`;
 }
 

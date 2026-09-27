@@ -25,6 +25,7 @@ import { useSafeArea } from "@platform/safe-area.ts";
 import { ease, SLIDE, SLIDE_AWAY } from "@/shared/ui/motion/transition.ts";
 import { PANEL_HEAD_HEIGHT, PanelPresence, type PanelProps, SHEET_RADIUS } from "@/shared/ui/panel.tsx";
 import { alpha, color } from "@/shared/ui/theme.ts";
+import { LABEL } from "@platform/palette.ts";
 
 const MAX_WIDTH = 540;
 /** Gap between the safe-area top and a full-height sheet, as on iOS. */
@@ -146,5 +147,5 @@ const styles = StyleSheet.create({
   },
   // iOS's sheet handle: 36 × 5, 5 below the top edge.
   handleArea: { position: "absolute", top: 0, left: "50%", marginLeft: -24, width: 48, height: 15, alignItems: "center", paddingTop: 5 },
-  handle: { width: 36, height: 5, borderRadius: 2.5, backgroundColor: alpha(color.text, 0.2) },
+  handle: { width: 36, height: 5, borderRadius: 2.5, backgroundColor: LABEL.tertiary },
 });

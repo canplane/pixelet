@@ -1,4 +1,4 @@
-// @pxl/native/platform/visual-viewport.ts
+// @pxl/native/platform/viewport.ts
 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 

@@ -49,19 +49,19 @@ const u32s = (at: u32, n: u32) => new Uint32Array(CORE.buffer, at, n);
 /** Where the kernel made a failure: a file name in its memory and a line. */
 const site = (file: u32, bytes: u32, line: u32) => file === 0 ? null : `${new TextDecoder().decode(new Uint8Array(CORE.buffer, file, bytes))}:${line}`;
 
-function frames_at(at: u32, count: u32): Frame[] {
+function framesAt(at: u32, count: u32): Frame[] {
   const w = words(at, count * FRAME.WORDS);
   return Array.from({ length: count }, (_, i) => frameAt(w, i * FRAME.WORDS));
 }
 
-function tasks_at(at: u32, count: u32): TaskRecord[] {
+function tasksAt(at: u32, count: u32): TaskRecord[] {
   const w = words(at, count * TASK.WORDS);
   const subjects = new BigUint64Array(CORE.buffer, at, count * TASK.WORDS);
   return Array.from({ length: count }, (_, i) => {
     const o = i * TASK.WORDS;
-    const phase_count = w[o + TASK.phase_count];
+    const phaseCount = w[o + TASK.phase_count];
     const phases: [string, f64][] = [];
-    for (let k = 0; k < phase_count; k++) {
+    for (let k = 0; k < phaseCount; k++) {
       phases.push([TASK_PHASE_NAMES[w[o + TASK.phase_ids + k]] ?? "?", w[o + TASK.phase_values + k]]);
     }
     const start = w[o + TASK.start_ms];
@@ -235,8 +235,8 @@ interface Read {
   worst: [u32, u32];
 }
 
-function read(window_ms: f64): Read {
-  const r = u32s(CORE_DOORBELL.call(Command.PROFILER_READ, encode_profiler_read({ window_ms }), (at) => at >>> 0), READ.WORDS);
+function read(windowMs: f64): Read {
+  const r = u32s(CORE_DOORBELL.call(Command.PROFILER_READ, encode_profiler_read({ window_ms: windowMs }), (at) => at >>> 0), READ.WORDS);
   return {
     summary: words(r[READ.summary_at], r[READ.summary_words]),
     frames: [r[READ.frames_at], r[READ.frames_count]],
@@ -261,16 +261,16 @@ function recOf(s: F64Array): Gauge["rec"] {
 
 const atlasOf = (s: F64Array) => section(s, SUMMARY.atlas) as Gauge["atlas"];
 
-/** What the panel draws: the summary over the last `window_ms`. */
-export function profilerGaugeRead(window_ms: f64): Gauge {
-  const { summary: s } = read(window_ms);
+/** What the panel draws: the summary over the last `windowMs`. */
+export function profilerGaugeRead(windowMs: f64): Gauge {
+  const { summary: s } = read(windowMs);
   return {
     rec: recOf(s),
     frames: frameSummary(s),
     tasks: taskSummaries(s),
     counters: section(s, SUMMARY.counters),
     atlas: atlasOf(s),
-    longs: longFramesSince(performance.now() - window_ms),
+    longs: longFramesSince(performance.now() - windowMs),
   };
 }
 
@@ -306,7 +306,7 @@ export function profilerReportRead(): ProfilerReport {
     peak: peak.present === 0 ? null : Object.fromEntries(Object.entries(peak).filter(([k]) => k !== "present")),
     taskN: taskSummary.reduce((n, t) => n + t.n, 0),
     tasks: taskSummary,
-    recent: tasks_at(tasks[0] + recentFrom * TASK.WORDS * WORD, tasks[1] - recentFrom),
+    recent: tasksAt(tasks[0] + recentFrom * TASK.WORDS * WORD, tasks[1] - recentFrom),
     worst: Array.from({ length: worst[1] }, (_, i) => {
       const o = i * WORST.WORDS;
       return { sample: frameAt(worstWords, o + WORST.sample), prev: worstWords[o + WORST.has_prev] === 0 ? null : frameAt(worstWords, o + WORST.prev) };
@@ -320,8 +320,8 @@ export function profilerRingsRead(): { frames: Frame[]; tasks: TaskRecord[]; wor
   const { tasks, frames, worst } = read(0);
   const worstWords = words(worst[0], worst[1] * WORST.WORDS);
   return {
-    frames: frames_at(frames[0], frames[1]),
-    tasks: tasks_at(tasks[0], tasks[1]),
+    frames: framesAt(frames[0], frames[1]),
+    tasks: tasksAt(tasks[0], tasks[1]),
     worst: Array.from({ length: worst[1] }, (_, i) => {
       const o = i * WORST.WORDS;
       return { sample: frameAt(worstWords, o + WORST.sample), prev: worstWords[o + WORST.has_prev] === 0 ? null : frameAt(worstWords, o + WORST.prev) };
@@ -332,5 +332,5 @@ export function profilerRingsRead(): { frames: Frame[]; tasks: TaskRecord[]; wor
 /** What the live stream kept since the last take, cleared by taking. */
 export function profilerLogTake(): { tasks: TaskRecord[]; frames: Frame[] } {
   const l = u32s(CORE_DOORBELL.call(Command.PROFILER_TAKE, null, (at) => at >>> 0), LOG.WORDS);
-  return { tasks: tasks_at(l[LOG.tasks_at], l[LOG.tasks_count]), frames: frames_at(l[LOG.frames_at], l[LOG.frames_count]) };
+  return { tasks: tasksAt(l[LOG.tasks_at], l[LOG.tasks_count]), frames: framesAt(l[LOG.frames_at], l[LOG.frames_count]) };
 }

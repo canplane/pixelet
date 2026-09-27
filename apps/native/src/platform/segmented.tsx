@@ -2,25 +2,39 @@
 
 /**
  * One of a few views of the same panel, on an iPhone: the system's segmented
- * control — SwiftUI's Picker in its segmented style — so the pick has the
- * press and the slide the system gives it. A segment holds its words alone,
- * as the system's does: UIKit's segment is a title or an image, never both.
+ * control, so the pick has the press and the slide the system gives it. It
+ * is UIKit's (modules/platform/ios/SegmentedControl.swift), as every control
+ * that takes a touch here is (README.md beside this file). A segment holds
+ * its words alone, as the system's does: UIKit's segment is a title or an
+ * image, never both.
  */
 
-import { Host, Picker, Text } from "@expo/ui/swift-ui";
-import { pickerStyle, tag } from "@expo/ui/swift-ui/modifiers";
+import { requireNativeView } from "expo";
+import type { ComponentType } from "react";
+import type { NativeSyntheticEvent, ViewProps } from "react-native";
+
+import { PANEL_CONTROL } from "@/shared/ui/panel.tsx";
 
 export interface Segment<T extends string | number> {
   value: T;
   label: string;
 }
 
+interface SegmentedControlProps extends ViewProps {
+  labels: string[];
+  selectedIndex: number;
+  onPick: (event: NativeSyntheticEvent<{ index: number }>) => void;
+}
+
+const SegmentedControl: ComponentType<SegmentedControlProps> = requireNativeView("PxlPlatform", "SegmentedControl");
+
 export function Segmented<T extends string | number>({ segments, value, onChange }: { segments: readonly Segment<T>[]; value: T; onChange: (value: T) => void }) {
   return (
-    <Host matchContents={{ vertical: true }}>
-      <Picker selection={value} onSelectionChange={onChange} modifiers={[pickerStyle("segmented")]}>
-        {segments.map((s) => <Text key={s.value} modifiers={[tag(s.value)]}>{s.label}</Text>)}
-      </Picker>
-    </Host>
+    <SegmentedControl
+      labels={segments.map((s) => s.label)}
+      selectedIndex={segments.findIndex((s) => s.value === value)}
+      onPick={(e) => onChange(segments[e.nativeEvent.index].value)}
+      style={{ height: PANEL_CONTROL, alignSelf: "stretch" }}
+    />
   );
 }

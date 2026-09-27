@@ -7,7 +7,7 @@ import { Panel as PagePanel } from "../../../web/src/platform/web/panel.tsx";
 
 // Android draws the page's own (panel.tsx is an iPhone's): its system
 // controls are Material's, which read as any Android app's rather than this
-// one's, and it has no backdrop blur to lend a surface over the map.
+// one's.
 //
 // What Material's sheet did for itself and the page's cannot: the system's
 // back closes an open sheet. Unanswered, back leaves the app with the sheet

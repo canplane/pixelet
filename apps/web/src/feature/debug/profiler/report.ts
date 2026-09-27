@@ -12,7 +12,7 @@
 
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { round } from "@xpute/core/math/scalar.ts";
-import { copy_text } from "@platform/save.ts";
+import { copyText } from "@platform/save.ts";
 
 import { fieldText, type Frame, GROUPS, groupText, n1, pct, tris } from "./lane.ts";
 import { loafSupported, type LongFrame } from "./long-frame.ts";
@@ -208,7 +208,7 @@ export async function profilerReportCopy(text: string): Promise<string> {
   const kb = `${Math.max(1, round(text.length / 1024))} KB`;
   let said: string;
   try {
-    await copy_text(text);
+    await copyText(text);
     said = `report copied · ${kb}`;
   } catch {
     // A page's clipboard can refuse without a user's gesture or off a

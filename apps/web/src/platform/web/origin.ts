@@ -6,6 +6,6 @@
 export const ORIGIN: string = "";
 
 /** Reads one of the app's own routes: the page's fetch. */
-export function origin_get(route: string, signal?: AbortSignal): Promise<Response> {
+export function originGet(route: string, signal?: AbortSignal): Promise<Response> {
   return fetch(route, { signal });
 }

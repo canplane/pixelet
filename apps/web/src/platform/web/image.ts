@@ -6,16 +6,16 @@
  */
 
 import type { u32 } from "@xpute/core/abi/word.ts";
-import { register_image } from "@/platform/web/webgpu.ts";
+import { registerImage } from "@/platform/web/webgpu.ts";
 
-let next_image: u32 = 1;
+let nextImage: u32 = 1;
 
 /** Decodes a response's image and holds it for the renderer: the handle the
  * kernel names it by. The file's own pixels, top row first, no color
  * conversion and no premultiplied alpha. */
-export async function hold_image(res: Response): Promise<u32 | null> {
+export async function holdImage(res: Response): Promise<u32 | null> {
   const image = await createImageBitmap(await res.blob(), { colorSpaceConversion: "none", premultiplyAlpha: "none" });
-  const handle = next_image++;
-  register_image(handle, image);
+  const handle = nextImage++;
+  registerImage(handle, image);
   return handle;
 }

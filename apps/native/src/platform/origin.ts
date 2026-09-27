@@ -10,7 +10,7 @@ export const ORIGIN = "https://plei.me";
  * A read the transport fails rejects with a TypeError, as the page's fetch
  * does, which is how the shell tells the network's failures from its own
  * (kernel/io/fetch.ts); Expo's says FetchError for both a failure and a stop. */
-export async function origin_get(route: string, signal?: AbortSignal): Promise<Response> {
+export async function originGet(route: string, signal?: AbortSignal): Promise<Response> {
   try {
     return await fetch(`${ORIGIN}${route}`, { signal });
   } catch (err) {

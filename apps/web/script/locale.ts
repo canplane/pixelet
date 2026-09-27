@@ -14,7 +14,7 @@
 
 import { dirname, join } from "@std/path";
 
-import { decor_kinds, decorName, placeable_cubes, placeableCubeChannel, placeableCubeId } from "../src/catalog/cell/mod.ts";
+import { decorKinds, decorName, placeableCubeChannel, placeableCubeId, placeableCubes } from "../src/catalog/cell/mod.ts";
 
 const web = dirname(dirname(new URL(import.meta.url).pathname));
 const LOCALES = ["en", "ko"];
@@ -41,13 +41,13 @@ function branch(locale: string, doc: Catalog, name: string, want: string[]): voi
   }
 }
 
-const cube_ids = placeable_cubes.map(placeableCubeId);
-const channels = [...new Set(placeable_cubes.map(placeableCubeChannel))];
+const cubeIds = placeableCubes.map(placeableCubeId);
+const channels = [...new Set(placeableCubes.map(placeableCubeChannel))];
 
 for (const locale of LOCALES) {
   const doc: Catalog = JSON.parse(await Deno.readTextFile(join(web, `src/locale/${locale}.json`)));
-  branch(locale, doc, "cubes", cube_ids);
-  branch(locale, doc, "decors", decor_kinds.map(decorName));
+  branch(locale, doc, "cubes", cubeIds);
+  branch(locale, doc, "decors", decorKinds.map(decorName));
   // The drawer groups the catalog by channel, one heading each.
   const sections = doc["drawer_modal"];
   branch(locale, typeof sections === "object" ? sections : {}, "sections", channels);

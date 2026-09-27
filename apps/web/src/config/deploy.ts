@@ -14,7 +14,7 @@
  * `__IS_DEV__ === false`.
  */
 
-import { id as build_id, number as build_number, time as build_time } from "virtual:pxl-build";
+import { id as buildId, number as buildNumber, time as buildTime } from "virtual:pxl-build";
 
 /** Application environment name, from VITE_APP_ENV (falling back to Vite's
  * mode). Shown in settings so it is possible to tell which build is on screen
@@ -22,19 +22,19 @@ import { id as build_id, number as build_number, time as build_time } from "virt
 export const APP_ENV: string = __APP_ENV__;
 
 /** When this bundle was built, ISO-8601 in UTC. On a dev server, when the
- * page was loaded (vite.config.ts#build_stamp). */
-export const BUILD_TIME: string = build_time;
+ * page was loaded (vite.config.ts#buildStamp). */
+export const BUILD_TIME: string = buildTime;
 
 /** Which source this bundle was built from, `<hash>[-dirty]`
- * (vite.config.ts#build_id). Stamped on every profiler report and trace so a
+ * (vite.config.ts#buildId). Stamped on every profiler report and trace so a
  * measurement names what it measured, and carried in BUILD_NUMBER where the
  * build is not one CI numbered. */
-export const BUILD_ID: string = build_id;
+export const BUILD_ID: string = buildId;
 
 /** Which build this is, counted per deploy outside git: `#<n>`, and
  * `#<n>-<id>` for one built after it from source CI did not number
- * (vite.config.ts#build_number). */
-export const BUILD_NUMBER: string = build_number;
+ * (vite.config.ts#buildNumber). */
+export const BUILD_NUMBER: string = buildNumber;
 
 /**
  * Whether tiles come from a published bake rather than a live API. Decides

@@ -106,7 +106,7 @@ type ProfilerGlobals = typeof globalThis & {
   __pxl_profiler_trace?: () => Promise<string>;
   __pxl_profiler_log?: (on: boolean) => void;
   __pxl_view?: (dist: number | null, polar: number | null) => void;
-  __pxl_gauge?: (window_ms: number) => Gauge;
+  __pxl_gauge?: (windowMs: number) => Gauge;
 };
 
 /** A fresh window on both sides: the kernel's rings and the shell's long frames. */

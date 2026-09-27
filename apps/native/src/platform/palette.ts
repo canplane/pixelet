@@ -16,11 +16,16 @@ function system(name: string): string {
   return PlatformColor(name) as unknown as string;
 }
 
-export const LABEL: { primary: string; secondary: string; placeholder: string } = {
+export const LABEL: { primary: string; secondary: string; tertiary: string; placeholder: string } = {
   primary: system("label"),
   secondary: system("secondaryLabel"),
+  tertiary: system("tertiaryLabel"),
   placeholder: system("placeholderText"),
 };
+
+/** The compass's north: the system's red, as its own Maps and Compass draw
+ * it. */
+export const NORTH: string = system("systemRed");
 
 export const STATUS: { ready: string; pending: string; failed: string } = {
   ready: system("systemGreen"),

@@ -1,57 +1,58 @@
 // @pxl/web/shared/ui/halo.tsx
 
-import type { LucideIcon } from "lucide-react-native";
 import type { ReactNode } from "react";
-import { type StyleProp, StyleSheet, Text, type TextStyle, View } from "react-native";
+import { type StyleProp, StyleSheet, Text, type TextStyle, View, type ViewStyle } from "react-native";
 
 import type { f64 } from "@xpute/core/abi/word.ts";
+import type { IconProps } from "@platform/icon.tsx";
+import { Glyph } from "@/shared/ui/glyph.tsx";
 import { color as theme, halo } from "@/shared/ui/theme.ts";
 
-/** A glyph over the map in the halo its text has (theme.ts `halo`). Each ring
- * is faded as a whole, so where the icon's own strokes cross it is no darker.
- * A stroke is in the icon's 24-unit box, so a ring's pixels are scaled into
- * it, and the rings are drawn in a box widened by the widest ring, since an
- * icon clips what it draws to its own box. */
-export function HaloIcon({ icon: Icon, size, color, strokeWidth = 2 }: { icon: LucideIcon; size: f64; color: string; strokeWidth?: f64 }) {
-  const unit = 24 / size;
-  const out = Math.max(...halo.rings);
-  const ring = { top: -out, left: -out, opacity: halo.ring };
-  const viewBox = `${-out * unit} ${-out * unit} ${24 + 2 * out * unit} ${24 + 2 * out * unit}`;
+/**
+ * What floats over the map, in the halo it stands in (theme.ts `halo`):
+ * `draw` drawn in black at points around a circle as wide as each ring, and
+ * over those as itself. Copies rather than a stroke, because nothing it
+ * draws has one to widen on every platform — a device's text has none, and
+ * an iPhone's symbol is an image — and copies take a word, a lucide glyph and
+ * an SF Symbol alike: eight points a pixel out, more as the circle grows, so
+ * no gap opens between two. Each ring is faded as a whole, so where the
+ * copies overlap it is no darker.
+ */
+function Halo({ style, draw }: { style: StyleProp<ViewStyle>; draw: (ink?: string) => ReactNode }) {
   return (
-    <View style={{ width: size, height: size }}>
+    <View style={style}>
       {halo.rings.map((px) => (
-        <View key={px} style={[styles.layer, ring]}>
-          <Icon size={size + 2 * out} viewBox={viewBox} color={theme.black} strokeWidth={strokeWidth + 2 * px * unit} />
+        <View key={px} aria-hidden style={[StyleSheet.absoluteFill, { opacity: halo.ring }]}>
+          {around(px).map(([x, y], i) => (
+            <View key={i} style={[StyleSheet.absoluteFill, { transform: [{ translateX: x }, { translateY: y }] }]}>
+              {draw(theme.black)}
+            </View>
+          ))}
         </View>
       ))}
-      <View style={styles.layer}>
-        <Icon size={size} color={color} strokeWidth={strokeWidth} />
-      </View>
+      {draw()}
     </View>
   );
 }
 
-/** One line of text over the map in the halo (theme.ts `halo`). A text has no
- * stroke on a device, so a ring is the line drawn in black at points around a
- * circle as wide as the ring, which together cover what a stroke that wide
- * would: eight points a pixel out, more as the circle grows, so no gap opens
- * between two. Every copy wraps and ends as the line does. */
+/** A glyph over the map in the halo its text has; crossed out, the strike is
+ * haloed with it, which parts it from the strokes it crosses. */
+export function HaloIcon({ struck, ...icon }: IconProps & { struck?: boolean }) {
+  return <Halo style={{ width: icon.size, height: icon.size }} draw={(ink) => <Glyph {...icon} color={ink ?? icon.color} struck={struck} />} />;
+}
+
+/** One line of text over the map in the halo. Every copy wraps and ends as
+ * the line does. */
 export function HaloText({ style, children }: { style: StyleProp<TextStyle>; children: ReactNode }) {
   return (
-    <View style={styles.shrink}>
-      {halo.rings.map((px) => (
-        <View key={px} aria-hidden style={[StyleSheet.absoluteFill, { opacity: halo.ring }]}>
-          {around(px).map(([x, y], i) => (
-            <Text key={i} numberOfLines={1} style={[style, styles.under, styles.ink, { transform: [{ translateX: x }, { translateY: y }] }]}>
-              {children}
-            </Text>
-          ))}
-        </View>
-      ))}
-      <Text numberOfLines={1} style={style}>
-        {children}
-      </Text>
-    </View>
+    <Halo
+      style={styles.shrink}
+      draw={(ink) => (
+        <Text numberOfLines={1} style={[style, ink !== undefined && { color: ink }]}>
+          {children}
+        </Text>
+      )}
+    />
   );
 }
 
@@ -65,8 +66,5 @@ function around(px: f64): [f64, f64][] {
 }
 
 const styles = StyleSheet.create({
-  layer: { position: "absolute", top: 0, left: 0 },
   shrink: { flexShrink: 1, minWidth: 0 },
-  under: { position: "absolute", top: 0, left: 0, right: 0 },
-  ink: { color: theme.black },
 });

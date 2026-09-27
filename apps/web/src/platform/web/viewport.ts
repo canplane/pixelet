@@ -1,4 +1,4 @@
-// @pxl/web/platform/web/visual-viewport.ts
+// @pxl/web/platform/web/viewport.ts
 
 import { useEffect, useSyncExternalStore } from "react";
 
@@ -8,7 +8,7 @@ const SETTLE_MS = 250;
 let top = 0;
 const listeners = new Set<() => void>();
 
-function set_top(value: number): void {
+function setTop(value: number): void {
   if (value === top) return;
   top = value;
   for (const l of listeners) l();
@@ -72,7 +72,7 @@ export function useVisualViewport(): void {
       settleTimer = setTimeout(() => {
         settleTimer = 0;
         if (!vv) return;
-        set_top(vv.offsetTop);
+        setTop(vv.offsetTop);
       }, SETTLE_MS);
     }
 
@@ -81,7 +81,7 @@ export function useVisualViewport(): void {
       frame = requestAnimationFrame(apply);
     }
 
-    set_top(vv.offsetTop);
+    setTop(vv.offsetTop);
     apply();
     vv.addEventListener("resize", schedule);
     vv.addEventListener("scroll", schedule);
@@ -92,7 +92,7 @@ export function useVisualViewport(): void {
       vv.removeEventListener("resize", schedule);
       vv.removeEventListener("scroll", schedule);
       root.style.removeProperty("--vv-bottom");
-      set_top(0);
+      setTop(0);
     };
   }, []);
 }

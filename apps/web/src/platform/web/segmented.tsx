@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { PANEL_CONTROL } from "@/shared/ui/panel.tsx";
 import { color, textStyle, weight } from "@/shared/ui/theme.ts";
+import { LABEL } from "@platform/palette.ts";
 
 export interface Segment<T extends string | number> {
   value: T;
@@ -41,6 +42,6 @@ const styles = StyleSheet.create({
   track: { flexDirection: "row", height: PANEL_CONTROL, padding: INSET, borderRadius: PANEL_CONTROL / 2, backgroundColor: color.faint },
   segment: { flex: 1, alignItems: "center", justifyContent: "center", borderRadius: PANEL_CONTROL / 2 - INSET },
   on: { backgroundColor: color.paper, boxShadow: "0 1px 2px rgba(0, 0, 0, 0.08)" },
-  label: { ...textStyle.footnote, fontWeight: weight.medium, color: color.textMuted },
-  labelOn: { color: color.text },
+  label: { ...textStyle.footnote, fontWeight: weight.medium, color: LABEL.secondary },
+  labelOn: { color: LABEL.primary },
 });

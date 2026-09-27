@@ -8,7 +8,7 @@
  */
 
 /** What is kept under `key`, or none. */
-export function storage_get(key: string): string | null {
+export function storageGet(key: string): string | null {
   try {
     return globalThis.localStorage?.getItem(key) ?? null;
   } catch {
@@ -17,7 +17,7 @@ export function storage_get(key: string): string | null {
 }
 
 /** Keeps `value` under `key`. */
-export function storage_set(key: string, value: string): void {
+export function storageSet(key: string, value: string): void {
   try {
     globalThis.localStorage?.setItem(key, value);
   } catch {

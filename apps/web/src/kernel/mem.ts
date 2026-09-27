@@ -15,7 +15,7 @@
 
 import type { f64 } from "@xpute/core/abi/word.ts";
 import { Doorbell } from "@xpute/runtime/ipc/doorbell.ts";
-import { open_core } from "@platform/core.ts";
+import { openCore } from "@platform/core.ts";
 import { BOOT, boot_block, type Core } from "@/kernel/module.ts";
 import { run_host_stream } from "@/kernel/host.ts";
 
@@ -40,7 +40,7 @@ export let CORE_DOORBELL: Doorbell;
 /** Opens the core and makes its doorbell. A core that fails to open fails the
  * client — the memory exists for the kernel. */
 export async function load_core(): Promise<void> {
-  const core = await open_core();
+  const core = await openCore();
   const boot = boot_block(core.buffer);
   CORE = core;
   CORE_DOORBELL = new Doorbell(core.buffer, boot[BOOT.sq], boot[BOOT.cq], (quota_ms) => {

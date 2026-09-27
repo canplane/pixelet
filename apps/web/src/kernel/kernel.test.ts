@@ -42,7 +42,7 @@ import { ELE_PADDED_SPAN, encode_terrain, pack_ground_cell, PAGE_CELLS } from "@
 
 import { CORE, CORE_DOORBELL, load_core } from "@/kernel/mem.ts";
 import { BOOT, boot_block, bytes_at, hold_body } from "@/kernel/module.ts";
-import { acquire_device } from "@/platform/web/webgpu.ts";
+import { acquireDevice } from "@/platform/web/webgpu.ts";
 
 // The module the tests drive, loaded before any of them reads it.
 await load_core();
@@ -185,7 +185,7 @@ console.log(`heap: boot and world create ${heap_row[HEAP_REQUESTS]} requests, to
 /** A device that takes every call and holds nothing: whatever is asked of
  * it, or of what it hands back, is another of the same. A chunk is drawn from
  * meshes on the device, so without one the world lists nothing to draw; the
- * shell reaches it through acquire_device, and so does this. */
+ * shell reaches it through acquireDevice, and so does this. */
 function inert(): unknown {
   return new Proxy(() => {}, {
     get: (_, key) => {
@@ -209,7 +209,7 @@ Object.defineProperty(navigator, "gpu", {
     getPreferredCanvasFormat: () => "bgra8unorm",
   },
 });
-const device = await acquire_device(() => {});
+const device = await acquireDevice(() => {});
 assert("align" in device, "the stand-in device answered");
 CORE_DOORBELL.send(0, Command.GPU_CREATE, encode_gpu_create({ min_uniform_offset_alignment: device.align, timestamps: device.timestamps }));
 CORE_DOORBELL.ring(0);
