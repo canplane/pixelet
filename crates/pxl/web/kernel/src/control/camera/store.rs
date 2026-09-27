@@ -72,6 +72,9 @@ pub struct CameraStore {
     pub view_state: ViewState,
     /// Follow mode flag.
     pub is_follow_mode: bool,
+    /// A wheel's zoom is still reaching its distance: the wheel has no hold to
+    /// let go of, so its gesture ends when the eye arrives (damping.rs).
+    pub wheel_zooming: bool,
 }
 
 impl CameraStore {
@@ -86,6 +89,7 @@ impl CameraStore {
                 polar: DEFAULT_POLAR,
             },
             is_follow_mode: false,
+            wheel_zooming: false,
         }
     }
 

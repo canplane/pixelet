@@ -358,6 +358,8 @@ export interface Snapshot {
   azimuth: f64;
   is_follow_mode: boolean;
   camera_busy: boolean;
+  /** A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is. */
+  zooming: boolean;
   show_compass: boolean;
   /** Every setting's value by its SettingKey, as SETTING_UPDATE carries one. */
   settings: u32[];
@@ -379,11 +381,12 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     azimuth: b.at(4).get<f64>(),
     is_follow_mode: b.at(5).get<boolean>(),
     camera_busy: b.at(6).get<boolean>(),
-    show_compass: b.at(7).get<boolean>(),
-    settings: Array.from(b.at(8).get<U32Array>()),
-    scale_bar: read_scale_bar(b.at_branch(9)),
-    place: list(b.at_branch(10), read_place_part),
-    object_sizes: Array.from(b.at(11).get<F64Array>()),
+    zooming: b.at(7).get<boolean>(),
+    show_compass: b.at(8).get<boolean>(),
+    settings: Array.from(b.at(9).get<U32Array>()),
+    scale_bar: read_scale_bar(b.at_branch(10)),
+    place: list(b.at_branch(11), read_place_part),
+    object_sizes: Array.from(b.at(12).get<F64Array>()),
   };
 }
 
@@ -442,11 +445,10 @@ export function read_orientation_state(b: BranchCursor): OrientationState {
 export interface ScaleBar {
   total_meters: f64;
   bar_width_px: f64;
-  is_default_zoom: boolean;
 }
 
 export function read_scale_bar(b: BranchCursor): ScaleBar {
-  return { total_meters: b.at(0).get<f64>(), bar_width_px: b.at(1).get<f64>(), is_default_zoom: b.at(2).get<boolean>() };
+  return { total_meters: b.at(0).get<f64>(), bar_width_px: b.at(1).get<f64>() };
 }
 
 /** One rung of the place, in every language the provider had rather than one resolved

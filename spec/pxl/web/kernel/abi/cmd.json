@@ -730,6 +730,7 @@
         { "name": "azimuth", "type": "f64", "doc": ["The view's azimuth."] },
         { "name": "is_follow_mode", "type": "bool" },
         { "name": "camera_busy", "type": "bool" },
+        { "name": "zooming", "type": "bool", "doc": ["A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is."] },
         { "name": "show_compass", "type": "bool" },
         { "name": "settings", "type": "u32", "list": true, "doc": ["Every setting's value by its SettingKey, as SETTING_UPDATE carries one."] },
         { "name": "scale_bar", "type": "ScaleBar" },
@@ -802,8 +803,7 @@
       "name": "ScaleBar",
       "fields": [
         { "name": "total_meters", "type": "f64" },
-        { "name": "bar_width_px", "type": "f64" },
-        { "name": "is_default_zoom", "type": "bool" }
+        { "name": "bar_width_px", "type": "f64" }
       ]
     },
     {

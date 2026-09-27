@@ -63,8 +63,6 @@ export const color = {
   send: SYSTEM.orange,
   /** One's own name in the chat. */
   self: SYSTEM.orange,
-  /** The scale bar as it leaves, the zoom put back. */
-  reset: SYSTEM.yellow,
   /** A status: something ready, as a sensor or the world is; something on
    * its way; a report that something failed, with the failure's ground and
    * edge. */

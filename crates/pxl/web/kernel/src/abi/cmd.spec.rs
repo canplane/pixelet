@@ -670,6 +670,8 @@ pub struct Snapshot<'a> {
     pub azimuth: f64,
     pub is_follow_mode: bool,
     pub camera_busy: bool,
+    /// A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is.
+    pub zooming: bool,
     pub show_compass: bool,
     /// Every setting's value by its SettingKey, as SETTING_UPDATE carries one.
     pub settings: &'a [u32],
@@ -684,7 +686,7 @@ pub struct Snapshot<'a> {
 
 impl Snapshot<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 12;
+    pub const FIELDS: u32 = 13;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.branch(MapState::FIELDS, |w| self.map.write(w));
@@ -694,6 +696,7 @@ impl Snapshot<'_> {
         w.f64(Some(self.azimuth));
         w.bool(Some(self.is_follow_mode));
         w.bool(Some(self.camera_busy));
+        w.bool(Some(self.zooming));
         w.bool(Some(self.show_compass));
         w.u32_array(Some(self.settings));
         w.branch(ScaleBar::FIELDS, |w| self.scale_bar.write(w));
@@ -799,17 +802,15 @@ impl OrientationState {
 pub struct ScaleBar {
     pub total_meters: f64,
     pub bar_width_px: f64,
-    pub is_default_zoom: bool,
 }
 
 impl ScaleBar {
     /// The children it is written as.
-    pub const FIELDS: u32 = 3;
+    pub const FIELDS: u32 = 2;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.f64(Some(self.total_meters));
         w.f64(Some(self.bar_width_px));
-        w.bool(Some(self.is_default_zoom));
     }
 }
 

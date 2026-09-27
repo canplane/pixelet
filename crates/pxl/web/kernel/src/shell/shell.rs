@@ -16,6 +16,7 @@ use xpute_core::wire::xtp::PacketWriter;
 
 pub use crate::abi::cmd::Tracking;
 use crate::abi::cmd::{CompanionState, LocationState, LonLat, MapState, OrientationState, PlaceName, PlacePart, ScaleBar, Snapshot};
+use crate::control::camera::input::pinching;
 use crate::control::camera::store::{camera_store, CameraStatus, ViewPatch};
 use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::device_orientation::{orientation_close, orientation_open, request_orientation};
@@ -115,12 +116,12 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         azimuth: camera.view_state.azimuth,
         is_follow_mode: camera.is_follow_mode,
         camera_busy: camera.camera_status != CameraStatus::Idle,
+        zooming: pinching() || camera.wheel_zooming,
         show_compass: show_compass(),
         settings: &values,
         scale_bar: ScaleBar {
             total_meters: bar.total_meters,
             bar_width_px: bar.bar_width_px,
-            is_default_zoom: bar.is_default_zoom,
         },
         place: &|each| place_parts(page, zoom, each),
         object_sizes: &crate::layer::object::size::OBJECT_SIZES,
