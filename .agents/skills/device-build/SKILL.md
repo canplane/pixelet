@@ -1,6 +1,6 @@
 ---
 name: device-build
-description: Build the device app (apps/native) and put it on an iPhone, the iOS simulator, an Android emulator, an Android phone or a Meta Quest — the one-time setup of each machine, the Debug and Release builds, install and launch, and the failures each has had. Use when a device build is asked for, when one fails, or when a machine is set up for one.
+description: Build the device app (apps/native) and put it on an iPhone, the iOS simulator, an Android emulator, an Android phone, a Meta Quest or an Apple Vision Pro — the one-time setup of each machine, the Debug and Release builds, install and launch, and the failures each has had. Use when a device build is asked for, when one fails, or when a machine is set up for one.
 ---
 
 # Building for a device
@@ -68,6 +68,29 @@ simulator's target itself.
 `--console` on the launch streams the app's stdout, where the kernel's last
 words go (`[pxl] …`).
 
+### An Apple Vision Pro
+
+The iPhone app runs on visionOS as it is, in a window, as an iPhone app
+there does ("Designed for iPad/iPhone"): the same build for the iPhone's SDK,
+the kernel drawing through Metal. A native visionOS target is not made here:
+the platform module is an Expo module, and Expo builds for no visionOS.
+
+In the simulator, once Xcode has the runtime (`xcodebuild -downloadPlatform
+visionOS`), the Vision Pro simulator's id is a destination of its own, and
+the products are the iPhone simulator's:
+
+```bash
+xcodebuild -workspace pixelet.xcworkspace -scheme pixelet -configuration Release \
+  -destination 'id=<Vision Pro simulator id>' -derivedDataPath build/derived
+xcrun simctl install <id> build/derived/Build/Products/Release-iphonesimulator/pixelet.app
+xcrun simctl location <id> set 37.2741,127.0437
+xcrun simctl launch <id> me.plei.pixelet
+```
+
+A Release, since the simulator reaching Metro has not been tried. It has
+drawn the terrain from the served pages and named the place. A headset has
+not run it yet.
+
 ### What has gone wrong
 
 - **"Unable to find a destination"**: the phone dropped off; `devicectl list
@@ -95,6 +118,10 @@ words go (`[pxl] …`).
   has been called". `apps/native/.java-version` names 17 for jenv:
   `jenv add <JDK 17 home>` once, and Gradle run under `apps/native` gets it
   (`jenv exec ./gradlew …`, or `JAVA_HOME` set by jenv's export plugin).
+  Where prebuild writes `android/gradle/gradle-daemon-jvm.properties`, it
+  pins Gradle's daemon to Java 25 whatever `JAVA_HOME` says, and the same
+  failure follows; deleting the file lets the daemon run on the JDK Gradle
+  is started with.
 - The Rust target `aarch64-linux-android`, which `rust-toolchain.toml`
   installs.
 
@@ -152,15 +179,34 @@ for anything found failing on one. What differs is the device:
   position is the network's, and its updates come minutes apart.
 - **No compass**: `headingAvailable` finds neither sensor, and the kernel
   never listens for a heading.
-- **Getting one on a headset** is not yet done here. A headset takes
-  `adb` once its developer mode is on (the Meta Horizon phone app, under a
-  Meta developer account) and it is plugged in and trusted. Without one,
-  Meta's Spatial Simulator is an emulator for 2D panel apps, installed
-  through the Meta Horizon Android Studio plugin or the `metavr` CLI
-  (`metavr tools install spatialsim`, `metavr ssim start`, `metavr app
-  install <apk>`); it asks for a Meta sign-in and apps targeting API 34 and
-  later. Neither path has been run against this app; what fails on it
-  belongs below once one has.
+
+No headset has run it. A headset takes `adb` once its developer mode is on
+(the Meta Horizon phone app, under a Meta developer account) and it is
+plugged in and trusted.
+
+Without one, Meta's Spatial Simulator is an Android emulator for 2D panel
+apps. `npx metavr@latest init` signs in to a Meta account, and installs
+Meta's agent skills into the home directory besides; it leaves no `metavr`
+on `PATH`, so it runs through npx:
+
+```bash
+npx metavr tools install spatialsim
+npx metavr ssim start    # an emulator adb sees, emulator-5554 if it is the first
+adb install -r app/build/outputs/apk/quest/release/app-quest-release.apk
+adb shell cmd location set-location-enabled true
+adb emu geo fix 127.0437 37.2741
+```
+
+Its location is off until turned on, and it has no network provider, so the
+position is only what `geo fix` gives.
+
+**It crashes there, and nothing has found why.** Within seconds of the first
+position the app dies in React Native's Fabric, `IllegalStateException:
+Unable to find View for tag: …` from
+`SurfaceMountingManager.updateOverflowInset`, every launch. With location
+off it runs, and the `mobile` flavor of the same commit runs on a phone. A
+position with no heading is the one state only a Quest is in; a Debug build
+against Metro is where to find the view.
 
 ### What has gone wrong
 
