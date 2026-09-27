@@ -1,6 +1,5 @@
 // @pxl/web/feature/map/ui/overlay/top-overlays.tsx
 
-import { Search } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Defs, LinearGradient, Mask, Rect, Stop, Svg } from "react-native-svg";
@@ -73,7 +72,7 @@ export function TopOverlays() {
           }
           <Pressable onPress={ui.openSearchModal} accessibilityRole="button" accessibilityLabel={t("map.search.trigger_aria_label")} style={styles.title}>
             <View style={styles.search}>
-              <HaloIcon icon={Search} size={14} strokeWidth={2.5} color={color.white} />
+              <HaloIcon glyph="magnifyingglass" size={14} weight="semibold" color={color.white} />
               <CurrentAddress label={addressLabel} />
             </View>
             <SensorStatus />

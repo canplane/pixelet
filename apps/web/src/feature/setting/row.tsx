@@ -1,12 +1,13 @@
 // @pxl/web/feature/setting/row.tsx
 
-import { Check, type LucideIcon } from "lucide-react-native";
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import type { Glyph as GlyphName } from "@platform/icon.tsx";
 import { ToggleRow } from "@platform/toggle-row.tsx";
 
 import type { SettingCost } from "@/feature/setting/schema.ts";
+import { Glyph } from "@/shared/ui/glyph.tsx";
 import { alpha, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
 import { LABEL } from "@platform/palette.ts";
 
@@ -124,23 +125,23 @@ export function SettingChoiceRow(props: SettingChoiceRowProps) {
   return (
     <Pressable onPress={onSelect} accessibilityRole="radio" aria-checked={selected} style={styles.row}>
       <Described label={label} description={description} cost={cost} />
-      <View style={styles.check}>{selected && <Check size={18} strokeWidth={2.5} color={color.chosen} />}</View>
+      <View style={styles.check}>{selected && <Glyph glyph="checkmark" size={18} weight="semibold" color={color.chosen} />}</View>
     </Pressable>
   );
 }
 
 interface SectionTitleProps {
   children: string;
-  icon?: LucideIcon;
+  icon?: GlyphName;
   caption?: string;
 }
 
 export function SectionTitle(props: SectionTitleProps) {
-  const { children, icon: Icon, caption } = props;
+  const { children, icon, caption } = props;
   return (
     <View style={styles.titleBlock}>
       <View style={styles.titleLine}>
-        {Icon && <Icon size={16} color={LABEL.secondary} />}
+        {icon && <Glyph glyph={icon} size={16} color={LABEL.secondary} />}
         <Text accessibilityRole="header" style={styles.title}>{children}</Text>
       </View>
       {caption && <Text style={styles.caption}>{caption}</Text>}

@@ -2,7 +2,6 @@
 
 import type { f64 } from "@xpute/core/abi/word.ts";
 import { useEffect, useState } from "react";
-import { Locate, Search, X } from "lucide-react-native";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { round } from "@xpute/core/math/scalar.ts";
 import { useTranslation } from "react-i18next";
@@ -21,6 +20,7 @@ import { AboveKeyboard } from "@platform/above-keyboard.tsx";
 import { SYSTEM_CLEAR } from "@platform/text-field.ts";
 import { Glass } from "@platform/glass.tsx";
 import { GlassVariant } from "@/shared/ui/glass-variant.ts";
+import { Glyph } from "@/shared/ui/glyph.tsx";
 import { resolvePoiBadge } from "@/feature/search/poi-badge.ts";
 import { assembleLabel } from "@/feature/map/geocode/label.ts";
 import { fetchSearch, type SearchResult } from "@/feature/search/repository.ts";
@@ -129,7 +129,7 @@ function LocateCard() {
     <AboveKeyboard inset={16}>
       <Glass fill={color.white} variant={GlassVariant.Clear} interactive style={styles.locateCard}>
         <Pressable onPress={kernel_enable_location} accessibilityRole="button" style={styles.locateRow}>
-          <Locate size={18} color={poseColor(location)} />
+          <Glyph glyph="location" size={18} color={poseColor(location)} />
           <Text numberOfLines={1} style={styles.locateLabel}>{t("map.sensors.label")}</Text>
           <Text style={styles.locateAction}>{t("map.sensors.turn_on")}</Text>
         </Pressable>
@@ -218,7 +218,7 @@ export function SearchModal(props: BaseModalProps) {
                   round button, so the two X's are not confused. */
               }
               <Glass fill={color.faint} variant={GlassVariant.Clear} style={styles.well}>
-                <Search size={16} color={LABEL.secondary} />
+                <Glyph glyph="magnifyingglass" size={16} color={LABEL.secondary} />
                 <TextField
                   value={query}
                   onChangeText={setQuery}
@@ -242,7 +242,7 @@ export function SearchModal(props: BaseModalProps) {
                     accessibilityLabel={t("map.search.clear_aria_label")}
                     style={styles.clear}
                   >
-                    <X size={10} strokeWidth={3} color={color.paper} />
+                    <Glyph glyph="xmark" size={10} weight="heavy" color={color.paper} />
                   </Pressable>
                 )}
               </Glass>

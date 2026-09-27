@@ -1,6 +1,5 @@
 // @pxl/web/feature/map/ui/overlay/sensor-status.tsx
 
-import { Compass, createLucideIcon, Locate, LocateOff, type LucideIcon } from "lucide-react-native";
 import { StyleSheet, View } from "react-native";
 
 import type { f64 } from "@xpute/core/abi/word.ts";
@@ -9,6 +8,7 @@ import { DevicePoseStatus } from "@/kernel/abi/cmd.spec.ts";
 import { useKernel } from "@/kernel/shell.ts";
 
 import { HANDHELD } from "@platform/core.ts";
+import type { Glyph } from "@platform/icon.tsx";
 import { HaloIcon } from "@/shared/ui/halo.tsx";
 import { color } from "@/shared/ui/theme.ts";
 
@@ -22,17 +22,6 @@ export function useSensors() {
   const hasCompass = HANDHELD && orientation !== DevicePoseStatus.Unavailable;
   return { location, orientation, hasCompass };
 }
-
-/** Lucide has no crossed-out compass, so this is its Compass drawn the way
- * its other "-off" icons are: the 2,2 → 22,22 slash, and the circle split
- * into two arcs that stop 12° short of where the slash crosses it (at 45°
- * and 225°), so the slash does not touch the outline. */
-const CompassOff = createLucideIcon("compass-off", [
-  ["path", { d: "M6.55 3.61A10 10 0 0 1 20.39 17.45", key: "arc-upper" }],
-  ["path", { d: "M17.45 20.39A10 10 0 0 1 3.61 6.55", key: "arc-lower" }],
-  ["path", { d: "m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z", key: "needle" }],
-  ["path", { d: "m2 2 20 20", key: "slash" }],
-]);
 
 function statusColor(status: DevicePoseStatus): string {
   switch (status) {
@@ -70,17 +59,18 @@ export function SensorStatus() {
 
   // The glyph is faded whole, its rim with it. Only a sensor on its way or
   // failed takes a color, and a failed one is also crossed out, so the state
-  // does not rest on color alone.
-  const icon = (Icon: LucideIcon, Failed: LucideIcon, status: DevicePoseStatus) => (
+  // does not rest on color alone — the location as its symbol's own `.slash`
+  // is, and the compass, whose symbol has none, the same way.
+  const icon = (glyph: Glyph, status: DevicePoseStatus) => (
     <View style={{ opacity: presence(status) }}>
-      <HaloIcon icon={status === DevicePoseStatus.Error ? Failed : Icon} size={12} color={statusColor(status)} />
+      <HaloIcon glyph={glyph} size={12} color={statusColor(status)} struck={status === DevicePoseStatus.Error} />
     </View>
   );
 
   return (
     <View style={styles.row}>
-      {icon(Locate, LocateOff, location)}
-      {hasCompass && icon(Compass, CompassOff, orientation)}
+      {icon("location", location)}
+      {hasCompass && icon("location.north.circle", orientation)}
     </View>
   );
 }

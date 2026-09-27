@@ -1,14 +1,15 @@
 // @pxl/web/shared/ui/toast/toast.tsx
 
-import { Check, Loader2, MapPinOff } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { type GestureResponderHandlers, PixelRatio, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import type { f64 } from "@xpute/core/abi/word.ts";
-import { Motion, Spin } from "@platform/motion.tsx";
+import { Spinner } from "@platform/icon.tsx";
+import { Motion } from "@platform/motion.tsx";
 import { LABEL, STATUS } from "@platform/palette.ts";
 import { Pill } from "@platform/pill.tsx";
 import { GlassVariant } from "@/shared/ui/glass-variant.ts";
+import { Glyph } from "@/shared/ui/glyph.tsx";
 import { Swap } from "@/shared/ui/motion/presence.tsx";
 import { LEAVE, SNAP, spring, type Transition } from "@/shared/ui/motion/transition.ts";
 import { alpha, color, surface, textStyle, weight } from "@/shared/ui/theme.ts";
@@ -24,8 +25,8 @@ const POP: Transition = spring({ stiffness: 260, damping: 12, mass: 0.8 });
 /** A glyph arriving otherwise, and any glyph leaving. */
 const GLYPH_FADE: Transition = { ...LEAVE, durationMs: 200 };
 
-/** A status as Apple draws one (checkmark.circle.fill): a white glyph in a
- * disc of the status's color. A stroked glyph in the color alone is too thin
+/** A status as Apple draws one (checkmark.circle.fill, xmark.circle.fill): a
+ * white glyph in a disc of the status's color. A stroked glyph in the color alone is too thin
  * to read — green's stroke on the glass stands under 2:1 against it — where
  * a filled disc is read by its shape whatever it stands on. */
 function StatusDisc({ fill, children }: { fill: string; children: React.ReactNode }) {
@@ -35,21 +36,17 @@ function StatusDisc({ fill, children }: { fill: string; children: React.ReactNod
 function glyph(tone: ToastTone) {
   switch (tone) {
     case ToastTone.Loading:
-      return (
-        <Spin periodMs={1000}>
-          <Loader2 size={16} strokeWidth={2.5} color={LABEL.primary} />
-        </Spin>
-      );
+      return <Spinner size={16} color={LABEL.primary} />;
     case ToastTone.Error:
       return (
         <StatusDisc fill={STATUS.failed}>
-          <MapPinOff size={11} strokeWidth={2.75} color={color.white} />
+          <Glyph glyph="xmark" size={11} weight="black" color={color.white} />
         </StatusDisc>
       );
     case ToastTone.Ready:
       return (
         <StatusDisc fill={STATUS.ready}>
-          <Check size={11} strokeWidth={3.5} color={color.white} />
+          <Glyph glyph="checkmark" size={11} weight="black" color={color.white} />
         </StatusDisc>
       );
   }

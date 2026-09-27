@@ -12,6 +12,7 @@ import { useUiStore } from "@/app/store/ui-store.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { useSafeArea } from "@platform/safe-area.ts";
 import { Panel } from "@platform/panel.tsx";
+import { Glyph } from "@/shared/ui/glyph.tsx";
 import { PANEL_EDGE, PANEL_TABS_ROOM, PanelBody, PanelHeader } from "@/shared/ui/panel.tsx";
 import { Segmented } from "@platform/segmented.tsx";
 import { color, hairline, sectionTitle, textStyle } from "@/shared/ui/theme.ts";
@@ -80,12 +81,11 @@ function DecorGridButton({ kind, onPick }: { kind: u8; onPick: (kind: u8) => voi
   const held = useUiStore((s) => s.decor);
   const active = activeTool === ActiveTool.Decor && held === kind;
   const name = decorName(kind);
-  const Icon = DECOR_ICONS[name];
 
   return (
     <GridButton label={t(`decors.${name}`)} active={active} onPress={() => onPick(kind)}>
       <View style={[styles.decor, active ? [styles.markOn, styles.decorOn] : styles.markOff]}>
-        <Icon size={16} strokeWidth={2} color={LABEL.primary} />
+        <Glyph glyph={DECOR_ICONS[name]} size={16} color={LABEL.primary} />
       </View>
     </GridButton>
   );

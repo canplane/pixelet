@@ -1,14 +1,15 @@
 // @pxl/web/feature/map/ui/overlay/mode-bar.tsx
 
 import { useRef, useState } from "react";
-import { ArrowUp, Eraser, LayoutGrid, MessageCircle, MousePointer, Palette, TreePine } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { Keyboard, PanResponder, PixelRatio, Pressable, ScrollView, StyleSheet, type TextInput, View } from "react-native";
 import { PAN_X } from "@platform/gesture.ts";
 
 import type { f64, u32, u8 } from "@xpute/core/abi/word.ts";
 import { Glass, SYSTEM_GLASS } from "@platform/glass.tsx";
+import type { Glyph as GlyphName } from "@platform/icon.tsx";
 import { GlassVariant } from "@/shared/ui/glass-variant.ts";
+import { Glyph } from "@/shared/ui/glyph.tsx";
 import { Motion } from "@platform/motion.tsx";
 import { LABEL } from "@platform/palette.ts";
 import { Pill } from "@platform/pill.tsx";
@@ -258,12 +259,11 @@ function DecorIconButton({ kind }: { kind: u8 }) {
   const held = useUiStore((s) => s.decor);
   const selectDecor = useUiStore.getState().selectDecor;
   const name = decorName(kind);
-  const Icon = DECOR_ICONS[name];
   const active = activeTool === ActiveTool.Decor && held === kind;
 
   return (
     <ToolButton label={t(`decors.${name}`)} active={active} onPress={() => selectDecor(kind)}>
-      <Icon size={GLYPH} strokeWidth={2} color={active ? STRIP.glyphOn : STRIP.glyph} />
+      <Glyph glyph={DECOR_ICONS[name]} size={GLYPH} color={active ? STRIP.glyphOn : STRIP.glyph} />
     </ToolButton>
   );
 }
@@ -274,8 +274,8 @@ function DecorIconButton({ kind }: { kind: u8 }) {
 // is one consumer) and is also imported by drawer-modal.tsx's own
 // DecorGridButton, so a new decor kind's icon shows up in both the hotbar
 // and the drawer for free.
-export const DECOR_ICONS: Record<DecorId, typeof TreePine> = {
-  tree: TreePine,
+export const DECOR_ICONS: Record<DecorId, GlyphName> = {
+  tree: "tree",
 };
 
 /** A round slot in the dark strip, lit while its tool is the one in hand. */
@@ -409,7 +409,7 @@ export function ModeBar() {
               accessibilityLabel={t("map.mode_bar.message_tooltip")}
               style={styles.messageIcon}
             >
-              <MessageCircle size={GLYPH} strokeWidth={2} color={LABEL.primary} />
+              <Glyph glyph="bubble.left" size={GLYPH} color={LABEL.primary} />
             </Pressable>
             <Presence
               show={messageExpanded}
@@ -452,10 +452,10 @@ export function ModeBar() {
             >
               <View style={styles.group}>
                 <ToolButton label={t("map.mode_bar.pointer")} active={activeTool === ActiveTool.Pointer} onPress={() => set_activeTool(ActiveTool.Pointer)}>
-                  <MousePointer size={GLYPH} strokeWidth={2} color={activeTool === ActiveTool.Pointer ? STRIP.glyphOn : STRIP.glyph} />
+                  <Glyph glyph="hand.point.up.left" size={GLYPH} color={activeTool === ActiveTool.Pointer ? STRIP.glyphOn : STRIP.glyph} />
                 </ToolButton>
                 <ToolButton label={t("map.mode_bar.eraser")} active={activeTool === ActiveTool.Eraser} onPress={() => set_activeTool(ActiveTool.Eraser)}>
-                  <Eraser size={GLYPH} strokeWidth={2} color={activeTool === ActiveTool.Eraser ? STRIP.glyphOn : STRIP.glyph} />
+                  <Glyph glyph="eraser" size={GLYPH} color={activeTool === ActiveTool.Eraser ? STRIP.glyphOn : STRIP.glyph} />
                 </ToolButton>
               </View>
 
@@ -487,7 +487,7 @@ export function ModeBar() {
               }
               <View style={styles.group}>
                 <ToolButton label={t("map.mode_bar.catalog_tooltip")} onPress={ui.openDrawerModal}>
-                  <LayoutGrid size={GLYPH} strokeWidth={2} color={STRIP.glyph} />
+                  <Glyph glyph="square.grid.2x2" size={GLYPH} color={STRIP.glyph} />
                 </ToolButton>
               </View>
             </Motion>
@@ -515,7 +515,7 @@ export function ModeBar() {
                     accessibilityLabel={t("map.mode_bar.send")}
                     style={({ pressed }) => [styles.slotButton, pressed && styles.sendPressed]}
                   >
-                    <ArrowUp size={GLYPH} strokeWidth={2.75} color={color.white} />
+                    <Glyph glyph="arrow.up" size={GLYPH} weight="bold" color={color.white} />
                   </Pressable>
                 )
                 : (
@@ -528,7 +528,7 @@ export function ModeBar() {
                     accessibilityLabel={t("map.mode_bar.palette_tooltip")}
                     style={styles.slotButton}
                   >
-                    <Palette size={GLYPH} strokeWidth={2} color={STRIP.glyph} />
+                    <Glyph glyph="paintpalette" size={GLYPH} color={STRIP.glyph} />
                   </Pressable>
                 )}
             </Swap>

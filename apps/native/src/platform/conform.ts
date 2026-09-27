@@ -17,6 +17,7 @@
 import type * as WebAboveKeyboard from "../../../web/src/platform/web/above-keyboard.tsx";
 import type * as WebCore from "../../../web/src/platform/web/core.ts";
 import type * as WebGlass from "../../../web/src/platform/web/glass.tsx";
+import type * as WebIcon from "../../../web/src/platform/web/icon.tsx";
 import type * as WebGesture from "../../../web/src/platform/web/gesture.ts";
 import type * as WebGpu from "../../../web/src/platform/web/gpu.ts";
 import type * as WebImage from "../../../web/src/platform/web/image.ts";
@@ -41,6 +42,7 @@ import type * as WebVisualViewport from "../../../web/src/platform/web/visual-vi
 import * as AboveKeyboard from "./above-keyboard.tsx";
 import * as Core from "./core.ts";
 import * as Glass from "./glass.tsx";
+import * as Icon from "./icon.tsx";
 import * as Gesture from "./gesture.ts";
 import * as Gpu from "./gpu.ts";
 import * as Image from "./image.ts";
@@ -62,6 +64,7 @@ import * as TextField from "./text-field.ts";
 import * as Typeface from "./typeface.ts";
 import * as VisualViewport from "./visual-viewport.ts";
 import * as GlassAndroid from "./glass.android.tsx";
+import * as IconAndroid from "./icon.android.tsx";
 import * as PaletteAndroid from "./palette.android.ts";
 import * as PanelAndroid from "./panel.android.tsx";
 import * as PillAndroid from "./pill.android.tsx";
@@ -73,6 +76,7 @@ export const CONFORMS = [
   AboveKeyboard satisfies typeof WebAboveKeyboard,
   Core satisfies typeof WebCore,
   Glass satisfies typeof WebGlass,
+  Icon satisfies typeof WebIcon,
   Gesture satisfies typeof WebGesture,
   Gpu satisfies typeof WebGpu,
   Image satisfies typeof WebImage,
@@ -94,6 +98,7 @@ export const CONFORMS = [
   Typeface satisfies typeof WebTypeface,
   VisualViewport satisfies typeof WebVisualViewport,
   GlassAndroid satisfies typeof WebGlass,
+  IconAndroid satisfies typeof WebIcon,
   PaletteAndroid satisfies typeof WebPalette,
   PanelAndroid satisfies typeof WebPanel,
   PillAndroid satisfies typeof WebPill,

@@ -1,16 +1,16 @@
 // @pxl/web/feature/map/ui/control/tracking-button.tsx
 
-import { Compass, Loader2, Locate, Navigation } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { View } from "react-native";
 
-import { Spin } from "@platform/motion.tsx";
+import { Spinner } from "@platform/icon.tsx";
 import { LABEL } from "@platform/palette.ts";
 
 import { DevicePoseStatus, Tracking } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_tracking, useKernel } from "@/kernel/shell.ts";
 
 import { CircularButton } from "@/shared/ui/circular-button.tsx";
+import { Glyph } from "@/shared/ui/glyph.tsx";
 
 export function TrackingButton() {
   const { t } = useTranslation();
@@ -28,24 +28,23 @@ export function TrackingButton() {
 
   const icon = () => {
     if (isLoading) {
-      return (
-        <Spin periodMs={1000}>
-          <Loader2 size={20} color={LABEL.primary} />
-        </Spin>
-      );
+      return <Spinner size={20} color={LABEL.primary} />;
     }
-    if (canShowLocationControl) return <Locate size={20} color={LABEL.primary} />;
+    // As iPhone Maps draws its button: an outline arrow to go back to where
+    // one is, a filled one while there, north's line while the map follows
+    // the heading.
+    if (canShowLocationControl) return <Glyph glyph="location" size={20} color={LABEL.primary} />;
     if (is_follow_mode) {
       const finalRotationDeg = (heading ?? 0) - (azimuth * 180) / Math.PI;
       // Turned by the view around it, in React Native's own transform: a CSS
       // string on the icon is the page's SVG, and a device's SVG refuses it.
       return (
         <View style={{ transform: [{ rotate: `${finalRotationDeg}deg` }] }}>
-          <Compass size={20} color={LABEL.primary} />
+          <Glyph glyph="location.north.line.fill" size={20} color={LABEL.primary} />
         </View>
       );
     }
-    return <Navigation size={20} color={LABEL.primary} />;
+    return <Glyph glyph="location.fill" size={20} color={LABEL.primary} />;
   };
 
   const title = canShowLocationControl ? t("map.controls.move_to_location") : is_follow_mode ? t("map.controls.exit_compass_mode") : t("map.controls.start_compass_mode");

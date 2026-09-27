@@ -1,11 +1,11 @@
 // @pxl/web/shared/ui/panel.tsx
 
-import { X } from "lucide-react-native";
 import { createContext, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Glass } from "@platform/glass.tsx";
 import { GlassVariant } from "@/shared/ui/glass-variant.ts";
+import { Glyph } from "@/shared/ui/glyph.tsx";
 import { color, textStyle } from "@/shared/ui/theme.ts";
 import { LABEL } from "@platform/palette.ts";
 
@@ -103,7 +103,7 @@ export function PanelClose({ label, onClose }: { label: string; onClose: () => v
   return (
     <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={label} style={styles.close}>
       <Glass fill={color.faint} variant={GlassVariant.Clear} interactive style={styles.closeFace}>
-        <X size={18} color={LABEL.primary} />
+        <Glyph glyph="xmark" size={18} color={LABEL.primary} />
       </Glass>
     </Pressable>
   );
