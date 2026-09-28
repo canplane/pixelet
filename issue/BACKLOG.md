@@ -52,16 +52,33 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
     z16 a kind's footing and a transport-aligned kind's heading are read off
     the level's cells, so an instance can appear, go or turn at a level
     change, as the ground under it does.
-- **What is drawn is what the screen covers.** The central idea from
-  2026-09-28
-  ([20260928-what-is-drawn-is-what-the-screen-covers.md](./20260928-what-is-drawn-is-what-the-screen-covers.md)):
-  what is drawn is bounded by the screen, each layer keeps its own storage,
-  one query joins the two, and fetching is what the query missed. It
-  replaces the budget's search, the set view counts and the pressure; the
-  audit that led to it is
-  [20260928-the-view-s-cost-read-against-its-invariant.md](./20260928-the-view-s-cost-read-against-its-invariant.md).
-  Under review: the invariants' proofs, asking before the data is there,
-  and rasterized pieces against casting into the records.
+- **What is drawn is what the screen covers: to main, and closed.** Built
+  2026-09-28 on `observation-paging`, pushed, not on main
+  ([20260928-what-is-drawn-is-what-the-screen-covers.md](./20260928-what-is-drawn-is-what-the-screen-covers.md);
+  ARCHITECTURE.md "The view"). The client asks for terrain v7, so main
+  waits for its publish. In order:
+  - **Before main.** The dev tile server's 500 on some pages under its top
+    level (a missing file in the demand fold) fixed, and the offline bake
+    checked for the same; terrain v7 baked and published after
+    `deno task usage` (about 227,000 Class A); a device build run; then
+    merged with `--no-ff` and deployed.
+  - **Closing the model.** The domain's reading by column becomes a query
+    of a 3D box, so height is nowhere special above a layer. The query's
+    walk skips by the index's extent a level at a time, so a ray costs a
+    logarithm, and an `Observer` on the GPU can cast every tile at once.
+    Record demand from hits rather than bounds: from street level
+    `ByBounds` asks for about 37 pages where 3 are seen. Places and decor
+    stop reading heights off the mesh (`Scheduler::surface_at`). Residency's
+    table, and what the domain, the frontier and the observer allocate per
+    rebuild, move off the heap. The arena is sized to the smaller goal.
+    Objects get records a level and an index of their own beyond the
+    store's reaches. The hard-held chain's test returns with the first
+    consumer that leases.
+- **How the samples are drawn.** Raster against casting into the records,
+  on the iPhone 13 mini, with today's box format (36 unindexed vertices)
+  against faces alone; seams where levels that are not neighbours meet, and
+  a blend on arrival; decor as its own solver — instances at the asset's
+  level of detail, an impostor far away, its lifetime off the chunk slot.
 - **A blank screen after a far search from a zoomed-out view.** Location
   pending, 30 ticks of zoom out, search "아주대학교", the first result:
   nothing is drawn and the frame count stops (2 of 2 under dev:local,

@@ -15,8 +15,9 @@
 //! (prefetch.rs) are merged in, the best reason per page, and what of that
 //! is not held is said to the scheduler once a turn. How the pages are drawn
 //! — the pieces the view is cut into (pyramid/domain.rs), what a layer draws
-//! of them (pyramid/cover.rs) — is made from what is resident and enters
-//! none of it.
+//! of them (pyramid/cover.rs, chunk/frontier.rs) — is made from what is
+//! resident and enters none of it, but through the one quality both are
+//! held to (world/quality.rs), which is decided before either reads it.
 //!
 //! The tree is as deep as a layer's data needs and no deeper: where a page
 //! says all of a child's ground (`Folds::settles`), the child is no page, is
@@ -33,6 +34,7 @@ pub mod domain;
 
 use std::collections::HashMap;
 
+use pxl_spec::space::lod::Tau;
 use pxl_spec::space::observation::{Bounds, ByBounds, DemandEstimator, Observation, Paged, Requirement, Storage as _};
 use pxl_spec::space::pyramid::{Folds, LevelPage, TOP_LEVEL};
 
@@ -44,6 +46,7 @@ use crate::world::observation::{heights_revision, observation, Known, Order};
 use crate::world::paging::floor::{Fallback, Floor};
 use crate::world::paging::{Candidate, Paging, Victim, ASKS, FRAMES, LEVEL_DEMAND_PAGES};
 use crate::world::prefetch::{NoPrefetch, Prefetch};
+use crate::world::quality;
 
 /// A layer the pyramid holds: its page is itself, folded by `Folds`.
 pub trait Layer: Folds + Clone + 'static {
@@ -82,16 +85,12 @@ pub trait Layer: Folds + Clone + 'static {
 }
 
 /// What the asks are a function of: the observation, what is held and
-/// leased (`Paging::revision`), and what is known of the heights
+/// leased (`Paging::revision`), what is known of the heights
 /// (`heights_revision`), which neither the observation nor this layer's
-/// pages move. Two turns agreeing on all of it ask for the same pages, so the
-/// second decides nothing again.
-type Seen = (Observation, u32, (u32, u32));
-
-/// The estimator of demand the kernel runs: from bounds alone, hidden ground
-/// asked for too. One from the samples' hits is a smaller superset and
-/// changes nothing else here.
-const ESTIMATOR: ByBounds = ByBounds;
+/// pages move, and the quality the view is held to (world/quality.rs). Two
+/// turns agreeing on all of it ask for the same pages, so the second decides
+/// nothing again.
+type Seen = (Observation, u32, (u32, u32), Tau);
 
 /// The speculation the kernel runs: none. The view is paged by its faults,
 /// and with no speculation at all it converges to exact
@@ -218,16 +217,16 @@ impl<L: Layer> Pyramid<L> {
 
     /// What the observation `o` asks for: the fallback leased, and every page
     /// asked for — what `estimator` says `o` requires, as far as `bounds`
-    /// know the heights, the leases, and what `prefetch` speculates on, at
-    /// most `allowance` of it — each with what it depends on, the best reason
-    /// per page. What of it is not held is what the layer wants.
+    /// know the heights, the leases, and what `prefetch` speculates on at
+    /// `tau`, at most `allowance` of it — each with what it depends on, the
+    /// best reason per page. What of it is not held is what the layer wants.
     ///
     /// Speculation is asked for only as far as frames are left over once
     /// everything held hard and everything demanded has one, so none of it
     /// is fetched only to find no frame.
-    pub fn observe(&mut self, o: &Observation, bounds: &impl Bounds, estimator: &impl DemandEstimator, prefetch: &impl Prefetch, allowance: u32) {
+    pub fn observe(&mut self, o: &Observation, bounds: &impl Bounds, estimator: &impl DemandEstimator, prefetch: &impl Prefetch, tau: Tau, allowance: u32) {
         let mut floor = Vec::with_capacity(Floor::PAGES as usize);
-        Floor::floor(o.eye, o.far, |p| floor.push(p));
+        Floor::floor(o.top, o.eye, o.far, |p| floor.push(p));
         xpute_core::ensure!(floor.len() as u32 <= Floor::PAGES, ENOTRECOVERABLE, floor.len());
         for &p in self.floor.iter().filter(|p| !floor.contains(p)) {
             self.paging.release(p);
@@ -273,7 +272,7 @@ impl<L: Layer> Pyramid<L> {
         let needed = asks.keys().filter(|&&p| self.paging.takes_frame(p)).count() as u32;
         let mut room = FRAMES.saturating_sub(needed).min(allowance);
         let mut hints: Vec<(Order, LevelPage)> = Vec::new();
-        prefetch.speculate(o, &mut |p| {
+        prefetch.speculate(o, tau, &mut |p| {
             if !asks.contains_key(&p) {
                 hints.push((order(p), p));
             }
@@ -311,18 +310,26 @@ impl<L: Layer> Pyramid<L> {
         &self.wants
     }
 
-    /// The layer's turn. Wherever the observation, what is held or leased,
-    /// or the heights have changed, it is observed again (`observe`), since
-    /// the asks are functions of all of them. A turn where none changed
-    /// decides nothing and says the wants it has.
+    /// The layer's turn. The quality is decided first (world/quality.rs),
+    /// so what is asked for is at the quality what is drawn is cut at.
+    /// Wherever the observation, what is held or leased, the heights or the
+    /// quality have changed, it is observed again (`observe`), since the asks
+    /// are functions of all of them. A turn where none changed decides
+    /// nothing and says the wants it has.
+    ///
+    /// The estimator is the one from bounds alone, hidden ground asked for
+    /// too; one from the samples' hits is a smaller superset and changes
+    /// nothing else here.
     pub fn step(&mut self) {
         let Some(o) = observation() else { return };
-        let seen = (o, self.paging.revision(), heights_revision());
+        quality::step();
+        let tau = quality::effective().tau();
+        let seen = (o, self.paging.revision(), heights_revision(), tau);
         if self.last != Some(seen) {
-            self.observe(&o, &Known, &ESTIMATOR, &PREFETCH, param::HINT_ALLOWANCE);
+            self.observe(&o, &Known, &ByBounds { tau }, &PREFETCH, tau, param::HINT_ALLOWANCE);
             // Observing leases and lets go; what is recorded is the state the
             // observation was made against.
-            self.last = Some((o, self.paging.revision(), heights_revision()));
+            self.last = Some((o, self.paging.revision(), heights_revision(), tau));
         }
         declare(L::CATEGORY, &self.wants);
     }

@@ -24,6 +24,7 @@ import {
   encode_setting_toggle,
   encode_setting_update,
   encode_world_create,
+  encode_world_source,
   encode_world_update,
   FetchOutcome,
   MapStatus,
@@ -35,7 +36,7 @@ import {
   type Snapshot,
 } from "@/kernel/abi/cmd.spec.ts";
 import { cube_types } from "@/catalog/cell/cube_type.spec.ts";
-import { BAKE_KINDS } from "@/config/published.spec.ts";
+import { BAKE_KINDS, PUBLISHED_SOURCE } from "@/config/published.spec.ts";
 import { SETTINGS } from "@/feature/setting/schema.spec.ts";
 
 import { ELE_PADDED_SPAN, encode_terrain, pack_ground_cell, PAGE_CELLS } from "@/kernel/fixture.ts";
@@ -180,6 +181,8 @@ CORE_DOORBELL.call(
   }),
   (r) => r,
 );
+// What the shell hands over for a published source, read from the bundle.
+CORE_DOORBELL.send(0, Command.WORLD_SOURCE, encode_world_source({ top_level: PUBLISHED_SOURCE.top_level }));
 console.log(`heap: boot and world create ${heap_row[HEAP_REQUESTS]} requests, top ${heap_row[HEAP_TOP]}`);
 
 /** A device that takes every call and holds nothing: whatever is asked of

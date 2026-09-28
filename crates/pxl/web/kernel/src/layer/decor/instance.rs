@@ -48,10 +48,7 @@ pub(crate) struct Instance {
 /// Groups one block holds at most: as many as the renderer's decor pass draws.
 pub const DECOR_GROUPS: usize = 64;
 
-/// Instances one chunk's decor holds at most at a tier: a kind scatters at
-/// most one to a cell, and the placed entries come past them. What does not
-/// fit is left out.
-const DECOR_INSTANCES: usize = 1 << 16;
+use crate::param::DECOR_INSTANCES;
 
 /// Bytes of the instances' lane in `.fixed.decor`, which the groups' follows.
 const INSTANCE_LANE_BYTES: u32 = (DECOR_INSTANCES * core::mem::size_of::<Instance>()) as u32;

@@ -44,10 +44,11 @@
 //!                    filled while the other is baked from (world/chunk/
 //!                    build.rs). A set is let go once its chunk's tiers are
 //!                    all on the device, which is what keeps them.
-//!   .fixed.bake      the one mesh a chunk bake has open, written there and
-//!                    sent to its slot on the device the moment it is done
-//!                    (world/chunk/mesh_slot.rs): a mesh has no home in the
-//!                    memory, since the device is where it is drawn from.
+//!   .fixed.bake      the workspace: the one mesh a chunk bake has open,
+//!                    written there and sent to its slot on the device the
+//!                    moment it is done (world/chunk/build.rs): a mesh has
+//!                    no home in the memory, since the device is where it
+//!                    is drawn from.
 //!   .fixed.surface   the surface each mesh slot's tier is drawn with, a lane
 //!                    a slot (world/chunk/mesh_slot.rs): what a thing standing
 //!                    on the drawn ground reads.
@@ -81,9 +82,10 @@ use crate::abi::host::stream as host_stream;
 use crate::layer::decor::instance::DECOR_BYTES;
 use crate::layer::terrain::fixed::TERRAIN_BYTES;
 use crate::mem::section::{map, PAGE_BYTES};
+use crate::param::RUN_SET_BYTES;
 use crate::sched::profiler::record::PROFILER_BYTES;
-use crate::world::chunk::build::{RUN_SETS, RUN_SET_BYTES};
-use crate::world::chunk::mesh_slot::{BAKE_BYTES, SURFACE_BYTES};
+use crate::world::chunk::build::{BAKE_BYTES, RUN_SETS};
+use crate::world::chunk::mesh_slot::SURFACE_BYTES;
 
 /// A range of `.fixed`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

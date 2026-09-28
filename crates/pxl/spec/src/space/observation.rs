@@ -23,7 +23,7 @@
 //! How the answers are drawn — chunks, meshes, their sizes — is no input to
 //! any of it.
 
-use super::lod::{fault_radius, split_distance, squares_within};
+use super::lod::{fault_radius, squares_within, Tau};
 use super::pyramid::{page_at, span_of, LevelPage, TOP_LEVEL};
 
 /// A square of ground: its south-west corner and its side, in units, as a
@@ -55,9 +55,12 @@ pub struct Observation {
     /// around, as a point observer's is.
     pub frustum: Option<Frustum>,
     /// How far a sample is answered: past it nothing is drawn. Never past the
-    /// top level's end (`fault_radius(TOP_LEVEL)`), since no level answers
-    /// farther.
+    /// top's end (`fault_radius(top)`), since no level answers farther.
     pub far: f64,
+    /// The coarsest level the source supplies whole, as it declares itself
+    /// (spec/pxl/spec/bake/published.json `SOURCE`): what every sample is answered
+    /// at when nothing finer is, and no sample asks for coarser.
+    pub top: u32,
     /// The planet's radius, in units: ground `d` from the eye is drawn
     /// `d² / 2R` under where it is stored.
     pub planet: f64,
@@ -174,24 +177,29 @@ pub trait DemandEstimator {
     fn requirements(&self, o: &Observation, bounds: &impl Bounds, each: &mut dyn FnMut(Requirement));
 }
 
-/// The estimator from bounds alone. A sample answered `r` away requires its
-/// ground at `level(r)`, which is `L` only for `r` in `[split_distance(L),
-/// 2 · split_distance(L))` — from nothing for z16, which answers everything
-/// nearer too — and nothing past the far edge. So a square of `L`'s is
-/// required only if some of it can be sampled and its nearest and farthest
-/// point from the eye leave some of that band between them. That holds of
-/// every square the exact demand has, whatever is hidden behind what; one
-/// behind a hill is required too. The squares are the lattice's at `L`,
-/// found among those within the band's end along the ground, so no level
-/// requires more than the fault bound's `FAULT_PAGES` of them.
-pub struct ByBounds;
+/// The estimator from bounds alone, at a quality `tau`. A sample answered
+/// `r` away requires its ground at `tau.level(r)`, no coarser than the
+/// observation's `top`, which is `L` only for `r` in
+/// `[tau.split_distance(L), tau.split_distance(L + 1))` — from nothing for
+/// z16, which answers everything nearer too, and out to the far edge for the
+/// top, which answers everything farther, since no level over it is supplied
+/// — and nothing past the far edge. So a square of `L`'s is required only if some of it can be sampled
+/// and its nearest and farthest point from the eye leave some of that band
+/// between them. That holds of every square the exact demand has, whatever
+/// is hidden behind what; one behind a hill is required too. The squares are
+/// the lattice's at `L`, found among those within the band's end along the
+/// ground, which no `Tau` puts past `fault_radius(L)` — so no level requires
+/// more than the fault bound's `FAULT_PAGES` of them.
+pub struct ByBounds {
+    pub tau: Tau,
+}
 
 impl DemandEstimator for ByBounds {
     fn requirements(&self, o: &Observation, bounds: &impl Bounds, each: &mut dyn FnMut(Requirement)) {
-        xpute_core::ensure!(o.far <= fault_radius(TOP_LEVEL), EINVAL);
-        for level in 0..=TOP_LEVEL {
-            let from = if level == 0 { 0.0 } else { split_distance(level as i32) };
-            let to = fault_radius(level);
+        xpute_core::ensure!(o.top <= TOP_LEVEL && o.far <= fault_radius(o.top), EINVAL);
+        for level in 0..=o.top {
+            let from = if level == 0 { 0.0 } else { self.tau.split_distance(level as i32) };
+            let to = if level == o.top { fault_radius(level) } else { self.tau.fault_radius(level) };
             if from > o.far {
                 break;
             }

@@ -8,21 +8,22 @@
 //! nothing else holds (world/paging.rs), so however eager it is, it only
 //! pushes itself out of the cache.
 
-use pxl_spec::space::lod::{fault_radius, pages_within};
+use pxl_spec::space::lod::{pages_within, Tau};
 use pxl_spec::space::observation::Observation;
 use pxl_spec::space::pyramid::{LevelPage, TOP_LEVEL};
 
 /// Which pages beyond the demand to speculate on for an observation.
 pub trait Prefetch {
-    /// Each page worth holding before it is read, for `o`.
-    fn speculate(&self, o: &Observation, each: &mut dyn FnMut(LevelPage));
+    /// Each page worth holding before it is read, for `o` at the quality
+    /// `tau` it is drawn at: never a page finer than what is drawn there.
+    fn speculate(&self, o: &Observation, tau: Tau, each: &mut dyn FnMut(LevelPage));
 }
 
 /// None: the view is paged by its faults alone.
 pub struct NoPrefetch;
 
 impl Prefetch for NoPrefetch {
-    fn speculate(&self, _o: &Observation, _each: &mut dyn FnMut(LevelPage)) {}
+    fn speculate(&self, _o: &Observation, _tau: Tau, _each: &mut dyn FnMut(LevelPage)) {}
 }
 
 /// Every level's reach, all around the eye: the ring about the eye's foot
@@ -36,13 +37,13 @@ pub struct Reach {
 }
 
 impl Prefetch for Reach {
-    fn speculate(&self, o: &Observation, each: &mut dyn FnMut(LevelPage)) {
+    fn speculate(&self, o: &Observation, tau: Tau, each: &mut dyn FnMut(LevelPage)) {
         let h = o.eye[2] - o.ground;
         for level in 0..=TOP_LEVEL {
             // A level is asked for nearer than where it ends, which on the
             // ground about the eye's foot is a disc as wide as that distance
             // leaves past the eye's height. None where the eye is higher.
-            let end = fault_radius(level);
+            let end = tau.fault_radius(level);
             if end <= h {
                 continue;
             }

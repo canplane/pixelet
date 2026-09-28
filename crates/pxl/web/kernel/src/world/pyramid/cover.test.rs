@@ -5,11 +5,12 @@ use crate::io::demand::{Ask, Why};
 use crate::layer::environment::fog::reach_at;
 use crate::world::observation::Order;
 use pxl_spec::bake::poi_page::{Place, PoiPage, POI_LATTICE};
-use pxl_spec::space::lod::fault_radius;
-use pxl_spec::space::observation::Observation;
+use pxl_spec::space::lod::{fault_radius, Tau};
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::{ivec, Pvf3};
 use pxl_spec::space::pyramid::{LevelPage, GROUND, TOP_LEVEL};
+
+use crate::world::fixture::{self, eye, World};
 
 /// How high the eye stands over flat ground: where the rule wants level 2
 /// under it.
@@ -19,14 +20,16 @@ fn anchor() -> IVec {
     ivec::gather(30_000, -17_000, 0)
 }
 
+/// The ground's height: inside the chunks of height zero at every level, as
+/// the places counted are.
+const LAND: f64 = 10.5;
+
+/// The eye over flat ground, looking down: the cover all around, refined
+/// where it looks.
 fn the_domain() -> Domain {
-    Domain::of(Observation {
-        eye: [ivec::X(anchor()) as f64, ivec::Y(anchor()) as f64, HEIGHT],
-        frustum: None,
-        far: reach_at(HEIGHT).min(fault_radius(TOP_LEVEL)),
-        planet: f64::INFINITY,
-        ground: 0.0,
-    })
+    let world = World::flat(LAND);
+    let at = [ivec::X(anchor()) as f64, ivec::Y(anchor()) as f64, LAND + HEIGHT];
+    fixture::domain(eye(at, Some([0.05, 0.02, -1.0]), reach_at(HEIGHT).min(fault_radius(TOP_LEVEL)), LAND), &[Tau::FINEST], &world)
 }
 
 /// Every page the chunks the rule draws lie in, and every page over those:
@@ -132,8 +135,6 @@ fn count(pyramid: &Pyramid<PoiPage>, c: Chunk) -> u32 {
 /// counted exactly once — whatever is resident, at whatever levels.
 #[test]
 fn the_cover_and_its_gaps_partition_the_domain_and_count_every_place_once() {
-    // The domain reads the terrain's and the objects' heights, which are
-    // globals.
     let _serial = crate::global::serial();
     let (at, pages) = places();
     let d = the_domain();
@@ -165,8 +166,6 @@ fn the_cover_and_its_gaps_partition_the_domain_and_count_every_place_once() {
 /// once: every piece drawn or open, and no two meeting.
 #[test]
 fn the_cover_is_the_domain_whole_whatever_is_held() {
-    // The domain reads the terrain's and the objects' heights, which are
-    // globals.
     let _serial = crate::global::serial();
     let (_, pages) = places();
     let d = the_domain();

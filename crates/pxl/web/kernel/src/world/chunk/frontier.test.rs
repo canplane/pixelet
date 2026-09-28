@@ -1,0 +1,410 @@
+// pxl-kernel/world/chunk/frontier.test.rs
+//
+// The frontier's laws on fixtures: flat ground a chunk thick, where the
+// pieces are the chunks of one square of ground at whatever levels a goal
+// says, driven by a table of its own — builds that land after a few steps,
+// slots counted by pool — against arenas too small for the goals asked of
+// them. The same table driven by the goal an eye observes of a world known
+// exactly (world/fixture.test.rs), from before the floor is resident to a
+// turn toward ground never seen. And the count the quality policy decides
+// by, on that world, known exactly and loosened.
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use pxl_spec::space::hierarchy::Scale;
+use pxl_spec::space::pvf3::ivec;
+use pxl_spec::space::pvf3::projection;
+use pxl_spec::space::pvf3::Pvf3;
+use pxl_spec::space::pyramid::chunk_span_of;
+use pxl_spec::space::v3::V3;
+
+use super::*;
+
+use crate::world::fixture::{self, eye, World};
+
+/// An object's cube and the ground's are one size wherever both have data:
+/// only nearer than a z16 cell's reach do a z16 chunk's objects go finer,
+/// down to their finest tier, while the ground stays at its atom.
+#[test]
+fn objects_draw_the_grounds_cube_and_go_finer_only_under_z16() {
+    let z16 = GROUND.scale(0);
+    for shamt in -6..=8 {
+        let cube = Scale::of(shamt);
+        let (ground, objects) = (drawn_cube(cube, 0, true, false), drawn_cube(cube, 0, true, true));
+        if cube >= z16 {
+            assert_eq!(objects, ground, "{cube:?}");
+        } else {
+            assert_eq!(ground, z16, "{cube:?}");
+            assert_eq!(objects, cube.max(OBJECT_FINEST), "{cube:?}");
+        }
+    }
+}
+
+// ---- the frontier ----
+
+/// The level the fixture's square is a chunk of: 16 × 16 z16 chunks.
+const ROOT: u32 = 4;
+
+/// The chunk of `level` over the fixture's ground `x`, `y` z16 chunks from
+/// its corner, at the ground's height.
+fn at(level: u32, x: i64, y: i64) -> Chunk {
+    let side = chunk_span_of(0) as i64;
+    Chunk::of(
+        level,
+        &Pvf3 {
+            i: ivec::gather(x * side, y * side, 0),
+            f: 0,
+        },
+    )
+}
+
+fn root() -> Chunk {
+    at(ROOT, 0, 0)
+}
+
+/// Every chunk of `level` over the fixture's ground.
+fn level(l: u32) -> Vec<Chunk> {
+    let n = 1i64 << (ROOT - l);
+    let step = 1i64 << l;
+    let mut out: Vec<Chunk> = (0..n).flat_map(|y| (0..n).map(move |x| at(l, x * step, y * step))).collect();
+    out.sort_unstable();
+    out
+}
+
+/// A goal: the ground at `fine` inside the square of z16 chunks `[0, w)`, and
+/// at `coarse` outside it, or where `w` is zero, at `coarse` everywhere.
+fn goal(fine: u32, coarse: u32, w: i64) -> Vec<Chunk> {
+    let inside = |c: &Chunk| {
+        let (x, y, side) = c.rect();
+        let unit = chunk_span_of(0);
+        x + side <= w as f64 * unit && y + side <= w as f64 * unit
+    };
+    let mut out: Vec<Chunk> = level(fine).into_iter().filter(|c| inside(c)).collect();
+    let covered = |c: &Chunk| out.iter().any(|f| f.ancestors().any(|a| a == *c));
+    let rest: Vec<Chunk> = level(coarse).into_iter().filter(|c| !covered(c) && !inside(c)).collect();
+    out.extend(rest);
+    out.sort_unstable();
+    out
+}
+
+/// The fixture's view of the pieces: z16 chunks in the fine pool, every
+/// other in the coarse, everything resident, nearer the corner first.
+struct Flat;
+
+impl Env for Flat {
+    fn pool(&self, c: Chunk) -> Pool {
+        if c.level() == 0 {
+            Pool::Fine
+        } else {
+            Pool::Coarse
+        }
+    }
+
+    fn buildable(&self, _c: Chunk) -> bool {
+        true
+    }
+
+    fn order(&self, c: Chunk) -> Order {
+        let (x, y, side) = c.rect();
+        Order {
+            seen: true,
+            near: (x + side / 2.0).hypot(y + side / 2.0),
+        }
+    }
+}
+
+/// The fixture's table: what is drawn, what is building and how many steps
+/// each has left before it is ready, and the arena.
+struct Table {
+    drawn: BTreeSet<Chunk>,
+    building: BTreeMap<Chunk, u32>,
+    arena: Slots,
+    seed: u64,
+}
+
+impl Table {
+    fn new(arena: Slots) -> Table {
+        Table {
+            drawn: BTreeSet::new(),
+            building: BTreeMap::new(),
+            arena,
+            seed: 0x2545_f491,
+        }
+    }
+
+    /// Slots each pool holds: every piece drawn, and every chunk building,
+    /// whose slot is held for it from the moment it starts.
+    fn held(&self) -> Slots {
+        let mut held = [0; POOLS];
+        for &c in self.drawn.iter().chain(self.building.keys()) {
+            held[Flat.pool(c) as usize] += 1;
+        }
+        held
+    }
+
+    /// One step toward `goal`: the plan made, what it says done, and the
+    /// builds a step nearer landing.
+    fn step(&mut self, goal: &[Chunk]) {
+        let ready: BTreeMap<Chunk, bool> = self.building.iter().map(|(&c, &left)| (c, left == 0)).collect();
+        let held = self.held();
+        let free = core::array::from_fn(|p| self.arena[p] - held[p]);
+        let now = Now {
+            goal,
+            drawn: &self.drawn,
+            building: &ready,
+            recubing: 0,
+            recube: &[],
+            free,
+        };
+        let plan = plan(&now, &Flat);
+        for c in plan.cancel.iter() {
+            self.building.remove(c);
+        }
+        for c in plan.drop.iter() {
+            self.drawn.remove(c);
+        }
+        for s in plan.swaps {
+            for c in s.leave {
+                assert!(self.drawn.remove(&c), "{c:?} left the frontier without being drawn");
+            }
+            for c in s.enter {
+                assert_eq!(self.building.remove(&c), Some(0), "{c:?} entered the frontier before it was ready");
+                self.drawn.insert(c);
+            }
+        }
+        for c in plan.start {
+            self.seed = self.seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            assert!(self.building.insert(c, 1 + (self.seed >> 40) as u32 % 4).is_none(), "{c:?} started twice");
+        }
+        for left in self.building.values_mut() {
+            *left = left.saturating_sub(1);
+        }
+    }
+
+    /// Whether every z16 chunk of the ground is drawn by exactly one piece:
+    /// itself or one over it.
+    fn covered(&self) -> bool {
+        level(0).iter().all(|&c| std::iter::once(c).chain(c.ancestors()).filter(|a| self.drawn.contains(a)).count() == 1)
+    }
+
+    /// The arena is never past what it holds, in any pool.
+    fn within(&self) -> bool {
+        let held = self.held();
+        (0..POOLS).all(|p| held[p] <= self.arena[p])
+    }
+}
+
+/// The frontier comes to its goal where the arena holds it, and once the
+/// ground is covered it stays covered, every step, whatever it moves to.
+#[test]
+fn the_frontier_comes_to_a_goal_the_arena_holds_with_no_gap_on_the_way() {
+    let mut t = Table::new([300, 200]);
+    let goals = [goal(3, 3, 0), goal(0, 2, 16), goal(1, 3, 8), goal(3, 4, 0), goal(0, 0, 16), goal(2, 3, 8), goal(0, 1, 8)];
+    let mut once = false;
+    for g in &goals {
+        for _ in 0..200 {
+            t.step(g);
+            assert!(t.within(), "past the arena");
+            once |= t.covered();
+            if once {
+                assert!(t.covered(), "a gap in the frontier");
+            }
+        }
+        let drawn: Vec<Chunk> = t.drawn.iter().copied().collect();
+        assert_eq!(&drawn, g, "the frontier did not come to its goal");
+        assert!(t.building.is_empty(), "work left over once the goal is drawn");
+    }
+}
+
+/// With an arena too small for the goal, the frontier refines as far as the
+/// arena holds and no further, with a coarser piece standing wherever it
+/// cannot: never a gap, never past the arena, and back to a goal the arena
+/// holds once one is asked.
+#[test]
+fn an_arena_too_small_for_the_goal_leaves_coarser_pieces_and_never_a_gap() {
+    for arena in [[40, 12], [8, 40], [64, 6], [2, 3]] {
+        let mut t = Table::new(arena);
+        for _ in 0..10 {
+            t.step(&[root()]);
+        }
+        assert!(t.covered(), "{arena:?}: the coarsest goal is drawn");
+        for g in [goal(0, 0, 16), goal(0, 1, 8), goal(3, 3, 0), goal(0, 0, 16), goal(4, 4, 0)] {
+            for k in 0..300 {
+                t.step(&g);
+                assert!(t.within(), "{arena:?}, step {k}: past the arena");
+                assert!(t.covered(), "{arena:?}, step {k}: a gap in the frontier");
+            }
+        }
+        let root = [root()];
+        let drawn: Vec<Chunk> = t.drawn.iter().copied().collect();
+        assert_eq!(drawn, root, "{arena:?}: back to the coarsest");
+    }
+}
+
+// ---- the goal an eye observes ----
+
+/// The height of the fixture world's ground.
+const LAND: f64 = 10.5;
+const EYE: V3 = [1_000.5, 2_000.25, LAND + 2.0];
+const FAR: f64 = 20_000.0;
+
+fn goal_of(forward: [f64; 3], world: &World) -> Domain {
+    fixture::domain(eye(EYE, Some(forward), FAR, LAND), &[Tau::FINEST], world)
+}
+
+/// Points of the ground all around the eye, within the reach.
+fn probes() -> Vec<V3> {
+    let mut out = Vec::new();
+    for ring in 1..=10 {
+        let r = FAR * 0.9 * ring as f64 / 10.0;
+        for k in 0..36 {
+            let a = k as f64 / 36.0 * std::f64::consts::TAU;
+            out.push([EYE[0] + r * a.cos(), EYE[1] + r * a.sin(), LAND]);
+        }
+    }
+    // And near the eye, where the goal is finest.
+    for k in 0..200 {
+        let (a, r) = (k as f64 * 2.399, 3.0 * k as f64);
+        out.push([EYE[0] + r * a.cos(), EYE[1] + r * a.sin(), LAND]);
+    }
+    out
+}
+
+impl Table {
+    /// How many drawn pieces each probe lies in: one each where the frontier
+    /// has no gap.
+    fn over(&self, probes: &[V3]) -> Vec<usize> {
+        probes
+            .iter()
+            .map(|p| {
+                let mut at = Pvf3::default();
+                projection::project(&mut at, p[0], p[1], p[2]);
+                (0..=TOP_LEVEL).filter(|&l| self.drawn.contains(&Chunk::of(l, &at))).count()
+            })
+            .collect()
+    }
+}
+
+/// Before the floor is resident there is no answer and nothing is drawn;
+/// once it is, the cover is filled and from then on every point of the
+/// ground within the reach is under exactly one drawn piece at every step —
+/// through the refinement toward what is seen, and through a turn to ground
+/// never seen before, which the cover already stands over.
+#[test]
+fn no_gap_once_the_floor_is_resident_even_where_the_view_turns() {
+    let probes = probes();
+    let mut t = Table::new([600, 3_000]);
+    let mut dark = World::flat(LAND);
+    dark.answered = false;
+    let d = goal_of([1.0, 0.0, -0.1], &dark);
+    assert!(d.pieces().is_empty() && d.unanswered() > 0, "no answer yet is no goal");
+    for _ in 0..10 {
+        t.step(d.pieces());
+    }
+    assert!(t.drawn.is_empty(), "drawn with nothing known");
+
+    let world = World::flat(LAND);
+    let east = goal_of([1.0, 0.0, -0.1], &world);
+    let mut whole = false;
+    for k in 0..400 {
+        t.step(east.pieces());
+        assert!(t.within(), "step {k}: past the arena");
+        let over = t.over(&probes);
+        whole |= over.iter().all(|&n| n == 1);
+        if whole {
+            assert!(over.iter().all(|&n| n == 1), "step {k}: a gap in the frontier");
+        }
+    }
+    let drawn: Vec<Chunk> = t.drawn.iter().copied().collect();
+    assert_eq!(drawn, east.pieces(), "the frontier did not come to the goal");
+    // West of the eye nothing was ever seen: the cover alone stands there.
+    let west = [EYE[0] - 3_000.0, EYE[1], LAND];
+    let mut at = Pvf3::default();
+    projection::project(&mut at, west[0], west[1], west[2]);
+    assert!(t.drawn.contains(&Chunk::of(TOP_LEVEL, &at)), "ground never seen is not the cover's");
+
+    let turned = goal_of([-1.0, 0.0, -0.1], &world);
+    for k in 0..400 {
+        t.step(turned.pieces());
+        assert!(t.within(), "turned, step {k}: past the arena");
+        assert!(t.over(&probes).iter().all(|&n| n == 1), "turned, step {k}: a gap in the frontier");
+    }
+    let drawn: Vec<Chunk> = t.drawn.iter().copied().collect();
+    assert_eq!(drawn, turned.pieces(), "the frontier did not come to the turned goal");
+}
+
+// ---- the count ----
+
+/// A world with some relief, known as tightly or loosely as `slack`.
+fn relief(slack: f64) -> World {
+    let mut w = World::flat(LAND);
+    for k in 0..8 {
+        let x = 1_050.0 + 170.0 * k as f64;
+        w = w.with([x, 1_700.0 + 40.0 * k as f64, LAND], [x + 60.0, 2_500.0, LAND + 30.0 * (k + 1) as f64]);
+    }
+    w.slack = slack;
+    w
+}
+
+fn ladder() -> Vec<Tau> {
+    (0..8).map(|k| Tau::of(2f64.powf(k as f64 / 2.0))).collect()
+}
+
+fn domain_at(height: f64, world: &World) -> Domain {
+    let at = [EYE[0], EYE[1], LAND + height];
+    fixture::domain(eye(at, Some([1.0, 0.05, -0.25]), FAR, LAND), &ladder(), world)
+}
+
+/// Every step's count, finest first.
+fn counts(d: &mut Domain) -> Vec<Slots> {
+    (0..d.ladder().len())
+        .map(|k| {
+            d.cut_at(k);
+            need(d, d.cut(k).expect("made above"), |_| None)
+        })
+        .collect()
+}
+
+/// The count never asks less at a finer quality than at a coarser one, and
+/// never less than the cut at that quality is.
+#[test]
+fn the_count_is_never_less_at_a_finer_quality_nor_less_than_the_cut() {
+    for height in [3.0, 150.0, 2_000.0] {
+        let mut d = domain_at(height, &relief(0.0));
+        let n = counts(&mut d);
+        for k in 0..n.len() {
+            if let Some(coarser) = n.get(k + 1) {
+                for (p, (finer, coarser)) in n[k].iter().zip(coarser).enumerate() {
+                    assert!(finer >= coarser, "height {height}: pool {p} asks less at step {k} than coarser");
+                }
+            }
+            let cut = d.cut_at(k);
+            let (tau, pieces) = (cut.tau(), cut.pieces().to_vec());
+            let fine = pieces.iter().filter(|&&c| pool_of(c, d.outermost(c), d.nearest_to(c), tau, None) == Pool::Fine).count() as u32;
+            assert!(n[k][Pool::Coarse as usize] >= pieces.len() as u32, "height {height}, {tau:?}: coarse under the cut");
+            assert!(n[k][Pool::Fine as usize] >= fine, "height {height}, {tau:?}: fine under the cut");
+        }
+    }
+}
+
+/// Knowing the heights more loosely never lowers the count: the same
+/// footprints touch no fewer chunks, whose errors span no less.
+#[test]
+fn looser_bounds_never_ask_less() {
+    for height in [3.0, 150.0, 2_000.0] {
+        let tight = counts(&mut domain_at(height, &relief(0.0)));
+        for slack in [1.0, 40.0, 700.0] {
+            let loose = counts(&mut domain_at(height, &relief(slack)));
+            for k in 0..tight.len() {
+                for p in 0..POOLS {
+                    assert!(
+                        loose[k][p] >= tight[k][p],
+                        "height {height}, slack {slack}, step {k}: pool {p} asks {} where knowing more asked {}",
+                        loose[k][p],
+                        tight[k][p]
+                    );
+                }
+            }
+        }
+    }
+}

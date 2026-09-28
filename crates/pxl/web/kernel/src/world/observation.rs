@@ -20,6 +20,7 @@ use crate::layer::object::store::objects_revision;
 use crate::layer::terrain::extent::extent_under;
 use crate::shell::map_store::map_store;
 use crate::world::frame::view::view;
+use crate::world::paging::floor;
 use crate::world::pyramid::Layer as _;
 
 /// Where the eye is as the view draws it, in units, once there is a map to
@@ -63,15 +64,19 @@ pub fn frustum_of_view() -> Frustum {
 }
 
 /// The eye's observation as the view makes it: what the frustum looks at,
-/// out to where the air ends the ground or the top level's end, whichever is
-/// nearer.
+/// out to where the air ends the ground or the end of the coarsest level the
+/// tile source supplies whole, whichever is nearer. None before the source
+/// has declared that level (world/paging/floor.rs): nothing is observed of a
+/// source whose floor is not known.
 pub fn observation() -> Option<Observation> {
     let eye = eye()?;
+    let top = floor::level()?;
     let height = eye_height();
     Some(Observation {
         eye,
         frustum: Some(frustum_of_view()),
-        far: reach_at(height).min(fault_radius(TOP_LEVEL)),
+        far: reach_at(height).min(fault_radius(top)),
+        top,
         planet: globe().radius_u(),
         ground: eye[2] - height,
     })

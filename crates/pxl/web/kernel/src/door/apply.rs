@@ -84,6 +84,10 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             }
             Ok(Some(0))
         }
+        Command::WORLD_SOURCE => {
+            crate::world::paging::floor::declare(abi::WorldSource::read(packet(pkt)?)?.top_level);
+            Ok(Some(0))
+        }
         Command::INPUT_UPDATE => {
             let p = abi::InputUpdate::read(packet(pkt)?)?;
             camera_input_rect(Rect {

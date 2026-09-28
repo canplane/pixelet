@@ -9,7 +9,11 @@
 use std::collections::HashSet;
 
 use super::*;
-use crate::space::lod::{level, FAULT_PAGES};
+use crate::space::lod::FAULT_PAGES;
+
+/// The qualities every law is held at: the criterion itself, and coarser
+/// ones, which bring every level's band nearer.
+const TAUS: [Tau; 3] = [Tau::FINEST, Tau::of(1.5), Tau::of(8.0)];
 
 /// A box standing on the ground: its footprint and its height.
 #[derive(Clone, Copy)]
@@ -126,22 +130,23 @@ fn observation(look: Look, far: f64, planet: f64, frustum: bool) -> Observation 
         eye: look.eye,
         frustum: frustum.then(|| look.frustum(far)),
         far,
+        top: TOP_LEVEL,
         planet,
         ground: 0.0,
     }
 }
 
-/// The pages the estimator's requirements map to.
-fn demand(o: &Observation, bounds: &impl Bounds) -> HashSet<LevelPage> {
+/// The pages the estimator's requirements map to at `tau`.
+fn demand(o: &Observation, bounds: &impl Bounds, tau: Tau) -> HashSet<LevelPage> {
     let mut out = HashSet::new();
-    ByBounds.requirements(o, bounds, &mut |r| Paged.pages(&r, &mut |p| _ = out.insert(p)));
+    ByBounds { tau }.requirements(o, bounds, &mut |r| Paged.pages(&r, &mut |p| _ = out.insert(p)));
     out
 }
 
-/// The exact demand of `look`'s samples: each ray's first hit, if it is
-/// answered, asks for the page holding it at the level its distance
+/// The exact demand of `look`'s samples at `tau`: each ray's first hit, if
+/// it is answered, asks for the page holding it at the level its distance
 /// chooses.
-fn exact(world: &World, look: Look, far: f64) -> HashSet<LevelPage> {
+fn exact(world: &World, look: Look, far: f64, tau: Tau) -> HashSet<LevelPage> {
     let mut out = HashSet::new();
     for v in look.rays(96) {
         let Some(r) = world.first_hit(look.eye, v) else { continue };
@@ -149,7 +154,7 @@ fn exact(world: &World, look: Look, far: f64) -> HashSet<LevelPage> {
             continue;
         }
         let at = [look.eye[0] + r * v[0], look.eye[1] + r * v[1]];
-        let l = level(r).clamp(0, TOP_LEVEL as i32) as u32;
+        let l = tau.level(r).clamp(0, TOP_LEVEL as i32) as u32;
         let span = span_of(l);
         out.insert(page_at(l, at.map(|c| (c / span).floor() as i64)));
     }
@@ -188,8 +193,8 @@ fn looks() -> Vec<Look> {
 }
 
 /// Every page the samples ask for, the estimator names: over towers that
-/// hide what is behind them, at every height and tilt, and whatever the far
-/// edge.
+/// hide what is behind them, at every height and tilt, whatever the far
+/// edge, and at every quality.
 #[test]
 fn the_bounds_estimator_names_every_page_the_exact_demand_does() {
     for (k, look) in looks().into_iter().enumerate() {
@@ -199,9 +204,11 @@ fn the_bounds_estimator_names_every_page_the_exact_demand_does() {
         };
         for far in [fault_radius(TOP_LEVEL), 30_000.0] {
             let o = observation(look, far, world.planet, true);
-            let named = demand(&o, &world);
-            for p in exact(&world, look, far) {
-                assert!(named.contains(&p), "look {k}, far {far}: {p:?} asked for and not named");
+            for tau in TAUS {
+                let named = demand(&o, &world, tau);
+                for p in exact(&world, look, far, tau) {
+                    assert!(named.contains(&p), "look {k}, far {far}, {tau:?}: {p:?} asked for and not named");
+                }
             }
         }
     }
@@ -215,8 +222,8 @@ fn ground_the_planet_draws_lower_is_named_where_it_is_drawn() {
     for look in looks() {
         let far = fault_radius(TOP_LEVEL);
         let o = observation(look, far, world.planet, true);
-        let named = demand(&o, &world);
-        for p in exact(&world, look, far) {
+        let named = demand(&o, &world, Tau::FINEST);
+        for p in exact(&world, look, far, Tau::FINEST) {
             assert!(named.contains(&p), "{p:?} asked for and not named");
         }
     }
@@ -224,7 +231,7 @@ fn ground_the_planet_draws_lower_is_named_where_it_is_drawn() {
 
 /// Knowing less never names less: with nothing known, every page the bounds
 /// name is still named. And a level names no more than the fault bound,
-/// with the frustum or looking all around, known or not.
+/// with the frustum or looking all around, known or not, at every quality.
 #[test]
 fn a_level_names_no_more_than_the_fault_bound_and_less_known_names_more() {
     for (k, look) in looks().into_iter().enumerate() {
@@ -234,12 +241,14 @@ fn a_level_names_no_more_than_the_fault_bound_and_less_known_names_more() {
         };
         for frustum in [true, false] {
             let o = observation(look, fault_radius(TOP_LEVEL), world.planet, frustum);
-            let (known, unknown) = (demand(&o, &world), demand(&o, &Unknown));
-            assert!(known.is_subset(&unknown), "look {k}: bounds named a page nothing known did not");
-            for named in [known, unknown] {
-                for l in 0..=TOP_LEVEL {
-                    let n = named.iter().filter(|p| p.level == l).count() as u32;
-                    assert!(n <= FAULT_PAGES, "look {k}, level {l}: {n} pages");
+            for tau in TAUS {
+                let (known, unknown) = (demand(&o, &world, tau), demand(&o, &Unknown, tau));
+                assert!(known.is_subset(&unknown), "look {k}, {tau:?}: bounds named a page nothing known did not");
+                for named in [known, unknown] {
+                    for l in 0..=TOP_LEVEL {
+                        let n = named.iter().filter(|p| p.level == l).count() as u32;
+                        assert!(n <= FAULT_PAGES, "look {k}, {tau:?}, level {l}: {n} pages");
+                    }
                 }
             }
         }

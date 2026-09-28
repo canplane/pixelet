@@ -23,9 +23,10 @@ use super::pyramid::{page_at, span_of, LevelPage, GROUND, TOP_LEVEL};
 /// together.
 pub const SPLIT: f64 = 192.0;
 
-/// Where ground stops being drawn at `level`: nearer than this, one of its
-/// cells covers more than a cell's pixels. Any integer level, the ones finer
-/// than z16 included.
+/// Where ground stops being drawn at `level` at `Tau::FINEST`: nearer than
+/// this, one of its cells covers more than a cell's pixels. Any integer
+/// level, the ones finer than z16 included. What a view draws is asked of
+/// its `Tau`; this is what the bounds sized before any view are read at.
 pub const fn split_distance(level: i32) -> f64 {
     SPLIT * GROUND.scale(0).up(level).side()
 }
@@ -40,6 +41,54 @@ pub const fn split_distance(level: i32) -> f64 {
 /// data ends coarser draws its finest there.
 pub fn level(r: f64) -> i32 {
     (r / split_distance(0)).log2().floor() as i32
+}
+
+/// A quality the criterion is held to: `SPLIT` scaled, a cell drawn covering
+/// up to τ times the pixels `SPLIT` allows, so every level's split distance
+/// is `split_distance` over τ. τ is 1 at `SPLIT` and only ever coarser: the
+/// fault bound (`FAULT_PAGES`) is sized at 1, and a coarser τ only brings
+/// every level's band nearer, so no τ this admits breaks it.
+///
+/// It is the one place the criterion is scaled. The level a distance wants,
+/// the pieces a view is cut into and the pages its demand names all ask a
+/// `Tau` for their distances, so whoever holds the effective one — the
+/// kernel's quality policy — moves all three together, and demand never
+/// names a page finer than what is drawn from it.
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+pub struct Tau(f64);
+
+impl Tau {
+    /// `SPLIT` itself: the bake's criterion, and the finest any view is held
+    /// to.
+    pub const FINEST: Tau = Tau(1.0);
+
+    /// `SPLIT` scaled by `scale`, which is at least 1.
+    pub const fn of(scale: f64) -> Tau {
+        assert!(scale >= 1.0, "a quality finer than the criterion the fault bound is sized at");
+        Tau(scale)
+    }
+
+    /// The factor over `SPLIT`.
+    pub const fn scale(self) -> f64 {
+        self.0
+    }
+
+    /// Where ground stops being drawn at `level` at this quality.
+    pub const fn split_distance(self, level: i32) -> f64 {
+        split_distance(level) / self.0
+    }
+
+    /// The level whose cell a pixel covers at `r` at this quality: `level`
+    /// of a distance τ times as far.
+    pub fn level(self, r: f64) -> i32 {
+        level(r * self.0)
+    }
+
+    /// How far from an observer's foot a fault at `level` can lie at this
+    /// quality: never past `fault_radius(level)`.
+    pub const fn fault_radius(self, level: u32) -> f64 {
+        self.split_distance(level as i32 + 1)
+    }
 }
 
 /// How far from an observer's foot a fault at `level` can lie, in units. An

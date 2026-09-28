@@ -87,6 +87,15 @@ to z6, a page 512 cells a side at every level and named by the Web Mercator
 tile it stands on. Say z16, not "level 0": no level is special.
 The rules below keep it one thing. They come from finding it several.
 
+- **The view keeps only what an observer can tell apart.** The world is
+  stored in each layer's own shape; what the view holds and does is bounded
+  by the screen, not by the world under it. The screen is quantized into
+  cells of τ pixels, and inside a cell nothing is promised: a piece refines
+  only where it contributes to a cell and its error, projected, crosses a
+  cell's edge on either axis. Storage, query, demand, residency, prefetch,
+  materialization and scheduling are separate concerns, each with its own
+  bound and contract — ARCHITECTURE.md's "The view" is the one statement
+  of them; read it before changing any of them.
 - **The lattice has one owner.** A size is a `Scale` against the unit,
   stepped from two roots — the tiers (`pxl-spec space/indexer.rs`) and the
   raster's cell (`bake/constant.rs` `CELL`), which is a resolution and
@@ -100,23 +109,27 @@ The rules below keep it one thing. They come from finding it several.
   second owner, and `check:rules` refuses it outside `space/`.
 - **A layer is a payload and a one-level fold, and nothing else.** No key,
   hierarchy, bounds, window, schedule or residency of its own: which pages
-  are wanted, held, fetched and folded is the kernel's `Pyramid<L>`, from
-  the one domain (`world/pyramid.rs`), and the bake's `build`
-  (`pxl-geo-bake pyramid.rs`). Layers share mechanics, not data — terrain
-  folds by majority and average, POI by sum.
+  are wanted is the observation's demand (`world/pyramid.rs` `observe`),
+  which are held is residency's (`world/paging.rs`), when they are fetched
+  is the ledger's (`io/sched.rs`), and a page is folded only by the bake's
+  `build` (`pxl-geo-bake pyramid.rs`). Layers share mechanics, not data —
+  terrain folds by majority and average, POI by sum.
 - **The view is 3D; storage is not.** A chunk is a cube, addressed by its
   level and x, y and z (`world/pyramid/chunk.rs`), and a cube that holds
   nothing is no chunk. Terrain and POI are pages of the pyramid, a 2D
   heightfield and a 2D count; placed objects are resident in their store, by
-  column and band. A lookup points a chunk at them (`Domain::occupied`,
-  `Chunk::column`), and nothing else reads them by column. A placed object
+  column and band. One query reads them (`world/access.rs`), and nothing
+  outside a layer reads its records by the layer's own shape; the domain's
+  reading by column (`Domain::occupied`, `Chunk::column`) is the one place
+  left that does, to be a query of a 3D box. A placed object
   lives in the chunk its band is in — built, made again and drawn with it,
   the ground's lifecycle there — and shares the lattice and the fold rule
   (`majority`, `pxl-spec bake/fold.rs`).
 - **2.5D is how ground is stored, not how anything behaves.** A page's
   heightfield is a compression; what the view selects, orders, budgets,
-  occludes and draws is 3D — cubes in a sphere about the eye — for terrain,
-  places and objects alike. A 2.5D shortcut (a height read off the raster,
+  occludes and draws is 3D — what the screen's cells observe, measured on
+  both of the screen's axes, height no different from the rest — for
+  terrain, places and objects alike. A 2.5D shortcut (a height read off the raster,
   `ground_ele_at`) is an optimization where it is known to behave exactly as
   the 3D rule would, never a model of its own.
 - **A mark stands at a cell's center** (`cell_center`), at the height of the
@@ -124,8 +137,10 @@ The rules below keep it one thing. They come from finding it several.
   mark for many things stands at the z16 cell their centroid falls in,
   which folds by count as the things do (`pxl-spec bake/poi_page.rs`).
 - **One rule chooses the level; a layer chooses its detail.** The shared
-  rule chooses a level for a piece of ground by its distance from the eye,
-  finer than z16 too — z17 to z19 near the eye. How much detail a layer
+  rule chooses a level for a piece of ground by its distance from the eye
+  (`pxl-spec space/lod.rs` `Tau::level`, one factor τ on the split
+  distance), finer than z16 too — z17 to z19 near the eye — and refines it
+  only where the screen observes it and its error crosses a cell. How much detail a layer
   draws at that level is the layer's own — terrain its cells averaged
   2 × 2, places a lattice sixteen times the ground's cell, objects their own
   cells — a tuning inside the perspective and never a second rule. Where
@@ -134,10 +149,15 @@ The rules below keep it one thing. They come from finding it several.
 - **A number is derived or said aloud.** A capacity or a count that bounds
   what something else already bounds is a second limit derived from nothing
   (a badge count once capped what screen collision already did). A product
-  number is raised in the conversation, not buried in a constant.
+  number is raised in the conversation, not buried in a constant: a knob is
+  named once in `pxl-kernel param.rs`, grouped by the policy it tunes, with
+  its reason, and read by what uses it.
 - **Dev is guarded like terrain.** The tile server answers no page above
   `--top-level`, and that is the whole guard for every pyramid layer; no
-  feature carries a dev exception of its own.
+  feature carries a dev exception of its own. A source declares the
+  coarsest level it supplies whole — the published version in its
+  metadata, the tile server at `/tile/source` — and the floor is that
+  level, not the pyramid's top.
 - **No test-only API, no adapter kept past the change that needed it.**
   Tests keep the shared algebraic laws (a fold's fixed point, the lattice),
   the wire and storage contracts, and stated invariants; one that restates

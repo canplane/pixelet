@@ -1,33 +1,31 @@
 // pxl-kernel/world/chunk/mesh_slot.rs
 
-//! Where a chunk's mesh lies on the device: a slot in the arena of fixed
-//! buffers the renderer keeps (pxl-render gpu/arena.rs).
+//! The render residency: where a drawn piece's mesh lies on the device, a
+//! slot in the arena of fixed buffers the renderer keeps (pxl-render
+//! gpu/arena.rs), and how many slots there are.
 //!
-//! A slot is room, not an address. Any tier may take any slot of its pool,
-//! and which one it takes is the scheduler's to decide
-//! (world/chunk/table.rs): a free one, else one whose holder is not drawing
-//! from it. A chunk's mesh keeps the slot it took until something takes it
-//! back, so a mesh outlives its page's record — it is drawn until something
-//! covers its ground — and there is nothing to free.
+//! Two contracts meet a mesh, and this is the second. The workspace is where
+//! a mesh is made — one bake open at a time, in `.fixed.bake`
+//! (world/chunk/build.rs `BAKE_BYTES`) — and it holds nothing across frames:
+//! what it made is handed to a slot the moment it is done. The slots are
+//! what is kept, and they are derived: every mesh in one is made again from
+//! the records whenever it is asked for, so a slot is room and never the
+//! only copy of anything. The workspace is sized to hold any mesh a slot
+//! can; past that the two share nothing.
 //!
-//! A slot named by the chunk's coordinate — reduced modulo the drawn ring's
-//! axis in chunks, within a group for its level modulo the levels a view
-//! holds — makes a level's chunks addressable *only* inside its own drawn
-//! ring, and so decides what can be drawn at all: `select` cannot descend
-//! past a page it does not hold, because the chunks under it lie outside the
-//! ring below and two of them land in one slot. Of the nine pages a top ring
-//! has, four fold from what is held and five do not, and every one of those
-//! five has one or two of its four children resident: nearly half the ground
-//! that shows as nothing is data the client already has and cannot address.
-//! Cesium's answer to the same thing is `skipLevelOfDetail`: a tile whose
-//! content is missing is refined through rather than rendered, and the
-//! loaded descendants are drawn.
+//! A slot is room, not an address. Any tier may take any free slot of its
+//! pool (world/chunk/table.rs), and keeps it until it is no longer drawn.
+//! Slots are never taken from a mesh that is drawn: what a view needs past
+//! the arena is drawn coarser by the quality policy (world/quality.rs), and
+//! what is waiting for a slot waits with the coarser piece it would replace
+//! still on the screen (world/chunk/frontier.rs).
 //!
 //! Two pools, because a group is one storage binding and a binding holds
 //! 128 MiB. The leaves' own tier — the one drawn at their cells — has a
 //! group to itself, since its box is six words where every other is four and
 //! a group is one format throughout; the coarse tiers share
-//! COARSE_GROUPS groups between them, any tier of any level in any of them.
+//! `ARENA_COARSE_GROUPS` groups between them, any tier of any level in any
+//! of them.
 //!
 //! A slot holds a number of boxes derived from the chunk's geometry, and a
 //! mesh never goes past it: one that would is baked a step coarser instead
@@ -54,16 +52,13 @@ use pxl_render::look::lod::COARSEST;
 use pxl_render::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
 use pxl_spec::space::pyramid::CHUNK_CELLS;
 
-/// Slots a group holds, and so the z16 chunks the leaves' own tier can draw
-/// at once. A product number, said aloud: the arena is the largest thing the
-/// device holds, and this is what it gives a view. It is the z16 chunks over
-/// flat ground within where z16 ends, as a disc; the rule's own bound
-/// (domain.rs `LEVEL_PIECES`, a ball, since steep ground or stacked objects
-/// make several chunks a column) is some eighteen times it, which for the
-/// leaves' tier alone is past a storage binding. A view past it waits for a
-/// slot (world/chunk/table.rs `claim`) rather than take one from ground on
-/// the screen.
-const SLOTS: u32 = 330;
+use crate::param::{ARENA_COARSE_GROUPS, ARENA_GROUP_SLOTS};
+
+/// Slots a group holds (param.rs).
+const SLOTS: u32 = ARENA_GROUP_SLOTS;
+/// Groups the coarse tiers share (param.rs).
+const COARSE_GROUPS: u32 = ARENA_COARSE_GROUPS;
+
 /// Boxes a leaf's first tier holds, the one tier drawn at a leaf's own cells:
 /// one a column. The ground is a heightfield, so a column of it is one run
 /// in a chunk, and a chunk is a cube that cuts it to its heights
@@ -71,39 +66,75 @@ const SLOTS: u32 = 330;
 /// mesh/chunk_mesher.rs). A chunk whose placed objects make it more is baked
 /// a step coarser, into the coarse pool.
 pub const FINE_BOXES: u32 = CHUNK_CELLS * CHUNK_CELLS;
-/// Boxes every other tier holds. A product number, said aloud: the room the
-/// coarse pool gives a mesh, which is its size on the device. It is not a
-/// bound the content keeps, and needs not be one: a coarse cell at step `s`
-/// is a cube `s` cells a side, holding at most its own box and the floor laid
-/// under it, so a chunk — 64 cells a side in all three — bakes to at most
-/// 2·(64/s)³ boxes, and a mesh that does not fit is baked a step coarser
-/// until it does. This fits at step 8 at the latest, and the coarsest step,
-/// one cell a chunk, always.
-pub const COARSE_BOXES: u32 = 4551;
+/// Boxes every other tier holds (param.rs). It is not a bound the content
+/// keeps, and needs not be one: a coarse cell at step `s` is a cube `s`
+/// cells a side, holding at most its own box and the floor laid under it, so
+/// a chunk — 64 cells a side in all three — bakes to at most 2·(64/s)³
+/// boxes, and a mesh that does not fit is baked a step coarser until it
+/// does. The coarsest step, one cell a chunk, always fits.
+pub const COARSE_BOXES: u32 = crate::param::COARSE_BOXES;
 
 const _: () = assert!(2 * (CHUNK_CELLS / COARSEST).pow(3) <= COARSE_BOXES, "a chunk at its coarsest step past what a coarse slot holds");
 
-/// Boxes a tier of step `step` on a chunk of `level` may have: its pool's.
-pub const fn capacity(level: u32, step: u32) -> u32 {
-    if level == 0 && step == 1 {
-        FINE_BOXES
-    } else {
-        COARSE_BOXES
+/// The pools a tier's slot is taken from, as an index.
+pub const POOLS: usize = 2;
+
+/// Which of the arena's pools a tier takes its slot from: the leaves' own
+/// tier, or any other.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Pool {
+    Fine = 0,
+    Coarse = 1,
+}
+
+impl Pool {
+    /// The pool a tier of step `step` on a chunk of `level` takes.
+    pub const fn of(level: u32, step: u32) -> Pool {
+        if level == 0 && step == 1 {
+            Pool::Fine
+        } else {
+            Pool::Coarse
+        }
+    }
+
+    /// Slots it holds.
+    pub const fn slots(self) -> u32 {
+        match self {
+            Pool::Fine => SLOTS,
+            Pool::Coarse => COARSE_GROUPS * SLOTS,
+        }
+    }
+
+    /// Which slots are its.
+    pub fn range(self) -> core::ops::Range<usize> {
+        match self {
+            Pool::Fine => (FINE_GROUP * SLOTS) as usize..((FINE_GROUP + 1) * SLOTS) as usize,
+            Pool::Coarse => 0..(COARSE_GROUPS * SLOTS) as usize,
+        }
+    }
+
+    /// The pool a slot is in.
+    pub const fn at(index: usize) -> Pool {
+        if index as u32 / SLOTS == FINE_GROUP {
+            Pool::Fine
+        } else {
+            Pool::Coarse
+        }
     }
 }
 
-/// The largest mesh one bake may write: past what any slot holds, so a bake
-/// is weighed against its slot before it could outgrow its block.
-pub const BAKE_BYTES: u32 = 1 << 20;
-/// Groups the coarse tiers share. A product number, said aloud: a slot for
-/// each of some thousand chunks a view draws, each in one coarse tier, and
-/// half as many again for what a change of view holds on to while it lasts —
-/// a dissolve's other tier, a stale chunk drawn until what replaced it is
-/// whole. The rule's bound (domain.rs `VIEW_PIECES`) with the same half
-/// again is some sixty times it, gigabytes of boxes. Past it a mesh waits
-/// for a slot rather than take one from ground on the screen
-/// (world/chunk/table.rs `claim`).
-const COARSE_GROUPS: u32 = 5;
+/// Every pool's slots, by `Pool` as an index: the arena the quality policy
+/// fits a view's frontier into.
+pub const ARENA: [u32; POOLS] = [Pool::Fine.slots(), Pool::Coarse.slots()];
+
+/// Boxes a tier of step `step` on a chunk of `level` may have: its pool's.
+pub const fn capacity(level: u32, step: u32) -> u32 {
+    match Pool::of(level, step) {
+        Pool::Fine => FINE_BOXES,
+        Pool::Coarse => COARSE_BOXES,
+    }
+}
+
 /// Groups the arena holds: the coarse tiers', and the leaves' own tier
 /// beside them.
 pub const GROUPS: u32 = COARSE_GROUPS + 1;
@@ -112,10 +143,6 @@ const FINE_GROUP: u32 = COARSE_GROUPS;
 /// Slots across every group, for whoever tracks who holds each.
 pub const OCCUPANCY: usize = (GROUPS * SLOTS) as usize;
 
-const _: () = assert!(
-    FINE_BOXES * FINE_BOX_WORDS * 4 <= BAKE_BYTES && COARSE_BOXES * COARSE_BOX_WORDS * 4 <= BAKE_BYTES,
-    "a slot past what one bake can write"
-);
 // WebGPU's default ceiling on one storage binding.
 const _: () = assert!(group_bytes_of(0) as u64 <= 128 << 20, "an arena group past a storage binding's limit");
 const _: () = assert!(group_bytes_of(FINE_GROUP) as u64 <= 128 << 20, "the leaves' group past a storage binding's limit");
@@ -164,20 +191,10 @@ pub struct MeshSlot {
     pub index: usize,
 }
 
-/// Which slots a tier of step `step` on a chunk of `level` may take. The
-/// leaves' own tier has its own pool; every other tier shares one.
-pub fn pool(level: u32, step: u32) -> core::ops::Range<usize> {
-    if level == 0 && step == 1 {
-        (FINE_GROUP * SLOTS) as usize..((FINE_GROUP + 1) * SLOTS) as usize
-    } else {
-        0..(COARSE_GROUPS * SLOTS) as usize
-    }
-}
-
 /// Words a slot's surface lane holds: a sample at the center of each of its
 /// tier's blocks, CHUNK_CELLS a side for the leaves' own tier, which draws
 /// its level's cells, and half that for every other, which draws no finer
-/// than its level's cells averaged 2 × 2 (world/chunk/table.rs
+/// than its level's cells averaged 2 × 2 (world/chunk/frontier.rs
 /// `drawn_cube`).
 const fn surface_words(group: u32) -> u32 {
     let axis = if group == FINE_GROUP { CHUNK_CELLS } else { CHUNK_CELLS / 2 };

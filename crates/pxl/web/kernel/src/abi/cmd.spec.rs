@@ -160,10 +160,11 @@ impl LoadMinor {
 #[repr(u32)]
 pub enum WorldMinor {
     SNAPSHOT = 0x15,
+    SOURCE = 0x16,
 }
 
 impl WorldMinor {
-    pub const ALL: [WorldMinor; 1] = [WorldMinor::SNAPSHOT];
+    pub const ALL: [WorldMinor; 2] = [WorldMinor::SNAPSHOT, WorldMinor::SOURCE];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<WorldMinor> {
@@ -530,6 +531,11 @@ pub enum Command {
     /// phases on what is left of the quota, the fetches within the credits. The turn leaves
     /// its signals on the completion ring, drawn by the kernel, and last this command's own.
     WORLD_UPDATE = 0x1b03,
+    /// What the tile source declares of itself, once the shell has it (published.json's
+    /// SOURCE, or the dev tile server's answer in the same form). Until it comes nothing is
+    /// observed: the floor is leased at the level it names, and no view is drawn from a
+    /// level the source does not supply whole.
+    WORLD_SOURCE = 0x1b16,
     /// The canvas's client rect.
     INPUT_UPDATE = 0x1c03,
     /// A pointer event on the canvas, in client pixels, with what the pointer holds; the
@@ -633,10 +639,11 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 45] = [
+    pub const ALL: [Command; 46] = [
         Command::NOP,
         Command::WORLD_CREATE,
         Command::WORLD_UPDATE,
+        Command::WORLD_SOURCE,
         Command::INPUT_UPDATE,
         Command::INPUT_POINTER,
         Command::INPUT_WHEEL,
@@ -983,6 +990,22 @@ impl WorldUpdateSignal {
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.draws));
+    }
+}
+
+/// Command::WORLD_SOURCE's packet.
+#[derive(Clone, Copy, Debug)]
+pub struct WorldSource {
+    /// The coarsest level of the pyramid the source supplies whole.
+    pub top_level: u32,
+}
+
+impl WorldSource {
+    pub fn read(pkt: &[u8]) -> Result<WorldSource, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(WorldSource {
+            top_level: f.at(0)?.get_number()? as u32,
+        })
     }
 }
 

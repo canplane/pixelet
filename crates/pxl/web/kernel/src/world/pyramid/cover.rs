@@ -3,10 +3,13 @@
 //! What a layer's resident pages draw of the view's pieces (domain.rs
 //! `Domain`): each piece from the finest resident page at or over it, and
 //! the ones nothing over is resident for, as gaps. Made for the frame from
-//! the pieces and what is resident, and read by whoever draws a layer — the
-//! chunk table for the terrain, the badges for places. Nothing is asked for
-//! because of it: what is fetched is the observation's demand
-//! (world/pyramid.rs).
+//! the pieces and what is resident, and read by what draws a layer at once —
+//! the badges for places, which hold nothing past the frame — and for the
+//! terrain by the profiler. The terrain's pieces hold slots of the arena, so
+//! what of them is drawn is a frontier moved toward the pieces under a
+//! budget (world/chunk/frontier.rs), which reads what is resident itself.
+//! Nothing is asked for because of it: what is fetched is the observation's
+//! demand (world/pyramid.rs).
 
 use std::collections::HashMap;
 
@@ -61,7 +64,7 @@ fn covered<L: Layer>() -> &'static mut Covered {
 /// no chunk's split distance: whoever reads the cover is told only when what
 /// it draws has changed.
 pub fn step<L: Layer>() {
-    domain::step();
+    crate::world::quality::step();
     let Some(d) = domain::current() else { return };
     let key = Some((domain::revision(), L::pyramid().revision()));
     let c = covered::<L>();

@@ -26,7 +26,7 @@ use crate::layer::environment::fog::reach_at;
 use crate::sched::profiler::record::{Failure, Outcome};
 use crate::world::prefetch::{NoPrefetch, Prefetch, Reach};
 use crate::world::pyramid::Pyramid;
-use pxl_spec::space::lod::{fault_radius, pages_within};
+use pxl_spec::space::lod::{fault_radius, pages_within, Tau};
 use pxl_spec::space::observation::{ByBounds, Observation, Unknown};
 
 /// How high the eye stands over flat ground.
@@ -49,6 +49,7 @@ fn observation_at([x, y]: [f64; 2]) -> Observation {
         eye: [x, y, HEIGHT],
         frustum: None,
         far: reach_at(HEIGHT).min(fault_radius(TOP_LEVEL)),
+        top: TOP_LEVEL,
         planet: f64::INFINITY,
         ground: 0.0,
     }
@@ -110,7 +111,7 @@ impl Serve for Hostile {
 struct Flood;
 
 impl Prefetch for Flood {
-    fn speculate(&self, o: &Observation, each: &mut dyn FnMut(LevelPage)) {
+    fn speculate(&self, o: &Observation, _tau: Tau, each: &mut dyn FnMut(LevelPage)) {
         let [x, y, _] = o.eye;
         for level in 0..=TOP_LEVEL {
             pages_within(level, [x, y], 8.0 * pxl_spec::space::pyramid::span_of(level)).for_each(&mut *each);
@@ -141,7 +142,7 @@ fn converge_on<S: Serve>(pyramid: &mut Pyramid<PoiPage>, observation: fn() -> Ob
     let mut resident: HashSet<LevelPage> = HashSet::new();
     for turn in 0..2_000 {
         let at = turn as f64 * 16.0;
-        pyramid.observe(&observation(), &Unknown, &ByBounds, prefetch, allowance);
+        pyramid.observe(&observation(), &Unknown, &ByBounds { tau: Tau::FINEST }, prefetch, Tau::FINEST, allowance);
         if exact(pyramid) && pyramid.wants().is_empty() {
             assert!(pyramid.paging().leases().all(|p| pyramid.paging().resident(p)), "every lease is held");
             return;
@@ -227,14 +228,14 @@ fn once_the_floor_is_resident_every_observation_has_an_answer() {
     let _serial = crate::global::serial();
     let mut pyramid = Pyramid::<PoiPage>::default();
     let unanswered = |pyramid: &Pyramid<PoiPage>| pyramid.demand().iter().filter(|&&p| pyramid.drawn_from(p).is_none()).count();
-    pyramid.observe(&the_observation(), &Unknown, &ByBounds, &NoPrefetch, 0);
+    pyramid.observe(&the_observation(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
     assert!(unanswered(&pyramid) > 0, "a cold start is open");
     let floor: Vec<LevelPage> = pyramid.paging().leases().collect();
     assert!(!floor.is_empty() && floor.iter().all(|p| p.level == TOP_LEVEL));
     for p in floor {
         pyramid.admit(p, |_| Ok(crowded(p))).expect("a page is made");
     }
-    pyramid.observe(&the_observation(), &Unknown, &ByBounds, &NoPrefetch, 0);
+    pyramid.observe(&the_observation(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
     assert_eq!(unanswered(&pyramid), 0, "pages with no answer");
 }
 
@@ -250,7 +251,7 @@ fn a_page_the_view_no_longer_asks_for_is_no_longer_held_for_it() {
         .filter(|&p| pyramid.paging().hold(p) == Hold::Demand)
         .collect();
     assert!(!read.is_empty(), "the view held its pages for itself");
-    pyramid.observe(&elsewhere(), &Unknown, &ByBounds, &NoPrefetch, 0);
+    pyramid.observe(&elsewhere(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
     for &p in &read {
         assert!(pyramid.paging().asked(p).is_none(), "{p:?} is asked for from elsewhere");
         assert_eq!(pyramid.paging().hold(p), Hold::Cache, "{p:?} still held for a view that left it");

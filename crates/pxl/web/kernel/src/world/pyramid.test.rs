@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use super::*;
 use crate::world::prefetch::NoPrefetch;
 use pxl_spec::bake::poi_page::{Place, PoiPage, POI_LATTICE};
-use pxl_spec::space::lod::fault_radius;
+use pxl_spec::space::lod::{fault_radius, Tau};
 use pxl_spec::space::observation::{Frustum, Rect, Unknown};
 use pxl_spec::space::pvf3::ivec;
 
@@ -17,6 +17,7 @@ fn at(eye: [f64; 3], frustum: Option<Frustum>) -> Observation {
         eye,
         frustum,
         far: fault_radius(TOP_LEVEL),
+        top: TOP_LEVEL,
         planet: f64::INFINITY,
         ground: 0.0,
     }
@@ -29,7 +30,7 @@ fn the_observation() -> Observation {
 /// The pages the estimator names for `o`, knowing nothing.
 fn named(o: &Observation) -> Vec<LevelPage> {
     let mut out = Vec::new();
-    ESTIMATOR.requirements(o, &Unknown, &mut |r| PoiPage::pages(&r, &mut |p| out.push(p)));
+    ByBounds { tau: Tau::FINEST }.requirements(o, &Unknown, &mut |r| PoiPage::pages(&r, &mut |p| out.push(p)));
     out.sort_unstable();
     out.dedup();
     out
@@ -78,7 +79,7 @@ fn the_demand_is_the_estimators_and_every_fault_in_it_is_asked_for() {
     let o = the_observation();
     let mut pyramid = Pyramid::<PoiPage>::default();
     hold(&mut pyramid, named(&o).into_iter().filter(|p| p.level >= 3 || ivec::X(p.page) % 2 == 0).map(|p| (p, crowded(p))));
-    pyramid.observe(&o, &Unknown, &ESTIMATOR, &NoPrefetch, 0);
+    pyramid.observe(&o, &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
     assert_eq!(pyramid.demand(), named(&o).as_slice(), "the demand is the estimator's");
     let asked: HashSet<u64> = pyramid.wants().iter().map(|(s, _)| *s).collect();
     let mut faults = 0;
@@ -108,7 +109,7 @@ fn ground_a_page_settles_is_never_asked_for() {
     top.sort_unstable();
     top.dedup();
     hold(&mut pyramid, top.into_iter().map(|p| (p, PoiPage::default())));
-    pyramid.observe(&o, &Unknown, &ESTIMATOR, &NoPrefetch, 0);
+    pyramid.observe(&o, &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
     for &p in pyramid.demand() {
         assert!(pyramid.source(p).is_some_and(|s| s.level == TOP_LEVEL), "{p:?} is said by the page at the top");
     }
@@ -130,7 +131,7 @@ fn ground_outside_the_frustum_is_not_demanded() {
     }
     let o = at([x, y, z], Some(Frustum { planes }));
     let mut pyramid = Pyramid::<PoiPage>::default();
-    pyramid.observe(&o, &Flat, &ESTIMATOR, &NoPrefetch, 0);
+    pyramid.observe(&o, &Flat, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
     let all = named(&at([x, y, z], None));
     assert!(pyramid.demand().len() < all.len(), "looking one way demands less than looking all around");
     for &p in pyramid.demand() {

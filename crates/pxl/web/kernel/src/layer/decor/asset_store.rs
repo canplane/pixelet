@@ -8,7 +8,7 @@
 //!
 //! A model is registered with the scheduler's models as it arrives
 //! (layer/model/asset.rs), so the kernel holds its triangles for the
-//! eraser's hit test (crates/pxl/web/kernel/src/world/chunk/raycast.rs) and the renderer
+//! eraser's hit test (layer/decor/hit.rs) and the renderer
 //! draws its instances from the same lanes; the group it is drawn as is its
 //! variant's place across every kind, in registry order. The registering is
 //! `decor_asset_task`'s, a variant at a time on a turn's quota.

@@ -13,7 +13,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use pxl_render::gpu::api::{gpu, room};
 use pxl_render::gpu::renderer::device_ready;
-use pxl_render::mesh::chunk_mesher::{box_words, mesh_words, BakeContext, Heights, Step, FINE_BOX_WORDS};
+use pxl_render::mesh::chunk_mesher::{box_words, mesh_words, BakeContext, Heights, Step, COARSE_BOX_WORDS, FINE_BOX_WORDS};
 use pxl_render::mesh::paint::level::write_level_runs;
 use pxl_render::mesh::paint::object::adapter::{Claims, Entries, Painted, Painter};
 use pxl_render::mesh::paint::object::fold::fold_columns;
@@ -32,7 +32,7 @@ use crate::mem::fixed::{at, Range};
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use pxl_spec::bake::constant::BAND_CELLS;
 
-use crate::world::chunk::mesh_slot::capacity;
+use crate::world::chunk::mesh_slot::{capacity, COARSE_BOXES, FINE_BOXES};
 use crate::world::chunk::source::tiers_draw;
 use crate::world::pyramid::chunk::Chunk as PyramidChunk;
 use crate::world::pyramid::Layer as _;
@@ -72,14 +72,11 @@ pub fn release_block(at: usize, bytes: u32) {
 
 /// How much built work chunks may keep in the heap *while off screen*: their
 /// decor, the one part of a chunk still there — its runs are a set of
-/// `.fixed.runs` and its tiers are on the device. Dropping all of it on the
-/// first release makes a rotation or a zoom in and out scatter every chunk's
-/// decor again, so the scheduler reclaims only past this, farthest first. Half
-/// the heap: the other half is the on-screen decor, the volumes a build
-/// composes in, and the room a large block needs in one piece.
+/// `.fixed.runs` and its tiers are on the device. The scheduler reclaims
+/// only past this, farthest first; the share is param.rs's `RETAIN_SHARE`.
 #[allow(non_snake_case)]
 pub fn RETAIN_BUDGET_BYTES() -> f64 {
-    crate::mem::section::map().map_or(0.0, |m| (m.heap.bytes / 2) as f64)
+    crate::mem::section::map().map_or(0.0, |m| m.heap.bytes as f64 * crate::param::RETAIN_SHARE)
 }
 
 // ---- the build as the kernel runs it ----
@@ -103,12 +100,18 @@ pub fn RETAIN_BUDGET_BYTES() -> f64 {
 // but the chunk's tiers are all baked while it is there. Two, so that one is
 // filled while the other is baked from. A chunk that finds both held waits.
 
+/// The workspace: `.fixed.bake`, where the one bake open writes its mesh
+/// before it is handed to its slot (world/chunk/mesh_slot.rs). As large as
+/// the largest mesh any slot holds, since a bake is weighed against its
+/// slot before it could outgrow it (`BuildEvent::Coarser`), and no larger.
+/// It keeps nothing across frames; what is kept is the slots.
+pub const BAKE_BYTES: u32 = {
+    let (fine, coarse) = (FINE_BOXES * FINE_BOX_WORDS, COARSE_BOXES * COARSE_BOX_WORDS);
+    4 * if fine > coarse { fine } else { coarse }
+};
+
 /// Run sets `.fixed.runs` holds.
 pub const RUN_SETS: usize = 2;
-/// Bytes a run set holds: a leaf chunk's columns at eleven runs each, where
-/// the terrain is one and what is placed on it rarely a handful more. A set
-/// past it is refused rather than cut, since a run left out is a hole.
-pub const RUN_SET_BYTES: u32 = 1 << 20;
 
 /// What a build hands the scheduler.
 #[derive(Clone, Copy, Debug, PartialEq)]

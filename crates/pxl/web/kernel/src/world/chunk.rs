@@ -5,6 +5,7 @@
 //! frame can draw.
 
 pub mod build;
+pub mod frontier;
 pub mod mesh_slot;
 pub mod source;
 pub mod stage;

@@ -354,10 +354,13 @@ pub struct FrameSample {
     pub cover: CoverSample,
 }
 
-/// What the terrain's cover made of the view: the chunks the rule draws with
-/// everything resident, and of those the chunks it draws from the pages it
-/// holds and the ones it leaves open. The three apart are what tells a view
-/// waiting on its pages from one whose pages came and are not drawn.
+/// What the terrain's cover made of the view: the chunks the goal would be
+/// at the target quality, the pieces at the effective one, and the columns
+/// of the pyramid's top within the reach with no answer yet — nothing over
+/// them resident, which the goal has no piece of (world/pyramid/domain.rs
+/// `unanswered`). The first against the second is how far the quality
+/// policy holds the view back (world/quality.rs); the third is a view
+/// waiting on its floor, a cold start or a jump.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CoverSample {
@@ -366,26 +369,28 @@ pub struct CoverSample {
     pub gaps: f64,
 }
 
-/// The chunks a view has moved off and that are kept until what replaces
-/// them is whole (world/chunk/table.rs `retire`): where they outstay it, they
-/// hide the ground that replaced them.
+/// The frontier's moves (world/chunk/frontier.rs). The lanes' names are the
+/// profiler spec's (spec/pxl/web/kernel/sched/profiler/profiler.json), which
+/// the web side reads them by; what each counts is said beside it, and the
+/// two that count nothing are zero.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct StaleSample {
+    /// Pieces a move replaced, dissolving out.
     pub chunks: f64,
     /// Of those, the ones drawn, and their levels as bits.
     pub drawn: f64,
     pub levels: f64,
-    /// Wanted chunks with a layout that a drawn stale chunk hides.
+    /// Chunks built for a move and ready, waiting on the rest of it.
     pub hidden: f64,
-    /// Why the stale chunks stay: what replaces them does not cover them;
-    /// covers them but is not laid out; and of those, where what is not laid
-    /// out is waiting on a slot.
+    /// Moves the arena had no room for this frame, and moves under way and
+    /// not all ready. `on_waiter` counts nothing.
     pub uncovered: f64,
     pub unready: f64,
     pub on_waiter: f64,
-    /// Meshes thrown away because their slot is still drawn from, and the
-    /// levels of the chunks that waited and that held the slots, as bits.
+    /// Meshes thrown away because their pool had no free slot, and the
+    /// levels of the chunks they were for as bits. `holder_levels` counts
+    /// nothing: no slot is taken from a holder.
     pub slot_waits: f64,
     pub wait_levels: f64,
     pub holder_levels: f64,
@@ -419,12 +424,11 @@ pub struct TurnSample {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CapSample {
-    /// Chunks on screen still wanting a layout that the commit pass did not
-    /// reach, and chunks the selection wants that are not mounted.
+    /// Chunks still wanting a layout that the commit pass did not reach, and
+    /// moves of the frontier that found no room this frame.
     pub commit_left: f64,
     pub mount_left: f64,
-    /// Whether the mount pass stopped because the table is full, rather than
-    /// because the frame's own cap was spent.
+    /// Whether any move found no room this frame.
     pub mount_full: f64,
     /// Pages that arrived and found every record carrying one worth more.
     pub record_refused: f64,

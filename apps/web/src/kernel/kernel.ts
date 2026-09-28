@@ -38,6 +38,7 @@ import {
   orientationSupported,
 } from "@platform/sensor.ts";
 import { abort_fetch, run_fetch } from "@/kernel/io/fetch.ts";
+import { declare_source } from "@/kernel/io/source.ts";
 import { load_image, load_model } from "@/kernel/io/load.ts";
 import { CORE, CORE_DOORBELL, load_core } from "@/kernel/mem.ts";
 import { bytes_at } from "@/kernel/module.ts";
@@ -115,6 +116,9 @@ export async function boot_kernel(): Promise<void> {
     }),
     (result) => result,
   );
+  // Not awaited: a dev tile server may answer late, and the kernel observes
+  // nothing until it has, which the boot does not wait on.
+  void declare_source();
   // What the kernel holds from now on is what storage keeps: the snapshot
   // after WORLD_CREATE is the first to say it.
   subscribe_snapshot(() => keepSettings(kernel_snapshot().settings));

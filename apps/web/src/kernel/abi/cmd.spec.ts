@@ -77,6 +77,7 @@ export const enum LoadMinor {
 /** The world's own verbs. */
 export const enum WorldMinor {
   SNAPSHOT = 0x15,
+  SOURCE = 0x16,
 }
 
 /** A setting's own verb. */
@@ -245,6 +246,11 @@ export const enum Command {
    * phases on what is left of the quota, the fetches within the credits. The turn leaves
    * its signals on the completion ring, drawn by the kernel, and last this command's own. */
   WORLD_UPDATE = 0x1b03,
+  /** What the tile source declares of itself, once the shell has it (published.json's
+   * SOURCE, or the dev tile server's answer in the same form). Until it comes nothing is
+   * observed: the floor is leased at the level it names, and no view is drawn from a
+   * level the source does not supply whole. */
+  WORLD_SOURCE = 0x1b16,
   /** The canvas's client rect. */
   INPUT_UPDATE = 0x1c03,
   /** A pointer event on the canvas, in client pixels, with what the pointer holds; the
@@ -553,6 +559,16 @@ export interface WorldUpdateSignal {
 
 export function read_world_update(b: BranchCursor): WorldUpdateSignal {
   return { draws: b.at(0).get<u32>() };
+}
+
+/** Command.WORLD_SOURCE's packet. */
+export interface WorldSource {
+  /** The coarsest level of the pyramid the source supplies whole. */
+  top_level: u32;
+}
+
+export function encode_world_source(p: WorldSource): U8Array {
+  return packet((b) => b.u32(p.top_level));
 }
 
 /** Command.INPUT_UPDATE's packet. */

@@ -1,5 +1,5 @@
 // The dissolve a change of what a chunk draws goes through: its two sides —
-// two tiers, or a stale chunk and what replaced it, with their decor — each
+// two tiers, or a replaced piece and what replaced it, with their decor — each
 // drawn over a share of the pixels, on complementary halves of one pattern,
 // so a pixel shows one of them and never both or neither.
 

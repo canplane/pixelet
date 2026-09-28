@@ -4,10 +4,11 @@ use super::*;
 
 #[test]
 fn a_slot_lies_inside_its_group_and_no_two_overlap() {
-    for p in [pool(0, 1), pool(0, 2)] {
+    for p in [Pool::Fine, Pool::Coarse] {
         let mut spans: Vec<(u32, u32, u32)> = p
-            .clone()
+            .range()
             .map(|at| {
+                assert_eq!(Pool::at(at), p, "a slot is in the pool that holds it");
                 let s = slot_at(at);
                 assert_eq!(s.index, at, "an index names its own slot");
                 (s.group, s.first_box, s.first_box + s.capacity)

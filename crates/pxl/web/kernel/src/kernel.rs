@@ -14,9 +14,6 @@ use crate::global::Global;
 use crate::layer::object::store::Store;
 use crate::world::chunk::table::Scheduler;
 
-/// The log's shape: world/change.rs's topics, and how many changes it keeps.
-pub const JOURNAL_CAPACITY: u32 = 4096;
-
 pub struct Kernel {
     /// The volumes over the heap, made at boot.
     pub volumes: Option<Volumes>,
@@ -38,7 +35,7 @@ impl Kernel {
             sched: Scheduler::new(),
             changes: ChangeLog::new(ChangeLogOptions {
                 topics: crate::world::change::WORLD_TOPICS,
-                capacity: JOURNAL_CAPACITY,
+                capacity: crate::param::JOURNAL_CAPACITY,
                 keys_per_topic: None,
             }),
         }

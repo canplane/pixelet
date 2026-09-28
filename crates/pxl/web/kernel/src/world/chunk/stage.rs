@@ -236,7 +236,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
             settling: census.settling as f64,
             blend_active: census.blend_active as f64,
             offscreen_pending: census.offscreen_pending as f64,
-            oldest_release_ms: census.oldest_release_ms,
+            oldest_release_ms: census.oldest_offscreen_ms,
             oldest_visible_ms: census.oldest_visible_ms,
         },
         pages,
@@ -246,31 +246,35 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         q_terrain: pending_count(Terrain::CATEGORY) as f64,
         q_poi: pending_count(PoiPage::CATEGORY) as f64,
         stale: StaleSample {
-            chunks: census.stale as f64,
-            drawn: census.stale_drawn as f64,
-            levels: census.stale_levels as f64,
-            hidden: census.hidden as f64,
+            chunks: census.leaving as f64,
+            drawn: census.leaving_drawn as f64,
+            levels: census.leaving_levels as f64,
+            hidden: census.ready_waiting as f64,
             slot_waits: census.slot_waits as f64,
             wait_levels: census.wait_levels as f64,
-            holder_levels: census.holder_levels as f64,
+            holder_levels: 0.0,
             coarser: census.coarser as f64,
-            uncovered: census.stale_uncovered as f64,
-            unready: census.stale_unready as f64,
-            on_waiter: census.stale_on_waiter as f64,
+            uncovered: census.refused as f64,
+            unready: census.waiting as f64,
+            on_waiter: 0.0,
         },
         turn: TurnSample::default(),
         cover: {
             let (cover, _) = crate::world::pyramid::cover::cover::<Terrain>();
+            // The target's cut is made for this where the quality in force
+            // is coarser, which only a view past its arena pays for.
+            let rule = crate::world::pyramid::domain::cut_at(0).map_or(0.0, |(_, cut)| cut.pieces().len() as f64);
+            let domain = crate::world::pyramid::domain::current();
             CoverSample {
-                rule: crate::world::pyramid::domain::current().map_or(0.0, |d| d.pieces().len() as f64),
+                rule,
                 drawn: cover.drawn.len() as f64,
-                gaps: cover.gaps.len() as f64,
+                gaps: domain.map_or(0.0, |d| d.unanswered() as f64),
             }
         },
         cap: CapSample {
             commit_left: census.commit_left as f64,
-            mount_left: census.mount_left as f64,
-            mount_full: census.mount_full as f64,
+            mount_left: census.refused as f64,
+            mount_full: (census.refused > 0) as u32 as f64,
             record_refused: Terrain::pyramid().take_refusals() as f64,
         },
     });

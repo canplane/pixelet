@@ -18,7 +18,7 @@ use pxl_spec::space::v3::V3;
 
 use crate::layer::object::geometry::Aabb;
 use crate::layer::object::store::{get_placed_object, OccupiedEntry};
-use crate::world::access::{Access, Hit, Ray, Struck, FINEST};
+use crate::world::access::{Access, Detail, Hit, Ray, Struck, FINEST};
 use crate::world::frame::coord::{local_world_origin, local_world_to_canonical};
 
 const INTERACT_RADIUS_CELL: f64 = 32.0 / U_PER_CELL - 0.707;
@@ -157,7 +157,7 @@ pub fn world_struck_corner(hit: &Hit, size: f64, map_origin: IVec) -> Pvf3 {
 pub fn resolve_hit_object(hit: &Hit) -> Option<OccupiedEntry> {
     match hit.struck {
         Struck::Object(at) => get_placed_object(at),
-        Struck::Ground => None,
+        Struck::Ground | Struck::Objects => None,
     }
 }
 
@@ -180,7 +180,7 @@ pub fn ray_pick(origin: V3, direction: V3, map_center: Option<&Pvf3>) -> Option<
         direction,
         reach: INTERACT_RADIUS_U * 1.5,
     };
-    let hit = Access::now().first_hit(&ray, FINEST).value().flatten()?.moved(frame.map(|v| -v));
+    let hit = Access::now().first_hit(&ray, Detail::Level(FINEST)).value().flatten()?.moved(frame.map(|v| -v));
 
     let mut probe = Pvf3::default();
     local_world_to_canonical(&mut probe, &hit.point, map_origin);

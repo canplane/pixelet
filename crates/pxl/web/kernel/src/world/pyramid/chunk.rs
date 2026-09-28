@@ -23,6 +23,9 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::pyramid::{chunk_span_of, LevelPage, CHUNK_CELLS, TOP_LEVEL};
 
+/// The chunks a level down that cover one: two a side in all three.
+pub const CHILDREN: usize = 8;
+
 /// Levels from a chunk up to the page it lies in.
 const PAGE_LEVELS: u32 = L3.above(L2) as u32;
 
@@ -126,7 +129,7 @@ impl Chunk {
     }
 
     /// The eight chunks a level down that cover it, in `slot_of`'s order.
-    pub fn children(self) -> [Chunk; 8] {
+    pub fn children(self) -> [Chunk; CHILDREN] {
         std::array::from_fn(|slot| Chunk {
             level: self.level - 1,
             at: child_of(self.at, slot),

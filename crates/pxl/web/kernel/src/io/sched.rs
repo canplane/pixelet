@@ -61,8 +61,7 @@ use crate::world::paging::FRAMES;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
-/// Fetches out at once at most, whatever the host grants.
-pub const MAX_CREDITS: u32 = 16;
+use crate::param::MAX_CREDITS;
 
 /// Where a serve policy places one want on the one scale this compares:
 /// `class` first, lower first, then `distance`.

@@ -198,7 +198,7 @@ fn the_ground_a_ray_meets_is_the_ground_the_paint_draws() {
         for cy in (0..CHUNK_CELLS).step_by(7) {
             for cx in (0..CHUNK_CELLS).step_by(5) {
                 let ray = down([x0 + cx as f64 + 0.5, y0 + cy as f64 + 0.5]);
-                let hit = access.first_hit(&ray, 0).value().flatten().expect("a ray down meets the ground");
+                let hit = access.first_hit(&ray, Detail::Level(0)).value().flatten().expect("a ray down meets the ground");
                 assert_eq!(hit.struck, Struck::Ground);
                 assert_eq!(hit.point[2], sample.ele[apron_col(cx, cy) as usize] as f64 * U_PER_CELL, "({cx}, {cy}) read {n} a side");
                 assert_eq!(hit.normal, [0.0, 0.0, 1.0]);
@@ -232,7 +232,7 @@ fn a_ray_passed_over_by_the_index_passes_over_no_ground() {
                 direction: [azimuth.cos() * dip.cos(), azimuth.sin() * dip.cos(), -dip.sin()],
                 reach: 400.0,
             };
-            let answer = access.first_hit(&ray, 0);
+            let answer = access.first_hit(&ray, Detail::Level(0));
             let hit = answer.value().flatten();
             let until = hit.map_or(ray.reach, |h| h.t);
             // Every point before what is met stands at or over the drawn
@@ -291,13 +291,13 @@ fn a_placed_object_is_met_at_its_own_box_and_air_takes_the_ground_out() {
     let corner = [cx + q, cy + 2.0 * q, bare + U_PER_CELL + q];
     write(&mut store, corner, side, placeable_cube_num_id(PlaceableCube::Block(cube_types::Block::red)));
     let access = Access::new(&paging, &store);
-    let hit = access.first_hit(&down([corner[0] + q / 2.0, corner[1] + q / 2.0]), 0).value().flatten().unwrap();
+    let hit = access.first_hit(&down([corner[0] + q / 2.0, corner[1] + q / 2.0]), Detail::Level(0)).value().flatten().unwrap();
     assert!(matches!(hit.struck, Struck::Object(_)), "{hit:?}");
     assert_eq!((hit.box_min, hit.box_max), (corner, corner.map(|v| v + q)));
     assert_eq!(hit.point[2], corner[2] + q);
     // Beside it in the same cell, the cell is the cube's: nothing is met
     // there until the ground's cell under it.
-    let beside = access.first_hit(&down([cx + 0.9, cy + 0.9]), 0).value().flatten().unwrap();
+    let beside = access.first_hit(&down([cx + 0.9, cy + 0.9]), Detail::Level(0)).value().flatten().unwrap();
     assert_eq!((beside.struck, beside.point[2]), (Struck::Ground, bare));
 
     // Air in the ground's top cell: the ray goes down to the cell under it.
@@ -305,7 +305,7 @@ fn a_placed_object_is_met_at_its_own_box_and_air_takes_the_ground_out() {
     let ground = access.at(&point(ax, ay), 0).value().unwrap().top;
     write(&mut store, [ax, ay, ground - U_PER_CELL], CELL, AIR);
     let access = Access::new(&paging, &store);
-    let hit = access.first_hit(&down([ax, ay]), 0).value().flatten().unwrap();
+    let hit = access.first_hit(&down([ax, ay]), Detail::Level(0)).value().flatten().unwrap();
     assert_eq!((hit.struck, hit.point[2]), (Struck::Ground, ground - U_PER_CELL));
 }
 
@@ -321,7 +321,7 @@ fn a_query_leaves_residency_as_it_found_it() {
     for at in points(&mut rng) {
         let _ = access.at(&at, 0);
         let p = [pvf3::to_real(pvf3::X(&at)), pvf3::to_real(pvf3::Y(&at))];
-        let _ = access.first_hit(&down(p), 0);
+        let _ = access.first_hit(&down(p), Detail::Level(0));
         let _ = access.extent(GROUND.cell_of(0, &at).page(), GROUND.cell_of(0, &at).page().node());
     }
     assert_eq!(before, (paging.revision(), paging.frames_used(), paging.leases().count()));

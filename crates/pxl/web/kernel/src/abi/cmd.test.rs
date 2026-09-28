@@ -11,6 +11,7 @@ fn every_number_is_its_major_and_minor() {
     let parts = [
         (WORLD_CREATE, Major::WORLD as u32, Minor::CREATE as u32),
         (WORLD_UPDATE, Major::WORLD as u32, Minor::UPDATE as u32),
+        (WORLD_SOURCE, Major::WORLD as u32, WorldMinor::SOURCE as u32),
         (INPUT_UPDATE, Major::INPUT as u32, Minor::UPDATE as u32),
         (INPUT_POINTER, Major::INPUT as u32, InputMinor::POINTER as u32),
         (INPUT_WHEEL, Major::INPUT as u32, InputMinor::WHEEL as u32),
@@ -67,7 +68,7 @@ fn every_number_is_its_major_and_minor() {
 /// same number as one of the four every subject has.
 #[test]
 fn a_subject_s_own_verbs_start_past_the_four_every_subject_has() {
-    let own: [(&str, u32); 23] = [
+    let own: [(&str, u32); 24] = [
         ("InputMinor::POINTER", InputMinor::POINTER as u32),
         ("InputMinor::WHEEL", InputMinor::WHEEL as u32),
         ("InputMinor::TRACKING", InputMinor::TRACKING as u32),
@@ -85,6 +86,7 @@ fn a_subject_s_own_verbs_start_past_the_four_every_subject_has() {
         ("SensorMinor::ORIENTATION_LOST", SensorMinor::ORIENTATION_LOST as u32),
         ("LoadMinor::IMAGE", LoadMinor::IMAGE as u32),
         ("WorldMinor::SNAPSHOT", WorldMinor::SNAPSHOT as u32),
+        ("WorldMinor::SOURCE", WorldMinor::SOURCE as u32),
         ("SettingMinor::TOGGLE", SettingMinor::TOGGLE as u32),
         ("ProfilerMinor::START", ProfilerMinor::START as u32),
         ("ProfilerMinor::STOP", ProfilerMinor::STOP as u32),
