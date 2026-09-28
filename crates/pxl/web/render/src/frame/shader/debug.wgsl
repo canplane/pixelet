@@ -15,7 +15,6 @@ struct Draw {
 @group(1) @binding(0) var<uniform> draw_words: array<vec4f, 1>;
 
 fn draw_translation() -> vec3f { return draw_words[0].xyz; }
-fn draw__p() -> f32 { return draw_words[0].w; }
 
 struct VertexOut {
   @builtin(position) clip: vec4f,

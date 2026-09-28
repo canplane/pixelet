@@ -60,11 +60,8 @@ fn frame_sun_color() -> vec3f { return frame_words[6].xyz; }
 fn frame_fog_near() -> f32 { return frame_words[6].w; }
 fn frame_ambient() -> vec3f { return frame_words[7].xyz; }
 fn frame_fog_far() -> f32 { return frame_words[7].w; }
-fn frame__p6() -> vec3f { return frame_words[8].xyz; }
 fn frame_floor() -> f32 { return frame_words[8].w; }
-fn frame__p7() -> vec3f { return frame_words[9].xyz; }
 fn frame_edge_width() -> f32 { return frame_words[9].w; }
-fn frame__p5() -> vec3f { return frame_words[10].xyz; }
 fn frame_rim_intensity() -> f32 { return frame_words[10].w; }
 fn frame_viewport() -> vec2f { return frame_words[11].xy; }
 fn frame_shadow_strength() -> f32 { return frame_words[11].z; }
@@ -75,9 +72,7 @@ fn frame_screen_ao() -> f32 { return frame_words[12].z; }
 fn frame_air_at_vertices() -> f32 { return frame_words[12].w; }
 fn frame_light_view_proj() -> mat4x4f { return mat4x4f(frame_words[13], frame_words[14], frame_words[15], frame_words[16]); }
 fn frame_other_dir() -> vec3f { return frame_words[17].xyz; }
-fn frame__p3() -> f32 { return frame_words[17].w; }
 fn frame_other_color() -> vec3f { return frame_words[18].xyz; }
-fn frame__p4() -> f32 { return frame_words[18].w; }
 fn frame_planet() -> vec4f { return frame_words[19]; }
 fn frame_globe() -> vec4f { return frame_words[20]; }
 

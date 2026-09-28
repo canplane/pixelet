@@ -485,8 +485,9 @@ fn floats_of(module: &Module, ty: naga::Handle<naga::Type>, offset: u32) -> Vec<
 /// Each shared block read field by field (`frame_camera_pos()` for the
 /// `Frame` its words hold): every field's function reads the word and the
 /// lane WGSL lays that field at, so the struct the Rust's offsets are held
-/// against by the tests above is the struct the shader reads, and no
-/// function builds the struct back, with which Safari's WebGPU lost its GPU
+/// against by the tests above is the struct the shader reads; padding (`_`)
+/// has no function. Nothing builds the struct back — no value, variable,
+/// argument or result of its type — with which Safari's WebGPU lost its GPU
 /// process (issue/20260927-a-matrix-the-driver-reads-its-own-way.md).
 #[test]
 fn every_block_reads_each_field_from_where_it_lies() {
@@ -515,12 +516,21 @@ fn every_block_reads_each_field_from_where_it_lies() {
         let TypeInner::Struct { ref members, .. } = module.types[ty].inner else {
             panic!("{block} is a struct")
         };
-        for f in module.functions.iter().map(|(_, f)| f) {
-            let returns_block = f.result.as_ref().is_some_and(|r| r.ty == ty);
-            assert!(!returns_block, "shader {kind}: {} builds a {block} back", f.name.as_deref().unwrap_or("?"));
+        let held = module.global_variables.iter().any(|(_, g)| g.ty == ty);
+        assert!(!held, "shader {kind}: a global holds a {block}");
+        let functions = module.functions.iter().map(|(_, f)| f).chain(module.entry_points.iter().map(|e| &e.function));
+        for f in functions {
+            let builds = f.result.as_ref().is_some_and(|r| r.ty == ty)
+                || f.arguments.iter().any(|a| a.ty == ty)
+                || f.local_variables.iter().any(|(_, v)| v.ty == ty)
+                || f.expressions.iter().any(|(_, e)| matches!(e, naga::Expression::Compose { ty: t, .. } if *t == ty));
+            assert!(!builds, "shader {kind}: {} builds a {block} back", f.name.as_deref().unwrap_or("?"));
         }
         for m in members {
             let name = m.name.as_deref().unwrap_or("?");
+            if name.starts_with('_') {
+                continue;
+            }
             let fun = format!("{prefix}_{name}");
             let (_, f) = module
                 .functions

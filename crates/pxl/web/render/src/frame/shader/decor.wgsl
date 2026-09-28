@@ -28,7 +28,6 @@ fn draw_offset() -> u32 { return bitcast<u32>(draw_words[0].w); }
 fn draw_count() -> u32 { return bitcast<u32>(draw_words[1].x); }
 fn draw_opacity() -> f32 { return draw_words[1].y; }
 fn draw_visible() -> f32 { return draw_words[1].z; }
-fn draw__p() -> u32 { return bitcast<u32>(draw_words[1].w); }
 
 @group(2) @binding(0) var skin: texture_2d<f32>;
 @group(2) @binding(1) var skin_sampler: sampler;

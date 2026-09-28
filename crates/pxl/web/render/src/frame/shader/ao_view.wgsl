@@ -39,8 +39,6 @@ fn ao_full() -> vec2f { return ao_words[8].xy; }
 fn ao_half() -> vec2f { return ao_words[8].zw; }
 fn ao_fog_near() -> f32 { return ao_words[9].x; }
 fn ao_fog_far() -> f32 { return ao_words[9].y; }
-fn ao__p0() -> f32 { return ao_words[9].z; }
-fn ao__p1() -> f32 { return ao_words[9].w; }
 
 const AO_RADIUS: f32 = 1.5;
 const AO_DISTANCE_FALLOFF: f32 = 1.0;
