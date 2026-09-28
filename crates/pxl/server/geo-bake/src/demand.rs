@@ -67,10 +67,12 @@ enum Source {
 /// What a layer's source says about its pyramid that the pyramid cannot:
 /// where it has nothing, and the one page terrain's open water reads as.
 impl Source {
-    /// A shared object a name addresses rather than a page.
-    fn shared(&self, name: &str) -> Option<&[u8]> {
+    /// The object a name addresses rather than a page, which is also what a
+    /// fold reads for a page the source left as no object where that is not
+    /// simply an empty page: terrain's open water.
+    fn shared(&self) -> Option<(&'static str, &[u8])> {
         match self {
-            Source::Terrain(s) if name == crate::terrain::leaf::OCEAN_KEY => Some(&s.raw_ocean),
+            Source::Terrain(s) => Some((crate::terrain::leaf::OCEAN_KEY, &s.raw_ocean)),
             _ => None,
         }
     }
@@ -92,19 +94,16 @@ impl Source {
             _ => pxl_spec::bake::poi_page::PoiPage::sources(p),
         }
     }
-
-    /// The object a fold reads for a page the source left as no object,
-    /// where that is not simply an empty page.
-    fn absent(&self) -> Option<(&'static str, &[u8])> {
-        match self {
-            Source::Terrain(s) => Some((crate::terrain::leaf::OCEAN_KEY, &s.raw_ocean)),
-            _ => None,
-        }
-    }
 }
 impl Dataset {
+    /// The shared object is the same for the generation's whole life, so it
+    /// is published here, before the generation can be asked for anything,
+    /// and every fold only reads it. Written by the folds that read it, it
+    /// would have a writer for every fold in flight, and those race on the one
+    /// staging path an atomic write goes through: the loser's rename finds
+    /// nothing, and its page fails for the rest of the generation.
     fn open(base: &std::path::Path, kind: Kind, revision: u64, runner: &Runner) -> Result<Self, String> {
-        Ok(Self {
+        let data = Self {
             cache: Cache::with_admission(
                 base.join(kind.name()).join(revision.to_string()),
                 runner.admission.clone(),
@@ -116,7 +115,11 @@ impl Dataset {
                 Kind::Poi => Source::Poi,
                 Kind::Geocode => Source::Geocode,
             },
-        })
+        };
+        if let Some((name, bytes)) = data.source.shared() {
+            data.cache.publish(name, Some(bytes))?;
+        }
+        Ok(data)
     }
 }
 

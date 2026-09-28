@@ -376,6 +376,14 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P3
 
+- **A staging file named by what it stages.** `pxl-geo-bake util.rs`
+  `write_atomic` stages every write through `<name>.part`, so it is atomic
+  only while one writer at a time writes a name. The dev tile server's
+  cache and the offline bake keep that today — the shared ocean page is
+  written once when a generation opens, since two folds re-publishing it
+  raced on the rename and left pages a 500 for the generation (2026-09-29)
+  — but the next writer outside the cache's `once` would race again. A
+  staging name unique to its writer takes the assumption away.
 - **A terrain read that hung.** Seen once on the simulator, 2026-09-27:
   every terrain page's read went unanswered for a minute and more while
   assets, geocode pages and the site's root answered at once, and a minute
