@@ -24,6 +24,20 @@ A **Release** build embeds the JavaScript bundle and runs without Metro. A
 only one Metro can hold the port — check that the running one serves the tree
 you mean before trusting what a Debug build shows.
 
+A build CI did not number labels itself `#<n>-<commit>`: the last number
+this checkout saw published, then what it was built from
+(`apps/native/metro.config.js`), fixed in the bundle when Metro makes it. The
+`<n>` is a cache, `apps/web/.build_number`, which a deploy through CI never
+writes, so bring it up to date before a Release:
+
+```bash
+deno task sync:build-number
+```
+
+It reads the build log in the bucket and writes only that cache
+(`script/build-log.ts`). A build made before a deploy carries the number
+before it, whatever is deployed after; to carry the new one, deploy first.
+
 ## iOS
 
 ### Once per machine
