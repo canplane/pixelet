@@ -6,7 +6,7 @@ use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::store::{device_location_store, DevicePoseStatus};
 use crate::global::Global;
-use crate::layer::terrain::elevation::ground_pivot;
+use crate::layer::terrain::ground_snap::ground_pivot;
 use crate::shell::map_store::map_store;
 
 // Seoul City Hall — the approximate coordinate used when GPS genuinely never
@@ -86,8 +86,7 @@ pub fn map_bootstrap_step() {
     }
 
     let Some(seed) = b.pending else { return };
-    let mut probe = seed;
-    let Some(grounded) = ground_pivot(&mut probe, &seed) else { return };
+    let Some(grounded) = ground_pivot(&seed) else { return };
     b.pending = None;
     match map_store().map_center {
         None => map_store().map_center = Some(grounded),

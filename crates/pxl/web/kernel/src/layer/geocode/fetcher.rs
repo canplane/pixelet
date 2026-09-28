@@ -21,8 +21,7 @@ use pxl_spec::bake::place_page::GROUP_SHAMT;
 use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 
-use crate::io::demand::Category;
-use crate::io::policy;
+use crate::io::demand::{Ask, Category};
 use crate::io::sched::declare;
 use crate::layer::geocode::store;
 use crate::shell::map_store::map_store;
@@ -46,11 +45,11 @@ pub fn center_group() -> Option<IVec> {
 pub fn geocode_fetcher_step() {
     // Answered once, either way: a bake with no dictionary is a bake whose
     // groups name nothing, and that is a store's answer rather than a hole.
-    let dict = [(DICT_SUBJECT, policy::geocode())];
+    let dict = [(DICT_SUBJECT, Ask::PLAIN)];
     declare(DICT_CATEGORY, if store::dict_answered() { &[] } else { &dict });
 
     match center_group() {
-        Some(idx) if store::answered() != Some(idx) => declare(CATEGORY, &[(idx, policy::geocode())]),
+        Some(idx) if store::answered() != Some(idx) => declare(CATEGORY, &[(idx, Ask::PLAIN)]),
         _ => declare(CATEGORY, &[]),
     }
 }

@@ -236,10 +236,6 @@ pub struct LodSample {
     /// on-screen chunk has.
     pub oldest_release_ms: f64,
     pub oldest_visible_ms: f64,
-    /// Levels the byte budget has pulled the view's criterion coarser by
-    /// (world/pyramid/pressure.rs): 0 is the criterion as the view asks for
-    /// it.
-    pub pressure: f64,
 }
 
 #[repr(C)]
@@ -486,7 +482,7 @@ words!(FrameSample, FRAME::WORDS,
     device.depth_mb => FRAME::tex_depth_mb, device.shadow_mb => FRAME::tex_shadow_mb, device.layers_mb => FRAME::tex_layers_mb,
     lod.chunks => FRAME::lod_chunks, lod.in_frustum => FRAME::lod_in_frustum, lod.pending => FRAME::lod_pending, lod.settling => FRAME::lod_settling,
     lod.blend_active => FRAME::lod_blend_active, lod.offscreen_pending => FRAME::lod_offscreen_pending,
-    lod.oldest_release_ms => FRAME::lod_oldest_release_ms, lod.oldest_visible_ms => FRAME::lod_oldest_visible_ms, lod.pressure => FRAME::lod_pressure,
+    lod.oldest_release_ms => FRAME::lod_oldest_release_ms, lod.oldest_visible_ms => FRAME::lod_oldest_visible_ms,
     mounts.added => FRAME::mounts_added, mounts.removed => FRAME::mounts_removed, mounts.layouts => FRAME::mounts_layouts,
     pages.total => FRAME::pages_total, pages.by_level => FRAME::pages_by_level, pages.poi => FRAME::pages_poi,
     heap.used_mb => FRAME::heap_used_mb, heap.live_mb => FRAME::heap_live_mb, heap.run_mb => FRAME::heap_run_mb,
@@ -519,7 +515,7 @@ words!(FramePeak, SUMMARY::peak::WORDS,
     chunks_ms => SUMMARY::peak::chunks_ms, gpu_ms => SUMMARY::peak::gpu_ms, draw_calls => SUMMARY::peak::draw_calls,
     triangles => SUMMARY::peak::triangles, q_terrain => SUMMARY::peak::q_terrain, q_poi => SUMMARY::peak::q_poi,
     chunks => SUMMARY::peak::chunks, in_frustum => SUMMARY::peak::in_frustum, pending => SUMMARY::peak::pending,
-    settling => SUMMARY::peak::settling, blend_active => SUMMARY::peak::blend_active, pressure => SUMMARY::peak::pressure,
+    settling => SUMMARY::peak::settling, blend_active => SUMMARY::peak::blend_active,
     offscreen_pending => SUMMARY::peak::offscreen_pending, oldest_release_ms => SUMMARY::peak::oldest_release_ms,
     oldest_visible_ms => SUMMARY::peak::oldest_visible_ms, fine_peak => SUMMARY::peak::fine_peak,
     coarse_peak => SUMMARY::peak::coarse_peak,
@@ -667,7 +663,6 @@ pub struct FramePeak {
     pub pending: f64,
     pub settling: f64,
     pub blend_active: f64,
-    pub pressure: f64,
     pub offscreen_pending: f64,
     pub oldest_release_ms: f64,
     pub oldest_visible_ms: f64,
@@ -859,7 +854,6 @@ pub fn profiler_record_frame(s: FrameSample) {
     p.oldest_visible_ms = p.oldest_visible_ms.max(s.lod.oldest_visible_ms);
     p.settling = p.settling.max(s.lod.settling);
     p.blend_active = p.blend_active.max(s.lod.blend_active);
-    p.pressure = p.pressure.max(s.lod.pressure);
 
     if let Some(frame) = l.sink.frame {
         frame(&s);

@@ -191,3 +191,141 @@ fn a_volume_keeps_what_fills_half_its_eight_and_loses_what_fills_less() {
     assert_eq!(majority(halves, 2), halves[7]);
     assert_eq!(majority(halves, -1), halves[0], "a level below the cell alternates the same way");
 }
+
+// ---- the index lane ----
+
+/// A small generator, so a page's ground and relief are rough everywhere and
+/// the same every run.
+struct Rng(u64);
+
+impl Rng {
+    fn next(&mut self) -> u64 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        self.0
+    }
+
+    fn below(&mut self, n: u64) -> i64 {
+        (self.next() % n) as i64
+    }
+}
+
+/// A leaf of rough relief — steps and spikes, which the interpolation
+/// overshoots most — over ground part water, which sits a step lower.
+fn rough_leaf(rng: &mut Rng) -> Terrain {
+    let ele = (0..PADDED * PADDED).map(|_| if rng.below(5) == 0 { rng.below(4000) - 500 } else { rng.below(40) } as i16).collect();
+    let cells = (0..SPAN * SPAN)
+        .map(|_| {
+            let land = if rng.below(3) == 0 { cube_types::land::bare } else { cube_types::land::green_light };
+            let water = if rng.below(4) == 0 { cube_types::water::river } else { 0 };
+            with_channel(with_channel(0, GroundChannelKey::LAND, land), GroundChannelKey::WATER, water)
+        })
+        .collect::<Vec<_>>();
+    Terrain::leaf(ele, Ground { cells: cells.into() })
+}
+
+/// The open ocean, as the bake makes it: flat water at sea level, no page.
+fn zero_page() -> Terrain {
+    let cells = vec![with_channel(0, GroundChannelKey::LAND, cube_types::land::sea); SPAN * SPAN];
+    let mut t = Terrain::leaf(vec![0; PADDED * PADDED], Ground { cells: cells.into() });
+    t.index.occupancy = Occupancy::ZERO;
+    t
+}
+
+/// Two levels folded over sixteen leaves under `top`, a few of them left as
+/// the ocean, as the bake folds them: every page by level, the zero page where
+/// a leaf has no object.
+fn pyramid(top: LevelPage) -> (std::collections::HashMap<LevelPage, Terrain>, Terrain) {
+    let (mut rng, zero) = (Rng(0x9e37_79b9_7f4a_7c15), zero_page());
+    let mut held = std::collections::HashMap::new();
+    for (k, leaf) in top.children().iter().flat_map(|c| c.children()).enumerate() {
+        if ![3, 6, 7].contains(&k) {
+            held.insert(leaf, rough_leaf(&mut rng));
+        }
+    }
+    for mid in top.children() {
+        let folded = Terrain::fold_page(mid, |p| Some(held.get(&p).unwrap_or(&zero))).unwrap();
+        held.insert(mid, folded);
+    }
+    let folded = Terrain::fold_page(top, |p| Some(held.get(&p).unwrap_or(&zero))).unwrap();
+    held.insert(top, folded);
+    (held, zero)
+}
+
+fn point(x: f64, y: f64) -> crate::space::pvf3::pvf3::Pvf3 {
+    use crate::space::pvf3::pvf3;
+    let mut at = pvf3::Pvf3::default();
+    pvf3::gather(&mut at, pvf3::from_real(x), pvf3::from_real(y), 0);
+    at
+}
+
+/// The zero page is what every page without an object reads at every level,
+/// which holds only if four of it fold to it: its index too.
+#[test]
+fn the_zero_page_folds_to_itself() {
+    let zero = zero_page();
+    assert_eq!(Terrain::fold_page(LevelPage::new(1, 0), |_| Some(&zero)).as_ref(), Some(&zero));
+}
+
+#[test]
+fn a_parents_occupancy_is_which_of_its_children_are_pages() {
+    let top = LevelPage::new(2, crate::space::pvf3::ivec::gather(-1, 3, 0));
+    let (held, _) = pyramid(top);
+    for parent in [top].into_iter().chain(top.children()) {
+        let o = held[&parent].index.occupancy;
+        let pages = parent.children().map(|c| held.get(&c).is_some_and(|t| t.index.occupancy.is_page()));
+        assert!((0..4).all(|q| o.has_child(q) == pages[q]), "{parent:?}: {o:?} against {pages:?}");
+        assert_eq!(o.is_page(), pages.contains(&true));
+    }
+}
+
+#[test]
+fn a_parents_extent_holds_each_childs() {
+    let top = LevelPage::new(2, crate::space::pvf3::ivec::gather(-1, 3, 0));
+    let (held, zero) = pyramid(top);
+    for parent in [top].into_iter().chain(top.children()) {
+        let outer = &held[&parent].index.extent;
+        for (q, child) in parent.children().iter().enumerate() {
+            let inner = &held.get(child).unwrap_or(&zero).index.extent;
+            for (index, &[lo, hi]) in inner.iter().enumerate() {
+                let [plo, phi] = outer[EXTENT.parent_cell(q, index as u32) as usize];
+                assert!(plo <= lo && hi <= phi, "{parent:?} child {q} cell {index}: [{lo}, {hi}] outside [{plo}, {phi}]");
+            }
+        }
+    }
+}
+
+/// Wherever a page's ground is drawn — at a cell's center or anywhere between
+/// — the height drawn lies inside its own extent there and inside the extent
+/// of every page over it.
+#[test]
+fn the_extent_holds_every_height_drawn_under_it() {
+    let top = LevelPage::new(2, crate::space::pvf3::ivec::gather(-1, 3, 0));
+    let (held, _) = pyramid(top);
+    let mut checked = 0u32;
+    for (&page, t) in &held {
+        let (x0, y0, _) = page.rect();
+        let side = GROUND.scale(page.level).side();
+        for ty in (0..SPAN).step_by(3) {
+            for tx in (0..SPAN).step_by(3) {
+                for f in [0.0, 0.5, 0.73] {
+                    let (fx, fy) = (tx as f64 + f, ty as f64 + (1.0 - f) * 0.9);
+                    let cell = GROUND.cell_index(tx as u32, fy.floor() as u32) as usize;
+                    let h = super::super::surface::bicubic(&t.ele, fx, fy) as i32 - super::super::ground::cell_recess(t.ground.cells[cell]) as i32;
+                    let at = point(x0 + fx * side, y0 + fy * side);
+                    let mut over = page;
+                    while over.level <= top.level {
+                        let c = EXTENT.cell_of(over.level, &at);
+                        assert_eq!(c.page(), over);
+                        let [lo, hi] = held[&over].index.extent[c.index() as usize];
+                        assert!(lo as i32 <= h && h <= hi as i32, "{page:?} at ({fx}, {fy}): {h} outside {over:?}'s [{lo}, {hi}]");
+                        checked += 1;
+                        over = over.parent();
+                    }
+                }
+            }
+        }
+    }
+    assert!(checked > 100_000);
+}

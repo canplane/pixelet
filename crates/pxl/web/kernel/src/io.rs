@@ -3,10 +3,11 @@
 //! The kernel's I/O: what it asks the host to read, in what order, and what
 //! becomes of what arrives.
 //!
-//! What is wanted is the producers'; where each want sits in one order is
-//! `policy`'s; how many run at once, which of them, and what may be tried
-//! again is `sched`'s, which is the only authority over them. What a body
-//! decodes into is `fetch`'s.
+//! What is wanted is the producers'; what is out, within the credits, and
+//! what is held back after a failure is `sched`'s, the mechanism and the only
+//! authority over them; where each want sits in one order, when a running
+//! read gives way and how long a failure waits is `policy`'s, which `sched`
+//! asks. What a body decodes into is `fetch`'s.
 
 pub mod demand;
 pub mod fetch;

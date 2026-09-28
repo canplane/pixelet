@@ -18,7 +18,7 @@ use pxl_spec::space::indexer::{L3_BASE, L3_CENTER};
 use pxl_spec::space::mat4::{mat4_transform_point, Mat4};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::projection;
-use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::v3::{floor3n, V3};
 use pxl_spec::space::xy::TO_XY;
 
@@ -26,8 +26,8 @@ use crate::global::Global;
 use crate::kernel::kernel;
 use crate::layer::billboard::field::BILLBOARD_FLOATS;
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
-use crate::layer::terrain::elevation::{ground_at, with_ele};
 use crate::text::text_width;
+use crate::world::access::{Access, FINEST};
 use crate::world::change::request_world_tick;
 use crate::world::frame::view::view;
 use crate::world::pyramid::Layer as _;
@@ -227,13 +227,14 @@ fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
     // it floors to, ground-snapped — a cell, so a box.
     let mut raw_v = [0.0; 3];
     projection::unproject(&mut raw_v, ivec::sub(map_center.i, map_origin), map_center.f);
-    let gnd_v = [raw_v[0], raw_v[1], ground_at(map_center).unwrap_or(0.0)];
+    let ground = |at: &Pvf3| Access::now().at(at, FINEST).value().map(|g| g.top);
+    let gnd_v = [raw_v[0], raw_v[1], ground(map_center).unwrap_or(0.0)];
     let mut quant_v = [0.0; 3];
     floor3n(&gnd_v, U_PER_CELL, &mut quant_v);
 
     // The floating origin, grounded and floored: local (0, 0, ground).
     let mut anchor_base_gnd_v = [0.0; 3];
-    anchor_base_gnd_v[2] = ground_at(&Pvf3 { i: map_origin, f: 0 }).unwrap_or(0.0);
+    anchor_base_gnd_v[2] = ground(&Pvf3 { i: map_origin, f: 0 }).unwrap_or(0.0);
     let mut anchor_base_quant_v = [0.0; 3];
     floor3n(&anchor_base_gnd_v, U_PER_CELL, &mut anchor_base_quant_v);
 
@@ -243,8 +244,10 @@ fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
     s.labeled_line(quant_v, anchor_base_quant_v, Some("floor(map_center) <-> anchor_base (map_origin)"), true);
 
     for (corner, label) in [(TO_XY(L3_BASE(map_center.i)), "page_base"), (TO_XY(L3_CENTER(map_center.i)), "page_center")] {
-        let mut out = Pvf3::default();
-        if let Some(grounded) = with_ele(&mut out, &Pvf3 { i: corner, f: 0 }) {
+        let at = Pvf3 { i: corner, f: 0 };
+        if let Some(top) = ground(&at) {
+            let mut grounded = at;
+            pvf3::gather(&mut grounded, pvf3::X(&at), pvf3::Y(&at), pvf3::Z(&at) + pvf3::from_real(top));
             s.r#box(local_of(&grounded, map_origin), 1.0, Some(label));
         }
     }
@@ -352,7 +355,7 @@ fn write_labels(g: &mut Gizmos) {
 }
 
 fn set_lines(at: V3, vertices: &[f32]) {
-    let Some((_, sched, _)) = kernel().world() else { return };
+    let Some((_, sched)) = kernel().world() else { return };
     // SAFETY: the vertices are f32s of the kernel's memory, read before this returns.
     sched.debug.set(&mut sched.draw, at, vertices);
 }

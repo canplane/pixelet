@@ -12,29 +12,26 @@
 //! once and its one fetch is not tied to any of them.
 
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::bake::format::{decode_terrain, decode_terrain_into, Ground, PageRoom, Terrain};
+use pxl_spec::bake::format::{decode_terrain, decode_terrain_into, Ground, Index, Occupancy, PageRoom, Terrain};
 use pxl_spec::bake::pack::GroundCell;
-use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pyramid::LevelPage;
-use pxl_spec::space::pyramid::PAGE_CELLS;
-use pxl_spec::space::xy::TO_XY;
+use pxl_spec::space::pyramid::{EXTENT, PAGE_CELLS};
 use xpute_runtime::abi::fetch::FetchFail;
 use xpute_runtime::mem::base::ptr_at;
 
 use crate::sched::profiler::record::Failure;
 
-use crate::control::navigation::store::map_navigation;
 use crate::global::Global;
 use crate::host::now;
-use crate::io::demand::{Category, Phases, TaskPhaseName};
-use crate::io::policy;
-use crate::io::sched::{declare, pending_count, Rank};
-use crate::layer::terrain::fixed::{ele_off, ground_off, ELE_LANE_BYTES, GROUND_LANE_BYTES};
+use crate::io::demand::{Ask, Category, Phases, TaskPhaseName};
+use crate::io::sched::{declare, pending_count};
+use crate::layer::terrain::fixed::{ele_off, extent_off, ground_off, ELE_LANE_BYTES, EXTENT_LANE_BYTES, GROUND_LANE_BYTES};
 use crate::layer::terrain::ground_snap::reground_map_center;
 use crate::mem::fixed::{at, Range};
 use crate::shell::map_store::{map_store, MapStatus};
-use crate::world::pyramid::domain::eye;
-use crate::world::pyramid::{Layer, Pyramid, ABSENT};
+use crate::world::observation::eye;
+use crate::world::paging::ABSENT;
+use crate::world::pyramid::{Layer, Pyramid};
 
 /// Object key of the single shared open-ocean tile in the static bucket.
 pub const OCEAN_KEY: &str = "_ocean";
@@ -66,20 +63,12 @@ impl Layer for Terrain {
             // page's lane sizes, and nothing reads it until the page is set.
             cells: unsafe { core::slice::from_raw_parts_mut(ptr_at::<GroundCell>(lanes.cells), CELLS) },
             ele: unsafe { core::slice::from_raw_parts_mut(ptr_at::<i16>(lanes.ele), SAMPLES) },
+            extent: unsafe { core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(lanes.extent), EXTENTS) },
         };
-        decode_terrain_into(pkt, room)?;
+        let occupancy = decode_terrain_into(pkt, room)?;
         phases.push(TaskPhaseName::decode_ms, now() - t0);
         // SAFETY: the lanes are this page's record until another page takes it.
-        Ok(unsafe { open_terrain(lanes) })
-    }
-
-    /// A folded page is already packed — the client made it from pages it
-    /// holds — so its cells go over as they are.
-    fn keep(record: u32, page: &Terrain) -> Result<Terrain, FetchFail> {
-        let lanes = lanes_of(record)?;
-        write_lanes(page, lanes);
-        // SAFETY: as `receive`.
-        Ok(unsafe { open_terrain(lanes) })
+        Ok(unsafe { open_terrain(lanes, occupancy) })
     }
 
     fn absent(p: LevelPage) {
@@ -91,44 +80,50 @@ impl Layer for Terrain {
         }
     }
 
-    /// A leaf is what a map center that could not be grounded before may be
-    /// grounded on now. The chunks are told nothing: which a view draws is
-    /// the cover's, made again from the pyramid's revision, and a chunk
-    /// whose page has gone leaves it.
-    fn changed(p: LevelPage, present: bool) {
+    /// A page coming or going changes the ground drawn under whatever it
+    /// is the finest resident page over, and the map center stands on the
+    /// ground drawn. The chunks are told nothing: which a view draws is the
+    /// cover's, made again from the pyramid's revision, and a chunk whose
+    /// page has gone leaves it.
+    fn changed(_p: LevelPage, _present: bool) {
         // A chunk is read from its own page or the nearest one over it, so a
         // page coming or going changes what some are read from.
         crate::world::chunk::source::chunk_sources_changed();
-        if p.level == 0 && present {
-            reground_map_center();
-        }
+        reground_map_center();
     }
 }
 
 const CELLS: usize = (PAGE_CELLS * PAGE_CELLS) as usize;
 const SAMPLES: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
+const EXTENTS: usize = (EXTENT.page_cells() * EXTENT.page_cells()) as usize;
 
 /// A page's lanes in the range: the ground cells, packed (pxl-spec
-/// bake/pack.rs), and the padded elevation grid.
+/// bake/pack.rs), the padded elevation grid and the index lane.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct TerrainLanes {
     cells: usize,
     ele: usize,
+    extent: usize,
 }
 
-/// Opens a page's lanes as the terrain the kernel reads.
+/// Opens a page's lanes as the terrain the kernel reads, with the occupancy
+/// the page carries by value.
 ///
 /// # Safety
 /// Every lane is a block of the kernel's memory held for this page for as
 /// long as the page is resident, at the page's fixed lane sizes.
-unsafe fn open_terrain(lanes: TerrainLanes) -> Terrain {
+unsafe fn open_terrain(lanes: TerrainLanes, occupancy: Occupancy) -> Terrain {
     // SAFETY: the caller's contract; a ground lane is one `GroundCell` a
-    // cell, an i16 lane 2 bytes a sample.
+    // cell, an i16 lane 2 bytes a sample, an index lane 4 bytes a cell.
     Terrain {
         ground: Ground {
             cells: unsafe { core::slice::from_raw_parts(ptr_at::<GroundCell>(lanes.cells), CELLS) }.into(),
         },
         ele: unsafe { core::slice::from_raw_parts(ptr_at::<i16>(lanes.ele), SAMPLES) }.into(),
+        index: Index {
+            extent: unsafe { core::slice::from_raw_parts(ptr_at::<[i16; 2]>(lanes.extent), EXTENTS) }.into(),
+            occupancy,
+        },
     }
 }
 
@@ -139,11 +134,13 @@ fn write_lanes(t: &Terrain, lanes: TerrainLanes) {
         unsafe { core::slice::from_raw_parts(p, n) }
     };
     let cells = &t.ground.cells;
+    let extent = &t.index.extent;
     let sources = [
         bytes(cells.as_ptr().cast::<u8>(), cells.len() * core::mem::size_of::<GroundCell>()),
         bytes(t.ele.as_ptr().cast::<u8>(), t.ele.len() * 2),
+        bytes(extent.as_ptr().cast::<u8>(), extent.len() * 4),
     ];
-    for (src, to) in sources.iter().zip([lanes.cells, lanes.ele]) {
+    for (src, to) in sources.iter().zip([lanes.cells, lanes.ele, lanes.extent]) {
         // SAFETY: `to` is the page's room in the range, the lane's own size,
         // and apart from `src`.
         unsafe { core::ptr::copy_nonoverlapping(src.as_ptr(), ptr_at::<u8>(to), src.len()) };
@@ -157,6 +154,7 @@ fn lanes_of(record: u32) -> Result<TerrainLanes, FetchFail> {
     Ok(TerrainLanes {
         cells: lane(ground_off(record), GROUND_LANE_BYTES)?,
         ele: lane(ele_off(record), ELE_LANE_BYTES)?,
+        extent: lane(extent_off(record), EXTENT_LANE_BYTES)?,
     })
 }
 
@@ -181,13 +179,13 @@ pub fn adopt_ocean(pkt: &[u8]) -> Result<(), Failure> {
         return Ok(());
     }
     let decoded = decode_terrain(pkt)?;
-    if decoded.ground.len() != CELLS || decoded.ele.len() != SAMPLES {
+    if decoded.ground.len() != CELLS || decoded.ele.len() != SAMPLES || decoded.index.extent.len() != EXTENTS {
         return Err(FetchFail::Decode.into());
     }
     let lanes = lanes_of(ABSENT)?;
     write_lanes(&decoded, lanes);
     // SAFETY: `ABSENT`, which no page takes and is written once.
-    let terrain = unsafe { open_terrain(lanes) };
+    let terrain = unsafe { open_terrain(lanes, decoded.index.occupancy) };
     let o = ocean();
     for p in o.waiting.drain(..) {
         Terrain::pyramid().set(p, terrain.clone());
@@ -198,23 +196,20 @@ pub fn adopt_ocean(pkt: &[u8]) -> Result<(), Failure> {
 
 // ---- the turn ----
 
-/// Terrain's turn: its pyramid's, with the device's own leaf pinned —
-/// panning moves the view away from the user's real position, and without
-/// it the marker would lose the ground under it — the shared ocean tile
-/// asked for while pages wait on it, and map_status following the queue.
+/// Terrain's turn: its pyramid's, with the shared ocean tile asked for while
+/// pages wait on it, and map_status following the queue.
 pub fn terrain_step() {
-    let device = map_navigation().device_coord.map(|c| LevelPage::new(0, TO_XY(L3_IDX(c.i))));
     let terrain = Terrain::pyramid();
-    terrain.pin(device);
-    // A page waiting on the shared tile is held as the view holds a page in
-    // `ABSENT`: while it keeps it.
+    // A page waiting on the shared tile is held as a page in `ABSENT` is:
+    // while something asks for it.
     if eye().is_some() {
-        ocean().waiting.retain(|&p| terrain.keeps(p));
+        ocean().waiting.retain(|&p| terrain.asked(p));
     }
     let o = ocean();
-    let ocean_wants: &[(u64, Rank)] = if o.terrain.is_none() && !o.waiting.is_empty() { &[(0, policy::ocean())] } else { &[] };
+    let ocean_wants: &[(u64, Ask)] = if o.terrain.is_none() && !o.waiting.is_empty() { &[(0, Ask::PLAIN)] } else { &[] };
     declare(OCEAN_CATEGORY, ocean_wants);
     terrain.step();
+    crate::world::pyramid::cover::step::<Terrain>();
     // Derived from the scheduler rather than tracked, so a later pan that
     // supersedes a batch cannot leave a stale SUCCESS behind. Nothing sets
     // Error: this reads only whether pages are pending, so a page that failed

@@ -34,8 +34,8 @@
 //!   .fixed.terrain   the resident terrain, one record a page, every record
 //!                    the same size, the first of them the open ocean every
 //!                    page the bake left as no object reads (world/
-//!                    pyramid.rs `ABSENT`; layer/terrain/fixed.rs). Which
-//!                    page lies in which record is the pyramid's, so the
+//!                    paging.rs `ABSENT`; layer/terrain/fixed.rs). Which
+//!                    page lies in which record is residency's, so the
 //!                    range is laid out once and its records change hands.
 //!
 //! A chunk as it is built, in the order its work runs.

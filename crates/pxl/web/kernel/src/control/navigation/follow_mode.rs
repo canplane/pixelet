@@ -8,7 +8,7 @@ use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::store::{device_location_store, device_orientation_store, DevicePoseStatus};
 use crate::global::Global;
 use crate::host::now;
-use crate::layer::terrain::elevation::ground_or_raw;
+use crate::layer::terrain::ground_snap::ground_or_raw;
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::settings_store;
 use crate::world::change::wake_at;

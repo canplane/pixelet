@@ -37,7 +37,7 @@ pub fn anchor_center(anchor: &Pvf3) -> Pvf3 {
 /// mesher and the hover cursor render from (both add +size/2 on every axis to
 /// get the visual center). Returned in map_origin-relative real units, the
 /// same low-magnitude space the billboards' local positions and camera/ray.rs's
-/// raycast already operate in.
+/// pick already operate in.
 pub fn object_local_corner(i: IVec, f: FVec, map_origin: IVec) -> V3 {
     let local = Pvf3 { i: ivec::sub(i, map_origin), f };
     [pvf3::to_real(pvf3::X(&local)), pvf3::to_real(pvf3::Y(&local)), pvf3::to_real(pvf3::Z(&local))]

@@ -36,8 +36,8 @@ use xpute_runtime::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 pub use crate::abi::cmd::LoadKind;
 use crate::global::Global;
 use crate::host::body_read;
-use crate::io::policy;
-use crate::io::sched::{attempt_of, settle, Rank};
+use crate::io::demand::Ask;
+use crate::io::sched::{attempt_of, settle};
 use crate::layer::decor::asset_store::decor_assets_arrived;
 use crate::sched::profiler::record::{Failure, Outcome};
 use crate::world::change::{request_world_tick, world_edge};
@@ -97,14 +97,14 @@ enum Entry<T> {
 }
 
 /// Loads by number: an asset's own, the sheet one past the last.
-const LOADS: usize = Asset::ALL.len() + 1;
+pub const LOADS: usize = Asset::ALL.len() + 1;
 
 struct Loader {
     gltf: Vec<Option<Entry<Rc<Gltf>>>>,
     image: Vec<Option<Entry<u32>>>,
     /// What `load_wants` last said, kept so saying it again every turn asks
     /// the heap for nothing.
-    wants: Vec<(u64, Rank)>,
+    wants: Vec<(u64, Ask)>,
 }
 
 static LOADER: Global<Loader> = Global::new();
@@ -163,16 +163,16 @@ pub fn of_subject(subject: u64) -> Option<(LoadKind, Load)> {
 
 /// Every asset something has asked for and has not got. Said in full every
 /// turn: a set that is the same set changes nothing.
-pub fn load_wants() -> &'static [(u64, Rank)] {
+pub fn load_wants() -> &'static [(u64, Ask)] {
     let l = loader();
     l.wants.clear();
     for n in 0..LOADS {
         let load = Load::of(n as u32).or_bug(Errno::ENOTRECOVERABLE);
         if matches!(l.gltf[n], Some(Entry::Pending)) {
-            l.wants.push((subject_of(LoadKind::Gltf, load), policy::asset()));
+            l.wants.push((subject_of(LoadKind::Gltf, load), Ask::PLAIN));
         }
         if matches!(l.image[n], Some(Entry::Pending)) {
-            l.wants.push((subject_of(LoadKind::Image, load), policy::asset()));
+            l.wants.push((subject_of(LoadKind::Image, load), Ask::PLAIN));
         }
     }
     &l.wants
@@ -185,7 +185,7 @@ pub fn load_wants() -> &'static [(u64, Rank)] {
 /// is the difference between a read and what is done with it.
 fn ended(key: u64, outcome: Outcome) -> Option<(LoadKind, Load)> {
     let what = attempt_of(key).and_then(|(_, subject)| of_subject(subject));
-    settle(key, outcome, None, Failure::default(), policy::retry_after(outcome));
+    settle(key, outcome, None, Failure::default());
     what
 }
 

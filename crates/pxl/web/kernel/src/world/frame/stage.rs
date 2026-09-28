@@ -11,10 +11,7 @@ use pxl_render::frame::stage::{stage_lane_mut, AO_STRENGTH, EDGE_STRENGTH, EDGE_
 use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::gpu::renderer::{render_frame, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
-use pxl_spec::bake::format::Terrain;
-
-use crate::world::pyramid::domain::split_distance;
-use crate::world::pyramid::{Domain, Layer as _};
+use pxl_spec::space::lod::split_distance;
 
 use crate::layer::billboard::distance_fade::fade_range;
 use pxl_spec::asset::ingested::Asset;
@@ -61,7 +58,12 @@ pub fn stage_write(resolution: f64) {
     s[STAGE_AT::NEAR] = v.near;
     s[STAGE_AT::FAR] = v.far;
     (s[STAGE_AT::FADE_START], s[STAGE_AT::FADE_END]) = fade_range();
-    s[STAGE_AT::LOD_CELL] = Terrain::pyramid().domain().map_or(2.0 / split_distance(0), Domain::cell_per_distance);
+    // The largest drawn cell per unit of distance: past a level's split
+    // distance its cells are drawn averaged 2 × 2, so a cell there is twice
+    // the level's over the distance, and half that just before the next
+    // split. For whoever has to tolerate a drawn cell's height — the badge
+    // occlusion test.
+    s[STAGE_AT::LOD_CELL] = 2.0 / split_distance(0);
     s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { EDGE_STRENGTH } else { 0.0 };
     s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { AO_STRENGTH } else { 0.0 };
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };

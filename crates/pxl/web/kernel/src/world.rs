@@ -1,12 +1,15 @@
 // pxl-kernel/world.rs
 
-//! The world the kernel keeps: the pages resident in the client, the chunks
-//! meshed out of them, the height under a point, and the frame's own view of
-//! it all. The change log is here too, so a rebuild knows what moved rather
-//! than rebuilding on a guess.
+//! The world the kernel keeps: the pages resident in the client, the one
+//! query every reader of them asks, the chunks meshed out of them, and the
+//! frame's own view of it all. The change log is here too, so a rebuild
+//! knows what moved rather than rebuilding on a guess.
 
+pub mod access;
 pub mod change;
 pub mod chunk;
 pub mod frame;
+pub mod observation;
+pub mod paging;
+pub mod prefetch;
 pub mod pyramid;
-pub mod surface_height;

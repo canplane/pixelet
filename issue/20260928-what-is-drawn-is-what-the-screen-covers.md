@@ -720,3 +720,102 @@ residency    resident(p), lease(p), release(p)
 prefetch     speculate(p)
 scheduling   execute(job)
 ```
+
+## Built, and what the merge settled
+
+Built on `observation-paging`: the structure (the level, the reach, the
+page's index lane, terrain v7) and the mechanisms (residency, demand, the
+ledger and its serve policy, prefetch as a policy), merged and through the
+gate. What the conversation settled while it was merged:
+
+- **Demand is held only while it is asked.** A frame is held for demand
+  while the current observation asks for its page; when the eye leaves, it
+  is cache and may go. A fault leaves no state behind.
+- **Prefetch is off by default.** With none, a view still converges to
+  exact — fault, fallback, fetch, refine — which is what shows prefetch is
+  not part of the meaning. The reach is a policy to compare against it.
+- **Nothing is leased for the device.** Its marker takes a coarse answer;
+  a lease is for a consumer that cannot, and none exists yet.
+- **The client's fold is gone.** A page's dependency is its parent, so a
+  parent with its children held and itself not cannot happen, and folding
+  was only a fetch saved — a cache optimization to bring back if the
+  requests show it is worth one.
+- **The frustum is two things.** For what is drawn it is the domain: a
+  direction outside it is not asked. For the records it is a predictor:
+  inside it is demand, around it is prefetch's. The floor is neither — it
+  answers every direction, turned to or not, so it is held all around.
+  Occlusion is not a stage: the first hit is the answer, and a culling of
+  what is hidden is an acceleration that must be conservative.
+- **Demand free of what is hidden needs demand from hits.** While the
+  raster cover is what raises faults, a hidden chunk raises one too; and a
+  hit that decides demand is taken on the conservative maximum, since the
+  drawn average can hide what stands behind it.
+- **A drawn chunk is derived.** Time is carried by the records; what is
+  drawn is made from them for the view. A cache of meshes may stay, if it
+  can be dropped at any moment and rebuilt, and holds no invariant.
+- **The demand bound is the observation's, not the chunk's.** A sample
+  hitting at `[r_L, 2 r_L)` asks for the page it hit, so the bound is
+  `(⌊4 · SPLIT / PAGE_CELLS⌋ + 2)²` a level, a function of the criterion
+  and the page alone. The raster cover reaches a chunk's diagonal further,
+  and that term is kept apart and marked as the one place the drawing's
+  representation still couples to the paging's bound; it goes when demand
+  comes from samples. Changing the chunk's size must not move the bound.
+- **Memory is a formula.** `.fixed.terrain` is `F × a frame's bytes` with
+  `F ≥ hard + D_max`; a tighter observation bound lowers it without a
+  heuristic.
+
+Each concern can be turned off or swapped to test that it is orthogonal:
+prefetch off, another scheduler, another victim policy, no mesh cache, no
+consumer leasing — and another chunk size — each leaving the meaning and
+the bounds as they were.
+
+### Run: a page depends on nothing over it
+
+Run against the local servers, the built branch drew nothing. Pages of
+levels 0 to 2 arrived; none was read. Residency held a page as read only
+once its parent was, and the dev server answers nothing past its top level,
+so no chain ever closed — and with every level served, one ancestor late
+would still leave everything under it undrawn. That is the invariant the
+tree states against it: a missing ancestor cannot make a resident
+descendant unreachable.
+
+The dependency was written for an index in the parent's lanes. The index
+is in each page's own, for everything under it; a page that is held
+exists; so nothing over a page is needed to read it. What the page over a
+missing one is for is the fallback and the query's descent, both from the
+nearest resident page. A page of the pyramid depends on nothing, and the
+demand is a fault's own page — the pages over it, held for a better answer
+meanwhile, are prefetch's to ask for, as a policy.
+
+With no dev exception: past the dev server's top level the floor is not
+served, so there only what the view asks for at the served levels answers.
+
+## Four sentences before the next step
+
+Settled in the conversation before the access module and the demand's
+estimator are built, so that neither drags a solver or a representation
+back into the meaning:
+
+1. **An observation's meaning is the first visible answer for an angular
+   sample** — an eye, a direction, a footprint. Ray casting and
+   rasterizing with a depth buffer are two solvers of it, and a layer may
+   use either; `first_hit(ray)` is the query's vocabulary, not a choice of
+   renderer.
+2. **Demand is first what an observation requires** — the information, at
+   the resolution its footprint allows within τ — and only then pages: the
+   storage's own representation maps a requirement to the pages that meet
+   it, so a page's shape can change and the observation's law does not.
+3. **A query answers and says what it lacked; it does nothing else.** It
+   returns an exact answer, a coarser one with what it would have needed,
+   or nothing. Turning a lack into a request is demand's, when to fetch it
+   is scheduling's, and a query never fetches, prefetches or holds.
+4. **An estimator of demand is a conservative superset of the exact
+   demand.** The first one works from bounds — a page's box in the frustum
+   and in its level's band of distance — and asks for hidden pages too;
+   later ones, from hits or the GPU's feedback, are smaller supersets. None
+   changes what an observation means or what residency does.
+
+What is left at the top is only this: the world, what an observation
+requires, the pages that meet it, what is resident, and what is made from
+it to be drawn — the chunk now a materialization, made for a frame and
+cached only if that is cheaper, never a thing the meaning rests on.

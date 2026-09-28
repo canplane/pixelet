@@ -1,7 +1,7 @@
 // pxl-kernel/layer/poi/placement.rs
 
 //! Where the counts are drawn. What the POI pages draw of the view is the
-//! layer's own cover (world/pyramid.rs `Cover`): pieces of the ground in
+//! layer's own cover (world/pyramid/cover.rs `Cover`): pieces of the ground in
 //! view, none over another, so every place under them is counted once. Each
 //! of their cells — cells of the POI lattice (pxl-spec bake/poi_page.rs
 //! `POI_LATTICE`) — is counted into itself, or into the cell over it at the
@@ -76,8 +76,8 @@ pub fn step(ctx: &mut TickContext) {
     let pages = PoiPage::pyramid();
     let sched = &crate::kernel::kernel().sched;
     let mut cells: BTreeMap<Cell, Tally> = BTreeMap::new();
-    let Some(domain) = pages.domain() else { return };
-    for &chunk in &pages.cover().0.drawn {
+    let Some(domain) = crate::world::pyramid::domain::current() else { return };
+    for &chunk in &crate::world::pyramid::cover::cover::<PoiPage>().0.drawn {
         // The page that draws the chunk's ground: its own, or where the tree
         // stops above it, the page over it that says that ground — whose cells
         // there hold one place or none, each standing where it stands.

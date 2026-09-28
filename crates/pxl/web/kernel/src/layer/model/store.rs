@@ -45,7 +45,7 @@ struct Clip {
     channels: Vec<Channel>,
 }
 
-/// Where a model's mesh is and how big, for a hit test (world/chunk/raycast.rs).
+/// Where a model's mesh is and how big, for a hit test (layer/decor/hit.rs).
 #[derive(Clone, Copy)]
 pub struct MeshRef {
     pub at: usize,

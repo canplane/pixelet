@@ -20,9 +20,7 @@
 //!
 //! The same scratch and packing serve the direct path (`begin_direct`),
 //! where the runs are not walked out of bands but written one call each by
-//! a layer's own source — one a column for terrain — and the same column
-//! walk serves the raycast (`ColumnRuns`), which asks for one column of a
-//! volume on a hover and reads the answer once.
+//! a layer's own source — one a column for terrain.
 
 use pxl_spec::bake::constant::BAND_CELLS;
 
@@ -324,57 +322,6 @@ impl ScanContext {
         self.open = false;
         self.runs.clear();
         self.next_col = None;
-    }
-}
-
-/// One column's runs for the raycast: the scan's walk, kept apart from the
-/// scan's own scratch so a hover while a scan is open across frames does
-/// not disturb it, and laid out as lanes to read once.
-pub struct ColumnRuns {
-    runs: Vec<Run>,
-    pub z0: Vec<i32>,
-    pub z1: Vec<i32>,
-    pub material_class: Vec<u8>,
-    /// The inset packed as the band stores it: ox, oy, oz, then sz.
-    pub sub: Vec<u32>,
-}
-
-impl Default for ColumnRuns {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ColumnRuns {
-    pub fn new() -> Self {
-        ColumnRuns {
-            runs: Vec::new(),
-            z0: Vec::new(),
-            z1: Vec::new(),
-            material_class: Vec::new(),
-            sub: Vec::new(),
-        }
-    }
-
-    /// Walks column (cx, cy) of `bands`, ascending by band_z; how many runs.
-    pub fn walk(&mut self, bands: &[BandView], cx: u32, cy: u32) -> usize {
-        for band in bands {
-            band.check();
-        }
-        self.runs.clear();
-        walk_column(&mut self.runs, bands, cx, cy);
-        self.z0.clear();
-        self.z1.clear();
-        self.material_class.clear();
-        self.sub.clear();
-        for run in &self.runs {
-            self.z0.push(run.z0);
-            self.z1.push(run.z1);
-            self.material_class.push(run.material_class);
-            self.sub
-                .push(run.sub_ox as u32 | ((run.sub_oy as u32) << 8) | ((run.sub_oz as u32) << 16) | ((run.sub_sz as u32) << 24));
-        }
-        self.runs.len()
     }
 }
 

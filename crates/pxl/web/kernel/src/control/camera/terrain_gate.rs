@@ -14,9 +14,9 @@ use xpute_core::math::scalar::wrap;
 
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::orbit::{orbit_local_offset, rotate2};
-use crate::layer::terrain::elevation::ground_at;
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::{settings_store, CameraCollisionMode};
+use crate::world::access::{Access, FINEST};
 use crate::world::frame::coord::{local_world_origin, local_world_to_canonical};
 
 /// One cell, so a bicubic elevation sample disagreeing slightly with the
@@ -68,9 +68,9 @@ pub fn pose(view: ViewTriple, center: Option<&Pvf3>) -> Option<ViewPose> {
     })
 }
 
-/// How far above the target the eye must sit to clear the ground beneath it,
-/// or None when the tile under it has not loaded — an unarrived sample says
-/// nothing.
+/// How far above the target the eye must sit to clear the ground drawn
+/// beneath it, or None where no page over it is resident — an unarrived
+/// sample says nothing.
 fn required_rise(at: &ViewPose) -> Option<f64> {
     let o = orbit_local_offset(at.dist, at.polar);
     // The camera never rotates; azimuth spins the world beneath it, so
@@ -78,7 +78,7 @@ fn required_rise(at: &ViewPose) -> Option<f64> {
     let offset = rotate2(0.0, -o.horiz_dist, -at.azimuth);
     let mut below = Pvf3::default();
     local_world_to_canonical(&mut below, &[at.target[0] + offset.x, at.target[1] + offset.y, 0.0], at.origin);
-    let ground = ground_at(&below)?;
+    let ground = Access::now().at(&below, FINEST).value()?.top;
     Some(ground + EYE_CLEARANCE_U - at.target[2])
 }
 

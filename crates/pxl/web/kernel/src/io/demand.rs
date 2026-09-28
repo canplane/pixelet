@@ -14,6 +14,7 @@
 use pxl_spec::bake::published::BakeKind;
 
 pub use crate::sched::profiler::spec::TaskPhaseName;
+use crate::world::observation::Order;
 
 /// The most sub-timings one run reports.
 pub const PHASES_MAX: usize = 6;
@@ -99,5 +100,48 @@ pub struct DemandKey {
 impl DemandKey {
     pub fn new(category: Category, subject: u64) -> DemandKey {
         DemandKey { category, subject }
+    }
+}
+
+/// Why a page is asked for: the hold residency keeps it by (world/paging.rs),
+/// strongest first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Why {
+    /// Leased by the fallback that keeps every observation answered
+    /// (world/paging/floor.rs), or a page such a page depends on.
+    Floor,
+    /// Leased by a consumer that takes no coarser answer, or a page such a
+    /// page depends on.
+    Lease,
+    /// A page the view reads now, or one it depends on: a fault where it is
+    /// not resident.
+    Fault,
+    /// Speculation (world/prefetch.rs): more than was asked, in case it will
+    /// be.
+    Hint,
+}
+
+/// What a producer says of one thing it wants: why, and where it falls in
+/// the view's order. What the want is worth against the others is the serve
+/// policy's to say (io/policy.rs), from this and nothing else.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Ask {
+    pub why: Why,
+    pub order: Order,
+}
+
+impl Ask {
+    /// A want with no place in the view: an asset, the geocode, the ocean,
+    /// which the serve policy orders by their category alone.
+    pub const PLAIN: Ask = Ask { why: Why::Fault, order: Order::LAST };
+
+    /// One page asked for twice: held by the stronger reason, and placed
+    /// where the earlier of the two falls — the two are apart, since a page
+    /// leased by a consumer and read by the view is the view's to order.
+    pub fn best(self, other: Ask) -> Ask {
+        Ask {
+            why: self.why.min(other.why),
+            order: self.order.min(other.order),
+        }
     }
 }

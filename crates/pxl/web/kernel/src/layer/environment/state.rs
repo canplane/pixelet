@@ -9,7 +9,6 @@
 use pxl_render::look::color::linear_rgb;
 use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS, NIGHT, THEME_FLOATS};
 use pxl_render::look::globe::Globe;
-use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
@@ -27,7 +26,6 @@ use crate::shell::map_store::map_store;
 use crate::world::change::{request_world_tick, wake_at};
 use crate::world::chunk::table::Frame;
 use crate::world::frame::view::camera_center;
-use crate::world::pyramid::Layer as _;
 
 // The map's own fallback, so the first frames before map_center exists light
 // the world from a real place instead of computing sun and moon for (0, 0).
@@ -285,7 +283,7 @@ impl EnvironmentDraw {
         let height = eye_height();
         // What the ground's pyramid last drew, the view it was made from:
         // read, not made again a frame at a time.
-        let drawn = Terrain::pyramid().domain().map(|d| d.far);
+        let drawn = crate::world::pyramid::domain::current().map(|d| d.observation().far);
         let band = band_at(height, drawn.unwrap_or_else(|| reach_at(height)));
         let light = Light {
             theme: self.current,

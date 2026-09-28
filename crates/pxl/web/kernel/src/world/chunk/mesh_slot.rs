@@ -50,15 +50,20 @@
 //! it merges, since a box shrunk about its cell's center touches nothing
 //! (issue/20260923-a-coarse-cell-is-isotropic.md).
 
-use crate::world::pyramid::domain::{LEVEL_CHUNKS, VIEW_CHUNKS};
 use pxl_render::look::lod::COARSEST;
 use pxl_render::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
 use pxl_spec::space::pyramid::CHUNK_CELLS;
 
-/// Slots a group holds: the z16 chunks a view is held to seeing at once
-/// (domain.rs `LEVEL_CHUNKS`), which is what the leaves' own tier needs,
-/// since only z16 draws it and only where it is seen.
-const SLOTS: u32 = LEVEL_CHUNKS;
+/// Slots a group holds, and so the z16 chunks the leaves' own tier can draw
+/// at once. A product number, said aloud: the arena is the largest thing the
+/// device holds, and this is what it gives a view. It is the z16 chunks over
+/// flat ground within where z16 ends, as a disc; the rule's own bound
+/// (domain.rs `LEVEL_PIECES`, a ball, since steep ground or stacked objects
+/// make several chunks a column) is some eighteen times it, which for the
+/// leaves' tier alone is past a storage binding. A view past it waits for a
+/// slot (world/chunk/table.rs `claim`) rather than take one from ground on
+/// the screen.
+const SLOTS: u32 = 330;
 /// Boxes a leaf's first tier holds, the one tier drawn at a leaf's own cells:
 /// one a column. The ground is a heightfield, so a column of it is one run
 /// in a chunk, and a chunk is a cube that cuts it to its heights
@@ -90,13 +95,15 @@ pub const fn capacity(level: u32, step: u32) -> u32 {
 /// The largest mesh one bake may write: past what any slot holds, so a bake
 /// is weighed against its slot before it could outgrow its block.
 pub const BAKE_BYTES: u32 = 1 << 20;
-/// Groups the coarse tiers share: a slot for every chunk a view draws, each
-/// drawn in one coarse tier, and half as many again for what a change of view
-/// holds on to while it lasts — a dissolve's other tier, a stale chunk
-/// drawn until what replaced it is whole. Past that a mesh waits for a slot
-/// rather than take one from ground on the screen (world/chunk/table.rs
-/// `claim`).
-const COARSE_GROUPS: u32 = (VIEW_CHUNKS * 3 / 2).div_ceil(SLOTS);
+/// Groups the coarse tiers share. A product number, said aloud: a slot for
+/// each of some thousand chunks a view draws, each in one coarse tier, and
+/// half as many again for what a change of view holds on to while it lasts —
+/// a dissolve's other tier, a stale chunk drawn until what replaced it is
+/// whole. The rule's bound (domain.rs `VIEW_PIECES`) with the same half
+/// again is some sixty times it, gigabytes of boxes. Past it a mesh waits
+/// for a slot rather than take one from ground on the screen
+/// (world/chunk/table.rs `claim`).
+const COARSE_GROUPS: u32 = 5;
 /// Groups the arena holds: the coarse tiers', and the leaves' own tier
 /// beside them.
 pub const GROUPS: u32 = COARSE_GROUPS + 1;

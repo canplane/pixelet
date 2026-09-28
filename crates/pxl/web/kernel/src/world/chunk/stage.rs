@@ -204,10 +204,10 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     let host = c.host.clone();
     let mut pages = PageSample::default();
     for (level, n) in pages.by_level.iter_mut().enumerate() {
-        *n = Terrain::pyramid().level(level as u32).count() as f64;
+        *n = Terrain::pyramid().paging().level(level as u32).count() as f64;
     }
     pages.total = pages.by_level.iter().sum();
-    pages.poi = (0..=TOP_LEVEL).map(|level| PoiPage::pyramid().level(level).count() as f64).sum();
+    pages.poi = (0..=TOP_LEVEL).map(|level| PoiPage::pyramid().paging().level(level).count() as f64).sum();
     let mut gpu = host.gpu;
     for (tris, boxes) in gpu.level_tris.iter_mut().zip(census.level_boxes) {
         *tris = boxes as f64 * BOX_TRIANGLES;
@@ -238,7 +238,6 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
             offscreen_pending: census.offscreen_pending as f64,
             oldest_release_ms: census.oldest_release_ms,
             oldest_visible_ms: census.oldest_visible_ms,
-            pressure: census.pressure as f64,
         },
         pages,
         heap: heap_sample(),
@@ -261,10 +260,9 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         },
         turn: TurnSample::default(),
         cover: {
-            let terrain = Terrain::pyramid();
-            let (cover, _) = terrain.cover();
+            let (cover, _) = crate::world::pyramid::cover::cover::<Terrain>();
             CoverSample {
-                rule: terrain.domain().map_or(0.0, |d| d.chunks() as f64),
+                rule: crate::world::pyramid::domain::current().map_or(0.0, |d| d.pieces().len() as f64),
                 drawn: cover.drawn.len() as f64,
                 gaps: cover.gaps.len() as f64,
             }

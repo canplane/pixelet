@@ -35,11 +35,11 @@ use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
 use crate::layer::object::geometry::{anchor_center, object_aabb, object_center};
 use crate::layer::object::size::{DECOR_SIZE, DEFAULT_OBJECT_SIZE};
 use crate::layer::object::store::{get_placed_object, place, place_air, place_decor, remove, OccupiedEntry};
-use crate::layer::terrain::elevation::ground_or_raw;
+use crate::layer::terrain::ground_snap::ground_or_raw;
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::settings_store;
+use crate::world::access::Hit;
 use crate::world::change::request_world_tick;
-use crate::world::chunk::raycast::WorldHit;
 use crate::world::frame::coord::local_world_origin;
 use crate::world::frame::view::{view, view_ray_local};
 use xpute_core::status::bug::OrBug;
@@ -193,14 +193,14 @@ fn input() -> &'static mut Input {
 }
 
 /// Which entry `hit` actually struck, decor included — the placed decor's mesh
-/// raycast first, bounded by hit.t: decor sitting on solid ground can only be
-/// the right answer when it's genuinely closer along the ray than whatever the
-/// voxel raycast found, falling back to ray.rs's solid-object AABB resolution.
-fn resolve_hit_target(hit: &WorldHit, origin: V3, direction: V3, map_origin: IVec) -> Option<OccupiedEntry> {
+/// hit first, bounded by hit.t: decor sitting on solid ground can only be the
+/// right answer when it's genuinely closer along the ray than whatever the
+/// pick met, falling back to the object the pick met.
+fn resolve_hit_target(hit: &Hit, origin: V3, direction: V3, map_origin: IVec) -> Option<OccupiedEntry> {
     if let Some(decor) = raycast_decor(origin, direction, map_origin, hit.t).and_then(get_placed_object) {
         return Some(decor);
     }
-    resolve_hit_object(hit, map_origin)
+    resolve_hit_object(hit)
 }
 
 /// What a non-drag tap on the terrain means — recenter the map (pointer tool),
@@ -547,8 +547,8 @@ fn update_hover(s: &Input) {
 
     let ui = s.holding;
     let map_origin = local_world_origin();
-    // One unified raycast — terrain (top or a wall) and any placed object all
-    // come back as the same WorldHit, all boxes in the same voxel field.
+    // One pick — terrain (top or a wall) and any placed object all come back
+    // as the same Hit.
     let Some(pick) = ray_pick(origin, direction, Some(&map_center)) else {
         return clear_hovered_once();
     };
@@ -560,9 +560,8 @@ fn update_hover(s: &Input) {
         // places at its own fixed DECOR_SIZE.
         camera.hovered_object_at = None;
         let placement_size = if ui.active_tool == ActiveTool::Decor { DECOR_SIZE } else { ui.object_size };
-        // A real struck entry's exact stored AABB, not the hit's own box — that
-        // comes back through the u8-packed sub_cell payload, accurate to only
-        // ~1/510 of a cell, which let stacked sub-cell placements drift.
+        // The box of the entry the hit resolves to: a decor met in front of
+        // what the pick struck is what the new cube goes flush against.
         let precise_box = resolve_hit_target(&hit, origin, direction, map_origin).map(|o| object_aabb(&o, map_origin));
         camera.hovered_coord = Some(world_adjacent_corner(&hit, placement_size, map_origin, precise_box.as_ref()));
         return;

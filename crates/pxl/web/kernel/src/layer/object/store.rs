@@ -20,6 +20,7 @@ use base64::Engine;
 use pxl_render::mesh::paint::object::adapter::Entries;
 use pxl_spec::bake::constant::{band_cell_z, band_of, in_cell, pack_pos, unpack_pos, BandZ, CellZ, BAND_CELL_SHAMT, BAND_UNITS, CELL, OBJECT_FINEST, OBJECT_LAYOUT, POS_MASK, STEP_UNITS, U_PER_CELL};
 use pxl_spec::bake::ground::shown_ground;
+use pxl_spec::bake::pack::channel_of;
 use pxl_spec::cell::object::{decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, placeable_cube_num_id, placeable_cube_of, terrain_style_cube_source, PlaceableCube};
 use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::hierarchy::{at_walk_order, child_of, first_descendant_of, parent_of, walk_order, Scale};
@@ -41,8 +42,8 @@ use crate::abi::host::storage;
 use crate::global::Global;
 use crate::host::{body_read, now, storage_set, turn};
 use crate::kernel::kernel;
-use crate::layer::terrain::elevation::get_ground_type;
 use crate::shell::setting::store::hidden_ground;
+use crate::world::access::{Access, FINEST};
 use crate::world::change::{bump_world, wake_at, world_changes, world_edge, OBJECT_COLUMN};
 use crate::world::chunk::source::{band_written, chunk_sources_changed};
 use crate::world::frame::coord::local_world_to_canonical;
@@ -405,10 +406,10 @@ fn store_state() -> &'static mut StoreState {
 /// ghost of it on top.
 ///
 /// Deliberately does NOT affect the cell queries (collision, decor's
-/// occupancy) or a raycast paint: the object has not been removed, and the
-/// raycaster is what resolves the hover in the first place — if it stopped
+/// occupancy) or the pick (world/access.rs): the object has not been removed,
+/// and the pick is what resolves the hover in the first place — if it stopped
 /// seeing the hidden object, hover would clear, the hide would lift, the
-/// raycaster would hit it again: an infinite loop.
+/// pick would hit it again: an infinite loop.
 ///
 /// Nor is it a change to what is stored: no revision moves, so nothing that
 /// reads the store — a save, the boxes a view measures heights by — sees
@@ -759,7 +760,11 @@ fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube, structure
         return false;
     }
     let Some(source) = terrain_style_cube_source(cube) else { return false };
-    let shown = shown_ground(|ch| get_ground_type(at, ch).unwrap_or(0), hidden_ground(structures));
+    // What the bake recorded is the leaf's to say: a page over it votes its
+    // cells' types, which say nothing of this one. A placement acts on the
+    // leaf, and where it is not resident the cube is written as asked.
+    let Some(ground) = Access::now().at(at, FINEST).exact() else { return false };
+    let shown = shown_ground(|ch| channel_of(ground.cell, ch) as u32, hidden_ground(structures));
     if shown.channel != source.channel || shown.type_id != source.terrain_num_id {
         return false;
     }
@@ -817,7 +822,7 @@ pub fn remove(at: EntryAt) {
 //
 // A leaf is the catalog value itself, which the catalog keeps within a
 // leaf's width (pxl-spec cell/object.rs); an entry is at most a cell because everything downstream — the collision neighborhood,
-// the raycast's per-cell runs — assumes one, and a leaf covering more is
+// the pick's cell by cell walk — assumes one, and a leaf covering more is
 // split into the cells it covers as the lanes are built; and the lanes are
 // made again a column at a time because a write touches one column and the
 // cost is bounded by what that column holds.

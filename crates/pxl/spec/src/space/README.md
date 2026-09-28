@@ -180,6 +180,7 @@ collapse its `settles`.
 | [`adapter/`](./adapter/)         | where a unit gets a meaning                                                                            |
 | `hierarchy.rs`                   | `Scale`, the one form a size takes, and parent and child in any number of axes                         |
 | `indexer.rs`                     | the tiers, and the four questions each answers                                                         |
+| `lod.rs`                         | the level a distance is drawn at, and the pages of a level an observation can fault on                 |
 | [`lattice/`](./lattice/)         | structures over the lattice: one address hash, points bucketed in 3D, rectangles indexed on the screen |
 | [`sparse_tree/`](./sparse_tree/) | an octree in two flat lanes, storing what differs from the default                                     |
 | `xy.rs`                          | `TO_XY`, which drops Z to give the key every 2D map surface is keyed by                                |

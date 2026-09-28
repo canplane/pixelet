@@ -110,13 +110,6 @@ pub const RUN_SETS: usize = 2;
 /// past it is refused rather than cut, since a run left out is a hole.
 pub const RUN_SET_BYTES: u32 = 1 << 20;
 
-/// Chunks held at once, the table's hard budget: a view draws a quarter of
-/// it (domain.rs `VIEW_CHUNKS`), so the widest selection fits with room for
-/// stale chunks. At it the mount pass lets a stale chunk go rather than
-/// trapping (`Scheduler::give_room`), so `Scheduler::add`'s assert past it
-/// says the caller has a bug, not that the view grew.
-pub const MAX_CHUNKS: usize = 4096;
-
 /// What a build hands the scheduler.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BuildEvent {
@@ -364,34 +357,6 @@ impl Builder {
         let read = c.read().filter(Read::own)?;
         let (tx0, ty0) = c.at.in_page();
         Some((tx0, ty0, read.page, c.structures))
-    }
-
-    /// What the composite of z16 chunk `chunk` is valid for: its column's
-    /// objects and the structure setting, the two things its paint reads that
-    /// change.
-    pub fn leaf_valid(&self, chunk: PyramidChunk) -> u32 {
-        object_col_revision(L2_IDX(chunk.corner())).wrapping_mul(2) | settings_store().structures as u32
-    }
-
-    /// The composite of z16 chunk `chunk` — the real set, no edits —
-    /// as a sealed volume for a raycast, or none: no leaf there, or a paint
-    /// refused. Made from the leaf page wherever it is resident, whether or
-    /// not a chunk is drawn from it: the ground is hit at the finest level
-    /// whichever level it is drawn at. With what it is valid for, which a
-    /// cached composite is compared by.
-    pub fn compose_leaf(&mut self, world: &mut World, chunk: PyramidChunk) -> Option<(u32, u32)> {
-        let page = Terrain::pyramid().get(chunk.page())?;
-        let (tx0, ty0) = chunk.in_page();
-        let show = settings_store().structures;
-        let col_idx = L2_IDX(chunk.corner());
-        let valid = self.leaf_valid(chunk);
-        let volume = self.paint_terrain_at(world, [tx0 as i64, ty0 as i64], 1, show, page)?;
-        if world.painter.paint(world.store.entries(col_idx), world.volumes, volume, None, None).refused {
-            world.volumes.release(volume);
-            return None;
-        }
-        world.volumes.seal(volume);
-        Some((volume, valid))
     }
 
     pub fn generation_of(&self, id: u32) -> Option<u32> {

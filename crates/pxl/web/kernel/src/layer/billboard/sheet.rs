@@ -41,7 +41,7 @@ pub fn follow_billboard_set(set: u32, actor: u32, lift: f64) {
 
 /// Replaces a set's instances with `lane`, BILLBOARD_FLOATS floats each.
 pub fn write_billboard_set(set: u32, lane: &[f32]) {
-    let Some((_, sched, _)) = kernel().world() else { return };
+    let Some((_, sched)) = kernel().world() else { return };
     sched.billboards.write(&mut sched.draw, set, lane);
 }
 

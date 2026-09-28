@@ -5,18 +5,20 @@
 //!   decode_tile 12720250262323200                # one leaf: summary + PNGs
 //!   decode_tile 3179787687624704 --level 2       # a page of a level above
 //!   decode_tile 12720250262323200 --out /tmp/page
-//!   decode_tile out/terrain/v6/_ocean            # a path works too
+//!   decode_tile out/terrain/v7/_ocean            # a path works too
 //!   decode_tile --all                            # every page of every level, checked
-//!   decode_tile --all --version v6
+//!   decode_tile --all --version v7
 //!
 //! (`cargo run --manifest-path crates/Cargo.toml --profile server --bin
 //! decode_tile -- …`, from the repository root, where `out/` is.)
 //!
 //! A page is read by the model's own `decode_terrain`, so a page this cannot
 //! read is one the client cannot either. What it checks past that is the
-//! bake's contract: the elevation is the padded page's and the ground the
-//! page's own size, nothing follows the tree, and every packed cell names a
-//! type its channel gives out. A cell's fields are indices into the pack's
+//! bake's contract: the elevation is the padded page's, the ground and the
+//! index lane the page's own size, nothing follows the tree, every packed
+//! cell names a type its channel gives out, and the index lane holds at least
+//! the page's own surface — what it says of the pages under it is the fold's
+//! (pxl-spec bake/fold.rs `fold_index`), whose laws are tested there. A cell's fields are indices into the pack's
 //! rows, and reading one past its row clamps to the row's last entry
 //! (pxl-spec bake/pack.rs), so a writer that disagrees with the reader draws
 //! the wrong ground rather than failing — which is why it is checked here.
@@ -38,12 +40,13 @@ use flate2::{Compression, Crc};
 use pxl_geo_bake::cli::Flags;
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::bake::format::decode_terrain;
-use pxl_spec::bake::format::GroundChannelKey;
+use pxl_spec::bake::format::{GroundChannelKey, Occupancy};
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::bake::published::PUBLISHED_VERSION;
+use pxl_spec::bake::surface::extent_of;
 use pxl_spec::cell::cube::ground_pack;
 use pxl_spec::cell::{color, cube_types};
-use pxl_spec::space::pyramid::PAGE_CELLS;
+use pxl_spec::space::pyramid::{EXTENT, PAGE_CELLS};
 use xpute_core::wire::xtp::{HDR_SZ, WORD_SZ};
 
 const MAGENTA: u32 = 0xff00ff;
@@ -67,17 +70,23 @@ fn read_page(path: &Path) -> Result<Vec<u8>, String> {
 struct Page {
     ele: Vec<i16>,
     cells: Vec<GroundCell>,
+    extent: Vec<[i16; 2]>,
+    occupancy: Occupancy,
 }
 
 /// The page as the kernel reads it, or what is wrong with its shape.
 fn decode(pkt: &[u8]) -> Result<Page, String> {
     let t = decode_terrain(pkt).map_err(|e| format!("{e:?}"))?;
-    let (ele, cells) = (t.ele.into_owned(), t.ground.cells.into_owned());
+    let (ele, cells, extent, occupancy) = (t.ele.into_owned(), t.ground.cells.into_owned(), t.index.extent.into_owned(), t.index.occupancy);
     if ele.len() != (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize {
         return Err(format!("ele has {} samples, expected {ELE_PADDED_SPAN}²", ele.len()));
     }
     if cells.len() != (PAGE_CELLS * PAGE_CELLS) as usize {
         return Err(format!("ground has {} cells, expected {PAGE_CELLS}²", cells.len()));
+    }
+    let side = EXTENT.page_cells();
+    if extent.len() != (side * side) as usize {
+        return Err(format!("index lane has {} cells, expected {side}²", extent.len()));
     }
     // Nothing may follow: a page is exactly its tree, and bytes past it are a
     // writer that disagrees with the reader, which only checks that the
@@ -87,7 +96,7 @@ fn decode(pkt: &[u8]) -> Result<Page, String> {
     if payload + HDR_SZ as usize != pkt.len() {
         return Err(format!("packet is {} bytes, header says {}", pkt.len(), payload + HDR_SZ as usize));
     }
-    Ok(Page { ele, cells })
+    Ok(Page { ele, cells, extent, occupancy })
 }
 
 /// A packed cell's field `f` as the dense index the word holds, which may lie
@@ -110,6 +119,9 @@ struct Summary {
     min: i16,
     max: i16,
     mean: f64,
+    /// The index lane's lowest and highest over the whole page.
+    extent: [i16; 2],
+    occupancy: Occupancy,
     /// Per channel in the pack's order: cells by type name.
     counts: Vec<BTreeMap<&'static str, u32>>,
     faults: Vec<String>,
@@ -143,12 +155,26 @@ fn summarize(page: &Page) -> Summary {
     if high > 0 {
         faults.push(format!("{high} cell(s) with bits set past the pack's {} bits", ground_pack::CELL_BITS));
     }
-    Summary { min, max, mean, counts, faults }
+    let short = extent_of(&page.ele, &page.cells).iter().zip(&page.extent).filter(|([lo, hi], [ilo, ihi])| ilo > lo || ihi < hi).count();
+    if short > 0 {
+        faults.push(format!("{short} index cell(s) narrower than the page's own surface"));
+    }
+    let extent = page.extent.iter().fold([i16::MAX, i16::MIN], |[lo, hi], &[l, h]| [lo.min(l), hi.max(h)]);
+    Summary {
+        min,
+        max,
+        mean,
+        extent,
+        occupancy: page.occupancy,
+        counts,
+        faults,
+    }
 }
 
 fn print_summary(name: &str, s: &Summary) {
     println!("page {name}");
     println!("  ele  min {} max {} mean {:.2}{}", s.min, s.max, s.mean, if s.min == s.max { " (flat)" } else { "" });
+    println!("  index  lowest {} highest {} occupancy {:#07b}", s.extent[0], s.extent[1], s.occupancy.bits());
     for (f, channel) in ground_pack::CHANNELS.iter().enumerate() {
         let list: Vec<String> = s.counts[f].iter().map(|(name, n)| format!("{name} {n}")).collect();
         println!("  {channel:<9} {}", list.join(", "));

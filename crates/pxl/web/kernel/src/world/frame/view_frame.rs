@@ -18,7 +18,7 @@ use crate::sched::tick::TickContext;
 use crate::shell::map_store::map_store;
 use crate::world::frame::coord::origin_for;
 use crate::world::frame::view::{view, view_compose};
-use crate::world::pyramid::domain::ground_level;
+use crate::world::observation::ground_level;
 
 // see damping.rs's DIST_EPS/POLAR_EPS comment — the same reasoning about
 // asking for frames.

@@ -11,6 +11,7 @@ use pxl_render::mesh::chunk_mesher::{mesh_words, write_lone_box, Heights, FINE_B
 use pxl_render::mesh::volume::NO_LAYER;
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::ground::shown_ground;
+use pxl_spec::bake::pack::channel_of;
 use pxl_spec::cell::object::{placeable_cube_num_id, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::{fvec, ivec};
@@ -29,8 +30,8 @@ use crate::layer::decor::registry::{decor_bundle_for, DECOR_BUNDLES};
 use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::{clear_virtual_carve_preview, get_placed_object, set_virtual_carve_preview, set_virtual_hide, EntryAt, EntryKind};
-use crate::layer::terrain::elevation::get_ground_type;
 use crate::shell::setting::store::{hidden_ground, settings_store};
+use crate::world::access::{Access, FINEST};
 use crate::world::change::request_world_tick;
 use crate::world::chunk::build::World;
 
@@ -139,7 +140,9 @@ pub fn hover_cursor_step() {
     // that looks like one: its terrain-styled id.
     let carved_style_cube: Option<PlaceableCube> = match (&hovered, digging_terrain) {
         (Some(h), true) => {
-            let shown = shown_ground(|ch| get_ground_type(h, ch).unwrap_or(0), hidden_ground(structures));
+            // The cell as it is drawn there, from whichever page it is.
+            let cell = Access::now().at(h, FINEST).value().map_or(0, |g| g.cell);
+            let shown = shown_ground(|ch| channel_of(cell, ch) as u32, hidden_ground(structures));
             terrain_style_cube_for(shown.channel, shown.type_id)
         }
         _ => None,

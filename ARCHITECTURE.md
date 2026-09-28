@@ -18,14 +18,14 @@ This document is in three parts. **The world** is the vocabulary: what a positio
 
 ## Spatial Hierarchy
 
-| Level | Name      | Extent per axis | Used for                                  |
-| ----- | --------- | --------------- | ----------------------------------------- |
-| L0    | Sub-block | within one L1   | fine placement, below one block           |
-| L1    | Block     | `1u`            | the unit a position names                 |
-| L2    | Chunk     | `64` blocks     | meshing, LOD, raycasting, frustum culling |
-| L3    | Page      | `512` blocks    | terrain streaming and storage             |
-| L4    | Anchor    | `4096` blocks   | the floating origin                       |
-| L5    | Shard     | `65536` blocks  | reserved                                  |
+| Level | Name      | Extent per axis | Used for                        |
+| ----- | --------- | --------------- | ------------------------------- |
+| L0    | Sub-block | within one L1   | fine placement, below one block |
+| L1    | Block     | `1u`            | the unit a position names       |
+| L2    | Chunk     | `64` blocks     | meshing, LOD, frustum culling   |
+| L3    | Page      | `512` blocks    | terrain streaming and storage   |
+| L4    | Anchor    | `4096` blocks   | the floating origin             |
+| L5    | Shard     | `65536` blocks  | reserved                        |
 
 L2 is Minecraft's chunk under another name — the unit a world is meshed in, cached at, and rebuilt when edited — at 64 blocks rather than 16.
 
@@ -82,9 +82,9 @@ Sea is a `LAND` value (`sea = 129`, `spec/pxl/spec/cell/cube_type.json`). A page
 
 What the view draws is decided from the eye, in three dimensions. A chunk of level L — a cube 64 of L's cells a side — is split into its eight children while the nearest point of its box is nearer the eye than L's **split distance**, a fixed multiple of its cell (`pxl-kernel world/pyramid/domain.rs`, [what a view costs is the eye's](./issue/20260925-what-a-view-costs-is-the-eye-s.md)). So every cell drawn covers about the same share of the screen wherever the eye stands and however the camera is tilted, as Cesium's selection does, and the rule runs from the pyramid's top down to terrain's atom. A child that holds nothing — no ground crosses it and no object's band is in it (`Domain::occupied`) — is never made, so the air is never split, counted or drawn; ground outside the frustum is not split at all. The map center is only the handle the camera is moved by, and plays no part in this or in anything below.
 
-What a view holds is a budget, not a count of levels. The chunks the rule draws, the pages they need and every ancestor of those are counted before anything is asked for, and where they are more than the device holds (`VIEW_CHUNKS`, `VIEW_PAGES`, `LEVEL_CHUNKS`), every split distance is shortened alike until they fit: the whole view coarser, never a piece of ground left out. Those pages answer three questions at once — fetched, kept decoded, given a record — so a page cannot be requested and then dropped from under its own request, and every layer on the pyramid is held to the same pages.
+What is fetched is not what is drawn. An observation requires the ground at a resolution — the level its distance chooses — before that is any page, and each layer's storage maps the requirement to its own pages (`pxl-spec space/observation.rs`). The exact requirement depends on what the world holds, so it is estimated from what is known: every page whose box — its heights from the terrain's index lanes and the objects on it — can be seen, and has some of its level's band of distance in it, hidden ground included (`ByBounds`). A sample answered at a distance asks for a level only inside that level's band, which ends at twice its split distance (`fault_radius`), so no level asks for more than 3 × 3 pages (`FAULT_PAGES`), whatever the ground, the tilt or how the answers are drawn. How many chunks the rule can cut a view into follows from it as well (`LEVEL_PIECES`), and nothing is fitted to a count; the mesh arena on the device is a size chosen and said, and a view past it waits for a slot.
 
-The rule's chunks are the view's **domain** (`Domain`): every piece of ground within reach, once, at the level the rule wants it. What a layer can draw of it is its **cover** (`world/pyramid.rs`): each chunk drawn from its own page where that has come, and from the nearest resident page over it where it has not (`drawn_from`) — that page's ground at the chunk's own cells, as Cesium upsamples a parent tile — so ground is on the screen the turn its page lands and is a gap only where nothing over it is held. Everything is asked for in one order out from the eye, the same for every layer (`Order`, `io/policy.rs`), and a fetch the view has left is stopped the turn it leaves (`io/sched.rs`).
+The rule's chunks are the view's **domain** (`Domain`): every piece of ground within reach, once, at the level the rule wants it. What a layer can draw of it is its **cover** (`world/pyramid/cover.rs`): each chunk drawn from its own page where that has come, and from the nearest resident page over it where it has not (`drawn_from`) — that page's ground at the chunk's own cells, as Cesium upsamples a parent tile — so ground is on the screen the turn its page lands and is a gap only where nothing over it is held. The domain and the cover are made for the frame and nothing is asked for because of them: what the view asks for is the estimated demand, and a page of it that is not resident is a fault, asked for at the page that says its ground (`world/pyramid.rs` `observe`). Which pages are held is residency's (`world/paging.rs`): a page carries the index of everything under it, so it is read the moment it is resident, with nothing over it required, and it is held hard, cached or given up by why it is asked for. The pyramid's top all around the eye is always leased, so every piece of ground has an answer once it lands (`world/paging/floor.rs`), and speculation — the whole reach, whatever the eye faces (`world/prefetch.rs`) — takes only frames nothing else holds. Everything is asked for in one order out from the eye, the same for every layer (`Order`, `io/policy.rs`), and a fetch the view has left is stopped the turn it leaves (`io/sched.rs`).
 
 ## Bake
 
@@ -104,7 +104,7 @@ Rasterizing is the bulk of it: polygons are filled even-odd with holes, lines ar
 
 Every land page is baked once into a versioned prefix. Open ocean is one shared page, since every one of them would be identical.
 
-Those pages are the leaves, z16. A view from farther away wants fewer, coarser pages, so the bake stacks levels on them: a level-k page covers the 2 × 2 level-(k − 1) pages under it at half their resolution and is the same record as a leaf, named by the Web Mercator tile it stands on so that a page's name is one digit shorter than its children's and a prefix of them. It is folded from the level below with no database in the loop — each ground channel by a majority of the four cells under it, the elevation by an average that reads past the page's edge — and the fold is `pxl-spec`'s (`bake/fold.rs`), so the client can fold the pages it already holds by the same function instead of fetching. Open water folds to itself, which is what lets the one ocean page serve every level.
+Those pages are the leaves, z16. A view from farther away wants fewer, coarser pages, so the bake stacks levels on them: a level-k page covers the 2 × 2 level-(k − 1) pages under it at half their resolution and is the same record as a leaf, named by the Web Mercator tile it stands on so that a page's name is one digit shorter than its children's and a prefix of them. It is folded from the level below with no database in the loop — each ground channel by a majority of the four cells under it, the elevation by an average that reads past the page's edge — and the fold is `pxl-spec`'s (`bake/fold.rs`), one function for the offline bake and the dev tile server. Open water folds to itself, which is what lets the one ocean page serve every level.
 
 The dev tile server (`geo-bake demand/`) serves every pyramid layer the same way (`demand/pyramid.rs`): a leaf baked from the layer's source when it is asked for, a page above it folded from the level below exactly as the offline bake folds (`pyramid.rs`), and nothing past `--top-level`, the one guard every layer shares.
 
@@ -201,9 +201,9 @@ The turn is xpute's, and so are the quota and the credits: the host rings once, 
 │   pump      start the I/O this turn's credits bought             │
 │   draw      the frame's draw list                                │
 │                                                                  │
-│ seven tasks beside it, polled on what the tick left              │
+│ five tasks beside it, polled on what the tick left               │
 │                                                                  │
-│   build · fetch decode · glTF · two folds · decor · store's save │
+│   build · fetch decode · glTF · decor · store's save             │
 └──────────────────────────────────────────────────────────────────┘
                                   │
                                   ▼
@@ -228,7 +228,7 @@ What the policy says: the frame is the 25th percentile of recent gaps between fr
 
 **The tasks** run on `embassy-executor`'s raw executor, which the module installs. The frame is a task rather than a function so that the order above is its own, and no task depends on the order the executor happens to poll them in.
 
-**The credits** bound what is out, and one place spends them (`io/sched.rs`). A producer says only what it wants — the subjects it wants read, each with a rank, replacing whatever it said last turn — and never that an attempt should start, stop or be retried. What is wanted, what is running and what has just failed are three tables, so an attempt ending answers nothing about the demand that outlived it, a failure waits rather than asking straight back, and the demand of a camera that has just moved is representable however much old work is still draining. A rank is a class and a distance; the numbers behind both are in one module (`io/policy.rs`) rather than one per layer, and a model or a texture is a read like any other, spending the same credits as a page rather than bidding against it from a second scheduler.
+**The credits** bound what is out, and one place spends them (`io/sched.rs`). A producer says only what it wants — the subjects it wants read, each with a rank, replacing whatever it said last turn — and never that an attempt should start, stop or be retried. What is wanted, with when a failed attempt at it may be tried again, and what is running are two tables of fixed size, so an attempt ending answers nothing about the demand that outlived it, a failure waits rather than asking straight back, and the demand of a camera that has just moved is representable however much old work is still draining. That ledger is the mechanism and orders nothing itself: a serve policy (`io/policy.rs`) ranks each want from why it is asked for and where it falls in the view's order, says whether a waiting want is worth a running one's credit and how long a failure waits, and the ledger keeps the credits, a total order and — while nothing moves — every want served, whatever the policy says. A model or a texture is a read like any other, spending the same credits as a page rather than bidding against it from a second scheduler.
 
 **The profiler** (`sched/profiler`, laid out by `spec/pxl/web/kernel/sched/profiler/profiler.json`) records what each frame and each task cost — pacing, per-phase time, GPU ask, heap gauges, LOD pressure, draw census, per-job waits — into rings the shell reads in place (`PROFILER_READ`, `PROFILER_TAKE`) and prints as a report or exports as a Chrome trace. The scheduler never reads them.
 
@@ -256,26 +256,26 @@ address        bytes                    range                  placed by
 2 MiB          8 MiB × 3                .ring.slot             build.rs
 32 MiB         ~0.7 MiB                 .rodata .data .bss     wasm-ld (--global-base)
                ↑ __data_end, rounded up to 4 KiB (PAGE_BYTES)
-~32.7 MiB      25.12 MiB                .fixed.terrain         the kernel (mem/fixed.rs)
-~57.8 MiB      1 MiB × 2                .fixed.runs            the kernel (mem/fixed.rs)
-~59.8 MiB      1 MiB                    .fixed.bake            the kernel (mem/fixed.rs)
-~60.8 MiB      11.60 MiB                .fixed.surface         the kernel (mem/fixed.rs)
-~72.4 MiB      2.12 MiB                 .fixed.decor           the kernel (mem/fixed.rs)
-~74.5 MiB      0.88 MiB                 .fixed.blocks          the kernel (mem/fixed.rs)
-~75.4 MiB      4 MiB                    .fixed.gpu             the kernel (mem/fixed.rs)
-~79.4 MiB      64 KiB                   .fixed.host            the kernel (mem/fixed.rs)
-~79.5 MiB      4.72 MiB                 .fixed.profiler        the kernel (mem/fixed.rs)
-~84.2 MiB      428 MiB  (phone)         .heap                  the allocator
-               940 MiB  (desktop)
+~32.7 MiB      60.30 MiB                .fixed.terrain         the kernel (mem/fixed.rs)
+~93.0 MiB      1 MiB × 2                .fixed.runs            the kernel (mem/fixed.rs)
+~95.0 MiB      1 MiB                    .fixed.bake            the kernel (mem/fixed.rs)
+~96.0 MiB      11.60 MiB                .fixed.surface         the kernel (mem/fixed.rs)
+~107.6 MiB     2.12 MiB                 .fixed.decor           the kernel (mem/fixed.rs)
+~109.7 MiB     0.88 MiB                 .fixed.blocks          the kernel (mem/fixed.rs)
+~110.6 MiB     4 MiB                    .fixed.gpu             the kernel (mem/fixed.rs)
+~114.6 MiB     64 KiB                   .fixed.host            the kernel (mem/fixed.rs)
+~114.7 MiB     4.72 MiB                 .fixed.profiler        the kernel (mem/fixed.rs)
+~119.4 MiB     393 MiB  (phone)         .heap                  the allocator
+               905 MiB  (desktop)
 512 MiB / 1 GiB                         end
 ──────────────────────────────────────────────────────────────────────────────────────
 ```
 
 The map is `pxl-kernel mem/section.rs`'s, over xpute's sections. The stack is first so that an overflow wraps below zero and traps — there is no MMU, so the wraparound is the only guard — and the kernel asserts at boot that the linker's `__stack_high` is where `mem.json` says. The rings sit at fixed addresses and `build.rs` emits `--global-base` from the same numbers, so the linker cannot place `.data` over them.
 
-`.fixed` is what the kernel places once, sizes at compile time and never frees; the table above lists it. The largest range is the resident terrain (`layer/terrain/fixed.rs`), one record a page: a record for every page a view can want (`VIEW_PAGES`, 48, the budget the view's criterion is loosened to fit) and one for the pinned page, so every page the view wants has room at once. Which page lies in which record is the pyramid's (`world/pyramid.rs`), not a coordinate's. Every layer's records begin with `ABSENT`, which is no page's own and which every absent page shares — in the terrain's range, the open ocean. A page that arrives takes a free record or the one worth least, one the view has left before one it wants, and the pinned page never gives its record up. A thing belongs in `.fixed` when it is in the kernel's own format and its size is settled at compile time; the heap is left for what is asked for, refused and given back, and for what another format sizes — a glTF, a PNG — whose bound nothing here can predict. Every range is reached through `mem/fixed.rs`, which checks what is asked for against the range's end, so nothing written through one lands in the next.
+`.fixed` is what the kernel places once, sizes at compile time and never frees; the table above lists it. The largest range is the resident terrain (`layer/terrain/fixed.rs`), one record a page, as many as residency's capacity (`world/paging.rs` `RECORDS`): a frame for everything held hard — the pyramid's top all around the eye and whatever a consumer leases — and for everything a view can read at once, 3 × 3 pages a level, so a page the view reads never has to give up another. Which page lies in which record is residency's, not a coordinate's. Every layer's records begin with `ABSENT`, which is no page's own and which every absent page shares — in the terrain's range, the open ocean. A page that arrives takes a free record or one nothing holds hard, the view does not read and no held page depends on, the farthest first; speculation takes only one that speculation does not hold either. A thing belongs in `.fixed` when it is in the kernel's own format and its size is settled at compile time; the heap is left for what is asked for, refused and given back, and for what another format sizes — a glTF, a PNG — whose bound nothing here can predict. Every range is reached through `mem/fixed.rs`, which checks what is asked for against the range's end, so nothing written through one lands in the next.
 
-`.heap` is everything else, under xpute's slab over buddy. A `String`, a band's voxels and a fetch body all come from here. A refused request is a wait, not a failure: the build keeps its place and asks again after a release, and the view's criterion is loosened until what it wants fits (`world/pyramid/pressure.rs`).
+`.heap` is everything else, under xpute's slab over buddy. A `String`, a band's voxels and a fetch body all come from here. A refused request is a wait, not a failure: the build keeps its place and asks again after a release.
 
 The numbers — page size, stack, ring addresses, `--global-base`, the two reservations, the heap a phone is guaranteed (`MIN_HEAP_BYTES`) — are one file, `spec/pxl/web/kernel/mem/mem.json`, read by the kernel's map, by `build.rs` and by the shell's reservation, and asserted at compile time and at boot.
 
@@ -285,7 +285,7 @@ What the renderer reads each frame is laid out as **column lanes**, structure-of
 
 # The engine
 
-Everything here serves one meeting. The ground arrives as a dense raster for a whole page; what the player places is a sparse tree per band. The two are stored apart and travel apart, and they meet once, when a chunk is built. What comes out of that meeting is one set of spans, one per stretch of a column that holds a single material — the **runs** the rest of this half is about. The same runs are drawn and hit, so the picture and the pointer can never disagree.
+Everything here serves one meeting. The ground arrives as a dense raster for a whole page; what the player places is a sparse tree per band. The two are stored apart and travel apart, and they meet once, when a chunk is built. What comes out of that meeting is one set of spans, one per stretch of a column that holds a single material — the **runs** the rest of this half is about. The pointer never reads them: it asks the records, through the functions the paint reads them with, so it meets what is drawn.
 
 ## Chunk pipeline
 
@@ -298,10 +298,9 @@ object store ────▶ object paint  (mesh/paint/object)  ──┘       
                                                                  ▼
 terrain record ──▶ direct runs, one a column ────────────▶ column run set (mesh/voxel_scan)
   (no object in the chunk)                                       │
-                                                  ┌──────────────┴──────────────┐
-                                                  ▼                             ▼
-                                        mesher (mesh/chunk_mesher)       raycast (world/chunk/raycast)
-                                        a mesh per LOD tier               the same column walk
+                                                                 ▼
+                                                       mesher (mesh/chunk_mesher)
+                                                       a mesh per LOD tier
 ```
 
 In a band, `0` is VOID, `128` is explicit AIR — a leaf that erases what a lower layer would show — and `255` is UNKNOWN. Any other value is at once a placed color, a terrain pick or a decor kind, and its id in the one global palette (`pxl-spec cell/`).
@@ -314,13 +313,13 @@ Objects paint after terrain, so a placed value wins the voxel. A chunk records t
 
 **A mesh is its boxes, and lives on the device.** Each tier's mesh is held in a slot of the fixed buffers the renderer keeps (`pxl-render gpu/arena.rs`). A slot is room, not an address: any tier takes any free slot of its pool (`world/chunk/mesh_slot.rs`), and a slot is taken over only once the chunk holding it is no longer drawn, so a mesh outlives its page's record and nothing is freed. What a slot holds is a bound that closes: a mesh past it is baked a step coarser until it fits, never cut, since a box left out is a hole. A mesh holds nothing per vertex — a box is its corner, size, color, texture layers and face mask — and the chunk pipeline binds it as storage for its vertex shader to unfold into a cube (`frame/shader/chunk.wgsl`).
 
-The raycast keeps its own exact composites near the pointer, made from the leaf page wherever one is resident, so the ground is hit at the finest level whichever level it is drawn at.
+**What is resident is read through one query** (`pxl-kernel world/access.rs`): a layer's value at a point at a level, or the first thing a ray meets. It answers from the page the chunk there is drawn from, its height taken by the paint's own function, and from the object store at each object's own tier, so the pointer, the camera's clearance and the map center's footing stand on what is drawn. An answer from a page coarser than asked carries the page it lacked, and the query does nothing else: it keeps no copy of the world and asks for nothing. Whether a ray goes down into a piece of ground at all is decided by the page's index lane, the lowest and highest anything under it stands; the surface a coarse page draws averages away the peaks under it, so it never decides a miss.
 
 **The scheduler** (`pxl-kernel world/chunk/table.rs`) is one table with a slot per chunk: flags, distances, bounding sphere, pending-since, retained bytes. It runs four passes a tick. **mount** decides which chunks exist: the terrain's cover of the view, each chunk at the level the rule wants its ground at, or a coarser or finer one standing in where that page has not come. A chunk no longer wanted is stale rather than gone: it is drawn until every chunk replacing it has a layout, and the replacements wait under it, so a split or a merge is never a hole. **refresh** measures each against the frustum; **recheck** asks the view's rule which tier distance wants (`wanted_cube`); **commit** applies a layout whose tiers are all in hand, or releases one that has gone off screen.
 
 **What to build next** is one priority. A chunk build runs in two stages, a scan and a mesh bake, one of each open at a time; the priority (`world/chunk/table.rs` `priority`) puts the two chunks holding those slots first, then what the view sees nearest the eye, then what it does not, so the view fills out from the eye. Builds run in the build task on what the tick left of the quota.
 
-**Memory is paid for in LOD.** A refused block ends the tick's builds and the chunk waits for a release; reclaim gives back off-screen work, farthest first. If a refusal finds nothing to reclaim, the view's one criterion is pulled a level coarser (`world/pyramid/pressure.rs`) — at most every half second, up to six — and its split, its pages and its tiers coarsen together; it is let out again after five seconds without a refusal and with the heap under 90%. The view gets coarser; the client does not die.
+**Memory is bounded before it is asked for.** The pages a view reads are bounded by its reach and live in records of `.fixed`, so they never ask the heap. A refused block ends the tick's builds and the chunk waits for a release; reclaim gives back off-screen decor, farthest first, and past a heap 90% live whatever the retain budget says (`world/chunk/table.rs` `reclaim`). The client does not die.
 
 ## Rendering
 
@@ -368,7 +367,7 @@ Every setting is one entry of one schema (`spec/pxl/web/kernel/shell/setting/sch
 
 ## Billboards and POI
 
-Places are a second layer of the same pyramid, folded by another rule. A POI page has the same name and level as the ground page it lies over, cut in a lattice sixteen times the ground's cell (`POI_LATTICE`), since a badge is many times a ground cell on the screen. A page holds a count per cell and, where a cell holds one place, which place it is: its name and its kind, the category its search result shows, numbered by the badge table both read (`spec/pxl/spec/bake/poi_badge.json`; `pxl-spec bake/poi_page.rs`, `PXP5`). Where the ground folds by majority, places fold by sum, so a coarse page counts everything under it and the client folds a page from the ones it holds exactly as the bake would; the tree stops where a page already says all of a child's ground, so an empty stretch is never asked for (`Folds::settles`). Which POI pages are fetched, kept and folded is the pyramid's, from the same pages the ground uses (`pxl-kernel world/pyramid.rs`, `layer/poi.rs`), so there is no POI-specific residency, schedule or key. The layer is a setting, off unless turned on.
+Places are a second layer of the same pyramid, folded by another rule. A POI page has the same name and level as the ground page it lies over, cut in a lattice sixteen times the ground's cell (`POI_LATTICE`), since a badge is many times a ground cell on the screen. A page holds a count per cell and, where a cell holds one place, which place it is: its name and its kind, the category its search result shows, numbered by the badge table both read (`spec/pxl/spec/bake/poi_badge.json`; `pxl-spec bake/poi_page.rs`, `PXP5`). Where the ground folds by majority, places fold by sum, so a coarse page counts everything under it; the tree stops where a page already says all of a child's ground, so an empty stretch is never asked for (`Folds::settles`). Which POI pages are fetched and kept is the pyramid's, from the same pages the ground uses (`pxl-kernel world/pyramid.rs`, `layer/poi.rs`), so there is no POI-specific residency, schedule or key. The layer is a setting, off unless turned on.
 
 Placement (`layer/poi/placement.rs`) counts what the layer's own cover draws, each place once: a cell of one place is drawn as the place, a cell of more as its count. A badge stands at the center of the z16 ground cell its places' centroid falls in, above the surface drawn there (`Cell::center`, `pxl-spec space/pyramid.rs`; `surface_at`), and where no ground is drawn there is no badge. Badges fade out over one sphere about the eye that grows with the zoom, and are drawn farthest first; none is hidden for overlapping another, since a badge stands for the places under its cell. A tap on a badge is the badge's before the ground's (`layer/poi/placement.rs` `tap`), and takes the view to where it stands.
 

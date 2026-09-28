@@ -125,8 +125,6 @@ fn world_tasks() {
     let spawned = spawn(frame_task(), Frame as u8)
         && spawn(crate::io::fetch::fetch_task(), Arrival as u8)
         && spawn(crate::io::load::gltf_task(), Arrival as u8)
-        && spawn(crate::world::pyramid::fold_task::<pxl_spec::bake::format::Terrain>(), Arrival as u8)
-        && spawn(crate::world::pyramid::fold_task::<pxl_spec::bake::poi_page::PoiPage>(), Arrival as u8)
         && spawn(crate::world::chunk::stage::build_task(), Build as u8)
         && spawn(crate::layer::decor::asset_store::decor_asset_task(), Background as u8)
         && spawn(crate::layer::object::store::save_task(), Background as u8);

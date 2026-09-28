@@ -1,10 +1,11 @@
 // pxl-kernel/world/pyramid/chunk.rs
 
-//! The grain a view is held and drawn at: a chunk is a cube 64 cells of one
-//! level on a side, one eighth of that level's page across. Pages are what is
-//! fetched and kept; a chunk is the finest piece of the world a view asks for
-//! at a resolution of its own, since the levels the rule draws meet at chunk
-//! faces and not at page edges (domain.rs).
+//! The grain a view is drawn at: a chunk is a cube 64 cells of one level on a
+//! side, one eighth of that level's page across. Pages are what is fetched
+//! and kept, by what an observation requires (world/pyramid.rs); a chunk is
+//! the finest piece of the world a view is drawn in at a resolution of its
+//! own, since the levels the rule draws meet at chunk faces and not at page
+//! edges (domain.rs). None is fetched for or held.
 //!
 //! A chunk is a node of the hierarchy in three dimensions: the L2 block at
 //! its level, named by its coordinate among that level's blocks in x, y and

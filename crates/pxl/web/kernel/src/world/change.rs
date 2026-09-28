@@ -38,7 +38,7 @@ pub fn world_changes() -> &'static mut ChangeLog {
 
 /// The tasks the kernel spawns (sched/turn.rs's `world_tasks`), with room: the
 /// edge parks each at most once, and an executor sizes its pool by it.
-pub const TASKS: usize = 8;
+pub const TASKS: usize = 6;
 
 static EDGE: Global<Edge<TASKS>> = Global::new();
 

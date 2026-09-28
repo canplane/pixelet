@@ -55,18 +55,29 @@ use crate::layer::model::store::Models;
 use crate::layer::object::store::{render_edits, EntryAt, RenderEdits};
 use crate::mem::fixed::{lane, range, Range};
 use crate::shell::setting::store::{hidden_ground, settings_store};
-use crate::world::chunk::build::{mesh_step, release_block, BuildEvent, Builder, Cube, World, MAX_CHUNKS};
+use crate::world::chunk::build::{mesh_step, release_block, BuildEvent, Builder, Cube, World};
 use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, group_is_fine, pool, slot_at, surface_of, MeshSlot, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::source::{decor_draws, decor_revision_of, draws_band, objects_revision_of, tiers_draw};
 use xpute_core::math::scalar::round;
 
+use crate::world::observation::Order;
 use crate::world::pyramid::chunk::Chunk;
-use crate::world::pyramid::domain::{Order, VIEW_CHUNKS};
-use crate::world::pyramid::pressure::{heap_pressed, pressure, pressure_step};
-use crate::world::pyramid::{Domain, Layer};
+use crate::world::pyramid::cover::cover;
+use crate::world::pyramid::domain::{self, Domain, VIEW_PIECES};
+use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::hierarchy::share;
 use pxl_spec::space::indexer::L2_IDX;
+
+/// The heap's live share past which it counts as pressed: the reclaim gives
+/// off-screen decor back past it whatever the retain budget says.
+const HEAP_PRESSURE: f64 = 0.9;
+
+/// Whether the heap is live past HEAP_PRESSURE.
+fn heap_pressed() -> bool {
+    let h = crate::host::heap_stat();
+    h.live as f64 > h.range as f64 * HEAP_PRESSURE
+}
 
 /// Layouts applied per frame on screen, and releases off it — more of the
 /// latter after a frame that had a block refused: a release is cheap, and
@@ -88,19 +99,22 @@ const MAX_RECLAIMS_WHEN_REFUSED: u32 = 64;
 /// go the next frame, nearest first.
 const MAX_MOUNTS_PER_FRAME: u32 = PAGE_CHUNKS * PAGE_CHUNKS;
 
-/// The widest selection there is: the chunks a view draws (domain.rs
-/// `VIEW_CHUNKS`), each in its own place whether its page has come or a page
-/// over it draws it (world/pyramid.rs `Cover`).
-///
-/// The point of writing it down is that it is under MAX_CHUNKS with the
-/// view it replaces beside it. The table is a hard budget, so what it can
-/// refuse matters: with both inside it, what a full table turns away is
-/// never the chunk the camera wants — there is always a stale one to give up
-/// instead (`give_room`), and the current view can always be represented
-/// whatever the last one left.
-const WIDEST_SELECTION: usize = VIEW_CHUNKS as usize;
+/// The widest selection there is: the pieces a view is cut into (domain.rs
+/// `VIEW_PIECES`), each in its own place whether its page has come or a page
+/// over it draws it (world/pyramid/cover.rs `Cover`).
+const WIDEST_SELECTION: usize = VIEW_PIECES as usize;
 
-const _: () = assert!(2 * WIDEST_SELECTION <= MAX_CHUNKS, "render: a view and the one it replaces the chunk table cannot hold at once");
+/// Chunks held at once: a view and the one it replaces. The table is a hard
+/// budget, so what it can refuse matters: with both inside it, what a full
+/// table turns away is never the chunk the camera wants — there is always a
+/// stale one to give up instead (`give_room`), and the current view can
+/// always be represented whatever the last one left. At it the mount pass
+/// lets a stale chunk go rather than trapping, so `Scheduler::add`'s assert
+/// past it says the caller has a bug, not that the view grew. Derived from
+/// the rule's bound, which is a ball about the eye at every level and so far
+/// past what a view holds on anything but the steepest ground: the table
+/// grows to what is mounted and is not made this size up front.
+const MAX_CHUNKS: usize = 2 * WIDEST_SELECTION;
 /// Tiers one chunk may keep: the active pair, the off-screen tier, and one
 /// of hysteresis.
 const MAX_CACHED_TIERS: usize = 4;
@@ -217,7 +231,7 @@ impl Frame {
 }
 
 /// What a mount pass selected for: which making of the terrain's cover
-/// (world/pyramid.rs `Pyramid::cover`), which is made again whenever the
+/// (world/pyramid/cover.rs `cover`), which is made again whenever the
 /// view or the resident pages change. While it is the same the selection
 /// stands, and the pass is skipped once nothing of it is left to mount.
 type MountKey = u32;
@@ -303,7 +317,7 @@ struct Slot {
     /// The bounding sphere in the chunk's own space.
     bc: V3,
     radius: f64,
-    /// Its place in the order every layer's work is taken in (domain.rs
+    /// Its place in the order every layer's work is taken in (world/observation.rs
     /// `Order`).
     order: Order,
     flags: u16,
@@ -500,8 +514,6 @@ pub struct Census {
     pub released: u32,
     pub retained_on: f64,
     pub retained_off: f64,
-    /// The budget's pressure: how far the byte budget has pulled the LOD in.
-    pub pressure: u32,
     /// Stale chunks: mounted, no longer wanted, kept until what replaces
     /// them is whole.
     pub stale: u32,
@@ -737,7 +749,7 @@ impl Scheduler {
             decor_models: Vec::new(),
             environment: EnvironmentDraw::default(),
             debug: DebugLines::default(),
-            slots: Vec::with_capacity(MAX_CHUNKS),
+            slots: Vec::new(),
             index: BTreeMap::new(),
             domain_seen: u32::MAX,
             frame: None,
@@ -746,7 +758,7 @@ impl Scheduler {
             retained_off: 0.0,
             census: Census::default(),
             counts: ChunkCounts::default(),
-            gone: Vec::with_capacity(MAX_CHUNKS),
+            gone: Vec::new(),
             next_mount_id: MOUNT_ID_BASE,
             selected_for: None,
             to_mount: VecDeque::new(),
@@ -818,7 +830,7 @@ impl Scheduler {
             decor_sources: DecorSources::of(k, edits),
         };
         slot.unmeasured();
-        if let (Some(frame), Some(d)) = (self.frame, Terrain::pyramid().domain()) {
+        if let (Some(frame), Some(d)) = (self.frame, domain::current()) {
             if measure(&frame, &slot).0 {
                 slot.layout_primary = drawn_cube(wanted_cube(d, k), level, slot.outermost(), false);
                 slot.desired = (slot.layout_primary, None);
@@ -1121,9 +1133,9 @@ impl Scheduler {
     }
 
     /// The chunks to draw: what the terrain draws of the view
-    /// (world/pyramid.rs `Cover`).
+    /// (world/pyramid/cover.rs `Cover`).
     fn select(&self) -> BTreeSet<Chunk> {
-        Terrain::pyramid().cover().0.drawn.iter().copied().collect()
+        cover::<Terrain>().0.drawn.iter().copied().collect()
     }
 
     /// Lets one stale chunk go so a wanted one can mount.
@@ -1160,7 +1172,7 @@ impl Scheduler {
     /// builds (`retire`). Rerun when the terrain's cover is made again
     /// (`MountKey`).
     fn mount(&mut self, world: &mut World) {
-        let key = Terrain::pyramid().cover().1;
+        let key = cover::<Terrain>().1;
         if self.selected_for == Some(key) && self.to_mount.is_empty() {
             return;
         }
@@ -1187,8 +1199,8 @@ impl Scheduler {
             // the ground at the horizon appeared last however badly the
             // builds wanted it.
             //
-            // In the view's order (domain.rs `Order`).
-            let Some(d) = Terrain::pyramid().domain() else { return };
+            // In the view's order (world/observation.rs `Order`).
+            let Some(d) = domain::current() else { return };
             let mut near: Vec<(Order, Chunk)> = wanted.iter().filter(|k| !self.index.contains_key(k)).map(|&k| (d.order_of(k), k)).collect();
             near.sort_by_key(|a| a.0);
             self.to_mount.clear();
@@ -1293,7 +1305,7 @@ impl Scheduler {
         // How many chunks the view wants under each stale one: it is covered
         // once all of them are here.
         let mut wanted_under: HashMap<Chunk, f64> = HashMap::new();
-        for &g in Terrain::pyramid().cover().0.drawn.iter() {
+        for &g in cover::<Terrain>().0.drawn.iter() {
             for a in g.ancestors().filter(|a| at(a).is_some_and(|j| slots[j].has(STALE))) {
                 *wanted_under.entry(a).or_default() += 1.0;
             }
@@ -1301,7 +1313,7 @@ impl Scheduler {
         // The ground the view draws, from the domain as it stands: a mount
         // pass is skipped while the cover holds, and the roots under a
         // stand-in move without the cover.
-        let drawn = Terrain::pyramid().domain().map(Domain::roots);
+        let drawn = domain::current().map(Domain::roots);
         for (&k, &i) in self.index.iter() {
             let s = &self.slots[i];
             if !s.has(STALE) {
@@ -1402,13 +1414,11 @@ impl Scheduler {
         self.frame = Some(frame);
         self.clock_ms += frame.delta_s * 1000.0;
         // What every chunk should be showing is read off the frame, the
-        // domain — the byte budget among its inputs — and what the chunk was
-        // told, so a change to
-        // any of them is answered now: `view_dirty` is that question
-        // outstanding — set by a frame that differs from the last, a domain
-        // made again, and every other input where it changes. Nothing is
-        // left to a timer to catch.
-        let domains = Terrain::pyramid().domains();
+        // domain and what the chunk was told, so a change to any of them is
+        // answered now: `view_dirty` is that question outstanding — set by a
+        // frame that differs from the last, a domain made again, and every
+        // other input where it changes. Nothing is left to a timer to catch.
+        let domains = domain::revision();
         if domains != self.domain_seen {
             self.domain_seen = domains;
             self.view_dirty = true;
@@ -1500,11 +1510,8 @@ impl Scheduler {
         }
         committed += core::mem::take(&mut self.build_committed);
 
-        let freed = self.reclaim(world, order);
+        self.reclaim(world, order);
         self.scratch = sc;
-        // The byte budget steps in on a refusal only where giving back what
-        // the view no longer shows answered nothing (world/pyramid/pressure.rs).
-        pressure_step(t0, freed);
         let animating = self.models.tick(&mut self.draw, frame.delta_s as f32) | self.markers.tick(&frame) | self.environment.tick(&frame);
         self.fade(self.clock_ms);
         self.draw_frame(&frame);
@@ -1558,7 +1565,6 @@ impl Scheduler {
         (c.stale_uncovered, c.stale_unready, c.stale_on_waiter) = self.kept;
         c.retained_on = self.retained_on;
         c.retained_off = self.retained_off;
-        c.pressure = pressure();
         let blending = c.blend_active > 0;
         self.census = c;
         committed > 0 || pending_total > committed || blending || self.view_dirty || animating
@@ -1701,7 +1707,7 @@ impl Scheduler {
     /// between the on-screen and off-screen totals, which is what the
     /// retention budget is spent from.
     fn refresh(&mut self, frame: &Frame) {
-        let domain = Terrain::pyramid().domain();
+        let domain = domain::current();
         for i in 0..self.slots.len() {
             let visible = measure(frame, &self.slots[i]).0;
             let order = domain.map_or(Order::LAST, |d| d.order_of(self.slots[i].chunk));
@@ -1835,7 +1841,7 @@ impl Scheduler {
         let s = &self.slots[i];
         let (level, chunk) = (s.level(), s.chunk);
         let outermost = s.outermost();
-        let Some(d) = Terrain::pyramid().domain() else { return };
+        let Some(d) = domain::current() else { return };
         let objects = level == 0 && world.store.entries(L2_IDX(s.chunk.corner())).is_some();
         let current = self.generation(i);
         let primary = self.slots[i].fitting(drawn_cube(wanted_cube(d, chunk), level, outermost, objects), current);
@@ -2032,15 +2038,14 @@ impl Scheduler {
     }
 
     /// The retain budget: off-screen decor past it, or the heap pressed
-    /// (world/pyramid/pressure.rs), is given back farthest first. A block
+    /// (`heap_pressed`), is given back farthest first. A block
     /// refused since the last pass is pressure too, whatever the numbers say:
     /// the heap has room
     /// in bytes but not in one piece, and what gives it back in pieces that
     /// join is the off-screen decor, farthest first. Decor is all a chunk
     /// holds in the heap: its runs are `.fixed.runs`'s and its tiers are on
-    /// the device, where a slot is taken over rather than given back. How
-    /// many chunks gave some back.
-    fn reclaim(&mut self, world: &mut World, order: &[usize]) -> u32 {
+    /// the device, where a slot is taken over rather than given back.
+    fn reclaim(&mut self, world: &mut World, order: &[usize]) {
         let budget = self.frame.map_or(f64::INFINITY, |f| f.retain_budget_bytes);
         let refused = self.builder.stat.starved != self.refused_seen;
         self.refused_seen = self.builder.stat.starved;
@@ -2062,7 +2067,7 @@ impl Scheduler {
             freed += 1;
         }
         if !refused || freed >= cap {
-            return freed;
+            return;
         }
         // Nothing off screen gave enough, or nothing was off screen: the
         // decor of steps an on-screen chunk does not show is given back,
@@ -2086,7 +2091,6 @@ impl Scheduler {
             self.account(i, before);
             freed += 1;
         }
-        freed
     }
 
     /// Gives back chunk `i`'s decor save what `keep` names.
@@ -2112,9 +2116,8 @@ fn same_view(a: &Frame, b: &Frame) -> bool {
 }
 
 /// The cube the rule wants `c` drawn in: the level wanted at its nearest
-/// point (domain.rs `Domain::wanted_level`, under a criterion the byte
-/// budget moves), whose cells terrain draws averaged 2 × 2 — a cube a level
-/// over it. It has
+/// point (domain.rs `Domain::wanted_level`), whose cells terrain draws
+/// averaged 2 × 2 — a cube a level over it. It has
 /// no floor at terrain's atom: nearer than z16's split distance it is finer
 /// than a z16 cell, which terrain draws as it is and objects fold to, down
 /// to their finest tier (build.rs `Cube`).
@@ -2162,7 +2165,7 @@ struct Priority {
 }
 
 /// The order work is taken in: the slots' holders, which the rest wait on;
-/// then what the view sees, nearest the eye first (world/pyramid/domain.rs
+/// then what the view sees, nearest the eye first (world/observation.rs
 /// `Order`), the one order every layer's work is taken in; then what it
 /// does not, farthest first — a release takes memory from what is least
 /// likely to be wanted again.

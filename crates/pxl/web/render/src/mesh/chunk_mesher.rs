@@ -103,8 +103,7 @@ const BAKE_BOXES_PER_STEP: usize = 512;
 /// draws: a level-`k` chunk is never drawn nearer than `192·2^k`
 /// (pxl-render look/lod.rs, kernel world/pyramid/domain.rs), where a finer
 /// level covers it, so its cell is between one and two TARGET_CELL_PX however
-/// the camera moves — under the reference criterion, which a view over its
-/// budget loosens, and its cells grow on screen with it. An eighth of that cell is at most one and a half pixels
+/// the camera moves. An eighth of that cell is at most one and a half pixels
 /// and its mesh is at most 32 cells across, so a cell index and an eighth
 /// land in a byte exactly. The leaf's tier keeps the whole u16, because it
 /// is drawn from arm's length, where its cell is hundreds of pixels.

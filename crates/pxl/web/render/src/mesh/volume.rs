@@ -2,8 +2,8 @@
 
 //! The render-time volume for one 64×64 chunk.
 //!
-//! World layers paint into whole 64³ signed-Z bands, and the scan and the
-//! raycast read the same flat lanes back; a band is allocated in full even
+//! World layers paint into whole 64³ signed-Z bands, and the scan reads the
+//! same flat lanes back; a band is allocated in full even
 //! if one peak or object touches it, and sparsity exists only between
 //! bands. What a band is made of and why (materials packed `0xCC_RRGGBB`,
 //! a layer byte apart so the direct payload is five bytes a voxel, sub-cell
@@ -108,7 +108,7 @@ const MATERIAL_BYTES: u32 = BAND_VOXELS as u32 * 4;
 const LAYER_BYTES: u32 = BAND_VOXELS as u32;
 const SUB_CELL_BYTES: u32 = BAND_VOXELS as u32 * 4;
 
-/// Column-major band-local index: Z is contiguous for paint, scan and raycast.
+/// Column-major band-local index: Z is contiguous for paint and scan.
 pub fn band_voxel_idx(x: u32, y: u32, z: u32) -> usize {
     ((y * BAND_CELLS + x) * BAND_CELLS + z) as usize
 }
@@ -523,9 +523,9 @@ impl Volumes {
         }
     }
 
-    /// Every band of volume `id` into `out`, cleared first: the scan and
-    /// the raycast walk a volume by its bands many times a tick, so the
-    /// list is theirs to keep, not built anew each walk.
+    /// Every band of volume `id` into `out`, cleared first: the scan walks
+    /// a volume by its bands many times a tick, so the list is its to keep,
+    /// not built anew each walk.
     ///
     /// # Safety
     /// As `band_view`: valid until the volume is painted again or released.

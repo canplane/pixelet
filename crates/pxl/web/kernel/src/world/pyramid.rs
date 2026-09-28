@@ -1,43 +1,49 @@
 // pxl-kernel/world/pyramid.rs
 
 //! The pyramid as the client holds it, for every layer the ground carries
-//! (pxl-spec space/pyramid.rs is the hierarchy itself). What a view wants of
-//! it is the ground in view once at the level the rule wants it at, and the
-//! pages that takes with every ancestor over them (domain.rs `Domain`). What the
-//! resident pages draw of that ground is the layer's cover (`cover`); a page
-//! the four under it are held for is stood up from them (`fold_one`), and
-//! what nothing covers is fetched. A page lives in one of a fixed number of
-//! records, and only another page needing the room takes a record from it.
+//! (pxl-spec space/pyramid.rs is the hierarchy itself): a layer's pages held
+//! (world/paging.rs), and what an observation asks for of them.
+//!
+//! What is asked for is the observation's demand and nothing drawn: what its
+//! samples require, before it is pages (pxl-spec space/observation.rs), as a
+//! conservative estimator names it from what is known of the heights, mapped
+//! to the layer's pages by the layer's storage. Each such page is asked for
+//! at the page that says its ground — itself, or where the bake left it no
+//! page, the one over it — with every page it depends on; one not resident
+//! is a fault, answered meanwhile by the nearest resident page over it. The
+//! fallback's pages (paging/floor.rs), the consumers' leases and speculation
+//! (prefetch.rs) are merged in, the best reason per page, and what of that
+//! is not held is said to the scheduler once a turn. How the pages are drawn
+//! — the pieces the view is cut into (pyramid/domain.rs), what a layer draws
+//! of them (pyramid/cover.rs) — is made from what is resident and enters
+//! none of it.
 //!
 //! The tree is as deep as a layer's data needs and no deeper: where a page
 //! says all of a child's ground (`Folds::settles`), the child is no page, is
 //! never asked for, and its ground is drawn from the page over it
 //! (`source`). Only the finest level is a bound.
 //!
-//! None of that is a layer's. A layer says what its page is and how it folds,
-//! how a fetched body becomes one in a record, what a page with no object is,
-//! and who reads its pages; the rest is here, once.
+//! None of that is a layer's. A layer says what its page is and what it
+//! depends on, how a fetched body becomes one in a record, what a page with
+//! no object is, and who reads its pages; the rest is here, once.
 
 pub mod chunk;
+pub mod cover;
 pub mod domain;
-pub mod pressure;
 
+use std::collections::HashMap;
+
+use pxl_spec::space::observation::{Bounds, ByBounds, DemandEstimator, Observation, Paged, Requirement, Storage as _};
 use pxl_spec::space::pyramid::{Folds, LevelPage, TOP_LEVEL};
-use std::collections::{BTreeMap, HashSet};
-use xpute_runtime::abi::fetch::FetchFail;
 
+use crate::io::demand::{Ask, Category, Phases, Why};
+use crate::io::sched::declare;
+use crate::param;
 use crate::sched::profiler::record::Failure;
-use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
-
-use crate::io::demand::{Category, Phases};
-use crate::io::policy::{self, Shell};
-use crate::io::sched::{declare, Rank};
-use crate::layer::environment::fog::eye_height;
-use crate::world::change::world_edge;
-use chunk::Chunk;
-pub use domain::Domain;
-use domain::{domain_for, eye, heights_revision, Frustum, Order, VIEW_PAGES};
-use pressure::pressure;
+use crate::world::observation::{heights_revision, observation, Known, Order};
+use crate::world::paging::floor::{Fallback, Floor};
+use crate::world::paging::{Candidate, Paging, Victim, ASKS, FRAMES, LEVEL_DEMAND_PAGES};
+use crate::world::prefetch::{NoPrefetch, Prefetch};
 
 /// A layer the pyramid holds: its page is itself, folded by `Folds`.
 pub trait Layer: Folds + Clone + 'static {
@@ -49,112 +55,85 @@ pub trait Layer: Folds + Clone + 'static {
     /// A fetched body, made the page `record` holds.
     fn receive(record: u32, pkt: &[u8], phases: &mut Phases) -> Result<Self, Failure>;
 
-    /// A page the client folded, made the page `record` holds.
-    fn keep(record: u32, page: &Self) -> Result<Self, FetchFail>;
-
     /// A page the bake left as no object: what it reads as, set now or once
     /// the layer has it.
     fn absent(p: LevelPage);
 
-    /// A page came or went; whoever reads this layer's pages is told.
+    /// A page became resident or stopped being; whoever reads this layer's
+    /// pages is told.
     fn changed(_p: LevelPage, _present: bool) {}
+
+    /// The page `p` depends on: held whenever `p` is, and `p` read only once
+    /// it is resident. None for a page of the pyramid: a page carries the
+    /// index of everything under it in its own lanes, and a page that is held
+    /// exists, so nothing over it is needed to read it. The page over a
+    /// missing one is the fallback's and the query's, which descend from the
+    /// nearest resident page, never a condition on reading one — or a
+    /// missing ancestor would make a resident descendant unreachable.
+    fn dependencies(_p: LevelPage) -> Option<LevelPage> {
+        None
+    }
+
+    /// The pages that meet a requirement (pxl-spec space/observation.rs
+    /// `Storage`): the pyramid's own, 2D, for every layer on it now.
+    fn pages(r: &Requirement, each: &mut dyn FnMut(LevelPage)) {
+        Paged.pages(r, each);
+    }
 }
 
-/// Pages a layer keeps wherever the view is: the device's own leaf, so the
-/// marker keeps the ground under it while the view is panned away.
-const PINNED: u32 = 1;
+/// What the asks are a function of: the observation, what is held and
+/// leased (`Paging::revision`), and what is known of the heights
+/// (`heights_revision`), which neither the observation nor this layer's
+/// pages move. Two turns agreeing on all of it ask for the same pages, so the
+/// second decides nothing again.
+type Seen = (Observation, u32, (u32, u32));
 
-/// The record every page the bake left as no object shares: what such a
-/// page reads as (a layer's `absent`) — the open ocean, a page of no places.
-/// It is a layer's room like any other record, written once, never handed
-/// to a page of its own and never taken back, however many pages read it,
-/// so an absent page is resident the way any page is and needs no state of
-/// its own.
-pub const ABSENT: u32 = 0;
+/// The estimator of demand the kernel runs: from bounds alone, hidden ground
+/// asked for too. One from the samples' hits is a smaller superset and
+/// changes nothing else here.
+const ESTIMATOR: ByBounds = ByBounds;
 
-/// Records a layer holds its pages in: `ABSENT`, then one for every page a
-/// view can want at once (domain.rs `VIEW_PAGES`, which the view's criterion
-/// is loosened to fit) and the pinned page, so every page a layer can want
-/// has room — which is what lets a page wanted never be turned out for
-/// another (`record_for`) — and what the view leaves over is room for pages
-/// the camera has left.
-pub const RECORDS: u32 = 1 + VIEW_PAGES + PINNED;
+/// The speculation the kernel runs: none. The view is paged by its faults,
+/// and with no speculation at all it converges to exact
+/// (world/paging.test.rs); what speculation would buy is latency, and which
+/// policy buys it is chosen here — `Reach`, with param.rs's numbers, is the
+/// one there is.
+const PREFETCH: NoPrefetch = NoPrefetch;
 
-/// What the resident pages draw of a view's `Domain`: the chunks the rule
-/// wants, each drawn from the finest resident page at or over it, and the
-/// ones nothing over is held for, as gaps — the two together being the
-/// domain's ground exactly, once. Whatever is counted over the cover is
-/// counted once, since every piece is a chunk the rule chose and none lies
-/// over another.
-#[derive(Default, PartialEq)]
-pub struct Cover {
-    pub drawn: Vec<Chunk>,
-    pub gaps: Vec<Chunk>,
-}
+/// The victim policy the kernel pages by: a page speculation does not ask
+/// for before one it does, and among those, the one last in the view's
+/// order, the one the eye is least likely to reach again.
+struct Farthest<'a>(Option<&'a Observation>);
 
-/// What the cover and the wishlist are a function of: where the eye is, what
-/// it sees, whether the camera is moving, the resident set, the pinned page,
-/// the heights the domain measures the ground by (`heights_revision`), which
-/// neither the eye nor this layer's resident set moves, and the byte
-/// budget's pressure (pressure.rs), which moves the criterion. Two turns agreeing on all of it want the same pages
-/// of the same ground, so the second decides nothing again.
-type Wish = ([f64; 3], Frustum, bool, u32, Option<LevelPage>, (u32, u32), u32);
-
-/// A resident page, and the record it lives in: `ABSENT` for a page the bake
-/// left as no object, which shares it with every other.
-struct Held<L> {
-    page: L,
-    record: u32,
+impl Victim for Farthest<'_> {
+    fn victim(&self, candidates: &[Candidate]) -> Option<usize> {
+        let order = |c: &Candidate| self.0.map_or(Order::LAST, |o| Order::of_page(o, c.page));
+        (0..candidates.len()).max_by_key(|&i| (!candidates[i].hinted, order(&candidates[i])))
+    }
 }
 
 pub struct Pyramid<L: Layer> {
-    /// Every resident page, in level order. A record is a page's room, not
-    /// its address: any page can sit in any record, and which pages the
-    /// range holds is `worth`'s policy rather than a coordinate's residue.
-    pages: BTreeMap<LevelPage, Held<L>>,
-    refused: u32,
-    /// Moves whenever a page is set or cleared, or a page is answered as
-    /// said by the one over it. The resident set is what the cover and every
-    /// fold are functions of, so this one number is what makes an arrival, a
-    /// fold, an answer or an eviction reach both.
-    revision: u32,
-    pinned: Option<LevelPage>,
-    /// The view the layer last drew, what it draws of it, and which making
-    /// of it this is: whoever draws it re-reads it when the number moves.
-    domain: Option<Domain>,
-    /// Which making of the domain this is: it moves whenever the domain is
-    /// made again, whether or not the cover changed with it.
-    domains: u32,
-    cover: Cover,
-    covers: u32,
-    /// What the layer asks the fetcher for, made with the cover: a function
-    /// of the same wish, and said again every turn as it stands.
-    wishlist: Vec<(u64, Rank)>,
-    last: Option<Wish>,
-    folds: Notify,
-    /// Pages a resident page settles, so none of their own is asked for.
-    settled: HashSet<LevelPage>,
-    /// Pages under the top the bucket has no object for: a page over them
-    /// says their ground, whether or not it is held yet.
-    answered: HashSet<LevelPage>,
+    paging: Paging<L>,
+    /// What the fallback leases now.
+    floor: Vec<LevelPage>,
+    /// The observation last asked for.
+    observation: Option<Observation>,
+    /// The pages it requires, as the estimator names them.
+    demand: Vec<LevelPage>,
+    /// What is asked for and not held, said again every turn as it stands.
+    wants: Vec<(u64, Ask)>,
+    last: Option<Seen>,
 }
 
 impl<L: Layer> Default for Pyramid<L> {
     fn default() -> Self {
         Pyramid {
-            pages: BTreeMap::new(),
-            refused: 0,
-            revision: 0,
-            pinned: None,
-            domain: None,
-            domains: 0,
-            cover: Cover::default(),
-            covers: 0,
-            wishlist: Vec::new(),
+            paging: Paging::default(),
+            floor: Vec::new(),
+            observation: None,
+            demand: Vec::new(),
+            wants: Vec::new(),
             last: None,
-            folds: Notify::new(),
-            settled: HashSet::new(),
-            answered: HashSet::new(),
         }
     }
 }
@@ -163,385 +142,198 @@ impl<L: Layer> Pyramid<L> {
     /// A resident page. None past the pyramid's top too, which is what a top
     /// page's parent is.
     pub fn get(&self, p: LevelPage) -> Option<&L> {
-        self.pages.get(&p).map(|held| &held.page)
+        self.paging.get(p)
     }
 
-    /// Every resident page of `level`.
-    pub fn level(&self, level: u32) -> impl Iterator<Item = (LevelPage, &L)> {
-        self.pages
-            .range(LevelPage { level, page: 0 }..LevelPage { level: level + 1, page: 0 })
-            .map(|(&p, held)| (p, &held.page))
+    /// What is held, and how.
+    pub fn paging(&self) -> &Paging<L> {
+        &self.paging
     }
 
-    /// Sets a page the bake left as no object, in `ABSENT`: nothing will want
-    /// the room of it, so it is held while the view wants it
-    /// (`drop_absent`).
+    /// Holds a page the bake left as no object (`Paging::set`).
     pub fn set(&mut self, p: LevelPage, page: L) {
-        self.put(p, page, ABSENT);
+        self.paging.set(p, page);
     }
 
-    fn put(&mut self, p: LevelPage, page: L, record: u32) {
-        if p.level > 0 {
-            self.settled.extend(p.children().into_iter().filter(|&c| page.settles(p, c)));
-        }
-        self.pages.insert(p, Held { page, record });
-        self.revision = self.revision.wrapping_add(1);
-        L::changed(p, true);
-    }
-
-    pub fn clear(&mut self, p: LevelPage) -> Option<L> {
-        let held = self.pages.remove(&p)?.page;
-        if p.level > 0 {
-            for c in p.children() {
-                self.settled.remove(&c);
-            }
-        }
-        self.revision = self.revision.wrapping_add(1);
-        L::changed(p, false);
-        Some(held)
-    }
-
-    /// Which resident set this is: equal between two reads only if no page
-    /// came or went between them.
+    /// Which resident set this is (`Paging::revision`).
     pub fn revision(&self) -> u32 {
-        self.revision
+        self.paging.revision()
     }
 
-    /// The bucket has no object for `p`, under the top: a page over it says
-    /// its ground.
+    /// The bucket has no object for `p`, under the top (`Paging::answer_above`).
     pub fn answer_above(&mut self, p: LevelPage) {
-        if self.answered.insert(p) {
-            self.revision = self.revision.wrapping_add(1);
-        }
+        self.paging.answer_above(p);
     }
 
-    /// Whether `p` is no page because one over it says its ground: it or a
-    /// page between it and the top is settled by the page over it, or has no
-    /// object in the bucket.
-    fn settled(&self, p: LevelPage) -> bool {
-        std::iter::successors(Some(p), |q| (q.level < TOP_LEVEL).then(|| q.parent()))
-            .take_while(|q| q.level < TOP_LEVEL)
-            .any(|q| self.settled.contains(&q) || self.answered.contains(&q))
-    }
-
-    /// The resident page that draws `p`'s ground: `p` itself, or where it is
-    /// settled, the nearest resident page over it.
+    /// The resident page that says `p`'s ground exactly (`Paging::source`).
     pub fn source(&self, p: LevelPage) -> Option<LevelPage> {
-        if self.get(p).is_some() {
-            return Some(p);
-        }
-        if !self.settled(p) {
-            return None;
-        }
-        std::iter::successors(Some(p), |q| (q.level < TOP_LEVEL).then(|| q.parent())).find(|&q| self.get(q).is_some())
+        self.paging.source(p)
     }
 
-    /// The resident page `p`'s ground is drawn from: `p` itself, or the
-    /// nearest resident page over it, which draws that ground coarser — a
-    /// count in its own lattice, terrain in its own cells upsampled — until
-    /// `p` comes. Where `p` is settled that is `source`'s page and exact.
-    /// None where nothing over it is held.
+    /// The resident page `p`'s ground is drawn from (`Paging::drawn_from`).
     pub fn drawn_from(&self, p: LevelPage) -> Option<LevelPage> {
-        std::iter::successors(Some(p), |q| (q.level < TOP_LEVEL).then(|| q.parent())).find(|&q| self.get(q).is_some())
+        self.paging.drawn_from(p)
     }
 
-    /// Keeps `p` wanted wherever the view is, and its record with it, until
-    /// another page is pinned in its place.
-    pub fn pin(&mut self, p: Option<LevelPage>) {
-        self.pinned = p;
+    /// Holds `p` hard for a consumer that takes no coarser answer, until
+    /// released.
+    pub fn lease(&mut self, p: LevelPage) {
+        self.paging.lease(p);
     }
 
-    // ---- what is resident can answer ----
-
-    /// A page's nearest resident ancestor.
-    fn ancestor(&self, p: LevelPage) -> Option<LevelPage> {
-        std::iter::successors(Some(p), |q| (q.level < TOP_LEVEL).then(|| q.parent())).skip(1).find(|&q| self.get(q).is_some())
+    pub fn release(&mut self, p: LevelPage) {
+        self.paging.release(p);
     }
 
-    fn children_resident(&self, p: LevelPage) -> bool {
-        p.level > 0 && p.children().iter().all(|&c| self.get(c).is_some())
+    /// Whether anything asks for `p` now.
+    pub fn asked(&self, p: LevelPage) -> bool {
+        self.paging.asked(p).is_some()
     }
 
-    /// Whether letting `p` go leaves its ground drawn: something coarser
-    /// over it is resident, which the cover falls back to once `p`'s sibling
-    /// group is short of it, or the pages it folds from are.
-    fn covered(&self, p: LevelPage) -> bool {
-        self.ancestor(p).is_some() || self.children_resident(p)
-    }
-
-    /// What the resident pages draw of `d` (`Cover`): every chunk the rule
-    /// wants, in its own place, drawn from its page or the nearest resident
-    /// page over it (`drawn_from`), and a gap where nothing over it is held.
-    /// A page is never waited on for its siblings, so ground whose own page
-    /// has come is drawn at once however little of the ground around it has,
-    /// and whatever arrives first — the finest near the eye, the view filling
-    /// outward (io/policy.rs) — is on the screen the turn it lands (Cesium's
-    /// upsampled tiles).
-    pub fn cover_of(&self, d: &Domain) -> Cover {
-        let mut out = Cover::default();
-        let mut open = d.roots().to_vec();
-        while let Some(c) = open.pop() {
-            if d.splits(c) {
-                open.extend(d.children(c));
-            } else if self.drawn_from(c.page()).is_some() {
-                out.drawn.push(c);
-            } else {
-                out.gaps.push(c);
-            }
-        }
-        out
-    }
-
-    /// What the layer draws of the view, and which making of it this is.
-    pub fn cover(&self) -> (&Cover, u32) {
-        (&self.cover, self.covers)
-    }
-
-    /// The view the cover was made for.
-    pub fn domain(&self) -> Option<&Domain> {
-        self.domain.as_ref()
-    }
-
-    /// Whether the view keeps `p` now: the pinned page, or one the domain
-    /// wants. What a page in `ABSENT` lives by, and what anything held
-    /// for the view is held by.
-    pub fn keeps(&self, p: LevelPage) -> bool {
-        keeps(self.pinned, self.domain.as_ref(), p)
-    }
-
-    /// Which making of the domain this is.
-    pub fn domains(&self) -> u32 {
-        self.domains
-    }
-
-    /// Whether the resident pages answer `p` with no request: it is
-    /// resident, or the page over it that settles it is, or every page it
-    /// folds from is and the client stands it up itself.
-    fn answers(&self, p: LevelPage) -> bool {
-        self.source(p).is_some() || self.children_resident(p)
-    }
-
-    // ---- records ----
-
-    /// The record `p` holds of its own: none for a page in `ABSENT`, whose
-    /// record is every such page's.
-    fn record_of(&self, p: LevelPage) -> Option<u32> {
-        self.pages.get(&p).map(|held| held.record).filter(|&r| r != ABSENT)
-    }
-
-    /// A record no page is in, past `ABSENT`.
-    fn free_record(&self) -> Option<u32> {
-        let mut used = [false; RECORDS as usize];
-        used[ABSENT as usize] = true;
-        for held in self.pages.values() {
-            used[held.record as usize] = true;
-        }
-        used.iter().position(|&u| !u).map(|at| at as u32)
-    }
-
-    /// What a resident page is weighed at for its record, the greater giving
-    /// it up first: a page the camera does not want goes before one it does; among those,
-    /// one something else already draws goes before one nothing covers; and
-    /// among equals the one last in the view's order, the one the eye is
-    /// least likely to reach again. Ordered by comparison rather than a
-    /// score, so a page the camera wants is never given up for one it does
-    /// not, whatever the distance.
-    fn worth(&self, d: &Domain, p: LevelPage) -> (bool, bool, Order) {
-        (!self.keeps(p), self.covered(p), d.page_order(p))
-    }
-
-    /// The record `p` goes into: its own, a free one, or the one whose page
-    /// is worth least. None where every record carries a page worth more,
-    /// which is an arrival the camera has moved past: dropped rather than
-    /// turning out a page that is wanted, and counted, since whether the
-    /// range is the wrong size is a reading and not an argument.
-    fn record_for(&mut self, p: LevelPage) -> Option<u32> {
-        if let Some(record) = self.record_of(p) {
-            return Some(record);
-        }
-        if let Some(free) = self.free_record() {
-            return Some(free);
-        }
-        let d = self.domain.as_ref()?;
-        let mine = self.worth(d, p);
-        // The pinned page is never the one to go, whatever it is weighed at.
-        let worst = self
-            .pages
-            .iter()
-            .filter(|(&held, _)| Some(held) != self.pinned)
-            .filter(|(_, h)| h.record != ABSENT)
-            .map(|(&held, h)| (self.worth(d, held), h.record))
-            .max_by_key(|&(w, _)| w);
-        let taken = worst.filter(|(w, _)| *w > mine).map(|(_, r)| r);
-        if taken.is_none() {
-            self.refused += 1;
-        }
-        taken
-    }
-
-    /// The record is `p`'s from here, and whatever it carried is gone.
-    fn take(&mut self, p: LevelPage, record: u32, page: L) {
-        xpute_core::ensure!(record != ABSENT, ENOTRECOVERABLE);
-        let gone = self.pages.iter().find(|(&held, h)| held != p && h.record == record).map(|(&held, _)| held);
-        if let Some(gone) = gone {
-            self.clear(gone);
-        }
-        self.put(p, page, record);
-    }
-
-    /// Arrivals dropped for want of a record since the last take, for the
-    /// profiler.
+    /// Arrivals given no frame since the last take, for the profiler.
     pub fn take_refusals(&mut self) -> u32 {
-        core::mem::take(&mut self.refused)
+        self.paging.take_refusals()
+    }
+
+    /// The pages the last observation requires, as the estimator named them.
+    pub fn demand(&self) -> &[LevelPage] {
+        &self.demand
     }
 
     // ---- arriving ----
 
     /// A page's fetched body, made resident.
     pub fn adopt(&mut self, p: LevelPage, pkt: &[u8], phases: &mut Phases) -> Result<(), Failure> {
-        let Some(record) = self.record_for(p) else { return Ok(()) };
-        let page = L::receive(record, pkt, phases)?;
-        self.take(p, record, page);
-        Ok(())
+        self.admit(p, |record| L::receive(record, pkt, phases))
     }
 
-    /// Stands one page up from the four under it, if any of the view's wants
-    /// can be. The finest first — the domain's pages are in level order — so
-    /// what one fold makes feeds the next. Whether it found one.
+    /// `p` has arrived, and `receive` makes it the page a frame holds
+    /// (`Paging::admit`), the frame given up if one must be by the kernel's
+    /// victim policy.
+    pub fn admit(&mut self, p: LevelPage, receive: impl FnOnce(u32) -> Result<L, Failure>) -> Result<(), Failure> {
+        self.paging.admit(p, &Farthest(self.observation.as_ref()), receive)
+    }
+
+    // ---- asking ----
+
+    /// What the observation `o` asks for: the fallback leased, and every page
+    /// asked for — what `estimator` says `o` requires, as far as `bounds`
+    /// know the heights, the leases, and what `prefetch` speculates on, at
+    /// most `allowance` of it — each with what it depends on, the best reason
+    /// per page. What of it is not held is what the layer wants.
     ///
-    /// The ring around those four is read where it is held and stood in for
-    /// where it is not: requiring it would put this at one page a level, and
-    /// a zoom out would fetch pages whose ground is already held.
-    fn fold_one(&mut self) -> bool {
-        let Some(d) = self.domain.as_ref() else { return false };
-        let wanted: Vec<LevelPage> = d.pages().map(|(p, _)| p).filter(|p| p.level > 0).collect();
-        for p in wanted {
-            if self.get(p).is_some() {
-                continue;
+    /// Speculation is asked for only as far as frames are left over once
+    /// everything held hard and everything demanded has one, so none of it
+    /// is fetched only to find no frame.
+    pub fn observe(&mut self, o: &Observation, bounds: &impl Bounds, estimator: &impl DemandEstimator, prefetch: &impl Prefetch, allowance: u32) {
+        let mut floor = Vec::with_capacity(Floor::PAGES as usize);
+        Floor::floor(o.eye, o.far, |p| floor.push(p));
+        xpute_core::ensure!(floor.len() as u32 <= Floor::PAGES, ENOTRECOVERABLE, floor.len());
+        for &p in self.floor.iter().filter(|p| !floor.contains(p)) {
+            self.paging.release(p);
+        }
+        for &p in floor.iter().filter(|p| !self.floor.contains(p)) {
+            self.paging.lease(p);
+        }
+        self.floor = floor;
+
+        let mut demand = Vec::new();
+        estimator.requirements(o, bounds, &mut |r| L::pages(&r, &mut |p| demand.push(p)));
+        demand.sort_unstable();
+        demand.dedup();
+        let mut asks: HashMap<LevelPage, Ask> = HashMap::new();
+        let ask = |asks: &mut HashMap<LevelPage, Ask>, p: LevelPage, a: Ask| {
+            let mut q = Some(p);
+            while let Some(p) = q {
+                asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
+                q = L::dependencies(p);
             }
-            let Some(folded) = L::fold_page(p, |q| self.get(q)) else { continue };
-            let Some(record) = self.record_for(p) else { return false };
-            return match L::keep(record, &folded) {
-                Ok(page) => {
-                    self.take(p, record, page);
-                    true
-                }
-                Err(_) => false,
-            };
+        };
+        let order = |p: LevelPage| Order::of(o, p.rect(), bounds.heights(p.level, p.rect()));
+        for &p in &demand {
+            let at = self.paging.source(p).unwrap_or(p);
+            ask(&mut asks, at, Ask { why: Why::Fault, order: order(p) });
         }
-        false
-    }
+        // What is demanded is inside the demand's bound, whatever the ground:
+        // more is the structure's bound broken, and the capacity with it.
+        let mut read = [0u32; TOP_LEVEL as usize + 1];
+        for p in asks.keys() {
+            read[p.level as usize] += 1;
+        }
+        xpute_core::ensure!(read.iter().all(|&n| n <= LEVEL_DEMAND_PAGES), ENOTRECOVERABLE, *read.iter().max().unwrap_or(&0));
+        for &p in &self.floor {
+            ask(&mut asks, p, Ask { why: Why::Floor, order: order(p) });
+        }
+        // A lease is held for its consumer, not the view: it has no place in
+        // the view's order unless the view reads it too.
+        for p in self.paging.leases().filter(|p| !self.floor.contains(p)) {
+            ask(&mut asks, p, Ask { why: Why::Lease, order: Order::LAST });
+        }
 
-    // ---- wanting ----
-
-    /// Every page the view wants that the resident pages cannot answer, each
-    /// ranked by what its absence costs, and the pinned page wherever the
-    /// view is.
-    fn wants(&self) -> Vec<(u64, Rank)> {
-        let mut wants = Vec::new();
-        if let Some(d) = self.domain.as_ref() {
-            // The page the first ground of the view's order is drawn from:
-            // the first of the layer's order (io/policy.rs).
-            let first = d.pages().filter_map(|(p, order)| order.map(|o| (o, p))).min().map(|(_, p)| p);
-            for (p, order) in d.pages() {
-                // A page the tree stops above is none to ask for, whether or
-                // not the page over it has come yet: that page is its own want.
-                if self.answers(p) || self.settled(p) {
-                    continue;
-                }
-                let (shell, order) = match order {
-                    Some(order) if Some(p) == first => (Shell::First, order),
-                    _ if p.level == TOP_LEVEL => (Shell::Top, d.page_order(p)),
-                    Some(order) => (Shell::Drawn, order),
-                    None => (Shell::Fallback, d.page_order(p)),
-                };
-                wants.push((p.subject(), policy::page(L::CATEGORY, shell, order)));
+        let needed = asks.keys().filter(|&&p| self.paging.takes_frame(p)).count() as u32;
+        let mut room = FRAMES.saturating_sub(needed).min(allowance);
+        let mut hints: Vec<(Order, LevelPage)> = Vec::new();
+        prefetch.speculate(o, &mut |p| {
+            if !asks.contains_key(&p) {
+                hints.push((order(p), p));
             }
+        });
+        hints.sort_unstable();
+        hints.dedup_by_key(|h| h.1);
+        // Nor for more pages than are left of what may be asked at once,
+        // whether or not each takes a frame: a page settled or held in
+        // `ABSENT` takes none, and is known only while it is asked for
+        // (paging.rs `ASKS`).
+        let mut pages = ASKS.saturating_sub(asks.len() as u32);
+        for (order, p) in hints {
+            let fresh: Vec<LevelPage> = std::iter::successors(Some(p), |&q| L::dependencies(q)).filter(|q| !asks.contains_key(q)).collect();
+            let new = fresh.iter().filter(|&&q| self.paging.takes_frame(q)).count() as u32;
+            if new > room || fresh.len() as u32 > pages {
+                break;
+            }
+            room -= new;
+            pages -= fresh.len() as u32;
+            ask(&mut asks, p, Ask { why: Why::Hint, order });
         }
-        if let Some(p) = self.pinned.filter(|p| self.get(*p).is_none() && !self.settled(*p) && !wants.iter().any(|(s, _)| *s == p.subject())) {
-            wants.push((p.subject(), policy::pinned()));
-        }
-        wants
+
+        self.wants.clear();
+        self.wants
+            .extend(asks.iter().filter(|(p, _)| !self.paging.held(**p) && !self.paging.settled(**p)).map(|(p, &a)| (p.subject(), a)));
+        self.paging.ask(asks);
+
+        self.observation = Some(*o);
+        self.demand = demand;
     }
 
-    /// Lets go of the pages the camera has left that lie in `ABSENT`: a page
-    /// the bake has no object for shares what it reads as with every other,
-    /// so nothing will ever want its room and it would sit in the table for
-    /// the session. A page with a record of its own is left to `record_for`:
-    /// the camera leaving a page is not a reason to throw it away.
-    fn drop_absent(&mut self, d: &Domain) {
-        // An answer the camera has left is asked again if it comes back.
-        let pinned = self.pinned;
-        self.answered.retain(|&p| keeps(pinned, Some(d), p));
-        let drop: Vec<LevelPage> = self.pages.iter().filter(|(&p, held)| held.record == ABSENT && !keeps(pinned, Some(d), p)).map(|(&p, _)| p).collect();
-        for p in drop {
-            self.clear(p);
-        }
+    /// What the layer wants of the scheduler: every page asked for and not
+    /// held.
+    pub fn wants(&self) -> &[(u64, Ask)] {
+        &self.wants
     }
 
-    /// The layer's turn. Wherever the view or the resident set has changed —
-    /// a page arrived, was folded or went — the cover and the wishlist are
-    /// made again, what the camera left let go and the folds woken, since each
-    /// is a function of both. A turn where neither changed decides nothing
-    /// and says the wishlist it has.
+    /// The layer's turn. Wherever the observation, what is held or leased,
+    /// or the heights have changed, it is observed again (`observe`), since
+    /// the asks are functions of all of them. A turn where none changed
+    /// decides nothing and says the wants it has.
     pub fn step(&mut self) {
-        let Some(e) = eye() else { return };
-        let frustum = Frustum::of_view();
-        let wish = (e.at, frustum, crate::sched::turn::interactive(), self.revision, self.pinned, heights_revision(), pressure());
-        if self.last != Some(wish) {
-            let d = domain_for(&e, eye_height(), Some(frustum), wish.6);
-            self.drop_absent(&d);
-            let mut cover = self.cover_of(&d);
-            cover.drawn.sort_unstable();
-            cover.gaps.sort_unstable();
-            self.domain = Some(d);
-            self.domains = self.domains.wrapping_add(1);
-            // The eye moves every frame the camera does, and most of those
-            // moves cross no chunk's split distance: whoever reads the cover
-            // is told only when what it draws has changed.
-            if cover != self.cover {
-                self.cover = cover;
-                self.covers = self.covers.wrapping_add(1);
-            }
-            // Letting a page go moves the revision; the wish is the resident
-            // set the cover was made from.
-            self.last = Some((wish.0, wish.1, wish.2, self.revision, wish.4, heights_revision(), wish.6));
-            self.wishlist = self.wants();
-            self.folds.notify();
+        let Some(o) = observation() else { return };
+        let seen = (o, self.paging.revision(), heights_revision());
+        if self.last != Some(seen) {
+            self.observe(&o, &Known, &ESTIMATOR, &PREFETCH, param::HINT_ALLOWANCE);
+            // Observing leases and lets go; what is recorded is the state the
+            // observation was made against.
+            self.last = Some((o, self.paging.revision(), heights_revision()));
         }
-        declare(L::CATEGORY, &self.wishlist);
+        declare(L::CATEGORY, &self.wants);
     }
 
     /// Asks for nothing: a layer the view does not show holds what it has
     /// and wants no more.
     pub fn idle(&mut self) {
+        self.wants.clear();
+        self.paging.ask(HashMap::new());
         declare(L::CATEGORY, &[]);
         self.last = None;
-    }
-}
-
-/// The one rule a view keeps a page by: pinned, or wanted by its domain.
-fn keeps(pinned: Option<LevelPage>, d: Option<&Domain>, p: LevelPage) -> bool {
-    Some(p) == pinned || d.is_some_and(|d| d.wants(p))
-}
-
-fn folds<L: Layer>() -> &'static mut Notify {
-    &mut L::pyramid().folds
-}
-
-/// A layer's folds: one page a step, on what the turn's quota leaves after
-/// the tick, for as long as there is one to make. A fold is work — a page
-/// voted or summed cell by cell — and work goes on the budgeted path, not in
-/// the turn where the wishlist is decided.
-pub async fn fold_task<L: Layer>() {
-    loop {
-        notified(folds::<L>).await;
-        loop {
-            yield_if_spent(world_edge).await;
-            if !L::pyramid().fold_one() {
-                break;
-            }
-        }
     }
 }
 
