@@ -38,9 +38,7 @@ struct Clouds {
 
 fn clouds_ray() -> mat3x3f { return mat3x3f(clouds_words[0].xyz, clouds_words[1].xyz, clouds_words[2].xyz); }
 fn clouds_sun_at() -> vec3f { return clouds_words[3].xyz; }
-fn clouds__p1() -> f32 { return clouds_words[3].w; }
 fn clouds_moon_at() -> vec3f { return clouds_words[4].xyz; }
-fn clouds__p2() -> f32 { return clouds_words[4].w; }
 
 const CLOUD_ALBEDO: f32 = 0.9;
 // Past this, from under the layer or close over it, the layer is too thin a

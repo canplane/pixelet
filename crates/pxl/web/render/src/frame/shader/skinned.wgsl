@@ -25,8 +25,6 @@ fn draw_translation() -> vec3f { return draw_words[0].xyz; }
 fn draw_rotation() -> f32 { return draw_words[0].w; }
 fn draw_opacity() -> f32 { return draw_words[1].x; }
 fn draw_scale() -> f32 { return draw_words[1].y; }
-fn draw__p0() -> f32 { return draw_words[1].z; }
-fn draw__p1() -> f32 { return draw_words[1].w; }
 
 @group(2) @binding(0) var skin: texture_2d<f32>;
 @group(2) @binding(1) var skin_sampler: sampler;

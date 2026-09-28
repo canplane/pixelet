@@ -38,11 +38,9 @@ fn stars_view_proj() -> mat4x4f { return mat4x4f(stars_words[0], stars_words[1],
 fn stars_sky() -> mat4x4f { return mat4x4f(stars_words[4], stars_words[5], stars_words[6], stars_words[7]); }
 fn stars_viewport() -> vec2f { return stars_words[8].xy; }
 fn stars_intensity() -> f32 { return stars_words[8].z; }
-fn stars__p0() -> f32 { return stars_words[8].w; }
 fn stars_depth() -> vec3f { return stars_words[9].xyz; }
 fn stars_density() -> f32 { return stars_words[9].w; }
 fn stars_up() -> vec3f { return stars_words[10].xyz; }
-fn stars__p1() -> f32 { return stars_words[10].w; }
 
 // Each star as gpu/stars.rs took it once: its direction in the equatorial
 // frame and its flux, then its color.

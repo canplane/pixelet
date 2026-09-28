@@ -100,9 +100,7 @@ fn atmos_moon_light() -> f32 { return atmos_words[7].w; }
 fn atmos_land() -> vec3f { return atmos_words[8].xyz; }
 fn atmos_land_altitude_km() -> f32 { return atmos_words[8].w; }
 fn atmos_sun_seen() -> vec3f { return atmos_words[9].xyz; }
-fn atmos__p1() -> f32 { return atmos_words[9].w; }
 fn atmos_up() -> vec3f { return atmos_words[10].xyz; }
-fn atmos__p2() -> f32 { return atmos_words[10].w; }
 fn atmos_cloud_base() -> vec2u { return bitcast<vec2u>(atmos_words[11].xy); }
 fn atmos_cloud_frac() -> vec2f { return atmos_words[11].zw; }
 fn atmos_cloud_time() -> f32 { return atmos_words[12].x; }
