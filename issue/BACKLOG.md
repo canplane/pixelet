@@ -52,6 +52,16 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
     z16 a kind's footing and a transport-aligned kind's heading are read off
     the level's cells, so an instance can appear, go or turn at a level
     change, as the ground under it does.
+- **What is drawn is what the screen covers.** The central idea from
+  2026-09-28
+  ([20260928-what-is-drawn-is-what-the-screen-covers.md](./20260928-what-is-drawn-is-what-the-screen-covers.md)):
+  what is drawn is bounded by the screen, each layer keeps its own storage,
+  one query joins the two, and fetching is what the query missed. It
+  replaces the budget's search, the set view counts and the pressure; the
+  audit that led to it is
+  [20260928-the-view-s-cost-read-against-its-invariant.md](./20260928-the-view-s-cost-read-against-its-invariant.md).
+  Under review: the invariants' proofs, asking before the data is there,
+  and rasterized pieces against casting into the records.
 - **A blank screen after a far search from a zoomed-out view.** Location
   pending, 30 ticks of zoom out, search "아주대학교", the first result:
   nothing is drawn and the frame count stops (2 of 2 under dev:local,
@@ -192,7 +202,10 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
     targets in `build-native.ts`; the kernel, the renderer and the shell
     take them as they are. Once the shell has settled.
 
-- **One byte budget over everything drawn, paid for in LOD.** The phone's
+- **One byte budget over everything drawn, paid for in LOD.** Its
+  pressure is to go (P0, the view's cost derived from its rule): a resident
+  byte derived from the view leaves no refusal to pay for. What stays is
+  the device's own ceiling, the arena and wgpu's allocations. The phone's
   page dies because the working set exceeds a budget of about two
   gigabytes, and a WebView (Capacitor) runs in the same WebKit content
   process under the same limit — reported by others as a 2048 MB jetsam
