@@ -71,11 +71,11 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
     tier is held in) and the share the quality gets (5 × 330) are chosen
     when the cell is seen on a device, from the tier sizes recorded at 4551,
     which give any other size's waste, draws and surface lanes offline; both
-    stay until then. Before that measurement, what reaches the GPU is
-    relative to the eye (the camera's pose, P1), so what a pixel shows is
-    the model's error and not the coordinates'. Objects get records a level
-    and an index of their own beyond the store's reaches. The hard-held
-    chain's test returns with the first consumer that leases.
+    stay until then. What reaches the GPU is relative to the eye
+    (2026-09-29), so what a pixel shows there is the model's error and not
+    the coordinates'. Objects get records a level and an index of their own
+    beyond the store's reaches. The hard-held chain's test returns with the
+    first consumer that leases.
 - **The atmosphere in the observation's test, an optimization held.** A
   difference is observed where its projected angle leaks past a cell _and_
   the contrast it makes is still distinguishable after the air (`T(d)`,
@@ -229,18 +229,23 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P1
 
-- **The camera's pose owns the view's frame.** Only distance and polar
-  move the eye today; the azimuth turns the world's root under a camera
-  fixed on the orbit's −Y side (control/camera/orbit.rs), so what needs the
-  view's heading — the sun and the moon — turns it back (`rotate2`), and
-  the planet is laid about the view center where the demand's curvature
-  is measured from the eye. The map center is only the gesture's pivot:
-  pinch the radius, a vertical drag the polar, a horizontal one the
-  azimuth, a pan the pivot, each a coordinate of the eye's pose about it,
-  and the world does not turn. Apart from it, what reaches the GPU can be
-  relative to the eye rather than to the map center, a matter of
-  precision and not of who owns the frame. Orthogonal to the model: the
-  observation reads only the frustum.
+- **The camera's pose owns the view's frame.** The observer is the origin
+  and does not move; what the controls move is the one transform from the
+  world to it, and the world as stored never moves. Orbit, free and XR
+  controls are policy above that line, each producing the one transform: an
+  orbit's radius, polar and azimuth are the pivot's place seen from the
+  observer, a free camera's are a position and a yaw and pitch, an XR
+  headset's its pose. Below the line nothing knows which control made it,
+  and what reaches the GPU already takes the observer at the origin
+  (2026-09-29): points, and the anchors the globe, the shadow and the clouds
+  are laid about, are written against the eye in doubles, the CPU's
+  anchor-local frame apart. Today's is one representation of that, for the
+  orbit alone, and half of one: only distance and polar move the eye, the
+  azimuth turns the world's root under a camera fixed on the orbit's −Y side
+  (control/camera/orbit.rs), so what needs the view's heading — the sun and
+  the moon — turns it back (`rotate2`), and the planet is laid about the
+  view center where the demand's curvature is measured from the eye.
+  Orthogonal to the model: the observation reads only the frustum.
 - **A change of polar re-cuts the whole screen.** Seen 2026-09-29: moving
   the polar makes the whole view flicker as pieces are replaced, as it did
   before and more since demand comes from the tiles' footprints. A visual

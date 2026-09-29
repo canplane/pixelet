@@ -463,7 +463,7 @@ impl Models {
     }
 
     /// Every visible actor's draw, placed against the frame's origin.
-    pub fn draw(&self, draw: &mut DrawList, origin: V3) {
+    pub fn draw(&self, draw: &mut DrawList, eye: V3) {
         for (_, a) in self.actors.iter() {
             if !a.visible {
                 continue;
@@ -472,7 +472,7 @@ impl Models {
             if m.handle == 0 {
                 continue;
             }
-            let t = DrawList::translation(a.at, origin);
+            let t = DrawList::translation(a.at, eye);
             draw.draw_scaled(PIPELINE_SKINNED, m.handle, a.palette_handle, a.model, t, a.rotation_z, 1.0, m.scale);
         }
     }

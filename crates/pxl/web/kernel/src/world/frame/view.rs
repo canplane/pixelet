@@ -108,6 +108,34 @@ impl View {
     }
 }
 
+impl View {
+    /// The eye, in units: the root frame's origin and the eye past it.
+    pub fn eye_at(&self) -> V3 {
+        let o = self.origin;
+        [
+            ivec::to_real(ivec::X(o)) + self.eye_local[0],
+            ivec::to_real(ivec::Y(o)) + self.eye_local[1],
+            ivec::to_real(ivec::Z(o)) + self.eye_local[2],
+        ]
+    }
+
+    /// The eye's frame to GL clip, and to the camera: the root frame moved
+    /// to put the eye at its origin, where every point the GPU holds is
+    /// (pxl-render frame/draw.rs `DrawList::translation`). Moved here, in
+    /// doubles, so the view takes the eye to the camera's origin with
+    /// nothing of the eye's position left in either for a point's to
+    /// cancel against in floats.
+    pub fn eye_frame(&self) -> (Mat4, Mat4) {
+        let (mut to_eye, mut camera, mut view_proj) = (mat4(), mat4(), mat4());
+        mat4_translation(&mut to_eye, self.eye_local[0], self.eye_local[1], self.eye_local[2]);
+        let mut m = mat4();
+        mat4_mul(&mut m, &self.view_matrix, &self.root);
+        mat4_mul(&mut camera, &m, &to_eye);
+        mat4_mul(&mut view_proj, &self.local_view_proj, &to_eye);
+        (view_proj, camera)
+    }
+}
+
 static VIEW: Global<View> = Global::new();
 
 /// `view`.
@@ -160,13 +188,7 @@ pub fn view_compose() {
     // the haze, and one from high up no further than the planet's own edge.
     // Read from the view in hand rather than through `eye()`, which would take
     // the view a second time while this holds it.
-    let o = v.origin;
-    let at = [
-        ivec::to_real(ivec::X(o)) + v.eye_local[0],
-        ivec::to_real(ivec::Y(o)) + v.eye_local[1],
-        ivec::to_real(ivec::Z(o)) + v.eye_local[2],
-    ];
-    let height = height_at(at);
+    let height = height_at(v.eye_at());
     v.near = near_clip_at(height);
     v.far = far_clip_at(height);
     mat4_perspective(&mut v.proj, (v.fov * core::f64::consts::PI) / 180.0, v.width / v.height, v.near, v.far);
@@ -201,3 +223,7 @@ pub fn view_sees_sphere(x: f64, y: f64, z: f64, radius: f64) -> bool {
     }
     true
 }
+
+#[cfg(test)]
+#[path = "view.test.rs"]
+mod test;

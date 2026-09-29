@@ -287,12 +287,12 @@ impl Markers {
         p.visible
     }
 
-    pub fn draw(&self, draw: &mut DrawList, origin: V3) {
+    pub fn draw(&self, draw: &mut DrawList, eye: V3) {
         let Some(p) = &self.puck else { return };
         if !p.visible || p.handle == 0 {
             return;
         }
-        let center = DrawList::translation(p.center, origin);
+        let center = DrawList::translation(p.center, eye);
         draw.draw_as(PIPELINE_PUCK_ZONE, p.handle, p.count, 0, center, 0.0, 1.0);
         let shown = p.shown.unwrap_or(p.target);
         let beacon = [

@@ -143,6 +143,10 @@ pub struct Frame {
     pub root: [f64; 16],
     /// The map origin, in units.
     pub origin: V3,
+    /// The eye, in units: what a draw's translation is taken from, so every
+    /// point the GPU holds is relative to it (pxl-render frame/draw.rs
+    /// `DrawList::translation`).
+    pub eye: V3,
     /// The frustum as six planes of (nx, ny, nz, constant).
     pub planes: [f64; 24],
     pub camera: V3,
@@ -1483,17 +1487,17 @@ impl Scheduler {
     fn draw_frame(&mut self, frame: &Frame) {
         self.draw.begin_frame();
         self.level_boxes = [0; LEVELS];
-        self.ghost.draw(&mut self.draw, frame.origin);
-        self.models.draw(&mut self.draw, frame.origin);
-        self.markers.draw(&mut self.draw, frame.origin);
-        self.debug.draw(&mut self.draw, frame.origin);
+        self.ghost.draw(&mut self.draw, frame.eye);
+        self.models.draw(&mut self.draw, frame.eye);
+        self.markers.draw(&mut self.draw, frame.eye);
+        self.debug.draw(&mut self.draw, frame.eye);
         let holder = &self.meshes.holder;
         for s in &self.slots {
             if s.role == Role::Building || !s.has(IN_FRUSTUM) || !s.layout_ready {
                 continue;
             }
             let (wp, ws) = s.told.map_or((1.0, 0.0), |t| (t.0, t.1));
-            let translation = DrawList::translation([s.base_x(), s.base_y(), 0.0], frame.origin);
+            let translation = DrawList::translation([s.base_x(), s.base_y(), 0.0], frame.eye);
             for (cube, visible) in [(Some(s.layout_primary), wp), (s.layout_secondary, ws)] {
                 let Some(cube) = cube else { continue };
                 // A tier's decor dissolves with its tier, on the same half of

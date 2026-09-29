@@ -30,11 +30,11 @@ impl DebugLines {
         self.origin = origin;
     }
 
-    pub fn draw(&self, draw: &mut DrawList, origin: V3) {
+    pub fn draw(&self, draw: &mut DrawList, eye: V3) {
         if self.vertex_cnt == 0 || self.held.handle == 0 {
             return;
         }
-        let t = DrawList::translation(self.origin, origin);
+        let t = DrawList::translation(self.origin, eye);
         draw.draw_as(PIPELINE_DEBUG, self.held.handle, self.vertex_cnt, 0, t, 0.0, 1.0);
     }
 }

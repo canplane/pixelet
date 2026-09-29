@@ -148,10 +148,12 @@ impl DrawList {
         self.uniforms.clear();
     }
 
-    /// A draw's translation: where `at` is against the frame's `origin`,
-    /// narrowed once the difference is small.
-    pub fn translation(at: V3, origin: V3) -> [f32; 3] {
-        [(at[0] - origin[0]) as f32, (at[1] - origin[1]) as f32, (at[2] - origin[2]) as f32]
+    /// A draw's translation: where `at` is against the `eye`, both in
+    /// units, narrowed once the difference is small. Every point the GPU
+    /// holds is relative to the eye, so what it rounds is as small as the
+    /// point is near, and what is near the eye is held finest.
+    pub fn translation(at: V3, eye: V3) -> [f32; 3] {
+        [(at[0] - eye[0]) as f32, (at[1] - eye[1]) as f32, (at[2] - eye[2]) as f32]
     }
 
     /// An actor's draw: a draw_as whose sixth uniform float is the model's scale.

@@ -146,11 +146,12 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     view_resize(ctx.state.width, ctx.state.height);
     let v = view();
 
-    let origin = v.origin;
+    let origin = [ivec::to_real(ivec::X(v.origin)), ivec::to_real(ivec::Y(v.origin)), ivec::to_real(ivec::Z(v.origin))];
 
     let frame = Frame {
         root: v.root,
-        origin: [ivec::to_real(ivec::X(origin)), ivec::to_real(ivec::Y(origin)), ivec::to_real(ivec::Z(origin))],
+        origin,
+        eye: v.eye_at(),
         planes: v.planes,
         camera: v.eye,
         delta_s: ctx.delta,
@@ -165,7 +166,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     let draw = with_world(|world, sched| sched.tick(world, frame, &now)).unwrap_or(false);
     crate::layer::poi::placement::step(ctx);
     let sched = &mut kernel().sched;
-    sched.billboards.draw(&mut sched.draw, &sched.models, frame.origin);
+    sched.billboards.draw(&mut sched.draw, &sched.models, frame.eye);
     if draw {
         c.draw = true;
         ctx.invalidate();

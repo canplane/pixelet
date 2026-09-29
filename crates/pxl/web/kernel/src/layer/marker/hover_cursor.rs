@@ -343,9 +343,9 @@ impl GhostDraw {
     }
 
     /// The ghost's draw this frame, placed against the frame's origin.
-    pub fn draw(&self, draw: &mut DrawList, origin: V3) {
+    pub fn draw(&self, draw: &mut DrawList, eye: V3) {
         let Some(h) = &self.held else { return };
-        let t = DrawList::translation(self.at, origin);
+        let t = DrawList::translation(self.at, eye);
         match h.shape {
             Shape::Box { coplanar, size_bits, .. } => {
                 let pipeline = if coplanar { PIPELINE_GHOST_BOX_COPLANAR } else { PIPELINE_GHOST_BOX };

@@ -158,26 +158,30 @@ impl CloudPass {
 }
 
 /// Where the layer is and what shapes it, for the air's uniform
-/// (gpu/atmosphere.rs's CLOUD_BASE on): the lattice index the root frame's
-/// origin — the cell it is on the map, as the integer lanes of its PVF3 —
-/// lies in and the fraction of a unit past it; the sky's clock, from the
-/// environment's lane `env`; the lattice's count across the world; the
-/// layer's height; and the camera's height past which it is gone.
+/// (gpu/atmosphere.rs's CLOUD_BASE on): the lattice index the eye's
+/// frame's origin — the root frame's `origin`, the cell it is on the map,
+/// as the integer lanes of its PVF3, and the eye `past` it east and north
+/// in units — lies in and the fraction of a unit past it; the sky's clock,
+/// from the environment's lane `env`; the lattice's count across the world;
+/// the layer's height; and the camera's height past which it is gone.
 ///
 /// The origin is split on the lattice here, in its own lanes, so the
 /// shader never holds a coordinate the size of the world: it gets the
 /// lattice index, the lane shifted down, and the fraction of a unit past
-/// it, the lane's low bits, and adds only the few thousand cells between
-/// the origin and the layer. A shift and a mask on two's complement lanes
-/// are a floor and a remainder, so a cell west of the origin's zero lands
-/// in the lattice unit it is in, and the index masked to the count is the
-/// same unit wherever the lane wrapped.
-pub fn field(origin: IVec, env: &[f32]) -> CloudField {
+/// it, the lane's low bits with the eye's offset in doubles, and adds only
+/// the few thousand cells between the eye and the layer. A shift and a
+/// mask on two's complement lanes are a floor and a remainder, so a cell
+/// west of the origin's zero lands in the lattice unit it is in, and the
+/// index masked to the count is the same unit wherever the lane wrapped.
+pub fn field(origin: IVec, past: [f64; 2], env: &[f32]) -> CloudField {
     let unit = ivec::sh(origin, -(LATTICE_SHAMT as i32));
     let within = ivec::and(origin, ivec::fill((1 << LATTICE_SHAMT) - 1));
+    let side = (1u32 << LATTICE_SHAMT) as f64;
+    let at = [ivec::X, ivec::Y].map(|lane| lane(within) as f64);
+    let units: [f64; 2] = core::array::from_fn(|k| (at[k] + past[k]) / side);
     let (base, frac) = (
-        [ivec::X, ivec::Y].map(|lane| lane(unit) as u32 & (LATTICE_COUNT - 1)),
-        [ivec::X, ivec::Y].map(|lane| lane(within) as f32 / (1u32 << LATTICE_SHAMT) as f32),
+        core::array::from_fn(|k| ([ivec::X, ivec::Y][k](unit) + units[k].floor() as i64) as u32 & (LATTICE_COUNT - 1)),
+        core::array::from_fn(|k| (units[k] - units[k].floor()) as f32),
     );
     CloudField {
         base,

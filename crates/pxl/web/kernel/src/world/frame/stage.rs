@@ -14,7 +14,6 @@ use pxl_render::gpu::surface::SURFACES;
 
 use crate::layer::billboard::distance_fade::fade_range;
 use pxl_spec::asset::ingested::Asset;
-use pxl_spec::space::mat4::{mat4, mat4_mul};
 use pxl_spec::space::pvf3::ivec;
 use xpute_core::math::scalar::round;
 
@@ -42,11 +41,12 @@ pub fn stage_write(resolution: f64) {
     let v = view();
     let settings = settings_store();
     let s = stage_lane_mut();
-    let mut m = mat4();
-    mat4_mul(&mut m, &v.view_matrix, &v.root);
-    s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].copy_from_slice(&m);
+    // The GPU is handed the eye's frame, where the draws' points are (the
+    // chunk stage's `Frame::eye`).
+    let (view_proj, camera) = v.eye_frame();
+    s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].copy_from_slice(&camera);
     s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16].copy_from_slice(&v.proj);
-    s[STAGE_AT::LOCAL_VIEW_PROJ..STAGE_AT::LOCAL_VIEW_PROJ + 16].copy_from_slice(&v.local_view_proj);
+    s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16].copy_from_slice(&view_proj);
     s[STAGE_AT::EYE_LOCAL..STAGE_AT::EYE_LOCAL + 3].copy_from_slice(&v.eye_local);
     s[STAGE_AT::TRANSLATION..STAGE_AT::TRANSLATION + 3].copy_from_slice(&[v.tx, v.ty, v.tz]);
     s[STAGE_AT::ORIGIN] = ivec::to_real(ivec::X(v.origin));

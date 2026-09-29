@@ -86,7 +86,7 @@ impl Billboards {
 
     /// Every set with something to show, in order; a set on an actor that
     /// is gone or hidden shows nothing.
-    pub fn draw(&self, draw: &mut DrawList, models: &Models, origin: V3) {
+    pub fn draw(&self, draw: &mut DrawList, models: &Models, eye: V3) {
         // By order, and within one in the order their slots lie: a pass an
         // order over the few there are, so a frame makes no list to sort.
         let orders = || self.sets.iter().map(|(_, s)| s.order);
@@ -103,7 +103,7 @@ impl Billboards {
                         _ => continue,
                     },
                 };
-                draw.draw_as(PIPELINE_BADGE, s.held.handle, s.count, 0, DrawList::translation(at, origin), 0.0, 1.0);
+                draw.draw_as(PIPELINE_BADGE, s.held.handle, s.count, 0, DrawList::translation(at, eye), 0.0, 1.0);
             }
             next = orders().filter(|&o| o > order).min();
         }
