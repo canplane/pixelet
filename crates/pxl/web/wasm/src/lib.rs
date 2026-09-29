@@ -1,10 +1,10 @@
 // pxl-wasm/lib.rs
 
-//! The one WebAssembly module: pxl-kernel behind a boot block and a doorbell.
+//! The one WebAssembly module: pxl-kernel behind a directory and a doorbell.
 //!
 //! No wasm-bindgen. The central scheduler gives the module its memory, and
 //! the kernel lays out everything inside it on its first turn
-//! (pxl_kernel::mem); the shell reads the boot block once, at an address both
+//! (pxl_kernel::mem); the shell reads the directory once, at an address both
 //! sides know, and everything after crosses in that memory
 //! (pxl_kernel::door). What is here is the bracket: what the linker and the
 //! page decide — where the module's own data ends, how much memory it was

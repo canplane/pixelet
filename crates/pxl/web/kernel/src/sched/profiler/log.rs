@@ -12,7 +12,7 @@
 //!
 //! It does not go out on the ring. The ring is the control path — ordered,
 //! back-pressured, and full is fatal: `Door::post` asserts when the
-//! completion queue and its spill are both full, so a debug line could take
+//! completion ring is full, so a debug line could take
 //! the module down, and the moment logging is turned on is exactly the moment
 //! instrumentation would be competing for ring slots with the fetch burst it
 //! was turned on to watch. This is what every operating system separates —

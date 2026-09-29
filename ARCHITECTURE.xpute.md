@@ -1,14 +1,14 @@
 # Architecture — xpute
 
-[xpute](./README.xpute.md) runs one program inside another. The outer one, the **host**, owns the machine: the clock, the memory, the I/O. The inner one, the **guest**, computes and owns nothing. It cannot take memory from the system, cannot open a connection, and cannot decide when it runs. Everything it has, the host gave it, and the host gives each thing a slice at a time — the memory once at boot, a quota of time on every turn, credits for the I/O it asks for.
+[xpute](./README.xpute.md) runs one program inside another. The outer one, the **host**, owns the machine: the clock, the memory, the I/O. The inner one, the **guest**, computes and owns nothing. It cannot take memory from the system, cannot open a connection, and cannot decide when it runs. Everything it has, the host gave it, and the host gives each thing a slice at a time — the memory once at boot, and a quota of time on every turn. What it wants done outside itself, it asks the host for.
 
 That is the arrangement an operating system has with a process, without the hardware that enforces it: nothing stops a guest from spending a whole quota inside one function.
 
-xpute is that arrangement, in two layers. `core` is generic code — collections, codecs, a wire format, an errno table, a libm — that any program can link and call, host or no host. `runtime` is the arrangement itself: the memory, the messages, the turn, the credits. `runtime` is written against `core`, and `core` knows nothing of `runtime`. Both layers exist twice, once in Rust and once in TypeScript; what that means for each of them is the last section, once the pieces have names.
+xpute is that arrangement, in two layers. `core` is generic code — collections, codecs, a wire format, an errno table, a libm — that any program can link and call, host or no host. `runtime` is the arrangement itself: the memory, the messages, the turn. `runtime` is written against `core`, and `core` knows nothing of `runtime`. Both layers exist twice, once in Rust and once in TypeScript; what that means for each of them is the last section, once the pieces have names.
 
 Neither layer knows what a guest computes. No domain type of any kind reaches them, which is what lets the arrangement carry from the program it was written for to the next one.
 
-Three things cross between them and nothing else does: one memory they share, one call in, one number out. The sections follow that order — the memory, what travels through it, the call that makes any of it run — then credits and handles, and last how all of it exists twice.
+Three things cross between them and nothing else does: one memory they share, one call in, one number out. The sections follow that order — the memory, what travels through it, the call that makes any of it run — then I/O and handles, the contract all of it comes down to, and last how it exists twice.
 
 ---
 
@@ -58,11 +58,11 @@ A push can fail in two ways and no others. `EAGAIN` means the ring is full: the 
 
 Two rings make a pair: one for what the host submits, one for what the guest completes. Driving that pair from the host end is the **doorbell** (`ipc/doorbell.ts`). It pushes the commands, rings the guest with a quota, and then reads the completion ring dry, handing each message either to the call that was waiting for it or to whoever listens for signals. One ring of the bell is one whole turn of the guest.
 
-The guest's end (`ipc/doorbell.rs`) applies what waits in the submission ring in order, answering each with what the guest made of it, and posts what the guest raises into the completion ring — or, while the host has not read and that ring is full, into a third ring behind it, the spill, so that nothing is dropped and what was raised first is read first. Each message is written once, in place.
+The guest's end (`ipc/doorbell.rs`) applies what waits in the submission ring in order, answering each with what the guest made of it, and posts what the guest raises, and its replies, into the completion ring. That ring holds a whole turn's worth: the host reads it dry before it rings again, and the guest stops applying submissions while too little room is left for what one more might raise, leaving the rest for the next turn, in order. Each message is written once, in place.
 
-## Streams, for what the host must do before the next turn
+## Streams, for calls too many to be messages
 
-A message on the completion ring waits until the host reads it, and the guest cannot tell when that is. Some requests cannot wait like that: a call the host has to make before anything else reaches a device, or one whose result the guest will read on its next turn. For those the guest writes a **stream** (`ipc/stream.rs`): records laid end to end in a range of the memory during a turn, which the host runs, all of them, when the turn returns and before it rings again.
+Some of what a guest asks of its host comes in thousands a turn: every call a renderer makes to a device the guest cannot reach, say. A message each would be a slot and a packet each, for a call that needs neither a reply nor a tree. For those the guest writes a **stream** (`ipc/stream.rs`): records laid end to end in a range of the memory during a turn, which the host runs, all of them, when the turn returns and before it rings again.
 
 ```text
 0       END   how many words of records the turn wrote
@@ -70,7 +70,7 @@ A message on the completion ring waits until the host reads it, and the guest ca
 head…   op · n · n words   op · n · n words   …
 ```
 
-A record is an op the user numbers, a count, and that many words. Because the whole stream runs between two turns, a record can name memory for the host to write into, and the guest reads it on its next turn without being told it is there: the order is the acknowledgment. What a stream costs is its range, which bounds what one turn can ask for; what a full stream means is the user's to decide.
+A record is an op the user numbers, a count, and that many words. Because the whole stream runs between two turns, a record can name memory for the host to write into, and the guest reads it on its next turn without being told it is there: the order is the acknowledgment. What a stream costs is its range, which bounds what one turn can ask for; a turn that asks for more has outgrown the range it was given, and the writer refuses the record rather than dropping it.
 
 ---
 
@@ -107,13 +107,15 @@ The format in full, and the API that writes it, is [the note beside the TypeScri
 
 ---
 
-## Changes, for what is only read
+## Changes, a guest's record of its own
 
-Not everything that crosses deserves a message. A packet describing state the other side only reads would be paying twice, since the reader goes and reads that state anyway. So the read direction is not a message but three numbers. A **change** (`ipc/change.rs`) is: a topic (`u16`, a kind of state the guest numbers), a key (`u64`, the one unit within that topic), and a revision (`u32`). A writer calls `bump`. The topic's counter advances, and its new value becomes the key's revision, written in two places: a table indexed by key, and one fixed-size journal ring.
+A guest often needs to know which units of its state changed since it last looked — what to build again, what to draw again. The runtime keeps that for it as data rather than as calls. A **change** (`ipc/change.rs`) is three numbers: a topic (`u16`, a kind of state the guest numbers), a key (`u64`, the one unit within that topic), and a revision (`u32`). A writer calls `bump`. The topic's counter advances, and its new value becomes the key's revision, written in two places: a table indexed by key, and one fixed-size journal ring.
 
 The two places exist because readers come in two kinds. A reader that cares about a handful of keys compares each key's revision against the one it remembers. A reader that cares about everything walks the journal forward from its own cursor — and if the journal has lapped that cursor, it gives up on the journal and re-reads the keys of the topics it follows.
 
-A change carries no value; the value is read where it lives. How a reader is woken — by polling on each turn, by a listener, by a React hook — is built on top of this and is not part of it.
+A change carries no value; the value is read where it lives. How a reader is woken — by polling on each turn, by a listener — is built on top of this and is not part of it.
+
+Nothing of it crosses to the host. It is a tool the runtime gives a guest, as the tick is, and the contract does not name it: a guest that keeps track of its changes another way is the same guest to its host.
 
 ---
 
@@ -144,12 +146,12 @@ commands ─────── submission ring ───────▶  drained
 doorbell ═════ interrupt(quota_ms) ═════▶  ┌ tick   phases in a fixed order
                                            │ tasks  futures that yield when
                                            │        the quota is spent
-                                           │ queue  what I/O it wants run
+                                           │ asks   what it wants done outside
 completions ◀───── completion ring ──────  └ posted before the falling edge
          ◀═══════════ wake_ms ═══════════  next frame · in n ms · never
 
-credits  runs what that queue started,
-         as far as the grant goes
+requests what the turn asked for, run
+         before the next rising edge
 
          … nothing until wake_ms …         … nothing at all …
 ```
@@ -158,13 +160,11 @@ On the host side, something has to decide when to ring at all. That is the **str
 
 ---
 
-## I/O by credits
+## I/O, by asking
 
-The guest cannot do I/O, because it does not own the connections; the host does, the way an operating system owns its devices. What the host grants it instead is a number: this turn's **credits**, how many reads may be out at once. Which reads those are is the guest's to say.
+The guest cannot do I/O, because it does not own the connections; the host does, the way an operating system owns its devices. So the guest asks, in what its turn leaves, and the host does the work and brings back what came of it — in a message, or into memory the request named.
 
-That the guest says which is the whole of the split. Ordering one demand against another needs to know what the program is for — what is on screen, what the camera is about to want, what a failure means — and none of that is a runtime's to hold. A queue for it ran here once and went for that reason (`io.rs`).
-
-That leaves two budgets, and they never touch. A tick spends a quota of time on the guest's own work. The credits spend a grant of concurrency on work the host does for the guest.
+How much may be out at once, and which want goes first, xpute does not say. Ordering one demand against another needs to know what the program is for — what is on screen, what is about to be wanted, what a failure means — and none of that is a runtime's to hold. A queue for it ran here once and went for that reason (`io.rs`). A program that wants a bound on its I/O passes one in its own messages, beside the quota.
 
 ---
 
@@ -191,18 +191,35 @@ Handles are in `runtime` rather than `core` because a handle is one side of a bo
 
 ---
 
+## The contract
+
+Most of what is above is how one end happens to be built. A tick is how one guest divides its quota, a completion ring sized to a turn is how one guest keeps its output in bounds, a strobe is how one host decides when to ring; each end could be built another way, in another language, and be the same arrangement to the other. What cannot change is shorter: the rules below, and the formats they travel in — the directory, the message's four words, the ring's layout and the stream's records — which are the boundary's and not either end's. Each rule is one the other end could catch being broken.
+
+0. **The directory.** Where anything lies is the guest's choice, so the host has to be told. The guest's first turn writes a **directory** in xpute's own format (`ipc/directory.rs`): a magic, a version, then entries of a key and a value — where each ring lies, the numbers of its quantum policy, and whatever keys the program numbers for itself, streams among them. The host learns one offset outside the memory, the directory's — a number both ends are built with, or one the loader hands over — and finds everything else it reads from there. A key appears in a directory at most once, and one the host does not know, it passes over.
+1. **One memory.** It never moves and never grows while the guest lives, and every address that crosses is an offset into it.
+2. **The turn.** The guest runs only inside `interrupt`, and the two sides never run at once: the host touches nothing a turn writes until the turn has returned. The call carries a quota, which is advice and not a deadline, and returns `wake_ms`: 0 asks for the next turn as soon as the host schedules one, a positive number for one that many milliseconds from now, and a negative one (`NO_WAKE`) for none. A turn of no quota is still a turn, and a question the host needs answered before it goes on is asked in one.
+3. **The message.** Four words: `tag`, `cmd` with its flags, `result`, and the packet. With `ACKREQ` a message gets exactly one reply; without it, a reply only when it failed. A reply carries its message's `tag` and `cmd`, which is how an answer finds its caller, and `RES`, so a completion without it is one the guest raised on its own.
+4. **What the host sends** is applied in the order it was sent, each message once. The guest may leave some for a later turn, but never out of order and never skipped, and while it leaves any it asks for the next turn (`wake_ms` 0).
+5. **What a turn leaves** — the messages it raises, the replies it makes, the records of its streams — is taken by the host before the next turn begins, none dropped. Order holds within each place a turn writes to, the completion ring or one stream, and not between them: the host may take all of one before the other, so a guest that needs one request run before another puts both in the same place. What one turn may leave is bounded by the room set aside for it, and running past that room is a mistake in sizing it, not a state to handle.
+6. **Handles.** A handle is `slot | generation << 16`, and 0 is never a handle. The side that issued it checks the generation, so a handle kept past its release does not name what took its slot next.
+7. **The clock.** During a turn the guest reads the host's clock (`now`) in milliseconds. It never runs backward, and only the difference between two readings means anything.
+
+Everything else is one end's own. The guest's: where its ranges lie, the heap and its allocator, the tick, its passes and tasks, and its change log. The host's: how large a quota is, when to ring, and how it reads what a turn left. Neither end may lean on how the other does any of it.
+
+---
+
 ## Written twice
 
 Everything above is implemented in both Rust and TypeScript, and the two implementations are not the same kind of pair.
 
-`core` is symmetric. Each language implements the same kit, and the golden records hold the two to each other wherever they must produce identical bytes. `runtime` is not symmetric and is not meant to be: its two halves are the two ends of one arrangement. The host end is TypeScript and the guest end is Rust. A module with nothing facing it across the boundary is not a gap waiting to be filled. What the two ends must agree on is not their module lists but their formats: the message's four words, the ring's layout, the memory's sections.
+`core` is symmetric. Each language implements the same kit, and the golden records hold the two to each other wherever they must produce identical bytes. `runtime` is not symmetric and is not meant to be: its two halves are the two ends of one arrangement. The host end is TypeScript and the guest end is Rust. A module with nothing facing it across the boundary is not a gap waiting to be filled. What the two ends must agree on is not their module lists but the contract above, and the formats it travels in: the directory, the message's four words, the ring's layout, the stream's records.
 
 |             | Rust (`crates/xpute/`)                                                                                                                                                                                        | TypeScript (`packages/xpute/`)                                                                                                          |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | **core**    | `abi` words and the command number · `alloc` slab and buddy · `codec` JSON · `collection` arena, deque, heap · `math` scalar, rng · `status` errno, error, bug · `wire` XTP, TLV · `golden` the record reader | `abi` `codec` `collection` `math` `status` `wire` as the Rust, plus `kit` (comparators, iterators, types) and `env` (feature detection) |
-| **runtime** | `mem` sections, the base and the heap door · `ipc` frame, ring, stream, change log, the guest's doorbell · `sched` quantum, tick, pass, task, edge · `abi` handles, fetch · `clock` · `global`                | `mem` the reservation · `ipc` frame, ring, stream, the host's doorbell · `sched` quantum, **strobe** · `abi` handles, fetch             |
+| **runtime** | `mem` sections, the base and the heap door · `ipc` directory, frame, ring, stream, change log, the guest's doorbell · `sched` quantum, tick, pass, task, edge · `abi` handles, fetch · `clock` · `global`     | `mem` the reservation · `ipc` directory, frame, ring, stream, the host's doorbell · `sched` quantum, **strobe** · `abi` handles, fetch  |
 
-The two rows differ in what they ask of a program. `core` asks nothing: link it and call it. `runtime` asks a program to run xpute's way — memory granted once, work in turns, I/O by credits.
+The two rows differ in what they ask of a program. `core` asks nothing: link it and call it. `runtime` asks a program to run xpute's way — memory granted once, work in turns, I/O by asking.
 
 ---
 
@@ -216,3 +233,5 @@ There are two kinds, and the difference decides whether a record may ever be re-
 - **Inside a language** — everything else. A record holds one implementation to itself. Where Rust's `libm` and JavaScript's `Math` round differently, neither is wrong, and each record follows its own implementation.
 
 The rule in one line: inside a language, each follows its own; across a protocol, the results must match exactly.
+
+A third kind is not an output at all. The **traces** under `crates/xpute/conformance/golden/` say what a host does and what it must then see — the steps, and the completions, stream records and next-turn asks each turn leaves — and a test runs them against a guest through the boundary alone (`conformance trace.test.rs`). They are written from the contract's rules rather than recorded from a guest, and they name only what a host can observe: a guest's sizes, and how it keeps its output in bounds, are its own. So they hold every guest to the same thing, whatever language it is written in; the one they run against now is the Rust one (`conformance guest.rs`), over the commands `spec/xpute/conformance/guest.json` numbers.

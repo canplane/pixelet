@@ -3,17 +3,17 @@
 /**
  * The Rust core as the shell holds it, on any platform: its memory and its
  * doorbell, which the platform opens — a page instantiates the module
- * (platform/web/core.ts), a device links the library into its app — the boot
- * block read in place, and the bodies the host holds for it. Everything else crosses in the memory,
+ * (platform/web/core.ts), a device links the library into its app — its
+ * directory read in place, and the bodies the host holds for it. Everything else crosses in the memory,
  * where the kernel's first turn laid out the rings, `.fixed` and the heap
  * (crates/pxl/web/kernel/src/mem/section.rs).
  */
 
-import type { U32Array, U8Array } from "@xpute/core/abi/array.ts";
+import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
-import type { QuantumPolicy } from "@xpute/runtime/sched/quantum.ts";
+import { Directory } from "@xpute/runtime/ipc/directory.ts";
 
-import { BOOT_AT } from "@/kernel/mem/mem.spec.ts";
+import { DIRECTORY_AT } from "@/kernel/mem/mem.spec.ts";
 
 /** The core, opened and booted: its memory, which never moves or grows, and
  * its doorbell. */
@@ -27,23 +27,13 @@ export interface Core {
   interrupt(quota_ms: f64): f64;
 }
 
-/** crates/pxl/web/kernel/src/door.rs's boot block, word by word: where the
- * submission and completion rings are; the quantum the kernel declares,
- * three words in thousandths; the heap's row; and the two streams run after
- * every turn, the renderer's (platform/web/webgpu.ts, 0 where the core draws
- * itself) and the host's (host.ts). */
-export const BOOT = { sq: 0, cq: 1, quantum: 2, heap_row: 5, gpu: 6, host: 7 } as const;
-const BOOT_WORDS = 8;
-
-/** The boot block, read in place at mem.json's BOOT_AT. */
-export function boot_block(memory: ArrayBuffer): U32Array {
-  return new Uint32Array(memory, BOOT_AT, BOOT_WORDS);
-}
-
-/** The quantum the kernel declared, for the central scheduler to grant by. */
-export function quantum_policy(boot: U32Array): QuantumPolicy {
-  const at = (i: u32) => boot[BOOT.quantum + i] / 1000;
-  return { margin_share: at(0), batch_frames: at(1), settle_ms: at(2) };
+/** The directory crates/pxl/web/kernel/src/door.rs writes on the first turn,
+ * at mem.json's DIRECTORY_AT: xpute's entries — the rings and the quantum the
+ * kernel declares — and the kernel's own (abi/directory.spec.ts): the two
+ * streams run after every turn, the renderer's (platform/web/webgpu.ts, 0
+ * where the core draws itself) and the host's (host.ts), and the heap's row. */
+export function directory(memory: ArrayBuffer): Directory {
+  return new Directory(memory, DIRECTORY_AT);
 }
 
 /** Bodies the host holds for the kernel — a response, a model file, what

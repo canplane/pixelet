@@ -267,7 +267,7 @@ pub mod FRAME {
     pub const heap_refusals: u32 = 91;
     pub const heap_largest_free_mb: u32 = 92;
     pub const ring_cq_peak: u32 = 93;
-    pub const ring_spill_peak: u32 = 94;
+    pub const ring_held_peak: u32 = 94;
     pub const work_scans: u32 = 95;
     pub const work_bakes: u32 = 96;
     pub const work_fine_peak: u32 = 97;
@@ -343,7 +343,7 @@ pub mod FRAME {
         "heap_refusals",
         "heap_largest_free_mb",
         "ring_cq_peak",
-        "ring_spill_peak",
+        "ring_held_peak",
         "work_scans",
         "work_bakes",
         "work_fine_peak",
@@ -402,7 +402,7 @@ pub mod FRAME_GROUPS {
     pub const cover: &[&str] = &["cover_rule", "cover_drawn", "cover_gaps"];
     pub const device: &[&str] = &["buffers", "buffer_mb", "arena_mb", "tex_depth_mb", "tex_shadow_mb", "tex_layers_mb"];
     pub const heap: &[&str] = &["heap_used_mb", "heap_live_mb", "heap_run_mb", "heap_slot_mb", "heap_range_mb", "heap_refusals", "heap_largest_free_mb"];
-    pub const ring: &[&str] = &["ring_cq_peak", "ring_spill_peak"];
+    pub const ring: &[&str] = &["ring_cq_peak", "ring_held_peak"];
     pub const KEYS: &[&str] = &["pace", "turn", "gpu", "lod", "mounts", "stale", "slot", "cap", "work", "q", "pages", "cover", "device", "heap", "ring"];
 }
 

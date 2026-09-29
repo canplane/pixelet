@@ -33,7 +33,7 @@ pub struct Gpu(());
 static GPU: Gpu = Gpu(());
 
 /// Installs the stream at `at`, `stream::BYTES` of the kernel's memory that
-/// nothing else writes, and names it for the boot block: the page runs what
+/// nothing else writes, and names it for the directory: the page runs what
 /// is recorded there.
 ///
 /// # Safety

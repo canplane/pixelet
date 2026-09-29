@@ -1,13 +1,15 @@
 // xpute-runtime/ipc/change.rs
 
-//! The read half of the channel: which units of state changed, as data.
+//! A guest's record of which units of its state changed, as data. It is the
+//! guest's alone: nothing of it crosses to the host, and the contract
+//! (ARCHITECTURE.xpute.md) does not name it.
 //!
 //! A change is three numbers — a topic (u16, a kind of state the caller
 //! numbers), a key (u64, the unit within it) and a revision (u32). A source
 //! calls `bump`; a reader either compares a key's revision with the one it
 //! remembers, or reads the journal from its own cursor. How a reader is woken
-//! — polled from a tick, a listener, a React hook, a worker's mirror — is
-//! built over this and is not part of it
+//! — polled from a tick, a listener — is built over this and is not part of
+//! it
 //! (issue/20260913-the-read-direction-a-change-log.md).
 //!
 //! A revision is the topic's tick at the key's last change, one counter per
@@ -24,18 +26,15 @@
 //! fixed however many read it.
 //!
 //! A change carries no value. The value is the owner's, read by key where it
-//! lives, so the journal stays small and a span of it crosses a boundary as a
-//! frame body unchanged.
+//! lives, so the journal stays small.
 //!
 //! A key is i64 in the lane, so a packed word past 2^63 is that word's bits
-//! read as signed and always finds the same entry. A cursor is u32: the
-//! position word the glue reads is one, and a wrap is four billion changes.
+//! read as signed and always finds the same entry. A cursor is u32, and a
+//! wrap is four billion changes.
 
 use std::collections::HashMap;
 
 use fnv::FnvBuildHasher;
-
-use crate::mem::base::off_of;
 
 pub type Topic = u32;
 pub type Revision = u32;
@@ -150,18 +149,6 @@ impl ChangeLog {
     /// Where the entry at a position lives in the lanes.
     pub fn slot(&self, position: Cursor) -> u32 {
         position % self.capacity
-    }
-
-    /// The lanes' addresses in the memory (mem/base.rs), for a reader through
-    /// views (the glue's): topic, key, revision, the head word and the ticks.
-    pub fn lanes(&self) -> [usize; 5] {
-        [
-            off_of(self.topic.as_ptr()),
-            off_of(self.key.as_ptr()),
-            off_of(self.revision.as_ptr()),
-            off_of(&raw const self._head),
-            off_of(self.ticks.as_ptr()),
-        ]
     }
 }
 

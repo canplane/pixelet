@@ -1,6 +1,6 @@
 # Architecture — pixelet
 
-[pixelet](./README.md) turns geographic data and player-built blocks into one voxel world and draws it in a browser tab or a device app. It is an application written over [xpute](./ARCHITECTURE.xpute.md): a Rust kernel that runs as xpute's guest, a TypeScript shell that is xpute's host, and Rust servers and bakes that share the kernel's model. The kernel is one WebAssembly module in a tab and a library linked into the app on a device; the shell is the same on both. This document is what pixelet builds; what it builds on — the memory, the rings, the turn, the credits — is the other one.
+[pixelet](./README.md) turns geographic data and player-built blocks into one voxel world and draws it in a browser tab or a device app. It is an application written over [xpute](./ARCHITECTURE.xpute.md): a Rust kernel that runs as xpute's guest, a TypeScript shell that is xpute's host, and Rust servers and bakes that share the kernel's model. The kernel is one WebAssembly module in a tab and a library linked into the app on a device; the shell is the same on both. This document is what pixelet builds; what it builds on — the memory, the rings, the turn — is the other one.
 
 Most of what follows is shaped by where it has to run: a phone, in a browser tab or an app, with a frame to fill. That is why the reservation is halved there, why a chunk's working storage is torn down as soon as it is scanned, and why detail is the first thing spent when memory runs short.
 
@@ -185,7 +185,7 @@ The UI is React over one snapshot, a packet the kernel writes after a turn in wh
 
 ## The kernel's turn
 
-The turn is xpute's, and so are the quota and the credits: the host rings once, the guest spends what it was given, and the falling edge says when to ring again ([ARCHITECTURE.xpute.md](./ARCHITECTURE.xpute.md) is the mechanism). What pixelet decides is what fills it.
+The turn is xpute's, and so is the quota: the host rings once, the guest spends what it was given, and the falling edge says when to ring again ([ARCHITECTURE.xpute.md](./ARCHITECTURE.xpute.md) is the mechanism). What pixelet decides is what fills it.
 
 ```text
                            the rising edge
@@ -212,7 +212,7 @@ The turn is xpute's, and so are the quota and the credits: the host rings once, 
 
 The host submits one `WORLD_UPDATE` before it rings — the viewport, the gap since the last turn, and how many reads this turn's credits allow to be out — and reads the completion ring after. Everything else here is the kernel's.
 
-**The quota's policy** is the kernel's (`sched/tick.rs`, `QUANTUM`). It reaches the host in the boot block, the words `boot` writes at the front of the memory for the shell to read once.
+**The quota's policy** is the kernel's (`sched/tick.rs`, `QUANTUM`). It reaches the host in the kernel's directory (xpute's, `ipc/directory.rs`), which `boot` writes on the first turn for the shell to read once.
 
 What the policy says: the frame is the 25th percentile of recent gaps between frames, ignoring any gap over 50 ms. A turn is interactive when input arrived within `settle_ms`, or when the kernel asked for it on its last falling edge. An interactive turn gets that frame less a margin; every other turn gets `batch_frames` frames.
 
@@ -234,7 +234,7 @@ What the policy says: the frame is the 25th percentile of recent gaps between fr
 
 ## The channel
 
-The shell and the kernel share three rings, each 2048 messages of four words with 4 KiB payload slots. Two of them are the pair xpute describes: one for what the shell submits, one for what the kernel completes. The third is a spill, which the completion ring overflows into when it is full, so that nothing is dropped and completions stay in order.
+The shell and the kernel share the two rings xpute describes, of four-word messages with 4 KiB payload slots: 2048 for what the shell submits, 4096 for what the kernel completes (`mem.json`). The completion ring holds everything one turn leaves, since the shell reads it dry before it rings again; a turn that has too little room left for what one more command might raise leaves the rest of the submissions for the next turn, in order, and asks for it.
 
 The commands are `spec/pxl/web/kernel/abi/cmd.json`'s: each one's number and the fields of the packet it carries, from which both sides' readers and writers are generated, so no field is found by its position anywhere else. A packet is an XTP tree, and anything larger than a slot crosses in a heap block the kernel hands out.
 

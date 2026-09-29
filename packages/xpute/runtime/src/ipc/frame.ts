@@ -60,7 +60,8 @@ export const enum FrameFlag {
    * completion it tells a reply from a signal the other side raised.
    */
   RES = 1,
-  /** Exactly one reply is sent; without it, none is. */
+  /** Exactly one reply is sent; without it, one is sent only when the
+   * message failed. */
   ACKREQ = 2,
 }
 

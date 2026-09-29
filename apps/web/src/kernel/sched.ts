@@ -17,7 +17,7 @@ import type { f64 } from "@xpute/core/abi/word.ts";
 import { Strobe } from "@xpute/runtime/sched/strobe.ts";
 import { Command, encode_world_update } from "@/kernel/abi/cmd.spec.ts";
 import { CORE, CORE_DOORBELL } from "@/kernel/mem.ts";
-import { boot_block, quantum_policy } from "@/kernel/module.ts";
+import { directory } from "@/kernel/module.ts";
 
 /** The surface's size in CSS pixels, and the device pixels to one, as the
  * frame reads them: the platform's to say, since a page's window has a ratio
@@ -78,7 +78,7 @@ const NET_CREDITS = 6;
 export let strobe: Strobe;
 
 export function start_sched(): void {
-  strobe = new Strobe(CORE_DOORBELL, quantum_policy(boot_block(CORE.buffer)), (grant, delta_s) => {
+  strobe = new Strobe(CORE_DOORBELL, directory(CORE.buffer).quantum(), (grant, delta_s) => {
     if (driver === null) return;
     const { width: w, height: h, dpr } = driver();
     const width = Math.max(1, w);
