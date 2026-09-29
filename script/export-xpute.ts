@@ -281,7 +281,7 @@ This is a copy. xpute is developed inside pixelet, a closed application that is 
 
 Taken from **${at}**.
 
-The four files generated from \`spec/xpute/\` — the errno table and the fetch ABI, on both sides — are checked in as pixelet generates them. The generator itself knows every one of pixelet's specs and did not come along, so this copy reads but does not regenerate them.
+The files generated from \`spec/xpute/\` are checked in as pixelet generates them. The generator itself knows every one of pixelet's specs and did not come along, so this copy reads but does not regenerate them.
 
 `;
   return doc.slice(0, atLicense) + provenance + doc.slice(atLicense);

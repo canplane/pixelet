@@ -8,9 +8,9 @@
 //! The completion ring holds everything one turn leaves: the host reads it
 //! dry before it rings again (the contract's rule 5, ARCHITECTURE.xpute.md),
 //! so a turn starts on an empty ring and one that would overrun it has left
-//! more than it was sized for — a sizing fault, as a full pool is, and not a state to
-//! wait out. Each message is written once, in place, and nothing is held on
-//! a heap.
+//! more than it was sized for — a sizing fault, as a full pool is, and not a
+//! state to wait out. Each message is written once, in place, and nothing is
+//! held on a heap.
 
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
