@@ -2,15 +2,16 @@
 
 //! The guest's end of its rings (the host's is ipc/doorbell.ts): what waits in
 //! the submission ring applied in order, and what the guest makes posted into
-//! the completion ring — or into a spill behind it while the host has not
-//! read, so what was raised first is read first and nothing is dropped. What
-//! a command does is the guest's, handed to `drain`; the order, the replies
-//! and the backpressure are this.
+//! the completion ring. What a command does is the guest's, handed to
+//! `drain`; the order, the replies and the backpressure are this.
 //!
-//! Each message is written once, in place, and nothing is held on a heap. A
-//! spill that fills as well is a sizing fault, as a full pool is.
+//! The completion ring holds everything one turn leaves: the host reads it
+//! dry before it rings again (the contract's rule 5, ARCHITECTURE.xpute.md),
+//! so a turn starts on an empty ring and one that would overrun it has left
+//! more than it was sized for — a sizing fault, as a full pool is, and not a state to
+//! wait out. Each message is written once, in place, and nothing is held on
+//! a heap.
 
-use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::PacketWriter;
@@ -18,16 +19,19 @@ use xpute_core::wire::xtp::PacketWriter;
 use crate::ipc::frame::FrameFlag;
 use crate::ipc::ring::Ring;
 
-/// Where a door's three rings lie in the memory: each ring's descriptors at
-/// `desc_at` and a stride apart, its slots' payloads at `slot_at` and a stride
-/// apart, submission first, then completion, then the spill.
-pub struct DoorLayout {
+/// Where one ring lies in the memory: how many messages it holds, its
+/// descriptors, and its slots' payloads.
+pub struct RingLayout {
     pub capacity: u32,
-    pub slot_bytes: u32,
     pub desc_at: u32,
-    pub desc_stride: u32,
     pub slot_at: u32,
-    pub slot_stride: u32,
+}
+
+/// Where a door's two rings lie, and how large a slot's payload is in both.
+pub struct DoorLayout {
+    pub slot_bytes: u32,
+    pub submission: RingLayout,
+    pub completion: RingLayout,
 }
 
 /// A packet's bytes written in place into a ring slot: its length, or none
@@ -44,39 +48,34 @@ pub type Applied = Result<Option<i32>, MarshalError>;
 /// so this bounds a single command rather than a turn.
 const MOST_SIGNALS: u32 = 64;
 
+/// What one command may leave in the completion ring: its signals, and its
+/// reply.
+const MOST_COMPLETIONS: u32 = MOST_SIGNALS + 1;
+
 pub struct Door {
     sq: Ring,
     cq: Ring,
-    spill: Ring,
-    /// Told the completion ring's and the spill's lengths at every post, for
-    /// whoever measures how full they run.
+    /// Told the completion ring's length at every post, and how many
+    /// submissions a drain left unapplied, for whoever measures how full the
+    /// rings run.
     note: fn(u32, u32),
 }
 
 impl Door {
-    /// Lays out three empty rings over the memory at `mem`, where `layout`
+    /// Lays out two empty rings over the memory at `mem`, where `layout`
     /// says.
     ///
     /// # Safety
     /// `mem` stays valid and never moves for as long as the door is used, and
     /// the ranges `layout` names are the door's alone.
     pub unsafe fn init(mem: *mut u8, layout: &DoorLayout, note: fn(u32, u32)) -> Door {
-        let ring = |n: u32| {
+        let ring = |r: &RingLayout| {
             // SAFETY: the caller's memory and ranges.
-            unsafe {
-                Ring::init(
-                    mem,
-                    layout.desc_at + n * layout.desc_stride,
-                    layout.capacity,
-                    layout.slot_at + n * layout.slot_stride,
-                    layout.slot_bytes,
-                )
-            }
+            unsafe { Ring::init(mem, r.desc_at, r.capacity, r.slot_at, layout.slot_bytes) }
         };
         Door {
-            sq: ring(0),
-            cq: ring(1),
-            spill: ring(2),
+            sq: ring(&layout.submission),
+            cq: ring(&layout.completion),
             note,
         }
     }
@@ -91,19 +90,13 @@ impl Door {
         &self.cq
     }
 
-    /// Posts a message: the completion ring while it has room and nothing
-    /// waits before it, otherwise the spill behind it.
+    /// Posts a message into the completion ring.
     pub fn post(&self, tag: u32, cmd: u32, flags: u32, result: i32, write: Option<Write<'_>>) {
-        let push = |r: &Ring| match write {
-            Some(w) => r.push_in_place(tag, cmd, flags, result, w),
-            None => r.push(tag, cmd, flags, None, result),
+        let e = match write {
+            Some(w) => self.cq.push_in_place(tag, cmd, flags, result, w),
+            None => self.cq.push(tag, cmd, flags, None, result),
         };
-        if self.spill.is_empty() && push(&self.cq) == Errno::OK {
-            (self.note)(self.cq.len(), 0);
-            return;
-        }
-        let e = push(&self.spill);
-        (self.note)(self.cq.len(), self.spill.len());
+        (self.note)(self.cq.len(), 0);
         xpute_core::ensure!(e == Errno::OK, ENOSPC, cmd, e as i32);
     }
 
@@ -122,50 +115,36 @@ impl Door {
         );
     }
 
-    /// Whether another command's worth of signals has somewhere to go. What
+    /// Whether another command's signals and reply have somewhere to go. What
     /// `drain` stops on: a command that has not been applied can be left in
-    /// the submission ring for the next call, where what it would have raised
-    /// cannot be left anywhere.
-    ///
-    /// The margin is the spill rather than the completion ring, so the host
-    /// is asked to read before anything is at risk — io_uring answers a
-    /// submission `-EBUSY` while its backlog stands, for the same reason.
+    /// the submission ring for the next turn, where what it would have raised
+    /// cannot be left anywhere. The receiver's room bounds what the sender
+    /// may start, as a credit-based link does, so nothing is refused for want
+    /// of it once started — io_uring answers a submission `-EBUSY` while its
+    /// completions back up, for the same reason.
     fn has_room(&self) -> bool {
-        self.spill.len() + MOST_SIGNALS <= self.spill.capacity
+        self.cq.len() + MOST_COMPLETIONS <= self.cq.capacity
     }
 
-    /// Moves what fits of the spill into the completion ring, in order.
-    fn flush(&self) {
-        loop {
-            let at = self.spill.peek();
-            if at < 0 {
-                return;
-            }
-            let at = at as u32;
-            let pkt = self.spill.packet(at).or_bug(Errno::ENOTRECOVERABLE);
-            if self.cq.push(self.spill.tag(at), self.spill.cmd(at), self.spill.flags(at), pkt, self.spill.result(at)) != Errno::OK {
-                return;
-            }
-            self.spill.advance();
-        }
+    /// Whether a submission waits that `drain` left for a later turn: the
+    /// guest asks for the next one while it does.
+    pub fn pending(&self) -> bool {
+        self.sq.peek() >= 0
     }
 
     /// Applies every submission waiting, each by `apply`: its number and its
-    /// packet. What they make goes into the completion ring as far as it has
-    /// room; the rest waits in the guest, in order, for the next call —
-    /// nothing is dropped, and nothing sent waits to be applied, which is
-    /// what lets a read see every write before it. Replies to what asks
-    /// (`ACKREQ`), and to what failed — a command nobody numbers, a packet
-    /// that does not read — since a command's effect is otherwise its
-    /// signals. How many completions the call made.
+    /// packet, while the completion ring has room for what one more might
+    /// raise; the rest waits in the submission ring, in order, for the next
+    /// turn (`pending`) — nothing is dropped, and nothing is applied out of
+    /// the order it was sent, which is what lets a read see every write
+    /// before it. Replies to what asks (`ACKREQ`), and to what failed — a
+    /// command nobody numbers, a packet that does not read — since a
+    /// command's effect is otherwise its signals. How many completions the
+    /// call made.
     pub fn drain(&self, mut apply: impl FnMut(u32, &Option<&[u8]>) -> Applied) -> u32 {
         let tail = self.cq.tail();
-        self.flush();
         loop {
             if !self.has_room() {
-                // Backpressure rather than a panic: what is left stays in the
-                // submission ring, in order, and the host reads the
-                // completions before it is drained again.
                 break;
             }
             let at = self.sq.peek();
@@ -187,6 +166,11 @@ impl Door {
                 self.post(tag, number, FrameFlag::RES as u32, result.unwrap_or_else(|errno| errno), None);
             }
         }
+        (self.note)(self.cq.len(), self.sq.len());
         self.cq.tail().wrapping_sub(tail)
     }
 }
+
+#[cfg(test)]
+#[path = "doorbell.test.rs"]
+mod test;

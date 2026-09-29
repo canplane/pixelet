@@ -16,7 +16,9 @@
 import type { f64 } from "@xpute/core/abi/word.ts";
 import { Doorbell } from "@xpute/runtime/ipc/doorbell.ts";
 import { openCore } from "@platform/core.ts";
-import { BOOT, boot_block, type Core } from "@/kernel/module.ts";
+import { key } from "@xpute/runtime/ipc/directory.spec.ts";
+import { key as kernel_key } from "@/kernel/abi/directory.spec.ts";
+import { type Core, directory } from "@/kernel/module.ts";
 import { run_host_stream } from "@/kernel/host.ts";
 
 // Set once by `load_core`, which the boot awaits before anything that reads
@@ -41,14 +43,15 @@ export let CORE_DOORBELL: Doorbell;
  * client — the memory exists for the kernel. */
 export async function load_core(): Promise<void> {
   const core = await openCore();
-  const boot = boot_block(core.buffer);
+  const dir = directory(core.buffer);
+  const host_stream = dir.get(kernel_key.HOST_STREAM);
   CORE = core;
-  CORE_DOORBELL = new Doorbell(core.buffer, boot[BOOT.sq], boot[BOOT.cq], (quota_ms) => {
+  CORE_DOORBELL = new Doorbell(core.buffer, dir.get(key.SUBMISSION), dir.get(key.COMPLETION), (quota_ms) => {
     let wake: f64;
     try {
       wake = core.interrupt(quota_ms);
     } finally {
-      run_host_stream(core.buffer, boot[BOOT.host]);
+      run_host_stream(core.buffer, host_stream);
     }
     return wake;
   });

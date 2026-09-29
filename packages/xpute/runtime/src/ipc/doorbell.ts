@@ -8,12 +8,15 @@
  * A ring of the doorbell is a whole turn (sched/quantum.ts): the rising edge
  * carries the quota, and the call's return is the falling edge, when the
  * guest wants its next turn. The guest runs only inside a ring. A ring with no
- * quota only applies what waits: a query asked at boot, or the one message
+ * quota is a turn all the same: a query asked at boot, or the one message
  * that cannot wait for a frame.
  *
- * A completion the ring had no room for waits in the guest, and so does a
- * submission it held back for want of room: a turn whose completion ring came
- * back full is read and rung again with no quota until it does not.
+ * Everything a turn leaves is read before the next one is rung (the
+ * contract's rule 5, ARCHITECTURE.xpute.md), so the completion ring holds one
+ * turn's worth and a listener may not ring the guest while it is being read
+ * — that turn would begin with the one before it half read. A submission the
+ * guest held back for want of room waits in its ring, and the guest asks for
+ * the next turn while one does.
  */
 
 import type { f64, i32, u32 } from "@xpute/core/abi/word.ts";
@@ -36,24 +39,14 @@ export type SignalListener = (tag: u32, cmd: u32, f: BranchCursor | null) => voi
 /** The guest's doorbell: a turn of `quota_ms`, and when it wants the next. */
 export type Interrupt = (quota_ms: f64) => f64;
 
-/** The sooner of two falling edges' asks, a negative one being none. */
-function sooner(a: f64, b: f64): f64 {
-  if (a < 0) return b;
-  if (b < 0) return a;
-  return Math.min(a, b);
-}
-
 export class Doorbell {
   private readonly sq: Ring;
   private readonly cq: Ring;
-  /** The calls waiting on their replies, by tag; and the replies a call
-   * made inside a listener read ahead of the completion ring's head, which
-   * the read under it then passes over. */
+  /** The calls waiting on their replies, by tag. */
   private next_call: u32 = 0;
   private readonly waiting = new Map<u32, (result: i32, f: BranchCursor | null) => void>();
-  private readonly taken = new Set<u32>();
-  /** How deep in `read` this is: a listener runs inside it. */
-  private reading = 0;
+  /** Whether the completion ring is being read: a listener runs inside it. */
+  private reading = false;
   /** Who hears the signals. */
   signal: SignalListener | null = null;
   /** Who hears every falling edge's ask, whichever ring it came back from. */
@@ -71,18 +64,14 @@ export class Doorbell {
 
   /**
    * A turn of `quota_ms`, and everything it left handed out: the falling
-   * edge's ask, as `wake` hears it too. Inside a listener, where the ring is
-   * being read under this call, only the guest is rung.
+   * edge's ask, as `wake` hears it too.
    */
   ring(quota_ms: f64): f64 {
-    let wake = this.edge(quota_ms);
-    if (this.reading > 0) return wake;
-    for (;;) {
-      const full = this.cq.len === this.cq.capacity;
-      this.read();
-      if (!full) return wake;
-      wake = sooner(wake, this.edge(0));
-    }
+    if (this.reading) throw new InvariantError(Errno.EBUSY);
+    const wake = this.interrupt(quota_ms);
+    this.read();
+    this.wake?.(wake);
+    return wake;
   }
 
   /**
@@ -91,16 +80,15 @@ export class Doorbell {
    * `take` reads the reply; its packet is valid only inside it.
    */
   call<T>(cmd: u32, pkt: U8Array | null, take: (result: i32, reply: BranchCursor | null) => T): T {
+    // Refused before anything is submitted: a call from inside a listener
+    // cannot be answered without a turn, and one left in the ring would be
+    // applied after the caller was told it failed.
+    if (this.reading) throw new InvariantError(Errno.EBUSY);
     const tag = this.next_call = (this.next_call + 1) >>> 0;
     let out: { value: T } | null = null;
     this.waiting.set(tag, (result, f) => out = { value: take(result, f) });
     try {
       this.submit(tag, cmd, pkt, FrameFlag.ACKREQ);
-      if (this.reading > 0) {
-        this.edge(0);
-        this.take_ahead(tag);
-        if (out === null) throw new InvariantError(Errno.ENOSPC);
-      }
       while (out === null) {
         const pending = this.sq.len;
         this.ring(0);
@@ -112,14 +100,8 @@ export class Doorbell {
     return (out as { value: T }).value;
   }
 
-  private edge(quota_ms: f64): f64 {
-    const wake = this.interrupt(quota_ms);
-    this.wake?.(wake);
-    return wake;
-  }
-
   private read(): void {
-    this.reading++;
+    this.reading = true;
     try {
       const cq = this.cq;
       for (let at = cq.peek(); at >= 0; at = cq.peek()) {
@@ -129,9 +111,7 @@ export class Doorbell {
         const f: BranchCursor | null = pkt ? new TreeReader(pkt).read_branch() : null;
         if (cq.flags(at) & FrameFlag.RES) {
           const waiting = this.waiting.get(tag);
-          if (this.taken.delete(tag)) {
-            // Read already, by the call that asked, from inside a listener.
-          } else if (waiting !== undefined) {
+          if (waiting !== undefined) {
             waiting(cq.result(at), f);
           } else if (cq.result(at) < 0) {
             console.warn(`[xpute/doorbell] command 0x${cmd.toString(16)} failed: errno ${cq.result(at)}`);
@@ -144,7 +124,7 @@ export class Doorbell {
         cq.advance();
       }
     } finally {
-      this.reading--;
+      this.reading = false;
     }
   }
 
@@ -154,20 +134,6 @@ export class Doorbell {
       if (errno === Errno.OK) return;
       if (errno !== Errno.EAGAIN) throw new Error(`[xpute/doorbell] command 0x${cmd.toString(16)} refused by the ring: ${errno}`);
       this.ring(0);
-    }
-  }
-
-  /** The reply to `tag`, read where it waits in the completion ring. A
-   * message not yet consumed holds its slot, so its packet stays whole. */
-  private take_ahead(tag: u32): void {
-    const cq = this.cq;
-    for (let pos = cq.head; pos !== cq.tail; pos = (pos + 1) >>> 0) {
-      const at = cq.entry_at(pos);
-      if ((cq.flags(at) & FrameFlag.RES) === 0 || cq.tag(at) !== tag) continue;
-      const pkt = cq.packet(at);
-      this.waiting.get(tag)!(cq.result(at), pkt ? new TreeReader(pkt).read_branch() : null);
-      this.taken.add(tag);
-      return;
     }
   }
 }

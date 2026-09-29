@@ -27,7 +27,8 @@
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { reserve_memory } from "@xpute/runtime/mem/reserve.ts";
 import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@/kernel/mem/mem.spec.ts";
-import { BOOT, boot_block, type Core } from "@/kernel/module.ts";
+import { key } from "@/kernel/abi/directory.spec.ts";
+import { type Core, directory } from "@/kernel/module.ts";
 import { runGpuStream } from "@/platform/web/webgpu.ts";
 import { DEV_BUNDLE } from "@/config/bundle.ts";
 
@@ -78,14 +79,14 @@ export async function openCore(): Promise<Core> {
   });
   const turn = instance.exports.interrupt as Core["interrupt"];
   // A turn with no quota applies what waits, which is nothing: the first one
-  // lays the memory out and writes the boot block.
+  // lays the memory out and writes the directory.
   turn(0);
   // The reservation's maximum is its initial size, so the buffer is never
   // replaced by a grow and one reference to it holds for the page's life.
   const buffer = memory.buffer as ArrayBuffer;
   // A module reaches WebGPU no other way than through the page, so the calls
   // its renderer recorded in a turn are made as the turn returns.
-  const gpu = boot_block(buffer)[BOOT.gpu];
+  const gpu = directory(buffer).get(key.GPU_STREAM);
   const interrupt = (quotaMs: f64) => {
     const wake = turn(quotaMs);
     runGpuStream(buffer, gpu);

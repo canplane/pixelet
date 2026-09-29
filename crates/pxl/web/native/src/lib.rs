@@ -71,7 +71,7 @@ pub extern "C" fn pxl_interrupt(quota_ms: f64) -> f64 {
 }
 
 /// The memory: its first byte, with its bytes written through `bytes` — what
-/// the shell reads the boot block and the rings through.
+/// the shell reads the directory and the rings through.
 ///
 /// # Safety
 /// `bytes` is null or points at a `u32` the caller owns.

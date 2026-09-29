@@ -9,7 +9,7 @@
 //! running on a single thread makes sound.
 //!
 //! Using this means running the way it runs: a turn on a doorbell, a quota
-//! measured from the frame, I/O granted by credits. That is the line between
+//! measured from the frame, I/O asked of the host. That is the line between
 //! it and `xpute-core`, which asks nothing of its caller.
 
 pub mod abi;

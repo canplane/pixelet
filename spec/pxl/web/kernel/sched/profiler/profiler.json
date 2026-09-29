@@ -141,7 +141,7 @@
     "heap_refusals": 91,
     "heap_largest_free_mb": 92,
     "ring_cq_peak": 93,
-    "ring_spill_peak": 94,
+    "ring_held_peak": 94,
     "work_scans": 95,
     "work_bakes": 96,
     "work_fine_peak": 97,
@@ -278,7 +278,7 @@
     ],
     "ring": [
       "ring_cq_peak",
-      "ring_spill_peak"
+      "ring_held_peak"
     ]
   },
   "TASK": {

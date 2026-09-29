@@ -41,7 +41,8 @@ import { SETTINGS } from "@/feature/setting/schema.spec.ts";
 import { ELE_PADDED_SPAN, encode_terrain, pack_ground_cell, PAGE_CELLS } from "@/kernel/fixture.ts";
 
 import { CORE, CORE_DOORBELL, load_core } from "@/kernel/mem.ts";
-import { BOOT, boot_block, bytes_at, hold_body } from "@/kernel/module.ts";
+import { key as entry } from "@/kernel/abi/directory.spec.ts";
+import { bytes_at, directory, hold_body } from "@/kernel/module.ts";
 import { acquireDevice } from "@/platform/web/webgpu.ts";
 
 // The module the tests drive, loaded before any of them reads it.
@@ -113,7 +114,7 @@ function terrain_body(seed: u32): U8Array {
  * requests. `used` is the top the heap has reached. */
 const HEAP_TOP = 1;
 const HEAP_REQUESTS = 8;
-const heap_row = new Uint32Array(CORE.buffer, boot_block(CORE.buffer)[BOOT.heap_row], 9);
+const heap_row = new Uint32Array(CORE.buffer, directory(CORE.buffer).get(entry.HEAP_ROW), 9);
 let strobe_requests = 0;
 const answer_requests: Record<string, number> = {};
 

@@ -15,15 +15,26 @@
 
 import type { u32 } from "@xpute/core/abi/word.ts";
 
-/** Messages a ring holds, and so payloads: one a slot
+/** Messages the submission ring holds, and so payloads: one a slot
  * (issue/20260917-the-ring-a-slot-and-its-payload.md). A power of two, which
  * the ring checks, since a position is taken modulo it by masking. */
-export const RING_CAPACITY: u32 = 2048 as number;
+export const SUBMISSION_CAPACITY: u32 = 2048 as number;
 
-/** Where the boot block is: the page under GLOBAL_BASE, past the rings' payloads. At
- * an address both sides know rather than one the module hands out, so the shell
- * finds it with no call but the first turn's, which lays the memory out. */
-export const BOOT_AT: u32 = 33550336 as number;
+/** Messages the completion ring holds: everything one turn leaves, since the
+ * shell reads it dry before it rings again, and a turn that leaves more is a
+ * fault in this number. Wider than the submission ring, since a turn answers
+ * what it was sent and raises its own signals besides; twice is the present
+ * sizing, giving the two the same room, and not a bound derived from either.
+ * Nothing is overrun if it is wrong: a command whose signals and reply would
+ * not fit waits for the next turn (xpute-runtime ipc/doorbell.rs). A power of
+ * two, as the submission ring's. */
+export const COMPLETION_CAPACITY: u32 = 4096 as number;
+
+/** Where the kernel's directory is (xpute-runtime ipc/directory.rs): the page under
+ * GLOBAL_BASE, past the rings' payloads. At an address both sides are built with
+ * rather than one the module hands out, so the shell finds it with no call but the
+ * first turn's, which lays the memory out and writes it. */
+export const DIRECTORY_AT: u32 = 33550336 as number;
 
 /** What a device's memory is counted in: a reservation is a whole number of
  * these and the bytes past the last one are left out. */

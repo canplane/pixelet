@@ -4,7 +4,7 @@
 //! state, with the numbers this world measured. How a tick runs is the
 //! mechanism's; what is here is what the kernel asks of it — its phases'
 //! share, its settle time, and the quantum it declares to the central
-//! scheduler (the boot block carries QUANTUM) — and the one step table the
+//! scheduler (the directory carries QUANTUM) — and the one step table the
 //! kernel keeps.
 //!
 //! The table is for outside a tick: a step that unregisters asks its

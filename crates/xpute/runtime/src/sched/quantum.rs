@@ -9,7 +9,7 @@
 //! the guest spends it on its own tasks cooperatively (sched/tick.rs,
 //! sched/edge.rs) and, on the falling edge, hands the turn back with when it
 //! wants the next one. The host knows nothing of what runs inside. Memory is
-//! granted once (mem.rs) and I/O by credits (io.rs), on the same footing.
+//! granted once (mem.rs), and I/O is asked of the host (io.rs).
 //!
 //! Sizing that quota is the host's alone (sched/quantum.ts): the frame interval
 //! it measures rather than assumes, the overrun a turn carries into its own
@@ -18,7 +18,7 @@
 //! arrangement, not one thing implemented twice, and a guest that could size
 //! its own quota would not be under a scheduler. What must agree is the
 //! format, and the format is this file: three numbers the guest declares in
-//! its boot block, one quota in, one wake out.
+//! its directory (ipc/directory.rs), one quota in, one wake out.
 
 /// A falling edge that asks for no next edge: the guest waits on something
 /// only the host can bring, an input or an arrival.

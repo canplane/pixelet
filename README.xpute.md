@@ -1,6 +1,6 @@
 # xpute
 
-xpute runs one program inside another. The **host** owns the machine — the clock, the memory, the I/O — and the **guest** computes and owns nothing. Everything the guest has, the host granted it, a slice at a time: the memory once at boot, a quota of time on every turn, credits for the I/O it asks for. That is what an operating system has with a process, without the hardware that enforces it.
+xpute runs one program inside another. The **host** owns the machine — the clock, the memory, the I/O — and the **guest** computes and owns nothing. Everything the guest has, the host granted it, a slice at a time: the memory once at boot, and a quota of time on every turn. That is what an operating system has with a process, without the hardware that enforces it.
 
 **xpute is both ends of that arrangement, and `core`, the generic code underneath them.** All of it is written twice, once in Rust and once in TypeScript.
 
@@ -27,9 +27,9 @@ Three edges, and one call the other way: the guest reads the host's clock (`now`
 
 `interrupt` is the whole of the guest's life. It runs when the host rings, for as long as the quota it was handed, and when the call returns it is not running at all — its answer is when it would like the next one. A guest that asks for nothing is rung for nothing.
 
-Two budgets run and they never touch: time for the guest's own work, and credits for the work the host does on its behalf.
+What the guest cannot do itself — a fetch, a call to a device — it asks for in what its turn leaves, and the host takes every such request before it rings again.
 
-[ARCHITECTURE.xpute.md](./ARCHITECTURE.xpute.md) is what each piece is and why it is shaped that way: the memory, the rings, the change log, the turn, the credits, the handles, the wire formats, the records.
+[ARCHITECTURE.xpute.md](./ARCHITECTURE.xpute.md) is what each piece is and why it is shaped that way: the memory, the rings, the change log, the turn, the handles, the contract either end must keep, the wire formats, the records.
 
 ## `core` and `runtime`
 
@@ -42,6 +42,7 @@ Golden records under `crates/xpute/core/golden/` hold the two languages to each 
 ```text
 crates/xpute/core     ·  packages/xpute/core       the same kit, twice
 crates/xpute/runtime  ·  packages/xpute/runtime    the guest end · the host end
+crates/xpute/conformance                           the contract's traces, and a guest they run against
 spec/xpute                                         numbers both are generated from
 ```
 

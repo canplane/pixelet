@@ -8,5 +8,6 @@
 //! and it belongs in one place there rather than split between a mechanism
 //! here and a caller above it.
 //!
-//! What is left of the arrangement is the grant: the host says how many reads
-//! may be out this turn, and the guest says which.
+//! So nothing of it is left here. The guest asks for its I/O in what its turn
+//! leaves, and how many reads may be out at once, and which, is the program's
+//! own: a host that bounds them says so in the program's messages.
