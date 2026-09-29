@@ -12,13 +12,13 @@ fn counts() -> Vec<Slots> {
 #[test]
 fn the_feasible_step_is_the_finest_that_fits_every_pool() {
     let c = counts();
-    assert_eq!(feasible(&c, [400, 2_000], 10, [0; POOLS]), Some(0));
-    assert_eq!(feasible(&c, [400, 1_000], 10, [0; POOLS]), Some(2));
-    assert_eq!(feasible(&c, [100, 2_000], 10, [0; POOLS]), Some(3));
-    assert_eq!(feasible(&c, [100, 2_000], 10, [20, 0]), Some(4));
-    assert_eq!(feasible(&c, [5, 50], 10, [0; POOLS]), None);
+    assert_eq!(feasible(&c, [400, 2_000], [10; POOLS], [0; POOLS]), Some(0));
+    assert_eq!(feasible(&c, [400, 1_000], [10; POOLS], [0; POOLS]), Some(2));
+    assert_eq!(feasible(&c, [100, 2_000], [10; POOLS], [0; POOLS]), Some(3));
+    assert_eq!(feasible(&c, [100, 2_000], [10; POOLS], [20, 0]), Some(4));
+    assert_eq!(feasible(&c, [5, 50], [10; POOLS], [0; POOLS]), None);
     for arena in [[40, 300], [200, 600], [260, 1_500], [1_000, 5_000]] {
-        let Some(k) = feasible(&c, arena, 10, [0; POOLS]) else { continue };
+        let Some(k) = feasible(&c, arena, [10; POOLS], [0; POOLS]) else { continue };
         let fits = |k: usize| (0..POOLS).all(|p| c[k][p] + 10 <= arena[p]);
         assert!((k..c.len()).all(fits), "{arena:?}: a step coarser than the feasible one does not fit");
         assert!(k == 0 || !fits(k - 1), "{arena:?}: a finer step fits");
@@ -31,7 +31,10 @@ fn the_feasible_step_is_the_finest_that_fits_every_pool() {
 fn with_room_for_the_target_the_target_is_in_force() {
     let mut s = Smooth::default();
     let c = counts();
-    let (star, roomy) = (feasible(&c, [10_000, 10_000], 40, [0; POOLS]).unwrap(), feasible(&c, [10_000, 10_000], 40, [500, 500]).unwrap());
+    let (star, roomy) = (
+        feasible(&c, [10_000, 10_000], [40; POOLS], [0; POOLS]).unwrap(),
+        feasible(&c, [10_000, 10_000], [40; POOLS], [500, 500]).unwrap(),
+    );
     for t in 0..10 {
         assert_eq!(s.follow(star, roomy, 1_000.0, t as f64 * 500.0), 0);
     }
@@ -93,13 +96,13 @@ fn asking_about_the_step_in_force_moves_as_the_whole_ladder_does() {
     let spare = [20, 100];
     for arena in [[40, 300], [100, 2_000], [200, 600], [260, 1_500], [400, 2_000], [1_000, 5_000], [5, 50]] {
         let last = c.len() - 1;
-        let star = feasible(&c, arena, 10, [0; POOLS]).unwrap_or(last);
-        let roomy = feasible(&c, arena, 10, spare).unwrap_or(last);
+        let star = feasible(&c, arena, [10; POOLS], [0; POOLS]).unwrap_or(last);
+        let roomy = feasible(&c, arena, [10; POOLS], spare).unwrap_or(last);
         for at in 0..c.len() {
             let mut asked = Vec::new();
             let local = around(at, c.len(), |k, room| {
                 asked.push(k);
-                fits(c[k], arena, 10, if room { spare } else { [0; POOLS] })
+                fits(c[k], arena, [10; POOLS], if room { spare } else { [0; POOLS] })
             });
             let (mut whole, mut near) = (Smooth::default(), Smooth::default());
             for s in [&mut whole, &mut near] {
@@ -108,9 +111,33 @@ fn asking_about_the_step_in_force_moves_as_the_whole_ladder_does() {
             for t in [1.0, 2_000.0] {
                 assert_eq!(whole.follow(star, roomy, 1_000.0, t), near.follow(local.0, local.1, 1_000.0, t), "{arena:?} from {at}");
             }
-            let fit_at = fits(c[at], arena, 10, [0; POOLS]);
+            let fit_at = fits(c[at], arena, [10; POOLS], [0; POOLS]);
             let most = if fit_at { 3 } else { star.max(at) - at + 1 };
             assert!(asked.len() <= most, "{arena:?} from {at}: asked {asked:?}");
         }
     }
+}
+
+/// The target is the cell a screen's logical pixels make at its optical
+/// axis: the reference view `SPLIT` was stated at asks the criterion itself,
+/// a screen half as tall a cell twice as wide, and one that would ask finer
+/// than the criterion is held at it. What the screen is rasterized at plays
+/// no part.
+#[test]
+fn the_target_is_the_screens_cell_and_never_finer_than_the_criterion() {
+    let _g = crate::global::serial();
+    let v = view();
+    let kept = (v.height, v.fov);
+    v.fov = 50.0;
+    let at = |height: f64| {
+        view().height = height;
+        target().scale()
+    };
+    let span = |height: f64| 2.0 * (param::CENTER_CELL_LOGICAL_PX * 25f64.to_radians().tan() / height).atan() * SPLIT;
+    assert!((span(1080.0) - 1.0).abs() < 0.01, "the reference view's cell is not the criterion's: {}", span(1080.0));
+    assert_eq!(at(1080.0), 1.0);
+    assert!((at(540.0) - span(540.0)).abs() < 1e-12, "not the angle half the height's cell spans: {}", at(540.0));
+    assert!((at(540.0) / span(1080.0) - 2.0).abs() < 1e-4, "half the height, not about twice the cell: {}", at(540.0));
+    assert_eq!(at(2160.0), 1.0, "a logical screen finer than the criterion asked past it");
+    (v.height, v.fov) = kept;
 }

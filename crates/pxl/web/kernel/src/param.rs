@@ -21,28 +21,36 @@
 //! Knobs defined outside the kernel, because what is outside shares them,
 //! and tuned there:
 //!
-//! - pxl-spec space/lod.rs `SPLIT`: the criterion, in units of a cell's side.
-//!   The bake and the fault bound are sized by it, so it moves every level
-//!   and every bound together; a quality coarser than it is a `Tau`, whose
-//!   target is `TAU_TARGET` here.
+//! - pxl-spec space/lod.rs `SPLIT`: the criterion, in units of a cell's side,
+//!   and so the finest cell angle the system is sized for, `1 / SPLIT`
+//!   radians. The bake, the fault bound, the cover and the arena are sized
+//!   by it, so it moves every level and every bound together; a quality
+//!   coarser than it is a `Tau`, whose target a screen sets from
+//!   `CENTER_CELL_LOGICAL_PX` here.
 //! - pxl-spec bake/constant.rs `EXTENT_SPAN`: how many cells a page's index
 //!   lane bounds at once, which the bake writes and the query reads.
 //! - pxl-render look/lod.rs `REFERENCE_VIEWPORT_H` and `REFERENCE_FOV_DEG`:
-//!   the view `SPLIT` is stated at in pixels. And the mesher's work a step
+//!   the view `SPLIT` was first stated at in pixels. And the mesher's work a step
 //!   (pxl-render mesh/voxel_scan.rs `SCAN_ROWS_PER_STEP`,
 //!   mesh/chunk_mesher.rs `BAKE_ROWS_PER_STEP`, `BAKE_BOXES_PER_STEP`),
 //!   which is inside a step the kernel only calls.
 
-use pxl_spec::space::lod::Tau;
 use pxl_spec::space::pyramid::PAGE_CHUNKS;
 
 // ---- product quality (world/quality.rs) ----
 
-/// The quality a view is held to where the arena has room for it: the
-/// criterion itself. Coarser only where a device cannot afford it — which
-/// moves what every view draws, not what the bake or the bounds are sized
-/// at.
-pub const TAU_TARGET: Tau = Tau::FINEST;
+/// How many of the screen's logical pixels a cell of the observation spans
+/// at the optical axis, where the arena has room for it. The cell is an
+/// angle, the same step in every direction about the eye; this is only how
+/// that angle is set from a screen: at the center of a perspective screen a
+/// logical pixel subtends `2 · tan(fov / 2) / height`, and toward the edges
+/// the same angle is drawn wider. A logical pixel — a CSS pixel on a page, a
+/// point on a device — and not a device pixel, which is how finely the
+/// screen is rasterized (world/frame/resolution.rs), not how finely the
+/// world is told apart. Six is the reference view `SPLIT` was stated at
+/// (pxl-render look/lod.rs): 1080 of them tall at 50°. A screen that asks
+/// finer than `SPLIT` is held at it, since everything is sized there.
+pub const CENTER_CELL_LOGICAL_PX: f64 = 6.0;
 
 // ---- what refinement observes (world/observer.rs) ----
 
@@ -124,8 +132,8 @@ pub const ARENA_GROUP_SLOTS: u32 = 330;
 pub const ARENA_COARSE_GROUPS: u32 = 5;
 
 /// Boxes a coarse slot holds, its mesh's size on the device. A product
-/// number, said aloud: a mesh past it is baked a step coarser until it fits,
-/// and the coarsest always does (world/chunk/mesh_slot.rs asserts it).
+/// number, said aloud: a mesh past it fills more slots, never a coarser
+/// cube, and the coarsest fills one (world/chunk/mesh_slot.rs asserts it).
 pub const COARSE_BOXES: u32 = 4551;
 
 /// Bytes a run set holds (`.fixed.runs`, world/chunk/build.rs): a leaf

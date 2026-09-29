@@ -348,12 +348,27 @@ impl<'a> Access<'a> {
     ///
     /// A region ends where the level changes, so a walk is in the cells of
     /// the level at its start, which is the finest over it.
+    ///
+    /// Before a region of the level asked is read, the pages over it that are
+    /// resident are asked, coarsest first, whether the ray passes over all
+    /// they hold (`clear`): an index cell of a page `k` levels up is `2^k`
+    /// of the level's across, so ground far under the ray is passed in as
+    /// many tests as there are levels over it, not a region at a time. A
+    /// page over it that is not resident proves nothing and is passed by; it
+    /// never lets the ray pass over what it would have held. What a ray
+    /// costs is the regions and cells it visits, which is fewest far over
+    /// the ground and most along a slope it grazes.
     pub fn first_hit(&self, ray: &Ray, detail: Detail) -> Answer<Option<Hit>> {
         let mut lack: Option<Lack> = None;
         let mut answered = false;
         let mut t = 0.0;
         while t < ray.reach {
             let (level, until) = detail.at(t);
+            if let Some(out) = self.clear(ray, t, level, until) {
+                answered = true;
+                t = out;
+                continue;
+            }
             let r = self.region(&ray.at(t + NUDGE), level);
             let out = exit(ray, r.base, r.side).min(until).max(t + NUDGE).min(ray.reach);
             let low = ray.at(t)[2].min(ray.at(out)[2]);
@@ -391,6 +406,36 @@ impl<'a> Access<'a> {
             (Some(l), true) => Answer::Coarser(None, l),
             (Some(l), false) => Answer::Nothing(l),
         }
+    }
+
+    /// Where the ray, at `t` and asking at `level` until `until`, is proved
+    /// to pass over everything under an index cell of a resident page over
+    /// `level`: the far edge of the largest such cell, or none. The ground
+    /// is solid under its surface, so it is passed over only above its
+    /// highest; objects stand in their span with air under it, so they are
+    /// passed under too. An index cell bounds what is drawn at its page's
+    /// level and every level under it, and the ray asks at `level` up to
+    /// `until` only, so no cell carries it past there.
+    fn clear(&self, ray: &Ray, t: f64, level: u32, until: f64) -> Option<f64> {
+        let p = ray.at(t + NUDGE);
+        let mut at = Pvf3::default();
+        projection::project(&mut at, p[0], p[1], 0.0);
+        (level + 1..=TOP_LEVEL).rev().find_map(|lv| {
+            let body = self.terrain.get(GROUND.cell_of(lv, &at).page())?;
+            let e = EXTENT.cell_of(lv, &at);
+            let [_, hi] = body.index.extent[e.index() as usize];
+            let scale = e.scale();
+            let [ix, iy, _] = scale.index_of(&at);
+            let base = scale.base_of([ix, iy, 0]);
+            let base = [pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base))];
+            let out = exit(ray, base, scale.side()).min(until).min(ray.reach).max(t + NUDGE);
+            let (za, zb) = (ray.at(t)[2], ray.at(out)[2]);
+            let over_ground = za.min(zb) > hi as f64 * U_PER_CELL;
+            let node = scale.max(L2);
+            let [nx, ny, _] = node.index_of(&at);
+            let clear_of_objects = self.objects.reach_over((node, [nx, ny])).is_none_or(|(olo, ohi)| za.min(zb) > ohi || za.max(zb) < olo);
+            (over_ground && clear_of_objects).then_some(out)
+        })
     }
 
     /// The region a point lies in, for a ray asking at `level`.

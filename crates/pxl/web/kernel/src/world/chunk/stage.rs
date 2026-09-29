@@ -253,7 +253,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
             slot_waits: census.slot_waits as f64,
             wait_levels: census.wait_levels as f64,
             holder_levels: 0.0,
-            coarser: census.coarser as f64,
+            chained: census.chained as f64,
             uncovered: census.refused as f64,
             unready: census.waiting as f64,
             on_waiter: 0.0,

@@ -43,11 +43,7 @@ pub fn object_local_corner(i: IVec, f: FVec, map_origin: IVec) -> V3 {
     [pvf3::to_real(pvf3::X(&local)), pvf3::to_real(pvf3::Y(&local)), pvf3::to_real(pvf3::Z(&local))]
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Aabb {
-    pub min: V3,
-    pub max: V3,
-}
+pub use pxl_spec::space::v3::Aabb;
 
 /// An object's exact box, in map_origin-relative units: what a cube stacked
 /// on it is placed flush against (camera/ray.rs `world_adjacent_corner`).

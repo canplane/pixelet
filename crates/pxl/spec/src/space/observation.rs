@@ -23,12 +23,9 @@
 //! How the answers are drawn — chunks, meshes, their sizes — is no input to
 //! any of it.
 
-use super::lod::{fault_radius, squares_within, Tau};
+use super::lod::{cubes_meeting, fault_radius, Tau};
 use super::pyramid::{page_at, span_of, LevelPage, TOP_LEVEL};
-
-/// A square of ground: its south-west corner and its side, in units, as a
-/// page's `rect` is.
-pub type Rect = (f64, f64, f64);
+use super::v3::{Aabb, V3};
 
 /// What an observation looks at: six planes, normals in, `n · x + d ≥ 0`
 /// inside, in world units.
@@ -80,64 +77,94 @@ pub struct Measure {
 }
 
 impl Observation {
-    /// Where a box of ground stands: `ground` and the heights `z` it spans,
-    /// or where they are not known, as tall as anything could stand there —
-    /// seen wherever it lies, as near as its footprint and without end.
-    /// Drawn, it stands up to `d² / 2R` lower at its farthest `d` along the
-    /// ground, so it is measured that much deeper.
-    pub fn measure(&self, (x0, y0, side): Rect, z: Option<(f64, f64)>) -> Measure {
-        let [ex, ey, ez] = self.eye;
-        let gap = |e: f64, lo: f64| (lo - e).max(e - lo - side).max(0.0);
-        let reach = |e: f64, lo: f64| (e - lo).abs().max((lo + side - e).abs());
-        let (along, reach_along) = (gap(ex, x0).hypot(gap(ey, y0)), reach(ex, x0).hypot(reach(ey, y0)));
-        let Some((zlo, zhi)) = z else {
-            return Measure {
-                seen: true,
-                near: along,
-                far: f64::INFINITY,
-            };
-        };
-        let zlo = zlo - reach_along * reach_along / (2.0 * self.planet);
-        let zgap = (zlo - ez).max(ez - zhi).max(0.0);
-        let zreach = (ez - zlo).abs().max((zhi - ez).abs());
-        let seen = self.frustum.is_none_or(|f| {
-            let center = [x0 + side / 2.0, y0 + side / 2.0, (zlo + zhi) / 2.0];
-            f.sees(center, (2.0 * side * side + (zhi - zlo).powi(2)).sqrt() / 2.0)
-        });
+    /// Where box `b` stands. Drawn, it stands up to `d² / 2R` lower at its
+    /// farthest `d` along the planet's surface, so it is measured that much
+    /// deeper: the planet has a down, and that is the one axis it names. A
+    /// box without end is seen wherever it lies.
+    pub fn measure(&self, b: &Aabb) -> Measure {
+        let e = self.eye;
+        let gap = |b: &Aabb, k: usize| (b.min[k] - e[k]).max(e[k] - b.max[k]).max(0.0);
+        let reach = |b: &Aabb, k: usize| (e[k] - b.min[k]).abs().max((b.max[k] - e[k]).abs());
+        let (along, reach_along) = (gap(b, 0).hypot(gap(b, 1)), reach(b, 0).hypot(reach(b, 1)));
+        let mut drawn = *b;
+        drawn.min[2] -= reach_along * reach_along / (2.0 * self.planet);
+        let seen = !drawn.bounded() || self.frustum.is_none_or(|f| f.sees(drawn.center(), norm(drawn.extent()) / 2.0));
         Measure {
             seen,
-            near: along.hypot(zgap),
-            far: reach_along.hypot(zreach),
+            near: along.hypot(gap(&drawn, 2)),
+            far: reach_along.hypot(reach(&drawn, 2)),
+        }
+    }
+
+    /// The box every point drawn within `radius` of the eye is stored in:
+    /// the eye's reach each way, and over it as far again as the planet
+    /// draws ground that far away lower (`measure`).
+    pub fn reach(&self, radius: f64) -> Aabb {
+        let e = self.eye;
+        Aabb {
+            min: e.map(|c| c - radius),
+            max: [e[0] + radius, e[1] + radius, e[2] + radius + radius * radius / (2.0 * self.planet)],
         }
     }
 }
 
-/// What an observation requires: the ground over `ground` known at `level`
+fn norm(v: V3) -> f64 {
+    (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt()
+}
+
+/// What an observation requires: what stands in `region` known at `level`
 /// — the pyramid's level whose cell a sample there covers, z16 for any
 /// finer, since no layer's pages are finer and a layer draws its finest
 /// where more is asked.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Requirement {
     pub level: u32,
-    pub ground: Rect,
+    pub region: Aabb,
 }
 
-/// What is known of the heights over a piece of ground: the lowest and
-/// highest anything there can stand — the ground drawn at every level, the
-/// interpolation's overshoot included, and whatever stands on it — or none
-/// where nothing is known. Never tighter than the truth: an estimator's
-/// superset rests on it. `level` is the resolution the ground is asked at,
-/// for a reader that keeps its bounds by level.
+/// What a box of the world holds at a level, as far as what is known says.
+/// How a layer stores it — a heightfield, bands of a column — is the
+/// layer's, and nothing that asks sees it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Contents {
+    /// Nothing is known of it: anything may stand anywhere in it.
+    Unknown,
+    /// Nothing stands in it.
+    Empty,
+    /// Everything that stands in it is inside `bound`, and what is drawn of
+    /// it at the level can be off from what it stands for by up to `error`
+    /// along each axis, never more than the box's own extent. The bound is
+    /// conservative, not tight: tighter only saves work.
+    Holds { bound: Aabb, error: V3 },
+}
+
+impl Contents {
+    /// Where in `region`, the box it answers for, anything can stand: all of
+    /// it where nothing is known.
+    pub fn within(self, region: Aabb) -> Option<Aabb> {
+        match self {
+            Contents::Unknown => Some(region),
+            Contents::Empty => None,
+            Contents::Holds { bound, .. } => Some(bound),
+        }
+    }
+}
+
+/// What is known of the world: what a box holds at `level`, the resolution
+/// it is asked at — the ground drawn at every level, the interpolation's
+/// overshoot included, and whatever stands on it. Never less than the
+/// truth, since an estimator's superset and every node a view makes rest on
+/// it, and at a coarser level never less than at a finer one under it.
 pub trait Bounds {
-    fn heights(&self, level: u32, ground: Rect) -> Option<(f64, f64)>;
+    fn contents(&self, level: u32, region: Aabb) -> Contents;
 }
 
 /// Nothing known anywhere: the bound every other is inside.
 pub struct Unknown;
 
 impl Bounds for Unknown {
-    fn heights(&self, _level: u32, _ground: Rect) -> Option<(f64, f64)> {
-        None
+    fn contents(&self, _level: u32, _region: Aabb) -> Contents {
+        Contents::Unknown
     }
 }
 
@@ -152,18 +179,17 @@ pub trait Storage {
 pub struct Paged;
 
 impl Storage for Paged {
-    /// Every page of the requirement's level with ground under the
-    /// requirement's, its edges its own on the south and west only, so
-    /// ground a page's square exactly is that page alone.
+    /// Every page of the requirement's level whose square is under the
+    /// requirement's region, its edges its own on the south and west only,
+    /// so a region over a page's square exactly is that page alone.
     fn pages(&self, r: &Requirement, each: &mut dyn FnMut(LevelPage)) {
         let span = span_of(r.level);
-        let (x0, y0, side) = r.ground;
-        let rows = |lo: f64| {
-            let first = (lo / span).floor() as i64;
-            first..=(((lo + side) / span).ceil() as i64 - 1).max(first)
+        let rows = |k: usize| {
+            let first = (r.region.min[k] / span).floor() as i64;
+            first..=((r.region.max[k] / span).ceil() as i64 - 1).max(first)
         };
-        for y in rows(y0) {
-            for x in rows(x0) {
+        for y in rows(1) {
+            for x in rows(0) {
                 each(page_at(r.level, [x, y]));
             }
         }
@@ -183,32 +209,45 @@ pub trait DemandEstimator {
 /// `[tau.split_distance(L), tau.split_distance(L + 1))` — from nothing for
 /// z16, which answers everything nearer too, and out to the far edge for the
 /// top, which answers everything farther, since no level over it is supplied
-/// — and nothing past the far edge. So a square of `L`'s is required only if some of it can be sampled
-/// and its nearest and farthest point from the eye leave some of that band
-/// between them. That holds of every square the exact demand has, whatever
-/// is hidden behind what; one behind a hill is required too. The squares are
-/// the lattice's at `L`, found among those within the band's end along the
-/// ground, which no `Tau` puts past `fault_radius(L)` — so no level requires
-/// more than the fault bound's `FAULT_PAGES` of them.
+/// — and nothing past the far edge. So a cube of `L`'s page lattice is
+/// required only if some of what it holds can be sampled and its nearest
+/// and farthest point from the eye leave some of that band between them.
+/// That holds of every cube the exact demand has, whatever is hidden behind
+/// what; one behind a hill is required too. What is required is nearer than
+/// the band's end, and so along the ground too, which no `Tau` puts past
+/// `fault_radius(L)` — so no level requires more than the fault bound's
+/// `FAULT_PAGES` pages.
 pub struct ByBounds {
     pub tau: Tau,
+}
+
+/// The distances `level` is required over at `tau` for `o`: from its split
+/// distance — from nothing for z16, which answers everything nearer too —
+/// to the next level's, or to the far edge for the observation's top, which
+/// answers everything farther. None where the level begins past the far
+/// edge. Every estimator's bands, so none requires a level farther than
+/// another would.
+pub fn band(o: &Observation, tau: Tau, level: u32) -> Option<(f64, f64)> {
+    let from = if level == 0 { 0.0 } else { tau.split_distance(level as i32) };
+    let to = if level == o.top { fault_radius(level) } else { tau.fault_radius(level) };
+    (from <= o.far).then_some((from, to))
 }
 
 impl DemandEstimator for ByBounds {
     fn requirements(&self, o: &Observation, bounds: &impl Bounds, each: &mut dyn FnMut(Requirement)) {
         xpute_core::ensure!(o.top <= TOP_LEVEL && o.far <= fault_radius(o.top), EINVAL);
         for level in 0..=o.top {
-            let from = if level == 0 { 0.0 } else { self.tau.split_distance(level as i32) };
-            let to = if level == o.top { fault_radius(level) } else { self.tau.fault_radius(level) };
-            if from > o.far {
-                break;
-            }
+            let Some((from, to)) = band(o, self.tau, level) else { break };
             let span = span_of(level);
-            for [x, y] in squares_within(level, [o.eye[0], o.eye[1]], to.min(o.far)) {
-                let ground = (x as f64 * span, y as f64 * span, span);
-                let m = o.measure(ground, bounds.heights(level, ground));
+            for at in cubes_meeting(span, o.reach(to.min(o.far))) {
+                let region = Aabb {
+                    min: at.map(|c| c as f64 * span),
+                    max: at.map(|c| (c + 1) as f64 * span),
+                };
+                let Some(held) = bounds.contents(level, region).within(region) else { continue };
+                let m = o.measure(&held);
                 if m.seen && m.near < to && m.near <= o.far && m.far >= from {
-                    each(Requirement { level, ground });
+                    each(Requirement { level, region });
                 }
             }
         }

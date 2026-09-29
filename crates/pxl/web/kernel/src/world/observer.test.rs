@@ -87,21 +87,72 @@ fn the_tiles_cover_the_screen_and_none_is_wider_than_a_tile() {
 }
 
 /// An error projects as its size over its distance on the axis it lies
-/// across: a cell's side seen square on spans its side over the distance
-/// on both axes; seen at a grazing angle, its depth projects small up the
-/// screen and a height whole.
+/// across, and no less: a cell's side seen square on spans its side over the
+/// distance on both axes; seen at a grazing angle, its depth projects small
+/// up the screen and a height whole.
 #[test]
 fn an_error_projects_its_size_over_its_distance_on_each_axis() {
+    // Its size over the distance, and over the distance less the box's
+    // diagonal at most.
+    let spans = |angle: f64, size: f64, r: f64, reach: f64| angle >= size / r - 1e-9 && angle <= size / (r - reach) + 1e-9;
+    let cell = 32f64.sqrt();
     let down = Lens::of(&viewed([0.0, 0.0, 100.0], [0.0, 1e-6, 0.0], 50.0, 1.0)).unwrap();
-    let [across, up] = down.error([0.0, 0.0, 0.0], 4.0, 0.0);
-    assert!((across - 0.04).abs() < 1e-6 && (up - 0.04).abs() < 1e-6, "a cell seen from above: {across}, {up}");
+    let [across, up] = down.error([0.0, 0.0, 0.0], [4.0, 4.0, 0.0]);
+    assert!(spans(across, 4.0, 100.0, cell) && spans(up, 4.0, 100.0, cell), "a cell seen from above: {across}, {up}");
     let level = Lens::of(&viewed([0.0, 0.0, 2.0], [100.0, 0.0, 2.0], 50.0, 1.0)).unwrap();
-    let [across, up] = level.error([1_000.0, 0.0, 0.0], 4.0, 0.0);
-    assert!((across - 0.004).abs() < 1e-6, "a cell seen across: {across}");
+    let r = (1_000f64.powi(2) + 4.0).sqrt();
+    let [across, up] = level.error([1_000.0, 0.0, 0.0], [4.0, 4.0, 0.0]);
+    assert!(spans(across, 4.0, r, cell), "a cell seen across: {across}");
     assert!(up < 0.004 * 0.01, "a cell's depth at a grazing angle: {up}");
-    let [_, up] = level.error([1_000.0, 0.0, 0.0], 0.0, 4.0);
-    assert!((up - 0.004).abs() < 1e-5, "a height at a grazing angle: {up}");
-    assert_eq!(level.error([0.0, 0.0, 2.0], 1.0, 1.0), [f64::INFINITY; 2], "an error at the eye");
+    let [_, up] = level.error([1_000.0, 0.0, 0.0], [0.0, 0.0, 4.0]);
+    // The screen's up leans off the vertical by the eye's height over the
+    // distance, so a height is a hair under its whole.
+    assert!(up >= 4.0 * 0.999_99 / r && up <= 4.0 / (r - 4.0) + 1e-9, "a height at a grazing angle: {up}");
+    assert_eq!(level.error([0.0, 0.0, 2.0], [1.0; 3]), [f64::INFINITY; 2], "an error at the eye");
+    assert_eq!(level.error([1.0, 0.0, 2.0], [1.0; 3]), [f64::INFINITY; 2], "an error reaching the eye");
+}
+
+/// What an error box spans on the screen is never more than the lens says:
+/// every corner of the box about a point on the screen, seen from the eye,
+/// lies no farther from the point along either of the screen's axes than
+/// its bound — near the eye, at a grazing angle, and with the box's depth
+/// and its breadth together, where the depth brings the breadth nearer.
+#[test]
+fn an_error_box_projects_within_its_bound() {
+    let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+    let mut next = || {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        (seed >> 11) as f64 / (1u64 << 53) as f64
+    };
+    for _ in 0..4_000 {
+        let eye = [next() * 100.0, next() * 100.0, 0.5 + next() * 300.0];
+        let target = [eye[0] + 50.0 + next() * 500.0, eye[1] - 250.0 + next() * 500.0, next() * 10.0];
+        let lens = Lens::of(&viewed(eye, target, 50.0, 16.0 / 9.0)).unwrap();
+        // A point inside the screen, some way off, with a box about it
+        // from a hair to as wide as the distance allows.
+        let (u, v, r) = ((next() * 2.0 - 1.0) * lens.tan[0] * 0.95, (next() * 2.0 - 1.0) * lens.tan[1] * 0.95, 1.0 + next() * 2_000.0);
+        let dir = unit(std::array::from_fn(|k| lens.forward[k] + u * lens.right[k] + v * lens.up[k])).unwrap();
+        let at: V3 = std::array::from_fn(|k| eye[k] + r * dir[k]);
+        let scale = r * 10f64.powf(-4.0 + next() * 3.9);
+        let e: V3 = [next() * scale, next() * scale, next() * scale];
+        let bound = lens.error(at, e);
+        for (k, axis) in [lens.right, lens.up].into_iter().enumerate() {
+            let a = unit(std::array::from_fn(|j| axis[j] - dir[j] * dot(axis, dir))).unwrap();
+            for corner in 0..8 {
+                let delta: V3 = std::array::from_fn(|j| if corner >> j & 1 == 1 { e[j] } else { -e[j] });
+                let angle = dot(delta, a).atan2(r + dot(delta, dir)).abs();
+                assert!(angle <= bound[k] * (1.0 + 1e-9), "{angle} past {} at {r} for {e:?}", bound[k]);
+            }
+        }
+    }
+}
+
+/// A box over a square at `at`, `side` wide, from `z.0` up to `z.1`.
+fn cube(at: [f64; 2], side: f64, z: (f64, f64)) -> Aabb {
+    Aabb {
+        min: [at[0], at[1], z.0],
+        max: [at[0] + side, at[1] + side, z.1],
+    }
 }
 
 /// A footprint touches a box that meets its outline and its heights, and
@@ -110,11 +161,11 @@ fn an_error_projects_its_size_over_its_distance_on_each_axis() {
 fn a_footprint_touches_what_meets_its_outline_and_heights() {
     let at = |x: f64, y: f64, z: f64| ([x, y, z], 1.0);
     let f = Footprint::of([0.0, 0.0, 10.0], [at(10.0, -5.0, 0.0), at(10.0, 5.0, 0.0), at(100.0, -50.0, 2.0), at(100.0, 50.0, 2.0)]);
-    assert!(f.touches((40.0, -1.0, 2.0), (0.0, 1.0)), "a box inside");
-    assert!(f.touches((95.0, 45.0, 20.0), (1.0, 5.0)), "a box over a corner");
-    assert!(!f.touches((40.0, 30.0, 2.0), (0.0, 1.0)), "a box beside the wedge");
-    assert!(!f.touches((40.0, -1.0, 2.0), (3.0, 9.0)), "a box over its heights");
-    assert!(!f.touches((0.0, -1.0, 2.0), (0.0, 1.0)), "a box before it");
+    assert!(f.touches(&cube([40.0, -1.0], 2.0, (0.0, 1.0))), "a box inside");
+    assert!(f.touches(&cube([95.0, 45.0], 20.0, (1.0, 5.0))), "a box over a corner");
+    assert!(!f.touches(&cube([40.0, 30.0], 2.0, (0.0, 1.0))), "a box beside the wedge");
+    assert!(!f.touches(&cube([40.0, -1.0], 2.0, (3.0, 9.0))), "a box over its heights");
+    assert!(!f.touches(&cube([0.0, -1.0], 2.0, (0.0, 1.0))), "a box before it");
 }
 
 /// Gives up no frame: the fixture holds fewer pages than there are.
@@ -143,10 +194,10 @@ fn the_estimator_never_changes_residency() {
     let store = Store::new();
     let o = over(&pages, [0.0; 3]);
     let before = (paging.revision(), paging.frames_used(), paging.leases().count());
-    let observer = EdgeRays(Access::new(&paging, &store));
+    let observer = EdgeRays(Access::new(&paging, &store), Tau::FINEST);
     let grid = Grid::of(Lens::of(&o).unwrap());
     let mut seen = 0;
-    observer.observe(&grid, o.far, &|_| true, &mut |_, f| {
+    observer.observe(&grid, o.far, &|_| true, &mut |_, f, _| {
         if let Some(f) = f {
             assert!(f.near > 0.0 && f.near < o.far, "{f:?} is not on the ocean");
             seen += 1;
@@ -185,7 +236,7 @@ fn a_tile_is_cast_again_only_where_it_is_stale() {
     let _g = serial();
     let (paging, pages) = resident();
     let store = Store::new();
-    let observer = EdgeRays(Access::new(&paging, &store));
+    let observer = EdgeRays(Access::new(&paging, &store), Tau::FINEST);
     let o = over(&pages, [0.0; 3]);
     let tiles = Grid::of(Lens::of(&o).unwrap()).count();
     let mut sight = Sight::default();

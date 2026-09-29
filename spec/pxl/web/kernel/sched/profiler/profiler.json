@@ -157,7 +157,7 @@
     "slot_waits": 107,
     "slot_wait_levels": 108,
     "slot_holder_levels": 109,
-    "slot_coarser": 110,
+    "slot_chained": 110,
     "cap_commit_left": 111,
     "cap_mount_left": 112,
     "cap_mount_full": 113,
@@ -229,7 +229,7 @@
       "slot_waits",
       "slot_wait_levels",
       "slot_holder_levels",
-      "slot_coarser"
+      "slot_chained"
     ],
     "cap": [
       "cap_commit_left",

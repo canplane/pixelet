@@ -38,20 +38,25 @@
 //! **The arena is never overrun, by admission.** A move is started only when
 //! every slot it will take is free, and those are held for it from then
 //! (`Now::free` counts them out), so a mesh that lands always finds its
-//! slot. A refinement or a fill leaves one slot a pool free past it
-//! (`RESERVE`); a coarsening may take that last one, and finishing one gives
-//! back at least the slot it took, so one is always possible and the
-//! frontier can always come back to a goal the arena holds. Refinements under
-//! way at once are `param::REFINEMENTS_IN_FLIGHT`: each holds the piece it
-//! replaces on the screen past the frontier.
+//! slots. A refinement, a fill or a change of cube leaves free past it what
+//! the one coarsening after it takes at most (`RESERVE`): a coarsening lands
+//! one piece over the pieces it replaces, always of a level over z16 and so
+//! in the coarse pool, and fills at most `COARSE_TIER_SLOTS` of it whatever
+//! it holds. So one coarsening is always possible, and the frontier can
+//! always come back to a goal the arena holds: progress needs one, not a
+//! slot for each. What moves already under way hold is counted out of the
+//! free slots, not again in the reserve. Refinements under way at once are
+//! `param::REFINEMENTS_IN_FLIGHT`: each holds the piece it replaces on the
+//! screen past the frontier, which is throughput, not progress.
 //!
 //! **A full arena is latency, never a hole.** A drawn piece leaves the
 //! frontier in two ways only: in a move whose every piece is ready
 //! (`Plan::swaps`), or over no ground the goal has (`Plan::drop`). A move
 //! the arena has no room for is refused (`Plan::refused`) and what it would
 //! replace stays drawn. Under that, the table never takes a slot a tier
-//! holds (table.rs `claim`), and a mesh that finds no free slot is thrown
-//! away with the drawn piece untouched (table.rs `self_record`). What a
+//! holds (table.rs `claim`), and a mesh that finds not all the slots it
+//! fills free is thrown away with the drawn piece untouched (table.rs
+//! `reserve`). What a
 //! full arena delays that nothing coarser covers is ground new to the view,
 //! whose first piece waits as it waits for its page; and since the quality
 //! policy keeps the goal and `HEADROOM` inside the arena, only while the
@@ -72,7 +77,7 @@ use pxl_spec::space::pyramid::{GROUND, TOP_LEVEL};
 
 use crate::param::REFINEMENTS_IN_FLIGHT;
 use crate::world::chunk::build::{mesh_step, Cube};
-use crate::world::chunk::mesh_slot::{Pool, POOLS};
+use crate::world::chunk::mesh_slot::{Pool, COARSE_TIER_SLOTS, POOLS};
 use crate::world::observation::Order;
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::domain::{Cut, Domain};
@@ -80,15 +85,18 @@ use crate::world::pyramid::domain::{Cut, Domain};
 /// Slots, by pool (`Pool` as an index).
 pub type Slots = [u32; POOLS];
 
-/// Slots a pool keeps free past a refinement or a fill, for a coarsening:
-/// one, since one coarsening at a time is progress — it takes a slot and
-/// gives back at least that one when it is done.
-pub const RESERVE: u32 = 1;
+/// Slots each pool keeps free past a refinement, a fill or a change of cube,
+/// for one coarsening: none in the fine pool, where no coarsening lands, and
+/// in the coarse pool the most a coarsening's piece can fill
+/// (`COARSE_TIER_SLOTS`), a bound from the representation and not from
+/// what has been baked so far.
+pub const RESERVE: Slots = [0, COARSE_TIER_SLOTS];
 
-/// Slots a pool keeps past the frontier while it moves: the refinements
-/// under way, each holding the piece it replaces, and the reserve. What the
-/// quality policy fits the goal beside.
-pub const HEADROOM: u32 = REFINEMENTS_IN_FLIGHT + RESERVE;
+/// Slots each pool keeps past the frontier while it moves, which the quality
+/// policy fits the goal beside: the reserve, which is progress, and a slot
+/// for each refinement under way, holding the piece it replaces, which is
+/// throughput.
+pub const HEADROOM: Slots = [REFINEMENTS_IN_FLIGHT + RESERVE[0], REFINEMENTS_IN_FLIGHT + RESERVE[1]];
 
 /// The cube the rule wants ground drawn in at `near` from the eye at `tau`:
 /// the level wanted there, whose cells terrain draws averaged 2 × 2 — a cube
@@ -114,21 +122,27 @@ pub fn wanted_cube(near: f64, tau: Tau) -> Cube {
 /// coarser page's cells instead, a chunk far under its page stood one cube
 /// as wide as itself, and those stood apart as blocks over the sea after a
 /// jump (2026-09-26).
+///
+/// The source's top is the cover, and the cover holds completeness, not
+/// quality: a piece of it is drawn in the coarsest cube, one cell a chunk,
+/// so it is at most two boxes and one slot whatever it holds, and the
+/// cover's count is its slots (world/quality.rs asserts it fits). Where its
+/// ground is seen closely enough for that to leak past a cell, the domain
+/// splits it, measuring it as it is drawn (world/pyramid/domain.rs).
 pub fn drawn_cube(cube: Cube, level: u32, outermost: bool, objects: bool) -> Cube {
+    if outermost {
+        return coarsest(level);
+    }
     // A level draws its own cells one cube coarser than they are, and no
     // coarser: level k's cells averaged 4 × 4 are the ground level k+1 draws
-    // averaged 2 × 2, and that ring is the one holding it. The outermost ring
-    // has no level over it, so nothing else would draw that ground — there
-    // the rule is followed as far as it goes, which is what makes a far ring
-    // cheap (issue/20260923-the-ground-runs-to-the-horizon.md).
+    // averaged 2 × 2, and that ring is the one holding it.
     let own = GROUND.scale(level);
     let finest = match (level, objects) {
         (0, true) => OBJECT_FINEST,
         (0, false) => own,
         _ => own.up(1),
     };
-    let coarsest = if outermost { coarsest(level) } else { own.up(1) };
-    cube.clamp(finest, coarsest)
+    cube.clamp(finest, own.up(1))
 }
 
 /// The coarsest cube a chunk of `level` is ever drawn in: its own cells
@@ -137,16 +151,19 @@ pub fn coarsest(level: u32) -> Cube {
     GROUND.scale(level).up(COARSEST.trailing_zeros() as i32)
 }
 
-/// The pool a piece of `c`, `near` the eye, takes at `tau`, where it is
-/// drawn no finer than `fit` (a mesh finer than that had more boxes than its
-/// slot holds); `outermost` where it is of the source's top, which no level
-/// over it draws. Objects move a z16 piece's cube, never its pool: both of
-/// its cubes finer than a z16 cell draw at step one.
-pub fn pool_of(c: Chunk, outermost: bool, near: f64, tau: Tau, fit: Option<Cube>) -> Pool {
-    let level = c.level();
-    let cube = drawn_cube(wanted_cube(near, tau), level, outermost, false);
-    let cube = fit.map_or(cube, |f| cube.max(f));
-    Pool::of(level, mesh_step(cube, level))
+/// The cube a piece of `c`, `near` the eye, is drawn in at `tau`;
+/// `outermost` where it is of the source's top, which no level over it
+/// draws. Objects move a z16 piece's cube, never its pool: both of its cubes
+/// finer than a z16 cell draw at step one. Nothing but the quality moves
+/// it: a mesh with more boxes than a slot holds fills more slots, and is
+/// never drawn coarser for it (world/chunk/mesh_slot.rs).
+pub fn cube_of(c: Chunk, outermost: bool, near: f64, tau: Tau) -> Cube {
+    drawn_cube(wanted_cube(near, tau), c.level(), outermost, false)
+}
+
+/// The pool a piece of `c` takes, drawn in `cube`.
+pub fn pool_of(c: Chunk, cube: Cube) -> Pool {
+    Pool::of(c.level(), mesh_step(cube, c.level()))
 }
 
 /// What the frontier can take of each pool at the quality `cut` is cut at,
@@ -173,14 +190,21 @@ pub fn pool_of(c: Chunk, outermost: bool, near: f64, tau: Tau, fit: Option<Cube>
 /// the same footprints touch no fewer chunks, a chunk's error spans no less,
 /// and a split keeps no fewer of the chunks under it, so no count is less.
 ///
-/// `fit` is what is known of a chunk's meshes that did not fit their slot,
-/// which only ever moves a piece out of the fine pool.
-pub fn need(d: &Domain, cut: &Cut, fit: impl Fn(Chunk) -> Option<Cube>) -> Slots {
+/// `slots` is how many slots a chunk's tier of a cube fills, as far as is
+/// known: one until a bake of it has had more boxes than one holds. A piece
+/// takes that many of its pool, and a z16 piece in the fine pool is counted
+/// once in the coarse one too, as above.
+pub fn need(d: &Domain, cut: &Cut, slots: impl Fn(Chunk, Cube) -> u32) -> Slots {
     let mut n = [0; POOLS];
     for &c in cut.pieces() {
-        n[Pool::Coarse as usize] += 1;
-        if c.level() == 0 && pool_of(c, d.outermost(c), d.nearest_to(c), cut.tau(), fit(c)) == Pool::Fine {
-            n[Pool::Fine as usize] += 1;
+        let cube = cube_of(c, d.outermost(c), d.nearest_to(c), cut.tau());
+        let k = slots(c, cube);
+        match pool_of(c, cube) {
+            Pool::Coarse => n[Pool::Coarse as usize] += k,
+            Pool::Fine => {
+                n[Pool::Fine as usize] += k;
+                n[Pool::Coarse as usize] += 1;
+            }
         }
     }
     n[Pool::Coarse as usize] += cut.splits().filter(|c| c.level() == 1).count() as u32;
@@ -189,8 +213,9 @@ pub fn need(d: &Domain, cut: &Cut, fit: impl Fn(Chunk) -> Option<Cube>) -> Slots
 
 /// What the frontier reads of the chunks it has not drawn yet.
 pub trait Env {
-    /// The pool a piece of `c` takes as the goal wants it drawn now.
-    fn pool(&self, c: Chunk) -> Pool;
+    /// The pool a piece of `c` takes as the goal wants it drawn now, and how
+    /// many of its slots, as far as is known.
+    fn slots(&self, c: Chunk) -> (Pool, u32);
     /// Whether a page at or over `c` is resident, which is all a build of it
     /// needs.
     fn buildable(&self, c: Chunk) -> bool;
@@ -210,8 +235,8 @@ pub struct Now<'a> {
     /// refinement under way.
     pub recubing: u32,
     /// Drawn pieces whose tier should change and has not been let: each
-    /// takes a slot of its pool beside the one it shows.
-    pub recube: &'a [(Chunk, Pool)],
+    /// takes its slots of its pool beside the ones it shows.
+    pub recube: &'a [(Chunk, (Pool, u32))],
     /// Slots each pool has that nothing holds and nothing already started
     /// will take.
     pub free: Slots,
@@ -350,7 +375,7 @@ pub fn plan(now: &Now, env: &impl Env) -> Plan {
     open.sort_by(|a, b| a.kind.cmp(&b.kind).then(a.order.cmp(&b.order)));
 
     let mut free = now.free;
-    let take = |free: &Slots, need: &Slots, reserve: u32| (0..POOLS).all(|p| need[p] == 0 || free[p] >= need[p] + reserve);
+    let take = |free: &Slots, need: &Slots, reserve: Slots| (0..POOLS).all(|p| need[p] == 0 || free[p] >= need[p] + reserve[p]);
     for m in open {
         if plan.start.len() as u32 >= crate::param::STARTS_PER_FRAME {
             plan.refused += 1;
@@ -360,9 +385,10 @@ pub fn plan(now: &Now, env: &impl Env) -> Plan {
         let fresh = !m.enter.iter().any(building);
         let mut need = [0; POOLS];
         for &c in &missing {
-            need[env.pool(c) as usize] += 1;
+            let (pool, k) = env.slots(c);
+            need[pool as usize] += k;
         }
-        let reserve = if m.kind == Kind::Coarsen { 0 } else { RESERVE };
+        let reserve = if m.kind == Kind::Coarsen { [0; POOLS] } else { RESERVE };
         let room = missing.iter().all(|&c| env.buildable(c)) && take(&free, &need, reserve) && !(m.kind == Kind::Refine && fresh && in_flight >= REFINEMENTS_IN_FLIGHT);
         if !room {
             plan.refused += 1;
@@ -377,16 +403,16 @@ pub fn plan(now: &Now, env: &impl Env) -> Plan {
         plan.start.extend(missing);
     }
 
-    let mut recube: Vec<(Chunk, Pool)> = now.recube.to_vec();
+    let mut recube: Vec<(Chunk, (Pool, u32))> = now.recube.to_vec();
     recube.sort_by_key(|&(c, _)| env.order(c));
-    for (c, pool) in recube {
+    for (c, (pool, k)) in recube {
         let mut need = [0; POOLS];
-        need[pool as usize] = 1;
+        need[pool as usize] = k;
         if in_flight >= REFINEMENTS_IN_FLIGHT || !take(&free, &need, RESERVE) {
             plan.refused += 1;
             continue;
         }
-        free[pool as usize] -= 1;
+        free[pool as usize] -= k;
         in_flight += 1;
         plan.recube.push(c);
     }

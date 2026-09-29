@@ -25,3 +25,18 @@ pub use fvec::FVec;
 pub use ivec::IVec;
 pub use pvec::{Fvec, Ivec, PVec, PVecTraits};
 pub use pvf3::Pvf3;
+
+use self::core::{IVEC_Y_W, IVEC_Z_W};
+use super::v3::Aabb;
+
+/// Every point a position can name, in units: each lane's signed range, the
+/// integer part being a unit. X has no end, since the lane is one world
+/// round and a page past either end is the one across the seam
+/// (pyramid.rs `page_at`).
+pub const REACH: Aabb = {
+    let (y, z) = ((1u64 << (IVEC_Y_W - 1)) as f64, (1u64 << (IVEC_Z_W - 1)) as f64);
+    Aabb {
+        min: [f64::NEG_INFINITY, -y, -z],
+        max: [f64::INFINITY, y, z],
+    }
+};

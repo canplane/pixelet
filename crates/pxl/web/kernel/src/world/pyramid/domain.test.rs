@@ -12,6 +12,7 @@
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::observation::Observation;
 use pxl_spec::space::pvf3::projection;
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
 
 use super::*;
@@ -189,14 +190,12 @@ fn a_split_contributes_leaks_and_lies_within_its_reach() {
             let cuts = cuts(&mut d);
             for (tau, pieces, splits) in &cuts {
                 for &c in splits {
-                    let (x0, y0, side) = c.rect();
-                    let (z0, z1) = d.occupied(c).expect("a split holds something");
-                    assert!(
-                        d.footprints.iter().any(|f| f.touches((x0, y0, side), (z0, z1))),
-                        "{forward:?} at {height}, {tau:?}: {c:?} split and touched by no tile"
-                    );
-                    let nearest = [at[0].clamp(x0, x0 + side), at[1].clamp(y0, y0 + side), at[2].clamp(z0, z1)];
-                    let error = lens.error(nearest, pxl_spec::space::pyramid::GROUND.scale(c.level()).side(), d.height_error(c));
+                    let Contents::Holds { bound, error } = d.contents(c) else {
+                        panic!("{c:?} split and holds nothing")
+                    };
+                    assert!(d.footprints.iter().any(|f| f.touches(&bound)), "{forward:?} at {height}, {tau:?}: {c:?} split and touched by no tile");
+                    let nearest = bound.nearest(at);
+                    let error = lens.error(nearest, error);
                     assert!(
                         error.iter().any(|&e| e > cell_angle(*tau)),
                         "{forward:?} at {height}, {tau:?}: {c:?} split with its error inside a cell"

@@ -11,7 +11,10 @@
 //! The scratch is plain vectors owned by the context. The mesh itself is
 //! written where the caller says: it is asked for a block once the bake
 //! knows the mesh's size (`Step::NeedMesh`), and the bake waits at that step
-//! for as long as the answer is that there is no room.
+//! for as long as the answer is that there is no room. A block need not hold
+//! the whole mesh: the boxes are written in order, and when one is full the
+//! bake stops (`Step::Full`) until the caller has taken them and handed it
+//! the next, so a mesh of any size is written through a block of one size.
 
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::v3::V3;
@@ -220,20 +223,26 @@ pub struct Mesh {
 pub enum Step {
     /// More steps to go.
     Working,
-    /// The mesh's size is known and it has nowhere to go: `provide_mesh`
-    /// this many words, then step on. Returned again by every step until
-    /// then.
+    /// The mesh's size is known and it has nowhere to go: `provide_mesh` a
+    /// block of at least one box, up to this many words, then step on.
+    /// Returned again by every step until then.
     NeedMesh(u32),
+    /// The block handed is full: its boxes are the caller's to take, and
+    /// `provide_mesh` the next, for what is left, then step on. Returned
+    /// again by every step until then.
+    Full,
     Done,
 }
 
-/// The words a mesh is written into: a caller's, held as a raw range so the
-/// context owes them no lifetime — the caller keeps them valid until the
-/// bake finishes or aborts.
+/// The words a block of the mesh is written into: a caller's, held as a raw
+/// range so the context owes them no lifetime — the caller keeps them valid
+/// until the block is full, or the bake finishes or aborts — and the first
+/// box of the mesh it holds.
 #[derive(Clone, Copy)]
 struct MeshTarget {
     ptr: *mut u32,
     words: usize,
+    first: u32,
 }
 
 /// What one coarse cell holds between two heights, as it is counted.
@@ -447,6 +456,9 @@ impl BakeContext {
         if self.mesh_words > 0 && self.mesh.is_none() {
             return Step::NeedMesh(self.mesh_words);
         }
+        if self.full() {
+            return Step::Full;
+        }
         let mut open = self.open.take().or_bug(Errno::ENOTRECOVERABLE);
         let cut = self.clipped.take();
         let view = cut.as_ref().map(OwnedRunSet::view);
@@ -461,20 +473,45 @@ impl BakeContext {
             Step::Done
         } else if self.mesh_words > 0 && self.mesh.is_none() {
             Step::NeedMesh(self.mesh_words)
+        } else if self.full() {
+            Step::Full
         } else {
             Step::Working
         }
     }
 
-    /// Hands the bake the words its mesh goes into, after `Step::NeedMesh`.
+    /// Whether the block handed is full with boxes still to write.
+    fn full(&self) -> bool {
+        self.mesh.is_some_and(|t| (self.box_cnt - t.first) as usize * self.box_words as usize >= t.words)
+    }
+
+    /// Words of the mesh not yet written: what the next block is at most.
+    pub fn left_words(&self) -> u32 {
+        self.mesh_words - self.box_cnt * self.box_words
+    }
+
+    /// The heights the mesh's boxes are held in, known from the step that
+    /// asks for its first block (`Step::NeedMesh`).
+    pub fn heights(&self) -> Heights {
+        self.heights
+    }
+
+    /// Hands the bake a block its mesh goes into, after `Step::NeedMesh` or
+    /// `Step::Full`: at least one box, and never more than what is left.
     ///
     /// # Safety
-    /// `ptr` must address at least the words asked for, 4-aligned, and stay
-    /// valid and otherwise untouched until `finish` or `abort`.
+    /// `ptr` must address `words` words, 4-aligned, and stay valid and
+    /// otherwise untouched until the block is full, or `finish` or `abort`.
     pub unsafe fn provide_mesh(&mut self, ptr: *mut u32, words: u32) {
-        xpute_core::ensure!(self.mesh_words > 0 && self.mesh.is_none(), ENOTRECOVERABLE);
-        xpute_core::ensure!(words >= self.mesh_words, ENOTRECOVERABLE, words, self.mesh_words);
-        self.mesh = Some(MeshTarget { ptr, words: self.mesh_words as usize });
+        xpute_core::ensure!(self.mesh_words > 0 && (self.mesh.is_none() || self.full()), ENOTRECOVERABLE);
+        let left = self.mesh_words - self.box_cnt * self.box_words;
+        xpute_core::ensure!(words >= self.box_words.min(left) && words <= left, ENOTRECOVERABLE, words, left);
+        let words = words - words % self.box_words;
+        self.mesh = Some(MeshTarget {
+            ptr,
+            words: words as usize,
+            first: self.box_cnt,
+        });
     }
 
     /// The complete mesh's counts. Its words are the caller's.
@@ -681,6 +718,11 @@ impl BakeContext {
                 size_z = unpack_sub_cell_size(sub_sz) * depth;
             }
             if mask & ALL_FACES != 0 {
+                // The block is full: stop before this box, for the next.
+                if self.full() {
+                    b.emit_at = s_i;
+                    return false;
+                }
                 self.emit_box([min_x, min_y, min_z], [size_x, size_y, size_z], [set.r[i], set.g[i], set.b[i]], set.layer_taps[i], mask, unit);
             }
             s_i += 6;
@@ -713,7 +755,7 @@ impl BakeContext {
         // and untouched until the bake closes.
         let m = unsafe { core::slice::from_raw_parts_mut(target.ptr, target.words) };
         let words = self.box_words as usize;
-        let at = self.box_cnt as usize * words;
+        let at = (self.box_cnt - target.first) as usize * words;
         let heights = self.heights;
         write_box(&mut m[at..at + words], min, size, rgb, taps, faces, unit, heights);
         self.box_cnt += 1;

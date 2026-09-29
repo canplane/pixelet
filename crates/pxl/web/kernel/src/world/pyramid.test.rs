@@ -6,8 +6,9 @@ use super::*;
 use crate::world::prefetch::NoPrefetch;
 use pxl_spec::bake::poi_page::{Place, PoiPage, POI_LATTICE};
 use pxl_spec::space::lod::{fault_radius, Tau};
-use pxl_spec::space::observation::{Frustum, Rect, Unknown};
+use pxl_spec::space::observation::{ByBounds, Contents, Frustum, Unknown};
 use pxl_spec::space::pvf3::ivec;
+use pxl_spec::space::v3::Aabb;
 
 /// How high the eye stands over flat ground.
 const HEIGHT: f64 = 1000.0;
@@ -40,8 +41,12 @@ fn named(o: &Observation) -> Vec<LevelPage> {
 struct Flat;
 
 impl Bounds for Flat {
-    fn heights(&self, _level: u32, _ground: Rect) -> Option<(f64, f64)> {
-        Some((0.0, 0.0))
+    fn contents(&self, _level: u32, region: Aabb) -> Contents {
+        let ground = Aabb {
+            min: [region.min[0], region.min[1], 0.0],
+            max: [region.max[0], region.max[1], 0.0],
+        };
+        ground.meet(region).map_or(Contents::Empty, |bound| Contents::Holds { bound, error: [0.0; 3] })
     }
 }
 

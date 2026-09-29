@@ -8,6 +8,8 @@
 // - the ground a ray meets is the ground the paint draws there;
 // - a ray passed over a region by its index lane never passes over ground:
 //   nothing along it before what it meets stands above it;
+// - a page resident over the ones a ray reads changes no answer, only how
+//   soon the ray passes;
 // - a placed object is met at its own box, and air takes the ground out;
 // - a query leaves residency as it found it.
 
@@ -307,6 +309,55 @@ fn a_placed_object_is_met_at_its_own_box_and_air_takes_the_ground_out() {
     let access = Access::new(&paging, &store);
     let hit = access.first_hit(&down([ax, ay]), Detail::Level(0)).value().flatten().unwrap();
     assert_eq!((hit.struck, hit.point[2]), (Struck::Ground, ground - U_PER_CELL));
+}
+
+/// A page resident over the ones a ray reads only lets it pass sooner: with
+/// the leaves' parent and its parent held over them, every ray meets what it
+/// meets without them — the same thing at the same place, as exactly, lacking
+/// the same page — high over the ground, grazing its slopes, and over and
+/// under objects standing apart from it. The rays stay over the leaves, the
+/// ground both residencies read at the level asked.
+#[test]
+fn a_page_over_the_ground_read_changes_no_answer() {
+    let _g = serial();
+    let (leaves, parent) = pages();
+    let zero = zero_page();
+    let over = top().parent();
+    let grand = Terrain::fold_page(over, |p| Some(if p == top() { &parent } else { &zero })).unwrap();
+    let (x0, y0, side) = top().rect();
+    let mut rng = Rng(0xb0c5);
+    let mut store = Store::new();
+    for _ in 0..16 {
+        let corner = [x0 + rng.unit() * side, y0 + rng.unit() * side, 60.0 + rng.unit() * 300.0];
+        write(&mut store, corner, CELL, placeable_cube_num_id(PlaceableCube::Block(cube_types::Block::red)));
+    }
+    let bare = resident(&leaves);
+    let stacked = resident(&leaves.iter().cloned().chain([(top(), parent.clone()), (over, grand)]).collect::<Vec<_>>());
+    let (without, with) = (Access::new(&bare, &store), Access::new(&stacked, &store));
+    let mut met = 0;
+    for _ in 0..600 {
+        let from = [x0 + rng.unit() * side, y0 + rng.unit() * side];
+        let (azimuth, dip) = (rng.unit() * std::f64::consts::TAU, if rng.below(2) == 0 { 0.001 + rng.unit() * 0.05 } else { rng.unit() * 1.2 - 0.3 });
+        let mut ray = Ray {
+            origin: [from[0], from[1], 20.0 + rng.unit() * 2_000.0],
+            direction: [azimuth.cos() * dip.cos(), azimuth.sin() * dip.cos(), -dip.sin()],
+            reach: 6_000.0,
+        };
+        ray.reach = ray.reach.min(exit(&ray, [x0, y0], side) - 1e-3);
+        let (a, b) = (without.first_hit(&ray, Detail::Level(0)), with.first_hit(&ray, Detail::Level(0)));
+        assert_eq!(a.lack(), b.lack(), "{ray:?}");
+        assert_eq!(a.exact().is_some(), b.exact().is_some(), "{ray:?}");
+        match (a.value().flatten(), b.value().flatten()) {
+            (None, None) => {}
+            (Some(h), Some(k)) => {
+                met += 1;
+                assert_eq!((h.struck, h.box_min, h.box_max, h.normal), (k.struck, k.box_min, k.box_max, k.normal), "{ray:?}");
+                assert!((h.t - k.t).abs() < 1e-6, "{ray:?}: met at {} and at {}", h.t, k.t);
+            }
+            (h, k) => panic!("{ray:?}: met {h:?} without the pages over and {k:?} with them"),
+        }
+    }
+    assert!(met > 50, "too few rays met anything to say much: {met}");
 }
 
 #[test]

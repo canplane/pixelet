@@ -31,9 +31,18 @@ struct World {
 }
 
 impl Bounds for World {
-    fn heights(&self, _level: u32, (x0, y0, side): Rect) -> Option<(f64, f64)> {
-        let over = |t: &&Tower| t.x[0] <= x0 + side && t.x[1] >= x0 && t.y[0] <= y0 + side && t.y[1] >= y0;
-        Some((0.0, self.towers.iter().filter(over).map(|t| t.h).fold(0.0, f64::max)))
+    fn contents(&self, _level: u32, region: Aabb) -> Contents {
+        let (lo, hi) = (region.min, region.max);
+        let over = |t: &&Tower| t.x[0] <= hi[0] && t.x[1] >= lo[0] && t.y[0] <= hi[1] && t.y[1] >= lo[1];
+        let top = self.towers.iter().filter(over).map(|t| t.h).fold(0.0, f64::max);
+        let column = Aabb {
+            min: [lo[0], lo[1], 0.0],
+            max: [hi[0], hi[1], top],
+        };
+        match column.meet(region) {
+            Some(bound) => Contents::Holds { bound, error: [0.0; 3] },
+            None => Contents::Empty,
+        }
     }
 }
 
@@ -255,20 +264,27 @@ fn a_level_names_no_more_than_the_fault_bound_and_less_known_names_more() {
     }
 }
 
-/// A square of a level's lattice is one page, and a wider ground every page
-/// under it.
+/// A region over a square of a level's lattice is one page, whatever its
+/// heights, and a wider one every page under it.
 #[test]
 fn paged_storage_maps_a_square_to_its_page_and_ground_to_every_page_under_it() {
     for level in [0, 3, TOP_LEVEL] {
         let span = span_of(level);
         for [x, y] in [[0i64, 0], [-3, 5], [17, -11]] {
             let mut pages = Vec::new();
-            let square = (x as f64 * span, y as f64 * span, span);
-            Paged.pages(&Requirement { level, ground: square }, &mut |p| pages.push(p));
+            let (x0, y0) = (x as f64 * span, y as f64 * span);
+            let square = Aabb {
+                min: [x0, y0, -7.0],
+                max: [x0 + span, y0 + span, 900.0],
+            };
+            Paged.pages(&Requirement { level, region: square }, &mut |p| pages.push(p));
             assert_eq!(pages, vec![page_at(level, [x, y])]);
             pages.clear();
-            let wider = (x as f64 * span + 0.5 * span, y as f64 * span, 1.5 * span);
-            Paged.pages(&Requirement { level, ground: wider }, &mut |p| pages.push(p));
+            let wider = Aabb {
+                min: [x0 + 0.5 * span, y0, 0.0],
+                max: [x0 + 2.0 * span, y0 + 1.5 * span, 0.0],
+            };
+            Paged.pages(&Requirement { level, region: wider }, &mut |p| pages.push(p));
             assert_eq!(pages.len(), 4, "level {level}: {pages:?}");
         }
     }

@@ -35,14 +35,14 @@ pub mod domain;
 use std::collections::HashMap;
 
 use pxl_spec::space::lod::Tau;
-use pxl_spec::space::observation::{Bounds, ByBounds, DemandEstimator, Observation, Paged, Requirement, Storage as _};
+use pxl_spec::space::observation::{Bounds, DemandEstimator, Observation, Paged, Requirement, Storage as _};
 use pxl_spec::space::pyramid::{Folds, LevelPage, TOP_LEVEL};
 
 use crate::io::demand::{Ask, Category, Phases, Why};
 use crate::io::sched::declare;
 use crate::param;
 use crate::sched::profiler::record::Failure;
-use crate::world::observation::{heights_revision, observation, Known, Order};
+use crate::world::observation::{heights_revision, observation, ByFootprints, Known, Order};
 use crate::world::paging::floor::{Fallback, Floor};
 use crate::world::paging::{Candidate, Paging, Victim, ASKS, FRAMES, LEVEL_DEMAND_PAGES};
 use crate::world::prefetch::{NoPrefetch, Prefetch};
@@ -87,10 +87,11 @@ pub trait Layer: Folds + Clone + 'static {
 /// What the asks are a function of: the observation, what is held and
 /// leased (`Paging::revision`), what is known of the heights
 /// (`heights_revision`), which neither the observation nor this layer's
-/// pages move, and the quality the view is held to (world/quality.rs). Two
-/// turns agreeing on all of it ask for the same pages, so the second decides
-/// nothing again.
-type Seen = (Observation, u32, (u32, u32), Tau);
+/// pages move, the quality the view is held to (world/quality.rs), and
+/// which casting of the screen's tiles the demand is estimated from
+/// (world/pyramid/domain.rs `walks`). Two turns agreeing on all of it ask
+/// for the same pages, so the second decides nothing again.
+type Seen = (Observation, u32, (u32, u32), Tau, u32);
 
 /// The speculation the kernel runs: none. The view is paged by its faults,
 /// and with no speculation at all it converges to exact
@@ -248,7 +249,7 @@ impl<L: Layer> Pyramid<L> {
                 q = L::dependencies(p);
             }
         };
-        let order = |p: LevelPage| Order::of(o, p.rect(), bounds.heights(p.level, p.rect()));
+        let order = |p: LevelPage| Order::of_region(o, bounds, p.level, p.region());
         for &p in &demand {
             let at = self.paging.source(p).unwrap_or(p);
             ask(&mut asks, at, Ask { why: Why::Fault, order: order(p) });
@@ -312,24 +313,24 @@ impl<L: Layer> Pyramid<L> {
 
     /// The layer's turn. The quality is decided first (world/quality.rs),
     /// so what is asked for is at the quality what is drawn is cut at.
-    /// Wherever the observation, what is held or leased, the heights or the
-    /// quality have changed, it is observed again (`observe`), since the asks
-    /// are functions of all of them. A turn where none changed decides
-    /// nothing and says the wants it has.
+    /// Wherever the observation, what is held or leased, the heights, the
+    /// quality or what the screen's tiles saw have changed, it is observed
+    /// again (`observe`), since the asks are functions of all of them. A turn
+    /// where none changed decides nothing and says the wants it has.
     ///
-    /// The estimator is the one from bounds alone, hidden ground asked for
-    /// too; one from the samples' hits is a smaller superset and changes
-    /// nothing else here.
+    /// The estimator is the one from what the tiles saw (world/observation.rs
+    /// `ByFootprints`), which the quality's turn has just cast: the ground
+    /// the screen reaches, and what it lacked, and not what is hidden.
     pub fn step(&mut self) {
         let Some(o) = observation() else { return };
         quality::step();
         let tau = quality::effective().tau();
-        let seen = (o, self.paging.revision(), heights_revision(), tau);
+        let seen = (o, self.paging.revision(), heights_revision(), tau, domain::walks());
         if self.last != Some(seen) {
-            self.observe(&o, &Known, &ByBounds { tau }, &PREFETCH, tau, param::HINT_ALLOWANCE);
+            self.observe(&o, &Known, &ByFootprints { tau, sight: domain::sight() }, &PREFETCH, tau, param::HINT_ALLOWANCE);
             // Observing leases and lets go; what is recorded is the state the
             // observation was made against.
-            self.last = Some((o, self.paging.revision(), heights_revision(), tau));
+            self.last = Some((o, self.paging.revision(), heights_revision(), tau, domain::walks()));
         }
         declare(L::CATEGORY, &self.wants);
     }

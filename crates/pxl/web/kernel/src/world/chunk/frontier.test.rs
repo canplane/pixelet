@@ -30,7 +30,7 @@ fn objects_draw_the_grounds_cube_and_go_finer_only_under_z16() {
     let z16 = GROUND.scale(0);
     for shamt in -6..=8 {
         let cube = Scale::of(shamt);
-        let (ground, objects) = (drawn_cube(cube, 0, true, false), drawn_cube(cube, 0, true, true));
+        let (ground, objects) = (drawn_cube(cube, 0, false, false), drawn_cube(cube, 0, false, true));
         if cube >= z16 {
             assert_eq!(objects, ground, "{cube:?}");
         } else {
@@ -88,15 +88,16 @@ fn goal(fine: u32, coarse: u32, w: i64) -> Vec<Chunk> {
 }
 
 /// The fixture's view of the pieces: z16 chunks in the fine pool, every
-/// other in the coarse, everything resident, nearer the corner first.
+/// other in the coarse, each a slot, everything resident, nearer the corner
+/// first.
 struct Flat;
 
 impl Env for Flat {
-    fn pool(&self, c: Chunk) -> Pool {
+    fn slots(&self, c: Chunk) -> (Pool, u32) {
         if c.level() == 0 {
-            Pool::Fine
+            (Pool::Fine, 1)
         } else {
-            Pool::Coarse
+            (Pool::Coarse, 1)
         }
     }
 
@@ -137,7 +138,8 @@ impl Table {
     fn held(&self) -> Slots {
         let mut held = [0; POOLS];
         for &c in self.drawn.iter().chain(self.building.keys()) {
-            held[Flat.pool(c) as usize] += 1;
+            let (pool, k) = Flat.slots(c);
+            held[pool as usize] += k;
         }
         held
     }
@@ -194,6 +196,102 @@ impl Table {
     }
 }
 
+/// The fixture's pieces with every z16 chunk's tier filling `0` slots.
+struct Heavy(u32);
+
+impl Env for Heavy {
+    fn slots(&self, c: Chunk) -> (Pool, u32) {
+        let (pool, k) = Flat.slots(c);
+        (pool, if c.level() == 0 { self.0 } else { k })
+    }
+
+    fn buildable(&self, c: Chunk) -> bool {
+        Flat.buildable(c)
+    }
+
+    fn order(&self, c: Chunk) -> Order {
+        Flat.order(c)
+    }
+}
+
+/// A piece whose tier fills several slots is started only with all of them
+/// free past the reserve, and never with some of them: a refinement into
+/// eight z16 chunks of three slots each waits for twenty-four and the
+/// reserve, however many fewer are free.
+#[test]
+fn a_piece_filling_several_slots_starts_only_with_all_of_them_free() {
+    let parent = at(1, 0, 0);
+    let children: Vec<Chunk> = {
+        let mut c = parent.children().to_vec();
+        c.sort_unstable();
+        c
+    };
+    let drawn: BTreeSet<Chunk> = [parent].into_iter().collect();
+    let building = BTreeMap::new();
+    let with = |fine: u32| {
+        let now = Now {
+            goal: &children,
+            drawn: &drawn,
+            building: &building,
+            recubing: 0,
+            recube: &[],
+            free: [fine, 100],
+        };
+        plan(&now, &Heavy(3))
+    };
+    let occupied = children.iter().filter(|c| c.level() == 0).count() as u32;
+    assert!(occupied > 0);
+    let all = 3 * occupied + RESERVE[Pool::Fine as usize];
+    assert!(with(all - 1).start.is_empty(), "started with fewer slots free than its pieces fill");
+    assert_eq!(with(all).start.len() as u32, occupied, "not started with every slot its pieces fill free");
+}
+
+/// The fixture's pieces with every piece over z16 filling the most a coarse
+/// tier can.
+struct Widest;
+
+impl Env for Widest {
+    fn slots(&self, c: Chunk) -> (Pool, u32) {
+        let (pool, k) = Flat.slots(c);
+        (pool, if c.level() > 0 { COARSE_TIER_SLOTS } else { k })
+    }
+
+    fn buildable(&self, c: Chunk) -> bool {
+        Flat.buildable(c)
+    }
+
+    fn order(&self, c: Chunk) -> Order {
+        Flat.order(c)
+    }
+}
+
+/// One coarsening can always be built: with the coarse pool down to the
+/// reserve, a piece over z16 filling the most a coarse tier can — however
+/// its mesh came to be that large — is started, where a refinement or a fill
+/// is not.
+#[test]
+fn a_coarsening_is_always_started_with_only_the_reserve_free() {
+    let parent = at(1, 0, 0);
+    let mut children = parent.children().to_vec();
+    children.sort_unstable();
+    let (drawn, building): (BTreeSet<Chunk>, BTreeMap<Chunk, bool>) = (children.iter().copied().collect(), BTreeMap::new());
+    let now = Now {
+        goal: &[parent],
+        drawn: &drawn,
+        building: &building,
+        recubing: 0,
+        recube: &[],
+        free: RESERVE,
+    };
+    assert_eq!(plan(&now, &Widest).start, vec![parent], "a coarsening not started with the reserve free");
+    let fill = Now {
+        goal: &[at(1, 4, 4)],
+        drawn: &BTreeSet::new(),
+        ..now
+    };
+    assert!(plan(&fill, &Widest).start.is_empty(), "a fill took the reserve");
+}
+
 /// The frontier comes to its goal where the arena holds it, and once the
 /// ground is covered it stays covered, every step, whatever it moves to.
 #[test]
@@ -219,10 +317,13 @@ fn the_frontier_comes_to_a_goal_the_arena_holds_with_no_gap_on_the_way() {
 /// With an arena too small for the goal, the frontier refines as far as the
 /// arena holds and no further, with a coarser piece standing wherever it
 /// cannot: never a gap, never past the arena, and back to a goal the arena
-/// holds once one is asked.
+/// holds once one is asked. Each arena is its room past the reserve a pool
+/// keeps for one coarsening, which every arena the kernel lays out has
+/// (world/quality.rs asserts the cover and the headroom fit).
 #[test]
 fn an_arena_too_small_for_the_goal_leaves_coarser_pieces_and_never_a_gap() {
-    for arena in [[40, 12], [8, 40], [64, 6], [2, 3]] {
+    for room in [[40, 12], [8, 40], [64, 6], [2, 3]] {
+        let arena: Slots = core::array::from_fn(|p| room[p] + RESERVE[p]);
         let mut t = Table::new(arena);
         for _ in 0..10 {
             t.step(&[root()]);
@@ -360,7 +461,7 @@ fn counts(d: &mut Domain) -> Vec<Slots> {
     (0..d.ladder().len())
         .map(|k| {
             d.cut_at(k);
-            need(d, d.cut(k).expect("made above"), |_| None)
+            need(d, d.cut(k).expect("made above"), |_, _| 1)
         })
         .collect()
 }
@@ -380,7 +481,7 @@ fn the_count_is_never_less_at_a_finer_quality_nor_less_than_the_cut() {
             }
             let cut = d.cut_at(k);
             let (tau, pieces) = (cut.tau(), cut.pieces().to_vec());
-            let fine = pieces.iter().filter(|&&c| pool_of(c, d.outermost(c), d.nearest_to(c), tau, None) == Pool::Fine).count() as u32;
+            let fine = pieces.iter().filter(|&&c| pool_of(c, cube_of(c, d.outermost(c), d.nearest_to(c), tau)) == Pool::Fine).count() as u32;
             assert!(n[k][Pool::Coarse as usize] >= pieces.len() as u32, "height {height}, {tau:?}: coarse under the cut");
             assert!(n[k][Pool::Fine as usize] >= fine, "height {height}, {tau:?}: fine under the cut");
         }

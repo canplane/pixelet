@@ -89,10 +89,12 @@ The rules below keep it one thing. They come from finding it several.
 
 - **The view keeps only what an observer can tell apart.** The world is
   stored in each layer's own shape; what the view holds and does is bounded
-  by the screen, not by the world under it. The screen is quantized into
-  cells of τ pixels, and inside a cell nothing is promised: a piece refines
-  only where it contributes to a cell and its error, projected, crosses a
-  cell's edge on either axis. Storage, query, demand, residency, prefetch,
+  by the screen, not by the world under it. What the eye sees is quantized
+  into cells, each an angle about the eye in its own frame — a screen only
+  calibrates how many logical pixels one spans at the optical axis — and
+  inside a cell nothing is promised: a piece refines only where it
+  contributes to a cell and its error, projected, crosses a cell's edge on
+  either axis. Storage, query, demand, residency, prefetch,
   materialization and scheduling are separate concerns, each with its own
   bound and contract — ARCHITECTURE.md's "The view" is the one statement
   of them; read it before changing any of them.
@@ -118,10 +120,12 @@ The rules below keep it one thing. They come from finding it several.
   level and x, y and z (`world/pyramid/chunk.rs`), and a cube that holds
   nothing is no chunk. Terrain and POI are pages of the pyramid, a 2D
   heightfield and a 2D count; placed objects are resident in their store, by
-  column and band. One query reads them (`world/access.rs`), and nothing
-  outside a layer reads its records by the layer's own shape; the domain's
-  reading by column (`Domain::occupied`, `Chunk::column`) is the one place
-  left that does, to be a query of a 3D box. A placed object
+  column and band. What a box of the world holds is asked of `Bounds`
+  (`pxl-spec space/observation.rs`), which the demand and the view's domain
+  both ask and `Known` (`world/observation.rs`) answers from those stores
+  behind it; a point or a ray is asked of the query (`world/access.rs`).
+  Nothing outside a layer reads its records by the layer's own shape, and a
+  chunk's build (`Chunk::column`) is the layer's own. A placed object
   lives in the chunk its band is in — built, made again and drawn with it,
   the ground's lifecycle there — and shares the lattice and the fold rule
   (`majority`, `pxl-spec bake/fold.rs`).

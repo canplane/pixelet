@@ -1023,3 +1023,290 @@ renderer folds away, because another observer can tell it apart: physics,
 a shadow, an edit, the camera one frame later. Each has its own quantum or
 its own lease; the renderer quotients the world by its own and by nothing
 else.
+
+## A box is all the view asks
+
+Until now the domain read the world by column: the ground's bound and the
+objects' span over a column, then the z-slices they crossed. Height was a
+different kind of thing from x and y in the one place that decides what is
+drawn. Now what a box of the world holds is one question
+(`pxl-spec space/observation.rs` `Bounds::contents`), and both the demand's
+estimator and the view's domain ask it. The kernel answers it
+(`world/observation.rs` `Known`) from the terrain's index lanes and the
+object store's bands. Those are stored flat, and only the answer leaves.
+
+```text
+Contents::Unknown                    nothing over it is resident
+Contents::Empty                      provably nothing in it
+Contents::Holds { bound, error }     all of it inside `bound`; drawn at the
+                                     level, off by up to `error` on each axis
+```
+
+Three points came out of reviewing it.
+
+- **The bound is conservative, not tight.** Only `truth ⊆ bound` is
+  required. A tighter bound saves work and nothing rests on it, so a layer
+  for which tight is expensive may answer loosely.
+- **The error is a box, one extent per axis.** The lens projects it as a
+  box is projected: its extent on each world axis, weighted by how much of
+  that axis the screen's axis takes (`Lens::error`). Terrain happens to
+  answer a cell across and its rise up; the domain does not know which axis
+  is up. A scalar radius would have lost the grazing case, where depth
+  projects small and height whole. The disc the horizontal error used to be
+  was an underestimate on the diagonal; the box is exact there. A
+  projection divides by depth, so a displacement that moves a point across
+  can also bring it nearer. The extent across is therefore taken over the
+  distance less the box's diagonal, so the bound is held over, never under.
+  A property test holds every corner of random boxes to it: near the eye,
+  at a grazing angle, and with depth and breadth together.
+- **The cover starts from the observation, not from the world.** An octree
+  from boxes coarser than the source's top was considered and dropped:
+  nothing coarser than the declared top is supplied, so no box over it has
+  an answer. The cover is every chunk of the top meeting the box the far
+  edge is stored in (`Observation::reach`). That box is the reach on every
+  axis, plus the planet's drop over it, since the planet has a down. It is
+  cut to what a position can name (`pxl-spec space/pvf3.rs` `REACH`).
+  The number is the observation's alone. Along each axis it is
+  ⌊2·far/side⌋ + 2 chunks, or the lane's where the lane ends first
+  (`cover_pieces`). The far edge is `SPLIT` cells of the level over the
+  top and a chunk `CHUNK_CELLS` of the top's own, so `far / side` is
+  2 · `SPLIT` / `CHUNK_CELLS` = 6 at every level. That makes 14 a side, and
+  it moves with the criterion: `SPLIT` 256 would make it 18. Height is where
+  the lane ends first today: the 16-bit lane and a chunk of the published
+  top are both 65,536 units, which meet two chunks either side of zero.
+  So the published cover is 14 × 14 × 2 as before, a bound derived from the
+  criterion, the lattice, the lane and the source's top, and no knob of its
+  own. The knob is the arena it is checked against. At a finer top the bound falls
+  from 128 slices of the lane to 14, because the reach ends before the lane
+  does. The arena is sized to this bound, not to what is drawn: what is
+  drawn is still bounded by what the screen's cells observe.
+
+Occupied is not yet contributes. Terrain answers a surface — a cube wholly
+under the ground's lowest holds nothing — and objects answer by the bands
+they are in. A solid mass of objects would still answer every inner cube
+as held. What contributes is the observer's to judge, above this query,
+and the query stays the access primitive it is.
+
+The estimator asks the same question of the page lattice's cubes. A
+requirement names a region, and a layer's storage maps it to its pages,
+by their squares for the pyramid's. What is required lies nearer than its
+level's band's end, so along the ground too, and the fault bound holds as
+it did.
+
+## A ray passes over what a coarser page already bounds
+
+The query's walk read the ground a region at a time, a region being one
+index cell of the level asked: sixteen of its cells across. The criterion
+puts a level's band at `SPLIT` of its cells, so a ray crossed about twelve
+regions a level, however far over the ground it went. Every page's index
+lane already bounds its whole subtree, so the pages resident over the one
+asked are a max-mipmap of it, and nothing new is stored to use them.
+
+Before a region is read, the resident pages over it are asked, coarsest
+first, whether the ray passes over all they hold (`Access::clear`). The
+first that proves it carries the ray to its cell's far edge. That cell is
+`2^k` of the level's regions across for a page `k` levels up, and never
+past where the level asked changes. What proves it differs by layer:
+
+- the ground is solid under its surface, so it is passed only above its
+  highest;
+- objects stand in their span with air under it, so they are passed under
+  as well as over.
+
+A page that is not resident proves nothing and is passed by. It never lets
+the ray skip what it would have held, and the answer, exact, coarser or
+nothing, and the page it lacks are what they were without it. The descent is
+as deep as the levels over the one asked; what a ray costs is the nodes it
+visits, fewest far over the ground and most along a slope it grazes. No
+bound on a whole ray is claimed.
+
+The GPU `Observer` is held back. A rebuild casts about a hundred corner
+rays, and moving them would mean the records on the GPU and a readback a
+frame or two late. It becomes worth it when tiles shrink toward the cell;
+then it would be a second `Observer`, perhaps one that leaves only a
+compact list of pages to read back.
+
+## The cell is an angle, and a screen only calibrates it
+
+"τ pixels" was a translation. In the code the cell was always an angle,
+`τ / SPLIT` radians. Pixels came in only through the reference view
+`SPLIT` was stated at: 1080 tall at 50°. The observer's frame was already
+the eye's own, built from the frustum as forward, right and up
+(`Lens::of`). The leak rule measures an error as an angle on the screen's
+two axes, square to its direction. So the observation was already a chart
+of directions about the optical axis, not of the world's axes. Only two
+things tied it to a plane, and both are now changed.
+
+- **The target is set from the screen.** The cell is to span
+  `CENTER_CELL_LOGICAL_PX` logical pixels centered on the optical axis.
+  The plane stands `height / (2 · tan(fov / 2))` of them from the eye, so
+  the angle is exact, not a small-angle approximation:
+
+  ```text
+  Δα       = 2 · atan(CENTER_CELL_LOGICAL_PX · tan(fov / 2) / height)
+  τ_target = max(1, SPLIT · Δα)
+  ```
+
+  (`world/quality.rs` `target`). The pixels are logical ones: CSS pixels
+  on a page, points on a device. A device pixel is how finely the screen
+  is rasterized, which the resolution policy owns. It is not how finely
+  the world is told apart, so detail does not follow the device's pixel
+  ratio. The logical pixel is not taken for a fixed angle of the eye;
+  viewing distance and zoom differ from one person and device to the next.
+  It is the product's unit of observation, independent of the raster. The
+  six pixels hold only at the optical axis: a perspective screen draws the
+  same angle wider toward its edges, and the angle is what is canonical.
+- **The floor of τ is a sizing, not a limit of the data.** τ = 1 is
+  `SPLIT`, the finest cell the fault bound, the cover and the arena are
+  sized for. A screen that asks finer is held there. A finer cell
+  everywhere is a smaller `SPLIT`, and every bound moves with it.
+- **The estimator's tiles are equal steps of angle** about the optical
+  axis on each screen axis, not equal steps of the screen's plane
+  (`Grid::corner`). They are equal steps of angle, not of solid angle; over
+  a field of view the two differ little, and a tile is the estimator's
+  resolution, held to no bound.
+
+The screen is still drawn in perspective. Nothing is resampled through
+another lens; the angular chart is where it is decided what to draw and how
+finely.
+
+The orbit that moves the eye — a distance and a polar angle about the map
+center, with the world turned under it by the azimuth — is orthogonal to
+all of this. It makes the frustum, and the observation reads only the
+frustum.
+
+## Demand from what the tiles reach
+
+The demand was estimated from bounds alone (`ByBounds`): every page whose
+box the frustum can see, in the band of its level. That includes ground
+behind a hill or a wall, which the screen never reaches. From street level
+it asked for about 37 pages where 3 were seen. Materialization already
+refined only where the screen's tiles reach. Demand did not use that, so
+the two concerns shared what is known (`Bounds`) but not what is seen.
+
+Now demand reads the same sight (`world/observation.rs` `ByFootprints`).
+Its requirements are the ground each tile's footprint touches, at every
+level whose band some of that ground lies in, plus what the tiles' rays
+lacked. Three rules keep it a demand and not a guess.
+
+- **What a ray lacked is required.** A footprint is what the resident
+  records say a tile meets. A coarse page averages its peaks away, so a
+  hit on it is not proof the ray stops there. The query already names
+  what such a hit lacked (`Answer::Coarser`, `Answer::Nothing`), and that
+  lack is required. When the lacked page comes, the tiles over it are
+  cast again, so the requirement grows until it is what the exact records
+  make it. An exact answer that meets nothing requires nothing.
+- **The observer names ground, never a page.** A lack travels as a
+  requirement, a level and a region, and each layer's storage maps it to
+  its own pages. Places are asked for by the same ground the terrain's rays
+  lacked.
+- **It is demand, not prefetch.** Only what the current observation reaches
+  or lacks is required. What it may reach later stays the prefetch policy's.
+
+The bands are shared with `ByBounds` (`pxl-spec space/observation.rs`
+`band`), so the fault bound holds as before. A lack asked at a finer
+quality than the effective one is lifted to the level that quality puts
+its ground at, so nothing finer is fetched than what is drawn.
+
+Hidden ground is not required at any level: the floor answers it. On the
+fixtures, a flat street with boxes, the pages required went from 25 to 21
+at street level, and from 25 to 13 in front of a wall. They went from 28
+to 18 at 40u, and from 24 to 10 at 600u, looking down. A dense grid of
+samples finds every page it answers from among those required.
+`ByBounds` stays the estimator the spec's own laws are held against.
+
+## The quality is the policy's alone: a tier fills the slots it takes
+
+Every mesh slot was one fixed size. A tier whose mesh had more boxes than
+its slot held was baked a step coarser until it fit (`BuildEvent::Coarser`,
+`Slot::fit`). That was a second quality policy, inside materialization,
+deciding for itself. A step coarser can leak past a cell. Terrain alone
+fits, since a column is a box, so what overflowed was placed objects,
+which have no practical bound per chunk. The quality policy only counted
+the retreat afterward. Decor stood on the drawn tier and not on the query's
+surface, and that was the compensation.
+
+The contract now is that the representation the quality chose is never
+changed by a local capacity. Five mechanisms were weighed; a variable
+allocation was not assumed.
+
+| Mechanism                    | What it costs                                            |
+| ---------------------------- | -------------------------------------------------------- |
+| Split instead of coarsen     | the goal would need the mesh's size; a leaf cannot split |
+| The policy picks a cube each | moves the retreat to the policy; still leaks past a cell |
+| Fewer boxes (faces alone)    | lowers how often a mesh overflows; sets no contract      |
+| Several fixed slots, chained | a draw per slot a heavy tier fills                       |
+| Slab or buddy allocation     | fragmentation, relocation, stable handles, GPU sync      |
+
+The chained slots were taken, because the allocation knows slots and
+nothing of why a tier needs them.
+
+- When a bake knows its size, every slot the mesh fills is held for it at
+  once, or none is (`BuildEvent::Reserve`, table.rs `reserve`). Holding
+  some and waiting for the rest would let two tiers each hold part of
+  what the other needs. Where there is not room, the bake is thrown away
+  rather than wait with the one bake open. How many slots the tier needs is
+  kept for its generation and cube (`Slot::need`), and it is not asked for
+  again until that many are free.
+- The mesher writes a slot's worth at a time (`Step::Full`), so the
+  workspace stays one slot however large the mesh. Each block goes to its
+  slot as it is written, and the slots may be anywhere in the pool,
+  chained in the order they are written (`Meshes::next`).
+- The frontier and the quality policy count each piece by the slots it is
+  known to fill (`Env::slots`, `need`). A piece not yet baked counts as one,
+  and is counted right from its first bake on. Where the goal is past the
+  arena, the one policy draws it coarser.
+- A heavy tier is a draw per slot, sharing its uniform.
+- Progress is proved in slots, not pieces. The frontier's old argument was
+  that one coarsening is always possible because it takes a slot and gives
+  one back. That no longer held once a piece could fill several. It holds
+  again from a bound on the representation, not on the meshes met so far.
+  A coarsening lands one piece over z16, so in the coarse pool. Every tier
+  there is drawn at a step of two or more, where a cell is at most its box
+  and a floor, so a chunk bakes to at most 2·32³ boxes, which is 15 slots
+  (`COARSE_TIER_SLOTS`). Refinements, fills and changes of cube leave that
+  many coarse slots free (`RESERVE`), and none in the fine pool, where no
+  coarsening lands. What moves already under way hold is counted out of the
+  free slots and not again in the reserve. The quality policy's headroom is
+  that reserve, which is progress, and a slot for each refinement under
+  way, which is throughput.
+- A bake's slots are its own until it lands, and free the moment it
+  closes without landing (`settle`, after every call that can close one),
+  not at the next bake's reservation.
+
+A mesh written through blocks of any size is the mesh written whole
+(`a_mesh_written_through_blocks_is_the_mesh_written_whole`). A move whose
+pieces fill several slots starts only with every one of them free
+(`a_piece_filling_several_slots_starts_only_with_all_of_them_free`), and
+a coarsening starts with only the reserve free where a fill does not
+(`a_coarsening_is_always_started_with_only_the_reserve_free`). A claim is
+all of its slots or none, each chained once with no cycle, and letting a
+chain go frees exactly what it took
+(`a_claim_is_all_of_its_slots_or_none_and_letting_it_go_frees_them_all`).
+Decor's reading of its tier now covers only the tier's cells averaged
+2 × 2, inside a cell, and goes when decor becomes its own solver.
+
+## The cover holds completeness; refinement holds quality
+
+The arena's assert, the cover and the headroom inside the coarse pool,
+added pieces to slots. That held while a piece was a slot. Once a tier can
+fill several, the cover's 392 pieces could, at worst, be 392 × 15 slots. A
+piece of the top was drawn from the level's cells averaged 2 × 2 up to the
+coarsest cube, by distance, so it was not structurally one slot.
+
+The cover's job is only that no ground the floor answers goes undrawn. So
+it is drawn in the coarsest cube, one cell a chunk, at most two boxes, one
+slot, whatever it holds (world/chunk/frontier.rs `drawn_cube`). Detail
+comes from refinement alone. The cover's count is its slots by its
+representation, and the assert is a proof in one unit.
+
+A piece is measured as it is drawn. A level's own cell is half the cube
+its cells are drawn averaged into — the 2 × 2 is by design, like a
+retina's pitch against its pooling — so the error of a cube is half its
+side across, which for every level under the top is the level's own cell
+as before. A piece of the cover is therefore half a chunk across, and up
+the one box's whole height from the layer's bound (world/pyramid/domain.rs
+`look`). Where it is seen that closely it splits; where it is hidden it
+stays as the floor. The size of the primitive drawn and the error it can
+make are not the same thing: a cube twelve pixels across whose error is
+held to six is inside the cell.

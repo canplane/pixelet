@@ -11,7 +11,9 @@
 //! fetched ahead, and when, is a prefetch policy over it; that no fault names
 //! a page outside the bound is structure.
 
+use super::pvf3::REACH;
 use super::pyramid::{page_at, span_of, LevelPage, GROUND, TOP_LEVEL};
+use super::v3::Aabb;
 
 /// The one criterion, as a distance per unit of a cell's side: a cell covers
 /// the pixels a cell is allowed at `SPLIT` times its side from the eye, so a
@@ -135,6 +137,25 @@ pub fn squares_within(level: u32, at: [f64; 2], radius: f64) -> impl Iterator<It
     let gap = move |c: f64, i: i64| (i as f64 * span - c).max(c - (i + 1) as f64 * span).max(0.0);
     ys.flat_map(move |y| xs.clone().map(move |x| [x, y]))
         .filter(move |&[x, y]| gap(at[0], x).hypot(gap(at[1], y)) <= radius)
+}
+
+/// The cubes of a lattice `side` wide, by their coordinate along each axis,
+/// that meet `b` inside what a position can name (pvf3.rs `REACH`): along an
+/// axis an interval of `d` meets at most ⌊d / side⌋ + 2 of them.
+pub fn cubes_meeting(side: f64, b: Aabb) -> impl Iterator<Item = [i64; 3]> {
+    let b = b.meet(REACH).map(|b| {
+        let row = |k: usize| {
+            let hi = if b.max[k] < REACH.max[k] { (b.max[k] / side).floor() } else { (b.max[k] / side).ceil() - 1.0 };
+            (b.min[k] / side).floor() as i64..=hi as i64
+        };
+        [row(0), row(1), row(2)]
+    });
+    b.into_iter().flat_map(|[xs, ys, zs]| {
+        zs.flat_map(move |z| {
+            let xs = xs.clone();
+            ys.clone().flat_map(move |y| xs.clone().map(move |x| [x, y, z]))
+        })
+    })
 }
 
 #[cfg(test)]

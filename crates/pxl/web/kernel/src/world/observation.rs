@@ -2,24 +2,33 @@
 
 //! The kernel's side of an observation (pxl-spec space/observation.rs): the
 //! eye as the view draws it, what it looks at, and what the kernel knows of
-//! the heights over the ground — the bounds an estimator of demand is
-//! handed. Nothing here knows how what is observed is drawn.
+//! what a box of the world holds — the bounds an estimator of demand and the
+//! view's domain are handed. Nothing here knows how what is observed is
+//! drawn.
 
 use std::cmp::Ordering;
+use std::collections::HashMap;
 
 use pxl_spec::bake::format::Terrain;
+use pxl_spec::space::hierarchy::{ancestor_of, Scale};
+use pxl_spec::space::indexer::{L2, L3};
+use pxl_spec::space::lod::Tau;
 use pxl_spec::space::lod::{self, fault_radius};
-use pxl_spec::space::observation::{Bounds, Frustum, Observation, Paged, Rect, Requirement, Storage as _};
+use pxl_spec::space::observation::{band, Bounds, Contents, DemandEstimator, Frustum, Observation, Requirement};
 use pxl_spec::space::pvf3::ivec;
-use pxl_spec::space::pyramid::{LevelPage, TOP_LEVEL};
+use pxl_spec::space::pvf3::REACH;
+use pxl_spec::space::pyramid::{span_of, LevelPage, GROUND, TOP_LEVEL};
+use pxl_spec::space::v3::Aabb;
 
+use crate::global::Global;
 use crate::kernel::kernel;
 use crate::layer::environment::fog::{eye_height, reach_at};
 use crate::layer::environment::state::globe;
 use crate::layer::object::store::objects_revision;
-use crate::layer::terrain::extent::extent_under;
 use crate::shell::map_store::map_store;
+use crate::world::access::Access;
 use crate::world::frame::view::view;
+use crate::world::observer::Sight;
 use crate::world::paging::floor;
 use crate::world::pyramid::Layer as _;
 
@@ -82,27 +91,198 @@ pub fn observation() -> Option<Observation> {
     })
 }
 
-/// What the kernel knows of the heights over the ground: the terrain's index
-/// lanes, from each page or the nearest resident page over it
-/// (layer/terrain/extent.rs), and the objects standing there, which are all
-/// resident. None where no terrain page over the ground is held.
+/// What the kernel knows of the world: the terrain's index lanes, from each
+/// page or the nearest resident page over it (world/access.rs
+/// `Access::extent`, `Access::slope`), and the objects, which are all
+/// resident. Both are stored flat — a heightfield, and bands over a column —
+/// and read here by the node of that storage under a box, so what asks sees
+/// only the box's answer. Unknown where no terrain page over some of the box
+/// is held.
+///
+/// A piece of ground drawn in a level's cells is off from what it stands for
+/// by a cell across and as far as it rises over one up; an object folded
+/// away is off by all of itself, which a far pole is and what a sheer face
+/// is taken to be.
 pub struct Known;
 
 impl Bounds for Known {
-    fn heights(&self, level: u32, ground: Rect) -> Option<(f64, f64)> {
-        let mut out = Some((f64::INFINITY, f64::NEG_INFINITY));
-        Paged.pages(&Requirement { level, ground }, &mut |p| {
-            let under = extent_under(p);
-            let objects = kernel().objects.reach_over(p.node());
-            out = match (out, under) {
-                (Some(a), Some(g)) => {
-                    let (lo, hi) = objects.map_or(g, |o| (g.0.min(o.0), g.1.max(o.1)));
-                    Some((a.0.min(lo), a.1.max(hi)))
-                }
-                _ => None,
+    fn contents(&self, level: u32, region: Aabb) -> Contents {
+        let (z0, z1) = (region.min[2], region.max[2]);
+        let cut = |(lo, hi): (f64, f64)| (lo <= z1 && hi >= z0).then(|| (lo.max(z0), hi.min(z1)));
+        let cell = GROUND.scale(level).side();
+        let mut known = true;
+        let mut bound: Option<Aabb> = None;
+        let mut rise = 0.0f64;
+        under(level, region, &mut |node, square| {
+            let Some(n) = read(level, node) else {
+                known = false;
+                return;
             };
+            let mut hold = |(lo, hi): (f64, f64)| {
+                let b = Aabb {
+                    min: [square.min[0], square.min[1], lo],
+                    max: [square.max[0], square.max[1], hi],
+                };
+                bound = Some(bound.map_or(b, |a| a.join(b)));
+            };
+            if let Some(ground) = cut(n.ground) {
+                hold(ground);
+                rise = rise.max(n.slope * cell);
+            }
+            if let Some(objects) = n.objects.and_then(cut).filter(|_| kernel().objects.holds(node, (z0, z1))) {
+                hold(objects);
+                rise = rise.max(objects.1 - objects.0);
+            }
         });
-        out
+        match (known, bound) {
+            (false, _) => Contents::Unknown,
+            (true, None) => Contents::Empty,
+            (true, Some(bound)) => {
+                let extent = region.extent();
+                let error = [cell, cell, rise];
+                Contents::Holds {
+                    bound,
+                    error: std::array::from_fn(|k| error[k].clamp(0.0, extent[k])),
+                }
+            }
+        }
+    }
+}
+
+/// What the stores say of a node of their own: the ground's bound and its
+/// steepest rise over a run, and the span its objects reach.
+#[derive(Clone, Copy)]
+struct Node {
+    ground: (f64, f64),
+    slope: f64,
+    objects: Option<(f64, f64)>,
+}
+
+/// Every node's answer, and the revision it was read at. A view is made
+/// again every frame the eye moves and asks of every chunk it cuts, eight
+/// children at a time, and an estimate of demand of every cube it names,
+/// while an answer only moves with what is resident. Asked afresh, it was
+/// most of a zoom's turn (measured 2026-09-26).
+type Read = (Option<(u32, u32)>, HashMap<(u32, (Scale, [i64; 2])), Option<Node>>);
+static READ: Global<Read> = Global::new();
+
+/// What is known of `node` at `level`: none where no terrain page over it is
+/// resident.
+fn read(level: u32, node: (Scale, [i64; 2])) -> Option<Node> {
+    let revision = heights_revision();
+    let read = READ.get(Default::default);
+    if read.0 != Some(revision) {
+        *read = (Some(revision), HashMap::new());
+    }
+    *read.1.entry((level, node)).or_insert_with(|| {
+        let page = L3.up(level as i32);
+        let [x, y] = ancestor_of(node.1, page.above(node.0) as u32);
+        let page = LevelPage::new(level, ivec::gather(x, y, 0));
+        let access = Access::now();
+        Some(Node {
+            ground: access.extent(page, node).value()?,
+            slope: access.slope(page, node).value()?,
+            objects: kernel().objects.reach_over(node),
+        })
+    })
+}
+
+/// Each node of the stores' flat lattice at `level` under `region`, with the
+/// square of it the region covers: the region's own square where it is one
+/// node — a chunk's column up to a page — and its columns otherwise.
+fn under(level: u32, region: Aabb, each: &mut dyn FnMut((Scale, [i64; 2]), Aabb)) {
+    let column = L2.up(level as i32);
+    let side = region.max[0] - region.min[0];
+    let node = (0..=L3.above(L2)).map(|k| column.up(k)).find(|s| s.side() == side && region.max[1] - region.min[1] == side);
+    let square = |s: Scale, [x, y]: [i64; 2]| {
+        let (x0, y0) = (x as f64 * s.side(), y as f64 * s.side());
+        let covered = Aabb {
+            min: [x0, y0, region.min[2]],
+            max: [x0 + s.side(), y0 + s.side(), region.max[2]],
+        };
+        covered.meet(region).unwrap_or(covered)
+    };
+    if let Some(s) = node.filter(|s| region.min[0] % s.side() == 0.0 && region.min[1] % s.side() == 0.0) {
+        let at = [(region.min[0] / s.side()) as i64, (region.min[1] / s.side()) as i64];
+        return each((s, at), square(s, at));
+    }
+    let rows = |k: usize| (region.min[k] / column.side()).floor() as i64..=((region.max[k] / column.side()).ceil() as i64 - 1);
+    for y in rows(1) {
+        for x in rows(0) {
+            each((column, [x, y]), square(column, [x, y]));
+        }
+    }
+}
+
+/// The estimator from what the screen's tiles saw (world/observer.rs
+/// `Sight`), at a quality `tau`: the ground their footprints touch, at each
+/// level whose band some of it lies in, and what their rays lacked. Ground
+/// no tile's rays reach — behind what they met, or behind the eye — is
+/// required of no level; the floor answers it (world/paging/floor.rs).
+///
+/// A footprint is what the resident records say a tile meets. Where they
+/// said it coarser than asked, or not at all, the ray lacked the ground at
+/// the level it asked, and that lack is required; when it comes, the tiles
+/// over it are cast again (`Sight::observe`), so the requirements grow
+/// toward what the exact records would make them and never rest short of
+/// it. What is required is the ground and the level — the lack as a
+/// region, never as a page, which each layer's storage names for itself.
+///
+/// The bands are every estimator's (pxl-spec space/observation.rs `band`),
+/// so nothing is required nearer than its level allows or past the band's
+/// end, the fault bound holds as it does of `ByBounds`, and a lack asked at
+/// a finer quality than `tau` is required at the level `tau` puts its
+/// ground at, never finer than what is drawn.
+pub struct ByFootprints<'a> {
+    pub tau: Tau,
+    pub sight: &'a Sight,
+}
+
+impl DemandEstimator for ByFootprints<'_> {
+    fn requirements(&self, o: &Observation, bounds: &impl Bounds, each: &mut dyn FnMut(Requirement)) {
+        let column = |x0: f64, y0: f64, x1: f64, y1: f64| Aabb {
+            min: [x0, y0, REACH.min[2]],
+            max: [x1, y1, REACH.max[2]],
+        };
+        let required = |level: u32, region: Aabb| {
+            let (from, to) = band(o, self.tau, level)?;
+            let held = bounds.contents(level, region).within(region)?;
+            let m = o.measure(&held);
+            (m.seen && m.near < to && m.near <= o.far && m.far >= from).then_some(Requirement { level, region })
+        };
+        for lack in self.sight.lacks() {
+            let r = lack.region;
+            let region = column(r.min[0], r.min[1], r.max[0], r.max[1]);
+            if let Some(r) = (lack.level..=o.top).find_map(|level| required(level, region)) {
+                each(r);
+            }
+        }
+        for f in self.sight.footprints() {
+            let b = f.aabb();
+            for level in 0..=o.top {
+                let Some((_, to)) = band(o, self.tau, level) else { break };
+                // Only what lies within the band's end along the ground.
+                let reach = to.min(o.far);
+                let lo = [b.min[0].max(o.eye[0] - reach), b.min[1].max(o.eye[1] - reach)];
+                let hi = [b.max[0].min(o.eye[0] + reach), b.max[1].min(o.eye[1] + reach)];
+                if lo[0] > hi[0] || lo[1] > hi[1] {
+                    continue;
+                }
+                let span = span_of(level);
+                let rows = |k: usize| (lo[k] / span).floor() as i64..=(hi[k] / span).floor() as i64;
+                for y in rows(1) {
+                    for x in rows(0) {
+                        let (x0, y0) = (x as f64 * span, y as f64 * span);
+                        let square = column(x0, y0, x0 + span, y0 + span);
+                        if f.touches(&square) {
+                            if let Some(r) = required(level, square) {
+                                each(r);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -128,16 +308,22 @@ impl Order {
     /// Nothing is ordered after this: what no view measured.
     pub const LAST: Order = Order { seen: false, near: f64::INFINITY };
 
-    /// Where a box of ground and the heights it spans falls for `o`.
-    pub fn of(o: &Observation, ground: Rect, z: Option<(f64, f64)>) -> Order {
-        let m = o.measure(ground, z);
+    /// Where box `b` falls for `o`.
+    pub fn of(o: &Observation, b: &Aabb) -> Order {
+        let m = o.measure(b);
         Order { seen: m.seen, near: m.near }
     }
 
-    /// Where page `p` falls for `o`, by its whole ground and what is known of
-    /// its heights.
+    /// Where `region` falls for `o`, by what `bounds` say it holds at
+    /// `level`: all of it where nothing is known.
+    pub fn of_region<B: Bounds + ?Sized>(o: &Observation, bounds: &B, level: u32, region: Aabb) -> Order {
+        Order::of(o, &bounds.contents(level, region).within(region).unwrap_or(region))
+    }
+
+    /// Where page `p` falls for `o`, by what is known of what stands over
+    /// it.
     pub fn of_page(o: &Observation, p: LevelPage) -> Order {
-        Order::of(o, p.rect(), Known.heights(p.level, p.rect()))
+        Order::of_region(o, &Known, p.level, p.region())
     }
 }
 

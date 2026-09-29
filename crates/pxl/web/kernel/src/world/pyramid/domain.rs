@@ -25,9 +25,12 @@
 //! cell of the observation — some tile's footprint touches it
 //! (world/observer.rs) — and its error, projected, crosses a cell's edge on
 //! either axis of the screen (`Lens::error` against `cell_angle`). Its error
-//! is what its page already says: its cell's side across, and up as far as
-//! its ground can rise across one of its cells and its objects whole
-//! (`height_error`), taken at its nearest point to the eye. Inside a cell is
+//! is what is known of what it holds already says, along each axis
+//! (pxl-spec space/observation.rs `Contents`), taken at its nearest point to
+//! the eye. A chunk is a box to this, and what it holds a box inside it:
+//! how a layer stores what stands there — a heightfield, bands over a column
+//! — is the layer's, read behind `Bounds` (world/observation.rs `Known`),
+//! and no axis is special here. Inside a cell is
 //! don't-care, so nothing refines to keep what stays inside one: ground at a
 //! grazing angle projects its depth small and stays coarse along the screen's
 //! depth, and refines across it, and at a silhouette, as far as it crosses;
@@ -39,8 +42,9 @@
 //! one center of everything a view decides.
 //!
 //! **What bounds the goal is the rule's reach, not the screen.** A chunk's
-//! error on either axis is at most its cell and its own height over its
-//! distance, and its height is `CHUNK_CELLS` cells, so a chunk of a level
+//! error along each axis is at most its extent, `CHUNK_CELLS` cells, so on
+//! the screen at most its diagonal over its distance less the diagonal, and
+//! a chunk of a level
 //! splits only within `split_reach` of the eye, whatever it holds
 //! and whatever the screen: a split is `CHILDREN − 1` pieces more at most,
 //! and the splits of a level are the touched chunks within its reach. That
@@ -58,51 +62,51 @@
 use std::collections::{HashMap, HashSet};
 
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::hierarchy::Scale;
-use pxl_spec::space::lod::{fault_radius, Tau};
-use pxl_spec::space::observation::Observation;
-use pxl_spec::space::pvf3::core::IVEC_Z_W;
-use pxl_spec::space::pvf3::ivec;
-use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{chunk_span_of, LevelPage, CHUNK_CELLS, GROUND, TOP_LEVEL};
+use pxl_spec::space::lod::{cubes_meeting, fault_radius, Tau};
+use pxl_spec::space::observation::{Bounds, Contents, Observation};
+use pxl_spec::space::pvf3::REACH;
+use pxl_spec::space::pyramid::{chunk_span_of, LevelPage, TOP_LEVEL};
+use pxl_spec::space::v3::Aabb;
 
 use crate::global::Global;
-use crate::kernel::kernel;
 use crate::world::access::Access;
-use crate::world::observation::{heights_revision, observation, Order};
+use crate::world::observation::{heights_revision, observation, Known, Order};
 use crate::world::observer::{cell_angle, EdgeRays, Footprint, Lens, Sight};
 use crate::world::quality::Effective;
 
 use super::chunk::Chunk;
 use super::Layer as _;
 
-/// The chunks of `top` one column's heights can span: a point's height is
-/// the 16-bit lane of a position (pxl-spec space/pvf3), half of it either
-/// side of zero, so the chunks of `top`'s height the lane crosses.
-pub const fn column_chunks(top: u32) -> u32 {
-    let half = 1i64 << (IVEC_Z_W - 1);
-    let span = chunk_span_of(top) as i64;
-    ((half - 1).div_euclid(span) - (-half).div_euclid(span) + 1) as u32
-}
-
-/// The most pieces the cover over a source whose top is `top` is: every
-/// chunk of the top within the far edge along the ground, which is never
-/// past the top's fault radius (pxl-spec space/observation.rs
-/// `Observation::far`). An interval of `d` touches at most ⌊d / side⌋ + 2
-/// chunks, and a disc no more than the square about it; the radius and a
-/// chunk grow by the same factor a level, so the square is as many chunks
-/// at every level, and a column of a finer top is more of them.
-pub const fn cover_pieces(top: u32) -> u32 {
-    let across = (2.0 * fault_radius(top) / chunk_span_of(top)) as u32 + 2;
-    across * across * column_chunks(top)
+/// The most pieces the cover over a source whose top is `top` is, on a
+/// planet no smaller than `planet`: every chunk of the top meeting the box
+/// the far edge is stored in (pxl-spec space/observation.rs
+/// `Observation::reach`) — the top's fault radius each way, never past it
+/// (`Observation::far`), and over it as far again as the planet lowers
+/// ground that far — inside what a position can name (pxl-spec
+/// space/pvf3.rs `REACH`). An interval of `d` meets at most ⌊d / side⌋ + 2
+/// chunks. The radius is `SPLIT` cells of the level over (pxl-spec
+/// space/lod.rs) and a chunk `CHUNK_CELLS` of its own, so the reach is
+/// 2 · `SPLIT` / `CHUNK_CELLS` chunks each way at every level — the criterion
+/// moves it, the level does not — until the lane ends first.
+pub const fn cover_pieces(top: u32, planet: f64) -> u32 {
+    let (far, side) = (fault_radius(top), chunk_span_of(top));
+    let reach = [2.0 * far, 2.0 * far, 2.0 * far + far * far / (2.0 * planet)];
+    let (mut n, mut k) = (1, 0);
+    while k < 3 {
+        let across = (reach[k] / side) as u32 + 2;
+        let lane = (REACH.max[k] / side).ceil() - (REACH.min[k] / side).floor();
+        n *= if lane < across as f64 { lane as u32 } else { across };
+        k += 1;
+    }
+    n
 }
 
 /// How near the eye a chunk of `level` has to come for its error to cross a
-/// cell at `tau`, whatever it holds: its error on either axis is at most its
-/// cell's side and its own height over its distance, and its height is at
-/// most `CHUNK_CELLS` of its cells.
+/// cell at `tau`, whatever it holds: its error along each axis is at most its
+/// extent, so on the screen at most its diagonal over its distance less the
+/// diagonal (world/observer.rs `Lens::error`).
 pub fn split_reach(level: u32, tau: Tau) -> f64 {
-    (1 + CHUNK_CELLS) as f64 * GROUND.scale(level).side() / cell_angle(tau)
+    3f64.sqrt() * chunk_span_of(level) * (1.0 + 1.0 / cell_angle(tau))
 }
 
 /// The view cut at one quality: the chunks split, and the pieces that
@@ -148,19 +152,19 @@ pub struct Domain {
     lens: Option<Lens>,
     /// What the screen's tiles touched.
     footprints: Vec<Footprint>,
-    /// What is known of the columns' heights: what holds anything, and what
-    /// has an answer.
-    known: Box<dyn ColumnBounds>,
+    /// What is known of what the world holds: which chunks hold anything,
+    /// and which have an answer.
+    known: Box<dyn Bounds>,
     /// The cover: every chunk of the top within the reach that holds
     /// anything and has an answer.
     roots: Vec<Chunk>,
-    /// Columns of the top within the reach with no answer yet.
+    /// Chunks of the top within the reach with no answer yet.
     unanswered: u32,
     /// What the footprints say of each chunk asked about so far.
     seen: HashMap<Chunk, Seen>,
     /// How near the eye each chunk cut comes and whether the view sees it —
     /// its place in the order — measured once: whoever orders or draws a
-    /// piece asks again, and a measure reads every placed column.
+    /// piece asks again.
     measured: HashMap<Chunk, Order>,
     /// The qualities it may be cut at, finest first, and the cut at each
     /// made so far.
@@ -172,8 +176,8 @@ pub struct Domain {
 
 impl Domain {
     /// The pieces `o` is cut into at `ladder[at]`, as far as `known` knows
-    /// the heights and `footprints` say what the screen touches.
-    pub fn of(o: Observation, ladder: &[Tau], at: usize, known: Box<dyn ColumnBounds>, footprints: Vec<Footprint>) -> Domain {
+    /// what the world holds and `footprints` say what the screen touches.
+    pub fn of(o: Observation, ladder: &[Tau], at: usize, known: Box<dyn Bounds>, footprints: Vec<Footprint>) -> Domain {
         xpute_core::ensure!(at < ladder.len(), EINVAL);
         let mut d = Domain {
             o,
@@ -202,15 +206,24 @@ impl Domain {
         if self.seen.contains_key(&c) {
             return;
         }
-        let (z0, z1) = self.occupied(c).unwrap_or(c.z_range());
-        let (x0, y0, side) = c.rect();
-        let touching: Vec<u32> = from.iter().copied().filter(|&k| self.footprints[k as usize].touches((x0, y0, side), (z0, z1))).collect();
+        let (bound, error) = match self.contents(c) {
+            // A piece of the cover is drawn one cell a chunk (world/chunk/
+            // frontier.rs `drawn_cube`), and measured as it is drawn: half
+            // that cell across, as a level's own cell is half the cube its
+            // cells are drawn averaged into, and up the one box's whole
+            // height.
+            Contents::Holds { bound, .. } if self.outermost(c) => {
+                let half = chunk_span_of(c.level()) / 2.0;
+                (bound, [half, half, bound.extent()[2]])
+            }
+            Contents::Holds { bound, error } => (bound, error),
+            _ => (c.region(), [0.0; 3]),
+        };
+        let touching: Vec<u32> = from.iter().copied().filter(|&k| self.footprints[k as usize].touches(&bound)).collect();
         let e = self.o.eye;
-        let nearest = [e[0].clamp(x0, x0 + side), e[1].clamp(y0, y0 + side), e[2].clamp(z0, z1)];
+        let nearest = bound.nearest(e);
         let near = (0..3).map(|k| (nearest[k] - e[k]).powi(2)).sum::<f64>().sqrt();
-        let error = self
-            .lens
-            .map_or(0.0, |l| l.error(nearest, GROUND.scale(c.level()).side(), self.height_error(c)).into_iter().fold(0.0, f64::max));
+        let error = self.lens.map_or(0.0, |l| l.error(nearest, error).into_iter().fold(0.0, f64::max));
         self.seen.insert(c, Seen { touching, error, near });
     }
 
@@ -290,7 +303,7 @@ impl Domain {
         self.in_force().tau
     }
 
-    /// Columns of the top within the reach no page over is resident for:
+    /// Chunks of the top within the reach no page over is resident for:
     /// ground with no answer yet, which the goal has no piece of.
     pub fn unanswered(&self) -> u32 {
         self.unanswered
@@ -301,7 +314,7 @@ impl Domain {
 /// tiles saw, and which making of its pieces this is.
 #[derive(Default)]
 struct Made {
-    key: Option<(Observation, (u32, u32))>,
+    key: Option<(Observation, (u32, u32), Tau)>,
     domain: Option<Domain>,
     sight: Sight,
     /// The terrain pages resident when the tiles were last cast, and the
@@ -325,17 +338,18 @@ pub fn step(ladder: &[Tau], q: Effective) -> bool {
     let Some(o) = observation() else { return false };
     let at = ladder.iter().position(|&t| t == q.tau()).unwrap_or(0);
     let made = MADE.get(Made::default);
-    let key = Some((o, heights_revision()));
+    let key = Some((o, heights_revision(), ladder[0]));
     if made.key != key {
+        let retarget = made.key.is_none_or(|(_, _, target)| target != ladder[0]);
         made.key = key;
         let paging = Terrain::pyramid().paging();
         let resident: HashSet<LevelPage> = (0..=TOP_LEVEL).flat_map(|level| paging.level(level).map(|(p, _)| p)).collect();
         let moved: Vec<(f64, f64, f64)> = resident.symmetric_difference(&made.resident).map(|p| p.rect()).collect();
         let objects = heights_revision().1;
-        made.rays = made.sight.observe(&o, &EdgeRays(Access::now()), objects != made.objects, &moved);
+        made.rays = made.sight.observe(&o, &EdgeRays(Access::now(), ladder[0]), retarget || objects != made.objects, &moved);
         made.resident = resident;
         made.objects = objects;
-        made.domain = Some(Domain::of(o, ladder, at, Box::new(Held), made.sight.footprints().cloned().collect()));
+        made.domain = Some(Domain::of(o, ladder, at, Box::new(Known), made.sight.footprints().cloned().collect()));
         made.revision = made.revision.wrapping_add(1);
         made.walks = made.walks.wrapping_add(1);
         return true;
@@ -344,6 +358,11 @@ pub fn step(ladder: &[Tau], q: Effective) -> bool {
         made.revision = made.revision.wrapping_add(1);
     }
     false
+}
+
+/// What the screen's tiles saw when the domain was last made.
+pub fn sight() -> &'static Sight {
+    &MADE.get(Made::default).sight
 }
 
 /// The view's domain as last made.
@@ -377,163 +396,42 @@ pub fn revision() -> u32 {
     MADE.get(Made::default).revision
 }
 
-/// What a column holds, as heights in units: its ground's bound, and the
-/// span from its lowest object to its highest, each none where nothing is
-/// known or nothing stands.
-pub type Spans = (Option<(f64, f64)>, Option<(f64, f64)>);
-
-/// What the domain knows of a column's heights (the K of the record): a
-/// bound, never tighter than the truth, and at a coarser level never
-/// tighter than at a finer one under it — the index lane's law, a parent's
-/// extent holding its children's (pxl-spec bake/fold.rs `fold_index`). That
-/// nesting is what makes every chunk that holds anything lie under one that
-/// does, a level up, so the domain's tree is the chunks' own. The ground's
-/// bound is known exactly where a page at or over the column is resident,
-/// which is what a piece's answer is.
-pub trait ColumnBounds {
-    /// Column `column` of `page`'s level: its ground's bound and its
-    /// objects' span.
-    fn spans(&self, page: LevelPage, column: (Scale, [i64; 2])) -> Spans;
-    /// Whether anything stands in `column` between heights `z`: the objects
-    /// are held by the bands they are in, not by their span, so a chunk
-    /// between two things stacked apart holds nothing.
-    fn holds(&self, column: (Scale, [i64; 2]), z: (f64, f64)) -> bool;
-    /// The steepest column `column` of `page`'s level's ground can be, as a
-    /// rise over a run (world/access.rs `Access::slope`): never less than the
-    /// truth's.
-    fn slope(&self, page: LevelPage, column: (Scale, [i64; 2])) -> Option<f64>;
-}
-
-/// What the kernel knows: the terrain's index lanes, from each page or the
-/// nearest resident page over it (world/access.rs `Access::extent`), and the
-/// objects standing in the column, which are all resident.
-pub struct Held;
-
-impl Held {
-    /// What is known of `column` of `page`'s level, read once a revision.
-    fn read(page: LevelPage, column: (Scale, [i64; 2])) -> HeldColumn {
-        let revision = heights_revision();
-        let cache = HEIGHTS.get(Default::default);
-        if cache.0 != Some(revision) {
-            *cache = (Some(revision), HashMap::new());
-        }
-        *cache.1.entry((page.level, column)).or_insert_with(|| {
-            let access = Access::now();
-            HeldColumn {
-                spans: (access.extent(page, column).value(), kernel().objects.reach_over(column)),
-                slope: access.slope(page, column).value(),
-            }
-        })
-    }
-}
-
-impl ColumnBounds for Held {
-    fn spans(&self, page: LevelPage, column: (Scale, [i64; 2])) -> Spans {
-        Held::read(page, column).spans
-    }
-
-    fn holds(&self, column: (Scale, [i64; 2]), z: (f64, f64)) -> bool {
-        kernel().objects.holds(column, z)
-    }
-
-    fn slope(&self, page: LevelPage, column: (Scale, [i64; 2])) -> Option<f64> {
-        Held::read(page, column).slope
-    }
-}
-
-/// A column's heights as `Held` read them.
-#[derive(Clone, Copy)]
-struct HeldColumn {
-    spans: Spans,
-    slope: Option<f64>,
-}
-
-/// Every column's heights as `Held` read them, and the revision they were
-/// read at.
-type HeightsCache = (Option<(u32, u32)>, HashMap<(u32, (Scale, [i64; 2])), HeldColumn>);
-static HEIGHTS: Global<HeightsCache> = Global::new();
-
-/// A column's ground and objects as one span.
-fn merged(spans: Spans) -> Option<(f64, f64)> {
-    match spans {
-        (Some(g), Some(o)) => Some((g.0.min(o.0), g.1.max(o.1))),
-        (g, o) => g.or(o),
-    }
-}
-
 impl Domain {
-    /// The heights anything in a column of `page`'s ground can span, as the
-    /// kernel knows them (`Held`). This is where a node of the view, which
-    /// is 3D, is pointed at what is stored, which is 2D: the terrain's
-    /// heightfield and the objects' columns, each read by the column
-    /// (`Chunk::column`). `heights_revision` says when any answer this gives
-    /// may have changed.
+    /// What `c` holds, as far as what is known says.
+    fn contents(&self, c: Chunk) -> Contents {
+        self.known.contents(c.level(), c.region())
+    }
+
+    /// Where in `c` anything stands, or none where nothing does or nothing
+    /// is known. A chunk that holds nothing is no node of the view — never
+    /// split, counted or drawn — and there is no slot for it anywhere: its
+    /// emptiness is this answer and not a thing kept.
     ///
     /// A bound and not the surface drawn, because what it decides is which
     /// chunks hold anything and how near they come, and the surface a page
     /// over a piece draws averages what is under it: a peak it averaged under
     /// its ceiling would be no chunk until the page under it came. A bound is
     /// no nearer than the truth, so the order it gives errs nearer.
-    ///
-    /// Read once for each column until the revision moves: a view is made
-    /// again every frame the eye moves, and every chunk it cuts asks, eight
-    /// children at a time, while the answer only moves with the heights.
-    /// Asked afresh, it was most of a zoom's turn (measured 2026-09-26).
-    pub fn heights(page: LevelPage, column: (Scale, [i64; 2])) -> Option<(f64, f64)> {
-        merged(Held.spans(page, column))
-    }
-
-    /// What of `c` can hold anything: the heights its ground's bound and the
-    /// objects in it span, cut to its own, or none where both pass it by or
-    /// nothing is known. A chunk that holds nothing is no node of the view —
-    /// never split, counted or drawn — and there is no slot for it anywhere:
-    /// its emptiness is this answer and not a thing kept. The objects are
-    /// asked by the bands they are in (`Store::holds`), not by their span, so
-    /// a chunk between two things stacked apart holds nothing.
-    pub fn occupied(&self, c: Chunk) -> Option<(f64, f64)> {
-        let (z0, z1) = c.z_range();
-        let cut = |(lo, hi): (f64, f64)| (lo < z1 && hi >= z0).then(|| (lo.max(z0), hi.min(z1)));
-        let (ground, objects) = self.known.spans(c.page(), c.column());
-        let ground = ground.and_then(cut);
-        let objects = objects.and_then(cut).filter(|_| self.known.holds(c.column(), (z0, z1)));
-        match (ground, objects) {
-            (Some(g), Some(o)) => Some((g.0.min(o.0), g.1.max(o.1))),
-            (g, o) => g.or(o),
+    pub fn occupied(&self, c: Chunk) -> Option<Aabb> {
+        match self.contents(c) {
+            Contents::Holds { bound, .. } => Some(bound),
+            _ => None,
         }
     }
 
-    /// How far up or down what `c` draws can be from what it stands for, in
-    /// units, and never more than its own height: its ground as far as it
-    /// can rise across one of its cells, and the objects in it whole. A
-    /// surface drawn in coarser cells stays the surface, off by what it
-    /// rises across a cell; an object thinner than a cell may be folded
-    /// away, so it can be off by all of itself, which a far pole is and
-    /// what a sheer face is taken to be.
-    fn height_error(&self, c: Chunk) -> f64 {
-        let (z0, z1) = c.z_range();
-        let ground = self.known.slope(c.page(), c.column()).map_or(0.0, |s| s * GROUND.scale(c.level()).side());
-        let objects = self
-            .known
-            .spans(c.page(), c.column())
-            .1
-            .filter(|_| self.known.holds(c.column(), (z0, z1)))
-            .map_or(0.0, |(lo, hi)| hi.min(z1) - lo.max(z0));
-        ground.max(objects).clamp(0.0, z1 - z0)
-    }
-
-    /// Whether `c`'s ground has an answer: some page at or over it is
-    /// resident, which is where its bound is known.
+    /// Whether anything is known of what `c` holds: some page at or over it
+    /// is resident.
     fn answered(&self, c: Chunk) -> bool {
-        self.known.spans(c.page(), c.column()).0.is_some()
+        self.contents(c) != Contents::Unknown
     }
 
-    /// How near the eye `c` comes, and whether the view sees any of it: its
-    /// footprint, and of its heights the ones that hold something.
+    /// How near the eye `c` comes, and whether the view sees any of it: by
+    /// where in it anything stands.
     fn measure(&self, c: Chunk) -> Order {
         if let Some(&m) = self.measured.get(&c) {
             return m;
         }
-        Order::of(&self.o, c.rect(), Some(self.occupied(c).unwrap_or(c.z_range())))
+        Order::of(&self.o, &self.occupied(c).unwrap_or(c.region()))
     }
 
     /// How near the eye `c` comes.
@@ -572,46 +470,35 @@ impl Domain {
         &self.ladder
     }
 
-    /// Every column of the top within the reach along the ground, and in each
-    /// with an answer the chunks its contents span that hold anything and
-    /// come within the reach; the ones with none, counted.
+    /// Every chunk of the top within the reach that holds anything; the ones
+    /// with no answer, counted. The chunks are the ones the box the far edge
+    /// is stored in meets (pxl-spec space/observation.rs
+    /// `Observation::reach`): a number the observation alone bounds
+    /// (`cover_pieces`), whatever the world holds.
     fn find_roots(&mut self) {
         let top = self.o.top;
-        let n = (self.o.far / chunk_span_of(top)).ceil() as i64 + 1;
-        let foot = Pvf3 {
-            i: ivec::gather(self.o.eye[0].floor() as i64, self.o.eye[1].floor() as i64, 0),
-            ..Pvf3::default()
-        };
         let mut roots = Vec::new();
-        for dy in -n..=n {
-            for dx in -n..=n {
-                let column = Chunk::of(top, &foot).beside(dx, dy, 0);
-                if Order::of(&self.o, column.rect(), None).near >= self.o.far {
-                    continue;
+        for at in cubes_meeting(chunk_span_of(top), self.o.reach(self.o.far)) {
+            let c = Chunk::at(top, at);
+            if Order::of(&self.o, &c.region()).near >= self.o.far {
+                continue;
+            }
+            match self.contents(c) {
+                Contents::Unknown => self.unanswered += 1,
+                Contents::Empty => {}
+                Contents::Holds { .. } => {
+                    if self.nearest_to(c) < self.o.far {
+                        roots.push(c);
+                    }
                 }
-                let spans = self.known.spans(column.page(), column.column());
-                let (Some(_), Some(heights)) = (spans.0, merged(spans)) else {
-                    self.unanswered += 1;
-                    continue;
-                };
-                roots.extend(self.spanned(column, heights).filter(|&c| self.nearest_to(c) < self.o.far));
             }
         }
-        xpute_core::ensure!(roots.len() as u32 <= cover_pieces(top), ENOTRECOVERABLE, roots.len());
+        xpute_core::ensure!(roots.len() as u32 <= cover_pieces(top, self.o.planet), ENOTRECOVERABLE, roots.len());
         for &c in &roots {
             let m = self.measure(c);
             self.measured.insert(c, m);
         }
         self.roots = roots;
-    }
-
-    /// The chunks of `column`'s column its contents reach, from the lowest,
-    /// `lo`, to the highest, `hi`, that hold anything.
-    fn spanned(&self, column: Chunk, (lo, hi): (f64, f64)) -> impl Iterator<Item = Chunk> + '_ {
-        let span = chunk_span_of(column.level());
-        let (base, k0, k1) = (column.z_range().0, (lo / span).floor() as i64, (hi / span).floor() as i64);
-        let base = (base / span).round() as i64;
-        (k0..=k1).map(move |k| column.beside(0, 0, k - base)).filter(|&c| self.occupied(c).is_some())
     }
 
     /// Whether the cut in force splits `c`.

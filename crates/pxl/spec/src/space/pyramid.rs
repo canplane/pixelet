@@ -18,6 +18,8 @@ use super::pvf3::core::IVEC_X_W;
 use super::pvf3::ivec::{self, IVec};
 use super::pvf3::projection;
 use super::pvf3::pvf3::{self, Pvf3};
+use super::pvf3::REACH;
+use super::v3::Aabb;
 use super::xy::TO_XY;
 use crate::bake::constant::{CELL, EXTENT_CELL};
 
@@ -241,6 +243,17 @@ impl LevelPage {
         let (side, [x, y]) = self.node();
         let base = side.base_of([x, y, 0]);
         (pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base)), side.side())
+    }
+
+    /// The page as a box of the world: its square, and every height a
+    /// position reaches over it. A page is stored flat and holds whatever
+    /// stands over its square, so no height is outside it.
+    pub fn region(self) -> Aabb {
+        let (x0, y0, side) = self.rect();
+        Aabb {
+            min: [x0, y0, REACH.min[2]],
+            max: [x0 + side, y0 + side, REACH.max[2]],
+        }
     }
 
     /// A demand's subject: the key with the level in the lane a page does not

@@ -200,3 +200,47 @@ pub fn snap3n<'a>(v: &V3, mask: i32, out: &'a mut V3) -> &'a mut V3 {
     out[2] = (to_int32(v[2]) & !mask) as f64;
     out
 }
+
+/// An axis-aligned box: its lowest corner and its highest, in units, every
+/// axis alike.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Aabb {
+    pub min: V3,
+    pub max: V3,
+}
+
+impl Aabb {
+    /// The part of it inside `other`, closed: none only where they miss.
+    pub fn meet(self, other: Aabb) -> Option<Aabb> {
+        let min: V3 = std::array::from_fn(|k| self.min[k].max(other.min[k]));
+        let max: V3 = std::array::from_fn(|k| self.max[k].min(other.max[k]));
+        (0..3).all(|k| min[k] <= max[k]).then_some(Aabb { min, max })
+    }
+
+    /// The least box holding both.
+    pub fn join(self, other: Aabb) -> Aabb {
+        Aabb {
+            min: std::array::from_fn(|k| self.min[k].min(other.min[k])),
+            max: std::array::from_fn(|k| self.max[k].max(other.max[k])),
+        }
+    }
+
+    /// How far it runs along each axis.
+    pub fn extent(self) -> V3 {
+        std::array::from_fn(|k| self.max[k] - self.min[k])
+    }
+
+    pub fn center(self) -> V3 {
+        std::array::from_fn(|k| (self.min[k] + self.max[k]) / 2.0)
+    }
+
+    /// The point of it nearest `p`.
+    pub fn nearest(self, p: V3) -> V3 {
+        std::array::from_fn(|k| p[k].clamp(self.min[k], self.max[k]))
+    }
+
+    /// Whether it ends along every axis.
+    pub fn bounded(self) -> bool {
+        self.min.iter().chain(&self.max).all(|c| c.is_finite())
+    }
+}

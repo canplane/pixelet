@@ -10,70 +10,70 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P0
 
-- **A view's level from the eye, in 3D, by one rule.** A node splits while
-  its nearest distance from the camera is under `r_L = (P / τ) · 2^L`, one
-  rule for every layer, so a cell's pixels and a view's node count are held
-  between constants whatever the tilt or position; the window's rings
-  around the map center go
+- **A view's level from the eye, and the crossfade.** The level a piece of
+  ground is drawn at is one rule for every layer, from its distance to the
+  eye (`Tau::level`), finer than z16 too; what a layer draws at a level is
+  its own tuning, never a second rule
   ([20260925-what-a-view-costs-is-the-eye-s.md](./20260925-what-a-view-costs-is-the-eye-s.md)).
-  Built for terrain and places. Settled 2026-09-25: the rule is shared and
-  chooses a level — a zoom — for each piece of ground by its distance from
-  the eye, below z16 too (z17 to z19 near the eye); what a layer draws at
-  that level, and in how much detail, is the layer's own, a tuning inside
-  the perspective rather than a second rule. At a level L terrain draws its
-  cells averaged 2 × 2 (detail +1) — blended by coverage for the smoother
-  ground it draws, not level L + 1's majority page, though that would fetch
-  a quarter of the pages — places count in a lattice sixteen times
-  the ground's cell (+4) and still stand a lone place on its z16 cell, and
-  objects draw their own cells (0), so an object's cube and the ground's are
-  the same size wherever both have data. Where the rule asks finer than a
-  layer's data, the layer draws its finest: terrain z16, objects their
-  sub-cell tiers to z19. z16 is terrain's atom and nothing more. What is
-  left:
-  - **The split distance from the real screen.** `SPLIT` is the reference
-    1080 px and 50° (pxl-render look/lod.rs); `P` is to come from the
-    canvas's device pixels and the field of view, and where a screen needs
-    more than the tables are sized for, τ rises rather than the rule
-    breaking. Planned 2026-09-25, held. Measured on an iPhone 13 mini
-    2026-09-27 (a debug build, the ratio fixed at 2): the GPU's time
-    follows the triangles and not the pixels — 6 ms at a quarter of a
-    million, 14 at half, 26.6 at the 2.07 million the view drew for most of
-    the window — so a frame fits under half a million, and 78% of frames
-    ran past 16.6 ms. A turn past 16 ms came in a frame the GPU ran long in
-    532 times of 537: the kernel waits for the layer's next drawable, and
-    on a device the JavaScript thread waits with it.
+  Which pieces refine is now the screen's cells
+  ([20260928-what-is-drawn-is-what-the-screen-covers.md](./20260928-what-is-drawn-is-what-the-screen-covers.md)).
+  What is left:
   - **What a crossfade leaves.** A change of what a chunk draws dissolves
     over 300 ms of frames (chunk/table.rs `Fade`), a cube for another and a
     stale chunk for what replaced it, its decor with it on the same half of
     the pattern (pxl-render dissolve.wgsl). The 300 ms is a number chosen by
-    eye, to be measured. No hysteresis: the rule is a function of where the
-    eye is, so a resting camera changes nothing, and the budget's pressure,
-    the one input that moves on its own, steps on timers of its own. Above
-    z16 a kind's footing and a transport-aligned kind's heading are read off
-    the level's cells, so an instance can appear, go or turn at a level
-    change, as the ground under it does.
+    eye, to be measured. Above z16 a kind's footing and a transport-aligned
+    kind's heading are read off the level's cells, so an instance can
+    appear, go or turn at a level change, as the ground under it does.
 - **What is drawn is what the screen covers: to main, and closed.** Built
   2026-09-28 on `observation-paging`, pushed, not on main
   ([20260928-what-is-drawn-is-what-the-screen-covers.md](./20260928-what-is-drawn-is-what-the-screen-covers.md);
   ARCHITECTURE.md "The view"). The client asks for terrain v7, so main
   waits for its publish. In order:
-  - **Before main.** The dev tile server's 500 on some pages under its top
-    level (a missing file in the demand fold) fixed, and the offline bake
-    checked for the same; terrain v7 baked and published after
-    `deno task usage` (about 227,000 Class A); a device build run; then
-    merged with `--no-ff` and deployed.
-  - **Closing the model.** The domain's reading by column becomes a query
-    of a 3D box, so height is nowhere special above a layer. The query's
-    walk skips by the index's extent a level at a time, so a ray costs a
-    logarithm, and an `Observer` on the GPU can cast every tile at once.
-    Record demand from hits rather than bounds: from street level
-    `ByBounds` asks for about 37 pages where 3 are seen. Places and decor
-    stop reading heights off the mesh (`Scheduler::surface_at`). Residency's
+  - **Before main, held until the format settles.** Terrain v7 baked and
+    published after `deno task usage` (about 227,000 Class A) — once, not
+    per revision of the format, and not by demand: a page's index bounds its
+    whole subtree, so a coarse page cannot be made before everything under
+    it; the offline bake checked for the dev fold's race; a device build
+    run; then merged with `--no-ff` and deployed. Until then the branch is
+    checked locally and through the tunnel.
+  - **Closing the model.** The cell set from the screen (2026-09-29) is to
+    be seen on a device: on an iPhone 13 mini it is now about a third
+    coarser than the reference, where a debug build measured 2026-09-27 (the
+    ratio fixed at 2) drew 2.07 million triangles for most of the window and
+    the GPU's time followed them and not the pixels — 6 ms at a quarter of a
+    million, 14 at half, 26.6 at that — so 78% of frames ran past 16.6 ms,
+    and a turn past 16 ms came in a frame the GPU ran long in 532 times of
+    537. An `Observer` on the GPU casts every tile at once — held back while
+    a rebuild casts a hundred-odd corner rays, where the records on the GPU
+    and a readback a frame or two late cost more than they save; it earns
+    its place when tiles shrink toward the cell. With the capacity contract
+    held (2026-09-29, a tier fills as many slots as it takes), the readers
+    of the mesh's surface (`Scheduler::surface_at`) are what is left of it:
+    decor stands on its own chunk's tier, the same piece it is built into —
+    what compensated for the retreat, now only for a cell averaged 2 × 2,
+    inside a cell — and goes with decor as its own solver; places count a
+    place only where the ground over it is drawn, which leaks the build's
+    state into a count, and go with how places are drawn. Residency's
     table, and what the domain, the frontier and the observer allocate per
     rebuild, move off the heap. The arena is sized to the smaller goal.
     Objects get records a level and an index of their own beyond the
     store's reaches. The hard-held chain's test returns with the first
     consumer that leases.
+- **The atmosphere in the observation's test, an optimization held.** A
+  difference is observed where its projected angle leaks past a cell _and_
+  the contrast it makes is still distinguishable after the air (`T(d)`,
+  layer/environment/fog.rs). Transmittance weakens contrast, not geometry,
+  so the two are tested side by side, not multiplied into one cell. With no
+  bound on the contrast a region's representation can be off by, the
+  contrast test is only today's far edge — the visual range, where `T`
+  falls to the threshold — which is correct as it stands. What it would
+  save inside the far edge needs a conservative bound on the difference a
+  representation's error can make in the final image, and that is not a
+  record's variance: it turns on material, light, shadow, emission and what
+  stands behind a silhouette. No lane is added to a page until such a
+  quantity is defined. The planet's horizon stays a separate, geometric
+  limit.
 - **How the samples are drawn.** Raster against casting into the records,
   on the iPhone 13 mini, with today's box format (36 unindexed vertices)
   against faces alone; seams where levels that are not neighbours meet, and
@@ -83,15 +83,18 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   pending, 30 ticks of zoom out, search "아주대학교", the first result:
   nothing is drawn and the frame count stops (2 of 2 under dev:local,
   2026-09-25). The first requests after the jump go to the world origin
-  (`eye()` on the stale origin). A lead not yet followed: `serve_tiles`
-  answers nothing past `--top-level` (3 by default; z11 and coarser are 503
-  for terrain and POI alike), so a view that draws nothing finer than
-  level 4 has no page it can get.
+  (`eye()` on the stale origin). Seen again 2026-09-29, the location still
+  pending and a search to Seoul station, on the branch and before it: the
+  first pages asked were the world origin's, and nothing was drawn. The floor now comes from the source's declared top, so the old lead —
+  a view with no page under `--top-level` — no longer holds; the stale
+  origin is what is left to follow.
 - **One order out from the eye, the rest.** Every scheduler takes work in
   one order out from the eye, a chunk is a cube of its level holding
   something, and a placed object lives in the cube its band is in
   ([20260926-the-view-is-cubes-about-the-eye.md](./20260926-the-view-is-cubes-about-the-eye.md)).
-  Left: occluded chunks are split, fetched and built like seen ones; a cut
+  Left: occluded ground is fetched like seen ground, since `ByBounds` asks
+  for hidden ground too (record demand from hits, above) — it is no longer
+  split, as only what a tile's footprint touches refines; a cut
   ceiling flashes on a cold load while a coarser page stands in; and a
   column crossing a cube's floor or ceiling is two chunks — 1.5 a column
   near Gangnam and 1.7 on Bukhansan, 2026-09-26 — each scanning the whole
@@ -210,6 +213,35 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P1
 
+- **The camera's pose owns the view's frame.** Only distance and polar
+  move the eye today; the azimuth turns the world's root under a camera
+  fixed on the orbit's −Y side (control/camera/orbit.rs), so what needs the
+  view's heading — the sun and the moon — turns it back (`rotate2`), and
+  the planet is laid about the view center where the demand's curvature
+  is measured from the eye. The map center is only the gesture's pivot:
+  pinch the radius, a vertical drag the polar, a horizontal one the
+  azimuth, a pan the pivot, each a coordinate of the eye's pose about it,
+  and the world does not turn. Apart from it, what reaches the GPU can be
+  relative to the eye rather than to the map center, a matter of
+  precision and not of who owns the frame. Orthogonal to the model: the
+  observation reads only the frustum.
+- **A change of polar re-cuts the whole screen.** Seen 2026-09-29: moving
+  the polar makes the whole view flicker as pieces are replaced, as it did
+  before and more since demand comes from the tiles' footprints. A visual
+  and temporal defect, not a wrong world, so after the model closes. Two
+  mechanisms could make it, and the first step is to tell which: a trace
+  while the polar moves of `τ_target` and `τ_eff`, the goal's pieces and
+  refinements, the frames held by demand and as cache, evictions and
+  faults. If `τ_eff` moves, it is the quality's step. The quality is one τ
+  for every direction, one angular criterion everywhere, and that is not
+  the fault. The fault would be the step itself crossing the arena
+  back and forth. A remedy there is in time — hysteresis, a quieter
+  transition — and not coarsening the far pieces first, which would make
+  distance a priority again; if a local choice is wanted, its measure is
+  in the observer's terms, what a slot of the arena buys of the
+  observation. If `τ` holds while evictions and faults move, it is pages
+  that left the demand being let go though just used: a matter of the
+  cache keeping what was recently asked, not of prefetch.
 - **The move to React Native, the rest.** Built for iOS 2026-09-26
   (apps/native, crates/pxl/web/native); what is left of the move itself —
   what the device costs to run is the budgets' items, not this one:

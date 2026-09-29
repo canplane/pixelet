@@ -27,12 +27,19 @@
 //! `ARENA_COARSE_GROUPS` groups between them, any tier of any level in any
 //! of them.
 //!
-//! A slot holds a number of boxes derived from the chunk's geometry, and a
-//! mesh never goes past it: one that would is baked a step coarser instead
-//! (world/chunk/build.rs), and a step always fits (`COARSE_BOXES`). Cut to
-//! its slot instead, a mesh leaves ground simply missing: the chunk's last
-//! rows, wherever steep ground makes more boxes than the slot holds, with its
-//! decor standing over nothing (measured 2026-09-26).
+//! A slot holds a number of boxes, and a tier with more fills as many slots
+//! as it takes, any free ones of its pool, chained in the order its boxes
+//! are written (world/chunk/table.rs `Meshes::next`). What a tier is drawn
+//! in is the quality's to choose and no slot's: a mesh is never cut to a
+//! slot, which left ground simply missing — the chunk's last rows, wherever
+//! steep ground made more boxes than the slot held, with its decor standing
+//! over nothing (measured 2026-09-26) — and never baked coarser than asked
+//! to fit one, which was a second quality policy, leaking past a cell where
+//! placed objects are dense. Every slot a tier fills is held for it at once,
+//! when its bake knows its size, or none is and the bake is thrown away
+//! (build.rs `BuildEvent::Reserve`); how many it fills is then counted by
+//! the frontier and the quality policy, which alone decides what the arena
+//! has no room for. The allocation knows slots and nothing of why.
 //!
 //! A slot's cost is its box's words (pxl-render mesh/chunk_mesher.rs), and
 //! the two tiers do not weigh the same: a leaf's box is six words and every
@@ -43,8 +50,8 @@
 //! throughout, which is what lets a slot be `residue × capacity`.
 //!
 //! What each tier asks for is read live as the profiler's `work fine_peak` and
-//! `coarse_peak`, and how many were baked a step coarser than asked as its
-//! `slot coarser`. The coarse tier asks for more than a leaf's own: nothing of
+//! `coarse_peak`, and how many filled more than one slot as its
+//! `slot chained`. The coarse tier asks for more than a leaf's own: nothing of
 //! it merges, since a box shrunk about its cell's center touches nothing
 //! (issue/20260923-a-coarse-cell-is-isotropic.md).
 
@@ -63,18 +70,31 @@ const COARSE_GROUPS: u32 = ARENA_COARSE_GROUPS;
 /// one a column. The ground is a heightfield, so a column of it is one run
 /// in a chunk, and a chunk is a cube that cuts it to its heights
 /// (world/pyramid/chunk.rs); a box is at most a run (pxl-render
-/// mesh/chunk_mesher.rs). A chunk whose placed objects make it more is baked
-/// a step coarser, into the coarse pool.
+/// mesh/chunk_mesher.rs). A chunk whose placed objects make it more fills
+/// more of them.
 pub const FINE_BOXES: u32 = CHUNK_CELLS * CHUNK_CELLS;
 /// Boxes every other tier holds (param.rs). It is not a bound the content
 /// keeps, and needs not be one: a coarse cell at step `s` is a cube `s`
 /// cells a side, holding at most its own box and the floor laid under it, so
 /// a chunk — 64 cells a side in all three — bakes to at most 2·(64/s)³
-/// boxes, and a mesh that does not fit is baked a step coarser until it
-/// does. The coarsest step, one cell a chunk, always fits.
+/// boxes, and a mesh past one slot fills more. The coarsest step, one cell
+/// a chunk, fills one, and the cover is drawn at it everywhere
+/// (world/chunk/frontier.rs `drawn_cube`), so the cover is a slot a piece
+/// by its representation, as the arena's sizing counts it
+/// (world/quality.rs).
 pub const COARSE_BOXES: u32 = crate::param::COARSE_BOXES;
 
 const _: () = assert!(2 * (CHUNK_CELLS / COARSEST).pow(3) <= COARSE_BOXES, "a chunk at its coarsest step past what a coarse slot holds");
+
+/// The most slots a tier of the coarse pool fills, whatever it holds: every
+/// tier there is drawn at a step of two or more — a level's cells averaged
+/// 2 × 2 (world/chunk/frontier.rs `drawn_cube`), or a z16 chunk drawn
+/// coarser — and a coarse cell is at most its own box and the floor laid
+/// under it, so a chunk at step two bakes to at most 2·32³ boxes. A bound
+/// from the representation, not from any mesh met so far: what the
+/// frontier keeps free so a coarsening, whose piece is over z16 and so of
+/// this pool, can always be built (frontier.rs `RESERVE`).
+pub const COARSE_TIER_SLOTS: u32 = (2 * (CHUNK_CELLS / 2).pow(3)).div_ceil(COARSE_BOXES);
 
 /// The pools a tier's slot is taken from, as an index.
 pub const POOLS: usize = 2;

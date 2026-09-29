@@ -51,27 +51,49 @@
 //! throwing away a level's pieces each time. The AIMD of the record is this
 //! behavior, and only this.
 
+use pxl_render::look::globe::MERCATOR_RADIUS_U;
 use pxl_spec::bake::published::PUBLISHED_TOP_LEVEL;
-use pxl_spec::space::lod::Tau;
+use pxl_spec::space::lod::{Tau, SPLIT};
 
 use crate::global::Global;
 use crate::kernel::kernel;
 use crate::param;
 use crate::world::chunk::frontier::{need, Slots, HEADROOM};
 use crate::world::chunk::mesh_slot::{Pool, ARENA, POOLS};
+use crate::world::frame::view::view;
 use crate::world::pyramid::domain::{self, cover_pieces};
 
 const _: () = assert!(param::QUALITY_WAIT_MS > 0.0, "a policy asked twice at one instant would step finer twice");
 const _: () = assert!(param::TAU_STEP > 1.0, "a step that is not coarser");
+// In slots, every term: a piece of the cover is drawn one cell a chunk, at
+// most two boxes and so one slot whatever it holds (world/chunk/frontier.rs
+// `drawn_cube`, mesh_slot.rs `COARSE_BOXES`), and the headroom is the
+// reserve one coarsening needs and a slot each refinement under way holds.
 const _: () = assert!(
-    cover_pieces(PUBLISHED_TOP_LEVEL) + HEADROOM <= ARENA[Pool::Coarse as usize],
+    cover_pieces(PUBLISHED_TOP_LEVEL, MERCATOR_RADIUS_U) + HEADROOM[Pool::Coarse as usize] <= ARENA[Pool::Coarse as usize],
     "the published source's cover does not fit the arena: ground it answers could stay unresolved"
 );
+
+/// The quality the view is held to where the arena has room for it: the
+/// angle `param::CENTER_CELL_LOGICAL_PX` of the screen's logical pixels
+/// span centered on its optical axis, as a factor on the finest cell
+/// everything is sized for (pxl-spec space/lod.rs `SPLIT`), and never finer
+/// than that one. On a screen `height` logical pixels tall at a field of
+/// view `fov` up, the plane stands `height / (2 · tan(fov / 2))` of them
+/// from the eye, so `n` of them about the axis span `2 · atan(n / 2 / that)`.
+/// A function of the screen's logical height and its field of view, and of
+/// nothing the screen is rasterized at.
+pub fn target() -> Tau {
+    let v = view();
+    let half = param::CENTER_CELL_LOGICAL_PX * (v.fov.to_radians() / 2.0).tan() / v.height;
+    Tau::of((2.0 * half.atan() * SPLIT).max(1.0))
+}
 
 /// The qualities the policy chooses among, finest first: the target, and
 /// `TAU_STEPS` steps coarser.
 pub fn ladder() -> [Tau; param::TAU_STEPS + 1] {
-    core::array::from_fn(|k| Tau::of(param::TAU_TARGET.scale() * param::TAU_STEP.powi(k as i32)))
+    let target = target().scale();
+    core::array::from_fn(|k| Tau::of(target * param::TAU_STEP.powi(k as i32)))
 }
 
 /// The effective quality, as the policy hands it out: the one value what is
@@ -87,15 +109,15 @@ impl Effective {
 
 /// Whether `count`, with `headroom` and `spare` beside it, fits `arena` in
 /// every pool.
-pub fn fits(count: Slots, arena: Slots, headroom: u32, spare: Slots) -> bool {
-    (0..POOLS).all(|p| count[p] + headroom + spare[p] <= arena[p])
+pub fn fits(count: Slots, arena: Slots, headroom: Slots, spare: Slots) -> bool {
+    (0..POOLS).all(|p| count[p] + headroom[p] + spare[p] <= arena[p])
 }
 
 /// The finest step of the ladder whose `frontier` count, with `headroom` and
 /// `spare` beside it, fits `arena` in every pool; none where not even the
 /// coarsest does. `frontier` is finest first and never less at a finer step,
 /// so every step from the one found on fits too.
-pub fn feasible(frontier: &[Slots], arena: Slots, headroom: u32, spare: Slots) -> Option<usize> {
+pub fn feasible(frontier: &[Slots], arena: Slots, headroom: Slots, spare: Slots) -> Option<usize> {
     (0..frontier.len()).find(|&k| fits(frontier[k], arena, headroom, spare))
 }
 
@@ -188,13 +210,13 @@ pub fn step() {
         return;
     }
     let sched = &kernel().sched;
-    let key = Some((domain::walks(), sched.fits_revision()));
+    let key = Some((domain::walks(), sched.needs_revision()));
     if q.counted != key {
         q.counted = key;
         q.counts = vec![None; ladder.len()];
     }
     let counts = &mut q.counts;
-    let mut count = |k: usize| *counts[k].get_or_insert_with(|| domain::cut_at(k).map_or([0; POOLS], |(d, cut)| need(d, cut, |c| sched.fit_of(c))));
+    let mut count = |k: usize| *counts[k].get_or_insert_with(|| domain::cut_at(k).map_or([0; POOLS], |(d, cut)| need(d, cut, |c, cube| sched.slots_of(c, cube))));
     let spare = margin();
     let (star, roomy) = around(q.smooth.at(), ladder.len(), |k, roomy| fits(count(k), ARENA, HEADROOM, if roomy { spare } else { [0; POOLS] }));
     let at = q.smooth.follow(star, roomy, param::QUALITY_WAIT_MS, crate::host::now());

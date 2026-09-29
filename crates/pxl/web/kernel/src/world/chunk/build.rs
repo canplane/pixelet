@@ -100,11 +100,11 @@ pub fn RETAIN_BUDGET_BYTES() -> f64 {
 // but the chunk's tiers are all baked while it is there. Two, so that one is
 // filled while the other is baked from. A chunk that finds both held waits.
 
-/// The workspace: `.fixed.bake`, where the one bake open writes its mesh
-/// before it is handed to its slot (world/chunk/mesh_slot.rs). As large as
-/// the largest mesh any slot holds, since a bake is weighed against its
-/// slot before it could outgrow it (`BuildEvent::Coarser`), and no larger.
-/// It keeps nothing across frames; what is kept is the slots.
+/// The workspace: `.fixed.bake`, where the one bake open writes its mesh a
+/// slot's worth at a time, each block handed to its slot before the next
+/// is written (world/chunk/mesh_slot.rs). As large as any one slot, and no
+/// larger, whatever the mesh. It keeps nothing across frames; what is kept
+/// is the slots.
 pub const BAKE_BYTES: u32 = {
     let (fine, coarse) = (FINE_BOXES * FINE_BOX_WORDS, COARSE_BOXES * COARSE_BOX_WORDS);
     4 * if fine > coarse { fine } else { coarse }
@@ -116,24 +116,36 @@ pub const RUN_SETS: usize = 2;
 /// What a build hands the scheduler.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BuildEvent {
-    /// Tier `cube` of chunk `id`, built from its sources as of `generation`:
-    /// the mesh is `bytes` bytes at `at` in `.fixed.bake`, until it is sent
-    /// to its slot on the device, and its boxes' heights are held in
-    /// `heights` (pxl-render mesh/chunk_mesher.rs).
-    Tier {
+    /// Tier `cube` of chunk `id`, of its sources as of `generation`, is
+    /// `boxes` boxes: the slots for all of it are asked for at once, before
+    /// any is written. The answer is whether they are held for it; where
+    /// not, the bake is thrown away, and what the tier needs is known the
+    /// next time it is counted (world/chunk/table.rs `Slot::need`).
+    Reserve { chunk: PyramidChunk, id: u32, generation: u32, cube: Cube, boxes: u32 },
+    /// A block of that tier's boxes: `box_cnt` of them from the mesh's box
+    /// `first`, at `at` in `.fixed.bake` until they are sent to their slot
+    /// on the device, their heights held in `heights` (pxl-render
+    /// mesh/chunk_mesher.rs). A slot's worth, but for the mesh's last.
+    Part {
         chunk: PyramidChunk,
         id: u32,
         generation: u32,
         cube: Cube,
         at: u32,
-        bytes: u32,
+        first: u32,
         box_cnt: u32,
         heights: Heights,
     },
-    /// Tier `cube` of chunk `id`, of its sources as of `generation`, has more
-    /// boxes than a slot of its pool holds (mesh_slot.rs `capacity`): it is
-    /// not baked, and the chunk is drawn a step coarser.
-    Coarser { chunk: PyramidChunk, id: u32, generation: u32, cube: Cube },
+    /// Tier `cube` of chunk `id`, built from its sources as of `generation`,
+    /// all of its `box_cnt` boxes handed: it lands.
+    Tier {
+        chunk: PyramidChunk,
+        id: u32,
+        generation: u32,
+        cube: Cube,
+        box_cnt: u32,
+        heights: Heights,
+    },
 }
 
 /// A chunk's runs: which of `.fixed.runs`'s sets, and what is in it — and
@@ -262,6 +274,8 @@ struct BakeJob {
     cube: Cube,
     generation: u32,
     mesh: Option<Block>,
+    /// The mesh's boxes handed so far, block by block.
+    handed: u32,
 }
 
 /// Where a chunk got to in one advance.
@@ -413,6 +427,12 @@ impl Builder {
 
     /// The tiers the chunk still lacks. A bake of a tier not wanted
     /// gives the slot back now.
+    /// The chunk the one bake open is for, and the cube and generation it
+    /// bakes; none while no bake is open.
+    pub fn baking(&self) -> Option<(u32, Cube, u32)> {
+        self.bake_job.as_ref().map(|j| (j.id, j.cube, j.generation))
+    }
+
     pub fn want(&mut self, world: &mut World, id: u32, want: [Option<Cube>; 2]) {
         let Some(c) = self.chunks.get_mut(&id) else { return };
         c.want = want;
@@ -503,7 +523,7 @@ impl Builder {
     /// scheduler reclaims after, so every later request would meet the same
     /// heap, and a refusal is not free — the direct runs are written whole
     /// before their block is asked for. Whether any chunk did work.
-    pub fn tick(&mut self, world: &mut World, order: &[u32], budget_ms: f64, now: &impl Fn() -> f64, emit: &mut impl FnMut(BuildEvent)) -> bool {
+    pub fn tick(&mut self, world: &mut World, order: &[u32], budget_ms: f64, now: &impl Fn() -> f64, emit: &mut impl FnMut(BuildEvent) -> bool) -> bool {
         let t0 = now();
         let starved = self.stat.starved;
         let mut stepped = false;
@@ -538,7 +558,7 @@ impl Builder {
         worked
     }
 
-    fn advance(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent)) -> Progress {
+    fn advance(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent) -> bool) -> Progress {
         let Some(c) = self.chunks.get(&id) else { return Progress::Done };
         if c.wanted().next().is_none() {
             return Progress::Done;
@@ -849,7 +869,7 @@ impl Builder {
         unsafe { RunSet::carve(core::slice::from_raw_parts(ptr_at::<u8>(set_at), bytes), runs.count, COL_SPAN, APRON) }
     }
 
-    fn advance_bake(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent)) -> Progress {
+    fn advance_bake(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent) -> bool) -> Progress {
         let holding = matches!(&self.bake_job, Some(j) if j.id == id);
         let c = &self.chunks[&id];
         let set = Self::run_set(c.runs.as_ref().unwrap());
@@ -869,16 +889,28 @@ impl Builder {
                 cube,
                 generation: c.generation,
                 mesh: None,
+                handed: 0,
             });
         }
         match self.bake.step(&set) {
             Step::Working => Progress::Busy,
             Step::NeedMesh(words) => {
-                // A mesh past its slot is not baked and not cut: the chunk is
-                // drawn a step coarser, which fits sooner or later
-                // (mesh_slot.rs `COARSE_BOXES`).
-                let step = mesh_step(self.bake_job.as_ref().unwrap().cube, c.level());
-                if words / box_words(step) > capacity(c.level(), step) {
+                // Every slot the mesh fills is held for it at once, or none
+                // is and the bake is thrown away: a mesh is never cut, never
+                // baked coarser than asked, and never waits holding the one
+                // bake open (mesh_slot.rs).
+                let job = self.bake_job.as_ref().unwrap();
+                let step = mesh_step(job.cube, c.level());
+                let (words_a_box, room_a_slot) = (box_words(step), capacity(c.level(), step));
+                let boxes = words / words_a_box;
+                let asked = BuildEvent::Reserve {
+                    chunk: c.at,
+                    id,
+                    generation: job.generation,
+                    cube: job.cube,
+                    boxes,
+                };
+                if !emit(asked) {
                     let job = self.bake_job.take().unwrap();
                     self.bake.abort();
                     let c = self.chunks.get_mut(&id).unwrap();
@@ -888,25 +920,49 @@ impl Builder {
                     if c.wanted().next().is_none() {
                         self.let_runs_go(id);
                     }
-                    emit(BuildEvent::Coarser {
-                        chunk: self.chunks[&id].at,
-                        id,
-                        generation: job.generation,
-                        cube: job.cube,
-                    });
                     return Progress::Busy;
                 }
-                // The one bake open writes into `.fixed.bake`, which is past
-                // any mesh a slot holds (mesh_slot.rs).
-                let Some(mesh_at) = at(Range::Bake, 0, words * 4) else {
+                // The one bake open writes a slot's worth at a time into
+                // `.fixed.bake`, which holds any slot's (mesh_slot.rs).
+                let block = boxes.min(room_a_slot) * words_a_box;
+                let Some(mesh_at) = at(Range::Bake, 0, block * 4) else {
                     self.abort_bake();
                     self.refuse(world, id);
                     return Progress::Blocked;
                 };
                 // SAFETY: `.fixed.bake`, the open bake's alone until it is
                 // finished and handed over, or aborted.
-                unsafe { self.bake.provide_mesh(ptr_at::<u32>(mesh_at as usize), words) };
-                self.bake_job.as_mut().unwrap().mesh = Some((mesh_at as usize, words * 4));
+                unsafe { self.bake.provide_mesh(ptr_at::<u32>(mesh_at as usize), block) };
+                self.bake_job.as_mut().unwrap().mesh = Some((mesh_at as usize, block * 4));
+                Progress::Busy
+            }
+            Step::Full => {
+                // A slot's worth written: handed over, and the block handed
+                // back for the rest.
+                let job = self.bake_job.as_ref().unwrap();
+                let (at, bytes) = job.mesh.unwrap();
+                if gpu().is_some() && device_ready() && !room(bytes) {
+                    return Progress::Blocked;
+                }
+                let step = mesh_step(job.cube, c.level());
+                let words_a_box = box_words(step);
+                let n = bytes / 4 / words_a_box;
+                emit(BuildEvent::Part {
+                    chunk: c.at,
+                    id,
+                    generation: job.generation,
+                    cube: job.cube,
+                    at: at as u32,
+                    first: job.handed,
+                    box_cnt: n,
+                    heights: self.bake.heights(),
+                });
+                let job = self.bake_job.as_mut().unwrap();
+                job.handed += n;
+                let left = self.bake.left_words();
+                let block = left.min(bytes / 4);
+                // SAFETY: the same block of `.fixed.bake`, its boxes handed.
+                unsafe { self.bake.provide_mesh(ptr_at::<u32>(at), block) };
                 Progress::Busy
             }
             Step::Done => {
@@ -926,6 +982,19 @@ impl Builder {
                 let mesh = self.bake.finish();
                 let job = self.bake_job.take().unwrap();
                 self.stat.bakes += 1;
+                let chunk = self.chunks[&id].at;
+                if mesh.box_cnt > job.handed {
+                    emit(BuildEvent::Part {
+                        chunk,
+                        id,
+                        generation: job.generation,
+                        cube: job.cube,
+                        at: at as u32,
+                        first: job.handed,
+                        box_cnt: mesh.box_cnt - job.handed,
+                        heights: mesh.heights,
+                    });
+                }
                 let c = self.chunks.get_mut(&id).unwrap();
                 for w in c.want.iter_mut() {
                     if *w == Some(job.cube) {
@@ -936,12 +1005,10 @@ impl Builder {
                     self.let_runs_go(id);
                 }
                 emit(BuildEvent::Tier {
-                    chunk: self.chunks[&id].at,
+                    chunk,
                     id,
                     generation: job.generation,
                     cube: job.cube,
-                    at: at as u32,
-                    bytes,
                     box_cnt: mesh.box_cnt,
                     heights: mesh.heights,
                 });

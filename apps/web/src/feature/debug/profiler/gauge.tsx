@@ -164,15 +164,14 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
             warn={f.last.stale_on_waiter > 0}
           />
           {
-            /* A finished mesh thrown away because every slot of its pool is
-              held by a chunk drawing from it, and the tiers baked a step
-              coarser than asked because they had more boxes than a slot holds:
-              the levels are the waiters' and the holders'
-              (world/chunk/mesh_slot.rs). */
+            /* A bake thrown away because the slots its mesh fills were not
+              free, and the tiers landed across more than one slot because they
+              had more boxes than one holds: the levels are the waiters' and
+              the holders' (world/chunk/mesh_slot.rs). */
           }
           <Row
-            k="slot wait/coarser"
-            v={`${round(f.last.slot_waits)}/${round(f.last.slot_coarser)} L${levelBits(f.last.slot_wait_levels)} on ${levelBits(f.last.slot_holder_levels)}`}
+            k="slot wait/chained"
+            v={`${round(f.last.slot_waits)}/${round(f.last.slot_chained)} L${levelBits(f.last.slot_wait_levels)} on ${levelBits(f.last.slot_holder_levels)}`}
             warn={f.last.slot_waits > 0}
           />
           {

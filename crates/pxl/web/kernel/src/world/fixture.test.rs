@@ -1,18 +1,17 @@
 // pxl-kernel/world/fixture.test.rs
 //
 // A world the goal's tests observe, known exactly: flat ground at a height
-// and solid boxes on it, as the bounds a domain reads (`ColumnBounds`) and
+// and solid boxes on it, as the bounds a domain reads (`Bounds`) and
 // as what an eye's tiles touch of it (`Observer`); and an eye looking one
 // way, as the observation whose frustum is its screen.
 
-use pxl_spec::space::hierarchy::Scale;
 use pxl_spec::space::lod::Tau;
-use pxl_spec::space::observation::{Frustum, Observation};
-use pxl_spec::space::pyramid::{LevelPage, TOP_LEVEL};
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::observation::{Bounds, Contents, Frustum, Observation};
+use pxl_spec::space::pyramid::{GROUND, TOP_LEVEL};
+use pxl_spec::space::v3::{Aabb, V3};
 
-use crate::world::observer::{Footprint, Grid, Observer, Sight};
-use crate::world::pyramid::domain::{ColumnBounds, Domain, Spans};
+use crate::world::observer::{Footprint, Grid, Observer, OnTile, Sight};
+use crate::world::pyramid::domain::Domain;
 
 /// Flat ground and boxes on it, each as solid as the ground and known as
 /// objects are, by the span they reach and the heights they are in.
@@ -43,39 +42,42 @@ impl World {
     }
 }
 
-impl ColumnBounds for World {
-    fn spans(&self, _page: LevelPage, column: (Scale, [i64; 2])) -> Spans {
+impl Bounds for World {
+    /// The ground and the boxes in `region`, each by the heights it stands
+    /// at over the region's square. The ground's lowest is its top cell's
+    /// floor, as the index lane bounds it: what stands is the cells under
+    /// the top. Flat, it rises a cell's step over an index cell of z16's
+    /// sixteen, and steeper by the slack; a box is off by all of itself.
+    fn contents(&self, level: u32, region: Aabb) -> Contents {
         if !self.answered {
-            return (None, None);
+            return Contents::Unknown;
         }
-        // The ground's lowest is its top cell's floor, as the index lane
-        // bounds a column: what stands is the cells under the top.
-        let objects = self
-            .over(column)
-            .fold(None, |span: Option<(f64, f64)>, (lo, hi)| Some(span.map_or((lo[2], hi[2]), |(l, h)| (l.min(lo[2]), h.max(hi[2])))));
-        (
-            Some((self.ground - 1.0 - self.slack, self.ground + self.slack)),
-            objects.map(|(lo, hi)| (lo - self.slack, hi + self.slack)),
-        )
-    }
-
-    fn holds(&self, column: (Scale, [i64; 2]), z: (f64, f64)) -> bool {
-        self.over(column).any(|(lo, hi)| lo[2] - self.slack < z.1 && hi[2] + self.slack >= z.0)
-    }
-
-    /// Flat: a cell's step over an index cell of z16's sixteen, and steeper
-    /// by the slack.
-    fn slope(&self, _page: LevelPage, _column: (Scale, [i64; 2])) -> Option<f64> {
-        self.answered.then(|| (1.0 + 2.0 * self.slack) / 16.0)
-    }
-}
-
-impl World {
-    /// The boxes over `column`.
-    fn over(&self, (scale, [x, y]): (Scale, [i64; 2])) -> impl Iterator<Item = &(V3, V3)> {
-        let side = scale.side();
-        let (x0, y0) = (x as f64 * side, y as f64 * side);
-        self.boxes.iter().filter(move |(lo, hi)| lo[0] < x0 + side && hi[0] > x0 && lo[1] < y0 + side && hi[1] > y0)
+        let (lo, hi) = (region.min, region.max);
+        let column = |z0: f64, z1: f64| {
+            Aabb {
+                min: [lo[0], lo[1], z0],
+                max: [hi[0], hi[1], z1],
+            }
+            .meet(region)
+        };
+        let cell = GROUND.scale(level).side();
+        let (mut bound, mut rise): (Option<Aabb>, f64) = (None, 0.0);
+        if let Some(g) = column(self.ground - 1.0 - self.slack, self.ground + self.slack) {
+            bound = Some(g);
+            rise = (1.0 + 2.0 * self.slack) / 16.0 * cell;
+        }
+        for (b0, b1) in self.boxes.iter().filter(|(b0, b1)| b0[0] < hi[0] && b1[0] > lo[0] && b0[1] < hi[1] && b1[1] > lo[1]) {
+            if let Some(b) = column(b0[2] - self.slack, b1[2] + self.slack) {
+                bound = Some(bound.map_or(b, |a| a.join(b)));
+                rise = rise.max(b.max[2] - b.min[2]);
+            }
+        }
+        let extent = region.extent();
+        let error = [cell, cell, rise];
+        bound.map_or(Contents::Empty, |bound| Contents::Holds {
+            bound,
+            error: std::array::from_fn(|k| error[k].clamp(0.0, extent[k])),
+        })
     }
 }
 
@@ -104,7 +106,7 @@ fn enter(o: V3, d: V3, lo: V3, hi: V3) -> Option<(f64, V3)> {
 impl World {
     /// The first point a ray from `o` along `d` meets within `far`, just
     /// inside what it met, and how far along.
-    fn first(&self, o: V3, d: V3, far: f64) -> Option<(V3, f64)> {
+    pub fn first(&self, o: V3, d: V3, far: f64) -> Option<(V3, f64)> {
         let ground = (d[2] < 0.0).then(|| ((self.ground - o[2]) / d[2], [0.0, 0.0, 1.0]));
         let (t, n) = self
             .boxes
@@ -118,12 +120,12 @@ impl World {
 }
 
 impl Observer for World {
-    fn observe(&self, grid: &Grid, far: f64, recast: &dyn Fn(usize) -> bool, each: &mut dyn FnMut(usize, Option<Footprint>)) -> u32 {
+    fn observe(&self, grid: &Grid, far: f64, recast: &dyn Fn(usize) -> bool, each: &mut OnTile) -> u32 {
         if !self.answered {
             return 0;
         }
         let eye = grid.lens().eye;
-        grid.footprints(far, recast, &mut |d| self.first(eye, d, far), each)
+        grid.footprints(far, recast, &mut |d| (self.first(eye, d, far), None), each)
     }
 }
 
