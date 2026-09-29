@@ -34,8 +34,19 @@ use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
+use std::borrow::Cow;
+
+use super::constant::ELE_PADDED_SPAN;
 use super::pack::{channel_of, GroundCell};
 use super::surface::extent_of;
+use crate::space::pyramid::{EXTENT, PAGE_CELLS};
+
+/// A page's lanes, as a count of what each holds: a page is these and no
+/// other size.
+pub const GROUND_LANE: usize = (PAGE_CELLS * PAGE_CELLS) as usize;
+pub const ELE_LANE: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
+pub const EXTENT_LANE: usize = (EXTENT.page_cells() * EXTENT.page_cells()) as usize;
+pub const BLOCK_LANE: usize = EXTENT.page_blocks() as usize;
 
 // ---- DB ----
 
@@ -212,10 +223,98 @@ impl Occupancy {
 /// surface (`Terrain::leaf`), a parent's from its own and its children's
 /// (bake/fold.rs `fold_index`). The client cannot know what lies under what
 /// it does not hold, so it makes none it was not given the children of.
+///
+/// Beside the lane, its blocks: for every aligned square of its cells 2^j
+/// a side (pxl-spec space/pyramid.rs `Lattice::block_index`), the lowest
+/// and highest of their extents and the widest any one of them spans — the
+/// lane summed over every node of the hierarchy a page holds, so what a
+/// node says is one read and not a walk over its cells. Made from the lane
+/// whenever an index is, never carried on the wire, and nothing changes
+/// the lane without making them again.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Index {
-    pub extent: std::borrow::Cow<'static, [[i16; 2]]>,
+    extent: Cow<'static, [[i16; 2]]>,
+    blocks: Cow<'static, [Block]>,
     pub occupancy: Occupancy,
+}
+
+/// What an aligned block of an index lane's cells says of all of them: the
+/// lowest and highest of their extents, in cells, and the most any one of
+/// them spans from its lowest to its highest. Each is a min or a max over
+/// the cells, so a block is its four quarters' join, exactly.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[repr(C)]
+pub struct Block {
+    pub lo: i16,
+    pub hi: i16,
+    pub span: u16,
+}
+
+impl Block {
+    /// A lane's cell as a block of one.
+    pub fn of([lo, hi]: [i16; 2]) -> Block {
+        Block {
+            lo,
+            hi,
+            span: (i32::from(hi) - i32::from(lo)).max(0) as u16,
+        }
+    }
+
+    fn join(self, o: Block) -> Block {
+        Block {
+            lo: self.lo.min(o.lo),
+            hi: self.hi.max(o.hi),
+            span: self.span.max(o.span),
+        }
+    }
+}
+
+impl Index {
+    /// A page's index from its lane, with its blocks.
+    pub fn new(extent: Vec<[i16; 2]>, occupancy: Occupancy) -> Index {
+        let mut blocks = vec![Block::default(); BLOCK_LANE];
+        blocks_of(&extent, &mut blocks);
+        Index {
+            extent: extent.into(),
+            blocks: blocks.into(),
+            occupancy,
+        }
+    }
+
+    /// The lane: each cell's lowest and highest, in `EXTENT`'s cell order.
+    pub fn extent(&self) -> &[[i16; 2]] {
+        &self.extent
+    }
+
+    /// What the `across` × `across` cells from (x, y) say, a block of the
+    /// lane: `across` a power of two and (x, y) a multiple of it.
+    pub fn over(&self, [x, y]: [u32; 2], across: u32) -> Block {
+        match across.trailing_zeros() {
+            0 => Block::of(self.extent[EXTENT.cell_index(x, y) as usize]),
+            j => self.blocks[EXTENT.block_index(j, x, y) as usize],
+        }
+    }
+}
+
+/// `lane`'s blocks into `blocks`, each size from the one under it: the
+/// smallest from the lane's cells, every other from the four a size down.
+fn blocks_of(lane: &[[i16; 2]], blocks: &mut [Block]) {
+    xpute_core::ensure!(lane.len() == EXTENT_LANE && blocks.len() == BLOCK_LANE, ENOTRECOVERABLE);
+    let n = EXTENT.page_cells();
+    for j in 1..=n.trailing_zeros() {
+        let side = 1u32 << j;
+        for by in (0..n).step_by(side as usize) {
+            for bx in (0..n).step_by(side as usize) {
+                let half = side / 2;
+                let quarter = |dx: u32, dy: u32| match j {
+                    1 => Block::of(lane[EXTENT.cell_index(bx + dx, by + dy) as usize]),
+                    _ => blocks[EXTENT.block_index(j - 1, bx + dx, by + dy) as usize],
+                };
+                let b = quarter(0, 0).join(quarter(half, 0)).join(quarter(0, half)).join(quarter(half, half));
+                blocks[EXTENT.block_index(j, bx, by) as usize] = b;
+            }
+        }
+    }
 }
 
 // ---- Page ----
@@ -235,10 +334,7 @@ impl Terrain {
         Terrain {
             ground,
             ele: ele.into(),
-            index: Index {
-                extent: extent.into(),
-                occupancy: Occupancy::LEAF,
-            },
+            index: Index::new(extent, Occupancy::LEAF),
         }
     }
 }
@@ -269,51 +365,78 @@ pub fn encode_terrain(page: &Terrain) -> Result<Vec<u8>, MarshalError> {
 }
 
 /// The room a page is written into, as the client holds it: the record's own
-/// lanes in `.fixed.terrain`.
-pub struct PageRoom<'a> {
-    pub cells: &'a mut [GroundCell],
-    pub ele: &'a mut [i16],
-    pub extent: &'a mut [[i16; 2]],
+/// lanes in `.fixed.terrain`, each a page's length, held for the page for as
+/// long as it is resident.
+pub struct PageRoom {
+    pub cells: &'static mut [GroundCell],
+    pub ele: &'static mut [i16],
+    pub extent: &'static mut [[i16; 2]],
+    pub blocks: &'static mut [Block],
 }
 
-/// A fetched page straight into the room it will live in, and its
-/// occupancy, a byte the page carries by value rather than in a lane.
-///
-/// The wire carries what the client holds, so this is a length check and
-/// three copies out of the packet — no page is allocated, nothing is walked a
-/// cell at a time, and nothing stands between a page arriving and the ground
-/// being drawn from it. That is what packing at the bake buys.
-pub fn decode_terrain_into(pkt: &[u8], room: PageRoom) -> Result<Occupancy, MarshalError> {
+/// A packet's lanes, where they lie, and its occupancy.
+struct Lanes<'a> {
+    ele: &'a [i16],
+    cells: &'a [GroundCell],
+    extent: &'a [[i16; 2]],
+    occupancy: Occupancy,
+}
+
+/// The packet's lanes: refused unless each is a page's length, since a page
+/// is nothing else.
+fn read_page(pkt: &[u8]) -> Result<Lanes<'_>, MarshalError> {
     let root = TreeReader::new(pkt)?.read_branch()?;
     let ele = root.at(0)?.get_array::<i16>()?;
     let cells = root.at(1)?.get_array::<GroundCell>()?;
     let extent = pairs(root.at(2)?.get_array::<i16>()?)?;
     let occupancy = occupancy_of(root.at(3)?.get_number()?)?;
-    if ele.len() != room.ele.len() || cells.len() != room.cells.len() || extent.len() != room.extent.len() {
+    if ele.len() != ELE_LANE || cells.len() != GROUND_LANE || extent.len() != EXTENT_LANE {
+        return Err(MarshalError::new(Errno::EBADMSG));
+    }
+    Ok(Lanes { ele, cells, extent, occupancy })
+}
+
+/// A fetched page straight into the room it will live in, read where it
+/// lies: the index's blocks are made there before the page is handed back,
+/// so nothing holds the page without them.
+///
+/// The wire carries what the client holds, so this is a length check and
+/// three copies out of the packet — no page is allocated, the lane of the
+/// index is walked once for its blocks and nothing else a cell at a time,
+/// and nothing stands between a page arriving and the ground being drawn
+/// from it. That is what packing at the bake buys.
+pub fn decode_terrain_into(pkt: &[u8], room: PageRoom) -> Result<Terrain, MarshalError> {
+    let Lanes { ele, cells, extent, occupancy } = read_page(pkt)?;
+    if room.ele.len() != ELE_LANE || room.cells.len() != GROUND_LANE || room.extent.len() != EXTENT_LANE {
         return Err(MarshalError::new(Errno::EBADMSG));
     }
     room.ele.copy_from_slice(ele);
     room.cells.copy_from_slice(cells);
     room.extent.copy_from_slice(extent);
-    Ok(occupancy)
+    blocks_of(room.extent, room.blocks);
+    let PageRoom { cells, ele, extent, blocks } = room;
+    Ok(Terrain {
+        ground: Ground { cells: (&*cells).into() },
+        ele: (&*ele).into(),
+        index: Index {
+            extent: (&*extent).into(),
+            blocks: (&*blocks).into(),
+            occupancy,
+        },
+    })
 }
 
 // [ele, cells, extent, occupancy] -> { ele, ground, index }
 //
-// For whoever needs a page in hand rather than in a record: the shared ocean
-// tile, the bake's own reads, the tests. Copied out, because a decoded page
-// outlives the packet it came from.
+// For whoever needs a page in hand rather than in a record: the bake's own
+// reads, the tests. Copied out, because a decoded page outlives the packet
+// it came from.
 pub fn decode_terrain(pkt: &[u8]) -> Result<Terrain, MarshalError> {
-    let root = TreeReader::new(pkt)?.read_branch()?;
+    let Lanes { ele, cells, extent, occupancy } = read_page(pkt)?;
     Ok(Terrain {
-        ele: root.at(0)?.get_array::<i16>()?.to_vec().into(),
-        ground: Ground {
-            cells: root.at(1)?.get_array::<GroundCell>()?.to_vec().into(),
-        },
-        index: Index {
-            extent: pairs(root.at(2)?.get_array::<i16>()?)?.to_vec().into(),
-            occupancy: occupancy_of(root.at(3)?.get_number()?)?,
-        },
+        ele: ele.to_vec().into(),
+        ground: Ground { cells: cells.to_vec().into() },
+        index: Index::new(extent.to_vec(), occupancy),
     })
 }
 

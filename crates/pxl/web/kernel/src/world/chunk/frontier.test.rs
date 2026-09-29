@@ -20,6 +20,7 @@ use pxl_spec::space::v3::V3;
 
 use super::*;
 
+use crate::allocations;
 use crate::world::fixture::{self, eye, World};
 
 /// An object's cube and the ground's are one size wherever both have data:
@@ -121,6 +122,9 @@ struct Table {
     building: BTreeMap<Chunk, u32>,
     arena: Slots,
     seed: u64,
+    frontier: Frontier,
+    /// What the frontier's steps have allocated.
+    allocated: u64,
 }
 
 impl Table {
@@ -130,6 +134,8 @@ impl Table {
             building: BTreeMap::new(),
             arena,
             seed: 0x2545_f491,
+            frontier: Frontier::default(),
+            allocated: 0,
         }
     }
 
@@ -147,34 +153,36 @@ impl Table {
     /// One step toward `goal`: the plan made, what it says done, and the
     /// builds a step nearer landing.
     fn step(&mut self, goal: &[Chunk]) {
-        let ready: BTreeMap<Chunk, bool> = self.building.iter().map(|(&c, &left)| (c, left == 0)).collect();
+        let drawn: Vec<Chunk> = self.drawn.iter().copied().collect();
+        let ready: Vec<(Chunk, bool)> = self.building.iter().map(|(&c, &left)| (c, left == 0)).collect();
         let held = self.held();
         let free = core::array::from_fn(|p| self.arena[p] - held[p]);
         let now = Now {
             goal,
-            drawn: &self.drawn,
+            drawn: &drawn,
             building: &ready,
             recubing: 0,
             recube: &[],
             free,
         };
-        let plan = plan(&now, &Flat);
+        let (allocated, plan) = allocations::during(|| self.frontier.plan(&now, &Flat));
+        self.allocated += allocated;
         for c in plan.cancel.iter() {
             self.building.remove(c);
         }
         for c in plan.drop.iter() {
             self.drawn.remove(c);
         }
-        for s in plan.swaps {
-            for c in s.leave {
-                assert!(self.drawn.remove(&c), "{c:?} left the frontier without being drawn");
+        for (leave, enter) in plan.swaps() {
+            for c in leave {
+                assert!(self.drawn.remove(c), "{c:?} left the frontier without being drawn");
             }
-            for c in s.enter {
+            for &c in enter {
                 assert_eq!(self.building.remove(&c), Some(0), "{c:?} entered the frontier before it was ready");
                 self.drawn.insert(c);
             }
         }
-        for c in plan.start {
+        for &c in plan.start.iter() {
             self.seed = self.seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
             assert!(self.building.insert(c, 1 + (self.seed >> 40) as u32 % 4).is_none(), "{c:?} started twice");
         }
@@ -226,24 +234,23 @@ fn a_piece_filling_several_slots_starts_only_with_all_of_them_free() {
         c.sort_unstable();
         c
     };
-    let drawn: BTreeSet<Chunk> = [parent].into_iter().collect();
-    let building = BTreeMap::new();
+    let drawn = [parent];
     let with = |fine: u32| {
         let now = Now {
             goal: &children,
             drawn: &drawn,
-            building: &building,
+            building: &[],
             recubing: 0,
             recube: &[],
-            free: [fine, 100],
+            free: [fine, 100, 0],
         };
-        plan(&now, &Heavy(3))
+        Frontier::default().plan(&now, &Heavy(3)).start.len() as u32
     };
     let occupied = children.iter().filter(|c| c.level() == 0).count() as u32;
     assert!(occupied > 0);
     let all = 3 * occupied + RESERVE[Pool::Fine as usize];
-    assert!(with(all - 1).start.is_empty(), "started with fewer slots free than its pieces fill");
-    assert_eq!(with(all).start.len() as u32, occupied, "not started with every slot its pieces fill free");
+    assert_eq!(with(all - 1), 0, "started with fewer slots free than its pieces fill");
+    assert_eq!(with(all), occupied, "not started with every slot its pieces fill free");
 }
 
 /// The fixture's pieces with every piece over z16 filling the most a coarse
@@ -274,29 +281,28 @@ fn a_coarsening_is_always_started_with_only_the_reserve_free() {
     let parent = at(1, 0, 0);
     let mut children = parent.children().to_vec();
     children.sort_unstable();
-    let (drawn, building): (BTreeSet<Chunk>, BTreeMap<Chunk, bool>) = (children.iter().copied().collect(), BTreeMap::new());
     let now = Now {
         goal: &[parent],
-        drawn: &drawn,
-        building: &building,
+        drawn: &children,
+        building: &[],
         recubing: 0,
         recube: &[],
         free: RESERVE,
     };
-    assert_eq!(plan(&now, &Widest).start, vec![parent], "a coarsening not started with the reserve free");
+    assert_eq!(Frontier::default().plan(&now, &Widest).start, vec![parent], "a coarsening not started with the reserve free");
     let fill = Now {
         goal: &[at(1, 4, 4)],
-        drawn: &BTreeSet::new(),
+        drawn: &[],
         ..now
     };
-    assert!(plan(&fill, &Widest).start.is_empty(), "a fill took the reserve");
+    assert!(Frontier::default().plan(&fill, &Widest).start.is_empty(), "a fill took the reserve");
 }
 
 /// The frontier comes to its goal where the arena holds it, and once the
 /// ground is covered it stays covered, every step, whatever it moves to.
 #[test]
 fn the_frontier_comes_to_a_goal_the_arena_holds_with_no_gap_on_the_way() {
-    let mut t = Table::new([300, 200]);
+    let mut t = Table::new([300, 200, 0]);
     let goals = [goal(3, 3, 0), goal(0, 2, 16), goal(1, 3, 8), goal(3, 4, 0), goal(0, 0, 16), goal(2, 3, 8), goal(0, 1, 8)];
     let mut once = false;
     for g in &goals {
@@ -314,6 +320,27 @@ fn the_frontier_comes_to_a_goal_the_arena_holds_with_no_gap_on_the_way() {
     }
 }
 
+/// A step over a frontier no larger than one already planned allocates
+/// nothing: moving through goals it has moved through before, the frontier
+/// works in what it held from then.
+#[test]
+fn planning_a_frontier_it_has_held_allocates_nothing() {
+    let mut t = Table::new([300, 200, 0]);
+    let goals = [goal(3, 3, 0), goal(0, 2, 16), goal(1, 3, 8), goal(0, 0, 16), goal(2, 3, 8), goal(0, 1, 8)];
+    let pass = |t: &mut Table| {
+        t.allocated = 0;
+        for g in &goals {
+            for _ in 0..200 {
+                t.step(g);
+            }
+        }
+        t.allocated
+    };
+    assert!(pass(&mut t) > 0, "the first pass allocated nothing: the count measures nothing");
+    pass(&mut t);
+    assert_eq!(pass(&mut t), 0, "a pass through goals already planned allocated");
+}
+
 /// With an arena too small for the goal, the frontier refines as far as the
 /// arena holds and no further, with a coarser piece standing wherever it
 /// cannot: never a gap, never past the arena, and back to a goal the arena
@@ -322,7 +349,7 @@ fn the_frontier_comes_to_a_goal_the_arena_holds_with_no_gap_on_the_way() {
 /// (world/quality.rs asserts the cover and the headroom fit).
 #[test]
 fn an_arena_too_small_for_the_goal_leaves_coarser_pieces_and_never_a_gap() {
-    for room in [[40, 12], [8, 40], [64, 6], [2, 3]] {
+    for room in [[40, 12, 0], [8, 40, 0], [64, 6, 0], [2, 3, 0]] {
         let arena: Slots = core::array::from_fn(|p| room[p] + RESERVE[p]);
         let mut t = Table::new(arena);
         for _ in 0..10 {
@@ -394,7 +421,7 @@ impl Table {
 #[test]
 fn no_gap_once_the_floor_is_resident_even_where_the_view_turns() {
     let probes = probes();
-    let mut t = Table::new([600, 3_000]);
+    let mut t = Table::new([600, 3_000, 0]);
     let mut dark = World::flat(LAND);
     dark.answered = false;
     let d = goal_of([1.0, 0.0, -0.1], &dark);
@@ -481,9 +508,13 @@ fn the_count_is_never_less_at_a_finer_quality_nor_less_than_the_cut() {
             }
             let cut = d.cut_at(k);
             let (tau, pieces) = (cut.tau(), cut.pieces().to_vec());
-            let fine = pieces.iter().filter(|&&c| pool_of(c, cube_of(c, d.outermost(c), d.nearest_to(c), tau)) == Pool::Fine).count() as u32;
-            assert!(n[k][Pool::Coarse as usize] >= pieces.len() as u32, "height {height}, {tau:?}: coarse under the cut");
-            assert!(n[k][Pool::Fine as usize] >= fine, "height {height}, {tau:?}: fine under the cut");
+            let of = |pool: Pool| pieces.iter().filter(|&&c| pool_of(c, cube_of(c, d.outermost(c), d.nearest_to(c), tau)) == pool).count() as u32;
+            assert!(
+                n[k][Pool::Coarse as usize] + n[k][Pool::Cover as usize] >= pieces.len() as u32,
+                "height {height}, {tau:?}: coarse under the cut"
+            );
+            assert!(n[k][Pool::Fine as usize] >= of(Pool::Fine), "height {height}, {tau:?}: fine under the cut");
+            assert!(n[k][Pool::Cover as usize] >= of(Pool::Cover), "height {height}, {tau:?}: cover under the cut");
         }
     }
 }

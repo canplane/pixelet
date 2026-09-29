@@ -285,9 +285,9 @@ fn a_parents_extent_holds_each_childs() {
     let top = LevelPage::new(2, crate::space::pvf3::ivec::gather(-1, 3, 0));
     let (held, zero) = pyramid(top);
     for parent in [top].into_iter().chain(top.children()) {
-        let outer = &held[&parent].index.extent;
+        let outer = &held[&parent].index.extent();
         for (q, child) in parent.children().iter().enumerate() {
-            let inner = &held.get(child).unwrap_or(&zero).index.extent;
+            let inner = &held.get(child).unwrap_or(&zero).index.extent();
             for (index, &[lo, hi]) in inner.iter().enumerate() {
                 let [plo, phi] = outer[EXTENT.parent_cell(q, index as u32) as usize];
                 assert!(plo <= lo && hi <= phi, "{parent:?} child {q} cell {index}: [{lo}, {hi}] outside [{plo}, {phi}]");
@@ -318,7 +318,7 @@ fn the_extent_holds_every_height_drawn_under_it() {
                     while over.level <= top.level {
                         let c = EXTENT.cell_of(over.level, &at);
                         assert_eq!(c.page(), over);
-                        let [lo, hi] = held[&over].index.extent[c.index() as usize];
+                        let [lo, hi] = held[&over].index.extent()[c.index() as usize];
                         assert!(lo as i32 <= h && h <= hi as i32, "{page:?} at ({fx}, {fy}): {h} outside {over:?}'s [{lo}, {hi}]");
                         checked += 1;
                         over = over.parent();

@@ -955,6 +955,40 @@ pub struct Store {
 /// largest node a view measures.
 const REACH_LEVELS: u32 = L3.above(L2) as u32 + TOP_LEVEL;
 
+/// The most a walk down the reaches holds at once: depth first, a node is
+/// taken off and its four children put on, three more a level down, and
+/// only from a node the reaches have, none higher than `REACH_LEVELS`.
+const DOWN: usize = 1 + 3 * REACH_LEVELS as usize;
+
+/// A walk down the reaches from one node, depth first, on the stack.
+struct Down {
+    nodes: [(u32, [i64; 2]); DOWN],
+    n: usize,
+}
+
+impl Down {
+    fn from(level: u32, at: [i64; 2]) -> Down {
+        let mut nodes = [(0, [0; 2]); DOWN];
+        nodes[0] = (level, at);
+        Down { nodes, n: 1 }
+    }
+
+    fn pop(&mut self) -> Option<(u32, [i64; 2])> {
+        self.n = self.n.checked_sub(1)?;
+        Some(self.nodes[self.n])
+    }
+
+    /// The node's four children, walked next: only of a node the reaches
+    /// have, which is what bounds the walk.
+    fn children(&mut self, level: u32, at: [i64; 2]) {
+        xpute_core::ensure!(level > 0 && self.n + 4 <= DOWN, ENOTRECOVERABLE, level);
+        for slot in 0..4 {
+            self.nodes[self.n] = (level - 1, child_of(at, slot));
+            self.n += 1;
+        }
+    }
+}
+
 impl Default for Store {
     fn default() -> Self {
         Store::new()
@@ -992,7 +1026,7 @@ impl Store {
         let Ok(level) = u32::try_from(side.above(L2)) else { return false };
         let band = L2.side();
         let (b0, b1) = ((z0 / band).floor() as BandZ, (z1 / band).ceil() as BandZ - 1);
-        let mut down = vec![(level, at)];
+        let mut down = Down::from(level, at);
         while let Some((level, at)) = down.pop() {
             let Some(&(lo, hi)) = self.reaches.get(&(level, at)) else { continue };
             if hi < z0 || lo >= z1 {
@@ -1005,30 +1039,30 @@ impl Store {
                         return true;
                     }
                 }
-                _ => down.extend((0..4).map(|slot| (level - 1, child_of(at, slot)))),
+                _ => down.children(level, at),
             }
         }
         false
     }
 
     /// The columns holding objects under a node, a column's or coarser,
-    /// found down the reaches: a subtree nothing stands in is not entered, so
-    /// the cost is what is under the node and not what the store holds.
-    pub fn cols_under(&self, (side, at): (Scale, [i64; 2])) -> Vec<IVec> {
-        let Ok(level) = u32::try_from(side.above(L2)) else { return Vec::new() };
-        let mut out = Vec::new();
-        let mut down = vec![(level, at)];
+    /// found down the reaches and added to `out`, sorted: a subtree nothing
+    /// stands in is not entered, so the cost is what is under the node and
+    /// not what the store holds.
+    pub fn cols_under(&self, (side, at): (Scale, [i64; 2]), out: &mut Vec<IVec>) {
+        let Ok(level) = u32::try_from(side.above(L2)) else { return };
+        let first = out.len();
+        let mut down = Down::from(level, at);
         while let Some((level, at)) = down.pop() {
             if !self.reaches.contains_key(&(level, at)) {
                 continue;
             }
             match level {
                 0 => out.push(ivec::gather(at[0], at[1], 0)),
-                _ => down.extend((0..4).map(|slot| (level - 1, child_of(at, slot)))),
+                _ => down.children(level, at),
             }
         }
-        out.sort_unstable();
-        out
+        out[first..].sort_unstable();
     }
 
     /// Makes again the reaches over column `col`, from it up.

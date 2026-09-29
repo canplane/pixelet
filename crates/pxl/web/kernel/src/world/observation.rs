@@ -7,7 +7,6 @@
 //! drawn.
 
 use std::cmp::Ordering;
-use std::collections::HashMap;
 
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::hierarchy::{ancestor_of, Scale};
@@ -20,7 +19,6 @@ use pxl_spec::space::pvf3::REACH;
 use pxl_spec::space::pyramid::{span_of, LevelPage, GROUND, TOP_LEVEL};
 use pxl_spec::space::v3::Aabb;
 
-use crate::global::Global;
 use crate::kernel::kernel;
 use crate::layer::environment::fog::{eye_height, reach_at};
 use crate::layer::environment::state::globe;
@@ -93,7 +91,7 @@ pub fn observation() -> Option<Observation> {
 
 /// What the kernel knows of the world: the terrain's index lanes, from each
 /// page or the nearest resident page over it (world/access.rs
-/// `Access::extent`, `Access::slope`), and the objects, which are all
+/// `Access::relief`), and the objects, which are all
 /// resident. Both are stored flat — a heightfield, and bands over a column —
 /// and read here by the node of that storage under a box, so what asks sees
 /// only the box's answer. Unknown where no terrain page over some of the box
@@ -158,32 +156,20 @@ struct Node {
     objects: Option<(f64, f64)>,
 }
 
-/// Every node's answer, and the revision it was read at. A view is made
-/// again every frame the eye moves and asks of every chunk it cuts, eight
-/// children at a time, and an estimate of demand of every cube it names,
-/// while an answer only moves with what is resident. Asked afresh, it was
-/// most of a zoom's turn (measured 2026-09-26).
-type Read = (Option<(u32, u32)>, HashMap<(u32, (Scale, [i64; 2])), Option<Node>>);
-static READ: Global<Read> = Global::new();
-
 /// What is known of `node` at `level`: none where no terrain page over it is
-/// resident.
+/// resident. Read afresh each time, and one read of each store: the ground's
+/// from the block of the index lane the node spans (pxl-spec bake/format.rs
+/// `Index`), made as its page arrived and gone with it, and the objects'
+/// from their store as it is now, which moves on its own.
 fn read(level: u32, node: (Scale, [i64; 2])) -> Option<Node> {
-    let revision = heights_revision();
-    let read = READ.get(Default::default);
-    if read.0 != Some(revision) {
-        *read = (Some(revision), HashMap::new());
-    }
-    *read.1.entry((level, node)).or_insert_with(|| {
-        let page = L3.up(level as i32);
-        let [x, y] = ancestor_of(node.1, page.above(node.0) as u32);
-        let page = LevelPage::new(level, ivec::gather(x, y, 0));
-        let access = Access::now();
-        Some(Node {
-            ground: access.extent(page, node).value()?,
-            slope: access.slope(page, node).value()?,
-            objects: kernel().objects.reach_over(node),
-        })
+    let page = L3.up(level as i32);
+    let [x, y] = ancestor_of(node.1, page.above(node.0) as u32);
+    let page = LevelPage::new(level, ivec::gather(x, y, 0));
+    let relief = Access::now().relief(page, node).value()?;
+    Some(Node {
+        ground: relief.extent,
+        slope: relief.slope,
+        objects: kernel().objects.reach_over(node),
     })
 }
 

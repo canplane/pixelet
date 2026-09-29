@@ -20,12 +20,15 @@
 //! what is waiting for a slot waits with the coarser piece it would replace
 //! still on the screen (world/chunk/frontier.rs).
 //!
-//! Two pools, because a group is one storage binding and a binding holds
-//! 128 MiB. The leaves' own tier — the one drawn at their cells — has a
-//! group to itself, since its box is six words where every other is four and
-//! a group is one format throughout; the coarse tiers share
-//! `ARENA_COARSE_GROUPS` groups between them, any tier of any level in any
-//! of them.
+//! Three pools, one a representation: a tier is drawn at one of three steps
+//! in its level's cells, and a slot of each is that step's size. The
+//! leaves' own tier — the one drawn at their cells — has a group to itself,
+//! since its box is six words where every other is four and a group is one
+//! format throughout; the tiers a level draws at its cells averaged 2 × 2
+//! share `ARENA_COARSE_GROUPS` groups between them, any level in any of
+//! them, since a group is one storage binding and a binding holds 128 MiB;
+//! and the cover, a cell a chunk, has a group of its own, a slot for each
+//! piece it can have and two boxes each.
 //!
 //! A slot holds a number of boxes, and a tier with more fills as many slots
 //! as it takes, any free ones of its pool, chained in the order its boxes
@@ -55,11 +58,13 @@
 //! it merges, since a box shrunk about its cell's center touches nothing
 //! (issue/20260923-a-coarse-cell-is-isotropic.md).
 
+use pxl_render::look::globe::MERCATOR_RADIUS_U;
 use pxl_render::look::lod::COARSEST;
 use pxl_render::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
-use pxl_spec::space::pyramid::CHUNK_CELLS;
+use pxl_spec::space::pyramid::{CHUNK_CELLS, TOP_LEVEL};
 
 use crate::param::{ARENA_COARSE_GROUPS, ARENA_GROUP_SLOTS};
+use crate::world::pyramid::domain::cover_pieces;
 
 /// Slots a group holds (param.rs).
 const SLOTS: u32 = ARENA_GROUP_SLOTS;
@@ -73,47 +78,81 @@ const COARSE_GROUPS: u32 = ARENA_COARSE_GROUPS;
 /// mesh/chunk_mesher.rs). A chunk whose placed objects make it more fills
 /// more of them.
 pub const FINE_BOXES: u32 = CHUNK_CELLS * CHUNK_CELLS;
-/// Boxes every other tier holds (param.rs). It is not a bound the content
-/// keeps, and needs not be one: a coarse cell at step `s` is a cube `s`
-/// cells a side, holding at most its own box and the floor laid under it, so
-/// a chunk — 64 cells a side in all three — bakes to at most 2·(64/s)³
-/// boxes, and a mesh past one slot fills more. The coarsest step, one cell
-/// a chunk, fills one, and the cover is drawn at it everywhere
-/// (world/chunk/frontier.rs `drawn_cube`), so the cover is a slot a piece
-/// by its representation, as the arena's sizing counts it
-/// (world/quality.rs).
+/// Boxes a slot of the coarse pool holds (param.rs): the unit its tiers are
+/// held in, and no bound on them. A tier fills as many slots as its boxes
+/// take, chained, so what this chooses is between room a tier holds and
+/// does not fill and draws a tier takes, one a slot.
 pub const COARSE_BOXES: u32 = crate::param::COARSE_BOXES;
 
-const _: () = assert!(2 * (CHUNK_CELLS / COARSEST).pow(3) <= COARSE_BOXES, "a chunk at its coarsest step past what a coarse slot holds");
-
 /// The most slots a tier of the coarse pool fills, whatever it holds: every
-/// tier there is drawn at a step of two or more — a level's cells averaged
-/// 2 × 2 (world/chunk/frontier.rs `drawn_cube`), or a z16 chunk drawn
-/// coarser — and a coarse cell is at most its own box and the floor laid
-/// under it, so a chunk at step two bakes to at most 2·32³ boxes. A bound
-/// from the representation, not from any mesh met so far: what the
-/// frontier keeps free so a coarsening, whose piece is over z16 and so of
-/// this pool, can always be built (frontier.rs `RESERVE`).
+/// tier there is drawn at step two — a level's cells averaged 2 × 2
+/// (world/chunk/frontier.rs `drawn_cube`), or a z16 chunk drawn coarser —
+/// and a coarse cell is at most its own box and the floor laid under it, so
+/// a chunk at step two bakes to at most 2·32³ boxes. A bound from the
+/// representation, not from any mesh met so far: what the frontier keeps
+/// free so a coarsening, whose piece is over z16 and short of the top and
+/// so of this pool, can always be built (frontier.rs `RESERVE`); one onto
+/// the top takes the cover's, where a slot is always free.
 pub const COARSE_TIER_SLOTS: u32 = (2 * (CHUNK_CELLS / 2).pow(3)).div_ceil(COARSE_BOXES);
 
 /// The pools a tier's slot is taken from, as an index.
-pub const POOLS: usize = 2;
+pub const POOLS: usize = 3;
+
+/// Boxes a slot of the cover holds: a chunk at its coarsest step is one
+/// cell, its own box and the floor laid under it.
+pub const COVER_BOXES: u32 = 2 * (CHUNK_CELLS / COARSEST).pow(3);
+
+/// Slots the cover takes: a slot a piece of it, the most pieces the cover
+/// over any source's top is (world/pyramid/domain.rs `cover_pieces`), which
+/// the domain asserts of its roots. Exact, with nothing past it: every
+/// cover slot held is a current root's, each root holds one at most — a
+/// piece of the top drawn, built or dissolving out, and a piece wanted again
+/// while it dissolves comes back to its own slot — and a piece dissolving
+/// out whose root the view has left is let go at once (world/chunk/table.rs
+/// `materialize`). So a root the cover lacks always finds a slot free.
+pub const COVER_SLOTS: u32 = {
+    let (mut most, mut top) = (0, 0);
+    while top <= TOP_LEVEL {
+        let n = cover_pieces(top, MERCATOR_RADIUS_U);
+        if n > most {
+            most = n;
+        }
+        top += 1;
+    }
+    most
+};
 
 /// Which of the arena's pools a tier takes its slot from: the leaves' own
-/// tier, or any other.
+/// tier, any other a level draws, or the cover. Each is one representation,
+/// a step a tier is drawn at in its level's cells, and every size a slot of
+/// it has is that step's: its boxes, and its surface lane.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Pool {
     Fine = 0,
     Coarse = 1,
+    Cover = 2,
 }
 
 impl Pool {
     /// The pool a tier of step `step` on a chunk of `level` takes.
     pub const fn of(level: u32, step: u32) -> Pool {
-        if level == 0 && step == 1 {
+        if step == COARSEST {
+            Pool::Cover
+        } else if level == 0 && step == 1 {
             Pool::Fine
         } else {
             Pool::Coarse
+        }
+    }
+
+    /// The step its tiers are drawn at, in their level's cells: a leaf's
+    /// own cells, a level's averaged 2 × 2 (world/chunk/frontier.rs
+    /// `drawn_cube`), or one cell a chunk.
+    const fn step(self) -> u32 {
+        match self {
+            Pool::Fine => 1,
+            Pool::Coarse => 2,
+            Pool::Cover => COARSEST,
         }
     }
 
@@ -122,50 +161,96 @@ impl Pool {
         match self {
             Pool::Fine => SLOTS,
             Pool::Coarse => COARSE_GROUPS * SLOTS,
+            Pool::Cover => COVER_SLOTS,
+        }
+    }
+
+    /// Boxes a slot of it holds.
+    const fn boxes(self) -> u32 {
+        match self {
+            Pool::Fine => FINE_BOXES,
+            Pool::Coarse => COARSE_BOXES,
+            Pool::Cover => COVER_BOXES,
+        }
+    }
+
+    /// Words a slot's surface lane holds: a sample at the center of each
+    /// block its tier draws.
+    const fn surface_words(self) -> u32 {
+        let axis = CHUNK_CELLS / self.step();
+        axis * axis
+    }
+
+    /// The first of its slots: the coarse pool's, then the leaves', then
+    /// the cover's.
+    const fn first(self) -> usize {
+        match self {
+            Pool::Coarse => 0,
+            Pool::Fine => Pool::Coarse.slots() as usize,
+            Pool::Cover => (Pool::Coarse.slots() + Pool::Fine.slots()) as usize,
         }
     }
 
     /// Which slots are its.
     pub fn range(self) -> core::ops::Range<usize> {
-        match self {
-            Pool::Fine => (FINE_GROUP * SLOTS) as usize..((FINE_GROUP + 1) * SLOTS) as usize,
-            Pool::Coarse => 0..(COARSE_GROUPS * SLOTS) as usize,
-        }
+        self.first()..self.first() + self.slots() as usize
     }
 
     /// The pool a slot is in.
     pub const fn at(index: usize) -> Pool {
-        if index as u32 / SLOTS == FINE_GROUP {
+        if index < Pool::Fine.first() {
+            Pool::Coarse
+        } else if index < Pool::Cover.first() {
             Pool::Fine
         } else {
-            Pool::Coarse
+            Pool::Cover
+        }
+    }
+
+    /// Where its surface lanes begin in `.fixed.surface`, in words.
+    const fn surface_first(self) -> u32 {
+        match self {
+            Pool::Coarse => 0,
+            Pool::Fine => Pool::Coarse.slots() * Pool::Coarse.surface_words(),
+            Pool::Cover => Pool::Coarse.slots() * Pool::Coarse.surface_words() + Pool::Fine.slots() * Pool::Fine.surface_words(),
         }
     }
 }
 
 /// Every pool's slots, by `Pool` as an index: the arena the quality policy
 /// fits a view's frontier into.
-pub const ARENA: [u32; POOLS] = [Pool::Fine.slots(), Pool::Coarse.slots()];
+pub const ARENA: [u32; POOLS] = [Pool::Fine.slots(), Pool::Coarse.slots(), Pool::Cover.slots()];
 
 /// Boxes a tier of step `step` on a chunk of `level` may have: its pool's.
 pub const fn capacity(level: u32, step: u32) -> u32 {
-    match Pool::of(level, step) {
-        Pool::Fine => FINE_BOXES,
-        Pool::Coarse => COARSE_BOXES,
-    }
+    Pool::of(level, step).boxes()
 }
 
-/// Groups the arena holds: the coarse tiers', and the leaves' own tier
-/// beside them.
-pub const GROUPS: u32 = COARSE_GROUPS + 1;
+/// Groups the arena holds: the coarse tiers', the leaves' own tier beside
+/// them, and the cover's.
+pub const GROUPS: u32 = COARSE_GROUPS + 2;
 /// The group the leaves' own tier lies in.
 const FINE_GROUP: u32 = COARSE_GROUPS;
+/// The group the cover lies in.
+const COVER_GROUP: u32 = COARSE_GROUPS + 1;
 /// Slots across every group, for whoever tracks who holds each.
-pub const OCCUPANCY: usize = (GROUPS * SLOTS) as usize;
+pub const OCCUPANCY: usize = (Pool::Coarse.slots() + Pool::Fine.slots() + Pool::Cover.slots()) as usize;
 
 // WebGPU's default ceiling on one storage binding.
 const _: () = assert!(group_bytes_of(0) as u64 <= 128 << 20, "an arena group past a storage binding's limit");
 const _: () = assert!(group_bytes_of(FINE_GROUP) as u64 <= 128 << 20, "the leaves' group past a storage binding's limit");
+const _: () = assert!(group_bytes_of(COVER_GROUP) as u64 <= 128 << 20, "the cover's group past a storage binding's limit");
+
+/// The pool group `group` is of.
+const fn pool_of_group(group: u32) -> Pool {
+    if group == FINE_GROUP {
+        Pool::Fine
+    } else if group == COVER_GROUP {
+        Pool::Cover
+    } else {
+        Pool::Coarse
+    }
+}
 
 /// Whether group `group` holds the leaves' own box format, which is what the
 /// renderer draws it at: the two formats are two pipelines and two vertex
@@ -183,13 +268,11 @@ pub const fn group_box_words(group: u32) -> u32 {
     }
 }
 
-/// Boxes group `group` holds: a coarse tier's slots, or the leaves' own.
+/// Boxes group `group` holds: its slots' of its pool.
 pub const fn group_boxes(group: u32) -> u32 {
-    if group == FINE_GROUP {
-        SLOTS * FINE_BOXES
-    } else {
-        SLOTS * COARSE_BOXES
-    }
+    let pool = pool_of_group(group);
+    let slots = if group < COARSE_GROUPS { SLOTS } else { pool.slots() };
+    slots * pool.boxes()
 }
 
 const fn group_bytes_of(group: u32) -> u32 {
@@ -211,32 +294,28 @@ pub struct MeshSlot {
     pub index: usize,
 }
 
-/// Words a slot's surface lane holds: a sample at the center of each of its
-/// tier's blocks, CHUNK_CELLS a side for the leaves' own tier, which draws
-/// its level's cells, and half that for every other, which draws no finer
-/// than its level's cells averaged 2 × 2 (world/chunk/frontier.rs
-/// `drawn_cube`).
-const fn surface_words(group: u32) -> u32 {
-    let axis = if group == FINE_GROUP { CHUNK_CELLS } else { CHUNK_CELLS / 2 };
-    axis * axis
-}
-
-/// `.fixed.surface`: every slot's surface lane, the coarse groups' then the
-/// leaves'.
-pub const SURFACE_BYTES: u32 = SLOTS * (COARSE_GROUPS * surface_words(0) + surface_words(FINE_GROUP)) * 4;
+/// `.fixed.surface`: every slot's surface lane, each pool's in turn.
+pub const SURFACE_BYTES: u32 = Pool::Cover.surface_first() * 4 + Pool::Cover.slots() * Pool::Cover.surface_words() * 4;
 
 /// Where slot `index`'s surface lane lies in `.fixed.surface`, and the words
 /// it holds.
 pub const fn surface_of(index: usize) -> (u32, u32) {
-    let (group, residue) = (index as u32 / SLOTS, index as u32 % SLOTS);
-    ((group * SLOTS * surface_words(0) + residue * surface_words(group)) * 4, surface_words(group))
+    let pool = Pool::at(index);
+    let n = (index - pool.first()) as u32;
+    ((pool.surface_first() + n * pool.surface_words()) * 4, pool.surface_words())
 }
 
 /// The slot an index names: which group's arena it is in, where in it, and
 /// how many boxes it holds.
 pub fn slot_at(index: usize) -> MeshSlot {
-    let (group, residue) = (index as u32 / SLOTS, index as u32 % SLOTS);
-    let capacity = if group == FINE_GROUP { FINE_BOXES } else { COARSE_BOXES };
+    let pool = Pool::at(index);
+    let n = (index - pool.first()) as u32;
+    let (group, residue) = match pool {
+        Pool::Coarse => (n / SLOTS, n % SLOTS),
+        Pool::Fine => (FINE_GROUP, n),
+        Pool::Cover => (COVER_GROUP, n),
+    };
+    let capacity = pool.boxes();
     MeshSlot {
         group,
         first_box: residue * capacity,

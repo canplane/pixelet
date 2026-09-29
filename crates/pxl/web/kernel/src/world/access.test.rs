@@ -161,7 +161,7 @@ fn an_answer_is_exact_only_from_the_page_asked_and_a_coarser_one_names_that_page
         assert!(matches!(access.at(&at, 1), Answer::Exact(_)), "the parent is the page asked at its own level");
         // The bound a descent is decided by is exact and lacking alike.
         let [kx, ky, _] = L2.index_of(&at);
-        assert_eq!(access.extent(asked, (L2, [kx, ky])).lack().is_some(), asked != leaves[0].0);
+        assert_eq!(access.relief(asked, (L2, [kx, ky])).lack().is_some(), asked != leaves[0].0);
     }
 }
 
@@ -373,7 +373,7 @@ fn a_query_leaves_residency_as_it_found_it() {
         let _ = access.at(&at, 0);
         let p = [pvf3::to_real(pvf3::X(&at)), pvf3::to_real(pvf3::Y(&at))];
         let _ = access.first_hit(&down(p), Detail::Level(0));
-        let _ = access.extent(GROUND.cell_of(0, &at).page(), GROUND.cell_of(0, &at).page().node());
+        let _ = access.relief(GROUND.cell_of(0, &at).page(), GROUND.cell_of(0, &at).page().node());
     }
     assert_eq!(before, (paging.revision(), paging.frames_used(), paging.leases().count()));
     for (p, _) in [(top(), ()), (leaves[3].0, ())] {

@@ -21,3 +21,7 @@ pub mod sched;
 pub mod shell;
 pub mod text;
 pub mod world;
+
+#[cfg(test)]
+#[path = "allocations.test.rs"]
+pub mod allocations;

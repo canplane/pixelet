@@ -11,11 +11,9 @@
 //! is fetched under its own category, so the pages waiting on it settle at
 //! once and its one fetch is not tied to any of them.
 
-use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::bake::format::{decode_terrain, decode_terrain_into, Ground, Index, Occupancy, PageRoom, Terrain};
+use pxl_spec::bake::format::{decode_terrain_into, Block, PageRoom, Terrain, BLOCK_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::pyramid::LevelPage;
-use pxl_spec::space::pyramid::{EXTENT, PAGE_CELLS};
 use xpute_runtime::abi::fetch::FetchFail;
 use xpute_runtime::mem::base::ptr_at;
 
@@ -25,7 +23,7 @@ use crate::global::Global;
 use crate::host::now;
 use crate::io::demand::{Ask, Category, Phases, TaskPhaseName};
 use crate::io::sched::{declare, pending_count};
-use crate::layer::terrain::fixed::{ele_off, extent_off, ground_off, ELE_LANE_BYTES, EXTENT_LANE_BYTES, GROUND_LANE_BYTES};
+use crate::layer::terrain::fixed::{blocks_off, ele_off, extent_off, ground_off, BLOCK_LANE_BYTES, ELE_LANE_BYTES, EXTENT_LANE_BYTES, GROUND_LANE_BYTES};
 use crate::layer::terrain::ground_snap::reground_map_center;
 use crate::mem::fixed::{at, Range};
 use crate::shell::map_store::{map_store, MapStatus};
@@ -57,18 +55,11 @@ impl Layer for Terrain {
     /// from it.
     fn receive(record: u32, pkt: &[u8], phases: &mut Phases) -> Result<Terrain, Failure> {
         let t0 = now();
-        let lanes = lanes_of(record)?;
-        let room = PageRoom {
-            // SAFETY: the record is this page's from the pyramid, at the
-            // page's lane sizes, and nothing reads it until the page is set.
-            cells: unsafe { core::slice::from_raw_parts_mut(ptr_at::<GroundCell>(lanes.cells), CELLS) },
-            ele: unsafe { core::slice::from_raw_parts_mut(ptr_at::<i16>(lanes.ele), SAMPLES) },
-            extent: unsafe { core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(lanes.extent), EXTENTS) },
-        };
-        let occupancy = decode_terrain_into(pkt, room)?;
+        // SAFETY: the record is this page's from the pyramid, and nothing
+        // reads it until the page is set.
+        let terrain = decode_terrain_into(pkt, unsafe { room_of(record)? })?;
         phases.push(TaskPhaseName::decode_ms, now() - t0);
-        // SAFETY: the lanes are this page's record until another page takes it.
-        Ok(unsafe { open_terrain(lanes, occupancy) })
+        Ok(terrain)
     }
 
     fn absent(p: LevelPage) {
@@ -93,68 +84,30 @@ impl Layer for Terrain {
     }
 }
 
-const CELLS: usize = (PAGE_CELLS * PAGE_CELLS) as usize;
-const SAMPLES: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
-const EXTENTS: usize = (EXTENT.page_cells() * EXTENT.page_cells()) as usize;
-
-/// A page's lanes in the range: the ground cells, packed (pxl-spec
-/// bake/pack.rs), the padded elevation grid and the index lane.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct TerrainLanes {
-    cells: usize,
-    ele: usize,
-    extent: usize,
-}
-
-/// Opens a page's lanes as the terrain the kernel reads, with the occupancy
-/// the page carries by value.
+/// A record's lanes, as the room a page is written into. NoRoom under a
+/// native test, which lays no memory out.
 ///
 /// # Safety
-/// Every lane is a block of the kernel's memory held for this page for as
-/// long as the page is resident, at the page's fixed lane sizes.
-unsafe fn open_terrain(lanes: TerrainLanes, occupancy: Occupancy) -> Terrain {
-    // SAFETY: the caller's contract; a ground lane is one `GroundCell` a
-    // cell, an i16 lane 2 bytes a sample, an index lane 4 bytes a cell.
-    Terrain {
-        ground: Ground {
-            cells: unsafe { core::slice::from_raw_parts(ptr_at::<GroundCell>(lanes.cells), CELLS) }.into(),
-        },
-        ele: unsafe { core::slice::from_raw_parts(ptr_at::<i16>(lanes.ele), SAMPLES) }.into(),
-        index: Index {
-            extent: unsafe { core::slice::from_raw_parts(ptr_at::<[i16; 2]>(lanes.extent), EXTENTS) }.into(),
-            occupancy,
-        },
-    }
-}
-
-/// Writes a decoded page into `lanes`, which must be the page's own room.
-fn write_lanes(t: &Terrain, lanes: TerrainLanes) {
-    let bytes = |p: *const u8, n: usize| {
-        // SAFETY: a lane read as its own bytes, where it lies.
-        unsafe { core::slice::from_raw_parts(p, n) }
-    };
-    let cells = &t.ground.cells;
-    let extent = &t.index.extent;
-    let sources = [
-        bytes(cells.as_ptr().cast::<u8>(), cells.len() * core::mem::size_of::<GroundCell>()),
-        bytes(t.ele.as_ptr().cast::<u8>(), t.ele.len() * 2),
-        bytes(extent.as_ptr().cast::<u8>(), extent.len() * 4),
-    ];
-    for (src, to) in sources.iter().zip([lanes.cells, lanes.ele, lanes.extent]) {
-        // SAFETY: `to` is the page's room in the range, the lane's own size,
-        // and apart from `src`.
-        unsafe { core::ptr::copy_nonoverlapping(src.as_ptr(), ptr_at::<u8>(to), src.len()) };
-    }
-}
-
-/// Where a record's lanes are. NoRoom under a native test, which lays no
-/// memory out.
-fn lanes_of(record: u32) -> Result<TerrainLanes, FetchFail> {
+/// The record's lanes are the page's that is given them, and no other's,
+/// from now until another page takes the record.
+unsafe fn room_of(record: u32) -> Result<PageRoom, FetchFail> {
     let lane = |off, bytes| at(Range::Terrain, off, bytes).map(|a| a as usize).ok_or(FetchFail::NoRoom);
-    Ok(TerrainLanes {
-        cells: lane(ground_off(record), GROUND_LANE_BYTES)?,
-        ele: lane(ele_off(record), ELE_LANE_BYTES)?,
-        extent: lane(extent_off(record), EXTENT_LANE_BYTES)?,
+    let (cells, ele, extent, blocks) = (
+        lane(ground_off(record), GROUND_LANE_BYTES)?,
+        lane(ele_off(record), ELE_LANE_BYTES)?,
+        lane(extent_off(record), EXTENT_LANE_BYTES)?,
+        lane(blocks_off(record), BLOCK_LANE_BYTES)?,
+    );
+    // SAFETY: each lane is a block of the kernel's memory at its own size,
+    // placed once and never freed, and the caller's contract makes it this
+    // page's alone.
+    Ok(unsafe {
+        PageRoom {
+            cells: core::slice::from_raw_parts_mut(ptr_at::<GroundCell>(cells), GROUND_LANE),
+            ele: core::slice::from_raw_parts_mut(ptr_at::<i16>(ele), ELE_LANE),
+            extent: core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(extent), EXTENT_LANE),
+            blocks: core::slice::from_raw_parts_mut(ptr_at::<Block>(blocks), BLOCK_LANE),
+        }
     })
 }
 
@@ -178,14 +131,8 @@ pub fn adopt_ocean(pkt: &[u8]) -> Result<(), Failure> {
     if ocean().terrain.is_some() {
         return Ok(());
     }
-    let decoded = decode_terrain(pkt)?;
-    if decoded.ground.len() != CELLS || decoded.ele.len() != SAMPLES || decoded.index.extent.len() != EXTENTS {
-        return Err(FetchFail::Decode.into());
-    }
-    let lanes = lanes_of(ABSENT)?;
-    write_lanes(&decoded, lanes);
     // SAFETY: `ABSENT`, which no page takes and is written once.
-    let terrain = unsafe { open_terrain(lanes, decoded.index.occupancy) };
+    let terrain = decode_terrain_into(pkt, unsafe { room_of(ABSENT)? })?;
     let o = ocean();
     for p in o.waiting.drain(..) {
         Terrain::pyramid().set(p, terrain.clone());

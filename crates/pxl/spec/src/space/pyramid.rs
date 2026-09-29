@@ -149,6 +149,37 @@ impl Lattice {
         let n = self.page_cells();
         [index % n, index / n]
     }
+
+    // A page's aligned square blocks of cells, 2^j a side for j from 1 to
+    // the page's own, lie one size after another from the smallest, each
+    // size's row by row: what a summary over any node of the hierarchy a
+    // page holds is read from in one place.
+
+    /// A page's blocks, every size together.
+    pub const fn page_blocks(self) -> u32 {
+        self.first_block(self.page_cell_shamt() + 1)
+    }
+
+    /// Where the block 2^`j` cells a side that holds cell (tx, ty) stands
+    /// among a page's blocks.
+    pub const fn block_index(self, j: u32, tx: u32, ty: u32) -> u32 {
+        if j == 0 || j > self.page_cell_shamt() {
+            panic!()
+        }
+        self.first_block(j) + (ty >> j) * (self.page_cells() >> j) + (tx >> j)
+    }
+
+    /// Where the blocks 2^`j` cells a side begin: past every smaller size.
+    const fn first_block(self, j: u32) -> u32 {
+        let mut first = 0;
+        let mut k = 1;
+        while k < j {
+            let side = self.page_cells() >> k;
+            first += side * side;
+            k += 1;
+        }
+        first
+    }
 }
 
 /// The ground's lattice: bake/constant.rs's cell, which terrain and objects

@@ -197,7 +197,7 @@ fn the_estimator_never_changes_residency() {
     let observer = EdgeRays(Access::new(&paging, &store), Tau::FINEST);
     let grid = Grid::of(Lens::of(&o).unwrap());
     let mut seen = 0;
-    observer.observe(&grid, o.far, &|_| true, &mut |_, f, _| {
+    observer.observe(&grid, o.far, &|_| true, &mut Vec::new(), &mut |_, f, _| {
         if let Some(f) = f {
             assert!(f.near > 0.0 && f.near < o.far, "{f:?} is not on the ocean");
             seen += 1;

@@ -147,6 +147,22 @@ impl<T> Answer<T> {
     }
 }
 
+/// What a node says of the ground over it (`Access::relief`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Relief {
+    /// The lowest and highest the ground stands, in units. A page over the
+    /// node holds the bound of everything under it, so read from one this
+    /// is wider, never narrower, than the page's own will be.
+    pub extent: (f64, f64),
+    /// The steepest it can be, as a rise over a run along the ground: the
+    /// largest span of any one index cell under the node over the cell's
+    /// side. The surface is interpolated from elevation samples an index
+    /// cell apart (pxl-spec bake/constant.rs `EXTENT_SPAN`), and an index
+    /// cell's span bounds the window its interpolation reads, so no point of
+    /// it rises faster than about that between two samples.
+    pub slope: f64,
+}
+
 /// The ground a cell draws: the top of its column in units, and the ground
 /// cell whose types it shows.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -284,56 +300,27 @@ impl<'a> Access<'a> {
         }
     }
 
-    /// The lowest and highest the ground over a node of `page`'s level can
-    /// stand, in units, at that level and every level under it: the index
-    /// lane of the page it is drawn from, over the node's footprint. A page
-    /// over it holds the bound of everything under it, so read from one the
-    /// answer is wider, never narrower, than the page's own will be. For
-    /// deciding what a piece of the view holds and how near it comes, never
-    /// for what is drawn.
-    pub fn extent(&self, page: LevelPage, (side, at): (Scale, [i64; 2])) -> Answer<(f64, f64)> {
+    /// What the ground over a node of `page`'s level can be, at that level
+    /// and every level under it, from the index lane of the page it is drawn
+    /// from over the node's footprint: one block of it (pxl-spec
+    /// bake/format.rs `Index::over`), whatever the node's size. For deciding
+    /// what a piece of the view holds, how near it comes and how far it can
+    /// be from the ground it stands for, never for what is drawn.
+    pub fn relief(&self, page: LevelPage, (side, at): (Scale, [i64; 2])) -> Answer<Relief> {
         let Some((src, body)) = self.drawn_from(page) else {
             return Answer::Nothing(Lack { layer: Category::terrain, page });
         };
         let index = EXTENT.scale(src.level);
         let first = EXTENT.cell_of(src.level, &side.base_of([at[0], at[1], 0]));
         let across = if side > index { index.count_in(side) } else { 1 };
-        let [x0, y0] = first.in_page();
-        let (mut lo, mut hi) = (i16::MAX, i16::MIN);
-        for y in y0..y0 + across {
-            for x in x0..x0 + across {
-                let [l, h] = body.index.extent[EXTENT.cell_index(x, y) as usize];
-                (lo, hi) = (lo.min(l), hi.max(h));
-            }
-        }
-        self.answer(page, (lo as f64 * U_PER_CELL, hi as f64 * U_PER_CELL))
-    }
-
-    /// The steepest the ground over a node of `page`'s level can be, as a
-    /// rise over a run along the ground: the largest span of any one index
-    /// cell under the node over the cell's side. The surface is interpolated
-    /// from elevation samples an index cell apart (pxl-spec
-    /// bake/constant.rs `EXTENT_SPAN`), and an index cell's span bounds the
-    /// window its interpolation reads, so no point of it rises faster than
-    /// about that between two samples. For deciding how far a piece of the
-    /// view can be from the ground it stands for across one of its cells,
-    /// never for what is drawn.
-    pub fn slope(&self, page: LevelPage, (side, at): (Scale, [i64; 2])) -> Answer<f64> {
-        let Some((src, body)) = self.drawn_from(page) else {
-            return Answer::Nothing(Lack { layer: Category::terrain, page });
-        };
-        let index = EXTENT.scale(src.level);
-        let first = EXTENT.cell_of(src.level, &side.base_of([at[0], at[1], 0]));
-        let across = if side > index { index.count_in(side) } else { 1 };
-        let [x0, y0] = first.in_page();
-        let mut most = 0i32;
-        for y in y0..y0 + across {
-            for x in x0..x0 + across {
-                let [l, h] = body.index.extent[EXTENT.cell_index(x, y) as usize];
-                most = most.max(h as i32 - l as i32);
-            }
-        }
-        self.answer(page, most as f64 * U_PER_CELL / index.side())
+        let b = body.index.over(first.in_page(), across);
+        self.answer(
+            page,
+            Relief {
+                extent: (f64::from(b.lo) * U_PER_CELL, f64::from(b.hi) * U_PER_CELL),
+                slope: f64::from(b.span) * U_PER_CELL / index.side(),
+            },
+        )
     }
 
     /// The first thing `ray` meets within its reach, the ground drawn at the
@@ -423,7 +410,7 @@ impl<'a> Access<'a> {
         (level + 1..=TOP_LEVEL).rev().find_map(|lv| {
             let body = self.terrain.get(GROUND.cell_of(lv, &at).page())?;
             let e = EXTENT.cell_of(lv, &at);
-            let [_, hi] = body.index.extent[e.index() as usize];
+            let [_, hi] = body.index.extent()[e.index() as usize];
             let scale = e.scale();
             let [ix, iy, _] = scale.index_of(&at);
             let base = scale.base_of([ix, iy, 0]);
@@ -450,7 +437,7 @@ impl<'a> Access<'a> {
                 // asked where that is the smaller: either way one bound and
                 // one page across it.
                 let e = EXTENT.cell_of(src.level, &at);
-                let [lo, hi] = body.index.extent[e.index() as usize];
+                let [lo, hi] = body.index.extent()[e.index() as usize];
                 let exact = self.terrain.source(page).is_some();
                 (e.scale().min(page_scale), Some(((lo as f64 * U_PER_CELL, hi as f64 * U_PER_CELL), exact)))
             }

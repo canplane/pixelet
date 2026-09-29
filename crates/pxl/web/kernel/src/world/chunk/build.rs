@@ -9,14 +9,13 @@
 //! what it asks.
 
 use pxl_spec::space::pyramid::GROUND;
-use std::collections::{BTreeMap, HashMap};
 
 use pxl_render::gpu::api::{gpu, room};
 use pxl_render::gpu::renderer::device_ready;
 use pxl_render::mesh::chunk_mesher::{box_words, mesh_words, BakeContext, Heights, Step, COARSE_BOX_WORDS, FINE_BOX_WORDS};
 use pxl_render::mesh::paint::level::write_level_runs;
 use pxl_render::mesh::paint::object::adapter::{Claims, Entries, Painted, Painter};
-use pxl_render::mesh::paint::object::fold::fold_columns;
+use pxl_render::mesh::paint::object::fold::Fold;
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
 use pxl_render::mesh::volume::Volumes;
 use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
@@ -32,7 +31,7 @@ use crate::mem::fixed::{at, Range};
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use pxl_spec::bake::constant::BAND_CELLS;
 
-use crate::world::chunk::mesh_slot::{capacity, COARSE_BOXES, FINE_BOXES};
+use crate::world::chunk::mesh_slot::{capacity, COARSE_BOXES, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::source::tiers_draw;
 use crate::world::pyramid::chunk::Chunk as PyramidChunk;
 use crate::world::pyramid::Layer as _;
@@ -121,13 +120,12 @@ pub enum BuildEvent {
     /// any is written. The answer is whether they are held for it; where
     /// not, the bake is thrown away, and what the tier needs is known the
     /// next time it is counted (world/chunk/table.rs `Slot::need`).
-    Reserve { chunk: PyramidChunk, id: u32, generation: u32, cube: Cube, boxes: u32 },
+    Reserve { id: u32, generation: u32, cube: Cube, boxes: u32 },
     /// A block of that tier's boxes: `box_cnt` of them from the mesh's box
     /// `first`, at `at` in `.fixed.bake` until they are sent to their slot
     /// on the device, their heights held in `heights` (pxl-render
     /// mesh/chunk_mesher.rs). A slot's worth, but for the mesh's last.
     Part {
-        chunk: PyramidChunk,
         id: u32,
         generation: u32,
         cube: Cube,
@@ -138,14 +136,7 @@ pub enum BuildEvent {
     },
     /// Tier `cube` of chunk `id`, built from its sources as of `generation`,
     /// all of its `box_cnt` boxes handed: it lands.
-    Tier {
-        chunk: PyramidChunk,
-        id: u32,
-        generation: u32,
-        cube: Cube,
-        box_cnt: u32,
-        heights: Heights,
-    },
+    Tier { id: u32, generation: u32, cube: Cube, box_cnt: u32, heights: Heights },
 }
 
 /// A chunk's runs: which of `.fixed.runs`'s sets, and what is in it — and
@@ -297,6 +288,41 @@ pub struct World<'a> {
     pub painter: &'a mut Painter,
 }
 
+/// What the builder holds of each chunk mounted, by its mount (world/chunk/
+/// table.rs `Scheduler::place`): room for every mount the table can give,
+/// made once.
+struct ByMount<T>(Vec<Option<T>>);
+
+impl<T> ByMount<T> {
+    fn new() -> ByMount<T> {
+        ByMount((0..OCCUPANCY).map(|_| None).collect())
+    }
+
+    fn get(&self, id: &u32) -> Option<&T> {
+        self.0.get(*id as usize)?.as_ref()
+    }
+
+    fn get_mut(&mut self, id: &u32) -> Option<&mut T> {
+        self.0.get_mut(*id as usize)?.as_mut()
+    }
+
+    fn insert(&mut self, id: u32, t: T) {
+        self.0[id as usize] = Some(t);
+    }
+
+    fn remove(&mut self, id: &u32) {
+        self.0[*id as usize] = None;
+    }
+}
+
+impl<T> core::ops::Index<&u32> for ByMount<T> {
+    type Output = T;
+
+    fn index(&self, id: &u32) -> &T {
+        self.get(id).or_bug(Errno::ENOTRECOVERABLE)
+    }
+}
+
 /// The build counters the profiler reads.
 #[derive(Clone, Copy, Default)]
 pub struct BuildStat {
@@ -307,7 +333,7 @@ pub struct BuildStat {
 }
 
 pub struct Builder {
-    chunks: BTreeMap<u32, Chunk>,
+    chunks: ByMount<Chunk>,
     scan: ScanContext,
     direct: ScanContext,
     bake: BakeContext,
@@ -325,8 +351,12 @@ pub struct Builder {
     bands: Vec<BandView<'static>>,
     /// The scan job's paint's claimed voxels, kept between its steps.
     claimed: Claims,
-    /// A level chunk's objects folded, kept for its capacity.
-    folded: HashMap<[i64; 3], u32>,
+    /// Objects folded, a level chunk's or a z16 chunk's to its cube, kept
+    /// for its capacity; and the columns a level chunk folds, and a fold's
+    /// cells in order, the same.
+    fold: Fold,
+    under: Vec<IVec>,
+    fold_cells: Vec<([i64; 3], u32)>,
     /// A z16 chunk's objects folded to its cube, as entries: what its paint
     /// reads where the cube is coarser than an object's finest tier.
     fold_band: Vec<BandZ>,
@@ -344,7 +374,7 @@ impl Default for Builder {
 impl Builder {
     pub fn new() -> Builder {
         Builder {
-            chunks: BTreeMap::new(),
+            chunks: ByMount::new(),
             scan: ScanContext::new(),
             direct: ScanContext::new(),
             bake: BakeContext::new(),
@@ -356,7 +386,9 @@ impl Builder {
             run_holders: [None; RUN_SETS],
             bands: Vec::new(),
             claimed: Claims::new(),
-            folded: HashMap::new(),
+            fold: Fold::default(),
+            under: Vec::new(),
+            fold_cells: Vec::new(),
             fold_band: Vec::new(),
             fold_pos: Vec::new(),
             fold_state: Vec::new(),
@@ -699,19 +731,19 @@ impl Builder {
     fn fold_objects(&mut self, world: &mut World, col_idx: IVec, scale: Scale) {
         let o = FROM_L2_IDX(col_idx);
         let (x0, y0) = (ivec::X(o), ivec::Y(o));
-        let columns: Vec<Entries> = world.store.entries(col_idx).into_iter().collect();
-        fold_columns(world.painter, &columns, scale, self.hide, &mut self.folded);
+        self.fold.fold(world.painter, world.store.entries(col_idx), scale, self.hide);
         // A cell's corner in finest steps: absolute, then from the column's
         // corner and its band's floor.
         let n = OBJECT_FINEST.count_in(scale) as i64;
         let band_steps = OBJECT_FINEST.count_in(BAND) as i64;
         let (fx, fy) = (OBJECT_FINEST.index(x0), OBJECT_FINEST.index(y0));
-        let mut cells: Vec<([i64; 3], u32)> = self.folded.iter().map(|(&c, &state)| (c, state)).collect();
-        cells.sort_unstable();
+        self.fold_cells.clear();
+        self.fold_cells.extend(self.fold.cells().iter().map(|(&c, &state)| (c, state)));
+        self.fold_cells.sort_unstable();
         self.fold_band.clear();
         self.fold_pos.clear();
         self.fold_state.clear();
-        for ([cx, cy, cz], state) in cells {
+        for &([cx, cy, cz], state) in &self.fold_cells {
             let z = cz * n;
             self.fold_band.push(z.div_euclid(band_steps) as BandZ);
             self.fold_pos.push(pack_pos((cx * n - fx) as u32, (cy * n - fy) as u32, z.rem_euclid(band_steps) as u32, scale));
@@ -810,24 +842,20 @@ impl Builder {
         self.sample.read(&view, read.origin, read.n, hidden_ground(show));
         let target = GROUND.scale(level);
         let (x0, y0) = (ivec::X(base), ivec::Y(base));
-        let mut columns = Vec::new();
         // Its own ground and the apron a fold reads, which reaches into the
         // chunks beside it.
-        let near = (-1..=1).flat_map(|dx| (-1..=1).map(move |dy| (dx, dy)));
-        let under: Vec<IVec> = near.flat_map(|(dx, dy)| world.store.cols_under(c.at.beside(dx, dy, 0).column())).collect();
-        for key in under {
-            if !tiers_draw(level, base, key) {
-                continue;
-            }
-            columns.extend(world.store.entries(key));
+        self.under.clear();
+        for (dx, dy) in (-1..=1).flat_map(|dx| (-1..=1).map(move |dy| (dx, dy))) {
+            world.store.cols_under(c.at.beside(dx, dy, 0).column(), &mut self.under);
         }
-        fold_columns(world.painter, &columns, target, self.hide, &mut self.folded);
+        let columns = self.under.iter().filter(|&&key| tiers_draw(level, base, key)).filter_map(|&key| world.store.entries(key));
+        self.fold.fold(world.painter, columns, target, self.hide);
         xpute_core::ensure!(self.direct.begin_direct(), ENOTRECOVERABLE);
         write_level_runs(
             &mut self.direct,
             &self.sample,
             world.painter,
-            &self.folded,
+            self.fold.cells(),
             (target.index(x0), target.index(y0)),
             GROUND.scale(0).count_in(target),
         );
@@ -904,7 +932,6 @@ impl Builder {
                 let (words_a_box, room_a_slot) = (box_words(step), capacity(c.level(), step));
                 let boxes = words / words_a_box;
                 let asked = BuildEvent::Reserve {
-                    chunk: c.at,
                     id,
                     generation: job.generation,
                     cube: job.cube,
@@ -948,7 +975,6 @@ impl Builder {
                 let words_a_box = box_words(step);
                 let n = bytes / 4 / words_a_box;
                 emit(BuildEvent::Part {
-                    chunk: c.at,
                     id,
                     generation: job.generation,
                     cube: job.cube,
@@ -982,10 +1008,8 @@ impl Builder {
                 let mesh = self.bake.finish();
                 let job = self.bake_job.take().unwrap();
                 self.stat.bakes += 1;
-                let chunk = self.chunks[&id].at;
                 if mesh.box_cnt > job.handed {
                     emit(BuildEvent::Part {
-                        chunk,
                         id,
                         generation: job.generation,
                         cube: job.cube,
@@ -1005,7 +1029,6 @@ impl Builder {
                     self.let_runs_go(id);
                 }
                 emit(BuildEvent::Tier {
-                    chunk,
                     id,
                     generation: job.generation,
                     cube: job.cube,

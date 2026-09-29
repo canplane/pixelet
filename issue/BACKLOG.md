@@ -54,12 +54,28 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
     what compensated for the retreat, now only for a cell averaged 2 × 2,
     inside a cell — and goes with decor as its own solver; places count a
     place only where the ground over it is drawn, which leaks the build's
-    state into a count, and go with how places are drawn. Residency's
-    table, and what the domain, the frontier and the observer allocate per
-    rebuild, move off the heap. The arena is sized to the smaller goal.
-    Objects get records a level and an index of their own beyond the
-    store's reaches. The hard-held chain's test returns with the first
-    consumer that leases.
+    state into a count, and go with how places are drawn. What recurs no
+    longer allocates (2026-09-29): the observation's, the domain's, the
+    frontier's and a build's working lists are their owners' and reused;
+    what `Known` read through a cache is a block of its page's index, made
+    as the page arrives and gone with it; a chunk holds its layout's tiers
+    and decor and one more; and a mounted chunk is one number in tables
+    sized once — a moving view, and a chunk mounted, built, let go and
+    another mounted in its place, allocate nothing once warm. What is sized
+    once and never grows or goes back stays in the heap: moving it to
+    `.fixed` is where it lies, not this. The arena's pools are a
+    representation each (2026-09-29): the leaves' own cells, a level's
+    averaged 2 × 2, and the cover, one cell a chunk, whose pool is as many
+    slots as any source's top has roots and holds exactly that. What is left
+    of sizing it is policy: the boxes a coarse slot holds (4551, the unit a
+    tier is held in) and the share the quality gets (5 × 330) are chosen
+    when the cell is seen on a device, from the tier sizes recorded at 4551,
+    which give any other size's waste, draws and surface lanes offline; both
+    stay until then. Before that measurement, what reaches the GPU is
+    relative to the eye (the camera's pose, P1), so what a pixel shows is
+    the model's error and not the coordinates'. Objects get records a level
+    and an index of their own beyond the store's reaches. The hard-held
+    chain's test returns with the first consumer that leases.
 - **The atmosphere in the observation's test, an optimization held.** A
   difference is observed where its projected angle leaks past a cell _and_
   the contrast it makes is still distinguishable after the air (`T(d)`,
@@ -402,9 +418,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   in and every shipped kind is on the nearest tier only; the impostor is
   what would draw them further for two triangles each. Not a phone fix —
   build it when a wider decor range is wanted.
-- **Terrain page blocks with the page.** `terrain/resident.rs` keeps the
-  pool blocks a page owns in a table of its own; they belong in the page
-  table's handle beside the views.
 
 ## P3
 
@@ -594,6 +607,14 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   until the match was held to whole names. Replacing on the syntax tree, as
   Babel does, takes strings, comments and prefixes out of it as a class, for
   a parse per module on Vite's path.
+- **Native tests lay out `.fixed` as a host does.** A native test lays out
+  no `.fixed`, so `range` answers none there and what lives in it answers
+  empty or no room under a test (the surface, a page's lanes, the decor
+  lanes, the profiler's rings) — a second memory model for the tests. Laid
+  out over a buffer of its own, the tests run on the ranges the module does.
+  Only then is it worth asking whether what is sized once and kept in the
+  heap for the tests' sake (world/chunk/table.rs `Scheduler::new`) moves
+  there; it need not.
 
 ## Parked, with the reason on file
 

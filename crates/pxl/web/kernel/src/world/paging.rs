@@ -203,6 +203,9 @@ pub struct Paging<L: Layer> {
     free: Vec<u32>,
     /// Pages leased now, never more than `LEASED`.
     leased: u32,
+    /// The pages an observation's asking lets go, gathered before they go:
+    /// held here so asking allocates nothing (`ask`).
+    going: Vec<LevelPage>,
     /// Moves whenever a page is held or let go, a lease is taken or given
     /// back, or a page is answered as said by the one over it: everything
     /// what is read and what is asked for are functions of.
@@ -217,6 +220,7 @@ impl<L: Layer> Default for Paging<L> {
             // Lowest first, as the frames are taken.
             free: (ABSENT + 1..RECORDS).rev().collect(),
             leased: 0,
+            going: Vec::with_capacity(ENTRIES as usize),
             revision: 0,
             refused: 0,
         }
@@ -372,16 +376,16 @@ impl<L: Layer> Paging<L> {
         self.pages.iter().filter(|(_, e)| e.leases > 0).map(|(&p, _)| p)
     }
 
-    /// Every page held hard for a lease: each leased page and every page it
+    /// Whether `p` is held hard for a lease: a leased page, or a page one
     /// depends on.
-    fn lease_lines(&self) -> Vec<LevelPage> {
-        self.leases().flat_map(|p| std::iter::successors(Some(p), |&q| dependency::<L>(q))).collect()
+    fn on_lease_line(&self, p: LevelPage) -> bool {
+        self.leases().any(|l| std::iter::successors(Some(l), |&q| dependency::<L>(q)).any(|q| q == p))
     }
 
     /// Whether anything keeps `p` known: the latest observation asks for it,
     /// or it is held hard for a lease.
     fn kept(&self, p: LevelPage) -> bool {
-        self.entry(p).is_some_and(|e| e.ask.is_some()) || self.lease_lines().contains(&p)
+        self.entry(p).is_some_and(|e| e.ask.is_some()) || self.on_lease_line(p)
     }
 
     /// Why each page is asked for from now, closed under dependencies. What
@@ -391,7 +395,7 @@ impl<L: Layer> Paging<L> {
     /// sit in the table for the session. A page in a frame of its own is left
     /// to the frames' own turnover: the view leaving a page is no reason to
     /// throw it away.
-    pub fn ask(&mut self, asks: HashMap<LevelPage, Ask>) {
+    pub fn ask(&mut self, asks: &HashMap<LevelPage, Ask>) {
         xpute_core::ensure!(asks.len() <= ASKS as usize, ENOTRECOVERABLE, asks.len());
         let mut changed = false;
         for (p, e) in &mut self.pages {
@@ -403,20 +407,23 @@ impl<L: Layer> Paging<L> {
         }
         // Finest first, so a page in a frame that depends on one of them
         // goes before it.
-        let lines = self.lease_lines();
-        let mut absent: Vec<LevelPage> = self
-            .pages
-            .iter()
-            .filter(|&(p, e)| e.ask.is_none() && e.held.as_ref().is_some_and(|h| h.record == ABSENT) && !lines.contains(p))
-            .map(|(&p, _)| p)
-            .collect();
-        absent.sort_unstable();
-        for p in absent {
+        let mut going = core::mem::take(&mut self.going);
+        going.clear();
+        going.extend(
+            self.pages
+                .iter()
+                .filter(|&(_, e)| e.ask.is_none() && e.held.as_ref().is_some_and(|h| h.record == ABSENT))
+                .map(|(&p, _)| p),
+        );
+        going.retain(|&p| !self.on_lease_line(p));
+        going.sort_unstable();
+        for &p in &going {
             self.let_go(p);
             changed = true;
         }
+        self.going = going;
         self.pages.retain(|_, e| !e.idle());
-        for (p, a) in asks {
+        for (&p, &a) in asks {
             self.entry_mut(p).ask = Some(a);
         }
         if changed {

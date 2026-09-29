@@ -39,9 +39,9 @@ fn fold(cells: &[(u32, u32, u32, u32)], level: u32) -> HashMap<[i64; 3], u32> {
         pos: &pos,
         state: &state,
     }];
-    let mut out = HashMap::new();
-    fold_columns(&painter(), &columns, GROUND.scale(level), None, &mut out);
-    out
+    let mut fold = Fold::default();
+    fold.fold(&painter(), columns, GROUND.scale(level), None);
+    fold.cells().clone()
 }
 
 #[test]

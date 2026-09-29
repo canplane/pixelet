@@ -68,8 +68,6 @@
 //! goal as it is while the frontier converges; a goal that cannot fit at
 //! all is cut coarser by the policy, and both demand and this read that.
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
-
 use pxl_render::look::lod::COARSEST;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::lod::Tau;
@@ -86,17 +84,19 @@ use crate::world::pyramid::domain::{Cut, Domain};
 pub type Slots = [u32; POOLS];
 
 /// Slots each pool keeps free past a refinement, a fill or a change of cube,
-/// for one coarsening: none in the fine pool, where no coarsening lands, and
-/// in the coarse pool the most a coarsening's piece can fill
+/// for one coarsening: none in the fine pool, where no coarsening lands; in
+/// the coarse pool the most a coarsening's piece can fill
 /// (`COARSE_TIER_SLOTS`), a bound from the representation and not from
-/// what has been baked so far.
-pub const RESERVE: Slots = [0, COARSE_TIER_SLOTS];
+/// what has been baked so far; and none in the cover's, where a root not
+/// drawn always finds its slot (mesh_slot.rs `COVER_SLOTS`).
+pub const RESERVE: Slots = [0, COARSE_TIER_SLOTS, 0];
 
 /// Slots each pool keeps past the frontier while it moves, which the quality
 /// policy fits the goal beside: the reserve, which is progress, and a slot
 /// for each refinement under way, holding the piece it replaces, which is
-/// throughput.
-pub const HEADROOM: Slots = [REFINEMENTS_IN_FLIGHT + RESERVE[0], REFINEMENTS_IN_FLIGHT + RESERVE[1]];
+/// throughput. None in the cover's: a piece of the top a refinement holds
+/// is its root's one slot there.
+pub const HEADROOM: Slots = [REFINEMENTS_IN_FLIGHT + RESERVE[0], REFINEMENTS_IN_FLIGHT + RESERVE[1], 0];
 
 /// The cube the rule wants ground drawn in at `near` from the eye at `tau`:
 /// the level wanted there, whose cells terrain draws averaged 2 × 2 — a cube
@@ -172,7 +172,8 @@ pub fn pool_of(c: Chunk, cube: Cube) -> Pool {
 /// never less at a finer quality than at a coarser one, and never less with
 /// looser bounds.
 ///
-/// A goal piece takes a slot of its pool. On the way to it a refinement
+/// A goal piece takes a slot of its pool; a piece of the top, the cover's.
+/// On the way to it a refinement
 /// draws the chunks over it a level at a time, each a chunk the cut splits,
 /// and those are coarse: the chunks drawn on the way are an antichain, each
 /// over some goal piece and none over another's, so in the coarse pool they
@@ -201,6 +202,7 @@ pub fn need(d: &Domain, cut: &Cut, slots: impl Fn(Chunk, Cube) -> u32) -> Slots 
         let k = slots(c, cube);
         match pool_of(c, cube) {
             Pool::Coarse => n[Pool::Coarse as usize] += k,
+            Pool::Cover => n[Pool::Cover as usize] += k,
             Pool::Fine => {
                 n[Pool::Fine as usize] += k;
                 n[Pool::Coarse as usize] += 1;
@@ -227,10 +229,11 @@ pub trait Env {
 pub struct Now<'a> {
     /// The goal at the effective quality, sorted: an antichain.
     pub goal: &'a [Chunk],
-    /// The pieces drawn: an antichain.
-    pub drawn: &'a BTreeSet<Chunk>,
-    /// The chunks built for moves under way, and whether each is ready.
-    pub building: &'a BTreeMap<Chunk, bool>,
+    /// The pieces drawn, sorted: an antichain.
+    pub drawn: &'a [Chunk],
+    /// The chunks built for moves under way, and whether each is ready,
+    /// sorted.
+    pub building: &'a [(Chunk, bool)],
     /// Drawn pieces building a tier other than the one they show, each a
     /// refinement under way.
     pub recubing: u32,
@@ -244,14 +247,12 @@ pub struct Now<'a> {
 
 /// The frontier's step: what to start and stop building, and the moves
 /// whose pieces are all ready.
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default)]
 pub struct Plan {
     /// Chunks to mount and build, in the order they were let.
     pub start: Vec<Chunk>,
     /// Chunks building that no move wants any more.
     pub cancel: Vec<Chunk>,
-    /// Moves to make now: what leaves the frontier and what enters it.
-    pub swaps: Vec<Swap>,
     /// Drawn pieces over no ground the goal has.
     pub drop: Vec<Chunk>,
     /// Drawn pieces let build the tier they want.
@@ -260,13 +261,39 @@ pub struct Plan {
     pub refused: u32,
     /// Moves under way and not all ready.
     pub waiting: u32,
+    /// The moves to make now, as what leaves and what enters, each a run of
+    /// `chunks`.
+    swaps: Vec<(Run, Run)>,
+    /// Every move's pieces, each move's a run of them.
+    chunks: Vec<Chunk>,
 }
 
-/// A move of the frontier: `leave` goes and `enter` comes, at once.
-#[derive(Debug, PartialEq)]
-pub struct Swap {
-    pub leave: Vec<Chunk>,
-    pub enter: Vec<Chunk>,
+impl Plan {
+    /// Moves to make now: what leaves the frontier and what enters it, at
+    /// once.
+    pub fn swaps(&self) -> impl Iterator<Item = (&[Chunk], &[Chunk])> {
+        self.swaps.iter().map(|&(leave, enter)| (leave.of(&self.chunks), enter.of(&self.chunks)))
+    }
+}
+
+/// A run of a plan's chunks.
+#[derive(Clone, Copy, Debug, Default)]
+struct Run {
+    from: u32,
+    to: u32,
+}
+
+impl Run {
+    fn of(self, chunks: &[Chunk]) -> &[Chunk] {
+        &chunks[self.from as usize..self.to as usize]
+    }
+}
+
+/// `pieces` appended to `chunks`, as the run they take.
+fn push(chunks: &mut Vec<Chunk>, pieces: impl IntoIterator<Item = Chunk>) -> Run {
+    let from = chunks.len() as u32;
+    chunks.extend(pieces);
+    Run { from, to: chunks.len() as u32 }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -276,147 +303,220 @@ enum Kind {
     Refine,
 }
 
+#[derive(Clone, Copy)]
 struct Move {
     kind: Kind,
     order: Order,
-    leave: Vec<Chunk>,
-    enter: Vec<Chunk>,
+    leave: Run,
+    enter: Run,
 }
 
-/// The frontier's step toward `now.goal`: the moves the drawn pieces make
-/// toward it, those whose pieces are all ready made, and of the rest, the
-/// ones the arena has room for started — coarsenings first, since they give
-/// room back, then fills, then refinements, each in the view's order.
-pub fn plan(now: &Now, env: &impl Env) -> Plan {
-    let goal: HashSet<Chunk> = now.goal.iter().copied().collect();
-    let mut related: HashSet<Chunk> = HashSet::new();
-    // A goal piece over drawn ones: the drawn pieces under it.
-    let mut coarsen: BTreeMap<Chunk, Vec<Chunk>> = BTreeMap::new();
-    for &d in now.drawn {
-        if goal.contains(&d) {
-            related.insert(d);
-        } else if let Some(a) = d.ancestors().find(|a| goal.contains(a)) {
-            coarsen.entry(a).or_default().push(d);
-            related.insert(d);
+/// The frontier's step and what it is worked out in, kept from one step to
+/// the next for their capacity: a step over a frontier no larger than one
+/// already planned allocates nothing. Nothing in it outlives a step.
+#[derive(Default)]
+pub struct Frontier {
+    plan: Plan,
+    moves: Vec<Move>,
+    /// A goal piece, and a drawn piece under it.
+    under: Vec<(Chunk, Chunk)>,
+    /// A drawn piece, and the chunk a level under it on the way to a goal
+    /// piece.
+    over: Vec<(Chunk, Chunk)>,
+    /// What the moves enter, sorted.
+    wanted: Vec<Chunk>,
+    /// The moves not all started, by index.
+    open: Vec<u32>,
+    recube: Vec<(Chunk, (Pool, u32))>,
+}
+
+impl Frontier {
+    /// The frontier's step toward `now.goal`: the moves the drawn pieces
+    /// make toward it, those whose pieces are all ready made, and of the
+    /// rest, the ones the arena has room for started — coarsenings first,
+    /// since they give room back, then fills, then refinements, each in the
+    /// view's order.
+    pub fn plan(&mut self, now: &Now, env: &impl Env) -> &Plan {
+        let Frontier {
+            plan,
+            moves,
+            under,
+            over,
+            wanted,
+            open,
+            recube,
+        } = self;
+        let Plan {
+            start,
+            cancel,
+            drop,
+            recube: recubed,
+            refused,
+            waiting,
+            swaps,
+            chunks,
+        } = plan;
+        for v in [&mut *start, &mut *cancel, &mut *drop, &mut *recubed, &mut *chunks] {
+            v.clear();
         }
-    }
-    // A drawn piece over goal ones: the chunks a level under it on the way
-    // to each. And a goal piece nothing drawn meets: a fill.
-    let mut refine: BTreeMap<Chunk, BTreeSet<Chunk>> = BTreeMap::new();
-    let mut fills = Vec::new();
-    for &g in now.goal {
-        if now.drawn.contains(&g) || coarsen.contains_key(&g) {
-            continue;
-        }
-        let mut below = g;
-        let mut over = None;
-        for a in g.ancestors() {
-            if now.drawn.contains(&a) {
-                over = Some(a);
-                break;
+        swaps.clear();
+        (*refused, *waiting) = (0, 0);
+        moves.clear();
+        under.clear();
+        over.clear();
+        wanted.clear();
+        open.clear();
+        recube.clear();
+
+        let in_goal = |c: &Chunk| now.goal.binary_search(c).is_ok();
+        let drawn = |c: &Chunk| now.drawn.binary_search(c).is_ok();
+        let ready = |c: &Chunk| now.building.binary_search_by_key(c, |&(b, _)| b).ok().map(|i| now.building[i].1);
+        let building = |c: &Chunk| ready(c).is_some();
+
+        // A goal piece over drawn ones: the drawn pieces under it. A drawn
+        // piece neither in the goal nor under a piece of it is dropped,
+        // unless it is over one, which the refinements below say.
+        for &d in now.drawn {
+            if in_goal(&d) {
+                continue;
             }
-            below = a;
-        }
-        match over {
-            Some(d) => {
-                refine.entry(d).or_default().insert(below);
-                related.insert(d);
+            match d.ancestors().find(in_goal) {
+                Some(a) => under.push((a, d)),
+                None => drop.push(d),
             }
-            None => fills.push(g),
         }
-    }
-
-    let mut moves: Vec<Move> = Vec::new();
-    moves.extend(coarsen.into_iter().map(|(a, leave)| Move {
-        kind: Kind::Coarsen,
-        order: env.order(a),
-        leave,
-        enter: vec![a],
-    }));
-    moves.extend(fills.into_iter().map(|g| Move {
-        kind: Kind::Fill,
-        order: env.order(g),
-        leave: Vec::new(),
-        enter: vec![g],
-    }));
-    moves.extend(refine.into_iter().map(|(d, steps)| Move {
-        kind: Kind::Refine,
-        order: env.order(d),
-        leave: vec![d],
-        enter: steps.into_iter().collect(),
-    }));
-
-    let mut plan = Plan {
-        drop: now.drawn.iter().copied().filter(|d| !related.contains(d)).collect(),
-        ..Plan::default()
-    };
-    let wanted: HashSet<Chunk> = moves.iter().flat_map(|m| m.enter.iter().copied()).collect();
-    plan.cancel = now.building.keys().copied().filter(|c| !wanted.contains(c)).collect();
-
-    let building = |c: &Chunk| now.building.contains_key(c);
-    let mut in_flight = now.recubing;
-    let mut open = Vec::new();
-    for m in moves {
-        if m.enter.iter().all(|c| now.building.get(c) == Some(&true)) {
-            plan.swaps.push(Swap { leave: m.leave, enter: m.enter });
-            continue;
+        under.sort_unstable();
+        for group in under.chunk_by(|x, y| x.0 == y.0) {
+            let a = group[0].0;
+            let leave = push(chunks, group.iter().map(|&(_, d)| d));
+            let enter = push(chunks, [a]);
+            moves.push(Move {
+                kind: Kind::Coarsen,
+                order: env.order(a),
+                leave,
+                enter,
+            });
         }
-        let started = m.enter.iter().any(building);
-        if started {
-            plan.waiting += 1;
-            if m.kind == Kind::Refine {
+        // A drawn piece over goal ones: the chunks a level under it on the
+        // way to each. And a goal piece nothing drawn meets: a fill.
+        for &g in now.goal {
+            if drawn(&g) || under.binary_search_by_key(&g, |&(a, _)| a).is_ok() {
+                continue;
+            }
+            let mut below = g;
+            let mut above = None;
+            for a in g.ancestors() {
+                if drawn(&a) {
+                    above = Some(a);
+                    break;
+                }
+                below = a;
+            }
+            match above {
+                Some(d) => over.push((d, below)),
+                None => {
+                    let enter = push(chunks, [g]);
+                    moves.push(Move {
+                        kind: Kind::Fill,
+                        order: env.order(g),
+                        leave: Run::default(),
+                        enter,
+                    });
+                }
+            }
+        }
+        over.sort_unstable();
+        over.dedup();
+        for group in over.chunk_by(|x, y| x.0 == y.0) {
+            let d = group[0].0;
+            let leave = push(chunks, [d]);
+            let enter = push(chunks, group.iter().map(|&(_, s)| s));
+            moves.push(Move {
+                kind: Kind::Refine,
+                order: env.order(d),
+                leave,
+                enter,
+            });
+        }
+        drop.retain(|d| over.binary_search_by_key(d, |&(o, _)| o).is_err());
+
+        for m in moves.iter() {
+            wanted.extend_from_slice(m.enter.of(chunks));
+        }
+        wanted.sort_unstable();
+        cancel.extend(now.building.iter().map(|&(c, _)| c).filter(|c| wanted.binary_search(c).is_err()));
+
+        let mut in_flight = now.recubing;
+        for (n, m) in moves.iter().enumerate() {
+            let enter = m.enter.of(chunks);
+            if enter.iter().all(|c| ready(c) == Some(true)) {
+                swaps.push((m.leave, m.enter));
+                continue;
+            }
+            if enter.iter().any(building) {
+                *waiting += 1;
+                if m.kind == Kind::Refine {
+                    in_flight += 1;
+                }
+            }
+            if !enter.iter().all(building) {
+                open.push(n as u32);
+            }
+        }
+        open.sort_unstable_by(|&a, &b| {
+            let (x, y) = (&moves[a as usize], &moves[b as usize]);
+            x.kind.cmp(&y.kind).then(x.order.cmp(&y.order)).then(a.cmp(&b))
+        });
+
+        let mut free = now.free;
+        let take = |free: &Slots, need: &Slots, reserve: Slots| (0..POOLS).all(|p| need[p] == 0 || free[p] >= need[p] + reserve[p]);
+        for &n in open.iter() {
+            let m = moves[n as usize];
+            if start.len() as u32 >= crate::param::STARTS_PER_FRAME {
+                *refused += 1;
+                continue;
+            }
+            let enter = m.enter.of(chunks);
+            let missing = || enter.iter().copied().filter(|c| !building(c));
+            let fresh = !enter.iter().any(building);
+            let mut need = [0; POOLS];
+            for c in missing() {
+                let (pool, k) = env.slots(c);
+                need[pool as usize] += k;
+            }
+            let reserve = if m.kind == Kind::Coarsen { [0; POOLS] } else { RESERVE };
+            let room = missing().all(|c| env.buildable(c)) && take(&free, &need, reserve) && !(m.kind == Kind::Refine && fresh && in_flight >= REFINEMENTS_IN_FLIGHT);
+            if !room {
+                *refused += 1;
+                continue;
+            }
+            for p in 0..POOLS {
+                free[p] -= need[p];
+            }
+            if m.kind == Kind::Refine && fresh {
                 in_flight += 1;
             }
+            start.extend(missing());
         }
-        if !m.enter.iter().all(building) {
-            open.push(m);
-        }
-    }
-    open.sort_by(|a, b| a.kind.cmp(&b.kind).then(a.order.cmp(&b.order)));
 
-    let mut free = now.free;
-    let take = |free: &Slots, need: &Slots, reserve: Slots| (0..POOLS).all(|p| need[p] == 0 || free[p] >= need[p] + reserve[p]);
-    for m in open {
-        if plan.start.len() as u32 >= crate::param::STARTS_PER_FRAME {
-            plan.refused += 1;
-            continue;
-        }
-        let missing: Vec<Chunk> = m.enter.iter().copied().filter(|c| !building(c)).collect();
-        let fresh = !m.enter.iter().any(building);
-        let mut need = [0; POOLS];
-        for &c in &missing {
-            let (pool, k) = env.slots(c);
-            need[pool as usize] += k;
-        }
-        let reserve = if m.kind == Kind::Coarsen { [0; POOLS] } else { RESERVE };
-        let room = missing.iter().all(|&c| env.buildable(c)) && take(&free, &need, reserve) && !(m.kind == Kind::Refine && fresh && in_flight >= REFINEMENTS_IN_FLIGHT);
-        if !room {
-            plan.refused += 1;
-            continue;
-        }
-        for p in 0..POOLS {
-            free[p] -= need[p];
-        }
-        if m.kind == Kind::Refine && fresh {
+        recube.extend_from_slice(now.recube);
+        // The chunk breaks a tie in the view's order and ranks nothing: it
+        // only makes the order total, so which of two pieces the view cannot
+        // tell apart is let first does not follow the table's history.
+        recube.sort_unstable_by_key(|&(c, _)| (env.order(c), c));
+        for &(c, (pool, k)) in recube.iter() {
+            let mut need = [0; POOLS];
+            need[pool as usize] = k;
+            if in_flight >= REFINEMENTS_IN_FLIGHT || !take(&free, &need, RESERVE) {
+                *refused += 1;
+                continue;
+            }
+            free[pool as usize] -= k;
             in_flight += 1;
+            recubed.push(c);
         }
-        plan.start.extend(missing);
+        plan
     }
-
-    let mut recube: Vec<(Chunk, (Pool, u32))> = now.recube.to_vec();
-    recube.sort_by_key(|&(c, _)| env.order(c));
-    for (c, (pool, k)) in recube {
-        let mut need = [0; POOLS];
-        need[pool as usize] = k;
-        if in_flight >= REFINEMENTS_IN_FLIGHT || !take(&free, &need, RESERVE) {
-            plan.refused += 1;
-            continue;
-        }
-        free[pool as usize] -= k;
-        in_flight += 1;
-        plan.recube.push(c);
-    }
-    plan
 }
 
 #[cfg(test)]

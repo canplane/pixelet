@@ -59,7 +59,7 @@ fn ground_of(d: &Domain) -> ((f64, f64, f64), f64) {
 fn hold(pyramid: &mut Pyramid<PoiPage>, pages: impl IntoIterator<Item = (LevelPage, PoiPage)>) {
     let pages: Vec<(LevelPage, PoiPage)> = pages.into_iter().collect();
     let aside = Ask { why: Why::Fault, order: Order::LAST };
-    pyramid.paging.ask(pages.iter().map(|&(p, _)| (p, aside)).collect());
+    pyramid.paging.ask(&pages.iter().map(|&(p, _)| (p, aside)).collect());
     for (p, page) in pages {
         pyramid.set(p, page);
     }

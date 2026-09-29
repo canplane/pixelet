@@ -123,6 +123,15 @@ pub struct Pyramid<L: Layer> {
     /// What is asked for and not held, said again every turn as it stands.
     wants: Vec<(u64, Ask)>,
     last: Option<Seen>,
+    /// What an observation asks for, and what it gathers on the way — the
+    /// floor it leases next, the speculation and the pages each would add —
+    /// held across observations so observing allocates nothing once it has
+    /// held the most it asks for: the asks are at most `ASKS`, the floor
+    /// `Floor::PAGES`.
+    asks: HashMap<LevelPage, Ask>,
+    next_floor: Vec<LevelPage>,
+    hints: Vec<(Order, LevelPage)>,
+    fresh: Vec<LevelPage>,
 }
 
 impl<L: Layer> Default for Pyramid<L> {
@@ -134,6 +143,10 @@ impl<L: Layer> Default for Pyramid<L> {
             demand: Vec::new(),
             wants: Vec::new(),
             last: None,
+            asks: HashMap::with_capacity(ASKS as usize),
+            next_floor: Vec::with_capacity(Floor::PAGES as usize),
+            hints: Vec::new(),
+            fresh: Vec::new(),
         }
     }
 }
@@ -226,7 +239,8 @@ impl<L: Layer> Pyramid<L> {
     /// everything held hard and everything demanded has one, so none of it
     /// is fetched only to find no frame.
     pub fn observe(&mut self, o: &Observation, bounds: &impl Bounds, estimator: &impl DemandEstimator, prefetch: &impl Prefetch, tau: Tau, allowance: u32) {
-        let mut floor = Vec::with_capacity(Floor::PAGES as usize);
+        let mut floor = core::mem::take(&mut self.next_floor);
+        floor.clear();
         Floor::floor(o.top, o.eye, o.far, |p| floor.push(p));
         xpute_core::ensure!(floor.len() as u32 <= Floor::PAGES, ENOTRECOVERABLE, floor.len());
         for &p in self.floor.iter().filter(|p| !floor.contains(p)) {
@@ -235,13 +249,15 @@ impl<L: Layer> Pyramid<L> {
         for &p in floor.iter().filter(|p| !self.floor.contains(p)) {
             self.paging.lease(p);
         }
-        self.floor = floor;
+        self.next_floor = core::mem::replace(&mut self.floor, floor);
 
-        let mut demand = Vec::new();
+        let mut demand = core::mem::take(&mut self.demand);
+        demand.clear();
         estimator.requirements(o, bounds, &mut |r| L::pages(&r, &mut |p| demand.push(p)));
         demand.sort_unstable();
         demand.dedup();
-        let mut asks: HashMap<LevelPage, Ask> = HashMap::new();
+        let mut asks = core::mem::take(&mut self.asks);
+        asks.clear();
         let ask = |asks: &mut HashMap<LevelPage, Ask>, p: LevelPage, a: Ask| {
             let mut q = Some(p);
             while let Some(p) = q {
@@ -272,7 +288,8 @@ impl<L: Layer> Pyramid<L> {
 
         let needed = asks.keys().filter(|&&p| self.paging.takes_frame(p)).count() as u32;
         let mut room = FRAMES.saturating_sub(needed).min(allowance);
-        let mut hints: Vec<(Order, LevelPage)> = Vec::new();
+        let mut hints = core::mem::take(&mut self.hints);
+        hints.clear();
         prefetch.speculate(o, tau, &mut |p| {
             if !asks.contains_key(&p) {
                 hints.push((order(p), p));
@@ -285,8 +302,10 @@ impl<L: Layer> Pyramid<L> {
         // `ABSENT` takes none, and is known only while it is asked for
         // (paging.rs `ASKS`).
         let mut pages = ASKS.saturating_sub(asks.len() as u32);
-        for (order, p) in hints {
-            let fresh: Vec<LevelPage> = std::iter::successors(Some(p), |&q| L::dependencies(q)).filter(|q| !asks.contains_key(q)).collect();
+        let mut fresh = core::mem::take(&mut self.fresh);
+        for &(order, p) in &hints {
+            fresh.clear();
+            fresh.extend(std::iter::successors(Some(p), |&q| L::dependencies(q)).filter(|q| !asks.contains_key(q)));
             let new = fresh.iter().filter(|&&q| self.paging.takes_frame(q)).count() as u32;
             if new > room || fresh.len() as u32 > pages {
                 break;
@@ -299,7 +318,8 @@ impl<L: Layer> Pyramid<L> {
         self.wants.clear();
         self.wants
             .extend(asks.iter().filter(|(p, _)| !self.paging.held(**p) && !self.paging.settled(**p)).map(|(p, &a)| (p.subject(), a)));
-        self.paging.ask(asks);
+        self.paging.ask(&asks);
+        (self.asks, self.hints, self.fresh) = (asks, hints, fresh);
 
         self.observation = Some(*o);
         self.demand = demand;
@@ -339,7 +359,8 @@ impl<L: Layer> Pyramid<L> {
     /// and wants no more.
     pub fn idle(&mut self) {
         self.wants.clear();
-        self.paging.ask(HashMap::new());
+        self.asks.clear();
+        self.paging.ask(&self.asks);
         declare(L::CATEGORY, &[]);
         self.last = None;
     }

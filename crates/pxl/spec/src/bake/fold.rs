@@ -164,14 +164,11 @@ pub fn fold_index(children: [&Index; 4], own: Vec<[i16; 2]>) -> Index {
         .map(|(index, [lo, hi])| {
             let (q, first) = EXTENT.child_block(index as u32);
             let [x, y] = EXTENT.in_page(first);
-            let four = [[x, y], [x + 1, y], [x, y + 1], [x + 1, y + 1]].map(|[x, y]| children[q].extent[EXTENT.cell_index(x, y) as usize]);
+            let four = [[x, y], [x + 1, y], [x, y + 1], [x + 1, y + 1]].map(|[x, y]| children[q].extent()[EXTENT.cell_index(x, y) as usize]);
             four.iter().fold([lo, hi], |[lo, hi], &[clo, chi]| [lo.min(clo), hi.max(chi)])
         })
         .collect::<Vec<_>>();
-    Index {
-        extent: extent.into(),
-        occupancy: Occupancy::of_children(children.map(|c| c.occupancy)),
-    }
+    Index::new(extent, Occupancy::of_children(children.map(|c| c.occupancy)))
 }
 
 /// Terrain reads the ring around the four children as well: a parent's

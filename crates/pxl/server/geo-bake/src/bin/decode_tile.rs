@@ -46,7 +46,7 @@ use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::bake::surface::extent_of;
 use pxl_spec::cell::cube::ground_pack;
 use pxl_spec::cell::{color, cube_types};
-use pxl_spec::space::pyramid::{EXTENT, PAGE_CELLS};
+use pxl_spec::space::pyramid::PAGE_CELLS;
 use xpute_core::wire::xtp::{HDR_SZ, WORD_SZ};
 
 const MAGENTA: u32 = 0xff00ff;
@@ -76,18 +76,9 @@ struct Page {
 
 /// The page as the kernel reads it, or what is wrong with its shape.
 fn decode(pkt: &[u8]) -> Result<Page, String> {
-    let t = decode_terrain(pkt).map_err(|e| format!("{e:?}"))?;
-    let (ele, cells, extent, occupancy) = (t.ele.into_owned(), t.ground.cells.into_owned(), t.index.extent.into_owned(), t.index.occupancy);
-    if ele.len() != (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize {
-        return Err(format!("ele has {} samples, expected {ELE_PADDED_SPAN}²", ele.len()));
-    }
-    if cells.len() != (PAGE_CELLS * PAGE_CELLS) as usize {
-        return Err(format!("ground has {} cells, expected {PAGE_CELLS}²", cells.len()));
-    }
-    let side = EXTENT.page_cells();
-    if extent.len() != (side * side) as usize {
-        return Err(format!("index lane has {} cells, expected {side}²", extent.len()));
-    }
+    // A packet whose lanes are not a page's is refused by the decoder.
+    let t = decode_terrain(pkt).map_err(|e| format!("not a page: {e:?}"))?;
+    let (ele, cells, extent, occupancy) = (t.ele.into_owned(), t.ground.cells.into_owned(), t.index.extent().to_vec(), t.index.occupancy);
     // Nothing may follow: a page is exactly its tree, and bytes past it are a
     // writer that disagrees with the reader, which only checks that the
     // payload the header names is there.

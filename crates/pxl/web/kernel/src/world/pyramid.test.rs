@@ -55,7 +55,7 @@ impl Bounds for Flat {
 fn hold(pyramid: &mut Pyramid<PoiPage>, pages: impl IntoIterator<Item = (LevelPage, PoiPage)>) {
     let pages: Vec<(LevelPage, PoiPage)> = pages.into_iter().collect();
     let aside = Ask { why: Why::Fault, order: Order::LAST };
-    pyramid.paging.ask(pages.iter().map(|&(p, _)| (p, aside)).collect());
+    pyramid.paging.ask(&pages.iter().map(|&(p, _)| (p, aside)).collect());
     for (p, page) in pages {
         pyramid.set(p, page);
     }
@@ -143,4 +143,23 @@ fn ground_outside_the_frustum_is_not_demanded() {
         let (x0, _, side) = p.rect();
         assert!(x0 + side / 2.0 + side * std::f64::consts::SQRT_2 / 2.0 >= x, "{p:?} lies wholly behind the eye");
     }
+}
+
+/// Observing allocates nothing once it has held the most it asks for: an eye
+/// moving along a path the second time over asks, leases and lets go
+/// without the heap, whatever the demand names each step.
+#[test]
+fn observing_a_moving_eye_allocates_nothing_once_it_has_held_the_most() {
+    let _serial = crate::global::serial();
+    let mut pyramid = Pyramid::<PoiPage>::default();
+    let path = |k: u32| at([30_000.0 + 97.0 * k as f64, -17_000.0 + 41.0 * k as f64, HEIGHT + (k % 7) as f64 * 150.0], None);
+    let walk = |pyramid: &mut Pyramid<PoiPage>| {
+        for k in 0..40 {
+            pyramid.observe(&path(k), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
+        }
+    };
+    let (first, ()) = crate::allocations::during(|| walk(&mut pyramid));
+    assert!(first > 0, "nothing counted the first time over, so the count says nothing");
+    let (again, ()) = crate::allocations::during(|| walk(&mut pyramid));
+    assert_eq!(again, 0, "observing along the path again allocated");
 }

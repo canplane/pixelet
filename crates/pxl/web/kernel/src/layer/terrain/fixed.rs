@@ -22,9 +22,12 @@
 //! 72 bytes is not aligned at any offset anyway. Held with the ground it would
 //! carry that 32 into every second page's lanes; held apart it costs nothing.
 //! The index lane (pxl-spec bake/format.rs `Index`) is a third plane past the
-//! elevation, a (lowest, highest) pair of i16 a cell of its lattice.
+//! elevation, a (lowest, highest) pair of i16 a cell of its lattice, and its
+//! blocks a fourth: made from the lane as the page is written into its
+//! record, and so held exactly as long as the lane is.
 
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
+use pxl_spec::bake::format::{Block, BLOCK_LANE};
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::pyramid::{EXTENT, PAGE_CELLS};
 
@@ -51,8 +54,14 @@ pub const EXTENT_LANE_BYTES: u32 = EXTENT.page_cells() * EXTENT.page_cells() * 4
 /// The index lanes across every record.
 pub const EXTENT_PLANE_BYTES: u32 = RECORDS * EXTENT_LANE_BYTES;
 
+/// A page's index blocks, one `Block` each.
+pub const BLOCK_LANE_BYTES: u32 = BLOCK_LANE as u32 * core::mem::size_of::<Block>() as u32;
+
+/// The index blocks across every record.
+pub const BLOCK_PLANE_BYTES: u32 = RECORDS * BLOCK_LANE_BYTES;
+
 /// The range, whole: `.fixed.terrain` is this and nothing else.
-pub const TERRAIN_BYTES: u32 = GROUND_BYTES + ELE_PLANE_BYTES + EXTENT_PLANE_BYTES;
+pub const TERRAIN_BYTES: u32 = GROUND_BYTES + ELE_PLANE_BYTES + EXTENT_PLANE_BYTES + BLOCK_PLANE_BYTES;
 
 const _: () = assert!(
     GROUND_LANE_BYTES.is_multiple_of(64),
@@ -72,4 +81,9 @@ pub const fn ele_off(record: u32) -> u32 {
 /// Where a record's index lane lies in the range.
 pub const fn extent_off(record: u32) -> u32 {
     GROUND_BYTES + ELE_PLANE_BYTES + record * EXTENT_LANE_BYTES
+}
+
+/// Where a record's index blocks lie in the range.
+pub const fn blocks_off(record: u32) -> u32 {
+    GROUND_BYTES + ELE_PLANE_BYTES + EXTENT_PLANE_BYTES + record * BLOCK_LANE_BYTES
 }

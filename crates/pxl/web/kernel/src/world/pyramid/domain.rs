@@ -74,7 +74,7 @@ use crate::world::observation::{heights_revision, observation, Known, Order};
 use crate::world::observer::{cell_angle, EdgeRays, Footprint, Lens, Sight};
 use crate::world::quality::Effective;
 
-use super::chunk::Chunk;
+use super::chunk::{Chunk, CHILDREN};
 use super::Layer as _;
 
 /// The most pieces the cover over a source whose top is `top` is, on a
@@ -115,6 +115,10 @@ pub struct Cut {
     tau: Tau,
     splits: HashSet<Chunk>,
     pieces: Vec<Chunk>,
+    /// Whether it is cut for the domain as it stands: its sets are kept
+    /// across makings, emptied, so cutting allocates nothing once they have
+    /// held the most a view cuts.
+    made: bool,
 }
 
 impl Cut {
@@ -137,8 +141,11 @@ impl Cut {
 /// What the footprints say of a chunk, whatever the quality: which of them
 /// touch it, and the angle its error spans on the screen's wider axis there,
 /// and how near the eye it comes.
+#[derive(Clone, Copy)]
 struct Seen {
-    touching: Vec<u32>,
+    /// The footprints touching it: this many from here of the domain's
+    /// `touching`, one list for every chunk, so noting one allocates nothing.
+    touching: (u32, u32),
     error: f64,
     near: f64,
 }
@@ -160,8 +167,12 @@ pub struct Domain {
     roots: Vec<Chunk>,
     /// Chunks of the top within the reach with no answer yet.
     unanswered: u32,
-    /// What the footprints say of each chunk asked about so far.
+    /// What the footprints say of each chunk asked about so far, and the
+    /// footprints touching each, one after another.
     seen: HashMap<Chunk, Seen>,
+    touching: Vec<u32>,
+    /// The chunks a cut has still to look at.
+    open: Vec<Chunk>,
     /// How near the eye each chunk cut comes and whether the view sees it —
     /// its place in the order — measured once: whoever orders or draws a
     /// piece asks again.
@@ -169,7 +180,7 @@ pub struct Domain {
     /// The qualities it may be cut at, finest first, and the cut at each
     /// made so far.
     ladder: Vec<Tau>,
-    cuts: Vec<Option<Cut>>,
+    cuts: Vec<Cut>,
     /// Which cut is in force.
     at: usize,
 }
@@ -177,32 +188,65 @@ pub struct Domain {
 impl Domain {
     /// The pieces `o` is cut into at `ladder[at]`, as far as `known` knows
     /// what the world holds and `footprints` say what the screen touches.
-    pub fn of(o: Observation, ladder: &[Tau], at: usize, known: Box<dyn Bounds>, footprints: Vec<Footprint>) -> Domain {
-        xpute_core::ensure!(at < ladder.len(), EINVAL);
+    pub fn of<'a>(o: Observation, ladder: &[Tau], at: usize, known: Box<dyn Bounds>, footprints: impl IntoIterator<Item = &'a Footprint>) -> Domain {
         let mut d = Domain {
             o,
-            lens: Lens::of(&o),
-            footprints,
+            lens: None,
+            footprints: Vec::new(),
             known,
             roots: Vec::new(),
             unanswered: 0,
             seen: HashMap::new(),
+            touching: Vec::new(),
+            open: Vec::new(),
             measured: HashMap::new(),
-            ladder: ladder.to_vec(),
-            cuts: (0..ladder.len()).map(|_| None).collect(),
-            at: at.min(ladder.len() - 1),
+            ladder: Vec::new(),
+            cuts: Vec::new(),
+            at: 0,
         };
-        d.find_roots();
-        let all: Vec<u32> = (0..d.footprints.len() as u32).collect();
-        for c in d.roots.clone() {
-            d.look(c, &all);
-        }
-        d.cut_at(d.at);
+        d.remake(o, ladder, at, footprints);
         d
     }
 
-    /// What the footprints of `from` say of `c`, noted once.
-    fn look(&mut self, c: Chunk, from: &[u32]) {
+    /// Made again for `o`, in the sets it already holds: a view is made
+    /// again every frame the eye moves, and making it allocates nothing
+    /// once it has held the most a view makes. What is known is what it was
+    /// made with.
+    pub fn remake<'a>(&mut self, o: Observation, ladder: &[Tau], at: usize, footprints: impl IntoIterator<Item = &'a Footprint>) {
+        xpute_core::ensure!(at < ladder.len(), EINVAL);
+        self.o = o;
+        self.lens = Lens::of(&o);
+        self.footprints.clear();
+        self.footprints.extend(footprints.into_iter().cloned());
+        self.roots.clear();
+        self.unanswered = 0;
+        self.seen.clear();
+        self.touching.clear();
+        self.measured.clear();
+        self.ladder.clear();
+        self.ladder.extend_from_slice(ladder);
+        for c in &mut self.cuts {
+            c.made = false;
+        }
+        while self.cuts.len() < ladder.len() {
+            self.cuts.push(Cut {
+                tau: ladder[0],
+                splits: HashSet::new(),
+                pieces: Vec::new(),
+                made: false,
+            });
+        }
+        self.at = at.min(ladder.len() - 1);
+        self.find_roots();
+        for i in 0..self.roots.len() {
+            self.look(self.roots[i], None);
+        }
+        self.cut_at(self.at);
+    }
+
+    /// What the footprints say of `c`, noted once: of every footprint, or of
+    /// those touching the chunk over it (`from`, a span of `touching`).
+    fn look(&mut self, c: Chunk, from: Option<(u32, u32)>) {
         if self.seen.contains_key(&c) {
             return;
         }
@@ -219,7 +263,15 @@ impl Domain {
             Contents::Holds { bound, error } => (bound, error),
             _ => (c.region(), [0.0; 3]),
         };
-        let touching: Vec<u32> = from.iter().copied().filter(|&k| self.footprints[k as usize].touches(&bound)).collect();
+        let start = self.touching.len() as u32;
+        let (first, n) = from.unwrap_or((0, self.footprints.len() as u32));
+        for j in first..first + n {
+            let k = if from.is_some() { self.touching[j as usize] } else { j };
+            if self.footprints[k as usize].touches(&bound) {
+                self.touching.push(k);
+            }
+        }
+        let touching = (start, self.touching.len() as u32 - start);
         let e = self.o.eye;
         let nearest = bound.nearest(e);
         let near = (0..3).map(|k| (nearest[k] - e[k]).powi(2)).sum::<f64>().sqrt();
@@ -235,21 +287,28 @@ impl Domain {
     /// is what keeps a finer quality's count no less. A piece with no answer
     /// is left out.
     pub fn cut_at(&mut self, k: usize) -> &Cut {
-        if self.cuts[k].is_none() {
+        if !self.cuts[k].made {
             let tau = self.ladder[k];
             let cell = cell_angle(tau);
-            let mut splits: HashSet<Chunk> = HashSet::new();
-            let mut pieces = Vec::new();
-            let mut open = self.roots.clone();
+            let mut splits = core::mem::take(&mut self.cuts[k].splits);
+            let mut pieces = core::mem::take(&mut self.cuts[k].pieces);
+            let mut open = core::mem::take(&mut self.open);
+            splits.clear();
+            pieces.clear();
+            open.clear();
+            open.extend_from_slice(&self.roots);
             while let Some(c) = open.pop() {
-                let s = &self.seen[&c];
-                let leaks = c.level() > 0 && !s.touching.is_empty() && s.error > cell;
-                let under: Vec<Chunk> = if leaks {
-                    c.children().into_iter().filter(|&k| self.occupied(k).is_some()).collect()
-                } else {
-                    Vec::new()
-                };
-                if under.is_empty() {
+                let s = self.seen[&c];
+                let leaks = c.level() > 0 && s.touching.1 > 0 && s.error > cell;
+                let (mut under, mut n) = ([c; CHILDREN], 0);
+                if leaks {
+                    for child in c.children() {
+                        if self.occupied(child).is_some() {
+                            (under[n], n) = (child, n + 1);
+                        }
+                    }
+                }
+                if n == 0 {
                     if self.answered(c) {
                         pieces.push(c);
                     }
@@ -258,12 +317,11 @@ impl Domain {
                 // The rule's reach, whatever the world: past it is the
                 // derivation broken, and the quality policy's count with it.
                 xpute_core::ensure!(s.near < split_reach(c.level(), tau), ENOTRECOVERABLE, c.level());
-                let from = s.touching.clone();
-                for &k in &under {
-                    self.look(k, &from);
+                for &child in &under[..n] {
+                    self.look(child, Some(s.touching));
                 }
                 splits.insert(c);
-                open.extend(under);
+                open.extend_from_slice(&under[..n]);
             }
             pieces.sort_unstable();
             for &c in pieces.iter().chain(&splits) {
@@ -272,14 +330,15 @@ impl Domain {
                     self.measured.insert(c, m);
                 }
             }
-            self.cuts[k] = Some(Cut { tau, splits, pieces });
+            self.open = open;
+            self.cuts[k] = Cut { tau, splits, pieces, made: true };
         }
-        self.cuts[k].as_ref().expect("made above")
+        &self.cuts[k]
     }
 
     /// The cut at step `k` of the ladder, where it has been made.
     pub fn cut(&self, k: usize) -> Option<&Cut> {
-        self.cuts.get(k)?.as_ref()
+        self.cuts.get(k).filter(|c| c.made)
     }
 
     /// Puts the cut at step `k` of the ladder in force, making it if it was
@@ -288,14 +347,14 @@ impl Domain {
         xpute_core::ensure!(k < self.ladder.len(), EINVAL);
         let k = k.min(self.ladder.len() - 1);
         self.cut_at(k);
-        let moved = self.cuts[k].as_ref().map(|c| &c.pieces) != self.cuts[self.at].as_ref().map(|c| &c.pieces);
+        let moved = self.cuts[k].pieces != self.cuts[self.at].pieces;
         self.at = k;
         moved
     }
 
     /// The cut in force.
     fn in_force(&self) -> &Cut {
-        self.cuts[self.at].as_ref().expect("the cut in force is made when it is put")
+        &self.cuts[self.at]
     }
 
     /// The quality the pieces are cut at.
@@ -349,7 +408,10 @@ pub fn step(ladder: &[Tau], q: Effective) -> bool {
         made.rays = made.sight.observe(&o, &EdgeRays(Access::now(), ladder[0]), retarget || objects != made.objects, &moved);
         made.resident = resident;
         made.objects = objects;
-        made.domain = Some(Domain::of(o, ladder, at, Box::new(Known), made.sight.footprints().cloned().collect()));
+        match made.domain.as_mut() {
+            Some(d) => d.remake(o, ladder, at, made.sight.footprints()),
+            None => made.domain = Some(Domain::of(o, ladder, at, Box::new(Known), made.sight.footprints())),
+        }
         made.revision = made.revision.wrapping_add(1);
         made.walks = made.walks.wrapping_add(1);
         return true;
@@ -460,9 +522,16 @@ impl Domain {
     }
 
     /// The cover: every chunk of the source's top within the reach that
-    /// holds anything and has an answer.
+    /// holds anything and has an answer, sorted.
     pub fn roots(&self) -> &[Chunk] {
         &self.roots
+    }
+
+    /// The root `c` is under, or is, where it is one: none where the view
+    /// reaches no ground over it.
+    pub fn root_of(&self, c: Chunk) -> Option<Chunk> {
+        let top = core::iter::once(c).chain(c.ancestors()).find(|&a| self.outermost(a))?;
+        self.roots.binary_search(&top).is_ok().then_some(top)
     }
 
     /// The qualities it may be cut at, finest first.
@@ -477,7 +546,8 @@ impl Domain {
     /// (`cover_pieces`), whatever the world holds.
     fn find_roots(&mut self) {
         let top = self.o.top;
-        let mut roots = Vec::new();
+        let mut roots = core::mem::take(&mut self.roots);
+        roots.clear();
         for at in cubes_meeting(chunk_span_of(top), self.o.reach(self.o.far)) {
             let c = Chunk::at(top, at);
             if Order::of(&self.o, &c.region()).near >= self.o.far {
@@ -494,6 +564,7 @@ impl Domain {
             }
         }
         xpute_core::ensure!(roots.len() as u32 <= cover_pieces(top, self.o.planet), ENOTRECOVERABLE, roots.len());
+        roots.sort_unstable();
         for &c in &roots {
             let m = self.measure(c);
             self.measured.insert(c, m);

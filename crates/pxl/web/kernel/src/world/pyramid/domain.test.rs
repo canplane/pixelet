@@ -237,3 +237,37 @@ fn the_cover_is_the_sources_top() {
     let c = d.pieces()[0];
     assert!(d.wanted_over(c).level() <= top, "the view said to draw over the source's top");
 }
+
+/// Making the view again as the eye moves allocates nothing once it has held
+/// the most it makes: the tiles cast again and the ground cut at every step
+/// of the ladder, along a path over ground and boxes the second time over.
+#[test]
+fn remaking_a_moving_view_allocates_nothing_once_it_has_held_the_most() {
+    let mut world = World::flat(GROUND);
+    for k in 0..8 {
+        let x = 1_100.0 + 150.0 * k as f64;
+        world = world.with([x, 1_900.0, GROUND], [x + 20.0, 2_100.0, GROUND + 30.0 + 20.0 * k as f64]);
+    }
+    let ladder = ladder();
+    let path = |k: u32| {
+        let at = [EYE[0] + 13.0 * k as f64, EYE[1] + 7.0 * k as f64, GROUND + 2.0 + (k % 5) as f64 * 40.0];
+        eye(at, Some([1.0, 0.1 * (k % 3) as f64, -0.2]), FAR, GROUND)
+    };
+    let mut sight = crate::world::observer::Sight::default();
+    sight.observe(&path(0), &world, true, &[]);
+    let mut d = Domain::of(path(0), &ladder, 0, Box::new(world.clone()), sight.footprints());
+    let walk = |d: &mut Domain, sight: &mut crate::world::observer::Sight| {
+        for k in 0..24 {
+            let o = path(k);
+            sight.observe(&o, &world, false, &[]);
+            d.remake(o, &ladder, 0, sight.footprints());
+            for step in 0..ladder.len() {
+                d.cut_at(step);
+            }
+        }
+    };
+    let (first, ()) = crate::allocations::during(|| walk(&mut d, &mut sight));
+    assert!(first > 0, "nothing counted the first time over, so the count says nothing");
+    let (again, ()) = crate::allocations::during(|| walk(&mut d, &mut sight));
+    assert_eq!(again, 0, "making the view again along the path allocated");
+}

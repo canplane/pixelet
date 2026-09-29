@@ -4,7 +4,7 @@ use super::*;
 
 /// A ladder's counts, finest first, never less at a finer step.
 fn counts() -> Vec<Slots> {
-    vec![[300, 1_900], [250, 1_400], [180, 900], [90, 500], [30, 200], [0, 60]]
+    vec![[300, 1_900, 0], [250, 1_400, 0], [180, 900, 0], [90, 500, 0], [30, 200, 0], [0, 60, 0]]
 }
 
 /// The feasible step is the finest whose count fits beside the headroom, in
@@ -12,12 +12,12 @@ fn counts() -> Vec<Slots> {
 #[test]
 fn the_feasible_step_is_the_finest_that_fits_every_pool() {
     let c = counts();
-    assert_eq!(feasible(&c, [400, 2_000], [10; POOLS], [0; POOLS]), Some(0));
-    assert_eq!(feasible(&c, [400, 1_000], [10; POOLS], [0; POOLS]), Some(2));
-    assert_eq!(feasible(&c, [100, 2_000], [10; POOLS], [0; POOLS]), Some(3));
-    assert_eq!(feasible(&c, [100, 2_000], [10; POOLS], [20, 0]), Some(4));
-    assert_eq!(feasible(&c, [5, 50], [10; POOLS], [0; POOLS]), None);
-    for arena in [[40, 300], [200, 600], [260, 1_500], [1_000, 5_000]] {
+    assert_eq!(feasible(&c, [400, 2_000, 10_000], [10; POOLS], [0; POOLS]), Some(0));
+    assert_eq!(feasible(&c, [400, 1_000, 10_000], [10; POOLS], [0; POOLS]), Some(2));
+    assert_eq!(feasible(&c, [100, 2_000, 10_000], [10; POOLS], [0; POOLS]), Some(3));
+    assert_eq!(feasible(&c, [100, 2_000, 10_000], [10; POOLS], [20, 0, 0]), Some(4));
+    assert_eq!(feasible(&c, [5, 50, 10_000], [10; POOLS], [0; POOLS]), None);
+    for arena in [[40, 300, 10_000], [200, 600, 10_000], [260, 1_500, 10_000], [1_000, 5_000, 10_000]] {
         let Some(k) = feasible(&c, arena, [10; POOLS], [0; POOLS]) else { continue };
         let fits = |k: usize| (0..POOLS).all(|p| c[k][p] + 10 <= arena[p]);
         assert!((k..c.len()).all(fits), "{arena:?}: a step coarser than the feasible one does not fit");
@@ -32,8 +32,8 @@ fn with_room_for_the_target_the_target_is_in_force() {
     let mut s = Smooth::default();
     let c = counts();
     let (star, roomy) = (
-        feasible(&c, [10_000, 10_000], [40; POOLS], [0; POOLS]).unwrap(),
-        feasible(&c, [10_000, 10_000], [40; POOLS], [500, 500]).unwrap(),
+        feasible(&c, [10_000, 10_000, 10_000], [40; POOLS], [0; POOLS]).unwrap(),
+        feasible(&c, [10_000, 10_000, 10_000], [40; POOLS], [500, 500, 0]).unwrap(),
     );
     for t in 0..10 {
         assert_eq!(s.follow(star, roomy, 1_000.0, t as f64 * 500.0), 0);
@@ -93,8 +93,16 @@ fn one_instant_is_one_step() {
 #[test]
 fn asking_about_the_step_in_force_moves_as_the_whole_ladder_does() {
     let c = counts();
-    let spare = [20, 100];
-    for arena in [[40, 300], [100, 2_000], [200, 600], [260, 1_500], [400, 2_000], [1_000, 5_000], [5, 50]] {
+    let spare = [20, 100, 0];
+    for arena in [
+        [40, 300, 10_000],
+        [100, 2_000, 10_000],
+        [200, 600, 10_000],
+        [260, 1_500, 10_000],
+        [400, 2_000, 10_000],
+        [1_000, 5_000, 10_000],
+        [5, 50, 10_000],
+    ] {
         let last = c.len() - 1;
         let star = feasible(&c, arena, [10; POOLS], [0; POOLS]).unwrap_or(last);
         let roomy = feasible(&c, arena, [10; POOLS], spare).unwrap_or(last);

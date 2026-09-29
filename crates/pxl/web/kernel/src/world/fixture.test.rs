@@ -10,7 +10,7 @@ use pxl_spec::space::observation::{Bounds, Contents, Frustum, Observation};
 use pxl_spec::space::pyramid::{GROUND, TOP_LEVEL};
 use pxl_spec::space::v3::{Aabb, V3};
 
-use crate::world::observer::{Footprint, Grid, Observer, OnTile, Sight};
+use crate::world::observer::{Footprint, Grid, Met, Observer, OnTile, Sight};
 use crate::world::pyramid::domain::Domain;
 
 /// Flat ground and boxes on it, each as solid as the ground and known as
@@ -120,12 +120,12 @@ impl World {
 }
 
 impl Observer for World {
-    fn observe(&self, grid: &Grid, far: f64, recast: &dyn Fn(usize) -> bool, each: &mut OnTile) -> u32 {
+    fn observe(&self, grid: &Grid, far: f64, recast: &dyn Fn(usize) -> bool, met: &mut Vec<Option<Met>>, each: &mut OnTile) -> u32 {
         if !self.answered {
             return 0;
         }
         let eye = grid.lens().eye;
-        grid.footprints(far, recast, &mut |d| (self.first(eye, d, far), None), each)
+        grid.footprints(far, recast, met, &mut |d| (self.first(eye, d, far), None), each)
     }
 }
 
@@ -139,7 +139,7 @@ pub fn footprints(o: &Observation, world: &World) -> Vec<Footprint> {
 /// The domain of `o` over `world` at each quality of `ladder`, the finest in
 /// force.
 pub fn domain(o: Observation, ladder: &[Tau], world: &World) -> Domain {
-    Domain::of(o, ladder, 0, Box::new(world.clone()), footprints(&o, world))
+    Domain::of(o, ladder, 0, Box::new(world.clone()), &footprints(&o, world))
 }
 
 fn unit(v: V3) -> V3 {

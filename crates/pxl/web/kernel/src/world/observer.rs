@@ -197,10 +197,13 @@ impl Grid {
     /// shared by the tiles about it is met once. A tile none of whose corners
     /// meets anything has no footprint; what its corners lacked is handed
     /// with it either way.
-    pub fn footprints(&self, far: f64, recast: &dyn Fn(usize) -> bool, meet: &mut dyn FnMut(V3) -> Met, each: &mut OnTile) -> u32 {
+    /// `met` is the caller's to hold across casts, so casting allocates
+    /// nothing once it has held a screen's corners.
+    pub fn footprints(&self, far: f64, recast: &dyn Fn(usize) -> bool, met: &mut Vec<Option<Met>>, meet: &mut dyn FnMut(V3) -> Met, each: &mut OnTile) -> u32 {
         let [nx, ny] = self.across;
         let eye = self.lens.eye;
-        let mut met: Vec<Option<Met>> = vec![None; ((nx + 1) * (ny + 1)) as usize];
+        met.clear();
+        met.resize(((nx + 1) * (ny + 1)) as usize, None);
         let mut rays = 0;
         for j in 0..ny {
             for i in 0..nx {
@@ -209,7 +212,7 @@ impl Grid {
                     continue;
                 }
                 let mut seen = false;
-                let mut lacks: Vec<Requirement> = Vec::new();
+                let mut lacks: Lacks = [None; 4];
                 let points = [[i, j], [i + 1, j], [i, j + 1], [i + 1, j + 1]].map(|c| {
                     let direction = self.corner(c);
                     let (hit, lack) = *met[(c[1] * (nx + 1) + c[0]) as usize].get_or_insert_with(|| {
@@ -217,10 +220,12 @@ impl Grid {
                         meet(direction)
                     });
                     seen |= hit.is_some();
-                    lacks.extend(lack.filter(|l| !lacks.contains(l)));
+                    if let Some(l) = lack.filter(|l| !lacks.contains(&Some(*l))) {
+                        lacks[lacks.iter().position(Option::is_none).unwrap_or(3)] = Some(l);
+                    }
                     hit.unwrap_or_else(|| (std::array::from_fn(|k| eye[k] + direction[k] * far), far))
                 });
-                each(tile, seen.then(|| Footprint::of(eye, points)), &lacks);
+                each(tile, seen.then(|| Footprint::of(eye, points)), lacks);
             }
         }
         rays
@@ -235,7 +240,9 @@ impl Grid {
 pub struct Footprint {
     /// Its outline along the ground: the corners' convex hull, counter-
     /// clockwise, and the box about it.
-    hull: Vec<[f64; 2]>,
+    hull: [[f64; 2]; 4],
+    /// How many of `hull`'s corners it has: a tile's four at most.
+    sides: usize,
     bounds: (f64, f64, f64, f64),
     /// The lowest and highest the corners stand.
     z: (f64, f64),
@@ -250,20 +257,15 @@ impl Footprint {
     /// The footprint the corner points `points` make, each with how far from
     /// `eye` it lies.
     pub fn of(eye: V3, points: [(V3, f64); 4]) -> Footprint {
-        let mut xy: Vec<[f64; 2]> = points.iter().map(|(p, _)| [p[0], p[1]]).collect();
+        let xy: [[f64; 2]; 4] = points.map(|(p, _)| [p[0], p[1]]);
         let z = points.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), (p, _)| (lo.min(p[2]), hi.max(p[2])));
         let near = points.iter().map(|&(_, t)| t).fold(f64::INFINITY, f64::min);
         let reach = xy.iter().fold((eye[0], eye[1], eye[0], eye[1]), |b, p| (b.0.min(p[0]), b.1.min(p[1]), b.2.max(p[0]), b.3.max(p[1])));
         let bounds = xy.iter().fold((f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY), |b, p| {
             (b.0.min(p[0]), b.1.min(p[1]), b.2.max(p[0]), b.3.max(p[1]))
         });
-        Footprint {
-            hull: hull(&mut xy),
-            bounds,
-            z,
-            near,
-            reach,
-        }
+        let (hull, sides) = hull(xy);
+        Footprint { hull, sides, bounds, z, near, reach }
     }
 
     /// The box it spans: its outline's bounds along the ground, and the
@@ -286,12 +288,12 @@ impl Footprint {
         if b.min[2] > self.z.1 || b.max[2] < self.z.0 || x0 > bx1 || x0 + w < bx0 || y0 > by1 || y0 + h < by0 {
             return false;
         }
-        let n = self.hull.len();
+        let (hull, n) = (&self.hull[..self.sides], self.sides);
         !(0..n).filter(|_| n > 1).any(|k| {
-            let (p, q) = (self.hull[k], self.hull[(k + 1) % n]);
+            let (p, q) = (hull[k], hull[(k + 1) % n]);
             let axis = [q[1] - p[1], p[0] - q[0]];
             let at = |v: [f64; 2]| v[0] * axis[0] + v[1] * axis[1];
-            let hull = self.hull.iter().map(|&v| at(v)).fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| (lo.min(v), hi.max(v)));
+            let hull = hull.iter().map(|&v| at(v)).fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| (lo.min(v), hi.max(v)));
             let (ax, ay) = ((axis[0] * w).abs(), (axis[1] * h).abs());
             let low = at([x0, y0]) + (axis[0] * w).min(0.0) + (axis[1] * h).min(0.0);
             let square = (low, low + ax + ay);
@@ -300,26 +302,32 @@ impl Footprint {
     }
 }
 
-/// The convex hull of `points`, counter-clockwise (Andrew's monotone chain).
-fn hull(points: &mut [[f64; 2]]) -> Vec<[f64; 2]> {
+/// The convex hull of a tile's four corners, counter-clockwise (Andrew's
+/// monotone chain), and how many corners it has: on the stack, since a hull
+/// of four points has four at most and its chain eight.
+fn hull(mut points: [[f64; 2]; 4]) -> ([[f64; 2]; 4], usize) {
     points.sort_by(|a, b| a[0].total_cmp(&b[0]).then(a[1].total_cmp(&b[1])));
     let cross = |o: [f64; 2], a: [f64; 2], b: [f64; 2]| (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-    let mut out: Vec<[f64; 2]> = Vec::with_capacity(points.len() * 2);
+    let mut chain = [[0.0; 2]; 8];
+    let mut len = 0;
     for pass in [false, true] {
-        let start = out.len();
-        let ordered: Vec<[f64; 2]> = if pass { points.iter().rev().copied().collect() } else { points.to_vec() };
-        for p in ordered {
-            while out.len() >= start + 2 && cross(out[out.len() - 2], out[out.len() - 1], p) <= 0.0 {
-                out.pop();
+        let start = len;
+        for k in 0..4 {
+            let p = points[if pass { 3 - k } else { k }];
+            while len >= start + 2 && cross(chain[len - 2], chain[len - 1], p) <= 0.0 {
+                len -= 1;
             }
-            out.push(p);
+            chain[len] = p;
+            len += 1;
         }
-        out.pop();
+        len -= 1;
     }
-    if out.is_empty() {
-        out.extend(points.first());
+    if len == 0 {
+        (chain[0], len) = (points[0], 1);
     }
-    out
+    let mut out = [[0.0; 2]; 4];
+    out[..len.min(4)].copy_from_slice(&chain[..len.min(4)]);
+    (out, len.min(4))
 }
 
 /// An estimator of what each tile of the screen observes.
@@ -328,12 +336,15 @@ pub trait Observer {
     /// `far` from the eye, handed to `each` with the tile's index and what
     /// its rays lacked; no footprint for a tile that meets nothing. How many
     /// rays it cast.
-    fn observe(&self, grid: &Grid, far: f64, recast: &dyn Fn(usize) -> bool, each: &mut OnTile) -> u32;
+    fn observe(&self, grid: &Grid, far: f64, recast: &dyn Fn(usize) -> bool, met: &mut Vec<Option<Met>>, each: &mut OnTile) -> u32;
 }
 
 /// Handed each tile cast: its index, its footprint where it met anything,
 /// and what its rays lacked.
-pub type OnTile<'a> = dyn FnMut(usize, Option<Footprint>, &[Requirement]) + 'a;
+pub type OnTile<'a> = dyn FnMut(usize, Option<Footprint>, Lacks) + 'a;
+
+/// What a tile's rays lacked: one a corner at most, no two alike.
+pub type Lacks = [Option<Requirement>; 4];
 
 /// What a direction met: the point, just inside what it met, and how far
 /// along; and what the answer lacked, as what an observation requires —
@@ -348,11 +359,12 @@ pub type Met = (Option<(V3, f64)>, Option<Requirement>);
 pub struct EdgeRays<'a>(pub Access<'a>, pub Tau);
 
 impl Observer for EdgeRays<'_> {
-    fn observe(&self, grid: &Grid, far: f64, recast: &dyn Fn(usize) -> bool, each: &mut OnTile) -> u32 {
+    fn observe(&self, grid: &Grid, far: f64, recast: &dyn Fn(usize) -> bool, met: &mut Vec<Option<Met>>, each: &mut OnTile) -> u32 {
         let eye = grid.lens().eye;
         grid.footprints(
             far,
             recast,
+            met,
             &mut |direction| {
                 let ray = Ray { origin: eye, direction, reach: far };
                 let answer = self.0.first_hit(&ray, Detail::Distance(self.1));
@@ -377,8 +389,13 @@ pub struct Sight {
     /// Each tile's footprint, what its rays lacked, and where the eye was
     /// when it was cast.
     tiles: Vec<Option<Footprint>>,
-    lacks: Vec<Vec<Requirement>>,
+    lacks: Vec<Lacks>,
     eyes: Vec<V3>,
+    /// Which tiles are cast again, and what each corner met: held across
+    /// observations so observing allocates nothing once it has held a
+    /// screen's tiles.
+    recast: Vec<bool>,
+    met: Vec<Option<Met>>,
 }
 
 impl Sight {
@@ -410,9 +427,13 @@ impl Sight {
                 across != grid.across() || reshaped || turned > shift || (o.far - far).abs() > shift * far
             });
         if whole {
-            self.tiles = vec![None; grid.count() as usize];
-            self.lacks = vec![Vec::new(); grid.count() as usize];
-            self.eyes = vec![lens.eye; grid.count() as usize];
+            let n = grid.count() as usize;
+            self.tiles.clear();
+            self.tiles.resize(n, None);
+            self.lacks.clear();
+            self.lacks.resize(n, [None; 4]);
+            self.eyes.clear();
+            self.eyes.resize(n, lens.eye);
         }
         // A tile that met nothing is measured against the far edge: what it
         // would meet first is past everything nearer.
@@ -427,13 +448,16 @@ impl Sight {
                     None => moved_eye > shift * o.far || !moved.is_empty(),
                 }
         };
-        let recast: Vec<bool> = (0..grid.count() as usize).map(stale).collect();
+        let mut recast = core::mem::take(&mut self.recast);
+        recast.clear();
+        recast.extend((0..grid.count() as usize).map(stale));
         let (tiles, lacks, eyes) = (&mut self.tiles, &mut self.lacks, &mut self.eyes);
-        let rays = observer.observe(&grid, o.far, &|k| recast[k], &mut |k, f, lacked| {
+        let rays = observer.observe(&grid, o.far, &|k| recast[k], &mut self.met, &mut |k, f, lacked| {
             tiles[k] = f;
-            lacks[k] = lacked.to_vec();
+            lacks[k] = lacked;
             eyes[k] = lens.eye;
         });
+        self.recast = recast;
         // Held from the last time every tile was cast, so a turn a little at
         // a time is measured whole and not a frame's worth at a time.
         if whole {
@@ -450,7 +474,7 @@ impl Sight {
     /// What the rays last cast lacked: the ground they read coarser than
     /// asked, or not at all, at the level they asked it at.
     pub fn lacks(&self) -> impl Iterator<Item = &Requirement> {
-        self.lacks.iter().flatten()
+        self.lacks.iter().flatten().flatten()
     }
 }
 

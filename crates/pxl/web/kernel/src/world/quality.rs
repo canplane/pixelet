@@ -36,10 +36,11 @@
 //! not by the screen, and no step of the ladder is sure to fit whatever the
 //! world holds: near the eye every step refines, and a world solid about
 //! the eye is refined as far as its error leaks. What is sure is the cover:
-//! the published source's fits beside the headroom, asserted below, so the
-//! floor's answer is always drawn and a view past the arena at the coarsest
-//! step is that step's frontier as far as it fits, never a hole
-//! (frontier.rs).
+//! it has a pool of its own, as many slots as it can have pieces
+//! (mesh_slot.rs `COVER_SLOTS`), and the headroom fits the other pools
+//! beside nothing, asserted below, so the floor's answer is always drawn
+//! and a view past the arena at the coarsest step is that step's frontier
+//! as far as it fits, never a hole (frontier.rs).
 //!
 //! **Smoothing** (`Smooth`) moves `τ_eff` toward `τ*` over time and decides
 //! nothing about what fits. Where `τ_eff` is finer than `τ*`, it is set to
@@ -65,13 +66,16 @@ use crate::world::pyramid::domain::{self, cover_pieces};
 
 const _: () = assert!(param::QUALITY_WAIT_MS > 0.0, "a policy asked twice at one instant would step finer twice");
 const _: () = assert!(param::TAU_STEP > 1.0, "a step that is not coarser");
-// In slots, every term: a piece of the cover is drawn one cell a chunk, at
-// most two boxes and so one slot whatever it holds (world/chunk/frontier.rs
-// `drawn_cube`, mesh_slot.rs `COARSE_BOXES`), and the headroom is the
-// reserve one coarsening needs and a slot each refinement under way holds.
+// In slots: the cover's pool is every piece it can have, and the headroom —
+// the reserve one coarsening needs and a slot each refinement under way
+// holds — fits each other pool.
 const _: () = assert!(
-    cover_pieces(PUBLISHED_TOP_LEVEL, MERCATOR_RADIUS_U) + HEADROOM[Pool::Coarse as usize] <= ARENA[Pool::Coarse as usize],
-    "the published source's cover does not fit the arena: ground it answers could stay unresolved"
+    cover_pieces(PUBLISHED_TOP_LEVEL, MERCATOR_RADIUS_U) <= ARENA[Pool::Cover as usize],
+    "the published source's cover does not fit its pool: ground it answers could stay unresolved"
+);
+const _: () = assert!(
+    HEADROOM[Pool::Fine as usize] <= ARENA[Pool::Fine as usize] && HEADROOM[Pool::Coarse as usize] <= ARENA[Pool::Coarse as usize],
+    "the headroom does not fit the arena: a view could be left with no move it can make"
 );
 
 /// The quality the view is held to where the arena has room for it: the
@@ -139,9 +143,10 @@ pub fn around(at: usize, len: usize, mut fit: impl FnMut(usize, bool) -> bool) -
 }
 
 /// What each pool keeps free past the frontier before a finer step is
-/// taken: `QUALITY_MARGIN` of it.
+/// taken: `QUALITY_MARGIN` of it, and none of the cover's, whose pieces are
+/// the roots' at every quality and never past its slots.
 fn margin() -> Slots {
-    core::array::from_fn(|p| (ARENA[p] as f64 * param::QUALITY_MARGIN) as u32)
+    core::array::from_fn(|p| if p == Pool::Cover as usize { 0 } else { (ARENA[p] as f64 * param::QUALITY_MARGIN) as u32 })
 }
 
 /// Where on the ladder the effective quality is, and since when the step
@@ -213,7 +218,8 @@ pub fn step() {
     let key = Some((domain::walks(), sched.needs_revision()));
     if q.counted != key {
         q.counted = key;
-        q.counts = vec![None; ladder.len()];
+        q.counts.clear();
+        q.counts.resize(ladder.len(), None);
     }
     let counts = &mut q.counts;
     let mut count = |k: usize| *counts[k].get_or_insert_with(|| domain::cut_at(k).map_or([0; POOLS], |(d, cut)| need(d, cut, |c, cube| sched.slots_of(c, cube))));
