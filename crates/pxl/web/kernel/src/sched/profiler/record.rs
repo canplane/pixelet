@@ -283,14 +283,15 @@ pub struct HeapSample {
     pub largest_free_mb: f64,
 }
 
-/// The completion ring and its spill at their fullest since the last frame: a
-/// post that finds both full asserts, so this is how close the control path
-/// came to that.
+/// The completion ring at its fullest since the last frame, and the most
+/// submissions a turn left unapplied for want of room in it: a turn that
+/// holds some back answers them a frame later, so this is when the ring's
+/// size started to cost latency.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct RingSample {
     pub cq_peak: f64,
-    pub spill_peak: f64,
+    pub held_peak: f64,
 }
 
 #[repr(C)]
@@ -492,7 +493,7 @@ words!(FrameSample, FRAME::WORDS,
     heap.used_mb => FRAME::heap_used_mb, heap.live_mb => FRAME::heap_live_mb, heap.run_mb => FRAME::heap_run_mb,
     heap.slot_mb => FRAME::heap_slot_mb, heap.range_mb => FRAME::heap_range_mb,
     heap.refusals => FRAME::heap_refusals, heap.largest_free_mb => FRAME::heap_largest_free_mb,
-    rings.cq_peak => FRAME::ring_cq_peak, rings.spill_peak => FRAME::ring_spill_peak,
+    rings.cq_peak => FRAME::ring_cq_peak, rings.held_peak => FRAME::ring_held_peak,
     work.scans => FRAME::work_scans, work.bakes => FRAME::work_bakes, work.fine_peak => FRAME::work_fine_peak, work.coarse_peak => FRAME::work_coarse_peak, q_terrain => FRAME::q_terrain, q_poi => FRAME::q_poi,
     stale.chunks => FRAME::stale_chunks, stale.drawn => FRAME::stale_drawn, stale.levels => FRAME::stale_levels, stale.hidden => FRAME::stale_hidden,
     stale.uncovered => FRAME::stale_uncovered, stale.unready => FRAME::stale_unready, stale.on_waiter => FRAME::stale_on_waiter,
@@ -713,7 +714,8 @@ struct Profiler {
     /// Slowest first, in a lane so they lie where they are read.
     worst: &'static mut [WorstFrame],
     worst_len: usize,
-    /// The completion ring's and the spill's fullest since the last frame.
+    /// The completion ring's fullest, and the most submissions held back,
+    /// since the last frame.
     rings: RingSample,
 }
 
@@ -805,12 +807,12 @@ pub fn profiler_frame_peak() -> FramePeak {
     profiler().frame_peak
 }
 
-/// The completion ring and its spill as a post left them: kept at their
-/// fullest until the next frame takes them.
-pub fn profiler_note_rings(cq_len: u32, spill_len: u32) {
+/// The completion ring as a post left it, and the submissions a drain left
+/// unapplied: kept at their fullest until the next frame takes them.
+pub fn profiler_note_rings(cq_len: u32, held: u32) {
     let r = &mut profiler().rings;
     r.cq_peak = r.cq_peak.max(cq_len as f64);
-    r.spill_peak = r.spill_peak.max(spill_len as f64);
+    r.held_peak = r.held_peak.max(held as f64);
 }
 
 /// The rings' fullest since the last take, cleared by taking.

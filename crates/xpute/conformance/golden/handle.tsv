@@ -1,0 +1,58 @@
+# The handles' traces (ARCHITECTURE.xpute.md, the contract's rule 6). Values the trace does not fix are
+# bound by name, $h1 and on, where a completion first shows them, and held to relations afterward: no
+# generation's number is written here, only that one handle is not another.
+#
+# The fixture's table has HANDLES slots and slot 0 is never handed out, so HANDLES - 1 issues fill it and
+# the one issued after a release has to take the slot let go. That forces the reuse the rule is about,
+# rather than leaning on which free slot a table happens to hand out first.
+scenarios	C6.reuse
+
+C6.reuse.step.0	submit 1 ISSUE ack
+C6.reuse.step.1	submit 2 ISSUE ack
+C6.reuse.step.2	submit 3 ISSUE ack
+C6.reuse.step.3	submit 4 ISSUE ack
+C6.reuse.step.4	submit 5 ISSUE ack
+C6.reuse.step.5	submit 6 ISSUE ack
+C6.reuse.step.6	submit 7 ISSUE ack
+C6.reuse.step.7	submit 8 ISSUE ack
+C6.reuse.step.8	submit 9 ISSUE ack
+C6.reuse.step.9	submit 10 ISSUE ack
+C6.reuse.step.10	submit 11 ISSUE ack
+C6.reuse.step.11	submit 12 ISSUE ack
+C6.reuse.step.12	submit 13 ISSUE ack
+C6.reuse.step.13	submit 14 ISSUE ack
+C6.reuse.step.14	submit 15 ISSUE ack
+C6.reuse.step.15	ring 0
+C6.reuse.step.16	submit 16 RELEASE ack $h1
+C6.reuse.step.17	submit 17 ISSUE ack
+C6.reuse.step.18	ring 0
+C6.reuse.step.19	submit 18 USE ack $h1
+C6.reuse.step.20	submit 19 USE ack $h16
+C6.reuse.step.21	submit 20 RELEASE ack $h1
+C6.reuse.step.22	submit 21 USE ack 0
+C6.reuse.step.23	ring 0
+#
+# A handle is issued to each slot, and none is 0.
+C6.reuse.turn.0.completions	1:ISSUE=$h1 2:ISSUE=$h2 3:ISSUE=$h3 4:ISSUE=$h4 5:ISSUE=$h5 6:ISSUE=$h6 7:ISSUE=$h7 8:ISSUE=$h8 9:ISSUE=$h9 10:ISSUE=$h10 11:ISSUE=$h11 12:ISSUE=$h12 13:ISSUE=$h13 14:ISSUE=$h14 15:ISSUE=$h15
+# The first is let go, and the next issue takes the only slot free: its slot, and not its handle.
+C6.reuse.turn.1.completions	16:RELEASE=0 17:ISSUE=$h16
+# The old handle names nothing now, not even for release; the new one is live; 0 never is.
+C6.reuse.turn.2.completions	18:USE=-9 19:USE=0 20:RELEASE=-9 21:USE=-9
+C6.reuse.relation.0	$h1 != 0
+C6.reuse.relation.1	$h2 != 0
+C6.reuse.relation.2	$h3 != 0
+C6.reuse.relation.3	$h4 != 0
+C6.reuse.relation.4	$h5 != 0
+C6.reuse.relation.5	$h6 != 0
+C6.reuse.relation.6	$h7 != 0
+C6.reuse.relation.7	$h8 != 0
+C6.reuse.relation.8	$h9 != 0
+C6.reuse.relation.9	$h10 != 0
+C6.reuse.relation.10	$h11 != 0
+C6.reuse.relation.11	$h12 != 0
+C6.reuse.relation.12	$h13 != 0
+C6.reuse.relation.13	$h14 != 0
+C6.reuse.relation.14	$h15 != 0
+C6.reuse.relation.15	$h16 != 0
+C6.reuse.relation.16	slot $h1 == slot $h16
+C6.reuse.relation.17	$h1 != $h16

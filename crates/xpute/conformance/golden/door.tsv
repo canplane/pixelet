@@ -1,0 +1,73 @@
+# The door's traces (ARCHITECTURE.xpute.md, the contract's rules 2 to 5): what a host sends, and what it
+# must then see. Written from the rules and not recorded from a guest. A value names only what a host
+# observes; every size is the fixture's (spec/xpute/conformance/guest.json), none a production one.
+# 
+# A step is `submit TAG CMD ack|noack [NUMBER]`, `ring QUOTA`, or `settle` (a turn of no quota after
+# another while a submission is left). Per turn t, and for the whole trace: the completion ring as
+# TAG:CMD=RESULT for a reply and TAG:CMD for a signal, a signal run tagged 0 up written CMD*n; the stream
+# as its records' ops; and what the turn asked for next (next, later, none). Each place is its own
+# sequence: nothing orders one against another.
+scenarios	C2.zero_quota C3.ack C3.noack C3.fail C3.fail_ack C3.unnumbered C4.order C5.raised C5.deferred C5.places
+# 
+# C2: a turn of no quota is a turn, and applies what waits.
+C2.zero_quota.step.0	submit 1 OK ack
+C2.zero_quota.step.1	ring 0
+C2.zero_quota.turn.0.completions	1:OK=0
+C2.zero_quota.turn.0.wake	none
+# 
+# C3: ACKREQ gets exactly one reply, and no ACKREQ gets one only on failure; a reply keeps its tag and cmd.
+C3.ack.step.0	submit 7 OK ack
+C3.ack.step.1	ring 0
+C3.ack.turn.0.completions	7:OK=0
+C3.noack.step.0	submit 7 OK noack
+C3.noack.step.1	ring 0
+C3.noack.turn.0.completions	-
+C3.fail.step.0	submit 9 FAIL noack
+C3.fail.step.1	ring 0
+C3.fail.turn.0.completions	9:FAIL=-22
+C3.fail_ack.step.0	submit 9 FAIL ack
+C3.fail_ack.step.1	ring 0
+C3.fail_ack.turn.0.completions	9:FAIL=-22
+# A command nobody numbers fails with ENOSYS, and so is answered unasked.
+C3.unnumbered.step.0	submit 5 0x0fff noack
+C3.unnumbered.step.1	ring 0
+C3.unnumbered.turn.0.completions	5:0x0fff=-38
+# 
+# C4: what is sent is applied in the order sent, each once.
+C4.order.step.0	submit 1 OK ack
+C4.order.step.1	submit 2 FAIL ack
+C4.order.step.2	submit 3 OK noack
+C4.order.step.3	submit 4 OK ack
+C4.order.step.4	ring 0
+C4.order.turn.0.completions	1:OK=0 2:FAIL=-22 4:OK=0
+# 
+# C5: one place keeps the order things were left in it. RAISE raises its signals and then replies, so
+# they come first; that they carry no RES, and so read as no one's reply, is C3's.
+C5.raised.step.0	submit 4 RAISE ack 3
+C5.raised.step.1	ring 0
+C5.raised.turn.0.completions	SIGNAL*3 4:RAISE=3
+# 
+# C5 and C4: eight commands whose signals and replies outgrow the fixture's completion ring. However a
+# guest keeps its output in bounds, what one turn leaves fits, what it could not answer waits in order
+# for a later turn it asks for, and every reply comes once, after its own signals.
+C5.deferred.step.0	submit 1 RAISE ack 32
+C5.deferred.step.1	submit 2 RAISE ack 32
+C5.deferred.step.2	submit 3 RAISE ack 32
+C5.deferred.step.3	submit 4 RAISE ack 32
+C5.deferred.step.4	submit 5 RAISE ack 32
+C5.deferred.step.5	submit 6 RAISE ack 32
+C5.deferred.step.6	submit 7 RAISE ack 32
+C5.deferred.step.7	submit 8 RAISE ack 32
+C5.deferred.step.8	settle
+C5.deferred.completions	SIGNAL*32 1:RAISE=32 SIGNAL*32 2:RAISE=32 SIGNAL*32 3:RAISE=32 SIGNAL*32 4:RAISE=32 SIGNAL*32 5:RAISE=32 SIGNAL*32 6:RAISE=32 SIGNAL*32 7:RAISE=32 SIGNAL*32 8:RAISE=32
+C5.deferred.turns.least	2
+C5.deferred.wake.before_last	next
+C5.deferred.wake.last	none
+# 
+# C5: the completion ring and the stream are two places, each in its own order.
+C5.places.step.0	submit 1 RECORD ack 10
+C5.places.step.1	submit 2 OK ack
+C5.places.step.2	submit 3 RECORD ack 11
+C5.places.step.3	ring 0
+C5.places.turn.0.completions	1:RECORD=0 2:OK=0 3:RECORD=0
+C5.places.turn.0.stream	10 11

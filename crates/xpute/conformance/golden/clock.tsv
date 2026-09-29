@@ -1,0 +1,13 @@
+# The clock's trace (ARCHITECTURE.xpute.md, the contract's rule 7). A `clock` step sets the host's clock;
+# its readings are the trace's inputs and appear in no value, which holds only the difference a guest
+# measures between two turns. That the clock never runs backward is the host's to keep, not a guest's.
+scenarios	C7.elapsed
+
+C7.elapsed.step.0	clock 100
+C7.elapsed.step.1	submit 1 MARK ack
+C7.elapsed.step.2	ring 0
+C7.elapsed.step.3	clock 137
+C7.elapsed.step.4	submit 2 SINCE ack
+C7.elapsed.step.5	ring 0
+C7.elapsed.turn.0.completions	1:MARK=0
+C7.elapsed.turn.1.completions	2:SINCE=37

@@ -3,7 +3,7 @@
 //! The kernel's side of the doorbell: what a bracket — pxl-wasm in a page,
 //! pxl-native in a device app — hands a turn to. The rings and their order
 //! are xpute's (xpute_runtime::ipc::doorbell); what is here is the kernel's
-//! part of them: the boot block, the commands applied, the signals raised and
+//! part of them: the directory, the commands applied, the signals raised and
 //! the profiler read in place, the same on every host since the shell on the
 //! other side is the same. What a bracket supplies is only what its platform
 //! decides (`Bracket`).
@@ -20,13 +20,13 @@ use crate::host::HeapStat;
 use crate::kernel::kernel;
 use crate::mem::fixed::Range;
 use crate::mem::section;
-use layout::{RING_CAPACITY, RING_DESC_AT, RING_DESC_STRIDE, RING_SLOT_AT, RING_SLOT_BYTES, RING_SLOT_STRIDE};
+use layout::DOOR_LAYOUT;
 use pxl_render::mesh::volume::Volumes;
-use xpute_core::math::scalar::round;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_core::wire::xtp::PacketWriter;
-use xpute_runtime::ipc::doorbell::{Door, DoorLayout};
+use xpute_runtime::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
+use xpute_runtime::ipc::doorbell::Door;
 use xpute_runtime::ipc::ring::Ring;
 use xpute_runtime::mem::base::{off_of, off_of_slice, ptr_at};
 
@@ -63,17 +63,9 @@ static DOOR: Global<Door> = Global::new();
 
 fn door() -> &'static Door {
     DOOR.get(|| {
-        let layout = DoorLayout {
-            capacity: RING_CAPACITY,
-            slot_bytes: RING_SLOT_BYTES,
-            desc_at: RING_DESC_AT,
-            desc_stride: RING_DESC_STRIDE,
-            slot_at: RING_SLOT_AT,
-            slot_stride: RING_SLOT_STRIDE,
-        };
         // SAFETY: the module's memory, which never moves and outlives the
         // door; the ranges are the layout's and no one else's.
-        unsafe { Door::init(ptr_at(0), &layout, crate::sched::profiler::record::profiler_note_rings) }
+        unsafe { Door::init(ptr_at(0), &DOOR_LAYOUT, crate::sched::profiler::record::profiler_note_rings) }
     })
 }
 
@@ -106,36 +98,25 @@ fn state() -> &'static mut State {
 // for it. The shell pushes into the submission ring, rings `interrupt` with
 // the turn's quota, and reads the completion ring when the call returns.
 
-/// Words in the boot block, each one the shell reads: where the submission
-/// ring and the completion ring are; the quantum the kernel declares to the
-/// central scheduler (xpute_runtime::sched::quantum's QuantumPolicy): margin
-/// share, batch frames and the settle time, each in thousandths; the heap's
-/// row; and the two streams the shell runs after every turn, the renderer's
-/// (pxl_render::gpu::api, 0 where the bracket draws itself) and the host's
-/// (crate::host). Where the kernel's ranges lie is its own and is not here:
-/// what the shell reads of them, it is given the address of.
-pub const BOOT_WORDS: usize = 8;
-
-const BOOT_QUANTUM: usize = 2;
-
-/// The boot word holding the address of the heap's row.
-const BOOT_HEAP: usize = 5;
-
-/// The boot words holding the addresses of the renderer's and the host's
-/// streams.
-const BOOT_GPU: usize = 6;
-const BOOT_HOST: usize = 7;
+/// Entries in the directory, each one the shell reads: xpute's — the two
+/// rings and the quantum the kernel declares to the central scheduler — and
+/// the kernel's own (abi/directory.json): the two streams the shell runs
+/// after every turn, the renderer's (pxl_render::gpu::api, 0 where the
+/// bracket draws itself) and the host's (crate::host), and the heap's row.
+/// Where the kernel's ranges lie is its own and is not here: what the shell
+/// reads of them, it is given the address of.
+const DIRECTORY_ENTRIES: usize = 8;
 
 /// The heap's row: the bracket's reading (`HeapStat`) as words — range, used,
 /// live, run, slot, largest free, releases, refusals, requests — written at
-/// every turn's fall past the boot block, in the memory, where the shell reads
+/// every turn's fall past the directory, in the memory, where the shell reads
 /// it in place.
-const HEAP_ROW_AT: u32 = crate::mem::spec::BOOT_AT + BOOT_WORDS as u32 * 4;
+const HEAP_ROW_AT: u32 = crate::mem::spec::DIRECTORY_AT + directory_words(DIRECTORY_ENTRIES) as u32 * 4;
 const HEAP_ROW_WORDS: usize = 9;
 
 fn write_heap_row() {
     let h = crate::host::heap_stat();
-    // SAFETY: the boot page past the boot block, the row's alone.
+    // SAFETY: the directory's page past the directory, the row's alone.
     let row = unsafe { &mut *ptr_at::<[u32; HEAP_ROW_WORDS]>(HEAP_ROW_AT as usize) };
     *row = [
         h.range as u32,
@@ -172,7 +153,7 @@ fn host_attached(s: &mut State) {
 }
 
 /// The first turn's: lays out the memory the module was given and writes the
-/// boot block where mem.json's BOOT_AT says, for the shell to read once
+/// directory where mem.json's DIRECTORY_AT says, for the shell to read once
 /// before any ring.
 fn boot(b: &Bracket) {
     crate::host::set_clock(b.clock);
@@ -194,17 +175,21 @@ fn boot(b: &Bracket) {
     }));
     let gpu_stream = lay_out(b);
     crate::sched::turn::boot();
-    // SAFETY: the page at BOOT_AT, which the layout keeps clear of the rings
-    // and the bracket's data; the boot block's alone.
-    let block = unsafe { &mut *ptr_at::<[u32; BOOT_WORDS]>(crate::mem::spec::BOOT_AT as usize) };
-    block[..2].copy_from_slice(&[ring_address(door().submission()), ring_address(door().completion())]);
-    block[BOOT_HEAP] = HEAP_ROW_AT;
-    block[BOOT_GPU] = gpu_stream;
-    block[BOOT_HOST] = fixed_at(Range::Host);
-    let q = crate::sched::tick::QUANTUM;
-    for (i, v) in [q.margin_share, q.batch_frames, q.settle_ms].into_iter().enumerate() {
-        block[BOOT_QUANTUM + i] = round(v * 1000.0) as u32;
-    }
+    let [margin, batch, settle] = quantum_entries(&crate::sched::tick::QUANTUM);
+    let entries: [Entry; DIRECTORY_ENTRIES] = [
+        (key::SUBMISSION, ring_address(door().submission())),
+        (key::COMPLETION, ring_address(door().completion())),
+        margin,
+        batch,
+        settle,
+        (crate::abi::directory::key::HOST_STREAM, fixed_at(Range::Host)),
+        (crate::abi::directory::key::GPU_STREAM, gpu_stream),
+        (crate::abi::directory::key::HEAP_ROW, HEAP_ROW_AT),
+    ];
+    // SAFETY: the page at DIRECTORY_AT, which the layout keeps clear of the
+    // rings and the bracket's data; the directory's and the heap row's alone.
+    let words = unsafe { &mut *ptr_at::<[u32; directory_words(DIRECTORY_ENTRIES)]>(crate::mem::spec::DIRECTORY_AT as usize) };
+    write_directory(words, &entries);
 }
 
 /// Where fixed range `r` begins, the map laid.
@@ -263,7 +248,14 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
     pxl_render::gpu::api::gpu_publish();
     write_heap_row();
     crate::host::host_fall();
-    crate::world::change::world_fall()
+    let wake = crate::world::change::world_fall();
+    // What the completion ring had no room for is still in the submission
+    // ring, and only a turn applies it.
+    if door().pending() {
+        0.0
+    } else {
+        wake
+    }
 }
 
 /// The UI's snapshot, a Snapshot packet written in place turn after turn:

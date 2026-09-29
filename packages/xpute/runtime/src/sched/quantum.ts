@@ -10,8 +10,7 @@
  * may take; the guest runs its own tasks cooperatively (xpute-runtime sched/tick.rs) and,
  * on the falling edge, hands the turn back with when it wants the next one.
  * The host knows nothing of what runs inside. Memory is granted once
- * (mem/reserve.ts), and I/O by credits — how many reads may
- * be out this turn, the guest saying which.
+ * (mem/reserve.ts), and I/O is asked of the host in what a turn leaves.
  *
  * **One quota, sized from what the host sees.** Nothing is preempted, so a
  * turn may run past its quota by the step that noticed; what it overran

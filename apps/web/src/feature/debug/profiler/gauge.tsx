@@ -204,7 +204,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           <Row k="bake/scan per s busy" v={`${round(f.backlogPerS[1])}/${round(f.backlogPerS[0])}`} />
           <Row k="faces kept" v={`${possible > 0 ? round((kept / possible) * 100) : 0}%`} />
           <Row k="queue t/p" v={`${f.last.q_terrain}/${f.last.q_poi}`} warn={f.last.q_terrain + f.last.q_poi > 12} />
-          <Row k="rings cq/spill" v={`${f.last.ring_cq_peak}/${f.last.ring_spill_peak}`} warn={f.last.ring_spill_peak > 0} />
+          <Row k="ring cq/held" v={`${f.last.ring_cq_peak}/${f.last.ring_held_peak}`} warn={f.last.ring_held_peak > 0} />
 
           <Head>memory</Head>
           <Row k="heap Δ" v={`${f.used_delta_mb >= 0 ? "+" : ""}${f.used_delta_mb}MB`} />

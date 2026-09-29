@@ -18,7 +18,7 @@ import { PLATFORM } from "./module.ts";
 export const HANDHELD: boolean = true;
 
 /** The core, booted: its first turn lays the memory out before anything reads
- * the boot block. */
+ * the directory. */
 export function openCore(): Promise<Core> {
   const buffer = PLATFORM.memory();
   PLATFORM.interrupt(0);

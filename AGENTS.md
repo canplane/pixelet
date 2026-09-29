@@ -48,7 +48,8 @@ erode by accident:
   (`pxl-render`) knows the model and nothing of the kernel (`pxl-kernel`).
 - **`core` is taken as it is; `runtime` asks you to run its way.** The kit
   works in any program; the runtime means a turn on a doorbell, a quota from
-  the frame, I/O by credits. `runtime` depends on `core`, never the reverse.
+  the frame, I/O asked of the host. `runtime` depends on `core`, never the
+  reverse.
   `core` is symmetric across the two languages and the golden records hold
   them to each other; `runtime` is two ends of one arrangement, so a module
   missing on one side is not a gap to fill — only the format must agree.

@@ -1,0 +1,16 @@
+[package]
+name = "xpute-conformance"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+xpute-core = { path = "../core" }
+xpute-runtime = { path = "../runtime" }
+
+# The traces' reader, for this crate's own tests.
+[dev-dependencies]
+xpute-core = { path = "../core", features = ["golden"] }

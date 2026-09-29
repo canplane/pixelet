@@ -96,7 +96,7 @@ export const FRAME = {
   heap_refusals: 91 as number,
   heap_largest_free_mb: 92 as number,
   ring_cq_peak: 93 as number,
-  ring_spill_peak: 94 as number,
+  ring_held_peak: 94 as number,
   work_scans: 95 as number,
   work_bakes: 96 as number,
   work_fine_peak: 97 as number,
@@ -144,7 +144,7 @@ export const FRAME_GROUPS = {
   cover: ["cover_rule", "cover_drawn", "cover_gaps"],
   device: ["buffers", "buffer_mb", "arena_mb", "tex_depth_mb", "tex_shadow_mb", "tex_layers_mb"],
   heap: ["heap_used_mb", "heap_live_mb", "heap_run_mb", "heap_slot_mb", "heap_range_mb", "heap_refusals", "heap_largest_free_mb"],
-  ring: ["ring_cq_peak", "ring_spill_peak"],
+  ring: ["ring_cq_peak", "ring_held_peak"],
 } as const;
 
 /** One settled task (sched/profiler/record.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `category`, `outcome` and each of `phase_ids` index CATEGORY_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the host's. */
