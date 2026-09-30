@@ -169,10 +169,13 @@ pub fn world_turn() -> f64 {
     effect!(worst, shell, crate::shell::shell::shell_step());
     effect!(worst, geolocation, geolocation_step(platform.geolocation));
     effect!(worst, orientation, orientation_watchdog_step(platform.orientation));
+    effect!(worst, follow, follow_mode_step());
+    // After every writer of the map center this turn has, before anything
+    // observes the view.
+    effect!(worst, view_snap, crate::world::frame::view_frame::view_snap_step());
     effect!(worst, tiles, terrain_step());
     effect!(worst, poi, crate::layer::poi::poi_step());
     effect!(worst, geocode, geocode_fetcher_step());
-    effect!(worst, follow, follow_mode_step());
     effect!(worst, theme, theme_clock_step());
     effect!(worst, decor, decor_assets_wanted());
     effect!(worst, chunk_sources, chunk_sources_step());

@@ -31,7 +31,7 @@ use crate::text::text_raster;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::stage::{set_host_frame_stat, HostFrameStat};
 use crate::world::frame::resolution::resolution_observe;
-use crate::world::frame::view::view;
+use crate::world::frame::view::{globe_anchor_local, view};
 
 const MB: f64 = 1_048_576.0;
 
@@ -47,8 +47,8 @@ pub fn stage_write(resolution: f64) {
     s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].copy_from_slice(&camera);
     s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16].copy_from_slice(&v.proj);
     s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16].copy_from_slice(&view_proj);
-    s[STAGE_AT::EYE_LOCAL..STAGE_AT::EYE_LOCAL + 3].copy_from_slice(&v.eye_local);
-    s[STAGE_AT::TRANSLATION..STAGE_AT::TRANSLATION + 3].copy_from_slice(&[v.tx, v.ty, v.tz]);
+    s[STAGE_AT::EYE_LOCAL..STAGE_AT::EYE_LOCAL + 3].copy_from_slice(&v.pose.eye);
+    s[STAGE_AT::GLOBE_ANCHOR..STAGE_AT::GLOBE_ANCHOR + 3].copy_from_slice(&globe_anchor_local());
     s[STAGE_AT::ORIGIN] = ivec::to_real(ivec::X(v.origin));
     s[STAGE_AT::ORIGIN + 1] = ivec::to_real(ivec::Y(v.origin));
     s[STAGE_AT::VIEWPORT] = v.width;

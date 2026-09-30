@@ -23,7 +23,7 @@ use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::build::RETAIN_BUDGET_BYTES;
 use crate::world::chunk::table::{builds, Census, Frame};
-use crate::world::frame::view::{view, view_resize};
+use crate::world::frame::view::{globe_anchor_local, view, view_resize};
 use crate::world::pyramid::Layer;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_page::PoiPage;
@@ -148,17 +148,23 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
 
     let origin = [ivec::to_real(ivec::X(v.origin)), ivec::to_real(ivec::Y(v.origin)), ivec::to_real(ivec::Z(v.origin))];
 
+    let anchor = globe_anchor_local();
+    let mut planes = v.planes;
+    for p in planes.as_chunks_mut::<4>().0 {
+        p[3] += p[0] * anchor[0] + p[1] * anchor[1] + p[2] * anchor[2];
+    }
+    let e = v.pose.eye;
     let frame = Frame {
-        root: v.root,
+        anchor,
         origin,
         eye: v.eye_at(),
-        planes: v.planes,
-        camera: v.eye,
+        planes,
+        camera: [e[0] - anchor[0], e[1] - anchor[1], e[2] - anchor[2]],
         delta_s: ctx.delta,
         remaining_ms: ctx.budget.remaining(),
         hard_slack_ms: HARD_SLACK_MS,
         retain_budget_bytes: RETAIN_BUDGET_BYTES(),
-        center_z: ivec::to_real(ivec::Z(v.origin)) - v.tz,
+        center_z: ivec::to_real(ivec::Z(v.origin)) + anchor[2],
         globe: Some(globe()),
     };
 

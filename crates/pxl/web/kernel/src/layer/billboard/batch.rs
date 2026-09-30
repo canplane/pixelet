@@ -24,7 +24,8 @@ pub struct BillboardBatch {
 
     // Filled by the selector rather than the producer. They live here so the
     // whole pass has one capacity and one allocation site.
-    /// World position, resolved once from the local one.
+    /// The position laid on the planet, in the root frame, resolved once
+    /// from the local one.
     pub world_x: Vec<f64>,
     pub world_y: Vec<f64>,
     pub world_z: Vec<f64>,

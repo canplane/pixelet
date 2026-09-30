@@ -1,50 +1,43 @@
 // pxl-kernel/world/frame/view.rs
 
-//! The view as drawn: the camera and the frame the world stands in, as
-//! doubles the renderer, the scheduler's frame, the placement passes and the
+//! The view as drawn: the observer's pose — the eye, and the turn from the
+//! world's axes to the camera's — and the matrices made from it, as doubles
+//! the renderer, the scheduler's frame, the placement passes and the
 //! pointer's ray all read.
 //!
-//! The model is the orbit camera's (camera/orbit.rs): the eye sits at
-//! `dist` from the origin, `polar` down from vertical, on the −Y side,
-//! looking at the origin with Z up — and never turns. The world turns
-//! under it instead: the root frame everything is placed in is the map's
-//! azimuth about Z, then a translation that puts the map center at the
-//! origin. Each of those is damped toward its control by its own step
-//! (camera/damping.rs, frame/view_frame.rs), and whichever moved
-//! composes the matrices again.
+//! The world stays in its own axes. Everything is written in the root
+//! frame: the world's axes, against the floating origin. A controller makes
+//! the pose (camera/orbit.rs `orbit_pose`), and nothing here knows which
+//! one, so a consumer reads the eye and the camera's turn and never how a
+//! control moved them.
 //!
 //! Held here the matrices are current the moment a step writes them.
 
-use pxl_spec::space::mat4::{
-    mat4, mat4_frustum_planes, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_rotation_z, mat4_transform_direction, mat4_transform_point, mat4_translation, Mat4,
-};
+use pxl_spec::space::mat4::{mat4, mat4_frustum_planes, mat4_invert, mat4_mul, mat4_perspective, mat4_transform_direction, mat4_transform_point, mat4_translation, Mat4};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
 
 use crate::control::camera::config::camera_cfg;
-use crate::control::camera::orbit::orbit_local_offset;
+use crate::control::camera::orbit::{orbit_pose, orbit_view};
 use crate::global::Global;
 use crate::layer::environment::config::render_cfg;
 use crate::layer::environment::fog::{far_clip_at, height_at, near_clip_at};
+use crate::shell::map_store::map_store;
 use crate::world::frame::coord::local_world_to_canonical;
 
-const UP: V3 = [0.0, 0.0, 1.0];
-const ORIGIN: V3 = [0.0, 0.0, 0.0];
+/// Where the observer is and which way it looks: the eye in the root frame,
+/// and the turn from the world's axes to the camera's — right, up and back
+/// along the camera's X, Y and Z, rotation alone. Any controller makes one.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ObserverPose {
+    pub eye: V3,
+    pub rotation: Mat4,
+}
 
 pub struct View {
-    // ---- the controls as drawn, written by their damping steps ----
-    /// The eye's distance from the origin and its angle down from vertical,
-    /// the climb included.
-    pub dist: f64,
-    pub polar: f64,
-    /// The map's turn about Z.
-    pub azimuth: f64,
-    /// Where the root frame's origin stands: minus the map center's offset
-    /// from the map origin, in units.
-    pub tx: f64,
-    pub ty: f64,
-    pub tz: f64,
+    /// The observer, as the controller last made it.
+    pub pose: ObserverPose,
     /// The map origin the root frame is relative to — the floating origin,
     /// as rebased by the translation step.
     pub origin: IVec,
@@ -57,52 +50,36 @@ pub struct View {
     pub far: f64,
 
     // ---- composed ----
-    /// The eye, in the view's own frame.
-    pub eye: V3,
-    /// The eye in the root frame, where everything is placed.
-    pub eye_local: V3,
-    /// View-frame to camera, and back: the camera's own matrix.
+    /// Root frame to camera, and back.
     pub view_matrix: Mat4,
     pub inv_view_matrix: Mat4,
     /// Camera to GL clip.
     pub proj: Mat4,
-    pub view_proj: Mat4,
-    pub inv_view_proj: Mat4,
-    /// Root frame to view frame, and back.
-    pub root: Mat4,
-    pub inv_root: Mat4,
-    /// Root frame to GL clip.
+    /// Root frame to GL clip, and back.
     pub local_view_proj: Mat4,
-    /// The frustum's planes in the view frame, normals in, as the
-    /// scheduler's frame takes them.
+    pub inv_local_view_proj: Mat4,
+    /// The frustum's planes in the root frame, normals in.
     pub planes: [f64; 24],
 }
 
 impl View {
     fn new() -> View {
         View {
-            dist: camera_cfg::view::DEFAULT_DIST,
-            polar: 0.0,
-            azimuth: 0.0,
-            tx: 0.0,
-            ty: 0.0,
-            tz: 0.0,
+            pose: ObserverPose {
+                eye: [0.0, 0.0, 1.0],
+                rotation: mat4(),
+            },
             origin: 0,
             width: 1.0,
             height: 1.0,
             fov: camera_cfg::projection::FOV,
             near: camera_cfg::projection::NEAR,
             far: render_cfg::FAR_CLIP,
-            eye: [0.0, 0.0, 1.0],
-            eye_local: [0.0, 0.0, 1.0],
             view_matrix: mat4(),
             inv_view_matrix: mat4(),
             proj: mat4(),
-            view_proj: mat4(),
-            inv_view_proj: mat4(),
-            root: mat4(),
-            inv_root: mat4(),
             local_view_proj: mat4(),
+            inv_local_view_proj: mat4(),
             planes: [0.0; 24],
         }
     }
@@ -112,27 +89,27 @@ impl View {
     /// The eye, in units: the root frame's origin and the eye past it.
     pub fn eye_at(&self) -> V3 {
         let o = self.origin;
-        [
-            ivec::to_real(ivec::X(o)) + self.eye_local[0],
-            ivec::to_real(ivec::Y(o)) + self.eye_local[1],
-            ivec::to_real(ivec::Z(o)) + self.eye_local[2],
-        ]
+        let e = self.pose.eye;
+        [ivec::to_real(ivec::X(o)) + e[0], ivec::to_real(ivec::Y(o)) + e[1], ivec::to_real(ivec::Z(o)) + e[2]]
     }
 
-    /// The eye's frame to GL clip, and to the camera: the root frame moved
-    /// to put the eye at its origin, where every point the GPU holds is
-    /// (pxl-render frame/draw.rs `DrawList::translation`). Moved here, in
-    /// doubles, so the view takes the eye to the camera's origin with
-    /// nothing of the eye's position left in either for a point's to
-    /// cancel against in floats.
+    /// The eye's frame to GL clip, and to the camera: the world's axes with
+    /// the eye at the origin, where every point the GPU holds is (pxl-render
+    /// frame/draw.rs `DrawList::translation`). Nothing of the eye's position
+    /// is in either, for a point's to cancel against in floats: the camera is
+    /// the pose's turn alone.
     pub fn eye_frame(&self) -> (Mat4, Mat4) {
-        let (mut to_eye, mut camera, mut view_proj) = (mat4(), mat4(), mat4());
-        mat4_translation(&mut to_eye, self.eye_local[0], self.eye_local[1], self.eye_local[2]);
-        let mut m = mat4();
-        mat4_mul(&mut m, &self.view_matrix, &self.root);
-        mat4_mul(&mut camera, &m, &to_eye);
-        mat4_mul(&mut view_proj, &self.local_view_proj, &to_eye);
-        (view_proj, camera)
+        let mut view_proj = mat4();
+        mat4_mul(&mut view_proj, &self.proj, &self.pose.rotation);
+        (view_proj, self.pose.rotation)
+    }
+
+    /// Which way the screen's up points along the ground, as an angle from
+    /// east counter-clockwise: the camera's up laid flat.
+    pub fn up_heading(&self) -> f64 {
+        let r = &self.pose.rotation;
+        // The camera's Y in the world's axes is the rotation's second row.
+        libm::atan2(r[5], r[1])
     }
 }
 
@@ -143,17 +120,24 @@ pub fn view() -> &'static mut View {
     VIEW.get(View::new)
 }
 
-/// The camera center: the point the orbit looks at, which the world is
-/// drawn about and laid on the planet about — the map center as the view has
-/// eased toward it, not the control's target (map_store's map_center), which
-/// it trails while it moves. What takes the planet's frame takes it from
-/// here — its latitude, its units, the sun and the moon over it — so the
-/// sphere's center and its latitude are one point in the same tick.
-pub fn camera_center() -> Pvf3 {
+/// Where the flat map is laid back on the planet about, in the root frame:
+/// the sea under the eye, so the eye stands where the placement is the
+/// identity and the planet's surface is at the sea's height. The sphere is
+/// one whichever point it is laid about (pxl-render look/globe.rs), so the
+/// anchor is only the frame it is written in, and the eye's is the one where
+/// the eye itself needs no placing.
+pub fn globe_anchor_local() -> V3 {
     let v = view();
+    [v.pose.eye[0], v.pose.eye[1], -ivec::to_real(ivec::Z(v.origin))]
+}
+
+/// The globe's anchor in units: what the planet's latitude, its units and
+/// the sky over it are taken at. None before there is a map to stand over.
+pub fn globe_anchor() -> Option<Pvf3> {
+    map_store().map_center?;
     let mut out = Pvf3::default();
-    local_world_to_canonical(&mut out, &[-v.tx, -v.ty, -v.tz], v.origin);
-    out
+    local_world_to_canonical(&mut out, &globe_anchor_local(), view().origin);
+    Some(out)
 }
 
 /// The viewport in CSS pixels; the projection follows it.
@@ -167,22 +151,16 @@ pub fn view_resize(width: f64, height: f64) {
     view_compose();
 }
 
-/// Composes the matrices from the controls as they stand.
+/// Composes the pose from the orbit and the matrices from the pose.
 pub fn view_compose() {
     let v = view();
-    let o = orbit_local_offset(v.dist, v.polar);
-    v.eye = [0.0, -o.horiz_dist, o.vert_dist];
-    mat4_look_at(&mut v.view_matrix, v.eye, ORIGIN, UP);
+    v.pose = orbit_pose(orbit_view());
+    let e = v.pose.eye;
+    let mut to_eye = mat4();
+    mat4_translation(&mut to_eye, -e[0], -e[1], -e[2]);
+    mat4_mul(&mut v.view_matrix, &v.pose.rotation, &to_eye);
     let vm = v.view_matrix;
     mat4_invert(&mut v.inv_view_matrix, &vm);
-    let (mut rot, mut trans) = (mat4(), mat4());
-    mat4_rotation_z(&mut rot, v.azimuth);
-    mat4_translation(&mut trans, v.tx, v.ty, v.tz);
-    mat4_mul(&mut v.root, &rot, &trans);
-    let root = v.root;
-    mat4_invert(&mut v.inv_root, &root);
-    let (inv_root, eye) = (v.inv_root, v.eye);
-    mat4_transform_point(&mut v.eye_local, &inv_root, eye[0], eye[1], eye[2]);
     // The planes follow the reach, which follows the eye's height over the
     // ground under it: a view laid along the ground reaches no further than
     // the haze, and one from high up no further than the planet's own edge.
@@ -193,27 +171,24 @@ pub fn view_compose() {
     v.far = far_clip_at(height);
     mat4_perspective(&mut v.proj, (v.fov * core::f64::consts::PI) / 180.0, v.width / v.height, v.near, v.far);
     let proj = v.proj;
-    mat4_mul(&mut v.view_proj, &proj, &vm);
-    let vp = v.view_proj;
-    mat4_invert(&mut v.inv_view_proj, &vp);
-    mat4_mul(&mut v.local_view_proj, &vp, &root);
-    mat4_frustum_planes(&mut v.planes, &vp);
+    mat4_mul(&mut v.local_view_proj, &proj, &vm);
+    let lvp = v.local_view_proj;
+    mat4_invert(&mut v.inv_local_view_proj, &lvp);
+    mat4_frustum_planes(&mut v.planes, &lvp);
 }
 
 /// The ray under a screen point, in the root frame: `ndc_x`/`ndc_y` in
 /// [−1, 1], x right and y up. `origin` is the eye and `direction` unit.
 pub fn view_ray_local(ndc_x: f64, ndc_y: f64, origin: &mut V3, direction: &mut V3) {
     let v = view();
-    *origin = v.eye_local;
-    // A point on the far plane, back through the projection and the root.
+    *origin = v.pose.eye;
+    // A point on the far plane, back through the projection and the view.
     let mut far = [0.0; 3];
-    mat4_transform_point(&mut far, &v.inv_view_proj, ndc_x, ndc_y, 1.0);
-    let f = far;
-    mat4_transform_point(&mut far, &v.inv_root, f[0], f[1], f[2]);
+    mat4_transform_point(&mut far, &v.inv_local_view_proj, ndc_x, ndc_y, 1.0);
     mat4_transform_direction(direction, &mat4(), far[0] - origin[0], far[1] - origin[1], far[2] - origin[2]);
 }
 
-/// Whether a sphere in the view frame meets the frustum.
+/// Whether a sphere in the root frame meets the frustum.
 pub fn view_sees_sphere(x: f64, y: f64, z: f64, radius: f64) -> bool {
     let p = &view().planes;
     for k in (0..24).step_by(4) {

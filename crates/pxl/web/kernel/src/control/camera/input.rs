@@ -26,6 +26,7 @@ use pxl_spec::space::v3::V3;
 
 pub use crate::abi::cmd::{ActiveTool, PointerKind};
 use crate::control::camera::config::camera_cfg;
+use crate::control::camera::orbit::orbit_view;
 use crate::control::camera::ray::{ray_pick, resolve_hit_object, world_adjacent_corner, world_hover_pvf3, world_struck_corner};
 use crate::control::camera::store::{camera_store, CameraStatus, ViewPatch};
 use crate::control::camera::terrain_gate::{allowed_pan, ViewTriple};
@@ -284,7 +285,7 @@ fn do_pan(dx: f64, dy: f64) {
     let units_per_px = view_h / view().height;
     let lx = -dx * units_per_px;
     let ly = dy * units_per_px;
-    let azimuth = view().azimuth;
+    let azimuth = orbit_view().azimuth;
     let wx = lx * azimuth.cos() + ly * azimuth.sin();
     let wy = -lx * azimuth.sin() + ly * azimuth.cos();
 

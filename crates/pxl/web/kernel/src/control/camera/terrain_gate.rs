@@ -13,7 +13,7 @@ use pxl_spec::space::v3::V3;
 use xpute_core::math::scalar::wrap;
 
 use crate::control::camera::config::camera_cfg;
-use crate::control::camera::orbit::{orbit_local_offset, rotate2};
+use crate::control::camera::orbit::{orbit_eye_offset, orbit_local_offset};
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::{settings_store, CameraCollisionMode};
 use crate::world::access::{Access, FINEST};
@@ -72,12 +72,9 @@ pub fn pose(view: ViewTriple, center: Option<&Pvf3>) -> Option<ViewPose> {
 /// beneath it, or None where no page over it is resident — an unarrived
 /// sample says nothing.
 fn required_rise(at: &ViewPose) -> Option<f64> {
-    let o = orbit_local_offset(at.dist, at.polar);
-    // The camera never rotates; azimuth spins the world beneath it, so
-    // un-rotating the camera-local offset puts it in the ground's frame.
-    let offset = rotate2(0.0, -o.horiz_dist, -at.azimuth);
+    let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
     let mut below = Pvf3::default();
-    local_world_to_canonical(&mut below, &[at.target[0] + offset.x, at.target[1] + offset.y, 0.0], at.origin);
+    local_world_to_canonical(&mut below, &[at.target[0] + offset[0], at.target[1] + offset[1], 0.0], at.origin);
     let ground = Access::now().at(&below, FINEST).value()?.top;
     Some(ground + EYE_CLEARANCE_U - at.target[2])
 }

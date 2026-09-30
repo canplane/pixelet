@@ -15,13 +15,13 @@ use pxl_render::gpu::pass::badges::LABEL_FONT;
 use pxl_render::gpu::surface::DPR_MAX;
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::indexer::{L3_BASE, L3_CENTER};
-use pxl_spec::space::mat4::{mat4_transform_point, Mat4};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::v3::{floor3n, V3};
 use pxl_spec::space::xy::TO_XY;
 
+use crate::control::camera::orbit::orbit_view;
 use crate::global::Global;
 use crate::kernel::kernel;
 use crate::layer::billboard::field::BILLBOARD_FLOATS;
@@ -29,7 +29,6 @@ use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_b
 use crate::text::text_width;
 use crate::world::access::{Access, FINEST};
 use crate::world::change::request_world_tick;
-use crate::world::frame::view::view;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 use xpute_core::status::bug::OrBug;
@@ -191,25 +190,16 @@ impl Sketch {
     }
 }
 
-/// A point of a matrix's frame, in the root frame.
-fn through(m: Mat4) -> impl Fn(V3) -> V3 {
-    move |v: V3| {
-        let mut out = [0.0; 3];
-        mat4_transform_point(&mut out, &m, v[0], v[1], v[2]);
-        out
-    }
-}
-
-/// The frames' rings: the view frame, which never turns, and the world frame,
-/// which turns with the map, both about the view's origin.
+/// The frames' rings about the orbit's pivot: the observer's heading, which
+/// turns with the orbit, and the world's axes, which never turn.
 fn sketch_frames(s: &mut Sketch) {
-    let v = view();
-    let view_frame = through(v.inv_root);
-    s.gyro(&view_frame, [4.0, 0.0, 0.0], "view-frame (4,0,0)", false);
-    s.point(view_frame([0.0, 0.0, 4.0]), Some("view-frame (0,0,4)"));
-    let (tx, ty, tz) = (v.tx, v.ty, v.tz);
-    let world_frame = move |p: V3| [p[0] - tx, p[1] - ty, p[2] - tz];
-    s.gyro(&world_frame, [0.0, RING_RADIUS, 0.0], "north (world-frame, azimuth-locked)", true);
+    let o = orbit_view();
+    let (pivot, (sin, cos)) = (o.pivot, (-o.azimuth).sin_cos());
+    let heading_frame = move |p: V3| [pivot[0] + p[0] * cos - p[1] * sin, pivot[1] + p[0] * sin + p[1] * cos, pivot[2] + p[2]];
+    s.gyro(&heading_frame, [4.0, 0.0, 0.0], "heading (4,0,0)", false);
+    s.point(heading_frame([0.0, 0.0, 4.0]), Some("heading (0,0,4)"));
+    let world_frame = move |p: V3| [pivot[0] + p[0], pivot[1] + p[1], pivot[2] + p[2]];
+    s.gyro(&world_frame, [0.0, RING_RADIUS, 0.0], "north (world)", true);
 }
 
 /// A point in the root frame: its address's offset from the map origin.
@@ -374,8 +364,8 @@ pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>, map_origin: IVec)
         }
         return;
     };
-    let v = view();
-    let key = (center, map_origin, Terrain::pyramid().revision(), [v.azimuth, v.tx, v.ty, v.tz]);
+    let o = orbit_view();
+    let key = (center, map_origin, Terrain::pyramid().revision(), [o.azimuth, o.pivot[0], o.pivot[1], o.pivot[2]]);
     if g.built_for == Some(key) {
         write_labels(g);
         return;

@@ -6,13 +6,14 @@ use xpute_core::math::scalar::clamp;
 use crate::control::camera::config::camera_cfg::smooth::CAM_DAMP;
 use crate::control::camera::config::camera_cfg::view::{MAX_DIST, MAX_POLAR, MIN_DIST, MIN_POLAR};
 use crate::control::camera::orbit::damp_alpha;
+use crate::control::camera::orbit::orbit_view;
 use crate::control::camera::store::camera_store;
 use crate::control::camera::terrain_gate::climb_polar;
 use crate::global::Global;
 use crate::sched::tick::TickContext;
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::{settings_store, CameraCollisionMode};
-use crate::world::frame::view::{view, view_compose};
+use crate::world::frame::view::view_compose;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 
@@ -148,7 +149,7 @@ pub fn camera_step(ctx: &mut TickContext) {
     // The offset lags the control, so a pitch steepening toward vertical can
     // still be carrying a climb from a shallower one.
     let view_polar = clamp(s.polar + s.shown_climb, MIN_POLAR, MAX_POLAR);
-    let v = view();
+    let v = orbit_view();
     if v.dist != s.dist || v.polar != view_polar {
         v.dist = s.dist;
         v.polar = view_polar;

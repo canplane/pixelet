@@ -11,6 +11,7 @@
 use pxl_render::frame::draw::DrawList;
 
 use super::*;
+use crate::control::camera::orbit::orbit_view;
 use crate::global::serial;
 
 /// A view as near and as low as the camera comes, turned: written against
@@ -18,9 +19,10 @@ use crate::global::serial;
 fn set(origin: [i64; 3], center: V3) -> &'static View {
     let v = view();
     (v.width, v.height) = (1_000.0, 800.0);
-    (v.dist, v.polar, v.azimuth) = (camera_cfg::view::MIN_DIST, camera_cfg::view::MAX_POLAR, 0.7);
+    let o = orbit_view();
+    (o.dist, o.polar, o.azimuth) = (camera_cfg::view::MIN_DIST, camera_cfg::view::MAX_POLAR, 0.7);
     v.origin = ivec::gather(origin[0], origin[1], origin[2]);
-    (v.tx, v.ty, v.tz) = (-center[0], -center[1], -center[2]);
+    o.pivot = center;
     view_compose();
     v
 }
@@ -102,7 +104,173 @@ fn a_point_near_the_eye_is_placed_finely_wherever_the_view_is() {
         let doubles: Vec<_> = points.iter().map(|&p| exact(v, p)).collect();
         assert!(apart(v, &gpu, &doubles) < 1e-2, "{origin:?}: {} px off", apart(v, &gpu, &doubles));
         let camera = v.eye_frame().1;
-        let eye_len = v.eye_local.iter().map(|x| x * x).sum::<f64>().sqrt();
+        let eye_len = v.pose.eye.iter().map(|x| x * x).sum::<f64>().sqrt();
         assert!(camera[12..15].iter().all(|t| t.abs() <= 1e-9 * eye_len.max(1.0)), "the eye is off the camera: {:?}", &camera[12..15]);
+    }
+}
+
+/// The view as it was composed before the observer owned its pose: the
+/// world turned about Z by the heading under a camera fixed south of the
+/// pivot, the oracle the pose is held to.
+mod before {
+    use pxl_spec::space::mat4::{mat4, mat4_frustum_planes, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_rotation_z, mat4_transform_point, mat4_translation, Mat4};
+
+    use super::*;
+    use crate::control::camera::orbit::orbit_local_offset;
+    use crate::layer::environment::fog::{far_clip_at, height_at, near_clip_at};
+
+    pub struct Before {
+        pub eye_at: V3,
+        pub eye_local: V3,
+        pub root: Mat4,
+        pub inv_root: Mat4,
+        pub local_view_proj: Mat4,
+        pub inv_view_proj: Mat4,
+        pub planes: [f64; 24],
+    }
+
+    pub fn compose(origin: V3, pivot: V3, dist: f64, polar: f64, azimuth: f64, (width, height, fov): (f64, f64, f64)) -> Before {
+        let o = orbit_local_offset(dist, polar);
+        let eye = [0.0, -o.horiz_dist, o.vert_dist];
+        let mut view_matrix = mat4();
+        mat4_look_at(&mut view_matrix, eye, [0.0; 3], [0.0, 0.0, 1.0]);
+        let (mut rot, mut trans, mut root, mut inv_root) = (mat4(), mat4(), mat4(), mat4());
+        mat4_rotation_z(&mut rot, azimuth);
+        mat4_translation(&mut trans, -pivot[0], -pivot[1], -pivot[2]);
+        mat4_mul(&mut root, &rot, &trans);
+        mat4_invert(&mut inv_root, &root);
+        let mut eye_local = [0.0; 3];
+        mat4_transform_point(&mut eye_local, &inv_root, eye[0], eye[1], eye[2]);
+        let eye_at = [origin[0] + eye_local[0], origin[1] + eye_local[1], origin[2] + eye_local[2]];
+        let h = height_at(eye_at);
+        let mut proj = mat4();
+        mat4_perspective(&mut proj, fov * core::f64::consts::PI / 180.0, width / height, near_clip_at(h), far_clip_at(h));
+        let (mut view_proj, mut inv_view_proj, mut local_view_proj) = (mat4(), mat4(), mat4());
+        mat4_mul(&mut view_proj, &proj, &view_matrix);
+        mat4_invert(&mut inv_view_proj, &view_proj);
+        mat4_mul(&mut local_view_proj, &view_proj, &root);
+        let mut planes = [0.0; 24];
+        mat4_frustum_planes(&mut planes, &view_proj);
+        Before {
+            eye_at,
+            eye_local,
+            root,
+            inv_root,
+            local_view_proj,
+            inv_view_proj,
+            planes,
+        }
+    }
+}
+
+fn clip(m: &[f64; 16], p: V3) -> [f64; 3] {
+    let c: [f64; 4] = core::array::from_fn(|r| m[r] * p[0] + m[4 + r] * p[1] + m[8 + r] * p[2] + m[12 + r]);
+    [c[0] / c[3], c[1] / c[3], c[2] / c[3]]
+}
+
+fn inside(planes: &[f64; 24], p: V3, margin: f64) -> Option<bool> {
+    let d = planes
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|q| (q[0] * p[0] + q[1] * p[1] + q[2] * p[2] + q[3]) / q[0].hypot(q[1]).hypot(q[2]))
+        .fold(f64::INFINITY, f64::min);
+    (d.abs() > margin).then_some(d > 0.0)
+}
+
+/// The observer owning its pose draws what the turned world drew: over
+/// pivots about the origin, negative and as far out as Seoul, every
+/// distance, tilt and heading, and origins rebased under them, the eye
+/// stands where it stood, a point lands on the screen where it landed, a
+/// pointer's ray leaves the eye the same way, the frustum holds what it
+/// held, and a point laid on the planet about the globe's anchor is seen
+/// where it was seen.
+#[test]
+fn the_observer_s_pose_draws_what_the_turned_world_drew() {
+    let _g = serial();
+    let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+    let mut unit = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        (seed >> 11) as f64 / (1u64 << 53) as f64
+    };
+    let (width, height) = (1_280.0, 720.0);
+    for n in 0..400 {
+        let origin = match n % 3 {
+            0 => [0, 0, 0],
+            1 => [-(1 << 20), 1 << 18, 0],
+            _ => [5_911_552, 1_900_544, 0],
+        };
+        let pivot = [unit() * 800.0 - 400.0, unit() * 800.0 - 400.0, unit() * 60.0 - 10.0];
+        let (dist, polar) = (
+            camera_cfg::view::MIN_DIST + unit() * 3_000.0,
+            camera_cfg::view::MIN_POLAR + unit() * (camera_cfg::view::MAX_POLAR - camera_cfg::view::MIN_POLAR),
+        );
+        let azimuth = unit() * 4.0 * core::f64::consts::PI - 2.0 * core::f64::consts::PI;
+        let v = view();
+        (v.width, v.height) = (width, height);
+        v.origin = ivec::gather(origin[0], origin[1], origin[2]);
+        let o = orbit_view();
+        (o.pivot, o.dist, o.polar, o.azimuth) = (pivot, dist, polar, azimuth);
+        view_compose();
+        let v = view();
+        let old = before::compose(origin.map(|c| c as f64), pivot, dist, polar, azimuth, (width, height, v.fov));
+        let at = format!("origin {origin:?} pivot {pivot:?} dist {dist} polar {polar} azimuth {azimuth}");
+
+        // The companion's facing, back to the camera: the screen's up laid
+        // on the ground, a quarter turn from the heading.
+        let turn = (v.up_heading() - core::f64::consts::FRAC_PI_2 + azimuth).rem_euclid(2.0 * core::f64::consts::PI);
+        assert!(turn.min(2.0 * core::f64::consts::PI - turn) < 1e-9, "{at}: the screen's up is {} off the heading", turn);
+
+        let eye = v.eye_at();
+        assert!((0..3).all(|k| (eye[k] - old.eye_at[k]).abs() < 1e-6), "{at}: the eye {eye:?} against {:?}", old.eye_at);
+
+        for _ in 0..16 {
+            // Points about the pivot, out to past the reach.
+            let r = dist * (0.2 + unit() * 3.0);
+            let p = [pivot[0] + (unit() - 0.5) * r, pivot[1] + (unit() - 0.5) * r, pivot[2] + (unit() - 0.4) * r * 0.3];
+            let (a, b) = (clip(&old.local_view_proj, p), clip(&v.local_view_proj, p));
+            if a[2].abs() <= 1.0 {
+                let px = (a[0] - b[0]).hypot(a[1] - b[1]) * height / 2.0;
+                assert!(px < 1e-4, "{at}: {p:?} moved {px} px");
+            }
+            // The frustum, the old planes in the turned frame.
+            let mut q = [0.0; 3];
+            pxl_spec::space::mat4::mat4_transform_point(&mut q, &old.root, p[0], p[1], p[2]);
+            if let (Some(was), Some(is)) = (inside(&old.planes, q, 1e-6), inside(&v.planes, p, 1e-6)) {
+                assert_eq!(was, is, "{at}: {p:?} in the frustum");
+            }
+            // Laid on the planet about the anchor, as the chunks and the
+            // badges measure it: turned back, placed, turned forward before;
+            // placed in the world's axes now.
+            let globe = pxl_render::look::globe::Globe::at(0.66);
+            let (s, c) = (old.root[1], old.root[0]);
+            let back = [q[0] * c + q[1] * s, -q[0] * s + q[1] * c, q[2]];
+            let laid = globe.place(back);
+            let placed_old = [laid[0] * c - laid[1] * s, laid[0] * s + laid[1] * c, laid[2]];
+            let d = [p[0] - pivot[0], p[1] - pivot[1], p[2] - pivot[2]];
+            let placed = globe.place(d);
+            let placed_new = [pivot[0] + placed[0], pivot[1] + placed[1], pivot[2] + placed[2]];
+            if let (Some(was), Some(is)) = (inside(&old.planes, placed_old, 1e-6), inside(&v.planes, placed_new, 1e-6)) {
+                assert_eq!(was, is, "{at}: {p:?} laid on the planet, in the frustum");
+            }
+        }
+
+        // The pointer's ray under a few screen points.
+        for (x, y) in [(0.0, 0.0), (0.7, -0.4), (-0.9, 0.95)] {
+            let (mut from, mut dir) = ([0.0; 3], [0.0; 3]);
+            view_ray_local(x, y, &mut from, &mut dir);
+            let mut far = [0.0; 3];
+            pxl_spec::space::mat4::mat4_transform_point(&mut far, &old.inv_view_proj, x, y, 1.0);
+            let f = far;
+            pxl_spec::space::mat4::mat4_transform_point(&mut far, &old.inv_root, f[0], f[1], f[2]);
+            let want = [far[0] - old.eye_local[0], far[1] - old.eye_local[1], far[2] - old.eye_local[2]];
+            let len = want[0].hypot(want[1]).hypot(want[2]);
+            let got_len = dir[0].hypot(dir[1]).hypot(dir[2]);
+            let cos = (0..3).map(|k| want[k] * dir[k]).sum::<f64>() / (len * got_len);
+            assert!(cos > 1.0 - 1e-12, "{at}: the ray at ({x}, {y}) turned by acos {cos}");
+            assert!((0..3).all(|k| (from[k] - old.eye_local[k]).abs() < 1e-6), "{at}: the ray starts at {from:?}");
+        }
     }
 }

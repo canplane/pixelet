@@ -34,12 +34,7 @@ use crate::world::pyramid::Layer as _;
 /// stand over.
 pub fn eye() -> Option<[f64; 3]> {
     map_store().map_center.as_ref()?;
-    let v = view();
-    Some([
-        ivec::to_real(ivec::X(v.origin)) + v.eye_local[0],
-        ivec::to_real(ivec::Y(v.origin)) + v.eye_local[1],
-        ivec::to_real(ivec::Z(v.origin)) + v.eye_local[2],
-    ])
+    Some(view().eye_at())
 }
 
 /// The level the ground under the eye wants, z16 at the finest: what the
@@ -49,23 +44,14 @@ pub fn ground_level() -> u32 {
     eye().map_or(0, |_| lod::level(eye_height()).clamp(0, TOP_LEVEL as i32) as u32)
 }
 
-/// The view's frustum in world units. The view's planes are in its own
-/// frame, which reaches world units as `root · (x − origin)`; a plane
-/// `n · x + d` there is `(Rᵀn) · x + d + n · t − (Rᵀn) · origin` here, the
-/// root being a rotation R and a translation t.
+/// The view's frustum in world units: its planes in the root frame, which
+/// is the world's axes against the origin, moved to the world's.
 pub fn frustum_of_view() -> Frustum {
     let v = view();
-    let r = v.root;
     let o = [ivec::to_real(ivec::X(v.origin)), ivec::to_real(ivec::Y(v.origin)), ivec::to_real(ivec::Z(v.origin))];
-    let mut planes = [0.0; 24];
-    for (k, p) in v.planes.as_chunks::<4>().0.iter().enumerate() {
-        let n = [
-            r[0] * p[0] + r[1] * p[1] + r[2] * p[2],
-            r[4] * p[0] + r[5] * p[1] + r[6] * p[2],
-            r[8] * p[0] + r[9] * p[1] + r[10] * p[2],
-        ];
-        let d = p[3] + p[0] * r[12] + p[1] * r[13] + p[2] * r[14] - (n[0] * o[0] + n[1] * o[1] + n[2] * o[2]);
-        planes[k * 4..k * 4 + 4].copy_from_slice(&[n[0], n[1], n[2], d]);
+    let mut planes = v.planes;
+    for p in planes.as_chunks_mut::<4>().0 {
+        p[3] -= p[0] * o[0] + p[1] * o[1] + p[2] * o[2];
     }
     Frustum { planes }
 }

@@ -1,20 +1,44 @@
 // pxl-kernel/control/camera/orbit.rs
 
-//! Pure math for this app's orbit camera model, pulled out of damping.rs /
-//! view_frame.rs so it can be unit tested on its own. Doc'd once here
-//! because the model is easy to get backward:
-//!
-//! **Azimuth never rotates the camera.** Only `dist` and `polar` determine
-//! camera.position (orbit_local_offset below), and the camera always looks
-//! straight at its target. World content rotates by azimuth under this fixed
-//! camera instead (world/frame/view.rs, stepped by view_frame.rs) — the
-//! ground spins, not the eye. Anything needing "which way is the camera
-//! effectively facing" — the sky dome's sun and moon sweep — has
-//! no single camera transform to read that off of — only this rotate2
-//! primitive, signed for the conversion direction: world_frame_ref's own
-//! rotation.z is always exactly +azimuth, so matching the ground's own
-//! transform means rotate2(..., +azimuth), and un-rotating a camera-local
-//! point back to its ground origin means rotate2(..., -azimuth).
+//! The orbit camera: one controller of the observer's pose. Its controls —
+//! a pivot, a distance, an angle down from vertical and a heading about Z —
+//! are damped toward the camera store's (camera/damping.rs,
+//! world/frame/view_frame.rs), and the pose is made from them here
+//! (`orbit_pose`): the eye at the distance from the pivot, looking at it.
+//! The world stays in its own axes; what turns is the observer. Nothing
+//! below the pose knows it came from an orbit.
+
+use pxl_spec::space::mat4::{mat4, mat4_look_at, mat4_mul, mat4_rotation_z, Mat4};
+use pxl_spec::space::v3::V3;
+
+use crate::control::camera::config::camera_cfg;
+use crate::global::Global;
+use crate::world::frame::view::ObserverPose;
+
+/// The orbit as drawn: its controls as their damping steps have eased them.
+pub struct OrbitView {
+    /// The eye's distance from the pivot and its angle down from vertical,
+    /// the climb included.
+    pub dist: f64,
+    pub polar: f64,
+    /// The heading about Z: at zero the eye stands south of the pivot and
+    /// looks north.
+    pub azimuth: f64,
+    /// What the eye looks at: the map center as the view has eased toward
+    /// it, in the view's root frame (world/frame/view.rs).
+    pub pivot: V3,
+}
+
+static ORBIT: Global<OrbitView> = Global::new();
+
+pub fn orbit_view() -> &'static mut OrbitView {
+    ORBIT.get(|| OrbitView {
+        dist: camera_cfg::view::DEFAULT_DIST,
+        polar: 0.0,
+        azimuth: 0.0,
+        pivot: [0.0; 3],
+    })
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct OrbitOffset {
@@ -22,12 +46,10 @@ pub struct OrbitOffset {
     pub vert_dist: f64,
 }
 
-/// The camera's local-space offset from its look-at target, given the current
+/// How far the eye stands from the pivot across and up, given the
 /// (already-damped/clamped) dist/polar. `polar` is measured from the +Z
 /// (vertical) axis: polar≈0 looks straight down, polar≈π/2 looks toward the
-/// horizon. The camera sits on the target's local -Y side — an arbitrary but
-/// fixed choice, since azimuth (not this offset) is what actually varies the
-/// apparent viewing direction, by spinning the world underneath it instead.
+/// horizon.
 pub fn orbit_local_offset(dist: f64, polar: f64) -> OrbitOffset {
     OrbitOffset {
         horiz_dist: dist * libm::sin(polar),
@@ -35,21 +57,33 @@ pub fn orbit_local_offset(dist: f64, polar: f64) -> OrbitOffset {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Rotated {
-    pub x: f64,
-    pub y: f64,
+/// The eye's offset from the pivot, in the world's axes: south of it at a
+/// heading of zero, turned about Z by the heading.
+pub fn orbit_eye_offset(dist: f64, polar: f64, azimuth: f64) -> V3 {
+    let o = orbit_local_offset(dist, polar);
+    let (s, c) = (libm::sin(azimuth), libm::cos(azimuth));
+    [-o.horiz_dist * s, -o.horiz_dist * c, o.vert_dist]
 }
 
-/// Rotates a 2D vector by `angle` around the Z axis (scene is Z-up):
-/// (x cosθ - y sinθ, x sinθ + y cosθ). The one shared primitive behind every
-/// azimuth-aware transform in this module tree. Callers pick the sign of
-/// `angle` for their own direction of conversion — see this module's doc
-/// comment above.
-pub fn rotate2(x: f64, y: f64, angle: f64) -> Rotated {
-    let c = libm::cos(angle);
-    let s = libm::sin(angle);
-    Rotated { x: x * c - y * s, y: x * s + y * c }
+/// The observer's pose the orbit makes: the eye at its offset from the
+/// pivot, and the turn from the world's axes to the camera's that looks
+/// from there at the pivot with Z up.
+pub fn orbit_pose(o: &OrbitView) -> ObserverPose {
+    let off = orbit_local_offset(o.dist, o.polar);
+    // Looking from south of the pivot, then the world's axes turned into
+    // that by the heading.
+    let mut look = mat4();
+    mat4_look_at(&mut look, [0.0, -off.horiz_dist, off.vert_dist], [0.0; 3], [0.0, 0.0, 1.0]);
+    look[12..15].fill(0.0);
+    let mut heading = mat4();
+    mat4_rotation_z(&mut heading, o.azimuth);
+    let mut rotation: Mat4 = mat4();
+    mat4_mul(&mut rotation, &look, &heading);
+    let e = orbit_eye_offset(o.dist, o.polar, o.azimuth);
+    ObserverPose {
+        eye: [o.pivot[0] + e[0], o.pivot[1] + e[1], o.pivot[2] + e[2]],
+        rotation,
+    }
 }
 
 /// Exponential-decay ease-toward-target factor for one frame of `delta`

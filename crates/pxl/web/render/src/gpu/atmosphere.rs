@@ -235,7 +235,7 @@ impl Atmosphere {
     }
 
     /// The frame's air, from the environment's lane `env`: the sun's
-    /// direction in the root frame, unturned; the moon's and how bright its
+    /// direction in the world's axes; the moon's and how bright its
     /// sky is shown; the camera's altitude in kilometers, a unit's length in
     /// them and the ground's own height, which the sky draws its ground at;
     /// and straight up where the eye stands, which every height of a light or

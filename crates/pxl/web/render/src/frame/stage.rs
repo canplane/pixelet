@@ -42,8 +42,9 @@ pub mod STAGE_AT {
     /// The eye in the root frame (3): what the eye's frame is the root frame
     /// less of.
     pub const EYE_LOCAL: usize = 48;
-    /// Where the root frame's origin stands (3): the shadow aims at its negation.
-    pub const TRANSLATION: usize = 51;
+    /// Where the flat map is laid back on the planet about, in the root
+    /// frame (3): the shadow aims at it too.
+    pub const GLOBE_ANCHOR: usize = 51;
     /// The viewport in CSS pixels (2).
     pub const VIEWPORT: usize = 54;
     pub const FOV: usize = 56;

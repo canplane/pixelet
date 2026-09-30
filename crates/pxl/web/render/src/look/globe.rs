@@ -12,10 +12,12 @@
 //! Mercator was drawn from further out — Mapbox's globe, which reprojects the
 //! same tiles in its vertex stage.
 //!
-//! The map center here is the camera center: the map center as the view has
-//! eased toward it (the kernel's view.rs, `camera_center`), which the
-//! placement's center, its latitude and the sky over it are all taken from,
-//! in the same tick.
+//! The map center here is the globe's anchor: the sea under the eye (the
+//! kernel's world/frame/view.rs, `globe_anchor`), which the placement's
+//! center, its latitude and the sky over it are all taken from, in the same
+//! tick. The sphere is one whichever point it is laid about, so the anchor
+//! is only the frame it is written in; under the eye, the eye itself needs
+//! no placing.
 //!
 //! The sphere is Web Mercator's own (pxl-spec's EPSG:4326 adapter), which is
 //! what makes the map center's neighborhood the identity; the atmosphere is
@@ -26,8 +28,6 @@
 
 use pxl_spec::space::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::v3::V3;
-
-use crate::look::azimuth::turn;
 
 /// Web Mercator's sphere.
 pub const MERCATOR_RADIUS_KM: f64 = epsg4326::EARTH_RADIUS / 1000.0;
@@ -105,20 +105,6 @@ impl Globe {
         // tan(π/4 + φ/2) = (1 + sin φ) / cos φ, against the center's.
         let e = (length + axis) / across;
         [MERCATOR_RADIUS_U * east.atan2(meridian), MERCATOR_RADIUS_U * (e / self.e0).ln()]
-    }
-
-    /// A point of the view frame — the map center at its origin, turned about
-    /// Z by the view's azimuth, whose sine and cosine are `s` and `c` (the
-    /// root frame's first column) — where the planet has it: turned back to
-    /// the map's own axes, placed, and turned forward again. What the module
-    /// measures of the world where it is drawn — a chunk's culling, a badge's
-    /// place on the screen — goes through this, as every shader that places
-    /// the world goes through globe.wgsl's `on_globe_of`. The pick ray is
-    /// walked in the flat map: it reaches some fifty units, where the planet
-    /// has parted from the plane by a thousandth of one.
-    pub fn place_turned(&self, p: V3, s: f64, c: f64) -> V3 {
-        let (mut flat, mut placed) = ([0.0; 3], [0.0; 3]);
-        *turn(&self.place(*turn(&p, -s, c, &mut flat)), s, c, &mut placed)
     }
 }
 

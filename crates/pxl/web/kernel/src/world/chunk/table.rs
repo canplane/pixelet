@@ -139,15 +139,18 @@ fn shown_cube(s: &Slot) -> Cube {
 /// What the chunk stage composes before a tick.
 #[derive(Clone, Copy, Default)]
 pub struct Frame {
-    /// The anchor root's world matrix, column-major.
-    pub root: [f64; 16],
+    /// The globe's anchor in the root frame (world/frame/view.rs
+    /// `globe_anchor`): what the chunks are measured about, since the map is
+    /// laid back on the planet about it.
+    pub anchor: V3,
     /// The map origin, in units.
     pub origin: V3,
     /// The eye, in units: what a draw's translation is taken from, so every
     /// point the GPU holds is relative to it (pxl-render frame/draw.rs
     /// `DrawList::translation`).
     pub eye: V3,
-    /// The frustum as six planes of (nx, ny, nz, constant).
+    /// The frustum as six planes of (nx, ny, nz, constant), and the eye,
+    /// about the anchor in the world's axes.
     pub planes: [f64; 24],
     pub camera: V3,
     pub delta_s: f64,
@@ -156,8 +159,8 @@ pub struct Frame {
     pub remaining_ms: f64,
     pub hard_slack_ms: f64,
     pub retain_budget_bytes: f64,
-    /// The camera center's height (view.rs's camera_center), in units: what
-    /// the camera's height over the sea is measured up from.
+    /// The globe's anchor's height, in units: what the camera's height over
+    /// the sea is measured up from.
     pub center_z: f64,
     /// The map center's latitude's values, which the renderer lays the map
     /// back on the planet about (pxl-render's look/globe.rs); none for a flat
@@ -166,16 +169,10 @@ pub struct Frame {
 }
 
 impl Frame {
-    /// Where `at`, in the map's units, is in the world the camera is
-    /// written in: against the origin, then through the anchor root.
+    /// Where `at`, in the map's units, is about the anchor: against the
+    /// origin, then less the anchor.
     pub fn world_of(&self, at: V3) -> V3 {
-        let m = &self.root;
-        let (lx, ly, lz) = (at[0] - self.origin[0], at[1] - self.origin[1], at[2] - self.origin[2]);
-        [
-            m[0] * lx + m[4] * ly + m[8] * lz + m[12],
-            m[1] * lx + m[5] * ly + m[9] * lz + m[13],
-            m[2] * lx + m[6] * ly + m[10] * lz + m[14],
-        ]
+        [0, 1, 2].map(|k| at[k] - self.origin[k] - self.anchor[k])
     }
 }
 
@@ -1917,7 +1914,7 @@ impl Scheduler {
 /// Whether two frames look at the world the same way: what a recheck's
 /// answer depends on, not the budget or the elapsed time.
 fn same_view(a: &Frame, b: &Frame) -> bool {
-    a.root == b.root && a.origin == b.origin && a.planes == b.planes && a.camera == b.camera
+    a.anchor == b.anchor && a.origin == b.origin && a.planes == b.planes && a.camera == b.camera
 }
 
 /// What a chunk's place in the order is decided by.
@@ -1956,13 +1953,11 @@ fn priority(a: &Priority, b: &Priority) -> core::cmp::Ordering {
 /// Where a slot is from a frame: on screen, and its world center.
 fn measure(frame: &Frame, s: &Slot) -> (bool, V3) {
     let [x, y, z] = frame.world_of([s.base_x() + s.bc[0], s.base_y() + s.bc[1], s.bc[2]]);
-    // Where the renderer draws it: laid back on the planet about the view
-    // center, the world's origin here, in the map's own axes — the view's
-    // turned back by the azimuth and forward again. A far chunk culled where
-    // the flat world has it would leave a hole at the horizon. The root's
-    // first column is the azimuth's cosine and sine.
+    // Where the renderer draws it: laid back on the planet about the
+    // anchor, the origin here. A far chunk culled where the flat world has
+    // it would leave a hole at the horizon.
     let [x, y, z] = match frame.globe {
-        Some(globe) => globe.place_turned([x, y, z], frame.root[1], frame.root[0]),
+        Some(globe) => globe.place([x, y, z]),
         None => [x, y, z],
     };
     let c = frame.camera;

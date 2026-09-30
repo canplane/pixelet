@@ -60,3 +60,48 @@ fn unplace_takes_a_placed_point_back_to_the_map() {
         assert!((back[0] - d[0]).abs() < 1e-2 && (back[1] - d[1]).abs() < 1e-2, "{d:?} came back as {back:?}");
     }
 }
+
+/// The planet a point is laid on is the one sphere whichever point the map
+/// is laid about: points laid about one anchor and about another, a few
+/// kilometers off it, stand as far apart in meters, each frame in its own
+/// center's units, and span the same signed volume — turned, not mirrored. So an anchor is a frame to write the sphere in, and
+/// moving it moves nothing but the frame.
+#[test]
+fn the_sphere_is_one_whichever_point_it_is_laid_about() {
+    let a = Globe::at(SEOUL);
+    let meters_a = a.cos_lat / epsg3857::U_PER_M;
+    let mut seed = 0x2545_f491_4f6c_dd1du64;
+    let mut unit = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        (seed >> 11) as f64 / (1u64 << 53) as f64 - 0.5
+    };
+    for _ in 0..200 {
+        // The other anchor, up to twenty kilometers off, and its latitude by
+        // its Mercator ordinate.
+        let off = [unit() * 1.0e5, unit() * 1.0e5];
+        let e = a.e0 * (off[1] / MERCATOR_RADIUS_U).exp();
+        let b = Globe::at(2.0 * e.atan() - core::f64::consts::FRAC_PI_2);
+        let meters_b = b.cos_lat / epsg3857::U_PER_M;
+        for _ in 0..8 {
+            let span = 3.0e5;
+            let pts: [V3; 4] = core::array::from_fn(|_| [unit() * span, unit() * span, (unit() + 0.5) * 2.0e3]);
+            let about_b = |v: V3| b.place([v[0] - off[0], v[1] - off[1], v[2]]);
+            let (pa, pb): (Vec<V3>, Vec<V3>) = (pts.iter().map(|&p| a.place(p)).collect(), pts.iter().map(|&p| about_b(p)).collect());
+            let sub = |x: V3, y: V3| [x[0] - y[0], x[1] - y[1], x[2] - y[2]];
+            let apart = |x: V3, y: V3| sub(x, y).iter().map(|v| v * v).sum::<f64>().sqrt();
+            for (i, j) in [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)] {
+                let (da, db) = (apart(pa[i], pa[j]) * meters_a, apart(pb[i], pb[j]) * meters_b);
+                assert!((da - db).abs() <= 1e-9 * da.max(1.0), "{:?} {:?} about {off:?}: {da} m against {db} m", pts[i], pts[j]);
+            }
+            // And turned, not mirrored: the four span the same signed volume.
+            let volume = |q: &[V3], m: f64| {
+                let (u, v, w) = (sub(q[1], q[0]), sub(q[2], q[0]), sub(q[3], q[0]));
+                (u[0] * (v[1] * w[2] - v[2] * w[1]) - u[1] * (v[0] * w[2] - v[2] * w[0]) + u[2] * (v[0] * w[1] - v[1] * w[0])) * m * m * m
+            };
+            let (va, vb) = (volume(&pa, meters_a), volume(&pb, meters_b));
+            assert!((va - vb).abs() <= 1e-7 * va.abs().max(1.0), "{pts:?} about {off:?}: a volume of {va} m³ against {vb} m³");
+        }
+    }
+}

@@ -22,10 +22,9 @@ use crate::layer::environment::config::light_cfg;
 use crate::layer::environment::fog::{band_at, eye_ground, eye_height, reach_at};
 use crate::layer::environment::theme::{themes, Theme};
 use crate::layer::environment::theme_clock::theme_key;
-use crate::shell::map_store::map_store;
 use crate::world::change::{request_world_tick, wake_at};
 use crate::world::chunk::table::Frame;
-use crate::world::frame::view::camera_center;
+use crate::world::frame::view::globe_anchor;
 
 // The map's own fallback, so the first frames before map_center exists light
 // the world from a real place instead of computing sun and moon for (0, 0).
@@ -79,7 +78,7 @@ pub fn km_per_u() -> f64 {
     epsg3857::M_PER_U * environment().observed_lat.to_radians().cos() / 1000.0
 }
 
-/// The sphere about the camera center (view.rs's camera_center), which the
+/// The sphere about the globe's anchor (world/frame/view.rs `globe_anchor`), which the
 /// flat map is laid back on (pxl-render's look/globe.rs), for the chunks'
 /// culling as the renderer takes it for its frame.
 pub fn globe() -> Globe {
@@ -101,9 +100,9 @@ pub fn map_environment_step() {
         request_world_tick();
     }
 
-    // Observed from the camera center, the one the world is laid on the
+    // Observed from the globe's anchor, the one the world is laid on the
     // planet about, so the sphere's latitude and the sky over it are its.
-    let center = map_store().map_center.map(|_| camera_center());
+    let center = globe_anchor();
     if center != e.observed_center {
         e.observed_center = center;
         if let Some(c) = center {

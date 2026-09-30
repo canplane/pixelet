@@ -821,24 +821,21 @@ impl Renderer {
         // at its origin (frame/draw.rs `DrawList::translation`): the meshes,
         // the sky and the stars, each pixel's ray from the eye, and the
         // clouds, anchored to the ground by the cell the eye is over on the
-        // map. What stands anywhere in it — the camera center below — is
+        // map. What stands anywhere in it — the globe's anchor below — is
         // written against the eye in doubles before it is narrowed.
         let eye_local = [s[STAGE_AT::EYE_LOCAL], s[STAGE_AT::EYE_LOCAL + 1], s[STAGE_AT::EYE_LOCAL + 2]];
         let eye = [0.0; 3];
         let origin = ivec::gather(ivec::from_real(s[STAGE_AT::ORIGIN]), ivec::from_real(s[STAGE_AT::ORIGIN + 1]), 0);
-        // The camera center — the root frame's origin undone — which the
-        // sun's shadow is aimed at and the map is laid back on the planet
-        // about (look/globe.rs): its latitude's values and the planet's
-        // radius in the units the map has there. The globe's placement is
-        // a function of a point's offset from it and its height over it
-        // alone, so it places a point of the eye's frame where it places
-        // the same point of the root frame, less the eye.
-        let center: [f64; 3] = core::array::from_fn(|k| -s[STAGE_AT::TRANSLATION + k] - eye_local[k]);
+        // The globe's anchor, which the sun's shadow is aimed at and the map
+        // is laid back on the planet about (look/globe.rs): its latitude's
+        // values and the planet's radius in the units the map has there. The
+        // globe's placement is a function of a point's offset from it and its
+        // height over it alone, so it places a point of the eye's frame where
+        // it places the same point of the root frame, less the eye.
+        let center: [f64; 3] = core::array::from_fn(|k| s[STAGE_AT::GLOBE_ANCHOR + k] - eye_local[k]);
         let sphere = Globe::at(env[ENV_AIR + 2] as f64);
         // Straight up where the eye stands: away from the planet's center,
-        // the radius below the camera center. The eye stands off the camera
-        // center by the orbit, so its up leans from the root frame's Z by that
-        // over the radius — nothing at a street, degrees from orbit — and the
+        // the radius below the globe's anchor, which is under the eye — the
         // air, the clouds and the stars are measured from it, on the sphere
         // the world is laid on.
         let planet_center = [center[0], center[1], center[2] - sphere.radius_u()];

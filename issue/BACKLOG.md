@@ -102,15 +102,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   and its hit with them: the pointer's ray scans the chunks shown, each
   grown by a reach derived from nothing (layer/decor/hit.rs `DECOR_REACH`),
   where the ground and the objects are each walked along the ray.
-- **A blank screen after a far search from a zoomed-out view.** Location
-  pending, 30 ticks of zoom out, search "아주대학교", the first result:
-  nothing is drawn and the frame count stops (2 of 2 under dev:local,
-  2026-09-25). The first requests after the jump go to the world origin
-  (`eye()` on the stale origin). Seen again 2026-09-29, the location still
-  pending and a search to Seoul station, on the branch and before it: the
-  first pages asked were the world origin's, and nothing was drawn. The floor now comes from the source's declared top, so the old lead —
-  a view with no page under `--top-level` — no longer holds; the stale
-  origin is what is left to follow.
 - **One order out from the eye, the rest.** Every scheduler takes work in
   one order out from the eye, a chunk is a cube of its level holding
   something, and a placed object lives in the cube its band is in
@@ -236,23 +227,16 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P1
 
-- **The camera's pose owns the view's frame.** The observer is the origin
-  and does not move; what the controls move is the one transform from the
-  world to it, and the world as stored never moves. Orbit, free and XR
-  controls are policy above that line, each producing the one transform: an
-  orbit's radius, polar and azimuth are the pivot's place seen from the
-  observer, a free camera's are a position and a yaw and pitch, an XR
-  headset's its pose. Below the line nothing knows which control made it,
-  and what reaches the GPU already takes the observer at the origin
-  (2026-09-29): points, and the anchors the globe, the shadow and the clouds
-  are laid about, are written against the eye in doubles, the CPU's
-  anchor-local frame apart. Today's is one representation of that, for the
-  orbit alone, and half of one: only distance and polar move the eye, the
-  azimuth turns the world's root under a camera fixed on the orbit's −Y side
-  (control/camera/orbit.rs), so what needs the view's heading — the sun and
-  the moon — turns it back (`rotate2`), and the planet is laid about the
-  view center where the demand's curvature is measured from the eye.
-  Orthogonal to the model: the observation reads only the frustum.
+- **The camera's pose owns the view's frame: the controllers and the
+  globe's anchor.** The world stays in its own axes and the observer has
+  the one pose (2026-09-30, world/frame/view.rs `ObserverPose`): the eye
+  and the turn from the world's axes to the camera's, which the orbit makes
+  from its pivot, distance, tilt and heading (control/camera/orbit.rs
+  `orbit_pose`), and every consumer reads, the chunks' culling, the badges,
+  the observation's frustum, the pointer's ray and the renderer alike. The
+  planet is laid about the sea under the eye (world/frame/view.rs
+  `globe_anchor`), since the sphere is one whichever point it is laid about
+  (pxl-render look/globe.rs) and under the eye the eye needs no placing.
 - **A change of polar re-cuts the whole screen.** Seen 2026-09-29: moving
   the polar makes the whole view flicker as pieces are replaced, as it did
   before and more since demand comes from the tiles' footprints. A visual

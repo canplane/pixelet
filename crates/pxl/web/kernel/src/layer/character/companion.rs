@@ -92,10 +92,9 @@ const SETTLE_DELAY_S: f64 = 0.15;
 // EMA to match, so this lerp is the one and only position-smoothing stage.
 const FOLLOW_LERP_K: f64 = camera_cfg::smooth::POS_DAMP;
 
-// Follow mode: the walker's turn about Z, set every frame as
-// `FOLLOW_FACING - azimuth` so its world facing stays constant while the map
-// spins under it. +PI turns a model whose forward is -Y into the screen, back
-// to the camera.
+// Follow mode: the walker's turn about Z, set every frame from the screen's
+// up laid on the ground so it keeps its back to the camera as the view turns.
+// +PI turns a model whose forward is -Y into the screen, back to the camera.
 const FOLLOW_FACING: f64 = core::f64::consts::PI;
 
 // A gap narrower than this is not worth walking to: well under one GPS fix's
@@ -226,7 +225,7 @@ impl Walker {
 
         if is_follow_mode {
             // Snap on the entry frame and across an L4 rebase: both are one-shot
-            // jumps the view frame itself snaps through.
+            // jumps the view itself snaps through.
             if rebased || !self.was_follow_mode {
                 px = target.x;
                 py = target.y;
@@ -235,8 +234,10 @@ impl Walker {
                 px = self.pose[0] + (target.x - self.pose[0]) * a;
                 py = self.pose[1] + (target.y - self.pose[1]) * a;
             }
-            // Back to the camera, held there while the map spins underneath.
-            self.pose[3] = FOLLOW_FACING - view().azimuth;
+            // Back to the camera, held there while the view turns about it:
+            // the screen's up laid on the ground is a quarter turn from east
+            // at a heading of zero.
+            self.pose[3] = FOLLOW_FACING + view().up_heading() - core::f64::consts::FRAC_PI_2;
             if (target.x - px).hypot(target.y - py) > WALK_EPS {
                 self.follow_walk_until = now + FOLLOW_WALK_LINGER_S;
             }
@@ -321,7 +322,7 @@ impl Walker {
             if let Some(heading) = step.heading {
                 self.pose[3] = heading + core::f64::consts::PI / 2.0;
             } else if !self.initial_facing_done {
-                let eye = view().eye_local;
+                let eye = view().pose.eye;
                 self.pose[3] = heading_to(Vec2 { x: step.x, y: step.y }, Vec2 { x: eye[0], y: eye[1] }) + core::f64::consts::PI / 2.0;
                 self.initial_facing_done = true;
             }
