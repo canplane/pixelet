@@ -186,14 +186,14 @@ fn ocean() -> Terrain {
 }
 
 /// The estimator only reads: every tile of a screen over resident ground
-/// sees it, and residency is as it was, nothing asked for, held or leased.
+/// sees it, and residency is as it was, nothing asked for or held.
 #[test]
 fn the_estimator_never_changes_residency() {
     let _g = serial();
     let (paging, pages) = resident();
     let store = Store::new();
     let o = over(&pages, [0.0; 3]);
-    let before = (paging.revision(), paging.frames_used(), paging.leases().count());
+    let before = (paging.revision(), paging.frames_used());
     let observer = EdgeRays(Access::new(&paging, &store), Tau::FINEST);
     let grid = Grid::of(Lens::of(&o).unwrap());
     let mut seen = 0;
@@ -204,7 +204,7 @@ fn the_estimator_never_changes_residency() {
         }
     });
     assert!(seen > 0, "nothing seen of resident ground");
-    assert_eq!(before, (paging.revision(), paging.frames_used(), paging.leases().count()));
+    assert_eq!(before, (paging.revision(), paging.frames_used()));
     for &p in &pages {
         assert!(paging.asked(p).is_none(), "an observation asked for {p:?}");
     }

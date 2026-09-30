@@ -34,12 +34,8 @@
 //!    first instead: from a cold start the eye's ancestors took the first six
 //!    connections, and the top page's two-kilometer cubes stood in front of
 //!    the eye for seconds while its own page waited (measured 2026-09-26).
-//!    The pages over a page the view reads are no such hole: the page is read
-//!    only once they are resident (world/paging.rs), so they are asked with
-//!    it, at its place.
 //!
-//! **Everything else is a tie.** A label, a lease no view reads — a
-//! consumer's page away from the eye — and the geocode dictionary have no
+//! **Everything else is a tie.** A label and the geocode dictionary have no
 //! relation to each other or to the view that anything in this tree gives a
 //! reason for. They rank the same, after the view, and io/sched.rs breaks the
 //! tie by category and subject: an order that means nothing and is the same
@@ -84,7 +80,7 @@ impl Policy {
 }
 
 /// A page of a layer, by why it is asked for and its place in the view's
-/// order: a page with none, a lease the view does not read, is aside.
+/// order: a page with none is aside.
 fn page(layer: Category, ask: Ask) -> Rank {
     if ask.order == Order::LAST {
         return Rank { class: ASIDE, distance: 0.0 };

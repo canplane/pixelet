@@ -533,7 +533,7 @@ pub enum Command {
     WORLD_UPDATE = 0x1b03,
     /// What the tile source declares of itself, once the shell has it (published.json's
     /// SOURCE, or the dev tile server's answer in the same form). Until it comes nothing is
-    /// observed: the floor is leased at the level it names, and no view is drawn from a
+    /// observed: the floor is held at the level it names, and no view is drawn from a
     /// level the source does not supply whole.
     WORLD_SOURCE = 0x1b16,
     /// The canvas's client rect.

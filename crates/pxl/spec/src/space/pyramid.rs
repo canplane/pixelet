@@ -1,15 +1,18 @@
 // pxl-spec/space/pyramid.rs
 
 //! The pyramid: the space hierarchy (indexer.rs) repeated over coarser
-//! blocks. A level-k cell is a block of 2^k units and a level-k page is a
-//! page's worth of those cells, 2^k leaf pages on a side, so every extent the
+//! blocks. A level-k cell is its lattice's first cell k levels up
+//! (`Lattice::scale`), 2^k of them on a side, and a level-k page is a page's
+//! worth of those cells, 2^k leaf pages on a side, so every extent the
 //! hierarchy gives a leaf is the same extent at level k, scaled
 //! (issue/20260921-level-step-and-zoom-are-one-number.md).
 //!
-//! It is the one hierarchy every layer is held in. Where a cell is, which
-//! page it belongs to, which pages fold into which, and where a cell's center
-//! stands are decided here and nowhere else; a layer owns only what a cell
-//! carries and how a parent's cell is made from its children's (`Folds`).
+//! It is the one hierarchy the ground's layers are paged in — terrain and
+//! places; the placed objects keep their own trees, on the same geometry
+//! (space/README.md). Where a cell is, which page it belongs to, which pages
+//! fold into which, and where a cell's center stands are decided here and
+//! nowhere else; a layer owns only what a cell carries and how a parent's
+//! cell is made from its children's (`Folds`).
 
 use super::hierarchy::{ancestor_of, child_of, first_descendant_of, parent_of, slot_of, Scale};
 use super::indexer::{L1, L2, L3, L3_IDX, L4};

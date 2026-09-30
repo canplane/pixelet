@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 
 use pxl_spec::bake::constant::{band_cell_z, in_cell, unpack_pos, BandZ, CellZ, EntryAt, CELL, CELL_STEPS};
 use pxl_spec::cell::cube_types;
-use pxl_spec::cell::object::{decor_ids, decor_num_id, placeable_cube_num_id, placeable_cubes};
+use pxl_spec::cell::object::{decor_ids, decor_num_id, object_value_is_voxel, placeable_cube_num_id, placeable_cubes};
 
 use crate::mesh::paint::object::material::solid_material;
 use pxl_spec::space::pvf3::ivec::IVec;
@@ -134,9 +134,10 @@ impl Painter {
     }
 
     /// Whether `state` is a voxel — a solid or air — rather than an instance
-    /// or nothing.
+    /// or nothing: the catalog's to say (pxl-spec cell/object.rs
+    /// `object_value_is_voxel`), which the painter's own kinds agree with.
     pub fn is_voxel(&self, state: u32) -> bool {
-        matches!(self.kind(state), Kind::Solid | Kind::Air)
+        object_value_is_voxel(state)
     }
 
     fn kind(&self, state: u32) -> Kind {
@@ -234,3 +235,7 @@ impl Painter {
         ok.then_some(1)
     }
 }
+
+#[cfg(test)]
+#[path = "adapter.test.rs"]
+mod test;

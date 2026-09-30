@@ -4,15 +4,16 @@
 //! frame cannot wait on a fetch, so a fault is answered by the nearest
 //! resident page over it (paging.rs `drawn_from`), and only something held
 //! over every observed piece of ground makes that page exist. What keeps the
-//! law is a fallback, and residency holds whatever the chosen one leases:
+//! law is a fallback, and residency holds hard whatever the chosen one asks
+//! for:
 //! the coarse level held all around is one way, a small root or a procedural
 //! stand-in would be others. Which is chosen is named once (`Floor`), and
 //! the capacity counts its pages (paging.rs `HARD_PAGES`).
 //!
-//! The floor is held, not asked for when an observation finds nothing: added
-//! only then, every turn toward ground not yet seen would leave a hole for a
-//! round trip. It is leased whatever is observed, so only the first moment of
-//! a cold start or a jump is without it.
+//! The floor is asked for with every observation, not when one finds
+//! nothing: added only then, every turn toward ground not yet seen would
+//! leave a hole for a round trip. So only the first moment of a cold start or
+//! a jump is without it.
 //!
 //! **The floor is the source's.** Its level is the coarsest the tile source
 //! supplies whole, as the source declares it (`declare`): the published
@@ -44,12 +45,12 @@ pub fn level() -> Option<u32> {
     *DECLARED.get(Default::default)
 }
 
-/// A way to keep every observation answered: the pages it leases for a view.
+/// A way to keep every observation answered: the pages it holds for a view.
 pub trait Fallback {
-    /// The most pages it leases at once.
+    /// The most pages it holds at once.
     const PAGES: u32;
 
-    /// Each page it leases for an eye at `eye` whose ground is drawn out to
+    /// Each page it holds for an eye at `eye` whose ground is drawn out to
     /// `far`, over a source whose coarsest level supplied whole is `top`.
     fn floor(top: u32, eye: [f64; 3], far: f64, each: impl FnMut(LevelPage));
 }

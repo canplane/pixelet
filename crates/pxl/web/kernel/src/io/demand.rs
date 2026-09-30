@@ -107,14 +107,10 @@ impl DemandKey {
 /// strongest first.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Why {
-    /// Leased by the fallback that keeps every observation answered
-    /// (world/paging/floor.rs), or a page such a page depends on.
+    /// A page of the fallback that keeps every observation answered
+    /// (world/paging/floor.rs).
     Floor,
-    /// Leased by a consumer that takes no coarser answer, or a page such a
-    /// page depends on.
-    Lease,
-    /// A page the view reads now, or one it depends on: a fault where it is
-    /// not resident.
+    /// A page the view reads now: a fault where it is not resident.
     Fault,
     /// Speculation (world/prefetch.rs): more than was asked, in case it will
     /// be.
@@ -136,8 +132,8 @@ impl Ask {
     pub const PLAIN: Ask = Ask { why: Why::Fault, order: Order::LAST };
 
     /// One page asked for twice: held by the stronger reason, and placed
-    /// where the earlier of the two falls — the two are apart, since a page
-    /// leased by a consumer and read by the view is the view's to order.
+    /// where the earlier of the two falls — the two are apart, since how a
+    /// page is held says nothing of when the view needs it.
     pub fn best(self, other: Ask) -> Ask {
         Ask {
             why: self.why.min(other.why),

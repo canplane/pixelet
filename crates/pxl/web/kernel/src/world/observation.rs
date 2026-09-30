@@ -91,11 +91,12 @@ pub fn observation() -> Option<Observation> {
 
 /// What the kernel knows of the world: the terrain's index lanes, from each
 /// page or the nearest resident page over it (world/access.rs
-/// `Access::relief`), and the objects, which are all
-/// resident. Both are stored flat — a heightfield, and bands over a column —
-/// and read here by the node of that storage under a box, so what asks sees
-/// only the box's answer. Unknown where no terrain page over some of the box
-/// is held.
+/// `Access::relief`), and the objects, which are all resident. The ground is
+/// stored flat and read by the node of its heightfield under a box; the
+/// objects are asked their 3D bound in each node's box
+/// (layer/object/store.rs `Store::bound_in`), so what asks sees only the
+/// box's answer on every axis. Unknown where no terrain page over some of
+/// the box is held.
 ///
 /// A piece of ground drawn in a level's cells is off from what it stands for
 /// by a cell across and as far as it rises over one up; an object folded
@@ -127,9 +128,9 @@ impl Bounds for Known {
                 hold(ground);
                 rise = rise.max(n.slope * cell);
             }
-            if let Some(objects) = n.objects.and_then(cut).filter(|_| kernel().objects.holds(node, (z0, z1))) {
-                hold(objects);
-                rise = rise.max(objects.1 - objects.0);
+            if let Some(objects) = kernel().objects.bound_in(&square) {
+                bound = Some(bound.map_or(objects, |a| a.join(objects)));
+                rise = rise.max(objects.max[2] - objects.min[2]);
             }
         });
         match (known, bound) {
@@ -147,20 +148,18 @@ impl Bounds for Known {
     }
 }
 
-/// What the stores say of a node of their own: the ground's bound and its
-/// steepest rise over a run, and the span its objects reach.
+/// What the ground's store says of a node of its own: its bound and its
+/// steepest rise over a run.
 #[derive(Clone, Copy)]
 struct Node {
     ground: (f64, f64),
     slope: f64,
-    objects: Option<(f64, f64)>,
 }
 
 /// What is known of `node` at `level`: none where no terrain page over it is
-/// resident. Read afresh each time, and one read of each store: the ground's
-/// from the block of the index lane the node spans (pxl-spec bake/format.rs
-/// `Index`), made as its page arrived and gone with it, and the objects'
-/// from their store as it is now, which moves on its own.
+/// resident. Read afresh each time from the block of the index lane the node
+/// spans (pxl-spec bake/format.rs `Index`), made as its page arrived and gone
+/// with it.
 fn read(level: u32, node: (Scale, [i64; 2])) -> Option<Node> {
     let page = L3.up(level as i32);
     let [x, y] = ancestor_of(node.1, page.above(node.0) as u32);
@@ -169,7 +168,6 @@ fn read(level: u32, node: (Scale, [i64; 2])) -> Option<Node> {
     Some(Node {
         ground: relief.extent,
         slope: relief.slope,
-        objects: kernel().objects.reach_over(node),
     })
 }
 

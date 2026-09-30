@@ -93,13 +93,13 @@ fn the_demand_is_the_estimators_and_every_fault_in_it_is_asked_for() {
             continue;
         }
         faults += 1;
-        let held = pyramid.paging.held(p) || pyramid.paging.settled(p);
+        let held = pyramid.paging.resident(p) || pyramid.paging.settled(p);
         assert_eq!(asked.contains(&p.subject()), !held, "{p:?}");
     }
     assert!(faults > 0, "a residency with faults");
     for &(s, _) in pyramid.wants() {
         let p = LevelPage::of_subject(s);
-        assert!(!pyramid.paging.held(p) && !pyramid.paging.settled(p), "{p:?} asked for and held or said");
+        assert!(!pyramid.paging.resident(p) && !pyramid.paging.settled(p), "{p:?} asked for and held or said");
     }
 }
 
@@ -146,7 +146,7 @@ fn ground_outside_the_frustum_is_not_demanded() {
 }
 
 /// Observing allocates nothing once it has held the most it asks for: an eye
-/// moving along a path the second time over asks, leases and lets go
+/// moving along a path the second time over asks and lets go
 /// without the heap, whatever the demand names each step.
 #[test]
 fn observing_a_moving_eye_allocates_nothing_once_it_has_held_the_most() {

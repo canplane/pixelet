@@ -9,10 +9,9 @@
 //! conservative estimator names it from what is known of the heights, mapped
 //! to the layer's pages by the layer's storage. Each such page is asked for
 //! at the page that says its ground — itself, or where the bake left it no
-//! page, the one over it — with every page it depends on; one not resident
-//! is a fault, answered meanwhile by the nearest resident page over it. The
-//! fallback's pages (paging/floor.rs), the consumers' leases and speculation
-//! (prefetch.rs) are merged in, the best reason per page, and what of that
+//! page, the one over it; one not resident is a fault, answered meanwhile
+//! by the nearest resident page over it. The fallback's pages
+//! (paging/floor.rs) and speculation (prefetch.rs) are merged in, the best reason per page, and what of that
 //! is not held is said to the scheduler once a turn. How the pages are drawn
 //! — the pieces the view is cut into (pyramid/domain.rs), what a layer draws
 //! of them (pyramid/cover.rs, chunk/frontier.rs) — is made from what is
@@ -24,8 +23,8 @@
 //! never asked for, and its ground is drawn from the page over it
 //! (`source`). Only the finest level is a bound.
 //!
-//! None of that is a layer's. A layer says what its page is and what it
-//! depends on, how a fetched body becomes one in a record, what a page with
+//! None of that is a layer's. A layer says what its page is, how a fetched
+//! body becomes one in a record, what a page with
 //! no object is, and who reads its pages; the rest is here, once.
 
 pub mod chunk;
@@ -66,17 +65,6 @@ pub trait Layer: Folds + Clone + 'static {
     /// pages is told.
     fn changed(_p: LevelPage, _present: bool) {}
 
-    /// The page `p` depends on: held whenever `p` is, and `p` read only once
-    /// it is resident. None for a page of the pyramid: a page carries the
-    /// index of everything under it in its own lanes, and a page that is held
-    /// exists, so nothing over it is needed to read it. The page over a
-    /// missing one is the fallback's and the query's, which descend from the
-    /// nearest resident page, never a condition on reading one — or a
-    /// missing ancestor would make a resident descendant unreachable.
-    fn dependencies(_p: LevelPage) -> Option<LevelPage> {
-        None
-    }
-
     /// The pages that meet a requirement (pxl-spec space/observation.rs
     /// `Storage`): the pyramid's own, 2D, for every layer on it now.
     fn pages(r: &Requirement, each: &mut dyn FnMut(LevelPage)) {
@@ -84,8 +72,8 @@ pub trait Layer: Folds + Clone + 'static {
     }
 }
 
-/// What the asks are a function of: the observation, what is held and
-/// leased (`Paging::revision`), what is known of the heights
+/// What the asks are a function of: the observation, what is held
+/// (`Paging::revision`), what is known of the heights
 /// (`heights_revision`), which neither the observation nor this layer's
 /// pages move, the quality the view is held to (world/quality.rs), and
 /// which casting of the screen's tiles the demand is estimated from
@@ -114,8 +102,6 @@ impl Victim for Farthest<'_> {
 
 pub struct Pyramid<L: Layer> {
     paging: Paging<L>,
-    /// What the fallback leases now.
-    floor: Vec<LevelPage>,
     /// The observation last asked for.
     observation: Option<Observation>,
     /// The pages it requires, as the estimator names them.
@@ -123,30 +109,23 @@ pub struct Pyramid<L: Layer> {
     /// What is asked for and not held, said again every turn as it stands.
     wants: Vec<(u64, Ask)>,
     last: Option<Seen>,
-    /// What an observation asks for, and what it gathers on the way — the
-    /// floor it leases next, the speculation and the pages each would add —
-    /// held across observations so observing allocates nothing once it has
-    /// held the most it asks for: the asks are at most `ASKS`, the floor
-    /// `Floor::PAGES`.
+    /// What an observation asks for, and the speculation it gathers on the
+    /// way, held across observations so observing allocates nothing once it
+    /// has held the most it asks for: the asks are at most `ASKS`.
     asks: HashMap<LevelPage, Ask>,
-    next_floor: Vec<LevelPage>,
     hints: Vec<(Order, LevelPage)>,
-    fresh: Vec<LevelPage>,
 }
 
 impl<L: Layer> Default for Pyramid<L> {
     fn default() -> Self {
         Pyramid {
             paging: Paging::default(),
-            floor: Vec::new(),
             observation: None,
             demand: Vec::new(),
             wants: Vec::new(),
             last: None,
             asks: HashMap::with_capacity(ASKS as usize),
-            next_floor: Vec::with_capacity(Floor::PAGES as usize),
             hints: Vec::new(),
-            fresh: Vec::new(),
         }
     }
 }
@@ -188,16 +167,6 @@ impl<L: Layer> Pyramid<L> {
         self.paging.drawn_from(p)
     }
 
-    /// Holds `p` hard for a consumer that takes no coarser answer, until
-    /// released.
-    pub fn lease(&mut self, p: LevelPage) {
-        self.paging.lease(p);
-    }
-
-    pub fn release(&mut self, p: LevelPage) {
-        self.paging.release(p);
-    }
-
     /// Whether anything asks for `p` now.
     pub fn asked(&self, p: LevelPage) -> bool {
         self.paging.asked(p).is_some()
@@ -229,28 +198,15 @@ impl<L: Layer> Pyramid<L> {
 
     // ---- asking ----
 
-    /// What the observation `o` asks for: the fallback leased, and every page
-    /// asked for — what `estimator` says `o` requires, as far as `bounds`
-    /// know the heights, the leases, and what `prefetch` speculates on at
-    /// `tau`, at most `allowance` of it — each with what it depends on, the
-    /// best reason per page. What of it is not held is what the layer wants.
+    /// What the observation `o` asks for: what `estimator` says `o`
+    /// requires, as far as `bounds` know the heights, the fallback's pages,
+    /// and what `prefetch` speculates on at `tau`, at most `allowance` of it,
+    /// the best reason per page. What of it is not held is what the layer wants.
     ///
     /// Speculation is asked for only as far as frames are left over once
     /// everything held hard and everything demanded has one, so none of it
     /// is fetched only to find no frame.
     pub fn observe(&mut self, o: &Observation, bounds: &impl Bounds, estimator: &impl DemandEstimator, prefetch: &impl Prefetch, tau: Tau, allowance: u32) {
-        let mut floor = core::mem::take(&mut self.next_floor);
-        floor.clear();
-        Floor::floor(o.top, o.eye, o.far, |p| floor.push(p));
-        xpute_core::ensure!(floor.len() as u32 <= Floor::PAGES, ENOTRECOVERABLE, floor.len());
-        for &p in self.floor.iter().filter(|p| !floor.contains(p)) {
-            self.paging.release(p);
-        }
-        for &p in floor.iter().filter(|p| !self.floor.contains(p)) {
-            self.paging.lease(p);
-        }
-        self.next_floor = core::mem::replace(&mut self.floor, floor);
-
         let mut demand = core::mem::take(&mut self.demand);
         demand.clear();
         estimator.requirements(o, bounds, &mut |r| L::pages(&r, &mut |p| demand.push(p)));
@@ -259,11 +215,7 @@ impl<L: Layer> Pyramid<L> {
         let mut asks = core::mem::take(&mut self.asks);
         asks.clear();
         let ask = |asks: &mut HashMap<LevelPage, Ask>, p: LevelPage, a: Ask| {
-            let mut q = Some(p);
-            while let Some(p) = q {
-                asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
-                q = L::dependencies(p);
-            }
+            asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
         };
         let order = |p: LevelPage| Order::of_region(o, bounds, p.level, p.region());
         for &p in &demand {
@@ -277,14 +229,12 @@ impl<L: Layer> Pyramid<L> {
             read[p.level as usize] += 1;
         }
         xpute_core::ensure!(read.iter().all(|&n| n <= LEVEL_DEMAND_PAGES), ENOTRECOVERABLE, *read.iter().max().unwrap_or(&0));
-        for &p in &self.floor {
+        let mut floor = 0u32;
+        Floor::floor(o.top, o.eye, o.far, |p| {
+            floor += 1;
             ask(&mut asks, p, Ask { why: Why::Floor, order: order(p) });
-        }
-        // A lease is held for its consumer, not the view: it has no place in
-        // the view's order unless the view reads it too.
-        for p in self.paging.leases().filter(|p| !self.floor.contains(p)) {
-            ask(&mut asks, p, Ask { why: Why::Lease, order: Order::LAST });
-        }
+        });
+        xpute_core::ensure!(floor <= Floor::PAGES, ENOTRECOVERABLE, floor);
 
         let needed = asks.keys().filter(|&&p| self.paging.takes_frame(p)).count() as u32;
         let mut room = FRAMES.saturating_sub(needed).min(allowance);
@@ -302,24 +252,21 @@ impl<L: Layer> Pyramid<L> {
         // `ABSENT` takes none, and is known only while it is asked for
         // (paging.rs `ASKS`).
         let mut pages = ASKS.saturating_sub(asks.len() as u32);
-        let mut fresh = core::mem::take(&mut self.fresh);
         for &(order, p) in &hints {
-            fresh.clear();
-            fresh.extend(std::iter::successors(Some(p), |&q| L::dependencies(q)).filter(|q| !asks.contains_key(q)));
-            let new = fresh.iter().filter(|&&q| self.paging.takes_frame(q)).count() as u32;
-            if new > room || fresh.len() as u32 > pages {
+            let new = u32::from(self.paging.takes_frame(p));
+            if new > room || pages == 0 {
                 break;
             }
             room -= new;
-            pages -= fresh.len() as u32;
+            pages -= 1;
             ask(&mut asks, p, Ask { why: Why::Hint, order });
         }
 
         self.wants.clear();
         self.wants
-            .extend(asks.iter().filter(|(p, _)| !self.paging.held(**p) && !self.paging.settled(**p)).map(|(p, &a)| (p.subject(), a)));
+            .extend(asks.iter().filter(|(p, _)| !self.paging.resident(**p) && !self.paging.settled(**p)).map(|(p, &a)| (p.subject(), a)));
         self.paging.ask(&asks);
-        (self.asks, self.hints, self.fresh) = (asks, hints, fresh);
+        (self.asks, self.hints) = (asks, hints);
 
         self.observation = Some(*o);
         self.demand = demand;
@@ -333,7 +280,7 @@ impl<L: Layer> Pyramid<L> {
 
     /// The layer's turn. The quality is decided first (world/quality.rs),
     /// so what is asked for is at the quality what is drawn is cut at.
-    /// Wherever the observation, what is held or leased, the heights, the
+    /// Wherever the observation, what is held, the heights, the
     /// quality or what the screen's tiles saw have changed, it is observed
     /// again (`observe`), since the asks are functions of all of them. A turn
     /// where none changed decides nothing and says the wants it has.
@@ -348,7 +295,7 @@ impl<L: Layer> Pyramid<L> {
         let seen = (o, self.paging.revision(), heights_revision(), tau, domain::walks());
         if self.last != Some(seen) {
             self.observe(&o, &Known, &ByFootprints { tau, sight: domain::sight() }, &PREFETCH, tau, param::HINT_ALLOWANCE);
-            // Observing leases and lets go; what is recorded is the state the
+            // Observing lets go; what is recorded is the state the
             // observation was made against.
             self.last = Some((o, self.paging.revision(), heights_revision(), tau, domain::walks()));
         }

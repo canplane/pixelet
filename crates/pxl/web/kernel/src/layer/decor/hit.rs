@@ -10,7 +10,7 @@
 use pxl_spec::space::indexer::L2_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::chunk_span_of;
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::v3::{Aabb, V3};
 use xpute_runtime::mem::base::ptr_at;
 
 use crate::kernel::kernel;
@@ -150,26 +150,11 @@ fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: 
 /// Whether the ray crosses the square [x0, x1] × [y0, y1] at any height
 /// within `limit`.
 fn ray_meets_square(o: &V3, d: &[f64; 3], x0: f64, y0: f64, x1: f64, y1: f64, limit: f64) -> bool {
-    let mut t0 = 0.0f64;
-    let mut t1 = limit;
-    for (p, v, lo, hi) in [(o[0], d[0], x0, x1), (o[1], d[1], y0, y1)] {
-        if v.abs() < 1e-12 {
-            if p < lo || p > hi {
-                return false;
-            }
-            continue;
-        }
-        let (mut a, mut b) = ((lo - p) / v, (hi - p) / v);
-        if a > b {
-            core::mem::swap(&mut a, &mut b);
-        }
-        t0 = t0.max(a);
-        t1 = t1.min(b);
-        if t0 > t1 {
-            return false;
-        }
-    }
-    true
+    let square = Aabb {
+        min: [x0, y0, f64::NEG_INFINITY],
+        max: [x1, y1, f64::INFINITY],
+    };
+    square.span_along(*o, *d).is_some_and(|(enter, leave, _)| enter.max(0.0) <= leave.min(limit))
 }
 
 /// Whether the ray from `p` (relative to the sphere's center) comes within

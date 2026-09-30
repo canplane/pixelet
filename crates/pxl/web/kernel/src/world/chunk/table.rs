@@ -29,7 +29,7 @@
 use pxl_spec::space::indexer::FROM_L2_IDX;
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
 
-use pxl_render::mesh::paint::object::fold::Fold;
+use std::collections::HashMap;
 
 use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::arena::{arena_configure, arena_epoch, arena_write};
@@ -607,7 +607,7 @@ pub struct Scheduler {
     decor_sample: ChunkSample,
     decor_cols: Vec<IVec>,
     decor_placed: Vec<Placed>,
-    decor_fold: Fold,
+    decor_folded: HashMap<[i64; 3], u32>,
     /// The frames' time, in milliseconds: what a dissolve runs on, as every
     /// animation does, so it takes the frames it says rather than whatever
     /// the wall clock did between them.
@@ -750,7 +750,7 @@ impl Scheduler {
             decor_sample: ChunkSample::default(),
             decor_cols: Vec::new(),
             decor_placed: Vec::new(),
-            decor_fold: Fold::default(),
+            decor_folded: HashMap::new(),
             clock_ms: 0.0,
             decor_scratch: None,
             refused_seen: 0,
@@ -1042,9 +1042,12 @@ impl Scheduler {
             // fold the chunk's runs are made with (build.rs `level_runs`): what
             // keeps a candidate off a cell is that fold, as a z16 chunk's is
             // the store's own cell.
-            let folds = level > 0 && scatters;
-            let columns = self.decor_placed.iter().filter(|_| folds).filter_map(|p| world.store.entries(p.col_idx));
-            self.decor_fold.fold(world.painter, columns, GROUND.scale(level), self.builder.hide());
+            let target = GROUND.scale(level);
+            let (cx, cy, span) = (target.index(x0), target.index(y0), CHUNK_CELLS as i64);
+            match level > 0 && scatters {
+                true => world.store.fold_at(target, [cx, cy], [cx + span, cy + span], self.builder.hide(), &mut self.decor_folded),
+                false => self.decor_folded.clear(),
+            }
             // The surface the tier is drawn with, which an instance stands
             // on: its tier is built before its decor (`commit`).
             let surface = self.slots[i].tier(cube, generation).map(|t| Drawn {
@@ -1064,7 +1067,7 @@ impl Scheduler {
                 ty0,
                 col_idx: (level == 0).then(|| L2_IDX(ivec::gather(x0, y0, 0))),
                 surface: surface.as_ref(),
-                folded: (level > 0).then_some(self.decor_fold.cells()),
+                folded: (level > 0).then_some(&self.decor_folded),
             });
             let Some(scratch) = self.decor_scratch.as_mut() else { return false };
             let heights = self.slots[i].chunk.z_range();

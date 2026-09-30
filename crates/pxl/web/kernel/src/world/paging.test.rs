@@ -7,10 +7,9 @@
 // camera at rest, whatever the policy:
 //
 // - residency never holds more frames than it has;
-// - a lease and what the view reads are never refused a frame (a refusal of
-//   one is a bug and aborts), and a leased page once resident stays so;
-// - a page, once resident, stays so while it is held: what it depends on is
-//   never given up under it;
+// - the fallback's pages and what the view reads are never refused a frame
+//   (a refusal of one is a bug and aborts), and a page of the fallback once
+//   resident stays so;
 // - every page the observation demands ends up read exactly, at its level,
 //   and nothing is left asked for.
 
@@ -19,7 +18,7 @@ use std::collections::HashSet;
 use pxl_spec::bake::poi_page::{Place, PoiPage, POI_LATTICE};
 
 use super::*;
-use crate::io::demand::Category;
+use crate::io::demand::{Category, Why};
 use crate::io::policy::Policy;
 use crate::io::sched::{Ledger, Rank, Serve};
 use crate::layer::environment::fog::reach_at;
@@ -53,6 +52,13 @@ fn observation_at([x, y]: [f64; 2]) -> Observation {
         planet: f64::INFINITY,
         ground: 0.0,
     }
+}
+
+/// The fallback's pages for `o`.
+fn floor_of(o: &Observation) -> Vec<LevelPage> {
+    let mut out = Vec::new();
+    Floor::floor(o.top, o.eye, o.far, |p| out.push(p));
+    out
 }
 
 /// A page with a crowd over each of its children, so it settles none of them
@@ -140,11 +146,12 @@ fn converge_on<S: Serve>(pyramid: &mut Pyramid<PoiPage>, observation: fn() -> Ob
     ledger.set_credits(4);
     let mut out: Vec<u64> = Vec::new();
     let mut resident: HashSet<LevelPage> = HashSet::new();
+    let floor = floor_of(&observation());
     for turn in 0..2_000 {
         let at = turn as f64 * 16.0;
         pyramid.observe(&observation(), &Unknown, &ByBounds { tau: Tau::FINEST }, prefetch, Tau::FINEST, allowance);
         if exact(pyramid) && pyramid.wants().is_empty() {
-            assert!(pyramid.paging().leases().all(|p| pyramid.paging().resident(p)), "every lease is held");
+            assert!(floor.iter().all(|&p| pyramid.paging().resident(p)), "the floor is held");
             return;
         }
         ledger.declare(Category::poi, pyramid.wants(), at);
@@ -168,15 +175,8 @@ fn converge_on<S: Serve>(pyramid: &mut Pyramid<PoiPage>, observation: fn() -> Ob
                 resident.insert(p);
             }
         }
-        for &p in &resident {
-            if pyramid.paging().held(p) {
-                assert!(pyramid.paging().resident(p), "turn {turn}: {p:?} held and no longer resident");
-            }
-        }
-        for p in pyramid.paging().leases() {
-            if resident.contains(&p) {
-                assert!(pyramid.paging().resident(p), "turn {turn}: the lease on {p:?} given up");
-            }
+        for &p in floor.iter().filter(|p| resident.contains(p)) {
+            assert!(pyramid.paging().resident(p), "turn {turn}: the floor's {p:?} given up");
         }
     }
     panic!("the view never came exact");
@@ -208,7 +208,7 @@ fn the_view_converges_exact_with_the_reach_prefetched_under_every_order() {
 /// are left once everything held hard and everything the view reads has
 /// one, and it never takes one of theirs.
 #[test]
-fn a_flood_of_speculation_never_displaces_a_lease_or_what_the_view_reads() {
+fn a_flood_of_speculation_never_displaces_the_floor_or_what_the_view_reads() {
     let _serial = crate::global::serial();
     for mut pyramid in [
         converge(Policy::standard(), &Flood, u32::MAX),
@@ -230,7 +230,7 @@ fn once_the_floor_is_resident_every_observation_has_an_answer() {
     let unanswered = |pyramid: &Pyramid<PoiPage>| pyramid.demand().iter().filter(|&&p| pyramid.drawn_from(p).is_none()).count();
     pyramid.observe(&the_observation(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
     assert!(unanswered(&pyramid) > 0, "a cold start is open");
-    let floor: Vec<LevelPage> = pyramid.paging().leases().collect();
+    let floor = floor_of(&the_observation());
     assert!(!floor.is_empty() && floor.iter().all(|p| p.level == TOP_LEVEL));
     for p in floor {
         pyramid.admit(p, |_| Ok(crowded(p))).expect("a page is made");
@@ -257,4 +257,25 @@ fn a_page_the_view_no_longer_asks_for_is_no_longer_held_for_it() {
         assert_eq!(pyramid.paging().hold(p), Hold::Cache, "{p:?} still held for a view that left it");
     }
     converge_on(&mut pyramid, elsewhere, Policy::standard(), &NoPrefetch, 0);
+}
+
+/// The floor is held hard only as the observation declares it: a layer gone
+/// idle asks for nothing and holds its floor as cache, and the next
+/// observation declares it again.
+#[test]
+fn the_floor_is_declared_again_by_the_next_observation_after_an_idle_one() {
+    let _serial = crate::global::serial();
+    let mut pyramid = Pyramid::<PoiPage>::default();
+    let floor = floor_of(&the_observation());
+    let why = |pyramid: &Pyramid<PoiPage>, p: LevelPage| pyramid.paging().asked(p).map(|a| a.why);
+    let observe = |pyramid: &mut Pyramid<PoiPage>| pyramid.observe(&the_observation(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
+    observe(&mut pyramid);
+    for &p in &floor {
+        pyramid.admit(p, |_| Ok(crowded(p))).expect("a page is made");
+    }
+    assert!(floor.iter().all(|&p| why(&pyramid, p) == Some(Why::Floor)));
+    pyramid.idle();
+    assert!(floor.iter().all(|&p| why(&pyramid, p).is_none() && pyramid.paging().resident(p)), "idle: the floor is cache");
+    observe(&mut pyramid);
+    assert!(floor.iter().all(|&p| why(&pyramid, p) == Some(Why::Floor) && pyramid.paging().resident(p)), "declared again");
 }

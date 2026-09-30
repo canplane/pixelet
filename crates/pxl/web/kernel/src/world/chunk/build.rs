@@ -8,21 +8,21 @@
 //! (crates/pxl/web/kernel/src/world/chunk/table.rs). What is here acts on
 //! what it asks.
 
-use pxl_spec::space::pyramid::GROUND;
+use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
 
 use pxl_render::gpu::api::{gpu, room};
 use pxl_render::gpu::renderer::device_ready;
 use pxl_render::mesh::chunk_mesher::{box_words, mesh_words, BakeContext, Heights, Step, COARSE_BOX_WORDS, FINE_BOX_WORDS};
 use pxl_render::mesh::paint::level::write_level_runs;
 use pxl_render::mesh::paint::object::adapter::{Claims, Entries, Painted, Painter};
-use pxl_render::mesh::paint::object::fold::Fold;
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
 use pxl_render::mesh::volume::Volumes;
 use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
 use pxl_spec::bake::constant::{pack_pos, BandZ, EntryAt, BAND, CELL, OBJECT_FINEST};
-use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
+use pxl_spec::space::indexer::{FROM_L2_IDX, L2, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
+use std::collections::HashMap;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{free, Block};
 
@@ -32,7 +32,6 @@ use crate::shell::setting::store::{hidden_ground, settings_store};
 use pxl_spec::bake::constant::BAND_CELLS;
 
 use crate::world::chunk::mesh_slot::{capacity, COARSE_BOXES, FINE_BOXES, OCCUPANCY};
-use crate::world::chunk::source::tiers_draw;
 use crate::world::pyramid::chunk::Chunk as PyramidChunk;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
@@ -351,11 +350,10 @@ pub struct Builder {
     bands: Vec<BandView<'static>>,
     /// The scan job's paint's claimed voxels, kept between its steps.
     claimed: Claims,
-    /// Objects folded, a level chunk's or a z16 chunk's to its cube, kept
-    /// for its capacity; and the columns a level chunk folds, and a fold's
-    /// cells in order, the same.
-    fold: Fold,
-    under: Vec<IVec>,
+    /// Objects folded, a level chunk's or a z16 chunk's to its cube, as the
+    /// store keeps them (layer/object/store.rs `Store::fold_at`), and those
+    /// cells in order, kept for their capacity.
+    folded: HashMap<[i64; 3], u32>,
     fold_cells: Vec<([i64; 3], u32)>,
     /// A z16 chunk's objects folded to its cube, as entries: what its paint
     /// reads where the cube is coarser than an object's finest tier.
@@ -386,8 +384,7 @@ impl Builder {
             run_holders: [None; RUN_SETS],
             bands: Vec::new(),
             claimed: Claims::new(),
-            fold: Fold::default(),
-            under: Vec::new(),
+            folded: HashMap::new(),
             fold_cells: Vec::new(),
             fold_band: Vec::new(),
             fold_pos: Vec::new(),
@@ -724,21 +721,23 @@ impl Builder {
     }
 
     /// A column's voxel entries folded to `scale` by the fold every level
-    /// shares (pxl-render mesh/paint/object/fold.rs), as entries of that
-    /// scale in the builder's fold lanes: what a z16 chunk paints for a cube
-    /// coarser than an object's finest tier. The hidden entry is left out
-    /// before the fold, as the paint would leave it out.
+    /// shares, as the store keeps it (layer/object/store.rs `fold_cell`), as
+    /// entries of that scale in the builder's fold lanes: what a z16 chunk
+    /// paints for a cube coarser than an object's finest tier. The hidden
+    /// entry is left out, as the paint would leave it out.
     fn fold_objects(&mut self, world: &mut World, col_idx: IVec, scale: Scale) {
         let o = FROM_L2_IDX(col_idx);
         let (x0, y0) = (ivec::X(o), ivec::Y(o));
-        self.fold.fold(world.painter, world.store.entries(col_idx), scale, self.hide);
+        let cells = scale.count_in(L2) as i64;
+        let at = [ivec::X(col_idx) * cells, ivec::Y(col_idx) * cells];
+        world.store.fold_at(scale, at, [at[0] + cells, at[1] + cells], self.hide, &mut self.folded);
         // A cell's corner in finest steps: absolute, then from the column's
         // corner and its band's floor.
         let n = OBJECT_FINEST.count_in(scale) as i64;
         let band_steps = OBJECT_FINEST.count_in(BAND) as i64;
         let (fx, fy) = (OBJECT_FINEST.index(x0), OBJECT_FINEST.index(y0));
         self.fold_cells.clear();
-        self.fold_cells.extend(self.fold.cells().iter().map(|(&c, &state)| (c, state)));
+        self.fold_cells.extend(self.folded.iter().map(|(&c, &state)| (c, state)));
         self.fold_cells.sort_unstable();
         self.fold_band.clear();
         self.fold_pos.clear();
@@ -842,20 +841,16 @@ impl Builder {
         self.sample.read(&view, read.origin, read.n, hidden_ground(show));
         let target = GROUND.scale(level);
         let (x0, y0) = (ivec::X(base), ivec::Y(base));
-        // Its own ground and the apron a fold reads, which reaches into the
-        // chunks beside it.
-        self.under.clear();
-        for (dx, dy) in (-1..=1).flat_map(|dx| (-1..=1).map(move |dy| (dx, dy))) {
-            world.store.cols_under(c.at.beside(dx, dy, 0).column(), &mut self.under);
-        }
-        let columns = self.under.iter().filter(|&&key| tiers_draw(level, base, key)).filter_map(|&key| world.store.entries(key));
-        self.fold.fold(world.painter, columns, target, self.hide);
+        // Its own cells and the apron of one a fold reads, which reaches into
+        // the chunks beside it (world/chunk/source.rs `folds_into`).
+        let (cx, cy, span) = (target.index(x0), target.index(y0), CHUNK_CELLS as i64);
+        world.store.fold_at(target, [cx - 1, cy - 1], [cx + span + 1, cy + span + 1], self.hide, &mut self.folded);
         xpute_core::ensure!(self.direct.begin_direct(), ENOTRECOVERABLE);
         write_level_runs(
             &mut self.direct,
             &self.sample,
             world.painter,
-            self.fold.cells(),
+            &self.folded,
             (target.index(x0), target.index(y0)),
             GROUND.scale(0).count_in(target),
         );

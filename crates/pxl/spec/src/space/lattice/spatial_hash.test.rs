@@ -177,7 +177,7 @@ fn spatial_hash_a_rebuild_allocates_nothing_it_does_not_already_own() {
     let points = scatter(1000, 100.0);
 
     let owned = |h: &SpatialHash| {
-        [&h.counts, &h.starts, &h.stamps, &h.cursors, &h.touched, &h.cells, &h.ids, &h.items]
+        [&h.counts, &h.starts, &h.stamps, &h.cursors, &h.touched, &h.buckets, &h.ids, &h.items]
             .map(|v| v.as_ptr() as usize)
             .into_iter()
             .chain([&h.ins_cx, &h.ins_cy, &h.ins_cz, &h.item_cx, &h.item_cy, &h.item_cz].map(|v| v.as_ptr() as usize))

@@ -38,18 +38,6 @@ fn what_the_view_needs_is_asked_for_out_from_the_eye_and_speculation_after() {
     assert!(before(t(Why::Fault, false, 1e9), t(Why::Hint, true, 0.0)), "speculation after everything needed");
 }
 
-/// A lease no view reads has no place in the view's order and waits behind
-/// all of it; one the view reads is the view's to place.
-#[test]
-fn a_lease_the_view_does_not_read_is_aside() {
-    let aside = key(Category::terrain, at(Why::Lease, false, f64::INFINITY));
-    assert!(before(key(Category::poi, at(Why::Hint, false, 1e9)), aside));
-    assert_eq!(aside, key(Category::geocode, Ask::PLAIN), "a tie with everything else unargued");
-    let read = Ask::best(at(Why::Lease, false, f64::INFINITY), at(Why::Fault, true, 5.0));
-    assert_eq!(read.why, Why::Lease, "held as a lease");
-    assert_eq!(key(Category::terrain, read), key(Category::terrain, at(Why::Fault, true, 5.0)), "placed as the view reads it");
-}
-
 #[test]
 fn only_a_whole_class_better_takes_a_running_credit() {
     let p = Policy::standard();

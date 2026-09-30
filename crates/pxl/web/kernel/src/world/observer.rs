@@ -39,7 +39,7 @@
 //! cast answers every step the quality policy weighs (world/quality.rs).
 //!
 //! An observer reads what is resident and nothing else: it never fetches,
-//! asks, prefetches, leases or holds. What it sees decides how deep what is
+//! asks, prefetches or holds. What it sees decides how deep what is
 //! drawn is refined, never what is fetched — that is the demand's
 //! (world/pyramid.rs), which no observation of this module's enters.
 //!

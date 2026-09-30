@@ -293,6 +293,65 @@ pub fn set<K: PVecTraits, T: Copy + Default + PartialEq>(mem: &mut SparseTreeMem
 where
     K::V: Copy,
 {
+    write::<K, T>(mem, layout, key, val, target, root, &mut [(0, 0); MAX_DEP]);
+}
+
+// A branch slot's `data` is the tree's to leave alone, and a caller may keep
+// in it what the branch's child block folds to — a majority, a maximum, a
+// count — so a node of any depth answers for all under it in one read. What
+// folds is the caller's; the tree keeps it current through `set_folded`,
+// carries it through `compact`, and makes it again whole through `refold`.
+
+/// The most levels a tree descends: what a write's path is held in.
+const MAX_DEP: usize = 32;
+
+/// `set`, keeping every branch slot's `data` what `fold` makes of its child
+/// block: the branches the write went through or made are folded again from
+/// the deepest up, `fold(children, scale)` with `scale` the branch's own.
+/// The branches it did not pass under are untouched, and none it passed is
+/// seen between the write and its fold.
+pub fn set_folded<K: PVecTraits, T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, layout: &SparseTreeLayout, key: K::V, val: T, target: Scale, root: u32, fold: &dyn Fn(&[T], Scale) -> T)
+where
+    K::V: Copy,
+{
+    let mut path = [(0, 0); MAX_DEP];
+    let n = write::<K, T>(mem, layout, key, val, target, root, &mut path);
+    let width = block_width(layout.dim) as usize;
+    for &(slot, u) in path[..n].iter().rev() {
+        let child = (mem.heap[slot as usize] & BLOCK_MASK) as usize;
+        let folded = fold(&mem.data[child..child + width], layout.min.up(u));
+        mem.data[slot as usize] = folded;
+    }
+}
+
+/// Every branch slot's `data` made again from its child block, the deepest
+/// first, by `fold` as `set_folded` keeps it: for a tree whose branches do
+/// not hold it yet.
+pub fn refold<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, layout: &SparseTreeLayout, root: u32, fold: &dyn Fn(&[T], Scale) -> T) {
+    fn go<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, width: u32, min: Scale, base: u32, u: i32, fold: &dyn Fn(&[T], Scale) -> T) {
+        for c in 0..width {
+            let slot = (base + c) as usize;
+            let node = mem.heap[slot];
+            if node & NODE_MSB != 0 {
+                let child = node & BLOCK_MASK;
+                go(mem, width, min, child, u - 1, fold);
+                let folded = fold(&mem.data[child as usize..(child + width) as usize], min.up(u));
+                mem.data[slot] = folded;
+            }
+        }
+    }
+    validate_layout(layout);
+    let dep = layout.max.above(layout.min);
+    go(mem, block_width(layout.dim), layout.min, root, dep - 1, fold);
+}
+
+/// `set`'s write, recording in `path` every branch slot it went through or
+/// made, with the level it is at, shallowest first; how many, none where
+/// the write changed nothing.
+fn write<K: PVecTraits, T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, layout: &SparseTreeLayout, key: K::V, val: T, target: Scale, root: u32, path: &mut [(u32, i32); MAX_DEP]) -> usize
+where
+    K::V: Copy,
+{
     validate_layout(layout);
 
     let mut base = root;
@@ -300,11 +359,13 @@ where
 
     let dep = layout.max.above(layout.min);
     if dep <= 0 {
-        return;
+        return 0;
     }
+    xpute_core::ensure!(dep as usize <= MAX_DEP, ENOTRECOVERABLE, dep);
 
     let target_u = target.above(layout.min);
 
+    let mut n = 0;
     let mut u = dep - 1;
     while u >= target_u {
         let child = slot_at::<K>(layout, key, u);
@@ -313,32 +374,37 @@ where
 
         if u == target_u {
             if mem.heap[slot] & NODE_MSB == 0 && mem.data[slot] == val {
-                return;
+                return 0;
             }
             mem.heap[slot] = 0;
             mem.data[slot] = val;
-            return;
+            return n;
         }
 
         let node = mem.heap[slot];
 
         if node & NODE_MSB != 0 {
+            path[n] = (slot as u32, u);
+            n += 1;
             base = node & BLOCK_MASK;
             u -= 1;
             continue;
         }
 
         if mem.data[slot] == val {
-            return;
+            return 0;
         }
 
         let next_base = alloc_block(mem, layout.dim);
         let was = mem.data[slot];
         mem.data.as_mut_slice()[next_base as usize..(next_base + width) as usize].fill(was);
         mem.heap[slot] = next_base | NODE_MSB;
+        path[n] = (slot as u32, u);
+        n += 1;
         base = next_base;
         u -= 1;
     }
+    n
 }
 
 // ============ Build ============
@@ -532,6 +598,30 @@ fn _walk<T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, dim: u32, min
     }
 }
 
+/// `walk` stopped at `target`: every slot at `target`'s depth — a branch
+/// there reported with its `data`, what its child block folds to where the
+/// caller keeps that (`set_folded`) — and every leaf coarser than it, at its
+/// own scale, with its corner in steps of `layout.min`.
+pub fn walk_to<T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, layout: &SparseTreeLayout, target: Scale, visit: &mut dyn FnMut(i32, i32, i32, Scale, T), root: u32) {
+    #[allow(clippy::too_many_arguments)]
+    fn go<T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, dim: u32, min: Scale, base: u32, u: i32, target_u: i32, [x, y, z]: [i32; 3], visit: &mut dyn FnMut(i32, i32, i32, Scale, T)) {
+        for c in 0..block_width(dim) {
+            let slot = (base + c) as usize;
+            let node = mem.heap[slot];
+            let [bx, by, bz] = child_of([0; 3], c as usize).map(|b| b as i32);
+            let at = [x | (bx << u), y | (by << u), z | (bz << u)];
+            if node & NODE_MSB != 0 && u > target_u {
+                go(mem, dim, min, node & BLOCK_MASK, u - 1, target_u, at, visit);
+            } else {
+                visit(at[0], at[1], at[2], min.up(u), mem.data[slot]);
+            }
+        }
+    }
+    validate_layout(layout);
+    let dep = layout.max.above(layout.min);
+    go(mem, layout.dim, layout.min, root, dep - 1, target.above(layout.min).max(0), [0; 3], visit);
+}
+
 // ============ Maintenance (Pack) ============
 
 /// What `compact` hands back: the memory, and its root base (0).
@@ -556,14 +646,15 @@ pub fn compact<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, lay
             let new_slot = (new_base + i) as usize;
             let node = mem.heap[old_slot];
 
+            // A branch's `data` goes with it too: what it folds to, where
+            // its caller keeps that (`set_folded`).
+            new_mem.data[new_slot] = mem.data[old_slot];
             if node & NODE_MSB != 0 {
                 let child_base = node & BLOCK_MASK;
                 let next_base = alloc_block(new_mem, dim);
 
                 new_mem.heap[new_slot] = next_base | NODE_MSB;
                 relocate(mem, new_mem, dim, width, child_base, next_base);
-            } else {
-                new_mem.data[new_slot] = mem.data[old_slot];
             }
         }
     }

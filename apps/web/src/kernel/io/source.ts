@@ -3,7 +3,7 @@
 /**
  * What the tile source declares of itself, handed to the kernel once
  * (WORLD_SOURCE): the coarsest level of the pyramid it supplies whole, where
- * the kernel leases its floor (crates/pxl/web/kernel/src/world/paging/floor.rs).
+ * the kernel holds its floor (crates/pxl/web/kernel/src/world/paging/floor.rs).
  *
  * A published bake's declaration is published.json's `SOURCE`, in the bundle.
  * A dev tile server bakes on demand to its own `--top-level` and answers the

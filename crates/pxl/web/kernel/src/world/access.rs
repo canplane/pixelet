@@ -3,7 +3,7 @@
 //! The access: one query of what is resident, in two forms — a layer's value
 //! at a point at a level (`at`), and the first thing a ray meets with how far
 //! along (`first_hit`) — and the conservative bound a descent is decided by
-//! (`extent`). Every reader of the ground and the objects asks here: the
+//! (`relief`). Every reader of the ground and the objects asks here: the
 //! pointer's pick, the camera's clearance, the map center's footing, the
 //! puck, the fog, the view's measure of how near ground is
 //! (world/pyramid/domain.rs), and what the eye's cells see
@@ -13,7 +13,7 @@
 //! reads what residency says is resident (world/paging.rs `drawn_from`,
 //! `source`) and the object store, which is resident whole, and returns an
 //! exact answer, a coarser one with the page it would have needed, or
-//! nothing and that page. It never fetches, asks, prefetches, leases or holds,
+//! nothing and that page. It never fetches, asks, prefetches or holds,
 //! and keeps nothing between calls: it borrows residency shared, so it cannot
 //! change it. Turning a lack into a request is demand's, at the caller, and
 //! only where the caller relies on the page coming.
@@ -37,14 +37,14 @@
 //! decor paints no voxel and is hit as it is drawn (layer/decor/hit.rs).
 //! Placing and editing act on the records the leaf says, and a leaf that is
 //! not resident is a lack they see (`Answer::exact`); a consumer that cannot
-//! take a coarser answer is the one that would lease a page, and none does
-//! yet (world/paging.rs `CONSUMER_LEASES`).
+//! take a coarser answer is the one that would hold a page hard, and none
+//! does yet (world/paging.rs `HARD_PAGES`).
 
 use pxl_render::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
 use pxl_spec::bake::constant::{CellZ, CELL, U_PER_CELL};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::pack::GroundCell;
-use pxl_spec::cell::object::{object_value_is_air, object_value_is_decor};
+use pxl_spec::cell::object::{object_value_is_air, object_value_is_decor, object_value_is_voxel};
 use pxl_spec::space::hierarchy::Scale;
 use pxl_spec::space::indexer::{L2, L2_IDX, L3};
 use pxl_spec::space::lod::Tau;
@@ -52,7 +52,7 @@ use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::pyramid::{Cell, LevelPage, EXTENT, GROUND, TOP_LEVEL};
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::v3::{Aabb, V3};
 use pxl_spec::space::xy::TO_XY;
 
 use crate::io::demand::Category;
@@ -192,9 +192,9 @@ pub enum Struck {
     Ground,
     /// A placed object, by where the store files it.
     Object(EntryAt),
-    /// The objects under a cell of a level over z16, met at the span they
-    /// reach: a coarse level draws them folded with the ground, so none of
-    /// them in particular is met.
+    /// The objects under a cell of a level over z16, met at the cell they
+    /// fold to there: a coarse level draws them folded, so none of them in
+    /// particular is met.
     Objects,
 }
 
@@ -241,8 +241,8 @@ impl Access<'static> {
 }
 
 /// A piece of ground a ray is decided over at once: the square no page or
-/// index cell it is read from changes across, what the terrain there is
-/// drawn from, and how high anything in it can stand.
+/// index cell it is read from changes across, and what the terrain there is
+/// drawn from.
 struct Region {
     /// The square's corner and side, in units.
     base: [f64; 2],
@@ -252,8 +252,6 @@ struct Region {
     /// The index lane's lowest and highest over it, and whether it is read
     /// from the page asked; none where nothing over it is resident.
     terrain: Option<((f64, f64), bool)>,
-    /// The lowest and highest the objects under it reach.
-    objects: Option<(f64, f64)>,
 }
 
 impl<'a> Access<'a> {
@@ -323,18 +321,30 @@ impl<'a> Access<'a> {
         )
     }
 
-    /// The first thing `ray` meets within its reach, the ground drawn at the
-    /// level `detail` says along it: the region the ray is in is passed over
-    /// whole where it stays above everything the index lane and the objects'
-    /// reach say can stand there, and walked cell column by cell column of
-    /// its level where it does not. A region read from a page coarser than
-    /// asked, whose bound the ray enters, is the lack — the nearest one, since
-    /// what is under it could be met before anything past it — and a region
-    /// nothing over is resident for is one too, whatever the ray's height,
-    /// since nothing bounds it.
+    /// The first thing `ray` meets within its reach, at the level `detail`
+    /// says along it: the ground and the objects, each by a walk of its own
+    /// shape, the nearer met. The objects are resident whole and their
+    /// cells are found down their index along the ray (`objects`); the
+    /// ground is paged, and is walked only as far as the objects' nearest,
+    /// since what lies past that is behind it. So the lack is the ground's
+    /// nearest one before what is met: an object is never answered exactly
+    /// over ground not known to lie behind it. What the ray starts inside is
+    /// not met: the object or the cell it is in, and the ground of the
+    /// column it is in, whose ground it meets again only in the next column
+    /// it enters, so an eye under the ground is not stopped where it stands.
     ///
-    /// A region ends where the level changes, so a walk is in the cells of
-    /// the level at its start, which is the finest over it.
+    /// The ground is walked region by region: a region is passed over whole
+    /// where the ray stays above everything its index lane says can stand
+    /// there, and walked cell column by cell column of its level where it
+    /// does not. A region read from a page coarser than asked, whose bound
+    /// the ray enters, is the lack — the nearest one, since what is under it
+    /// could be met before anything past it — and a region nothing over is
+    /// resident for is one too, whatever the ray's height, since nothing
+    /// bounds it.
+    ///
+    /// The level is one along each band of distance, and a region ends where
+    /// the band does, so a walk is in the cells of the level at its start,
+    /// which is the finest over it.
     ///
     /// Before a region of the level asked is read, the pages over it that are
     /// resident are asked, coarsest first, whether the ray passes over all
@@ -351,20 +361,44 @@ impl<'a> Access<'a> {
         let mut t = 0.0;
         while t < ray.reach {
             let (level, until) = detail.at(t);
-            if let Some(out) = self.clear(ray, t, level, until) {
-                answered = true;
+            let end = until.min(ray.reach);
+            let objects = self.objects(ray, (t, end), level);
+            let limit = objects.map_or(end, |o| o.t);
+            // The ground where it is met no farther than the objects' nearest.
+            let ground = self.ground_first(ray, (t, limit), level, &mut lack, &mut answered).filter(|g| g.t <= limit);
+            if let Some(hit) = ground.or(objects) {
+                return match lack {
+                    Some(l) => Answer::Coarser(Some(hit), l),
+                    None => Answer::Exact(Some(hit)),
+                };
+            }
+            t = end;
+        }
+        match (lack, answered) {
+            (None, _) => Answer::Exact(None),
+            (Some(l), true) => Answer::Coarser(None, l),
+            (Some(l), false) => Answer::Nothing(l),
+        }
+    }
+
+    /// The first of the ground the ray meets between `t0` and `t1` at
+    /// `level`, noting the nearest lack and whether any of it was answered.
+    fn ground_first(&self, ray: &Ray, (t0, t1): (f64, f64), level: u32, lack: &mut Option<Lack>, answered: &mut bool) -> Option<Hit> {
+        let mut t = t0;
+        while t < t1 {
+            if let Some(out) = self.clear(ray, t, level, t1) {
+                *answered = true;
                 t = out;
                 continue;
             }
             let r = self.region(&ray.at(t + NUDGE), level);
-            let out = exit(ray, r.base, r.side).min(until).max(t + NUDGE).min(ray.reach);
+            let out = exit(ray, r.base, r.side).min(t1).max(t + NUDGE).min(ray.reach);
             let low = ray.at(t)[2].min(ray.at(out)[2]);
-            let terrain_under = r.terrain.is_some_and(|((_, hi), _)| low <= hi);
-            let objects_under = r.objects.is_some_and(|(_, hi)| low <= hi);
+            let under = r.terrain.is_some_and(|((_, hi), _)| low <= hi);
             match r.terrain {
                 Some((_, exact)) => {
-                    answered = true;
-                    if terrain_under && !exact {
+                    *answered = true;
+                    if under && !exact {
                         lack.get_or_insert(Lack {
                             layer: Category::terrain,
                             page: r.page,
@@ -378,31 +412,23 @@ impl<'a> Access<'a> {
                     });
                 }
             }
-            if terrain_under || objects_under {
+            if under {
                 if let Some(hit) = self.walk(ray, &r, t, out, level) {
-                    return match lack {
-                        Some(l) => Answer::Coarser(Some(hit), l),
-                        None => Answer::Exact(Some(hit)),
-                    };
+                    return Some(hit);
                 }
             }
             t = out;
         }
-        match (lack, answered) {
-            (None, _) => Answer::Exact(None),
-            (Some(l), true) => Answer::Coarser(None, l),
-            (Some(l), false) => Answer::Nothing(l),
-        }
+        None
     }
 
     /// Where the ray, at `t` and asking at `level` until `until`, is proved
-    /// to pass over everything under an index cell of a resident page over
-    /// `level`: the far edge of the largest such cell, or none. The ground
-    /// is solid under its surface, so it is passed over only above its
-    /// highest; objects stand in their span with air under it, so they are
-    /// passed under too. An index cell bounds what is drawn at its page's
-    /// level and every level under it, and the ray asks at `level` up to
-    /// `until` only, so no cell carries it past there.
+    /// to pass over all the ground under an index cell of a resident page
+    /// over `level`: the far edge of the largest such cell, or none. The
+    /// ground is solid under its surface, so it is passed over only above
+    /// its highest. An index cell bounds what is drawn at its page's level
+    /// and every level under it, and the ray asks at `level` up to `until`
+    /// only, so no cell carries it past there.
     fn clear(&self, ray: &Ray, t: f64, level: u32, until: f64) -> Option<f64> {
         let p = ray.at(t + NUDGE);
         let mut at = Pvf3::default();
@@ -415,13 +441,9 @@ impl<'a> Access<'a> {
             let [ix, iy, _] = scale.index_of(&at);
             let base = scale.base_of([ix, iy, 0]);
             let base = [pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base))];
-            let out = exit(ray, base, scale.side()).min(until).min(ray.reach).max(t + NUDGE);
+            let out = exit(ray, base, scale.side()).min(until).max(t + NUDGE);
             let (za, zb) = (ray.at(t)[2], ray.at(out)[2]);
-            let over_ground = za.min(zb) > hi as f64 * U_PER_CELL;
-            let node = scale.max(L2);
-            let [nx, ny, _] = node.index_of(&at);
-            let clear_of_objects = self.objects.reach_over((node, [nx, ny])).is_none_or(|(olo, ohi)| za.min(zb) > ohi || za.max(zb) < olo);
-            (over_ground && clear_of_objects).then_some(out)
+            (za.min(zb) > hi as f64 * U_PER_CELL).then_some(out)
         })
     }
 
@@ -445,22 +467,18 @@ impl<'a> Access<'a> {
         };
         let [ix, iy, _] = scale.index_of(&at);
         let base = scale.base_of([ix, iy, 0]);
-        // Objects are kept by column, so a region finer than one is bounded
-        // by the column it lies in.
-        let node = scale.max(L2);
-        let [nx, ny, _] = node.index_of(&at);
+        let base = [pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base))];
         Region {
-            base: [pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base))],
+            base,
             side: scale.side(),
             page,
             terrain,
-            objects: self.objects.reach_over((node, [nx, ny])),
         }
     }
 
-    /// The first thing met between `t0` and `t1` along the ray inside region
-    /// `r`, cell column by cell column of `level` in the order the ray
-    /// crosses them (Amanatides–Woo). The walk stops at the region's edge by
+    /// The first of the ground met between `t0` and `t1` along the ray
+    /// inside region `r`, cell column by cell column of `level` in the order
+    /// the ray crosses them (Amanatides–Woo). The walk stops at the region's edge by
     /// the cells it holds and not by `t1`: a step's distance and the edge's
     /// are summed two ways, and a column past the edge taken for inside would
     /// be read as the region's, exact or not. A region is at least a cell of
@@ -502,59 +520,34 @@ impl<'a> Access<'a> {
         None
     }
 
-    /// The first thing met in z16 cell column `cell` while the ray is over
-    /// it, between `t0` and `t1`: the ground under its drawn top, and where
-    /// something is placed in the column at the heights the ray passes, one
-    /// cell of height at a time, since a cell holding a voxel entry is its
-    /// objects' and not the ground's. What the ray starts inside is not met.
+    /// Where the ray first meets the ground in z16 cell column `cell` while
+    /// it is over it, between `t0` and `t1`: a cell under the column's drawn
+    /// top that no voxel entry takes, since a cell holding one is its
+    /// objects' and not the ground's — air as much as a solid. The ray is
+    /// stepped a cell of height at a time only once it is under the top.
+    /// What the ray starts inside is not met.
     fn column(&self, ray: &Ray, [ix, iy]: [i64; 2], t0: f64, t1: f64) -> Option<Hit> {
         let side = CELL.side();
         let base = CELL.base_of([ix, iy, 0]);
-        let top = self.ground(GROUND.cell_of(0, &base)).value().map(|g| g.top);
+        let top = self.ground(GROUND.cell_of(0, &base)).value()?.top;
         let (za, zb) = (ray.at(t0)[2], ray.at(t1)[2]);
-        let [kx, ky, _] = L2.index_of(&base);
-        let placed = self.objects.reach_over((L2, [kx, ky])).filter(|&(lo, hi)| za.min(zb) <= hi && za.max(zb) >= lo);
-        let ground = |t: f64, cz: i64, normal: V3| {
-            let min = [ix as f64 * side, iy as f64 * side, cz as f64 * side];
-            Hit {
-                t,
-                point: ray.at(t),
-                normal,
-                box_min: min,
-                box_max: min.map(|v| v + side),
-                struck: Struck::Ground,
-            }
-        };
         let dz = ray.direction[2];
-        let Some((lo, hi)) = placed else {
-            // Nothing placed where the ray passes: the ground alone, met at
-            // the column's side or through its top.
-            let top = top?;
-            if za < top {
-                return (t0 > 0.0).then(|| ground(t0, (za / side).floor() as i64, wall_normal(ray, t0, side)));
-            }
-            if zb < top {
-                let t = (top - ray.origin[2]) / dz;
-                return Some(ground(t, (top / side).ceil() as i64 - 1, [0.0, 0.0, 1.0]));
-            }
-            return None;
-        };
-        // Only the heights something can be met at are stepped through: from
-        // the highest of what is placed and the ground's top down, and up to
-        // the highest of what is placed.
-        let ceiling = hi.max(top.unwrap_or(f64::NEG_INFINITY));
         let at_z = |z: f64| (z - ray.origin[2]) / dz;
         let mut from = t0;
-        if dz < 0.0 && za > ceiling {
-            from = at_z(ceiling);
-        } else if dz > 0.0 && za < lo && top.is_none_or(|top| za >= top) {
-            from = at_z(lo);
+        if za >= top {
+            if zb >= top {
+                return None;
+            }
+            from = at_z(top);
         }
-        let end = if dz > 0.0 && top.is_none_or(|top| za >= top) { t1.min(at_z(hi)) } else { t1 };
+        let [kx, ky, _] = L2.index_of(&base);
         let col_idx = L2_IDX(TO_XY(base.i));
-        let corner = [(kx * cells_across()) as f64 * side, (ky * cells_across()) as f64 * side];
-        let first = (ray.at(from)[2] / side).floor() as i64;
-        let mut cz = first;
+        let (cx, cy) = (ix - kx * cells_across(), iy - ky * cells_across());
+        let mut cz = (ray.at(from)[2] / side).floor() as i64;
+        if from <= 0.0 && !self.taken(col_idx, [cx, cy], cz) {
+            // It starts inside the ground.
+            return None;
+        }
         loop {
             let leave = if dz.abs() < 1e-12 {
                 t1
@@ -562,12 +555,7 @@ impl<'a> Access<'a> {
                 let face = if dz > 0.0 { (cz + 1) as f64 * side } else { cz as f64 * side };
                 at_z(face).min(t1)
             };
-            let entries = self.cell_entries(col_idx, [ix - kx * cells_across(), iy - ky * cells_across()], cz);
-            if !entries.is_empty() {
-                if let Some(hit) = object_hit(ray, &entries, corner) {
-                    return Some(hit);
-                }
-            } else if top.is_some_and(|top| (cz as f64) * side < top) && from > 0.0 {
+            if (cz as f64) * side < top && from > 0.0 && !self.taken(col_idx, [cx, cy], cz) {
                 // In through the column's side where this is the cell the ray
                 // came into the column at, and through the cell's floor or
                 // ceiling past it.
@@ -576,9 +564,17 @@ impl<'a> Access<'a> {
                 } else {
                     [0.0, 0.0, if dz > 0.0 { -1.0 } else { 1.0 }]
                 };
-                return Some(ground(from, cz, normal));
+                let min = [ix as f64 * side, iy as f64 * side, cz as f64 * side];
+                return Some(Hit {
+                    t: from,
+                    point: ray.at(from),
+                    normal,
+                    box_min: min,
+                    box_max: min.map(|v| v + side),
+                    struck: Struck::Ground,
+                });
             }
-            if leave >= end {
+            if leave >= t1 {
                 return None;
             }
             cz += if dz > 0.0 { 1 } else { -1 };
@@ -586,66 +582,74 @@ impl<'a> Access<'a> {
         }
     }
 
-    /// The first thing met in cell column `cell` of `level`, over z16, while
-    /// the ray is over it, between `t0` and `t1`: the ground the level draws
-    /// under its top, and the objects under the cell as one span from the
-    /// lowest to the highest they reach. A level over z16 draws its objects
-    /// folded into its own cells, not at their own boxes, and walking them
-    /// box by box would be the z16 walk the level is there to spare; the span
-    /// holds every one of them, so what is met is never behind anything the
-    /// level draws there. What the ray starts inside is not met.
+    /// Where the ray first meets the ground in cell column `cell` of
+    /// `level`, over z16, while it is over it, between `t0` and `t1`: the
+    /// column's cells under the top the level draws. What the ray starts
+    /// inside is not met.
     fn folded(&self, ray: &Ray, [ix, iy]: [i64; 2], t0: f64, t1: f64, level: u32) -> Option<Hit> {
         let scale = GROUND.scale(level);
         let side = scale.side();
         let base = scale.base_of([ix, iy, 0]);
-        let top = self.ground(GROUND.cell_of(level, &base)).value().map(|g| g.top);
-        let node = scale.max(L2);
-        let [nx, ny, _] = node.index_of(&base);
-        let placed = self.objects.reach_over((node, [nx, ny]));
+        let top = self.ground(GROUND.cell_of(level, &base)).value()?.top;
         let (za, zb) = (ray.at(t0)[2], ray.at(t1)[2]);
-        let dz = ray.direction[2];
-        // Where the ray comes into the heights `lo` to `hi` over the column,
-        // and through which face.
-        let enter = |lo: f64, hi: f64| -> Option<(f64, V3)> {
-            if za >= lo && za <= hi {
-                return (t0 > 0.0).then(|| (t0, wall_normal(ray, t0, side)));
-            }
-            if za > hi && zb <= hi {
-                return Some(((hi - ray.origin[2]) / dz, [0.0, 0.0, 1.0]));
-            }
-            if za < lo && zb >= lo {
-                return Some(((lo - ray.origin[2]) / dz, [0.0, 0.0, -1.0]));
-            }
-            None
+        let (t, normal) = if za <= top {
+            (t0 > 0.0).then(|| (t0, wall_normal(ray, t0, side)))?
+        } else if zb <= top {
+            ((top - ray.origin[2]) / ray.direction[2], [0.0, 0.0, 1.0])
+        } else {
+            return None;
         };
+        let p = ray.at(t);
+        let cz = ((p[2] - normal[2] * NUDGE) / side).floor();
         let corner = [ix as f64 * side, iy as f64 * side];
-        let ground = top.and_then(|top| enter(f64::NEG_INFINITY, top)).map(|(t, normal)| {
-            let p = ray.at(t);
-            let cz = ((p[2] - normal[2] * NUDGE) / side).floor();
-            Hit {
-                t,
-                point: p,
-                normal,
-                box_min: [corner[0], corner[1], cz * side],
-                box_max: [corner[0] + side, corner[1] + side, (cz + 1.0) * side],
-                struck: Struck::Ground,
-            }
+        Some(Hit {
+            t,
+            point: p,
+            normal,
+            box_min: [corner[0], corner[1], cz * side],
+            box_max: [corner[0] + side, corner[1] + side, (cz + 1.0) * side],
+            struck: Struck::Ground,
+        })
+    }
+
+    /// The first of the objects the ray meets between `t0` and `t1` at
+    /// `level`, from the cells their index says the ray passes, nearest
+    /// first (layer/object/store.rs `Store::along_ray`). At z16 a cell's voxel
+    /// entries are met at their own boxes, sub-cell ones included, air
+    /// meeting nothing. Over z16 the level draws its objects folded into its
+    /// own cells, as the store keeps them (`fold_cell`), so a cell that
+    /// paints a material is met at its own box — the ground's cells and the
+    /// objects' at one resolution, the one the mesher then merges 2 × 2 × 2
+    /// by what each bucket covers, whichever layer it came from. A cell the
+    /// ray is already in where the band of its level begins is met there,
+    /// through the side it is nearest, as the ground's is; what the ray
+    /// starts inside is not met.
+    fn objects(&self, ray: &Ray, (t0, t1): (f64, f64), level: u32) -> Option<Hit> {
+        let scale = GROUND.scale(level);
+        let side = scale.side();
+        let mut met = None;
+        self.objects.along_ray(ray.origin, ray.direction, (t0, t1), scale, &mut |[x, y, z]| {
+            met = if level == FINEST {
+                let across = cells_across();
+                let col_idx = pxl_spec::space::pvf3::ivec::gather(x.div_euclid(across), y.div_euclid(across), 0);
+                let entries = self.cell_entries(col_idx, [x.rem_euclid(across), y.rem_euclid(across)], z);
+                let corner = [(x.div_euclid(across) * across) as f64 * side, (y.div_euclid(across) * across) as f64 * side];
+                object_hit(ray, &entries, corner)
+            } else {
+                let v = u32::from(self.objects.folded_value(scale, [x, y, z]));
+                (object_value_is_voxel(v) && !object_value_is_air(v)).then(|| cell_hit(ray, [x, y, z], scale, t0)).flatten()
+            };
+            met.is_some()
         });
-        let objects = placed.and_then(|(lo, hi)| {
-            let (t, normal) = enter(lo, hi)?;
-            Some(Hit {
-                t,
-                point: ray.at(t),
-                normal,
-                box_min: [corner[0], corner[1], lo],
-                box_max: [corner[0] + side, corner[1] + side, hi],
-                struck: Struck::Objects,
-            })
-        });
-        match (ground, objects) {
-            (Some(g), Some(o)) => Some(if o.t < g.t { o } else { g }),
-            (g, o) => g.or(o),
-        }
+        met
+    }
+
+    /// Whether z16 cell `cz` of column-local (cx, cy) holds a voxel entry,
+    /// which takes the cell from the ground.
+    fn taken(&self, col_idx: IVec, [cx, cy]: [i64; 2], cz: i64) -> bool {
+        let Some(run) = self.objects.cell(col_idx, cx as u32, cy as u32, cz as CellZ) else { return false };
+        let Some(e) = self.objects.entries(col_idx) else { return false };
+        (run.start as usize..(run.start + run.count) as usize).any(|k| !object_value_is_decor(e.state[k]))
     }
 
     /// The voxel entries of the cell at column-local (cx, cy) and height
@@ -727,33 +731,38 @@ fn object_hit(ray: &Ray, entries: &[EntryCursor], [x0, y0]: [f64; 2]) -> Option<
     best
 }
 
-/// Where the ray enters a box and through which face, the slab test; none
-/// where it misses the box, leaves it before its reach begins or starts
-/// inside it.
+/// Where the ray enters a box and through which face; none where it misses
+/// the box, leaves it before its reach begins or starts inside it.
 fn ray_box(ray: &Ray, min: &V3, max: &V3) -> Option<(f64, V3)> {
-    let (o, d) = (ray.origin, ray.direction);
-    let (mut enter, mut leave) = (f64::NEG_INFINITY, f64::INFINITY);
+    let (enter, _, k) = Aabb { min: *min, max: *max }.span_along(ray.origin, ray.direction)?;
     let mut normal = [0.0; 3];
-    for k in 0..3 {
-        if d[k].abs() < 1e-12 {
-            if o[k] < min[k] || o[k] > max[k] {
-                return None;
-            }
-            continue;
-        }
-        let (a, b) = ((min[k] - o[k]) / d[k], (max[k] - o[k]) / d[k]);
-        let (near, far) = if d[k] > 0.0 { (a, b) } else { (b, a) };
-        if near > enter {
-            enter = near;
-            normal = [0.0; 3];
-            normal[k] = if d[k] > 0.0 { -1.0 } else { 1.0 };
-        }
-        leave = leave.min(far);
-        if enter > leave {
-            return None;
-        }
-    }
+    normal[k] = if ray.direction[k] > 0.0 { -1.0 } else { 1.0 };
     (enter >= 0.0 && enter <= ray.reach).then_some((enter, normal))
+}
+
+/// Where the ray meets the cell of `scale` at `cell`, whole, and through
+/// which face: where it enters it, or `from` where it is inside it there,
+/// through the side it is nearest; none where it misses it, or starts
+/// inside it.
+fn cell_hit(ray: &Ray, cell: [i64; 3], scale: Scale, from: f64) -> Option<Hit> {
+    let Aabb { min, max } = scale.cube(cell);
+    let side = scale.side();
+    let (t, normal) = match ray_box(ray, &min, &max) {
+        Some((t, normal)) if t >= from => (t, normal),
+        _ => {
+            let p = ray.at(from);
+            let inside = (0..3).all(|k| p[k] >= min[k] && p[k] <= max[k]);
+            (inside && from > 0.0).then(|| (from, wall_normal(ray, from, side)))?
+        }
+    };
+    Some(Hit {
+        t,
+        point: ray.at(t),
+        normal,
+        box_min: min,
+        box_max: max,
+        struck: Struck::Objects,
+    })
 }
 
 #[cfg(test)]

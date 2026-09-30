@@ -73,9 +73,13 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
     which give any other size's waste, draws and surface lanes offline; both
     stay until then. What reaches the GPU is relative to the eye
     (2026-09-29), so what a pixel shows there is the model's error and not
-    the coordinates'. Objects get records a level and an index of their own
-    beyond the store's reaches. The hard-held chain's test returns with the
-    first consumer that leases.
+    the coordinates'. Objects keep their records a level and a 3D index of
+    their own (2026-09-30). The fallback is all residency holds hard
+    (2026-09-30): nothing leased and nothing depended on, since a page reads
+    on its own and every reader of the ground takes the fallback's answer. A
+    consumer that cannot — physics under a moving body, a placement, an edit
+    — declares the pages it needs to each observation as the fallback does,
+    and its place in the fetch order is argued then.
 - **The atmosphere in the observation's test, an optimization held.** A
   difference is observed where its projected angle leaks past a cell _and_
   the contrast it makes is still distinguishable after the air (`T(d)`,
@@ -94,7 +98,10 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   on the iPhone 13 mini, with today's box format (36 unindexed vertices)
   against faces alone; seams where levels that are not neighbours meet, and
   a blend on arrival; decor as its own solver — instances at the asset's
-  level of detail, an impostor far away, its lifetime off the chunk slot.
+  level of detail, an impostor far away, its lifetime off the chunk slot,
+  and its hit with them: the pointer's ray scans the chunks shown, each
+  grown by a reach derived from nothing (layer/decor/hit.rs `DECOR_REACH`),
+  where the ground and the objects are each walked along the ray.
 - **A blank screen after a far search from a zoomed-out view.** Location
   pending, 30 ticks of zoom out, search "아주대학교", the first result:
   nothing is drawn and the frame count stops (2 of 2 under dev:local,
@@ -108,10 +115,10 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   one order out from the eye, a chunk is a cube of its level holding
   something, and a placed object lives in the cube its band is in
   ([20260926-the-view-is-cubes-about-the-eye.md](./20260926-the-view-is-cubes-about-the-eye.md)).
-  Left: occluded ground is fetched like seen ground, since `ByBounds` asks
-  for hidden ground too (record demand from hits, above) — it is no longer
-  split, as only what a tile's footprint touches refines; a cut
-  ceiling flashes on a cold load while a coarser page stands in; and a
+  Hidden ground is no longer asked for: demand is what the screen's tiles
+  meet (world/observation.rs `ByFootprints`), and ground behind what they
+  meet is required of no level. Left: a cut ceiling flashes on a cold load
+  while a coarser page stands in; and a
   column crossing a cube's floor or ceiling is two chunks — 1.5 a column
   near Gangnam and 1.7 on Bukhansan, 2026-09-26 — each scanning the whole
   column's runs again, where the runs could be the column's once and each
@@ -337,36 +344,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   The pools raised it (2026-09-15): a block acquired and released is
   1,752 ns through the rings against 202 through the exports, a three-word
   packet 488 ns of it each way, on a path that runs per block.
-
-- **Placed objects come back moved after a reload.** Found 2026-09-14: a
-  wall of fifteen cubes (five along X, three up Z) reloads as thirteen
-  cells on one Z layer spread along Y. In since v7.
-
-  The cause first written here — that `local_world_to_canonical` is not the
-  inverse of the page-local offset `encode_objects` writes — does not hold
-  against the code as it stands (read 2026-09-17, by reading only; the
-  symptom has not been reproduced since). Five links of that path were
-  checked and each is symmetric:
-
-  - the page base is `FROM_L3_IDX(page_idx)` on both sides, and `page_idx`
-    is written and read as the same `u64`;
-  - the fixed-point identity holds. `pvf3::to_real(pvf3::X(v))` is
-    `(i * ONE + f) / ONE`, `ONE` is `2^FRAC_W` and an fvec lane is an
-    unsigned residue in `[0, ONE)`, so it equals
-    `projection::unproject_comp(i, f)` — which `project` inverts;
-  - `ivec::sub` is per-lane with sign extension (`as_int_n`), not a packed
-    subtract that could borrow across lanes;
-  - the anchor is the same PVF3 on both sides: the encoder writes
-    `entry.corner()` and `write_object_value` takes the corner as given;
-  - `lower` and `corner` are inverses — `pvf3::sh` by `-OBJECT_LAYOUT.min`
-    one way and `+min` the other.
-
-  What is not ruled out: `x`/`y`/`z` are `f32` lanes in the saved form
-  (`object/store.rs`), so a coordinate's precision is f32's at page-local
-  magnitudes; and a chunk's entry lanes hold one entry per cell for a leaf
-  larger than one, each carrying `entry.size`, so what a large leaf is on the
-  way back out is worth checking. Fifteen becoming thirteen is two placements
-  landing on one cell, which is what either of those would do.
 
 - **Strings out of the kernel's records.** Most of the kernel's `String`s
   name something rather than hold text — a task's key is a category and a

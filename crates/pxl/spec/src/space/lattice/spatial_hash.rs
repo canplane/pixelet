@@ -90,7 +90,7 @@ pub struct SpatialHash {
 
     /// Parallel to insertion order: the bucket each inserted id hashed to, so
     /// the placing pass does not re-derive it.
-    cells: Box<[u32]>,
+    buckets: Box<[u32]>,
     /// Parallel to insertion order: the caller's id and its cell.
     ids: Box<[u32]>,
     ins_cx: Box<[i32]>,
@@ -135,7 +135,7 @@ impl SpatialHash {
             cursors: take(bucket_count),
             touched: take(bucket_count),
             touched_len: 0,
-            cells: take(capacity),
+            buckets: take(capacity),
             ids: take(capacity),
             ins_cx: take(capacity),
             ins_cy: take(capacity),
@@ -198,7 +198,7 @@ impl SpatialHash {
 
         let n = self.count as usize;
         self.count += 1;
-        self.cells[n] = b as u32;
+        self.buckets[n] = b as u32;
         self.ids[n] = id;
         self.ins_cx[n] = cx;
         self.ins_cy[n] = cy;
@@ -221,7 +221,7 @@ impl SpatialHash {
             offset += self.counts[b];
         }
         for n in 0..self.count as usize {
-            let b = self.cells[n] as usize;
+            let b = self.buckets[n] as usize;
             let at = self.cursors[b] as usize;
             self.cursors[b] = at as u32 + 1;
             self.items[at] = self.ids[n];
