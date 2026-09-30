@@ -176,7 +176,7 @@
 
     // The golden records are committed as they were written and read byte
     // for byte by the tests; formatting them would break that.
-    "exclude": ["node_modules/", "dist/", "crates/**/golden/"]
+    "exclude": ["node_modules/", "dist/", "crates/**/golden/", "spec/xpute/golden/"]
   },
 
   "lint": {

@@ -29,7 +29,7 @@
  * - The format itself does not define schema semantics.
  * - Higher layers define field meaning, ordering rules, and validation policy.
  * - Graft is a splice primitive, not an independent payload class.
- * - A grafted subtree must produce the same root payload layout as if encoded inline.
+ * - A grafted subtree must produce the same root payload layout, under the same type, as if encoded inline.
  * - Typed optional values preserve their original node kind even when physically absent.
  * - Therefore `str(null)`, `u32(null)`, `branch(null)`, and generic `set(null)` / `put(null)` are distinct lowerings.
  *

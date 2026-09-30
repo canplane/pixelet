@@ -59,8 +59,10 @@ export class TreeEncoder {
     const cap: u32 = this.buf.byteLength;
     if (new_cap <= cap) return cap;
 
-    new_cap = Math.max(cap * 2, new_cap);
+    // Doubling stops at the cap, so what the cap refuses is a packet that
+    // does not fit and never a growth step past it.
     if (new_cap > this.max_cap) throw new MarshalError(Errno.EOVERFLOW);
+    new_cap = Math.min(Math.max(cap * 2, new_cap), this.max_cap);
 
     const new_buf: U8Array = new Uint8Array(new_cap);
     new_buf.set(this.buf);
@@ -89,9 +91,10 @@ export class TreeEncoder {
     const st: EncodingState = { base: HDR_SZ, lim: HDR_SZ, type: node.type };
     this._node(node, st);
 
-    // root node kind is preserved even when payload_sz == 0
+    // root node kind is preserved even when payload_sz == 0; a grafted root
+    // is its packet's root, so the type is the one the graft read
     const payload_sz: u32 = st.lim - HDR_SZ;
-    const desc: u32 = FIELD_SET(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, node.type);
+    const desc: u32 = FIELD_SET(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, st.type);
     SET_WORD(this.buf_view, WORD_SZ, payload_sz, desc); // word1
 
     const pkt_nbyte: u32 = ALIGN(HDR_SZ + payload_sz, WORD_SZ);

@@ -12,10 +12,6 @@ fnv.workspace = true
 indexmap.workspace = true
 xpute-core = { path = "../core" }
 
-# The vectors' reader, for this crate's own tests.
-[dev-dependencies]
-xpute-core = { path = "../core", features = ["golden"] }
-
 # A pointer changes type by `.cast()` and a reference becomes one by `&raw`
 # or `ptr::from_ref`, so an `as *const` or `as *mut` left is an offset made a
 # pointer: what mem/base.rs exists to be the one way to.

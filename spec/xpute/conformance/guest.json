@@ -1,6 +1,6 @@
 {
   "$doc": [
-    "The guest the contract's traces drive (crates/xpute/conformance/golden/door.tsv): the",
+    "The guest the contract's traces drive (spec/xpute/conformance/door.tsv): the",
     "few commands every language's conformance guest implements, and the numbers a trace",
     "is written against. It computes nothing, and asks for no turn when nothing waits; what",
     "it does inside is each guest's own, and what the host sees of it is what the traces",

@@ -3,7 +3,7 @@
 // The C++ conformance guest: guest.spec.hpp's commands, over a runtime
 // written from the contract (ARCHITECTURE.xpute.md) rather than from another
 // language's guest, and held to the same traces
-// (crates/xpute/conformance/golden/).
+// (spec/xpute/conformance/).
 //
 // These two calls are how a test reaches it, not an API a program embeds.
 // They are C's so that any host can call them. A guest is its memory:

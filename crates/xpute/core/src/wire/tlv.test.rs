@@ -1,10 +1,9 @@
 // xpute-core/wire/tlv.test.rs
-// (no pair: tlv.ts has no test file)
 
 use super::*;
 use crate::golden::Golden;
 
-const GOLDEN: &str = include_str!("../../golden/wire/tlv.tsv");
+const GOLDEN: &str = include_str!("../../../../../spec/xpute/golden/wire/tlv.tsv");
 
 /// A read value as the TypeScript prints it: `typeof`, a colon, the value.
 fn show(v: &TlvValue) -> String {

@@ -42,7 +42,7 @@ std::vector<std::uint8_t> bytes(const std::string &hex_text) {
 } // namespace
 
 XPUTE_TEST(xtp_the_writer_writes_the_bytes_the_other_languages_write) {
-    Golden v = Golden::load("crates/xpute/core/golden/wire/xtp/encode.tsv");
+    Golden v = Golden::load("spec/xpute/golden/wire/xtp/encode.tsv");
     auto check = [&v](const char *name, auto &&build) {
         std::string k;
         v.each("", [&](const std::string &j) {
@@ -80,6 +80,12 @@ XPUTE_TEST(xtp_the_writer_writes_the_bytes_the_other_languages_write) {
     check("typed null root", [](PacketWriter &w) { w.u32(std::nullopt); });
     std::vector<std::uint8_t> inner = bytes(encode([](PacketWriter &w) { w.branch(2, [](PacketWriter &b) { b.i32(1).str("x"); }); }));
     check("graft", [&](PacketWriter &w) { w.graft(inner); });
+}
+
+XPUTE_TEST(xtp_a_packet_grafted_whole_is_that_packet) {
+    std::string inner = encode([](PacketWriter &w) { w.branch(2, [](PacketWriter &b) { b.i32(1).str("x"); }); });
+    std::vector<std::uint8_t> packet = bytes(inner);
+    XPUTE_CHECK_EQ(encode([&packet](PacketWriter &w) { w.graft(packet); }), inner, "a graft of a whole packet");
 }
 
 XPUTE_TEST(xtp_a_string_written_in_place_is_the_string_written_from_bytes_and_reads_back_where_it_lies) {

@@ -15,7 +15,7 @@
 using namespace xpute;
 
 XPUTE_TEST(deque_holds_what_the_record_holds) {
-    Golden v = Golden::load("crates/xpute/core/golden/collection/deque.tsv");
+    Golden v = Golden::load("spec/xpute/golden/collection/deque.tsv");
     std::array<std::uint32_t, 8> buf{};
     Deque<std::uint32_t> d{buf};
     auto show = [](const std::uint32_t *x) { return x ? std::to_string(*x) : std::string("none"); };
@@ -49,7 +49,7 @@ static std::string show(const E &e) {
 }
 
 XPUTE_TEST(heaps_pop_what_the_record_holds) {
-    Golden v = Golden::load("crates/xpute/core/golden/collection/heap.tsv");
+    Golden v = Golden::load("spec/xpute/golden/collection/heap.tsv");
     std::vector<E> a, b;
     v.each("steps", [&](const std::string &k) {
         if (v.s(k + ".op") == "pop") {

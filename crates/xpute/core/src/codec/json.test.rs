@@ -1,10 +1,9 @@
 // xpute-core/codec/json.test.rs
-// (no pair: json.rs is the host's JSON, ported for the records' tags)
 
 use super::*;
 use crate::golden::Golden;
 
-const GOLDEN: &str = include_str!("../../golden/codec/json.tsv");
+const GOLDEN: &str = include_str!("../../../../../spec/xpute/golden/codec/json.tsv");
 
 #[test]
 fn json_read_in_place_walks_what_the_text_holds_and_refuses_what_is_not_json() {

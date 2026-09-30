@@ -4,7 +4,7 @@
 use super::*;
 use crate::golden::Golden;
 
-const GOLDEN: &str = include_str!("../../golden/math/scalar.tsv");
+const GOLDEN: &str = include_str!("../../../../../spec/xpute/golden/math/scalar.tsv");
 
 #[test]
 fn scalar_computes_what_the_record_holds() {

@@ -60,7 +60,14 @@ Every module present on one side only is there for one of three reasons.
 ## What the reading found
 
 None of these is fixed here; each is recorded so the C++ `core` is not written
-against it.
+against it. All seven were fixed the same day, after the C++: `libm` left
+`xpute-core`, which never called it, and the comments that cited it; the
+`rng` and `FIELD_MASK64` comments say what the code does, and `FIELD_MASK`
+gives Rust's answers at the word's edge; a deque's pop from empty is none and
+its push onto full a bug, in all three languages; `lower.ts` keeps only the
+tuple helpers the XTP README recommends; the headers name no absent pair;
+and `codec/json` is filed across a protocol, the host's own JSON held to the
+record by a TypeScript test.
 
 - `xpute-core` declares `libm` and no source in it uses it, while `golden.rs`
   and `lib.rs` say Rust rounds through it. Either the dependency or the
@@ -100,8 +107,9 @@ The three reasons, applied to C++ rather than copied from either side:
 ## What writing it found
 
 The C++ XTP was held to both records and turned up three places where the pair
-disagrees with itself. None is fixed here; the C++ writes the bytes the records
-hold.
+disagrees with itself. All three are fixed in the three languages the same
+day, each with a test of the law it broke; the first changed the `graft`
+vector's root type from GRAFT to BRANCH.
 
 - **A grafted root does not read back.** The tree encoder writes GRAFT as the
   header's type when the root is a graft, where a grafted child takes its
@@ -121,17 +129,15 @@ hold.
 
 ## Open
 
-- **Where the records live.** They are under `crates/xpute/core/golden/` and
-  every language reads them there; the traces are under
-  `crates/xpute/conformance/golden/`. Both are the three languages' and belong
-  to none, which argues for `spec/xpute/` — a move every language's reader
-  follows.
+- **Where the records live.** They were under `crates/xpute/core/golden/` and
+  the traces under `crates/xpute/conformance/golden/`, both the three
+  languages' and belonging to none. Moved 09-30: the records to
+  `spec/xpute/golden/`, the traces beside `guest.json` in
+  `spec/xpute/conformance/`, and every reader with them.
 - **A guest built to WebAssembly.** The host drives each guest as a native
   library; the same two calls over a guest built for `wasm32` is the
   arrangement a page runs, and asks a C++ build for `wasm32` with `memcpy` and
   `abort` supplied, or a WASI SDK.
-- **The findings**, both lists, fixed before the C++ is written against the
-  pair, or after.
 
 ## Where it stands
 

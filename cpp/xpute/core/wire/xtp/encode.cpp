@@ -150,10 +150,7 @@ PacketWriter &PacketWriter::graft(std::span<const std::uint8_t> packet) noexcept
             }
         }
     }
-    // A grafted root keeps GRAFT as its type in the header, where a grafted
-    // child takes its root's: the bytes the other two write and
-    // golden/wire/xtp/encode.tsv holds.
-    return entry(at, frame_.root ? type_of(SpecialType::graft) : type);
+    return entry(at, type);
 }
 
 Result<std::uint32_t> PacketWriter::finish() noexcept {

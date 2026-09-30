@@ -1,6 +1,6 @@
 // cpp/xpute/core/golden.hpp
 
-// The reader of the golden records (crates/xpute/core/golden/): lines of
+// The reader of the golden records (spec/xpute/golden/): lines of
 // `path<TAB>value`, the path the keys and indices down to the value joined by
 // dots. A split per line and no parser, so reading is not itself a thing to
 // verify. The same files the Rust and the TypeScript read, and the same rule

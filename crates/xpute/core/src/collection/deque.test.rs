@@ -4,7 +4,7 @@
 use super::*;
 use crate::golden::Golden;
 
-const GOLDEN: &str = include_str!("../../golden/collection/deque.tsv");
+const GOLDEN: &str = include_str!("../../../../../spec/xpute/golden/collection/deque.tsv");
 
 #[test]
 fn deque_holds_what_the_record_holds() {

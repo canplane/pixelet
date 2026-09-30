@@ -1,7 +1,7 @@
 // @xpute/conformance/trace.test.ts
 
 /**
- * The traces (crates/xpute/conformance/golden/) run against every guest, by
+ * The traces (spec/xpute/conformance/) run against every guest, by
  * the one host there is: this runtime's ring, directory and stream reader,
  * over a guest opened as a library and booted into a memory the host holds.
  * The Rust guest and the C++ one export the same two C calls
@@ -289,7 +289,7 @@ function run(g: Golden, guest: string, lib: Deno.DynamicLibrary<typeof SYMBOLS>,
 for (const trace of ["directory", "door", "handle", "clock"]) {
   for (const [guest, path] of Object.entries(GUESTS)) {
     Deno.test(`trace ${trace} - the ${guest} guest`, async () => {
-      const g = await Golden.load(`../../conformance/golden/${trace}.tsv`);
+      const g = await Golden.load(`conformance/${trace}.tsv`);
       const lib = Deno.dlopen(path, SYMBOLS);
       const now = new Deno.UnsafeCallback({ parameters: [], result: "f64" } as const, () => clock_ms);
       try {

@@ -93,7 +93,8 @@ enum class SpecialType : NodeType {
     // Null with no type of its own.
     nil = 0x00,
     branch = 0x20,
-    // A packet spliced in whole; the wire names it only at a root.
+    // A packet spliced in whole. The wire never carries it: a graft is
+    // written as its packet's root, under that root's type.
     graft = 0x40,
 };
 

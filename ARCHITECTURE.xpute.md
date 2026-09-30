@@ -4,7 +4,7 @@
 
 That is the arrangement an operating system has with a process, without the hardware that enforces it: nothing stops a guest from spending a whole quota inside one function.
 
-xpute is that arrangement, in two layers. `core` is generic code — collections, codecs, a wire format, an errno table, a libm — that any program can link and call, host or no host. `runtime` is the arrangement itself: the memory, the messages, the turn. `runtime` is written against `core`, and `core` knows nothing of `runtime`. Both layers exist twice, once in Rust and once in TypeScript, and a guest's end a third time, in C++; what that means for each of them is the last section, once the pieces have names.
+xpute is that arrangement, in two layers. `core` is generic code — collections, codecs, a wire format, an errno table, scalar math — that any program can link and call, host or no host. `runtime` is the arrangement itself: the memory, the messages, the turn. `runtime` is written against `core`, and `core` knows nothing of `runtime`. Both layers exist in Rust and in TypeScript, and `core` and a guest's end a third time, in C++; what that means for each of them is the last section, once the pieces have names.
 
 Neither layer knows what a guest computes. No domain type of any kind reaches them, which is what lets the arrangement carry from the program it was written for to the next one.
 
@@ -227,13 +227,13 @@ C++ is a third implementation beside the Rust, not a part of it: written from th
 
 ## The golden records
 
-Under each crate's `golden/` are lines of `path<TAB>value`, produced once, checked once, and frozen. They are read by splitting each line and nothing more (`core golden.rs`), so the records cannot drift because a parser changed.
+Under `spec/xpute/golden/` are lines of `path<TAB>value`, produced once, checked once, and frozen. They are read by splitting each line and nothing more (`core golden.rs`), so the records cannot drift because a parser changed.
 
 There are two kinds, and the difference decides whether a record may ever be re-recorded.
 
-- **Across a protocol** — `wire/xtp`, `wire/tlv`. Every language must produce these bytes, to the last one, and each one's tests read the same files.
-- **Inside a language** — everything else. A record holds one implementation to itself. Where Rust's `libm` and JavaScript's `Math` round differently, neither is wrong, and each record follows its own implementation.
+- **Across a protocol** — `wire/xtp`, `wire/tlv`, and `codec/json`, a flat string map as JSON text, which the host writes with its own `JSON.stringify` and Rust writes with a port of it. Every language that carries one must produce these bytes, to the last one, and each one's tests read the same files.
+- **Inside a language** — everything else. A record holds one implementation to itself. Where Rust and JavaScript's `Math` round differently, neither is wrong, and each record follows its own implementation.
 
 The rule in one line: inside a language, each follows its own; across a protocol, the results must match exactly.
 
-A third kind is not an output at all. The **traces** under `crates/xpute/conformance/golden/` say what a host does and what it must then see — the steps, and the completions, stream records and next-turn asks each turn leaves — and one host runs them against every guest through the boundary alone (`packages/xpute/conformance/src/trace.test.ts`): the TypeScript runtime's own ring, directory and stream reader, over a guest built as a library of two C calls and booted into a memory the host holds. They are written from the contract's rules rather than recorded from a guest, and they name only what a host can observe: a guest's sizes, and how it keeps its output in bounds, are its own. So they hold every guest to the same thing, whatever language it is written in; they run against two, the Rust guest (`conformance guest.rs`) and the C++ one (`cpp/xpute/conformance/guest.cpp`), each over the commands `spec/xpute/conformance/guest.json` numbers and each laying its memory out its own way.
+A third kind is not an output at all. The **traces** under `spec/xpute/conformance/` say what a host does and what it must then see — the steps, and the completions, stream records and next-turn asks each turn leaves — and one host runs them against every guest through the boundary alone (`packages/xpute/conformance/src/trace.test.ts`): the TypeScript runtime's own ring, directory and stream reader, over a guest built as a library of two C calls and booted into a memory the host holds. They are written from the contract's rules rather than recorded from a guest, and they name only what a host can observe: a guest's sizes, and how it keeps its output in bounds, are its own. So they hold every guest to the same thing, whatever language it is written in; they run against two, the Rust guest (`conformance guest.rs`) and the C++ one (`cpp/xpute/conformance/guest.cpp`), each over the commands `spec/xpute/conformance/guest.json` numbers and each laying its memory out its own way.

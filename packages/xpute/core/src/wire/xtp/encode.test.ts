@@ -29,7 +29,7 @@ function encode(build: (t: TreeView) => void): U8Array {
 }
 
 Deno.test("the encoder writes the bytes the typescript writes", async () => {
-  const v = await Golden.load("wire/xtp/encode.tsv");
+  const v = await Golden.load("golden/wire/xtp/encode.tsv");
   const check = (name: string, build: (t: TreeView) => void) => assertEquals(bytes_to_hex(encode(build)), expected(v, name), name);
 
   check("nil", (t) => t.nil());
@@ -53,4 +53,14 @@ Deno.test("the encoder writes the bytes the typescript writes", async () => {
 
   const inner = encode((t) => t.set([1, "x"]));
   check("graft", (t) => t.graft(inner));
+});
+
+Deno.test("a packet grafted whole is that packet", () => {
+  const inner = encode((t) => t.set([1, "x"]));
+  assertEquals(encode((t) => t.graft(inner)), inner);
+});
+
+Deno.test("a packet under the cap is written, whatever the cap", () => {
+  const t = new TreeView().u8_array(new Uint8Array(1100) as U8Array);
+  assertEquals(new TreeEncoder().encode(t, { max_cap: 1500 }).byteLength, 16 + 8 + 1104);
 });

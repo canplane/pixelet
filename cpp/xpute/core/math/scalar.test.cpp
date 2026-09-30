@@ -10,7 +10,7 @@
 using namespace xpute;
 
 XPUTE_TEST(scalar_computes_what_the_record_holds) {
-    Golden v = Golden::load("crates/xpute/core/golden/math/scalar.tsv");
+    Golden v = Golden::load("spec/xpute/golden/math/scalar.tsv");
     v.each("", [&v](const std::string &k) {
         double x = v.f64(k + ".x");
         double s = v.f64(k + ".s");

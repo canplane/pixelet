@@ -87,7 +87,8 @@ export type RNG = () => u32;
 /**
  * Create a deterministic RNG from a seed.
  *
- * Implements splitmix64 algorithm, returning the low 32 bits of each iteration.
+ * Implements splitmix64, drawing each iteration's word through a double
+ * modulo 2^32 (see the return below).
  * Provides good statistical properties for non-cryptographic use cases.
  *
  * Use cases:
@@ -128,7 +129,10 @@ export function make_rng(seed: u64 = seed64()): RNG {
     z = U64((z ^ (z >> 27n)) * 0x94d049bb133111ebn);
     z ^= z >> 31n;
 
-    // return low 32-bit
+    // Not the word's low 32 bits: `Number` rounds it to the nearest double
+    // first, so past 2^53 the modulo sees a rounded word. This sequence is
+    // what golden/math/rng.tsv holds and what the decor scatter is placed
+    // from, and the Rust and the C++ draw it the same way.
     return U32(Number(z));
   };
 }

@@ -49,13 +49,16 @@ impl<T> Deque<'_, T> {
         self.buf[i as usize].as_ref()
     }
 
+    /// A push onto a full deque would overwrite the front: the caller's bug.
     pub fn push_back(&mut self, v: T) {
+        crate::ensure!(self.len < self.cap(), ENOSPC, self.len);
         let i = (self.head + self.len) % self.cap();
         self.buf[i as usize] = Some(v);
         self.len += 1;
     }
 
     pub fn push_front(&mut self, v: T) {
+        crate::ensure!(self.len < self.cap(), ENOSPC, self.len);
         let cap = self.cap();
         self.head = (self.head + cap - 1) % cap;
         self.buf[self.head as usize] = Some(v);

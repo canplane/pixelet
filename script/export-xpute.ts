@@ -9,10 +9,10 @@
 // commits that touched xpute in its first month landed in one week).
 //
 // **The layout is preserved exactly.** `crates/xpute/`, `packages/xpute/`,
-// `cpp/xpute/` and `spec/xpute/` keep their paths, which is not cosmetic: `golden.ts` reaches
-// the Rust tree's records at `../../../../crates/xpute/core/golden/`, because
-// one copy read from both sides is the only arrangement that cannot drift
-// silently. Rewriting a path to flatten the tree would reintroduce exactly
+// `cpp/xpute/` and `spec/xpute/` keep their paths, which is not cosmetic: every
+// language reaches the records under `spec/xpute/golden/` by a path from its
+// own tree, because one copy read from every side is the only arrangement
+// that cannot drift silently. Rewriting a path to flatten the tree would reintroduce exactly
 // what that arrangement avoids — and the day xpute really leaves, nothing has
 // to change.
 //
@@ -71,7 +71,7 @@ const CARRIED = [...TREES, ...ROOT_FILES, "README.xpute.md", "script/export-xput
 /** What the Rust half actually depends on. The versions and the reasons are
  * read out of pixelet's manifest rather than repeated here, so a re-pin
  * upstream cannot leave the export behind. */
-const RUST_DEPS = ["libm", "fnv", "indexmap", "hex"];
+const RUST_DEPS = ["fnv", "indexmap", "hex"];
 
 /** What the export does not manage, and so neither writes nor objects to:
  * build output, and the lock files, which belong to whoever runs the gate
@@ -205,7 +205,7 @@ function denoManifest(): string {
 
     // The golden records are committed as they were written and read byte
     // for byte by the tests; formatting them would break that.
-    "exclude": ["node_modules/", "crates/**/golden/"]
+    "exclude": ["node_modules/", "spec/xpute/golden/"]
   },
 
   "lint": { "rules": { "tags": ["recommended"] }, "exclude": ["node_modules/"] }
@@ -320,13 +320,19 @@ function draft(to: string, at: string): string {
 
 // ---- building it ----
 
-type File = { path: string; bytes: Uint8Array };
+/** A file as it goes out: its bytes, and whether git records it as one to
+ * run — a script that opens on its interpreter is called by path from the
+ * tasks, and the bytes alone would arrive unable to run. */
+type File = { path: string; bytes: Uint8Array; executable: boolean };
 
 /** Everything the export holds: the tracked source byte for byte, then the
  * files that are written because pixelet's own say what is not xpute's. */
 function build(): File[] {
   const encoder = new TextEncoder();
-  const listed = git(["ls-files", "-z", "--", ...TREES, ...ROOT_FILES]).split("\0").filter((p) => p !== "");
+  // `mode sha stage<TAB>path`, one to a NUL.
+  const staged = git(["ls-files", "-s", "-z", "--", ...TREES, ...ROOT_FILES]).split("\0").filter((l) => l !== "");
+  const listed = staged.map((l) => l.slice(l.indexOf("\t") + 1));
+  const executable = new Set(staged.filter((l) => l.startsWith("100755 ")).map((l) => l.slice(l.indexOf("\t") + 1)));
   if (listed.length === 0) die("git listed nothing to export");
 
   // The notices are a file now, so the path in them and the path here can drift.
@@ -340,7 +346,7 @@ function build(): File[] {
   const files: File[] = listed.map((path) => {
     const bytes = Deno.readFileSync(join(ROOT, path));
     const carried = path.endsWith(".md") ? encoder.encode(relink(new TextDecoder().decode(bytes))) : bytes;
-    return { path: RENAMED[path] ?? path, bytes: carried };
+    return { path: RENAMED[path] ?? path, bytes: carried, executable: executable.has(path) };
   });
   const at = stamp();
   for (
@@ -351,7 +357,7 @@ function build(): File[] {
       [".gitignore", gitignore()],
     ] as const
   ) {
-    files.push({ path, bytes: encoder.encode(text) });
+    files.push({ path, bytes: encoder.encode(text), executable: false });
   }
   return files;
 }
@@ -399,7 +405,8 @@ function compare(files: File[], to: string): { differs: string[]; extra: string[
       differs.push(file.path);
       continue;
     }
-    if (!same(file.bytes, held)) differs.push(file.path);
+    const runs = ((Deno.statSync(join(to, file.path)).mode ?? 0) & 0o111) !== 0;
+    if (!same(file.bytes, held) || runs !== file.executable) differs.push(file.path);
   }
 
   const known = new Set(files.map((f) => f.path));
@@ -439,6 +446,7 @@ function write(files: File[], to: string): void {
     const full = join(to, file.path);
     Deno.mkdirSync(dirname(full), { recursive: true });
     Deno.writeFileSync(full, file.bytes);
+    Deno.chmodSync(full, file.executable ? 0o755 : 0o644);
   }
 }
 

@@ -49,7 +49,7 @@ std::string show(const tlv::Value &v) {
 
 // Across a protocol: the bytes are the other two languages', to the last one.
 XPUTE_TEST(tlv_computes_what_the_other_languages_compute) {
-    Golden v = Golden::load("crates/xpute/core/golden/wire/tlv.tsv");
+    Golden v = Golden::load("spec/xpute/golden/wire/tlv.tsv");
     std::vector<std::uint8_t> buf;
     tlv::Writer w(buf);
     const std::uint8_t three[] = {9, 8, 7};

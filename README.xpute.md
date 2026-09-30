@@ -33,9 +33,9 @@ What the guest cannot do itself — a fetch, a call to a device — it asks for 
 
 ## `core` and `runtime`
 
-`core` is a kit and nothing more — collections, codecs, math over one libm, an errno table, the wire formats. Link it and use it: it knows nothing of turns, hosts or memories.
+`core` is a kit and nothing more — collections, codecs, scalar math, an errno table, the wire formats. Link it and use it: it knows nothing of turns, hosts or memories.
 
-Golden records under `crates/xpute/core/golden/` hold the languages to each other wherever bytes cross.
+Golden records under `spec/xpute/golden/` hold the languages to each other wherever bytes cross.
 
 `runtime` is the arrangement above, and it is not symmetric — the two halves are the two ends of one thing, not two implementations of it. A module on one side with nothing facing it is not a gap to fill; what the two owe each other is not matching module lists but matching formats.
 
@@ -61,11 +61,12 @@ The line is drawn in the same place every time: xpute carries the mechanism, and
 
 ## Running it
 
-Deno 2.x and a Rust toolchain.
+Deno 2.x, a Rust toolchain, and a C++20 compiler as `c++` or `$CXX`.
 
 ```sh
-deno task check   # deno fmt --check, deno check, cargo fmt --check, clippy
-deno task test    # deno test and cargo test, the golden records included
+deno task check   # deno fmt --check, deno check, cargo fmt --check, clippy, the C++ compiled
+deno task test    # deno test, cargo test and the C++ tests, the golden records included,
+                  # then the traces run against every guest
 deno task lint    # deno lint
 ```
 

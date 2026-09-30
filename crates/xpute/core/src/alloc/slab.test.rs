@@ -1,5 +1,5 @@
 // xpute-core/alloc/slab.test.rs
-// (no pair: the allocator is the Rust's alone)
+// (no pair: TypeScript has no allocator)
 
 use super::*;
 use crate::alloc::buddy_tree::Range;
