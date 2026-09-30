@@ -8,16 +8,16 @@
 // and a bump for every change, and the boundary is still moving (38 of the 49
 // commits that touched xpute in its first month landed in one week).
 //
-// **The layout is preserved exactly.** `crates/xpute/`, `packages/xpute/` and
-// `spec/xpute/` keep their paths, which is not cosmetic: `golden.ts` reaches
+// **The layout is preserved exactly.** `crates/xpute/`, `packages/xpute/`,
+// `cpp/xpute/` and `spec/xpute/` keep their paths, which is not cosmetic: `golden.ts` reaches
 // the Rust tree's records at `../../../../crates/xpute/core/golden/`, because
 // one copy read from both sides is the only arrangement that cannot drift
 // silently. Rewriting a path to flatten the tree would reintroduce exactly
 // what that arrangement avoids — and the day xpute really leaves, nothing has
 // to change.
 //
-// So **no source file is edited**. Every `.rs`, `.ts`, `.tsv` and `.json`
-// under the three trees is copied byte for byte, listed by `git ls-files` so
+// So **no source file is edited**. Every `.rs`, `.ts`, `.cpp`, `.hpp`, `.tsv` and
+// `.json` under the four trees is copied byte for byte, listed by `git ls-files` so
 // that no build output can come along. Four manifests are written instead of
 // copied, because pixelet's own say things that are not xpute's: the Cargo
 // workspace (whose members and header describe pxl), `deno.jsonc` (28 tasks,
@@ -37,9 +37,10 @@ import { dirname, join, relative } from "@std/path";
 
 const ROOT = dirname(dirname(new URL(import.meta.url).pathname));
 
-/** The trees that are xpute's, and the root files that belong with them. */
-const TREES = ["crates/xpute", "packages/xpute", "spec/xpute"];
-const ROOT_FILES = ["rustfmt.toml", "ARCHITECTURE.xpute.md", "LICENSE.xpute", "THIRD_PARTY_NOTICES.xpute.md"];
+/** The trees that are xpute's, and the files outside them that belong with
+ * them: the C++ is built by a script of its own, as the Rust is by Cargo. */
+const TREES = ["crates/xpute", "packages/xpute", "cpp/xpute", "spec/xpute"];
+const ROOT_FILES = ["rustfmt.toml", "ARCHITECTURE.xpute.md", "LICENSE.xpute", "THIRD_PARTY_NOTICES.xpute.md", "script/cpp.ts"];
 
 /** What each `.xpute` name is called over there — what a copied file lands as,
  * and what `relink` rewrites a cross-reference to. The `.xpute` infix tells
@@ -63,7 +64,7 @@ const RETIRED = ["deno.json"];
 const CRATES = ["xpute/core", "xpute/runtime", "xpute/conformance"];
 
 /** What an export carries, for the purpose of saying what it carries: the
- * three trees and the two files that are copied, the README this tree keeps
+ * four trees and the two files that are copied, the README this tree keeps
  * for the other repository, and this script, which decides the rest. */
 const CARRIED = [...TREES, ...ROOT_FILES, "README.xpute.md", "script/export-xpute.ts"];
 
@@ -172,12 +173,12 @@ function denoManifest(): string {
 
   "description": "A kit and a runtime for a guest program inside a host.",
 
-  "workspace": ["packages/xpute/core", "packages/xpute/runtime"],
+  "workspace": ["packages/xpute/core", "packages/xpute/runtime", "packages/xpute/conformance"],
   "nodeModulesDir": "auto",
 
   "tasks": {
-    "check": "deno fmt --check && deno check packages/xpute/core/src/**/*.ts && deno check packages/xpute/runtime/src/**/*.ts && cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --all-targets -- -D warnings",
-    "test": "deno test -A packages/xpute/core/src && deno test -A packages/xpute/runtime/src && cargo test --manifest-path crates/Cargo.toml --all",
+    "check": "deno fmt --check && deno check packages/xpute/core/src/**/*.ts && deno check packages/xpute/runtime/src/**/*.ts && deno check packages/xpute/conformance/src/**/*.ts && cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --all-targets -- -D warnings && ./script/cpp.ts check",
+    "test": "deno test -A packages/xpute/core/src && deno test -A packages/xpute/runtime/src && cargo test --manifest-path crates/Cargo.toml --all && ./script/cpp.ts test && cargo build --manifest-path crates/Cargo.toml -p xpute-conformance && ./script/cpp.ts guest && deno test -A packages/xpute/conformance/src",
     "fmt": "deno fmt && cargo fmt --manifest-path crates/Cargo.toml --all",
     "lint": "deno lint"
   },
@@ -193,6 +194,7 @@ function denoManifest(): string {
   "imports": {
     "@xpute/core/": "./packages/xpute/core/src/",
     "@xpute/runtime/": "./packages/xpute/runtime/src/",
+    "@xpute/conformance/": "./packages/xpute/conformance/src/",
     "@std/assert": "jsr:@std/assert@^1",
     "@std/path": "jsr:@std/path@^1"
   },
@@ -211,10 +213,11 @@ function denoManifest(): string {
 `;
 }
 
-/** The one file here that is someone else's, and the file that says so. A
- * notice naming a path that is no longer exported would be a claim with
- * nothing behind it, so the export refuses rather than shipping one. */
-const PORTED = "crates/xpute/core/src/alloc/buddy_tree.rs";
+/** The files here that are someone else's — one port, in two languages —
+ * and the file that says so. A notice naming a path that is no longer
+ * exported would be a claim with nothing behind it, so the export refuses
+ * rather than shipping one. */
+const PORTED = ["crates/xpute/core/src/alloc/buddy_tree.rs", "cpp/xpute/core/alloc/buddy_tree.hpp"];
 
 /** The sections of pixelet's own `.gitignore` that apply to a repository with
  * no `apps/web`, no bake output and no bundler — taken by name rather than
@@ -243,8 +246,9 @@ function gitignore(): string {
   const source = Deno.readTextFileSync(join(ROOT, ".gitignore"));
   return `${IGNORE_SECTIONS.map((h) => ignoreSection(source, h)).join("\n\n")}
 
-# Rust workspace build output
+# Build output: the Rust workspace's, and the C++'s (script/cpp.ts)
 /crates/target
+/target
 
 # Written by whoever runs the gate here, and not by the export. Two libraries'
 # locks bind no consumer, and pixelet's own are what its builds are held to.
@@ -327,9 +331,10 @@ function build(): File[] {
 
   // The notices are a file now, so the path in them and the path here can drift.
   // Neither is allowed to: the notice has to name the file it is a notice for.
-  if (!listed.includes(PORTED)) die(`${PORTED} is not being exported, and the notices name it`);
-  if (!Deno.readTextFileSync(join(ROOT, "THIRD_PARTY_NOTICES.xpute.md")).includes(PORTED)) {
-    die(`THIRD_PARTY_NOTICES.xpute.md does not name ${PORTED}, which is the file it exists for`);
+  const notices = Deno.readTextFileSync(join(ROOT, "THIRD_PARTY_NOTICES.xpute.md"));
+  for (const ported of PORTED) {
+    if (!listed.includes(ported)) die(`${ported} is not being exported, and the notices name it`);
+    if (!notices.includes(ported)) die(`THIRD_PARTY_NOTICES.xpute.md does not name ${ported}, which it exists for`);
   }
 
   const files: File[] = listed.map((path) => {

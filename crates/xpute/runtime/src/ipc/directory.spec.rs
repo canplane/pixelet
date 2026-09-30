@@ -8,9 +8,9 @@
 // ARCHITECTURE.xpute.md).
 //
 // Its words: MAGIC, VERSION, how many entries follow, and a word kept at 0; then that
-// many entries, a key and a value each, no key twice. A reader looks up the keys it knows and passes
-// over the rest, the way a process reads its ELF auxiliary vector, so a directory that
-// grows an entry is still read by a host that predates it.
+// many entries, a key and a value each, no key twice. A reader looks up the keys it
+// knows and passes over the rest, the way a process reads its ELF auxiliary vector, so
+// a directory that grows an entry is still read by a host that predates it.
 
 // Casing here is the spec's and not Rust's: a name is spelled as the JSON
 // spells it, so that one record is indexed by one name on both sides. To

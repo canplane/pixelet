@@ -116,7 +116,7 @@ deno task dev:local
 | `deno task spec`                     | Generate Rust and TypeScript from the JSON under `spec/`              |
 | `deno task deploy`                   | Build the client and publish the Cloudflare Worker                    |
 | `deno task smoke <url>`              | What a deployment must answer, against a running one                  |
-| `deno task check`                    | The gate: format, types, clippy, and the files generated from `spec/` |
+| `deno task check`                    | The gate: format, types, clippy, the C++, the files made from `spec/` |
 | `deno task test`                     | Every test, every workspace member                                    |
 | `deno task lint` / `fmt`             | Lint / format                                                         |
 
