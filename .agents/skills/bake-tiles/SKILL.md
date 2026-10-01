@@ -244,8 +244,8 @@ and means a full re-bake into a **new** version — not a partial one, because
 a mixed bucket serves tiles from two pipelines with no way to tell them
 apart.
 
-A **geocode** version names the page _format_, not the data: the
-monthly refresh rewrites the same prefix with newer Overture content. A
+A **geocode** version names the page _format_, not the data: a data
+refresh rewrites the same prefix with newer Overture content. A
 format change (a new field, a new encoding) is a new version and a re-bake; a
 data refresh is not.
 
