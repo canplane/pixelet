@@ -579,7 +579,10 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         // Decor's impostors: a strip of four corners an instance, opaque
         // where the sprite covers and discarded where it does not, both sides.
         crate::frame::draw::PIPELINE_IMPOSTOR => record(
-            Head { topology: STRIP, ..lit(SHADER_IMPOSTOR, CULL_NONE) },
+            Head {
+                topology: STRIP,
+                ..lit(SHADER_IMPOSTOR, CULL_NONE)
+            },
             &[],
             &[
                 group(&LIT_FRAME),

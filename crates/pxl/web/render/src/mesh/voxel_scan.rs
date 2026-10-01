@@ -250,13 +250,14 @@ impl ScanContext {
         }
     }
 
-    /// The one run an apron column holds, where its ground reaches the floor.
+    /// The one run an apron column holds: floor to its ground, or, where its
+    /// ground stands below the floor, the one cell at its top — what the
+    /// chunk's edge wall reaches down to (chunk_mesher.rs `edge_low`). It
+    /// is never painted or emitted, so it changes no occupancy.
     fn apron_run(&mut self, apron: &Apron, col: usize) {
         let top = apron.ele[col] as i32 - 1;
-        if top < apron.floor {
-            return;
-        }
-        self.runs.push(run_of(apron.floor, top, apron.material[col], apron.layer_idx[col]));
+        let z0 = if top < apron.floor { top } else { apron.floor };
+        self.runs.push(run_of(z0, top, apron.material[col], apron.layer_idx[col]));
     }
 
     fn set_bytes(&self) -> u32 {

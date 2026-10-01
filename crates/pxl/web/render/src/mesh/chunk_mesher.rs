@@ -599,7 +599,7 @@ impl BakeContext {
                             self.counters.culled += 1;
                             continue;
                         }
-                        if set.sub_s[i] == SUB_CELL_NONE && mergeable.is_none() {
+                        if set.sub_s[i] == SUB_CELL_NONE && mergeable.is_none() && hung_floor(set, cx, cy, i).is_none() {
                             mergeable = Some((i as u32, mask));
                             continue;
                         }
@@ -703,12 +703,13 @@ impl BakeContext {
             let depth = (set.z1[i] as f64 + 1.0 - set.z0[i] as f64) * z_unit;
             let (min_x, min_y, min_z, size_x, size_y, size_z);
             if sub_s == SUB_CELL_NONE {
+                let z0 = hung_floor(set, s[0], s[1], i).unwrap_or(set.z0[i]);
                 min_x = (cx - apron) * unit;
                 min_y = (cy - apron) * unit;
-                min_z = set.z0[i] as f64 * z_unit;
+                min_z = z0 as f64 * z_unit;
                 size_x = w * unit;
                 size_y = h * unit;
-                size_z = depth;
+                size_z = (set.z1[i] as f64 + 1.0 - z0 as f64) * z_unit;
             } else {
                 min_x = (cx - apron) * unit + unpack_sub_cell_fraction(set.sub_ox[i]) * unit;
                 min_y = (cy - apron) * unit + unpack_sub_cell_fraction(set.sub_oy[i]) * unit;
@@ -799,7 +800,17 @@ impl BakeContext {
                         }
                     }
                     self.coarse.start.push(self.coarse.z0.len() as u32);
-                    self.pack_coarse_cell(start, cnt, lod_step, bucket);
+                    let mut low: Option<i32> = None;
+                    for j in 0..lod_step {
+                        for k in 0..lod_step {
+                            let (cx, cy) = (bx * lod_step + k + set.apron, by * lod_step + j + set.apron);
+                            low = match (low, edge_low(set, cx, cy)) {
+                                (Some(a), Some(b)) => Some(a.min(b)),
+                                (a, b) => a.or(b),
+                            };
+                        }
+                    }
+                    self.pack_coarse_cell(start, cnt, lod_step, bucket, low);
                     self.buckets.truncate(start as usize);
                 }
             }
@@ -876,7 +887,9 @@ impl BakeContext {
     /// Packs one coarse cell's buckets bottom to top. A cell's buckets have
     /// distinct heights (find_or_create_bucket), so sorting them by height
     /// visits them lowest first.
-    fn pack_coarse_cell(&mut self, start: u32, cnt: u32, lod_step: u32, bucket: i32) {
+    /// `edge_low` is the lowest ground beside the cell across the chunk's
+    /// edge, where it is on the edge: its skirt hangs down to it.
+    fn pack_coarse_cell(&mut self, start: u32, cnt: u32, lod_step: u32, bucket: i32, edge_low: Option<i32>) {
         let step = bucket;
         let cell = start as usize..(start + cnt) as usize;
         self.buckets[cell.clone()].sort_unstable_by_key(|acc| acc.bz);
@@ -923,7 +936,7 @@ impl BakeContext {
             let under = if !acc.ground || floored {
                 None
             } else if lowest {
-                Some((bucket_lo - step, bucket_lo - 1))
+                Some(((bucket_lo - step).min(edge_low.map_or(i32::MAX, |low| low + 1)), bucket_lo - 1))
             } else if inset.is_some() {
                 // A run with no height: its top alone, at the cell's bottom.
                 Some((bucket_lo, bucket_lo - 1))
@@ -1015,6 +1028,45 @@ fn write_box(m: &mut [u32], min: V3, size: [f64; 3], rgb: [u8; 3], taps: u32, fa
     m[3] = u32::from_le_bytes([rgb[0], rgb[1], rgb[2], 0]);
     m[4] = taps;
     m[5] = faces;
+}
+
+/// The lowest top of the ground beside column (cx, cy) across the chunk's
+/// edge, in cells, where the column is on the edge and the apron holds
+/// ground there: what the edge's wall hangs down to. The floor is the
+/// chunk's own, and the chunk beside may stand lower than it — a cliff at
+/// the edge, or a coarser chunk whose cell is read at its center — so a wall
+/// down to the floor alone left the plane between the two open below it.
+/// Only the drawn wall reaches down; what the chunk holds is unchanged.
+fn edge_low(set: &RunSet, cx: u32, cy: u32) -> Option<i32> {
+    let (span, apron) = (set.span, set.apron);
+    if apron == 0 {
+        return None;
+    }
+    let (lo, hi) = (apron, span - apron);
+    let top = |x: u32, y: u32| {
+        let col = (y * span + x) as usize;
+        (set.start[col]..set.start[col + 1]).map(|i| set.z1[i as usize]).max()
+    };
+    [
+        (cx + 1 == hi).then(|| top(cx + 1, cy)),
+        (cx == lo).then(|| top(cx - 1, cy)),
+        (cy + 1 == hi).then(|| top(cx, cy + 1)),
+        (cy == lo).then(|| top(cx, cy - 1)),
+    ]
+    .into_iter()
+    .flatten()
+    .flatten()
+    .min()
+}
+
+/// Where column (cx, cy)'s lowest box starts once its wall reaches the
+/// ground beside (`edge_low`), where that is lower than its own floor.
+fn hung_floor(set: &RunSet, cx: u32, cy: u32, run: usize) -> Option<i32> {
+    let col = (cy * set.span + cx) as usize;
+    if set.start[col] as usize != run || set.sub_s[run] != SUB_CELL_NONE {
+        return None;
+    }
+    edge_low(set, cx, cy).map(|low| low + 1).filter(|&z0| z0 < set.z0[run])
 }
 
 fn steps(v: f64, step: f64) -> u32 {

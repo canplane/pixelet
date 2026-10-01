@@ -81,7 +81,15 @@ impl ImpostorPass {
         let sampler = object();
         g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::LINEAR, address::CLAMP, compare::NONE, 1);
         let atlas = object();
-        g.texture(atlas, SPRITE, SPRITE, GROUPS as u32, format::RGBA8_SRGB, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
+        g.texture(
+            atlas,
+            SPRITE,
+            SPRITE,
+            GROUPS as u32,
+            format::RGBA8_SRGB,
+            1,
+            texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING,
+        );
         let atlas_view = object();
         g.view(atlas_view, atlas, dimension::D2_ARRAY, 0, 1, 0, GROUPS as u32);
         let depth = object();
@@ -94,7 +102,23 @@ impl ImpostorPass {
         g.bind_group(
             group,
             draw.layouts[2],
-            &[0, resource::VIEW, atlas_view, 0, 0, 1, resource::SAMPLER, sampler, 0, 0, 2, resource::BUFFER, fits, 0, (GROUPS * 16) as u32],
+            &[
+                0,
+                resource::VIEW,
+                atlas_view,
+                0,
+                0,
+                1,
+                resource::SAMPLER,
+                sampler,
+                0,
+                0,
+                2,
+                resource::BUFFER,
+                fits,
+                0,
+                (GROUPS * 16) as u32,
+            ],
         );
         ImpostorPass {
             frames: FrameGroups::new(g, draw.layouts[0], frame_buffer, shadow.entries(1), None, ao, air),
@@ -131,8 +155,9 @@ impl ImpostorPass {
     /// Draws every layer whose model or skin changed and is on the device
     /// now, before the frame's passes read the atlas.
     pub fn bake(&mut self, g: &Gpu, encoder: u32, decor: &mut DecorPass, blocks: &Blocks) {
-        let due: Vec<(usize, Baked)> =
-            (0..GROUPS).filter_map(|k| self.wanted[k].filter(|w| w.0 != 0 && w.1.is_some() && self.baked[k] != Some(*w)).map(|w| (k, w))).collect();
+        let due: Vec<(usize, Baked)> = (0..GROUPS)
+            .filter_map(|k| self.wanted[k].filter(|w| w.0 != 0 && w.1.is_some() && self.baked[k] != Some(*w)).map(|w| (k, w)))
+            .collect();
         if due.is_empty() {
             return;
         }
@@ -143,7 +168,9 @@ impl ImpostorPass {
             }
         });
         for (n, &(k, w)) in due.iter().enumerate() {
-            let Some((model, vertex_cnt, index_cnt, skin)) = decor.model_of(g, k as u32, blocks) else { continue };
+            let Some((model, vertex_cnt, index_cnt, skin)) = decor.model_of(g, k as u32, blocks) else {
+                continue;
+            };
             let Some((fit_group, offset)) = self.fit_uniforms.at(n as u32) else { break };
             let layer = object();
             g.view(layer, self.atlas, dimension::D2, 0, 1, k as u32, 1);
