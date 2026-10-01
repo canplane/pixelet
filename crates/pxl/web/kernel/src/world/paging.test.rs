@@ -18,14 +18,14 @@ use std::collections::HashSet;
 use pxl_spec::bake::poi_page::{Place, PoiPage, POI_LATTICE};
 
 use super::*;
-use crate::io::demand::{Category, Why};
+use crate::io::demand::Category;
 use crate::io::policy::Policy;
 use crate::io::sched::{Ledger, Rank, Serve};
 use crate::layer::environment::fog::reach_at;
 use crate::sched::profiler::record::{Failure, Outcome};
-use crate::world::prefetch::{NoPrefetch, Prefetch, Reach};
+use crate::world::prefetch::{Prefetch, Reach};
 use crate::world::pyramid::Pyramid;
-use pxl_spec::space::lod::{fault_radius, pages_within, Tau};
+use pxl_spec::space::lod::{fault_radius, Tau};
 use pxl_spec::space::observation::{ByBounds, Observation, Unknown};
 
 /// How high the eye stands over flat ground.
@@ -33,12 +33,6 @@ const HEIGHT: f64 = 1000.0;
 
 fn the_observation() -> Observation {
     observation_at([30_000.0, -17_000.0])
-}
-
-/// An observation some hundreds of kilometers from `the_observation`,
-/// sharing no page under the top with it.
-fn elsewhere() -> Observation {
-    observation_at([-400_000.0, 250_000.0])
 }
 
 /// Looking all around from `HEIGHT` over flat ground, with nothing known of
@@ -112,19 +106,6 @@ impl Serve for Hostile {
     }
 }
 
-/// Speculation run wild: every page of every level for dozens of pages about
-/// the eye.
-struct Flood;
-
-impl Prefetch for Flood {
-    fn speculate(&self, o: &Observation, _tau: Tau, each: &mut dyn FnMut(LevelPage)) {
-        let [x, y, _] = o.eye;
-        for level in 0..=TOP_LEVEL {
-            pages_within(level, [x, y], 8.0 * pxl_spec::space::pyramid::span_of(level)).for_each(&mut *each);
-        }
-    }
-}
-
 /// Whether every page the observation demands is read exactly.
 fn exact(pyramid: &Pyramid<PoiPage>) -> bool {
     pyramid.demand().iter().all(|&p| pyramid.source(p).is_some())
@@ -193,4 +174,3 @@ fn the_view_converges_exact_with_the_reach_prefetched_under_every_order() {
         converge(Hostile::Preempt, &reach, allowance);
     }
 }
-

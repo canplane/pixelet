@@ -44,7 +44,7 @@ function number(row: Setting, value: unknown): u32 {
       return typeof value === "boolean" ? Number(value) : NONE;
     case "choice":
       return typeof value === "string" && row.options.includes(value) ? row.options.indexOf(value) : NONE;
-    case "number":
+    case "index":
       return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : NONE;
   }
 }

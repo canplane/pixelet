@@ -30,8 +30,8 @@ pub struct Arena<T: Default> {
     pub mem: Vec<T>,
 
     pub max_cap: u32,
-    _cap: u32,
-    _len: u32,
+    cap_of: u32,
+    len_of: u32,
 }
 
 impl<T: Default> Arena<T> {
@@ -39,23 +39,23 @@ impl<T: Default> Arena<T> {
         let mut arena = Arena {
             mem: Vec::new(),
             max_cap: opts.max_cap,
-            _cap: 0,
-            _len: 0,
+            cap_of: 0,
+            len_of: 0,
         };
-        arena._grow(opts.init_cap.min(opts.max_cap))?;
+        arena.grow(opts.init_cap.min(opts.max_cap))?;
         Ok(arena)
     }
 
     pub fn cap(&self) -> u32 {
-        self._cap
+        self.cap_of
     }
 
     pub fn len(&self) -> u32 {
-        self._len
+        self.len_of
     }
 
     pub fn is_empty(&self) -> bool {
-        self._len == 0
+        self.len_of == 0
     }
 
     pub fn get(&mut self, idx: u32) -> &mut T {
@@ -66,20 +66,20 @@ impl<T: Default> Arena<T> {
     pub fn alloc(&mut self) -> Result<&mut T, MarshalError> {
         // Saturating so a doubling past u32 lands above max_cap and is
         // refused there, rather than wrapping under it and passing.
-        if self._len >= self._cap {
-            self._grow(self._cap.saturating_mul(2).max(1))?;
+        if self.len_of >= self.cap_of {
+            self.grow(self.cap_of.saturating_mul(2).max(1))?;
         }
 
-        let i = self._len as usize;
-        self._len += 1;
+        let i = self.len_of as usize;
+        self.len_of += 1;
         Ok(&mut self.mem[i])
     }
 
     /// Grows now so that the next `cnt` allocs do not.
     pub fn reserve(&mut self, cnt: u32) -> Result<(), MarshalError> {
-        let req = self._len.saturating_add(cnt);
-        if req > self._cap {
-            self._grow(self._cap.saturating_mul(2).max(req))?;
+        let req = self.len_of.saturating_add(cnt);
+        if req > self.cap_of {
+            self.grow(self.cap_of.saturating_mul(2).max(req))?;
         }
         Ok(())
     }
@@ -90,12 +90,12 @@ impl<T: Default> Arena<T> {
     /// is a mistake rather than a resize request, so it is a broken
     /// invariant and not a clamp.
     pub fn truncate(&mut self, new_len: u32) {
-        crate::ensure!(new_len <= self._len, EINVAL, new_len, self._len);
-        self._len = new_len;
+        crate::ensure!(new_len <= self.len_of, EINVAL, new_len, self.len_of);
+        self.len_of = new_len;
     }
 
-    fn _grow(&mut self, new_cap: u32) -> Result<(), MarshalError> {
-        if new_cap <= self._cap {
+    fn grow(&mut self, new_cap: u32) -> Result<(), MarshalError> {
+        if new_cap <= self.cap_of {
             return Ok(());
         }
         if new_cap > self.max_cap {
@@ -103,10 +103,10 @@ impl<T: Default> Arena<T> {
         }
 
         self.mem.reserve(new_cap as usize - self.mem.len());
-        for _ in self._cap..new_cap {
+        for _ in self.cap_of..new_cap {
             self.mem.push(T::default());
         }
-        self._cap = new_cap;
+        self.cap_of = new_cap;
         Ok(())
     }
 
@@ -117,13 +117,13 @@ impl<T: Default> Arena<T> {
 }
 
 pub struct ArenaGuard<'a, T: Default> {
-    _mark: u32,
+    mark: u32,
     arena: &'a mut Arena<T>,
 }
 
 impl<'a, T: Default> ArenaGuard<'a, T> {
     fn new(arena: &'a mut Arena<T>) -> ArenaGuard<'a, T> {
-        ArenaGuard { _mark: arena.len(), arena }
+        ArenaGuard { mark: arena.len(), arena }
     }
 }
 
@@ -142,7 +142,7 @@ impl<T: Default> core::ops::DerefMut for ArenaGuard<'_, T> {
 
 impl<T: Default> Drop for ArenaGuard<'_, T> {
     fn drop(&mut self) {
-        self.arena.truncate(self._mark);
+        self.arena.truncate(self.mark);
     }
 }
 

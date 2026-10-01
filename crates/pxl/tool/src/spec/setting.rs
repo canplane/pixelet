@@ -111,7 +111,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             "pub enum SettingKind {",
             "    Toggle,",
             "    Choice,",
-            "    Number,",
+            "    Index,",
             "}",
         ]
         .map(String::from),
@@ -175,13 +175,14 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         match s.kind() {
             "toggle" => Ok("bool".to_string()),
             "choice" => Ok(enum_name(s.options().unwrap_or_default())),
-            _ => {
+            "index" => {
                 let d = s.spec.get("default").ok_or(format!("{JSON}: {} has no default", s.key))?;
                 match d.is_wrapper().then(|| d.str_at("$type")).flatten() {
                     Some(t @ ("u8" | "u16" | "u32")) => Ok(t.to_string()),
-                    _ => Err(format!("{JSON}: {} is a number with no width", s.key)),
+                    _ => Err(format!("{JSON}: {} is an index with no width", s.key)),
                 }
             }
+            kind => Err(format!("{JSON}: {} is a setting of no kind there is: {kind}", s.key)),
         }
     };
     let default_lit = |s: &Setting| -> Result<String, String> {
@@ -229,7 +230,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     rs.extend(
         [
             "    /// A setting's value as it crosses: a toggle's 0 or 1, a choice's option",
-            "    /// by its index, a number.",
+            "    /// by its place in its list, an index as itself.",
             "    pub fn get(&self, key: SettingKey) -> u32 {",
             "        match key {",
         ]

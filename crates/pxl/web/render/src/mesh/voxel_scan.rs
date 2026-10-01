@@ -112,7 +112,7 @@ struct Run {
     sub_ox: u8,
     sub_oy: u8,
     sub_oz: u8,
-    sub_sz: u8,
+    sub_s: u8,
 }
 
 /// Where a scan stands after a step.
@@ -290,7 +290,7 @@ impl ScanContext {
             core::slice::from_raw_parts_mut(p, len)
         };
         let (r, g, b, class) = (lane(n), lane(n), lane(n), lane(n));
-        let (ox, oy, oz, sx, sy, sz) = (lane(n), lane(n), lane(n), lane(n), lane(n), lane(n));
+        let (ox, oy, oz, size) = (lane(n), lane(n), lane(n), lane(n));
         for (i, run) in self.runs.iter().enumerate() {
             z0[i] = run.z0 as u32;
             z1[i] = run.z1 as u32;
@@ -302,11 +302,7 @@ impl ScanContext {
             ox[i] = run.sub_ox;
             oy[i] = run.sub_oy;
             oz[i] = run.sub_oz;
-            // A scanned sub-voxel is a cube: one extent on every axis. Only
-            // the coarse mesher writes them apart.
-            sx[i] = run.sub_sz;
-            sy[i] = run.sub_sz;
-            sz[i] = run.sub_sz;
+            size[i] = run.sub_s;
         }
         self.packed = true;
     }
@@ -338,7 +334,7 @@ fn run_of(z0: i32, z1: i32, material: u32, layer_idx: u8) -> Run {
         sub_ox: 0,
         sub_oy: 0,
         sub_oz: 0,
-        sub_sz: SUB_CELL_NONE,
+        sub_s: SUB_CELL_NONE,
     }
 }
 
@@ -372,8 +368,8 @@ fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) {
             let material_class = (packed >> 24) as u8;
             let layer_idx = band.layer_idx[idx];
             let sub = band.sub_cell.map(|s| &s[idx * 4..idx * 4 + 4]);
-            let sub_sz = sub.map_or(SUB_CELL_NONE, |s| s[3]);
-            if sub_sz != SUB_CELL_NONE {
+            let sub_s = sub.map_or(SUB_CELL_NONE, |s| s[3]);
+            if sub_s != SUB_CELL_NONE {
                 let s = sub.unwrap();
                 push(
                     runs,
@@ -388,7 +384,7 @@ fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) {
                         sub_ox: s[0],
                         sub_oy: s[1],
                         sub_oz: s[2],
-                        sub_sz,
+                        sub_s,
                     },
                 );
                 open = None;
@@ -411,7 +407,7 @@ fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) {
                         sub_ox: 0,
                         sub_oy: 0,
                         sub_oz: 0,
-                        sub_sz: SUB_CELL_NONE,
+                        sub_s: SUB_CELL_NONE,
                     },
                 ));
             }
@@ -436,7 +432,7 @@ fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) {
                         sub_ox: s as u8,
                         sub_oy: (s >> 8) as u8,
                         sub_oz: (s >> 16) as u8,
-                        sub_sz: (s >> 24) as u8,
+                        sub_s: (s >> 24) as u8,
                     },
                 );
             }
@@ -487,13 +483,14 @@ pub struct RunSet<'a> {
     pub sub_ox: &'a [u8],
     pub sub_oy: &'a [u8],
     pub sub_oz: &'a [u8],
-    pub sub_sx: &'a [u8],
-    pub sub_sy: &'a [u8],
-    pub sub_sz: &'a [u8],
+    /// A sub-cell box's side, one on every axis — a scanned sub-voxel is a
+    /// cube, and a coarse cell's sparse box is one too — or SUB_CELL_NONE
+    /// for a run that fills its cells.
+    pub sub_s: &'a [u8],
 }
 
 const RUN_I32_FIELDS: u32 = 3;
-const RUN_U8_FIELDS: u32 = 10;
+const RUN_U8_FIELDS: u32 = 8;
 
 /// The bytes a set of `count` runs over `span`² columns occupies.
 pub fn run_set_bytes(count: u32, span: u32) -> u32 {
@@ -545,9 +542,7 @@ impl<'a> RunSet<'a> {
             sub_ox: lane(),
             sub_oy: lane(),
             sub_oz: lane(),
-            sub_sx: lane(),
-            sub_sy: lane(),
-            sub_sz: lane(),
+            sub_s: lane(),
         }
     }
 }
@@ -569,9 +564,7 @@ pub struct OwnedRunSet {
     pub sub_ox: Vec<u8>,
     pub sub_oy: Vec<u8>,
     pub sub_oz: Vec<u8>,
-    pub sub_sx: Vec<u8>,
-    pub sub_sy: Vec<u8>,
-    pub sub_sz: Vec<u8>,
+    pub sub_s: Vec<u8>,
 }
 
 impl OwnedRunSet {
@@ -589,9 +582,7 @@ impl OwnedRunSet {
             &mut self.sub_ox,
             &mut self.sub_oy,
             &mut self.sub_oz,
-            &mut self.sub_sx,
-            &mut self.sub_sy,
-            &mut self.sub_sz,
+            &mut self.sub_s,
         ] {
             lane.clear();
         }
@@ -624,9 +615,7 @@ impl OwnedRunSet {
                 self.sub_ox.push(set.sub_ox[i]);
                 self.sub_oy.push(set.sub_oy[i]);
                 self.sub_oz.push(set.sub_oz[i]);
-                self.sub_sx.push(set.sub_sx[i]);
-                self.sub_sy.push(set.sub_sy[i]);
-                self.sub_sz.push(set.sub_sz[i]);
+                self.sub_s.push(set.sub_s[i]);
             }
             self.start.push(self.z0.len() as u32);
         }
@@ -648,9 +637,7 @@ impl OwnedRunSet {
             sub_ox: &self.sub_ox,
             sub_oy: &self.sub_oy,
             sub_oz: &self.sub_oz,
-            sub_sx: &self.sub_sx,
-            sub_sy: &self.sub_sy,
-            sub_sz: &self.sub_sz,
+            sub_s: &self.sub_s,
         }
     }
 }

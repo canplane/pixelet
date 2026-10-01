@@ -16,8 +16,10 @@
 // A choice's `options` names one of the lists below, and the option crosses
 // and is held as its index there; only storage keeps it by name. A setting
 // is numbered by its place in SETTINGS (the kernel's SettingKey), which is
-// what crosses for it. `sources_chunks` marks one a chunk's build reads, so
-// that changing it builds the chunks again.
+// what crosses for it. An `index` is a place in a list kept elsewhere — the
+// person and the pet are by theirs in variant.json — and crosses as itself.
+// `sources_chunks` marks one a chunk's build reads, so that changing it
+// builds the chunks again.
 
 // Casing here is the spec's and not Rust's: a name is spelled as the JSON
 // spells it, so that one record is indexed by one name on both sides. To
@@ -134,7 +136,7 @@ impl ResolutionMode {
 pub enum SettingKind {
     Toggle,
     Choice,
-    Number,
+    Index,
 }
 
 /// Every setting, by its place in schema.json's SETTINGS.
@@ -260,8 +262,8 @@ impl SettingKey {
             SettingKey::resolution => SettingKind::Choice,
             SettingKey::profiler => SettingKind::Toggle,
             SettingKey::gizmos => SettingKind::Toggle,
-            SettingKey::person => SettingKind::Number,
-            SettingKey::pet => SettingKind::Number,
+            SettingKey::person => SettingKind::Index,
+            SettingKey::pet => SettingKind::Index,
         }
     }
 
@@ -323,7 +325,7 @@ impl Settings {
     };
 
     /// A setting's value as it crosses: a toggle's 0 or 1, a choice's option
-    /// by its index, a number.
+    /// by its place in its list, an index as itself.
     pub fn get(&self, key: SettingKey) -> u32 {
         match key {
             SettingKey::textures => self.textures as u32,

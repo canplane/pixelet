@@ -572,11 +572,11 @@ pub fn walk<T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, layout: &S
         return;
     }
 
-    _walk(mem, layout.dim, layout.min, root, dep - 1, 0, 0, 0, visit);
+    walk_of(mem, layout.dim, layout.min, root, dep - 1, 0, 0, 0, visit);
 }
 
 #[allow(clippy::too_many_arguments)]
-fn _walk<T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, dim: u32, min: Scale, base: u32, u: i32, x: i32, y: i32, z: i32, visit: &mut dyn FnMut(i32, i32, i32, Scale, T)) {
+fn walk_of<T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, dim: u32, min: Scale, base: u32, u: i32, x: i32, y: i32, z: i32, visit: &mut dyn FnMut(i32, i32, i32, Scale, T)) {
     let width = block_width(dim);
 
     for c in 0..width {
@@ -591,7 +591,7 @@ fn _walk<T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, dim: u32, min
         let cz = z | (bit_z << u);
 
         if node & NODE_MSB != 0 {
-            _walk(mem, dim, min, node & BLOCK_MASK, u - 1, cx, cy, cz, visit);
+            walk_of(mem, dim, min, node & BLOCK_MASK, u - 1, cx, cy, cz, visit);
         } else {
             visit(cx, cy, cz, min.up(u), mem.data[slot]);
         }
@@ -636,7 +636,7 @@ pub fn compact<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, lay
 
     let width = block_width(layout.dim);
 
-    _prune(mem, root, layout.max.above(layout.min), width);
+    prune(mem, root, layout.max.above(layout.min), width);
 
     let mut new_mem = alloc::<T>(layout.dim, mem.head);
 
@@ -676,7 +676,7 @@ pub fn compact<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, lay
 /// Return:
 /// - uniform leaf value if the whole block can collapse into one value
 /// - `None` otherwise
-fn _prune<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, base: u32, dep: i32, width: u32) -> Option<T> {
+fn prune<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, base: u32, dep: i32, width: u32) -> Option<T> {
     if dep == 0 {
         return None;
     }
@@ -691,7 +691,7 @@ fn _prune<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, base: u3
 
         if node & NODE_MSB != 0 {
             let child_base = node & BLOCK_MASK;
-            let child_val = _prune(mem, child_base, dep - 1, width);
+            let child_val = prune(mem, child_base, dep - 1, width);
 
             if let Some(child_val) = child_val {
                 mem.heap[slot] = 0;

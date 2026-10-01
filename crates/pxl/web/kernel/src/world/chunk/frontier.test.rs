@@ -13,7 +13,6 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use pxl_spec::space::hierarchy::Scale;
 use pxl_spec::space::pvf3::ivec;
-use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::Pvf3;
 use pxl_spec::space::pyramid::chunk_span_of;
 use pxl_spec::space::v3::V3;
@@ -57,10 +56,6 @@ fn at(level: u32, x: i64, y: i64) -> Chunk {
             f: 0,
         },
     )
-}
-
-fn root() -> Chunk {
-    at(ROOT, 0, 0)
 }
 
 /// Every chunk of `level` over the fixture's ground.
@@ -195,18 +190,6 @@ impl Table {
         for left in self.building.values_mut() {
             *left = left.saturating_sub(1);
         }
-    }
-
-    /// Whether every z16 chunk of the ground is drawn by exactly one piece:
-    /// itself or one over it.
-    fn covered(&self) -> bool {
-        level(0).iter().all(|&c| std::iter::once(c).chain(c.ancestors()).filter(|a| self.drawn.contains(a)).count() == 1)
-    }
-
-    /// The arena is never past what it holds, in any pool.
-    fn within(&self) -> bool {
-        let held = self.held();
-        (0..POOLS).all(|p| held[p] <= self.arena[p])
     }
 }
 
@@ -378,42 +361,7 @@ const LAND: f64 = 10.5;
 const EYE: V3 = [1_000.5, 2_000.25, LAND + 2.0];
 const FAR: f64 = 20_000.0;
 
-fn goal_of(forward: [f64; 3], world: &World) -> Domain {
-    fixture::domain(eye(EYE, Some(forward), FAR, LAND), &[Tau::FINEST], world)
-}
-
-/// Points of the ground all around the eye, within the reach.
-fn probes() -> Vec<V3> {
-    let mut out = Vec::new();
-    for ring in 1..=10 {
-        let r = FAR * 0.9 * ring as f64 / 10.0;
-        for k in 0..36 {
-            let a = k as f64 / 36.0 * std::f64::consts::TAU;
-            out.push([EYE[0] + r * a.cos(), EYE[1] + r * a.sin(), LAND]);
-        }
-    }
-    // And near the eye, where the goal is finest.
-    for k in 0..200 {
-        let (a, r) = (k as f64 * 2.399, 3.0 * k as f64);
-        out.push([EYE[0] + r * a.cos(), EYE[1] + r * a.sin(), LAND]);
-    }
-    out
-}
-
-impl Table {
-    /// How many drawn pieces each probe lies in: one each where the frontier
-    /// has no gap.
-    fn over(&self, probes: &[V3]) -> Vec<usize> {
-        probes
-            .iter()
-            .map(|p| {
-                let mut at = Pvf3::default();
-                projection::project(&mut at, p[0], p[1], p[2]);
-                (0..=TOP_LEVEL).filter(|&l| self.drawn.contains(&Chunk::of(l, &at))).count()
-            })
-            .collect()
-    }
-}
+impl Table {}
 
 // ---- the count ----
 
@@ -472,4 +420,3 @@ fn the_count_is_never_less_at_a_finer_quality_nor_less_than_the_cut() {
         }
     }
 }
-

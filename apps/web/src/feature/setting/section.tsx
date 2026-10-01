@@ -77,7 +77,7 @@ function SettingControl(props: { name: SettingName }) {
           ))}
         </SettingGroup>
       );
-    case "number":
+    case "index":
       return null;
   }
 }

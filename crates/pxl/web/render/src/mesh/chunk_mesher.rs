@@ -599,7 +599,7 @@ impl BakeContext {
                             self.counters.culled += 1;
                             continue;
                         }
-                        if set.sub_sz[i] == SUB_CELL_NONE && mergeable.is_none() {
+                        if set.sub_s[i] == SUB_CELL_NONE && mergeable.is_none() {
                             mergeable = Some((i as u32, mask));
                             continue;
                         }
@@ -699,10 +699,10 @@ impl BakeContext {
         while s_i < emit_end {
             let s = &self.surviving[s_i..s_i + 6];
             let (cx, cy, i, mask, w, h) = (s[0] as f64, s[1] as f64, s[2] as usize, s[3], s[4] as f64, s[5] as f64);
-            let sub_sz = set.sub_sz[i];
+            let sub_s = set.sub_s[i];
             let depth = (set.z1[i] as f64 + 1.0 - set.z0[i] as f64) * z_unit;
             let (min_x, min_y, min_z, size_x, size_y, size_z);
-            if sub_sz == SUB_CELL_NONE {
+            if sub_s == SUB_CELL_NONE {
                 min_x = (cx - apron) * unit;
                 min_y = (cy - apron) * unit;
                 min_z = set.z0[i] as f64 * z_unit;
@@ -713,9 +713,10 @@ impl BakeContext {
                 min_x = (cx - apron) * unit + unpack_sub_cell_fraction(set.sub_ox[i]) * unit;
                 min_y = (cy - apron) * unit + unpack_sub_cell_fraction(set.sub_oy[i]) * unit;
                 min_z = set.z0[i] as f64 * z_unit + unpack_sub_cell_fraction(set.sub_oz[i]) * depth;
-                size_x = unpack_sub_cell_size(set.sub_sx[i]) * unit;
-                size_y = unpack_sub_cell_size(set.sub_sy[i]) * unit;
-                size_z = unpack_sub_cell_size(sub_sz) * depth;
+                let side = unpack_sub_cell_size(sub_s);
+                size_x = side * unit;
+                size_y = side * unit;
+                size_z = side * depth;
             }
             if mask & ALL_FACES != 0 {
                 // The block is full: stop before this box, for the next.
@@ -848,8 +849,8 @@ impl BakeContext {
         let swatch = [set.r[i], set.g[i], set.b[i]];
         let mean = if self.textured { layer_mean(set.layer_taps[i] & 255, swatch) } else { swatch };
         let rgb = linear_of(mean[0], mean[1], mean[2]);
-        if set.sub_sz[i] != SUB_CELL_NONE {
-            let frac = unpack_sub_cell_size(set.sub_sz[i]);
+        if set.sub_s[i] != SUB_CELL_NONE {
+            let frac = unpack_sub_cell_size(set.sub_s[i]);
             // A thing inside one cell: its volume is the fraction cubed, and
             // every one of its six faces the fraction squared. It stands in
             // the cell's air, so none of them is hidden.
@@ -918,7 +919,7 @@ impl BakeContext {
             // it. Its top is the floor. A box over a whole box needs neither:
             // the one under it is the floor already.
             let lowest = open.is_none() && last_top == i32::MIN;
-            let floored = last_top == bucket_lo - 1 && open.is_some_and(|o| self.coarse.sub_sz[o] == SUB_CELL_NONE);
+            let floored = last_top == bucket_lo - 1 && open.is_some_and(|o| self.coarse.sub_s[o] == SUB_CELL_NONE);
             let under = if !acc.ground || floored {
                 None
             } else if lowest {
@@ -938,8 +939,8 @@ impl BakeContext {
                 co.b.push(rgb[2]);
                 co.layer_taps.push(taps);
                 co.material_class.push(MATERIAL_LAND);
-                co.sub_sz.push(SUB_CELL_NONE);
-                for lane in [&mut co.sub_sx, &mut co.sub_sy, &mut co.sub_ox, &mut co.sub_oy, &mut co.sub_oz] {
+                co.sub_s.push(SUB_CELL_NONE);
+                for lane in [&mut co.sub_ox, &mut co.sub_oy, &mut co.sub_oz] {
                     lane.push(0);
                 }
                 // The run above is not this box, so nothing merges across it.
@@ -952,7 +953,7 @@ impl BakeContext {
             let class = if acc.ground { MATERIAL_LAND } else { MATERIAL_OBJECT };
             let co = &mut self.coarse;
             if let Some(o) = open.filter(|_| inset.is_none() && bucket_lo == last_top + 1) {
-                if [co.r[o], co.g[o], co.b[o]] == rgb && co.layer_taps[o] == taps && co.sub_sz[o] == SUB_CELL_NONE && co.material_class[o] == class {
+                if [co.r[o], co.g[o], co.b[o]] == rgb && co.layer_taps[o] == taps && co.sub_s[o] == SUB_CELL_NONE && co.material_class[o] == class {
                     co.z1[o] = bucket_hi;
                     last_top = bucket_hi;
                     continue;
@@ -967,9 +968,7 @@ impl BakeContext {
             co.layer_taps.push(taps);
             co.material_class.push(class);
             let (offset, scale) = inset.unwrap_or((0, 0));
-            co.sub_sz.push(if inset.is_none() { SUB_CELL_NONE } else { scale.max(1) });
-            co.sub_sx.push(scale);
-            co.sub_sy.push(scale);
+            co.sub_s.push(if inset.is_none() { SUB_CELL_NONE } else { scale.max(1) });
             co.sub_ox.push(offset);
             co.sub_oy.push(offset);
             co.sub_oz.push(offset);
@@ -1053,7 +1052,7 @@ fn column_spans_range(set: &RunSet, col: u32, z0: i32, z1: i32) -> bool {
         if set.z0[i] > z0 {
             return false;
         }
-        if set.sub_sz[i] != SUB_CELL_NONE {
+        if set.sub_s[i] != SUB_CELL_NONE {
             continue;
         }
         if set.z1[i] >= z1 {
@@ -1073,7 +1072,7 @@ fn column_covers(set: &RunSet, col: u32, z: i32) -> bool {
         if set.z0[i] > z {
             break;
         }
-        if set.sub_sz[i] != SUB_CELL_NONE || set.z1[i] < z {
+        if set.sub_s[i] != SUB_CELL_NONE || set.z1[i] < z {
             continue;
         }
         return true;
@@ -1092,7 +1091,7 @@ fn neighbor_relation(set: &RunSet, col: u32, z0: i32, z1: i32) -> u32 {
         if r_z0 > above {
             break;
         }
-        if set.sub_sz[i] != SUB_CELL_NONE {
+        if set.sub_s[i] != SUB_CELL_NONE {
             continue;
         }
         let r_z1 = set.z1[i];
@@ -1122,7 +1121,7 @@ fn neighbor_relation(set: &RunSet, col: u32, z0: i32, z1: i32) -> u32 {
 /// stand clear of the ground, and so is an inset box's — a coarse cell's
 /// box is shrunk about its center and rests on nothing.
 fn run_include_bottom(set: &RunSet, i: usize) -> bool {
-    set.material_class[i] == MATERIAL_OBJECT || set.sub_sz[i] != SUB_CELL_NONE
+    set.material_class[i] == MATERIAL_OBJECT || set.sub_s[i] != SUB_CELL_NONE
 }
 
 fn wants_diagonal(mask: u32, a: u32, b: u32) -> bool {
@@ -1157,7 +1156,7 @@ fn run_face_mask(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize) -> u32 {
 
 fn run_faces(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize) -> u32 {
     let mask_all = if run_include_bottom(set, i) { ALL_FACES } else { OPEN_BOTTOM_FACES };
-    if set.sub_sz[i] != SUB_CELL_NONE {
+    if set.sub_s[i] != SUB_CELL_NONE {
         // A thing placed in a cell is lit as it stands; a coarse cell's box
         // is the ground itself, shrunk, and its underside is more ground.
         let under = if set.material_class[i] == MATERIAL_OBJECT { 0 } else { UNDER_AS_TOP };
@@ -1236,8 +1235,8 @@ fn runs_match(set: &RunSet, a: usize, b: usize) -> bool {
         && set.b[a] == set.b[b]
         && set.layer_taps[a] == set.layer_taps[b]
         && set.material_class[a] == set.material_class[b]
-        && set.sub_sz[a] == SUB_CELL_NONE
-        && set.sub_sz[b] == SUB_CELL_NONE
+        && set.sub_s[a] == SUB_CELL_NONE
+        && set.sub_s[b] == SUB_CELL_NONE
 }
 
 /// How much of one run's surface meets air, between `lo` and `hi`, in the
@@ -1281,7 +1280,7 @@ fn covered_height(set: &RunSet, col: u32, lo: i32, hi: i32) -> i32 {
         if set.z0[i] > hi {
             break;
         }
-        if set.sub_sz[i] != SUB_CELL_NONE {
+        if set.sub_s[i] != SUB_CELL_NONE {
             continue;
         }
         covered += (set.z1[i].min(hi) - set.z0[i].max(lo) + 1).max(0);

@@ -2,7 +2,7 @@
 
 //! The write end: a `TreeView` holds a root node, a `BranchView` a branch's
 //! children, and both write through the same typed writers — `NodeView` is
-//! one write primitive (`_set_node` for a tree, `_put_node` for a branch),
+//! one write primitive (`set_node` for a tree, `put_node` for a branch),
 //! and every writer on top of it.
 
 // Uppercase throughout, as the notation these operations are written in: one
@@ -229,7 +229,7 @@ impl<'a> TreeView<'a> {
     // ---- Write Primitive ----
 
     /// Replaces the current root node.
-    fn _set_node(&mut self, node: Node<'a>) -> &mut Self {
+    fn set_node(&mut self, node: Node<'a>) -> &mut Self {
         self.node = node;
         self
     }
@@ -242,7 +242,7 @@ impl<'a> TreeView<'a> {
     /// are the caller's choice of leaf rather than a lowering to check.
     pub fn set(&mut self, val: ViewValue<'a>) -> Result<&mut Self, MarshalError> {
         let node = val_to_node(val)?;
-        Ok(self._set_node(node))
+        Ok(self.set_node(node))
     }
 }
 
@@ -252,7 +252,7 @@ impl<'a> NodeView<'a> for TreeView<'a> {
     }
 
     fn write(&mut self, node: Node<'a>) -> &mut Self {
-        self._set_node(node)
+        self.set_node(node)
     }
 }
 
@@ -296,7 +296,7 @@ impl<'a> BranchViewImpl<'a> {
     // ---- Append Primitive ----
 
     /// Appends one child node to the current branch.
-    fn _put_node(&mut self, node: Node<'a>) -> &mut Self {
+    fn put_node(&mut self, node: Node<'a>) -> &mut Self {
         self.children().push(node);
         self
     }
@@ -308,7 +308,7 @@ impl<'a> NodeView<'a> for BranchViewImpl<'a> {
     }
 
     fn write(&mut self, node: Node<'a>) -> &mut Self {
-        self._put_node(node)
+        self.put_node(node)
     }
 }
 
@@ -323,11 +323,11 @@ impl<'a> BranchView<'a> for BranchViewImpl<'a> {
 
     fn put(&mut self, val: ViewValue<'a>) -> Result<&mut Self, MarshalError> {
         let node = val_to_node(val)?;
-        Ok(self._put_node(node))
+        Ok(self.put_node(node))
     }
 
     fn subtree<V: NodeView<'a>>(&mut self, subtree: &V) -> &mut Self {
         let node = subtree.node().clone();
-        self._put_node(node)
+        self.put_node(node)
     }
 }

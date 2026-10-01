@@ -194,70 +194,12 @@ fn a_volume_keeps_what_fills_half_its_eight_and_loses_what_fills_less() {
 
 // ---- the index lane ----
 
-/// A small generator, so a page's ground and relief are rough everywhere and
-/// the same every run.
-struct Rng(u64);
-
-impl Rng {
-    fn next(&mut self) -> u64 {
-        self.0 ^= self.0 << 13;
-        self.0 ^= self.0 >> 7;
-        self.0 ^= self.0 << 17;
-        self.0
-    }
-
-    fn below(&mut self, n: u64) -> i64 {
-        (self.next() % n) as i64
-    }
-}
-
-/// A leaf of rough relief — steps and spikes, which the interpolation
-/// overshoots most — over ground part water, which sits a step lower.
-fn rough_leaf(rng: &mut Rng) -> Terrain {
-    let ele = (0..PADDED * PADDED).map(|_| if rng.below(5) == 0 { rng.below(4000) - 500 } else { rng.below(40) } as i16).collect();
-    let cells = (0..SPAN * SPAN)
-        .map(|_| {
-            let land = if rng.below(3) == 0 { cube_types::land::bare } else { cube_types::land::green_light };
-            let water = if rng.below(4) == 0 { cube_types::water::river } else { 0 };
-            with_channel(with_channel(0, GroundChannelKey::LAND, land), GroundChannelKey::WATER, water)
-        })
-        .collect::<Vec<_>>();
-    Terrain::leaf(ele, Ground { cells: cells.into() })
-}
-
 /// The open ocean, as the bake makes it: flat water at sea level, no page.
 fn zero_page() -> Terrain {
     let cells = vec![with_channel(0, GroundChannelKey::LAND, cube_types::land::sea); SPAN * SPAN];
     let mut t = Terrain::leaf(vec![0; PADDED * PADDED], Ground { cells: cells.into() });
     t.index.occupancy = Occupancy::ZERO;
     t
-}
-
-/// Two levels folded over sixteen leaves under `top`, a few of them left as
-/// the ocean, as the bake folds them: every page by level, the zero page where
-/// a leaf has no object.
-fn pyramid(top: LevelPage) -> (std::collections::HashMap<LevelPage, Terrain>, Terrain) {
-    let (mut rng, zero) = (Rng(0x9e37_79b9_7f4a_7c15), zero_page());
-    let mut held = std::collections::HashMap::new();
-    for (k, leaf) in top.children().iter().flat_map(|c| c.children()).enumerate() {
-        if ![3, 6, 7].contains(&k) {
-            held.insert(leaf, rough_leaf(&mut rng));
-        }
-    }
-    for mid in top.children() {
-        let folded = Terrain::fold_page(mid, |p| Some(held.get(&p).unwrap_or(&zero))).unwrap();
-        held.insert(mid, folded);
-    }
-    let folded = Terrain::fold_page(top, |p| Some(held.get(&p).unwrap_or(&zero))).unwrap();
-    held.insert(top, folded);
-    (held, zero)
-}
-
-fn point(x: f64, y: f64) -> crate::space::pvf3::pvf3::Pvf3 {
-    use crate::space::pvf3::pvf3;
-    let mut at = pvf3::Pvf3::default();
-    pvf3::gather(&mut at, pvf3::from_real(x), pvf3::from_real(y), 0);
-    at
 }
 
 /// The zero page is what every page without an object reads at every level,
@@ -267,4 +209,3 @@ fn the_zero_page_folds_to_itself() {
     let zero = zero_page();
     assert_eq!(Terrain::fold_page(LevelPage::new(1, 0), |_| Some(&zero)).as_ref(), Some(&zero));
 }
-

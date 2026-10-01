@@ -43,7 +43,7 @@ impl TreeEncoder {
 
     // ---- Buffer ----
 
-    fn _ensure(&mut self, new_cap: u32) -> Result<u32, MarshalError> {
+    fn ensure(&mut self, new_cap: u32) -> Result<u32, MarshalError> {
         let cap = self.buf.len() as u32;
         if new_cap <= cap {
             return Ok(cap);
@@ -83,7 +83,7 @@ impl TreeEncoder {
             lim: HDR_SZ,
             type_: node.type_(),
         };
-        self._node(node, &mut st)?;
+        self.node(node, &mut st)?;
 
         // root node kind is preserved even when payload_sz == 0; a grafted root
         // is its packet's root, so the type is the one the graft read
@@ -92,31 +92,31 @@ impl TreeEncoder {
         SET_WORD(&mut self.buf, WORD_SZ, payload_sz, desc); // word1
 
         let pkt_nbyte = ALIGN(HDR_SZ + payload_sz, WORD_SZ)?;
-        self._ensure(pkt_nbyte)?;
+        self.ensure(pkt_nbyte)?;
         Ok(self.buf[..pkt_nbyte as usize].to_vec())
     }
 
     // ---- Node Dispatch ----
 
-    fn _node(&mut self, node: &Node, st: &mut EncodingState) -> Result<(), MarshalError> {
+    fn node(&mut self, node: &Node, st: &mut EncodingState) -> Result<(), MarshalError> {
         // leaf
         if NODE_IS_LEAF(node) {
             if NODE_IS_SEQ(node) {
                 let Node::Sequence(n) = node else { unreachable!() };
-                return self._seq(n, st);
+                return self.seq_of(n, st);
             }
             let Node::Scalar(n) = node else { unreachable!() };
-            return self._scalar(n, st);
+            return self.scalar_of(n, st);
         }
 
         // special
         if NODE_IS_BRANCH(node) {
             let Node::Branch(n) = node else { unreachable!() };
-            return self._branch(n, st);
+            return self.branch_of(n, st);
         }
         if NODE_IS_GRAFT(node) {
             let Node::Graft(n) = node else { unreachable!() };
-            return self._graft(n, st);
+            return self.graft(n, st);
         }
         if NODE_IS_NIL(node) {
             return Ok(());
@@ -133,7 +133,7 @@ impl TreeEncoder {
     // - because root_payload_sz excludes the fixed packet header, graft preserves
     //   the same root payload layout as inline encoding
     // - base-offset alignment is expected to be enforced by the view construction path
-    fn _graft(&mut self, node: &GraftNode, st: &mut EncodingState) -> Result<(), MarshalError> {
+    fn graft(&mut self, node: &GraftNode, st: &mut EncodingState) -> Result<(), MarshalError> {
         let pkt = &node.val;
 
         if (pkt.len() as u32) < HDR_SZ {
@@ -169,7 +169,7 @@ impl TreeEncoder {
             return Err(MarshalError::new(Errno::EOVERFLOW));
         }
         st.lim = st.base + payload_sz;
-        self._ensure(st.lim)?;
+        self.ensure(st.lim)?;
         let at = st.base as usize;
         self.buf[at..at + payload_sz as usize].copy_from_slice(&pkt[HDR_SZ as usize..(HDR_SZ + payload_sz) as usize]);
         Ok(())
@@ -189,7 +189,7 @@ impl TreeEncoder {
     // - only the low 32 bits of len/off are currently interpreted
     // - each child offset is relative to the enclosing branch node base
     // - branch alignment is WORD_SZ
-    fn _branch(&mut self, node: &BranchNode, st: &mut EncodingState) -> Result<(), MarshalError> {
+    fn branch_of(&mut self, node: &BranchNode, st: &mut EncodingState) -> Result<(), MarshalError> {
         let Some(children) = &node.val else { return Ok(()) };
 
         st.base = ALIGN(st.base, WORD_SZ)?;
@@ -202,7 +202,7 @@ impl TreeEncoder {
         }
 
         st.lim = table_start + len * WORD_SZ;
-        self._ensure(st.lim)?; // [len | child entries...]
+        self.ensure(st.lim)?; // [len | child entries...]
 
         SET_WORD(&mut self.buf, st.base, len, RESERVED);
 
@@ -216,7 +216,7 @@ impl TreeEncoder {
             child_st.base = child_st.lim;
             child_st.type_ = child.type_();
 
-            self._node(child, &mut child_st)?;
+            self.node(child, &mut child_st)?;
             let rel_off = if child_st.base == child_st.lim { 0 } else { child_st.base - st.base };
 
             // child node kind is preserved even when rel_off == 0
@@ -225,7 +225,7 @@ impl TreeEncoder {
             table_off += WORD_SZ;
         }
         st.lim = ALIGN(child_st.lim, WORD_SZ)?;
-        self._ensure(st.lim)?;
+        self.ensure(st.lim)?;
         Ok(())
     }
 
@@ -235,7 +235,7 @@ impl TreeEncoder {
     // [payload]
     // - scalar nodes have no header
     // - scalar alignment is equal to the element size
-    fn _scalar(&mut self, node: &ScalarNode, st: &mut EncodingState) -> Result<(), MarshalError> {
+    fn scalar_of(&mut self, node: &ScalarNode, st: &mut EncodingState) -> Result<(), MarshalError> {
         let type_ = node.type_;
         let Some(val) = node.val else { return Ok(()) };
 
@@ -263,7 +263,7 @@ impl TreeEncoder {
         st.base = ALIGN(st.base, elem_sz)?;
 
         st.lim = st.base + elem_sz;
-        self._ensure(st.lim)?;
+        self.ensure(st.lim)?;
         self.buf[st.base as usize..st.lim as usize].copy_from_slice(&payload);
         Ok(())
     }
@@ -275,7 +275,7 @@ impl TreeEncoder {
     // - payload begins immediately after the len slot: base + WORD_SZ
     // - sequence node base is WORD_SZ-aligned
     // - STR stores a trailing NUL on wire, but len excludes that terminator
-    fn _seq(&mut self, node: &SequenceNode, st: &mut EncodingState) -> Result<(), MarshalError> {
+    fn seq_of(&mut self, node: &SequenceNode, st: &mut EncodingState) -> Result<(), MarshalError> {
         let type_ = node.type_;
         let Some(val) = &node.val else { return Ok(()) };
 
@@ -304,7 +304,7 @@ impl TreeEncoder {
                     return Err(MarshalError::new(Errno::EOVERFLOW));
                 }
                 st.lim = payload_start + ALIGN(payload_sz, WORD_SZ)?;
-                self._ensure(st.lim)?;
+                self.ensure(st.lim)?;
                 let at = payload_start as usize;
                 self.buf[at..at + payload_sz as usize].copy_from_slice(&arr.bytes);
             }
@@ -322,7 +322,7 @@ impl TreeEncoder {
                     return Err(MarshalError::new(Errno::EOVERFLOW));
                 }
                 st.lim = payload_start + ALIGN(payload_sz, WORD_SZ)?;
-                self._ensure(st.lim)?;
+                self.ensure(st.lim)?;
 
                 // bit packing: bit i -> byte[i >> 3], bit position (i & 7), LSB-first within each byte
                 self.buf[payload_start as usize..(payload_start + payload_sz) as usize].fill(0);
@@ -354,25 +354,25 @@ impl TreeEncoder {
                 // Signed: the payload may start past the buffer's end, which
                 // the growth below is for.
                 if self.buf.len() as i64 - (payload_start as i64) < min_needed as i64 {
-                    self._ensure(payload_start + min_needed)?;
+                    self.ensure(payload_start + min_needed)?;
                 }
 
                 // The tail holds all of the string's UTF-8, or the worst case is
                 // reserved: the growth steps are part of where the cap refuses.
                 let data = s.as_bytes();
                 if data.len() as i64 > self.buf.len() as i64 - payload_start as i64 {
-                    self._ensure(payload_start + max_needed)?;
+                    self.ensure(payload_start + max_needed)?;
                 }
 
                 len = data.len() as u32; // UTF-8 byte length, excluding trailing NUL
                 payload_sz = len + 1; // wire payload includes trailing NUL for C-friendly reads
 
-                self._ensure(payload_start + payload_sz)?;
+                self.ensure(payload_start + payload_sz)?;
                 let at = payload_start as usize;
                 self.buf[at..at + len as usize].copy_from_slice(data);
                 self.buf[at + len as usize] = 0;
                 st.lim = payload_start + ALIGN(payload_sz, WORD_SZ)?;
-                self._ensure(st.lim)?;
+                self.ensure(st.lim)?;
             }
         }
 

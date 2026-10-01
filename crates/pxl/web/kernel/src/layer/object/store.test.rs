@@ -8,8 +8,6 @@ use pxl_spec::bake::constant::{BAND_CELLS, CELL, CELL_STEPS};
 use pxl_spec::cell::cube_types::Block;
 use pxl_spec::space::pvf3::ivec;
 
-use pxl_spec::space::hierarchy::slot_of;
-
 use super::*;
 
 // Distinct, far-apart corners per test so leftover state from one test never
@@ -130,77 +128,6 @@ impl Rng {
 
     fn pick<T: Copy>(&mut self, of: &[T]) -> T {
         of[(self.next() % of.len() as u64) as usize]
-    }
-}
-
-/// The writes that set, of the block `cells` a side from `from` in band
-/// `band_idx` of column `col_idx`, five of every eight children down to a
-/// whole cell to `state`: the least that makes the block `state` at every
-/// level by a strict majority, whatever the ties.
-fn fill(col_idx: IVec, band_idx: BandZ, from: [u32; 3], cells: u32, state: u32) -> Vec<Write> {
-    fn go(corner: [u32; 3], side: u32, write: &mut dyn FnMut([u32; 3])) {
-        if side == 1 {
-            return write(corner);
-        }
-        for slot in 0..5 {
-            let c = child_of([0i64; 3], slot);
-            go([0, 1, 2].map(|a| corner[a] + c[a] as u32 * side / 2), side / 2, write);
-        }
-    }
-    let step = OBJECT_FINEST.count_in(CELL);
-    let mut out = Vec::new();
-    go(from, cells, &mut |c| {
-        out.push(Write {
-            col_idx,
-            band_idx,
-            at: c.map(|v| v * step),
-            scale: CELL,
-            state,
-        })
-    });
-    out
-}
-
-/// The objects' fold done the long way, as a chunk once did at every build:
-/// every entry of `columns` but `hide`, each at its own size, folded from
-/// the finest up a level at a time to `target` — what the store's folds
-/// are held to.
-fn fold_entries<'a>(columns: impl IntoIterator<Item = Entries<'a>>, target: Scale, hide: Option<EntryAt>) -> HashMap<[i64; 3], u32> {
-    let mut native: HashMap<Scale, Vec<([i64; 3], u32)>> = HashMap::new();
-    for e in columns {
-        let corner = FROM_L2_IDX(e.col_idx);
-        let (x0, y0) = (OBJECT_FINEST.index(ivec::X(corner)), OBJECT_FINEST.index(ivec::Y(corner)));
-        for k in 0..e.band.len() {
-            let (band, pos, state) = (e.band[k], e.pos[k], e.state[k]);
-            if !object_value_is_voxel(state) || hide == Some(e.at(k)) {
-                continue;
-            }
-            let (x, y, z, own) = unpack_pos(pos);
-            let (x, y) = (x0 + x as i64, y0 + y as i64);
-            let z = band as i64 * OBJECT_FINEST.count_in(BAND) as i64 + z as i64;
-            // An entry is a cell or finer, and a target a cell or coarser.
-            assert!(own <= target);
-            let at = |v: i64| v.div_euclid(OBJECT_FINEST.count_in(own) as i64);
-            native.entry(own).or_default().push(([at(x), at(y), at(z)], state));
-        }
-    }
-    let mut cells: HashMap<[i64; 3], u32> = HashMap::new();
-    let mut scale = OBJECT_FINEST;
-    loop {
-        cells.extend(native.remove(&scale).unwrap_or_default());
-        if scale >= target {
-            return cells;
-        }
-        let mut parents: HashMap<[i64; 3], [u32; 8]> = HashMap::new();
-        for (c, state) in cells.drain() {
-            parents.entry(parent_of(c)).or_insert([0; 8])[slot_of(c)] = state;
-        }
-        let parent = scale.up(1);
-        cells.extend(parents.into_iter().filter_map(|(p, v)| {
-            let m = majority(v, parent.above(CELL));
-            (m != 0).then_some((p, m))
-        }));
-        scale = parent;
     }
 }
 

@@ -39,7 +39,7 @@ export type SettingName = keyof Spec;
 /** A row as the sheet reads one, whichever setting it is. */
 export type Setting =
   & { key: number; section: SettingSection; cost?: SettingCost; dev?: boolean }
-  & ({ kind: "toggle" } | { kind: "choice"; options: readonly string[]; costs?: readonly (SettingCost | "")[] } | { kind: "number" });
+  & ({ kind: "toggle" } | { kind: "choice"; options: readonly string[]; costs?: readonly (SettingCost | "")[] } | { kind: "index" });
 
 const SETTING_NAMES = Object.keys(SETTINGS) as SettingName[];
 

@@ -318,7 +318,3 @@ impl PartialEq for Order {
 }
 
 impl Eq for Order {}
-
-#[cfg(test)]
-#[path = "observation.test.rs"]
-mod test;

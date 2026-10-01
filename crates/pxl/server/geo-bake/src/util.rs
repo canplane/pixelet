@@ -144,8 +144,19 @@ pub fn now_iso8601() -> String {
 /// Writes to a temp name and renames. A crash mid-write would otherwise leave
 /// a truncated file that the resume path — the file existing — treats as a
 /// finished object forever after.
+///
+/// The temp name is the writer's own: the file's whole name, then the
+/// process and this write's number in it, then `.part`. A name shared by two
+/// writers of one file — the dev tile server's folds, a bake beside it —
+/// lets one rename the other's half-written bytes into place or find its own
+/// staging file gone; a name that only swapped the extension was shared by
+/// two files besides.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    let part = path.with_extension("part");
+    static WRITES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = WRITES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(".{}-{n}.part", std::process::id()));
+    let part = path.with_file_name(name);
     std::fs::write(&part, bytes)?;
     std::fs::rename(&part, path)
 }

@@ -16,8 +16,7 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
 
 use super::*;
-use crate::world::observer::{cell_angle, Lens};
-use crate::world::pyramid::chunk::CHILDREN;
+use crate::world::observer::cell_angle;
 
 use crate::world::fixture::{self, eye, World};
 

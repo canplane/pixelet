@@ -99,7 +99,7 @@ impl<'a> Cursor<'a> {
     /// of any other node is EBADMSG rather than a wrong slice.
     pub fn get_array<T: Copy>(&self) -> Result<&'a [T], MarshalError> {
         match self {
-            Cursor::Node(c) if TYPE_IS_SEQ(c.type_) && c.type_ != SequenceType::BITSET as u8 && c.type_ != SequenceType::STR as u8 => c._array::<T>(),
+            Cursor::Node(c) if TYPE_IS_SEQ(c.type_) && c.type_ != SequenceType::BITSET as u8 && c.type_ != SequenceType::STR as u8 => c.array::<T>(),
             _ => Err(MarshalError::new(Errno::EBADMSG)),
         }
     }
@@ -143,7 +143,7 @@ impl<'a> Cursor<'a> {
     /// read.
     pub fn get_str_ref(&self) -> Result<&'a str, MarshalError> {
         match self {
-            Cursor::Node(c) if c.type_ == SequenceType::STR as u8 => c._str_ref(),
+            Cursor::Node(c) if c.type_ == SequenceType::STR as u8 => c.str_ref(),
             _ => Err(MarshalError::new(Errno::EBADMSG)),
         }
     }
@@ -307,64 +307,64 @@ impl<'a> NodeCursor<'a> {
         let t = self.type_;
         Ok(match t {
             // -- Scalars --
-            t if t == ScalarType::U8 as u8 => NodeValue::U8(self._u8()?),
-            t if t == ScalarType::I8 as u8 => NodeValue::I8(self._i8()?),
-            t if t == ScalarType::U16 as u8 => NodeValue::U16(self._u16()?),
-            t if t == ScalarType::I16 as u8 => NodeValue::I16(self._i16()?),
-            t if t == ScalarType::U32 as u8 => NodeValue::U32(self._u32()?),
-            t if t == ScalarType::I32 as u8 => NodeValue::I32(self._i32()?),
-            t if t == ScalarType::U64 as u8 => NodeValue::U64(self._u64()?),
-            t if t == ScalarType::I64 as u8 => NodeValue::I64(self._i64()?),
-            t if t == ScalarType::F32 as u8 => NodeValue::F32(self._f32()?),
-            t if t == ScalarType::F64 as u8 => NodeValue::F64(self._f64()?),
-            t if t == ScalarType::BOOL as u8 => NodeValue::Bool(self._bool()?),
+            t if t == ScalarType::U8 as u8 => NodeValue::U8(self.u8_of()?),
+            t if t == ScalarType::I8 as u8 => NodeValue::I8(self.i8_of()?),
+            t if t == ScalarType::U16 as u8 => NodeValue::U16(self.u16_of()?),
+            t if t == ScalarType::I16 as u8 => NodeValue::I16(self.i16_of()?),
+            t if t == ScalarType::U32 as u8 => NodeValue::U32(self.u32_of()?),
+            t if t == ScalarType::I32 as u8 => NodeValue::I32(self.i32_of()?),
+            t if t == ScalarType::U64 as u8 => NodeValue::U64(self.u64_of()?),
+            t if t == ScalarType::I64 as u8 => NodeValue::I64(self.i64_of()?),
+            t if t == ScalarType::F32 as u8 => NodeValue::F32(self.f32_of()?),
+            t if t == ScalarType::F64 as u8 => NodeValue::F64(self.f64_of()?),
+            t if t == ScalarType::BOOL as u8 => NodeValue::Bool(self.bool_of()?),
 
             // -- Sequences --
             t if t == SequenceType::U8_ARRAY as u8 => NodeValue::Array(Array {
                 type_: SequenceType::U8_ARRAY,
-                bytes: bytes_of(self._u8_array()?).into(),
+                bytes: bytes_of(self.u8_array()?).into(),
             }),
             t if t == SequenceType::I8_ARRAY as u8 => NodeValue::Array(Array {
                 type_: SequenceType::I8_ARRAY,
-                bytes: bytes_of(self._i8_array()?).into(),
+                bytes: bytes_of(self.i8_array()?).into(),
             }),
             t if t == SequenceType::U16_ARRAY as u8 => NodeValue::Array(Array {
                 type_: SequenceType::U16_ARRAY,
-                bytes: bytes_of(self._u16_array()?).into(),
+                bytes: bytes_of(self.u16_array()?).into(),
             }),
             t if t == SequenceType::I16_ARRAY as u8 => NodeValue::Array(Array {
                 type_: SequenceType::I16_ARRAY,
-                bytes: bytes_of(self._i16_array()?).into(),
+                bytes: bytes_of(self.i16_array()?).into(),
             }),
             t if t == SequenceType::U32_ARRAY as u8 => NodeValue::Array(Array {
                 type_: SequenceType::U32_ARRAY,
-                bytes: bytes_of(self._u32_array()?).into(),
+                bytes: bytes_of(self.u32_array()?).into(),
             }),
             t if t == SequenceType::I32_ARRAY as u8 => NodeValue::Array(Array {
                 type_: SequenceType::I32_ARRAY,
-                bytes: bytes_of(self._i32_array()?).into(),
+                bytes: bytes_of(self.i32_array()?).into(),
             }),
             t if t == SequenceType::U64_ARRAY as u8 => NodeValue::Array(Array {
                 type_: SequenceType::U64_ARRAY,
-                bytes: bytes_of(self._u64_array()?).into(),
+                bytes: bytes_of(self.u64_array()?).into(),
             }),
             t if t == SequenceType::I64_ARRAY as u8 => NodeValue::Array(Array {
                 type_: SequenceType::I64_ARRAY,
-                bytes: bytes_of(self._i64_array()?).into(),
+                bytes: bytes_of(self.i64_array()?).into(),
             }),
             t if t == SequenceType::F32_ARRAY as u8 => NodeValue::Array(Array {
                 type_: SequenceType::F32_ARRAY,
-                bytes: bytes_of(self._f32_array()?).into(),
+                bytes: bytes_of(self.f32_array()?).into(),
             }),
             t if t == SequenceType::F64_ARRAY as u8 => NodeValue::Array(Array {
                 type_: SequenceType::F64_ARRAY,
-                bytes: bytes_of(self._f64_array()?).into(),
+                bytes: bytes_of(self.f64_array()?).into(),
             }),
             t if t == SequenceType::BITSET as u8 => NodeValue::Array(Array {
                 type_: SequenceType::BITSET,
-                bytes: self._bitset()?.into(),
+                bytes: self.bitset()?.into(),
             }),
-            t if t == SequenceType::STR as u8 => NodeValue::Str(self._str()?),
+            t if t == SequenceType::STR as u8 => NodeValue::Str(self.str_of()?),
 
             _ => return Err(MarshalError::new(Errno::EBADMSG)),
         })
@@ -379,37 +379,37 @@ impl<'a> NodeCursor<'a> {
         Ok(self.pkt[self.base as usize..self.base as usize + N].try_into().unwrap())
     }
 
-    fn _u8(&self) -> Result<u8, MarshalError> {
+    fn u8_of(&self) -> Result<u8, MarshalError> {
         Ok(u8::from_le_bytes(self.scalar()?))
     }
-    fn _i8(&self) -> Result<i8, MarshalError> {
+    fn i8_of(&self) -> Result<i8, MarshalError> {
         Ok(i8::from_le_bytes(self.scalar()?))
     }
-    fn _u16(&self) -> Result<u16, MarshalError> {
+    fn u16_of(&self) -> Result<u16, MarshalError> {
         Ok(u16::from_le_bytes(self.scalar()?))
     }
-    fn _i16(&self) -> Result<i16, MarshalError> {
+    fn i16_of(&self) -> Result<i16, MarshalError> {
         Ok(i16::from_le_bytes(self.scalar()?))
     }
-    fn _u32(&self) -> Result<u32, MarshalError> {
+    fn u32_of(&self) -> Result<u32, MarshalError> {
         Ok(u32::from_le_bytes(self.scalar()?))
     }
-    fn _i32(&self) -> Result<i32, MarshalError> {
+    fn i32_of(&self) -> Result<i32, MarshalError> {
         Ok(i32::from_le_bytes(self.scalar()?))
     }
-    fn _u64(&self) -> Result<u64, MarshalError> {
+    fn u64_of(&self) -> Result<u64, MarshalError> {
         Ok(u64::from_le_bytes(self.scalar()?))
     }
-    fn _i64(&self) -> Result<i64, MarshalError> {
+    fn i64_of(&self) -> Result<i64, MarshalError> {
         Ok(i64::from_le_bytes(self.scalar()?))
     }
-    fn _f32(&self) -> Result<f32, MarshalError> {
+    fn f32_of(&self) -> Result<f32, MarshalError> {
         Ok(f32::from_le_bytes(self.scalar()?))
     }
-    fn _f64(&self) -> Result<f64, MarshalError> {
+    fn f64_of(&self) -> Result<f64, MarshalError> {
         Ok(f64::from_le_bytes(self.scalar()?))
     }
-    fn _bool(&self) -> Result<bool, MarshalError> {
+    fn bool_of(&self) -> Result<bool, MarshalError> {
         Ok(u8::from_le_bytes(self.scalar()?) != 0)
     }
 
@@ -421,7 +421,7 @@ impl<'a> NodeCursor<'a> {
     /// - sequence payload starts immediately after the len slot: base + WORD_SZ
     /// - because sequence node bases are WORD_SZ-aligned, payload_start is also
     ///   naturally aligned for all supported typed-array element sizes (<= 8)
-    fn _array<T: Copy>(&self) -> Result<&'a [T], MarshalError> {
+    fn array<T: Copy>(&self) -> Result<&'a [T], MarshalError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
@@ -451,38 +451,38 @@ impl<'a> NodeCursor<'a> {
         Ok(unsafe { core::slice::from_raw_parts(self.pkt[at..].as_ptr() as *const T, len as usize) })
     }
 
-    fn _u8_array(&self) -> Result<&'a [u8], MarshalError> {
-        self._array()
+    fn u8_array(&self) -> Result<&'a [u8], MarshalError> {
+        self.array()
     }
-    fn _i8_array(&self) -> Result<&'a [i8], MarshalError> {
-        self._array()
+    fn i8_array(&self) -> Result<&'a [i8], MarshalError> {
+        self.array()
     }
-    fn _u16_array(&self) -> Result<&'a [u16], MarshalError> {
-        self._array()
+    fn u16_array(&self) -> Result<&'a [u16], MarshalError> {
+        self.array()
     }
-    fn _i16_array(&self) -> Result<&'a [i16], MarshalError> {
-        self._array()
+    fn i16_array(&self) -> Result<&'a [i16], MarshalError> {
+        self.array()
     }
-    fn _u32_array(&self) -> Result<&'a [u32], MarshalError> {
-        self._array()
+    fn u32_array(&self) -> Result<&'a [u32], MarshalError> {
+        self.array()
     }
-    fn _i32_array(&self) -> Result<&'a [i32], MarshalError> {
-        self._array()
+    fn i32_array(&self) -> Result<&'a [i32], MarshalError> {
+        self.array()
     }
-    fn _u64_array(&self) -> Result<&'a [u64], MarshalError> {
-        self._array()
+    fn u64_array(&self) -> Result<&'a [u64], MarshalError> {
+        self.array()
     }
-    fn _i64_array(&self) -> Result<&'a [i64], MarshalError> {
-        self._array()
+    fn i64_array(&self) -> Result<&'a [i64], MarshalError> {
+        self.array()
     }
-    fn _f32_array(&self) -> Result<&'a [f32], MarshalError> {
-        self._array()
+    fn f32_array(&self) -> Result<&'a [f32], MarshalError> {
+        self.array()
     }
-    fn _f64_array(&self) -> Result<&'a [f64], MarshalError> {
-        self._array()
+    fn f64_array(&self) -> Result<&'a [f64], MarshalError> {
+        self.array()
     }
 
-    fn _bitset(&self) -> Result<Vec<u8>, MarshalError> {
+    fn bitset(&self) -> Result<Vec<u8>, MarshalError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
@@ -507,8 +507,8 @@ impl<'a> NodeCursor<'a> {
         Ok(arr)
     }
 
-    /// The string's own bytes where they lie, checked as `_str` checks them.
-    fn _str_ref(&self) -> Result<&'a str, MarshalError> {
+    /// The string's own bytes where they lie, checked as `str_of` checks them.
+    fn str_ref(&self) -> Result<&'a str, MarshalError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
@@ -526,7 +526,7 @@ impl<'a> NodeCursor<'a> {
     }
 
     // STR stores UTF-8 bytes with a trailing NUL on wire, while len excludes that terminator.
-    fn _str(&self) -> Result<String, MarshalError> {
+    fn str_of(&self) -> Result<String, MarshalError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
