@@ -28,7 +28,10 @@ pub enum Label {
     /// How many places, and whether that is a floor (pxl-spec
     /// bake/poi_page.rs `PoiCell::partial`).
     Count(u32, bool),
-    Place { page: LevelPage, place: u32 },
+    Place {
+        page: LevelPage,
+        place: u32,
+    },
 }
 
 impl Label {

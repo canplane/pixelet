@@ -129,7 +129,9 @@ pub fn step(ctx: &mut TickContext) {
                 // enough. A place stands where it does, a count at its cell's
                 // middle.
                 let (label, ground) = if major_only {
-                    let Some((place, _, at)) = poi.shown(c).map(|(i, p, at)| (i, rank_of(p.kind), at)).filter(|s| s.1 <= POI_MAJOR_RANK).min_by_key(|s| s.1) else { continue };
+                    let Some((place, _, at)) = poi.shown(c).map(|(i, p, at)| (i, rank_of(p.kind), at)).filter(|s| s.1 <= POI_MAJOR_RANK).min_by_key(|s| s.1) else {
+                        continue;
+                    };
                     (Label::Place { page: src, place }, cell.inner_at(GROUND, 0, at))
                 } else {
                     match (c.count, poi.shown(c).next()) {

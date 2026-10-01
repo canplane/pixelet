@@ -194,7 +194,10 @@ impl PoiPage {
                 (cell.index(), cell.offset_of(GROUND.cell_of(0, &point)), cut_name(place.name), place.kind, place.id)
             })
             .collect();
-        gathered(cut.iter().map(|(cell, at, name, kind, id)| (*cell, 1, !complete, [(*at, Place { name, kind: *kind, id: *id })].into_iter())))
+        gathered(
+            cut.iter()
+                .map(|(cell, at, name, kind, id)| (*cell, 1, !complete, [(*at, Place { name, kind: *kind, id: *id })].into_iter())),
+        )
     }
 
     /// The places `c` holds, one of each kind among those with a name, and
