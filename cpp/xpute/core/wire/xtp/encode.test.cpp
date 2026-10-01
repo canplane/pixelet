@@ -65,6 +65,8 @@ XPUTE_TEST(xtp_the_writer_writes_the_bytes_the_other_languages_write) {
     check("typed f32", [&](PacketWriter &w) { w.f32_array(f32s); });
     const std::array<std::uint8_t, 9> bits{1, 0, 1, 1, 0, 0, 0, 0, 1};
     check("bitset", [&](PacketWriter &w) { w.bitset(bits); });
+    const std::array<std::string_view, 3> strs{"a", "héllo", ""};
+    check("strs", [&](PacketWriter &w) { w.strs(strs); });
     const std::array<std::int32_t, 1> seven{7};
     check("branch mixed", [&](PacketWriter &w) {
         w.branch(7, [&](PacketWriter &b) {

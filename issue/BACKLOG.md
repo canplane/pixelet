@@ -50,21 +50,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P1
 
-- **XTP: a string-sequence leaf.** A `str` sequence leaf — one UTF-8 blob
-  plus a u32 offsets lane — in place of one `str` node per string. A new
-  type code, so existing packets still read. Per string today is an 8-byte
-  header, a NUL and word padding (the POI repack: 60 MB gzipped against
-  51 MB of JSON) and one node object at encode.
-- **Strings out of the kernel's records.** A name in a record is numbers
-  now — the profiler's task row carries a category index and a subject,
-  and sits in a lane of a section. What is left is text that is data — a
-  chat line (layer/character/chat_bubble.rs), a place's name
-  (layer/poi/badge.rs) — held as `String`s on the module heap: as bytes in
-  a UTF-8 lane with an offset lane beside it, the shape of a
-  string-sequence leaf, it could sit in a section too. What is built to be
-  handed to the shell once (a report, a log line, the snapshot) stays on
-  the heap.
-
 - **Decor: the impostor tier.** Decided 2026-09-13
   ([20260911-decor-identity-orientation-and-one-cell-format.md](./20260911-decor-identity-orientation-and-one-cell-format.md),
   "Closed"): each variant rendered once to a sprite, far instances drawn
@@ -75,6 +60,12 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P3
 
+- **Strings out of the kernel's records.** Read 2026-10-01 and left on the
+  heap: a chat line is one string set when it arrives, and a badge's text is
+  built when the badge is, so neither touches the heap on a settled turn. A
+  section would need a bound on a chat line's length, which is a product
+  number not yet said; with one, the line and its laid-out lines fit the
+  string-sequence leaf's shape (XTP's STRS).
 - **The address label by the zoom.** Asked 2026-09-23, not now: it wants a
   rebake. The label is one baked answer a leaf page
   (`use-reverse-geocode.ts`, `geo-bake/geocode/provider/overture.rs`) — region,
