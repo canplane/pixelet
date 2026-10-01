@@ -289,7 +289,7 @@ address        bytes                    range                  placed by
 ──────────────────────────────────────────────────────────────────────────────────────
 0              1 MiB                    .stack                 rustc (-z stack-size, --stack-first)
 1 MiB          36 KiB × 3               .ring.desc             build.rs
-2 MiB          8 MiB × 3                .ring.slot             build.rs
+2 MiB          8 MiB + 16 MiB           .ring.slot             build.rs
 32 MiB         ~0.7 MiB                 .rodata .data .bss     wasm-ld (--global-base)
                ↑ __data_end, rounded up to 4 KiB (PAGE_BYTES)
 ~32.7 MiB      66.62 MiB                .fixed.terrain         the kernel (mem/fixed.rs)
