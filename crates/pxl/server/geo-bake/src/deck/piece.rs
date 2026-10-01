@@ -74,7 +74,7 @@ pub fn pieces_of(row: &BridgeRow, form: Form) -> Vec<Piece> {
     let flags = row.flags.as_deref();
     let (on, less): (&[&str], Vec<&str>) = match form {
         Form::Deck | Form::Ramp => (DECK_FLAGS, UNSEEN_FLAGS.to_vec()),
-        Form::Bore => (BORE_FLAGS, UNSEEN_FLAGS.iter().copied().filter(|f| !BORE_FLAGS.contains(f)).collect()),
+        Form::Bore | Form::Cut => (BORE_FLAGS, UNSEEN_FLAGS.iter().copied().filter(|f| !BORE_FLAGS.contains(f)).collect()),
     };
     let deck = without(&flag_ranges(flags, on), &flag_ranges(flags, &less));
     if deck.is_empty() {

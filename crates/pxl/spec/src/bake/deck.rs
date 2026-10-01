@@ -42,23 +42,24 @@ pub const POINT_SCALE: f64 = 8.0;
 /// two metres a road deck's structure is.
 pub const THICKNESS: i32 = 1;
 
-/// A bore's air, floor to roof, in z16 cells: about four metres, a road
-/// tunnel's 4.5 to 5 m clearance taken to the cell below it, as a
-/// Minecraft tunnel is two blocks high — a character's height and a cell
-/// over its head.
-pub const BORE_HEIGHT: i32 = 2;
+/// A bore's air, floor to roof, in z16 cells: about six metres, a road
+/// tunnel's 4.5 to 5 m clearance and the lights and fans over it. A product
+/// number, set by choice.
+pub const BORE_HEIGHT: i32 = 3;
 
 /// What a line is to the ground.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Form {
     /// Carried over it: a bridge, a viaduct, a ramp.
     Deck,
-    /// Cut through it: a tunnel where the ground stands over it, and its
-    /// approach, which the ground does not stand over, cut open.
+    /// Cut through it: a tunnel, under a roof of the ground over it.
     Bore,
     /// Built up on it: the embankment a bridge's approach climbs on, solid
     /// from the ground to its top.
     Ramp,
+    /// Cut down into it: the open cutting a tunnel's approach drops through
+    /// to its portal, nothing over it from its floor to the sky.
+    Cut,
 }
 
 impl Form {
@@ -66,6 +67,7 @@ impl Form {
         match byte {
             1 => Form::Bore,
             2 => Form::Ramp,
+            3 => Form::Cut,
             _ => Form::Deck,
         }
     }
@@ -75,7 +77,13 @@ impl Form {
             Form::Deck => 0,
             Form::Bore => 1,
             Form::Ramp => 2,
+            Form::Cut => 3,
         }
+    }
+
+    /// Whether it lies under the ground's top rather than over it.
+    pub fn cuts(self) -> bool {
+        matches!(self, Form::Bore | Form::Cut)
     }
 }
 
@@ -170,6 +178,7 @@ impl Over {
             Form::Bore if top < ground => Occupies::Through {
                 air: [top, (top + BORE_HEIGHT).min(ground)],
             },
+            Form::Cut if top < ground => Occupies::Through { air: [top, ground] },
             _ => Occupies::Grade,
         }
     }
@@ -233,11 +242,11 @@ impl Decks {
         self.iter().flat_map(move |deck| (0..deck.points.len().saturating_sub(1)).filter_map(move |s| deck.over_segment(s, at)))
     }
 
-    /// The lowest a bore cuts inside the `[x0, x1) × [y0, y1)` cells — the
+    /// The lowest a bore or a cutting cuts inside the `[x0, x1) × [y0, y1)` cells — the
     /// cell of the way under its floor — conservatively, as `highest_in`.
     pub fn lowest_in(&self, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> Option<i16> {
         let mut low = None;
-        for bore in self.iter().filter(|d| d.form == Form::Bore) {
+        for bore in self.iter().filter(|d| d.form.cuts()) {
             let half = bore.reach();
             for s in 0..bore.points.len().saturating_sub(1) {
                 let (a, b) = (bore.point(s), bore.point(s + 1));
@@ -256,7 +265,7 @@ impl Decks {
     /// within its reach of the box.
     pub fn highest_in(&self, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> Option<i16> {
         let mut top = None;
-        for deck in self.iter().filter(|d| d.form != Form::Bore) {
+        for deck in self.iter().filter(|d| !d.form.cuts()) {
             let half = deck.reach();
             for s in 0..deck.points.len().saturating_sub(1) {
                 let (a, b) = (deck.point(s), deck.point(s + 1));

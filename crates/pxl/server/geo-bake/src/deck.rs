@@ -36,6 +36,8 @@ pub mod profile;
 pub mod source;
 pub mod structure;
 
+use std::collections::HashSet;
+
 use postgres::Client;
 
 use clearance::{Under, PIER_MIN_RISE, PIER_OFF_WAY, PIER_STEP, STACKED};
@@ -44,7 +46,7 @@ use profile::{solve as solve_profile, Problem, Profile};
 use pxl_spec::bake::constant::CELL_PER_M;
 use pxl_spec::bake::deck::{Form, BORE_HEIGHT};
 use source::DeckOut;
-use structure::{group, side_by_side, Graph};
+use structure::{end_of, group, key_of, side_by_side, Graph};
 
 use crate::terrain::pipeline::overture::between::{flag_at, flag_ranges, value_at};
 use crate::terrain::pipeline::overture::policy::{DECK_FLAGS, UNSEEN_FLAGS};
@@ -58,7 +60,7 @@ const AT_END: f64 = 1.0;
 /// coming up to a portal, in z16 cells: its air, a cell of the ground over
 /// it as its roof, and half a cell for the rounding the floor and the
 /// ground each take into cells, so the roof is never rounded away.
-const COVER: f64 = BORE_HEIGHT as f64 + 1.5;
+pub(crate) const COVER: f64 = BORE_HEIGHT as f64 + 1.5;
 
 /// What one solve made.
 pub struct Solved {
@@ -88,7 +90,7 @@ pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<Solve
 
     source::stage(client, &pieces)?;
     let mut needs = needs_of(client, url, &pieces)?;
-    let ramps = approach::approaches(url, &pieces)?;
+    let ramps = approach::approaches(url, &pieces, &approach::free_ends(&pieces), Form::Ramp)?;
     log(&format!("{} approaches graded with their bridges", ramps.len()));
     pieces.extend(ramps);
     needs.resize(pieces.len(), Vec::new());
@@ -117,8 +119,14 @@ pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<Solve
         }
     }
     let tunnel_rows = source::flagged_rows(client, "is_tunnel")?;
-    let tunnels: Vec<Piece> = tunnel_rows.iter().flat_map(|r| pieces_of(r, Form::Bore)).collect();
+    let mut tunnels: Vec<Piece> = tunnel_rows.iter().flat_map(|r| pieces_of(r, Form::Bore)).collect();
     drop(tunnel_rows);
+    // Each portal's cutting, and the structures with them.
+    let portals = portals_of(url, &tunnels)?;
+    let cuttings = approach::approaches(url, &tunnels, &portals, Form::Cut)?;
+    log(&format!("{} portals, {} cut to", portals.len(), cuttings.len()));
+    let portal_at: HashSet<(i64, i64)> = portals.iter().map(|&(i, last)| key_of([end_of(&tunnels[i], last).0[0], end_of(&tunnels[i], last).0[1], 0.0])).collect();
+    tunnels.extend(cuttings);
     let bored = group(&tunnels, &[]);
     let bore_graphs: Vec<Graph> = bored.iter().map(|m| Graph::build(&tunnels, m, &[])).collect();
 
@@ -203,7 +211,7 @@ pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<Solve
         }
     }
     log(&slopes.say("deck"));
-    let (bores, bore_slopes) = bores_of(url, &tunnels, &bored, &bore_graphs, &bore_grounds)?;
+    let (bores, bore_slopes) = bores_of(&tunnels, &portal_at, &bored, &bore_graphs, &bore_grounds);
     log(&format!("{} tunnel pieces, {} bored through from a portal", tunnels.len(), bores.len()));
     log(&bore_slopes.say("bore"));
     out.extend(bores);
@@ -216,50 +224,55 @@ pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<Solve
     })
 }
 
-/// The bores of the tunnels that come out to the ground, cut their whole
-/// length so a first-person view can go through. A bore's floor is a deck's
-/// profile turned over (profile.rs), one rule for a road tunnel and a
-/// subway alike: it meets each portal at the portal's ground, runs straight
-/// between them, and is lowered under the drawn surface wherever that line
-/// would leave less than `COVER` over it — falling off at the steepest a
-/// bore descends, so it comes down from a portal on a ramp and then follows
-/// the ground at that depth, its roof the ground. Only the ramps at the
-/// portals are open to the sky. A tunnel with one portal has no line beyond
-/// that portal's height, and lies under the ground the rest of its length.
-/// A portal is an end where the way carries on at the surface — a way
-/// touching it there that is no tunnel and stands at level 0 or over — and
-/// not merely an end: a subway's tunnel ends at its stations' platforms,
-/// which are under the ground too, and a tunnel with no portal is cut
-/// nowhere.
-fn bores_of<'a>(url: &str, tunnels: &'a [Piece], structures: &[Vec<usize>], graphs: &[Graph], grounds: &[Vec<f64>]) -> Result<(Vec<DeckOut<'a>>, Slopes), postgres::Error> {
-    let ends: Vec<([f64; 2], &str)> = structures
-        .iter()
-        .zip(graphs)
-        .flat_map(|(members, g)| g.free_ends.iter().zip(&g.free_end_of).map(|(&e, &k)| (g.at[e as usize], tunnels[members[k]].gers_id.as_str())))
-        .collect();
+/// The ends of tunnels that are portals, as (piece, its last end): an end
+/// where the way carries on at the surface — a way touching it there that is
+/// no tunnel and stands at level 0 or over — and not merely an end: a
+/// subway's tunnel ends at its stations' platforms, which are under the
+/// ground too.
+fn portals_of(url: &str, tunnels: &[Piece]) -> Result<Vec<(usize, bool)>, postgres::Error> {
+    let ends = approach::free_ends(tunnels);
+    let asked: Vec<([f64; 2], &str)> = ends.iter().map(|&(i, last)| (end_of(&tunnels[i], last).0, tunnels[i].gers_id.as_str())).collect();
     let mut portal = vec![false; ends.len()];
-    for t in source::touching(url, &ends)? {
+    for t in source::touching(url, &asked)? {
         let at_surface = |at: f64| (0.0..=1.0).contains(&at) && !flag_at(t.flags.as_deref(), UNSEEN_FLAGS, at) && value_at(t.levels.as_deref(), at).unwrap_or(0.0) >= 0.0;
         if at_surface(t.own_at - t.step) || at_surface(t.own_at + t.step) {
             portal[t.point] = true;
         }
     }
-    let mut end_at = 0;
+    Ok(ends.into_iter().zip(portal).filter(|&(_, p)| p).map(|(e, _)| e).collect())
+}
+
+/// The bores of the tunnels that come out to the ground, cut their whole
+/// length so a first-person view can go through, and their cuttings. A
+/// bore's floor is a deck's profile turned over (profile.rs), one rule for a
+/// road tunnel and a subway alike: under its roof it lies a bore and a roof
+/// (`COVER`) under the drawn surface, so the portal, where OSM begins the
+/// tunnel, is where its roof begins; the drop to that depth is the cutting's
+/// before the portal (approach.rs), open from its floor to the sky; and
+/// between portals the floor runs straight where that already holds, no
+/// steeper than a way climbs anywhere. A tunnel's structure meets the ground
+/// at its cuttings' far ends, and at a portal with no way to cut along. One
+/// that meets it nowhere — a subway between stations — is cut nowhere.
+fn bores_of<'a>(tunnels: &'a [Piece], portal_at: &HashSet<(i64, i64)>, structures: &[Vec<usize>], graphs: &[Graph], grounds: &[Vec<f64>]) -> (Vec<DeckOut<'a>>, Slopes) {
     let mut out = Vec::new();
     let mut slopes = Slopes::default();
     for ((members, g), ground) in structures.iter().zip(graphs).zip(grounds) {
-        let ends: Vec<(u32, f64)> = g.free_ends.iter().enumerate().filter(|&(j, _)| portal[end_at + j]).map(|(_, &e)| (e, ground[e as usize])).collect();
-        end_at += g.free_ends.len();
+        let ends: Vec<(u32, f64)> = g
+            .free_ends
+            .iter()
+            .zip(&g.free_end_of)
+            .filter(|&(&e, &k)| tunnels[members[k]].approach || portal_at.contains(&key_of([g.at[e as usize][0], g.at[e as usize][1], 0.0])))
+            .map(|(&e, _)| (e, -ground[e as usize]))
+            .collect();
         if ends.is_empty() {
             continue;
         }
-        // Turned over, the floor's depth under the ground is a deck's height
-        // over it: the line between the portals, and a cover it must keep
-        // under the ground, which lowers it about the point that asks.
+        // Turned over, a floor's depth under the ground is a deck's height
+        // over it: under a roof it keeps the cover, and in a cutting it is no
+        // higher than the ground.
+        let carried = carried_of(tunnels, members, g);
+        let need: Vec<f64> = (0..g.at.len()).map(|v| if carried[v] { COVER / CELL_PER_M(g.at[v][1]) - ground[v] } else { -ground[v] }).collect();
         let below = |x: &[f64]| x.iter().map(|v| -v).collect::<Vec<f64>>();
-        let need: Vec<f64> = g.at.iter().zip(ground).map(|(at, &h)| COVER / CELL_PER_M(at[1]) - h).collect();
-        let ends: Vec<(u32, f64)> = ends.iter().map(|&(e, h)| (e, -h)).collect();
-        let carried = vec![true; g.at.len()];
         let profile = solve_profile(&Problem {
             adj: &g.adj,
             need: &need,
@@ -270,18 +283,22 @@ fn bores_of<'a>(url: &str, tunnels: &'a [Piece], structures: &[Vec<usize>], grap
         slopes.count(&profile);
         let floor = below(&profile.top);
         for (k, &m) in members.iter().enumerate() {
-            let points: Vec<[f64; 3]> = g.along[k].iter().map(|&(node, _)| [g.at[node as usize][0], g.at[node as usize][1], floor[node as usize]]).collect();
+            let piece = &tunnels[m];
+            let points: Vec<[f64; 3]> = on_structure(piece, &g.along[k], |n| floor[n] < ground[n])
+                .iter()
+                .map(|&(node, _)| [g.at[node as usize][0], g.at[node as usize][1], floor[node as usize]])
+                .collect();
             if points.len() >= 2 {
                 out.push(DeckOut {
-                    piece: &tunnels[m],
-                    form: Form::Bore,
+                    piece,
+                    form: piece.form,
                     piers: vec![0; points.len()],
                     points,
                 });
             }
         }
     }
-    Ok((out, slopes))
+    (out, slopes)
 }
 
 /// The steps of the solved structures that are steeper than `MAX_SLOPE`:
@@ -304,7 +321,7 @@ impl Slopes {
 }
 
 /// Whether each point of a structure is carried: on a member that is the
-/// bridge's own rather than an approach to it. A joint is
+/// bridge's or the tunnel's own rather than an approach to it. A joint is
 /// both, and carried.
 fn carried_of(pieces: &[Piece], members: &[usize], g: &Graph) -> Vec<bool> {
     let mut carried = vec![false; g.at.len()];
@@ -319,7 +336,7 @@ fn carried_of(pieces: &[Piece], members: &[usize], g: &Graph) -> Vec<bool> {
 }
 
 /// A member's points as far as it is off the ground: the whole of a
-/// bridge, and an approach from where it joins as far as the point it
+/// bridge or a tunnel, and an approach from where it joins as far as the point it
 /// comes to the ground, past which it is the way on the ground it was.
 fn on_structure<'a>(piece: &Piece, along: &'a [(u32, f64)], off_ground: impl Fn(usize) -> bool) -> &'a [(u32, f64)] {
     if !piece.approach {
