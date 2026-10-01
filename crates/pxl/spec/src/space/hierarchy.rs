@@ -15,12 +15,13 @@
 //! many axes there are: a node's parent is its coordinate halved, and it is
 //! one of its parent's 2^D children, told apart by the low bit of each axis.
 //! The ground's pages and cells are this in two (pyramid.rs `LevelPage`,
-//! `Cell`), an object's cells in three (pxl-render mesh/paint/object/fold.rs),
+//! `Cell`), an object's cells in three (pxl-kernel layer/object/store.rs),
 //! a sparse tree's blocks in either (sparse_tree/mem.rs), and a fold reads
 //! the children in this order whichever it is (bake/fold.rs `majority`).
 
 use super::pvf3::core::FRAC_W;
 use super::pvf3::pvf3::{self, Pvf3};
+use super::v3::Aabb;
 
 /// A side of 2^shamt units: negative where it is finer than a unit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -94,6 +95,13 @@ impl Scale {
         let mut out = Pvf3::default();
         pvf3::gather(&mut out, index[0] << shift, index[1] << shift, index[2] << shift);
         out
+    }
+
+    /// The cube of this scale at `index`, as a box in units.
+    pub fn cube(self, index: [i64; 3]) -> Aabb {
+        let side = self.side();
+        let min = index.map(|c| c as f64 * side);
+        Aabb { min, max: min.map(|v| v + side) }
     }
 
     /// The scale whose side is nearest `units`, a power of two where it is

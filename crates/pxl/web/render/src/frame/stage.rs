@@ -29,16 +29,22 @@ pub const STAGE_WORDS: usize = 80;
 /// Where each value sits in the lane.
 #[allow(non_snake_case)]
 pub mod STAGE_AT {
-    /// The badges' view: the view matrix through the root frame (16).
+    /// The badges' view: the view matrix through the root frame, from the
+    /// eye's frame (16).
     pub const BADGE_VIEW: usize = 0;
     /// Camera to GL clip (16).
     pub const PROJ: usize = 16;
-    /// Root frame to GL clip (16).
-    pub const LOCAL_VIEW_PROJ: usize = 32;
-    /// The eye in the root frame, where the meshes are (3).
+    /// The eye's frame to GL clip: the root frame with the eye at its
+    /// origin, where every point a draw lists stands (frame/draw.rs
+    /// `DrawList::translation`), so the matrix holds no translation of the
+    /// eye's for a point's to cancel against (16).
+    pub const EYE_VIEW_PROJ: usize = 32;
+    /// The eye in the root frame (3): what the eye's frame is the root frame
+    /// less of.
     pub const EYE_LOCAL: usize = 48;
-    /// Where the root frame's origin stands (3): the shadow aims at its negation.
-    pub const TRANSLATION: usize = 51;
+    /// Where the flat map is laid back on the planet about, in the root
+    /// frame (3): the shadow aims at it too.
+    pub const GLOBE_ANCHOR: usize = 51;
     /// The viewport in CSS pixels (2).
     pub const VIEWPORT: usize = 54;
     pub const FOV: usize = 56;
@@ -56,7 +62,8 @@ pub mod STAGE_AT {
     /// The screen-space occlusion (gpu/ao.rs): 1 to run it, 0 not to.
     pub const SCREEN_AO: usize = 68;
     /// The map origin the root frame is relative to, east and north, in
-    /// units (2): where the clouds are anchored to the ground.
+    /// units (2): with the eye past it, where the clouds are anchored to the
+    /// ground.
     pub const ORIGIN: usize = 69;
     /// The device pixels the world's surface is drawn at to a CSS pixel,
     /// as the kernel's resolution chose them this frame.

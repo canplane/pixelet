@@ -13,10 +13,8 @@
 //! budget, then the draw. The rest wait on what they work on: arrivals, the
 //! chunk builds, the decor models, the save.
 
-use pxl_spec::space::pvf3::{ivec, projection};
 use xpute_runtime::sched::edge::{notified, Notify};
 
-use crate::control::camera::damping::camera_step;
 use crate::control::camera::input::camera_input_step;
 use crate::control::navigation::bootstrap::map_bootstrap_step;
 use crate::control::navigation::follow_mode::follow_mode_step;
@@ -37,14 +35,12 @@ use crate::layer::marker::location_puck::location_puck_step;
 use crate::layer::terrain::page::terrain_step;
 use crate::sched::profiler::spec::EffectName;
 use crate::sched::tick::{on_tick, run_tick, StepName, TickContext, TickReport, TickState, COSMETIC, INTERACTION, REPORT, VISIBLE};
-use crate::shell::map_store::map_store;
 use crate::shell::setting::store::settings_store;
 use crate::text::text_rise;
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::source::chunk_sources_step;
 use crate::world::chunk::stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms, set_turn_timing, take_draw};
 use crate::world::frame::coord::local_world_origin;
-use crate::world::frame::view_frame::{view_rotation_step, view_translation_step};
 
 /// What the platform offers the sensors, as the shell found it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -54,12 +50,16 @@ pub struct Platform {
 }
 
 /// The companion's place, from map_center in the local floating-origin frame —
-/// wherever the camera actually is, not the origin's cell's center.
+/// wherever the camera actually is, not the origin's cell's center. Only
+/// where the camera stands off it: where the eye is the map center, the
+/// character is the one looking.
 fn companion_props() -> Option<CompanionProps> {
-    let map_center = map_store().map_center?;
+    if crate::control::camera::controller::radius() == 0.0 {
+        return None;
+    }
+    let map_center = crate::control::camera::controller::map_center()?;
     let map_origin = local_world_origin();
-    let mut local = [0.0; 3];
-    projection::unproject(&mut local, ivec::sub(map_center.i, map_origin), map_center.f);
+    let local = crate::world::frame::coord::canonical_to_local(&map_center, map_origin);
     Some(CompanionProps {
         map_origin,
         center_x: local[0],
@@ -73,7 +73,7 @@ fn companion_tick(ctx: &mut TickContext) {
 }
 
 fn debug_gizmos_tick(_: &mut TickContext) {
-    let map_center = map_store().map_center;
+    let map_center = crate::control::camera::controller::map_center();
     let show = settings_store().gizmos && map_center.is_some();
     debug_gizmos_step(show, map_center, local_world_origin());
 }
@@ -90,10 +90,9 @@ fn environment_tick(_: &mut TickContext) {
 /// and the tasks spawned. Nothing runs until the first poll; the frame task waits for the
 /// first frame the host asks, so the boot has to come from outside a frame.
 pub fn boot() {
+    on_tick(INTERACTION, crate::control::camera::controller::controller_step, StepName::controller);
     on_tick(INTERACTION, camera_input_tick, StepName::input);
-    on_tick(INTERACTION, camera_step, StepName::camera);
-    on_tick(INTERACTION, view_rotation_step, StepName::view_rotation);
-    on_tick(INTERACTION, view_translation_step, StepName::view_translation);
+    on_tick(INTERACTION, crate::control::camera::controller::camera_step, StepName::camera);
     // After the view has moved: the environment observes the camera center
     // the view eased to this tick.
     on_tick(INTERACTION, environment_tick, StepName::environment);
@@ -125,8 +124,6 @@ fn world_tasks() {
     let spawned = spawn(frame_task(), Frame as u8)
         && spawn(crate::io::fetch::fetch_task(), Arrival as u8)
         && spawn(crate::io::load::gltf_task(), Arrival as u8)
-        && spawn(crate::world::pyramid::fold_task::<pxl_spec::bake::format::Terrain>(), Arrival as u8)
-        && spawn(crate::world::pyramid::fold_task::<pxl_spec::bake::poi_page::PoiPage>(), Arrival as u8)
         && spawn(crate::world::chunk::stage::build_task(), Build as u8)
         && spawn(crate::layer::decor::asset_store::decor_asset_task(), Background as u8)
         && spawn(crate::layer::object::store::save_task(), Background as u8);
@@ -168,13 +165,16 @@ pub fn world_turn() -> f64 {
     let mut worst = (0.0f64, None);
     effect!(worst, navigation, map_navigation_step());
     effect!(worst, bootstrap, map_bootstrap_step());
-    effect!(worst, shell, crate::shell::shell::shell_step());
     effect!(worst, geolocation, geolocation_step(platform.geolocation));
     effect!(worst, orientation, orientation_watchdog_step(platform.orientation));
+    effect!(worst, follow, follow_mode_step());
+    effect!(worst, destination, crate::control::navigation::destination::destination_step());
+    // After every writer of the map center this turn has, before anything
+    // observes the view.
+    effect!(worst, view, crate::world::frame::view::view_compose());
     effect!(worst, tiles, terrain_step());
     effect!(worst, poi, crate::layer::poi::poi_step());
     effect!(worst, geocode, geocode_fetcher_step());
-    effect!(worst, follow, follow_mode_step());
     effect!(worst, theme, theme_clock_step());
     effect!(worst, decor, decor_assets_wanted());
     effect!(worst, chunk_sources, chunk_sources_step());

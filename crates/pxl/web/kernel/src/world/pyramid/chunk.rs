@@ -1,18 +1,20 @@
 // pxl-kernel/world/pyramid/chunk.rs
 
-//! The grain a view is held and drawn at: a chunk is a cube 64 cells of one
-//! level on a side, one eighth of that level's page across. Pages are what is
-//! fetched and kept; a chunk is the finest piece of the world a view asks for
-//! at a resolution of its own, since the levels the rule draws meet at chunk
-//! faces and not at page edges (domain.rs).
+//! The grain a view is drawn at: a chunk is a cube 64 cells of one level on a
+//! side, one eighth of that level's page across. Pages are what is fetched
+//! and kept, by what an observation requires (world/pyramid.rs); a chunk is
+//! the finest piece of the world a view is drawn in at a resolution of its
+//! own, since the levels the rule draws meet at chunk faces and not at page
+//! edges (domain.rs). None is fetched for or held.
 //!
 //! A chunk is a node of the hierarchy in three dimensions: the L2 block at
 //! its level, named by its coordinate among that level's blocks in x, y and
 //! z, with eight children a level down. Its address is all it is — no table
 //! holds one per block, and a block with nothing in it is never made one
-//! (domain.rs `Domain::occupied`). What stands in it is stored elsewhere and
-//! in two dimensions: the terrain's pages and the objects' columns are read
-//! by the column the chunk stands in (`column`), and its page and its place in
+//! (domain.rs `Domain::occupied`). To the view it is a box (`region`), and
+//! what it holds is asked of the box. What stands in it is stored elsewhere
+//! and flat: a build reads the terrain's pages and the objects' columns by
+//! the column the chunk stands in (`column`), and its page and its place in
 //! the page are that column's, three levels up, so no pair of them can
 //! disagree with where the chunk is.
 
@@ -20,7 +22,11 @@ use pxl_spec::space::hierarchy::{ancestor_of, child_of, first_descendant_of, par
 use pxl_spec::space::indexer::{L2, L3};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::pyramid::{chunk_span_of, LevelPage, CHUNK_CELLS, TOP_LEVEL};
+use pxl_spec::space::pyramid::{chunk_span_of, page_at, LevelPage, CHUNK_CELLS, PAGE_CELLS, TOP_LEVEL};
+use pxl_spec::space::v3::Aabb;
+
+/// The chunks a level down that cover one: two a side in all three.
+pub const CHILDREN: usize = 8;
 
 /// Levels from a chunk up to the page it lies in.
 const PAGE_LEVELS: u32 = L3.above(L2) as u32;
@@ -40,6 +46,11 @@ impl Chunk {
             level,
             at: L2.up(level as i32).index_of(at),
         }
+    }
+
+    /// The level-`level` chunk at coordinate `at` among its level's blocks.
+    pub fn at(level: u32, at: [i64; 3]) -> Chunk {
+        Chunk { level, at }
     }
 
     /// Every level-`level` chunk of the column a point stands in, from the
@@ -75,6 +86,26 @@ impl Chunk {
         ((x - x0) as u32 * CHUNK_CELLS, (y - y0) as u32 * CHUNK_CELLS)
     }
 
+    /// The pages beside the chunk's own that a ring of `apron` cells about
+    /// it reaches into, each with where it lies from the chunk's own page —
+    /// one for each side and corner of the page the chunk lies against, none
+    /// for a chunk inside it.
+    pub fn pages_beside(self, apron: u32) -> impl Iterator<Item = ([i64; 2], LevelPage)> {
+        let (x0, y0) = self.in_page();
+        let steps = move |v: u32| {
+            [0, -1, 1]
+                .into_iter()
+                .filter(move |&q| q == 0 || (q < 0 && v < apron) || (q > 0 && v + CHUNK_CELLS + apron > PAGE_CELLS))
+        };
+        let page = self.page();
+        let [px, py] = [ivec::X(page.page), ivec::Y(page.page)];
+        let level = self.level;
+        steps(y0)
+            .flat_map(move |qy| steps(x0).map(move |qx| [qx, qy]))
+            .filter(|&q| q != [0, 0])
+            .map(move |[qx, qy]| ([qx, qy], page_at(level, [px + qx, py + qy])))
+    }
+
     /// The corner of the chunk's column, in units, at no height: what the
     /// stores the chunk is read from key it by, which are 2D.
     pub fn corner(self) -> IVec {
@@ -96,6 +127,17 @@ impl Chunk {
         let span = chunk_span_of(self.level);
         let z0 = self.at[2] as f64 * span;
         (z0, z0 + span)
+    }
+
+    /// The chunk as a box of the world, in units.
+    pub fn region(self) -> Aabb {
+        let span = chunk_span_of(self.level);
+        let (x0, y0, _) = self.rect();
+        let z0 = self.z_range().0;
+        Aabb {
+            min: [x0, y0, z0],
+            max: [x0 + span, y0 + span, z0 + span],
+        }
     }
 
     /// The chunk as a node of the hierarchy: its side, the L2 block's at its
@@ -125,7 +167,7 @@ impl Chunk {
     }
 
     /// The eight chunks a level down that cover it, in `slot_of`'s order.
-    pub fn children(self) -> [Chunk; 8] {
+    pub fn children(self) -> [Chunk; CHILDREN] {
         std::array::from_fn(|slot| Chunk {
             level: self.level - 1,
             at: child_of(self.at, slot),

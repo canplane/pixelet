@@ -1,7 +1,7 @@
 // pxl-kernel/layer/character/companion.rs
 
-//! A companion (person + pet) that sits at map_center, facing the camera until
-//! it has somewhere to walk to. Whenever map_center stops changing — after a
+//! A companion (person + pet) that sits at map_center, its back to the camera
+//! and looking where the screen looks, until it has somewhere to walk to. Whenever map_center stops changing — after a
 //! drag, a click-to-navigate tween, a GPS recenter, whatever moved it — it
 //! makes a fixed-duration catch-up walk there and ends up facing its direction
 //! of travel, which it then just keeps. While map_center is still actively
@@ -23,27 +23,33 @@
 //! Assets: Kenney's "Mini Characters" (person) and "Cube Pets" (pet) packs,
 //! both CC0, both real glTF.
 
+use pxl_spec::bake::constant::U_PER_CELL;
+use pxl_spec::cell::object::object_value_is_air;
+use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::xy::TO_XY;
 
 use crate::control::camera::config::camera_cfg;
-use crate::control::camera::orbit::damp_alpha;
+use crate::control::camera::controller::damp_alpha;
 use crate::control::camera::store::{camera_store, CameraStatus};
 use crate::global::Global;
 use crate::io::load::{load_gltf, load_image, Load};
 use crate::kernel::{kernel, with_world};
 use crate::layer::character::chat_bubble::chat_bubble_step;
-use crate::layer::character::path::{heading_to, init_settle_tracker, sample_walk_plan, update_settle_tracker, SettleTracker, Vec2, WalkPlan, WalkSample};
+use crate::layer::character::path::{init_settle_tracker, sample_walk_plan, update_settle_tracker, SettleTracker, Vec2, WalkPlan, WalkSample};
 use crate::layer::character::store::companion_load_store;
 use crate::layer::character::variant::{character_variant, CharacterGroup, CharacterVariant};
 use crate::layer::character::variant_spec::IDLE_CLIP;
 use crate::layer::model::asset::{register_model, ModelHandle};
-use crate::layer::object::store::objects_revision;
+use crate::layer::object::store::{each_col_entry, objects_revision};
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::settings_store;
+use crate::world::access::{Access, FINEST};
 use crate::world::change::wake_at;
+use crate::world::frame::coord::{local_height, local_world_to_canonical};
 use crate::world::frame::view::view;
 use crate::world::pyramid::Layer as _;
-use crate::world::surface_height::get_surface_z_at_local;
 use pxl_spec::bake::format::Terrain;
 
 /// A variant's model in the scheduler, registered once per model and height
@@ -86,11 +92,15 @@ const SETTLE_DELAY_S: f64 = 0.15;
 // EMA to match, so this lerp is the one and only position-smoothing stage.
 const FOLLOW_LERP_K: f64 = camera_cfg::smooth::POS_DAMP;
 
-// Follow mode: the walker's turn about Z, set every frame as
-// `FOLLOW_FACING - azimuth` so its world facing stays constant while the map
-// spins under it. +PI turns a model whose forward is -Y into the screen, back
-// to the camera.
+// +PI turns a model whose forward is -Y into the screen, back to the camera.
 const FOLLOW_FACING: f64 = core::f64::consts::PI;
+
+/// The walker's turn about Z that puts its back to the camera, looking where
+/// the screen does: the screen's up laid on the ground, which is a quarter
+/// turn from east at a heading of zero.
+fn back_to_camera() -> f64 {
+    FOLLOW_FACING + view().up_heading() - core::f64::consts::FRAC_PI_2
+}
 
 // A gap narrower than this is not worth walking to: well under one GPS fix's
 // worth of travel (~0.5u at a walking pace) and over the near-zero gap a map
@@ -220,7 +230,7 @@ impl Walker {
 
         if is_follow_mode {
             // Snap on the entry frame and across an L4 rebase: both are one-shot
-            // jumps the view frame itself snaps through.
+            // jumps the view itself snaps through.
             if rebased || !self.was_follow_mode {
                 px = target.x;
                 py = target.y;
@@ -229,8 +239,8 @@ impl Walker {
                 px = self.pose[0] + (target.x - self.pose[0]) * a;
                 py = self.pose[1] + (target.y - self.pose[1]) * a;
             }
-            // Back to the camera, held there while the map spins underneath.
-            self.pose[3] = FOLLOW_FACING - view().azimuth;
+            // Back to the camera, held there while the view turns about it.
+            self.pose[3] = back_to_camera();
             if (target.x - px).hypot(target.y - py) > WALK_EPS {
                 self.follow_walk_until = now + FOLLOW_WALK_LINGER_S;
             }
@@ -309,14 +319,13 @@ impl Walker {
             is_walking = step.heading.is_some();
 
             // Facing: direction of travel while walking; otherwise a one-time
-            // camera-facing pose, never recomputed. The Y-up to Z-up turn the
-            // actor stands with maps the model's native forward to +Y, hence the
-            // +PI/2 from a raw heading.
+            // pose with its back to the camera, looking into the screen, never
+            // recomputed. The Y-up to Z-up turn the actor stands with maps the
+            // model's native forward to +Y, hence the +PI/2 from a raw heading.
             if let Some(heading) = step.heading {
                 self.pose[3] = heading + core::f64::consts::PI / 2.0;
             } else if !self.initial_facing_done {
-                let eye = view().eye_local;
-                self.pose[3] = heading_to(Vec2 { x: step.x, y: step.y }, Vec2 { x: eye[0], y: eye[1] }) + core::f64::consts::PI / 2.0;
+                self.pose[3] = back_to_camera();
                 self.initial_facing_done = true;
             }
         }
@@ -339,7 +348,7 @@ impl Walker {
                 origin: Some(map_origin),
                 revision,
                 tiles,
-                z: get_surface_z_at_local(map_origin, px, py, target_z),
+                z: footing(map_origin, px, py, target_z),
             };
         }
         self.pose[0] = px;
@@ -436,4 +445,99 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
 pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
     let c: &'static _ = COMPANION.get(|| Companion { person: None, pet: None });
     [&c.person, &c.pet].into_iter().flatten().filter_map(|w| w.held.as_ref()).map(|h| (h.model.model, h.skin))
+}
+
+// ---- where a walker stands ----
+
+// Two Z values within this of each other count as "flush" — guards the climb
+// loop against re-finding the object that just set `surface` on the next pass,
+// and the "is this actually resting there" / "is this at or past the hint"
+// checks below, against float noise from PVF3 round-trips.
+const SAME_SURFACE_EPS: f64 = 1e-6;
+
+/// The z extents of every placed object whose footprint covers a local XY,
+/// gathered in one pass over the column the point stands in.
+///
+/// One pass rather than a 27-cell neighborhood query at each step upward: with
+/// nothing placed at the XY a probe runs to its 64-cell guard on every call,
+/// and the companion asks twice a frame. A placed object is at most a cell and
+/// lies inside one, so one whose footprint covers the point is in the point's
+/// own column.
+fn boxes_over(map_origin: IVec, local_x: f64, local_y: f64) -> Vec<(f64, f64)> {
+    let mut boxes = Vec::new();
+    let mut at = Pvf3::default();
+    local_world_to_canonical(&mut at, &[local_x, local_y, 0.0], map_origin);
+    let col_idx = L2_IDX(TO_XY(at.i));
+    // The column's corner in the local frame; entries are relative to it.
+    let [bx, by, bz] = crate::world::frame::coord::offset(FROM_L2_IDX(col_idx), map_origin);
+    each_col_entry(col_idx, &mut |entry| {
+        if object_value_is_air(entry.state) {
+            return;
+        }
+        let (x0, y0) = (bx + entry.lx, by + entry.ly);
+        if local_x < x0 || local_x >= x0 + entry.size || local_y < y0 || local_y >= y0 + entry.size {
+            return;
+        }
+        let z0 = bz + entry.lz;
+        boxes.push((z0, z0 + entry.size));
+    });
+    boxes
+}
+
+/// The height a walker stands at over a local XY: the ground drawn there
+/// (world/access.rs), or the top of a placed object standing on it — walking
+/// onto a placed block, or a stack of them, stands on top. None where no page
+/// over the point is resident.
+///
+/// `hint_z` is roughly where the walker's target is vertically — used only to
+/// pick *which* shelf to land on when the stack at this XY has a gap in it:
+/// scans upward from the hint for the lowest object whose top is at or above
+/// it, i.e. snaps up past a gap onto the next real platform rather than always
+/// defaulting to the first one reachable from the ground. Once landed, still
+/// climbs any further objects resting flush on top of that shelf, so the
+/// walker ends up on the true top of whatever contiguous structure it's
+/// standing on. Falls back to climbing from the ground when nothing qualifies
+/// above the hint.
+fn footing(map_origin: IVec, local_x: f64, local_y: f64, hint_z: f64) -> Option<f64> {
+    let mut at = Pvf3::default();
+    local_world_to_canonical(&mut at, &[local_x, local_y, 0.0], map_origin);
+    let ground = local_height(Access::now().at(&at, FINEST).value()?.top, map_origin);
+    let boxes = boxes_over(map_origin, local_x, local_y);
+    if boxes.is_empty() {
+        return Some(ground);
+    }
+
+    // Snap-up: the lowest top at or above the hint, among boxes from the cell
+    // below where the search starts — what stepping upward from there found.
+    let search_from = hint_z.max(ground);
+    let floor_z = ((search_from / U_PER_CELL).floor() - 1.0) * U_PER_CELL;
+    let mut landing: Option<f64> = None;
+    for &(min_z, max_z) in &boxes {
+        if min_z < floor_z || max_z < hint_z - SAME_SURFACE_EPS {
+            continue;
+        }
+        if landing.is_none_or(|l| max_z < l) {
+            landing = Some(max_z);
+        }
+    }
+
+    let mut surface = landing.unwrap_or(ground);
+
+    // Climb any further objects resting flush on top of the landing spot. Each
+    // pass lifts the surface past at least one box, so it ends within the box
+    // count.
+    for _ in 0..boxes.len() {
+        let mut top: Option<f64> = None;
+        for &(min_z, max_z) in &boxes {
+            if min_z > surface + SAME_SURFACE_EPS || max_z <= surface + SAME_SURFACE_EPS {
+                continue;
+            }
+            if top.is_none_or(|t| max_z > t) {
+                top = Some(max_z);
+            }
+        }
+        let Some(top) = top else { break };
+        surface = top;
+    }
+    Some(surface)
 }

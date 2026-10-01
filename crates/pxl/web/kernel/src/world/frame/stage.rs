@@ -11,14 +11,9 @@ use pxl_render::frame::stage::{stage_lane_mut, AO_STRENGTH, EDGE_STRENGTH, EDGE_
 use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::gpu::renderer::{render_frame, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
-use pxl_spec::bake::format::Terrain;
-
-use crate::world::pyramid::domain::split_distance;
-use crate::world::pyramid::{Domain, Layer as _};
 
 use crate::layer::billboard::distance_fade::fade_range;
 use pxl_spec::asset::ingested::Asset;
-use pxl_spec::space::mat4::{mat4, mat4_mul};
 use pxl_spec::space::pvf3::ivec;
 use xpute_core::math::scalar::round;
 
@@ -36,7 +31,7 @@ use crate::text::text_raster;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::stage::{set_host_frame_stat, HostFrameStat};
 use crate::world::frame::resolution::resolution_observe;
-use crate::world::frame::view::view;
+use crate::world::frame::view::{globe_anchor_local, view};
 
 const MB: f64 = 1_048_576.0;
 
@@ -46,13 +41,14 @@ pub fn stage_write(resolution: f64) {
     let v = view();
     let settings = settings_store();
     let s = stage_lane_mut();
-    let mut m = mat4();
-    mat4_mul(&mut m, &v.view_matrix, &v.root);
-    s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].copy_from_slice(&m);
+    // The GPU is handed the eye's frame, where the draws' points are (the
+    // chunk stage's `Frame::eye`).
+    let (view_proj, camera) = v.eye_frame();
+    s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].copy_from_slice(&camera);
     s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16].copy_from_slice(&v.proj);
-    s[STAGE_AT::LOCAL_VIEW_PROJ..STAGE_AT::LOCAL_VIEW_PROJ + 16].copy_from_slice(&v.local_view_proj);
-    s[STAGE_AT::EYE_LOCAL..STAGE_AT::EYE_LOCAL + 3].copy_from_slice(&v.eye_local);
-    s[STAGE_AT::TRANSLATION..STAGE_AT::TRANSLATION + 3].copy_from_slice(&[v.tx, v.ty, v.tz]);
+    s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16].copy_from_slice(&view_proj);
+    s[STAGE_AT::EYE_LOCAL..STAGE_AT::EYE_LOCAL + 3].copy_from_slice(&v.pose.eye);
+    s[STAGE_AT::GLOBE_ANCHOR..STAGE_AT::GLOBE_ANCHOR + 3].copy_from_slice(&globe_anchor_local());
     s[STAGE_AT::ORIGIN] = ivec::to_real(ivec::X(v.origin));
     s[STAGE_AT::ORIGIN + 1] = ivec::to_real(ivec::Y(v.origin));
     s[STAGE_AT::VIEWPORT] = v.width;
@@ -61,7 +57,12 @@ pub fn stage_write(resolution: f64) {
     s[STAGE_AT::NEAR] = v.near;
     s[STAGE_AT::FAR] = v.far;
     (s[STAGE_AT::FADE_START], s[STAGE_AT::FADE_END]) = fade_range();
-    s[STAGE_AT::LOD_CELL] = Terrain::pyramid().domain().map_or(2.0 / split_distance(0), Domain::cell_per_distance);
+    // The largest drawn cell per unit of distance: past a level's split
+    // distance its cells are drawn averaged 2 × 2, so a cell there is twice
+    // the level's over the distance, and half that just before the next
+    // split — at the quality the view is drawn at. For whoever has to
+    // tolerate a drawn cell's height — the badge occlusion test.
+    s[STAGE_AT::LOD_CELL] = 2.0 / crate::world::quality::effective().tau().split_distance(0);
     s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { EDGE_STRENGTH } else { 0.0 };
     s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { AO_STRENGTH } else { 0.0 };
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };

@@ -140,23 +140,34 @@ kernel's mesher measures its own step against the same scale, so the
 mesher's step, the level a page is held at and a web map's zoom are one
 quantity (`issue/20260921-level-step-and-zoom-are-one-number.md`).
 
-## Two trees, two jobs
+## The trees share their geometry and nothing else
 
-The pyramid is a tree across levels. Every page in it holds a summary of
-the ground under it — terrain's cells voted and averaged, places summed — so
-a far view draws a coarse level as it is, the way a mipmap is read. Placed
+Every tree in this world is dyadic. A node's parent is its coordinate
+halved and its children are the 2^D under it (`hierarchy.rs`), its size is a
+`Scale`, a cube of a scale is one box (`Scale::cube`), and a ray crosses a
+box by one slab test (`Aabb::span_along`, in `v3.rs`). That much is one law,
+written once. What a node holds, whether it is resident, how it is stored
+and how a reader walks it are each tree's own, and follow from what it
+represents:
+
+|                                                       | axes   | resident                     | a node holds                              | stored                                             | walked                                             |
+| ----------------------------------------------------- | ------ | ---------------------------- | ----------------------------------------- | -------------------------------------------------- | -------------------------------------------------- |
+| the pyramid (`pyramid.rs`)                            | 2      | paged: a page can be missing | a layer's fold of all under it            | a record a page                                    | from a point, up to the nearest resident page      |
+| a page's index (`bake/format.rs` `Index`)             | 2      | with its page                | the lowest and highest drawn under a cell | dense lanes in the page, and blocks of them        | a coarse cell passed whole where a ray is above it |
+| the sparse tree (`sparse_tree/`)                      | 2 or 3 | whole                        | the way down, and a fold if asked         | two flat lanes, only what differs from the default | down a key's path, or every leaf                   |
+| the objects' folds (pxl-kernel layer/object/store.rs) | 3      | whole                        | the majority of its eight                 | in a band's tree under a band, a map over it       | one read a cell                                    |
+| the objects' bounds (the same)                        | 3      | whole                        | the box of everything under it            | a map, from a band up to the widest box asked      | down by a box, or along a ray nearest first        |
+
+The pyramid is a tree across levels: every page holds a summary of the
+ground under it — terrain's cells voted and averaged, places summed — so a
+far view draws a coarse level as it is, the way a mipmap is read. Placed
 objects need a tree of another kind: they are all resident, mostly empty
 space, and three-dimensional, so what matters is storing one level without
-its empty cells. That is the **sparse tree** (`sparse_tree/`), a tree inside
-one level whose inner nodes hold nothing but the way down.
-
-|                     | pyramid                            | sparse tree                    |
-| ------------------- | ---------------------------------- | ------------------------------ |
-| a node is           | a page, at one level               | a block of cells, in one level |
-| an inner node holds | a summary of all under it          | nothing                        |
-| it is for           | drawing far ground coarse          | storing a level compactly      |
-| it stops where      | a summary loses nothing of a child | every cell of a block is equal |
-| it lives            | in pages, fetched and let go       | resident, whole                |
+its empty cells. That is the **sparse tree**, a tree inside one level whose
+inner nodes are the way down and, where the caller asks, a summary too: a
+folded write (`set_folded`, in `sparse_tree/mem.rs`) refolds every branch it
+passed through by the caller's fold, and a walk can stop at a depth and read
+a branch there by its fold (`walk_to`).
 
 The two ways of stopping are one rule. A node stops growing where it
 already says all of the ground under it, and a block of equal cells is the
@@ -164,13 +175,22 @@ case where any summary loses nothing. The pyramid asks it of the layer's fold
 (`Folds::settles`, in `pyramid.rs`): a page of places settles a child when
 no cell over it holds two places, so the tree of places is only as deep as
 a crowd needs, and a layer whose fold is lossy, like terrain's vote, never
-settles one. Parent and child for both trees come from `hierarchy.rs`.
+settles one.
 
-They stay two because they answer different questions on different axes.
-Objects do have coarse levels, but they are folded when a chunk is built
-rather than stored, since nothing about objects is fetched; were they ever
-paged, their summaries would be a layer of the pyramid, and their octree's
+They stay two because one is paged and the other is not. Objects keep their
+coarse levels stored all the same, refolded along a write's path rather than
+folded again when a chunk is built: inside a band in its tree's branches, and
+past a band in the object store's own records a level. Were objects ever
+paged, those records would be a layer of the pyramid, and their octree's
 collapse its `settles`.
+
+A reader that crosses two trees walks each its own way and puts the answers
+together (pxl-kernel world/access.rs `first_hit`). A ray reads the ground
+again from each point along it, since a page over it may be missing and a
+descent would stall on the gap, and it walks the objects' bounds nearest
+first, since none is missing. The spatial hash (`lattice/spatial_hash.rs`)
+is no tree, on purpose: for many points moving in a small volume a tree
+prunes nothing.
 
 ## What else is here
 
@@ -180,6 +200,7 @@ collapse its `settles`.
 | [`adapter/`](./adapter/)         | where a unit gets a meaning                                                                            |
 | `hierarchy.rs`                   | `Scale`, the one form a size takes, and parent and child in any number of axes                         |
 | `indexer.rs`                     | the tiers, and the four questions each answers                                                         |
+| `lod.rs`                         | the level a distance is drawn at, and the pages of a level an observation can fault on                 |
 | [`lattice/`](./lattice/)         | structures over the lattice: one address hash, points bucketed in 3D, rectangles indexed on the screen |
 | [`sparse_tree/`](./sparse_tree/) | an octree in two flat lanes, storing what differs from the default                                     |
 | `xy.rs`                          | `TO_XY`, which drops Z to give the key every 2D map surface is keyed by                                |

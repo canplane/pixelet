@@ -16,76 +16,19 @@
 //! - 1 [cell] = 1 [texel]
 //! - Elevation stored in the i16 lane is in [cell] units.
 
-use pxl_spec::bake::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
 use pxl_spec::bake::format::{Ground, GroundChannelKey};
-use pxl_spec::bake::ground::{recess, shown_ground};
+use pxl_spec::bake::ground::cell_recess;
 use pxl_spec::bake::pack::{channel_of, GroundCell};
-use pxl_spec::space::pyramid::{GROUND, PAGE_CELLS};
-use xpute_core::math::scalar::round;
+use pxl_spec::bake::surface::bicubic;
+use pxl_spec::space::pyramid::GROUND;
 
-const ELE_CELL_STEP: f64 = PAGE_CELLS as f64 / PAGE_ELE_SPAN as f64;
-
-/// Bicubic elevation sampling from the padded source raster.
-///
-/// Notes:
-/// - keeps the hot path allocation-free
-/// - uses an unclamped fast path for the common interior case
-/// - falls back to clamped sampling near tile boundaries
-///
-/// `tx`/`ty` are a point in texels, continuous: a cell's center is its
-/// index and a half.
-fn sample_ele_bicubic(page_ele: &[i16], tx: f64, ty: f64) -> i16 {
-    let sx = tx / ELE_CELL_STEP + ELE_PAD as f64 - 0.5;
-    let sy = ty / ELE_CELL_STEP + ELE_PAD as f64 - 0.5;
-
-    let sx0 = sx.floor() as i32;
-    let sy0 = sy.floor() as i32;
-
-    let fdx = sx - sx0 as f64;
-    let fdy = sy - sy0 as f64;
-
-    // precompute cubic interpolation weights.
-    let x2 = fdx * fdx;
-    let x3 = x2 * fdx;
-    let wx = [-0.5 * x3 + x2 - 0.5 * fdx, 1.5 * x3 - 2.5 * x2 + 1.0, -1.5 * x3 + 2.0 * x2 + 0.5 * fdx, 0.5 * x3 - 0.5 * x2];
-
-    let y2 = fdy * fdy;
-    let y3 = y2 * fdy;
-    let wy = [-0.5 * y3 + y2 - 0.5 * fdy, 1.5 * y3 - 2.5 * y2 + 1.0, -1.5 * y3 + 2.0 * y2 + 0.5 * fdy, 0.5 * y3 - 0.5 * y2];
-
-    let span = ELE_PADDED_SPAN as i32;
-    let e = |idx: i32| page_ele[idx as usize] as f64;
-
-    // fast interior path with no clamp overhead.
-    if sx0 >= 1 && sx0 <= span - 3 && sy0 >= 1 && sy0 <= span - 3 {
-        let row = |y: i32| {
-            let idx = y * span + sx0;
-            e(idx - 1) * wx[0] + e(idx) * wx[1] + e(idx + 1) * wx[2] + e(idx + 2) * wx[3]
-        };
-        return round(row(sy0 - 1) * wy[0] + row(sy0) * wy[1] + row(sy0 + 1) * wy[2] + row(sy0 + 2) * wy[3]) as i16;
-    }
-
-    // slow boundary path with clamped coordinates.
-    let mut out = 0.0;
-    for (j, wyj) in wy.iter().enumerate() {
-        let py = (sy0 - 1 + j as i32).clamp(0, span - 1);
-        let mut row_out = 0.0;
-        for (i, wxi) in wx.iter().enumerate() {
-            let px = (sx0 - 1 + i as i32).clamp(0, span - 1);
-            row_out += e(py * span + px) * wxi;
-        }
-        out += row_out * wyj;
-    }
-    round(out) as i16
-}
-
-/// `sample_ele`: the bicubic sample.
+/// `sample_ele`: the bicubic sample (pxl-spec bake/surface.rs `bicubic`).
 /// `tx`/`ty` are signed because the padded raster reaches ELE_PAD samples
 /// past the page's own span (pxl-spec's ELE_PAD): a cell just outside the
 /// page has a height here, which is what lets a chunk at the page's edge
 /// read the ground its neighbor stands on.
 pub fn sample_ele(page_ele: &[i16], tx: i32, ty: i32) -> i16 {
-    sample_ele_bicubic(page_ele, tx as f64 + 0.5, ty as f64 + 0.5)
+    bicubic(page_ele, tx as f64 + 0.5, ty as f64 + 0.5)
 }
 
 /// One page's ground cells, however the caller holds them: a page's own
@@ -111,13 +54,13 @@ impl<'a> GroundLanes<'a> {
     /// recess of the type it shows (pxl-spec's `recess`), so a shoreline
     /// reads as water meeting land a step lower rather than as two surfaces
     /// at one level. A real height and not a mesh offset — every consumer
-    /// (the chunk mesh, the placement raycast, the camera's ground-snap)
-    /// takes it through `ground_ele` — and so it is asked with no channel
-    /// hidden: a structure covers the water whatever the dev toggle says,
-    /// since the raycast and the ground-snap read it with the toggle nowhere
-    /// in sight.
+    /// (the chunk mesh, and the kernel's query of the ground, which the pick
+    /// and the camera's ground-snap ask) takes it through `ground_ele` — and
+    /// so it is asked with no channel hidden: a structure covers the water
+    /// whatever the dev toggle says, since the query reads it with the
+    /// toggle nowhere in sight.
     pub fn recess(&self, i: usize) -> i16 {
-        recess(shown_ground(|k| self.get(k, i) as u32, 0))
+        cell_recess(self.cells[i])
     }
 }
 
@@ -140,7 +83,7 @@ pub fn ground_ele(page_ele: &[i16], ground: Option<GroundLanes>, tx: i32, ty: i3
 /// finer cell read from this page stands, its height the surface's there
 /// and its recess the page cell's it lies in.
 pub fn ground_ele_at(page_ele: &[i16], ground: Option<GroundLanes>, tx: f64, ty: f64) -> i16 {
-    let ele = sample_ele_bicubic(page_ele, tx, ty);
+    let ele = bicubic(page_ele, tx, ty);
     ground.map_or(ele, |g| ele - g.recess(GROUND.cell_index(tx.floor() as u32, ty.floor() as u32) as usize))
 }
 

@@ -12,6 +12,7 @@
 use postgres::types::ToSql;
 use postgres::Client;
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
+use pxl_spec::bake::format::{decode_terrain, encode_terrain, Occupancy};
 use pxl_spec::space::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::hierarchy::ancestor_of;
 use pxl_spec::space::indexer::L3_IDX;
@@ -146,7 +147,7 @@ fn empty_source() -> Vec<u8> {
 /// latitude) yields identical bytes.
 pub fn bake_ocean(samples: &[IVec]) -> Result<Vec<u8>, String> {
     let src = empty_source();
-    let baked: Vec<Vec<u8>> = samples.iter().map(|p| bake_terrain(*p, &src).expect("ocean bake")).collect();
+    let baked: Vec<Vec<u8>> = samples.iter().map(|p| bake_terrain(*p, &src).and_then(|t| encode_terrain(&t)).expect("ocean bake")).collect();
     for (i, page) in baked.iter().enumerate().skip(1) {
         if page != &baked[0] {
             return Err(format!(
@@ -159,7 +160,12 @@ pub fn bake_ocean(samples: &[IVec]) -> Result<Vec<u8>, String> {
             ));
         }
     }
-    Ok(baked.into_iter().next().expect("one sample"))
+    // Baked as a leaf, but it is the page every page with no object reads:
+    // the zero page, which is no page of its own (pxl-spec bake/format.rs
+    // `Occupancy`), and which a parent over it says so of.
+    let mut ocean = decode_terrain(&baked[0]).map_err(|e| format!("{e:?}"))?;
+    ocean.index.occupancy = Occupancy::ZERO;
+    encode_terrain(&ocean).map_err(|e| format!("{e:?}"))
 }
 
 /// Three pages far apart in latitude, which is what the ocean check compares.

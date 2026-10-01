@@ -25,6 +25,12 @@ export function tileUrl(kind: BakeKind, name: string, published: boolean): strin
   return published ? `${TILE_ROOT}/${kind}/${PUBLISHED_VERSION[kind]}/${name}` : `${TILE_ROOT}/${kind}/${name}`;
 }
 
+/** Where a dev tile server answers what it declares of itself, in the form
+ * published.json's `SOURCE` gives a published bake's: a deployment fact, on
+ * this side of the line with the version. A published source is never asked
+ * here — its declaration is in the bundle (`PUBLISHED_SOURCE`). */
+export const TILE_SOURCE_ROUTE = `${TILE_ROOT}/source`;
+
 /** A content-addressed asset — a model, a texture — by its bucket key
  * (`asset/<sha256>`, what the ingest gave its bytes). The root and the bucket's
  * own prefix are the same word deliberately, so the URL is the key with a

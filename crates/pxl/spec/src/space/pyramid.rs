@@ -1,15 +1,18 @@
 // pxl-spec/space/pyramid.rs
 
 //! The pyramid: the space hierarchy (indexer.rs) repeated over coarser
-//! blocks. A level-k cell is a block of 2^k units and a level-k page is a
-//! page's worth of those cells, 2^k leaf pages on a side, so every extent the
+//! blocks. A level-k cell is its lattice's first cell k levels up
+//! (`Lattice::scale`), 2^k of them on a side, and a level-k page is a page's
+//! worth of those cells, 2^k leaf pages on a side, so every extent the
 //! hierarchy gives a leaf is the same extent at level k, scaled
 //! (issue/20260921-level-step-and-zoom-are-one-number.md).
 //!
-//! It is the one hierarchy every layer is held in. Where a cell is, which
-//! page it belongs to, which pages fold into which, and where a cell's center
-//! stands are decided here and nowhere else; a layer owns only what a cell
-//! carries and how a parent's cell is made from its children's (`Folds`).
+//! It is the one hierarchy the ground's layers are paged in — terrain and
+//! places; the placed objects keep their own trees, on the same geometry
+//! (space/README.md). Where a cell is, which page it belongs to, which pages
+//! fold into which, and where a cell's center stands are decided here and
+//! nowhere else; a layer owns only what a cell carries and how a parent's
+//! cell is made from its children's (`Folds`).
 
 use super::hierarchy::{ancestor_of, child_of, first_descendant_of, parent_of, slot_of, Scale};
 use super::indexer::{L1, L2, L3, L3_IDX, L4};
@@ -18,8 +21,10 @@ use super::pvf3::core::IVEC_X_W;
 use super::pvf3::ivec::{self, IVec};
 use super::pvf3::projection;
 use super::pvf3::pvf3::{self, Pvf3};
+use super::pvf3::REACH;
+use super::v3::Aabb;
 use super::xy::TO_XY;
-use crate::bake::constant::CELL;
+use crate::bake::constant::{CELL, EXTENT_CELL};
 
 /// The coarsest level the pyramid is folded to. At level 10 — zoom 5 — a
 /// page spans about 9° of latitude, across which the page-constant vertical
@@ -132,17 +137,61 @@ impl Lattice {
         (slot_of([x / n, y / n]), self.cell_index((x % n) as u32, (y % n) as u32))
     }
 
+    /// The cells of this lattice that lie under `outer`'s cell at `index` of
+    /// the same page, row by row: a block n a side where `outer`'s cell is n
+    /// of this one's.
+    pub fn under(self, outer: Lattice, index: u32) -> impl Iterator<Item = u32> {
+        let n = self.cell.count_in(outer.cell);
+        let [x0, y0] = outer.in_page(index).map(|v| v * n);
+        (0..n).flat_map(move |dy| (0..n).map(move |dx| self.cell_index(x0 + dx, y0 + dy)))
+    }
+
     /// A cell index as its column and row in its page: `cell_index`'s
     /// inverse.
     pub const fn in_page(self, index: u32) -> [u32; 2] {
         let n = self.page_cells();
         [index % n, index / n]
     }
+
+    // A page's aligned square blocks of cells, 2^j a side for j from 1 to
+    // the page's own, lie one size after another from the smallest, each
+    // size's row by row: what a summary over any node of the hierarchy a
+    // page holds is read from in one place.
+
+    /// A page's blocks, every size together.
+    pub const fn page_blocks(self) -> u32 {
+        self.first_block(self.page_cell_shamt() + 1)
+    }
+
+    /// Where the block 2^`j` cells a side that holds cell (tx, ty) stands
+    /// among a page's blocks.
+    pub const fn block_index(self, j: u32, tx: u32, ty: u32) -> u32 {
+        if j == 0 || j > self.page_cell_shamt() {
+            panic!()
+        }
+        self.first_block(j) + (ty >> j) * (self.page_cells() >> j) + (tx >> j)
+    }
+
+    /// Where the blocks 2^`j` cells a side begin: past every smaller size.
+    const fn first_block(self, j: u32) -> u32 {
+        let mut first = 0;
+        let mut k = 1;
+        while k < j {
+            let side = self.page_cells() >> k;
+            first += side * side;
+            k += 1;
+        }
+        first
+    }
 }
 
 /// The ground's lattice: bake/constant.rs's cell, which terrain and objects
 /// are cut in.
 pub const GROUND: Lattice = Lattice::new(CELL);
+
+/// The index lane's lattice (bake/format.rs `Index`): a cell of it bounds
+/// the heights of every page under it, a block of the ground's cells a side.
+pub const EXTENT: Lattice = Lattice::new(EXTENT_CELL);
 
 /// Cells on a page's side in the ground's lattice.
 pub const PAGE_CELLS: u32 = GROUND.page_cells();
@@ -230,6 +279,17 @@ impl LevelPage {
         (pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base)), side.side())
     }
 
+    /// The page as a box of the world: its square, and every height a
+    /// position reaches over it. A page is stored flat and holds whatever
+    /// stands over its square, so no height is outside it.
+    pub fn region(self) -> Aabb {
+        let (x0, y0, side) = self.rect();
+        Aabb {
+            min: [x0, y0, REACH.min[2]],
+            max: [x0 + side, y0 + side, REACH.max[2]],
+        }
+    }
+
     /// A demand's subject: the key with the level in the lane a page does not
     /// use. The URL and the arrival take it apart again.
     pub fn subject(self) -> u64 {
@@ -267,14 +327,20 @@ pub const fn anchor_span_of(level: u32) -> i64 {
 /// its first child, the page's own children at `CHILDREN`. X wraps, since
 /// the lane is one world; a page past Y's edge has no object.
 pub fn neighborhood(p: LevelPage) -> [LevelPage; 16] {
-    let below = p.level - 1;
-    let across = 1i64 << (IVEC_X_W - L3.shamt() as u32 - below);
-    let wrap = |x: i64| (x + across / 2).rem_euclid(across) - across / 2;
     let [x, y] = child_of(p.at(), 0);
     std::array::from_fn(|k| {
         let (qx, qy) = ((k % 4) as i64 - 1, (k / 4) as i64 - 1);
-        LevelPage::new(below, ivec::gather(wrap(x + qx), y + qy, 0))
+        page_at(p.level - 1, [x + qx, y + qy])
     })
+}
+
+/// The level-`level` page at column `x` and row `y`, counted without the
+/// seam: X wraps, since the lane is one world, so a column past either end
+/// is the one the world meets there.
+pub fn page_at(level: u32, [x, y]: [i64; 2]) -> LevelPage {
+    let across = 1i64 << (IVEC_X_W - L3.shamt() as u32 - level);
+    let wrap = |x: i64| (x + across / 2).rem_euclid(across) - across / 2;
+    LevelPage::new(level, ivec::gather(wrap(x), y, 0))
 }
 
 /// Where a page's own four children sit in its neighborhood, in `slot_of`'s

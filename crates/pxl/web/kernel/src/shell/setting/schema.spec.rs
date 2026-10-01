@@ -24,6 +24,29 @@
 // case them the way Rust would is to rename the protocol.
 #![allow(non_camel_case_types)]
 
+/// Which controller makes the camera's pose.
+///
+///   orbit — third person: the camera turns about the map center, its
+///           radius ahead of the eye, and a drag moves the map center.
+///   free  — first person: the eye is the map center and turns in place;
+///           a drag walks it over the ground, the eye at its height over
+///           the ground it reaches, and nothing moves it up or down.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum CameraMode {
+    orbit = 0,
+    free = 1,
+}
+
+impl CameraMode {
+    pub const ALL: [CameraMode; 2] = [CameraMode::orbit, CameraMode::free];
+
+    /// The option an index names, or none for an index past the list.
+    pub fn of(index: u32) -> Option<CameraMode> {
+        CameraMode::ALL.get(index as usize).copied()
+    }
+}
+
 /// What terrain does to the camera.
 ///
 ///   through — nothing. The eye goes wherever the controls put it, ground
@@ -151,40 +174,39 @@ pub enum SettingKey {
     /// Off by default: the tilt is the one control a map view is expected to
     /// have, and locking it reads as the app being stuck.
     tilt_lock = 4,
+    /// Which controller makes the camera's pose; CAMERA_MODES says each. To
+    /// first person the person stands at the map center, the eye at its
+    /// height over the ground; to third the map center is laid on the ground
+    /// and the eye steps back by the radius.
+    camera_mode = 5,
     /// What the camera does when the controls would put it underground;
     /// CAMERA_COLLISION_MODES says each. The default is climb, because the one
     /// thing a map camera must not do is refuse to
     /// move. stop is the more literal answer and the worse default: it hands
     /// back a control that did nothing, which reads as the app being stuck
     /// rather than as the ground being in the way.
-    camera_collision = 5,
+    camera_collision = 6,
     /// Panning re-samples the terrain height under the map center each step.
-    ground_snap = 6,
+    ground_snap = 7,
     /// The eraser digs into the baked terrain where nothing is placed. Off by
     /// default: the terrain is real map data, not the player's scratch canvas.
-    terrain_carving = 7,
+    terrain_carving = 8,
     /// Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.
-    edge_shade = 8,
+    edge_shade = 9,
     /// A uniform on an already-compiled shader term; not a pass.
-    rim_light = 9,
+    rim_light = 10,
     /// corner, the occlusion a voxel world gets from its own geometry with no
     /// screen-space pass; screen, N8AO's screen-space pass, the costliest of
     /// the three. AO_MODES says each.
-    ao = 10,
+    ao = 11,
     /// The sun's shadow map (crates/pxl/web/render/src/gpu/shadow.rs): the world drawn once more
     /// from the sun each frame, depth only, and a 3x3 compare per fragment;
     /// 16 MB of map on a desktop, 4 on a phone.
-    shadows = 11,
+    shadows = 12,
     /// The pixels the world is filled at, the GPU's largest cost: two to a
     /// CSS pixel is four times the fragments of one. RESOLUTION_MODES says each.
-    resolution = 12,
-    /// A change of what a chunk draws dissolves over 150 ms of frames instead
-    /// of switching at once (crates/pxl/web/kernel/src/world/chunk/table.rs's
-    /// Fade): a cube for another, a stale chunk for what replaced it. The two
-    /// draw on complementary halves of one screen-space pattern, so a chunk
-    /// in a dissolve is drawn twice while it lasts.
-    lod_crossfade = 13,
+    resolution = 13,
     /// The performance overlay: the profiler's panel, and the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`).
     profiler = 14,
     /// Markers for the map center and the cell it floors to, the floating origin, the page's corners and the two gyro rings (layer/marker/frame_gizmo.rs).
@@ -200,6 +222,7 @@ impl SettingKey {
         SettingKey::decor,
         SettingKey::poi,
         SettingKey::tilt_lock,
+        SettingKey::camera_mode,
         SettingKey::camera_collision,
         SettingKey::ground_snap,
         SettingKey::terrain_carving,
@@ -208,7 +231,6 @@ impl SettingKey {
         SettingKey::ao,
         SettingKey::shadows,
         SettingKey::resolution,
-        SettingKey::lod_crossfade,
         SettingKey::profiler,
         SettingKey::gizmos,
         SettingKey::person,
@@ -227,6 +249,7 @@ impl SettingKey {
             SettingKey::decor => SettingKind::Toggle,
             SettingKey::poi => SettingKind::Toggle,
             SettingKey::tilt_lock => SettingKind::Toggle,
+            SettingKey::camera_mode => SettingKind::Choice,
             SettingKey::camera_collision => SettingKind::Choice,
             SettingKey::ground_snap => SettingKind::Toggle,
             SettingKey::terrain_carving => SettingKind::Toggle,
@@ -235,7 +258,6 @@ impl SettingKey {
             SettingKey::ao => SettingKind::Choice,
             SettingKey::shadows => SettingKind::Toggle,
             SettingKey::resolution => SettingKind::Choice,
-            SettingKey::lod_crossfade => SettingKind::Toggle,
             SettingKey::profiler => SettingKind::Toggle,
             SettingKey::gizmos => SettingKind::Toggle,
             SettingKey::person => SettingKind::Number,
@@ -262,6 +284,7 @@ pub struct Settings {
     pub decor: bool,
     pub poi: bool,
     pub tilt_lock: bool,
+    pub camera_mode: CameraMode,
     pub camera_collision: CameraCollisionMode,
     pub ground_snap: bool,
     pub terrain_carving: bool,
@@ -270,7 +293,6 @@ pub struct Settings {
     pub ao: AoMode,
     pub shadows: bool,
     pub resolution: ResolutionMode,
-    pub lod_crossfade: bool,
     pub profiler: bool,
     pub gizmos: bool,
     pub person: u8,
@@ -285,6 +307,7 @@ impl Settings {
         decor: true,
         poi: false,
         tilt_lock: false,
+        camera_mode: CameraMode::orbit,
         camera_collision: CameraCollisionMode::climb,
         ground_snap: true,
         terrain_carving: false,
@@ -293,7 +316,6 @@ impl Settings {
         ao: AoMode::corner,
         shadows: false,
         resolution: ResolutionMode::auto,
-        lod_crossfade: true,
         profiler: false,
         gizmos: false,
         person: 1,
@@ -309,6 +331,7 @@ impl Settings {
             SettingKey::decor => self.decor as u32,
             SettingKey::poi => self.poi as u32,
             SettingKey::tilt_lock => self.tilt_lock as u32,
+            SettingKey::camera_mode => self.camera_mode as u32,
             SettingKey::camera_collision => self.camera_collision as u32,
             SettingKey::ground_snap => self.ground_snap as u32,
             SettingKey::terrain_carving => self.terrain_carving as u32,
@@ -317,7 +340,6 @@ impl Settings {
             SettingKey::ao => self.ao as u32,
             SettingKey::shadows => self.shadows as u32,
             SettingKey::resolution => self.resolution as u32,
-            SettingKey::lod_crossfade => self.lod_crossfade as u32,
             SettingKey::profiler => self.profiler as u32,
             SettingKey::gizmos => self.gizmos as u32,
             SettingKey::person => self.person as u32,
@@ -334,6 +356,10 @@ impl Settings {
             SettingKey::decor if value <= 1 => self.decor = value == 1,
             SettingKey::poi if value <= 1 => self.poi = value == 1,
             SettingKey::tilt_lock if value <= 1 => self.tilt_lock = value == 1,
+            SettingKey::camera_mode => match CameraMode::of(value) {
+                Some(o) => self.camera_mode = o,
+                None => return false,
+            },
             SettingKey::camera_collision => match CameraCollisionMode::of(value) {
                 Some(o) => self.camera_collision = o,
                 None => return false,
@@ -351,7 +377,6 @@ impl Settings {
                 Some(o) => self.resolution = o,
                 None => return false,
             },
-            SettingKey::lod_crossfade if value <= 1 => self.lod_crossfade = value == 1,
             SettingKey::profiler if value <= 1 => self.profiler = value == 1,
             SettingKey::gizmos if value <= 1 => self.gizmos = value == 1,
             SettingKey::person => match u8::try_from(value) {

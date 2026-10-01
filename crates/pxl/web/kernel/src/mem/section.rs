@@ -41,8 +41,8 @@
 //! ```text
 //!              offset         end            phone        desktop
 //!   module     0              ~32.7 MiB      the linker's
-//!   .fixed     ~32.7 MiB      ~84.2 MiB      51.51 MiB    51.51 MiB
-//!   heap       ~84.2 MiB      —              427.79 MiB   939.79 MiB
+//!   .fixed     ~32.7 MiB      ~119.4 MiB     86.68 MiB    86.68 MiB
+//!   heap       ~119.4 MiB     —              392.62 MiB   904.62 MiB
 //! ```
 //!
 //! What everything in front of the heap is checked against is MIN_HEAP_BYTES —

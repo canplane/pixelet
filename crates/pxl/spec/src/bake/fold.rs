@@ -32,14 +32,21 @@
 //! and the fraction the mean leaves is what a coarse cell's inset is cut from.
 //! The value stays in units at every level: in the level's own cells the
 //! rounding would eat that fraction.
+//!
+//! The index lane is the one fold that is not a summary of the level below
+//! alone. A mean lies inside what it averages but says nothing of how far
+//! what it averages reaches, so a parent's extent is carried up from its
+//! children's, which already hold everything under them, and widened by its
+//! own surface, which the interpolation can lift past theirs.
 
 use crate::space::pyramid::PAGE_CELLS;
 use xpute_core::math::scalar::round;
 
 use super::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
-use super::format::{Ground, Terrain, GROUND_CH_KEYS};
+use super::format::{Ground, Index, Occupancy, Terrain, GROUND_CH_KEYS};
 use super::pack::{channel_of, with_channel, GroundCell};
-use crate::space::pyramid::{neighborhood, Folds, LevelPage, CHILDREN, GROUND};
+use super::surface::extent_of;
+use crate::space::pyramid::{neighborhood, Folds, LevelPage, CHILDREN, EXTENT, GROUND};
 
 /// The value that fills more than half of a 2×2 block, or of a 2×2×2 one,
 /// folding into `level`; when none does, or two fill half each, the tie
@@ -143,6 +150,27 @@ pub fn fold_ele(around: [Option<&[i16]>; 16], out: &mut [i16]) {
     }
 }
 
+/// A parent's index: each of its cells the union of its own surface's
+/// extent there (`own`, bake/surface.rs `extent_of`) and the 2×2 cells of the
+/// child under it, a child's extent being already everything under that
+/// child; and which of the four children are pages. A child the bake has no
+/// object for is folded as the zero page, whose extent is the ocean's surface
+/// and which is no page, so a parent over the ocean says it and asks for
+/// nothing there.
+pub fn fold_index(children: [&Index; 4], own: Vec<[i16; 2]>) -> Index {
+    let extent = own
+        .into_iter()
+        .enumerate()
+        .map(|(index, [lo, hi])| {
+            let (q, first) = EXTENT.child_block(index as u32);
+            let [x, y] = EXTENT.in_page(first);
+            let four = [[x, y], [x + 1, y], [x, y + 1], [x + 1, y + 1]].map(|[x, y]| children[q].extent()[EXTENT.cell_index(x, y) as usize]);
+            four.iter().fold([lo, hi], |[lo, hi], &[clo, chi]| [lo.min(clo), hi.max(chi)])
+        })
+        .collect::<Vec<_>>();
+    Index::new(extent, Occupancy::of_children(children.map(|c| c.occupancy)))
+}
+
 /// Terrain reads the ring around the four children as well: a parent's
 /// elevation pads two samples past its rim, which lie in its children's
 /// neighbors (`fold_ele`).
@@ -166,11 +194,13 @@ impl Folds for Terrain {
 /// level it is leaving, and a level is folded from four pages of it, not
 /// from the sixteen a bake has lying around.
 fn fold_terrain(around: [Option<&Terrain>; 16], level: u32) -> Option<Terrain> {
-    let child = |q: usize| around[CHILDREN[q]].map(|t| &t.ground);
-    let ground = fold_ground([child(0)?, child(1)?, child(2)?, child(3)?], level);
+    let child = |q: usize| around[CHILDREN[q]];
+    let children = [child(0)?, child(1)?, child(2)?, child(3)?];
+    let ground = fold_ground(children.map(|t| &t.ground), level);
     let mut ele = vec![0i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
     fold_ele(around.map(|t| t.map(|t| &*t.ele)), &mut ele);
-    Some(Terrain { ground, ele: ele.into() })
+    let index = fold_index(children.map(|t| &t.index), extent_of(&ele, &ground.cells));
+    Some(Terrain { ground, ele: ele.into(), index })
 }
 
 #[cfg(test)]

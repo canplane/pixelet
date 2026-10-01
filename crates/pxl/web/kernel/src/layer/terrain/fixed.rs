@@ -7,8 +7,8 @@
 //! (mem/fixed.rs), which is what the name says — placed once when the
 //! module boots, never freed, and of a size settled at compile time.
 //!
-//! How many records there are, and which page is in which, are the
-//! pyramid's (world/pyramid.rs `RECORDS`), the same for every layer, and so
+//! How many records there are, and which page is in which, are residency's
+//! (world/paging.rs `RECORDS`), the same for every layer, and so
 //! is the first, `ABSENT`, which every page the bake left as no object reads
 //! — the open ocean; what is terrain's is that a record is a room of fixed
 //! bytes here.
@@ -21,12 +21,17 @@
 //! its record is 2,592 bytes — 32 past a cache line, and a grid whose rows are
 //! 72 bytes is not aligned at any offset anyway. Held with the ground it would
 //! carry that 32 into every second page's lanes; held apart it costs nothing.
+//! The index lane (pxl-spec bake/format.rs `Index`) is a third plane past the
+//! elevation, a (lowest, highest) pair of i16 a cell of its lattice, and its
+//! blocks a fourth: made from the lane as the page is written into its
+//! record, and so held exactly as long as the lane is.
 
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
+use pxl_spec::bake::format::{Block, BLOCK_LANE};
 use pxl_spec::bake::pack::GroundCell;
-use pxl_spec::space::pyramid::PAGE_CELLS;
+use pxl_spec::space::pyramid::{EXTENT, PAGE_CELLS};
 
-use crate::world::pyramid::RECORDS;
+use crate::world::paging::RECORDS;
 
 // ---- The routing ----
 
@@ -43,8 +48,20 @@ pub const ELE_LANE_BYTES: u32 = ELE_PADDED_SPAN * ELE_PADDED_SPAN * 2;
 /// The elevation across every record.
 pub const ELE_PLANE_BYTES: u32 = RECORDS * ELE_LANE_BYTES;
 
+/// A page's index lane: two i16 a cell of the index lattice.
+pub const EXTENT_LANE_BYTES: u32 = EXTENT.page_cells() * EXTENT.page_cells() * 4;
+
+/// The index lanes across every record.
+pub const EXTENT_PLANE_BYTES: u32 = RECORDS * EXTENT_LANE_BYTES;
+
+/// A page's index blocks, one `Block` each.
+pub const BLOCK_LANE_BYTES: u32 = BLOCK_LANE as u32 * core::mem::size_of::<Block>() as u32;
+
+/// The index blocks across every record.
+pub const BLOCK_PLANE_BYTES: u32 = RECORDS * BLOCK_LANE_BYTES;
+
 /// The range, whole: `.fixed.terrain` is this and nothing else.
-pub const TERRAIN_BYTES: u32 = GROUND_BYTES + ELE_PLANE_BYTES;
+pub const TERRAIN_BYTES: u32 = GROUND_BYTES + ELE_PLANE_BYTES + EXTENT_PLANE_BYTES + BLOCK_PLANE_BYTES;
 
 const _: () = assert!(
     GROUND_LANE_BYTES.is_multiple_of(64),
@@ -59,4 +76,14 @@ pub const fn ground_off(record: u32) -> u32 {
 /// Where a record's elevation grid lies in the range.
 pub const fn ele_off(record: u32) -> u32 {
     GROUND_BYTES + record * ELE_LANE_BYTES
+}
+
+/// Where a record's index lane lies in the range.
+pub const fn extent_off(record: u32) -> u32 {
+    GROUND_BYTES + ELE_PLANE_BYTES + record * EXTENT_LANE_BYTES
+}
+
+/// Where a record's index blocks lie in the range.
+pub const fn blocks_off(record: u32) -> u32 {
+    GROUND_BYTES + ELE_PLANE_BYTES + EXTENT_PLANE_BYTES + record * BLOCK_LANE_BYTES
 }

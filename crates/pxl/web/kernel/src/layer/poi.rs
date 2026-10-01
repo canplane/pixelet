@@ -3,15 +3,14 @@
 //! Places as a layer of the pyramid (world/pyramid.rs): a page counts the
 //! places in each of its cells (pxl-spec bake/poi_page.rs), and a count is
 //! drawn as a badge at the center of the block of cells the ground under it
-//! is drawn at (placement.rs). Which pages are held, fetched or folded is the
-//! pyramid's, in the same window as the ground's.
+//! is drawn at (placement.rs). Which pages are held and fetched is the
+//! pyramid's, for the same view as the ground's.
 
 pub mod badge;
 pub mod placement;
 
 use pxl_spec::bake::poi_page::{self, PoiPage};
 use pxl_spec::space::pyramid::{LevelPage, TOP_LEVEL};
-use xpute_runtime::abi::fetch::FetchFail;
 
 use crate::global::Global;
 use crate::io::demand::{Category, Phases};
@@ -34,10 +33,6 @@ impl Layer for PoiPage {
         Ok(poi_page::decode(pkt)?)
     }
 
-    fn keep(_record: u32, page: &PoiPage) -> Result<PoiPage, FetchFail> {
-        Ok(page.clone())
-    }
-
     /// A page the bake has no object for: at the top, one holding no places;
     /// under it, one the page over it settles, whose ground that page says.
     fn absent(p: LevelPage) {
@@ -57,7 +52,8 @@ pub fn enabled() -> bool {
 /// for while they are not.
 pub fn poi_step() {
     if enabled() {
-        PoiPage::pyramid().step();
+        PoiPage::pyramid().step(None);
+        crate::world::pyramid::cover::step::<PoiPage>();
     } else {
         PoiPage::pyramid().idle();
     }

@@ -814,41 +814,44 @@ impl Renderer {
         b.cell = s[STAGE_AT::LOD_CELL] as f32;
 
         let u = &mut self.frame;
-        a.copy_from_slice(&s[STAGE_AT::LOCAL_VIEW_PROJ..STAGE_AT::LOCAL_VIEW_PROJ + 16]);
+        a.copy_from_slice(&s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16]);
         mat4_mul(&mut m, &GL_TO_WGPU, &a);
         put_mat(u, VIEW_PROJ, &m);
-        // The sky, the stars and the clouds are drawn in the root frame, as
-        // the meshes are: each pixel's ray from the eye in it, the stars
-        // through the same matrix, and the cell the root frame's origin is
-        // on the map, which anchors the clouds to the ground.
+        // Everything is drawn in the eye's frame, the root frame with the eye
+        // at its origin (frame/draw.rs `DrawList::translation`): the meshes,
+        // the sky and the stars, each pixel's ray from the eye, and the
+        // clouds, anchored to the ground by the cell the eye is over on the
+        // map. What stands anywhere in it — the globe's anchor below — is
+        // written against the eye in doubles before it is narrowed.
         let eye_local = [s[STAGE_AT::EYE_LOCAL], s[STAGE_AT::EYE_LOCAL + 1], s[STAGE_AT::EYE_LOCAL + 2]];
+        let eye = [0.0; 3];
         let origin = ivec::gather(ivec::from_real(s[STAGE_AT::ORIGIN]), ivec::from_real(s[STAGE_AT::ORIGIN + 1]), 0);
-        // The camera center — the root frame's origin undone — which the
-        // sun's shadow is aimed at and the map is laid back on the planet
-        // about (look/globe.rs): its latitude's values and the planet's
-        // radius in the units the map has there.
-        let center = [-s[STAGE_AT::TRANSLATION], -s[STAGE_AT::TRANSLATION + 1], -s[STAGE_AT::TRANSLATION + 2]];
+        // The globe's anchor, which the sun's shadow is aimed at and the map
+        // is laid back on the planet about (look/globe.rs): its latitude's
+        // values and the planet's radius in the units the map has there. The
+        // globe's placement is a function of a point's offset from it and its
+        // height over it alone, so it places a point of the eye's frame where
+        // it places the same point of the root frame, less the eye.
+        let center: [f64; 3] = core::array::from_fn(|k| s[STAGE_AT::GLOBE_ANCHOR + k] - eye_local[k]);
         let sphere = Globe::at(env[ENV_AIR + 2] as f64);
         // Straight up where the eye stands: away from the planet's center,
-        // the radius below the camera center. The eye stands off the camera
-        // center by the orbit, so its up leans from the root frame's Z by that
-        // over the radius — nothing at a street, degrees from orbit — and the
+        // the radius below the globe's anchor, which is under the eye — the
         // air, the clouds and the stars are measured from it, on the sphere
         // the world is laid on.
         let planet_center = [center[0], center[1], center[2] - sphere.radius_u()];
         let mut up = [0.0; 3];
-        norm3(sub3(&eye_local, &planet_center, &mut [0.0; 3]), &mut up);
-        self.clouds.lay_out(g, &m, &eye_local, env, &up);
-        self.atmosphere.set_clouds(&clouds::field(origin, env));
+        norm3(sub3(&eye, &planet_center, &mut [0.0; 3]), &mut up);
+        self.clouds.lay_out(g, &m, &eye, env, &up);
+        self.atmosphere.set_clouds(&clouds::field(origin, [eye_local[0], eye_local[1]], env));
         self.stars.lay_out(g, &m, env, width, height, &up);
-        put_ray(&mut self.sky, 0, &m, &eye_local);
+        put_ray(&mut self.sky, 0, &m, &eye);
         // The celestial pole in the root frame, the stars' frame's third
         // column: which way the Moon's north is turned.
         self.sky[SKY_POLE..SKY_POLE + 3].copy_from_slice(&env[ENV_STARS + 8..ENV_STARS + 11]);
         self.sky[SKY_MAPPED] = if self.moon.loaded { 1.0 } else { 0.0 };
-        // The camera's position in the root's frame, where the meshes are.
+        // The camera's position in the eye's frame, where the meshes are.
         for i in 0..3 {
-            u[CAMERA_POS + i] = s[STAGE_AT::EYE_LOCAL + i] as f32;
+            u[CAMERA_POS + i] = eye[i] as f32;
         }
         u[EDGE_STRENGTH] = s[STAGE_AT::EDGE_STRENGTH] as f32;
         u[ENV..ENV + 24].copy_from_slice(&env[0..24]);

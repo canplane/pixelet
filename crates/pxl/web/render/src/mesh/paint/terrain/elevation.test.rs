@@ -43,10 +43,10 @@ fn a_page_folded_without_its_ring_seams_under_a_cell() {
     fold_ele(four, &mut folded);
 
     // Which cells can reach the outermost sample at all: the bicubic's first
-    // tap lands on sample 0 only while `tx / ELE_CELL_STEP + ELE_PAD - 0.5`
+    // tap lands on sample 0 only while `tx`, in samples, `+ ELE_PAD - 0.5`
     // falls inside the first sample, which is the cells within half a sample
     // of the page's edge.
-    let rim = (ELE_CELL_STEP / 2.0) as i32;
+    let rim = (PAGE_CELLS / PAGE_ELE_SPAN / 2) as i32;
     let span = PAGE_CELLS as i32;
     let (mut worst_rim, mut worst_inside) = (0i32, 0i32);
     for ty in 0..span {

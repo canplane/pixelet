@@ -6,7 +6,6 @@ use crate::abi::cmd::CompassState;
 use crate::control::camera::input::dragging;
 use crate::control::camera::store::{camera_store, CameraStatus};
 use crate::global::Global;
-use crate::layer::terrain::ground_snap::reground_map_center;
 
 /// Whether the compass was shown at the last reading, which the snapshot
 /// takes once a turn.
@@ -26,9 +25,9 @@ pub fn compass_state() -> CompassState {
         SHOWN.set(false);
         return CompassState::Following;
     }
-    let (dist, azimuth) = (camera.view_state.dist, camera.view_state.azimuth);
-    let azimuth_thres = (25.0 / (dist + 2.5)).max(3.0).to_radians();
-    let in_hand = dragging() || camera.wheel_zooming || camera.camera_status != CameraStatus::Idle;
+    let azimuth = camera.intent.azimuth;
+    let azimuth_thres = (25.0 / (crate::control::camera::controller::radius() + 2.5)).max(3.0).to_radians();
+    let in_hand = dragging() || crate::control::camera::controller::zooming() || camera.camera_status != CameraStatus::Idle;
     let shown = azimuth.abs() > azimuth_thres || (*SHOWN.get(|| false) && in_hand);
     SHOWN.set(shown);
     if shown {
@@ -38,14 +37,12 @@ pub fn compass_state() -> CompassState {
     }
 }
 
-/// reset_azimuth doesn't re-sample elevation, so map_center can be left stale
-/// relative to the new angle if it isn't re-grounded alongside it. Nothing
-/// while the map follows the heading, which turns it straight back: north up
-/// is the tracking button's to ask then, and the compass is shown dimmed.
+/// North up. Nothing while the map follows the heading, which turns it
+/// straight back: north up is the tracking button's to ask then, and the
+/// compass is shown dimmed.
 pub fn compass_reset() {
     if camera_store().is_follow_mode {
         return;
     }
-    camera_store().reset_azimuth();
-    reground_map_center();
+    crate::control::camera::controller::reset_azimuth();
 }

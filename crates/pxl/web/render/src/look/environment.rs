@@ -70,7 +70,7 @@ const MOON_COLOR: [f32; 3] = [0.3467, 0.4564, 0.6724];
 pub struct Light {
     /// The theme as eased so far, THEME_FLOATS linear floats.
     pub theme: [f32; THEME_FLOATS],
-    /// The sun's and the moon's directions, unturned.
+    /// The sun's and the moon's directions, in the world's axes.
     pub sun: V3,
     pub moon: V3,
     pub moon_intensity: f64,

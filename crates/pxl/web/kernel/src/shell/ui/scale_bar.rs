@@ -9,8 +9,6 @@
 use pxl_spec::space::adapter::epsg3857;
 
 use crate::control::camera::config::camera_cfg;
-use crate::control::camera::store::camera_store;
-use crate::shell::map_store::map_store;
 
 pub const SCALE_BAR_MAX_WIDTH_PX: f64 = 80.0;
 
@@ -43,7 +41,7 @@ pub struct ScaleBar {
 /// The Web Mercator meters one pixel covers: the projection's own units,
 /// before the latitude a real distance needs.
 fn planar_m_per_px(screen_height: f64) -> f64 {
-    let dist = camera_store().view_state.dist;
+    let dist = crate::control::camera::controller::radius();
     let fov_rad = camera_cfg::projection::FOV.to_radians();
     let visible_u = 2.0 * (fov_rad / 2.0).tan() * dist;
     // `dist` is in canonical "u" units, not meters — the conversion is required.
@@ -62,7 +60,7 @@ pub fn mercator_zoom(screen_height: f64) -> f64 {
 
 pub fn scale_bar(screen_height: f64) -> ScaleBar {
     let planar_m_per_px = planar_m_per_px(screen_height);
-    let mercator_scale = match map_store().map_center {
+    let mercator_scale = match crate::control::camera::controller::map_center() {
         Some(c) => {
             let mut g = [0.0; 3];
             epsg3857::unproject(&mut g, c.i, c.f);

@@ -1,60 +1,52 @@
 // pxl-kernel/control/camera/ray.rs
 
-//! Single raycast entry point for the whole world — terrain (any face: top or
-//! a cliff/wall side) and placed objects (any size, including sub-cell) alike,
-//! since both are painted into the exact same sectioned per-column voxel field
-//! the chunks are meshed from. One DDA walks the composite's own voxel-derived
-//! boxes and returns whichever box the ray actually struck first, regardless
-//! of whether it came from terrain or an object.
+//! The pointer's pick: the one ray the whole world is hit by — terrain (any
+//! face: top or a cliff/wall side) and placed objects (any size, including
+//! sub-cell) alike — asked of the access (world/access.rs `first_hit`) at
+//! terrain's finest level, which is the level the ground about the eye is
+//! drawn at, so what the pick meets is what is on the screen there.
 //!
-//! The walk is the kernel's (crates/pxl/web/kernel/src/world/chunk/raycast.rs). What this
-//! module adds is the interact radius, and what a hit means for a placement:
-//! the corner a new cube takes, the voxel the eraser digs, and which placed
-//! object a hit resolves to. The ray itself is the view's
+//! What this module adds is how far the pick reaches, and what a hit means
+//! for a placement: the corner a new cube takes, the voxel the eraser digs, and
+//! which placed object a hit is. The ray itself is the view's
 //! (world/frame/view.rs), in the root frame the chunks are placed in.
 
-use pxl_render::mesh::volume::MaterialClasses;
-use pxl_spec::bake::constant::{OBJECT_FINEST, U_PER_CELL};
-use pxl_spec::space::hierarchy::share;
+use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::v3::V3;
 
 use crate::layer::object::geometry::Aabb;
-use crate::layer::object::store::{cube_node, objects_at, OccupiedEntry};
-use crate::layer::terrain::elevation::with_ele;
-use crate::world::chunk::raycast::{ray_hit_world, RayLike, WorldHit};
+use crate::layer::object::store::{get_placed_object, OccupiedEntry};
+use crate::world::access::{Access, Detail, Hit, Ray, Struck, FINEST};
 use crate::world::frame::coord::{local_world_origin, local_world_to_canonical};
 
-const INTERACT_RADIUS_CELL: f64 = 32.0 / U_PER_CELL - 0.707;
-const INTERACT_RADIUS_U: f64 = INTERACT_RADIUS_CELL * U_PER_CELL;
-const INTERACT_RADIUS2_U: f64 = INTERACT_RADIUS_U * INTERACT_RADIUS_U;
+/// How far from the eye the pick reaches, in units: what can be edited is a
+/// sphere about the observer, whichever controller placed it, and the ray's
+/// own length is that sphere — every hit along it lies within it. A product
+/// number: 32 cells.
+const PICK_REACH_U: f64 = 32.0 * U_PER_CELL;
 
-pub fn in_interact_radius(a: &Pvf3, b: &Pvf3) -> bool {
-    let dx = pvf3::to_real(pvf3::X(a)) - pvf3::to_real(pvf3::X(b));
-    let dy = pvf3::to_real(pvf3::Y(a)) - pvf3::to_real(pvf3::Y(b));
-    dx * dx + dy * dy <= INTERACT_RADIUS2_U
-}
-
-/// The struck top terrain cell's own (min-x, min-y, min-z) CORNER — for the
-/// pointer tool's hover cursor over plain terrain OR a wall (both give the same
-/// "which cell" answer via box_min's own XY, since a wall hit's box is still
-/// that wall's OWN cell, not a neighbor's). X/Y come straight from box_min; Z
-/// is the real terrain surface (with_ele) stepped DOWN one cell, so the anchor
-/// is the struck voxel's floor, not its top face — the same min-corner
+/// The struck column's top terrain cell's own (min-x, min-y, min-z) CORNER —
+/// for the pointer tool's hover cursor over plain terrain OR a wall (both give
+/// the same "which cell" answer via box_min's own XY, since a wall hit's box is
+/// still that wall's OWN cell, not a neighbor's). X/Y come straight from
+/// box_min; Z is the drawn surface there stepped DOWN one cell, so the anchor
+/// is the top voxel's floor, not its top face — the same min-corner
 /// convention world_struck_corner / world_adjacent_corner already use, which
 /// lets the ghost and the recenter both apply a symmetric + half a cell on all
 /// three axes. Objects don't go through this — see resolve_hit_object.
-pub fn world_hover_pvf3(hit: &WorldHit, map_origin: IVec) -> Option<Pvf3> {
-    // -U_PER_CELL, not 0: with_ele adds the real surface height onto this Z, so
-    // starting one cell low lands the result on the struck top voxel's floor
-    // (min-z corner) instead of its top face.
-    let mut p = Pvf3::default();
-    projection::project(&mut p, hit.box_min[0], hit.box_min[1], -U_PER_CELL);
-    p.i = ivec::add(p.i, map_origin);
-    let (i, f) = (p.i, p.f);
-    with_ele(&mut p, &Pvf3 { i, f })
+pub fn world_hover_pvf3(hit: &Hit, map_origin: IVec) -> Option<Pvf3> {
+    // The cell's middle, so the cell it names does not rest on a rounding
+    // of its corner.
+    let mut at = Pvf3::default();
+    local_world_to_canonical(&mut at, &[hit.box_min[0] + U_PER_CELL / 2.0, hit.box_min[1] + U_PER_CELL / 2.0, 0.0], map_origin);
+    let top = Access::now().at(&at, FINEST).value()?.top;
+    let mut corner = Pvf3::default();
+    local_world_to_canonical(&mut corner, &[hit.box_min[0], hit.box_min[1], 0.0], map_origin);
+    let (x, y) = (pvf3::X(&corner), pvf3::Y(&corner));
+    pvf3::gather(&mut corner, x, y, pvf3::from_real(top - U_PER_CELL));
+    Some(corner)
 }
 
 // Tolerance for "same nominal size"/"integer-aligned" comparisons below —
@@ -83,27 +75,24 @@ fn grid_floor(v: f64, size: f64) -> f64 {
 /// whatever `hit` struck — ONE rule, applied identically to all three axes:
 /// every axis lands on new_size's own sparse_tree-canonical grid, and which of
 /// the two grid-snap directions applies is purely a function of that axis's
-/// own face_normal component:
+/// own normal component:
 /// - n > 0 (this axis IS the struck face's outward normal, positive side): the
 ///   new box must start at-or-beyond the struck face — grid_ceil(box_max).
 /// - n < 0 (outward normal, negative side): the new box must end at-or-before
 ///   the struck face — grid_floor(box_min) - new_size.
 /// - n == 0 (this axis is untouched by the struck face): whichever
-///   new_size-grid cell hit_point itself falls into — grid_floor(hit_point).
+///   new_size-grid cell the hit's point falls into — grid_floor(point).
 ///   Automatically stays within the struck box's own footprint when new_size
 ///   <= the struck box's own extent on this axis, and automatically resolves
 ///   to the struck box's own containing cell when new_size is bigger.
 ///
 /// A struck face can put its nonzero n on ANY axis (a side wall's normal is X
 /// or Y, not just a top hit's Z), so one rule, chosen per axis by that axis's
-/// own face_normal sign, is both simpler and the only version that can't
+/// own normal sign, is both simpler and the only version that can't
 /// disagree with itself.
 ///
-/// `precise_box`: use the caller's exact, known AABB instead of
-/// `hit.box_min/box_max` when available. hit's own box for a sub-cell object
-/// comes back through volume.rs's u8-packed sub_cell payload — accurate to only
-/// ~1/510 of a cell — so stacking off it compounded that error stack-to-stack,
-/// visibly drifting. Terrain/unknown hits have no more precise source.
+/// `precise_box`: the box of what the caller resolved the hit to instead of
+/// `hit.box_min/box_max` — a decor met in front of what the ray struck.
 ///
 /// Each axis is a multiple of `new_size`, which float holds exactly, and the
 /// map origin is whole units, so the corner lies on the cube's own lattice:
@@ -111,19 +100,19 @@ fn grid_floor(v: f64, size: f64) -> f64 {
 /// PVF3, and the store, which files a cube on its lattice (store.rs
 /// `At::of_cube`), agree on the one cube.
 #[allow(clippy::needless_range_loop)]
-pub fn world_adjacent_corner(hit: &WorldHit, new_size: f64, map_origin: IVec, precise_box: Option<&Aabb>) -> Pvf3 {
+pub fn world_adjacent_corner(hit: &Hit, new_size: f64, map_origin: IVec, precise_box: Option<&Aabb>) -> Pvf3 {
     let box_min = precise_box.map_or(hit.box_min, |b| b.min);
     let box_max = precise_box.map_or(hit.box_max, |b| b.max);
     let mut out: V3 = [0.0; 3];
 
     for axis in 0..3 {
-        let n = hit.face_normal[axis];
+        let n = hit.normal[axis];
         out[axis] = if n > 0.0 {
             grid_ceil(box_max[axis], new_size)
         } else if n < 0.0 {
             grid_floor(box_min[axis], new_size) - new_size
         } else {
-            grid_floor(hit.hit_point[axis], new_size)
+            grid_floor(hit.point[axis], new_size)
         };
     }
 
@@ -132,32 +121,25 @@ pub fn world_adjacent_corner(hit: &WorldHit, new_size: f64, map_origin: IVec, pr
     p
 }
 
-/// The single real `size`-tall voxel `hit` actually struck, exactly as
-/// raycast against the live rendered voxel field — eraser's own targeting for
-/// its "nothing placed here, dig into the terrain itself" case. Deliberately
-/// NOT just hit.box_min/box_max directly — those bound whichever merged run the
-/// scan combined same-material voxels into. A flat, uniformly-colored terrain
-/// column routinely merges dozens of cells deep into ONE box, so box_min there
-/// can sit far below the real surface, nowhere near what was actually visually
-/// struck.
+/// The single real `size`-tall voxel `hit` actually struck — eraser's own
+/// targeting for its "nothing placed here, dig into the terrain itself" case.
 ///
 /// Same per-axis shape as world_adjacent_corner but the OPPOSITE choice on the
 /// axis with a nonzero normal: world_adjacent_corner steps OUTSIDE the struck
 /// box on that axis; this stays INSIDE it, landing on the exact `size`-tall
-/// slice the struck face itself bounds. The axes with no face_normal component
-/// use hit_point itself, since only hit_point is guaranteed to fall inside the
-/// ONE real cell that was struck rather than the merged run's whole footprint.
+/// slice the struck face itself bounds. The axes with no normal component
+/// use the hit's point, which falls inside the one cell that was struck.
 #[allow(clippy::needless_range_loop)]
-pub fn world_struck_corner(hit: &WorldHit, size: f64, map_origin: IVec) -> Pvf3 {
+pub fn world_struck_corner(hit: &Hit, size: f64, map_origin: IVec) -> Pvf3 {
     let mut out: V3 = [0.0; 3];
     for axis in 0..3 {
-        let n = hit.face_normal[axis];
+        let n = hit.normal[axis];
         out[axis] = if n > 0.0 {
             grid_ceil(hit.box_max[axis], size) - size
         } else if n < 0.0 {
             grid_floor(hit.box_min[axis], size)
         } else {
-            grid_floor(hit.hit_point[axis], size)
+            grid_floor(hit.point[axis], size)
         };
     }
     let mut p = Pvf3::default();
@@ -165,52 +147,35 @@ pub fn world_struck_corner(hit: &WorldHit, size: f64, map_origin: IVec) -> Pvf3 
     p
 }
 
-/// Which solid placed object `hit` actually struck, when hit.material_class is
-/// OBJECT: the one whose cube holds a point inside what was struck. The voxel
-/// field carries no object identity, so this is a small secondary lookup, not
-/// the raycast itself. Decor is never resolved here — it never paints a voxel
-/// of its own and has its own hit test (hit.rs).
-///
-/// The point is half an object's finest step in from the struck face on the
-/// face's axis. Across a column it is the struck box's middle, since a run is
-/// one column's, and a sub-cell run's box is its object's to within the
-/// sub-cell packing — finer than that half step. Up a column it is where the
-/// ray struck, since a run there may be several objects stacked.
-pub fn resolve_hit_object(hit: &WorldHit, map_origin: IVec) -> Option<OccupiedEntry> {
-    if hit.material_class != MaterialClasses::OBJECT {
-        return None;
+/// Which placed object `hit` struck: the one the access met, by where the
+/// store files it. Decor is never resolved here — it paints no voxel and has
+/// its own hit test (layer/decor/hit.rs).
+pub fn resolve_hit_object(hit: &Hit) -> Option<OccupiedEntry> {
+    match hit.struck {
+        Struck::Object(at) => get_placed_object(at),
+        Struck::Ground | Struck::Objects => None,
     }
-    let half = OBJECT_FINEST.side() / 2.0;
-    let inside: V3 = core::array::from_fn(|k| match hit.face_normal[k] {
-        n if n != 0.0 => hit.hit_point[k] - n * half,
-        _ if k < 2 => (hit.box_min[k] + hit.box_max[k]) / 2.0,
-        _ => hit.hit_point[k],
-    });
-    let mut at = Pvf3::default();
-    local_world_to_canonical(&mut at, &inside, map_origin);
-    let point = (OBJECT_FINEST, OBJECT_FINEST.index_of(&at));
-    objects_at(&at).into_iter().find(|o| share(cube_node(&Pvf3 { i: o.i, f: o.f }, o.size), point))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PickResult {
     /// Never absent — ray_pick itself returns None when nothing was struck.
-    pub hit: WorldHit,
+    pub hit: Hit,
 }
 
-/// Single raycast entry point — see this module's own doc comment. The ray is
-/// in the root frame.
-pub fn ray_pick(origin: V3, direction: V3, map_center: Option<&Pvf3>) -> Option<PickResult> {
-    let map_center = map_center?;
+/// The pick — see this module's own doc comment. The ray is in the root
+/// frame, from the eye, and so is the hit. What the query lacked is not asked
+/// for here: the pick is near the eye, where the view's own faults already
+/// ask for the ground it is drawn from.
+pub fn ray_pick(origin: V3, direction: V3) -> Option<PickResult> {
     let map_origin = local_world_origin();
-
-    let hit = ray_hit_world(&RayLike { origin, direction }, map_origin, INTERACT_RADIUS_U * 1.5)?;
-
-    let mut probe = Pvf3::default();
-    local_world_to_canonical(&mut probe, &hit.hit_point, map_origin);
-    if !in_interact_radius(&probe, map_center) {
-        return None;
-    }
+    let frame: V3 = [ivec::to_real(ivec::X(map_origin)), ivec::to_real(ivec::Y(map_origin)), ivec::to_real(ivec::Z(map_origin))];
+    let ray = Ray {
+        origin: std::array::from_fn(|k| origin[k] + frame[k]),
+        direction,
+        reach: PICK_REACH_U,
+    };
+    let hit = Access::now().first_hit(&ray, Detail::Level(FINEST)).value().flatten()?.moved(frame.map(|v| -v));
     Some(PickResult { hit })
 }
 

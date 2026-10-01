@@ -36,6 +36,15 @@ pub fn object_value_is_decor(value: u32) -> bool {
     u8::try_from(value).ok().and_then(decor_types::Decor::of).is_some()
 }
 
+/// Whether a leaf's value is drawn as a voxel — a placeable cube, or the
+/// eraser's air — rather than as an instance or nothing: what the objects'
+/// fold counts (pxl-kernel layer/object/store.rs `fold_cell`). A number
+/// both catalogs have is the decor's, as
+/// `object_value_is_decor` tells them apart.
+pub fn object_value_is_voxel(value: u32) -> bool {
+    !object_value_is_decor(value) && (object_value_is_air(value) || placeable_cube_of(value).is_some())
+}
+
 /// The value a leaf holds a decor kind as.
 pub fn decor_num_id(id: DecorId) -> u32 {
     id as u32

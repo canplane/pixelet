@@ -3,14 +3,12 @@
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_core::math::scalar::wrap;
 
-use crate::control::camera::store::{camera_store, ViewPatch};
+use crate::control::camera::store::{camera_store, IntentPatch};
+use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::store::{device_location_store, device_orientation_store, DevicePoseStatus};
 use crate::global::Global;
 use crate::host::now;
-use crate::layer::terrain::elevation::ground_or_raw;
-use crate::shell::map_store::map_store;
-use crate::shell::setting::store::settings_store;
 use crate::world::change::wake_at;
 
 /// EMA factor applied per heading sample (not per frame — device orientation
@@ -102,11 +100,11 @@ pub fn follow_mode_step() {
     }
 
     // 1. [Position sync] only when the GPS coordinate changes. No EMA here: the
-    // companion's catch-up glide is the single smoothing stage. ground_or_raw
-    // for the same reason pan and the recenter button use it: device_coord's
-    // Z is raw GPS altitude, not baked terrain height.
+    // companion's catch-up glide is the single smoothing stage. On the ground
+    // there, as the recenter button puts it: device_coord's Z is the fix's
+    // altitude, not the map's height.
     if let Some(device) = device_coord.filter(|d| entered || Some(*d) != f.last_device) {
-        map_store().map_center = Some(if settings_store().ground_snap { ground_or_raw(&device) } else { device });
+        go_to_ground(device);
     }
     f.last_device = device_coord;
 
@@ -120,7 +118,7 @@ pub fn follow_mode_step() {
             Some(s) => s + wrap(raw_azimuth - s, -core::f64::consts::PI, core::f64::consts::PI) * HEADING_SMOOTH_ALPHA,
         };
         f.smoothed_azimuth = Some(smoothed);
-        camera.set_view_state(ViewPatch {
+        crate::control::camera::controller::set_intent(IntentPatch {
             azimuth: Some(smoothed),
             ..Default::default()
         });

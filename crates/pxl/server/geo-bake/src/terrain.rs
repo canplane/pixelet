@@ -12,7 +12,7 @@ use pxl_spec::bake::format::{decode_terrain, encode_terrain, Terrain};
 /// bake/fold.rs. A page it left as no object is open water, the ocean page.
 impl crate::pyramid::Layer for Terrain {
     fn encode(&self) -> Result<Vec<u8>, String> {
-        encode_terrain(&self.ele, &self.ground).map_err(|e| format!("{e:?}"))
+        encode_terrain(self).map_err(|e| format!("{e:?}"))
     }
 
     fn decode(raw: &[u8]) -> Result<Self, String> {

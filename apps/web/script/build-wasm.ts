@@ -227,6 +227,16 @@ function numbered(module: URL): number {
   return n;
 }
 
+const modified = (url: URL) => Deno.statSync(url).mtime?.getTime() ?? NaN;
+const exists = (url: URL) => {
+  try {
+    return Deno.statSync(url).isFile;
+  } catch {
+    return false;
+  }
+};
+const before = exists(BUILT) ? modified(BUILT) : NaN;
+
 let status: Deno.CommandStatus;
 try {
   status = await cargo.output();
@@ -235,6 +245,15 @@ try {
   Deno.exit(1);
 }
 if (!status.success) Deno.exit(status.code);
+
+// Cargo relinks only what changed — a change of mode among it, since the two
+// modes' features fingerprint apart — so a module it left as it was, already
+// finished into OUT, is the module OUT holds. Finishing it again would write
+// the same bytes and reload every page a dev server has open.
+if (modified(BUILT) === before && exists(OUT) && modified(OUT) >= before) {
+  console.log("[build-wasm] up to date -> src/kernel/kernel.wasm");
+  Deno.exit(0);
+}
 
 const linkedFile = staged("linked");
 const done = staged("done");

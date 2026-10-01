@@ -1,27 +1,21 @@
-// pxl-kernel/control/camera/terrain_gate.rs
+// pxl-kernel/control/camera/orbit/terrain_gate.rs
 
-//! How far a camera control gets before terrain is in the way.
-//!
-//! A pure function of the pose, applied to the values the controls write
-//! rather than to the position they are damped into — dist is what the scale
-//! bar reads, so a control that failed to take effect further down would move
-//! the bar while the view stood still.
+//! How far the orbit gets toward what the controls ask before terrain is in
+//! the way: a pure function of the pose, from where the orbit is drawn to
+//! where the controls would have it (orbit.rs `target`). The controls keep
+//! what was asked; the drawn orbit stops short, and what reads the zoom reads
+//! the drawn radius, which stands still with the view.
 
-use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
 use xpute_core::math::scalar::wrap;
 
-use crate::control::camera::config::camera_cfg;
-use crate::control::camera::orbit::{orbit_local_offset, rotate2};
-use crate::layer::terrain::elevation::ground_at;
-use crate::shell::map_store::map_store;
+use crate::control::camera::config::camera_cfg::view::EYE_CLEARANCE_U;
+use crate::control::camera::orbit::orbit_eye_offset;
 use crate::shell::setting::store::{settings_store, CameraCollisionMode};
-use crate::world::frame::coord::{local_world_origin, local_world_to_canonical};
-
-/// One cell, so a bicubic elevation sample disagreeing slightly with the
-/// voxel it produced cannot put the eye inside a block.
-const EYE_CLEARANCE_U: f64 = 1.0;
+use crate::world::access::{Access, FINEST};
+use crate::world::frame::coord::{canonical_to_local, local_height, local_world_origin, local_world_to_canonical};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewTriple {
@@ -55,41 +49,38 @@ pub struct ViewPose {
 /// between them crosses frames; the store's current center supplies it for
 /// every caller, and a candidate target is expressed against that same one.
 pub fn pose(view: ViewTriple, center: Option<&Pvf3>) -> Option<ViewPose> {
-    let map_center = map_store().map_center?;
+    let map_center = crate::control::camera::controller::map_center()?;
     let at = center.copied().unwrap_or(map_center);
     let origin = local_world_origin();
-    let local = Pvf3 { i: ivec::sub(at.i, origin), f: at.f };
     Some(ViewPose {
         origin,
-        target: [pvf3::to_real(pvf3::X(&local)), pvf3::to_real(pvf3::Y(&local)), pvf3::to_real(pvf3::Z(&local))],
+        target: canonical_to_local(&at, origin),
         dist: view.dist,
         polar: view.polar,
         azimuth: view.azimuth,
     })
 }
 
-/// How far above the target the eye must sit to clear the ground beneath it,
-/// or None when the tile under it has not loaded — an unarrived sample says
-/// nothing.
+/// How far above the target the eye must sit to clear the ground drawn
+/// beneath it, or None where no page over it is resident — an unarrived
+/// sample says nothing.
 fn required_rise(at: &ViewPose) -> Option<f64> {
-    let o = orbit_local_offset(at.dist, at.polar);
-    // The camera never rotates; azimuth spins the world beneath it, so
-    // un-rotating the camera-local offset puts it in the ground's frame.
-    let offset = rotate2(0.0, -o.horiz_dist, -at.azimuth);
+    let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
     let mut below = Pvf3::default();
-    local_world_to_canonical(&mut below, &[at.target[0] + offset.x, at.target[1] + offset.y, 0.0], at.origin);
-    let ground = ground_at(&below)?;
+    local_world_to_canonical(&mut below, &[at.target[0] + offset[0], at.target[1] + offset[1], 0.0], at.origin);
+    let ground = local_height(Access::now().at(&below, FINEST).value()?.top, at.origin);
     Some(ground + EYE_CLEARANCE_U - at.target[2])
 }
 
 /// How far below its clearance the eye sits: positive inside the terrain,
 /// None where the ground is not known yet.
 fn penetration(at: &ViewPose) -> Option<f64> {
-    Some(required_rise(at)? - orbit_local_offset(at.dist, at.polar).vert_dist)
+    Some(required_rise(at)? - orbit_eye_offset(at.dist, at.polar, at.azimuth)[2])
 }
 
-/// Testing only where a step lands lets the camera tunnel: damping.rs
-/// damps toward the new state and visits everything between. The straight
+/// Testing only where a step lands lets the camera tunnel: the orbit's step
+/// (orbit.rs `turn`) damps toward the new state and visits everything
+/// between. The straight
 /// line in pose space is the path it takes.
 const STEP_SAMPLES: u32 = 16;
 
@@ -111,7 +102,7 @@ pub fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
 
     let limit = penetration(from).map_or(0.0, |start| start.max(0.0));
 
-    // The short way round, matching how view_frame.rs damps azimuth.
+    // The short way round, matching how the orbit's step damps azimuth.
     let turn = wrap(to.azimuth - from.azimuth, -core::f64::consts::PI, core::f64::consts::PI);
     let mut last = *from;
     for i in 1..=STEP_SAMPLES {
@@ -185,7 +176,7 @@ const CLIMB_PASSES: u32 = 2;
 /// angles, so its output steps even where the terrain does not, and the camera
 /// judders on flat ground it is merely passing over.
 ///
-/// There is nearly always an answer. At MIN_POLAR the eye is directly above
+/// There is nearly always an answer. Straight down the eye is directly above
 /// the target and only terrain higher than `target + dist` could block it.
 pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
     let Some(mut at) = pose(ViewTriple { dist, polar, azimuth }, None) else { return polar };
@@ -194,7 +185,7 @@ pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
         // Only ever steepens: an eye already high enough is left where the
         // controls put it.
         let solved = (rise / dist).min(1.0).acos();
-        at.polar = camera_cfg::view::MIN_POLAR.max(at.polar.min(solved));
+        at.polar = at.polar.min(solved);
     }
     at.polar
 }

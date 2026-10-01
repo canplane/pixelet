@@ -16,35 +16,22 @@ use xpute_core::wire::xtp::PacketWriter;
 
 pub use crate::abi::cmd::Tracking;
 use crate::abi::cmd::{CompanionState, LocationState, LonLat, MapState, OrientationState, PlaceName, PlacePart, ScaleBar, Snapshot};
-use crate::control::camera::input::pinching;
-use crate::control::camera::store::{camera_store, CameraStatus, ViewPatch};
+use crate::control::camera::controller::radius;
+use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
+use crate::control::navigation::destination::{self, go_to_ground};
 use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::device_orientation::{orientation_close, orientation_open, request_orientation};
 use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
 use crate::control::sensor::store::{device_location_store, device_orientation_store};
-use crate::global::Global;
 use crate::layer::character::store::companion_load_store;
 use crate::layer::geocode::fetcher::center_group;
 use crate::layer::geocode::store as geocode_store;
-use crate::layer::terrain::elevation::{ground_at, ground_or_raw};
 use crate::sched::turn::world_platform;
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::{settings_store, SettingKey};
 use crate::shell::ui::compass::compass_state;
 use crate::shell::ui::scale_bar::{mercator_zoom, scale_bar};
 use crate::world::frame::view::view;
-
-struct Shell {
-    /// A search jump that landed on a page with no terrain yet: re-grounded
-    /// the moment that page's tile arrives, while the map is still there.
-    go_to: Option<Pvf3>,
-}
-
-static SHELL: Global<Shell> = Global::new();
-
-fn shell() -> &'static mut Shell {
-    SHELL.get(|| Shell { go_to: None })
-}
 
 /// The place the center page is in, broad to narrow, cut at the rung this
 /// zoom asks for, each part handed to `each`; none where the page is in none
@@ -85,14 +72,16 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     let settings = settings_store();
     let companion = companion_load_store();
     let bar = scale_bar(view().height.max(1.0));
-    let page = map.map_center.map(|c| L3_IDX(c.i));
-    let center = map.map_center.map(|c| {
+    let page = crate::control::camera::controller::map_center().map(|c| L3_IDX(c.i));
+    let center = crate::control::camera::controller::map_center().map(|c| {
         let mut g = [0.0; 3];
         epsg4326::unproject(&mut g, c.i, c.f);
         LonLat { lon: g[0], lat: g[1] }
     });
     let values = SettingKey::ALL.map(|key| settings.get(key));
-    let zoom = mercator_zoom(view().height.max(1.0));
+    // The label's depth is the zoom's, which there is only where the camera
+    // stands off the map center; standing at it, it is told all of it.
+    let zoom = if radius() > 0.0 { mercator_zoom(view().height.max(1.0)) } else { f64::INFINITY };
     let snapshot = Snapshot {
         map: MapState {
             status: map.map_status,
@@ -113,10 +102,10 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
             status: orientation.status,
             heading: orientation.orientation.and_then(|o| o.heading),
         },
-        azimuth: camera.view_state.azimuth,
+        azimuth: camera.intent.azimuth,
         is_follow_mode: camera.is_follow_mode,
         camera_busy: camera.camera_status != CameraStatus::Idle,
-        zooming: pinching() || camera.wheel_zooming,
+        zooming: crate::control::camera::controller::zooming(),
         compass: compass_state(),
         settings: &values,
         scale_bar: ScaleBar {
@@ -139,13 +128,11 @@ pub fn tracking_action(tracking: Tracking) {
     let camera = camera_store();
     match tracking {
         Tracking::Recenter => {
+            // The device names a place on the map by its X and Y alone: its
+            // Z is the fix's altitude, absent on most and never the ground's
+            // height on the map, so the recenter stands on the ground there.
             if let Some(device) = map_navigation().device_coord {
-                // device_coord's Z is the device's raw GPS altitude, not the
-                // map's baked terrain height — ground_or_raw applies the same
-                // terrain sample a pan uses, so this recenter lands where
-                // panning would.
-                let target = if settings_store().ground_snap { ground_or_raw(&device) } else { device };
-                map_store().map_center = Some(target);
+                go_to_ground(device);
             }
             camera.is_follow_mode = false;
         }
@@ -156,36 +143,33 @@ pub fn tracking_action(tracking: Tracking) {
         }
         Tracking::Unfollow => {
             camera.is_follow_mode = false;
-            camera.reset_azimuth();
+            crate::control::camera::controller::reset_azimuth();
         }
     }
 }
 
-/// Moves the map center to `target`, grounded the way every map_center
-/// setter that respects ground_snap is.
+/// The camera put so the map center is at `target`, a place named with its
+/// height.
 pub fn go_to(target: Pvf3) {
     // The user drove the camera: GPS stops overriding it.
     camera_store().is_follow_mode = false;
-    let grounded = ground_or_raw(&target);
-    map_store().map_center = Some(grounded);
-    // A jump usually lands on a page nothing has loaded yet, where the
-    // ground falls back to the raw coordinate: grounded again once the
-    // page's tile arrives, rather than left under the terrain.
-    shell().go_to = (grounded == target).then_some(target);
+    destination::go_to(target);
 }
 
-/// A search result: the center moved to degrees.
+/// A search result: the center moved to degrees, on the ground there once
+/// it is known.
 pub fn go_to_degrees(lon: f64, lat: f64) {
+    camera_store().is_follow_mode = false;
     let mut target = Pvf3::default();
     epsg4326::project(&mut target, &[lon, lat, 0.0]);
-    go_to(target);
+    go_to_ground(target);
 }
 
 /// Where the camera stands, set outright rather than driven: what the
 /// kernel's own test puts a view at (apps/web/src/kernel/kernel.test.ts), and
 /// what an A/B reads two builds at the same view with.
 pub fn set_view(dist: Option<f64>, polar: Option<f64>) {
-    camera_store().set_view_state(ViewPatch { dist, azimuth: None, polar });
+    crate::control::camera::controller::set_intent(IntentPatch { dist, azimuth: None, polar });
 }
 
 /// The location card: the location alone, the compass being asked for where
@@ -205,17 +189,4 @@ pub fn sensors_open() {
 pub fn sensors_close() {
     geolocation_close();
     orientation_close();
-}
-
-/// The shell's turn: a pending search jump re-grounded once its page's terrain
-/// has arrived, if the map is still on that page.
-pub fn shell_step() {
-    let Some(target) = shell().go_to else { return };
-    if ground_at(&target).is_none() {
-        return;
-    }
-    shell().go_to = None;
-    if map_store().map_center.is_some_and(|c| L3_IDX(c.i) == L3_IDX(target.i)) {
-        map_store().map_center = Some(ground_or_raw(&target));
-    }
 }

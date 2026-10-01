@@ -8,22 +8,20 @@
 //! (crates/pxl/web/kernel/src/world/chunk/table.rs). What is here acts on
 //! what it asks.
 
-use pxl_spec::space::pyramid::GROUND;
-use std::collections::{BTreeMap, HashMap};
+use pxl_spec::space::pyramid::{LevelPage, CHUNK_CELLS, GROUND};
 
 use pxl_render::gpu::api::{gpu, room};
 use pxl_render::gpu::renderer::device_ready;
-use pxl_render::mesh::chunk_mesher::{box_words, mesh_words, BakeContext, Heights, Step, FINE_BOX_WORDS};
+use pxl_render::mesh::chunk_mesher::{box_words, mesh_words, BakeContext, Heights, Step, COARSE_BOX_WORDS, FINE_BOX_WORDS};
 use pxl_render::mesh::paint::level::write_level_runs;
 use pxl_render::mesh::paint::object::adapter::{Claims, Entries, Painted, Painter};
-use pxl_render::mesh::paint::object::fold::fold_columns;
-use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
+use pxl_render::mesh::paint::terrain::adapter::{beside_index, Around, ChunkSample, PageSource, PageView};
 use pxl_render::mesh::volume::Volumes;
 use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
 use pxl_spec::bake::constant::{pack_pos, BandZ, EntryAt, BAND, CELL, OBJECT_FINEST};
-use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
+use pxl_spec::space::indexer::{FROM_L2_IDX, L2, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::Pvf3;
+use std::collections::HashMap;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{free, Block};
 
@@ -32,8 +30,7 @@ use crate::mem::fixed::{at, Range};
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use pxl_spec::bake::constant::BAND_CELLS;
 
-use crate::world::chunk::mesh_slot::capacity;
-use crate::world::chunk::source::tiers_draw;
+use crate::world::chunk::mesh_slot::{capacity, COARSE_BOXES, FINE_BOXES, OCCUPANCY};
 use crate::world::pyramid::chunk::Chunk as PyramidChunk;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
@@ -72,14 +69,11 @@ pub fn release_block(at: usize, bytes: u32) {
 
 /// How much built work chunks may keep in the heap *while off screen*: their
 /// decor, the one part of a chunk still there — its runs are a set of
-/// `.fixed.runs` and its tiers are on the device. Dropping all of it on the
-/// first release makes a rotation or a zoom in and out scatter every chunk's
-/// decor again, so the scheduler reclaims only past this, farthest first. Half
-/// the heap: the other half is the on-screen decor, the volumes a build
-/// composes in, and the room a large block needs in one piece.
+/// `.fixed.runs` and its tiers are on the device. The scheduler reclaims
+/// only past this, farthest first; the share is param.rs's `RETAIN_SHARE`.
 #[allow(non_snake_case)]
 pub fn RETAIN_BUDGET_BYTES() -> f64 {
-    crate::mem::section::map().map_or(0.0, |m| (m.heap.bytes / 2) as f64)
+    crate::mem::section::map().map_or(0.0, |m| m.heap.bytes as f64 * crate::param::RETAIN_SHARE)
 }
 
 // ---- the build as the kernel runs it ----
@@ -103,41 +97,44 @@ pub fn RETAIN_BUDGET_BYTES() -> f64 {
 // but the chunk's tiers are all baked while it is there. Two, so that one is
 // filled while the other is baked from. A chunk that finds both held waits.
 
+/// The workspace: `.fixed.bake`, where the one bake open writes its mesh a
+/// slot's worth at a time, each block handed to its slot before the next
+/// is written (world/chunk/mesh_slot.rs). As large as any one slot, and no
+/// larger, whatever the mesh. It keeps nothing across frames; what is kept
+/// is the slots.
+pub const BAKE_BYTES: u32 = {
+    let (fine, coarse) = (FINE_BOXES * FINE_BOX_WORDS, COARSE_BOXES * COARSE_BOX_WORDS);
+    4 * if fine > coarse { fine } else { coarse }
+};
+
 /// Run sets `.fixed.runs` holds.
 pub const RUN_SETS: usize = 2;
-/// Bytes a run set holds: a leaf chunk's columns at eleven runs each, where
-/// the terrain is one and what is placed on it rarely a handful more. A set
-/// past it is refused rather than cut, since a run left out is a hole.
-pub const RUN_SET_BYTES: u32 = 1 << 20;
-
-/// Chunks held at once, the table's hard budget: a view draws a quarter of
-/// it (domain.rs `VIEW_CHUNKS`), so the widest selection fits with room for
-/// stale chunks. At it the mount pass lets a stale chunk go rather than
-/// trapping (`Scheduler::give_room`), so `Scheduler::add`'s assert past it
-/// says the caller has a bug, not that the view grew.
-pub const MAX_CHUNKS: usize = 4096;
 
 /// What a build hands the scheduler.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BuildEvent {
-    /// Tier `cube` of chunk `id`, built from its sources as of `generation`:
-    /// the mesh is `bytes` bytes at `at` in `.fixed.bake`, until it is sent
-    /// to its slot on the device, and its boxes' heights are held in
-    /// `heights` (pxl-render mesh/chunk_mesher.rs).
-    Tier {
-        chunk: PyramidChunk,
+    /// Tier `cube` of chunk `id`, of its sources as of `generation`, is
+    /// `boxes` boxes: the slots for all of it are asked for at once, before
+    /// any is written. The answer is whether they are held for it; where
+    /// not, the bake is thrown away, and what the tier needs is known the
+    /// next time it is counted (world/chunk/table.rs `Slot::need`).
+    Reserve { id: u32, generation: u32, cube: Cube, boxes: u32 },
+    /// A block of that tier's boxes: `box_cnt` of them from the mesh's box
+    /// `first`, at `at` in `.fixed.bake` until they are sent to their slot
+    /// on the device, their heights held in `heights` (pxl-render
+    /// mesh/chunk_mesher.rs). A slot's worth, but for the mesh's last.
+    Part {
         id: u32,
         generation: u32,
         cube: Cube,
         at: u32,
-        bytes: u32,
+        first: u32,
         box_cnt: u32,
         heights: Heights,
     },
-    /// Tier `cube` of chunk `id`, of its sources as of `generation`, has more
-    /// boxes than a slot of its pool holds (mesh_slot.rs `capacity`): it is
-    /// not baked, and the chunk is drawn a step coarser.
-    Coarser { chunk: PyramidChunk, id: u32, generation: u32, cube: Cube },
+    /// Tier `cube` of chunk `id`, built from its sources as of `generation`,
+    /// all of its `box_cnt` boxes handed: it lands.
+    Tier { id: u32, generation: u32, cube: Cube, box_cnt: u32, heights: Heights },
 }
 
 /// A chunk's runs: which of `.fixed.runs`'s sets, and what is in it — and
@@ -151,21 +148,66 @@ struct Runs {
     fold: Option<Scale>,
 }
 
-/// What a chunk's ground is read from: the page, the chunk's first cell as
-/// its own cells from that page's corner, and how many of them a side a
-/// page cell stands for — 1 on its own page, more on the nearest page over
-/// it held while its own has not come (world/pyramid.rs `drawn_from`).
+/// What a page's ground is read from: the page drawn in its place, the
+/// page's first cell as its own cells from that page's corner, and how many
+/// of them a side a source cell stands for — 1 on its own page, more on the
+/// nearest page over it held while its own has not come (world/pyramid.rs
+/// `drawn_from`).
 #[derive(Clone, Copy)]
-struct Read {
+struct Source {
     page: &'static Terrain,
     origin: [i64; 2],
     n: u32,
 }
 
+impl Source {
+    /// What `p` is drawn from now. A page is found by its key, so one gone,
+    /// or whose record another page now holds, is none and never another
+    /// page's bytes.
+    fn of(p: LevelPage) -> Option<Source> {
+        let pyramid = Terrain::pyramid();
+        let src = pyramid.drawn_from(p)?;
+        let page = pyramid.get(src)?;
+        let corner = GROUND.cell_at(p, GROUND.cell_index(0, 0));
+        Some(Source {
+            page,
+            origin: corner.in_page_above(src.level - p.level),
+            n: GROUND.scale(p.level).count_in(GROUND.scale(src.level)),
+        })
+    }
+
+    fn view(&self) -> PageSource<'static> {
+        PageSource {
+            page: Builder::page_view(self.page),
+            origin: self.origin,
+            n: self.n,
+        }
+    }
+}
+
+/// What a chunk's ground is read from: its own page's source, and the
+/// sources of the pages beside it its apron reaches into, so the edge it
+/// shares with a chunk there is read from what that chunk is drawn from —
+/// both sides of it one surface, whichever of them is borrowed; and the
+/// chunk's first cell in its page.
+#[derive(Clone, Copy)]
+struct Read {
+    own: Source,
+    beside: [Option<Source>; 8],
+    first: [i64; 2],
+}
+
 impl Read {
     /// Whether it is the chunk's own page.
     fn own(&self) -> bool {
-        self.n == 1
+        self.own.n == 1
+    }
+
+    fn around(&self) -> Around<'static> {
+        Around {
+            own: self.own.view(),
+            beside: self.beside.map(|b| b.as_ref().map(Source::view)),
+        }
     }
 }
 
@@ -204,19 +246,17 @@ impl Chunk {
     }
 
     /// What the chunk is drawn from now: its own page, or the nearest
-    /// resident page over it. A page is found by its key, so one gone, or
-    /// whose record another page now holds, is none and never another page's
-    /// bytes.
+    /// resident page over it, and what the pages its apron reaches into are.
     fn read(&self) -> Option<Read> {
-        let pyramid = Terrain::pyramid();
-        let src = pyramid.drawn_from(self.at.page())?;
-        let page = pyramid.get(src)?;
-        let own = GROUND.cell_of(self.level(), &Pvf3 { i: self.base(), f: 0 });
-        let levels = src.level - self.level();
+        let mut beside = [None; 8];
+        for ([qx, qy], p) in self.at.pages_beside(APRON) {
+            beside[beside_index(qx, qy)] = Source::of(p);
+        }
+        let (x0, y0) = self.at.in_page();
         Some(Read {
-            page,
-            origin: own.in_page_above(levels),
-            n: GROUND.scale(self.level()).count_in(GROUND.scale(src.level)),
+            own: Source::of(self.at.page())?,
+            beside,
+            first: [x0 as i64, y0 as i64],
         })
     }
 
@@ -266,6 +306,8 @@ struct BakeJob {
     cube: Cube,
     generation: u32,
     mesh: Option<Block>,
+    /// The mesh's boxes handed so far, block by block.
+    handed: u32,
 }
 
 /// Where a chunk got to in one advance.
@@ -287,6 +329,41 @@ pub struct World<'a> {
     pub painter: &'a mut Painter,
 }
 
+/// What the builder holds of each chunk mounted, by its mount (world/chunk/
+/// table.rs `Scheduler::place`): room for every mount the table can give,
+/// made once.
+struct ByMount<T>(Vec<Option<T>>);
+
+impl<T> ByMount<T> {
+    fn new() -> ByMount<T> {
+        ByMount((0..OCCUPANCY).map(|_| None).collect())
+    }
+
+    fn get(&self, id: &u32) -> Option<&T> {
+        self.0.get(*id as usize)?.as_ref()
+    }
+
+    fn get_mut(&mut self, id: &u32) -> Option<&mut T> {
+        self.0.get_mut(*id as usize)?.as_mut()
+    }
+
+    fn insert(&mut self, id: u32, t: T) {
+        self.0[id as usize] = Some(t);
+    }
+
+    fn remove(&mut self, id: &u32) {
+        self.0[*id as usize] = None;
+    }
+}
+
+impl<T> core::ops::Index<&u32> for ByMount<T> {
+    type Output = T;
+
+    fn index(&self, id: &u32) -> &T {
+        self.get(id).or_bug(Errno::ENOTRECOVERABLE)
+    }
+}
+
 /// The build counters the profiler reads.
 #[derive(Clone, Copy, Default)]
 pub struct BuildStat {
@@ -297,7 +374,7 @@ pub struct BuildStat {
 }
 
 pub struct Builder {
-    chunks: BTreeMap<u32, Chunk>,
+    chunks: ByMount<Chunk>,
     scan: ScanContext,
     direct: ScanContext,
     bake: BakeContext,
@@ -315,8 +392,11 @@ pub struct Builder {
     bands: Vec<BandView<'static>>,
     /// The scan job's paint's claimed voxels, kept between its steps.
     claimed: Claims,
-    /// A level chunk's objects folded, kept for its capacity.
+    /// Objects folded, a level chunk's or a z16 chunk's to its cube, as the
+    /// store keeps them (layer/object/store.rs `Store::fold_at`), and those
+    /// cells in order, kept for their capacity.
     folded: HashMap<[i64; 3], u32>,
+    fold_cells: Vec<([i64; 3], u32)>,
     /// A z16 chunk's objects folded to its cube, as entries: what its paint
     /// reads where the cube is coarser than an object's finest tier.
     fold_band: Vec<BandZ>,
@@ -334,7 +414,7 @@ impl Default for Builder {
 impl Builder {
     pub fn new() -> Builder {
         Builder {
-            chunks: BTreeMap::new(),
+            chunks: ByMount::new(),
             scan: ScanContext::new(),
             direct: ScanContext::new(),
             bake: BakeContext::new(),
@@ -347,6 +427,7 @@ impl Builder {
             bands: Vec::new(),
             claimed: Claims::new(),
             folded: HashMap::new(),
+            fold_cells: Vec::new(),
             fold_band: Vec::new(),
             fold_pos: Vec::new(),
             fold_state: Vec::new(),
@@ -363,35 +444,7 @@ impl Builder {
         let c = self.chunks.get(&id)?;
         let read = c.read().filter(Read::own)?;
         let (tx0, ty0) = c.at.in_page();
-        Some((tx0, ty0, read.page, c.structures))
-    }
-
-    /// What the composite of z16 chunk `chunk` is valid for: its column's
-    /// objects and the structure setting, the two things its paint reads that
-    /// change.
-    pub fn leaf_valid(&self, chunk: PyramidChunk) -> u32 {
-        object_col_revision(L2_IDX(chunk.corner())).wrapping_mul(2) | settings_store().structures as u32
-    }
-
-    /// The composite of z16 chunk `chunk` — the real set, no edits —
-    /// as a sealed volume for a raycast, or none: no leaf there, or a paint
-    /// refused. Made from the leaf page wherever it is resident, whether or
-    /// not a chunk is drawn from it: the ground is hit at the finest level
-    /// whichever level it is drawn at. With what it is valid for, which a
-    /// cached composite is compared by.
-    pub fn compose_leaf(&mut self, world: &mut World, chunk: PyramidChunk) -> Option<(u32, u32)> {
-        let page = Terrain::pyramid().get(chunk.page())?;
-        let (tx0, ty0) = chunk.in_page();
-        let show = settings_store().structures;
-        let col_idx = L2_IDX(chunk.corner());
-        let valid = self.leaf_valid(chunk);
-        let volume = self.paint_terrain_at(world, [tx0 as i64, ty0 as i64], 1, show, page)?;
-        if world.painter.paint(world.store.entries(col_idx), world.volumes, volume, None, None).refused {
-            world.volumes.release(volume);
-            return None;
-        }
-        world.volumes.seal(volume);
-        Some((volume, valid))
+        Some((tx0, ty0, read.own.page, c.structures))
     }
 
     pub fn generation_of(&self, id: u32) -> Option<u32> {
@@ -445,6 +498,12 @@ impl Builder {
 
     /// The tiers the chunk still lacks. A bake of a tier not wanted
     /// gives the slot back now.
+    /// The chunk the one bake open is for, and the cube and generation it
+    /// bakes; none while no bake is open.
+    pub fn baking(&self) -> Option<(u32, Cube, u32)> {
+        self.bake_job.as_ref().map(|j| (j.id, j.cube, j.generation))
+    }
+
     pub fn want(&mut self, world: &mut World, id: u32, want: [Option<Cube>; 2]) {
         let Some(c) = self.chunks.get_mut(&id) else { return };
         c.want = want;
@@ -535,7 +594,7 @@ impl Builder {
     /// scheduler reclaims after, so every later request would meet the same
     /// heap, and a refusal is not free — the direct runs are written whole
     /// before their block is asked for. Whether any chunk did work.
-    pub fn tick(&mut self, world: &mut World, order: &[u32], budget_ms: f64, now: &impl Fn() -> f64, emit: &mut impl FnMut(BuildEvent)) -> bool {
+    pub fn tick(&mut self, world: &mut World, order: &[u32], budget_ms: f64, now: &impl Fn() -> f64, emit: &mut impl FnMut(BuildEvent) -> bool) -> bool {
         let t0 = now();
         let starved = self.stat.starved;
         let mut stepped = false;
@@ -570,7 +629,7 @@ impl Builder {
         worked
     }
 
-    fn advance(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent)) -> Progress {
+    fn advance(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent) -> bool) -> Progress {
         let Some(c) = self.chunks.get(&id) else { return Progress::Done };
         if c.wanted().next().is_none() {
             return Progress::Done;
@@ -689,12 +748,7 @@ impl Builder {
     /// paint was refused.
     fn paint_terrain(&mut self, world: &mut World, id: u32, read: Read) -> Option<u32> {
         let show = self.chunks[&id].structures;
-        self.paint_terrain_at(world, read.origin, read.n, show, read.page)
-    }
-
-    fn paint_terrain_at(&mut self, world: &mut World, origin: [i64; 2], n: u32, show: bool, page: &Terrain) -> Option<u32> {
-        let view = Self::page_view(page);
-        self.sample.read(&view, origin, n, hidden_ground(show));
+        self.sample.read(&read.around(), read.first, hidden_ground(show));
         let volume = world.volumes.open();
         if !self.sample.paint(world.volumes, volume) {
             world.volumes.release(volume);
@@ -704,26 +758,28 @@ impl Builder {
     }
 
     /// A column's voxel entries folded to `scale` by the fold every level
-    /// shares (pxl-render mesh/paint/object/fold.rs), as entries of that
-    /// scale in the builder's fold lanes: what a z16 chunk paints for a cube
-    /// coarser than an object's finest tier. The hidden entry is left out
-    /// before the fold, as the paint would leave it out.
+    /// shares, as the store keeps it (layer/object/store.rs `fold_cell`), as
+    /// entries of that scale in the builder's fold lanes: what a z16 chunk
+    /// paints for a cube coarser than an object's finest tier. The hidden
+    /// entry is left out, as the paint would leave it out.
     fn fold_objects(&mut self, world: &mut World, col_idx: IVec, scale: Scale) {
         let o = FROM_L2_IDX(col_idx);
         let (x0, y0) = (ivec::X(o), ivec::Y(o));
-        let columns: Vec<Entries> = world.store.entries(col_idx).into_iter().collect();
-        fold_columns(world.painter, &columns, scale, self.hide, &mut self.folded);
+        let cells = scale.count_in(L2) as i64;
+        let at = [ivec::X(col_idx) * cells, ivec::Y(col_idx) * cells];
+        world.store.fold_at(scale, at, [at[0] + cells, at[1] + cells], self.hide, &mut self.folded);
         // A cell's corner in finest steps: absolute, then from the column's
         // corner and its band's floor.
         let n = OBJECT_FINEST.count_in(scale) as i64;
         let band_steps = OBJECT_FINEST.count_in(BAND) as i64;
         let (fx, fy) = (OBJECT_FINEST.index(x0), OBJECT_FINEST.index(y0));
-        let mut cells: Vec<([i64; 3], u32)> = self.folded.iter().map(|(&c, &state)| (c, state)).collect();
-        cells.sort_unstable();
+        self.fold_cells.clear();
+        self.fold_cells.extend(self.folded.iter().map(|(&c, &state)| (c, state)));
+        self.fold_cells.sort_unstable();
         self.fold_band.clear();
         self.fold_pos.clear();
         self.fold_state.clear();
-        for ([cx, cy, cz], state) in cells {
+        for &([cx, cy, cz], state) in &self.fold_cells {
             let z = cz * n;
             self.fold_band.push(z.div_euclid(band_steps) as BandZ);
             self.fold_pos.push(pack_pos((cx * n - fx) as u32, (cy * n - fy) as u32, z.rem_euclid(band_steps) as u32, scale));
@@ -782,8 +838,7 @@ impl Builder {
             return Progress::Blocked;
         }
         let show = self.chunks[&id].structures;
-        let view = Self::page_view(read.page);
-        self.sample.read(&view, read.origin, read.n, hidden_ground(show));
+        self.sample.read(&read.around(), read.first, hidden_ground(show));
         xpute_core::ensure!(self.direct.begin_direct(), ENOTRECOVERABLE);
         let floor = self.sample.floor;
         // Every column of the set, the chunk's own and the apron's: the
@@ -818,22 +873,13 @@ impl Builder {
         }
         let c = &self.chunks[&id];
         let (show, level, base) = (c.structures, c.level(), c.base());
-        let view = Self::page_view(read.page);
-        self.sample.read(&view, read.origin, read.n, hidden_ground(show));
+        self.sample.read(&read.around(), read.first, hidden_ground(show));
         let target = GROUND.scale(level);
         let (x0, y0) = (ivec::X(base), ivec::Y(base));
-        let mut columns = Vec::new();
-        // Its own ground and the apron a fold reads, which reaches into the
-        // chunks beside it.
-        let near = (-1..=1).flat_map(|dx| (-1..=1).map(move |dy| (dx, dy)));
-        let under: Vec<IVec> = near.flat_map(|(dx, dy)| world.store.cols_under(c.at.beside(dx, dy, 0).column())).collect();
-        for key in under {
-            if !tiers_draw(level, base, key) {
-                continue;
-            }
-            columns.extend(world.store.entries(key));
-        }
-        fold_columns(world.painter, &columns, target, self.hide, &mut self.folded);
+        // Its own cells and the apron of one a fold reads, which reaches into
+        // the chunks beside it (world/chunk/source.rs `folds_into`).
+        let (cx, cy, span) = (target.index(x0), target.index(y0), CHUNK_CELLS as i64);
+        world.store.fold_at(target, [cx - 1, cy - 1], [cx + span + 1, cy + span + 1], self.hide, &mut self.folded);
         xpute_core::ensure!(self.direct.begin_direct(), ENOTRECOVERABLE);
         write_level_runs(
             &mut self.direct,
@@ -881,7 +927,7 @@ impl Builder {
         unsafe { RunSet::carve(core::slice::from_raw_parts(ptr_at::<u8>(set_at), bytes), runs.count, COL_SPAN, APRON) }
     }
 
-    fn advance_bake(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent)) -> Progress {
+    fn advance_bake(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent) -> bool) -> Progress {
         let holding = matches!(&self.bake_job, Some(j) if j.id == id);
         let c = &self.chunks[&id];
         let set = Self::run_set(c.runs.as_ref().unwrap());
@@ -901,16 +947,27 @@ impl Builder {
                 cube,
                 generation: c.generation,
                 mesh: None,
+                handed: 0,
             });
         }
         match self.bake.step(&set) {
             Step::Working => Progress::Busy,
             Step::NeedMesh(words) => {
-                // A mesh past its slot is not baked and not cut: the chunk is
-                // drawn a step coarser, which fits sooner or later
-                // (mesh_slot.rs `COARSE_BOXES`).
-                let step = mesh_step(self.bake_job.as_ref().unwrap().cube, c.level());
-                if words / box_words(step) > capacity(c.level(), step) {
+                // Every slot the mesh fills is held for it at once, or none
+                // is and the bake is thrown away: a mesh is never cut, never
+                // baked coarser than asked, and never waits holding the one
+                // bake open (mesh_slot.rs).
+                let job = self.bake_job.as_ref().unwrap();
+                let step = mesh_step(job.cube, c.level());
+                let (words_a_box, room_a_slot) = (box_words(step), capacity(c.level(), step));
+                let boxes = words / words_a_box;
+                let asked = BuildEvent::Reserve {
+                    id,
+                    generation: job.generation,
+                    cube: job.cube,
+                    boxes,
+                };
+                if !emit(asked) {
                     let job = self.bake_job.take().unwrap();
                     self.bake.abort();
                     let c = self.chunks.get_mut(&id).unwrap();
@@ -920,25 +977,48 @@ impl Builder {
                     if c.wanted().next().is_none() {
                         self.let_runs_go(id);
                     }
-                    emit(BuildEvent::Coarser {
-                        chunk: self.chunks[&id].at,
-                        id,
-                        generation: job.generation,
-                        cube: job.cube,
-                    });
                     return Progress::Busy;
                 }
-                // The one bake open writes into `.fixed.bake`, which is past
-                // any mesh a slot holds (mesh_slot.rs).
-                let Some(mesh_at) = at(Range::Bake, 0, words * 4) else {
+                // The one bake open writes a slot's worth at a time into
+                // `.fixed.bake`, which holds any slot's (mesh_slot.rs).
+                let block = boxes.min(room_a_slot) * words_a_box;
+                let Some(mesh_at) = at(Range::Bake, 0, block * 4) else {
                     self.abort_bake();
                     self.refuse(world, id);
                     return Progress::Blocked;
                 };
                 // SAFETY: `.fixed.bake`, the open bake's alone until it is
                 // finished and handed over, or aborted.
-                unsafe { self.bake.provide_mesh(ptr_at::<u32>(mesh_at as usize), words) };
-                self.bake_job.as_mut().unwrap().mesh = Some((mesh_at as usize, words * 4));
+                unsafe { self.bake.provide_mesh(ptr_at::<u32>(mesh_at as usize), block) };
+                self.bake_job.as_mut().unwrap().mesh = Some((mesh_at as usize, block * 4));
+                Progress::Busy
+            }
+            Step::Full => {
+                // A slot's worth written: handed over, and the block handed
+                // back for the rest.
+                let job = self.bake_job.as_ref().unwrap();
+                let (at, bytes) = job.mesh.unwrap();
+                if gpu().is_some() && device_ready() && !room(bytes) {
+                    return Progress::Blocked;
+                }
+                let step = mesh_step(job.cube, c.level());
+                let words_a_box = box_words(step);
+                let n = bytes / 4 / words_a_box;
+                emit(BuildEvent::Part {
+                    id,
+                    generation: job.generation,
+                    cube: job.cube,
+                    at: at as u32,
+                    first: job.handed,
+                    box_cnt: n,
+                    heights: self.bake.heights(),
+                });
+                let job = self.bake_job.as_mut().unwrap();
+                job.handed += n;
+                let left = self.bake.left_words();
+                let block = left.min(bytes / 4);
+                // SAFETY: the same block of `.fixed.bake`, its boxes handed.
+                unsafe { self.bake.provide_mesh(ptr_at::<u32>(at), block) };
                 Progress::Busy
             }
             Step::Done => {
@@ -958,6 +1038,17 @@ impl Builder {
                 let mesh = self.bake.finish();
                 let job = self.bake_job.take().unwrap();
                 self.stat.bakes += 1;
+                if mesh.box_cnt > job.handed {
+                    emit(BuildEvent::Part {
+                        id,
+                        generation: job.generation,
+                        cube: job.cube,
+                        at: at as u32,
+                        first: job.handed,
+                        box_cnt: mesh.box_cnt - job.handed,
+                        heights: mesh.heights,
+                    });
+                }
                 let c = self.chunks.get_mut(&id).unwrap();
                 for w in c.want.iter_mut() {
                     if *w == Some(job.cube) {
@@ -968,12 +1059,9 @@ impl Builder {
                     self.let_runs_go(id);
                 }
                 emit(BuildEvent::Tier {
-                    chunk: self.chunks[&id].at,
                     id,
                     generation: job.generation,
                     cube: job.cube,
-                    at: at as u32,
-                    bytes,
                     box_cnt: mesh.box_cnt,
                     heights: mesh.heights,
                 });

@@ -31,7 +31,6 @@ use crate::abi::cmd::{FetchOutcome, FetchUpdate};
 use crate::global::Global;
 use crate::host::body_read;
 use crate::io::demand::{Category, Phases, TaskPhaseName};
-use crate::io::policy;
 use crate::io::sched::{attempt_of, settle};
 use crate::layer::geocode::{repository as geocode_repository, store as geocode_store};
 use crate::layer::terrain::page::{adopt_ocean, OCEAN_KEY};
@@ -189,7 +188,7 @@ fn fetch_arrived(
             (Outcome::error, if fail.fail == FetchFail::None { Failure { fail: FetchFail::Shell, ..fail } } else { fail })
         }
     };
-    settle(key, outcome, Some(phases), fail, policy::retry_after(outcome));
+    settle(key, outcome, Some(phases), fail);
 }
 
 /// There is no such object. What that means is the category's: open water

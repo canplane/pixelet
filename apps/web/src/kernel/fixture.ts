@@ -4,7 +4,7 @@
  * The pages kernel.test.ts answers the kernel's fetches with.
  *
  * A page's wire format is `pxl-spec`'s — `bake/format.rs` writes what a bake
- * publishes and the kernel reads. This writes the same two shapes in
+ * publishes and the kernel reads. This writes the same shapes in
  * TypeScript, because the test drives the module from outside it and has
  * nothing else to hand it bytes.
  *
@@ -28,6 +28,14 @@ import { encoder, TreeView } from "@xpute/core/wire/xtp/mod.ts";
 export const PAGE_CELLS = 512;
 export const ELE_PADDED_SPAN = 36;
 
+/** Cells on a page's side in its index lane, pxl-spec's `EXTENT_SPAN`
+ * (bake/constant.rs). */
+export const EXTENT_SPAN = 32;
+
+/** A finest-level page's occupancy byte: a page, with no children (pxl-spec
+ * bake/format.rs `Occupancy::LEAF`). */
+const LEAF = 1 << 4;
+
 /** A cell's four channels in one word, as pxl-spec's bake/pack.rs reads it:
  * each channel a dense index into its own table (`ground_pack`), which the
  * catalog generates beside the numbers it maps. */
@@ -42,8 +50,15 @@ export function pack_ground_cell(numbers: { land: u32; water: u32; structure: u3
   return cell >>> 0;
 }
 
-/** `[ele, cells]` — the terrain page as the bake writes it and the client
- * reads it, sixteen bits a cell. */
+/** `[ele, cells, extent, occupancy]` — the terrain page as the bake writes
+ * it and the client reads it, sixteen bits a cell. The index lane here says
+ * nothing: every cell's extent is the whole range an i16 holds, which is
+ * true of any ground, and the page a leaf. */
 export function encode_terrain(ele: I16Array, cells: U16Array): U8Array {
-  return encoder.encode(new TreeView().branch((__) => __.i16_array(ele).u16_array(cells)));
+  const extent = new Int16Array(EXTENT_SPAN * EXTENT_SPAN * 2);
+  for (let i = 0; i < extent.length; i += 2) {
+    extent[i] = -32768;
+    extent[i + 1] = 32767;
+  }
+  return encoder.encode(new TreeView().branch((__) => __.i16_array(ele).u16_array(cells).i16_array(extent).u8(LEAF)));
 }

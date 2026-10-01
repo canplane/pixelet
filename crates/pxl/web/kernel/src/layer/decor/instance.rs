@@ -21,8 +21,8 @@
 ///
 /// `i32::MIN` and not `u32::MAX`, because the word it fills holds a `BandZ` —
 /// an `i32` — cast to `u32`, and the band below the origin is -1, which casts
-/// to exactly `u32::MAX`. A decor placed there read as procedural: the raycast
-/// passes over NO_ENTRY (world/chunk/raycast.rs), so the hit
+/// to exactly `u32::MAX`. A decor placed there read as procedural: the hit
+/// passes over NO_ENTRY (layer/decor/hit.rs), so it
 /// never resolved to its entry and the thing could not be picked or erased. Any value a band can
 /// take has to stay out of the sentinel, and a band is a cell's Z divided by
 /// BAND_CELLS, from a sixteen-bit Z lane (spec/space/pvf3's IVEC_Z_W), so it
@@ -48,10 +48,7 @@ pub(crate) struct Instance {
 /// Groups one block holds at most: as many as the renderer's decor pass draws.
 pub const DECOR_GROUPS: usize = 64;
 
-/// Instances one chunk's decor holds at most at a tier: a kind scatters at
-/// most one to a cell, and the placed entries come past them. What does not
-/// fit is left out.
-const DECOR_INSTANCES: usize = 1 << 16;
+use crate::param::DECOR_INSTANCES;
 
 /// Bytes of the instances' lane in `.fixed.decor`, which the groups' follows.
 const INSTANCE_LANE_BYTES: u32 = (DECOR_INSTANCES * core::mem::size_of::<Instance>()) as u32;

@@ -55,6 +55,8 @@ export const enum InputMinor {
   RESET_DIST = 0x14,
   COMPASS_RESET = 0x15,
   GO_TO = 0x16,
+  POSE = 0x17,
+  POSE_END = 0x18,
 }
 
 /** The device sensors' own verbs. */
@@ -77,6 +79,7 @@ export const enum LoadMinor {
 /** The world's own verbs. */
 export const enum WorldMinor {
   SNAPSHOT = 0x15,
+  SOURCE = 0x16,
 }
 
 /** A setting's own verb. */
@@ -245,12 +248,18 @@ export const enum Command {
    * phases on what is left of the quota, the fetches within the credits. The turn leaves
    * its signals on the completion ring, drawn by the kernel, and last this command's own. */
   WORLD_UPDATE = 0x1b03,
+  /** What the tile source declares of itself, once the shell has it (published.json's
+   * SOURCE, or the dev tile server's answer in the same form). Until it comes nothing is
+   * observed: the floor is held at the level it names, and no view is drawn from a
+   * level the source does not supply whole. */
+  WORLD_SOURCE = 0x1b16,
   /** The canvas's client rect. */
   INPUT_UPDATE = 0x1c03,
   /** A pointer event on the canvas, in client pixels, with what the pointer holds; the
    * shell sends a move at the last position when the holding changes, as a browser
    * synthesizes a mouse move. */
   INPUT_POINTER = 0x1c10,
+  /** A wheel's turn in CSS pixels, whatever unit the platform turned it in. */
   INPUT_WHEEL = 0x1c11,
   /** The tracking button's press, as the button showed it. */
   INPUT_TRACKING = 0x1c12,
@@ -263,6 +272,13 @@ export const enum Command {
   INPUT_COMPASS_RESET = 0x1c15,
   /** A search result: the map center moved there. */
   INPUT_GO_TO = 0x1c16,
+  /** A tracked pose: where a tracker has the camera, and its turn as a unit quaternion
+   * (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
+   * first of a run is taken to be where the camera already is, so nothing moves as
+   * it begins; the camera follows the tracker from there until POSE_END. */
+  INPUT_POSE = 0x1c17,
+  /** The tracker let the camera go: back to the controller it had. */
+  INPUT_POSE_END = 0x1c18,
   /** A GPS fix; a field is absent where the browser gave none. */
   SENSOR_UPDATE = 0x1d03,
   /** The watch failed and was stopped. */
@@ -555,6 +571,16 @@ export function read_world_update(b: BranchCursor): WorldUpdateSignal {
   return { draws: b.at(0).get<u32>() };
 }
 
+/** Command.WORLD_SOURCE's packet. */
+export interface WorldSource {
+  /** The coarsest level of the pyramid the source supplies whole. */
+  top_level: u32;
+}
+
+export function encode_world_source(p: WorldSource): U8Array {
+  return packet((b) => b.u32(p.top_level));
+}
+
 /** Command.INPUT_UPDATE's packet. */
 export interface InputUpdate {
   left: f64;
@@ -624,6 +650,21 @@ export interface InputGoTo {
 
 export function encode_input_go_to(p: InputGoTo): U8Array {
   return packet((b) => b.f64(p.lon).f64(p.lat));
+}
+
+/** Command.INPUT_POSE's packet. */
+export interface InputPose {
+  x: f64;
+  y: f64;
+  z: f64;
+  qx: f64;
+  qy: f64;
+  qz: f64;
+  qw: f64;
+}
+
+export function encode_input_pose(p: InputPose): U8Array {
+  return packet((b) => b.f64(p.x).f64(p.y).f64(p.z).f64(p.qx).f64(p.qy).f64(p.qz).f64(p.qw));
 }
 
 /** Command.SENSOR_UPDATE's packet. */

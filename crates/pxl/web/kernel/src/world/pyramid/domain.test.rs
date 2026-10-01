@@ -1,184 +1,273 @@
 // pxl-kernel/world/pyramid/domain.test.rs
+//
+// The goal's laws on worlds known exactly (world/fixture.test.rs): the cover
+// stands all around and ground with no answer is no piece; a piece refines
+// only where it contributes to a cell and its error, projected, crosses one
+// — so ground at a grazing angle refines across the screen as far as its
+// error crosses a cell and no further along its depth, a far pole inside a
+// cell is neither refined nor a hole, and hidden ground keeps its depth;
+// every split lies within its level's reach whatever stands behind what is
+// seen; and a finer quality splits every chunk a coarser one does.
+
+use pxl_spec::space::lod::Tau;
+use pxl_spec::space::observation::Observation;
+use pxl_spec::space::pvf3::projection;
+use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::v3::V3;
 
 use super::*;
-use pxl_spec::space::pyramid::chunk_span_of;
+use crate::world::observer::{cell_angle, Lens};
+use crate::world::pyramid::chunk::CHILDREN;
 
-/// The chunks the rule draws of a domain where everything is resident: the
-/// roots, each split while it comes nearer than its level's split distance.
-fn drawn_by_rule(d: &Domain) -> Vec<Chunk> {
+use crate::world::fixture::{self, eye, World};
+
+/// A few qualities, finest first.
+fn ladder() -> Vec<Tau> {
+    (0..6).map(|k| Tau::of(2f64.powf(k as f64 / 2.0))).collect()
+}
+
+fn domain(o: Observation, world: &World) -> Domain {
+    fixture::domain(o, &ladder(), world)
+}
+
+/// A point in units, as a position.
+fn point(p: V3) -> Pvf3 {
+    let mut at = Pvf3::default();
+    projection::project(&mut at, p[0], p[1], p[2]);
+    at
+}
+
+/// The pieces `p` lies in: exactly one where the goal has no gap.
+fn pieces_at(pieces: &[Chunk], p: V3) -> Vec<Chunk> {
+    let at = point(p);
+    (0..=TOP_LEVEL).map(|level| Chunk::of(level, &at)).filter(|c| pieces.binary_search(c).is_ok()).collect()
+}
+
+/// Points of the ground about `eye[0..2]` out to `radius`, all around.
+fn around(eye: V3, radius: f64, z: f64) -> Vec<V3> {
     let mut out = Vec::new();
-    let mut open = d.roots().to_vec();
-    while let Some(c) = open.pop() {
-        if d.splits(c) {
-            open.extend(d.children(c));
-        } else {
-            out.push(c);
+    for ring in 1..=12 {
+        let r = radius * ring as f64 / 12.0;
+        for k in 0..48 {
+            let a = k as f64 / 48.0 * std::f64::consts::TAU;
+            out.push([eye[0] + r * a.cos(), eye[1] + r * a.sin(), z]);
         }
     }
     out
 }
 
-/// The farthest point of `c`'s ground from `eye`, the ground flat at `z`.
-fn farthest(eye: [f64; 3], c: Chunk, z: f64) -> f64 {
-    let (x0, y0, side) = c.rect();
-    let far = |e: f64, lo: f64| (e - lo).abs().max((lo + side - e).abs());
-    far(eye[0], x0).hypot(far(eye[1], y0)).hypot(eye[2] - z)
+/// Every cut of the ladder, made.
+fn cuts(d: &mut Domain) -> Vec<(Tau, Vec<Chunk>, HashSet<Chunk>)> {
+    (0..d.ladder().len())
+        .map(|k| {
+            let cut = d.cut_at(k);
+            (cut.tau(), cut.pieces().to_vec(), cut.splits().collect())
+        })
+        .collect()
 }
 
-/// The invariant the rule is for, over flat ground and every height the
-/// camera can stand at: a chunk drawn under a split parent is no nearer than
-/// its own level's split distance under the view's criterion and no farther
-/// than its parent's plus the parent's diagonal, so a cell drawn covers
-/// between two fixed shares of the criterion's pixels wherever the eye is;
-/// a level draws no more chunks than LEVEL_CHUNKS; and what the view wants
-/// fits what the device holds. The tilt is not an input at all.
+const GROUND: f64 = 10.5;
+const EYE: V3 = [1_000.5, 2_000.25, GROUND + 2.0];
+const FAR: f64 = 30_000.0;
+
+/// Before anything over the ground is resident, nothing is known of it: no
+/// piece, and the ground counted as having no answer yet. Once it is, the
+/// cover stands all around the eye, behind it as much as before it, and
+/// every point of the ground within the reach is in exactly one piece.
 #[test]
-fn every_drawn_chunk_lies_between_its_split_distances_and_the_view_fits_its_budget() {
-    // The domain reads the terrain's and the objects' heights, which are
-    // globals.
-    let _serial = crate::global::serial();
-    for height in [1.0, 50.0, 400.0, 1000.0, 5000.0, 40_000.0, 250_000.0] {
-        for (x, y) in [(0.3, 0.2), (511.9, 0.1), (123_456.7, -98_765.4), (-7_000.5, 3_000_000.25)] {
-            let eye = Eye {
-                at: [x, y, height],
-                foot: ivec::gather(f64::floor(x) as i64, f64::floor(y) as i64, 0),
-            };
-            let d = domain_for(&eye, height, None, 0);
-            let s = d.scale;
-            assert!(s > 0.0 && s <= 1.0);
-            let chunks = drawn_by_rule(&d);
-            for &c in &chunks {
-                let level = c.level();
-                let at = format!("height {height}, eye ({x}, {y}), {c:?}");
-                if level > 0 {
-                    assert!(d.nearest_to(c) >= split_distance(level as i32) * s, "{at}: nearer than its split distance");
-                }
-                if level < TOP_LEVEL {
-                    let parent = split_distance(level as i32 + 1) * s + chunk_span_of(level + 1) * SQRT_2;
-                    assert!(farthest(eye.at, c, 0.0) <= parent, "{at}: farther than its parent could reach");
-                }
+fn the_cover_stands_all_around_and_ground_with_no_answer_is_no_piece() {
+    let o = eye(EYE, Some([1.0, 0.0, 0.0]), FAR, GROUND);
+    let mut unknown = World::flat(GROUND);
+    unknown.answered = false;
+    let d = domain(o, &unknown);
+    assert!(d.pieces().is_empty(), "a piece where nothing is known");
+    assert!(d.unanswered() > 0, "ground with no answer, not counted as such");
+
+    let mut d = domain(o, &World::flat(GROUND));
+    assert_eq!(d.unanswered(), 0);
+    for (tau, pieces, _) in cuts(&mut d) {
+        for p in around(EYE, FAR * 0.9, GROUND) {
+            assert_eq!(pieces_at(&pieces, p).len(), 1, "{tau:?}: {p:?} in a gap or under two pieces");
+        }
+    }
+    // Behind the eye nothing is seen, so nothing is refined there: the cover
+    // stands at the top.
+    let behind = pieces_at(d.pieces(), [EYE[0] - 20_000.0, EYE[1], GROUND]);
+    assert_eq!(behind[0].level(), TOP_LEVEL, "ground behind the eye refined");
+}
+
+/// From 2u over flat ground, a piece is as fine across the screen as its
+/// cell crossing a cell asks — the level the criterion wants at the
+/// distance, out to the far edge — and no finer: along the screen's depth
+/// its error projects under a cell and stays inside.
+#[test]
+fn grazing_ground_refines_across_the_screen_and_not_along_its_depth() {
+    let o = eye(EYE, Some([1.0, 0.0, 0.0]), FAR, GROUND);
+    let mut d = domain(o, &World::flat(GROUND));
+    let half = (fixture::REFERENCE[0].atan() * 0.9).to_degrees() as i32;
+    for (tau, pieces, _) in cuts(&mut d) {
+        for bearing in (-half..=half).step_by(5) {
+            let b = (bearing as f64).to_radians();
+            for r in [3.0, 30.0, 100.0, 400.0, 1_500.0, 6_000.0, 20_000.0, 29_000.0] {
+                let p = [EYE[0] + r * b.cos(), EYE[1] + r * b.sin(), GROUND - 0.5];
+                let over = pieces_at(&pieces, p);
+                assert_eq!(over.len(), 1, "{tau:?}: {p:?} under {over:?}");
+                let level = over[0].level() as i32;
+                let wanted = tau.level(r).clamp(0, TOP_LEVEL as i32);
+                assert!(
+                    level <= wanted,
+                    "{tau:?}: ground {r} away at {bearing}° left at {level} where its cell crosses a cell finer than {wanted}"
+                );
+                assert!(level + 1 >= wanted, "{tau:?}: ground {r} away refined to {level}, past what its error across asks ({wanted})");
             }
-            for level in 0..=TOP_LEVEL {
-                let n = chunks.iter().filter(|c| c.level() == level).count() as u32;
-                assert!(n <= LEVEL_CHUNKS, "height {height}: {n} chunks at level {level}");
-            }
-            assert!(chunks.len() as u32 <= VIEW_CHUNKS, "height {height}: {} chunks", chunks.len());
-            assert!(d.pages().count() as u32 <= VIEW_PAGES, "height {height}: {} pages", d.pages().count());
         }
     }
 }
 
-/// What a view wants held is every page its drawn chunks lie in, and every
-/// ancestor of those up to the pyramid's top, so ground whose page has not
-/// come has something coarser held over it.
+/// A pole thinner and shorter than a cell far away is inside one: the goal
+/// is the goal of the ground without it, and the pole is under exactly one
+/// piece. The same pole tall enough to cross cells up the screen refines.
 #[test]
-fn every_page_drawn_from_is_wanted_with_every_ancestor_up_to_the_top() {
-    let _serial = crate::global::serial();
-    for height in [1.0, 400.0, 5000.0, 250_000.0] {
-        for (x, y) in [(0.3, 0.2), (511.9, 0.1), (123_456.7, -98_765.4)] {
-            let eye = Eye {
-                at: [x, y, height],
-                foot: ivec::gather(f64::floor(x) as i64, f64::floor(y) as i64, 0),
-            };
-            let d = domain_for(&eye, height, None, 0);
-            for c in drawn_by_rule(&d) {
-                let order = d.order_of(c);
+fn a_far_pole_inside_a_cell_is_not_refined_and_not_a_hole() {
+    let o = eye(EYE, Some([1.0, 0.0, 0.0]), FAR, GROUND);
+    let tau = Tau::FINEST;
+    let flat = fixture::domain(o, &[tau], &World::flat(GROUND));
+    let at = [EYE[0] + 2_700.0, EYE[1] + 40.0];
+    let pole = |height: f64| World::flat(GROUND).with([at[0], at[1], GROUND - 1.0], [at[0] + 0.5, at[1] + 0.5, GROUND + height]);
+    let thin = fixture::domain(o, &[tau], &pole(3.0));
+    assert!(3.0 / 2_700.0 < cell_angle(tau), "the pole is not inside a cell");
+    assert_eq!(thin.pieces(), flat.pieces(), "a pole inside a cell refined the goal");
+    let top = [at[0] + 0.25, at[1] + 0.25, GROUND + 2.5];
+    assert_eq!(pieces_at(thin.pieces(), top).len(), 1, "the pole is a hole or under two pieces");
+
+    let tall = fixture::domain(o, &[tau], &pole(60.0));
+    let (level_flat, level_tall) = (
+        pieces_at(flat.pieces(), top)[0].level(),
+        pieces_at(tall.pieces(), [at[0] + 0.25, at[1] + 0.25, GROUND + 30.0])[0].level(),
+    );
+    assert!(level_tall < level_flat, "a pole crossing cells up the screen not refined: {level_tall} against {level_flat}");
+}
+
+/// Ground behind a wall contributes to no cell, so no chunk wholly behind it
+/// is split, however near the eye; the ground before it is refined down to
+/// z16's parents.
+#[test]
+fn hidden_ground_keeps_its_depth() {
+    let (x0, x1) = (1_192.0, 1_256.0);
+    let world = World::flat(GROUND).with([x0, -50_000.0, GROUND], [x1, 50_000.0, GROUND + 1_000.0]);
+    let mut d = domain(eye(EYE, Some([1.0, 0.0, 0.0]), FAR, GROUND), &world);
+    let cuts = cuts(&mut d);
+    assert!(cuts[0].2.iter().any(|c| c.level() == 1), "the ground before the wall is not refined");
+    for (tau, _, splits) in cuts {
+        for c in splits {
+            assert!(c.rect().0 < x1, "{tau:?}: {c:?} is wholly behind the wall and split");
+        }
+    }
+}
+
+/// A ridge, and stacks of cubes behind it as tall as the lane, seen from
+/// near the ground, over it and from high up: every chunk split contributes
+/// to some tile's footprint and its error spans more than a cell — a piece
+/// whose error stays under a cell on both axes is never split — and lies
+/// within its level's reach, and a finer quality splits every chunk a
+/// coarser one does.
+#[test]
+fn a_split_contributes_leaks_and_lies_within_its_reach() {
+    let mut world = World::flat(GROUND).with([1_100.0, -40_000.0, GROUND], [1_200.0, 40_000.0, GROUND + 400.0]);
+    for k in 0..20 {
+        let x = 1_300.0 + 97.0 * k as f64;
+        for j in 0..10 {
+            let y = 1_000.0 + 211.0 * j as f64;
+            world = world.with([x, y, GROUND + 700.0], [x + 16.0, y + 16.0, 30_000.0]);
+        }
+    }
+    for forward in [[1.0, 0.0, 0.0], [1.0, 0.2, -0.4], [1.0, -0.3, 0.3], [0.0, 1.0, -1.0], [0.3, 0.1, -3.0]] {
+        for height in [2.0, 300.0, 2_500.0] {
+            let at = [EYE[0], EYE[1], GROUND + height];
+            let o = eye(at, Some(forward), FAR, GROUND);
+            let lens = Lens::of(&o).unwrap();
+            let mut d = domain(o, &world);
+            let cuts = cuts(&mut d);
+            for (tau, pieces, splits) in &cuts {
+                for &c in splits {
+                    let Contents::Holds { bound, error } = d.contents(c) else {
+                        panic!("{c:?} split and holds nothing")
+                    };
+                    assert!(d.footprints.iter().any(|f| f.touches(&bound)), "{forward:?} at {height}, {tau:?}: {c:?} split and touched by no tile");
+                    let nearest = bound.nearest(at);
+                    let error = lens.error(nearest, error);
+                    assert!(
+                        error.iter().any(|&e| e > cell_angle(*tau)),
+                        "{forward:?} at {height}, {tau:?}: {c:?} split with its error inside a cell"
+                    );
+                    let near = (0..3).map(|k| (nearest[k] - at[k]).powi(2)).sum::<f64>().sqrt();
+                    assert!(near < split_reach(c.level(), *tau), "{forward:?} at {height}, {tau:?}: {c:?} split past its reach");
+                }
                 assert!(
-                    matches!(d.pages.get(&c.page()), Some(Some(o)) if *o <= order),
-                    "height {height}: {c:?} is drawn from a page not wanted, or one ordered after it"
+                    pieces.len() <= d.roots().len() + (CHILDREN - 1) * splits.len(),
+                    "{forward:?} at {height}, {tau:?}: more pieces than the splits make"
                 );
             }
-            for (p, _) in d.pages() {
-                if p.level < TOP_LEVEL {
-                    assert!(d.wants(p.parent()), "height {height}: {p:?} is wanted and the page over it is not");
-                }
+            for pair in cuts.windows(2) {
+                assert!(pair[1].2.is_subset(&pair[0].2), "{forward:?} at {height}: {:?} splits a chunk {:?} does not", pair[1].0, pair[0].0);
+                assert!(pair[1].1.len() <= pair[0].1.len(), "{forward:?} at {height}: fewer pieces at {:?} than at {:?}", pair[0].0, pair[1].0);
             }
         }
     }
 }
 
-/// Ground the view does not see is not refined: with a view looking east,
-/// every chunk drawn under the top has a parent the view saw — its sphere
-/// reaches east of the eye.
+/// With the source's top below the pyramid's, the cover is that level's
+/// chunks and nothing coarser is ever a piece or asked to split.
 #[test]
-fn ground_outside_the_frustum_is_not_refined() {
-    let _serial = crate::global::serial();
-    let (height, x, y) = (400.0, 123_456.7, -98_765.4);
-    let eye = Eye {
-        at: [x, y, height],
-        foot: ivec::gather(f64::floor(x) as i64, f64::floor(y) as i64, 0),
+fn the_cover_is_the_sources_top() {
+    let top = 3;
+    let o = Observation {
+        top,
+        far: fault_radius(top),
+        ..eye(EYE, Some([1.0, 0.1, -0.2]), fault_radius(top), GROUND)
     };
-    // One plane, x ≥ the eye's, and five that pass everything.
-    let mut planes = [0.0; 24];
-    planes[..4].copy_from_slice(&[1.0, 0.0, 0.0, -x]);
-    for k in 1..6 {
-        planes[k * 4 + 3] = 1.0;
+    let mut d = domain(o, &World::flat(GROUND));
+    assert!(d.roots().iter().all(|c| c.level() == top), "a root not of the source's top");
+    for (tau, pieces, splits) in cuts(&mut d) {
+        assert!(pieces.iter().chain(&splits).all(|c| c.level() <= top), "{tau:?}: a piece or split over the source's top");
+        for p in around(EYE, fault_radius(top) * 0.5, GROUND) {
+            assert_eq!(pieces_at(&pieces, p).len(), 1, "{tau:?}: {p:?} in a gap or under two pieces");
+        }
     }
-    let east = domain_for(&eye, height, Some(Frustum { planes, planet: 1e12 }), 0);
-    let fine: Vec<Chunk> = drawn_by_rule(&east).into_iter().filter(|c| c.level() < TOP_LEVEL).collect();
-    assert!(!fine.is_empty(), "the view refines what it sees");
-    for c in fine {
-        let (x0, _, side) = c.parent().expect("a chunk under the top has a parent").rect();
-        assert!(x0 + side / 2.0 + side * SQRT_2 / 2.0 >= x, "{c:?} was refined from a parent the view does not see");
-    }
+    let c = d.pieces()[0];
+    assert!(d.wanted_over(c).level() <= top, "the view said to draw over the source's top");
 }
 
-/// A column's objects are held chunk by chunk, where they are: two things
-/// stacked far apart in one column make the chunks they stand in and none in
-/// the air between, and no chunk the rule draws lies over another.
+/// Making the view again as the eye moves allocates nothing once it has held
+/// the most it makes: the tiles cast again and the ground cut at every step
+/// of the ladder, along a path over ground and boxes the second time over.
 #[test]
-fn things_stacked_apart_hold_their_chunks_and_not_the_air_between() {
-    use crate::layer::object::store::place;
-    use pxl_spec::cell::cube_types::Block;
-    use pxl_spec::cell::object::PlaceableCube;
-    let _serial = crate::global::serial();
-    // Far from every other test's ground: the store is the kernel's.
-    let (x, y, height): (f64, f64, f64) = (-2_000_000.5, 1_500_000.5, 30.0);
-    let at = |z: i64| Pvf3 {
-        i: ivec::gather(x.floor() as i64, y.floor() as i64, z),
-        f: 0,
-    };
-    let (low, high) = (10, 10 + 64 * 6);
-    for z in [low, high] {
-        place(&at(z), 1.0, PlaceableCube::Block(Block::red), false);
+fn remaking_a_moving_view_allocates_nothing_once_it_has_held_the_most() {
+    let mut world = World::flat(GROUND);
+    for k in 0..8 {
+        let x = 1_100.0 + 150.0 * k as f64;
+        world = world.with([x, 1_900.0, GROUND], [x + 20.0, 2_100.0, GROUND + 30.0 + 20.0 * k as f64]);
     }
-    let eye = Eye {
-        at: [x, y, height],
-        foot: ivec::gather(x.floor() as i64, y.floor() as i64, 0),
+    let ladder = ladder();
+    let path = |k: u32| {
+        let at = [EYE[0] + 13.0 * k as f64, EYE[1] + 7.0 * k as f64, GROUND + 2.0 + (k % 5) as f64 * 40.0];
+        eye(at, Some([1.0, 0.1 * (k % 3) as f64, -0.2]), FAR, GROUND)
     };
-    let d = domain_for(&eye, height, None, 0);
-    let chunks = drawn_by_rule(&d);
-    let set: std::collections::HashSet<Chunk> = chunks.iter().copied().collect();
-    assert_eq!(set.len(), chunks.len(), "a chunk drawn twice");
-    assert!(chunks.iter().all(|c| !c.ancestors().any(|a| set.contains(&a))), "a chunk drawn under another");
-    let holding = |z: i64| {
-        chunks
-            .iter()
-            .any(|&c| c.column() == Chunk::of(c.level(), &at(z)).column() && c.node().1[2] == Chunk::of(c.level(), &at(z)).node().1[2])
+    let mut sight = crate::world::observer::Sight::default();
+    sight.observe(&path(0), &world, true, &[]);
+    let mut d = Domain::of(path(0), &ladder, 0, Box::new(world.clone()), sight.footprints());
+    let walk = |d: &mut Domain, sight: &mut crate::world::observer::Sight| {
+        for k in 0..24 {
+            let o = path(k);
+            sight.observe(&o, &world, false, &[]);
+            d.remake(o, &ladder, 0, sight.footprints());
+            for step in 0..ladder.len() {
+                d.cut_at(step);
+            }
+        }
     };
-    assert!(holding(low) && holding(high), "each thing's chunk is drawn");
-    assert!(!holding(10 + 64 * 3), "the air between them is no chunk");
-}
-
-/// The frustum the view draws, carried into world units, sees what the view
-/// looks at: the map center it orbits, from every tilt and turn.
-#[test]
-fn the_view_s_frustum_sees_the_ground_it_looks_at() {
-    let _serial = crate::global::serial();
-    let v = crate::world::frame::view::view();
-    v.origin = ivec::gather(3_000_000, 2_000_000, 0);
-    (v.tx, v.ty, v.tz) = (-500.0, -300.0, -10.0);
-    (v.width, v.height) = (1600.0, 900.0);
-    for (dist, polar, azimuth) in [(50.0, 0.3, 0.0), (5000.0, 1.3, 2.0), (200.0, 0.8, -1.0)] {
-        (v.dist, v.polar, v.azimuth) = (dist, polar, azimuth);
-        crate::world::frame::view::view_compose();
-        let f = Frustum::of_view();
-        let center = [3_000_000.0 + 500.0, 2_000_000.0 + 300.0, 10.0];
-        let v = crate::world::frame::view::view();
-        let eye = [3_000_000.0 + v.eye_local[0], 2_000_000.0 + v.eye_local[1], v.eye_local[2]];
-        assert!(f.sees(center, 1.0, eye), "dist {dist}, polar {polar}, azimuth {azimuth}");
-        // And not what lies straight behind the eye.
-        let behind = [2.0 * eye[0] - center[0], 2.0 * eye[1] - center[1], center[2]];
-        assert!(!f.sees(behind, 1.0, eye), "behind, dist {dist}, polar {polar}, azimuth {azimuth}");
-    }
+    let (first, ()) = crate::allocations::during(|| walk(&mut d, &mut sight));
+    assert!(first > 0, "nothing counted the first time over, so the count says nothing");
+    let (again, ()) = crate::allocations::during(|| walk(&mut d, &mut sight));
+    assert_eq!(again, 0, "making the view again along the path allocated");
 }
