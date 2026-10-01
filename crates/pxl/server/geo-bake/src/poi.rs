@@ -66,28 +66,30 @@ pub fn leaves(client: &mut Client, within: Option<IVec>) -> Result<BTreeMap<IVec
 }
 
 /// How prominent a place of `category` is, the more the lower: OpenMapTiles'
-/// `poi_class_rank` (layers/poi/class.sql) over ten — a hospital, a station,
-/// a sight, a school, a town hall, a park, a library, a police or a post
-/// office before a shop, a grocery, fast food, clothes and a bar, and what it
-/// does not rank, 100, after all of those.
+/// `poi_class_rank` (layers/poi/class.sql) over five, which keeps every one
+/// of its ranks whole in a byte, of the class its `poi` layer files the
+/// category under (layers/poi/poi.yaml) — a clinic is a hospital, a subway a
+/// railway, a kindergarten a school, a mall or a convenience store a shop, a
+/// department store a grocery, a pub beer — and a class it does not rank,
+/// 1000 over five, last.
 pub fn rank_of(category: &str) -> u8 {
     match category {
-        "hospital" => 2,
-        "subway" | "station" => 4,
-        "bus_station" => 5,
-        "attraction" | "museum" => 7,
-        "university" | "college" => 8,
-        "school" => 9,
-        "townhall" => 10,
-        "park" => 12,
-        "library" => 13,
-        "police" | "fire_station" => 14,
-        "post_office" => 14,
-        "mall" | "department_store" | "clinic" | "pharmacy" | "dentist" => 40,
-        "supermarket" | "convenience" => 50,
-        "fast_food" => 60,
-        "clothes" => 70,
-        "bar" | "pub" => 80,
-        _ => 100,
+        "hospital" | "clinic" => 4,
+        "subway" | "station" => 8,
+        "bus_station" => 10,
+        "attraction" => 14,
+        "university" | "college" => 16,
+        "school" | "kindergarten" => 17,
+        "townhall" => 20,
+        "park" => 24,
+        "library" => 26,
+        "police" => 27,
+        "post_office" => 28,
+        "mall" | "convenience" => 80,
+        "supermarket" | "department_store" => 100,
+        "fast_food" => 120,
+        "clothes" => 140,
+        "bar" => 160,
+        _ => 200,
     }
 }

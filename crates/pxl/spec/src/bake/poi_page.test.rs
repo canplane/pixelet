@@ -17,7 +17,7 @@ fn point(tx: u32, ty: u32, dx: u32, dy: u32) -> Pvf3 {
 
 /// A place of no kind, called `name`.
 fn called(name: &str) -> Place<'_> {
-    Place { name, kind: 0, rank: 100 }
+    Place { name, kind: 0, rank: 200 }
 }
 
 /// A page survives the wire whole, its places and positions with it.
@@ -26,7 +26,7 @@ fn a_page_and_its_places_come_back_as_they_went() {
     let station = Place {
         name: "Seoul Station",
         kind: kind_of("subway"),
-        rank: 4,
+        rank: 8,
     };
     let page = PoiPage::of_places(
         0,
@@ -62,7 +62,7 @@ fn a_lone_place_folds_up_with_its_kind_and_its_ground_cell() {
     let tower = Place {
         name: "Namsan Tower",
         kind: kind_of("attraction"),
-        rank: 7,
+        rank: 14,
     };
     let mut below = (leaf(), PoiPage::of_places(0, [(at, tower)]));
     for level in 1..=TOP_LEVEL {
@@ -108,9 +108,13 @@ fn a_crowd_is_shown_by_its_most_prominent_place() {
     let station = Place {
         name: "Gangnam",
         kind: kind_of("subway"),
-        rank: 4,
+        rank: 8,
     };
-    let cafe = Place { name: "A", kind: kind_of("cafe"), rank: 100 };
+    let cafe = Place {
+        name: "A",
+        kind: kind_of("cafe"),
+        rank: 200,
+    };
     let places = [(point(0, 0, 0, 0), cafe), (point(0, 0, 2, 0), called("B")), (point(1, 0, 5, 0), station)];
     let leaf_page = PoiPage::of_places(0, places);
     assert_eq!(
@@ -152,4 +156,17 @@ fn a_page_that_names_no_place_or_splits_a_character_is_refused() {
     let ends = 16 + CELL_BYTES;
     bytes[ends..ends + 4].copy_from_slice(&(name.len() as u32).to_le_bytes());
     assert!(decode(&bytes).is_err());
+}
+
+/// A cell is shown by a place a badge can name: one with a name, however
+/// prominent the nameless one beside it.
+#[test]
+fn a_named_place_shows_a_cell_before_a_nameless_one() {
+    let nameless = Place {
+        name: "",
+        kind: kind_of("hospital"),
+        rank: 4,
+    };
+    let page = PoiPage::of_places(0, [(point(0, 0, 0, 0), nameless), (point(0, 0, 1, 0), called("B"))]);
+    assert_eq!(page.place(&page.cells[0]), Some(called("B")));
 }

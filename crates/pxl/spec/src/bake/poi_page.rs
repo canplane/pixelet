@@ -35,7 +35,7 @@ use crate::space::pyramid::{Folds, Lattice, LevelPage, GROUND, TOP_LEVEL};
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 
-const MAGIC: &[u8; 4] = b"PXP7";
+const MAGIC: &[u8; 4] = b"PXP6";
 
 /// The lattice places are counted in: a cell sixty-four times the ground's on
 /// a side — a chunk's column, six levels over the ground's cell — sharing the
@@ -148,11 +148,11 @@ impl<'a> Pool<'a> {
     }
 }
 
-/// How prominent a place is, the most first: by its rank, a place with no
-/// name last, then by its name, so that two of one rank are chosen alike by
-/// the bake and by the client.
-fn prominence(place: Place<'_>) -> (u8, bool, &str) {
-    (place.rank, place.name.is_empty(), place.name)
+/// How prominent a place is, the most first: a place with a name before one
+/// without, which a badge cannot show, then by its rank, then by its name, so
+/// that two of one rank are chosen alike by the bake and by the client.
+fn prominence(place: Place<'_>) -> (bool, u8, &str) {
+    (place.name.is_empty(), place.rank, place.name)
 }
 
 /// A kind's number, by its category; 0 where the table has none.
@@ -328,7 +328,12 @@ pub fn decode(bytes: &[u8]) -> Result<PoiPage, MarshalError> {
     }
     let page = PoiPage {
         cells,
-        places: Places { bytes: text.to_vec(), ends, kinds, ranks },
+        places: Places {
+            bytes: text.to_vec(),
+            ends,
+            kinds,
+            ranks,
+        },
     };
     validate(&page)?;
     Ok(page)

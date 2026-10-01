@@ -311,6 +311,6 @@ pub const POI_ALL_LEVEL: u32 = 2;
 pub const POI_MAJOR_LEVEL: u32 = 4;
 
 /// The rank a place needs to be shown between `POI_ALL_LEVEL` and
-/// `POI_MAJOR_LEVEL`: a station's, OpenMapTiles' `poi_class_rank` 40 over
-/// ten (pxl-geo-bake poi.rs `rank_of`).
-pub const POI_MAJOR_RANK: u8 = 4;
+/// `POI_MAJOR_LEVEL`: a railway station's, OpenMapTiles' `poi_class_rank` 40
+/// over five (pxl-geo-bake poi.rs `rank_of`).
+pub const POI_MAJOR_RANK: u8 = 8;

@@ -126,6 +126,9 @@ pub fn step(ctx: &mut TickContext) {
                 if m == 0 && Chunk::of(chunk.level(), &ground.mid()).column() != chunk.column() {
                     continue;
                 }
+                if major_only && poi.place(c).is_none_or(|place| place.rank > POI_MAJOR_RANK) {
+                    continue;
+                }
                 // A column is drawn by every chunk over it that holds
                 // something (world/pyramid/chunk.rs); a place is counted by
                 // the one the top of what stands on its ground is in, and by
@@ -133,9 +136,6 @@ pub fn step(ctx: &mut TickContext) {
                 // stand.
                 let Some(top) = top_at(&ground.mid(), chunk.level()) else { continue };
                 if top - 1.0 < z0 || top - 1.0 >= z1 {
-                    continue;
-                }
-                if major_only && poi.place(c).is_none_or(|place| place.rank > POI_MAJOR_RANK) {
                     continue;
                 }
                 let label = match poi.place(c) {
