@@ -71,7 +71,7 @@ const DATA_SPECS: [DataSpec; 10] = [
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
-        cpp: None,
+        cpp: Some(("cpp/xpute/runtime/ipc/sys.spec.hpp", "xpute::sys")),
     },
     DataSpec {
         json: "spec/pxl/web/kernel/abi/directory.json",

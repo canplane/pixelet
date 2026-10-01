@@ -103,9 +103,9 @@ Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> packet)
         s.stream.record(arg, {});
         return {};
     case cmd::ISSUE: {
-        std::uint32_t h = s.handles.acquire();
-        if (h == 0) return {.error = Errno::enfile};
-        return {.value = static_cast<std::int32_t>(h)};
+        std::optional<std::uint32_t> h = s.handles.acquire();
+        if (!h) return {.error = Errno::enfile};
+        return {.value = static_cast<std::int32_t>(*h)};
     }
     case cmd::RELEASE:
         return s.handles.release(arg) ? Applied{} : Applied{.error = Errno::ebadf};
@@ -170,6 +170,28 @@ using namespace xpute::conformance;
 
 #ifdef __wasm__
 
+// This guest keeps nothing on a heap, so it has none: an allocation is a
+// bug, and the library's own allocator — whose failure path prints through
+// WASI — is never linked. A guest with a heap replaces these over it
+// (runtime/mem/heap.hpp). Natively the operators stay the process's, which
+// the host's own code shares.
+void *operator new(std::size_t n) {
+    bug(Errno::enomem, n);
+}
+void *operator new(std::size_t n, std::align_val_t) {
+    bug(Errno::enomem, n);
+}
+void *operator new(std::size_t, const std::nothrow_t &) noexcept {
+    return nullptr;
+}
+void *operator new(std::size_t, std::align_val_t, const std::nothrow_t &) noexcept {
+    return nullptr;
+}
+void operator delete(void *) noexcept {}
+void operator delete(void *, std::size_t) noexcept {}
+void operator delete(void *, std::align_val_t) noexcept {}
+void operator delete(void *, std::size_t, std::align_val_t) noexcept {}
+
 extern "C" std::uint32_t xpute_conformance_boot(void) {
     std::uint32_t range = range_at();
     // The host sized the memory; a range past its end is a host that sized
@@ -185,11 +207,11 @@ extern "C" double xpute_conformance_interrupt(double) {
 #else
 
 extern "C" std::uint32_t xpute_conformance_boot(std::uint8_t *mem, xpute_conformance_now now) {
-    return boot(Memory(reinterpret_cast<std::uintptr_t>(mem)), 0, now);
+    return boot(Memory(reinterpret_cast<std::uintptr_t>(mem), MEMORY_BYTES), 0, now);
 }
 
 extern "C" double xpute_conformance_interrupt(std::uint8_t *mem, double) {
-    return interrupt(Memory(reinterpret_cast<std::uintptr_t>(mem)), 0);
+    return interrupt(Memory(reinterpret_cast<std::uintptr_t>(mem), MEMORY_BYTES), 0);
 }
 
 #endif

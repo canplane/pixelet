@@ -369,6 +369,261 @@ fn ts(spec: &Spec, t: &Target) -> Result<String, String> {
     Ok(file(&out))
 }
 
+// ---- C++ ----
+//
+// The guest's end in C++: the enums, each with its members for `member_of`
+// (core abi/cmd.hpp), what a guest reads off a packet, and what it writes
+// into a signal. Names are the spec's, as the Rust's are.
+
+/// A field as a C++ guest reads it, from a packet the host wrote.
+fn cpp_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
+    let kind = spec.kind(&f.ty)?;
+    if f.list && kind == Kind::Number {
+        return Ok(format!("xtp::Elements<{}>", cpp_number(&f.ty)));
+    }
+    if f.list || kind == Kind::Record {
+        return Err(format!("cmd.json: a guest reads no {} ({})", if f.list { "list" } else { "record" }, f.name));
+    }
+    let one = match kind {
+        Kind::Number => cpp_number(&f.ty).to_string(),
+        Kind::Str => "std::string_view".to_string(),
+        Kind::Bool => "bool".to_string(),
+        Kind::Enum => f.ty.clone(),
+        _ => return Err(format!("cmd.json: {} names another table's enum, which C++ is not given", f.name)),
+    };
+    Ok(if f.optional { format!("std::optional<{one}>") } else { one })
+}
+
+fn cpp_number(ty: &str) -> &'static str {
+    match ty {
+        "u8" => "std::uint8_t",
+        "u32" => "std::uint32_t",
+        "i32" => "std::int32_t",
+        "u64" => "std::uint64_t",
+        _ => "double",
+    }
+}
+
+/// The statements that read one field out of the cursor `c` into `to`,
+/// returning the error where it does not read.
+fn cpp_read_one(spec: &Spec, f: &Field, c: &str, to: &str) -> Result<Vec<String>, String> {
+    let kind = spec.kind(&f.ty)?;
+    let (call, conv) = if f.list {
+        (format!("{c}->get_array<{}>()", cpp_number(&f.ty)), "*v".to_string())
+    } else {
+        match kind {
+            Kind::Number => match f.ty.as_str() {
+                "u64" => (format!("{c}->get_u64()"), "*v".to_string()),
+                "f64" => (format!("{c}->get_number()"), "*v".to_string()),
+                ty => (format!("{c}->get_number()"), format!("saturate_as<{}>(*v)", cpp_number(ty))),
+            },
+            Kind::Bool => (format!("{c}->get_bool()"), "*v".to_string()),
+            Kind::Str => (format!("{c}->get_str_ref()"), "*v".to_string()),
+            _ => {
+                let e = spec.enums.iter().find(|e| e.name == f.ty).ok_or(format!("cmd.json: no type {}", f.ty))?;
+                let member = format!("member_of<{}>(saturate_as<std::uint32_t>(*v))", f.ty);
+                let read = match &e.unknown {
+                    Some(u) => format!("{member}.value_or({}::{u})", f.ty),
+                    None => {
+                        return Ok(vec![
+                            format!("auto v = {c}.get_number();"),
+                            "if (!v) return v.error();".to_string(),
+                            format!("std::optional<{}> m = {member};", f.ty),
+                            "if (!m) return marshal_error(Errno::einval);".to_string(),
+                            format!("{to} = *m;"),
+                        ])
+                    }
+                };
+                (format!("{c}->get_number()"), read)
+            }
+        }
+    };
+    Ok(vec![format!("auto v = {call};"), "if (!v) return v.error();".to_string(), format!("{to} = {conv};")])
+}
+
+fn cpp_read(spec: &Spec, f: &Field, i: usize) -> Result<Vec<String>, String> {
+    let mut out = vec!["{".to_string(), format!("    Result<xtp::Cursor> c = f->at({i});"), "    if (!c) return c.error();".to_string()];
+    if f.optional {
+        out.push("    if (!c->is_null()) {".to_string());
+        out.extend(cpp_read_one(spec, f, "c", &format!("out.{}", f.name))?.into_iter().map(|l| format!("        {l}")));
+        out.push("    }".to_string());
+    } else {
+        out.extend(cpp_read_one(spec, f, "c", &format!("out.{}", f.name))?.into_iter().map(|l| format!("    {l}")));
+    }
+    out.push("}".to_string());
+    Ok(out)
+}
+
+/// A field as a C++ guest writes it. A list of records is a function that
+/// hands each item to the callback it is given — called twice, once to count
+/// them, since a branch's table precedes its children.
+fn cpp_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
+    let kind = spec.kind(&f.ty)?;
+    if f.list {
+        return match kind {
+            Kind::Number => Ok(format!("std::span<const {}>", cpp_number(&f.ty))),
+            _ => Err(format!("cmd.json: a C++ guest writes no list of {} ({})", f.ty, f.name)),
+        };
+    }
+    let one = match kind {
+        Kind::Number => cpp_number(&f.ty).to_string(),
+        Kind::Bool => "bool".to_string(),
+        Kind::Str => "std::string_view".to_string(),
+        Kind::Record | Kind::Enum => f.ty.clone(),
+        Kind::Extern => return Err(format!("cmd.json: {} names another table's enum, which C++ is not given", f.name)),
+    };
+    Ok(if f.optional { format!("std::optional<{one}>") } else { one })
+}
+
+fn cpp_write(spec: &Spec, f: &Field) -> Result<String, String> {
+    let kind = spec.kind(&f.ty)?;
+    let v = &f.name;
+    if f.list {
+        return Ok(format!("w.{}_array({v});", f.ty));
+    }
+    Ok(match kind {
+        Kind::Record if f.optional => format!("if ({v}) w.branch({}::FIELDS, [this](xtp::PacketWriter &w) {{ {v}->write(w); }}); else w.no_branch();", f.ty),
+        Kind::Record => format!("w.branch({}::FIELDS, [this](xtp::PacketWriter &w) {{ {v}.write(w); }});", f.ty),
+        Kind::Str => format!("w.str({v});"),
+        Kind::Enum if f.optional => format!("w.u32({v} ? std::optional(static_cast<std::uint32_t>(*{v})) : std::nullopt);"),
+        Kind::Enum => format!("w.u32(static_cast<std::uint32_t>({v}));"),
+        Kind::Bool => format!("w.boolean({v});"),
+        _ => format!("w.{}({v});", f.ty),
+    })
+}
+
+fn cpp_writer(spec: &Spec, out: &mut Vec<String>, name: &str, doc: Option<&[String]>, fields: &[Field]) -> Result<(), String> {
+    out.push(String::new());
+    if let Some(doc) = doc {
+        out.extend(super::line_comments(doc, ""));
+    }
+    out.push(format!("struct {name} {{"));
+    for f in fields {
+        if let Some(doc) = &f.doc {
+            out.extend(super::line_comments(doc, "    "));
+        }
+        out.push(format!("    {} {};", cpp_write_type(spec, f)?, f.name));
+    }
+    out.extend([
+        String::new(),
+        "    // The children it is written as.".to_string(),
+        format!("    static constexpr std::uint32_t FIELDS = {};", fields.len()),
+        String::new(),
+        "    void write([[maybe_unused]] xtp::PacketWriter &w) const noexcept {".to_string(),
+    ]);
+    for f in fields {
+        out.push(format!("        {}", cpp_write(spec, f)?));
+    }
+    out.extend(["    }".to_string(), "};".to_string()]);
+    Ok(())
+}
+
+fn cpp(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<String, String> {
+    let mut out = vec![
+        format!("// {path}"),
+        "//".into(),
+        format!("// GENERATED by pxl-tool/bin/spec.rs from {} — do not edit.", t.json),
+        "//".into(),
+    ];
+    out.extend(super::line_comments(&spec.doc, ""));
+    out.extend(
+        [
+            "",
+            "#pragma once",
+            "",
+            "#include <array>",
+            "#include <cstdint>",
+            "#include <optional>",
+            "#include <span>",
+            "#include <string_view>",
+            "",
+            "#include \"../../core/abi/cmd.hpp\"",
+            "#include \"../../core/math/scalar.hpp\"",
+            "#include \"../../core/status/error.hpp\"",
+            "#include \"../../core/wire/xtp/cursor.hpp\"",
+            "#include \"../../core/wire/xtp/encode.hpp\"",
+            "",
+            &format!("namespace {namespace} {{"),
+        ]
+        .map(String::from),
+    );
+    for e in &spec.enums {
+        let all: Vec<&Member> = members(e).collect();
+        out.push(String::new());
+        if let Some(doc) = &e.doc {
+            out.extend(super::line_comments(doc, ""));
+        }
+        out.push(format!("enum class {} : std::uint32_t {{", e.name));
+        for entry in &e.entries {
+            match entry {
+                Entry::Section(s) => {
+                    out.extend([String::new(), format!("    // ---- {} ----", s.section)]);
+                    if let Some(doc) = &s.doc {
+                        out.push("    //".into());
+                        out.extend(super::line_comments(doc, "    "));
+                    }
+                }
+                Entry::Member(m) => {
+                    if let Some(doc) = &m.doc {
+                        out.extend(super::line_comments(doc, "    "));
+                    }
+                    out.push(format!("    {} = {},", m.name, literal(m.value, &e.format)));
+                }
+            }
+        }
+        out.extend([
+            "};".to_string(),
+            String::new(),
+            format!("}} // namespace {namespace}"),
+            String::new(),
+            format!("template <> struct xpute::Members<{namespace}::{}> {{", e.name),
+            format!(
+                "    static constexpr std::array<{namespace}::{0}, {1}> ALL{{{2}}};",
+                e.name,
+                all.len(),
+                all.iter().map(|m| format!("{namespace}::{}::{}", e.name, m.name)).collect::<Vec<_>>().join(", ")
+            ),
+            "};".to_string(),
+            String::new(),
+            format!("namespace {namespace} {{"),
+        ]);
+    }
+    for r in &spec.records {
+        cpp_writer(spec, &mut out, &r.name, r.doc.as_deref(), &r.fields)?;
+    }
+    for c in spec.commands()? {
+        let name = pascal(&c.name);
+        if let Some(packet) = &c.packet {
+            out.extend([String::new(), format!("// Command::{}'s packet.", c.name), format!("struct {name} {{")]);
+            for f in packet {
+                if let Some(doc) = &f.doc {
+                    out.extend(super::line_comments(doc, "    "));
+                }
+                out.push(format!("    {} {}{{}};", cpp_read_type(spec, f)?, f.name));
+            }
+            out.extend([
+                String::new(),
+                format!("    static Result<{name}> read(std::span<const std::uint8_t> pkt) noexcept {{"),
+                "        Result<xtp::TreeReader> t = xtp::TreeReader::make(pkt);".to_string(),
+                "        if (!t) return t.error();".to_string(),
+                "        Result<xtp::BranchCursor> f = t->read_branch();".to_string(),
+                "        if (!f) return f.error();".to_string(),
+                format!("        {name} out;"),
+            ]);
+            for (i, f) in packet.iter().enumerate() {
+                out.extend(cpp_read(spec, f, i)?.into_iter().map(|l| format!("        {l}")));
+            }
+            out.extend(["        return out;".to_string(), "    }".to_string(), "};".to_string()]);
+        }
+        if let Some(signal) = &c.signal {
+            let doc = [format!("Command::{}'s signal.", c.name)];
+            cpp_writer(spec, &mut out, &format!("{name}Signal"), Some(&doc), signal)?;
+        }
+    }
+    out.extend([String::new(), format!("}} // namespace {namespace}")]);
+    Ok(file(&out))
+}
+
 // ---- Rust ----
 
 /// Whether a record, as Rust writes it, borrows what it carries.
@@ -748,6 +1003,8 @@ struct Target {
     rs_dir: &'static str,
     /// The crate and path under `src/` they are named by.
     rs_logical: &'static str,
+    /// The C++ header written from it, and the namespace its names are in.
+    cpp: Option<(&'static str, &'static str)>,
 }
 
 const TARGETS: [Target; 2] = [
@@ -757,6 +1014,7 @@ const TARGETS: [Target; 2] = [
         ts_logical: "@xpute/runtime/abi/cmd.spec.ts",
         rs_dir: "crates/xpute/runtime/src/abi",
         rs_logical: "xpute-runtime/abi",
+        cpp: Some(("cpp/xpute/runtime/abi/cmd.spec.hpp", "xpute::abi")),
     },
     Target {
         json: "spec/pxl/web/kernel/abi/cmd.json",
@@ -764,6 +1022,7 @@ const TARGETS: [Target; 2] = [
         ts_logical: "@pxl/web/kernel/abi/cmd.spec.ts",
         rs_dir: "crates/pxl/web/kernel/src/abi",
         rs_logical: "pxl-kernel/abi",
+        cpp: None,
     },
 ];
 
@@ -805,6 +1064,9 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         out.push(Output::new(t.ts, ts(&spec, t)?));
         out.push(Output::new(&format!("{}/cmd.spec.rs", t.rs_dir), rs(&spec, t)?));
         out.push(Output::new(&format!("{}/cmd.test.rs", t.rs_dir), test_rs(&spec, t)?));
+        if let Some((path, namespace)) = t.cpp {
+            out.push(Output::new(path, cpp(&spec, t, path, namespace)?));
+        }
     }
     Ok(out)
 }

@@ -127,8 +127,20 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
     let mut cpp = vec!["// cpp/xpute/core/status/errno.spec.hpp".to_string()];
     cpp.extend(head.iter().cloned());
     cpp.extend(
-        ["", "#pragma once", "", "#include <cstdint>", "#include <optional>", "#include <string_view>", "#include <utility>", "", "namespace xpute {", "", "enum class Errno : std::int32_t {"]
-            .map(String::from),
+        [
+            "",
+            "#pragma once",
+            "",
+            "#include <cstdint>",
+            "#include <optional>",
+            "#include <string_view>",
+            "#include <utility>",
+            "",
+            "namespace xpute {",
+            "",
+            "enum class Errno : std::int32_t {",
+        ]
+        .map(String::from),
     );
     for e in &spec.entries {
         match e {

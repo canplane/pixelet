@@ -12,6 +12,7 @@
 #pragma STDC FP_CONTRACT OFF
 
 #include <cmath>
+#include <limits>
 
 namespace xpute {
 
@@ -60,6 +61,16 @@ inline double round_half_even(double x) noexcept {
 // The project's rounding, which is to even.
 inline double round(double x) noexcept {
     return round_half_even(x);
+}
+
+// `v` as an integer of type T, as Rust's `as` casts a float: toward zero,
+// held to T's range at either end, and NaN as 0 — where a plain cast is
+// undefined past the range.
+template <class T> constexpr T saturate_as(double v) noexcept {
+    if (v != v) return 0;
+    if (v <= static_cast<double>(std::numeric_limits<T>::min())) return std::numeric_limits<T>::min();
+    if (v >= static_cast<double>(std::numeric_limits<T>::max())) return std::numeric_limits<T>::max();
+    return static_cast<T>(v);
 }
 
 inline double lerp(double a, double b, double t) noexcept {

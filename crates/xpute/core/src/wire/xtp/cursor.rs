@@ -18,9 +18,7 @@ use crate::abi::word::field_get32;
 use crate::status::errno::Errno;
 use crate::status::error::MarshalError;
 
-use super::spec::{
-    AlignUnit, Array, NodeType, NodeValue, ScalarType, SequenceType, SpecialType, ALIGN_SZ, DESC_TYPE_MASK, DESC_TYPE_SHAMT, GET_WORD, HDR_SZ, MAGIC, NONE, TYPE_IS_LEAF, WORD_SZ,
-};
+use super::spec::{AlignUnit, Array, NodeType, NodeValue, ScalarType, SequenceType, SpecialType, ALIGN_SZ, DESC_TYPE_MASK, DESC_TYPE_SHAMT, GET_WORD, HDR_SZ, MAGIC, NONE, TYPE_IS_LEAF, WORD_SZ};
 
 /// A shallow read's value: a leaf's value, null, or a branch's cursor.
 pub type ShallowNodeValue<'a> = NodeValue<'a, BranchCursor<'a>>;

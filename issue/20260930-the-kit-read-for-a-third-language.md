@@ -193,6 +193,32 @@ the host. They are read by JSON's grammar now, and the record holds which
 texts are JSON at all, judged by the host's own `JSON.parse` and by both
 guests' readers.
 
+## The guest runtime twice (10-01)
+
+`runtime` had been read as one pair, the host and the guest, which are two
+ends of one arrangement and owe each other only the format. That holds for
+the host against either guest. It does not hold for the two guests against
+each other: Rust's and C++'s are the same end, plugged into the same host, and
+a program written on one should find on the other what it found on the
+first. So they are held to each other as `core` is, and C++'s runtime, which
+had gone only as far as the conformance guest needed, took the rest of
+Rust's: the clock; sections and the heap's door, a block named by its
+offset and taken from an allocator the guest installs; the stream's head
+and bytes, a ring's packets checked, pushed and written in place, and a door
+that raises a signal with its packet and answers a packet that does not
+read; the system calls; a handle table that gives a freed slot out next, and
+`Slots`; the quantum, the pass, the tick and the edge; and a task, a C++20
+coroutine on an installed executor, its frame from the guest's heap. The
+command and system-call tables are generated into C++ from the same JSON.
+
+What stays apart is the language's: a task is a coroutine where Rust's is a
+future; the memory is a value a call names rather than one base per module;
+and `global`, the one value per module Rust needs a type for, is a plain
+static. Reading Rust's runtime for the port also found what it carried for
+nothing: a change log whose journal no one read (its revisions are
+pixelet's own now), a vocabulary of fetch failures that re-said an errno, and
+an `io` module of comments alone. All three went rather than being ported.
+
 ## Where it stands
 
 **Built** 09-30. The C++ `core` is the kit: `abi`, `alloc`, `codec`,
@@ -200,7 +226,8 @@ guests' readers.
 `deno task test:cpp` against the records the other two read. Its XTP has a
 writer in place that gives the tree encoder's bytes, the tree and its
 encoder over it (10-01), and a reader that loads elements where they lie, so
-a packet need not be aligned.
+a packet need not be aligned. Its `runtime` is the Rust guest's, item for
+item (10-01).
 
 The Rust harness is gone. Each guest is a library of the same two C calls, its
 state in the memory it is booted over, and one host —
