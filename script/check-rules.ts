@@ -7,9 +7,12 @@
 //
 // - A source file opens with its own logical path. The comment is how a file
 //   is named in every other comment, so a wrong one sends readers elsewhere.
-// - A source path a comment or a document names exists. A file renamed or
-//   deleted leaves its citations behind; eleven still named the terrain
-//   level module weeks after the pyramid window replaced it.
+// - A source path a comment or a document names exists, and a name cited
+//   right after it — `world/access.rs` `first_hit` — is in that file. A file
+//   renamed or deleted leaves its citations behind; eleven still named the
+//   terrain level module weeks after the pyramid window replaced it, and a
+//   function renamed under a path that stayed was named for weeks after
+//   (`set_view_state`, `surface_at`, `reclaim`, 2026-10-02).
 // - The lattice's arithmetic is the space model's. A level's cells, chunks
 //   and pages are 2^level of the leaf's, and every size is a `Scale` stepped
 //   and counted in `pxl-spec space/`; a shift by a tier or by a scale's own
@@ -129,6 +132,28 @@ function exists(path: string, from: string): boolean {
 }
 
 const CITED = /(?<![\w/.:@-])((?:\.{1,2}\/)*@?(?:[\w.@-]+\/)*[\w-]+(?:\.[\w-]+)*\.(?:rs|ts|tsx|wgsl))(?![\w/])/g;
+
+/** The files of the tree `path`, as `from` cites it, can name: a suffix of
+ * one, or the same under a crate's or an app's or a package's root. */
+function resolve(path: string, from: string): string[] {
+  const tails = new Set<string>();
+  if (path.startsWith("./") || path.startsWith("../")) tails.add(normalize(join(dirname(from), path)));
+  tails.add(path.replace(/^\.\//, ""));
+  const [head, ...rest] = path.split("/");
+  const tail = rest.join("/");
+  if (head === "@pxl") {
+    const [app, ...within] = rest;
+    tails.add(`apps/${app}/src/${within.join("/")}`).add(`apps/${app}/${within.join("/")}`);
+  }
+  if (head === "@") tails.add(`apps/web/src/${tail}`);
+  if (head === "@xpute") tails.add(`packages/xpute/${rest[0]}/src/${rest.slice(1).join("/")}`);
+  const dir = crates.get(head);
+  if (dir) tails.add(`${dir}src/${tail}`).add(`${dir}${tail}`);
+  return files.filter((f) => [...tails].some((t) => f === t || f.endsWith(`/${t}`)));
+}
+
+/** A name cited right after a path, as `` `name` `` or `` `Type::name` ``. */
+const NAMED = /^`?\s+`([A-Za-z_][\w]*(?:::[A-Za-z_][\w]*)*)`/;
 const PROSE = /\.(rs|tsx?|wgsl|md|jsonc?)$/;
 
 for (const f of files) {
@@ -139,8 +164,17 @@ for (const f of files) {
   text.split("\n").forEach((line, n) => {
     if (!doc && !/^\s*(\/\/|\/?\*)/.test(line)) return;
     if (line.includes("://")) return;
-    for (const [, path] of line.matchAll(CITED)) {
-      if (!exists(path, f)) problems.push(`${f}:${n + 1}: names ${path}, which is no file here`);
+    for (const m of line.matchAll(CITED)) {
+      const path = m[1];
+      if (!exists(path, f)) {
+        problems.push(`${f}:${n + 1}: names ${path}, which is no file here`);
+        continue;
+      }
+      const name = line.slice(m.index! + path.length).match(NAMED)?.[1]?.split("::").pop();
+      const within = name ? resolve(path, f) : [];
+      if (name && within.length > 0 && !within.some((w) => new RegExp(`\\b${name}\\b`).test(read(w) ?? ""))) {
+        problems.push(`${f}:${n + 1}: names ${name} in ${path}, which has no ${name}`);
+      }
     }
   });
 }

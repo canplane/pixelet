@@ -291,23 +291,22 @@ address        bytes                    range                  placed by
 1 MiB          36 KiB × 3               .ring.desc             build.rs
 2 MiB          8 MiB + 16 MiB           .ring.slot             build.rs
 32 MiB         ~0.7 MiB                 .rodata .data .bss     wasm-ld (--global-base)
-               ↑ __data_end, rounded up to 4 KiB (PAGE_BYTES)
-~32.7 MiB      66.62 MiB                .fixed.terrain         the kernel (mem/fixed.rs)
-~99.3 MiB      96 KiB                   .fixed.bake            the kernel (mem/fixed.rs)
-~99.4 MiB      260 KiB                  .fixed.mounts          the kernel (mem/fixed.rs)
-~99.7 MiB      448 KiB                  .fixed.blocks          the kernel (mem/fixed.rs)
-~100.1 MiB     4 MiB                    .fixed.gpu             the kernel (mem/fixed.rs)
-~104.1 MiB     64 KiB                   .fixed.host            the kernel (mem/fixed.rs)
-~104.2 MiB     4.62 MiB                 .fixed.profiler        the kernel (mem/fixed.rs)
-~108.8 MiB     403 MiB  (phone)         .heap                  the allocator
-               915 MiB  (desktop)
+               ↑ D: __data_end, rounded up to 4 KiB (PAGE_BYTES), about 32.7 MiB
+D              66.62 MiB                .fixed.terrain         the kernel (mem/fixed.rs)
+D + 66.62 MiB  96 KiB                   .fixed.bake            the kernel (mem/fixed.rs)
+D + 66.72 MiB  259 KiB                  .fixed.mounts          the kernel (mem/fixed.rs)
+D + 66.97 MiB  448 KiB                  .fixed.blocks          the kernel (mem/fixed.rs)
+D + 67.41 MiB  4 MiB                    .fixed.gpu             the kernel (mem/fixed.rs)
+D + 71.41 MiB  64 KiB                   .fixed.host            the kernel (mem/fixed.rs)
+D + 71.47 MiB  4.62 MiB                 .fixed.profiler        the kernel (mem/fixed.rs)
+D + 76.09 MiB  the rest                 .heap                  the allocator
 512 MiB / 1 GiB                         end
 ──────────────────────────────────────────────────────────────────────────────────────
 ```
 
 The map is `pxl-kernel mem/section.rs`'s, over xpute's sections. The stack is first so that an overflow wraps below zero and traps — there is no MMU, so the wraparound is the only guard — and the kernel asserts at boot that the linker's `__stack_high` is where `mem.json` says. The rings sit at fixed addresses and `build.rs` emits `--global-base` from the same numbers, so the linker cannot place `.data` over them.
 
-`.fixed` is what the kernel places once, sizes at compile time and never frees; the table above lists it. The largest range is the resident terrain (`layer/terrain/fixed.rs`), one record a page, as many as residency's capacity (`world/paging.rs` `RECORDS`): a frame for everything held hard — the pyramid's top all around the eye — and for everything a view can read at once, 3 × 3 pages a level, so a page the view reads never has to give up another. Which page lies in which record is residency's, not a coordinate's. Every layer's records begin with `ABSENT`, which is no page's own and which every absent page shares — in the terrain's range, the open ocean. A page that arrives takes a free record or one nothing holds hard and the view does not read, the farthest first; speculation takes only one that speculation does not hold either. A thing belongs in `.fixed` when it is in the kernel's own format and its size is settled at compile time; the heap is left for what is asked for, refused and given back, and for what another format sizes — a glTF, a PNG — whose bound nothing here can predict. Every range is reached through `mem/fixed.rs`, which checks what is asked for against the range's end, so nothing written through one lands in the next.
+`.fixed` is what the kernel places once, sizes at compile time and never frees; the table above lists it, and a kernel test holds its rows to `mem/fixed.rs` (`the_architecture_s_memory_map_is_the_kernel_s`), printing the rows it expects where they differ. The heap is the rest of the reservation: about 403 MiB on a phone and 915 MiB on the desktop. The largest range is the resident terrain (`layer/terrain/fixed.rs`), one record a page, as many as residency's capacity (`world/paging.rs` `RECORDS`): a frame for everything held hard — the pyramid's top all around the eye — and for everything a view can read at once, 3 × 3 pages a level, so a page the view reads never has to give up another. Which page lies in which record is residency's, not a coordinate's. Every layer's records begin with `ABSENT`, which is no page's own and which every absent page shares — in the terrain's range, the open ocean. A page that arrives takes a free record or one nothing holds hard and the view does not read, the farthest first; speculation takes only one that speculation does not hold either. A thing belongs in `.fixed` when it is in the kernel's own format and its size is settled at compile time; the heap is left for what is asked for, refused and given back, and for what another format sizes — a glTF, a PNG — whose bound nothing here can predict. Every range is reached through `mem/fixed.rs`, which checks what is asked for against the range's end, so nothing written through one lands in the next.
 
 `.heap` is everything else, under xpute's slab over buddy. A `String`, a band's voxels and a fetch body all come from here. A refused request is a wait, not a failure: the build keeps its place and asks again after a release.
 
@@ -353,7 +352,7 @@ Objects paint after terrain, so a placed value wins the voxel. A chunk records t
 
 **What to build next** is one priority. A chunk build runs in two stages, a scan and a mesh bake, one of each open at a time; the priority (`world/chunk/table.rs` `priority`) puts the two chunks holding those slots first, then what the view sees nearest the eye, then what it does not, so the view fills out from the eye. Builds run in the build task on what the tick left of the quota.
 
-**Memory is bounded before it is asked for.** The pages a view reads are bounded by its reach and live in records of `.fixed`, so they never ask the heap. Where the arena has no room for what the view asks, the quality is chosen coarser (`world/quality.rs`); a block the heap refuses leaves what asked for it unbuilt — a decor cell keeps its parent drawn — and it is asked again on a later turn. The client does not die.
+**Memory is bounded before it is asked for.** The pages a view reads are bounded by its reach and live in records of `.fixed`, so they never ask the heap. Where the arena has no room for what the view asks, the quality is chosen coarser (`world/quality.rs`); a block the heap refuses leaves what asked for it unbuilt — a chunk's build and a model wait for the heap's next release (`world/chunk/build.rs` `refuse`), and a decor cell keeps its parent drawn. The client does not die.
 
 ## Rendering
 

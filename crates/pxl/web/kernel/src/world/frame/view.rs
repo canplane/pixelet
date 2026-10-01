@@ -7,7 +7,7 @@
 //!
 //! The world stays in its own axes. Everything is written in the root
 //! frame: the world's axes, against the floating origin. A controller makes
-//! the pose (camera/orbit.rs `orbit_pose`), and nothing here knows which
+//! the pose (camera/controller.rs `pose`), and nothing here knows which
 //! one, so a consumer reads the eye and the camera's turn and never how a
 //! control moved them.
 //!
