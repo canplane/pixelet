@@ -87,28 +87,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
     sky's irradiance, the way the sunlight now comes from the air. The floor
     is there for a phone's night and would resist it.
 
-- **A changelog, when `xpute` is published and not before.** Asked 2026-09-19
-  and answered no: a changelog's reader is someone deciding whether to move
-  between versions, and its load-bearing lines are the ones that change what
-  that reader must do — removed, changed, deprecated, upgrade now. Continuous
-  deployment has no such reader, since nobody chooses a build. What was wanted
-  instead — which commits a build number carries — is a build log, and
-  `check-and-deploy.yml`'s `record` job appends one line per published build to
-  `_meta/build-log.jsonl`, subjects and all, which `./script/build-log.ts`
-  reads back. Subjects rather than tags or ids because main's history is
-  rewritten here routinely, and a name for a commit outlives the commit only if
-  it is not a reference to one. The trigger that
-  would make a real changelog earn its place is
-  [the spin-out](./20260708-vision-and-scope-pivot.md): the day `@xpute/core`
-  and `xpute-core` ship as packages, their consumers have neither this git log
-  nor `issue/`, and the changelog belongs inside the package with its semver —
-  generated from the commits at that point, not accumulated by hand until
-  then. An installable build through Capacitor
-  ([20260810-mobile-and-perf-targets.md](./20260810-mobile-and-perf-targets.md))
-  is the same trigger from the other side, since a store submission wants
-  release notes per version. Until one of those, `issue/` is the history and it
-  records why, which a changelog never does.
-
 ## Parked, with the reason on file
 
 - **Coarse tiers: draw calls, a wider unit.** Not a bottleneck after the
