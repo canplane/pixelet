@@ -348,6 +348,13 @@ pub fn get_objects_in_cell(ix: i64, iy: i64, iz: i64) -> Vec<OccupiedEntry> {
     out
 }
 
+/// Whether any leaf is written in the cell `at` lies in, air included: what
+/// a scattered decor standing there yields to.
+pub fn holds_entry(at: &Pvf3) -> bool {
+    let [ix, iy, iz] = CELL.index_of(at);
+    cell_run(ix, iy, iz).is_some()
+}
+
 /// Every object claiming the cell `at` stands in.
 pub fn objects_at(at: &Pvf3) -> Vec<OccupiedEntry> {
     let [ix, iy, iz] = CELL.index_of(at);
