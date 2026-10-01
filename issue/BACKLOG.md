@@ -35,16 +35,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   a blend on arrival; decor as its own solver — instances at the asset's
   level of detail and its lifetime off the chunk slot (its impostor far away
   is in, 2026-10-01, and its hit's reach is the models' own).
-- **One order out from the eye, the rest.** Every scheduler takes work in
-  one order out from the eye, a chunk is a cube of its level holding
-  something, and a placed object lives in the cube its band is in
-  ([20260926-the-view-is-cubes-about-the-eye.md](./20260926-the-view-is-cubes-about-the-eye.md)).
-  Hidden ground is no longer asked for: demand is what the screen's tiles
-  meet (world/observation.rs `ByFootprints`), and ground behind what they
-  meet is required of no level. Left: a column crossing a cube's floor or ceiling is two chunks — 1.5 a column
-  near Gangnam and 1.7 on Bukhansan, 2026-09-26 — each scanning the whole
-  column's runs again, where the runs could be the column's once and each
-  chunk a cut of them.
 
 ## P1
 
