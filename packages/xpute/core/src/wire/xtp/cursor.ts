@@ -182,6 +182,8 @@ export abstract class NodeCursor {
         return this._bitset() as T;
       case SequenceType.STR:
         return this._str() as T;
+      case SequenceType.STRS:
+        return this._strs() as T;
 
       default:
         throw new MarshalError(Errno.EBADMSG);
@@ -309,6 +311,26 @@ export abstract class NodeCursor {
       arr[i] = BOOL(x);
     }
     return arr;
+  }
+
+  /** A STRS payload: `len` + 1 offsets, each no less than the one before,
+   * into the UTF-8 after them. */
+  protected _strs(): string[] {
+    if (this.base + WORD_SZ > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
+    const [n] = GET_WORD(this.pkt_view, this.base, WORD_REG);
+    const start: u32 = this.base + WORD_SZ;
+    const blob: u32 = start + 4 * (n + 1);
+    if (blob > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
+    const off = (i: u32): u32 => this.pkt_view.getUint32(start + 4 * i, true);
+    const total = off(n);
+    if (total > this.pkt.byteLength - blob) throw new MarshalError(Errno.EBADMSG);
+    const out: string[] = [];
+    for (let i = 0; i < n; i++) {
+      const [a, b] = [off(i), off(i + 1)];
+      if (a > b || b > total) throw new MarshalError(Errno.EBADMSG);
+      out.push(encoding.td.decode(this.pkt.subarray(blob + a, blob + b)));
+    }
+    return out;
   }
 
   // STR stores UTF-8 bytes with a trailing NUL on wire, while len excludes that terminator.

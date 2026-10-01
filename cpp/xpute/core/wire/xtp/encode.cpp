@@ -114,6 +114,29 @@ PacketWriter &PacketWriter::str(std::optional<std::string_view> s) noexcept {
     return entry(at, type_of(SequenceType::str));
 }
 
+PacketWriter &PacketWriter::strs(std::optional<std::span<const std::string_view>> items) noexcept {
+    std::optional<std::uint32_t> at;
+    if (items) {
+        auto n = static_cast<std::uint32_t>(items->size());
+        std::uint64_t lane = 4 * (std::uint64_t{n} + 1);
+        std::uint64_t blob = 0;
+        for (std::string_view s : *items) blob += s.size();
+        at = seq(n, lane + blob);
+        if (at) {
+            std::uint8_t *payload = buf_.data() + *at + WORD_SZ;
+            std::uint32_t off = 0;
+            std::memcpy(payload, &off, 4);
+            for (std::uint32_t i = 0; i < n; i++) {
+                std::string_view s = (*items)[i];
+                std::memcpy(payload + lane + off, s.data(), s.size());
+                off += static_cast<std::uint32_t>(s.size());
+                std::memcpy(payload + 4 * (i + 1), &off, 4);
+            }
+        }
+    }
+    return entry(at, type_of(SequenceType::strs));
+}
+
 std::optional<std::uint32_t> PacketWriter::branch_open(std::uint32_t count) noexcept {
     std::optional<std::uint32_t> at = reserve(WORD_SZ, WORD_SZ + std::uint64_t{count} * WORD_SZ);
     if (at) set_word(buf_, *at, count, RESERVED);

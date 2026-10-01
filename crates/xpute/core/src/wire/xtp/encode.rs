@@ -374,10 +374,48 @@ impl TreeEncoder {
                 st.lim = payload_start + ALIGN(payload_sz, WORD_SZ)?;
                 self.ensure(st.lim)?;
             }
+
+            SequenceType::STRS => {
+                let SequenceVal::Strs(items) = val else { return Err(bad_type()) };
+                len = items.len() as u32;
+                self.strs_of(items, payload_start, st)?;
+            }
         }
 
         // [len, ...payload]
         SET_WORD(&mut self.buf, st.base, len, RESERVED);
+        Ok(())
+    }
+}
+
+/// A string sequence's payload: `items.len()` + 1 offsets into the UTF-8
+/// after them, then that UTF-8.
+fn strs_payload<S: AsRef<str>>(items: &[S], out: &mut [u8]) {
+    let lane = 4 * (items.len() + 1);
+    let mut off = 0u32;
+    out[0..4].copy_from_slice(&0u32.to_le_bytes());
+    for (i, s) in items.iter().enumerate() {
+        let s = s.as_ref().as_bytes();
+        out[lane + off as usize..lane + off as usize + s.len()].copy_from_slice(s);
+        off += s.len() as u32;
+        out[4 * (i + 1)..4 * (i + 2)].copy_from_slice(&off.to_le_bytes());
+    }
+}
+
+/// A string sequence's payload size: its offsets lane and its UTF-8.
+fn strs_size<S: AsRef<str>>(items: &[S]) -> u64 {
+    4 * (items.len() as u64 + 1) + items.iter().map(|s| s.as_ref().len() as u64).sum::<u64>()
+}
+
+impl TreeEncoder {
+    fn strs_of(&mut self, items: &[String], payload_start: u32, st: &mut EncodingState) -> Result<(), MarshalError> {
+        let size = strs_size(items);
+        if size as i64 > self.max_cap as i64 - payload_start as i64 {
+            return Err(MarshalError::new(Errno::EOVERFLOW));
+        }
+        st.lim = payload_start + ALIGN(size as u32, WORD_SZ)?;
+        self.ensure(st.lim)?;
+        strs_payload(items, &mut self.buf[payload_start as usize..(payload_start as u64 + size) as usize]);
         Ok(())
     }
 }
@@ -531,6 +569,20 @@ impl<'a> PacketWriter<'a> {
                 out[..s.len()].copy_from_slice(s.as_bytes());
             }),
             None => self.entry(None, SequenceType::STR as u8),
+        }
+    }
+
+    /// Many strings as one leaf (`SequenceType::STRS`).
+    pub fn strs<S: AsRef<str>>(&mut self, items: Option<&[S]>) -> &mut Self {
+        match items {
+            Some(items) => match u32::try_from(strs_size(items)) {
+                Ok(size) => self.seq(SequenceType::STRS, items.len() as u32, size, |out| strs_payload(items, out)),
+                Err(_) => {
+                    self.fits = false;
+                    self.entry(None, SequenceType::STRS as u8)
+                }
+            },
+            None => self.entry(None, SequenceType::STRS as u8),
         }
     }
 

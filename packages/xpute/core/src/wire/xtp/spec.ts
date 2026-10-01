@@ -188,6 +188,9 @@ export const enum SequenceType {
 
   BITSET = 0x80 | 32 | (24 | 0), // BIT_SEQ | R(0)
   STR = 0x80 | 32 | (24 | 1), // BIT_SEQ | R(1)
+  /** Many strings as one leaf: `len` + 1 u32 offsets into the UTF-8 that
+   * follows them, so a string is its offsets' span and costs no node. */
+  STRS = 0x80 | 32 | (24 | 2), // BIT_SEQ | R(2)
 }
 
 // special type space (when L = 0)
@@ -228,7 +231,7 @@ export interface ScalarNode {
 export interface SequenceNode {
   readonly type: SequenceType;
 
-  val: Nullable<string | TypedArray | BigTypedArray>;
+  val: Nullable<string | string[] | TypedArray | BigTypedArray>;
 }
 
 // ---- Special Nodes ----

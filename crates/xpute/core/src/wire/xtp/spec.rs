@@ -231,6 +231,9 @@ pub enum SequenceType {
 
     BITSET = 0x80 | 32 | 24,    // BIT_SEQ | R(0)
     STR = 0x80 | 32 | (24 | 1), // BIT_SEQ | R(1)
+    /// Many strings as one leaf: `len` + 1 u32 offsets into the UTF-8 that
+    /// follows them, so a string is its offsets' span and costs no node.
+    STRS = 0x80 | 32 | (24 | 2), // BIT_SEQ | R(2)
 }
 
 // special type space (when L = 0)
@@ -327,6 +330,7 @@ pub struct ScalarNode {
 #[derive(Clone, Debug, PartialEq)]
 pub enum SequenceVal<'a> {
     Str(String),
+    Strs(Vec<String>),
     Array(Array<'a>),
 }
 
@@ -468,7 +472,7 @@ pub fn ELEM_SZ(type_: SequenceType) -> AlignUnit {
     match type_ {
         SequenceType::U8_ARRAY | SequenceType::I8_ARRAY | SequenceType::BITSET | SequenceType::STR => 1,
         SequenceType::U16_ARRAY | SequenceType::I16_ARRAY => 2,
-        SequenceType::U32_ARRAY | SequenceType::I32_ARRAY | SequenceType::F32_ARRAY => 4,
+        SequenceType::U32_ARRAY | SequenceType::I32_ARRAY | SequenceType::F32_ARRAY | SequenceType::STRS => 4,
         SequenceType::U64_ARRAY | SequenceType::I64_ARRAY | SequenceType::F64_ARRAY => 8,
     }
 }

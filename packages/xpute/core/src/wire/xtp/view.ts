@@ -36,6 +36,7 @@ const F64_ARRAY_NODE = (arr: F64Array | null): Node => ({ type: SequenceType.F64
 
 const BITSET_NODE = (arr: U8Array | null): Node => ({ type: SequenceType.BITSET, val: arr });
 const STR_NODE = (s: string | null): Node => ({ type: SequenceType.STR, val: s });
+const STRS_NODE = (items: string[] | null): Node => ({ type: SequenceType.STRS, val: items });
 
 function val_to_node(val: NodeValue<NodeView>): Node {
   if (val instanceof NodeView) return (val.node);
@@ -115,6 +116,7 @@ export abstract class NodeView {
   abstract bitset(arr: U8Array | null): this;
 
   abstract str(s: string | null): this;
+  abstract strs(items: string[] | null): this;
 
   // ---- Subtree ----
 
@@ -263,6 +265,10 @@ export class TreeView extends NodeView {
     return this._set_node(STR_NODE(s));
   }
 
+  override strs(items: string[] | null): this {
+    return this._set_node(STRS_NODE(items));
+  }
+
   // ---- Subtree ----
 
   /** Builds a branch subtree inline and writes it into the current root node. */
@@ -396,6 +402,10 @@ export abstract class BranchView extends NodeView {
 
   override str(s: string | null): this {
     return this._put_node(STR_NODE(s));
+  }
+
+  override strs(items: string[] | null): this {
+    return this._put_node(STRS_NODE(items));
   }
 
   // ---- Subtree ----

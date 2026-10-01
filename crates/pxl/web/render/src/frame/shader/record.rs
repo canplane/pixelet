@@ -38,7 +38,9 @@ pub const SHADER_STARS: u32 = 17;
 pub const SHADER_CLOUDS: u32 = 18;
 pub const SHADER_CLOUD_FIELD: u32 = 19;
 pub const SHADER_SHEET: u32 = 20;
-pub const SHADERS: u32 = 21;
+pub const SHADER_IMPOSTOR: u32 = 21;
+pub const SHADER_IMPOSTOR_BAKE: u32 = 22;
+pub const SHADERS: u32 = 23;
 
 /// A shader's pieces, as build.rs wrote them: the files beside this one with
 /// their comments and indentation off, since what ships is what the GPU
@@ -118,6 +120,21 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_DEBUG => wgsl!("frame", "globe", "grade", "debug"),
         SHADER_MIPS => wgsl!("mips"),
         SHADER_SHEET => wgsl!("sheet"),
+        SHADER_IMPOSTOR => wgsl!(
+            "frame",
+            "globe",
+            "grade",
+            "atmos_medium",
+            "atmos_bind",
+            "atmos_lut",
+            "atmos_sky",
+            "atmos_view",
+            "shade",
+            "finish",
+            "shadow",
+            "impostor"
+        ),
+        SHADER_IMPOSTOR_BAKE => wgsl!("impostor_bake"),
         SHADER_AO_DOWNSAMPLE => wgsl!("ao_view", "ao_downsample"),
         SHADER_AO_SAMPLE => wgsl!("ao_view", "ao_sample"),
         SHADER_AO_BLUR => wgsl!("ao_view", "ao_blur"),
@@ -213,7 +230,10 @@ pub const PIPELINE_CHUNK_COARSE_DEPTH: u32 = 30;
 pub const PIPELINE_CHUNK_COARSE_PREPASS: u32 = 31;
 /// An entry of the billboard sheet (gpu/sheet.rs).
 pub const PIPELINE_SHEET: u32 = 33;
-pub const PIPELINES: u32 = 34;
+/// A decor variant's impostor sprite, drawn once into its layer
+/// (gpu/pass/impostor.rs).
+pub const PIPELINE_IMPOSTOR_BAKE: u32 = 35;
+pub const PIPELINES: u32 = 36;
 
 // A pipeline record's words, in order: the shader; whether it has a fragment
 // stage; the topology; the cull mode; whether it writes depth; the depth
@@ -555,6 +575,28 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         // A mip level from the one above: no depth, into the texture's own
         // format.
         PIPELINE_MIPS => record(screen(SHADER_MIPS), &[], &[group(&SKIN)]),
+        // Decor's impostors: a strip of four corners an instance, opaque
+        // where the sprite covers and discarded where it does not, both sides.
+        crate::frame::draw::PIPELINE_IMPOSTOR => record(
+            Head { topology: STRIP, ..lit(SHADER_IMPOSTOR, CULL_NONE) },
+            &[],
+            &[
+                group(&LIT_FRAME),
+                group(&[[0, BOTH, UNIFORM_DYNAMIC]]),
+                group(&[[0, FRAGMENT, TEXTURE_ARRAY], [1, FRAGMENT, SAMPLER], [2, VERTEX, UNIFORM]]),
+                group(&[[0, VERTEX, STORAGE]]),
+            ],
+        ),
+        // A variant drawn into its sprite: its own color target and depth,
+        // nearer wins under a plain depth.
+        PIPELINE_IMPOSTOR_BAKE => record(
+            Head {
+                fragment: true,
+                ..depth_only(SHADER_IMPOSTOR_BAKE)
+            },
+            &model_lanes(false),
+            &[group(&[[0, VERTEX, UNIFORM_DYNAMIC]]), group(&SKIN)],
+        ),
         // An entry of the billboard sheet: its shapes and lines of text laid
         // over each other in the entry's own texture, no depth.
         PIPELINE_SHEET => record(

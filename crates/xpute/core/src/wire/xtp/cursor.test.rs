@@ -42,7 +42,7 @@ fn show<T>(v: &NodeValue<T>) -> String {
                 SequenceType::I64_ARRAY => ("BigInt64Array", b.chunks(8).map(|c| i64::from_le_bytes(c.try_into().unwrap()).to_string()).collect()),
                 SequenceType::F32_ARRAY => ("Float32Array", b.chunks(4).map(|c| (f32::from_le_bytes(c.try_into().unwrap()) as f64).to_string()).collect()),
                 SequenceType::F64_ARRAY => ("Float64Array", b.chunks(8).map(|c| f64::from_le_bytes(c.try_into().unwrap()).to_string()).collect()),
-                SequenceType::STR => unreachable!("a string leaf reads as NodeValue::Str"),
+                SequenceType::STR | SequenceType::STRS => unreachable!("a string leaf reads as NodeValue::Str, a sequence of them as NodeValue::List"),
             };
             format!("{name}({})", elements.join(" "))
         }

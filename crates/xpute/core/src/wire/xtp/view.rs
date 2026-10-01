@@ -54,6 +54,9 @@ fn BITSET_NODE<'a>(arr: Option<&'a [u8]>) -> Node<'a> {
 fn STR_NODE<'a>(s: Option<&str>) -> Node<'a> {
     seq(SequenceType::STR, s.map(|s| SequenceVal::Str(s.to_string())))
 }
+fn STRS_NODE<'a, S: AsRef<str>>(items: Option<&[S]>) -> Node<'a> {
+    seq(SequenceType::STRS, items.map(|items| SequenceVal::Strs(items.iter().map(|s| s.as_ref().to_string()).collect())))
+}
 
 /// A view's node, as the value a `set` or `put` takes in place of the view.
 pub type ViewValue<'a> = NodeValue<'a, Node<'a>>;
@@ -182,6 +185,10 @@ pub trait NodeView<'a> {
 
     fn str(&mut self, s: Option<&str>) -> &mut Self {
         self.write(STR_NODE(s))
+    }
+
+    fn strs(&mut self, items: Option<&[&str]>) -> &mut Self {
+        self.write(STRS_NODE(items))
     }
 
     // ---- Subtree ----

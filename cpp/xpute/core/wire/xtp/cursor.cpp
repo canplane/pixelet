@@ -61,6 +61,30 @@ Result<std::string_view> Cursor::str() const noexcept {
     return std::string_view(reinterpret_cast<const char *>(pkt_.data() + payload), nbyte);
 }
 
+Result<Strs> Cursor::strs() const noexcept {
+    std::uint64_t payload = std::uint64_t{base_} + WORD_SZ;
+    if (payload > pkt_.size()) return marshal_error(Errno::ebadmsg);
+    std::uint32_t n = get_word(pkt_, base_)[0];
+    std::uint64_t blob = payload + 4 * (std::uint64_t{n} + 1);
+    if (blob > pkt_.size()) return marshal_error(Errno::ebadmsg);
+    auto off = [&](std::uint32_t i) {
+        std::uint32_t v;
+        std::memcpy(&v, pkt_.data() + payload + 4 * i, 4);
+        return v;
+    };
+    std::uint32_t total = off(n);
+    if (total > pkt_.size() - blob) return marshal_error(Errno::ebadmsg);
+    for (std::uint32_t i = 0; i < n; i++) {
+        if (off(i) > off(i + 1) || off(i + 1) > total) return marshal_error(Errno::ebadmsg);
+    }
+    return Strs{pkt_.subspan(payload, 4 * (std::uint64_t{n} + 1)), pkt_.subspan(blob, total), n};
+}
+
+Result<Strs> Cursor::get_strs() const noexcept {
+    if (type_ != type_of(SequenceType::strs)) return marshal_error(Errno::ebadmsg);
+    return strs();
+}
+
 Result<Value> Cursor::get() const noexcept {
     if (is_null()) return Value(Null{});
     if (is_branch()) return Value(BranchCursor(*this));
@@ -111,6 +135,8 @@ Result<Value> Cursor::get() const noexcept {
         return seq(bitset());
     case SequenceType::str:
         return seq(str());
+    case SequenceType::strs:
+        return seq(strs());
     }
     return marshal_error(Errno::ebadmsg);
 }

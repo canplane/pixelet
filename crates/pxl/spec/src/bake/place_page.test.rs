@@ -115,7 +115,7 @@ fn group_pkt(starts: &[u32], flat: &[u32], pages: &[u16], locals: &[Division]) -
     let mut t: TreeView<'_> = TreeView::new();
     t.branch(Some(&mut |b| {
         b.u32_array(Some(starts)).u32_array(Some(flat)).u16_array(Some(pages));
-        write_places(b, locals, &lanes);
+        write_places(b, &lanes);
     }));
     encoder().encode(&t, TreeEncoderOptions::default()).expect("encodes")
 }
@@ -139,10 +139,11 @@ fn a_run_of_places_whose_lanes_disagree_is_refused() {
     let lanes = PlaceLanes {
         ranks: vec![PlaceRank::Region as u8],
         starts: vec![0, 1, 1],
+        names: vec!["경기도"],
+        langs: vec!["en", "Gyeonggi-do"],
     };
-    let one = [division(PlaceRank::Region, "경기도", "Gyeonggi-do")];
     let mut t: TreeView<'_> = TreeView::new();
-    t.branch(Some(&mut |b| write_places(b, &one, &lanes)));
+    t.branch(Some(&mut |b| write_places(b, &lanes)));
     let pkt = encoder().encode(&t, TreeEncoderOptions::default()).expect("encodes");
     assert!(open_place_dict(&pkt).is_err());
 }

@@ -81,6 +81,9 @@ class PacketWriter {
     // UTF-8, with the NUL the wire carries after it and its length leaves out.
     PacketWriter &str(std::optional<std::string_view> s) noexcept;
 
+    // Many strings as one leaf: len + 1 offsets into the UTF-8 after them.
+    PacketWriter &strs(std::optional<std::span<const std::string_view>> items) noexcept;
+
     // A string written in place by `write`, which is given the room after
     // the length slot and answers how many bytes it wrote, or none when they
     // did not fit: for text that lies in no string to copy from.

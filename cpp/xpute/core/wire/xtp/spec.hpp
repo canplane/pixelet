@@ -86,6 +86,8 @@ enum class SequenceType : NodeType {
     f64_array = BIT_SEQ | float_type(3),
     bitset = BIT_SEQ | nonnum_type(0),
     str = BIT_SEQ | nonnum_type(1),
+    // Many strings as one leaf: len + 1 offsets into the UTF-8 after them.
+    strs = BIT_SEQ | nonnum_type(2),
 };
 
 // The types whose top bit is clear.

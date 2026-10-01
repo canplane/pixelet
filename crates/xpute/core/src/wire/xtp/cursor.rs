@@ -99,7 +99,7 @@ impl<'a> Cursor<'a> {
     /// of any other node is EBADMSG rather than a wrong slice.
     pub fn get_array<T: Copy>(&self) -> Result<&'a [T], MarshalError> {
         match self {
-            Cursor::Node(c) if TYPE_IS_SEQ(c.type_) && c.type_ != SequenceType::BITSET as u8 && c.type_ != SequenceType::STR as u8 => c.array::<T>(),
+            Cursor::Node(c) if TYPE_IS_SEQ(c.type_) && ![SequenceType::BITSET as u8, SequenceType::STR as u8, SequenceType::STRS as u8].contains(&c.type_) => c.array::<T>(),
             _ => Err(MarshalError::new(Errno::EBADMSG)),
         }
     }
@@ -132,6 +132,15 @@ impl<'a> Cursor<'a> {
     pub fn get_str(&self) -> Result<String, MarshalError> {
         match self.get()? {
             NodeValue::Str(s) => Ok(s),
+            _ => Err(MarshalError::new(Errno::EBADMSG)),
+        }
+    }
+
+    /// A string sequence's strings, read where they lie. A string that is not
+    /// UTF-8, or offsets that do not climb within the payload, are EBADMSG.
+    pub fn get_strs(&self) -> Result<Strs<'a>, MarshalError> {
+        match self {
+            Cursor::Node(c) if c.type_ == SequenceType::STRS as u8 => c.strs(),
             _ => Err(MarshalError::new(Errno::EBADMSG)),
         }
     }
@@ -365,6 +374,7 @@ impl<'a> NodeCursor<'a> {
                 bytes: self.bitset()?.into(),
             }),
             t if t == SequenceType::STR as u8 => NodeValue::Str(self.str_of()?),
+            t if t == SequenceType::STRS as u8 => NodeValue::List(self.strs()?.iter().map(|s| NodeValue::Str(s.to_string())).collect()),
 
             _ => return Err(MarshalError::new(Errno::EBADMSG)),
         })
@@ -523,6 +533,34 @@ impl<'a> NodeCursor<'a> {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
         core::str::from_utf8(&bytes[payload_start as usize..(payload_start + nbyte) as usize]).map_err(|_| MarshalError::new(Errno::EBADMSG))
+    }
+
+    /// A STRS payload: `len` + 1 offsets, each no less than the one before,
+    /// into the UTF-8 after them; every string checked before any is given.
+    fn strs(&self) -> Result<Strs<'a>, MarshalError> {
+        let bad = || MarshalError::new(Errno::EBADMSG);
+        if self.base + WORD_SZ > self.pkt.len() as u32 {
+            return Err(bad());
+        }
+        let mut reg = WORD_REG;
+        let [n, _] = GET_WORD(self.pkt, self.base, &mut reg);
+        let start = (self.base + WORD_SZ) as usize;
+        let pkt: &'a [u8] = self.pkt;
+        let offs = pkt.get(start..start + 4 * (n as usize + 1)).ok_or_else(bad)?;
+        let strs = Strs { offs, blob: &[], len: n };
+        let blob = start + offs.len();
+        let total = strs.off(n as usize);
+        let strs = Strs {
+            blob: pkt.get(blob..blob + total).ok_or_else(bad)?,
+            ..strs
+        };
+        for i in 0..n as usize {
+            let (a, b) = (strs.off(i), strs.off(i + 1));
+            if a > b || b > total || core::str::from_utf8(&strs.blob[a..b]).is_err() {
+                return Err(bad());
+            }
+        }
+        Ok(strs)
     }
 
     // STR stores UTF-8 bytes with a trailing NUL on wire, while len excludes that terminator.
@@ -735,3 +773,41 @@ pub fn elements<'b, T: Copy>(a: &'b Array<'_>) -> &'b [T] {
 #[cfg(test)]
 #[path = "cursor.test.rs"]
 mod test;
+
+/// A string sequence's strings, as they lie in the packet: `len` of them,
+/// each the span between two offsets into the UTF-8 after the offsets,
+/// checked when the sequence was read.
+#[derive(Clone, Copy, Debug)]
+pub struct Strs<'a> {
+    offs: &'a [u8],
+    blob: &'a [u8],
+    len: u32,
+}
+
+impl<'a> Strs<'a> {
+    fn off(&self, i: usize) -> usize {
+        u32::from_le_bytes([self.offs[4 * i], self.offs[4 * i + 1], self.offs[4 * i + 2], self.offs[4 * i + 3]]) as usize
+    }
+
+    pub fn len(&self) -> u32 {
+        self.len
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// The string at `i`, or none past the end.
+    pub fn get(&self, i: u32) -> Option<&'a str> {
+        (i < self.len).then(|| {
+            let blob: &'a [u8] = self.blob;
+            // SAFETY: every span was checked as UTF-8 when the sequence was read.
+            unsafe { core::str::from_utf8_unchecked(&blob[self.off(i as usize)..self.off(i as usize + 1)]) }
+        })
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &'a str> + 'a {
+        let s = *self;
+        (0..s.len).filter_map(move |i| s.get(i))
+    }
+}

@@ -70,6 +70,10 @@ pub const PIPELINE_DEBUG: u32 = 9;
 /// rather than six, because a pipeline's stride is fixed and the two formats
 /// do not share one (frame/shader/record.rs's chunk_lanes).
 pub const PIPELINE_CHUNK_COARSE: u32 = 32;
+/// Decor drawn as its variants' sprites, where a variant is too small on the
+/// screen for its model: the decor block's instances, a quad each
+/// (gpu/pass/impostor.rs).
+pub const PIPELINE_IMPOSTOR: u32 = 34;
 /// Words a rewrite record holds: the handle, and the block's address and
 /// length, whose bytes replace the buffer's.
 pub const REWRITE_WORDS: usize = 3;
@@ -203,6 +207,14 @@ impl DrawList {
         let uniform = (self.uniforms.len() / UNIFORM_FLOATS) as u32;
         self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], offset as f32, 1.0, 0.0, 0.0, 0.0]);
         self.draws.extend_from_slice(&[handle, group, count, uniform, PIPELINE_DECOR]);
+    }
+
+    /// Group `group` of decor block `handle` as its sprites: `draw_decor`'s
+    /// words under the impostor's pipeline.
+    pub fn draw_impostor(&mut self, handle: u32, group: u32, count: u32, offset: u32, translation: [f32; 3]) {
+        let uniform = (self.uniforms.len() / UNIFORM_FLOATS) as u32;
+        self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], offset as f32, 1.0, 0.0, 0.0, 0.0]);
+        self.draws.extend_from_slice(&[handle, group, count, uniform, PIPELINE_IMPOSTOR]);
     }
 
     /// The draws the last frame listed.

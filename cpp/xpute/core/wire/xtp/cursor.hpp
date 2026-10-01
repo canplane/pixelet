@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <cstring>
 #include <string_view>
 #include <variant>
 
@@ -55,12 +56,27 @@ struct Bitset {
     bool operator[](std::uint32_t i) const noexcept { return (packed[i >> 3] >> (i & 7)) & 1; }
 };
 
+// A string sequence's strings, as they lie: `len` of them, each the span
+// between two offsets into the UTF-8 after the offsets.
+struct Strs {
+    std::span<const std::uint8_t> offs;
+    std::span<const std::uint8_t> blob;
+    std::uint32_t len;
+
+    std::string_view operator[](std::uint32_t i) const noexcept {
+        std::uint32_t a, b;
+        std::memcpy(&a, offs.data() + 4 * i, 4);
+        std::memcpy(&b, offs.data() + 4 * (i + 1), 4);
+        return std::string_view(reinterpret_cast<const char *>(blob.data() + a), b - a);
+    }
+};
+
 class BranchCursor;
 
 // What a read hands back: a leaf's value at the width it was written, null,
 // or a branch's cursor.
 using Value = std::variant<Null, bool, std::uint8_t, std::int8_t, std::uint16_t, std::int16_t, std::uint32_t, std::int32_t, std::uint64_t, std::int64_t, float,
-                           double, std::string_view, Array, Bitset, BranchCursor>;
+                           double, std::string_view, Array, Bitset, Strs, BranchCursor>;
 
 class Cursor {
   public:
@@ -91,6 +107,8 @@ class Cursor {
     // The bytes as they lie, without the NUL; whether they are UTF-8 is the
     // caller's to ask.
     Result<std::string_view> get_str() const noexcept;
+    // A string sequence, its offsets checked to climb within its payload.
+    Result<Strs> get_strs() const noexcept;
 
     // A scalar of 32 bits or fewer, or a float, as a double, which holds
     // every one of them exactly. A 64-bit integer is not one: get_u64/get_i64.
@@ -114,6 +132,7 @@ class Cursor {
     Result<Array> array(std::uint32_t elem) const noexcept;
     Result<Bitset> bitset() const noexcept;
     Result<std::string_view> str() const noexcept;
+    Result<Strs> strs() const noexcept;
 
     std::span<const std::uint8_t> pkt_;
     // 0 for a node physically absent, where no node can start.

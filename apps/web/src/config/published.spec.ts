@@ -17,7 +17,7 @@
 export const PUBLISHED_VERSION = {
   terrain: "v7",
   poi: "v8",
-  geocode: "v4",
+  geocode: "v5",
 } as const;
 
 export type BakeKind = keyof typeof PUBLISHED_VERSION;
