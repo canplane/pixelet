@@ -181,4 +181,3 @@ pub unsafe fn lane<T>(s: Section, off: u32, n: usize) -> &'static mut [T] {
     // SAFETY: inside `s`, aligned, and the caller's alone.
     unsafe { core::slice::from_raw_parts_mut(ptr_at::<T>(at as usize), n) }
 }
-

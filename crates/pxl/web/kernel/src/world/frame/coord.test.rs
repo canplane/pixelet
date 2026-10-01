@@ -35,7 +35,12 @@ fn a_canonical_point_comes_back_through_floats() {
         seed ^= seed << 17;
         (seed % (2 * span as u64 + 1)) as i64 - span
     };
-    let origins = [ivec::gather(0, 0, 0), ivec::gather(249_856, -94_208, 4096), ivec::gather(-3, 7, 32_768), ivec::gather(1 << 20, -(1 << 20), -4096)];
+    let origins = [
+        ivec::gather(0, 0, 0),
+        ivec::gather(249_856, -94_208, 4096),
+        ivec::gather(-3, 7, 32_768),
+        ivec::gather(1 << 20, -(1 << 20), -4096),
+    ];
     for n in 0..20_000 {
         // Whole units near the origin and far from it, and a fraction with
         // the ones a hair off a whole unit drawn often.

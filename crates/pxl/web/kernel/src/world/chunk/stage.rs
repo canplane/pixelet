@@ -10,11 +10,11 @@ use pxl_spec::space::pvf3::ivec;
 use xpute_core::math::scalar::round;
 use xpute_runtime::sched::edge::{notified, yield_if_spent};
 
-use crate::layer::decor::build::DecorHide;
 use crate::global::Global;
 use crate::host::now;
 use crate::io::sched::pending_count;
 use crate::kernel::{kernel, with_world};
+use crate::layer::decor::build::DecorHide;
 use crate::layer::environment::state::globe;
 use crate::sched::profiler::record::{
     profiler_record_frame, profiler_recording, profiler_take_rings, CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample,
@@ -170,7 +170,11 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     {
         let k = kernel();
         let edits = crate::layer::object::store::render_edits();
-        let hide = edits.hide.filter(|_| edits.hide_in.1).map(DecorHide::Placed).or(crate::layer::decor::cell::scattered_hide().map(DecorHide::Scattered));
+        let hide = edits
+            .hide
+            .filter(|_| edits.hide_in.1)
+            .map(DecorHide::Placed)
+            .or(crate::layer::decor::cell::scattered_hide().map(DecorHide::Scattered));
         crate::layer::decor::cell::step(crate::layer::decor::build::kinds(), &k.objects, &mut k.sched.draw, hide, frame.eye);
     }
     crate::layer::poi::placement::step(ctx);
