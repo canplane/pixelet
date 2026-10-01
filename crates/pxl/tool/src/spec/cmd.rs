@@ -540,7 +540,8 @@ fn rs_writer(spec: &Spec, out: &mut Vec<String>, name: &str, doc: Option<&[Strin
         "    /// The children it is written as.".to_string(),
         format!("    pub const FIELDS: u32 = {};", fields.len()),
         String::new(),
-        "    pub fn write(&self, w: &mut PacketWriter) {".to_string(),
+        // A packet of no fields writes nothing, and names no writer.
+        format!("    pub fn write(&self, {}: &mut PacketWriter) {{", if fields.is_empty() { "_" } else { "w" }),
     ]);
     for f in fields {
         out.extend(rs_write(spec, f)?.into_iter().map(|l| format!("        {l}")));

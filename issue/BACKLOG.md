@@ -10,19 +10,11 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P0
 
-- **What is drawn is what the screen covers: to main.** Built 2026-09-28
-  on `observation-paging`
-  ([20260928-what-is-drawn-is-what-the-screen-covers.md](./20260928-what-is-drawn-is-what-the-screen-covers.md);
-  ARCHITECTURE.md "The view"). The client asks for terrain v7, so main
-  waits for its publish: terrain v7 baked and published after
-  `deno task usage` (about 227,000 Class A) — once, not per revision of the
-  format, and not by demand, since a page's index bounds its whole subtree
-  and a coarse page cannot be made before everything under it — then
-  merged with `--no-ff` and deployed. What is left of the model is one
-  reader of the mesh's surface from outside the chunk it is built into:
-  places count a place only where the ground over it is drawn
-  (layer/poi/placement.rs, `Scheduler::surface_at`), which leaks the
-  build's state into a count, and goes with how places are drawn.
+- **Terrain v7, baked and published.** The client asks for terrain v7
+  (merged to main 2026-10-01), so a deploy waits for it: baked and
+  published after `deno task usage` (about 227,000 Class A) — once, not per
+  revision of the format, and not by demand, since a page's index bounds its
+  whole subtree and a coarse page cannot be made before everything under it.
 - **The atmosphere in the observation's test, an optimization held.** A
   difference is observed where its projected angle leaks past a cell _and_
   the contrast it makes is still distinguishable after the air (`T(d)`,

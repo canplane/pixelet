@@ -11,9 +11,10 @@
 //! count, a cell holding one is the place, and either stands at the center
 //! of the z16 ground cell its places' centroid falls in — the page's, or the
 //! centroids of the finer cells counted into it weighted by their counts. It
-//! stands in all three axes, on the surface drawn there (pxl-spec
-//! space/pyramid.rs `Cell::center`, chunk/table.rs `surface_at`), which is
-//! the one thing read from the ground.
+//! stands in all three axes, on the surface the model says is drawn there:
+//! what a ray down through the cell meets first, ground or a placed object,
+//! at the level the view draws that ground at (world/access.rs `first_hit`)
+//! — the world as it is known, never the state of a mesh being built.
 
 use crate::global::Global;
 use crate::layer::billboard::batch::BillboardBatch;
@@ -23,6 +24,7 @@ use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_b
 use crate::layer::poi::badge::{self, Label};
 use crate::layer::poi::enabled;
 use crate::sched::tick::TickContext;
+use crate::world::access::{Access, Detail, Ray};
 use crate::world::frame::coord::local_world_origin;
 use crate::world::frame::view::view;
 use crate::world::pyramid::chunk::Chunk;
@@ -30,7 +32,7 @@ use crate::world::pyramid::Layer;
 use pxl_render::asset::atlas::NO_SLOT;
 
 use pxl_spec::bake::poi_page::{PoiPage, POI_LATTICE};
-use pxl_spec::space::pvf3::ivec;
+use pxl_spec::space::pvf3::{ivec, projection, REACH};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pyramid::{Cell, LevelPage, GROUND};
 use std::collections::{BTreeMap, HashSet};
@@ -49,6 +51,18 @@ struct Placement {
 }
 static PLACEMENT: Global<Placement> = Global::new();
 
+/// The top of what stands at `at`'s X and Y as the view draws it at `level`:
+/// where a ray straight down first meets the ground or a placed object.
+/// None where nothing over it is known.
+fn top_at(at: &Pvf3, level: u32) -> Option<f64> {
+    let mut xy = [0.0; 3];
+    projection::unproject(&mut xy, at.i, at.f);
+    let (high, low) = (REACH.max[2], REACH.min[2]);
+    let ray = Ray { origin: [xy[0], xy[1], high], direction: [0.0, 0.0, -1.0], reach: high - low };
+    let hit = Access::now().first_hit(&ray, Detail::Level(level)).value().flatten()?;
+    Some(high - hit.t)
+}
+
 /// How many places a badge's cell holds, where it holds one, that place —
 /// its page and pool index, read only once the count is known to be one —
 /// and the sum of its places' z16 ground cells, as offsets in the badge's
@@ -56,6 +70,8 @@ static PLACEMENT: Global<Placement> = Global::new();
 #[derive(Clone, Copy, Default)]
 struct Tally {
     count: u32,
+    /// The level the view draws the ground its places stand on at.
+    level: u32,
     place: Option<(LevelPage, u32)>,
     at: [u64; 2],
 }
@@ -74,7 +90,6 @@ pub fn step(ctx: &mut TickContext) {
     let origin = local_world_origin();
     let base = [ivec::to_real(ivec::X(origin)), ivec::to_real(ivec::Y(origin)), ivec::to_real(ivec::Z(origin))];
     let pages = PoiPage::pyramid();
-    let sched = &crate::kernel::kernel().sched;
     let mut cells: BTreeMap<Cell, Tally> = BTreeMap::new();
     let Some(domain) = crate::world::pyramid::domain::current() else { return };
     for &chunk in &crate::world::pyramid::cover::cover::<PoiPage>().0.drawn {
@@ -106,9 +121,10 @@ pub fn step(ctx: &mut TickContext) {
                 }
                 // A column is drawn by every chunk over it that holds
                 // something (world/pyramid/chunk.rs); a place is counted by
-                // the one its ground's top voxel is in, and by none where no
-                // ground is drawn under it, where no badge could stand.
-                let Some((_, top)) = sched.surface_at(&ground.mid()) else { continue };
+                // the one the top of what stands on its ground is in, and by
+                // none where nothing under it is known, where no badge could
+                // stand.
+                let Some(top) = top_at(&ground.mid(), chunk.level()) else { continue };
                 if top - 1.0 < z0 || top - 1.0 >= z1 {
                     continue;
                 }
@@ -116,6 +132,7 @@ pub fn step(ctx: &mut TickContext) {
                 let at = up.offset_of(ground);
                 let t = cells.entry(up).or_default();
                 t.count += c.count;
+                t.level = chunk.level();
                 t.place = poi.place(c).map(|_| (src, c.place));
                 for (sum, lane) in t.at.iter_mut().zip(at) {
                     *sum += lane as u64 * c.count as u64;
@@ -132,7 +149,7 @@ pub fn step(ctx: &mut TickContext) {
         };
         let mean = |sum: u64| ((sum + t.count as u64 / 2) / t.count as u64) as u32;
         let stands = cell.inner_at(GROUND, 0, t.at.map(mean));
-        let Some((_, top)) = sched.surface_at(&stands.mid()) else { continue };
+        let Some(top) = top_at(&stands.mid(), t.level) else { continue };
         let Some(width) = badge::width(label) else { continue };
         let center = stands.center(top);
         let local = crate::world::frame::coord::canonical_to_local(&center, origin);

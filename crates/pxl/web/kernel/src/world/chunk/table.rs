@@ -40,7 +40,6 @@ use pxl_render::mesh::voxel_scan::APRON;
 
 use pxl_spec::space::observation::Bounds as _;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::Pvf3;
 use pxl_spec::space::pyramid::TOP_LEVEL;
 use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::base::ptr_at;
@@ -637,7 +636,7 @@ pub struct Scheduler {
     /// The mounts free, the last given back first.
     mounts: Free,
     /// The mounted chunks in chunk order, with their mounts: how a chunk is
-    /// found, and a column of them (`surface_at`).
+    /// found.
     index: Index,
     /// The domain's pieces the last recheck saw (world/pyramid/domain.rs
     /// `revision`): what a chunk should show is read off it, and it is made
@@ -1539,49 +1538,6 @@ impl Scheduler {
         }
     }
 
-    /// Piece `s` as it is drawn now, as the block of the pyramid's cells it
-    /// draws; a chunk that is not a drawn piece, or has no layout, draws
-    /// nothing a layer could stand on.
-    fn drawn_of<'a>(&'a self, s: &'a Slot) -> Option<Drawn<'a>> {
-        if s.role != Role::Drawn || !s.layout_ready {
-            return None;
-        }
-        let cube = s.layout_primary;
-        let t = s.tier(cube, s.layout_generation)?;
-        Some(Drawn {
-            level: s.level(),
-            base: s.chunk.corner(),
-            step: mesh_step(cube, s.level()),
-            tops: surface(t.slot.index, mesh_step(cube, s.level())),
-            heights: t.heights,
-        })
-    }
-
-    /// The ground drawn now at `addr`: the level of the cells it is drawn in
-    /// there, and the top of that cell's surface in units. Read from the
-    /// piece `drawn_of` gives for that ground, so it is the surface on the
-    /// screen — a coarser piece while what replaces it builds — and none
-    /// where nothing drawn stands there.
-    ///
-    /// A column is drawn by every chunk over it that holds something, each
-    /// cut to its own heights (world/pyramid/chunk.rs), so a chunk under the
-    /// surface tops out where it is cut. The highest one drawn there is the
-    /// one whose top is the surface's.
-    pub fn surface_at(&self, at: &Pvf3) -> Option<(u32, f64)> {
-        (0..=TOP_LEVEL).find_map(|level| {
-            let column = Chunk::column_of(level, at);
-            let (from, to) = (self.index.partition_point(|(c, _)| c < column.start()), self.index.partition_point(|(c, _)| c <= column.end()));
-            self.index[from..to].iter().rev().find_map(|&(_, id)| {
-                let d = self.drawn_of(&self.slots[self.place[id as usize].get()?])?;
-                // The chunk lies in one page at every level over its own, so
-                // the point's cell and the chunk's first are of one page.
-                let [cx, cy] = GROUND.cell_of(d.cell_level(), at).in_page();
-                let [fx, fy] = GROUND.cell_of(d.cell_level(), &Pvf3 { i: d.base, ..Default::default() }).in_page();
-                Some((d.cell_level(), d.top(cx - fx, cy - fy)?))
-            })
-        })
-    }
-
     /// Where every chunk is and whether it is on screen, measured against the
     /// frame. A slot that crosses the frustum's edge moves its retained bytes
     /// between the on-screen and off-screen totals, which is what the
@@ -2326,8 +2282,7 @@ fn surface_centers(index: usize, first: bool, words: &[u32], stride: usize, step
 
 /// A chunk as it is drawn: its level, the unit address its first cell
 /// begins at, the step its drawn tier's cells are, and that tier's surface.
-/// What a layer standing things on the drawn ground reads
-/// (`Scheduler::surface_at`, a decor build's surface).
+/// What a decor build stands its things on.
 pub struct Drawn<'a> {
     pub level: u32,
     pub base: IVec,
