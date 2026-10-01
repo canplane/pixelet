@@ -19,10 +19,12 @@ serde_json = { version = "1", features = ["float_roundtrip", "raw_value"] }
 //! Confirmed live against a real Gangnam-area sample: unlike Buildings,
 //! `subtype`/`class` are 100% populated here (subtype: road/rail; class:
 //! residential/service/footway/primary/secondary/steps/tertiary/path/subway/
-//! cycleway/standard_gauge/...). `road` — structured lane and width data,
-//! when present — is kept as JSONB rather than flattened, because
-//! `overture_policy` decides how much of it to use and a raw passthrough here
-//! means that mapping can change without a re-ingest.
+//! cycleway/standard_gauge/...). The vertical columns — `road_flags` or
+//! `rail_flags` (`is_tunnel`, `is_bridge`, ...) and `level_rules` (OSM's
+//! `layer`), each a list of values over a `between` range of the segment's
+//! length — are kept as the source's JSONB rather than flattened or split
+//! here, because the bake's policy decides how much of them to use and a raw
+//! passthrough means that mapping can change without a re-ingest.
 //!
 //!   ./infra/geo/overture/script/ingest_transportation.rs [--bbox ...] [--out dir]
 
@@ -39,7 +41,9 @@ CREATE TABLE overture_transportation (
   gers_id TEXT PRIMARY KEY,
   subtype TEXT NOT NULL,
   class TEXT,
-  road JSONB,
+  road_flags JSONB,
+  rail_flags JSONB,
+  level_rules JSONB,
   geom GEOMETRY(LineString, 3857) NOT NULL
 );
 CREATE INDEX idx_overture_transportation_geom ON overture_transportation USING GIST (geom);
@@ -57,7 +61,7 @@ fn run(args: &Args) -> Result<(), String> {
     let mut client = args.connect()?;
     let table = Table {
         name: "overture_transportation",
-        columns: &["gers_id", "subtype", "class", "road"],
+        columns: &["gers_id", "subtype", "class", "road_flags", "rail_flags", "level_rules"],
         geom: Geom::GeoJson,
         schema: SCHEMA.to_string(),
         batch: 300,
@@ -69,11 +73,20 @@ fn run(args: &Args) -> Result<(), String> {
                 Cell::Text(Some(f.id()?.to_string())),
                 overture::cell_text(f.prop_str("subtype")),
                 overture::cell_text(f.prop_str("class")),
-                Cell::Json(f.prop_raw("road")),
+                json(f, "road_flags"),
+                json(f, "rail_flags"),
+                json(f, "level_rules"),
             ],
             geom: GeomValue::GeoJson(f.geometry()?.to_string()),
         })
     })?;
 
     args.record(&mut client, "overture_transportation", count)
+}
+
+/// A JSONB column from a property, NULL where the extract writes `null`: a
+/// segment carries only one of `road_flags` and `rail_flags`, and a JSON null
+/// stored for the other would be a value `COALESCE` takes.
+fn json(f: &overture::Feature, key: &str) -> Cell {
+    Cell::Json(f.prop_raw(key).filter(|v| v != "null"))
 }

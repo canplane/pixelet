@@ -135,7 +135,8 @@ fn compute_metrics(feat: &OvertureRawFeature, _category: &str) -> FeatureCompute
     FeatureComputed {
         height: height.max(0.0),
         width: width.max(0.0),
-        // No bridge/tunnel vertical-stacking signal is ingested for Overture yet.
+        // `level_rules` is in the table, but nothing places a feature off the
+        // surface yet: what is not in a tunnel is painted on the ground.
         layer: 0,
     }
 }
@@ -182,11 +183,9 @@ fn compute_extra(feat: &OvertureRawFeature, category: &str) -> FeatureExtra {
         is_parking: category == "parking",
         is_institutional: institutional,
         is_sports: SPORTS_CLASSES.contains(&building_type(feat)) || SPORTS_CLASSES.contains(&land_use_class(feat)),
-        // Overture's segment `road` JSONB likely carries a tunnel/bridge flag,
-        // but its real shape is not sample-confirmed, so this stays false
-        // until a live sample settles the field path — see the top comment on
-        // not guessing against unverified schema.
-        is_tunnel: false,
+        // A tunnel is under the surface, which is all the ground is: from
+        // above, a subway is not there to see.
+        is_tunnel: matches!(feat, OvertureRawFeature::Segment(s) if s.is_tunnel),
     }
 }
 

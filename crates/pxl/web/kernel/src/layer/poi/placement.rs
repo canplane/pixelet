@@ -32,8 +32,8 @@ use crate::world::pyramid::Layer;
 use pxl_render::asset::atlas::NO_SLOT;
 
 use pxl_spec::bake::poi_page::{PoiPage, POI_LATTICE};
-use pxl_spec::space::pvf3::{ivec, projection, REACH};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::pvf3::{ivec, projection, REACH};
 use pxl_spec::space::pyramid::{Cell, LevelPage, GROUND};
 use std::collections::{BTreeMap, HashSet};
 
@@ -58,7 +58,11 @@ fn top_at(at: &Pvf3, level: u32) -> Option<f64> {
     let mut xy = [0.0; 3];
     projection::unproject(&mut xy, at.i, at.f);
     let (high, low) = (REACH.max[2], REACH.min[2]);
-    let ray = Ray { origin: [xy[0], xy[1], high], direction: [0.0, 0.0, -1.0], reach: high - low };
+    let ray = Ray {
+        origin: [xy[0], xy[1], high],
+        direction: [0.0, 0.0, -1.0],
+        reach: high - low,
+    };
     let hit = Access::now().first_hit(&ray, Detail::Level(level)).value().flatten()?;
     Some(high - hit.t)
 }

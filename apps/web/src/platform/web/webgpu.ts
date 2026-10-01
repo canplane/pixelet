@@ -136,7 +136,7 @@ export function unbindSurface(handle: u32): void {
   surfaces[handle_slot(handle)] = undefined;
 }
 
-/** An image a load decoded, by the handle the kernel names it by. */
+/** An image the kernel had decoded, by the whole handle it issued. */
 export function registerImage(handle: u32, image: ImageBitmap): void {
   images.set(handle, image);
 }

@@ -24,6 +24,8 @@ import { CORE_DOORBELL } from "@/kernel/mem.ts";
 import { request_frame } from "@/kernel/sched.ts";
 import { storageGet, storageSet } from "@platform/storage.ts";
 import { textRaster, textWidth } from "@platform/text.ts";
+import { decodeImage } from "@platform/image.ts";
+import { Command, encode_image_decoded } from "@/kernel/abi/cmd.spec.ts";
 
 const utf8 = new TextDecoder();
 
@@ -75,9 +77,23 @@ function line_ends(text: string, max_width: number, width: (s: string) => number
   return ends;
 }
 
-/** The kernel's own calls: a text laid out, or drawn. */
+/** The kernel's open files. */
+const FILES = new Files();
+
+/** The kernel's own calls: a text laid out or drawn, an image decoded. */
 function program(memory: ArrayBuffer, code: u32, w: U32Array, a: u32): void {
   switch (code) {
+    case op.IMAGE_DECODE: {
+      // The bytes are taken now: the kernel may close the file in this turn.
+      const [fd, image] = [w[a], w[a + 1]];
+      const bytes = FILES.bytes(fd);
+      void (async () => {
+        const decoded = bytes !== null && (await decodeImage(image, bytes));
+        CORE_DOORBELL.send(0, Command.IMAGE_DECODED, encode_image_decoded({ image, res: decoded ? 0 : Errno.EBADMSG }));
+        request_frame();
+      })();
+      break;
+    }
     case op.TEXT_LAYOUT: {
       const [weight, px, max_width, at, lines] = [w[a], float(w[a + 1]), float(w[a + 2]), w[a + 3], w[a + 4]];
       const text = utf8.decode(bytes_of(w, a + 5));
@@ -102,9 +118,6 @@ function program(memory: ArrayBuffer, code: u32, w: U32Array, a: u32): void {
       throw new Error(`[host] call ${code}`);
   }
 }
-
-/** The kernel's open files. */
-const FILES = new Files();
 
 /** How a root's file is read whole. */
 type Open = (path: string, signal: AbortSignal) => U8Array | Promise<U8Array>;

@@ -22,9 +22,9 @@ uint8_t *pxl_memory(uint32_t *bytes);
 int32_t pxl_gpu_open(uint32_t *align, uint32_t *timestamps);
 
 // Decodes the PNG or WebP of `bytes` bytes at `file` and holds it for the
-// renderer: the handle the kernel names it by, or 0 when it does not decode.
-// Any thread.
-uint32_t pxl_image_hold(const uint8_t *file, uint32_t bytes);
+// renderer as `handle`, which the kernel issued: 1, or 0 when it does not
+// decode. Any thread.
+uint32_t pxl_image_hold(uint32_t handle, const uint8_t *file, uint32_t bytes);
 
 // Binds the kernel's surface `handle` to `layer`, a view's CAMetalLayer,
 // which the view keeps until it has unbound it: 0, or -2 when no device is

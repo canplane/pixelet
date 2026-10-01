@@ -6,14 +6,13 @@
  * from (crates/pxl/web/render/src/gpu/api/device.rs).
  */
 
+import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { PLATFORM } from "./module.ts";
 
-/** Decodes a response's image and holds it for the renderer: the handle the
- * kernel names it by, or none for a file the core does not decode. The
- * file's own pixels, top row first, no color conversion and no premultiplied
- * alpha. */
-export async function holdImage(res: Response): Promise<u32 | null> {
-  const handle = await PLATFORM.imageHold(new Uint8Array(await res.arrayBuffer()));
-  return handle === 0 ? null : handle;
+/** Decodes a file's image and holds it for the renderer as `handle`, the
+ * kernel's own: false for a file the core does not decode. The file's own
+ * pixels, top row first, no color conversion and no premultiplied alpha. */
+export async function decodeImage(handle: u32, file: U8Array): Promise<boolean> {
+  return (await PLATFORM.imageHold(handle, file)) !== 0;
 }

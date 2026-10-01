@@ -28,7 +28,6 @@
 
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
 
-
 use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::arena::{arena_configure, arena_epoch, arena_write};
 use pxl_render::look::globe::Globe;
@@ -71,7 +70,6 @@ use crate::world::pyramid::domain::{self, Domain};
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::indexer::L2_IDX;
-
 
 pub const IN_FRUSTUM: u16 = 1;
 pub const PENDING: u16 = 4;
@@ -1409,7 +1407,6 @@ impl Scheduler {
         self.set_pending(i, false, 0.0);
         true
     }
-
 }
 
 /// Whether two frames look at the world the same way: what a recheck's
@@ -1608,7 +1605,6 @@ impl<T: Copy> Held<T> {
     fn clear(&mut self) {
         self.retain(|_| false);
     }
-
 }
 
 /// The slot `n` down the chain from `at`.

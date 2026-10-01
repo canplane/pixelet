@@ -18,8 +18,8 @@ interface PxlPlatform {
    * or null where the system has no GPU. */
   gpuOpen(): [u32, u32] | null;
   /** Decodes a PNG or a WebP off the JavaScript thread and holds it for the
-   * renderer: its handle, or 0 when it does not decode. */
-  imageHold(file: Uint8Array): Promise<u32>;
+   * renderer as the kernel's `handle`: 1, or 0 when it does not decode. */
+  imageHold(handle: u32, file: Uint8Array): Promise<u32>;
   storageGet(key: string): string | null;
   storageSet(key: string, value: string): void;
   clipboardSet(text: string): void;

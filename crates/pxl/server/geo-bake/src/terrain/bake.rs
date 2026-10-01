@@ -70,7 +70,7 @@ fn segment_row(row: &BranchCursor<'_>) -> Result<SegmentRow, MarshalError> {
         gers_id: row.at(0)?.get_str()?,
         subtype: row.at(1)?.get_str()?,
         class: opt_str(row, 2)?,
-        road: opt_str(row, 3)?,
+        flags: opt_str(row, 3)?,
         geom_wkb: row.at(4)?.get_array::<u8>()?.into(),
     })
 }

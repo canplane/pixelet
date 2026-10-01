@@ -31,23 +31,21 @@ struct Image {
     pixels: Box<[u8]>,
 }
 
-/// The images loads hold, at their handles; 0 is none. Held for the app's
-/// life, as the page's bitmaps are: the renderer may make a texture of one
-/// again, and names it only by its handle. Behind a lock, since an image is
-/// decoded off the kernel's thread and read on it.
-static IMAGES: Mutex<Vec<Option<Image>>> = Mutex::new(Vec::new());
+/// The images the kernel had decoded, by the handle it issued each — the
+/// whole handle, generation and all, so a slot issued again names only its
+/// new image. Held for the app's life, as the page's bitmaps are: the
+/// renderer may make a texture of one again, and names it only by its
+/// handle. Behind a lock, since an image is decoded off the kernel's thread
+/// and read on it.
+static IMAGES: Mutex<Option<std::collections::HashMap<u32, Image>>> = Mutex::new(None);
 
-/// Decodes a PNG or a WebP and holds it for the renderer: the handle the
-/// kernel names it by, or none for a file that does not decode. Runs on any
-/// thread.
-pub fn hold_image(file: &[u8]) -> Option<u32> {
-    let image = if file.starts_with(b"RIFF") { decode_webp(file)? } else { decode_png(file)? };
-    let mut images = IMAGES.lock().unwrap_or_else(|e| e.into_inner());
-    if images.is_empty() {
-        images.push(None);
-    }
-    images.push(Some(image));
-    Some(images.len() as u32 - 1)
+/// Decodes a PNG or a WebP and holds it for the renderer as `handle`, the
+/// kernel's own: false for a file that does not decode. Runs on any thread.
+pub fn hold_image(handle: u32, file: &[u8]) -> bool {
+    let image = if file.starts_with(b"RIFF") { decode_webp(file) } else { decode_png(file) };
+    let Some(image) = image else { return false };
+    IMAGES.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(Default::default).insert(handle, image);
+    true
 }
 
 fn decode_png(file: &[u8]) -> Option<Image> {
@@ -620,7 +618,7 @@ impl Gpu {
     pub fn image_texture(&self, id: u32, image: u32) {
         let Some(d) = device() else { return };
         let images = IMAGES.lock().unwrap_or_else(|e| e.into_inner());
-        let Some(Some(image)) = images.get(image as usize) else { return };
+        let Some(image) = images.as_ref().and_then(|m| m.get(&image)) else { return };
         let size = wgpu::Extent3d {
             width: image.width,
             height: image.height,

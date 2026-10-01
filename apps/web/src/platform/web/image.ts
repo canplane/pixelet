@@ -5,17 +5,19 @@
  * the browser, into a bitmap the page's WebGPU copies from (webgpu.ts).
  */
 
+import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { registerImage } from "@/platform/web/webgpu.ts";
 
-let nextImage: u32 = 1;
-
-/** Decodes a response's image and holds it for the renderer: the handle the
- * kernel names it by. The file's own pixels, top row first, no color
- * conversion and no premultiplied alpha. */
-export async function holdImage(res: Response): Promise<u32 | null> {
-  const image = await createImageBitmap(await res.blob(), { colorSpaceConversion: "none", premultiplyAlpha: "none" });
-  const handle = nextImage++;
-  registerImage(handle, image);
-  return handle;
+/** Decodes a file's image and holds it for the renderer as `handle`, the
+ * kernel's own: false for a file the browser does not decode. The file's own
+ * pixels, top row first, no color conversion and no premultiplied alpha. */
+export async function decodeImage(handle: u32, file: U8Array): Promise<boolean> {
+  try {
+    const image = await createImageBitmap(new Blob([file]), { colorSpaceConversion: "none", premultiplyAlpha: "none" });
+    registerImage(handle, image);
+    return true;
+  } catch {
+    return false;
+  }
 }

@@ -18,7 +18,6 @@ use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::EntryAt;
 use crate::world::chunk::table::Scheduler;
 
-
 // A decor mesh sitting on the ground it also intersects (any tree's own
 // trunk-base, by construction) has its own hit distance land almost exactly AT
 // max_dist, not comfortably inside it — the two distances come from two
@@ -67,7 +66,13 @@ struct DecorHit {
 /// size decor is placed at — what the models are, and nothing guessed — only
 /// for skipping chunks the ray never comes near.
 fn decor_reach(sched: &Scheduler) -> f64 {
-    let radius = sched.decor_models.iter().flatten().filter_map(|&m| sched.models.mesh(m)).map(|m| m.radius as f64 * m.scale as f64).fold(0.0, f64::max);
+    let radius = sched
+        .decor_models
+        .iter()
+        .flatten()
+        .filter_map(|&m| sched.models.mesh(m))
+        .map(|m| m.radius as f64 * m.scale as f64)
+        .fold(0.0, f64::max);
     radius * DECOR_SIZE
 }
 

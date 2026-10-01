@@ -71,6 +71,13 @@ const utf8 = new TextDecoder();
 /** The descriptors a guest holds open, by the handle it issued. */
 export class Files {
   readonly open = new Map<u32, File>();
+
+  /** The bytes of the file opened to read as `fd`, for a call of the
+   * program's own to consume where the host is, rather than copied into the
+   * guest by a READ: none where `fd` holds no such file. */
+  bytes(fd: u32): U8Array | null {
+    return this.open.get(fd)?.bytes ?? null;
+  }
 }
 
 /** Whether `path` walks down from its root and nowhere else, as 9P's walk

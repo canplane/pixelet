@@ -14,13 +14,11 @@ import { TreeReader } from "@xpute/core/wire/xtp/mod.ts";
 import {
   Command,
   encode_gpu_ready,
-  encode_load_failed,
   encode_setting_set,
   encode_setting_toggle,
   encode_world_boot,
   encode_world_frame,
   encode_world_source,
-  read_load_start,
   read_snapshot,
   read_world_snapshot,
   type Snapshot,
@@ -40,13 +38,12 @@ await load_core();
 start_sched();
 
 let snapshot: Snapshot | null = null;
-let loads: bigint[] = [];
 
 CORE_DOORBELL.signal = (_tag, cmd, f) => {
   if (cmd === Command.WORLD_SNAPSHOT) {
     const { at, len } = read_world_snapshot(f!);
     snapshot = read_snapshot(new TreeReader(bytes_at(CORE.buffer, at, len)).read_branch());
-  } else if (cmd === Command.LOAD_START) loads.push(read_load_start(f!).key);
+  }
 };
 
 /** The heap's row (crates/pxl/web/kernel/src/door.rs, written at every turn's
@@ -58,16 +55,12 @@ const heap_row = new Uint32Array(CORE.buffer, directory(CORE.buffer).get(entry.H
 
 /** One frame as the driver runs it, and the host's answers let in after it. */
 async function turn(delta = 1 / 60): Promise<Snapshot> {
-  loads = [];
   CORE_DOORBELL.send(
     0,
     Command.WORLD_FRAME,
     encode_world_frame({ width: 1280, height: 720, dpr: 1, delta_s: delta, frame_ms: 1000 / 60, interactive: true, credits: 6, unix_ms: 0, hours: 12, minutes: 0, seconds: 0, day_start_ms: 0 }),
   );
   CORE_DOORBELL.ring(8);
-  // An image's read is a read: it is settled by the key it was started with,
-  // and the kernel asks again in its own time.
-  for (const key of loads) CORE_DOORBELL.send(0, Command.LOAD_FAILED, encode_load_failed({ key }));
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert(snapshot !== null, "the kernel posted its snapshot");
   return snapshot;

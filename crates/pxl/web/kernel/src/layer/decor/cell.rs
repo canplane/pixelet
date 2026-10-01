@@ -33,13 +33,11 @@ use xpute_runtime::mem::heap::alloc;
 use crate::control::camera::controller::units_per_px_at;
 use crate::global::Global;
 use crate::layer::decor::build::{decor_gone_px, DecorBuild, Ground, Kind, Placed};
-use crate::layer::decor::scatter::SCALE_JITTER;
 use crate::layer::decor::instance::{decor_groups, DecorScratch, GroupLanes};
+use crate::layer::decor::scatter::SCALE_JITTER;
 use crate::layer::object::size::DECOR_SIZE;
-use crate::param::IMPOSTOR_GONE_CELLS;
-use pxl_render::look::lod::TARGET_CELL_PX;
 use crate::layer::object::store::{object_col_revision, EntryAt, Store};
-use pxl_spec::bake::format::Terrain;
+use crate::param::IMPOSTOR_GONE_CELLS;
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::chunk::build::{release_block, Builder};
 use crate::world::observation::{eye, frustum_of_view};
@@ -47,6 +45,8 @@ use crate::world::paging::floor;
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer;
 use crate::world::quality;
+use pxl_render::look::lod::TARGET_CELL_PX;
+use pxl_spec::bake::format::Terrain;
 
 /// A decor cell: a column of level `level`'s chunks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -73,7 +73,10 @@ impl DecorCell {
     fn children(self) -> [DecorCell; 4] {
         let [x, y] = self.at;
         let l = self.level - 1;
-        [[0, 0], [1, 0], [0, 1], [1, 1]].map(|[dx, dy]| DecorCell { level: l, at: [x * 2 + dx, y * 2 + dy] })
+        [[0, 0], [1, 0], [0, 1], [1, 1]].map(|[dx, dy]| DecorCell {
+            level: l,
+            at: [x * 2 + dx, y * 2 + dy],
+        })
     }
 }
 

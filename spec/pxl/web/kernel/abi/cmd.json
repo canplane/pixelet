@@ -76,7 +76,7 @@
           "value": 18
         },
         {
-          "name": "LOAD",
+          "name": "IMAGE",
           "value": 19
         },
         {
@@ -233,27 +233,15 @@
       ]
     },
     {
-      "name": "LoadMinor",
+      "name": "ImageMinor",
       "doc": [
-        "A load's verbs."
+        "An image's verbs."
       ],
       "format": "hex2",
       "entries": [
         {
-          "name": "START",
+          "name": "DECODED",
           "value": 1
-        },
-        {
-          "name": "CANCEL",
-          "value": 2
-        },
-        {
-          "name": "FAILED",
-          "value": 3
-        },
-        {
-          "name": "IMAGE",
-          "value": 4
         }
       ]
     },
@@ -756,71 +744,24 @@
           ]
         },
         {
-          "name": "LOAD_START",
-          "value": 4865,
-          "doc": [
-            "An image the scheduler wants read and decoded. It shares the credits with the pages,",
-            "and so is started when one is free rather than all at once; which file it is and",
-            "where it lives is the host's. A model is read as a file (xpute's OPENAT, root ASSET)."
-          ],
-          "signal": [
-            {
-              "name": "key",
-              "type": "u64"
-            },
-            {
-              "name": "load",
-              "type": "u32",
-              "doc": [
-                "asset/ingested's asset number, the texture pack's sheet one past the last."
-              ]
-            }
-          ]
-        },
-        {
-          "name": "LOAD_CANCEL",
-          "value": 4866,
-          "doc": [
-            "Stop this image's read: the scheduler took its credit back. The host answers LOAD_FAILED."
-          ],
-          "signal": [
-            {
-              "name": "key",
-              "type": "u64"
-            }
-          ]
-        },
-        {
           "section": "the host answers: an I/O the process started, done"
         },
         {
-          "name": "LOAD_IMAGE",
-          "value": 4868,
+          "name": "IMAGE_DECODED",
+          "value": 4865,
           "doc": [
-            "An image decoded and held by the shell."
+            "An image the kernel asked decoded (host.json's IMAGE_DECODE): 0, held for the renderer",
+            "as the kernel's `image`, or -errno where the file is not an image the device decodes.",
+            "A file that did not come is the open's answer (xpute's SYS_OPENED), not this."
           ],
           "packet": [
             {
-              "name": "key",
-              "type": "u64"
+              "name": "image",
+              "type": "u32"
             },
             {
-              "name": "handle",
-              "type": "u32"
-            }
-          ]
-        },
-        {
-          "name": "LOAD_FAILED",
-          "value": 4867,
-          "doc": [
-            "An image's read failed or was stopped. The guest wants it again, after whatever the",
-            "scheduler makes it wait."
-          ],
-          "packet": [
-            {
-              "name": "key",
-              "type": "u64"
+              "name": "res",
+              "type": "i32"
             }
           ]
         },

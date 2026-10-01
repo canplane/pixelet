@@ -18,7 +18,7 @@
 //!
 //! raw wire   = [ele, buildings, segments, base, coasts]
 //!   buildings = [[gers_id, subtype, class, height, num_floors, geom_wkb], ...]
-//!   segments  = [[gers_id, subtype, class, road, geom_wkb], ...]
+//!   segments  = [[gers_id, subtype, class, flags, geom_wkb], ...]
 //!   base      = [[gers_id, source, subtype, class, geom_wkb], ...]  (source: land_use|water|land|infrastructure)
 //!   coasts    = [[id, geom_wkb, covers_page], ...]
 //!
@@ -63,8 +63,10 @@ pub struct SegmentRow {
     pub gers_id: String,
     pub subtype: String,
     pub class: Option<String>,
-    pub road: Option<String>, // raw JSON text (::text of the road JSONB column)
-    pub geom_wkb: Box<[u8]>,  // WKB
+    /// Raw JSON text of the segment's `road_flags` or `rail_flags`, whichever
+    /// its subtype carries.
+    pub flags: Option<String>,
+    pub geom_wkb: Box<[u8]>, // WKB
 }
 
 pub struct BaseRow {

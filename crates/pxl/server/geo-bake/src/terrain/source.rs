@@ -55,7 +55,7 @@ fn segment_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a SegmentRow) {
         t.str(Some(&row.gers_id))
             .str(Some(&row.subtype))
             .str(row.class.as_deref())
-            .str(row.road.as_deref())
+            .str(row.flags.as_deref())
             .u8_array(Some(&row.geom_wkb));
     }));
 }

@@ -36,7 +36,7 @@ export const enum Major {
   WORLD = 0x10,
   INPUT = 0x11,
   SENSOR = 0x12,
-  LOAD = 0x13,
+  IMAGE = 0x13,
   GPU = 0x14,
   SURFACE = 0x15,
   SETTING = 0x16,
@@ -82,12 +82,9 @@ export const enum SensorMinor {
   ORIENTATION_LOST = 0x0a,
 }
 
-/** A load's verbs. */
-export const enum LoadMinor {
-  START = 0x01,
-  CANCEL = 0x02,
-  FAILED = 0x03,
-  IMAGE = 0x04,
+/** An image's verbs. */
+export const enum ImageMinor {
+  DECODED = 0x01,
 }
 
 /** The GPU's verbs. */
@@ -259,20 +256,13 @@ export const enum Command {
   SENSOR_START = 0x1201,
   /** Stop watching. */
   SENSOR_STOP = 0x1203,
-  /** An image the scheduler wants read and decoded. It shares the credits with the pages,
-   * and so is started when one is free rather than all at once; which file it is and
-   * where it lives is the host's. A model is read as a file (xpute's OPENAT, root ASSET). */
-  LOAD_START = 0x1301,
-  /** Stop this image's read: the scheduler took its credit back. The host answers LOAD_FAILED. */
-  LOAD_CANCEL = 0x1302,
 
   // ---- the host answers: an I/O the process started, done ----
 
-  /** An image decoded and held by the shell. */
-  LOAD_IMAGE = 0x1304,
-  /** An image's read failed or was stopped. The guest wants it again, after whatever the
-   * scheduler makes it wait. */
-  LOAD_FAILED = 0x1303,
+  /** An image the kernel asked decoded (host.json's IMAGE_DECODE): 0, held for the renderer
+   * as the kernel's `image`, or -errno where the file is not an image the device decodes.
+   * A file that did not come is the open's answer (xpute's SYS_OPENED), not this. */
+  IMAGE_DECODED = 0x1301,
   /** A GPS fix; a field is absent where the browser gave none. */
   SENSOR_POSITION = 0x1202,
   /** An orientation event; a field is absent where the browser gave none. */
@@ -524,43 +514,14 @@ export function read_sensor_stop(b: BranchCursor): SensorStopSignal {
   return { sensor: b.at(0).get<Sensor>() };
 }
 
-/** Command.LOAD_START's signal. */
-export interface LoadStartSignal {
-  key: u64;
-  /** asset/ingested's asset number, the texture pack's sheet one past the last. */
-  load: u32;
+/** Command.IMAGE_DECODED's packet. */
+export interface ImageDecoded {
+  image: u32;
+  res: i32;
 }
 
-export function read_load_start(b: BranchCursor): LoadStartSignal {
-  return { key: b.at(0).get<u64>(), load: b.at(1).get<u32>() };
-}
-
-/** Command.LOAD_CANCEL's signal. */
-export interface LoadCancelSignal {
-  key: u64;
-}
-
-export function read_load_cancel(b: BranchCursor): LoadCancelSignal {
-  return { key: b.at(0).get<u64>() };
-}
-
-/** Command.LOAD_IMAGE's packet. */
-export interface LoadImage {
-  key: u64;
-  handle: u32;
-}
-
-export function encode_load_image(p: LoadImage): U8Array {
-  return packet((b) => b.u64(p.key).u32(p.handle));
-}
-
-/** Command.LOAD_FAILED's packet. */
-export interface LoadFailed {
-  key: u64;
-}
-
-export function encode_load_failed(p: LoadFailed): U8Array {
-  return packet((b) => b.u64(p.key));
+export function encode_image_decoded(p: ImageDecoded): U8Array {
+  return packet((b) => b.u32(p.image).i32(p.res));
 }
 
 /** Command.SENSOR_POSITION's packet. */

@@ -172,8 +172,6 @@ pub const IMPOSTOR_GONE_CELLS: f64 = 0.5;
 /// behind can still catch up from before it has to read everything again.
 pub const JOURNAL_CAPACITY: u32 = 4096;
 
-
-
 // ---- per-frame work caps (world/chunk/table.rs, io/policy.rs) ----
 
 /// Pieces a frame starts building, which is a frame's worth of work: each
@@ -185,7 +183,6 @@ pub const STARTS_PER_FRAME: u32 = PAGE_CHUNKS * PAGE_CHUNKS;
 /// Layouts applied in one frame: a layout whose tiers have landed may build
 /// its decor before it is shown, which is a block's scatter each.
 pub const COMMITS_PER_FRAME: u32 = 8;
-
 
 /// The most attempts one pump starts (io/policy.rs). The credits already
 /// bound what is out; this bounds only how fast they are taken up.

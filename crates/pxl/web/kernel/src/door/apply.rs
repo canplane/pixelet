@@ -211,13 +211,9 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             ui::sensors_close();
             applied(s)
         }
-        Command::LOAD_IMAGE => {
-            let p = abi::LoadImage::read(packet(pkt)?)?;
-            crate::io::load::image_arrived(p.key, p.handle);
-            Ok(Some(0))
-        }
-        Command::LOAD_FAILED => {
-            crate::io::load::load_rejected(abi::LoadFailed::read(packet(pkt)?)?.key);
+        Command::IMAGE_DECODED => {
+            let p = abi::ImageDecoded::read(packet(pkt)?)?;
+            crate::io::load::image_decoded(p.image, p.res);
             Ok(Some(0))
         }
         Command::GPU_READY => {
@@ -296,7 +292,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         // An address in a memory of at most a gibibyte, which an i32 holds.
         Command::PROFILER_READ => Ok(Some(profiler_read(abi::ProfilerRead::read(packet(pkt)?)?.window_ms) as i32)),
         Command::PROFILER_TAKE => Ok(Some(profiler_take(s) as i32)),
-        Command::WORLD_SNAPSHOT | Command::SENSOR_START | Command::SENSOR_STOP | Command::LOAD_START | Command::LOAD_CANCEL => Ok(None),
+        Command::WORLD_SNAPSHOT | Command::SENSOR_START | Command::SENSOR_STOP => Ok(None),
     }
 }
 

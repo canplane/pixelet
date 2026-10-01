@@ -20,12 +20,15 @@
 //! the asset's own, and asking for them again brings back the same bytes, so
 //! that one is final.
 //!
-//! Where an asset lives is the host's. A model is a file below the assets'
-//! root (io/file.rs), opened, then read and parsed by `gltf_task` on the
-//! turns' quota; an image is decoded where the device is and comes back as
-//! the host's handle (LOAD_START, `image_arrived`) — the file's own pixels,
-//! top row first, no color conversion and no premultiplied alpha. A consumer
-//! polls: None while the read is out or the asset is broken.
+//! Where an asset lives is the host's. Either kind is a file below the
+//! assets' root (io/file.rs), opened alike and stopped alike by closing it.
+//! What differs is who consumes the bytes: a model's are read in and parsed
+//! by `gltf_task` on the turns' quota; an image's never cross — the host
+//! decodes the opened file where the device is and holds it for the
+//! renderer as a handle the kernel issued (host.json's IMAGE_DECODE,
+//! `image_decoded`) — the file's own pixels, top row first, no color
+//! conversion and no premultiplied alpha. A consumer polls: None while the
+//! read is out or the asset is broken.
 
 use std::rc::Rc;
 
@@ -33,8 +36,9 @@ use pxl_render::asset::gltf::{parse_gltf, Gltf};
 use pxl_spec::asset::ingested::Asset;
 use xpute_runtime::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 
-use crate::abi::host::root;
+use crate::abi::host::{op, root};
 use crate::global::Global;
+use crate::host::host_record;
 use crate::io::demand::Ask;
 use crate::io::file::{self, Owner};
 use crate::io::sched::{attempt_of, settle};
@@ -43,6 +47,7 @@ use crate::sched::profiler::record::{Failure, Outcome};
 use crate::world::change::{request_world_tick, world_edge};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
+use xpute_runtime::abi::handle::Slots;
 
 /// What an asset is read as.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -96,8 +101,9 @@ impl Load {
 enum Entry<T> {
     /// Wanted, and the read for it is the scheduler's business.
     Pending,
-    /// The file is open as this descriptor, this long, and nothing has read
-    /// or parsed it yet.
+    /// A model: the file is open as this descriptor, this long, and nothing
+    /// has read or parsed it yet. An image: the handle it is being decoded
+    /// under.
     Arrived(u32, u32),
     Ready(T),
     Failed,
@@ -202,18 +208,62 @@ fn arrivals() -> &'static mut Notify {
     ARRIVALS.get(Notify::new)
 }
 
-/// Opens a model's file for the scheduler's attempt `key`.
-pub fn open_model(key: u64, load: Load) {
-    file::open(root::ASSET, &load.number().to_string(), Owner::Model { key });
+/// Opens an asset's file for the scheduler's attempt `key`.
+pub fn open_asset(key: u64, kind: LoadKind, load: Load) {
+    let owner = match kind {
+        LoadKind::Gltf => Owner::Model { key },
+        LoadKind::Image => Owner::Image { key },
+    };
+    file::open(root::ASSET, &load.number().to_string(), owner);
 }
 
-/// Stops a model's read, if one is open: the asset is wanted again, as after
-/// a read that did not arrive.
-pub fn cancel_model(key: u64) -> bool {
-    let Some(fd) = file::held_for(|o| *o == Owner::Model { key }) else { return false };
+/// Stops an asset's read, if one is open: the asset is wanted again, as
+/// after a read that did not arrive.
+pub fn cancel_asset(key: u64) -> bool {
+    let Some(fd) = file::held_for(|o| *o == Owner::Model { key } || *o == Owner::Image { key }) else {
+        return false;
+    };
     file::close(fd);
     load_rejected(key);
     true
+}
+
+/// The images' handles, issued here as every handle to what the host keeps
+/// is (xpute-runtime abi/handle.rs).
+static IMAGES: Global<Slots<()>> = Global::new();
+
+/// The host's answer to an image's open: decoded where the device is, from
+/// the bytes the host holds, under a handle issued here — the file is closed
+/// in the same turn, since the host takes its bytes when it runs the decode
+/// — or a read that did not arrive.
+pub fn image_opened(fd: u32, key: u64, res: i32) {
+    if res < 0 {
+        file::close(fd);
+        load_rejected(key);
+        return;
+    }
+    let Some((_, load)) = ended(key, Outcome::ok) else {
+        file::close(fd);
+        return;
+    };
+    let image = IMAGES.get(Slots::default).insert(());
+    host_record(op::IMAGE_DECODE, &[fd, image], &[]);
+    file::close(fd);
+    loader().image[load.number() as usize] = Some(Entry::Arrived(image, 0));
+}
+
+/// The host's answer to a decode: the image ready under its handle, or a
+/// file that is no image the device decodes — the asset's own failure, which
+/// asking again would not change, so it is final, as a model that does not
+/// parse is.
+pub fn image_decoded(image: u32, res: i32) {
+    let l = loader();
+    let Some(n) = (0..LOADS).find(|&n| matches!(l.image[n], Some(Entry::Arrived(h, _)) if h == image)) else {
+        return;
+    };
+    l.image[n] = Some(if res == 0 { Entry::Ready(image) } else { Entry::Failed });
+    decor_assets_arrived();
+    request_world_tick();
 }
 
 /// The host's answer to a model's open: `gltf_task`'s to read and parse, or
@@ -262,14 +312,6 @@ pub async fn gltf_task() {
             request_world_tick();
         }
     }
-}
-
-/// The shell's handle for a decoded image.
-pub fn image_arrived(key: u64, handle: u32) {
-    let Some((_, load)) = ended(key, Outcome::ok) else { return };
-    loader().image[load.number() as usize] = Some(Entry::Ready(handle));
-    decor_assets_arrived();
-    request_world_tick();
 }
 
 /// The host's report that a read did not arrive. The asset goes back to

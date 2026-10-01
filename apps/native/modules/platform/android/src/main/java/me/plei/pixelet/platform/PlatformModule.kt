@@ -49,7 +49,7 @@ class PlatformModule : Module() {
     /** Decodes a PNG or a WebP and holds it for the renderer: its handle, or 0
      * when it does not decode. Async, so it runs off the JavaScript thread: a
      * large image costs no turn. */
-    AsyncFunction("imageHold") { file: ByteArray -> PxlCore.imageHold(file) }
+    AsyncFunction("imageHold") { handle: Int, file: ByteArray -> PxlCore.imageHold(handle, file) }
 
     // ---- storage (platform/storage.ts) ----
     //

@@ -48,7 +48,7 @@ pub enum Major {
     WORLD = 0x10,
     INPUT = 0x11,
     SENSOR = 0x12,
-    LOAD = 0x13,
+    IMAGE = 0x13,
     GPU = 0x14,
     SURFACE = 0x15,
     SETTING = 0x16,
@@ -62,7 +62,7 @@ impl Major {
         Major::WORLD,
         Major::INPUT,
         Major::SENSOR,
-        Major::LOAD,
+        Major::IMAGE,
         Major::GPU,
         Major::SURFACE,
         Major::SETTING,
@@ -169,22 +169,19 @@ impl SensorMinor {
     }
 }
 
-/// A load's verbs.
+/// An image's verbs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
-pub enum LoadMinor {
-    START = 0x01,
-    CANCEL = 0x02,
-    FAILED = 0x03,
-    IMAGE = 0x04,
+pub enum ImageMinor {
+    DECODED = 0x01,
 }
 
-impl LoadMinor {
-    pub const ALL: [LoadMinor; 4] = [LoadMinor::START, LoadMinor::CANCEL, LoadMinor::FAILED, LoadMinor::IMAGE];
+impl ImageMinor {
+    pub const ALL: [ImageMinor; 1] = [ImageMinor::DECODED];
 
     /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<LoadMinor> {
-        LoadMinor::ALL.into_iter().find(|m| *m as u32 == number)
+    pub fn of(number: u32) -> Option<ImageMinor> {
+        ImageMinor::ALL.into_iter().find(|m| *m as u32 == number)
     }
 }
 
@@ -572,19 +569,12 @@ pub enum Command {
     SENSOR_START = 0x1201,
     /// Stop watching.
     SENSOR_STOP = 0x1203,
-    /// An image the scheduler wants read and decoded. It shares the credits with the pages,
-    /// and so is started when one is free rather than all at once; which file it is and
-    /// where it lives is the host's. A model is read as a file (xpute's OPENAT, root ASSET).
-    LOAD_START = 0x1301,
-    /// Stop this image's read: the scheduler took its credit back. The host answers LOAD_FAILED.
-    LOAD_CANCEL = 0x1302,
 
     // ---- the host answers: an I/O the process started, done ----
-    /// An image decoded and held by the shell.
-    LOAD_IMAGE = 0x1304,
-    /// An image's read failed or was stopped. The guest wants it again, after whatever the
-    /// scheduler makes it wait.
-    LOAD_FAILED = 0x1303,
+    /// An image the kernel asked decoded (host.json's IMAGE_DECODE): 0, held for the renderer
+    /// as the kernel's `image`, or -errno where the file is not an image the device decodes.
+    /// A file that did not come is the open's answer (xpute's SYS_OPENED), not this.
+    IMAGE_DECODED = 0x1301,
     /// A GPS fix; a field is absent where the browser gave none.
     SENSOR_POSITION = 0x1202,
     /// An orientation event; a field is absent where the browser gave none.
@@ -682,13 +672,10 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 44] = [
+    pub const ALL: [Command; 41] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
-        Command::LOAD_START,
-        Command::LOAD_CANCEL,
-        Command::LOAD_IMAGE,
-        Command::LOAD_FAILED,
+        Command::IMAGE_DECODED,
         Command::SENSOR_POSITION,
         Command::SENSOR_ORIENTATION,
         Command::SENSOR_ERROR,
@@ -956,64 +943,20 @@ impl SensorStopSignal {
     }
 }
 
-/// Command::LOAD_START's signal.
-pub struct LoadStartSignal {
-    pub key: u64,
-    /// asset/ingested's asset number, the texture pack's sheet one past the last.
-    pub load: u32,
-}
-
-impl LoadStartSignal {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 2;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u64(Some(self.key));
-        w.u32(Some(self.load));
-    }
-}
-
-/// Command::LOAD_CANCEL's signal.
-pub struct LoadCancelSignal {
-    pub key: u64,
-}
-
-impl LoadCancelSignal {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 1;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u64(Some(self.key));
-    }
-}
-
-/// Command::LOAD_IMAGE's packet.
+/// Command::IMAGE_DECODED's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct LoadImage {
-    pub key: u64,
-    pub handle: u32,
+pub struct ImageDecoded {
+    pub image: u32,
+    pub res: i32,
 }
 
-impl LoadImage {
-    pub fn read(pkt: &[u8]) -> Result<LoadImage, MarshalError> {
+impl ImageDecoded {
+    pub fn read(pkt: &[u8]) -> Result<ImageDecoded, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(LoadImage {
-            key: f.at(0)?.get_u64()?,
-            handle: f.at(1)?.get_number()? as u32,
+        Ok(ImageDecoded {
+            image: f.at(0)?.get_number()? as u32,
+            res: f.at(1)?.get_number()? as i32,
         })
-    }
-}
-
-/// Command::LOAD_FAILED's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct LoadFailed {
-    pub key: u64,
-}
-
-impl LoadFailed {
-    pub fn read(pkt: &[u8]) -> Result<LoadFailed, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(LoadFailed { key: f.at(0)?.get_u64()? })
     }
 }
 

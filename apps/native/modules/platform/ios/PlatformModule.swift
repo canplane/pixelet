@@ -50,12 +50,13 @@ public class PlatformModule: Module {
       return pxl_gpu_open(&align, &timestamps) == 0 ? [align, timestamps] : nil
     }
 
-    /// Decodes a PNG or a WebP and holds it for the renderer: its handle, or 0
-    /// when it does not decode. Async, so it runs on the module's queue rather
-    /// than the JavaScript thread: a large image costs no turn.
-    AsyncFunction("imageHold") { (file: Data) -> UInt32 in
+    /// Decodes a PNG or a WebP and holds it for the renderer as the kernel's
+    /// `handle`: 1, or 0 when it does not decode. Async, so it runs on the
+    /// module's queue rather than the JavaScript thread: a large image costs
+    /// no turn.
+    AsyncFunction("imageHold") { (handle: UInt32, file: Data) -> UInt32 in
       file.withUnsafeBytes { bytes in
-        pxl_image_hold(bytes.bindMemory(to: UInt8.self).baseAddress, UInt32(bytes.count))
+        pxl_image_hold(handle, bytes.bindMemory(to: UInt8.self).baseAddress, UInt32(bytes.count))
       }
     }
 

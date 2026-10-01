@@ -14,10 +14,9 @@ mod apply;
 mod executor;
 pub mod layout;
 
-use crate::abi::cmd::{Command, LoadCancelSignal, LoadStartSignal, Sensor, SensorStartSignal, WorldFrameSignal, WorldSnapshotSignal};
+use crate::abi::cmd::{Command, Sensor, SensorStartSignal, WorldFrameSignal, WorldSnapshotSignal};
 use crate::global::Global;
 use crate::host::HeapStat;
-use crate::io::load::LoadKind;
 use crate::kernel::kernel;
 use crate::mem::fixed::Range;
 use crate::mem::section;
@@ -308,26 +307,22 @@ fn post_shell(s: &mut State) {
     }
     // The key crosses as the one word the queue orders by; the shell holds it
     // as a handle and hands it back, and never reads into it.
-    // A bake's object and a model are files the kernel opens; an image is
-    // decoded where the device is, so it is asked for by command.
+    // A bake's object and an asset alike are files the kernel opens.
     take_started(|key, category, subject| match category.bake() {
         Some(_) => crate::io::fetch::start(key, category, subject),
-        None => match crate::io::load::of_subject(subject) {
-            Some((LoadKind::Gltf, load)) => crate::io::load::open_model(key, load),
-            Some((LoadKind::Image, load)) => {
-                let signal = LoadStartSignal { key, load: load.number() };
-                raise(Command::LOAD_START, LoadStartSignal::FIELDS, |w| signal.write(w));
+        None => {
+            if let Some((kind, load)) = crate::io::load::of_subject(subject) {
+                crate::io::load::open_asset(key, kind, load);
             }
-            None => {}
-        },
+        }
     });
     // Taken first: stopping a read settles it, which the scheduler's own
     // walk over its stops must not be inside.
     let mut stops = Vec::new();
     take_stops(|key| stops.push(key));
     for key in stops {
-        if !crate::io::fetch::cancel(key) && !crate::io::load::cancel_model(key) {
-            raise(Command::LOAD_CANCEL, LoadCancelSignal::FIELDS, |w| LoadCancelSignal { key }.write(w));
+        if !crate::io::fetch::cancel(key) {
+            crate::io::load::cancel_asset(key);
         }
     }
 }

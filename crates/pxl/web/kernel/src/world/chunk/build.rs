@@ -67,7 +67,6 @@ pub fn release_block(at: usize, bytes: u32) {
     unsafe { free((at, bytes)) };
 }
 
-
 // ---- the build as the kernel runs it ----
 //
 // A chunk's build, from its sources to its meshes, a chunk at a time under

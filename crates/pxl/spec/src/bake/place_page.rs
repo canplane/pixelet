@@ -40,8 +40,8 @@
 
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
-use xpute_core::wire::xtp::{BranchCursor, Strs};
 use xpute_core::wire::xtp::{encoder, BranchViewImpl, NodeView, TreeEncoderOptions, TreeReader, TreeView};
+use xpute_core::wire::xtp::{BranchCursor, Strs};
 
 use crate::bake::quadkey::{quadkey_of, Quadkey};
 use crate::place::PlaceRank;

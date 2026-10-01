@@ -103,7 +103,7 @@ WHERE geom && env.e";
 const OVERTURE_TRANSPORTATION_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
-SELECT gers_id, subtype, class, road::text AS road, ST_AsBinary(geom) AS geom_wkb
+SELECT gers_id, subtype, class, COALESCE(road_flags, rail_flags)::text AS flags, ST_AsBinary(geom) AS geom_wkb
 FROM overture_transportation, env
 WHERE geom && env.e";
 
@@ -221,7 +221,7 @@ impl TerrainRepository {
                 gers_id: row.get("gers_id"),
                 subtype: row.get("subtype"),
                 class: row.get("class"),
-                road: row.get("road"),
+                flags: row.get("flags"),
                 geom_wkb: wkb(row),
             })
             .collect();

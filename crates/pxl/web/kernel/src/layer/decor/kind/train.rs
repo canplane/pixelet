@@ -3,10 +3,11 @@
 //! A decor kind: its seed, its rules and its models, as the registry
 //! (decor/registry.rs) binds them.
 //!
-//! Occasional trains on rail lines. rail_main only (not RAIL_SUBWAY —
-//! that's underground, wrong context for a surface-scattered prop). Same
-//! "align_transport" reasoning as car applies: a train lying across the rail
-//! sideways would read as derailed. Only the transport channel matters.
+//! Occasional trains on rail lines, subway included: what runs in a tunnel
+//! is not painted on the ground at all, so a subway track the ground shows is
+//! one at the surface. Same "align_transport" reasoning as car applies: a
+//! train lying across the rail sideways would read as derailed. Only the
+//! transport channel matters.
 
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::bake::format::GroundChannelKey;
@@ -45,7 +46,7 @@ pub const DEF: DecorKindDef = DecorKindDef {
         density: 0.004,
         orientation: DecorOrientationMode::AlignTransport,
     },
-    rules: DecorRules::ANY.one_of(GroundChannelKey::TRANSPORT, &[Transport::rail_main as u8]),
+    rules: DecorRules::ANY.one_of(GroundChannelKey::TRANSPORT, &[Transport::rail_main as u8, Transport::rail_subway as u8]),
     variants: &VARIANTS,
     decor_id: None,
 };
