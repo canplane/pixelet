@@ -1,12 +1,12 @@
 // pxl-kernel/control/camera/free.rs
 
 //! The free camera. It turns the camera (controller.rs `Camera`) about its
-//! eye, which is the map center, and walks it (`pan`), at one speed wherever
-//! it stands. The eye's height is no control: the eye's target stands where
-//! the walk every camera pans by stands (layer/terrain/ground_snap.rs
-//! `walk`), `EYE_HEIGHT_U` over it — in a cave as on the surface — and the
-//! drawn eye comes to that target, so on a slope or a step it is on its way
-//! there rather than at that height every frame.
+//! eye, which is the map center and the character's place, and walks it
+//! (controller.rs `pan`), at one speed wherever it stands. The eye's height
+//! is no control: the eye's target stands where the walk every camera pans
+//! by stands (layer/terrain/ground_snap.rs `walk`) — in a cave as on the
+//! surface — and the drawn eye comes to that target, so on a slope or a
+//! step it is on its way there rather than at that height every frame.
 //!
 //! As the orbit's, its target and what is drawn are kept apart: the controls
 //! write where the eye is to stand and the look in the camera store's
@@ -14,21 +14,19 @@
 //! (approach.rs). The ground sets the target's height as the drag sets its X
 //! and Y, so a step in the ground comes as every other move does.
 
-use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::v3::V3;
 
 use crate::control::camera::approach::{approach_angle, approach_scalar, approach_vec};
-use crate::control::camera::config::camera_cfg::free::EYE_HEIGHT_U;
 use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, POS_DAMP, ROT_DAMP};
 use crate::control::camera::controller::{camera, eye_local, map_center, set_eye_local};
 use crate::control::camera::controller::look_domain;
 use crate::control::camera::store::camera_store;
 use crate::global::Global;
 use crate::world::access::{Access, Detail, Ray};
-use crate::world::frame::coord::{canonical_to_local, local_world_to_canonical};
+use crate::world::frame::coord::canonical_to_local;
 use crate::world::frame::view::{view, view_compose};
 
 /// What a look from `eye` along `forward` falls on, in the root frame: the
@@ -67,41 +65,21 @@ fn to() -> &'static mut Option<Pvf3> {
 const EYE_EPS: f64 = 0.001;
 const LOOK_EPS: f64 = 0.0001;
 
-/// How far the eye stands over the pivot a walker standing where it does
-/// has: the middle of the cell it fills, the camera's own convention
-/// (layer/terrain/ground_snap.rs), to the eye's height.
-pub(crate) const EYE_OVER_PIVOT: f64 = EYE_HEIGHT_U - U_PER_CELL / 2.0;
-
-/// The map center the eye's target has: under it by the eye's height, as
-/// the drawn one is (controller.rs `center_local`).
+/// The map center the eye's target has: the eye's target itself, as the
+/// drawn map center is the drawn eye (controller.rs `center_local`).
 pub(crate) fn target_center() -> Option<Pvf3> {
-    match *to() {
-        Some(eye) => Some(raised(&eye, -EYE_OVER_PIVOT)),
-        None => map_center(),
-    }
+    to().or_else(map_center)
 }
 
-/// The eye's target put over `at`, a map center — the middle of the cell a
-/// walker fills — at the eye's height: where a place said outright puts it,
-/// and with `snap` the drawn eye there at once.
+/// The eye's target put at `at`, a map center, which first person is the
+/// eye: where a place said outright puts it, and with `snap` the drawn eye
+/// there at once.
 pub(crate) fn put(at: Pvf3, snap: bool) {
-    let eye = raised(&at, EYE_OVER_PIVOT);
+    let eye = at;
     *to() = Some(eye);
     if snap {
         set_eye_local(&canonical_to_local(&eye, view().origin));
     }
-}
-
-fn canonical(local: &V3) -> Pvf3 {
-    let mut out = Pvf3::default();
-    local_world_to_canonical(&mut out, local, view().origin);
-    out
-}
-
-/// `at` raised by `dz` units.
-fn raised(at: &Pvf3, dz: f64) -> Pvf3 {
-    let local = canonical_to_local(at, view().origin);
-    canonical(&[local[0], local[1], local[2] + dz])
 }
 
 /// The free camera's turn over `delta` seconds: its eye and its look each

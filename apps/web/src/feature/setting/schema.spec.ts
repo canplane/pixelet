@@ -108,7 +108,7 @@ export const SETTINGS = {
     section: "camera",
     dev: true,
   },
-  /** Panning re-samples the terrain height under the map center each step. */
+  /** Panning stands the map center where a walker would (world/access.rs support), in either person; off, it moves at its own height. */
   ground_snap: {
     key: 7 as number,
     kind: "toggle",

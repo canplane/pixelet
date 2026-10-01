@@ -141,19 +141,18 @@ pub fn radius() -> f64 {
     }
 }
 
-/// The map center in the view's root frame: the middle of the cell the
-/// walker fills, whichever person — `radius` ahead of the drawn eye along
-/// its look third person, a person's eye height under the eye first person
-/// — and the tracked eye itself while a tracker holds the pose.
+/// The map center in the view's root frame: the camera's center, which is
+/// the character's place — `radius` ahead of the drawn eye along its look,
+/// the eye itself first person, and the tracked eye while a tracker holds
+/// the pose.
 pub fn center_local() -> Option<V3> {
     camera().eye?;
+    if active() == Active::Tracked {
+        return Some(view().pose.eye);
+    }
     let (e, c) = (eye_local()?, camera());
     let (d, r) = (look_dir(c.pitch, c.yaw), radius());
-    match active() {
-        Active::Tracked => Some(view().pose.eye),
-        Active::Orbit => Some(std::array::from_fn(|k| e[k] + d[k] * r)),
-        Active::Free => Some([e[0], e[1], e[2] - crate::control::camera::free::EYE_OVER_PIVOT]),
-    }
+    Some(std::array::from_fn(|k| e[k] + d[k] * r))
 }
 
 /// The map center: the character's place, and what the world is related to
@@ -216,11 +215,11 @@ pub fn pan(dx: f64, dy: f64) {
         Active::Free | Active::Tracked => DEFAULT_DIST,
     };
     let yaw = camera().yaw;
-    // Third person stands its center as it walks where the ground snap is
-    // on, and first person always stands its eye.
-    let to = match active() {
-        Active::Orbit if !settings_store().ground_snap => moved(&from, dx, dy, units_per_px_at(across), yaw),
-        _ => walk(&from, dx, dy, units_per_px_at(across), yaw),
+    // The ground snap is the walk's support, in either person: off, the
+    // map center moves at its own height.
+    let to = match settings_store().ground_snap {
+        true => walk(&from, dx, dy, units_per_px_at(across), yaw),
+        false => moved(&from, dx, dy, units_per_px_at(across), yaw),
     };
     let to = match active() {
         Active::Orbit => crate::control::camera::orbit::gate_pan(&to),

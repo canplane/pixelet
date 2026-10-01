@@ -3,7 +3,7 @@
     "camera": {
       "ground_snap": {
         "label": "Ground Altitude Lock",
-        "description": "Constrains the camera focus altitude to the actual terrain height while panning."
+        "description": "While panning, the camera focus stands where a walker would: down to the floor, up a step, stopped by a wall."
       },
       "camera_collision": {
         "label": "Terrain Collision",

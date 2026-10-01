@@ -188,7 +188,7 @@ pub enum SettingKey {
     /// back a control that did nothing, which reads as the app being stuck
     /// rather than as the ground being in the way.
     camera_collision = 6,
-    /// Panning re-samples the terrain height under the map center each step.
+    /// Panning stands the map center where a walker would (world/access.rs support), in either person; off, it moves at its own height.
     ground_snap = 7,
     /// Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.

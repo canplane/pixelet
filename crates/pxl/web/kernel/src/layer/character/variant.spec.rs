@@ -112,7 +112,7 @@ pub mod groups {
             pxl_spec::asset::ingested::Asset::actor_kenney_mini_characters_male_f_glb,
         ];
         pub const skin: pxl_spec::asset::ingested::Asset = pxl_spec::asset::ingested::Asset::actor_kenney_mini_characters_colormap_png;
-        /// The catch-up/preview move's clip, by its index in the pack's animations —
+        /// The walk/preview move's clip, by its index in the pack's animations —
         /// every file of a pack lists them in one order, and Kenney doesn't name this
         /// "walk" consistently: the person's is "sprint", the pet's "run".
         pub const move_clip: u32 = 3;
@@ -239,7 +239,7 @@ pub mod groups {
             pxl_spec::asset::ingested::Asset::actor_kenney_cube_pets_tiger_glb,
         ];
         pub const skin: pxl_spec::asset::ingested::Asset = pxl_spec::asset::ingested::Asset::actor_kenney_cube_pets_colormap_png;
-        /// The catch-up/preview move's clip, by its index in the pack's animations —
+        /// The walk/preview move's clip, by its index in the pack's animations —
         /// every file of a pack lists them in one order, and Kenney doesn't name this
         /// "walk" consistently: the person's is "sprint", the pet's "run".
         pub const move_clip: u32 = 3;

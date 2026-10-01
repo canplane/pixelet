@@ -1,19 +1,23 @@
 // pxl-kernel/layer/terrain/ground_snap.rs
 
-//! The map center standing on the ground: where the camera pivots over a
-//! coordinate, and the one walk every camera's pan takes.
+//! The map center standing on the ground, and the one walk every camera's
+//! pan takes.
+//!
+//! The map center is the character's place, and a point on the lattice as
+//! every placed thing's is: a corner, its Z the floor the character stands
+//! on (world/access.rs `support`), X and Y where the hand left it. Read as a
+//! cell it is the cell that corner is the low corner of, and its middle is
+//! half a cell in on every axis alike (object/geometry.rs `anchor_center`).
 
-use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 
 use crate::world::access::{Access, Answer};
 use crate::world::frame::coord::{canonical_to_local, local_world_origin, local_world_to_canonical};
 
-/// Where a walker standing from a coordinate is, as the camera pivots on it.
+/// Where a walker standing from a coordinate is.
 pub enum Pivot {
-    /// The center of the cube standing on what supports a walker starting
-    /// from the cell the coordinate lies in (world/access.rs `support`) —
-    /// the cell the character occupies.
+    /// The coordinate on the floor of what supports a walker starting from
+    /// the cell it lies in (world/access.rs `support`).
     Stands(Pvf3),
     /// That cell is filled taller than a step: a wall.
     Blocked,
@@ -21,12 +25,9 @@ pub enum Pivot {
     Unknown,
 }
 
-/// A center, not the top face, because the camera pivots on the cube the
-/// character would fill. Every map center an interaction sets — a pan, a
-/// tap — is this one, and the free camera's eye stands on the same support,
-/// so the first pan after a tap moves nothing. Standing things (the puck,
-/// decor, a place) are grounded to the top face itself; this is the one
-/// place the camera's own convention is applied.
+/// Every map center an interaction sets — a pan, a tap — is this one, and
+/// the free camera's eye stands over the same support, so the first pan
+/// after a tap moves nothing.
 pub fn ground_pivot(at: &Pvf3) -> Pivot {
     match Access::now().support(at) {
         Answer::Exact(Some(top)) | Answer::Coarser(Some(top), _) => Pivot::Stands(pivot_over(at, top)),
@@ -35,10 +36,10 @@ pub fn ground_pivot(at: &Pvf3) -> Pivot {
     }
 }
 
-/// The pivot over `at` on ground whose top is `top`.
+/// `at` on ground whose top is `top`: at its X and Y, on that floor.
 pub fn pivot_over(at: &Pvf3, top: f64) -> Pvf3 {
     let mut out = Pvf3::default();
-    pvf3::gather(&mut out, pvf3::X(at), pvf3::Y(at), pvf3::from_real(top + U_PER_CELL / 2.0));
+    pvf3::gather(&mut out, pvf3::X(at), pvf3::Y(at), pvf3::from_real(top));
     out
 }
 

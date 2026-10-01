@@ -49,26 +49,20 @@ pub struct Platform {
     pub orientation: OrientationPlatform,
 }
 
-/// The companion's place, from map_center in the local floating-origin frame —
-/// wherever the camera actually is, not the origin's cell's center. Only
+/// The companion's place: the map center, which is the character's. Only
 /// where the camera stands off it: where the eye is the map center, the
 /// character is the one looking.
 fn companion_props() -> Option<CompanionProps> {
     if crate::control::camera::controller::radius() == 0.0 {
         return None;
     }
-    let map_center = crate::control::camera::controller::map_center()?;
-    let map_origin = local_world_origin();
-    let local = crate::world::frame::coord::canonical_to_local(&map_center, map_origin);
     Some(CompanionProps {
-        map_origin,
-        center_x: local[0],
-        center_y: local[1],
+        map_center: crate::control::camera::controller::map_center()?,
     })
 }
 
-fn companion_tick(ctx: &mut TickContext) {
-    companion_step(ctx, companion_props());
+fn companion_tick(_: &mut TickContext) {
+    companion_step(companion_props());
 }
 
 fn debug_gizmos_tick(_: &mut TickContext) {

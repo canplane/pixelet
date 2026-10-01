@@ -4,6 +4,7 @@
 //
 // - the map center is the eye pushed the radius along the look, the eye
 //   itself first person;
+// - a change of person leaves the map center where it is;
 // - a pinch keeps no debt past a limit;
 // - the look's coordinates hold over their whole domain: every tilt a
 //   rotation, and at either pole every heading the one direction.
@@ -51,6 +52,36 @@ fn the_map_center_is_the_eye_pushed_the_radius_along_the_look() {
         assert!(near(center_local().unwrap(), eye_local().unwrap(), 1e-12), "{n}: first person");
         controllers().base = CameraMode::orbit;
     }
+}
+
+/// The map center is the character's place, and a change of person moves
+/// the camera about it and never it: third person to first and back, it
+/// stays where it was.
+#[test]
+fn a_change_of_person_leaves_the_map_center() {
+    let _g = serial();
+    third_person();
+    let mut rng = Rng(0xc0de);
+    for n in 0..100 {
+        let center = [rng.unit() * 2_000.0 - 1_000.0, rng.unit() * 2_000.0 - 1_000.0, rng.unit() * 40.0];
+        let (dist, polar, azimuth) = (camera_cfg::view::MIN_DIST + rng.unit() * 2_000.0, rng.unit() * core::f64::consts::PI, rng.unit() * 6.0 - 3.0);
+        place(center, dist, polar, azimuth);
+        // What a change of person does (`switch`): the map center one
+        // person has, the other's camera put at it.
+        for mode in [CameraMode::free, CameraMode::orbit] {
+            let at = map_center().unwrap();
+            controllers().base = mode;
+            match mode {
+                CameraMode::free => crate::control::camera::free::put(at, true),
+                CameraMode::orbit => crate::control::camera::orbit::put(at, true),
+            }
+            // To the precision a canonical point keeps: its fraction is in
+            // 256ths of a unit.
+            let got = center_local().unwrap();
+            assert!((0..3).all(|k| (got[k] - center[k]).abs() <= 1.0 / 256.0), "{n}: moved by the change to {mode:?}");
+        }
+    }
+    third_person();
 }
 
 /// A pinch is the fingers' spread against where it began, and keeps no

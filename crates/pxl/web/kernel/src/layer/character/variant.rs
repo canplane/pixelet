@@ -24,7 +24,7 @@ pub struct CharacterVariant {
     /// on-screen height the model is scaled to, and it is the group's
     /// `size`: one full cell tall for the person, a quarter cell for the pet.
     pub height_u: f64,
-    /// The catch-up/preview move's clip, by its animation's index.
+    /// The walk/preview move's clip, by its animation's index.
     pub move_clip: u32,
 }
 
