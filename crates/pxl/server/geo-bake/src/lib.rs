@@ -19,6 +19,7 @@
 
 pub mod cli;
 pub mod deck;
+pub mod elevation;
 pub mod geocode;
 pub mod page;
 pub mod poi;

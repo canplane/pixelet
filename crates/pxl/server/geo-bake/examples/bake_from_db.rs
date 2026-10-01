@@ -11,8 +11,10 @@
 //! Reads DB_GEO_URL from the environment.
 
 use std::fs;
+use std::sync::Arc;
 
 use postgres::{Client, NoTls};
+use pxl_geo_bake::elevation::Raster;
 use pxl_geo_bake::terrain::repository::TerrainRepository;
 use pxl_geo_bake::terrain::source::{fetch_tile, SourceStats};
 
@@ -22,7 +24,8 @@ fn main() {
 
     let url = std::env::var("DB_GEO_URL").expect("DB_GEO_URL");
     let mut client = Client::connect(&url, NoTls).expect("connect");
-    let repo = TerrainRepository::prepare(&mut client).expect("prepare");
+    let raster = Arc::new(Raster::open(&mut client).expect("raster"));
+    let repo = TerrainRepository::prepare(&mut client, raster).expect("prepare");
     let mut stats = SourceStats::default();
 
     for page in pages {
@@ -31,7 +34,7 @@ fn main() {
         fs::write(format!("{dir}/{page}.db.tile"), &tile).expect("write");
         println!("{page}\t{}", tile.len());
     }
-    if stats.invalid_ele_shape > 0 {
-        eprintln!("[bake] invalid ele shape on {} page(s)", stats.invalid_ele_shape);
+    if stats.flat_ele > 0 {
+        eprintln!("[bake] no elevation on {} page(s)", stats.flat_ele);
     }
 }

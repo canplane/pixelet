@@ -1,90 +1,17 @@
 // pxl-geo-bake/terrain/repository.rs
 
-//! One page's raw source, out of the geo database: the elevation raster
-//! resampled onto the page's grid, and the Overture Buildings, Transportation,
-//! Base and coastline rows its envelope touches.
+//! One page's raw source, out of the geo database: its elevation grid
+//! (elevation.rs), and the Overture Buildings, Transportation, Base and
+//! coastline rows its envelope touches.
+
+use std::sync::Arc;
 
 use postgres::types::ToSql;
 use postgres::{Client, Statement};
-use pxl_spec::bake::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN, CELL_PER_M};
 use pxl_spec::bake::format::{BaseRow, BuildingRow, CoastRow, DeckRow, SegmentRow};
 use pxl_spec::space::adapter::epsg3857::BBox3857;
 
-/// The elevation raster, clipped and resampled onto this page's own grid.
-///
-/// The padded span is what the bake reads: sampling stays valid at the page
-/// boundary only if the source envelope is expanded before the union, and the
-/// resample lands on the exact target grid rather than near it.
-fn elevation_sql() -> String {
-    format!(
-        "WITH cfg AS (
-  SELECT
-    {PAGE_ELE_SPAN}::float8 AS ele_span,
-    $5::float8 AS cell_per_m,
-    {ELE_PAD}::int AS pad,
-    {ELE_PADDED_SPAN}::int AS padded_span
-),
-params AS (
-  SELECT
-    $1::float8 AS minx,
-    $2::float8 AS miny,
-    $3::float8 AS maxx,
-    $4::float8 AS maxy,
-    ($3::float8 - $1::float8) AS width_m
-),
-calculated AS (
-  SELECT width_m / ele_span AS stride_m
-  FROM params, cfg
-),
-ref_rast AS (
-  SELECT ST_MakeEmptyRaster(
-    (SELECT padded_span FROM cfg), (SELECT padded_span FROM cfg),
-    (SELECT minx - (pad * stride_m) FROM params, cfg, calculated),
-    (SELECT maxy + (pad * stride_m) FROM params, cfg, calculated),
-    (SELECT stride_m FROM calculated), -(SELECT stride_m FROM calculated),
-    0, 0, 3857
-  ) AS rast
-),
-env AS (
-  -- Expanded source envelope to keep bilinear sampling valid near edges
-  SELECT ST_Expand(ST_Envelope(rast), (SELECT stride_m * 2 FROM calculated)) AS e
-  FROM ref_rast
-),
-mosaic AS (
-  -- Clip source rasters to the expanded envelope before union
-  SELECT ST_Union(ST_Clip(r.rast, env.e)) AS rast
-  FROM elevation_raster r, env
-  WHERE r.rast && env.e AND ST_Intersects(r.rast, env.e)
-),
-resampled AS (
-  -- Resample onto the exact target grid
-  SELECT ST_Resample(m.rast, r.rast, 'Bilinear') AS rast
-  FROM mosaic m, ref_rast r
-),
-final_rast AS (
-  -- Final clip to the exact output extent
-  SELECT ST_Clip(s.rast, ST_Envelope(r.rast)) AS rast
-  FROM resampled s, ref_rast r
-),
-dumped AS (
-  -- Extract the final resampled cell matrix as a 2D value array
-  SELECT (ST_DumpValues(rast)).valarray AS z_matrix
-  FROM final_rast
-)
-SELECT
-  array_agg(
-    COALESCE(round(val * (SELECT cell_per_m FROM cfg)), 0)::int2
-    ORDER BY row_idx DESC, col_idx ASC
-  ) AS ele
-FROM dumped,
-     unnest(z_matrix) WITH ORDINALITY AS t(val, ord),
-     LATERAL (
-       SELECT
-         ((ord - 1) / (SELECT padded_span FROM cfg))::int AS row_idx,
-         ((ord - 1) % (SELECT padded_span FROM cfg))::int AS col_idx
-     ) AS l;"
-    )
-}
+use crate::elevation::Raster;
 
 // Buildings and roads are not clipped to the page envelope, so a polygon
 // grazing a page costs it the whole geometry. Clipping them broke ring
@@ -166,7 +93,7 @@ FROM land
 WHERE NOT ST_IsEmpty(g)";
 
 pub struct PageSource {
-    /// Row-major, or none when the page has no elevation coverage.
+    /// Row-major, or none where the raster does not reach the page.
     pub ele: Option<Vec<i16>>,
     pub building_rows: Vec<BuildingRow>,
     pub segment_rows: Vec<SegmentRow>,
@@ -175,13 +102,14 @@ pub struct PageSource {
     pub deck_rows: Vec<DeckRow>,
 }
 
-/// The six statements, prepared once against one connection.
+/// The five statements, prepared once against one connection, and the
+/// raster the elevation is read from, which the connections share.
 ///
 /// An ordinary parameterized query re-planned every call spends ~34 ms of a
 /// ~44 ms bbox lookup against `overture_buildings` in planning; prepared once
 /// per physical connection, the lookup is ~2–3 ms.
 pub struct TerrainRepository {
-    ele: Statement,
+    raster: Arc<Raster>,
     buildings: Statement,
     segments: Statement,
     base: Statement,
@@ -190,9 +118,9 @@ pub struct TerrainRepository {
 }
 
 impl TerrainRepository {
-    pub fn prepare(client: &mut Client) -> Result<TerrainRepository, postgres::Error> {
+    pub fn prepare(client: &mut Client, raster: Arc<Raster>) -> Result<TerrainRepository, postgres::Error> {
         Ok(TerrainRepository {
-            ele: client.prepare(&elevation_sql())?,
+            raster,
             buildings: client.prepare(OVERTURE_BUILDINGS_SQL)?,
             segments: client.prepare(OVERTURE_TRANSPORTATION_SQL)?,
             base: client.prepare(OVERTURE_BASE_SQL)?,
@@ -201,18 +129,14 @@ impl TerrainRepository {
         })
     }
 
-    /// All six per-page queries on the one connection, in order. A page only
+    /// The page's elevation and its five queries on the one connection, in order. A page only
     /// ever holds one connection, so page-level concurrency and the worker
     /// count mean the same thing.
     pub fn fetch_page_source(&self, client: &mut Client, page_bbox: BBox3857) -> Result<PageSource, postgres::Error> {
         let (minx, miny, maxx, maxy) = (page_bbox[0][0], page_bbox[0][1], page_bbox[1][0], page_bbox[1][1]);
         let bbox: [&(dyn ToSql + Sync); 4] = [&minx, &miny, &maxx, &maxy];
-        let cell_per_m = CELL_PER_M(miny);
 
-        let ele = client
-            .query(&self.ele, &[&minx, &miny, &maxx, &maxy, &cell_per_m])?
-            .first()
-            .and_then(|row| row.get::<_, Option<Vec<i16>>>("ele"));
+        let ele = self.raster.page_grid(client, page_bbox)?;
 
         let building_rows = client
             .query(&self.buildings, &bbox)?

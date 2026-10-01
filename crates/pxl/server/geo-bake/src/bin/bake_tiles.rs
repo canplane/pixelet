@@ -34,7 +34,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use postgres::{Client, NoTls};
@@ -44,6 +44,7 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::LevelPage;
 
 use pxl_geo_bake::cli::Flags;
+use pxl_geo_bake::elevation::Raster;
 use pxl_geo_bake::page::walk::{land_pages, write_land_pages};
 use pxl_geo_bake::pyramid::{build, write_manifest, Layer, PageSet};
 use pxl_geo_bake::terrain::leaf::{bake_leaf, bake_ocean, has_land, ocean_samples, Coverage, NE, OCEAN_KEY, SW};
@@ -148,7 +149,7 @@ struct Totals {
     failed: u64,
     raw: u64,
     bytes: u64,
-    invalid_ele_shape: u64,
+    flat_ele: u64,
 }
 
 fn run() -> Result<(), String> {
@@ -171,6 +172,8 @@ fn run() -> Result<(), String> {
 
     let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
     let mut client = Client::connect(&url, NoTls).map_err(|e| e.to_string())?;
+    // One raster for every worker, so a tile pages share is read once.
+    let raster = Arc::new(Raster::open(&mut client).map_err(|e| e.to_string())?);
 
     let coverage = Coverage::of_source();
     let candidates = coverage.pages();
@@ -238,7 +241,7 @@ fn run() -> Result<(), String> {
                     Ok(c) => c,
                     Err(err) => return eprintln!("[bake/worker] connect failed: {err}"),
                 };
-                let repo = match TerrainRepository::prepare(&mut client) {
+                let repo = match TerrainRepository::prepare(&mut client, raster.clone()) {
                     Ok(r) => r,
                     Err(err) => return eprintln!("[bake/worker] prepare failed: {err}"),
                 };
@@ -252,7 +255,7 @@ fn run() -> Result<(), String> {
                         continue;
                     }
 
-                    let before = stats.invalid_ele_shape;
+                    let before = stats.flat_ele;
                     let result =
                         bake_leaf(&repo, &mut client, page_idx, &mut stats, Level::Stored).and_then(|(raw, packed)| tiles.write(LevelPage::new(0, page_idx), &packed).map(|()| (raw, packed.len())));
 
@@ -269,7 +272,7 @@ fn run() -> Result<(), String> {
                                 eprintln!("[bake/tile/{}] failed: {err}", ivec::repr(page_idx));
                             }
                         }
-                        t.invalid_ele_shape += stats.invalid_ele_shape - before;
+                        t.flat_ele += stats.flat_ele - before;
                         t.baked + t.skipped + t.failed
                     };
 
@@ -310,12 +313,11 @@ fn run() -> Result<(), String> {
     // A degraded tile still writes successfully, so it never shows up in
     // `failed` — surface it here rather than leaving it buried in per-page
     // warnings that nobody greps for after a forty-minute run.
-    if t.invalid_ele_shape > 0 {
-        let pct = t.invalid_ele_shape as f64 / t.baked.max(1) as f64 * 100.0;
+    if t.flat_ele > 0 {
+        let pct = t.flat_ele as f64 / t.baked.max(1) as f64 * 100.0;
         eprintln!(
-            "[bake] WARNING: {} of {} tiles ({pct:.2}%) had an invalid elevation shape and were baked FLAT (zero-filled elevation). \
-             Expected at the outer edge of the DEM coverage, where the padded sampling window falls outside the source raster.",
-            t.invalid_ele_shape, t.baked
+            "[bake] WARNING: {} of {} tiles ({pct:.2}%) are out of the elevation raster's reach and were baked FLAT (zero-filled elevation).",
+            t.flat_ele, t.baked
         );
     }
 
@@ -340,7 +342,7 @@ fn run() -> Result<(), String> {
                 "skipped": t.skipped,
                 "failed": t.failed,
                 "bytes": t.bytes,
-                "flat_elevation_tiles": t.invalid_ele_shape,
+                "flat_elevation_tiles": t.flat_ele,
             },
             "source": read_source_catalogs(&mut client),
         }),

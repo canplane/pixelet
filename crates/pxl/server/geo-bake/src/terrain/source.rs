@@ -23,14 +23,14 @@ const ELE_PADDED_SPAN2: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
 
 /// Degradations that are survivable per page but matter in bulk.
 ///
-/// `invalid_ele_shape` in particular: a page whose elevation query comes back
-/// the wrong length silently gets a zero-filled grid and bakes perfectly flat.
+/// `flat_ele` in particular: a page the elevation raster does not reach gets a
+/// zero-filled grid and bakes perfectly flat.
 /// One such page is a warning line nobody reads; several hundred is a visible
 /// property of the dataset, and a bake over tens of thousands of pages has no
 /// other way to notice.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SourceStats {
-    pub invalid_ele_shape: u64,
+    pub flat_ele: u64,
 }
 
 fn rows_branch<'a, F: FnMut(&mut BranchViewImpl<'a>)>(mut each: F) -> TreeView<'a> {
@@ -97,9 +97,9 @@ fn coast_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a CoastRow) {
 /// bake/format.rs).
 pub fn pack_source(source: &PageSource, stats: &mut SourceStats) -> Result<Vec<u8>, MarshalError> {
     let ele = match &source.ele {
-        Some(v) if v.len() == ELE_PADDED_SPAN2 => v.clone(),
-        _ => {
-            stats.invalid_ele_shape += 1;
+        Some(v) => v.clone(),
+        None => {
+            stats.flat_ele += 1;
             vec![0i16; ELE_PADDED_SPAN2]
         }
     };

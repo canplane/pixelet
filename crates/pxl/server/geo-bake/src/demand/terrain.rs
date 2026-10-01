@@ -31,7 +31,8 @@ pub(super) fn execute(p: LevelPage, cache: &std::path::Path, out: &std::path::Pa
             if !leaf::has_land(&mut client, &[p.page]).map_err(|e| e.to_string())?[0] {
                 return Ok(None);
             }
-            let repository = TerrainRepository::prepare(&mut client).map_err(|e| e.to_string())?;
+            let raster = std::sync::Arc::new(crate::elevation::Raster::open(&mut client).map_err(|e| e.to_string())?);
+            let repository = TerrainRepository::prepare(&mut client, raster).map_err(|e| e.to_string())?;
             let packed = leaf::bake_leaf(&repository, &mut client, p.page, &mut SourceStats::default(), Level::Live)?.1;
             decode_terrain(&unpack(&packed).map_err(|e| e.to_string())?).map(Some).map_err(|e| format!("{e:?}"))
         },
