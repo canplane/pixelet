@@ -5,6 +5,11 @@
 // carries. The minors below 0x10 are the four every subject can have; a
 // subject's own verbs start at MINOR_OWN. What the majors are is the
 // program's, not this kit's.
+//
+// Create, update and delete are a subject added, changed and removed, the
+// same word whether the sender asks for it or says it happened, as a
+// kernel's uevent says add, change and remove; read asks. A failure is the
+// message's result, `-errno`, and not a verb.
 
 #pragma once
 

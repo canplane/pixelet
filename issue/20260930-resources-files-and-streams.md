@@ -27,8 +27,10 @@ a lifetime, which way it goes (H→G host to guest, G→H guest to host), how
 often, when it completes, what it carries, whether order matters, what names
 it, which Unix verb it would be, and whether that verb fits without losing
 meaning or adding state. `apps/web/src/kernel/abi/cmd.spec.ts` is the
-command list; the host's stream is `spec/pxl/web/kernel/abi/host.json`; the
-device's C calls are `crates/pxl/web/native/src/`.
+command list; the host's stream is `spec/pxl/web/kernel/abi/host.json`. The
+device's four C calls are not here: they are its host's own services, and
+the kernel learns of what they did by the same commands as on the page
+([20260930-sync-and-async-across-the-boundary.md](./20260930-sync-and-async-across-the-boundary.md)).
 
 ### Resources
 
@@ -36,12 +38,10 @@ device's C calls are `crates/pxl/web/native/src/`.
 | -------------------------------------------------------------------- | ---------------------- | -------- | ----------------------------- | ---------------------- | ----------------------- | --------------------- | ------- | --------------------------------------------- | -------------------------- | ------------------------------------------------------------------------- |
 | `SURFACE_CREATE` / `UPDATE` / `DELETE`                               | a canvas               | yes      | H→G                           | once / repeated / once | call / next turn / call | XTP record            | yes     | a handle the guest issues                     | open / ctl / close         | yes                                                                       |
 | `PREVIEW_CREATE` / `DELETE`                                          | a surface's mode       | yes      | H→G                           | once                   | next turn               | XTP (`surface`)       | yes     | the surface's handle                          | ctl on its fd              | only as a ctl; opened on its own it would not                             |
-| `pxl_surface_bind` / `unbind` (device)                               | the same canvas        | yes      | H→G                           | once                   | a C call, waited on     | a host pointer        | —       | the surface's handle                          | ctl                        | the pointer is not an offset (rule 1); it would cross as an opaque word   |
 | `FETCH_CREATE` / `DELETE` (raised), `FETCH_UPDATE`, `BODY_READ`      | a remote object's read | yes      | opened G→H, done H→G          | once                   | next turn               | XTP, then a byte span | per key | the guest's domain key and a host body number | open / done / read / close | the flow is Unix's; one descriptor for both names needs a key-to-fd table |
-| `LOAD_CREATE` (raised), `LOAD_UPDATE` / `LOAD_IMAGE` / `LOAD_DELETE` | an asset's read        | yes      | opened G→H                    | once                   | next turn               | XTP, a body, an image | per key | a domain key and a body or image number       | as above                   | `LOAD_DELETE` means it failed: a verb used for an event                   |
+| `LOAD_CREATE` (raised), `LOAD_UPDATE` / `LOAD_IMAGE` / `LOAD_DELETE` | an asset's read        | yes      | opened G→H                    | once                   | next turn               | XTP, a body, an image | per key | a domain key and a body or image number       | as above                   | yes; `LOAD_DELETE` is the read gone without data                          |
 | `SENSOR_CREATE` / `DELETE` (raised)                                  | watching GPS, compass  | yes      | opened G→H                    | once                   | not answered            | an enum               | —       | an enum (`Sensor`)                            | open / close               | yes, opened by the guest                                                  |
-| `GPU_CREATE` / `DELETE` (page), `pxl_gpu_open` (device)              | the GPU                | yes      | H→G news, H→G call            | once                   | next turn / waited on   | scalars               | —       | none, there is one                            | open / close               | its owner differs by platform, so one verb does not join them             |
-| `pxl_image_hold` (device), `hold_body` + `LOAD_IMAGE` (page)         | an image's bytes       | yes      | H→G                           | once                   | waited on / next turn   | bytes                 | —       | a host number                                 | write                      | two roads by platform                                                     |
+| `GPU_CREATE` / `DELETE`                                              | the GPU                | yes      | H→G news                      | once                   | next turn               | scalars               | —       | none, there is one                            | open / close               | yes, news of a device the host opened, on the page and on the device      |
 | `BODY_READ` (host stream)                                            | a body the host holds  | yes      | G→H                           | once                   | between turns           | a byte span           | —       | a body number                                 | read and close             | yes; a length of 0 closes alone                                           |
 | `STORAGE_SET` (host stream), stored values in `WORLD_CREATE`         | storage by key         | lasting  | written G→H, read at boot H→G | repeated               | between turns           | a UTF-8 span          | per key | a string key (`pxl:settings`)                 | write / read at boot       | a file in all but name; the key is a path                                 |
 | `SETTING_UPDATE` / `TOGGLE`                                          | a setting              | lasting  | H→G                           | repeated               | next turn               | scalars               | per key | a key (u32)                                   | write / ctl                | yes, as a sysctl                                                          |
@@ -85,9 +85,11 @@ device's C calls are `crates/pxl/web/native/src/`.
   enum, a string. A fetch's key is what a read is deduplicated and cancelled
   by; a descriptor in its place adds a table from key to descriptor and
   loses what the key meant.
-- **The verbs are used for events.** `LOAD_DELETE` says a load failed;
-  `FETCH_UPDATE` and `SENSOR_UPDATE` say something arrived. An operation and
-  an event share one minor.
+- **The verbs are a subject added, changed and removed.** Asked for or
+  reported, as a kernel's uevent says add, change and remove: `GPU_CREATE`
+  says a device was added, `SENSOR_UPDATE` that a reading changed,
+  `LOAD_DELETE` that a read went without data, so the guest asks again.
+  Every command reads that way.
 - **Three kinds of flow, not one.** A queue, where every item and its order
   matter (the pointer); a latest state, where the newest reading is what
   counts and a whole state is replaced (the snapshot, most of a sensor);
@@ -95,26 +97,21 @@ device's C calls are `crates/pxl/web/native/src/`.
   the API reads better and the meaning goes. The snapshot is published state
   with a notice of change, which is what the change log was when it left the
   contract.
-- **The guest asks through two places.** Opening a read, a load or a sensor
-  is a signal on the completion ring; reading a body, storing a value and
-  laying out text are records in the host's stream. Both are taken before
-  the next turn (rule 5). What may tell them apart is when each must be
-  done: a signal starts something that finishes on a later turn, and a
-  record is work the host must finish between this turn and the next —
-  `BODY_READ` writes into the guest's memory before it is read. The
-  stream's records are, in that sense, the guest's system calls batched.
+- **The guest asks through one channel, packed two ways.** Each side puts
+  work in the other's queue and the other takes it on its turn, the host
+  between turns. A guest's request is a message — four words and a packet —
+  or a record in its stream — a few words, thousands to a turn for what one
+  turn asks of the GPU. Whether an answer comes is the message's `ACKREQ`,
+  not which place it went to.
 
 ## What follows
 
 1. **No system-call or descriptor API now.**
-2. **Operations and events get separate words first.** The four common
-   minors name what is done; an arrival, a failure, an end are events and
-   are named as such.
-3. **The two places a guest asks are checked against one hypothesis:** the
-   completion ring carries requests and events that complete later, the
-   host's stream carries work the host finishes between turns. The next
-   tidying of the commands checks each use against it; if it holds, it is
-   why there are two.
+2. **The minors are a subject added, changed and removed**, asked for or
+   reported; a failure is the result's `-errno`. Written where the minors
+   are defined (`core abi/cmd`), and no command needs renaming.
+3. **One request channel each way.** The stream is the guest's requests
+   packed for volume, not a second kind of request.
 4. **Queue, latest state and future stay three things.** None is folded into
    one stream abstraction.
 5. **No namespace.** A command's major already names a resource's class. A
@@ -127,5 +124,7 @@ flow abstraction is shown to recur as a thing of its own.
 
 ## Where it stands
 
-**Recorded** 09-30. Nothing is built from it; the vocabulary of operations
-and events is the next step when the commands are next tidied.
+**Recorded** 09-30; **corrected** 10-01: the device's C calls are its
+host's own services and left the table; the guest's requests are one
+channel packed two ways; the minors' reading is written in `core abi/cmd`
+and no command needed renaming.

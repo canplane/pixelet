@@ -64,7 +64,7 @@ calls nothing of the OS imports nothing of WASI.
 - The contract stays the boundary. The page and the device, turns, and
   reading in place are what it is for, and a WASI boundary covers wasm
   alone and gives up the last two.
-- WASI as a subsystem over the contract is queued in
+- WASI as a subsystem over the contract is parked in
   [BACKLOG.md](./BACKLOG.md), not now: it is what would let an existing
   program in, which is where an open-source xpute gains users, and it has
   no program to be built against yet.

@@ -434,28 +434,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   release notes per version. Until one of those, `issue/` is the history and it
   records why, which a changelog never does.
 
-- **The device's C calls into the contract.** Found 2026-09-30:
-  `pxl_gpu_open`, `pxl_surface_bind`/`unbind` and `pxl_image_hold` are the
-  app calling into the kernel and waiting, outside the contract, where the
-  page asks the same with `Doorbell.call` or a message
-  ([20260930-sync-and-async-across-the-boundary.md](./20260930-sync-and-async-across-the-boundary.md)).
-  As commands called in a turn of no quota the two roads become one; a
-  layer crosses as an opaque word, and the rule that a command is called or
-  sent and never both goes into the contract with it.
-
-- **WASI, as a subsystem over the contract.** Decided 2026-09-30, not now: a
-  guest built against WASI could run on an xpute host if the host offered
-  WASI's calls translated into the contract's requests, the way an NT
-  subsystem sits over the kernel, and that is what would let an existing
-  program in, which is where an open-source xpute gains users. Guests stay
-  `wasm32-unknown-unknown` meanwhile: one channel to the host, the contract,
-  and no second one that WASI's imports would open beside it. What it costs
-  is WASI's calls being synchronous where the contract's are not, so a guest
-  blocked on one needs its turn split or its stack suspended (asyncify). A
-  host standing on a WASI runtime is the other place WASI fits, and needs
-  nothing of the guest
-  ([20260930-wasi-and-the-boundary.md](./20260930-wasi-and-the-boundary.md)).
-
 - **The TypeScript's private marker, ported as a leading underscore.** 74
   places outside the tests: 53 functions and 21 fields, concentrated in
   `wire/xtp/cursor.rs` (25), `wire/tlv.rs` (23), `collection/arena.rs`
@@ -569,3 +547,8 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   direct path; not without a measurement —
   [20260912-coarse-tiers-what-the-field-does.md](./20260912-coarse-tiers-what-the-field-does.md).
 - **Characters and the rest without a record format.** Not before the format.
+- **WASI, as a subsystem over the contract.** An adapter that offers a WASI
+  program WASI's calls translated into the contract's requests, which is what
+  would let an existing program in. Not without one to build it against;
+  guests stay `wasm32-unknown-unknown` meanwhile —
+  [20260930-wasi-and-the-boundary.md](./20260930-wasi-and-the-boundary.md).
