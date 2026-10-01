@@ -100,10 +100,10 @@ fn a_multipolygon_is_flattened_to_one_polygon_each() {
     assert_eq!(g[1].points[0], [5.0, 5.0, 0.0]);
 }
 
-/// EWKB's SRID and Z words are skipped rather than read — the pipeline is
-/// 3857 throughout and carries its own Z.
+/// EWKB's SRID word is skipped — the pipeline is 3857 throughout — and its
+/// Z kept, which is a deck's top.
 #[test]
-fn ewkb_srid_and_z_are_skipped() {
+fn ewkb_srid_is_skipped_and_z_kept() {
     let mut bytes = vec![1u8];
     bytes.extend_from_slice(&(1u32 | 0x2000_0000 | 0x8000_0000).to_le_bytes());
     bytes.extend_from_slice(&3857u32.to_le_bytes());
@@ -111,7 +111,21 @@ fn ewkb_srid_and_z_are_skipped() {
     bytes.extend_from_slice(&2.0f64.to_le_bytes());
     bytes.extend_from_slice(&99.0f64.to_le_bytes());
     let g = wkb_to_geometries(&bytes);
-    assert_eq!(g[0].points, vec![[1.0, 2.0, 0.0]]);
+    assert_eq!(g[0].points, vec![[1.0, 2.0, 99.0]]);
+}
+
+/// ISO's dimensions are thousands of the type, as `ST_AsBinary` writes a
+/// line with Z: 1002, and an M past it is passed over.
+#[test]
+fn iso_z_and_m_are_read() {
+    let mut bytes = vec![1u8];
+    bytes.extend_from_slice(&3002u32.to_le_bytes());
+    bytes.extend_from_slice(&2u32.to_le_bytes());
+    for v in [1.0f64, 2.0, 3.0, 7.0, 4.0, 5.0, 6.0, 7.0] {
+        bytes.extend_from_slice(&v.to_le_bytes());
+    }
+    let g = wkb_to_geometries(&bytes);
+    assert_eq!(g[0].points, vec![[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]);
 }
 
 #[test]

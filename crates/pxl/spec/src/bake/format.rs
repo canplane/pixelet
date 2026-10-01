@@ -18,10 +18,10 @@
 //!
 //! raw wire   = [ele, buildings, segments, base, coasts, decks]
 //!   buildings = [[gers_id, subtype, class, height, num_floors, geom_wkb], ...]
-//!   segments  = [[gers_id, subtype, class, flags, geom_wkb], ...]
+//!   segments  = [[gers_id, subtype, class, flags, widths, access, geom_wkb], ...]
 //!   base      = [[gers_id, source, subtype, class, geom_wkb], ...]  (source: land_use|water|land|infrastructure)
 //!   coasts    = [[id, geom_wkb, covers_page], ...]
-//!   decks     = [[gers_id, subtype, class, piers, geom_wkb], ...]  (LineStringZ, the top in m)
+//!   decks     = [[gers_id, subtype, class, width_m, piers, geom_wkb], ...]  (LineStringZ, the top in m)
 //!
 //! baked wire = [ele, cells, extent, occupancy, decks]
 //!   cells     = one u16 a cell, the four ground channels packed into it
@@ -69,6 +69,10 @@ pub struct SegmentRow {
     /// Raw JSON text of the segment's `road_flags` or `rail_flags`, whichever
     /// its subtype carries.
     pub flags: Option<String>,
+    /// Raw JSON text of its `width_rules`.
+    pub widths: Option<String>,
+    /// Raw JSON text of its `access_restrictions`.
+    pub access: Option<String>,
     pub geom_wkb: Box<[u8]>, // WKB
 }
 
@@ -81,12 +85,13 @@ pub struct BaseRow {
 }
 
 /// A deck as the offline solve left it (pxl-geo-bake deck/): its way's
-/// subtype and class, its line with the deck's top in metres as Z, and a
-/// byte a point, 1 where a pier stands under it.
+/// subtype, class and width in metres, its line with the deck's top in
+/// metres as Z, and a byte a point, 1 where a pier stands under it.
 pub struct DeckRow {
     pub gers_id: String,
     pub subtype: String,
     pub class: Option<String>,
+    pub width_m: f64,
     pub piers: Box<[u8]>,
     pub geom_wkb: Box<[u8]>, // WKB, LineString Z
 }

@@ -73,7 +73,9 @@ fn segment_row(row: &BranchCursor<'_>) -> Result<SegmentRow, MarshalError> {
         subtype: row.at(1)?.get_str()?,
         class: opt_str(row, 2)?,
         flags: opt_str(row, 3)?,
-        geom_wkb: row.at(4)?.get_array::<u8>()?.into(),
+        widths: opt_str(row, 4)?,
+        access: opt_str(row, 5)?,
+        geom_wkb: row.at(6)?.get_array::<u8>()?.into(),
     })
 }
 
@@ -82,8 +84,9 @@ fn deck_row(row: &BranchCursor<'_>) -> Result<DeckRow, MarshalError> {
         gers_id: row.at(0)?.get_str()?,
         subtype: row.at(1)?.get_str()?,
         class: opt_str(row, 2)?,
-        piers: row.at(3)?.get_array::<u8>()?.into(),
-        geom_wkb: row.at(4)?.get_array::<u8>()?.into(),
+        width_m: row.at(3)?.get_number()?,
+        piers: row.at(4)?.get_array::<u8>()?.into(),
+        geom_wkb: row.at(5)?.get_array::<u8>()?.into(),
     })
 }
 

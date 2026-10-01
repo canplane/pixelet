@@ -2,24 +2,25 @@
 
 //! A page's decks (pxl-spec bake/deck.rs) from the rows the offline solve
 //! wrote (deck/): each deck's line in the page's cells, its tops in the
-//! page's z16 cells, and its width and surface as its way has them on the
-//! ground (overture/policy.rs), so a way reads the same on a bridge as off
-//! it.
+//! page's z16 cells, its width as the solve took it from its way
+//! (overture/width.rs) and its surface as its way shows on the ground
+//! (overture/policy.rs), so a way reads the same on a bridge as off it.
 //!
 //! A deck's row is its whole line, and a page keeps the runs of it whose
 //! segments come within reach of the page — whole segments, so every point
 //! a page keeps is one the solve placed and two pages that share a deck agree
 //! on it point for point. A segment is within reach where it comes within
-//! half the deck's width of the page, past which nothing of it can be drawn
-//! there.
+//! the deck's reach of the page (pxl-spec bake/way.rs), past which nothing
+//! of it can be drawn there.
 
 use pxl_spec::bake::constant::{XY_CELL_PER_M, Z_CELL_PER_M};
 use pxl_spec::bake::deck::{Builder, Decks, POINT_SCALE};
 use pxl_spec::bake::format::DeckRow;
+use pxl_spec::bake::way;
 use pxl_spec::space::adapter::epsg3857::G3857;
 use pxl_spec::space::pyramid::PAGE_CELLS;
 
-use crate::terrain::pipeline::overture::policy::{segment_type, segment_width_m};
+use crate::terrain::pipeline::overture::policy::segment_type;
 use crate::wkb::wkb_to_geometries;
 
 /// The page's decks, or none where they do not fit a record — which the
@@ -29,7 +30,7 @@ pub fn bake_decks(rows: &[DeckRow], page_min: G3857) -> Option<Decks> {
     let mut decks = Builder::default();
     for row in rows {
         let kind = segment_type(&row.subtype, row.class.as_deref());
-        let width = segment_width_m(row.class.as_deref().unwrap_or("")) * XY_CELL_PER_M;
+        let width = row.width_m * XY_CELL_PER_M;
         let width_code = (width * POINT_SCALE).round().clamp(1.0, f64::from(u8::MAX)) as u8;
         for g in wkb_to_geometries(&row.geom_wkb) {
             if g.points.len() != row.piers.len() {
@@ -44,7 +45,7 @@ pub fn bake_decks(rows: &[DeckRow], page_min: G3857) -> Option<Decks> {
                     (at, (p[2] * z_cell_per_m).round() as i16, pier)
                 })
                 .collect();
-            for run in runs_within(&local, width / 2.0) {
+            for run in runs_within(&local, way::reach(width)) {
                 decks.push(run.iter().copied(), width_code, kind);
             }
         }

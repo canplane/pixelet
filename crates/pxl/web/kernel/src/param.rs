@@ -147,16 +147,7 @@ pub const ARENA_COARSE_GROUPS: u32 = 5;
 /// cube, and the coarsest fills one (world/chunk/mesh_slot.rs asserts it).
 pub const COARSE_BOXES: u32 = 4551;
 
-/// Bytes a run set holds (`.fixed.runs`, world/chunk/build.rs): a leaf
-/// chunk's columns at eleven runs each, where the terrain is one and what is
-/// placed on it rarely a handful more. A set past it is refused rather than
-/// cut, since a run left out is a hole.
-pub const RUN_SET_BYTES: u32 = 1 << 20;
 
-/// Instances one chunk's decor holds at most at a tier (`.fixed.decor`,
-/// layer/decor/instance.rs): a kind scatters at most one to a cell, and the
-/// placed entries come past them. What does not fit is left out.
-pub const DECOR_INSTANCES: usize = 1 << 16;
 
 // ---- decor's tiers ----
 

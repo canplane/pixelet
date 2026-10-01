@@ -868,7 +868,7 @@ impl Scheduler {
         core::mem::take(&mut self.counts)
     }
 
-    /// What the chunks hold, with the run sets `.fixed.runs` has lent as the
+    /// What the chunks hold, with the run sets held for them as the
     /// builder counts them (`Builder::run_sets`).
     pub fn held(&self) -> ChunkHeld {
         let (run_sets, run_bytes) = self.builder.run_sets();

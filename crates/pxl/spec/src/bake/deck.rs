@@ -26,6 +26,7 @@ use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{BranchCursor, BranchViewImpl, NodeView};
 
+use super::way;
 use crate::space::hierarchy::child_of;
 use crate::space::pyramid::PAGE_CELLS;
 
@@ -84,8 +85,9 @@ pub struct Deck<'a> {
     pub kind: u8,
 }
 
-/// What a deck is over a column: its top there, in z16 cells, its kind, and
-/// whether a pier carries it there.
+/// What a deck is over a column — one it covers as a way covers the ground
+/// (bake/way.rs): its top there, in z16 cells, its kind, and whether a pier
+/// carries it there.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Over {
     pub top: f64,
@@ -153,7 +155,7 @@ impl Decks {
     pub fn over_grid(&self, origin: [f64; 2], step: f64, size: [i64; 2], mut each: impl FnMut(i64, i64, usize, Over)) {
         let cell = |v: f64, k: usize| (v - origin[k]) / step - 0.5;
         for (d, deck) in self.iter().enumerate() {
-            let half = deck.half_width();
+            let half = deck.reach();
             for s in 0..deck.points.len().saturating_sub(1) {
                 let (a, b) = (deck.point(s), deck.point(s + 1));
                 let range = |k: usize| {
@@ -179,11 +181,11 @@ impl Decks {
 
     /// The highest top any deck has inside the `[x0, x1) × [y0, y1)` cells,
     /// conservatively: a deck's highest point counts wherever its line comes
-    /// within its half width of the box.
+    /// within its reach of the box.
     pub fn highest_in(&self, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> Option<i16> {
         let mut top = None;
         for deck in self.iter() {
-            let half = deck.half_width();
+            let half = deck.reach();
             for s in 0..deck.points.len().saturating_sub(1) {
                 let (a, b) = (deck.point(s), deck.point(s + 1));
                 if a[0].max(b[0]) + half < x0 || a[0].min(b[0]) - half > x1 || a[1].max(b[1]) + half < y0 || a[1].min(b[1]) - half > y1 {
@@ -203,8 +205,15 @@ impl Deck<'_> {
         self.points[i].map(|v| f64::from(v) / POINT_SCALE)
     }
 
-    pub fn half_width(&self) -> f64 {
-        f64::from(self.width) / POINT_SCALE / 2.0
+    /// Its width in the page's cells.
+    pub fn width_cells(&self) -> f64 {
+        f64::from(self.width) / POINT_SCALE
+    }
+
+    /// How far from its line it covers a cell's center, in the page's cells
+    /// (bake/way.rs).
+    pub fn reach(&self) -> f64 {
+        way::reach(self.width_cells())
     }
 
     /// The corners of the box its line lies in, in the page's cells.
@@ -220,21 +229,19 @@ impl Deck<'_> {
     }
 
     /// What segment `s` is over `at`: the top at the nearest point of the
-    /// segment, if `at` is within half the width of it. A pier stands at a
-    /// point and takes the cell its point is in, at least, and half the
-    /// deck's width across.
+    /// segment, if the deck covers `at`. A pier stands at a point and takes
+    /// the cell its point is in, at least, and half the deck's width across.
     fn over_segment(&self, s: usize, at: [f64; 2]) -> Option<Over> {
         let (a, b) = (self.point(s), self.point(s + 1));
         let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
         let len2 = dx * dx + dy * dy;
         let t = if len2 > 0.0 { (((at[0] - a[0]) * dx + (at[1] - a[1]) * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
         let near = [a[0] + dx * t, a[1] + dy * t];
-        let half = self.half_width();
-        if (at[0] - near[0]).hypot(at[1] - near[1]) > half {
+        if !way::covers(self.width_cells(), (at[0] - near[0]).hypot(at[1] - near[1])) {
             return None;
         }
         let top = f64::from(self.tops[s]) + (f64::from(self.tops[s + 1]) - f64::from(self.tops[s])) * t;
-        let pier_radius = (half / 2.0).max(0.5);
+        let pier_radius = (self.width_cells() / 4.0).max(0.5);
         let on = |i: usize| self.piers[i] != 0 && {
             let p = self.point(i);
             (at[0] - p[0]).abs() <= pier_radius && (at[1] - p[1]).abs() <= pier_radius

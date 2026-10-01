@@ -9,12 +9,25 @@ fn one(points: &[[f64; 2]], tops: &[i16], width_cells: f64) -> Decks {
 }
 
 #[test]
-fn a_column_is_under_a_deck_within_half_its_width() {
+fn a_column_is_under_a_deck_within_its_reach() {
+    // Four cells wide: two either side of the line.
     let d = one(&[[10.0, 10.0], [30.0, 10.0]], &[100, 120], 4.0);
-    let over: Vec<Over> = d.over_point([20.0, 11.5]).collect();
+    let over: Vec<Over> = d.over_point([20.0, 12.0]).collect();
     assert_eq!(over.len(), 1);
     assert_eq!(over[0].top, 110.0);
     assert_eq!(d.over_point([20.0, 12.5]).count(), 0);
+}
+
+#[test]
+fn a_narrow_deck_along_a_diagonal_is_one_band() {
+    let d = one(&[[0.0, 0.0], [40.0, 40.0]], &[10, 10], 0.5);
+    let mut covered = std::collections::HashSet::new();
+    d.over_grid([0.0, 0.0], 1.0, [40, 40], |x, y, _, _| {
+        covered.insert((x, y));
+    });
+    for k in 0..39 {
+        assert!(covered.contains(&(k + 1, k)) || covered.contains(&(k, k + 1)), "cells {k} and {} meet only at a corner", k + 1);
+    }
 }
 
 #[test]

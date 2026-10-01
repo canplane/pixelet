@@ -262,13 +262,12 @@ export const SUMMARY = {
     built_scans: 9 as number,
     built_bakes: 10 as number,
     built_starved: 11 as number,
-    decor_dropped: 12 as number,
-    atlas_repacks: 13 as number,
-    atlas_uploads: 14 as number,
-    WORDS: 15 as number,
+    atlas_repacks: 12 as number,
+    atlas_uploads: 13 as number,
+    WORDS: 14 as number,
   },
   atlas: {
-    AT: 388 as number,
+    AT: 387 as number,
     size: 0 as number,
     entries: 1 as number,
     shelves: 2 as number,
@@ -276,7 +275,7 @@ export const SUMMARY = {
     WORDS: 4 as number,
   },
   held: {
-    AT: 392 as number,
+    AT: 391 as number,
     run_sets: 0 as number,
     run_set_mb: 1 as number,
     tiers: 2 as number,
@@ -286,14 +285,14 @@ export const SUMMARY = {
     WORDS: 6 as number,
   },
   fetch: {
-    AT: 398 as number,
+    AT: 397 as number,
     queued: 0 as number,
     running: 1 as number,
     credits: 2 as number,
     WORDS: 3 as number,
   },
   peak: {
-    AT: 401 as number,
+    AT: 400 as number,
     present: 0 as number,
     dt_ms: 1 as number,
     sched_ms: 2 as number,
@@ -315,13 +314,13 @@ export const SUMMARY = {
     WORDS: 18 as number,
   },
   steps: {
-    AT: 419 as number,
+    AT: 418 as number,
     count: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
   quality: {
-    AT: 580 as number,
+    AT: 579 as number,
     step: 0 as number,
     star: 1 as number,
     frames_held: 2 as number,
@@ -332,7 +331,7 @@ export const SUMMARY = {
     changes_peak: 7 as number,
     WORDS: 8 as number,
   },
-  WORDS: 588 as number,
+  WORDS: 587 as number,
 } as const;
 
 /** What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count. */

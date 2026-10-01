@@ -557,10 +557,9 @@ pub mod SUMMARY {
         pub const built_scans: u32 = 9;
         pub const built_bakes: u32 = 10;
         pub const built_starved: u32 = 11;
-        pub const decor_dropped: u32 = 12;
-        pub const atlas_repacks: u32 = 13;
-        pub const atlas_uploads: u32 = 14;
-        pub const WORDS: u32 = 15;
+        pub const atlas_repacks: u32 = 12;
+        pub const atlas_uploads: u32 = 13;
+        pub const WORDS: u32 = 14;
         pub const KEYS: &[&str] = &[
             "AT",
             "faces_kept",
@@ -575,14 +574,13 @@ pub mod SUMMARY {
             "built_scans",
             "built_bakes",
             "built_starved",
-            "decor_dropped",
             "atlas_repacks",
             "atlas_uploads",
             "WORDS",
         ];
     }
     pub mod atlas {
-        pub const AT: u32 = 388;
+        pub const AT: u32 = 387;
         pub const size: u32 = 0;
         pub const entries: u32 = 1;
         pub const shelves: u32 = 2;
@@ -591,7 +589,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "WORDS"];
     }
     pub mod held {
-        pub const AT: u32 = 392;
+        pub const AT: u32 = 391;
         pub const run_sets: u32 = 0;
         pub const run_set_mb: u32 = 1;
         pub const tiers: u32 = 2;
@@ -602,7 +600,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "run_sets", "run_set_mb", "tiers", "decor_cells", "decor_instances", "decor_bytes", "WORDS"];
     }
     pub mod fetch {
-        pub const AT: u32 = 398;
+        pub const AT: u32 = 397;
         pub const queued: u32 = 0;
         pub const running: u32 = 1;
         pub const credits: u32 = 2;
@@ -610,7 +608,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "queued", "running", "credits", "WORDS"];
     }
     pub mod peak {
-        pub const AT: u32 = 401;
+        pub const AT: u32 = 400;
         pub const present: u32 = 0;
         pub const dt_ms: u32 = 1;
         pub const sched_ms: u32 = 2;
@@ -654,14 +652,14 @@ pub mod SUMMARY {
         ];
     }
     pub mod steps {
-        pub const AT: u32 = 419;
+        pub const AT: u32 = 418;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
     pub mod quality {
-        pub const AT: u32 = 580;
+        pub const AT: u32 = 579;
         pub const step: u32 = 0;
         pub const star: u32 = 1;
         pub const frames_held: u32 = 2;
@@ -673,7 +671,7 @@ pub mod SUMMARY {
         pub const WORDS: u32 = 8;
         pub const KEYS: &[&str] = &["AT", "step", "star", "frames_held", "admitted", "evicted", "refined", "recubed", "changes_peak", "WORDS"];
     }
-    pub const WORDS: u32 = 588;
+    pub const WORDS: u32 = 587;
     pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "held", "fetch", "peak", "steps", "quality", "WORDS"];
 }
 

@@ -288,17 +288,15 @@ address        bytes                    range                  placed by
 2 MiB          8 MiB × 3                .ring.slot             build.rs
 32 MiB         ~0.7 MiB                 .rodata .data .bss     wasm-ld (--global-base)
                ↑ __data_end, rounded up to 4 KiB (PAGE_BYTES)
-~32.7 MiB      60.30 MiB                .fixed.terrain         the kernel (mem/fixed.rs)
-~93.0 MiB      1 MiB × 2                .fixed.runs            the kernel (mem/fixed.rs)
-~95.0 MiB      1 MiB                    .fixed.bake            the kernel (mem/fixed.rs)
-~96.0 MiB      11.60 MiB                .fixed.surface         the kernel (mem/fixed.rs)
-~107.6 MiB     2.12 MiB                 .fixed.decor           the kernel (mem/fixed.rs)
-~109.7 MiB     0.88 MiB                 .fixed.blocks          the kernel (mem/fixed.rs)
-~110.6 MiB     4 MiB                    .fixed.gpu             the kernel (mem/fixed.rs)
-~114.6 MiB     64 KiB                   .fixed.host            the kernel (mem/fixed.rs)
-~114.7 MiB     4.72 MiB                 .fixed.profiler        the kernel (mem/fixed.rs)
-~119.4 MiB     393 MiB  (phone)         .heap                  the allocator
-               905 MiB  (desktop)
+~32.7 MiB      66.62 MiB                .fixed.terrain         the kernel (mem/fixed.rs)
+~99.3 MiB      96 KiB                   .fixed.bake            the kernel (mem/fixed.rs)
+~99.4 MiB      0.25 MiB                 .fixed.mounts          the kernel (mem/fixed.rs)
+~99.7 MiB      0.88 MiB                 .fixed.blocks          the kernel (mem/fixed.rs)
+~100.6 MiB     4 MiB                    .fixed.gpu             the kernel (mem/fixed.rs)
+~104.6 MiB     64 KiB                   .fixed.host            the kernel (mem/fixed.rs)
+~104.6 MiB     4.62 MiB                 .fixed.profiler        the kernel (mem/fixed.rs)
+~109.2 MiB     403 MiB  (phone)         .heap                  the allocator
+               915 MiB  (desktop)
 512 MiB / 1 GiB                         end
 ──────────────────────────────────────────────────────────────────────────────────────
 ```
@@ -341,7 +339,7 @@ Objects paint after terrain, so a placed value wins the voxel. A chunk records t
 
 **Bands are temporary** (`pxl-render mesh/volume.rs`). A band is `64³` voxels, five bytes each — a `u32` `material` `0xCC_RRGGBB` and a `u8` `layer_idx`, plus a sub-cell payload where fine objects need it — about 1.25 MiB, allocated whole when one peak touches it. That is too much to keep for every visible chunk on a phone, so bands live only while a chunk is composed and scanned; sixteen band stores keep their lanes between composites, because reallocating them was the heap's worst churn.
 
-**The column run set lasts as long as its bakes.** A column is read bottom to top, and a run extends while the material holds. A chunk's `66²` columns, its own and an apron, become their runs in one of `.fixed.runs`'s two sets; a set past its room is refused rather than cut, since a run left out is a hole. Every tier the chunk has is baked from the set while it is there, and then the set is let go: the tiers are what lasts, and runs kept for a tier asked later would be a cache of a cache.
+**The column run set lasts as long as its bakes.** A column is read bottom to top, and a run extends while the material holds. A chunk's `66²` columns, its own and an apron, become their runs in a heap block of exactly the size the scan counted, two sets at most at once; a column's runs are what stands in it, every band up to the top of the world, so no fixed range is sized for every column, and one that was refused its chunk, which then drew nothing. Every tier the chunk has is baked from the set while it is there, and then the set is let go: the tiers are what lasts, and runs kept for a tier asked later would be a cache of a cache.
 
 **A mesh is its boxes, and lives on the device.** Each tier's mesh is held in a slot of the fixed buffers the renderer keeps (`pxl-render gpu/arena.rs`). A slot is room, not an address: any tier takes any free slot of its pool (`world/chunk/mesh_slot.rs`), keeps it while it is drawn, and gives it back the moment it is not, so a slot never holds what is off the frontier and a drawn mesh outlives its page's record. The slots are derived, a residency of what is drawn, and apart from the one bake's workspace in `.fixed.bake` that a mesh is made in. A mesh past a slot fills as many as it takes, any free ones chained, all held at once or none: it is never cut, since a box left out is a hole, and never baked coarser to fit, since what a tier is drawn in is the quality's to choose and a slot's size is no quality. How many slots a tier fills is counted by the frontier and the quality policy, which alone decide what the arena has no room for. A mesh holds nothing per vertex — a box is its corner, size, color, texture layers and face mask — and the chunk pipeline binds it as storage for its vertex shader to unfold into a cube (`frame/shader/chunk.wgsl`).
 

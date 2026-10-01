@@ -24,3 +24,4 @@ pub mod poi_page;
 pub mod published;
 pub mod quadkey;
 pub mod surface;
+pub mod way;

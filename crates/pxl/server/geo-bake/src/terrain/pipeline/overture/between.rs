@@ -72,10 +72,16 @@ pub fn without(ranges: &[Range], less: &[Range]) -> Vec<Range> {
     out
 }
 
-/// The value of the rule of a values column (`level_rules`) that holds at
-/// fraction `at`, the first that does.
-pub fn value_at(column: Option<&str>, at: f64) -> Option<i64> {
-    rules(column).iter().find(|r| range_of(r).is_some_and(|[a, b]| (a..=b).contains(&at))).and_then(|r| r["value"].as_i64())
+/// The value of the rule of a values column (`level_rules`, `width_rules`)
+/// that holds at fraction `at`, the first that does.
+pub fn value_at(column: Option<&str>, at: f64) -> Option<f64> {
+    rules(column).iter().find(|r| range_of(r).is_some_and(|[a, b]| (a..=b).contains(&at))).and_then(|r| r["value"].as_f64())
+}
+
+/// Whether any of `wanted` holds at fraction `at` among a flags column's
+/// rules.
+pub fn flag_at(flags: Option<&str>, wanted: &[&str], at: f64) -> bool {
+    flag_ranges(flags, wanted).iter().any(|&[a, b]| (a..=b).contains(&at))
 }
 
 /// A line cut wherever a range of any of `sets` starts or ends, each piece

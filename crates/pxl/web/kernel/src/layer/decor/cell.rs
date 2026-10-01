@@ -266,7 +266,7 @@ fn build(c: &mut Cells, cell: DecorCell, kinds: &[Kind], store: &Store, draw: &m
         col_idx: (level == 0).then(|| L2_IDX(ivec::gather(x0, y0, 0))),
         folded: (level > 0).then_some(&c.folded),
     };
-    let scratch = c.scratch.get_or_insert_with(DecorScratch::laid);
+    let scratch = c.scratch.get_or_insert_with(DecorScratch::default);
     // A cell is a whole column: every instance over it, at any height.
     let step = GROUND.scale(0).count_in(target.max(GROUND.scale(0)));
     let built = DecorBuild::build(scratch, kinds, Some(&ground), &c.placed, sources.hide, store, step, sources.shown, (f64::MIN, f64::MAX));
@@ -455,10 +455,6 @@ pub fn bytes() -> u32 {
     cells().blocks.values().map(|b| b.bytes).sum()
 }
 
-/// Instances the build's lanes had no room for, since the kernel started.
-pub fn dropped() -> u32 {
-    cells().scratch.as_ref().map_or(0, |s| s.dropped)
-}
 
 /// The cells holding a block, and the instances their blocks hold.
 pub fn counts() -> (u32, u32) {

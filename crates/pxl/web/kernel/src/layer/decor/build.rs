@@ -470,7 +470,7 @@ impl<'s> DecorBuild<'s> {
     /// The block's size in bytes (instance.rs `GroupLanes`).
     /// The instances the block holds.
     pub fn instances(&self) -> usize {
-        self.scratch.len
+        self.scratch.instances.len()
     }
 
     pub fn bytes(&self) -> u32 {
@@ -500,7 +500,7 @@ impl<'s> DecorBuild<'s> {
             k += GroupLanes::words(n);
         }
         let mut rank = [0usize; DECOR_GROUPS];
-        for (i, &g) in s.instances[..s.len].iter().zip(&s.groups[..s.len]) {
+        for (i, &g) in s.instances.iter().zip(&s.groups) {
             let (lane, r) = (lanes[g as usize], rank[g as usize]);
             for (l, v) in [i.x, i.y, i.z, i.rotation, i.scale].into_iter().enumerate() {
                 *words.add(lane.f32_at(l, r)) = v.to_bits();

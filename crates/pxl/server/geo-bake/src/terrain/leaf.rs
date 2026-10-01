@@ -137,6 +137,7 @@ fn empty_source() -> Vec<u8> {
         r.subtree(&empty); // segments
         r.subtree(&empty); // base
         r.subtree(&empty); // coasts
+        r.subtree(&empty); // decks
     }));
     encoder().encode(&root, TreeEncoderOptions::default()).expect("empty source packet")
 }

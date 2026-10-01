@@ -55,7 +55,6 @@ fn counters() -> CountersBlock {
         built_scans: st.scans as f64,
         built_bakes: st.bakes as f64,
         built_starved: st.starved as f64,
-        decor_dropped: crate::layer::decor::cell::dropped() as f64,
         atlas_repacks: atlas.repacks as f64,
         atlas_uploads: atlas.uploads as f64,
     }

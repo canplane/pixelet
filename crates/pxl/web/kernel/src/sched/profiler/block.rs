@@ -160,7 +160,6 @@ pub struct CountersBlock {
     pub built_scans: f64,
     pub built_bakes: f64,
     pub built_starved: f64,
-    pub decor_dropped: f64,
     pub atlas_repacks: f64,
     pub atlas_uploads: f64,
 }
@@ -192,7 +191,7 @@ words!(CountersBlock, SUMMARY::counters::WORDS,
     bands_reused => SUMMARY::counters::bands_reused, bands_allocated => SUMMARY::counters::bands_allocated,
     built_direct => SUMMARY::counters::built_direct, built_scans => SUMMARY::counters::built_scans,
     built_bakes => SUMMARY::counters::built_bakes, built_starved => SUMMARY::counters::built_starved,
-    decor_dropped => SUMMARY::counters::decor_dropped, atlas_repacks => SUMMARY::counters::atlas_repacks,
+    atlas_repacks => SUMMARY::counters::atlas_repacks,
     atlas_uploads => SUMMARY::counters::atlas_uploads,
 );
 

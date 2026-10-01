@@ -17,7 +17,8 @@ const BATCH: usize = 20_000;
 /// Every segment a bridge flag is on.
 pub fn bridge_rows(client: &mut Client) -> Result<Vec<BridgeRow>, postgres::Error> {
     let rows = client.query(
-        "SELECT gers_id, subtype, class, COALESCE(road_flags, rail_flags)::text AS flags, level_rules::text AS levels, ST_AsBinary(geom) AS geom_wkb
+        "SELECT gers_id, subtype, class, COALESCE(road_flags, rail_flags)::text AS flags, level_rules::text AS levels,
+                width_rules::text AS widths, access_restrictions::text AS access, ST_AsBinary(geom) AS geom_wkb
          FROM overture_transportation
          WHERE COALESCE(road_flags, rail_flags)::text LIKE '%is_bridge%'",
         &[],
@@ -30,6 +31,8 @@ pub fn bridge_rows(client: &mut Client) -> Result<Vec<BridgeRow>, postgres::Erro
             class: r.get("class"),
             flags: r.get("flags"),
             levels: r.get("levels"),
+            widths: r.get("widths"),
+            access: r.get("access"),
             geom_wkb: r.get::<_, &[u8]>("geom_wkb").into(),
         })
         .collect())
@@ -189,17 +192,18 @@ pub struct DeckOut<'a> {
 pub fn write(client: &mut Client, decks: &[DeckOut]) -> Result<(), postgres::Error> {
     client.batch_execute(
         "DROP TABLE IF EXISTS overture_deck;
-         CREATE TABLE overture_deck (gers_id TEXT NOT NULL, subtype TEXT NOT NULL, class TEXT, piers BYTEA NOT NULL, geom GEOMETRY(LineStringZ, 3857) NOT NULL);",
+         CREATE TABLE overture_deck (gers_id TEXT NOT NULL, subtype TEXT NOT NULL, class TEXT, width_m REAL NOT NULL, piers BYTEA NOT NULL, geom GEOMETRY(LineStringZ, 3857) NOT NULL);",
     )?;
     for batch in decks.chunks(BATCH) {
         let gers: Vec<&str> = batch.iter().map(|d| d.piece.gers_id.as_str()).collect();
         let subtypes: Vec<&str> = batch.iter().map(|d| d.piece.subtype.as_str()).collect();
         let classes: Vec<Option<&str>> = batch.iter().map(|d| d.piece.class.as_deref()).collect();
+        let widths: Vec<f32> = batch.iter().map(|d| d.piece.width_m as f32).collect();
         let piers: Vec<&[u8]> = batch.iter().map(|d| d.piers.as_slice()).collect();
         let lines: Vec<String> = batch.iter().map(|d| wkt(d.points.iter().map(|q| format!("{} {} {:.2}", q[0], q[1], q[2])), true)).collect();
         client.execute(
-            "INSERT INTO overture_deck SELECT g, s, c, p, ST_GeomFromText(w, 3857) FROM unnest($1::text[], $2::text[], $3::text[], $4::bytea[], $5::text[]) AS t(g, s, c, p, w)",
-            &[&gers, &subtypes, &classes, &piers, &lines],
+            "INSERT INTO overture_deck SELECT g, s, c, m, p, ST_GeomFromText(w, 3857) FROM unnest($1::text[], $2::text[], $3::text[], $4::real[], $5::bytea[], $6::text[]) AS t(g, s, c, m, p, w)",
+            &[&gers, &subtypes, &classes, &widths, &piers, &lines],
         )?;
     }
     client.batch_execute("CREATE INDEX ON overture_deck USING GIST (geom); ANALYZE overture_deck;")

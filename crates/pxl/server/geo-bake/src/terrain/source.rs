@@ -56,6 +56,8 @@ fn segment_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a SegmentRow) {
             .str(Some(&row.subtype))
             .str(row.class.as_deref())
             .str(row.flags.as_deref())
+            .str(row.widths.as_deref())
+            .str(row.access.as_deref())
             .u8_array(Some(&row.geom_wkb));
     }));
 }
@@ -75,6 +77,7 @@ fn deck_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a DeckRow) {
         t.str(Some(&row.gers_id))
             .str(Some(&row.subtype))
             .str(row.class.as_deref())
+            .f64(Some(row.width_m))
             .u8_array(Some(&row.piers))
             .u8_array(Some(&row.geom_wkb));
     }));

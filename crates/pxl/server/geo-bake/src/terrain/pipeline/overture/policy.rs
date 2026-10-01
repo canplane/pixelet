@@ -19,28 +19,9 @@ use pxl_spec::space::adapter::epsg3857::G3857;
 
 use crate::terrain::pipeline::normalizer::{NormalizePolicy, RawFeature};
 use crate::terrain::pipeline::overture::adapter::{BaseSource, OvertureRawFeature};
+use crate::terrain::pipeline::overture::width::width_m;
 
 // ============ Domain knowledge constants ============
-
-/// Overture Transportation `class` -> default width in meters, absent
-/// structured `road` lane data.
-fn road_width_by_class(class: &str) -> Option<f64> {
-    Some(match class {
-        "motorway" => 14.0,
-        "trunk" | "primary" => 10.5,
-        "secondary" | "tertiary" => 7.0,
-        "residential" | "service" | "unclassified" | "living_street" => 3.5,
-        "path" | "footway" | "steps" | "cycleway" | "pedestrian" => 1.75,
-        "standard_gauge" | "light_rail" | "subway" => 3.5,
-        _ => return None,
-    })
-}
-
-/// A way's width in metres, the class's or a lane's where it has none: the
-/// one width a way is painted on the ground and carried on a deck at.
-pub fn segment_width_m(class: &str) -> f64 {
-    road_width_by_class(class).unwrap_or(3.5)
-}
 
 /// The transport type a way shows, on the ground or on a deck.
 pub fn segment_type(subtype: &str, class: Option<&str>) -> u8 {
@@ -96,6 +77,9 @@ const SPORTS_CLASSES: [&str; 2] = ["pitch", "playground"];
 /// rails are still there — nor `is_covered`, which is under a roof that the
 /// buildings paint over where they have it.
 pub const UNSEEN_FLAGS: &[&str] = &["is_tunnel", "is_indoor", "is_under_construction", "is_abandoned"];
+
+/// Segment flags under which a way is a link — a slip road, one lane.
+pub const LINK_FLAGS: &[&str] = &["is_link"];
 
 /// Segment flags under which a way is carried above the ground: a deck,
 /// which the page's decks draw (terrain/pipeline/deck.rs) and the ground
@@ -166,8 +150,8 @@ fn compute_metrics(feat: &OvertureRawFeature, _category: &str) -> FeatureCompute
                 (None, None) => 3.5,
             };
         }
-        OvertureRawFeature::Segment(_) => {
-            width = segment_width_m(segment_class(feat));
+        OvertureRawFeature::Segment(s) => {
+            width = width_m(&s.subtype, s.class.as_deref(), s.shape);
         }
         OvertureRawFeature::Base(_) => {}
     }

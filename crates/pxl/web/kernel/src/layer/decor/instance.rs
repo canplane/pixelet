@@ -1,21 +1,19 @@
 // pxl-kernel/layer/decor/instance.rs
 
-//! A chunk's decor instances as lanes, and the block the scheduler hands them
-//! over in.
+//! A decor cell's instances as lanes, and the block they are laid into.
 //!
-//! What an instance is: a chunk-local position, a spin about Z, a scale, and
+//! What an instance is: a cell-local position, a spin about Z, a scale, and
 //! where it came from — a user-placed entry in object/store.rs, or a procedural
 //! scatter that no store names. A placed entry is named by its band and packed
 //! position in its column, two u32s, which with the chunk's column is the
 //! store's own address for it (object/store.rs `EntryAt`). `hidden` is a flag
-//! lane rather than a separate list: the vertex
-//! shader sends a hidden instance outside the clip volume (decor.wgsl) while the
+//! lane rather than a separate list: the presentation leaves a hidden
+//! instance out of what is drawn (layer/decor/cell.rs `present`) while the
 //! hit test keeps seeing it.
 //!
-//! The scheduler builds a chunk's decor at one tier as one block of the mesh
-//! section (crates/pxl/web/kernel/src/layer/decor/build.rs's DecorBuild): every group's
-//! lanes — a group per (kind, variant) in the order the kinds were taught —
-//! laid out here.
+//! A decor cell's population is one block of the heap (layer/decor/build.rs
+//! `DecorBuild`): every group's lanes — a group per (kind, variant) in the
+//! order the kinds were taught — laid out here.
 
 /// NO_ENTRY: a procedural instance resolves to no stored entry.
 ///
@@ -27,8 +25,6 @@
 /// take has to stay out of the sentinel, and a band is a cell's Z divided by
 /// BAND_CELLS, from a sixteen-bit Z lane (spec/space/pvf3's IVEC_Z_W), so it
 /// fits in ten bits signed and nothing reaches `i32::MIN`.
-use crate::mem::fixed::{lane, range, Range};
-
 pub const NO_ENTRY: u32 = i32::MIN as u32;
 pub const HIDDEN_FLAG: u8 = 1;
 
@@ -48,63 +44,47 @@ pub(crate) struct Instance {
 /// Groups one block holds at most: as many as the renderer's decor pass draws.
 pub const DECOR_GROUPS: usize = 64;
 
-use crate::param::DECOR_INSTANCES;
-
-/// Bytes of the instances' lane in `.fixed.decor`, which the groups' follows.
-const INSTANCE_LANE_BYTES: u32 = (DECOR_INSTANCES * core::mem::size_of::<Instance>()) as u32;
-
-/// `.fixed.decor`: the instances' lane, then the groups'.
-pub const DECOR_BYTES: u32 = INSTANCE_LANE_BYTES + (DECOR_INSTANCES * core::mem::size_of::<u16>()) as u32;
-
-/// Where a chunk's instances are gathered, in the order they are made, before
-/// they are laid into its block group by group: two lanes in `.fixed.decor`,
-/// one chunk's at a time, so a build takes nothing of its own.
+/// Where a cell's instances are gathered, in the order they are made, before
+/// they are laid into its block group by group: two lanes of the heap, one
+/// cell's at a time, kept from cell to cell so a settled turn asks the heap
+/// for nothing.
+///
+/// Not a range of `.fixed`: a cell holds a scattered instance a cell of its
+/// lattice a kind at most, but the placed ones are as many as were placed,
+/// and no size holds every cell. A workspace too small for a cell left
+/// what did not fit out, and what was left out could be what someone put
+/// there. The lanes grow to the largest cell gathered, and nothing is left
+/// out but for the memory being out.
 pub struct DecorScratch {
-    pub(crate) instances: &'static mut [Instance],
+    pub(crate) instances: Vec<Instance>,
     /// The group each instance is in.
-    pub(crate) groups: &'static mut [u16],
-    pub(crate) len: usize,
+    pub(crate) groups: Vec<u16>,
     pub(crate) counts: [u32; DECOR_GROUPS],
     pub(crate) group_count: usize,
-    /// Instances the lanes had no room for, since the kernel started: what a
-    /// chunk shows is short by this many, and the profiler says so rather than
-    /// leaving the gap to be noticed on screen.
-    pub dropped: u32,
+}
+
+impl Default for DecorScratch {
+    fn default() -> DecorScratch {
+        DecorScratch {
+            instances: Vec::new(),
+            groups: Vec::new(),
+            counts: [0; DECOR_GROUPS],
+            group_count: 0,
+        }
+    }
 }
 
 impl DecorScratch {
-    /// Its lanes in `.fixed.decor`, as the module laid them. Made once: the
-    /// scheduler keeps the one there is.
-    pub fn laid() -> DecorScratch {
-        let decor = range(Range::Decor);
-        // SAFETY: the range's two lanes, which this scratch holds alone; the
-        // elements are plain numbers, and none is read before a build has
-        // written it.
-        let (instances, groups) = unsafe { (lane(decor, 0, DECOR_INSTANCES), lane(decor, INSTANCE_LANE_BYTES, DECOR_INSTANCES)) };
-        DecorScratch {
-            instances,
-            groups,
-            len: 0,
-            counts: [0; DECOR_GROUPS],
-            group_count: 0,
-            dropped: 0,
-        }
-    }
-
     pub(crate) fn clear(&mut self) {
-        self.len = 0;
+        self.instances.clear();
+        self.groups.clear();
         self.counts = [0; DECOR_GROUPS];
         self.group_count = 0;
     }
 
     pub(crate) fn push(&mut self, group: usize, instance: Instance) {
-        if self.len == DECOR_INSTANCES {
-            self.dropped += 1;
-            return;
-        }
-        self.instances[self.len] = instance;
-        self.groups[self.len] = group as u16;
-        self.len += 1;
+        self.instances.push(instance);
+        self.groups.push(group as u16);
         self.counts[group] += 1;
     }
 }

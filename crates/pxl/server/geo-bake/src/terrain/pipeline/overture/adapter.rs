@@ -14,8 +14,9 @@
 use pxl_spec::bake::format::{BaseRow, BuildingRow, SegmentRow};
 use pxl_spec::space::adapter::epsg3857::G3857;
 
-use crate::terrain::pipeline::overture::between::{flag_ranges, split};
-use crate::terrain::pipeline::overture::policy::{DECK_FLAGS, UNSEEN_FLAGS};
+use crate::terrain::pipeline::overture::between::{flag_at, flag_ranges, split_ranged, value_at};
+use crate::terrain::pipeline::overture::policy::{DECK_FLAGS, LINK_FLAGS, UNSEEN_FLAGS};
+use crate::terrain::pipeline::overture::width::{is_oneway, WayShape};
 use crate::wkb::{wkb_to_geometries, WkbGeometry};
 
 pub struct OvertureBuildingRawFeature {
@@ -37,6 +38,8 @@ pub struct OvertureSegmentRawFeature {
     pub class: Option<String>,
     pub is_unseen: bool,
     pub is_deck: bool,
+    /// What it says of its width over the piece (overture/width.rs).
+    pub shape: WayShape,
     pub geometry: WkbGeometry,
     pub center: G3857,
 }
@@ -111,16 +114,23 @@ pub fn from_building_row(row: &BuildingRow) -> Vec<OvertureRawFeature> {
 pub fn from_segment_row(row: &SegmentRow) -> Vec<OvertureRawFeature> {
     let flags = row.flags.as_deref();
     let (unseen, deck) = (flag_ranges(flags, UNSEEN_FLAGS), flag_ranges(flags, DECK_FLAGS));
+    let oneway = is_oneway(row.access.as_deref());
     wkb_to_geometries(&row.geom_wkb)
         .into_iter()
-        .flat_map(|g| split(g, [&unseen, &deck]))
-        .map(|([is_unseen, is_deck], g)| {
+        .flat_map(|g| split_ranged(g, [&unseen, &deck]))
+        .map(|([is_unseen, is_deck], [a, b], g)| {
+            let mid = (a + b) / 2.0;
             OvertureRawFeature::Segment(OvertureSegmentRawFeature {
                 gers_id: row.gers_id.clone(),
                 subtype: row.subtype.clone(),
                 class: row.class.clone(),
                 is_unseen,
                 is_deck,
+                shape: WayShape {
+                    measured: value_at(row.widths.as_deref(), mid),
+                    oneway,
+                    link: flag_at(flags, LINK_FLAGS, mid),
+                },
                 center: center_of(&g),
                 geometry: g,
             })

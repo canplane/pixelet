@@ -103,7 +103,8 @@ WHERE geom && env.e";
 const OVERTURE_TRANSPORTATION_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
-SELECT gers_id, subtype, class, COALESCE(road_flags, rail_flags)::text AS flags, ST_AsBinary(geom) AS geom_wkb
+SELECT gers_id, subtype, class, COALESCE(road_flags, rail_flags)::text AS flags,
+  width_rules::text AS widths, access_restrictions::text AS access, ST_AsBinary(geom) AS geom_wkb
 FROM overture_transportation, env
 WHERE geom && env.e";
 
@@ -113,7 +114,7 @@ WHERE geom && env.e";
 const OVERTURE_DECK_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
-SELECT gers_id, subtype, class, piers, ST_AsBinary(geom) AS geom_wkb
+SELECT gers_id, subtype, class, width_m, piers, ST_AsBinary(geom) AS geom_wkb
 FROM overture_deck, env
 WHERE geom && env.e";
 
@@ -235,6 +236,8 @@ impl TerrainRepository {
                 subtype: row.get("subtype"),
                 class: row.get("class"),
                 flags: row.get("flags"),
+                widths: row.get("widths"),
+                access: row.get("access"),
                 geom_wkb: wkb(row),
             })
             .collect();
@@ -268,6 +271,7 @@ impl TerrainRepository {
                 gers_id: row.get("gers_id"),
                 subtype: row.get("subtype"),
                 class: row.get("class"),
+                width_m: row.get::<_, f32>("width_m").into(),
                 piers: row.get::<_, &[u8]>("piers").into(),
                 geom_wkb: wkb(row),
             })

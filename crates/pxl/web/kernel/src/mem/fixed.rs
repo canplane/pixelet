@@ -38,12 +38,11 @@
 //!                    page lies in which record is residency's, so the
 //!                    range is laid out once and its records change hands.
 //!
-//! A chunk as it is built, in the order its work runs.
+//! A chunk as it is built, in the order its work runs. Its runs are not
+//! here: how many a column holds is what stands in it, which no range can be
+//! sized for, so they are a heap block of the size the scan counts
+//! (world/chunk/build.rs).
 //!
-//!   .fixed.runs      the run sets a chunk's tiers are baked from, two: one
-//!                    filled while the other is baked from (world/chunk/
-//!                    build.rs). A set is let go once its chunk's tiers are
-//!                    all on the device, which is what keeps them.
 //!   .fixed.bake      the workspace: the one mesh a chunk bake has open,
 //!                    written there and sent to its slot on the device the
 //!                    moment it is done (world/chunk/build.rs): a mesh has
@@ -53,8 +52,6 @@
 //!                    each mesh slot and what each is chained to, which slot
 //!                    each mount's chunk is in, the mounts free and the chunks
 //!                    mounted in order, each sized by the slots.
-//!   .fixed.decor     where one decor cell's instances are gathered before
-//!                    they are laid into its block (layer/decor/instance.rs).
 //!
 //! The renderer's.
 //!
@@ -80,51 +77,37 @@ use pxl_render::gpu::renderer::BLOCKS_BYTES;
 
 use crate::abi::host::stream as host_stream;
 
-use crate::layer::decor::instance::DECOR_BYTES;
 use crate::layer::terrain::fixed::TERRAIN_BYTES;
 use crate::mem::section::{map, PAGE_BYTES};
-use crate::param::RUN_SET_BYTES;
 use crate::sched::profiler::record::PROFILER_BYTES;
-use crate::world::chunk::build::{BAKE_BYTES, RUN_SETS};
+use crate::world::chunk::build::BAKE_BYTES;
 use crate::world::chunk::table::MOUNTS_BYTES;
 
 /// A range of `.fixed`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Range {
     Terrain,
-    /// Run set `n`, below RUN_SETS.
-    Run(usize),
     Bake,
     Mounts,
-    Decor,
     Blocks,
     Gpu,
     Host,
     Profiler,
 }
 
-const COUNT: usize = 8 + RUN_SETS;
+const COUNT: usize = 7;
 
 impl Range {
     /// Its place in address order.
     const fn index(self) -> usize {
         match self {
             Range::Terrain => 0,
-            Range::Run(set) => {
-                // A run set past the ones there are. Const, so no bug report:
-                // the panic names its place and nothing else.
-                if set >= RUN_SETS {
-                    panic!()
-                }
-                1 + set
-            }
-            Range::Bake => 1 + RUN_SETS,
-            Range::Mounts => 2 + RUN_SETS,
-            Range::Decor => 3 + RUN_SETS,
-            Range::Blocks => 4 + RUN_SETS,
-            Range::Gpu => 5 + RUN_SETS,
-            Range::Host => 6 + RUN_SETS,
-            Range::Profiler => 7 + RUN_SETS,
+            Range::Bake => 1,
+            Range::Mounts => 2,
+            Range::Blocks => 3,
+            Range::Gpu => 4,
+            Range::Host => 5,
+            Range::Profiler => 6,
         }
     }
 }
@@ -134,14 +117,8 @@ impl Range {
 const RANGES: [u32; COUNT] = {
     let mut r = [0; COUNT];
     r[Range::Terrain.index()] = TERRAIN_BYTES;
-    let mut set = 0;
-    while set < RUN_SETS {
-        r[Range::Run(set).index()] = RUN_SET_BYTES;
-        set += 1;
-    }
     r[Range::Bake.index()] = BAKE_BYTES;
     r[Range::Mounts.index()] = MOUNTS_BYTES;
-    r[Range::Decor.index()] = DECOR_BYTES;
     r[Range::Blocks.index()] = BLOCKS_BYTES;
     r[Range::Gpu.index()] = stream::BYTES;
     r[Range::Host.index()] = host_stream::BYTES;

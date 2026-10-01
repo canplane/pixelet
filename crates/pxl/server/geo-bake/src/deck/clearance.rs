@@ -14,8 +14,16 @@ pub const ROAD: f64 = 6.0;
 pub const PATH: f64 = 5.0;
 /// … where a railway does: the overhead wire stands six above the track.
 pub const RAIL: f64 = 8.0;
-/// … over a river's, canal's or lake's water.
+/// … over a river's, canal's or lake's water, the least: Arnis's.
 pub const RIVER: f64 = 4.0;
+
+/// … and how much higher for every metre of water a deck spans, up to
+/// `RIVER_MOST`. A wide river is navigable and its bridges stand clear of
+/// its boats: a metre a hundred metres of water puts a deck over the Han,
+/// a kilometre across, some fourteen metres up, about where its bridges'
+/// decks are, and leaves a stream's crossing at Arnis's four.
+pub const RIVER_PER_M: f64 = 0.01;
+pub const RIVER_MOST: f64 = 15.0;
 /// … over a stream's, ditch's or drain's.
 pub const STREAM: f64 = 2.0;
 /// … over a lower deck it crosses, from that deck's top.
@@ -53,13 +61,14 @@ pub enum Under {
 }
 
 impl Under {
-    /// The height over the ground there the deck's top must reach.
-    pub fn headroom(self) -> f64 {
+    /// The height over the ground there the deck's top must reach, where
+    /// it spans `span` metres of what it clears.
+    pub fn headroom(self, span: f64) -> f64 {
         match self {
             Under::Road => ROAD,
             Under::Path => PATH,
             Under::Rail => RAIL,
-            Under::River => RIVER,
+            Under::River => (RIVER + RIVER_PER_M * span).min(RIVER_MOST),
             Under::Stream => STREAM,
         }
     }

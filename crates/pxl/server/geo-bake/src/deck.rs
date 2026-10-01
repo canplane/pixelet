@@ -13,8 +13,8 @@
 //! to turn on.
 //!
 //! - `piece`: a segment's bridge ranges, less what is not seen.
-//! - `structure`: the pieces that meet end to end, and the graph of points
-//!   along them.
+//! - `structure`: the pieces that meet end to end or run side by side, and
+//!   the graph of points along them.
 //! - `clearance`: what a deck has to clear, and how steeply it may climb.
 //! - `profile`: a structure's tops, from its ends and its clearances.
 //! - `elevation`: the ground's height at the points, a raster tile at a time.
@@ -38,7 +38,7 @@ use clearance::{Under, PIER_MIN_RISE, PIER_OFF_WAY, PIER_STEP, STACKED};
 use piece::{pieces_of, Piece};
 use profile::{solve as solve_profile, Problem};
 use source::DeckOut;
-use structure::{group, Graph};
+use structure::{group, side_by_side, Graph};
 
 use crate::terrain::pipeline::overture::between::flag_ranges;
 use crate::terrain::pipeline::overture::policy::{DECK_FLAGS, UNSEEN_FLAGS};
@@ -76,8 +76,9 @@ pub fn solve(client: &mut Client, log: impl Fn(&str)) -> Result<Solved, postgres
     let crossings = source::decks_crossing(client)?;
     log(&format!("{} ways and waters under decks, {} decks over decks", needs.iter().map(Vec::len).sum::<usize>(), crossings.len()));
 
-    let structures = group(&pieces);
-    let graphs: Vec<Graph> = structures.iter().map(|m| Graph::build(&pieces, m)).collect();
+    let beside = side_by_side(&pieces);
+    let structures = group(&pieces, &beside);
+    let graphs: Vec<Graph> = structures.iter().map(|m| Graph::build(&pieces, m, &beside)).collect();
     // Which structure each piece is in, and its place among the members.
     let mut place = vec![(0usize, 0usize); pieces.len()];
     for (s, members) in structures.iter().enumerate() {
@@ -93,7 +94,7 @@ pub fn solve(client: &mut Client, log: impl Fn(&str)) -> Result<Solved, postgres
         grounds.push(flat[at..at + g.at.len()].to_vec());
         at += g.at.len();
     }
-    log(&format!("{} structures, {} points", structures.len(), all.len()));
+    log(&format!("{} structures, {} pairs of decks side by side, {} points", structures.len(), beside.len(), all.len()));
 
     let mut tops: Vec<Vec<f64>> = grounds.clone();
     for pass in 0..2 {
@@ -104,7 +105,7 @@ pub fn solve(client: &mut Client, log: impl Fn(&str)) -> Result<Solved, postgres
             for (k, &m) in members.iter().enumerate() {
                 for n in &needs[m] {
                     for node in nodes_within(g, k, n.from, n.to) {
-                        need[node] = need[node].max(ground[node] + n.under.headroom());
+                        need[node] = need[node].max(ground[node] + n.under.headroom(n.to - n.from));
                     }
                 }
             }
@@ -180,9 +181,22 @@ fn needs_of(client: &mut Client, pieces: &[Piece]) -> Result<Vec<Vec<Need>>, pos
         let under = Under::of_way(&c.subtype, c.class.as_deref());
         needs[c.piece].push(Need { from: c.at, to: c.at, under });
     }
+    let mut water: Vec<Vec<Need>> = vec![Vec::new(); pieces.len()];
     for w in source::water_under(client)? {
         if let Some(under) = Under::of_water(&w.subtype, w.class.as_deref()) {
-            needs[w.piece].push(Need { from: w.from, to: w.to, under });
+            water[w.piece].push(Need { from: w.from, to: w.to, under });
+        }
+    }
+    // One stretch of water is many pieces once its polygon is subdivided, and
+    // how much of it a deck spans is the stretch's: the pieces of one kind
+    // that touch are joined first.
+    for (m, mut spans) in water.into_iter().enumerate() {
+        spans.sort_by(|a, b| a.from.total_cmp(&b.from));
+        for n in spans {
+            match needs[m].last_mut() {
+                Some(last) if last.under == n.under && n.from <= last.to + AT_END => last.to = last.to.max(n.to),
+                _ => needs[m].push(n),
+            }
         }
     }
     Ok(needs)
