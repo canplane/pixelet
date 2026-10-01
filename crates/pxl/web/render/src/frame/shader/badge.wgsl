@@ -26,8 +26,6 @@ struct Badge {
   proj: mat4x4f,
   translation: vec3f,
   px_k: f32,
-  fade_start: f32,
-  fade_end: f32,
   near: f32,
   far: f32,
   cell: f32,
@@ -49,13 +47,11 @@ fn badge_view() -> mat4x4f { return mat4x4f(badge_words[0], badge_words[1], badg
 fn badge_proj() -> mat4x4f { return mat4x4f(badge_words[4], badge_words[5], badge_words[6], badge_words[7]); }
 fn badge_translation() -> vec3f { return badge_words[8].xyz; }
 fn badge_px_k() -> f32 { return badge_words[8].w; }
-fn badge_fade_start() -> f32 { return badge_words[9].x; }
-fn badge_fade_end() -> f32 { return badge_words[9].y; }
-fn badge_near() -> f32 { return badge_words[9].z; }
-fn badge_far() -> f32 { return badge_words[9].w; }
-fn badge_cell() -> f32 { return badge_words[10].x; }
-fn badge_vignette() -> f32 { return badge_words[10].y; }
-fn badge_viewport() -> vec2f { return badge_words[10].zw; }
+fn badge_near() -> f32 { return badge_words[9].x; }
+fn badge_far() -> f32 { return badge_words[9].y; }
+fn badge_cell() -> f32 { return badge_words[9].z; }
+fn badge_vignette() -> f32 { return badge_words[9].w; }
+fn badge_viewport() -> vec2f { return badge_words[10].xy; }
 fn badge_planet() -> vec4f { return badge_words[11]; }
 fn badge_globe() -> vec4f { return badge_words[12]; }
 
@@ -66,9 +62,8 @@ fn badge_globe() -> vec4f { return badge_words[12]; }
 struct VertexOut {
   @builtin(position) clip: vec4f,
   @location(0) uv: vec2f,
-  @location(1) opacity: f32,
-  @location(2) upright_z: f32,
-  @location(3) @interpolate(flat) hidden: u32,
+  @location(1) upright_z: f32,
+  @location(2) @interpolate(flat) hidden: u32,
 };
 
 // Distance from the camera, in world units, for a depth-buffer value —
@@ -111,8 +106,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Verte
   let anchor_view = (badge_view() * vec4f(anchor, 1.0)).xyz;
   let dist = length(anchor_view);
   let depth = max(-anchor_view.z, 1e-3);
-  let fade = 1.0 - smoothstep(badge_fade_start(), badge_fade_end(), dist);
-  let size = size_px * depth / badge_px_k() * fade;
+  let size = size_px * depth / badge_px_k();
   let drop = size.y * (frac - 0.5);
   // The sprite anchor is a screen offset, independent of camera tilt.
   let center_view = anchor_view + vec3f(0.0, drop, 0.0);
@@ -122,7 +116,6 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Verte
   o.clip = badge_proj() * vec4f(center_view + vec3f(corner, 0.0), 1.0);
   // The sheet's v0 is the rectangle's top edge.
   o.uv = vec2f(mix(rect.x, rect.z, q.x + 0.5), mix(rect.w, rect.y, q.y + 0.5));
-  o.opacity = fade;
 
   let view_proj = badge_proj() * badge_view();
   let lifted = view_proj * vec4f(anchor + vec3f(0.0, 0.0, DEPTH_LIFT_U), 1.0);
@@ -159,7 +152,7 @@ fn fs(i: VertexOut) -> FragOut {
   let color = texel.rgb / max(texel.a, 1e-4);
   // Vignetted as the world under it is: the post stack darkened the whole
   // screen, badges included.
-  o.color = vec4f(to_srgb(grade(color) * vignette_of(i.clip.xy, badge_viewport(), badge_vignette())), texel.a * i.opacity);
+  o.color = vec4f(to_srgb(grade(color) * vignette_of(i.clip.xy, badge_viewport(), badge_vignette())), texel.a);
   o.depth = i.upright_z;
   return o;
 }

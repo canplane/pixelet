@@ -38,8 +38,7 @@ pub const REFERENCE_FOV_DEG: f64 = 50.0;
 pub const REFERENCE_THRESHOLD_0: f64 = pxl_spec::space::lod::SPLIT;
 
 /// Pixels a world unit covers at one unit of distance — the same projection
-/// factor the badges and billboard/distance_fade.rs size their own screen
-/// measurements with.
+/// factor the badges size their own screen measurements with.
 pub fn px_per_unit(viewport_h: f64, fov_deg: f64) -> f64 {
     viewport_h / (2.0 * libm::tan((fov_deg * core::f64::consts::PI) / 360.0))
 }

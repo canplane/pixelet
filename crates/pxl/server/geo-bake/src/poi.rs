@@ -46,7 +46,7 @@ pub fn leaves(client: &mut Client, within: Option<IVec>) -> Result<BTreeMap<IVec
         None => client.query("SELECT ST_X(geom), ST_Y(geom), name, properties->'categories'->>'primary' FROM overture_places", &[]),
     }
     .map_err(|e| e.to_string())?;
-    let mut places: BTreeMap<IVec, Vec<(Pvf3, String, u8)>> = BTreeMap::new();
+    let mut places: BTreeMap<IVec, Vec<(Pvf3, String, u8, u8)>> = BTreeMap::new();
     for row in rows {
         let mut at = Pvf3::default();
         epsg3857::project(&mut at, row.get(0), row.get(1), 0.0);
@@ -56,11 +56,38 @@ pub fn leaves(client: &mut Client, within: Option<IVec>) -> Result<BTreeMap<IVec
         if within.is_some_and(|w| leaf.page != w) {
             continue;
         }
-        let kind = kind_of(category_named(row.get::<_, Option<&str>>(3)));
-        places.entry(leaf.page).or_default().push((at, row.get(2), kind));
+        let category = category_named(row.get::<_, Option<&str>>(3));
+        places.entry(leaf.page).or_default().push((at, row.get(2), kind_of(category), rank_of(category)));
     }
     Ok(places
         .into_iter()
-        .map(|(page, p)| (page, PoiPage::of_places(0, p.iter().map(|(at, name, kind)| (*at, Place { name, kind: *kind })))))
+        .map(|(page, p)| (page, PoiPage::of_places(0, p.iter().map(|(at, name, kind, rank)| (*at, Place { name, kind: *kind, rank: *rank })))))
         .collect())
+}
+
+/// How prominent a place of `category` is, the more the lower: OpenMapTiles'
+/// `poi_class_rank` (layers/poi/class.sql) over ten — a hospital, a station,
+/// a sight, a school, a town hall, a park, a library, a police or a post
+/// office before a shop, a grocery, fast food, clothes and a bar, and what it
+/// does not rank, 100, after all of those.
+pub fn rank_of(category: &str) -> u8 {
+    match category {
+        "hospital" => 2,
+        "subway" | "station" => 4,
+        "bus_station" => 5,
+        "attraction" | "museum" => 7,
+        "university" | "college" => 8,
+        "school" => 9,
+        "townhall" => 10,
+        "park" => 12,
+        "library" => 13,
+        "police" | "fire_station" => 14,
+        "post_office" => 14,
+        "mall" | "department_store" | "clinic" | "pharmacy" | "dentist" => 40,
+        "supermarket" | "convenience" => 50,
+        "fast_food" => 60,
+        "clothes" => 70,
+        "bar" | "pub" => 80,
+        _ => 100,
+    }
 }

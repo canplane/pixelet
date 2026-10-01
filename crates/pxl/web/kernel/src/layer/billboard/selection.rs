@@ -12,8 +12,11 @@
 //!    full view — and at an oblique polar the bottom edge is where the
 //!    *nearest* anchors are. Point membership therefore deleted the closest
 //!    badges first while distant ones near the horizon stayed.
-//! 2. The fade and the viewport: what has faded past legibility, or whose box
-//!    does not reach the screen, is not drawn.
+//! 2. The viewport: a billboard whose box does not reach the screen is not
+//!    drawn.
+//!    How far a billboard is shown is its layer's: a place by the level its
+//!    ground is drawn at (layer/poi/placement.rs), as a map shows its places
+//!    by zoom.
 //!
 //! What survives is every candidate, overlapping or not: a badge stands for
 //! the places under its cell, and hiding one behind another would drop them
@@ -24,7 +27,6 @@
 use pxl_spec::space::mat4::mat4_transform_point;
 
 use crate::layer::billboard::batch::BillboardBatch;
-use crate::layer::billboard::distance_fade::distance_fade_far;
 use crate::layer::environment::state::globe;
 use crate::world::frame::view::{globe_anchor_local, view, view_sees_sphere};
 
@@ -36,14 +38,7 @@ use crate::world::frame::view::{globe_anchor_local, view, view_sees_sphere};
 /// early is the bug above.
 const ANCHOR_REACH: f64 = 0.08;
 
-/// The fade level below which a billboard is not worth a draw call. `far` is
-/// the drawn size as a fraction of full and it is also the opacity, so this is
-/// one number saying both "a tenth of the size" and "a tenth of the alpha".
-/// Cutting here removes the outer shell of the reach and changes nothing anyone
-/// can see.
-const MIN_LEGIBLE_FAR: f64 = 0.12;
-
-/// The candidates that survive the frustum, the viewport and the fade, as
+/// The candidates that survive the frustum and the viewport, as
 /// indices into `batch` written to `out`. Indices rather than items: this
 /// pass never learns what a candidate *is*. The batch's coordinates are in the
 /// root frame (world/frame/view.rs).
@@ -88,13 +83,6 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, viewport_w: f64, vi
     for k in 0..n {
         let i = batch.order[k] as usize;
 
-        let far = distance_fade_far(batch.d2[i].sqrt());
-        // Not `far <= 0`. The last stretch before the fade's end is ten pixels by
-        // three at a tenth opacity — invisible, and not worth a draw.
-        if far < MIN_LEGIBLE_FAR {
-            continue;
-        }
-
         mat4_transform_point(&mut ndc, &v.local_view_proj, batch.world_x[i], batch.world_y[i], batch.world_z[i]);
         let sx = (ndc[0] * 0.5 + 0.5) * viewport_w;
         let sy = (-ndc[1] * 0.5 + 0.5) * viewport_h;
@@ -102,9 +90,9 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, viewport_w: f64, vi
         // Canvas Y and screen Y both grow downward, so the anchor's canvas offset
         // reads straight across: the box's top sits that far above the
         // projected anchor, and its bottom is the anchor.
-        let w = batch.w_px[i] as f64 * far;
+        let w = batch.w_px[i] as f64;
         let x0 = sx - w / 2.0;
-        let y0 = sy - batch.anchor_px[i] as f64 * far;
+        let y0 = sy - batch.anchor_px[i] as f64;
         let (x1, y1) = (x0 + w, sy);
         // The frustum test keeps an anchor a margin past the screen's edge,
         // since its sprite can reach in. One whose box does not reach the

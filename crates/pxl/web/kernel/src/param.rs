@@ -294,3 +294,23 @@ pub const RESOLUTION_CHANGE_GAP_MS: f64 = 1000.0;
 /// nothing: no precedent or measurement fixes it. It is not Minecraft's —
 /// a walk there steps 0.6 of a block, and a jump makes a whole one.
 pub const STEP_CELLS: i64 = 4;
+
+// ---- places' zooms (layer/poi.rs, layer/poi/placement.rs) ----
+
+/// The coarsest level every place is shown at: z14 (level k is z(16 − k)).
+/// OpenMapTiles' `poi` layer holds every point POI from z14 and no general
+/// one under it (layers/poi/poi.yaml, `etl_layer_points`), and Google's and
+/// Naver's maps leave businesses off below about the same zoom.
+pub const POI_ALL_LEVEL: u32 = 2;
+
+/// The coarsest level a place is shown at at all, and only the most
+/// prominent — a rank no more than `POI_MAJOR_RANK`: z12. OpenMapTiles
+/// shows railway stations, halts and ferry terminals at z12 and z13 and
+/// nothing else of the layer; under z12 there is none, and nothing is asked
+/// for.
+pub const POI_MAJOR_LEVEL: u32 = 4;
+
+/// The rank a place needs to be shown between `POI_ALL_LEVEL` and
+/// `POI_MAJOR_LEVEL`: a station's, OpenMapTiles' `poi_class_rank` 40 over
+/// ten (pxl-geo-bake poi.rs `rank_of`).
+pub const POI_MAJOR_RANK: u8 = 4;

@@ -153,8 +153,8 @@ The rules below keep it one thing. They come from finding it several.
   the 3D rule would, never a model of its own.
 - **A mark stands at a cell's center** (`Cell::center`), at the height of the
   surface drawn there, never at a center derived from its data's bounds. A
-  mark for many things stands at the z16 cell their centroid falls in,
-  which folds by count as the things do (`pxl-spec bake/poi_page.rs`).
+  mark for many things stands at the z16 cell of the one it names, as a
+  map's label does (`pxl-spec bake/poi_page.rs`).
 - **One rule chooses the level; a layer chooses its detail.** The shared
   rule chooses a level for a piece of ground by its distance from the eye
   (`pxl-spec space/lod.rs` `Tau::level`, one factor τ on the split

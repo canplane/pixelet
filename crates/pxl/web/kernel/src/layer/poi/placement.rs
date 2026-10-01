@@ -8,9 +8,10 @@
 //! there hold one place or none. Either way each cell of the POI lattice
 //! (pxl-spec bake/poi_page.rs `POI_LATTICE`) under the piece is one badge,
 //! already folded as the pyramid keeps it, and no two of them meet in one
-//! cell of the piece's level. A cell holding two places or more is a count,
-//! a cell holding one is the place, and either stands at the center of the
-//! z16 ground cell its places' centroid falls in. It stands in all three
+//! cell of the piece's level. A cell is shown by the place its page names for
+//! it — the most prominent under it (pxl-spec bake/poi_page.rs) — and stands
+//! at the center of the z16 ground cell that place stands in; a cell none of
+//! whose places has a name is its count. It stands in all three
 //! axes, on the surface the model says is drawn there:
 //! what a ray down through the cell meets first, ground or a placed object,
 //! at the level the view draws that ground at (world/access.rs `first_hit`)
@@ -22,6 +23,7 @@ use crate::layer::billboard::selection::select_visible_billboards;
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::layer::poi::badge::{self, Label};
 use crate::layer::poi::enabled;
+use crate::param::{POI_ALL_LEVEL, POI_MAJOR_LEVEL, POI_MAJOR_RANK};
 use crate::sched::tick::TickContext;
 use crate::world::access::{Access, Detail, Ray};
 use crate::world::frame::coord::local_world_origin;
@@ -92,19 +94,16 @@ pub fn step(ctx: &mut TickContext) {
     if crate::world::pyramid::domain::current().is_none() {
         return;
     }
-    let Some(eye) = crate::world::observation::eye() else { return };
-    let far = crate::layer::billboard::distance_fade::fade_range().1;
     let mut found = core::mem::take(&mut p.found);
     found.clear();
     for &chunk in &crate::world::pyramid::cover::cover::<PoiPage>().0.drawn {
-        // A badge is gone past the fade, and no badge of a piece is nearer
-        // the eye than the piece: laid on the planet, ground only drops away
-        // from it. So the cover past the fade, out to the horizon, is never
-        // read or cast down through.
-        let nearest = chunk.region().nearest(eye);
-        if (0..3).map(|k| (nearest[k] - eye[k]).powi(2)).sum::<f64>() > far * far {
+        // Places are shown by the zoom their ground is drawn at, as a map
+        // shows them: none coarser than `POI_MAJOR_LEVEL`, only the most
+        // prominent between it and `POI_ALL_LEVEL` (param.rs).
+        if chunk.level() > POI_MAJOR_LEVEL {
             continue;
         }
+        let major_only = chunk.level() > POI_ALL_LEVEL;
         // The page that draws the chunk's ground: its own, or where the tree
         // stops above it, the page over it that says that ground — whose cells
         // there hold one place or none, each standing where it stands.
@@ -134,6 +133,9 @@ pub fn step(ctx: &mut TickContext) {
                 // stand.
                 let Some(top) = top_at(&ground.mid(), chunk.level()) else { continue };
                 if top - 1.0 < z0 || top - 1.0 >= z1 {
+                    continue;
+                }
+                if major_only && poi.place(c).is_none_or(|place| place.rank > POI_MAJOR_RANK) {
                     continue;
                 }
                 let label = match poi.place(c) {

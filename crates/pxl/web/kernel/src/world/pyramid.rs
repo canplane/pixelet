@@ -361,9 +361,12 @@ impl<L: Layer> Pyramid<L> {
     ///
     /// `readers` are the pages another layer reads from this one, as
     /// `observe` takes them.
-    pub fn step(&mut self, destination: Option<LevelPage>, readers: &[LevelPage]) {
+    ///
+    /// `far` is how far the layer is seen, its observation cut there: what
+    /// it draws past that is nothing, so it asks for nothing past it.
+    pub fn step(&mut self, destination: Option<LevelPage>, readers: &[LevelPage], far: f64) {
         let Some(top) = floor::level() else { return };
-        let o = observation();
+        let o = observation().map(|o| Observation { far: o.far.min(far), ..o });
         if o.is_none() && destination.is_none() {
             return;
         }

@@ -1,26 +1,31 @@
 // pxl-spec/bake/poi_page.rs
 
 //! The POI layer's page. A place is 2.5D: it belongs to the cell of the POI
-//! lattice it stands in (`POI_LATTICE`). A cell stands where its places stand
-//! on average — their centroid, as the z16 ground cell it falls in — so a
-//! cell holding one place stands on that place's own, at every level, and a
-//! cell of two or more stands among them rather than on the lattice's grid.
-//! A page holds, for each occupied cell, how many places stand in it, where
-//! they stand on average, and where that is one, which place it is.
+//! lattice it stands in (`POI_LATTICE`). A page holds, for each occupied
+//! cell, how many places stand in it and the one it is shown by — its
+//! representative, the most prominent of them — and where that one stands,
+//! as the z16 ground cell it is in. That is what a map's labels do: a map
+//! names a place at each scale, the more prominent first, and the rest come
+//! in as it is looked at closer (OpenMapTiles' `poi` layer ranks the places
+//! of each label grid cell by their class and names the first, `rank`; Mapbox
+//! Streets' `filterrank` is the same idea).
 //!
-//! Folding is counting. A parent cell holds what its 2×2 children hold, which
-//! needs no ring and loses nothing: every level counts exactly the places
-//! under it, so a count read at any level agrees with the leaves. A centroid
-//! folds the same way, as its children's weighted by their counts, rounded to
-//! a z16 cell at each level. A place is not a representative chosen for a
-//! cell: it is there only where the cell holds one, so it is that place, and a
-//! parent holding one place holds what its one child held.
+//! Folding is counting and choosing. A parent cell holds what its 2×2
+//! children hold: their counts summed, which needs no ring and loses nothing,
+//! so a count read at any level agrees with the leaves; and the most
+//! prominent of their representatives, which is the most prominent of every
+//! place under it, since a maximum of maxima is the maximum. A cell of one
+//! place is that place at every level.
 //!
-//! Which place a cell holds is its name and its kind (bake/poi_badge.json),
-//! held once a page in a pool the cells index: both are the one place's and
-//! nothing else's, so they fold together. A cell is four words whatever its
-//! place, and a place that stands in many cells — a chain's branch, a
-//! station's exits — is carried once.
+//! How prominent a place is, is its rank, which the source gives it: the
+//! fold compares ranks and knows nothing of where they came from — a map's
+//! provider's class (pxl-geo-bake poi.rs `rank_of`), a search's order, a
+//! user's own — so every kind of mark folds by the one rule here.
+//!
+//! Which place a cell is shown by is its name, its kind (bake/poi_badge.json)
+//! and its rank, held once a page in a pool the cells index. A cell is four
+//! words whatever its place, and a place that stands in many cells — a
+//! chain's branch, a station's exits — is carried once.
 
 use std::collections::HashMap;
 
@@ -30,7 +35,7 @@ use crate::space::pyramid::{Folds, Lattice, LevelPage, GROUND, TOP_LEVEL};
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 
-const MAGIC: &[u8; 4] = b"PXP6";
+const MAGIC: &[u8; 4] = b"PXP7";
 
 /// The lattice places are counted in: a cell sixty-four times the ground's on
 /// a side — a chunk's column, six levels over the ground's cell — sharing the
@@ -48,8 +53,7 @@ const CELLS: u32 = POI_LATTICE.page_cells() * POI_LATTICE.page_cells();
 /// A cell on the wire: its index, count, position and place, a word each.
 const CELL_BYTES: usize = 16;
 
-/// A cell with no place: it holds more than one, or its one place has no
-/// name.
+/// A cell with no place: none of its places has a name.
 pub const NO_PLACE: u32 = u32::MAX;
 
 /// The longest name a page holds, in code points; a longer one is cut to end
@@ -67,9 +71,9 @@ const _: () = assert!(
 );
 
 /// An occupied cell: its index in the page, how many places stand in it, the
-/// z16 ground cell their centroid falls in, as that cell's offset in this one
-/// (pxl-spec space/pyramid.rs `Cell::offset_of`), and where `count` is 1, the
-/// pool index of its one place (NO_PLACE where it has no name).
+/// pool index of the place it is shown by (NO_PLACE where none under it has
+/// a name), and the z16 ground cell that place stands in, as that cell's
+/// offset in this one (pxl-spec space/pyramid.rs `Cell::offset_of`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PoiCell {
     pub cell: u32,
@@ -78,29 +82,33 @@ pub struct PoiCell {
     pub at: [u32; 2],
 }
 
-/// A place as a cell names it: what it is called, and its kind — its number
-/// in the badge table, 0 for none (`kind_of`).
+/// A place as a cell names it: what it is called, its kind — its number in
+/// the badge table, 0 for none (`kind_of`) — and its rank, the more
+/// prominent the lower, as its source ranks it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Place<'a> {
     pub name: &'a str,
     pub kind: u8,
+    pub rank: u8,
 }
 
 /// A page's places, each once: place i's name is `bytes[ends[i - 1]..ends[i]]`,
-/// one run of UTF-8, and its kind `kinds[i]`.
+/// one run of UTF-8, its kind `kinds[i]` and its rank `ranks[i]`.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Places {
     bytes: Vec<u8>,
     ends: Vec<u32>,
     kinds: Vec<u8>,
+    ranks: Vec<u8>,
 }
 
 impl Places {
-    /// Place `i`; nameless and of no kind where there is none.
+    /// Place `i`; nameless, of no kind and last where there is none.
     pub fn get(&self, i: u32) -> Place<'_> {
         Place {
             name: self.name(i),
             kind: self.kinds.get(i as usize).copied().unwrap_or(0),
+            rank: self.ranks.get(i as usize).copied().unwrap_or(u8::MAX),
         }
     }
 
@@ -134,9 +142,17 @@ impl<'a> Pool<'a> {
             places.bytes.extend_from_slice(place.name.as_bytes());
             places.ends.push(places.bytes.len() as u32);
             places.kinds.push(place.kind);
+            places.ranks.push(place.rank);
             places.ends.len() as u32 - 1
         })
     }
+}
+
+/// How prominent a place is, the most first: by its rank, a place with no
+/// name last, then by its name, so that two of one rank are chosen alike by
+/// the bake and by the client.
+fn prominence(place: Place<'_>) -> (u8, bool, &str) {
+    (place.rank, place.name.is_empty(), place.name)
 }
 
 /// A kind's number, by its category; 0 where the table has none.
@@ -170,16 +186,15 @@ impl PoiPage {
             .into_iter()
             .map(|(point, place)| {
                 let cell = POI_LATTICE.cell_of(level, &point);
-                (cell.index(), cell.offset_of(GROUND.cell_of(0, &point)), cut_name(place.name), place.kind)
+                (cell.index(), cell.offset_of(GROUND.cell_of(0, &point)), cut_name(place.name), place.kind, place.rank)
             })
             .collect();
-        gathered(cut.iter().map(|(cell, at, name, kind)| (*cell, 1, *at, Place { name, kind: *kind })).collect())
+        gathered(cut.iter().map(|(cell, at, name, kind, rank)| (*cell, 1, *at, Place { name, kind: *kind, rank: *rank })).collect())
     }
 
-    /// The one place `c` holds; none where it holds more, or its one place
-    /// has no name.
+    /// The place `c` is shown by; none where no place under it has a name.
     pub fn place(&self, c: &PoiCell) -> Option<Place<'_>> {
-        (c.count == 1 && c.place != NO_PLACE).then(|| self.places.get(c.place))
+        (c.place != NO_PLACE).then(|| self.places.get(c.place))
     }
 }
 
@@ -200,8 +215,8 @@ impl Folds for PoiPage {
             let child = held(k)?;
             cells.extend(child.cells.iter().map(|c| {
                 let parent = POI_LATTICE.parent_cell(q, c.cell);
-                // The child's centroid, found again from the child's cell and
-                // read from the parent's.
+                // Where the child's place stands, found again from the
+                // child's cell and read from the parent's.
                 let ground = POI_LATTICE.cell_at(k, c.cell).inner_at(GROUND, 0, c.at);
                 let at = POI_LATTICE.cell_at(p, parent).offset_of(ground);
                 (parent, c.count, at, child.place(c).unwrap_or(NAMELESS))
@@ -224,27 +239,23 @@ fn cut_name(name: &str) -> std::borrow::Cow<'_, str> {
 }
 
 /// A place with no name, which the pool does not hold.
-const NAMELESS: Place = Place { name: "", kind: 0 };
+const NAMELESS: Place = Place { name: "", kind: 0, rank: u8::MAX };
 
-/// Cells ascending, each once, holding the sum of the counts it was given,
-/// their centroids' mean weighted by those counts, and a place where the sum
-/// is one.
+/// Cells ascending, each once, holding the sum of the counts it was given
+/// and the most prominent of the places it was given, standing where that
+/// one stands.
 fn gathered(mut cells: Vec<(u32, u32, [u32; 2], Place)>) -> PoiPage {
     cells.sort_unstable_by_key(|c| c.0);
     let mut pool = Pool::default();
     let cells = cells
         .chunk_by(|a, b| a.0 == b.0)
         .map(|group| {
-            let count: u32 = group.iter().map(|c| c.1).sum();
-            let mean = |lane: usize| {
-                let sum: u64 = group.iter().map(|c| c.2[lane] as u64 * c.1 as u64).sum();
-                ((sum + count as u64 / 2) / count as u64) as u32
-            };
+            let shown = group.iter().min_by(|a, b| prominence(a.3).cmp(&prominence(b.3)).then(a.2.cmp(&b.2))).unwrap_or(&group[0]);
             PoiCell {
                 cell: group[0].0,
-                count,
-                place: if count == 1 { pool.add(group[0].3) } else { NO_PLACE },
-                at: [mean(0), mean(1)],
+                count: group.iter().map(|c| c.1).sum(),
+                place: pool.add(shown.3),
+                at: shown.2,
             }
         })
         .collect();
@@ -253,11 +264,11 @@ fn gathered(mut cells: Vec<(u32, u32, [u32; 2], Place)>) -> PoiPage {
 
 /// The magic; how many cells, places and bytes of names; the cells, four
 /// words each (the position's two lanes a half-word each); each place's
-/// name's end; each place's kind, a byte; the names.
+/// name's end; each place's kind, a byte; its rank, a byte; the names.
 pub fn encode(page: &PoiPage) -> Result<Vec<u8>, MarshalError> {
     validate(page)?;
     let places = &page.places;
-    let mut out = Vec::with_capacity(16 + page.cells.len() * CELL_BYTES + places.ends.len() * 5 + places.bytes.len());
+    let mut out = Vec::with_capacity(16 + page.cells.len() * CELL_BYTES + places.ends.len() * 6 + places.bytes.len());
     out.extend_from_slice(MAGIC);
     for n in [page.cells.len() as u32, places.len(), places.bytes.len() as u32] {
         out.extend_from_slice(&n.to_le_bytes());
@@ -271,6 +282,7 @@ pub fn encode(page: &PoiPage) -> Result<Vec<u8>, MarshalError> {
         out.extend_from_slice(&end.to_le_bytes());
     }
     out.extend_from_slice(&places.kinds);
+    out.extend_from_slice(&places.ranks);
     out.extend_from_slice(&places.bytes);
     Ok(out)
 }
@@ -282,7 +294,7 @@ pub fn decode(bytes: &[u8]) -> Result<PoiPage, MarshalError> {
     let word = |at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap());
     let (n, places, pool) = (word(4) as usize, word(8) as usize, word(12) as usize);
     // Checked against the page's own bound before anything is allocated.
-    if n > CELLS as usize || places > n || bytes.len() != 16 + n * CELL_BYTES + places * 5 + pool {
+    if n > CELLS as usize || places > n || bytes.len() != 16 + n * CELL_BYTES + places * 6 + pool {
         return Err(bad());
     }
     let cells = (0..n)
@@ -299,7 +311,8 @@ pub fn decode(bytes: &[u8]) -> Result<PoiPage, MarshalError> {
     let at = 16 + n * CELL_BYTES;
     let ends: Vec<u32> = (0..places).map(|i| word(at + i * 4)).collect();
     let kinds = bytes[at + places * 4..at + places * 5].to_vec();
-    let text = &bytes[at + places * 5..];
+    let ranks = bytes[at + places * 5..at + places * 6].to_vec();
+    let text = &bytes[at + places * 6..];
     if ends.windows(2).any(|w| w[0] > w[1]) || ends.last().map_or(0, |&e| e as usize) != text.len() {
         return Err(bad());
     }
@@ -315,20 +328,20 @@ pub fn decode(bytes: &[u8]) -> Result<PoiPage, MarshalError> {
     }
     let page = PoiPage {
         cells,
-        places: Places { bytes: text.to_vec(), ends, kinds },
+        places: Places { bytes: text.to_vec(), ends, kinds, ranks },
     };
     validate(&page)?;
     Ok(page)
 }
 
 /// A page is its cells ascending, each inside the page and holding a place,
-/// its position a half-word a lane, and a place only where a cell holds one,
-/// the place from the pool and of a kind the badge table has.
+/// its position a half-word a lane, its place from the pool and of a kind the
+/// badge table has.
 fn validate(page: &PoiPage) -> Result<(), MarshalError> {
     if page.cells.iter().any(|c| c.cell >= CELLS || c.count == 0) || page.cells.windows(2).any(|w| w[0].cell >= w[1].cell) {
         return Err(bad());
     }
-    if page.cells.iter().any(|c| c.place != NO_PLACE && (c.count != 1 || c.place >= page.places.len())) {
+    if page.cells.iter().any(|c| c.place != NO_PLACE && c.place >= page.places.len()) {
         return Err(bad());
     }
     if page.places.kinds.iter().any(|&k| k as usize > KIND_CATEGORIES.len()) {

@@ -12,7 +12,6 @@ use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::gpu::renderer::{render_frame, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
 
-use crate::layer::billboard::distance_fade::fade_range;
 use crate::sched::profiler::record::MB;
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::space::pvf3::ivec;
@@ -55,7 +54,6 @@ pub fn stage_write(resolution: f64) {
     s[STAGE_AT::FOV] = v.fov;
     s[STAGE_AT::NEAR] = v.near;
     s[STAGE_AT::FAR] = v.far;
-    (s[STAGE_AT::FADE_START], s[STAGE_AT::FADE_END]) = fade_range();
     // The largest drawn cell per unit of distance: past a level's split
     // distance its cells are drawn averaged 2 × 2, so a cell there is twice
     // the level's over the distance, and half that just before the next

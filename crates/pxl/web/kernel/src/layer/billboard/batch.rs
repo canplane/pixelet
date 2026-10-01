@@ -14,9 +14,9 @@ pub struct BillboardBatch {
     pub local_y: Vec<f64>,
     pub local_z: Vec<f64>,
 
-    /// Full-strength drawn width in CSS pixels, before the distance fade.
+    /// Drawn width in CSS pixels.
     pub w_px: Vec<f32>,
-    /// Canvas-space Y of the anchor, in CSS pixels before the fade.
+    /// Canvas-space Y of the anchor, in CSS pixels.
     pub anchor_px: Vec<f32>,
     /// Stable per candidate, used only to keep two at equal distance from
     /// swapping places between frames.

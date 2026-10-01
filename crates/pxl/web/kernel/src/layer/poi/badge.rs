@@ -33,7 +33,7 @@ impl Label {
     /// The place a badge names, from the page it was read from; nameless and
     /// of no kind once that page has gone.
     fn place(page: LevelPage, place: u32) -> Place<'static> {
-        PoiPage::pyramid().get(page).map_or(Place { name: "", kind: 0 }, |p| p.places.get(place))
+        PoiPage::pyramid().get(page).map_or(Place { name: "", kind: 0, rank: u8::MAX }, |p| p.places.get(place))
     }
 
     /// What the badge shows: the count, or the name cut where a badge would

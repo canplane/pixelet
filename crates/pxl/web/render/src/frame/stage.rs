@@ -50,24 +50,22 @@ pub mod STAGE_AT {
     pub const FOV: usize = 56;
     pub const NEAR: usize = 57;
     pub const FAR: usize = 58;
-    pub const FADE_START: usize = 59;
-    pub const FADE_END: usize = 60;
-    pub const LOD_CELL: usize = 61;
-    pub const EDGE_STRENGTH: usize = 62;
-    pub const LOW_SPEC: usize = 63;
-    pub const EDGE_WIDTH: usize = 64;
-    pub const RIM_INTENSITY: usize = 65;
-    pub const SHADOWS: usize = 66;
-    pub const AO_STRENGTH: usize = 67;
+    pub const LOD_CELL: usize = 59;
+    pub const EDGE_STRENGTH: usize = 60;
+    pub const LOW_SPEC: usize = 61;
+    pub const EDGE_WIDTH: usize = 62;
+    pub const RIM_INTENSITY: usize = 63;
+    pub const SHADOWS: usize = 64;
+    pub const AO_STRENGTH: usize = 65;
     /// The screen-space occlusion (gpu/ao.rs): 1 to run it, 0 not to.
-    pub const SCREEN_AO: usize = 68;
+    pub const SCREEN_AO: usize = 66;
     /// The map origin the root frame is relative to, east and north, in
     /// units (2): with the eye past it, where the clouds are anchored to the
     /// ground.
-    pub const ORIGIN: usize = 69;
+    pub const ORIGIN: usize = 67;
     /// The device pixels the world's surface is drawn at to a CSS pixel,
     /// as the kernel's resolution chose them this frame.
-    pub const RESOLUTION: usize = 71;
+    pub const RESOLUTION: usize = 69;
 }
 
 static STAGE: Global<[f64; STAGE_WORDS]> = Global::new();

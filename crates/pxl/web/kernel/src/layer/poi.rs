@@ -48,11 +48,14 @@ pub fn enabled() -> bool {
     settings_store().poi
 }
 
-/// The layer's turn: its pyramid's while places are shown, and nothing asked
-/// for while they are not.
+/// The layer's turn: its pyramid's while places are shown, out to where the
+/// ground is drawn coarser than the coarsest level a place is shown at
+/// (param.rs `POI_MAJOR_LEVEL`) and no farther, and nothing asked for while
+/// they are not.
 pub fn poi_step() {
     if enabled() {
-        PoiPage::pyramid().step(None, &[]);
+        let far = crate::world::quality::effective().tau().split_distance(crate::param::POI_MAJOR_LEVEL as i32 + 1);
+        PoiPage::pyramid().step(None, &[], far);
         crate::world::pyramid::cover::step::<PoiPage>();
     } else {
         PoiPage::pyramid().idle();

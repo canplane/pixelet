@@ -17,7 +17,7 @@ fn point(tx: u32, ty: u32, dx: u32, dy: u32) -> Pvf3 {
 
 /// A place of no kind, called `name`.
 fn called(name: &str) -> Place<'_> {
-    Place { name, kind: 0 }
+    Place { name, kind: 0, rank: 100 }
 }
 
 /// A page survives the wire whole, its places and positions with it.
@@ -26,6 +26,7 @@ fn a_page_and_its_places_come_back_as_they_went() {
     let station = Place {
         name: "Seoul Station",
         kind: kind_of("subway"),
+        rank: 4,
     };
     let page = PoiPage::of_places(
         0,
@@ -40,20 +41,19 @@ fn a_page_and_its_places_come_back_as_they_went() {
     );
     assert_eq!(decode(&encode(&page).unwrap()).unwrap(), page);
     // A place standing in two cells is held once, the same name of another
-    // kind is another place, and a cell of two places holds none and stands
-    // between them.
-    assert_eq!(page.places.len(), 2);
+    // kind is another place, a cell of two places of one class is shown by
+    // the first by name and stands where it does, and a nameless one by none.
+    assert_eq!(page.places.len(), 3);
     assert_eq!(
         page.cells.iter().map(|c| page.place(c)).collect::<Vec<_>>(),
-        [Some(station), None, None, Some(station), Some(called("Seoul Station"))]
+        [Some(station), Some(called("남대문")), None, Some(station), Some(called("Seoul Station"))]
     );
-    assert_eq!(page.cells.iter().map(|c| c.at).collect::<Vec<_>>(), [[1, 2], [2, 2], [2, 0], [0, 3], [0, 0]]);
+    assert_eq!(page.cells.iter().map(|c| c.at).collect::<Vec<_>>(), [[1, 2], [3, 3], [2, 0], [0, 3], [0, 0]]);
 }
 
-/// A place and a position are a cell's only while it holds one, at every
-/// level: a parent with one place under it has that place, its kind with it,
-/// and stands it on the same z16 ground cell its leaf did, and a parent with
-/// two has a count and nothing else.
+/// A lone place is its cell's at every level: a parent with one place under
+/// it has that place, its kind with it, and stands it on the same z16 ground
+/// cell its leaf did; a parent with two counts both and is shown by one.
 #[test]
 fn a_lone_place_folds_up_with_its_kind_and_its_ground_cell() {
     let at = point(5, 4, 3, 1);
@@ -62,6 +62,7 @@ fn a_lone_place_folds_up_with_its_kind_and_its_ground_cell() {
     let tower = Place {
         name: "Namsan Tower",
         kind: kind_of("attraction"),
+        rank: 7,
     };
     let mut below = (leaf(), PoiPage::of_places(0, [(at, tower)]));
     for level in 1..=TOP_LEVEL {
@@ -77,7 +78,7 @@ fn a_lone_place_folds_up_with_its_kind_and_its_ground_cell() {
     let p = LevelPage::over(1, leaf().page);
     let pair_up = PoiPage::fold_page(p, |k| Some(if k == leaf() { &two } else { &empty })).unwrap();
     assert_eq!(pair_up.cells[0].count, 2);
-    assert_eq!(pair_up.place(&pair_up.cells[0]), None);
+    assert_eq!(pair_up.place(&pair_up.cells[0]), Some(called("A")));
 }
 
 /// A page settles a child where no cell over it holds a crowd: a lone place
@@ -99,30 +100,38 @@ fn a_page_settles_every_child_but_one_under_a_crowd() {
     assert!(page.settles(p, empty));
 }
 
-/// A crowd stands at its places' centroid, and a parent's is its children's
-/// weighted by their counts: folded from the leaves, it is where the places
-/// under it stand on average, as a page made at that level from the places
-/// themselves has it.
+/// A crowd is shown by its most prominent place, wherever it stands in the
+/// cell, and a parent by the most prominent of its children's: folded from
+/// the leaves it is what a page made at that level from the places has.
 #[test]
-fn a_centroid_folds_as_the_places_under_it_average() {
-    let places = [(point(0, 0, 0, 0), called("A")), (point(0, 0, 2, 0), called("B")), (point(1, 0, 0, 0), called("C"))];
+fn a_crowd_is_shown_by_its_most_prominent_place() {
+    let station = Place {
+        name: "Gangnam",
+        kind: kind_of("subway"),
+        rank: 4,
+    };
+    let cafe = Place { name: "A", kind: kind_of("cafe"), rank: 100 };
+    let places = [(point(0, 0, 0, 0), cafe), (point(0, 0, 2, 0), called("B")), (point(1, 0, 5, 0), station)];
     let leaf_page = PoiPage::of_places(0, places);
-    assert_eq!(leaf_page.cells.iter().map(|c| (c.count, c.at)).collect::<Vec<_>>(), [(2, [1, 0]), (1, [0, 0])]);
+    assert_eq!(
+        leaf_page.cells.iter().map(|c| (c.count, leaf_page.place(c), c.at)).collect::<Vec<_>>(),
+        [(2, Some(cafe), [0, 0]), (1, Some(station), [5, 0])]
+    );
     let p = LevelPage::over(1, leaf().page);
     let empty = PoiPage::default();
     let folded = PoiPage::fold_page(p, |k| Some(if k == leaf() { &leaf_page } else { &empty })).unwrap();
     assert_eq!(folded, PoiPage::of_places(1, places));
-    // A third of the way from A and B's column to C's: (0 + 2 + 64) / 3.
-    assert_eq!((folded.cells[0].count, folded.cells[0].at), (3, [22, 0]));
+    // The station, 64 ground cells and 5 in from the parent's corner.
+    assert_eq!((folded.cells[0].count, folded.place(&folded.cells[0]), folded.cells[0].at), (3, Some(station), [69, 0]));
 }
 
-/// What the wire cannot hold is refused: a place in a cell of two, a name
-/// split across a character or past `NAME_CHARS`, a kind past the theme.
+/// What the wire cannot hold is refused: a place past the pool, a name split
+/// across a character or past `NAME_CHARS`, a kind past the theme.
 #[test]
-fn a_page_that_names_a_crowd_or_splits_a_character_is_refused() {
+fn a_page_that_names_no_place_or_splits_a_character_is_refused() {
     let crowd = PoiPage::of_places(0, [(point(3, 0, 0, 0), called("A")), (point(3, 0, 1, 1), called("B")), (point(5, 0, 0, 0), called("C"))]);
     let mut named = crowd;
-    named.cells[0].place = 0;
+    named.cells[0].place = 9;
     assert!(encode(&named).is_err());
     let good = encode(&PoiPage::of_places(0, [(point(1, 0, 0, 0), called("역")), (point(2, 0, 0, 0), called("a"))])).unwrap();
     let mut split = good.clone();

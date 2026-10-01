@@ -64,7 +64,7 @@ fn crowded(p: LevelPage) -> PoiPage {
     let at = |k: LevelPage| POI_LATTICE.cell_base(k, 0, 0);
     PoiPage::of_places(
         p.level,
-        p.children().into_iter().flat_map(|k| [(at(k), Place { name: "a", kind: 0 }), (at(k), Place { name: "b", kind: 0 })]),
+        p.children().into_iter().flat_map(|k| [(at(k), Place { name: "a", kind: 0, rank: 100 }), (at(k), Place { name: "b", kind: 0, rank: 100 })]),
     )
 }
 
