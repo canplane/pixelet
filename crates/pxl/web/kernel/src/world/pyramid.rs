@@ -34,7 +34,7 @@ pub mod domain;
 
 use std::collections::HashMap;
 
-use pxl_spec::space::lod::Tau;
+use pxl_spec::space::lod::{fault_radius, pages_within, Tau};
 use pxl_spec::space::observation::{Bounds, DemandEstimator, Observation, Paged, Requirement, Storage as _};
 use pxl_spec::space::pyramid::{Folds, LevelPage, TOP_LEVEL};
 
@@ -142,6 +142,12 @@ impl<L: Layer> Pyramid<L> {
         self.paging.get(p)
     }
 
+    /// Whether `p` is no page because one over it says its ground
+    /// (`Paging::settled`).
+    pub fn settled(&self, p: LevelPage) -> bool {
+        self.paging.settled(p)
+    }
+
     /// What is held, and how.
     pub fn paging(&self) -> &Paging<L> {
         &self.paging
@@ -208,8 +214,16 @@ impl<L: Layer> Pyramid<L> {
     /// the fallback's pages, and what `prefetch` speculates on at `tau`, at
     /// most `allowance` of it — and with or without it, the `destination`'s
     /// pages, the best reason per page; and the pages another layer reads
-    /// from this one (`readers`), demanded as the observation's own are.
-    /// What of it is not held is what the layer wants.
+    /// from this one (`readers`). What of it is not held is what the layer
+    /// wants.
+    ///
+    /// A reader's page is demanded where a fault could name it — inside
+    /// its level's fault radius about the eye's foot, where the demand's
+    /// bound already counts it — and is a hint past that. Decor's cells
+    /// reach past the radius by a parent's diagonal, a split forced by a
+    /// sibling's, which would take a level's pages from three a side to
+    /// four; what such a cell does not get, it draws its parent's
+    /// population for (layer/decor/cell.rs `step`).
     ///
     /// Speculation is asked for only as far as frames are left over once
     /// everything held hard and everything demanded has one, so none of it
@@ -242,8 +256,11 @@ impl<L: Layer> Pyramid<L> {
                 let at = self.paging.source(p).unwrap_or(p);
                 ask(&mut asks, at, Ask { why: Why::Fault, order: order(o, p) });
             }
+            let foot = [o.eye[0], o.eye[1]];
             for &p in readers {
-                ask(&mut asks, p, Ask { why: Why::Fault, order: order(o, p) });
+                if pages_within(p.level, foot, fault_radius(p.level)).any(|q| q == p) {
+                    ask(&mut asks, p, Ask { why: Why::Fault, order: order(o, p) });
+                }
             }
             // What is demanded is inside the demand's bound, whatever the
             // ground: more is the structure's bound broken, and the capacity
@@ -289,6 +306,7 @@ impl<L: Layer> Pyramid<L> {
                     hints.push((order(o, p), p));
                 }
             });
+            hints.extend(readers.iter().filter(|p| !asks.contains_key(p)).map(|&p| (order(o, p), p)));
             hints.sort_unstable();
             hints.dedup_by_key(|h| h.1);
             // Nor for more pages than are left of what may be asked at once,

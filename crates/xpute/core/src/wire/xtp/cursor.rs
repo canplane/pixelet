@@ -546,12 +546,17 @@ impl<'a> NodeCursor<'a> {
         let [n, _] = GET_WORD(self.pkt, self.base, &mut reg);
         let start = (self.base + WORD_SZ) as usize;
         let pkt: &'a [u8] = self.pkt;
-        let offs = pkt.get(start..start + 4 * (n as usize + 1)).ok_or_else(bad)?;
+        // In u64: a count a packet cannot hold must read as one, not wrap.
+        let lane = 4 * (n as u64 + 1);
+        if start as u64 + lane > pkt.len() as u64 {
+            return Err(bad());
+        }
+        let offs = &pkt[start..start + lane as usize];
         let strs = Strs { offs, blob: &[], len: n };
         let blob = start + offs.len();
         let total = strs.off(n as usize);
         let strs = Strs {
-            blob: pkt.get(blob..blob + total).ok_or_else(bad)?,
+            blob: pkt.get(blob..blob.checked_add(total).ok_or_else(bad)?).ok_or_else(bad)?,
             ..strs
         };
         for i in 0..n as usize {

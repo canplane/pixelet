@@ -90,34 +90,38 @@ function walks_down(path: string): boolean {
 function open_file(files: Files, host: SysHost, fd: u32, root: u32, flags: u32, path: string): void {
   const file: File = { root, path, controller: new AbortController(), bytes: null, written: null };
   files.open.set(fd, file);
-  const own = () => files.open.get(fd) === file;
+  // Every answer leaves the record run first, even one known at once: an
+  // answer is a submission, and a submission the ring has no room for rings
+  // a turn to make room — a turn inside this run would write over the
+  // records it is still reading. Asked when it is sent, so a descriptor
+  // closed in the same run is answered nothing.
+  const answer = (res: i32, detail: u32) => {
+    if (files.open.get(fd) !== file) return;
+    if (res < 0) files.open.delete(fd);
+    host.opened(fd, res, detail);
+  };
   const failed = (err: unknown) => {
-    if (!own()) return;
-    files.open.delete(fd);
-    const [errno, detail] = err instanceof FileError ? [err.errno, err.detail] : [Errno.EIO, 0];
     if (!(err instanceof FileError)) console.warn(`[xpute/sys] open ${root}/${path}: ${err instanceof Error ? err.message : String(err)}`);
-    host.opened(fd, errno, detail);
+    const [errno, detail] = err instanceof FileError ? [err.errno, err.detail] : [Errno.EIO, 0];
+    answer(errno, detail);
   };
   const read = (bytes: U8Array) => {
-    if (!own()) return;
+    if (files.open.get(fd) !== file) return;
     file.bytes = bytes;
-    host.opened(fd, bytes.byteLength, 0);
+    answer(bytes.byteLength, 0);
   };
-  if (!walks_down(path)) return failed(new FileError(Errno.EACCES));
+  if (!walks_down(path)) return queueMicrotask(() => failed(new FileError(Errno.EACCES)));
   if (flags === flag.O_WRONLY) {
     file.written = [];
-    return host.opened(fd, 0, 0);
+    return queueMicrotask(() => answer(0, 0));
   }
-  // A file the host holds is answered now and one behind a transport when
-  // the transport is; either way the guest hears it on a later turn.
   let got: U8Array | Promise<U8Array>;
   try {
     got = host.open(root, path, file.controller.signal);
   } catch (err) {
-    return failed(err);
+    return queueMicrotask(() => failed(err));
   }
-  if (got instanceof Promise) got.then(read, failed);
-  else read(got);
+  Promise.resolve(got).then(read, failed);
 }
 
 /** Runs the calls the turn just returned left in the stream at `at`. */

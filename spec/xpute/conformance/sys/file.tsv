@@ -42,12 +42,14 @@ read.step.6	turn
 read.step.7	expect read 68656c6c6f
 read.step.8	expect quiet
 
+# Opened to write and closed in one turn: the close commits what was written, and the open, ended
+# before it was answered, is answered nothing.
 write.step.0	openat 0x10001 7 wr a
 write.step.1	write 0x10001 ab
 write.step.2	write 0x10001 c
 write.step.3	close 0x10001
 write.step.4	turn
-write.step.5	expect opened 0x10001 0
+write.step.5	expect quiet
 write.step.6	expect commit 7 a abc
 
 # A close ends a descriptor still opening: its open is never answered, however late its transport.

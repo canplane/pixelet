@@ -87,6 +87,12 @@ impl Settings {
 
     /// Writes what differs from the defaults, by name, to storage.
     fn keep(&self) {
+        file::write_whole(root::STORAGE, settings_path(), self.kept().into_bytes());
+    }
+
+    /// What storage keeps of the settings: what differs from the defaults
+    /// and this build offers, by name, as `settings_load` reads it.
+    fn kept(&self) -> String {
         let mut out = String::from("{");
         for key in SettingKey::ALL {
             let value = self.get(key);
@@ -104,7 +110,7 @@ impl Settings {
             out.push_str(&format!("\"{}\":{stored}", key.name()));
         }
         out.push('}');
-        file::write_whole(root::STORAGE, settings_path(), out.into_bytes());
+        out
     }
 
     pub fn toggle_setting(&mut self, key: SettingKey) {
@@ -125,6 +131,12 @@ fn settings_path() -> &'static str {
 /// its setting cannot hold is left at the default; unreadable storage is
 /// none.
 pub fn settings_load(kept: &str) {
+    SETTINGS_STORE.set(read_kept(kept));
+    profiler_follow(settings_store().profiler);
+}
+
+/// The settings `kept` holds over the defaults (`settings_load`).
+fn read_kept(kept: &str) -> Settings {
     let mut s = Settings::DEFAULT;
     if let Some(kept) = read_json(kept).filter(|v| v.kind() == JsonKind::Object) {
         for key in SettingKey::ALL {
@@ -139,10 +151,13 @@ pub fn settings_load(kept: &str) {
             }
         }
     }
-    SETTINGS_STORE.set(s);
-    profiler_follow(settings_store().profiler);
+    s
 }
 
 pub fn settings_store() -> &'static mut Settings {
     SETTINGS_STORE.get(|| Settings::DEFAULT)
 }
+
+#[cfg(test)]
+#[path = "store.test.rs"]
+mod test;

@@ -87,7 +87,10 @@ function program(memory: ArrayBuffer, code: u32, w: U32Array, a: u32): void {
       // The bytes are taken now: the kernel may close the file in this turn.
       const [fd, image] = [w[a], w[a + 1]];
       const bytes = FILES.bytes(fd);
+      // Answered after the record run, never inside it, as an open is
+      // (@xpute/runtime/ipc/sys.ts).
       void (async () => {
+        await Promise.resolve();
         const decoded = bytes !== null && (await decodeImage(image, bytes));
         CORE_DOORBELL.send(0, Command.IMAGE_DECODED, encode_image_decoded({ image, res: decoded ? 0 : Errno.EBADMSG }));
         request_frame();

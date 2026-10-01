@@ -36,6 +36,11 @@ population is the level-L scatter over the level-L page and the seed.
    antichain over the ground in view, as the terrain's is, decided by decor
    from the eye with the shared rule (`Tau::level`), never read off the
    terrain's frontier. One region holds a level-L cell or its children.
+   What is drawn is a cover that moves to that frontier one whole
+   replacement at a time: a refining cell stays drawn until every wanted
+   cell under it is ready, coarsening cells until their parent is, and what
+   waits under a drawn cell is held hidden — so a change of level never
+   leaves a region with no decor on it (layer/decor/cell.rs `step`).
 2. **Population LOD and presentation LOD are separate.** Which level a cell
    is decides what its block holds, and a change of level is a new block.
    Whether an instance is drawn as its model, its sprite or not at all is its
@@ -45,24 +50,30 @@ population is the level-L scatter over the level-L page and the seed.
    asks for the level-L page it scatters over; no chunk, mesh or
    materialization state is read — an instance's height is the query's
    (world/access.rs), not the drawn surface's.
+   The ask is a demand where a fault could name the page, inside the
+   level's fault radius about the eye's foot, so the demand's bound holds
+   as it is; a cell split only because a sibling is near reaches past that
+   by its parent's diagonal — four pages a side at a level rather than
+   three — and its page is a hint there, its parent drawn until it comes
+   (world/pyramid.rs `observe`).
 
 ## The shape
 
 ```text
-            eye + Tau
-               │
-      decor frontier (own antichain)
-               │
-          level-L cells
-        ┌──────┴──────┐
- page + seed       object store
- (scattered)        (placed)
-        └──────┬──────┘
-     instance blocks, one a cell
-               │
-   presentation, a frame at a time
-     ┌─────────┼─────────┐
-   model    sprite     gone
+           eye + Tau
+              │
+     decor frontier (own antichain)
+              │
+         level-L cells
+       ┌──────┴──────┐
+page + seed       object store
+(scattered)        (placed)
+       └──────┬──────┘
+    instance blocks, one a cell
+              │
+  presentation, a frame at a time
+    ┌─────────┼─────────┐
+  model    sprite     gone
 ```
 
 - **Admission is conservative.** Whether a cell is wanted is decided before

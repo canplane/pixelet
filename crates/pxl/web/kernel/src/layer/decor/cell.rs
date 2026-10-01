@@ -18,7 +18,7 @@
 //! apart from the population: the instance's own extent at its own distance,
 //! its model or its sprite (`present`). A change of it rebuilds nothing.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, PageSource};
@@ -70,6 +70,13 @@ impl DecorCell {
         self.chunk().page()
     }
 
+    fn parent(self) -> DecorCell {
+        DecorCell {
+            level: self.level + 1,
+            at: self.at.map(|v| v.div_euclid(2)),
+        }
+    }
+
     fn children(self) -> [DecorCell; 4] {
         let [x, y] = self.at;
         let l = self.level - 1;
@@ -90,6 +97,9 @@ struct Block {
     /// instance, rewritten a frame at a time by `present`.
     index: u32,
     sources: Sources,
+    /// Whether the cell is drawn: a block is held hidden while it waits on
+    /// the rest of a replacement (`step`).
+    drawn: bool,
 }
 
 /// What a cell's population is made of beyond its page and the seed: the
@@ -104,7 +114,8 @@ struct Sources {
 
 #[derive(Default)]
 struct Cells {
-    /// The frontier as last solved, in cell order.
+    /// The cells the eye wants, as last solved, in cell order: what is
+    /// drawn moves to it one whole replacement at a time (`step`).
     frontier: Vec<DecorCell>,
     blocks: HashMap<DecorCell, Block>,
     scratch: Option<DecorScratch>,
@@ -260,6 +271,7 @@ fn build(c: &mut Cells, cell: DecorCell, kinds: &[Kind], store: &Store, draw: &m
         handle,
         index,
         sources,
+        drawn: false,
     })
 }
 
@@ -268,19 +280,24 @@ fn release(block: Block, draw: &mut DrawList) {
     release_block(block.at as usize, block.bytes);
 }
 
-/// Decor's turn: the frontier solved for the eye, the cells it left given
-/// back, the ones it wants built as far as the frame allows, and what it
-/// shows listed to draw.
+/// Moves decor toward the eye's frontier, a frame at a time.
+///
+/// The frontier is what is wanted; what is drawn is a cover of the ground
+/// in view that reaches it one whole replacement at a time, as the
+/// terrain's does. A cell refining into its children stays drawn until
+/// every wanted cell under it is ready, and they are drawn in the frame it
+/// goes; cells coarsening into their parent stay drawn until the parent
+/// is ready. Ready is a built block, or a page a coarser one settles,
+/// which has nothing to scatter. So a change of level never leaves a
+/// region with nothing drawn on it, and no region is drawn twice: what
+/// waits under a cell that is still drawn is held hidden.
 pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<EntryAt>, frame_eye: V3) {
     let c = cells();
     let mut frontier = core::mem::take(&mut c.frontier);
     solve(kinds, &mut frontier);
-    let gone: Vec<DecorCell> = c.blocks.keys().filter(|k| frontier.binary_search(k).is_err()).copied().collect();
-    for k in gone {
-        if let Some(b) = c.blocks.remove(&k) {
-            release(b, draw);
-        }
-    }
+    let top = floor::level().unwrap_or(0);
+    let pages = Terrain::pyramid();
+
     let mut built = 0;
     let mut cols = core::mem::take(&mut c.cols);
     for &cell in &frontier {
@@ -292,15 +309,62 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Ent
             continue;
         }
         c.cols = core::mem::take(&mut cols);
-        if let Some(b) = build(c, cell, kinds, store, draw, sources) {
-            if let Some(old) = c.blocks.insert(cell, b) {
+        if let Some(mut b) = build(c, cell, kinds, store, draw, sources) {
+            if let Some(old) = c.blocks.remove(&cell) {
+                b.drawn = old.drawn;
                 release(old, draw);
             }
+            c.blocks.insert(cell, b);
             built += 1;
         }
         cols = core::mem::take(&mut c.cols);
     }
     c.cols = cols;
+
+    let wanted: HashSet<DecorCell> = frontier.iter().copied().collect();
+    let ready = |cell: DecorCell, blocks: &HashMap<DecorCell, Block>| blocks.contains_key(&cell) || pages.settled(cell.page());
+    // Over every wanted cell, whether all the wanted cells under it are
+    // ready: a held cell there stays drawn until they are.
+    let mut under: HashMap<DecorCell, bool> = HashMap::new();
+    for &cell in &frontier {
+        let r = ready(cell, &c.blocks);
+        let mut a = cell;
+        while a.level < top {
+            a = a.parent();
+            *under.entry(a).or_insert(true) &= r;
+        }
+    }
+    let wanted_over = |cell: DecorCell| {
+        let mut a = cell;
+        while a.level < top {
+            a = a.parent();
+            if wanted.contains(&a) {
+                return Some(a);
+            }
+        }
+        None
+    };
+    let kept = |cell: DecorCell, blocks: &HashMap<DecorCell, Block>| {
+        wanted.contains(&cell) || under.get(&cell) == Some(&false) || wanted_over(cell).is_some_and(|a| !ready(a, blocks))
+    };
+    let gone: Vec<DecorCell> = c.blocks.keys().copied().filter(|&k| !kept(k, &c.blocks)).collect();
+    for k in gone {
+        if let Some(b) = c.blocks.remove(&k) {
+            release(b, draw);
+        }
+    }
+    // A held cell still waiting on what refines it covers its region, so
+    // nothing under it is drawn.
+    let covers: HashSet<DecorCell> = c.blocks.keys().copied().filter(|k| under.get(k) == Some(&false) && !wanted.contains(k)).collect();
+    for (&cell, b) in c.blocks.iter_mut() {
+        let mut a = cell;
+        let mut covered = false;
+        while a.level < top && !covered {
+            a = a.parent();
+            covered = covers.contains(&a);
+        }
+        b.drawn = !covered;
+    }
     c.frontier = frontier;
     present(c, kinds, draw, frame_eye);
 }
@@ -314,7 +378,7 @@ fn present(c: &Cells, kinds: &[Kind], draw: &mut DrawList, frame_eye: V3) {
     let Some(eye) = eye() else { return };
     let model_px = decor_gone_px();
     let sprite_px = *TARGET_CELL_PX * IMPOSTOR_GONE_CELLS;
-    for (&cell, block) in &c.blocks {
+    for (&cell, block) in c.blocks.iter().filter(|(_, b)| b.drawn) {
         let (x0, y0, _) = cell.rect();
         let translation = DrawList::translation([x0, y0, 0.0], frame_eye);
         // SAFETY: the block the cell holds, `bytes` long, and its own to
@@ -363,7 +427,7 @@ fn present(c: &Cells, kinds: &[Kind], draw: &mut DrawList, frame_eye: V3) {
 /// Every cell shown, its corner in units and its block's words: what a hit
 /// walks.
 pub fn shown() -> impl Iterator<Item = (DecorCell, f64, f64, &'static [u32])> {
-    cells().blocks.iter().map(|(&cell, b)| {
+    cells().blocks.iter().filter(|(_, b)| b.drawn).map(|(&cell, b)| {
         let (x0, y0, _) = cell.rect();
         // SAFETY: the block the cell holds, `bytes` long, until it is given
         // back on a later turn.

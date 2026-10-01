@@ -2,8 +2,8 @@
 //
 // What the kernel asks of the host that is not a command it answers, made as
 // xpute's system calls (xpute-runtime ipc/sys.rs): its files (io/file.rs),
-// and the kernel's own calls — a text laid out or drawn (text.rs,
-// abi/host.json). The host runs
+// and the kernel's own calls — a text laid out or drawn (text.rs), an image
+// decoded (io/load.rs) — numbered in abi/host.json. The host runs
 // them once the turn has returned, so what one asks is done by the time the
 // next turn rises — and what it names is kept that long. Only the clock is
 // still called: a turn measures its own budget mid-turn, when the host cannot
