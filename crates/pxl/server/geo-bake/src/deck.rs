@@ -40,11 +40,10 @@ use std::collections::HashSet;
 
 use postgres::Client;
 
-use clearance::{Under, STACKED};
+use clearance::{Under, BORE_DEPTH, STACKED};
 use piece::{pieces_of, Piece};
 use profile::{solve as solve_profile, Problem, Profile};
-use pxl_spec::bake::constant::CELL_PER_M;
-use pxl_spec::bake::deck::{Form, BORE_HEIGHT};
+use pxl_spec::bake::deck::Form;
 use source::DeckOut;
 use structure::{end_of, group, key_of, side_by_side, Graph};
 
@@ -55,12 +54,6 @@ use crate::terrain::pipeline::overture::policy::{DECK_FLAGS, UNSEEN_FLAGS};
 /// something under it, in metres: where two pieces meet they intersect at
 /// that point.
 const AT_END: f64 = 1.0;
-
-/// How deep under the drawn surface a bore's floor lies wherever it is not
-/// coming up to a portal, in z16 cells: its air, a cell of the ground over
-/// it as its roof, and half a cell for the rounding the floor and the
-/// ground each take into cells, so the roof is never rounded away.
-pub(crate) const COVER: f64 = BORE_HEIGHT as f64 + 1.5;
 
 /// What one solve made.
 pub struct Solved {
@@ -224,8 +217,8 @@ fn portals_of(url: &str, tunnels: &[Piece]) -> Result<Vec<(usize, bool)>, postgr
 /// The bores of the tunnels that come out to the ground, cut their whole
 /// length so a first-person view can go through, and their cuttings. A
 /// bore's floor is a deck's profile turned over (profile.rs), one rule for a
-/// road tunnel and a subway alike: under its roof it lies a bore and a roof
-/// (`COVER`) under the drawn surface, so the portal, where OSM begins the
+/// road tunnel and a subway alike: under its roof it lies `BORE_DEPTH`
+/// under the ground, so the portal, where OSM begins the
 /// tunnel, is where its roof begins; the drop to that depth is the cutting's
 /// before the portal (approach.rs), open from its floor to the sky; and
 /// between portals the floor runs straight where that already holds, no
@@ -250,7 +243,7 @@ fn bores_of<'a>(tunnels: &'a [Piece], portal_at: &HashSet<(i64, i64)>, structure
         // over it: under a roof it keeps the cover, and in a cutting it is no
         // higher than the ground.
         let carried = carried_of(tunnels, members, g);
-        let need: Vec<f64> = (0..g.at.len()).map(|v| if carried[v] { COVER / CELL_PER_M(g.at[v][1]) - ground[v] } else { -ground[v] }).collect();
+        let need: Vec<f64> = (0..g.at.len()).map(|v| if carried[v] { BORE_DEPTH - ground[v] } else { -ground[v] }).collect();
         let below = |x: &[f64]| x.iter().map(|v| -v).collect::<Vec<f64>>();
         let profile = solve_profile(&Problem {
             adj: &g.adj,

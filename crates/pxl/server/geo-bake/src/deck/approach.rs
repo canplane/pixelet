@@ -27,14 +27,12 @@
 
 use std::collections::HashMap;
 
-use pxl_spec::bake::constant::CELL_PER_M;
 use pxl_spec::bake::deck::Form;
 
-use crate::deck::clearance::MAX_SLOPE;
+use crate::deck::clearance::{BORE_DEPTH, MAX_SLOPE};
 use crate::deck::piece::Piece;
 use crate::deck::source;
 use crate::deck::structure::{end_of, key_of};
-use crate::deck::COVER;
 use crate::terrain::pipeline::overture::between::{flag_ranges, value_ranges, without, Line, Range};
 use crate::terrain::pipeline::overture::policy::{DECK_FLAGS, UNSEEN_FLAGS};
 use crate::terrain::pipeline::overture::width::{width_m, WayShape};
@@ -87,8 +85,7 @@ pub fn approaches(url: &str, pieces: &[Piece], ends: &[(usize, bool)], form: For
                 let mut below: Vec<Range> = [off, value_ranges(row.levels.as_deref(), |v| v < 0.0)].concat();
                 below.sort_by(|x, y| x[0].total_cmp(&y[0]));
                 // The drop to the portal, at the steepest a way climbs.
-                let drop = COVER / CELL_PER_M(at[1]);
-                (without(&[[0.0, 1.0]], &below), drop / MAX_SLOPE * structure.scale() / len)
+                (without(&[[0.0, 1.0]], &below), BORE_DEPTH / MAX_SLOPE * structure.scale() / len)
             }
         };
         for outward in [1.0, -1.0] {
