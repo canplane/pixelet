@@ -31,8 +31,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   limit.
 - **How the samples are drawn.** Raster against casting into the records,
   on the iPhone 13 mini, with today's box format (36 unindexed vertices)
-  against faces alone; a blend on arrival — a chunk rebuilt
-  because its page came is swapped in whole today; decor as its own solver — instances at the asset's
+  against faces alone; decor as its own solver — instances at the asset's
   level of detail and its lifetime off the chunk slot (its impostor far away
   is in, 2026-10-01, and its hit's reach is the models' own).
 
