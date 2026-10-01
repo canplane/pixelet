@@ -57,6 +57,9 @@ pub struct CameraStore {
     /// Where the placed object currently under the cursor is filed, if there
     /// is one — see camera/ray.rs's PickResult.
     pub hovered_object_at: Option<EntryAt>,
+    /// The cell the scattered decor under the cursor stands in, if that is
+    /// what is under it: no entry, what is made there.
+    pub hovered_scattered: Option<[i64; 3]>,
     /// What the controls ask of the camera (`Intent`).
     pub intent: Intent,
     /// Follow mode flag.
@@ -69,6 +72,7 @@ impl CameraStore {
             camera_status: CameraStatus::Idle,
             hovered_coord: None,
             hovered_object_at: None,
+            hovered_scattered: None,
             intent: Intent {
                 dist: DEFAULT_DIST,
                 azimuth: DEFAULT_AZIMUTH,

@@ -41,7 +41,13 @@ use crate::layer::decor::kind::DecorKindDef;
 use crate::layer::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
 use crate::layer::decor::scatter::{DecorKindSeed, DecorOrientationMode, DecorRules};
 use crate::layer::object::store::{At, EntryAt, Store};
+use crate::world::access::{Access, FINEST};
+use crate::world::pyramid::Layer as _;
 use pxl_spec::asset::ingested::Asset;
+use pxl_spec::bake::constant::CELL;
+use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::pack::GroundCell;
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 
 const AIR: u32 = cube_types::common::air as u32;
 
@@ -299,6 +305,58 @@ fn representative(tag: u64, level: u32, x: i64, y: i64) -> (i64, i64) {
     (x, y)
 }
 
+/// What a kind's scatter draws at a cell of a level: the z16 cell it stands
+/// for (`representative`), and that cell's own draws.
+pub struct Draw {
+    pub gx: i64,
+    pub gy: i64,
+    pub variant: u32,
+    pub rotation: f64,
+    pub scale: f64,
+}
+
+/// `kind`'s candidate at the cell `at` of `level`, `page_at` its place in
+/// the page whose `cells` it reads: none where the kind may not stand on
+/// what is drawn there, or its density leaves it out.
+pub fn draw(kind: &Kind, cells: &[GroundCell], level: u32, at: [i64; 2], page_at: [u32; 2]) -> Option<Draw> {
+    let [cell_x, cell_y] = page_at;
+    if !kind.rules.allows(cells[GROUND.cell_index(cell_x, cell_y) as usize]) {
+        return None;
+    }
+    let (gx, gy) = representative(kind.tag, level, at[0], at[1]);
+    // The z16 cell's own stream: its page's seed, the kind's, and its place
+    // in its page.
+    let z16 = GROUND.cell_of(0, &GROUND.scale(0).base_of([gx, gy, 0]));
+    let [px, py] = z16.in_page().map(u64::from);
+    let kind_seed = derive_seed_u64(derive_seed_u64(DECOR_MASTER_SEED, z16.page().page), kind.tag);
+    let mut rng = Rng::new(derive_seed_u64(kind_seed, (px << 16) | py));
+    if rng.unit() >= kind.density {
+        return None;
+    }
+    let variant = ((rng.unit() * kind.variant_count as f64).floor() as u32).min(kind.variant_count - 1);
+    let rotation = if kind.align_transport {
+        let flip = rng.unit() < 0.5;
+        transport_aligned_rotation(cells, cell_x, cell_y, flip)
+    } else {
+        rng.unit() * core::f64::consts::PI * 2.0
+    };
+    let scale = 1.0 + (rng.unit() * 2.0 - 1.0) * SCALE_JITTER;
+    Some(Draw { gx, gy, variant, rotation, scale })
+}
+
+/// Whether the scatter stands decor of value `value` in the cell `at` lies
+/// in, as z16 draws it, with nothing written there: the kind's candidate at
+/// that z16 cell, on the ground drawn there. False where the cell's page is
+/// not resident, which says nothing of it.
+pub fn scatters_at(value: u32, at: &Pvf3) -> bool {
+    let Some(kind) = kinds().iter().find(|k| k.decor_value == Some(value)) else { return false };
+    let z16 = GROUND.cell_of(0, at);
+    let Some(page) = Terrain::pyramid().get(z16.page()) else { return false };
+    let Some(ground) = Access::now().at(at, FINEST).exact() else { return false };
+    let [ix, iy, iz] = CELL.index_of(at);
+    iz == (ground.top / CELL.side()).round() as i64 && draw(kind, &page.ground.cells, 0, [ix, iy], z16.in_page()).is_some()
+}
+
 impl<'s> DecorBuild<'s> {
     /// Builds every kind's instances at world step `step` into `scratch`:
     /// the decor placed in `placed`'s columns, `hide` flagged hidden, and
@@ -402,29 +460,15 @@ impl<'s> DecorBuild<'s> {
             let cell_y = ground.ty0 + dy;
             for dx in 0..CHUNK_CELLS {
                 let cell_x = ground.tx0 + dx;
-                if !kind.rules.allows(cells[GROUND.cell_index(cell_x, cell_y) as usize]) {
+                let Some(Draw { gx, gy, variant, rotation, scale }) = draw(kind, cells, ground.level, [lx0 + dx as i64, ly0 + dy as i64], [cell_x, cell_y]) else {
                     continue;
-                }
-                let (gx, gy) = representative(kind.tag, ground.level, lx0 + dx as i64, ly0 + dy as i64);
-                // The z16 cell's own stream: its page's seed, the kind's, and
-                // its place in its page.
-                let z16 = GROUND.cell_of(0, &atom.base_of([gx, gy, 0]));
-                let [px, py] = z16.in_page().map(u64::from);
-                let kind_seed = derive_seed_u64(derive_seed_u64(DECOR_MASTER_SEED, z16.page().page), kind.tag);
-                let mut rng = Rng::new(derive_seed_u64(kind_seed, (px << 16) | py));
-                if rng.unit() >= kind.density {
-                    continue;
-                }
-                let variant = ((rng.unit() * kind.variant_count as f64).floor() as u32).min(kind.variant_count - 1);
-                let rotation = if kind.align_transport {
-                    let flip = rng.unit() < 0.5;
-                    transport_aligned_rotation(cells, cell_x, cell_y, flip)
-                } else {
-                    rng.unit() * core::f64::consts::PI * 2.0
                 };
-                let scale = 1.0 + (rng.unit() * 2.0 - 1.0) * SCALE_JITTER;
                 let ele = ground.sample.ele[apron_col(dx, dy) as usize] as i32;
-                if has_entries && ground.col_idx.is_some_and(|c| store.cell(c, dx, dy, ele).is_some_and(|c| c.solid > 0)) {
+                // A scattered instance is what is made there, and an object's
+                // leaf in the cell it stands in is what was written over it,
+                // as over the ground: a cube puts a cube there, air takes it
+                // away, and the leaf gone brings it back.
+                if has_entries && ground.col_idx.is_some_and(|c| store.cell(c, dx, dy, ele).is_some()) {
                     continue;
                 }
                 let filled = |f: &HashMap<[i64; 3], u32>| f.get(&[lx0 + dx as i64, ly0 + dy as i64, level.index(ele as i64)]).is_some_and(|&s| s != AIR);

@@ -74,7 +74,8 @@ pub fn hover_cursor_step() {
     // Eraser's own "dig into the terrain itself" case (camera/input.rs's
     // handle_tap/update_hover) — gated on the same settings flag those use, so
     // this ghost never previews an edit the tap handler wouldn't commit.
-    let digging_terrain = active_tool == ActiveTool::Eraser && hovered_object.is_none() && terrain_carving;
+    let scattered = camera.hovered_scattered.is_some();
+    let digging_terrain = active_tool == ActiveTool::Eraser && hovered_object.is_none() && !scattered && terrain_carving;
     let structures = settings.structures;
     let textures = settings.textures;
 
@@ -89,7 +90,7 @@ pub fn hover_cursor_step() {
     let preview_size = match (&hovered_object, active_tool) {
         (Some(o), ActiveTool::Eraser | ActiveTool::Pointer) => o.size,
         (_, ActiveTool::Decor) => DECOR_SIZE,
-        _ if digging_terrain => U_PER_CELL,
+        _ if digging_terrain || scattered => U_PER_CELL,
         _ => ui.object_size,
     };
 
@@ -105,9 +106,10 @@ pub fn hover_cursor_step() {
             let tool = if active_tool == ActiveTool::Object { PlacementTool::Object } else { PlacementTool::Decor };
             is_placement_blocked(tool, h, ui.object_size)
         }
-        // Eraser hovering an existing object is never blocked; bare terrain is
-        // blocked exactly when digging into it isn't enabled.
-        (Some(_), ActiveTool::Eraser) => hovered_object.is_none() && !terrain_carving,
+        // Eraser hovering an existing object or a scattered decor is never
+        // blocked; bare terrain is blocked exactly when digging into it isn't
+        // enabled.
+        (Some(_), ActiveTool::Eraser) => hovered_object.is_none() && !scattered && !terrain_carving,
         _ => false,
     };
 

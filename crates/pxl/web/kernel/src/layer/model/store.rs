@@ -27,7 +27,6 @@ use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 
 use crate::layer::model::occupancy::Occupancy;
-use crate::layer::object::size::tier_of;
 
 /// A channel's path: translation, rotation; anything else is scale.
 const T: u8 = 0;
@@ -80,7 +79,7 @@ pub struct Model {
     /// How far a vertex reaches from the model's origin, unscaled: a
     /// bounding sphere for a hit test to reject by.
     radius: f32,
-    /// What it fills, at the tier its registered size is filled at.
+    /// What it fills, in its own frame and units.
     occupancy: Option<Occupancy>,
 }
 
@@ -302,7 +301,7 @@ impl Models {
         let positions = core::slice::from_raw_parts(ptr_at::<f32>(m.at), m.vertex_cnt as usize * 3);
         m.radius = positions.as_chunks::<3>().0.iter().map(|p| p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).fold(0.0f32, f32::max).sqrt();
         let indices = core::slice::from_raw_parts(ptr_at::<u32>(m.at).add(m.vertex_cnt as usize * MODEL_VERTEX_WORDS as usize), m.index_cnt as usize);
-        m.occupancy = Occupancy::of(positions, indices, |longest| (tier_of((longest * scale) as f64) as f32) / scale);
+        m.occupancy = Occupancy::of(positions, indices);
         let n = m.parent.len();
         let mut placed = vec![false; n];
         m.order.clear();

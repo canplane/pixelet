@@ -1,12 +1,15 @@
 // pxl-kernel/layer/decor/hit.rs
 
-//! Which user-placed decor entry the pointer's ray strikes: the ray against
-//! the triangles of every placed instance the decor cells hold
-//! (layer/decor/cell.rs), from the same blocks the renderer draws. A decor paints no voxel, so the access's
+//! Which decor the pointer's ray strikes: the ray against the triangles of
+//! every instance the z16 decor cells hold (layer/decor/cell.rs), from the
+//! same blocks the renderer draws. A decor paints no voxel, so the access's
 //! ray (world/access.rs `first_hit`) passes through it; this is its own hit,
-//! against what is drawn. What comes back is the address the object store
-//! files the entry under.
+//! against what is drawn. What comes back is what an edit acts on: a placed
+//! instance's entry, which the object store files it under, or the cell a
+//! scattered one stands in, which has no entry and is written over as the
+//! ground is.
 
+use pxl_spec::bake::constant::CELL;
 use pxl_spec::space::indexer::L2_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::v3::{Aabb, V3};
@@ -31,34 +34,46 @@ use crate::world::chunk::table::Scheduler;
 // terrain win, and larger than the round-off.
 const SAME_SURFACE_EPS: f64 = 1e-3;
 
-/// Where the placed decor entry the ray strikes within `max_dist` is filed, or
-/// None. Procedural instances are passed over, so a hit on one falls through
-/// to whatever is next along the ray. The ray is in the root frame, relative
-/// to `map_origin`.
-pub fn raycast_decor(origin: V3, direction: V3, map_origin: IVec, max_dist: f64) -> Option<EntryAt> {
+/// What decor a ray struck.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum DecorStruck {
+    /// A placed instance: where its entry is filed.
+    Placed(EntryAt),
+    /// A scattered instance: the cell it stands in, which a leaf written
+    /// there overrides.
+    Scattered([i64; 3]),
+}
+
+/// The decor the ray strikes within `max_dist`, or None. The ray is in the
+/// root frame, relative to `map_origin`.
+pub fn raycast_decor(origin: V3, direction: V3, map_origin: IVec, max_dist: f64) -> Option<DecorStruck> {
     let (_, sched) = kernel().world()?;
     let frame = [ivec::to_real(ivec::X(map_origin)), ivec::to_real(ivec::Y(map_origin))];
     let hit = hit_decor(sched, frame, origin, direction, max_dist + SAME_SURFACE_EPS)?;
-    // The lane holds the band's own i32 as a word (layer/decor/build.rs),
-    // NO_ENTRY apart, which the hit has already passed over.
-    Some(EntryAt {
+    if hit.band == NO_ENTRY {
+        return Some(DecorStruck::Scattered(hit.at.map(|v| (v / CELL.side()).floor() as i64)));
+    }
+    // The lane holds the band's own i32 as a word (layer/decor/build.rs).
+    Some(DecorStruck::Placed(EntryAt {
         col_idx: {
             let (x0, y0, _) = hit.cell.rect();
             L2_IDX(ivec::gather(x0 as i64, y0 as i64, 0))
         },
         band_idx: hit.band as i32,
         pos: hit.pos,
-    })
+    }))
 }
 
 /// What a ray struck among the decor shown: the decor cell it stands in, a
-/// z16 one since only those name their entries, the entry's band and packed
-/// position in that cell's column, and how far along.
+/// z16 one, the entry's band and packed position in that cell's column —
+/// NO_ENTRY for a scattered instance — where the instance stands, and how
+/// far along.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct DecorHit {
     pub cell: crate::layer::decor::cell::DecorCell,
     pub band: u32,
     pub pos: u32,
+    pub at: [f64; 3],
     pub t: f64,
 }
 
@@ -81,17 +96,17 @@ fn decor_reach(sched: &Scheduler) -> f64 {
     radius * DECOR_SIZE
 }
 
-/// The nearest placed decor instance the ray strikes within `max_dist`,
-/// over the decor every shown cell holds, model triangle by triangle
-/// after a bounding sphere. Procedural instances — the ones with no entry —
-/// are passed over, as the eraser has nothing to remove there; hidden
-/// ones are tested, since the hidden one is what the eraser is over.
+/// The nearest decor instance the ray strikes within `max_dist`, over the
+/// decor every shown z16 cell holds, model triangle by triangle after a
+/// bounding sphere. Hidden ones are tested, since the hidden one is what the
+/// eraser is over.
 fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: f64) -> Option<DecorHit> {
     let mut best: Option<DecorHit> = None;
     let mut limit = max_dist;
     let reach = decor_reach(sched);
     for (cell, base_x, base_y, words) in crate::layer::decor::cell::shown() {
-        // Only a z16 cell names its placed entries.
+        // Only a z16 cell names its placed entries, and what an edit acts on
+        // is made at z16: what is erased is erased from close by.
         if cell.level != 0 {
             continue;
         }
@@ -121,9 +136,6 @@ fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: 
             };
             for i in 0..lanes.count {
                 let band = words[lanes.band_at(i)];
-                if band == NO_ENTRY {
-                    continue;
-                }
                 let c = [tx + lane(0, i), ty + lane(1, i), lane(2, i)];
                 let spin = lane(3, i);
                 let s = lane(4, i) * mesh.scale as f64;
@@ -152,6 +164,7 @@ fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: 
                                 cell,
                                 band,
                                 pos: words[lanes.pos_at(i)],
+                                at: [base_x + lane(0, i), base_y + lane(1, i), lane(2, i)],
                                 t,
                             });
                         }

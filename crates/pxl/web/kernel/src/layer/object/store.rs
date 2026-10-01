@@ -50,6 +50,7 @@ use crate::global::Global;
 use crate::host::{now, turn};
 use crate::io::file::{self, Owner};
 use crate::kernel::kernel;
+use crate::layer::decor::build::scatters_at;
 use crate::shell::setting::store::hidden_ground;
 use crate::world::access::{Access, FINEST};
 use crate::world::change::{bump_world, wake_at, world_changes, world_edge, OBJECT_COLUMN};
@@ -810,9 +811,14 @@ pub fn place(at: &Pvf3, size: f64, cube: PlaceableCube, structures: bool) {
 }
 
 /// Same write path as place(), just tagged with a decor kind instead of a
-/// color.
+/// color — and the same law: placing the decor the scatter itself stands in
+/// a cell an erase emptied takes the erase back, VOID rather than a leaf
+/// repeating what is made there, so the scattered instance returns as it
+/// was, its own variant and turn.
 pub fn place_decor(at: &Pvf3, size: f64, decor_id: DecorId) {
-    write_object_value(at, size, decor_num_id(decor_id));
+    let value = decor_num_id(decor_id);
+    let redundant = size >= U_PER_CELL && object_value_is_air(read_state(at)) && scatters_at(value, at);
+    write_object_value(at, size, if redundant { VOID } else { value });
 }
 
 /// Eraser's own write path for its "nothing placed here" case — a real,
@@ -1383,6 +1389,14 @@ impl Store {
             }
         }
         Ok(())
+    }
+
+    /// Whether anything is kept in the band cell `at` (a `CELL`) lies in: false
+    /// says nothing is placed there, true only that something may be.
+    pub fn may_hold(&self, at: [i64; 3]) -> bool {
+        let cells = CELL.count_in(BAND) as i64;
+        let col_idx = ivec::gather(at[0].div_euclid(cells), at[1].div_euclid(cells), 0);
+        self.columns.get(&col_idx).is_some_and(|c| c.bands.contains_key(&(at[2].div_euclid(cells) as BandZ)))
     }
 
     /// What the objects fold to at cell `at` of `scale` (`fold_cell`), VOID

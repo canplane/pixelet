@@ -14,7 +14,7 @@
 use std::collections::BTreeMap;
 
 use camera_cfg::input::{AXIS_LOCK_THRESHOLD_PX, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION};
-use pxl_spec::bake::constant::U_PER_CELL;
+use pxl_spec::bake::constant::{CELL, U_PER_CELL};
 use pxl_spec::cell::object::PlaceableCube;
 use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::pvf3::ivec::IVec;
@@ -29,7 +29,7 @@ use crate::control::camera::ray::{ray_pick, resolve_hit_object, world_adjacent_c
 use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
 use crate::control::navigation::destination::cancel as cancel_destination;
 use crate::global::Global;
-use crate::layer::decor::hit::raycast_decor;
+use crate::layer::decor::hit::{raycast_decor, DecorStruck};
 use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
 use crate::layer::object::geometry::{anchor_center, object_aabb, object_center};
 use crate::layer::object::size::{DECOR_SIZE, DEFAULT_OBJECT_SIZE};
@@ -183,15 +183,39 @@ fn input() -> &'static mut Input {
     })
 }
 
-/// Which entry `hit` actually struck, decor included — the placed decor's mesh
-/// hit first, bounded by hit.t: decor sitting on solid ground can only be the
-/// right answer when it's genuinely closer along the ray than whatever the
-/// pick met, falling back to the object the pick met.
-fn resolve_hit_target(hit: &Hit, origin: V3, direction: V3, map_origin: IVec) -> Option<OccupiedEntry> {
-    if let Some(decor) = raycast_decor(origin, direction, map_origin, hit.t).and_then(get_placed_object) {
-        return Some(decor);
+/// What `hit` actually struck, decor included.
+enum Struck {
+    /// A placed entry.
+    Object(OccupiedEntry),
+    /// A scattered decor instance: the cell it stands in.
+    Scattered([i64; 3]),
+}
+
+/// What `hit` actually struck — the decor's mesh hit first, bounded by
+/// hit.t: decor sitting on solid ground can only be the right answer when
+/// it's genuinely closer along the ray than whatever the pick met, falling
+/// back to the object the pick met.
+fn resolve_struck(hit: &Hit, origin: V3, direction: V3, map_origin: IVec) -> Option<Struck> {
+    match raycast_decor(origin, direction, map_origin, hit.t) {
+        Some(DecorStruck::Placed(at)) => {
+            if let Some(o) = get_placed_object(at) {
+                return Some(Struck::Object(o));
+            }
+        }
+        Some(DecorStruck::Scattered(cell)) => return Some(Struck::Scattered(cell)),
+        None => {}
     }
-    resolve_hit_object(hit)
+    resolve_hit_object(hit).map(Struck::Object)
+}
+
+/// The placed entry `hit` struck, a placed decor's mesh met first; what a
+/// placement goes flush against. A scattered instance is what is made
+/// there and not an entry, and a placement lands as it would on the ground.
+fn resolve_hit_target(hit: &Hit, origin: V3, direction: V3, map_origin: IVec) -> Option<OccupiedEntry> {
+    match resolve_struck(hit, origin, direction, map_origin) {
+        Some(Struck::Object(o)) => Some(o),
+        _ => resolve_hit_object(hit),
+    }
 }
 
 /// What a non-drag tap on the terrain means — recenter the map (pointer tool),
@@ -218,8 +242,12 @@ fn handle_tap(hovered: Pvf3) {
         ActiveTool::Eraser => {
             // Targets the object the raycast actually struck, not a grid-key
             // lookup — correct for any size, any face.
-            match camera_store().hovered_object_at {
-                Some(at) => remove(at),
+            match (camera_store().hovered_object_at, camera_store().hovered_scattered) {
+                (Some(at), _) => remove(at),
+                // A scattered instance: air written over the cell it stands
+                // in, as over the ground, and with no setting asked, since it
+                // takes away nothing the ground is.
+                (None, Some(cell)) => place_air(&CELL.base_of(cell), U_PER_CELL),
                 // Nothing placed here — dig into the terrain's own real surface,
                 // once the user has opted into that. AIR, not VOID: real terrain
                 // has no object-layer leaf of its own to delete, so an explicit
@@ -230,8 +258,8 @@ fn handle_tap(hovered: Pvf3) {
                 // (pxl-render mesh/voxel_scan.rs), so a smaller leaf would still
                 // take the cell whole while recording a bite nobody took — and
                 // the store is saved, so that number outlives the session.
-                None if settings_store().terrain_carving => place_air(&hovered, U_PER_CELL),
-                None => {}
+                (None, None) if settings_store().terrain_carving => place_air(&hovered, U_PER_CELL),
+                (None, None) => {}
             }
         }
         ActiveTool::Decor | ActiveTool::Object => {
@@ -503,6 +531,7 @@ fn clear_hovered_once() {
     if camera.hovered_object_at.is_some() {
         camera.hovered_object_at = None;
     }
+    camera.hovered_scattered = None;
 }
 
 fn update_hover(s: &Input) {
@@ -524,6 +553,7 @@ fn update_hover(s: &Input) {
         // The one tool group that wants an ADJACENT empty slot. Decor always
         // places at its own fixed DECOR_SIZE.
         camera.hovered_object_at = None;
+        camera.hovered_scattered = None;
         let placement_size = if ui.active_tool == ActiveTool::Decor { DECOR_SIZE } else { ui.object_size };
         // The box of the entry the hit resolves to: a decor met in front of
         // what the pick struck is what the new cube goes flush against.
@@ -534,10 +564,19 @@ fn update_hover(s: &Input) {
 
     // Pointer (recenter on it) and eraser (remove/dig it) both target the struck
     // thing itself.
-    let struck = resolve_hit_target(&hit, origin, direction, map_origin);
-    camera.hovered_object_at = struck.as_ref().map(|o| o.at);
-    if let Some(o) = struck {
+    let struck = resolve_struck(&hit, origin, direction, map_origin);
+    camera.hovered_object_at = match &struck {
+        Some(Struck::Object(o)) => Some(o.at),
+        _ => None,
+    };
+    camera.hovered_scattered = match struck {
+        Some(Struck::Scattered(cell)) => Some(cell),
+        _ => None,
+    };
+    if let Some(Struck::Object(o)) = struck {
         camera.hovered_coord = Some(Pvf3 { i: o.i, f: o.f });
+    } else if let Some(cell) = camera.hovered_scattered {
+        camera.hovered_coord = Some(CELL.base_of(cell));
     } else if ui.active_tool == ActiveTool::Eraser && settings_store().terrain_carving {
         // Bare terrain under the eraser wants the struck voxel's OWN corner
         // (real, possibly dug-into height included), not the baked-elevation

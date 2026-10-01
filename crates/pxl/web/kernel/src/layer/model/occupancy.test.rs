@@ -17,9 +17,8 @@ fn filled(o: &Occupancy) -> usize {
 #[test]
 fn a_closed_mesh_is_solid_through() {
     let (p, i) = cube([0.0; 3], [2.0; 3]);
-    let o = Occupancy::of(&p, &i, |_| 1.0).unwrap();
-    // 2 / (1 / 4) = 8 cells a side, and the faces on the grid's far planes
-    // touch the cells past them too.
+    let o = Occupancy::of(&p, &i).unwrap();
+    // The faces on the grid's far planes touch the cells past them too.
     let side = (2.0 / o.cell) as usize + 1;
     assert_eq!(filled(&o), side * side * side);
 }
@@ -28,7 +27,7 @@ fn a_closed_mesh_is_solid_through() {
 fn an_open_mesh_is_only_its_shell() {
     // One face of the box: a sheet, nothing enclosed.
     let (p, i) = cube([0.0; 3], [2.0; 3]);
-    let o = Occupancy::of(&p, &i[..6], |_| 1.0).unwrap();
+    let o = Occupancy::of(&p, &i[..6]).unwrap();
     let side = (2.0 / o.cell) as usize + 1;
     assert_eq!(filled(&o), side * side);
 }

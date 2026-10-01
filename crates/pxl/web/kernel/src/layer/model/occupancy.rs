@@ -12,13 +12,16 @@
 //! and Minecraft's schematic importers make, kept as runs up the model's
 //! height, since what reads it asks a column at a time.
 //!
-//! Made once, when the model is sealed, from the vertices it was registered
-//! with: the model's own fact, read wherever it is placed, at any size.
+//! Made once, when the model is sealed, from its vertices alone: the mesh's
+//! own fact, the same however it is registered, placed or sized. Which tier
+//! an instance rounds it to is the instance's (layer/decor/volume.rs).
 
-/// How many of the grid's cells span the side of the model's smallest
-/// quantum: a quarter, so a model rounded outward to a tier is rounded by
-/// the tier and never by the grid under it by more than a quarter of one.
-const CELLS_A_QUANTUM: f32 = 4.0;
+/// How many cells the grid lays along the model's longest side: how finely
+/// the mesh's shape is kept, and no physical size. A tier rounds outward on
+/// top of it, so what it costs is a model whose instances are much larger
+/// than a tier — a building sixty-four cells long rounds by up to a cell
+/// more — against a grid of 64³ at most to fill once when it loads.
+const CELLS_LONGEST: f32 = 64.0;
 
 /// A model's filled cells, in its own frame (glTF's: Y up), unscaled.
 pub struct Occupancy {
@@ -33,10 +36,9 @@ pub struct Occupancy {
 
 impl Occupancy {
     /// The grid of the mesh `positions` (x, y, z a vertex) and `indices` (a
-    /// triangle three) make, its cell `quantum(longest) / CELLS_A_QUANTUM` in
-    /// the mesh's own units, `longest` its longest side. None for a mesh with
-    /// no extent.
-    pub fn of(positions: &[f32], indices: &[u32], quantum: impl FnOnce(f32) -> f32) -> Option<Occupancy> {
+    /// triangle three) make, `CELLS_LONGEST` cells along its longest side.
+    /// None for a mesh with no extent.
+    pub fn of(positions: &[f32], indices: &[u32]) -> Option<Occupancy> {
         let points = positions.as_chunks::<3>().0;
         let mut lo = [f32::INFINITY; 3];
         let mut hi = [f32::NEG_INFINITY; 3];
@@ -50,7 +52,7 @@ impl Occupancy {
             return None;
         }
         let longest = (0..3).map(|k| hi[k] - lo[k]).fold(0.0, f32::max);
-        let cell = quantum(longest) / CELLS_A_QUANTUM;
+        let cell = longest / CELLS_LONGEST;
         if !cell.is_finite() || cell <= 0.0 {
             return None;
         }

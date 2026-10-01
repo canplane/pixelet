@@ -4,10 +4,11 @@
 //! `support`): each instance's model occupancy (layer/model/occupancy.rs),
 //! turned and sized as it is drawn and rounded outward to the tier its size
 //! is filled at — whole cells for a thing a cell long or more, the
-//! sub-cells of its own size for a smaller one — then folded to the cell
-//! with the objects, sub-cell by sub-cell, by the objects' own rule. So a
-//! tree, a car or a candle is a volume the way a cube of its size is, and
-//! what folds away for a small cube folds away for a small mesh.
+//! sub-cells of its own size for a smaller one. What a cell comes to is the
+//! support's: sub-cell by sub-cell with the objects over it and the ground
+//! under it, then how much of the cell is filled. So a tree, a car or a
+//! candle is a volume the way a cube of its size is, and what is too little
+//! of a cell for a small cube is too little for a small mesh.
 //!
 //! The instances are the ones z16 draws — the scatter's own candidates and
 //! the placed decor, whatever level the view draws there — so what stands
@@ -17,8 +18,6 @@
 use std::collections::HashMap;
 
 use pxl_spec::bake::constant::{CELL, CELL_STEPS, OBJECT_FINEST};
-use pxl_spec::bake::fold::majority;
-use pxl_spec::cell::object::{object_value_is_air, object_value_is_voxel};
 use pxl_spec::space::pyramid::chunk_span_of;
 
 use crate::global::Global;
@@ -30,16 +29,13 @@ use crate::layer::decor::hit::group_models;
 use crate::layer::decor::instance::DECOR_GROUPS;
 use crate::layer::decor::scatter::SCALE_JITTER;
 use crate::layer::object::size::tier_of;
-use crate::layer::object::store::{Store, VOID};
+use crate::layer::object::store::Store;
 use crate::shell::setting::store::settings_store;
 use crate::world::access::support_revision;
 
-/// What a sub-cell a decor volume fills holds while it is folded: no value
-/// the catalogs give out.
-const FILLED: u16 = u16::MAX;
-
-/// A cell's sub-cells at the objects' finest, one bit each, x fastest.
-type SubCells = [u64; (CELL_STEPS * CELL_STEPS * CELL_STEPS) as usize / 64];
+/// A cell's sub-cells at the objects' finest, one bit each, x fastest, then
+/// y, then z.
+pub type SubCells = [u64; (CELL_STEPS * CELL_STEPS * CELL_STEPS) as usize / 64];
 
 /// An instance as its volume is read: its model, where it stands, its turn
 /// and its size.
@@ -73,12 +69,10 @@ pub fn decor_volume_revision() -> u32 {
     loaded << 1 | u32::from(settings_store().decor)
 }
 
-/// What the cells of column `[ix, iy]` fold to where decor fills any of
-/// their sub-cells, as `(cell z, filled)`: true where the fold is a solid —
-/// a cube, or decor — false where it is air, and the cell left out where it
-/// folds to nothing, for the ground to answer. A cell no decor reaches is
-/// left out too, the objects' own fold standing.
-pub fn decor_column(store: &Store, ix: i64, iy: i64, out: &mut Vec<(i64, bool)>) {
+/// The sub-cells decor fills in the cells of column `[ix, iy]`, as `(cell
+/// z, sub-cells)`, a cell no decor reaches left out. What they come to with
+/// the objects and the ground is the support's (world/access.rs).
+pub fn decor_column(store: &Store, ix: i64, iy: i64, out: &mut Vec<(i64, SubCells)>) {
     out.clear();
     let Some((_, sched)) = kernel().world() else { return };
     let mut models = [None; DECOR_GROUPS];
@@ -186,39 +180,5 @@ pub fn decor_column(store: &Store, ix: i64, iy: i64, out: &mut Vec<(i64, bool)>)
             }
         }
     }
-    for (&cz, sub) in &v.cells {
-        let n = steps as usize;
-        let mut values: Vec<u16> = (0..n * n * n)
-            .map(|k| {
-                let [x, y, z] = [k % n, k / n % n, k / (n * n)].map(|c| c as i64);
-                let own = store.folded_value(OBJECT_FINEST, [column[0][0] + x, column[1][0] + y, cz * steps + z]);
-                match (object_value_is_voxel(u32::from(own)), sub[k / 64] >> (k % 64) & 1 != 0) {
-                    (true, _) => own,
-                    (false, true) => FILLED,
-                    (false, false) => VOID as u16,
-                }
-            })
-            .collect();
-        // Up to the cell a level at a time, the eight under each parent by
-        // the rule the objects fold by (layer/object/store.rs `fold_cell`).
-        let mut scale = OBJECT_FINEST;
-        let mut m = n;
-        while scale < CELL {
-            scale = scale.up(1);
-            let h = m / 2;
-            values = (0..h * h * h)
-                .map(|k| {
-                    let [x, y, z] = [k % h, k / h % h, k / (h * h)].map(|c| c * 2);
-                    let eight: [u16; 8] = core::array::from_fn(|c| values[((z + (c >> 2)) * m + y + (c >> 1 & 1)) * m + x + (c & 1)]);
-                    majority(eight, scale.above(CELL))
-                })
-                .collect();
-            m = h;
-        }
-        match values[0] {
-            FILLED => out.push((cz, true)),
-            v if object_value_is_voxel(u32::from(v)) => out.push((cz, !object_value_is_air(u32::from(v)))),
-            _ => {}
-        }
-    }
+    out.extend(v.cells.iter().map(|(&cz, &sub)| (cz, sub)));
 }
