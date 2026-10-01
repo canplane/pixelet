@@ -178,6 +178,21 @@ read, since Rust views elements in place, and C++ loads them where they lie;
 and a shallow value's shape follows each language — a bitset packed or a
 list of bytes, a string sequence its own type or a list.
 
+## `codec/json` is a reader, and nothing more (10-01)
+
+What made `codec/json` a protocol was a string map written by one side and
+parsed by the other, the POI's tags in a packet. That left with the tags on
+09-25, and the map's `stringify` and `parse` stayed behind with no caller
+but their record, as did a TypeScript `codec/json.ts` nothing imported. All
+three are gone; the bake's coast tags are a list of pairs of its own.
+
+What is left is the reader: a glTF's document and the settings a guest
+kept, read where they lie. Its numbers had been scanned as Rust's `f64`
+parse takes them, so `+1`, `.5` and `1.` were JSON to both guests and not to
+the host. They are read by JSON's grammar now, and the record holds which
+texts are JSON at all, judged by the host's own `JSON.parse` and by both
+guests' readers.
+
 ## Where it stands
 
 **Built** 09-30. The C++ `core` is the kit: `abi`, `alloc`, `codec`,

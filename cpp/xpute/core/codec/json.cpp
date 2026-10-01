@@ -8,20 +8,6 @@ namespace xpute {
 
 namespace json_detail {
 
-bool is_array_index(std::string_view k) noexcept {
-    if (k.empty() || k.size() > 10 || (k.size() > 1 && k[0] == '0')) return false;
-    for (char c : k) {
-        if (c < '0' || c > '9') return false;
-    }
-    return index_of(k) < 0xffff'ffffu;
-}
-
-std::uint64_t index_of(std::string_view k) noexcept {
-    std::uint64_t n = 0;
-    for (char c : k) n = n * 10 + static_cast<std::uint64_t>(c - '0');
-    return n;
-}
-
 std::size_t skip_ws(std::string_view s, std::size_t at) noexcept {
     while (at < s.size() && (s[at] == ' ' || s[at] == '\t' || s[at] == '\n' || s[at] == '\r')) at++;
     return at;
@@ -95,29 +81,32 @@ static std::optional<std::size_t> skip_string(std::string_view s, std::size_t at
     }
 }
 
-// Whether `t` is a number as Rust's `f64` parse reads one, over the
-// characters a JSON number is scanned by: an optional sign, digits with an
-// optional point and fraction or a point and digits, an optional exponent.
-static bool rust_f64(std::string_view t) noexcept {
-    std::size_t i = 0;
-    auto digits = [&] {
-        std::size_t from = i;
-        while (i < t.size() && t[i] >= '0' && t[i] <= '9') i++;
+// Where the number starting at `at` ends, by JSON's grammar: a minus only,
+// no leading zero, digits on both sides of a point. `+1`, `.5`, `1.` and
+// `01` are what the host's `JSON.parse` refuses, and so are they here.
+static std::optional<std::size_t> skip_number(std::string_view s, std::size_t at) noexcept {
+    auto digits = [&](std::size_t from) {
+        std::size_t i = from;
+        while (i < s.size() && s[i] >= '0' && s[i] <= '9') i++;
         return i - from;
     };
-    if (i < t.size() && (t[i] == '+' || t[i] == '-')) i++;
-    std::size_t whole = digits(), frac = 0;
-    if (i < t.size() && t[i] == '.') {
-        i++;
-        frac = digits();
+    if (at < s.size() && s[at] == '-') at++;
+    std::size_t n = digits(at);
+    if (n == 0 || (n > 1 && s[at] == '0')) return std::nullopt;
+    at += n;
+    if (at < s.size() && s[at] == '.') {
+        n = digits(at + 1);
+        if (n == 0) return std::nullopt;
+        at += 1 + n;
     }
-    if (whole + frac == 0) return false;
-    if (i < t.size() && (t[i] == 'e' || t[i] == 'E')) {
-        i++;
-        if (i < t.size() && (t[i] == '+' || t[i] == '-')) i++;
-        if (digits() == 0) return false;
+    if (at < s.size() && (s[at] == 'e' || s[at] == 'E')) {
+        at++;
+        if (at < s.size() && (s[at] == '+' || s[at] == '-')) at++;
+        n = digits(at);
+        if (n == 0) return std::nullopt;
+        at += n;
     }
-    return i == t.size();
+    return at;
 }
 
 // Where the value starting at `at` ends.
@@ -163,12 +152,7 @@ static std::optional<std::size_t> skip_value(std::string_view s, std::size_t at,
             else return std::nullopt;
         }
     }
-    default: {
-        std::size_t end = at;
-        while (end < s.size() && (s[end] == '-' || s[end] == '+' || s[end] == '.' || s[end] == 'e' || s[end] == 'E' || (s[end] >= '0' && s[end] <= '9'))) end++;
-        if (!rust_f64(s.substr(at, end - at))) return std::nullopt;
-        return end;
-    }
+    default: return skip_number(s, at);
     }
 }
 
@@ -199,8 +183,6 @@ std::optional<bool> JsonValue::as_bool() const noexcept {
 std::optional<double> JsonValue::as_f64() const noexcept {
     if (kind() != JsonKind::number) return std::nullopt;
     std::string_view t = s_;
-    // from_chars takes no leading plus, which Rust's parse does.
-    if (!t.empty() && t[0] == '+') t.remove_prefix(1);
     double v = 0;
     auto [end, ec] = std::from_chars(t.data(), t.data() + t.size(), v);
     if (ec != std::errc() || end != t.data() + t.size()) return std::nullopt;

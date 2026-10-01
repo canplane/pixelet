@@ -31,52 +31,14 @@ fn json_read_in_place_walks_what_the_text_holds_and_refuses_what_is_not_json() {
 }
 
 fn text(v: &Golden, key: &str) -> String {
-    if v.has(key) {
-        String::from_utf8_lossy(&hex::decode(v.s(key)).unwrap()).into_owned()
-    } else {
-        String::new()
-    }
-}
-
-fn list(v: &Golden, base: &str) -> Vec<String> {
-    if !v.has(&format!("{base}.0")) {
-        return Vec::new();
-    }
-    (0..v.len(base)).map(|j| v.s(&format!("{base}.{j}")).to_string()).collect()
+    String::from_utf8_lossy(&hex::decode(v.s(key)).unwrap()).into_owned()
 }
 
 #[test]
-fn json_writes_and_reads_what_the_host_does() {
+fn json_is_what_the_host_s_json_parse_takes() {
     let v = Golden::load(GOLDEN);
-    v.each("stringify", |k| {
-        let keys = list(&v, &format!("{k}.keys"));
-        let values = list(&v, &format!("{k}.values"));
-        let map: StrMap = keys
-            .iter()
-            .zip(values.iter())
-            .map(|(key, val)| {
-                (
-                    String::from_utf8_lossy(&hex::decode(key).unwrap()).into_owned(),
-                    if val == "undefined" {
-                        None
-                    } else {
-                        Some(String::from_utf8_lossy(&hex::decode(val).unwrap()).into_owned())
-                    },
-                )
-            })
-            .collect();
-        assert_eq!(stringify_str_map(&map), text(&v, &format!("{k}.json")), "{k}");
-    });
-    v.each("parse", |k| {
-        let got = match parse_str_map(&text(&v, &format!("{k}.text"))) {
-            Err(_) => "refused".to_string(),
-            Ok(m) if m.is_empty() => "empty".to_string(),
-            Ok(m) => m
-                .iter()
-                .map(|(key, val)| format!("{}={}", hex::encode(key), hex::encode(val.as_deref().unwrap())))
-                .collect::<Vec<_>>()
-                .join(","),
-        };
+    v.each("grammar", |k| {
+        let got = if read_json(&text(&v, &format!("{k}.text"))).is_some() { "json" } else { "refused" };
         assert_eq!(got, v.s(&format!("{k}.read")), "{k}");
     });
 }

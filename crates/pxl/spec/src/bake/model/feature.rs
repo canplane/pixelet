@@ -1,7 +1,5 @@
 // pxl-spec/bake/model/feature.rs
 
-use xpute_core::codec::json::StrMap;
-
 use crate::bake::format::CellConfig;
 use crate::space::adapter::epsg3857::G3857;
 use crate::space::v3::V3;
@@ -9,7 +7,7 @@ use crate::space::v3::V3;
 /// Synthetic tag set attached to coastline rows (pipeline/coast/adapter.rs's
 /// from_coast_row) — coast/policy.rs's own IS_COAST check reads `natural`/
 /// `source` off this shape.
-pub type CoastTags = StrMap;
+pub type CoastTags = Vec<(String, Option<String>)>;
 
 /// Raw coastline row form exchanged between coast/adapter.rs and
 /// pipeline/normalizer.rs. Coordinates are expected to be in EPSG:3857 meters. This
@@ -48,6 +46,9 @@ pub struct FeatureExtra {
     /// ground or inside a building, is not built yet or is no longer there,
     /// or is a route rather than a way — so the ground does not paint it.
     pub is_unseen: bool,
+    /// True where the feature is carried above the ground: the page's decks
+    /// draw it (bake/deck.rs), and the ground does not.
+    pub is_deck: bool,
 }
 
 /// Final normalized feature form ready for bake/runtime use, shared by every

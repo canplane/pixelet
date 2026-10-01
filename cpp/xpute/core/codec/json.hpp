@@ -1,218 +1,26 @@
 // cpp/xpute/core/codec/json.hpp
 
-// `JSON.stringify` and `JSON.parse` of a flat string map — the one JSON the
-// records carry (a POI's tags, a placement's), written by either side and
-// read by the other, so the text is the host's to the byte — and a reader
-// that walks any JSON where it lies, as Rust's codec/json.rs does.
-//
-// What the host does that a naive port would not:
-// - an object's own key order puts array-index keys ("0", "12") first in
-//   ascending number, then the rest in insertion order, and both stringify
-//   and parse follow it;
-// - a key given twice keeps its first position and its last value;
-// - an absent value is left out of the text;
-// - a string escapes `"`, `\`, the five short controls, and every other code
-//   unit below U+0020 as `\u00xx` in lowercase hex, and nothing else.
-//
-// The one thing it cannot be: a lone surrogate, which a JavaScript string
-// holds and a UTF-8 one cannot; `\ud800` alone parses to U+FFFD.
-//
-// The map is built with the caller's allocator, as `arena` is, so a guest's
-// map is the guest's heap's; the reader allocates nothing.
+// JSON read where it lies, as Rust's codec/json.rs reads it: the documents
+// a guest is handed whole, checked once by JSON's own grammar and walked when
+// asked, with nothing allocated. And a string written as JSON writes one, a
+// piece at a time.
 
 #pragma once
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <optional>
-#include <string>
 #include <string_view>
-#include <utility>
-#include <vector>
 
-#include "../status/error.hpp"
 
 namespace xpute {
 
 namespace json_detail {
 
-// A canonical array index: "0", or digits with no leading zero, below 2^32 − 1.
-bool is_array_index(std::string_view k) noexcept;
-
-// The index's value, for one `is_array_index` accepted.
-std::uint64_t index_of(std::string_view k) noexcept;
-
-// `s` as `JSON.stringify` writes a string, into `out`.
-template <class S> void quote(S &out, std::string_view s) {
-    static constexpr char HEX[] = "0123456789abcdef";
-    out.push_back('"');
-    for (char ch : s) {
-        auto c = static_cast<unsigned char>(ch);
-        switch (c) {
-        case '"': out.append("\\\""); break;
-        case '\\': out.append("\\\\"); break;
-        case '\b': out.append("\\b"); break;
-        case '\f': out.append("\\f"); break;
-        case '\n': out.append("\\n"); break;
-        case '\r': out.append("\\r"); break;
-        case '\t': out.append("\\t"); break;
-        default:
-            if (c < 0x20) {
-                const char esc[] = {'\\', 'u', '0', '0', HEX[c >> 4], HEX[c & 15]};
-                out.append(esc, sizeof esc);
-            } else {
-                out.push_back(ch);
-            }
-        }
-    }
-    out.push_back('"');
-}
-
-// One parsed string, decoded into `out` from the text at `at`, which opens on
-// its quote; where it ends, or none for one that does not read.
-template <class S> std::optional<std::size_t> parse_string(std::string_view s, std::size_t at, S &out);
-
-} // namespace json_detail
-
-template <class Alloc = std::allocator<char>> using JsonText = std::basic_string<char, std::char_traits<char>, Alloc>;
-
-// `Record<string, string | undefined>`, in the order it was built.
-template <class Alloc = std::allocator<char>>
-using StrMap = std::vector<std::pair<JsonText<Alloc>, std::optional<JsonText<Alloc>>>,
-                           typename std::allocator_traits<Alloc>::template rebind_alloc<std::pair<JsonText<Alloc>, std::optional<JsonText<Alloc>>>>>;
-
-namespace json_detail {
-
-// The entries as the object holds them: a key once, at its first position
-// with its last value, index keys first.
-template <class Alloc> StrMap<Alloc> ordered(const StrMap<Alloc> &map, const Alloc &alloc) {
-    StrMap<Alloc> out(alloc);
-    out.reserve(map.size());
-    for (const auto &[k, v] : map) {
-        auto have = std::find_if(out.begin(), out.end(), [&](const auto &e) { return e.first == k; });
-        if (have != out.end()) have->second = v;
-        else out.emplace_back(k, v);
-    }
-    auto rest = std::stable_partition(out.begin(), out.end(), [](const auto &e) { return is_array_index(e.first); });
-    std::stable_sort(out.begin(), rest, [](const auto &a, const auto &b) { return index_of(a.first) < index_of(b.first); });
-    return out;
-}
-
-} // namespace json_detail
-
-// `JSON.stringify(map)`.
-template <class Alloc = std::allocator<char>> JsonText<Alloc> stringify_str_map(const StrMap<Alloc> &map, const Alloc &alloc = Alloc()) {
-    JsonText<Alloc> out(alloc);
-    out.push_back('{');
-    bool first = true;
-    for (const auto &[k, v] : json_detail::ordered(map, alloc)) {
-        if (!v) continue;
-        if (!first) out.push_back(',');
-        first = false;
-        json_detail::quote(out, k);
-        out.push_back(':');
-        json_detail::quote(out, *v);
-    }
-    out.push_back('}');
-    return out;
-}
-
-namespace json_detail {
-
 std::size_t skip_ws(std::string_view s, std::size_t at) noexcept;
 void push_utf8(std::uint32_t c, char *out, std::size_t &n) noexcept;
-std::optional<std::uint32_t> hex4(std::string_view s, std::size_t at) noexcept;
-
-template <class S> std::optional<std::size_t> parse_string(std::string_view s, std::size_t at, S &out) {
-    at = skip_ws(s, at);
-    if (at >= s.size() || s[at] != '"') return std::nullopt;
-    at++;
-    for (;;) {
-        if (at >= s.size()) return std::nullopt;
-        auto b = static_cast<unsigned char>(s[at]);
-        if (b == '"') return at + 1;
-        if (b == '\\') {
-            if (++at >= s.size()) return std::nullopt;
-            char e = s[at++];
-            switch (e) {
-            case '"': out.push_back('"'); break;
-            case '\\': out.push_back('\\'); break;
-            case '/': out.push_back('/'); break;
-            case 'b': out.push_back('\b'); break;
-            case 'f': out.push_back('\f'); break;
-            case 'n': out.push_back('\n'); break;
-            case 'r': out.push_back('\r'); break;
-            case 't': out.push_back('\t'); break;
-            case 'u': {
-                std::optional<std::uint32_t> hi = hex4(s, at);
-                if (!hi) return std::nullopt;
-                at += 4;
-                std::uint32_t unit = *hi;
-                if (*hi >= 0xd800 && *hi < 0xdc00 && s.substr(at, 2) == "\\u") {
-                    std::optional<std::uint32_t> lo = hex4(s, at + 2);
-                    if (!lo) return std::nullopt;
-                    if (*lo >= 0xdc00 && *lo < 0xe000) {
-                        unit = 0x10000 + ((*hi - 0xd800) << 10) + (*lo - 0xdc00);
-                        at += 6;
-                    }
-                }
-                if (unit >= 0xd800 && unit < 0xe000) unit = 0xfffd;
-                char buf[4];
-                std::size_t n = 0;
-                push_utf8(unit, buf, n);
-                out.append(buf, n);
-                break;
-            }
-            default: return std::nullopt;
-            }
-            continue;
-        }
-        if (b < 0x20) return std::nullopt;
-        out.push_back(static_cast<char>(b));
-        at++;
-    }
-}
 
 } // namespace json_detail
-
-// `JSON.parse(text)` for an object whose values are strings. Anything else —
-// another value type, trailing text — is refused (EBADMSG), where the host
-// would hand back whatever the text held.
-template <class Alloc = std::allocator<char>> Result<StrMap<Alloc>> parse_str_map(std::string_view text, const Alloc &alloc = Alloc()) {
-    using json_detail::skip_ws;
-    auto bad = [] { return marshal_error(Errno::ebadmsg); };
-    std::size_t at = skip_ws(text, 0);
-    if (at >= text.size() || text[at] != '{') return bad();
-    at = skip_ws(text, at + 1);
-    StrMap<Alloc> raw(alloc);
-    if (at < text.size() && text[at] == '}') {
-        at++;
-    } else {
-        for (;;) {
-            JsonText<Alloc> k(alloc), v(alloc);
-            std::optional<std::size_t> end = json_detail::parse_string(text, at, k);
-            if (!end) return bad();
-            at = skip_ws(text, *end);
-            if (at >= text.size() || text[at] != ':') return bad();
-            end = json_detail::parse_string(text, at + 1, v);
-            if (!end) return bad();
-            raw.emplace_back(std::move(k), std::move(v));
-            at = skip_ws(text, *end);
-            if (at < text.size() && text[at] == ',') {
-                at++;
-            } else if (at < text.size() && text[at] == '}') {
-                at++;
-                break;
-            } else {
-                return bad();
-            }
-        }
-    }
-    if (skip_ws(text, at) != text.size()) return bad();
-    return json_detail::ordered(raw, alloc);
-}
 
 // ============ Reading in place ============
 //

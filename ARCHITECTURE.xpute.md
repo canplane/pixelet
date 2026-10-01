@@ -233,7 +233,7 @@ Under `spec/xpute/golden/` are lines of `path<TAB>value`, produced once, checked
 
 There are two kinds, and the difference decides whether a record may ever be re-recorded.
 
-- **Across a protocol** — `wire/xtp`, `wire/tlv`, and `codec/json`, a flat string map as JSON text, which the host writes with its own `JSON.stringify` and Rust writes with a port of it. Every language that carries one must produce these bytes, to the last one, and each one's tests read the same files.
+- **Across a protocol** — `wire/xtp`, `wire/tlv`, and `codec/json`'s grammar: which texts are JSON at all, as the host's own `JSON.parse` judges them, so a document a guest reads in place is one the host would have read. Every language that carries one must produce these bytes and judgments, to the last one, and each one's tests read the same files.
 - **Inside a language** — everything else. A record holds one implementation to itself. Where Rust and JavaScript's `Math` round differently, neither is wrong, and each record follows its own implementation.
 
 The rule in one line: inside a language, each follows its own; across a protocol, the results must match exactly.
