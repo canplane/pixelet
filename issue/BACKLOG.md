@@ -27,27 +27,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P3
 
-- **The address label by the zoom.** Asked 2026-09-23, not now: it wants a
-  rebake. The label is one baked answer a leaf page
-  (`use-reverse-geocode.ts`, `geo-bake/geocode/provider/overture.rs`) — region,
-  county, the fine polygon and a nearby point — shown whole at every zoom, so
-  zoomed out to a province it still names a 동. The prior art is Nominatim's
-  reverse `zoom`, which the client used before the bake: 5 a state, 8 a
-  county, 10–13 a city or suburb, 14 on a neighborhood. Here, with level `k`
-  at zoom 15 − k, something like the whole chain to level 2, region and county
-  to level 5, region alone above.
-  - Cut the leaf page's chain rather than bake one per level. A level page's
-    center is not the map's: at level 4 a page is some 16 km, and its label
-    would name the next county over. The leaf page is about a kilometer, so
-    its chain is right and only needs shortening.
-  - Each part carries its `subtype`, which means rebaking the geocode set
-    and a new published version. Cutting by position is wrong where a level
-    is missing: Sejong has no county, so "the first two" is not "region and
-    county".
-  - Zoomed out, a pan crosses leaf pages faster and asks more often; the
-    500 ms debounce holds that to two a second, nothing against the Worker's
-    100k a day.
-
 - **What the sky left open.** Recorded 2026-09-22
   ([the sky is the air](./20260922-the-sky-is-the-air.md)), each small and
   none blocking:
