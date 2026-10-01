@@ -305,6 +305,26 @@ fn representative(tag: u64, level: u32, x: i64, y: i64) -> (i64, i64) {
     (x, y)
 }
 
+/// The decor a cell draws hidden: what the eraser is over, previewed gone
+/// while it is (layer/marker/hover_cursor.rs). Hidden and not left out, so
+/// the hit that put the eraser there still meets it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DecorHide {
+    /// A placed instance, by its entry.
+    Placed(EntryAt),
+    /// A scattered one, by the cell it stands in.
+    Scattered([i64; 3]),
+}
+
+impl DecorHide {
+    pub fn placed(self) -> Option<EntryAt> {
+        match self {
+            DecorHide::Placed(at) => Some(at),
+            DecorHide::Scattered(_) => None,
+        }
+    }
+}
+
 /// What a kind's scatter draws at a cell of a level: the z16 cell it stands
 /// for (`representative`), and that cell's own draws.
 pub struct Draw {
@@ -344,17 +364,17 @@ pub fn draw(kind: &Kind, cells: &[GroundCell], level: u32, at: [i64; 2], page_at
     Some(Draw { gx, gy, variant, rotation, scale })
 }
 
-/// Whether the scatter stands decor of value `value` in the cell `at` lies
-/// in, as z16 draws it, with nothing written there: the kind's candidate at
-/// that z16 cell, on the ground drawn there. False where the cell's page is
-/// not resident, which says nothing of it.
-pub fn scatters_at(value: u32, at: &Pvf3) -> bool {
-    let Some(kind) = kinds().iter().find(|k| k.decor_value == Some(value)) else { return false };
+/// What the scatter stands of decor value `value` in the cell `at` lies in,
+/// as z16 draws it with nothing written there: the kind's candidate at that
+/// z16 cell, on the ground drawn there. None where the cell's page is not
+/// resident, which says nothing of it.
+pub fn scatters_at(value: u32, at: &Pvf3) -> Option<Draw> {
+    let kind = kinds().iter().find(|k| k.decor_value == Some(value))?;
     let z16 = GROUND.cell_of(0, at);
-    let Some(page) = Terrain::pyramid().get(z16.page()) else { return false };
-    let Some(ground) = Access::now().at(at, FINEST).exact() else { return false };
+    let page = Terrain::pyramid().get(z16.page())?;
+    let ground = Access::now().at(at, FINEST).exact()?;
     let [ix, iy, iz] = CELL.index_of(at);
-    iz == (ground.top / CELL.side()).round() as i64 && draw(kind, &page.ground.cells, 0, [ix, iy], z16.in_page()).is_some()
+    (iz == (ground.top / CELL.side()).round() as i64).then(|| draw(kind, &page.ground.cells, 0, [ix, iy], z16.in_page()))?
 }
 
 impl<'s> DecorBuild<'s> {
@@ -367,7 +387,7 @@ impl<'s> DecorBuild<'s> {
     /// it, at any height. None where the heap refused the scratch room for
     /// them, and the cell is not built.
     #[allow(clippy::too_many_arguments)]
-    pub fn build(scratch: &'s mut DecorScratch, kinds: &[Kind], ground: Option<&Ground>, placed: &[Placed], hide: Option<EntryAt>, store: &Store, step: u32, decor: bool) -> Option<DecorBuild<'s>> {
+    pub fn build(scratch: &'s mut DecorScratch, kinds: &[Kind], ground: Option<&Ground>, placed: &[Placed], hide: Option<DecorHide>, store: &Store, step: u32, decor: bool) -> Option<DecorBuild<'s>> {
         scratch.clear();
         for kind in kinds {
             // A kind with no variant has no group to fill and no variant to
@@ -389,10 +409,10 @@ impl<'s> DecorBuild<'s> {
                 continue;
             }
             for column in placed {
-                Self::placed(scratch, kind, first, column, hide, store).ok()?;
+                Self::placed(scratch, kind, first, column, hide.and_then(DecorHide::placed), store).ok()?;
             }
             if let Some(ground) = ground.filter(|_| decor) {
-                Self::scatter(scratch, kind, first, ground, store).ok()?;
+                Self::scatter(scratch, kind, first, ground, hide, store).ok()?;
             }
         }
         Some(DecorBuild { scratch })
@@ -451,7 +471,7 @@ impl<'s> DecorBuild<'s> {
     /// there: a tree above z16 stands on the grass the view sees, not on a
     /// z16 cell it cannot, so it can come and go with a level as that grass
     /// does.
-    fn scatter(scratch: &mut DecorScratch, kind: &Kind, first: usize, ground: &Ground, store: &Store) -> Result<(), TryReserveError> {
+    fn scatter(scratch: &mut DecorScratch, kind: &Kind, first: usize, ground: &Ground, hide: Option<DecorHide>, store: &Store) -> Result<(), TryReserveError> {
         let cells = ground.page.cells;
         let (level, atom) = (GROUND.scale(ground.level), GROUND.scale(0));
         let (lx0, ly0) = (level.index(ground.x0), level.index(ground.y0));
@@ -477,6 +497,7 @@ impl<'s> DecorBuild<'s> {
                 }
                 let (x, y) = ((gx as f64 + 0.5) * atom.side() - ground.x0 as f64, (gy as f64 + 0.5) * atom.side() - ground.y0 as f64);
                 let z = ele as f64;
+                let hidden = ground.level == 0 && hide == Some(DecorHide::Scattered([gx, gy, i64::from(ele)]));
                 scratch.push(
                     first + variant as usize,
                     Instance {
@@ -485,7 +506,7 @@ impl<'s> DecorBuild<'s> {
                         z: z as f32,
                         rotation: rotation as f32,
                         scale: scale as f32,
-                        flags: 0,
+                        flags: if hidden { HIDDEN_FLAG } else { 0 },
                         band: NO_ENTRY,
                         pos: 0,
                     },

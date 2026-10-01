@@ -50,7 +50,7 @@ use crate::global::Global;
 use crate::host::{now, turn};
 use crate::io::file::{self, Owner};
 use crate::kernel::kernel;
-use crate::layer::decor::build::scatters_at;
+use crate::layer::decor::build::{scatters_at, Draw};
 use crate::shell::setting::store::hidden_ground;
 use crate::world::access::{Access, FINEST};
 use crate::world::change::{bump_world, wake_at, world_changes, world_edge, OBJECT_COLUMN};
@@ -816,9 +816,15 @@ pub fn place(at: &Pvf3, size: f64, cube: PlaceableCube, structures: bool) {
 /// repeating what is made there, so the scattered instance returns as it
 /// was, its own variant and turn.
 pub fn place_decor(at: &Pvf3, size: f64, decor_id: DecorId) {
-    let value = decor_num_id(decor_id);
-    let redundant = size >= U_PER_CELL && object_value_is_air(read_state(at)) && scatters_at(value, at);
-    write_object_value(at, size, if redundant { VOID } else { value });
+    let value = if restores_scattered(at, size, decor_id).is_some() { VOID } else { decor_num_id(decor_id) };
+    write_object_value(at, size, value);
+}
+
+/// The scattered instance placing `decor_id` at `at` brings back, where it
+/// is one an erase took away (`place_decor`): what the placement's preview
+/// shows, since it is what the placement leaves.
+pub fn restores_scattered(at: &Pvf3, size: f64, decor_id: DecorId) -> Option<Draw> {
+    (size >= U_PER_CELL && object_value_is_air(read_state(at))).then(|| scatters_at(decor_num_id(decor_id), at))?
 }
 
 /// Eraser's own write path for its "nothing placed here" case — a real,

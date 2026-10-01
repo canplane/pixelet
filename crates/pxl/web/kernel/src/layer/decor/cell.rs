@@ -33,13 +33,14 @@ use xpute_runtime::mem::heap::alloc;
 use crate::control::camera::controller::units_per_px_at;
 use crate::global::Global;
 use crate::layer::decor::asset_store::decor_bundle_assets;
-use crate::layer::decor::build::{decor_gone_px, variant_extent, DecorBuild, Ground, Kind, Placed};
+use crate::layer::decor::build::{decor_gone_px, variant_extent, DecorBuild, DecorHide, Ground, Kind, Placed};
 use crate::layer::decor::instance::{decor_groups, DecorScratch, GroupLanes};
 use crate::layer::decor::scatter::SCALE_JITTER;
 use crate::layer::object::size::DECOR_SIZE;
-use crate::layer::object::store::{object_col_revision, EntryAt, Store};
+use crate::layer::object::store::{object_col_revision, Store};
 use crate::param::IMPOSTOR_GONE_CELLS;
 use crate::shell::setting::store::{hidden_ground, settings_store};
+use crate::world::change::request_world_tick;
 use crate::world::chunk::build::Builder;
 use crate::world::observation::{eye, frustum_of_view};
 use crate::world::paging::floor;
@@ -111,7 +112,7 @@ struct Block {
 struct Sources {
     revision: u32,
     shown: bool,
-    hide: Option<EntryAt>,
+    hide: Option<DecorHide>,
 }
 
 #[derive(Default)]
@@ -137,6 +138,22 @@ struct Cells {
 }
 
 static CELLS: Global<Cells> = Global::new();
+
+/// The cell the scattered decor the eraser is over stands in, drawn hidden
+/// while it is: a preview, written nowhere (`DecorHide`).
+static SCATTERED_HIDE: Global<Option<[i64; 3]>> = Global::new();
+
+pub fn scattered_hide() -> Option<[i64; 3]> {
+    *SCATTERED_HIDE.get(|| None)
+}
+
+pub fn set_scattered_hide(cell: Option<[i64; 3]>) {
+    let held = SCATTERED_HIDE.get(|| None);
+    if *held != cell {
+        *held = cell;
+        request_world_tick();
+    }
+}
 
 /// What a cell's population is gathered in, kept so a settled turn asks the
 /// heap for nothing: the ground drawn under it, the columns of placed decor
@@ -253,14 +270,18 @@ fn solve(kinds: &[Kind], stack: &mut Vec<DecorCell>, out: &mut Vec<DecorCell>) {
 
 /// What cell `cell`'s population is made of now; none where the heap
 /// refused the room to list its columns, and the cell stays as it is.
-fn sources_of(cell: DecorCell, store: &Store, cols: &mut Vec<IVec>, hide: Option<EntryAt>) -> Option<Sources> {
+fn sources_of(cell: DecorCell, store: &Store, cols: &mut Vec<IVec>, hide: Option<DecorHide>) -> Option<Sources> {
     cols.clear();
     store.cols_under(cell.chunk().column(), cols).ok()?;
     let revision = cols.iter().fold(0u32, |r, &c| r.wrapping_mul(31).wrapping_add(object_col_revision(c)));
     let (x0, y0, side) = cell.rect();
-    let hide = hide.filter(|at| {
-        let o = FROM_L2_IDX(at.col_idx);
-        (x0..x0 + side).contains(&(ivec::X(o) as f64)) && (y0..y0 + side).contains(&(ivec::Y(o) as f64))
+    let inside = |x: i64, y: i64| (x0..x0 + side).contains(&(x as f64)) && (y0..y0 + side).contains(&(y as f64));
+    let hide = hide.filter(|h| match *h {
+        DecorHide::Placed(at) => {
+            let o = FROM_L2_IDX(at.col_idx);
+            inside(ivec::X(o), ivec::Y(o))
+        }
+        DecorHide::Scattered([x, y, _]) => cell.level == 0 && inside(x, y),
     });
     Some(Sources {
         revision,
@@ -332,7 +353,7 @@ impl Population {
         let target = GROUND.scale(level);
         let (cx, cy, span) = (target.index(x0), target.index(y0), CHUNK_CELLS as i64);
         match level > 0 && sources.shown {
-            true => store.fold_at(target, [cx, cy], [cx + span, cy + span], sources.hide, &mut c.folded).ok()?,
+            true => store.fold_at(target, [cx, cy], [cx + span, cy + span], sources.hide.and_then(DecorHide::placed), &mut c.folded).ok()?,
             false => c.folded.clear(),
         }
         let ground = Ground {
@@ -372,7 +393,7 @@ fn release(block: Block, draw: &mut DrawList) {
 /// region with nothing drawn on it, and no region is drawn twice: a wanted
 /// cell waiting under one still drawn is held hidden, and a cell neither
 /// wanted nor drawn the turn before is let go.
-pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<EntryAt>, frame_eye: V3) {
+pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<DecorHide>, frame_eye: V3) {
     let c = cells();
     let mut frontier = core::mem::take(&mut c.frontier);
     solve(kinds, &mut c.stack, &mut frontier);
