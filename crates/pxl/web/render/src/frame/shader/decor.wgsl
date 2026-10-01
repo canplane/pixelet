@@ -1,8 +1,9 @@
 // Decor: instanced draws of each variant's model, the instances read
-// straight out of the decor block the module built (decor.rs's layout) as
-// it lies on the GPU — the block is the instance buffer, the chunk's
-// translation is its uniform. The model's lanes are model.rs's; the skin is
-// the glue's. An instance is its position, its spin about Z after the glTF
+// straight out of the decor block the module built (kernel
+// layer/decor/build.rs's layout) as it lies on the GPU — the block is the
+// instance buffer, the chunk's translation is its uniform. The model's lanes
+// are kernel layer/model/asset.rs's; the skin is the image its variant
+// loaded (gpu/pass/decor.rs). An instance is its position, its spin about Z after the glTF
 // Y-up to Z-up turn, and its scale. Which instances are drawn is the index
 // list the kernel writes a frame at a time (kernel layer/decor/cell.rs
 // `present`): the n-th drawn is the one its n-th word names.

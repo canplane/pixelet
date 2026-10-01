@@ -1,7 +1,7 @@
 // The debug gizmos: the module's line segments (frame/draw.rs) drawn as one line
 // list over everything, with no depth test — a gizmo marks a place whether
 // or not the ground is in front of it. A pixel wide, which is what a line
-// list is; the labels are the glue's DOM.
+// list is; the labels are billboards (kernel layer/marker/frame_gizmo.rs).
 
 struct Draw {
   translation: vec3f,

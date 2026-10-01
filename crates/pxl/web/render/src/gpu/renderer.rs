@@ -6,7 +6,7 @@
 //! the module but the calls. A block the scheduler names goes to the GPU
 //! whole, as the mesher laid it out; the frame's uniforms are laid out from the
 //! stage (stage.rs) and the environment; every pipeline and shader is
-//! shader.rs's.
+//! frame/shader/record.rs's.
 //!
 //! What the frame is drawn into is sized here and its cost counted: the depth
 //! buffer, the sun's shadow map, the texture pack's layers with their mip chains, the
@@ -58,7 +58,7 @@ use xpute_core::status::errno::Errno;
 /// GL clip z [-1, 1] to reversed WebGPU clip z [1, 0], column-major.
 pub const GL_TO_WGPU: Mat4 = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0, 0.0, 0.5, 1.0];
 
-/// The frame uniform's fields, in floats (shader.rs's FRAME_AT).
+/// The frame uniform's fields, in floats (frame/shader/record.rs's FRAME_AT).
 pub(crate) const VIEW_PROJ: usize = FRAME_AT[0];
 pub(crate) const CAMERA_POS: usize = FRAME_AT[1];
 const EDGE_STRENGTH: usize = FRAME_AT[2];
@@ -1326,8 +1326,7 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
     }
 }
 
-/// The lists the scheduler left, as `row` names their lanes: the blocks it
-/// named recorded, and put on the device or let go there when `g` has one;
+/// The lists the scheduler left: the blocks it named recorded, and put on the device or let go there when `g` has one;
 /// and the frame's draws and their uniforms. Blocks listed with no device
 /// wait in the table for the next one.
 fn take_lists<'a>(g: Option<&Gpu>, lists: Lists<'a>) -> (&'a [u32], &'a [f32]) {

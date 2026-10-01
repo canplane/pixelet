@@ -2,8 +2,8 @@
 // view, the camera, the environment's run (look/environment.rs's output, sun_dir
 // through its padding), the effects' strengths, and the light's view for the
 // shadow, and the second light — the dimmer of the sun and the moon, which
-// casts no shadow; and the planet's curvature. The layout is shader.rs's
-// FRAME_AT to name; the glue fills it.
+// casts no shadow; and the planet's curvature. The layout is record.rs's
+// FRAME_AT to name; the renderer fills it (gpu/renderer.rs `lay_out`).
 
 struct Frame {
   view_proj: mat4x4f,

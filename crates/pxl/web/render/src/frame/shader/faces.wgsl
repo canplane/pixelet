@@ -1,7 +1,7 @@
-// A vertex's face mask, the bits the mesher writes (mesh/chunk_mesher.rs): what
+// A box's face mask, the bits the mesher writes (mesh/chunk_mesher.rs): what
 // the edge shading asks of a face. The lateral bits come in fours in the
 // order +X, -X, +Y, -Y from each base, so a lateral is `base * k` with k
-// 1, 2, 4, 8 — chunk.wgsl's lateral_bit. shader.rs's test holds each value
+// 1, 2, 4, 8 — chunk.wgsl's lateral_bit. record.test.rs holds each value
 // to the mesher's constant.
 const FACE_BASE: u32 = 1u;
 const RISES_BASE: u32 = 64u;

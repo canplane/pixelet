@@ -1,4 +1,4 @@
-// Actors: the module's skinned draws (model.rs) against each model's mesh
+// Actors: the module's skinned draws (kernel layer/model/store.rs) against each model's mesh
 // block and each actor's joint palette, both as the module wrote them. A
 // vertex is skinned by its four joints and weights out of the palette,
 // scaled to the model's height, turned from glTF's Y-up to this world's

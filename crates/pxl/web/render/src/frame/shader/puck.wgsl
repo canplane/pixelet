@@ -1,7 +1,8 @@
 // The location puck's draw uniform, shared by its zone and its beacon
-// (marker.rs): the translation, the fourth float of the module's uniform
-// (the beacon's spin), the color the glue paints the zone in — the UI's
-// action color, which is the glue's to know — and whether it is night.
+// (kernel layer/marker/location_puck.rs): the translation, the fourth float
+// of the module's uniform (the beacon's spin), the color the puck pass paints
+// the zone in (gpu/pass/puck.rs) — the UI's action color — and whether it is
+// night.
 
 struct Draw {
   translation: vec3f,

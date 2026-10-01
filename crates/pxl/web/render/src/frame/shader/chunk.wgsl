@@ -1,6 +1,6 @@
 // The chunk mesh: the mesher's boxes as they lie in a block, each unfolded
 // here into a cube's six faces, a face whose bit the mask lacks collapsed to
-// nothing (chunk_mesher.rs's BOX_WORDS). Every rule here was GLSL injected into three's
+// nothing (chunk_mesher.rs's FINE_BOX_WORDS and COARSE_BOX_WORDS). Every rule here was GLSL injected into three's
 // standard material (b9e31004) — the
 // real-size tile UV from a box's own corner and scale, the edge shading
 // from the mesher's face bits — with the lighting three did for us written
@@ -51,8 +51,9 @@ struct BoxWords {
 // One box of the mesh, unfolded from the words the mesher packed
 // (mesh/chunk_mesher.rs). Its corner and width across x and y are steps of
 // its own cell, which the draw says the size of; its floor and height are
-// steps of the mesh's own, because a chunk is not divided in z, so what a
-// mesh spans there is its own and the draw says what one step of it is.
+// steps of the mesh's own, because a run's z is the world's and what a
+// mesh spans there is the relief inside its chunk, its own, and the draw
+// says what one step of it is.
 struct Box {
   min_xy: vec2f,
   size_xy: vec2f,

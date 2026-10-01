@@ -3,8 +3,8 @@
 // perspective projection's depth is densest near the eye, so the two
 // cancel and the far terrain's coplanar faces stop fighting — the fix every
 // engine reached for once a float depth format was there to take it. GL's
-// clip z is [-1, 1] with far at 1; the glue's clip transform maps it to
-// [1, 0], and this maps a depth value back.
+// clip z is [-1, 1] with far at 1; the renderer's GL_TO_WGPU
+// (gpu/renderer.rs) maps it to [1, 0], and this maps a depth value back.
 fn depth_to_gl_z(d: f32) -> f32 {
   return 1.0 - 2.0 * d;
 }

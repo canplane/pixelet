@@ -203,7 +203,8 @@ const FRAME_FIELDS: [&str; 17] = [
 /// the sky, the mip builder, the depth-only passes from the eye that the
 /// screen-space occlusion reads, the occlusion's four (gpu/ao.rs), and the
 /// atmosphere's three tables and its exposure (gpu/atmosphere.rs), the stars
-/// (gpu/stars.rs) and the clouds (gpu/clouds.rs).
+/// (gpu/stars.rs), the clouds (gpu/clouds.rs), the billboard sheet's
+/// entries (gpu/sheet.rs) and the impostors' sprites (gpu/pass/impostor.rs).
 pub const PIPELINE_CHUNK_DEPTH: u32 = 10;
 pub const PIPELINE_DECOR_DEPTH: u32 = 11;
 pub const PIPELINE_SKINNED_DEPTH: u32 = 12;
@@ -460,7 +461,7 @@ const SKIN: [[u32; 3]; 2] = [[0, FRAGMENT, TEXTURE], [1, FRAGMENT, SAMPLER]];
 /// A chunk's boxes, one record an instance, out of the arena or a block
 /// (gpu/arena.rs): the mesh is a vertex buffer stepped per instance rather
 /// than a storage buffer the shader indexes, so a draw reaches its own boxes
-/// by the offset it binds at and thirty-six vertices share one record.
+/// by its first instance and thirty-six vertices share one record.
 ///
 /// The two formats differ only in stride — six words for a leaf's own tier,
 /// four for every other (mesh/chunk_mesher.rs) — and a pipeline's stride is
@@ -482,7 +483,7 @@ fn chunk_groups() -> Vec<Vec<u32>> {
     g0.extend([[3, VERTEX, STORAGE], [4, FRAGMENT, TEXTURE_ARRAY], [5, FRAGMENT, STORAGE], [6, FRAGMENT, SAMPLER]]);
     vec![group(&g0)]
 }
-/// A model's lanes (model.rs): position, normal, uv; then, skinned, the
+/// A model's lanes (kernel layer/model/asset.rs): position, normal, uv; then, skinned, the
 /// joints and the weights.
 fn model_lanes(skinned: bool) -> Vec<Vec<u32>> {
     let mut lanes = vec![lane(12, 0, F32X3), lane(12, 1, F32X3), lane(8, 2, F32X2)];

@@ -4,7 +4,9 @@
 //! as instanced draws of each variant's model, the instances read straight out
 //! of the decor block the scheduler built (crates/pxl/web/kernel/src/layer/decor/build.rs's layout) as it lies
 //! on the GPU: the block is the instance buffer, the chunk's translation is its
-//! uniform, and the scheduler says which block a chunk shows.
+//! uniform, and the scheduler says which block a chunk shows. Which of a
+//! block's instances are drawn is the index list at the block's end, which
+//! the kernel writes; one it hides is not in the list.
 //!
 //! A model is the scheduler's (crates/pxl/web/kernel/src/layer/model/store.rs), registered by the decor asset
 //! store and drawn from the same block the kernel holds its triangles in for
@@ -24,7 +26,8 @@ use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{release_skin, skin_group, Blocks, Draws};
 
 /// A decor draw's dynamic uniform (shader/decor.wgsl's Draw): translation, the
-/// group's first lane word, the instance count, the opacity, padding.
+/// group's first lane word, its stride, the opacity, padding, the index
+/// list's first word.
 const DRAW_UNIFORM_BYTES: u32 = 32;
 /// Decor groups the pass holds a model and a skin for: every bundle's
 /// variants, in bundle order.

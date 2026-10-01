@@ -10,10 +10,11 @@
 //! A block is named by a handle the kernel hands out when a tier lands; the
 //! upload says where the block lies in the memory and how long it is, and
 //! the renderer reads the lanes by the mesher's layout from the vertex count.
-//! Uploads and frees accumulate until the renderer takes them, whatever calls
-//! made them (a tick, a build now); the draws are the last tick's. A free
-//! cancels an upload not yet taken: the block is released the moment the
-//! free is listed, and may be someone else's by the time the list runs.
+//! Uploads, rewrites and frees accumulate until the renderer takes them,
+//! whatever calls made them (a tick, a build now); the draws are the last
+//! tick's. A free cancels an upload and the rewrites not yet taken: the block
+//! is released the moment the free is listed, and may be someone else's by
+//! the time the list runs.
 
 use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::base::ptr_at;
@@ -38,7 +39,8 @@ pub const UNIFORM_FLOATS: usize = 8;
 /// group and never a block's handle. A decor draw's are (the decor block's
 /// handle, the group — which kind and variant, in teaching order —, the
 /// instance count, uniform, pipeline), its uniform carrying the group's
-/// first lane word as its fourth float.
+/// first lane word, its stride and the first word of the index list that
+/// names the instances drawn (`draw_instances`).
 pub const PIPELINE_CHUNK: u32 = 0;
 pub const PIPELINE_DECOR: u32 = 1;
 /// The hover ghost: a box through the chunk shader, or one decor instance

@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/badge.wgsl
 
 // The billboards — the POI badges and the chat bubble: an instanced quad
-// over the module's billboard sets (billboard.rs), one draw a set, drawn
+// over the module's billboard sets (kernel layer/billboard/field.rs), one draw a set, drawn
 // after the world with the world's depth attached read-only and bound as
 // a texture at once, so both occlusion questions are asked of this
 // frame's depth.

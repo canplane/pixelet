@@ -137,12 +137,12 @@ pub const fn box_words(lod_step: u32) -> u32 {
 /// (mesh/volume.rs), so nothing is lost; a chunk is 64 cells, which is
 /// 16,384 steps, and that is the whole u16.
 ///
-/// Height is held the same way but against the mesh itself. A chunk is not
-/// divided in z — its key is `(page, bx, by)` — so a run's z is the world's,
-/// in units, and what a mesh spans there is whatever relief its columns
-/// have. Each mesh therefore carries its own floor and its own step, and a
-/// box's height is in those: the floor rides on the draw's translation,
-/// which had nothing in z, and the step beside it.
+/// Height is held the same way but against the mesh itself. A run's z is
+/// the world's, in units, and what a mesh spans there is whatever relief its
+/// columns have inside the chunk's cube (`begin`'s `clip`), not a lattice
+/// the box can be counted on. Each mesh therefore carries its own floor and
+/// its own step, and a box's height is in those: the floor rides on the
+/// draw's translation, and the step beside it.
 const XY_STEPS: f64 = 256.0;
 /// The same for a box that merges cells, where a byte holds the cell and the
 /// step together (COARSE_BOX_WORDS).
@@ -344,9 +344,9 @@ pub struct BakeContext {
     /// (`begin`'s `clip`): what it was handed, cut to them, and held until
     /// the bake is done, since every step reads it.
     clipped: Option<OwnedRunSet>,
-    /// Every word a mesh uses is written by the emit before it is read,
-    /// except the visibility lane, which the renderer owns — so the target
-    /// is never cleared, which for a large mesh would write it twice.
+    /// Every word a mesh uses is written by the emit before it is read, so
+    /// the target is never cleared, which for a large mesh would write it
+    /// twice.
     mesh: Option<MeshTarget>,
     /// What the open bake's heights are held in, from the set it reads.
     heights: Heights,

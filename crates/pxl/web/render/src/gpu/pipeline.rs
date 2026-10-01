@@ -1,6 +1,6 @@
 // pxl-render/gpu/pipeline.rs
 
-//! The pipelines as shader.rs defines them, made on the device once
+//! The pipelines as frame/shader/record.rs defines them, made on the device once
 //! each: a pipeline at a format, its shader modules, and
 //! its bind group layouts — shared by their words, so every pipeline that
 //! declares the same group gets the same layout and a bind group made for one
