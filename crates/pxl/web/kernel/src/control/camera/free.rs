@@ -23,7 +23,7 @@ use pxl_spec::space::v3::V3;
 use crate::control::camera::approach::{approach_angle, approach_scalar, approach_vec};
 use crate::control::camera::config::camera_cfg::free::EYE_HEIGHT_U;
 use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, POS_DAMP, ROT_DAMP};
-use crate::control::camera::controller::{camera, eye_local, set_eye_local};
+use crate::control::camera::controller::{camera, eye_local, map_center, set_eye_local};
 use crate::control::camera::controller::look_domain;
 use crate::control::camera::store::camera_store;
 use crate::global::Global;
@@ -70,12 +70,15 @@ const LOOK_EPS: f64 = 0.0001;
 /// How far the eye stands over the pivot a walker standing where it does
 /// has: the middle of the cell it fills, the camera's own convention
 /// (layer/terrain/ground_snap.rs), to the eye's height.
-const EYE_OVER_PIVOT: f64 = EYE_HEIGHT_U - U_PER_CELL / 2.0;
+pub(crate) const EYE_OVER_PIVOT: f64 = EYE_HEIGHT_U - U_PER_CELL / 2.0;
 
-/// The map center the eye's target has: under it by the eye's height.
+/// The map center the eye's target has: under it by the eye's height, as
+/// the drawn one is (controller.rs `center_local`).
 pub(crate) fn target_center() -> Option<Pvf3> {
-    let eye = to().or_else(|| eye_local().map(|e| canonical(&e)))?;
-    Some(raised(&eye, -EYE_OVER_PIVOT))
+    match *to() {
+        Some(eye) => Some(raised(&eye, -EYE_OVER_PIVOT)),
+        None => map_center(),
+    }
 }
 
 /// The eye's target put over `at`, a map center — the middle of the cell a

@@ -394,7 +394,7 @@ Flat ground at a distance therefore reads as separated cubes rather than a sheet
 
 ## Camera and settings
 
-The camera is three controls — `dist`, `polar`, `azimuth` — and nothing else writes them, and a control is taken as asked. What is in the way is met where the orbit is drawn, by the radius: the ray from the map center back to the eye is met as the pointer's is, and the eye stops short of what it meets (`clear` in `control/camera/orbit.rs`), so a cave's ceiling or a wall behind pulls it in and lets it out again, as Minecraft's third person does. A pan is one walk for either camera (`walk` in `layer/terrain/ground_snap.rs`): from the cell the walker fills, down to the floor beside, up a step, and stopped by a wall (`support` in `world/access.rs`).
+The camera is three controls — `dist`, `polar`, `azimuth` — and nothing else writes them, and a control is taken as asked: nothing the ground does moves the camera. A pan is one walk for either camera (`walk` in `layer/terrain/ground_snap.rs`): from the cell the walker fills, down to the floor beside, up a step, and stopped by a wall (`support` in `world/access.rs`).
 
 Every setting is one entry of one schema (`spec/pxl/web/kernel/shell/setting/schema.json`): default, kind, section. The store keeps only the user's overrides, and the settings sheet renders its rows from the schema. The nightly entries — the shadows — are marked `dev`: a development build offers them, and a published one carries neither their rows nor the kernel's code for them (`apps/web/script/check-bundle.ts` holds it to that). The debug section — the gizmos, the profiler panel — is in every build, since a release is what it most needs to measure.
 

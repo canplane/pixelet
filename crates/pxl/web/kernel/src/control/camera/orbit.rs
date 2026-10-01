@@ -8,15 +8,12 @@
 //!
 //! What the controls ask of it and what is drawn are kept apart: the
 //! controls write the target — the look and the distance in the camera
-//! store's intent, and the map center where the hand has put it, where the
-//! walk stands it (`pan`) — and `turn` brings what is drawn to it, every
-//! channel by the one law (approach.rs), the radius no longer than leaves
-//! the eye short of what is in the way (`clear`). The drawn state is the
-//! radius here and the eye and the look in the camera; the map center drawn
-//! is derived from them. The target is the controls' alone: what draws
+//! store's intent, and the map center where the hand has put it — and
+//! `turn` brings what is drawn to it, every channel by the one law
+//! (approach.rs). The drawn state is the radius here and the eye and the
+//! look in the camera; the map center drawn is derived from them. The target is the controls' alone: what draws
 //! or reads the world reads the drawn state.
 
-use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 
 use pxl_spec::space::v3::V3;
@@ -26,12 +23,11 @@ use crate::control::camera::approach::{approach_angle, approach_scalar, approach
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::config::camera_cfg::input::DOLLY_GAIN;
 use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, POS_DAMP, ROT_DAMP};
-use crate::control::camera::config::camera_cfg::view::{EYE_CLEARANCE_U, MAX_DIST, MIN_DIST};
+use crate::control::camera::config::camera_cfg::view::{MAX_DIST, MIN_DIST};
 use crate::control::camera::controller::{camera, center_local, look_dir, look_domain, map_center, set_eye_local};
 use crate::control::camera::gesture::{spread, Anchor};
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
 use crate::global::Global;
-use crate::world::access::{Access, Detail, Ray, FINEST};
 use crate::world::frame::coord::canonical_to_local;
 use crate::world::frame::view::{view, view_compose};
 
@@ -72,34 +68,8 @@ const DIST_EPS: f64 = 0.001;
 const POLAR_EPS: f64 = 0.0001;
 const AZIMUTH_EPS: f64 = 0.0001;
 
-/// How far short of what is in the way the eye stops, in units
-/// (camera_cfg::view `EYE_CLEARANCE_U`).
-///
-/// The radius from `center` (local) along the look at (`polar`, `azimuth`)
-/// that reaches the eye at most `dist` back without passing through
-/// anything: the ray from the map center to the eye, met as the pointer's is
-/// (world/access.rs `first_hit`), stopping `EYE_CLEARANCE_U` short of what it
-/// meets — a cave's ceiling, a wall behind, a hill — as Minecraft's third
-/// person does. Decor is passed through, as a walker passes it. Where the
-/// ground along it is not resident, nothing is known to be in the way.
-fn clear(center: V3, polar: f64, azimuth: f64, dist: f64) -> f64 {
-    let o = view().origin;
-    let frame = [ivec::to_real(ivec::X(o)), ivec::to_real(ivec::Y(o)), ivec::to_real(ivec::Z(o))];
-    let ray = Ray {
-        origin: std::array::from_fn(|k| center[k] + frame[k]),
-        direction: look_dir(polar, azimuth).map(|v| -v),
-        reach: dist,
-    };
-    match Access::now().first_hit(&ray, Detail::Level(FINEST)).value().flatten() {
-        Some(hit) => (hit.t - EYE_CLEARANCE_U).max(0.0),
-        None => dist,
-    }
-}
-
 /// The controls ask `partial` of the orbit: taken as asked, as the free
-/// camera's are. What is in the way is met where the orbit is drawn
-/// (`turn`), by the radius and never by a control, so what the controls hold
-/// comes back on its own once nothing is.
+/// camera's are.
 pub fn ask(partial: IntentPatch) -> Intent {
     let c = camera_store();
     c.commit_intent(c.merged(partial));
@@ -163,9 +133,8 @@ pub(crate) fn put(at: Pvf3, snap: bool) {
 }
 
 /// The orbit's turn over `delta` seconds: the map center, the radius and
-/// the look each brought toward their targets — the radius no longer than
-/// leaves the eye short of what is between it and the map center (`clear`)
-/// — and the eye put where they have it about the map center. Whether it is still moving; none
+/// the look each brought toward their targets — and the eye put where they
+/// have it about the map center. Whether it is still moving; none
 /// where the camera stands nowhere.
 pub(crate) fn turn(delta: f64) -> Option<bool> {
     let drawn_center = center_local()?;
@@ -177,6 +146,7 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
     let (center, mut moving) = approach_vec(drawn_center, to, POS_DAMP, delta, CENTER_EPS);
 
     let (dist, m) = approach_scalar(o.dist, vs.dist, CAM_DAMP, delta, DIST_EPS);
+    o.dist = clamp(dist, MIN_DIST, MAX_DIST);
     moving |= m;
 
     let (pitch, m) = approach_scalar(cam.pitch, vs.polar, CAM_DAMP, delta, POLAR_EPS);
@@ -184,9 +154,6 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
     let (yaw, m) = approach_angle(cam.yaw, vs.azimuth, ROT_DAMP, delta, AZIMUTH_EPS);
     moving |= m;
     (cam.pitch, cam.yaw) = look_domain(pitch, yaw);
-    // Pulled in at once and let out by the approach: an eye late to come in
-    // is an eye inside a wall for a frame.
-    o.dist = clamp(dist, MIN_DIST, MAX_DIST).min(clear(center, cam.pitch, cam.yaw, dist));
 
     // The eye is written only where the center, the radius or the look
     // moved: at rest nothing is derived and written back.

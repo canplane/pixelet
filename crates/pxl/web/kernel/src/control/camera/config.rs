@@ -11,11 +11,6 @@ pub mod camera_cfg {
         pub const NEAR: f64 = 0.1;
     }
     pub mod view {
-        /// How far short of what is between it and the map center the orbit's
-        /// eye stops (orbit.rs `clear`): a quarter of a cell, past the near
-        /// plane (`NEAR`) and the corners of the screen it spans, so what is in
-        /// the way is not cut into.
-        pub const EYE_CLEARANCE_U: f64 = 0.25;
 
         /// 4 * 4.
         pub const DEFAULT_DIST: f64 = 16.0;
@@ -43,9 +38,7 @@ pub mod camera_cfg {
         /// How high the free camera's eye stands over the ground it walks
         /// on, in units. A knob, set by eye and derived from nothing: no
         /// relation to the lattice, the orbit's pivot or anything else
-        /// fixes it. Nor is it the eye's clearance (`view::EYE_CLEARANCE_U`),
-        /// which is how near the ground an eye may come and not where an eye
-        /// stands.
+        /// fixes it.
         pub const EYE_HEIGHT_U: f64 = 1.5;
     }
     pub mod input {

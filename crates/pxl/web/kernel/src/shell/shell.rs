@@ -15,6 +15,7 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_core::wire::xtp::PacketWriter;
 
 pub use crate::abi::cmd::Tracking;
+use crate::layer::terrain::ground_snap::ground_or_raw;
 use crate::abi::cmd::{CompanionState, LocationState, LonLat, MapState, OrientationState, PlaceName, PlacePart, ScaleBar, Snapshot};
 use crate::control::camera::controller::radius;
 use crate::control::camera::controller::Motion;
@@ -155,7 +156,9 @@ pub fn tracking_action(tracking: Tracking) {
 pub fn go_to(target: Pvf3) {
     // The user drove the camera: GPS stops overriding it.
     camera_store().is_follow_mode = false;
-    destination::go_to(target, Motion::Smooth);
+    // A place stands on its top face; the camera is put over the cell a
+    // walker standing there fills (layer/terrain/ground_snap.rs).
+    destination::go_to(ground_or_raw(&target), Motion::Smooth);
 }
 
 /// A search result: the center moved to degrees, on the ground there once

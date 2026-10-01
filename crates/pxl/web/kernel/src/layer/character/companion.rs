@@ -339,12 +339,15 @@ impl Walker {
         let s = &mut self.surface;
         let revision = support_revision();
         if s.x != px || s.y != py || s.origin != Some(map_origin) || s.revision != revision {
+            // Where the ground beside is not known yet it stays at the height
+            // it stood, rather than starting over from the surface.
+            let z = footing(map_origin, px, py, s.z).or(s.z);
             *s = Surface {
                 x: px,
                 y: py,
                 origin: Some(map_origin),
                 revision,
-                z: footing(map_origin, px, py, s.z),
+                z,
             };
         }
         self.pose[0] = px;

@@ -141,17 +141,19 @@ pub fn radius() -> f64 {
     }
 }
 
-/// The map center in the view's root frame: `radius` ahead of the drawn
-/// eye along its look — the tracked eye itself while a tracker holds the
-/// pose.
+/// The map center in the view's root frame: the middle of the cell the
+/// walker fills, whichever person — `radius` ahead of the drawn eye along
+/// its look third person, a person's eye height under the eye first person
+/// — and the tracked eye itself while a tracker holds the pose.
 pub fn center_local() -> Option<V3> {
     camera().eye?;
-    if active() == Active::Tracked {
-        return Some(view().pose.eye);
-    }
     let (e, c) = (eye_local()?, camera());
     let (d, r) = (look_dir(c.pitch, c.yaw), radius());
-    Some(std::array::from_fn(|k| e[k] + d[k] * r))
+    match active() {
+        Active::Tracked => Some(view().pose.eye),
+        Active::Orbit => Some(std::array::from_fn(|k| e[k] + d[k] * r)),
+        Active::Free => Some([e[0], e[1], e[2] - crate::control::camera::free::EYE_OVER_PIVOT]),
+    }
 }
 
 /// The map center: the character's place, and what the world is related to
