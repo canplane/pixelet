@@ -1,5 +1,5 @@
 // xpute-core/alloc/buddy_tree.test.rs
-// (no pair: the allocator is the Rust's alone — JavaScript has no heap to hand out)
+// (no pair: TypeScript has no allocator — JavaScript has no heap to hand out)
 
 use super::*;
 use std::alloc::Layout;

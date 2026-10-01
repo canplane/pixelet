@@ -11,8 +11,5 @@ path = "src/lib.rs"
 # The golden records' reader (src/golden.rs), for another crate's tests.
 golden = []
 
-[dependencies]
-libm.workspace = true
-
 [dev-dependencies]
 hex.workspace = true

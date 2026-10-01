@@ -46,7 +46,7 @@ function refused(hex: string): string {
 }
 
 Deno.test("the cursor reads what the typescript reads", async () => {
-  const v = await Golden.load("wire/xtp/cursor.tsv");
+  const v = await Golden.load("golden/wire/xtp/cursor.tsv");
 
   v.each("packets", (k) => {
     const root = new TreeReader(hex_to_bytes(v.s(`${k}.packet`))).root;

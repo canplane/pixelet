@@ -2908,7 +2908,6 @@ name = "xpute-core"
 version = "0.0.0"
 dependencies = [
  "hex",
- "libm",
 ]
 
 [[package]]

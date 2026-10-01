@@ -1,6 +1,4 @@
 // xpute-core/wire/xtp/encode.test.rs
-// (no pair: the TypeScript tree has no test file; the vector holds it to the
-// TypeScript encoder byte for byte)
 
 use super::*;
 use crate::wire::xtp::cursor::{Cursor, TreeReader};
@@ -9,7 +7,7 @@ use crate::wire::xtp::view::{NodeView, TreeView, ViewValue};
 
 /// What the TypeScript computed, recorded: the generator that wrote it
 /// is gone and the vector stands as it is (xpute-core/golden.rs).
-const GOLDEN: &str = include_str!("../../../golden/wire/xtp/encode.tsv");
+const GOLDEN: &str = include_str!("../../../../../../spec/xpute/golden/wire/xtp/encode.tsv");
 
 /// A typed array as a value, written at the width its type names.
 fn u16_arr<'a>(v: &[u16]) -> Array<'a> {
@@ -267,4 +265,47 @@ fn a_packet_reads_back_what_was_written() {
     let Cursor::Null(n) = root.at(0).unwrap() else { panic!("a null cursor") };
     assert_eq!(n.0.type_, ScalarType::U32 as u8);
     assert!(root.at(0).unwrap().opt().is_none());
+}
+
+#[test]
+fn a_packet_grafted_whole_is_that_packet() {
+    let inner = encode(|t| {
+        t.set(ViewValue::List(vec![ViewValue::I32(1), ViewValue::Str("x".into())])).unwrap();
+    });
+    let grafted = encode(|t| {
+        t.graft(&inner).unwrap();
+    });
+    assert_eq!(grafted, inner);
+}
+
+#[test]
+fn a_packet_under_the_cap_is_written_whatever_the_cap() {
+    let bytes = [0u8; 1100];
+    let mut t = TreeView::new();
+    t.u8_array(Some(&bytes[..]));
+    let options = TreeEncoderOptions {
+        max_cap: Some(1500),
+        ..Default::default()
+    };
+    assert_eq!(TreeEncoder::new().encode(&t, options).unwrap().len(), 16 + 8 + 1104);
+}
+
+#[test]
+fn what_follows_a_branch_in_a_packet_writer_lies_where_the_encoder_lays_it() {
+    let expected = encode(|t| {
+        t.branch(Some(&mut |b| {
+            b.branch(Some(&mut |b| {
+                b.u8(Some(1));
+            }))
+            .u8(Some(2));
+        }));
+    });
+    let mut buf = [0xffu8; 128];
+    let mut w = PacketWriter::new(&mut buf, 2);
+    w.branch(1, |w| {
+        w.u8(Some(1));
+    })
+    .u8(Some(2));
+    let n = w.finish().unwrap() as usize;
+    assert_eq!(&buf[..n], &expected[..]);
 }

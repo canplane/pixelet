@@ -121,9 +121,24 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
         }
     }
     ts.push("};".into());
+    // C++ names them in lower case, as std::errc names its own: EINVAL and
+    // its kind are the C library's macros, and a C++ header that includes
+    // <array> or <span> may have brought <cerrno> in, where an enumerator of
+    // that name no longer reads as one. The numbers are what cross.
+    let mut cpp = vec!["// cpp/xpute/core/status/errno.spec.hpp".to_string()];
+    cpp.extend(head.iter().cloned());
+    cpp.extend(["", "#pragma once", "", "#include <cstdint>", "", "namespace xpute {", "", "enum class Errno : std::int32_t {"].map(String::from));
+    for e in &spec.entries {
+        match e {
+            ErrnoEntry::Section { section } => cpp.extend([String::new(), format!("    // ---- {section} ----")]),
+            ErrnoEntry::Member(m) => cpp.push(format!("    {} = {}, // {}", m.name.to_lowercase(), m.value, m.doc)),
+        }
+    }
+    cpp.extend(["};", "", "} // namespace xpute"].map(String::from));
     Ok(vec![
         Output::new("packages/xpute/core/src/status/errno.spec.ts", file(&ts)),
         Output::new("crates/xpute/core/src/status/errno.spec.rs", file(&rs)),
+        Output::new("cpp/xpute/core/status/errno.spec.hpp", file(&cpp)),
     ])
 }
 

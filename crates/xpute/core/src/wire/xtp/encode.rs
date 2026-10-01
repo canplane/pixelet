@@ -49,10 +49,12 @@ impl TreeEncoder {
             return Ok(cap);
         }
 
-        let new_cap = (cap * 2).max(new_cap);
+        // Doubling stops at the cap, so what the cap refuses is a packet that
+        // does not fit and never a growth step past it.
         if new_cap > self.max_cap {
             return Err(MarshalError::new(Errno::EOVERFLOW));
         }
+        let new_cap = cap.saturating_mul(2).max(new_cap).min(self.max_cap);
 
         self.buf.resize(new_cap as usize, 0);
         Ok(self.buf.len() as u32)
@@ -83,9 +85,10 @@ impl TreeEncoder {
         };
         self._node(node, &mut st)?;
 
-        // root node kind is preserved even when payload_sz == 0
+        // root node kind is preserved even when payload_sz == 0; a grafted root
+        // is its packet's root, so the type is the one the graft read
         let payload_sz = st.lim - HDR_SZ;
-        let desc = field_set32(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, node.type_() as u32);
+        let desc = field_set32(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, st.type_ as u32);
         SET_WORD(&mut self.buf, WORD_SZ, payload_sz, desc); // word1
 
         let pkt_nbyte = ALIGN(HDR_SZ + payload_sz, WORD_SZ)?;
@@ -635,6 +638,17 @@ impl<'a> PacketWriter<'a> {
         fill(self);
         crate::ensure!(self.written == self.count, ENOTRECOVERABLE, self.count, self.written);
         (self.base, self.count, self.written) = outer;
+        // A branch ends on a word, as the encoder ends one, so what follows
+        // it starts where the encoder starts it.
+        if at.is_some() && self.fits {
+            let end = align(self.lim, WORD_SZ);
+            if end as usize > self.buf.len() {
+                self.fits = false;
+            } else {
+                self.buf[self.lim as usize..end as usize].fill(0);
+                self.lim = end;
+            }
+        }
         self.entry(at, SpecialType::BRANCH as u8)
     }
 

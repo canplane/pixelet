@@ -110,13 +110,18 @@ export const HAS_BIT = (u: u32, nbit: u32): boolean => HAS_BITS(u, BIT(nbit));
  * Examples:
  * - FIELD_MASK(3)    => 0b00000111
  * - FIELD_MASK(3, 5) => 0b11100000
+ * - FIELD_MASK(32)   => 0xffffffff, a field the whole word
+ * - FIELD_MASK(3, 32) => 0, a field past the word
  *
- * Kernel rule:
- * - this helper is intentionally thin
- * - nbit/shamt validity is caller-owned
- * - 32-bit boundary / overshift cases are not guarded
+ * The bounds are said because JavaScript takes a shift count modulo 32, so
+ * `1 << 32` is 1 and a whole-word mask would come out 0; xpute-core's
+ * field_mask32 gives the same answers.
  */
-export const FIELD_MASK = (nbit: u32, shamt: u32 = 0): u32 => U32(((1 << nbit) - 1) << shamt);
+export const FIELD_MASK = (nbit: u32, shamt: u32 = 0): u32 => {
+  if (shamt >= 32) return 0;
+  const field = nbit >= 32 ? 0xffff_ffff : (1 << nbit) - 1;
+  return U32(field << shamt);
+};
 export const FIELD_GET = (u: u32, shamt: u32, mask: u32): u32 => U32((u >>> shamt) & mask);
 export const FIELD_SET = (u: u32, shamt: u32, mask: u32, v: u32): u32 => U32((u & ~(mask << shamt)) | ((v & mask) << shamt));
 
@@ -145,10 +150,8 @@ export const HAS_BIT64 = (x: u64, shamt: u32): boolean => HAS_BITS64(x, BIT64(sh
  * - FIELD_MASK64(3)    => 0b111n
  * - FIELD_MASK64(3, 5) => 0b11100000n
  *
- * Kernel rule:
- * - this helper is intentionally thin
- * - nbit/shamt validity is caller-owned
- * - 64-bit boundary / overshift cases are not guarded
+ * A bigint shift does not wrap, so a whole-word field is all ones and a
+ * field past the word is 0 without saying so, as xpute-core's field_mask64.
  */
 export const FIELD_MASK64 = (nbit: u32, shamt: u32 = 0): u64 => U64(((1n << BigInt(nbit)) - 1n) << BigInt(shamt));
 export const FIELD_GET64 = (x: u64, shamt: u32, mask: u64): u64 => U64((x >> BigInt(shamt)) & mask);

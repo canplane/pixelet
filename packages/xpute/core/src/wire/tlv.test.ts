@@ -21,7 +21,7 @@ function show(v: TlvValue): string {
 }
 
 Deno.test("tlv computes what the typescript computes", async () => {
-  const v = await Golden.load("wire/tlv.tsv");
+  const v = await Golden.load("golden/wire/tlv.tsv");
 
   const w = new TlvWriter(4);
   w.u8(200).i8(-3).u16(65535).i16(-2).u32(4000000000).i32(-7);

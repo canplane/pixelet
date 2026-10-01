@@ -2,7 +2,8 @@
 
 #![cfg(any(test, feature = "golden"))]
 
-//! The reader of the golden records under each crate's `golden/`: lines of
+//! The reader of the golden records — xpute's under spec/xpute/golden/, which
+//! every language reads, and any a crate keeps in its own `golden/`: lines of
 //! `path<TAB>value`, the path the keys and indices down to the value joined
 //! by dots. A split per line and no parser, so reading is not itself a thing
 //! to verify.
@@ -15,13 +16,14 @@
 //!
 //! **Inside a language, each follows its own.** Where a value never leaves the
 //! side that computed it, the two are free to differ — Rust rounds to even
-//! through `libm` where JavaScript's `Math` rounds half up, and neither is
+//! where JavaScript's `Math` rounds half up, and neither is
 //! wrong. A record of one of those holds that implementation to what it did,
 //! and nothing more: a deliberate change to it is re-recorded, and an
 //! accidental one is what the record is there to catch.
 //!
-//! **Across a protocol, the results must match exactly.** XTP's packets and
-//! TLV's bytes are read by the side that did not write them, so a record of
+//! **Across a protocol, the results must match exactly.** XTP's packets,
+//! TLV's bytes and a string map's JSON text are read by the side that did not
+//! write them, so a record of
 //! one of those is a claim about both languages. It is never re-recorded to
 //! make a test pass: a difference there is not a stale baseline, it is the
 //! protocol having come apart, and the fix is in whichever side moved.
