@@ -135,7 +135,7 @@ function lastSection(f: Frame): string[] {
 }
 
 /** The summary's side sections, a field each, as the kernel names them; a
- * section with nothing in it is left out (POI, while it is not wired). */
+ * section with nothing in it is left out. */
 function sideSection(r: ProfilerReport): string[] {
   const lines = [];
   for (const [name, fields] of Object.entries(r.sections)) {

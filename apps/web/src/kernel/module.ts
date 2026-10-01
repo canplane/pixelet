@@ -28,10 +28,11 @@ export interface Core {
 }
 
 /** The directory crates/pxl/web/kernel/src/door.rs writes on the first turn,
- * at mem.json's DIRECTORY_AT: xpute's entries — the rings and the quantum the
- * kernel declares — and the kernel's own (abi/directory.spec.ts): the two
- * streams run after every turn, the renderer's (platform/web/webgpu.ts, 0
- * where the core draws itself) and the host's (host.ts), and the heap's row. */
+ * at mem.json's DIRECTORY_AT: xpute's entries — the rings, the system-call
+ * stream the host runs after every turn (host.ts) and the quantum the kernel
+ * declares — and the kernel's own (abi/directory.spec.ts): the renderer's
+ * stream, also run after every turn (platform/web/webgpu.ts, 0 where the core
+ * draws itself), and the heap's row. */
 export function directory(memory: ArrayBuffer): Directory {
   return new Directory(memory, DIRECTORY_AT);
 }

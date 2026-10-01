@@ -7,7 +7,7 @@
  * never writes — nothing here feeds back into scheduling.
  *
  * What the report has and this does not is detail, not kind: per-unit costs,
- * retention counts, band reuse, mounts and the window peak stay in the report.
+ * what is held, band reuse, mounts and the window peak stay in the report.
  * Everything here comes from the kernel's summary block, read in place
  * (view.ts) — the same block the report is built from. It is grouped the way
  * the report's lanes are (profiler.json FRAME_GROUPS), in the order a reader

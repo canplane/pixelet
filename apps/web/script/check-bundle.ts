@@ -74,9 +74,9 @@ const DEV_MARKERS = ["dev/test", "development"];
  * not in `deno task check`: it reads a built `dist/`, which the gate does not
  * produce.
  *
- * KERNEL_SENTINELS is what no route names: the terrain's page names are the
- * kernel's own (world/pyramid.rs), so nothing generates them
- * and there is nothing to check them against. */
+ * KERNEL_SENTINELS is what no route names: the ocean tile's name is the
+ * kernel's own (layer/terrain/page.rs `OCEAN_KEY`), so nothing generates it
+ * and there is nothing to check it against. */
 const SENTINELS = ["/geo/search", "/tile"];
 // Empty, and kept rather than deleted: the generator's error when this list is
 // missing is what would catch a branch marked for the kernel with nothing here

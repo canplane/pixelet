@@ -12,7 +12,7 @@
  * on Android, a thin track under a thumb wider than it, which is Material's
  * older switch and no platform's the app is held to. The track fills with
  * the chosen coral by an opacity and the thumb slides by a translation, the
- * two things an overlay moves (AGENTS.md).
+ * two things a pose moves (shared/ui/motion/pose.ts).
  */
 
 import type { ReactNode } from "react";

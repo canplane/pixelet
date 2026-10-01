@@ -4,10 +4,9 @@
  * The completion ring's signals, and the boot that starts everything.
  *
  * A turn leaves on the completion ring what the kernel asks of the host — the
- * sensors' watches — and the
- * shell's snapshot when it changed, which the host hands on; this is where
- * each is handed to whoever runs it. Nothing is decided here: every branch is one line to the module that
- * does the work.
+ * sensors' watches — and the shell's snapshot when it changed, which the host
+ * hands on; this is where each is handed to whoever runs it. Nothing is
+ * decided here: every branch is one line to the module that does the work.
  */
 
 import type { u32 } from "@xpute/core/abi/word.ts";

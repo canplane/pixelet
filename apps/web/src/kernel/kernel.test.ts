@@ -99,7 +99,7 @@ function inert(): unknown {
       if (key === "lost") return new Promise(() => {});
       // `then` is undefined above so that awaiting one of these does not hang,
       // which also makes every proxy unawaitable — and an error scope is the
-      // one call whose result the renderer awaits (gpu.ts op.BUFFER).
+      // one call whose result the renderer awaits (platform/web/webgpu.ts op.BUFFER).
       if (key === "popErrorScope") return () => Promise.resolve(null);
       if (key === "limits") return { minUniformBufferOffsetAlignment: 256 };
       return inert();

@@ -188,9 +188,10 @@ export function SearchModal(props: BaseModalProps) {
   }, [q]);
 
   function select(result: SearchResult) {
-    // The kernel's map center: it grounds the jump the way a pan is, stops
-    // follow mode (the user drove the camera), and grounds it again once the
-    // target page's tile arrives, while the map is still on that page.
+    // The kernel's map center: it stops follow mode (the user drove the
+    // camera) and puts the camera there at once, standing on the ground,
+    // when the target page's ground has arrived — not before, at a guessed
+    // height (pxl-kernel control/navigation/destination.rs).
     kernel_command(Command.INPUT_GO_TO, encode_input_go_to({ lon: result.lon, lat: result.lat }));
     onClose();
   }
