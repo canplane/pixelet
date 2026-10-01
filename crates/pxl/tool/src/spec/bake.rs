@@ -28,7 +28,7 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
             "",
             "export type BakeKind = keyof typeof PUBLISHED_VERSION;",
             "",
-            "/** The kinds by the number the kernel names one by (FETCH_CREATE's `bake`). */",
+            "/** The kinds by the number the kernel names one by (FETCH_START's `bake`). */",
         ]
         .map(String::from),
     );

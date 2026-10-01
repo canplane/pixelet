@@ -27,7 +27,7 @@ use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free, Block};
 use xpute_runtime::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 
-use crate::abi::cmd::{FetchOutcome, FetchUpdate};
+use crate::abi::cmd::{FetchDone, FetchOutcome};
 use crate::global::Global;
 use crate::host::body_read;
 use crate::io::demand::{Category, Phases, TaskPhaseName};
@@ -98,10 +98,10 @@ fn view<'a>((at, bytes): Block) -> &'a [u8] {
     unsafe { core::slice::from_raw_parts(ptr_at::<u8>(at), bytes as usize) }
 }
 
-static ARRIVED: Global<Vec<FetchUpdate>> = Global::new();
+static ARRIVED: Global<Vec<FetchDone>> = Global::new();
 static ARRIVALS: Global<Notify> = Global::new();
 
-fn arrived() -> &'static mut Vec<FetchUpdate> {
+fn arrived() -> &'static mut Vec<FetchDone> {
     ARRIVED.get(Vec::new)
 }
 
@@ -112,7 +112,7 @@ fn arrivals() -> &'static mut Notify {
 /// The host's report that a read finished, queued for `fetch_task`. `detail`
 /// is whatever number the host refused with, kept for the profiler to print;
 /// nothing branches on it, which is what keeps a protocol out of here.
-pub fn fetch_queued(update: FetchUpdate) {
+pub fn fetch_queued(update: FetchDone) {
     arrived().push(update);
     arrivals().notify();
 }
@@ -135,9 +135,9 @@ pub async fn fetch_task() {
 }
 
 fn fetch_arrived(
-    FetchUpdate {
+    FetchDone {
         key, outcome, fail, detail, net_ms, ..
-    }: FetchUpdate,
+    }: FetchDone,
     block: Result<Option<Block>, FetchFail>,
 ) {
     let (outcome, fail, block) = match block {

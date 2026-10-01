@@ -88,7 +88,7 @@ fn table() -> &'static mut Table {
 
 /// A handle for a canvas the shell hands over to show `role`; 0 when every
 /// surface is taken. Whoever hands it over asks for the turn that draws it.
-pub fn surface_create(role: u32) -> u32 {
+pub fn surface_open(role: u32) -> u32 {
     let t = table();
     let Some(handle) = t.handles.acquire() else { return 0 };
     t.surfaces[handle_slot(handle) as usize] = Surface {
@@ -102,7 +102,7 @@ pub fn surface_create(role: u32) -> u32 {
 
 /// The canvas's layout box in device pixels, and the device's pixel ratio.
 /// Whether the handle was live: the caller asks for the turn that redraws it.
-pub fn surface_update(handle: u32, px_w: u32, px_h: u32, dpr: f64) -> bool {
+pub fn surface_resize(handle: u32, px_w: u32, px_h: u32, dpr: f64) -> bool {
     let Some(s) = surface(handle) else { return false };
     s.px_w = px_w;
     s.px_h = px_h;
@@ -111,7 +111,7 @@ pub fn surface_update(handle: u32, px_w: u32, px_h: u32, dpr: f64) -> bool {
 }
 
 /// Closes a surface; what it held on the device is let go (renderer.rs).
-pub fn surface_delete(handle: u32) -> Option<Surface> {
+pub fn surface_close(handle: u32) -> Option<Surface> {
     let t = table();
     if !t.handles.release(handle) {
         return None;

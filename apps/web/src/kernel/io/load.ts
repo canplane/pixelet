@@ -15,7 +15,7 @@
  */
 
 import type { u32, u64 } from "@xpute/core/abi/word.ts";
-import { Command, encode_load_delete, encode_load_image, encode_load_update } from "@/kernel/abi/cmd.spec.ts";
+import { Command, encode_load_done, encode_load_failed, encode_load_image } from "@/kernel/abi/cmd.spec.ts";
 import { loadKey } from "@/catalog/asset/load.ts";
 import { originGet } from "@platform/origin.ts";
 import { assetUrl } from "@/config/route.ts";
@@ -37,7 +37,7 @@ async function fetch_load(load: u32, signal: AbortSignal): Promise<Response> {
 /** Tells the kernel the read under `key` did not arrive: it asks again in
  * its own time. */
 function refuse(key: u64): void {
-  CORE_DOORBELL.send(0, Command.LOAD_DELETE, encode_load_delete({ key }));
+  CORE_DOORBELL.send(0, Command.LOAD_FAILED, encode_load_failed({ key }));
   request_frame();
 }
 
@@ -66,7 +66,7 @@ export function load_model(key: u64, load: u32): Promise<void> {
     const bytes = new Uint8Array(await res.arrayBuffer());
     // A model is far past a ring frame: the host holds it, and the kernel
     // reads it in its turn.
-    return () => CORE_DOORBELL.send(0, Command.LOAD_UPDATE, encode_load_update({ key, body: hold_body(bytes), bytes: bytes.byteLength }));
+    return () => CORE_DOORBELL.send(0, Command.LOAD_DONE, encode_load_done({ key, body: hold_body(bytes), bytes: bytes.byteLength }));
   });
 }
 

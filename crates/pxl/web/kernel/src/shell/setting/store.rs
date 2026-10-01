@@ -9,7 +9,7 @@
 //! which layer it came from.
 //!
 //! What the browser keeps of them is the shell's (feature/setting/store.ts):
-//! it reads storage into a value a setting for WORLD_CREATE, and writes back
+//! it reads storage into a value a setting for WORLD_BOOT, and writes back
 //! what the snapshot says whenever it changes. Here a setting is its number
 //! and nothing else; its name and its options' are the shell's, which lets
 //! the stored form stay one object by name while the module names nothing.
@@ -43,7 +43,7 @@ use crate::world::chunk::source::chunk_sources_changed;
 /// and runs each at its default.
 ///
 /// Called from `settings_load` and after, which means it reads what the
-/// shell hands over at WORLD_CREATE: the store is first read after it.
+/// shell hands over at WORLD_BOOT: the store is first read after it.
 pub fn is_offered(key: SettingKey) -> bool {
     !key.dev() || (cfg!(feature = "dev") && development())
 }
@@ -87,10 +87,10 @@ impl Settings {
 
 static SETTINGS_STORE: Global<Settings> = Global::new();
 
-/// A setting storage kept nothing for, in what WORLD_CREATE carries.
+/// A setting storage kept nothing for, in what WORLD_BOOT carries.
 pub const NONE: u32 = u32::MAX;
 
-/// The settings from what storage kept (WORLD_CREATE): a value a setting in
+/// The settings from what storage kept (WORLD_BOOT): a value a setting in
 /// SettingKey's order, NONE for none. What this build does not offer, or a
 /// value its setting cannot hold, is left at the default.
 pub fn settings_load(values: impl IntoIterator<Item = u32>) {

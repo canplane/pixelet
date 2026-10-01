@@ -15,7 +15,7 @@
 import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { f64 } from "@xpute/core/abi/word.ts";
 import { Strobe } from "@xpute/runtime/sched/strobe.ts";
-import { Command, encode_world_update } from "@/kernel/abi/cmd.spec.ts";
+import { Command, encode_world_frame } from "@/kernel/abi/cmd.spec.ts";
 import { CORE, CORE_DOORBELL } from "@/kernel/mem.ts";
 import { directory } from "@/kernel/module.ts";
 
@@ -85,8 +85,8 @@ export function start_sched(): void {
     const height = Math.max(1, h);
     CORE_DOORBELL.send(
       0,
-      Command.WORLD_UPDATE,
-      encode_world_update({ width, height, dpr, delta_s, frame_ms: grant.frame_ms, interactive: grant.interactive, credits: NET_CREDITS, ...local_time() }),
+      Command.WORLD_FRAME,
+      encode_world_frame({ width, height, dpr, delta_s, frame_ms: grant.frame_ms, interactive: grant.interactive, credits: NET_CREDITS, ...local_time() }),
     );
   }, (run) => requestAnimationFrame(run));
 }

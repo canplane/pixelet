@@ -5,7 +5,7 @@ import { create } from "zustand";
 import type { u32, u8 } from "@xpute/core/abi/word.ts";
 import { cube_types, GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
 import { decorKinds, type PlaceableCube, placeableCubes, sameCube } from "@/catalog/cell/mod.ts";
-import { ActiveTool, Command, encode_chat_create } from "@/kernel/abi/cmd.spec.ts";
+import { ActiveTool, Command, encode_chat_send } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command } from "@/kernel/shell.ts";
 import { kernel_hold } from "@/kernel/shell.ts";
 import { storageGet, storageSet } from "@platform/storage.ts";
@@ -176,7 +176,7 @@ export const useUiStore = create<UiState>()((set) => ({
       chatLines: [...state.chatLines, { id: nextChatLineId++, text }].slice(-MAX_CHAT_LINES),
     }));
     // The kernel draws the bubble over the companion from the last line.
-    kernel_command(Command.CHAT_CREATE, encode_chat_create({ text }));
+    kernel_command(Command.CHAT_SEND, encode_chat_send({ text }));
   },
 }));
 

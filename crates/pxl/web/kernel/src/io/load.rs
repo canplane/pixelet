@@ -53,7 +53,7 @@ pub enum Load {
 }
 
 impl Load {
-    /// Its number on the wire (LOAD_CREATE): an asset's own, the sheet one past
+    /// Its number on the wire (LOAD_START): an asset's own, the sheet one past
     /// the last.
     pub fn number(self) -> u32 {
         match self {

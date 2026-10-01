@@ -45,8 +45,8 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             };
             Ok(Some(value as i32))
         }
-        Command::WORLD_UPDATE => {
-            let p = abi::WorldUpdate::read(packet(pkt)?)?;
+        Command::WORLD_FRAME => {
+            let p = abi::WorldFrame::read(packet(pkt)?)?;
             crate::sched::turn::world_frame_asked(crate::sched::turn::HostFrame {
                 width: p.width,
                 height: p.height,
@@ -65,8 +65,8 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             });
             Ok(Some(0))
         }
-        Command::WORLD_CREATE => {
-            let p = abi::WorldCreate::read(packet(pkt)?)?;
+        Command::WORLD_BOOT => {
+            let p = abi::WorldBoot::read(packet(pkt)?)?;
             super::host_attached(s);
             crate::host::set_development(p.development);
             crate::host::set_handheld(p.handheld);
@@ -84,8 +84,8 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             }
             Ok(Some(0))
         }
-        Command::INPUT_UPDATE => {
-            let p = abi::InputUpdate::read(packet(pkt)?)?;
+        Command::INPUT_RECT => {
+            let p = abi::InputRect::read(packet(pkt)?)?;
             camera_input_rect(Rect {
                 left: p.left,
                 top: p.top,
@@ -151,8 +151,8 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             ui::go_to_degrees(p.lon, p.lat);
             applied(s)
         }
-        Command::SENSOR_UPDATE => {
-            let p = abi::SensorUpdate::read(packet(pkt)?)?;
+        Command::SENSOR_POSITION => {
+            let p = abi::SensorPosition::read(packet(pkt)?)?;
             geolocation::geolocation_fix(p.lon, p.lat, p.altitude, p.accuracy, p.heading);
             Ok(Some(0))
         }
@@ -181,8 +181,8 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             }
             Ok(Some(0))
         }
-        Command::SENSOR_VISIBILITY => {
-            let visible = abi::SensorVisibility::read(packet(pkt)?)?.visible;
+        Command::WORLD_VISIBILITY => {
+            let visible = abi::WorldVisibility::read(packet(pkt)?)?.visible;
             geolocation::geolocation_visibility(visible, world_platform().geolocation);
             if visible {
                 device_orientation::orientation_visible();
@@ -203,12 +203,12 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             ui::sensors_close();
             applied(s)
         }
-        Command::FETCH_UPDATE => {
-            crate::io::fetch::fetch_queued(abi::FetchUpdate::read(packet(pkt)?)?);
+        Command::FETCH_DONE => {
+            crate::io::fetch::fetch_queued(abi::FetchDone::read(packet(pkt)?)?);
             Ok(Some(0))
         }
-        Command::LOAD_UPDATE => {
-            let p = abi::LoadUpdate::read(packet(pkt)?)?;
+        Command::LOAD_DONE => {
+            let p = abi::LoadDone::read(packet(pkt)?)?;
             // A model's bytes are far past a slot: the host holds them, and
             // the models' task reads them on a turn's quota.
             crate::io::load::gltf_arrived(p.key, p.body, p.bytes);
@@ -219,42 +219,42 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             crate::io::load::image_arrived(p.key, p.handle);
             Ok(Some(0))
         }
-        Command::LOAD_DELETE => {
-            crate::io::load::load_rejected(abi::LoadDelete::read(packet(pkt)?)?.key);
+        Command::LOAD_FAILED => {
+            crate::io::load::load_rejected(abi::LoadFailed::read(packet(pkt)?)?.key);
             Ok(Some(0))
         }
-        Command::GPU_CREATE => {
-            let p = abi::GpuCreate::read(packet(pkt)?)?;
+        Command::GPU_READY => {
+            let p = abi::GpuReady::read(packet(pkt)?)?;
             pxl_render::gpu::renderer::gpu_created(p.min_uniform_offset_alignment, p.timestamps);
             request_world_tick();
             Ok(Some(0))
         }
-        Command::GPU_DELETE => {
+        Command::GPU_LOST => {
             pxl_render::gpu::renderer::gpu_lost();
             Ok(Some(0))
         }
-        Command::SURFACE_CREATE => {
-            let handle = pxl_render::gpu::surface::surface_create(abi::SurfaceCreate::read(packet(pkt)?)?.role);
+        Command::SURFACE_OPEN => {
+            let handle = pxl_render::gpu::surface::surface_open(abi::SurfaceOpen::read(packet(pkt)?)?.role);
             if handle != 0 {
                 request_world_tick();
             }
             Ok(Some(handle as i32))
         }
-        Command::SURFACE_UPDATE => {
-            let p = abi::SurfaceUpdate::read(packet(pkt)?)?;
-            if pxl_render::gpu::surface::surface_update(p.surface, p.width, p.height, p.device_pixel_ratio) {
+        Command::SURFACE_RESIZE => {
+            let p = abi::SurfaceResize::read(packet(pkt)?)?;
+            if pxl_render::gpu::surface::surface_resize(p.surface, p.width, p.height, p.device_pixel_ratio) {
                 request_world_tick();
             }
             Ok(Some(0))
         }
-        Command::SURFACE_DELETE => {
-            if let Some(closed) = pxl_render::gpu::surface::surface_delete(abi::SurfaceDelete::read(packet(pkt)?)?.surface) {
+        Command::SURFACE_CLOSE => {
+            if let Some(closed) = pxl_render::gpu::surface::surface_close(abi::SurfaceClose::read(packet(pkt)?)?.surface) {
                 pxl_render::gpu::renderer::surface_closed(closed);
             }
             Ok(Some(0))
         }
-        Command::SETTING_UPDATE => {
-            let p = abi::SettingUpdate::read(packet(pkt)?)?;
+        Command::SETTING_SET => {
+            let p = abi::SettingSet::read(packet(pkt)?)?;
             settings_store().set_setting(p.key, p.value);
             applied(s)
         }
@@ -262,20 +262,20 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             settings_store().toggle_setting(abi::SettingToggle::read(packet(pkt)?)?.key);
             applied(s)
         }
-        Command::CHAT_CREATE => {
-            crate::layer::character::chat_bubble::append_chat_line(abi::ChatCreate::read(packet(pkt)?)?.text);
+        Command::CHAT_SEND => {
+            crate::layer::character::chat_bubble::append_chat_line(abi::ChatSend::read(packet(pkt)?)?.text);
             applied(s)
         }
-        Command::PREVIEW_CREATE => {
-            let p = abi::PreviewCreate::read(packet(pkt)?)?;
+        Command::PREVIEW_OPEN => {
+            let p = abi::PreviewOpen::read(packet(pkt)?)?;
             let number = u8::try_from(p.number).map_err(|_| MarshalError::new(Errno::EINVAL))?;
             if !crate::layer::character::preview::preview_open(p.surface, p.group, number) {
                 return Err(MarshalError::new(Errno::EINVAL));
             }
             applied(s)
         }
-        Command::PREVIEW_DELETE => {
-            crate::layer::character::preview::preview_close(abi::PreviewDelete::read(packet(pkt)?)?.surface);
+        Command::PREVIEW_CLOSE => {
+            crate::layer::character::preview::preview_close(abi::PreviewClose::read(packet(pkt)?)?.surface);
             applied(s)
         }
         // The profiler records only while its setting is on (log.rs
@@ -299,7 +299,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         // An address in a memory of at most a gibibyte, which an i32 holds.
         Command::PROFILER_READ => Ok(Some(profiler_read(abi::ProfilerRead::read(packet(pkt)?)?.window_ms) as i32)),
         Command::PROFILER_TAKE => Ok(Some(profiler_take(s) as i32)),
-        Command::WORLD_SNAPSHOT | Command::SENSOR_CREATE | Command::SENSOR_DELETE | Command::FETCH_CREATE | Command::FETCH_DELETE | Command::LOAD_CREATE => Ok(None),
+        Command::WORLD_SNAPSHOT | Command::SENSOR_START | Command::SENSOR_STOP | Command::FETCH_START | Command::FETCH_CANCEL | Command::LOAD_START => Ok(None),
     }
 }
 

@@ -14,7 +14,7 @@ mod apply;
 mod executor;
 pub mod layout;
 
-use crate::abi::cmd::{Command, FetchCreateSignal, FetchDeleteSignal, LoadCreateSignal, Sensor, SensorCreateSignal, WorldSnapshotSignal, WorldUpdateSignal};
+use crate::abi::cmd::{Command, FetchCancelSignal, FetchStartSignal, LoadStartSignal, Sensor, SensorStartSignal, WorldFrameSignal, WorldSnapshotSignal};
 use crate::global::Global;
 use crate::host::HeapStat;
 use crate::kernel::kernel;
@@ -143,7 +143,7 @@ fn host_attached(s: &mut State) {
     crate::io::sched::reset();
     let open: Vec<u32> = pxl_render::gpu::surface::surfaces().map(|surface| surface.handle).collect();
     for handle in open {
-        if let Some(closed) = pxl_render::gpu::surface::surface_delete(handle) {
+        if let Some(closed) = pxl_render::gpu::surface::surface_close(handle) {
             pxl_render::gpu::renderer::surface_closed(closed);
         }
     }
@@ -273,17 +273,17 @@ fn post_shell(s: &mut State) {
     use crate::control::sensor::geolocation::{take_geolocation_commands, GeolocationCommand};
     use crate::io::sched::{take_started, take_stops};
 
-    let sensor = |cmd: Command, sensor: Sensor| raise(cmd, SensorCreateSignal::FIELDS, |w| SensorCreateSignal { sensor }.write(w));
+    let sensor = |cmd: Command, sensor: Sensor| raise(cmd, SensorStartSignal::FIELDS, |w| SensorStartSignal { sensor }.write(w));
     for c in take_geolocation_commands() {
         match c {
-            GeolocationCommand::Start => sensor(Command::SENSOR_CREATE, Sensor::Geolocation),
-            GeolocationCommand::Stop => sensor(Command::SENSOR_DELETE, Sensor::Geolocation),
+            GeolocationCommand::Start => sensor(Command::SENSOR_START, Sensor::Geolocation),
+            GeolocationCommand::Stop => sensor(Command::SENSOR_STOP, Sensor::Geolocation),
         }
     }
     for c in take_orientation_commands() {
         match c {
-            OrientationCommand::Listen => sensor(Command::SENSOR_CREATE, Sensor::Orientation),
-            OrientationCommand::Remove => sensor(Command::SENSOR_DELETE, Sensor::Orientation),
+            OrientationCommand::Listen => sensor(Command::SENSOR_START, Sensor::Orientation),
+            OrientationCommand::Remove => sensor(Command::SENSOR_STOP, Sensor::Orientation),
         }
     }
     let buf = SNAPSHOT.get(Vec::new);
@@ -310,25 +310,25 @@ fn post_shell(s: &mut State) {
     take_started(|key, category, subject| match category.bake() {
         Some(bake) => {
             let name = crate::io::fetch::DemandName(category, subject);
-            raise(Command::FETCH_CREATE, FetchCreateSignal::FIELDS, |w| FetchCreateSignal { key, bake, name: &name }.write(w));
+            raise(Command::FETCH_START, FetchStartSignal::FIELDS, |w| FetchStartSignal { key, bake, name: &name }.write(w));
         }
         // An asset belongs to no bake: it is named by its content, and the
         // host is the one that knows what that is.
         None => {
             let Some((kind, load)) = crate::io::load::of_subject(subject) else { return };
-            let signal = LoadCreateSignal { key, kind, load: load.number() };
-            raise(Command::LOAD_CREATE, LoadCreateSignal::FIELDS, |w| signal.write(w));
+            let signal = LoadStartSignal { key, kind, load: load.number() };
+            raise(Command::LOAD_START, LoadStartSignal::FIELDS, |w| signal.write(w));
         }
     });
-    take_stops(|key| raise(Command::FETCH_DELETE, FetchDeleteSignal::FIELDS, |w| FetchDeleteSignal { key }.write(w)));
+    take_stops(|key| raise(Command::FETCH_CANCEL, FetchCancelSignal::FIELDS, |w| FetchCancelSignal { key }.write(w)));
 }
 
 /// The end of a frame, the kernel having drawn it: what it asks of the shell,
 /// and last the draws it listed.
 fn post_turn(s: &mut State) {
     post_shell(s);
-    let signal = WorldUpdateSignal {
+    let signal = WorldFrameSignal {
         draws: kernel().sched.draw.draw_count(),
     };
-    raise(Command::WORLD_UPDATE, WorldUpdateSignal::FIELDS, |w| signal.write(w));
+    raise(Command::WORLD_FRAME, WorldFrameSignal::FIELDS, |w| signal.write(w));
 }

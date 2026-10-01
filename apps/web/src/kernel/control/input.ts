@@ -14,7 +14,7 @@
  */
 
 import type { f64, i32, u32 } from "@xpute/core/abi/word.ts";
-import { ActiveTool, Command, encode_input_pointer, encode_input_update, encode_input_wheel, encode_sensor_visibility, PointerKind, PointerPhase } from "@/kernel/abi/cmd.spec.ts";
+import { ActiveTool, Command, encode_input_pointer, encode_input_rect, encode_input_wheel, encode_world_visibility, PointerKind, PointerPhase } from "@/kernel/abi/cmd.spec.ts";
 import type { GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
 import { permissionFollow } from "@platform/sensor.ts";
 import { CORE_DOORBELL } from "@/kernel/mem.ts";
@@ -59,7 +59,7 @@ export function kernel_wheel(delta_y: f64): void {
 /** Where the surface lies in the window, in its pixels: what a pointer's
  * place is read against. */
 export function kernel_rect(left: f64, top: f64, width: f64, height: f64): void {
-  CORE_DOORBELL.send(0, Command.INPUT_UPDATE, encode_input_update({ left, top, width, height }));
+  CORE_DOORBELL.send(0, Command.INPUT_RECT, encode_input_rect({ left, top, width, height }));
 }
 
 /**
@@ -93,7 +93,7 @@ export function kernel_open(viewport: () => Viewport): () => void {
  * app gets no frame and hiding is its last sure moment for the pending save;
  * the turns stop while it is hidden and resume when it is back. */
 export function kernel_visible(visible: boolean): void {
-  CORE_DOORBELL.send(0, Command.SENSOR_VISIBILITY, encode_sensor_visibility({ visible }));
+  CORE_DOORBELL.send(0, Command.WORLD_VISIBILITY, encode_world_visibility({ visible }));
   CORE_DOORBELL.ring(0);
   if (visible) {
     strobe.start();

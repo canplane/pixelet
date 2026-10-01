@@ -27,7 +27,7 @@
 
 import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { f64, u32, u64 } from "@xpute/core/abi/word.ts";
-import { Command, encode_fetch_update, FetchOutcome } from "@/kernel/abi/cmd.spec.ts";
+import { Command, encode_fetch_done, FetchOutcome } from "@/kernel/abi/cmd.spec.ts";
 import { FetchFail } from "@xpute/runtime/abi/fetch.spec.ts";
 import { PUBLISHED_TILES } from "@/config/deploy.ts";
 import { originGet } from "@platform/origin.ts";
@@ -69,7 +69,7 @@ function packed(body: U8Array): boolean {
 
 /** Tells the kernel what became of the read it started under `key`. */
 function settle(key: u64, outcome: FetchOutcome, body: u32, body_bytes: u32, fail: FetchFail, detail: u32, net_ms: f64): void {
-  CORE_DOORBELL.send(0, Command.FETCH_UPDATE, encode_fetch_update({ key, outcome, body, body_bytes, fail, detail, net_ms }));
+  CORE_DOORBELL.send(0, Command.FETCH_DONE, encode_fetch_done({ key, outcome, body, body_bytes, fail, detail, net_ms }));
   request_frame();
 }
 

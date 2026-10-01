@@ -94,5 +94,5 @@ over the rings, if one comes, is that shape written in WIT.
 
 **Recorded** 09-30; **corrected** 10-01: the device's C calls are its
 host's own services, not calls into the guest, and the page and the device
-cross the boundary the same way. The rule of a command's kind waits to be
-written into the contract.
+cross the boundary the same way. The rule of a command's kind is in the
+contract's rule 2 since 10-01.

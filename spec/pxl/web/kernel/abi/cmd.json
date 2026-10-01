@@ -1,9 +1,11 @@
 {
   "doc": [
-    "The shell's and the kernel's commands, by number (@xpute/core/abi/cmd.ts:",
-    "`major << 8 | minor`), and the packet each carries — an XTP branch whose",
-    "children are its fields, in order. A command with no fields carries no",
-    "packet.",
+    "The kernel's commands, by number (@xpute/core/abi/cmd.ts: `major << 8 | minor`),",
+    "and the packet each carries — an XTP branch whose children are its fields, in",
+    "order. A command with no fields carries no packet. The kernel is the process; the",
+    "JavaScript around it is two things to it, its host, which holds the devices and",
+    "the turns, and its shell, the UI. The commands are grouped by which of them a",
+    "command is between.",
     "",
     "The same number is a command on the submission ring and a signal on the",
     "completion ring (its `RES` clear). The direction is the ring: `packet` is",
@@ -85,24 +87,25 @@
       ]
     },
     {
-      "name": "InputMinor",
-      "doc": [
-        "The pointer's own verbs, and the map controls'."
-      ],
+      "name": "WorldMinor",
+      "doc": ["The world's verbs."],
       "format": "hex2",
       "entries": [
-        {
-          "name": "POINTER",
-          "value": 16
-        },
-        {
-          "name": "WHEEL",
-          "value": 17
-        },
-        {
-          "name": "TRACKING",
-          "value": 18
-        },
+        { "name": "BOOT", "value": 1 },
+        { "name": "FRAME", "value": 3 },
+        { "name": "VISIBILITY", "value": 16 },
+        { "name": "SNAPSHOT", "value": 21 }
+      ]
+    },
+    {
+      "name": "InputMinor",
+      "doc": ["The input's verbs: the canvas, the pointer, the map controls."],
+      "format": "hex2",
+      "entries": [
+        { "name": "RECT", "value": 3 },
+        { "name": "POINTER", "value": 16 },
+        { "name": "WHEEL", "value": 17 },
+        { "name": "TRACKING", "value": 18 },
         { "name": "VIEW", "value": 19 },
         { "name": "RESET_DIST", "value": 20 },
         { "name": "COMPASS_RESET", "value": 21 },
@@ -111,27 +114,15 @@
     },
     {
       "name": "SensorMinor",
-      "doc": [
-        "The device sensors' own verbs."
-      ],
+      "doc": ["The device sensors' verbs."],
       "format": "hex2",
       "entries": [
-        {
-          "name": "ERROR",
-          "value": 16
-        },
-        {
-          "name": "ORIENTATION",
-          "value": 17
-        },
-        {
-          "name": "PERMISSION",
-          "value": 18
-        },
-        {
-          "name": "VISIBILITY",
-          "value": 19
-        },
+        { "name": "START", "value": 1 },
+        { "name": "POSITION", "value": 3 },
+        { "name": "STOP", "value": 4 },
+        { "name": "ERROR", "value": 16 },
+        { "name": "ORIENTATION", "value": 17 },
+        { "name": "PERMISSION", "value": 18 },
         { "name": "ENABLE", "value": 20 },
         { "name": "OPEN", "value": 21 },
         { "name": "CLOSE", "value": 22 },
@@ -139,40 +130,74 @@
       ]
     },
     {
-      "name": "LoadMinor",
-      "doc": [
-        "A load's own verb."
-      ],
+      "name": "FetchMinor",
+      "doc": ["A fetch's verbs."],
       "format": "hex2",
       "entries": [
-        {
-          "name": "IMAGE",
-          "value": 16
-        }
+        { "name": "START", "value": 1 },
+        { "name": "DONE", "value": 3 },
+        { "name": "CANCEL", "value": 4 }
       ]
     },
     {
-      "name": "WorldMinor",
-      "doc": [
-        "The world's own verbs."
-      ],
+      "name": "LoadMinor",
+      "doc": ["A load's verbs."],
       "format": "hex2",
       "entries": [
-        {
-          "name": "SNAPSHOT",
-          "value": 21
-        }
+        { "name": "START", "value": 1 },
+        { "name": "DONE", "value": 3 },
+        { "name": "FAILED", "value": 4 },
+        { "name": "IMAGE", "value": 16 }
+      ]
+    },
+    {
+      "name": "GpuMinor",
+      "doc": ["The GPU's verbs."],
+      "format": "hex2",
+      "entries": [
+        { "name": "READY", "value": 1 },
+        { "name": "LOST", "value": 4 }
+      ]
+    },
+    {
+      "name": "SurfaceMinor",
+      "doc": ["A surface's verbs."],
+      "format": "hex2",
+      "entries": [
+        { "name": "OPEN", "value": 1 },
+        { "name": "RESIZE", "value": 3 },
+        { "name": "CLOSE", "value": 4 }
       ]
     },
     {
       "name": "SettingMinor",
-      "doc": ["A setting's own verb."],
+      "doc": ["A setting's verbs."],
       "format": "hex2",
-      "entries": [{ "name": "TOGGLE", "value": 16 }]
+      "entries": [
+        { "name": "SET", "value": 3 },
+        { "name": "TOGGLE", "value": 16 }
+      ]
+    },
+    {
+      "name": "ChatMinor",
+      "doc": ["The chat's verbs."],
+      "format": "hex2",
+      "entries": [
+        { "name": "SEND", "value": 1 }
+      ]
+    },
+    {
+      "name": "PreviewMinor",
+      "doc": ["A preview's verbs."],
+      "format": "hex2",
+      "entries": [
+        { "name": "OPEN", "value": 1 },
+        { "name": "CLOSE", "value": 4 }
+      ]
     },
     {
       "name": "ProfilerMinor",
-      "doc": ["The profiler's own verbs."],
+      "doc": ["The profiler's verbs."],
       "format": "hex2",
       "entries": [
         { "name": "START", "value": 16 },
@@ -368,11 +393,124 @@
           "doc": ["Replies with its packet's value, or 0 where it has none — the rings' own test."],
           "packet": [{ "name": "value", "type": "u32" }]
         },
+        { "section": "the process asks the host: its system calls, raised on the completion ring and run before the next turn (the rest are the host stream's records, host.json)" },
+        { "name": "SENSOR_START", "value": 7425, "doc": ["Start watching."], "signal": [{ "name": "sensor", "type": "Sensor" }] },
+        { "name": "SENSOR_STOP", "value": 7428, "doc": ["Stop watching."], "signal": [{ "name": "sensor", "type": "Sensor" }] },
         {
-          "section": "the world's turn: the shell's events in, the kernel's asks out"
+          "name": "FETCH_START",
+          "value": 7681,
+          "doc": [
+            "An object the scheduler wants read. The guest names it in its own terms — which",
+            "bake it belongs to, and the name inside that bake — and the host is the one that",
+            "knows what address that is and what protocol reaches it. The key is a handle the",
+            "shell hands back and never reads into."
+          ],
+          "signal": [
+            { "name": "key", "type": "u64" },
+            { "name": "bake", "type": "BakeKind" },
+            { "name": "name", "type": "str" }
+          ]
         },
         {
-          "name": "WORLD_CREATE",
+          "name": "FETCH_CANCEL",
+          "value": 7684,
+          "doc": [
+            "Stop this read, whichever kind it is. The scheduler took its credit for something",
+            "the viewer is more waiting on; the host settles it as stopped, and the guest still",
+            "wants it."
+          ],
+          "signal": [{ "name": "key", "type": "u64" }]
+        },
+        {
+          "name": "LOAD_START",
+          "value": 7937,
+          "doc": [
+            "An asset the scheduler wants read. It shares the credits with the pages, and so is",
+            "started when one is free rather than all at once; what it is and where it lives is",
+            "the host's, as a page's address is."
+          ],
+          "signal": [
+            { "name": "key", "type": "u64" },
+            { "name": "kind", "type": "LoadKind" },
+            { "name": "load", "type": "u32", "doc": ["asset/ingested's asset number, the texture pack's sheet one past the last."] }
+          ]
+        },
+        { "section": "the host answers: an I/O the process started, done" },
+        {
+          "name": "FETCH_DONE",
+          "value": 7683,
+          "doc": ["A read the host finished, its body held as `body` until the kernel takes it (host.json's BODY_READ)."],
+          "packet": [
+            { "name": "key", "type": "u64" },
+            { "name": "outcome", "type": "FetchOutcome" },
+            { "name": "body", "type": "u32" },
+            { "name": "body_bytes", "type": "u32", "doc": ["0 for none."] },
+            { "name": "fail", "type": "FetchFail" },
+            { "name": "detail", "type": "u32", "doc": ["Whatever number the host refused with, kept for the profiler to print and for nothing to branch on."] },
+            { "name": "net_ms", "type": "f64" }
+          ]
+        },
+        {
+          "name": "LOAD_DONE",
+          "value": 7939,
+          "doc": ["A model's bytes, held by the host as `body` until the kernel reads them (host.json's BODY_READ)."],
+          "packet": [
+            { "name": "key", "type": "u64" },
+            { "name": "body", "type": "u32" },
+            { "name": "bytes", "type": "u32" }
+          ]
+        },
+        {
+          "name": "LOAD_IMAGE",
+          "value": 7952,
+          "doc": ["An image decoded and held by the shell."],
+          "packet": [
+            { "name": "key", "type": "u64" },
+            { "name": "handle", "type": "u32" }
+          ]
+        },
+        {
+          "name": "LOAD_FAILED",
+          "value": 7940,
+          "doc": [
+            "A read of an asset failed. The guest wants it again, after whatever the scheduler",
+            "makes it wait; a model whose *bytes* do not parse is a different thing and is not this."
+          ],
+          "packet": [{ "name": "key", "type": "u64" }]
+        },
+        {
+          "name": "SENSOR_POSITION",
+          "value": 7427,
+          "doc": ["A GPS fix; a field is absent where the browser gave none."],
+          "packet": [
+            { "name": "lon", "type": "f64" },
+            { "name": "lat", "type": "f64" },
+            { "name": "altitude", "type": "f64", "optional": true },
+            { "name": "accuracy", "type": "f64" },
+            { "name": "heading", "type": "f64", "optional": true }
+          ]
+        },
+        {
+          "name": "SENSOR_ORIENTATION",
+          "value": 7441,
+          "doc": ["An orientation event; a field is absent where the browser gave none."],
+          "packet": [
+            { "name": "webkit_compass_heading", "type": "f64", "optional": true },
+            { "name": "alpha", "type": "f64", "optional": true },
+            { "name": "beta", "type": "f64", "optional": true },
+            { "name": "gamma", "type": "f64", "optional": true }
+          ]
+        },
+        {
+          "name": "SENSOR_ERROR",
+          "value": 7440,
+          "doc": ["The watch failed and was stopped."],
+          "packet": [{ "name": "code", "type": "GeolocationErrorCode" }]
+        },
+        { "name": "SENSOR_ORIENTATION_LOST", "value": 7447, "doc": ["The compass failed and its listener was removed, where the platform says so."] },
+        { "section": "the host tells the process: its start, its turn, its window, its devices and its input" },
+        {
+          "name": "WORLD_BOOT",
           "value": 6913,
           "doc": [
             "The shell's boot: what the build is and what the device offers, and what the browser's",
@@ -407,7 +545,7 @@
           ]
         },
         {
-          "name": "WORLD_UPDATE",
+          "name": "WORLD_FRAME",
           "value": 6915,
           "doc": [
             "The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's",
@@ -431,7 +569,25 @@
           "signal": [{ "name": "draws", "type": "u32" }]
         },
         {
-          "name": "INPUT_UPDATE",
+          "name": "WORLD_VISIBILITY",
+          "value": 6928,
+          "doc": [
+            "The tab's visibility; the host rings the doorbell for it at once, since a hidden",
+            "page gets no frame and hiding is the save's last sure moment."
+          ],
+          "packet": [{ "name": "visible", "type": "bool" }]
+        },
+        {
+          "name": "SENSOR_PERMISSION",
+          "value": 7442,
+          "doc": ["A permission as the shell's prompt or the browser's change reported it."],
+          "packet": [
+            { "name": "sensor", "type": "Sensor" },
+            { "name": "answer", "type": "PermissionAnswer" }
+          ]
+        },
+        {
+          "name": "INPUT_RECT",
           "value": 7171,
           "doc": ["The canvas's client rect."],
           "packet": [
@@ -473,6 +629,62 @@
         },
         { "name": "INPUT_WHEEL", "value": 7185, "packet": [{ "name": "delta_y", "type": "f64" }] },
         {
+          "name": "GPU_READY",
+          "value": 8193,
+          "doc": ["A device answered; the kernel's renderer is made on it (crates/pxl/web/render/src/gpu/renderer.rs)."],
+          "packet": [
+            { "name": "min_uniform_offset_alignment", "type": "u32" },
+            { "name": "timestamps", "type": "bool" }
+          ]
+        },
+        { "name": "GPU_LOST", "value": 8196, "doc": ["The device went away, and every object on it."] },
+        { "section": "the shell and the process: what the UI asks of it, and what it shows the UI" },
+        {
+          "name": "SURFACE_OPEN",
+          "value": 8449,
+          "doc": ["A call, answered with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on."],
+          "packet": [{ "name": "role", "type": "u32", "doc": ["The renderer's surface_role (render/gpu/api.json)."] }]
+        },
+        {
+          "name": "SURFACE_RESIZE",
+          "value": 8451,
+          "doc": ["The canvas's layout box in device pixels, transforms aside; the buffer it is drawn into is the kernel's."],
+          "packet": [
+            { "name": "surface", "type": "u32" },
+            { "name": "width", "type": "u32" },
+            { "name": "height", "type": "u32" },
+            { "name": "device_pixel_ratio", "type": "f64" }
+          ]
+        },
+        {
+          "name": "SURFACE_CLOSE",
+          "value": 8452,
+          "doc": ["A call: the canvas is going, and what it held on the device is let go before the call returns."],
+          "packet": [{ "name": "surface", "type": "u32" }]
+        },
+        {
+          "name": "PREVIEW_OPEN",
+          "value": 9217,
+          "doc": ["A character drawn alone into a surface the shell handed over, as the picker shows it."],
+          "packet": [
+            { "name": "surface", "type": "u32" },
+            { "name": "group", "type": "CharacterGroup" },
+            { "name": "number", "type": "u32" }
+          ]
+        },
+        { "name": "PREVIEW_CLOSE", "value": 9220, "packet": [{ "name": "surface", "type": "u32" }] },
+        {
+          "name": "SETTING_SET",
+          "value": 8707,
+          "doc": ["A setting set from the sheet or the character picker."],
+          "packet": [
+            { "name": "key", "type": "SettingKey" },
+            { "name": "value", "type": "u32", "doc": ["A toggle's 0 or 1, a choice's option by its index, or a number."] }
+          ]
+        },
+        { "name": "SETTING_TOGGLE", "value": 8720, "doc": ["A toggle's switch."], "packet": [{ "name": "key", "type": "SettingKey" }] },
+        { "name": "CHAT_SEND", "value": 8961, "doc": ["A line the player said, shown over the character."], "packet": [{ "name": "text", "type": "str" }] },
+        {
           "name": "INPUT_TRACKING",
           "value": 7186,
           "doc": ["The tracking button's press, as the button showed it."],
@@ -501,53 +713,8 @@
             { "name": "lat", "type": "f64" }
           ]
         },
-        {
-          "name": "SENSOR_UPDATE",
-          "value": 7427,
-          "doc": ["A GPS fix; a field is absent where the browser gave none."],
-          "packet": [
-            { "name": "lon", "type": "f64" },
-            { "name": "lat", "type": "f64" },
-            { "name": "altitude", "type": "f64", "optional": true },
-            { "name": "accuracy", "type": "f64" },
-            { "name": "heading", "type": "f64", "optional": true }
-          ]
-        },
-        {
-          "name": "SENSOR_ERROR",
-          "value": 7440,
-          "doc": ["The watch failed and was stopped."],
-          "packet": [{ "name": "code", "type": "GeolocationErrorCode" }]
-        },
-        {
-          "name": "SENSOR_ORIENTATION",
-          "value": 7441,
-          "doc": ["An orientation event; a field is absent where the browser gave none."],
-          "packet": [
-            { "name": "webkit_compass_heading", "type": "f64", "optional": true },
-            { "name": "alpha", "type": "f64", "optional": true },
-            { "name": "beta", "type": "f64", "optional": true },
-            { "name": "gamma", "type": "f64", "optional": true }
-          ]
-        },
-        {
-          "name": "SENSOR_PERMISSION",
-          "value": 7442,
-          "doc": ["A permission as the shell's prompt or the browser's change reported it."],
-          "packet": [
-            { "name": "sensor", "type": "Sensor" },
-            { "name": "answer", "type": "PermissionAnswer" }
-          ]
-        },
-        {
-          "name": "SENSOR_VISIBILITY",
-          "value": 7443,
-          "doc": [
-            "The tab's visibility; the host rings the doorbell for it at once, since a hidden",
-            "page gets no frame and hiding is the save's last sure moment."
-          ],
-          "packet": [{ "name": "visible", "type": "bool" }]
-        },
+        { "name": "SENSOR_OPEN", "value": 7445, "doc": ["The map is on screen and wants the sensors."] },
+        { "name": "SENSOR_CLOSE", "value": 7446, "doc": ["The map is gone, and the sensors are let go."] },
         {
           "name": "SENSOR_ENABLE_LOCATION",
           "value": 7444,
@@ -557,106 +724,6 @@
             "without the location."
           ]
         },
-        { "name": "SENSOR_OPEN", "value": 7445, "doc": ["The map is on screen and wants the sensors."] },
-        { "name": "SENSOR_CLOSE", "value": 7446, "doc": ["The map is gone, and the sensors are let go."] },
-        { "name": "SENSOR_ORIENTATION_LOST", "value": 7447, "doc": ["The compass failed and its listener was removed, where the platform says so."] },
-        {
-          "name": "FETCH_UPDATE",
-          "value": 7683,
-          "doc": ["A read the host finished, its body held as `body` until the kernel takes it (host.json's BODY_READ)."],
-          "packet": [
-            { "name": "key", "type": "u64" },
-            { "name": "outcome", "type": "FetchOutcome" },
-            { "name": "body", "type": "u32" },
-            { "name": "body_bytes", "type": "u32", "doc": ["0 for none."] },
-            { "name": "fail", "type": "FetchFail" },
-            { "name": "detail", "type": "u32", "doc": ["Whatever number the host refused with, kept for the profiler to print and for nothing to branch on."] },
-            { "name": "net_ms", "type": "f64" }
-          ]
-        },
-        {
-          "name": "LOAD_UPDATE",
-          "value": 7939,
-          "doc": ["A model's bytes, held by the host as `body` until the kernel reads them (host.json's BODY_READ)."],
-          "packet": [
-            { "name": "key", "type": "u64" },
-            { "name": "body", "type": "u32" },
-            { "name": "bytes", "type": "u32" }
-          ]
-        },
-        {
-          "name": "LOAD_IMAGE",
-          "value": 7952,
-          "doc": ["An image decoded and held by the shell."],
-          "packet": [
-            { "name": "key", "type": "u64" },
-            { "name": "handle", "type": "u32" }
-          ]
-        },
-        {
-          "name": "LOAD_DELETE",
-          "value": 7940,
-          "doc": [
-            "A read of an asset failed. The guest wants it again, after whatever the scheduler",
-            "makes it wait; a model whose *bytes* do not parse is a different thing and is not this."
-          ],
-          "packet": [{ "name": "key", "type": "u64" }]
-        },
-        {
-          "name": "GPU_CREATE",
-          "value": 8193,
-          "doc": ["A device answered; the kernel's renderer is made on it (crates/pxl/web/render/src/gpu/renderer.rs)."],
-          "packet": [
-            { "name": "min_uniform_offset_alignment", "type": "u32" },
-            { "name": "timestamps", "type": "bool" }
-          ]
-        },
-        { "name": "GPU_DELETE", "value": 8196, "doc": ["The device went away, and every object on it."] },
-        {
-          "name": "SURFACE_CREATE",
-          "value": 8449,
-          "doc": ["A call, answered with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on."],
-          "packet": [{ "name": "role", "type": "u32", "doc": ["The renderer's surface_role (render/gpu/api.json)."] }]
-        },
-        {
-          "name": "SURFACE_UPDATE",
-          "value": 8451,
-          "doc": ["The canvas's layout box in device pixels, transforms aside; the buffer it is drawn into is the kernel's."],
-          "packet": [
-            { "name": "surface", "type": "u32" },
-            { "name": "width", "type": "u32" },
-            { "name": "height", "type": "u32" },
-            { "name": "device_pixel_ratio", "type": "f64" }
-          ]
-        },
-        {
-          "name": "SURFACE_DELETE",
-          "value": 8452,
-          "doc": ["A call: the canvas is going, and what it held on the device is let go before the call returns."],
-          "packet": [{ "name": "surface", "type": "u32" }]
-        },
-        {
-          "name": "SETTING_UPDATE",
-          "value": 8707,
-          "doc": ["A setting set from the sheet or the character picker."],
-          "packet": [
-            { "name": "key", "type": "SettingKey" },
-            { "name": "value", "type": "u32", "doc": ["A toggle's 0 or 1, a choice's option by its index, or a number."] }
-          ]
-        },
-        { "name": "SETTING_TOGGLE", "value": 8720, "doc": ["A toggle's switch."], "packet": [{ "name": "key", "type": "SettingKey" }] },
-        { "name": "CHAT_CREATE", "value": 8961, "doc": ["A line the player said, shown over the character."], "packet": [{ "name": "text", "type": "str" }] },
-        {
-          "name": "PREVIEW_CREATE",
-          "value": 9217,
-          "doc": ["A character drawn alone into a surface the shell handed over, as the picker shows it."],
-          "packet": [
-            { "name": "surface", "type": "u32" },
-            { "name": "group", "type": "CharacterGroup" },
-            { "name": "number", "type": "u32" }
-          ]
-        },
-        { "name": "PREVIEW_DELETE", "value": 9220, "packet": [{ "name": "surface", "type": "u32" }] },
         { "name": "PROFILER_START", "value": 9488, "doc": ["A fresh recording window."] },
         { "name": "PROFILER_STOP", "value": 9489, "doc": ["The window frozen, so what is exported holds still."] },
         { "name": "PROFILER_LOG", "value": 9490, "doc": ["The console stream on or off."], "packet": [{ "name": "on", "type": "bool" }] },
@@ -675,9 +742,6 @@
           "doc": ["The rows the console stream kept: the reply is the address of LOG's words, and the rows are let go on the next turn."]
         },
         {
-          "section": "the turn's signals: kernel → shell, left on the completion ring by a strobe or a command"
-        },
-        {
           "name": "WORLD_SNAPSHOT",
           "value": 6933,
           "doc": [
@@ -687,47 +751,6 @@
           "signal": [
             { "name": "at", "type": "u32" },
             { "name": "len", "type": "u32" }
-          ]
-        },
-        { "name": "SENSOR_CREATE", "value": 7425, "doc": ["Start watching."], "signal": [{ "name": "sensor", "type": "Sensor" }] },
-        { "name": "SENSOR_DELETE", "value": 7428, "doc": ["Stop watching."], "signal": [{ "name": "sensor", "type": "Sensor" }] },
-        {
-          "name": "FETCH_CREATE",
-          "value": 7681,
-          "doc": [
-            "An object the scheduler wants read. The guest names it in its own terms — which",
-            "bake it belongs to, and the name inside that bake — and the host is the one that",
-            "knows what address that is and what protocol reaches it. The key is a handle the",
-            "shell hands back and never reads into."
-          ],
-          "signal": [
-            { "name": "key", "type": "u64" },
-            { "name": "bake", "type": "BakeKind" },
-            { "name": "name", "type": "str" }
-          ]
-        },
-        {
-          "name": "FETCH_DELETE",
-          "value": 7684,
-          "doc": [
-            "Stop this read, whichever kind it is. The scheduler took its credit for something",
-            "the viewer is more waiting on; the host settles it as stopped, and the guest still",
-            "wants it."
-          ],
-          "signal": [{ "name": "key", "type": "u64" }]
-        },
-        {
-          "name": "LOAD_CREATE",
-          "value": 7937,
-          "doc": [
-            "An asset the scheduler wants read. It shares the credits with the pages, and so is",
-            "started when one is free rather than all at once; what it is and where it lives is",
-            "the host's, as a page's address is."
-          ],
-          "signal": [
-            { "name": "key", "type": "u64" },
-            { "name": "kind", "type": "LoadKind" },
-            { "name": "load", "type": "u32", "doc": ["asset/ingested's asset number, the texture pack's sheet one past the last."] }
           ]
         }
       ]
@@ -747,7 +770,7 @@
         { "name": "camera_busy", "type": "bool" },
         { "name": "zooming", "type": "bool", "doc": ["A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is."] },
         { "name": "compass", "type": "CompassState" },
-        { "name": "settings", "type": "u32", "list": true, "doc": ["Every setting's value by its SettingKey, as SETTING_UPDATE carries one."] },
+        { "name": "settings", "type": "u32", "list": true, "doc": ["Every setting's value by its SettingKey, as SETTING_SET carries one."] },
         { "name": "scale_bar", "type": "ScaleBar" },
         {
           "name": "place",

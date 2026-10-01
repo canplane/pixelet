@@ -11,7 +11,7 @@
  * that asked for it.
  */
 
-import { Command, encode_sensor_error, encode_sensor_orientation, encode_sensor_permission, encode_sensor_update, GeolocationErrorCode, PermissionAnswer, Sensor } from "@/kernel/abi/cmd.spec.ts";
+import { Command, encode_sensor_error, encode_sensor_orientation, encode_sensor_permission, encode_sensor_position, GeolocationErrorCode, PermissionAnswer, Sensor } from "@/kernel/abi/cmd.spec.ts";
 import { CORE_DOORBELL } from "@/kernel/mem.ts";
 import { request_frame } from "@/kernel/sched.ts";
 
@@ -50,7 +50,7 @@ export function geolocationStart(): void {
   geolocationWatch = navigator.geolocation.watchPosition(
     (pos) => {
       const { latitude, longitude, altitude, accuracy, heading } = pos.coords;
-      CORE_DOORBELL.send(0, Command.SENSOR_UPDATE, encode_sensor_update({ lon: longitude, lat: latitude, altitude, accuracy, heading }));
+      CORE_DOORBELL.send(0, Command.SENSOR_POSITION, encode_sensor_position({ lon: longitude, lat: latitude, altitude, accuracy, heading }));
       request_frame();
     },
     (err) => {

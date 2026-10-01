@@ -96,7 +96,7 @@ pub fn window_counters() -> CountersBlock {
 
 /// The profiler follows its setting, `profiler`: it records while the
 /// setting is on and not at all while it is off. The store calls this with
-/// what storage kept at WORLD_CREATE, before the first turn, so a profiler
+/// what storage kept at WORLD_BOOT, before the first turn, so a profiler
 /// left on has the boot in its window — the first turns and the first fetches,
 /// which a start sent once the shell had drawn its panel came too late for.
 pub fn profiler_follow(on: bool) {

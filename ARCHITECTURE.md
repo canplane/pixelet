@@ -145,23 +145,23 @@ app           │ apps/web  *.spec.ts │◀────────────
                          └──── the same shell, its own @platform/ ────────────┘
 ```
 
-| Crate / package | What it is                                                                                                                                                                                                                                  |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pxl-spec`      | The model: PVF3, the spatial hierarchy, the cell catalogs, the command numbers, the page formats, the asset tables. One implementation, in Rust.                                                                                            |
-| `pxl-render`    | The view: volumes, the column scan, the mesher, glTF, the LOD criterion's reference, the atlas, the draw list, the shaders, the renderer.                                                                                                   |
-| `pxl-kernel`    | The kernel: the chunk scheduler, the layers and their stores, fetches and loads, the camera and sensors, the turn, the profiler.                                                                                                            |
-| `pxl-wasm`      | The kernel in a tab: one module that fixes the memory's front with linker flags, imports the clock and exports `interrupt`.                                                                                                                 |
-| `pxl-native`    | The kernel on a device: a static library that takes its memory from the system, runs every call on a thread of its own, and exports `pxl_interrupt` and the surface's binding through the C ABI, and through JNI on Android (`android.rs`). |
-| `apps/web`      | The shell, both apps': React Native over the kernel's snapshot, the I/O the kernel names, and what only a page does — the WebGPU host among it; and the Cloudflare Worker that serves it all.                                               |
-| `apps/native`   | The device app: the shell run by Metro, what only a device does, and the native module that links the kernel.                                                                                                                               |
-| `pxl-server`    | What both servers need before answering: the environment variables, the database pool, the gate over internal routes.                                                                                                                       |
-| `pxl-geo-spec`  | What the geo server and the bakes agree on about db-geo: table names, and what Overture's categories and divisions mean.                                                                                                                    |
-| `pxl-geo`       | The world's server. Forward search — the one route that queries a database at request time.                                                                                                                                                 |
-| `pxl-api`       | The application's server.                                                                                                                                                                                                                   |
-| `pxl-geo-bake`  | The three offline bakes — terrain, POI, geocode — and, behind a feature, the dev tile server.                                                                                                                                               |
-| `pxl-tool`      | Hashes `asset/` into the bucket's shape and writes the asset tables `pxl-spec` and the shell carry; bakes the stars, the Moon, the brand.                                                                                                   |
+| Crate / package | What it is                                                                                                                                                                                                                                            |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pxl-spec`      | The model: PVF3, the spatial hierarchy, the cell catalogs, the command numbers, the page formats, the asset tables. One implementation, in Rust.                                                                                                      |
+| `pxl-render`    | The view: volumes, the column scan, the mesher, glTF, the LOD criterion's reference, the atlas, the draw list, the shaders, the renderer.                                                                                                             |
+| `pxl-kernel`    | The kernel: the chunk scheduler, the layers and their stores, fetches and loads, the camera and sensors, the turn, the profiler.                                                                                                                      |
+| `pxl-wasm`      | The kernel in a tab: one module that fixes the memory's front with linker flags, imports the clock and exports `interrupt`.                                                                                                                           |
+| `pxl-native`    | The kernel on a device: a static library that takes its memory from the system, runs every call on a thread of its own, and exports `pxl_interrupt` and the surface's binding through the C ABI, and through JNI on Android (`android.rs`).           |
+| `apps/web`      | The kernel's host and its shell, both apps': the host that opens the kernel, rings its turns and does the I/O it asks for — WebGPU in a tab among it — and the shell, React over the kernel's snapshot; and the Cloudflare Worker that serves it all. |
+| `apps/native`   | The device app: the same host and shell run by Metro, what only a device does, and the native module that links the kernel.                                                                                                                           |
+| `pxl-server`    | What both servers need before answering: the environment variables, the database pool, the gate over internal routes.                                                                                                                                 |
+| `pxl-geo-spec`  | What the geo server and the bakes agree on about db-geo: table names, and what Overture's categories and divisions mean.                                                                                                                              |
+| `pxl-geo`       | The world's server. Forward search — the one route that queries a database at request time.                                                                                                                                                           |
+| `pxl-api`       | The application's server.                                                                                                                                                                                                                             |
+| `pxl-geo-bake`  | The three offline bakes — terrain, POI, geocode — and, behind a feature, the dev tile server.                                                                                                                                                         |
+| `pxl-tool`      | Hashes `asset/` into the bucket's shape and writes the asset tables `pxl-spec` and the shell carry; bakes the stars, the Moon, the brand.                                                                                                             |
 
-The servers, the bakes and the asset ingest all compile the model, so they are crates. The Overture and elevation ingests move a provider's columns into Postgres columns and touch no model, so they are scripts under `infra/geo/`. The shell is TypeScript because it decides nothing about the world; what it needs of the model — catalogs, ABI enums, routes — is generated into `apps/web/src/**/*.spec.ts` from the same JSON the Rust is generated from.
+The servers, the bakes and the asset ingest all compile the model, so they are crates. The Overture and elevation ingests move a provider's columns into Postgres columns and touch no model, so they are scripts under `infra/geo/`. The host and the shell are TypeScript because neither decides anything about the world; what it needs of the model — catalogs, ABI enums, routes — is generated into `apps/web/src/**/*.spec.ts` from the same JSON the Rust is generated from.
 
 Three rules hold the graph in that shape:
 
@@ -169,19 +169,21 @@ Three rules hold the graph in that shape:
 - **The kernel does not know which bracket holds it.** A **bracket** is what gives the kernel a place to run: `pxl-wasm` in a tab, `pxl-native` on a device. It hands in the memory, the clock, the allocator's reading and where to say what stopped the kernel (`door.rs` `Bracket`), and the kernel asks everything else of the host in records the host runs after the turn — storage, text, a body's bytes (`host.rs`). So the kernel also runs under `cargo test`, with no bracket at all. The one thing the target decides is how the renderer's calls are made: recorded for the page's WebGPU on wasm32, made through wgpu anywhere else (`pxl-render gpu/api.rs`).
 - **Nothing is found by name.** Commands, cells, decor kinds (what the world grows on its own — trees, cars, boats, trains), character variants (the people and pets a player can be), assets and messages are numbers fixed in data. The words a message is shown in belong to the shell's locale files.
 
-## Shell and kernel
+## Host, shell and kernel
 
-The shell is a device driver (`apps/web/src/kernel/`). It does five things:
+The kernel is the process: it holds the world and decides everything about it, and it owns no device. The TypeScript around it is two things to it, and they are not the same thing. Its **host** is what an operating system is to a process — xpute's host — and its **shell** is the UI, a program that talks to the kernel as one process talks to another.
+
+The host is most of `apps/web/src/kernel/`, the kernel's channel; the shell's end of it is `shell.ts`, `snapshot.ts` and `render/surface.ts` there. The host does five things:
 
 - Opens the kernel: reserves the memory and instantiates the module over it in a tab, asks the app's native module for the linked kernel's memory on a device (`platform/core.ts`, `mem.ts`, `module.ts`).
 - Rings the doorbell once per animation frame, when something asked for one.
 - Forwards pointer, wheel, sensor and visibility events as commands (`control/input.ts`).
-- Does the I/O the kernel names — fetches, image decodes, sensor watches, storage, a line of text laid out or drawn — and hands the bytes to blocks the kernel chose.
-- Hands over surfaces, each named by a handle like any GPU object. In a tab a canvas is transferred to an `OffscreenCanvas` once; on a device a view binds its own surface to the handle while it has one — a Metal layer on an iPhone, a `SurfaceView`'s on Android — and the kernel draws into it directly.
+- Does the I/O the kernel asks for — fetches, image decodes, sensor watches, storage, a line of text laid out or drawn — and hands the bytes to blocks the kernel chose.
+- Holds the GPU: in a tab it runs the renderer's recorded calls against WebGPU after each turn; on a device it opens the device and binds a view's Metal layer or `SurfaceView` to a surface, and the kernel draws into it directly.
+
+The shell (`apps/web/src/app/`, `feature/`, and its end of the channel) is React over one snapshot the kernel writes, and every control is a command the kernel applies. It hands the kernel the surfaces it draws into, each named by a handle — a canvas transferred to an `OffscreenCanvas` once in a tab, a view on a device. Nothing in it computes a coordinate, a tile or a draw. `spec/pxl/web/kernel/abi/cmd.json` groups the commands by which of the two a command is between.
 
 Both apps run this one tree of TypeScript. What differs between a page and a device is behind one import prefix, `@platform/`, which each app resolves to its own directory: `apps/web/src/platform/web/` for Vite, `apps/native/src/platform/` for Metro. Each module there exports what its twin does — a check fails the gate if a device's module lacks a name the page's has (`platform/conform.ts`) — and the device's modules reach the system through one native module of the app's (`apps/native/modules/platform/`). A device's kernel runs every call on a thread of its own, with a stack it sizes, while the caller waits ([a device's kernel on a thread of its own](./issue/20260926-a-device-s-kernel-on-a-thread-of-its-own.md)).
-
-The UI is React over one snapshot, a packet the kernel writes after a turn in which something changed. Every control is a command of its own that the kernel applies. Nothing in the shell computes a coordinate, a tile or a draw.
 
 ## The kernel's turn
 
@@ -210,9 +212,9 @@ The turn is xpute's, and so is the quota: the host rings once, the guest spends 
                           the falling edge  ──▶  wake_ms
 ```
 
-The host submits one `WORLD_UPDATE` before it rings — the viewport, the gap since the last turn, and how many reads this turn's credits allow to be out — and reads the completion ring after. Everything else here is the kernel's.
+The host submits one `WORLD_FRAME` before it rings — the viewport, the gap since the last turn, and how many reads this turn's credits allow to be out — and reads the completion ring after. Everything else here is the kernel's.
 
-**The quota's policy** is the kernel's (`sched/tick.rs`, `QUANTUM`). It reaches the host in the kernel's directory (xpute's, `ipc/directory.rs`), which `boot` writes on the first turn for the shell to read once.
+**The quota's policy** is the kernel's (`sched/tick.rs`, `QUANTUM`). It reaches the host in the kernel's directory (xpute's, `ipc/directory.rs`), which `boot` writes on the first turn for the host to read once.
 
 What the policy says: the frame is the 25th percentile of recent gaps between frames, ignoring any gap over 50 ms. A turn is interactive when input arrived within `settle_ms`, or when the kernel asked for it on its last falling edge. An interactive turn gets that frame less a margin; every other turn gets `batch_frames` frames.
 
@@ -234,7 +236,7 @@ What the policy says: the frame is the 25th percentile of recent gaps between fr
 
 ## The channel
 
-The shell and the kernel share the two rings xpute describes, of four-word messages with 4 KiB payload slots: 2048 for what the shell submits, 4096 for what the kernel completes (`mem.json`). The completion ring holds everything one turn leaves, since the shell reads it dry before it rings again; a turn that has too little room left for what one more command might raise leaves the rest of the submissions for the next turn, in order, and asks for it.
+The host and the kernel share the two rings xpute describes, of four-word messages with 4 KiB payload slots: 2048 for what the host submits — its own commands and the shell's, which go through it — and 4096 for what the kernel completes (`mem.json`). The completion ring holds everything one turn leaves, since the host reads it dry before it rings again; a turn that has too little room left for what one more command might raise leaves the rest of the submissions for the next turn, in order, and asks for it.
 
 The commands are `spec/pxl/web/kernel/abi/cmd.json`'s: each one's number and the fields of the packet it carries, from which both sides' readers and writers are generated, so no field is found by its position anywhere else. A packet is an XTP tree, and anything larger than a slot crosses in a heap block the kernel hands out.
 

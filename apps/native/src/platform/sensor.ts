@@ -22,7 +22,7 @@
 import { AppState } from "react-native";
 import * as Location from "expo-horizon-location";
 
-import { Command, encode_sensor_error, encode_sensor_orientation, encode_sensor_permission, encode_sensor_update, GeolocationErrorCode, PermissionAnswer, Sensor } from "@/kernel/abi/cmd.spec.ts";
+import { Command, encode_sensor_error, encode_sensor_orientation, encode_sensor_permission, encode_sensor_position, GeolocationErrorCode, PermissionAnswer, Sensor } from "@/kernel/abi/cmd.spec.ts";
 import { CORE_DOORBELL } from "@/kernel/mem.ts";
 import { request_frame, ring_now } from "@/kernel/sched.ts";
 import { PLATFORM } from "./module.ts";
@@ -130,7 +130,7 @@ export function geolocationStart(): void {
       { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
       (pos) => {
         const { latitude, longitude, altitude, accuracy, heading } = pos.coords;
-        CORE_DOORBELL.send(0, Command.SENSOR_UPDATE, encode_sensor_update({ lon: longitude, lat: latitude, altitude, accuracy: accuracy ?? Infinity, heading }));
+        CORE_DOORBELL.send(0, Command.SENSOR_POSITION, encode_sensor_position({ lon: longitude, lat: latitude, altitude, accuracy: accuracy ?? Infinity, heading }));
         request_frame();
       },
       () => geolocationFail(watch, GeolocationErrorCode.PositionUnavailable),
