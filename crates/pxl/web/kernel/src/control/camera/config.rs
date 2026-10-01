@@ -11,10 +11,11 @@ pub mod camera_cfg {
         pub const NEAR: f64 = 0.1;
     }
     pub mod view {
-        /// How far over the ground drawn under it an eye stands at least: one
-        /// cell, so a bicubic elevation sample disagreeing slightly with the
-        /// voxel it produced cannot put the eye inside a block.
-        pub const EYE_CLEARANCE_U: f64 = 1.0;
+        /// How far short of what is between it and the map center the orbit's
+        /// eye stops (orbit.rs `clear`): a quarter of a cell, past the near
+        /// plane (`NEAR`) and the corners of the screen it spans, so what is in
+        /// the way is not cut into.
+        pub const EYE_CLEARANCE_U: f64 = 0.25;
 
         /// 4 * 4.
         pub const DEFAULT_DIST: f64 = 16.0;

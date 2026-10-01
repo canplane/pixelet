@@ -31,8 +31,8 @@
 ///   orbit — third person: the camera turns about the map center, its
 ///           radius ahead of the eye, and a drag moves the map center.
 ///   free  — first person: the eye is the map center and turns in place;
-///           a drag walks it over the ground, the eye at its height over
-///           the ground it reaches, and nothing moves it up or down.
+///           a drag walks it as the orbit's center walks, the eye at its
+///           height over where the walk stands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum CameraMode {
@@ -46,33 +46,6 @@ impl CameraMode {
     /// The option an index names, or none for an index past the list.
     pub fn of(index: u32) -> Option<CameraMode> {
         CameraMode::ALL.get(index as usize).copied()
-    }
-}
-
-/// What terrain does to the camera.
-///
-///   through — nothing. The eye goes wherever the controls put it, ground
-///             included, where the terrain shell has no inward-facing
-///             geometry and the scene reads inside out.
-///   stop    — a control goes as far as it asked or as far as it can.
-///             Nothing moves on its own; a zoom into a hill stops short.
-///   climb   — dist is always granted and the *view* pitches up instead,
-///             as far as straight down, so every zoom level stays
-///             reachable at the cost of an angle nobody asked for.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum CameraCollisionMode {
-    through = 0,
-    stop = 1,
-    climb = 2,
-}
-
-impl CameraCollisionMode {
-    pub const ALL: [CameraCollisionMode; 3] = [CameraCollisionMode::through, CameraCollisionMode::stop, CameraCollisionMode::climb];
-
-    /// The option an index names, or none for an index past the list.
-    pub fn of(index: u32) -> Option<CameraCollisionMode> {
-        CameraCollisionMode::ALL.get(index as usize).copied()
     }
 }
 
@@ -181,49 +154,38 @@ pub enum SettingKey {
     /// height over the ground; to third the map center is laid on the ground
     /// and the eye steps back by the radius.
     camera_mode = 5,
-    /// What the camera does when the controls would put it underground;
-    /// CAMERA_COLLISION_MODES says each. The default is climb, because the one
-    /// thing a map camera must not do is refuse to
-    /// move. stop is the more literal answer and the worse default: it hands
-    /// back a control that did nothing, which reads as the app being stuck
-    /// rather than as the ground being in the way.
-    camera_collision = 6,
-    /// Panning re-samples the terrain height under the map center each step.
-    ground_snap = 7,
     /// Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.
-    edge_shade = 8,
+    edge_shade = 6,
     /// A uniform on an already-compiled shader term; not a pass.
-    rim_light = 9,
+    rim_light = 7,
     /// corner, the occlusion a voxel world gets from its own geometry with no
     /// screen-space pass; screen, N8AO's screen-space pass, the costliest of
     /// the three. AO_MODES says each.
-    ao = 10,
+    ao = 8,
     /// The sun's shadow map (crates/pxl/web/render/src/gpu/shadow.rs): the world drawn once more
     /// from the sun each frame, depth only, and a 3x3 compare per fragment;
     /// 16 MB of map on a desktop, 4 on a phone.
-    shadows = 11,
+    shadows = 9,
     /// The pixels the world is filled at, the GPU's largest cost: two to a
     /// CSS pixel is four times the fragments of one. RESOLUTION_MODES says each.
-    resolution = 12,
+    resolution = 10,
     /// The performance overlay: the profiler's panel, and the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`).
-    profiler = 13,
+    profiler = 11,
     /// Markers for the map center and the cell it floors to, the floating origin, the page's corners and the two gyro rings (layer/marker/frame_gizmo.rs).
-    gizmos = 14,
-    person = 15,
-    pet = 16,
+    gizmos = 12,
+    person = 13,
+    pet = 14,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 17] = [
+    pub const ALL: [SettingKey; 15] = [
         SettingKey::textures,
         SettingKey::structures,
         SettingKey::decor,
         SettingKey::poi,
         SettingKey::tilt_lock,
         SettingKey::camera_mode,
-        SettingKey::camera_collision,
-        SettingKey::ground_snap,
         SettingKey::edge_shade,
         SettingKey::rim_light,
         SettingKey::ao,
@@ -248,8 +210,6 @@ impl SettingKey {
             SettingKey::poi => SettingKind::Toggle,
             SettingKey::tilt_lock => SettingKind::Toggle,
             SettingKey::camera_mode => SettingKind::Choice,
-            SettingKey::camera_collision => SettingKind::Choice,
-            SettingKey::ground_snap => SettingKind::Toggle,
             SettingKey::edge_shade => SettingKind::Toggle,
             SettingKey::rim_light => SettingKind::Toggle,
             SettingKey::ao => SettingKind::Choice,
@@ -271,8 +231,6 @@ impl SettingKey {
             SettingKey::poi => "poi",
             SettingKey::tilt_lock => "tilt_lock",
             SettingKey::camera_mode => "camera_mode",
-            SettingKey::camera_collision => "camera_collision",
-            SettingKey::ground_snap => "ground_snap",
             SettingKey::edge_shade => "edge_shade",
             SettingKey::rim_light => "rim_light",
             SettingKey::ao => "ao",
@@ -289,7 +247,6 @@ impl SettingKey {
     pub fn options(self) -> &'static [&'static str] {
         match self {
             SettingKey::camera_mode => &["orbit", "free"],
-            SettingKey::camera_collision => &["through", "stop", "climb"],
             SettingKey::ao => &["off", "corner", "screen"],
             SettingKey::resolution => &["auto", "fixed", "low"],
             _ => &[],
@@ -298,7 +255,7 @@ impl SettingKey {
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(self, SettingKey::camera_collision | SettingKey::ground_snap | SettingKey::shadows)
+        matches!(self, SettingKey::shadows)
     }
 
     /// Read by a chunk's build, so a change builds the chunks again.
@@ -316,8 +273,6 @@ pub struct Settings {
     pub poi: bool,
     pub tilt_lock: bool,
     pub camera_mode: CameraMode,
-    pub camera_collision: CameraCollisionMode,
-    pub ground_snap: bool,
     pub edge_shade: bool,
     pub rim_light: bool,
     pub ao: AoMode,
@@ -338,8 +293,6 @@ impl Settings {
         poi: false,
         tilt_lock: false,
         camera_mode: CameraMode::orbit,
-        camera_collision: CameraCollisionMode::climb,
-        ground_snap: true,
         edge_shade: true,
         rim_light: true,
         ao: AoMode::corner,
@@ -361,8 +314,6 @@ impl Settings {
             SettingKey::poi => self.poi as u32,
             SettingKey::tilt_lock => self.tilt_lock as u32,
             SettingKey::camera_mode => self.camera_mode as u32,
-            SettingKey::camera_collision => self.camera_collision as u32,
-            SettingKey::ground_snap => self.ground_snap as u32,
             SettingKey::edge_shade => self.edge_shade as u32,
             SettingKey::rim_light => self.rim_light as u32,
             SettingKey::ao => self.ao as u32,
@@ -388,11 +339,6 @@ impl Settings {
                 Some(o) => self.camera_mode = o,
                 None => return false,
             },
-            SettingKey::camera_collision => match CameraCollisionMode::of(value) {
-                Some(o) => self.camera_collision = o,
-                None => return false,
-            },
-            SettingKey::ground_snap if value <= 1 => self.ground_snap = value == 1,
             SettingKey::edge_shade if value <= 1 => self.edge_shade = value == 1,
             SettingKey::rim_light if value <= 1 => self.rim_light = value == 1,
             SettingKey::ao => match AoMode::of(value) {

@@ -284,3 +284,10 @@ pub const RESOLUTION_BUDGET_FLOOR_MS: f64 = 1000.0 / 60.0;
 /// change makes the world's targets again (pxl-render gpu/renderer.rs
 /// `targets`), which is work of its own.
 pub const RESOLUTION_CHANGE_GAP_MS: f64 = 1000.0;
+
+// ---- a walker's step (world/access.rs `support`) ----
+
+/// How many cells a walker steps up onto, from the cell it walks into: one,
+/// as Minecraft's step. What fills more than this beside it is a wall, and
+/// the step is not taken.
+pub const STEP_CELLS: i64 = 1;

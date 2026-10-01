@@ -20,7 +20,7 @@
 //!
 //! **Two surfaces, kept apart.** What a query answers with is the surface
 //! the records draw at the level asked — a level's cell, its height the
-//! page's interpolant at the cell's center less its recess, read from the
+//! page's interpolant at the cell's center plus its shift, read from the
 //! page the chunk there is painted from, by the paint's own function
 //! (pxl-render mesh/paint/terrain/elevation.rs `ground_ele_at`) — so a pick,
 //! a snap and a marker stand on what is on the screen. Whether to go down
@@ -58,6 +58,7 @@ use pxl_spec::space::pyramid::{Cell, LevelPage, EXTENT, GROUND, TOP_LEVEL};
 use pxl_spec::space::v3::{Aabb, V3};
 use pxl_spec::space::xy::TO_XY;
 
+use crate::param::STEP_CELLS;
 use crate::io::demand::Category;
 use crate::kernel::kernel;
 use crate::layer::object::store::{objects_revision, EntryAt, EntryCursor, Store};
@@ -362,11 +363,12 @@ impl<'a> Access<'a> {
     /// It starts from the cell `at` lies in, at its own height, and from
     /// there goes down through the empty cells under it to the first solid's
     /// top — a cave's floor, a carve, the ground — or, where that cell is
-    /// solid, up through the solid cells over it to where they end — a step,
-    /// a stack of cubes. So a walker in a cave stays in it, and one walking
-    /// into a wall goes over it; nothing sends it to the surface but the
-    /// surface being what is under it.
-    pub fn support(&self, at: &Pvf3) -> Answer<f64> {
+    /// solid, up onto what fills it if that is a step (param.rs
+    /// `STEP_CELLS`). Taller, it is a wall, and the answer is none: the step
+    /// is not taken. So a walker in a cave stays in it and stops at its
+    /// walls; nothing sends it to the surface but the surface being what is
+    /// under it.
+    pub fn support(&self, at: &Pvf3) -> Answer<Option<f64>> {
         let [ix, iy, iz] = CELL.index_of(at);
         self.stand([ix, iy], Some(iz))
     }
@@ -374,15 +376,19 @@ impl<'a> Access<'a> {
     /// `support` from the surface drawn at `at`'s X and Y, its height
     /// discarded: where only a place is named and not how high — a fix, a
     /// search result — what stands there is what stands on the surface, or in
-    /// a carve or a bore come out at it, or on a stack on it.
+    /// a carve or a bore come out at it, or on a stack on it however tall,
+    /// since nothing was walked into.
     pub fn surface_support(&self, at: &Pvf3) -> Answer<f64> {
         let [ix, iy, _] = CELL.index_of(at);
-        self.stand([ix, iy], None)
+        // A stand from the surface meets no wall (`stand`), so it is never
+        // none.
+        self.stand([ix, iy], None).map(Option::unwrap_or_default)
     }
 
     /// Where a thing stands in z16 column `cell`, starting from cell `from`
-    /// of it, the surface's where none.
-    fn stand(&self, [ix, iy]: [i64; 2], from: Option<i64>) -> Answer<f64> {
+    /// of it and climbing a step at most, or from the surface and climbing
+    /// any height where none; none where a step from `from` meets a wall.
+    fn stand(&self, [ix, iy]: [i64; 2], from: Option<i64>) -> Answer<Option<f64>> {
         self.composed([ix, iy]).map(|c| {
             let side = CELL.side();
             let top = (c.top / side).round() as i64;
@@ -408,13 +414,19 @@ impl<'a> Access<'a> {
             // As far as a position reaches, so a shaft or a stack of any
             // height is followed to its end.
             let [lo, hi] = [REACH.min[2] / side, REACH.max[2] / side].map(|z| z as i64);
-            let from = from.unwrap_or(top);
-            let stand = if solid(from) {
-                (from + 1..hi).find(|&cz| !solid(cz)).unwrap_or(from)
-            } else {
-                (lo..from).rev().find(|&cz| solid(cz)).map_or(from, |cz| cz + 1)
+            let (start, climb) = match from {
+                Some(cz) => (cz, STEP_CELLS),
+                None => (top, hi - top),
             };
-            stand as f64 * side
+            let stand = if solid(start) {
+                let over = (start + 1..=start + climb).find(|&cz| !solid(cz));
+                // From the surface a stack filling a position's whole reach
+                // is stood in, as the surface was before.
+                if from.is_none() { over.or(Some(start)) } else { over }
+            } else {
+                Some((lo..start).rev().find(|&cz| solid(cz)).map_or(start, |cz| cz + 1))
+            };
+            stand.map(|cz| cz as f64 * side)
         })
     }
 

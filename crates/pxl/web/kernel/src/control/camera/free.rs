@@ -3,10 +3,10 @@
 //! The free camera. It turns the camera (controller.rs `Camera`) about its
 //! eye, which is the map center, and walks it (`pan`), at one speed wherever
 //! it stands. The eye's height is no control: the eye's target stands where
-//! a walker does (world/access.rs `support`), `EYE_HEIGHT_U` over it
-//! (`stand`) — in a cave as on the surface — and the drawn eye comes to that
-//! target, so on a slope or a step it is on its way there rather than at
-//! that height every frame.
+//! the walk every camera pans by stands (layer/terrain/ground_snap.rs
+//! `walk`), `EYE_HEIGHT_U` over it — in a cave as on the surface — and the
+//! drawn eye comes to that target, so on a slope or a step it is on its way
+//! there rather than at that height every frame.
 //!
 //! As the orbit's, its target and what is drawn are kept apart: the controls
 //! write where the eye is to stand and the look in the camera store's
@@ -17,8 +17,7 @@
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pvf3::REACH;
-use pxl_spec::space::pvf3::{ivec, projection};
+use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::v3::V3;
 
 use crate::control::camera::approach::{approach_angle, approach_scalar, approach_vec};
@@ -31,7 +30,8 @@ use crate::control::camera::store::camera_store;
 use crate::global::Global;
 use crate::world::access::{Access, Detail, Ray};
 use crate::world::change::request_world_tick;
-use crate::world::frame::coord::{canonical_to_local, local_height, local_world_to_canonical};
+use crate::layer::terrain::ground_snap::walk;
+use crate::world::frame::coord::{canonical_to_local, local_world_to_canonical};
 use crate::world::frame::view::{view, view_compose};
 
 /// What a look from `eye` along `forward` falls on, in the root frame: the
@@ -70,34 +70,30 @@ fn to() -> &'static mut Option<Pvf3> {
 const EYE_EPS: f64 = 0.001;
 const LOOK_EPS: f64 = 0.0001;
 
-/// A drag walks the eye's target over the ground: `dx`, `dy` in pixels. One
-/// speed wherever it stands and whichever way it goes, and the orbit's at
-/// the distance it starts at (`DEFAULT_DIST`): a drag carries the ground as
-/// far under either.
+/// How far the eye stands over the pivot a walker standing where it does
+/// has: the middle of the cell it fills, the camera's own convention
+/// (layer/terrain/ground_snap.rs), to the eye's height.
+const EYE_OVER_PIVOT: f64 = EYE_HEIGHT_U - U_PER_CELL / 2.0;
+
+/// A drag walks the eye's target: `dx`, `dy` in pixels, the one walk every
+/// camera pans by (ground_snap.rs `walk`), at the orbit's speed at the
+/// distance it starts at (`DEFAULT_DIST`), the eye `EYE_HEIGHT_U` over where
+/// the walk stands.
 pub fn pan(dx: f64, dy: f64) {
     let Some(from) = to().or_else(|| eye_local().map(|e| canonical(&e))) else { return };
-    let units_per_px = units_per_px_at(DEFAULT_DIST);
-    let (lx, ly) = (-dx * units_per_px, dy * units_per_px);
-    let (s, c) = camera().yaw.sin_cos();
-    let at = canonical_to_local(&from, view().origin);
-    let mut next = [at[0] + lx * c + ly * s, at[1] - lx * s + ly * c, at[2]];
-    // A step from the cell its feet are in, as a walker's.
-    let feet = at[2] - EYE_HEIGHT_U + U_PER_CELL / 2.0;
-    stand(&mut next, feet);
-    *to() = Some(canonical(&next));
+    let pivot = walk(&raised(&from, -EYE_OVER_PIVOT), dx, dy, units_per_px_at(DEFAULT_DIST), camera().yaw);
+    *to() = Some(raised(&pivot, EYE_OVER_PIVOT));
     request_world_tick();
 }
 
-/// The eye's target put standing at `at`, a map center — the middle of the
-/// cell a walker fills — `EYE_HEIGHT_U` over what it stands on: where a
-/// place said outright puts it, and with `snap` the drawn eye there at once.
+/// The eye's target put over `at`, a map center — the middle of the cell a
+/// walker fills — at the eye's height: where a place said outright puts it,
+/// and with `snap` the drawn eye there at once.
 pub(crate) fn put(at: Pvf3, snap: bool) {
-    let mut eye = canonical_to_local(&at, view().origin);
-    let from = eye[2];
-    stand(&mut eye, from);
-    *to() = Some(canonical(&eye));
+    let eye = raised(&at, EYE_OVER_PIVOT);
+    *to() = Some(eye);
     if snap {
-        set_eye_local(&eye);
+        set_eye_local(&canonical_to_local(&eye, view().origin));
     }
 }
 
@@ -107,22 +103,10 @@ fn canonical(local: &V3) -> Pvf3 {
     out
 }
 
-/// Where an eye's target over `eye`'s X and Y stands: within the lattice's
-/// rows north and south, and `EYE_HEIGHT_U` over what a walker starting from
-/// local height `from` there stands on (world/access.rs `support`). Its Z is
-/// that and nothing the hand moves; where the ground there is not known yet,
-/// it keeps the Z it has, and the ground arriving later moves nothing — only
-/// a step or a place put reads the ground again.
-fn stand(eye: &mut V3, from: f64) {
-    let o = view().origin;
-    let base = [ivec::to_real(ivec::X(o)), ivec::to_real(ivec::Y(o)), ivec::to_real(ivec::Z(o))];
-    let y = (eye[1] + base[1]).clamp(REACH.min[1], REACH.max[1] - 1.0);
-    eye[1] = y - base[1];
-    let mut start = Pvf3::default();
-    projection::project(&mut start, eye[0] + base[0], y, from + base[2]);
-    if let Some(top) = Access::now().support(&start).value() {
-        eye[2] = local_height(top, o) + EYE_HEIGHT_U;
-    }
+/// `at` raised by `dz` units.
+fn raised(at: &Pvf3, dz: f64) -> Pvf3 {
+    let local = canonical_to_local(at, view().origin);
+    canonical(&[local[0], local[1], local[2] + dz])
 }
 
 /// The free camera's turn over `delta` seconds: its eye and its look each

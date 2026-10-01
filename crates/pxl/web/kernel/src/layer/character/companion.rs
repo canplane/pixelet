@@ -457,7 +457,8 @@ fn footing(map_origin: IVec, local_x: f64, local_y: f64, from: Option<f64>) -> O
     local_world_to_canonical(&mut at, &[local_x, local_y, z], map_origin);
     let access = Access::now();
     match from {
-        Some(_) => access.support(&at).value(),
+        // A wall beside: it stays at the height it stood, as a pan stops.
+        Some(z) => access.support(&at).value().map(|s| s.unwrap_or(z)),
         None => access.surface_support(&at).value(),
     }
 }

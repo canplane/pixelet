@@ -1,26 +1,6 @@
 {
   "settings": {
-    "camera": {
-      "ground_snap": {
-        "label": "고도 접지 고정",
-        "description": "지도를 움직이는 동안 카메라 초점의 고도를 실제 지형 높이에 맞춰 고정합니다."
-      },
-      "camera_collision": {
-        "label": "지형 충돌",
-        "through": {
-          "label": "통과",
-          "description": "카메라가 지형을 그대로 지나갑니다. 땅속에서는 안쪽 면을 그리지 않아 화면이 뒤집혀 보입니다."
-        },
-        "stop": {
-          "label": "멈춤",
-          "description": "줌과 회전, 기울이기가 요청한 만큼 가되 갈 수 있는 데까지만 갑니다. 카메라가 스스로 움직이지는 않습니다."
-        },
-        "climb": {
-          "label": "타고 넘기",
-          "description": "줌은 항상 그대로 적용하고, 대신 시야가 위로 서면서 지형을 넘어갑니다. 모든 배율에 닿을 수 있지만 각도가 저절로 바뀝니다."
-        }
-      }
-    },
+    "camera": {},
     "lighting": {
       "shadows": {
         "label": "그림자",

@@ -26,7 +26,7 @@ use crate::global::Global;
 use crate::host::development;
 use crate::io::file;
 use crate::sched::profiler::log::profiler_follow;
-pub use crate::shell::setting::schema_spec::{AoMode, CameraCollisionMode, CameraMode, ResolutionMode, SettingKey, SettingKind, Settings};
+pub use crate::shell::setting::schema_spec::{AoMode, CameraMode, ResolutionMode, SettingKey, SettingKind, Settings};
 use crate::world::chunk::source::chunk_sources_changed;
 
 /// Whether this build offers the setting at all.
