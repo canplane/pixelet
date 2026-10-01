@@ -14,9 +14,10 @@ mod apply;
 mod executor;
 pub mod layout;
 
-use crate::abi::cmd::{Command, LoadStartSignal, Sensor, SensorStartSignal, WorldFrameSignal, WorldSnapshotSignal};
+use crate::abi::cmd::{Command, LoadCancelSignal, LoadStartSignal, Sensor, SensorStartSignal, WorldFrameSignal, WorldSnapshotSignal};
 use crate::global::Global;
 use crate::host::HeapStat;
+use crate::io::load::LoadKind;
 use crate::kernel::kernel;
 use crate::mem::fixed::Range;
 use crate::mem::section;
@@ -24,7 +25,6 @@ use layout::DOOR_LAYOUT;
 use pxl_render::mesh::volume::Volumes;
 use xpute_core::status::errno::Errno;
 use xpute_core::wire::xtp::PacketWriter;
-use xpute_runtime::abi::cmd as xpute_cmd;
 use xpute_runtime::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
 use xpute_runtime::ipc::doorbell::Door;
 use xpute_runtime::ipc::ring::Ring;
@@ -71,11 +71,6 @@ fn door() -> &'static Door {
 
 /// A signal for the shell with a packet of `count` children written by `f`.
 fn raise(cmd: Command, count: u32, f: impl Fn(&mut PacketWriter)) {
-    door().raise(cmd as u32, count, f);
-}
-
-/// A signal of every program's (xpute-runtime abi/cmd), with its packet.
-fn raise_xpute(cmd: xpute_cmd::Command, count: u32, f: impl Fn(&mut PacketWriter)) {
     door().raise(cmd as u32, count, f);
 }
 
@@ -313,30 +308,28 @@ fn post_shell(s: &mut State) {
     }
     // The key crosses as the one word the queue orders by; the shell holds it
     // as a handle and hands it back, and never reads into it.
+    // A bake's object and a model are files the kernel opens; an image is
+    // decoded where the device is, so it is asked for by command.
     take_started(|key, category, subject| match category.bake() {
-        Some(bake) => {
-            let name = crate::io::fetch::DemandName(category, subject);
-            // A bake is a source of the kernel's, numbered by its kind.
-            let signal = xpute_cmd::FetchStartSignal {
-                key,
-                source: bake as u32,
-                name: &name,
-            };
-            raise_xpute(xpute_cmd::Command::FETCH_START, xpute_cmd::FetchStartSignal::FIELDS, |w| signal.write(w));
-        }
-        // An asset belongs to no bake: it is named by its content, and the
-        // host is the one that knows what that is.
-        None => {
-            let Some((kind, load)) = crate::io::load::of_subject(subject) else { return };
-            let signal = LoadStartSignal { key, kind, load: load.number() };
-            raise(Command::LOAD_START, LoadStartSignal::FIELDS, |w| signal.write(w));
-        }
+        Some(_) => crate::io::fetch::start(key, category, subject),
+        None => match crate::io::load::of_subject(subject) {
+            Some((LoadKind::Gltf, load)) => crate::io::load::open_model(key, load),
+            Some((LoadKind::Image, load)) => {
+                let signal = LoadStartSignal { key, load: load.number() };
+                raise(Command::LOAD_START, LoadStartSignal::FIELDS, |w| signal.write(w));
+            }
+            None => {}
+        },
     });
-    take_stops(|key| {
-        raise_xpute(xpute_cmd::Command::FETCH_CANCEL, xpute_cmd::FetchCancelSignal::FIELDS, |w| {
-            xpute_cmd::FetchCancelSignal { key }.write(w)
-        })
-    });
+    // Taken first: stopping a read settles it, which the scheduler's own
+    // walk over its stops must not be inside.
+    let mut stops = Vec::new();
+    take_stops(|key| stops.push(key));
+    for key in stops {
+        if !crate::io::fetch::cancel(key) && !crate::io::load::cancel_model(key) {
+            raise(Command::LOAD_CANCEL, LoadCancelSignal::FIELDS, |w| LoadCancelSignal { key }.write(w));
+        }
+    }
 }
 
 /// The end of a frame, the kernel having drawn it: what it asks of the shell,

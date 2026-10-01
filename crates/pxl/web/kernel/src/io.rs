@@ -11,6 +11,7 @@
 
 pub mod demand;
 pub mod fetch;
+pub mod file;
 pub mod load;
 pub mod policy;
 pub mod sched;

@@ -8,11 +8,7 @@ use xpute_core::abi::cmd::cmd;
 #[test]
 fn every_number_is_its_major_and_minor() {
     use Command::*;
-    let parts = [
-        (FETCH_START, Major::FETCH as u32, FetchMinor::START as u32),
-        (FETCH_CANCEL, Major::FETCH as u32, FetchMinor::CANCEL as u32),
-        (FETCH_DONE, Major::FETCH as u32, FetchMinor::DONE as u32),
-    ];
+    let parts = [(SYS_OPENED, Major::SYS as u32, SysMinor::OPENED as u32)];
     for (c, major, minor) in parts {
         assert_eq!(c as u32, cmd(major, minor), "{c:?}");
         assert_eq!(Command::of(c as u32), Some(c));

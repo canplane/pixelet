@@ -1,7 +1,8 @@
 // @pxl/web/kernel/io/fetch.ts
 
 /**
- * The bus under the kernel's reads (crates/pxl/web/kernel/src/io/fetch.rs).
+ * The bus under the kernel's reads (crates/pxl/web/kernel/src/io/fetch.rs):
+ * a file below a bake's root, opened whole.
  *
  * The kernel names an object — which bake it belongs to, and its name inside
  * that bake — and never an address. Turning that into a URL, running HTTP,
@@ -17,48 +18,20 @@
  * handed and negotiates with the real client itself, so a refusal written
  * there refuses everyone (2026-09-24).
  *
- * Four outcomes go back, and only four. **404 is not one of them**: it is how
- * HTTP spells "there is no such object", so it is translated here into the
- * outcome that says so, and the kernel decides what an absent object means
- * for its category without ever learning the number. The body is held where
- * the kernel reads it in its own turn, and a stop is the scheduler's own
- * doing — it carries no reason, where everything else does.
+ * **404 is not a failure**: it is how HTTP spells "there is no such object",
+ * so it is ENOENT here, and the kernel decides what an absent object means for
+ * its category without ever learning the number. A stop is the kernel closing
+ * the file, and nothing is said of it.
  */
 
 import type { U8Array } from "@xpute/core/abi/array.ts";
-import type { f64, u32, u64 } from "@xpute/core/abi/word.ts";
-import { Command as XputeCommand, encode_fetch_done, FetchOutcome } from "@xpute/runtime/abi/cmd.spec.ts";
-import { FetchFail } from "@xpute/runtime/abi/fetch.spec.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
+import { FileError } from "@xpute/runtime/ipc/sys.ts";
 import { PUBLISHED_TILES } from "@/config/deploy.ts";
 import { originGet } from "@platform/origin.ts";
 import { tileUrl } from "@/config/route.ts";
 import { BAKE_KINDS } from "@/config/published.spec.ts";
-import { CORE_DOORBELL } from "@/kernel/mem.ts";
-import { BODIES } from "@/kernel/module.ts";
-import { request_frame } from "@/kernel/sched.ts";
-
-/** Every read the scheduler started and the host has not settled, by the key
- * it handed out, with what stops it. One map for both kinds: a stop names a
- * key and nothing else, so which kind of read it was is not this side's
- * question (load.ts). */
-const running = new Map<bigint, () => void>();
-
-/** A read begun under `key`: the signal its transport is stopped by, and
- * `own`, which says whether its end is still this read's to report — and
- * from then on it is not. A read ends once, by its answer or by its stop,
- * whichever comes first: a stop is reported at once, through `stopped`, and
- * never waits on the transport to let the read go. A transport may never let
- * it go — a device's fetch left a body stopped after its response unsettled
- * for good — and the credit the read spends would never come back. */
-export function begin_read(key: u64, stopped: () => void): { signal: AbortSignal; own: () => boolean } {
-  const controller = new AbortController();
-  running.set(key, () => {
-    running.delete(key);
-    controller.abort();
-    stopped();
-  });
-  return { signal: controller.signal, own: () => running.delete(key) };
-}
 
 /** Whether a body is still in the encoding it was stored in — which, on this
  * side of the wire, means the transport did not decode it. The same judgment
@@ -67,63 +40,30 @@ function packed(body: U8Array): boolean {
   return (body[0] === 0x28 && body[1] === 0xb5) || (body[0] === 0x1f && body[1] === 0x8b);
 }
 
-/** Tells the kernel what became of the read it started under `key`. */
-function settle(key: u64, outcome: FetchOutcome, body: u32, body_bytes: u32, fail: FetchFail, detail: u32, net_ms: f64): void {
-  CORE_DOORBELL.send(0, XputeCommand.FETCH_DONE, encode_fetch_done({ key, outcome, body, body_bytes, fail, detail, net_ms }));
-  request_frame();
-}
-
-/** Reads one object the kernel named: its bytes written into the room the
- * kernel gives them, and what became of the read reported back. */
-export async function run_fetch(key: u64, bake: number, name: string): Promise<void> {
-  const { signal, own } = begin_read(key, () => settle(key, FetchOutcome.Aborted, 0, 0, FetchFail.None, 0, 0));
-  let outcome: FetchOutcome = FetchOutcome.Read;
-  let held = 0;
-  let bytes = 0;
-  let fail: FetchFail = FetchFail.None;
-  let detail = 0;
-  let net_ms = 0;
+/** The object `name` of bake `bake`, whole, or a FileError. */
+export async function read_object(bake: u32, name: string, signal: AbortSignal): Promise<U8Array> {
+  let res: Response;
+  let body: U8Array;
   try {
-    const t0 = performance.now();
-    const res = await originGet(tileUrl(BAKE_KINDS[bake], name, PUBLISHED_TILES), signal);
-    const body = new Uint8Array(await res.arrayBuffer());
-    net_ms = performance.now() - t0;
-    if (!own()) return;
-    if (res.status === 404) {
-      outcome = FetchOutcome.Absent;
-    } else if (!res.ok) {
-      outcome = FetchOutcome.Error;
-      fail = FetchFail.Refused;
-      detail = res.status;
-    } else if (body.byteLength > 0 && packed(body)) {
-      // Still in the encoding it was stored in: something between the bucket
-      // and here dropped the header that says so, since the edge decodes a
-      // body for a browser that cannot. The object's failure, not the
-      // browser's — and handing it on would spend a heap block and fail in the
-      // kernel's decoder, far from the one thing that is actually wrong.
-      console.warn(`[fetch] ${key}: the body arrived still packed, with no encoding to undo it`);
-      outcome = FetchOutcome.Error;
-      fail = FetchFail.Decode;
-    } else if (body.byteLength > 0) {
-      held = BODIES.hold(body);
-      bytes = body.byteLength;
-    }
+    res = await originGet(tileUrl(BAKE_KINDS[bake], name, PUBLISHED_TILES), signal);
+    body = new Uint8Array(await res.arrayBuffer());
   } catch (err) {
-    // A stop was reported when it was made, and carries no reason.
-    if (!own()) return;
-    // Everything else is the transport's: a browser raises TypeError for
-    // offline, DNS, CORS and a refused connection alike, and its words for
-    // them are this side's to log — what the kernel needs is which of these
-    // happened.
-    outcome = FetchOutcome.Error;
-    fail = err instanceof Error && err.name === "TypeError" ? FetchFail.Network : FetchFail.Shell;
-    console.warn(`[fetch] ${key}: ${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}`);
+    // A browser raises TypeError for offline, DNS, CORS and a refused
+    // connection alike, and its words for them are this side's to log —
+    // what the kernel needs is which of these happened.
+    if (!signal.aborted) console.warn(`[fetch] ${name}: ${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}`);
+    throw new FileError(err instanceof Error && err.name === "TypeError" ? Errno.ENETUNREACH : Errno.EIO);
   }
-  settle(key, outcome, held, bytes, fail, detail, net_ms);
-}
-
-/** Stops the read the kernel started under `key`, whichever kind it is, if it
- * is still running. */
-export function abort_fetch(key: u64): void {
-  running.get(key)?.();
+  if (res.status === 404) throw new FileError(Errno.ENOENT);
+  if (!res.ok) throw new FileError(Errno.EACCES, res.status);
+  if (body.byteLength > 0 && packed(body)) {
+    // Still in the encoding it was stored in: something between the bucket
+    // and here dropped the header that says so, since the edge decodes a
+    // body for a browser that cannot. The object's failure, not the
+    // browser's — and handing it on would spend a heap block and fail in the
+    // kernel's decoder, far from the one thing that is actually wrong.
+    console.warn(`[fetch] ${name}: the body arrived still packed, with no encoding to undo it`);
+    throw new FileError(Errno.EBADMSG);
+  }
+  return body;
 }

@@ -12,7 +12,6 @@
 import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { Directory } from "@xpute/runtime/ipc/directory.ts";
-import { Bodies } from "@xpute/runtime/ipc/sys.ts";
 
 import { DIRECTORY_AT } from "@/kernel/mem/mem.spec.ts";
 
@@ -36,10 +35,6 @@ export interface Core {
 export function directory(memory: ArrayBuffer): Directory {
   return new Directory(memory, DIRECTORY_AT);
 }
-
-/** Bytes the host holds for the kernel — a response, a model file, what
- * storage kept — until the kernel reads them (xpute's READ, host.ts). */
-export const BODIES = new Bodies();
 
 const utf8_decoder = new TextDecoder();
 

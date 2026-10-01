@@ -58,11 +58,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P1
 
-- **xpute's system calls as a guest's files.** `openat(root, path)`, `read`,
-  `write`, `close` on a descriptor the guest issues, Plan 9's structure with
-  POSIX's words; the body numbers, the fetch commands and the whole-file
-  write go
-  ([20261001-a-guest-s-files-as-plan-9-s.md](./20261001-a-guest-s-files-as-plan-9-s.md)).
 - **XTP: a string-sequence leaf.** A `str` sequence leaf — one UTF-8 blob
   plus a u32 offsets lane — in place of one `str` node per string. A new
   type code, so existing packets still read. Per string today is an 8-byte

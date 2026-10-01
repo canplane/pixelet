@@ -561,8 +561,10 @@ fn rs(spec: &Spec, t: &Target) -> Result<String, String> {
         [
             "",
             "// A list a record carries is a function handing out its items, whose",
-            "// type is long to spell and is spelled once, here, for each.",
-            "#![allow(non_camel_case_types, clippy::type_complexity)]",
+            "// type is long to spell and is spelled once, here, for each. A table",
+            "// with no signal or no enum read off the wire leaves a writer or",
+            "// `unknown` unused.",
+            "#![allow(non_camel_case_types, clippy::type_complexity, unused_imports, dead_code)]",
             "",
             "use core::fmt::Display;",
             "",

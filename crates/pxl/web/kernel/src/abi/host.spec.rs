@@ -37,7 +37,18 @@ pub mod op {
     pub const KEYS: &[&str] = &["TEXT_LAYOUT", "TEXT_RASTER"];
 }
 
-/// The kernel's files, by the number xpute's WRITE names: what it keeps in the platform's storage, under the key the host keeps it by (`STORAGE_KEYS`).
+/// The roots the kernel opens files below (xpute's OPENAT). Below STORAGE a root is a
+/// bake, numbered by its kind (pxl-spec bake/published.spec.rs), and a path is an object's
+/// name in it.
+pub mod root {
+    /// The platform's storage; a path is a key (`STORAGE_KEYS`).
+    pub const STORAGE: u32 = 256;
+    /// The shipped assets; a path is a load's number in decimal (io/load.rs).
+    pub const ASSET: u32 = 257;
+    pub const KEYS: &[&str] = &["STORAGE", "ASSET"];
+}
+
+/// What the platform's storage keeps, by `STORAGE_KEYS`' order.
 pub mod storage {
     pub const SETTINGS: u32 = 0;
     pub const OBJECTS: u32 = 1;

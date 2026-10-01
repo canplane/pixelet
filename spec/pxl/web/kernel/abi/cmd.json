@@ -244,7 +244,7 @@
           "value": 1
         },
         {
-          "name": "DONE",
+          "name": "CANCEL",
           "value": 2
         },
         {
@@ -578,23 +578,6 @@
       ]
     },
     {
-      "name": "LoadKind",
-      "doc": [
-        "What an asset is read as."
-      ],
-      "format": "dec",
-      "entries": [
-        {
-          "name": "Gltf",
-          "value": 0
-        },
-        {
-          "name": "Image",
-          "value": 1
-        }
-      ]
-    },
-    {
       "name": "MapStatus",
       "doc": [
         "The map's loading lifecycle."
@@ -776,18 +759,14 @@
           "name": "LOAD_START",
           "value": 4865,
           "doc": [
-            "An asset the scheduler wants read. It shares the credits with the pages, and so is",
-            "started when one is free rather than all at once; what it is and where it lives is",
-            "the host's, as a page's address is."
+            "An image the scheduler wants read and decoded. It shares the credits with the pages,",
+            "and so is started when one is free rather than all at once; which file it is and",
+            "where it lives is the host's. A model is read as a file (xpute's OPENAT, root ASSET)."
           ],
           "signal": [
             {
               "name": "key",
               "type": "u64"
-            },
-            {
-              "name": "kind",
-              "type": "LoadKind"
             },
             {
               "name": "load",
@@ -799,28 +778,20 @@
           ]
         },
         {
-          "section": "the host answers: an I/O the process started, done"
-        },
-        {
-          "name": "LOAD_DONE",
+          "name": "LOAD_CANCEL",
           "value": 4866,
           "doc": [
-            "A model's bytes, held by the host as `body` until the kernel reads them (xpute's sys READ)."
+            "Stop this image's read: the scheduler took its credit back. The host answers LOAD_FAILED."
           ],
-          "packet": [
+          "signal": [
             {
               "name": "key",
               "type": "u64"
-            },
-            {
-              "name": "body",
-              "type": "u32"
-            },
-            {
-              "name": "bytes",
-              "type": "u32"
             }
           ]
+        },
+        {
+          "section": "the host answers: an I/O the process started, done"
         },
         {
           "name": "LOAD_IMAGE",
@@ -843,8 +814,8 @@
           "name": "LOAD_FAILED",
           "value": 4867,
           "doc": [
-            "A read of an asset failed. The guest wants it again, after whatever the scheduler",
-            "makes it wait; a model whose *bytes* do not parse is a different thing and is not this."
+            "An image's read failed or was stopped. The guest wants it again, after whatever the",
+            "scheduler makes it wait."
           ],
           "packet": [
             {
@@ -987,17 +958,6 @@
                 "The settings as storage kept them, a value a setting in SettingKey's order as the",
                 "snapshot carries them, 0xffffffff for one it kept nothing for."
               ]
-            },
-            {
-              "name": "objects",
-              "type": "u32",
-              "doc": [
-                "The objects as stored, held as a body (xpute's sys READ), 0 for none."
-              ]
-            },
-            {
-              "name": "objects_bytes",
-              "type": "u32"
             }
           ]
         },

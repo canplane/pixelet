@@ -12,8 +12,10 @@
 //! raises on the completion ring.
 
 // A list a record carries is a function handing out its items, whose
-// type is long to spell and is spelled once, here, for each.
-#![allow(non_camel_case_types, clippy::type_complexity)]
+// type is long to spell and is spelled once, here, for each. A table
+// with no signal or no enum read off the wire leaves a writer or
+// `unknown` unused.
+#![allow(non_camel_case_types, clippy::type_complexity, unused_imports, dead_code)]
 
 use core::fmt::Display;
 
@@ -32,11 +34,11 @@ fn unknown() -> MarshalError {
 #[repr(u32)]
 pub enum Major {
     NOP = 0x00,
-    FETCH = 0x01,
+    SYS = 0x01,
 }
 
 impl Major {
-    pub const ALL: [Major; 2] = [Major::NOP, Major::FETCH];
+    pub const ALL: [Major; 2] = [Major::NOP, Major::SYS];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<Major> {
@@ -44,42 +46,19 @@ impl Major {
     }
 }
 
-/// A fetch's verbs.
+/// The system calls' answers (ipc/sys.json).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
-pub enum FetchMinor {
-    START = 0x01,
-    CANCEL = 0x02,
-    DONE = 0x03,
+pub enum SysMinor {
+    OPENED = 0x01,
 }
 
-impl FetchMinor {
-    pub const ALL: [FetchMinor; 3] = [FetchMinor::START, FetchMinor::CANCEL, FetchMinor::DONE];
+impl SysMinor {
+    pub const ALL: [SysMinor; 1] = [SysMinor::OPENED];
 
     /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<FetchMinor> {
-        FetchMinor::ALL.into_iter().find(|m| *m as u32 == number)
-    }
-}
-
-/// What a read came to. **Absent is an outcome, not a code the guest reads.**
-/// There is no such object, however the protocol spells that — an HTTP 404, a
-/// missing file — and the host is the one that can tell.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum FetchOutcome {
-    Read = 0,
-    Aborted = 1,
-    Error = 2,
-    Absent = 3,
-}
-
-impl FetchOutcome {
-    pub const ALL: [FetchOutcome; 4] = [FetchOutcome::Read, FetchOutcome::Aborted, FetchOutcome::Error, FetchOutcome::Absent];
-
-    /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<FetchOutcome> {
-        FetchOutcome::ALL.into_iter().find(|m| *m as u32 == number)
+    pub fn of(number: u32) -> Option<SysMinor> {
+        SysMinor::ALL.into_iter().find(|m| *m as u32 == number)
     }
 }
 
@@ -89,19 +68,13 @@ impl FetchOutcome {
 pub enum Command {
     /// Replies with its packet's value, or 0 where it has none — the rings' own test.
     NOP = 0x0000,
-    /// An object the guest wants read, named in the guest's terms: a source, a number the
-    /// program gives each place it reads from, and a name inside it. The host is the one
-    /// that knows what address that is and what protocol reaches it. The key is the
-    /// guest's, handed back and never read into.
-    FETCH_START = 0x0101,
-    /// Stop this read. The host settles it as aborted.
-    FETCH_CANCEL = 0x0102,
-    /// A read the host finished, its body held as `body` until the guest reads it (ipc/sys's READ).
-    FETCH_DONE = 0x0103,
+    /// An OPENAT answered: the file's size, or -errno — ENOENT where there is no such file.
+    /// Never sent for a descriptor already closed.
+    SYS_OPENED = 0x0101,
 }
 
 impl Command {
-    pub const ALL: [Command; 4] = [Command::NOP, Command::FETCH_START, Command::FETCH_CANCEL, Command::FETCH_DONE];
+    pub const ALL: [Command; 2] = [Command::NOP, Command::SYS_OPENED];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<Command> {
@@ -122,63 +95,22 @@ impl Nop {
     }
 }
 
-/// Command::FETCH_START's signal.
-pub struct FetchStartSignal<'a> {
-    pub key: u64,
-    pub source: u32,
-    pub name: &'a dyn Display,
-}
-
-impl FetchStartSignal<'_> {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 3;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u64(Some(self.key));
-        w.u32(Some(self.source));
-        w.str_display(self.name);
-    }
-}
-
-/// Command::FETCH_CANCEL's signal.
-pub struct FetchCancelSignal {
-    pub key: u64,
-}
-
-impl FetchCancelSignal {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 1;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u64(Some(self.key));
-    }
-}
-
-/// Command::FETCH_DONE's packet.
+/// Command::SYS_OPENED's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct FetchDone {
-    pub key: u64,
-    pub outcome: FetchOutcome,
-    pub body: u32,
-    /// 0 for none.
-    pub body_bytes: u32,
-    pub fail: crate::abi::fetch::FetchFail,
-    /// Whatever number the host refused with, kept for a reader to print and for nothing to branch on.
+pub struct SysOpened {
+    pub fd: u32,
+    pub res: i32,
+    /// Whatever number the host refused with — for HTTP its status — kept for a reader to print and for nothing to branch on.
     pub detail: u32,
-    pub net_ms: f64,
 }
 
-impl FetchDone {
-    pub fn read(pkt: &[u8]) -> Result<FetchDone, MarshalError> {
+impl SysOpened {
+    pub fn read(pkt: &[u8]) -> Result<SysOpened, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(FetchDone {
-            key: f.at(0)?.get_u64()?,
-            outcome: FetchOutcome::of(f.at(1)?.get_number()? as u32).ok_or_else(|| unknown())?,
-            body: f.at(2)?.get_number()? as u32,
-            body_bytes: f.at(3)?.get_number()? as u32,
-            fail: crate::abi::fetch::FetchFail::of(f.at(4)?.get_number()? as u32).unwrap_or(crate::abi::fetch::FetchFail::Shell),
-            detail: f.at(5)?.get_number()? as u32,
-            net_ms: f.at(6)?.get_number()?,
+        Ok(SysOpened {
+            fd: f.at(0)?.get_number()? as u32,
+            res: f.at(1)?.get_number()? as i32,
+            detail: f.at(2)?.get_number()? as u32,
         })
     }
 }

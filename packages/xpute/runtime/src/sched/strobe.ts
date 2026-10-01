@@ -66,6 +66,7 @@ export class Strobe {
   }
 
   private wake(wake_ms: f64): void {
+    if (!this.running) return;
     if (wake_ms === 0) return this.request();
     if (wake_ms < 0) return;
     const at = performance.now() + wake_ms;

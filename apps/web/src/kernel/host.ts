@@ -2,22 +2,26 @@
 
 /**
  * The kernel's system calls as its host answers them (crates/pxl/web/kernel/
- * src/host.rs): xpute's, run by xpute (@xpute/runtime/ipc/sys.ts), with a file
- * written to the platform's storage and a broken invariant said on the
- * console; and the kernel's own (abi/host.json), a text laid out or drawn
- * (crates/pxl/web/kernel/src/text.rs). All of them run once the turn has
- * returned and before the next can begin, so whatever one names in the
+ * src/host.rs): xpute's, run by xpute (@xpute/runtime/ipc/sys.ts), with
+ * storage bound here and the other roots bound by the boot (`bind_root`,
+ * kernel.ts) — a bake to its origin, the assets to theirs — and a broken
+ * invariant said on the console; and the kernel's own (abi/host.json), a text laid out
+ * or drawn (crates/pxl/web/kernel/src/text.rs). All of them run once the turn
+ * has returned and before the next can begin, so whatever one names in the
  * kernel's memory is written by the time the kernel reads it.
  */
 
-import type { U32Array } from "@xpute/core/abi/array.ts";
+import type { U32Array, U8Array } from "@xpute/core/abi/array.ts";
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { strerror } from "@xpute/core/status/errno.spec.ts";
 import { bytes_of } from "@xpute/runtime/ipc/stream.ts";
-import { run_sys, type SysHost } from "@xpute/runtime/ipc/sys.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
+import { Command as XputeCommand, encode_sys_opened } from "@xpute/runtime/abi/cmd.spec.ts";
+import { FileError, Files, run_sys, type SysHost } from "@xpute/runtime/ipc/sys.ts";
 
-import { op, STORAGE_KEYS } from "@/kernel/abi/host.spec.ts";
-import { BODIES } from "@/kernel/module.ts";
+import { op, root } from "@/kernel/abi/host.spec.ts";
+import { CORE_DOORBELL } from "@/kernel/mem.ts";
+import { request_frame } from "@/kernel/sched.ts";
 import { storageGet, storageSet } from "@platform/storage.ts";
 import { textRaster, textWidth } from "@platform/text.ts";
 
@@ -71,11 +75,6 @@ function line_ends(text: string, max_width: number, width: (s: string) => number
   return ends;
 }
 
-/** What storage keeps under `storage`'s key (host.json), or none. */
-export function stored(storage: u32): string | null {
-  return storageGet(STORAGE_KEYS[storage]);
-}
-
 /** The kernel's own calls: a text laid out, or drawn. */
 function program(memory: ArrayBuffer, code: u32, w: U32Array, a: u32): void {
   switch (code) {
@@ -104,12 +103,45 @@ function program(memory: ArrayBuffer, code: u32, w: U32Array, a: u32): void {
   }
 }
 
+/** The kernel's open files. */
+const FILES = new Files();
+
+/** How a root's file is read whole. */
+type Open = (path: string, signal: AbortSignal) => U8Array | Promise<U8Array>;
+
+const ROOTS = new Map<u32, Open>([[root.STORAGE, (path) => {
+  const value = storageGet(path);
+  if (value === null) throw new FileError(Errno.ENOENT);
+  return utf8_out.encode(value);
+}]]);
+
+/** Binds `r` to where its files are read from. A root bound to nothing has
+ * no files. */
+export function bind_root(r: u32, open: Open): void {
+  ROOTS.set(r, open);
+}
+
+/** A file below one of the kernel's roots, whole. */
+function open(r: u32, path: string, signal: AbortSignal) {
+  const bound = ROOTS.get(r);
+  if (bound === undefined) throw new FileError(Errno.ENOENT);
+  return bound(path, signal);
+}
+
 /** Runs the calls the turn just returned left in the stream at `at`. */
 export function run_host_stream(memory: ArrayBuffer, at: u32): void {
   const host: SysHost = {
-    write: (file, bytes) => storageSet(STORAGE_KEYS[file], utf8.decode(bytes)),
+    open,
+    commit: (r, path, bytes) => {
+      if (r !== root.STORAGE) throw new FileError(Errno.EROFS);
+      storageSet(path, utf8.decode(bytes));
+    },
+    opened: (fd, res, detail) => {
+      CORE_DOORBELL.send(0, XputeCommand.SYS_OPENED, encode_sys_opened({ fd, res, detail }));
+      request_frame();
+    },
     abort: ({ errno, file, line, column, a, b }) => console.error(`[pxl] ${strerror(errno)} at ${file.replace(/^\.+/, "")}:${line}:${column} (${a}, ${b})`),
     program: (code, w, a) => program(memory, code, w, a),
   };
-  run_sys(memory, at, BODIES, host);
+  run_sys(memory, at, FILES, host);
 }

@@ -37,9 +37,25 @@
       ]
     }
   },
+  "root": {
+    "$type": "u32",
+    "$doc": [
+      "The roots the kernel opens files below (xpute's OPENAT). Below STORAGE a root is a",
+      "bake, numbered by its kind (pxl-spec bake/published.spec.rs), and a path is an object's",
+      "name in it."
+    ],
+    "STORAGE": {
+      "$value": 256,
+      "$doc": ["The platform's storage; a path is a key (`STORAGE_KEYS`)."]
+    },
+    "ASSET": {
+      "$value": 257,
+      "$doc": ["The shipped assets; a path is a load's number in decimal (io/load.rs)."]
+    }
+  },
   "storage": {
     "$type": "u32",
-    "$doc": ["The kernel's files, by the number xpute's WRITE names: what it keeps in the platform's storage, under the key the host keeps it by (`STORAGE_KEYS`)."],
+    "$doc": ["What the platform's storage keeps, by `STORAGE_KEYS`' order."],
     "SETTINGS": 0,
     "OBJECTS": 1
   },

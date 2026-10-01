@@ -20,12 +20,12 @@
 //! the asset's own, and asking for them again brings back the same bytes, so
 //! that one is final.
 //!
-//! The reading is the shell's, and so is where an asset lives: it answers
-//! with the bytes of a model it holds (`gltf_arrived`, then read and parsed by
-//! `gltf_task` on the turns' quota) or the handle of an image it
-//! decoded and holds (`image_arrived`) — the file's own pixels, top row
-//! first, no color conversion and no premultiplied alpha. A consumer polls:
-//! None while the read is out or the asset is broken.
+//! Where an asset lives is the host's. A model is a file below the assets'
+//! root (io/file.rs), opened, then read and parsed by `gltf_task` on the
+//! turns' quota; an image is decoded where the device is and comes back as
+//! the host's handle (LOAD_START, `image_arrived`) — the file's own pixels,
+//! top row first, no color conversion and no premultiplied alpha. A consumer
+//! polls: None while the read is out or the asset is broken.
 
 use std::rc::Rc;
 
@@ -33,16 +33,23 @@ use pxl_render::asset::gltf::{parse_gltf, Gltf};
 use pxl_spec::asset::ingested::Asset;
 use xpute_runtime::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 
-pub use crate::abi::cmd::LoadKind;
+use crate::abi::host::root;
 use crate::global::Global;
-use crate::host::body_read;
 use crate::io::demand::Ask;
+use crate::io::file::{self, Owner};
 use crate::io::sched::{attempt_of, settle};
 use crate::layer::decor::asset_store::decor_assets_arrived;
 use crate::sched::profiler::record::{Failure, Outcome};
 use crate::world::change::{request_world_tick, world_edge};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
+
+/// What an asset is read as.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LoadKind {
+    Gltf = 0,
+    Image = 1,
+}
 
 /// What a load names: a shipped asset, or the texture pack's sheet, which the
 /// ingest writes beside the table rather than as a row of it.
@@ -89,8 +96,8 @@ impl Load {
 enum Entry<T> {
     /// Wanted, and the read for it is the scheduler's business.
     Pending,
-    /// The shell holds the bytes at this body, this long, and nothing has
-    /// parsed them yet.
+    /// The file is open as this descriptor, this long, and nothing has read
+    /// or parsed it yet.
     Arrived(u32, u32),
     Ready(T),
     Failed,
@@ -195,10 +202,33 @@ fn arrivals() -> &'static mut Notify {
     ARRIVALS.get(Notify::new)
 }
 
-/// The host holds a model's bytes as `body`: `gltf_task`'s to parse.
-pub fn gltf_arrived(key: u64, body: u32, bytes: u32) {
-    let Some((_, load)) = ended(key, Outcome::ok) else { return };
-    loader().gltf[load.number() as usize] = Some(Entry::Arrived(body, bytes));
+/// Opens a model's file for the scheduler's attempt `key`.
+pub fn open_model(key: u64, load: Load) {
+    file::open(root::ASSET, &load.number().to_string(), Owner::Model { key });
+}
+
+/// Stops a model's read, if one is open: the asset is wanted again, as after
+/// a read that did not arrive.
+pub fn cancel_model(key: u64) -> bool {
+    let Some(fd) = file::held_for(|o| *o == Owner::Model { key }) else { return false };
+    file::close(fd);
+    load_rejected(key);
+    true
+}
+
+/// The host's answer to a model's open: `gltf_task`'s to read and parse, or
+/// a read that did not arrive.
+pub fn model_opened(fd: u32, key: u64, res: i32) {
+    if res < 0 {
+        file::close(fd);
+        load_rejected(key);
+        return;
+    }
+    let Some((_, load)) = ended(key, Outcome::ok) else {
+        file::close(fd);
+        return;
+    };
+    loader().gltf[load.number() as usize] = Some(Entry::Arrived(fd, res as u32));
     arrivals().notify();
 }
 
@@ -216,10 +246,11 @@ fn next_arrival() -> Option<(usize, u32, u32)> {
 pub async fn gltf_task() {
     loop {
         notified(arrivals).await;
-        while let Some((n, body, bytes)) = next_arrival() {
+        while let Some((n, fd, bytes)) = next_arrival() {
             yield_if_spent(world_edge).await;
             let mut buf = vec![0u8; bytes as usize];
-            body_read(body, &mut buf);
+            file::read(fd, &mut buf);
+            file::close(fd);
             // In once the host has run the turn's records.
             next_turn(world_edge).await;
             let entry = match parse_gltf(&buf, &[], || yield_if_spent(world_edge)).await {

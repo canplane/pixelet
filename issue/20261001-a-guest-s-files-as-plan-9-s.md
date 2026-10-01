@@ -92,7 +92,10 @@ string.
 
 ## Where it stands
 
-**Decided** 10-01. It supersedes two conclusions of
+**Built** 10-01, once both branches were on main: `ipc/sys` in both
+runtimes, the kernel's descriptor table (`io/file.rs`), its roots in
+`host.json`, and the host's in `apps/web/src/kernel/host.ts`. An image still
+comes back as a handle, by LOAD_START and LOAD_CANCEL. **Decided** 10-01. It
+supersedes two conclusions of
 [20260930-resources-files-and-streams.md](./20260930-resources-files-and-streams.md):
-"no system-call or descriptor API now" and "no namespace". Queued in
-[BACKLOG.md](./BACKLOG.md) until both branches are on main.
+"no system-call or descriptor API now" and "no namespace".

@@ -5,9 +5,14 @@
 //! has returned. A call that names the guest's memory is done by the time the
 //! next turn rises, and what it names is kept that long.
 //!
-//! Every program's calls are here — read a body the host holds, write a file,
-//! report the invariant that stopped it. A program's own go in the same
-//! stream through `call`, numbered past the PROGRAM bit.
+//! Files are reached as Plan 9 reaches them: the guest issues the descriptor
+//! — a handle of its own table, so a late answer to one it closed names
+//! nothing the slot holds after — and names a file by a root and a path
+//! below it. `openat` is answered by the command SYS_OPENED on a later turn;
+//! `read`, `write` and `close` are done before the next turn rises.
+//!
+//! A program's own calls go in the same stream through `call`, numbered past
+//! the PROGRAM bit.
 
 use core::panic::Location;
 
@@ -18,6 +23,9 @@ use crate::mem::base::off_of_slice;
 
 #[path = "sys.spec.rs"]
 pub mod spec;
+
+/// A descriptor: a handle the guest issued (abi/handle.rs).
+pub type Fd = u32;
 
 pub struct Sys {
     stream: Stream,
@@ -46,22 +54,27 @@ impl Sys {
         self.stream.publish();
     }
 
-    /// The bytes the host holds as `body` copied into `dst`, `dst`'s length of
-    /// them, and let go. They are there from the next turn on, and `dst` must
-    /// be kept until then.
-    pub fn read(&mut self, body: u32, dst: &mut [u8]) {
-        self.stream.record(spec::op::READ, &[body, off_of_slice(&raw mut *dst) as u32, dst.len() as u32], &[], None);
+    /// Opens the file at `path` below `root` as `fd`, with `flags`
+    /// (`spec::flag`). Answered by SYS_OPENED.
+    pub fn openat(&mut self, fd: Fd, root: u32, flags: u32, path: &[u8]) {
+        self.stream.record(spec::op::OPENAT, &[fd, root, flags], &[], Some(path));
     }
 
-    /// Lets the host's `body` go unread.
-    pub fn close(&mut self, body: u32) {
-        self.read(body, &mut []);
+    /// The opened file's first `dst.len()` bytes, in `dst` from the next turn
+    /// on; `dst` must be kept until then.
+    pub fn read(&mut self, fd: Fd, dst: &mut [u8]) {
+        self.stream.record(spec::op::READ, &[fd, off_of_slice(&raw mut *dst) as u32, dst.len() as u32], &[], None);
     }
 
-    /// `bytes` written whole to the host's file `file`.
-    pub fn write(&mut self, file: u32, bytes: Vec<u8>) {
-        self.stream.record(spec::op::WRITE, &[file, off_of_slice(bytes.as_slice()) as u32, bytes.len() as u32], &[], None);
+    /// `bytes` added to what the file opened for writing as `fd` holds.
+    pub fn write(&mut self, fd: Fd, bytes: Vec<u8>) {
+        self.stream.record(spec::op::WRITE, &[fd, off_of_slice(bytes.as_slice()) as u32, bytes.len() as u32], &[], None);
         self.held.push(bytes);
+    }
+
+    /// Ends `fd`: a write is committed, an open not yet answered cancelled.
+    pub fn close(&mut self, fd: Fd) {
+        self.stream.record(spec::op::CLOSE, &[fd], &[], None);
     }
 
     /// A program's own call: `op` with the PROGRAM bit, its arguments and its

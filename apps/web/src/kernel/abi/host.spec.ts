@@ -27,7 +27,17 @@ export const op = {
   TEXT_RASTER: 2147483650 as number,
 } as const;
 
-/** The kernel's files, by the number xpute's WRITE names: what it keeps in the platform's storage, under the key the host keeps it by (`STORAGE_KEYS`). */
+/** The roots the kernel opens files below (xpute's OPENAT). Below STORAGE a root is a
+ * bake, numbered by its kind (pxl-spec bake/published.spec.rs), and a path is an object's
+ * name in it. */
+export const root = {
+  /** The platform's storage; a path is a key (`STORAGE_KEYS`). */
+  STORAGE: 256 as number,
+  /** The shipped assets; a path is a load's number in decimal (io/load.rs). */
+  ASSET: 257 as number,
+} as const;
+
+/** What the platform's storage keeps, by `STORAGE_KEYS`' order. */
 export const storage = {
   SETTINGS: 0 as number,
   OBJECTS: 1 as number,

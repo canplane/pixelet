@@ -24,8 +24,10 @@
 //! without one refuses the packet.
 
 // A list a record carries is a function handing out its items, whose
-// type is long to spell and is spelled once, here, for each.
-#![allow(non_camel_case_types, clippy::type_complexity)]
+// type is long to spell and is spelled once, here, for each. A table
+// with no signal or no enum read off the wire leaves a writer or
+// `unknown` unused.
+#![allow(non_camel_case_types, clippy::type_complexity, unused_imports, dead_code)]
 
 use core::fmt::Display;
 
@@ -172,13 +174,13 @@ impl SensorMinor {
 #[repr(u32)]
 pub enum LoadMinor {
     START = 0x01,
-    DONE = 0x02,
+    CANCEL = 0x02,
     FAILED = 0x03,
     IMAGE = 0x04,
 }
 
 impl LoadMinor {
-    pub const ALL: [LoadMinor; 4] = [LoadMinor::START, LoadMinor::DONE, LoadMinor::FAILED, LoadMinor::IMAGE];
+    pub const ALL: [LoadMinor; 4] = [LoadMinor::START, LoadMinor::CANCEL, LoadMinor::FAILED, LoadMinor::IMAGE];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<LoadMinor> {
@@ -452,23 +454,6 @@ impl PermissionAnswer {
     }
 }
 
-/// What an asset is read as.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum LoadKind {
-    Gltf = 0,
-    Image = 1,
-}
-
-impl LoadKind {
-    pub const ALL: [LoadKind; 2] = [LoadKind::Gltf, LoadKind::Image];
-
-    /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<LoadKind> {
-        LoadKind::ALL.into_iter().find(|m| *m as u32 == number)
-    }
-}
-
 /// The map's loading lifecycle.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[repr(u32)]
@@ -587,18 +572,18 @@ pub enum Command {
     SENSOR_START = 0x1201,
     /// Stop watching.
     SENSOR_STOP = 0x1203,
-    /// An asset the scheduler wants read. It shares the credits with the pages, and so is
-    /// started when one is free rather than all at once; what it is and where it lives is
-    /// the host's, as a page's address is.
+    /// An image the scheduler wants read and decoded. It shares the credits with the pages,
+    /// and so is started when one is free rather than all at once; which file it is and
+    /// where it lives is the host's. A model is read as a file (xpute's OPENAT, root ASSET).
     LOAD_START = 0x1301,
+    /// Stop this image's read: the scheduler took its credit back. The host answers LOAD_FAILED.
+    LOAD_CANCEL = 0x1302,
 
     // ---- the host answers: an I/O the process started, done ----
-    /// A model's bytes, held by the host as `body` until the kernel reads them (xpute's sys READ).
-    LOAD_DONE = 0x1302,
     /// An image decoded and held by the shell.
     LOAD_IMAGE = 0x1304,
-    /// A read of an asset failed. The guest wants it again, after whatever the scheduler
-    /// makes it wait; a model whose *bytes* do not parse is a different thing and is not this.
+    /// An image's read failed or was stopped. The guest wants it again, after whatever the
+    /// scheduler makes it wait.
     LOAD_FAILED = 0x1303,
     /// A GPS fix; a field is absent where the browser gave none.
     SENSOR_POSITION = 0x1202,
@@ -702,7 +687,7 @@ impl Command {
         Command::SENSOR_START,
         Command::SENSOR_STOP,
         Command::LOAD_START,
-        Command::LOAD_DONE,
+        Command::LOAD_CANCEL,
         Command::LOAD_IMAGE,
         Command::LOAD_FAILED,
         Command::SENSOR_POSITION,
@@ -975,38 +960,31 @@ impl SensorStopSignal {
 /// Command::LOAD_START's signal.
 pub struct LoadStartSignal {
     pub key: u64,
-    pub kind: LoadKind,
     /// asset/ingested's asset number, the texture pack's sheet one past the last.
     pub load: u32,
 }
 
 impl LoadStartSignal {
     /// The children it is written as.
-    pub const FIELDS: u32 = 3;
+    pub const FIELDS: u32 = 2;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u64(Some(self.key));
-        w.u32(Some(self.kind as u32));
         w.u32(Some(self.load));
     }
 }
 
-/// Command::LOAD_DONE's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct LoadDone {
+/// Command::LOAD_CANCEL's signal.
+pub struct LoadCancelSignal {
     pub key: u64,
-    pub body: u32,
-    pub bytes: u32,
 }
 
-impl LoadDone {
-    pub fn read(pkt: &[u8]) -> Result<LoadDone, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(LoadDone {
-            key: f.at(0)?.get_u64()?,
-            body: f.at(1)?.get_number()? as u32,
-            bytes: f.at(2)?.get_number()? as u32,
-        })
+impl LoadCancelSignal {
+    /// The children it is written as.
+    pub const FIELDS: u32 = 1;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.u64(Some(self.key));
     }
 }
 
@@ -1134,9 +1112,6 @@ pub struct WorldBoot<'a> {
     /// The settings as storage kept them, a value a setting in SettingKey's order as the
     /// snapshot carries them, 0xffffffff for one it kept nothing for.
     pub settings: &'a [u32],
-    /// The objects as stored, held as a body (xpute's sys READ), 0 for none.
-    pub objects: u32,
-    pub objects_bytes: u32,
 }
 
 impl<'a> WorldBoot<'a> {
@@ -1150,8 +1125,6 @@ impl<'a> WorldBoot<'a> {
             orientation_permission: f.at(4)?.get_bool()?,
             orientation_silence_is_loss: f.at(5)?.get_bool()?,
             settings: f.at(6)?.get_array::<u32>()?,
-            objects: f.at(7)?.get_number()? as u32,
-            objects_bytes: f.at(8)?.get_number()? as u32,
         })
     }
 }
