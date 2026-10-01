@@ -36,7 +36,7 @@ use crate::layer::terrain::ground_snap::walk;
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::{settings_store, CameraMode};
 use crate::world::change::request_world_tick;
-use crate::world::frame::coord::local_world_to_canonical;
+use crate::world::frame::coord::{local_world_to_canonical, local_world_to_canonical_nearest};
 use crate::world::frame::view::{view, view_compose, ObserverPose};
 use xpute_core::math::scalar::wrap;
 
@@ -442,14 +442,12 @@ fn take_mode(want: CameraMode) -> bool {
     if c.base == want || c.tracked.is_some() {
         return false;
     }
-    // The drawn map center to the nearest point a canonical one holds, not
-    // the one under it the conversion rounds down to: a center derived as
-    // a hair under a point would otherwise step a 256th of a unit down every
-    // change, and a few round trips walk the character away.
+    // The map center was a canonical point put through the camera's floats:
+    // it is taken back as that point, not the one under it, or a few round
+    // trips walk the character away (world/frame/coord.rs).
     let center = center_local().map(|local| {
-        let one = pxl_spec::space::pvf3::core::ONE as f64;
         let mut c = Pvf3::default();
-        local_world_to_canonical(&mut c, &local.map(|v| (v * one).round() / one), view().origin);
+        local_world_to_canonical_nearest(&mut c, &local, view().origin);
         c
     });
     c.base = want;

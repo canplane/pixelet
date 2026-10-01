@@ -63,6 +63,19 @@ pub fn local_world_to_canonical<'a>(out: &'a mut Pvf3, local: &V3, map_origin: I
     out
 }
 
+/// A canonical point carried through local float arithmetic, back: the
+/// nearest point a canonical one holds to `local`, where
+/// `local_world_to_canonical` takes the one whose cell `local` lies in.
+/// The two mean different things. A new position is in the cell it falls
+/// in, so a point a hair under a boundary is in the cell under it; a point
+/// that was canonical and came back through floats a hair under where it
+/// was is still that point, and rounding it down would step it a fraction
+/// of a unit each time it made the trip.
+pub fn local_world_to_canonical_nearest<'a>(out: &'a mut Pvf3, local: &V3, map_origin: IVec) -> &'a mut Pvf3 {
+    let one = pxl_spec::space::pvf3::core::ONE as f64;
+    local_world_to_canonical(out, &local.map(|v| (v * one).round() / one), map_origin)
+}
+
 #[cfg(test)]
 #[path = "coord.test.rs"]
 mod test;
