@@ -108,7 +108,7 @@
     // the published module is built without `dev` (build-wasm.ts). pxl-native
     // is checked for the iPhone, the one target its Metal backend has, and for
     // Android, whose JNI and Vulkan are its alone.
-    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target aarch64-apple-ios -p pxl-native -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target aarch64-linux-android -p pxl-native --no-default-features -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p xpute-runtime -p xpute-conformance -p pxl-spec -p pxl-render -p pxl-kernel -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-wasm --no-default-features -- -D warnings",
+    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target aarch64-apple-ios -p pxl-native -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target aarch64-linux-android -p pxl-native --no-default-features -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p xpute-runtime -p xpute-conformance -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p xpute-runtime -p xpute-conformance -p pxl-spec -p pxl-render -p pxl-kernel -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-wasm --no-default-features -- -D warnings",
     // Before anything compiles: a Rust version written twice is a binary
     // built on a compiler the gate never ran.
     "check:toolchain": "./script/check-toolchain.ts",
@@ -122,8 +122,9 @@
     "test": "deno task test:web && deno task test:xpute && deno task test:rust && deno task test:cpp",
     "test:web": "deno task --cwd apps/web test",
     // The traces last, run by the TypeScript host against every guest, each
-    // built as the library the host opens.
-    "test:xpute": "deno test -A packages/xpute/core/src && deno test -A packages/xpute/runtime/src && cargo build --manifest-path crates/Cargo.toml -p xpute-conformance && ./script/cpp.ts guest && deno test -A packages/xpute/conformance/src",
+    // built as the library the host opens and as the WebAssembly module it
+    // instantiates (the C++ one with the WASI SDK, script/cpp.ts).
+    "test:xpute": "deno test -A packages/xpute/core/src && deno test -A packages/xpute/runtime/src && cargo build --manifest-path crates/Cargo.toml -p xpute-conformance && cargo build --manifest-path crates/Cargo.toml -p xpute-conformance --target wasm32-unknown-unknown && ./script/cpp.ts guest && ./script/cpp.ts wasm && deno test -A packages/xpute/conformance/src",
     "test:cpp": "./script/cpp.ts test",
     // pxl-tool's measures every shipped model from its file and holds it
     // against the table the ingest wrote. The table is committed, and it has

@@ -50,9 +50,10 @@ erode by accident:
   works in any program; the runtime means a turn on a doorbell, a quota from
   the frame, I/O asked of the host. `runtime` depends on `core`, never the
   reverse.
-  `core` is symmetric across the two languages and the golden records hold
-  them to each other; `runtime` is two ends of one arrangement, so a module
-  missing on one side is not a gap to fill — only the format must agree.
+  `core` is symmetric across Rust, TypeScript and C++, and the golden
+  records under `spec/xpute/golden/` hold them to each other; `runtime` is
+  two ends of one arrangement, so a module missing on one side is not a gap
+  to fill — only the format must agree.
 - **`pxl-spec` is the one model and has no TypeScript twin.** The shell reads
   a page through the kernel, never by decoding one. What the shell holds — the
   cell catalog, the asset tables, the ABI enums — is generated into

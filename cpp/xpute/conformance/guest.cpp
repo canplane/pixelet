@@ -8,6 +8,7 @@
 #include <span>
 
 #include "../core/math/scalar.hpp"
+#include "../core/status/bug.hpp"
 #include "../core/status/errno.spec.hpp"
 #include "../core/wire/xtp/cursor.hpp"
 #include "../runtime/abi/handle.hpp"
@@ -16,6 +17,17 @@
 #include "../runtime/ipc/ring.hpp"
 #include "../runtime/ipc/stream.hpp"
 #include "guest.spec.hpp"
+
+#ifdef __wasm__
+extern "C" {
+// Where the linker stopped placing the module's stack and data. wasm-ld
+// defines it.
+extern const std::uint8_t __heap_base;
+
+// The host's clock, the module's one import besides its memory.
+__attribute__((import_module("env"), import_name("now"))) double xpute_conformance_host_now(void);
+}
+#endif
 
 namespace xpute::conformance {
 namespace {
@@ -26,9 +38,11 @@ constexpr std::uint32_t page_up(std::uint32_t bytes) {
     return (bytes + PAGE - 1) / PAGE * PAGE;
 }
 
-// Where this guest's ranges lie. Not where another guest puts them: the
-// stream first and the completion ring before the submission ring, so a host
-// that finds them at all has found them through the directory.
+// Where this guest's ranges lie, from the start of its range. Not where
+// another guest puts them: the stream after the directory and the completion
+// ring before the submission ring, so a host that finds them at all has found
+// them through the directory.
+constexpr std::uint32_t DIRECTORY_AT = 0;
 constexpr std::uint32_t STREAM_AT = PAGE;
 constexpr std::uint32_t COMPLETION_DESC_AT = STREAM_AT + page_up(STREAM_WORDS * 4);
 constexpr std::uint32_t SUBMISSION_DESC_AT = COMPLETION_DESC_AT + page_up(Ring::bytes(COMPLETION_CAPACITY));
@@ -50,8 +64,8 @@ static_assert(STATE_AT + sizeof(State) <= MEMORY_BYTES, "the ranges run past the
 static_assert(STATE_AT % alignof(State) == 0, "the state lies on its own alignment");
 static_assert(DIRECTORY_AT + directory_words(3) * 4 <= STREAM_AT, "the directory runs into the stream");
 
-State &state_of(std::uint8_t *mem) {
-    return *std::launder(reinterpret_cast<State *>(mem + STATE_AT));
+State &state_of(Memory m, std::uint32_t range) {
+    return *std::launder(reinterpret_cast<State *>(m.at(range + STATE_AT)));
 }
 
 // The u32 a command's packet carries as its root branch's first child.
@@ -109,29 +123,73 @@ Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> packet)
     }
 }
 
+// Lays the guest out in the range that begins at `range`, and answers where
+// its directory is. Every offset written anywhere is the memory's, so the
+// range's start is added to each.
+std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now) {
+    // A command leaves at most its signals and its reply.
+    Door door(Ring::init(m, range + SUBMISSION_DESC_AT, SUBMISSION_CAPACITY, range + SUBMISSION_SLOT_AT, SLOT_BYTES),
+              Ring::init(m, range + COMPLETION_DESC_AT, COMPLETION_CAPACITY, range + COMPLETION_SLOT_AT, SLOT_BYTES), MOST_RAISE + 1);
+    new (m.at(range + STATE_AT)) State{.door = door, .stream = Stream(m, range + STREAM_AT, STREAM_WORDS), .handles = {}, .now = now};
+    const std::array<Entry, 3> entries{{
+        {directory::key::SUBMISSION, range + SUBMISSION_DESC_AT},
+        {directory::key::COMPLETION, range + COMPLETION_DESC_AT},
+        {key::STREAM, range + STREAM_AT},
+    }};
+    write_directory(m, range + DIRECTORY_AT, entries);
+    return range + DIRECTORY_AT;
+}
+
+double interrupt(Memory m, std::uint32_t range) {
+    State &s = state_of(m, range);
+    s.door.drain([&s](std::uint32_t cmd, std::span<const std::uint8_t> packet) { return apply(s, cmd, packet); });
+    s.stream.publish();
+    return s.door.pending() ? 0.0 : -1.0;
+}
+
+#ifdef __wasm__
+
+// The module's memory, from address 0: the linker's stack and data first,
+// and the range from the first page past where the linker stopped, so how
+// large the stack or the data is decides nothing a host reads.
+std::uint32_t range_at() {
+    return page_up(static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(&__heap_base)));
+}
+
+double now() {
+    return xpute_conformance_host_now();
+}
+
+#endif
+
 } // namespace
 } // namespace xpute::conformance
 
 using namespace xpute;
 using namespace xpute::conformance;
 
-extern "C" void xpute_conformance_boot(std::uint8_t *mem, xpute_conformance_now now) {
-    Memory m(mem);
-    // A command leaves at most its signals and its reply.
-    Door door(Ring::init(m, SUBMISSION_DESC_AT, SUBMISSION_CAPACITY, SUBMISSION_SLOT_AT, SLOT_BYTES),
-              Ring::init(m, COMPLETION_DESC_AT, COMPLETION_CAPACITY, COMPLETION_SLOT_AT, SLOT_BYTES), MOST_RAISE + 1);
-    new (mem + STATE_AT) State{.door = door, .stream = Stream(m, STREAM_AT, STREAM_WORDS), .handles = {}, .now = now};
-    const std::array<Entry, 3> entries{{
-        {directory::key::SUBMISSION, SUBMISSION_DESC_AT},
-        {directory::key::COMPLETION, COMPLETION_DESC_AT},
-        {key::STREAM, STREAM_AT},
-    }};
-    write_directory(m, DIRECTORY_AT, entries);
+#ifdef __wasm__
+
+extern "C" std::uint32_t xpute_conformance_boot(void) {
+    std::uint32_t range = range_at();
+    // The host sized the memory; a range past its end is a host that sized
+    // it for another guest.
+    ensure(std::uint64_t{range} + MEMORY_BYTES <= std::uint64_t{__builtin_wasm_memory_size(0)} * 65536, Errno::enomem, range);
+    return boot(Memory(0), range, now);
+}
+
+extern "C" double xpute_conformance_interrupt(double) {
+    return interrupt(Memory(0), range_at());
+}
+
+#else
+
+extern "C" std::uint32_t xpute_conformance_boot(std::uint8_t *mem, xpute_conformance_now now) {
+    return boot(Memory(reinterpret_cast<std::uintptr_t>(mem)), 0, now);
 }
 
 extern "C" double xpute_conformance_interrupt(std::uint8_t *mem, double) {
-    State &s = state_of(mem);
-    s.door.drain([&s](std::uint32_t cmd, std::span<const std::uint8_t> packet) { return apply(s, cmd, packet); });
-    s.stream.publish();
-    return s.door.pending() ? 0.0 : -1.0;
+    return interrupt(Memory(reinterpret_cast<std::uintptr_t>(mem)), 0);
 }
+
+#endif

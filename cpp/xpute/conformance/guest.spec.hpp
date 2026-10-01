@@ -17,10 +17,10 @@
 
 namespace xpute::conformance {
 
-// Where the directory is: the number both ends are built with (the contract's rule 0).
-inline constexpr std::uint32_t DIRECTORY_AT = 0u;
-
-// The memory the host reserves for the guest: the directory, both rings and a stream, with room to spare.
+// The room a guest's shared range asks for: the directory, both rings, a stream and its
+// own state, with room to spare. Where the range begins, and so where the directory is,
+// the guest's boot answers (the contract's rule 0); what else a memory holds — a module's
+// stack and data — is the build's, and no number here.
 inline constexpr std::uint32_t MEMORY_BYTES = 262144u;
 
 // Messages the submission ring holds.

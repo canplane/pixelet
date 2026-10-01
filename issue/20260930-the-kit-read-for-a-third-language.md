@@ -134,10 +134,17 @@ vector's root type from GRAFT to BRANCH.
   languages' and belonging to none. Moved 09-30: the records to
   `spec/xpute/golden/`, the traces beside `guest.json` in
   `spec/xpute/conformance/`, and every reader with them.
-- **A guest built to WebAssembly.** The host drives each guest as a native
-  library; the same two calls over a guest built for `wasm32` is the
-  arrangement a page runs, and asks a C++ build for `wasm32` with `memcpy` and
-  `abort` supplied, or a WASI SDK.
+- **A guest built to WebAssembly.** Built 09-30, both guests: the module
+  imports its memory and `env.now`, its stack (1 MiB, said in each build)
+  and data come first, and its range begins on the page past them. The
+  guest.json number for the directory went: boot answers where the directory
+  is, the contract's rule 0 taken the other way it allows, so the host finds
+  a native guest's at 0 and a module's past a megabyte by the same call.
+  Every pointer is made from an address, the base being address 0 on a
+  module. The C++ is built with the WASI SDK, and libc++'s abort on its own
+  broken preconditions is the guest's `bug`, since its default printed to
+  stderr and imported WASI's file calls; a module that imports anything but
+  its memory and the clock fails the traces.
 
 ## Where it stands
 

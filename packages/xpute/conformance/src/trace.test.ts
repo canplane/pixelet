@@ -1,23 +1,24 @@
 // @xpute/conformance/trace.test.ts
 
 /**
- * The traces (spec/xpute/conformance/) run against every guest, by
- * the one host there is: this runtime's ring, directory and stream reader,
- * over a guest opened as a library and booted into a memory the host holds.
- * The Rust guest and the C++ one export the same two C calls
- * (cpp/xpute/conformance/guest.hpp), so neither is where the other is held.
+ * The traces (spec/xpute/conformance/) run against every guest, by the one
+ * host there is: this runtime's ring, directory and stream reader. A guest is
+ * Rust or C++, and built as a native library the host opens or as a
+ * WebAssembly module it instantiates; each exports the same two calls
+ * (cpp/xpute/conformance/guest.hpp), so none is where another is held.
  *
- * The host knows only what the contract lets it: the directory's offset, and
- * then what the directory names. It sends what a step says, rings, runs the
- * stream and reads the completion ring dry after every turn, as rule 5 asks
- * of a host, and holds what it saw to what the trace says it must see.
+ * The host knows only what the contract lets it: the directory's offset,
+ * which the guest's boot answers, and then what the directory names. It sends
+ * what a step says, rings, runs the stream and reads the completion ring dry
+ * after every turn, as rule 5 asks of a host, and holds what it saw to what
+ * the trace says it must see.
  *
  * Two rules are not in any trace because the host here is what keeps them:
  * the memory never moves (rule 1), and the host never runs while a turn does
  * (rule 2's exclusion). A trace holds what a guest could get wrong.
  *
- * The libraries are built before this runs: the Rust one by Cargo, the C++
- * one by script/cpp.ts.
+ * The guests are built before this runs: the Rust ones by Cargo, the C++
+ * ones by script/cpp.ts.
  */
 
 import { assert, assertEquals, assertNotEquals } from "@std/assert";
@@ -32,26 +33,92 @@ import { key as directory_key } from "@xpute/runtime/ipc/directory.spec.ts";
 import { FrameFlag } from "@xpute/runtime/ipc/frame.ts";
 import { Ring } from "@xpute/runtime/ipc/ring.ts";
 import { each_record } from "@xpute/runtime/ipc/stream.ts";
-import { cmd, DIRECTORY_AT, key, MEMORY_BYTES } from "./guest.spec.ts";
+import { cmd, key, MEMORY_BYTES } from "./guest.spec.ts";
 
 const ROOT = fromFileUrl(new URL("../../../../", import.meta.url));
+const CARGO_TARGET = resolve(Deno.env.get("CARGO_TARGET_DIR") ?? join(ROOT, "crates/target"));
 
 /** A shared library under `dir`, its file named as the platform names one. */
 function library(dir: string, name: string): string {
   return join(dir, Deno.build.os === "darwin" ? `lib${name}.dylib` : Deno.build.os === "windows" ? `${name}.dll` : `lib${name}.so`);
 }
 
-/** Every guest, by the library it is built as: Cargo's debug build, and
- * script/cpp.ts's. */
-const GUESTS: Record<string, string> = {
-  rust: library(join(resolve(Deno.env.get("CARGO_TARGET_DIR") ?? join(ROOT, "crates/target")), "debug"), "xpute_conformance"),
-  cpp: library(join(ROOT, "target/cpp"), "xpute_conformance"),
-};
-
 const SYMBOLS = {
-  xpute_conformance_boot: { parameters: ["buffer", "function"], result: "void" },
+  xpute_conformance_boot: { parameters: ["buffer", "function"], result: "u32" },
   xpute_conformance_interrupt: { parameters: ["buffer", "f64"], result: "f64" },
 } as const;
+
+/** The memory a host reserves a WebAssembly guest: the guest's range and
+ * room past it for the module's own stack and data, which are the build's
+ * and no number the host is told. A module that needs more says so by
+ * failing to instantiate. */
+const MODULE_BYTES = 4 << 20;
+
+/** What a WebAssembly guest may import: its memory and the host's clock,
+ * the contract's one call out, and nothing that would be a second way to the
+ * host beside it. */
+const MODULE_IMPORTS = ["env.memory", "env.now"];
+
+/** A guest as the host holds one, however it was built: the memory, where
+ * its boot said the directory is, and its turn. */
+interface Guest {
+  memory: ArrayBuffer;
+  directory_at: number;
+  interrupt(quota_ms: number): number;
+}
+
+/** A way to boot a fresh guest, and to let go of what it was opened from. */
+interface Opener {
+  open(): Guest;
+  close(): void;
+}
+
+/** A guest built as a native library: booted into a region the host holds,
+ * with the host's clock handed over. */
+function native(path: string): Opener {
+  const lib = Deno.dlopen(path, SYMBOLS);
+  const now = new Deno.UnsafeCallback({ parameters: [], result: "f64" } as const, () => clock_ms);
+  return {
+    open() {
+      // Words of eight bytes, so the region is 8-aligned, as a guest asks.
+      const memory = new Float64Array(MEMORY_BYTES / 8).buffer;
+      const bytes = new Uint8Array(memory);
+      const directory_at = lib.symbols.xpute_conformance_boot(bytes, now.pointer);
+      return { memory, directory_at, interrupt: (quota) => lib.symbols.xpute_conformance_interrupt(bytes, quota) };
+    },
+    close() {
+      now.close();
+      lib.close();
+    },
+  };
+}
+
+/** A guest built as a WebAssembly module: instantiated over a memory the
+ * host reserves, which never grows, with the clock as its import. */
+function module(path: string): Opener {
+  const compiled = new WebAssembly.Module(Deno.readFileSync(path));
+  const imports = WebAssembly.Module.imports(compiled).map((i) => `${i.module}.${i.name}`).sort();
+  assertEquals(imports, MODULE_IMPORTS, `${path}: what the module reaches its host through`);
+  return {
+    open() {
+      const pages = MODULE_BYTES >> 16;
+      const memory = new WebAssembly.Memory({ initial: pages, maximum: pages });
+      const instance = new WebAssembly.Instance(compiled, { env: { memory, now: () => clock_ms } });
+      const exports = instance.exports as { xpute_conformance_boot(): number; xpute_conformance_interrupt(quota_ms: number): number };
+      const directory_at = exports.xpute_conformance_boot() >>> 0;
+      return { memory: memory.buffer as ArrayBuffer, directory_at, interrupt: (quota) => exports.xpute_conformance_interrupt(quota) };
+    },
+    close() {},
+  };
+}
+
+/** Every guest, by how it is built: Cargo's builds and script/cpp.ts's. */
+const GUESTS: Record<string, () => Opener> = {
+  "rust native": () => native(library(join(CARGO_TARGET, "debug"), "xpute_conformance")),
+  "cpp native": () => native(library(join(ROOT, "target/cpp"), "xpute_conformance")),
+  "rust wasm": () => module(join(CARGO_TARGET, "wasm32-unknown-unknown/debug/xpute_conformance.wasm")),
+  "cpp wasm": () => module(join(ROOT, "target/cpp/xpute_conformance.wasm")),
+};
 
 /** Turns a `settle` rings at most before the trace is taken to have stalled. */
 const MOST_SETTLE_TURNS = 64;
@@ -75,7 +142,6 @@ interface Turn {
 }
 
 class Host {
-  private readonly bytes: Uint8Array;
   readonly directory: Directory;
   /** The directory's word kept at 0. */
   readonly reserved: number;
@@ -83,14 +149,11 @@ class Host {
   private readonly cq: Ring;
   private readonly stream_at: number;
 
-  /** A fresh guest over a fresh memory, found through its directory. */
-  constructor(private readonly lib: Deno.DynamicLibrary<typeof SYMBOLS>, now: Deno.UnsafeCallback) {
-    // Words of eight bytes, so the memory is 8-aligned, as a guest asks.
-    const mem = new Float64Array(MEMORY_BYTES / 8).buffer;
-    this.bytes = new Uint8Array(mem);
-    lib.symbols.xpute_conformance_boot(this.bytes, now.pointer);
-    this.directory = new Directory(mem, DIRECTORY_AT);
-    this.reserved = new Uint32Array(mem, DIRECTORY_AT, 4)[3];
+  /** A fresh guest, found through the directory its boot pointed at. */
+  constructor(private readonly guest: Guest) {
+    const mem = guest.memory;
+    this.directory = new Directory(mem, guest.directory_at);
+    this.reserved = new Uint32Array(mem, guest.directory_at, 4)[3];
     this.sq = new Ring(mem, this.directory.get(directory_key.SUBMISSION));
     this.cq = new Ring(mem, this.directory.get(directory_key.COMPLETION));
     this.stream_at = this.directory.get(key.STREAM);
@@ -103,9 +166,9 @@ class Host {
 
   /** A turn, and everything it left taken before anything else. */
   ring(quota_ms: number): Turn {
-    const wake = this.lib.symbols.xpute_conformance_interrupt(this.bytes, quota_ms);
+    const wake = this.guest.interrupt(quota_ms);
     const stream: number[] = [];
-    each_record(this.bytes.buffer, this.stream_at, 1, (op) => stream.push(op));
+    each_record(this.guest.memory, this.stream_at, 1, (op) => stream.push(op));
     const completions: Completion[] = [];
     for (let at = this.cq.peek(); at >= 0; at = this.cq.peek()) {
       completions.push({ tag: this.cq.tag(at), cmd: this.cq.cmd(at), reply: (this.cq.flags(at) & FrameFlag.RES) !== 0, result: this.cq.result(at) });
@@ -231,10 +294,10 @@ function wake_name(wake: number): string {
 
 /** Runs one scenario's steps on a fresh guest and holds every turn, and the
  * whole, to what the trace says of them. */
-function run(g: Golden, guest: string, lib: Deno.DynamicLibrary<typeof SYMBOLS>, now: Deno.UnsafeCallback, trace: string): void {
+function run(g: Golden, guest: string, opener: Opener, trace: string): void {
   const name = `${guest}: ${trace}`;
   clock_ms = 0;
-  const host = new Host(lib, now);
+  const host = new Host(opener.open());
   const turns: Turn[] = [];
   const vars = new Map<string, number>();
   for (let i = 0; g.has(`${trace}.step.${i}`); i++) {
@@ -287,16 +350,14 @@ function run(g: Golden, guest: string, lib: Deno.DynamicLibrary<typeof SYMBOLS>,
 }
 
 for (const trace of ["directory", "door", "handle", "clock"]) {
-  for (const [guest, path] of Object.entries(GUESTS)) {
+  for (const [guest, open] of Object.entries(GUESTS)) {
     Deno.test(`trace ${trace} - the ${guest} guest`, async () => {
       const g = await Golden.load(`conformance/${trace}.tsv`);
-      const lib = Deno.dlopen(path, SYMBOLS);
-      const now = new Deno.UnsafeCallback({ parameters: [], result: "f64" } as const, () => clock_ms);
+      const opener = open();
       try {
-        for (const scenario of g.s("scenarios").split(" ")) run(g, guest, lib, now, scenario);
+        for (const scenario of g.s("scenarios").split(" ")) run(g, guest, opener, scenario);
       } finally {
-        now.close();
-        lib.close();
+        opener.close();
       }
     });
   }

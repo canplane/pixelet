@@ -178,7 +178,7 @@ function denoManifest(): string {
 
   "tasks": {
     "check": "deno fmt --check && deno check packages/xpute/core/src/**/*.ts && deno check packages/xpute/runtime/src/**/*.ts && deno check packages/xpute/conformance/src/**/*.ts && cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --all-targets -- -D warnings && ./script/cpp.ts check",
-    "test": "deno test -A packages/xpute/core/src && deno test -A packages/xpute/runtime/src && cargo test --manifest-path crates/Cargo.toml --all && ./script/cpp.ts test && cargo build --manifest-path crates/Cargo.toml -p xpute-conformance && ./script/cpp.ts guest && deno test -A packages/xpute/conformance/src",
+    "test": "deno test -A packages/xpute/core/src && deno test -A packages/xpute/runtime/src && cargo test --manifest-path crates/Cargo.toml --all && ./script/cpp.ts test && cargo build --manifest-path crates/Cargo.toml -p xpute-conformance && cargo build --manifest-path crates/Cargo.toml -p xpute-conformance --target wasm32-unknown-unknown && ./script/cpp.ts guest && ./script/cpp.ts wasm && deno test -A packages/xpute/conformance/src",
     "fmt": "deno fmt && cargo fmt --manifest-path crates/Cargo.toml --all",
     "lint": "deno lint"
   },
