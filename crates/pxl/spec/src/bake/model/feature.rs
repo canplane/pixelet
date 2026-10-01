@@ -49,6 +49,19 @@ pub struct FeatureExtra {
     /// True where the feature is carried above the ground: the page's decks
     /// draw it (bake/deck.rs), and the ground does not.
     pub is_deck: bool,
+    /// Which way beside it the feature shares one paved strip with, where it
+    /// does: the gap between them is paved too (pxl-geo-bake
+    /// terrain/pipeline/corridor.rs).
+    pub joins: Option<Joins>,
+}
+
+/// What way beside a way the gap to is paved.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Joins {
+    /// A sidewalk: to the road it runs along, as its own paving.
+    Road,
+    /// One carriageway of a road drawn as two: to the other, as the road.
+    Carriageway,
 }
 
 /// Final normalized feature form ready for bake/runtime use, shared by every

@@ -18,7 +18,7 @@
 //!
 //! raw wire   = [ele, buildings, segments, base, coasts, decks]
 //!   buildings = [[gers_id, subtype, class, height, num_floors, geom_wkb], ...]
-//!   segments  = [[gers_id, subtype, class, flags, widths, access, geom_wkb], ...]
+//!   segments  = [[gers_id, subtype, class, flags, widths, access, subclass, subclasses, geom_wkb], ...]
 //!   base      = [[gers_id, source, subtype, class, geom_wkb], ...]  (source: land_use|water|land|infrastructure)
 //!   coasts    = [[id, geom_wkb, covers_page], ...]
 //!   decks     = [[gers_id, subtype, class, width_m, piers, geom_wkb], ...]  (LineStringZ, the top in m)
@@ -73,6 +73,9 @@ pub struct SegmentRow {
     pub widths: Option<String>,
     /// Raw JSON text of its `access_restrictions`.
     pub access: Option<String>,
+    /// Its `subclass`, and the raw JSON text of its `subclass_rules`.
+    pub subclass: Option<String>,
+    pub subclasses: Option<String>,
     pub geom_wkb: Box<[u8]>, // WKB
 }
 

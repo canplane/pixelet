@@ -75,7 +75,9 @@ fn segment_row(row: &BranchCursor<'_>) -> Result<SegmentRow, MarshalError> {
         flags: opt_str(row, 3)?,
         widths: opt_str(row, 4)?,
         access: opt_str(row, 5)?,
-        geom_wkb: row.at(6)?.get_array::<u8>()?.into(),
+        subclass: opt_str(row, 6)?,
+        subclasses: opt_str(row, 7)?,
+        geom_wkb: row.at(8)?.get_array::<u8>()?.into(),
     })
 }
 

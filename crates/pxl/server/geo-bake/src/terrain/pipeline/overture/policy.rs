@@ -13,12 +13,13 @@
 //! either way since only the coarse structure category is ever baked.
 
 use pxl_spec::bake::format::{CellConfig, GroundChannelKey};
-use pxl_spec::bake::model::feature::{FeatureComputed, FeatureExtra};
+use pxl_spec::bake::model::feature::{FeatureComputed, FeatureExtra, Joins};
 use pxl_spec::cell::cube::cube_types;
 use pxl_spec::space::adapter::epsg3857::G3857;
 
 use crate::terrain::pipeline::normalizer::{NormalizePolicy, RawFeature};
 use crate::terrain::pipeline::overture::adapter::{BaseSource, OvertureRawFeature};
+use crate::terrain::pipeline::overture::role::Role;
 use crate::terrain::pipeline::overture::width::width_m;
 
 // ============ Domain knowledge constants ============
@@ -44,6 +45,10 @@ pub fn segment_type(subtype: &str, class: Option<&str>) -> u8 {
         cube_types::transport::road_default
     }
 }
+
+/// The classes whose one-way ways are a road's carriageways rather than a
+/// one-way street of their own.
+const THROUGH_CLASSES: [&str; 5] = ["motorway", "trunk", "primary", "secondary", "tertiary"];
 
 const PEDESTRIAN_CLASSES: [&str; 6] = ["footway", "path", "steps", "cycleway", "pedestrian", "living_street"];
 const MOTOR_CLASSES: [&str; 2] = ["motorway", "trunk"];
@@ -104,12 +109,6 @@ fn land_use_class(feat: &OvertureRawFeature) -> &str {
     }
 }
 
-fn segment_class(feat: &OvertureRawFeature) -> &str {
-    match feat {
-        OvertureRawFeature::Segment(s) => s.class.as_deref().unwrap_or(""),
-        _ => "",
-    }
-}
 
 fn determine_category(feat: &OvertureRawFeature) -> String {
     match feat {
@@ -182,6 +181,56 @@ fn is_institutional(feat: &OvertureRawFeature) -> bool {
     INSTITUTIONAL_BUILDING_CLASSES.contains(&building_type(feat)) || land_use == "school" || land_use == "hospital"
 }
 
+/// Where a way paints among the transport channel's, lowest first: where
+/// two overlap — a junction, a road beside its sidewalk, a railway across a
+/// street — the later keeps the cell. Every other feature on the channel, a
+/// parking lot, ranks under all of them (`calculate_rank`'s base of ten).
+///
+/// The order is OpenStreetMap Carto's, the standard map's (`roads_info` in
+/// `openstreetmap-carto-flex.lua`, CC0), its `z` taken as is: a footway or a
+/// sidewalk under a service lane under every link, the links under every
+/// through road in their classes' order, the through roads in theirs, and a
+/// railway over them all, as a level crossing is drawn.
+fn paint_order(subtype: &str, class: Option<&str>, role: Role) -> u32 {
+    let c = class.unwrap_or("");
+    if subtype == "rail" {
+        return match c {
+            "standard_gauge" => 440,
+            "tram" => 410,
+            _ => 420,
+        };
+    }
+    if role == Role::Link {
+        return match c {
+            "motorway" => 240,
+            "trunk" => 230,
+            "primary" => 220,
+            "secondary" => 210,
+            _ => 200,
+        };
+    }
+    if role == Role::Sidewalk {
+        return 100;
+    }
+    if role == Role::Lane {
+        return 150;
+    }
+    match c {
+        "motorway" => 380,
+        "trunk" => 370,
+        "primary" => 360,
+        "secondary" => 350,
+        "tertiary" => 340,
+        "living_street" => 320,
+        "pedestrian" => 310,
+        "service" => 150,
+        "track" => 110,
+        "path" | "footway" | "bridleway" | "cycleway" => 100,
+        "steps" => 90,
+        _ => 330,
+    }
+}
+
 fn calculate_rank(feat: &OvertureRawFeature, category: &str, is_institutional: bool) -> u32 {
     let mut score: u32 = 10;
 
@@ -192,15 +241,8 @@ fn calculate_rank(feat: &OvertureRawFeature, category: &str, is_institutional: b
         score += 10;
     }
 
-    if matches!(feat, OvertureRawFeature::Segment(_)) {
-        let c = segment_class(feat);
-        if MOTOR_CLASSES.contains(&c) {
-            score += 80;
-        } else if c == "primary" || SECONDARY_CLASSES.contains(&c) {
-            score += 50;
-        } else {
-            score += 10;
-        }
+    if let OvertureRawFeature::Segment(s) = feat {
+        return paint_order(&s.subtype, s.class.as_deref(), s.shape.role);
     }
 
     if is_institutional {
@@ -221,6 +263,11 @@ fn compute_extra(feat: &OvertureRawFeature, category: &str) -> FeatureExtra {
         is_sports: SPORTS_CLASSES.contains(&building_type(feat)) || SPORTS_CLASSES.contains(&land_use_class(feat)),
         is_unseen: is_unseen(feat),
         is_deck: matches!(feat, OvertureRawFeature::Segment(s) if s.is_deck),
+        joins: match feat {
+            OvertureRawFeature::Segment(s) if s.shape.role == Role::Sidewalk => Some(Joins::Road),
+            OvertureRawFeature::Segment(s) if s.shape.oneway && s.subtype == "road" && THROUGH_CLASSES.contains(&s.class.as_deref().unwrap_or("")) => Some(Joins::Carriageway),
+            _ => None,
+        },
     }
 }
 
@@ -280,6 +327,10 @@ fn determine_cell_cfg(feat: &OvertureRawFeature, category: &str, extra: &Feature
     }
 
     if let OvertureRawFeature::Segment(s) = feat {
+        // A crossing is a line over a road the road already shows.
+        if s.shape.role == Role::Crossing {
+            return None;
+        }
         if category == "road" {
             return Some(CellConfig {
                 cell_type: segment_type(&s.subtype, s.class.as_deref()),

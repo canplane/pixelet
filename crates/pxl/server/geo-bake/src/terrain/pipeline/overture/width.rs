@@ -20,6 +20,8 @@
 //! link — a slip road — is one lane, and so is a service road's own lane
 //! (role.rs), a little narrower than a through lane.
 
+use crate::terrain::pipeline::overture::between::{flag_at, value_at};
+use crate::terrain::pipeline::overture::policy::LINK_FLAGS;
 use crate::terrain::pipeline::overture::role::Role;
 
 /// A motor lane's width.
@@ -70,6 +72,31 @@ pub struct WayShape {
     pub measured: Option<f64>,
     pub oneway: bool,
     pub role: Role,
+}
+
+/// The columns of a way that say what it is along its length.
+#[derive(Clone, Copy, Default)]
+pub struct WayColumns<'a> {
+    pub flags: Option<&'a str>,
+    pub widths: Option<&'a str>,
+    pub access: Option<&'a str>,
+    pub subclass: Option<&'a str>,
+    pub subclasses: Option<&'a str>,
+}
+
+impl WayShape {
+    /// What a way's columns say of it at fraction `at` of its length.
+    pub fn at(c: WayColumns, at: f64) -> WayShape {
+        let role = match Role::at(c.subclass, c.subclasses, at) {
+            Role::Way if flag_at(c.flags, LINK_FLAGS, at) => Role::Link,
+            role => role,
+        };
+        WayShape {
+            measured: value_at(c.widths, at),
+            oneway: is_oneway(c.access),
+            role,
+        }
+    }
 }
 
 /// A way's width in metres.

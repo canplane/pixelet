@@ -18,7 +18,8 @@ const BATCH: usize = 20_000;
 pub fn bridge_rows(client: &mut Client) -> Result<Vec<BridgeRow>, postgres::Error> {
     let rows = client.query(
         "SELECT gers_id, subtype, class, COALESCE(road_flags, rail_flags)::text AS flags, level_rules::text AS levels,
-                width_rules::text AS widths, access_restrictions::text AS access, ST_AsBinary(geom) AS geom_wkb
+                width_rules::text AS widths, access_restrictions::text AS access,
+                subclass, subclass_rules::text AS subclasses, ST_AsBinary(geom) AS geom_wkb
          FROM overture_transportation
          WHERE COALESCE(road_flags, rail_flags)::text LIKE '%is_bridge%'",
         &[],
@@ -33,6 +34,8 @@ pub fn bridge_rows(client: &mut Client) -> Result<Vec<BridgeRow>, postgres::Erro
             levels: r.get("levels"),
             widths: r.get("widths"),
             access: r.get("access"),
+            subclass: r.get("subclass"),
+            subclasses: r.get("subclasses"),
             geom_wkb: r.get::<_, &[u8]>("geom_wkb").into(),
         })
         .collect())

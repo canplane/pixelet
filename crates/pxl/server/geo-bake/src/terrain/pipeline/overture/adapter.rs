@@ -14,9 +14,9 @@
 use pxl_spec::bake::format::{BaseRow, BuildingRow, SegmentRow};
 use pxl_spec::space::adapter::epsg3857::G3857;
 
-use crate::terrain::pipeline::overture::between::{flag_at, flag_ranges, split_ranged, value_at};
-use crate::terrain::pipeline::overture::policy::{DECK_FLAGS, LINK_FLAGS, UNSEEN_FLAGS};
-use crate::terrain::pipeline::overture::width::{is_oneway, WayShape};
+use crate::terrain::pipeline::overture::between::{flag_ranges, split_ranged};
+use crate::terrain::pipeline::overture::policy::{DECK_FLAGS, UNSEEN_FLAGS};
+use crate::terrain::pipeline::overture::width::{WayColumns, WayShape};
 use crate::wkb::{wkb_to_geometries, WkbGeometry};
 
 pub struct OvertureBuildingRawFeature {
@@ -106,6 +106,23 @@ pub fn from_building_row(row: &BuildingRow) -> Vec<OvertureRawFeature> {
         .collect()
 }
 
+/// What a segment row's columns say of the way along its length.
+trait Columns {
+    fn columns(&self) -> WayColumns<'_>;
+}
+
+impl Columns for SegmentRow {
+    fn columns(&self) -> WayColumns<'_> {
+        WayColumns {
+            flags: self.flags.as_deref(),
+            widths: self.widths.as_deref(),
+            access: self.access.as_deref(),
+            subclass: self.subclass.as_deref(),
+            subclasses: self.subclasses.as_deref(),
+        }
+    }
+}
+
 /// Transportation's segments only — a connector is routing topology and is
 /// skipped. A segment is cut where an unseen flag or its bridge starts or
 /// stops, since Overture puts a flag on a range of a segment's length rather
@@ -114,7 +131,6 @@ pub fn from_building_row(row: &BuildingRow) -> Vec<OvertureRawFeature> {
 pub fn from_segment_row(row: &SegmentRow) -> Vec<OvertureRawFeature> {
     let flags = row.flags.as_deref();
     let (unseen, deck) = (flag_ranges(flags, UNSEEN_FLAGS), flag_ranges(flags, DECK_FLAGS));
-    let oneway = is_oneway(row.access.as_deref());
     wkb_to_geometries(&row.geom_wkb)
         .into_iter()
         .flat_map(|g| split_ranged(g, [&unseen, &deck]))
@@ -126,11 +142,7 @@ pub fn from_segment_row(row: &SegmentRow) -> Vec<OvertureRawFeature> {
                 class: row.class.clone(),
                 is_unseen,
                 is_deck,
-                shape: WayShape {
-                    measured: value_at(row.widths.as_deref(), mid),
-                    oneway,
-                    link: flag_at(flags, LINK_FLAGS, mid),
-                },
+                shape: WayShape::at(row.columns(), mid),
                 center: center_of(&g),
                 geometry: g,
             })

@@ -6,9 +6,9 @@
 
 use pxl_spec::space::adapter::epsg3857::G3857;
 
-use crate::terrain::pipeline::overture::between::{flag_at, flag_ranges, split_ranged, value_at, without};
-use crate::terrain::pipeline::overture::policy::{DECK_FLAGS, LINK_FLAGS, UNSEEN_FLAGS};
-use crate::terrain::pipeline::overture::width::{is_oneway, width_m, WayShape};
+use crate::terrain::pipeline::overture::between::{flag_ranges, split_ranged, value_at, without};
+use crate::terrain::pipeline::overture::policy::{DECK_FLAGS, UNSEEN_FLAGS};
+use crate::terrain::pipeline::overture::width::{width_m, WayColumns, WayShape};
 use crate::wkb::wkb_to_geometries;
 
 /// A segment as the solve reads it.
@@ -20,7 +20,21 @@ pub struct BridgeRow {
     pub levels: Option<String>,
     pub widths: Option<String>,
     pub access: Option<String>,
+    pub subclass: Option<String>,
+    pub subclasses: Option<String>,
     pub geom_wkb: Box<[u8]>,
+}
+
+impl BridgeRow {
+    fn columns(&self) -> WayColumns<'_> {
+        WayColumns {
+            flags: self.flags.as_deref(),
+            widths: self.widths.as_deref(),
+            access: self.access.as_deref(),
+            subclass: self.subclass.as_deref(),
+            subclasses: self.subclasses.as_deref(),
+        }
+    }
 }
 
 /// One piece of a bridge, in EPSG:3857 metres.
@@ -39,7 +53,6 @@ pub struct Piece {
 /// The deck pieces of a segment.
 pub fn pieces_of(row: &BridgeRow) -> Vec<Piece> {
     let flags = row.flags.as_deref();
-    let oneway = is_oneway(row.access.as_deref());
     let deck = without(&flag_ranges(flags, DECK_FLAGS), &flag_ranges(flags, UNSEEN_FLAGS));
     if deck.is_empty() {
         return Vec::new();
@@ -50,11 +63,7 @@ pub fn pieces_of(row: &BridgeRow) -> Vec<Piece> {
         .filter(|([on], _, _)| *on)
         .map(|(_, [a, b], g)| {
             let mid = (a + b) / 2.0;
-            let shape = WayShape {
-                measured: value_at(row.widths.as_deref(), mid),
-                oneway,
-                link: flag_at(flags, LINK_FLAGS, mid),
-            };
+            let shape = WayShape::at(row.columns(), mid);
             Piece {
                 gers_id: row.gers_id.clone(),
                 subtype: row.subtype.clone(),

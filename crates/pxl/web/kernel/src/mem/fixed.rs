@@ -125,9 +125,13 @@ pub const ACTORS_MAX: usize = crate::layer::character::companion::ACTORS_MAX + c
 const SINGLE_BLOCKS: usize = 3;
 
 /// The most blocks the renderer's table names at once: each owner's bound —
-/// decor's cells (layer/decor/cell.rs `BLOCKS_MAX`), the models and the
-/// actors' joint palettes, a billboard set's instances an order, and the
-/// blocks one of which is held — summed, so the table cannot fill.
+/// decor's cells (layer/decor/cell.rs `BLOCKS_MAX`, a budget its admission
+/// keeps), the models and the actors' joint palettes, a billboard set's
+/// instances an order, and the blocks one of which is held — summed, so the
+/// table cannot fill. Each is what its owner holds when a turn's list is
+/// done, and the table holds no more than that at any point of taking the
+/// list, since it lets go of what the list frees before it takes what the
+/// list uploads (pxl-render gpu/renderer.rs `take_lists`).
 pub const MAX_LIVE_BLOCKS: usize = crate::layer::decor::cell::BLOCKS_MAX + MODELS_MAX + ACTORS_MAX + crate::layer::billboard::order::SETS_MAX + SINGLE_BLOCKS;
 
 /// The table's slots, from that bound at the table's load (pxl-render

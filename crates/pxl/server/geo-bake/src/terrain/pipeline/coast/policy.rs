@@ -63,6 +63,7 @@ impl NormalizePolicy<CoastRawFeature> for CoastPolicy {
             is_sports: false,
             is_unseen: false,
             is_deck: false,
+            joins: None,
         }
     }
 

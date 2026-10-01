@@ -129,12 +129,14 @@ struct Cells {
     folded: HashMap<[i64; 3], u32>,
     /// What a turn works in, kept so a settled turn asks the heap for
     /// nothing: the solve's stack, the replacement's state over each wanted
-    /// cell's ancestors, the cells it gives back or that cover others, and a
-    /// group's sprites.
+    /// cell's ancestors, the cells it gives back or that cover others or are
+    /// held under others, and a group's sprites.
     stack: Vec<DecorCell>,
     under: HashMap<DecorCell, bool>,
     cells: Vec<DecorCell>,
     covers: Vec<DecorCell>,
+    /// Every ancestor of a cell held: where a build is a coarsening.
+    over: Vec<DecorCell>,
     sprites: Vec<u32>,
 }
 
@@ -169,12 +171,11 @@ pub const FRONTIER_MAX: usize = {
     (top + TOP_LEVEL as u64 * across * across) as usize
 };
 
-/// Blocks decor holds at once at most: the cells of the frontier wanted now,
-/// and those drawn the turn before that still stand in for some not ready
-/// (`step`) — the second no more than a frontier while the cover drawn is
-/// one frontier's. A wanted parent left unready while the eye moves on can
-/// keep an older cover under it beside a newer one elsewhere, and this
-/// bound is then not one the replacement rule proves.
+/// Blocks decor holds at once at most: a residency budget, which `step`
+/// keeps by admission and not by assumption. Room for a frontier wanted and
+/// a frontier's worth drawn standing in for it, which is what a change of
+/// view holds in the ordinary way; past it, what is drawn stays drawn and
+/// no new cell is built but one whose arrival lets more go than it takes.
 pub const BLOCKS_MAX: usize = 2 * FRONTIER_MAX;
 
 /// Blocks a frame builds at most: a cell's scatter walks its cells and a
@@ -351,33 +352,53 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Ent
     solve(kinds, &mut c.stack, &mut frontier);
     xpute_core::ensure!(frontier.len() <= FRONTIER_MAX, ENOTRECOVERABLE, frontier.len());
     let top = floor::level().unwrap_or(0);
+    let ancestors = move |cell: DecorCell| core::iter::successors(Some(cell), move |a| (a.level < top).then(|| a.parent())).skip(1);
     let pages = Terrain::pyramid();
 
+    // What decor builds is admitted against `BLOCKS_MAX`. A cell built over
+    // cells held under it — a coarsening — lets those go once it is in, so
+    // it comes first and is admitted at the budget too: the turn ends with
+    // fewer blocks than it began. Any other new cell is admitted only below
+    // the budget, and a rebuild of a cell held takes the place of its old
+    // block. A cell not admitted waits, and what stands in for it stays
+    // drawn: the budget slows a change of view, never opens a hole in it.
+    c.over.clear();
+    c.over.extend(c.blocks.keys().flat_map(|&k| ancestors(k)));
+    c.over.sort_unstable();
+    c.over.dedup();
     let mut built = 0;
     let mut cols = core::mem::take(&mut c.cols);
-    for &cell in &frontier {
-        let Some(sources) = sources_of(cell, store, &mut cols, hide) else { continue };
-        if c.blocks.get(&cell).is_some_and(|b| b.sources == sources) {
-            continue;
-        }
-        if built >= BUILDS_PER_FRAME {
-            continue;
-        }
-        c.cols = core::mem::take(&mut cols);
-        if let Some(mut b) = build(c, cell, kinds, store, draw, sources) {
-            b.drawn = c.blocks.get(&cell).is_some_and(|old| old.drawn);
-            if let Some(old) = c.blocks.insert(cell, b) {
-                release(old, draw);
+    for coarsening in [true, false] {
+        for &cell in &frontier {
+            if built >= BUILDS_PER_FRAME {
+                break;
             }
-            built += 1;
+            if c.over.binary_search(&cell).is_ok() != coarsening {
+                continue;
+            }
+            let Some(sources) = sources_of(cell, store, &mut cols, hide) else { continue };
+            let held = c.blocks.get(&cell);
+            if held.is_some_and(|b| b.sources == sources) {
+                continue;
+            }
+            if held.is_none() && !coarsening && c.blocks.len() >= BLOCKS_MAX {
+                continue;
+            }
+            c.cols = core::mem::take(&mut cols);
+            if let Some(mut b) = build(c, cell, kinds, store, draw, sources) {
+                b.drawn = c.blocks.get(&cell).is_some_and(|old| old.drawn);
+                if let Some(old) = c.blocks.insert(cell, b) {
+                    release(old, draw);
+                }
+                built += 1;
+            }
+            cols = core::mem::take(&mut c.cols);
         }
-        cols = core::mem::take(&mut c.cols);
     }
     c.cols = cols;
 
     let wanted = |cell: &DecorCell| frontier.binary_search(cell).is_ok();
     let ready = |cell: DecorCell, blocks: &HashMap<DecorCell, Block>| blocks.contains_key(&cell) || pages.settled(cell.page());
-    let ancestors = move |cell: DecorCell| core::iter::successors(Some(cell), move |a| (a.level < top).then(|| a.parent())).skip(1);
     // Over every wanted cell, whether all the wanted cells under it are
     // ready: a held cell there stays drawn until they are.
     c.under.clear();
@@ -411,6 +432,7 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Ent
     for (&cell, b) in c.blocks.iter_mut() {
         b.drawn = !ancestors(cell).any(|a| c.covers.binary_search(&a).is_ok());
     }
+    xpute_core::ensure!(c.blocks.len() <= BLOCKS_MAX, ENOTRECOVERABLE, c.blocks.len());
     c.pages.clear();
     c.pages.extend(frontier.iter().map(|c| c.page()));
     c.pages.sort_unstable();

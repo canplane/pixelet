@@ -1332,14 +1332,18 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
 /// wait in the table for the next one.
 fn take_lists<'a>(g: Option<&Gpu>, lists: Lists<'a>) -> (&'a [u32], &'a [f32]) {
     let b = blocks();
+    // What goes, first: a block replaced in the same list is never there
+    // with its replacement, so the table holds no more than the owners do
+    // when the list is done. A handle freed in a list is never uploaded in
+    // it (draw.rs `DrawList::free` drops an upload not yet taken).
+    for &handle in lists.frees {
+        b.remove(handle);
+    }
     for u in lists.uploads.as_chunks::<UPLOAD_WORDS>().0 {
         b.insert(g, u[0], u[1], u[2], u[3], u[4]);
     }
     for r in lists.rewrites.as_chunks::<REWRITE_WORDS>().0 {
         b.rewrite(g, r[0], r[1], r[2], r[3]);
-    }
-    for &handle in lists.frees {
-        b.remove(handle);
     }
     (lists.draws, lists.uniforms)
 }

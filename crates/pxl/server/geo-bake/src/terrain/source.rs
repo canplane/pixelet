@@ -58,6 +58,8 @@ fn segment_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a SegmentRow) {
             .str(row.flags.as_deref())
             .str(row.widths.as_deref())
             .str(row.access.as_deref())
+            .str(row.subclass.as_deref())
+            .str(row.subclasses.as_deref())
             .u8_array(Some(&row.geom_wkb));
     }));
 }

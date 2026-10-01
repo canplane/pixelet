@@ -183,6 +183,24 @@ The rules below keep it one thing. They come from finding it several.
   POI and objects side by side, for anything one does its own way. An
   asymmetry is removed or explained.
 
+## What the bake paints
+
+**How the bake turns the source into a page follows precedent, not
+invention.** A way's width, the order ways paint in, what a sidewalk or a
+crossing or a slip road is, what is left off the surface, how high a deck
+stands: each rule is taken from the renderers and converters that have
+already met the data, and from the source's own schema, and cites where it
+came from beside the code that applies it — OpenStreetMap Carto
+(`openstreetmap-carto-flex.lua`), OpenMapTiles/MapTiler's schema, Arnis,
+osm2streets and osm2lanes (A/B Street), Overture's documented properties.
+Read how they treat the case before writing the rule. A number none of them
+gives is said aloud with its reason. Look at what the data actually holds —
+a sample, not the whole coverage — before trusting a field: Overture's
+`road` column turned out empty, and much of `width_rules` is an import's
+width classes. What can be made when a chunk is drawn — a deck's slab, a
+tunnel's mouth — is the client's, and the bake carries only what the client
+cannot work out (issue/20261001-ways-off-the-ground.md).
+
 ## Scope
 
 The MVP is a concept demo — real-world location (Pokémon GO), block building
