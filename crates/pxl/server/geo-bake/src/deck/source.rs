@@ -322,7 +322,6 @@ pub struct DeckOut<'a> {
     pub form: Form,
     /// Each point, its top in metres as Z.
     pub points: Vec<[f64; 3]>,
-    pub piers: Vec<u8>,
 }
 
 /// `overture_deck`, made again whole: the bake reads it a page at a time
@@ -330,7 +329,7 @@ pub struct DeckOut<'a> {
 pub fn write(client: &mut Client, decks: &[DeckOut]) -> Result<(), postgres::Error> {
     client.batch_execute(
         "DROP TABLE IF EXISTS overture_deck;
-         CREATE TABLE overture_deck (gers_id TEXT NOT NULL, subtype TEXT NOT NULL, class TEXT, width_m REAL NOT NULL, form SMALLINT NOT NULL, piers BYTEA NOT NULL, geom GEOMETRY(LineStringZ, 3857) NOT NULL);",
+         CREATE TABLE overture_deck (gers_id TEXT NOT NULL, subtype TEXT NOT NULL, class TEXT, width_m REAL NOT NULL, form SMALLINT NOT NULL, geom GEOMETRY(LineStringZ, 3857) NOT NULL);",
     )?;
     for batch in decks.chunks(BATCH) {
         let gers: Vec<&str> = batch.iter().map(|d| d.piece.gers_id.as_str()).collect();
@@ -338,11 +337,10 @@ pub fn write(client: &mut Client, decks: &[DeckOut]) -> Result<(), postgres::Err
         let classes: Vec<Option<&str>> = batch.iter().map(|d| d.piece.class.as_deref()).collect();
         let widths: Vec<f32> = batch.iter().map(|d| d.piece.width_m as f32).collect();
         let forms: Vec<i16> = batch.iter().map(|d| i16::from(d.form.byte())).collect();
-        let piers: Vec<&[u8]> = batch.iter().map(|d| d.piers.as_slice()).collect();
         let lines: Vec<String> = batch.iter().map(|d| wkt(d.points.iter().map(|q| format!("{} {} {:.2}", q[0], q[1], q[2])), true)).collect();
         client.execute(
-            "INSERT INTO overture_deck SELECT g, s, c, m, f, p, ST_GeomFromText(w, 3857) FROM unnest($1::text[], $2::text[], $3::text[], $4::real[], $5::int2[], $6::bytea[], $7::text[]) AS t(g, s, c, m, f, p, w)",
-            &[&gers, &subtypes, &classes, &widths, &forms, &piers, &lines],
+            "INSERT INTO overture_deck SELECT g, s, c, m, f, ST_GeomFromText(w, 3857) FROM unnest($1::text[], $2::text[], $3::text[], $4::real[], $5::int2[], $6::text[]) AS t(g, s, c, m, f, w)",
+            &[&gers, &subtypes, &classes, &widths, &forms, &lines],
         )?;
     }
     client.batch_execute("CREATE INDEX ON overture_deck USING GIST (geom); ANALYZE overture_deck; DROP TABLE IF EXISTS deck_piece, deck_water;")

@@ -61,7 +61,7 @@ pub struct Piece {
 impl Piece {
     /// Mercator's metres to a physical metre where the piece lies: every
     /// length the solve sets against a measured one — a clearance's run, a
-    /// pier's spacing, a gap — is divided by it, Mercator being conformal.
+    /// gap — is divided by it, Mercator being conformal.
     pub fn scale(&self) -> f64 {
         Z_SCALE(self.points[0][1])
     }

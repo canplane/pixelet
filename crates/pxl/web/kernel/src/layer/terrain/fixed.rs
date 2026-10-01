@@ -55,13 +55,12 @@ const fn deck_lane(count: usize, size: usize) -> u32 {
 }
 
 /// A page's deck lanes, in the order their planes lie: where each deck's
-/// points start, the points, their tops, their piers, each deck's width, its
-/// kind and its form.
-pub const DECK_LANE_BYTES: [u32; 7] = [
+/// points start, the points, their tops, each deck's width, its kind and
+/// its form.
+pub const DECK_LANE_BYTES: [u32; 6] = [
     deck_lane(MAX_DECKS + 1, 4),
     deck_lane(MAX_POINTS, 4),
     deck_lane(MAX_POINTS, 2),
-    deck_lane(MAX_POINTS, 1),
     deck_lane(MAX_DECKS, 1),
     deck_lane(MAX_DECKS, 1),
     deck_lane(MAX_DECKS, 1),

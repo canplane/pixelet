@@ -41,14 +41,6 @@ pub const MAX_SLOPE: f64 = 0.08;
 /// kilometre of deck is two hundred points.
 pub const STEP: f64 = 5.0;
 
-/// Piers stand this far apart along a deck, a short span's length.
-pub const PIER_STEP: f64 = 30.0;
-/// A pier stands only under a deck this far over the ground, room for one
-/// under its slab.
-pub const PIER_MIN_RISE: f64 = 4.0;
-/// … and no nearer than this to a road or a railway that passes under.
-pub const PIER_OFF_WAY: f64 = 8.0;
-
 /// What passes under a deck, by how much it asks the deck to clear.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Under {
@@ -70,12 +62,6 @@ impl Under {
             Under::River => (RIVER + RIVER_PER_M * span).min(RIVER_MOST),
             Under::Stream => STREAM,
         }
-    }
-
-    /// Whether a pier keeps off it: a way is driven or walked through, and
-    /// water is where a river bridge's piers stand.
-    pub fn keeps_piers_off(self) -> bool {
-        matches!(self, Under::Road | Under::Path | Under::Rail)
     }
 
     /// A transportation segment's, by its subtype and class.

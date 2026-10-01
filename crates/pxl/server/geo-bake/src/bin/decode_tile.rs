@@ -202,10 +202,9 @@ fn print_bores(page: &Page) {
 
 fn print_decks(decks: &Decks) {
     let tops = decks.tops.iter().fold([i16::MAX, i16::MIN], |[lo, hi], &t| [lo.min(t), hi.max(t)]);
-    let piers = decks.piers.iter().filter(|&&p| p != 0).count();
     match decks.len() {
         0 => println!("  decks     none"),
-        n => println!("  decks     {n}, {} points, {piers} piers, tops {}..{}", decks.points.len(), tops[0], tops[1]),
+        n => println!("  decks     {n}, {} points, tops {}..{}", decks.points.len(), tops[0], tops[1]),
     }
 }
 

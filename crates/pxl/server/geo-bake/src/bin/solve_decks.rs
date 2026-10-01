@@ -15,7 +15,7 @@ fn run() -> Result<(), String> {
     let started = Instant::now();
     let log = |line: &str| println!("[solve/deck] {line} ({:.0}s)", started.elapsed().as_secs_f64());
     let s = solve(&mut client, &url, log).map_err(|e| e.to_string())?;
-    log(&format!("{} decks in {} structures, {} points, {} piers: overture_deck", s.pieces, s.structures, s.points, s.piers));
+    log(&format!("{} decks in {} structures, {} points: overture_deck", s.pieces, s.structures, s.points));
     Ok(())
 }
 

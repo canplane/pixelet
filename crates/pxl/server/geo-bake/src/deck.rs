@@ -40,7 +40,7 @@ use std::collections::HashSet;
 
 use postgres::Client;
 
-use clearance::{Under, PIER_MIN_RISE, PIER_OFF_WAY, PIER_STEP, STACKED};
+use clearance::{Under, STACKED};
 use piece::{pieces_of, Piece};
 use profile::{solve as solve_profile, Problem, Profile};
 use pxl_spec::bake::constant::CELL_PER_M;
@@ -67,7 +67,6 @@ pub struct Solved {
     pub pieces: usize,
     pub structures: usize,
     pub points: usize,
-    pub piers: usize,
 }
 
 /// What passes under a piece, from and to metres along it.
@@ -180,34 +179,15 @@ pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<Solve
     }
 
     let mut out = Vec::with_capacity(pieces.len());
-    let mut piers = 0;
     for (m, piece) in pieces.iter().enumerate() {
         let (s, k) = place[m];
         let (g, ground, top) = (&graphs[s], &grounds[s], &tops[s]);
-        let keep_off: Vec<&Need> = needs[m].iter().filter(|n| n.under.keeps_piers_off()).collect();
-        let mut since = 0.0;
-        let mut last_d = 0.0;
-        let mut deck = DeckOut {
-            piece,
-            form: piece.form,
-            points: Vec::with_capacity(g.along[k].len()),
-            piers: Vec::with_capacity(g.along[k].len()),
-        };
-        for &(node, d) in on_structure(piece, &g.along[k], |n| top[n] > ground[n]) {
-            let n = node as usize;
-            since += d - last_d;
-            last_d = d;
-            let clear = keep_off.iter().all(|w| d < w.from - PIER_OFF_WAY || d > w.to + PIER_OFF_WAY);
-            let pier = since >= PIER_STEP && top[n] - ground[n] >= PIER_MIN_RISE && clear;
-            if pier {
-                since = 0.0;
-                piers += 1;
-            }
-            deck.points.push([g.at[n][0], g.at[n][1], top[n]]);
-            deck.piers.push(u8::from(pier));
-        }
-        if deck.points.len() >= 2 {
-            out.push(deck);
+        let points: Vec<[f64; 3]> = on_structure(piece, &g.along[k], |n| top[n] > ground[n])
+            .iter()
+            .map(|&(node, _)| [g.at[node as usize][0], g.at[node as usize][1], top[node as usize]])
+            .collect();
+        if points.len() >= 2 {
+            out.push(DeckOut { piece, form: piece.form, points });
         }
     }
     log(&slopes.say("deck"));
@@ -220,7 +200,6 @@ pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<Solve
         pieces: pieces.len(),
         structures: structures.len(),
         points,
-        piers,
     })
 }
 
@@ -289,12 +268,7 @@ fn bores_of<'a>(tunnels: &'a [Piece], portal_at: &HashSet<(i64, i64)>, structure
                 .map(|&(node, _)| [g.at[node as usize][0], g.at[node as usize][1], floor[node as usize]])
                 .collect();
             if points.len() >= 2 {
-                out.push(DeckOut {
-                    piece,
-                    form: piece.form,
-                    piers: vec![0; points.len()],
-                    points,
-                });
+                out.push(DeckOut { piece, form: piece.form, points });
             }
         }
     }

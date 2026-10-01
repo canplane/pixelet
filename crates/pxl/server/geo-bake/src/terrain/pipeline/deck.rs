@@ -33,16 +33,12 @@ pub fn bake_decks(rows: &[DeckRow], page_min: G3857) -> Option<Decks> {
         let width = row.width_m * cell_per_m;
         let width_code = (width * POINT_SCALE).round().clamp(1.0, f64::from(u8::MAX)) as u8;
         for g in wkb_to_geometries(&row.geom_wkb) {
-            if g.points.len() != row.piers.len() {
-                continue;
-            }
-            let local: Vec<([f64; 2], i16, u8)> = g
+            let local: Vec<([f64; 2], i16)> = g
                 .points
                 .iter()
-                .zip(row.piers.iter())
-                .map(|(p, &pier)| {
+                .map(|p| {
                     let at = [(p[0] - page_min[0]) * XY_CELL_PER_M, (p[1] - page_min[1]) * XY_CELL_PER_M];
-                    (at, (p[2] * cell_per_m).round() as i16, pier)
+                    (at, (p[2] * cell_per_m).round() as i16)
                 })
                 .collect();
             for run in runs_within(&local, way::reach(width)) {
@@ -55,7 +51,7 @@ pub fn bake_decks(rows: &[DeckRow], page_min: G3857) -> Option<Decks> {
 
 /// The runs of consecutive segments of a line that come within `reach`
 /// cells of the page.
-fn runs_within(points: &[([f64; 2], i16, u8)], reach: f64) -> Vec<&[([f64; 2], i16, u8)]> {
+fn runs_within(points: &[([f64; 2], i16)], reach: f64) -> Vec<&[([f64; 2], i16)]> {
     let (lo, hi) = (-reach, f64::from(PAGE_CELLS) + reach);
     let near = |a: [f64; 2], b: [f64; 2]| (0..2).all(|k| a[k].max(b[k]) >= lo && a[k].min(b[k]) <= hi);
     let mut runs = Vec::new();
