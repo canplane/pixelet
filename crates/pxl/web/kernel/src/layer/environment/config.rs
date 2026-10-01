@@ -3,14 +3,11 @@
 /// The band that hides where the ground ends, and the far clip, as shares
 /// of the reach.
 ///
-/// How far the ground is worth drawing is no longer a number here. It is
-/// read off the world: the planet turns away at the horizon, and before
-/// that the aerosol near the ground takes a surface's contrast over the
-/// visual range, and the nearer of the two wins (environment/fog.rs,
-/// issue/20260923-the-ground-runs-to-the-horizon.md). What the rings hold
-/// is a second end — a window of levels sized for `.fixed` — and the band
-/// ends the ground at whichever comes first, so ground fades out instead
-/// of being cut off while it is still in view: into the sky's own light
+/// How far the ground is drawn is not a number here. It has two ends and
+/// the nearer wins (environment/fog.rs): the planet turns away at the
+/// horizon, and the view draws `param::VIEW_LEVELS` levels past the ground
+/// under the eye. The band ends the ground there, so ground fades out
+/// instead of being cut off while it is still in view: into the sky's own light
 /// along the same ray, which the sky pass draws past it (atmos_view.wgsl),
 /// so the edge is no seam. The haze in front of the band is the air's
 /// (look/atmosphere.rs, aerial perspective), not this band's.

@@ -51,7 +51,7 @@ pub fn draws_band(k: PyramidChunk, band: BandZ) -> bool {
     i64::from(band) >> k.level() == k.node().1[2]
 }
 
-/// A chunk as the change log keys it, in one word: its coordinate among its
+/// A chunk as its revisions key it, in one word: its coordinate among its
 /// level's chunks, and its level beside its height in the height's lane. A
 /// chunk's height index is a band's shifted by its level, and a band is 64
 /// units of a lane of ±32,768, so eleven bits hold it and the level takes the

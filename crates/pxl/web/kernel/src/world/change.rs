@@ -29,7 +29,7 @@ pub const OBJECT_COLUMN: WorldTopic = 0;
 /// chunk (world/chunk/source.rs `chunk_key`): moved by a write to any column
 /// it draws, so a chunk reads one revision rather than summing its columns'.
 pub const TIERS_CHUNK: WorldTopic = 1;
-/// How many topics the log keeps.
+/// How many topics there are.
 pub const WORLD_TOPICS: WorldTopic = TIERS_CHUNK + 1;
 
 pub type WorldTopic = u32;

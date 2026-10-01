@@ -210,7 +210,8 @@ words!(AtlasBlock, SUMMARY::atlas::WORDS,
     shelves => SUMMARY::atlas::shelves, used_px => SUMMARY::atlas::used_px,
 );
 
-/// What the chunks keep, against the budget they keep it under.
+/// What the chunks hold — their run sets and tiers — and what decor's cells
+/// hold beside them.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct HeldBlock {

@@ -11,7 +11,7 @@
 //! derived from them a column at a time, the column's entries as three lanes
 //! in an order a cell's are one run of. A coordinate is lowered here to a
 //! column key, a band and a lattice position, and what comes back is lanes.
-//! What this module adds is the eraser's two virtual edits, the change log's
+//! What this module adds is the eraser's two virtual edits, the revisions'
 //! bumps, and the persisted form in the host's storage.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, TryReserveError};
@@ -421,9 +421,9 @@ fn store_state() -> &'static mut StoreState {
 ///
 /// Nor is it a change to what is stored: no revision moves, so nothing that
 /// reads the store — a save, the boxes a view measures heights by — sees
-/// the hover. A chunk sees it as one of its sources (`render_edits`), in
-/// its tiers or its decor by the entry's kind, so hover churn never
-/// rebakes the wrong half.
+/// the hover. A chunk's tiers or a decor cell see it as one of their
+/// sources (`render_edits`), by the entry's kind, so hover churn never
+/// rebuilds the wrong one.
 pub fn set_virtual_hide(at: Option<EntryAt>) {
     let st = store_state();
     if st.virtual_hide == at {
@@ -465,8 +465,9 @@ pub fn clear_virtual_carve_preview() {
 }
 
 /// The drawn build's two edits, which a chunk's sources are compared with
-/// beside the store (world/chunk/table.rs `Sources`): the hidden entry, with
-/// whether it is drawn in tiers and in decor, and the carve preview.
+/// beside the store (world/chunk/table.rs `Sources`), and a decor cell's
+/// (layer/decor/cell.rs `Sources`): the hidden entry, with whether it is
+/// drawn in tiers and in decor, and the carve preview.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct RenderEdits {
     pub hide: Option<EntryAt>,

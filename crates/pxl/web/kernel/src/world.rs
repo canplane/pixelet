@@ -2,8 +2,8 @@
 
 //! The world the kernel keeps: the pages resident in the client, the one
 //! query every reader of them asks, the chunks meshed out of them, and the
-//! frame's own view of it all. The change log is here too, so a rebuild
-//! knows what moved rather than rebuilding on a guess.
+//! frame's own view of it all. The world's revisions are here too, so a
+//! rebuild knows what moved rather than rebuilding on a guess.
 
 pub mod access;
 pub mod change;

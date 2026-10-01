@@ -180,8 +180,9 @@ pub const IMPOSTOR_GONE_CELLS: f64 = 0.5;
 /// next frame, nearest first.
 pub const STARTS_PER_FRAME: u32 = PAGE_CHUNKS * PAGE_CHUNKS;
 
-/// Layouts applied in one frame: a layout whose tiers have landed may build
-/// its decor before it is shown, which is a block's scatter each.
+/// Layouts applied in one frame: each asks the builder for a pending
+/// chunk's tier, shows it once it is held, and lets go of what it no longer
+/// draws.
 pub const COMMITS_PER_FRAME: u32 = 8;
 
 /// The most attempts one pump starts (io/policy.rs). The credits already

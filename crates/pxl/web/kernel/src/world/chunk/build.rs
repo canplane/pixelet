@@ -84,10 +84,11 @@ pub fn object_fold(cube: Cube) -> Scale {
 //
 // Not a range of `.fixed`: how many runs a column holds is what stands in
 // it, every band of it up to the top of the world, and no size that would
-// fit a range holds every column. A range too small for a column refused
-// its chunk, which then drew nothing — the world wrong for want of a
+// fit a range holds every column. A range would refuse a column past its
+// size, and that chunk would draw nothing — the world wrong for want of a
 // workspace. The heap asked for the size the scan has counted refuses only
-// when the memory is out.
+// when the memory is out, and then the build is `Progress::Blocked` with
+// what is drawn left drawn.
 
 /// The workspace: `.fixed.bake`, where the one bake open writes its mesh a
 /// slot's worth at a time, each block handed to its slot before the next

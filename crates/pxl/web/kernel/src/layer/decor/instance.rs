@@ -5,7 +5,7 @@
 //! What an instance is: a cell-local position, a spin about Z, a scale, and
 //! where it came from — a user-placed entry in object/store.rs, or a procedural
 //! scatter that no store names. A placed entry is named by its band and packed
-//! position in its column, two u32s, which with the chunk's column is the
+//! position in its column, two u32s, which with its column is the
 //! store's own address for it (object/store.rs `EntryAt`). `hidden` is a flag
 //! lane rather than a separate list: the presentation leaves a hidden
 //! instance out of what is drawn (layer/decor/cell.rs `present`) while the
@@ -53,10 +53,11 @@ pub const DECOR_GROUPS: usize = 64;
 ///
 /// Not a range of `.fixed`: a cell holds a scattered instance a cell of its
 /// lattice a kind at most, but the placed ones are as many as were placed,
-/// and no size holds every cell. A workspace too small for a cell left
-/// what did not fit out, and what was left out could be what someone put
+/// and no size holds every cell. A workspace of a fixed size would leave
+/// out what did not fit, and what was left out could be what someone put
 /// there. The lanes grow to the largest cell gathered, and nothing is left
-/// out but for the memory being out.
+/// out: where the heap refuses them more, the cell is not built
+/// (layer/decor/cell.rs `build`).
 pub struct DecorScratch {
     pub(crate) instances: Vec<Instance>,
     /// The group each instance is in.

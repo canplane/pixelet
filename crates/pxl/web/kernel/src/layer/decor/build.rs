@@ -3,7 +3,8 @@
 //! The decor layer: what real GLB models stand where. The first half is the
 //! kinds, taught to the scheduler as data — each kind's extent, density, the
 //! channels it scatters on and its variants — and the falloff by tier the
-//! build uses; the second is the build, a chunk's decor at a tier.
+//! build uses; the second is the build, a decor cell's population
+//! (layer/decor/cell.rs).
 //!
 //! No decoration is ever stored: scatter.rs's placement is a pure function of
 //! terrain + a fixed seed, recomputed on demand. A cell that currently holds a
@@ -11,10 +12,10 @@
 //! removing that object clears the very same filter on the next rebuild, so the
 //! decoration reappears with no bookkeeping of its own.
 //!
-//! The tier split is Minecraft's own block model, taken literally:
-//! static grid content — cubes and decor alike — bakes into the chunk's own
-//! blocks; anything that moves under its own logic every frame (the companion)
-//! lives outside the grid as an actor. User-placed decor lands in the object
+//! The split is Minecraft's own block model, taken literally: static grid
+//! content stays on the grid — cubes baked into the chunks, decor into its
+//! own cells' blocks — and anything that moves under its own logic every
+//! frame (the companion) lives outside the grid as an actor. User-placed decor lands in the object
 //! store as its own entry kind alongside solid cubes, and is merged into the
 //! build next to the scattered instances, not kept in a separate store.
 
@@ -49,22 +50,24 @@ const AIR: u32 = cube_types::common::air as u32;
 // decoration in the world. A seed derivation masks to 64 bits.
 pub const DECOR_MASTER_SEED: u64 = 0xd0c0_dec0_5eed_0001;
 
-/// How far a kind is drawn, from its size and nothing else.
+/// How far a kind is drawn as its model, from its size and nothing else.
 ///
 /// One criterion for every kind, the terrain tiers' own: what decides whether a
 /// thing is drawn is how large it is to the eye. A kind brings its extent — the
 /// largest dimension of its models, in world units — and never a threshold. At
 /// the far edge of a tier's band, a cell projects to TARGET_CELL_PX; an extent
 /// of E cells projects to E times that over the step. A thing that would cover
-/// fewer pixels than two of the tier's cells is not drawn: at that size its
-/// absence makes no visible difference, and the tier's cubes are already
-/// coarser than it. Twelve pixels at the reference viewport — the middle of the
+/// fewer pixels than two of the tier's cells is not drawn as a model: at that
+/// size its triangles make no visible difference, and the tier's cubes are
+/// already coarser than it. Its sprite stands in past that, down to
+/// `IMPOSTOR_GONE_CELLS` (`decor_tier`). Twelve pixels at the reference viewport — the middle of the
 /// range at which Google's map products stop drawing a building in 3D
 /// (decided by eye).
 ///
 /// No fade: a kind is drawn at full density up to its last tier and not past
-/// it. What softens the edge is the blend across a band boundary, which
-/// staggers the tier change across chunks. Cost is the low-poly tier's problem,
+/// it. The edge is decided per instance, by its own extent at its own
+/// distance (layer/decor/cell.rs `present`), so it is staggered instance by
+/// instance rather than drawn as a line. Cost is the low-poly tier's problem,
 /// not the criterion's; a tree and a car of the same size are drawn to the same
 /// range.
 pub fn decor_gone_px() -> f64 {
@@ -202,19 +205,19 @@ pub fn user_decor_pick(i: IVec, variant_count: u32) -> (u32, f64) {
 
 // ---- the layer as the kernel builds it ----
 //
-// Two halves. The procedural one scatters each kind over the chunk's cells
-// at its own level, each cell's candidate the one a z16 cell under it draws
-// with a random stream seeded from that cell's page, the kind and the cell
-// alone — nothing about the view, so a tree stands in the same place however
-// the chunk was reached and whatever level draws it — keeps what lands on
-// eligible ground at the density, and stands it on the terrain unless a
-// placed object occupies that cell. The user one is every decor entry the
-// object store holds in the chunk's columns, turned and varied by a stream
-// seeded from its own corner. What comes out is one block: for each kind and
-// variant, the instances' lanes.
+// Two halves. The procedural one scatters each kind over the decor cell's
+// cells at its own level, each cell's candidate the one a z16 cell under it
+// draws with a random stream seeded from that cell's page, the kind and the
+// cell alone — nothing about the view, so a tree stands in the same place
+// however the cell was reached and whatever level draws it — keeps what
+// lands on eligible ground at the density, and stands it on the terrain
+// unless a placed object occupies that cell. The user one is every decor
+// entry the object store holds in the decor cell's columns, turned and
+// varied by a stream seeded from its own corner. What comes out is one
+// block: for each kind and variant, the instances' lanes.
 //
-// A kind is drawn on a tier only where it is at least two of the tier's
-// cells across (decor_density).
+// A kind is scattered on a tier only where it is drawn there at all, as a
+// model or a sprite (decor_density).
 
 /// A decor stream: SplitMix64, drawn as units in [0, 1).
 struct Rng(SplitMix64);
@@ -242,43 +245,42 @@ pub struct Kind {
     pub rules: DecorRules,
 }
 
-/// A chunk's decor at a tier, gathered and ready to be laid into its block.
+/// A decor cell's population, gathered and ready to be laid into its block.
 pub struct DecorBuild<'s> {
     scratch: &'s DecorScratch,
 }
 
-/// The ground a chunk's decor is scattered over: the chunk's own page at
-/// its own level, the cells of it the chunk covers, and their heights.
+/// The ground a decor cell is scattered over: its own page at its own
+/// level, the cells of it the decor cell covers, and their heights.
 pub struct Ground<'a> {
     pub page: &'a PageView<'a>,
     pub sample: &'a ChunkSample,
     pub level: u32,
-    /// The chunk's corner, in units.
+    /// The decor cell's corner, in units.
     pub x0: i64,
     pub y0: i64,
-    /// Where the chunk starts in its page, in the level's cells.
+    /// Where the decor cell starts in its page, in the level's cells.
     pub tx0: u32,
     pub ty0: u32,
-    /// The column a z16 chunk stands in, whose placed objects keep a
+    /// The column a z16 decor cell stands in, whose placed objects keep a
     /// candidate off the cell they fill. None above z16, where a cell is the
-    /// ground of many columns and the objects are folded into the chunk's
-    /// cubes rather than standing in its cells.
+    /// ground of many columns and the objects are read folded (`folded`).
     pub col_idx: Option<IVec>,
-    /// Above z16, the chunk's objects folded to its level's cell, as its
-    /// runs draw them: a candidate is kept off a cell they fill.
+    /// Above z16, the decor cell's objects folded to its level's cell, as
+    /// the chunks' runs draw them: a candidate is kept off a cell they fill.
     pub folded: Option<&'a HashMap<[i64; 3], u32>>,
 }
 
-/// A column whose placed decor a chunk draws.
+/// A column whose placed decor a decor cell draws.
 pub struct Placed {
     pub col_idx: IVec,
-    /// Where the column's corner is from the corner of the chunk drawing it,
-    /// in units: zero for a z16 chunk, its place among the columns under it
-    /// for a coarser one.
+    /// Where the column's corner is from the corner of the decor cell
+    /// drawing it, in units: zero for a z16 cell, its place among the
+    /// columns under it for a coarser one.
     pub ox: f64,
     pub oy: f64,
     /// Whether a placed instance keeps the entry it came from, for the
-    /// eraser's hit. A coarser chunk draws several columns' decor and names
+    /// eraser's hit. A coarser cell draws several columns' decor and names
     /// none of their entries: what is erased is erased from close by.
     pub hittable: bool,
 }
@@ -387,8 +389,8 @@ impl<'s> DecorBuild<'s> {
         Ok(())
     }
 
-    /// The scatter of `kind` over `ground`: for each of the chunk's cells
-    /// the kind may stand on, the candidate of the z16 cell it draws from
+    /// The scatter of `kind` over `ground`: for each of the decor cell's
+    /// cells the kind may stand on, the candidate of the z16 cell it draws from
     /// (`representative`), with the draws that cell makes at z16 — kept at
     /// the kind's density, stood on the surface drawn there, and left out
     /// where a placed object fills the cell as it is drawn.

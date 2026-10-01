@@ -181,8 +181,8 @@ pub fn view_compose() {
     let vm = v.view_matrix;
     mat4_invert(&mut v.inv_view_matrix, &vm);
     // The planes follow the reach, which follows the eye's height over the
-    // ground under it: a view laid along the ground reaches no further than
-    // the haze, and one from high up no further than the planet's own edge.
+    // ground under it: no further than the levels the view draws past that
+    // ground, nor than the planet's own edge where that is nearer.
     // Read from the view in hand rather than through `eye()`, which would take
     // the view a second time while this holds it.
     let height = height_at(v.eye_at());

@@ -1649,8 +1649,7 @@ fn refuse(slots: &mut [Slot], i: usize, meshes: &mut Meshes, generation: u32, cu
 }
 
 /// Writes a block of the landing tier's boxes to the slot it fills
-/// (build.rs `BuildEvent::Part`), and gathers what the tier's bounds and
-/// surface are.
+/// (build.rs `BuildEvent::Part`), and gathers the tier's bounds.
 fn part(slots: &[Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
     let BuildEvent::Part {
         id,

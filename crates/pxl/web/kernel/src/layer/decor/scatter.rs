@@ -7,7 +7,7 @@
 //! DecorKindSeed + eligibility rules, never their own bespoke RNG).
 //!
 //! The scatter itself is the kernel's (crates/pxl/web/kernel/src/layer/decor/build.rs):
-//! it walks a chunk's cells into the decor block's lanes, drawing from a
+//! it walks a decor cell's cells into its block's lanes, drawing from a
 //! stream seeded by the page, the kind and the cell. Which cells it may use
 //! and what it does with the draws is declared here, so a kind is one
 //! description rather than two rules kept in step. Nothing here reaches for a tile store — plain ground-channel

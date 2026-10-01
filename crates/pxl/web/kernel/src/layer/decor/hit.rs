@@ -51,9 +51,9 @@ pub fn raycast_decor(origin: V3, direction: V3, map_origin: IVec, max_dist: f64)
     })
 }
 
-/// What a ray struck among the decor shown: the chunk it stands in, a z16
-/// one since only those name their entries, the entry's band and packed
-/// position in that chunk's column, and how far along.
+/// What a ray struck among the decor shown: the decor cell it stands in, a
+/// z16 one since only those name their entries, the entry's band and packed
+/// position in that cell's column, and how far along.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct DecorHit {
     pub cell: crate::layer::decor::cell::DecorCell,
@@ -68,10 +68,10 @@ fn group_models() -> impl Iterator<Item = Option<u32>> {
     decor_bundle_assets().iter().flat_map(|e| e.models.iter().copied())
 }
 
-/// How far past a chunk's own square a placed instance standing in it can
+/// How far past a decor cell's own square a placed instance standing in it can
 /// reach, in units: the largest decor model's bounding radius at the largest
 /// size decor is placed at — what the models are, and nothing guessed — only
-/// for skipping chunks the ray never comes near.
+/// for skipping cells the ray never comes near.
 fn decor_reach(sched: &Scheduler) -> f64 {
     let radius = group_models()
         .flatten()
@@ -82,7 +82,7 @@ fn decor_reach(sched: &Scheduler) -> f64 {
 }
 
 /// The nearest placed decor instance the ray strikes within `max_dist`,
-/// over the decor every on-screen chunk shows, model triangle by triangle
+/// over the decor every shown cell holds, model triangle by triangle
 /// after a bounding sphere. Procedural instances — the ones with no entry —
 /// are passed over, as the eraser has nothing to remove there; hidden
 /// ones are tested, since the hidden one is what the eraser is over.
