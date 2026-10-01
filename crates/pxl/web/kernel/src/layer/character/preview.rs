@@ -3,7 +3,7 @@
 //! Small display cases for the variant picker — one character playing its idle
 //! clip while slowly spinning in place, so a pick can actually be seen before
 //! committing to it. Deliberately separate from companion.rs's walker: no
-//! map_center, no ground-following, no walk — a display case, not a
+//! map_center, no ground-following, no catch-up walk — a display case, not a
 //! world entity.
 //!
 //! The case's drawing is the renderer's (crates/pxl/web/render/src/gpu/renderer.rs's draw_cases):

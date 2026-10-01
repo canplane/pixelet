@@ -63,7 +63,7 @@
         "$value": 3,
         "$type": "u32",
         "$doc": [
-          "The walk/preview move's clip, by its index in the pack's animations —",
+          "The catch-up/preview move's clip, by its index in the pack's animations —",
           "every file of a pack lists them in one order, and Kenney doesn't name this",
           "\"walk\" consistently: the person's is \"sprint\", the pet's \"run\"."
         ]
@@ -144,7 +144,7 @@
         "$value": 3,
         "$type": "u32",
         "$doc": [
-          "The walk/preview move's clip, by its index in the pack's animations —",
+          "The catch-up/preview move's clip, by its index in the pack's animations —",
           "every file of a pack lists them in one order, and Kenney doesn't name this",
           "\"walk\" consistently: the person's is \"sprint\", the pet's \"run\"."
         ]

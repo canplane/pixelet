@@ -45,7 +45,7 @@ export const groups = {
       "actor/kenney_mini_characters/male-f.glb",
     ],
     skin: "actor/kenney_mini_characters/colormap.png",
-    /** The walk/preview move's clip, by its index in the pack's animations —
+    /** The catch-up/preview move's clip, by its index in the pack's animations —
      * every file of a pack lists them in one order, and Kenney doesn't name this
      * "walk" consistently: the person's is "sprint", the pet's "run". */
     move_clip: 3 as number,
@@ -107,7 +107,7 @@ export const groups = {
       "actor/kenney_cube_pets/tiger.glb",
     ],
     skin: "actor/kenney_cube_pets/colormap.png",
-    /** The walk/preview move's clip, by its index in the pack's animations —
+    /** The catch-up/preview move's clip, by its index in the pack's animations —
      * every file of a pack lists them in one order, and Kenney doesn't name this
      * "walk" consistently: the person's is "sprint", the pet's "run". */
     move_clip: 3 as number,
