@@ -15,7 +15,7 @@
 // - a ray does not meet the ground of the column it starts inside;
 // - a query leaves residency as it found it.
 
-use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
+use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, PageSource, PageView};
 use pxl_render::mesh::voxel_scan::apron_col;
 use pxl_spec::bake::constant::{ELE_PADDED_SPAN, OBJECT_FINEST};
 use pxl_spec::bake::format::{Ground, GroundChannelKey};
@@ -190,15 +190,15 @@ fn the_ground_a_ray_meets_is_the_ground_the_paint_draws() {
         let access = Access::new(&paging, &store);
         let first = GROUND.cell_of(0, &point(x0, y0));
         let mut sample = ChunkSample::default();
-        sample.read(
-            &PageView {
+        let own = PageSource {
+            page: PageView {
                 cells: &src.ground.cells,
                 ele: &src.ele,
             },
-            first.in_page_above(src_level(n)),
+            origin: first.in_page_above(src_level(n)),
             n,
-            0,
-        );
+        };
+        sample.read(&Around { own, beside: [None; 8] }, [0, 0], 0);
         for cy in (0..CHUNK_CELLS).step_by(7) {
             for cx in (0..CHUNK_CELLS).step_by(5) {
                 let ray = down([x0 + cx as f64 + 0.5, y0 + cy as f64 + 0.5]);

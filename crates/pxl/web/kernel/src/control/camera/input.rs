@@ -562,9 +562,6 @@ fn clear_hovered_once() {
 }
 
 fn update_hover(s: &Input) {
-    let Some(map_center) = map_store().map_center else {
-        return clear_hovered_once();
-    };
     let mut origin = [0.0; 3];
     let mut direction = [0.0; 3];
     view_ray_local(s.pointer_x, s.pointer_y, &mut origin, &mut direction);
@@ -573,7 +570,7 @@ fn update_hover(s: &Input) {
     let map_origin = local_world_origin();
     // One pick — terrain (top or a wall) and any placed object all come back
     // as the same Hit.
-    let Some(pick) = ray_pick(origin, direction, Some(&map_center)) else {
+    let Some(pick) = ray_pick(origin, direction) else {
         return clear_hovered_once();
     };
     let hit = pick.hit;

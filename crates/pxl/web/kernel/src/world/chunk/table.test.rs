@@ -104,6 +104,7 @@ fn building(chunk: Chunk, id: u32, cube: Cube) -> Slot {
             hide: None,
             carve: None,
             read_from: None,
+            beside_from: [None; 8],
         },
         decor_sources: DecorSources {
             revision: 0,

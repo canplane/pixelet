@@ -3,11 +3,11 @@
 //! The pointer's pick: the one ray the whole world is hit by — terrain (any
 //! face: top or a cliff/wall side) and placed objects (any size, including
 //! sub-cell) alike — asked of the access (world/access.rs `first_hit`) at
-//! terrain's finest level, which is the level the ground within the interact
-//! radius is drawn at, so what the pick meets is what is on the screen there.
+//! terrain's finest level, which is the level the ground about the eye is
+//! drawn at, so what the pick meets is what is on the screen there.
 //!
-//! What this module adds is the interact radius, and what a hit means for a
-//! placement: the corner a new cube takes, the voxel the eraser digs, and
+//! What this module adds is how far the pick reaches, and what a hit means
+//! for a placement: the corner a new cube takes, the voxel the eraser digs, and
 //! which placed object a hit is. The ray itself is the view's
 //! (world/frame/view.rs), in the root frame the chunks are placed in.
 
@@ -21,15 +21,11 @@ use crate::layer::object::store::{get_placed_object, OccupiedEntry};
 use crate::world::access::{Access, Detail, Hit, Ray, Struck, FINEST};
 use crate::world::frame::coord::{local_world_origin, local_world_to_canonical};
 
-const INTERACT_RADIUS_CELL: f64 = 32.0 / U_PER_CELL - 0.707;
-const INTERACT_RADIUS_U: f64 = INTERACT_RADIUS_CELL * U_PER_CELL;
-const INTERACT_RADIUS2_U: f64 = INTERACT_RADIUS_U * INTERACT_RADIUS_U;
-
-pub fn in_interact_radius(a: &Pvf3, b: &Pvf3) -> bool {
-    let dx = pvf3::to_real(pvf3::X(a)) - pvf3::to_real(pvf3::X(b));
-    let dy = pvf3::to_real(pvf3::Y(a)) - pvf3::to_real(pvf3::Y(b));
-    dx * dx + dy * dy <= INTERACT_RADIUS2_U
-}
+/// How far from the eye the pick reaches, in units: what can be edited is a
+/// sphere about the observer, whichever controller placed it, and the ray's
+/// own length is that sphere — every hit along it lies within it. A product
+/// number: 32 cells.
+const PICK_REACH_U: f64 = 32.0 * U_PER_CELL;
 
 /// The struck column's top terrain cell's own (min-x, min-y, min-z) CORNER —
 /// for the pointer tool's hover cursor over plain terrain OR a wall (both give
@@ -168,25 +164,18 @@ pub struct PickResult {
 }
 
 /// The pick — see this module's own doc comment. The ray is in the root
-/// frame, and so is the hit. What the query lacked is not asked for here: the
-/// pick is near the eye, where the view's own faults already ask for the
-/// ground it is drawn from.
-pub fn ray_pick(origin: V3, direction: V3, map_center: Option<&Pvf3>) -> Option<PickResult> {
-    let map_center = map_center?;
+/// frame, from the eye, and so is the hit. What the query lacked is not asked
+/// for here: the pick is near the eye, where the view's own faults already
+/// ask for the ground it is drawn from.
+pub fn ray_pick(origin: V3, direction: V3) -> Option<PickResult> {
     let map_origin = local_world_origin();
     let frame: V3 = [ivec::to_real(ivec::X(map_origin)), ivec::to_real(ivec::Y(map_origin)), ivec::to_real(ivec::Z(map_origin))];
     let ray = Ray {
         origin: std::array::from_fn(|k| origin[k] + frame[k]),
         direction,
-        reach: INTERACT_RADIUS_U * 1.5,
+        reach: PICK_REACH_U,
     };
     let hit = Access::now().first_hit(&ray, Detail::Level(FINEST)).value().flatten()?.moved(frame.map(|v| -v));
-
-    let mut probe = Pvf3::default();
-    local_world_to_canonical(&mut probe, &hit.point, map_origin);
-    if !in_interact_radius(&probe, map_center) {
-        return None;
-    }
     Some(PickResult { hit })
 }
 

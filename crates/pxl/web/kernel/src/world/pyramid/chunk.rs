@@ -22,7 +22,7 @@ use pxl_spec::space::hierarchy::{ancestor_of, child_of, first_descendant_of, par
 use pxl_spec::space::indexer::{L2, L3};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::pyramid::{chunk_span_of, LevelPage, CHUNK_CELLS, TOP_LEVEL};
+use pxl_spec::space::pyramid::{chunk_span_of, page_at, LevelPage, CHUNK_CELLS, PAGE_CELLS, TOP_LEVEL};
 use pxl_spec::space::v3::Aabb;
 
 /// The chunks a level down that cover one: two a side in all three.
@@ -84,6 +84,26 @@ impl Chunk {
         let [x, y] = self.column().1;
         let [x0, y0] = first_descendant_of(ancestor_of([x, y], PAGE_LEVELS), PAGE_LEVELS);
         ((x - x0) as u32 * CHUNK_CELLS, (y - y0) as u32 * CHUNK_CELLS)
+    }
+
+    /// The pages beside the chunk's own that a ring of `apron` cells about
+    /// it reaches into, each with where it lies from the chunk's own page —
+    /// one for each side and corner of the page the chunk lies against, none
+    /// for a chunk inside it.
+    pub fn pages_beside(self, apron: u32) -> impl Iterator<Item = ([i64; 2], LevelPage)> {
+        let (x0, y0) = self.in_page();
+        let steps = move |v: u32| {
+            [0, -1, 1]
+                .into_iter()
+                .filter(move |&q| q == 0 || (q < 0 && v < apron) || (q > 0 && v + CHUNK_CELLS + apron > PAGE_CELLS))
+        };
+        let page = self.page();
+        let [px, py] = [ivec::X(page.page), ivec::Y(page.page)];
+        let level = self.level;
+        steps(y0)
+            .flat_map(move |qy| steps(x0).map(move |qx| [qx, qy]))
+            .filter(|&q| q != [0, 0])
+            .map(move |[qx, qy]| ([qx, qy], page_at(level, [px + qx, py + qy])))
     }
 
     /// The corner of the chunk's column, in units, at no height: what the

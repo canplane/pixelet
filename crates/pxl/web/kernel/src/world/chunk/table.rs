@@ -35,7 +35,8 @@ use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::arena::{arena_configure, arena_epoch, arena_write};
 use pxl_render::look::globe::Globe;
 use pxl_render::mesh::chunk_mesher::{box_bounds, box_z, Heights};
-use pxl_render::mesh::paint::terrain::adapter::ChunkSample;
+use pxl_render::mesh::paint::terrain::adapter::{beside_index, Around, ChunkSample, PageSource};
+use pxl_render::mesh::voxel_scan::APRON;
 
 use pxl_spec::space::observation::Bounds as _;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -322,8 +323,11 @@ struct Sources {
     carve: Option<EntryAt>,
     /// The level of the page the chunk is read from: its own, or the nearest
     /// resident page over it (world/pyramid.rs `drawn_from`), so its own
-    /// page arriving builds it again from its own ground.
+    /// page arriving builds it again from its own ground; and the same of
+    /// each page beside it its apron reads (build.rs `Read`), so the edge it
+    /// shares with a chunk there is made again when that chunk's ground is.
     read_from: Option<u32>,
+    beside_from: [Option<u32>; 8],
 }
 
 /// What a chunk's decor is made of: the revision of the columns it draws the
@@ -348,6 +352,13 @@ impl Sources {
             hide: edits.hide.filter(|at| edits.hide_in.0 && drawn(at)),
             carve: edits.carve.filter(drawn),
             read_from: Terrain::pyramid().drawn_from(k.page()).map(|p| p.level),
+            beside_from: {
+                let mut from = [None; 8];
+                for ([qx, qy], p) in k.pages_beside(APRON) {
+                    from[beside_index(qx, qy)] = Terrain::pyramid().drawn_from(p).map(|p| p.level);
+                }
+                from
+            },
         }
     }
 }
@@ -1022,7 +1033,11 @@ impl Scheduler {
             let view = source.map(|(_, _, page, _)| Builder::page_view(page));
             if let (Some((tx0, ty0, _, show)), Some(view)) = (source, view.as_ref()) {
                 if scatters {
-                    self.decor_sample.read(view, [tx0 as i64, ty0 as i64], 1, hidden_ground(show));
+                    let around = Around {
+                        own: PageSource { page: *view, origin: [0, 0], n: 1 },
+                        beside: [None; 8],
+                    };
+                    self.decor_sample.read(&around, [tx0 as i64, ty0 as i64], hidden_ground(show));
                 }
             }
             self.decor_placed.clear();

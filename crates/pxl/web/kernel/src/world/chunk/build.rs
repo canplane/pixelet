@@ -8,20 +8,19 @@
 //! (crates/pxl/web/kernel/src/world/chunk/table.rs). What is here acts on
 //! what it asks.
 
-use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
+use pxl_spec::space::pyramid::{LevelPage, CHUNK_CELLS, GROUND};
 
 use pxl_render::gpu::api::{gpu, room};
 use pxl_render::gpu::renderer::device_ready;
 use pxl_render::mesh::chunk_mesher::{box_words, mesh_words, BakeContext, Heights, Step, COARSE_BOX_WORDS, FINE_BOX_WORDS};
 use pxl_render::mesh::paint::level::write_level_runs;
 use pxl_render::mesh::paint::object::adapter::{Claims, Entries, Painted, Painter};
-use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
+use pxl_render::mesh::paint::terrain::adapter::{beside_index, Around, ChunkSample, PageSource, PageView};
 use pxl_render::mesh::volume::Volumes;
 use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
 use pxl_spec::bake::constant::{pack_pos, BandZ, EntryAt, BAND, CELL, OBJECT_FINEST};
 use pxl_spec::space::indexer::{FROM_L2_IDX, L2, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::Pvf3;
 use std::collections::HashMap;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{free, Block};
@@ -149,21 +148,66 @@ struct Runs {
     fold: Option<Scale>,
 }
 
-/// What a chunk's ground is read from: the page, the chunk's first cell as
-/// its own cells from that page's corner, and how many of them a side a
-/// page cell stands for — 1 on its own page, more on the nearest page over
-/// it held while its own has not come (world/pyramid.rs `drawn_from`).
+/// What a page's ground is read from: the page drawn in its place, the
+/// page's first cell as its own cells from that page's corner, and how many
+/// of them a side a source cell stands for — 1 on its own page, more on the
+/// nearest page over it held while its own has not come (world/pyramid.rs
+/// `drawn_from`).
 #[derive(Clone, Copy)]
-struct Read {
+struct Source {
     page: &'static Terrain,
     origin: [i64; 2],
     n: u32,
 }
 
+impl Source {
+    /// What `p` is drawn from now. A page is found by its key, so one gone,
+    /// or whose record another page now holds, is none and never another
+    /// page's bytes.
+    fn of(p: LevelPage) -> Option<Source> {
+        let pyramid = Terrain::pyramid();
+        let src = pyramid.drawn_from(p)?;
+        let page = pyramid.get(src)?;
+        let corner = GROUND.cell_at(p, GROUND.cell_index(0, 0));
+        Some(Source {
+            page,
+            origin: corner.in_page_above(src.level - p.level),
+            n: GROUND.scale(p.level).count_in(GROUND.scale(src.level)),
+        })
+    }
+
+    fn view(&self) -> PageSource<'static> {
+        PageSource {
+            page: Builder::page_view(self.page),
+            origin: self.origin,
+            n: self.n,
+        }
+    }
+}
+
+/// What a chunk's ground is read from: its own page's source, and the
+/// sources of the pages beside it its apron reaches into, so the edge it
+/// shares with a chunk there is read from what that chunk is drawn from —
+/// both sides of it one surface, whichever of them is borrowed; and the
+/// chunk's first cell in its page.
+#[derive(Clone, Copy)]
+struct Read {
+    own: Source,
+    beside: [Option<Source>; 8],
+    first: [i64; 2],
+}
+
 impl Read {
     /// Whether it is the chunk's own page.
     fn own(&self) -> bool {
-        self.n == 1
+        self.own.n == 1
+    }
+
+    fn around(&self) -> Around<'static> {
+        Around {
+            own: self.own.view(),
+            beside: self.beside.map(|b| b.as_ref().map(Source::view)),
+        }
     }
 }
 
@@ -202,19 +246,17 @@ impl Chunk {
     }
 
     /// What the chunk is drawn from now: its own page, or the nearest
-    /// resident page over it. A page is found by its key, so one gone, or
-    /// whose record another page now holds, is none and never another page's
-    /// bytes.
+    /// resident page over it, and what the pages its apron reaches into are.
     fn read(&self) -> Option<Read> {
-        let pyramid = Terrain::pyramid();
-        let src = pyramid.drawn_from(self.at.page())?;
-        let page = pyramid.get(src)?;
-        let own = GROUND.cell_of(self.level(), &Pvf3 { i: self.base(), f: 0 });
-        let levels = src.level - self.level();
+        let mut beside = [None; 8];
+        for ([qx, qy], p) in self.at.pages_beside(APRON) {
+            beside[beside_index(qx, qy)] = Source::of(p);
+        }
+        let (x0, y0) = self.at.in_page();
         Some(Read {
-            page,
-            origin: own.in_page_above(levels),
-            n: GROUND.scale(self.level()).count_in(GROUND.scale(src.level)),
+            own: Source::of(self.at.page())?,
+            beside,
+            first: [x0 as i64, y0 as i64],
         })
     }
 
@@ -402,7 +444,7 @@ impl Builder {
         let c = self.chunks.get(&id)?;
         let read = c.read().filter(Read::own)?;
         let (tx0, ty0) = c.at.in_page();
-        Some((tx0, ty0, read.page, c.structures))
+        Some((tx0, ty0, read.own.page, c.structures))
     }
 
     pub fn generation_of(&self, id: u32) -> Option<u32> {
@@ -706,12 +748,7 @@ impl Builder {
     /// paint was refused.
     fn paint_terrain(&mut self, world: &mut World, id: u32, read: Read) -> Option<u32> {
         let show = self.chunks[&id].structures;
-        self.paint_terrain_at(world, read.origin, read.n, show, read.page)
-    }
-
-    fn paint_terrain_at(&mut self, world: &mut World, origin: [i64; 2], n: u32, show: bool, page: &Terrain) -> Option<u32> {
-        let view = Self::page_view(page);
-        self.sample.read(&view, origin, n, hidden_ground(show));
+        self.sample.read(&read.around(), read.first, hidden_ground(show));
         let volume = world.volumes.open();
         if !self.sample.paint(world.volumes, volume) {
             world.volumes.release(volume);
@@ -801,8 +838,7 @@ impl Builder {
             return Progress::Blocked;
         }
         let show = self.chunks[&id].structures;
-        let view = Self::page_view(read.page);
-        self.sample.read(&view, read.origin, read.n, hidden_ground(show));
+        self.sample.read(&read.around(), read.first, hidden_ground(show));
         xpute_core::ensure!(self.direct.begin_direct(), ENOTRECOVERABLE);
         let floor = self.sample.floor;
         // Every column of the set, the chunk's own and the apron's: the
@@ -837,8 +873,7 @@ impl Builder {
         }
         let c = &self.chunks[&id];
         let (show, level, base) = (c.structures, c.level(), c.base());
-        let view = Self::page_view(read.page);
-        self.sample.read(&view, read.origin, read.n, hidden_ground(show));
+        self.sample.read(&read.around(), read.first, hidden_ground(show));
         let target = GROUND.scale(level);
         let (x0, y0) = (ivec::X(base), ivec::Y(base));
         // Its own cells and the apron of one a fold reads, which reaches into
