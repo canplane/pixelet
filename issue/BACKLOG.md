@@ -144,12 +144,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   release notes per version. Until one of those, `issue/` is the history and it
   records why, which a changelog never does.
 
-- **The leading underscore left in `xpute-runtime`'s `ipc/change.rs`.** The
-  TypeScript's private marker, which in Rust silences the unused warning
-  instead of meaning private, was taken out of `xpute-core` and `pxl-spec`
-  (2026-10-01); `ipc/change.rs` waits for the fd-model rewrite that touches
-  the ipc it sits in.
-
 ## Parked, with the reason on file
 
 - **Coarse tiers: draw calls, a wider unit.** Not a bottleneck after the
