@@ -2,14 +2,25 @@
 
 use super::*;
 
+/// A restart keeps every page a stopped server baked and clears only what
+/// it was killed in the middle of; a running server's cache is not taken
+/// from it.
 #[test]
-fn a_claimed_cache_drops_what_a_stopped_server_left_and_refuses_a_second_owner() {
+fn a_restart_keeps_the_pages_and_clears_what_was_cut_short() {
     let base = std::env::temp_dir().join(format!("pxl-demand-claim-{}", std::process::id()));
-    let orphan = base.join("poi").join("1").join("132110320123012");
-    std::fs::create_dir_all(&orphan).unwrap();
+    let root = base.join("poi");
+    let page = root.join("0").join("132110320123012");
+    let work = root.join(".work-0");
+    let purge = cache::purged(&root);
+    for d in [&page, &work, &purge] {
+        std::fs::create_dir_all(d).unwrap();
+    }
     let owner = claim(&base).unwrap();
-    assert!(!base.join("poi").exists(), "a generation no running server owns is removed");
     assert!(claim(&base).is_err(), "a running server's cache is not taken from it");
+    prune(&root).unwrap();
+    assert!(page.exists(), "a baked page is kept");
+    assert!(!work.exists(), "a killed job's staging is removed");
+    assert!(!purge.exists(), "a killed purge is finished");
     drop(owner);
     std::fs::remove_dir_all(base).unwrap();
 }
@@ -22,7 +33,7 @@ fn a_terrain_generation_holds_the_ocean_page_before_any_fold_reads_it() {
 
     let base = std::env::temp_dir().join(format!("pxl-demand-ocean-{}", std::process::id()));
     let runner = Runner::new(String::new(), 1, Limits::default()).unwrap();
-    let data = Dataset::open(&base, Kind::Terrain, 1, &runner).unwrap();
+    let data = Dataset::open(&base, Kind::Terrain, &runner).unwrap();
     let ocean = std::fs::read(data.cache.root.join(OCEAN_KEY)).expect("the ocean page is published as the generation opens");
 
     // One child stands on disk and the other fifteen pages the parent reads

@@ -2,7 +2,9 @@
 
 //! Local demand bakes. Each tile kind uses the same generation, job and
 //! response path; the deployment still serves immutable bucket objects.
-//! --cache is the parent of private terrain/poi/geocode generation directories.
+//! --cache is the parent of the terrain/poi/geocode directories: a page is
+//! cached while its file is there, across restarts, until its kind is
+//! invalidated (demand.rs `prune`).
 
 use axum::body::Bytes;
 use axum::extract::{Path, State};

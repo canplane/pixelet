@@ -28,9 +28,13 @@ from the root; README.md lists the tasks. The one `package.json` is the device
 app's (`apps/native`), because Expo and Metro find their packages the way npm
 lays them out.
 
-**`deno task check` is the gate.** Do not report work as done without it
-passing. main is not built by CI; publishing is a push to `deploy`
-([infra/README.md](./infra/README.md) §5).
+**`deno task check` is the gate before a deploy, not after every edit.**
+Nothing is compiled, linted or tested while a change is being made; what
+the change touched is verified once, when it is done (`deno task
+check:diff` checks only what changed, when asked for), and the whole gate
+runs before a push to `deploy`, which is how publishing happens
+([infra/README.md](./infra/README.md) §5), or when asked. main is not built
+by CI.
 
 The geo database (`pixelet-db-geo`) holds a multi-gigabyte PostGIS dataset.
 **Never `down -v` it casually** — the volume is the data. Ingestion and

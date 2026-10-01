@@ -5,7 +5,7 @@ use crate::util::{pack, write_atomic, Level};
 use std::collections::HashMap;
 use std::future::Future;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use tokio::sync::{Notify, Semaphore};
 
 #[derive(Default)]
@@ -19,6 +19,11 @@ pub struct Cache {
     flights: Arc<Mutex<HashMap<String, Arc<Flight>>>>,
     admission: Arc<Semaphore>,
     deadline: std::time::Duration,
+    /// Whether this generation still owns `root`: false once purged, after
+    /// which nothing it was still baking is written there. Every write holds
+    /// it shared and the purge holds it alone, so no write lands between a
+    /// purge and the next generation's first read.
+    live: RwLock<bool>,
 }
 
 impl Cache {
@@ -34,6 +39,7 @@ impl Cache {
             flights: Arc::new(Mutex::new(HashMap::new())),
             admission,
             deadline,
+            live: RwLock::new(true),
         })
     }
 
@@ -101,13 +107,43 @@ impl Cache {
     }
 
     pub fn publish_stored(&self, name: &str, bytes: Option<&[u8]>) -> Result<(), String> {
-        let path = self.root.join(name);
-        std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
-        match bytes {
-            Some(bytes) => write_atomic(&path, bytes),
-            None => write_atomic(&path.with_extension("empty"), b""),
+        self.commit(|| {
+            let path = self.root.join(name);
+            std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+            match bytes {
+                Some(bytes) => write_atomic(&path, bytes),
+                None => write_atomic(&path.with_extension("empty"), b""),
+            }
+            .map_err(|e| e.to_string())
+        })
+    }
+
+    /// A write into `root`, made only while this generation still owns it: a
+    /// purged one's late result is dropped, not published over the next's.
+    pub fn commit(&self, write: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
+        let live = self.live.read().expect("live");
+        if *live {
+            write()
+        } else {
+            Ok(())
         }
-        .map_err(|e| e.to_string())
+    }
+
+    /// Everything this generation published, gone: `root` is moved aside and
+    /// removed, and the generation can write nothing more into it.
+    pub fn purge(&self) -> Result<(), String> {
+        let mut live = self.live.write().expect("live");
+        *live = false;
+        let aside = purged(&self.root);
+        match std::fs::rename(&self.root, &aside) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
+            _ => {}
+        }
+        drop(live);
+        match std::fs::remove_dir_all(&aside) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
+            _ => Ok(()),
+        }
     }
 
     pub async fn read(&self, name: &str) -> Result<Option<Vec<u8>>, String> {
@@ -120,12 +156,12 @@ impl Cache {
     }
 }
 
-impl Drop for Cache {
-    fn drop(&mut self) {
-        // A generation is private to this process. In-flight jobs keep it
-        // alive, so obsolete writes finish before the directory disappears.
-        let _ = std::fs::remove_dir_all(&self.root);
-    }
+/// Where a purge moves a cache's directory before removing it, beside it so
+/// the move is a rename; a start clears what a killed purge left there.
+pub fn purged(root: &std::path::Path) -> PathBuf {
+    let mut name = root.file_name().unwrap_or_default().to_owned();
+    name.push(".purged");
+    root.with_file_name(name)
 }
 
 #[cfg(test)]

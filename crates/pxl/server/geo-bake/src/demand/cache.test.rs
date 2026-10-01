@@ -38,10 +38,8 @@ async fn concurrent_requests_publish_once_and_preserve_empty_and_failed_results(
 }
 
 #[tokio::test]
-async fn disconnected_request_does_not_cancel_publication_and_old_generation_cannot_write_into_new() {
+async fn disconnected_request_does_not_cancel_publication_and_a_purged_generation_cannot_write_into_the_next() {
     let old = cache();
-    let new = cache();
-    let path = old.root.clone();
     let entered = Arc::new(Notify::new());
     let release = Arc::new(Notify::new());
     let task = {
@@ -60,12 +58,14 @@ async fn disconnected_request_does_not_cancel_publication_and_old_generation_can
     };
     entered.notified().await;
     task.abort();
+    old.purge().unwrap();
+    let new = Cache::with_admission(old.root.clone(), old.admission.clone(), old.deadline).unwrap();
     new.publish("page", Some(b"new")).unwrap();
     release.notify_one();
     old.once("page".into(), |_deadline| async { panic!("must join existing job") }).await.unwrap();
     assert_eq!(crate::util::unpack(&new.read("page").await.unwrap().unwrap()).unwrap(), b"new");
-    drop(old);
-    assert!(!path.exists());
+    new.purge().unwrap();
+    assert!(!new.root.exists());
 }
 
 #[tokio::test]

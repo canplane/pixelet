@@ -226,8 +226,9 @@ not a cap on process memory or total cached disk bytes.
 page above it is answered 503, since each one folds the whole level under it
 on first request. Geocode groups have a fixed bake footprint.
 The common job limits apply to all of them and survive cache invalidation.
-Source data must stay unchanged within a running generation. After re-ingest
-or a bake change, restart or invalidate the affected kind as a whole:
+A page is cached while its file is in `out/dev/<kind>/`, and a restart keeps
+it. After re-ingest or a bake change, invalidate the affected kind as a whole
+— a restart alone serves the old pages:
 
 ```bash
 curl -X POST localhost:3001/geo/internal/world/terrain/cache/invalidate -H "x-admin-token: $ADMIN_TOKEN"
