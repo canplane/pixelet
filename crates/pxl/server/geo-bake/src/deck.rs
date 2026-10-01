@@ -40,8 +40,9 @@ use postgres::Client;
 
 use clearance::{Under, PIER_MIN_RISE, PIER_OFF_WAY, PIER_STEP, STACKED};
 use piece::{pieces_of, Piece};
-use profile::{solve as solve_profile, straight, Problem};
-use pxl_spec::bake::deck::Form;
+use profile::{solve as solve_profile, Problem, Profile};
+use pxl_spec::bake::constant::CELL_PER_M;
+use pxl_spec::bake::deck::{Form, BORE_HEIGHT};
 use source::DeckOut;
 use structure::{group, side_by_side, Graph};
 
@@ -52,6 +53,12 @@ use crate::terrain::pipeline::overture::policy::{DECK_FLAGS, UNSEEN_FLAGS};
 /// something under it, in metres: where two pieces meet they intersect at
 /// that point.
 const AT_END: f64 = 1.0;
+
+/// How deep under the drawn surface a bore's floor lies wherever it is not
+/// coming up to a portal, in z16 cells: its air, a cell of the ground over
+/// it as its roof, and half a cell for the rounding the floor and the
+/// ground each take into cells, so the roof is never rounded away.
+const COVER: f64 = BORE_HEIGHT as f64 + 1.5;
 
 /// What one solve made.
 pub struct Solved {
@@ -127,7 +134,9 @@ pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<Solve
 
     let carried: Vec<Vec<bool>> = structures.iter().zip(&graphs).map(|(members, g)| carried_of(&pieces, members, g)).collect();
     let mut tops: Vec<Vec<f64>> = grounds.clone();
+    let mut slopes = Slopes::default();
     for pass in 0..2 {
+        slopes = Slopes::default();
         let mut next = Vec::with_capacity(structures.len());
         for (s, members) in structures.iter().enumerate() {
             let (g, ground) = (&graphs[s], &grounds[s]);
@@ -149,13 +158,15 @@ pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<Solve
                 }
             }
             let ends: Vec<(u32, f64)> = g.free_ends.iter().map(|&e| (e, ground[e as usize])).collect();
-            next.push(solve_profile(&Problem {
+            let profile = solve_profile(&Problem {
                 adj: &g.adj,
                 need: &need,
                 ends: &ends,
                 ground,
                 carried: &carried[s],
-            }));
+            });
+            slopes.count(&profile);
+            next.push(profile.top);
         }
         tops = next;
     }
@@ -191,8 +202,10 @@ pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<Solve
             out.push(deck);
         }
     }
-    let bores = bores_of(url, &tunnels, &bored, &bore_graphs, &bore_grounds)?;
+    log(&slopes.say("deck"));
+    let (bores, bore_slopes) = bores_of(url, &tunnels, &bored, &bore_graphs, &bore_grounds)?;
     log(&format!("{} tunnel pieces, {} bored through from a portal", tunnels.len(), bores.len()));
+    log(&bore_slopes.say("bore"));
     out.extend(bores);
     source::write(client, &out)?;
     Ok(Solved {
@@ -204,23 +217,21 @@ pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<Solve
 }
 
 /// The bores of the tunnels that come out to the ground, cut their whole
-/// length so a first-person view can go through. A tunnel's floor runs
-/// straight between its portals' ground, as a road or a railway is graded
-/// through a hill at one even grade, and nothing lowers it: where the ground
-/// over it is deeper than the bore, the ground stays as its roof, and where it
-/// is not, the bore is open to the sky there, as a cut-and-cover stretch is
-/// (pxl-spec bake/deck.rs `Occupies`). Arnis lowers a bore under its line to
-/// keep a roof over it, because a Minecraft tunnel is walled and lit inside a
-/// cover it needs; here the drawn surface is the roof, and lowering would
-/// bend a straight bore for the sake of a heightfield's wiggle. A tunnel with
-/// one portal runs level from it, since where its other end lies under the
-/// ground nothing says.
+/// length so a first-person view can go through. A bore's floor is a deck's
+/// profile turned over (profile.rs), one rule for a road tunnel and a
+/// subway alike: it meets each portal at the portal's ground, runs straight
+/// between them, and is lowered under the drawn surface wherever that line
+/// would leave less than `COVER` over it — falling off at the steepest a
+/// bore descends, so it comes down from a portal on a ramp and then follows
+/// the ground at that depth, its roof the ground. Only the ramps at the
+/// portals are open to the sky. A tunnel with one portal has no line beyond
+/// that portal's height, and lies under the ground the rest of its length.
 /// A portal is an end where the way carries on at the surface — a way
 /// touching it there that is no tunnel and stands at level 0 or over — and
 /// not merely an end: a subway's tunnel ends at its stations' platforms,
 /// which are under the ground too, and a tunnel with no portal is cut
 /// nowhere.
-fn bores_of<'a>(url: &str, tunnels: &'a [Piece], structures: &[Vec<usize>], graphs: &[Graph], grounds: &[Vec<f64>]) -> Result<Vec<DeckOut<'a>>, postgres::Error> {
+fn bores_of<'a>(url: &str, tunnels: &'a [Piece], structures: &[Vec<usize>], graphs: &[Graph], grounds: &[Vec<f64>]) -> Result<(Vec<DeckOut<'a>>, Slopes), postgres::Error> {
     let ends: Vec<([f64; 2], &str)> = structures
         .iter()
         .zip(graphs)
@@ -235,13 +246,29 @@ fn bores_of<'a>(url: &str, tunnels: &'a [Piece], structures: &[Vec<usize>], grap
     }
     let mut end_at = 0;
     let mut out = Vec::new();
+    let mut slopes = Slopes::default();
     for ((members, g), ground) in structures.iter().zip(graphs).zip(grounds) {
         let ends: Vec<(u32, f64)> = g.free_ends.iter().enumerate().filter(|&(j, _)| portal[end_at + j]).map(|(_, &e)| (e, ground[e as usize])).collect();
         end_at += g.free_ends.len();
         if ends.is_empty() {
             continue;
         }
-        let floor = straight(&g.adj, &ends);
+        // Turned over, the floor's depth under the ground is a deck's height
+        // over it: the line between the portals, and a cover it must keep
+        // under the ground, which lowers it about the point that asks.
+        let below = |x: &[f64]| x.iter().map(|v| -v).collect::<Vec<f64>>();
+        let need: Vec<f64> = g.at.iter().zip(ground).map(|(at, &h)| COVER / CELL_PER_M(at[1]) - h).collect();
+        let ends: Vec<(u32, f64)> = ends.iter().map(|&(e, h)| (e, -h)).collect();
+        let carried = vec![true; g.at.len()];
+        let profile = solve_profile(&Problem {
+            adj: &g.adj,
+            need: &need,
+            ends: &ends,
+            ground: &below(ground),
+            carried: &carried,
+        });
+        slopes.count(&profile);
+        let floor = below(&profile.top);
         for (k, &m) in members.iter().enumerate() {
             let points: Vec<[f64; 3]> = g.along[k].iter().map(|&(node, _)| [g.at[node as usize][0], g.at[node as usize][1], floor[node as usize]]).collect();
             if points.len() >= 2 {
@@ -254,7 +281,26 @@ fn bores_of<'a>(url: &str, tunnels: &'a [Piece], structures: &[Vec<usize>], grap
             }
         }
     }
-    Ok(out)
+    Ok((out, slopes))
+}
+
+/// The steps of the solved structures that are steeper than `MAX_SLOPE`:
+/// each one lies on a stretch between two ends whose own ground is that
+/// steep apart (profile.rs `Profile::forced`), which no deck or bore could
+/// meet, and the count says how much of the data asks for it.
+#[derive(Default)]
+struct Slopes {
+    forced: usize,
+}
+
+impl Slopes {
+    fn count(&mut self, profile: &Profile) {
+        self.forced += profile.forced.iter().filter(|&&f| f).count();
+    }
+
+    fn say(&self, what: &str) -> String {
+        format!("{what}: {} points on stretches whose ends are steeper apart than a {what} may climb", self.forced)
+    }
 }
 
 /// Whether each point of a structure is carried: on a member that is the

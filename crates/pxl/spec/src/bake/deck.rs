@@ -43,10 +43,11 @@ pub const POINT_SCALE: f64 = 8.0;
 /// two metres a road deck's structure is.
 pub const THICKNESS: i32 = 1;
 
-/// A bore's air, floor to roof, in z16 cells: about six metres, a road
-/// tunnel's 4.5 to 5 m clearance for traffic and the lights and fans over
-/// it.
-pub const BORE_HEIGHT: i32 = 3;
+/// A bore's air, floor to roof, in z16 cells: about four metres, a road
+/// tunnel's 4.5 to 5 m clearance taken to the cell below it, as a
+/// Minecraft tunnel is two blocks high — a character's height and a cell
+/// over its head.
+pub const BORE_HEIGHT: i32 = 2;
 
 /// What a line is to the ground.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

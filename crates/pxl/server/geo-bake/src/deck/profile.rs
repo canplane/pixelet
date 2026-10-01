@@ -7,12 +7,12 @@
 //!
 //! - **The line between where it meets the ground.** A bridge is carried
 //!   from end to end, so where nothing is under it, it runs straight between
-//!   its ends' ground — over a valley as much as over a flat. On a graph that
-//!   is the ends' heights weighted by how near each is, which on a single
-//!   span is exactly the straight line. Only the carried part has a line: an
-//!   approach is a way on the ground, and its ends are where it joins the
-//!   bridge, so the line never runs from one approach's far end to the
-//!   other's across whatever lies between.
+//!   its ends' ground — over a valley as much as over a flat. On a single
+//!   span that is the straight line; where spans branch, each stretch is as
+//!   gentle as the ends around it allow (`line`). Only the
+//!   carried part has a line: an approach is a way on the ground, and its
+//!   ends are where it joins the bridge, so the line never runs from one
+//!   approach's far end to the other's across whatever lies between.
 //! - **What it has to clear.** Each point asks a height of its own: the
 //!   ground under it, and over a road, a river or a lower deck the clearance
 //!   that asks (clearance.rs). A clearance raises the deck about it, falling
@@ -24,6 +24,14 @@
 //! approach, where there is no line, its ground or the deck coming down to
 //! it, whichever is higher. A structure that reaches the ground nowhere — a
 //! loop of joints — has no line, and is its clearances.
+//!
+//! So the top is never steeper than `MAX_SLOPE` along the carried part: the
+//! raised clearances are no steeper by how they spread, the line no steeper
+//! than its ends make it, and the higher of two such is no steeper either —
+//! except on a stretch between two ends whose own ground is steeper than
+//! that apart, which no deck could meet, and which the profile marks as
+//! forced (`Profile::forced`) rather than leaving it to look like the
+//! solver's.
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
@@ -45,8 +53,17 @@ pub struct Problem<'a> {
     pub carried: &'a [bool],
 }
 
-/// Each point's top, in metres.
-pub fn solve(p: &Problem) -> Vec<f64> {
+/// A structure's tops.
+pub struct Profile {
+    /// Each point's top, in metres.
+    pub top: Vec<f64>,
+    /// Each point the line had to make steeper than `MAX_SLOPE`, because
+    /// the ends it runs between are steeper than that apart.
+    pub forced: Vec<bool>,
+}
+
+/// Each point's top.
+pub fn solve(p: &Problem) -> Profile {
     let n = p.need.len();
     // The highest each point can be and still come down to every end.
     let cap = spread(p.adj, p.ends.iter().copied(), |v, d| v + MAX_SLOPE * d, Ordering::Less);
@@ -55,15 +72,16 @@ pub fn solve(p: &Problem) -> Vec<f64> {
     // nothing past it.
     let held = (0..n).filter(|&v| p.carried[v]).map(|v| (v as u32, p.need[v].min(cap[v])));
     let raised = spread(p.adj, held, |v, d| v - MAX_SLOPE * d, Ordering::Greater);
-    let line = between_ends(p);
-    (0..n).map(|v| if p.carried[v] { line[v].max(raised[v]) } else { p.need[v].max(raised[v]) }).collect()
+    let (line, slope) = between_ends(p);
+    let top = (0..n).map(|v| if p.carried[v] { line[v].max(raised[v]) } else { p.need[v].max(raised[v]) }).collect();
+    let forced = slope.iter().map(|&s| s > MAX_SLOPE + 1e-9).collect();
+    Profile { top, forced }
 }
 
-/// The straight line between the carried part's ends, at each carried
-/// point: the ends' grounds weighted by the inverse of each one's distance
-/// along it. Its ends are the structure's own ends and the points where it
-/// joins an approach.
-fn between_ends(p: &Problem) -> Vec<f64> {
+/// The line between the carried part's ends, at each carried point, and how
+/// steep the stretch is that set it. Its ends are the structure's own ends
+/// and the points where it joins an approach.
+fn between_ends(p: &Problem) -> (Vec<f64>, Vec<f64>) {
     let n = p.need.len();
     let carried: Vec<Vec<(u32, f64)>> = (0..n)
         .map(|v| {
@@ -78,28 +96,116 @@ fn between_ends(p: &Problem) -> Vec<f64> {
         .filter(|&v| p.carried[v] && p.adj[v].iter().any(|&(w, _)| !p.carried[w as usize]))
         .map(|v| (v as u32, p.ground[v]));
     let ends: Vec<(u32, f64)> = p.ends.iter().copied().filter(|&(e, _)| p.carried[e as usize]).chain(joints).collect();
-    straight(&carried, &ends)
+    line(&carried, &ends)
 }
 
-/// The straight line between `ends` over a graph, at each point: the ends'
-/// heights weighted by the inverse of each one's distance along it, which on
-/// a single span is exactly the straight line. A point no end reaches has
-/// none.
-pub fn straight(adj: &[Vec<(u32, f64)>], ends: &[(u32, f64)]) -> Vec<f64> {
+/// The line through `ends` over a graph, and at each point how steep the
+/// stretch is that set it: the steepest stretch first, then the steepest of
+/// what is left. Of every path between two points already set that passes
+/// only points not yet set, the steepest is laid straight and set, and each
+/// part of the graph it leaves is done the same way on its own, until every
+/// point an end reaches is set; a part that touches one set point only is
+/// that point's height. This is the line that is as gentle as its ends allow
+/// on every stretch, not only on the steepest — the absolutely minimizing
+/// Lipschitz extension, by the steepest-path algorithm of Lazarus, Loeb,
+/// Propp and Ullman as Kyng, Rao, Sachdeva and Spielman put it to graphs —
+/// so on a single span it is the straight line, where spans meet the
+/// junction stands where the steepest pair of ends puts it, and a pair of
+/// ends steeper than a deck climbs makes only the stretch between them
+/// steep. A point no end reaches has none.
+fn line(adj: &[Vec<(u32, f64)>], ends: &[(u32, f64)]) -> (Vec<f64>, Vec<f64>) {
     let n = adj.len();
-    let (mut sum, mut weight) = (vec![0.0; n], vec![0.0; n]);
-    let mut at_end: Vec<Option<f64>> = vec![None; n];
-    for &(end, ground) in ends {
-        at_end[end as usize] = Some(ground);
-        let d = spread(adj, [(end, 0.0)], |v, d| v + d, Ordering::Less);
-        for v in 0..n {
-            if d[v].is_finite() && d[v] > 0.0 {
-                sum[v] += ground / d[v];
-                weight[v] += 1.0 / d[v];
+    let mut height: Vec<Option<f64>> = vec![None; n];
+    let mut slope = vec![0.0; n];
+    for &(e, h) in ends {
+        height[e as usize] = Some(h);
+    }
+    loop {
+        // The steepest path between two set points through unset ones, from
+        // each set point that has an unset neighbour.
+        let mut best: Option<(f64, Vec<u32>)> = None;
+        for a in 0..n {
+            let Some(ha) = height[a] else { continue };
+            if !adj[a].iter().any(|&(w, _)| height[w as usize].is_none()) {
+                continue;
+            }
+            let (dist, from) = through_unset(adj, &height, a as u32);
+            for b in 0..n {
+                let (Some(hb), Some(d)) = (height[b], dist[b]) else { continue };
+                if b == a || from[b] == a as u32 || d <= 0.0 {
+                    continue;
+                }
+                let s = (ha - hb).abs() / d;
+                if best.as_ref().is_none_or(|(bs, _)| s > *bs) {
+                    let mut path = vec![b as u32];
+                    while *path.last().unwrap() != a as u32 {
+                        path.push(from[*path.last().unwrap() as usize]);
+                    }
+                    best = Some((s, path));
+                }
+            }
+        }
+        let Some((s, path)) = best else { break };
+        // Laid straight between its two set ends, by distance along it.
+        let (hb, ha) = (height[path[0] as usize].unwrap(), height[*path.last().unwrap() as usize].unwrap());
+        let along: Vec<f64> = path
+            .windows(2)
+            .scan(0.0, |d, w| {
+                *d += adj[w[0] as usize].iter().filter(|&&(x, _)| x == w[1]).map(|&(_, l)| l).fold(f64::INFINITY, f64::min);
+                Some(*d)
+            })
+            .collect();
+        let total = *along.last().unwrap();
+        for (i, &v) in path.iter().enumerate().skip(1).take(path.len() - 2) {
+            height[v as usize] = Some(hb + (ha - hb) * along[i - 1] / total);
+            slope[v as usize] = s;
+        }
+    }
+    // What is left touches one set point at most: it is that point's height.
+    let mut queue: Vec<u32> = (0..n as u32).filter(|&v| height[v as usize].is_some()).collect();
+    while let Some(v) = queue.pop() {
+        for &(w, _) in &adj[v as usize] {
+            if height[w as usize].is_none() {
+                height[w as usize] = height[v as usize];
+                queue.push(w);
             }
         }
     }
-    (0..n).map(|v| at_end[v].unwrap_or(if weight[v] > 0.0 { sum[v] / weight[v] } else { f64::NEG_INFINITY })).collect()
+    (height.into_iter().map(|h| h.unwrap_or(f64::NEG_INFINITY)).collect(), slope)
+}
+
+/// Distances from set point `a` to every point, over unset points only — a
+/// set point is reached but not passed through — and each point's
+/// predecessor on the way.
+fn through_unset(adj: &[Vec<(u32, f64)>], height: &[Option<f64>], a: u32) -> (Vec<Option<f64>>, Vec<u32>) {
+    let n = adj.len();
+    let mut dist = vec![None; n];
+    let mut from = vec![u32::MAX; n];
+    let mut heap = BinaryHeap::new();
+    dist[a as usize] = Some(0.0);
+    heap.push(Entry {
+        value: 0.0,
+        node: a,
+        best: Ordering::Less,
+    });
+    while let Some(Entry { value, node, .. }) = heap.pop() {
+        if dist[node as usize] != Some(value) || (node != a && height[node as usize].is_some()) {
+            continue;
+        }
+        for &(next, d) in &adj[node as usize] {
+            let y = value + d;
+            if dist[next as usize].is_none_or(|x| y < x) {
+                dist[next as usize] = Some(y);
+                from[next as usize] = node;
+                heap.push(Entry {
+                    value: y,
+                    node: next,
+                    best: Ordering::Less,
+                });
+            }
+        }
+    }
+    (dist, from)
 }
 
 /// A value spread from `sources` over the graph by `along` per metre: each
