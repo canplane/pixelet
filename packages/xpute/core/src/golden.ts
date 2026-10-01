@@ -12,16 +12,17 @@
  * cross — the wire's, where both sides have to produce the same bytes from the
  * same input and the record is the only thing that says so.
  *
- * The files live in the Rust crate that reads them with `include_str!`. There
- * is one copy, not one per language, because a second copy is how the two come
- * to disagree without anything failing.
+ * The files live under spec/xpute/, which every language reads and none owns:
+ * the records under golden/, the contract's traces under conformance/. There
+ * is one copy, not one per language, because a second copy is how the
+ * languages come to disagree without anything failing.
  */
 
 import type { U8Array } from "./abi/array.ts";
 import type { f64, u32, u64 } from "./abi/word.ts";
 import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { InvariantError } from "@xpute/core/status/error.ts";
-const CRATE = new URL("../../../../crates/xpute/core/golden/", import.meta.url);
+const SPEC = new URL("../../../../spec/xpute/", import.meta.url);
 
 export class Golden {
   private readonly map: Map<string, string>;
@@ -35,9 +36,9 @@ export class Golden {
     );
   }
 
-  /** The record at `path` under the crate's `golden/`. */
+  /** The record at `path` under spec/xpute/: `golden/wire/tlv.tsv`. */
   static async load(path: string): Promise<Golden> {
-    return new Golden(await Deno.readTextFile(new URL(path, CRATE)));
+    return new Golden(await Deno.readTextFile(new URL(path, SPEC)));
   }
 
   has(key: string): boolean {

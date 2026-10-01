@@ -1,0 +1,9 @@
+{
+  // Nearly empty on purpose, and here so the directory can be a workspace
+  // member at all — everything this package needs is said once at the root.
+  //
+  // What the package is called is `@xpute/conformance/`, and it is called
+  // that by the import maps, as `@xpute/core/` and `@xpute/runtime/` are.
+  // Nothing imports it: it is the host that runs the traces against every
+  // guest, and a test is all it holds.
+}

@@ -73,6 +73,9 @@ function header(f: string): string | null {
     }
     return null;
   }
+  // C++ has no package to be named by, so a file of cpp/ is named by its
+  // path, which is the same in the xpute repository.
+  if (/^cpp\/.*\.(cpp|hpp)$/.test(f)) return f;
   if (!/\.tsx?$/.test(f)) return null;
   // An app's file by the app's name: under its src/, or at its root.
   const app = f.match(/^apps\/([\w-]+)\/(?:src\/)?(.*)$/);

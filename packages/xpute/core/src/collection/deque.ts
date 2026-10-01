@@ -6,9 +6,12 @@
 //   - head: pop-front index
 //   - len : live element count
 //
-// No defensive checks. Caller upholds preconditions.
+// A pop from an empty deque is undefined, as xpute-core's is None; a push
+// onto a full one is the caller's bug, since it would overwrite the front.
 
 import type { u32 } from "@xpute/core/abi/word.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
+import { InvariantError } from "@xpute/core/status/error.ts";
 
 export class Deque<T> {
   // external storage (DOD-friendly): caller owns the ring buffer.
@@ -46,6 +49,7 @@ export class Deque<T> {
   }
 
   push_back(v: T): void {
+    if (this.full()) throw new InvariantError(Errno.ENOSPC);
     const cap = this.cap();
     const i = (this.head + this.len) % cap;
     this.buf[i] = v;
@@ -53,13 +57,15 @@ export class Deque<T> {
   }
 
   push_front(v: T): void {
+    if (this.full()) throw new InvariantError(Errno.ENOSPC);
     const cap = this.cap();
     this.head = (this.head + cap - 1) % cap;
     this.buf[this.head] = v;
     this.len++;
   }
 
-  pop_front(): T {
+  pop_front(): T | undefined {
+    if (!this.len) return undefined;
     const v = this.buf[this.head] as T;
     this.buf[this.head] = undefined;
     this.head = (this.head + 1) % this.cap();
@@ -67,7 +73,8 @@ export class Deque<T> {
     return v;
   }
 
-  pop_back(): T {
+  pop_back(): T | undefined {
+    if (!this.len) return undefined;
     const cap = this.cap();
     const i = (this.head + this.len - 1) % cap;
     const v = this.buf[i] as T;

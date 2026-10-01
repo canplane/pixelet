@@ -4,7 +4,7 @@
 use super::*;
 use crate::golden::Golden;
 
-const GOLDEN: &str = include_str!("../../golden/collection/heap.tsv");
+const GOLDEN: &str = include_str!("../../../../../spec/xpute/golden/collection/heap.tsv");
 
 /// The two heaps' shared element type, named so a pair of them can be read.
 type Elements = Vec<Element<f64, i32>>;

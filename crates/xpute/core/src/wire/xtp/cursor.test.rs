@@ -1,5 +1,4 @@
 // xpute-core/wire/xtp/cursor.test.rs
-// (no pair: the TypeScript tree has no test file)
 
 use super::*;
 use crate::golden::Golden;
@@ -7,7 +6,7 @@ use crate::wire::xtp::encode::{TreeEncoder, TreeEncoderOptions};
 use crate::wire::xtp::spec::{NodeValue, SequenceType};
 use crate::wire::xtp::view::{NodeView, TreeView};
 
-const GOLDEN: &str = include_str!("../../../golden/wire/xtp/cursor.tsv");
+const GOLDEN: &str = include_str!("../../../../../../spec/xpute/golden/wire/xtp/cursor.tsv");
 
 /// A read value as the generator prints it, which means as JavaScript would:
 /// every width the reader can hand back that a `number` carried prints

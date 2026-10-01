@@ -50,9 +50,10 @@ erode by accident:
   works in any program; the runtime means a turn on a doorbell, a quota from
   the frame, I/O asked of the host. `runtime` depends on `core`, never the
   reverse.
-  `core` is symmetric across the two languages and the golden records hold
-  them to each other; `runtime` is two ends of one arrangement, so a module
-  missing on one side is not a gap to fill — only the format must agree.
+  `core` is symmetric across Rust, TypeScript and C++, and the golden
+  records under `spec/xpute/golden/` hold them to each other; `runtime` is
+  two ends of one arrangement, so a module missing on one side is not a gap
+  to fill — only the format must agree.
 - **`pxl-spec` is the one model and has no TypeScript twin.** The shell reads
   a page through the kernel, never by decoding one. What the shell holds — the
   cell catalog, the asset tables, the ABI enums — is generated into
@@ -182,8 +183,9 @@ looks unfinished.
 **Every source file opens with a comment naming its own logical path** — the
 import-map path (`// @pxl/web/feature/map/ui/view.tsx`), or for Rust the
 package as Cargo.toml spells it and the path under `src/`
-(`// pxl-spec/space/indexer.rs`); an executable script opens on its
-interpreter. `check:rules` holds every file to it.
+(`// pxl-spec/space/indexer.rs`), or for C++, which has no package, the
+path itself (`// cpp/xpute/runtime/ipc/ring.cpp`); an executable script opens
+on its interpreter. `check:rules` holds every file to it.
 
 **A name's case follows the side it is on.** `PascalCase` for types,
 `SCREAMING_SNAKE_CASE` for module constants. Functions and locals are
@@ -198,7 +200,7 @@ their ecosystem's casing; ported code keeps its original conventions
 and a reason, and a shape that needs none — a `const`, a `LazyLock`, a type
 with associated constants — comes first.
 
-**A file's name is its language's**: `snake_case` in Rust and `packages/`,
+**A file's name is its language's**: `snake_case` in Rust, C++ and `packages/`,
 `kebab-case` in `apps/` and `script/`, `kebab-case` for a file of no language.
 What is generated from `spec/` carries the `.spec.` infix on both sides
 (`cube_type.spec.rs`, `cube_type.spec.ts`) and is regenerated, never edited;
@@ -206,6 +208,17 @@ a test carries `.test.` the same way, and a Rust module reaches either through
 `#[path]`. **Directories are singular**, named for the concept they hold,
 except where an ecosystem fixes the name (`node_modules/`, `apps/`,
 `crates/`), and a file inside one does not repeat it (`toast/store.ts`).
+
+**A C++ guest is written the way the Rust one is.** C++20, with exceptions
+and RTTI off and none of the library's runtime surface — `iostream`, locale,
+filesystem. What C++ says that plain code would not — RAII, a template, a
+`constexpr`, `std::array`, `std::span`, `std::optional` — is used where it
+says it, and plain code stays plain, in a `.cpp` as C would write it. Memory
+is the guest's own, as the Rust kernel's is: its one allocator over the heap
+section, `.fixed` for what has a bound (`pxl-kernel mem/fixed.rs`), and a
+settled turn asking the heap for nothing. So a standard container that
+allocates does it through the guest's heap and never the system's
+`operator new`, which would take memory the guest was not given.
 
 **A shape is an `interface`; what an interface cannot say is a `type`.**
 **A number says its width where it has one**: `u32` for a count, length,
