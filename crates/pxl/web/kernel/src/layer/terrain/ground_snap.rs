@@ -8,15 +8,15 @@ use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 
 use crate::world::access::Access;
 
-/// Where the camera's pivot sits at a coordinate's X/Y: the center of the
-/// cube standing on what supports a walker there (world/access.rs
-/// `support`) — the cell the character occupies — its original Z discarded.
-/// None where no page over it is resident.
+/// Where the camera's pivot sits from a coordinate: the center of the cube
+/// standing on what supports a walker starting from the cell it lies in
+/// (world/access.rs `support`) — the cell the character occupies. None
+/// where no page over it is resident.
 ///
 /// A center, not the top face, because the camera pivots on the cube the
 /// character would fill. Every map center an interaction sets — a pan, a
-/// tap, the GPS recenter — is this one, so the first pan after a tap moves
-/// nothing. Standing things (the puck, decor, a place) are grounded to the
+/// tap — is this one, and the free camera's eye stands on the same support,
+/// so the first pan after a tap moves nothing. Standing things (the puck, decor, a place) are grounded to the
 /// top face itself; this is the one place the camera's own convention is
 /// applied.
 pub fn ground_pivot(at: &Pvf3) -> Option<Pvf3> {
