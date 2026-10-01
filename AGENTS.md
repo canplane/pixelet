@@ -344,6 +344,28 @@ art where one exists (Minecraft's chunk model for grid content, Cesium's
   before its deletion has been considered. Implementation size is not a
   cost; server spend and end-user device load are (the valid cost axes;
   turns spent and lines written are not among them).
+- **Remove work before adding machinery to speed it up.** Before a cache,
+  an ordering, an index or any retained state, look for the work that can
+  simply go. Every candidate is one of three things:
+  - **A free reduction:** behavior-equivalent, with no new state kept and
+    no other resource spent. Allocation on a settled turn, a traversal or
+    a computation repeated, a copy, a bind or an upload that changes
+    nothing, work done for a consumer that is off. It is done, and needs
+    no measurement.
+  - **A trade:** it saves one resource by spending another — CPU, GPU,
+    memory, latency, state, determinism — or it changes what is seen,
+    however slightly (an order at equal depth, an update's timing, a
+    criterion made more exact). Its cost and gain are said before it is
+    done, and it is measured where the balance does not follow from the
+    structure.
+  - **Structural debt:** dead state, a fact kept twice, an abstraction or
+    an owner left from an older architecture, a wrapper, a sync that
+    derivation makes unnecessary. It is removed.
+
+  Less work beats faster work, less state beats cached state, and a
+  derivation beats a synchronization. "Optimize it once it measures" is no
+  reason to keep avoidable work: profiling ranks the trades, it is not a
+  license for waste (2026-10-01, the audit after decor left the chunks).
 - **Diff size is not a goal.** A five-hundred-line rewrite that leaves a
   smaller state space beats a twenty-line patch that does not. Do not keep
   an API, a type, a test or a module to hold churn down, and when a change
