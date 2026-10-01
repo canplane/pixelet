@@ -95,7 +95,26 @@ string.
 **Built** 10-01, once both branches were on main: `ipc/sys` in both
 runtimes, the kernel's descriptor table (`io/file.rs`), its roots in
 `host.json`, and the host's in `apps/web/src/kernel/host.ts`. An image still
-comes back as a handle, by LOAD_START and LOAD_CANCEL. **Decided** 10-01. It
+comes back as a handle, by LOAD_START and LOAD_CANCEL. Since:
+
+- A path is walked a name at a time on the host's end, and an empty name,
+  `.` or `..` is refused (`EACCES`), so a root is the whole of what it
+  grants.
+- The settings are the kernel's: storage's file is handed over unread in
+  WORLD_BOOT, as a process is handed its environment — the start is a
+  handshake, not an open the boot would have to wait on — and every write
+  after is the kernel's own, through these calls.
+- An open's answer comes on some later turn, not the next one: a transport
+  takes what it takes.
+- The service has traces of its own, apart from the boundary's C0 to C7
+  (`spec/xpute/conformance/sys/file.tsv`): a late open, an absent file, a
+  read, a write committed at close, a close while opening that is never
+  answered, a slot reused under a new generation before the old open's
+  answer, and the walk.
+
+Where it differs from 9P — no offset on a read, a size in the open's
+answer, images and the GPU as commands — it differs on purpose, and is not
+changed for being different. **Decided** 10-01. It
 supersedes two conclusions of
 [20260930-resources-files-and-streams.md](./20260930-resources-files-and-streams.md):
 "no system-call or descriptor API now" and "no namespace".
