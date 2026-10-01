@@ -122,11 +122,7 @@ struct Cells {
     /// The terrain pages the frontier scatters over, each once, in order.
     pages: Vec<LevelPage>,
     blocks: HashMap<DecorCell, Block>,
-    scratch: Option<DecorScratch>,
-    sample: ChunkSample,
-    cols: Vec<IVec>,
-    placed: Vec<Placed>,
-    folded: HashMap<[i64; 3], u32>,
+    population: Population,
     /// What a turn works in, kept so a settled turn asks the heap for
     /// nothing: the solve's stack, the replacement's state over each wanted
     /// cell's ancestors, the cells it gives back or that cover others or are
@@ -141,6 +137,18 @@ struct Cells {
 }
 
 static CELLS: Global<Cells> = Global::new();
+
+/// What a cell's population is gathered in, kept so a settled turn asks the
+/// heap for nothing: the ground drawn under it, the columns of placed decor
+/// it draws, their objects folded to its level, and the instances.
+#[derive(Default)]
+pub struct Population {
+    scratch: Option<DecorScratch>,
+    sample: ChunkSample,
+    cols: Vec<IVec>,
+    placed: Vec<Placed>,
+    folded: HashMap<[i64; 3], u32>,
+}
 
 fn cells() -> &'static mut Cells {
     CELLS.get(Cells::default)
@@ -264,52 +272,7 @@ fn sources_of(cell: DecorCell, store: &Store, cols: &mut Vec<IVec>, hide: Option
 /// Builds cell `cell`'s block where its page is resident; none where it is
 /// not yet, or the heap refused the block.
 fn build(c: &mut Cells, cell: DecorCell, kinds: &[Kind], store: &Store, draw: &mut DrawList, sources: Sources) -> Option<Block> {
-    let pages = Terrain::pyramid();
-    let page = pages.get(cell.page())?;
-    let level = cell.level;
-    let (x0, y0, _) = cell.rect();
-    let (x0, y0) = (x0 as i64, y0 as i64);
-    let (tx0, ty0) = cell.chunk().in_page();
-    let view = Builder::page_view(page);
-    if sources.shown {
-        let around = Around {
-            own: PageSource { page: view, origin: [0, 0], n: 1 },
-            beside: [None; 8],
-        };
-        c.sample.read(&around, [tx0 as i64, ty0 as i64], hidden_ground(settings_store().structures)).ok()?;
-    }
-    c.placed.clear();
-    c.placed.try_reserve(c.cols.len()).ok()?;
-    c.placed.extend(c.cols.iter().map(|&col_idx| {
-        let o = FROM_L2_IDX(col_idx);
-        Placed {
-            col_idx,
-            ox: (ivec::X(o) - x0) as f64,
-            oy: (ivec::Y(o) - y0) as f64,
-            hittable: level == 0,
-        }
-    }));
-    let target = GROUND.scale(level);
-    let (cx, cy, span) = (target.index(x0), target.index(y0), CHUNK_CELLS as i64);
-    match level > 0 && sources.shown {
-        true => store.fold_at(target, [cx, cy], [cx + span, cy + span], sources.hide, &mut c.folded).ok()?,
-        false => c.folded.clear(),
-    }
-    let ground = Ground {
-        page: &view,
-        sample: &c.sample,
-        level,
-        x0,
-        y0,
-        tx0,
-        ty0,
-        col_idx: (level == 0).then(|| L2_IDX(ivec::gather(x0, y0, 0))),
-        folded: (level > 0).then_some(&c.folded),
-    };
-    let scratch = c.scratch.get_or_insert_with(DecorScratch::default);
-    // A cell is a whole column: every instance over it, at any height.
-    let step = GROUND.scale(0).count_in(target.max(GROUND.scale(0)));
-    let built = DecorBuild::build(scratch, kinds, Some(&ground), &c.placed, sources.hide, store, step, sources.shown)?;
+    let built = c.population.populate(cell, kinds, store, sources)?;
     let index = built.bytes();
     let instances = built.instances() as u32;
     let (at, bytes) = alloc(index + instances * 4)?;
@@ -325,6 +288,69 @@ fn build(c: &mut Cells, cell: DecorCell, kinds: &[Kind], store: &Store, draw: &m
         sources,
         drawn: false,
     })
+}
+
+impl Population {
+    /// The instances z16 cell `cell` holds as it draws them, nothing hidden:
+    /// every decor instance standing over its columns, at the size and turn
+    /// it is drawn at, whatever level the view draws there.
+    pub fn at_z16(&mut self, cell: DecorCell, kinds: &[Kind], store: &Store) -> Option<DecorBuild<'_>> {
+        let sources = sources_of(cell, store, &mut self.cols, None)?;
+        self.populate(cell, kinds, store, sources)
+    }
+
+    /// The instances cell `cell` holds, as its block draws them, the
+    /// columns of its placed decor those `sources_of` last listed into it;
+    /// none where its page is not resident or the heap refused the room.
+    fn populate(&mut self, cell: DecorCell, kinds: &[Kind], store: &Store, sources: Sources) -> Option<DecorBuild<'_>> {
+        let c = self;
+        let pages = Terrain::pyramid();
+        let page = pages.get(cell.page())?;
+        let level = cell.level;
+        let (x0, y0, _) = cell.rect();
+        let (x0, y0) = (x0 as i64, y0 as i64);
+        let (tx0, ty0) = cell.chunk().in_page();
+        let view = Builder::page_view(page);
+        if sources.shown {
+            let around = Around {
+                own: PageSource { page: view, origin: [0, 0], n: 1 },
+                beside: [None; 8],
+            };
+            c.sample.read(&around, [tx0 as i64, ty0 as i64], hidden_ground(settings_store().structures)).ok()?;
+        }
+        c.placed.clear();
+        c.placed.try_reserve(c.cols.len()).ok()?;
+        c.placed.extend(c.cols.iter().map(|&col_idx| {
+            let o = FROM_L2_IDX(col_idx);
+            Placed {
+                col_idx,
+                ox: (ivec::X(o) - x0) as f64,
+                oy: (ivec::Y(o) - y0) as f64,
+                hittable: level == 0,
+            }
+        }));
+        let target = GROUND.scale(level);
+        let (cx, cy, span) = (target.index(x0), target.index(y0), CHUNK_CELLS as i64);
+        match level > 0 && sources.shown {
+            true => store.fold_at(target, [cx, cy], [cx + span, cy + span], sources.hide, &mut c.folded).ok()?,
+            false => c.folded.clear(),
+        }
+        let ground = Ground {
+            page: &view,
+            sample: &c.sample,
+            level,
+            x0,
+            y0,
+            tx0,
+            ty0,
+            col_idx: (level == 0).then(|| L2_IDX(ivec::gather(x0, y0, 0))),
+            folded: (level > 0).then_some(&c.folded),
+        };
+        let scratch = c.scratch.get_or_insert_with(DecorScratch::default);
+        // A cell is a whole column: every instance over it, at any height.
+        let step = GROUND.scale(0).count_in(target.max(GROUND.scale(0)));
+        DecorBuild::build(scratch, kinds, Some(&ground), &c.placed, sources.hide, store, step, sources.shown)
+    }
 }
 
 fn release(block: Block, draw: &mut DrawList) {
@@ -367,7 +393,6 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Ent
     c.over.sort_unstable();
     c.over.dedup();
     let mut built = 0;
-    let mut cols = core::mem::take(&mut c.cols);
     for coarsening in [true, false] {
         for &cell in &frontier {
             if built >= BUILDS_PER_FRAME {
@@ -376,7 +401,7 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Ent
             if c.over.binary_search(&cell).is_ok() != coarsening {
                 continue;
             }
-            let Some(sources) = sources_of(cell, store, &mut cols, hide) else { continue };
+            let Some(sources) = sources_of(cell, store, &mut c.population.cols, hide) else { continue };
             let held = c.blocks.get(&cell);
             if held.is_some_and(|b| b.sources == sources) {
                 continue;
@@ -384,7 +409,6 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Ent
             if held.is_none() && !coarsening && c.blocks.len() >= BLOCKS_MAX {
                 continue;
             }
-            c.cols = core::mem::take(&mut cols);
             if let Some(mut b) = build(c, cell, kinds, store, draw, sources) {
                 b.drawn = c.blocks.get(&cell).is_some_and(|old| old.drawn);
                 if let Some(old) = c.blocks.insert(cell, b) {
@@ -392,10 +416,8 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Ent
                 }
                 built += 1;
             }
-            cols = core::mem::take(&mut c.cols);
         }
     }
-    c.cols = cols;
 
     let wanted = |cell: &DecorCell| frontier.binary_search(cell).is_ok();
     let ready = |cell: DecorCell, blocks: &HashMap<DecorCell, Block>| blocks.contains_key(&cell) || pages.settled(cell.page());
@@ -524,7 +546,6 @@ pub fn lanes(offset: u32, count: u32) -> GroupLanes {
 pub fn bytes() -> u32 {
     cells().blocks.values().map(|b| b.bytes).sum()
 }
-
 
 /// The cells holding a block, and the instances their blocks hold.
 pub fn counts() -> (u32, u32) {

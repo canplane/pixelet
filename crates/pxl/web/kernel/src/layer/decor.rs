@@ -13,3 +13,4 @@ pub mod instance;
 pub mod kind;
 pub mod registry;
 pub mod scatter;
+pub mod volume;

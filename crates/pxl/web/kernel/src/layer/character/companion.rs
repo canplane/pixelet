@@ -38,15 +38,12 @@ use crate::layer::character::store::companion_load_store;
 use crate::layer::character::variant::{character_variant, CharacterGroup, CharacterVariant};
 use crate::layer::character::variant_spec::IDLE_CLIP;
 use crate::layer::model::asset::{register_model, ModelHandle};
-use crate::layer::object::store::objects_revision;
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::settings_store;
-use crate::world::access::Access;
+use crate::world::access::{support_revision, Access};
 use crate::world::change::wake_at;
 use crate::world::frame::coord::{local_height, local_world_to_canonical};
 use crate::world::frame::view::view;
-use crate::world::pyramid::Layer as _;
-use pxl_spec::bake::format::Terrain;
 
 /// A variant's model in the scheduler, registered once per model and height
 /// whoever asks first; None inside while it failed. By asset, then by height's
@@ -126,8 +123,7 @@ struct Surface {
     x: f64,
     y: f64,
     origin: Option<IVec>,
-    revision: u32,
-    tiles: u32,
+    revision: [u32; 3],
     z: Option<f64>,
 }
 
@@ -174,8 +170,7 @@ impl Walker {
                 x: f64::NAN,
                 y: f64::NAN,
                 origin: None,
-                revision: u32::MAX,
-                tiles: u32::MAX,
+                revision: [u32::MAX; 3],
                 z: None,
             },
         }
@@ -339,15 +334,13 @@ impl Walker {
         // Z is what the walker stands on there (world/access.rs `support`):
         // asked again only when something it depends on moved.
         let s = &mut self.surface;
-        let revision = objects_revision();
-        let tiles = Terrain::pyramid().revision();
-        if s.x != px || s.y != py || s.origin != Some(map_origin) || s.revision != revision || s.tiles != tiles {
+        let revision = support_revision();
+        if s.x != px || s.y != py || s.origin != Some(map_origin) || s.revision != revision {
             *s = Surface {
                 x: px,
                 y: py,
                 origin: Some(map_origin),
                 revision,
-                tiles,
                 z: footing(map_origin, px, py),
             };
         }

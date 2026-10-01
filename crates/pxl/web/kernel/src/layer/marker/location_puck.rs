@@ -20,12 +20,9 @@ use crate::kernel::{kernel, with_world};
 use crate::layer::environment::fog::view_reach;
 use crate::layer::environment::theme::Theme;
 use crate::layer::environment::theme_clock::theme_key;
-use crate::layer::object::store::objects_revision;
-use crate::world::access::Access;
+use crate::world::access::{support_revision, Access};
 use crate::world::change::request_world_tick;
 use crate::world::chunk::table::Frame;
-use crate::world::pyramid::Layer as _;
-use pxl_spec::bake::format::Terrain;
 
 // The numerator (4) is a world-space distance, not a cell count — it fixes the
 // zone's footprint size independent of U_PER_CELL. The .707 shave is a fixed
@@ -79,10 +76,11 @@ struct Puck {
     /// Not yet grounded gates drawing, instead of drawing the marker at a
     /// guessed height while the device's own page isn't loaded yet.
     last_known_center_z: Option<f64>,
-    /// The zone as last written: its center, and the tiles and the objects it
-    /// was grounded against. A zone sample can reach a page not yet loaded; a
-    /// page arriving, or an object placed or carved, grounds it again.
-    zone_for: Option<(V3, u32, u32)>,
+    /// The zone as last written: its center, and what it was grounded
+    /// against (world/access.rs `support_revision`). A zone sample can reach
+    /// a page not yet loaded; a page arriving, an object placed or carved, or
+    /// decor arriving grounds it again.
+    zone_for: Option<(V3, [u32; 3])>,
     beacon_for: Option<([f64; 2], bool)>,
     shown: bool,
 }
@@ -119,9 +117,9 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
     let mut center_pos = [0.0; 3];
     floor3n(&raw, U_PER_CELL, &mut center_pos);
 
-    let (tiles, objects) = (Terrain::pyramid().revision(), objects_revision());
-    if p.zone_for != Some((center_pos, tiles, objects)) {
-        p.zone_for = Some((center_pos, tiles, objects));
+    let revision = support_revision();
+    if p.zone_for != Some((center_pos, revision)) {
+        p.zone_for = Some((center_pos, revision));
         let mut lane: Vec<f32> = Vec::with_capacity(p.samples.len() * 7);
         let mut v = [0.0; 3];
         for s in &p.samples {

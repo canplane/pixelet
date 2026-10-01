@@ -59,7 +59,8 @@ use pxl_spec::space::xy::TO_XY;
 
 use crate::io::demand::Category;
 use crate::kernel::kernel;
-use crate::layer::object::store::{EntryAt, EntryCursor, Store};
+use crate::layer::decor::volume::{decor_column, decor_volume_revision};
+use crate::layer::object::store::{objects_revision, EntryAt, EntryCursor, Store};
 use crate::world::paging::Paging;
 use crate::world::pyramid::{Layer as _, Pyramid};
 
@@ -291,6 +292,13 @@ struct Region {
     terrain: Option<((f64, f64), bool)>,
 }
 
+/// Changes whenever what `Access::support` answers may: the terrain held,
+/// the objects, and what decor fills. What keeps a support asks again when
+/// it does.
+pub fn support_revision() -> [u32; 3] {
+    [Terrain::pyramid().revision(), objects_revision(), decor_volume_revision()]
+}
+
 impl<'a> Access<'a> {
     pub fn new(terrain: &'a Paging<Terrain>, objects: &'a Store) -> Access<'a> {
         Access { terrain, objects, visits: None }
@@ -334,7 +342,12 @@ impl<'a> Access<'a> {
         self.composed([ix, iy]).map(|c| {
             let side = CELL.side();
             let top = (c.top / side).round() as i64;
+            let mut decor = Vec::new();
+            decor_column(self.objects, ix, iy, &mut decor);
             let solid = |cz: i64| {
+                if let Some(&(_, filled)) = decor.iter().find(|&&(z, _)| z == cz) {
+                    return filled;
+                }
                 let v = u32::from(self.objects.folded_value(CELL, [ix, iy, cz]));
                 if object_value_is_voxel(v) {
                     return !object_value_is_air(v);

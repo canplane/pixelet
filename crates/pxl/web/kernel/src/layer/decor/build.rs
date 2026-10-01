@@ -309,16 +309,7 @@ impl<'s> DecorBuild<'s> {
     /// it, at any height. None where the heap refused the scratch room for
     /// them, and the cell is not built.
     #[allow(clippy::too_many_arguments)]
-    pub fn build(
-        scratch: &'s mut DecorScratch,
-        kinds: &[Kind],
-        ground: Option<&Ground>,
-        placed: &[Placed],
-        hide: Option<EntryAt>,
-        store: &Store,
-        step: u32,
-        decor: bool,
-    ) -> Option<DecorBuild<'s>> {
+    pub fn build(scratch: &'s mut DecorScratch, kinds: &[Kind], ground: Option<&Ground>, placed: &[Placed], hide: Option<EntryAt>, store: &Store, step: u32, decor: bool) -> Option<DecorBuild<'s>> {
         scratch.clear();
         for kind in kinds {
             // A kind with no variant has no group to fill and no variant to
@@ -352,7 +343,9 @@ impl<'s> DecorBuild<'s> {
     /// One column's placed instances of `kind`, into its groups from
     /// `first`, in the store's entry order.
     fn placed(scratch: &mut DecorScratch, kind: &Kind, first: usize, column: &Placed, hide: Option<EntryAt>, store: &Store) -> Result<(), TryReserveError> {
-        let (Some(value), Some(e)) = (kind.decor_value, store.entries(column.col_idx)) else { return Ok(()) };
+        let (Some(value), Some(e)) = (kind.decor_value, store.entries(column.col_idx)) else {
+            return Ok(());
+        };
         let (bands, poss, states) = (e.band, e.pos, e.state);
         for k in 0..bands.len() {
             if states[k] != value {
@@ -456,6 +449,11 @@ impl<'s> DecorBuild<'s> {
             }
         }
         Ok(())
+    }
+
+    /// Each instance with the group it is drawn in.
+    pub(crate) fn each(&self) -> impl Iterator<Item = (usize, &Instance)> {
+        self.scratch.groups.iter().map(|&g| g as usize).zip(&self.scratch.instances)
     }
 
     /// The instances the block holds.
