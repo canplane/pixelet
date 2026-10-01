@@ -35,25 +35,54 @@ pub struct Sheet {
     pub faces: Vec<TileFace>,
 }
 
+/// Which of a box's three images a tile is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Face {
+    Top,
+    Side,
+    Bottom,
+}
+
+impl Face {
+    /// The member of the generated `CubeFace`.
+    fn member(self) -> &'static str {
+        match self {
+            Face::Top => "Top",
+            Face::Side => "Side",
+            Face::Bottom => "Bottom",
+        }
+    }
+
+    /// The name the shell's table spells it with.
+    fn name(self) -> &'static str {
+        match self {
+            Face::Top => "top",
+            Face::Side => "side",
+            Face::Bottom => "bottom",
+        }
+    }
+}
+
 /// One cube face and the tile it wears.
 pub struct TileFace {
     pub channel: String,
     pub ty: String,
-    pub side: bool,
+    pub face: Face,
     pub tile: u32,
 }
 
 /// The cube faces each tile is, from the manifest's slot for it: a top is
-/// its channel's type, a side the type of that name in every channel that
-/// has one. A slot that names no type in the catalog is an error rather than
+/// its channel's type, a side or a bottom the type of that name in every
+/// channel that has one. A slot that names no type in the catalog is an error rather than
 /// a tile no face wears, which is how a renamed type once left its blocks
 /// untextured with nothing said.
 pub fn faces(slots: &[Slot], channels: &[(String, Vec<String>)]) -> Result<Vec<TileFace>, String> {
     let mut out = Vec::new();
     for (n, slot) in slots.iter().enumerate() {
-        let (side, ty, wanted) = match slot {
-            Slot::Top { channel, ty } => (false, ty, Some(channel.as_str())),
-            Slot::Side { ty } => (true, ty, None),
+        let (face, ty, wanted) = match slot {
+            Slot::Top { channel, ty } => (Face::Top, ty, Some(channel.as_str())),
+            Slot::Side { ty } => (Face::Side, ty, None),
+            Slot::Bottom { ty } => (Face::Bottom, ty, None),
         };
         let before = out.len();
         for (channel, types) in channels.iter().filter(|(ch, _)| *ch != "common" && wanted.is_none_or(|w| w == *ch)) {
@@ -61,7 +90,7 @@ pub fn faces(slots: &[Slot], channels: &[(String, Vec<String>)]) -> Result<Vec<T
                 out.push(TileFace {
                     channel: channel.clone(),
                     ty: ty.clone(),
-                    side,
+                    face,
                     tile: n as u32,
                 });
             }
@@ -137,7 +166,7 @@ export const SHEET = {
     }
     out.push_str("  ],\n  faces: [\n");
     for f in &sheet.faces {
-        let _ = writeln!(out, "    [\"{}\", \"{}\", \"{}\", {}],", f.channel, f.ty, if f.side { "side" } else { "top" }, f.tile);
+        let _ = writeln!(out, "    [\"{}\", \"{}\", \"{}\", {}],", f.channel, f.ty, f.face.name(), f.tile);
     }
     out.push_str("  ],\n} as const;\n");
     out
@@ -211,13 +240,14 @@ pub struct IngestedAsset {
     out.push_str(
         r##"];
 
-/// Which of a box's images a tile is. The split is the renderer's own: a face
-/// is lateral at `abs(normal.z) < 0.5`, so a bottom face wears the top image
-/// just as the top face does.
+/// Which of a box's images a tile is, as Minecraft's `cube_bottom_top`
+/// names them. Which face of a box wears which is the renderer's
+/// (chunk.wgsl): a cell below the surface wears its bottom on every side.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CubeFace {
     Top,
     Side,
+    Bottom,
 }
 
 /// The texture pack as one sheet: `columns` tiles of `cell` pixels per
@@ -246,7 +276,7 @@ pub const SHEET: Sheet = Sheet {
     for f in &sheet.faces {
         let mut c = f.channel.chars();
         let upper: String = c.next().map(|first| first.to_ascii_uppercase().to_string() + c.as_str()).unwrap_or_default();
-        let face = if f.side { "Side" } else { "Top" };
+        let face = f.face.member();
         let _ = writeln!(out, "        (PlaceableCube::{upper}(cube_types::{upper}::{}), CubeFace::{face}, {}),", f.ty, f.tile);
     }
     out.push_str("    ],\n    means: &[\n");

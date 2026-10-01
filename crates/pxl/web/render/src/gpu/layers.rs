@@ -1,16 +1,16 @@
 // pxl-render/gpu/layers.rs
 
 //! The texture pack as one 2D array texture on the device, and the table a
-//! layer's two faces are found in it through.
+//! layer's three images are found in it through.
 //!
-//! A slot of the array is a distinct tile of the pack, not a layer: a side
-//! with no tile of its own wears the top's and shares its slot, and a layer
-//! the pack ships nothing for takes none at all — it reads as the box's own
-//! color, which the shader already has. The table turns the layer index the
-//! mesher bakes into a box's taps (mesh/paint/palette/shader_meta.rs) into
-//! the slot its top and its side are in. Two arrays of a layer each, one the
-//! copy of the other for most of them, was half again the memory and twice
-//! the samples a fragment took.
+//! A slot of the array is a distinct tile of the pack, not a layer: a side or
+//! a bottom with no tile of its own wears the top's and shares its slot, and
+//! a layer the pack ships nothing for takes none at all — it reads as the
+//! box's own color, which the shader already has. The table turns the layer
+//! index the mesher bakes into a box's taps (mesh/paint/palette/shader_meta.rs)
+//! into the slots its top, its side and its bottom are in. Two arrays of a
+//! layer each, one the copy of the other for most of them, was half again the
+//! memory and twice the samples a fragment took.
 //!
 //! The array keeps its mip chain: a tile a cell minifies to a few texels at
 //! the far tiers, and without the chain every camera movement resamples a
@@ -107,17 +107,22 @@ fn each_layer(mut f: impl FnMut(Option<PlaceableCube>, u32, u32)) {
 }
 
 /// A face with no tile of its own in the pack: the box's own color is what
-/// it reads as, and no slot of the array is spent waiting for one.
-const NO_SLOT: u32 = 0xffff;
+/// it reads as, and no slot of the array is spent waiting for one. A slot is
+/// ten bits, past any array WebGPU gives (maxTextureArrayLayers is 256).
+const NO_SLOT: u32 = 0x3ff;
+const SLOT_BITS: u32 = 10;
 
-/// Where a layer's two faces are drawn in the array, packed as the shader
-/// reads them: the top in the low half, the side in the high.
-fn slot_word(top: u32, side: u32) -> u32 {
-    top | (side << 16)
+/// Where a layer's three images are drawn in the array, packed as the shader
+/// reads them: the top in the low ten bits, the side in the next, the bottom
+/// in the ten over those.
+const fn slot_word(top: u32, side: u32, bottom: u32) -> u32 {
+    top | (side << SLOT_BITS) | (bottom << (2 * SLOT_BITS))
 }
 
+const NO_SLOTS: u32 = slot_word(NO_SLOT, NO_SLOT, NO_SLOT);
+
 /// The array the pack needs, and the table that finds a face in it: one slot
-/// a distinct tile, so a side that wears the top's shares its slot and a
+/// a distinct tile, so an image that wears the top's shares its slot and a
 /// layer the pack ships nothing for takes none at all.
 fn plan() -> (Vec<TileOrigin>, Vec<u32>) {
     fn slot_of(slots: &mut Vec<TileOrigin>, tile: Option<TileOrigin>) -> u32 {
@@ -134,12 +139,15 @@ fn plan() -> (Vec<TileOrigin>, Vec<u32>) {
     let mut table: Vec<u32> = Vec::new();
     each_layer(|cube, layer, _| {
         let top = cube.and_then(|cube| shipped_texture_tile(cube, CubeFace::Top));
-        // A side with no tile of its own wears the top's, which is the same
-        // tile and so the same slot.
+        // A type with no side of its own is one image on every face, as
+        // Minecraft's cube_all: its side and its bottom wear the top's tile,
+        // and so its slot. The pack has no side without a bottom
+        // (pxl-tool asset/pack.rs).
         let side = cube.and_then(|cube| shipped_texture_tile(cube, CubeFace::Side)).or(top);
-        let word = slot_word(slot_of(&mut slots, top), slot_of(&mut slots, side));
+        let bottom = cube.and_then(|cube| shipped_texture_tile(cube, CubeFace::Bottom)).or(top);
+        let word = slot_word(slot_of(&mut slots, top), slot_of(&mut slots, side), slot_of(&mut slots, bottom));
         if table.len() <= layer as usize {
-            table.resize(layer as usize + 1, slot_word(NO_SLOT, NO_SLOT));
+            table.resize(layer as usize + 1, NO_SLOTS);
         }
         table[layer as usize] = word;
     });
@@ -149,7 +157,7 @@ fn plan() -> (Vec<TileOrigin>, Vec<u32>) {
 pub struct Layers {
     tex: u32,
     pub view: u32,
-    /// Where each layer's faces are in the array, as the shader reads it.
+    /// Where each layer's images are in the array, as the shader reads it.
     pub table: u32,
     pub sampler: u32,
     pub bytes: u32,
@@ -181,7 +189,7 @@ impl Layers {
         let sampler = object();
         g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::LINEAR, address::REPEAT, compare::NONE, 4);
         let table = object();
-        let blank: Vec<u32> = vec![slot_word(NO_SLOT, NO_SLOT); table_len()];
+        let blank: Vec<u32> = vec![NO_SLOTS; table_len()];
         g.buffer(table, (blank.len() * 4) as u32, buffer_usage::STORAGE | buffer_usage::COPY_DST);
         g.write_buffer(table, 0, bytes(&blank));
         // A chain is the sum of its levels' texels: under four thirds of the first.

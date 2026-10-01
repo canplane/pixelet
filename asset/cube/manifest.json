@@ -1,19 +1,19 @@
 {
   "pack": {
     "name": "pixelet-ms2-inspired-original",
-    "description": "Original individual 64x64 terrain and object textures for pixelet. All active assets use an original hand-painted fantasy-game visual style. The 15 object block textures share one generic painted plaster/stucco architectural material and differ only by palette color. The existing filenames are retained only for code compatibility. It is an original design and does not copy MapleStory 2 or any other game.",
-    "tileSize": 64,
+    "description": "Original individual 256x256 terrain and object textures for pixelet. All active assets use an original hand-painted fantasy-game visual style. The 15 object block textures share one generic painted plaster/stucco architectural material and differ only by palette color. The existing filenames are retained only for code compatibility. It is an original design and does not copy MapleStory 2 or any other game.",
+    "tileSize": 256,
     "format": "PNG",
     "filesAreIndividual": true,
-    "activeAssetCount": 60,
-    "cutePaintedActiveCount": 60,
+    "activeAssetCount": 73,
+    "cutePaintedActiveCount": 73,
     "legacyActiveCount": 0,
     "allActiveAssetsUseCutePaintedStyle": true,
     "sourcePalette": {
       "terrain": "pixelet terrain/carto.json",
       "objects": "pixelet objects/default.json"
     },
-    "note": "Download each active source image as an individual file and normalize it to exactly 64x64 RGBA PNG. For these hand-painted assets, use high-quality Lanczos or bicubic downsampling when the source is larger than 64x64; do not use nearest-neighbor on the painted set because it can reintroduce visible pixelation. Do not make a sprite sheet. The cute-painted set covers all 17 land/water top materials, all 5 structure tops, all 10 transport tops, and all 13 terrain sides. The SEA, LAKE, RIVER, and WETLAND water entries were refreshed with a calmer pastel-painted water treatment: broad soft tonal drift, restrained contrast, and no strong repeated ripple pattern. The RAIL_MAIN and RAIL_SUBWAY transport entries were refreshed with an isotropic rail-ballast treatment with no directional lines, since a single stamped tile cannot be rotated to match each way's real bearing. All 15 object block textures now use the shared generic-painted-plaster-stucco-v1 material. The existing filenames are retained only for code compatibility; none of the active block textures represent wool or fiber. Each color keeps its existing paletteHex and has its own individual PNG (60 cute-painted, 0 legacy = 60 active assets total). Preserve distinct-per-type mappings and do not collapse types. The old sourceCreation 28 exposed-soil image is intentionally excluded and must not be assigned to any terrain type.",
+    "note": "Download each active source image as an individual file and normalize it to exactly 256x256 opaque RGBA PNG. For these hand-painted assets, use high-quality Lanczos or bicubic downsampling when the source is larger than 256x256; do not use nearest-neighbor on the painted set because it can reintroduce visible pixelation. Do not make a sprite sheet. The cute-painted set covers all 17 land/water top materials, all 5 structure tops, all 10 transport tops, all 13 terrain sides, and the 13 terrain bottoms. The SEA, LAKE, RIVER, and WETLAND water entries were refreshed with a calmer pastel-painted water treatment: broad soft tonal drift, restrained contrast, and no strong repeated ripple pattern. The RAIL_MAIN and RAIL_SUBWAY transport entries were refreshed with an isotropic rail-ballast treatment with no directional lines, since a single stamped tile cannot be rotated to match each way's real bearing. All 15 object block textures now use the shared generic-painted-plaster-stucco-v1 material. The existing filenames are retained only for code compatibility; none of the active block textures represent wool or fiber. Each color keeps its existing paletteHex and has its own individual PNG (73 cute-painted, 0 legacy = 73 active assets total). Preserve distinct-per-type mappings and do not collapse types. The old sourceCreation 28 exposed-soil image is intentionally excluded and must not be assigned to any terrain type.",
     "conversion": {
       "status": "complete",
       "cutePaintedGroups": [
@@ -22,15 +22,17 @@
         "terrain.top.structure",
         "terrain.top.transport",
         "terrain.side",
+        "terrain.bottom",
         "objects.block"
       ],
       "legacyGroups": [],
-      "cutePaintedAssetCount": 60,
+      "cutePaintedAssetCount": 73,
       "legacyAssetCount": 0,
       "remainingForCutePaintedConversion": 0,
       "fullPackComplete": true,
-      "note": "The pack is now fully converted to the active painted style. All 17 land/water top materials, 5 structure tops, 10 transport tops, 13 terrain sides, and 15 object blocks are active. The 15 object blocks share the generic-painted-plaster-stucco-v1 architectural surface rule and differ only by palette color. The existing filenames remain unchanged for compatibility. The calm-water variants remain active, and the old sourceCreation 28 exposed-soil image remains excluded."
-    }
+      "note": "The pack is now fully converted to the active painted style. All 17 land/water top materials, 5 structure tops, 10 transport tops, 13 terrain sides, 13 terrain bottoms, and 15 object blocks are active. The 15 object blocks share the generic-painted-plaster-stucco-v1 architectural surface rule and differ only by palette color. The existing filenames remain unchanged for compatibility. The calm-water variants remain active, and the old sourceCreation 28 exposed-soil image remains excluded."
+    },
+    "bottomNote": "A terrain bottom is the type's ground material under its surface, as Minecraft's grass block wears dirt on its bottom face and the blocks under it are dirt: the face under the box, and every side cell below the one at the surface. It repeats no top lip. A type with a side has a bottom; a type with neither is the same image on every face."
   },
   "terrain": {
     "top": {
@@ -356,6 +358,99 @@
         "sourceCreationId": "75cab513-b9dd-414f-b49b-db009cc4344f",
         "url": "https://image-assets.jianhua.art/public/1788240519310_yl3gts.png",
         "file": "terrain/side_helipad.png",
+        "paletteHex": "#BBBBCC",
+        "style": "cute-painted-fantasy-v1"
+      }
+    },
+    "bottom": {
+      "bare": {
+        "sourceCreationId": "4784de86-303d-4de7-a7da-da28f446cbdc",
+        "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/2672f7de-7685-4529-a599-47935acbd835.png",
+        "file": "terrain/bottom_bare.png",
+        "paletteHex": null,
+        "style": "cute-painted-fantasy-v1"
+      },
+      "green_deep": {
+        "sourceCreationId": "36bec971-d8d3-4a94-96bc-488f41031b25",
+        "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/ec46172f-a659-4e87-99f7-e20db059fa22.png",
+        "file": "terrain/bottom_green_deep.png",
+        "paletteHex": "#ADD19E",
+        "style": "cute-painted-fantasy-v1"
+      },
+      "green_light": {
+        "sourceCreationId": "0c1bc181-7ff2-4316-a9c1-153566b352c3",
+        "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/e39ef483-fa71-4d2c-a5f9-491c62e7adb8.png",
+        "file": "terrain/bottom_green_light.png",
+        "paletteHex": "#C8FACC",
+        "style": "cute-painted-fantasy-v1"
+      },
+      "sports": {
+        "sourceCreationId": "b1039902-e240-451a-8003-793bcfb88e47",
+        "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/5b99cb3c-7adc-4769-bde6-590ca45497f5.png",
+        "file": "terrain/bottom_sports.png",
+        "paletteHex": "#88E0BE",
+        "style": "cute-painted-fantasy-v1"
+      },
+      "sand": {
+        "sourceCreationId": "185674bf-5f00-4e92-951e-afaaf38e33b6",
+        "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/e97cce52-d566-48f8-b02c-70fafc76d759.png",
+        "file": "terrain/bottom_sand.png",
+        "paletteHex": "#F5E9C6",
+        "style": "cute-painted-fantasy-v1"
+      },
+      "residential": {
+        "sourceCreationId": "a6da25f7-f190-46d6-a6d6-ea165bd086ba",
+        "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/baf3358f-14a2-410b-bc04-e6184b862307.png",
+        "file": "terrain/bottom_residential.png",
+        "paletteHex": "#E0DFDF",
+        "style": "cute-painted-fantasy-v1"
+      },
+      "commercial": {
+        "sourceCreationId": "42cc7f72-c05f-4eab-a42b-f2c94894ca60",
+        "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/5e38706e-66a4-4a12-a8d4-ab4b027a1349.png",
+        "file": "terrain/bottom_commercial.png",
+        "paletteHex": "#F2DAD9",
+        "style": "cute-painted-fantasy-v1"
+      },
+      "industrial": {
+        "sourceCreationId": "a57fb713-ce0e-41f1-8373-d5ef8b4619de",
+        "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/c47e06e9-3f02-4272-b2ab-8cbab1c3ee5c.png",
+        "file": "terrain/bottom_industrial.png",
+        "paletteHex": "#EBDBE8",
+        "style": "cute-painted-fantasy-v1"
+      },
+      "education": {
+        "sourceCreationId": "2b3adca2-fb7e-445d-999d-c3fb23501214",
+        "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/e9896a2d-14d2-4e2a-96aa-2ea3c39cfbc9.png",
+        "file": "terrain/bottom_education.png",
+        "paletteHex": "#FFFFE5",
+        "style": "cute-painted-fantasy-v1"
+      },
+      "medical": {
+        "sourceCreationId": "25df9871-8d2a-4ba6-bc05-a8d8de2044c6",
+        "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/bba1a61d-ae55-49be-820e-572ece57059b.png",
+        "file": "terrain/bottom_medical.png",
+        "paletteHex": "#FFFFE5",
+        "style": "cute-painted-fantasy-v1"
+      },
+      "public": {
+        "sourceCreationId": "215d0c91-9b73-40c3-8dae-9eba8733f91a",
+        "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/1cf7886d-6a0e-4bab-9f9f-5c541c4b7b07.png",
+        "file": "terrain/bottom_public.png",
+        "paletteHex": "#FFFFE5",
+        "style": "cute-painted-fantasy-v1"
+      },
+      "apron": {
+        "sourceCreationId": "6f052ae5-ff35-41d9-b190-da6c4d45a5a8",
+        "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/4113cbaa-9017-4365-8f06-86d631e24198.png",
+        "file": "terrain/bottom_apron.png",
+        "paletteHex": "#DADAE0",
+        "style": "cute-painted-fantasy-v1"
+      },
+      "helipad": {
+        "sourceCreationId": "517f9f20-8fb6-453d-af3d-ed904b923d31",
+        "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/9399c2d7-c871-4dd4-99a1-4d00cc4322e5.png",
+        "file": "terrain/bottom_helipad.png",
         "paletteHex": "#BBBBCC",
         "style": "cute-painted-fantasy-v1"
       }

@@ -28,16 +28,22 @@ struct Draw {
 
 @group(0) @binding(3) var<storage, read> draws: array<Draw>;
 @group(0) @binding(4) var layers: texture_2d_array<f32>;
-// Where each layer's two faces are in the array: the top's slot in the low
-// half of its word, the side's in the high (gpu/layers.rs). NO_SLOT for a
-// face the pack ships no tile for, and for every face until it arrives.
+// Where each layer's three images are in the array: the top's slot in the
+// low ten bits of its word, the side's in the next ten, the bottom's in the
+// ten over those (gpu/layers.rs). NO_SLOT for an image the pack ships no
+// tile for, and for every one until it arrives.
 @group(0) @binding(5) var<storage, read> layer_slot: array<u32>;
 @group(0) @binding(6) var layer_sampler: sampler;
 
 // volume.rs's NO_LAYER: a tap past the last layer means the vertex color.
 const NO_LAYER: f32 = 255.0;
-// gpu/layers.rs's NO_SLOT.
-const NO_SLOT: u32 = 0xffffu;
+// gpu/layers.rs's NO_SLOT and SLOT_BITS.
+const NO_SLOT: u32 = 0x3ffu;
+const SLOT_BITS: u32 = 10u;
+// Which of a layer's images a face wears: its field in the word.
+const IMAGE_TOP: u32 = 0u;
+const IMAGE_SIDE: u32 = 1u;
+const IMAGE_BOTTOM: u32 = 2u;
 
 // The words one box was handed, as vertex attributes stepped per instance.
 // The first four are always there; the last two only where the format is the
@@ -444,16 +450,34 @@ fn occlusion(local_pos: vec3f, box_scale: vec3f, normal: vec3f, faces: u32) -> f
   return 1.0 - open;
 }
 
+// Which image a face wears, as Minecraft draws a grass block over dirt: the
+// cell at the surface is the grass block — its top on top, its side with
+// the top's lip on the sides, its bottom underneath — and every cell under
+// it is the dirt, its bottom on every face. A box is a run of one material
+// from its top down, and a side's v counts cells from that top (vs), so the
+// surface's cell is the first row of a box nothing stands on (CAP_PZ). A
+// cell something stands on is dirt too, as a grass block under a block
+// turns to dirt. A type with no side of its own has all three images the
+// same (gpu/layers.rs), so this changes nothing for it.
+fn face_image(normal: vec3f, v: f32, faces: u32) -> u32 {
+  if (normal.z > 0.5) {
+    return IMAGE_TOP;
+  }
+  if (normal.z < -0.5) {
+    return IMAGE_BOTTOM;
+  }
+  return select(IMAGE_BOTTOM, IMAGE_SIDE, v < 1.0 && !face_bit(faces, CAP_PZ));
+}
+
 // The gradients are the caller's: a tap is read inside a branch — a box
 // with no layer skips the read altogether — and a sample that takes its own
 // gradients may only be called where every fragment of the quad takes it.
-fn sample_tap(layer: f32, is_side: bool, uv: vec2f, ddx: vec2f, ddy: vec2f, fallback: vec3f) -> vec3f {
+fn sample_tap(layer: f32, image: u32, uv: vec2f, ddx: vec2f, ddy: vec2f, fallback: vec3f) -> vec3f {
   let l = u32(clamp(layer, 0.0, 255.0) + 0.5);
   if (l >= arrayLength(&layer_slot)) {
     return fallback;
   }
-  let word = layer_slot[l];
-  let slot = select(word & 0xffffu, word >> 16u, is_side);
+  let slot = (layer_slot[l] >> (image * SLOT_BITS)) & NO_SLOT;
   if (slot == NO_SLOT) {
     return fallback;
   }
@@ -471,11 +495,11 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let ddy = dpdy(i.box_uv);
   var taps = i.rgb;
   if (textured) {
-    let is_side = abs(i.normal.z) < 0.5;
-    taps = (sample_tap(i.layer_taps.x, is_side, i.box_uv, ddx, ddy, i.rgb)
-      + sample_tap(i.layer_taps.y, is_side, i.box_uv, ddx, ddy, i.rgb)
-      + sample_tap(i.layer_taps.z, is_side, i.box_uv, ddx, ddy, i.rgb)
-      + sample_tap(i.layer_taps.w, is_side, i.box_uv, ddx, ddy, i.rgb)) * 0.25;
+    let image = face_image(i.normal, i.box_uv.y, i.faces);
+    taps = (sample_tap(i.layer_taps.x, image, i.box_uv, ddx, ddy, i.rgb)
+      + sample_tap(i.layer_taps.y, image, i.box_uv, ddx, ddy, i.rgb)
+      + sample_tap(i.layer_taps.z, image, i.box_uv, ddx, ddy, i.rgb)
+      + sample_tap(i.layer_taps.w, image, i.box_uv, ddx, ddy, i.rgb)) * 0.25;
   }
   var base = taps;
   base = base * mix(1.0, 1.0 - frame_edge_strength(), edge_factor(i.local_pos, i.box_scale, i.normal, i.faces));

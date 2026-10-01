@@ -17,7 +17,7 @@ import type { u32 } from "@xpute/core/abi/word.ts";
 import { INGESTED, SHEET } from "./ingested.spec.ts";
 
 /** Each cube kind's top image, by channel and type name: the face a swatch
- * shows. The sheet's side images are the renderer's alone
+ * shows. The sheet's side and bottom images are the renderer's alone
  * (crates/pxl/web/render/src/gpu/layers.rs), which no swatch shows. */
 const TOP_TILE = new Map<string, u32>(SHEET.faces.filter(([, , face]) => face === "top").map(([channel, type, , n]) => [`${channel}/${type}`, n]));
 

@@ -45,6 +45,8 @@ struct Entry {
 struct Terrain {
     top: BTreeMap<String, BTreeMap<String, Entry>>,
     side: BTreeMap<String, Entry>,
+    #[serde(default)]
+    bottom: BTreeMap<String, Entry>,
 }
 
 #[derive(Deserialize)]
@@ -59,13 +61,15 @@ struct Manifest {
 }
 
 /// Which cube face an entry is the image of, by the manifest's own keys: the
-/// top of a channel's type, or the side of a type in every channel that has
-/// one of that name. A placed block is the `block` channel's top. The file's
-/// name says nothing here — a pack names its files as it likes.
+/// top of a channel's type, or the side or the bottom of a type in every
+/// channel that has one of that name. A placed block is the `block` channel's
+/// top. The file's name says nothing here — a pack names its files as it
+/// likes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Slot {
     Top { channel: String, ty: String },
     Side { ty: String },
+    Bottom { ty: String },
 }
 
 /// One entry as the tool works it: where it comes from, where its original is
@@ -113,8 +117,20 @@ pub fn load(cube_dir: &Path) -> Result<Vec<Item>, String> {
             );
         }
     }
+    // Minecraft's grass block: a side with a lip of the top over it, and a
+    // bottom of the ground under it, which the cells below the surface wear
+    // on every face. A side alone would leave those cells nothing right to
+    // wear — its own lip repeats down the wall, the top lies on its side —
+    // so a type with one has the other; a type with neither is one image on
+    // every face.
+    if let Some(ty) = manifest.terrain.side.keys().find(|ty| !manifest.terrain.bottom.contains_key(*ty)) {
+        return Err(format!("manifest.json: terrain.side.{ty} has no terrain.bottom.{ty}"));
+    }
     for (ty, entry) in &manifest.terrain.side {
         push(format!("terrain.side.{ty}"), Slot::Side { ty: ty.clone() }, entry);
+    }
+    for (ty, entry) in &manifest.terrain.bottom {
+        push(format!("terrain.bottom.{ty}"), Slot::Bottom { ty: ty.clone() }, entry);
     }
     for (ty, entry) in &manifest.objects.block {
         push(
