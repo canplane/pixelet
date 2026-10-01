@@ -6,7 +6,6 @@ use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::v3::V3;
 
-
 use crate::layer::object::store::OccupiedEntry;
 
 /// The center of the cell a hover anchor (`i`/`f`) points at — the point that

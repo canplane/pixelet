@@ -15,14 +15,14 @@
 //! and Y, so a step in the ground comes as every other move does.
 
 use pxl_spec::space::lod::Tau;
-use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::ivec;
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
 
 use crate::control::camera::approach::{approach_angle, approach_scalar, approach_vec};
 use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, POS_DAMP, ROT_DAMP};
-use crate::control::camera::controller::{camera, eye_local, map_center, set_eye_local};
 use crate::control::camera::controller::look_domain;
+use crate::control::camera::controller::{camera, eye_local, map_center, set_eye_local};
 use crate::control::camera::store::camera_store;
 use crate::global::Global;
 use crate::world::access::{Access, Detail, Ray};
