@@ -388,6 +388,17 @@ art where one exists (Minecraft's chunk model for grid content, Cesium's
   derivation beats a synchronization. "Optimize it once it measures" is no
   reason to keep avoidable work: profiling ranks the trades, it is not a
   license for waste (2026-10-01, the audit after decor left the chunks).
+- **Memory a size bounds is a structural bound; what has none borrows and
+  can be refused.** A fixed range, a fixed table or a fixed lane is sized
+  from a bound the structure proves — a count its owners are held to where
+  they make it, or that admission keeps — and past it is a bug, never a
+  measurement or a knob. A workspace that grows with what stands in the
+  world is the heap's, asked for room before it grows, and a refusal is
+  backpressure: the work waits and what is drawn stays drawn. Memory
+  pressure slows progress or quality; it never opens a hole in what is
+  shown, drops what someone placed or ends the module (2026-10-01, the
+  `.fixed` audit, where a run set too small drew no chunk and a decor
+  workspace too small left placed decor out).
 - **Diff size is not a goal.** A five-hundred-line rewrite that leaves a
   smaller state space beats a twenty-line patch that does not. Do not keep
   an API, a type, a test or a module to hold churn down, and when a change
