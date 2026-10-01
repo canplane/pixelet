@@ -26,32 +26,28 @@
 //! tiers; the chunk stage (stage.rs) composes the frame — the camera, the
 //! anchor root's matrix, the frustum — and calls the tick.
 
-use pxl_spec::space::indexer::FROM_L2_IDX;
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
 
-use std::collections::HashMap;
 
 use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::arena::{arena_configure, arena_epoch, arena_write};
 use pxl_render::look::globe::Globe;
 use pxl_render::mesh::chunk_mesher::{box_bounds, box_z, Heights};
-use pxl_render::mesh::paint::terrain::adapter::{beside_index, Around, ChunkSample, PageSource};
+use pxl_render::mesh::paint::terrain::adapter::beside_index;
 use pxl_render::mesh::voxel_scan::APRON;
 
 use pxl_spec::space::observation::Bounds as _;
-use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pyramid::TOP_LEVEL;
 use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::heap::alloc;
 use xpute_runtime::mem::section::span_of;
 use xpute_runtime::sched::edge::Notify;
 use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats};
 
 use crate::global::Global;
 use crate::layer::billboard::field::Billboards;
-use crate::layer::decor::build::{decor_density, decor_tier, DecorBuild, DecorTier, Ground, Kind as DecorKind, Placed};
-use crate::layer::decor::instance::{decor_groups, DecorScratch};
+use crate::layer::decor::build::Kind as DecorKind;
 use crate::layer::environment::state::EnvironmentDraw;
 use crate::layer::marker::debug_lines::DebugLines;
 use crate::layer::marker::hover_cursor::GhostDraw;
@@ -60,11 +56,11 @@ use crate::layer::model::store::Models;
 use crate::layer::object::store::{render_edits, EntryAt, RenderEdits};
 use crate::mem::fixed::{lane, range, Range};
 use crate::param;
-use crate::shell::setting::store::{hidden_ground, settings_store};
-use crate::world::chunk::build::{mesh_step, release_block, BuildEvent, Builder, Cube, World};
+use crate::shell::setting::store::settings_store;
+use crate::world::chunk::build::{mesh_step, BuildEvent, Builder, Cube, World};
 use crate::world::chunk::frontier::{self, cube_of, drawn_cube, pool_of, wanted_cube, Env, Frontier, Now, Slots};
 use crate::world::chunk::mesh_slot::{capacity, group_box_words, group_bytes, group_is_fine, slot_at, surface_of, MeshSlot, Pool, ARENA, COVER_SLOTS, FINE_BOXES, OCCUPANCY};
-use crate::world::chunk::source::{decor_draws, decor_revision_of, draws_band, objects_revision_of, tiers_draw};
+use crate::world::chunk::source::{draws_band, objects_revision_of, tiers_draw};
 use xpute_core::math::scalar::round;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
@@ -76,11 +72,6 @@ use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::indexer::L2_IDX;
 
-/// Whether the heap is live past `param::HEAP_PRESSURE`.
-fn heap_pressed() -> bool {
-    let h = crate::host::heap_stat();
-    h.live as f64 > h.range as f64 * param::HEAP_PRESSURE
-}
 
 pub const IN_FRUSTUM: u16 = 1;
 pub const PENDING: u16 = 4;
@@ -122,7 +113,6 @@ pub struct Frame {
     /// the quota itself (`FrameSample::budget_ms`).
     pub remaining_ms: f64,
     pub hard_slack_ms: f64,
-    pub retain_budget_bytes: f64,
     /// The globe's anchor's height, in units: what the camera's height over
     /// the sea is measured up from.
     pub center_z: f64,
@@ -178,40 +168,6 @@ pub struct ChunkRetention {
     pub run_set_mb: u32,
     /// Built tiers held across every chunk.
     pub tiers: u32,
-    /// Decor: per-tier blocks.
-    pub decor_steps: u32,
-    /// The instances those blocks hold, which is what they cost to draw.
-    pub decor_instances: u32,
-}
-
-/// A decor block a chunk holds: its cube and bytes, and the
-/// renderer's handle. Each group's lanes are where the block's own header
-/// says.
-#[derive(Clone, Copy)]
-pub struct Decor {
-    cube: Cube,
-    generation: u32,
-    /// Where the block is in the memory, and its size.
-    pub at: u32,
-    pub bytes: u32,
-    handle: u32,
-}
-
-impl Decor {
-    /// Gives the block back and its handle with it: one lifetime, the slot's.
-    fn release(self, draw: &mut DrawList) {
-        draw.free(self.handle);
-        release_block(self.at as usize, self.bytes);
-    }
-
-    /// Each group's first lane word in the block and its count
-    /// (decor/instance.rs's decor_groups).
-    fn groups(&self) -> impl Iterator<Item = (u32, u32)> {
-        // SAFETY: the block the scheduler wrote at `at`, `bytes` long, held
-        // for as long as this decor is.
-        let words: &[u32] = unsafe { core::slice::from_raw_parts(ptr_at::<u32>(self.at as usize), self.bytes as usize / 4) };
-        decor_groups(words)
-    }
 }
 
 #[derive(Clone)]
@@ -243,16 +199,10 @@ struct Slot {
     /// are: a cube's tier of the new generation joins the old one's, and the
     /// old go when a layout of the new is applied.
     tiers: Held<Tier>,
-    /// Its decor blocks, by cube and generation alike: its layout's, and
-    /// while a commit applies a new one, that one's.
-    decor: Held<Decor>,
     layout_primary: Cube,
     /// The generation the layout's tiers and decor are drawn from.
     layout_generation: u32,
     layout_ready: bool,
-    /// Whether the layout's decor is built: the reclaim gives an off-screen
-    /// chunk's back, and it is built again once the chunk is on screen.
-    decor_whole: bool,
     /// The cube the rule wants it drawn in now.
     desired: Cube,
     /// The heap's release count when its decor was last refused a
@@ -262,7 +212,6 @@ struct Slot {
     /// decor was last built from: a change of either is a rebuild of the
     /// one it names (`sources_step`).
     sources: Sources,
-    decor_sources: DecorSources,
 }
 
 /// What a chunk's tiers are made of, past its page: the settings it paints
@@ -288,16 +237,6 @@ struct Sources {
     beside_from: [Option<u32>; 8],
 }
 
-/// What a chunk's decor is made of: the revision of the columns it draws the
-/// placed decor of, the setting, and the hidden entry where it is decor
-/// there.
-#[derive(Clone, Copy, PartialEq, Eq)]
-struct DecorSources {
-    revision: u32,
-    shown: bool,
-    hide: Option<EntryAt>,
-}
-
 impl Sources {
     fn of(k: Chunk, edits: RenderEdits) -> Sources {
         let settings = settings_store();
@@ -317,17 +256,6 @@ impl Sources {
                 }
                 from
             },
-        }
-    }
-}
-
-impl DecorSources {
-    fn of(k: Chunk, edits: RenderEdits) -> DecorSources {
-        let (level, base) = (k.level(), k.corner());
-        DecorSources {
-            revision: decor_revision_of(k),
-            shown: settings_store().decor,
-            hide: edits.hide.filter(|at| edits.hide_in.1 && decor_draws(level, base, at.col_idx) && draws_band(k, at.band_idx)),
         }
     }
 }
@@ -382,18 +310,8 @@ impl Slot {
         }
     }
 
-    /// What the chunk holds in the heap: its decor. Its runs are a set of
-    /// `.fixed.runs` and its tiers are on the device.
-    fn retained(&self) -> f64 {
-        self.decor.iter().map(|d| d.bytes as f64).sum::<f64>()
-    }
-
     fn tier(&self, cube: Cube, generation: u32) -> Option<&Tier> {
         self.tiers.iter().find(|t| t.cube == cube && t.generation == generation)
-    }
-
-    fn decor_of(&self, cube: Cube, generation: u32) -> Option<&Decor> {
-        self.decor.iter().find(|d| d.cube == cube && d.generation == generation)
     }
 
     /// The pool its desired tier takes.
@@ -447,8 +365,6 @@ pub struct Census {
     pub offscreen_pending: u32,
     pub oldest_visible_ms: f64,
     pub oldest_offscreen_ms: f64,
-    pub retained_on: f64,
-    pub retained_off: f64,
     /// Chunks built for a move and ready, waiting on the rest of it.
     pub ready_waiting: u32,
     /// Meshes thrown away since the last census because their pool had no
@@ -651,26 +567,11 @@ pub struct Scheduler {
     /// has run, or the world stops at whatever the last frame left —
     /// nothing else asks for a frame.
     view_dirty: bool,
-    retained_on: f64,
-    retained_off: f64,
     pub census: Census,
     counts: ChunkCounts,
     /// The decor kinds, in the order decor/build.rs taught them — the order of
     /// the groups in every decor block.
-    decor_kinds: Vec<DecorKind>,
-    /// A decor build's sample of its chunk's ground, its chunk's columns and
-    /// what is placed in them, and its chunk's objects folded to its level,
-    /// kept for their capacity.
-    decor_sample: ChunkSample,
-    decor_cols: Vec<IVec>,
-    decor_placed: Vec<Placed>,
-    decor_folded: HashMap<[i64; 3], u32>,
-    /// Where a decor build gathers its instances, made at the first build:
-    /// the scheduler is made before the sections are.
-    decor_scratch: Option<DecorScratch>,
-    /// The builder's refusals as of the last reclaim, so a refusal since
-    /// is pressure now.
-    refused_seen: u32,
+    pub(crate) decor_kinds: Vec<DecorKind>,
     /// The chunks the build task advances, in the one order, as the last
     /// tick left them.
     builds: Vec<u32>,
@@ -804,17 +705,9 @@ impl Scheduler {
             domain_seen: u32::MAX,
             frame: None,
             view_dirty: true,
-            retained_on: 0.0,
-            retained_off: 0.0,
             census: Census::default(),
             counts: ChunkCounts::default(),
             decor_kinds: Vec::new(),
-            decor_sample: ChunkSample::default(),
-            decor_cols: Vec::new(),
-            decor_placed: Vec::new(),
-            decor_folded: HashMap::new(),
-            decor_scratch: None,
-            refused_seen: 0,
             scratch: Scratch::default(),
             builds: Vec::new(),
             landed: Vec::new(),
@@ -835,15 +728,6 @@ impl Scheduler {
     /// Forgets every kind taught, so they can be taught again.
     pub fn decor_forget(&mut self) {
         self.decor_kinds.clear();
-    }
-
-    fn account(&mut self, i: usize, before: f64) {
-        let delta = self.slots[i].retained() - before;
-        if self.slots[i].has(IN_FRUSTUM) {
-            self.retained_on += delta;
-        } else {
-            self.retained_off += delta;
-        }
     }
 
     /// How many slots chunk `c`'s tier of `cube` fills, as far as is known
@@ -890,15 +774,12 @@ impl Scheduler {
             need: None,
             recube: false,
             tiers: Held::EMPTY,
-            decor: Held::EMPTY,
             layout_primary: frontier::coarsest(level),
             layout_generation: 0,
             layout_ready: false,
-            decor_whole: false,
             desired: frontier::coarsest(level),
             refused: None,
             sources,
-            decor_sources: DecorSources::of(k, edits),
         };
         slot.unmeasured();
         if let Some(frame) = self.frame {
@@ -924,17 +805,8 @@ impl Scheduler {
         self.counts.removed += 1;
         self.builder.remove(world, id);
         settle(&mut self.meshes, &self.builder);
-        let before = self.slots[i].retained();
-        if self.slots[i].has(IN_FRUSTUM) {
-            self.retained_on -= before;
-        } else {
-            self.retained_off -= before;
-        }
         for t in self.slots[i].tiers.iter() {
             let_go(&mut self.meshes, t.slot.index, id);
-        }
-        for d in self.slots[i].decor.iter() {
-            d.release(&mut self.draw);
         }
         self.slots.swap_remove(i);
         if i < self.slots.len() {
@@ -992,11 +864,6 @@ impl Scheduler {
                 self.slots[i].sources = sources;
                 self.source(world, i);
             }
-            let decor = DecorSources::of(k, edits);
-            if decor != self.slots[i].decor_sources {
-                self.slots[i].decor_sources = decor;
-                self.decor_now(world, i);
-            }
         }
     }
 
@@ -1034,144 +901,6 @@ impl Scheduler {
         worked
     }
 
-    /// Only the chunk's decor changed (an entry placed or hidden, the
-    /// setting): the decor it holds is stale and let go; the layout's decor is
-    /// rebuilt now and the layout applied again, the tiers untouched. Unless a
-    /// block was refused, when the ground stays drawn without it and it
-    /// lands on a later tick.
-    fn decor_now(&mut self, world: &mut World, i: usize) {
-        let before = self.slots[i].retained();
-        for d in self.slots[i].decor.take().iter() {
-            d.release(&mut self.draw);
-        }
-        self.account(i, before);
-        self.slots[i].decor_whole = false;
-        if !self.slots[i].layout_ready {
-            return;
-        }
-        let (p, g) = (self.slots[i].layout_primary, self.slots[i].layout_generation);
-        if self.ensure_decor(world, i, p, g) {
-            self.apply_layout(i, p, g);
-            self.slots[i].decor_whole = true;
-        } else {
-            self.slots[i].set(FRESH, true);
-            self.view_dirty = true;
-        }
-    }
-
-    /// Whether the chunk holds the decor of its tier `cube` of
-    /// `generation`, building it where it lacks it: false when the
-    /// heap refused a block. A chunk with no page has no decor to build.
-    fn ensure_decor(&mut self, world: &mut World, i: usize, cube: Cube, generation: u32) -> bool {
-        let (id, level, corner) = (self.slots[i].id, self.slots[i].level(), self.slots[i].chunk.corner());
-        let (x0, y0) = (ivec::X(corner), ivec::Y(corner));
-        // Whether it scatters is one of what its decor is made of, as told.
-        let decor = self.slots[i].decor_sources.shown;
-        if self.slots[i].decor_of(cube, generation).is_some() {
-            return true;
-        }
-        // A chunk scatters from its own page at its own level, at the
-        // world step its cube is. A kind is drawn, scattered or placed,
-        // only at a step where it covers the pixels it is drawn at, so a
-        // step no kind is drawn at has no block. The setting is the
-        // scatter's alone: what the user placed is drawn whatever it says.
-        let world_step = GROUND.scale(0).count_in(cube.max(GROUND.scale(0)));
-        // Every column whose corner lies in the chunk: its own, at z16.
-        self.decor_cols.clear();
-        world.store.cols_under(self.slots[i].chunk.column(), &mut self.decor_cols);
-        let drawn = |k: &&DecorKind| decor_density(k.extent, world_step) > 0.0;
-        let scatters = decor && self.decor_kinds.iter().filter(drawn).any(|k| k.density > 0.0);
-        let places = !self.decor_cols.is_empty() && self.decor_kinds.iter().filter(drawn).any(|k| k.decor_value.is_some());
-        if !scatters && !places {
-            return true;
-        }
-        let source = self.builder.ground_of(id);
-        let view = source.map(|(_, _, page, _)| Builder::page_view(page));
-        if let (Some((tx0, ty0, _, show)), Some(view)) = (source, view.as_ref()) {
-            if scatters {
-                let around = Around {
-                    own: PageSource { page: *view, origin: [0, 0], n: 1 },
-                    beside: [None; 8],
-                };
-                self.decor_sample.read(&around, [tx0 as i64, ty0 as i64], hidden_ground(show));
-            }
-        }
-        self.decor_placed.clear();
-        self.decor_placed.extend(self.decor_cols.iter().map(|&col_idx| {
-            let o = FROM_L2_IDX(col_idx);
-            Placed {
-                col_idx,
-                ox: (ivec::X(o) - x0) as f64,
-                oy: (ivec::Y(o) - y0) as f64,
-                hittable: level == 0,
-            }
-        }));
-        // Above z16 the objects are drawn folded to the level's cell, the
-        // fold the chunk's runs are made with (build.rs `level_runs`): what
-        // keeps a candidate off a cell is that fold, as a z16 chunk's is
-        // the store's own cell.
-        let target = GROUND.scale(level);
-        let (cx, cy, span) = (target.index(x0), target.index(y0), CHUNK_CELLS as i64);
-        match level > 0 && scatters {
-            true => world.store.fold_at(target, [cx, cy], [cx + span, cy + span], self.builder.hide(), &mut self.decor_folded),
-            false => self.decor_folded.clear(),
-        }
-        // The surface the tier is drawn with, which an instance stands
-        // on: its tier is built before its decor (`commit`).
-        let surface = self.slots[i].tier(cube, generation).map(|t| Drawn {
-            level,
-            base: ivec::gather(x0, y0, 0),
-            step: mesh_step(cube, level),
-            tops: surface(t.slot.index, mesh_step(cube, level)),
-            heights: t.heights,
-        });
-        let ground = source.zip(view.as_ref()).map(|((tx0, ty0, _, _), view)| Ground {
-            page: view,
-            sample: &self.decor_sample,
-            level,
-            x0,
-            y0,
-            tx0,
-            ty0,
-            col_idx: (level == 0).then(|| L2_IDX(ivec::gather(x0, y0, 0))),
-            surface: surface.as_ref(),
-            folded: (level > 0).then_some(&self.decor_folded),
-        });
-        let scratch = self.decor_scratch.get_or_insert_with(DecorScratch::laid);
-        let heights = self.slots[i].chunk.z_range();
-        let built = DecorBuild::build(
-            scratch,
-            &self.decor_kinds,
-            ground.as_ref(),
-            &self.decor_placed,
-            self.builder.hide(),
-            world.store,
-            world_step,
-            decor,
-            heights,
-        );
-        let bytes = built.bytes();
-        let Some((at, bytes)) = alloc(bytes) else {
-            self.builder.stat.starved += 1;
-            self.slots[i].refused = Some(crate::host::heap_stat().releases);
-            return false;
-        };
-        // SAFETY: a block of the bytes the build asked for, the slot's from
-        // here until its decor is let go.
-        unsafe { built.write(ptr_at::<u8>(at)) };
-        let before = self.slots[i].retained();
-        let handle = self.draw.upload(at as u32, bytes, 0, 0);
-        self.slots[i].decor.push(Decor {
-            cube,
-            generation,
-            at: at as u32,
-            bytes,
-            handle,
-        });
-        self.account(i, before);
-        true
-    }
-
     /// The model decor group `group` is drawn with.
     pub fn decor_model(&mut self, group: u32, model: u32) {
         let g = group as usize;
@@ -1179,16 +908,6 @@ impl Scheduler {
             self.decor_models.resize(g + 1, None);
         }
         self.decor_models[g] = Some(model);
-    }
-
-    /// Every drawn piece's decor on screen as shown this frame — the block
-    /// of the tier its layout mostly shows — with the chunk and its base, in
-    /// units: what a hit test walks.
-    pub fn shown_decor(&self) -> impl Iterator<Item = (Chunk, f64, f64, &Decor)> {
-        self.slots
-            .iter()
-            .filter(|s| s.role == Role::Drawn && s.has(IN_FRUSTUM) && s.layout_ready)
-            .filter_map(|s| s.decor_of(s.layout_primary, s.layout_generation).map(|d| (s.chunk, s.base_x(), s.base_y(), d)))
     }
 
     /// The counts since the last frame sample, taken.
@@ -1207,16 +926,8 @@ impl Scheduler {
         };
         for s in &self.slots {
             out.tiers += s.tiers.len() as u32;
-            out.decor_steps += s.decor.len() as u32;
-            out.decor_instances += s.decor.iter().flat_map(|d| d.groups()).map(|(_, n)| n).sum::<u32>();
         }
         out
-    }
-
-    /// Decor instances the build's lanes had no room for, since the kernel
-    /// started: the profiler's, so a chunk short of its decor says so.
-    pub fn decor_dropped(&self) -> u32 {
-        self.decor_scratch.as_ref().map_or(0, |s| s.dropped)
     }
 
     /// Slots each pool has that no tier holds and no chunk mounted will
@@ -1403,14 +1114,7 @@ impl Scheduler {
         sc.pending.extend(sc.order.iter().copied().filter(|&i| self.slots[i].has(PENDING)));
         let pending_total = sc.pending.len() as u32;
 
-        // A commit may build decor, and a block refused ends the commits this
-        // tick as it ends the builds (Builder::tick): the heap is the same
-        // until reclaim, and the decor is scattered before its block is
-        // asked for.
-        let starved = self.builder.stat.starved;
-        let commits = under_budget(&sc.pending, param::COMMITS_PER_FRAME, deadline, hard, now, |i| {
-            self.builder.stat.starved == starved && self.commit(world, i)
-        });
+        let commits = under_budget(&sc.pending, param::COMMITS_PER_FRAME, deadline, hard, now, |i| self.commit(world, i));
         // What the pass never looked at, which is what a cap on how many may
         // land costs when there are more of them than it lets through.
         let commit_left = sc.pending.len() as u32 - commits.visited;
@@ -1426,7 +1130,6 @@ impl Scheduler {
         }
         committed += core::mem::take(&mut self.build_committed);
 
-        self.reclaim(&sc.order);
         self.scratch = sc;
         let animating = self.models.tick(&mut self.draw, frame.delta_s as f32) | self.markers.tick(&frame) | self.environment.tick(&frame);
         self.draw_frame(&frame);
@@ -1467,8 +1170,6 @@ impl Scheduler {
         c.chained = core::mem::take(&mut self.meshes.chained);
         c.fine_peak = core::mem::take(&mut self.meshes.fine_peak);
         c.coarse_peak = core::mem::take(&mut self.meshes.coarse_peak);
-        c.retained_on = self.retained_on;
-        c.retained_off = self.retained_off;
         let moving = c.waiting > 0 || c.ready_waiting > 0;
         self.census = c;
         committed > 0 || pending_total > committed || moving || self.view_dirty || animating
@@ -1493,23 +1194,6 @@ impl Scheduler {
             }
             let translation = DrawList::translation([s.base_x(), s.base_y(), 0.0], frame.eye);
             let cube = s.layout_primary;
-            if let Some(d) = s.decor_of(cube, s.layout_generation) {
-                // A group's kind is drawn as its tier says at the step the
-                // decor was built at: its model, or its sprite.
-                let step = GROUND.scale(0).count_in(cube.max(GROUND.scale(0)));
-                let mut kinds = self.decor_kinds.iter().flat_map(|k| (0..k.variant_count).map(move |_| k.extent));
-                for (group, (offset, count)) in d.groups().enumerate() {
-                    let extent = kinds.next().unwrap_or(0.0);
-                    if count == 0 {
-                        continue;
-                    }
-                    if decor_tier(extent, step) == DecorTier::Impostor {
-                        self.draw.draw_impostor(d.handle, group as u32, count, offset, translation);
-                    } else {
-                        self.draw.draw_decor(d.handle, group as u32, count, offset, translation);
-                    }
-                }
-            }
             let Some(t) = s.tier(cube, s.layout_generation) else { continue };
             // A chunk draws only from a slot it holds. The slot is room
             // and not an address (world/chunk/mesh_slot.rs), so it is
@@ -1561,15 +1245,7 @@ impl Scheduler {
             s.order = order;
             let was = s.has(IN_FRUSTUM);
             if visible != was {
-                let bytes = s.retained();
                 s.set(IN_FRUSTUM, visible);
-                if visible {
-                    self.retained_off -= bytes;
-                    self.retained_on += bytes;
-                } else {
-                    self.retained_on -= bytes;
-                    self.retained_off += bytes;
-                }
                 self.view_dirty = true;
             }
         }
@@ -1635,7 +1311,7 @@ impl Scheduler {
         if !s.recubes() {
             s.recube = false;
         }
-        let pending = !s.layout_ready || s.layout_primary != s.target() || s.layout_generation != current || (s.has(IN_FRUSTUM) && !s.decor_whole);
+        let pending = !s.layout_ready || s.layout_primary != s.target() || s.layout_generation != current;
         self.set_pending(i, pending, now);
         let s = &mut self.slots[i];
         let settling = s.has(PENDING) && s.layout_ready;
@@ -1648,22 +1324,11 @@ impl Scheduler {
     /// Lets go of chunk `i`'s tiers and decor but those `keep` names, and of
     /// the slots only they held; its layout too where its primary goes.
     fn release_tiers(&mut self, i: usize, keep: impl Fn(Cube, u32) -> bool) {
-        let before = self.slots[i].retained();
         let s = &mut self.slots[i];
-        let draw = &mut self.draw;
-        s.decor.retain(|d| {
-            let kept = keep(d.cube, d.generation);
-            if !kept {
-                d.release(draw);
-            }
-            kept
-        });
         prune(s, &mut self.meshes, |t| keep(t.cube, t.generation), None);
         if s.tier(s.layout_primary, s.layout_generation).is_none() {
             s.layout_ready = false;
-            s.decor_whole = false;
         }
-        self.account(i, before);
     }
 
     /// Whether the chunk holds the tier `primary` of the current generation.
@@ -1728,7 +1393,7 @@ impl Scheduler {
         }
         let (p, generation) = (s.target(), self.generation(i));
         let asked = self.ask(world, i, p);
-        if !asked || !self.ensure_decor(world, i, p, generation) {
+        if !asked {
             return false;
         }
         let s = &self.slots[i];
@@ -1741,45 +1406,10 @@ impl Scheduler {
         }
         let s = &mut self.slots[i];
         s.recube = s.recubes() && s.recube;
-        s.decor_whole = true;
         self.set_pending(i, false, 0.0);
         true
     }
 
-    /// The retain budget: off-screen decor past it, or the heap pressed
-    /// (`heap_pressed`), is given back farthest first. A block refused since
-    /// the last pass is pressure too, whatever the numbers say: the heap has
-    /// room in bytes but not in one piece, and what gives it back in pieces
-    /// that join is the off-screen decor, farthest first. Decor is all a
-    /// chunk holds in the heap: its runs are `.fixed.runs`'s and its tiers
-    /// are on the device. What is given back is built again once its chunk
-    /// is on screen (`recheck`).
-    fn reclaim(&mut self, order: &[usize]) {
-        let budget = self.frame.map_or(f64::INFINITY, |f| f.retain_budget_bytes);
-        let refused = self.builder.stat.starved != self.refused_seen;
-        self.refused_seen = self.builder.stat.starved;
-        let cap = if refused { param::RECLAIMS_WHEN_REFUSED } else { param::RECLAIMS_PER_FRAME };
-        let mut freed = 0;
-        // Farthest first: the order puts what the view does not see last,
-        // the farthest of it at the end.
-        for &i in order.iter().rev() {
-            if freed >= cap || !(refused || self.retained_off > budget || heap_pressed()) {
-                break;
-            }
-            if self.slots[i].has(IN_FRUSTUM) || self.slots[i].retained() <= 0.0 {
-                continue;
-            }
-            let before = self.slots[i].retained();
-            let s = &mut self.slots[i];
-            let draw = &mut self.draw;
-            for d in s.decor.take().iter() {
-                d.release(draw);
-            }
-            s.decor_whole = false;
-            self.account(i, before);
-            freed += 1;
-        }
-    }
 }
 
 /// Whether two frames look at the world the same way: what a recheck's
@@ -1979,10 +1609,6 @@ impl<T: Copy> Held<T> {
         self.retain(|_| false);
     }
 
-    /// Everything held, leaving nothing.
-    fn take(&mut self) -> Held<T> {
-        core::mem::replace(self, Held::EMPTY)
-    }
 }
 
 /// The slot `n` down the chain from `at`.

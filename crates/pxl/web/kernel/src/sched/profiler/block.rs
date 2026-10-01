@@ -218,18 +218,15 @@ pub struct RetainBlock {
     pub run_sets: f64,
     pub run_set_mb: f64,
     pub tiers: f64,
-    pub decor_steps: f64,
+    pub decor_cells: f64,
     pub decor_instances: f64,
-    pub on_bytes: f64,
-    pub off_bytes: f64,
-    pub budget_bytes: f64,
+    pub decor_bytes: f64,
 }
 
 words!(RetainBlock, SUMMARY::retain::WORDS,
     run_sets => SUMMARY::retain::run_sets, run_set_mb => SUMMARY::retain::run_set_mb,
-    tiers => SUMMARY::retain::tiers, decor_steps => SUMMARY::retain::decor_steps,
-    decor_instances => SUMMARY::retain::decor_instances, on_bytes => SUMMARY::retain::on_bytes,
-    off_bytes => SUMMARY::retain::off_bytes, budget_bytes => SUMMARY::retain::budget_bytes,
+    tiers => SUMMARY::retain::tiers, decor_cells => SUMMARY::retain::decor_cells,
+    decor_instances => SUMMARY::retain::decor_instances, decor_bytes => SUMMARY::retain::decor_bytes,
 );
 
 /// The fetch scheduler's queue, as it stands.

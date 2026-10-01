@@ -24,7 +24,6 @@ use crate::sched::profiler::log::window_counters;
 use crate::sched::profiler::record::{fixed_lane, profiler_frame_peak, profiler_frames_since, profiler_recording_state, profiler_tasks_since, put, FrameSample, Lane, Outcome, TaskRow, SPREAD_LIMIT};
 use crate::sched::profiler::spec::{LIMITS, SUMMARY, TASK_PHASE_NAMES};
 use crate::sched::tick::{tick_step_stats, HARD_SLACK_MS};
-use crate::world::chunk::build::RETAIN_BUDGET_BYTES;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 
@@ -236,7 +235,7 @@ fn side(out: &mut [f64]) {
     );
 
     let retain = with_world(|_, sched| sched.retention()).unwrap_or_default();
-    let census = kernel().sched.census;
+    let (decor_cells, decor_instances) = crate::layer::decor::cell::counts();
     put(
         out,
         SUMMARY::retain::AT,
@@ -244,11 +243,9 @@ fn side(out: &mut [f64]) {
             run_sets: retain.run_sets as f64,
             run_set_mb: retain.run_set_mb as f64,
             tiers: retain.tiers as f64,
-            decor_steps: retain.decor_steps as f64,
-            decor_instances: retain.decor_instances as f64,
-            on_bytes: census.retained_on,
-            off_bytes: census.retained_off,
-            budget_bytes: RETAIN_BUDGET_BYTES(),
+            decor_cells: decor_cells as f64,
+            decor_instances: decor_instances as f64,
+            decor_bytes: crate::layer::decor::cell::bytes() as f64,
         },
     );
 

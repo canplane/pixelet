@@ -67,14 +67,6 @@ pub fn release_block(at: usize, bytes: u32) {
     unsafe { free((at, bytes)) };
 }
 
-/// How much built work chunks may keep in the heap *while off screen*: their
-/// decor, the one part of a chunk still there — its runs are a set of
-/// `.fixed.runs` and its tiers are on the device. The scheduler reclaims
-/// only past this, farthest first; the share is param.rs's `RETAIN_SHARE`.
-#[allow(non_snake_case)]
-pub fn RETAIN_BUDGET_BYTES() -> f64 {
-    crate::mem::section::map().map_or(0.0, |m| m.heap.bytes as f64 * crate::param::RETAIN_SHARE)
-}
 
 // ---- the build as the kernel runs it ----
 //

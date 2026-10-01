@@ -280,22 +280,20 @@ export const SUMMARY = {
     run_sets: 0 as number,
     run_set_mb: 1 as number,
     tiers: 2 as number,
-    decor_steps: 3 as number,
+    decor_cells: 3 as number,
     decor_instances: 4 as number,
-    on_bytes: 5 as number,
-    off_bytes: 6 as number,
-    budget_bytes: 7 as number,
-    WORDS: 8 as number,
+    decor_bytes: 5 as number,
+    WORDS: 6 as number,
   },
   fetch: {
-    AT: 400 as number,
+    AT: 398 as number,
     queued: 0 as number,
     running: 1 as number,
     credits: 2 as number,
     WORDS: 3 as number,
   },
   peak: {
-    AT: 403 as number,
+    AT: 401 as number,
     present: 0 as number,
     dt_ms: 1 as number,
     sched_ms: 2 as number,
@@ -317,13 +315,13 @@ export const SUMMARY = {
     WORDS: 18 as number,
   },
   steps: {
-    AT: 421 as number,
+    AT: 419 as number,
     count: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
   quality: {
-    AT: 582 as number,
+    AT: 580 as number,
     step: 0 as number,
     star: 1 as number,
     frames_held: 2 as number,
@@ -334,7 +332,7 @@ export const SUMMARY = {
     changes_peak: 7 as number,
     WORDS: 8 as number,
   },
-  WORDS: 590 as number,
+  WORDS: 588 as number,
 } as const;
 
 /** What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count. */

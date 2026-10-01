@@ -21,7 +21,6 @@ use crate::sched::profiler::record::{
 };
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::world::change::{request_world_tick, world_edge};
-use crate::world::chunk::build::RETAIN_BUDGET_BYTES;
 use crate::world::chunk::table::{builds, Census, Frame};
 use crate::world::frame::view::{globe_anchor_local, view, view_resize};
 use crate::world::pyramid::Layer;
@@ -163,13 +162,20 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
         delta_s: ctx.delta,
         remaining_ms: ctx.budget.remaining(),
         hard_slack_ms: HARD_SLACK_MS,
-        retain_budget_bytes: RETAIN_BUDGET_BYTES(),
         center_z: ivec::to_real(ivec::Z(v.origin)) + anchor[2],
         globe: Some(globe()),
     };
 
     let t0 = now();
     let draw = with_world(|world, sched| sched.tick(world, frame, &now)).unwrap_or(false);
+    // Decor, its own layer: its frontier, its blocks and how each is drawn,
+    // after the chunks have listed theirs (layer/decor/cell.rs).
+    {
+        let k = kernel();
+        let edits = crate::layer::object::store::render_edits();
+        let hide = edits.hide.filter(|_| edits.hide_in.1);
+        crate::layer::decor::cell::step(&k.sched.decor_kinds, &k.objects, &mut k.sched.draw, hide, frame.eye);
+    }
     crate::layer::poi::placement::step(ctx);
     let sched = &mut kernel().sched;
     sched.billboards.draw(&mut sched.draw, &sched.models, frame.eye);

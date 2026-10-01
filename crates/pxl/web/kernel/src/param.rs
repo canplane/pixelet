@@ -172,17 +172,7 @@ pub const IMPOSTOR_GONE_CELLS: f64 = 0.5;
 /// behind can still catch up from before it has to read everything again.
 pub const JOURNAL_CAPACITY: u32 = 4096;
 
-/// The share of the heap off-screen decor may keep before it is given back
-/// farthest first. Half: the other half is the on-screen decor, the volumes
-/// a build composes in, and the room a large block needs in one piece.
-/// Dropping it all on the first turn away makes a rotation scatter every
-/// chunk's decor again.
-pub const RETAIN_SHARE: f64 = 0.5;
 
-/// The heap's live share past which it counts as pressed, and off-screen
-/// decor is given back whatever the retain budget says: the rest is what a
-/// large block needs in one piece.
-pub const HEAP_PRESSURE: f64 = 0.9;
 
 // ---- per-frame work caps (world/chunk/table.rs, io/policy.rs) ----
 
@@ -196,12 +186,6 @@ pub const STARTS_PER_FRAME: u32 = PAGE_CHUNKS * PAGE_CHUNKS;
 /// its decor before it is shown, which is a block's scatter each.
 pub const COMMITS_PER_FRAME: u32 = 8;
 
-/// Off-screen chunks whose decor one frame gives back while the heap is
-/// pressed, and how many when a block was refused this frame: a refusal is
-/// a build on screen going nowhere, and the heap has no spill to fall back
-/// on.
-pub const RECLAIMS_PER_FRAME: u32 = 16;
-pub const RECLAIMS_WHEN_REFUSED: u32 = 64;
 
 /// The most attempts one pump starts (io/policy.rs). The credits already
 /// bound what is out; this bounds only how fast they are taken up.

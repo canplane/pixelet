@@ -1,15 +1,14 @@
 // pxl-kernel/layer/decor/hit.rs
 
 //! Which user-placed decor entry the pointer's ray strikes: the ray against
-//! the triangles of every placed instance the on-screen chunks show, from the
-//! same blocks the renderer draws. A decor paints no voxel, so the access's
+//! the triangles of every placed instance the decor cells hold
+//! (layer/decor/cell.rs), from the same blocks the renderer draws. A decor paints no voxel, so the access's
 //! ray (world/access.rs `first_hit`) passes through it; this is its own hit,
 //! against what is drawn. What comes back is the address the object store
 //! files the entry under.
 
 use pxl_spec::space::indexer::L2_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::chunk_span_of;
 use pxl_spec::space::v3::{Aabb, V3};
 use xpute_runtime::mem::base::ptr_at;
 
@@ -18,10 +17,7 @@ use crate::layer::decor::instance::{decor_groups, GroupLanes, NO_ENTRY};
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::EntryAt;
 use crate::world::chunk::table::Scheduler;
-use crate::world::pyramid::chunk::Chunk;
 
-/// A chunk's side, in units.
-const CHUNK_W: f64 = chunk_span_of(0);
 
 // A decor mesh sitting on the ground it also intersects (any tree's own
 // trunk-base, by construction) has its own hit distance land almost exactly AT
@@ -46,7 +42,10 @@ pub fn raycast_decor(origin: V3, direction: V3, map_origin: IVec, max_dist: f64)
     // The lane holds the band's own i32 as a word (layer/decor/build.rs),
     // NO_ENTRY apart, which the hit has already passed over.
     Some(EntryAt {
-        col_idx: L2_IDX(hit.chunk.corner()),
+        col_idx: {
+            let (x0, y0, _) = hit.cell.rect();
+            L2_IDX(ivec::gather(x0 as i64, y0 as i64, 0))
+        },
         band_idx: hit.band as i32,
         pos: hit.pos,
     })
@@ -57,7 +56,7 @@ pub fn raycast_decor(origin: V3, direction: V3, map_origin: IVec, max_dist: f64)
 /// position in that chunk's column, and how far along.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct DecorHit {
-    pub chunk: Chunk,
+    pub cell: crate::layer::decor::cell::DecorCell,
     pub band: u32,
     pub pos: u32,
     pub t: f64,
@@ -81,15 +80,17 @@ fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: 
     let mut best: Option<DecorHit> = None;
     let mut limit = max_dist;
     let reach = decor_reach(sched);
-    for (chunk, base_x, base_y, decor) in sched.shown_decor() {
-        let tx = base_x - origin[0];
-        let ty = base_y - origin[1];
-        if !ray_meets_square(&o, &d, tx - reach, ty - reach, tx + CHUNK_W + reach, ty + CHUNK_W + reach, limit) {
+    for (cell, base_x, base_y, words) in crate::layer::decor::cell::shown() {
+        // Only a z16 cell names its placed entries.
+        if cell.level != 0 {
             continue;
         }
-        // SAFETY: the block the scheduler wrote at `at`, of the groups it
-        // recorded; every lane read is inside its group's run.
-        let words = unsafe { core::slice::from_raw_parts(ptr_at::<u32>(decor.at as usize), decor.bytes as usize / 4) };
+        let side = cell.rect().2;
+        let tx = base_x - origin[0];
+        let ty = base_y - origin[1];
+        if !ray_meets_square(&o, &d, tx - reach, ty - reach, tx + side + reach, ty + side + reach, limit) {
+            continue;
+        }
         for (g, (offset, count)) in decor_groups(words).enumerate() {
             let Some(Some(model)) = sched.decor_models.get(g) else { continue };
             let Some(mesh) = sched.models.mesh(*model) else { continue };
@@ -139,7 +140,7 @@ fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: 
                         if t < limit {
                             limit = t;
                             best = Some(DecorHit {
-                                chunk,
+                                cell,
                                 band,
                                 pos: words[lanes.pos_at(i)],
                                 t,

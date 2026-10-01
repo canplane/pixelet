@@ -68,7 +68,7 @@ pub const DECOR_MASTER_SEED: u64 = 0xd0c0_dec0_5eed_0001;
 /// staggers the tier change across chunks. Cost is the low-poly tier's problem,
 /// not the criterion's; a tree and a car of the same size are drawn to the same
 /// range.
-fn decor_gone_px() -> f64 {
+pub fn decor_gone_px() -> f64 {
     *TARGET_CELL_PX * 2.0
 }
 

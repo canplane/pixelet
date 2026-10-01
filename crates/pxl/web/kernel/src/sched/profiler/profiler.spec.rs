@@ -595,27 +595,14 @@ pub mod SUMMARY {
         pub const run_sets: u32 = 0;
         pub const run_set_mb: u32 = 1;
         pub const tiers: u32 = 2;
-        pub const decor_steps: u32 = 3;
+        pub const decor_cells: u32 = 3;
         pub const decor_instances: u32 = 4;
-        pub const on_bytes: u32 = 5;
-        pub const off_bytes: u32 = 6;
-        pub const budget_bytes: u32 = 7;
-        pub const WORDS: u32 = 8;
-        pub const KEYS: &[&str] = &[
-            "AT",
-            "run_sets",
-            "run_set_mb",
-            "tiers",
-            "decor_steps",
-            "decor_instances",
-            "on_bytes",
-            "off_bytes",
-            "budget_bytes",
-            "WORDS",
-        ];
+        pub const decor_bytes: u32 = 5;
+        pub const WORDS: u32 = 6;
+        pub const KEYS: &[&str] = &["AT", "run_sets", "run_set_mb", "tiers", "decor_cells", "decor_instances", "decor_bytes", "WORDS"];
     }
     pub mod fetch {
-        pub const AT: u32 = 400;
+        pub const AT: u32 = 398;
         pub const queued: u32 = 0;
         pub const running: u32 = 1;
         pub const credits: u32 = 2;
@@ -623,7 +610,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "queued", "running", "credits", "WORDS"];
     }
     pub mod peak {
-        pub const AT: u32 = 403;
+        pub const AT: u32 = 401;
         pub const present: u32 = 0;
         pub const dt_ms: u32 = 1;
         pub const sched_ms: u32 = 2;
@@ -667,14 +654,14 @@ pub mod SUMMARY {
         ];
     }
     pub mod steps {
-        pub const AT: u32 = 421;
+        pub const AT: u32 = 419;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
     pub mod quality {
-        pub const AT: u32 = 582;
+        pub const AT: u32 = 580;
         pub const step: u32 = 0;
         pub const star: u32 = 1;
         pub const frames_held: u32 = 2;
@@ -686,7 +673,7 @@ pub mod SUMMARY {
         pub const WORDS: u32 = 8;
         pub const KEYS: &[&str] = &["AT", "step", "star", "frames_held", "admitted", "evicted", "refined", "recubed", "changes_peak", "WORDS"];
     }
-    pub const WORDS: u32 = 590;
+    pub const WORDS: u32 = 588;
     pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "retain", "fetch", "peak", "steps", "quality", "WORDS"];
 }
 

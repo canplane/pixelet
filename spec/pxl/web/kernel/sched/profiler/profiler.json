@@ -417,22 +417,20 @@
       "run_sets": 0,
       "run_set_mb": 1,
       "tiers": 2,
-      "decor_steps": 3,
+      "decor_cells": 3,
       "decor_instances": 4,
-      "on_bytes": 5,
-      "off_bytes": 6,
-      "budget_bytes": 7,
-      "WORDS": 8
+      "decor_bytes": 5,
+      "WORDS": 6
     },
     "fetch": {
-      "AT": 400,
+      "AT": 398,
       "queued": 0,
       "running": 1,
       "credits": 2,
       "WORDS": 3
     },
     "peak": {
-      "AT": 403,
+      "AT": 401,
       "present": 0,
       "dt_ms": 1,
       "sched_ms": 2,
@@ -454,13 +452,13 @@
       "WORDS": 18
     },
     "steps": {
-      "AT": 421,
+      "AT": 419,
       "count": 0,
       "slots": 1,
       "WORDS": 161
     },
     "quality": {
-      "AT": 582,
+      "AT": 580,
       "step": 0,
       "star": 1,
       "frames_held": 2,
@@ -471,7 +469,7 @@
       "changes_peak": 7,
       "WORDS": 8
     },
-    "WORDS": 590
+    "WORDS": 588
   },
   "READ": {
     "$type": "u32",
