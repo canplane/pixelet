@@ -72,11 +72,37 @@ fn decor_gone_px() -> f64 {
     *TARGET_CELL_PX * 2.0
 }
 
-/// The density a kind is scattered at on a tier: 1, or 0 when it is not drawn
-/// there.
-pub fn decor_density(extent_u: f64, lod_step: LodStep) -> f64 {
+/// How a kind is drawn on a tier.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DecorTier {
+    /// Its variants' models.
+    Model,
+    /// Its variants' sprites, a quad an instance (pxl-render
+    /// gpu/pass/impostor.rs): too small on the screen for a model's
+    /// triangles, large enough to be seen.
+    Impostor,
+    /// Not at all.
+    Gone,
+}
+
+/// How a kind of `extent_u` is drawn on a tier of `lod_step`, by how large it
+/// is to the eye there: its model down to the model's floor, its sprite down
+/// to the impostor's (param.rs `IMPOSTOR_GONE_CELLS`), nothing past.
+pub fn decor_tier(extent_u: f64, lod_step: LodStep) -> DecorTier {
     let projected_px = (extent_u / U_PER_CELL) * *TARGET_CELL_PX / lod_step as f64;
-    if projected_px < decor_gone_px() {
+    if projected_px >= decor_gone_px() {
+        DecorTier::Model
+    } else if projected_px >= *TARGET_CELL_PX * crate::param::IMPOSTOR_GONE_CELLS {
+        DecorTier::Impostor
+    } else {
+        DecorTier::Gone
+    }
+}
+
+/// The density a kind is scattered at on a tier: 1 where it is drawn there
+/// at all, model or sprite, 0 where it is not.
+pub fn decor_density(extent_u: f64, lod_step: LodStep) -> f64 {
+    if decor_tier(extent_u, lod_step) == DecorTier::Gone {
         0.0
     } else {
         1.0

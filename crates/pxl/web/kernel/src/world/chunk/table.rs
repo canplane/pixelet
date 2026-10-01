@@ -50,7 +50,7 @@ use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats
 
 use crate::global::Global;
 use crate::layer::billboard::field::Billboards;
-use crate::layer::decor::build::{decor_density, DecorBuild, Ground, Kind as DecorKind, Placed};
+use crate::layer::decor::build::{decor_density, decor_tier, DecorBuild, DecorTier, Ground, Kind as DecorKind, Placed};
 use crate::layer::decor::instance::{decor_groups, DecorScratch};
 use crate::layer::environment::state::EnvironmentDraw;
 use crate::layer::marker::debug_lines::DebugLines;
@@ -1494,8 +1494,18 @@ impl Scheduler {
             let translation = DrawList::translation([s.base_x(), s.base_y(), 0.0], frame.eye);
             let cube = s.layout_primary;
             if let Some(d) = s.decor_of(cube, s.layout_generation) {
+                // A group's kind is drawn as its tier says at the step the
+                // decor was built at: its model, or its sprite.
+                let step = GROUND.scale(0).count_in(cube.max(GROUND.scale(0)));
+                let mut kinds = self.decor_kinds.iter().flat_map(|k| (0..k.variant_count).map(move |_| k.extent));
                 for (group, (offset, count)) in d.groups().enumerate() {
-                    if count > 0 {
+                    let extent = kinds.next().unwrap_or(0.0);
+                    if count == 0 {
+                        continue;
+                    }
+                    if decor_tier(extent, step) == DecorTier::Impostor {
+                        self.draw.draw_impostor(d.handle, group as u32, count, offset, translation);
+                    } else {
                         self.draw.draw_decor(d.handle, group as u32, count, offset, translation);
                     }
                 }

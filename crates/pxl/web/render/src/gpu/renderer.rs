@@ -115,8 +115,8 @@ pub struct FrameInput<'a> {
     /// The environment's lane (look/environment.rs), ENV_FLOATS floats.
     pub environment: &'a [f32],
     /// Each decor group's model block, by the list's handle (0 while it
-    /// loads), and its skin's image, in group order.
-    pub decor: &'a [(u32, Option<u32>)],
+    /// loads), its skin's image and its extent, in group order.
+    pub decor: &'a [(u32, Option<u32>, crate::gpu::pass::impostor::Extent)],
     /// The world's actors' models and the images they are skinned with.
     pub skins: &'a [(u32, u32)],
     /// The variant picker's cases: the surface, the model and its skin.
@@ -665,6 +665,7 @@ pub struct Renderer {
     layers: Layers,
     moon: MoonMap,
     decor: DecorPass,
+    impostor: crate::gpu::pass::impostor::ImpostorPass,
     skinned: SkinnedPass,
     puck: PuckPass,
     badges: BadgePass,
@@ -720,6 +721,7 @@ impl Renderer {
             chunk_coarse_prepass: pipelines.build(g, PIPELINE_CHUNK_COARSE_PREPASS, format::CANVAS),
             ghost: [pipelines.build(g, PIPELINE_GHOST_BOX, format::CANVAS), pipelines.build(g, PIPELINE_GHOST_BOX_COPLANAR, format::CANVAS)],
             decor: DecorPass::new(g, &mut pipelines, frame_buffer, &shadow, ao.blank_entry(7), air, device.align),
+            impostor: crate::gpu::pass::impostor::ImpostorPass::new(g, &mut pipelines, frame_buffer, &shadow, ao.blank_entry(7), air, device.align),
             skinned: SkinnedPass::new(
                 g,
                 &mut pipelines,
@@ -789,6 +791,7 @@ impl Renderer {
         self.light_group = self.chunk_group(g, self.shadow.light_frame, self.shadow.blank_entries(1));
         let ao = self.ao.entry(7);
         self.decor.rebind(g, self.frame_buffer, &self.shadow, ao);
+        self.impostor.rebind(g, self.frame_buffer, &self.shadow, ao);
         self.skinned
             .rebind(g, self.frame_buffer, self.shadow.entries(1), Some((self.shadow.light_frame, self.shadow.blank_entries(1))), ao);
     }
@@ -956,7 +959,9 @@ impl Renderer {
     /// The world, on the world's surface, and every case on its own; what the
     /// frame cost.
     fn frame(&mut self, g: &Gpu, world: &mut Surface, input: FrameInput) -> FrameStat {
-        self.decor.set_models(input.decor);
+        let models: Vec<(u32, Option<u32>)> = input.decor.iter().map(|&(m, i, _)| (m, i)).collect();
+        self.decor.set_models(&models);
+        self.impostor.set_models(input.decor);
         for &(model, image) in input.skins {
             self.skinned.set_skin(g, model, image);
         }
@@ -987,6 +992,7 @@ impl Renderer {
             g.write_buffer(self.draws_buffer, 0, bytes(uniforms));
         }
         self.decor.prepare(g, draws, uniforms);
+        self.impostor.prepare(g, draws, uniforms);
         self.skinned.prepare(g, draws, uniforms);
 
         let b = blocks();
@@ -998,6 +1004,9 @@ impl Renderer {
         // ran: which were is told with the set, since a query no pass wrote
         // holds whatever an earlier frame left in it.
         let mut stamps: [Stamp; GPU_SPANS.len()] = core::array::from_fn(|span| Stamp::of(q, span));
+        // A variant's sprite, where its model or skin came or changed, before
+        // the world's pass reads the atlas.
+        self.impostor.bake(g, encoder, &mut self.decor, b);
         self.atmosphere.draw(g, encoder, &mut stamps[SPAN_AIR]);
         // The sun's shadow map first, from the frame's lists, where it is on.
         if self.shadows {
@@ -1037,6 +1046,7 @@ impl Renderer {
         g.set_pipeline(pass, self.chunk_coarse.pipeline);
         self.draw_meshes(g, pass, draws, PIPELINE_CHUNK_COARSE, COARSE_BOX_BYTES, None);
         self.decor.draw(g, pass, draws, b);
+        self.impostor.draw(g, pass, draws, b);
         self.skinned.draw(g, pass, draws, b);
         // The sky and the stars after the opaque world, at the far plane, so
         // only a pixel it left empty runs the sky's shader: looking down at the
@@ -1147,6 +1157,7 @@ impl Renderer {
             let tris = match d[4] {
                 PIPELINE_CHUNK | PIPELINE_CHUNK_COARSE | PIPELINE_GHOST_BOX | PIPELINE_GHOST_BOX_COPLANAR => d[1] * 12,
                 PIPELINE_DECOR | PIPELINE_GHOST_DECOR => self.decor.triangles_of(d[1], b) * d[2],
+                crate::frame::draw::PIPELINE_IMPOSTOR => 2 * d[2],
                 PIPELINE_SKINNED => b.get(d[0]).map_or(0, |(_, _, index_cnt)| index_cnt / 3),
                 PIPELINE_PUCK_ZONE => 12 * d[1],
                 PIPELINE_PUCK_BEACON => 8,

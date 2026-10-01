@@ -81,6 +81,6 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
     discard;
   }
   let n = normalize(i.normal);
-  let color = shade(sprite.rgb, n, i.world_pos, sun_lit(i.world_pos, n), vec3f(1.0), Seen(i.through, i.scattered, i.past, i.fill));
+  let color = screen_ao(shade(sprite.rgb, n, i.world_pos, sun_lit(i.world_pos, n), vec3f(1.0), Seen(i.through, i.scattered, i.past, i.fill)), i.clip.xy);
   return vec4f(finish(color, i.clip.xy), draw_opacity());
 }

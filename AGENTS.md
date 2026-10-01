@@ -406,6 +406,16 @@ size.
   `// removed:` marker.
 - **Keep mechanisms orthogonal.** Gestures, animation and styling stay
   independently verifiable; never fuse them into one library mechanism.
+- **Agents working at once run optimistically.** Several agents share the
+  checkout and edit, commit and push without asking one another first: a
+  conflict that might happen costs nothing and is not a reason to wait,
+  lock, protect another's edits or split a commit. Only an actual git
+  conflict, or edits that cannot both stand, is paid for: the agents resolve
+  it one at a time in an order agreed once, each taking the latest, fixing,
+  committing and pushing before the next, and then all go on in parallel.
+  A broken intermediate state is allowed; correctness is held at the
+  checkpoints where the work is integrated — optimistic execution, conflict
+  detection, deterministic serialization, resume.
 - **Design in the conversation, not in a planning artifact.** Plan documents,
   approval gates and agent fan-outs are overhead here; skip them unless asked.
 - Code, comments and documentation stay in English.

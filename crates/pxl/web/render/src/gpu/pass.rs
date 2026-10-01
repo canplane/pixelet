@@ -7,6 +7,7 @@
 
 pub mod badges;
 pub mod decor;
+pub mod impostor;
 pub mod model;
 pub mod puck;
 pub mod skinned;

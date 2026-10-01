@@ -158,6 +158,16 @@ pub const RUN_SET_BYTES: u32 = 1 << 20;
 /// placed entries come past them. What does not fit is left out.
 pub const DECOR_INSTANCES: usize = 1 << 16;
 
+// ---- decor's tiers ----
+
+/// How small, in the tier's cells on the screen, a decor kind may get and
+/// still be drawn, as its variants' sprites (layer/decor/build.rs
+/// `decor_tier`): past the model's floor of two cells, down to half of one.
+/// A knob set by eye and derived from nothing: a sprite costs two triangles
+/// an instance, so how far decor reaches is what this buys, and below half a
+/// cell an instance is a pixel or two that reads as noise.
+pub const IMPOSTOR_GONE_CELLS: f64 = 0.5;
+
 /// Changes the world's change log keeps (kernel.rs): what a reader that fell
 /// behind can still catch up from before it has to read everything again.
 pub const JOURNAL_CAPACITY: u32 = 4096;

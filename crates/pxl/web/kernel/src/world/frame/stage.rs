@@ -79,12 +79,15 @@ pub fn stage_write(resolution: f64) {
 pub fn stage_render() {
     let lists = kernel().sched.draw.take();
     let models = &kernel().sched.models;
-    let mut decor = [(0u32, None); GROUPS];
-    let variants = decor_bundle_assets()
-        .iter()
-        .flat_map(|entry| (0..entry.models.len()).map(move |v| (entry.models[v], entry.skins.get(v).copied().flatten())));
-    for (slot, (model, image)) in decor.iter_mut().zip(variants) {
-        *slot = (model.and_then(|m| models.mesh(m)).map_or(0, |m| m.handle), image);
+    let mut decor = [(0u32, None, [0.0f32; 3]); GROUPS];
+    let variants = decor_bundle_assets().iter().flat_map(|entry| {
+        (0..entry.models.len()).map(move |v| {
+            let extent = entry.bundle.variants.get(v).and_then(|a| a.model.ingested().extent).unwrap_or([0.0; 3]);
+            (entry.models[v], entry.skins.get(v).copied().flatten(), extent.map(|e| e as f32))
+        })
+    });
+    for (slot, (model, image, extent)) in decor.iter_mut().zip(variants) {
+        *slot = (model.and_then(|m| models.mesh(m)).map_or(0, |m| m.handle), image, extent);
     }
     let mut skins = [(0u32, 0u32); 2];
     let mut skin_cnt = 0;

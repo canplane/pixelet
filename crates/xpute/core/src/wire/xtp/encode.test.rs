@@ -193,6 +193,9 @@ fn the_encoder_writes_the_bytes_the_typescript_writes() {
     check("bitset", |t| {
         t.bitset(Some(&[1, 0, 1, 1, 0, 0, 0, 0, 1]));
     });
+    check("strs", |t| {
+        t.strs(Some(&["a", "héllo", ""]));
+    });
     check("branch mixed", |t| {
         t.set(ViewValue::List(vec![
             ViewValue::I32(42),

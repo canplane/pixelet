@@ -117,7 +117,7 @@ impl DecorPass {
 
     /// A group's model block and counts and its skin's group, the skin made on
     /// first use once its image is here.
-    fn model_of(&mut self, g: &Gpu, group: u32, blocks: &Blocks) -> Option<(u32, u32, u32, u32)> {
+    pub(crate) fn model_of(&mut self, g: &Gpu, group: u32, blocks: &Blocks) -> Option<(u32, u32, u32, u32)> {
         let gr = *self.groups.get(group as usize)?;
         let (buffer, vertex_cnt, index_cnt) = blocks.get(gr.mesh)?;
         let at = if gr.skin == NO_SKIN { self.take_skin(g, gr.image?)? } else { gr.skin };
