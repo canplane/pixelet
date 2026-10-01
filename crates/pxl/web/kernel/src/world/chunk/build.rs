@@ -140,6 +140,16 @@ pub enum BuildEvent {
 /// A chunk's runs: which of `.fixed.runs`'s sets, and what is in it — and
 /// the scale its objects were folded to where it painted any
 /// (`object_fold`), which only the cubes that fold to it are baked from.
+/// A run set held: the column its runs are of, the chunks of that column
+/// using it, and its runs once made. A column crossing a cube's floor or
+/// ceiling is two chunks or more, each a cut of the one column's runs, so the
+/// runs are the column's, made once, and every chunk over it bakes from them.
+struct RunHold {
+    column: (Scale, [i64; 2]),
+    users: Vec<u32>,
+    runs: Option<Runs>,
+}
+
 #[derive(Clone, Copy)]
 struct Runs {
     set: usize,
@@ -220,7 +230,6 @@ struct Chunk {
     generation: u32,
     /// The tiers the node lacks, in the order it wants them.
     want: [Option<Cube>; 2],
-    runs: Option<Runs>,
     /// The heap's release count when it last refused this chunk a
     /// block: until a block is given back, the same request meets the
     /// same heap, and the chunk is not tried.
@@ -387,7 +396,7 @@ pub struct Builder {
     carve: Option<EntryAt>,
     /// The chunk holding each run set, whether it is being filled or baked
     /// from.
-    run_holders: [Option<u32>; RUN_SETS],
+    run_holds: [Option<RunHold>; RUN_SETS],
     /// The scan job's bands, kept between the scan's steps.
     bands: Vec<BandView<'static>>,
     /// The scan job's paint's claimed voxels, kept between its steps.
@@ -423,7 +432,7 @@ impl Builder {
             sample: ChunkSample::default(),
             hide: None,
             carve: None,
-            run_holders: [None; RUN_SETS],
+            run_holds: [const { None }; RUN_SETS],
             bands: Vec::new(),
             claimed: Claims::new(),
             folded: HashMap::new(),
@@ -475,14 +484,17 @@ impl Builder {
                 structures: false,
                 generation: 0,
                 want: [None; 2],
-                runs: None,
                 refused: None,
             },
         );
     }
 
     pub fn remove(&mut self, world: &mut World, id: u32) {
-        self.drop_work(world, id);
+        self.abort_scan_of(world, id);
+        if matches!(&self.bake_job, Some(j) if j.id == id) {
+            self.abort_bake();
+        }
+        self.leave_runs(id);
         self.chunks.remove(&id);
     }
 
@@ -513,7 +525,7 @@ impl Builder {
         }
         if want == [None, None] {
             self.abort_scan_of(world, id);
-            self.let_runs_go(id);
+            self.leave_runs(id);
         }
     }
 
@@ -522,44 +534,77 @@ impl Builder {
         self.carve = carve;
     }
 
+    /// The chunk's sources changed: its column's runs are stale for every
+    /// chunk over it, which share them.
     fn drop_work(&mut self, world: &mut World, id: u32) {
         self.abort_scan_of(world, id);
         if matches!(&self.bake_job, Some(j) if j.id == id) {
             self.abort_bake();
         }
-        self.let_runs_go(id);
+        self.drop_runs(id);
     }
 
     fn abort_scan_of(&mut self, world: &mut World, id: u32) {
         if let Some(job) = self.scan_job.take_if(|j| j.id == id) {
             self.scan.abort();
             world.volumes.release(job.volume);
-            self.let_runs_go(id);
+            self.leave_runs(id);
         }
     }
 
-    /// A run set for chunk `id`: the one it holds, or a free one it now
-    /// does. None while both are held by others.
+    /// The run set chunk `id`'s column holds, if one does.
+    fn hold_of(&self, id: u32) -> Option<usize> {
+        let column = self.chunks.get(&id)?.at.column();
+        self.run_holds.iter().position(|h| h.as_ref().is_some_and(|h| h.column == column))
+    }
+
+    /// The runs chunk `id`'s column holds, once made.
+    fn runs_of(&self, id: u32) -> Option<Runs> {
+        self.run_holds[self.hold_of(id)?].as_ref()?.runs
+    }
+
+    /// A run set for chunk `id`: its column's, joined, or a free one its
+    /// column now holds. None while every set is another column's.
     fn run_set_for(&mut self, id: u32) -> Option<usize> {
-        let set = self.run_holders.iter().position(|&h| h == Some(id)).or_else(|| self.run_holders.iter().position(|h| h.is_none()))?;
-        self.run_holders[set] = Some(id);
+        if let Some(set) = self.hold_of(id) {
+            let users = &mut self.run_holds[set].as_mut()?.users;
+            if !users.contains(&id) {
+                users.push(id);
+            }
+            return Some(set);
+        }
+        let set = self.run_holds.iter().position(Option::is_none)?;
+        let column = self.chunks.get(&id)?.at.column();
+        self.run_holds[set] = Some(RunHold { column, users: vec![id], runs: None });
         Some(set)
     }
 
-    /// Gives back the run set chunk `id` holds, if any.
-    fn let_runs_go(&mut self, id: u32) {
-        for h in self.run_holders.iter_mut().filter(|h| **h == Some(id)) {
-            *h = None;
+    /// Chunk `id` uses its column's runs no more; the set is given back with
+    /// its last user.
+    fn leave_runs(&mut self, id: u32) {
+        for slot in self.run_holds.iter_mut() {
+            if let Some(h) = slot {
+                h.users.retain(|&u| u != id);
+                if h.users.is_empty() {
+                    *slot = None;
+                }
+            }
         }
-        if let Some(c) = self.chunks.get_mut(&id) {
-            c.runs = None;
+    }
+
+    /// Chunk `id`'s column's runs are stale: the set is given back for every
+    /// chunk over the column, each of which makes them again, once.
+    fn drop_runs(&mut self, id: u32) {
+        if let Some(set) = self.hold_of(id) {
+            self.run_holds[set] = None;
         }
+        self.leave_runs(id);
     }
 
     /// The run sets lent now, and the bytes their runs fill.
     pub fn run_sets(&self) -> (u32, u32) {
-        let held = self.run_holders.iter().flatten();
-        let bytes = held.clone().filter_map(|id| self.chunks.get(id)?.runs.map(|r| r.bytes)).sum();
+        let held = self.run_holds.iter().flatten();
+        let bytes = held.clone().filter_map(|h| h.runs.map(|r| r.bytes)).sum();
         (held.count() as u32, bytes)
     }
 
@@ -572,7 +617,7 @@ impl Builder {
         if matches!(&self.bake_job, Some(j) if j.id == id) {
             self.abort_bake();
         }
-        self.let_runs_go(id);
+        self.leave_runs(id);
         let releases = crate::host::heap_stat().releases;
         if let Some(c) = self.chunks.get_mut(&id) {
             c.refused = Some(releases);
@@ -602,7 +647,8 @@ impl Builder {
         // The chunks holding the scan, the bake or a run set go first, each
         // once: held, a slot is every other chunk's wait.
         let mut first = [None; 2 + RUN_SETS];
-        for (n, id) in self.holders().into_iter().chain(self.run_holders).enumerate() {
+        let users = self.run_holds.iter().flatten().flat_map(|h| h.users.first().copied());
+        for (n, id) in self.holders().into_iter().chain(users.map(Some)).enumerate() {
             if !first[..n].contains(&id) {
                 first[n] = id;
             }
@@ -640,12 +686,15 @@ impl Builder {
         // Runs whose objects were folded for another cube than the next one
         // wanted draw that cube's objects, not this one's: made again.
         let next = c.wanted().next().or_bug(Errno::ENOTRECOVERABLE);
-        if c.runs.is_some_and(|r| r.fold.is_some_and(|f| f != object_fold(next))) && !matches!(&self.bake_job, Some(j) if j.id == id) {
-            self.let_runs_go(id);
+        if self.runs_of(id).is_some_and(|r| r.fold.is_some_and(|f| f != object_fold(next))) && !matches!(&self.bake_job, Some(j) if j.id == id) {
+            self.drop_runs(id);
         }
-        if self.chunks[&id].runs.is_none() {
+        if self.runs_of(id).is_none() {
             return self.advance_runs(world, id);
         }
+        // Another chunk of the column made them: this one bakes its cut of
+        // them too, and holds the set while it does.
+        self.run_set_for(id);
         self.advance_bake(world, id, emit)
     }
 
@@ -910,14 +959,15 @@ impl Builder {
         match at(Range::Run(set), 0, bytes) {
             Some(at) => Some((set, at as usize)),
             None => {
-                self.let_runs_go(id);
+                self.leave_runs(id);
                 None
             }
         }
     }
 
     fn keep_runs(&mut self, id: u32, runs: Runs) {
-        self.chunks.get_mut(&id).unwrap().runs = Some(runs);
+        let set = self.hold_of(id).or_bug(Errno::ENOTRECOVERABLE);
+        self.run_holds[set].as_mut().or_bug(Errno::ENOTRECOVERABLE).runs = Some(runs);
     }
 
     fn run_set(runs: &Runs) -> RunSet<'static> {
@@ -930,7 +980,7 @@ impl Builder {
     fn advance_bake(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent) -> bool) -> Progress {
         let holding = matches!(&self.bake_job, Some(j) if j.id == id);
         let c = &self.chunks[&id];
-        let set = Self::run_set(c.runs.as_ref().unwrap());
+        let set = Self::run_set(&self.runs_of(id).or_bug(Errno::ENOTRECOVERABLE));
         if !holding {
             if self.bake_job.is_some() {
                 return Progress::Blocked;
@@ -975,7 +1025,7 @@ impl Builder {
                         *w = None;
                     }
                     if c.wanted().next().is_none() {
-                        self.let_runs_go(id);
+                        self.leave_runs(id);
                     }
                     return Progress::Busy;
                 }
@@ -1056,7 +1106,7 @@ impl Builder {
                     }
                 }
                 if c.wanted().next().is_none() {
-                    self.let_runs_go(id);
+                    self.leave_runs(id);
                 }
                 emit(BuildEvent::Tier {
                     id,
