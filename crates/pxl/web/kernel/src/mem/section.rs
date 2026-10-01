@@ -34,16 +34,10 @@
 //! how much world is resident — it should not read as compiler output, and the
 //! reasoning for it should not have to be recovered from a linker map.
 //!
-//! Where each lands, at the two memories the shell reserves. Everything but
-//! the heap is the same on both: the terrain is what a view can hold,
-//! not a share of what the device happens to have.
-//!
-//! ```text
-//!              offset         end            phone        desktop
-//!   module     0              ~32.7 MiB      the linker's
-//!   .fixed     ~32.7 MiB      ~108.9 MiB     76.21 MiB    76.21 MiB
-//!   heap       ~108.9 MiB     —              ~403.1 MiB   ~915.1 MiB
-//! ```
+//! Where each lands, at the two memories the shell reserves: the module,
+//! then `.fixed` (mem/fixed.rs `BYTES`), then the heap, the rest. Everything
+//! but the heap is the same on both: the terrain is what a view can hold, not
+//! a share of what the device happens to have.
 //!
 //! What everything in front of the heap is checked against is MIN_HEAP_BYTES —
 //! the heap a phone is guaranteed — asked once at compile time of the lowest

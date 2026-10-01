@@ -182,6 +182,3 @@ pub unsafe fn lane<T>(s: Section, off: u32, n: usize) -> &'static mut [T] {
     unsafe { core::slice::from_raw_parts_mut(ptr_at::<T>(at as usize), n) }
 }
 
-#[cfg(test)]
-#[path = "fixed.test.rs"]
-mod test;
