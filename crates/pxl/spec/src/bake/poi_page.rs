@@ -211,11 +211,13 @@ impl Folds for PoiPage {
     /// A child is settled where no cell over it holds two places: a cell of
     /// one says where that place stands to the z16 cell and which it is, and
     /// a cell of none says there is nothing, so the child's cells would say it
-    /// again. Only a crowd comes apart a level down.
+    /// again. Only a crowd comes apart a level down — and a count that is a
+    /// floor, which says only what the source gave, not that nothing more is
+    /// under it.
     fn settles(&self, p: LevelPage, child: LevelPage) -> bool {
         self.cells
             .iter()
-            .all(|c| c.count < 2 || POI_LATTICE.cell_of(child.level, &POI_LATTICE.cell_at(p, c.cell).base()).page() != child)
+            .all(|c| (c.count < 2 && !c.partial) || POI_LATTICE.cell_of(child.level, &POI_LATTICE.cell_at(p, c.cell).base()).page() != child)
     }
 
     fn fold_page<'a>(p: LevelPage, held: impl Fn(LevelPage) -> Option<&'a Self>) -> Option<Self> {

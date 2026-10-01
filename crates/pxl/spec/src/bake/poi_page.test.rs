@@ -216,5 +216,7 @@ fn a_floor_stays_a_floor_as_it_folds() {
     for (leaf_page, partial) in [(&some, true), (&all, false)] {
         let up = PoiPage::fold_page(p, |k| Some(if k == leaf() { leaf_page } else { &empty })).unwrap();
         assert_eq!(up.cells[0].partial, partial);
+        // A floor of one is no proof that one is all, so it settles nothing.
+        assert_eq!(up.settles(p, leaf()), !partial);
     }
 }
