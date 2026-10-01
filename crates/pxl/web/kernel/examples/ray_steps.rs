@@ -51,7 +51,7 @@ const FOV_DEG: f64 = 50.0;
 /// the frame's sum, is what is measured, and it is the same at any stride
 /// fine against the ground's cells.
 const STRIDE_PT: f64 = 3.0;
-/// How far a ray is asked, in units: past the visual range of the air.
+/// How far a ray is asked, in units: past the reach any view draws to.
 const REACH: f64 = 40_000.0;
 /// Rounds of cast and fetch before what is still lacked is taken as what
 /// cannot be had.

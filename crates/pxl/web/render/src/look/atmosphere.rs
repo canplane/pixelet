@@ -36,9 +36,9 @@ pub const MIE_G: f64 = 0.8;
 ///
 /// Bruneton's medium alone gives 179 km — cleaner than the clearest day
 /// anyone stands in — because it carries no aerosol in the boundary layer,
-/// only the stratospheric Mie the sky's color wants. Without one the ground
-/// stays sharp to the horizon and something else has to hide where it ends
-/// (issue/20260923-the-ground-runs-to-the-horizon.md).
+/// only the stratospheric Mie the sky's color wants. Without one far ground
+/// stays sharp against the sky; with it, it fades into the sky's own light.
+/// Where the ground stops being drawn is the view's, not the air's.
 pub const HAZE_VISUAL_RANGE_KM: f64 = 40.0;
 /// The aerosol the range asks for, over what the medium already extinguishes
 /// at green, where the eye's contrast is measured. Read by the aerial
