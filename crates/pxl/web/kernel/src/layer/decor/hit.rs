@@ -39,9 +39,20 @@ const SAME_SURFACE_EPS: f64 = 1e-3;
 pub enum DecorStruck {
     /// A placed instance: where its entry is filed.
     Placed(EntryAt),
-    /// A scattered instance: the cell it stands in, which a leaf written
-    /// there overrides.
-    Scattered([i64; 3]),
+    /// A scattered instance.
+    Scattered(Scattered),
+}
+
+/// A scattered instance a ray struck: the cell it stands in, which a leaf
+/// written there overrides, and how it is drawn — its group, where it
+/// stands, its turn and its size — for a preview drawn as it is.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Scattered {
+    pub cell: [i64; 3],
+    pub group: u32,
+    pub at: [f64; 3],
+    pub rotation: f64,
+    pub scale: f64,
 }
 
 /// The decor the ray strikes within `max_dist`, or None. The ray is in the
@@ -51,7 +62,13 @@ pub fn raycast_decor(origin: V3, direction: V3, map_origin: IVec, max_dist: f64)
     let frame = [ivec::to_real(ivec::X(map_origin)), ivec::to_real(ivec::Y(map_origin))];
     let hit = hit_decor(sched, frame, origin, direction, max_dist + SAME_SURFACE_EPS)?;
     if hit.band == NO_ENTRY {
-        return Some(DecorStruck::Scattered(hit.at.map(|v| (v / CELL.side()).floor() as i64)));
+        return Some(DecorStruck::Scattered(Scattered {
+            cell: hit.at.map(|v| (v / CELL.side()).floor() as i64),
+            group: hit.group,
+            at: hit.at,
+            rotation: hit.rotation,
+            scale: hit.scale,
+        }));
     }
     // The lane holds the band's own i32 as a word (layer/decor/build.rs).
     Some(DecorStruck::Placed(EntryAt {
@@ -74,6 +91,9 @@ struct DecorHit {
     pub band: u32,
     pub pos: u32,
     pub at: [f64; 3],
+    pub group: u32,
+    pub rotation: f64,
+    pub scale: f64,
     pub t: f64,
 }
 
@@ -116,7 +136,7 @@ fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: 
         if !ray_meets_square(&o, &d, tx - reach, ty - reach, tx + side + reach, ty + side + reach, limit) {
             continue;
         }
-        for ((offset, count), model) in decor_groups(words).zip(group_models()) {
+        for (group, ((offset, count), model)) in decor_groups(words).zip(group_models()).enumerate() {
             let Some(mesh) = model.and_then(|m| sched.models.mesh(m)) else { continue };
             let lanes = GroupLanes {
                 first: offset as usize,
@@ -165,6 +185,9 @@ fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: 
                                 band,
                                 pos: words[lanes.pos_at(i)],
                                 at: [base_x + lane(0, i), base_y + lane(1, i), lane(2, i)],
+                                group: group as u32,
+                                rotation: spin,
+                                scale: lane(4, i),
                                 t,
                             });
                         }

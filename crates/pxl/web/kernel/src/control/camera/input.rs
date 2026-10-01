@@ -29,7 +29,7 @@ use crate::control::camera::ray::{ray_pick, resolve_hit_object, world_adjacent_c
 use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
 use crate::control::navigation::destination::cancel as cancel_destination;
 use crate::global::Global;
-use crate::layer::decor::hit::{raycast_decor, DecorStruck};
+use crate::layer::decor::hit::{raycast_decor, DecorStruck, Scattered};
 use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
 use crate::layer::object::geometry::{anchor_center, object_aabb, object_center};
 use crate::layer::object::size::{DECOR_SIZE, DEFAULT_OBJECT_SIZE};
@@ -187,8 +187,8 @@ fn input() -> &'static mut Input {
 enum Struck {
     /// A placed entry.
     Object(OccupiedEntry),
-    /// A scattered decor instance: the cell it stands in.
-    Scattered([i64; 3]),
+    /// A scattered decor instance.
+    Scattered(Scattered),
 }
 
 /// What `hit` actually struck — the decor's mesh hit first, bounded by
@@ -202,7 +202,7 @@ fn resolve_struck(hit: &Hit, origin: V3, direction: V3, map_origin: IVec) -> Opt
                 return Some(Struck::Object(o));
             }
         }
-        Some(DecorStruck::Scattered(cell)) => return Some(Struck::Scattered(cell)),
+        Some(DecorStruck::Scattered(s)) => return Some(Struck::Scattered(s)),
         None => {}
     }
     resolve_hit_object(hit).map(Struck::Object)
@@ -247,7 +247,7 @@ fn handle_tap(hovered: Pvf3) {
                 // A scattered instance: air written over the cell it stands
                 // in, as over the ground, and with no setting asked, since it
                 // takes away nothing the ground is.
-                (None, Some(cell)) => place_air(&CELL.base_of(cell), U_PER_CELL),
+                (None, Some(s)) => place_air(&CELL.base_of(s.cell), U_PER_CELL),
                 // Nothing placed here — dig into the terrain's own real surface,
                 // once the user has opted into that. AIR, not VOID: real terrain
                 // has no object-layer leaf of its own to delete, so an explicit
@@ -570,13 +570,13 @@ fn update_hover(s: &Input) {
         _ => None,
     };
     camera.hovered_scattered = match struck {
-        Some(Struck::Scattered(cell)) => Some(cell),
+        Some(Struck::Scattered(s)) => Some(s),
         _ => None,
     };
     if let Some(Struck::Object(o)) = struck {
         camera.hovered_coord = Some(Pvf3 { i: o.i, f: o.f });
-    } else if let Some(cell) = camera.hovered_scattered {
-        camera.hovered_coord = Some(CELL.base_of(cell));
+    } else if let Some(s) = camera.hovered_scattered {
+        camera.hovered_coord = Some(CELL.base_of(s.cell));
     } else if ui.active_tool == ActiveTool::Eraser && settings_store().terrain_carving {
         // Bare terrain under the eraser wants the struck voxel's OWN corner
         // (real, possibly dug-into height included), not the baked-elevation

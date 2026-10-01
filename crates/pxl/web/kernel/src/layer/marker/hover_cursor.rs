@@ -128,7 +128,7 @@ pub fn hover_cursor_step() {
     }
     // A scattered decor has no entry to hide; it is hidden by the cell it
     // stands in.
-    set_scattered_hide(camera.hovered_scattered.filter(|_| active_tool == ActiveTool::Eraser));
+    set_scattered_hide(camera.hovered_scattered.filter(|_| active_tool == ActiveTool::Eraser).map(|s| s.cell));
 
     // Terrain's own counterpart: eraser hovering bare terrain has no real leaf
     // to hide, so the carve preview injects a real AIR entry into the build at
@@ -212,8 +212,20 @@ pub fn hover_cursor_step() {
     // mesh while the cursor is on it.
     let coplanar_with_terrain = !use_object_style;
 
-    let ghost = match (hovered, blocked) {
-        (Some(h), false) => {
+    // A scattered decor under the pointer or the eraser is previewed as
+    // itself, as a placed one is: its own model, where and as it is drawn.
+    let scattered_ghost = camera
+        .hovered_scattered
+        .filter(|_| matches!(active_tool, ActiveTool::Pointer | ActiveTool::Eraser))
+        .map(|s| Ghost::Decor {
+            at: s.at,
+            group: s.group,
+            rotation: s.rotation,
+            scale: s.scale,
+        });
+    let ghost = match (scattered_ghost, hovered, blocked) {
+        (Some(g), _, _) => g,
+        (None, Some(h), false) => {
             let x = ivec::to_real(ivec::X(h.i)) + fvec::to_real(fvec::X(h.f));
             let y = ivec::to_real(ivec::Y(h.i)) + fvec::to_real(fvec::Y(h.f));
             let z = ivec::to_real(ivec::Z(h.i)) + fvec::to_real(fvec::Z(h.f));
