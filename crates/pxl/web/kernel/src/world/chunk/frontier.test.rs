@@ -125,6 +125,9 @@ struct Table {
     frontier: Frontier,
     /// What the frontier's steps have allocated.
     allocated: u64,
+    /// The instant, in milliseconds: a hold's length a step, so a
+    /// coarsening asked for in one step is let in the next.
+    ms: f64,
 }
 
 impl Table {
@@ -136,6 +139,7 @@ impl Table {
             seed: 0x2545_f491,
             frontier: Frontier::default(),
             allocated: 0,
+            ms: 0.0,
         }
     }
 
@@ -157,7 +161,9 @@ impl Table {
         let ready: Vec<(Chunk, bool)> = self.building.iter().map(|(&c, &left)| (c, left == 0)).collect();
         let held = self.held();
         let free = core::array::from_fn(|p| self.arena[p] - held[p]);
+        self.ms += crate::param::COARSEN_HOLD_MS;
         let now = Now {
+            ms: self.ms,
             goal,
             drawn: &drawn,
             building: &ready,
@@ -237,6 +243,7 @@ fn a_piece_filling_several_slots_starts_only_with_all_of_them_free() {
     let drawn = [parent];
     let with = |fine: u32| {
         let now = Now {
+            ms: 0.0,
             goal: &children,
             drawn: &drawn,
             building: &[],
@@ -251,6 +258,43 @@ fn a_piece_filling_several_slots_starts_only_with_all_of_them_free() {
     let all = 3 * occupied + RESERVE[Pool::Fine as usize];
     assert_eq!(with(all - 1), 0, "started with fewer slots free than its pieces fill");
     assert_eq!(with(all), occupied, "not started with every slot its pieces fill free");
+}
+
+/// A coarsening waits until the goal has asked for it for its hold, so a
+/// goal that comes back within it finds the finer pieces still drawn; a
+/// step that found the arena short lets it go at once.
+#[test]
+fn a_coarsening_waits_its_hold_unless_the_arena_is_short() {
+    fn now<'a>(ms: f64, goal: &'a [Chunk], drawn: &'a [Chunk], free: Slots) -> Now<'a> {
+        Now {
+            ms,
+            goal,
+            drawn,
+            building: &[],
+            recubing: 0,
+            recube: &[],
+            free,
+        }
+    }
+    let parent = at(1, 0, 0);
+    let mut children = parent.children().to_vec();
+    children.sort_unstable();
+    let (hold, roomy, goal) = (crate::param::COARSEN_HOLD_MS, [100; POOLS], [parent]);
+    let mut f = Frontier::default();
+    assert!(f.plan(&now(0.0, &goal, &children, roomy), &Flat).start.is_empty(), "coarsened the moment it was asked for");
+    assert!(f.plan(&now(hold / 2.0, &goal, &children, roomy), &Flat).start.is_empty(), "coarsened inside its hold");
+    assert_eq!(f.plan(&now(hold, &goal, &children, roomy), &Flat).start, vec![parent], "not coarsened past its hold");
+
+    // Asked for again after the goal let it go: it waits again.
+    let mut f = Frontier::default();
+    f.plan(&now(0.0, &goal, &children, roomy), &Flat);
+    f.plan(&now(hold / 2.0, &children, &children, roomy), &Flat);
+    assert!(f.plan(&now(hold, &goal, &children, roomy), &Flat).start.is_empty(), "a coarsening asked for again kept its first time");
+
+    // A step that refused a move room: the next coarsens at once.
+    let mut f = Frontier::default();
+    f.plan(&now(0.0, &[parent, at(1, 4, 4)], &children, [0; POOLS]), &Flat);
+    assert_eq!(f.plan(&now(1.0, &goal, &children, roomy), &Flat).start, vec![parent], "held a coarsening while the arena was short");
 }
 
 /// The fixture's pieces with every piece over z16 filling the most a coarse
@@ -282,6 +326,7 @@ fn a_coarsening_is_always_started_with_only_the_reserve_free() {
     let mut children = parent.children().to_vec();
     children.sort_unstable();
     let now = Now {
+        ms: 0.0,
         goal: &[parent],
         drawn: &children,
         building: &[],
@@ -289,7 +334,14 @@ fn a_coarsening_is_always_started_with_only_the_reserve_free() {
         recube: &[],
         free: RESERVE,
     };
-    assert_eq!(Frontier::default().plan(&now, &Widest).start, vec![parent], "a coarsening not started with the reserve free");
+    // Asked for past its hold.
+    let mut frontier = Frontier::default();
+    frontier.plan(&now, &Widest);
+    let later = Now {
+        ms: crate::param::COARSEN_HOLD_MS,
+        ..now
+    };
+    assert_eq!(frontier.plan(&later, &Widest).start, vec![parent], "a coarsening not started with the reserve free");
     let fill = Now {
         goal: &[at(1, 4, 4)],
         drawn: &[],

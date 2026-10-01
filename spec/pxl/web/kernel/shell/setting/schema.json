@@ -240,19 +240,6 @@
       "options": "RESOLUTION_MODES",
       "section": "quality"
     },
-    "lod_crossfade": {
-      "$doc": [
-        "A change of what a chunk draws dissolves over 150 ms of frames instead",
-        "of switching at once (crates/pxl/web/kernel/src/world/chunk/table.rs's",
-        "Fade): a cube for another, a stale chunk for what replaced it. The two",
-        "draw on complementary halves of one screen-space pattern, so a chunk",
-        "in a dissolve is drawn twice while it lasts."
-      ],
-      "kind": "toggle",
-      "default": true,
-      "section": "quality",
-      "cost": "low"
-    },
     "profiler": {
       "$doc": ["The performance overlay: the profiler's panel, and the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`)."],
       "kind": "toggle",

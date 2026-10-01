@@ -65,7 +65,6 @@ pub fn source(kind: u32) -> &'static str {
             "shadow",
             "ao_map",
             "faces",
-            "dissolve",
             "chunk"
         ),
         SHADER_DECOR => wgsl!(
@@ -82,7 +81,6 @@ pub fn source(kind: u32) -> &'static str {
             "shadow",
             "ao_map",
             "place",
-            "dissolve",
             "decor"
         ),
         SHADER_SKINNED => wgsl!(

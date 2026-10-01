@@ -112,6 +112,17 @@ pub const QUALITY_MARGIN: f64 = 0.05;
 /// quality for the same arena.
 pub const REFINEMENTS_IN_FLIGHT: u32 = 32;
 
+// ---- the frontier's time (world/chunk/frontier.rs) ----
+
+/// How long the goal has to have asked for a piece coarser than what is
+/// drawn before the drawn pieces are replaced by it, in milliseconds: as
+/// long as a finer quality step waits (`QUALITY_WAIT_MS`), and for the same
+/// reason — a tilt or a turn that comes back within it finds the finer
+/// pieces still drawn, and nothing is thrown away to be built again. A finer
+/// piece drawn longer is never wrong, only memory held longer, and a shortage
+/// of the arena lets every held coarsening go at once.
+pub const COARSEN_HOLD_MS: f64 = QUALITY_WAIT_MS;
+
 // ---- device budget: memory (world/chunk/mesh_slot.rs, mem/fixed.rs) ----
 
 /// Slots in one arena group, and so the z16 chunks drawn at their own cells
@@ -125,7 +136,7 @@ pub const ARENA_GROUP_SLOTS: u32 = 330;
 /// Groups the coarse tiers share. A product number, said aloud: a slot for
 /// each of some thousand chunks a view draws in a coarse tier, and half as
 /// many again for what a change of view holds while it lasts — refinements
-/// under way, a dissolve's other side. The goal at the target over rolling
+/// under way. The goal at the target over rolling
 /// ground is some 350 to 760 pieces, from high up to 2u over it (measured
 /// 2026-09-28); what the leak rule asks past the arena the quality policy
 /// draws coarser.
@@ -213,13 +224,6 @@ pub const RETRY_MS: f64 = 2_000.0;
 /// Fetches out at once at most, whatever the host grants: the host's grant
 /// is cut to it, and the ledger's table of attempts out is this long.
 pub const MAX_CREDITS: u32 = 16;
-
-// ---- visual (world/chunk/table.rs) ----
-
-/// How long a change of what is drawn dissolves over, in milliseconds: a
-/// tier for another, a replaced piece for what replaced it. 300 read as
-/// slow (2026-09-26); half of it is what the dissolve takes now.
-pub const FADE_MS: f64 = 150.0;
 
 // ---- the turn's budget (sched/tick.rs) ----
 

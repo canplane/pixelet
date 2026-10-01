@@ -29,8 +29,8 @@ Deno.test("frameAt - reads each lane at its word", () => {
 Deno.test("label and valueText - a lane's name says its unit", () => {
   assertEquals(label("lod", "lod_oldest_release_ms"), "oldest_release");
   assertEquals(label("heap", "heap_used_mb"), "used");
-  assertEquals(label("stale", "stale_levels"), "levels");
+  assertEquals(label("slot", "slot_wait_levels"), "wait_levels");
   assertEquals(valueText("lod_oldest_release_ms", 12.34), "12.3ms");
-  assertEquals(valueText("stale_levels", 0b1001), "0,3");
+  assertEquals(valueText("slot_wait_levels", 0b1001), "0,3");
   assertEquals(valueText("triangles", 12_400), "12k");
 });

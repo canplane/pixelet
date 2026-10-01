@@ -190,6 +190,8 @@ impl Smooth {
 #[derive(Default)]
 struct Quality {
     smooth: Smooth,
+    /// The feasible step the last turn found, for the profiler.
+    star: usize,
     counts: Vec<Option<Slots>>,
     counted: Option<(u32, u32)>,
 }
@@ -200,6 +202,13 @@ static QUALITY: Global<Quality> = Global::new();
 /// pages at.
 pub fn effective() -> Effective {
     Effective(ladder()[QUALITY.get(Quality::default).smooth.at()])
+}
+
+/// The step in force and the feasible step, on the ladder from the target:
+/// what the profiler reads the policy by.
+pub fn reading() -> [usize; 2] {
+    let q = QUALITY.get(Quality::default);
+    [q.smooth.at(), q.star]
 }
 
 /// The policy's turn, before anything reads the quality: the view's domain
@@ -225,6 +234,7 @@ pub fn step() {
     let mut count = |k: usize| *counts[k].get_or_insert_with(|| domain::cut_at(k).map_or([0; POOLS], |(d, cut)| need(d, cut, |c, cube| sched.slots_of(c, cube))));
     let spare = margin();
     let (star, roomy) = around(q.smooth.at(), ladder.len(), |k, roomy| fits(count(k), ARENA, HEADROOM, if roomy { spare } else { [0; POOLS] }));
+    q.star = star;
     let at = q.smooth.follow(star, roomy, param::QUALITY_WAIT_MS, crate::host::now());
     domain::step(&ladder, Effective(ladder[at]));
 }

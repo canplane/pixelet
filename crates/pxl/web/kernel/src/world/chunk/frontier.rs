@@ -15,6 +15,12 @@
 //! 5. Without a cache the result is the same: a slot holds a mesh only while
 //!    it is drawn or about to be, and every one is made again from the
 //!    records when asked for.
+//! 6. The goal is the domain's, a function of the observation and nothing
+//!    of time; when the frontier moves to it is the frontier's. A coarsening
+//!    waits until the goal has asked for it for `param::COARSEN_HOLD_MS`,
+//!    so a goal that comes back within that finds the finer pieces still
+//!    drawn; a step in which the arena refused a move room lets every held
+//!    coarsening go, since coarsening is what gives room back.
 //!
 //! **What is drawn is a frontier with no gap.** The drawn pieces are an
 //! antichain of the chunk tree, and every piece of the goal is one of them,
@@ -227,6 +233,8 @@ pub trait Env {
 
 /// The frontier as it stands, and the room the arena has for it.
 pub struct Now<'a> {
+    /// The instant, in milliseconds: what a held coarsening is timed by.
+    pub ms: f64,
     /// The goal at the effective quality, sorted: an antichain.
     pub goal: &'a [Chunk],
     /// The pieces drawn, sorted: an antichain.
@@ -261,6 +269,11 @@ pub struct Plan {
     pub refused: u32,
     /// Moves under way and not all ready.
     pub waiting: u32,
+    /// Coarsenings waiting their hold: a turn is asked for while any does,
+    /// or nothing would make one when it is over.
+    pub held: u32,
+    /// Refinements made this step.
+    pub refined: u32,
     /// The moves to make now, as what leaves and what enters, each a run of
     /// `chunks`.
     swaps: Vec<(Run, Run)>,
@@ -313,9 +326,17 @@ struct Move {
 
 /// The frontier's step and what it is worked out in, kept from one step to
 /// the next for their capacity: a step over a frontier no larger than one
-/// already planned allocates nothing. Nothing in it outlives a step.
+/// already planned allocates nothing. Nothing in it outlives a step but the
+/// coarsenings' time (`asked`, `short`).
 #[derive(Default)]
 pub struct Frontier {
+    /// Each goal piece a coarsening enters, and since when the goal has
+    /// asked for it: only the ones it asks for now are kept.
+    asked: Vec<(Chunk, f64)>,
+    /// `asked` as this step makes it, before it takes its place.
+    asking: Vec<(Chunk, f64)>,
+    /// Whether the last step refused a move room in the arena.
+    short: bool,
     plan: Plan,
     moves: Vec<Move>,
     /// A goal piece, and a drawn piece under it.
@@ -338,6 +359,9 @@ impl Frontier {
     /// view's order.
     pub fn plan(&mut self, now: &Now, env: &impl Env) -> &Plan {
         let Frontier {
+            asked,
+            asking,
+            short,
             plan,
             moves,
             under,
@@ -353,6 +377,8 @@ impl Frontier {
             recube: recubed,
             refused,
             waiting,
+            held: held_n,
+            refined,
             swaps,
             chunks,
         } = plan;
@@ -360,7 +386,7 @@ impl Frontier {
             v.clear();
         }
         swaps.clear();
-        (*refused, *waiting) = (0, 0);
+        (*refused, *waiting, *held_n, *refined) = (0, 0, 0, 0);
         moves.clear();
         under.clear();
         over.clear();
@@ -446,11 +472,37 @@ impl Frontier {
         wanted.sort_unstable();
         cancel.extend(now.building.iter().map(|&(c, _)| c).filter(|c| wanted.binary_search(c).is_err()));
 
+        // Since when each coarsening's goal piece has been asked for: the
+        // ones asked before keep their time, new ones start now, and those
+        // the goal no longer asks for are forgotten, so one asked for again
+        // waits again.
+        asking.clear();
+        asking.extend(moves.iter().filter(|m| m.kind == Kind::Coarsen).map(|m| {
+            let a = m.enter.of(chunks)[0];
+            let t = asked.binary_search_by_key(&a, |&(c, _)| c).map_or(now.ms, |i| asked[i].1);
+            (a, t)
+        }));
+        asking.sort_unstable_by_key(|&(c, _)| c);
+        core::mem::swap(asked, asking);
+        let pressed = *short;
+        let held = |m: &Move| {
+            m.kind == Kind::Coarsen
+                && !pressed
+                && asked
+                    .binary_search_by_key(&m.enter.of(chunks)[0], |&(c, _)| c)
+                    .is_ok_and(|i| now.ms - asked[i].1 < crate::param::COARSEN_HOLD_MS)
+        };
+
         let mut in_flight = now.recubing;
         for (n, m) in moves.iter().enumerate() {
+            if held(m) {
+                *held_n += 1;
+                continue;
+            }
             let enter = m.enter.of(chunks);
             if enter.iter().all(|c| ready(c) == Some(true)) {
                 swaps.push((m.leave, m.enter));
+                *refined += (m.kind == Kind::Refine) as u32;
                 continue;
             }
             if enter.iter().any(building) {
@@ -470,6 +522,7 @@ impl Frontier {
 
         let mut free = now.free;
         let take = |free: &Slots, need: &Slots, reserve: Slots| (0..POOLS).all(|p| need[p] == 0 || free[p] >= need[p] + reserve[p]);
+        let mut cramped = false;
         for &n in open.iter() {
             let m = moves[n as usize];
             if start.len() as u32 >= crate::param::STARTS_PER_FRAME {
@@ -485,7 +538,9 @@ impl Frontier {
                 need[pool as usize] += k;
             }
             let reserve = if m.kind == Kind::Coarsen { [0; POOLS] } else { RESERVE };
-            let room = missing().all(|c| env.buildable(c)) && take(&free, &need, reserve) && !(m.kind == Kind::Refine && fresh && in_flight >= REFINEMENTS_IN_FLIGHT);
+            let fits = take(&free, &need, reserve);
+            cramped |= !fits;
+            let room = missing().all(|c| env.buildable(c)) && fits && !(m.kind == Kind::Refine && fresh && in_flight >= REFINEMENTS_IN_FLIGHT);
             if !room {
                 *refused += 1;
                 continue;
@@ -507,7 +562,9 @@ impl Frontier {
         for &(c, (pool, k)) in recube.iter() {
             let mut need = [0; POOLS];
             need[pool as usize] = k;
-            if in_flight >= REFINEMENTS_IN_FLIGHT || !take(&free, &need, RESERVE) {
+            let fits = take(&free, &need, RESERVE);
+            cramped |= !fits;
+            if in_flight >= REFINEMENTS_IN_FLIGHT || !fits {
                 *refused += 1;
                 continue;
             }
@@ -515,6 +572,7 @@ impl Frontier {
             in_flight += 1;
             recubed.push(c);
         }
+        *short = cramped;
         plan
     }
 }

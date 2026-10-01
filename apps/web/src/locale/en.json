@@ -86,10 +86,6 @@
           "label": "Low",
           "description": "Draws at a lower resolution to save battery and heat. Looks a little softer."
         }
-      },
-      "lod_crossfade": {
-        "label": "LOD Crossfade",
-        "description": "Blocks fade into their new level of detail as you zoom or move, instead of switching at once. Draws the changing blocks twice while they fade."
       }
     },
     "debug": {

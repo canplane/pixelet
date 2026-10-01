@@ -194,6 +194,8 @@ pub struct Paging<L: Layer> {
     /// what is read and what is asked for are functions of.
     revision: u32,
     refused: u32,
+    admitted: u32,
+    evicted: u32,
 }
 
 impl<L: Layer> Default for Paging<L> {
@@ -205,6 +207,8 @@ impl<L: Layer> Default for Paging<L> {
             going: Vec::with_capacity(ENTRIES as usize),
             revision: 0,
             refused: 0,
+            admitted: 0,
+            evicted: 0,
         }
     }
 }
@@ -414,7 +418,14 @@ impl<L: Layer> Paging<L> {
             self.refused += 1;
             return None;
         };
+        self.evicted = self.evicted.wrapping_add(1);
         self.remove(candidates[at].page)
+    }
+
+    /// Pages taken into a frame, and pages given up for another's frame,
+    /// since load: what a view's turnover is read by, for the profiler.
+    pub fn churn(&self) -> [u32; 2] {
+        [self.admitted, self.evicted]
     }
 
     /// Arrivals given no frame since the last take, for the profiler.
@@ -432,6 +443,7 @@ impl<L: Layer> Paging<L> {
         let Some(record) = self.frame_for(p, victim) else { return Ok(()) };
         match receive(record) {
             Ok(page) => {
+                self.admitted = self.admitted.wrapping_add(1);
                 self.put(p, page, record);
                 Ok(())
             }

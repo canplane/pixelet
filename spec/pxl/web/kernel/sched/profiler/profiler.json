@@ -123,54 +123,48 @@
     "lod_in_frustum": 62,
     "lod_pending": 63,
     "lod_settling": 64,
-    "lod_blend_active": 65,
-    "lod_offscreen_pending": 66,
-    "lod_oldest_release_ms": 67,
-    "lod_oldest_visible_ms": 68,
-    "mounts_added": 69,
-    "mounts_removed": 70,
-    "mounts_layouts": 71,
-    "pages_total": 72,
-    "pages_by_level": 73,
-    "pages_poi": 84,
-    "heap_used_mb": 85,
-    "heap_live_mb": 86,
-    "heap_run_mb": 87,
-    "heap_slot_mb": 88,
-    "heap_range_mb": 89,
-    "heap_refusals": 90,
-    "heap_largest_free_mb": 91,
-    "ring_cq_peak": 92,
-    "ring_spill_peak": 93,
-    "work_scans": 94,
-    "work_bakes": 95,
-    "work_fine_peak": 96,
-    "work_coarse_peak": 97,
-    "q_terrain": 98,
-    "q_poi": 99,
-    "stale_chunks": 100,
-    "stale_drawn": 101,
-    "stale_levels": 102,
-    "stale_hidden": 103,
-    "stale_uncovered": 104,
-    "stale_unready": 105,
-    "stale_on_waiter": 106,
-    "slot_waits": 107,
-    "slot_wait_levels": 108,
-    "slot_holder_levels": 109,
-    "slot_chained": 110,
-    "cap_commit_left": 111,
-    "cap_mount_left": 112,
-    "cap_mount_full": 113,
-    "cap_record_refused": 114,
-    "turn_effects_ms": 115,
-    "turn_stage_ms": 116,
-    "turn_step_ms": 117,
-    "turn_step_name": 118,
-    "cover_rule": 119,
-    "cover_drawn": 120,
-    "cover_gaps": 121,
-    "WORDS": 122
+    "lod_offscreen_pending": 65,
+    "lod_oldest_release_ms": 66,
+    "lod_oldest_visible_ms": 67,
+    "mounts_added": 68,
+    "mounts_removed": 69,
+    "mounts_layouts": 70,
+    "pages_total": 71,
+    "pages_by_level": 72,
+    "pages_poi": 83,
+    "heap_used_mb": 84,
+    "heap_live_mb": 85,
+    "heap_run_mb": 86,
+    "heap_slot_mb": 87,
+    "heap_range_mb": 88,
+    "heap_refusals": 89,
+    "heap_largest_free_mb": 90,
+    "ring_cq_peak": 91,
+    "ring_spill_peak": 92,
+    "work_scans": 93,
+    "work_bakes": 94,
+    "work_fine_peak": 95,
+    "work_coarse_peak": 96,
+    "q_terrain": 97,
+    "q_poi": 98,
+    "stale_hidden": 99,
+    "stale_uncovered": 100,
+    "stale_unready": 101,
+    "slot_waits": 102,
+    "slot_wait_levels": 103,
+    "slot_chained": 104,
+    "cap_commit_left": 105,
+    "cap_mount_left": 106,
+    "cap_mount_full": 107,
+    "cap_record_refused": 108,
+    "turn_effects_ms": 109,
+    "turn_stage_ms": 110,
+    "turn_step_ms": 111,
+    "turn_step_name": 112,
+    "cover_rule": 113,
+    "cover_drawn": 114,
+    "cover_gaps": 115,
+    "WORDS": 116
   },
   "FRAME_GROUPS": {
     "$doc": [
@@ -207,7 +201,6 @@
       "lod_in_frustum",
       "lod_pending",
       "lod_settling",
-      "lod_blend_active",
       "lod_offscreen_pending",
       "lod_oldest_release_ms",
       "lod_oldest_visible_ms"
@@ -218,18 +211,13 @@
       "mounts_layouts"
     ],
     "stale": [
-      "stale_chunks",
-      "stale_drawn",
-      "stale_levels",
       "stale_hidden",
       "stale_uncovered",
-      "stale_unready",
-      "stale_on_waiter"
+      "stale_unready"
     ],
     "slot": [
       "slot_waits",
       "slot_wait_levels",
-      "slot_holder_levels",
       "slot_chained"
     ],
     "cap": [
@@ -308,9 +296,9 @@
       "One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0."
     ],
     "sample": 0,
-    "has_prev": 122,
-    "prev": 123,
-    "WORDS": 245
+    "has_prev": 116,
+    "prev": 117,
+    "WORDS": 233
   },
   "SPREAD": {
     "$type": "u32",
@@ -391,15 +379,15 @@
       "census": 71,
       "level_tris": 91,
       "last": 102,
-      "WORDS": 224
+      "WORDS": 218
     },
     "tasks": {
-      "AT": 229,
+      "AT": 223,
       "slots": 0,
       "WORDS": 150
     },
     "counters": {
-      "AT": 379,
+      "AT": 373,
       "faces_kept": 0,
       "faces_possible": 1,
       "runs_culled": 2,
@@ -418,7 +406,7 @@
       "WORDS": 15
     },
     "atlas": {
-      "AT": 394,
+      "AT": 388,
       "size": 0,
       "entries": 1,
       "shelves": 2,
@@ -426,7 +414,7 @@
       "WORDS": 4
     },
     "retain": {
-      "AT": 398,
+      "AT": 392,
       "run_sets": 0,
       "run_set_mb": 1,
       "tiers": 2,
@@ -438,14 +426,14 @@
       "WORDS": 8
     },
     "fetch": {
-      "AT": 406,
+      "AT": 400,
       "queued": 0,
       "running": 1,
       "credits": 2,
       "WORDS": 3
     },
     "peak": {
-      "AT": 409,
+      "AT": 403,
       "present": 0,
       "dt_ms": 1,
       "sched_ms": 2,
@@ -459,21 +447,32 @@
       "in_frustum": 10,
       "pending": 11,
       "settling": 12,
-      "blend_active": 13,
-      "offscreen_pending": 14,
-      "oldest_release_ms": 15,
-      "oldest_visible_ms": 16,
-      "fine_peak": 17,
-      "coarse_peak": 18,
-      "WORDS": 19
+      "offscreen_pending": 13,
+      "oldest_release_ms": 14,
+      "oldest_visible_ms": 15,
+      "fine_peak": 16,
+      "coarse_peak": 17,
+      "WORDS": 18
     },
     "steps": {
-      "AT": 428,
+      "AT": 421,
       "count": 0,
       "slots": 1,
       "WORDS": 161
     },
-    "WORDS": 589
+    "quality": {
+      "AT": 582,
+      "step": 0,
+      "star": 1,
+      "frames_held": 2,
+      "admitted": 3,
+      "evicted": 4,
+      "refined": 5,
+      "recubed": 6,
+      "changes_peak": 7,
+      "WORDS": 8
+    },
+    "WORDS": 590
   },
   "READ": {
     "$type": "u32",

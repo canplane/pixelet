@@ -170,40 +170,28 @@ export const SETTINGS = {
     options: ["auto", "fixed", "low"],
     section: "quality",
   },
-  /** A change of what a chunk draws dissolves over 150 ms of frames instead
-   * of switching at once (crates/pxl/web/kernel/src/world/chunk/table.rs's
-   * Fade): a cube for another, a stale chunk for what replaced it. The two
-   * draw on complementary halves of one screen-space pattern, so a chunk
-   * in a dissolve is drawn twice while it lasts. */
-  lod_crossfade: {
-    key: 14 as number,
-    kind: "toggle",
-    default: true,
-    section: "quality",
-    cost: "low",
-  },
   /** The performance overlay: the profiler's panel, and the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`). */
   profiler: {
-    key: 15 as number,
+    key: 14 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** Markers for the map center and the cell it floors to, the floating origin, the page's corners and the two gyro rings (layer/marker/frame_gizmo.rs). */
   gizmos: {
-    key: 16 as number,
+    key: 15 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   person: {
-    key: 17 as number,
+    key: 16 as number,
     kind: "number",
     default: 1 as number,
     section: "character",
   },
   pet: {
-    key: 18 as number,
+    key: 17 as number,
     kind: "number",
     default: 5 as number,
     section: "character",
@@ -310,40 +298,28 @@ export const SETTINGS_SHIPPED = {
     options: ["auto", "fixed", "low"],
     section: "quality",
   },
-  /** A change of what a chunk draws dissolves over 150 ms of frames instead
-   * of switching at once (crates/pxl/web/kernel/src/world/chunk/table.rs's
-   * Fade): a cube for another, a stale chunk for what replaced it. The two
-   * draw on complementary halves of one screen-space pattern, so a chunk
-   * in a dissolve is drawn twice while it lasts. */
-  lod_crossfade: {
-    key: 14 as number,
-    kind: "toggle",
-    default: true,
-    section: "quality",
-    cost: "low",
-  },
   /** The performance overlay: the profiler's panel, and the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`). */
   profiler: {
-    key: 15 as number,
+    key: 14 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** Markers for the map center and the cell it floors to, the floating origin, the page's corners and the two gyro rings (layer/marker/frame_gizmo.rs). */
   gizmos: {
-    key: 16 as number,
+    key: 15 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   person: {
-    key: 17 as number,
+    key: 16 as number,
     kind: "number",
     default: 1 as number,
     section: "character",
   },
   pet: {
-    key: 18 as number,
+    key: 17 as number,
     kind: "number",
     default: 5 as number,
     section: "character",

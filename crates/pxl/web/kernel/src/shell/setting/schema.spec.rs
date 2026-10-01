@@ -206,22 +206,16 @@ pub enum SettingKey {
     /// The pixels the world is filled at, the GPU's largest cost: two to a
     /// CSS pixel is four times the fragments of one. RESOLUTION_MODES says each.
     resolution = 13,
-    /// A change of what a chunk draws dissolves over 150 ms of frames instead
-    /// of switching at once (crates/pxl/web/kernel/src/world/chunk/table.rs's
-    /// Fade): a cube for another, a stale chunk for what replaced it. The two
-    /// draw on complementary halves of one screen-space pattern, so a chunk
-    /// in a dissolve is drawn twice while it lasts.
-    lod_crossfade = 14,
     /// The performance overlay: the profiler's panel, and the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`).
-    profiler = 15,
+    profiler = 14,
     /// Markers for the map center and the cell it floors to, the floating origin, the page's corners and the two gyro rings (layer/marker/frame_gizmo.rs).
-    gizmos = 16,
-    person = 17,
-    pet = 18,
+    gizmos = 15,
+    person = 16,
+    pet = 17,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 19] = [
+    pub const ALL: [SettingKey; 18] = [
         SettingKey::textures,
         SettingKey::structures,
         SettingKey::decor,
@@ -236,7 +230,6 @@ impl SettingKey {
         SettingKey::ao,
         SettingKey::shadows,
         SettingKey::resolution,
-        SettingKey::lod_crossfade,
         SettingKey::profiler,
         SettingKey::gizmos,
         SettingKey::person,
@@ -264,7 +257,6 @@ impl SettingKey {
             SettingKey::ao => SettingKind::Choice,
             SettingKey::shadows => SettingKind::Toggle,
             SettingKey::resolution => SettingKind::Choice,
-            SettingKey::lod_crossfade => SettingKind::Toggle,
             SettingKey::profiler => SettingKind::Toggle,
             SettingKey::gizmos => SettingKind::Toggle,
             SettingKey::person => SettingKind::Number,
@@ -303,7 +295,6 @@ pub struct Settings {
     pub ao: AoMode,
     pub shadows: bool,
     pub resolution: ResolutionMode,
-    pub lod_crossfade: bool,
     pub profiler: bool,
     pub gizmos: bool,
     pub person: u8,
@@ -327,7 +318,6 @@ impl Settings {
         ao: AoMode::corner,
         shadows: false,
         resolution: ResolutionMode::auto,
-        lod_crossfade: true,
         profiler: false,
         gizmos: false,
         person: 1,
@@ -352,7 +342,6 @@ impl Settings {
             SettingKey::ao => self.ao as u32,
             SettingKey::shadows => self.shadows as u32,
             SettingKey::resolution => self.resolution as u32,
-            SettingKey::lod_crossfade => self.lod_crossfade as u32,
             SettingKey::profiler => self.profiler as u32,
             SettingKey::gizmos => self.gizmos as u32,
             SettingKey::person => self.person as u32,
@@ -390,7 +379,6 @@ impl Settings {
                 Some(o) => self.resolution = o,
                 None => return false,
             },
-            SettingKey::lod_crossfade if value <= 1 => self.lod_crossfade = value == 1,
             SettingKey::profiler if value <= 1 => self.profiler = value == 1,
             SettingKey::gizmos if value <= 1 => self.gizmos = value == 1,
             SettingKey::person => match u8::try_from(value) {

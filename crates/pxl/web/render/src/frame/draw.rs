@@ -26,9 +26,9 @@ pub const UPLOAD_WORDS: usize = 5;
 /// index of its uniforms, and the pipeline.
 pub const DRAW_WORDS: usize = 5;
 /// Floats a draw's uniforms hold: its translation in the frame the camera
-/// is written in (3), its visibility as the chunk lane encoded it (amount,
-/// or 2 + amount for the complement), its opacity, and padding to a
-/// 32-byte stride.
+/// is written in (3), a fourth its pipeline reads its own way (an actor's
+/// turn, the beacon's spin; nothing for a chunk), its opacity, and the rest
+/// to a 32-byte stride.
 pub const UNIFORM_FLOATS: usize = 8;
 
 /// The pipelines a draw names. A chunk draw's words are (its arena group
@@ -37,7 +37,7 @@ pub const UNIFORM_FLOATS: usize = 8;
 /// group and never a block's handle. A decor draw's are (the decor block's
 /// handle, the group — which kind and variant, in teaching order —, the
 /// instance count, uniform, pipeline), its uniform carrying the group's
-/// first lane word in place of the visibility.
+/// first lane word as its fourth float.
 pub const PIPELINE_CHUNK: u32 = 0;
 pub const PIPELINE_DECOR: u32 = 1;
 /// The hover ghost: a box through the chunk shader, or one decor instance
@@ -179,14 +179,9 @@ impl DrawList {
     /// shader as the entry point it is drawn at. The mesh's own floor is in
     /// `translation`.
     #[allow(clippy::too_many_arguments)]
-    pub fn draw_arena(&mut self, group: u32, first_box: u32, box_cnt: u32, translation: [f32; 3], visible: f32, unit: f32, z_step: f32, fine: bool) {
+    pub fn draw_arena(&mut self, group: u32, first_box: u32, box_cnt: u32, translation: [f32; 3], unit: f32, z_step: f32, fine: bool) {
         let pipeline = if fine { PIPELINE_CHUNK } else { PIPELINE_CHUNK_COARSE };
-        self.draw_in(pipeline, group, box_cnt, first_box, translation, visible, 1.0, unit, z_step);
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn draw(&mut self, pipeline: u32, handle: u32, vertex_cnt: u32, index_cnt: u32, translation: [f32; 3], visible: f32, opacity: f32) {
-        self.draw_in(pipeline, handle, vertex_cnt, index_cnt, translation, visible, opacity, 1.0, 1.0);
+        self.draw_in(pipeline, group, box_cnt, first_box, translation, 1.0, unit, z_step);
     }
 
     /// A draw whose boxes are measured in cells of `unit` units, their
@@ -195,20 +190,18 @@ impl DrawList {
     /// record of two vectors is the one a storage array cannot lay out two
     /// ways (chunk.wgsl's Draw).
     #[allow(clippy::too_many_arguments)]
-    pub fn draw_in(&mut self, pipeline: u32, handle: u32, vertex_cnt: u32, index_cnt: u32, translation: [f32; 3], visible: f32, opacity: f32, unit: f32, z_step: f32) {
+    pub fn draw_in(&mut self, pipeline: u32, handle: u32, vertex_cnt: u32, index_cnt: u32, translation: [f32; 3], opacity: f32, unit: f32, z_step: f32) {
         let uniform = (self.uniforms.len() / UNIFORM_FLOATS) as u32;
-        self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], visible, opacity, unit, z_step, 0.0]);
+        self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], 0.0, opacity, unit, z_step, 0.0]);
         self.draws.extend_from_slice(&[handle, vertex_cnt, index_cnt, uniform, pipeline]);
     }
 
     /// A decor group's instances: `offset` is the group's first lane word in
-    /// the block (crates/pxl/web/kernel/src/layer/decor/build.rs's layout), exact in a float to 2^24 words,
-    /// and `visible` the share of a dissolve they are drawn over, as a
-    /// chunk's tier is (`draw_arena`).
-    pub fn draw_decor(&mut self, handle: u32, group: u32, count: u32, offset: u32, translation: [f32; 3], visible: f32) {
+    /// the block (crates/pxl/web/kernel/src/layer/decor/build.rs's layout),
+    /// exact in a float to 2^24 words.
+    pub fn draw_decor(&mut self, handle: u32, group: u32, count: u32, offset: u32, translation: [f32; 3]) {
         let uniform = (self.uniforms.len() / UNIFORM_FLOATS) as u32;
-        self.uniforms
-            .extend_from_slice(&[translation[0], translation[1], translation[2], offset as f32, 1.0, visible, 0.0, 0.0]);
+        self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], offset as f32, 1.0, 0.0, 0.0, 0.0]);
         self.draws.extend_from_slice(&[handle, group, count, uniform, PIPELINE_DECOR]);
     }
 

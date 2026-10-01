@@ -105,11 +105,9 @@ pub const COVER_BOXES: u32 = 2 * (CHUNK_CELLS / COARSEST).pow(3);
 /// Slots the cover takes: a slot a piece of it, the most pieces the cover
 /// over any source's top is (world/pyramid/domain.rs `cover_pieces`), which
 /// the domain asserts of its roots. Exact, with nothing past it: every
-/// cover slot held is a current root's, each root holds one at most — a
-/// piece of the top drawn, built or dissolving out, and a piece wanted again
-/// while it dissolves comes back to its own slot — and a piece dissolving
-/// out whose root the view has left is let go at once (world/chunk/table.rs
-/// `materialize`). So a root the cover lacks always finds a slot free.
+/// cover slot held is a current root's, and each root holds one at most, a
+/// piece of the top drawn or built (world/chunk/table.rs `materialize`). So
+/// a root the cover lacks always finds a slot free.
 pub const COVER_SLOTS: u32 = {
     let (mut most, mut top) = (0, 0);
     while top <= TOP_LEVEL {

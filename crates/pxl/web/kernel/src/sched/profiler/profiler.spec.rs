@@ -240,54 +240,48 @@ pub mod FRAME {
     pub const lod_in_frustum: u32 = 62;
     pub const lod_pending: u32 = 63;
     pub const lod_settling: u32 = 64;
-    pub const lod_blend_active: u32 = 65;
-    pub const lod_offscreen_pending: u32 = 66;
-    pub const lod_oldest_release_ms: u32 = 67;
-    pub const lod_oldest_visible_ms: u32 = 68;
-    pub const mounts_added: u32 = 69;
-    pub const mounts_removed: u32 = 70;
-    pub const mounts_layouts: u32 = 71;
-    pub const pages_total: u32 = 72;
-    pub const pages_by_level: u32 = 73;
-    pub const pages_poi: u32 = 84;
-    pub const heap_used_mb: u32 = 85;
-    pub const heap_live_mb: u32 = 86;
-    pub const heap_run_mb: u32 = 87;
-    pub const heap_slot_mb: u32 = 88;
-    pub const heap_range_mb: u32 = 89;
-    pub const heap_refusals: u32 = 90;
-    pub const heap_largest_free_mb: u32 = 91;
-    pub const ring_cq_peak: u32 = 92;
-    pub const ring_spill_peak: u32 = 93;
-    pub const work_scans: u32 = 94;
-    pub const work_bakes: u32 = 95;
-    pub const work_fine_peak: u32 = 96;
-    pub const work_coarse_peak: u32 = 97;
-    pub const q_terrain: u32 = 98;
-    pub const q_poi: u32 = 99;
-    pub const stale_chunks: u32 = 100;
-    pub const stale_drawn: u32 = 101;
-    pub const stale_levels: u32 = 102;
-    pub const stale_hidden: u32 = 103;
-    pub const stale_uncovered: u32 = 104;
-    pub const stale_unready: u32 = 105;
-    pub const stale_on_waiter: u32 = 106;
-    pub const slot_waits: u32 = 107;
-    pub const slot_wait_levels: u32 = 108;
-    pub const slot_holder_levels: u32 = 109;
-    pub const slot_chained: u32 = 110;
-    pub const cap_commit_left: u32 = 111;
-    pub const cap_mount_left: u32 = 112;
-    pub const cap_mount_full: u32 = 113;
-    pub const cap_record_refused: u32 = 114;
-    pub const turn_effects_ms: u32 = 115;
-    pub const turn_stage_ms: u32 = 116;
-    pub const turn_step_ms: u32 = 117;
-    pub const turn_step_name: u32 = 118;
-    pub const cover_rule: u32 = 119;
-    pub const cover_drawn: u32 = 120;
-    pub const cover_gaps: u32 = 121;
-    pub const WORDS: u32 = 122;
+    pub const lod_offscreen_pending: u32 = 65;
+    pub const lod_oldest_release_ms: u32 = 66;
+    pub const lod_oldest_visible_ms: u32 = 67;
+    pub const mounts_added: u32 = 68;
+    pub const mounts_removed: u32 = 69;
+    pub const mounts_layouts: u32 = 70;
+    pub const pages_total: u32 = 71;
+    pub const pages_by_level: u32 = 72;
+    pub const pages_poi: u32 = 83;
+    pub const heap_used_mb: u32 = 84;
+    pub const heap_live_mb: u32 = 85;
+    pub const heap_run_mb: u32 = 86;
+    pub const heap_slot_mb: u32 = 87;
+    pub const heap_range_mb: u32 = 88;
+    pub const heap_refusals: u32 = 89;
+    pub const heap_largest_free_mb: u32 = 90;
+    pub const ring_cq_peak: u32 = 91;
+    pub const ring_spill_peak: u32 = 92;
+    pub const work_scans: u32 = 93;
+    pub const work_bakes: u32 = 94;
+    pub const work_fine_peak: u32 = 95;
+    pub const work_coarse_peak: u32 = 96;
+    pub const q_terrain: u32 = 97;
+    pub const q_poi: u32 = 98;
+    pub const stale_hidden: u32 = 99;
+    pub const stale_uncovered: u32 = 100;
+    pub const stale_unready: u32 = 101;
+    pub const slot_waits: u32 = 102;
+    pub const slot_wait_levels: u32 = 103;
+    pub const slot_chained: u32 = 104;
+    pub const cap_commit_left: u32 = 105;
+    pub const cap_mount_left: u32 = 106;
+    pub const cap_mount_full: u32 = 107;
+    pub const cap_record_refused: u32 = 108;
+    pub const turn_effects_ms: u32 = 109;
+    pub const turn_stage_ms: u32 = 110;
+    pub const turn_step_ms: u32 = 111;
+    pub const turn_step_name: u32 = 112;
+    pub const cover_rule: u32 = 113;
+    pub const cover_drawn: u32 = 114;
+    pub const cover_gaps: u32 = 115;
+    pub const WORDS: u32 = 116;
     pub const KEYS: &[&str] = &[
         "t",
         "dt_ms",
@@ -315,7 +309,6 @@ pub mod FRAME {
         "lod_in_frustum",
         "lod_pending",
         "lod_settling",
-        "lod_blend_active",
         "lod_offscreen_pending",
         "lod_oldest_release_ms",
         "lod_oldest_visible_ms",
@@ -340,16 +333,11 @@ pub mod FRAME {
         "work_coarse_peak",
         "q_terrain",
         "q_poi",
-        "stale_chunks",
-        "stale_drawn",
-        "stale_levels",
         "stale_hidden",
         "stale_uncovered",
         "stale_unready",
-        "stale_on_waiter",
         "slot_waits",
         "slot_wait_levels",
-        "slot_holder_levels",
         "slot_chained",
         "cap_commit_left",
         "cap_mount_left",
@@ -376,14 +364,13 @@ pub mod FRAME_GROUPS {
         "lod_in_frustum",
         "lod_pending",
         "lod_settling",
-        "lod_blend_active",
         "lod_offscreen_pending",
         "lod_oldest_release_ms",
         "lod_oldest_visible_ms",
     ];
     pub const mounts: &[&str] = &["mounts_added", "mounts_removed", "mounts_layouts"];
-    pub const stale: &[&str] = &["stale_chunks", "stale_drawn", "stale_levels", "stale_hidden", "stale_uncovered", "stale_unready", "stale_on_waiter"];
-    pub const slot: &[&str] = &["slot_waits", "slot_wait_levels", "slot_holder_levels", "slot_chained"];
+    pub const stale: &[&str] = &["stale_hidden", "stale_uncovered", "stale_unready"];
+    pub const slot: &[&str] = &["slot_waits", "slot_wait_levels", "slot_chained"];
     pub const cap: &[&str] = &["cap_commit_left", "cap_mount_left", "cap_mount_full", "cap_record_refused"];
     pub const work: &[&str] = &["work_scans", "work_bakes", "work_fine_peak", "work_coarse_peak"];
     pub const q: &[&str] = &["q_terrain", "q_poi"];
@@ -436,9 +423,9 @@ pub mod TASK {
 /// One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0.
 pub mod WORST {
     pub const sample: u32 = 0;
-    pub const has_prev: u32 = 122;
-    pub const prev: u32 = 123;
-    pub const WORDS: u32 = 245;
+    pub const has_prev: u32 = 116;
+    pub const prev: u32 = 117;
+    pub const WORDS: u32 = 233;
     pub const KEYS: &[&str] = &["sample", "has_prev", "prev", "WORDS"];
 }
 
@@ -518,7 +505,7 @@ pub mod SUMMARY {
         pub const census: u32 = 71;
         pub const level_tris: u32 = 91;
         pub const last: u32 = 102;
-        pub const WORDS: u32 = 224;
+        pub const WORDS: u32 = 218;
         pub const KEYS: &[&str] = &[
             "present",
             "n",
@@ -553,13 +540,13 @@ pub mod SUMMARY {
         ];
     }
     pub mod tasks {
-        pub const AT: u32 = 229;
+        pub const AT: u32 = 223;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 150;
         pub const KEYS: &[&str] = &["AT", "slots", "WORDS"];
     }
     pub mod counters {
-        pub const AT: u32 = 379;
+        pub const AT: u32 = 373;
         pub const faces_kept: u32 = 0;
         pub const faces_possible: u32 = 1;
         pub const runs_culled: u32 = 2;
@@ -597,7 +584,7 @@ pub mod SUMMARY {
         ];
     }
     pub mod atlas {
-        pub const AT: u32 = 394;
+        pub const AT: u32 = 388;
         pub const size: u32 = 0;
         pub const entries: u32 = 1;
         pub const shelves: u32 = 2;
@@ -606,7 +593,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "WORDS"];
     }
     pub mod retain {
-        pub const AT: u32 = 398;
+        pub const AT: u32 = 392;
         pub const run_sets: u32 = 0;
         pub const run_set_mb: u32 = 1;
         pub const tiers: u32 = 2;
@@ -630,7 +617,7 @@ pub mod SUMMARY {
         ];
     }
     pub mod fetch {
-        pub const AT: u32 = 406;
+        pub const AT: u32 = 400;
         pub const queued: u32 = 0;
         pub const running: u32 = 1;
         pub const credits: u32 = 2;
@@ -638,7 +625,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "queued", "running", "credits", "WORDS"];
     }
     pub mod peak {
-        pub const AT: u32 = 409;
+        pub const AT: u32 = 403;
         pub const present: u32 = 0;
         pub const dt_ms: u32 = 1;
         pub const sched_ms: u32 = 2;
@@ -652,13 +639,12 @@ pub mod SUMMARY {
         pub const in_frustum: u32 = 10;
         pub const pending: u32 = 11;
         pub const settling: u32 = 12;
-        pub const blend_active: u32 = 13;
-        pub const offscreen_pending: u32 = 14;
-        pub const oldest_release_ms: u32 = 15;
-        pub const oldest_visible_ms: u32 = 16;
-        pub const fine_peak: u32 = 17;
-        pub const coarse_peak: u32 = 18;
-        pub const WORDS: u32 = 19;
+        pub const offscreen_pending: u32 = 13;
+        pub const oldest_release_ms: u32 = 14;
+        pub const oldest_visible_ms: u32 = 15;
+        pub const fine_peak: u32 = 16;
+        pub const coarse_peak: u32 = 17;
+        pub const WORDS: u32 = 18;
         pub const KEYS: &[&str] = &[
             "AT",
             "present",
@@ -674,7 +660,6 @@ pub mod SUMMARY {
             "in_frustum",
             "pending",
             "settling",
-            "blend_active",
             "offscreen_pending",
             "oldest_release_ms",
             "oldest_visible_ms",
@@ -684,14 +669,27 @@ pub mod SUMMARY {
         ];
     }
     pub mod steps {
-        pub const AT: u32 = 428;
+        pub const AT: u32 = 421;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
-    pub const WORDS: u32 = 589;
-    pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "retain", "fetch", "peak", "steps", "WORDS"];
+    pub mod quality {
+        pub const AT: u32 = 582;
+        pub const step: u32 = 0;
+        pub const star: u32 = 1;
+        pub const frames_held: u32 = 2;
+        pub const admitted: u32 = 3;
+        pub const evicted: u32 = 4;
+        pub const refined: u32 = 5;
+        pub const recubed: u32 = 6;
+        pub const changes_peak: u32 = 7;
+        pub const WORDS: u32 = 8;
+        pub const KEYS: &[&str] = &["AT", "step", "star", "frames_held", "admitted", "evicted", "refined", "recubed", "changes_peak", "WORDS"];
+    }
+    pub const WORDS: u32 = 590;
+    pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "retain", "fetch", "peak", "steps", "quality", "WORDS"];
 }
 
 /// What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count.
