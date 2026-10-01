@@ -9,7 +9,7 @@
 //! A projected vector is a `V3`, `[f64; 3]` by value, and a page's burst of
 //! them is one `Vec`.
 
-use pxl_spec::bake::constant::{XY_CELL_PER_M, Z_CELL_PER_M};
+use pxl_spec::bake::constant::{CELL_PER_M, XY_CELL_PER_M};
 use pxl_spec::bake::format::CellConfig;
 use pxl_spec::bake::model::feature::{Feature, FeatureComputed, FeatureExtra, FeatureShape};
 use pxl_spec::space::adapter::epsg3857::G3857;
@@ -76,8 +76,8 @@ pub fn normalize<F: RawFeature, P: NormalizePolicy<F>>(raw_feat: &F, page_min: G
 
     // 7. Meter -> cell scaling
     let computed = FeatureComputed {
-        height: metrics_m.height * Z_CELL_PER_M(page_min[1]),
-        width: metrics_m.width * XY_CELL_PER_M,
+        height: metrics_m.height * CELL_PER_M(page_min[1]),
+        width: metrics_m.width * CELL_PER_M(page_min[1]),
         layer: metrics_m.layer,
     };
 

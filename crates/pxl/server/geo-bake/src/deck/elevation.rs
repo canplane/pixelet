@@ -1,22 +1,32 @@
 // pxl-geo-bake/deck/elevation.rs
 
-//! The ground's height at many points, read from `elevation_raster` a tile
-//! at a time.
+//! The ground's height at many points, as the pages draw it.
 //!
-//! `ST_Value` in a join is the obvious query and the wrong one: each row
-//! detoasts the whole 256 × 256 tile it reads, so two and a half million
-//! points along the decks read a tile two and a half million times, some ten
-//! minutes. Here each tile a point falls in is fetched once, as WKB, and
-//! every point in it is sampled from it — bilinearly, as `ST_Value`'s
-//! `'bilinear'` does, on the raster the pages' own elevation is resampled
-//! from.
+//! A deck comes down to the ground and a tunnel's bore is cut under it, so
+//! the height they are solved against is the surface the client draws, not
+//! the raster under it: a page's elevation is the raster resampled to a grid
+//! of 32 samples a side and interpolated bicubically between them
+//! (terrain/repository.rs `elevation_sql`, pxl-spec bake/surface.rs), which
+//! stands metres off the raw raster on a slope. Each page's grid is made
+//! again here as the bake makes it — bilinear at each sample's center,
+//! quantized to cells — and each point read from it with the client's own
+//! interpolation, so a deck's end and a bore's floor meet the ground on the
+//! screen.
+//!
+//! `ST_Value` in a join is the obvious query for the raster and the wrong
+//! one: each row detoasts the whole 256 × 256 tile it reads. Each tile a
+//! page's grid needs is fetched once, as WKB, and kept while pages near it
+//! are made.
 
 use std::collections::HashMap;
 
 use postgres::Client;
-
-/// Tiles a fetch asks for at once.
-const TILES_PER_FETCH: usize = 64;
+use pxl_spec::bake::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN, XY_CELL_PER_M, CELL_PER_M};
+use pxl_spec::bake::surface::bicubic;
+use pxl_spec::space::adapter::epsg3857;
+use pxl_spec::space::indexer::L3_IDX;
+use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 
 /// One tile's band, as its WKB carries it.
 struct Tile {
@@ -82,44 +92,96 @@ impl Tile {
     }
 }
 
-/// The ground at each point, in metres: zero where the raster has none,
-/// which is the sea's.
-pub fn ground(client: &mut Client, points: &[[f64; 2]]) -> Result<Vec<f64>, postgres::Error> {
-    // Which tile each point is in, from the tiles' extents alone: a header
-    // read, which detoasts nothing past it.
-    let extents = client.query(
-        "SELECT rid, ST_UpperLeftX(rast) AS x0, ST_UpperLeftY(rast) AS y0, ST_ScaleX(rast) AS sx, ST_ScaleY(rast) AS sy, ST_Width(rast) AS w, ST_Height(rast) AS h FROM elevation_raster",
-        &[],
-    )?;
-    let Some(first) = extents.first() else { return Ok(vec![0.0; points.len()]) };
-    // The tiles are one grid of one pixel size, so a point's tile is found by
-    // dividing, keyed on the grid's full tile size.
-    let (sx, sy): (f64, f64) = (first.get("sx"), first.get("sy"));
-    let side = extents.iter().map(|r| r.get::<_, i32>("w")).max().unwrap_or(1) as f64;
-    let origin_x = extents.iter().map(|r| r.get::<_, f64>("x0")).fold(f64::INFINITY, f64::min);
-    let origin_y = extents.iter().map(|r| r.get::<_, f64>("y0")).fold(f64::NEG_INFINITY, f64::max);
-    let key = |x: f64, y: f64| (((x - origin_x) / (sx * side)).floor() as i64, ((y - origin_y) / (sy * side)).floor() as i64);
-    let mut tile_of: HashMap<(i64, i64), i32> = HashMap::new();
-    for r in &extents {
-        let (x0, y0): (f64, f64) = (r.get("x0"), r.get("y0"));
-        // A tile's own key, from a point just inside its upper-left corner.
-        tile_of.insert(key(x0 + sx / 2.0, y0 + sy / 2.0), r.get("rid"));
-    }
-    let mut by_tile: HashMap<i32, Vec<usize>> = HashMap::new();
+/// The drawn surface at each point, in metres.
+pub fn surface(client: &mut Client, points: &[[f64; 2]]) -> Result<Vec<f64>, postgres::Error> {
+    let mut raster = Raster::open(client)?;
+    let mut by_page: HashMap<IVec, Vec<usize>> = HashMap::new();
     for (i, p) in points.iter().enumerate() {
-        if let Some(&rid) = tile_of.get(&key(p[0], p[1])) {
-            by_tile.entry(rid).or_default().push(i);
-        }
+        let mut at = Pvf3::default();
+        epsg3857::project(&mut at, p[0], p[1], 0.0);
+        by_page.entry(L3_IDX(at.i)).or_default().push(i);
     }
+    // Pages in row order, so the tiles a page's grid reads are mostly the
+    // last page's.
+    let mut pages: Vec<IVec> = by_page.keys().copied().collect();
+    pages.sort_by_key(|&p| (ivec::Y(p), ivec::X(p)));
     let mut out = vec![0.0; points.len()];
-    let rids: Vec<i32> = by_tile.keys().copied().collect();
-    for batch in rids.chunks(TILES_PER_FETCH) {
-        for r in client.query("SELECT rid, ST_AsBinary(rast) AS wkb FROM elevation_raster WHERE rid = ANY($1)", &[&batch])? {
-            let Some(tile) = Tile::of_wkb(r.get("wkb")) else { continue };
-            for &i in &by_tile[&r.get::<_, i32>("rid")] {
-                out[i] = tile.sample(points[i][0], points[i][1]).unwrap_or(0.0);
+    for page in pages {
+        let [min, max] = epsg3857::get_page_bbox(page);
+        let cell_per_m = CELL_PER_M(min[1]);
+        let stride = (max[0] - min[0]) / f64::from(PAGE_ELE_SPAN);
+        let pad = f64::from(ELE_PAD);
+        let span = ELE_PADDED_SPAN as usize;
+        let mut grid = vec![0i16; span * span];
+        for sy in 0..span {
+            for sx in 0..span {
+                let x = min[0] + (sx as f64 - pad + 0.5) * stride;
+                let y = min[1] + (sy as f64 - pad + 0.5) * stride;
+                let m = raster.at(client, x, y)?.unwrap_or(0.0);
+                grid[sy * span + sx] = (m * cell_per_m).round() as i16;
             }
+        }
+        for &i in &by_page[&page] {
+            let [x, y] = points[i];
+            let (tx, ty) = ((x - min[0]) * XY_CELL_PER_M, (y - min[1]) * XY_CELL_PER_M);
+            out[i] = f64::from(bicubic(&grid, tx, ty)) / cell_per_m;
         }
     }
     Ok(out)
+}
+
+/// The raster's tiles, read as they are asked for and kept a few hundred at
+/// a time.
+struct Raster {
+    origin: [f64; 2],
+    tile: [f64; 2],
+    rid_of: HashMap<(i64, i64), i32>,
+    held: HashMap<i32, Option<Tile>>,
+}
+
+/// Tiles held at once: a few rows of pages' worth.
+const HELD: usize = 512;
+
+impl Raster {
+    /// The tiles' extents, a header read that detoasts nothing past it. They
+    /// are one grid of one pixel size, so a point's tile is found by
+    /// dividing.
+    fn open(client: &mut Client) -> Result<Raster, postgres::Error> {
+        let rows = client.query(
+            "SELECT rid, ST_UpperLeftX(rast) AS x0, ST_UpperLeftY(rast) AS y0, ST_ScaleX(rast) AS sx, ST_ScaleY(rast) AS sy, ST_Width(rast) AS w FROM elevation_raster",
+            &[],
+        )?;
+        let (sx, sy) = rows.first().map_or((1.0, -1.0), |r| (r.get::<_, f64>("sx"), r.get::<_, f64>("sy")));
+        let side = rows.iter().map(|r| r.get::<_, i32>("w")).max().unwrap_or(1) as f64;
+        let origin = [rows.iter().map(|r| r.get::<_, f64>("x0")).fold(f64::INFINITY, f64::min), rows.iter().map(|r| r.get::<_, f64>("y0")).fold(f64::NEG_INFINITY, f64::max)];
+        let mut raster = Raster {
+            origin,
+            tile: [sx * side, sy * side],
+            rid_of: HashMap::new(),
+            held: HashMap::new(),
+        };
+        for r in &rows {
+            let key = raster.key(r.get::<_, f64>("x0") + sx / 2.0, r.get::<_, f64>("y0") + sy / 2.0);
+            raster.rid_of.insert(key, r.get("rid"));
+        }
+        Ok(raster)
+    }
+
+    fn key(&self, x: f64, y: f64) -> (i64, i64) {
+        (((x - self.origin[0]) / self.tile[0]).floor() as i64, ((y - self.origin[1]) / self.tile[1]).floor() as i64)
+    }
+
+    /// The raster's height at (x, y), bilinear, as `ST_Value`'s `'bilinear'`
+    /// and the bake's `ST_Resample` read it; none off the raster.
+    fn at(&mut self, client: &mut Client, x: f64, y: f64) -> Result<Option<f64>, postgres::Error> {
+        let Some(&rid) = self.rid_of.get(&self.key(x, y)) else { return Ok(None) };
+        if !self.held.contains_key(&rid) {
+            if self.held.len() >= HELD {
+                self.held.clear();
+            }
+            let row = client.query_one("SELECT ST_AsBinary(rast) AS wkb FROM elevation_raster WHERE rid = $1", &[&rid])?;
+            self.held.insert(rid, Tile::of_wkb(row.get("wkb")));
+        }
+        Ok(self.held[&rid].as_ref().and_then(|t| t.sample(x, y)))
+    }
 }

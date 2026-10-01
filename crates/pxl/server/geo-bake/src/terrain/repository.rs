@@ -6,7 +6,7 @@
 
 use postgres::types::ToSql;
 use postgres::{Client, Statement};
-use pxl_spec::bake::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN, Z_CELL_PER_M};
+use pxl_spec::bake::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN, CELL_PER_M};
 use pxl_spec::bake::format::{BaseRow, BuildingRow, CoastRow, DeckRow, SegmentRow};
 use pxl_spec::space::adapter::epsg3857::BBox3857;
 
@@ -20,7 +20,7 @@ fn elevation_sql() -> String {
         "WITH cfg AS (
   SELECT
     {PAGE_ELE_SPAN}::float8 AS ele_span,
-    $5::float8 AS z_cell_per_m,
+    $5::float8 AS cell_per_m,
     {ELE_PAD}::int AS pad,
     {ELE_PADDED_SPAN}::int AS padded_span
 ),
@@ -73,7 +73,7 @@ dumped AS (
 )
 SELECT
   array_agg(
-    COALESCE(round(val * (SELECT z_cell_per_m FROM cfg)), 0)::int2
+    COALESCE(round(val * (SELECT cell_per_m FROM cfg)), 0)::int2
     ORDER BY row_idx DESC, col_idx ASC
   ) AS ele
 FROM dumped,
@@ -115,7 +115,7 @@ WHERE geom && env.e";
 const OVERTURE_DECK_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
-SELECT gers_id, subtype, class, width_m, piers, ST_AsBinary(geom) AS geom_wkb
+SELECT gers_id, subtype, class, width_m, form, piers, ST_AsBinary(geom) AS geom_wkb
 FROM overture_deck, env
 WHERE geom && env.e";
 
@@ -207,10 +207,10 @@ impl TerrainRepository {
     pub fn fetch_page_source(&self, client: &mut Client, page_bbox: BBox3857) -> Result<PageSource, postgres::Error> {
         let (minx, miny, maxx, maxy) = (page_bbox[0][0], page_bbox[0][1], page_bbox[1][0], page_bbox[1][1]);
         let bbox: [&(dyn ToSql + Sync); 4] = [&minx, &miny, &maxx, &maxy];
-        let z_cell_per_m = Z_CELL_PER_M(miny);
+        let cell_per_m = CELL_PER_M(miny);
 
         let ele = client
-            .query(&self.ele, &[&minx, &miny, &maxx, &maxy, &z_cell_per_m])?
+            .query(&self.ele, &[&minx, &miny, &maxx, &maxy, &cell_per_m])?
             .first()
             .and_then(|row| row.get::<_, Option<Vec<i16>>>("ele"));
 
@@ -275,6 +275,7 @@ impl TerrainRepository {
                 subtype: row.get("subtype"),
                 class: row.get("class"),
                 width_m: row.get::<_, f32>("width_m").into(),
+                form: row.get::<_, i16>("form") as u8,
                 piers: row.get::<_, &[u8]>("piers").into(),
                 geom_wkb: wkb(row),
             })

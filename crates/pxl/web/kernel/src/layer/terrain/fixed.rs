@@ -26,7 +26,7 @@
 //! blocks a fourth: made from the lane as the page is written into its
 //! record, and so held exactly as long as the lane is.
 //!
-//! A page's decks (pxl-spec bake/deck.rs) are six planes between the ground
+//! A page's decks (pxl-spec bake/deck.rs) are seven planes between the ground
 //! and the elevation, one a lane of theirs, each lane as long as a record
 //! holds and a whole number of cache lines: placed past the ground, whose
 //! plane ends on a line, every record's deck lanes start on one. A record
@@ -55,19 +55,28 @@ const fn deck_lane(count: usize, size: usize) -> u32 {
 }
 
 /// A page's deck lanes, in the order their planes lie: where each deck's
-/// points start, the points, their tops, their piers, each deck's width and
-/// its kind.
-pub const DECK_LANE_BYTES: [u32; 6] = [
+/// points start, the points, their tops, their piers, each deck's width, its
+/// kind and its form.
+pub const DECK_LANE_BYTES: [u32; 7] = [
     deck_lane(MAX_DECKS + 1, 4),
     deck_lane(MAX_POINTS, 4),
     deck_lane(MAX_POINTS, 2),
     deck_lane(MAX_POINTS, 1),
     deck_lane(MAX_DECKS, 1),
     deck_lane(MAX_DECKS, 1),
+    deck_lane(MAX_DECKS, 1),
 ];
 
 /// The deck planes across every record.
-pub const DECK_BYTES: u32 = RECORDS * (DECK_LANE_BYTES[0] + DECK_LANE_BYTES[1] + DECK_LANE_BYTES[2] + DECK_LANE_BYTES[3] + DECK_LANE_BYTES[4] + DECK_LANE_BYTES[5]);
+pub const DECK_BYTES: u32 = RECORDS * {
+    let mut sum = 0;
+    let mut k = 0;
+    while k < DECK_LANE_BYTES.len() {
+        sum += DECK_LANE_BYTES[k];
+        k += 1;
+    }
+    sum
+};
 
 /// A page's elevation: the inner samples and the two-cell skirt bicubic reads
 /// at the edges, two bytes a sample.

@@ -21,7 +21,7 @@
 //!   segments  = [[gers_id, subtype, class, flags, widths, access, subclass, subclasses, geom_wkb], ...]
 //!   base      = [[gers_id, source, subtype, class, geom_wkb], ...]  (source: land_use|water|land|infrastructure)
 //!   coasts    = [[id, geom_wkb, covers_page], ...]
-//!   decks     = [[gers_id, subtype, class, width_m, piers, geom_wkb], ...]  (LineStringZ, the top in m)
+//!   decks     = [[gers_id, subtype, class, width_m, form, piers, geom_wkb], ...]  (LineStringZ, the top in m)
 //!
 //! baked wire = [ele, cells, extent, occupancy, decks]
 //!   cells     = one u16 a cell, the four ground channels packed into it
@@ -95,6 +95,8 @@ pub struct DeckRow {
     pub subtype: String,
     pub class: Option<String>,
     pub width_m: f64,
+    /// A deck over the ground or a bore through it (bake/deck.rs `Form`).
+    pub form: u8,
     pub piers: Box<[u8]>,
     pub geom_wkb: Box<[u8]>, // WKB, LineString Z
 }

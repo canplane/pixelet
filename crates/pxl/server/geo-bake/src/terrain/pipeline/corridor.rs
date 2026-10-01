@@ -4,24 +4,25 @@
 //! sidewalk drawn apart from its road, the two carriageways of a road drawn
 //! as two (pxl-spec bake/model/feature.rs `Joins`).
 //!
-//! osm2streets, which builds street geometry from OSM, zips a sidewalk into
-//! its road with a buffer lane between them — the physical separation that
-//! made a mapper draw it apart — and gives a planted buffer or a verge a
-//! typical 2 m (osm2lanes `typical_lane_widths`). A gap that wide is real
-//! and stays the land it is. A gap no wider is the buffer itself, narrower
-//! than the cell it would have to be drawn in, and left unpainted it is a
-//! sliver of land between two ways that folds, a level up, into a broken
-//! line; so it is paved as the way that joins across it.
+//! A gap a cell wide or wider is land the page can draw, and it stays the
+//! land it is: osm2streets, which builds street geometry from OSM, zips a
+//! sidewalk into its road with a buffer lane between them — the physical
+//! separation that made a mapper draw it apart, a planted buffer or a verge
+//! of a typical 2 m (osm2lanes `typical_lane_widths`). A gap narrower than a
+//! cell is a sliver the page cannot draw as what it is: left unpainted it
+//! comes out, cell centre by cell centre, as a broken thread of land between
+//! two ways, which folds a level up into a broken road. So it is paved as the
+//! way that joins across it — a collapse of what the raster cannot resolve,
+//! not a claim about the street.
 
-use pxl_spec::bake::constant::XY_CELL_PER_M;
 use pxl_spec::bake::format::{CellConfig, GroundChannelKey};
 use pxl_spec::bake::model::feature::{Feature, FeatureShape, Joins};
 use pxl_spec::bake::way;
 use pxl_spec::cell::cube::cube_types;
 use std::collections::HashMap;
 
-/// The widest gap paved, in metres: osm2lanes' typical buffer.
-const BUFFER_M: f64 = 2.0;
+/// The widest gap paved, in the page's cells: under one.
+const GAP: f64 = 1.0;
 
 /// How far apart two ways' headings may be and still run side by side, as
 /// Arnis takes a dual carriageway's.
@@ -40,7 +41,7 @@ struct Seg {
 /// The paved gaps of a page's ways, as features to paint under them.
 pub fn corridor_fills(feats: &[Feature]) -> Vec<Feature> {
     let line = |f: &Feature| !f.shape.is_closed && !f.extra.is_unseen && !f.extra.is_deck && f.cell_cfg.is_some_and(|c| c.ch_key == GroundChannelKey::TRANSPORT);
-    let gap = BUFFER_M * XY_CELL_PER_M;
+    let gap = GAP;
     let mut buckets: HashMap<(i64, i64), Vec<Seg>> = HashMap::new();
     let mut widest = 0.0f64;
     for (i, f) in feats.iter().enumerate().filter(|(_, f)| line(f)) {
@@ -102,7 +103,7 @@ pub fn corridor_fills(feats: &[Feature]) -> Vec<Feature> {
                             let q = [s.a[0] + dx * u, s.a[1] + dy * u];
                             let d = (p[0] - q[0]).hypot(p[1] - q[1]);
                             let between = d - reach - way::reach(g.computed.width);
-                            if between > 0.0 && between <= gap && best.is_none_or(|(bd, _)| d < bd) {
+                            if between > 0.0 && between < gap && best.is_none_or(|(bd, _)| d < bd) {
                                 best = Some((d, q));
                             }
                         }

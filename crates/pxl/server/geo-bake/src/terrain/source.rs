@@ -80,6 +80,7 @@ fn deck_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a DeckRow) {
             .str(Some(&row.subtype))
             .str(row.class.as_deref())
             .f64(Some(row.width_m))
+            .u8(Some(row.form))
             .u8_array(Some(&row.piers))
             .u8_array(Some(&row.geom_wkb));
     }));

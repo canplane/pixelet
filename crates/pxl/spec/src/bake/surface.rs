@@ -112,7 +112,8 @@ pub fn bound(page_ele: &[i16], [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> [i32; 
 /// (`EXTENT`), the lowest and highest the ground drawn anywhere in it stands,
 /// in cells — the interpolation's overshoot and the cells' recess included,
 /// so a point anywhere over the cell, a cell's center or a finer cell read
-/// from this page, lies inside it — and the highest any deck over it is.
+/// from this page, lies inside it — the highest any deck over it is, and the
+/// lowest a bore through it cuts.
 /// Saturated at an i16's range, which is some 78 km at the equator and is
 /// never met.
 pub fn extent_of(page_ele: &[i16], cells: &[GroundCell], decks: &Decks) -> Vec<[i16; 2]> {
@@ -134,8 +135,9 @@ pub fn extent_of(page_ele: &[i16], cells: &[GroundCell], decks: &Decks) -> Vec<[
                 (rlo, rhi) = (rlo.min(r), rhi.max(r));
             }
             let deck = decks.highest_in([ex, ex + n], [ey, ey + n]).map_or(i32::MIN, i32::from);
+            let bore = decks.lowest_in([ex, ex + n], [ey, ey + n]).map_or(i32::MAX, i32::from);
             let clamp = |v: i32| v.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
-            [clamp(lo - rhi), clamp((hi - rlo).max(deck))]
+            [clamp((lo - rhi).min(bore)), clamp((hi - rlo).max(deck))]
         })
         .collect()
 }

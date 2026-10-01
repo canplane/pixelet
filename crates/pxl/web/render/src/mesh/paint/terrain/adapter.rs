@@ -15,7 +15,9 @@
 //! the pier from the ground to the slab, so a column holds its ground and
 //! whatever decks cross over it, each a run of its own. A deck at or under
 //! the ground there — where a bridge comes down to its ends — is the way on
-//! the ground, painted as the column's own material.
+//! the ground, painted as the column's own material. A bore through the
+//! ground — a tunnel's mouth — takes the air over its floor out of the
+//! column, and the cell under the floor is the way.
 //!
 //! The floor is rounded down to a whole band (`min_ele - TERRAIN_Z_MARGIN`,
 //! floored to BAND_CELLS) because a volume allocates in whole bands: a floor
@@ -25,7 +27,7 @@
 //! same level.
 
 use pxl_spec::bake::constant::BAND_CELLS;
-use pxl_spec::bake::deck::{Decks, Over};
+use pxl_spec::bake::deck::{Decks, Occupies, Over};
 use pxl_spec::bake::format::{ch_index, GroundChannelKey, GROUND_CH_KEYS};
 use pxl_spec::bake::ground::{channel_bit, ChannelMask, BASE};
 use pxl_spec::bake::pack::{unpack, GroundCell};
@@ -211,9 +213,21 @@ pub struct ChunkSample {
     /// lowest first and none overlapping; the apron's columns have none.
     pub span_at: Vec<u32>,
     pub spans: Vec<Span>,
+    /// The air a bore takes out of each column's ground, `[lo, hi)`, empty
+    /// where none does, and the way's material on the cell under it.
+    pub bore: Vec<Bore>,
     /// The decks over each column as they are read, kept between reads: a
     /// column, a deck and what it is there.
     over: Vec<(usize, usize, Over)>,
+}
+
+/// The air a bore takes out of a column, `[lo, hi)` in cells, and the
+/// surface of the way on its floor.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Bore {
+    pub air: [i32; 2],
+    pub material: u32,
+    pub layer: u8,
 }
 
 /// A run off the ground: a deck's slab or a pier, from `lo` up to `hi`
@@ -235,6 +249,7 @@ impl Default for ChunkSample {
             floor: 0,
             span_at: vec![0; COL_SPAN2 + 1],
             spans: Vec::new(),
+            bore: vec![Bore::default(); COL_SPAN2],
             over: Vec::new(),
         }
     }
@@ -310,10 +325,14 @@ impl ChunkSample {
                 }
             }
         }
-        // One band-aligned floor shared by the whole chunk, under every peak.
-        self.floor = (min_ele - TERRAIN_Z_MARGIN).div_euclid(BAND_CELLS as i32) * BAND_CELLS as i32;
         let shown = !skip[ch_index(GroundChannelKey::TRANSPORT)];
-        self.read_decks(if shown { Some(&around.own) } else { None }, first)
+        self.read_decks(if shown { Some(&around.own) } else { None }, first)?;
+        // One band-aligned floor shared by the whole chunk, under every peak
+        // and under every bore's floor, whose way is the ground's cell under
+        // its air.
+        let bored = self.bore.iter().filter(|b| b.air[0] < b.air[1]).map(|b| b.air[0] - 1).min().unwrap_or(i32::MAX);
+        self.floor = (min_ele.min(bored) - TERRAIN_Z_MARGIN).div_euclid(BAND_CELLS as i32) * BAND_CELLS as i32;
+        Ok(())
     }
 
     /// The decks over the chunk's own columns, from the page they are drawn
@@ -337,16 +356,28 @@ impl ChunkSample {
         let mut i = 0;
         while col < COL_SPAN2 {
             self.span_at[col] = self.spans.len() as u32;
+            self.bore[col] = Bore::default();
             let from = self.spans.len();
             while i < over.len() && over[i].0 == col {
                 let o = over[i].2;
                 i += 1;
                 let Some((slab, slab_layer)) = tables.of(GroundChannelKey::TRANSPORT, o.kind) else { continue };
-                let Some(occupied) = o.occupies(self.ele[col] as i32) else {
-                    (self.material[col], self.layer_idx[col]) = (slab, slab_layer);
-                    continue;
+                let (slab_at, pier_at) = match o.occupies(self.ele[col] as i32) {
+                    Occupies::Grade => {
+                        (self.material[col], self.layer_idx[col]) = (slab, slab_layer);
+                        continue;
+                    }
+                    Occupies::Through { air } => {
+                        // Of two bores through one column, the one that takes
+                        // more of it.
+                        if air[1] - air[0] > self.bore[col].air[1] - self.bore[col].air[0] {
+                            self.bore[col] = Bore { air, material: slab, layer: slab_layer };
+                        }
+                        continue;
+                    }
+                    Occupies::Above { slab, pier } => (slab, pier),
                 };
-                let [lo, hi] = occupied.slab;
+                let [lo, hi] = slab_at;
                 try_push(
                     &mut self.spans,
                     Span {
@@ -356,7 +387,7 @@ impl ChunkSample {
                         layer: slab_layer,
                     },
                 )?;
-                if let (Some([lo, hi]), Some((pier, pier_layer))) = (occupied.pier, tables.of(PIER.0, PIER.1)) {
+                if let (Some([lo, hi]), Some((pier, pier_layer))) = (pier_at, tables.of(PIER.0, PIER.1)) {
                     try_push(
                         &mut self.spans,
                         Span {
@@ -388,13 +419,28 @@ impl ChunkSample {
         Ok(())
     }
 
+    /// Column `i`'s ground from `from` up to `to` exclusive, lowest first,
+    /// as `run(lo, hi, material, layer)`, both ends inside: one run, or
+    /// where a bore goes through it, the ground under the bore's floor, the
+    /// way on the floor's cell, and the ground standing over its air.
+    pub fn ground_runs<E>(&self, i: usize, from: i32, to: i32, mut run: impl FnMut(i32, i32, u32, u8) -> Result<(), E>) -> Result<(), E> {
+        let top = (self.ele[i] as i32).min(to);
+        let (m, l) = (self.material[i], self.layer_idx[i]);
+        let mut part = |lo: i32, hi: i32, m: u32, l: u8| if lo.max(from) < hi { run(lo.max(from), hi - 1, m, l) } else { Ok(()) };
+        let b = self.bore[i];
+        if b.air[0] >= b.air[1] {
+            return part(from, top, m, l);
+        }
+        let floor = b.air[0];
+        part(from, (floor - 1).min(top), m, l)?;
+        part(floor - 1, floor.min(top), b.material, b.layer)?;
+        part(b.air[1], top, m, l)
+    }
+
     /// Column `i`'s runs, lowest first: its ground from `floor`, then what
     /// stands off it, as `run(lo, hi, material, layer)`, both ends inside.
     pub fn column_runs<E>(&self, i: usize, mut run: impl FnMut(i32, i32, u32, u8) -> Result<(), E>) -> Result<(), E> {
-        let top = self.ele[i] as i32 - 1;
-        if top >= self.floor {
-            run(self.floor, top, self.material[i], self.layer_idx[i])?;
-        }
+        self.ground_runs(i, self.floor, i32::MAX, &mut run)?;
         for s in &self.spans[self.span_at[i] as usize..self.span_at[i + 1] as usize] {
             run(s.lo, s.hi - 1, s.material, s.layer)?;
         }

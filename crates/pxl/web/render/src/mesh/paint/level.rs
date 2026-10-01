@@ -71,16 +71,8 @@ pub fn write_level_runs(
     let mut next = 0;
     for i in 0..columns {
         direct.direct_column(i as u32);
-        let (material, layer) = (sample.material[i], sample.layer_idx[i]);
-        let height = sample.ele[i] as i32;
         // The ground from `from` up to `to`, both exclusive at the top.
-        let ground = |direct: &mut ScanContext, from: i32, to: i32| {
-            let top = height.min(to) - 1;
-            if from <= top {
-                direct.direct_run(from, top, material, layer)?;
-            }
-            Ok::<(), Refused>(())
-        };
+        let ground = |direct: &mut ScanContext, from: i32, to: i32| sample.ground_runs(i, from, to, |lo, hi, m, l| direct.direct_run(lo, hi, m, l));
         let mut z = sample.floor;
         while next < stands.len() && stands[next].0 == i as u32 {
             let (lo, hi, stand) = stands[next].1;

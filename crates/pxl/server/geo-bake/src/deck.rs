@@ -1,7 +1,7 @@
 // pxl-geo-bake/deck.rs
 
-//! The decks' heights, solved offline over the whole network and written to
-//! `overture_deck`, which the terrain bake reads a page at a time
+//! The decks' heights and the tunnels' mouths, solved offline over the whole
+//! network and written to `overture_deck`, which the terrain bake reads a page at a time
 //! (terrain/pipeline/deck.rs).
 //!
 //! A deck's height depends on where its structure comes down to the ground,
@@ -12,12 +12,13 @@
 //! network as one system, which is the approach OSM2World found too fragile
 //! to turn on.
 //!
-//! - `piece`: a segment's bridge ranges, less what is not seen.
+//! - `piece`: a segment's bridge or tunnel ranges, less what is not seen or
+//!   not built.
 //! - `structure`: the pieces that meet end to end or run side by side, and
 //!   the graph of points along them.
 //! - `clearance`: what a deck has to clear, and how steeply it may climb.
 //! - `profile`: a structure's tops, from its ends and its clearances.
-//! - `elevation`: the ground's height at the points, a raster tile at a time.
+//! - `elevation`: the ground's height at the points, as the pages draw it.
 //! - `source`: the geo DB, read and written.
 //!
 //! It runs in two passes. A deck that crosses a lower one clears that
@@ -37,10 +38,12 @@ use postgres::Client;
 use clearance::{Under, PIER_MIN_RISE, PIER_OFF_WAY, PIER_STEP, STACKED};
 use piece::{pieces_of, Piece};
 use profile::{solve as solve_profile, Problem};
+use pxl_spec::bake::constant::CELL_PER_M;
+use pxl_spec::bake::deck::{Form, BORE_HEIGHT};
 use source::DeckOut;
 use structure::{group, side_by_side, Graph};
 
-use crate::terrain::pipeline::overture::between::flag_ranges;
+use crate::terrain::pipeline::overture::between::{flag_at, flag_ranges, value_at};
 use crate::terrain::pipeline::overture::policy::{DECK_FLAGS, UNSEEN_FLAGS};
 
 /// How far from a piece's end a crossing is its own joint rather than
@@ -66,14 +69,21 @@ struct Need {
 
 /// Solves every deck and writes `overture_deck`, whole.
 pub fn solve(client: &mut Client, log: impl Fn(&str)) -> Result<Solved, postgres::Error> {
-    let rows = source::bridge_rows(client)?;
-    let pieces: Vec<Piece> = rows.iter().flat_map(pieces_of).collect();
+    let rows = source::flagged_rows(client, "is_bridge")?;
+    let pieces: Vec<Piece> = rows.iter().flat_map(|r| pieces_of(r, Form::Deck)).collect();
     log(&format!("{} bridge segments, {} deck pieces", rows.len(), pieces.len()));
     drop(rows);
 
     source::stage(client, &pieces)?;
     let needs = needs_of(client, &pieces)?;
-    let crossings = source::decks_crossing(client)?;
+    let crossings: Vec<source::DeckCrossing> = source::decks_crossing(client)?
+        .into_iter()
+        .map(|c| source::DeckCrossing {
+            upper_at: c.upper_at / pieces[c.upper].scale(),
+            lower_at: c.lower_at / pieces[c.lower].scale(),
+            ..c
+        })
+        .collect();
     log(&format!("{} ways and waters under decks, {} decks over decks", needs.iter().map(Vec::len).sum::<usize>(), crossings.len()));
 
     let beside = side_by_side(&pieces);
@@ -87,7 +97,7 @@ pub fn solve(client: &mut Client, log: impl Fn(&str)) -> Result<Solved, postgres
         }
     }
     let all: Vec<[f64; 2]> = graphs.iter().flat_map(|g| g.at.iter().copied()).collect();
-    let flat = elevation::ground(client, &all)?;
+    let flat = elevation::surface(client, &all)?;
     let mut grounds: Vec<Vec<f64>> = Vec::with_capacity(graphs.len());
     let mut at = 0;
     for g in &graphs {
@@ -134,6 +144,7 @@ pub fn solve(client: &mut Client, log: impl Fn(&str)) -> Result<Solved, postgres
         let mut last_d = 0.0;
         let mut deck = DeckOut {
             piece,
+            form: Form::Deck,
             points: Vec::with_capacity(g.along[k].len()),
             piers: Vec::with_capacity(g.along[k].len()),
         };
@@ -154,6 +165,11 @@ pub fn solve(client: &mut Client, log: impl Fn(&str)) -> Result<Solved, postgres
             out.push(deck);
         }
     }
+    let tunnel_rows = source::flagged_rows(client, "is_tunnel")?;
+    let tunnels: Vec<Piece> = tunnel_rows.iter().flat_map(|r| pieces_of(r, Form::Bore)).collect();
+    let bores = bores_of(client, &tunnels)?;
+    log(&format!("{} tunnel pieces, {} bored through from a portal", tunnels.len(), bores.len()));
+    out.extend(bores);
     source::write(client, &out)?;
     Ok(Solved {
         pieces: pieces.len(),
@@ -163,17 +179,80 @@ pub fn solve(client: &mut Client, log: impl Fn(&str)) -> Result<Solved, postgres
     })
 }
 
+/// The bores of the tunnels that come out to the ground, cut their whole
+/// length so a first-person view can go through. A tunnel's floor is a deck's
+/// profile turned over: where a deck is raised to clear what is under it, a
+/// bore is lowered to keep ground over it — its height and a cell of roof —
+/// and runs straight between its portals where that already holds, as a road
+/// or a railway is graded through a hill, coming up to each portal no
+/// steeper than a deck climbs. The same solve does both, on heights negated.
+/// A portal is an end where the way carries on at the surface — a way
+/// touching it there that is no tunnel and stands at level 0 or over — and
+/// not merely an end: a subway's tunnel ends at its stations' platforms,
+/// which are under the ground too, and a tunnel with no portal is cut
+/// nowhere.
+fn bores_of<'a>(client: &mut Client, tunnels: &'a [Piece]) -> Result<Vec<DeckOut<'a>>, postgres::Error> {
+    let structures = group(tunnels, &[]);
+    let graphs: Vec<Graph> = structures.iter().map(|m| Graph::build(tunnels, m, &[])).collect();
+    let ends: Vec<([f64; 2], &str)> = structures
+        .iter()
+        .zip(&graphs)
+        .flat_map(|(members, g)| g.free_ends.iter().zip(&g.free_end_of).map(|(&e, &k)| (g.at[e as usize], tunnels[members[k]].gers_id.as_str())))
+        .collect();
+    let mut portal = vec![false; ends.len()];
+    for t in source::touching(client, &ends)? {
+        let at_surface = |at: f64| (0.0..=1.0).contains(&at) && !flag_at(t.flags.as_deref(), UNSEEN_FLAGS, at) && value_at(t.levels.as_deref(), at).unwrap_or(0.0) >= 0.0;
+        if at_surface(t.own_at - t.step) || at_surface(t.own_at + t.step) {
+            portal[t.point] = true;
+        }
+    }
+    let all: Vec<[f64; 2]> = graphs.iter().flat_map(|g| g.at.iter().copied()).collect();
+    let flat = elevation::surface(client, &all)?;
+    let mut end_at = 0;
+    let mut out = Vec::new();
+    let mut at = 0;
+    for (members, g) in structures.iter().zip(&graphs) {
+        let ground = &flat[at..at + g.at.len()];
+        at += g.at.len();
+        let ends: Vec<(u32, f64)> = g.free_ends.iter().enumerate().filter(|&(j, _)| portal[end_at + j]).map(|(_, &e)| (e, ground[e as usize])).collect();
+        end_at += g.free_ends.len();
+        if ends.is_empty() {
+            continue;
+        }
+        // Under the ground by the bore's height and a cell of roof, in metres
+        // at its latitude.
+        let under: Vec<f64> = (0..g.at.len()).map(|v| -(ground[v] - f64::from(BORE_HEIGHT + 1) / CELL_PER_M(g.at[v][1]))).collect();
+        let at_portals: Vec<(u32, f64)> = ends.iter().map(|&(e, z)| (e, -z)).collect();
+        let floor: Vec<f64> = solve_profile(&Problem { adj: &g.adj, need: &under, ends: &at_portals }).into_iter().map(|v| -v).collect();
+        for (k, &m) in members.iter().enumerate() {
+            let points: Vec<[f64; 3]> = g.along[k].iter().map(|&(node, _)| [g.at[node as usize][0], g.at[node as usize][1], floor[node as usize]]).collect();
+            if points.len() >= 2 {
+                out.push(DeckOut {
+                    piece: &tunnels[m],
+                    form: Form::Bore,
+                    piers: vec![0; points.len()],
+                    points,
+                });
+            }
+        }
+    }
+    Ok(out)
+}
+
 /// What passes under each piece: the ways that cross it where they are on
 /// the ground — not where they are a tunnel, nor a deck, which is cleared as
 /// a deck — and the water it spans.
 fn needs_of(client: &mut Client, pieces: &[Piece]) -> Result<Vec<Vec<Need>>, postgres::Error> {
     let mut needs: Vec<Vec<Need>> = vec![Vec::new(); pieces.len()];
+    // Where along a piece, in physical metres, from PostGIS's Mercator ones.
+    let physical = |m: usize, at: f64| at / pieces[m].scale();
     let length = |m: usize| {
         let p = &pieces[m].points;
-        p.windows(2).map(|w| (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1])).sum::<f64>()
+        physical(m, p.windows(2).map(|w| (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1])).sum::<f64>())
     };
     let inside = |at: f64, m: usize| at > AT_END && at < length(m) - AT_END;
-    for c in source::ways_crossing(client)? {
+    for mut c in source::ways_crossing(client)? {
+        c.at = physical(c.piece, c.at);
         let off_ground = flag_ranges(c.flags.as_deref(), UNSEEN_FLAGS).iter().chain(&flag_ranges(c.flags.as_deref(), DECK_FLAGS)).any(|&[a, b]| (a..=b).contains(&c.own_at));
         if off_ground || !inside(c.at, c.piece) {
             continue;
@@ -184,7 +263,7 @@ fn needs_of(client: &mut Client, pieces: &[Piece]) -> Result<Vec<Vec<Need>>, pos
     let mut water: Vec<Vec<Need>> = vec![Vec::new(); pieces.len()];
     for w in source::water_under(client)? {
         if let Some(under) = Under::of_water(&w.subtype, w.class.as_deref()) {
-            water[w.piece].push(Need { from: w.from, to: w.to, under });
+            water[w.piece].push(Need { from: physical(w.piece, w.from), to: physical(w.piece, w.to), under });
         }
     }
     // One stretch of water is many pieces once its polygon is subdivided, and

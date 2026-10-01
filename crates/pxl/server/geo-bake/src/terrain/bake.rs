@@ -88,8 +88,9 @@ fn deck_row(row: &BranchCursor<'_>) -> Result<DeckRow, MarshalError> {
         subtype: row.at(1)?.get_str()?,
         class: opt_str(row, 2)?,
         width_m: row.at(3)?.get_number()?,
-        piers: row.at(4)?.get_array::<u8>()?.into(),
-        geom_wkb: row.at(5)?.get_array::<u8>()?.into(),
+        form: row.at(4)?.get_number()? as u8,
+        piers: row.at(5)?.get_array::<u8>()?.into(),
+        geom_wkb: row.at(6)?.get_array::<u8>()?.into(),
     })
 }
 

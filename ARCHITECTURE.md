@@ -292,14 +292,14 @@ address        bytes                    range                  placed by
 2 MiB          8 MiB + 16 MiB           .ring.slot             build.rs
 32 MiB         ~0.7 MiB                 .rodata .data .bss     wasm-ld (--global-base)
                ↑ D: __data_end, rounded up to 4 KiB (PAGE_BYTES), about 32.7 MiB
-D              66.62 MiB                .fixed.terrain         the kernel (mem/fixed.rs)
-D + 66.62 MiB  96 KiB                   .fixed.bake            the kernel (mem/fixed.rs)
-D + 66.72 MiB  259 KiB                  .fixed.mounts          the kernel (mem/fixed.rs)
-D + 66.97 MiB  448 KiB                  .fixed.blocks          the kernel (mem/fixed.rs)
-D + 67.41 MiB  4 MiB                    .fixed.gpu             the kernel (mem/fixed.rs)
-D + 71.41 MiB  64 KiB                   .fixed.host            the kernel (mem/fixed.rs)
-D + 71.47 MiB  4.62 MiB                 .fixed.profiler        the kernel (mem/fixed.rs)
-D + 76.09 MiB  the rest                 .heap                  the allocator
+D              66.74 MiB                .fixed.terrain         the kernel (mem/fixed.rs)
+D + 66.74 MiB  96 KiB                   .fixed.bake            the kernel (mem/fixed.rs)
+D + 66.84 MiB  259 KiB                  .fixed.mounts          the kernel (mem/fixed.rs)
+D + 67.09 MiB  448 KiB                  .fixed.blocks          the kernel (mem/fixed.rs)
+D + 67.53 MiB  4 MiB                    .fixed.gpu             the kernel (mem/fixed.rs)
+D + 71.53 MiB  64 KiB                   .fixed.host            the kernel (mem/fixed.rs)
+D + 71.59 MiB  4.62 MiB                 .fixed.profiler        the kernel (mem/fixed.rs)
+D + 76.21 MiB  the rest                 .heap                  the allocator
 512 MiB / 1 GiB                         end
 ──────────────────────────────────────────────────────────────────────────────────────
 ```

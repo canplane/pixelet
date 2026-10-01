@@ -87,6 +87,10 @@ const SPORTS_CLASSES: [&str; 2] = ["pitch", "playground"];
 /// buildings paint over where they have it.
 pub const UNSEEN_FLAGS: &[&str] = &["is_tunnel", "is_indoor", "is_under_construction", "is_abandoned"];
 
+/// Segment flags under which a way runs through the ground, where a bore
+/// is cut for it at a hillside (deck/).
+pub const BORE_FLAGS: &[&str] = &["is_tunnel"];
+
 /// Segment flags under which a way is a link — a slip road, one lane.
 pub const LINK_FLAGS: &[&str] = &["is_link"];
 

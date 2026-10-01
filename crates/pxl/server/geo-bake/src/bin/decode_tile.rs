@@ -40,7 +40,8 @@ use flate2::write::ZlibEncoder;
 use flate2::{Compression, Crc};
 use pxl_geo_bake::cli::Flags;
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::bake::deck::Decks;
+use pxl_spec::bake::deck::{Decks, Form};
+use pxl_spec::bake::surface::bicubic;
 use pxl_spec::bake::format::decode_terrain;
 use pxl_spec::bake::format::{GroundChannelKey, Occupancy};
 use pxl_spec::bake::pack::GroundCell;
@@ -173,6 +174,26 @@ fn print_summary(name: &str, s: &Summary) {
         let list: Vec<String> = s.counts[f].iter().map(|(name, n)| format!("{name} {n}")).collect();
         println!("  {channel:<9} {}", list.join(", "));
     }
+}
+
+/// The bores, and how deep each point's floor lies under the surface the
+/// page draws there: a bore cuts only where it is under.
+fn print_bores(page: &Page) {
+    let bores: Vec<_> = page.decks.iter().filter(|d| d.form == Form::Bore).collect();
+    if bores.is_empty() {
+        return;
+    }
+    let (mut under, mut points) = (0, 0);
+    for d in &bores {
+        for i in 0..d.points.len() {
+            let [x, y] = d.point(i);
+            points += 1;
+            if i32::from(d.tops[i]) < i32::from(bicubic(&page.ele, x, y)) {
+                under += 1;
+            }
+        }
+    }
+    println!("  bores     {}, {points} points, {under} under the surface", bores.len());
 }
 
 fn print_decks(decks: &Decks) {
@@ -320,6 +341,7 @@ fn one(path: &Path, out: Option<PathBuf>) -> Result<bool, String> {
     let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
     print_summary(&name, &s);
     print_decks(&page.decks);
+    print_bores(&page);
     for line in &s.faults {
         eprintln!("[decode_tile] {line}");
     }

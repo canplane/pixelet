@@ -4,7 +4,7 @@ use super::*;
 
 fn one(points: &[[f64; 2]], tops: &[i16], width_cells: f64) -> Decks {
     let mut b = Builder::default();
-    b.push(points.iter().zip(tops).map(|(&p, &t)| (p, t, 0)), (width_cells * POINT_SCALE) as u8, 3);
+    b.push(points.iter().zip(tops).map(|(&p, &t)| (p, t, 0)), (width_cells * POINT_SCALE) as u8, 3, Form::Deck);
     b.finish()
 }
 
@@ -46,4 +46,12 @@ fn a_straight_level_deck_folds_to_its_ends() {
     let up = fold_decks([&d, &empty, &empty, &empty], 1);
     assert_eq!(up.deck(0).points.len(), 2);
     assert_eq!(up.deck(0).point(1), [15.0, 0.0]);
+}
+
+#[test]
+fn a_bore_carves_only_where_the_ground_stands_over_its_floor() {
+    let over = |top: f64| Over { top, kind: 3, form: Form::Bore, pier: false };
+    assert_eq!(over(10.0).occupies(10), Occupies::Grade);
+    assert_eq!(over(10.0).occupies(11), Occupies::Through { air: [10, 11] });
+    assert_eq!(over(10.0).occupies(40), Occupies::Through { air: [10, 10 + BORE_HEIGHT] });
 }

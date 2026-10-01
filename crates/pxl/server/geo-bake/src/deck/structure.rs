@@ -53,8 +53,8 @@ fn end_of(p: &Piece, last: bool) -> ([f64; 2], [f64; 2]) {
 
 /// Every pair of ends of different pieces that lie side by side.
 pub fn side_by_side(pieces: &[Piece]) -> Vec<Beside> {
-    let widest = pieces.iter().map(|p| p.width_m).fold(0.0, f64::max);
-    let cell = widest + SIDE_GAP;
+    let widest = pieces.iter().map(|p| p.width_m * p.scale()).fold(0.0, f64::max);
+    let cell = widest + SIDE_GAP * 2.0;
     let mut grid: HashMap<(i64, i64), Vec<(usize, bool)>> = HashMap::new();
     let cell_of = |at: [f64; 2]| ((at[0] / cell).floor() as i64, (at[1] / cell).floor() as i64);
     for (i, p) in pieces.iter().enumerate() {
@@ -72,7 +72,7 @@ pub fn side_by_side(pieces: &[Piece]) -> Vec<Beside> {
                     continue;
                 }
                 let (other, other_heading) = end_of(&pieces[j], other_last);
-                let d = (at[0] - other[0]).hypot(at[1] - other[1]);
+                let d = (at[0] - other[0]).hypot(at[1] - other[1]) / p.scale();
                 let meet = key_of([at[0], at[1], 0.0]) == key_of([other[0], other[1], 0.0]);
                 let near = d <= (p.width_m + pieces[j].width_m) / 2.0 + SIDE_GAP;
                 let parallel = (heading[0] * other_heading[0] + heading[1] * other_heading[1]).clamp(-1.0, 1.0).acos() <= SIDE_HEADING;
@@ -125,7 +125,7 @@ pub fn group(pieces: &[Piece], beside: &[Beside]) -> Vec<Vec<usize>> {
 
 /// A structure's points, every `STEP` metres along each piece and at every
 /// end, an end its pieces share being one point and two ends side by side
-/// joined across.
+/// joined across. Its distances are physical metres (`Piece::scale`).
 pub struct Graph {
     /// Each point, in EPSG:3857 metres.
     pub at: Vec<[f64; 2]>,
@@ -136,6 +136,8 @@ pub struct Graph {
     /// The points at an end only one piece reaches: where the structure
     /// comes down to the ground.
     pub free_ends: Vec<u32>,
+    /// The piece, among the structure's members, each free end is an end of.
+    pub free_end_of: Vec<usize>,
 }
 
 impl Graph {
@@ -145,6 +147,7 @@ impl Graph {
             adj: Vec::new(),
             along: Vec::new(),
             free_ends: Vec::new(),
+            free_end_of: Vec::new(),
         };
         let mut ends: HashMap<Key, (u32, u32)> = HashMap::new();
         let point = |g: &mut Graph, p: [f64; 3]| -> u32 {
@@ -157,12 +160,13 @@ impl Graph {
                 g.along.push(Vec::new());
                 continue;
             };
-            let len = line.length();
-            let steps = (len / STEP).ceil().max(1.0) as usize;
+            let (len, scale) = (line.length(), pieces[m].scale());
+            let steps = (len / scale / STEP).ceil().max(1.0) as usize;
             let mut nodes: Vec<(u32, f64)> = Vec::with_capacity(steps + 1);
             for k in 0..=steps {
-                let d = len * k as f64 / steps as f64;
-                let p = line.at(d);
+                let along = len * k as f64 / steps as f64;
+                let p = line.at(along);
+                let d = along / scale;
                 let node = if k == 0 || k == steps {
                     let e = ends.entry(key_of(p)).or_insert_with(|| (u32::MAX, 0));
                     if e.0 == u32::MAX {
@@ -194,6 +198,7 @@ impl Graph {
         }
         g.free_ends = ends.into_values().filter(|&(_, n)| n == 1).map(|(node, _)| node).collect();
         g.free_ends.sort_unstable();
+        g.free_end_of = g.free_ends.iter().map(|&e| g.along.iter().position(|nodes| nodes.first().map(|n| n.0) == Some(e) || nodes.last().map(|n| n.0) == Some(e)).unwrap_or(0)).collect();
         g
     }
 

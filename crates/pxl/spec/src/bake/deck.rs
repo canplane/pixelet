@@ -12,7 +12,9 @@
 //! would be a byte a cell on every page.
 //!
 //! A deck is a polyline in its page's cells, a top at each point, a width and
-//! the transport type its surface shows; a point may stand on a pier. Where a
+//! the transport type its surface shows; a point may stand on a pier. A
+//! bore is the same line through the ground rather than over it — a
+//! tunnel's mouth, where it meets a hillside — its points the way's floor. Where a
 //! deck lies is the page's lattice, the ground's (space/pyramid.rs
 //! `GROUND`), so a level's page holds its decks in its own cells as it holds
 //! its ground. A top is in z16 cells, as the elevation is, at every level.
@@ -39,6 +41,37 @@ pub const POINT_SCALE: f64 = 8.0;
 /// A deck's slab, top to underside, in z16 cells. One cell is about the
 /// two metres a road deck's structure is.
 pub const THICKNESS: i32 = 1;
+
+/// A bore's air, floor to roof, in z16 cells: about six metres, a road
+/// tunnel's 4.5 to 5 m clearance for traffic and the lights and fans over
+/// it.
+pub const BORE_HEIGHT: i32 = 3;
+
+/// What a line is to the ground.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Form {
+    /// Carried over it: a bridge, a viaduct, a ramp.
+    Deck,
+    /// Cut through it: a tunnel where the ground stands over it.
+    Bore,
+}
+
+impl Form {
+    pub fn of(byte: u8) -> Form {
+        if byte == 1 {
+            Form::Bore
+        } else {
+            Form::Deck
+        }
+    }
+
+    pub fn byte(self) -> u8 {
+        match self {
+            Form::Deck => 0,
+            Form::Bore => 1,
+        }
+    }
+}
 
 /// A resident record's room for decks and their points (pxl-kernel
 /// layer/terrain/fixed.rs). The bake keeps every page within them, and
@@ -67,6 +100,8 @@ pub struct Decks {
     /// The transport type a deck's surface shows, as the catalog numbers it
     /// (cell/cube_type.spec.rs `transport`).
     pub kind: Cow<'static, [u8]>,
+    /// Each line's `Form`, as its byte.
+    pub form: Cow<'static, [u8]>,
 }
 
 impl Default for Decks {
@@ -83,42 +118,51 @@ pub struct Deck<'a> {
     pub piers: &'a [u8],
     pub width: u8,
     pub kind: u8,
+    pub form: Form,
 }
 
-/// What a deck is over a column — one it covers as a way covers the ground
-/// (bake/way.rs): its top there, in z16 cells, its kind, and whether a pier
-/// carries it there.
+/// What a line is over a column — one it covers as a way covers the ground
+/// (bake/way.rs): its top there (a bore's, its floor), in z16 cells, its
+/// kind and form, and whether a pier carries it there.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Over {
     pub top: f64,
     pub kind: u8,
+    pub form: Form,
     pub pier: bool,
 }
 
-/// What a deck occupies over one column, in z16 cells, each `[lo, hi)`: its
-/// slab under its top, and where a pier carries it, the pier from the
-/// ground to the slab. The one rule the paint draws a deck by and the query
-/// meets it by.
+/// What a line occupies of one column, in z16 cells, each `[lo, hi)`. The
+/// one rule the paint draws a line by and the query meets it by.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Occupied {
-    pub slab: [i32; 2],
-    pub pier: Option<[i32; 2]>,
+pub enum Occupies {
+    /// The way on the ground: where a bridge comes down to its end, or a
+    /// tunnel's floor is the ground's top. The column's top cell is its
+    /// surface.
+    Grade,
+    /// A slab under its top, and where a pier carries it, the pier from the
+    /// ground to the slab.
+    Above { slab: [i32; 2], pier: Option<[i32; 2]> },
+    /// Air through the ground from the floor up, as far as the ground
+    /// stands; the cell under the floor is the way's surface.
+    Through { air: [i32; 2] },
 }
 
 impl Over {
-    /// Over a column whose ground stands `ground` cells high; none where the
-    /// deck is at or under the ground there — where a bridge comes down to
-    /// its end, which is the way on the ground.
-    pub fn occupies(&self, ground: i32) -> Option<Occupied> {
+    /// Over a column whose ground stands `ground` cells high.
+    pub fn occupies(&self, ground: i32) -> Occupies {
         let top = self.top.round() as i32;
-        if top <= ground {
-            return None;
+        match self.form {
+            Form::Deck if top > ground => {
+                let lo = (top - THICKNESS).max(ground);
+                Occupies::Above {
+                    slab: [lo, top],
+                    pier: (self.pier && lo > ground).then_some([ground, lo]),
+                }
+            }
+            Form::Bore if top < ground => Occupies::Through { air: [top, (top + BORE_HEIGHT).min(ground)] },
+            _ => Occupies::Grade,
         }
-        let lo = (top - THICKNESS).max(ground);
-        Some(Occupied {
-            slab: [lo, top],
-            pier: (self.pier && lo > ground).then_some([ground, lo]),
-        })
     }
 }
 
@@ -139,6 +183,7 @@ impl Decks {
             piers: &self.piers[a..b],
             width: self.width[d],
             kind: self.kind[d],
+            form: Form::of(self.form[d]),
         }
     }
 
@@ -179,12 +224,30 @@ impl Decks {
         self.iter().flat_map(move |deck| (0..deck.points.len().saturating_sub(1)).filter_map(move |s| deck.over_segment(s, at)))
     }
 
+    /// The lowest a bore cuts inside the `[x0, x1) × [y0, y1)` cells — the
+    /// cell of the way under its floor — conservatively, as `highest_in`.
+    pub fn lowest_in(&self, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> Option<i16> {
+        let mut low = None;
+        for bore in self.iter().filter(|d| d.form == Form::Bore) {
+            let half = bore.reach();
+            for s in 0..bore.points.len().saturating_sub(1) {
+                let (a, b) = (bore.point(s), bore.point(s + 1));
+                if a[0].max(b[0]) + half < x0 || a[0].min(b[0]) - half > x1 || a[1].max(b[1]) + half < y0 || a[1].min(b[1]) - half > y1 {
+                    continue;
+                }
+                let floor = bore.tops[s].min(bore.tops[s + 1]).saturating_sub(1);
+                low = Some(low.map_or(floor, |v: i16| v.min(floor)));
+            }
+        }
+        low
+    }
+
     /// The highest top any deck has inside the `[x0, x1) × [y0, y1)` cells,
     /// conservatively: a deck's highest point counts wherever its line comes
     /// within its reach of the box.
     pub fn highest_in(&self, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> Option<i16> {
         let mut top = None;
-        for deck in self.iter() {
+        for deck in self.iter().filter(|d| d.form == Form::Deck) {
             let half = deck.reach();
             for s in 0..deck.points.len().saturating_sub(1) {
                 let (a, b) = (deck.point(s), deck.point(s + 1));
@@ -249,6 +312,7 @@ impl Deck<'_> {
         Some(Over {
             top,
             kind: self.kind,
+            form: self.form,
             pier: on(s) || on(s + 1),
         })
     }
@@ -277,7 +341,7 @@ pub fn fold_decks(children: [&Decks; 4], level: u32) -> Decks {
             let points: Vec<[f64; 2]> = (0..deck.points.len()).map(|i| deck.point(i)).map(|[x, y]| [(x + qx) / 2.0, (y + qy) / 2.0]).collect();
             let keep = simplify(&points, deck.tops, 0.5, height_tolerance);
             let kept: Vec<usize> = (0..points.len()).filter(|&i| keep[i] || deck.piers[i] != 0).collect();
-            out.push(kept.iter().map(|&i| (points[i], deck.tops[i], deck.piers[i])), width, deck.kind);
+            out.push(kept.iter().map(|&i| (points[i], deck.tops[i], deck.piers[i])), width, deck.kind, deck.form);
         }
     }
     out.finish()
@@ -330,13 +394,14 @@ pub struct Builder {
     piers: Vec<u8>,
     width: Vec<u8>,
     kind: Vec<u8>,
+    form: Vec<u8>,
 }
 
 impl Builder {
     /// A deck from its points in the page's cells, each with its top and
     /// whether a pier stands under it. A line of fewer than two points, or
     /// of no width, is no deck.
-    pub fn push(&mut self, points: impl IntoIterator<Item = ([f64; 2], i16, u8)>, width: u8, kind: u8) {
+    pub fn push(&mut self, points: impl IntoIterator<Item = ([f64; 2], i16, u8)>, width: u8, kind: u8, form: Form) {
         let at = self.points.len();
         for ([x, y], top, pier) in points {
             let q = |v: f64| (v * POINT_SCALE).round().clamp(f64::from(i16::MIN), f64::from(i16::MAX)) as i16;
@@ -353,6 +418,7 @@ impl Builder {
         self.starts.push(at as u32);
         self.width.push(width);
         self.kind.push(kind);
+        self.form.push(form.byte());
     }
 
     /// Whether the decks so far fit a record.
@@ -369,13 +435,15 @@ impl Builder {
             piers: self.piers.into(),
             width: self.width.into(),
             kind: self.kind.into(),
+            form: self.form.into(),
         }
     }
 }
 
 // ---- The wire ----
 
-// decks = [starts, points, tops, piers, width, kind], the points flattened.
+// decks = [starts, points, tops, piers, width, kind, form], the points
+// flattened.
 
 /// A page's decks as its packet's branch.
 pub fn write_branch<'a>(decks: &'a Decks, b: &mut BranchViewImpl<'a>) {
@@ -385,7 +453,8 @@ pub fn write_branch<'a>(decks: &'a Decks, b: &mut BranchViewImpl<'a>) {
             .i16_array(Some(&decks.tops))
             .u8_array(Some(&decks.piers))
             .u8_array(Some(&decks.width))
-            .u8_array(Some(&decks.kind));
+            .u8_array(Some(&decks.kind))
+            .u8_array(Some(&decks.form));
     }));
 }
 
@@ -397,6 +466,7 @@ pub struct Lanes<'a> {
     piers: &'a [u8],
     width: &'a [u8],
     kind: &'a [u8],
+    form: &'a [u8],
 }
 
 /// The branch's lanes: refused unless they are one page's decks — as many
@@ -417,9 +487,11 @@ pub fn read_branch(d: BranchCursor<'_>) -> Result<Lanes<'_>, MarshalError> {
         piers: d.at(3)?.get_array::<u8>()?,
         width: d.at(4)?.get_array::<u8>()?,
         kind: d.at(5)?.get_array::<u8>()?,
+        form: d.at(6)?.get_array::<u8>()?,
     };
     let n = lanes.width.len();
     let shaped = lanes.kind.len() == n
+        && lanes.form.len() == n
         && starts.len() == n + 1
         && lanes.tops.len() == points.len()
         && lanes.piers.len() == points.len()
@@ -441,6 +513,7 @@ impl Lanes<'_> {
             piers: self.piers.to_vec().into(),
             width: self.width.to_vec().into(),
             kind: self.kind.to_vec().into(),
+            form: self.form.to_vec().into(),
         }
     }
 
@@ -458,6 +531,7 @@ impl Lanes<'_> {
             piers: put(room.piers, self.piers).into(),
             width: put(room.width, self.width).into(),
             kind: put(room.kind, self.kind).into(),
+            form: put(room.form, self.form).into(),
         }
     }
 }
@@ -471,6 +545,7 @@ pub struct Room {
     pub piers: &'static mut [u8],
     pub width: &'static mut [u8],
     pub kind: &'static mut [u8],
+    pub form: &'static mut [u8],
 }
 
 #[cfg(test)]
