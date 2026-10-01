@@ -13,8 +13,8 @@
 //! becomes available to every other class through the level below.
 //!
 //! A request of a page or more is not carved at all. It goes straight down,
-//! and it is the common case rather than the edge: a band's lanes and a fetch
-//! body are all far past a page.
+//! and it is the common case rather than the edge: a program's buffers and a
+//! file's bytes are mostly far past a page.
 //!
 //! ## Where the bookkeeping lives
 //!
@@ -273,7 +273,7 @@ impl<R: Range> SlabMalloc<R> {
     }
 
     /// What `malloc`/`free` stand in for: the word alignment every block of
-    /// this kernel is read at.
+    /// a guest is read at.
     fn layout(bytes: usize) -> Layout {
         // SAFETY: 8 is a power of two, and the size cannot overflow a range
         // that fits in the module's memory.

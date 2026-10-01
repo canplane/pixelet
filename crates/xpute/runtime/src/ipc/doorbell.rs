@@ -43,9 +43,9 @@ pub type Write<'a> = &'a dyn Fn(&mut [u8]) -> Option<u32>;
 /// its errno.
 pub type Applied = Result<Option<i32>, MarshalError>;
 
-/// Signals one command may raise before `drain` checks again. A frame is the
-/// many-signaled one — its sensor asks, snapshot, fetches and loads —
-/// so this bounds a single command rather than a turn.
+/// Signals one command may raise before `drain` checks again: a bound on a
+/// single command rather than a turn, which a program whose command raises
+/// more sizes its completion ring past.
 const MOST_SIGNALS: u32 = 64;
 
 /// What one command may leave in the completion ring: its signals, and its

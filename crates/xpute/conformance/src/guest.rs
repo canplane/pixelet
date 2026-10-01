@@ -1,7 +1,8 @@
 // xpute-conformance/guest.rs
 
-//! The Rust conformance guest: xpute-runtime's door and a stream over a
-//! memory the host reserves, and guest.json's commands applied through them.
+//! The Rust conformance guest: xpute-runtime's door, a stream, the system
+//! calls and a file table over a memory the host reserves, with a heap in its
+//! own range, and guest.json's commands applied through them.
 //! Where its ranges lie is its own choice, and `boot` answers where its
 //! directory is — the one offset a host learns outside the memory (the
 //! contract's rule 0).

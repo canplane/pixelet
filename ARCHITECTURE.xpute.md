@@ -16,11 +16,11 @@ Three things cross between them and nothing else does: one memory they share, on
 
 The two sides share one linear memory and nothing else. The host reserves it at boot and never grows it, so a view taken into that memory stays valid for as long as the guest lives. Everything below rests on that: a message queue can keep its words at a fixed address, and a payload can be read where it lies rather than copied out of the way first.
 
-What goes in the memory is the guest's business; placing it is the runtime's. The guest hands in a base, a unit and a list of sizes, and gets back where each range landed (`mem/section.rs`). A linker script does the same thing with output sections, for the same reason: whatever places ranges should not need to know what any of them hold. A range comes back as a section, and whatever is asked of it — a span to write, or ranges laid inside it — is checked against where it ends (`Section::at`, `nth`), so nothing written through one range lands in the next.
+What goes in the memory is the guest's business; placing it is the runtime's. The guest hands in a base, a unit and a list of sizes, and gets back where each range landed (`mem/section`). A linker script does the same thing with output sections, for the same reason: whatever places ranges should not need to know what any of them hold. A range comes back as a section, and whatever is asked of it — a span to write, or ranges laid inside it — is checked against where it ends (`Section::at`, `nth`), so nothing written through one range lands in the next.
 
-The memory need not begin at address zero. A WebAssembly module's linear memory does; a guest linked into a native program is given one region instead, wherever the system put it. So every address a guest names — a heap block, a range, a ring, what a record hands its host — is an offset from the memory's base and never a pointer (`mem/base.rs`): a number means the same to the host however the guest is built, and it fits the `u32` a record carries however wide the machine's pointers are. A pointer becomes an offset in one place (`off_of`), and one outside the memory is refused rather than passed on, since a static or a read-only constant lies where the linker put it and not in the region. An empty slice names nothing and is offset 0, since its pointer is only its alignment.
+The memory need not begin at address zero. A WebAssembly module's linear memory does; a guest linked into a native program is given one region instead, wherever the system put it. So every address a guest names — a heap block, a range, a ring, what a record hands its host — is an offset from the memory's base and never a pointer (`mem/base`): a number means the same to the host however the guest is built, and it fits the `u32` a record carries however wide the machine's pointers are. A pointer becomes an offset in one place (`off_of`), and one outside the memory is refused rather than passed on, since a static or a read-only constant lies where the linker put it and not in the region. An empty slice names nothing and is offset 0, since its pointer is only its alignment.
 
-The last range is the heap, and blocks come out of it through a single call (`mem/heap.rs`). What answers that call is the guest's choice. `core` offers two allocators that fit together. The lower one is a buddy allocator, which hands out fixed pages over a given span (`alloc/buddy_tree.rs`, ported from evanw/buddy-malloc). Above it sits a slab allocator holding size classes (`alloc/slab.rs`), so that a small request takes a slot of its own class instead of a whole page. The slab keeps its bookkeeping inside the blocks it has not handed out, so what it costs does not grow with the span it covers.
+The last range is the heap, and blocks come out of it through a single call (`mem/heap`). What answers that call is the guest's choice. `core` offers two allocators that fit together. The lower one is a buddy allocator, which hands out fixed pages over a given span (`alloc/buddy_tree.rs`, ported from evanw/buddy-malloc). Above it sits a slab allocator holding size classes (`alloc/slab.rs`), so that a small request takes a slot of its own class instead of a whole page. The slab keeps its bookkeeping inside the blocks it has not handed out, so what it costs does not grow with the span it covers.
 
 The buddy is not ours: it was written for this same situation, a module handed one heap with no system allocator beneath it.
 
@@ -28,11 +28,11 @@ The buddy is not ours: it was written for this same situation, a module handed o
 
 ## The message, and the rings that carry it
 
-Sharing a memory does not say what a request looks like. Every request and every answer in xpute is the same four words (`ipc/frame.rs`): who asked (`tag`), what is asked (`cmd` in the low 16 bits, flags in the high 16), what came back (`result`, a value or `-errno`), and where the packet is. A command number is two bytes, `major << 8 | minor` (`core abi/cmd`). The majors below `0x10` are xpute's, every program's commands — the rings' own test and the answer to a file's open (`runtime abi/cmd`) — and a program numbers its own from `0x10` in a table that names xpute's as its base, so no number is given out twice.
+Sharing a memory does not say what a request looks like. Every request and every answer in xpute is the same four words (`ipc/frame`): who asked (`tag`), what is asked (`cmd` in the low 16 bits, flags in the high 16), what came back (`result`, a value or `-errno`), and where the packet is. A command number is two bytes, `major << 8 | minor` (`core abi/cmd`). The majors below `0x10` are xpute's, every program's commands — the rings' own test and the answer to a file's open (`runtime abi/cmd`) — and a program numbers its own from `0x10` in a table that names xpute's as its base, so no number is given out twice.
 
 Two of the flags in that high half decide what a message means. `ACKREQ` is set by whoever submits, and asks for an answer. `RES` is set by whoever completes, and says the message is an answer — to a call that asked for one, or to a call that failed. A completion without `RES` answers nothing: the guest raised it on its own, and whoever cares about it listens for it.
 
-Four words are small, and a request's data usually is not. So the words go in one place and the data in another. What carries them is a **ring** (`ipc/ring.rs`): the four-word descriptors in one place, and the packets they point at in a separate range of the memory.
+Four words are small, and a request's data usually is not. So the words go in one place and the data in another. What carries them is a **ring** (`ipc/ring`): the four-word descriptors in one place, and the packets they point at in a separate range of the memory.
 
 ```text
 descriptors                                  payloads, elsewhere in memory
@@ -58,11 +58,11 @@ A push can fail in two ways and no others. `EAGAIN` means the ring is full: the 
 
 Two rings make a pair: one for what the host submits, one for what the guest completes. Driving that pair from the host end is the **doorbell** (`ipc/doorbell.ts`). It pushes the commands, rings the guest with a quota, and then reads the completion ring dry, handing each message either to the call that was waiting for it or to whoever listens for signals. One ring of the bell is one whole turn of the guest.
 
-The guest's end (`ipc/doorbell.rs`) applies what waits in the submission ring in order, answering each with what the guest made of it, and posts what the guest raises, and its replies, into the completion ring. That ring holds a whole turn's worth: the host reads it dry before it rings again, and the guest stops applying submissions while too little room is left for what one more might raise, leaving the rest for the next turn, in order. Each message is written once, in place.
+The guest's end (`ipc/doorbell`) applies what waits in the submission ring in order, answering each with what the guest made of it, and posts what the guest raises, and its replies, into the completion ring. That ring holds a whole turn's worth: the host reads it dry before it rings again, and the guest stops applying submissions while too little room is left for what one more might raise, leaving the rest for the next turn, in order. Each message is written once, in place.
 
 ## Streams, for calls too many to be messages
 
-Some of what a guest asks of its host comes in thousands a turn: every call a renderer makes to a device the guest cannot reach, say. A message each would be a slot and a packet each, for a call that needs neither a reply nor a tree. For those the guest writes a **stream** (`ipc/stream.rs`): records laid end to end in a range of the memory during a turn, which the host runs, all of them, when the turn returns and before it rings again.
+Some of what a guest asks of its host comes in thousands a turn: every call a renderer makes to a device the guest cannot reach, say. A message each would be a slot and a packet each, for a call that needs neither a reply nor a tree. For those the guest writes a **stream** (`ipc/stream`): records laid end to end in a range of the memory during a turn, which the host runs, all of them, when the turn returns and before it rings again.
 
 ```text
 0       END   how many words of records the turn wrote
@@ -103,7 +103,7 @@ Three things follow. A payload in a ring slot is read where it lies instead of b
 
 The rest is layout. A tree of scalar leaves, typed-array sequences and branch nodes, little-endian, its tables and headers on 8-byte words, with two words of packet header first — the magic, then the root's size and type. A branch entry carries its child's type whether or not the child is there, so an optional node that is absent still says what it would have been.
 
-The format in full, and the API that writes it, is [the note beside the TypeScript implementation](./packages/xpute/core/src/wire/xtp/README.md); the Rust mirrors it.
+The format in full, and the API that writes it, is [the note beside the TypeScript implementation](./packages/xpute/core/src/wire/xtp/README.md), which the other languages mirror.
 
 **TLV** (`core wire/tlv`) is the other format: a forward-only sequence of typed values, each tag naming its payload's type and length, closed by END. Where XTP is a structured value kept and walked where it lies, a TLV is read once, in order, and nothing it has passed is kept — an argument list as much as values arriving over time. Its reader says how a sequence stopped, at END or where the input ran out between two values, and what either means is the user's: a message may require END, and a journal cut short by its writer is a readable prefix. Both live in `core`, because neither knows anything about the program using it.
 
@@ -121,11 +121,11 @@ How long a turn may take, and how that time is spent inside it, are separate pro
 2. **Tick** (`sched/tick`) is the guest's, and it divides the quota. The guest runs its phases in a fixed order against one budget, counted from the rising edge. Which phases exist and what share each gets is the guest's; the tick knows the quota and the clock and nothing else. Nothing enforces the quota — a phase that runs past its share is not stopped, it is simply counted against the turn.
 3. **Pass** (`sched/frame_budget`) is one phase's share spent on one ordered list of steps, until a wall-time budget or a step cap says stop. It is not a registry — what is eligible, and in what order, is the caller's. What it does guarantee is forward progress: the first step that has work always runs, so nothing can be starved by whatever sits ahead of it in the list.
 
-Work too long for one turn is a **task**: a plain future written against `sched/edge`. That module hands a task the turn's quota as a deadline on the host clock, plus `yield_if_spent` to stop when the quota is gone and `next_turn` to park until the next turn begins. Nothing in that interface names an executor. Whatever module assembles the guest picks one, marks the two edges by calling `rise` and `fall`, and polls the executor between them.
+Work too long for one turn is a **task**, written against `sched/edge` in its language's own form — a future, a coroutine. That module hands a task the turn's quota as a deadline on the host clock, plus `yield_if_spent` to stop when the quota is gone and `next_turn` to park until the next turn begins. Nothing in that interface names an executor. Whatever module assembles the guest picks one, marks the two edges by calling `rise` and `fall`, and polls the executor between them.
 
 ```text
-host · TypeScript                          guest · Rust
-─────────────────                          ────────────
+host · TypeScript                          guest
+─────────────────                          ─────
 
 strobe   a frame, and only when one
          was asked for
@@ -134,7 +134,7 @@ quantum  a quota, from the frame it
 
 commands ─────── submission ring ───────▶  drained on the rising edge
 doorbell ═════ interrupt(quota_ms) ═════▶  ┌ tick   phases in a fixed order
-                                           │ tasks  futures that yield when
+                                           │ tasks  that yield when
                                            │        the quota is spent
                                            │ asks   what it wants done outside
 completions ◀───── completion ring ──────  └ posted before the falling edge
@@ -154,7 +154,7 @@ On the host side, something has to decide when to ring at all. That is the **str
 
 The guest cannot do I/O, because it does not own the connections; the host does, the way an operating system owns its devices. So the guest asks, in what its turn leaves, and the host does the work and brings back what came of it — in a message, or into memory the request named.
 
-How much may be out at once, and which want goes first, xpute does not say. Ordering one demand against another needs to know what the program is for — what is on screen, what is about to be wanted, what a failure means — and none of that is a runtime's to hold. A queue for it ran here once and went for that reason (`io.rs`). A program that wants a bound on its I/O passes one in its own messages, beside the quota.
+How much may be out at once, and which want goes first, xpute does not say. Ordering one demand against another needs to know what the program is for — what is on screen, what is about to be wanted, what a failure means — and none of that is a runtime's to hold. A program that wants a bound on its I/O passes one in its own messages, beside the quota.
 
 ---
 
@@ -175,7 +175,7 @@ one 32-bit handle
                has, and cannot name whatever took the slot next
 ```
 
-A table is fixed at N slots and never grows. Slot 0 is never handed out, so 0 is never a valid handle and can be used for "none".
+A table is fixed at N slots and never grows; one over values a side keeps (`Slots`) grows as they come, and gives a removed value's handle to nothing. Slot 0 is never handed out, so 0 is never a valid handle and can be used for "none". A guest's file descriptors are handles of its file table (`ipc/file`), which is why an answer for one already closed finds nothing.
 
 Handles are in `runtime` rather than `core` because a handle is one side of a boundary, not a container.
 
@@ -185,7 +185,7 @@ Handles are in `runtime` rather than `core` because a handle is one side of a bo
 
 Most of what is above is how one end happens to be built. A tick is how one guest divides its quota, a completion ring sized to a turn is how one guest keeps its output in bounds, a strobe is how one host decides when to ring; each end could be built another way, in another language, and be the same arrangement to the other. What cannot change is shorter: the rules below, and the formats they travel in — the directory, the message's four words, the ring's layout and the stream's records — which are the boundary's and not either end's. Each rule is one the other end could catch being broken.
 
-0. **The directory.** Where anything lies is the guest's choice, so the host has to be told. The guest's first turn writes a **directory** in xpute's own format (`ipc/directory.rs`): a magic, a version, then entries of a key and a value — where each ring lies, the numbers of its quantum policy, and whatever keys the program numbers for itself, streams among them. The host learns one offset outside the memory, the directory's — a number both ends are built with, or one the loader hands over — and finds everything else it reads from there. A key appears in a directory at most once, and one the host does not know, it passes over.
+0. **The directory.** Where anything lies is the guest's choice, so the host has to be told. The guest's first turn writes a **directory** in xpute's own format (`ipc/directory`): a magic, a version, then entries of a key and a value — where each ring lies, the numbers of its quantum policy, and whatever keys the program numbers for itself, streams among them. The host learns one offset outside the memory, the directory's — a number both ends are built with, or one the loader hands over — and finds everything else it reads from there. A key appears in a directory at most once, and one the host does not know, it passes over.
 1. **One memory.** It never moves and never grows while the guest lives, and every address that crosses is an offset into it.
 2. **The turn.** The guest runs only inside `interrupt`, and the two sides never run at once: the host touches nothing a turn writes until the turn has returned. The call carries a quota, which is advice and not a deadline, and returns `wake_ms`: 0 asks for the next turn as soon as the host schedules one, a positive number for one that many milliseconds from now, and a negative one (`NO_WAKE`) for none. A turn of no quota is still a turn, and a question the host needs answered before it goes on is asked in one. Which commands may be asked that way is each command's own: one the guest answers from what it already holds, waiting on nothing outside, may be; one that waits on anything outside is sent and answered on a later turn. A command is one or the other, never both.
 3. **The message.** Four words: `tag`, `cmd` with its flags, `result`, and the packet. With `ACKREQ` a message gets exactly one reply; without it, a reply only when it failed. A reply carries its message's `tag` and `cmd`, which is how an answer finds its caller, and `RES`, so a completion without it is one the guest raised on its own.
@@ -194,7 +194,7 @@ Most of what is above is how one end happens to be built. A tick is how one gues
 6. **Handles.** A handle is `slot | generation << 16`, and 0 is never a handle. The side that issued it checks the generation, so a handle kept past its release does not name what took its slot next.
 7. **The clock.** During a turn the guest reads the host's clock (`now`) in milliseconds. It never runs backward, and only the difference between two readings means anything.
 
-Everything else is one end's own. The guest's: where its ranges lie, the heap and its allocator, the tick, and its passes and tasks. The host's: how large a quota is, when to ring, and how it reads what a turn left. Neither end may lean on how the other does any of it.
+Everything else is one end's own. The guest's: where its ranges lie, the heap and its allocator, the tick, its passes and tasks, and its files. The host's: how large a quota is, when to ring, and how it reads what a turn left. Neither end may lean on how the other does any of it.
 
 ---
 
@@ -217,7 +217,7 @@ C++ is a third implementation beside the Rust, not a part of it: written from th
 
 ## The golden records
 
-Under `spec/xpute/golden/` are lines of `path<TAB>value`, produced once, checked once, and frozen. They are read by splitting each line and nothing more (`core golden.rs`), so the records cannot drift because a parser changed.
+Under `spec/xpute/golden/` are lines of `path<TAB>value`, produced once, checked once, and frozen. They are read by splitting each line and nothing more (`core golden`), so the records cannot drift because a parser changed.
 
 There are two kinds, and the difference decides whether a record may ever be re-recorded.
 

@@ -35,12 +35,12 @@ pub struct BudgetOpts {
     /// Absolute ceiling on the pass, never waived.
     ///
     /// `budget_ms` alone is not enough, and this is the measured reason: a step
-    /// may cost real time and still report `false`. A chunk commit once
-    /// scanned for ~15 ms and then deferred, a deliberate hand-off so a
-    /// cheaper chunk got the frame's slot. With the soft budget waived until
-    /// something succeeds, a run of expensive deferrals armed nothing: ~2000
-    /// pending chunks produced a single 4711 ms frame while every individual
-    /// step stayed under 42 ms.
+    /// may cost real time and still report `false`. A step once scanned for
+    /// ~15 ms and then deferred, a deliberate hand-off so a cheaper item got
+    /// the frame's slot. With the soft budget waived until something
+    /// succeeds, a run of expensive deferrals armed nothing: ~2000 pending
+    /// items produced a single 4711 ms frame while every individual step
+    /// stayed under 42 ms.
     ///
     /// So the soft budget keeps the guarantee (something always runs) and this
     /// bounds what the guarantee is allowed to cost. None for no ceiling.

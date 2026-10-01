@@ -1,9 +1,9 @@
 // @xpute/core/wire/tlv.test.ts
 
 /**
- * The half of xpute-core/wire/tlv.test.rs that runs here. TLV's bytes cross,
- * so the record is a claim about both languages and each side has to be held
- * to it: the Rust alone would only prove the Rust has not drifted.
+ * The TypeScript's end of golden/wire/tlv.tsv. TLV's bytes cross, so the
+ * record is a claim about every language and each has to be held to it: one
+ * alone would only prove that one has not drifted.
  */
 
 import { assertEquals } from "@std/assert";

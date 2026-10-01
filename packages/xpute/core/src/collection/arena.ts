@@ -76,7 +76,7 @@ export class Arena<T extends object> {
   /**
    * Rewind the bump cursor to a previous position.
    *
-   * Kernel rule:
+   * Rule:
    * - new_len validity is caller-owned
    * - a new_len past the current len is a broken invariant, not a clamp
    */
@@ -189,7 +189,7 @@ export class Vector<T extends AnyTypedArray> {
   /**
    * Rewind the bump cursor to a previous position.
    *
-   * Kernel rule:
+   * Rule:
    * - new_len validity is caller-owned
    * - if new_len exceeds the current len, the request is ignored with a warning
    */

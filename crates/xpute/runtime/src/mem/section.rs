@@ -1,6 +1,6 @@
 // xpute-runtime/mem/section.rs
 
-//! Ranges laid end to end in a linear memory: the mechanism under a kernel's
+//! Ranges laid end to end in a linear memory: the mechanism under a guest's
 //! memory map.
 //!
 //! A linker script's job, and its shape. `ld` places output sections in the
@@ -9,12 +9,12 @@
 //! `n` is are the script's. Nothing here knows what a range holds either — it
 //! is told a base, a unit and a list of sizes.
 //!
-//! The central scheduler reserves the memory — one `WebAssembly.Memory` with
-//! `initial == maximum`, which nothing grows — and gives it to the kernel. So
+//! The host reserves the memory — one `WebAssembly.Memory` with
+//! `initial == maximum`, which nothing grows — and gives it to the guest. So
 //! `memory.buffer` is one `ArrayBuffer` for the module's life: a view over it
 //! stays valid, which is what lets a ring hold its words and a lane be read
 //! where it lies. What the ranges are for, and how large each one is, is the
-//! kernel's own policy, and nothing here reads it.
+//! guest's own policy, and nothing here reads it.
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Section {

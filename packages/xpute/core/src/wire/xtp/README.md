@@ -1,6 +1,6 @@
 # XTP: Xpute Tree Packet
 
-A small **relocatable binary tree packet** format, with two implementations held to each other: this directory in TypeScript and `crates/xpute/core/src/wire/xtp/` in Rust. The wire format is the contract between them; the walkthrough below is the TypeScript API, which the Rust mirrors.
+A small **relocatable binary tree packet** format, implemented three times and held to each other: this directory in TypeScript, `crates/xpute/core/src/wire/xtp/` in Rust and `cpp/xpute/core/wire/xtp/` in C++. The wire format is the contract between them; the walkthrough below is the TypeScript API, which the others mirror in their own languages' shapes. The Rust and the C++ also write a packet in place, into bytes the caller holds, with no tree built first (`PacketWriter`), giving the bytes the tree encoder gives.
 
 It is designed to stay simple at the surface:
 
@@ -24,6 +24,7 @@ XTP stands for **Xpute Tree Packet**. In the rest of this document, it is descri
 - byte order is **little-endian**
 - branch child offsets are relative to the **enclosing branch base**
 - `str` stores UTF-8 bytes with a trailing NUL on wire, while its stored `len` excludes that terminator
+- `strs` stores many strings as one leaf: `len` + 1 u32 offsets, each no less than the one before, then the UTF-8 they index
 - root presence is encoded through `root_payload_sz`
 - branch-child presence is encoded through `child_rel_off`
 
@@ -133,7 +134,7 @@ Generic lowering does it for you.
 - `boolean` -> `bool`
 - `string` -> `str`
 - `TypedArray` / `BigTypedArray` -> matching packed sequence leaf
-- `Array` -> branch node
+- `Array` -> branch node, an array of strings among them; one leaf of many strings is `strs(items)`, written explicitly
 
 Notes:
 
@@ -727,6 +728,14 @@ scalar node
 sequence node
 ├─ len slot
 └─ payload
+```
+
+For `strs`:
+
+```text
+strs node
+├─ len slot            // how many strings
+└─ payload             // len + 1 u32 offsets, then the UTF-8 they index
 ```
 
 For `str` specifically:

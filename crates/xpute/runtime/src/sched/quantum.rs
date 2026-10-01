@@ -3,13 +3,13 @@
 //! The turn's outermost level: what the guest declares about its quantum, and
 //! what its falling edge answers with.
 //!
-//! The central scheduler runs guests the way an OS runs processes: it owns the
+//! The host runs guests the way an OS runs processes: it owns the
 //! clock and the resources, and a turn alternates like a clock's two edges. On
 //! the rising edge the host hands the guest one quota, the time it may take;
 //! the guest spends it on its own tasks cooperatively (sched/tick.rs,
 //! sched/edge.rs) and, on the falling edge, hands the turn back with when it
 //! wants the next one. The host knows nothing of what runs inside. Memory is
-//! granted once (mem.rs), and I/O is asked of the host (io.rs).
+//! granted once (mem.rs), and I/O is asked of the host (ipc/sys.rs).
 //!
 //! Sizing that quota is the host's alone (sched/quantum.ts): the frame interval
 //! it measures rather than assumes, the overrun a turn carries into its own

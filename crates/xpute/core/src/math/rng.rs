@@ -45,7 +45,7 @@ impl SplitMix64 {
         // Not `z as u32`: the draw goes through an f64, which rounds the word
         // to the nearest double before the modulo, so past 2^53 it is not the
         // word's low bits. This sequence is what `golden/math/rng.tsv` holds
-        // and what the decor scatter is placed from.
+        // and what a scatter drawn from it is placed by.
         ((z as f64) % 4_294_967_296.0) as u32
     }
 }

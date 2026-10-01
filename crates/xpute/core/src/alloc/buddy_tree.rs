@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 //! evanw/buddy-malloc, line for line, over a range that is given rather than
-//! asked for — the kernel's page allocator, with `slab.rs` over it for
+//! asked for — a guest's page allocator, with `slab.rs` over it for
 //! everything smaller than a page.
 //!
 //! A buddy allocator that spans a fixed linear address range with a binary
@@ -59,7 +59,7 @@ use core::ptr;
 /// answers its `brk`, read at the first request and asked again at every one.
 ///
 /// The exponents are the caller's because they are the caller's decisions.
-/// `MIN_LOG2` is the smallest block — the kernel's page, since this tree hands
+/// `MIN_LOG2` is the smallest block — a page, since this tree hands
 /// out pages and runs of pages and `slab.rs` cuts the classes below one.
 /// `MAX_LOG2` is the largest block the tree can describe, which is a statement
 /// about the address space and not about any memory: the tree begins as a

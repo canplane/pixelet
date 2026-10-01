@@ -2,7 +2,7 @@
 
 //! A guest's scheduler: the middle of the scheduler's three levels.
 //!
-//! The guest knows little of what is outside it. The central scheduler
+//! The guest knows little of what is outside it. The host
 //! strobes it with a quota (sched/quantum.rs); in that turn the guest takes
 //! what waits on its submission ring, runs its own tasks here, cooperatively,
 //! and leaves what goes back on its completion ring. The quota says about how
@@ -153,7 +153,7 @@ pub struct StepStats {
     pub max_ms: f64,
 }
 
-/// What a turn spent: what the guest reports back to the central scheduler.
+/// What a turn spent: what the guest reports back to the host.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TickReport {
     pub budget_ms: f64,

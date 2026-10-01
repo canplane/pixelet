@@ -21,7 +21,7 @@ impl Default for ArenaOptions {
 /// Slots are built once and live as long as the arena: `truncate` moves the
 /// cursor and drops nothing, so whatever a slot owns — a buffer, a string —
 /// is still allocated when the slot is handed out again. For work whose
-/// lifetime is one pass, a page's features or a chunk's scratch, that is one
+/// lifetime is one pass, a parse's nodes or a build's scratch, that is one
 /// rewind against a free and an allocation per object.
 ///
 /// The cost is the caller's: a slot arrives in whatever state its last user

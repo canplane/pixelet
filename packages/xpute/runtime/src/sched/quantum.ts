@@ -1,10 +1,10 @@
 // @xpute/runtime/sched/quantum.ts
 
 /**
- * The central scheduler's grant: the outermost of the scheduler's three
+ * The host's grant: the outermost of the scheduler's three
  * levels.
  *
- * The central scheduler runs guests the way an OS runs processes: it owns
+ * The host runs guests the way an OS runs processes: it owns
  * the clock and the resources, and the turn alternates like a clock's two
  * edges. On the rising edge the host hands the guest one quota, the time it
  * may take; the guest runs its own tasks cooperatively (xpute-runtime sched/tick.rs) and,
@@ -42,7 +42,7 @@
  * none, and the gap before the next can be seconds.
  *
  * Every number that decides how much is the guest's policy (QuantumPolicy),
- * declared to the central scheduler, not chosen here.
+ * declared to the host, not chosen here.
  */
 
 import type { f64 } from "@xpute/core/abi/word.ts";

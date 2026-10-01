@@ -1,7 +1,7 @@
 // @xpute/runtime/sched/strobe.ts
 
 /**
- * The central scheduler's clock for one guest: the turns, alternating
+ * The host's clock for one guest: the turns, alternating
  * between the host and the guest like a clock's two edges.
  *
  * A turn starts on an animation frame, and only when something asked for

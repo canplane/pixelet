@@ -1,8 +1,8 @@
 // xpute-runtime/ipc/ring.rs
 
 //! A single-producer, single-consumer ring of messages in a buffer both
-//! sides can see — the submission and completion rings between a shell and
-//! its kernel, laid out once and shared by address.
+//! sides can see — the submission and completion rings between a host and
+//! its guest, laid out once and shared by address.
 //!
 //! A message is a frame (frame.rs), and this is where its four words sit: a
 //! slot's descriptor, with word 3 the address of that slot's payload in the

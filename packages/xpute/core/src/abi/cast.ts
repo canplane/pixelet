@@ -1,7 +1,7 @@
 // @xpute/core/abi/cast.ts
 
 /**
- * Kernel ABI – Bit Casting
+ * ABI – Bit Casting
  *
  * Re-interprets an existing bit-pattern with a given width & signedness.
  *

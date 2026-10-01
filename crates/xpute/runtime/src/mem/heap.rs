@@ -13,8 +13,8 @@ use crate::mem::base::{off_of, ptr_at};
 /// base (base.rs), and its bytes.
 ///
 /// Two numbers rather than a `Vec` or a slice, because what holds a block
-/// names it by number — a list that uploads it, a table of a chunk's
-/// tiers, a host that writes into the memory at an offset — and the size
+/// names it by number — a list that uploads it, a table that indexes it, a
+/// host that writes into the memory at an offset — and the size
 /// travels with the address, since giving a block back needs both.
 pub type Block = (usize, u32);
 
