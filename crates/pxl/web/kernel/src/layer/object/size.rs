@@ -41,10 +41,3 @@ pub const DECOR_SIZE: f64 = OBJECT_SIZES[0];
 pub fn object_size_of(tier: u32) -> f64 {
     OBJECT_SIZES.get(tier as usize).copied().unwrap_or(DEFAULT_OBJECT_SIZE)
 }
-
-/// The tier a thing `len` long at its longest is filled at: the coarsest
-/// that is no longer than it, so one a cell long or more fills whole cells
-/// and a smaller one the sub-cells of its own size; the finest below that.
-pub fn tier_of(len: f64) -> f64 {
-    OBJECT_SIZES.into_iter().find(|&side| side <= len).unwrap_or(OBJECT_SIZES[OBJECT_TIERS - 1])
-}

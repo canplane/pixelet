@@ -26,8 +26,6 @@ use xpute_runtime::abi::handle::Slots;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 
-use crate::layer::model::occupancy::Occupancy;
-
 /// A channel's path: translation, rotation; anything else is scale.
 const T: u8 = 0;
 const R: u8 = 1;
@@ -79,8 +77,6 @@ pub struct Model {
     /// How far a vertex reaches from the model's origin, unscaled: a
     /// bounding sphere for a hit test to reject by.
     radius: f32,
-    /// What it fills, in its own frame and units.
-    occupancy: Option<Occupancy>,
 }
 
 #[derive(Clone, Copy)]
@@ -250,7 +246,6 @@ impl Models {
             order: Vec::new(),
             scale: 1.0,
             radius: 0.0,
-            occupancy: None,
         };
         self.models.push(model);
         Some(((self.models.len() - 1) as u32, at))
@@ -300,8 +295,6 @@ impl Models {
         m.handle = draw.upload(m.at as u32, m.bytes, m.vertex_cnt, m.index_cnt);
         let positions = core::slice::from_raw_parts(ptr_at::<f32>(m.at), m.vertex_cnt as usize * 3);
         m.radius = positions.as_chunks::<3>().0.iter().map(|p| p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).fold(0.0f32, f32::max).sqrt();
-        let indices = core::slice::from_raw_parts(ptr_at::<u32>(m.at).add(m.vertex_cnt as usize * MODEL_VERTEX_WORDS as usize), m.index_cnt as usize);
-        m.occupancy = Occupancy::of(positions, indices);
         let n = m.parent.len();
         let mut placed = vec![false; n];
         m.order.clear();
@@ -338,12 +331,6 @@ impl Models {
             radius: m.radius,
             scale: m.scale,
         })
-    }
-
-    /// What a model fills, in its own frame and units; none for one with no
-    /// extent.
-    pub fn occupancy(&self, model: u32) -> Option<&Occupancy> {
-        self.models.get(model as usize)?.occupancy.as_ref()
     }
 
     pub fn new_actor(&mut self, draw: &mut DrawList, model: u32) -> Option<u32> {

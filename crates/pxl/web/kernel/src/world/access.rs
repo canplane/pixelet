@@ -60,7 +60,6 @@ use pxl_spec::space::xy::TO_XY;
 
 use crate::io::demand::Category;
 use crate::kernel::kernel;
-use crate::layer::decor::volume::{decor_column, decor_volume_revision};
 use crate::layer::object::store::{objects_revision, EntryAt, EntryCursor, Store};
 use crate::world::paging::Paging;
 use crate::world::pyramid::{Layer as _, Pyramid};
@@ -293,11 +292,10 @@ struct Region {
     terrain: Option<((f64, f64), bool)>,
 }
 
-/// Changes whenever what `Access::support` answers may: the terrain held,
-/// the objects, and what decor fills. What keeps a support asks again when
-/// it does.
-pub fn support_revision() -> [u32; 3] {
-    [Terrain::pyramid().revision(), objects_revision(), decor_volume_revision()]
+/// Changes whenever what `Access::support` answers may: the terrain held
+/// and the objects. What keeps a support asks again when it does.
+pub fn support_revision() -> [u32; 2] {
+    [Terrain::pyramid().revision(), objects_revision()]
 }
 
 /// Whether a cell whose sub-cells at the objects' finest are `filled` is:
@@ -352,14 +350,14 @@ impl<'a> Access<'a> {
     /// the ground and a carve are made in, and a cell is solid where it is
     /// filled. What fills it is composed at the objects' finest, sub-cell by
     /// sub-cell, the authored over what is made: an object's leaf where one
-    /// says a cube or air; under no leaf, decor's volume (layer/decor/
-    /// volume.rs), then the ground — under its top and out of a bore's air —
-    /// or a deck. Then the filled sub-cells fold to the cell by majority, a
-    /// level at a time as the objects' do (layer/object/store.rs
-    /// `fold_cell`), but of filled against empty and not of which cube, so a
-    /// cell seven eighths filled with three kinds of cube is filled, and a
-    /// small cube, a small bite or a small mesh is what is seen and picked
-    /// and not what is stood on.
+    /// says a cube or air; under no leaf, the ground — under its top and out
+    /// of a bore's air — or a deck. Then the filled sub-cells fold to the
+    /// cell by majority, a level at a time as the objects' do
+    /// (layer/object/store.rs `fold_cell`), but of filled against empty and
+    /// not of which cube, so a cell seven eighths filled with three kinds of
+    /// cube is filled, and a small cube or a small bite is what is seen and
+    /// picked and not what is stood on. Decor is passed through: it is drawn
+    /// and hit, and stood on nowhere.
     ///
     /// From the surface drawn there it goes down through the empty cells
     /// under it to the first solid's top — a carve, a bore come out at the
@@ -372,8 +370,6 @@ impl<'a> Access<'a> {
         self.composed([ix, iy]).map(|c| {
             let side = CELL.side();
             let top = (c.top / side).round() as i64;
-            let mut decor = Vec::new();
-            decor_column(self.objects, ix, iy, &mut decor);
             // What is made at height `z`: the ground and the lines over it.
             let made = |z: f64| {
                 let inside = |[lo, hi]: [f64; 2]| z >= lo && z < hi;
@@ -382,19 +378,14 @@ impl<'a> Access<'a> {
             let n = CELL_STEPS as i64;
             let fine = OBJECT_FINEST.side();
             let solid = |cz: i64| {
-                let fills = decor.iter().find(|&&(z, _)| z == cz).map(|(_, s)| s);
-                if fills.is_none() && !self.objects.may_hold([ix, iy, cz]) {
+                if !self.objects.may_hold([ix, iy, cz]) {
                     return made((cz as f64 + 0.5) * side);
                 }
                 filled_cell(|[x, y, z]| {
-                    let k = (z * n + y) * n + x;
                     let v = u32::from(self.objects.folded_value(OBJECT_FINEST, [ix * n + x, iy * n + y, cz * n + z]));
-                    if object_value_is_voxel(v) {
-                        !object_value_is_air(v)
-                    } else if fills.is_some_and(|s| s[k as usize / 64] >> (k % 64) & 1 != 0) {
-                        true
-                    } else {
-                        made(((cz * n + z) as f64 + 0.5) * fine)
+                    match object_value_is_voxel(v) {
+                        true => !object_value_is_air(v),
+                        false => made(((cz * n + z) as f64 + 0.5) * fine),
                     }
                 })
             };

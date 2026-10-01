@@ -6,5 +6,4 @@
 //! picker's preview all draw through it.
 
 pub mod asset;
-pub mod occupancy;
 pub mod store;

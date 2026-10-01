@@ -78,9 +78,9 @@ struct Puck {
     last_known_center_z: Option<f64>,
     /// The zone as last written: its center, and what it was grounded
     /// against (world/access.rs `support_revision`). A zone sample can reach
-    /// a page not yet loaded; a page arriving, an object placed or carved, or
-    /// decor arriving grounds it again.
-    zone_for: Option<(V3, [u32; 3])>,
+    /// a page not yet loaded; a page arriving, or an object placed or carved,
+    /// grounds it again.
+    zone_for: Option<(V3, [u32; 2])>,
     beacon_for: Option<([f64; 2], bool)>,
     shown: bool,
 }

@@ -516,11 +516,6 @@ impl<'s> DecorBuild<'s> {
         Ok(())
     }
 
-    /// Each instance with the group it is drawn in.
-    pub(crate) fn each(&self) -> impl Iterator<Item = (usize, &Instance)> {
-        self.scratch.groups.iter().map(|&g| g as usize).zip(&self.scratch.instances)
-    }
-
     /// The instances the block holds.
     pub fn instances(&self) -> usize {
         self.scratch.instances.len()

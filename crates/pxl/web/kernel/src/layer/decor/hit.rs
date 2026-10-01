@@ -99,7 +99,7 @@ struct DecorHit {
 
 /// The model each decor group is drawn with, in group order, none while it
 /// loads.
-pub(crate) fn group_models() -> impl Iterator<Item = Option<u32>> {
+fn group_models() -> impl Iterator<Item = Option<u32>> {
     decor_bundle_assets().iter().flat_map(|e| e.models.iter().copied())
 }
 

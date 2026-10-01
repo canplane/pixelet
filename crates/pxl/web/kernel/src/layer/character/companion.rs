@@ -123,7 +123,7 @@ struct Surface {
     x: f64,
     y: f64,
     origin: Option<IVec>,
-    revision: [u32; 3],
+    revision: [u32; 2],
     z: Option<f64>,
 }
 
@@ -170,7 +170,7 @@ impl Walker {
                 x: f64::NAN,
                 y: f64::NAN,
                 origin: None,
-                revision: [u32::MAX; 3],
+                revision: [u32::MAX; 2],
                 z: None,
             },
         }
