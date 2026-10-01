@@ -22,8 +22,10 @@ const root = path.resolve(__dirname, "../..");
  * and all. The table refuses an enum it cannot inline; `inlineEnums` below
  * does the rest.
  */
-const { readEnums, stale: staleIn } = require(path.join(root, "apps/web/script/const-enum.cjs"));
-const { exported: EXPORTED, local: LOCAL } = readEnums([path.join(root, "apps/web/src"), path.join(root, "packages"), path.join(root, "apps/native/src")]);
+const { readEnums, enumAt, stale: staleIn } = require(path.join(root, "apps/web/script/const-enum.cjs"));
+const TABLE = readEnums([path.join(root, "apps/web/src"), path.join(root, "packages"), path.join(root, "apps/native/src")]);
+const { exported: EXPORTED, local: LOCAL } = TABLE;
+
 
 /** The table is read once, when Metro loads this file, so an enum or a member
  * added since — a spec regenerated under a running Metro — is not in it. Left
@@ -46,11 +48,11 @@ const inlineEnums = ({ types: t }) => ({
       // of the file's own is found by its name.
       const binding = p.scope.getBinding(object.name);
       const members = !binding
-        ? state.own.get(object.name) ?? EXPORTED.get(object.name)
+        ? state.own.get(object.name)
         : state.declared.has(binding.identifier)
         ? state.declared.get(binding.identifier)
         : binding.path.isImportSpecifier()
-        ? EXPORTED.get(object.name)
+        ? state.imports.get(object.name)
         : undefined;
       if (!members) return;
       if (!members.has(property.name)) throw p.buildCodeFrameError(stale(`${object.name}.${property.name}`));
@@ -74,16 +76,25 @@ const inlineEnums = ({ types: t }) => ({
       // uses below it, and a struck path answers no question about itself.
       enter(p, state) {
         state.declared = new Map();
-        const own = LOCAL.get(state.filename) ?? new Map();
+        const local = LOCAL.get(state.filename) ?? new Map();
+        const exported = EXPORTED.get(state.filename) ?? new Map();
         p.traverse({
           TSEnumDeclaration(d) {
             if (!d.node.const) return;
-            const members = d.parentPath.isExportNamedDeclaration() ? EXPORTED.get(d.node.id.name) : own.get(d.node.id.name);
+            const members = (d.parentPath.isExportNamedDeclaration() ? exported : local).get(d.node.id.name);
             if (members) state.declared.set(d.node.id, members);
           },
         });
         state.own = new Map([...state.declared].map(([id, members]) => [id.name, members]));
-        state.names = new Set([...EXPORTED.keys(), ...state.own.keys()]);
+        // Every import that names a const enum, by its local name.
+        state.imports = new Map();
+        p.traverse({
+          ImportSpecifier(s) {
+            const members = enumAt(TABLE, root, state.filename, s.parentPath.node.source.value, s.node.imported.name ?? s.node.imported.value);
+            if (members) state.imports.set(s.node.local.name, members);
+          },
+        });
+        state.names = new Set([...state.imports.keys(), ...state.own.keys()]);
       },
       exit(p, state) {
         p.traverse({

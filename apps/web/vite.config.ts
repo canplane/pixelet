@@ -14,7 +14,7 @@ import svgr from "vite-plugin-svgr";
 
 import { DEV_PROXY_ROUTES } from "./src/config/route.ts";
 
-const { DECL, readEnums, literal, stale } = createRequire(import.meta.url)("./script/const-enum.cjs");
+const { DECL, readEnums, enumAt, literal, stale } = createRequire(import.meta.url)("./script/const-enum.cjs");
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -163,11 +163,9 @@ function buildStamp(): Plugin {
  * member added to one, is the same error, saying the server has to be
  * restarted.
  */
-function constEnum(roots: string[]): Plugin {
-  const { exported, local } = readEnums(roots) as {
-    exported: Map<string, Map<string, number | string>>;
-    local: Map<string, Map<string, Map<string, number | string>>>;
-  };
+function constEnum(roots: string[], root: string): Plugin {
+  type Members = Map<string, number | string>;
+  const table = readEnums(roots) as { exported: Map<string, Map<string, Members>>; local: Map<string, Map<string, Members>> };
   const restart = "restart the dev server";
 
   // An id can carry a query or a hash — `?worker`, and the `#deno` the Deno
@@ -176,7 +174,24 @@ function constEnum(roots: string[]): Plugin {
   // silent and asymmetric: the file holding the declaration is reached under
   // its plain path and loses it, while the importer keeps the name it can no
   // longer bind.
-  const sourceOf = (id: string) => id.split("?")[0].split("#")[0];
+  //
+  // The Deno resolver's virtual id names the file last, after `::`
+  // (`\0deno::TypeScript::file:///…::/…/x.ts`), and an import is resolved
+  // against the file itself, so that is what is kept.
+  const sourceOf = (id: string) => {
+    const plain = id.split("?")[0].split("#")[0];
+    return plain.slice(plain.lastIndexOf("::") + (plain.includes("::") ? 2 : 0)).replace(/^\0/, "").replace(/^file:\/\//, "");
+  };
+  const IMPORT = /import\s*(?:type\s+)?\{([^}]*)\}\s*from\s*(['"][^'"]+['"])\s*;?/g;
+  const items = (clause: string) =>
+    clause
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((s) => {
+        const [orig, as] = s.replace(/^type\s+/, "").split(/\s+as\s+/);
+        return { item: s, orig, local: as ?? orig };
+      });
 
   return {
     name: "const-enum",
@@ -185,37 +200,44 @@ function constEnum(roots: string[]): Plugin {
     transform(code, id) {
       const file = sourceOf(id);
       if (!/\.tsx?$/.test(file) || id.includes("node_modules")) return null;
-      const own = local.get(path.resolve(file)) ?? new Map<string, Map<string, number | string>>();
+      const at = path.resolve(file);
       for (const [, isExported, name] of code.matchAll(DECL)) {
-        if (isExported ? !exported.has(name) : !own.has(name)) throw new Error(`${stale(`const enum ${name}`, restart)} (${id})`);
+        if (!(isExported ? table.exported : table.local).get(at)?.has(name)) throw new Error(`${stale(`const enum ${name}`, restart)} (${id})`);
+      }
+      // What each name in the file is: its own enums, and every enum an
+      // import clause names, followed to the file that declares it — so an
+      // alias is the enum it aliases, and two files' `Command` are two.
+      const bound = new Map<string, Members>([...(table.local.get(at) ?? []), ...(table.exported.get(at) ?? [])]);
+      const imported = new Set<string>();
+      for (const [, clause, from] of code.matchAll(IMPORT)) {
+        for (const { orig, local } of items(clause)) {
+          const members = enumAt(table, root, at, from.slice(1, -1), orig) as Members | null;
+          if (members) {
+            bound.set(local, members);
+            imported.add(local);
+          }
+        }
       }
       let out = code;
       const struck: string[] = [];
-      const inline = (name: string, members: Map<string, number | string>) => {
+      for (const [name, members] of bound) {
+        if (!out.includes(name)) continue;
         // Whole names only: a member that is a prefix of another — a table
         // read before SENSOR_ENABLE became SENSOR_ENABLE_LOCATION — would
         // otherwise leave `7444_LOCATION` for the parser instead of a name
         // the stale check below can say.
         out = out.replace(new RegExp(`\\b${name}\\.(\\w+)\\b`, "g"), (whole, key: string) => (members.has(key) ? literal(members.get(key)) : whole));
         struck.push(name);
-      };
-      // A file's own enum first: its name is the file's, whatever another
-      // file exports under it.
-      for (const [name, members] of own) inline(name, members);
-      for (const [name, members] of exported) {
-        if (!own.has(name) && out.includes(name)) inline(name, members);
       }
       if (!struck.length) return null;
       out = out.replace(DECL, "");
-      // The name is gone from the module that had it, so it has to go from
-      // every clause that imported it too, or the bundler is left binding an
+      // An enum's name is gone from what it was bound to, so it goes from
+      // the clause that imported it too, or the bundler is left binding an
       // export nobody declares.
-      out = out.replace(/import\s*\{([^}]*)\}\s*from\s*(['"][^'"]+['"])\s*;?/g, (whole, clause: string, from: string) => {
-        const kept = clause
-          .split(",")
-          .map((s) => s.trim())
-          .filter((s) => s && !struck.includes(s.replace(/^type\s+/, "")));
-        if (kept.length === clause.split(",").map((s) => s.trim()).filter(Boolean).length) return whole;
+      out = out.replace(IMPORT, (whole, clause: string, from: string) => {
+        const all = items(clause);
+        const kept = all.filter((i) => !imported.has(i.local)).map((i) => i.item);
+        if (kept.length === all.length) return whole;
         return kept.length ? `import { ${kept.join(", ")} } from ${from};` : "";
       });
       for (const name of struck) {
@@ -405,7 +427,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       buildStamp(),
       remoteConsole(),
-      constEnum([path.resolve(__dirname, "src"), path.resolve(__dirname, "..", "..", "packages")]),
+      constEnum([path.resolve(__dirname, "src"), path.resolve(__dirname, "..", "..", "packages")], path.resolve(__dirname, "..", "..")),
       deno(),
       react(),
       svgr({ svgrOptions: { titleProp: true } }), // SVGR

@@ -12,12 +12,12 @@
  * front, here, and each bundler only replaces a use with its value and
  * strikes the declaration.
  *
- * Nothing is left alone. An enum that is not const, a member whose value is
- * not a plain literal or arithmetic over literals, two exported enums under
- * one name — each is an error here, before either bundler runs, since any of
- * them would put a name in a bundle as a string or bind a use to the wrong
- * value. An enum that is not exported is its file's alone and is replaced in
- * that file only.
+ * Nothing is left alone. An enum that is not const, or a member whose value
+ * is not a plain literal or arithmetic over literals, is an error here,
+ * before either bundler runs, since either would put a name in a bundle as a
+ * string. A use is the enum its import names, followed to the file that
+ * declares it, so two files exporting one name are two enums. An enum that is
+ * not exported is its file's alone and is replaced in that file only.
  *
  * CommonJS, because Metro requires the Babel config that reads this.
  */
@@ -53,13 +53,14 @@ function membersOf(body, where) {
 }
 
 /**
- * Every const enum under `roots`: `exported` by name, the ones a file keeps
- * to itself in `local` by the file's path and then by name. Tests are not
- * bundled and are not read.
+ * Every const enum under `roots`, by the file that declares it: `exported`
+ * and `local` each by the file's path and then by name. Two files may export
+ * one name — xpute's command table and pixelet's both export `Command` — so a
+ * use is found through its import, never by its name alone (`enumAt`). Tests
+ * are not bundled and are not read.
  */
 function readEnums(roots) {
   const exported = new Map();
-  const declaredIn = new Map();
   const local = new Map();
   const walk = (dir) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -74,22 +75,64 @@ function readEnums(roots) {
         throw new Error(`const-enum: ${full}: enum ${name} is not const, so a bundle would carry its members' names; declare it \`const enum\``);
       }
       for (const [, isExported, name, body] of src.matchAll(DECL)) {
-        const members = membersOf(body, `${full}: ${name}`);
-        if (!isExported) {
-          if (!local.has(full)) local.set(full, new Map());
-          local.get(full).set(name, members);
-          continue;
-        }
-        if (exported.has(name)) {
-          throw new Error(`const-enum: enum ${name} is exported from both ${declaredIn.get(name)} and ${full}; a use is replaced by name, so one name is one enum`);
-        }
-        exported.set(name, members);
-        declaredIn.set(name, full);
+        const by = isExported ? exported : local;
+        if (!by.has(full)) by.set(full, new Map());
+        by.get(full).set(name, membersOf(body, `${full}: ${name}`));
       }
     }
   };
   for (const root of roots) walk(root);
   return { exported, local };
+}
+
+/** The import map's prefixes, as the page's deno.jsonc and Metro's config
+ * name them. */
+function aliases(root) {
+  return [
+    ["@/", path.join(root, "apps/web/src/")],
+    ["@xpute/core/", path.join(root, "packages/xpute/core/src/")],
+    ["@xpute/runtime/", path.join(root, "packages/xpute/runtime/src/")],
+    ["@xpute/conformance/", path.join(root, "packages/xpute/conformance/src/")],
+  ];
+}
+
+/** The file `spec` names from `from`: relative to it, or through an alias;
+ * none for a package or a file that is not there. */
+function fileOf(from, spec, root) {
+  let base = null;
+  if (spec.startsWith(".")) base = path.resolve(path.dirname(from), spec);
+  for (const [prefix, dir] of aliases(root)) {
+    if (spec.startsWith(prefix)) base = dir + spec.slice(prefix.length);
+  }
+  if (base === null) return null;
+  for (const at of [base, base + ".ts", base + ".tsx", path.join(base, "index.ts")]) {
+    if (fs.existsSync(at) && fs.statSync(at).isFile()) return at;
+  }
+  return null;
+}
+
+/**
+ * The members of the enum a file `from` imports as `name` from `spec`, or
+ * none where that is no const enum: the file it names declares it, or
+ * passes it on, one `export { … } from` or `export * from` at a time.
+ */
+function enumAt(table, root, from, spec, name, depth = 0) {
+  const file = fileOf(from, spec, root);
+  if (file === null || depth > 8) return null;
+  const own = table.exported.get(file)?.get(name);
+  if (own) return own;
+  const src = fs.readFileSync(file, "utf8");
+  for (const [, clause, next] of src.matchAll(/export\s*\{([^}]*)\}\s*from\s*["']([^"']+)["']/g)) {
+    for (const item of clause.split(",").map((s) => s.trim()).filter(Boolean)) {
+      const [orig, as] = item.replace(/^type\s+/, "").split(/\s+as\s+/);
+      if ((as ?? orig) === name) return enumAt(table, root, file, next, orig, depth + 1);
+    }
+  }
+  for (const [, next] of src.matchAll(/export\s*\*\s*from\s*["']([^"']+)["']/g)) {
+    const found = enumAt(table, root, file, next, name, depth + 1);
+    if (found) return found;
+  }
+  return null;
 }
 
 /** A member's value as source text. */
@@ -103,4 +146,4 @@ function stale(what, restart) {
   return `const-enum: ${what} is not in the enum table read when the bundler started; the enums changed since, so ${restart}`;
 }
 
-module.exports = { DECL, readEnums, literal, stale };
+module.exports = { DECL, readEnums, enumAt, literal, stale };
