@@ -212,6 +212,30 @@ request arrives at one Worker. Both said less than the thing they displaced.
 Ask what the sentence would have to say if the fact changed. If the answer is
 "nothing" — the structure holds either way — the fact was never the point.
 
+## A fact the code holds is not kept by hand
+
+A document that states what the code derives — a value generated from
+`spec/`, a path, a name, a size, a count, an offset — must not become a
+second place that fact is kept. One day here set the memory map's numbers by
+hand twice, and a third change was already coming; a sweep found functions
+cited under paths that stayed after the functions were renamed.
+
+So a derived fact goes where a check already reaches it: a value from
+`spec/` is generated, a path and a name cited right after it
+(`world/access.rs` `first_hit`) are held by `check:rules`, and a table of
+sizes is held by a test of the code it comes from, which prints the rows it
+expects (`pxl-kernel mem/fixed.test.rs`). Before adding a table of numbers
+or a citation, ask whether an existing check can hold it, and cite in the
+form it reads. A new mechanism is built only for drift that has recurred,
+and as far as it recurred.
+
+What a check cannot hold is not generated either: who owns what, what a
+failure means, where an abstraction ends, why the structure is what it is
+and what decided it. Those are explanations, kept by a person who reads
+them. A check or a generator only stops a document contradicting a fact the
+code already has; it never defines the meaning or the contract the document
+is there to state.
+
 ## Symmetry is not a reason
 
 Every rule above pushes toward consistency, and applied without judgment that
