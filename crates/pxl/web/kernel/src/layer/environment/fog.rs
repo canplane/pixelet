@@ -2,39 +2,27 @@
 
 //! How far the view reaches, and the clip planes set from it.
 //!
-//! On a planet the ground ends twice and the nearer end wins. It turns away
-//! at the **horizon**, `√(2Rh + h²)` from a camera `h` above it, which the
-//! height alone sets and the tilt does not. Before that it loses its contrast
-//! in the air: the aerosol near the ground (pxl-render look/atmosphere.rs)
-//! takes a surface down to the sky's own light over the **visual range**, and
-//! past that there is nothing left to draw.
-//!
-//! Which of the two is nearer changes with height, and both move out with
-//! it. Standing on the ground the horizon is a few kilometers and the air is
-//! clear well past it, so the planet ends the ground; from a few hundred
-//! meters up the horizon has run past the visual range and the haze ends it;
-//! from orbit the layer is one crossing however far the eye looks, the air
-//! sees through it, and the planet ends the ground again.
-//!
-//! What stood here before was a render distance: a constant scaled with the
-//! zoom, with the band that hid the drawn edge following it. Both are now
-//! read off the reach, so the ground ends where the world says rather than
-//! where a number was tuned
-//! (issue/20260923-the-ground-runs-to-the-horizon.md).
+//! The ground ends twice and the nearer end wins. The planet turns it away at
+//! the **horizon**, `√(2Rh + h²)` from a camera `h` above it, which the height
+//! alone sets and the tilt does not. And the view stops drawing it: past the
+//! ground under the eye, or z16's split distance where that is nearer, a
+//! view draws `param::VIEW_LEVELS` levels and no more, a level a doubling of
+//! distance, so what a view costs is set by that count at any height rather
+//! than by how far the planet lets it see. The fog is laid over the second
+//! end as a sphere about the eye: it says where drawing stops, and does not
+//! stand for the air (issue/20260923-the-ground-runs-to-the-horizon.md says
+//! how the reach was the air's before).
 
-use pxl_render::look::atmosphere::{HAZE_EXTINCTION, HAZE_SCALE_HEIGHT_KM};
+use pxl_spec::space::lod::split_distance;
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 
 use crate::control::camera::config::camera_cfg;
 use crate::layer::environment::config::render_cfg;
-use crate::layer::environment::state::{globe, km_per_u};
+use crate::layer::environment::state::globe;
+use crate::param;
 use crate::world::access::{Access, FINEST};
 use crate::world::observation::eye;
-
-/// The optical depth at which a surface's contrast against the horizon sky is
-/// gone: `ln(1/0.02)`, the 2% the visual range is defined by (Koschmieder).
-const CONTRAST_GONE: f64 = 3.912;
 
 /// Where the planet turns away, seen from `height` above it.
 pub fn horizon_at(height: f64) -> f64 {
@@ -42,21 +30,11 @@ pub fn horizon_at(height: f64) -> f64 {
     (2.0 * r * height + height * height).sqrt()
 }
 
-/// Where the haze has taken the ground, seen from `height` above it: the
-/// distance whose slant through the aerosol carries CONTRAST_GONE.
-///
-/// The aerosol is mixed through a layer HAZE_SCALE_HEIGHT_KM deep, so a ray
-/// from `h` down to the ground averages `H(1 − e^(−h/H))/h` of the surface
-/// density over its length — the layer's integral along a straight line. A
-/// camera in the layer sees the whole density and a camera above it crosses
-/// the layer once however far it looks, which is why this grows with height
-/// until the horizon overtakes it.
-pub fn haze_reach_at(height: f64) -> f64 {
-    let km_per_u = km_per_u();
-    let h = (height * km_per_u).max(1e-9);
-    let scale = HAZE_SCALE_HEIGHT_KM;
-    let share = scale * (1.0 - (-h / scale).exp()) / h;
-    CONTRAST_GONE / (HAZE_EXTINCTION * share) / km_per_u
+/// Where the view stops drawing, seen from `height` over the ground:
+/// `VIEW_LEVELS` doublings past the nearer of the ground under the eye and
+/// z16's split distance, where the finest level ends.
+pub fn levels_reach_at(height: f64) -> f64 {
+    height.max(split_distance(0)) * f64::from(1u32 << param::VIEW_LEVELS)
 }
 
 /// Nothing is drawn nearer than this, whatever the two ends say: the camera
@@ -64,9 +42,9 @@ pub fn haze_reach_at(height: f64) -> f64 {
 /// feet and a view along it would hold nothing at all.
 const NEAREST_REACH: f64 = 1024.0;
 
-/// How far the ground is worth drawing from `height` above it.
+/// How far the ground is drawn from `height` above it.
 pub fn reach_at(height: f64) -> f64 {
-    horizon_at(height).min(haze_reach_at(height)).max(NEAREST_REACH)
+    horizon_at(height).min(levels_reach_at(height)).max(NEAREST_REACH)
 }
 
 /// How high the ground under a point stands over the datum the projection
@@ -112,12 +90,10 @@ fn scale(reach: f64) -> f64 {
 /// Where the ground is gone, and where it begins to fade: the band that
 /// hides the drawn edge.
 ///
-/// The ground ends at whichever comes first, the air and the planet or what
-/// the view draws, which runs to the pyramid top's reach
-/// (world/observation.rs `observation`): only from high enough that the
-/// planet's horizon is past that does the data run out before the air does,
-/// and the band is then a crossfade over the edge of what is drawn rather
-/// than over the reach.
+/// The ground ends at whichever comes first, the reach or what is drawn,
+/// which runs to the pyramid top's reach (world/observation.rs
+/// `observation`): where the data runs out before the reach does, the band
+/// is a crossfade over the edge of what is drawn rather than over the reach.
 pub fn band_at(height: f64, drawn: f64) -> (f64, f64) {
     let far = reach_at(height).min(drawn);
     (far * (render_cfg::FOG_NEAR / render_cfg::FOG_FAR), far)
