@@ -38,6 +38,13 @@ pub const SLOT_BYTES: u32 = 256;
 /// The stream's range, its END word first.
 pub const STREAM_WORDS: u32 = 256;
 
+/// The system calls' stream: OPEN and CLOSE are recorded there, and nothing runs them.
+pub const SYS_WORDS: u32 = 64;
+
+/// The guest's heap, in its own range: what its file table holds lies there, since the
+/// memory a host hands a module never grows and a guest takes nothing it was not given.
+pub const HEAP_BYTES: u32 = 65536;
+
 /// Slots in the guest's handle table, slot 0 never handed out.
 pub const HANDLES: u32 = 16;
 
@@ -51,28 +58,35 @@ pub mod key {
     pub const KEYS: &[&str] = &["STREAM"];
 }
 
-/// The commands, `major << 8 | minor`. A packet, where one is taken, is a branch whose
-/// first child is a number.
+/// The commands, `major << 8 | minor`, on the majors a program numbers its own from
+/// (xpute's PROGRAM_MAJOR and up), so none is one of xpute's — SYS_OPENED among them. A
+/// packet, where one is taken, is a branch whose first child is a number.
 pub mod cmd {
     /// Succeeds; replies 0.
-    pub const OK: u32 = 257;
+    pub const OK: u32 = 4097;
     /// Fails with EINVAL.
-    pub const FAIL: u32 = 258;
+    pub const FAIL: u32 = 4098;
     /// Raises the packet's number of SIGNALs, tagged 0 up, then replies with that number.
-    pub const RAISE: u32 = 259;
+    pub const RAISE: u32 = 4099;
     /// Writes one record to the stream, its op the packet's number and no words; replies 0.
-    pub const RECORD: u32 = 260;
+    pub const RECORD: u32 = 4100;
     /// Takes a handle from the guest's table and replies with it.
-    pub const ISSUE: u32 = 261;
+    pub const ISSUE: u32 = 4101;
     /// Gives back the packet's handle; fails with EBADF for one that is not live.
-    pub const RELEASE: u32 = 262;
+    pub const RELEASE: u32 = 4102;
     /// Replies 0 for a live handle; fails with EBADF for any other, 0 among them.
-    pub const USE: u32 = 263;
+    pub const USE: u32 = 4103;
     /// Reads the host's clock and keeps the reading; replies 0.
-    pub const MARK: u32 = 264;
+    pub const MARK: u32 = 4104;
     /// Reads the host's clock and replies with the whole milliseconds since the last MARK.
-    pub const SINCE: u32 = 265;
+    pub const SINCE: u32 = 4105;
+    /// Opens a file for the packet's number, its owner, and replies with the descriptor; the host's answer (SYS_OPENED) raises OPENED for that owner while the descriptor is open.
+    pub const OPEN: u32 = 4106;
+    /// Closes the packet's descriptor, answered or not; fails with EBADF for one not open.
+    pub const CLOSE: u32 = 4107;
     /// What RAISE raises.
-    pub const SIGNAL: u32 = 513;
-    pub const KEYS: &[&str] = &["OK", "FAIL", "RAISE", "RECORD", "ISSUE", "RELEASE", "USE", "MARK", "SINCE", "SIGNAL"];
+    pub const SIGNAL: u32 = 4353;
+    /// An open answered: tagged with its owner, its result the host's.
+    pub const OPENED: u32 = 4354;
+    pub const KEYS: &[&str] = &["OK", "FAIL", "RAISE", "RECORD", "ISSUE", "RELEASE", "USE", "MARK", "SINCE", "OPEN", "CLOSE", "SIGNAL", "OPENED"];
 }

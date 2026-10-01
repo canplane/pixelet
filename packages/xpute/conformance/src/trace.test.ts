@@ -27,6 +27,7 @@ import { fromFileUrl, join, resolve } from "@std/path";
 import { Golden } from "@xpute/core/golden.ts";
 import { encoder, TreeView } from "@xpute/core/wire/xtp/mod.ts";
 import { Errno } from "@xpute/core/status/errno.spec.ts";
+import { Command } from "@xpute/runtime/abi/cmd.spec.ts";
 import { handle_slot } from "@xpute/runtime/abi/handle.ts";
 import { Directory } from "@xpute/runtime/ipc/directory.ts";
 import { key as directory_key } from "@xpute/runtime/ipc/directory.spec.ts";
@@ -159,8 +160,9 @@ class Host {
     this.stream_at = this.directory.get(key.STREAM);
   }
 
-  submit(tag: number, command: number, ack: boolean, arg: number | undefined): void {
-    const packet = arg === undefined ? null : encoder.encode(new TreeView().branch((b) => b.u32(arg)));
+  /** A message whose packet, where it has numbers, is a branch of them. */
+  submit(tag: number, command: number, ack: boolean, args: number[]): void {
+    const packet = args.length === 0 ? null : encoder.encode(new TreeView().branch((b) => args.forEach((a) => b.u32(a))));
     assertEquals(this.sq.push(tag, command, ack ? FrameFlag.ACKREQ : 0, packet), Errno.OK);
   }
 
@@ -195,7 +197,8 @@ function key_number(name: string): number {
   return keys[name];
 }
 
-const CMD_NAMES = Object.entries(cmd).filter(([, v]) => typeof v === "number") as [string, number][];
+/** The fixture's commands, and xpute's own the host answers a guest with. */
+const CMD_NAMES = [...Object.entries(cmd).filter(([, v]) => typeof v === "number"), ["SYS_OPENED", Command.SYS_OPENED]] as [string, number][];
 
 function cmd_number(name: string): number {
   const found = CMD_NAMES.find(([n]) => n === name);
@@ -304,7 +307,7 @@ function run(g: Golden, guest: string, opener: Opener, trace: string): void {
     const step = g.s(`${trace}.step.${i}`).split(" ");
     switch (step[0]) {
       case "submit":
-        host.submit(Number(step[1]), cmd_number(step[2]), step[3] === "ack", step[4] === undefined ? undefined : value(step[4], vars));
+        host.submit(Number(step[1]), cmd_number(step[2]), step[3] === "ack", step.slice(4).map((t) => value(t, vars)));
         break;
       case "ring": {
         // A turn is held to the trace as soon as it is seen, so the results
@@ -349,7 +352,7 @@ function run(g: Golden, guest: string, opener: Opener, trace: string): void {
   if (g.has(at("directory.reserved"))) assertEquals(host.reserved, g.u32(at("directory.reserved")), `${name}: the directory's reserved word`);
 }
 
-for (const trace of ["directory", "door", "handle", "clock"]) {
+for (const trace of ["directory", "door", "handle", "clock", "file"]) {
   for (const [guest, open] of Object.entries(GUESTS)) {
     Deno.test(`trace ${trace} - the ${guest} guest`, async () => {
       const g = await Golden.load(`conformance/${trace}.tsv`);

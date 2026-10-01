@@ -3,19 +3,25 @@
 #include "guest.hpp"
 
 #include <array>
+#include <bit>
+#include <cstddef>
 #include <new>
 #include <optional>
 #include <span>
 
+#include "../core/alloc/slab.hpp"
 #include "../core/math/scalar.hpp"
 #include "../core/status/bug.hpp"
 #include "../core/status/errno.spec.hpp"
 #include "../core/wire/xtp/cursor.hpp"
+#include "../runtime/abi/cmd.spec.hpp"
 #include "../runtime/abi/handle.hpp"
 #include "../runtime/ipc/directory.hpp"
 #include "../runtime/ipc/door.hpp"
+#include "../runtime/ipc/file.hpp"
 #include "../runtime/ipc/ring.hpp"
 #include "../runtime/ipc/stream.hpp"
+#include "../runtime/ipc/sys.hpp"
 #include "guest.spec.hpp"
 
 #ifdef __wasm__
@@ -48,21 +54,29 @@ constexpr std::uint32_t COMPLETION_DESC_AT = STREAM_AT + page_up(STREAM_WORDS * 
 constexpr std::uint32_t SUBMISSION_DESC_AT = COMPLETION_DESC_AT + page_up(Ring::bytes(COMPLETION_CAPACITY));
 constexpr std::uint32_t COMPLETION_SLOT_AT = SUBMISSION_DESC_AT + page_up(Ring::bytes(SUBMISSION_CAPACITY));
 constexpr std::uint32_t SUBMISSION_SLOT_AT = COMPLETION_SLOT_AT + COMPLETION_CAPACITY * SLOT_BYTES;
-constexpr std::uint32_t STATE_AT = SUBMISSION_SLOT_AT + SUBMISSION_CAPACITY * SLOT_BYTES;
+constexpr std::uint32_t SYS_AT = SUBMISSION_SLOT_AT + SUBMISSION_CAPACITY * SLOT_BYTES;
+constexpr std::uint32_t STATE_AT = page_up(SYS_AT + SYS_WORDS * 4);
 
 // What the guest keeps, made in its own memory.
 struct State {
     Door door;
     Stream stream;
+    Sys sys;
+    // The files OPEN opened, each for the owner its packet named.
+    Files<std::uint32_t> files;
     HandleTable<HANDLES> handles;
     xpute_conformance_now now;
     // The clock at the last MARK.
     double mark = 0;
 };
 
-static_assert(STATE_AT + sizeof(State) <= MEMORY_BYTES, "the ranges run past the memory");
+// The heap, past the state, on a page: a module's allocator over it, since
+// the memory never grows. A native build's is the process's.
+constexpr std::uint32_t HEAP_AT = page_up(STATE_AT + sizeof(State));
+
+static_assert(HEAP_AT + HEAP_BYTES <= MEMORY_BYTES, "the ranges run past the memory");
 static_assert(STATE_AT % alignof(State) == 0, "the state lies on its own alignment");
-static_assert(DIRECTORY_AT + directory_words(3) * 4 <= STREAM_AT, "the directory runs into the stream");
+static_assert(DIRECTORY_AT + directory_words(4) * 4 <= STREAM_AT, "the directory runs into the stream");
 
 State &state_of(Memory m, std::uint32_t range) {
     return *std::launder(reinterpret_cast<State *>(m.at(range + STATE_AT)));
@@ -85,7 +99,13 @@ Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> packet)
     // The commands that take a number read it first; one without a packet,
     // or with one that does not read, fails as a bad message.
     std::uint32_t arg = 0;
-    if (cmd == cmd::RAISE || cmd == cmd::RECORD || cmd == cmd::RELEASE || cmd == cmd::USE) {
+    if (cmd == static_cast<std::uint32_t>(abi::Command::SYS_OPENED)) {
+        Result<abi::SysOpened> answer = abi::SysOpened::read(packet);
+        if (!answer) return {.error = answer.error().code};
+        if (const std::uint32_t *owner = s.files.owner(answer->fd)) s.door.post(*owner, cmd::OPENED, 0, answer->res);
+        return {};
+    }
+    if (cmd == cmd::RAISE || cmd == cmd::RECORD || cmd == cmd::RELEASE || cmd == cmd::USE || cmd == cmd::OPEN || cmd == cmd::CLOSE) {
         std::optional<std::uint32_t> n = first_u32(packet);
         if (!n) return {.error = Errno::ebadmsg};
         arg = *n;
@@ -114,6 +134,10 @@ Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> packet)
     case cmd::MARK:
         s.mark = s.now();
         return {};
+    case cmd::OPEN:
+        return {.value = static_cast<std::int32_t>(s.files.open(s.sys, 1, "f", arg))};
+    case cmd::CLOSE:
+        return s.files.close(s.sys, arg) ? Applied{} : Applied{.error = Errno::ebadf};
     case cmd::SINCE: {
         double since = s.now() - s.mark;
         return {.value = static_cast<std::int32_t>(round(since))};
@@ -130,11 +154,13 @@ std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now) {
     // A command leaves at most its signals and its reply.
     Door door(Ring::init(m, range + SUBMISSION_DESC_AT, SUBMISSION_CAPACITY, range + SUBMISSION_SLOT_AT, SLOT_BYTES),
               Ring::init(m, range + COMPLETION_DESC_AT, COMPLETION_CAPACITY, range + COMPLETION_SLOT_AT, SLOT_BYTES), MOST_RAISE + 1);
-    new (m.at(range + STATE_AT)) State{.door = door, .stream = Stream(m, range + STREAM_AT, STREAM_WORDS), .handles = {}, .now = now};
-    const std::array<Entry, 3> entries{{
+    new (m.at(range + STATE_AT)) State{
+        .door = door, .stream = Stream(m, range + STREAM_AT, STREAM_WORDS), .sys = Sys(m, range + SYS_AT, SYS_WORDS), .files = {}, .handles = {}, .now = now};
+    const std::array<Entry, 4> entries{{
         {directory::key::SUBMISSION, range + SUBMISSION_DESC_AT},
         {directory::key::COMPLETION, range + COMPLETION_DESC_AT},
         {key::STREAM, range + STREAM_AT},
+        {directory::key::SYS, range + SYS_AT},
     }};
     write_directory(m, range + DIRECTORY_AT, entries);
     return range + DIRECTORY_AT;
@@ -142,8 +168,10 @@ std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now) {
 
 double interrupt(Memory m, std::uint32_t range) {
     State &s = state_of(m, range);
+    s.sys.rise();
     s.door.drain([&s](std::uint32_t cmd, std::span<const std::uint8_t> packet) { return apply(s, cmd, packet); });
     s.stream.publish();
+    s.sys.fall();
     return s.door.pending() ? 0.0 : -1.0;
 }
 
@@ -170,27 +198,50 @@ using namespace xpute::conformance;
 
 #ifdef __wasm__
 
-// This guest keeps nothing on a heap, so it has none: an allocation is a
-// bug, and the library's own allocator — whose failure path prints through
-// WASI — is never linked. A guest with a heap replaces these over it
-// (runtime/mem/heap.hpp). Natively the operators stay the process's, which
-// the host's own code shares.
+// The guest's heap, over its own range: what a standard container it holds
+// allocates comes from there, as a guest's must, and the library's own
+// allocator — which grows a memory that never grows, and whose failure path
+// prints through WASI — is never linked. Natively the operators stay the
+// process's, which the host's own code shares.
+struct HeapRange {
+    static constexpr std::size_t MIN_LOG2 = 12;
+    static constexpr std::size_t MAX_LOG2 = std::countr_zero(HEAP_BYTES);
+    static std::uintptr_t base() noexcept { return range_at() + HEAP_AT; }
+    static std::uintptr_t end() noexcept { return base() + HEAP_BYTES; }
+};
+
+SlabMalloc<HeapRange> heap;
+
 void *operator new(std::size_t n) {
-    bug(Errno::enomem, n);
+    void *p = heap.alloc(n, alignof(std::max_align_t));
+    if (p == nullptr) bug(Errno::enomem, n);
+    return p;
 }
-void *operator new(std::size_t n, std::align_val_t) {
-    bug(Errno::enomem, n);
+void *operator new(std::size_t n, std::align_val_t a) {
+    void *p = heap.alloc(n, static_cast<std::size_t>(a));
+    if (p == nullptr) bug(Errno::enomem, n);
+    return p;
 }
-void *operator new(std::size_t, const std::nothrow_t &) noexcept {
-    return nullptr;
+void *operator new(std::size_t n, const std::nothrow_t &) noexcept {
+    return heap.alloc(n, alignof(std::max_align_t));
 }
-void *operator new(std::size_t, std::align_val_t, const std::nothrow_t &) noexcept {
-    return nullptr;
+void *operator new(std::size_t n, std::align_val_t a, const std::nothrow_t &) noexcept {
+    return heap.alloc(n, static_cast<std::size_t>(a));
 }
-void operator delete(void *) noexcept {}
-void operator delete(void *, std::size_t) noexcept {}
-void operator delete(void *, std::align_val_t) noexcept {}
-void operator delete(void *, std::size_t, std::align_val_t) noexcept {}
+void operator delete(void *p, std::size_t n) noexcept {
+    if (p != nullptr) heap.dealloc(p, n, alignof(std::max_align_t));
+}
+void operator delete(void *p, std::size_t n, std::align_val_t a) noexcept {
+    if (p != nullptr) heap.dealloc(p, n, static_cast<std::size_t>(a));
+}
+// Without its size a block cannot be given back to a slab, and the library
+// is built to say it.
+void operator delete(void *p) noexcept {
+    if (p != nullptr) bug(Errno::enotrecoverable);
+}
+void operator delete(void *p, std::align_val_t) noexcept {
+    if (p != nullptr) bug(Errno::enotrecoverable);
+}
 
 extern "C" std::uint32_t xpute_conformance_boot(void) {
     std::uint32_t range = range_at();

@@ -22,11 +22,14 @@ use xpute_core::math::scalar::round;
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::TreeReader;
+use xpute_runtime::abi::cmd::{Command, SysOpened};
 use xpute_runtime::abi::handle::HandleTable;
 use xpute_runtime::ipc::directory::{directory_words, spec::key, write_directory};
 use xpute_runtime::ipc::doorbell::{Applied, Door, DoorLayout, RingLayout};
+use xpute_runtime::ipc::file::Files;
 use xpute_runtime::ipc::ring::{ring_bytes, slots_bytes};
 use xpute_runtime::ipc::stream::Stream;
+use xpute_runtime::ipc::sys::Sys;
 use xpute_runtime::sched::quantum::NO_WAKE;
 
 use crate::spec;
@@ -39,26 +42,40 @@ const fn page_up(bytes: u32) -> u32 {
 
 // Where this guest's ranges lie, from the start of its range: the
 // directory's page first, then each ring's descriptors, then their payloads,
-// then the stream, then what the guest keeps.
+// then the stream, then the system calls' stream, then what the guest keeps,
+// then its heap.
 const DIRECTORY_AT: u32 = 0;
 const SUBMISSION_DESC_AT: u32 = PAGE;
 const COMPLETION_DESC_AT: u32 = SUBMISSION_DESC_AT + page_up(ring_bytes(spec::SUBMISSION_CAPACITY));
 const SUBMISSION_SLOT_AT: u32 = COMPLETION_DESC_AT + page_up(ring_bytes(spec::COMPLETION_CAPACITY));
 const COMPLETION_SLOT_AT: u32 = SUBMISSION_SLOT_AT + slots_bytes(spec::SUBMISSION_CAPACITY, spec::SLOT_BYTES);
 const STREAM_AT: u32 = COMPLETION_SLOT_AT + slots_bytes(spec::COMPLETION_CAPACITY, spec::SLOT_BYTES);
-const STATE_AT: u32 = page_up(STREAM_AT + spec::STREAM_WORDS * 4);
+const SYS_AT: u32 = STREAM_AT + spec::STREAM_WORDS * 4;
+const STATE_AT: u32 = page_up(SYS_AT + spec::SYS_WORDS * 4);
 
-const _: () = assert!(STATE_AT as usize + core::mem::size_of::<Guest>() <= spec::MEMORY_BYTES as usize, "the ranges run past the memory");
+/// The heap, past the state, on a page: a module's allocator over it, since
+/// the memory never grows. A native build's is the process's.
+const HEAP_AT: u32 = page_up(STATE_AT + core::mem::size_of::<Guest>() as u32);
+
+const _: () = assert!(HEAP_AT as usize + spec::HEAP_BYTES as usize <= spec::MEMORY_BYTES as usize, "the ranges run past the memory");
 const _: () = assert!((STATE_AT as usize).is_multiple_of(core::mem::align_of::<Guest>()), "the state lies on its own alignment");
-const _: () = assert!(directory_words(3) as u32 * 4 <= PAGE, "the directory outgrows its page");
+const _: () = assert!(directory_words(4) as u32 * 4 <= PAGE, "the directory outgrows its page");
 
 /// The host's clock, as the host hands it over.
 pub type Now = extern "C" fn() -> f64;
 
-/// What the guest keeps, made in its own memory.
+/// What the guest keeps, made in its own memory: its door, and what the
+/// commands it applies act on.
 struct Guest {
     door: Door,
+    state: State,
+}
+
+struct State {
     stream: Stream,
+    sys: Sys,
+    /// The files OPEN opened, each for the owner its packet named.
+    files: Files<u32>,
     handles: HandleTable<{ spec::HANDLES as usize }>,
     now: Now,
     /// The clock at the last MARK.
@@ -93,11 +110,12 @@ unsafe fn boot(mem: *mut u8, range: u32, now: Now) -> u32 {
         },
     };
     // SAFETY: the caller's memory; the ranges are the layout's.
-    let (door, stream, directory) = unsafe {
+    let (door, stream, sys, directory) = unsafe {
         (
             Door::init(mem, &layout, |_, _| {}),
             Stream::new(core::slice::from_raw_parts_mut(at::<u32>(mem, range + STREAM_AT), spec::STREAM_WORDS as usize), 1),
-            core::slice::from_raw_parts_mut(at::<u32>(mem, range + DIRECTORY_AT), directory_words(3)),
+            Sys::new(core::slice::from_raw_parts_mut(at::<u32>(mem, range + SYS_AT), spec::SYS_WORDS as usize)),
+            core::slice::from_raw_parts_mut(at::<u32>(mem, range + DIRECTORY_AT), directory_words(4)),
         )
     };
     write_directory(
@@ -106,14 +124,19 @@ unsafe fn boot(mem: *mut u8, range: u32, now: Now) -> u32 {
             (key::SUBMISSION, range + SUBMISSION_DESC_AT),
             (key::COMPLETION, range + COMPLETION_DESC_AT),
             (spec::key::STREAM, range + STREAM_AT),
+            (key::SYS, range + SYS_AT),
         ],
     );
     let guest = Guest {
         door,
-        stream,
-        handles: HandleTable::new(),
-        now,
-        mark: 0.0,
+        state: State {
+            stream,
+            sys,
+            files: Files::new(),
+            handles: HandleTable::new(),
+            now,
+            mark: 0.0,
+        },
     };
     // SAFETY: the state's range is the layout's, inside the memory and on
     // the state's alignment (the asserts above).
@@ -128,9 +151,11 @@ unsafe fn boot(mem: *mut u8, range: u32, now: Now) -> u32 {
 /// `boot` laid a guest out there.
 unsafe fn interrupt(mem: *mut u8, range: u32) -> f64 {
     // SAFETY: the state boot made, which nothing else holds while a turn runs.
-    let Guest { door, stream, handles, now, mark } = unsafe { &mut *at::<Guest>(mem, range + STATE_AT) };
-    door.drain(|cmd, pkt| apply(door, stream, handles, *now, mark, cmd, pkt));
-    stream.publish();
+    let Guest { door, state } = unsafe { &mut *at::<Guest>(mem, range + STATE_AT) };
+    state.sys.rise();
+    door.drain(|cmd, pkt| apply(door, state, cmd, pkt));
+    state.stream.publish();
+    state.sys.fall();
     if door.pending() {
         0.0
     } else {
@@ -166,6 +191,30 @@ pub unsafe extern "C" fn xpute_conformance_interrupt(mem: *mut u8, _quota_ms: f6
 #[cfg(target_arch = "wasm32")]
 mod module {
     use super::*;
+    use xpute_core::alloc::buddy_tree::Range;
+    use xpute_core::alloc::slab::SlabMalloc;
+
+    /// The heap's range in the guest's own.
+    struct Heap;
+
+    const HEAP_LOG2: usize = spec::HEAP_BYTES.trailing_zeros() as usize;
+    const SPLIT_BYTES: usize = (1 << (HEAP_LOG2 - 12)) / 8;
+
+    impl Range for Heap {
+        const MIN_LOG2: usize = 12;
+        const MAX_LOG2: usize = HEAP_LOG2;
+        type Split = [u8; SPLIT_BYTES];
+        const SPLIT_INIT: Self::Split = [0; SPLIT_BYTES];
+        fn base() -> usize {
+            (range_at() + HEAP_AT) as usize
+        }
+        fn end() -> usize {
+            Self::base() + spec::HEAP_BYTES as usize
+        }
+    }
+
+    #[global_allocator]
+    static ALLOC: SlabMalloc<Heap> = SlabMalloc::new();
 
     extern "C" {
         /// Where the linker stopped placing the module's stack and data.
@@ -213,7 +262,15 @@ mod module {
     }
 }
 
-fn apply(door: &Door, stream: &mut Stream, handles: &mut HandleTable<{ spec::HANDLES as usize }>, now: Now, mark: &mut f64, cmd: u32, pkt: &Option<&[u8]>) -> Applied {
+fn apply(door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u8]>) -> Applied {
+    let State {
+        stream,
+        sys,
+        files,
+        handles,
+        now,
+        mark,
+    } = state;
     let bad_handle = || MarshalError::new(Errno::EBADF);
     match cmd {
         spec::cmd::OK => Ok(Some(0)),
@@ -240,6 +297,15 @@ fn apply(door: &Door, stream: &mut Stream, handles: &mut HandleTable<{ spec::HAN
             Ok(Some(0))
         }
         spec::cmd::SINCE => Ok(Some(round(now() - *mark) as i32)),
+        spec::cmd::OPEN => Ok(Some(files.open(sys, 1, "f", arg(pkt)?) as i32)),
+        spec::cmd::CLOSE => files.close(sys, arg(pkt)?).map(|_| Some(0)).ok_or_else(bad_handle),
+        c if c == Command::SYS_OPENED as u32 => {
+            let answer = SysOpened::read(pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?)?;
+            if let Some(&owner) = files.owner(answer.fd) {
+                door.post(owner, spec::cmd::OPENED, 0, answer.res, None);
+            }
+            Ok(Some(0))
+        }
         _ => Ok(None),
     }
 }
