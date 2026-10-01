@@ -27,14 +27,14 @@
 
 import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { f64, u32, u64 } from "@xpute/core/abi/word.ts";
-import { Command, encode_fetch_done, FetchOutcome } from "@/kernel/abi/cmd.spec.ts";
+import { Command as XputeCommand, encode_fetch_done, FetchOutcome } from "@xpute/runtime/abi/cmd.spec.ts";
 import { FetchFail } from "@xpute/runtime/abi/fetch.spec.ts";
 import { PUBLISHED_TILES } from "@/config/deploy.ts";
 import { originGet } from "@platform/origin.ts";
 import { tileUrl } from "@/config/route.ts";
 import { BAKE_KINDS } from "@/config/published.spec.ts";
 import { CORE_DOORBELL } from "@/kernel/mem.ts";
-import { hold_body } from "@/kernel/module.ts";
+import { BODIES } from "@/kernel/module.ts";
 import { request_frame } from "@/kernel/sched.ts";
 
 /** Every read the scheduler started and the host has not settled, by the key
@@ -69,7 +69,7 @@ function packed(body: U8Array): boolean {
 
 /** Tells the kernel what became of the read it started under `key`. */
 function settle(key: u64, outcome: FetchOutcome, body: u32, body_bytes: u32, fail: FetchFail, detail: u32, net_ms: f64): void {
-  CORE_DOORBELL.send(0, Command.FETCH_DONE, encode_fetch_done({ key, outcome, body, body_bytes, fail, detail, net_ms }));
+  CORE_DOORBELL.send(0, XputeCommand.FETCH_DONE, encode_fetch_done({ key, outcome, body, body_bytes, fail, detail, net_ms }));
   request_frame();
 }
 
@@ -105,7 +105,7 @@ export async function run_fetch(key: u64, bake: number, name: string): Promise<v
       outcome = FetchOutcome.Error;
       fail = FetchFail.Decode;
     } else if (body.byteLength > 0) {
-      held = hold_body(body);
+      held = BODIES.hold(body);
       bytes = body.byteLength;
     }
   } catch (err) {

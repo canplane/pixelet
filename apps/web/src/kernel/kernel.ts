@@ -12,10 +12,11 @@
 
 import type { u32 } from "@xpute/core/abi/word.ts";
 import type { BranchCursor } from "@xpute/core/wire/xtp/mod.ts";
-import { Command, encode_world_boot, LoadKind, read_fetch_cancel, read_fetch_start, read_load_start, read_sensor_start, read_sensor_stop, read_world_snapshot, Sensor } from "@/kernel/abi/cmd.spec.ts";
+import { Command, encode_world_boot, LoadKind, read_load_start, read_sensor_start, read_sensor_stop, read_world_snapshot, Sensor } from "@/kernel/abi/cmd.spec.ts";
+import { Command as XputeCommand, read_fetch_cancel, read_fetch_start } from "@xpute/runtime/abi/cmd.spec.ts";
 import { storage } from "@/kernel/abi/host.spec.ts";
 import { stored } from "@/kernel/host.ts";
-import { hold_body } from "@/kernel/module.ts";
+import { BODIES } from "@/kernel/module.ts";
 import {
   geolocationStart,
   geolocationStop,
@@ -36,7 +37,7 @@ import { start_sched } from "@/kernel/sched.ts";
 import { kernel_snapshot, set_snapshot, subscribe_snapshot } from "@/kernel/snapshot.ts";
 import { keepSettings, storedSettings } from "@/feature/setting/store.ts";
 
-function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
+function on_signal(_tag: u32, cmd: Command | XputeCommand, f: BranchCursor | null): void {
   switch (cmd) {
     case Command.WORLD_SNAPSHOT: {
       // The packet is far past a ring frame, so the kernel names the block
@@ -56,12 +57,12 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
       if (read_sensor_stop(f!).sensor === Sensor.Geolocation) geolocationStop();
       else orientationRemove();
       return;
-    case Command.FETCH_START: {
-      const { key, bake, name } = read_fetch_start(f!);
+    case XputeCommand.FETCH_START: {
+      const { key, source: bake, name } = read_fetch_start(f!);
       void run_fetch(key, bake, name);
       return;
     }
-    case Command.FETCH_CANCEL:
+    case XputeCommand.FETCH_CANCEL:
       abort_fetch(read_fetch_cancel(f!).key);
       return;
     case Command.LOAD_START: {
@@ -78,7 +79,7 @@ function objects_body(): { objects: u32; objects_bytes: u32 } {
   const raw = stored(storage.OBJECTS);
   if (raw === null) return { objects: 0, objects_bytes: 0 };
   const bytes = new TextEncoder().encode(raw);
-  return { objects: hold_body(bytes), objects_bytes: bytes.byteLength };
+  return { objects: BODIES.hold(bytes), objects_bytes: bytes.byteLength };
 }
 
 /** Starts the kernel: the module, the turns it is given and who hears what

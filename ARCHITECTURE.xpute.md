@@ -28,7 +28,7 @@ The buddy is not ours: it was written for this same situation, a module handed o
 
 ## The message, and the rings that carry it
 
-Sharing a memory does not say what a request looks like. Every request and every answer in xpute is the same four words (`ipc/frame.rs`): who asked (`tag`), what is asked (`cmd` in the low 16 bits, flags in the high 16), what came back (`result`, a value or `-errno`), and where the packet is. A command number is two bytes, `major << 8 | minor` (`core abi/cmd`).
+Sharing a memory does not say what a request looks like. Every request and every answer in xpute is the same four words (`ipc/frame.rs`): who asked (`tag`), what is asked (`cmd` in the low 16 bits, flags in the high 16), what came back (`result`, a value or `-errno`), and where the packet is. A command number is two bytes, `major << 8 | minor` (`core abi/cmd`). The majors below `0x10` are xpute's, every program's commands — the rings' own test and a fetch's start, cancel and result (`runtime abi/cmd`) — and a program numbers its own from `0x10` in a table that names xpute's as its base, so no number is given out twice.
 
 Two of the flags in that high half decide what a message means. `ACKREQ` is set by whoever submits, and asks for an answer. `RES` is set by whoever completes, and says the message is an answer — to a call that asked for one, or to a call that failed. A completion without `RES` answers nothing: the guest raised it on its own, and whoever cares about it listens for it.
 
@@ -71,6 +71,8 @@ head…   op · n · n words   op · n · n words   …
 ```
 
 A record is an op the user numbers, a count, and that many words. Because the whole stream runs between two turns, a record can name memory for the host to write into, and the guest reads it on its next turn without being told it is there: the order is the acknowledgment. What a stream costs is its range, which bounds what one turn can ask for; a turn that asks for more has outgrown the range it was given, and the writer refuses the record rather than dropping it.
+
+Some of those calls are every program's: read bytes the host holds for the guest, write a file, report the invariant that stopped it. Those are xpute's **system calls** (`ipc/sys`), records in one stream the directory names, with numbers xpute gives them; a program's own calls go in the same stream, numbered past a PROGRAM bit, the way its directory keys are. The host's end runs xpute's and hands the program's to the program, so a guest asks for a file the same way whatever host it runs under.
 
 ---
 

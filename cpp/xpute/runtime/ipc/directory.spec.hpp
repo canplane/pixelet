@@ -48,6 +48,9 @@ inline constexpr std::uint32_t BATCH_FRAMES = 4u;
 // The quantum policy's settle time, in QUANTUM_SCALE of a millisecond.
 inline constexpr std::uint32_t SETTLE_MS = 5u;
 
+// Where the system-call stream's words begin (ipc/sys.json).
+inline constexpr std::uint32_t SYS = 6u;
+
 // The bit every key a program numbers for itself carries: xpute gives none of
 // them a meaning, and a host that is not the program's passes over them.
 inline constexpr std::uint32_t PROGRAM = 2147483648u;

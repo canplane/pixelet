@@ -21,23 +21,38 @@
     "`unknown` is the member a number it does not give out reads as; an enum",
     "without one refuses the packet."
   ],
+  "base": "spec/xpute/abi/cmd.json",
   "extern": [
     {
-      "name": "FetchFail",
-      "rs": "xpute_runtime::abi::fetch::FetchFail",
-      "ts": "@xpute/runtime/abi/fetch.spec.ts",
-      "unknown": "Shell",
-      "doc": ["A code this build does not know reads as one the host raised rather than as none."]
+      "name": "BakeKind",
+      "rs": "pxl_spec::bake::published::BakeKind",
+      "doc": [
+        "By its index in BAKE_KINDS (published.spec.ts)."
+      ]
     },
-    { "name": "BakeKind", "rs": "pxl_spec::bake::published::BakeKind", "doc": ["By its index in BAKE_KINDS (published.spec.ts)."] },
-    { "name": "SettingKey", "rs": "crate::shell::setting::schema_spec::SettingKey", "doc": ["A setting by its place in schema.json's SETTINGS, its row's `key`."] },
-    { "name": "CharacterGroup", "rs": "crate::layer::character::variant_spec::Group", "repr": "u8", "doc": ["variant.json's group, by its number."] },
+    {
+      "name": "SettingKey",
+      "rs": "crate::shell::setting::schema_spec::SettingKey",
+      "doc": [
+        "A setting by its place in schema.json's SETTINGS, its row's `key`."
+      ]
+    },
+    {
+      "name": "CharacterGroup",
+      "rs": "crate::layer::character::variant_spec::Group",
+      "repr": "u8",
+      "doc": [
+        "variant.json's group, by its number."
+      ]
+    },
     {
       "name": "GroundChannelKey",
       "rs": "pxl_spec::bake::format::GroundChannelKey",
       "ts": "@/catalog/cell/cube_type.spec.ts",
       "repr": "u8",
-      "doc": ["A ground channel by its identity (cube_type.json)."]
+      "doc": [
+        "A ground channel by its identity (cube_type.json)."
+      ]
     }
   ],
   "enums": [
@@ -49,300 +64,578 @@
       "format": "hex2",
       "entries": [
         {
-          "name": "NOP",
-          "value": 0
-        },
-        {
           "name": "WORLD",
-          "value": 27
+          "value": 16
         },
         {
           "name": "INPUT",
-          "value": 28
+          "value": 17
         },
         {
           "name": "SENSOR",
-          "value": 29
-        },
-        {
-          "name": "FETCH",
-          "value": 30
+          "value": 18
         },
         {
           "name": "LOAD",
-          "value": 31
+          "value": 19
         },
         {
           "name": "GPU",
-          "value": 32
+          "value": 20
         },
         {
           "name": "SURFACE",
-          "value": 33
+          "value": 21
         },
-        { "name": "SETTING", "value": 34 },
-        { "name": "CHAT", "value": 35 },
-        { "name": "PREVIEW", "value": 36 },
-        { "name": "PROFILER", "value": 37 }
+        {
+          "name": "SETTING",
+          "value": 22
+        },
+        {
+          "name": "CHAT",
+          "value": 23
+        },
+        {
+          "name": "PREVIEW",
+          "value": 24
+        },
+        {
+          "name": "PROFILER",
+          "value": 25
+        }
       ]
     },
     {
       "name": "WorldMinor",
-      "doc": ["The world's verbs."],
+      "doc": [
+        "The world's verbs."
+      ],
       "format": "hex2",
       "entries": [
-        { "name": "BOOT", "value": 1 },
-        { "name": "FRAME", "value": 3 },
-        { "name": "VISIBILITY", "value": 16 },
-        { "name": "SNAPSHOT", "value": 21 }
+        {
+          "name": "BOOT",
+          "value": 1
+        },
+        {
+          "name": "FRAME",
+          "value": 2
+        },
+        {
+          "name": "VISIBILITY",
+          "value": 3
+        },
+        {
+          "name": "SNAPSHOT",
+          "value": 4
+        }
       ]
     },
     {
       "name": "InputMinor",
-      "doc": ["The input's verbs: the canvas, the pointer, the map controls."],
+      "doc": [
+        "The input's verbs: the canvas, the pointer, the map controls."
+      ],
       "format": "hex2",
       "entries": [
-        { "name": "RECT", "value": 3 },
-        { "name": "POINTER", "value": 16 },
-        { "name": "WHEEL", "value": 17 },
-        { "name": "TRACKING", "value": 18 },
-        { "name": "VIEW", "value": 19 },
-        { "name": "RESET_DIST", "value": 20 },
-        { "name": "COMPASS_RESET", "value": 21 },
-        { "name": "GO_TO", "value": 22 }
+        {
+          "name": "RECT",
+          "value": 1
+        },
+        {
+          "name": "POINTER",
+          "value": 2
+        },
+        {
+          "name": "WHEEL",
+          "value": 3
+        },
+        {
+          "name": "TRACKING",
+          "value": 4
+        },
+        {
+          "name": "VIEW",
+          "value": 5
+        },
+        {
+          "name": "RESET_DIST",
+          "value": 6
+        },
+        {
+          "name": "COMPASS_RESET",
+          "value": 7
+        },
+        {
+          "name": "GO_TO",
+          "value": 8
+        }
       ]
     },
     {
       "name": "SensorMinor",
-      "doc": ["The device sensors' verbs."],
+      "doc": [
+        "The device sensors' verbs."
+      ],
       "format": "hex2",
       "entries": [
-        { "name": "START", "value": 1 },
-        { "name": "POSITION", "value": 3 },
-        { "name": "STOP", "value": 4 },
-        { "name": "ERROR", "value": 16 },
-        { "name": "ORIENTATION", "value": 17 },
-        { "name": "PERMISSION", "value": 18 },
-        { "name": "ENABLE", "value": 20 },
-        { "name": "OPEN", "value": 21 },
-        { "name": "CLOSE", "value": 22 },
-        { "name": "ORIENTATION_LOST", "value": 23 }
-      ]
-    },
-    {
-      "name": "FetchMinor",
-      "doc": ["A fetch's verbs."],
-      "format": "hex2",
-      "entries": [
-        { "name": "START", "value": 1 },
-        { "name": "DONE", "value": 3 },
-        { "name": "CANCEL", "value": 4 }
+        {
+          "name": "START",
+          "value": 1
+        },
+        {
+          "name": "POSITION",
+          "value": 2
+        },
+        {
+          "name": "STOP",
+          "value": 3
+        },
+        {
+          "name": "ERROR",
+          "value": 4
+        },
+        {
+          "name": "ORIENTATION",
+          "value": 5
+        },
+        {
+          "name": "PERMISSION",
+          "value": 6
+        },
+        {
+          "name": "ENABLE_LOCATION",
+          "value": 7
+        },
+        {
+          "name": "OPEN",
+          "value": 8
+        },
+        {
+          "name": "CLOSE",
+          "value": 9
+        },
+        {
+          "name": "ORIENTATION_LOST",
+          "value": 10
+        }
       ]
     },
     {
       "name": "LoadMinor",
-      "doc": ["A load's verbs."],
+      "doc": [
+        "A load's verbs."
+      ],
       "format": "hex2",
       "entries": [
-        { "name": "START", "value": 1 },
-        { "name": "DONE", "value": 3 },
-        { "name": "FAILED", "value": 4 },
-        { "name": "IMAGE", "value": 16 }
+        {
+          "name": "START",
+          "value": 1
+        },
+        {
+          "name": "DONE",
+          "value": 2
+        },
+        {
+          "name": "FAILED",
+          "value": 3
+        },
+        {
+          "name": "IMAGE",
+          "value": 4
+        }
       ]
     },
     {
       "name": "GpuMinor",
-      "doc": ["The GPU's verbs."],
+      "doc": [
+        "The GPU's verbs."
+      ],
       "format": "hex2",
       "entries": [
-        { "name": "READY", "value": 1 },
-        { "name": "LOST", "value": 4 }
+        {
+          "name": "READY",
+          "value": 1
+        },
+        {
+          "name": "LOST",
+          "value": 2
+        }
       ]
     },
     {
       "name": "SurfaceMinor",
-      "doc": ["A surface's verbs."],
+      "doc": [
+        "A surface's verbs."
+      ],
       "format": "hex2",
       "entries": [
-        { "name": "OPEN", "value": 1 },
-        { "name": "RESIZE", "value": 3 },
-        { "name": "CLOSE", "value": 4 }
+        {
+          "name": "OPEN",
+          "value": 1
+        },
+        {
+          "name": "RESIZE",
+          "value": 2
+        },
+        {
+          "name": "CLOSE",
+          "value": 3
+        }
       ]
     },
     {
       "name": "SettingMinor",
-      "doc": ["A setting's verbs."],
+      "doc": [
+        "A setting's verbs."
+      ],
       "format": "hex2",
       "entries": [
-        { "name": "SET", "value": 3 },
-        { "name": "TOGGLE", "value": 16 }
+        {
+          "name": "SET",
+          "value": 1
+        },
+        {
+          "name": "TOGGLE",
+          "value": 2
+        }
       ]
     },
     {
       "name": "ChatMinor",
-      "doc": ["The chat's verbs."],
+      "doc": [
+        "The chat's verbs."
+      ],
       "format": "hex2",
       "entries": [
-        { "name": "SEND", "value": 1 }
+        {
+          "name": "SEND",
+          "value": 1
+        }
       ]
     },
     {
       "name": "PreviewMinor",
-      "doc": ["A preview's verbs."],
+      "doc": [
+        "A preview's verbs."
+      ],
       "format": "hex2",
       "entries": [
-        { "name": "OPEN", "value": 1 },
-        { "name": "CLOSE", "value": 4 }
+        {
+          "name": "OPEN",
+          "value": 1
+        },
+        {
+          "name": "CLOSE",
+          "value": 2
+        }
       ]
     },
     {
       "name": "ProfilerMinor",
-      "doc": ["The profiler's verbs."],
+      "doc": [
+        "The profiler's verbs."
+      ],
       "format": "hex2",
       "entries": [
-        { "name": "START", "value": 16 },
-        { "name": "STOP", "value": 17 },
-        { "name": "LOG", "value": 18 },
-        { "name": "READ", "value": 19 },
-        { "name": "TAKE", "value": 20 }
+        {
+          "name": "START",
+          "value": 1
+        },
+        {
+          "name": "STOP",
+          "value": 2
+        },
+        {
+          "name": "LOG",
+          "value": 3
+        },
+        {
+          "name": "READ",
+          "value": 4
+        },
+        {
+          "name": "TAKE",
+          "value": 5
+        }
       ]
     },
     {
       "name": "PointerPhase",
-      "doc": ["Where a pointer event is in its gesture."],
+      "doc": [
+        "Where a pointer event is in its gesture."
+      ],
       "format": "dec",
       "entries": [
-        { "name": "Down", "value": 0 },
-        { "name": "Move", "value": 1 },
-        { "name": "Up", "value": 2 },
-        { "name": "Out", "value": 3 }
+        {
+          "name": "Down",
+          "value": 0
+        },
+        {
+          "name": "Move",
+          "value": 1
+        },
+        {
+          "name": "Up",
+          "value": 2
+        },
+        {
+          "name": "Out",
+          "value": 3
+        }
       ]
     },
     {
       "name": "PointerKind",
-      "doc": ["What the pointer is, as the browser's `pointerType` says."],
+      "doc": [
+        "What the pointer is, as the browser's `pointerType` says."
+      ],
       "format": "dec",
       "entries": [
-        { "name": "Mouse", "value": 0 },
-        { "name": "Touch", "value": 1 },
-        { "name": "Pen", "value": 2 }
+        {
+          "name": "Mouse",
+          "value": 0
+        },
+        {
+          "name": "Touch",
+          "value": 1
+        },
+        {
+          "name": "Pen",
+          "value": 2
+        }
       ]
     },
     {
       "name": "ActiveTool",
-      "doc": ["What the pointer holds."],
+      "doc": [
+        "What the pointer holds."
+      ],
       "format": "dec",
       "default": "Pointer",
       "entries": [
-        { "name": "Pointer", "value": 0 },
-        { "name": "Object", "value": 1 },
-        { "name": "Decor", "value": 2 },
-        { "name": "Eraser", "value": 3 }
+        {
+          "name": "Pointer",
+          "value": 0
+        },
+        {
+          "name": "Object",
+          "value": 1
+        },
+        {
+          "name": "Decor",
+          "value": 2
+        },
+        {
+          "name": "Eraser",
+          "value": 3
+        }
       ]
     },
     {
       "name": "Tracking",
-      "doc": ["What the tracking button did, as the button showed it."],
+      "doc": [
+        "What the tracking button did, as the button showed it."
+      ],
       "format": "dec",
       "entries": [
-        { "name": "Recenter", "value": 0, "doc": ["Back to the device."] },
-        { "name": "Follow", "value": 1, "doc": ["Follow mode on, where the compass is listened to."] },
-        { "name": "Unfollow", "value": 2, "doc": ["Follow mode off, north up again."] }
+        {
+          "name": "Recenter",
+          "value": 0,
+          "doc": [
+            "Back to the device."
+          ]
+        },
+        {
+          "name": "Follow",
+          "value": 1,
+          "doc": [
+            "Follow mode on, where the compass is listened to."
+          ]
+        },
+        {
+          "name": "Unfollow",
+          "value": 2,
+          "doc": [
+            "Follow mode off, north up again."
+          ]
+        }
       ]
     },
     {
       "name": "CompassState",
-      "doc": ["The compass over the map (shell/ui/compass.rs), as the kernel decides it."],
+      "doc": [
+        "The compass over the map (shell/ui/compass.rs), as the kernel decides it."
+      ],
       "format": "dec",
       "entries": [
-        { "name": "Hidden", "value": 0, "doc": ["The map is north up, near enough."] },
-        { "name": "Shown", "value": 1, "doc": ["The map is turned; a press turns it north up again."] },
+        {
+          "name": "Hidden",
+          "value": 0,
+          "doc": [
+            "The map is north up, near enough."
+          ]
+        },
+        {
+          "name": "Shown",
+          "value": 1,
+          "doc": [
+            "The map is turned; a press turns it north up again."
+          ]
+        },
         {
           "name": "Following",
           "value": 2,
-          "doc": ["The map follows the device's heading: shown for where north is, dimmed and taking no press, since north up is the tracking button's to ask."]
+          "doc": [
+            "The map follows the device's heading: shown for where north is, dimmed and taking no press, since north up is the tracking button's to ask."
+          ]
         }
       ]
     },
     {
       "name": "GeolocationErrorCode",
-      "doc": ["The browser's PositionError codes."],
+      "doc": [
+        "The browser's PositionError codes."
+      ],
       "format": "dec",
       "unknown": "Other",
       "entries": [
-        { "name": "Other", "value": 0 },
-        { "name": "PermissionDenied", "value": 1 },
-        { "name": "PositionUnavailable", "value": 2 },
-        { "name": "Timeout", "value": 3 }
+        {
+          "name": "Other",
+          "value": 0
+        },
+        {
+          "name": "PermissionDenied",
+          "value": 1
+        },
+        {
+          "name": "PositionUnavailable",
+          "value": 2
+        },
+        {
+          "name": "Timeout",
+          "value": 3
+        }
       ]
     },
     {
       "name": "Sensor",
-      "doc": ["Which of the device's sensors."],
+      "doc": [
+        "Which of the device's sensors."
+      ],
       "format": "dec",
       "entries": [
-        { "name": "Geolocation", "value": 0 },
-        { "name": "Orientation", "value": 1 }
+        {
+          "name": "Geolocation",
+          "value": 0
+        },
+        {
+          "name": "Orientation",
+          "value": 1
+        }
       ]
     },
     {
       "name": "PermissionAnswer",
-      "doc": ["A sensor permission, as the shell's prompt or the browser's change reported it."],
-      "format": "dec",
-      "entries": [
-        { "name": "Asking", "value": 0, "doc": ["The shell's prompt is up."] },
-        { "name": "Granted", "value": 1 },
-        { "name": "Denied", "value": 2 },
-        { "name": "Failed", "value": 3, "doc": ["The prompt itself threw."] }
-      ]
-    },
-    {
-      "name": "FetchOutcome",
       "doc": [
-        "What a read came to. **Absent is an outcome, not a code the guest reads.**",
-        "There is no such object, however the protocol spells that — an HTTP 404, a",
-        "missing file — and the host is the one that can tell."
+        "A sensor permission, as the shell's prompt or the browser's change reported it."
       ],
       "format": "dec",
       "entries": [
-        { "name": "Read", "value": 0 },
-        { "name": "Aborted", "value": 1 },
-        { "name": "Error", "value": 2 },
-        { "name": "Absent", "value": 3 }
+        {
+          "name": "Asking",
+          "value": 0,
+          "doc": [
+            "The shell's prompt is up."
+          ]
+        },
+        {
+          "name": "Granted",
+          "value": 1
+        },
+        {
+          "name": "Denied",
+          "value": 2
+        },
+        {
+          "name": "Failed",
+          "value": 3,
+          "doc": [
+            "The prompt itself threw."
+          ]
+        }
       ]
     },
     {
       "name": "LoadKind",
-      "doc": ["What an asset is read as."],
+      "doc": [
+        "What an asset is read as."
+      ],
       "format": "dec",
       "entries": [
-        { "name": "Gltf", "value": 0 },
-        { "name": "Image", "value": 1 }
+        {
+          "name": "Gltf",
+          "value": 0
+        },
+        {
+          "name": "Image",
+          "value": 1
+        }
       ]
     },
     {
       "name": "MapStatus",
-      "doc": ["The map's loading lifecycle."],
+      "doc": [
+        "The map's loading lifecycle."
+      ],
       "format": "dec",
       "default": "Idle",
       "entries": [
-        { "name": "Idle", "value": 0 },
-        { "name": "Loading", "value": 1 },
-        { "name": "Success", "value": 2 },
-        { "name": "Error", "value": 3 }
+        {
+          "name": "Idle",
+          "value": 0
+        },
+        {
+          "name": "Loading",
+          "value": 1
+        },
+        {
+          "name": "Success",
+          "value": 2
+        },
+        {
+          "name": "Error",
+          "value": 3
+        }
       ]
     },
     {
       "name": "DevicePoseStatus",
-      "doc": ["Where a sensor's reading is: none asked for, asked for, arriving, failed, or none to be had, the device having no such sensor."],
+      "doc": [
+        "Where a sensor's reading is: none asked for, asked for, arriving, failed, or none to be had, the device having no such sensor."
+      ],
       "format": "dec",
       "default": "Idle",
       "entries": [
-        { "name": "Idle", "value": 0 },
-        { "name": "Loading", "value": 1 },
-        { "name": "Ready", "value": 2 },
-        { "name": "Error", "value": 3 },
-        { "name": "Unavailable", "value": 4 }
+        {
+          "name": "Idle",
+          "value": 0
+        },
+        {
+          "name": "Loading",
+          "value": 1
+        },
+        {
+          "name": "Ready",
+          "value": 2
+        },
+        {
+          "name": "Error",
+          "value": 3
+        },
+        {
+          "name": "Unavailable",
+          "value": 4
+        }
       ]
     },
     {
@@ -363,24 +656,75 @@
       ],
       "format": "hex4",
       "entries": [
-        { "name": "None", "value": 0 },
-        { "section": "0x01 the world's own state" },
-        { "name": "MapLoading", "value": 257 },
-        { "name": "MapLoadError", "value": 258 },
-        { "name": "CompanionLoading", "value": 259 },
-        { "name": "WorldReady", "value": 260 },
-        { "section": "0x02 where the device says it is" },
-        { "name": "LocationChecking", "value": 513 },
-        { "name": "LocationWeakSignal", "value": 514 },
-        { "name": "GeolocationUnsupported", "value": 515 },
-        { "name": "GeolocationPermissionDenied", "value": 516 },
-        { "name": "GeolocationPositionUnavailable", "value": 517 },
-        { "name": "GeolocationTimeout", "value": 518 },
-        { "name": "GeolocationGenericError", "value": 519 },
-        { "section": "0x03 which way the device is facing" },
-        { "name": "OrientationPermissionError", "value": 770 },
-        { "name": "OrientationPermissionDenied", "value": 771 },
-        { "name": "OrientationSignalLost", "value": 772 }
+        {
+          "name": "None",
+          "value": 0
+        },
+        {
+          "section": "0x01 the world's own state"
+        },
+        {
+          "name": "MapLoading",
+          "value": 257
+        },
+        {
+          "name": "MapLoadError",
+          "value": 258
+        },
+        {
+          "name": "CompanionLoading",
+          "value": 259
+        },
+        {
+          "name": "WorldReady",
+          "value": 260
+        },
+        {
+          "section": "0x02 where the device says it is"
+        },
+        {
+          "name": "LocationChecking",
+          "value": 513
+        },
+        {
+          "name": "LocationWeakSignal",
+          "value": 514
+        },
+        {
+          "name": "GeolocationUnsupported",
+          "value": 515
+        },
+        {
+          "name": "GeolocationPermissionDenied",
+          "value": 516
+        },
+        {
+          "name": "GeolocationPositionUnavailable",
+          "value": 517
+        },
+        {
+          "name": "GeolocationTimeout",
+          "value": 518
+        },
+        {
+          "name": "GeolocationGenericError",
+          "value": 519
+        },
+        {
+          "section": "0x03 which way the device is facing"
+        },
+        {
+          "name": "OrientationPermissionError",
+          "value": 770
+        },
+        {
+          "name": "OrientationPermissionDenied",
+          "value": 771
+        },
+        {
+          "name": "OrientationSignalLost",
+          "value": 772
+        }
       ]
     },
     {
@@ -388,140 +732,232 @@
       "format": "hex4",
       "entries": [
         {
-          "name": "NOP",
-          "value": 0,
-          "doc": ["Replies with its packet's value, or 0 where it has none — the rings' own test."],
-          "packet": [{ "name": "value", "type": "u32" }]
+          "section": "the process asks the host: its system calls, raised on the completion ring and run before the next turn (the rest are the host stream's records, host.json)"
         },
-        { "section": "the process asks the host: its system calls, raised on the completion ring and run before the next turn (the rest are the host stream's records, host.json)" },
-        { "name": "SENSOR_START", "value": 7425, "doc": ["Start watching."], "signal": [{ "name": "sensor", "type": "Sensor" }] },
-        { "name": "SENSOR_STOP", "value": 7428, "doc": ["Stop watching."], "signal": [{ "name": "sensor", "type": "Sensor" }] },
         {
-          "name": "FETCH_START",
-          "value": 7681,
+          "name": "SENSOR_START",
+          "value": 4609,
           "doc": [
-            "An object the scheduler wants read. The guest names it in its own terms — which",
-            "bake it belongs to, and the name inside that bake — and the host is the one that",
-            "knows what address that is and what protocol reaches it. The key is a handle the",
-            "shell hands back and never reads into."
+            "Start watching."
           ],
           "signal": [
-            { "name": "key", "type": "u64" },
-            { "name": "bake", "type": "BakeKind" },
-            { "name": "name", "type": "str" }
+            {
+              "name": "sensor",
+              "type": "Sensor"
+            }
           ]
         },
         {
-          "name": "FETCH_CANCEL",
-          "value": 7684,
+          "name": "SENSOR_STOP",
+          "value": 4611,
           "doc": [
-            "Stop this read, whichever kind it is. The scheduler took its credit for something",
-            "the viewer is more waiting on; the host settles it as stopped, and the guest still",
-            "wants it."
+            "Stop watching."
           ],
-          "signal": [{ "name": "key", "type": "u64" }]
+          "signal": [
+            {
+              "name": "sensor",
+              "type": "Sensor"
+            }
+          ]
         },
         {
           "name": "LOAD_START",
-          "value": 7937,
+          "value": 4865,
           "doc": [
             "An asset the scheduler wants read. It shares the credits with the pages, and so is",
             "started when one is free rather than all at once; what it is and where it lives is",
             "the host's, as a page's address is."
           ],
           "signal": [
-            { "name": "key", "type": "u64" },
-            { "name": "kind", "type": "LoadKind" },
-            { "name": "load", "type": "u32", "doc": ["asset/ingested's asset number, the texture pack's sheet one past the last."] }
+            {
+              "name": "key",
+              "type": "u64"
+            },
+            {
+              "name": "kind",
+              "type": "LoadKind"
+            },
+            {
+              "name": "load",
+              "type": "u32",
+              "doc": [
+                "asset/ingested's asset number, the texture pack's sheet one past the last."
+              ]
+            }
           ]
         },
-        { "section": "the host answers: an I/O the process started, done" },
         {
-          "name": "FETCH_DONE",
-          "value": 7683,
-          "doc": ["A read the host finished, its body held as `body` until the kernel takes it (host.json's BODY_READ)."],
-          "packet": [
-            { "name": "key", "type": "u64" },
-            { "name": "outcome", "type": "FetchOutcome" },
-            { "name": "body", "type": "u32" },
-            { "name": "body_bytes", "type": "u32", "doc": ["0 for none."] },
-            { "name": "fail", "type": "FetchFail" },
-            { "name": "detail", "type": "u32", "doc": ["Whatever number the host refused with, kept for the profiler to print and for nothing to branch on."] },
-            { "name": "net_ms", "type": "f64" }
-          ]
+          "section": "the host answers: an I/O the process started, done"
         },
         {
           "name": "LOAD_DONE",
-          "value": 7939,
-          "doc": ["A model's bytes, held by the host as `body` until the kernel reads them (host.json's BODY_READ)."],
+          "value": 4866,
+          "doc": [
+            "A model's bytes, held by the host as `body` until the kernel reads them (host.json's BODY_READ)."
+          ],
           "packet": [
-            { "name": "key", "type": "u64" },
-            { "name": "body", "type": "u32" },
-            { "name": "bytes", "type": "u32" }
+            {
+              "name": "key",
+              "type": "u64"
+            },
+            {
+              "name": "body",
+              "type": "u32"
+            },
+            {
+              "name": "bytes",
+              "type": "u32"
+            }
           ]
         },
         {
           "name": "LOAD_IMAGE",
-          "value": 7952,
-          "doc": ["An image decoded and held by the shell."],
+          "value": 4868,
+          "doc": [
+            "An image decoded and held by the shell."
+          ],
           "packet": [
-            { "name": "key", "type": "u64" },
-            { "name": "handle", "type": "u32" }
+            {
+              "name": "key",
+              "type": "u64"
+            },
+            {
+              "name": "handle",
+              "type": "u32"
+            }
           ]
         },
         {
           "name": "LOAD_FAILED",
-          "value": 7940,
+          "value": 4867,
           "doc": [
             "A read of an asset failed. The guest wants it again, after whatever the scheduler",
             "makes it wait; a model whose *bytes* do not parse is a different thing and is not this."
           ],
-          "packet": [{ "name": "key", "type": "u64" }]
+          "packet": [
+            {
+              "name": "key",
+              "type": "u64"
+            }
+          ]
         },
         {
           "name": "SENSOR_POSITION",
-          "value": 7427,
-          "doc": ["A GPS fix; a field is absent where the browser gave none."],
+          "value": 4610,
+          "doc": [
+            "A GPS fix; a field is absent where the browser gave none."
+          ],
           "packet": [
-            { "name": "lon", "type": "f64" },
-            { "name": "lat", "type": "f64" },
-            { "name": "altitude", "type": "f64", "optional": true },
-            { "name": "accuracy", "type": "f64" },
-            { "name": "heading", "type": "f64", "optional": true }
+            {
+              "name": "lon",
+              "type": "f64"
+            },
+            {
+              "name": "lat",
+              "type": "f64"
+            },
+            {
+              "name": "altitude",
+              "type": "f64",
+              "optional": true
+            },
+            {
+              "name": "accuracy",
+              "type": "f64"
+            },
+            {
+              "name": "heading",
+              "type": "f64",
+              "optional": true
+            }
           ]
         },
         {
           "name": "SENSOR_ORIENTATION",
-          "value": 7441,
-          "doc": ["An orientation event; a field is absent where the browser gave none."],
+          "value": 4613,
+          "doc": [
+            "An orientation event; a field is absent where the browser gave none."
+          ],
           "packet": [
-            { "name": "webkit_compass_heading", "type": "f64", "optional": true },
-            { "name": "alpha", "type": "f64", "optional": true },
-            { "name": "beta", "type": "f64", "optional": true },
-            { "name": "gamma", "type": "f64", "optional": true }
+            {
+              "name": "webkit_compass_heading",
+              "type": "f64",
+              "optional": true
+            },
+            {
+              "name": "alpha",
+              "type": "f64",
+              "optional": true
+            },
+            {
+              "name": "beta",
+              "type": "f64",
+              "optional": true
+            },
+            {
+              "name": "gamma",
+              "type": "f64",
+              "optional": true
+            }
           ]
         },
         {
           "name": "SENSOR_ERROR",
-          "value": 7440,
-          "doc": ["The watch failed and was stopped."],
-          "packet": [{ "name": "code", "type": "GeolocationErrorCode" }]
+          "value": 4612,
+          "doc": [
+            "The watch failed and was stopped."
+          ],
+          "packet": [
+            {
+              "name": "code",
+              "type": "GeolocationErrorCode"
+            }
+          ]
         },
-        { "name": "SENSOR_ORIENTATION_LOST", "value": 7447, "doc": ["The compass failed and its listener was removed, where the platform says so."] },
-        { "section": "the host tells the process: its start, its turn, its window, its devices and its input" },
+        {
+          "name": "SENSOR_ORIENTATION_LOST",
+          "value": 4618,
+          "doc": [
+            "The compass failed and its listener was removed, where the platform says so."
+          ]
+        },
+        {
+          "section": "the host tells the process: its start, its turn, its window, its devices and its input"
+        },
         {
           "name": "WORLD_BOOT",
-          "value": 6913,
+          "value": 4097,
           "doc": [
             "The shell's boot: what the build is and what the device offers, and what the browser's",
             "storage kept under host.json's keys."
           ],
           "packet": [
-            { "name": "development", "type": "bool", "doc": ["A development build, which offers the settings schema.json marks `dev`."] },
-            { "name": "handheld", "type": "bool" },
-            { "name": "geolocation", "type": "bool" },
-            { "name": "orientation", "type": "bool" },
-            { "name": "orientation_permission", "type": "bool", "doc": ["iOS 13+'s gate: requestPermission exists and must run inside a gesture."] },
+            {
+              "name": "development",
+              "type": "bool",
+              "doc": [
+                "A development build, which offers the settings schema.json marks `dev`."
+              ]
+            },
+            {
+              "name": "handheld",
+              "type": "bool"
+            },
+            {
+              "name": "geolocation",
+              "type": "bool"
+            },
+            {
+              "name": "orientation",
+              "type": "bool"
+            },
+            {
+              "name": "orientation_permission",
+              "type": "bool",
+              "doc": [
+                "iOS 13+'s gate: requestPermission exists and must run inside a gesture."
+              ]
+            },
             {
               "name": "orientation_silence_is_loss",
               "type": "bool",
@@ -540,217 +976,529 @@
                 "snapshot carries them, 0xffffffff for one it kept nothing for."
               ]
             },
-            { "name": "objects", "type": "u32", "doc": ["The objects as stored, held as a body (host.json's BODY_READ), 0 for none."] },
-            { "name": "objects_bytes", "type": "u32" }
+            {
+              "name": "objects",
+              "type": "u32",
+              "doc": [
+                "The objects as stored, held as a body (host.json's BODY_READ), 0 for none."
+              ]
+            },
+            {
+              "name": "objects_bytes",
+              "type": "u32"
+            }
           ]
         },
         {
           "name": "WORLD_FRAME",
-          "value": 6915,
+          "value": 4098,
           "doc": [
             "The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's",
             "phases on what is left of the quota, the fetches within the credits. The turn leaves",
             "its signals on the completion ring, drawn by the kernel, and last this command's own."
           ],
           "packet": [
-            { "name": "width", "type": "f64", "doc": ["The viewport, in CSS pixels."] },
-            { "name": "height", "type": "f64" },
-            { "name": "dpr", "type": "f64" },
-            { "name": "delta_s", "type": "f64", "doc": ["The frame interval and the turn, as the host measured them."] },
-            { "name": "frame_ms", "type": "f64" },
-            { "name": "interactive", "type": "bool" },
-            { "name": "credits", "type": "u32" },
-            { "name": "unix_ms", "type": "f64", "doc": ["The local wall clock: `Date.now()`, the local hour, minute and second, and the local day's start."] },
-            { "name": "hours", "type": "f64" },
-            { "name": "minutes", "type": "f64" },
-            { "name": "seconds", "type": "f64" },
-            { "name": "day_start_ms", "type": "f64" }
+            {
+              "name": "width",
+              "type": "f64",
+              "doc": [
+                "The viewport, in CSS pixels."
+              ]
+            },
+            {
+              "name": "height",
+              "type": "f64"
+            },
+            {
+              "name": "dpr",
+              "type": "f64"
+            },
+            {
+              "name": "delta_s",
+              "type": "f64",
+              "doc": [
+                "The frame interval and the turn, as the host measured them."
+              ]
+            },
+            {
+              "name": "frame_ms",
+              "type": "f64"
+            },
+            {
+              "name": "interactive",
+              "type": "bool"
+            },
+            {
+              "name": "credits",
+              "type": "u32"
+            },
+            {
+              "name": "unix_ms",
+              "type": "f64",
+              "doc": [
+                "The local wall clock: `Date.now()`, the local hour, minute and second, and the local day's start."
+              ]
+            },
+            {
+              "name": "hours",
+              "type": "f64"
+            },
+            {
+              "name": "minutes",
+              "type": "f64"
+            },
+            {
+              "name": "seconds",
+              "type": "f64"
+            },
+            {
+              "name": "day_start_ms",
+              "type": "f64"
+            }
           ],
-          "signal": [{ "name": "draws", "type": "u32" }]
+          "signal": [
+            {
+              "name": "draws",
+              "type": "u32"
+            }
+          ]
         },
         {
           "name": "WORLD_VISIBILITY",
-          "value": 6928,
+          "value": 4099,
           "doc": [
             "The tab's visibility; the host rings the doorbell for it at once, since a hidden",
             "page gets no frame and hiding is the save's last sure moment."
           ],
-          "packet": [{ "name": "visible", "type": "bool" }]
+          "packet": [
+            {
+              "name": "visible",
+              "type": "bool"
+            }
+          ]
         },
         {
           "name": "SENSOR_PERMISSION",
-          "value": 7442,
-          "doc": ["A permission as the shell's prompt or the browser's change reported it."],
+          "value": 4614,
+          "doc": [
+            "A permission as the shell's prompt or the browser's change reported it."
+          ],
           "packet": [
-            { "name": "sensor", "type": "Sensor" },
-            { "name": "answer", "type": "PermissionAnswer" }
+            {
+              "name": "sensor",
+              "type": "Sensor"
+            },
+            {
+              "name": "answer",
+              "type": "PermissionAnswer"
+            }
           ]
         },
         {
           "name": "INPUT_RECT",
-          "value": 7171,
-          "doc": ["The canvas's client rect."],
+          "value": 4353,
+          "doc": [
+            "The canvas's client rect."
+          ],
           "packet": [
-            { "name": "left", "type": "f64" },
-            { "name": "top", "type": "f64" },
-            { "name": "width", "type": "f64" },
-            { "name": "height", "type": "f64" }
+            {
+              "name": "left",
+              "type": "f64"
+            },
+            {
+              "name": "top",
+              "type": "f64"
+            },
+            {
+              "name": "width",
+              "type": "f64"
+            },
+            {
+              "name": "height",
+              "type": "f64"
+            }
           ]
         },
         {
           "name": "INPUT_POINTER",
-          "value": 7184,
+          "value": 4354,
           "doc": [
             "A pointer event on the canvas, in client pixels, with what the pointer holds; the",
             "shell sends a move at the last position when the holding changes, as a browser",
             "synthesizes a mouse move."
           ],
           "packet": [
-            { "name": "phase", "type": "PointerPhase" },
-            { "name": "kind", "type": "PointerKind" },
-            { "name": "id", "type": "i32" },
-            { "name": "button", "type": "i32" },
-            { "name": "x", "type": "f64" },
-            { "name": "y", "type": "f64" },
-            { "name": "tool", "type": "ActiveTool" },
+            {
+              "name": "phase",
+              "type": "PointerPhase"
+            },
+            {
+              "name": "kind",
+              "type": "PointerKind"
+            },
+            {
+              "name": "id",
+              "type": "i32"
+            },
+            {
+              "name": "button",
+              "type": "i32"
+            },
+            {
+              "name": "x",
+              "type": "f64"
+            },
+            {
+              "name": "y",
+              "type": "f64"
+            },
+            {
+              "name": "tool",
+              "type": "ActiveTool"
+            },
             {
               "name": "channel",
               "type": "GroundChannelKey",
               "optional": true,
-              "doc": ["The ground channel the held cube stands in for; absent for a flat color, a decor kind or nothing."]
+              "doc": [
+                "The ground channel the held cube stands in for; absent for a flat color, a decor kind or nothing."
+              ]
             },
             {
               "name": "value",
               "type": "u32",
-              "doc": ["The held cube's type in its channel, or the decor kind, by the catalog's number; what the object store keeps is the kernel's to derive."]
+              "doc": [
+                "The held cube's type in its channel, or the decor kind, by the catalog's number; what the object store keeps is the kernel's to derive."
+              ]
             },
-            { "name": "tier", "type": "u32", "doc": ["The object size, by its index in the snapshot's object_sizes."] }
+            {
+              "name": "tier",
+              "type": "u32",
+              "doc": [
+                "The object size, by its index in the snapshot's object_sizes."
+              ]
+            }
           ]
         },
-        { "name": "INPUT_WHEEL", "value": 7185, "packet": [{ "name": "delta_y", "type": "f64" }] },
+        {
+          "name": "INPUT_WHEEL",
+          "value": 4355,
+          "packet": [
+            {
+              "name": "delta_y",
+              "type": "f64"
+            }
+          ]
+        },
         {
           "name": "GPU_READY",
-          "value": 8193,
-          "doc": ["A device answered; the kernel's renderer is made on it (crates/pxl/web/render/src/gpu/renderer.rs)."],
+          "value": 5121,
+          "doc": [
+            "A device answered; the kernel's renderer is made on it (crates/pxl/web/render/src/gpu/renderer.rs)."
+          ],
           "packet": [
-            { "name": "min_uniform_offset_alignment", "type": "u32" },
-            { "name": "timestamps", "type": "bool" }
+            {
+              "name": "min_uniform_offset_alignment",
+              "type": "u32"
+            },
+            {
+              "name": "timestamps",
+              "type": "bool"
+            }
           ]
         },
-        { "name": "GPU_LOST", "value": 8196, "doc": ["The device went away, and every object on it."] },
-        { "section": "the shell and the process: what the UI asks of it, and what it shows the UI" },
+        {
+          "name": "GPU_LOST",
+          "value": 5122,
+          "doc": [
+            "The device went away, and every object on it."
+          ]
+        },
+        {
+          "section": "the shell and the process: what the UI asks of it, and what it shows the UI"
+        },
         {
           "name": "SURFACE_OPEN",
-          "value": 8449,
-          "doc": ["A call, answered with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on."],
-          "packet": [{ "name": "role", "type": "u32", "doc": ["The renderer's surface_role (render/gpu/api.json)."] }]
+          "value": 5377,
+          "doc": [
+            "A call, answered with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on."
+          ],
+          "packet": [
+            {
+              "name": "role",
+              "type": "u32",
+              "doc": [
+                "The renderer's surface_role (render/gpu/api.json)."
+              ]
+            }
+          ]
         },
         {
           "name": "SURFACE_RESIZE",
-          "value": 8451,
-          "doc": ["The canvas's layout box in device pixels, transforms aside; the buffer it is drawn into is the kernel's."],
+          "value": 5378,
+          "doc": [
+            "The canvas's layout box in device pixels, transforms aside; the buffer it is drawn into is the kernel's."
+          ],
           "packet": [
-            { "name": "surface", "type": "u32" },
-            { "name": "width", "type": "u32" },
-            { "name": "height", "type": "u32" },
-            { "name": "device_pixel_ratio", "type": "f64" }
+            {
+              "name": "surface",
+              "type": "u32"
+            },
+            {
+              "name": "width",
+              "type": "u32"
+            },
+            {
+              "name": "height",
+              "type": "u32"
+            },
+            {
+              "name": "device_pixel_ratio",
+              "type": "f64"
+            }
           ]
         },
         {
           "name": "SURFACE_CLOSE",
-          "value": 8452,
-          "doc": ["A call: the canvas is going, and what it held on the device is let go before the call returns."],
-          "packet": [{ "name": "surface", "type": "u32" }]
+          "value": 5379,
+          "doc": [
+            "A call: the canvas is going, and what it held on the device is let go before the call returns."
+          ],
+          "packet": [
+            {
+              "name": "surface",
+              "type": "u32"
+            }
+          ]
         },
         {
           "name": "PREVIEW_OPEN",
-          "value": 9217,
-          "doc": ["A character drawn alone into a surface the shell handed over, as the picker shows it."],
+          "value": 6145,
+          "doc": [
+            "A character drawn alone into a surface the shell handed over, as the picker shows it."
+          ],
           "packet": [
-            { "name": "surface", "type": "u32" },
-            { "name": "group", "type": "CharacterGroup" },
-            { "name": "number", "type": "u32" }
+            {
+              "name": "surface",
+              "type": "u32"
+            },
+            {
+              "name": "group",
+              "type": "CharacterGroup"
+            },
+            {
+              "name": "number",
+              "type": "u32"
+            }
           ]
         },
-        { "name": "PREVIEW_CLOSE", "value": 9220, "packet": [{ "name": "surface", "type": "u32" }] },
+        {
+          "name": "PREVIEW_CLOSE",
+          "value": 6146,
+          "packet": [
+            {
+              "name": "surface",
+              "type": "u32"
+            }
+          ]
+        },
         {
           "name": "SETTING_SET",
-          "value": 8707,
-          "doc": ["A setting set from the sheet or the character picker."],
+          "value": 5633,
+          "doc": [
+            "A setting set from the sheet or the character picker."
+          ],
           "packet": [
-            { "name": "key", "type": "SettingKey" },
-            { "name": "value", "type": "u32", "doc": ["A toggle's 0 or 1, a choice's option by its index, or a number."] }
+            {
+              "name": "key",
+              "type": "SettingKey"
+            },
+            {
+              "name": "value",
+              "type": "u32",
+              "doc": [
+                "A toggle's 0 or 1, a choice's option by its index, or a number."
+              ]
+            }
           ]
         },
-        { "name": "SETTING_TOGGLE", "value": 8720, "doc": ["A toggle's switch."], "packet": [{ "name": "key", "type": "SettingKey" }] },
-        { "name": "CHAT_SEND", "value": 8961, "doc": ["A line the player said, shown over the character."], "packet": [{ "name": "text", "type": "str" }] },
+        {
+          "name": "SETTING_TOGGLE",
+          "value": 5634,
+          "doc": [
+            "A toggle's switch."
+          ],
+          "packet": [
+            {
+              "name": "key",
+              "type": "SettingKey"
+            }
+          ]
+        },
+        {
+          "name": "CHAT_SEND",
+          "value": 5889,
+          "doc": [
+            "A line the player said, shown over the character."
+          ],
+          "packet": [
+            {
+              "name": "text",
+              "type": "str"
+            }
+          ]
+        },
         {
           "name": "INPUT_TRACKING",
-          "value": 7186,
-          "doc": ["The tracking button's press, as the button showed it."],
-          "packet": [{ "name": "tracking", "type": "Tracking" }]
+          "value": 4356,
+          "doc": [
+            "The tracking button's press, as the button showed it."
+          ],
+          "packet": [
+            {
+              "name": "tracking",
+              "type": "Tracking"
+            }
+          ]
         },
         {
           "name": "INPUT_VIEW",
-          "value": 7187,
+          "value": 4357,
           "doc": [
             "Where the camera stands, set outright rather than driven: what the kernel's own",
             "test puts a view at, and what an A/B reads two builds at the same view with."
           ],
           "packet": [
-            { "name": "dist", "type": "f64", "optional": true },
-            { "name": "polar", "type": "f64", "optional": true }
+            {
+              "name": "dist",
+              "type": "f64",
+              "optional": true
+            },
+            {
+              "name": "polar",
+              "type": "f64",
+              "optional": true
+            }
           ]
         },
-        { "name": "INPUT_RESET_DIST", "value": 7188, "doc": ["The scale bar's press: the default zoom."] },
-        { "name": "INPUT_COMPASS_RESET", "value": 7189, "doc": ["The compass's press: north up."] },
+        {
+          "name": "INPUT_RESET_DIST",
+          "value": 4358,
+          "doc": [
+            "The scale bar's press: the default zoom."
+          ]
+        },
+        {
+          "name": "INPUT_COMPASS_RESET",
+          "value": 4359,
+          "doc": [
+            "The compass's press: north up."
+          ]
+        },
         {
           "name": "INPUT_GO_TO",
-          "value": 7190,
-          "doc": ["A search result: the map center moved there."],
+          "value": 4360,
+          "doc": [
+            "A search result: the map center moved there."
+          ],
           "packet": [
-            { "name": "lon", "type": "f64" },
-            { "name": "lat", "type": "f64" }
+            {
+              "name": "lon",
+              "type": "f64"
+            },
+            {
+              "name": "lat",
+              "type": "f64"
+            }
           ]
         },
-        { "name": "SENSOR_OPEN", "value": 7445, "doc": ["The map is on screen and wants the sensors."] },
-        { "name": "SENSOR_CLOSE", "value": 7446, "doc": ["The map is gone, and the sensors are let go."] },
+        {
+          "name": "SENSOR_OPEN",
+          "value": 4616,
+          "doc": [
+            "The map is on screen and wants the sensors."
+          ]
+        },
+        {
+          "name": "SENSOR_CLOSE",
+          "value": 4617,
+          "doc": [
+            "The map is gone, and the sensors are let go."
+          ]
+        },
         {
           "name": "SENSOR_ENABLE_LOCATION",
-          "value": 7444,
+          "value": 4615,
           "doc": [
             "The search panel's location card: the location asked for. The compass is asked for",
             "where it is used, entering follow mode (TRACKING), and never alone: nothing reads it",
             "without the location."
           ]
         },
-        { "name": "PROFILER_START", "value": 9488, "doc": ["A fresh recording window."] },
-        { "name": "PROFILER_STOP", "value": 9489, "doc": ["The window frozen, so what is exported holds still."] },
-        { "name": "PROFILER_LOG", "value": 9490, "doc": ["The console stream on or off."], "packet": [{ "name": "on", "type": "bool" }] },
+        {
+          "name": "PROFILER_START",
+          "value": 6401,
+          "doc": [
+            "A fresh recording window."
+          ]
+        },
+        {
+          "name": "PROFILER_STOP",
+          "value": 6402,
+          "doc": [
+            "The window frozen, so what is exported holds still."
+          ]
+        },
+        {
+          "name": "PROFILER_LOG",
+          "value": 6403,
+          "doc": [
+            "The console stream on or off."
+          ],
+          "packet": [
+            {
+              "name": "on",
+              "type": "bool"
+            }
+          ]
+        },
         {
           "name": "PROFILER_READ",
-          "value": 9491,
+          "value": 6404,
           "doc": [
             "The profiler where it lies: the reply is the address of READ's words (profiler.json) over the",
             "last `window_ms`, an infinite window being the whole recording, good until the next turn."
           ],
-          "packet": [{ "name": "window_ms", "type": "f64" }]
+          "packet": [
+            {
+              "name": "window_ms",
+              "type": "f64"
+            }
+          ]
         },
         {
           "name": "PROFILER_TAKE",
-          "value": 9492,
-          "doc": ["The rows the console stream kept: the reply is the address of LOG's words, and the rows are let go on the next turn."]
+          "value": 6405,
+          "doc": [
+            "The rows the console stream kept: the reply is the address of LOG's words, and the rows are let go on the next turn."
+          ]
         },
         {
           "name": "WORLD_SNAPSHOT",
-          "value": 6933,
+          "value": 4100,
           "doc": [
             "The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a",
             "block the kernel holds, valid until the next snapshot."
           ],
           "signal": [
-            { "name": "at", "type": "u32" },
-            { "name": "len", "type": "u32" }
+            {
+              "name": "at",
+              "type": "u32"
+            },
+            {
+              "name": "len",
+              "type": "u32"
+            }
           ]
         }
       ]
@@ -759,19 +1507,64 @@
   "records": [
     {
       "name": "Snapshot",
-      "doc": ["What the page's UI shows of the kernel (shell/shell.rs): written after a turn that changed it, and replaced whole."],
+      "doc": [
+        "What the page's UI shows of the kernel (shell/shell.rs): written after a turn that changed it, and replaced whole."
+      ],
       "fields": [
-        { "name": "map", "type": "MapState" },
-        { "name": "location", "type": "LocationState" },
-        { "name": "companion", "type": "CompanionState" },
-        { "name": "orientation", "type": "OrientationState" },
-        { "name": "azimuth", "type": "f64", "doc": ["The view's azimuth."] },
-        { "name": "is_follow_mode", "type": "bool" },
-        { "name": "camera_busy", "type": "bool" },
-        { "name": "zooming", "type": "bool", "doc": ["A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is."] },
-        { "name": "compass", "type": "CompassState" },
-        { "name": "settings", "type": "u32", "list": true, "doc": ["Every setting's value by its SettingKey, as SETTING_SET carries one."] },
-        { "name": "scale_bar", "type": "ScaleBar" },
+        {
+          "name": "map",
+          "type": "MapState"
+        },
+        {
+          "name": "location",
+          "type": "LocationState"
+        },
+        {
+          "name": "companion",
+          "type": "CompanionState"
+        },
+        {
+          "name": "orientation",
+          "type": "OrientationState"
+        },
+        {
+          "name": "azimuth",
+          "type": "f64",
+          "doc": [
+            "The view's azimuth."
+          ]
+        },
+        {
+          "name": "is_follow_mode",
+          "type": "bool"
+        },
+        {
+          "name": "camera_busy",
+          "type": "bool"
+        },
+        {
+          "name": "zooming",
+          "type": "bool",
+          "doc": [
+            "A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is."
+          ]
+        },
+        {
+          "name": "compass",
+          "type": "CompassState"
+        },
+        {
+          "name": "settings",
+          "type": "u32",
+          "list": true,
+          "doc": [
+            "Every setting's value by its SettingKey, as SETTING_SET carries one."
+          ]
+        },
+        {
+          "name": "scale_bar",
+          "type": "ScaleBar"
+        },
         {
           "name": "place",
           "type": "PlacePart",
@@ -786,16 +1579,31 @@
           "name": "object_sizes",
           "type": "f64",
           "list": true,
-          "doc": ["The sizes an object places at, in units, coarsest first: the tiers the size flyout offers, one of which the shell holds by its index."]
+          "doc": [
+            "The sizes an object places at, in units, coarsest first: the tiers the size flyout offers, one of which the shell holds by its index."
+          ]
         }
       ]
     },
     {
       "name": "MapState",
       "fields": [
-        { "name": "status", "type": "MapStatus" },
-        { "name": "is_off_center", "type": "bool" },
-        { "name": "center", "type": "LonLat", "optional": true, "doc": ["The map center in degrees: what the search measures distance from."] },
+        {
+          "name": "status",
+          "type": "MapStatus"
+        },
+        {
+          "name": "is_off_center",
+          "type": "bool"
+        },
+        {
+          "name": "center",
+          "type": "LonLat",
+          "optional": true,
+          "doc": [
+            "The map center in degrees: what the search measures distance from."
+          ]
+        },
         {
           "name": "page",
           "type": "u64",
@@ -811,37 +1619,72 @@
     {
       "name": "LonLat",
       "fields": [
-        { "name": "lon", "type": "f64" },
-        { "name": "lat", "type": "f64" }
+        {
+          "name": "lon",
+          "type": "f64"
+        },
+        {
+          "name": "lat",
+          "type": "f64"
+        }
       ]
     },
     {
       "name": "LocationState",
       "fields": [
-        { "name": "status", "type": "DevicePoseStatus" },
-        { "name": "has_location", "type": "bool" },
-        { "name": "error", "type": "Message", "optional": true }
+        {
+          "name": "status",
+          "type": "DevicePoseStatus"
+        },
+        {
+          "name": "has_location",
+          "type": "bool"
+        },
+        {
+          "name": "error",
+          "type": "Message",
+          "optional": true
+        }
       ]
     },
     {
       "name": "CompanionState",
       "fields": [
-        { "name": "person_ready", "type": "bool" },
-        { "name": "pet_ready", "type": "bool" }
+        {
+          "name": "person_ready",
+          "type": "bool"
+        },
+        {
+          "name": "pet_ready",
+          "type": "bool"
+        }
       ]
     },
     {
       "name": "OrientationState",
       "fields": [
-        { "name": "status", "type": "DevicePoseStatus" },
-        { "name": "heading", "type": "f64", "optional": true }
+        {
+          "name": "status",
+          "type": "DevicePoseStatus"
+        },
+        {
+          "name": "heading",
+          "type": "f64",
+          "optional": true
+        }
       ]
     },
     {
       "name": "ScaleBar",
       "fields": [
-        { "name": "total_meters", "type": "f64" },
-        { "name": "bar_width_px", "type": "f64" }
+        {
+          "name": "total_meters",
+          "type": "f64"
+        },
+        {
+          "name": "bar_width_px",
+          "type": "f64"
+        }
       ]
     },
     {
@@ -852,15 +1695,28 @@
         "sent."
       ],
       "fields": [
-        { "name": "name", "type": "str" },
-        { "name": "names", "type": "PlaceName", "list": true }
+        {
+          "name": "name",
+          "type": "str"
+        },
+        {
+          "name": "names",
+          "type": "PlaceName",
+          "list": true
+        }
       ]
     },
     {
       "name": "PlaceName",
       "fields": [
-        { "name": "lang", "type": "str" },
-        { "name": "name", "type": "str" }
+        {
+          "name": "lang",
+          "type": "str"
+        },
+        {
+          "name": "name",
+          "type": "str"
+        }
       ]
     }
   ]

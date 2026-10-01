@@ -14,7 +14,7 @@ mod apply;
 mod executor;
 pub mod layout;
 
-use crate::abi::cmd::{Command, FetchCancelSignal, FetchStartSignal, LoadStartSignal, Sensor, SensorStartSignal, WorldFrameSignal, WorldSnapshotSignal};
+use crate::abi::cmd::{Command, LoadStartSignal, Sensor, SensorStartSignal, WorldFrameSignal, WorldSnapshotSignal};
 use crate::global::Global;
 use crate::host::HeapStat;
 use crate::kernel::kernel;
@@ -25,6 +25,7 @@ use pxl_render::mesh::volume::Volumes;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_core::wire::xtp::PacketWriter;
+use xpute_runtime::abi::cmd as xpute_cmd;
 use xpute_runtime::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
 use xpute_runtime::ipc::doorbell::Door;
 use xpute_runtime::ipc::ring::Ring;
@@ -71,6 +72,11 @@ fn door() -> &'static Door {
 
 /// A signal for the shell with a packet of `count` children written by `f`.
 fn raise(cmd: Command, count: u32, f: impl Fn(&mut PacketWriter)) {
+    door().raise(cmd as u32, count, f);
+}
+
+/// A signal of every program's (xpute-runtime abi/cmd), with its packet.
+fn raise_xpute(cmd: xpute_cmd::Command, count: u32, f: impl Fn(&mut PacketWriter)) {
     door().raise(cmd as u32, count, f);
 }
 
@@ -182,7 +188,7 @@ fn boot(b: &Bracket) {
         margin,
         batch,
         settle,
-        (crate::abi::directory::key::HOST_STREAM, fixed_at(Range::Host)),
+        (key::SYS, fixed_at(Range::Host)),
         (crate::abi::directory::key::GPU_STREAM, gpu_stream),
         (crate::abi::directory::key::HEAP_ROW, HEAP_ROW_AT),
     ];
@@ -310,7 +316,13 @@ fn post_shell(s: &mut State) {
     take_started(|key, category, subject| match category.bake() {
         Some(bake) => {
             let name = crate::io::fetch::DemandName(category, subject);
-            raise(Command::FETCH_START, FetchStartSignal::FIELDS, |w| FetchStartSignal { key, bake, name: &name }.write(w));
+            // A bake is a source of the kernel's, numbered by its kind.
+            let signal = xpute_cmd::FetchStartSignal {
+                key,
+                source: bake as u32,
+                name: &name,
+            };
+            raise_xpute(xpute_cmd::Command::FETCH_START, xpute_cmd::FetchStartSignal::FIELDS, |w| signal.write(w));
         }
         // An asset belongs to no bake: it is named by its content, and the
         // host is the one that knows what that is.
@@ -320,7 +332,11 @@ fn post_shell(s: &mut State) {
             raise(Command::LOAD_START, LoadStartSignal::FIELDS, |w| signal.write(w));
         }
     });
-    take_stops(|key| raise(Command::FETCH_CANCEL, FetchCancelSignal::FIELDS, |w| FetchCancelSignal { key }.write(w)));
+    take_stops(|key| {
+        raise_xpute(xpute_cmd::Command::FETCH_CANCEL, xpute_cmd::FetchCancelSignal::FIELDS, |w| {
+            xpute_cmd::FetchCancelSignal { key }.write(w)
+        })
+    });
 }
 
 /// The end of a frame, the kernel having drawn it: what it asks of the shell,

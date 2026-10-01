@@ -7,6 +7,7 @@ use super::{post_shell, State};
 use crate::abi::cmd::{self as abi, Command};
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
+use xpute_runtime::abi::cmd as xpute_cmd;
 use xpute_runtime::mem::base::{off_of, off_of_slice};
 
 /// A command's packet, refused when the command needs one and the message
@@ -36,15 +37,11 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
     use crate::shell::shell as ui;
     use crate::world::change::request_world_tick;
 
+    if let Some(cmd) = xpute_cmd::Command::of(number) {
+        return apply_xpute(cmd, pkt);
+    }
     let Some(cmd) = Command::of(number) else { return Ok(None) };
     match cmd {
-        Command::NOP => {
-            let value = match pkt {
-                Some(pkt) => abi::Nop::read(pkt)?.value,
-                None => 0,
-            };
-            Ok(Some(value as i32))
-        }
         Command::WORLD_FRAME => {
             let p = abi::WorldFrame::read(packet(pkt)?)?;
             crate::sched::turn::world_frame_asked(crate::sched::turn::HostFrame {
@@ -203,10 +200,6 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             ui::sensors_close();
             applied(s)
         }
-        Command::FETCH_DONE => {
-            crate::io::fetch::fetch_queued(abi::FetchDone::read(packet(pkt)?)?);
-            Ok(Some(0))
-        }
         Command::LOAD_DONE => {
             let p = abi::LoadDone::read(packet(pkt)?)?;
             // A model's bytes are far past a slot: the host holds them, and
@@ -299,7 +292,26 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         // An address in a memory of at most a gibibyte, which an i32 holds.
         Command::PROFILER_READ => Ok(Some(profiler_read(abi::ProfilerRead::read(packet(pkt)?)?.window_ms) as i32)),
         Command::PROFILER_TAKE => Ok(Some(profiler_take(s) as i32)),
-        Command::WORLD_SNAPSHOT | Command::SENSOR_START | Command::SENSOR_STOP | Command::FETCH_START | Command::FETCH_CANCEL | Command::LOAD_START => Ok(None),
+        Command::WORLD_SNAPSHOT | Command::SENSOR_START | Command::SENSOR_STOP | Command::LOAD_START => Ok(None),
+    }
+}
+
+/// Every program's commands (xpute-runtime abi/cmd): the rings' own test, and
+/// a read the host finished; a signal submitted as a command replies ENOSYS.
+fn apply_xpute(cmd: xpute_cmd::Command, pkt: &Option<&[u8]>) -> Result<Option<i32>, MarshalError> {
+    match cmd {
+        xpute_cmd::Command::NOP => {
+            let value = match pkt {
+                Some(pkt) => xpute_cmd::Nop::read(pkt)?.value,
+                None => 0,
+            };
+            Ok(Some(value as i32))
+        }
+        xpute_cmd::Command::FETCH_DONE => {
+            crate::io::fetch::fetch_queued(xpute_cmd::FetchDone::read(packet(pkt)?)?);
+            Ok(Some(0))
+        }
+        xpute_cmd::Command::FETCH_START | xpute_cmd::Command::FETCH_CANCEL => Ok(None),
     }
 }
 

@@ -21,7 +21,7 @@ import { originGet } from "@platform/origin.ts";
 import { assetUrl } from "@/config/route.ts";
 import { begin_read } from "@/kernel/io/fetch.ts";
 import { CORE_DOORBELL } from "@/kernel/mem.ts";
-import { hold_body } from "@/kernel/module.ts";
+import { BODIES } from "@/kernel/module.ts";
 import { holdImage } from "@platform/image.ts";
 import { request_frame } from "@/kernel/sched.ts";
 
@@ -66,7 +66,7 @@ export function load_model(key: u64, load: u32): Promise<void> {
     const bytes = new Uint8Array(await res.arrayBuffer());
     // A model is far past a ring frame: the host holds it, and the kernel
     // reads it in its turn.
-    return () => CORE_DOORBELL.send(0, Command.LOAD_DONE, encode_load_done({ key, body: hold_body(bytes), bytes: bytes.byteLength }));
+    return () => CORE_DOORBELL.send(0, Command.LOAD_DONE, encode_load_done({ key, body: BODIES.hold(bytes), bytes: bytes.byteLength }));
   });
 }
 

@@ -166,7 +166,7 @@ The servers, the bakes and the asset ingest all compile the model, so they are c
 Three rules hold the graph in that shape:
 
 - **The view does not know the kernel.** `pxl-render` sees the model and a `FrameInput`, and returns what a frame cost.
-- **The kernel does not know which bracket holds it.** A **bracket** is what gives the kernel a place to run: `pxl-wasm` in a tab, `pxl-native` on a device. It hands in the memory, the clock, the allocator's reading and where to say what stopped the kernel (`door.rs` `Bracket`), and the kernel asks everything else of the host in records the host runs after the turn — storage, text, a body's bytes (`host.rs`). So the kernel also runs under `cargo test`, with no bracket at all. The one thing the target decides is how the renderer's calls are made: recorded for the page's WebGPU on wasm32, made through wgpu anywhere else (`pxl-render gpu/api.rs`).
+- **The kernel does not know which bracket holds it.** A **bracket** is what gives the kernel a place to run: `pxl-wasm` in a tab, `pxl-native` on a device. It hands in the memory, the clock, the allocator's reading and where to say what stopped the kernel (`door.rs` `Bracket`), and the kernel asks everything else of the host as system calls the host runs after the turn — xpute's for a body's bytes and a file written to storage, its own for text (`host.rs`). So the kernel also runs under `cargo test`, with no bracket at all. The one thing the target decides is how the renderer's calls are made: recorded for the page's WebGPU on wasm32, made through wgpu anywhere else (`pxl-render gpu/api.rs`).
 - **Nothing is found by name.** Commands, cells, decor kinds (what the world grows on its own — trees, cars, boats, trains), character variants (the people and pets a player can be), assets and messages are numbers fixed in data. The words a message is shown in belong to the shell's locale files.
 
 ## Host, shell and kernel
@@ -238,7 +238,7 @@ What the policy says: the frame is the 25th percentile of recent gaps between fr
 
 The host and the kernel share the two rings xpute describes, of four-word messages with 4 KiB payload slots: 2048 for what the host submits — its own commands and the shell's, which go through it — and 4096 for what the kernel completes (`mem.json`). The completion ring holds everything one turn leaves, since the host reads it dry before it rings again; a turn that has too little room left for what one more command might raise leaves the rest of the submissions for the next turn, in order, and asks for it.
 
-The commands are `spec/pxl/web/kernel/abi/cmd.json`'s: each one's number and the fields of the packet it carries, from which both sides' readers and writers are generated, so no field is found by its position anywhere else. A packet is an XTP tree, and anything larger than a slot crosses in a heap block the kernel hands out.
+The commands are `spec/pxl/web/kernel/abi/cmd.json`'s, numbered from `0x10` past xpute's own (`spec/xpute/abi/cmd.json`, the fetches among them): each one's number and the fields of the packet it carries, from which both sides' readers and writers are generated, so no field is found by its position anywhere else. A packet is an XTP tree, and anything larger than a slot crosses in a heap block the kernel hands out.
 
 The kernel also posts messages nobody asked for: a fetch to start or cancel, a model or image to decode, a sensor to watch, a console line, a new snapshot. Those are its signals.
 

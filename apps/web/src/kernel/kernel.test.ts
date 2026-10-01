@@ -14,9 +14,9 @@ import { assert, assertEquals } from "@std/assert";
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { TreeReader } from "@xpute/core/wire/xtp/mod.ts";
 import { FetchFail } from "@xpute/runtime/abi/fetch.spec.ts";
+import { Command as XputeCommand, encode_fetch_done, FetchOutcome, read_fetch_start } from "@xpute/runtime/abi/cmd.spec.ts";
 import {
   Command,
-  encode_fetch_done,
   encode_gpu_ready,
   encode_input_go_to,
   encode_input_view,
@@ -25,9 +25,7 @@ import {
   encode_setting_toggle,
   encode_world_boot,
   encode_world_frame,
-  FetchOutcome,
   MapStatus,
-  read_fetch_start,
   read_load_start,
   read_snapshot,
   read_world_frame,
@@ -42,7 +40,7 @@ import { ELE_PADDED_SPAN, encode_terrain, pack_ground_cell, PAGE_CELLS } from "@
 
 import { CORE, CORE_DOORBELL, load_core } from "@/kernel/mem.ts";
 import { key as entry } from "@/kernel/abi/directory.spec.ts";
-import { bytes_at, directory, hold_body } from "@/kernel/module.ts";
+import { BODIES, bytes_at, directory } from "@/kernel/module.ts";
 import { acquireDevice } from "@/platform/web/webgpu.ts";
 
 // The module the tests drive, loaded before any of them reads it.
@@ -83,8 +81,8 @@ CORE_DOORBELL.signal = (_tag, cmd, f) => {
     const { at, len } = read_world_snapshot(f!);
     snapshot = read_snapshot(new TreeReader(bytes_at(CORE.buffer, at, len)).read_branch());
   } else if (cmd === Command.WORLD_FRAME) draws = read_world_frame(f!).draws;
-  else if (cmd === Command.FETCH_START) {
-    const { key, bake, name } = read_fetch_start(f!);
+  else if (cmd === XputeCommand.FETCH_START) {
+    const { key, source: bake, name } = read_fetch_start(f!);
     fetched.push({ key, bake, name, category: category_of(bake, name) });
   } else if (cmd === Command.LOAD_START) loads.push(read_load_start(f!).key);
 };
@@ -123,8 +121,8 @@ function answer(f: Fetched, outcome: FetchOutcome, body: U8Array | null): void {
   const requests = heap_row[HEAP_REQUESTS];
   try {
     const bytes = body?.byteLength ?? 0;
-    const held = body !== null && bytes > 0 ? hold_body(body) : 0;
-    CORE_DOORBELL.send(0, Command.FETCH_DONE, encode_fetch_done({ key: f.key, outcome, body: held, body_bytes: bytes, fail: FetchFail.None, detail: 0, net_ms: 0 }));
+    const held = body !== null && bytes > 0 ? BODIES.hold(body) : 0;
+    CORE_DOORBELL.send(0, XputeCommand.FETCH_DONE, encode_fetch_done({ key: f.key, outcome, body: held, body_bytes: bytes, fail: FetchFail.None, detail: 0, net_ms: 0 }));
     CORE_DOORBELL.ring(0);
   } finally {
     answer_requests[f.category] = (answer_requests[f.category] ?? 0) + heap_row[HEAP_REQUESTS] - requests;
@@ -132,7 +130,7 @@ function answer(f: Fetched, outcome: FetchOutcome, body: U8Array | null): void {
 }
 
 function fail(f: Fetched): void {
-  CORE_DOORBELL.send(0, Command.FETCH_DONE, encode_fetch_done({ key: f.key, outcome: FetchOutcome.Error, body: 0, body_bytes: 0, fail: FetchFail.Network, detail: 0, net_ms: 0 }));
+  CORE_DOORBELL.send(0, XputeCommand.FETCH_DONE, encode_fetch_done({ key: f.key, outcome: FetchOutcome.Error, body: 0, body_bytes: 0, fail: FetchFail.Network, detail: 0, net_ms: 0 }));
   CORE_DOORBELL.ring(0);
 }
 

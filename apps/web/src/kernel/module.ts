@@ -12,6 +12,7 @@
 import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { Directory } from "@xpute/runtime/ipc/directory.ts";
+import { Bodies } from "@xpute/runtime/ipc/sys.ts";
 
 import { DIRECTORY_AT } from "@/kernel/mem/mem.spec.ts";
 
@@ -36,26 +37,9 @@ export function directory(memory: ArrayBuffer): Directory {
   return new Directory(memory, DIRECTORY_AT);
 }
 
-/** Bodies the host holds for the kernel — a response, a model file, what
- * storage kept — until the kernel asks for them to be copied in (host.ts's
- * BODY_READ). */
-const bodies = new Map<u32, U8Array>();
-let next_body: u32 = 1;
-
-/** Holds `bytes` for the kernel: the number a command names them by. */
-export function hold_body(bytes: U8Array): u32 {
-  const body = next_body;
-  next_body = (next_body + 1) >>> 0 || 1;
-  bodies.set(body, bytes);
-  return body;
-}
-
-/** The body held as `body`, let go. */
-export function take_body(body: u32): U8Array | undefined {
-  const bytes = bodies.get(body);
-  bodies.delete(body);
-  return bytes;
-}
+/** Bytes the host holds for the kernel — a response, a model file, what
+ * storage kept — until the kernel reads them (xpute's READ, host.ts). */
+export const BODIES = new Bodies();
 
 const utf8_decoder = new TextDecoder();
 

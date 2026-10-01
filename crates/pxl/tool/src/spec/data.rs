@@ -45,7 +45,7 @@ struct DataSpec {
     cpp: Option<(&'static str, &'static str)>,
 }
 
-const DATA_SPECS: [DataSpec; 9] = [
+const DATA_SPECS: [DataSpec; 10] = [
     DataSpec {
         json: "spec/xpute/conformance/guest.json",
         ts: Some("packages/xpute/conformance/src/guest.spec.ts"),
@@ -63,6 +63,15 @@ const DATA_SPECS: [DataSpec; 9] = [
         enums: Enums::None,
         ts_names: None,
         cpp: Some(("cpp/xpute/runtime/ipc/directory.spec.hpp", "xpute::directory")),
+    },
+    DataSpec {
+        json: "spec/xpute/ipc/sys.json",
+        ts: Some("packages/xpute/runtime/src/ipc/sys.spec.ts"),
+        rs: Some("crates/xpute/runtime/src/ipc/sys.spec.rs"),
+        module: Some("spec"),
+        enums: Enums::None,
+        ts_names: None,
+        cpp: None,
     },
     DataSpec {
         json: "spec/pxl/web/kernel/abi/directory.json",
