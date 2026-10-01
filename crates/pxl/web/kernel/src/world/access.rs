@@ -490,6 +490,18 @@ impl<'a> Access<'a> {
         self.answer(page, Ground { top, cell })
     }
 
+    /// The level the ground under `at` is known at: z16's where its own
+    /// page says it exactly, a coarser one's where only a page over it is
+    /// resident, none where nothing over it is. What a step there can mean is
+    /// bounded by it: a cell of that level is the finest thing known.
+    pub fn known_level(&self, at: &Pvf3) -> Option<u32> {
+        let page = GROUND.cell_of(FINEST, at).page();
+        match self.terrain.source(page) {
+            Some(_) => Some(FINEST),
+            None => self.drawn_from(page).map(|(src, _)| src.level),
+        }
+    }
+
     /// The resident page `page`'s ground is drawn from, and its body.
     fn drawn_from(&self, page: LevelPage) -> Option<(LevelPage, &'a Terrain)> {
         let src = self.terrain.drawn_from(page)?;
