@@ -136,10 +136,14 @@ pub fn tracking_action(tracking: Tracking) {
                 go_to_ground(device, Motion::Snap);
             }
             camera.is_follow_mode = false;
+            // Back to where the user is is back to the distance the view
+            // starts at, too.
+            crate::control::camera::controller::reset_dist();
         }
         Tracking::Follow => {
             if request_orientation(world_platform().orientation) {
                 camera.is_follow_mode = true;
+                crate::control::camera::controller::reset_dist();
             }
         }
         Tracking::Unfollow => {
