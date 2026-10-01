@@ -33,10 +33,8 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   on the iPhone 13 mini, with today's box format (36 unindexed vertices)
   against faces alone; seams where levels that are not neighbours meet, and
   a blend on arrival; decor as its own solver — instances at the asset's
-  level of detail, an impostor far away, its lifetime off the chunk slot,
-  and its hit with them: the pointer's ray scans the chunks shown, each
-  grown by a reach derived from nothing (layer/decor/hit.rs `DECOR_REACH`),
-  where the ground and the objects are each walked along the ray.
+  level of detail and its lifetime off the chunk slot (its impostor far away
+  is in, 2026-10-01, and its hit's reach is the models' own).
 - **One order out from the eye, the rest.** Every scheduler takes work in
   one order out from the eye, a chunk is a cube of its level holding
   something, and a placed object lives in the cube its band is in
@@ -49,14 +47,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   chunk a cut of them.
 
 ## P1
-
-- **Decor: the impostor tier.** Decided 2026-09-13
-  ([20260911-decor-identity-orientation-and-one-cell-format.md](./20260911-decor-identity-orientation-and-one-cell-format.md),
-  "Closed"): each variant rendered once to a sprite, far instances drawn
-  as a camera-facing quad through the billboard field. The criterion is
-  in and every shipped kind is on the nearest tier only; the impostor is
-  what would draw them further for two triangles each. Not a phone fix —
-  build it when a wider decor range is wanted.
 
 ## P3
 

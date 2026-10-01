@@ -15,6 +15,7 @@ use xpute_runtime::mem::base::ptr_at;
 
 use crate::kernel::kernel;
 use crate::layer::decor::instance::{decor_groups, GroupLanes, NO_ENTRY};
+use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::EntryAt;
 use crate::world::chunk::table::Scheduler;
 use crate::world::pyramid::chunk::Chunk;
@@ -62,10 +63,14 @@ struct DecorHit {
     pub t: f64,
 }
 
-/// How far past a chunk's own square an instance standing in it can
-/// reach, in units: a generous bound on the models' size, only for
-/// skipping chunks the ray never comes near.
-const DECOR_REACH: f64 = 16.0;
+/// How far past a chunk's own square a placed instance standing in it can
+/// reach, in units: the largest decor model's bounding radius at the largest
+/// size decor is placed at — what the models are, and nothing guessed — only
+/// for skipping chunks the ray never comes near.
+fn decor_reach(sched: &Scheduler) -> f64 {
+    let radius = sched.decor_models.iter().flatten().filter_map(|&m| sched.models.mesh(m)).map(|m| m.radius as f64 * m.scale as f64).fold(0.0, f64::max);
+    radius * DECOR_SIZE
+}
 
 /// The nearest placed decor instance the ray strikes within `max_dist`,
 /// over the decor every on-screen chunk shows, model triangle by triangle
@@ -75,10 +80,11 @@ const DECOR_REACH: f64 = 16.0;
 fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: f64) -> Option<DecorHit> {
     let mut best: Option<DecorHit> = None;
     let mut limit = max_dist;
+    let reach = decor_reach(sched);
     for (chunk, base_x, base_y, decor) in sched.shown_decor() {
         let tx = base_x - origin[0];
         let ty = base_y - origin[1];
-        if !ray_meets_square(&o, &d, tx - DECOR_REACH, ty - DECOR_REACH, tx + CHUNK_W + DECOR_REACH, ty + CHUNK_W + DECOR_REACH, limit) {
+        if !ray_meets_square(&o, &d, tx - reach, ty - reach, tx + CHUNK_W + reach, ty + CHUNK_W + reach, limit) {
             continue;
         }
         // SAFETY: the block the scheduler wrote at `at`, of the groups it
