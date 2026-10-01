@@ -1,7 +1,7 @@
 // pxl-kernel/layer/character/companion.rs
 
-//! A companion (person + pet) that sits at map_center, facing the camera until
-//! it has somewhere to walk to. Whenever map_center stops changing — after a
+//! A companion (person + pet) that sits at map_center, its back to the camera
+//! and looking where the screen looks, until it has somewhere to walk to. Whenever map_center stops changing — after a
 //! drag, a click-to-navigate tween, a GPS recenter, whatever moved it — it
 //! makes a fixed-duration catch-up walk there and ends up facing its direction
 //! of travel, which it then just keeps. While map_center is still actively
@@ -27,17 +27,17 @@ use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::cell::object::object_value_is_air;
 use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::xy::TO_XY;
 
 use crate::control::camera::config::camera_cfg;
-use crate::control::camera::orbit::damp_alpha;
+use crate::control::camera::controller::damp_alpha;
 use crate::control::camera::store::{camera_store, CameraStatus};
 use crate::global::Global;
 use crate::io::load::{load_gltf, load_image, Load};
 use crate::kernel::{kernel, with_world};
 use crate::layer::character::chat_bubble::chat_bubble_step;
-use crate::layer::character::path::{heading_to, init_settle_tracker, sample_walk_plan, update_settle_tracker, SettleTracker, Vec2, WalkPlan, WalkSample};
+use crate::layer::character::path::{init_settle_tracker, sample_walk_plan, update_settle_tracker, SettleTracker, Vec2, WalkPlan, WalkSample};
 use crate::layer::character::store::companion_load_store;
 use crate::layer::character::variant::{character_variant, CharacterGroup, CharacterVariant};
 use crate::layer::character::variant_spec::IDLE_CLIP;
@@ -47,7 +47,7 @@ use crate::sched::tick::TickContext;
 use crate::shell::setting::store::settings_store;
 use crate::world::access::{Access, FINEST};
 use crate::world::change::wake_at;
-use crate::world::frame::coord::local_world_to_canonical;
+use crate::world::frame::coord::{local_height, local_world_to_canonical};
 use crate::world::frame::view::view;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
@@ -92,10 +92,15 @@ const SETTLE_DELAY_S: f64 = 0.15;
 // EMA to match, so this lerp is the one and only position-smoothing stage.
 const FOLLOW_LERP_K: f64 = camera_cfg::smooth::POS_DAMP;
 
-// Follow mode: the walker's turn about Z, set every frame from the screen's
-// up laid on the ground so it keeps its back to the camera as the view turns.
 // +PI turns a model whose forward is -Y into the screen, back to the camera.
 const FOLLOW_FACING: f64 = core::f64::consts::PI;
+
+/// The walker's turn about Z that puts its back to the camera, looking where
+/// the screen does: the screen's up laid on the ground, which is a quarter
+/// turn from east at a heading of zero.
+fn back_to_camera() -> f64 {
+    FOLLOW_FACING + view().up_heading() - core::f64::consts::FRAC_PI_2
+}
 
 // A gap narrower than this is not worth walking to: well under one GPS fix's
 // worth of travel (~0.5u at a walking pace) and over the near-zero gap a map
@@ -234,10 +239,8 @@ impl Walker {
                 px = self.pose[0] + (target.x - self.pose[0]) * a;
                 py = self.pose[1] + (target.y - self.pose[1]) * a;
             }
-            // Back to the camera, held there while the view turns about it:
-            // the screen's up laid on the ground is a quarter turn from east
-            // at a heading of zero.
-            self.pose[3] = FOLLOW_FACING + view().up_heading() - core::f64::consts::FRAC_PI_2;
+            // Back to the camera, held there while the view turns about it.
+            self.pose[3] = back_to_camera();
             if (target.x - px).hypot(target.y - py) > WALK_EPS {
                 self.follow_walk_until = now + FOLLOW_WALK_LINGER_S;
             }
@@ -316,14 +319,13 @@ impl Walker {
             is_walking = step.heading.is_some();
 
             // Facing: direction of travel while walking; otherwise a one-time
-            // camera-facing pose, never recomputed. The Y-up to Z-up turn the
-            // actor stands with maps the model's native forward to +Y, hence the
-            // +PI/2 from a raw heading.
+            // pose with its back to the camera, looking into the screen, never
+            // recomputed. The Y-up to Z-up turn the actor stands with maps the
+            // model's native forward to +Y, hence the +PI/2 from a raw heading.
             if let Some(heading) = step.heading {
                 self.pose[3] = heading + core::f64::consts::PI / 2.0;
             } else if !self.initial_facing_done {
-                let eye = view().pose.eye;
-                self.pose[3] = heading_to(Vec2 { x: step.x, y: step.y }, Vec2 { x: eye[0], y: eye[1] }) + core::f64::consts::PI / 2.0;
+                self.pose[3] = back_to_camera();
                 self.initial_facing_done = true;
             }
         }
@@ -467,11 +469,7 @@ fn boxes_over(map_origin: IVec, local_x: f64, local_y: f64) -> Vec<(f64, f64)> {
     local_world_to_canonical(&mut at, &[local_x, local_y, 0.0], map_origin);
     let col_idx = L2_IDX(TO_XY(at.i));
     // The column's corner in the local frame; entries are relative to it.
-    let local = Pvf3 {
-        i: ivec::sub(FROM_L2_IDX(col_idx), map_origin),
-        f: 0,
-    };
-    let (bx, by, bz) = (pvf3::to_real(pvf3::X(&local)), pvf3::to_real(pvf3::Y(&local)), pvf3::to_real(pvf3::Z(&local)));
+    let [bx, by, bz] = crate::world::frame::coord::offset(FROM_L2_IDX(col_idx), map_origin);
     each_col_entry(col_idx, &mut |entry| {
         if object_value_is_air(entry.state) {
             return;
@@ -503,7 +501,7 @@ fn boxes_over(map_origin: IVec, local_x: f64, local_y: f64) -> Vec<(f64, f64)> {
 fn footing(map_origin: IVec, local_x: f64, local_y: f64, hint_z: f64) -> Option<f64> {
     let mut at = Pvf3::default();
     local_world_to_canonical(&mut at, &[local_x, local_y, 0.0], map_origin);
-    let ground = Access::now().at(&at, FINEST).value()?.top;
+    let ground = local_height(Access::now().at(&at, FINEST).value()?.top, map_origin);
     let boxes = boxes_over(map_origin, local_x, local_y);
     if boxes.is_empty() {
         return Some(ground);

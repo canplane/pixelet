@@ -81,15 +81,16 @@ export const SETTINGS = {
     default: false,
     section: "camera",
   },
-  /** Which controller makes the camera's pose; CAMERA_MODES says each. A
-   * change keeps the view where it is. */
+  /** Which controller makes the camera's pose; CAMERA_MODES says each. To
+   * first person the person stands at the map center, the eye at its
+   * height over the ground; to third the map center is laid on the ground
+   * and the eye steps back by the radius. */
   camera_mode: {
     key: 5 as number,
     kind: "choice",
     default: "orbit",
     options: ["orbit", "free"],
     section: "camera",
-    dev: true,
   },
   /** What the camera does when the controls would put it underground;
    * CAMERA_COLLISION_MODES says each. The default is climb, because the one
@@ -259,6 +260,17 @@ export const SETTINGS_SHIPPED = {
     key: 4 as number,
     kind: "toggle",
     default: false,
+    section: "camera",
+  },
+  /** Which controller makes the camera's pose; CAMERA_MODES says each. To
+   * first person the person stands at the map center, the eye at its
+   * height over the ground; to third the map center is laid on the ground
+   * and the eye steps back by the radius. */
+  camera_mode: {
+    key: 5 as number,
+    kind: "choice",
+    default: "orbit",
+    options: ["orbit", "free"],
     section: "camera",
   },
   /** Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).

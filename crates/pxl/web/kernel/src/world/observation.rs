@@ -23,17 +23,16 @@ use crate::kernel::kernel;
 use crate::layer::environment::fog::{eye_height, reach_at};
 use crate::layer::environment::state::globe;
 use crate::layer::object::store::objects_revision;
-use crate::shell::map_store::map_store;
 use crate::world::access::Access;
 use crate::world::frame::view::view;
 use crate::world::observer::Sight;
 use crate::world::paging::floor;
 use crate::world::pyramid::Layer as _;
 
-/// Where the eye is as the view draws it, in units, once there is a map to
-/// stand over.
+/// Where the eye is as the view draws it, in units, once the camera stands
+/// somewhere.
 pub fn eye() -> Option<[f64; 3]> {
-    map_store().map_center.as_ref()?;
+    crate::control::camera::controller::camera().eye?;
     Some(view().eye_at())
 }
 
@@ -277,6 +276,9 @@ pub struct Order {
 impl Order {
     /// Nothing is ordered after this: what no view measured.
     pub const LAST: Order = Order { seen: false, near: f64::INFINITY };
+
+    /// Nothing is ordered before this: where the eye is about to be.
+    pub const FIRST: Order = Order { seen: true, near: 0.0 };
 
     /// Where box `b` falls for `o`.
     pub fn of(o: &Observation, b: &Aabb) -> Order {

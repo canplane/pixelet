@@ -11,18 +11,16 @@
 use pxl_render::frame::draw::DrawList;
 
 use super::*;
-use crate::control::camera::orbit::orbit;
 use crate::global::serial;
+use crate::world::fixture::place;
 
 /// A view as near and as low as the camera comes, turned: written against
 /// `origin`, with the map center `center` past it, in units.
 fn set(origin: [i64; 3], center: V3) -> &'static View {
     let v = view();
     (v.width, v.height) = (1_000.0, 800.0);
-    let o = orbit();
-    (o.dist, o.polar, o.azimuth) = (camera_cfg::view::MIN_DIST, 1.48, 0.7);
     v.origin = ivec::gather(origin[0], origin[1], origin[2]);
-    o.pivot = center;
+    place(center, camera_cfg::view::MIN_DIST, 1.48, 0.7);
     view_compose();
     v
 }
@@ -211,8 +209,7 @@ fn the_observer_s_pose_draws_what_the_turned_world_drew() {
         let v = view();
         (v.width, v.height) = (width, height);
         v.origin = ivec::gather(origin[0], origin[1], origin[2]);
-        let o = orbit();
-        (o.pivot, o.dist, o.polar, o.azimuth) = (pivot, dist, polar, azimuth);
+        place(pivot, dist, polar, azimuth);
         view_compose();
         let v = view();
         // The view rebases onto the eye's origin as it composes: the same
@@ -291,12 +288,11 @@ fn an_eye_over_the_lattice_s_reach_keeps_the_origin_in_it() {
         let v = view();
         (v.width, v.height) = (1_280.0, 720.0);
         v.origin = ivec::gather(at[0], at[1], at[2]);
-        let o = orbit();
         // High enough that the height, wrapped in the lattice's lane, would
         // read as under the ground.
-        (o.pivot, o.dist, o.polar, o.azimuth) = ([10.0, 20.0, 5.0], 40_000.0, 0.001, 0.3);
+        place([10.0, 20.0, 5.0], 40_000.0, 0.001, 0.3);
         let want = {
-            let e = crate::control::camera::orbit::orbit_eye_offset(o.dist, o.polar, o.azimuth);
+            let e = crate::control::camera::orbit::orbit_eye_offset(40_000.0, 0.001, 0.3);
             [at[0] as f64 + 10.0 + e[0], at[1] as f64 + 20.0 + e[1], 5.0 + e[2]]
         };
         view_compose();

@@ -89,12 +89,18 @@ pub const LEVEL_DEMAND_PAGES: u32 = FAULT_PAGES;
 /// demand's pages a level, every level, each observer.
 pub const DEMAND_PAGES: u32 = OBSERVERS * LEVEL_DEMAND_PAGES * LEVELS;
 
-/// What is held hard at most: the fallback's pages. Every reader of the
-/// ground takes the fallback's answer where the exact page is not resident,
-/// the device's puck too; a consumer that could not — physics under a moving
-/// body, a placement, an edit — would declare the pages it needs to each
-/// observation as the fallback does, and be counted here beside it.
-pub const HARD_PAGES: u32 = Floor::PAGES;
+/// What a destination holds hard: the line from its z16 page to the top, a
+/// page a level (world/pyramid.rs `Pyramid::step`).
+pub const DESTINATION_PAGES: u32 = LEVELS;
+
+/// What is held hard at most: the fallback's pages, and a destination's.
+/// Every reader of the ground takes the fallback's answer where the exact
+/// page is not resident, the device's puck too; one that cannot is a
+/// destination, which waits for its ground exactly and holds the pages that
+/// say it while it does. Another such consumer — physics under a moving
+/// body, a placement, an edit — would declare the pages it needs as these do,
+/// and be counted here beside them.
+pub const HARD_PAGES: u32 = Floor::PAGES + DESTINATION_PAGES;
 
 /// Frames progress needs past what is held hard: one, for a page nothing
 /// holds hard to land in while everything that is holds its own.
@@ -374,7 +380,7 @@ impl<L: Layer> Paging<L> {
     fn hold(&self, p: LevelPage) -> Hold {
         let Some(e) = self.entry(p) else { return Hold::Cache };
         match e.ask.map(|a| a.why) {
-            Some(Why::Floor) => Hold::Hard,
+            Some(Why::Floor | Why::Destination) => Hold::Hard,
             Some(Why::Fault) => Hold::Demand,
             Some(Why::Hint) | None => Hold::Cache,
         }

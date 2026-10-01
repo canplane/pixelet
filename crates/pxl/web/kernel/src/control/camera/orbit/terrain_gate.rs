@@ -1,27 +1,21 @@
-// pxl-kernel/control/camera/terrain_gate.rs
+// pxl-kernel/control/camera/orbit/terrain_gate.rs
 
-//! How far a camera control gets before terrain is in the way.
-//!
-//! A pure function of the pose, applied to the values the controls write
-//! rather than to the position they are damped into — dist is what the scale
-//! bar reads, so a control that failed to take effect further down would move
-//! the bar while the view stood still.
+//! How far the orbit gets toward what the controls ask before terrain is in
+//! the way: a pure function of the pose, from where the orbit is drawn to
+//! where the controls would have it (orbit.rs `target`). The controls keep
+//! what was asked; the drawn orbit stops short, and what reads the zoom reads
+//! the drawn radius, which stands still with the view.
 
-use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
 use xpute_core::math::scalar::wrap;
 
-use crate::control::camera::controller::{active, Active};
+use crate::control::camera::config::camera_cfg::view::EYE_CLEARANCE_U;
 use crate::control::camera::orbit::orbit_eye_offset;
-use crate::shell::map_store::map_store;
 use crate::shell::setting::store::{settings_store, CameraCollisionMode};
 use crate::world::access::{Access, FINEST};
-use crate::world::frame::coord::{local_world_origin, local_world_to_canonical};
-
-/// One cell, so a bicubic elevation sample disagreeing slightly with the
-/// voxel it produced cannot put the eye inside a block.
-pub(crate) const EYE_CLEARANCE_U: f64 = 1.0;
+use crate::world::frame::coord::{canonical_to_local, local_height, local_world_origin, local_world_to_canonical};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewTriple {
@@ -55,13 +49,12 @@ pub struct ViewPose {
 /// between them crosses frames; the store's current center supplies it for
 /// every caller, and a candidate target is expressed against that same one.
 pub fn pose(view: ViewTriple, center: Option<&Pvf3>) -> Option<ViewPose> {
-    let map_center = map_store().map_center?;
+    let map_center = crate::control::camera::controller::map_center()?;
     let at = center.copied().unwrap_or(map_center);
     let origin = local_world_origin();
-    let local = Pvf3 { i: ivec::sub(at.i, origin), f: at.f };
     Some(ViewPose {
         origin,
-        target: [pvf3::to_real(pvf3::X(&local)), pvf3::to_real(pvf3::Y(&local)), pvf3::to_real(pvf3::Z(&local))],
+        target: canonical_to_local(&at, origin),
         dist: view.dist,
         polar: view.polar,
         azimuth: view.azimuth,
@@ -75,7 +68,7 @@ fn required_rise(at: &ViewPose) -> Option<f64> {
     let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
     let mut below = Pvf3::default();
     local_world_to_canonical(&mut below, &[at.target[0] + offset[0], at.target[1] + offset[1], 0.0], at.origin);
-    let ground = Access::now().at(&below, FINEST).value()?.top;
+    let ground = local_height(Access::now().at(&below, FINEST).value()?.top, at.origin);
     Some(ground + EYE_CLEARANCE_U - at.target[2])
 }
 
@@ -86,7 +79,7 @@ fn penetration(at: &ViewPose) -> Option<f64> {
 }
 
 /// Testing only where a step lands lets the camera tunnel: the orbit's step
-/// (orbit.rs `orbit_step`) damps toward the new state and visits everything
+/// (orbit.rs `turn`) damps toward the new state and visits everything
 /// between. The straight
 /// line in pose space is the path it takes.
 const STEP_SAMPLES: u32 = 16;
@@ -139,10 +132,6 @@ pub fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
 
 /// The orbit half, where the target holds still.
 pub fn allowed_view(to: ViewTriple, from: ViewTriple) -> ViewTriple {
-    // The gate is the orbit's: the free camera keeps its own clear (free.rs).
-    if active() != Active::Orbit {
-        return to;
-    }
     let (Some(from_pose), Some(to_pose)) = (pose(from, None), pose(to, None)) else { return to };
     let reached = allowed_step(&to_pose, &from_pose);
     ViewTriple {
@@ -159,9 +148,6 @@ pub fn allowed_view(to: ViewTriple, from: ViewTriple) -> ViewTriple {
 /// worked. Jumps do not come through here — a search result or a GPS recenter
 /// is a destination the user named, not a path they dragged.
 pub fn allowed_pan(view: ViewTriple, to_center: &Pvf3) -> Pvf3 {
-    if active() != Active::Orbit {
-        return *to_center;
-    }
     let (Some(from_pose), Some(to_pose)) = (pose(view, None), pose(view, Some(to_center))) else {
         return *to_center;
     };

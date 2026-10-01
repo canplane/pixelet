@@ -20,7 +20,6 @@ use crate::global::Global;
 use crate::host::{local_time, now};
 use crate::kernel::kernel;
 use crate::layer::environment::theme::{get_theme_key, Theme};
-use crate::shell::map_store::map_store;
 use crate::world::change::wake_at;
 
 const THEME_CHECK_INTERVAL_MS: f64 = 60_000.0;
@@ -30,7 +29,7 @@ const THEME_CHECK_INTERVAL_MS: f64 = 60_000.0;
 use crate::control::navigation::bootstrap::FALLBACK_G4326;
 
 fn compute_theme_key() -> Theme {
-    let (lon, lat) = match map_store().map_center {
+    let (lon, lat) = match crate::control::camera::controller::map_center() {
         Some(center) => {
             let mut g: G4326 = [0.0; 3];
             epsg4326::unproject(&mut g, center.i, center.f);

@@ -47,8 +47,7 @@
   "STEP_NAMES": [
     "controller",
     "input",
-    "orbit",
-    "free",
+    "camera",
     "environment",
     "companion",
     "preview",
@@ -59,11 +58,11 @@
   "EFFECT_NAMES": [
     "navigation",
     "bootstrap",
-    "shell",
     "geolocation",
     "orientation",
     "follow",
-    "view_snap",
+    "destination",
+    "view",
     "tiles",
     "poi",
     "geocode",

@@ -11,8 +11,9 @@
 //! at the page that says its ground — itself, or where the bake left it no
 //! page, the one over it; one not resident is a fault, answered meanwhile
 //! by the nearest resident page over it. The fallback's pages
-//! (paging/floor.rs) and speculation (prefetch.rs) are merged in, the best reason per page, and what of that
-//! is not held is said to the scheduler once a turn. How the pages are drawn
+//! (paging/floor.rs), a destination's (control/navigation/destination.rs)
+//! and speculation (prefetch.rs) are merged in, the best reason per page,
+//! and what of that is not held is said to the scheduler once a turn. How the pages are drawn
 //! — the pieces the view is cut into (pyramid/domain.rs), what a layer draws
 //! of them (pyramid/cover.rs, chunk/frontier.rs) — is made from what is
 //! resident and enters none of it, but through the one quality both are
@@ -42,8 +43,8 @@ use crate::io::sched::declare;
 use crate::param;
 use crate::sched::profiler::record::Failure;
 use crate::world::observation::{heights_revision, observation, ByFootprints, Known, Order};
-use crate::world::paging::floor::{Fallback, Floor};
-use crate::world::paging::{Candidate, Paging, Victim, ASKS, FRAMES, LEVEL_DEMAND_PAGES};
+use crate::world::paging::floor::{self, Fallback, Floor};
+use crate::world::paging::{Candidate, Paging, Victim, ASKS, DESTINATION_PAGES, FRAMES, LEVEL_DEMAND_PAGES};
 use crate::world::prefetch::{NoPrefetch, Prefetch};
 use crate::world::quality;
 
@@ -72,14 +73,15 @@ pub trait Layer: Folds + Clone + 'static {
     }
 }
 
-/// What the asks are a function of: the observation, what is held
+/// What the asks are a function of: the observation, the destination, what
+/// is held
 /// (`Paging::revision`), what is known of the heights
 /// (`heights_revision`), which neither the observation nor this layer's
 /// pages move, the quality the view is held to (world/quality.rs), and
 /// which casting of the screen's tiles the demand is estimated from
 /// (world/pyramid/domain.rs `walks`). Two turns agreeing on all of it ask
 /// for the same pages, so the second decides nothing again.
-type Seen = (Observation, u32, (u32, u32), Tau, u32);
+type Seen = (Option<Observation>, Option<LevelPage>, u32, (u32, u32), Tau, u32);
 
 /// The speculation the kernel runs: none. The view is paged by its faults,
 /// and with no speculation at all it converges to exact
@@ -198,68 +200,103 @@ impl<L: Layer> Pyramid<L> {
 
     // ---- asking ----
 
-    /// What the observation `o` asks for: what `estimator` says `o`
-    /// requires, as far as `bounds` know the heights, the fallback's pages,
-    /// and what `prefetch` speculates on at `tau`, at most `allowance` of it,
-    /// the best reason per page. What of it is not held is what the layer wants.
+    /// What the observation `o` asks for, where there is one: what
+    /// `estimator` says `o` requires, as far as `bounds` know the heights,
+    /// the fallback's pages, and what `prefetch` speculates on at `tau`, at
+    /// most `allowance` of it — and with or without it, the `destination`'s
+    /// pages, the best reason per page. What of it is not held is what the
+    /// layer wants.
     ///
     /// Speculation is asked for only as far as frames are left over once
     /// everything held hard and everything demanded has one, so none of it
     /// is fetched only to find no frame.
-    pub fn observe(&mut self, o: &Observation, bounds: &impl Bounds, estimator: &impl DemandEstimator, prefetch: &impl Prefetch, tau: Tau, allowance: u32) {
+    #[allow(clippy::too_many_arguments)]
+    pub fn observe(
+        &mut self,
+        o: Option<&Observation>,
+        destination: impl Iterator<Item = LevelPage>,
+        bounds: &impl Bounds,
+        estimator: &impl DemandEstimator,
+        prefetch: &impl Prefetch,
+        tau: Tau,
+        allowance: u32,
+    ) {
         let mut demand = core::mem::take(&mut self.demand);
         demand.clear();
-        estimator.requirements(o, bounds, &mut |r| L::pages(&r, &mut |p| demand.push(p)));
-        demand.sort_unstable();
-        demand.dedup();
         let mut asks = core::mem::take(&mut self.asks);
         asks.clear();
         let ask = |asks: &mut HashMap<LevelPage, Ask>, p: LevelPage, a: Ask| {
             asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
         };
-        let order = |p: LevelPage| Order::of_region(o, bounds, p.level, p.region());
-        for &p in &demand {
-            let at = self.paging.source(p).unwrap_or(p);
-            ask(&mut asks, at, Ask { why: Why::Fault, order: order(p) });
+        let order = |o: &Observation, p: LevelPage| Order::of_region(o, bounds, p.level, p.region());
+        if let Some(o) = o {
+            estimator.requirements(o, bounds, &mut |r| L::pages(&r, &mut |p| demand.push(p)));
+            demand.sort_unstable();
+            demand.dedup();
+            for &p in &demand {
+                let at = self.paging.source(p).unwrap_or(p);
+                ask(&mut asks, at, Ask { why: Why::Fault, order: order(o, p) });
+            }
+            // What is demanded is inside the demand's bound, whatever the
+            // ground: more is the structure's bound broken, and the capacity
+            // with it.
+            let mut read = [0u32; TOP_LEVEL as usize + 1];
+            for p in asks.keys() {
+                read[p.level as usize] += 1;
+            }
+            xpute_core::ensure!(read.iter().all(|&n| n <= LEVEL_DEMAND_PAGES), ENOTRECOVERABLE, *read.iter().max().unwrap_or(&0));
+            let mut floor = 0u32;
+            Floor::floor(o.top, o.eye, o.far, |p| {
+                floor += 1;
+                ask(&mut asks, p, Ask { why: Why::Floor, order: order(o, p) });
+            });
+            xpute_core::ensure!(floor <= Floor::PAGES, ENOTRECOVERABLE, floor);
         }
-        // What is demanded is inside the demand's bound, whatever the ground:
-        // more is the structure's bound broken, and the capacity with it.
-        let mut read = [0u32; TOP_LEVEL as usize + 1];
-        for p in asks.keys() {
-            read[p.level as usize] += 1;
+        // Every page on the line rather than the finest alone: which of them
+        // says the destination's ground is known only once those over it are
+        // (`Paging::source`), and asking them one after another would be a
+        // round trip a level. First in the order, since the eye is going
+        // there.
+        let mut named = 0u32;
+        for p in destination {
+            named += 1;
+            ask(
+                &mut asks,
+                p,
+                Ask {
+                    why: Why::Destination,
+                    order: Order::FIRST,
+                },
+            );
         }
-        xpute_core::ensure!(read.iter().all(|&n| n <= LEVEL_DEMAND_PAGES), ENOTRECOVERABLE, *read.iter().max().unwrap_or(&0));
-        let mut floor = 0u32;
-        Floor::floor(o.top, o.eye, o.far, |p| {
-            floor += 1;
-            ask(&mut asks, p, Ask { why: Why::Floor, order: order(p) });
-        });
-        xpute_core::ensure!(floor <= Floor::PAGES, ENOTRECOVERABLE, floor);
+        xpute_core::ensure!(named <= DESTINATION_PAGES, ENOTRECOVERABLE, named);
 
-        let needed = asks.keys().filter(|&&p| self.paging.takes_frame(p)).count() as u32;
-        let mut room = FRAMES.saturating_sub(needed).min(allowance);
         let mut hints = core::mem::take(&mut self.hints);
         hints.clear();
-        prefetch.speculate(o, tau, &mut |p| {
-            if !asks.contains_key(&p) {
-                hints.push((order(p), p));
+        if let Some(o) = o {
+            let needed = asks.keys().filter(|&&p| self.paging.takes_frame(p)).count() as u32;
+            let mut room = FRAMES.saturating_sub(needed).min(allowance);
+            prefetch.speculate(o, tau, &mut |p| {
+                if !asks.contains_key(&p) {
+                    hints.push((order(o, p), p));
+                }
+            });
+            hints.sort_unstable();
+            hints.dedup_by_key(|h| h.1);
+            // Nor for more pages than are left of what may be asked at once,
+            // whether or not each takes a frame: a page settled or held in
+            // `ABSENT` takes none, and is known only while it is asked for
+            // (paging.rs `ASKS`).
+            let mut pages = ASKS.saturating_sub(asks.len() as u32);
+            for &(order, p) in &hints {
+                let new = u32::from(self.paging.takes_frame(p));
+                if new > room || pages == 0 {
+                    break;
+                }
+                room -= new;
+                pages -= 1;
+                ask(&mut asks, p, Ask { why: Why::Hint, order });
             }
-        });
-        hints.sort_unstable();
-        hints.dedup_by_key(|h| h.1);
-        // Nor for more pages than are left of what may be asked at once,
-        // whether or not each takes a frame: a page settled or held in
-        // `ABSENT` takes none, and is known only while it is asked for
-        // (paging.rs `ASKS`).
-        let mut pages = ASKS.saturating_sub(asks.len() as u32);
-        for &(order, p) in &hints {
-            let new = u32::from(self.paging.takes_frame(p));
-            if new > room || pages == 0 {
-                break;
-            }
-            room -= new;
-            pages -= 1;
-            ask(&mut asks, p, Ask { why: Why::Hint, order });
         }
 
         self.wants.clear();
@@ -268,7 +305,7 @@ impl<L: Layer> Pyramid<L> {
         self.paging.ask(&asks);
         (self.asks, self.hints) = (asks, hints);
 
-        self.observation = Some(*o);
+        self.observation = o.copied();
         self.demand = demand;
     }
 
@@ -280,24 +317,42 @@ impl<L: Layer> Pyramid<L> {
 
     /// The layer's turn. The quality is decided first (world/quality.rs),
     /// so what is asked for is at the quality what is drawn is cut at.
-    /// Wherever the observation, what is held, the heights, the
-    /// quality or what the screen's tiles saw have changed, it is observed
-    /// again (`observe`), since the asks are functions of all of them. A turn
-    /// where none changed decides nothing and says the wants it has.
+    /// Wherever the observation, the destination, what is held, the heights,
+    /// the quality or what the screen's tiles saw have changed, it is
+    /// observed again (`observe`), since the asks are functions of all of
+    /// them. A turn where none changed decides nothing and says the wants it
+    /// has.
     ///
     /// The estimator is the one from what the tiles saw (world/observation.rs
     /// `ByFootprints`), which the quality's turn has just cast: the ground
     /// the screen reaches, and what it lacked, and not what is hidden.
-    pub fn step(&mut self) {
-        let Some(o) = observation() else { return };
-        quality::step();
-        let tau = quality::effective().tau();
-        let seen = (o, self.paging.revision(), heights_revision(), tau, domain::walks());
+    ///
+    /// `destination` is the z16 page a destination stands in, whose ground
+    /// is wanted exactly: asked for with the line over it, up to the top the
+    /// source supplies, whether or not there is an observation yet — at the
+    /// first fix there is none, since the camera waits for that ground to be
+    /// put at all.
+    pub fn step(&mut self, destination: Option<LevelPage>) {
+        let Some(top) = floor::level() else { return };
+        let o = observation();
+        if o.is_none() && destination.is_none() {
+            return;
+        }
+        let tau = match o {
+            Some(_) => {
+                quality::step();
+                quality::effective().tau()
+            }
+            // Nothing is observed, so nothing is asked at a quality.
+            None => Tau::FINEST,
+        };
+        let seen = (o, destination, self.paging.revision(), heights_revision(), tau, domain::walks());
         if self.last != Some(seen) {
-            self.observe(&o, &Known, &ByFootprints { tau, sight: domain::sight() }, &PREFETCH, tau, param::HINT_ALLOWANCE);
+            let line = destination.into_iter().flat_map(|p| std::iter::successors(Some(p), move |q| (q.level < top).then(|| q.parent())));
+            self.observe(o.as_ref(), line, &Known, &ByFootprints { tau, sight: domain::sight() }, &PREFETCH, tau, param::HINT_ALLOWANCE);
             // Observing lets go; what is recorded is the state the
             // observation was made against.
-            self.last = Some((o, self.paging.revision(), heights_revision(), tau, domain::walks()));
+            self.last = Some((o, destination, self.paging.revision(), heights_revision(), tau, domain::walks()));
         }
         declare(L::CATEGORY, &self.wants);
     }

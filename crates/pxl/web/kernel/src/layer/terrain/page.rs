@@ -24,7 +24,6 @@ use crate::host::now;
 use crate::io::demand::{Ask, Category, Phases, TaskPhaseName};
 use crate::io::sched::{declare, pending_count};
 use crate::layer::terrain::fixed::{blocks_off, ele_off, extent_off, ground_off, BLOCK_LANE_BYTES, ELE_LANE_BYTES, EXTENT_LANE_BYTES, GROUND_LANE_BYTES};
-use crate::layer::terrain::ground_snap::reground_map_center;
 use crate::mem::fixed::{at, Range};
 use crate::shell::map_store::{map_store, MapStatus};
 use crate::world::observation::eye;
@@ -72,15 +71,13 @@ impl Layer for Terrain {
     }
 
     /// A page coming or going changes the ground drawn under whatever it
-    /// is the finest resident page over, and the map center stands on the
-    /// ground drawn. The chunks are told nothing: which a view draws is the
+    /// is the finest resident page over. The chunks are told nothing: which a view draws is the
     /// cover's, made again from the pyramid's revision, and a chunk whose
     /// page has gone leaves it.
     fn changed(_p: LevelPage, _present: bool) {
         // A chunk is read from its own page or the nearest one over it, so a
         // page coming or going changes what some are read from.
         crate::world::chunk::source::chunk_sources_changed();
-        reground_map_center();
     }
 }
 
@@ -155,7 +152,7 @@ pub fn terrain_step() {
     let o = ocean();
     let ocean_wants: &[(u64, Ask)] = if o.terrain.is_none() && !o.waiting.is_empty() { &[(0, Ask::PLAIN)] } else { &[] };
     declare(OCEAN_CATEGORY, ocean_wants);
-    terrain.step();
+    terrain.step(crate::control::navigation::destination::page());
     crate::world::pyramid::cover::step::<Terrain>();
     // Derived from the scheduler rather than tracked, so a later pan that
     // supersedes a batch cannot leave a stale SUCCESS behind. Nothing sets

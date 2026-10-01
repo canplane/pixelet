@@ -16,13 +16,10 @@ use pxl_render::gpu::surface::DPR_MAX;
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::indexer::{L3_BASE, L3_CENTER};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::v3::{floor3n, V3};
 use pxl_spec::space::xy::TO_XY;
 
-use crate::control::camera::controller::{active, Active};
-use crate::control::camera::orbit::orbit;
 use crate::global::Global;
 use crate::kernel::kernel;
 use crate::layer::billboard::field::BILLBOARD_FLOATS;
@@ -191,14 +188,14 @@ impl Sketch {
     }
 }
 
-/// The frames' rings about the orbit's pivot: the observer's heading, which
+/// The frames' rings about what the orbit looks at: the observer's heading, which
 /// turns with the orbit, and the world's axes, which never turn.
 fn sketch_frames(s: &mut Sketch) {
-    if active() != Active::Orbit {
+    if crate::control::camera::controller::radius() == 0.0 {
         return;
     }
-    let o = orbit();
-    let (pivot, (sin, cos)) = (o.pivot, (-o.azimuth).sin_cos());
+    let Some(pivot) = crate::control::camera::controller::center_local() else { return };
+    let (sin, cos) = (-crate::control::camera::controller::camera().yaw).sin_cos();
     let heading_frame = move |p: V3| [pivot[0] + p[0] * cos - p[1] * sin, pivot[1] + p[0] * sin + p[1] * cos, pivot[2] + p[2]];
     s.gyro(&heading_frame, [4.0, 0.0, 0.0], "heading (4,0,0)", false);
     s.point(heading_frame([0.0, 0.0, 4.0]), Some("heading (0,0,4)"));
@@ -208,10 +205,7 @@ fn sketch_frames(s: &mut Sketch) {
 
 /// A point in the root frame: its address's offset from the map origin.
 fn local_of(p: &Pvf3, map_origin: IVec) -> V3 {
-    let local = ivec::sub(p.i, map_origin);
-    let mut v = [0.0; 3];
-    projection::unproject(&mut v, 0, p.f);
-    [ivec::to_real(ivec::X(local)) + v[0], ivec::to_real(ivec::Y(local)) + v[1], ivec::to_real(ivec::Z(local)) + v[2]]
+    crate::world::frame::coord::canonical_to_local(p, map_origin)
 }
 
 fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
@@ -219,9 +213,8 @@ fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
 
     // raw_v: the map center as placed, no elevation override. quant_v: the cell
     // it floors to, ground-snapped — a cell, so a box.
-    let mut raw_v = [0.0; 3];
-    projection::unproject(&mut raw_v, ivec::sub(map_center.i, map_origin), map_center.f);
-    let ground = |at: &Pvf3| Access::now().at(at, FINEST).value().map(|g| g.top);
+    let raw_v = local_of(map_center, map_origin);
+    let ground = |at: &Pvf3| Access::now().at(at, FINEST).value().map(|g| crate::world::frame::coord::local_height(g.top, map_origin));
     let gnd_v = [raw_v[0], raw_v[1], ground(map_center).unwrap_or(0.0)];
     let mut quant_v = [0.0; 3];
     floor3n(&gnd_v, U_PER_CELL, &mut quant_v);
@@ -252,7 +245,7 @@ fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
 struct Gizmos {
     /// What the drawn sketch was built from: the map center, the origin, the
     /// tiles' revision, and the view's frame.
-    built_for: Option<(Pvf3, IVec, u32, [f64; 4])>,
+    built_for: Option<(Pvf3, IVec, u32, f64)>,
     drawn: Sketch,
     shown: bool,
     /// The labels' billboard set, and each drawn label's slot of the sheet
@@ -368,8 +361,7 @@ pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>, map_origin: IVec)
         }
         return;
     };
-    let o = orbit();
-    let key = (center, map_origin, Terrain::pyramid().revision(), [o.azimuth, o.pivot[0], o.pivot[1], o.pivot[2]]);
+    let key = (center, map_origin, Terrain::pyramid().revision(), crate::control::camera::controller::camera().yaw);
     if g.built_for == Some(key) {
         write_labels(g);
         return;

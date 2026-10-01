@@ -143,7 +143,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             applied(s)
         }
         Command::INPUT_RESET_DIST => {
-            crate::control::camera::store::camera_store().reset_dist();
+            crate::control::camera::controller::reset_dist();
             applied(s)
         }
         Command::INPUT_COMPASS_RESET => {

@@ -1,13 +1,14 @@
 // pxl-kernel/control/navigation/bootstrap.rs
 
 use pxl_spec::space::adapter::epsg4326::{self, G4326};
+use pxl_spec::space::pvf3::core::FRAC_W;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 
+use crate::control::camera::controller::map_center;
+use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::store::{device_location_store, DevicePoseStatus};
 use crate::global::Global;
-use crate::layer::terrain::ground_snap::ground_pivot;
-use crate::shell::map_store::map_store;
 
 // Seoul City Hall — the approximate coordinate used when GPS genuinely never
 // comes up (permission denied, no signal, timeout, unsupported browser),
@@ -28,69 +29,47 @@ fn fallback_seed() -> Pvf3 {
     out
 }
 
+/// Whether two places are one on the map, across it: within a cell of each
+/// other. The map center is derived from the camera, so what is put there
+/// comes back to it as near as the camera's frame holds it, not to the bit.
 fn is_at(a: &Pvf3, b: &Pvf3) -> bool {
-    pvf3::X(a) == pvf3::X(b) && pvf3::Y(a) == pvf3::Y(b)
+    let cell = 1i64 << FRAC_W;
+    (pvf3::X(a) - pvf3::X(b)).abs() < cell && (pvf3::Y(a) - pvf3::Y(b)).abs() < cell
 }
 
 struct Bootstrap {
     /// The inputs as last seen.
     last: Option<(Option<Pvf3>, DevicePoseStatus)>,
-    /// A seed set and not yet grounded: retried each turn until the ground
-    /// under it has arrived.
-    pending: Option<Pvf3>,
 }
 
 static BOOTSTRAP: Global<Bootstrap> = Global::new();
 
-/// Seeds and grounds map_center: the bootstrap's turn.
+/// Names where the map starts, the camera put there on the ground once the
+/// ground there is known (control/navigation/destination.rs): the
+/// bootstrap's turn.
 pub fn map_bootstrap_step() {
     let device_coord = map_navigation().device_coord;
     let location_status = device_location_store().status;
-    let b = BOOTSTRAP.get(|| Bootstrap { last: None, pending: None });
-
-    if b.last != Some((device_coord, location_status)) {
-        b.last = Some((device_coord, location_status));
-        b.pending = None;
-        // prefer the real device position. Only reach for the Seoul fallback
-        // once GPS has genuinely given up (ERROR — not merely still
-        // LOADING/IDLE) *and* no center was ever established. A later GPS
-        // dropout, after a real fix already seeded map_center, intentionally
-        // does nothing here and leaves the camera wherever it last was.
-        let fallback = fallback_seed();
-        let seed = match device_coord {
-            Some(device) => {
-                let mut s = Pvf3::default();
-                pvf3::gather(&mut s, pvf3::X(&device), pvf3::Y(&device), 0);
-                Some(s)
-            }
-            None if map_store().map_center.is_none() && location_status == DevicePoseStatus::Error => Some(fallback),
-            None => None,
-        };
-        if let Some(seed) = seed {
-            // sitting exactly at the fallback seed counts as "nothing real yet"
-            // too — otherwise a real fix landing after the fallback kicked in
-            // would never actually take over.
-            match map_store().map_center {
-                None => {
-                    map_store().navigate_to(seed);
-                    b.pending = Some(seed);
-                }
-                Some(cur) if is_at(&cur, &fallback) => {
-                    map_store().navigate_to(seed);
-                    b.pending = Some(seed);
-                }
-                Some(cur) if is_at(&cur, &seed) => b.pending = Some(seed),
-                Some(_) => {}
-            }
-        }
+    let b = BOOTSTRAP.get(|| Bootstrap { last: None });
+    if b.last == Some((device_coord, location_status)) {
+        return;
     }
-
-    let Some(seed) = b.pending else { return };
-    let Some(grounded) = ground_pivot(&seed) else { return };
-    b.pending = None;
-    match map_store().map_center {
-        None => map_store().navigate_to(grounded),
-        Some(cur) if is_at(&cur, &fallback_seed()) || is_at(&cur, &seed) => map_store().navigate_to(grounded),
-        Some(_) => {}
+    b.last = Some((device_coord, location_status));
+    // prefer the real device position. Only reach for the Seoul fallback
+    // once GPS has genuinely given up (ERROR — not merely still
+    // LOADING/IDLE) *and* the camera was never placed. A later GPS dropout,
+    // after a real fix placed it, intentionally does nothing here and leaves
+    // the camera wherever it last was.
+    let fallback = fallback_seed();
+    let center = map_center();
+    let seed = match device_coord {
+        Some(device) => device,
+        None if center.is_none() && location_status == DevicePoseStatus::Error => fallback,
+        None => return,
+    };
+    // Still at the fallback counts as nothing real yet: a real fix landing
+    // after the fallback takes over.
+    if center.is_none_or(|c| is_at(&c, &fallback)) {
+        go_to_ground(seed);
     }
 }

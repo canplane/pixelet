@@ -26,12 +26,11 @@
 
 /// Which controller makes the camera's pose.
 ///
-///   orbit — the eye circles what it looks at, and the map center is what
-///           it looks at.
-///   free  — the eye stands where it is and turns in place; a drag walks
-///           it over the ground and the zoom carries it up and down, at one
-///           speed everywhere; a search or a recenter carries it there,
-///           putting the place where what it looked at was.
+///   orbit — third person: the camera turns about the map center, its
+///           radius ahead of the eye, and a drag moves the map center.
+///   free  — first person: the eye is the map center and turns in place;
+///           a drag walks it over the ground, the eye at its height over
+///           the ground it reaches, and nothing moves it up or down.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum CameraMode {
@@ -175,8 +174,10 @@ pub enum SettingKey {
     /// Off by default: the tilt is the one control a map view is expected to
     /// have, and locking it reads as the app being stuck.
     tilt_lock = 4,
-    /// Which controller makes the camera's pose; CAMERA_MODES says each. A
-    /// change keeps the view where it is.
+    /// Which controller makes the camera's pose; CAMERA_MODES says each. To
+    /// first person the person stands at the map center, the eye at its
+    /// height over the ground; to third the map center is laid on the ground
+    /// and the eye steps back by the radius.
     camera_mode = 5,
     /// What the camera does when the controls would put it underground;
     /// CAMERA_COLLISION_MODES says each. The default is climb, because the one
@@ -266,10 +267,7 @@ impl SettingKey {
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(
-            self,
-            SettingKey::camera_mode | SettingKey::camera_collision | SettingKey::ground_snap | SettingKey::terrain_carving | SettingKey::shadows
-        )
+        matches!(self, SettingKey::camera_collision | SettingKey::ground_snap | SettingKey::terrain_carving | SettingKey::shadows)
     }
 
     /// Read by a chunk's build, so a change builds the chunks again.

@@ -91,29 +91,27 @@ impl TaskPhaseName {
     }
 }
 
-pub const STEP_NAMES: &[&str] = &["controller", "input", "orbit", "free", "environment", "companion", "preview", "chunks", "debug_gizmos", "profiler"];
+pub const STEP_NAMES: &[&str] = &["controller", "input", "camera", "environment", "companion", "preview", "chunks", "debug_gizmos", "profiler"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum StepName {
     controller = 0,
     input = 1,
-    orbit = 2,
-    free = 3,
-    environment = 4,
-    companion = 5,
-    preview = 6,
-    chunks = 7,
-    debug_gizmos = 8,
-    profiler = 9,
+    camera = 2,
+    environment = 3,
+    companion = 4,
+    preview = 5,
+    chunks = 6,
+    debug_gizmos = 7,
+    profiler = 8,
 }
 
 impl StepName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [StepName; 10] = [
+    pub const ALL: [StepName; 9] = [
         StepName::controller,
         StepName::input,
-        StepName::orbit,
-        StepName::free,
+        StepName::camera,
         StepName::environment,
         StepName::companion,
         StepName::preview,
@@ -132,11 +130,11 @@ impl StepName {
 pub const EFFECT_NAMES: &[&str] = &[
     "navigation",
     "bootstrap",
-    "shell",
     "geolocation",
     "orientation",
     "follow",
-    "view_snap",
+    "destination",
+    "view",
     "tiles",
     "poi",
     "geocode",
@@ -154,11 +152,11 @@ pub const EFFECT_NAMES: &[&str] = &[
 pub enum EffectName {
     navigation = 0,
     bootstrap = 1,
-    shell = 2,
-    geolocation = 3,
-    orientation = 4,
-    follow = 5,
-    view_snap = 6,
+    geolocation = 2,
+    orientation = 3,
+    follow = 4,
+    destination = 5,
+    view = 6,
     tiles = 7,
     poi = 8,
     geocode = 9,
@@ -177,11 +175,11 @@ impl EffectName {
     pub const ALL: [EffectName; 18] = [
         EffectName::navigation,
         EffectName::bootstrap,
-        EffectName::shell,
         EffectName::geolocation,
         EffectName::orientation,
         EffectName::follow,
-        EffectName::view_snap,
+        EffectName::destination,
+        EffectName::view,
         EffectName::tiles,
         EffectName::poi,
         EffectName::geocode,

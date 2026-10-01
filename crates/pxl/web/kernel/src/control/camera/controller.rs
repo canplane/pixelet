@@ -1,55 +1,223 @@
 // pxl-kernel/control/camera/controller.rs
 
-//! Which controller makes the observer's pose: the orbit or the free camera,
-//! as the settings choose, or a tracker while one holds it. Each has its own
-//! state and none shares another's; what they have in common is the pose
-//! they make (world/frame/view.rs `ObserverPose`), which is all the rest of
-//! the kernel reads.
-//!
-//! A change between the orbit and the free camera keeps the view where it
-//! is (free.rs `from_orbit`, `to_orbit`). A tracker overrides whichever is
-//! the base while it holds the pose, which stays as it was under it and is
-//! the controller again when the tracker lets go: a tracked turn can roll,
-//! and neither base can take a roll as its own.
+//! The camera, and which controller moves it. The camera is the observer: an
+//! eye and a look, (θ, φ) about the world's Z
+//! (orbit.rs `look_dir`) — the one state every controller moves, and in the
+//! observer's own frame the eye is the origin (world/frame/view.rs). The
+//! orbit and the free camera share that geometry and differ in policy: the
+//! free camera turns about its eye, first person, and the orbit about a
+//! point a radius ahead of it, third person, its `dist`. The map center is
+//! that point — the eye first person — derived and never kept (`map_center`);
+//! a navigation command puts the camera so the map center is where it says
+//! (`put_center`). First person walks the ground, its eye at a person's
+//! height over it (free.rs `stand`); third person turns about a point on the
+//! ground. A change from first person to third lays the map center straight
+//! down on the ground and steps the eye back by the radius; from third to
+//! first the person stands at the map center, the eye at its height over the
+//! ground there and no earlier height put back. A
+//! tracker overrides whichever is the base while it holds the pose, which
+//! stays as it was under it and is the controller again when the tracker
+//! lets go: a tracked turn can roll, and neither base can take a roll as its
+//! own.
 
-use pxl_spec::space::mat4::{mat4, Mat4};
+use pxl_spec::space::mat4::{mat4, mat4_mul, mat4_rotation_z, Mat4};
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
 
-use crate::control::camera::free::{free, free_pose, from_orbit, look_point, to_orbit};
-use crate::control::camera::orbit::{orbit, orbit_pose};
-use crate::control::camera::store::camera_store;
+use crate::control::camera::config::camera_cfg::projection::FOV;
+use crate::control::camera::config::camera_cfg::smooth::POS_DAMP;
+use crate::control::camera::config::camera_cfg::view::{DEFAULT_AZIMUTH, DEFAULT_POLAR};
+use crate::control::camera::free::{hold, look_point};
+use crate::control::camera::orbit::orbit;
+use crate::control::camera::store::{camera_store, Intent, IntentPatch};
 use crate::global::Global;
+use crate::layer::terrain::ground_snap::ground_or_raw;
 use crate::sched::tick::TickContext;
-use crate::shell::map_store::map_store;
 use crate::shell::setting::store::{settings_store, CameraMode};
 use crate::world::change::request_world_tick;
-use crate::world::frame::coord::local_world_to_canonical;
+use crate::world::frame::coord::{canonical_to_local, local_world_to_canonical};
 use crate::world::frame::view::{view, view_compose, ObserverPose};
+use xpute_core::math::scalar::wrap;
 
-/// How far, in camera distances, the map center may stand from where the view
-/// is for the view to glide there; past it the move is a jump — a search, a
-/// locate — and the view is put there at once. A drag's lag is the damping's
-/// tenth of a second of travel, a fraction of a screen, and a screen is about
-/// a camera distance across.
-pub(crate) const JUMP_DISTANCES: f64 = 1.0;
+// ---- the look, in spherical coordinates about the ground's normal ----
+//
+// Which way a camera looks is a point of the sphere of directions, taken in
+// spherical coordinates about the world's Z: θ the angle from straight down
+// and φ the heading, from north toward east. θ runs over [0, π] — straight
+// down to straight up — and stops there, as the coordinate does; φ is a turn,
+// [−π, π), and wraps. Every controller looks by these, and nothing else is a
+// way to write a direction.
+//
+// The coordinates are not one to one with directions, and cannot be: at
+// either pole every φ names the one direction, as spherical coordinates do.
+// φ is kept there all the same, the heading the look comes back down along
+// when it tilts away. Nor is a direction a camera's whole turn: a turn about
+// the look itself, a roll, is left, and no rule chooses it smoothly over the
+// whole sphere — at the poles the look is the world's up, and nothing is
+// across from it. Roll is no control here; the camera's turn is the
+// convention `look_rotation` states, under which φ at a pole turns the screen
+// about the look rather than the look.
 
-/// The active controller put where navigation has the map before anything
-/// observes it, where that is a jump away or the controller is not placed
-/// yet: what the effects turn set the map center to is what the turn's
-/// demand is made from, and a search asks for the pages of where it went and
-/// not of where the view was. A move within the jump distance is left to the
-/// tick's damping, so what is observed is the view being drawn and not the
-/// control's target. A tracker takes no navigation.
-pub fn snap_step() {
-    match active() {
-        Active::Orbit => {
-            crate::control::camera::orbit::snap_if_discontinuous();
-        }
-        Active::Free => {
-            crate::control::camera::free::navigate();
-        }
-        Active::Tracked => {}
+/// A look's coordinates brought into their domain: θ within straight down
+/// and straight up, φ wrapped to a turn.
+pub fn look_domain(theta: f64, phi: f64) -> (f64, f64) {
+    (theta.clamp(0.0, core::f64::consts::PI), wrap(phi, -core::f64::consts::PI, core::f64::consts::PI))
+}
+
+/// The unit direction a look at (θ, φ) points along.
+pub fn look_dir(theta: f64, phi: f64) -> V3 {
+    let (st, ct) = (libm::sin(theta), libm::cos(theta));
+    let (sp, cp) = (libm::sin(phi), libm::cos(phi));
+    [st * sp, st * cp, -ct]
+}
+
+/// The turn from the world's axes to the camera's for a look at (θ, φ), the
+/// camera looking along `look_dir`: the world turned by the heading, then
+/// about the camera's right by θ — straight down at zero with the heading up
+/// the screen, the world's up toward the screen's up between the poles. A
+/// rotation at every (θ, φ), the poles included, where it is the heading's
+/// turn of the screen alone.
+pub fn look_rotation(theta: f64, phi: f64) -> Mat4 {
+    let mut heading = mat4();
+    mat4_rotation_z(&mut heading, phi);
+    let (s, c) = (libm::sin(theta), libm::cos(theta));
+    let mut tilt = mat4();
+    (tilt[5], tilt[6], tilt[9], tilt[10]) = (c, -s, s, c);
+    let mut rotation: Mat4 = mat4();
+    mat4_mul(&mut rotation, &tilt, &heading);
+    rotation
+}
+
+/// How many units a pixel spans at `dist` along the look, on the screen as
+/// it is: the view's height there over its height in pixels. A drag that
+/// carries the ground this far a pixel keeps what is at that distance under
+/// the finger.
+pub fn units_per_px_at(dist: f64) -> f64 {
+    2.0 * dist * (FOV * core::f64::consts::PI / 360.0).tan() / view().height
+}
+
+/// Exponential-decay ease-toward-target factor for one frame of `delta`
+/// seconds at rate `k` (bigger k = snappier convergence). Shared by every
+/// damped camera value in this module tree (the orbit's in its `turn`, the
+/// free camera's in free.rs) so they all converge with the same
+/// characteristic curve — apply as
+/// `current += (target - current) * damp_alpha(k, delta)`.
+pub fn damp_alpha(k: f64, delta: f64) -> f64 {
+    1.0 - libm::exp(-k * delta)
+}
+
+/// What is left of a hand's move once it is under this, in world units: a
+/// sub-pixel remainder at any distance the view is looked across, taken
+/// whole so the camera comes to rest.
+const TRAVEL_EPS: f64 = 0.001;
+
+/// This turn's share of the hand's move (`CameraStore::travel`), taken out
+/// of it whatever the controller then makes of it: eased over `delta`
+/// seconds, the whole of a remainder too small to see. None where nothing
+/// is left to move by.
+pub(crate) fn spend_travel(delta: f64) -> Option<[f64; 2]> {
+    let travel = &mut camera_store().travel;
+    if *travel == [0.0; 2] {
+        return None;
     }
+    let a = damp_alpha(POS_DAMP, delta);
+    let rest: [f64; 2] = std::array::from_fn(|k| travel[k] * (1.0 - a));
+    let share = if rest.iter().all(|r| r.abs() < TRAVEL_EPS) {
+        *travel
+    } else {
+        std::array::from_fn(|k| travel[k] * a)
+    };
+    *travel = std::array::from_fn(|k| travel[k] - share[k]);
+    if travel.iter().all(|r| r.abs() < TRAVEL_EPS) {
+        *travel = [0.0; 2];
+    }
+    Some(share)
+}
+
+/// The observer: where the eye is and which way it looks, as drawn. The eye
+/// is in the view's root frame, in doubles, and moves with the origin
+/// (`rebase`): a canonical point holds a unit's 256th, and the orbit puts
+/// the eye back from what it derives of it every frame, so a rounding held
+/// in it would walk the map center. None before navigation has put it
+/// anywhere.
+pub struct Camera {
+    pub eye: Option<V3>,
+    /// The heading about Z and the angle down from vertical.
+    pub yaw: f64,
+    pub pitch: f64,
+}
+
+static CAMERA: Global<Camera> = Global::new();
+
+pub fn camera() -> &'static mut Camera {
+    // Where the controls start, so nothing eases at the first frame.
+    CAMERA.get(|| Camera {
+        eye: None,
+        yaw: DEFAULT_AZIMUTH,
+        pitch: DEFAULT_POLAR,
+    })
+}
+
+/// The eye in the view's root frame.
+pub fn eye_local() -> Option<V3> {
+    camera().eye
+}
+
+/// The eye put at `at`, in the view's root frame.
+pub fn set_eye_local(at: &V3) {
+    camera().eye = Some(*at);
+}
+
+/// How far ahead of the eye, along the look, the active controller turns
+/// about: the orbit's distance, and none first person or tracked.
+pub fn radius() -> f64 {
+    match active() {
+        Active::Orbit => orbit().dist,
+        Active::Free | Active::Tracked => 0.0,
+    }
+}
+
+/// The map center in the view's root frame: `radius` ahead of the drawn
+/// eye along its look — the tracked eye itself while a tracker holds the
+/// pose.
+pub fn center_local() -> Option<V3> {
+    camera().eye?;
+    if active() == Active::Tracked {
+        return Some(view().pose.eye);
+    }
+    let (e, c) = (eye_local()?, camera());
+    let (d, r) = (look_dir(c.pitch, c.yaw), radius());
+    Some(std::array::from_fn(|k| e[k] + d[k] * r))
+}
+
+/// The map center: the character's place, and what the world is related to
+/// the camera by — derived from the camera, canonical and absolute.
+pub fn map_center() -> Option<Pvf3> {
+    let at = center_local()?;
+    let mut c = Pvf3::default();
+    local_world_to_canonical(&mut c, &at, view().origin);
+    Some(c)
+}
+
+/// The camera put so the map center is `target`, its look kept: a
+/// navigation command or a change of person, a place said outright, so
+/// what the hand had still to move by goes with what it moved from. A
+/// tracker's pose takes none: its eye is the tracker's, and no base under
+/// it is moved in its place.
+pub fn put_center(target: Pvf3) {
+    camera_store().travel = [0.0; 2];
+    if active() == Active::Tracked {
+        return;
+    }
+    let at = canonical_to_local(&target, view().origin);
+    let c = camera();
+    let (d, r) = (look_dir(c.pitch, c.yaw), radius());
+    set_eye_local(&std::array::from_fn(|k| at[k] - d[k] * r));
+    if active() == Active::Free {
+        hold();
+    }
+    view_compose();
+    request_world_tick();
 }
 
 /// Which controller makes the pose now.
@@ -110,15 +278,19 @@ pub fn pose() -> ObserverPose {
                 rotation: transpose3(&camera_to_world),
             }
         }
-        (None, CameraMode::orbit) => orbit_pose(orbit()),
-        (None, CameraMode::free) => free_pose(free()),
+        (None, _) => {
+            let cam = camera();
+            ObserverPose {
+                eye: eye_local().unwrap_or_default(),
+                rotation: look_rotation(cam.pitch, cam.yaw),
+            }
+        }
     }
 }
 
 /// How far the view looks: from the eye to what it looks at along its
-/// forward ray — the orbit's distance to its pivot, and for any other
-/// controller what its look falls on (free.rs `look_point`), measured once a
-/// pose. What reads it takes the view's reach, whichever controller made it.
+/// forward ray — the orbit's radius, and for any other controller what its
+/// look falls on (free.rs `look_point`), measured once a pose. What reads it takes the view's reach, whichever controller made it.
 pub fn look_distance() -> f64 {
     if active() == Active::Orbit {
         return orbit().dist;
@@ -130,52 +302,142 @@ pub fn look_distance() -> f64 {
     }
     let r = &now.rotation;
     let forward = [-r[2], -r[6], -r[10]];
-    let at = look_point(now.eye, forward, camera_store().view_state.dist);
+    let at = look_point(now.eye, forward, view().far);
     let d = (0..3).map(|k| (at[k] - now.eye[k]).powi(2)).sum::<f64>().sqrt();
     c.look = Some((now, d));
     d
 }
 
-/// Every controller's positions moved with the origin, `by` the origin's
-/// own move: the base under a tracker too, which it comes back to.
+/// The camera's eye and a tracker's place moved with the origin, `by` the
+/// origin's own move.
 pub fn rebase(by: V3) {
-    let o = orbit();
-    o.pivot = std::array::from_fn(|k| o.pivot[k] - by[k]);
-    crate::control::camera::free::rebase(by);
+    if let Some(e) = &mut camera().eye {
+        *e = std::array::from_fn(|k| e[k] - by[k]);
+    }
     if let Some(t) = &mut controllers().tracked {
         t.world_at = std::array::from_fn(|k| t.world_at[k] - by[k]);
     }
 }
 
+/// The controls ask `partial` of the camera: the intent as far as the active
+/// controller takes it — the orbit no further than terrain lets it go
+/// (orbit.rs `ask`), the free camera as asked within the controls' ranges.
+/// What it took, which a gesture goes on from (gesture.rs).
+pub fn set_intent(partial: IntentPatch) -> Intent {
+    match active() {
+        Active::Orbit => crate::control::camera::orbit::ask(partial),
+        Active::Free | Active::Tracked => {
+            let c = camera_store();
+            c.commit_intent(c.merged(partial));
+            c.intent
+        }
+    }
+}
+
+/// North up: the heading the controls ask, back to its default; the tilt
+/// is left as the user set it, since "align north" is what both the compass
+/// button and the follow mode's end mean.
+pub fn reset_azimuth() {
+    set_intent(IntentPatch {
+        azimuth: Some(DEFAULT_AZIMUTH),
+        ..Default::default()
+    });
+}
+
+/// The distance the controls ask, back to its default.
+pub fn reset_dist() {
+    set_intent(IntentPatch {
+        dist: Some(crate::control::camera::config::camera_cfg::view::DEFAULT_DIST),
+        ..Default::default()
+    });
+}
+
+/// Whether a zoom is in hand — the orbit's alone, as the free camera has
+/// none.
+pub fn zooming() -> bool {
+    active() == Active::Orbit && (crate::control::camera::input::pinching() || crate::control::camera::orbit::zoom_settling())
+}
+
+/// A wheel's turn, `delta_y` in CSS pixels: the orbit's zoom. First person
+/// has none — the eye stands at its height over the ground, and how high is
+/// no control.
+pub fn wheel(delta_y: f64) {
+    if active() == Active::Orbit {
+        crate::control::camera::orbit::wheel(delta_y);
+    }
+}
+
+/// Two fingers came down `span` pixels apart: where a pinch is measured
+/// from.
+pub fn pinch_begin(span: f64) {
+    crate::control::camera::orbit::pinch_begin(span);
+}
+
+/// Two fingers `span` pixels apart: the orbit's zoom, the spread against
+/// where the pinch began. First person has none, as the wheel's.
+pub fn pinch(span: f64) {
+    if active() == Active::Orbit {
+        crate::control::camera::orbit::pinch(span);
+    }
+}
+
+/// The camera brought to `at` to look closer at it: put there, and nearer
+/// where it has a nearer to be — the orbit halves its distance.
+pub fn focus(at: Pvf3) {
+    crate::shell::shell::go_to(at);
+    if active() == Active::Orbit {
+        crate::control::camera::orbit::zoom_by(0.5);
+    }
+}
+
 /// The controllers' turn, first in the interaction phase: a change of the
-/// settings' camera mode taken, the view where it was.
+/// settings' camera mode taken. Third person to first, the person stands at
+/// the map center, the eye at its height over the ground, no earlier height
+/// put back; first to third, the map center is laid straight down on the
+/// ground and the eye steps back by the radius. The
+/// controls are where the camera then is, so nothing eases away.
 pub fn controller_step(ctx: &mut TickContext) {
+    if switch() {
+        ctx.invalidate();
+    }
+}
+
+/// The camera's turn, after the input's: the active controller's, and only
+/// its — which one is decided here and nowhere in them. A tracker's pose is
+/// the tracker's and takes no turn.
+pub fn camera_step(ctx: &mut TickContext) {
+    let moving = match active() {
+        Active::Orbit => crate::control::camera::orbit::turn(ctx.delta) == Some(true),
+        Active::Free => crate::control::camera::free::turn(ctx.delta),
+        Active::Tracked => false,
+    };
+    if moving {
+        ctx.invalidate();
+    }
+}
+
+/// The change of camera mode the settings ask, taken: whether there was one.
+fn switch() -> bool {
     let want = settings_store().camera_mode;
     let c = controllers();
     if c.base == want {
-        return;
+        return false;
     }
-    match want {
-        CameraMode::free => from_orbit(orbit()),
-        CameraMode::orbit => {
-            let o = to_orbit(free(), orbit().dist);
-            let mut center = pxl_spec::space::pvf3::pvf3::Pvf3::default();
-            local_world_to_canonical(&mut center, &o.pivot, view().origin);
-            // The orbit stands about the map center, so it is where the
-            // orbit's pivot is; and its controls are where it stands, so
-            // nothing eases away.
-            map_store().map_center = Some(center);
-            camera_store().commit_view(crate::control::camera::store::ViewState {
-                dist: o.dist,
-                azimuth: o.azimuth,
-                polar: o.polar,
-            });
-            *orbit() = o;
-        }
-    }
+    let center = map_center();
     c.base = want;
+    let cam = camera();
+    if want == CameraMode::orbit {
+        camera_store().commit_intent(Intent {
+            dist: orbit().dist,
+            azimuth: cam.yaw,
+            polar: cam.pitch,
+        });
+    }
+    if let Some(center) = center {
+        put_center(if want == CameraMode::orbit { ground_or_raw(&center) } else { center });
+    }
     view_compose();
-    ctx.invalidate();
+    true
 }
 
 /// A tracked pose: the camera at `at` in the tracker's space, turned by the

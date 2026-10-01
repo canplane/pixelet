@@ -43,12 +43,11 @@
     "$doc": [
       "Which controller makes the camera's pose.",
       "",
-      "  orbit — the eye circles what it looks at, and the map center is what",
-      "          it looks at.",
-      "  free  — the eye stands where it is and turns in place; a drag walks",
-      "          it over the ground and the zoom carries it up and down, at one",
-      "          speed everywhere; a search or a recenter carries it there,",
-      "          putting the place where what it looked at was."
+      "  orbit — third person: the camera turns about the map center, its",
+      "          radius ahead of the eye, and a drag moves the map center.",
+      "  free  — first person: the eye is the map center and turns in place;",
+      "          a drag walks it over the ground, the eye at its height over",
+      "          the ground it reaches, and nothing moves it up or down."
     ]
   },
   "CAMERA_COLLISION_MODES": {
@@ -151,14 +150,15 @@
     },
     "camera_mode": {
       "$doc": [
-        "Which controller makes the camera's pose; CAMERA_MODES says each. A",
-        "change keeps the view where it is."
+        "Which controller makes the camera's pose; CAMERA_MODES says each. To",
+        "first person the person stands at the map center, the eye at its",
+        "height over the ground; to third the map center is laid on the ground",
+        "and the eye steps back by the radius."
       ],
       "kind": "choice",
       "default": "orbit",
       "options": "CAMERA_MODES",
-      "section": "camera",
-      "dev": true
+      "section": "camera"
     },
     "camera_collision": {
       "$doc": [

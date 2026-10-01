@@ -24,7 +24,6 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use crate::io::demand::{Ask, Category};
 use crate::io::sched::declare;
 use crate::layer::geocode::store;
-use crate::shell::map_store::map_store;
 
 pub const CATEGORY: Category = Category::geocode;
 pub const DICT_CATEGORY: Category = Category::geocode_dict;
@@ -34,7 +33,7 @@ const DICT_SUBJECT: u64 = 0;
 
 /// The group the map center's page is in.
 pub fn center_group() -> Option<IVec> {
-    map_store().map_center.map(|c| ivec::sh(L3_IDX(c.i), -(GROUP_SHAMT as i32)))
+    crate::control::camera::controller::map_center().map(|c| ivec::sh(L3_IDX(c.i), -(GROUP_SHAMT as i32)))
 }
 
 /// Runs every turn: what the label needs and does not have.

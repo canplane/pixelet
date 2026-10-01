@@ -149,7 +149,7 @@ fn converge_on<S: Serve>(pyramid: &mut Pyramid<PoiPage>, observation: fn() -> Ob
     let floor = floor_of(&observation());
     for turn in 0..2_000 {
         let at = turn as f64 * 16.0;
-        pyramid.observe(&observation(), &Unknown, &ByBounds { tau: Tau::FINEST }, prefetch, Tau::FINEST, allowance);
+        pyramid.observe(Some(&observation()), core::iter::empty(), &Unknown, &ByBounds { tau: Tau::FINEST }, prefetch, Tau::FINEST, allowance);
         if exact(pyramid) && pyramid.wants().is_empty() {
             assert!(floor.iter().all(|&p| pyramid.paging().resident(p)), "the floor is held");
             return;
@@ -228,14 +228,14 @@ fn once_the_floor_is_resident_every_observation_has_an_answer() {
     let _serial = crate::global::serial();
     let mut pyramid = Pyramid::<PoiPage>::default();
     let unanswered = |pyramid: &Pyramid<PoiPage>| pyramid.demand().iter().filter(|&&p| pyramid.drawn_from(p).is_none()).count();
-    pyramid.observe(&the_observation(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
+    pyramid.observe(Some(&the_observation()), core::iter::empty(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
     assert!(unanswered(&pyramid) > 0, "a cold start is open");
     let floor = floor_of(&the_observation());
     assert!(!floor.is_empty() && floor.iter().all(|p| p.level == TOP_LEVEL));
     for p in floor {
         pyramid.admit(p, |_| Ok(crowded(p))).expect("a page is made");
     }
-    pyramid.observe(&the_observation(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
+    pyramid.observe(Some(&the_observation()), core::iter::empty(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
     assert_eq!(unanswered(&pyramid), 0, "pages with no answer");
 }
 
@@ -251,7 +251,7 @@ fn a_page_the_view_no_longer_asks_for_is_no_longer_held_for_it() {
         .filter(|&p| pyramid.paging().hold(p) == Hold::Demand)
         .collect();
     assert!(!read.is_empty(), "the view held its pages for itself");
-    pyramid.observe(&elsewhere(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
+    pyramid.observe(Some(&elsewhere()), core::iter::empty(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
     for &p in &read {
         assert!(pyramid.paging().asked(p).is_none(), "{p:?} is asked for from elsewhere");
         assert_eq!(pyramid.paging().hold(p), Hold::Cache, "{p:?} still held for a view that left it");
@@ -268,7 +268,7 @@ fn the_floor_is_declared_again_by_the_next_observation_after_an_idle_one() {
     let mut pyramid = Pyramid::<PoiPage>::default();
     let floor = floor_of(&the_observation());
     let why = |pyramid: &Pyramid<PoiPage>, p: LevelPage| pyramid.paging().asked(p).map(|a| a.why);
-    let observe = |pyramid: &mut Pyramid<PoiPage>| pyramid.observe(&the_observation(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
+    let observe = |pyramid: &mut Pyramid<PoiPage>| pyramid.observe(Some(&the_observation()), core::iter::empty(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
     observe(&mut pyramid);
     for &p in &floor {
         pyramid.admit(p, |_| Ok(crowded(p))).expect("a page is made");

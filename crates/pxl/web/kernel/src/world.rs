@@ -18,4 +18,4 @@ pub mod quality;
 
 #[cfg(test)]
 #[path = "world/fixture.test.rs"]
-mod fixture;
+pub(crate) mod fixture;

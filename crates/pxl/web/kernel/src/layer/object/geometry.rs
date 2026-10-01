@@ -2,7 +2,7 @@
 
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::fvec::FVec;
-use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::v3::V3;
 
@@ -39,8 +39,7 @@ pub fn anchor_center(anchor: &Pvf3) -> Pvf3 {
 /// same low-magnitude space the billboards' local positions and camera/ray.rs's
 /// pick already operate in.
 pub fn object_local_corner(i: IVec, f: FVec, map_origin: IVec) -> V3 {
-    let local = Pvf3 { i: ivec::sub(i, map_origin), f };
-    [pvf3::to_real(pvf3::X(&local)), pvf3::to_real(pvf3::Y(&local)), pvf3::to_real(pvf3::Z(&local))]
+    crate::world::frame::coord::canonical_to_local(&Pvf3 { i, f }, map_origin)
 }
 
 pub use pxl_spec::space::v3::Aabb;

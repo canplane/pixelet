@@ -11,6 +11,11 @@ pub mod camera_cfg {
         pub const NEAR: f64 = 0.1;
     }
     pub mod view {
+        /// How far over the ground drawn under it an eye stands at least: one
+        /// cell, so a bicubic elevation sample disagreeing slightly with the
+        /// voxel it produced cannot put the eye inside a block.
+        pub const EYE_CLEARANCE_U: f64 = 1.0;
+
         /// 4 * 4.
         pub const DEFAULT_DIST: f64 = 16.0;
         pub const DEFAULT_AZIMUTH: f64 = 0.0;
@@ -34,12 +39,13 @@ pub mod camera_cfg {
         pub const MAX_DIST: f64 = 262144.0;
     }
     pub mod free {
-        /// How far the free camera moves for a pixel of drag, wheel or
-        /// pinch, in units: one speed wherever it stands and whichever way
-        /// it goes — across, along the ground, or up. A product number: a
-        /// hundred pixels, a drag or a wheel's notch, is about ten meters at
-        /// Seoul's latitude, as far as Minecraft's flight goes in a second.
-        pub const UNITS_PER_PX: f64 = 0.05;
+        /// How high the free camera's eye stands over the ground it walks
+        /// on, in units. A knob, set by eye and derived from nothing: no
+        /// relation to the lattice, the orbit's pivot or anything else
+        /// fixes it. Nor is it the eye's clearance (`view::EYE_CLEARANCE_U`),
+        /// which is how near the ground an eye may come and not where an eye
+        /// stands.
+        pub const EYE_HEIGHT_U: f64 = 1.5;
     }
     pub mod input {
         /// How much of the viewport a vertical drag has to cover to sweep the

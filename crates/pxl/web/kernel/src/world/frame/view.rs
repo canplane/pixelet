@@ -24,7 +24,6 @@ use crate::control::camera::controller::{pose, rebase};
 use crate::global::Global;
 use crate::layer::environment::config::render_cfg;
 use crate::layer::environment::fog::{far_clip_at, height_at, near_clip_at};
-use crate::shell::map_store::map_store;
 use crate::world::frame::coord::{local_world_to_canonical, origin_for};
 use pxl_spec::space::lod;
 use pxl_spec::space::pyramid::TOP_LEVEL;
@@ -135,9 +134,9 @@ pub fn globe_anchor_local() -> V3 {
 }
 
 /// The globe's anchor in units: what the planet's latitude, its units and
-/// the sky over it are taken at. None before there is a map to stand over.
+/// the sky over it are taken at. None before the camera stands somewhere.
 pub fn globe_anchor() -> Option<Pvf3> {
-    map_store().map_center?;
+    crate::control::camera::controller::camera().eye?;
     let mut out = Pvf3::default();
     local_world_to_canonical(&mut out, &globe_anchor_local(), view().origin);
     Some(out)
@@ -171,8 +170,7 @@ pub fn view_compose() {
     let level = lod::level(height_at(v.eye_at())).clamp(0, TOP_LEVEL as i32) as u32;
     let want = origin_for(at.i, level);
     if want != v.origin {
-        let d = ivec::sub(want, v.origin);
-        rebase([ivec::to_real(ivec::X(d)), ivec::to_real(ivec::Y(d)), ivec::to_real(ivec::Z(d))]);
+        rebase(crate::world::frame::coord::offset(want, v.origin));
         v.origin = want;
         v.pose = pose();
     }

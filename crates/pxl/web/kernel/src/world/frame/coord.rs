@@ -30,8 +30,39 @@ pub fn local_world_origin() -> IVec {
     view().origin
 }
 
+/// Where a lattice address lies from `origin`, in units of the frame the
+/// view is drawn in. X the short way round, since its lane is one world;
+/// Y and Z are bounded, and a difference past half a lane is a real one, not
+/// the way back round — the lanes' own difference would wrap it, and a point
+/// read across that wrap lands a lane's length away.
+pub fn offset(i: IVec, origin: IVec) -> V3 {
+    let along = |lane: fn(IVec) -> i64| ivec::to_real(lane(i)) - ivec::to_real(lane(origin));
+    [ivec::to_real(ivec::X(ivec::sub(i, origin))), along(ivec::Y), along(ivec::Z)]
+}
+
+/// A height in units — the ground's top, as the query answers it — in the
+/// frame whose origin is `origin`. The origin follows the eye up, so a
+/// height read against the frame's own Z without this is off by as much as
+/// the eye is high.
+pub fn local_height(z: f64, origin: IVec) -> f64 {
+    z - ivec::to_real(ivec::Z(origin))
+}
+
+/// A canonical point in the frame whose origin is `origin`:
+/// `local_world_to_canonical`'s inverse.
+pub fn canonical_to_local(p: &Pvf3, origin: IVec) -> V3 {
+    let at = offset(p.i, origin);
+    let mut f = [0.0; 3];
+    projection::unproject(&mut f, 0, p.f);
+    std::array::from_fn(|k| at[k] + f[k])
+}
+
 pub fn local_world_to_canonical<'a>(out: &'a mut Pvf3, local: &V3, map_origin: IVec) -> &'a mut Pvf3 {
     projection::project(out, local[0], local[1], local[2]);
     out.i = ivec::add(out.i, map_origin);
     out
 }
+
+#[cfg(test)]
+#[path = "coord.test.rs"]
+mod test;

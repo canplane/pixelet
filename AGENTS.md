@@ -275,6 +275,17 @@ art where one exists (Minecraft's chunk model for grid content, Cesium's
   the problem impossible — before optimizing it, extending it, guarding it
   or repairing it. Compatibility with an internal detail is worth nothing;
   only a contract something outside this tree depends on is.
+- **One fact, one owner; the rest derived.** Before keeping a value, ask
+  whether it follows from another; if it does, compute it where it is read.
+  Before a module reads a concept, ask whether it should know it or only
+  the contract above it: a controller's words (a pivot, a radius, a zoom)
+  stay in the controller, and what is generic reads the geometric fact
+  (the eye, the look, the map center). Code that keeps one value in step
+  with another — sets B when A changes, resets it on a mode change, moves
+  it on a rebase, snaps it on a jump — is a second copy of a truth: remove
+  the copy, do not tune the sync. Nor is a derived value written back into
+  what it was derived from on every turn; where an outside event changes
+  the source, the event writes it once (the camera, 2026-10-01).
 - **Remove a state rather than handle it.** In order: make the bad state
   unrepresentable; remove the boundary that creates it; fold two
   representations into one; move ownership or lifetime so the conflict

@@ -8,8 +8,8 @@
 pub mod config;
 pub mod controller;
 pub mod free;
+pub mod gesture;
 pub mod input;
 pub mod orbit;
 pub mod ray;
 pub mod store;
-pub mod terrain_gate;

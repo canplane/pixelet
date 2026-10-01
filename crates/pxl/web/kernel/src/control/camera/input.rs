@@ -13,23 +13,21 @@
 
 use std::collections::BTreeMap;
 
-use camera_cfg::input::{AXIS_LOCK_THRESHOLD_PX, DOLLY_GAIN, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION};
-use camera_cfg::projection::FOV;
+use camera_cfg::input::{AXIS_LOCK_THRESHOLD_PX, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION};
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::cell::object::PlaceableCube;
 use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::pvf3::ivec::IVec;
-use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
 
 pub use crate::abi::cmd::{ActiveTool, PointerKind};
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::controller::{active, Active};
-use crate::control::camera::orbit::orbit;
+use crate::control::camera::gesture::{linear, Anchor};
 use crate::control::camera::ray::{ray_pick, resolve_hit_object, world_adjacent_corner, world_hover_pvf3, world_struck_corner};
-use crate::control::camera::store::{camera_store, CameraStatus, ViewPatch};
-use crate::control::camera::terrain_gate::{allowed_pan, ViewTriple};
+use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
+use crate::control::navigation::destination::cancel as cancel_destination;
 use crate::global::Global;
 use crate::layer::decor::hit::raycast_decor;
 use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
@@ -37,7 +35,6 @@ use crate::layer::object::geometry::{anchor_center, object_aabb, object_center};
 use crate::layer::object::size::{DECOR_SIZE, DEFAULT_OBJECT_SIZE};
 use crate::layer::object::store::{get_placed_object, place, place_air, place_decor, remove, OccupiedEntry};
 use crate::layer::terrain::ground_snap::ground_or_raw;
-use crate::shell::map_store::map_store;
 use crate::shell::setting::store::settings_store;
 use crate::world::access::Hit;
 use crate::world::change::request_world_tick;
@@ -131,16 +128,14 @@ struct Input {
     // since a distance change can cross every visible chunk's threshold at once.
     // Summing deltaY before one exp() is exact: exp(a)*exp(b) == exp(a+b).
     pending_wheel_delta_y: Option<f64>,
-    /// The wheel turned under the free camera: its rise.
-    pending_wheel_rise: Option<f64>,
 
     // ---- rotate-drag ----
-    rotate_start_angle: f64,
-    rotate_start_azimuth: f64,
-    /// The pitch when the drag began: a tilt is the drag's whole vertical
-    /// travel from there, as a pinch's is from its fingers' first midpoint.
-    rotate_start_polar: f64,
-    rotate_anchored: bool,
+    /// The heading against the cursor's angle about screen center, once a
+    /// sample far enough from it to read has anchored it.
+    rotate_turn: Option<Anchor>,
+    /// The tilt against the cursor's height: a tilt is the drag's vertical
+    /// travel from there, as a pinch's is from its fingers' midpoint.
+    rotate_tilt: Anchor,
     rotate_drag_start_x: f64,
     rotate_drag_start_y: f64,
     rotate_axis_lock: RotateAxisLock,
@@ -148,15 +143,11 @@ struct Input {
     // ---- multi-touch ----
     active_pointers: BTreeMap<i32, PointerPos>,
     pinch_start_dist: f64,
-    /// The fingers' distance at the last move: what a free camera's rise is
-    /// the change of.
-    pinch_last_dist: f64,
-    pinch_start_angle: f64,
-    pinch_start_midpoint_y: f64,
-    pinch_start_view_dist: f64,
-    pinch_start_azimuth: f64,
-    pinch_start_polar: f64,
-    twist_anchored: bool,
+    /// The tilt against the fingers' midpoint.
+    pinch_tilt: Anchor,
+    /// The heading against the fingers' angle, once they are far enough
+    /// apart to read it.
+    pinch_twist: Option<Anchor>,
 }
 
 static INPUT: Global<Input> = Global::new();
@@ -180,23 +171,15 @@ fn input() -> &'static mut Input {
         pending_client_x: 0.0,
         pending_client_y: 0.0,
         pending_wheel_delta_y: None,
-        pending_wheel_rise: None,
-        rotate_start_angle: 0.0,
-        rotate_start_azimuth: 0.0,
-        rotate_start_polar: 0.0,
-        rotate_anchored: false,
+        rotate_turn: None,
+        rotate_tilt: Anchor::new(0.0, 0.0),
         rotate_drag_start_x: 0.0,
         rotate_drag_start_y: 0.0,
         rotate_axis_lock: RotateAxisLock::None,
         active_pointers: BTreeMap::new(),
         pinch_start_dist: 0.0,
-        pinch_last_dist: 0.0,
-        pinch_start_angle: 0.0,
-        pinch_start_midpoint_y: 0.0,
-        pinch_start_view_dist: 0.0,
-        pinch_start_azimuth: 0.0,
-        pinch_start_polar: 0.0,
-        twist_anchored: false,
+        pinch_tilt: Anchor::new(0.0, 0.0),
+        pinch_twist: None,
     })
 }
 
@@ -231,7 +214,7 @@ fn handle_tap(hovered: Pvf3) {
                 Some(o) => object_center(&o, local_world_origin()),
                 None => ground_or_raw(&anchor_center(&hovered)),
             };
-            map_store().navigate_to(target);
+            crate::control::navigation::destination::go_to(target);
         }
         ActiveTool::Eraser => {
             // Targets the object the raycast actually struck, not a grid-key
@@ -285,43 +268,21 @@ fn update_pointer(s: &mut Input, client_x: f64, client_y: f64) {
     s.pointer_y = -((client_y - rect.top) / rect.height) * 2.0 + 1.0;
 }
 
-/// Shared pan implementation — driven by either a mouse left-drag or a single touch.
+/// Shared pan implementation — driven by either a mouse left-drag or a single
+/// touch: the active controller's own. A pan puts the map center by hand, so
+/// a destination still waiting for its ground goes.
 fn do_pan(dx: f64, dy: f64) {
     match active() {
-        Active::Orbit => {}
-        Active::Free => return crate::control::camera::free::pan(dx, dy),
-        Active::Tracked => return,
+        Active::Orbit => {
+            cancel_destination();
+            crate::control::camera::orbit::pan(dx, dy);
+        }
+        Active::Free => {
+            cancel_destination();
+            crate::control::camera::free::pan(dx, dy);
+        }
+        Active::Tracked => {}
     }
-    let view_state = camera_store().view_state;
-    let Some(map_center) = map_store().map_center else { return };
-
-    let view_h = 2.0 * view_state.dist * (FOV * core::f64::consts::PI / 360.0).tan();
-    let units_per_px = view_h / view().height;
-    let lx = -dx * units_per_px;
-    let ly = dy * units_per_px;
-    let azimuth = orbit().azimuth;
-    let wx = lx * azimuth.cos() + ly * azimuth.sin();
-    let wy = -lx * azimuth.sin() + ly * azimuth.cos();
-
-    let mut center = [0.0; 3];
-    projection::unproject(&mut center, map_center.i, map_center.f);
-    let mut next_center = Pvf3::default();
-    projection::project(&mut next_center, center[0] + wx, center[1] + wy, center[2]);
-
-    // ground_or_raw shares the exact same "zero Z, then sample real terrain
-    // height" step every map_center-setting interaction that respects
-    // ground_snap goes through.
-    let desired = if settings_store().ground_snap { ground_or_raw(&next_center) } else { next_center };
-    // Gated after the snap, not before: the snap moves the target's Z, and the
-    // eye rides on it. Panning is the one control that moves the target.
-    map_store().map_center = Some(allowed_pan(
-        ViewTriple {
-            dist: view_state.dist,
-            polar: view_state.polar,
-            azimuth: view_state.azimuth,
-        },
-        &desired,
-    ));
 }
 
 /// Azimuth tracks the cursor's angle around screen center since drag-start
@@ -346,45 +307,38 @@ fn do_rotate(s: &mut Input, client_x: f64, client_y: f64) {
         s.rotate_axis_lock = if total_dy.abs() > total_dx.abs() { RotateAxisLock::Tilt } else { RotateAxisLock::Rotate };
     }
 
-    let camera = camera_store();
-    let view_state = camera.view_state;
-
     if s.rotate_axis_lock == RotateAxisLock::Tilt {
         // tilt_lock only gates this write — an experiment toggle for a
         // fixed-tilt UX, not yet a decided product change.
         if !settings_store().tilt_lock {
-            camera.set_view_state(ViewPatch {
-                polar: Some(s.rotate_start_polar + (client_y - s.rotate_drag_start_y) * tilt_gain()),
+            let polar = s.rotate_tilt.ask(client_y, linear(tilt_gain()));
+            let took = crate::control::camera::controller::set_intent(IntentPatch {
+                polar: Some(polar),
                 ..Default::default()
             });
+            s.rotate_tilt.settle(polar, took.polar, client_y);
         }
         return;
     }
 
-    let mut next_azimuth = view_state.azimuth;
-    if let Some(rect) = s.rect {
-        let dx = client_x - (rect.left + rect.width / 2.0);
-        let dyc = client_y - (rect.top + rect.height / 2.0);
-        // atan2's angle is numerically unstable close to the pivot: freeze
-        // azimuth and drop the anchor below that radius, re-anchoring from the
-        // next reliable sample.
-        if dx.hypot(dyc) >= MIN_ROTATE_RADIUS_PX {
-            let cur_angle = dyc.atan2(dx);
-            if !s.rotate_anchored {
-                s.rotate_start_angle = cur_angle;
-                s.rotate_start_azimuth = view_state.azimuth;
-                s.rotate_anchored = true;
-            } else {
-                next_azimuth = s.rotate_start_azimuth - (cur_angle - s.rotate_start_angle);
-            }
-        } else {
-            s.rotate_anchored = false;
-        }
+    let Some(rect) = s.rect else { return };
+    let dx = client_x - (rect.left + rect.width / 2.0);
+    let dyc = client_y - (rect.top + rect.height / 2.0);
+    // atan2's angle is numerically unstable close to the pivot: freeze
+    // azimuth and drop the anchor below that radius, re-anchoring from the
+    // next reliable sample.
+    if dx.hypot(dyc) < MIN_ROTATE_RADIUS_PX {
+        s.rotate_turn = None;
+        return;
     }
-    camera.set_view_state(ViewPatch {
-        azimuth: Some(next_azimuth),
+    let angle = dyc.atan2(dx);
+    let turn = s.rotate_turn.get_or_insert(Anchor::new(camera_store().intent.azimuth, angle));
+    let azimuth = turn.ask(angle, linear(-1.0));
+    let took = crate::control::camera::controller::set_intent(IntentPatch {
+        azimuth: Some(azimuth),
         ..Default::default()
     });
+    turn.settle(azimuth, took.azimuth, angle);
 }
 
 fn pointer_pair(s: &Input) -> Option<(PointerPos, PointerPos)> {
@@ -397,15 +351,12 @@ fn pointer_pair(s: &Input) -> Option<(PointerPos, PointerPos)> {
 fn begin_pinch(s: &mut Input) {
     let Some((p0, p1)) = pointer_pair(s) else { return };
     s.pinch_start_dist = (p1.x - p0.x).hypot(p1.y - p0.y);
-    s.pinch_last_dist = s.pinch_start_dist;
-    s.pinch_start_midpoint_y = (p0.y + p1.y) / 2.0;
-    // The twist angle is re-anchored lazily once the fingers are far enough
-    // apart for it to be reliable.
-    s.twist_anchored = false;
+    crate::control::camera::controller::pinch_begin(s.pinch_start_dist);
     let camera = camera_store();
-    s.pinch_start_view_dist = camera.view_state.dist;
-    s.pinch_start_azimuth = camera.view_state.azimuth;
-    s.pinch_start_polar = camera.view_state.polar;
+    s.pinch_tilt = Anchor::new(camera.intent.polar, (p0.y + p1.y) / 2.0);
+    // The twist angle is anchored lazily once the fingers are far enough
+    // apart for it to be reliable.
+    s.pinch_twist = None;
     s.drag_mode = DragMode::Pinch;
     s.did_drag = true;
     camera.hovered_coord = None;
@@ -420,38 +371,31 @@ fn update_pinch(s: &mut Input) {
     }
     let dist = (p1.x - p0.x).hypot(p1.y - p0.y);
     let midpoint_y = (p0.y + p1.y) / 2.0;
-    // Under the free camera the pinch is its rise, fingers spreading
-    // carrying it down as a zoom in would; the orbit's zoom is the distance
-    // below.
-    let free = active() == Active::Free;
-    if free {
-        crate::control::camera::free::rise(s.pinch_last_dist - dist);
-    }
-    s.pinch_last_dist = dist;
-    // Fingers spreading apart zoom in.
-    let next_dist = s.pinch_start_view_dist * (s.pinch_start_dist / dist);
-    let next_polar = s.pinch_start_polar + (midpoint_y - s.pinch_start_midpoint_y) * tilt_gain();
+    // The fingers' spread is the active controller's zoom; their midpoint
+    // and their turn are the look's.
+    crate::control::camera::controller::pinch(dist);
 
-    let camera = camera_store();
-    let mut next_azimuth = s.pinch_start_azimuth;
-    if dist >= MIN_TWIST_DIST_PX {
-        let angle = (p1.y - p0.y).atan2(p1.x - p0.x);
-        if !s.twist_anchored {
-            s.pinch_start_angle = angle;
-            s.pinch_start_azimuth = camera.view_state.azimuth;
-            s.twist_anchored = true;
-            next_azimuth = s.pinch_start_azimuth;
-        } else {
-            next_azimuth = s.pinch_start_azimuth - (angle - s.pinch_start_angle);
-        }
-    } else {
-        s.twist_anchored = false;
+    let intent = camera_store().intent;
+    // A control the fingers did not move is not asked: a pinch that only
+    // zooms writes no tilt, which the ground could hold to where it is.
+    let polar = s.pinch_tilt.ask(midpoint_y, linear(tilt_gain()));
+    let polar = (!settings_store().tilt_lock && polar != intent.polar).then_some(polar);
+    let angle = (p1.y - p0.y).atan2(p1.x - p0.x);
+    if dist < MIN_TWIST_DIST_PX {
+        s.pinch_twist = None;
     }
-    camera.set_view_state(ViewPatch {
-        dist: (!free).then_some(next_dist),
-        azimuth: Some(next_azimuth),
-        polar: (!settings_store().tilt_lock).then_some(next_polar),
-    });
+    let twist = (dist >= MIN_TWIST_DIST_PX).then(|| *s.pinch_twist.get_or_insert(Anchor::new(intent.azimuth, angle)));
+    let azimuth = twist.map(|t| t.ask(angle, linear(-1.0))).filter(|&a| a != intent.azimuth);
+    if polar.is_none() && azimuth.is_none() {
+        return;
+    }
+    let took = crate::control::camera::controller::set_intent(IntentPatch { dist: None, azimuth, polar });
+    if let Some(polar) = polar {
+        s.pinch_tilt.settle(polar, took.polar, midpoint_y);
+    }
+    if let (Some(azimuth), Some(t)) = (azimuth, &mut s.pinch_twist) {
+        t.settle(azimuth, took.azimuth, angle);
+    }
 }
 
 /// A pointer went down on the canvas.
@@ -491,13 +435,14 @@ pub fn camera_pointer_down(kind: PointerKind, pointer_id: i32, button: i32, clie
     s.tap_start_x = client_x;
     s.tap_start_y = client_y;
     if s.drag_mode == DragMode::Rotate {
-        // The anchor is captured lazily by do_rotate on the first reliable
-        // sample — the down position may be within MIN_ROTATE_RADIUS_PX.
-        s.rotate_anchored = false;
+        // The turn's anchor is captured lazily by do_rotate on the first
+        // reliable sample — the down position may be within
+        // MIN_ROTATE_RADIUS_PX.
+        s.rotate_turn = None;
         s.rotate_axis_lock = RotateAxisLock::None;
         s.rotate_drag_start_x = client_x;
         s.rotate_drag_start_y = client_y;
-        s.rotate_start_polar = camera.view_state.polar;
+        s.rotate_tilt = Anchor::new(camera.intent.polar, client_y);
     }
     update_pointer(s, client_x, client_y);
     camera.camera_status = CameraStatus::Drag;
@@ -672,12 +617,9 @@ pub fn camera_pointer_out() {
     clear_hovered_once();
 }
 
-/// A wheel event's turn in CSS pixels: the free camera's rise, or the
-/// orbit's zoom.
+/// A wheel event's turn in CSS pixels.
 pub fn camera_wheel(delta_y: f64) {
-    let s = input();
-    let pending = if active() == Active::Free { &mut s.pending_wheel_rise } else { &mut s.pending_wheel_delta_y };
-    *pending.get_or_insert(0.0) += delta_y;
+    *input().pending_wheel_delta_y.get_or_insert(0.0) += delta_y;
 }
 
 /// The input's turn, once a frame: the coalesced hover, drag and wheel.
@@ -704,16 +646,8 @@ pub fn camera_input_step() {
         s.pending_pan_dx = 0.0;
         s.pending_pan_dy = 0.0;
     }
-    if let Some(delta_y) = s.pending_wheel_rise.take() {
-        crate::control::camera::free::rise(delta_y);
-    }
     if let Some(delta_y) = s.pending_wheel_delta_y.take() {
-        let camera = camera_store();
-        camera.set_view_state(ViewPatch {
-            dist: Some(camera.view_state.dist * (delta_y * DOLLY_GAIN).exp()),
-            ..Default::default()
-        });
-        camera.wheel_zooming = true;
+        crate::control::camera::controller::wheel(delta_y);
     }
 }
 

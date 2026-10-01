@@ -5,7 +5,6 @@ use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 
 use crate::control::sensor::store::device_location_store;
 use crate::global::Global;
-use crate::shell::map_store::map_store;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct MapNavigation {
@@ -45,7 +44,7 @@ pub fn map_navigation_step() {
     // distance above threshold indefinitely, even sitting exactly on the
     // recentered X/Y spot. Navigation here is inherently horizontal (a top-down
     // map), so only X/Y should decide "did the user wander away".
-    match (map_store().map_center, device_coord()) {
+    match (crate::control::camera::controller::map_center(), device_coord()) {
         (Some(center), Some(device)) => {
             // X occupies one complete signed lane/world period, so PVF3
             // subtraction gives the short delta across the antimeridian instead

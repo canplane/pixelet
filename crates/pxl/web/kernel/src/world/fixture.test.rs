@@ -189,3 +189,17 @@ pub fn eye(eye: V3, forward: Option<V3>, far: f64, ground: f64) -> Observation {
         ground,
     }
 }
+
+/// The orbit at `dist`, looking at (θ, φ) = (`polar`, `azimuth`) — controls
+/// and drawn alike — about `center` in the view's root frame.
+pub fn place(center: V3, dist: f64, polar: f64, azimuth: f64) {
+    use crate::control::camera::controller::{camera, set_eye_local};
+    use crate::control::camera::orbit::{orbit, orbit_eye_offset};
+    use crate::control::camera::store::{camera_store, Intent};
+    orbit().dist = dist;
+    let cam = camera();
+    (cam.pitch, cam.yaw) = (polar, azimuth);
+    camera_store().intent = Intent { dist, azimuth, polar };
+    let e = orbit_eye_offset(dist, polar, azimuth);
+    set_eye_local(&std::array::from_fn(|k| center[k] + e[k]));
+}

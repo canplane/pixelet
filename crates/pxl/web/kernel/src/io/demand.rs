@@ -110,6 +110,9 @@ pub enum Why {
     /// A page of the fallback that keeps every observation answered
     /// (world/paging/floor.rs).
     Floor,
+    /// A page on the line over a destination the camera is not put at
+    /// before its ground is known exactly (control/navigation/destination.rs).
+    Destination,
     /// A page the view reads now: a fault where it is not resident.
     Fault,
     /// Speculation (world/prefetch.rs): more than was asked, in case it will
