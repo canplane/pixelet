@@ -607,20 +607,12 @@ const LANE_ALIGN: u32 = 64;
 /// `.fixed.profiler`: every lane, end to end.
 pub const PROFILER_BYTES: u32 = span_of(&LANES, LANE_ALIGN);
 
-/// `lane`, as `cap` records, zeroed. Under a native test, which lays no
-/// memory out, the host's own allocator stands in: leaked once, which is what
-/// the kernel's lane is too — the profiler holds its rings for the program's
-/// life either way. Without it the profiler records nothing under `cargo test`
-/// and every check of what it summarizes reads zero.
+/// `lane`, as `cap` records, zeroed.
 pub(super) fn fixed_lane<T: Copy>(which: Lane, cap: usize) -> &'static mut [T] {
-    match range(Range::Profiler) {
-        // SAFETY: the lane's own bytes, which only its ring holds, zeroed as
-        // the range was laid; a zeroed record is a valid one for the plain
-        // numbers the rings hold.
-        Some(r) => unsafe { lane(r.nth(&LANES, LANE_ALIGN, which as usize), 0, cap) },
-        // SAFETY: as for the kernel's lane.
-        None => Box::leak(vec![unsafe { core::mem::zeroed::<T>() }; cap].into_boxed_slice()),
-    }
+    // SAFETY: the lane's own bytes, which only its ring holds, zeroed as the
+    // range was laid; a zeroed record is a valid one for the plain numbers
+    // the rings hold.
+    unsafe { lane(range(Range::Profiler).nth(&LANES, LANE_ALIGN, which as usize), 0, cap) }
 }
 
 /// Live consumer for records as they land — log.rs's console stream. One sink,

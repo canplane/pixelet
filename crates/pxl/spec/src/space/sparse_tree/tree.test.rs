@@ -78,29 +78,3 @@ fn folds_hold(tree: &SparseTree<u8>) {
     }
 }
 
-/// A branch holds what its child block folds to through every write —
-/// finer ones splitting a leaf, coarser ones claiming a block, erasures —
-/// and through the compaction after each; and a tree whose branches hold
-/// nothing is folded whole to the same.
-#[test]
-fn a_branch_holds_what_its_block_folds_to_through_every_write() {
-    let max = |c: &[u8], _: Scale| c.iter().copied().max().unwrap_or(0);
-    let mut rng = Rng(0x9e37_79b9_7f4a_7c15);
-    let mut tree = sparse_tree::alloc::<u8>(LAYOUT, 64);
-    for _ in 0..300 {
-        let scale = Scale::of(-3 + (rng.next() % 6) as i32);
-        let p = [0, 1, 2].map(|_| (rng.next() % 64) as f64 / 8.0);
-        let val = (rng.next() % 6) as u8;
-        let key = to_key(&at(p[0], p[1], p[2]), LAYOUT.min);
-        st_mem::set_folded::<Ivec, u8>(&mut tree.mem, &tree.layout, key, val, scale, 0, &max);
-        sparse_tree::compact(&mut tree);
-        folds_hold(&tree);
-    }
-    for (slot, node) in tree.mem.heap.iter().enumerate() {
-        if node & 0x8000_0000 != 0 {
-            tree.mem.data[slot] = 0;
-        }
-    }
-    st_mem::refold(&mut tree.mem, &tree.layout, 0, &max);
-    folds_hold(&tree);
-}

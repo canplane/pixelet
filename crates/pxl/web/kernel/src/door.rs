@@ -22,7 +22,6 @@ use crate::mem::fixed::Range;
 use crate::mem::section;
 use layout::DOOR_LAYOUT;
 use pxl_render::mesh::volume::Volumes;
-use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_core::wire::xtp::PacketWriter;
 use xpute_runtime::abi::cmd as xpute_cmd;
@@ -200,7 +199,7 @@ fn boot(b: &Bracket) {
 
 /// Where fixed range `r` begins, the map laid.
 fn fixed_at(r: Range) -> u32 {
-    crate::mem::fixed::range(r).or_bug(Errno::ENOTRECOVERABLE).offset
+    crate::mem::fixed::range(r).offset
 }
 
 /// Records the kernel's map over the memory the bracket gave, and makes the
@@ -211,9 +210,10 @@ fn fixed_at(r: Range) -> u32 {
 /// contents' own affair; the heap is the one allocator and it knows its range
 /// without being told (`buddy_tree`'s `Range`).
 fn lay_out(b: &Bracket) -> u32 {
-    let map = section::lay_out(b.given, b.data_end);
+    // The map first: the kernel's first use makes the chunk table, whose
+    // tables lie in `.fixed`.
+    section::set_map(section::lay_out(b.given, b.data_end));
     kernel().volumes = Some(Volumes::new());
-    section::set_map(map);
     // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.blocks`, each what it
     // is installed as from a page, zeroed, the renderer's and the host's
     // alone.

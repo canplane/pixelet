@@ -197,27 +197,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   for nothing today. Either the coarse bake learns to fit XY and Z
   separately, or the lanes go; decided with the Rust mesher, since the
   format is its input.
-- **The const enum pass, once.** Asked 2026-09-27, not now. Vite
-  (`apps/web/vite.config.ts` `const_enum`) and Metro
-  (`apps/native/babel.config.js` `inline_enums`) each read every
-  `export const enum` into a table of their own, a near copy, and already
-  drift: one holds values as source text, the other as values. The reading
-  goes to one file under `apps/web/script/`, plain JavaScript, since Metro
-  `require`s the Babel config under Deno — whether CommonJS there can
-  `require` an ES module is to be tried first. Vite's replacement is text:
-  a member that prefixes another (`SENSOR_ENABLE` under a table read before
-  it became `SENSOR_ENABLE_LOCATION`) left `7444_LOCATION` for the parser
-  until the match was held to whole names. Replacing on the syntax tree, as
-  Babel does, takes strings, comments and prefixes out of it as a class, for
-  a parse per module on Vite's path.
-- **Native tests lay out `.fixed` as a host does.** A native test lays out
-  no `.fixed`, so `range` answers none there and what lives in it answers
-  empty or no room under a test (the surface, a page's lanes, the decor
-  lanes, the profiler's rings) — a second memory model for the tests. Laid
-  out over a buffer of its own, the tests run on the ranges the module does.
-  Only then is it worth asking whether what is sized once and kept in the
-  heap for the tests' sake (world/chunk/table.rs `Scheduler::new`) moves
-  there; it need not.
 
 ## Parked, with the reason on file
 

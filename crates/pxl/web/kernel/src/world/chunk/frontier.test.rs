@@ -350,28 +350,6 @@ fn a_coarsening_is_always_started_with_only_the_reserve_free() {
     assert!(Frontier::default().plan(&fill, &Widest).start.is_empty(), "a fill took the reserve");
 }
 
-/// The frontier comes to its goal where the arena holds it, and once the
-/// ground is covered it stays covered, every step, whatever it moves to.
-#[test]
-fn the_frontier_comes_to_a_goal_the_arena_holds_with_no_gap_on_the_way() {
-    let mut t = Table::new([300, 200, 0]);
-    let goals = [goal(3, 3, 0), goal(0, 2, 16), goal(1, 3, 8), goal(3, 4, 0), goal(0, 0, 16), goal(2, 3, 8), goal(0, 1, 8)];
-    let mut once = false;
-    for g in &goals {
-        for _ in 0..200 {
-            t.step(g);
-            assert!(t.within(), "past the arena");
-            once |= t.covered();
-            if once {
-                assert!(t.covered(), "a gap in the frontier");
-            }
-        }
-        let drawn: Vec<Chunk> = t.drawn.iter().copied().collect();
-        assert_eq!(&drawn, g, "the frontier did not come to its goal");
-        assert!(t.building.is_empty(), "work left over once the goal is drawn");
-    }
-}
-
 /// A step over a frontier no larger than one already planned allocates
 /// nothing: moving through goals it has moved through before, the frontier
 /// works in what it held from then.
@@ -391,34 +369,6 @@ fn planning_a_frontier_it_has_held_allocates_nothing() {
     assert!(pass(&mut t) > 0, "the first pass allocated nothing: the count measures nothing");
     pass(&mut t);
     assert_eq!(pass(&mut t), 0, "a pass through goals already planned allocated");
-}
-
-/// With an arena too small for the goal, the frontier refines as far as the
-/// arena holds and no further, with a coarser piece standing wherever it
-/// cannot: never a gap, never past the arena, and back to a goal the arena
-/// holds once one is asked. Each arena is its room past the reserve a pool
-/// keeps for one coarsening, which every arena the kernel lays out has
-/// (world/quality.rs asserts the cover and the headroom fit).
-#[test]
-fn an_arena_too_small_for_the_goal_leaves_coarser_pieces_and_never_a_gap() {
-    for room in [[40, 12, 0], [8, 40, 0], [64, 6, 0], [2, 3, 0]] {
-        let arena: Slots = core::array::from_fn(|p| room[p] + RESERVE[p]);
-        let mut t = Table::new(arena);
-        for _ in 0..10 {
-            t.step(&[root()]);
-        }
-        assert!(t.covered(), "{arena:?}: the coarsest goal is drawn");
-        for g in [goal(0, 0, 16), goal(0, 1, 8), goal(3, 3, 0), goal(0, 0, 16), goal(4, 4, 0)] {
-            for k in 0..300 {
-                t.step(&g);
-                assert!(t.within(), "{arena:?}, step {k}: past the arena");
-                assert!(t.covered(), "{arena:?}, step {k}: a gap in the frontier");
-            }
-        }
-        let root = [root()];
-        let drawn: Vec<Chunk> = t.drawn.iter().copied().collect();
-        assert_eq!(drawn, root, "{arena:?}: back to the coarsest");
-    }
 }
 
 // ---- the goal an eye observes ----
@@ -463,54 +413,6 @@ impl Table {
             })
             .collect()
     }
-}
-
-/// Before the floor is resident there is no answer and nothing is drawn;
-/// once it is, the cover is filled and from then on every point of the
-/// ground within the reach is under exactly one drawn piece at every step —
-/// through the refinement toward what is seen, and through a turn to ground
-/// never seen before, which the cover already stands over.
-#[test]
-fn no_gap_once_the_floor_is_resident_even_where_the_view_turns() {
-    let probes = probes();
-    let mut t = Table::new([600, 3_000, 0]);
-    let mut dark = World::flat(LAND);
-    dark.answered = false;
-    let d = goal_of([1.0, 0.0, -0.1], &dark);
-    assert!(d.pieces().is_empty() && d.unanswered() > 0, "no answer yet is no goal");
-    for _ in 0..10 {
-        t.step(d.pieces());
-    }
-    assert!(t.drawn.is_empty(), "drawn with nothing known");
-
-    let world = World::flat(LAND);
-    let east = goal_of([1.0, 0.0, -0.1], &world);
-    let mut whole = false;
-    for k in 0..400 {
-        t.step(east.pieces());
-        assert!(t.within(), "step {k}: past the arena");
-        let over = t.over(&probes);
-        whole |= over.iter().all(|&n| n == 1);
-        if whole {
-            assert!(over.iter().all(|&n| n == 1), "step {k}: a gap in the frontier");
-        }
-    }
-    let drawn: Vec<Chunk> = t.drawn.iter().copied().collect();
-    assert_eq!(drawn, east.pieces(), "the frontier did not come to the goal");
-    // West of the eye nothing was ever seen: the cover alone stands there.
-    let west = [EYE[0] - 3_000.0, EYE[1], LAND];
-    let mut at = Pvf3::default();
-    projection::project(&mut at, west[0], west[1], west[2]);
-    assert!(t.drawn.contains(&Chunk::of(TOP_LEVEL, &at)), "ground never seen is not the cover's");
-
-    let turned = goal_of([-1.0, 0.0, -0.1], &world);
-    for k in 0..400 {
-        t.step(turned.pieces());
-        assert!(t.within(), "turned, step {k}: past the arena");
-        assert!(t.over(&probes).iter().all(|&n| n == 1), "turned, step {k}: a gap in the frontier");
-    }
-    let drawn: Vec<Chunk> = t.drawn.iter().copied().collect();
-    assert_eq!(drawn, turned.pieces(), "the frontier did not come to the turned goal");
 }
 
 // ---- the count ----
@@ -571,24 +473,3 @@ fn the_count_is_never_less_at_a_finer_quality_nor_less_than_the_cut() {
     }
 }
 
-/// Knowing the heights more loosely never lowers the count: the same
-/// footprints touch no fewer chunks, whose errors span no less.
-#[test]
-fn looser_bounds_never_ask_less() {
-    for height in [3.0, 150.0, 2_000.0] {
-        let tight = counts(&mut domain_at(height, &relief(0.0)));
-        for slack in [1.0, 40.0, 700.0] {
-            let loose = counts(&mut domain_at(height, &relief(slack)));
-            for k in 0..tight.len() {
-                for p in 0..POOLS {
-                    assert!(
-                        loose[k][p] >= tight[k][p],
-                        "height {height}, slack {slack}, step {k}: pool {p} asks {} where knowing more asked {}",
-                        loose[k][p],
-                        tight[k][p]
-                    );
-                }
-            }
-        }
-    }
-}

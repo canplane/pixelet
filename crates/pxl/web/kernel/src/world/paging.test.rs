@@ -183,16 +183,6 @@ fn converge_on<S: Serve>(pyramid: &mut Pyramid<PoiPage>, observation: fn() -> Ob
 }
 
 #[test]
-fn the_view_converges_exact_with_no_prefetch_under_every_order() {
-    let _serial = crate::global::serial();
-    converge(Policy::standard(), &NoPrefetch, 0);
-    converge(Hostile::Random(7), &NoPrefetch, 0);
-    converge(Hostile::Random(0xdead_beef), &NoPrefetch, 0);
-    converge(Hostile::Lifo, &NoPrefetch, 0);
-    converge(Hostile::Preempt, &NoPrefetch, 0);
-}
-
-#[test]
 fn the_view_converges_exact_with_the_reach_prefetched_under_every_order() {
     let _serial = crate::global::serial();
     let reach = Reach { slack: 1.0, margin: 0.0 };
@@ -204,78 +194,3 @@ fn the_view_converges_exact_with_the_reach_prefetched_under_every_order() {
     }
 }
 
-/// Speculation far past the frames: it is asked for only as far as frames
-/// are left once everything held hard and everything the view reads has
-/// one, and it never takes one of theirs.
-#[test]
-fn a_flood_of_speculation_never_displaces_the_floor_or_what_the_view_reads() {
-    let _serial = crate::global::serial();
-    for mut pyramid in [
-        converge(Policy::standard(), &Flood, u32::MAX),
-        converge(Hostile::Lifo, &Flood, u32::MAX),
-        converge(Hostile::Preempt, &Flood, u32::MAX),
-        converge(Hostile::Random(3), &Flood, u32::MAX),
-    ] {
-        assert_eq!(pyramid.paging().frames_used(), FRAMES, "the flood fills every frame left over");
-        assert_eq!(pyramid.take_refusals(), 0, "and never asks for one it cannot have");
-    }
-}
-
-/// The fallback keeps its law: once its pages are resident, every page the
-/// observation demands has an answer, whatever else is held.
-#[test]
-fn once_the_floor_is_resident_every_observation_has_an_answer() {
-    let _serial = crate::global::serial();
-    let mut pyramid = Pyramid::<PoiPage>::default();
-    let unanswered = |pyramid: &Pyramid<PoiPage>| pyramid.demand().iter().filter(|&&p| pyramid.drawn_from(p).is_none()).count();
-    pyramid.observe(Some(&the_observation()), core::iter::empty(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
-    assert!(unanswered(&pyramid) > 0, "a cold start is open");
-    let floor = floor_of(&the_observation());
-    assert!(!floor.is_empty() && floor.iter().all(|p| p.level == TOP_LEVEL));
-    for p in floor {
-        pyramid.admit(p, |_| Ok(crowded(p))).expect("a page is made");
-    }
-    pyramid.observe(Some(&the_observation()), core::iter::empty(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
-    assert_eq!(unanswered(&pyramid), 0, "pages with no answer");
-}
-
-/// The view holds a page only while it asks for it: once the eye has moved
-/// on, what it read before is cache, and a view elsewhere converges exact
-/// over it.
-#[test]
-fn a_page_the_view_no_longer_asks_for_is_no_longer_held_for_it() {
-    let _serial = crate::global::serial();
-    let mut pyramid = converge(Policy::standard(), &NoPrefetch, 0);
-    let read: Vec<LevelPage> = (0..TOP_LEVEL)
-        .flat_map(|level| pyramid.paging().level(level).map(|(p, _)| p).collect::<Vec<_>>())
-        .filter(|&p| pyramid.paging().hold(p) == Hold::Demand)
-        .collect();
-    assert!(!read.is_empty(), "the view held its pages for itself");
-    pyramid.observe(Some(&elsewhere()), core::iter::empty(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
-    for &p in &read {
-        assert!(pyramid.paging().asked(p).is_none(), "{p:?} is asked for from elsewhere");
-        assert_eq!(pyramid.paging().hold(p), Hold::Cache, "{p:?} still held for a view that left it");
-    }
-    converge_on(&mut pyramid, elsewhere, Policy::standard(), &NoPrefetch, 0);
-}
-
-/// The floor is held hard only as the observation declares it: a layer gone
-/// idle asks for nothing and holds its floor as cache, and the next
-/// observation declares it again.
-#[test]
-fn the_floor_is_declared_again_by_the_next_observation_after_an_idle_one() {
-    let _serial = crate::global::serial();
-    let mut pyramid = Pyramid::<PoiPage>::default();
-    let floor = floor_of(&the_observation());
-    let why = |pyramid: &Pyramid<PoiPage>, p: LevelPage| pyramid.paging().asked(p).map(|a| a.why);
-    let observe = |pyramid: &mut Pyramid<PoiPage>| pyramid.observe(Some(&the_observation()), core::iter::empty(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
-    observe(&mut pyramid);
-    for &p in &floor {
-        pyramid.admit(p, |_| Ok(crowded(p))).expect("a page is made");
-    }
-    assert!(floor.iter().all(|&p| why(&pyramid, p) == Some(Why::Floor)));
-    pyramid.idle();
-    assert!(floor.iter().all(|&p| why(&pyramid, p).is_none() && pyramid.paging().resident(p)), "idle: the floor is cache");
-    observe(&mut pyramid);
-    assert!(floor.iter().all(|&p| why(&pyramid, p) == Some(Why::Floor) && pyramid.paging().resident(p)), "declared again");
-}

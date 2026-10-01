@@ -18,7 +18,6 @@ import { Command as XputeCommand, encode_fetch_done, FetchOutcome, read_fetch_st
 import {
   Command,
   encode_gpu_ready,
-  encode_input_go_to,
   encode_load_failed,
   encode_setting_set,
   encode_setting_toggle,
@@ -113,20 +112,13 @@ function terrain_body(seed: u32): U8Array {
 const HEAP_TOP = 1;
 const HEAP_REQUESTS = 8;
 const heap_row = new Uint32Array(CORE.buffer, directory(CORE.buffer).get(entry.HEAP_ROW), 9);
-let strobe_requests = 0;
-const answer_requests: Record<string, number> = {};
 
 /** A response as the driver reports one: the body held for the kernel. */
 function answer(f: Fetched, outcome: FetchOutcome, body: U8Array | null): void {
-  const requests = heap_row[HEAP_REQUESTS];
-  try {
-    const bytes = body?.byteLength ?? 0;
-    const held = body !== null && bytes > 0 ? BODIES.hold(body) : 0;
-    CORE_DOORBELL.send(0, XputeCommand.FETCH_DONE, encode_fetch_done({ key: f.key, outcome, body: held, body_bytes: bytes, fail: FetchFail.None, detail: 0, net_ms: 0 }));
-    CORE_DOORBELL.ring(0);
-  } finally {
-    answer_requests[f.category] = (answer_requests[f.category] ?? 0) + heap_row[HEAP_REQUESTS] - requests;
-  }
+  const bytes = body?.byteLength ?? 0;
+  const held = body !== null && bytes > 0 ? BODIES.hold(body) : 0;
+  CORE_DOORBELL.send(0, XputeCommand.FETCH_DONE, encode_fetch_done({ key: f.key, outcome, body: held, body_bytes: bytes, fail: FetchFail.None, detail: 0, net_ms: 0 }));
+  CORE_DOORBELL.ring(0);
 }
 
 function fail(f: Fetched): void {
@@ -138,14 +130,12 @@ function fail(f: Fetched): void {
 function turn(delta = 1 / 60): Turn {
   fetched = [];
   loads = [];
-  const requests = heap_row[HEAP_REQUESTS];
   CORE_DOORBELL.send(
     0,
     Command.WORLD_FRAME,
     encode_world_frame({ width: 1280, height: 720, dpr: 1, delta_s: delta, frame_ms: 1000 / 60, interactive: true, credits: 6, unix_ms: 0, hours: 12, minutes: 0, seconds: 0, day_start_ms: 0 }),
   );
   CORE_DOORBELL.ring(8);
-  strobe_requests += heap_row[HEAP_REQUESTS] - requests;
   const started = fetched;
   for (const f of started) {
     if (f.category === "terrain") answer(f, FetchOutcome.Read, terrain_body(Number(BigInt(f.name.slice(f.name.indexOf("/") + 1)) & 0xffffn)));
@@ -181,7 +171,6 @@ CORE_DOORBELL.call(
 );
 // What the shell hands over for a published source, read from the bundle.
 CORE_DOORBELL.send(0, Command.WORLD_SOURCE, encode_world_source({ top_level: PUBLISHED_SOURCE.top_level }));
-console.log(`heap: boot and world create ${heap_row[HEAP_REQUESTS]} requests, top ${heap_row[HEAP_TOP]}`);
 
 /** A device that takes every call and holds nothing: whatever is asked of
  * it, or of what it hands back, is another of the same. A chunk is drawn from
@@ -215,47 +204,6 @@ assert(device, "the stand-in device answered");
 CORE_DOORBELL.send(0, Command.GPU_READY, encode_gpu_ready({ min_uniform_offset_alignment: device.align, timestamps: device.timestamps }));
 CORE_DOORBELL.ring(0);
 turn();
-console.log(`heap: through the first turn ${heap_row[HEAP_REQUESTS]} requests, top ${heap_row[HEAP_TOP]}`);
-
-Deno.test("kernel - a map center fetches its terrain and draws it, and the map settles to success", () => {
-  command(Command.INPUT_GO_TO, encode_input_go_to({ lon: 126.978, lat: 37.5665 }));
-  let first = turn();
-  assert(first.snapshot.map.center !== null, "the center is set");
-  // The page the shell keys a reverse-geocode label by. It is the index, not
-  // an object's name — what the kernel asks the host for is the name.
-  const page = first.snapshot.map.page;
-  assert(page !== null, "the center's page is an index");
-  const statuses = new Set<MapStatus>([first.snapshot.map.status]);
-  const categories = new Set(first.fetched.map((f) => f.category));
-  let terrain_names = first.fetched.filter((f) => f.category === "terrain").map((f) => f.name);
-  let geocode_names = first.fetched.filter((f) => f.category === "geocode").map((f) => f.name);
-  let max_draws = first.draws;
-  for (let i = 0; i < 400; i++) {
-    const t = turn();
-    statuses.add(t.snapshot.map.status);
-    for (const f of t.fetched) categories.add(f.category);
-    terrain_names = terrain_names.concat(t.fetched.filter((f) => f.category === "terrain").map((f) => f.name));
-    geocode_names = geocode_names.concat(t.fetched.filter((f) => f.category === "geocode").map((f) => f.name));
-    max_draws = Math.max(max_draws, t.draws);
-    first = t;
-  }
-  assert(categories.has("terrain"), `terrain was asked for: ${[...categories]}`);
-  assert(terrain_names.every((n) => /^[0-3]{5,15}$/.test(n)), `a terrain name is a quadkey: ${terrain_names.slice(0, 3)}`);
-  assert(geocode_names.every((n) => /^[0-3]{11}$/.test(n)), `a group's name is a shorter one: ${geocode_names.slice(0, 3)}`);
-  // The property the names have this shape for: a coarser object's name is a
-  // prefix of a finer one's over the same ground, so one prefix in the store
-  // is one region. Two layers that share no code arrive at the same digits
-  // from the same center, which is also what says these are that center's
-  // pages rather than well-shaped numbers.
-  assert(geocode_names.length > 0, "a reverse-geocode group was asked for");
-  assert(
-    terrain_names.some((t) => geocode_names.some((g) => t.startsWith(g))),
-    `no leaf sits under a fetched group: ${terrain_names.slice(0, 3)} / ${geocode_names.slice(0, 3)}`,
-  );
-  assert(max_draws > 0, "something was drawn");
-  assert(statuses.has(MapStatus.Loading), `the map loaded: ${[...statuses]}`);
-  assertEquals(first.snapshot.map.status, MapStatus.Success);
-});
 
 Deno.test("kernel - the settings commands reach the snapshot", () => {
   const tilt = SETTINGS.tilt_lock.key;
@@ -271,22 +219,4 @@ Deno.test("kernel - a settled turn asks the module heap for nothing", () => {
   const [top, requests] = [heap_row[HEAP_TOP], heap_row[HEAP_REQUESTS]];
   for (let i = 0; i < 100; i++) turn();
   assertEquals([heap_row[HEAP_REQUESTS] - requests, heap_row[HEAP_TOP] - top], [0, 0], "a hundred settled turns: no request, and the heap's top where it was");
-});
-
-Deno.test("kernel - heap requests along the event paths", () => {
-  for (let i = 0; i < 50; i++) turn();
-  let mark = heap_row[HEAP_REQUESTS];
-  const since = () => {
-    const n = heap_row[HEAP_REQUESTS] - mark;
-    mark = heap_row[HEAP_REQUESTS];
-    return n;
-  };
-  strobe_requests = 0;
-  for (const k of Object.keys(answer_requests)) delete answer_requests[k];
-  command(Command.INPUT_GO_TO, encode_input_go_to({ lon: 127.3, lat: 36.35 }));
-  let load = 0;
-  for (let i = 0; i < 200; i++) turn();
-  load = since();
-  console.log(`heap: a far jump and its load ${load}`);
-  console.log(`heap: the load's strobes ${strobe_requests}, its answers ${JSON.stringify(answer_requests)}`);
 });

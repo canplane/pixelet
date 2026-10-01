@@ -52,6 +52,10 @@
 //!   .fixed.surface   the surface each mesh slot's tier is drawn with, a lane
 //!                    a slot (world/chunk/mesh_slot.rs): what a thing standing
 //!                    on the drawn ground reads.
+//!   .fixed.mounts    the chunk table's own (world/chunk/table.rs): who holds
+//!                    each mesh slot and what each is chained to, which slot
+//!                    each mount's chunk is in, the mounts free and the chunks
+//!                    mounted in order, each sized by the slots.
 //!   .fixed.decor     where one chunk's decor is gathered before it is laid
 //!                    into its block (layer/decor/instance.rs).
 //!
@@ -86,6 +90,7 @@ use crate::param::RUN_SET_BYTES;
 use crate::sched::profiler::record::PROFILER_BYTES;
 use crate::world::chunk::build::{BAKE_BYTES, RUN_SETS};
 use crate::world::chunk::mesh_slot::SURFACE_BYTES;
+use crate::world::chunk::table::MOUNTS_BYTES;
 
 /// A range of `.fixed`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -95,6 +100,7 @@ pub enum Range {
     Run(usize),
     Bake,
     Surface,
+    Mounts,
     Decor,
     Blocks,
     Gpu,
@@ -102,7 +108,7 @@ pub enum Range {
     Profiler,
 }
 
-const COUNT: usize = 8 + RUN_SETS;
+const COUNT: usize = 9 + RUN_SETS;
 
 impl Range {
     /// Its place in address order.
@@ -119,11 +125,12 @@ impl Range {
             }
             Range::Bake => 1 + RUN_SETS,
             Range::Surface => 2 + RUN_SETS,
-            Range::Decor => 3 + RUN_SETS,
-            Range::Blocks => 4 + RUN_SETS,
-            Range::Gpu => 5 + RUN_SETS,
-            Range::Host => 6 + RUN_SETS,
-            Range::Profiler => 7 + RUN_SETS,
+            Range::Mounts => 3 + RUN_SETS,
+            Range::Decor => 4 + RUN_SETS,
+            Range::Blocks => 5 + RUN_SETS,
+            Range::Gpu => 6 + RUN_SETS,
+            Range::Host => 7 + RUN_SETS,
+            Range::Profiler => 8 + RUN_SETS,
         }
     }
 }
@@ -140,6 +147,7 @@ const RANGES: [u32; COUNT] = {
     }
     r[Range::Bake.index()] = BAKE_BYTES;
     r[Range::Surface.index()] = SURFACE_BYTES;
+    r[Range::Mounts.index()] = MOUNTS_BYTES;
     r[Range::Decor.index()] = DECOR_BYTES;
     r[Range::Blocks.index()] = BLOCKS_BYTES;
     r[Range::Gpu.index()] = stream::BYTES;
@@ -151,16 +159,16 @@ const RANGES: [u32; COUNT] = {
 /// What `.fixed` spans, which is where the heap begins past it.
 pub const BYTES: u32 = span_of(&RANGES, PAGE_BYTES);
 
-/// Range `r`, once the module has laid its memory out; none under a native
-/// test, which lays none out.
-pub fn range(r: Range) -> Option<Section> {
-    map().map(|m| m.fixed.nth(&RANGES, PAGE_BYTES, r.index()))
+/// Range `r`. The memory is laid out as the module boots (door.rs), before
+/// anything reads a range, so a range asked for before it is a bug.
+pub fn range(r: Range) -> Section {
+    map().or_bug(Errno::ENOTRECOVERABLE).fixed.nth(&RANGES, PAGE_BYTES, r.index())
 }
 
-/// Where `bytes` from `off` into range `r` lie: none under a native test, or
-/// where they would run past the range's end.
+/// Where `bytes` from `off` into range `r` lie: none where they would run
+/// past the range's end.
 pub fn at(r: Range, off: u32, bytes: u32) -> Option<u32> {
-    range(r)?.at(off, bytes)
+    range(r).at(off, bytes)
 }
 
 /// `n` of `T` from `off` into `s`, a range or a part of one. A lane of a size

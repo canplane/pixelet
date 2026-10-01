@@ -45,6 +45,7 @@ use pxl_spec::space::pyramid::TOP_LEVEL;
 use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::alloc;
+use xpute_runtime::mem::section::span_of;
 use xpute_runtime::sched::edge::Notify;
 use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats};
 
@@ -479,12 +480,109 @@ pub const LEVELS: usize = TOP_LEVEL as usize + 1;
 /// Who holds each mesh slot (mesh_slot.rs), by mount, none for a free one;
 /// the slot each is chained to; the tier landing now; and the arena epoch
 /// the tiers were written under.
+/// A slot's or a mount's number in a lane of `.fixed.mounts`, or none: one
+/// past the number, so a lane as it is laid, zeroed, reads as none.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[repr(transparent)]
+struct Nth(u32);
+
+impl Nth {
+    const NONE: Nth = Nth(0);
+
+    fn of(n: usize) -> Nth {
+        Nth(n as u32 + 1)
+    }
+
+    fn get(self) -> Option<usize> {
+        self.0.checked_sub(1).map(|n| n as usize)
+    }
+
+    fn is_none(self) -> bool {
+        self == Nth::NONE
+    }
+
+    fn take(&mut self) -> Option<usize> {
+        core::mem::take(self).get()
+    }
+}
+
+/// The mounts free, the last given back first.
+struct Free {
+    lane: &'static mut [u32],
+    len: usize,
+}
+
+impl Free {
+    fn pop(&mut self) -> Option<u32> {
+        self.len = self.len.checked_sub(1)?;
+        Some(self.lane[self.len])
+    }
+
+    fn push(&mut self, id: u32) {
+        self.lane[self.len] = id;
+        self.len += 1;
+    }
+}
+
+/// The chunks mounted in chunk order, each with its mount: a sorted run of
+/// a lane as long as there are mounts.
+struct Index {
+    lane: &'static mut [(Chunk, u32)],
+    len: usize,
+}
+
+impl Index {
+    fn insert(&mut self, n: usize, entry: (Chunk, u32)) {
+        self.lane.copy_within(n..self.len, n + 1);
+        self.lane[n] = entry;
+        self.len += 1;
+    }
+
+    fn remove(&mut self, n: usize) -> (Chunk, u32) {
+        let entry = self.lane[n];
+        self.lane.copy_within(n + 1..self.len, n);
+        self.len -= 1;
+        entry
+    }
+}
+
+impl core::ops::Deref for Index {
+    type Target = [(Chunk, u32)];
+
+    fn deref(&self) -> &[(Chunk, u32)] {
+        &self.lane[..self.len]
+    }
+}
+
+/// `.fixed.mounts`, lane by lane: a slot's holder and its next, a mount's
+/// place, the mounts free, the index.
+const MOUNT_LANES: [u32; 5] = [
+    (OCCUPANCY * size_of::<Nth>()) as u32,
+    (OCCUPANCY * size_of::<Nth>()) as u32,
+    (OCCUPANCY * size_of::<Nth>()) as u32,
+    (OCCUPANCY * size_of::<u32>()) as u32,
+    (OCCUPANCY * size_of::<(Chunk, u32)>()) as u32,
+];
+const MOUNT_ALIGN: u32 = 8;
+
+/// What `.fixed.mounts` spans.
+pub const MOUNTS_BYTES: u32 = span_of(&MOUNT_LANES, MOUNT_ALIGN);
+
+/// Lane `k` of `.fixed.mounts`, its `OCCUPANCY` entries.
+///
+/// # Safety
+/// Each lane is the table's alone, taken once as it is made; a zeroed entry
+/// is a valid one for the plain numbers each holds.
+unsafe fn mount_lane<T>(k: usize) -> &'static mut [T] {
+    unsafe { lane(range(Range::Mounts).nth(&MOUNT_LANES, MOUNT_ALIGN, k), 0, OCCUPANCY) }
+}
+
 pub struct Meshes {
-    holder: Vec<Option<u32>>,
+    holder: &'static mut [Nth],
     /// The slot after each in the tier that fills it, by index: a tier past
     /// one slot's boxes goes on in any free slot of its pool, contiguous or
     /// not. Fixed at the slots' count, so it holds no more than they do.
-    next: Vec<Option<usize>>,
+    next: &'static mut [Nth],
     /// The tier the one bake open is landing: every slot it fills was held
     /// for it at once when its size was known (`reserve`), and its blocks
     /// are written as they come (`part`).
@@ -535,12 +633,12 @@ pub struct Scheduler {
     /// it is landing. Nothing that names a mount outlives it (`remove`), so
     /// a number given back is given again at once, and nothing can take the
     /// chunk mounted under it for the one before.
-    place: Vec<Option<usize>>,
+    place: &'static mut [Nth],
     /// The mounts free, the last given back first.
-    mounts: Vec<u32>,
+    mounts: Free,
     /// The mounted chunks in chunk order, with their mounts: how a chunk is
     /// found, and a column of them (`surface_at`).
-    index: Vec<(Chunk, u32)>,
+    index: Index,
     /// The domain's pieces the last recheck saw (world/pyramid/domain.rs
     /// `revision`): what a chunk should show is read off it, and it is made
     /// again when the eye, the resident pages, the heights or the quality
@@ -667,18 +765,21 @@ impl Scheduler {
     pub fn new() -> Scheduler {
         arena_configure(&group_bytes());
         // What is sized by the mesh slots — who holds each and what each is
-        // chained to, where each mount's slot is, the mounts free, the chunk
-        // index, and the builder's state by mount — is allocated here once
-        // and never grows or goes back, so a view moving and chunks coming
-        // and going allocate nothing for it. Its size is fixed, which is what
-        // `.fixed` holds (mem/fixed.rs), but it stays in the heap: a native
-        // test lays out no `.fixed`, and these are what the table's tests
-        // run on.
+        // chained to, where each mount's slot is, the mounts free and the
+        // chunk index — lies in `.fixed.mounts` (mem/fixed.rs), taken once
+        // here, so a view moving and chunks coming and going allocate nothing
+        // for it. The builder's state by mount is made once too, in the heap:
+        // it holds what a build is in the middle of, not plain numbers.
+        // SAFETY: the five lanes, each taken once here and the table's alone.
+        let (holder, next, place, free, index) = unsafe { (mount_lane(0), mount_lane(1), mount_lane(2), mount_lane::<u32>(3), mount_lane(4)) };
+        for (k, id) in free.iter_mut().enumerate() {
+            *id = (OCCUPANCY - 1 - k) as u32;
+        }
         Scheduler {
             level_boxes: [0; LEVELS],
             meshes: Meshes {
-                holder: vec![None; OCCUPANCY],
-                next: vec![None; OCCUPANCY],
+                holder,
+                next,
                 landing: None,
                 epoch: arena_epoch(),
                 chained: 0,
@@ -698,9 +799,9 @@ impl Scheduler {
             environment: EnvironmentDraw::default(),
             debug: DebugLines::default(),
             slots: Vec::new(),
-            place: vec![None; OCCUPANCY],
-            mounts: (0..OCCUPANCY as u32).rev().collect(),
-            index: Vec::with_capacity(OCCUPANCY),
+            place,
+            mounts: Free { lane: free, len: OCCUPANCY },
+            index: Index { lane: index, len: 0 },
             domain_seen: u32::MAX,
             frame: None,
             view_dirty: true,
@@ -809,7 +910,7 @@ impl Scheduler {
         }
         let n = self.index.partition_point(|&(c, _)| c < k);
         self.index.insert(n, (k, id));
-        self.place[id as usize] = Some(self.slots.len());
+        self.place[id as usize] = Nth::of(self.slots.len());
         self.slots.push(slot);
         let i = self.slots.len() - 1;
         self.recheck(world, i, crate::host::now());
@@ -819,7 +920,7 @@ impl Scheduler {
     fn remove(&mut self, world: &mut World, k: Chunk) {
         let Ok(n) = self.index.binary_search_by_key(&k, |&(c, _)| c) else { return };
         let (_, id) = self.index.remove(n);
-        let i = self.place[id as usize].or_bug(Errno::ENOTRECOVERABLE);
+        let i = self.place[id as usize].get().or_bug(Errno::ENOTRECOVERABLE);
         self.view_dirty = true;
         self.counts.removed += 1;
         self.builder.remove(world, id);
@@ -838,12 +939,12 @@ impl Scheduler {
         }
         self.slots.swap_remove(i);
         if i < self.slots.len() {
-            self.place[self.slots[i].id as usize] = Some(i);
+            self.place[self.slots[i].id as usize] = Nth::of(i);
         }
-        self.place[id as usize] = None;
+        self.place[id as usize] = Nth::NONE;
         // The mount is given again at once: nothing may still name it.
         debug_assert!(
-            self.builder.generation_of(id).is_none() && self.meshes.landing.as_ref().is_none_or(|l| l.id != id) && self.meshes.holder.iter().all(|&h| h != Some(id)),
+            self.builder.generation_of(id).is_none() && self.meshes.landing.as_ref().is_none_or(|l| l.id != id) && self.meshes.holder.iter().all(|&h| h != Nth::of(id as usize)),
             "mount {id} outlived by what names it"
         );
         self.mounts.push(id);
@@ -852,7 +953,7 @@ impl Scheduler {
     /// Where chunk `k`'s slot is, if it is mounted.
     fn find(&self, k: &Chunk) -> Option<usize> {
         let n = self.index.binary_search_by_key(k, |&(c, _)| c).ok()?;
-        self.place[self.index[n].1 as usize]
+        self.place[self.index[n].1 as usize].get()
     }
 
     /// The builder's generation for slot `i`: the telling of its sources a
@@ -907,7 +1008,7 @@ impl Scheduler {
     /// or a block was refused — the heap is the same until the next tick
     /// reclaims.
     pub fn build_step(&mut self, world: &mut World, budget_ms: f64) -> bool {
-        let (slots, place, meshes, landed) = (&mut self.slots, &self.place, &mut self.meshes, &mut self.landed);
+        let (slots, place, meshes, landed) = (&mut self.slots, &*self.place, &mut self.meshes, &mut self.landed);
         landed.clear();
         let worked = self.builder.tick(world, &self.builds, budget_ms, &crate::host::now, &mut |e| match e {
             BuildEvent::Reserve { .. } => reserve(slots, place, meshes, e),
@@ -924,7 +1025,7 @@ impl Scheduler {
         settle(&mut self.meshes, &self.builder);
         let landed = core::mem::take(&mut self.landed);
         for &id in &landed {
-            if let Some(i) = self.place[id as usize] {
+            if let Some(i) = self.place[id as usize].get() {
                 if self.commit(world, i) {
                     self.build_committed += 1;
                 }
@@ -967,9 +1068,6 @@ impl Scheduler {
         let (x0, y0) = (ivec::X(corner), ivec::Y(corner));
         // Whether it scatters is one of what its decor is made of, as told.
         let decor = self.slots[i].decor_sources.shown;
-        if self.decor_scratch.is_none() {
-            self.decor_scratch = DecorScratch::new();
-        }
         if self.slots[i].decor_of(cube, generation).is_some() {
             return true;
         }
@@ -1040,7 +1138,7 @@ impl Scheduler {
             surface: surface.as_ref(),
             folded: (level > 0).then_some(&self.decor_folded),
         });
-        let Some(scratch) = self.decor_scratch.as_mut() else { return false };
+        let scratch = self.decor_scratch.get_or_insert_with(DecorScratch::laid);
         let heights = self.slots[i].chunk.z_range();
         let built = DecorBuild::build(
             scratch,
@@ -1127,7 +1225,7 @@ impl Scheduler {
     fn free(&self) -> Slots {
         let mut free = ARENA;
         for (at, h) in self.meshes.holder.iter().enumerate() {
-            if h.is_some() {
+            if !h.is_none() {
                 let p = Pool::at(at) as usize;
                 free[p] = free[p].saturating_sub(1);
             }
@@ -1213,8 +1311,8 @@ impl Scheduler {
         let roots = d.roots();
         let mut owned = [false; COVER_SLOTS as usize];
         for at in Pool::Cover.range() {
-            let Some(id) = self.meshes.holder[at] else { continue };
-            let chunk = self.place[id as usize].map(|i| self.slots[i].chunk);
+            let Some(id) = self.meshes.holder[at].get() else { continue };
+            let chunk = self.place[id].get().map(|i| self.slots[i].chunk);
             let root = chunk.and_then(|c| roots.binary_search(&c).ok());
             xpute_core::ensure!(root.is_some_and(|r| !core::mem::replace(&mut owned[r], true)), ENOTRECOVERABLE, at);
         }
@@ -1233,7 +1331,7 @@ impl Scheduler {
             return;
         }
         self.meshes.epoch = epoch;
-        self.meshes.holder.fill(None);
+        self.meshes.holder.fill(Nth::NONE);
         for s in self.slots.iter_mut() {
             s.tiers.clear();
             s.layout_ready = false;
@@ -1413,7 +1511,7 @@ impl Scheduler {
             // that took it, a slot is free only once that tier is gone,
             // and this looks the tier up again every frame. The assert is
             // what says so out loud, at an array index a draw.
-            xpute_core::ensure!(holder[t.slot.index] == Some(s.id), ENOTRECOVERABLE);
+            xpute_core::ensure!(holder[t.slot.index] == Nth::of(s.id as usize), ENOTRECOVERABLE);
             if t.box_cnt == 0 {
                 continue;
             }
@@ -1435,7 +1533,7 @@ impl Scheduler {
                     group_is_fine(m.group),
                 );
                 left -= n;
-                slot = self.meshes.next[at_slot];
+                slot = self.meshes.next[at_slot].get();
             }
             self.level_boxes[s.level() as usize] += t.box_cnt;
         }
@@ -1474,7 +1572,7 @@ impl Scheduler {
             let column = Chunk::column_of(level, at);
             let (from, to) = (self.index.partition_point(|(c, _)| c < column.start()), self.index.partition_point(|(c, _)| c <= column.end()));
             self.index[from..to].iter().rev().find_map(|&(_, id)| {
-                let d = self.drawn_of(&self.slots[self.place[id as usize]?])?;
+                let d = self.drawn_of(&self.slots[self.place[id as usize].get()?])?;
                 // The chunk lies in one page at every level over its own, so
                 // the point's cell and the chunk's first are of one page.
                 let [cx, cy] = GROUND.cell_of(d.cell_level(), at).in_page();
@@ -1828,10 +1926,10 @@ fn claim(meshes: &mut Meshes, pool: Pool, k: u32, holder: u32) -> Option<usize> 
         if !free_at(meshes, at) {
             continue;
         }
-        meshes.holder[at] = Some(holder);
-        meshes.next[at] = None;
+        meshes.holder[at] = Nth::of(holder as usize);
+        meshes.next[at] = Nth::NONE;
         match last {
-            Some(p) => meshes.next[p] = Some(at),
+            Some(p) => meshes.next[p] = Nth::of(at),
             None => first = Some(at),
         }
         last = Some(at);
@@ -1845,8 +1943,8 @@ fn let_go(meshes: &mut Meshes, at: usize, id: u32) {
     let mut slot = Some(at);
     while let Some(at) = slot {
         slot = meshes.next[at].take();
-        if meshes.holder[at] == Some(id) {
-            meshes.holder[at] = None;
+        if meshes.holder[at] == Nth::of(id as usize) {
+            meshes.holder[at] = Nth::NONE;
         }
     }
 }
@@ -1923,7 +2021,7 @@ impl<T: Copy> Held<T> {
 
 /// The slot `n` down the chain from `at`.
 fn chained(meshes: &Meshes, at: usize, n: u32) -> Option<usize> {
-    (0..n).try_fold(at, |at, _| meshes.next[at])
+    (0..n).try_fold(at, |at, _| meshes.next[at].get())
 }
 
 /// A tier the open bake is landing: whose it is, the first of the slots it
@@ -1946,14 +2044,14 @@ struct Landing {
 /// them. Where the room is not there, how many it needs is kept: the
 /// frontier and the quality policy count it so from then on, and it is not
 /// asked for again until the slots are free (`Scheduler::ask`).
-fn reserve(slots: &mut [Slot], place: &[Option<usize>], meshes: &mut Meshes, e: BuildEvent) -> bool {
+fn reserve(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) -> bool {
     let BuildEvent::Reserve { id, generation, cube, boxes } = e else { return false };
     // One bake is open at a time: a landing still here is of one that closed
     // within this tick without landing, and is let go as `settle` would.
     if let Some(l) = meshes.landing.take() {
         release(meshes, l);
     }
-    let Some(i) = place[id as usize] else { return false };
+    let Some(i) = place[id as usize].get() else { return false };
     let s = &slots[i];
     if cube != s.target() {
         return false;
@@ -1973,7 +2071,7 @@ fn reserve(slots: &mut [Slot], place: &[Option<usize>], meshes: &mut Meshes, e: 
         let last = chained(meshes, first, held - 1).unwrap_or(first);
         let more = claim(meshes, pool, k - held, id);
         match more {
-            Some(more) => meshes.next[last] = Some(more),
+            Some(more) => meshes.next[last] = Nth::of(more),
             None => return refuse(slots, i, meshes, generation, cube, k, level),
         }
     }
@@ -2028,7 +2126,7 @@ fn refuse(slots: &mut [Slot], i: usize, meshes: &mut Meshes, generation: u32, cu
 /// Writes a block of the landing tier's boxes to the slot it fills
 /// (build.rs `BuildEvent::Part`), and gathers what the tier's bounds and
 /// surface are.
-fn part(slots: &[Slot], place: &[Option<usize>], meshes: &mut Meshes, e: BuildEvent) {
+fn part(slots: &[Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
     let BuildEvent::Part {
         id,
         generation,
@@ -2044,7 +2142,7 @@ fn part(slots: &[Slot], place: &[Option<usize>], meshes: &mut Meshes, e: BuildEv
     let Some(l) = meshes.landing.as_ref().filter(|l| (l.id, l.generation, l.cube) == (id, generation, cube)) else {
         return;
     };
-    let Some(i) = place[id as usize] else { return };
+    let Some(i) = place[id as usize].get() else { return };
     let level = slots[i].level();
     let step = mesh_step(cube, level);
     let head = slot_at(l.first);
@@ -2098,7 +2196,7 @@ fn part(slots: &[Slot], place: &[Option<usize>], meshes: &mut Meshes, e: BuildEv
 /// Lands the tier every block of which is written (build.rs
 /// `BuildEvent::Tier`): recorded on its chunk, over the slots held for it,
 /// and what the tier it was rebuilt over held past what it fills let go.
-fn land(slots: &mut [Slot], place: &[Option<usize>], meshes: &mut Meshes, e: BuildEvent) {
+fn land(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
     let BuildEvent::Tier {
         id,
         generation,
@@ -2109,7 +2207,7 @@ fn land(slots: &mut [Slot], place: &[Option<usize>], meshes: &mut Meshes, e: Bui
     else {
         return;
     };
-    let Some(i) = place[id as usize] else { return };
+    let Some(i) = place[id as usize].get() else { return };
     let s = &slots[i];
     // Only what the chunk builds now lands: a drawn piece a new cube only
     // once a slot is held for it.
@@ -2184,8 +2282,7 @@ fn land(slots: &mut [Slot], place: &[Option<usize>], meshes: &mut Meshes, e: Bui
 }
 
 /// Slot `index`'s surface as its tier of `step` holds it, a word a block:
-/// the lane's first (CHUNK_CELLS / step)² words. Empty under a native test,
-/// which lays no memory out.
+/// the lane's first (CHUNK_CELLS / step)² words.
 fn surface(index: usize, step: u32) -> &'static mut [u32] {
     let (off, words) = surface_of(index);
     let axis = CHUNK_CELLS / step;
@@ -2193,7 +2290,7 @@ fn surface(index: usize, step: u32) -> &'static mut [u32] {
     // SAFETY: the slot's own lane in `.fixed.surface`, written only by the
     // tier landing in the slot and read by what stands on it, both the chunk
     // table's, on its one thread.
-    range(Range::Surface).map_or(&mut [], |s| unsafe { lane(s, off, (axis * axis) as usize) })
+    unsafe { lane(range(Range::Surface), off, (axis * axis) as usize) }
 }
 
 /// A cell-center height query needs no CPU copy of the mesh. Quantized tops
@@ -2265,7 +2362,3 @@ impl Drawn<'_> {
         Some(self.heights.floor + top as f64 * self.heights.step)
     }
 }
-
-#[cfg(test)]
-#[path = "table.test.rs"]
-mod test;

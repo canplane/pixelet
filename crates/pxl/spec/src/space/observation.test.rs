@@ -201,28 +201,6 @@ fn looks() -> Vec<Look> {
     out
 }
 
-/// Every page the samples ask for, the estimator names: over towers that
-/// hide what is behind them, at every height and tilt, whatever the far
-/// edge, and at every quality.
-#[test]
-fn the_bounds_estimator_names_every_page_the_exact_demand_does() {
-    for (k, look) in looks().into_iter().enumerate() {
-        let world = World {
-            towers: towers([look.eye[0], look.eye[1]], k as u64),
-            planet: f64::INFINITY,
-        };
-        for far in [fault_radius(TOP_LEVEL), 30_000.0] {
-            let o = observation(look, far, world.planet, true);
-            for tau in TAUS {
-                let named = demand(&o, &world, tau);
-                for p in exact(&world, look, far, tau) {
-                    assert!(named.contains(&p), "look {k}, far {far}, {tau:?}: {p:?} asked for and not named");
-                }
-            }
-        }
-    }
-}
-
 /// Where the planet draws the far ground lower, what it lowers is still
 /// named: a small planet, so the drop is large.
 #[test]

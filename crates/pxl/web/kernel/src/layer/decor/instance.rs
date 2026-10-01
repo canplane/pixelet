@@ -73,22 +73,22 @@ pub struct DecorScratch {
 }
 
 impl DecorScratch {
-    /// Its lanes in `.fixed.decor`; none under a native test, which lays no
-    /// memory out. Made once: the scheduler keeps the one there is.
-    pub fn new() -> Option<DecorScratch> {
-        let decor = range(Range::Decor)?;
+    /// Its lanes in `.fixed.decor`, as the module laid them. Made once: the
+    /// scheduler keeps the one there is.
+    pub fn laid() -> DecorScratch {
+        let decor = range(Range::Decor);
         // SAFETY: the range's two lanes, which this scratch holds alone; the
         // elements are plain numbers, and none is read before a build has
         // written it.
         let (instances, groups) = unsafe { (lane(decor, 0, DECOR_INSTANCES), lane(decor, INSTANCE_LANE_BYTES, DECOR_INSTANCES)) };
-        Some(DecorScratch {
+        DecorScratch {
             instances,
             groups,
             len: 0,
             counts: [0; DECOR_GROUPS],
             group_count: 0,
             dropped: 0,
-        })
+        }
     }
 
     pub(crate) fn clear(&mut self) {

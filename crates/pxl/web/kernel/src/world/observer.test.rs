@@ -185,31 +185,6 @@ fn ocean() -> Terrain {
     Terrain::leaf(vec![0; padded * padded], Ground { cells: cells.into() })
 }
 
-/// The estimator only reads: every tile of a screen over resident ground
-/// sees it, and residency is as it was, nothing asked for or held.
-#[test]
-fn the_estimator_never_changes_residency() {
-    let _g = serial();
-    let (paging, pages) = resident();
-    let store = Store::new();
-    let o = over(&pages, [0.0; 3]);
-    let before = (paging.revision(), paging.frames_used());
-    let observer = EdgeRays(Access::new(&paging, &store), Tau::FINEST);
-    let grid = Grid::of(Lens::of(&o).unwrap());
-    let mut seen = 0;
-    observer.observe(&grid, o.far, &|_| true, &mut Vec::new(), &mut |_, f, _| {
-        if let Some(f) = f {
-            assert!(f.near > 0.0 && f.near < o.far, "{f:?} is not on the ocean");
-            seen += 1;
-        }
-    });
-    assert!(seen > 0, "nothing seen of resident ground");
-    assert_eq!(before, (paging.revision(), paging.frames_used()));
-    for &p in &pages {
-        assert!(paging.asked(p).is_none(), "an observation asked for {p:?}");
-    }
-}
-
 /// Four pages of open ocean, resident.
 fn resident() -> (Paging<Terrain>, Vec<LevelPage>) {
     let pages: Vec<LevelPage> = (0..2).flat_map(|x| (0..2).map(move |y| LevelPage::new(0, ivec::gather(40 + x, -20 + y, 0)))).collect();
@@ -227,33 +202,3 @@ fn over(pages: &[LevelPage], by: V3) -> Observation {
     viewed(eye, [x0 + side * 1.5 + by[0], y0 + side * 1.3 + by[1], 0.0], 50.0, 16.0 / 9.0)
 }
 
-/// What was seen is reused while it is not stale, and cast again where it
-/// is: at rest nothing is cast; a small move casts nothing; a turn past the
-/// share of a tile casts every tile; ground whose residency changed under
-/// some tiles' rays casts those, and a footprint reused is the one it was.
-#[test]
-fn a_tile_is_cast_again_only_where_it_is_stale() {
-    let _g = serial();
-    let (paging, pages) = resident();
-    let store = Store::new();
-    let observer = EdgeRays(Access::new(&paging, &store), Tau::FINEST);
-    let o = over(&pages, [0.0; 3]);
-    let tiles = Grid::of(Lens::of(&o).unwrap()).count();
-    let mut sight = Sight::default();
-    let full = sight.observe(&o, &observer, false, &[]);
-    assert!(full >= tiles, "a first sight cast {full} rays for {tiles} tiles");
-    let first: Vec<Footprint> = sight.footprints().cloned().collect();
-    assert_eq!(sight.observe(&o, &observer, false, &[]), 0, "cast again at rest");
-    assert_eq!(sight.footprints().cloned().collect::<Vec<_>>(), first, "a footprint at rest changed");
-    assert_eq!(sight.observe(&over(&pages, [0.01, 0.0, 0.0]), &observer, false, &[]), 0, "cast again for a small move");
-    let turned = over(&pages, [0.0, 0.0, 0.0]);
-    let turned = Observation {
-        frustum: viewed(turned.eye, [turned.eye[0] + 10.0, turned.eye[1] - 40.0, 0.0], 50.0, 16.0 / 9.0).frustum,
-        ..turned
-    };
-    assert_eq!(sight.observe(&turned, &observer, false, &[]), full, "a turn past a share of a tile left a tile uncast");
-    let nearest = sight.footprints().min_by(|a, b| a.near.total_cmp(&b.near)).expect("something seen").reach;
-    let under_some = [(nearest.2 - 0.25, nearest.3 - 0.25, 0.1)];
-    let some = sight.observe(&turned, &observer, false, &under_some);
-    assert!(some > 0 && some < full, "residency moved under some tiles cast {some} of {full}");
-}

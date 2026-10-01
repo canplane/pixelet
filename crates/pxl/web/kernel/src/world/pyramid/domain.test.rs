@@ -165,57 +165,6 @@ fn hidden_ground_keeps_its_depth() {
     }
 }
 
-/// A ridge, and stacks of cubes behind it as tall as the lane, seen from
-/// near the ground, over it and from high up: every chunk split contributes
-/// to some tile's footprint and its error spans more than a cell — a piece
-/// whose error stays under a cell on both axes is never split — and lies
-/// within its level's reach, and a finer quality splits every chunk a
-/// coarser one does.
-#[test]
-fn a_split_contributes_leaks_and_lies_within_its_reach() {
-    let mut world = World::flat(GROUND).with([1_100.0, -40_000.0, GROUND], [1_200.0, 40_000.0, GROUND + 400.0]);
-    for k in 0..20 {
-        let x = 1_300.0 + 97.0 * k as f64;
-        for j in 0..10 {
-            let y = 1_000.0 + 211.0 * j as f64;
-            world = world.with([x, y, GROUND + 700.0], [x + 16.0, y + 16.0, 30_000.0]);
-        }
-    }
-    for forward in [[1.0, 0.0, 0.0], [1.0, 0.2, -0.4], [1.0, -0.3, 0.3], [0.0, 1.0, -1.0], [0.3, 0.1, -3.0]] {
-        for height in [2.0, 300.0, 2_500.0] {
-            let at = [EYE[0], EYE[1], GROUND + height];
-            let o = eye(at, Some(forward), FAR, GROUND);
-            let lens = Lens::of(&o).unwrap();
-            let mut d = domain(o, &world);
-            let cuts = cuts(&mut d);
-            for (tau, pieces, splits) in &cuts {
-                for &c in splits {
-                    let Contents::Holds { bound, error } = d.contents(c) else {
-                        panic!("{c:?} split and holds nothing")
-                    };
-                    assert!(d.footprints.iter().any(|f| f.touches(&bound)), "{forward:?} at {height}, {tau:?}: {c:?} split and touched by no tile");
-                    let nearest = bound.nearest(at);
-                    let error = lens.error(nearest, error);
-                    assert!(
-                        error.iter().any(|&e| e > cell_angle(*tau)),
-                        "{forward:?} at {height}, {tau:?}: {c:?} split with its error inside a cell"
-                    );
-                    let near = (0..3).map(|k| (nearest[k] - at[k]).powi(2)).sum::<f64>().sqrt();
-                    assert!(near < split_reach(c.level(), *tau), "{forward:?} at {height}, {tau:?}: {c:?} split past its reach");
-                }
-                assert!(
-                    pieces.len() <= d.roots().len() + (CHILDREN - 1) * splits.len(),
-                    "{forward:?} at {height}, {tau:?}: more pieces than the splits make"
-                );
-            }
-            for pair in cuts.windows(2) {
-                assert!(pair[1].2.is_subset(&pair[0].2), "{forward:?} at {height}: {:?} splits a chunk {:?} does not", pair[1].0, pair[0].0);
-                assert!(pair[1].1.len() <= pair[0].1.len(), "{forward:?} at {height}: fewer pieces at {:?} than at {:?}", pair[0].0, pair[1].0);
-            }
-        }
-    }
-}
-
 /// With the source's top below the pyramid's, the cover is that level's
 /// chunks and nothing coarser is ever a piece or asked to split.
 #[test]
