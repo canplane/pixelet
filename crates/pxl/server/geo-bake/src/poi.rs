@@ -39,14 +39,14 @@ pub fn leaves(client: &mut Client, within: Option<IVec>) -> Result<BTreeMap<IVec
         Some(p) => {
             let [[x0, y0, _], [x1, y1, _]] = epsg3857::get_page_bbox(p);
             client.query(
-                "SELECT ST_X(geom), ST_Y(geom), name, properties->'categories'->>'primary' FROM overture_places WHERE geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)",
+                "SELECT ST_X(geom), ST_Y(geom), name, properties->'categories'->>'primary', gers_id FROM overture_places WHERE geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)",
                 &[&x0, &y0, &x1, &y1],
             )
         }
-        None => client.query("SELECT ST_X(geom), ST_Y(geom), name, properties->'categories'->>'primary' FROM overture_places", &[]),
+        None => client.query("SELECT ST_X(geom), ST_Y(geom), name, properties->'categories'->>'primary', gers_id FROM overture_places", &[]),
     }
     .map_err(|e| e.to_string())?;
-    let mut places: BTreeMap<IVec, Vec<(Pvf3, String, u8, u8)>> = BTreeMap::new();
+    let mut places: BTreeMap<IVec, Vec<(Pvf3, String, u8, u64)>> = BTreeMap::new();
     for row in rows {
         let mut at = Pvf3::default();
         epsg3857::project(&mut at, row.get(0), row.get(1), 0.0);
@@ -56,40 +56,19 @@ pub fn leaves(client: &mut Client, within: Option<IVec>) -> Result<BTreeMap<IVec
         if within.is_some_and(|w| leaf.page != w) {
             continue;
         }
-        let category = category_named(row.get::<_, Option<&str>>(3));
-        places.entry(leaf.page).or_default().push((at, row.get(2), kind_of(category), rank_of(category)));
+        let kind = kind_of(category_named(row.get::<_, Option<&str>>(3)));
+        places.entry(leaf.page).or_default().push((at, row.get(2), kind, id_of(row.get(4))));
     }
     Ok(places
         .into_iter()
-        .map(|(page, p)| (page, PoiPage::of_places(0, p.iter().map(|(at, name, kind, rank)| (*at, Place { name, kind: *kind, rank: *rank })))))
+        // The table holds every place Overture has here, so a count is a
+        // total.
+        .map(|(page, p)| (page, PoiPage::of_places(0, p.iter().map(|(at, name, kind, id)| (*at, Place { name, kind: *kind, id: *id })), true)))
         .collect())
 }
 
-/// How prominent a place of `category` is, the more the lower: OpenMapTiles'
-/// `poi_class_rank` (layers/poi/class.sql) over five, which keeps every one
-/// of its ranks whole in a byte, of the class its `poi` layer files the
-/// category under (layers/poi/poi.yaml) — a clinic is a hospital, a subway a
-/// railway, a kindergarten a school, a mall or a convenience store a shop, a
-/// department store a grocery, a pub beer — and a class it does not rank,
-/// 1000 over five, last.
-pub fn rank_of(category: &str) -> u8 {
-    match category {
-        "hospital" | "clinic" => 4,
-        "subway" | "station" => 8,
-        "bus_station" => 10,
-        "attraction" => 14,
-        "university" | "college" => 16,
-        "school" | "kindergarten" => 17,
-        "townhall" => 20,
-        "park" => 24,
-        "library" => 26,
-        "police" => 27,
-        "post_office" => 28,
-        "mall" | "convenience" => 80,
-        "supermarket" | "department_store" => 100,
-        "fast_food" => 120,
-        "clothes" => 140,
-        "bar" => 160,
-        _ => 200,
-    }
+/// A place's id: FNV-1a over 64 bits of the source's own id for it, Overture's
+/// GERS id here, so the page carries a word and no source's form of one.
+fn id_of(source_id: &str) -> u64 {
+    source_id.bytes().fold(0xcbf2_9ce4_8422_2325, |h, b| (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3))
 }

@@ -25,7 +25,9 @@ pub const ANCHOR: f64 = 34.0;
 /// `slot`), and a badge is found again by these numbers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Label {
-    Count(u32),
+    /// How many places, and whether that is a floor (pxl-spec
+    /// bake/poi_page.rs `PoiCell::partial`).
+    Count(u32, bool),
     Place { page: LevelPage, place: u32 },
 }
 
@@ -33,14 +35,14 @@ impl Label {
     /// The place a badge names, from the page it was read from; nameless and
     /// of no kind once that page has gone.
     fn place(page: LevelPage, place: u32) -> Place<'static> {
-        PoiPage::pyramid().get(page).map_or(Place { name: "", kind: 0, rank: u8::MAX }, |p| p.places.get(place))
+        PoiPage::pyramid().get(page).map_or(Place { name: "", kind: 0, id: 0 }, |p| p.places.get(place))
     }
 
     /// What the badge shows: the count, or the name cut where a badge would
     /// run past the rest.
     pub fn text(self) -> String {
         match self {
-            Label::Count(n) => n.to_string(),
+            Label::Count(n, partial) => format!("{n}{}", if partial { "+" } else { "" }),
             Label::Place { page, place } => {
                 let full = Label::place(page, place).name;
                 let mut shown: String = full.chars().take(SHOWN_CHARS).collect();
@@ -101,7 +103,7 @@ pub fn slot(label: Label) -> i32 {
             b.width * DPR_MAX,
             HEIGHT * DPR_MAX,
             match label {
-                Label::Count(_) => DrawSpec::Cluster {
+                Label::Count(..) => DrawSpec::Cluster {
                     label: label.text(),
                     logical_w: b.width,
                 },

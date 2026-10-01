@@ -8,11 +8,10 @@
 //! there hold one place or none. Either way each cell of the POI lattice
 //! (pxl-spec bake/poi_page.rs `POI_LATTICE`) under the piece is one badge,
 //! already folded as the pyramid keeps it, and no two of them meet in one
-//! cell of the piece's level. A cell is shown by the place its page names for
-//! it — the most prominent under it (pxl-spec bake/poi_page.rs) — and stands
-//! at the center of the z16 ground cell that place stands in; a cell none of
-//! whose places has a name is its count. It stands in all three
-//! axes, on the surface the model says is drawn there:
+//! cell of the piece's level. What a cell is shown as is chosen here, from
+//! what its page holds (`step`), and a badge stands at the center of a z16
+//! ground cell — its place's, or its cell's middle's for a count. It stands
+//! in all three axes, on the surface the model says is drawn there:
 //! what a ray down through the cell meets first, ground or a placed object,
 //! at the level the view draws that ground at (world/access.rs `first_hit`)
 //! — the world as it is known, never the state of a mesh being built.
@@ -22,7 +21,7 @@ use crate::layer::billboard::batch::BillboardBatch;
 use crate::layer::billboard::selection::select_visible_billboards;
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::layer::poi::badge::{self, Label};
-use crate::layer::poi::enabled;
+use crate::layer::poi::{enabled, rank_of};
 use crate::param::{POI_ALL_LEVEL, POI_MAJOR_LEVEL, POI_MAJOR_RANK};
 use crate::sched::tick::TickContext;
 use crate::world::access::{Access, Detail, Ray};
@@ -122,11 +121,23 @@ pub fn step(ctx: &mut TickContext) {
             let from = poi.cells.partition_point(|c| c.cell < lo);
             for c in poi.cells[from..].iter().take_while(|c| c.cell < hi) {
                 let cell = POI_LATTICE.cell_at(src, c.cell);
-                let ground = cell.inner_at(GROUND, 0, c.at);
+                // What the cell is shown as, which is the reader's to choose
+                // (layer/poi.rs `rank_of`): every cell from `POI_ALL_LEVEL`, a
+                // place where it holds one and a count where it holds more,
+                // as the clusters of a map's markers are; coarser, only the
+                // most prominent place it holds, where that is prominent
+                // enough. A place stands where it does, a count at its cell's
+                // middle.
+                let (label, ground) = if major_only {
+                    let Some((place, _, at)) = poi.shown(c).map(|(i, p, at)| (i, rank_of(p.kind), at)).filter(|s| s.1 <= POI_MAJOR_RANK).min_by_key(|s| s.1) else { continue };
+                    (Label::Place { page: src, place }, cell.inner_at(GROUND, 0, at))
+                } else {
+                    match (c.count, poi.shown(c).next()) {
+                        (1, Some((place, _, at))) => (Label::Place { page: src, place }, cell.inner_at(GROUND, 0, at)),
+                        _ => (Label::Count(c.count, c.partial), GROUND.cell_of(0, &cell.mid())),
+                    }
+                };
                 if m == 0 && Chunk::of(chunk.level(), &ground.mid()).column() != chunk.column() {
-                    continue;
-                }
-                if major_only && poi.place(c).is_none_or(|place| place.rank > POI_MAJOR_RANK) {
                     continue;
                 }
                 // A column is drawn by every chunk over it that holds
@@ -138,10 +149,6 @@ pub fn step(ctx: &mut TickContext) {
                 if top - 1.0 < z0 || top - 1.0 >= z1 {
                     continue;
                 }
-                let label = match poi.place(c) {
-                    Some(_) => Label::Place { page: src, place: c.place },
-                    None => Label::Count(c.count),
-                };
                 found.push((POI_LATTICE.cell_of(chunk.level(), &ground.mid()), label, ground, top));
             }
         }
@@ -220,7 +227,7 @@ pub fn tap(ndc_x: f64, ndc_y: f64) -> bool {
     };
     match label {
         // A count opens up as it is looked at closer.
-        Label::Count(_) => crate::control::camera::controller::focus(stands),
+        Label::Count(..) => crate::control::camera::controller::focus(stands),
         _ => crate::shell::shell::go_to(stands),
     }
     true

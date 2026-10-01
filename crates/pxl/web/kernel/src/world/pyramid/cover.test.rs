@@ -111,8 +111,8 @@ fn places() -> (Vec<IVec>, Vec<(LevelPage, PoiPage)>) {
                 .iter()
                 .map(|&a| Pvf3 { i: a, ..Default::default() })
                 .filter(|a| POI_LATTICE.cell_of(p.level, a).page() == p)
-                .map(|a| (a, Place { name: "", kind: 0, rank: 100 }));
-            (p, PoiPage::of_places(p.level, places))
+                .map(|a| (a, Place { name: "p", kind: 0, id: a.i }));
+            (p, PoiPage::of_places(p.level, places, true))
         })
         .collect();
     (at, pages)
@@ -127,7 +127,13 @@ fn count(pyramid: &Pyramid<PoiPage>, c: Chunk) -> Option<u32> {
     let page = pyramid.get(src).expect("a source is resident");
     page.cells
         .iter()
-        .filter(|x| Chunk::of(c.level(), &POI_LATTICE.cell_at(src, x.cell).inner_at(GROUND, 0, x.at).mid()) == c)
+        .filter(|x| {
+            // A crowd's cell is the chunk's own column; a cell over a chunk
+            // holds one place, which stands where it does.
+            let cell = POI_LATTICE.cell_at(src, x.cell);
+            let at = page.shown(x).next().map_or(cell.mid(), |(_, _, at)| cell.inner_at(GROUND, 0, at).mid());
+            Chunk::of(c.level(), &at) == c
+        })
         .map(|x| x.count)
         .sum::<u32>()
         .into()
@@ -198,7 +204,10 @@ fn crowded(p: LevelPage) -> PoiPage {
     let at = |k: LevelPage| POI_LATTICE.cell_base(k, 0, 0);
     PoiPage::of_places(
         p.level,
-        p.children().into_iter().flat_map(|k| [(at(k), Place { name: "a", kind: 0, rank: 100 }), (at(k), Place { name: "b", kind: 0, rank: 100 })]),
+        p.children()
+            .into_iter()
+            .flat_map(|k| [(at(k), Place { name: "a", kind: 0, id: 1 }), (at(k), Place { name: "b", kind: 0, id: 1 })]),
+        true,
     )
 }
 
