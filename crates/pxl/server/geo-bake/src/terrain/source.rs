@@ -10,13 +10,17 @@
 
 use postgres::Client;
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::bake::format::{encode_terrain, BaseRow, BuildingRow, CoastRow, DeckRow, SegmentRow};
+use pxl_spec::bake::deck::Decks;
+use pxl_spec::bake::format::{BaseRow, BuildingRow, CoastRow, SegmentRow};
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
+use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, BranchView, BranchViewImpl, NodeView, TreeEncoderOptions, TreeView};
 
-use crate::terrain::bake::bake_terrain;
+use crate::terrain::artifact::Surface;
+use crate::terrain::bake::bake_surface;
+use crate::terrain::pipeline::deck::bake_decks;
 use crate::terrain::repository::{PageSource, TerrainRepository};
 
 const ELE_PADDED_SPAN2: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
@@ -74,25 +78,13 @@ fn base_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a BaseRow) {
     }));
 }
 
-fn deck_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a DeckRow) {
-    b.branch(Some(&mut |t| {
-        t.str(Some(&row.gers_id))
-            .str(Some(&row.subtype))
-            .str(row.class.as_deref())
-            .f64(Some(row.width_m))
-            .u8(Some(row.form))
-            .u8_array(Some(&row.piers))
-            .u8_array(Some(&row.geom_wkb));
-    }));
-}
-
 fn coast_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a CoastRow) {
     b.branch(Some(&mut |t| {
         t.str(Some(&row.id)).u8_array(Some(&row.geom_wkb)).bool(Some(row.covers_page));
     }));
 }
 
-/// Packs what the database gave into `[ele, buildings, segments, base, coasts, decks]`,
+/// Packs what the database gave into `[ele, buildings, segments, base, coasts]`,
 /// each row a tuple in the order of its row type's fields (pxl-spec
 /// bake/format.rs).
 pub fn pack_source(source: &PageSource, stats: &mut SourceStats) -> Result<Vec<u8>, MarshalError> {
@@ -125,12 +117,6 @@ pub fn pack_source(source: &PageSource, stats: &mut SourceStats) -> Result<Vec<u
         }
     });
 
-    let decks = rows_branch(|b| {
-        for row in &source.deck_rows {
-            deck_tuple(b, row);
-        }
-    });
-
     let mut root = TreeView::new();
     root.branch(Some(&mut |r| {
         r.i16_array(Some(&ele));
@@ -138,7 +124,6 @@ pub fn pack_source(source: &PageSource, stats: &mut SourceStats) -> Result<Vec<u
         r.subtree(&segments);
         r.subtree(&base);
         r.subtree(&coasts);
-        r.subtree(&decks);
     }));
 
     encoder().encode(&root, TreeEncoderOptions::default())
@@ -151,10 +136,17 @@ pub fn fetch_terrain_source(repo: &TerrainRepository, client: &mut Client, page_
     Ok(pack_source(&source, stats)?)
 }
 
-/// Raw Overture and elevation source, baked into client-ready ground channels.
-pub fn fetch_tile(repo: &TerrainRepository, client: &mut Client, page_idx: IVec, stats: &mut SourceStats) -> Result<Vec<u8>, BakeError> {
+/// A page's surface, from the database (terrain/artifact.rs).
+pub fn fetch_surface(repo: &TerrainRepository, client: &mut Client, page_idx: IVec, stats: &mut SourceStats) -> Result<Surface, BakeError> {
     let raw = fetch_terrain_source(repo, client, page_idx, stats)?;
-    Ok(encode_terrain(&bake_terrain(page_idx, &raw)?)?)
+    Ok(bake_surface(page_idx, &raw)?)
+}
+
+/// A page's lines, from the solve's table (terrain/artifact.rs).
+pub fn fetch_lines(repo: &TerrainRepository, client: &mut Client, page_idx: IVec) -> Result<Decks, BakeError> {
+    let page_bbox = epsg3857::get_page_bbox(page_idx);
+    let rows = repo.fetch_deck_rows(client, page_bbox)?;
+    bake_decks(&rows, page_bbox[0]).ok_or(BakeError::Marshal(MarshalError::new(Errno::ENOSPC)))
 }
 
 #[derive(Debug)]

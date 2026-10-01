@@ -20,9 +20,10 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_core::wire::xtp::{encoder, BranchView, NodeView, TreeEncoderOptions, TreeView};
 
-use crate::terrain::bake::bake_terrain;
+use crate::terrain::artifact::assemble;
+use crate::terrain::bake::bake_surface;
 use crate::terrain::repository::TerrainRepository;
-use crate::terrain::source::{fetch_tile, SourceStats};
+use crate::terrain::source::{fetch_lines, fetch_surface, SourceStats};
 use crate::util::{pack, Level};
 
 /// Current `elevation_raster` coverage bbox — confirmed with
@@ -114,9 +115,12 @@ pub fn has_land(client: &mut Client, pages: &[IVec]) -> Result<Vec<bool>, postgr
     Ok(out)
 }
 
-/// A leaf's object, packed as it is stored and served, and its raw size.
+/// A leaf's object, its surface and its lines made and assembled in one go,
+/// packed as it is stored and served, and its raw size.
 pub fn bake_leaf(repo: &TerrainRepository, client: &mut Client, page: IVec, stats: &mut SourceStats, level: Level) -> Result<(usize, Vec<u8>), String> {
-    let raw = fetch_tile(repo, client, page, stats).map_err(|e| e.to_string())?;
+    let surface = fetch_surface(repo, client, page, stats).map_err(|e| e.to_string())?;
+    let lines = fetch_lines(repo, client, page).map_err(|e| e.to_string())?;
+    let raw = encode_terrain(&assemble(surface, lines)).map_err(|e| format!("{e:?}"))?;
     let packed = pack(raw.as_slice(), level).map_err(|e| e.to_string())?;
     Ok((raw.len(), packed))
 }
@@ -137,7 +141,6 @@ fn empty_source() -> Vec<u8> {
         r.subtree(&empty); // segments
         r.subtree(&empty); // base
         r.subtree(&empty); // coasts
-        r.subtree(&empty); // decks
     }));
     encoder().encode(&root, TreeEncoderOptions::default()).expect("empty source packet")
 }
@@ -148,7 +151,10 @@ fn empty_source() -> Vec<u8> {
 /// latitude) yields identical bytes.
 pub fn bake_ocean(samples: &[IVec]) -> Result<Vec<u8>, String> {
     let src = empty_source();
-    let baked: Vec<Vec<u8>> = samples.iter().map(|p| bake_terrain(*p, &src).and_then(|t| encode_terrain(&t)).expect("ocean bake")).collect();
+    let baked: Vec<Vec<u8>> = samples
+        .iter()
+        .map(|p| bake_surface(*p, &src).and_then(|s| encode_terrain(&assemble(s, Default::default()))).expect("ocean bake"))
+        .collect();
     for (i, page) in baked.iter().enumerate().skip(1) {
         if page != &baked[0] {
             return Err(format!(

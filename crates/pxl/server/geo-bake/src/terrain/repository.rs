@@ -99,7 +99,6 @@ pub struct PageSource {
     pub segment_rows: Vec<SegmentRow>,
     pub base_rows: Vec<BaseRow>,
     pub coast_rows: Vec<CoastRow>,
-    pub deck_rows: Vec<DeckRow>,
 }
 
 /// The five statements, prepared once against one connection, and the
@@ -191,8 +190,21 @@ impl TerrainRepository {
             })
             .collect();
 
-        let deck_rows = client
-            .query(&self.deck, &bbox)?
+        Ok(PageSource {
+            ele,
+            building_rows,
+            segment_rows,
+            base_rows,
+            coast_rows,
+        })
+    }
+
+    /// The solved lines its envelope touches (deck/): what a page's lines are
+    /// made of, apart from its surface.
+    pub fn fetch_deck_rows(&self, client: &mut Client, page_bbox: BBox3857) -> Result<Vec<DeckRow>, postgres::Error> {
+        let (minx, miny, maxx, maxy) = (page_bbox[0][0], page_bbox[0][1], page_bbox[1][0], page_bbox[1][1]);
+        Ok(client
+            .query(&self.deck, &[&minx, &miny, &maxx, &maxy])?
             .iter()
             .map(|row| DeckRow {
                 gers_id: row.get("gers_id"),
@@ -203,16 +215,7 @@ impl TerrainRepository {
                 piers: row.get::<_, &[u8]>("piers").into(),
                 geom_wkb: wkb(row),
             })
-            .collect();
-
-        Ok(PageSource {
-            ele,
-            building_rows,
-            segment_rows,
-            base_rows,
-            coast_rows,
-            deck_rows,
-        })
+            .collect())
     }
 }
 

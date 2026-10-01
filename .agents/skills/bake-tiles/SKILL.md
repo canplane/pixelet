@@ -72,24 +72,41 @@ ingested data.
 
 ## Terrain
 
-The decks' heights come first. `overture_deck` is derived from
-`overture_transportation`, the water and the elevation, over the whole
-coverage at once, since a viaduct's height is decided by where it meets the
-ground pages away (`geo-bake deck.rs`). Solve it again after a
-transportation ingest or a change to the solve, then bake:
+A page is built from two artifacts that change for different reasons
+(`geo-bake terrain/artifact.rs`), and assembled from them:
+
+- **surface** — ground and elevation, from the database. The expensive one,
+  baked again only when the source data changes; resumable.
+- **lines** — decks, ramps and bores, from `overture_deck`, which the deck
+  solve writes over the whole coverage at once, since a viaduct's height is
+  decided by where it meets the ground pages away (`geo-bake deck.rs`).
+  Cheap, and made whole every time.
+- **assemble** — each leaf of the two, and the pyramid folded over the
+  leaves, with no database. Whole every time.
+
+A first bake, or one after an ingest:
 
 ```bash
 deno task solve:decks
 deno task bake:tiles --out ./out/terrain/<version> --concurrency 8
 ```
 
-| Flag                | Meaning                                                         |
-| ------------------- | --------------------------------------------------------------- |
-| `--out <dir>`       | output directory; its last path segment is the version          |
-| `--concurrency <n>` | parallel bakes — match `DB_POOL_SIZE`, the DB is the bottleneck |
-| `--limit <n>`       | stop after n tiles (smoke test)                                 |
-| `--force`           | re-bake tiles already on disk                                   |
-| `--reclassify`      | ignore the cached land/ocean scan and redo it                   |
+After a change to how decks or bores are solved, nothing else:
+
+```bash
+deno task solve:decks
+deno task bake:tiles --out ./out/terrain/<version> --stage lines --stage assemble
+```
+
+| Flag                | Meaning                                                              |
+| ------------------- | -------------------------------------------------------------------- |
+| `--stage <s>`       | `surface`, `lines` or `assemble`, repeatable; all three when omitted |
+| `--out <dir>`       | published pages; its last path segment is the version                |
+| `--build <dir>`     | the artifacts (default `./out/build/terrain`)                        |
+| `--concurrency <n>` | parallel pages — match `DB_POOL_SIZE`, the DB is the bottleneck      |
+| `--limit <n>`       | stop after n pages (smoke test)                                      |
+| `--force`           | bake surfaces already on disk again                                  |
+| `--reclassify`      | ignore the cached land/ocean scan and redo it                        |
 
 It runs long enough to want a log file rather than a terminal:
 
@@ -98,7 +115,8 @@ It runs long enough to want a log file rather than a terminal:
 grep '^\[bake\] ' /tmp/bake.log | tail -2
 ```
 
-What it produces:
+What it produces, beside `surface/` and `lines/` under `--build` with a
+`surface.json` and `lines.json` of what built them:
 
 - `0/`, one packed object per land-or-coastal page — the leaves
 - `1/`, `2/`, … each level folded from the one below it until a level is a
@@ -116,17 +134,17 @@ and reused unless `--reclassify` is passed.
 
 ### Verifying
 
-1. **Zero failures.** The final line reports `failed=`. Anything above zero
-   means tiles are missing from the set; repeat the run (it skips the
-   successes).
-2. **Check the flat-elevation warning.** A tile whose elevation query returns
-   the wrong shape is written successfully with a zero-filled grid — it bakes
-   perfectly flat and never appears in `failed`. The summary prints a
-   `WARNING: N of M tiles ... baked FLAT` line when this happens, and
-   `manifest.json` records it under `run.flat_elevation_tiles`. A few hundred
-   at the outer edge of the DEM coverage is expected (the padded sampling
-   window falls outside the source raster there). A large number, or any away
-   from the boundary, means something else is wrong.
+1. **Zero failures.** Each stage's line reports `failed=`. Anything above
+   zero in `surface` means pages are missing; repeat the stage (it skips the
+   successes). `assemble` refuses to finish with a page missing.
+2. **Check the flat-elevation warning.** A page the elevation raster does not
+   reach is written successfully with a zero-filled grid — it bakes perfectly
+   flat and never appears in `failed`. The `surface` stage prints a
+   `WARNING: N pages ... baked FLAT` line when this happens, and
+   `manifest.json` records it under `flat_elevation_pages`. A page whose
+   padded window only partly leaves the raster is not flat: its grid has the
+   ground where there is any. A large number means the coverage and the
+   raster disagree.
 3. **The ocean tile stayed page-independent.** The tool bakes an empty source
    at three different pages and aborts if the bytes differ. If it ever does,
    the single-fallback design no longer holds — stop and re-read the

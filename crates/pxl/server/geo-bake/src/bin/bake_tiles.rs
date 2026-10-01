@@ -5,40 +5,55 @@
 //! packed tile objects (util.rs's CONTENT_ENCODING) ready to upload to a static object store and be served
 //! straight to the client with no API server in the loop.
 //!
+//! A page is built in three stages, because its two halves change for
+//! different reasons (terrain/artifact.rs):
+//!
+//! - `surface`: each land page's ground and elevation, from the database,
+//!   into `<build>/surface/`. The expensive one, run when the source data
+//!   changes; resumed by what is on disk.
+//! - `lines`: each land page's decks, ramps and bores, from what
+//!   `solve:decks` wrote, into `<build>/lines/`. Cheap, and made again whole
+//!   every time, so a page that lost its lines keeps none: run after every
+//!   solve.
+//! - `assemble`: each leaf made of its surface and its lines, under
+//!   `<out>/0/`, and every level above folded from the one below it
+//!   (pyramid.rs) into `<out>/<level>/` up to TOP_LEVEL — with no database
+//!   in the loop. Always whole.
+//!
+//! So a change to how decks are solved is `solve:decks`, then `--stage
+//! lines --stage assemble`, and no surface is baked again. With no
+//! `--stage`, all three run.
+//!
 //! Land/ocean classification is a coarse pre-filter, cheaper and separate from
 //! the bake path's own fine-grained coastline carving. It checks
 //! `overture_base_land` directly for existence, not the full carve; a page with
 //! zero touching land rows is open ocean and gets served by the client's single
 //! shared fallback tile instead.
 //!
-//! Tile bytes come from terrain/source.rs, the same assembly the dev endpoint
-//! uses, so a bucket tile and a locally served one are identical byte for byte.
-//!
-//! Those are the leaves, z16, under `<out>/0/`. Every level above is folded
-//! from the one below it on disk (pyramid.rs) into `<out>/<level>/`,
-//! with no database in the loop, up to TOP_LEVEL. The levels are
-//! always refolded whole: they are a function of the leaves, so a resumed or
-//! partial leaf bake is never left under a stale pyramid.
+//! A page is the same bytes the dev tile server makes of it, which makes and
+//! assembles both halves in one go (terrain/leaf.rs `bake_leaf`).
 //!
 //! Usage (from the repo root):
 //!   cargo run --profile server -p pxl-geo-bake --bin bake_tiles -- [flags]
 //!
 //! Flags:
-//!   --out <dir>          output directory (default ./out/terrain/<published version>)
-//!   --concurrency <n>    parallel bakes, one connection each (default 8)
-//!   --limit <n>          stop after n land tiles (smoke test)
-//!   --force              re-bake tiles that already exist on disk
+//!   --stage <s>          surface, lines or assemble; repeatable (default: all three)
+//!   --out <dir>          published pages (default ./out/terrain/<published version>)
+//!   --build <dir>        the stages' artifacts (default ./out/build/terrain)
+//!   --concurrency <n>    parallel pages, one connection each (default 8)
+//!   --limit <n>          stop after n land pages (smoke test)
+//!   --force              bake surfaces that already exist on disk again
 //!   --reclassify         ignore a cached land_pages.json and re-run the scan
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use postgres::{Client, NoTls};
-use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::format::{encode_terrain, Terrain};
 use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::LevelPage;
@@ -47,17 +62,27 @@ use pxl_geo_bake::cli::Flags;
 use pxl_geo_bake::elevation::Raster;
 use pxl_geo_bake::page::walk::{land_pages, write_land_pages};
 use pxl_geo_bake::pyramid::{build, write_manifest, Layer, PageSet};
-use pxl_geo_bake::terrain::leaf::{bake_leaf, bake_ocean, has_land, ocean_samples, Coverage, NE, OCEAN_KEY, SW};
+use pxl_geo_bake::terrain::artifact::{assemble, decode_lines, encode_lines, Surface};
+use pxl_geo_bake::terrain::leaf::{bake_ocean, has_land, ocean_samples, Coverage, NE, OCEAN_KEY, SW};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
-use pxl_geo_bake::terrain::source::SourceStats;
-use pxl_geo_bake::util::{fmt_bytes, fmt_dur, pack, refuse_mixed, Level};
+use pxl_geo_bake::terrain::source::{fetch_lines, fetch_surface, SourceStats};
+use pxl_geo_bake::util::{fmt_bytes, fmt_dur, git_sha, pack, refuse_mixed, unpack, Level};
 
 const CLASSIFY_BATCH: usize = 2000;
 
 // ---- args ----
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Stage {
+    Surface,
+    Lines,
+    Assemble,
+}
+
 struct Args {
+    stages: Vec<Stage>,
     out: PathBuf,
+    build: PathBuf,
     concurrency: usize,
     limit: Option<usize>,
     force: bool,
@@ -66,7 +91,9 @@ struct Args {
 
 fn parse_args() -> Result<Args, String> {
     let mut args = Args {
+        stages: Vec::new(),
         out: PathBuf::from(format!("./out/terrain/{}", PUBLISHED_VERSION.terrain)),
+        build: PathBuf::from("./out/build/terrain"),
         concurrency: 8,
         limit: None,
         force: false,
@@ -76,13 +103,23 @@ fn parse_args() -> Result<Args, String> {
     let mut flags = Flags::from_env();
     while let Some(flag) = flags.arg() {
         match flag.as_str() {
+            "--stage" => args.stages.push(match flags.value()?.as_str() {
+                "surface" => Stage::Surface,
+                "lines" => Stage::Lines,
+                "assemble" => Stage::Assemble,
+                other => return Err(format!("unknown stage: {other}")),
+            }),
             "--out" => args.out = PathBuf::from(flags.value()?),
+            "--build" => args.build = PathBuf::from(flags.value()?),
             "--concurrency" => args.concurrency = flags.parse()?,
             "--limit" => args.limit = Some(flags.parse()?),
             "--force" => args.force = true,
             "--reclassify" => args.reclassify = true,
             other => return Err(format!("unknown flag: {other}")),
         }
+    }
+    if args.stages.is_empty() {
+        args.stages = vec![Stage::Surface, Stage::Lines, Stage::Assemble];
     }
     Ok(args)
 }
@@ -142,212 +179,276 @@ fn classify_land_pages(client: &mut Client, candidates: &[IVec]) -> Result<Vec<I
 
 // ---- run ----
 
+/// What one stage did, over the pages it was given.
 #[derive(Default)]
 struct Totals {
-    baked: u64,
+    done: u64,
     skipped: u64,
     failed: u64,
-    raw: u64,
     bytes: u64,
     flat_ele: u64,
 }
 
-fn run() -> Result<(), String> {
-    let args = parse_args()?;
-    let tiles = PageSet::new(&args.out);
-    println!(
-        "[bake] out={} concurrency={} limit={} force={}",
-        args.out.display(),
-        args.concurrency,
-        args.limit.map(|n| n.to_string()).unwrap_or_else(|| "none".into()),
-        args.force
-    );
-    fs::create_dir_all(tiles.level_dir(0)).map_err(|e| e.to_string())?;
-    // The levels above are refolded whole; the leaves and the ocean page are
-    // what a resumed run keeps.
-    if !args.force {
-        refuse_mixed(&tiles.root)?;
-        refuse_mixed(&tiles.level_dir(0))?;
-    }
-
-    let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
-    let mut client = Client::connect(&url, NoTls).map_err(|e| e.to_string())?;
-    // One raster for every worker, so a tile pages share is read once.
-    let raster = Arc::new(Raster::open(&mut client).map_err(|e| e.to_string())?);
-
-    let coverage = Coverage::of_source();
-    let candidates = coverage.pages();
-    println!(
-        "[bake] page grid x[{}..{}] y[{}..{}] = {} candidate pages",
-        coverage.x.0,
-        coverage.x.1,
-        coverage.y.0,
-        coverage.y.1,
-        candidates.len()
-    );
-
-    // ---- classify (cached: the scan is deterministic and slow-ish) ----
-    let land_cache = args.out.join("../land_pages.json");
-    // A list classified at another page size is not reusable, and this is the
-    // one bake that can classify again, so a refused cache is simply redone.
-    let cached = if args.reclassify { Err("--reclassify".to_string()) } else { land_pages(&land_cache) };
-    let land: Vec<IVec> = match cached {
-        Ok(land) => {
-            println!("[bake/classify] reusing cached list: {} land pages ({})", land.len(), land_cache.display());
-            land
-        }
-        Err(why) => {
-            println!("[bake/classify] classifying: {why}");
-            let land = classify_land_pages(&mut client, &candidates).map_err(|e| e.to_string())?;
-            write_land_pages(&land_cache, &land)?;
-            println!("[bake/classify] done: land={} ocean={} -> {}", land.len(), candidates.len() - land.len(), land_cache.display());
-            land
-        }
-    };
-    if land.is_empty() {
-        return Err("no land pages: nothing to bake".to_string());
-    }
-
-    // ---- ocean fallback tile ----
-    let ocean_path = tiles.root.join(OCEAN_KEY);
-    if args.force || !ocean_path.exists() {
-        let ocean_raw = bake_ocean(&ocean_samples(&coverage))?;
-        let ocean_packed = pack(ocean_raw.as_slice(), Level::Stored).map_err(|e| e.to_string())?;
-        fs::write(&ocean_path, &ocean_packed).map_err(|e| e.to_string())?;
-        println!(
-            "[bake/ocean] wrote {OCEAN_KEY}: raw={} packed={} (page-independent: verified)",
-            fmt_bytes(ocean_raw.len() as f64),
-            fmt_bytes(ocean_packed.len() as f64)
-        );
-    }
-
-    // ---- bake land tiles ----
-    let targets: &[IVec] = match args.limit {
-        Some(n) => &land[..n.min(land.len())],
-        None => &land,
-    };
-
+/// Runs `each` over `pages` on `workers` threads, each with what `open`
+/// gives it for the whole run, and reports as it goes. `each` says how many
+/// bytes it wrote, or that it skipped the page.
+fn over_pages<W>(what: &str, pages: &[IVec], workers: usize, open: impl Fn() -> Result<W, String> + Sync, each: impl Fn(&mut W, IVec, &mut Totals) -> Result<Option<u64>, String> + Sync) -> Totals {
     let next = AtomicUsize::new(0);
     let totals = Mutex::new(Totals::default());
     let started = Instant::now();
-
-    // A worker owns its connection and its prepared statements for the whole
-    // run, which is what the five-queries-on-one-client shape wants; page-level
-    // concurrency and the connection count are then the same number.
     std::thread::scope(|scope| {
-        for _ in 0..args.concurrency.max(1) {
+        for _ in 0..workers.max(1) {
             scope.spawn(|| {
-                let mut client = match Client::connect(&url, NoTls) {
-                    Ok(c) => c,
-                    Err(err) => return eprintln!("[bake/worker] connect failed: {err}"),
+                let mut w = match open() {
+                    Ok(w) => w,
+                    Err(err) => return eprintln!("[bake/{what}] worker failed to start: {err}"),
                 };
-                let repo = match TerrainRepository::prepare(&mut client, raster.clone()) {
-                    Ok(r) => r,
-                    Err(err) => return eprintln!("[bake/worker] prepare failed: {err}"),
-                };
-                let mut stats = SourceStats::default();
-
                 loop {
                     let i = next.fetch_add(1, Ordering::Relaxed);
-                    let Some(&page_idx) = targets.get(i) else { break };
-                    if !args.force && tiles.path(LevelPage::new(0, page_idx)).exists() {
-                        totals.lock().expect("totals").skipped += 1;
-                        continue;
-                    }
-
-                    let before = stats.flat_ele;
-                    let result =
-                        bake_leaf(&repo, &mut client, page_idx, &mut stats, Level::Stored).and_then(|(raw, packed)| tiles.write(LevelPage::new(0, page_idx), &packed).map(|()| (raw, packed.len())));
-
-                    let done = {
-                        let mut t = totals.lock().expect("totals");
-                        match result {
-                            Ok((raw, bytes)) => {
-                                t.baked += 1;
-                                t.raw += raw as u64;
-                                t.bytes += bytes as u64;
-                            }
-                            Err(err) => {
-                                t.failed += 1;
-                                eprintln!("[bake/tile/{}] failed: {err}", ivec::repr(page_idx));
-                            }
+                    let Some(&page) = pages.get(i) else { break };
+                    let mut local = Totals::default();
+                    let result = each(&mut w, page, &mut local);
+                    let mut t = totals.lock().expect("totals");
+                    t.flat_ele += local.flat_ele;
+                    match result {
+                        Ok(Some(bytes)) => {
+                            t.done += 1;
+                            t.bytes += bytes;
                         }
-                        t.flat_ele += stats.flat_ele - before;
-                        t.baked + t.skipped + t.failed
-                    };
-
-                    if done.is_multiple_of(200) {
-                        let t = totals.lock().expect("totals");
-                        let elapsed = started.elapsed().as_secs_f64() * 1000.0;
-                        let rate = if t.baked > 0 { elapsed / t.baked as f64 } else { 0.0 };
+                        Ok(None) => t.skipped += 1,
+                        Err(err) => {
+                            t.failed += 1;
+                            eprintln!("[bake/{what}/{}] failed: {err}", ivec::repr(page));
+                        }
+                    }
+                    let n = t.done + t.skipped + t.failed;
+                    if n.is_multiple_of(1000) {
+                        let rate = started.elapsed().as_secs_f64() * 1000.0 / t.done.max(1) as f64;
                         println!(
-                            "[bake] {done}/{} baked={} skipped={} failed={} packed={} {rate:.0}ms/tile eta={}",
-                            targets.len(),
-                            t.baked,
+                            "[bake/{what}] {n}/{} done={} skipped={} failed={} {} {rate:.0}ms/page eta={}",
+                            pages.len(),
+                            t.done,
                             t.skipped,
                             t.failed,
                             fmt_bytes(t.bytes as f64),
-                            fmt_dur(rate * (targets.len() as u64 - done) as f64)
+                            fmt_dur(rate * (pages.len() as u64 - n) as f64)
                         );
                     }
                 }
             });
         }
     });
-
     let t = totals.into_inner().expect("totals");
-    let elapsed = started.elapsed().as_secs_f64() * 1000.0;
-    let avg = if t.baked > 0 { t.bytes as f64 / t.baked as f64 } else { 0.0 };
-
-    println!();
-    println!("[bake] done in {}: baked={} skipped={} failed={}", fmt_dur(elapsed), t.baked, t.skipped, t.failed);
     println!(
-        "[bake] raw={} packed={} (avg {}/tile packed, {:.1}% of raw)",
-        fmt_bytes(t.raw as f64),
-        fmt_bytes(t.bytes as f64),
-        fmt_bytes(avg),
-        t.bytes as f64 / t.raw.max(1) as f64 * 100.0
+        "[bake/{what}] done in {}: done={} skipped={} failed={} {}",
+        fmt_dur(started.elapsed().as_secs_f64() * 1000.0),
+        t.done,
+        t.skipped,
+        t.failed,
+        fmt_bytes(t.bytes as f64)
     );
-    println!("[bake] projected full set ({} land tiles): {}", land.len(), fmt_bytes(avg * land.len() as f64));
+    t
+}
 
-    // A degraded tile still writes successfully, so it never shows up in
-    // `failed` — surface it here rather than leaving it buried in per-page
-    // warnings that nobody greps for after a forty-minute run.
-    if t.flat_ele > 0 {
-        let pct = t.flat_ele as f64 / t.baked.max(1) as f64 * 100.0;
-        eprintln!(
-            "[bake] WARNING: {} of {} tiles ({pct:.2}%) are out of the elevation raster's reach and were baked FLAT (zero-filled elevation).",
-            t.flat_ele, t.baked
+/// A worker's connection and the statements it asks with.
+struct Db {
+    client: Client,
+    repo: TerrainRepository,
+}
+
+fn connect(url: &str, raster: &Arc<Raster>) -> Result<Db, String> {
+    let mut client = Client::connect(url, NoTls).map_err(|e| e.to_string())?;
+    let repo = TerrainRepository::prepare(&mut client, raster.clone()).map_err(|e| e.to_string())?;
+    Ok(Db { client, repo })
+}
+
+fn write_json(path: &Path, value: &serde_json::Value) -> Result<(), String> {
+    fs::write(path, serde_json::to_string_pretty(value).map_err(|e| e.to_string())?).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+fn read_json(path: &Path) -> serde_json::Value {
+    fs::read_to_string(path).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or(serde_json::Value::Null)
+}
+
+fn run() -> Result<(), String> {
+    let args = parse_args()?;
+    let surfaces = PageSet::new(args.build.join("surface"));
+    let lines = PageSet::new(args.build.join("lines"));
+    let coverage = Coverage::of_source();
+    // Beside the published versions, which share it.
+    let land_cache = args.out.parent().unwrap_or(Path::new(".")).join("land_pages.json");
+    // The database is only asked by the stages that read it.
+    let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing".to_string());
+
+    if args.stages.contains(&Stage::Surface) {
+        let url = url.as_deref().map_err(Clone::clone)?;
+        let mut client = Client::connect(url, NoTls).map_err(|e| e.to_string())?;
+        // One raster for every worker, so a tile pages share is read once.
+        let raster = Arc::new(Raster::open(&mut client).map_err(|e| e.to_string())?);
+        let candidates = coverage.pages();
+        println!(
+            "[bake] page grid x[{}..{}] y[{}..{}] = {} candidate pages",
+            coverage.x.0,
+            coverage.x.1,
+            coverage.y.0,
+            coverage.y.1,
+            candidates.len()
         );
+
+        // The scan is deterministic and slow-ish, so it is kept; a list
+        // classified at another page size is not reusable, and this is the
+        // one stage that can classify again, so a refused cache is redone.
+        let cached = if args.reclassify { Err("--reclassify".to_string()) } else { land_pages(&land_cache) };
+        let land: Vec<IVec> = match cached {
+            Ok(land) => {
+                println!("[bake/classify] reusing cached list: {} land pages ({})", land.len(), land_cache.display());
+                land
+            }
+            Err(why) => {
+                println!("[bake/classify] classifying: {why}");
+                let land = classify_land_pages(&mut client, &candidates).map_err(|e| e.to_string())?;
+                fs::create_dir_all(land_cache.parent().unwrap_or(Path::new("."))).map_err(|e| e.to_string())?;
+                write_land_pages(&land_cache, &land)?;
+                println!("[bake/classify] done: land={} ocean={} -> {}", land.len(), candidates.len() - land.len(), land_cache.display());
+                land
+            }
+        };
+        let targets = &land[..args.limit.map_or(land.len(), |n| n.min(land.len()))];
+        fs::create_dir_all(surfaces.level_dir(0)).map_err(|e| e.to_string())?;
+        if !args.force {
+            refuse_mixed(&surfaces.level_dir(0))?;
+        }
+        let t = over_pages(
+            "surface",
+            targets,
+            args.concurrency,
+            || connect(url, &raster),
+            |db, page, t| {
+                let at = LevelPage::new(0, page);
+                if !args.force && surfaces.path(at).exists() {
+                    return Ok(None);
+                }
+                let mut stats = SourceStats::default();
+                let surface = fetch_surface(&db.repo, &mut db.client, page, &mut stats).map_err(|e| e.to_string())?;
+                t.flat_ele += stats.flat_ele;
+                let packed = pack(&surface.encode().map_err(|e| format!("{e:?}"))?, Level::Stored).map_err(|e| e.to_string())?;
+                surfaces.write(at, &packed)?;
+                Ok(Some(packed.len() as u64))
+            },
+        );
+        // A degraded page still writes successfully, so it never shows up in
+        // `failed` — surface it here rather than leaving it buried in
+        // per-page warnings that nobody greps for after a long run.
+        if t.flat_ele > 0 {
+            eprintln!(
+                "[bake/surface] WARNING: {} pages are out of the elevation raster's reach and were baked FLAT (zero-filled elevation).",
+                t.flat_ele
+            );
+        }
+        write_json(
+            &args.build.join("surface.json"),
+            &serde_json::json!({
+                "git_sha": git_sha(),
+                "land_pages": land.len(),
+                "flat_elevation_pages": t.flat_ele,
+                "source": read_source_catalogs(&mut client),
+            }),
+        )?;
     }
 
-    // ---- the levels above ----
-    let ocean = Terrain::decode(&pxl_geo_bake::util::unpack(&fs::read(&ocean_path).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?)?;
-    let top = build(&tiles, &ocean, args.concurrency)?;
+    let land = land_pages(&land_cache)?;
+    let targets = &land[..args.limit.map_or(land.len(), |n| n.min(land.len()))];
 
-    write_manifest(
-        &tiles,
-        top,
-        serde_json::json!({
-            "bbox_4326": { "sw": SW, "ne": NE },
-            "candidate_pages": candidates.len(),
-            "land_pages": land.len(),
-            "ocean_pages": candidates.len() - land.len(),
-            "ocean_key": OCEAN_KEY,
-            // This invocation only — a resumed run reports only what it
-            // re-baked, so a zero here means "nothing to do", not "nothing
-            // wrong".
-            "run": {
-                "baked": t.baked,
-                "skipped": t.skipped,
-                "failed": t.failed,
-                "bytes": t.bytes,
-                "flat_elevation_tiles": t.flat_ele,
+    if args.stages.contains(&Stage::Lines) {
+        let url = url.as_deref().map_err(Clone::clone)?;
+        let mut client = Client::connect(url, NoTls).map_err(|e| e.to_string())?;
+        let raster = Arc::new(Raster::open(&mut client).map_err(|e| e.to_string())?);
+        // Whole every time: a page whose lines the solve took away keeps none.
+        if lines.root.exists() {
+            fs::remove_dir_all(&lines.root).map_err(|e| e.to_string())?;
+        }
+        fs::create_dir_all(lines.level_dir(0)).map_err(|e| e.to_string())?;
+        over_pages(
+            "lines",
+            targets,
+            args.concurrency,
+            || connect(url, &raster),
+            |db, page, _| {
+                let decks = fetch_lines(&db.repo, &mut db.client, page).map_err(|e| e.to_string())?;
+                if decks.is_empty() {
+                    return Ok(None);
+                }
+                let packed = pack(&encode_lines(&decks).map_err(|e| format!("{e:?}"))?, Level::Stored).map_err(|e| e.to_string())?;
+                lines.write(LevelPage::new(0, page), &packed)?;
+                Ok(Some(packed.len() as u64))
             },
-            "source": read_source_catalogs(&mut client),
-        }),
-    )?;
+        );
+        write_json(&args.build.join("lines.json"), &serde_json::json!({ "git_sha": git_sha() }))?;
+    }
 
+    if args.stages.contains(&Stage::Assemble) {
+        let tiles = PageSet::new(&args.out);
+        // Whole every time, as the levels above always were: a leaf is a
+        // function of its two artifacts, and none is left from another run.
+        if tiles.root.exists() {
+            fs::remove_dir_all(&tiles.root).map_err(|e| e.to_string())?;
+        }
+        fs::create_dir_all(tiles.level_dir(0)).map_err(|e| e.to_string())?;
+
+        let ocean_raw = bake_ocean(&ocean_samples(&coverage))?;
+        let ocean_packed = pack(ocean_raw.as_slice(), Level::Stored).map_err(|e| e.to_string())?;
+        fs::write(tiles.root.join(OCEAN_KEY), &ocean_packed).map_err(|e| e.to_string())?;
+        println!("[bake/ocean] wrote {OCEAN_KEY}: {} (page-independent: verified)", fmt_bytes(ocean_packed.len() as f64));
+
+        let read = |set: &PageSet, page: IVec| -> Result<Option<Vec<u8>>, String> {
+            let path = set.path(LevelPage::new(0, page));
+            if !path.exists() {
+                return Ok(None);
+            }
+            unpack(&fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?).map(Some).map_err(|e| e.to_string())
+        };
+        let t = over_pages(
+            "assemble",
+            targets,
+            args.concurrency,
+            || Ok(()),
+            |_, page, _| {
+                let surface = read(&surfaces, page)?.ok_or("no surface: run --stage surface")?;
+                let surface = Surface::decode(&surface).map_err(|e| format!("{e:?}"))?;
+                let decks = match read(&lines, page)? {
+                    Some(raw) => decode_lines(&raw).map_err(|e| format!("{e:?}"))?,
+                    None => Default::default(),
+                };
+                let raw = encode_terrain(&assemble(surface, decks)).map_err(|e| format!("{e:?}"))?;
+                let packed = pack(&raw, Level::Stored).map_err(|e| e.to_string())?;
+                tiles.write(LevelPage::new(0, page), &packed)?;
+                Ok(Some(packed.len() as u64))
+            },
+        );
+        if t.failed > 0 {
+            return Err(format!("{} pages failed to assemble", t.failed));
+        }
+
+        let ocean = Terrain::decode(&unpack(&ocean_packed).map_err(|e| e.to_string())?)?;
+        let top = build(&tiles, &ocean, args.concurrency)?;
+        let surface = read_json(&args.build.join("surface.json"));
+        write_manifest(
+            &tiles,
+            top,
+            serde_json::json!({
+                "bbox_4326": { "sw": SW, "ne": NE },
+                "candidate_pages": coverage.pages().len(),
+                "land_pages": land.len(),
+                "ocean_key": OCEAN_KEY,
+                "flat_elevation_pages": surface["flat_elevation_pages"],
+                "source": surface["source"],
+                "built": {
+                    "surface_git_sha": surface["git_sha"],
+                    "lines_git_sha": read_json(&args.build.join("lines.json"))["git_sha"],
+                },
+            }),
+        )?;
+    }
     Ok(())
 }
 

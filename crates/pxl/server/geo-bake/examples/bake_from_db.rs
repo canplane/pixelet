@@ -15,8 +15,10 @@ use std::sync::Arc;
 
 use postgres::{Client, NoTls};
 use pxl_geo_bake::elevation::Raster;
+use pxl_geo_bake::terrain::leaf::bake_leaf;
 use pxl_geo_bake::terrain::repository::TerrainRepository;
-use pxl_geo_bake::terrain::source::{fetch_tile, SourceStats};
+use pxl_geo_bake::terrain::source::SourceStats;
+use pxl_geo_bake::util::{unpack, Level};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -30,7 +32,8 @@ fn main() {
 
     for page in pages {
         let idx = page.parse().expect("page_idx");
-        let tile = fetch_tile(&repo, &mut client, idx, &mut stats).expect("bake");
+        let (_, packed) = bake_leaf(&repo, &mut client, idx, &mut stats, Level::Stored).expect("bake");
+        let tile = unpack(&packed).expect("unpack");
         fs::write(format!("{dir}/{page}.db.tile"), &tile).expect("write");
         println!("{page}\t{}", tile.len());
     }
