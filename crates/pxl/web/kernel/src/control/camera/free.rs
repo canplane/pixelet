@@ -19,14 +19,14 @@ use pxl_spec::space::pvf3::REACH;
 use pxl_spec::space::pvf3::{ivec, projection};
 use pxl_spec::space::v3::V3;
 
-use crate::control::camera::config::camera_cfg::free::EYE_HEIGHT_U;
 use crate::control::camera::approach::{approach_angle, approach_scalar, approach_vec};
+use crate::control::camera::config::camera_cfg::free::EYE_HEIGHT_U;
 use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, POS_DAMP, ROT_DAMP};
 use crate::control::camera::config::camera_cfg::view::DEFAULT_DIST;
 use crate::control::camera::controller::{camera, eye_local, set_eye_local};
 use crate::control::camera::controller::{look_domain, units_per_px_at};
-use crate::global::Global;
 use crate::control::camera::store::camera_store;
+use crate::global::Global;
 use crate::world::access::{Access, Detail, Ray, FINEST};
 use crate::world::change::request_world_tick;
 use crate::world::frame::coord::{canonical_to_local, local_height, local_world_to_canonical};

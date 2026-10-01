@@ -41,11 +41,11 @@ use flate2::{Compression, Crc};
 use pxl_geo_bake::cli::Flags;
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::bake::deck::{Decks, Form};
-use pxl_spec::bake::surface::bicubic;
 use pxl_spec::bake::format::decode_terrain;
 use pxl_spec::bake::format::{GroundChannelKey, Occupancy};
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::bake::published::PUBLISHED_VERSION;
+use pxl_spec::bake::surface::bicubic;
 use pxl_spec::bake::surface::extent_of;
 use pxl_spec::cell::cube::ground_pack;
 use pxl_spec::cell::{color, cube_types};
@@ -150,7 +150,11 @@ fn summarize(page: &Page) -> Summary {
     if high > 0 {
         faults.push(format!("{high} cell(s) with bits set past the pack's {} bits", ground_pack::CELL_BITS));
     }
-    let short = extent_of(&page.ele, &page.cells, &page.decks).iter().zip(&page.extent).filter(|([lo, hi], [ilo, ihi])| ilo > lo || ihi < hi).count();
+    let short = extent_of(&page.ele, &page.cells, &page.decks)
+        .iter()
+        .zip(&page.extent)
+        .filter(|([lo, hi], [ilo, ihi])| ilo > lo || ihi < hi)
+        .count();
     if short > 0 {
         faults.push(format!("{short} index cell(s) narrower than the page's own surface"));
     }
@@ -277,7 +281,11 @@ fn decks_png(page: &Page) -> Vec<u8> {
             return;
         }
         top[i] = over.top;
-        let v = if over.pier { 0xffffff } else { color::ground(GroundChannelKey::TRANSPORT, over.kind).map_or(MAGENTA, |s| s.rgb) };
+        let v = if over.pier {
+            0xffffff
+        } else {
+            color::ground(GroundChannelKey::TRANSPORT, over.kind).map_or(MAGENTA, |s| s.rgb)
+        };
         px[i * 3..i * 3 + 3].copy_from_slice(&[(v >> 16) as u8, (v >> 8) as u8, v as u8]);
     });
     png(PAGE_CELLS, PAGE_CELLS, 3, &px)

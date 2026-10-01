@@ -55,24 +55,26 @@ pub fn shown_ground(read: impl Fn(GroundChannelKey) -> u32, hidden: ChannelMask)
     shown
 }
 
-/// How far below its sampled height a cell showing `shown` sits, in units:
-/// the catalog's `recess` column, which is how water meets land a step lower
-/// rather than at the same level. A column of the type, so it is the same
-/// whichever channel the type came from — the sea is a land type and sits
-/// where a river does.
-pub fn recess(shown: ShownGround) -> i16 {
+/// How far off its sampled height a cell showing `shown` stands, in units,
+/// up positive: the catalog's `shift` column, one rule for every type that
+/// does not stand at the surface — water and a building's footprint a step
+/// down, so a shoreline is water meeting land a step lower and a block's edge
+/// reads against its street. A column of the type, so it is the same whichever
+/// channel the type came from — the sea is a land type and lies where a
+/// river does.
+pub fn shift(shown: ShownGround) -> i16 {
     let column = match shown.channel {
-        GroundChannelKey::LAND => cube_types::land::RECESS,
-        GroundChannelKey::WATER => cube_types::water::RECESS,
-        GroundChannelKey::STRUCTURE => cube_types::structure::RECESS,
-        GroundChannelKey::TRANSPORT => cube_types::transport::RECESS,
+        GroundChannelKey::LAND => cube_types::land::SHIFT,
+        GroundChannelKey::WATER => cube_types::water::SHIFT,
+        GroundChannelKey::STRUCTURE => cube_types::structure::SHIFT,
+        GroundChannelKey::TRANSPORT => cube_types::transport::SHIFT,
     };
     column.iter().find(|(t, _)| *t as u32 == shown.type_id).map_or(0, |&(_, r)| r)
 }
 
-/// How far below its sampled height a packed cell sits: `recess` of what it
+/// How far off its sampled height a packed cell stands: `shift` of what it
 /// shows with no channel hidden, which is the height every reader of the
 /// ground takes, whatever a view hides.
-pub fn cell_recess(cell: GroundCell) -> i16 {
-    recess(shown_ground(|k| channel_of(cell, k) as u32, 0))
+pub fn cell_shift(cell: GroundCell) -> i16 {
+    shift(shown_ground(|k| channel_of(cell, k) as u32, 0))
 }

@@ -43,20 +43,42 @@ fn a_uniform_page_folds_to_itself() {
 }
 
 #[test]
-fn a_one_cell_line_is_a_tie_and_a_dot_goes() {
-    // A one-cell road down x = 10: every parent cell it touches holds it in
-    // two of four children — a tie, taken by the corner child, which on level
-    // 1 is the south-west one and so sees the road only where x is even.
-    let road = plane(|x, _| if x == 10 { cube_types::transport::road_primary } else { 0 });
+fn an_area_one_cell_wide_is_a_tie_and_a_dot_goes() {
+    // A one-cell strip of parking down x = 10: every parent cell it touches
+    // holds it in two of four children — a tie, taken by the corner child,
+    // which on level 1 is the south-west one and so sees it only where x is
+    // even.
+    let lot = plane(|x, _| if x == 10 { cube_types::transport::parking } else { 0 });
     let empty = plane(|_, _| 0);
-    let out = fold([&road, &empty, &empty, &empty], 1);
-    assert_eq!(out[5], cube_types::transport::road_primary);
-    let odd = plane(|x, _| if x == 11 { cube_types::transport::road_primary } else { 0 });
-    let out = fold([&odd, &empty, &empty, &empty], 1);
-    assert_eq!(out[5], 0);
+    assert_eq!(fold([&lot, &empty, &empty, &empty], 1)[5], cube_types::transport::parking);
+    let odd = plane(|x, _| if x == 11 { cube_types::transport::parking } else { 0 });
+    assert_eq!(fold([&odd, &empty, &empty, &empty], 1)[5], 0);
     // A single cell is one of four and always goes.
-    let dot = plane(|x, y| if (x, y) == (10, 10) { 3 } else { 0 });
+    let dot = plane(|x, y| if (x, y) == (10, 10) { cube_types::transport::parking } else { 0 });
     assert!(fold([&dot, &empty, &empty, &empty], 1).iter().all(|&v| v == 0));
+}
+
+#[test]
+fn a_way_one_cell_wide_is_kept_while_its_class_is_shown() {
+    let empty = plane(|_, _| 0);
+    let road = plane(|x, _| if x == 11 { cube_types::transport::road_primary } else { 0 });
+    assert_eq!(fold([&road, &empty, &empty, &empty], 1)[5], cube_types::transport::road_primary);
+    // A footway is shown to level 1 only; a level up it folds as an area,
+    // and a one-cell line of it is a tie, which on level 2 the north-east
+    // corner takes and the even column loses.
+    let path = plane(|x, _| if x == 10 { cube_types::transport::pedestrian } else { 0 });
+    assert_eq!(fold([&path, &empty, &empty, &empty], 2)[5], 0);
+}
+
+#[test]
+fn where_ways_meet_the_one_of_higher_precedence_keeps_the_cell() {
+    let empty = plane(|_, _| 0);
+    let cross = plane(|x, y| match (x, y) {
+        (10, _) => cube_types::transport::road_default,
+        (_, 10) => cube_types::transport::road_motorway,
+        _ => 0,
+    });
+    assert_eq!(fold([&cross, &empty, &empty, &empty], 1)[5 * SPAN + 5], cube_types::transport::road_motorway);
 }
 
 #[test]
@@ -72,9 +94,9 @@ fn ties_alternate_their_corner_by_level() {
     // Columns tie every block 2:2 with the two corners on opposite sides, so
     // the parent is whichever corner the level names: (0, 0) on odd levels,
     // (1, 1) on even ones.
-    let columns = plane(|x, _| if x % 2 == 0 { cube_types::transport::road_default } else { cube_types::transport::road_motorway });
-    assert!(fold([&columns, &columns, &columns, &columns], 1).iter().all(|&v| v == cube_types::transport::road_default));
-    assert!(fold([&columns, &columns, &columns, &columns], 2).iter().all(|&v| v == cube_types::transport::road_motorway));
+    let columns = plane(|x, _| if x % 2 == 0 { cube_types::transport::parking } else { cube_types::transport::runway });
+    assert!(fold([&columns, &columns, &columns, &columns], 1).iter().all(|&v| v == cube_types::transport::parking));
+    assert!(fold([&columns, &columns, &columns, &columns], 2).iter().all(|&v| v == cube_types::transport::runway));
 }
 
 #[test]

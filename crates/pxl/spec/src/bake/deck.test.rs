@@ -31,12 +31,16 @@ fn a_narrow_deck_along_a_diagonal_is_one_band() {
 }
 
 #[test]
-fn a_deck_narrower_than_half_the_parent_cell_folds_away() {
-    let wide = one(&[[0.0, 0.0], [100.0, 0.0]], &[50, 50], 2.0);
-    let narrow = one(&[[0.0, 0.0], [100.0, 0.0]], &[50, 50], 0.5);
+fn a_deck_folds_away_with_its_way_and_stays_a_cell_wide_till_then() {
+    let road = one(&[[0.0, 0.0], [100.0, 0.0]], &[50, 50], 0.5);
     let empty = Decks::default();
-    assert_eq!(fold_decks([&wide, &empty, &empty, &empty], 1).len(), 1);
-    assert_eq!(fold_decks([&narrow, &empty, &empty, &empty], 1).len(), 0);
+    let up = fold_decks([&road, &empty, &empty, &empty], 1);
+    assert_eq!(up.len(), 1);
+    assert_eq!(up.deck(0).width_cells(), 1.0);
+    let mut b = Builder::default();
+    b.push([([0.0, 0.0], 50, 0), ([100.0, 0.0], 50, 0)], 16, crate::cell::cube::cube_types::transport::pedestrian, Form::Deck);
+    let path = b.finish();
+    assert_eq!(fold_decks([&path, &empty, &empty, &empty], 2).len(), 0);
 }
 
 #[test]
@@ -50,7 +54,12 @@ fn a_straight_level_deck_folds_to_its_ends() {
 
 #[test]
 fn a_bore_carves_only_where_the_ground_stands_over_its_floor() {
-    let over = |top: f64| Over { top, kind: 3, form: Form::Bore, pier: false };
+    let over = |top: f64| Over {
+        top,
+        kind: 3,
+        form: Form::Bore,
+        pier: false,
+    };
     assert_eq!(over(10.0).occupies(10), Occupies::Grade);
     assert_eq!(over(10.0).occupies(11), Occupies::Through { air: [10, 11] });
     assert_eq!(over(10.0).occupies(40), Occupies::Through { air: [10, 10 + BORE_HEIGHT] });

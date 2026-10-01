@@ -9,9 +9,9 @@ use pxl_spec::space::adapter::epsg3857::{G3857, Z_SCALE};
 
 use crate::terrain::pipeline::overture::between::{flag_ranges, split_ranged, value_at, without};
 use crate::terrain::pipeline::overture::policy::{BORE_FLAGS, DECK_FLAGS, UNSEEN_FLAGS};
-use pxl_spec::bake::deck::Form;
 use crate::terrain::pipeline::overture::width::{width_m, WayColumns, WayShape};
 use crate::wkb::wkb_to_geometries;
+use pxl_spec::bake::deck::Form;
 
 /// A segment as the solve reads it.
 pub struct BridgeRow {
@@ -28,7 +28,7 @@ pub struct BridgeRow {
 }
 
 impl BridgeRow {
-    fn columns(&self) -> WayColumns<'_> {
+    pub fn columns(&self) -> WayColumns<'_> {
         WayColumns {
             flags: self.flags.as_deref(),
             widths: self.widths.as_deref(),
@@ -51,6 +51,10 @@ pub struct Piece {
     pub width_m: f64,
     /// Over the ground or through it.
     pub form: Form,
+    /// A way at the surface the structure is carried down to the ground on,
+    /// or comes up out of it on (approach.rs), not the bridge or the tunnel
+    /// itself.
+    pub approach: bool,
     pub points: Vec<G3857>,
 }
 
@@ -69,7 +73,7 @@ impl Piece {
 pub fn pieces_of(row: &BridgeRow, form: Form) -> Vec<Piece> {
     let flags = row.flags.as_deref();
     let (on, less): (&[&str], Vec<&str>) = match form {
-        Form::Deck => (DECK_FLAGS, UNSEEN_FLAGS.to_vec()),
+        Form::Deck | Form::Ramp => (DECK_FLAGS, UNSEEN_FLAGS.to_vec()),
         Form::Bore => (BORE_FLAGS, UNSEEN_FLAGS.iter().copied().filter(|f| !BORE_FLAGS.contains(f)).collect()),
     };
     let deck = without(&flag_ranges(flags, on), &flag_ranges(flags, &less));
@@ -90,6 +94,7 @@ pub fn pieces_of(row: &BridgeRow, form: Form) -> Vec<Piece> {
                 level: value_at(row.levels.as_deref(), mid).map_or(1, |v| v as i64),
                 width_m: width_m(&row.subtype, row.class.as_deref(), shape),
                 form,
+                approach: false,
                 points: g.points,
             }
         })

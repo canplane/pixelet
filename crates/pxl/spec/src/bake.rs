@@ -13,6 +13,7 @@ pub mod constant;
 pub mod deck;
 pub mod fold;
 pub mod format;
+pub mod generalize;
 pub mod ground;
 pub mod model;
 pub mod pack;

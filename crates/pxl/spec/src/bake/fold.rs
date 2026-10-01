@@ -34,8 +34,9 @@
 //! rounding would eat that fraction.
 //!
 //! Decks are lines, and fold as lines (bake/deck.rs `fold_decks`): each
-//! child's in the parent's cells, simplified to its cell, and one narrower
-//! than half of it left out — the size rule the majority keeps for ground.
+//! child's in the parent's cells, simplified to its cell, and kept while its
+//! way is shown at the level, as the transport channel keeps the way
+//! (bake/generalize.rs), so a road does not lose its bridge at a distance.
 //!
 //! The index lane is the one fold that is not a summary of the level below
 //! alone. A mean lies inside what it averages but says nothing of how far
@@ -48,7 +49,8 @@ use xpute_core::math::scalar::round;
 
 use super::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
 use super::deck::fold_decks;
-use super::format::{Ground, Index, Occupancy, Terrain, GROUND_CH_KEYS};
+use super::format::{Ground, GroundChannelKey, Index, Occupancy, Terrain, GROUND_CH_KEYS};
+use super::generalize::fold_line;
 use super::pack::{channel_of, with_channel, GroundCell};
 use super::surface::extent_of;
 use crate::space::pyramid::{neighborhood, Folds, LevelPage, CHILDREN, EXTENT, GROUND};
@@ -81,9 +83,12 @@ pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], level: i32) -> T {
     half.unwrap_or(tie)
 }
 
-/// Every ground channel folded the same way, each on its own: a channel votes
-/// among its children's values for that channel and no other's, which is what
-/// keeps a road from taking the land's vote under it.
+/// Every ground channel folded on its own: a channel votes among its
+/// children's values for that channel and no other's, which is what keeps a
+/// road from taking the land's vote under it. The transport channel's ways
+/// are lines, and keep a cell any child holds them in while their class is
+/// still shown (bake/generalize.rs); everything else, and a way past its
+/// class's last level, takes the majority.
 ///
 /// Read straight out of the packed cells and written straight back, a field
 /// at a time. A page is one array and there are no planes to take apart.
@@ -96,7 +101,8 @@ pub fn fold_ground(children: [&Ground; 4], level: u32) -> Ground {
             let mut cell = 0 as GroundCell;
             for key in GROUND_CH_KEYS {
                 let v = four.map(|f| channel_of(f, key));
-                cell = with_channel(cell, key, majority(v, level as i32));
+                let line = (key == GroundChannelKey::TRANSPORT).then(|| fold_line(v, level)).flatten();
+                cell = with_channel(cell, key, line.unwrap_or_else(|| majority(v, level as i32)));
             }
             cell
         })
@@ -206,7 +212,12 @@ fn fold_terrain(around: [Option<&Terrain>; 16], level: u32) -> Option<Terrain> {
     fold_ele(around.map(|t| t.map(|t| &*t.ele)), &mut ele);
     let decks = fold_decks(children.map(|t| &t.decks), level);
     let index = fold_index(children.map(|t| &t.index), extent_of(&ele, &ground.cells, &decks));
-    Some(Terrain { ground, decks, ele: ele.into(), index })
+    Some(Terrain {
+        ground,
+        decks,
+        ele: ele.into(),
+        index,
+    })
 }
 
 #[cfg(test)]

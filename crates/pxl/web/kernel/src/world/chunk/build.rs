@@ -781,7 +781,15 @@ impl Builder {
                 let job = self.scan_job.take().unwrap();
                 world.volumes.release(job.volume);
                 self.stat.scans += 1;
-                self.keep_runs(id, Runs { block, bytes, count, fold: Some(fold) });
+                self.keep_runs(
+                    id,
+                    Runs {
+                        block,
+                        bytes,
+                        count,
+                        fold: Some(fold),
+                    },
+                );
                 Progress::Busy
             }
         }

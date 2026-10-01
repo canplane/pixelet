@@ -160,8 +160,6 @@ pub const ARENA_COARSE_GROUPS: u32 = 5;
 /// cube, and the coarsest fills one (world/chunk/mesh_slot.rs asserts it).
 pub const COARSE_BOXES: u32 = 4551;
 
-
-
 // ---- decor's tiers ----
 
 /// How small, in the tier's cells on the screen, a decor kind may get and

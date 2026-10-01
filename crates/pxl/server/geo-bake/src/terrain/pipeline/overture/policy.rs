@@ -117,7 +117,6 @@ fn land_use_class(feat: &OvertureRawFeature) -> &str {
     }
 }
 
-
 fn determine_category(feat: &OvertureRawFeature) -> String {
     match feat {
         OvertureRawFeature::Building(_) => "building".to_string(),

@@ -35,11 +35,22 @@ fn range_of(rule: &Value) -> Option<Range> {
 /// The ranges over which any of `wanted` holds among a flags column's rules,
 /// sorted and merged.
 pub fn flag_ranges(flags: Option<&str>, wanted: &[&str]) -> Vec<Range> {
-    let mut ranges: Vec<Range> = rules(flags)
-        .iter()
-        .filter(|r| r["values"].as_array().is_some_and(|v| v.iter().any(|v| v.as_str().is_some_and(|v| wanted.contains(&v)))))
-        .filter_map(range_of)
-        .collect();
+    merged(
+        rules(flags)
+            .iter()
+            .filter(|r| r["values"].as_array().is_some_and(|v| v.iter().any(|v| v.as_str().is_some_and(|v| wanted.contains(&v)))))
+            .filter_map(range_of)
+            .collect(),
+    )
+}
+
+/// The ranges over which a values column's rule (`level_rules`) holds a
+/// value `keep` takes, sorted and merged.
+pub fn value_ranges(column: Option<&str>, keep: impl Fn(f64) -> bool) -> Vec<Range> {
+    merged(rules(column).iter().filter(|r| r["value"].as_f64().is_some_and(&keep)).filter_map(range_of).collect())
+}
+
+fn merged(mut ranges: Vec<Range>) -> Vec<Range> {
     ranges.sort_by(|x, y| x[0].total_cmp(&y[0]));
     let mut merged: Vec<Range> = Vec::with_capacity(ranges.len());
     for r in ranges {
@@ -81,7 +92,10 @@ pub fn value_at(column: Option<&str>, at: f64) -> Option<f64> {
 /// The text value of the rule of a values column (`subclass_rules`) that
 /// holds at fraction `at`.
 pub fn text_at(column: Option<&str>, at: f64) -> Option<String> {
-    rules(column).iter().find(|r| range_of(r).is_some_and(|[a, b]| (a..=b).contains(&at))).and_then(|r| r["value"].as_str().map(str::to_string))
+    rules(column)
+        .iter()
+        .find(|r| range_of(r).is_some_and(|[a, b]| (a..=b).contains(&at)))
+        .and_then(|r| r["value"].as_str().map(str::to_string))
 }
 
 /// Whether any of `wanted` holds at fraction `at` among a flags column's

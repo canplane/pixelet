@@ -240,7 +240,7 @@ impl Occupancy {
 /// not held can be reasoned about from what is. Each of the index lattice's
 /// cells (`EXTENT`) holds the lowest and highest the ground drawn there
 /// stands, in cells, at this page's level and every level under it —
-/// conservative, the interpolation's overshoot and the cells' recess
+/// conservative, the interpolation's overshoot and the cells' shift
 /// included — so a ray that passes over a cell's highest passes over
 /// everything finer there, and one under its lowest has hit. The children's
 /// occupancy says which of them there is anything to ask for.
@@ -447,7 +447,13 @@ pub fn decode_terrain_into(pkt: &[u8], room: PageRoom) -> Result<Terrain, Marsha
     room.cells.copy_from_slice(cells);
     room.extent.copy_from_slice(extent);
     blocks_of(room.extent, room.blocks);
-    let PageRoom { cells, ele, extent, blocks, decks: deck_room } = room;
+    let PageRoom {
+        cells,
+        ele,
+        extent,
+        blocks,
+        decks: deck_room,
+    } = room;
     Ok(Terrain {
         ground: Ground { cells: (&*cells).into() },
         decks: decks.into_room(deck_room),

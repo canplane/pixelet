@@ -122,7 +122,9 @@ pub fn width_m(subtype: &str, class: Option<&str>, shape: WayShape) -> f64 {
 /// denies every user travel one way along it, where a rule for a mode or a
 /// vehicle — a bus lane, a lorry ban — does not.
 pub fn is_oneway(access: Option<&str>) -> bool {
-    let Some(rules) = access.and_then(|a| serde_json::from_str::<serde_json::Value>(a).ok()) else { return false };
+    let Some(rules) = access.and_then(|a| serde_json::from_str::<serde_json::Value>(a).ok()) else {
+        return false;
+    };
     rules.as_array().into_iter().flatten().any(|r| {
         let when = &r["when"];
         r["access_type"] == "denied" && when["heading"].is_string() && ["mode", "using", "vehicle", "recognized", "during"].iter().all(|k| when[k].is_null())

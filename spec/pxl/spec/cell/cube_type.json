@@ -49,7 +49,7 @@
         {
           "name": "sea",
           "value": 129,
-          "recess": 1,
+          "shift": -1,
           "doc": [
             "sea water (MSB-partitioned)"
           ]
@@ -86,27 +86,27 @@
     {
       "name": "water",
       "entries": [
-        { "name": "river", "value": 1, "recess": 1, "doc": ["flowing water"] },
-        { "name": "lake", "value": 2, "recess": 1, "doc": ["still water"] },
-        { "name": "wetland", "value": 3, "recess": 1, "doc": ["wetland"] }
+        { "name": "river", "value": 1, "shift": -1, "doc": ["flowing water"] },
+        { "name": "lake", "value": 2, "shift": -1, "doc": ["still water"] },
+        { "name": "wetland", "value": 3, "shift": -1, "doc": ["wetland"] }
       ]
     },
     {
       "name": "structure",
       "entries": [
         { "section": "buildings" },
-        { "name": "building", "value": 1, "recess": -1, "doc": ["generic building"] },
+        { "name": "building", "value": 1, "shift": -1, "doc": ["generic building"] },
         {
           "name": "building_station",
           "value": 2,
-          "recess": -1,
+          "shift": -1,
           "doc": [
             "station / terminal building"
           ]
         },
-        { "name": "building_education", "value": 3, "recess": -1, "doc": ["education building"] },
-        { "name": "building_medical", "value": 4, "recess": -1, "doc": ["medical building"] },
-        { "name": "building_public", "value": 5, "recess": -1, "doc": ["public building"] }
+        { "name": "building_education", "value": 3, "shift": -1, "doc": ["education building"] },
+        { "name": "building_medical", "value": 4, "shift": -1, "doc": ["medical building"] },
+        { "name": "building_public", "value": 5, "shift": -1, "doc": ["public building"] }
       ]
     },
     {

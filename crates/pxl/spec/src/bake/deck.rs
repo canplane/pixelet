@@ -28,6 +28,7 @@ use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{BranchCursor, BranchViewImpl, NodeView};
 
+use super::generalize::line;
 use super::way;
 use crate::space::hierarchy::child_of;
 use crate::space::pyramid::PAGE_CELLS;
@@ -52,16 +53,20 @@ pub const BORE_HEIGHT: i32 = 3;
 pub enum Form {
     /// Carried over it: a bridge, a viaduct, a ramp.
     Deck,
-    /// Cut through it: a tunnel where the ground stands over it.
+    /// Cut through it: a tunnel where the ground stands over it, and its
+    /// approach, which the ground does not stand over, cut open.
     Bore,
+    /// Built up on it: the embankment a bridge's approach climbs on, solid
+    /// from the ground to its top.
+    Ramp,
 }
 
 impl Form {
     pub fn of(byte: u8) -> Form {
-        if byte == 1 {
-            Form::Bore
-        } else {
-            Form::Deck
+        match byte {
+            1 => Form::Bore,
+            2 => Form::Ramp,
+            _ => Form::Deck,
         }
     }
 
@@ -69,6 +74,7 @@ impl Form {
         match self {
             Form::Deck => 0,
             Form::Bore => 1,
+            Form::Ramp => 2,
         }
     }
 }
@@ -160,7 +166,10 @@ impl Over {
                     pier: (self.pier && lo > ground).then_some([ground, lo]),
                 }
             }
-            Form::Bore if top < ground => Occupies::Through { air: [top, (top + BORE_HEIGHT).min(ground)] },
+            Form::Ramp if top > ground => Occupies::Above { slab: [ground, top], pier: None },
+            Form::Bore if top < ground => Occupies::Through {
+                air: [top, (top + BORE_HEIGHT).min(ground)],
+            },
             _ => Occupies::Grade,
         }
     }
@@ -247,7 +256,7 @@ impl Decks {
     /// within its reach of the box.
     pub fn highest_in(&self, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> Option<i16> {
         let mut top = None;
-        for deck in self.iter().filter(|d| d.form == Form::Deck) {
+        for deck in self.iter().filter(|d| d.form != Form::Bore) {
             let half = deck.reach();
             for s in 0..deck.points.len().saturating_sub(1) {
                 let (a, b) = (deck.point(s), deck.point(s + 1));
@@ -305,9 +314,11 @@ impl Deck<'_> {
         }
         let top = f64::from(self.tops[s]) + (f64::from(self.tops[s + 1]) - f64::from(self.tops[s])) * t;
         let pier_radius = (self.width_cells() / 4.0).max(0.5);
-        let on = |i: usize| self.piers[i] != 0 && {
-            let p = self.point(i);
-            (at[0] - p[0]).abs() <= pier_radius && (at[1] - p[1]).abs() <= pier_radius
+        let on = |i: usize| {
+            self.piers[i] != 0 && {
+                let p = self.point(i);
+                (at[0] - p[0]).abs() <= pier_radius && (at[1] - p[1]).abs() <= pier_radius
+            }
         };
         Some(Over {
             top,
@@ -319,9 +330,10 @@ impl Deck<'_> {
 }
 
 /// A page's decks one level up, from its four children's: each child's
-/// decks in the parent's cells, every deck narrower than half the parent's
-/// cell left out, the same rule by size the ground's majority keeps
-/// (bake/fold.rs), and each line simplified to the parent's cell — a point
+/// decks in the parent's cells, kept while the ground keeps its way at the
+/// level and at least a cell wide, as the ground draws it (bake/generalize.rs)
+/// — a bore, which only the near view goes into, while it is as wide as half
+/// a cell — and each line simplified to the parent's cell — a point
 /// goes where the line without it stays within half a cell of it across and
 /// half a cell of height. A deck two children both carry is carried twice,
 /// which draws the same columns twice.
@@ -334,10 +346,15 @@ pub fn fold_decks(children: [&Decks; 4], level: u32) -> Decks {
     for (q, child) in children.iter().enumerate() {
         let [qx, qy] = child_of([0, 0], q).map(|v| v as f64 * n);
         for deck in child.iter() {
-            let width = deck.width / 2;
-            if f64::from(width) < POINT_SCALE / 2.0 {
+            let halved = deck.width / 2;
+            let shown = match deck.form {
+                Form::Deck | Form::Ramp => line(deck.kind).is_some_and(|(last, _)| level <= last),
+                Form::Bore => f64::from(halved) >= POINT_SCALE / 2.0,
+            };
+            if !shown {
                 continue;
             }
+            let width = if deck.form == Form::Bore { halved } else { halved.max(POINT_SCALE as u8) };
             let points: Vec<[f64; 2]> = (0..deck.points.len()).map(|i| deck.point(i)).map(|[x, y]| [(x + qx) / 2.0, (y + qy) / 2.0]).collect();
             let keep = simplify(&points, deck.tops, 0.5, height_tolerance);
             let kept: Vec<usize> = (0..points.len()).filter(|&i| keep[i] || deck.piers[i] != 0).collect();

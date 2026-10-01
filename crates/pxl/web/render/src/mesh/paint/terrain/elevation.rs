@@ -17,7 +17,7 @@
 //! - Elevation stored in the i16 lane is in [cell] units.
 
 use pxl_spec::bake::format::{Ground, GroundChannelKey};
-use pxl_spec::bake::ground::cell_recess;
+use pxl_spec::bake::ground::cell_shift;
 use pxl_spec::bake::pack::{channel_of, GroundCell};
 use pxl_spec::bake::surface::bicubic;
 use pxl_spec::space::pyramid::GROUND;
@@ -50,26 +50,26 @@ impl<'a> GroundLanes<'a> {
         channel_of(self.cells[i], key)
     }
 
-    /// How far below its sampled height cell `i` sits, in units: the
-    /// recess of the type it shows (pxl-spec's `recess`), so a shoreline
-    /// reads as water meeting land a step lower rather than as two surfaces
-    /// at one level. A real height and not a mesh offset — every consumer
+    /// How far off its sampled height cell `i` stands, in units, up
+    /// positive: the shift of the type it shows (pxl-spec's `shift`), so a
+    /// shoreline reads as water meeting land a step lower, and a block's edge
+    /// against its street, rather than as surfaces at one level. A real height and not a mesh offset — every consumer
     /// (the chunk mesh, and the kernel's query of the ground, which the pick
     /// and the camera's ground-snap ask) takes it through `ground_ele` — and
     /// so it is asked with no channel hidden: a structure covers the water
     /// whatever the dev toggle says, since the query reads it with the
     /// toggle nowhere in sight.
-    pub fn recess(&self, i: usize) -> i16 {
-        cell_recess(self.cells[i])
+    pub fn shift(&self, i: usize) -> i16 {
+        cell_shift(self.cells[i])
     }
 }
 
 /// The ground's height at cell (tx, ty) — the one answer every consumer of a
 /// page's elevation takes, so that none of them reasons about a height the
-/// others do not see. The sampled elevation less the cell's recess, applied
+/// others do not see. The sampled elevation plus the cell's shift, applied
 /// here, once, rather than at each place that asks.
 ///
-/// `ground` is none where the channels are not to hand, and the recess is
+/// `ground` is none where the channels are not to hand, and the shift is
 /// then not applied. That is a cell outside the page: the elevation raster
 /// is padded and still has its height (pxl-spec's ELE_PAD), while the ground
 /// channels are the page's own span and stop at its edge. The one place this
@@ -81,10 +81,10 @@ pub fn ground_ele(page_ele: &[i16], ground: Option<GroundLanes>, tx: i32, ty: i3
 
 /// `ground_ele` at a point in texels rather than a cell's center: where a
 /// finer cell read from this page stands, its height the surface's there
-/// and its recess the page cell's it lies in.
+/// and its shift the page cell's it lies in.
 pub fn ground_ele_at(page_ele: &[i16], ground: Option<GroundLanes>, tx: f64, ty: f64) -> i16 {
     let ele = bicubic(page_ele, tx, ty);
-    ground.map_or(ele, |g| ele - g.recess(GROUND.cell_index(tx.floor() as u32, ty.floor() as u32) as usize))
+    ground.map_or(ele, |g| ele + g.shift(GROUND.cell_index(tx.floor() as u32, ty.floor() as u32) as usize))
 }
 
 #[cfg(test)]

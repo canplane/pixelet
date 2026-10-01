@@ -22,7 +22,7 @@
 //! The floor is rounded down to a whole band (`min_ele - TERRAIN_Z_MARGIN`,
 //! floored to BAND_CELLS) because a volume allocates in whole bands: a floor
 //! anywhere inside one would open a band below it for the few voxels that
-//! cross. A cell sits its type's recess below its sampled height, so a
+//! cross. A cell stands its type's shift off its sampled height, so a
 //! shoreline reads as water meeting land rather than as two surfaces at the
 //! same level.
 
@@ -37,8 +37,8 @@ use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, PAGE_CELLS};
 use crate::mesh::paint::palette::shader_meta::{ground_color_lookup, ground_layer_index_lookup};
 use crate::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
 use crate::mesh::volume::{MaterialClasses, Volumes, Voxel, NO_LAYER};
-use crate::mesh::{try_push, Refused};
 use crate::mesh::voxel_scan::{apron_col, APRON, COL_SPAN};
+use crate::mesh::{try_push, Refused};
 use std::sync::LazyLock;
 
 /// How far below the chunk's lowest cell the shared floor sits, before it
@@ -311,7 +311,7 @@ impl ChunkSample {
                 self.material[i] = material;
                 self.layer_idx[i] = layer;
 
-                // The height every consumer of this page takes, recess and
+                // The height every consumer of this page takes, shift and
                 // all (elevation.rs's ground_ele). An apron cell off the page
                 // has no channels to judge by and takes the raw height.
                 let lanes = on_page.then_some(GroundLanes { cells: page.cells });
@@ -371,7 +371,11 @@ impl ChunkSample {
                         // Of two bores through one column, the one that takes
                         // more of it.
                         if air[1] - air[0] > self.bore[col].air[1] - self.bore[col].air[0] {
-                            self.bore[col] = Bore { air, material: slab, layer: slab_layer };
+                            self.bore[col] = Bore {
+                                air,
+                                material: slab,
+                                layer: slab_layer,
+                            };
                         }
                         continue;
                     }

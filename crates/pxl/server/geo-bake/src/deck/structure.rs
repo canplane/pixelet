@@ -20,9 +20,9 @@ use crate::terrain::pipeline::overture::between::Line;
 
 /// An end's key: its point to the centimetre, which two segments that share
 /// a connector agree on.
-type Key = (i64, i64);
+pub type Key = (i64, i64);
 
-fn key_of(p: [f64; 3]) -> Key {
+pub fn key_of(p: [f64; 3]) -> Key {
     ((p[0] * 100.0).round() as i64, (p[1] * 100.0).round() as i64)
 }
 
@@ -43,7 +43,7 @@ pub struct Beside {
 }
 
 /// An end's point and the way the piece heads into itself from it.
-fn end_of(p: &Piece, last: bool) -> ([f64; 2], [f64; 2]) {
+pub fn end_of(p: &Piece, last: bool) -> ([f64; 2], [f64; 2]) {
     let n = p.points.len();
     let (at, next) = if last { (p.points[n - 1], p.points[n - 2]) } else { (p.points[0], p.points[1]) };
     let (dx, dy) = (next[0] - at[0], next[1] - at[1]);
@@ -198,7 +198,16 @@ impl Graph {
         }
         g.free_ends = ends.into_values().filter(|&(_, n)| n == 1).map(|(node, _)| node).collect();
         g.free_ends.sort_unstable();
-        g.free_end_of = g.free_ends.iter().map(|&e| g.along.iter().position(|nodes| nodes.first().map(|n| n.0) == Some(e) || nodes.last().map(|n| n.0) == Some(e)).unwrap_or(0)).collect();
+        g.free_end_of = g
+            .free_ends
+            .iter()
+            .map(|&e| {
+                g.along
+                    .iter()
+                    .position(|nodes| nodes.first().map(|n| n.0) == Some(e) || nodes.last().map(|n| n.0) == Some(e))
+                    .unwrap_or(0)
+            })
+            .collect();
         g
     }
 
@@ -207,6 +216,11 @@ impl Graph {
     pub fn nearest(&self, k: usize, d: f64) -> Option<u32> {
         let nodes = &self.along[k];
         let i = nodes.partition_point(|&(_, nd)| nd < d);
-        [i.checked_sub(1), Some(i)].into_iter().flatten().filter_map(|i| nodes.get(i)).min_by(|a, b| (a.1 - d).abs().total_cmp(&(b.1 - d).abs())).map(|&(n, _)| n)
+        [i.checked_sub(1), Some(i)]
+            .into_iter()
+            .flatten()
+            .filter_map(|i| nodes.get(i))
+            .min_by(|a, b| (a.1 - d).abs().total_cmp(&(b.1 - d).abs()))
+            .map(|&(n, _)| n)
     }
 }

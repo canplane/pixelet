@@ -20,7 +20,7 @@
 //!
 //! **Two surfaces, kept apart.** What a query answers with is the surface
 //! the records draw at the level asked — a level's cell, its height the
-//! page's interpolant at the cell's center less its recess, read from the
+//! page's interpolant at the cell's center plus its shift, read from the
 //! page the chunk there is painted from, by the paint's own function
 //! (pxl-render mesh/paint/terrain/elevation.rs `ground_ele_at`) — so a pick,
 //! a snap and a marker stand on what is on the screen. Whether to go down

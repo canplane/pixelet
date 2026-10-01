@@ -29,13 +29,12 @@ pub const STREAM: f64 = 2.0;
 /// … over a lower deck it crosses, from that deck's top.
 pub const STACKED: f64 = 6.0;
 
-/// The steepest a deck climbs, rise over run, to clear what is under it
-/// from where it meets the ground. Arnis allows one to one, since a bridge
-/// way in OSM ends where its embankment begins and a clearance has to be
-/// reached within it. Half that keeps the climb readable as a ramp at a
-/// cell of about two metres and still clears a road under a forty-metre
-/// overpass.
-pub const MAX_SLOPE: f64 = 0.5;
+/// The steepest a deck climbs, or a bore descends, rise over run, from where
+/// it meets the ground. Pixelet's, not a precedent's: a city's ramps run
+/// about 6 to 8 percent, and with the approach graded with the bridge
+/// (approach.rs) the climb has the length a real one has. Arnis, which grades
+/// the bridge way alone, has to allow one to one.
+pub const MAX_SLOPE: f64 = 0.08;
 
 /// How far apart the solve samples a deck, in metres: about two cells, so
 /// a deck's line bends where its ground and what it clears change, and a
