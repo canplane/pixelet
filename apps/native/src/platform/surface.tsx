@@ -24,7 +24,7 @@ import { AppState, type GestureResponderEvent, type LayoutChangeEvent, type Nati
 import { PointerKind, PointerPhase } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_open, kernel_pointer, kernel_rect, kernel_visible } from "@/kernel/control/input.ts";
 import { surface_role } from "@/kernel/render/gpu/api.spec.ts";
-import { surface_create, surface_delete, surface_size } from "@/kernel/render/surface.ts";
+import { surface_close, surface_open, surface_size } from "@/kernel/render/surface.ts";
 import { request_frame, type Viewport } from "@/kernel/sched.ts";
 
 interface SurfaceProps extends ViewProps {
@@ -58,13 +58,13 @@ function useSurface(role: u32, key: string, opened?: (surface: u32) => () => voi
   };
 
   useEffect(() => {
-    const surface = surface_create(role);
+    const surface = surface_open(role);
     setHandle(surface);
     const close = surface !== 0 && open.current ? open.current(surface) : () => {};
     return () => {
       close();
       setHandle(0);
-      if (surface !== 0) surface_delete(surface);
+      if (surface !== 0) surface_close(surface);
     };
   }, [key]);
 

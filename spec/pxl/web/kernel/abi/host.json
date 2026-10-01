@@ -1,15 +1,12 @@
 {
   "$doc": [
-    "What the kernel asks of the host that no command answers, as records in a stream",
-    "(xpute-runtime ipc/stream.rs) the host runs once each turn has returned",
-    "(pxl-kernel host.rs, apps/web/src/kernel/host.ts). A record may name memory the",
-    "kernel holds: the host reads or writes it before the next turn, and the kernel",
-    "keeps it that long."
+    "The kernel's own system calls, beside xpute's in the same stream (spec/xpute/ipc/",
+    "sys.json, pxl-kernel host.rs, apps/web/src/kernel/host.ts), and the range and the",
+    "files it keeps them in."
   ],
   "stream": {
     "$type": "u32",
-    "$doc": ["Its head is the stream's END alone."],
-    "HEAD": 2,
+    "$doc": ["The stream's range, laid out by the kernel's map."],
     "BYTES": {
       "$value": 65536,
       "$doc": [
@@ -20,11 +17,9 @@
   },
   "op": {
     "$type": "u32",
-    "$doc": ["A record's operation, then its arguments."],
-    "BODY_READ": { "$value": 1, "$doc": ["body, at, len: the body the host holds copied to `at`, `len` bytes, and let go; a `len` of 0 only lets it go"] },
-    "STORAGE_SET": { "$value": 2, "$doc": ["key, at, len: the UTF-8 at `at` stored under `storage`'s key"] },
+    "$doc": ["The kernel's calls, each with xpute's PROGRAM bit; a record's call, then its arguments."],
     "TEXT_LAYOUT": {
-      "$value": 3,
+      "$value": 2147483649,
       "$doc": [
         "weight, px (f32 bits), max width (f32 bits, 0 for one line), at, lines, then the",
         "text's bytes: the text in the platform's own family at the weight and size, broken",
@@ -33,25 +28,18 @@
       ]
     },
     "TEXT_RASTER": {
-      "$value": 5,
+      "$value": 2147483650,
       "$doc": [
         "weight, px (f32 bits), color (0xRRGGBBAA), at, width, height, x (f32 bits), then",
         "the text's bytes: one line drawn in the platform's own family, starting at x with",
         "the middle of its em box on the middle row, into `width` by `height` pixels at",
         "`at`, RGBA a byte a channel, top row first, alpha not premultiplied"
       ]
-    },
-    "PANIC": {
-      "$value": 4,
-      "$doc": [
-        "errno, line, column, a (low, high word), b (low, high word), then the file's bytes:",
-        "the broken invariant the kernel reported before it trapped (xpute-core status/bug.rs)"
-      ]
     }
   },
   "storage": {
     "$type": "u32",
-    "$doc": ["What the kernel keeps in the browser's storage, by the key the host keeps it under (`STORAGE_KEYS`)."],
+    "$doc": ["The kernel's files, by the number xpute's WRITE names: what it keeps in the platform's storage, under the key the host keeps it by (`STORAGE_KEYS`)."],
     "SETTINGS": 0,
     "OBJECTS": 1
   },

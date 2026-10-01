@@ -66,8 +66,13 @@ erode by accident:
 **What shares `pxl-spec` is Rust, and what does not is free.** The kernel, the
 servers and the bakes compile the model, so they are crates; an ingest that
 moves a provider's columns into Postgres shares nothing, so it is a script;
-`apps/web` is the shell — the device app runs the same one, and adds only
-what a device does behind `@platform/` — and stays TypeScript.
+`apps/web` is the TypeScript around the kernel, and stays TypeScript. It is
+two things to the kernel, which is the process: its host, which holds the
+memory, the turns, the devices and the I/O (most of `src/kernel/`), and its
+shell, the UI, whose end of that channel is `shell.ts`, `snapshot.ts` and
+`render/surface.ts`. The two are not one thing, and a command is between the kernel and
+one of them (`cmd.json`). The device app runs the same TypeScript, and adds
+only what a device does behind `@platform/`.
 
 **A tool that makes a file is Rust; one that talks to a service is
 TypeScript.** What writes or reads a format the Rust side owns, or processes

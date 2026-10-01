@@ -17,7 +17,7 @@ import { useEffect, useRef } from "react";
 import { PointerKind, PointerPhase } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_open, kernel_pointer, kernel_rect, kernel_visible, kernel_wheel } from "@/kernel/control/input.ts";
 import { surface_role } from "@/kernel/render/gpu/api.spec.ts";
-import { surface_create, surface_delete, surface_size } from "@/kernel/render/surface.ts";
+import { surface_close, surface_open, surface_size } from "@/kernel/render/surface.ts";
 import { request_frame } from "@/kernel/sched.ts";
 import { bindSurface, unbindSurface } from "@/platform/web/webgpu.ts";
 
@@ -44,7 +44,7 @@ function dpr(): f64 {
  * which changes the ratio and not the box — is caught by the window's resize.
  */
 function openSurface(canvas: HTMLCanvasElement, role: u32): { handle: u32; close: () => void } {
-  const handle = surface_create(role);
+  const handle = surface_open(role);
   if (handle === 0) return { handle, close: () => {} };
   bindSurface(handle, canvas);
   const send = (width: u32, height: u32) => surface_size(handle, width, height, dpr());
@@ -66,7 +66,7 @@ function openSurface(canvas: HTMLCanvasElement, role: u32): { handle: u32; close
     close: () => {
       globalThis.removeEventListener("resize", sendBox);
       observer.disconnect();
-      surface_delete(handle);
+      surface_close(handle);
       unbindSurface(handle);
     },
   };

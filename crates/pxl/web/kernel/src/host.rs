@@ -1,51 +1,42 @@
 // pxl-kernel/host.rs
 //
-// What the kernel asks of the host that is not a command it answers: the
-// platform's key-value storage, a body the host holds copied in, a text laid
-// out or drawn (text.rs). Each is a record in the host stream
-// (abi/host.json), which the host runs once the turn has returned, so what a
-// record asks is done by the time the next turn rises — and what it names is
-// kept that long. Only the clock is still called: a turn measures its own
-// budget mid-turn, when the host cannot run. A native test has no stream, and
-// storage keeps nothing there.
+// What the kernel asks of the host that is not a command it answers, made as
+// xpute's system calls (xpute-runtime ipc/sys.rs): a body the host holds
+// copied in, a value written to the platform's storage, and the kernel's own
+// calls — a text laid out or drawn (text.rs, abi/host.json). The host runs
+// them once the turn has returned, so what one asks is done by the time the
+// next turn rises — and what it names is kept that long. Only the clock is
+// still called: a turn measures its own budget mid-turn, when the host cannot
+// run. A native test has no stream, and storage keeps nothing there.
 
 use core::panic::Location;
 
 use xpute_core::status::errno::Errno;
-use xpute_runtime::ipc::stream::Stream;
-use xpute_runtime::mem::base::{off_of_slice, ptr_at};
+use xpute_runtime::ipc::sys::Sys;
+use xpute_runtime::mem::base::ptr_at;
 
-use crate::abi::host::{op, stream};
+use crate::abi::host::stream;
 use crate::global::Global;
 
 /// The host's clock, in milliseconds. The substrate holds it
 /// (xpute clock.rs); it is named here because it arrives with the rest.
 pub use xpute_runtime::clock::{now, set_clock};
 
-struct Host {
-    stream: Stream,
-    /// What a record names, kept until the host has run it: a value to store.
-    held: Vec<String>,
+static SYS: Global<Option<Sys>> = Global::new();
+
+fn host() -> Option<&'static mut Sys> {
+    SYS.get(|| None).as_mut()
 }
 
-static HOST: Global<Option<Host>> = Global::new();
-
-fn host() -> Option<&'static mut Host> {
-    HOST.get(|| None).as_mut()
-}
-
-/// Installs the host stream at `at`, `stream::BYTES` of the kernel's memory
-/// nothing else writes.
+/// Installs the system calls' stream at `at`, `stream::BYTES` of the
+/// kernel's memory nothing else writes.
 ///
 /// # Safety
 /// `at` must address that range, 4-aligned, for as long as the module runs.
 pub unsafe fn set_host_stream(at: u32) {
     // SAFETY: the caller's range.
     let words = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(at as usize), (stream::BYTES / 4) as usize) };
-    HOST.set(Some(Host {
-        stream: Stream::new(words, stream::HEAD as usize),
-        held: Vec::new(),
-    }));
+    SYS.set(Some(Sys::new(words)));
 }
 
 /// The turn's rise: what the host did after the last turn is in, so what was
@@ -53,15 +44,16 @@ pub unsafe fn set_host_stream(at: u32) {
 pub fn host_rise() {
     *TURN.get(|| 0) += 1;
     if let Some(h) = host() {
-        h.held.clear();
+        h.rise();
     }
 }
 
-/// Records `op` with `args` and `bytes` for the host to run once the turn
-/// has returned; false where there is no host to run it.
+/// The kernel's own call `op` (abi/host.json) with `args` and `bytes`, for
+/// the host to run once the turn has returned; false where there is no host
+/// to run it.
 pub fn host_record(op: u32, args: &[u32], bytes: &[u8]) -> bool {
     let Some(h) = host() else { return false };
-    h.stream.record(op, args, &[], Some(bytes));
+    h.call(op, args, bytes);
     true
 }
 
@@ -76,7 +68,7 @@ pub fn turn() -> u64 {
 /// The turn's fall: its records, for the host to run once it returns.
 pub fn host_fall() {
     if let Some(h) = host() {
-        h.stream.publish();
+        h.fall();
     }
 }
 
@@ -91,10 +83,7 @@ pub fn host_bug(errno: Errno, at: &Location<'_>, a: u64, b: u64) {
     STOPPED.set(true);
     last_words(Stop::Bug { errno, at, a, b });
     if let Some(h) = host() {
-        h.stream.publish();
-        let args = [errno as i32 as u32, at.line(), at.column(), a as u32, (a >> 32) as u32, b as u32, (b >> 32) as u32];
-        h.stream.record(op::PANIC, &args, &[], Some(at.file().as_bytes()));
-        h.stream.publish();
+        h.abort(errno, at, a, b);
     }
 }
 
@@ -107,11 +96,11 @@ pub fn stopped() -> bool {
     *STOPPED.get(|| false)
 }
 
-/// What the platform keeps under `storage`'s key (host.json).
+/// What the platform keeps under `storage`'s key (host.json): a file of the
+/// host's, numbered by `storage`.
 pub fn storage_set(storage: u32, value: String) {
     let Some(h) = host() else { return };
-    h.stream.record(op::STORAGE_SET, &[storage, off_of_slice(value.as_bytes()) as u32, value.len() as u32], &[], None);
-    h.held.push(value);
+    h.write(storage, value.into_bytes());
 }
 
 /// Asks the host to copy body `body` into `dst`, which is its length, and let
@@ -119,7 +108,7 @@ pub fn storage_set(storage: u32, value: String) {
 /// turn on, and `dst` must be kept until then.
 pub fn body_read(body: u32, dst: &mut [u8]) {
     let Some(h) = host() else { return };
-    h.stream.record(op::BODY_READ, &[body, off_of_slice(&raw mut *dst) as u32, dst.len() as u32], &[], None);
+    h.read(body, dst);
 }
 
 static HANDHELD: Global<bool> = Global::new();

@@ -12,7 +12,7 @@
 import { type StyleProp, View, type ViewStyle } from "react-native";
 
 import { CaseSurface } from "@platform/surface.tsx";
-import { Command, encode_preview_create, encode_preview_delete } from "@/kernel/abi/cmd.spec.ts";
+import { Command, encode_preview_close, encode_preview_open } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command } from "@/kernel/shell.ts";
 import type { CharacterVariant } from "@/feature/character/variant.ts";
 
@@ -29,8 +29,8 @@ export function CharacterPreview(props: CharacterPreviewProps) {
       <CaseSurface
         openKey={`${variant.group}:${variant.number}`}
         onOpen={(surface) => {
-          kernel_command(Command.PREVIEW_CREATE, encode_preview_create({ surface, group: variant.group, number: variant.number }));
-          return () => kernel_command(Command.PREVIEW_DELETE, encode_preview_delete({ surface }));
+          kernel_command(Command.PREVIEW_OPEN, encode_preview_open({ surface, group: variant.group, number: variant.number }));
+          return () => kernel_command(Command.PREVIEW_CLOSE, encode_preview_close({ surface }));
         }}
       />
     </View>

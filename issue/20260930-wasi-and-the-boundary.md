@@ -23,16 +23,23 @@ is close to xpute's turn.
 
 ## Where it meets the contract
 
-The component model is shared-nothing: a component and its host never see
-each other's memory, and what crosses is copied through the canonical ABI.
-xpute's boundary is the opposite — the host reads the guest's memory where
-it lies, and a turn crosses once. So:
+The component model is shared-nothing between components: each has a memory
+of its own, and what crosses from one to another is copied through the
+canonical ABI. Between a component and its host it is narrower than that: a
+call lends a buffer, and the host may read or fill it in place, for as long
+as the operation runs — across the wait, for an async read. How many copies
+that costs is the host's implementation, not the interface's. What the
+interface cannot say is a region both sides keep and keep changing, which
+is what xpute's boundary is: the rings, the snapshot the host reads where it
+lies, the record streams that name the guest's memory, and one crossing a
+turn. So:
 
 - **WASI at the wasm boundary conflicts.** A guest whose imports and exports
-  are `wasi:*` gives its host no right to its memory; the rings leave the
-  boundary for the host's inside, and the boundary becomes calls and copies
-  — per call, where xpute pays per turn. That cost lands on the end user's
-  device, per frame.
+  are `wasi:*` lends its host a buffer per operation and nothing standing;
+  the rings leave the boundary for the host's inside, and the boundary
+  becomes a crossing per call, where xpute pays per turn. That cost lands on
+  the end user's device, per frame. The copies are not the conflict: a
+  host may fill a lent buffer in place, as xpute's host fills one now.
 - **A WASI-shaped API inside the guest does not.** The guest calls an API
   with WASI's vocabulary and xpute's runtime turns the calls into messages,
   the way a libc lays POSIX over io_uring. The wasm boundary stays the
@@ -64,16 +71,22 @@ calls nothing of the OS imports nothing of WASI.
 - The contract stays the boundary. The page and the device, turns, and
   reading in place are what it is for, and a WASI boundary covers wasm
   alone and gives up the last two.
-- WASI as a subsystem over the contract is queued in
+- WASI as a subsystem over the contract is parked in
   [BACKLOG.md](./BACKLOG.md), not now: it is what would let an existing
   program in, which is where an open-source xpute gains users, and it has
   no program to be built against yet.
 - Aligning the vocabulary is the part worth having early, and it is the
   same question as the resource vocabulary
-  ([20260930-resources-files-and-streams.md](./20260930-resources-files-and-streams.md)).
+  ([20260930-resources-files-and-streams.md](./20260930-resources-files-and-streams.md)),
+  decided 10-01 as a guest's files reached as Plan 9 reaches them, in
+  POSIX's and WASI's words
+  ([20261001-a-guest-s-files-as-plan-9-s.md](./20261001-a-guest-s-files-as-plan-9-s.md)).
 
 ## Where it stands
 
-**Decided** 09-30. Sources: the WASI roadmap (wasi.dev/roadmap), the WASI
+**Decided** 09-30; **corrected** 10-01: the component model shares nothing
+between components, but a host may fill a lent buffer in place, so what
+conflicts with the contract is a standing shared region and a crossing per
+call, not copies. Sources: the WASI roadmap (wasi.dev/roadmap), the WASI
 0.3 release page (wasi.dev/releases/wasi-p3), and the component model's
 `design/mvp/Concurrency.md`.

@@ -30,20 +30,28 @@ profiler's `PROFILER_READ` and `PROFILER_TAKE`. Everything else the shell
 sends — input, sensors, fetch results, loads, a surface's size — is a
 message it does not wait on.
 
-On a device the same needs take another road. `pxl_gpu_open`,
-`pxl_surface_bind`, `pxl_surface_unbind` and `pxl_image_hold`
-(`crates/pxl/web/native/src/`) are C functions the app calls, each run on the
-kernel's thread by `on_kernel` while the caller waits. They are synchronous
-calls into the guest, and they are outside the contract: no message, no
-turn, and on the page no counterpart.
+On a device the shell sends the kernel the same: the same calls, the same
+messages, from the same shell code. Beside them the app calls four C
+functions — `pxl_gpu_open`, `pxl_surface_bind`, `pxl_surface_unbind` and
+`pxl_image_hold` (`crates/pxl/web/native/src/`) — and none of them is a call
+into the guest. They are the device's own services, linked into the library
+the kernel is in, doing what the browser does for a page: opening the GPU
+through wgpu where the page opens WebGPU, binding a view's Metal layer to a
+surface where the page hands over a canvas, decoding an image where the
+browser decodes one. What the kernel is told of them comes as a message, as
+on the page: `GPU_CREATE` once the device is open (`platform/gpu.ts`) and
+`LOAD_IMAGE` with the decoded image's handle, beside the `SURFACE_CREATE`
+and its kin that made the surface. A layer bound to a surface it is not
+told of: on a device the kernel draws itself (its GPU stream is 0), so the
+GPU, the bound layers and the decoded images are a library its renderer
+calls into in its own process, where on the page they are the host's,
+reached through the stream. The first three calls run on the kernel's thread
+because wgpu's objects live there, not because they enter the guest; the
+image is decoded off it.
 
-The two platforms differ for a reason the contract does not see: who owns
-the device. On the page the host opens WebGPU and the kernel records its
-calls in a stream, so an open device is news the host sends
-(`GPU_CREATE`, a message). On a device the kernel opens the GPU itself
-through wgpu, so the app asks it to, and waits. An image goes the same two
-ways: a body the host holds and a message naming it, or a C call that hands
-the bytes over.
+The boundary is crossed the same way on both. What differs lies on either
+side of it — which API opens the device, and on a device the renderer
+drawing through a GPU library of its own rather than asking the host to.
 
 **The guest out to the host.** The clock is the only call that waits. What
 else the kernel wants from outside goes through the host's stream
@@ -72,16 +80,10 @@ but at an address a signal or a call has just named.
   already resident, at a bounded cost, waiting on nothing outside, may be
   called; one that waits on anything outside is a message. A command has one
   kind and not both. This was proposed when the contract was drawn and not
-  written into it; the GPU's two roads are what its absence looks like,
-  though there the roads part over ownership, which a rule of kinds does not
-  join.
-- **The device's C calls belong in the contract.** They are the host
-  calling into the guest and waiting — `Doorbell.call`'s cell — made
-  outside it. As commands called in a turn of no quota, the page and the
-  device would share one road. `pxl_surface_bind` hands over a
-  `CAMetalLayer`, a pointer into the host's objects rather than an offset
-  into the memory, so it would cross as an opaque word the host alone reads;
-  rule 1 speaks of addresses into the memory, and this is none.
+  written into it, and nothing in the code breaks it.
+- **The page and the device cross the boundary the same way.** Every command
+  the kernel receives comes by the same road on both; the device's C calls
+  are its host's own services, and the boundary has nothing to say of them.
 
 Seen against WASI 0.3, the contract is a component model with a discipline:
 the host may call the guest and wait or not, and the guest may call the host
@@ -90,6 +92,7 @@ over the rings, if one comes, is that shape written in WIT.
 
 ## Where it stands
 
-**Recorded** 09-30. The device's C calls into the contract is queued in
-[BACKLOG.md](./BACKLOG.md); the rule of a command's kind waits to be written
-into the contract with it.
+**Recorded** 09-30; **corrected** 10-01: the device's C calls are its
+host's own services, not calls into the guest, and the page and the device
+cross the boundary the same way. The rule of a command's kind is in the
+contract's rule 2 since 10-01.

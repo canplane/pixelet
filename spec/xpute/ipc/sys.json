@@ -1,0 +1,49 @@
+{
+  "$doc": [
+    "A guest's system calls: what it asks of its host that no command answers, as records",
+    "in a stream (ipc/stream.rs) the host runs once each turn has returned and before the",
+    "next begins. A record may name memory the guest holds: the host reads or writes it",
+    "in that gap, and the guest keeps it that long. The directory says where the stream",
+    "is (key SYS).",
+    "",
+    "The calls below are every program's. A program's own calls go in the same stream,",
+    "numbered with the PROGRAM bit, and a host that is not the program's refuses them."
+  ],
+
+  "HEAD": {
+    "$value": 2,
+    "$type": "u32",
+    "$doc": ["Words before the first record: END, then a word kept at 0."]
+  },
+
+  "op": {
+    "$type": "u32",
+    "$doc": ["A record's call, then its arguments."],
+    "READ": {
+      "$value": 1,
+      "$doc": [
+        "body, at, len: the bytes the host holds as `body`, copied to `at`, `len` of them, and",
+        "let go; a `len` of 0 only lets them go. The host hands a body's number over in a",
+        "command, and holds the bytes until this."
+      ]
+    },
+    "WRITE": {
+      "$value": 2,
+      "$doc": [
+        "file, at, len: the `len` bytes at `at` written whole to the host's file `file`, a number",
+        "the program gives each of its files and the host maps to where it keeps them."
+      ]
+    },
+    "ABORT": {
+      "$value": 3,
+      "$doc": [
+        "errno, line, column, a (low, high word), b (low, high word), then the file's bytes:",
+        "the broken invariant the guest reports before it stops (xpute-core status/bug.rs)."
+      ]
+    },
+    "PROGRAM": {
+      "$value": 2147483648,
+      "$doc": ["The bit every call a program numbers for itself carries."]
+    }
+  }
+}

@@ -29,7 +29,7 @@ import { storage, STORAGE_KEYS } from "@/kernel/abi/host.spec.ts";
 import { storageGet, storageSet } from "@platform/storage.ts";
 import { type Setting, SETTINGS } from "./schema.ts";
 
-/** A setting storage kept nothing for, as WORLD_CREATE carries it (the
+/** A setting storage kept nothing for, as WORLD_BOOT carries it (the
  * kernel's `NONE`). */
 const NONE: u32 = 0xffffffff;
 
@@ -54,7 +54,7 @@ function stored(row: Setting, value: u32): boolean | string | number {
   return row.kind === "toggle" ? value === 1 : row.kind === "choice" ? row.options[value] : value;
 }
 
-/** What storage kept, as WORLD_CREATE carries it: a value a setting, by its
+/** What storage kept, as WORLD_BOOT carries it: a value a setting, by its
  * key, NONE where it kept nothing this build can read. */
 export function storedSettings(): u32[] {
   const values: u32[] = new Array(Math.max(...ROWS.map(([, row]) => row.key)) + 1).fill(NONE);
