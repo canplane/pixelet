@@ -44,8 +44,10 @@ pub struct FeatureExtra {
     pub is_institutional: bool,
     /// Sports-area marker.
     pub is_sports: bool,
-    /// True when the feature is a tunnel and should not be rasterized.
-    pub is_tunnel: bool,
+    /// True where nothing of the feature shows from above — it runs under the
+    /// ground or inside a building, is not built yet or is no longer there,
+    /// or is a route rather than a way — so the ground does not paint it.
+    pub is_unseen: bool,
 }
 
 /// Final normalized feature form ready for bake/runtime use, shared by every

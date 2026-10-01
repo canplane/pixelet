@@ -62,6 +62,13 @@ fn land_use_class_map(class: &str) -> Option<u8> {
 const INSTITUTIONAL_BUILDING_CLASSES: [&str; 5] = ["education", "medical_care", "civic", "government_service", "religious"];
 const SPORTS_CLASSES: [&str; 2] = ["pitch", "playground"];
 
+/// Segment flags under which nothing of a way shows from above: the ground
+/// is the surface, and a tunnel, an indoor passage, a line not built yet and
+/// one whose track is gone are not on it. `is_disused` is not here — its
+/// rails are still there — nor `is_covered`, which is under a roof that the
+/// buildings paint over where they have it.
+pub const UNSEEN_FLAGS: &[&str] = &["is_tunnel", "is_indoor", "is_under_construction", "is_abandoned"];
+
 // ============ Policy logic ============
 
 /// `feat.class ?? feat.subtype ?? ""`, the building's own type as the policy
@@ -136,8 +143,20 @@ fn compute_metrics(feat: &OvertureRawFeature, _category: &str) -> FeatureCompute
         height: height.max(0.0),
         width: width.max(0.0),
         // `level_rules` is in the table, but nothing places a feature off the
-        // surface yet: what is not in a tunnel is painted on the ground.
+        // surface yet: what is seen from above is painted on the ground.
         layer: 0,
+    }
+}
+
+/// Whether nothing of a feature shows from above. A `water` segment is a
+/// ferry's route and a strait's line is where its name is written: neither is
+/// a thing on the surface, and a route paints over the sea, which no mask
+/// stops a transport cell at.
+fn is_unseen(feat: &OvertureRawFeature) -> bool {
+    match feat {
+        OvertureRawFeature::Segment(s) => s.is_unseen || s.subtype == "water",
+        OvertureRawFeature::Base(b) => b.source == BaseSource::Water && b.class.as_deref() == Some("strait"),
+        OvertureRawFeature::Building(_) => false,
     }
 }
 
@@ -183,9 +202,7 @@ fn compute_extra(feat: &OvertureRawFeature, category: &str) -> FeatureExtra {
         is_parking: category == "parking",
         is_institutional: institutional,
         is_sports: SPORTS_CLASSES.contains(&building_type(feat)) || SPORTS_CLASSES.contains(&land_use_class(feat)),
-        // A tunnel is under the surface, which is all the ground is: from
-        // above, a subway is not there to see.
-        is_tunnel: matches!(feat, OvertureRawFeature::Segment(s) if s.is_tunnel),
+        is_unseen: is_unseen(feat),
     }
 }
 

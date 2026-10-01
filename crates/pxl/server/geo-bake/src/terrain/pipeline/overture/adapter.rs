@@ -14,6 +14,7 @@
 use pxl_spec::bake::format::{BaseRow, BuildingRow, SegmentRow};
 use pxl_spec::space::adapter::epsg3857::G3857;
 
+use crate::terrain::pipeline::overture::policy::UNSEEN_FLAGS;
 use crate::wkb::{wkb_to_geometries, WkbGeometry};
 
 pub struct OvertureBuildingRawFeature {
@@ -26,13 +27,14 @@ pub struct OvertureBuildingRawFeature {
     pub center: G3857,
 }
 
-/// One piece of a segment: the part of its length over which it is either
-/// in a tunnel or not, which is the unit the surface is painted in.
+/// One piece of a segment: the part of its length over which one of
+/// `UNSEEN_FLAGS` holds or none does, which is the unit the surface is
+/// painted in.
 pub struct OvertureSegmentRawFeature {
     pub gers_id: String,
     pub subtype: String,
     pub class: Option<String>,
-    pub is_tunnel: bool,
+    pub is_unseen: bool,
     pub geometry: WkbGeometry,
     pub center: G3857,
 }
@@ -100,21 +102,21 @@ pub fn from_building_row(row: &BuildingRow) -> Vec<OvertureRawFeature> {
 }
 
 /// Transportation's segments only — a connector is routing topology and is
-/// skipped. A segment is cut where its tunnel flag starts or stops, since
+/// skipped. A segment is cut where an unseen flag starts or stops, since
 /// Overture puts a flag on a range of a segment's length rather than on the
 /// whole of it: one segment of a subway line runs over a bridge, along the
 /// surface and into a tunnel.
 pub fn from_segment_row(row: &SegmentRow) -> Vec<OvertureRawFeature> {
-    let tunnels = flag_ranges(row.flags.as_deref(), "is_tunnel");
+    let unseen = flag_ranges(row.flags.as_deref(), UNSEEN_FLAGS);
     wkb_to_geometries(&row.geom_wkb)
         .into_iter()
-        .flat_map(|g| pieces(g, &tunnels))
-        .map(|(is_tunnel, g)| {
+        .flat_map(|g| pieces(g, &unseen))
+        .map(|(is_unseen, g)| {
             OvertureRawFeature::Segment(OvertureSegmentRawFeature {
                 gers_id: row.gers_id.clone(),
                 subtype: row.subtype.clone(),
                 class: row.class.clone(),
-                is_tunnel,
+                is_unseen,
                 center: center_of(&g),
                 geometry: g,
             })
@@ -122,11 +124,11 @@ pub fn from_segment_row(row: &SegmentRow) -> Vec<OvertureRawFeature> {
         .collect()
 }
 
-/// The ranges of a segment's length, as fractions of it, over which `flag`
-/// holds: sorted and merged. A rule with no `between` holds over the whole
+/// The ranges of a segment's length, as fractions of it, over which any of
+/// `wanted` holds: sorted and merged. A rule with no `between` holds over the whole
 /// segment. Flags that do not parse are no flags, which paints the segment as
 /// it was painted before any were read.
-fn flag_ranges(flags: Option<&str>, flag: &str) -> Vec<[f64; 2]> {
+fn flag_ranges(flags: Option<&str>, wanted: &[&str]) -> Vec<[f64; 2]> {
     let Some(rules) = flags.and_then(|f| serde_json::from_str::<serde_json::Value>(f).ok()) else {
         return Vec::new();
     };
@@ -134,7 +136,7 @@ fn flag_ranges(flags: Option<&str>, flag: &str) -> Vec<[f64; 2]> {
         .as_array()
         .into_iter()
         .flatten()
-        .filter(|r| r["values"].as_array().is_some_and(|v| v.iter().any(|v| v == flag)))
+        .filter(|r| r["values"].as_array().is_some_and(|v| v.iter().any(|v| v.as_str().is_some_and(|v| wanted.contains(&v)))))
         .map(|r| match r["between"].as_array().map(|b| (b.first().and_then(|v| v.as_f64()), b.get(1).and_then(|v| v.as_f64()))) {
             Some((Some(a), Some(b))) => [a.clamp(0.0, 1.0), b.clamp(0.0, 1.0)],
             _ => [0.0, 1.0],

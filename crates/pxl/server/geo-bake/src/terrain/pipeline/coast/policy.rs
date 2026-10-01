@@ -61,8 +61,7 @@ impl NormalizePolicy<CoastRawFeature> for CoastPolicy {
             is_parking: false,
             is_institutional: false,
             is_sports: false,
-            // from_coast_row never synthesizes a tunnel tag.
-            is_tunnel: false,
+            is_unseen: false,
         }
     }
 
