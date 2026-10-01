@@ -203,12 +203,17 @@ fn target_center() -> Option<Pvf3> {
 /// A drag: the map center walked (layer/terrain/ground_snap.rs `walk`) and
 /// the camera put over where it stands, whichever controller is active — a
 /// controller knows only how a map center is had from its camera and how
-/// its camera is put over one. One speed in either, wherever it stands: the
-/// ground under the finger at the distance the orbit starts at
+/// its camera is put over one. The ground follows the finger at the
+/// distance third person looks across, the zoom; first person, which has
+/// none, walks as third person does at the distance it starts at
 /// (`DEFAULT_DIST`).
 pub fn pan(dx: f64, dy: f64) {
     let Some(from) = target_center() else { return };
-    let to = walk(&from, dx, dy, units_per_px_at(DEFAULT_DIST), camera().yaw);
+    let across = match active() {
+        Active::Orbit => camera_store().intent.dist,
+        Active::Free | Active::Tracked => DEFAULT_DIST,
+    };
+    let to = walk(&from, dx, dy, units_per_px_at(across), camera().yaw);
     put_center(to, Motion::Smooth);
 }
 
