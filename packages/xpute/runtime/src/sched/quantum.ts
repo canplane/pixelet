@@ -72,19 +72,6 @@ export interface Grant {
   interactive: boolean;
 }
 
-/** A turn as the host saw it, once the falling edge came back. */
-export interface Turn {
-  /** The gap before the turn, in seconds. */
-  delta_s: f64;
-  /** The whole turn, around the call. */
-  turn_ms: f64;
-  /** The grant the turn ran on. */
-  grant: Grant;
-  /** When the guest wants the next edge, in ms from now: 0 the next frame,
-   * NO_WAKE none. */
-  wake_ms: f64;
-}
-
 export class Quantum {
   private readonly gaps = new Float64Array(FRAME_WINDOW).fill(1000 / 60);
   private readonly sorted = new Float64Array(FRAME_WINDOW);
@@ -102,17 +89,20 @@ export class Quantum {
     this.input_at = now;
   }
 
-  /** Learns from a turn that finished. */
-  observe(turn: Turn): void {
-    const gap_ms = turn.delta_s * 1000;
-    const interactive = turn.grant.interactive;
+  /** Learns from a turn that finished, as the host saw it once the falling
+   * edge came back: the gap before it in seconds, the whole turn around the
+   * call, the grant it ran on, and when the guest wants the next edge, in ms
+   * from now — 0 the next frame, NO_WAKE none. */
+  observe(delta_s: f64, turn_ms: f64, grant: Grant, wake_ms: f64): void {
+    const gap_ms = delta_s * 1000;
+    const interactive = grant.interactive;
     if (interactive && this.prev_interactive && gap_ms > 0 && gap_ms <= MAX_FRAME_GAP_MS) {
       this.gaps[this.gap_at] = gap_ms;
       this.gap_at = (this.gap_at + 1) % FRAME_WINDOW;
     }
     this.prev_interactive = interactive;
-    this.overrun_ms = Math.max(0, turn.turn_ms - turn.grant.quota_ms);
-    this.asked_next = turn.wake_ms === 0;
+    this.overrun_ms = Math.max(0, turn_ms - grant.quota_ms);
+    this.asked_next = wake_ms === 0;
   }
 
   /** The rising edge's grant at `now`. */

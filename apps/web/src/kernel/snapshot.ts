@@ -41,7 +41,7 @@ export function set_snapshot(bytes: U8Array): void {
 }
 
 /** Calls `listener` with every snapshot the kernel posts from now on. */
-export function subscribe_snapshot(listener: () => void): () => void {
+function subscribe_snapshot(listener: () => void): () => void {
   snapshot_listeners.add(listener);
   return () => snapshot_listeners.delete(listener);
 }
@@ -50,7 +50,10 @@ export function kernel_snapshot(): Snapshot {
   return snapshot;
 }
 
-/** The part of the kernel's snapshot a component shows. */
+/** The part of the kernel's snapshot a component shows. A component
+ * re-renders only when what it selects changes, so `select` returns a
+ * primitive or a reference the snapshot already holds: one that builds a
+ * new array or object each call never compares equal and renders forever. */
 export function useKernel<T>(select: (s: Snapshot) => T): T {
-  return select(useSyncExternalStore(subscribe_snapshot, kernel_snapshot));
+  return useSyncExternalStore(subscribe_snapshot, () => select(snapshot));
 }

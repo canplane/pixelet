@@ -1,16 +1,22 @@
 // pxl-kernel/world/change.rs
 
-//! The world's change log: which units of world-shared state changed, read by
-//! whoever cares, the way issue/20260913-the-read-direction-a-change-log.md
-//! describes. The log is the kernel's (xpute_runtime::ipc::change), where the
-//! state that changes most — the object store — bumps it itself; this is its
-//! face for the modules: the topics, a bump, and the frame a bump asks for.
+//! The world's revisions: which units of world-shared state changed, read by
+//! whoever cares (issue/20260913-the-read-direction-a-change-log.md). A
+//! revision is its topic's tick at the key's last change, one counter per
+//! topic rather than per key, so a key forgotten and changed again gets a
+//! revision it never had and a reader holding an old one cannot mistake the
+//! new state for the one it saw — Bevy's change ticks, per topic. The tick is
+//! u32 and a wrap is not handled: four billion changes to one topic.
 //!
-//! A source calls `bump_world`. Readers compare revisions or walk the
-//! journal. The canvas renders on demand, so a bump also asks for that frame;
-//! the request goes back to the host on the turn's falling edge.
+//! A source calls `bump_world`; a reader compares a key's revision with the
+//! one it remembers, or a topic's tick. A change carries no value: the value
+//! is the owner's, read by key where it lives. The canvas renders on demand,
+//! so a bump also asks for that frame; the request goes back to the host on
+//! the turn's falling edge.
 
-use xpute_runtime::ipc::change::{ChangeLog, Revision, Topic};
+use std::collections::HashMap;
+
+use fnv::FnvBuildHasher;
 
 use xpute_runtime::sched::edge::Edge;
 
@@ -18,21 +24,46 @@ use crate::global::Global;
 use crate::kernel::kernel;
 
 /// What a column stores (object/store.rs), keyed by column index.
-pub const OBJECT_COLUMN: Topic = 0;
-/// What a chunk above z16 draws of the objects in its tiers and in its
-/// decor, keyed by the chunk (world/chunk/source.rs `chunk_key`): moved by a
-/// write to any column it draws, so a chunk reads one revision rather than
-/// summing its columns'.
-pub const TIERS_CHUNK: Topic = 1;
-pub const DECOR_CHUNK: Topic = 2;
+pub const OBJECT_COLUMN: WorldTopic = 0;
+/// What a chunk above z16 draws of the objects in its tiers, keyed by the
+/// chunk (world/chunk/source.rs `chunk_key`): moved by a write to any column
+/// it draws, so a chunk reads one revision rather than summing its columns'.
+pub const TIERS_CHUNK: WorldTopic = 1;
 /// How many topics the log keeps.
-pub const WORLD_TOPICS: Topic = DECOR_CHUNK + 1;
+pub const WORLD_TOPICS: WorldTopic = TIERS_CHUNK + 1;
 
-/// `WorldTopic`.
-pub type WorldTopic = Topic;
+pub type WorldTopic = u32;
+pub type Revision = u32;
 
-/// The kernel's log.
-pub fn world_changes() -> &'static mut ChangeLog {
+/// Each topic's tick, and each key's revision in it.
+#[derive(Default)]
+pub struct Revisions {
+    ticks: [Revision; WORLD_TOPICS as usize],
+    keys: [HashMap<i64, Revision, FnvBuildHasher>; WORLD_TOPICS as usize],
+}
+
+impl Revisions {
+    /// Records that `key` in `topic` changed, and returns its new revision.
+    pub fn bump(&mut self, topic: WorldTopic, key: i64) -> Revision {
+        let tick = self.ticks[topic as usize].wrapping_add(1);
+        self.ticks[topic as usize] = tick;
+        self.keys[topic as usize].insert(key, tick);
+        tick
+    }
+
+    /// The key's revision, or 0 where it has never changed.
+    pub fn revision_of(&self, topic: WorldTopic, key: i64) -> Revision {
+        self.keys[topic as usize].get(&key).copied().unwrap_or(0)
+    }
+
+    /// The topic's tick: moved means something in the topic changed.
+    pub fn tick(&self, topic: WorldTopic) -> Revision {
+        self.ticks[topic as usize]
+    }
+}
+
+/// The kernel's revisions.
+pub fn world_changes() -> &'static mut Revisions {
     &mut kernel().changes
 }
 

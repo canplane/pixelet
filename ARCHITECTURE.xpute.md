@@ -109,18 +109,6 @@ The format in full, and the API that writes it, is [the note beside the TypeScri
 
 ---
 
-## Changes, a guest's record of its own
-
-A guest often needs to know which units of its state changed since it last looked — what to build again, what to draw again. The runtime keeps that for it as data rather than as calls. A **change** (`ipc/change.rs`) is three numbers: a topic (`u16`, a kind of state the guest numbers), a key (`u64`, the one unit within that topic), and a revision (`u32`). A writer calls `bump`. The topic's counter advances, and its new value becomes the key's revision, written in two places: a table indexed by key, and one fixed-size journal ring.
-
-The two places exist because readers come in two kinds. A reader that cares about a handful of keys compares each key's revision against the one it remembers. A reader that cares about everything walks the journal forward from its own cursor — and if the journal has lapped that cursor, it gives up on the journal and re-reads the keys of the topics it follows.
-
-A change carries no value; the value is read where it lives. How a reader is woken — by polling on each turn, by a listener — is built on top of this and is not part of it.
-
-Nothing of it crosses to the host. It is a tool the runtime gives a guest, as the tick is, and the contract does not name it: a guest that keeps track of its changes another way is the same guest to its host.
-
----
-
 ## The turn
 
 The guest does not run continuously. It runs inside one call, `interrupt(quota_ms)`, and when that call returns the guest is not running at all.
@@ -206,7 +194,7 @@ Most of what is above is how one end happens to be built. A tick is how one gues
 6. **Handles.** A handle is `slot | generation << 16`, and 0 is never a handle. The side that issued it checks the generation, so a handle kept past its release does not name what took its slot next.
 7. **The clock.** During a turn the guest reads the host's clock (`now`) in milliseconds. It never runs backward, and only the difference between two readings means anything.
 
-Everything else is one end's own. The guest's: where its ranges lie, the heap and its allocator, the tick, its passes and tasks, and its change log. The host's: how large a quota is, when to ring, and how it reads what a turn left. Neither end may lean on how the other does any of it.
+Everything else is one end's own. The guest's: where its ranges lie, the heap and its allocator, the tick, and its passes and tasks. The host's: how large a quota is, when to ring, and how it reads what a turn left. Neither end may lean on how the other does any of it.
 
 ---
 
@@ -216,10 +204,10 @@ Everything above is implemented in Rust and TypeScript, and in C++ as well, and 
 
 `core` is symmetric. Each language implements the same kit, and the golden records hold them to each other wherever they must produce identical bytes. `runtime` is not symmetric and is not meant to be: its halves are the two ends of one arrangement. The host end is TypeScript and the guest end is Rust or C++. A module with nothing facing it across the boundary is not a gap waiting to be filled. What the two ends must agree on is not their module lists but the contract above, and the formats it travels in: the directory, the message's four words, the ring's layout, the stream's records.
 
-|             | Rust (`crates/xpute/`)                                                                                                                                                                                         | TypeScript (`packages/xpute/`)                                                                                                              | C++ (`cpp/xpute/`)                                                                                                                         |
-| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **core**    | `abi` words and the command number · `alloc` slab and buddy · `codec` JSON · `collection` arena, deque, heap · `math` scalar, rng · `status` errno, error, bug · `wire` XTP, TLV · `golden` the record reader  | `abi` `codec` `collection` `math` `status` `wire` as the Rust, plus `kit` (comparators, iterators, types) and `env` (feature detection)     | `abi` `alloc` `collection` `math` `status` `wire` `golden` as the Rust, and `codec` hex, base64url and FNV, which the Rust takes as crates |
-| **runtime** | `mem` sections, the base and the heap door · `ipc` directory, frame, ring, stream, sys, change log, the guest's doorbell · `sched` quantum, tick, pass, task, edge · `abi` handles, fetch · `clock` · `global` | `mem` the reservation · `ipc` directory, frame, ring, stream, sys, the host's doorbell · `sched` quantum, **strobe** · `abi` handles, fetch | `mem` the memory · `ipc` directory, frame, ring, stream, the guest's door · `abi` handles                                                  |
+|             | Rust (`crates/xpute/`)                                                                                                                                                                                        | TypeScript (`packages/xpute/`)                                                                                                                 | C++ (`cpp/xpute/`)                                                                                                                         |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **core**    | `abi` words and the command number · `alloc` slab and buddy · `codec` JSON · `collection` arena, deque, heap · `math` scalar, rng · `status` errno, error, bug · `wire` XTP, TLV · `golden` the record reader | `abi` `codec` `collection` `math` `status` `wire` as the Rust, plus `kit` (comparators, iterators, types) and `env` (feature detection)        | `abi` `alloc` `collection` `math` `status` `wire` `golden` as the Rust, and `codec` hex, base64url and FNV, which the Rust takes as crates |
+| **runtime** | `mem` sections, the base and the heap door · `ipc` directory, frame, ring, stream, sys, the guest's doorbell · `sched` quantum, tick, pass, task, edge · `abi` commands, handles · `clock` · `global`         | `mem` the reservation · `ipc` directory, frame, ring, stream, sys, the host's doorbell · `sched` quantum, **strobe** · `abi` commands, handles | `mem` the memory · `ipc` directory, frame, ring, stream, the guest's door · `abi` handles                                                  |
 
 The two rows differ in what they ask of a program. `core` asks nothing: link it and call it. `runtime` asks a program to run xpute's way — memory granted once, work in turns, I/O by asking.
 

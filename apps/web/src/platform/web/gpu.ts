@@ -8,9 +8,8 @@
  */
 
 import { Command, encode_gpu_ready } from "@/kernel/abi/cmd.spec.ts";
-import { CORE_DOORBELL } from "@/kernel/mem.ts";
 import { acquireDevice } from "@/platform/web/webgpu.ts";
-import { request_frame } from "@/kernel/sched.ts";
+import { send_next } from "@/kernel/sched.ts";
 
 /** How long to wait before asking again while the page is shown: after a
  * device is lost, and after each request no adapter answers. Only a device
@@ -46,9 +45,8 @@ function askAgain(): void {
  * one is lost. */
 export function gpuBoot(): void {
   const lost = () => {
-    CORE_DOORBELL.send(0, Command.GPU_LOST);
+    send_next(Command.GPU_LOST);
     askAgain();
-    request_frame();
   };
   tries += 1;
   void acquireDevice(lost).then((info) => {
@@ -58,7 +56,6 @@ export function gpuBoot(): void {
     }
     if (tries > 1) console.info(`[gpu] a device answered after ${tries} requests`);
     tries = 0;
-    CORE_DOORBELL.send(0, Command.GPU_READY, encode_gpu_ready({ min_uniform_offset_alignment: info.align, timestamps: info.timestamps }));
-    request_frame();
+    send_next(Command.GPU_READY, encode_gpu_ready({ min_uniform_offset_alignment: info.align, timestamps: info.timestamps }));
   }, (err) => console.error("[gpu] the device request failed; nothing can be drawn:", err));
 }

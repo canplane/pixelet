@@ -33,6 +33,10 @@
 //! The value stays in units at every level: in the level's own cells the
 //! rounding would eat that fraction.
 //!
+//! Decks are lines, and fold as lines (bake/deck.rs `fold_decks`): each
+//! child's in the parent's cells, simplified to its cell, and one narrower
+//! than half of it left out — the size rule the majority keeps for ground.
+//!
 //! The index lane is the one fold that is not a summary of the level below
 //! alone. A mean lies inside what it averages but says nothing of how far
 //! what it averages reaches, so a parent's extent is carried up from its
@@ -43,6 +47,7 @@ use crate::space::pyramid::PAGE_CELLS;
 use xpute_core::math::scalar::round;
 
 use super::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
+use super::deck::fold_decks;
 use super::format::{Ground, Index, Occupancy, Terrain, GROUND_CH_KEYS};
 use super::pack::{channel_of, with_channel, GroundCell};
 use super::surface::extent_of;
@@ -199,8 +204,9 @@ fn fold_terrain(around: [Option<&Terrain>; 16], level: u32) -> Option<Terrain> {
     let ground = fold_ground(children.map(|t| &t.ground), level);
     let mut ele = vec![0i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
     fold_ele(around.map(|t| t.map(|t| &*t.ele)), &mut ele);
-    let index = fold_index(children.map(|t| &t.index), extent_of(&ele, &ground.cells));
-    Some(Terrain { ground, ele: ele.into(), index })
+    let decks = fold_decks(children.map(|t| &t.decks), level);
+    let index = fold_index(children.map(|t| &t.index), extent_of(&ele, &ground.cells, &decks));
+    Some(Terrain { ground, decks, ele: ele.into(), index })
 }
 
 #[cfg(test)]

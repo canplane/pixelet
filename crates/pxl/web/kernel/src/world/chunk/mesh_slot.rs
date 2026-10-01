@@ -35,8 +35,7 @@
 //! are written (world/chunk/table.rs `Meshes::next`). What a tier is drawn
 //! in is the quality's to choose and no slot's: a mesh is never cut to a
 //! slot, which left ground simply missing — the chunk's last rows, wherever
-//! steep ground made more boxes than the slot held, with its decor standing
-//! over nothing (measured 2026-09-26) — and never baked coarser than asked
+//! steep ground made more boxes than the slot held (measured 2026-09-26) — and never baked coarser than asked
 //! to fit one, which was a second quality policy, leaking past a cell where
 //! placed objects are dense. Every slot a tier fills is held for it at once,
 //! when its bake knows its size, or none is and the bake is thrown away
@@ -123,7 +122,7 @@ pub const COVER_SLOTS: u32 = {
 /// Which of the arena's pools a tier takes its slot from: the leaves' own
 /// tier, any other a level draws, or the cover. Each is one representation,
 /// a step a tier is drawn at in its level's cells, and every size a slot of
-/// it has is that step's: its boxes, and its surface lane.
+/// it has is that step's: its boxes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Pool {
     Fine = 0,
@@ -143,16 +142,6 @@ impl Pool {
         }
     }
 
-    /// The step its tiers are drawn at, in their level's cells: a leaf's
-    /// own cells, a level's averaged 2 × 2 (world/chunk/frontier.rs
-    /// `drawn_cube`), or one cell a chunk.
-    const fn step(self) -> u32 {
-        match self {
-            Pool::Fine => 1,
-            Pool::Coarse => 2,
-            Pool::Cover => COARSEST,
-        }
-    }
 
     /// Slots it holds.
     pub const fn slots(self) -> u32 {
@@ -277,9 +266,6 @@ pub struct MeshSlot {
     pub capacity: u32,
     pub index: usize,
 }
-
-pub const SURFACE_BYTES: u32 = Pool::Cover.surface_first() * 4 + Pool::Cover.slots() * Pool::Cover.surface_words() * 4;
-
 
 /// The slot an index names: which group's arena it is in, where in it, and
 /// how many boxes it holds.

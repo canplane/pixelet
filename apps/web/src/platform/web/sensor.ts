@@ -12,8 +12,7 @@
  */
 
 import { Command, encode_sensor_error, encode_sensor_orientation, encode_sensor_permission, encode_sensor_position, GeolocationErrorCode, PermissionAnswer, Sensor } from "@/kernel/abi/cmd.spec.ts";
-import { CORE_DOORBELL } from "@/kernel/mem.ts";
-import { request_frame } from "@/kernel/sched.ts";
+import { send_next } from "@/kernel/sched.ts";
 
 interface IOSOrientationEvent extends DeviceOrientationEvent {
   webkitCompassHeading?: number;
@@ -50,8 +49,7 @@ export function geolocationStart(): void {
   geolocationWatch = navigator.geolocation.watchPosition(
     (pos) => {
       const { latitude, longitude, altitude, accuracy, heading } = pos.coords;
-      CORE_DOORBELL.send(0, Command.SENSOR_POSITION, encode_sensor_position({ lon: longitude, lat: latitude, altitude, accuracy, heading }));
-      request_frame();
+      send_next(Command.SENSOR_POSITION, encode_sensor_position({ lon: longitude, lat: latitude, altitude, accuracy, heading }));
     },
     (err) => {
       // The dead watch is cleared, not just forgotten: it keeps calling back,
@@ -64,8 +62,7 @@ export function geolocationStart(): void {
         : err.code === err.TIMEOUT
         ? GeolocationErrorCode.Timeout
         : GeolocationErrorCode.Other;
-      CORE_DOORBELL.send(0, Command.SENSOR_ERROR, encode_sensor_error({ code }));
-      request_frame();
+      send_next(Command.SENSOR_ERROR, encode_sensor_error({ code }));
     },
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 },
   );
@@ -75,8 +72,7 @@ let orientationEvent: string | null = null;
 
 function onOrientation(e: Event): void {
   const o = e as IOSOrientationEvent;
-  CORE_DOORBELL.send(0, Command.SENSOR_ORIENTATION, encode_sensor_orientation({ webkit_compass_heading: o.webkitCompassHeading ?? null, alpha: o.alpha, beta: o.beta, gamma: o.gamma }));
-  request_frame();
+  send_next(Command.SENSOR_ORIENTATION, encode_sensor_orientation({ webkit_compass_heading: o.webkitCompassHeading ?? null, alpha: o.alpha, beta: o.beta, gamma: o.gamma }));
 }
 
 function listenOrientation(name: string): void {
@@ -90,8 +86,7 @@ export function orientationListen(): void {
 }
 
 function sendPermission(sensor: Sensor, answer: PermissionAnswer): void {
-  CORE_DOORBELL.send(0, Command.SENSOR_PERMISSION, encode_sensor_permission({ sensor, answer }));
-  request_frame();
+  send_next(Command.SENSOR_PERMISSION, encode_sensor_permission({ sensor, answer }));
 }
 
 /** Follows the location permission while the map is up, so a grant made

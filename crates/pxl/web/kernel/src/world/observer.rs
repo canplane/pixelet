@@ -214,16 +214,18 @@ impl Grid {
                 let mut seen = false;
                 let mut lacks: Lacks = [None; 4];
                 let points = [[i, j], [i + 1, j], [i, j + 1], [i + 1, j + 1]].map(|c| {
-                    let direction = self.corner(c);
                     let (hit, lack) = *met[(c[1] * (nx + 1) + c[0]) as usize].get_or_insert_with(|| {
                         rays += 1;
-                        meet(direction)
+                        meet(self.corner(c))
                     });
                     seen |= hit.is_some();
                     if let Some(l) = lack.filter(|l| !lacks.contains(&Some(*l))) {
                         lacks[lacks.iter().position(Option::is_none).unwrap_or(3)] = Some(l);
                     }
-                    hit.unwrap_or_else(|| (std::array::from_fn(|k| eye[k] + direction[k] * far), far))
+                    hit.unwrap_or_else(|| {
+                        let direction = self.corner(c);
+                        (std::array::from_fn(|k| eye[k] + direction[k] * far), far)
+                    })
                 });
                 each(tile, seen.then(|| Footprint::of(eye, points)), lacks);
             }

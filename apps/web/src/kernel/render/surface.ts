@@ -11,7 +11,7 @@
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { Command, encode_surface_close, encode_surface_open, encode_surface_resize } from "@/kernel/abi/cmd.spec.ts";
 import { CORE_DOORBELL } from "@/kernel/mem.ts";
-import { request_frame } from "@/kernel/sched.ts";
+import { send_next } from "@/kernel/sched.ts";
 
 /** A surface for `role`: its handle, 0 when the kernel has none left. */
 export function surface_open(role: u32): u32 {
@@ -21,8 +21,7 @@ export function surface_open(role: u32): u32 {
 /** The surface's box: `width` by `height` device pixels, `dpr` of them to a
  * CSS pixel. */
 export function surface_size(surface: u32, width: u32, height: u32, dpr: f64): void {
-  CORE_DOORBELL.send(0, Command.SURFACE_RESIZE, encode_surface_resize({ surface, width, height, device_pixel_ratio: dpr }));
-  request_frame();
+  send_next(Command.SURFACE_RESIZE, encode_surface_resize({ surface, width, height, device_pixel_ratio: dpr }));
 }
 
 export function surface_close(surface: u32): void {

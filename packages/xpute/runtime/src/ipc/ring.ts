@@ -59,12 +59,11 @@
 import type { i32, u32 } from "@xpute/core/abi/word.ts";
 import type { U8Array } from "@xpute/core/abi/array.ts";
 import { Errno } from "@xpute/core/status/errno.spec.ts";
-import { MarshalError } from "@xpute/core/status/error.ts";
+import { InvariantError, MarshalError } from "@xpute/core/status/error.ts";
 
 import { cmd_of, cmd_word, flags_of, FRAME_CMD, FRAME_PACKET, FRAME_RESULT, FRAME_TAG, FRAME_WORDS } from "@xpute/runtime/ipc/frame.ts";
-import { InvariantError } from "@xpute/core/status/error.ts";
 
-export const RING_HEADER_WORDS: u32 = 8;
+const RING_HEADER_WORDS: u32 = 8;
 
 /** Bytes the descriptors of a ring of `capacity` messages take. */
 export function ring_bytes(capacity: u32): u32 {
@@ -209,10 +208,10 @@ export class Ring {
     const packet_at = this.words[at + FRAME_PACKET];
     if (packet_at === 0) return null;
     const off = packet_at - this.slot_base;
-    if (off < 0 || off % this.slot_bytes !== 0 || off + 16 > this.slots.byteLength || packet_bytes(this.slots, off) > this.slot_bytes) {
-      throw new MarshalError(Errno.EBADMSG);
-    }
-    return this.slots.subarray(off, off + packet_bytes(this.slots, off));
+    if (off < 0 || off % this.slot_bytes !== 0 || off + 16 > this.slots.byteLength) throw new MarshalError(Errno.EBADMSG);
+    const len = packet_bytes(this.slots, off);
+    if (len > this.slot_bytes) throw new MarshalError(Errno.EBADMSG);
+    return this.slots.subarray(off, off + len);
   }
 
   /** Consumes the message at the head. */

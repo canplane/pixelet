@@ -2,7 +2,6 @@
 
 //! What crosses between two sides of one memory.
 
-pub mod change;
 pub mod directory;
 pub mod doorbell;
 pub mod frame;

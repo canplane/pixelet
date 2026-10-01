@@ -22,8 +22,7 @@ import { PUBLISHED_TILES } from "@/config/deploy.ts";
 import { PUBLISHED_SOURCE, type TileSource } from "@/config/published.spec.ts";
 import { TILE_SOURCE_ROUTE } from "@/config/route.ts";
 import { originGet } from "@platform/origin.ts";
-import { CORE_DOORBELL } from "@/kernel/mem.ts";
-import { request_frame } from "@/kernel/sched.ts";
+import { send_next } from "@/kernel/sched.ts";
 
 /** How long a source that did not answer waits before it is asked again, in
  * milliseconds: a dev server compiling or restarting answers within seconds,
@@ -51,6 +50,5 @@ export async function declare_source(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, ASK_AGAIN_MS));
     source = await asked();
   }
-  CORE_DOORBELL.send(0, Command.WORLD_SOURCE, encode_world_source({ top_level: source.top_level }));
-  request_frame();
+  send_next(Command.WORLD_SOURCE, encode_world_source({ top_level: source.top_level }));
 }

@@ -32,14 +32,16 @@ use xpute_runtime::mem::heap::alloc;
 
 use crate::control::camera::controller::units_per_px_at;
 use crate::global::Global;
-use crate::layer::decor::build::{decor_gone_px, DecorBuild, Ground, Kind, Placed};
+use crate::layer::decor::asset_store::decor_bundle_assets;
+use crate::layer::decor::build::{decor_gone_px, variant_extent, DecorBuild, Ground, Kind, Placed};
 use crate::layer::decor::instance::{decor_groups, DecorScratch, GroupLanes};
 use crate::layer::decor::scatter::SCALE_JITTER;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::{object_col_revision, EntryAt, Store};
 use crate::param::IMPOSTOR_GONE_CELLS;
 use crate::shell::setting::store::{hidden_ground, settings_store};
-use crate::world::chunk::build::{release_block, Builder};
+use crate::world::chunk::build::Builder;
+use xpute_runtime::mem::heap::free;
 use crate::world::observation::{eye, frustum_of_view};
 use crate::world::paging::floor;
 use crate::world::pyramid::chunk::Chunk;
@@ -287,7 +289,9 @@ fn build(c: &mut Cells, cell: DecorCell, kinds: &[Kind], store: &Store, draw: &m
 
 fn release(block: Block, draw: &mut DrawList) {
     draw.free(block.handle);
-    release_block(block.at as usize, block.bytes);
+    // SAFETY: the block the cell took and has not given back; nothing reads
+    // it past this turn.
+    unsafe { free((block.at as usize, block.bytes)) };
 }
 
 /// Moves decor toward the eye's frontier, a frame at a time.
@@ -366,7 +370,7 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Ent
     c.pages.sort_unstable();
     c.pages.dedup();
     c.frontier = frontier;
-    present(c, kinds, draw, frame_eye);
+    present(c, draw, frame_eye);
 }
 
 /// Each cell's instances listed to draw, each as its model, its sprite or
@@ -375,7 +379,7 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Ent
 /// index list holds the instances drawn as models first and those drawn as
 /// sprites after them; the list goes to the device again only where it
 /// changed.
-fn present(c: &mut Cells, kinds: &[Kind], draw: &mut DrawList, frame_eye: V3) {
+fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
     let Some(eye) = eye() else { return };
     let model_px = decor_gone_px();
     let sprite_px = *TARGET_CELL_PX * IMPOSTOR_GONE_CELLS;
@@ -387,7 +391,7 @@ fn present(c: &mut Cells, kinds: &[Kind], draw: &mut DrawList, frame_eye: V3) {
         // write past `index`.
         let words: &mut [u32] = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block.at as usize), block.bytes as usize / 4) };
         let (lanes_of, list) = words.split_at_mut(block.index as usize / 4);
-        let mut extents = kinds.iter().flat_map(|k| (0..k.variant_count).map(move |_| k.extent));
+        let mut extents = decor_bundle_assets().iter().flat_map(|e| e.bundle.variants.iter().map(variant_extent));
         let (mut at, mut changed) = (0usize, false);
         for (group, (offset, count)) in decor_groups(lanes_of).enumerate() {
             let extent = extents.next().unwrap_or(0.0);

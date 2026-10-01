@@ -25,7 +25,7 @@ const BROAD_TO_NARROW_LANGS = new Set(["ko", "ja", "zh"]);
 // The provider's own name is always some real language's — Overture's is
 // the local one — so falling back to it means "show the Korean name"
 // rather than an empty part.
-export function displayPartName(part: PlacePart, lang: string): string {
+function displayPartName(part: PlacePart, lang: string): string {
   return part.names?.[lang] ?? part.name;
 }
 

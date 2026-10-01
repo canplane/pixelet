@@ -10,7 +10,7 @@
 
 use postgres::Client;
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::bake::format::{encode_terrain, BaseRow, BuildingRow, CoastRow, SegmentRow};
+use pxl_spec::bake::format::{encode_terrain, BaseRow, BuildingRow, CoastRow, DeckRow, SegmentRow};
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
 use xpute_core::status::error::MarshalError;
@@ -70,13 +70,23 @@ fn base_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a BaseRow) {
     }));
 }
 
+fn deck_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a DeckRow) {
+    b.branch(Some(&mut |t| {
+        t.str(Some(&row.gers_id))
+            .str(Some(&row.subtype))
+            .str(row.class.as_deref())
+            .u8_array(Some(&row.piers))
+            .u8_array(Some(&row.geom_wkb));
+    }));
+}
+
 fn coast_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a CoastRow) {
     b.branch(Some(&mut |t| {
         t.str(Some(&row.id)).u8_array(Some(&row.geom_wkb)).bool(Some(row.covers_page));
     }));
 }
 
-/// Packs what the database gave into `[ele, buildings, segments, base, coasts]`,
+/// Packs what the database gave into `[ele, buildings, segments, base, coasts, decks]`,
 /// each row a tuple in the order of its row type's fields (pxl-spec
 /// bake/format.rs).
 pub fn pack_source(source: &PageSource, stats: &mut SourceStats) -> Result<Vec<u8>, MarshalError> {
@@ -109,6 +119,12 @@ pub fn pack_source(source: &PageSource, stats: &mut SourceStats) -> Result<Vec<u
         }
     });
 
+    let decks = rows_branch(|b| {
+        for row in &source.deck_rows {
+            deck_tuple(b, row);
+        }
+    });
+
     let mut root = TreeView::new();
     root.branch(Some(&mut |r| {
         r.i16_array(Some(&ele));
@@ -116,6 +132,7 @@ pub fn pack_source(source: &PageSource, stats: &mut SourceStats) -> Result<Vec<u
         r.subtree(&segments);
         r.subtree(&base);
         r.subtree(&coasts);
+        r.subtree(&decks);
     }));
 
     encoder().encode(&root, TreeEncoderOptions::default())

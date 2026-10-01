@@ -13,6 +13,7 @@ use pxl_spec::space::v3::{Aabb, V3};
 use xpute_runtime::mem::base::ptr_at;
 
 use crate::kernel::kernel;
+use crate::layer::decor::asset_store::decor_bundle_assets;
 use crate::layer::decor::instance::{decor_groups, GroupLanes, NO_ENTRY};
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::EntryAt;
@@ -61,16 +62,20 @@ struct DecorHit {
     pub t: f64,
 }
 
+/// The model each decor group is drawn with, in group order, none while it
+/// loads.
+fn group_models() -> impl Iterator<Item = Option<u32>> {
+    decor_bundle_assets().iter().flat_map(|e| e.models.iter().copied())
+}
+
 /// How far past a chunk's own square a placed instance standing in it can
 /// reach, in units: the largest decor model's bounding radius at the largest
 /// size decor is placed at — what the models are, and nothing guessed — only
 /// for skipping chunks the ray never comes near.
 fn decor_reach(sched: &Scheduler) -> f64 {
-    let radius = sched
-        .decor_models
-        .iter()
+    let radius = group_models()
         .flatten()
-        .filter_map(|&m| sched.models.mesh(m))
+        .filter_map(|m| sched.models.mesh(m))
         .map(|m| m.radius as f64 * m.scale as f64)
         .fold(0.0, f64::max);
     radius * DECOR_SIZE
@@ -96,9 +101,8 @@ fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: 
         if !ray_meets_square(&o, &d, tx - reach, ty - reach, tx + side + reach, ty + side + reach, limit) {
             continue;
         }
-        for (g, (offset, count)) in decor_groups(words).enumerate() {
-            let Some(Some(model)) = sched.decor_models.get(g) else { continue };
-            let Some(mesh) = sched.models.mesh(*model) else { continue };
+        for ((offset, count), model) in decor_groups(words).zip(group_models()) {
+            let Some(mesh) = model.and_then(|m| sched.models.mesh(m)) else { continue };
             let lanes = GroupLanes {
                 first: offset as usize,
                 count: count as usize,

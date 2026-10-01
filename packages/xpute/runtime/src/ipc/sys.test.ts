@@ -14,7 +14,7 @@ import type { U8Array } from "@xpute/core/abi/array.ts";
 import { Golden } from "@xpute/core/golden.ts";
 import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { END } from "./stream.ts";
-import { FileError, Files, run_sys, type SysHost } from "./sys.ts";
+import { FileError, Sys, type SysHost } from "./sys.ts";
 import { flag, HEAD, op } from "./sys.spec.ts";
 
 /** Where a read puts its bytes in the guest's memory. */
@@ -57,7 +57,6 @@ const errno = (name: string): number => ERRNO[name];
 
 async function run(g: Golden, scenario: string): Promise<void> {
   const turn = new Turn();
-  const files = new Files();
   const kept = new Map<string, string>();
   const waiting = new Map<string, (bytes: U8Array) => void>();
   const failing = new Map<string, (err: FileError) => void>();
@@ -76,6 +75,7 @@ async function run(g: Golden, scenario: string): Promise<void> {
     abort: () => {},
     program: () => {},
   };
+  const sys = new Sys(host);
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
   const steps: string[] = [];
@@ -107,7 +107,7 @@ async function run(g: Golden, scenario: string): Promise<void> {
         break;
       case "turn":
         turn.publish();
-        run_sys(turn.memory, 0, files, host);
+        sys.run(turn.memory, 0);
         await settle();
         break;
       case "deliver": {

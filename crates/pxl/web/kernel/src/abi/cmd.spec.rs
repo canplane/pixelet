@@ -589,7 +589,7 @@ pub enum Command {
     WORLD_BOOT = 0x1001,
     /// The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
     /// phases on what is left of the quota, the fetches within the credits. The turn leaves
-    /// its signals on the completion ring, drawn by the kernel, and last this command's own.
+    /// its signals on the completion ring, drawn by the kernel.
     WORLD_FRAME = 0x1002,
     /// The tab's visibility; the host rings the doorbell for it at once, since a hidden
     /// page gets no frame and hiding is the save's last sure moment.
@@ -1109,20 +1109,6 @@ impl WorldFrame {
             seconds: f.at(10)?.get_number()?,
             day_start_ms: f.at(11)?.get_number()?,
         })
-    }
-}
-
-/// Command::WORLD_FRAME's signal.
-pub struct WorldFrameSignal {
-    pub draws: u32,
-}
-
-impl WorldFrameSignal {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 1;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.draws));
     }
 }
 

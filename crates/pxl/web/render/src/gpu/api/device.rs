@@ -21,6 +21,7 @@ use xpute_runtime::abi::handle::handle_slot;
 use xpute_runtime::global::Global;
 
 use super::NONE;
+use crate::frame::shader::record::VERTEX_ENTRY;
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, record, resource};
 
 /// An image a load holds: the file's own pixels, RGBA, top row first, no
@@ -543,8 +544,6 @@ const VERTEX_FORMAT: [wgpu::VertexFormat; 7] = [
     wgpu::VertexFormat::Uint32,
     wgpu::VertexFormat::Uint32x2,
 ];
-/// The vertex entry points a pipeline record can name, by record::VS and kin.
-const VERTEX_ENTRY: [&str; 2] = ["vs", "vs_coarse"];
 
 /// Straight alpha over what is drawn.
 const ALPHA_BLEND: wgpu::BlendState = wgpu::BlendState {
@@ -574,13 +573,6 @@ const ADD_BLEND: wgpu::BlendState = wgpu::BlendState {
 };
 
 impl Gpu {
-    /// Every object the device holds let go: the renderer starts over.
-    pub fn reset(&self) {
-        if let Some(d) = device() {
-            d.objects.clear();
-        }
-    }
-
     pub fn buffer(&self, id: u32, size: u32, usage: u32) {
         let Some(d) = device() else { return };
         let b = d.device.create_buffer(&wgpu::BufferDescriptor {

@@ -9,7 +9,7 @@ const POLICY: QuantumPolicy = { margin_share: 0.15, batch_frames: 2, settle_ms: 
 /** A whole window of turns on what each grant said, so what came before is
  * gone; the grant after them. */
 function fill(q: Quantum, delta_s: number, turn_ms: number, wake_ms: number): Grant {
-  for (let i = 0; i < FRAME_WINDOW; i++) q.observe({ delta_s, turn_ms, grant: q.grant(0), wake_ms });
+  for (let i = 0; i < FRAME_WINDOW; i++) q.observe(delta_s, turn_ms, q.grant(0), wake_ms);
   return q.grant(0);
 }
 
@@ -25,7 +25,7 @@ Deno.test("quantum - the quota follows the display's measured frame, not an assu
 Deno.test("quantum - a gap that is not a frame moves nothing", () => {
   const q = new Quantum(POLICY);
   const before = fill(q, 1 / 165, 0, 0);
-  q.observe({ delta_s: 3, turn_ms: 0, grant: before, wake_ms: 0 });
+  q.observe(3, 0, before, 0);
   assertEquals(q.grant(0).frame_ms, before.frame_ms);
 });
 
@@ -41,9 +41,9 @@ Deno.test("quantum - a still guest's frame gaps do not teach the quantum a faste
 Deno.test("quantum - what a turn overran comes off its own next quota, down to nothing", () => {
   const q = new Quantum(POLICY);
   const full = fill(q, 1 / 30, 0, 0);
-  q.observe({ delta_s: 1 / 30, turn_ms: full.quota_ms + 3, grant: full, wake_ms: 0 });
+  q.observe(1 / 30, full.quota_ms + 3, full, 0);
   assertAlmostEquals(q.grant(0).quota_ms, full.quota_ms - 3, 1e-9);
-  q.observe({ delta_s: 1 / 30, turn_ms: 100, grant: full, wake_ms: 0 });
+  q.observe(1 / 30, 100, full, 0);
   assertEquals(q.grant(0).quota_ms, 0);
 });
 

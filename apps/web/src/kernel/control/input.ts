@@ -18,7 +18,7 @@ import { ActiveTool, Command, encode_input_pointer, encode_input_rect, encode_in
 import type { GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
 import { permissionFollow } from "@platform/sensor.ts";
 import { CORE_DOORBELL } from "@/kernel/mem.ts";
-import { request_frame, ring_now, set_driver, strobe, type Viewport } from "@/kernel/sched.ts";
+import { request_frame, ring_now, send_input, set_driver, strobe, type Viewport } from "@/kernel/sched.ts";
 
 /** What the pointer holds: a tool, the held cube's ground channel (none for
  * a flat color) and type, or the decor kind, by the catalog's numbers, and
@@ -37,9 +37,7 @@ let last_hover: { kind: PointerKind; id: i32; button: i32; x: f64; y: f64 } | nu
 
 function send_pointer(phase: PointerPhase, kind: PointerKind, id: i32, button: i32, x: f64, y: f64): void {
   const { tool, channel, value, tier } = holding;
-  CORE_DOORBELL.send(0, Command.INPUT_POINTER, encode_input_pointer({ phase, kind, id, button, x, y, tool, channel, value, tier }));
-  strobe.input();
-  request_frame();
+  send_input(Command.INPUT_POINTER, encode_input_pointer({ phase, kind, id, button, x, y, tool, channel, value, tier }));
 }
 
 /** A pointer at (x, y) in the window, in its pixels. A mouse or a pen
@@ -51,9 +49,7 @@ export function kernel_pointer(phase: PointerPhase, kind: PointerKind, id: i32, 
 
 /** A wheel's turn over the surface, in CSS pixels. */
 export function kernel_wheel(delta_y: f64): void {
-  CORE_DOORBELL.send(0, Command.INPUT_WHEEL, encode_input_wheel({ delta_y }));
-  strobe.input();
-  request_frame();
+  send_input(Command.INPUT_WHEEL, encode_input_wheel({ delta_y }));
 }
 
 /** Where the surface lies in the window, in its pixels: what a pointer's

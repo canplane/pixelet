@@ -7,8 +7,7 @@
  */
 
 import { Command, encode_gpu_ready } from "@/kernel/abi/cmd.spec.ts";
-import { CORE_DOORBELL } from "@/kernel/mem.ts";
-import { request_frame } from "@/kernel/sched.ts";
+import { send_next } from "@/kernel/sched.ts";
 import { PLATFORM } from "./module.ts";
 
 export function gpuBoot(): void {
@@ -21,6 +20,5 @@ export function gpuBoot(): void {
     return;
   }
   const [align, timestamps] = info;
-  CORE_DOORBELL.send(0, Command.GPU_READY, encode_gpu_ready({ min_uniform_offset_alignment: align, timestamps: timestamps !== 0 }));
-  request_frame();
+  send_next(Command.GPU_READY, encode_gpu_ready({ min_uniform_offset_alignment: align, timestamps: timestamps !== 0 }));
 }

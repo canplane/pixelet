@@ -8,9 +8,10 @@
 
 use super::*;
 use crate::io::demand::Why;
+use xpute_core::status::errno::Errno;
+
 use crate::sched::profiler::record::{Failure, Outcome};
 use crate::world::observation::Order;
-use xpute_runtime::abi::fetch::FetchFail;
 
 struct ByWhy;
 
@@ -67,7 +68,7 @@ fn ok<S: Serve>(l: &mut Ledger<S>, key: u64, at: f64) {
 
 fn failed<S: Serve>(l: &mut Ledger<S>, key: u64, at: f64) {
     let fail = Failure {
-        fail: FetchFail::Network,
+        errno: Errno::ENETUNREACH as i32,
         ..Failure::default()
     };
     l.settle(key, Outcome::error, None, fail, at);

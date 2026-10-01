@@ -3,7 +3,7 @@
 //! The runtime, in Rust: what a guest and its host agree on, over
 //! `xpute-core`'s kit.
 //!
-//! The rings and the change log a linear memory's two sides talk across, the
+//! The rings a linear memory's two sides talk across, the
 //! three levels of the scheduler that divide one turn, the clock and the
 //! memory a browser does not give a module, and the one value per module that
 //! running on a single thread makes sound.
@@ -15,7 +15,6 @@
 pub mod abi;
 pub mod clock;
 pub mod global;
-pub mod io;
 pub mod ipc;
 pub mod mem;
 pub mod sched;

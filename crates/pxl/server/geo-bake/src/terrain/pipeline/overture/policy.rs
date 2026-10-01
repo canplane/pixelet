@@ -36,6 +36,34 @@ fn road_width_by_class(class: &str) -> Option<f64> {
     })
 }
 
+/// A way's width in metres, the class's or a lane's where it has none: the
+/// one width a way is painted on the ground and carried on a deck at.
+pub fn segment_width_m(class: &str) -> f64 {
+    road_width_by_class(class).unwrap_or(3.5)
+}
+
+/// The transport type a way shows, on the ground or on a deck.
+pub fn segment_type(subtype: &str, class: Option<&str>) -> u8 {
+    let c = class.unwrap_or("");
+    if subtype == "rail" {
+        if c == "subway" || c == "light_rail" {
+            cube_types::transport::rail_subway
+        } else {
+            cube_types::transport::rail_main
+        }
+    } else if PEDESTRIAN_CLASSES.contains(&c) {
+        cube_types::transport::pedestrian
+    } else if MOTOR_CLASSES.contains(&c) {
+        cube_types::transport::road_motorway
+    } else if c == "primary" {
+        cube_types::transport::road_primary
+    } else if SECONDARY_CLASSES.contains(&c) {
+        cube_types::transport::road_secondary
+    } else {
+        cube_types::transport::road_default
+    }
+}
+
 const PEDESTRIAN_CLASSES: [&str; 6] = ["footway", "path", "steps", "cycleway", "pedestrian", "living_street"];
 const MOTOR_CLASSES: [&str; 2] = ["motorway", "trunk"];
 const SECONDARY_CLASSES: [&str; 2] = ["secondary", "tertiary"];
@@ -68,6 +96,11 @@ const SPORTS_CLASSES: [&str; 2] = ["pitch", "playground"];
 /// rails are still there — nor `is_covered`, which is under a roof that the
 /// buildings paint over where they have it.
 pub const UNSEEN_FLAGS: &[&str] = &["is_tunnel", "is_indoor", "is_under_construction", "is_abandoned"];
+
+/// Segment flags under which a way is carried above the ground: a deck,
+/// which the page's decks draw (terrain/pipeline/deck.rs) and the ground
+/// does not.
+pub const DECK_FLAGS: &[&str] = &["is_bridge"];
 
 // ============ Policy logic ============
 
@@ -134,7 +167,7 @@ fn compute_metrics(feat: &OvertureRawFeature, _category: &str) -> FeatureCompute
             };
         }
         OvertureRawFeature::Segment(_) => {
-            width = road_width_by_class(segment_class(feat)).unwrap_or(3.5);
+            width = segment_width_m(segment_class(feat));
         }
         OvertureRawFeature::Base(_) => {}
     }
@@ -203,6 +236,7 @@ fn compute_extra(feat: &OvertureRawFeature, category: &str) -> FeatureExtra {
         is_institutional: institutional,
         is_sports: SPORTS_CLASSES.contains(&building_type(feat)) || SPORTS_CLASSES.contains(&land_use_class(feat)),
         is_unseen: is_unseen(feat),
+        is_deck: matches!(feat, OvertureRawFeature::Segment(s) if s.is_deck),
     }
 }
 
@@ -263,26 +297,8 @@ fn determine_cell_cfg(feat: &OvertureRawFeature, category: &str, extra: &Feature
 
     if let OvertureRawFeature::Segment(s) = feat {
         if category == "road" {
-            let c = s.class.as_deref().unwrap_or("");
-            let cell_type = if s.subtype == "rail" {
-                if c == "subway" || c == "light_rail" {
-                    cube_types::transport::rail_subway
-                } else {
-                    cube_types::transport::rail_main
-                }
-            } else if PEDESTRIAN_CLASSES.contains(&c) {
-                cube_types::transport::pedestrian
-            } else if MOTOR_CLASSES.contains(&c) {
-                cube_types::transport::road_motorway
-            } else if c == "primary" {
-                cube_types::transport::road_primary
-            } else if SECONDARY_CLASSES.contains(&c) {
-                cube_types::transport::road_secondary
-            } else {
-                cube_types::transport::road_default
-            };
             return Some(CellConfig {
-                cell_type,
+                cell_type: segment_type(&s.subtype, s.class.as_deref()),
                 ch_key: GroundChannelKey::TRANSPORT,
             });
         }

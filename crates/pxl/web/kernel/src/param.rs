@@ -168,10 +168,6 @@ pub const DECOR_INSTANCES: usize = 1 << 16;
 /// cell an instance is a pixel or two that reads as noise.
 pub const IMPOSTOR_GONE_CELLS: f64 = 0.5;
 
-/// Changes the world's change log keeps (kernel.rs): what a reader that fell
-/// behind can still catch up from before it has to read everything again.
-pub const JOURNAL_CAPACITY: u32 = 4096;
-
 // ---- per-frame work caps (world/chunk/table.rs, io/policy.rs) ----
 
 /// Pieces a frame starts building, which is a frame's worth of work: each

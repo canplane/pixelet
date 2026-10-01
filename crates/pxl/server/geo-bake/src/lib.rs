@@ -9,14 +9,16 @@
 //! run on different machines, and nothing passes between them but the spec.
 //! See issue/20260918-the-server-in-rust-and-the-line-already-drawn.md.
 //!
-//! One module per stage of the pipeline: `terrain` bakes a page from the
-//! geo DB, `poi` and `geocode` each fetch what one page holds, and `page` is
+//! One module per stage of the pipeline: `deck` solves the heights of the
+//! ways carried above the ground over the whole geo DB, `terrain` bakes a
+//! page from it, `poi` and `geocode` each fetch what one page holds, and `page` is
 //! the walk over a coverage that the last two share. What a bake does is a
 //! sequence, and the tree says which step a file belongs to rather than which
 //! type it holds. The command lines that drive them are `src/bin/`, outside
 //! the library — each links it by name like any other consumer.
 
 pub mod cli;
+pub mod deck;
 pub mod geocode;
 pub mod page;
 pub mod poi;

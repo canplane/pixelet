@@ -16,8 +16,7 @@ use crate::io::sched::pending_count;
 use crate::kernel::{kernel, with_world};
 use crate::layer::environment::state::globe;
 use crate::sched::profiler::record::{
-    profiler_record_frame, profiler_take_rings, CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample, TurnSample, WorkSample,
-    LEVELS,
+    profiler_record_frame, profiler_recording, profiler_take_rings, CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample, TurnSample, WorkSample, MB,
 };
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::world::change::{request_world_tick, world_edge};
@@ -26,14 +25,10 @@ use crate::world::frame::view::{globe_anchor_local, view, view_resize};
 use crate::world::pyramid::Layer;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_page::PoiPage;
-use pxl_spec::space::pyramid::TOP_LEVEL;
-
-const MB: f64 = 1_048_576.0;
 
 /// A box drawn is a cube, twelve triangles, whatever its faces show (the
 /// renderer's census counts them the same way).
 const BOX_TRIANGLES: f64 = 12.0;
-const _: () = assert!(LEVELS == crate::world::chunk::table::LEVELS, "a lane a level for every level the census counts");
 
 /// What the turn measured of the frame outside the tick: the renderer's
 /// numbers and the turn's own time. The terrain's triangles by level are the
@@ -66,9 +61,9 @@ fn core_tick() -> &'static mut CoreTick {
 }
 
 /// The shell's numbers for the frame just drawn.
-pub fn set_host_frame_stat(stat: HostFrameStat) {
-    let task_ms = core_tick().host.task_ms;
-    core_tick().host = HostFrameStat { task_ms, ..stat };
+pub fn set_host_frame_stat(gpu: GpuSample, device: DeviceSample) {
+    let host = &mut core_tick().host;
+    (host.gpu, host.device) = (gpu, device);
 }
 
 /// The whole turn just run: the strobe in, the tick, the draw and submit.
@@ -174,7 +169,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
         let k = kernel();
         let edits = crate::layer::object::store::render_edits();
         let hide = edits.hide.filter(|_| edits.hide_in.1);
-        crate::layer::decor::cell::step(&k.sched.decor_kinds, &k.objects, &mut k.sched.draw, hide, frame.eye);
+        crate::layer::decor::cell::step(crate::layer::decor::build::kinds(), &k.objects, &mut k.sched.draw, hide, frame.eye);
     }
     crate::layer::poi::placement::step(ctx);
     let sched = &mut kernel().sched;
@@ -213,14 +208,23 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     let Some(chunks_ms) = c.visible_pass else { return };
     let frame_t0 = ctx.budget.t0;
     let census = kernel().sched.census;
+    // What is counted since the last sample is taken whether or not a
+    // recording keeps it, so a recording starts from now.
     let counts = kernel().sched.take_counts();
+    let rings = profiler_take_rings();
+    let work = work_sample(c, &census);
+    let record_refused = Terrain::pyramid().take_refusals() as f64;
+    // The rest is measured only for a recording to keep.
+    if !profiler_recording() {
+        return;
+    }
     let host = c.host.clone();
     let mut pages = PageSample::default();
-    for (level, n) in pages.by_level.iter_mut().enumerate() {
-        *n = Terrain::pyramid().paging().level(level as u32).count() as f64;
+    for (p, _) in Terrain::pyramid().paging().held() {
+        pages.by_level[p.level as usize] += 1.0;
     }
     pages.total = pages.by_level.iter().sum();
-    pages.poi = (0..=TOP_LEVEL).map(|level| PoiPage::pyramid().paging().level(level).count() as f64).sum();
+    pages.poi = PoiPage::pyramid().paging().held().count() as f64;
     let mut gpu = host.gpu;
     for (tris, boxes) in gpu.level_tris.iter_mut().zip(census.level_boxes) {
         *tris = boxes as f64 * BOX_TRIANGLES;
@@ -253,8 +257,8 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         },
         pages,
         heap: heap_sample(),
-        rings: profiler_take_rings(),
-        work: work_sample(c, &census),
+        rings,
+        work,
         q_terrain: pending_count(Terrain::CATEGORY) as f64,
         q_poi: pending_count(PoiPage::CATEGORY) as f64,
         stale: StaleSample {
@@ -282,7 +286,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
             commit_left: census.commit_left as f64,
             mount_left: census.refused as f64,
             mount_full: (census.refused > 0) as u32 as f64,
-            record_refused: Terrain::pyramid().take_refusals() as f64,
+            record_refused,
         },
     });
 }

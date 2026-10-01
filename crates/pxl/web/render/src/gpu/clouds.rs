@@ -3,8 +3,9 @@
 //! The clouds: a layer over the planet drawn after the opaque world
 //! (frame/shader/clouds.wgsl), one full-screen pass reading the frame, the
 //! air, and where the camera stands on the ground. What it costs is a
-//! fragment a pixel where a ray meets the layer — eight octaves of value noise
-//! and the air's lookups — and nothing where one does not.
+//! fragment a pixel where a ray meets the layer — a read of the tile its
+//! shape is baked into once (`bake`) and the air's lookups — and nothing
+//! where one does not.
 
 use pxl_spec::space::mat4::Mat4;
 use pxl_spec::space::pvf3::core::{IVEC_X_W, IVEC_Y_W};
@@ -213,5 +214,7 @@ fn bake(g: &Gpu, pipelines: &mut Pipelines, tile: u32, levels: u32) {
     }
     g.submit(encoder);
     release(encoder);
-    Mips::new(g, pipelines, format::R8).build(g, tile, levels, 0, 1);
+    let mips = Mips::new(g, pipelines, format::R8);
+    mips.build(g, tile, levels, 0, 1);
+    mips.release();
 }

@@ -110,6 +110,8 @@ pub struct Models {
     /// an asset of the build and the build's assets stay while it runs.
     models: Vec<Model>,
     actors: Slots<Actor>,
+    /// The pose a cross-fade blends from, worked in a turn at a time.
+    from: Vec<[f32; 10]>,
 }
 
 // ---- small math over column-major f32 matrices ----
@@ -392,14 +394,15 @@ impl Models {
         }
     }
 
-    /// Advances every actor by `dt` seconds and writes its joint palette.
-    /// Advances every actor's clips and writes the palettes; whether any
+    /// Advances every actor's clips by `dt` seconds and writes the palettes;
+    /// whether any
     /// actor is playing a clip of some length, which is what asks for the
     /// next frame — nothing else says an actor moved.
     pub fn tick(&mut self, draw: &mut DrawList, dt: f32) -> bool {
         let mut animating = false;
-        for a in self.actors.values_mut() {
-            let Some(m) = self.models.get(a.model as usize) else { continue };
+        let Models { models, actors, from } = self;
+        for a in actors.values_mut() {
+            let Some(m) = models.get(a.model as usize) else { continue };
             animating |= a.current.is_some_and(|p| m.clips.get(p.clip as usize).is_some_and(|c| c.duration > 0.0));
             let wrap = |p: &mut Playing| {
                 p.time += dt;
@@ -425,7 +428,7 @@ impl Models {
             if joints == 0 {
                 continue;
             }
-            let pose = |p: Option<Playing>, out: &mut Vec<[f32; 10]>| {
+            let pose = |p: Option<Playing>, out: &mut [[f32; 10]]| {
                 out.copy_from_slice(&m.rest);
                 if let Some(p) = p {
                     if let Some(c) = m.clips.get(p.clip as usize) {
@@ -439,10 +442,10 @@ impl Models {
             };
             pose(a.current, &mut a.local);
             if let Some(prev) = a.previous {
-                let mut from = vec![[0.0; 10]; joints];
-                pose(Some(prev), &mut from);
+                from.resize(joints, [0.0; 10]);
+                pose(Some(prev), from);
                 let w = if a.fade_len > 0.0 { (a.fade / a.fade_len).clamp(0.0, 1.0) } else { 1.0 };
-                for (to, from) in a.local.iter_mut().zip(&from) {
+                for (to, from) in a.local.iter_mut().zip(from.iter()) {
                     *to = blend(from, to, w);
                 }
             }

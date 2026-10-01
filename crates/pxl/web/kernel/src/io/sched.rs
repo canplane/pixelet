@@ -221,14 +221,15 @@ impl<S: Serve> Ledger<S> {
                 None => *entry = None,
             }
         }
+        let mut held = self.desired.iter().flatten().filter(|w| w.category == category).count();
         for &(subject, ask) in wanted {
             if self.find(category, subject).is_some() {
                 continue;
             }
             // A category asking past its bound is a producer asking for more
             // than it can hold, which the bound is derived from.
-            let held = self.desired.iter().flatten().filter(|w| w.category == category).count();
             xpute_core::ensure!(held < bound(category), ENOTRECOVERABLE, category as u32);
+            held += 1;
             let free = self.desired.iter().position(Option::is_none).or_bug(Errno::ENOTRECOVERABLE);
             self.desired[free] = Some(Wanted {
                 category,

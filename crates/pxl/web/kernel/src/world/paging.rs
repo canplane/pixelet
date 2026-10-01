@@ -253,16 +253,17 @@ impl<L: Layer> Paging<L> {
     /// A resident page. None past the pyramid's top too, which is what a top
     /// page's parent is.
     pub fn get(&self, p: LevelPage) -> Option<&L> {
-        if self.resident(p) {
-            self.held_as(p).map(|h| &h.body)
-        } else {
-            None
-        }
+        self.held_as(p).map(|h| &h.body)
+    }
+
+    /// Every held page.
+    pub fn held(&self) -> impl Iterator<Item = (LevelPage, &L)> {
+        self.pages.iter().filter_map(|(&p, e)| Some((p, &e.held.as_ref()?.body)))
     }
 
     /// Every held page of `level`.
     pub fn level(&self, level: u32) -> impl Iterator<Item = (LevelPage, &L)> {
-        self.pages.iter().filter(move |(p, _)| p.level == level).filter_map(|(&p, e)| Some((p, &e.held.as_ref()?.body)))
+        self.held().filter(move |(p, _)| p.level == level)
     }
 
     /// Frames in use, `ABSENT` apart.
@@ -495,9 +496,10 @@ impl<L: Layer> Paging<L> {
     /// Takes `p` out: given up, or about to be held again in another way.
     /// The frame it was in, where it had one, for the caller to fill or free.
     fn remove(&mut self, p: LevelPage) -> Option<u32> {
-        let held = self.pages.get_mut(&p)?.held.take()?;
-        if self.pages[&p].idle() {
-            self.pages.remove(&p);
+        let std::collections::hash_map::Entry::Occupied(mut e) = self.pages.entry(p) else { return None };
+        let held = e.get_mut().held.take()?;
+        if e.get().idle() {
+            e.remove();
         }
         self.revision = self.revision.wrapping_add(1);
         L::changed(p, false);

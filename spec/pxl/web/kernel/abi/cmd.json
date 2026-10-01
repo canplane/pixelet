@@ -907,7 +907,7 @@
           "doc": [
             "The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's",
             "phases on what is left of the quota, the fetches within the credits. The turn leaves",
-            "its signals on the completion ring, drawn by the kernel, and last this command's own."
+            "its signals on the completion ring, drawn by the kernel."
           ],
           "packet": [
             {
@@ -966,12 +966,6 @@
             {
               "name": "day_start_ms",
               "type": "f64"
-            }
-          ],
-          "signal": [
-            {
-              "name": "draws",
-              "type": "u32"
             }
           ]
         },

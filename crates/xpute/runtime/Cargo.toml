@@ -8,7 +8,6 @@ publish.workspace = true
 path = "src/lib.rs"
 
 [dependencies]
-fnv.workspace = true
 indexmap.workspace = true
 xpute-core = { path = "../core" }
 

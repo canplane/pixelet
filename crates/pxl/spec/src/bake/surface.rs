@@ -9,6 +9,7 @@
 use xpute_core::math::scalar::round;
 
 use super::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
+use super::deck::Decks;
 use super::ground::cell_recess;
 use super::pack::GroundCell;
 use crate::space::pyramid::{EXTENT, GROUND, PAGE_CELLS};
@@ -111,9 +112,10 @@ pub fn bound(page_ele: &[i16], [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> [i32; 
 /// (`EXTENT`), the lowest and highest the ground drawn anywhere in it stands,
 /// in cells — the interpolation's overshoot and the cells' recess included,
 /// so a point anywhere over the cell, a cell's center or a finer cell read
-/// from this page, lies inside it. Saturated at an i16's range, which is some
-/// 78 km at the equator and is never met.
-pub fn extent_of(page_ele: &[i16], cells: &[GroundCell]) -> Vec<[i16; 2]> {
+/// from this page, lies inside it — and the highest any deck over it is.
+/// Saturated at an i16's range, which is some 78 km at the equator and is
+/// never met.
+pub fn extent_of(page_ele: &[i16], cells: &[GroundCell], decks: &Decks) -> Vec<[i16; 2]> {
     let n = GROUND.scale(0).count_in(EXTENT.scale(0)) as f64;
     let side = EXTENT.page_cells();
     (0..side * side)
@@ -131,8 +133,9 @@ pub fn extent_of(page_ele: &[i16], cells: &[GroundCell]) -> Vec<[i16; 2]> {
                 let r = cell_recess(cell) as i32;
                 (rlo, rhi) = (rlo.min(r), rhi.max(r));
             }
+            let deck = decks.highest_in([ex, ex + n], [ey, ey + n]).map_or(i32::MIN, i32::from);
             let clamp = |v: i32| v.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
-            [clamp(lo - rhi), clamp(hi - rlo)]
+            [clamp(lo - rhi), clamp((hi - rlo).max(deck))]
         })
         .collect()
 }

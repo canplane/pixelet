@@ -4,7 +4,7 @@
  * The Rust core as the shell holds it, on any platform: its memory and its
  * doorbell, which the platform opens — a page instantiates the module
  * (platform/web/core.ts), a device links the library into its app — its
- * directory read in place, and the bodies the host holds for it. Everything else crosses in the memory,
+ * directory read in place. Everything else crosses in the memory,
  * where the kernel's first turn laid out the rings, `.fixed` and the heap
  * (crates/pxl/web/kernel/src/mem/section.rs).
  */
@@ -36,15 +36,8 @@ export function directory(memory: ArrayBuffer): Directory {
   return new Directory(memory, DIRECTORY_AT);
 }
 
-const utf8_decoder = new TextDecoder();
-
 /** A range's bytes, where they lie. Valid until the kernel is given them back
  * or writes them again, so a caller that keeps them copies them first. */
 export function bytes_at(memory: ArrayBuffer, at: u32, len: u32): U8Array {
   return new Uint8Array(memory, at, len);
-}
-
-/** A range's bytes as text, `len` bytes of UTF-8. */
-export function text_at(memory: ArrayBuffer, at: u32, len: u32): string {
-  return utf8_decoder.decode(bytes_at(memory, at, len));
 }

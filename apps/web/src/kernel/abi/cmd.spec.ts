@@ -278,7 +278,7 @@ export const enum Command {
   WORLD_BOOT = 0x1001,
   /** The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
    * phases on what is left of the quota, the fetches within the credits. The turn leaves
-   * its signals on the completion ring, drawn by the kernel, and last this command's own. */
+   * its signals on the completion ring, drawn by the kernel. */
   WORLD_FRAME = 0x1002,
   /** The tab's visibility; the host rings the doorbell for it at once, since a hidden
    * page gets no frame and hiding is the save's last sure moment. */
@@ -604,15 +604,6 @@ export function encode_world_frame(p: WorldFrame): U8Array {
   return packet((b) =>
     b.f64(p.width).f64(p.height).f64(p.dpr).f64(p.delta_s).f64(p.frame_ms).bool(p.interactive).u32(p.credits).f64(p.unix_ms).f64(p.hours).f64(p.minutes).f64(p.seconds).f64(p.day_start_ms)
   );
-}
-
-/** Command.WORLD_FRAME's signal. */
-export interface WorldFrameSignal {
-  draws: u32;
-}
-
-export function read_world_frame(b: BranchCursor): WorldFrameSignal {
-  return { draws: b.at(0).get<u32>() };
 }
 
 /** Command.WORLD_VISIBILITY's packet. */

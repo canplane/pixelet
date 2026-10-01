@@ -24,7 +24,7 @@ use super::pvf3::pvf3::{self, Pvf3};
 use super::pvf3::REACH;
 use super::v3::Aabb;
 use super::xy::TO_XY;
-use crate::bake::constant::{CELL, EXTENT_CELL};
+use crate::bake::constant::{CELL, DECK_CELL, EXTENT_CELL};
 
 /// The coarsest level the pyramid is folded to. At level 10 — zoom 5 — a
 /// page spans about 9° of latitude, across which the page-constant vertical

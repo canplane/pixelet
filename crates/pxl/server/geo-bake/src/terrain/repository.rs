@@ -7,7 +7,7 @@
 use postgres::types::ToSql;
 use postgres::{Client, Statement};
 use pxl_spec::bake::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN, Z_CELL_PER_M};
-use pxl_spec::bake::format::{BaseRow, BuildingRow, CoastRow, SegmentRow};
+use pxl_spec::bake::format::{BaseRow, BuildingRow, CoastRow, DeckRow, SegmentRow};
 use pxl_spec::space::adapter::epsg3857::BBox3857;
 
 /// The elevation raster, clipped and resampled onto this page's own grid.
@@ -107,6 +107,16 @@ SELECT gers_id, subtype, class, COALESCE(road_flags, rail_flags)::text AS flags,
 FROM overture_transportation, env
 WHERE geom && env.e";
 
+/// The decks the offline solve wrote (deck/), whole: a deck is a line and
+/// the page keeps the run of it that crosses the page
+/// (terrain/pipeline/deck.rs).
+const OVERTURE_DECK_SQL: &str = "WITH env AS (
+  SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
+)
+SELECT gers_id, subtype, class, piers, ST_AsBinary(geom) AS geom_wkb
+FROM overture_deck, env
+WHERE geom && env.e";
+
 /// Base is fragmented across four tables but shares one row shape — a literal
 /// `source` column per branch tells the adapter which table's own
 /// subtype/class vocabulary a row came from.
@@ -160,9 +170,10 @@ pub struct PageSource {
     pub segment_rows: Vec<SegmentRow>,
     pub base_rows: Vec<BaseRow>,
     pub coast_rows: Vec<CoastRow>,
+    pub deck_rows: Vec<DeckRow>,
 }
 
-/// The five statements, prepared once against one connection.
+/// The six statements, prepared once against one connection.
 ///
 /// An ordinary parameterized query re-planned every call spends ~34 ms of a
 /// ~44 ms bbox lookup against `overture_buildings` in planning; prepared once
@@ -173,6 +184,7 @@ pub struct TerrainRepository {
     segments: Statement,
     base: Statement,
     coast: Statement,
+    deck: Statement,
 }
 
 impl TerrainRepository {
@@ -183,10 +195,11 @@ impl TerrainRepository {
             segments: client.prepare(OVERTURE_TRANSPORTATION_SQL)?,
             base: client.prepare(OVERTURE_BASE_SQL)?,
             coast: client.prepare(OVERTURE_COAST_SQL)?,
+            deck: client.prepare(OVERTURE_DECK_SQL)?,
         })
     }
 
-    /// All five per-page queries on the one connection, in order. A page only
+    /// All six per-page queries on the one connection, in order. A page only
     /// ever holds one connection, so page-level concurrency and the worker
     /// count mean the same thing.
     pub fn fetch_page_source(&self, client: &mut Client, page_bbox: BBox3857) -> Result<PageSource, postgres::Error> {
@@ -248,12 +261,25 @@ impl TerrainRepository {
             })
             .collect();
 
+        let deck_rows = client
+            .query(&self.deck, &bbox)?
+            .iter()
+            .map(|row| DeckRow {
+                gers_id: row.get("gers_id"),
+                subtype: row.get("subtype"),
+                class: row.get("class"),
+                piers: row.get::<_, &[u8]>("piers").into(),
+                geom_wkb: wkb(row),
+            })
+            .collect();
+
         Ok(PageSource {
             ele,
             building_rows,
             segment_rows,
             base_rows,
             coast_rows,
+            deck_rows,
         })
     }
 }

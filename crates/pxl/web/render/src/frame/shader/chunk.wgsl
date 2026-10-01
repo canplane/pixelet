@@ -70,13 +70,6 @@ const COARSE_XY_STEPS: f32 = 8.0;
 // reason it need not carry them.
 const NO_TAPS: u32 = 0xffffffffu;
 
-// A box's own words, one record an instance: the arena is bound as a vertex
-// buffer stepped per instance and the draw offsets into it, so thirty-six
-// vertices share one record and nothing is indexed by hand. Four words always,
-// and two more where the format is the leaf's own six — a coarse draw binds
-// the same buffer twice so that one shader serves both
-// (frame/shader/record.rs's chunk_lanes).
-
 fn box_pair(word: u32, step: f32) -> vec2f {
   return vec2f(f32(word & 0xffffu), f32(word >> 16u)) * step;
 }
@@ -135,30 +128,32 @@ fn srgb_to_linear(c: vec3f) -> vec3f {
   return select(high, low, c <= vec3f(0.04045));
 }
 
+// What is the same at every vertex of a face — the box's color, taps and
+// size, the face's normal, the draw's opacity, the frame's sky fill — is
+// flat: taken from one vertex rather than interpolated between equal values.
 struct VertexOut {
   @builtin(position) clip: vec4f,
-  @location(0) rgb: vec3f,
-  @location(1) layer_taps: vec4f,
+  @location(0) @interpolate(flat) rgb: vec3f,
+  @location(1) @interpolate(flat) layer_taps: vec4f,
   @location(2) box_uv: vec2f,
   @location(3) local_pos: vec3f,
-  @location(4) box_scale: vec3f,
-  @location(5) normal: vec3f,
+  @location(4) @interpolate(flat) box_scale: vec3f,
+  @location(5) @interpolate(flat) normal: vec3f,
   @location(6) world_pos: vec3f,
   @location(7) @interpolate(flat) faces: u32,
-  @location(8) @interpolate(flat) draw: u32,
+  @location(8) @interpolate(flat) opacity: f32,
   // The air in front of the vertex (atmos_view.wgsl's Seen).
   @location(9) through: vec3f,
   @location(10) scattered: vec3f,
   @location(11) past: vec3f,
-  @location(12) fill: vec3f,
+  @location(12) @interpolate(flat) fill: vec3f,
 };
 
-// Which draw record this box belongs to rides on `vertex_index`, not on
-// `instance_index`. Both attribute slots step per instance, and WebGPU
-// fetches an instance-stepped element at `first_instance + i` — so putting
-// the record's index in the first instance would slide the boxes themselves
-// by it. No attribute steps per vertex, so the first vertex slides nothing,
-// and the draw gives it the record's index times the cube.
+// Which draw record a box belongs to rides on `vertex_index`: the draw's
+// first vertex is the record's index times the cube, and no attribute steps
+// per vertex, so it slides nothing. The draw's own first box is its first
+// instance, where the instance-stepped attributes are fetched from
+// (gpu/renderer.rs's draw_meshes); `instance_index` is not read.
 @vertex
 fn vs(@builtin(vertex_index) v: u32, words: BoxWords) -> VertexOut {
   return chunk_vertex(v, words, true);
@@ -173,34 +168,79 @@ fn vs_coarse(@builtin(vertex_index) v: u32, words: BoxWords) -> VertexOut {
   return chunk_vertex(v, words, false);
 }
 
+// The two again for the passes that write depth alone, the shadow map's and
+// the prepass the screen-space occlusion reads: the position and nothing
+// else, through the same `box_corner` and `corner_clip` as the lit pass.
+@vertex
+fn vs_depth(@builtin(vertex_index) v: u32, words: BoxWords) -> @builtin(position) vec4f {
+  return chunk_depth(v, words, true);
+}
+
+@vertex
+fn vs_coarse_depth(@builtin(vertex_index) v: u32, words: BoxWords) -> @builtin(position) vec4f {
+  return chunk_depth(v, words, false);
+}
+
+// A vertex of a box: its face, whether the mask keeps that face, its corner
+// in the box's [-0.5, 0.5] cube, the box's size and where the corner stands
+// on the globe.
+struct Corner {
+  face: u32,
+  shown: bool,
+  local: vec3f,
+  size: vec3f,
+  world: vec3f,
+};
+
+fn box_corner(k: u32, b: Box, place: vec3f) -> Corner {
+  var c: Corner;
+  c.face = k / 6u;
+  c.shown = (b.faces & (1u << c.face)) != 0u;
+  if (!c.shown) {
+    return c;
+  }
+  c.local = FACE_CORNER[c.face * 4u + FACE_TRIANGLES[k % 6u]];
+  c.size = vec3f(b.size_xy, b.z.y);
+  let position = vec3f(b.min_xy, b.z.x) + c.size * 0.5 + c.local * c.size;
+  c.world = on_globe(position + place);
+  return c;
+}
+
+// A face the mask leaves out: every vertex of it at one point, a triangle of
+// no area, which the rasterizer drops.
+fn corner_clip(c: Corner) -> vec4f {
+  if (!c.shown) {
+    return vec4f(0.0, 0.0, 0.0, 1.0);
+  }
+  return frame_view_proj() * vec4f(c.world, 1.0);
+}
+
+fn chunk_depth(v: u32, words: BoxWords, fine: bool) -> vec4f {
+  let d = draws[v / BOX_VERTICES];
+  return corner_clip(box_corner(v % BOX_VERTICES, box_of(words, d, fine), d.place.xyz));
+}
+
 fn chunk_vertex(v: u32, words: BoxWords, fine: bool) -> VertexOut {
-  let draw = v / BOX_VERTICES;
-  let k = v % BOX_VERTICES;
-  let d = draws[draw];
+  let d = draws[v / BOX_VERTICES];
   let b = box_of(words, d, fine);
-  let face = k / 6u;
+  let c = box_corner(v % BOX_VERTICES, b, d.place.xyz);
   var o: VertexOut;
-  // A face the mask leaves out: every vertex of it at one point, a triangle
-  // of no area, which the rasterizer drops.
-  if ((b.faces & (1u << face)) == 0u) {
-    o.clip = vec4f(0.0, 0.0, 0.0, 1.0);
+  o.clip = corner_clip(c);
+  if (!c.shown) {
     return o;
   }
-  let local = FACE_CORNER[face * 4u + FACE_TRIANGLES[k % 6u]];
-  let size = vec3f(b.size_xy, b.z.y);
-  let position = vec3f(b.min_xy, b.z.x) + size * 0.5 + local * size;
-  let normal = FACE_NORMAL[face];
-  let world = on_globe(position + d.place.xyz);
-  o.clip = frame_view_proj() * vec4f(world, 1.0);
+  let local = c.local;
+  let size = c.size;
+  let normal = FACE_NORMAL[c.face];
   o.rgb = srgb_to_linear(unpack4x8unorm(b.rgb).xyz);
   o.layer_taps = unpack4x8unorm(b.taps) * 255.0;
   o.local_pos = local;
   o.box_scale = size;
   o.normal = normal;
   o.faces = b.faces;
-  o.draw = draw;
-  o.world_pos = world;
-  let seen = seen_at_vertex(world);
+  o.opacity = d.measure.x;
+  o.world_pos = c.world;
+  let seen = seen_from_eye(c.world);
   o.through = seen.through;
   o.scattered = seen.scattered;
   o.past = seen.past;
@@ -421,7 +461,6 @@ fn sample_tap(layer: f32, is_side: bool, uv: vec2f, ddx: vec2f, ddy: vec2f, fall
 
 @fragment
 fn fs(i: VertexOut) -> @location(0) vec4f {
-  let d = draws[i.draw];
   // A box with no layer of its own is its color and nothing else: that is
   // every tier over a leaf's own cells, which are the only ones the texture
   // pack is for (mesh/chunk_mesher.rs). The four samples are skipped with
@@ -448,5 +487,5 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let k = frame_ao_strength() * occlusion(i.local_pos, i.box_scale, i.normal, i.faces);
   let open = (1.0 - k) * mix(vec3f(1.0), AO_TINT, k);
   let color = screen_ao(shade(base, n, i.world_pos, sun_lit(i.world_pos, n), open, Seen(i.through, i.scattered, i.past, i.fill)), i.clip.xy);
-  return vec4f(finish(color, i.clip.xy), d.measure.x);
+  return vec4f(finish(color, i.clip.xy), i.opacity);
 }

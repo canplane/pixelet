@@ -173,12 +173,11 @@ pub const FRAME_FLOATS: usize = 84;
 /// edge_width, rim_intensity, viewport, shadow_strength, shadow_texel,
 /// vignette, ao_strength, screen_ao, light_view_proj, the second light's run
 /// (other_dir through other_color, look/environment.rs's ENV_OTHER_LIGHT),
-/// the planet and the globe; and whether the vertices take the air. The
-/// renderer reads the table rather than counting; the test below holds it to
-/// the struct.
-pub const FRAME_AT: [usize; 18] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68, 76, 80, 51];
+/// the planet and the globe. The renderer reads the table rather than
+/// counting; the test below holds it to the struct.
+pub const FRAME_AT: [usize; 17] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68, 76, 80];
 #[cfg(test)]
-const FRAME_FIELDS: [&str; 18] = [
+const FRAME_FIELDS: [&str; 17] = [
     "view_proj",
     "camera_pos",
     "edge_strength",
@@ -196,11 +195,11 @@ const FRAME_FIELDS: [&str; 18] = [
     "other_dir",
     "planet",
     "globe",
-    "air_at_vertices",
 ];
 
-/// The pipelines, by id: draw.rs's ten, which a draw names, then the ones
-/// a frame runs on its own — the depth-only passes into the shadow map,
+/// The pipelines, by id: draw.rs's, which a draw names (0 to 9, and the
+/// coarse chunk and the impostors past them), then the ones a frame runs on
+/// its own — the depth-only passes into the shadow map,
 /// the sky, the mip builder, the depth-only passes from the eye that the
 /// screen-space occlusion reads, the occlusion's four (gpu/ao.rs), and the
 /// atmosphere's three tables and its exposure (gpu/atmosphere.rs), the stars
@@ -246,6 +245,10 @@ pub const PIPELINES: u32 = 36;
 // kind) each. The codes are the host's too (gpu/api.json).
 pub use crate::gpu::api_spec::record::*;
 
+use crate::frame::draw::{
+    PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_CHUNK_COARSE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
+    PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED,
+};
 use crate::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
 
 const fn f(v: f32) -> u32 {
@@ -273,11 +276,13 @@ struct Head {
 
 /// The vertex entry points a record can name, indexed by VS and kin. The
 /// shell holds the same list against the same numbers (apps/web/src/platform/web/webgpu.ts).
-pub const VERTEX_ENTRY: [&str; 2] = ["vs", "vs_coarse"];
+pub const VERTEX_ENTRY: [&str; 4] = ["vs", "vs_coarse", "vs_depth", "vs_coarse_depth"];
 
-/// The same pipeline entered at the coarse boxes' vertex entry point.
+/// The same pipeline entered at the coarse boxes' vertex entry point, lit or
+/// depth-only as it was.
 const fn at_coarse(h: Head) -> Head {
-    Head { vertex: VS_COARSE, ..h }
+    let vertex = if h.vertex == VS_DEPTH { VS_COARSE_DEPTH } else { VS_COARSE };
+    Head { vertex, ..h }
 }
 
 /// An opaque lit pipeline: writes depth, nearer wins.
@@ -313,9 +318,10 @@ const fn blended(shader: u32, cull: u32, bias: i32, slope: f32) -> Head {
     }
 }
 
-/// A depth-only pass into the shadow map: the pass's own vertex shader
-/// under the light's frame, no fragment stage, both sides, a plain
-/// less-than depth.
+/// A depth-only pass into the shadow map: the shader's depth-only vertex
+/// entry point, which places a vertex as its lit one does and computes
+/// nothing else, under the light's frame; no fragment stage, both sides, a
+/// plain less-than depth.
 const fn depth_only(shader: u32) -> Head {
     Head {
         shader,
@@ -327,7 +333,7 @@ const fn depth_only(shader: u32) -> Head {
         depth_bias: 0,
         depth_bias_slope: 0,
         blend: OPAQUE,
-        vertex: VS,
+        vertex: VS_DEPTH,
     }
 }
 
@@ -467,12 +473,13 @@ fn chunk_lanes(fine: bool) -> Vec<Vec<u32>> {
     let rest = if fine { 16 } else { 0 };
     vec![vec![stride, PER_INSTANCE, 1, 0, 0, U32X4], vec![stride, PER_INSTANCE, 1, 1, rest, U32X2]]
 }
-/// The chunk's groups: the lit frame, the draws, the texture pack's array,
-/// the table its faces are found through and their sampler. The mesh is no
-/// group of its own any more — it arrives as vertex attributes.
+/// The chunk's groups: the lit frame, the draws — read where a vertex is
+/// placed, a draw's opacity carried on to the fragments from there —, the
+/// texture pack's array, the table its faces are found through and their
+/// sampler. The boxes are no group: they arrive as vertex attributes.
 fn chunk_groups() -> Vec<Vec<u32>> {
     let mut g0 = LIT_FRAME.to_vec();
-    g0.extend([[3, BOTH, STORAGE], [4, FRAGMENT, TEXTURE_ARRAY], [5, FRAGMENT, STORAGE], [6, FRAGMENT, SAMPLER]]);
+    g0.extend([[3, VERTEX, STORAGE], [4, FRAGMENT, TEXTURE_ARRAY], [5, FRAGMENT, STORAGE], [6, FRAGMENT, SAMPLER]]);
     vec![group(&g0)]
 }
 /// A model's lanes (model.rs): position, normal, uv; then, skinned, the
@@ -496,31 +503,31 @@ fn model_groups() -> Vec<Vec<u32>> {
 pub fn pipeline(id: u32) -> Vec<u32> {
     let frame = |visibility: u32| group(&[[0, visibility, UNIFORM]]);
     match id {
-        crate::frame::draw::PIPELINE_CHUNK => record(lit(SHADER_CHUNK, CULL_BACK), &chunk_lanes(true), &chunk_groups()),
-        crate::frame::draw::PIPELINE_CHUNK_COARSE => record(at_coarse(lit(SHADER_CHUNK, CULL_BACK)), &chunk_lanes(false), &chunk_groups()),
-        crate::frame::draw::PIPELINE_DECOR => record(lit(SHADER_DECOR, CULL_NONE), &model_lanes(false), &model_groups()),
+        PIPELINE_CHUNK => record(lit(SHADER_CHUNK, CULL_BACK), &chunk_lanes(true), &chunk_groups()),
+        PIPELINE_CHUNK_COARSE => record(at_coarse(lit(SHADER_CHUNK, CULL_BACK)), &chunk_lanes(false), &chunk_groups()),
+        PIPELINE_DECOR => record(lit(SHADER_DECOR, CULL_NONE), &model_lanes(false), &model_groups()),
         // The hover ghost, biased toward the eye: slightly clear of a
         // surface it sits on, strongly clear of one it sits in.
-        crate::frame::draw::PIPELINE_GHOST_BOX => record(blended(SHADER_CHUNK, CULL_BACK, 1, 1.0), &chunk_lanes(true), &chunk_groups()),
-        crate::frame::draw::PIPELINE_GHOST_BOX_COPLANAR => record(blended(SHADER_CHUNK, CULL_BACK, 8, 2.0), &chunk_lanes(true), &chunk_groups()),
-        crate::frame::draw::PIPELINE_GHOST_DECOR => record(blended(SHADER_DECOR, CULL_NONE, 1, 1.0), &model_lanes(false), &model_groups()),
+        PIPELINE_GHOST_BOX => record(blended(SHADER_CHUNK, CULL_BACK, 1, 1.0), &chunk_lanes(true), &chunk_groups()),
+        PIPELINE_GHOST_BOX_COPLANAR => record(blended(SHADER_CHUNK, CULL_BACK, 8, 2.0), &chunk_lanes(true), &chunk_groups()),
+        PIPELINE_GHOST_DECOR => record(blended(SHADER_DECOR, CULL_NONE, 1, 1.0), &model_lanes(false), &model_groups()),
         // Back faces culled, as three's material (FrontSide) did: drawn both
         // sides, a closed body's inner faces fight its outer ones for the
         // same depth at a distance, and the character shimmers.
-        crate::frame::draw::PIPELINE_SKINNED => record(lit(SHADER_SKINNED, CULL_BACK), &model_lanes(true), &model_groups()),
-        crate::frame::draw::PIPELINE_PUCK_ZONE => record(
+        PIPELINE_SKINNED => record(lit(SHADER_SKINNED, CULL_BACK), &model_lanes(true), &model_groups()),
+        PIPELINE_PUCK_ZONE => record(
             blended(SHADER_PUCK_ZONE, CULL_NONE, 4, 1.0),
             &[lane(12, 0, F32X3), lane(8, 1, F32X2)],
             &[frame(BOTH), group(&[[0, BOTH, UNIFORM]]), group(&[[0, VERTEX, STORAGE]])],
         ),
-        crate::frame::draw::PIPELINE_PUCK_BEACON => record(
+        PIPELINE_PUCK_BEACON => record(
             lit(SHADER_PUCK_BEACON, CULL_BACK),
             &[lane(12, 0, F32X3), lane(12, 1, F32X3)],
             &[frame(BOTH), group(&[[0, BOTH, UNIFORM]])],
         ),
         // The badges: a strip of four corners an instance, blended over the
         // world, tested against its depth and no nearer than it.
-        crate::frame::draw::PIPELINE_BADGE => record(
+        PIPELINE_BADGE => record(
             Head {
                 topology: STRIP,
                 depth_compare: GREATER_EQUAL,
@@ -530,7 +537,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             &[group(&[[0, BOTH, UNIFORM], [1, VERTEX, STORAGE], [2, VERTEX, DEPTH]]), group(&SKIN)],
         ),
         // The gizmos: a line list over everything, no depth test.
-        crate::frame::draw::PIPELINE_DEBUG => record(
+        PIPELINE_DEBUG => record(
             Head {
                 topology: LINES,
                 depth_compare: ALWAYS,
@@ -578,7 +585,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         PIPELINE_MIPS => record(screen(SHADER_MIPS), &[], &[group(&SKIN)]),
         // Decor's impostors: a strip of four corners an instance, opaque
         // where the sprite covers and discarded where it does not, both sides.
-        crate::frame::draw::PIPELINE_IMPOSTOR => record(
+        PIPELINE_IMPOSTOR => record(
             Head {
                 topology: STRIP,
                 ..lit(SHADER_IMPOSTOR, CULL_NONE)
@@ -596,6 +603,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         PIPELINE_IMPOSTOR_BAKE => record(
             Head {
                 fragment: true,
+                vertex: VS,
                 ..depth_only(SHADER_IMPOSTOR_BAKE)
             },
             &model_lanes(false),
@@ -657,8 +665,9 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             &[group(&[AIR[0], AIR[1], AIR[3], [12, FRAGMENT, TEXTURE], [14, FRAGMENT, UNIFORM]])],
         ),
         PIPELINE_ATMOS_EXPOSURE => record(screen(SHADER_ATMOS_EXPOSURE), &[], &[group(&[AIR[0], AIR[1], AIR[2], AIR[3]])]),
-        // The stars: a strip of four corners a star, added over the sky and
-        // under everything drawn after it, no depth read or written.
+        // The stars: a strip of four corners a star, added over the sky where
+        // the world left the far plane and under everything drawn after it;
+        // depth tested, never written.
         PIPELINE_STARS => record(
             Head {
                 topology: STRIP,

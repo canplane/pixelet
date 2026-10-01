@@ -14,7 +14,7 @@ mod apply;
 mod executor;
 pub mod layout;
 
-use crate::abi::cmd::{Command, Sensor, SensorStartSignal, WorldFrameSignal, WorldSnapshotSignal};
+use crate::abi::cmd::{Command, Sensor, SensorStartSignal, WorldSnapshotSignal};
 use crate::global::Global;
 use crate::host::HeapStat;
 use crate::kernel::kernel;
@@ -243,7 +243,7 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
         xpute_runtime::sched::task::poll();
     }
     if take_world_drawn() {
-        post_turn(s);
+        post_shell(s);
     }
     pxl_render::gpu::api::gpu_publish();
     write_heap_row();
@@ -325,14 +325,4 @@ fn post_shell(s: &mut State) {
             crate::io::load::cancel_asset(key);
         }
     }
-}
-
-/// The end of a frame, the kernel having drawn it: what it asks of the shell,
-/// and last the draws it listed.
-fn post_turn(s: &mut State) {
-    post_shell(s);
-    let signal = WorldFrameSignal {
-        draws: kernel().sched.draw.draw_count(),
-    };
-    raise(Command::WORLD_FRAME, WorldFrameSignal::FIELDS, |w| signal.write(w));
 }

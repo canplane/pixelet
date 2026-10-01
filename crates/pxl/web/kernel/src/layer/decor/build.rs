@@ -34,7 +34,7 @@ use std::collections::HashMap;
 
 use pxl_spec::cell::cube_types;
 
-use crate::kernel::kernel;
+use crate::global::Global;
 use crate::layer::decor::instance::{DecorScratch, GroupLanes, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
 use crate::layer::decor::kind::DecorKindDef;
 use crate::layer::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
@@ -135,15 +135,22 @@ pub struct DecorKindBundle {
     pub extent: f64,
 }
 
+/// The largest of `values`, a NaN kept rather than dropped.
+fn largest(values: impl Iterator<Item = f64>) -> f64 {
+    values.fold(0.0, |a: f64, b| if a.is_nan() || b.is_nan() { f64::NAN } else { a.max(b) })
+}
+
+/// The largest dimension of a variant's model, in world units: how large the
+/// variant is to the eye, which is what decides how an instance of it is
+/// drawn (layer/decor/cell.rs `present`).
+pub fn variant_extent(v: &DecorVariantAsset) -> f64 {
+    largest(v.model.ingested().extent.unwrap_or([0.0; 3]).into_iter())
+}
+
 /// Binds a kind's seed and rules to its variants, and measures the kind's
 /// extent over all of them.
 pub fn bind_models(def: &DecorKindDef) -> DecorKindBundle {
-    // A NaN extent stays NaN rather than being dropped.
-    let extent = def
-        .variants
-        .iter()
-        .flat_map(|v| v.model.ingested().extent.unwrap_or([0.0; 3]))
-        .fold(0.0, |a: f64, b| if a.is_nan() || b.is_nan() { f64::NAN } else { a.max(b) });
+    let extent = largest(def.variants.iter().map(variant_extent));
     DecorKindBundle {
         seed: def.seed,
         rules: def.rules,
@@ -153,14 +160,21 @@ pub fn bind_models(def: &DecorKindDef) -> DecorKindBundle {
     }
 }
 
-/// Teaches the scheduler every kind, in bundle order — the order of the groups
-/// in the decor blocks it builds: each kind's variants in variant order, one
-/// group a variant.
+static KINDS: Global<Vec<Kind>> = Global::new();
+
+/// The decor kinds, in the order they were taught — the order of the groups
+/// in every decor block.
+pub fn kinds() -> &'static [Kind] {
+    KINDS.get(Vec::new)
+}
+
+/// Teaches every kind, in bundle order — the order of the groups in the
+/// decor blocks: each kind's variants in variant order, one group a variant.
 pub fn teach_decor_kinds(bundles: &[&DecorKindBundle]) {
-    let sched = &mut kernel().sched;
-    sched.decor_forget();
+    let kinds = KINDS.get(Vec::new);
+    kinds.clear();
     for bundle in bundles {
-        sched.decor_kind(Kind {
+        kinds.push(Kind {
             tag: bundle.seed.tag,
             density: bundle.seed.density,
             variant_count: bundle.variants.len() as u32,

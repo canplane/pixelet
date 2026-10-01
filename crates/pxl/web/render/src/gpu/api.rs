@@ -24,20 +24,20 @@ pub use record::{frame_room, gpu, gpu_publish, install, room, Gpu};
 
 use xpute_runtime::abi::handle::HandleTable;
 
+use crate::gpu::api_spec::resource;
+
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::global::Global;
 
 /// WebGPU's buffer usage bits.
 pub mod buffer_usage {
-    pub const MAP_READ: u32 = 0x0001;
     pub const COPY_SRC: u32 = 0x0004;
     pub const COPY_DST: u32 = 0x0008;
     pub const INDEX: u32 = 0x0010;
     pub const VERTEX: u32 = 0x0020;
     pub const UNIFORM: u32 = 0x0040;
     pub const STORAGE: u32 = 0x0080;
-    pub const QUERY_RESOLVE: u32 = 0x0200;
 }
 
 /// WebGPU's texture usage bits.
@@ -90,7 +90,7 @@ pub const fn word_bytes(words: usize) -> u32 {
 
 /// A group's entry over a buffer, whole.
 pub fn buffer_entry(binding: u32, buffer: u32) -> [u32; 5] {
-    [binding, crate::gpu::api_spec::resource::BUFFER, buffer, 0, 0]
+    [binding, resource::BUFFER, buffer, 0, 0]
 }
 
 /// A render pass's description: color, cleared to transparent or loaded; depth cleared to `depth_clear`, loaded or read only;

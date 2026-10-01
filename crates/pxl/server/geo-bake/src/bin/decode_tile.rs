@@ -26,9 +26,10 @@
 //! `--all` after `deno task bake:tiles` is for.
 //!
 //! For one page it also writes `heights.png` (the raster stretched to its own
-//! range, so a flat page is flat gray) and one PNG a channel in the palette's
+//! range, so a flat page is flat gray), one PNG a channel in the palette's
 //! colors, with `void` left black and an index the pack has no type for in
-//! magenta. The picture is for the eye; the summary is the check.
+//! magenta, and `decks.png`, the decks from above with their piers white.
+//! The picture is for the eye; the summary is the check.
 
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -39,6 +40,7 @@ use flate2::write::ZlibEncoder;
 use flate2::{Compression, Crc};
 use pxl_geo_bake::cli::Flags;
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
+use pxl_spec::bake::deck::Decks;
 use pxl_spec::bake::format::decode_terrain;
 use pxl_spec::bake::format::{GroundChannelKey, Occupancy};
 use pxl_spec::bake::pack::GroundCell;
@@ -72,13 +74,14 @@ struct Page {
     cells: Vec<GroundCell>,
     extent: Vec<[i16; 2]>,
     occupancy: Occupancy,
+    decks: Decks,
 }
 
 /// The page as the kernel reads it, or what is wrong with its shape.
 fn decode(pkt: &[u8]) -> Result<Page, String> {
     // A packet whose lanes are not a page's is refused by the decoder.
     let t = decode_terrain(pkt).map_err(|e| format!("not a page: {e:?}"))?;
-    let (ele, cells, extent, occupancy) = (t.ele.into_owned(), t.ground.cells.into_owned(), t.index.extent().to_vec(), t.index.occupancy);
+    let (ele, cells, extent, occupancy, decks) = (t.ele.into_owned(), t.ground.cells.into_owned(), t.index.extent().to_vec(), t.index.occupancy, t.decks);
     // Nothing may follow: a page is exactly its tree, and bytes past it are a
     // writer that disagrees with the reader, which only checks that the
     // payload the header names is there.
@@ -87,7 +90,7 @@ fn decode(pkt: &[u8]) -> Result<Page, String> {
     if payload + HDR_SZ as usize != pkt.len() {
         return Err(format!("packet is {} bytes, header says {}", pkt.len(), payload + HDR_SZ as usize));
     }
-    Ok(Page { ele, cells, extent, occupancy })
+    Ok(Page { ele, cells, extent, occupancy, decks })
 }
 
 /// A packed cell's field `f` as the dense index the word holds, which may lie
@@ -146,7 +149,7 @@ fn summarize(page: &Page) -> Summary {
     if high > 0 {
         faults.push(format!("{high} cell(s) with bits set past the pack's {} bits", ground_pack::CELL_BITS));
     }
-    let short = extent_of(&page.ele, &page.cells).iter().zip(&page.extent).filter(|([lo, hi], [ilo, ihi])| ilo > lo || ihi < hi).count();
+    let short = extent_of(&page.ele, &page.cells, &page.decks).iter().zip(&page.extent).filter(|([lo, hi], [ilo, ihi])| ilo > lo || ihi < hi).count();
     if short > 0 {
         faults.push(format!("{short} index cell(s) narrower than the page's own surface"));
     }
@@ -169,6 +172,15 @@ fn print_summary(name: &str, s: &Summary) {
     for (f, channel) in ground_pack::CHANNELS.iter().enumerate() {
         let list: Vec<String> = s.counts[f].iter().map(|(name, n)| format!("{name} {n}")).collect();
         println!("  {channel:<9} {}", list.join(", "));
+    }
+}
+
+fn print_decks(decks: &Decks) {
+    let tops = decks.tops.iter().fold([i16::MAX, i16::MIN], |[lo, hi], &t| [lo.min(t), hi.max(t)]);
+    let piers = decks.piers.iter().filter(|&&p| p != 0).count();
+    match decks.len() {
+        0 => println!("  decks     none"),
+        n => println!("  decks     {n}, {} points, {piers} piers, tops {}..{}", decks.points.len(), tops[0], tops[1]),
     }
 }
 
@@ -232,6 +244,24 @@ fn channel_png(page: &Page, f: usize) -> Vec<u8> {
     png(PAGE_CELLS, PAGE_CELLS, 3, &px)
 }
 
+/// The decks drawn from above: each covered cell its surface's color, the
+/// higher deck where two cross, and a pier white.
+fn decks_png(page: &Page) -> Vec<u8> {
+    let n = PAGE_CELLS as i64;
+    let mut top = vec![f64::NEG_INFINITY; (n * n) as usize];
+    let mut px = vec![0u8; (n * n * 3) as usize];
+    page.decks.over_cells([0, n], [0, n], |x, y, _, over| {
+        let i = (y * n + x) as usize;
+        if over.top < top[i] {
+            return;
+        }
+        top[i] = over.top;
+        let v = if over.pier { 0xffffff } else { color::ground(GroundChannelKey::TRANSPORT, over.kind).map_or(MAGENTA, |s| s.rgb) };
+        px[i * 3..i * 3 + 3].copy_from_slice(&[(v >> 16) as u8, (v >> 8) as u8, v as u8]);
+    });
+    png(PAGE_CELLS, PAGE_CELLS, 3, &px)
+}
+
 // ---- driver ----
 
 /// Every stored page under a tile set: the ocean page, and each level's.
@@ -289,6 +319,7 @@ fn one(path: &Path, out: Option<PathBuf>) -> Result<bool, String> {
     let s = summarize(&page);
     let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
     print_summary(&name, &s);
+    print_decks(&page.decks);
     for line in &s.faults {
         eprintln!("[decode_tile] {line}");
     }
@@ -296,6 +327,7 @@ fn one(path: &Path, out: Option<PathBuf>) -> Result<bool, String> {
     let write = |file: String, bytes: Vec<u8>| std::fs::write(dir.join(&file), bytes).map_err(|e| format!("{file}: {e}"));
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     write("heights.png".into(), heights_png(&page, &s))?;
+    write("decks.png".into(), decks_png(&page))?;
     for (f, channel) in ground_pack::CHANNELS.iter().enumerate() {
         write(format!("{channel}.png"), channel_png(&page, f))?;
     }

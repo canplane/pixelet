@@ -16,14 +16,12 @@ import { useKernel } from "@/kernel/shell.ts";
  * are the kernel's I/O scheduler's.
  *
  * The parts arrive unjoined and in every language the provider had, so
- * assembleLabel() runs on every render against the current i18n.language:
+ * assembleLabel() runs on every snapshot against the current i18n.language:
  * switching UI language re-orders a label already in hand rather than
  * asking for another. A packet carries a part's languages as a list; the
  * label reads them by tag, as the search API gives them.
  */
 export function useReverseGeocode(): string | null {
   const { i18n } = useTranslation();
-  const parts = useKernel((s) => s.place);
-  if (parts.length === 0) return null;
-  return assembleLabel(parts.map((p) => ({ name: p.name, names: Object.fromEntries(p.names.map((n) => [n.lang, n.name])) })), i18n.language);
+  return useKernel((s) => s.place.length === 0 ? null : assembleLabel(s.place.map((p) => ({ name: p.name, names: Object.fromEntries(p.names.map((n) => [n.lang, n.name])) })), i18n.language));
 }

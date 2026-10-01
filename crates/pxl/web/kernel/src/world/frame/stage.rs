@@ -12,6 +12,7 @@ use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::gpu::renderer::{render_frame, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
 
+use crate::sched::profiler::record::MB;
 use crate::layer::billboard::distance_fade::fade_range;
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::space::pvf3::ivec;
@@ -29,11 +30,9 @@ use crate::sched::profiler::record::{DeviceSample, DrawCensus, GpuSample, CENSUS
 use crate::shell::setting::store::{settings_store, AoMode};
 use crate::text::text_raster;
 use crate::world::change::request_world_tick;
-use crate::world::chunk::stage::{set_host_frame_stat, HostFrameStat};
+use crate::world::chunk::stage::set_host_frame_stat;
 use crate::world::frame::resolution::resolution_observe;
 use crate::world::frame::view::{globe_anchor_local, view};
-
-const MB: f64 = 1_048_576.0;
 
 /// Writes the frame's uniforms from the view and the settings as they stand,
 /// the world drawn at `resolution` device pixels to a CSS pixel.
@@ -120,9 +119,8 @@ pub fn stage_render() {
     resolution_observe(stat.gpu_ms);
     let mut census: DrawCensus = Default::default();
     census.copy_from_slice(&stat.census[..CENSUS_LEN]);
-    set_host_frame_stat(HostFrameStat {
-        task_ms: 0.0,
-        gpu: GpuSample {
+    set_host_frame_stat(
+        GpuSample {
             ms: stat.gpu_ms,
             spans: stat.gpu_spans,
             draw_calls: stat.draw_calls,
@@ -131,7 +129,7 @@ pub fn stage_render() {
             level_tris: Default::default(),
             px: stat.px,
         },
-        device: DeviceSample {
+        DeviceSample {
             buffers: stat.buffers,
             buffer_mb: round(stat.buffer_bytes / MB),
             arena_mb: stat.arena_mb,
@@ -139,5 +137,5 @@ pub fn stage_render() {
             shadow_mb: stat.shadow_mb,
             layers_mb: stat.layers_mb,
         },
-    });
+    );
 }

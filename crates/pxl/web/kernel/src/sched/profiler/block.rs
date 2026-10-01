@@ -214,7 +214,7 @@ words!(AtlasBlock, SUMMARY::atlas::WORDS,
 /// What the chunks keep, against the budget they keep it under.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct RetainBlock {
+pub struct HeldBlock {
     pub run_sets: f64,
     pub run_set_mb: f64,
     pub tiers: f64,
@@ -223,10 +223,10 @@ pub struct RetainBlock {
     pub decor_bytes: f64,
 }
 
-words!(RetainBlock, SUMMARY::retain::WORDS,
-    run_sets => SUMMARY::retain::run_sets, run_set_mb => SUMMARY::retain::run_set_mb,
-    tiers => SUMMARY::retain::tiers, decor_cells => SUMMARY::retain::decor_cells,
-    decor_instances => SUMMARY::retain::decor_instances, decor_bytes => SUMMARY::retain::decor_bytes,
+words!(HeldBlock, SUMMARY::held::WORDS,
+    run_sets => SUMMARY::held::run_sets, run_set_mb => SUMMARY::held::run_set_mb,
+    tiers => SUMMARY::held::tiers, decor_cells => SUMMARY::held::decor_cells,
+    decor_instances => SUMMARY::held::decor_instances, decor_bytes => SUMMARY::held::decor_bytes,
 );
 
 /// The fetch scheduler's queue, as it stands.

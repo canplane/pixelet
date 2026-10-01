@@ -159,6 +159,8 @@
     "ADD": 2,
     "VS": 0,
     "VS_COARSE": 1,
+    "VS_DEPTH": 2,
+    "VS_COARSE_DEPTH": 3,
     "PER_VERTEX": 0,
     "PER_INSTANCE": 1,
     "U32X2": 6,

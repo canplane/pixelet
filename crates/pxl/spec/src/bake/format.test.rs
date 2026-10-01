@@ -30,10 +30,34 @@ fn page(seed: u64) -> Terrain {
             [a.min(b), a.max(b)]
         })
         .collect();
+    let mut decks = deck::Builder::default();
+    for _ in 0..3 {
+        let points: Vec<([f64; 2], i16, u8)> = (0..4).map(|_| ([(rng.next() % 600) as f64, (rng.next() % 600) as f64], rng.next() as i16, (rng.next() % 2) as u8)).collect();
+        decks.push(points, 1 + (rng.next() % 200) as u8, rng.next() as u8);
+    }
     Terrain {
         ele: ele.into(),
         ground: Ground { cells: cells.into() },
+        decks: decks.finish(),
         index: Index::new(extent, Occupancy::of_bits(0b10101).unwrap()),
+    }
+}
+
+/// A record's room, as the kernel's fixed range would give it.
+fn room() -> PageRoom {
+    PageRoom {
+        cells: vec![0; GROUND_LANE].leak(),
+        ele: vec![0; ELE_LANE].leak(),
+        extent: vec![[0; 2]; EXTENT_LANE].leak(),
+        blocks: vec![Block::default(); BLOCK_LANE].leak(),
+        decks: deck::Room {
+            starts: vec![0; deck::MAX_DECKS + 1].leak(),
+            points: vec![[0; 2]; deck::MAX_POINTS].leak(),
+            tops: vec![0; deck::MAX_POINTS].leak(),
+            piers: vec![0; deck::MAX_POINTS].leak(),
+            width: vec![0; deck::MAX_DECKS].leak(),
+            kind: vec![0; deck::MAX_DECKS].leak(),
+        },
     }
 }
 
@@ -52,12 +76,7 @@ fn the_formats_write_and_read_what_the_record_holds() {
     let terrain = encode_terrain(&page).unwrap();
     assert_eq!(format!("{:016x}", fnv(&terrain)), v.s("terrain.fnv"), "the page's bytes");
     assert_eq!(decode_terrain(&terrain).unwrap(), page, "a page reads back as it was written");
-    let room = PageRoom {
-        cells: vec![0; GROUND_LANE].leak(),
-        ele: vec![0; ELE_LANE].leak(),
-        extent: vec![[0; 2]; EXTENT_LANE].leak(),
-        blocks: vec![Block::default(); BLOCK_LANE].leak(),
-    };
+    let room = room();
     assert_eq!(decode_terrain_into(&terrain, room).unwrap(), page, "a page reads into its room as it was written");
 }
 
@@ -67,12 +86,7 @@ fn a_packet_that_is_not_a_page_is_refused() {
     let v = Golden::load(GOLDEN);
     let small = hex::decode(v.s("not_a_page")).unwrap();
     assert!(decode_terrain(&small).is_err());
-    let room = PageRoom {
-        cells: vec![0; GROUND_LANE].leak(),
-        ele: vec![0; ELE_LANE].leak(),
-        extent: vec![[0; 2]; EXTENT_LANE].leak(),
-        blocks: vec![Block::default(); BLOCK_LANE].leak(),
-    };
+    let room = room();
     assert!(decode_terrain_into(&small, room).is_err());
 }
 

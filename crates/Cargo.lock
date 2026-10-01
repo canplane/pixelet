@@ -2914,7 +2914,6 @@ dependencies = [
 name = "xpute-runtime"
 version = "0.0.0"
 dependencies = [
- "fnv",
  "indexmap",
  "xpute-core",
 ]

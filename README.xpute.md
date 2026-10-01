@@ -29,7 +29,7 @@ Three edges, and one call the other way: the guest reads the host's clock (`now`
 
 What the guest cannot do itself — a fetch, a call to a device — it asks for in what its turn leaves, and the host takes every such request before it rings again.
 
-[ARCHITECTURE.xpute.md](./ARCHITECTURE.xpute.md) is what each piece is and why it is shaped that way: the memory, the rings, the change log, the turn, the handles, the contract either end must keep, the wire formats, the records.
+[ARCHITECTURE.xpute.md](./ARCHITECTURE.xpute.md) is what each piece is and why it is shaped that way: the memory, the rings, the turn, the handles, the contract either end must keep, the wire formats, the records.
 
 ## `core` and `runtime`
 

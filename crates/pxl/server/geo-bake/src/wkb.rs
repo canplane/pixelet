@@ -3,8 +3,9 @@
 //! Minimal WKB decoder shared by every source adapter that reads
 //! `ST_AsBinary(geom)` rows (terrain/pipeline/coast/adapter.rs,
 //! terrain/pipeline/overture/adapter.rs). Supports Point, LineString, Polygon
-//! and MultiPolygon. Accepts EWKB flags (Z/SRID) and ignores SRID and Z
-//! because the pipeline assumes 3857.
+//! and MultiPolygon. Accepts EWKB's flags (Z/SRID) and ISO's dimension
+//! thousands (Z, M, ZM), ignores SRID because the pipeline assumes 3857, and
+//! keeps a Z — a deck's top (terrain/pipeline/deck.rs) — where there is one.
 
 use pxl_spec::space::adapter::epsg3857::G3857;
 
@@ -60,8 +61,13 @@ fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
     let t = r.u32(le)?;
 
     let has_srid = t & 0x2000_0000 != 0;
-    let has_z = t & 0x8000_0000 != 0;
-    let base = t & 0xff;
+    // ISO writes the dimensions as thousands of the type: 1 Z, 2 M, 3 ZM.
+    let iso = (t & 0xffff) / 1000;
+    let dims = Dims {
+        z: t & 0x8000_0000 != 0 || iso == 1 || iso == 3,
+        m: t & 0x4000_0000 != 0 || iso == 2 || iso == 3,
+    };
+    let base = (t & 0xffff) % 1000;
     if has_srid {
         r.skip(4)?;
     }
@@ -69,20 +75,16 @@ fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
     match base {
         1 => {
             // Point
-            let x = r.f64(le)?;
-            let y = r.f64(le)?;
-            if has_z {
-                r.skip(8)?;
-            }
+            let p = read_point(r, le, dims)?;
             Some(vec![WkbGeometry {
-                points: vec![[x, y, 0.0]],
+                points: vec![p],
                 holes: Vec::new(),
                 is_polygon_source: false,
             }])
         }
         2 => {
             // LineString
-            let pts = read_ring(r, le, has_z)?;
+            let pts = read_ring(r, le, dims)?;
             Some(vec![WkbGeometry {
                 points: pts,
                 holes: Vec::new(),
@@ -99,10 +101,10 @@ fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
                     is_polygon_source: true,
                 }]);
             }
-            let outer = read_ring(r, le, has_z)?;
+            let outer = read_ring(r, le, dims)?;
             let mut holes: Vec<Vec<G3857>> = Vec::new();
             for _ in 1..nr {
-                holes.push(read_ring(r, le, has_z)?);
+                holes.push(read_ring(r, le, dims)?);
             }
             Some(vec![WkbGeometry {
                 points: outer,
@@ -128,7 +130,24 @@ fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
     }
 }
 
-fn read_ring(r: &mut Reader, le: bool, has_z: bool) -> Option<Vec<G3857>> {
+/// Which coordinates past x and y a point carries.
+#[derive(Clone, Copy)]
+struct Dims {
+    z: bool,
+    m: bool,
+}
+
+/// A point, its Z kept and its M passed over.
+fn read_point(r: &mut Reader, le: bool, dims: Dims) -> Option<G3857> {
+    let (x, y) = (r.f64(le)?, r.f64(le)?);
+    let z = if dims.z { r.f64(le)? } else { 0.0 };
+    if dims.m {
+        r.skip(8)?;
+    }
+    Some([x, y, z])
+}
+
+fn read_ring(r: &mut Reader, le: bool, dims: Dims) -> Option<Vec<G3857>> {
     let n = r.u32(le)? as usize;
     // A length word off the wire sizes an allocation, so it is not trusted:
     // each point is at least 16 bytes, and a ring claiming more than the
@@ -138,12 +157,7 @@ fn read_ring(r: &mut Reader, le: bool, has_z: bool) -> Option<Vec<G3857>> {
     }
     let mut pts: Vec<G3857> = Vec::with_capacity(n);
     for _ in 0..n {
-        let x = r.f64(le)?;
-        let y = r.f64(le)?;
-        if has_z {
-            r.skip(8)?;
-        }
-        pts.push([x, y, 0.0]);
+        pts.push(read_point(r, le, dims)?);
     }
     Some(pts)
 }

@@ -8,19 +8,14 @@
  * call.
  */
 
-import type { U8Array } from "@xpute/core/abi/array.ts";
 import { Command, encode_input_tracking, Tracking } from "@/kernel/abi/cmd.spec.ts";
-import { CORE_DOORBELL } from "@/kernel/mem.ts";
-import { request_frame, ring_now, strobe } from "@/kernel/sched.ts";
+import { ring_now, send_input } from "@/kernel/sched.ts";
 import { orientationPermit } from "@platform/sensor.ts";
 
 export { kernel_snapshot, useKernel } from "@/kernel/snapshot.ts";
 export { kernel_hold } from "@/kernel/control/input.ts";
-
 /** Sends one of the UI's commands, rung at once. */
-export function kernel_command(cmd: Command, pkt?: U8Array): void {
-  ring_now(cmd, pkt);
-}
+export { ring_now as kernel_command } from "@/kernel/sched.ts";
 
 /** The tracking button. Following needs the compass, so where a platform
  * gates it behind a prompt (iOS Safari), the prompt runs here, inside the
@@ -32,9 +27,7 @@ export async function kernel_tracking(tracking: Tracking): Promise<void> {
     console.error("[orientation] could not start the sensor.");
     return;
   }
-  CORE_DOORBELL.send(0, Command.INPUT_TRACKING, encode_input_tracking({ tracking }));
-  strobe.input();
-  request_frame();
+  send_input(Command.INPUT_TRACKING, encode_input_tracking({ tracking }));
 }
 
 /** The location card: the location alone. The compass's prompt is raised

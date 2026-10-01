@@ -12,15 +12,17 @@
 //! bake/format.rs, `BuildingRow` and the rest). A reader knows the order by
 //! position, so the rows are read here by index in that order.
 
-use pxl_spec::bake::format::{BaseRow, BuildingRow, CoastRow, Ground, SegmentRow, Terrain};
+use pxl_spec::bake::format::{BaseRow, BuildingRow, CoastRow, DeckRow, Ground, SegmentRow, Terrain};
 use pxl_spec::bake::model::feature::Feature;
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
+use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{BranchCursor, SequenceType, TreeReader};
 
 use crate::terrain::pipeline::coast::adapter::from_coast_row;
 use crate::terrain::pipeline::coast::policy::CoastPolicy;
+use crate::terrain::pipeline::deck::bake_decks;
 use crate::terrain::pipeline::ground::bake_ground;
 use crate::terrain::pipeline::normalizer::normalize;
 use crate::terrain::pipeline::overture::adapter::{from_base_row, from_building_row, from_segment_row};
@@ -75,6 +77,16 @@ fn segment_row(row: &BranchCursor<'_>) -> Result<SegmentRow, MarshalError> {
     })
 }
 
+fn deck_row(row: &BranchCursor<'_>) -> Result<DeckRow, MarshalError> {
+    Ok(DeckRow {
+        gers_id: row.at(0)?.get_str()?,
+        subtype: row.at(1)?.get_str()?,
+        class: opt_str(row, 2)?,
+        piers: row.at(3)?.get_array::<u8>()?.into(),
+        geom_wkb: row.at(4)?.get_array::<u8>()?.into(),
+    })
+}
+
 fn base_row(row: &BranchCursor<'_>) -> Result<BaseRow, MarshalError> {
     Ok(BaseRow {
         gers_id: row.at(0)?.get_str()?,
@@ -104,6 +116,7 @@ pub fn bake_terrain(page_idx: IVec, pkt: &[u8]) -> Result<Terrain, MarshalError>
     let segments = root.at(2)?.as_branch()?;
     let base = root.at(3)?.as_branch()?;
     let coasts = root.at(4)?.as_branch()?;
+    let deck_rows = root.at(5)?.as_branch()?;
 
     let mut feats: Vec<Feature> = Vec::new();
 
@@ -136,5 +149,8 @@ pub fn bake_terrain(page_idx: IVec, pkt: &[u8]) -> Result<Terrain, MarshalError>
 
     let ground: Ground = bake_ground(&feats, has_coast_row);
 
-    Ok(Terrain::leaf(ele.to_vec(), ground))
+    let rows = (0..deck_rows.len).map(|i| deck_row(&deck_rows.at_branch(i)?)).collect::<Result<Vec<_>, _>>()?;
+    let decks = bake_decks(&rows, page_min).ok_or(MarshalError::new(Errno::ENOSPC))?;
+
+    Ok(Terrain::leaf(ele.to_vec(), ground, decks))
 }

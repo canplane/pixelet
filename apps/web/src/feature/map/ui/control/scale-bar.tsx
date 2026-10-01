@@ -32,7 +32,8 @@ const LABEL_GAP_PX = 8;
  * The line and ticks are one path, stroked as the halo's rings, so the halo
  * runs unbroken where they meet. */
 export function MapScaleBar({ show }: { show: boolean }) {
-  const { total_meters, bar_width_px } = useKernel((s) => s.scale_bar);
+  const total_meters = useKernel((s) => s.scale_bar.total_meters);
+  const bar_width_px = useKernel((s) => s.scale_bar.bar_width_px);
   // Dimmed with the chrome around it, as a surface of its own.
   const veil = useVeil(1, SNAP);
 

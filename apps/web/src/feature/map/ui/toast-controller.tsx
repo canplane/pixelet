@@ -10,7 +10,7 @@ import { useKernel } from "@/kernel/shell.ts";
 import { toastDismiss, toastShow, ToastTone } from "@/shared/ui/toast/store.ts";
 
 /** The reports the map keeps up, each one toast that replaces itself. */
-export const enum Report {
+const enum Report {
   Location = 0,
   World = 1,
 }

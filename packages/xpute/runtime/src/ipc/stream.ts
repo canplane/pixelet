@@ -17,6 +17,7 @@
 
 import type { U32Array } from "@xpute/core/abi/array.ts";
 import type { u32 } from "@xpute/core/abi/word.ts";
+import { td } from "@xpute/core/codec/encoding.ts";
 
 /** The head word holding how many words of records the turn wrote. */
 export const END = 0;
@@ -38,4 +39,9 @@ export function each_record(memory: ArrayBufferLike, at: u32, head: u32, run: (o
 /** A record's bytes, which open on their count at word `i` of `w`. */
 export function bytes_of(w: U32Array, i: u32): Uint8Array {
   return new Uint8Array(w.buffer, w.byteOffset + 4 * (i + 1), w[i]);
+}
+
+/** A record's bytes as UTF-8 text, as `bytes_of` finds them. */
+export function text_of(w: U32Array, i: u32): string {
+  return td.decode(bytes_of(w, i));
 }

@@ -27,6 +27,7 @@ export class Strobe {
   private timer_at = Infinity;
   private last = -1;
   private running = false;
+  private readonly run = (now: f64): void => this.turn(now);
 
   /** `submit` writes what the frame carries into the rings before the
    * doorbell is rung, given the grant and the gap since the last frame;
@@ -57,7 +58,7 @@ export class Strobe {
   request(): void {
     if (this.frame || !this.running) return;
     this.frame = true;
-    this.next_frame((now) => this.turn(now));
+    this.next_frame(this.run);
   }
 
   /** The host saw input: the turns after it are interactive. */
@@ -95,6 +96,6 @@ export class Strobe {
     this.submit(grant, delta_s);
     const t0 = performance.now();
     const wake_ms = this.doorbell.ring(grant.quota_ms);
-    this.quantum.observe({ delta_s, turn_ms: performance.now() - t0, grant, wake_ms });
+    this.quantum.observe(delta_s, performance.now() - t0, grant, wake_ms);
   }
 }

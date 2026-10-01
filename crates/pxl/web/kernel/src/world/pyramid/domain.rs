@@ -65,7 +65,7 @@ use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::lod::{cubes_meeting, fault_radius, Tau};
 use pxl_spec::space::observation::{Bounds, Contents, Observation};
 use pxl_spec::space::pvf3::REACH;
-use pxl_spec::space::pyramid::{chunk_span_of, LevelPage, TOP_LEVEL};
+use pxl_spec::space::pyramid::{chunk_span_of, LevelPage};
 use pxl_spec::space::v3::Aabb;
 
 use crate::global::Global;
@@ -402,9 +402,9 @@ pub fn step(ladder: &[Tau], q: Effective) -> bool {
         let retarget = made.key.is_none_or(|(_, _, target)| target != ladder[0]);
         made.key = key;
         let paging = Terrain::pyramid().paging();
-        let resident: HashSet<LevelPage> = (0..=TOP_LEVEL).flat_map(|level| paging.level(level).map(|(p, _)| p)).collect();
+        let resident: HashSet<LevelPage> = paging.held().map(|(p, _)| p).collect();
         let moved: Vec<(f64, f64, f64)> = resident.symmetric_difference(&made.resident).map(|p| p.rect()).collect();
-        let objects = heights_revision().1;
+        let objects = key.map_or(0, |(_, h, _)| h.1);
         made.rays = made.sight.observe(&o, &EdgeRays(Access::now(), ladder[0]), retarget || objects != made.objects, &moved);
         made.resident = resident;
         made.objects = objects;
@@ -556,19 +556,17 @@ impl Domain {
             match self.contents(c) {
                 Contents::Unknown => self.unanswered += 1,
                 Contents::Empty => {}
-                Contents::Holds { .. } => {
-                    if self.nearest_to(c) < self.o.far {
+                Contents::Holds { bound, .. } => {
+                    let m = Order::of(&self.o, &bound);
+                    if m.near < self.o.far {
                         roots.push(c);
+                        self.measured.insert(c, m);
                     }
                 }
             }
         }
         xpute_core::ensure!(roots.len() as u32 <= cover_pieces(top, self.o.planet), ENOTRECOVERABLE, roots.len());
         roots.sort_unstable();
-        for &c in &roots {
-            let m = self.measure(c);
-            self.measured.insert(c, m);
-        }
         self.roots = roots;
     }
 
@@ -581,8 +579,7 @@ impl Domain {
     /// at: `c` itself where the view draws it at `c`'s level or finer. No
     /// coarser than the source's top, which the view never draws over.
     pub fn wanted_over(&self, c: Chunk) -> Chunk {
-        let chain: Vec<Chunk> = std::iter::once(c).chain(c.ancestors()).filter(|k| k.level() <= self.o.top).collect();
-        chain.into_iter().rev().find(|&k| !self.splits(k)).unwrap_or(c)
+        std::iter::once(c).chain(c.ancestors()).filter(|k| k.level() <= self.o.top && !self.splits(*k)).last().unwrap_or(c)
     }
 }
 

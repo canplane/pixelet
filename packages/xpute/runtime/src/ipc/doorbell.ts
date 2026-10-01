@@ -34,10 +34,10 @@ export function packet(fill: (b: BranchView) => void): U8Array {
 
 /** What the guest raised: the message's tag, its number, and its packet's
  * branch, valid only inside the call. */
-export type SignalListener = (tag: u32, cmd: u32, f: BranchCursor | null) => void;
+type SignalListener = (tag: u32, cmd: u32, f: BranchCursor | null) => void;
 
 /** The guest's doorbell: a turn of `quota_ms`, and when it wants the next. */
-export type Interrupt = (quota_ms: f64) => f64;
+type Interrupt = (quota_ms: f64) => f64;
 
 export class Doorbell {
   private readonly sq: Ring;

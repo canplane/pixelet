@@ -15,6 +15,7 @@
 
 import type { F64Array } from "@xpute/core/abi/array.ts";
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
+import { td } from "@xpute/core/codec/encoding.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
 import { Command, encode_profiler_read } from "@/kernel/abi/cmd.spec.ts";
 import { CORE, CORE_DOORBELL } from "@/kernel/mem.ts";
@@ -47,7 +48,7 @@ const RECENT_TASKS = 20;
 const words = (at: u32, n: u32) => new Float64Array(CORE.buffer, at, n);
 const u32s = (at: u32, n: u32) => new Uint32Array(CORE.buffer, at, n);
 /** Where the kernel made a failure: a file name in its memory and a line. */
-const site = (file: u32, bytes: u32, line: u32) => file === 0 ? null : `${new TextDecoder().decode(new Uint8Array(CORE.buffer, file, bytes))}:${line}`;
+const site = (file: u32, bytes: u32, line: u32) => file === 0 ? null : `${td.decode(new Uint8Array(CORE.buffer, file, bytes))}:${line}`;
 
 function framesAt(at: u32, count: u32): Frame[] {
   const w = words(at, count * FRAME.WORDS);
@@ -149,7 +150,7 @@ export interface ProfilerReport {
   build: { number: string; id: string; time: string };
   frames: FrameSummary | null;
   /** The summary's side sections, a field a number, as profiler.json names them. */
-  sections: Record<"counters" | "atlas" | "retain" | "fetch" | "quality", Record<string, f64>>;
+  sections: Record<"counters" | "atlas" | "held" | "fetch" | "quality", Record<string, f64>>;
   steps: { phase: string; name: string; ms: f64; count: f64; max_ms: f64 }[];
   peak: Record<string, f64> | null;
   taskN: u32;
@@ -301,7 +302,7 @@ export function profilerReportRead(): ProfilerReport {
     sections: {
       counters: section(s, SUMMARY.counters),
       atlas: section(s, SUMMARY.atlas),
-      retain: section(s, SUMMARY.retain),
+      held: section(s, SUMMARY.held),
       fetch: section(s, SUMMARY.fetch),
       quality: section(s, SUMMARY.quality),
     },

@@ -70,12 +70,11 @@ impl Phases {
 pub use crate::sched::profiler::spec::CategoryName as Category;
 
 impl Category {
-    /// Which bake an object of this category belongs to. The name inside that
-    /// bake is the layer's (`DemandName`); where the two together are read
-    /// from is the host's, and nothing here knows it.
     /// Which bake an object of this category belongs to, for the categories
-    /// whose objects are pages. An asset belongs to no bake — it is named by
-    /// its content — and is asked for by its own command.
+    /// whose objects are pages. The name inside that bake is the layer's
+    /// (`DemandName`); where the two together are read from is the host's,
+    /// and nothing here knows it. An asset belongs to no bake — it is named
+    /// by its content — and is asked for by its own command.
     pub fn bake(self) -> Option<BakeKind> {
         match self {
             Category::terrain | Category::ocean => Some(BakeKind::terrain),

@@ -22,8 +22,9 @@ use xpute_runtime::mem::heap::{alloc, free};
 /// Words an upload record holds: the handle, the block's address and its
 /// length in bytes, and the vertex and index counts, which name the lanes.
 pub const UPLOAD_WORDS: usize = 5;
-/// Words a draw record holds: the handle, the vertex and index counts, the
-/// index of its uniforms, and the pipeline.
+/// Words a draw record holds: a block's handle or the arena group, two words
+/// its pipeline reads its own way (below), the index of its uniforms, and the
+/// pipeline.
 pub const DRAW_WORDS: usize = 5;
 /// Floats a draw's uniforms hold: its translation in the frame the camera
 /// is written in (3), a fourth its pipeline reads its own way (an actor's

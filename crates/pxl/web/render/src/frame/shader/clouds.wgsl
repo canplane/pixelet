@@ -133,11 +133,12 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
   // it lies over: at night the air's light is all but gone, the ground is
   // lit by the fill, and a cloud without it read as a black blot on it. By
   // day the sun has already taken the layer past white.
-  let fill = (frame_ambient() + sky_fill()) / PI + frame_floor();
+  let sky_light = sky_fill();
+  let fill = (frame_ambient() + sky_light) / PI + frame_floor();
   var color = CLOUD_ALBEDO * (light + sky * 0.5 + fill);
 
   // Where the layer lies in the root frame, for the air in front of it.
   let world = frame_camera_pos() + dir * du;
-  color = aerial(color, world);
+  color = aerial(color, world, sky_light);
   return vec4f(finish(shoulder(color), v.clip.xy), alpha);
 }

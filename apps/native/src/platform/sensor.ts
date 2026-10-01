@@ -23,8 +23,7 @@ import { AppState } from "react-native";
 import * as Location from "expo-horizon-location";
 
 import { Command, encode_sensor_error, encode_sensor_orientation, encode_sensor_permission, encode_sensor_position, GeolocationErrorCode, PermissionAnswer, Sensor } from "@/kernel/abi/cmd.spec.ts";
-import { CORE_DOORBELL } from "@/kernel/mem.ts";
-import { request_frame, ring_now } from "@/kernel/sched.ts";
+import { ring_now, send_next } from "@/kernel/sched.ts";
 import { PLATFORM } from "./module.ts";
 
 export function geolocationSupported(): boolean {
@@ -49,8 +48,7 @@ export function orientationPermit(): Promise<boolean> {
 }
 
 function sendPermission(sensor: Sensor, answer: PermissionAnswer): void {
-  CORE_DOORBELL.send(0, Command.SENSOR_PERMISSION, encode_sensor_permission({ sensor, answer }));
-  request_frame();
+  send_next(Command.SENSOR_PERMISSION, encode_sensor_permission({ sensor, answer }));
 }
 
 /** The permission as last seen: what a return to the app compares against. */
@@ -116,8 +114,7 @@ function geolocationFail(watch: Watch, code: GeolocationErrorCode): void {
   if (geolocation !== watch) return;
   watchEnd(watch);
   geolocation = null;
-  CORE_DOORBELL.send(0, Command.SENSOR_ERROR, encode_sensor_error({ code }));
-  request_frame();
+  send_next(Command.SENSOR_ERROR, encode_sensor_error({ code }));
 }
 
 export function geolocationStart(): void {
@@ -130,8 +127,7 @@ export function geolocationStart(): void {
       { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
       (pos) => {
         const { latitude, longitude, altitude, accuracy, heading } = pos.coords;
-        CORE_DOORBELL.send(0, Command.SENSOR_POSITION, encode_sensor_position({ lon: longitude, lat: latitude, altitude, accuracy: accuracy ?? Infinity, heading }));
-        request_frame();
+        send_next(Command.SENSOR_POSITION, encode_sensor_position({ lon: longitude, lat: latitude, altitude, accuracy: accuracy ?? Infinity, heading }));
       },
       () => geolocationFail(watch, GeolocationErrorCode.PositionUnavailable),
     );
@@ -168,8 +164,7 @@ export function orientationListen(): void {
       (h) => {
         // True north where the OS has a fix to correct by, magnetic otherwise.
         const heading = h.trueHeading >= 0 ? h.trueHeading : h.magHeading;
-        CORE_DOORBELL.send(0, Command.SENSOR_ORIENTATION, encode_sensor_orientation({ webkit_compass_heading: heading, alpha: null, beta: null, gamma: null }));
-        request_frame();
+        send_next(Command.SENSOR_ORIENTATION, encode_sensor_orientation({ webkit_compass_heading: heading, alpha: null, beta: null, gamma: null }));
       },
       (reason) => {
         console.error("[sensor] heading:", reason);

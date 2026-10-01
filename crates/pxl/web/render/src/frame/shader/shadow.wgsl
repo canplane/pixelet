@@ -9,6 +9,12 @@
 @group(0) @binding(2) var shadow_sampler: sampler_comparison;
 
 fn sun_lit(world_pos: vec3f, n: vec3f) -> f32 {
+  // A face turned from the sun takes none of it, whatever the map holds:
+  // shade.wgsl weighs the sun by the same facing, so the nine taps would be
+  // multiplied by zero.
+  if (dot(n, frame_sun_dir()) <= 0.0) {
+    return 0.0;
+  }
   if (frame_shadow_strength() <= 0.0) {
     return 1.0;
   }

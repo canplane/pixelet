@@ -197,7 +197,7 @@ fn a_volume_keeps_what_fills_half_its_eight_and_loses_what_fills_less() {
 /// The open ocean, as the bake makes it: flat water at sea level, no page.
 fn zero_page() -> Terrain {
     let cells = vec![with_channel(0, GroundChannelKey::LAND, cube_types::land::sea); SPAN * SPAN];
-    let mut t = Terrain::leaf(vec![0; PADDED * PADDED], Ground { cells: cells.into() });
+    let mut t = Terrain::leaf(vec![0; PADDED * PADDED], Ground { cells: cells.into() }, Default::default());
     t.index.occupancy = Occupancy::ZERO;
     t
 }

@@ -1,7 +1,7 @@
 // pxl-kernel/world/chunk/source.rs
 
-//! What a chunk is made of, past its page: which columns' objects it draws,
-//! in its tiers and in its decor, and of those which bands — a chunk is a
+//! What a chunk is made of, past its page: which columns' objects it draws
+//! in its tiers, and of those which bands — a chunk is a
 //! cube, so an object written is in one chunk a level and not in every chunk
 //! over its column — the revisions those are read as, and the
 //! flag that has the scheduler compare every chunk's against what it was
@@ -11,11 +11,11 @@ use pxl_spec::bake::constant::BandZ;
 use pxl_spec::space::indexer::{FROM_L2_IDX, L1, L2, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{chunk_span_of, CHUNK_CELLS, GROUND, TOP_LEVEL};
+use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, TOP_LEVEL};
 
 use crate::global::Global;
 use crate::kernel::with_world;
-use crate::world::change::{bump_world, world_changes, DECOR_CHUNK, TIERS_CHUNK};
+use crate::world::change::{bump_world, world_changes, TIERS_CHUNK};
 use crate::world::pyramid::chunk::Chunk as PyramidChunk;
 
 static SOURCES_CHANGED: Global<bool> = Global::new();
@@ -44,14 +44,6 @@ pub fn tiers_draw(level: u32, base: IVec, col: IVec) -> bool {
     }
 }
 
-/// Whether a chunk of `level` at `base` draws the placed decor of column
-/// `col`: the columns whose corner lies in it.
-pub fn decor_draws(level: u32, base: IVec, col: IVec) -> bool {
-    let span = chunk_span_of(level) as i64;
-    let o = FROM_L2_IDX(col);
-    (ivec::X(base)..ivec::X(base) + span).contains(&ivec::X(o)) && (ivec::Y(base)..ivec::Y(base) + span).contains(&ivec::Y(o))
-}
-
 /// Whether chunk `k` draws what lies in band `band` of a column: a band is a
 /// z16 chunk's height, so a band is in the chunk of any level whose height
 /// holds it, one a level.
@@ -77,16 +69,11 @@ pub fn objects_revision_of(k: PyramidChunk) -> u32 {
     world_changes().revision_of(TIERS_CHUNK, chunk_key(k))
 }
 
-/// What a chunk's placed decor is made of, as a revision, the same way.
-pub fn decor_revision_of(k: PyramidChunk) -> u32 {
-    world_changes().revision_of(DECOR_CHUNK, chunk_key(k))
-}
-
-/// A write to band `band` of column `col`: every chunk that draws it moves,
-/// in its tiers or its decor, and no other — a chunk over the column that
-/// does not hold the band is not made again. Its tiers' are the chunk the
-/// band lies in at each level and, above z16, through the apron a fold reads,
-/// its neighbors at that height; its decor's the one it lies in.
+/// A write to band `band` of column `col`: every chunk whose tiers draw it
+/// moves, and no other — a chunk over the column that does not hold the band
+/// is not made again. Those are the chunk the band lies in at each level
+/// and, above z16, through the apron a fold reads, its neighbors at that
+/// height.
 pub fn band_written(col: IVec, band: BandZ) {
     let corner = Pvf3 { i: FROM_L2_IDX(col), f: 0 };
     for level in 0..=TOP_LEVEL {
@@ -97,9 +84,6 @@ pub fn band_written(col: IVec, band: BandZ) {
             let k = home.beside(dx, dy, 0);
             if tiers_draw(level, k.corner(), col) {
                 bump_world(TIERS_CHUNK, chunk_key(k) as u64);
-            }
-            if decor_draws(level, k.corner(), col) {
-                bump_world(DECOR_CHUNK, chunk_key(k) as u64);
             }
         }
     }

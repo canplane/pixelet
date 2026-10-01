@@ -51,30 +51,48 @@ struct VertexOut {
   @location(0) uv: vec2f,
   @location(1) normal: vec3f,
   @location(2) world_pos: vec3f,
-  // The air in front of the vertex (atmos_view.wgsl's Seen).
+  // The air in front of the vertex (atmos_view.wgsl's Seen); the sky's fill
+  // is the frame's, flat.
   @location(3) through: vec3f,
   @location(4) scattered: vec3f,
   @location(5) past: vec3f,
-  @location(6) fill: vec3f,
+  @location(6) @interpolate(flat) fill: vec3f,
 };
+
+// A vertex's joints and weights as one matrix.
+fn skin_of(v: VertexIn) -> mat4x4f {
+  return joint(v.joints.x) * v.weights.x + joint(v.joints.y) * v.weights.y + joint(v.joints.z) * v.weights.z + joint(v.joints.w) * v.weights.w;
+}
+
+// Where a vertex skinned by `m` stands: one function, so the depth passes
+// place it where the lit pass does.
+fn skinned_world(v: VertexIn, m: mat4x4f) -> vec3f {
+  let p = (m * vec4f(v.position, 1.0)).xyz * draw_scale();
+  return on_globe(place_up(p, draw_rotation()) + draw_translation());
+}
 
 @vertex
 fn vs(v: VertexIn) -> VertexOut {
-  let m = joint(v.joints.x) * v.weights.x + joint(v.joints.y) * v.weights.y + joint(v.joints.z) * v.weights.z + joint(v.joints.w) * v.weights.w;
-  let p = (m * vec4f(v.position, 1.0)).xyz * draw_scale();
+  let m = skin_of(v);
+  let world = skinned_world(v, m);
   let n = (m * vec4f(v.normal, 0.0)).xyz;
-  let world = on_globe(place_up(p, draw_rotation()) + draw_translation());
   var o: VertexOut;
   o.clip = frame_view_proj() * vec4f(world, 1.0);
   o.uv = v.uv;
   o.normal = place_up(n, draw_rotation());
   o.world_pos = world;
-  let seen = seen_at_vertex(world);
+  let seen = seen_from_eye(world);
   o.through = seen.through;
   o.scattered = seen.scattered;
   o.past = seen.past;
   o.fill = seen.fill;
   return o;
+}
+
+// The position alone, for the passes that write depth and nothing else.
+@vertex
+fn vs_depth(v: VertexIn) -> @builtin(position) vec4f {
+  return frame_view_proj() * vec4f(skinned_world(v, skin_of(v)), 1.0);
 }
 
 @fragment

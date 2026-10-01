@@ -1,17 +1,17 @@
 // pxl-kernel/kernel.rs
 //
 // The kernel's one state: the volumes, the object store and its painter, the
-// scheduler and the change log — as one value made on first use. The
+// scheduler and the world's revisions — as one value made on first use. The
 // kernel's modules read and write it directly, and hand the view
 // (pxl-render) what it draws; pxl-wasm keeps only the rings and hands
 // commands to it.
 
 use pxl_render::mesh::paint::object::adapter::Painter;
 use pxl_render::mesh::volume::Volumes;
-use xpute_runtime::ipc::change::{ChangeLog, ChangeLogOptions};
 
 use crate::global::Global;
 use crate::layer::object::store::Store;
+use crate::world::change::Revisions;
 use crate::world::chunk::table::Scheduler;
 
 pub struct Kernel {
@@ -22,8 +22,8 @@ pub struct Kernel {
     pub painter: Painter,
     /// The chunks' builds.
     pub sched: Scheduler,
-    /// The world's change log (world/change.rs's topics).
-    pub changes: ChangeLog,
+    /// The world's revisions (world/change.rs's topics).
+    pub changes: Revisions,
 }
 
 impl Kernel {
@@ -33,11 +33,7 @@ impl Kernel {
             objects: Store::new(),
             painter: Painter::new(),
             sched: Scheduler::new(),
-            changes: ChangeLog::new(ChangeLogOptions {
-                topics: crate::world::change::WORLD_TOPICS,
-                capacity: crate::param::JOURNAL_CAPACITY,
-                keys_per_topic: None,
-            }),
+            changes: Revisions::default(),
         }
     }
 }

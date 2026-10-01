@@ -4,9 +4,17 @@
 // model to be worth its triangles (kernel layer/decor/build.rs `decor_tier`).
 // The instances are decor.wgsl's, read the same way, through the index list.
 
-// Held as vec4 words, as decor.wgsl's: translation, the group's first lane
-// word, its stride, the opacity, the sprite's layer, the index list's first
-// word.
+// Held as vec4 words, as decor.wgsl's, with the sprite's layer where decor
+// has padding.
+struct Draw {
+  translation: vec3f,
+  offset: u32,
+  stride: u32,
+  opacity: f32,
+  layer: u32,
+  index: u32,
+};
+
 @group(1) @binding(0) var<uniform> draw_words: array<vec4f, 2>;
 
 fn draw_translation() -> vec3f { return draw_words[0].xyz; }
@@ -28,15 +36,17 @@ struct VertexIn {
   @builtin(vertex_index) k: u32,
 };
 
+// The normal is the quad's, turned to the eye once for all four corners,
+// and the sky's fill the frame's: both flat.
 struct VertexOut {
   @builtin(position) clip: vec4f,
   @location(0) uv: vec2f,
-  @location(1) normal: vec3f,
+  @location(1) @interpolate(flat) normal: vec3f,
   @location(2) world_pos: vec3f,
   @location(3) through: vec3f,
   @location(4) scattered: vec3f,
   @location(5) past: vec3f,
-  @location(6) fill: vec3f,
+  @location(6) @interpolate(flat) fill: vec3f,
 };
 
 fn lane(k: u32, i: u32) -> f32 {
@@ -62,7 +72,7 @@ fn vs(v: VertexIn) -> VertexOut {
   o.uv = vec2f(0.5 + 0.5 * corner.x, 0.5 - 0.5 * corner.y);
   o.normal = facing;
   o.world_pos = world;
-  let seen = seen_at_vertex(world);
+  let seen = seen_from_eye(world);
   o.through = seen.through;
   o.scattered = seen.scattered;
   o.past = seen.past;

@@ -155,7 +155,7 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   let across = (dir - dot(dir, atmos_moon_dir()) * atmos_moon_dir()) / (MOON_ANGULAR_RADIUS * DISC_SCALE);
   let moon_a = length(across);
   let moon_w = max(fwidth(moon_a), 1e-4);
-  var color = beyond(air_along(dir)) + sun_disc(dir, r, sun_a, sun_w) + moon_disc(dir, r, across, moon_a, moon_w) + glare(dir);
+  var color = beyond(air_along(dir), sky_fill()) + sun_disc(dir, r, sun_a, sun_w) + moon_disc(dir, r, across, moon_a, moon_w) + glare(dir);
   color = shoulder(color);
   color += (hash(v.clip.xy) - 0.5) * (1.0 / 255.0);
   return vec4f(finish(color, v.clip.xy), 1.0);

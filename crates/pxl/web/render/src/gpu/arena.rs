@@ -1,7 +1,7 @@
 // pxl-render/gpu/arena.rs
 
 //! Where chunk meshes live: on the device alone, in a fixed number of
-//! storage buffers of a fixed size, each mesh at an offset its owner decides
+//! vertex buffers of a fixed size, each mesh at an offset its owner decides
 //! by arithmetic (the kernel's world/chunk/mesh_slot.rs). Nothing here is
 //! allocated per mesh and nothing is given back; a mesh written over another
 //! simply takes its place.
@@ -13,6 +13,7 @@
 //! does hold, the terrain records.
 
 use crate::gpu::api::{buffer_usage, gpu, object};
+use crate::gpu::renderer::device_ready;
 use xpute_runtime::global::Global;
 
 /// Buffers the arena can hold: one a group of levels.
@@ -62,7 +63,7 @@ pub fn arena_epoch() -> u32 {
 /// Writes `bytes` at `offset` in group `group`, making the buffers first where
 /// the device has none. False when there is no device to write to.
 pub fn arena_write(group: usize, offset: u32, bytes: &[u8]) -> bool {
-    let Some(g) = gpu().filter(|_| crate::gpu::renderer::device_ready()) else {
+    let Some(g) = gpu().filter(|_| device_ready()) else {
         return false;
     };
     let a = arena();
@@ -81,9 +82,10 @@ pub fn arena_write(group: usize, offset: u32, bytes: &[u8]) -> bool {
     true
 }
 
-/// Group `group`'s buffer, or none where the device has not made it. The
-/// draw binds it as a vertex buffer at the offset of its own first box, so
-/// there is no bind group over it and nothing to key by a layout.
+/// Group `group`'s buffer, or none where the device has not made it. A draw
+/// binds it as a vertex buffer and starts at its own first box as its first
+/// instance, so there is no bind group over it and nothing to key by a
+/// layout.
 pub fn arena_buffer(group: usize) -> Option<u32> {
     let id = arena().buffers[group];
     if id == 0 {

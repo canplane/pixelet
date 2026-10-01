@@ -72,12 +72,11 @@ impl Layer for Terrain {
     }
 
     /// A page coming or going changes the ground drawn under whatever it
-    /// is the finest resident page over. The chunks are told nothing: which a view draws is the
-    /// cover's, made again from the pyramid's revision, and a chunk whose
-    /// page has gone leaves it.
+    /// is the finest resident page over: a chunk is read from its own page or
+    /// the nearest one over it, so the chunks compare their sources at the
+    /// next turn. Which chunks a view draws is the cover's, made again from
+    /// the pyramid's revision.
     fn changed(_p: LevelPage, _present: bool) {
-        // A chunk is read from its own page or the nearest one over it, so a
-        // page coming or going changes what some are read from.
         crate::world::chunk::source::chunk_sources_changed();
     }
 }

@@ -13,7 +13,7 @@
  */
 
 import type { U8Array } from "@xpute/core/abi/array.ts";
-import type { f64 } from "@xpute/core/abi/word.ts";
+import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { Strobe } from "@xpute/runtime/sched/strobe.ts";
 import { Command, encode_world_frame } from "@/kernel/abi/cmd.spec.ts";
 import { CORE, CORE_DOORBELL } from "@/kernel/mem.ts";
@@ -32,26 +32,22 @@ export interface Viewport {
  * event of its own. */
 let driver: (() => Viewport) | null = null;
 
-/** The local wall clock, as the frame's command carries it: unix ms, the
- * local hour, minute and second, and the local day's start. */
-interface LocalTime {
-  unix_ms: f64;
-  hours: f64;
-  minutes: f64;
-  seconds: f64;
-  day_start_ms: f64;
-}
-
-function local_time(): LocalTime {
-  const d = new Date();
-  const start = new Date(d);
-  start.setHours(0, 0, 0, 0);
-  return { unix_ms: d.getTime(), hours: d.getHours(), minutes: d.getMinutes(), seconds: d.getSeconds(), day_start_ms: start.getTime() };
-}
-
 /** Asks for a frame: the next animation frame strobes the kernel. */
 export function request_frame(): void {
   strobe.request();
+}
+
+/** Sends a command for the next turn and asks for the frame that runs it. */
+export function send_next(cmd: u32, pkt?: U8Array): void {
+  CORE_DOORBELL.send(0, cmd, pkt);
+  request_frame();
+}
+
+/** Sends an input for the next turn: the turns after it are interactive. */
+export function send_input(cmd: u32, pkt?: U8Array): void {
+  CORE_DOORBELL.send(0, cmd, pkt);
+  strobe.input();
+  request_frame();
 }
 
 /** Sends a command and rings it at once with no quota: what it asks of the
@@ -83,10 +79,30 @@ export function start_sched(): void {
     const { width: w, height: h, dpr } = driver();
     const width = Math.max(1, w);
     const height = Math.max(1, h);
+    // One instant: read as the wall clock, then moved to its day's start.
+    const now = new Date();
+    const unix_ms = now.getTime();
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    const seconds = now.getSeconds();
+    now.setHours(0, 0, 0, 0);
     CORE_DOORBELL.send(
       0,
       Command.WORLD_FRAME,
-      encode_world_frame({ width, height, dpr, delta_s, frame_ms: grant.frame_ms, interactive: grant.interactive, credits: NET_CREDITS, ...local_time() }),
+      encode_world_frame({
+        width,
+        height,
+        dpr,
+        delta_s,
+        frame_ms: grant.frame_ms,
+        interactive: grant.interactive,
+        credits: NET_CREDITS,
+        unix_ms,
+        hours,
+        minutes,
+        seconds,
+        day_start_ms: now.getTime(),
+      }),
     );
   }, (run) => requestAnimationFrame(run));
 }

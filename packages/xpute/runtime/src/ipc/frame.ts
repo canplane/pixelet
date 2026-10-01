@@ -49,9 +49,9 @@ export const FRAME_RESULT: u32 = 2;
 export const FRAME_PACKET: u32 = 3;
 
 /** Where the flags start in word 1. */
-export const FLAG_SHIFT: u32 = 16;
+const FLAG_SHIFT: u32 = 16;
 /** The low half of word 1. */
-export const CMD_MASK: u32 = (1 << FLAG_SHIFT) - 1;
+const CMD_MASK: u32 = (1 << FLAG_SHIFT) - 1;
 
 /** What a frame asks for, or reports. Bits 2 and up are reserved above. */
 export const enum FrameFlag {

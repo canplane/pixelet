@@ -108,7 +108,7 @@ pub fn bake_ground(elements: &[Feature], has_coast_row: bool) -> Ground {
 
     // Render categorized ground features.
     for feat in &other_feats {
-        if feat.extra.is_unseen {
+        if feat.extra.is_unseen || feat.extra.is_deck {
             continue;
         }
         let Some(cfg) = feat.cell_cfg else { continue };

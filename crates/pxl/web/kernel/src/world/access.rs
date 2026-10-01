@@ -634,7 +634,7 @@ impl<'a> Access<'a> {
                 let col_idx = pxl_spec::space::pvf3::ivec::gather(x.div_euclid(across), y.div_euclid(across), 0);
                 let entries = self.cell_entries(col_idx, [x.rem_euclid(across), y.rem_euclid(across)], z);
                 let corner = [(x.div_euclid(across) * across) as f64 * side, (y.div_euclid(across) * across) as f64 * side];
-                object_hit(ray, &entries, corner)
+                object_hit(ray, entries, corner)
             } else {
                 let v = u32::from(self.objects.folded_value(scale, [x, y, z]));
                 (object_value_is_voxel(v) && !object_value_is_air(v)).then(|| cell_hit(ray, [x, y, z], scale, t0)).flatten()
@@ -655,20 +655,22 @@ impl<'a> Access<'a> {
     /// The voxel entries of the cell at column-local (cx, cy) and height
     /// `cz`: each placed thing that paints a voxel, with where it is filed.
     /// A decor paints none, so a cell of decor alone is the ground's.
-    fn cell_entries(&self, col_idx: IVec, [cx, cy]: [i64; 2], cz: i64) -> Vec<EntryCursor> {
-        let Some(run) = self.objects.cell(col_idx, cx as u32, cy as u32, cz as CellZ) else {
-            return Vec::new();
+    fn cell_entries(&self, col_idx: IVec, [cx, cy]: [i64; 2], cz: i64) -> impl Iterator<Item = EntryCursor> + '_ {
+        let run = self.objects.cell(col_idx, cx as u32, cy as u32, cz as CellZ);
+        let e = run.and(self.objects.entries(col_idx));
+        let ks = match (run, e) {
+            (Some(run), Some(_)) => run.start as usize..(run.start + run.count) as usize,
+            _ => 0..0,
         };
-        let Some(e) = self.objects.entries(col_idx) else { return Vec::new() };
-        (run.start as usize..(run.start + run.count) as usize)
-            .filter(|&k| !object_value_is_decor(e.state[k]))
-            .map(|k| {
+        ks.filter_map(move |k| {
+            let e = e?;
+            (!object_value_is_decor(e.state[k])).then(|| {
                 let mut cursor = EntryCursor::default();
                 cursor.at_column(col_idx);
                 cursor.load(e.band[k], e.pos[k], e.state[k]);
                 cursor
             })
-            .collect()
+        })
     }
 }
 
@@ -710,9 +712,9 @@ fn wall_normal(ray: &Ray, t: f64, side: f64) -> V3 {
 /// The nearest solid of a cell's voxel entries the ray enters, or none: air
 /// is nothing to meet, and the cell is empty past what is placed in it.
 /// `corner` is the column's, in units, which the entries' corners are from.
-fn object_hit(ray: &Ray, entries: &[EntryCursor], [x0, y0]: [f64; 2]) -> Option<Hit> {
+fn object_hit(ray: &Ray, entries: impl Iterator<Item = EntryCursor>, [x0, y0]: [f64; 2]) -> Option<Hit> {
     let mut best: Option<Hit> = None;
-    for e in entries.iter().filter(|e| !object_value_is_air(e.state)) {
+    for e in entries.filter(|e| !object_value_is_air(e.state)) {
         let min = [x0 + e.lx, y0 + e.ly, e.lz];
         let max = min.map(|v| v + e.size);
         let Some((t, normal)) = ray_box(ray, &min, &max) else { continue };

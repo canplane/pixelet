@@ -18,7 +18,6 @@
 
 use crate::global::Global;
 use crate::layer::billboard::batch::BillboardBatch;
-use crate::layer::billboard::field::BILLBOARD_FLOATS;
 use crate::layer::billboard::selection::select_visible_billboards;
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::layer::poi::badge::{self, Label};
@@ -48,6 +47,11 @@ struct Placement {
     /// its box on the screen, what it says and where it stands: the point
     /// it is drawn over, on the surface there.
     hits: Vec<([f64; 4], Label, Pvf3)>,
+    /// What a turn works in, kept so a settled turn asks the heap for
+    /// nothing: each badge's label and where it stands, and the instances
+    /// written for the set.
+    labeled: Vec<(Label, Pvf3)>,
+    instances: Vec<f32>,
 }
 static PLACEMENT: Global<Placement> = Global::new();
 
@@ -145,7 +149,8 @@ pub fn step(ctx: &mut TickContext) {
         }
     }
     p.batch.reset();
-    let mut labeled = Vec::new();
+    let mut labeled = core::mem::take(&mut p.labeled);
+    labeled.clear();
     for (cell, t) in cells {
         let label = match (t.count, t.place) {
             (1, Some((page, place))) => Label::Place { page, place },
@@ -181,7 +186,8 @@ pub fn step(ctx: &mut TickContext) {
     });
     p.hits.clear();
     p.hits.extend(p.drawn.iter().rev().map(|&i| (p.batch.screen[i as usize], labeled[i as usize].0, labeled[i as usize].1)));
-    let mut instances = Vec::with_capacity(p.drawn.len() * BILLBOARD_FLOATS);
+    let mut instances = core::mem::take(&mut p.instances);
+    instances.clear();
     for &i in &p.drawn {
         let i = i as usize;
         let (sheet, slot) = (billboard_sheet(), badge::slot(labeled[i].0) as u32);
@@ -198,13 +204,13 @@ pub fn step(ctx: &mut TickContext) {
             (badge::ANCHOR / badge::HEIGHT) as f32,
         ]);
     }
-    if p.set.is_none() && instances.is_empty() {
-        return;
+    if p.set.is_some() || !instances.is_empty() {
+        let set = *p.set.get_or_insert_with(|| new_billboard_set(BillboardOrder::Poi));
+        place_billboard_set(set, base);
+        write_billboard_set(set, &instances);
+        ctx.invalidate();
     }
-    let set = *p.set.get_or_insert_with(|| new_billboard_set(BillboardOrder::Poi));
-    place_billboard_set(set, base);
-    write_billboard_set(set, &instances);
-    ctx.invalidate();
+    (p.labeled, p.instances) = (labeled, instances);
 }
 
 /// A tap at `ndc_x`, `ndc_y` (in [−1, 1], y up) on the badges: the nearest

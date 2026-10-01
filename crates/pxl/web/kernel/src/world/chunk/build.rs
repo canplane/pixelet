@@ -3,8 +3,8 @@
 //! A chunk's build: the builder that makes its tiers from what it is made
 //! of (source.rs).
 //!
-//! Every decision about a chunk, and everything it holds — its tiers, its
-//! decor blocks, the sources they were made from — is the scheduler's
+//! Every decision about a chunk, and everything it holds — its tiers and the
+//! sources they were made from — is the scheduler's
 //! (crates/pxl/web/kernel/src/world/chunk/table.rs). What is here acts on
 //! what it asks.
 
@@ -23,7 +23,7 @@ use pxl_spec::space::indexer::{FROM_L2_IDX, L2, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use std::collections::HashMap;
 use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::heap::{free, Block};
+use xpute_runtime::mem::heap::Block;
 
 use crate::layer::object::store::{object_col_revision, Store};
 use crate::mem::fixed::{at, Range};
@@ -60,12 +60,6 @@ pub fn object_fold(cube: Cube) -> Scale {
     cube.clamp(OBJECT_FINEST, CELL)
 }
 
-/// Hands a block back to the heap. Every view into it is dead
-/// afterward.
-pub fn release_block(at: usize, bytes: u32) {
-    // SAFETY: a block this chunk took and has not given back.
-    unsafe { free((at, bytes)) };
-}
 
 // ---- the build as the kernel runs it ----
 //
@@ -128,9 +122,6 @@ pub enum BuildEvent {
     Tier { id: u32, generation: u32, cube: Cube, box_cnt: u32, heights: Heights },
 }
 
-/// A chunk's runs: which of `.fixed.runs`'s sets, and what is in it — and
-/// the scale its objects were folded to where it painted any
-/// (`object_fold`), which only the cubes that fold to it are baked from.
 /// A run set held: the column its runs are of, the chunks of that column
 /// using it, and its runs once made. A column crossing a cube's floor or
 /// ceiling is two chunks or more, each a cut of the one column's runs, so the
@@ -141,6 +132,9 @@ struct RunHold {
     runs: Option<Runs>,
 }
 
+/// A chunk's runs: which of `.fixed.runs`'s sets, and what is in it — and
+/// the scale its objects were folded to where it painted any
+/// (`object_fold`), which only the cubes that fold to it are baked from.
 #[derive(Clone, Copy)]
 struct Runs {
     set: usize,
@@ -199,11 +193,6 @@ struct Read {
 }
 
 impl Read {
-    /// Whether it is the chunk's own page.
-    fn own(&self) -> bool {
-        self.own.n == 1
-    }
-
     fn around(&self) -> Around<'static> {
         Around {
             own: self.own.view(),
@@ -435,26 +424,11 @@ impl Builder {
         }
     }
 
-    /// Where chunk `id` starts in its page, the page's lanes and the
-    /// structure setting it is drawn under: the ground its decor is
-    /// scattered over, at any level. None while its own page has not come:
-    /// a chunk drawn from a page over it scatters nothing, since what it
-    /// scattered there would move when its own page came.
-    pub fn ground_of(&self, id: u32) -> Option<(u32, u32, &'static Terrain, bool)> {
-        let c = self.chunks.get(&id)?;
-        let read = c.read().filter(Read::own)?;
-        let (tx0, ty0) = c.at.in_page();
-        Some((tx0, ty0, read.own.page, c.structures))
-    }
 
     pub fn generation_of(&self, id: u32) -> Option<u32> {
         self.chunks.get(&id).map(|c| c.generation)
     }
 
-    /// The entry the drawn build leaves out.
-    pub fn hide(&self) -> Option<EntryAt> {
-        self.hide
-    }
 
     /// The chunks holding the scan slot and the bake slot.
     pub fn holders(&self) -> [Option<u32>; 2] {
@@ -481,10 +455,7 @@ impl Builder {
     }
 
     pub fn remove(&mut self, world: &mut World, id: u32) {
-        self.abort_scan_of(world, id);
-        if matches!(&self.bake_job, Some(j) if j.id == id) {
-            self.abort_bake();
-        }
+        self.abort_work_of(world, id);
         self.leave_runs(id);
         self.chunks.remove(&id);
     }
@@ -499,14 +470,14 @@ impl Builder {
         }
     }
 
-    /// The tiers the chunk still lacks. A bake of a tier not wanted
-    /// gives the slot back now.
     /// The chunk the one bake open is for, and the cube and generation it
     /// bakes; none while no bake is open.
     pub fn baking(&self) -> Option<(u32, Cube, u32)> {
         self.bake_job.as_ref().map(|j| (j.id, j.cube, j.generation))
     }
 
+    /// The tiers the chunk still lacks. A bake of a tier not wanted
+    /// gives the slot back now.
     pub fn want(&mut self, world: &mut World, id: u32, want: [Option<Cube>; 2]) {
         let Some(c) = self.chunks.get_mut(&id) else { return };
         c.want = want;
@@ -528,11 +499,16 @@ impl Builder {
     /// The chunk's sources changed: its column's runs are stale for every
     /// chunk over it, which share them.
     fn drop_work(&mut self, world: &mut World, id: u32) {
+        self.abort_work_of(world, id);
+        self.drop_runs(id);
+    }
+
+    /// Aborts the scan and the bake chunk `id` holds, if it holds either.
+    fn abort_work_of(&mut self, world: &mut World, id: u32) {
         self.abort_scan_of(world, id);
         if matches!(&self.bake_job, Some(j) if j.id == id) {
             self.abort_bake();
         }
-        self.drop_runs(id);
     }
 
     fn abort_scan_of(&mut self, world: &mut World, id: u32) {
@@ -604,14 +580,23 @@ impl Builder {
     /// until the heap changes — and the chunk waits for a release.
     fn refuse(&mut self, world: &mut World, id: u32) {
         self.stat.starved += 1;
-        self.abort_scan_of(world, id);
-        if matches!(&self.bake_job, Some(j) if j.id == id) {
-            self.abort_bake();
-        }
+        self.abort_work_of(world, id);
         self.leave_runs(id);
         let releases = crate::host::heap_stat().releases;
         if let Some(c) = self.chunks.get_mut(&id) {
             c.refused = Some(releases);
+        }
+    }
+
+    /// Chunk `id` no longer wants a tier of `cube`; its column's runs are
+    /// let go once it wants none.
+    fn unwant(&mut self, id: u32, cube: Cube) {
+        let Some(c) = self.chunks.get_mut(&id) else { return };
+        for w in c.want.iter_mut().filter(|w| **w == Some(cube)) {
+            *w = None;
+        }
+        if c.wanted().next().is_none() {
+            self.leave_runs(id);
         }
     }
 
@@ -626,9 +611,8 @@ impl Builder {
     /// Advances the chunks in `order` under `budget_ms` of `now`, the
     /// holders of the scan and the bake slot first: a slot held is every
     /// other chunk's wait. At least one step is taken, whatever the budget.
-    /// A block refused ends the tick: the heap does not change until the
-    /// scheduler reclaims after, so every later request would meet the same
-    /// heap, and a refusal is not free — the direct runs are written whole
+    /// A block refused ends the tick: the heap does not change within it, so
+    /// every later request would meet the same heap, and a refusal is not free — the direct runs are written whole
     /// before their block is asked for. Whether any chunk did work.
     pub fn tick(&mut self, world: &mut World, order: &[u32], budget_ms: f64, now: &impl Fn() -> f64, emit: &mut impl FnMut(BuildEvent) -> bool) -> bool {
         let t0 = now();
@@ -890,18 +874,7 @@ impl Builder {
                 self.direct.direct_run(floor, top, self.sample.material[i], self.sample.layer_idx[i]);
             }
         }
-        let bytes = self.direct.close_direct();
-        let Some((set, at)) = self.set_of(id, bytes) else {
-            self.direct.abort();
-            self.refuse(world, id);
-            return Progress::Blocked;
-        };
-        // SAFETY: as for a scan's set.
-        unsafe { self.direct.provide_set(ptr_at::<u8>(at), bytes) };
-        let count = self.direct.finish();
-        self.stat.direct += 1;
-        self.keep_runs(id, Runs { set, bytes, count, fold: None });
-        Progress::Busy
+        self.close_direct(world, id)
     }
 
     /// A level chunk's runs, written the direct way: its level page's ground
@@ -929,6 +902,12 @@ impl Builder {
             (target.index(x0), target.index(y0)),
             GROUND.scale(0).count_in(target),
         );
+        self.close_direct(world, id)
+    }
+
+    /// Closes the direct runs written for chunk `id` into its run set: kept
+    /// as its runs, or the chunk refused where the set has no room.
+    fn close_direct(&mut self, world: &mut World, id: u32) -> Progress {
         let bytes = self.direct.close_direct();
         let Some((set, at)) = self.set_of(id, bytes) else {
             self.direct.abort();
@@ -1011,13 +990,7 @@ impl Builder {
                 if !emit(asked) {
                     let job = self.bake_job.take().unwrap();
                     self.bake.abort();
-                    let c = self.chunks.get_mut(&id).unwrap();
-                    for w in c.want.iter_mut().filter(|w| **w == Some(job.cube)) {
-                        *w = None;
-                    }
-                    if c.wanted().next().is_none() {
-                        self.leave_runs(id);
-                    }
+                    self.unwant(id, job.cube);
                     return Progress::Busy;
                 }
                 // The one bake open writes a slot's worth at a time into
@@ -1090,15 +1063,7 @@ impl Builder {
                         heights: mesh.heights,
                     });
                 }
-                let c = self.chunks.get_mut(&id).unwrap();
-                for w in c.want.iter_mut() {
-                    if *w == Some(job.cube) {
-                        *w = None;
-                    }
-                }
-                if c.wanted().next().is_none() {
-                    self.leave_runs(id);
-                }
+                self.unwant(id, job.cube);
                 emit(BuildEvent::Tier {
                     id,
                     generation: job.generation,

@@ -590,7 +590,7 @@ pub mod SUMMARY {
         pub const WORDS: u32 = 4;
         pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "WORDS"];
     }
-    pub mod retain {
+    pub mod held {
         pub const AT: u32 = 392;
         pub const run_sets: u32 = 0;
         pub const run_set_mb: u32 = 1;
@@ -674,7 +674,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "step", "star", "frames_held", "admitted", "evicted", "refined", "recubed", "changes_peak", "WORDS"];
     }
     pub const WORDS: u32 = 588;
-    pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "retain", "fetch", "peak", "steps", "quality", "WORDS"];
+    pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "held", "fetch", "peak", "steps", "quality", "WORDS"];
 }
 
 /// What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count.

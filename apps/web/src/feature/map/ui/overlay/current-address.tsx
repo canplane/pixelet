@@ -19,9 +19,9 @@ interface CurrentAddressProps {
  * as a map titles a spot with no name. */
 export function CurrentAddress(props: CurrentAddressProps) {
   const { label } = props;
-  const center = useKernel((s) => s.map.center);
+  const position = useKernel((s) => s.map.center && coordinates(s.map.center));
 
-  const text = label ?? (center && coordinates(center));
+  const text = label ?? position;
   if (!text) return null;
 
   return (

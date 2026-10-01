@@ -192,7 +192,7 @@ struct Quality {
     smooth: Smooth,
     /// The feasible step the last turn found, for the profiler.
     star: usize,
-    counts: Vec<Option<Slots>>,
+    counts: [Option<Slots>; param::TAU_STEPS + 1],
     counted: Option<(u32, u32)>,
 }
 
@@ -227,8 +227,7 @@ pub fn step() {
     let key = Some((domain::walks(), sched.needs_revision()));
     if q.counted != key {
         q.counted = key;
-        q.counts.clear();
-        q.counts.resize(ladder.len(), None);
+        q.counts = [None; param::TAU_STEPS + 1];
     }
     let counts = &mut q.counts;
     let mut count = |k: usize| *counts[k].get_or_insert_with(|| domain::cut_at(k).map_or([0; POOLS], |(d, cut)| need(d, cut, |c, cube| sched.slots_of(c, cube))));
