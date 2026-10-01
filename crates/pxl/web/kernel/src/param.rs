@@ -287,7 +287,10 @@ pub const RESOLUTION_CHANGE_GAP_MS: f64 = 1000.0;
 
 // ---- a walker's step (world/access.rs `support`) ----
 
-/// How many cells a walker steps up onto, from the cell it walks into: one,
-/// as Minecraft's step. What fills more than this beside it is a wall, and
-/// the step is not taken.
-pub const STEP_CELLS: i64 = 1;
+/// How many cells a walker steps up onto, from the cell it walks into. What
+/// fills more than this beside it is a wall, and the step is not taken.
+///
+/// Four, set by the product owner by choice (2026-10-02), derived from
+/// nothing: no precedent or measurement fixes it. It is not Minecraft's —
+/// a walk there steps 0.6 of a block, and a jump makes a whole one.
+pub const STEP_CELLS: i64 = 4;
