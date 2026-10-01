@@ -59,29 +59,6 @@ fn an_area_one_cell_wide_is_a_tie_and_a_dot_goes() {
 }
 
 #[test]
-fn a_way_one_cell_wide_is_kept_while_its_class_is_shown() {
-    let empty = plane(|_, _| 0);
-    let road = plane(|x, _| if x == 11 { cube_types::transport::road_primary } else { 0 });
-    assert_eq!(fold([&road, &empty, &empty, &empty], 1)[5], cube_types::transport::road_primary);
-    // A footway is shown to level 1 only; a level up it folds as an area,
-    // and a one-cell line of it is a tie, which on level 2 the north-east
-    // corner takes and the even column loses.
-    let path = plane(|x, _| if x == 10 { cube_types::transport::pedestrian } else { 0 });
-    assert_eq!(fold([&path, &empty, &empty, &empty], 2)[5], 0);
-}
-
-#[test]
-fn where_ways_meet_the_one_of_higher_precedence_keeps_the_cell() {
-    let empty = plane(|_, _| 0);
-    let cross = plane(|x, y| match (x, y) {
-        (10, _) => cube_types::transport::road_default,
-        (_, 10) => cube_types::transport::road_motorway,
-        _ => 0,
-    });
-    assert_eq!(fold([&cross, &empty, &empty, &empty], 1)[5 * SPAN + 5], cube_types::transport::road_motorway);
-}
-
-#[test]
 fn a_feature_two_cells_wide_survives_a_fold() {
     let road = plane(|x, _| if x == 10 || x == 11 { 3 } else { 0 });
     let empty = plane(|_, _| 0);

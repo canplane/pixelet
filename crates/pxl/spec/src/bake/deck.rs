@@ -28,7 +28,6 @@ use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{BranchCursor, BranchViewImpl, NodeView};
 
-use super::generalize::line;
 use super::way;
 use crate::space::hierarchy::child_of;
 use crate::space::pyramid::PAGE_CELLS;
@@ -331,10 +330,9 @@ impl Deck<'_> {
 }
 
 /// A page's decks one level up, from its four children's: each child's
-/// decks in the parent's cells, kept while the ground keeps its way at the
-/// level and at least a cell wide, as the ground draws it (bake/generalize.rs)
-/// — a bore, which only the near view goes into, while it is as wide as half
-/// a cell — and each line simplified to the parent's cell — a point
+/// decks in the parent's cells, at their own width, kept while they are as
+/// wide as half the parent's cell — by their size and nothing of what they
+/// are — and each line simplified to the parent's cell — a point
 /// goes where the line without it stays within half a cell of it across and
 /// half a cell of height. A deck two children both carry is carried twice,
 /// which draws the same columns twice.
@@ -347,15 +345,10 @@ pub fn fold_decks(children: [&Decks; 4], level: u32) -> Decks {
     for (q, child) in children.iter().enumerate() {
         let [qx, qy] = child_of([0, 0], q).map(|v| v as f64 * n);
         for deck in child.iter() {
-            let halved = deck.width / 2;
-            let shown = match deck.form {
-                Form::Deck | Form::Ramp => line(deck.kind).is_some_and(|(last, _)| level <= last),
-                Form::Bore => f64::from(halved) >= POINT_SCALE / 2.0,
-            };
-            if !shown {
+            let width = deck.width / 2;
+            if f64::from(width) < POINT_SCALE / 2.0 {
                 continue;
             }
-            let width = if deck.form == Form::Bore { halved } else { halved.max(POINT_SCALE as u8) };
             let points: Vec<[f64; 2]> = (0..deck.points.len()).map(|i| deck.point(i)).map(|[x, y]| [(x + qx) / 2.0, (y + qy) / 2.0]).collect();
             let keep = simplify(&points, deck.tops, 0.5, height_tolerance);
             let kept: Vec<usize> = (0..points.len()).filter(|&i| keep[i] || deck.piers[i] != 0).collect();

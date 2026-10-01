@@ -31,16 +31,16 @@ fn a_narrow_deck_along_a_diagonal_is_one_band() {
 }
 
 #[test]
-fn a_deck_folds_away_with_its_way_and_stays_a_cell_wide_till_then() {
-    let road = one(&[[0.0, 0.0], [100.0, 0.0]], &[50, 50], 0.5);
+fn a_deck_is_kept_up_the_pyramid_by_its_width_alone() {
     let empty = Decks::default();
-    let up = fold_decks([&road, &empty, &empty, &empty], 1);
+    // Two cells wide: one cell a level up, kept at its own width.
+    let wide = one(&[[0.0, 0.0], [100.0, 0.0]], &[50, 50], 2.0);
+    let up = fold_decks([&wide, &empty, &empty, &empty], 1);
     assert_eq!(up.len(), 1);
     assert_eq!(up.deck(0).width_cells(), 1.0);
-    let mut b = Builder::default();
-    b.push([([0.0, 0.0], 50, 0), ([100.0, 0.0], 50, 0)], 16, crate::cell::cube::cube_types::transport::pedestrian, Form::Deck);
-    let path = b.finish();
-    assert_eq!(fold_decks([&path, &empty, &empty, &empty], 2).len(), 0);
+    // Under a cell wide: under half the parent's, and gone, whatever it is.
+    let narrow = one(&[[0.0, 0.0], [100.0, 0.0]], &[50, 50], 0.75);
+    assert_eq!(fold_decks([&narrow, &empty, &empty, &empty], 1).len(), 0);
 }
 
 #[test]
