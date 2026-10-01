@@ -21,7 +21,8 @@ use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::v3::{floor3n, V3};
 use pxl_spec::space::xy::TO_XY;
 
-use crate::control::camera::orbit::orbit_view;
+use crate::control::camera::controller::{active, Active};
+use crate::control::camera::orbit::orbit;
 use crate::global::Global;
 use crate::kernel::kernel;
 use crate::layer::billboard::field::BILLBOARD_FLOATS;
@@ -193,7 +194,10 @@ impl Sketch {
 /// The frames' rings about the orbit's pivot: the observer's heading, which
 /// turns with the orbit, and the world's axes, which never turn.
 fn sketch_frames(s: &mut Sketch) {
-    let o = orbit_view();
+    if active() != Active::Orbit {
+        return;
+    }
+    let o = orbit();
     let (pivot, (sin, cos)) = (o.pivot, (-o.azimuth).sin_cos());
     let heading_frame = move |p: V3| [pivot[0] + p[0] * cos - p[1] * sin, pivot[1] + p[0] * sin + p[1] * cos, pivot[2] + p[2]];
     s.gyro(&heading_frame, [4.0, 0.0, 0.0], "heading (4,0,0)", false);
@@ -364,7 +368,7 @@ pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>, map_origin: IVec)
         }
         return;
     };
-    let o = orbit_view();
+    let o = orbit();
     let key = (center, map_origin, Terrain::pyramid().revision(), [o.azimuth, o.pivot[0], o.pivot[1], o.pivot[2]]);
     if g.built_for == Some(key) {
         write_labels(g);

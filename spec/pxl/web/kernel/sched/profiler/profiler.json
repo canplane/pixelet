@@ -45,11 +45,11 @@
     "adopt_ms"
   ],
   "STEP_NAMES": [
+    "controller",
     "input",
-    "camera",
+    "orbit",
+    "free",
     "environment",
-    "view_rotation",
-    "view_translation",
     "companion",
     "preview",
     "chunks",

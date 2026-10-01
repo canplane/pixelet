@@ -91,26 +91,15 @@ impl TaskPhaseName {
     }
 }
 
-pub const STEP_NAMES: &[&str] = &[
-    "input",
-    "camera",
-    "environment",
-    "view_rotation",
-    "view_translation",
-    "companion",
-    "preview",
-    "chunks",
-    "debug_gizmos",
-    "profiler",
-];
+pub const STEP_NAMES: &[&str] = &["controller", "input", "orbit", "free", "environment", "companion", "preview", "chunks", "debug_gizmos", "profiler"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum StepName {
-    input = 0,
-    camera = 1,
-    environment = 2,
-    view_rotation = 3,
-    view_translation = 4,
+    controller = 0,
+    input = 1,
+    orbit = 2,
+    free = 3,
+    environment = 4,
     companion = 5,
     preview = 6,
     chunks = 7,
@@ -121,11 +110,11 @@ pub enum StepName {
 impl StepName {
     /// Every member, in the JSON's own order.
     pub const ALL: [StepName; 10] = [
+        StepName::controller,
         StepName::input,
-        StepName::camera,
+        StepName::orbit,
+        StepName::free,
         StepName::environment,
-        StepName::view_rotation,
-        StepName::view_translation,
         StepName::companion,
         StepName::preview,
         StepName::chunks,

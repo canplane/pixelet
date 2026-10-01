@@ -16,7 +16,7 @@ fn the_view_s_frustum_sees_the_ground_it_looks_at() {
     let _serial = crate::global::serial();
     let v = view();
     v.origin = ivec::gather(3_000_000, 2_000_000, 0);
-    let o = crate::control::camera::orbit::orbit_view();
+    let o = crate::control::camera::orbit::orbit();
     o.pivot = [500.0, 300.0, 10.0];
     (v.width, v.height) = (1600.0, 900.0);
     for (dist, polar, azimuth) in [(50.0, 0.3, 0.0), (5000.0, 1.3, 2.0), (200.0, 0.8, -1.0)] {

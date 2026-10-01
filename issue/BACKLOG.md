@@ -227,16 +227,14 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P1
 
-- **The camera's pose owns the view's frame: the controllers and the
-  globe's anchor.** The world stays in its own axes and the observer has
-  the one pose (2026-09-30, world/frame/view.rs `ObserverPose`): the eye
-  and the turn from the world's axes to the camera's, which the orbit makes
-  from its pivot, distance, tilt and heading (control/camera/orbit.rs
-  `orbit_pose`), and every consumer reads, the chunks' culling, the badges,
-  the observation's frustum, the pointer's ray and the renderer alike. The
-  planet is laid about the sea under the eye (world/frame/view.rs
-  `globe_anchor`), since the sphere is one whichever point it is laid about
-  (pxl-render look/globe.rs) and under the eye the eye needs no placing.
+- **Where editing is allowed, apart from where navigation is.** The pick
+  reaches as far as the interaction radius about the map center
+  (control/camera/ray.rs `in_interact_radius`), the companion's ground, so
+  the free camera, carried away from the map center by walking, sees what it
+  cannot touch. Whether that is the rule — editing about the character —
+  or the pick should reach about the observer is a product decision; the
+  navigation target, the center of editing and the observer's place are
+  three things the map center still stands for together.
 - **A change of polar re-cuts the whole screen.** Seen 2026-09-29: moving
   the polar makes the whole view flicker as pieces are replaced, as it did
   before and more since demand comes from the tiles' footprints. A visual

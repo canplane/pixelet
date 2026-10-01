@@ -16,15 +16,18 @@
 use pxl_spec::space::mat4::{mat4, mat4_frustum_planes, mat4_invert, mat4_mul, mat4_perspective, mat4_transform_direction, mat4_transform_point, mat4_translation, Mat4};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::pvf3::{projection, REACH};
 use pxl_spec::space::v3::V3;
 
 use crate::control::camera::config::camera_cfg;
-use crate::control::camera::orbit::{orbit_pose, orbit_view};
+use crate::control::camera::controller::{pose, rebase};
 use crate::global::Global;
 use crate::layer::environment::config::render_cfg;
 use crate::layer::environment::fog::{far_clip_at, height_at, near_clip_at};
 use crate::shell::map_store::map_store;
-use crate::world::frame::coord::local_world_to_canonical;
+use crate::world::frame::coord::{local_world_to_canonical, origin_for};
+use pxl_spec::space::lod;
+use pxl_spec::space::pyramid::TOP_LEVEL;
 
 /// Where the observer is and which way it looks: the eye in the root frame,
 /// and the turn from the world's axes to the camera's — right, up and back
@@ -151,10 +154,28 @@ pub fn view_resize(width: f64, height: f64) {
     view_compose();
 }
 
-/// Composes the pose from the orbit and the matrices from the pose.
+/// Composes the pose from the active controller and the matrices from the
+/// pose. The floating origin follows the eye, whichever controller put it
+/// there: where the eye has left the origin's cell, every controller's
+/// positions are rebased onto the eye's, in the same step, so nothing reads
+/// a position in one origin and draws it in another.
 pub fn view_compose() {
     let v = view();
-    v.pose = orbit_pose(orbit_view());
+    v.pose = pose();
+    // The origin is a cell of the lattice, which reaches only so high: an eye
+    // over it — an orbit drawn far out stands a few times higher — is written
+    // against the highest cell it can be, the eye itself being doubles.
+    let e = v.eye_at();
+    let mut at = Pvf3::default();
+    projection::project(&mut at, e[0], e[1], e[2].clamp(REACH.min[2], REACH.max[2] - 1.0));
+    let level = lod::level(height_at(v.eye_at())).clamp(0, TOP_LEVEL as i32) as u32;
+    let want = origin_for(at.i, level);
+    if want != v.origin {
+        let d = ivec::sub(want, v.origin);
+        rebase([ivec::to_real(ivec::X(d)), ivec::to_real(ivec::Y(d)), ivec::to_real(ivec::Z(d))]);
+        v.origin = want;
+        v.pose = pose();
+    }
     let e = v.pose.eye;
     let mut to_eye = mat4();
     mat4_translation(&mut to_eye, -e[0], -e[1], -e[2]);

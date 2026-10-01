@@ -6,7 +6,8 @@
 //! in the way.
 
 pub mod config;
-pub mod damping;
+pub mod controller;
+pub mod free;
 pub mod input;
 pub mod orbit;
 pub mod ray;

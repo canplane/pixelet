@@ -88,10 +88,12 @@ pub enum InputMinor {
     RESET_DIST = 0x14,
     COMPASS_RESET = 0x15,
     GO_TO = 0x16,
+    POSE = 0x17,
+    POSE_END = 0x18,
 }
 
 impl InputMinor {
-    pub const ALL: [InputMinor; 7] = [
+    pub const ALL: [InputMinor; 9] = [
         InputMinor::POINTER,
         InputMinor::WHEEL,
         InputMinor::TRACKING,
@@ -99,6 +101,8 @@ impl InputMinor {
         InputMinor::RESET_DIST,
         InputMinor::COMPASS_RESET,
         InputMinor::GO_TO,
+        InputMinor::POSE,
+        InputMinor::POSE_END,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -542,6 +546,7 @@ pub enum Command {
     /// shell sends a move at the last position when the holding changes, as a browser
     /// synthesizes a mouse move.
     INPUT_POINTER = 0x1c10,
+    /// A wheel's turn in CSS pixels, whatever unit the platform turned it in.
     INPUT_WHEEL = 0x1c11,
     /// The tracking button's press, as the button showed it.
     INPUT_TRACKING = 0x1c12,
@@ -554,6 +559,13 @@ pub enum Command {
     INPUT_COMPASS_RESET = 0x1c15,
     /// A search result: the map center moved there.
     INPUT_GO_TO = 0x1c16,
+    /// A tracked pose: where a tracker has the camera, and its turn as a unit quaternion
+    /// (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
+    /// first of a run is taken to be where the camera already is, so nothing moves as
+    /// it begins; the camera follows the tracker from there until POSE_END.
+    INPUT_POSE = 0x1c17,
+    /// The tracker let the camera go: back to the controller it had.
+    INPUT_POSE_END = 0x1c18,
     /// A GPS fix; a field is absent where the browser gave none.
     SENSOR_UPDATE = 0x1d03,
     /// The watch failed and was stopped.
@@ -639,7 +651,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 46] = [
+    pub const ALL: [Command; 48] = [
         Command::NOP,
         Command::WORLD_CREATE,
         Command::WORLD_UPDATE,
@@ -652,6 +664,8 @@ impl Command {
         Command::INPUT_RESET_DIST,
         Command::INPUT_COMPASS_RESET,
         Command::INPUT_GO_TO,
+        Command::INPUT_POSE,
+        Command::INPUT_POSE_END,
         Command::SENSOR_UPDATE,
         Command::SENSOR_ERROR,
         Command::SENSOR_ORIENTATION,
@@ -1138,6 +1152,33 @@ impl InputGoTo {
         Ok(InputGoTo {
             lon: f.at(0)?.get_number()?,
             lat: f.at(1)?.get_number()?,
+        })
+    }
+}
+
+/// Command::INPUT_POSE's packet.
+#[derive(Clone, Copy, Debug)]
+pub struct InputPose {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+    pub qx: f64,
+    pub qy: f64,
+    pub qz: f64,
+    pub qw: f64,
+}
+
+impl InputPose {
+    pub fn read(pkt: &[u8]) -> Result<InputPose, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(InputPose {
+            x: f.at(0)?.get_number()?,
+            y: f.at(1)?.get_number()?,
+            z: f.at(2)?.get_number()?,
+            qx: f.at(3)?.get_number()?,
+            qy: f.at(4)?.get_number()?,
+            qz: f.at(5)?.get_number()?,
+            qw: f.at(6)?.get_number()?,
         })
     }
 }

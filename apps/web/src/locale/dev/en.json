@@ -5,6 +5,17 @@
         "label": "Ground Altitude Lock",
         "description": "Constrains the camera focus altitude to the actual terrain height while panning."
       },
+      "camera_mode": {
+        "label": "Camera",
+        "orbit": {
+          "label": "Orbit",
+          "description": "The camera circles the place it looks at, and dragging moves that place."
+        },
+        "free": {
+          "label": "Free",
+          "description": "The camera stands where it is and turns in place; dragging walks it over the ground, zooming carries it up and down, at one speed everywhere."
+        }
+      },
       "camera_collision": {
         "label": "Terrain Collision",
         "through": {

@@ -9,4 +9,3 @@ pub mod coord;
 pub mod resolution;
 pub mod stage;
 pub mod view;
-pub mod view_frame;

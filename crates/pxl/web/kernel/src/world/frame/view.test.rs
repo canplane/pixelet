@@ -11,7 +11,7 @@
 use pxl_render::frame::draw::DrawList;
 
 use super::*;
-use crate::control::camera::orbit::orbit_view;
+use crate::control::camera::orbit::orbit;
 use crate::global::serial;
 
 /// A view as near and as low as the camera comes, turned: written against
@@ -19,8 +19,8 @@ use crate::global::serial;
 fn set(origin: [i64; 3], center: V3) -> &'static View {
     let v = view();
     (v.width, v.height) = (1_000.0, 800.0);
-    let o = orbit_view();
-    (o.dist, o.polar, o.azimuth) = (camera_cfg::view::MIN_DIST, camera_cfg::view::MAX_POLAR, 0.7);
+    let o = orbit();
+    (o.dist, o.polar, o.azimuth) = (camera_cfg::view::MIN_DIST, 1.48, 0.7);
     v.origin = ivec::gather(origin[0], origin[1], origin[2]);
     o.pivot = center;
     view_compose();
@@ -116,7 +116,6 @@ mod before {
     use pxl_spec::space::mat4::{mat4, mat4_frustum_planes, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_rotation_z, mat4_transform_point, mat4_translation, Mat4};
 
     use super::*;
-    use crate::control::camera::orbit::orbit_local_offset;
     use crate::layer::environment::fog::{far_clip_at, height_at, near_clip_at};
 
     pub struct Before {
@@ -130,8 +129,7 @@ mod before {
     }
 
     pub fn compose(origin: V3, pivot: V3, dist: f64, polar: f64, azimuth: f64, (width, height, fov): (f64, f64, f64)) -> Before {
-        let o = orbit_local_offset(dist, polar);
-        let eye = [0.0, -o.horiz_dist, o.vert_dist];
+        let eye = [0.0, -dist * polar.sin(), dist * polar.cos()];
         let mut view_matrix = mat4();
         mat4_look_at(&mut view_matrix, eye, [0.0; 3], [0.0, 0.0, 1.0]);
         let (mut rot, mut trans, mut root, mut inv_root) = (mat4(), mat4(), mat4(), mat4());
@@ -205,17 +203,25 @@ fn the_observer_s_pose_draws_what_the_turned_world_drew() {
         let pivot = [unit() * 800.0 - 400.0, unit() * 800.0 - 400.0, unit() * 60.0 - 10.0];
         let (dist, polar) = (
             camera_cfg::view::MIN_DIST + unit() * 3_000.0,
-            camera_cfg::view::MIN_POLAR + unit() * (camera_cfg::view::MAX_POLAR - camera_cfg::view::MIN_POLAR),
+            // The turned world's look-at stood Z up and came apart straight
+            // down and level; the oracle holds only between.
+            0.001 + unit() * (1.48 - 0.001),
         );
         let azimuth = unit() * 4.0 * core::f64::consts::PI - 2.0 * core::f64::consts::PI;
         let v = view();
         (v.width, v.height) = (width, height);
         v.origin = ivec::gather(origin[0], origin[1], origin[2]);
-        let o = orbit_view();
+        let o = orbit();
         (o.pivot, o.dist, o.polar, o.azimuth) = (pivot, dist, polar, azimuth);
         view_compose();
         let v = view();
-        let old = before::compose(origin.map(|c| c as f64), pivot, dist, polar, azimuth, (width, height, v.fov));
+        // The view rebases onto the eye's origin as it composes: the same
+        // scene, written against where it now is.
+        let at = |o: [i64; 3]| o.map(|c| c as f64);
+        let moved = [ivec::X(v.origin), ivec::Y(v.origin), ivec::Z(v.origin)];
+        let pivot_was = pivot;
+        let pivot: V3 = std::array::from_fn(|k| pivot_was[k] + at(origin)[k] - at(moved)[k]);
+        let old = before::compose(at(moved), pivot, dist, polar, azimuth, (width, height, v.fov));
         let at = format!("origin {origin:?} pivot {pivot:?} dist {dist} polar {polar} azimuth {azimuth}");
 
         // The companion's facing, back to the camera: the screen's up laid
@@ -272,5 +278,33 @@ fn the_observer_s_pose_draws_what_the_turned_world_drew() {
             assert!(cos > 1.0 - 1e-12, "{at}: the ray at ({x}, {y}) turned by acos {cos}");
             assert!((0..3).all(|k| (from[k] - old.eye_local[k]).abs() < 1e-6), "{at}: the ray starts at {from:?}");
         }
+    }
+}
+
+/// An orbit drawn far out stands its eye higher than the lattice reaches:
+/// the origin stays a cell the lattice has, under the eye, and the eye stands
+/// where the orbit puts it, over Seoul and about the origin alike.
+#[test]
+fn an_eye_over_the_lattice_s_reach_keeps_the_origin_in_it() {
+    let _g = serial();
+    for at in [[0, 0, 0], [5_911_552, 1_900_544, 0]] {
+        let v = view();
+        (v.width, v.height) = (1_280.0, 720.0);
+        v.origin = ivec::gather(at[0], at[1], at[2]);
+        let o = orbit();
+        // High enough that the height, wrapped in the lattice's lane, would
+        // read as under the ground.
+        (o.pivot, o.dist, o.polar, o.azimuth) = ([10.0, 20.0, 5.0], 40_000.0, 0.001, 0.3);
+        let want = {
+            let e = crate::control::camera::orbit::orbit_eye_offset(o.dist, o.polar, o.azimuth);
+            [at[0] as f64 + 10.0 + e[0], at[1] as f64 + 20.0 + e[1], 5.0 + e[2]]
+        };
+        view_compose();
+        let v = view();
+        let z = ivec::to_real(ivec::Z(v.origin));
+        assert!((0.0..pxl_spec::space::pvf3::REACH.max[2]).contains(&z), "{at:?}: the origin's height {z}");
+        let eye = v.eye_at();
+        assert!((0..3).all(|k| (eye[k] - want[k]).abs() < 1e-6), "{at:?}: the eye {eye:?} against {want:?}");
+        assert!(want[2] > pxl_spec::space::pvf3::REACH.max[2], "the eye was not over the reach");
     }
 }

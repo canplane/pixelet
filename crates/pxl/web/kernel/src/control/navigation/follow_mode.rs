@@ -106,7 +106,7 @@ pub fn follow_mode_step() {
     // for the same reason pan and the recenter button use it: device_coord's
     // Z is raw GPS altitude, not baked terrain height.
     if let Some(device) = device_coord.filter(|d| entered || Some(*d) != f.last_device) {
-        map_store().map_center = Some(if settings_store().ground_snap { ground_or_raw(&device) } else { device });
+        map_store().navigate_to(if settings_store().ground_snap { ground_or_raw(&device) } else { device });
     }
     f.last_device = device_coord;
 

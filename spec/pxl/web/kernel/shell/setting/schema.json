@@ -38,6 +38,19 @@
       "  low   — one."
     ]
   },
+  "CAMERA_MODES": {
+    "$value": ["orbit", "free"],
+    "$doc": [
+      "Which controller makes the camera's pose.",
+      "",
+      "  orbit — the eye circles what it looks at, and the map center is what",
+      "          it looks at.",
+      "  free  — the eye stands where it is and turns in place; a drag walks",
+      "          it over the ground and the zoom carries it up and down, at one",
+      "          speed everywhere; a search or a recenter carries it there,",
+      "          putting the place where what it looked at was."
+    ]
+  },
   "CAMERA_COLLISION_MODES": {
     "$value": ["through", "stop", "climb"],
     "$doc": [
@@ -135,6 +148,17 @@
       "kind": "toggle",
       "default": false,
       "section": "camera"
+    },
+    "camera_mode": {
+      "$doc": [
+        "Which controller makes the camera's pose; CAMERA_MODES says each. A",
+        "change keeps the view where it is."
+      ],
+      "kind": "choice",
+      "default": "orbit",
+      "options": "CAMERA_MODES",
+      "section": "camera",
+      "dev": true
     },
     "camera_collision": {
       "$doc": [

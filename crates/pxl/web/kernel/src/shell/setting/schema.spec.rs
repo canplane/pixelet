@@ -24,6 +24,30 @@
 // case them the way Rust would is to rename the protocol.
 #![allow(non_camel_case_types)]
 
+/// Which controller makes the camera's pose.
+///
+///   orbit — the eye circles what it looks at, and the map center is what
+///           it looks at.
+///   free  — the eye stands where it is and turns in place; a drag walks
+///           it over the ground and the zoom carries it up and down, at one
+///           speed everywhere; a search or a recenter carries it there,
+///           putting the place where what it looked at was.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum CameraMode {
+    orbit = 0,
+    free = 1,
+}
+
+impl CameraMode {
+    pub const ALL: [CameraMode; 2] = [CameraMode::orbit, CameraMode::free];
+
+    /// The option an index names, or none for an index past the list.
+    pub fn of(index: u32) -> Option<CameraMode> {
+        CameraMode::ALL.get(index as usize).copied()
+    }
+}
+
 /// What terrain does to the camera.
 ///
 ///   through — nothing. The eye goes wherever the controls put it, ground
@@ -151,55 +175,59 @@ pub enum SettingKey {
     /// Off by default: the tilt is the one control a map view is expected to
     /// have, and locking it reads as the app being stuck.
     tilt_lock = 4,
+    /// Which controller makes the camera's pose; CAMERA_MODES says each. A
+    /// change keeps the view where it is.
+    camera_mode = 5,
     /// What the camera does when the controls would put it underground;
     /// CAMERA_COLLISION_MODES says each. The default is climb, because the one
     /// thing a map camera must not do is refuse to
     /// move. stop is the more literal answer and the worse default: it hands
     /// back a control that did nothing, which reads as the app being stuck
     /// rather than as the ground being in the way.
-    camera_collision = 5,
+    camera_collision = 6,
     /// Panning re-samples the terrain height under the map center each step.
-    ground_snap = 6,
+    ground_snap = 7,
     /// The eraser digs into the baked terrain where nothing is placed. Off by
     /// default: the terrain is real map data, not the player's scratch canvas.
-    terrain_carving = 7,
+    terrain_carving = 8,
     /// Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.
-    edge_shade = 8,
+    edge_shade = 9,
     /// A uniform on an already-compiled shader term; not a pass.
-    rim_light = 9,
+    rim_light = 10,
     /// corner, the occlusion a voxel world gets from its own geometry with no
     /// screen-space pass; screen, N8AO's screen-space pass, the costliest of
     /// the three. AO_MODES says each.
-    ao = 10,
+    ao = 11,
     /// The sun's shadow map (crates/pxl/web/render/src/gpu/shadow.rs): the world drawn once more
     /// from the sun each frame, depth only, and a 3x3 compare per fragment;
     /// 16 MB of map on a desktop, 4 on a phone.
-    shadows = 11,
+    shadows = 12,
     /// The pixels the world is filled at, the GPU's largest cost: two to a
     /// CSS pixel is four times the fragments of one. RESOLUTION_MODES says each.
-    resolution = 12,
+    resolution = 13,
     /// A change of what a chunk draws dissolves over 150 ms of frames instead
     /// of switching at once (crates/pxl/web/kernel/src/world/chunk/table.rs's
     /// Fade): a cube for another, a stale chunk for what replaced it. The two
     /// draw on complementary halves of one screen-space pattern, so a chunk
     /// in a dissolve is drawn twice while it lasts.
-    lod_crossfade = 13,
+    lod_crossfade = 14,
     /// The performance overlay: the profiler's panel, and the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`).
-    profiler = 14,
+    profiler = 15,
     /// Markers for the map center and the cell it floors to, the floating origin, the page's corners and the two gyro rings (layer/marker/frame_gizmo.rs).
-    gizmos = 15,
-    person = 16,
-    pet = 17,
+    gizmos = 16,
+    person = 17,
+    pet = 18,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 18] = [
+    pub const ALL: [SettingKey; 19] = [
         SettingKey::textures,
         SettingKey::structures,
         SettingKey::decor,
         SettingKey::poi,
         SettingKey::tilt_lock,
+        SettingKey::camera_mode,
         SettingKey::camera_collision,
         SettingKey::ground_snap,
         SettingKey::terrain_carving,
@@ -227,6 +255,7 @@ impl SettingKey {
             SettingKey::decor => SettingKind::Toggle,
             SettingKey::poi => SettingKind::Toggle,
             SettingKey::tilt_lock => SettingKind::Toggle,
+            SettingKey::camera_mode => SettingKind::Choice,
             SettingKey::camera_collision => SettingKind::Choice,
             SettingKey::ground_snap => SettingKind::Toggle,
             SettingKey::terrain_carving => SettingKind::Toggle,
@@ -245,7 +274,10 @@ impl SettingKey {
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(self, SettingKey::camera_collision | SettingKey::ground_snap | SettingKey::terrain_carving | SettingKey::shadows)
+        matches!(
+            self,
+            SettingKey::camera_mode | SettingKey::camera_collision | SettingKey::ground_snap | SettingKey::terrain_carving | SettingKey::shadows
+        )
     }
 
     /// Read by a chunk's build, so a change builds the chunks again.
@@ -262,6 +294,7 @@ pub struct Settings {
     pub decor: bool,
     pub poi: bool,
     pub tilt_lock: bool,
+    pub camera_mode: CameraMode,
     pub camera_collision: CameraCollisionMode,
     pub ground_snap: bool,
     pub terrain_carving: bool,
@@ -285,6 +318,7 @@ impl Settings {
         decor: true,
         poi: false,
         tilt_lock: false,
+        camera_mode: CameraMode::orbit,
         camera_collision: CameraCollisionMode::climb,
         ground_snap: true,
         terrain_carving: false,
@@ -309,6 +343,7 @@ impl Settings {
             SettingKey::decor => self.decor as u32,
             SettingKey::poi => self.poi as u32,
             SettingKey::tilt_lock => self.tilt_lock as u32,
+            SettingKey::camera_mode => self.camera_mode as u32,
             SettingKey::camera_collision => self.camera_collision as u32,
             SettingKey::ground_snap => self.ground_snap as u32,
             SettingKey::terrain_carving => self.terrain_carving as u32,
@@ -334,6 +369,10 @@ impl Settings {
             SettingKey::decor if value <= 1 => self.decor = value == 1,
             SettingKey::poi if value <= 1 => self.poi = value == 1,
             SettingKey::tilt_lock if value <= 1 => self.tilt_lock = value == 1,
+            SettingKey::camera_mode => match CameraMode::of(value) {
+                Some(o) => self.camera_mode = o,
+                None => return false,
+            },
             SettingKey::camera_collision => match CameraCollisionMode::of(value) {
                 Some(o) => self.camera_collision = o,
                 None => return false,

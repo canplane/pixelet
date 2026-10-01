@@ -72,11 +72,11 @@ pub fn map_bootstrap_step() {
             // would never actually take over.
             match map_store().map_center {
                 None => {
-                    map_store().map_center = Some(seed);
+                    map_store().navigate_to(seed);
                     b.pending = Some(seed);
                 }
                 Some(cur) if is_at(&cur, &fallback) => {
-                    map_store().map_center = Some(seed);
+                    map_store().navigate_to(seed);
                     b.pending = Some(seed);
                 }
                 Some(cur) if is_at(&cur, &seed) => b.pending = Some(seed),
@@ -89,8 +89,8 @@ pub fn map_bootstrap_step() {
     let Some(grounded) = ground_pivot(&seed) else { return };
     b.pending = None;
     match map_store().map_center {
-        None => map_store().map_center = Some(grounded),
-        Some(cur) if is_at(&cur, &fallback_seed()) || is_at(&cur, &seed) => map_store().map_center = Some(grounded),
+        None => map_store().navigate_to(grounded),
+        Some(cur) if is_at(&cur, &fallback_seed()) || is_at(&cur, &seed) => map_store().navigate_to(grounded),
         Some(_) => {}
     }
 }

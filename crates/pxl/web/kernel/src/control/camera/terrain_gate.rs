@@ -12,8 +12,8 @@ use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::v3::V3;
 use xpute_core::math::scalar::wrap;
 
-use crate::control::camera::config::camera_cfg;
-use crate::control::camera::orbit::{orbit_eye_offset, orbit_local_offset};
+use crate::control::camera::controller::{active, Active};
+use crate::control::camera::orbit::orbit_eye_offset;
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::{settings_store, CameraCollisionMode};
 use crate::world::access::{Access, FINEST};
@@ -21,7 +21,7 @@ use crate::world::frame::coord::{local_world_origin, local_world_to_canonical};
 
 /// One cell, so a bicubic elevation sample disagreeing slightly with the
 /// voxel it produced cannot put the eye inside a block.
-const EYE_CLEARANCE_U: f64 = 1.0;
+pub(crate) const EYE_CLEARANCE_U: f64 = 1.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewTriple {
@@ -82,11 +82,12 @@ fn required_rise(at: &ViewPose) -> Option<f64> {
 /// How far below its clearance the eye sits: positive inside the terrain,
 /// None where the ground is not known yet.
 fn penetration(at: &ViewPose) -> Option<f64> {
-    Some(required_rise(at)? - orbit_local_offset(at.dist, at.polar).vert_dist)
+    Some(required_rise(at)? - orbit_eye_offset(at.dist, at.polar, at.azimuth)[2])
 }
 
-/// Testing only where a step lands lets the camera tunnel: damping.rs
-/// damps toward the new state and visits everything between. The straight
+/// Testing only where a step lands lets the camera tunnel: the orbit's step
+/// (orbit.rs `orbit_step`) damps toward the new state and visits everything
+/// between. The straight
 /// line in pose space is the path it takes.
 const STEP_SAMPLES: u32 = 16;
 
@@ -108,7 +109,7 @@ pub fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
 
     let limit = penetration(from).map_or(0.0, |start| start.max(0.0));
 
-    // The short way round, matching how view_frame.rs damps azimuth.
+    // The short way round, matching how the orbit's step damps azimuth.
     let turn = wrap(to.azimuth - from.azimuth, -core::f64::consts::PI, core::f64::consts::PI);
     let mut last = *from;
     for i in 1..=STEP_SAMPLES {
@@ -138,6 +139,10 @@ pub fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
 
 /// The orbit half, where the target holds still.
 pub fn allowed_view(to: ViewTriple, from: ViewTriple) -> ViewTriple {
+    // The gate is the orbit's: the free camera keeps its own clear (free.rs).
+    if active() != Active::Orbit {
+        return to;
+    }
     let (Some(from_pose), Some(to_pose)) = (pose(from, None), pose(to, None)) else { return to };
     let reached = allowed_step(&to_pose, &from_pose);
     ViewTriple {
@@ -154,6 +159,9 @@ pub fn allowed_view(to: ViewTriple, from: ViewTriple) -> ViewTriple {
 /// worked. Jumps do not come through here — a search result or a GPS recenter
 /// is a destination the user named, not a path they dragged.
 pub fn allowed_pan(view: ViewTriple, to_center: &Pvf3) -> Pvf3 {
+    if active() != Active::Orbit {
+        return *to_center;
+    }
     let (Some(from_pose), Some(to_pose)) = (pose(view, None), pose(view, Some(to_center))) else {
         return *to_center;
     };
@@ -182,7 +190,7 @@ const CLIMB_PASSES: u32 = 2;
 /// angles, so its output steps even where the terrain does not, and the camera
 /// judders on flat ground it is merely passing over.
 ///
-/// There is nearly always an answer. At MIN_POLAR the eye is directly above
+/// There is nearly always an answer. Straight down the eye is directly above
 /// the target and only terrain higher than `target + dist` could block it.
 pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
     let Some(mut at) = pose(ViewTriple { dist, polar, azimuth }, None) else { return polar };
@@ -191,7 +199,7 @@ pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
         // Only ever steepens: an eye already high enough is left where the
         // controls put it.
         let solved = (rise / dist).min(1.0).acos();
-        at.polar = camera_cfg::view::MIN_POLAR.max(at.polar.min(solved));
+        at.polar = at.polar.min(solved);
     }
     at.polar
 }

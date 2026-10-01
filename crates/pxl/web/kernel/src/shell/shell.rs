@@ -145,7 +145,7 @@ pub fn tracking_action(tracking: Tracking) {
                 // terrain sample a pan uses, so this recenter lands where
                 // panning would.
                 let target = if settings_store().ground_snap { ground_or_raw(&device) } else { device };
-                map_store().map_center = Some(target);
+                map_store().navigate_to(target);
             }
             camera.is_follow_mode = false;
         }
@@ -167,7 +167,7 @@ pub fn go_to(target: Pvf3) {
     // The user drove the camera: GPS stops overriding it.
     camera_store().is_follow_mode = false;
     let grounded = ground_or_raw(&target);
-    map_store().map_center = Some(grounded);
+    map_store().navigate_to(grounded);
     // A jump usually lands on a page nothing has loaded yet, where the
     // ground falls back to the raw coordinate: grounded again once the
     // page's tile arrives, rather than left under the terrain.
@@ -216,6 +216,6 @@ pub fn shell_step() {
     }
     shell().go_to = None;
     if map_store().map_center.is_some_and(|c| L3_IDX(c.i) == L3_IDX(target.i)) {
-        map_store().map_center = Some(ground_or_raw(&target));
+        map_store().navigate_to(ground_or_raw(&target));
     }
 }

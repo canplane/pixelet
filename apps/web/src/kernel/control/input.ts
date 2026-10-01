@@ -49,7 +49,7 @@ export function kernel_pointer(phase: PointerPhase, kind: PointerKind, id: i32, 
   send_pointer(phase, kind, id, button, x, y);
 }
 
-/** A wheel's turn over the surface. */
+/** A wheel's turn over the surface, in CSS pixels. */
 export function kernel_wheel(delta_y: f64): void {
   CORE_DOORBELL.send(0, Command.INPUT_WHEEL, encode_input_wheel({ delta_y }));
   strobe.input();

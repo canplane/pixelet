@@ -155,6 +155,15 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             ui::go_to_degrees(p.lon, p.lat);
             applied(s)
         }
+        Command::INPUT_POSE => {
+            let p = abi::InputPose::read(packet(pkt)?)?;
+            crate::control::camera::controller::tracked_pose([p.x, p.y, p.z], [p.qx, p.qy, p.qz, p.qw]);
+            applied(s)
+        }
+        Command::INPUT_POSE_END => {
+            crate::control::camera::controller::tracked_end();
+            applied(s)
+        }
         Command::SENSOR_UPDATE => {
             let p = abi::SensorUpdate::read(packet(pkt)?)?;
             geolocation::geolocation_fix(p.lon, p.lat, p.altitude, p.accuracy, p.heading);

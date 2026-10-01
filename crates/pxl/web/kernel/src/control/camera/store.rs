@@ -1,26 +1,27 @@
 // pxl-kernel/control/camera/store.rs
 
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use xpute_core::math::scalar::{clamp, round_to_step, wrap};
+use xpute_core::math::scalar::clamp;
 
-use crate::control::camera::config::camera_cfg::view::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR, MAX_DIST, MAX_POLAR, MIN_DIST, MIN_POLAR};
+use crate::control::camera::config::camera_cfg::view::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR, MAX_DIST, MIN_DIST};
+use crate::control::camera::orbit::look_domain;
 use crate::control::camera::terrain_gate::{allowed_view, ViewTriple};
 use crate::global::Global;
 use crate::layer::object::store::EntryAt;
 use crate::world::change::request_world_tick;
 
-const PI: f64 = core::f64::consts::PI;
-
+/// The controls held to what they range over: the distance to its bounds,
+/// the look to its domain (orbit.rs `look_domain`).
 fn norm_dist(dist: f64) -> f64 {
-    clamp(round_to_step(dist, 0.1), MIN_DIST, MAX_DIST)
+    clamp(dist, MIN_DIST, MAX_DIST)
 }
 
 fn norm_azimuth(azimuth: f64) -> f64 {
-    wrap(round_to_step(azimuth, 0.1 * (PI / 180.0)), -PI, PI)
+    look_domain(0.0, azimuth).1
 }
 
 fn norm_polar(polar: f64) -> f64 {
-    clamp(round_to_step(polar, 0.01), MIN_POLAR, MAX_POLAR)
+    look_domain(polar, 0.0).0
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -73,7 +74,8 @@ pub struct CameraStore {
     /// Follow mode flag.
     pub is_follow_mode: bool,
     /// A wheel's zoom is still reaching its distance: the wheel has no hold to
-    /// let go of, so its gesture ends when the eye arrives (damping.rs).
+    /// let go of, so its gesture ends when the eye arrives (orbit.rs
+    /// `orbit_step`).
     pub wheel_zooming: bool,
 }
 
@@ -139,7 +141,7 @@ impl CameraStore {
 
     /// A view state change wakes the damping loop, which only runs when a
     /// frame is asked for.
-    fn commit_view(&mut self, next: ViewState) {
+    pub(crate) fn commit_view(&mut self, next: ViewState) {
         if self.view_state == next {
             return;
         }
@@ -153,3 +155,7 @@ static CAMERA_STORE: Global<CameraStore> = Global::new();
 pub fn camera_store() -> &'static mut CameraStore {
     CAMERA_STORE.get(CameraStore::new)
 }
+
+#[cfg(test)]
+#[path = "store.test.rs"]
+mod test;

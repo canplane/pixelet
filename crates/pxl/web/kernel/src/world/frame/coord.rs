@@ -23,9 +23,9 @@ pub fn origin_for(center: IVec, level: u32) -> IVec {
 }
 
 /// The floating origin every local position is measured from: the one the
-/// view is drawn in, decided once a tick by the translation step
-/// (view_frame.rs), so that nothing reads a position in one origin and draws
-/// it in another.
+/// view is drawn in, decided where the view is composed, about the eye
+/// (view.rs `view_compose`), so that nothing reads a position in one origin
+/// and draws it in another.
 pub fn local_world_origin() -> IVec {
     view().origin
 }

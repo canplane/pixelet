@@ -16,7 +16,6 @@
 use pxl_spec::space::pvf3::{ivec, projection};
 use xpute_runtime::sched::edge::{notified, Notify};
 
-use crate::control::camera::damping::camera_step;
 use crate::control::camera::input::camera_input_step;
 use crate::control::navigation::bootstrap::map_bootstrap_step;
 use crate::control::navigation::follow_mode::follow_mode_step;
@@ -44,7 +43,6 @@ use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::source::chunk_sources_step;
 use crate::world::chunk::stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms, set_turn_timing, take_draw};
 use crate::world::frame::coord::local_world_origin;
-use crate::world::frame::view_frame::{view_rotation_step, view_translation_step};
 
 /// What the platform offers the sensors, as the shell found it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -90,10 +88,10 @@ fn environment_tick(_: &mut TickContext) {
 /// and the tasks spawned. Nothing runs until the first poll; the frame task waits for the
 /// first frame the host asks, so the boot has to come from outside a frame.
 pub fn boot() {
+    on_tick(INTERACTION, crate::control::camera::controller::controller_step, StepName::controller);
     on_tick(INTERACTION, camera_input_tick, StepName::input);
-    on_tick(INTERACTION, camera_step, StepName::camera);
-    on_tick(INTERACTION, view_rotation_step, StepName::view_rotation);
-    on_tick(INTERACTION, view_translation_step, StepName::view_translation);
+    on_tick(INTERACTION, crate::control::camera::orbit::orbit_step, StepName::orbit);
+    on_tick(INTERACTION, crate::control::camera::free::free_step, StepName::free);
     // After the view has moved: the environment observes the camera center
     // the view eased to this tick.
     on_tick(INTERACTION, environment_tick, StepName::environment);
@@ -172,7 +170,7 @@ pub fn world_turn() -> f64 {
     effect!(worst, follow, follow_mode_step());
     // After every writer of the map center this turn has, before anything
     // observes the view.
-    effect!(worst, view_snap, crate::world::frame::view_frame::view_snap_step());
+    effect!(worst, view_snap, crate::control::camera::controller::snap_step());
     effect!(worst, tiles, terrain_step());
     effect!(worst, poi, crate::layer::poi::poi_step());
     effect!(worst, geocode, geocode_fetcher_step());
