@@ -5,7 +5,11 @@
 namespace xpute::tlv {
 
 Result<std::optional<Value>> Reader::next() noexcept {
-    if (off_ >= buf_.size()) return std::optional<Value>();
+    if (end_) return std::optional<Value>();
+    if (off_ >= buf_.size()) {
+        end_ = End::unclosed;
+        return std::optional<Value>();
+    }
     auto tag = static_cast<Tag>(buf_[off_++]);
     auto scalar = [this]<class T>() -> Result<std::optional<Value>> {
         if (!has(sizeof(T))) return marshal_error(Errno::ebadmsg);
@@ -21,6 +25,7 @@ Result<std::optional<Value>> Reader::next() noexcept {
     };
     switch (tag) {
     case Tag::end:
+        end_ = End::closed;
         return std::optional<Value>();
     case Tag::boolean: {
         if (!has(1)) return marshal_error(Errno::ebadmsg);

@@ -105,7 +105,7 @@ The rest is layout. A tree of scalar leaves, typed-array sequences and branch no
 
 The format in full, and the API that writes it, is [the note beside the TypeScript implementation](./packages/xpute/core/src/wire/xtp/README.md); the Rust mirrors it.
 
-**TLV** (`core wire/tlv`) is the other format, flat and self-delimiting, for arguments that arrive as a stream rather than a tree. Both live in `core`, because neither knows anything about the program using it.
+**TLV** (`core wire/tlv`) is the other format: a forward-only sequence of typed values, each tag naming its payload's type and length, closed by END. Where XTP is a structured value kept and walked where it lies, a TLV is read once, in order, and nothing it has passed is kept — an argument list as much as values arriving over time. Its reader says how a sequence stopped, at END or where the input ran out between two values, and what either means is the user's: a message may require END, and a journal cut short by its writer is a readable prefix. Both live in `core`, because neither knows anything about the program using it.
 
 ---
 

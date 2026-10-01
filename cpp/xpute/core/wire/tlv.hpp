@@ -1,15 +1,22 @@
 // cpp/xpute/core/wire/tlv.hpp
 
-// TLV: a self-delimiting stream of tagged values, ended by END — the format
-// xpute-core's wire/tlv.rs and @xpute/core wire/tlv.ts write, and
-// golden/wire/tlv.tsv holds all three to, byte for byte.
+// TLV: xpute's forward-only typed value sequence — the format xpute-core's
+// wire/tlv.rs and @xpute/core wire/tlv.ts write, and golden/wire/tlv.tsv
+// holds all three to, byte for byte. Rust's module comment is the contract in
+// full; in short:
 //
 //   [tag | payload] … [END]
 //
-// A scalar's payload is its little-endian bytes; STR and BYTES are a u32
-// length and that many bytes. END ends the stream, and bytes after it are not
-// read; a stream may also end exactly at the buffer's end. An unknown tag, or
-// a payload cut short, is EBADMSG.
+// A producer appends values; a consumer reads them once, in order, and keeps
+// nothing it has passed — no table, offset or tree, which is what sets it
+// apart from XTP, a retained structured value. A tag is its payload's length
+// as well as its type: a scalar is its little-endian bytes, STR and BYTES a
+// u32 length and that many bytes.
+//
+// Where reading stops is one of three facts, and the reader says which: END
+// read (closed); the input run out at an element's boundary (unclosed); or
+// the input run out inside an element, or a tag unknown — EBADMSG, the values
+// before it standing. Which end a sequence must have is its user's.
 //
 // The writer appends to a byte container the caller owns — any with the
 // vector's `push_back` and `insert`, so one over the guest's heap — and a
@@ -61,6 +68,14 @@ struct Str {
 struct Bytes {
     std::span<const std::uint8_t> data;
     bool operator==(const Bytes &o) const { return std::equal(data.begin(), data.end(), o.data.begin(), o.data.end()); }
+};
+
+// Where a sequence stopped without a fault.
+enum class End : std::uint8_t {
+    // END was read.
+    closed,
+    // The input ran out at an element's boundary, without END.
+    unclosed,
 };
 
 // One variant per tag, in the tags' order.
@@ -137,8 +152,13 @@ class Reader {
   public:
     explicit Reader(std::span<const std::uint8_t> buf) noexcept : buf_(buf) {}
 
-    // The next value, or none at END or at the buffer's end.
+    // The next value, or none at END or at the input's end, which `end`
+    // then tells apart.
     Result<std::optional<Value>> next() noexcept;
+
+    // How the sequence ended, once reading has reached its end: none while
+    // values remain, and none after a fault.
+    std::optional<End> end() const noexcept { return end_; }
 
     // Every value until END, appended to `out`.
     template <class Vec> Result<void> read_all(Vec &out) {
@@ -165,6 +185,7 @@ class Reader {
 
     std::span<const std::uint8_t> buf_;
     std::size_t off_ = 0;
+    std::optional<End> end_;
 };
 
 } // namespace xpute::tlv

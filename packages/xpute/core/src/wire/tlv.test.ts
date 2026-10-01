@@ -37,6 +37,21 @@ Deno.test("tlv computes what the typescript computes", async () => {
   v.each("read", (k) => want.push(v.s(k)));
   assertEquals(read, want);
 
+  // How a sequence stops: the values handed out before it did, then END
+  // read, the input run out at a boundary, or a fault.
+  for (let k = 0; v.has(`end.${k}.packet`); k++) {
+    const r = new TlvReader(hex_to_bytes(v.s(`end.${k}.packet`)));
+    let n = 0;
+    let stop: string;
+    try {
+      for (const _ of r) n++;
+      stop = r.end() ?? "none";
+    } catch (err) {
+      stop = `errno:${(err as FaultError).errno ?? Errno.OK}`;
+    }
+    assertEquals(`${n}:${stop}`, v.s(`end.${k}.read`), `end.${k}`);
+  }
+
   // A length past what the packet holds: the reader refuses rather than
   // reading whatever follows.
   let huge = "ok";
