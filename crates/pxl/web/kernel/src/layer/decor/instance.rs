@@ -25,6 +25,8 @@
 /// take has to stay out of the sentinel, and a band is a cell's Z divided by
 /// BAND_CELLS, from a sixteen-bit Z lane (spec/space/pvf3's IVEC_Z_W), so it
 /// fits in ten bits signed and nothing reaches `i32::MIN`.
+use std::collections::TryReserveError;
+
 pub const NO_ENTRY: u32 = i32::MIN as u32;
 pub const HIDDEN_FLAG: u8 = 1;
 
@@ -63,6 +65,11 @@ pub struct DecorScratch {
     pub(crate) group_count: usize,
 }
 
+/// The fewest instances the lanes grow by: a cell of a single kind's scatter
+/// is some thousands, and growing a few at a time would ask the heap once a
+/// handful of instances.
+const MIN_GROWTH: usize = 1024;
+
 impl Default for DecorScratch {
     fn default() -> DecorScratch {
         DecorScratch {
@@ -82,10 +89,20 @@ impl DecorScratch {
         self.group_count = 0;
     }
 
-    pub(crate) fn push(&mut self, group: usize, instance: Instance) {
+    /// One more instance, in `group`; an error, and nothing pushed, where
+    /// the lanes are full and the heap refuses them more. They grow by
+    /// doubling, asked for only when full, so a build that fits what an
+    /// earlier one grew them to asks for nothing.
+    pub(crate) fn push(&mut self, group: usize, instance: Instance) -> Result<(), TryReserveError> {
+        if self.instances.len() == self.instances.capacity() || self.groups.len() == self.groups.capacity() {
+            let more = self.instances.len().max(MIN_GROWTH);
+            self.instances.try_reserve(more)?;
+            self.groups.try_reserve(more)?;
+        }
         self.instances.push(instance);
         self.groups.push(group as u16);
         self.counts[group] += 1;
+        Ok(())
     }
 }
 

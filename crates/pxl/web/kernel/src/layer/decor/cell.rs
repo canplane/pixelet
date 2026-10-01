@@ -167,8 +167,10 @@ fn nearest(cell: DecorCell, eye: V3, ground: f64) -> f64 {
 
 /// The frontier for the eye: from the source's top level, a cell refined
 /// where the rule wants a finer level than its own at its nearest point,
-/// kept where it is seen and where its largest possible instance covers the
-/// sprite's floor; none of a cell's ancestors with it.
+/// kept where it is seen — within the view's reach (fog.rs `view_reach`),
+/// past which nothing is drawn, and in the frustum — and where its largest
+/// possible instance covers the sprite's floor; none of a cell's ancestors
+/// with it.
 fn solve(kinds: &[Kind], stack: &mut Vec<DecorCell>, out: &mut Vec<DecorCell>) {
     out.clear();
     stack.clear();
@@ -182,6 +184,7 @@ fn solve(kinds: &[Kind], stack: &mut Vec<DecorCell>, out: &mut Vec<DecorCell>) {
     let (cx, cy) = ((eye[0] / side).floor() as i64, (eye[1] / side).floor() as i64);
     let n = (reach / side).ceil() as i64 + 1;
     let ground = crate::layer::environment::fog::eye_ground();
+    let view_reach = crate::layer::environment::fog::view_reach();
     for y in cy - n..=cy + n {
         for x in cx - n..=cx + n {
             stack.push(DecorCell { level: top, at: [x, y] });
@@ -189,7 +192,7 @@ fn solve(kinds: &[Kind], stack: &mut Vec<DecorCell>, out: &mut Vec<DecorCell>) {
     }
     while let Some(cell) = stack.pop() {
         let d = nearest(cell, eye, ground).max(1e-3);
-        if largest / units_per_px_at(d) < floor_px {
+        if d > view_reach || largest / units_per_px_at(d) < floor_px {
             continue;
         }
         let (x0, y0, s) = cell.rect();
@@ -269,7 +272,7 @@ fn build(c: &mut Cells, cell: DecorCell, kinds: &[Kind], store: &Store, draw: &m
     let scratch = c.scratch.get_or_insert_with(DecorScratch::default);
     // A cell is a whole column: every instance over it, at any height.
     let step = GROUND.scale(0).count_in(target.max(GROUND.scale(0)));
-    let built = DecorBuild::build(scratch, kinds, Some(&ground), &c.placed, sources.hide, store, step, sources.shown, (f64::MIN, f64::MAX));
+    let built = DecorBuild::build(scratch, kinds, Some(&ground), &c.placed, sources.hide, store, step, sources.shown)?;
     let index = built.bytes();
     let instances = built.instances() as u32;
     let (at, bytes) = alloc(index + instances * 4)?;

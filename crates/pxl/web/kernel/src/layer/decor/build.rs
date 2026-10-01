@@ -30,7 +30,7 @@ use pxl_spec::space::pvf3::ivec::{gather, IVec};
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
 use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, TryReserveError};
 
 use pxl_spec::cell::cube_types;
 
@@ -300,15 +300,12 @@ fn representative(tag: u64, level: u32, x: i64, y: i64) -> (i64, i64) {
 impl<'s> DecorBuild<'s> {
     /// Builds every kind's instances at world step `step` into `scratch`:
     /// the decor placed in `placed`'s columns, `hide` flagged hidden, and
-    /// where `decor`, the
-    /// scatter over `ground`. A chunk scatters from its own level's page, so
-    /// decoration reaches as far as the ground it stands on is drawn, a kind
-    /// as far as it covers the pixels it is drawn at (`decor_density`).
-    ///
-    /// Only what stands in `heights`, the chunk's own, in units: a chunk is
-    /// a cube and a column's decor stands in one of the chunks over it, the
-    /// one its foot is in, as the column's runs are cut between them
-    /// (pxl-render mesh/voxel_scan.rs `OwnedRunSet::clip_from`).
+    /// where `decor`, the scatter over `ground`. A cell scatters from its
+    /// own level's page, so decoration reaches as far as the ground it
+    /// stands on is drawn, a kind as far as it covers the pixels it is drawn
+    /// at (`decor_density`). A cell is a whole column: every instance over
+    /// it, at any height. None where the heap refused the scratch room for
+    /// them, and the cell is not built.
     #[allow(clippy::too_many_arguments)]
     pub fn build(
         scratch: &'s mut DecorScratch,
@@ -319,8 +316,7 @@ impl<'s> DecorBuild<'s> {
         store: &Store,
         step: u32,
         decor: bool,
-        heights: (f64, f64),
-    ) -> DecorBuild<'s> {
+    ) -> Option<DecorBuild<'s>> {
         scratch.clear();
         for kind in kinds {
             // A kind with no variant has no group to fill and no variant to
@@ -342,19 +338,19 @@ impl<'s> DecorBuild<'s> {
                 continue;
             }
             for column in placed {
-                Self::placed(scratch, kind, first, column, hide, store, heights);
+                Self::placed(scratch, kind, first, column, hide, store).ok()?;
             }
             if let Some(ground) = ground.filter(|_| decor) {
-                Self::scatter(scratch, kind, first, ground, store, heights);
+                Self::scatter(scratch, kind, first, ground, store).ok()?;
             }
         }
-        DecorBuild { scratch }
+        Some(DecorBuild { scratch })
     }
 
     /// One column's placed instances of `kind`, into its groups from
     /// `first`, in the store's entry order.
-    fn placed(scratch: &mut DecorScratch, kind: &Kind, first: usize, column: &Placed, hide: Option<EntryAt>, store: &Store, (z0, z1): (f64, f64)) {
-        let (Some(value), Some(e)) = (kind.decor_value, store.entries(column.col_idx)) else { return };
+    fn placed(scratch: &mut DecorScratch, kind: &Kind, first: usize, column: &Placed, hide: Option<EntryAt>, store: &Store) -> Result<(), TryReserveError> {
+        let (Some(value), Some(e)) = (kind.decor_value, store.entries(column.col_idx)) else { return Ok(()) };
         let (bands, poss, states) = (e.band, e.pos, e.state);
         for k in 0..bands.len() {
             if states[k] != value {
@@ -372,9 +368,6 @@ impl<'s> DecorBuild<'s> {
             // placed it predicted.
             let (variant, rotation) = user_decor_pick(at.corner().i, kind.variant_count);
             let [lx, ly, lz] = at.local();
-            if lz < z0 || lz >= z1 {
-                continue;
-            }
             let hidden = hide == Some(e.at(k));
             let h = size / 2.0;
             scratch.push(
@@ -389,8 +382,9 @@ impl<'s> DecorBuild<'s> {
                     band: if column.hittable { bands[k] as u32 } else { NO_ENTRY },
                     pos,
                 },
-            );
+            )?;
         }
+        Ok(())
     }
 
     /// The scatter of `kind` over `ground`: for each of the chunk's cells
@@ -404,7 +398,7 @@ impl<'s> DecorBuild<'s> {
     /// there: a tree above z16 stands on the grass the view sees, not on a
     /// z16 cell it cannot, so it can come and go with a level as that grass
     /// does.
-    fn scatter(scratch: &mut DecorScratch, kind: &Kind, first: usize, ground: &Ground, store: &Store, (z0, z1): (f64, f64)) {
+    fn scatter(scratch: &mut DecorScratch, kind: &Kind, first: usize, ground: &Ground, store: &Store) -> Result<(), TryReserveError> {
         let cells = ground.page.cells;
         let (level, atom) = (GROUND.scale(ground.level), GROUND.scale(0));
         let (lx0, ly0) = (level.index(ground.x0), level.index(ground.y0));
@@ -435,12 +429,6 @@ impl<'s> DecorBuild<'s> {
                 };
                 let scale = 1.0 + (rng.unit() * 2.0 - 1.0) * SCALE_JITTER;
                 let ele = ground.sample.ele[apron_col(dx, dy) as usize] as i32;
-                // The surface's top voxel, one under its height, is in one
-                // chunk of the column: that one stands the instance.
-                let foot = (ele - 1) as f64;
-                if foot < z0 || foot >= z1 {
-                    continue;
-                }
                 if has_entries && ground.col_idx.is_some_and(|c| store.cell(c, dx, dy, ele).is_some_and(|c| c.solid > 0)) {
                     continue;
                 }
@@ -462,17 +450,18 @@ impl<'s> DecorBuild<'s> {
                         band: NO_ENTRY,
                         pos: 0,
                     },
-                );
+                )?;
             }
         }
+        Ok(())
     }
 
-    /// The block's size in bytes (instance.rs `GroupLanes`).
     /// The instances the block holds.
     pub fn instances(&self) -> usize {
         self.scratch.instances.len()
     }
 
+    /// The block's size in bytes (instance.rs `GroupLanes`).
     pub fn bytes(&self) -> u32 {
         let s = self.scratch;
         let words: usize = 1 + s.group_count + s.counts[..s.group_count].iter().map(|&n| GroupLanes::words(n as usize)).sum::<usize>();
