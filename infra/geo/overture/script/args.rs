@@ -96,11 +96,9 @@ impl Args {
 
     /// The catalog row, written once the table is filled: which bbox it was
     /// pulled with and which Overture release it is from.
-    pub fn record(&self, client: &mut Client, table: &str, count: i64) -> Result<(), String> {
-        let cli = std::path::Path::new("./out/overture/.venv/bin/overturemaps");
-        let release = crate::overture::release(cli)?;
-        crate::overture::record_catalog(client, table, &self.bbox, &release, count)?;
-        println!("[ingest/{table}] catalog: release {release}");
+    pub fn record(&self, client: &mut Client, table: &str, ingested: &crate::overture::Ingested) -> Result<(), String> {
+        crate::overture::record_catalog(client, table, &self.bbox, &ingested.release, ingested.count)?;
+        println!("[ingest/{table}] catalog: release {}", ingested.release);
         Ok(())
     }
 

@@ -89,6 +89,30 @@ pub fn release(cli: &Path) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
+/// Whether `extract` already holds every feature of `overture_type` in
+/// `bbox` from release `latest`, by the state file the CLI writes beside it.
+/// An extract is every column of every feature in the box, so a change to
+/// what a table keeps of it is a re-read of this file, never a re-download.
+///
+/// The state is written when a download finishes, and a download that stops
+/// partway leaves the previous run's state beside a truncated file — so the
+/// state is trusted only when it is not older than the file it describes.
+fn is_current(extract: &Path, overture_type: &str, bbox: &str, latest: &str) -> bool {
+    let state_path = PathBuf::from(format!("{}.state", extract.display()));
+    let (Ok(extract_meta), Ok(state_meta)) = (std::fs::metadata(extract), std::fs::metadata(&state_path)) else {
+        return false;
+    };
+    if !matches!((extract_meta.modified(), state_meta.modified()), (Ok(e), Ok(s)) if s >= e) {
+        return false;
+    }
+    let Some(state) = std::fs::read_to_string(&state_path).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) else {
+        return false;
+    };
+    let want: Vec<f64> = bbox.split(',').filter_map(|v| v.trim().parse().ok()).collect();
+    let have: Vec<f64> = ["xmin", "ymin", "xmax", "ymax"].iter().filter_map(|k| state["bbox"][k].as_f64()).collect();
+    state["last_release"] == latest && state["type"] == overture_type && want.len() == 4 && want == have
+}
+
 const CATALOG_SQL: &str = "
 CREATE TABLE IF NOT EXISTS overture_catalog (
   file_name TEXT PRIMARY KEY,
@@ -273,30 +297,44 @@ fn insert_sql(table: &Table, rows: usize) -> String {
     sql
 }
 
+/// What one ingest filled a table with: its row count and the release the
+/// rows are from, which is the extract's and not whatever is latest by the
+/// time the table is filled.
+pub struct Ingested {
+    pub count: i64,
+    pub release: String,
+}
+
 /// Downloads one Overture type into `out` and fills `table` from it.
 ///
 /// `row` is called once per feature and returns `None` for one the theme does
 /// not keep, which is how a type that carries more than this project uses is
 /// narrowed without a second pass over the extract.
-pub fn ingest(client: &mut Client, bbox: &str, out: &Path, overture_type: &str, table: &Table, mut row: impl FnMut(&Feature) -> Option<Row>) -> Result<i64, String> {
+pub fn ingest(client: &mut Client, bbox: &str, out: &Path, overture_type: &str, table: &Table, mut row: impl FnMut(&Feature) -> Option<Row>) -> Result<Ingested, String> {
     let cli = ensure_cli()?;
     std::fs::create_dir_all(out).map_err(|e| e.to_string())?;
     let extract = out.join(format!("{overture_type}.geojsonseq"));
 
-    println!("[ingest/{overture_type}] downloading from Overture's public S3 release...");
     let started = std::time::Instant::now();
-    run(
-        &cli,
-        &[
-            "download",
-            &format!("--bbox={bbox}"),
-            "-f",
-            "geojsonseq",
-            &format!("--type={overture_type}"),
-            "-o",
-            &extract.to_string_lossy(),
-        ],
-    )?;
+    let latest = release(&cli)?;
+    if is_current(&extract, overture_type, bbox, &latest) {
+        println!("[ingest/{overture_type}] {} is release {latest} over this bbox already; not downloading", extract.display());
+    } else {
+        println!("[ingest/{overture_type}] downloading release {latest} from Overture's public S3 release...");
+        run(
+            &cli,
+            &[
+                "download",
+                &format!("--bbox={bbox}"),
+                "-f",
+                "geojsonseq",
+                &format!("--type={overture_type}"),
+                &format!("--release={latest}"),
+                "-o",
+                &extract.to_string_lossy(),
+            ],
+        )?;
+    }
 
     println!("[ingest/{}] resetting the table...", table.name);
     client.batch_execute(&table.schema).map_err(|e| e.to_string())?;
@@ -333,7 +371,7 @@ pub fn ingest(client: &mut Client, bbox: &str, out: &Path, overture_type: &str, 
         fmt_int(total),
         fmt_dur(started.elapsed().as_secs_f64() * 1000.0)
     );
-    Ok(count)
+    Ok(Ingested { count, release: latest })
 }
 
 fn flush(client: &mut Client, table: &Table, batch: &mut Vec<Row>) -> Result<u64, String> {

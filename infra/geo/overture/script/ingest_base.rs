@@ -75,7 +75,7 @@ fn main() -> std::process::ExitCode {
 
 fn run(args: &Args) -> Result<(), String> {
     let mut client = args.connect()?;
-    let mut counts: Vec<(&str, i64)> = Vec::new();
+    let mut filled: Vec<(&str, overture::Ingested)> = Vec::new();
 
     for (overture_type, name, kept) in THEMES {
         let table = Table {
@@ -85,7 +85,7 @@ fn run(args: &Args) -> Result<(), String> {
             schema: schema(name),
             batch: 300,
         };
-        let count = overture::ingest(&mut client, &args.bbox, &args.out, overture_type, &table, |f| {
+        let ingested = overture::ingest(&mut client, &args.bbox, &args.out, overture_type, &table, |f| {
             let class = f.prop_str("class");
             if !kept.is_empty() && !class.is_some_and(|c| kept.contains(&c)) {
                 return None;
@@ -95,11 +95,11 @@ fn run(args: &Args) -> Result<(), String> {
                 geom: GeomValue::GeoJson(f.geometry()?.to_string()),
             })
         })?;
-        counts.push((name, count));
+        filled.push((name, ingested));
     }
 
-    for (name, count) in counts {
-        args.record(&mut client, name, count)?;
+    for (name, ingested) in filled {
+        args.record(&mut client, name, &ingested)?;
     }
     Ok(())
 }

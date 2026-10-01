@@ -71,7 +71,7 @@ fn run(args: &Args) -> Result<(), String> {
         batch: 200,
     };
 
-    let count = overture::ingest(&mut client, &args.bbox, &args.out, "building", &table, |f| {
+    let ingested = overture::ingest(&mut client, &args.bbox, &args.out, "building", &table, |f| {
         Some(Row {
             cells: vec![
                 Cell::Text(Some(f.id()?.to_string())),
@@ -84,5 +84,5 @@ fn run(args: &Args) -> Result<(), String> {
         })
     })?;
 
-    args.record(&mut client, "overture_buildings", count)
+    args.record(&mut client, "overture_buildings", &ingested)
 }

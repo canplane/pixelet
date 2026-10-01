@@ -90,7 +90,7 @@ fn run(args: &Args) -> Result<(), String> {
         ("division", "overture_division_points", "Point", POINT_KEPT),
     ];
 
-    let mut counts: Vec<(&str, i64)> = Vec::new();
+    let mut filled: Vec<(&str, overture::Ingested)> = Vec::new();
     for (overture_type, name, geom_type, kept) in themes {
         let table = Table {
             name,
@@ -99,7 +99,7 @@ fn run(args: &Args) -> Result<(), String> {
             schema: schema(name, geom_type),
             batch: 200,
         };
-        let count = overture::ingest(&mut client, &args.bbox, &args.out, overture_type, &table, |f| {
+        let ingested = overture::ingest(&mut client, &args.bbox, &args.out, overture_type, &table, |f| {
             let subtype = f.prop_str("subtype")?;
             if !kept.contains(&subtype) {
                 return None;
@@ -115,11 +115,11 @@ fn run(args: &Args) -> Result<(), String> {
                 geom: GeomValue::GeoJson(f.geometry()?.to_string()),
             })
         })?;
-        counts.push((name, count));
+        filled.push((name, ingested));
     }
 
-    for (name, count) in counts {
-        args.record(&mut client, name, count)?;
+    for (name, ingested) in filled {
+        args.record(&mut client, name, &ingested)?;
     }
     Ok(())
 }

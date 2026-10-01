@@ -67,7 +67,7 @@ fn run(args: &Args) -> Result<(), String> {
         batch: 300,
     };
 
-    let count = overture::ingest(&mut client, &args.bbox, &args.out, "segment", &table, |f| {
+    let ingested = overture::ingest(&mut client, &args.bbox, &args.out, "segment", &table, |f| {
         Some(Row {
             cells: vec![
                 Cell::Text(Some(f.id()?.to_string())),
@@ -81,7 +81,7 @@ fn run(args: &Args) -> Result<(), String> {
         })
     })?;
 
-    args.record(&mut client, "overture_transportation", count)
+    args.record(&mut client, "overture_transportation", &ingested)
 }
 
 /// A JSONB column from a property, NULL where the extract writes `null`: a

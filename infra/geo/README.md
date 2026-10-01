@@ -125,7 +125,11 @@ keeps, and why. Read that before changing one; several of the filters are
 there because a theme carries far more than this project paints.
 
 The flags are the same everywhere: `--bbox` for the coverage, `--out` for the
-scratch directory the extract is downloaded into.
+directory the extract is kept in. An extract is every column of every feature
+in the box, and an ingest whose extract is already the latest release over the
+same bbox reads it instead of downloading it again — so a change to what a
+table keeps of a theme is a re-run, not a re-download. Keep the extracts;
+deleting one is what forces a fresh pull.
 
 ## 5. Verify
 

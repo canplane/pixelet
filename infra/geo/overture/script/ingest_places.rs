@@ -70,7 +70,7 @@ fn run(args: &Args) -> Result<(), String> {
         batch: 500,
     };
 
-    let count = overture::ingest(&mut client, &args.bbox, &args.out, "place", &table, |f| {
+    let ingested = overture::ingest(&mut client, &args.bbox, &args.out, "place", &table, |f| {
         let name = f.prop("names").and_then(|n| n.get("primary")).and_then(|v| v.as_str()).unwrap_or("");
         // The point's own two numbers, not its text: they are bound to
         // ST_MakePoint as doubles and never pass through a decimal rendering.
@@ -87,5 +87,5 @@ fn run(args: &Args) -> Result<(), String> {
         })
     })?;
 
-    args.record(&mut client, "overture_places", count)
+    args.record(&mut client, "overture_places", &ingested)
 }

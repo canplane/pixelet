@@ -35,6 +35,11 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P1
 
+- **The device's image binding, built once.** `a59f64e4` changed
+  `pxl_image_hold` to take the kernel's handle, and with it the Swift and
+  Kotlin bindings (`PlatformModule`, `PxlCore`); the Rust side is checked for
+  both targets, the bindings only by a device build, at the next one.
+
 ## P3
 
 - **Strings out of the kernel's records.** Read 2026-10-01 and left on the

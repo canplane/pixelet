@@ -112,6 +112,19 @@ comes back as a handle, by LOAD_START and LOAD_CANCEL. Since:
   answered, a slot reused under a new generation before the old open's
   answer, and the walk.
 
+- An image is a file like any asset (`a59f64e4`): opened below the assets'
+  root, stopped by closing it, and decoded by a call of the kernel's own
+  that takes the opened file's bytes where the host is, never copied into
+  the kernel. Its own start, cancel, failure and answer commands, the
+  shell's map of running reads and the host-issued image id went with it.
+  What came of it is a shape for any resource: get it as a file, change it
+  by an operation of its domain, use what that makes under a handle the
+  kernel issued — `openat`, `IMAGE_DECODE`, `IMAGE_TEXTURE`.
+- The tree was read again for a second way to name, keep, stop or carry one
+  thing, and none was left: the GPU, the text calls and the sensors are
+  other operations, the search box's request is the shell's own, and the
+  rings and the directory are the boundary under all of it.
+
 Where it differs from 9P — no offset on a read, a size in the open's
 answer, images and the GPU as commands — it differs on purpose, and is not
 changed for being different. **Decided** 10-01. It
