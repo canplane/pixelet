@@ -10,13 +10,14 @@
 //! that point — the eye first person — derived and never kept (`map_center`);
 //! a navigation command puts the camera so the map center is where it says
 //! (`put_center`), at once or as every other move comes, as the command
-//! says (`Motion`). Each controller's target stands where one walk stands it
-//! (layer/terrain/ground_snap.rs `walk`) and what is drawn comes to it:
-//! first person's eye a person's height over it, third person's map center
-//! the middle of the cell the walker fills. A change from first person to
-//! third stands the map center where the walker is and steps the eye back by
-//! the radius; from third to first the person stands at the map center, the
-//! eye at its height over it and no earlier height put back. A
+//! says (`Motion`). A controller knows two things only: how its camera's
+//! target has a map center, and how its camera is put over one — first
+//! person's eye a person's height over it, third person's a radius back
+//! along the look. A pan (`pan`) walks the map center (layer/terrain/
+//! ground_snap.rs `walk`) and puts the camera over where it stands, and a
+//! change of person puts the other's camera over the same map center, so
+//! neither has a pan or a change of its own. What is drawn comes to the
+//! target. A
 //! tracker overrides whichever is the base while it holds the pose, which
 //! stays as it was under it and is the controller again when the tracker
 //! lets go: a tracked turn can roll, and neither base can take a roll as its
@@ -27,12 +28,12 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
 
 use crate::control::camera::config::camera_cfg::projection::FOV;
-use crate::control::camera::config::camera_cfg::view::{DEFAULT_AZIMUTH, DEFAULT_POLAR};
+use crate::control::camera::config::camera_cfg::view::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR};
 use crate::control::camera::free::look_point;
 use crate::control::camera::orbit::orbit;
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
 use crate::global::Global;
-use crate::layer::terrain::ground_snap::ground_or_raw;
+use crate::layer::terrain::ground_snap::walk;
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::{settings_store, CameraMode};
 use crate::world::change::request_world_tick;
@@ -186,6 +187,29 @@ pub fn put_center(target: Pvf3, motion: Motion) {
     }
     view_compose();
     request_world_tick();
+}
+
+/// The map center the active controller's target has: where the controls
+/// have put it, which the drawn one comes to. None tracked, or before the
+/// camera stands anywhere.
+fn target_center() -> Option<Pvf3> {
+    match active() {
+        Active::Orbit => crate::control::camera::orbit::target_center(),
+        Active::Free => crate::control::camera::free::target_center(),
+        Active::Tracked => None,
+    }
+}
+
+/// A drag: the map center walked (layer/terrain/ground_snap.rs `walk`) and
+/// the camera put over where it stands, whichever controller is active — a
+/// controller knows only how a map center is had from its camera and how
+/// its camera is put over one. One speed in either, wherever it stands: the
+/// ground under the finger at the distance the orbit starts at
+/// (`DEFAULT_DIST`).
+pub fn pan(dx: f64, dy: f64) {
+    let Some(from) = target_center() else { return };
+    let to = walk(&from, dx, dy, units_per_px_at(DEFAULT_DIST), camera().yaw);
+    put_center(to, Motion::Smooth);
 }
 
 /// Which controller makes the pose now.
@@ -359,11 +383,12 @@ pub fn focus(at: Pvf3) {
 }
 
 /// The controllers' turn, first in the interaction phase: a change of the
-/// settings' camera mode taken. Third person to first, the person stands at
-/// the map center, the eye at its height over the ground, no earlier height
-/// put back; first to third, the map center is laid straight down on the
-/// ground and the eye steps back by the radius. The
-/// controls are where the camera then is, so nothing eases away.
+/// settings' camera mode taken: the map center the one had, the other's
+/// camera put over — third person to first, the eye at a person's height
+/// over it; first to third, the eye stepped back by the radius. No earlier
+/// height put back and no ground read again, since the map center already
+/// stands where the walk left it. The controls are where the camera then
+/// is, so nothing eases away.
 pub fn controller_step(ctx: &mut TickContext) {
     if switch() {
         ctx.invalidate();
@@ -402,7 +427,7 @@ fn switch() -> bool {
         });
     }
     if let Some(center) = center {
-        put_center(if want == CameraMode::orbit { ground_or_raw(&center) } else { center }, Motion::Snap);
+        put_center(center, Motion::Snap);
     }
     view_compose();
     true

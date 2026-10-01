@@ -27,13 +27,11 @@ use crate::control::camera::config::camera_cfg;
 use crate::control::camera::config::camera_cfg::input::DOLLY_GAIN;
 use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, POS_DAMP, ROT_DAMP};
 use crate::control::camera::config::camera_cfg::view::{EYE_CLEARANCE_U, MAX_DIST, MIN_DIST};
-use crate::control::camera::controller::{camera, center_local, look_dir, look_domain, map_center, set_eye_local, units_per_px_at};
+use crate::control::camera::controller::{camera, center_local, look_dir, look_domain, map_center, set_eye_local};
 use crate::control::camera::gesture::{spread, Anchor};
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
 use crate::global::Global;
-use crate::layer::terrain::ground_snap::walk;
 use crate::world::access::{Access, Detail, Ray, FINEST};
-use crate::world::change::request_world_tick;
 use crate::world::frame::coord::canonical_to_local;
 use crate::world::frame::view::{view, view_compose};
 
@@ -147,15 +145,9 @@ pub fn zoom_to(dist: f64) -> f64 {
     .dist
 }
 
-/// A drag walks the map center's target, the ground following the finger at
-/// the distance the view looks across: the one walk every camera pans by
-/// (layer/terrain/ground_snap.rs `walk`), which sets the target's height as
-/// the drag sets its X and Y, so the height comes by the same approach and a
-/// step in the ground is no jump.
-pub fn pan(dx: f64, dy: f64) {
-    let Some(from) = orbit().to.or_else(map_center) else { return };
-    orbit().to = Some(walk(&from, dx, dy, units_per_px_at(camera_store().intent.dist), camera().yaw));
-    request_world_tick();
+/// The map center the controls have put, not yet drawn.
+pub(crate) fn target_center() -> Option<Pvf3> {
+    orbit().to.or_else(map_center)
 }
 
 /// The map center's target put at `at`: where a place said outright puts

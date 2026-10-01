@@ -295,16 +295,9 @@ fn update_pointer(s: &mut Input, client_x: f64, client_y: f64) {
 /// touch: the active controller's own. A pan puts the map center by hand, so
 /// a destination still waiting for its ground goes.
 fn do_pan(dx: f64, dy: f64) {
-    match active() {
-        Active::Orbit => {
-            cancel_destination();
-            crate::control::camera::orbit::pan(dx, dy);
-        }
-        Active::Free => {
-            cancel_destination();
-            crate::control::camera::free::pan(dx, dy);
-        }
-        Active::Tracked => {}
+    if active() != Active::Tracked {
+        cancel_destination();
+        crate::control::camera::controller::pan(dx, dy);
     }
 }
 

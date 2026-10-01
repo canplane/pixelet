@@ -23,14 +23,11 @@ use pxl_spec::space::v3::V3;
 use crate::control::camera::approach::{approach_angle, approach_scalar, approach_vec};
 use crate::control::camera::config::camera_cfg::free::EYE_HEIGHT_U;
 use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, POS_DAMP, ROT_DAMP};
-use crate::control::camera::config::camera_cfg::view::DEFAULT_DIST;
 use crate::control::camera::controller::{camera, eye_local, set_eye_local};
-use crate::control::camera::controller::{look_domain, units_per_px_at};
+use crate::control::camera::controller::look_domain;
 use crate::control::camera::store::camera_store;
 use crate::global::Global;
 use crate::world::access::{Access, Detail, Ray};
-use crate::world::change::request_world_tick;
-use crate::layer::terrain::ground_snap::walk;
 use crate::world::frame::coord::{canonical_to_local, local_world_to_canonical};
 use crate::world::frame::view::{view, view_compose};
 
@@ -75,15 +72,10 @@ const LOOK_EPS: f64 = 0.0001;
 /// (layer/terrain/ground_snap.rs), to the eye's height.
 const EYE_OVER_PIVOT: f64 = EYE_HEIGHT_U - U_PER_CELL / 2.0;
 
-/// A drag walks the eye's target: `dx`, `dy` in pixels, the one walk every
-/// camera pans by (ground_snap.rs `walk`), at the orbit's speed at the
-/// distance it starts at (`DEFAULT_DIST`), the eye `EYE_HEIGHT_U` over where
-/// the walk stands.
-pub fn pan(dx: f64, dy: f64) {
-    let Some(from) = to().or_else(|| eye_local().map(|e| canonical(&e))) else { return };
-    let pivot = walk(&raised(&from, -EYE_OVER_PIVOT), dx, dy, units_per_px_at(DEFAULT_DIST), camera().yaw);
-    *to() = Some(raised(&pivot, EYE_OVER_PIVOT));
-    request_world_tick();
+/// The map center the eye's target has: under it by the eye's height.
+pub(crate) fn target_center() -> Option<Pvf3> {
+    let eye = to().or_else(|| eye_local().map(|e| canonical(&e)))?;
+    Some(raised(&eye, -EYE_OVER_PIVOT))
 }
 
 /// The eye's target put over `at`, a map center — the middle of the cell a
