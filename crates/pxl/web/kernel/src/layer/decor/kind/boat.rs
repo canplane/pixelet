@@ -50,10 +50,7 @@ pub const DEF: DecorKindDef = DecorKindDef {
         density: 0.002,
         orientation: DecorOrientationMode::Random,
     },
-    rules: DecorRules::ANY
-        .void(GroundChannelKey::STRUCTURE)
-        .void(GroundChannelKey::TRANSPORT)
-        .one_of(GroundChannelKey::WATER, &[Water::river as u8, Water::lake as u8]),
+    rules: DecorRules::on(GroundChannelKey::WATER, &[Water::river as u8, Water::lake as u8]),
     variants: &VARIANTS,
     decor_id: None,
 };

@@ -45,6 +45,7 @@ use crate::world::access::{Access, FINEST};
 use crate::world::pyramid::Layer as _;
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::bake::constant::CELL;
+use pxl_spec::bake::deck::Decks;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
@@ -336,9 +337,14 @@ pub struct Draw {
 }
 
 /// `kind`'s candidate at the cell `at` of `level`, `page_at` its place in
-/// the page whose `cells` it reads: none where the kind may not stand on
-/// what is drawn there, or its density leaves it out.
-pub fn draw(kind: &Kind, cells: &[GroundCell], level: u32, at: [i64; 2], page_at: [u32; 2]) -> Option<Draw> {
+/// the page whose `cells` and `lines` it reads: none where the kind may not
+/// stand on what is drawn there, or its density leaves it out.
+///
+/// A scatter fills only a cell whose shown ground is its own (scatter.rs
+/// `DecorRules`) and that no line of any form is in — a deck over it, a ramp
+/// or a cutting in it, a bore under it: where something stands over the
+/// ground or cuts into it, nothing is scattered.
+pub fn draw(kind: &Kind, cells: &[GroundCell], lines: &Decks, level: u32, at: [i64; 2], page_at: [u32; 2]) -> Option<Draw> {
     let [cell_x, cell_y] = page_at;
     if !kind.rules.allows(cells[GROUND.cell_index(cell_x, cell_y) as usize]) {
         return None;
@@ -361,6 +367,11 @@ pub fn draw(kind: &Kind, cells: &[GroundCell], level: u32, at: [i64; 2], page_at
         rng.unit() * core::f64::consts::PI * 2.0
     };
     let scale = 1.0 + (rng.unit() * 2.0 - 1.0) * SCALE_JITTER;
+    // Asked after the draws, so a page's lines are walked for the cells a
+    // kind would fill and no other.
+    if lines.over_point([f64::from(cell_x) + 0.5, f64::from(cell_y) + 0.5]).next().is_some() {
+        return None;
+    }
     Some(Draw { gx, gy, variant, rotation, scale })
 }
 
@@ -374,7 +385,7 @@ pub fn scatters_at(value: u32, at: &Pvf3) -> Option<Draw> {
     let page = Terrain::pyramid().get(z16.page())?;
     let ground = Access::now().at(at, FINEST).exact()?;
     let [ix, iy, iz] = CELL.index_of(at);
-    (iz == (ground.top / CELL.side()).round() as i64).then(|| draw(kind, &page.ground.cells, 0, [ix, iy], z16.in_page()))?
+    (iz == (ground.top / CELL.side()).round() as i64).then(|| draw(kind, &page.ground.cells, &page.decks, 0, [ix, iy], z16.in_page()))?
 }
 
 impl<'s> DecorBuild<'s> {
@@ -472,7 +483,7 @@ impl<'s> DecorBuild<'s> {
     /// z16 cell it cannot, so it can come and go with a level as that grass
     /// does.
     fn scatter(scratch: &mut DecorScratch, kind: &Kind, first: usize, ground: &Ground, hide: Option<DecorHide>, store: &Store) -> Result<(), TryReserveError> {
-        let cells = ground.page.cells;
+        let (cells, lines) = (ground.page.cells, ground.page.decks);
         let (level, atom) = (GROUND.scale(ground.level), GROUND.scale(0));
         let (lx0, ly0) = (level.index(ground.x0), level.index(ground.y0));
         let has_entries = ground.col_idx.is_some_and(|c| store.entries(c).is_some());
@@ -480,7 +491,7 @@ impl<'s> DecorBuild<'s> {
             let cell_y = ground.ty0 + dy;
             for dx in 0..CHUNK_CELLS {
                 let cell_x = ground.tx0 + dx;
-                let Some(Draw { gx, gy, variant, rotation, scale }) = draw(kind, cells, ground.level, [lx0 + dx as i64, ly0 + dy as i64], [cell_x, cell_y]) else {
+                let Some(Draw { gx, gy, variant, rotation, scale }) = draw(kind, cells, lines, ground.level, [lx0 + dx as i64, ly0 + dy as i64], [cell_x, cell_y]) else {
                     continue;
                 };
                 let ele = ground.sample.ele[apron_col(dx, dy) as usize] as i32;

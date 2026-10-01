@@ -6,8 +6,8 @@
 //! Occasional trains on rail lines, subway included: what runs in a tunnel
 //! is not painted on the ground at all, so a subway track the ground shows is
 //! one at the surface. Same "align_transport" reasoning as car applies: a
-//! train lying across the rail sideways would read as derailed. Only the
-//! transport channel matters.
+//! train lying across the rail sideways would read as derailed. It stands
+//! where the cell shows rail (scatter.rs `DecorRules`).
 
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::bake::format::GroundChannelKey;
@@ -46,7 +46,7 @@ pub const DEF: DecorKindDef = DecorKindDef {
         density: 0.004,
         orientation: DecorOrientationMode::AlignTransport,
     },
-    rules: DecorRules::ANY.one_of(GroundChannelKey::TRANSPORT, &[Transport::rail_main as u8, Transport::rail_subway as u8]),
+    rules: DecorRules::on(GroundChannelKey::TRANSPORT, &[Transport::rail_main as u8, Transport::rail_subway as u8]),
     variants: &VARIANTS,
     decor_id: None,
 };

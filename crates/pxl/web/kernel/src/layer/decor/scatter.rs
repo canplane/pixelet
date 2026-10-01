@@ -14,62 +14,40 @@
 //! arrays and numbers, so it can be read head-on.
 
 use pxl_spec::bake::format::GroundChannelKey;
+use pxl_spec::bake::ground::shown_ground;
 use pxl_spec::bake::pack::{channel_of, GroundCell};
 use pxl_spec::cell::cube_types;
 use pxl_spec::space::pyramid::{GROUND, PAGE_CELLS};
 
-/// What a channel's type must be for a kind to stand on the cell.
+/// The ground a kind stands on: one channel and the types of it, as the
+/// cell shows them. A cell shows the last of its channels that is painted,
+/// in the paint's order (pxl-spec bake/ground.rs `shown_ground`), so a kind
+/// on one channel stands only where every channel after it is empty: a tree
+/// on land where no water, way or structure is over it, a boat on water
+/// where no way or structure is, a car on a way where no structure is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Rule {
-    Any,
-    /// Nothing painted.
-    Void,
-    /// One of the types whose bits are set.
-    OneOf([u64; 4]),
+pub struct DecorRules {
+    channel: GroundChannelKey,
+    types: [u64; 4],
 }
-
-impl Rule {
-    fn allows(&self, t: u8) -> bool {
-        match self {
-            Rule::Any => true,
-            Rule::Void => t == cube_types::common::void,
-            Rule::OneOf(bits) => bits[(t >> 6) as usize] & (1 << (t & 63)) != 0,
-        }
-    }
-}
-
-/// A kind's rule per ground channel, by the channel's number: what a kind's
-/// file writes and what the scatter tests, one and the same. A channel no
-/// rule names takes anything.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct DecorRules([Rule; 4]);
 
 impl DecorRules {
-    pub const ANY: DecorRules = DecorRules([Rule::Any; 4]);
-
-    /// `channel` has nothing painted.
-    pub const fn void(mut self, channel: GroundChannelKey) -> DecorRules {
-        self.0[channel as usize] = Rule::Void;
-        self
-    }
-
-    /// `channel` holds one of `types`.
-    pub const fn one_of(mut self, channel: GroundChannelKey, types: &[u8]) -> DecorRules {
+    /// On `channel`, where it shows one of `types`.
+    pub const fn on(channel: GroundChannelKey, types: &[u8]) -> DecorRules {
         let mut bits = [0u64; 4];
         let mut i = 0;
         while i < types.len() {
             bits[(types[i] >> 6) as usize] |= 1 << (types[i] & 63);
             i += 1;
         }
-        self.0[channel as usize] = Rule::OneOf(bits);
-        self
+        DecorRules { channel, types: bits }
     }
 
-    /// Whether a cell's channels are ground the kind may stand on — the
-    /// terrain paint's precedence: land is the base, and water, structure and
-    /// transport each stand over it where they are painted.
+    /// Whether a cell shows ground the kind may stand on.
     pub fn allows(&self, cell: GroundCell) -> bool {
-        GroundChannelKey::ALL.iter().all(|&key| self.0[key as usize].allows(channel_of(cell, key)))
+        let shown = shown_ground(|key| u32::from(channel_of(cell, key)), 0);
+        let t = shown.type_id as u8;
+        shown.channel as u8 == self.channel as u8 && self.types[(t >> 6) as usize] & (1 << (t & 63)) != 0
     }
 }
 

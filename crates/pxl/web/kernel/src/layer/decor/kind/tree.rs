@@ -86,11 +86,7 @@ pub const DEF: DecorKindDef = DecorKindDef {
         density: 0.04,
         orientation: DecorOrientationMode::Random,
     },
-    rules: DecorRules::ANY
-        .void(GroundChannelKey::WATER)
-        .void(GroundChannelKey::STRUCTURE)
-        .void(GroundChannelKey::TRANSPORT)
-        .one_of(GroundChannelKey::LAND, &[Land::green_light as u8, Land::green_deep as u8, Land::bare as u8]),
+    rules: DecorRules::on(GroundChannelKey::LAND, &[Land::green_light as u8, Land::green_deep as u8, Land::bare as u8]),
     variants: &VARIANTS,
     decor_id: Some(Decor::tree),
 };

@@ -10,10 +10,8 @@
 //! more than the same car sitting on a major road's shoulder does.
 //! "align_transport" orientation is what keeps these lined up with the road
 //! instead of facing a random direction, which would otherwise read as a
-//! crash, not traffic. Only the transport channel matters: transport always
-//! wins last in the terrain paint, so a cell whose transport is one of these
-//! renders (and therefore counts) as that road type regardless of whatever
-//! land/water/structure value sits underneath it.
+//! crash, not traffic. A car stands where the cell shows one of these roads
+//! (scatter.rs `DecorRules`), so not under a structure painted over it.
 
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::bake::format::GroundChannelKey;
@@ -56,7 +54,7 @@ pub const DEF: DecorKindDef = DecorKindDef {
         density: 0.004,
         orientation: DecorOrientationMode::AlignTransport,
     },
-    rules: DecorRules::ANY.one_of(
+    rules: DecorRules::on(
         GroundChannelKey::TRANSPORT,
         &[
             Transport::road_motorway as u8,
