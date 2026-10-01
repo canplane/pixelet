@@ -254,8 +254,10 @@ struct MeshTarget {
 /// Two measures, both in the set's own cells — a column's footprint by a
 /// unit. `coverage` is how much of the bucket is not air, which sizes the
 /// box; `faces` is how many of those cells' six faces meet air, which
-/// colors it. A cell buried on every side weighs nothing, so flat ground
-/// takes the color of its top and a wall the color of its side.
+/// weighs each material's color in it. A cell buried on every side weighs
+/// nothing. Every face of a material counts in that material's one color,
+/// its top's mean, a wall as much as the ground (shader_meta.rs
+/// `LAYER_MEAN`).
 #[derive(Clone, Copy, Default)]
 struct ZBucketAccum {
     bz: i32,

@@ -72,6 +72,19 @@ pub static GROUND_LAYER_META: LazyLock<Vec<TerrainLayerMeta>> = LazyLock::new(la
 /// The swatch is the color a type is filed under — the color a legend
 /// would use — while the tile is what the ground actually shows, and the two
 /// part company wherever a tile is painted rather than flat.
+///
+/// One mean a layer, its top's, on every face a summary has: a far wall
+/// reads as the ground it stands under and not as its side or its bottom.
+/// The leaf's tier draws a wall in its side and bottom, so where the
+/// summary takes over a cliff turns from the earth to the top's color. That
+/// is taken knowingly: from far off this is a map, and what a patch of it
+/// says is its land use, which is the top's, while earth under every slope
+/// would bury it. Distant Horizons summarizes Minecraft the same way — a
+/// block's LOD color is its top texture's average (its issue #191 asks for
+/// the side on logs, which are seen from the side). The other way is
+/// Minecraft's own mipmaps, where each face fades to its own image's mean,
+/// and Voxy, which bakes an image a face for its LODs; either would carry a
+/// mean a face here, top, side and bottom, as the ingest already measures.
 pub static LAYER_MEAN: LazyLock<Vec<[u8; 3]>> = LazyLock::new(layer_means);
 
 fn layer_means() -> Vec<[u8; 3]> {
