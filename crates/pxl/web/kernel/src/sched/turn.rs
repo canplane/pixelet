@@ -64,7 +64,9 @@ fn companion_props() -> Option<CompanionProps> {
         map_origin,
         center_x: local[0],
         center_y: local[1],
-        center_z: local[2] + pxl_spec::space::pvf3::ivec::to_real(pxl_spec::space::pvf3::ivec::Z(map_origin)),
+        // The map center stands half a cell over the floor; the character's
+        // feet are on it.
+        center_z: local[2] - pxl_spec::bake::constant::CELL.side() / 2.0 + pxl_spec::space::pvf3::ivec::to_real(pxl_spec::space::pvf3::ivec::Z(map_origin)),
     })
 }
 

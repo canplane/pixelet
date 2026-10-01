@@ -387,7 +387,8 @@ pub struct CompanionProps {
     pub map_origin: IVec,
     pub center_x: f64,
     pub center_y: f64,
-    /// The map center's height, in world units: the floor it stands on.
+    /// The character's floor, in world units: half a cell under the map
+    /// center.
     pub center_z: f64,
 }
 

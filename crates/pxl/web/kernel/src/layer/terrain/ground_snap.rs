@@ -3,11 +3,11 @@
 //! The map center standing on the ground, and the one walk every camera's
 //! pan takes.
 //!
-//! The map center is the character's place, and a point on the lattice as
-//! every placed thing's is: a corner, its Z the floor the character stands
-//! on (world/access.rs `support`), X and Y where the hand left it. Read as a
-//! cell it is the cell that corner is the low corner of, and its middle is
-//! half a cell in on every axis alike (object/geometry.rs `anchor_center`).
+//! The map center is the character's place and the camera's center, one
+//! point, where it says it is: X and Y where the hand left it, Z half a cell
+//! over the floor the character stands on (world/access.rs `support`), as
+//! a cell's center stands over its ground (pxl-spec space/pyramid.rs
+//! `Cell::center`).
 
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 
@@ -19,8 +19,8 @@ use crate::world::frame::coord::{canonical_to_local, local_height, local_world_o
 
 /// Where a walker standing from a coordinate is.
 pub enum Pivot {
-    /// The coordinate on the floor of what supports a walker starting from
-    /// the cell it lies in (world/access.rs `support`).
+    /// The coordinate half a cell over the floor of what supports a walker
+    /// starting from the cell it lies in (world/access.rs `support`).
     Stands(Pvf3),
     /// That cell is filled taller than a step: a wall.
     Blocked,
@@ -38,10 +38,11 @@ pub fn ground_pivot(at: &Pvf3) -> Pivot {
     }
 }
 
-/// `at` on ground whose top is `top`: at its X and Y, on that floor.
+/// `at` on ground whose top is `top`: at its X and Y, half a cell over that
+/// floor.
 pub fn pivot_over(at: &Pvf3, top: f64) -> Pvf3 {
     let mut out = Pvf3::default();
-    pvf3::gather(&mut out, pvf3::X(at), pvf3::Y(at), pvf3::from_real(top));
+    pvf3::gather(&mut out, pvf3::X(at), pvf3::Y(at), pvf3::from_real(top + CELL.side() / 2.0));
     out
 }
 
@@ -83,7 +84,7 @@ pub fn walk(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, yaw: f64) -> Pvf3 
     // the arrival itself never did.
     if access.known_level(from) == Some(FINEST) {
         if let Answer::Exact(top) = access.floor_under(from) {
-            here[2] = here[2].max(local_height(top, origin));
+            here[2] = here[2].max(local_height(top, origin) + CELL.side() / 2.0);
         }
     }
     while gone < length {
@@ -104,7 +105,7 @@ pub fn walk(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, yaw: f64) -> Pvf3 
             Some(_) => access.surface_support(&probe).value(),
             None => None,
         };
-        here = [next[0], next[1], z.map_or(next[2], |top| local_height(top, origin))];
+        here = [next[0], next[1], z.map_or(next[2], |top| local_height(top, origin) + CELL.side() / 2.0)];
         gone += step;
     }
     let mut out = Pvf3::default();
