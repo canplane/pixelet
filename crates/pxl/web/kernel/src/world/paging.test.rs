@@ -130,7 +130,7 @@ fn converge_on<S: Serve>(pyramid: &mut Pyramid<PoiPage>, observation: fn() -> Ob
     let floor = floor_of(&observation());
     for turn in 0..2_000 {
         let at = turn as f64 * 16.0;
-        pyramid.observe(Some(&observation()), core::iter::empty(), &Unknown, &ByBounds { tau: Tau::FINEST }, prefetch, Tau::FINEST, allowance);
+        pyramid.observe(Some(&observation()), core::iter::empty(), &[], &Unknown, &ByBounds { tau: Tau::FINEST }, prefetch, Tau::FINEST, allowance);
         if exact(pyramid) && pyramid.wants().is_empty() {
             assert!(floor.iter().all(|&p| pyramid.paging().resident(p)), "the floor is held");
             return;

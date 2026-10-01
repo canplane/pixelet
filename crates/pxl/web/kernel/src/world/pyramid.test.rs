@@ -84,7 +84,7 @@ fn the_demand_is_the_estimators_and_every_fault_in_it_is_asked_for() {
     let o = the_observation();
     let mut pyramid = Pyramid::<PoiPage>::default();
     hold(&mut pyramid, named(&o).into_iter().filter(|p| p.level >= 3 || ivec::X(p.page) % 2 == 0).map(|p| (p, crowded(p))));
-    pyramid.observe(Some(&o), core::iter::empty(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
+    pyramid.observe(Some(&o), core::iter::empty(), &[], &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
     assert_eq!(pyramid.demand(), named(&o).as_slice(), "the demand is the estimator's");
     let asked: HashSet<u64> = pyramid.wants().iter().map(|(s, _)| *s).collect();
     let mut faults = 0;
@@ -114,7 +114,7 @@ fn ground_a_page_settles_is_never_asked_for() {
     top.sort_unstable();
     top.dedup();
     hold(&mut pyramid, top.into_iter().map(|p| (p, PoiPage::default())));
-    pyramid.observe(Some(&o), core::iter::empty(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
+    pyramid.observe(Some(&o), core::iter::empty(), &[], &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
     for &p in pyramid.demand() {
         assert!(pyramid.source(p).is_some_and(|s| s.level == TOP_LEVEL), "{p:?} is said by the page at the top");
     }
@@ -136,7 +136,7 @@ fn ground_outside_the_frustum_is_not_demanded() {
     }
     let o = at([x, y, z], Some(Frustum { planes }));
     let mut pyramid = Pyramid::<PoiPage>::default();
-    pyramid.observe(Some(&o), core::iter::empty(), &Flat, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
+    pyramid.observe(Some(&o), core::iter::empty(), &[], &Flat, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
     let all = named(&at([x, y, z], None));
     assert!(pyramid.demand().len() < all.len(), "looking one way demands less than looking all around");
     for &p in pyramid.demand() {
@@ -155,7 +155,7 @@ fn observing_a_moving_eye_allocates_nothing_once_it_has_held_the_most() {
     let path = |k: u32| at([30_000.0 + 97.0 * k as f64, -17_000.0 + 41.0 * k as f64, HEIGHT + (k % 7) as f64 * 150.0], None);
     let walk = |pyramid: &mut Pyramid<PoiPage>| {
         for k in 0..40 {
-            pyramid.observe(Some(&path(k)), core::iter::empty(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
+            pyramid.observe(Some(&path(k)), core::iter::empty(), &[], &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
         }
     };
     let (first, ()) = crate::allocations::during(|| walk(&mut pyramid));

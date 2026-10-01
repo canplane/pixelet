@@ -427,17 +427,17 @@ impl Blocks {
         }
     }
 
-    /// The block's bytes changed at `at`: written into its buffer when it has
-    /// one, and read from there when it is next put on a device. Where the
-    /// turn's stream has no room for them, the buffer goes and the block is
-    /// missing, put again whole once there is.
-    fn rewrite(&mut self, g: Option<&Gpu>, handle: u32, at: u32, len: u32) {
+    /// The block at `at` changed `len` bytes from byte `from`: written into
+    /// its buffer when it has one, and read from there when it is next put
+    /// on a device. Where the turn's stream has no room for them, the buffer
+    /// goes and the block is missing, put again whole once there is.
+    fn rewrite(&mut self, g: Option<&Gpu>, handle: u32, at: u32, from: u32, len: u32) {
         let Some(i) = self.find(handle) else { return };
         self.at[i] = at;
         let (Some(g), buffer @ 1..) = (g, self.buffer[i]) else { return };
-        let bytes = len.min(self.len[i]) & !3;
+        let bytes = len.min(self.len[i].saturating_sub(from)) & !3;
         if room(bytes) {
-            g.write_buffer(buffer, 0, memory(at, bytes));
+            g.write_buffer(buffer, from, memory(at + from, bytes));
         } else {
             release(self.group[i]);
             release(buffer);
@@ -1268,7 +1268,7 @@ fn take_lists<'a>(g: Option<&Gpu>, lists: Lists<'a>) -> (&'a [u32], &'a [f32]) {
         b.insert(g, u[0], u[1], u[2], u[3], u[4]);
     }
     for r in lists.rewrites.as_chunks::<REWRITE_WORDS>().0 {
-        b.rewrite(g, r[0], r[1], r[2]);
+        b.rewrite(g, r[0], r[1], r[2], r[3]);
     }
     for &handle in lists.frees {
         b.remove(handle);

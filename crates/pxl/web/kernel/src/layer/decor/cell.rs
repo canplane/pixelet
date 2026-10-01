@@ -20,7 +20,7 @@
 
 use std::collections::HashMap;
 
-use pxl_render::frame::draw::DrawList;
+use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, PageSource};
 use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::lod::fault_radius;
@@ -36,6 +36,8 @@ use crate::layer::decor::build::{decor_gone_px, DecorBuild, Ground, Kind, Placed
 use crate::layer::decor::scatter::SCALE_JITTER;
 use crate::layer::decor::instance::{decor_groups, DecorScratch, GroupLanes};
 use crate::layer::object::size::DECOR_SIZE;
+use crate::param::IMPOSTOR_GONE_CELLS;
+use pxl_render::look::lod::TARGET_CELL_PX;
 use crate::layer::object::store::{object_col_revision, EntryAt, Store};
 use pxl_spec::bake::format::Terrain;
 use crate::shell::setting::store::{hidden_ground, settings_store};
@@ -81,6 +83,9 @@ struct Block {
     at: u32,
     bytes: u32,
     handle: u32,
+    /// The byte the index list starts at, past the instances: a word an
+    /// instance, rewritten a frame at a time by `present`.
+    index: u32,
     sources: Sources,
 }
 
@@ -239,8 +244,9 @@ fn build(c: &mut Cells, cell: DecorCell, kinds: &[Kind], store: &Store, draw: &m
     // A cell is a whole column: every instance over it, at any height.
     let step = GROUND.scale(0).count_in(target.max(GROUND.scale(0)));
     let built = DecorBuild::build(scratch, kinds, Some(&ground), &c.placed, sources.hide, store, step, sources.shown, (f64::MIN, f64::MAX));
-    let bytes = built.bytes();
-    let (at, bytes) = alloc(bytes)?;
+    let index = built.bytes();
+    let instances = built.instances() as u32;
+    let (at, bytes) = alloc(index + instances * 4)?;
     // SAFETY: a block of the bytes the build asked for, the cell's until it
     // is given back.
     unsafe { built.write(ptr_at::<u8>(at)) };
@@ -249,6 +255,7 @@ fn build(c: &mut Cells, cell: DecorCell, kinds: &[Kind], store: &Store, draw: &m
         at: at as u32,
         bytes,
         handle,
+        index,
         sources,
     })
 }
@@ -295,31 +302,57 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Ent
     present(c, kinds, draw, frame_eye);
 }
 
-/// Each cell's groups listed to draw, each as its model or its sprite by
-/// how large its kind's largest instance is at the cell's nearest point:
-/// the presentation, a frame at a time, of a block that does not change.
+/// Each cell's instances listed to draw, each as its model, its sprite or
+/// not at all by how large it is where it stands: the presentation, a frame
+/// at a time, of a block that does not change. A group's slice of the
+/// index list holds the instances drawn as models first and those drawn as
+/// sprites after them, and only that list goes to the device again.
 fn present(c: &Cells, kinds: &[Kind], draw: &mut DrawList, frame_eye: V3) {
     let Some(eye) = eye() else { return };
     let model_px = decor_gone_px();
+    let sprite_px = *TARGET_CELL_PX * IMPOSTOR_GONE_CELLS;
     for (&cell, block) in &c.blocks {
         let (x0, y0, _) = cell.rect();
         let translation = DrawList::translation([x0, y0, 0.0], frame_eye);
-        let d = nearest(cell, eye).max(1e-3);
-        let px_per_unit = 1.0 / units_per_px_at(d);
-        // SAFETY: the block the cell holds, `bytes` long.
-        let words: &[u32] = unsafe { core::slice::from_raw_parts(ptr_at::<u32>(block.at as usize), block.bytes as usize / 4) };
+        // SAFETY: the block the cell holds, `bytes` long, and its own to
+        // write past `index`.
+        let words: &mut [u32] = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block.at as usize), block.bytes as usize / 4) };
+        let groups: Vec<(u32, u32)> = decor_groups(words).collect();
+        let index = block.index / 4;
         let mut extents = kinds.iter().flat_map(|k| (0..k.variant_count).map(move |_| k.extent));
-        for (group, (offset, count)) in decor_groups(words).enumerate() {
+        let mut at = index as usize;
+        for (group, &(offset, count)) in groups.iter().enumerate() {
             let extent = extents.next().unwrap_or(0.0);
-            if count == 0 {
-                continue;
+            let lane = lanes(offset, count);
+            let first = at;
+            let mut sprites = Vec::new();
+            for i in 0..count as usize {
+                if (words[lane.flags()..][i / 4] >> ((i % 4) * 8)) & 1 != 0 {
+                    continue;
+                }
+                let f = |l: usize| f32::from_bits(words[lane.f32_at(l, i)]) as f64;
+                let d = (x0 + f(0) - eye[0]).hypot(y0 + f(1) - eye[1]).hypot(f(2) - eye[2]).max(1e-3);
+                let px = extent * f(4) / units_per_px_at(d);
+                if px >= model_px {
+                    words[at] = i as u32;
+                    at += 1;
+                } else if px >= sprite_px {
+                    sprites.push(i as u32);
+                }
             }
-            let px = extent * (1.0 + SCALE_JITTER) * px_per_unit;
-            if px >= model_px {
-                draw.draw_decor(block.handle, group as u32, count, offset, translation);
-            } else {
-                draw.draw_impostor(block.handle, group as u32, count, offset, translation);
+            let models = (at - first) as u32;
+            words[at..at + sprites.len()].copy_from_slice(&sprites);
+            at += sprites.len();
+            let group = group as u32;
+            if models > 0 {
+                draw.draw_instances(PIPELINE_DECOR, block.handle, group, models, [offset, count, first as u32], translation, 1.0);
             }
+            if !sprites.is_empty() {
+                draw.draw_instances(PIPELINE_IMPOSTOR, block.handle, group, sprites.len() as u32, [offset, count, first as u32 + models], translation, 1.0);
+            }
+        }
+        if at > index as usize {
+            draw.rewrite_part(block.handle, block.at, block.index, (at - index as usize) as u32 * 4);
         }
     }
 }
@@ -367,4 +400,14 @@ pub fn counts() -> (u32, u32) {
         })
         .sum();
     (c.blocks.len() as u32, instances)
+}
+
+/// The terrain pages the frontier's cells scatter over, each once: what
+/// decor reads of the ground, asked for by decor (world/pyramid.rs
+/// `step`'s readers) rather than left to what the terrain draws.
+pub fn pages() -> Vec<LevelPage> {
+    let mut out: Vec<LevelPage> = cells().frontier.iter().map(|c| c.page()).collect();
+    out.sort_unstable();
+    out.dedup();
+    out
 }

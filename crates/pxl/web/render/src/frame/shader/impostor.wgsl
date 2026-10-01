@@ -2,18 +2,19 @@
 // turned to the eye about the world's up, its variant's sprite on it
 // (impostor_bake.wgsl), where the variant is too small on the screen for its
 // model to be worth its triangles (kernel layer/decor/build.rs `decor_tier`).
-// The instances are decor.wgsl's, read the same way; a hidden one is sent
-// outside the clip volume.
+// The instances are decor.wgsl's, read the same way, through the index list.
 
 // Held as vec4 words, as decor.wgsl's: translation, the group's first lane
-// word, the instance count, the opacity, the sprite's layer.
+// word, its stride, the opacity, the sprite's layer, the index list's first
+// word.
 @group(1) @binding(0) var<uniform> draw_words: array<vec4f, 2>;
 
 fn draw_translation() -> vec3f { return draw_words[0].xyz; }
 fn draw_offset() -> u32 { return bitcast<u32>(draw_words[0].w); }
-fn draw_count() -> u32 { return bitcast<u32>(draw_words[1].x); }
+fn draw_stride() -> u32 { return bitcast<u32>(draw_words[1].x); }
 fn draw_opacity() -> f32 { return draw_words[1].y; }
 fn draw_layer() -> u32 { return bitcast<u32>(draw_words[1].z); }
+fn draw_index() -> u32 { return bitcast<u32>(draw_words[1].w); }
 
 @group(2) @binding(0) var sprites: texture_2d_array<f32>;
 @group(2) @binding(1) var sprite_sampler: sampler;
@@ -39,20 +40,15 @@ struct VertexOut {
 };
 
 fn lane(k: u32, i: u32) -> f32 {
-  return bitcast<f32>(block[draw_offset() + k * draw_count() + i]);
+  return bitcast<f32>(block[draw_offset() + k * draw_stride() + i]);
 }
 
 @vertex
 fn vs(v: VertexIn) -> VertexOut {
-  let n = draw_count();
-  let flags = (block[draw_offset() + 5u * n + v.i / 4u] >> ((v.i % 4u) * 8u)) & 255u;
+  let i = block[draw_index() + v.i];
   var o: VertexOut;
-  if ((flags & 1u) != 0u) {
-    o.clip = vec4f(0.0, 0.0, -2.0, 1.0);
-    return o;
-  }
-  let base = vec3f(lane(0u, v.i), lane(1u, v.i), lane(2u, v.i)) + draw_translation();
-  let scale = lane(4u, v.i);
+  let base = vec3f(lane(0u, i), lane(1u, i), lane(2u, i)) + draw_translation();
+  let scale = lane(4u, i);
   let fit = fits[draw_layer()];
   let corner = vec2f(select(-1.0, 1.0, (v.k & 1u) != 0u), select(-1.0, 1.0, (v.k & 2u) != 0u));
   let up = vec3f(0.0, 0.0, 1.0);

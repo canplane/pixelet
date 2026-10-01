@@ -3,16 +3,9 @@
 // it lies on the GPU — the block is the instance buffer, the chunk's
 // translation is its uniform. The model's lanes are model.rs's; the skin is
 // the glue's. An instance is its position, its spin about Z after the glTF
-// Y-up to Z-up turn, and its scale; a hidden one is sent outside the clip
-// volume.
-
-struct Draw {
-  translation: vec3f,
-  offset: u32,
-  count: u32,
-  opacity: f32,
-  _p: vec2u,
-};
+// Y-up to Z-up turn, and its scale. Which instances are drawn is the index
+// list the kernel writes a frame at a time (kernel layer/decor/cell.rs
+// `present`): the n-th drawn is the one its n-th word names.
 
 // Held as vec4 words, each field read from its own by `draw_<field>()`:
 // what the host and a shader share has no room inside it for a driver to
@@ -23,8 +16,9 @@ struct Draw {
 
 fn draw_translation() -> vec3f { return draw_words[0].xyz; }
 fn draw_offset() -> u32 { return bitcast<u32>(draw_words[0].w); }
-fn draw_count() -> u32 { return bitcast<u32>(draw_words[1].x); }
+fn draw_stride() -> u32 { return bitcast<u32>(draw_words[1].x); }
 fn draw_opacity() -> f32 { return draw_words[1].y; }
+fn draw_index() -> u32 { return bitcast<u32>(draw_words[1].w); }
 
 @group(2) @binding(0) var skin: texture_2d<f32>;
 @group(2) @binding(1) var skin_sampler: sampler;
@@ -50,21 +44,16 @@ struct VertexOut {
 };
 
 fn lane(k: u32, i: u32) -> f32 {
-  return bitcast<f32>(block[draw_offset() + k * draw_count() + i]);
+  return bitcast<f32>(block[draw_offset() + k * draw_stride() + i]);
 }
 
 @vertex
 fn vs(v: VertexIn) -> VertexOut {
-  let n = draw_count();
-  let flags = (block[draw_offset() + 5u * n + v.i / 4u] >> ((v.i % 4u) * 8u)) & 255u;
+  let i = block[draw_index() + v.i];
   var o: VertexOut;
-  if ((flags & 1u) != 0u) {
-    o.clip = vec4f(0.0, 0.0, -2.0, 1.0);
-    return o;
-  }
-  let at = vec3f(lane(0u, v.i), lane(1u, v.i), lane(2u, v.i));
-  let spin = lane(3u, v.i);
-  let scale = lane(4u, v.i);
+  let at = vec3f(lane(0u, i), lane(1u, i), lane(2u, i));
+  let spin = lane(3u, i);
+  let scale = lane(4u, i);
   let world = on_globe(place_up(v.position * scale, spin) + at + draw_translation());
   o.clip = frame_view_proj() * vec4f(world, 1.0);
   o.uv = v.uv;

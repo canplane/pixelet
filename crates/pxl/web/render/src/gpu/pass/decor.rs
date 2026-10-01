@@ -165,10 +165,10 @@ impl DecorPass {
             put_f32(buf, 4, uniforms[u + 1]);
             put_f32(buf, 8, uniforms[u + 2]);
             put_u32(buf, 12, uniforms[u + 3] as u32);
-            put_u32(buf, 16, d[2]);
+            put_u32(buf, 16, uniforms[u + 5] as u32);
             put_f32(buf, 20, uniforms[u + 4]);
             put_u32(buf, 24, 0);
-            put_u32(buf, 28, 0);
+            put_u32(buf, 28, uniforms[u + 6] as u32);
         });
     }
 

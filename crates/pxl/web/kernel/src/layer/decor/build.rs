@@ -459,6 +459,11 @@ impl<'s> DecorBuild<'s> {
     }
 
     /// The block's size in bytes (instance.rs `GroupLanes`).
+    /// The instances the block holds.
+    pub fn instances(&self) -> usize {
+        self.scratch.len
+    }
+
     pub fn bytes(&self) -> u32 {
         let s = self.scratch;
         let words: usize = 1 + s.group_count + s.counts[..s.group_count].iter().map(|&n| GroupLanes::words(n as usize)).sum::<usize>();

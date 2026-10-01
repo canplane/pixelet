@@ -30,8 +30,8 @@ use crate::gpu::shadow::Shadow;
 /// this is several times what any one is drawn at.
 const SPRITE: u32 = 128;
 /// An impostor draw's dynamic uniform (shader/impostor.wgsl's words):
-/// translation, the group's first lane word, the count, the opacity, the
-/// layer, padding.
+/// translation, the group's first lane word, its stride, the opacity, the
+/// layer, the index list's first word.
 const DRAW_UNIFORM_BYTES: u32 = 32;
 /// A bake's dynamic uniform: the fit.
 const FIT_BYTES: u32 = 16;
@@ -199,10 +199,10 @@ impl ImpostorPass {
             put_f32(buf, 4, uniforms[u + 1]);
             put_f32(buf, 8, uniforms[u + 2]);
             put_u32(buf, 12, uniforms[u + 3] as u32);
-            put_u32(buf, 16, d[2]);
+            put_u32(buf, 16, uniforms[u + 5] as u32);
             put_f32(buf, 20, uniforms[u + 4]);
             put_u32(buf, 24, d[1]);
-            put_u32(buf, 28, 0);
+            put_u32(buf, 28, uniforms[u + 6] as u32);
         });
     }
 

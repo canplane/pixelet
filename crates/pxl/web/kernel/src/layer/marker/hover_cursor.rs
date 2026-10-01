@@ -307,12 +307,13 @@ impl GhostDraw {
         if self.held.as_ref().is_some_and(|h| h.shape == shape) {
             return;
         }
-        // A group of one: five float lanes, the flags in a word, band, pos.
-        let bytes = 8 * 4;
+        // A group of one: five float lanes, the flags in a word, band, pos;
+        // and an index list naming it.
+        let bytes = 9 * 4;
         let Some(block) = self.replace(draw, shape, bytes) else { return };
         // SAFETY: as for the box.
-        let m = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block), 8) };
-        m.copy_from_slice(&[0f32.to_bits(), 0f32.to_bits(), 0f32.to_bits(), rotation.to_bits(), 1f32.to_bits(), 0, NO_ENTRY, 0]);
+        let m = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block), 9) };
+        m.copy_from_slice(&[0f32.to_bits(), 0f32.to_bits(), 0f32.to_bits(), rotation.to_bits(), 1f32.to_bits(), 0, NO_ENTRY, 0, 0]);
         self.upload(draw, 0, 0);
     }
 
@@ -353,7 +354,7 @@ impl GhostDraw {
                 let unit = f64::from_bits(size_bits) as f32;
                 draw.draw_in(pipeline, h.handle, 1, 0, t, GHOST_OPACITY, unit, h.heights.step as f32);
             }
-            Shape::Decor { group, .. } => draw.draw_as(PIPELINE_GHOST_DECOR, h.handle, group, 1, t, 0.0, GHOST_OPACITY),
+            Shape::Decor { group, .. } => draw.draw_instances(PIPELINE_GHOST_DECOR, h.handle, group, 1, [0, 1, 8], t, GHOST_OPACITY),
         }
     }
 }

@@ -111,6 +111,8 @@ pub struct Pyramid<L: Layer> {
     /// What is asked for and not held, said again every turn as it stands.
     wants: Vec<(u64, Ask)>,
     last: Option<Seen>,
+    /// The `readers` the last observation was made with.
+    readers: Vec<LevelPage>,
     /// What an observation asks for, and the speculation it gathers on the
     /// way, held across observations so observing allocates nothing once it
     /// has held the most it asks for: the asks are at most `ASKS`.
@@ -126,6 +128,7 @@ impl<L: Layer> Default for Pyramid<L> {
             demand: Vec::new(),
             wants: Vec::new(),
             last: None,
+            readers: Vec::new(),
             asks: HashMap::with_capacity(ASKS as usize),
             hints: Vec::new(),
         }
@@ -204,8 +207,9 @@ impl<L: Layer> Pyramid<L> {
     /// `estimator` says `o` requires, as far as `bounds` know the heights,
     /// the fallback's pages, and what `prefetch` speculates on at `tau`, at
     /// most `allowance` of it — and with or without it, the `destination`'s
-    /// pages, the best reason per page. What of it is not held is what the
-    /// layer wants.
+    /// pages, the best reason per page; and the pages another layer reads
+    /// from this one (`readers`), demanded as the observation's own are.
+    /// What of it is not held is what the layer wants.
     ///
     /// Speculation is asked for only as far as frames are left over once
     /// everything held hard and everything demanded has one, so none of it
@@ -215,6 +219,7 @@ impl<L: Layer> Pyramid<L> {
         &mut self,
         o: Option<&Observation>,
         destination: impl Iterator<Item = LevelPage>,
+        readers: &[LevelPage],
         bounds: &impl Bounds,
         estimator: &impl DemandEstimator,
         prefetch: &impl Prefetch,
@@ -236,6 +241,9 @@ impl<L: Layer> Pyramid<L> {
             for &p in &demand {
                 let at = self.paging.source(p).unwrap_or(p);
                 ask(&mut asks, at, Ask { why: Why::Fault, order: order(o, p) });
+            }
+            for &p in readers {
+                ask(&mut asks, p, Ask { why: Why::Fault, order: order(o, p) });
             }
             // What is demanded is inside the demand's bound, whatever the
             // ground: more is the structure's bound broken, and the capacity
@@ -332,7 +340,10 @@ impl<L: Layer> Pyramid<L> {
     /// source supplies, whether or not there is an observation yet — at the
     /// first fix there is none, since the camera waits for that ground to be
     /// put at all.
-    pub fn step(&mut self, destination: Option<LevelPage>) {
+    ///
+    /// `readers` are the pages another layer reads from this one, as
+    /// `observe` takes them.
+    pub fn step(&mut self, destination: Option<LevelPage>, readers: &[LevelPage]) {
         let Some(top) = floor::level() else { return };
         let o = observation();
         if o.is_none() && destination.is_none() {
@@ -347,12 +358,14 @@ impl<L: Layer> Pyramid<L> {
             None => Tau::FINEST,
         };
         let seen = (o, destination, self.paging.revision(), heights_revision(), tau, domain::walks());
-        if self.last != Some(seen) {
+        if self.last != Some(seen) || self.readers != readers {
             let line = destination.into_iter().flat_map(|p| std::iter::successors(Some(p), move |q| (q.level < top).then(|| q.parent())));
-            self.observe(o.as_ref(), line, &Known, &ByFootprints { tau, sight: domain::sight() }, &PREFETCH, tau, param::HINT_ALLOWANCE);
+            self.observe(o.as_ref(), line, readers, &Known, &ByFootprints { tau, sight: domain::sight() }, &PREFETCH, tau, param::HINT_ALLOWANCE);
             // Observing lets go; what is recorded is the state the
             // observation was made against.
             self.last = Some((o, destination, self.paging.revision(), heights_revision(), tau, domain::walks()));
+            self.readers.clear();
+            self.readers.extend_from_slice(readers);
         }
         declare(L::CATEGORY, &self.wants);
     }

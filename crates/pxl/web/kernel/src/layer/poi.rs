@@ -52,7 +52,7 @@ pub fn enabled() -> bool {
 /// for while they are not.
 pub fn poi_step() {
     if enabled() {
-        PoiPage::pyramid().step(None);
+        PoiPage::pyramid().step(None, &[]);
         crate::world::pyramid::cover::step::<PoiPage>();
     } else {
         PoiPage::pyramid().idle();
