@@ -90,6 +90,15 @@ descriptor does. Taken from it: the completion travels host to guest on the
 submission side, and a path is `openat(root, path)` rather than a prefixed
 string.
 
+## The table is xpute's (10-01)
+
+The table that issues a descriptor with who it is for, and finds the owner
+an answer to an open belongs to — or none, for a descriptor closed — was the
+kernel's. Nothing in it was pixelet's: a second guest that opens a file
+needs the same table and the same rule for a stale answer, so it is
+xpute-runtime's `ipc/file`, in Rust and C++ alike, over an owner type each
+program gives. The kernel keeps its owners and where each answer goes.
+
 ## Where it stands
 
 **Built** 10-01, once both branches were on main: `ipc/sys` in both
