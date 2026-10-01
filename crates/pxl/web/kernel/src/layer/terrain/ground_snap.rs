@@ -25,9 +25,8 @@ pub enum Pivot {
     Unknown,
 }
 
-/// Every map center an interaction sets — a pan, a tap — is this one, and
-/// the free camera's eye stands over the same support, so the first pan
-/// after a tap moves nothing.
+/// Every map center an interaction sets — a pan, a tap — is this one, in
+/// either person, so the first pan after a tap moves nothing.
 pub fn ground_pivot(at: &Pvf3) -> Pivot {
     match Access::now().support(at) {
         Answer::Exact(Some(top)) | Answer::Coarser(Some(top), _) => Pivot::Stands(pivot_over(at, top)),
@@ -59,7 +58,12 @@ pub fn ground_or_raw(coord: &Pvf3) -> Pvf3 {
 /// at its height, and the ground arriving later moves nothing. Every camera
 /// pans by it, so the walk is the same whichever looks.
 pub fn walk(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, yaw: f64) -> Pvf3 {
-    let next = moved(from, dx, dy, units_per_px, yaw);
+    let (lx, ly) = (-dx * units_per_px, dy * units_per_px);
+    let (s, c) = yaw.sin_cos();
+    let origin = local_world_origin();
+    let at = canonical_to_local(from, origin);
+    let mut next = Pvf3::default();
+    local_world_to_canonical(&mut next, &[at[0] + lx * c + ly * s, at[1] - lx * s + ly * c, at[2]], origin);
     match ground_pivot(&next) {
         Pivot::Stands(p) => p,
         Pivot::Blocked => *from,
@@ -67,15 +71,3 @@ pub fn walk(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, yaw: f64) -> Pvf3 
     }
 }
 
-/// `from` moved by `dx`, `dy` pixels of drag at `units_per_px`, turned by
-/// the heading `yaw`, at its own height: a drag's move before anything
-/// stands it.
-pub fn moved(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, yaw: f64) -> Pvf3 {
-    let (lx, ly) = (-dx * units_per_px, dy * units_per_px);
-    let (s, c) = yaw.sin_cos();
-    let origin = local_world_origin();
-    let at = canonical_to_local(from, origin);
-    let mut next = Pvf3::default();
-    local_world_to_canonical(&mut next, &[at[0] + lx * c + ly * s, at[1] - lx * s + ly * c, at[2]], origin);
-    next
-}

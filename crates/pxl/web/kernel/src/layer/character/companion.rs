@@ -202,7 +202,7 @@ impl Walker {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn step(&mut self, ctx: &TickContext, variant: &CharacterVariant, map_origin: IVec, target: Vec2, center_z: f64, is_follow_mode: bool) {
+    fn step(&mut self, ctx: &TickContext, variant: &CharacterVariant, map_origin: IVec, target: Vec2, arrive_z: f64, is_follow_mode: bool) {
         self.acquire(variant, target);
         if self.held.is_none() {
             return;
@@ -324,17 +324,24 @@ impl Walker {
         self.was_dragging = dragging;
 
         // Along the way it steps from where it stood (world/access.rs
-        // `support`): down to the floor beside, up a step, and a wall holds
-        // it where it is, walking in place, until the walk's end puts it at
-        // the map center. Come to the map center, its height is the map
-        // center's, which is the character's place.
+        // `support`), asked only where it moved: down to the floor beside,
+        // up a step, and a wall holds it where it is, walking in place, until
+        // the walk's end puts it at its target. Following a fix there is no
+        // end to wait for, so a wall puts it at its target at once. Come to
+        // its target, its height is `arrive_z`: the map center's, which is
+        // the character's place, or the pet's own floor beside it.
         let arrived = (target.x - px).hypot(target.y - py) <= WALK_EPS;
-        let stands = self.stands_z.get_or_insert(center_z);
+        let moved = (px, py) != (self.pose[0], self.pose[1]);
+        let stands = self.stands_z.get_or_insert(arrive_z);
         if arrived {
-            *stands = center_z;
-        } else {
+            *stands = arrive_z;
+        } else if moved {
             match step_from(map_origin, [px, py], *stands) {
                 Some(Some(z)) => *stands = z,
+                Some(None) if is_follow_mode => {
+                    (px, py) = (target.x, target.y);
+                    *stands = arrive_z;
+                }
                 Some(None) => (px, py) = (self.pose[0], self.pose[1]),
                 None => {}
             }
@@ -424,7 +431,10 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
         y: p.center_y + PET_OFFSET.y,
     };
     let pet = walker_for(&mut c.pet, pet_variant, pet_target, p.map_origin);
-    pet.step(ctx, pet_variant, p.map_origin, pet_target, p.center_z, is_follow_mode);
+    // The pet stands on its own floor beside the person, stepping there from
+    // the person's height (`step_from`), never on the person's height.
+    let pet_z = step_from(p.map_origin, [pet_target.x, pet_target.y], p.center_z).flatten().unwrap_or(p.center_z);
+    pet.step(ctx, pet_variant, p.map_origin, pet_target, pet_z, is_follow_mode);
 }
 
 /// Which skin each live companion model is drawn with: (model, image handle),

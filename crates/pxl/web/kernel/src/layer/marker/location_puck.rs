@@ -127,11 +127,12 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
             add3(&center_pos, &s.off, &mut v);
             let mut coord = Pvf3::default();
             projection::project(&mut coord, v[0], v[1], v[2]);
-            // Falls back to flat (center height) rather than 0 when a sample
-            // lands on an unloaded neighboring page or against a wall —
-            // absolute 0 would sink or launch that instance away from the rest
-            // of the zone.
-            let delta_ele = Access::now().support(&coord).value().flatten().unwrap_or(center_pos[2]) - center_pos[2];
+            // On the surface, as the center is: the puck marks a fix, and a
+            // fix names a place and not how high. Falls back to flat (center
+            // height) rather than 0 when a sample lands on an unloaded
+            // neighboring page — absolute 0 would sink or launch that
+            // instance away from the rest of the zone.
+            let delta_ele = Access::now().surface_support(&coord).value().unwrap_or(center_pos[2]) - center_pos[2];
             let lifted = [s.off[0], s.off[1], s.off[2] + delta_ele];
             center3n(&lifted, U_PER_CELL, &mut v);
             lane.extend([

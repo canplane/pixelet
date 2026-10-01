@@ -2,7 +2,7 @@
 
 //! How far the orbit gets toward what the controls ask before terrain is in
 //! the way: a pure function of the pose, from where the orbit is drawn to
-//! where the controls would have it (orbit.rs `target`). The controls keep
+//! where the controls would have it (orbit.rs `ask`). The controls keep
 //! what was asked; the drawn orbit stops short, and what reads the zoom reads
 //! the drawn radius, which stands still with the view.
 
@@ -30,8 +30,8 @@ pub struct ViewTriple {
 /// The target belongs here because the eye is `target + orbit offset` and a
 /// gate that reads only the second term can be walked through by moving the
 /// first — which is what panning does. It is carried in the local render frame
-/// (real u against `origin`), the frame the orbit offset and the
-/// heightfield lookup already share, and the one a step can be interpolated in.
+/// (real u against `origin`), the frame the orbit offset and the floor
+/// under the eye are read in, and the one a step can be interpolated in.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewPose {
     /// The floating origin `target` is expressed against.

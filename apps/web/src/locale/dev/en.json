@@ -1,10 +1,6 @@
 {
   "settings": {
     "camera": {
-      "ground_snap": {
-        "label": "Ground Altitude Lock",
-        "description": "While panning, the camera focus stands where a walker would: down to the floor, up as many as four cells, stopped by a taller wall."
-      },
       "camera_collision": {
         "label": "Terrain Collision",
         "through": {

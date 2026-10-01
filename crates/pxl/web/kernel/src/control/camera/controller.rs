@@ -11,9 +11,8 @@
 //! a navigation command puts the camera so the map center is where it says
 //! (`put_center`), at once or as every other move comes, as the command
 //! says (`Motion`). A controller knows two things only: how its camera's
-//! target has a map center, and how its camera is put over one — first
-//! person's eye a person's height over it, third person's a radius back
-//! along the look. A pan (`pan`) walks the map center (layer/terrain/
+//! target has a map center, and how its camera is put at one — first
+//! person's eye at it, third person's a radius back along the look. A pan (`pan`) walks the map center (layer/terrain/
 //! ground_snap.rs `walk`) and puts the camera over where it stands, and a
 //! change of person puts the other's camera over the same map center, so
 //! neither has a pan or a change of its own. What is drawn comes to the
@@ -215,19 +214,6 @@ pub fn pan(dx: f64, dy: f64) {
         Active::Free | Active::Tracked => DEFAULT_DIST,
     };
     let (yaw, upp) = (camera().yaw, units_per_px_at(across));
-    // The map center is the character's place, on its support whatever the
-    // snap says. With the snap off third person keeps its eye's height
-    // instead: the eye walks level and the map center and the radius follow
-    // where its look meets the world, so the view does not ride the ground.
-    // First person's eye is the map center, and walks.
-    if active() == Active::Orbit && !settings_store().ground_snap {
-        if let Some((to, dist)) = crate::control::camera::orbit::level_pan(&from, dx, dy, upp, yaw) {
-            let c = camera_store();
-            c.commit_intent(Intent { dist, ..c.intent });
-            put_center(crate::control::camera::orbit::gate_pan(&to), Motion::Smooth);
-            return;
-        }
-    }
     let to = walk(&from, dx, dy, upp, yaw);
     let to = match active() {
         Active::Orbit => crate::control::camera::orbit::gate_pan(&to),
@@ -408,8 +394,8 @@ pub fn focus(at: Pvf3) {
 
 /// The controllers' turn, first in the interaction phase: a change of the
 /// settings' camera mode taken: the map center the one had, the other's
-/// camera put over — third person to first, the eye at a person's height
-/// over it; first to third, the eye stepped back by the radius. No earlier
+/// camera put at it — third person to first, the eye at it; first to
+/// third, the eye stepped back by the radius. No earlier
 /// height put back and no ground read again, since the map center already
 /// stands where the walk left it. The controls are where the camera then
 /// is, so nothing eases away.
@@ -437,7 +423,10 @@ pub fn camera_step(ctx: &mut TickContext) {
 fn switch() -> bool {
     let want = settings_store().camera_mode;
     let c = controllers();
-    if c.base == want {
+    // A tracker holds the pose, and no base under it is moved in its place
+    // (`put_center`): the change is taken once it lets go, at the map center
+    // the base has then, so the new camera is never left unplaced.
+    if c.base == want || c.tracked.is_some() {
         return false;
     }
     let center = map_center();

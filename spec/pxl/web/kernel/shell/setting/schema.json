@@ -177,13 +177,6 @@
       "section": "camera",
       "dev": true
     },
-    "ground_snap": {
-      "$doc": ["Panning stands the map center where a walker would (world/access.rs support), in either person; off, it moves at its own height."],
-      "kind": "toggle",
-      "default": true,
-      "section": "camera",
-      "dev": true
-    },
     "edge_shade": {
       "$doc": [
         "Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).",

@@ -15,12 +15,11 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_core::wire::xtp::PacketWriter;
 
 pub use crate::abi::cmd::Tracking;
-use crate::layer::terrain::ground_snap::ground_or_raw;
 use crate::abi::cmd::{CompanionState, LocationState, LonLat, MapState, OrientationState, PlaceName, PlacePart, ScaleBar, Snapshot};
 use crate::control::camera::controller::radius;
 use crate::control::camera::controller::Motion;
 use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
-use crate::control::navigation::destination::{self, go_to_ground};
+use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::device_orientation::{orientation_close, orientation_open, request_orientation};
 use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
@@ -150,15 +149,15 @@ pub fn tracking_action(tracking: Tracking) {
     }
 }
 
-/// The camera moved so the map center is at `target`, a place named with
-/// its height on the screen — a badge, an object — reached as the hand's
-/// moves are.
+/// The camera moved so the map center is over a place on the screen — a
+/// badge — reached as the hand's moves are. A place stands on the surface,
+/// and the height the badge is drawn at is its level's, coarser than where
+/// a walker stands: the map center goes on the surface there once it is
+/// known exactly (destination.rs), as a search's does.
 pub fn go_to(target: Pvf3) {
     // The user drove the camera: GPS stops overriding it.
     camera_store().is_follow_mode = false;
-    // A place stands on its top face; the camera is put over the cell a
-    // walker standing there fills (layer/terrain/ground_snap.rs).
-    destination::go_to(ground_or_raw(&target), Motion::Smooth);
+    go_to_ground(target, Motion::Smooth);
 }
 
 /// A search result: the center moved to degrees, on the ground there once

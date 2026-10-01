@@ -3,8 +3,8 @@
 //! The orbit camera. It turns the camera (controller.rs `Camera`) about a
 //! point its radius ahead of the eye along the look — the map center —
 //! keeping that point where it is: the eye moves over the sphere about it,
-//! and the radius is the zoom. A drag moves the map center over the ground
-//! (`pan`).
+//! and the radius is the zoom. A drag walks the map center (controller.rs
+//! `pan`).
 //!
 //! What the controls ask of it and what is drawn are kept apart: the
 //! controls write the target — the look and the distance in the camera
@@ -17,9 +17,6 @@
 
 pub mod terrain_gate;
 
-use pxl_spec::bake::constant::U_PER_CELL;
-use pxl_spec::space::lod::Tau;
-use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 
 use pxl_spec::space::v3::V3;
@@ -33,14 +30,10 @@ use crate::control::camera::config::camera_cfg::view::{MAX_DIST, MIN_DIST};
 use crate::control::camera::controller::{camera, center_local, look_dir, look_domain, map_center, set_eye_local};
 use crate::control::camera::gesture::{spread, Anchor};
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
-use crate::control::camera::ray::world_adjacent_corner;
 use crate::global::Global;
-use crate::layer::object::geometry::anchor_center;
-use crate::layer::terrain::ground_snap::{ground_or_raw, moved};
-use crate::world::access::{Access, Detail, Ray};
 use crate::shell::setting::store::{settings_store, CameraCollisionMode};
 use crate::world::access::support_revision;
-use crate::world::frame::coord::{canonical_to_local, local_world_to_canonical};
+use crate::world::frame::coord::canonical_to_local;
 use crate::world::frame::view::{view, view_compose};
 use terrain_gate::{allowed_pan, allowed_view, climb_polar, ViewTriple};
 
@@ -226,40 +219,6 @@ pub(crate) fn target_center() -> Option<Pvf3> {
 /// before: the walk moves the center's Z, and the eye rides on it.
 pub(crate) fn gate_pan(to: &Pvf3) -> Pvf3 {
     allowed_pan(drawn(), to)
-}
-
-/// A pan with the ground snap off: the eye walked level — at its own
-/// height, the look kept — and the map center, which is the character's
-/// place and so on what supports a walker, where that look meets the world
-/// (world/access.rs `first_hit`): on a floor the point met, which lies on
-/// the look and leaves the view as it was; on a wall or a ceiling the walker
-/// standing from the cell across it (layer/terrain/ground_snap.rs). The
-/// radius is the eye's distance to it. None where the look meets nothing.
-pub(crate) fn level_pan(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, yaw: f64) -> Option<(Pvf3, f64)> {
-    let vs = camera_store().intent;
-    let origin = view().origin;
-    let frame = [ivec::to_real(ivec::X(origin)), ivec::to_real(ivec::Y(origin)), ivec::to_real(ivec::Z(origin))];
-    let center = canonical_to_local(from, origin);
-    let back = orbit_eye_offset(vs.dist, vs.polar, vs.azimuth);
-    let mut eye = Pvf3::default();
-    local_world_to_canonical(&mut eye, &std::array::from_fn(|k| center[k] + back[k]), origin);
-    let eye = canonical_to_local(&moved(&eye, dx, dy, units_per_px, yaw), origin);
-    let ray = Ray {
-        origin: std::array::from_fn(|k| eye[k] + frame[k]),
-        direction: look_dir(vs.polar, vs.azimuth),
-        reach: view().far,
-    };
-    let hit = Access::now().first_hit(&ray, Detail::Distance(Tau::FINEST)).value().flatten()?.moved(frame.map(|v| -v));
-    let to = if hit.normal[2] > 0.0 {
-        let mut at = Pvf3::default();
-        local_world_to_canonical(&mut at, &hit.point, origin);
-        at
-    } else {
-        ground_or_raw(&anchor_center(&world_adjacent_corner(&hit, U_PER_CELL, origin, None)))
-    };
-    let at = canonical_to_local(&to, origin);
-    let dist = (0..3).map(|k| (at[k] - eye[k]).powi(2)).sum::<f64>().sqrt();
-    Some((to, dist))
 }
 
 /// The map center's target put at `at`: where a place said outright puts

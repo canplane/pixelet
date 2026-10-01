@@ -188,34 +188,32 @@ pub enum SettingKey {
     /// back a control that did nothing, which reads as the app being stuck
     /// rather than as the ground being in the way.
     camera_collision = 6,
-    /// Panning stands the map center where a walker would (world/access.rs support), in either person; off, it moves at its own height.
-    ground_snap = 7,
     /// Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.
-    edge_shade = 8,
+    edge_shade = 7,
     /// A uniform on an already-compiled shader term; not a pass.
-    rim_light = 9,
+    rim_light = 8,
     /// corner, the occlusion a voxel world gets from its own geometry with no
     /// screen-space pass; screen, N8AO's screen-space pass, the costliest of
     /// the three. AO_MODES says each.
-    ao = 10,
+    ao = 9,
     /// The sun's shadow map (crates/pxl/web/render/src/gpu/shadow.rs): the world drawn once more
     /// from the sun each frame, depth only, and a 3x3 compare per fragment;
     /// 16 MB of map on a desktop, 4 on a phone.
-    shadows = 11,
+    shadows = 10,
     /// The pixels the world is filled at, the GPU's largest cost: two to a
     /// CSS pixel is four times the fragments of one. RESOLUTION_MODES says each.
-    resolution = 12,
+    resolution = 11,
     /// The performance overlay: the profiler's panel, and the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`).
-    profiler = 13,
+    profiler = 12,
     /// Markers for the map center and the cell it floors to, the floating origin, the page's corners and the two gyro rings (layer/marker/frame_gizmo.rs).
-    gizmos = 14,
-    person = 15,
-    pet = 16,
+    gizmos = 13,
+    person = 14,
+    pet = 15,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 17] = [
+    pub const ALL: [SettingKey; 16] = [
         SettingKey::textures,
         SettingKey::structures,
         SettingKey::decor,
@@ -223,7 +221,6 @@ impl SettingKey {
         SettingKey::tilt_lock,
         SettingKey::camera_mode,
         SettingKey::camera_collision,
-        SettingKey::ground_snap,
         SettingKey::edge_shade,
         SettingKey::rim_light,
         SettingKey::ao,
@@ -249,7 +246,6 @@ impl SettingKey {
             SettingKey::tilt_lock => SettingKind::Toggle,
             SettingKey::camera_mode => SettingKind::Choice,
             SettingKey::camera_collision => SettingKind::Choice,
-            SettingKey::ground_snap => SettingKind::Toggle,
             SettingKey::edge_shade => SettingKind::Toggle,
             SettingKey::rim_light => SettingKind::Toggle,
             SettingKey::ao => SettingKind::Choice,
@@ -272,7 +268,6 @@ impl SettingKey {
             SettingKey::tilt_lock => "tilt_lock",
             SettingKey::camera_mode => "camera_mode",
             SettingKey::camera_collision => "camera_collision",
-            SettingKey::ground_snap => "ground_snap",
             SettingKey::edge_shade => "edge_shade",
             SettingKey::rim_light => "rim_light",
             SettingKey::ao => "ao",
@@ -298,7 +293,7 @@ impl SettingKey {
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(self, SettingKey::camera_collision | SettingKey::ground_snap | SettingKey::shadows)
+        matches!(self, SettingKey::camera_collision | SettingKey::shadows)
     }
 
     /// Read by a chunk's build, so a change builds the chunks again.
@@ -317,7 +312,6 @@ pub struct Settings {
     pub tilt_lock: bool,
     pub camera_mode: CameraMode,
     pub camera_collision: CameraCollisionMode,
-    pub ground_snap: bool,
     pub edge_shade: bool,
     pub rim_light: bool,
     pub ao: AoMode,
@@ -339,7 +333,6 @@ impl Settings {
         tilt_lock: false,
         camera_mode: CameraMode::orbit,
         camera_collision: CameraCollisionMode::climb,
-        ground_snap: true,
         edge_shade: true,
         rim_light: true,
         ao: AoMode::corner,
@@ -362,7 +355,6 @@ impl Settings {
             SettingKey::tilt_lock => self.tilt_lock as u32,
             SettingKey::camera_mode => self.camera_mode as u32,
             SettingKey::camera_collision => self.camera_collision as u32,
-            SettingKey::ground_snap => self.ground_snap as u32,
             SettingKey::edge_shade => self.edge_shade as u32,
             SettingKey::rim_light => self.rim_light as u32,
             SettingKey::ao => self.ao as u32,
@@ -392,7 +384,6 @@ impl Settings {
                 Some(o) => self.camera_collision = o,
                 None => return false,
             },
-            SettingKey::ground_snap if value <= 1 => self.ground_snap = value == 1,
             SettingKey::edge_shade if value <= 1 => self.edge_shade = value == 1,
             SettingKey::rim_light if value <= 1 => self.rim_light = value == 1,
             SettingKey::ao => match AoMode::of(value) {
