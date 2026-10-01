@@ -33,7 +33,7 @@ use crate::control::camera::free::look_point;
 use crate::control::camera::orbit::orbit;
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
 use crate::global::Global;
-use crate::layer::terrain::ground_snap::walk;
+use crate::layer::terrain::ground_snap::{moved, walk};
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::{settings_store, CameraMode};
 use crate::world::change::request_world_tick;
@@ -215,7 +215,17 @@ pub fn pan(dx: f64, dy: f64) {
         Active::Orbit => camera_store().intent.dist,
         Active::Free | Active::Tracked => DEFAULT_DIST,
     };
-    let to = walk(&from, dx, dy, units_per_px_at(across), camera().yaw);
+    let yaw = camera().yaw;
+    // Third person stands its center as it walks where the ground snap is
+    // on, and first person always stands its eye.
+    let to = match active() {
+        Active::Orbit if !settings_store().ground_snap => moved(&from, dx, dy, units_per_px_at(across), yaw),
+        _ => walk(&from, dx, dy, units_per_px_at(across), yaw),
+    };
+    let to = match active() {
+        Active::Orbit => crate::control::camera::orbit::gate_pan(&to),
+        Active::Free | Active::Tracked => to,
+    };
     put_center(to, Motion::Smooth);
 }
 

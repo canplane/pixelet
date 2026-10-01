@@ -1,6 +1,26 @@
 {
   "settings": {
-    "camera": {},
+    "camera": {
+      "ground_snap": {
+        "label": "Ground Altitude Lock",
+        "description": "Constrains the camera focus altitude to the actual terrain height while panning."
+      },
+      "camera_collision": {
+        "label": "Terrain Collision",
+        "through": {
+          "label": "Pass through",
+          "description": "The camera goes wherever the controls put it. Underground there are no inward-facing faces, so the scene reads inside out."
+        },
+        "stop": {
+          "label": "Stop",
+          "description": "Zoom, rotate and tilt go as far as they asked or as far as they can. Nothing moves on its own."
+        },
+        "climb": {
+          "label": "Climb over",
+          "description": "Zoom always takes effect and the view pitches up to clear the ground instead. Every zoom level stays reachable, at the cost of an angle you did not set."
+        }
+      }
+    },
     "lighting": {
       "shadows": {
         "label": "Shadows",
