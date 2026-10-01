@@ -10,9 +10,10 @@
 //! that point — the eye first person — derived and never kept (`map_center`);
 //! a navigation command puts the camera so the map center is where it says
 //! (`put_center`), at once or as every other move comes, as the command
-//! says (`Motion`). First person walks the ground, its eye at a person's
-//! height over it (free.rs `stand`); third person turns about a point on the
-//! ground. A change from first person to third lays the map center straight
+//! says (`Motion`). Each controller's target stands on the ground and what
+//! is drawn comes to it: first person's eye a person's height over the
+//! ground (free.rs `stand`), third person's map center on it where the
+//! ground snap is on. A change from first person to third lays the map center straight
 //! down on the ground and steps the eye back by the radius; from third to
 //! first the person stands at the map center, the eye at its height over the
 //! ground there and no earlier height put back. A

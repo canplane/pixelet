@@ -2,8 +2,10 @@
 
 //! The free camera. It turns the camera (controller.rs `Camera`) about its
 //! eye, which is the map center, and walks it over the ground (`pan`), at one
-//! speed wherever it stands. The eye's height is no control: it is the
-//! ground's where it stands, and `EYE_HEIGHT_U` over it (`stand`).
+//! speed wherever it stands. The eye's height is no control: the eye's
+//! target stands on the ground, `EYE_HEIGHT_U` over it (`stand`), and the
+//! drawn eye comes to that target, so on a slope or a step it is on its way
+//! there rather than at that height every frame.
 //!
 //! As the orbit's, its target and what is drawn are kept apart: the controls
 //! write where the eye is to stand and the look in the camera store's
@@ -100,8 +102,9 @@ fn canonical(local: &V3) -> Pvf3 {
     out
 }
 
-/// Where an eye over `eye`'s X and Y stands: within the lattice's rows
-/// north and south, and `EYE_HEIGHT_U` over the ground there. Its Z is the ground's and nothing the hand moves; where the ground
+/// Where an eye's target over `eye`'s X and Y stands: within the lattice's
+/// rows north and south, and `EYE_HEIGHT_U` over the ground there. Its Z is
+/// the ground's and nothing the hand moves; where the ground
 /// there is not known yet, it keeps the Z it has, and the ground arriving
 /// later moves nothing — only a step or a place put reads the ground again.
 fn stand(eye: &mut V3) {
