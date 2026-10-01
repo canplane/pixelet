@@ -92,9 +92,19 @@ pub fn step(ctx: &mut TickContext) {
     if crate::world::pyramid::domain::current().is_none() {
         return;
     }
+    let Some(eye) = crate::world::observation::eye() else { return };
+    let far = crate::layer::billboard::distance_fade::fade_range().1;
     let mut found = core::mem::take(&mut p.found);
     found.clear();
     for &chunk in &crate::world::pyramid::cover::cover::<PoiPage>().0.drawn {
+        // A badge is gone past the fade, and no badge of a piece is nearer
+        // the eye than the piece: laid on the planet, ground only drops away
+        // from it. So the cover past the fade, out to the horizon, is never
+        // read or cast down through.
+        let nearest = chunk.region().nearest(eye);
+        if (0..3).map(|k| (nearest[k] - eye[k]).powi(2)).sum::<f64>() > far * far {
+            continue;
+        }
         // The page that draws the chunk's ground: its own, or where the tree
         // stops above it, the page over it that says that ground — whose cells
         // there hold one place or none, each standing where it stands.

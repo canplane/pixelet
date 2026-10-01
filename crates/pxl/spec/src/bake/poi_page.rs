@@ -30,16 +30,18 @@ use crate::space::pyramid::{Folds, Lattice, LevelPage, GROUND, TOP_LEVEL};
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 
-const MAGIC: &[u8; 4] = b"PXP5";
+const MAGIC: &[u8; 4] = b"PXP6";
 
-/// The lattice places are counted in: a cell sixteen times the ground's on a
-/// side — four levels over it, so a POI page's cells at z16 are z12's —
-/// sharing the ground's pages, levels and names. A badge stands for its
-/// cell, and a cell the ground's size is a few pixels on the screen at every
-/// distance (pxl-render look/lod.rs), far under a badge. Sixteen times is a
-/// product choice, not a derivation: the scale places merge at, the layer's
-/// own detail at a level the shared rule chooses.
-pub const POI_LATTICE: Lattice = Lattice::new(GROUND.scale(4));
+/// The lattice places are counted in: a cell sixty-four times the ground's on
+/// a side — a chunk's column, six levels over the ground's cell — sharing the
+/// ground's pages, levels and names. A badge stands for its cell, and no two
+/// cells' badges may cover each other, so a cell is no narrower on the screen
+/// than the widest badge: a level is drawn where its ground cell covers three
+/// to six pixels (pxl-render look/lod.rs, `SPLIT`), so 2^s ground cells cover
+/// at least 3 · 2^s, and the widest badge — an icon and `SHOWN_CHARS` of a
+/// name (pxl-kernel layer/poi/badge.rs) — is under 192 pixels, which s = 6
+/// covers and s = 5 does not.
+pub const POI_LATTICE: Lattice = Lattice::new(GROUND.scale(6));
 
 const CELLS: u32 = POI_LATTICE.page_cells() * POI_LATTICE.page_cells();
 

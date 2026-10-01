@@ -161,7 +161,7 @@ The rules below keep it one thing. They come from finding it several.
   distance), finer than z16 too — z17 to z19 near the eye — and refines it
   only where the screen observes it and its error crosses a cell. How much detail a layer
   draws at that level is the layer's own — terrain its cells averaged
-  2 × 2, places a lattice sixteen times the ground's cell, objects their own
+  2 × 2, places a lattice sixty-four times the ground's cell, objects their own
   cells — a tuning inside the perspective and never a second rule. Where
   the rule asks for a level finer than a layer's data, the layer draws its
   finest: terrain z16, objects their sub-cell tiers down to z19.

@@ -20,22 +20,15 @@
 //! reusable by the next badge of roughly that size, which is what keeps a long
 //! session from fragmenting the sheet into unusable gaps.
 //!
-//! **Growth repacks rather than reserving.** A sheet big enough for a dense
-//! city is most of a hundred megabytes, and most sessions never need it, so
-//! this starts small and doubles. Each entry keeps what drew it, so a repack is
-//! a redraw.
+//! **Growth repacks rather than reserving.** Most views show a handful of
+//! badges, so this starts small and doubles. Each entry keeps what drew it, so
+//! a repack is a redraw.
 //!
-//! ---
-//!
-//! **What would replace this: an atlas of glyphs rather than of badges.** The
-//! ceiling here is set by the data: every distinct place name is a distinct
-//! rectangle, so a dense city fills the sheet and there is no size that is
-//! enough — MAX_SIZE is a place to give up, not a bound. Pack *glyphs* instead
-//! and the sheet is bounded by the script. That is what map renderers do, and
-//! it is the only version of this that stops growing with the world; it costs
-//! a badge becoming a run of quads, and the text a run of glyphs the kernel
-//! places itself — shaping, kerning and joining that the platform does now,
-//! drawing a line whole (gpu/text.rs).
+//! **What the sheet holds is bounded by the screen, not by the world.** An
+//! entry is a badge on the screen, and the places are counted in cells no
+//! narrower there than the widest badge (pxl-spec bake/poi_page.rs
+//! `POI_LATTICE`), one badge a cell, however many places a city has under
+//! them; `MAX_SIZE` is sized from that.
 //!
 //! ---
 //!
@@ -92,15 +85,14 @@ const HEIGHT_BUCKET: u32 = 16;
 
 const INITIAL_SIZE: u32 = 1024;
 
-/// Where growth gives up. A phone stops one step earlier: the canvas alone is
-/// 64 MB at 4096, and the GPU copy and its mipmaps as much again.
-fn max_size(handheld: bool) -> u32 {
-    if handheld {
-        2048
-    } else {
-        4096
-    }
-}
+/// Where growth gives up, on every device: 2048 px, RGBA, 16 MiB and a third
+/// again for the mip chain on the GPU. What the sheet holds is what is on the
+/// screen — the places' badges, one a POI cell (pxl-spec bake/poi_page.rs
+/// `POI_LATTICE`), and a bubble or two — and a POI cell is no narrower on
+/// the screen than the widest badge, so a screen holds a few dozen of them;
+/// a 2048 sheet holds over a hundred of the widest. A sheet that is full is
+/// a bounded flow: what does not fit waits unshown for a slot (`NO_SLOT`).
+const MAX_SIZE: u32 = 2048;
 
 /// One device pixel of transparent margin, so a linear sample at the edge of
 /// one entry cannot reach into its neighbor. Mipmaps make the reach wider than
@@ -173,7 +165,6 @@ pub struct Flush {
 #[derive(Default)]
 pub struct BillboardAtlas {
     size: u32,
-    max_size: u32,
 
     /// The rows: where each starts, its bucketed height, how far along it is
     /// spent. Every entry in a row is allocated at the row's height.
@@ -211,11 +202,10 @@ pub struct BillboardAtlas {
 }
 
 impl BillboardAtlas {
-    /// An empty sheet, growing as far as a `handheld` device's does.
-    pub fn new(handheld: bool) -> BillboardAtlas {
+    /// An empty sheet.
+    pub fn new() -> BillboardAtlas {
         BillboardAtlas {
             size: INITIAL_SIZE,
-            max_size: max_size(handheld),
             ..Default::default()
         }
     }
@@ -439,7 +429,7 @@ impl BillboardAtlas {
     /// their indices; only their rectangles move, which is why a consumer reads
     /// the rectangle on every use.
     fn grow(&mut self) -> bool {
-        if self.size >= self.max_size {
+        if self.size >= MAX_SIZE {
             return false;
         }
         let (slots, ws, hs) = self.live_slots();

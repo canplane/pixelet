@@ -13,7 +13,6 @@ use pxl_render::asset::atlas::BillboardAtlas;
 use pxl_spec::space::v3::V3;
 
 use crate::global::Global;
-use crate::host::handheld;
 use crate::kernel::kernel;
 pub use crate::layer::billboard::order::BillboardOrder;
 
@@ -21,7 +20,7 @@ static SHEET: Global<BillboardAtlas> = Global::new();
 
 /// `billboard_sheet`.
 pub fn billboard_sheet() -> &'static mut BillboardAtlas {
-    SHEET.get(|| BillboardAtlas::new(handheld()))
+    SHEET.get(BillboardAtlas::new)
 }
 
 /// A billboard set, empty and standing at the origin, drawn in `order`.

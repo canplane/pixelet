@@ -30,12 +30,12 @@ fn a_page_and_its_places_come_back_as_they_went() {
     let page = PoiPage::of_places(
         0,
         [
-            (point(7, 0, 1, 2), station),
-            (point(9, 0, 0, 0), called("서울역")),
-            (point(9, 0, 3, 3), called("남대문")),
-            (point(12, 0, 2, 0), called("")),
-            (point(20, 1, 0, 3), station),
-            (point(22, 1, 0, 0), called("Seoul Station")),
+            (point(1, 0, 1, 2), station),
+            (point(2, 0, 0, 0), called("서울역")),
+            (point(2, 0, 3, 3), called("남대문")),
+            (point(3, 0, 2, 0), called("")),
+            (point(5, 1, 0, 3), station),
+            (point(6, 1, 0, 0), called("Seoul Station")),
         ],
     );
     assert_eq!(decode(&encode(&page).unwrap()).unwrap(), page);
@@ -56,7 +56,7 @@ fn a_page_and_its_places_come_back_as_they_went() {
 /// two has a count and nothing else.
 #[test]
 fn a_lone_place_folds_up_with_its_kind_and_its_ground_cell() {
-    let at = point(21, 17, 3, 1);
+    let at = point(5, 4, 3, 1);
     let ground = GROUND.cell_of(0, &at);
     let empty = PoiPage::default();
     let tower = Place {
@@ -112,8 +112,8 @@ fn a_centroid_folds_as_the_places_under_it_average() {
     let empty = PoiPage::default();
     let folded = PoiPage::fold_page(p, |k| Some(if k == leaf() { &leaf_page } else { &empty })).unwrap();
     assert_eq!(folded, PoiPage::of_places(1, places));
-    // Two thirds of the way from C's column to A and B's: (0 + 2 + 16) / 3.
-    assert_eq!((folded.cells[0].count, folded.cells[0].at), (3, [6, 0]));
+    // A third of the way from A and B's column to C's: (0 + 2 + 64) / 3.
+    assert_eq!((folded.cells[0].count, folded.cells[0].at), (3, [22, 0]));
 }
 
 /// What the wire cannot hold is refused: a place in a cell of two, a name

@@ -119,20 +119,24 @@ fn places() -> (Vec<IVec>, Vec<(LevelPage, PoiPage)>) {
 }
 
 /// The places a drawn chunk counts: those of its source page — its own, or
-/// the one over it that settles it — whose cell stands on the chunk's ground.
-fn count(pyramid: &Pyramid<PoiPage>, c: Chunk) -> u32 {
-    let src = pyramid.drawn_from(c.page()).expect("a drawn chunk has a page that draws it");
+/// the one over it that settles it — whose cell stands on the chunk's ground;
+/// none where only a page over it that does not settle it is resident,
+/// which draws its ground and does not say what stands there.
+fn count(pyramid: &Pyramid<PoiPage>, c: Chunk) -> Option<u32> {
+    let src = pyramid.source(c.page())?;
     let page = pyramid.get(src).expect("a source is resident");
     page.cells
         .iter()
         .filter(|x| Chunk::of(c.level(), &POI_LATTICE.cell_at(src, x.cell).inner_at(GROUND, 0, x.at).mid()) == c)
         .map(|x| x.count)
-        .sum()
+        .sum::<u32>()
+        .into()
 }
 
 /// The cover is the domain's ground cut once: its drawn pieces and its gaps
 /// meet nowhere, together they are all of it, and every place on it is
-/// counted exactly once — whatever is resident, at whatever levels.
+/// counted exactly once where a page says it, and nowhere else — whatever
+/// is resident, at whatever levels.
 #[test]
 fn the_cover_and_its_gaps_partition_the_domain_and_count_every_place_once() {
     let _serial = crate::global::serial();
@@ -156,9 +160,10 @@ fn the_cover_and_its_gaps_partition_the_domain_and_count_every_place_once() {
         assert!(disjoint(&pieces), "trial {trial}: two pieces meet");
         let total: f64 = pieces.iter().map(|&c| area(c)).sum();
         assert_eq!(total, whole, "trial {trial}: the pieces are the domain's ground");
-        let drawn: u32 = cover.drawn.iter().map(|&c| count(&pyramid, c)).sum();
-        let in_gaps = at.iter().filter(|&&a| cover.gaps.iter().any(|&g| inside(g, a))).count() as u32;
-        assert_eq!(drawn + in_gaps, at.len() as u32, "trial {trial}: every place once");
+        let drawn: u32 = cover.drawn.iter().filter_map(|&c| count(&pyramid, c)).sum();
+        let unsaid: Vec<Chunk> = cover.gaps.iter().copied().chain(cover.drawn.iter().copied().filter(|&c| count(&pyramid, c).is_none())).collect();
+        let elsewhere = at.iter().filter(|&&a| unsaid.iter().any(|&g| inside(g, a))).count() as u32;
+        assert_eq!(drawn + elsewhere, at.len() as u32, "trial {trial}: every place once");
     }
 }
 
