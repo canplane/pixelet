@@ -325,7 +325,10 @@ fn run() -> Result<(), String> {
             || connect(url, &raster),
             |db, page, t| {
                 let at = LevelPage::new(0, page);
-                if !args.force && surfaces.path(at).exists() {
+                // Resumed: a surface on disk stands if it is current, and one
+                // written in another layout is baked again.
+                let path = surfaces.path(at);
+                if !args.force && path.exists() && fs::read(&path).ok().and_then(|p| unpack(&p).ok()).is_some_and(|raw| Surface::is_current(&raw)) {
                     return Ok(None);
                 }
                 let mut stats = SourceStats::default();
@@ -407,6 +410,14 @@ fn run() -> Result<(), String> {
             }
             unpack(&fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?).map(Some).map_err(|e| e.to_string())
         };
+        // An artifact written in another layout is refused before any page
+        // is assembled, not a page at a time after.
+        if let Some(&first) = targets.first() {
+            Surface::decode(&read(&surfaces, first)?.ok_or("no surface: run --stage surface")?)?;
+        }
+        if let Some(raw) = lines.pages(0)?.first().map(|p| read(&lines, p.page)).transpose()?.flatten() {
+            decode_lines(&raw)?;
+        }
         let t = over_pages(
             "assemble",
             targets,
@@ -414,9 +425,9 @@ fn run() -> Result<(), String> {
             || Ok(()),
             |_, page, _| {
                 let surface = read(&surfaces, page)?.ok_or("no surface: run --stage surface")?;
-                let surface = Surface::decode(&surface).map_err(|e| format!("{e:?}"))?;
+                let surface = Surface::decode(&surface)?;
                 let decks = match read(&lines, page)? {
-                    Some(raw) => decode_lines(&raw).map_err(|e| format!("{e:?}"))?,
+                    Some(raw) => decode_lines(&raw)?,
                     None => Default::default(),
                 };
                 let raw = encode_terrain(&assemble(surface, decks)).map_err(|e| format!("{e:?}"))?;
