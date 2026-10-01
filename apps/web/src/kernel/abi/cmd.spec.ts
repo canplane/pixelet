@@ -284,8 +284,7 @@ export const enum Command {
 
   // ---- the host tells the process: its start, its turn, its window, its devices and its input ----
 
-  /** The shell's boot: what the build is and what the device offers, and what the browser's
-   * storage kept under host.json's keys. */
+  /** The kernel's start: what the platform is, and what it was handed to start with. */
   WORLD_BOOT = 0x1001,
   /** The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
    * phases on what is left of the quota, the fetches within the credits. The turn leaves
@@ -611,15 +610,14 @@ export interface WorldBoot {
    * silence is the only sign of loss; a device's speaks only when the heading turns and
    * reports a failure itself (SENSOR_ORIENTATION_LOST). */
   orientation_silence_is_loss: boolean;
-  /** The settings as storage kept them, a value a setting in SettingKey's order as the
-   * snapshot carries them, 0xffffffff for one it kept nothing for. */
-  settings: u32[];
+  /** What storage keeps of the settings, as it keeps it, empty for none: the kernel's own file
+   * (host.json's STORAGE_KEYS), handed over unread as a process is handed its environment,
+   * which the kernel reads and from then on writes itself. */
+  settings: string;
 }
 
 export function encode_world_boot(p: WorldBoot): U8Array {
-  return packet((b) =>
-    b.bool(p.development).bool(p.handheld).bool(p.geolocation).bool(p.orientation).bool(p.orientation_permission).bool(p.orientation_silence_is_loss).u32_array(Uint32Array.from(p.settings))
-  );
+  return packet((b) => b.bool(p.development).bool(p.handheld).bool(p.geolocation).bool(p.orientation).bool(p.orientation_permission).bool(p.orientation_silence_is_loss).str(p.settings));
 }
 
 /** Command.WORLD_FRAME's packet. */

@@ -75,7 +75,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                     silence_is_loss: p.orientation_silence_is_loss,
                 },
             });
-            settings_load(p.settings.iter().copied());
+            settings_load(p.settings);
             crate::layer::object::store::load();
             Ok(Some(0))
         }

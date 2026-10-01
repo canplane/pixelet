@@ -30,12 +30,13 @@ import { bind_root } from "@/kernel/host.ts";
 import { root } from "@/kernel/abi/host.spec.ts";
 import { BAKE_KINDS } from "@/config/published.spec.ts";
 import { CORE, CORE_DOORBELL, load_core } from "@/kernel/mem.ts";
+import { storage, STORAGE_KEYS } from "@/kernel/abi/host.spec.ts";
+import { storageGet } from "@platform/storage.ts";
 import { bytes_at } from "@/kernel/module.ts";
 import { gpuBoot } from "@platform/gpu.ts";
 import { HANDHELD } from "@platform/core.ts";
 import { start_sched } from "@/kernel/sched.ts";
-import { kernel_snapshot, set_snapshot, subscribe_snapshot } from "@/kernel/snapshot.ts";
-import { keepSettings, storedSettings } from "@/feature/setting/store.ts";
+import { set_snapshot } from "@/kernel/snapshot.ts";
 
 function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
   switch (cmd) {
@@ -90,14 +91,13 @@ export async function boot_kernel(): Promise<void> {
       orientation: orientationSupported(),
       orientation_permission: orientationNeedsPermission(),
       orientation_silence_is_loss: orientationSilenceIsLoss(),
-      settings: storedSettings(),
+      // The kernel's own file, handed over unread: it reads it, and writes it
+      // from then on.
+      settings: storageGet(STORAGE_KEYS[storage.SETTINGS]) ?? "",
     }),
     (result) => result,
   );
   // Not awaited: a dev tile server may answer late, and the kernel observes
   // nothing until it has, which the boot does not wait on.
   void declare_source();
-  // What the kernel holds from now on is what storage keeps: the snapshot
-  // after WORLD_BOOT is the first to say it.
-  subscribe_snapshot(() => keepSettings(kernel_snapshot().settings));
 }

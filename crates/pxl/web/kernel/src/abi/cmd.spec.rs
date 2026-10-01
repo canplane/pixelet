@@ -595,8 +595,7 @@ pub enum Command {
     SENSOR_ORIENTATION_LOST = 0x120a,
 
     // ---- the host tells the process: its start, its turn, its window, its devices and its input ----
-    /// The shell's boot: what the build is and what the device offers, and what the browser's
-    /// storage kept under host.json's keys.
+    /// The kernel's start: what the platform is, and what it was handed to start with.
     WORLD_BOOT = 0x1001,
     /// The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
     /// phases on what is left of the quota, the fetches within the credits. The turn leaves
@@ -1109,9 +1108,10 @@ pub struct WorldBoot<'a> {
     /// silence is the only sign of loss; a device's speaks only when the heading turns and
     /// reports a failure itself (SENSOR_ORIENTATION_LOST).
     pub orientation_silence_is_loss: bool,
-    /// The settings as storage kept them, a value a setting in SettingKey's order as the
-    /// snapshot carries them, 0xffffffff for one it kept nothing for.
-    pub settings: &'a [u32],
+    /// What storage keeps of the settings, as it keeps it, empty for none: the kernel's own file
+    /// (host.json's STORAGE_KEYS), handed over unread as a process is handed its environment,
+    /// which the kernel reads and from then on writes itself.
+    pub settings: &'a str,
 }
 
 impl<'a> WorldBoot<'a> {
@@ -1124,7 +1124,7 @@ impl<'a> WorldBoot<'a> {
             orientation: f.at(3)?.get_bool()?,
             orientation_permission: f.at(4)?.get_bool()?,
             orientation_silence_is_loss: f.at(5)?.get_bool()?,
-            settings: f.at(6)?.get_array::<u32>()?,
+            settings: f.at(6)?.get_str_ref()?,
         })
     }
 }

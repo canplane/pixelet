@@ -88,7 +88,7 @@ CORE_DOORBELL.call(
     orientation: false,
     orientation_permission: false,
     orientation_silence_is_loss: true,
-    settings: [],
+    settings: "",
   }),
   (r) => r,
 );

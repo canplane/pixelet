@@ -160,6 +160,30 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         "        }".to_string(),
         "    }".into(),
         String::new(),
+        "    /// Its name, as storage keeps it.".into(),
+        "    pub fn name(self) -> &'static str {".into(),
+        "        match self {".into(),
+    ]);
+    rs.extend(settings.iter().map(|s| format!("            SettingKey::{} => \"{}\",", s.key, s.key)));
+    rs.extend([
+        "        }".to_string(),
+        "    }".into(),
+        String::new(),
+        "    /// A choice's options by name, in index order; none for any other kind.".into(),
+        "    pub fn options(self) -> &'static [&'static str] {".into(),
+        "        match self {".into(),
+    ]);
+    for s in settings.iter().filter(|s| s.kind() == "choice") {
+        let name = s.options().unwrap_or_default();
+        let List { values, .. } = list(name).ok_or(format!("{JSON}: no list {name}"))?;
+        let names: Vec<String> = values.iter().map(|v| format!("\"{v}\"")).collect();
+        rs.push(format!("            SettingKey::{} => &[{}],", s.key, names.join(", ")));
+    }
+    rs.extend([
+        "            _ => &[],".to_string(),
+        "        }".into(),
+        "    }".into(),
+        String::new(),
         "    /// Offered by a development build only.".into(),
         "    pub fn dev(self) -> bool {".into(),
         format!("        {}", keys_where(&|s| s.flag("dev"))),

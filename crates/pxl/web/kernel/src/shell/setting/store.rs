@@ -8,16 +8,23 @@
 //! (schema.spec.rs `Settings`), so a consumer reads `poi` and never asks
 //! which layer it came from.
 //!
-//! What the browser keeps of them is the shell's (feature/setting/store.ts):
-//! it reads storage into a value a setting for WORLD_BOOT, and writes back
-//! what the snapshot says whenever it changes. Here a setting is its number
-//! and nothing else; its name and its options' are the shell's, which lets
-//! the stored form stay one object by name while the module names nothing.
+//! What storage keeps of them is the kernel's too, one file below the storage
+//! root (io/file.rs): handed over unread at the boot, as a process is handed
+//! its environment, and written by the kernel whenever a setting changes. It is one object by name,
+//! `{"poi":true,"ao":"screen"}`: a setting and a choice's option are numbered
+//! by their place in schema.json, and a name outlives the order they are
+//! listed in. Only what differs from the default is kept: a default written
+//! to storage is not a default — it is a decision nobody made, and changing
+//! the value in the source would then reach only people with empty storage.
 
 use pxl_spec::bake::ground::{channel_bit, ChannelMask, GroundChannelKey};
 
+use xpute_core::codec::json::{read_json, JsonKind};
+
+use crate::abi::host::{root, storage, STORAGE_KEYS};
 use crate::global::Global;
 use crate::host::development;
+use crate::io::file;
 use crate::sched::profiler::log::profiler_follow;
 pub use crate::shell::setting::schema_spec::{AoMode, CameraCollisionMode, CameraMode, ResolutionMode, SettingKey, SettingKind, Settings};
 use crate::world::chunk::source::chunk_sources_changed;
@@ -33,17 +40,16 @@ use crate::world::chunk::source::chunk_sources_changed;
 /// would be to clear the site's data.
 ///
 /// `settings_load` drops what this says no to rather than carrying it: a
-/// value the page cannot reach is a state nothing agrees with, and the
-/// shell stores what the store holds, so it leaves storage too.
+/// value the page cannot reach is a state nothing agrees with, and what is
+/// kept is written from the store, so it leaves storage too.
 /// `set_setting` refuses it for the same reason: the row is gone from the
 /// sheet, but the command that sets it is not gone from the console.
 ///
 /// A module built without the `dev` feature offers none, whatever the build
-/// says of itself: it does not name them (schema.spec.rs `SettingKey::name`),
-/// and runs each at its default.
+/// says of itself, and runs each at its default.
 ///
-/// Called from `settings_load` and after, which means it reads what the
-/// shell hands over at WORLD_BOOT: the store is first read after it.
+/// Called from `settings_load` and after, which means it reads what
+/// WORLD_BOOT said of the build: the store is first read after it.
 pub fn is_offered(key: SettingKey) -> bool {
     !key.dev() || (cfg!(feature = "dev") && development())
 }
@@ -76,6 +82,29 @@ impl Settings {
         if key == SettingKey::profiler {
             profiler_follow(value == 1);
         }
+        self.keep();
+    }
+
+    /// Writes what differs from the defaults, by name, to storage.
+    fn keep(&self) {
+        let mut out = String::from("{");
+        for key in SettingKey::ALL {
+            let value = self.get(key);
+            if !is_offered(key) || value == Settings::DEFAULT.get(key) {
+                continue;
+            }
+            if out.len() > 1 {
+                out.push(',');
+            }
+            let stored = match key.kind() {
+                SettingKind::Toggle => (if value == 1 { "true" } else { "false" }).to_string(),
+                SettingKind::Choice => format!("\"{}\"", key.options()[value as usize]),
+                SettingKind::Index => value.to_string(),
+            };
+            out.push_str(&format!("\"{}\":{stored}", key.name()));
+        }
+        out.push('}');
+        file::write_whole(root::STORAGE, settings_path(), out.into_bytes());
     }
 
     pub fn toggle_setting(&mut self, key: SettingKey) {
@@ -87,17 +116,27 @@ impl Settings {
 
 static SETTINGS_STORE: Global<Settings> = Global::new();
 
-/// A setting storage kept nothing for, in what WORLD_BOOT carries.
-pub const NONE: u32 = u32::MAX;
+fn settings_path() -> &'static str {
+    STORAGE_KEYS[storage::SETTINGS as usize]
+}
 
-/// The settings from what storage kept (WORLD_BOOT): a value a setting in
-/// SettingKey's order, NONE for none. What this build does not offer, or a
-/// value its setting cannot hold, is left at the default.
-pub fn settings_load(values: impl IntoIterator<Item = u32>) {
+/// The settings from what storage kept, as WORLD_BOOT hands it over. What
+/// this build does not offer, a name the schema does not have, or a value
+/// its setting cannot hold is left at the default; unreadable storage is
+/// none.
+pub fn settings_load(kept: &str) {
     let mut s = Settings::DEFAULT;
-    for (key, value) in SettingKey::ALL.into_iter().zip(values) {
-        if value != NONE && is_offered(key) {
-            s.set(key, value);
+    if let Some(kept) = read_json(kept).filter(|v| v.kind() == JsonKind::Object) {
+        for key in SettingKey::ALL {
+            let Some(v) = kept.get(key.name()).filter(|_| is_offered(key)) else { continue };
+            let value = match key.kind() {
+                SettingKind::Toggle => v.as_bool().map(u32::from),
+                SettingKind::Choice => v.as_str().and_then(|o| key.options().iter().position(|n| o.eq_str(n))).map(|i| i as u32),
+                SettingKind::Index => v.as_f64().filter(|n| n.fract() == 0.0 && *n >= 0.0 && *n <= u32::MAX as f64).map(|n| n as u32),
+            };
+            if let Some(value) = value {
+                s.set(key, value);
+            }
         }
     }
     SETTINGS_STORE.set(s);

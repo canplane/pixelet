@@ -911,8 +911,7 @@
           "name": "WORLD_BOOT",
           "value": 4097,
           "doc": [
-            "The shell's boot: what the build is and what the device offers, and what the browser's",
-            "storage kept under host.json's keys."
+            "The kernel's start: what the platform is, and what it was handed to start with."
           ],
           "packet": [
             {
@@ -952,11 +951,11 @@
             },
             {
               "name": "settings",
-              "type": "u32",
-              "list": true,
+              "type": "str",
               "doc": [
-                "The settings as storage kept them, a value a setting in SettingKey's order as the",
-                "snapshot carries them, 0xffffffff for one it kept nothing for."
+                "What storage keeps of the settings, as it keeps it, empty for none: the kernel's own file",
+                "(host.json's STORAGE_KEYS), handed over unread as a process is handed its environment,",
+                "which the kernel reads and from then on writes itself."
               ]
             }
           ]

@@ -73,31 +73,44 @@ export class Files {
   readonly open = new Map<u32, File>();
 }
 
+/** Whether `path` walks down from its root and nowhere else, as 9P's walk
+ * does a name at a time: no name empty, `.` or `..`, so no path leaves the
+ * root it is opened below and the root is the whole of what it grants. */
+function walks_down(path: string): boolean {
+  return path.split("/").every((name) => name !== "" && name !== "." && name !== "..");
+}
+
 function open_file(files: Files, host: SysHost, fd: u32, root: u32, flags: u32, path: string): void {
   const file: File = { root, path, controller: new AbortController(), bytes: null, written: null };
   files.open.set(fd, file);
+  const own = () => files.open.get(fd) === file;
+  const failed = (err: unknown) => {
+    if (!own()) return;
+    files.open.delete(fd);
+    const [errno, detail] = err instanceof FileError ? [err.errno, err.detail] : [Errno.EIO, 0];
+    if (!(err instanceof FileError)) console.warn(`[xpute/sys] open ${root}/${path}: ${err instanceof Error ? err.message : String(err)}`);
+    host.opened(fd, errno, detail);
+  };
+  const read = (bytes: U8Array) => {
+    if (!own()) return;
+    file.bytes = bytes;
+    host.opened(fd, bytes.byteLength, 0);
+  };
+  if (!walks_down(path)) return failed(new FileError(Errno.EACCES));
   if (flags === flag.O_WRONLY) {
     file.written = [];
-    host.opened(fd, 0, 0);
-    return;
+    return host.opened(fd, 0, 0);
   }
-  // Answered once the record run is over, so an answer at once and one a
-  // response later reach the guest the same way.
-  void (async () => {
-    await Promise.resolve();
-    try {
-      const bytes = await host.open(root, path, file.controller.signal);
-      if (files.open.get(fd) !== file) return;
-      file.bytes = bytes;
-      host.opened(fd, bytes.byteLength, 0);
-    } catch (err) {
-      if (files.open.get(fd) !== file) return;
-      files.open.delete(fd);
-      const [errno, detail] = err instanceof FileError ? [err.errno, err.detail] : [Errno.EIO, 0];
-      if (!(err instanceof FileError)) console.warn(`[xpute/sys] open ${root}/${path}: ${err instanceof Error ? err.message : String(err)}`);
-      host.opened(fd, errno, detail);
-    }
-  })();
+  // A file the host holds is answered now and one behind a transport when
+  // the transport is; either way the guest hears it on a later turn.
+  let got: U8Array | Promise<U8Array>;
+  try {
+    got = host.open(root, path, file.controller.signal);
+  } catch (err) {
+    return failed(err);
+  }
+  if (got instanceof Promise) got.then(read, failed);
+  else read(got);
 }
 
 /** Runs the calls the turn just returned left in the stream at `at`. */
