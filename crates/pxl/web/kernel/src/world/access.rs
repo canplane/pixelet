@@ -229,6 +229,10 @@ impl Hit {
 pub struct Access<'a> {
     terrain: &'a Paging<Terrain>,
     objects: &'a Store,
+    /// Where the rays cast through it count what they visit, where someone
+    /// counts: each region read and each cell walked — the cost `first_hit`
+    /// says a ray has, counted as it is paid.
+    visits: Option<&'a std::cell::Cell<u64>>,
 }
 
 impl Access<'static> {
@@ -256,7 +260,19 @@ struct Region {
 
 impl<'a> Access<'a> {
     pub fn new(terrain: &'a Paging<Terrain>, objects: &'a Store) -> Access<'a> {
-        Access { terrain, objects }
+        Access { terrain, objects, visits: None }
+    }
+
+    /// The same, counting into `visits` the regions and cells its rays
+    /// visit.
+    pub fn counting(self, visits: &'a std::cell::Cell<u64>) -> Access<'a> {
+        Access { visits: Some(visits), ..self }
+    }
+
+    fn visit(&self) {
+        if let Some(v) = self.visits {
+            v.set(v.get() + 1);
+        }
     }
 
     /// The ground `at` stands on, drawn at `level`: the level's cell it lies
@@ -386,6 +402,7 @@ impl<'a> Access<'a> {
     fn ground_first(&self, ray: &Ray, (t0, t1): (f64, f64), level: u32, lack: &mut Option<Lack>, answered: &mut bool) -> Option<Hit> {
         let mut t = t0;
         while t < t1 {
+            self.visit();
             if let Some(out) = self.clear(ray, t, level, t1) {
                 *answered = true;
                 t = out;
@@ -503,6 +520,7 @@ impl<'a> Access<'a> {
         let (delta_y, mut next_y) = axis(dy, cell[1], ray.origin[1]);
         let mut from = t0;
         while from < t1 && inside(cell) {
+            self.visit();
             let to = next_x.min(next_y).min(t1);
             let hit = if level == 0 { self.column(ray, cell, from, to) } else { self.folded(ray, cell, from, to, level) };
             if hit.is_some() {
