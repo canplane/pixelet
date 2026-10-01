@@ -23,6 +23,7 @@ use xpute_core::math::scalar::round;
 use crate::mesh::paint::palette::shader_meta::layer_mean;
 use crate::mesh::volume::{pack_sub_cell_fraction, unpack_sub_cell_fraction, unpack_sub_cell_size, MATERIAL_LAND, MATERIAL_OBJECT, NO_LAYER, SUB_CELL_NONE};
 use crate::mesh::voxel_scan::{OwnedRunSet, RunSet, COL_SPAN};
+use crate::mesh::{grow, Refused};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
@@ -232,6 +233,9 @@ pub enum Step {
     /// again by every step until then.
     Full,
     Done,
+    /// The heap refused the bake's workspace room: the bake is over, and
+    /// asked for again once the heap has let something go.
+    Refused,
 }
 
 /// The words a block of the mesh is written into: a caller's, held as a raw
@@ -360,6 +364,8 @@ pub struct BakeContext {
     box_cnt: u32,
     open: Option<Open>,
     done: bool,
+    /// The heap refused a step's workspace room, which ends the bake.
+    refused: bool,
     pub counters: Counters,
 }
 
@@ -386,6 +392,7 @@ impl BakeContext {
             box_cnt: 0,
             open: None,
             done: false,
+            refused: false,
             counters: Counters::default(),
         }
     }
@@ -395,17 +402,17 @@ impl BakeContext {
     /// every level. `textured` is whether the pack is drawn. `clip`, the
     /// heights a chunk spans where its set is its whole column's, cuts the
     /// set to them (`OwnedRunSet::clip_from`), and every step of the bake
-    /// reads the cut set in place of the one it is handed. False when one is
-    /// already open.
-    pub fn begin(&mut self, set: &RunSet, lod_step: u32, scale: u32, textured: bool, clip: Option<(i32, i32)>) -> bool {
-        if self.open.is_some() {
-            return false;
-        }
+    /// reads the cut set in place of the one it is handed. One bake is open
+    /// at a time; an error where the heap refused the cut room.
+    pub fn begin(&mut self, set: &RunSet, lod_step: u32, scale: u32, textured: bool, clip: Option<(i32, i32)>) -> Result<(), Refused> {
+        xpute_core::ensure!(self.open.is_none(), ENOTRECOVERABLE);
+        self.refused = false;
         match clip {
             Some((z0, z1)) => {
                 let mut cut = self.clipped.take().unwrap_or_default();
-                cut.clip_from(set, z0, z1);
+                let clipped = cut.clip_from(set, z0, z1);
                 self.clipped = Some(cut);
+                clipped?;
             }
             None => self.clipped = None,
         }
@@ -444,7 +451,7 @@ impl BakeContext {
                 fine: None,
             })
         });
-        true
+        Ok(())
     }
 
     /// Advances the open bake by one step over `set`, the set it was opened
@@ -469,6 +476,10 @@ impl BakeContext {
         };
         self.clipped = cut;
         self.open = Some(open);
+        if self.refused {
+            self.abort();
+            return Step::Refused;
+        }
         if self.done {
             Step::Done
         } else if self.mesh_words > 0 && self.mesh.is_none() {
@@ -734,7 +745,17 @@ impl BakeContext {
     }
 
     fn push_box(&mut self, cx: u32, cy: u32, run: u32, mask: u32, w: u32, h: u32) {
-        self.surviving.extend_from_slice(&[cx, cy, run, mask, w, h]);
+        let grown = grow(&mut self.surviving, 6);
+        if self.room(grown) {
+            self.surviving.extend_from_slice(&[cx, cy, run, mask, w, h]);
+        }
+    }
+
+    /// Whether growth had room; where it had none the bake is refused, and
+    /// what the step goes on to write is thrown away with it.
+    fn room(&mut self, grown: Result<(), Refused>) -> bool {
+        self.refused |= grown.is_err();
+        grown.is_ok()
     }
 
     fn merged_mask(&self, span: usize, col: usize, w: usize, h: usize) -> u32 {
@@ -799,6 +820,10 @@ impl BakeContext {
                             }
                         }
                     }
+                    let grown = grow(&mut self.coarse.start, 1);
+                    if !self.room(grown) {
+                        return false;
+                    }
                     self.coarse.start.push(self.coarse.z0.len() as u32);
                     let mut low: Option<i32> = None;
                     for j in 0..lod_step {
@@ -816,6 +841,10 @@ impl BakeContext {
             }
             b.row = row_end;
             if row_end < res {
+                return false;
+            }
+            let grown = grow(&mut self.coarse.start, 1);
+            if !self.room(grown) {
                 return false;
             }
             self.coarse.start.push(self.coarse.z0.len() as u32);
@@ -839,6 +868,13 @@ impl BakeContext {
             if self.buckets[i as usize].bz == bz {
                 return i;
             }
+        }
+        // Where the heap refuses another bucket the bake is refused, and the
+        // run goes into the last one there is — kept from the context's
+        // first, so there always is one — which nothing reads.
+        let grown = grow(&mut self.buckets, 1);
+        if !self.room(grown) {
+            return self.buckets.len() as u32 - 1;
         }
         self.buckets.push(ZBucketAccum { bz, ..ZBucketAccum::default() });
         self.buckets.len() as u32 - 1
@@ -890,6 +926,12 @@ impl BakeContext {
     /// `edge_low` is the lowest ground beside the cell across the chunk's
     /// edge, where it is on the edge: its skirt hangs down to it.
     fn pack_coarse_cell(&mut self, start: u32, cnt: u32, lod_step: u32, bucket: i32, edge_low: Option<i32>) {
+        // Two runs a bucket at most: the bucket's own, and ground under it
+        // (`under`).
+        let grown = self.coarse.grow_runs(2 * cnt as usize);
+        if !self.room(grown) {
+            return;
+        }
         let step = bucket;
         let cell = start as usize..(start + cnt) as usize;
         self.buckets[cell.clone()].sort_unstable_by_key(|acc| acc.bz);

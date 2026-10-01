@@ -22,6 +22,7 @@ use xpute_core::wire::xtp::{BranchCursor, SequenceType, TreeReader};
 
 use crate::terrain::pipeline::coast::adapter::from_coast_row;
 use crate::terrain::pipeline::coast::policy::CoastPolicy;
+use crate::terrain::pipeline::corridor::corridor_fills;
 use crate::terrain::pipeline::deck::bake_decks;
 use crate::terrain::pipeline::ground::bake_ground;
 use crate::terrain::pipeline::normalizer::normalize;
@@ -152,6 +153,8 @@ pub fn bake_terrain(page_idx: IVec, pkt: &[u8]) -> Result<Terrain, MarshalError>
     // present but not worth rasterizing (full land)".
     let has_coast_row = coasts.len > 0;
 
+    let fills = corridor_fills(&feats);
+    feats.extend(fills);
     let ground: Ground = bake_ground(&feats, has_coast_row);
 
     let rows = (0..deck_rows.len).map(|i| deck_row(&deck_rows.at_branch(i)?)).collect::<Result<Vec<_>, _>>()?;

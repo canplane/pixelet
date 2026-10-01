@@ -75,8 +75,12 @@ pub const fn transport(t: u8) -> Option<Swatch> {
     match t {
         cube_types::transport::road_default => Some(Swatch::new(0xffffff)),
         cube_types::transport::road_motorway => Some(Swatch::new(0xe892a2)),
+        cube_types::transport::road_trunk => Some(Swatch::new(0xf9b29c)),
         cube_types::transport::road_primary => Some(Swatch::new(0xfcd6a4)),
         cube_types::transport::road_secondary => Some(Swatch::new(0xf7fabf)),
+        cube_types::transport::road_tertiary => Some(Swatch::new(0xffffff)),
+        cube_types::transport::road_service => Some(Swatch::new(0xffffff)),
+        cube_types::transport::track => Some(Swatch::new(0x996600)),
         cube_types::transport::pedestrian => Some(Swatch::new(0xdddde8)),
         cube_types::transport::parking => Some(Swatch::new(0xeeeeee)),
         cube_types::transport::rail_main => Some(Swatch::new(0x707070)),

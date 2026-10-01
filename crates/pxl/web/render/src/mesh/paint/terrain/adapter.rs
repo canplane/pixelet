@@ -325,9 +325,19 @@ impl ChunkSample {
                     continue;
                 };
                 let [lo, hi] = occupied.slab;
-                self.spans.push(Span { lo, hi, material: slab, layer: slab_layer });
+                self.spans.push(Span {
+                    lo,
+                    hi,
+                    material: slab,
+                    layer: slab_layer,
+                });
                 if let (Some([lo, hi]), Some((pier, pier_layer))) = (occupied.pier, tables.of(PIER.0, PIER.1)) {
-                    self.spans.push(Span { lo, hi, material: pier, layer: pier_layer });
+                    self.spans.push(Span {
+                        lo,
+                        hi,
+                        material: pier,
+                        layer: pier_layer,
+                    });
                 }
             }
             // Lowest first, and a higher span keeps what two of them share.
@@ -351,14 +361,15 @@ impl ChunkSample {
 
     /// Column `i`'s runs, lowest first: its ground from `floor`, then what
     /// stands off it, as `run(lo, hi, material, layer)`, both ends inside.
-    pub fn column_runs(&self, i: usize, mut run: impl FnMut(i32, i32, u32, u8)) {
+    pub fn column_runs<E>(&self, i: usize, mut run: impl FnMut(i32, i32, u32, u8) -> Result<(), E>) -> Result<(), E> {
         let top = self.ele[i] as i32 - 1;
         if top >= self.floor {
-            run(self.floor, top, self.material[i], self.layer_idx[i]);
+            run(self.floor, top, self.material[i], self.layer_idx[i])?;
         }
         for s in &self.spans[self.span_at[i] as usize..self.span_at[i + 1] as usize] {
-            run(s.lo, s.hi - 1, s.material, s.layer);
+            run(s.lo, s.hi - 1, s.material, s.layer)?;
         }
+        Ok(())
     }
 
     /// Paints the chunk's own columns into `volume`, floor to top and what
@@ -368,8 +379,9 @@ impl ChunkSample {
         let mut painted = true;
         for cy in 0..CHUNK_CELLS {
             for cx in 0..CHUNK_CELLS {
-                self.column_runs(apron_col(cx, cy) as usize, |lo, hi, material, layer_idx| {
+                let _ = self.column_runs(apron_col(cx, cy) as usize, |lo, hi, material, layer_idx| {
                     painted &= volumes.fill_column(volume, (cx, cy), lo, hi, Voxel { material, layer_idx, sub: 0 });
+                    Ok::<(), ()>(())
                 });
                 if !painted {
                     return false;

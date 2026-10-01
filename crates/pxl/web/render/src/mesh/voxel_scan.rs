@@ -25,6 +25,7 @@
 use pxl_spec::bake::constant::BAND_CELLS;
 
 use crate::mesh::volume::{BAND_VOXELS, MATERIAL_OBJECT, SUB_CELL_NONE};
+use crate::mesh::{grow, try_push, Refused};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
@@ -123,6 +124,9 @@ pub enum ScanStep {
     /// this many bytes. Returned again by every step until then.
     NeedSet(u32),
     Done,
+    /// The heap refused the runs room: the scan is over, and asked for
+    /// again once the heap has let something go.
+    Refused,
 }
 
 /// One scan at a time, and the scratch every scan reuses.
@@ -198,10 +202,11 @@ impl ScanContext {
     }
 
     /// One full-cell run `[z0, z1]` of the column last started, in a
-    /// packed 0xCC_RRGGBB material on `layer_idx`.
-    pub fn direct_run(&mut self, z0: i32, z1: i32, material: u32, layer_idx: u8) {
+    /// packed 0xCC_RRGGBB material on `layer_idx`; an error where the heap
+    /// refused the runs room.
+    pub fn direct_run(&mut self, z0: i32, z1: i32, material: u32, layer_idx: u8) -> Result<(), Refused> {
         xpute_core::ensure!(self.next_col.is_some_and(|n| n > 0), ENOTRECOVERABLE);
-        self.runs.push(run_of(z0, z1, material, layer_idx));
+        try_push(&mut self.runs, run_of(z0, z1, material, layer_idx))
     }
 
     /// Closes the writer: the columns not started are empty, and the set
@@ -234,10 +239,14 @@ impl ScanContext {
                 self.starts[col] = self.runs.len() as u32;
                 let own = APRON..COL_SPAN - APRON;
                 let inner = own.contains(&px) && own.contains(&py);
-                if inner {
-                    walk_column(&mut self.runs, bands, px - APRON, py - APRON);
+                let walked = if inner {
+                    walk_column(&mut self.runs, bands, px - APRON, py - APRON)
                 } else {
-                    self.apron_run(apron, col);
+                    self.apron_run(apron, col)
+                };
+                if walked.is_err() {
+                    self.abort();
+                    return ScanStep::Refused;
                 }
             }
         }
@@ -254,10 +263,10 @@ impl ScanContext {
     /// ground stands below the floor, the one cell at its top — what the
     /// chunk's edge wall reaches down to (chunk_mesher.rs `edge_low`). It
     /// is never painted or emitted, so it changes no occupancy.
-    fn apron_run(&mut self, apron: &Apron, col: usize) {
+    fn apron_run(&mut self, apron: &Apron, col: usize) -> Result<(), Refused> {
         let top = apron.ele[col] as i32 - 1;
         let z0 = if top < apron.floor { top } else { apron.floor };
-        self.runs.push(run_of(z0, top, apron.material[col], apron.layer_idx[col]));
+        try_push(&mut self.runs, run_of(z0, top, apron.material[col], apron.layer_idx[col]))
     }
 
     fn set_bytes(&self) -> u32 {
@@ -339,12 +348,12 @@ fn run_of(z0: i32, z1: i32, material: u32, layer_idx: u8) -> Run {
     }
 }
 
-fn push(runs: &mut Vec<Run>, run: Run) -> usize {
-    runs.push(run);
-    runs.len() - 1
+fn push(runs: &mut Vec<Run>, run: Run) -> Result<usize, Refused> {
+    try_push(runs, run)?;
+    Ok(runs.len() - 1)
 }
 
-fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) {
+fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) -> Result<(), Refused> {
     let col = (cy * BAND_CELLS + cx) as usize;
     let mut open: Option<usize> = None;
     let mut previous_band_z: Option<i32> = None;
@@ -387,7 +396,7 @@ fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) {
                         sub_oz: s[2],
                         sub_s,
                     },
-                );
+                )?;
                 open = None;
             } else if let Some(i) = open.filter(|&i| {
                 let o = &runs[i];
@@ -410,7 +419,7 @@ fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) {
                         sub_oz: 0,
                         sub_s: SUB_CELL_NONE,
                     },
-                ));
+                )?);
             }
         }
 
@@ -435,10 +444,11 @@ fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) {
                         sub_oz: (s >> 16) as u8,
                         sub_s: (s >> 24) as u8,
                     },
-                );
+                )?;
             }
         }
     }
+    Ok(())
 }
 
 /// A fine run has one material, written into all four taps.
@@ -595,11 +605,14 @@ impl OwnedRunSet {
     /// cube and its column's contents run through every chunk over it
     /// (kernel world/pyramid/chunk.rs). A run cut at a face ends there as
     /// any run ends, and the chunk beside it across that face draws the rest.
-    pub fn clip_from(&mut self, set: &RunSet, z0: i32, z1: i32) {
+    /// An error, and the cut empty, where the heap refused it room.
+    pub fn clip_from(&mut self, set: &RunSet, z0: i32, z1: i32) -> Result<(), Refused> {
         self.clear();
         self.span = set.span;
         self.apron = set.apron;
         let columns = (set.span * set.span) as usize;
+        grow(&mut self.start, columns + 1)?;
+        self.grow_runs(set.count as usize)?;
         self.start.push(0);
         for col in 0..columns {
             for i in set.start[col] as usize..set.start[col + 1] as usize {
@@ -620,6 +633,27 @@ impl OwnedRunSet {
             }
             self.start.push(self.z0.len() as u32);
         }
+        Ok(())
+    }
+
+    /// Room for `n` more runs in every lane.
+    pub(crate) fn grow_runs(&mut self, n: usize) -> Result<(), Refused> {
+        grow(&mut self.z0, n)?;
+        grow(&mut self.z1, n)?;
+        grow(&mut self.layer_taps, n)?;
+        for lane in [
+            &mut self.r,
+            &mut self.g,
+            &mut self.b,
+            &mut self.material_class,
+            &mut self.sub_ox,
+            &mut self.sub_oy,
+            &mut self.sub_oz,
+            &mut self.sub_s,
+        ] {
+            grow(lane, n)?;
+        }
+        Ok(())
     }
 
     pub fn view(&self) -> RunSet<'_> {

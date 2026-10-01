@@ -3,8 +3,8 @@
 //! A decor kind: its seed, its rules and its models, as the registry
 //! (decor/registry.rs) binds them.
 //!
-//! Ambient cars on major roads. Motorway/primary/secondary only,
-//! deliberately: ordinary neighborhood streets and pedestrian ways
+//! Ambient cars on major roads. Motorway, trunk, primary, secondary and
+//! tertiary only, deliberately: ordinary neighborhood streets and pedestrian ways
 //! (ROAD_DEFAULT, PEDESTRIAN) are dense and everywhere a user might want to
 //! build, and a car parked in the middle of one reads as "in the way" far
 //! more than the same car sitting on a major road's shoulder does.
@@ -58,7 +58,13 @@ pub const DEF: DecorKindDef = DecorKindDef {
     },
     rules: DecorRules::ANY.one_of(
         GroundChannelKey::TRANSPORT,
-        &[Transport::road_motorway as u8, Transport::road_primary as u8, Transport::road_secondary as u8],
+        &[
+            Transport::road_motorway as u8,
+            Transport::road_trunk as u8,
+            Transport::road_primary as u8,
+            Transport::road_secondary as u8,
+            Transport::road_tertiary as u8,
+        ],
     ),
     variants: &VARIANTS,
     decor_id: None,

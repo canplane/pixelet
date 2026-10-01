@@ -64,7 +64,7 @@ pub fn corridor_fills(feats: &[Feature]) -> Vec<Feature> {
         // Each point a cell apart along the way, and where across the gap it
         // is paved to, if anywhere.
         let mut strip: Vec<([f64; 2], [f64; 2])> = Vec::new();
-        let mut flush = |strip: &mut Vec<([f64; 2], [f64; 2])>, out: &mut Vec<Feature>| {
+        let flush = |strip: &mut Vec<([f64; 2], [f64; 2])>, out: &mut Vec<Feature>| {
             for pair in strip.windows(2) {
                 let ((p0, q0), (p1, q1)) = (pair[0], pair[1]);
                 out.push(fill(f, cfg, [p0, p1, q1, q0]));
@@ -115,7 +115,6 @@ pub fn corridor_fills(feats: &[Feature]) -> Vec<Feature> {
             }
         }
         flush(&mut strip, &mut out);
-        let _ = i;
     }
     out
 }

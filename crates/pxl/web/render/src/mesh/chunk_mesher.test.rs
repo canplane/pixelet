@@ -76,7 +76,7 @@ fn a_column_off_the_sets_edge_is_air_and_leaves_the_side_open() {
 fn bake_in_blocks(set: &OwnedRunSet, lod_step: u32, block: u32) -> Vec<u32> {
     let mut bake = BakeContext::new();
     let view = set.view();
-    assert!(bake.begin(&view, lod_step, 1, true, None));
+    assert!(bake.begin(&view, lod_step, 1, true, None).is_ok());
     let words_a_box = box_words(lod_step);
     let mut buf = vec![0u32; (block * words_a_box) as usize];
     let mut out: Vec<u32> = Vec::new();
@@ -98,6 +98,7 @@ fn bake_in_blocks(set: &OwnedRunSet, lod_step: u32, block: u32) -> Vec<u32> {
                 unsafe { bake.provide_mesh(buf.as_mut_ptr(), n) };
                 handed = n as usize;
             }
+            Step::Refused => panic!("the heap refused a test bake"),
             Step::Done => {
                 let mesh = bake.finish();
                 let written = mesh.box_cnt as usize * words_a_box as usize - out.len();
@@ -132,7 +133,7 @@ fn a_mesh_written_through_blocks_is_the_mesh_written_whole() {
 fn east_faces(set: &OwnedRunSet, lod_step: u32) -> Vec<(f64, f64)> {
     let mut bake = BakeContext::new();
     let view = set.view();
-    assert!(bake.begin(&view, lod_step, 1, true, None));
+    assert!(bake.begin(&view, lod_step, 1, true, None).is_ok());
     let words = box_words(lod_step);
     let mut buf: Vec<u32> = Vec::new();
     loop {
@@ -144,6 +145,7 @@ fn east_faces(set: &OwnedRunSet, lod_step: u32) -> Vec<(f64, f64)> {
                 unsafe { bake.provide_mesh(buf.as_mut_ptr(), n) };
             }
             Step::Full => panic!("one block holds the mesh"),
+            Step::Refused => panic!("the heap refused a test bake"),
             Step::Done => break,
         }
     }

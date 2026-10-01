@@ -24,25 +24,30 @@ use crate::terrain::pipeline::overture::width::width_m;
 
 // ============ Domain knowledge constants ============
 
-/// The transport type a way shows, on the ground or on a deck.
+/// The transport type a way shows, on the ground or on a deck: its class
+/// as OpenMapTiles' transportation layer classes it (MapTiler's schema) —
+/// motorway, trunk, primary, secondary, tertiary, minor, service, track and
+/// path, rail and transit — one type a class, as neither finer nor coarser
+/// than the maps the data is read on.
 pub fn segment_type(subtype: &str, class: Option<&str>) -> u8 {
+    use cube_types::transport as t;
     let c = class.unwrap_or("");
     if subtype == "rail" {
-        if c == "subway" || c == "light_rail" {
-            cube_types::transport::rail_subway
-        } else {
-            cube_types::transport::rail_main
-        }
-    } else if PEDESTRIAN_CLASSES.contains(&c) {
-        cube_types::transport::pedestrian
-    } else if MOTOR_CLASSES.contains(&c) {
-        cube_types::transport::road_motorway
-    } else if c == "primary" {
-        cube_types::transport::road_primary
-    } else if SECONDARY_CLASSES.contains(&c) {
-        cube_types::transport::road_secondary
-    } else {
-        cube_types::transport::road_default
+        return match c {
+            "subway" | "light_rail" | "tram" | "monorail" => t::rail_subway,
+            _ => t::rail_main,
+        };
+    }
+    match c {
+        "motorway" => t::road_motorway,
+        "trunk" => t::road_trunk,
+        "primary" => t::road_primary,
+        "secondary" => t::road_secondary,
+        "tertiary" => t::road_tertiary,
+        "service" => t::road_service,
+        "track" => t::track,
+        _ if PEDESTRIAN_CLASSES.contains(&c) => t::pedestrian,
+        _ => t::road_default,
     }
 }
 
@@ -50,9 +55,8 @@ pub fn segment_type(subtype: &str, class: Option<&str>) -> u8 {
 /// one-way street of their own.
 const THROUGH_CLASSES: [&str; 5] = ["motorway", "trunk", "primary", "secondary", "tertiary"];
 
-const PEDESTRIAN_CLASSES: [&str; 6] = ["footway", "path", "steps", "cycleway", "pedestrian", "living_street"];
-const MOTOR_CLASSES: [&str; 2] = ["motorway", "trunk"];
-const SECONDARY_CLASSES: [&str; 2] = ["secondary", "tertiary"];
+/// OpenMapTiles' path class: what is walked, cycled or ridden.
+const PEDESTRIAN_CLASSES: [&str; 6] = ["footway", "path", "steps", "cycleway", "pedestrian", "bridleway"];
 
 const FLOWING_WATER_SUBTYPES: [&str; 3] = ["river", "stream", "canal"];
 const TREE_COVER_LAND_SUBTYPES: [&str; 4] = ["tree", "forest", "tree_row", "wood"];

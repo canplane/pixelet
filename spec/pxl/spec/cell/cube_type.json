@@ -95,32 +95,37 @@
       "name": "structure",
       "entries": [
         { "section": "buildings" },
-        { "name": "building", "value": 1, "doc": ["generic building"] },
+        { "name": "building", "value": 1, "recess": -1, "doc": ["generic building"] },
         {
           "name": "building_station",
           "value": 2,
+          "recess": -1,
           "doc": [
             "station / terminal building"
           ]
         },
-        { "name": "building_education", "value": 3, "doc": ["education building"] },
-        { "name": "building_medical", "value": 4, "doc": ["medical building"] },
-        { "name": "building_public", "value": 5, "doc": ["public building"] }
+        { "name": "building_education", "value": 3, "recess": -1, "doc": ["education building"] },
+        { "name": "building_medical", "value": 4, "recess": -1, "doc": ["medical building"] },
+        { "name": "building_public", "value": 5, "recess": -1, "doc": ["public building"] }
       ]
     },
     {
       "name": "transport",
       "entries": [
         { "section": "roads" },
-        { "name": "road_default", "value": 1, "doc": ["default road"] },
+        { "name": "road_default", "value": 1, "doc": ["minor road: residential, unclassified, living street (OpenMapTiles minor)"] },
         { "name": "road_motorway", "value": 2, "doc": ["motorway"] },
+        { "name": "road_trunk", "value": 7, "doc": ["trunk road"] },
         { "name": "road_primary", "value": 3, "doc": ["primary road"] },
         { "name": "road_secondary", "value": 4, "doc": ["secondary road"] },
-        { "name": "pedestrian", "value": 5, "doc": ["pedestrian path"] },
+        { "name": "road_tertiary", "value": 8, "doc": ["tertiary road"] },
+        { "name": "road_service", "value": 9, "doc": ["service road: a driveway, a parking aisle, an alley"] },
+        { "name": "track", "value": 12, "doc": ["track: an agricultural or forest way"] },
+        { "name": "pedestrian", "value": 5, "doc": ["path: footway, cycleway, steps, path, pedestrian street (OpenMapTiles path)"] },
         { "name": "parking", "value": 6, "doc": ["parking area"] },
         { "section": "rails" },
         { "name": "rail_main", "value": 10, "doc": ["main rail"] },
-        { "name": "rail_subway", "value": 11, "doc": ["subway rail"] },
+        { "name": "rail_subway", "value": 11, "doc": ["transit rail: subway, light rail, tram, monorail (OpenMapTiles transit)"] },
         { "section": "aeroway lines" },
         { "name": "runway", "value": 20, "doc": ["runway"] },
         { "name": "taxiway", "value": 21, "doc": ["taxiway"] }

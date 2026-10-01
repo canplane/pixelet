@@ -13,7 +13,7 @@ use pxl_spec::space::pyramid::{LevelPage, CHUNK_CELLS, GROUND};
 use pxl_render::gpu::api::{gpu, room};
 use pxl_render::gpu::renderer::device_ready;
 use pxl_render::mesh::chunk_mesher::{box_words, mesh_words, BakeContext, Heights, Step, COARSE_BOX_WORDS, FINE_BOX_WORDS};
-use pxl_render::mesh::paint::level::write_level_runs;
+use pxl_render::mesh::paint::level::{write_level_runs, Stands};
 use pxl_render::mesh::paint::object::adapter::{Claims, Entries, Painted, Painter};
 use pxl_render::mesh::paint::terrain::adapter::{beside_index, Around, ChunkSample, PageSource, PageView};
 use pxl_render::mesh::volume::Volumes;
@@ -405,6 +405,9 @@ pub struct Builder {
     /// cells in order, kept for their capacity.
     folded: HashMap<[i64; 3], u32>,
     fold_cells: Vec<([i64; 3], u32)>,
+    /// What stands in each column of a level chunk, by column and height
+    /// (pxl-render mesh/paint/level.rs `write_level_runs`).
+    stands: Vec<(u32, Stands)>,
     /// A z16 chunk's objects folded to its cube, as entries: what its paint
     /// reads where the cube is coarser than an object's finest tier.
     fold_band: Vec<BandZ>,
@@ -436,6 +439,7 @@ impl Builder {
             claimed: Claims::new(),
             folded: HashMap::new(),
             fold_cells: Vec::new(),
+            stands: Vec::new(),
             fold_band: Vec::new(),
             fold_pos: Vec::new(),
             fold_state: Vec::new(),
@@ -745,7 +749,10 @@ impl Builder {
             return self.advance_paint(world, id, volume, paint);
         }
         // SAFETY: the scan job's volume, held until the scan finishes.
-        unsafe { world.volumes.band_views(volume, &mut self.bands) };
+        if !unsafe { world.volumes.band_views(volume, &mut self.bands) } {
+            self.refuse(world, id);
+            return Progress::Blocked;
+        }
         // The apron's columns are the sample's, which paint_terrain read
         // before the volume was painted: the bands hold the chunk's own
         // cells and nothing beyond them.
@@ -758,6 +765,10 @@ impl Builder {
         match self.scan.step(&self.bands, &apron) {
             ScanStep::Working => Progress::Busy,
             ScanStep::Done => xpute_core::bug!(ENOTRECOVERABLE),
+            ScanStep::Refused => {
+                self.refuse(world, id);
+                Progress::Blocked
+            }
             ScanStep::NeedSet(bytes) => {
                 let Some(block) = self.set_of(id, bytes) else {
                     self.refuse(world, id);
@@ -818,12 +829,17 @@ impl Builder {
         let n = OBJECT_FINEST.count_in(scale) as i64;
         let band_steps = OBJECT_FINEST.count_in(BAND) as i64;
         let (fx, fy) = (OBJECT_FINEST.index(x0), OBJECT_FINEST.index(y0));
+        let n_folded = self.folded.len();
         self.fold_cells.clear();
-        self.fold_cells.extend(self.folded.iter().map(|(&c, &state)| (c, state)));
-        self.fold_cells.sort_unstable();
         self.fold_band.clear();
         self.fold_pos.clear();
         self.fold_state.clear();
+        self.fold_cells.try_reserve(n_folded)?;
+        self.fold_band.try_reserve(n_folded)?;
+        self.fold_pos.try_reserve(n_folded)?;
+        self.fold_state.try_reserve(n_folded)?;
+        self.fold_cells.extend(self.folded.iter().map(|(&c, &state)| (c, state)));
+        self.fold_cells.sort_unstable();
         for &([cx, cy, cz], state) in &self.fold_cells {
             let z = cz * n;
             self.fold_band.push(z.div_euclid(band_steps) as BandZ);
@@ -870,10 +886,12 @@ impl Builder {
             self.refuse(world, id);
             return Progress::Blocked;
         }
-        world.volumes.seal(volume);
-        // SAFETY: the volume was just sealed and is held by the scan job
-        // until the scan finishes.
-        unsafe { world.volumes.band_views(volume, &mut self.bands) };
+        // SAFETY: the volume, once sealed, is held by the scan job until the
+        // scan finishes.
+        if !world.volumes.seal(volume) || !unsafe { world.volumes.band_views(volume, &mut self.bands) } {
+            self.refuse(world, id);
+            return Progress::Blocked;
+        }
         xpute_core::ensure!(self.scan.begin(&self.bands), ENOTRECOVERABLE);
         self.scan_job.as_mut().unwrap().paint = None;
         Progress::Busy
@@ -891,7 +909,11 @@ impl Builder {
         for i in 0..(COL_SPAN * COL_SPAN) as usize {
             self.direct.direct_column(i as u32);
             let direct = &mut self.direct;
-            self.sample.column_runs(i, |lo, hi, material, layer| direct.direct_run(lo, hi, material, layer));
+            if self.sample.column_runs(i, |lo, hi, material, layer| direct.direct_run(lo, hi, material, layer)).is_err() {
+                self.direct.abort();
+                self.refuse(world, id);
+                return Progress::Blocked;
+            }
         }
         self.close_direct(world, id)
     }
@@ -916,14 +938,20 @@ impl Builder {
             return Progress::Blocked;
         }
         xpute_core::ensure!(self.direct.begin_direct(), ENOTRECOVERABLE);
-        write_level_runs(
+        let written = write_level_runs(
             &mut self.direct,
             &self.sample,
             world.painter,
             &self.folded,
             (target.index(x0), target.index(y0)),
             GROUND.scale(0).count_in(target),
+            &mut self.stands,
         );
+        if written.is_err() {
+            self.direct.abort();
+            self.refuse(world, id);
+            return Progress::Blocked;
+        }
         self.close_direct(world, id)
     }
 
@@ -987,7 +1015,10 @@ impl Builder {
             // chunk.rs).
             let (z0, z1) = c.at.z_range();
             let clip = Some((z0 as i32, z1 as i32));
-            xpute_core::ensure!(self.bake.begin(&set, mesh_step(cube, c.level()), 1 << c.level(), settings_store().textures, clip), ENOTRECOVERABLE);
+            if self.bake.begin(&set, mesh_step(cube, c.level()), 1 << c.level(), settings_store().textures, clip).is_err() {
+                self.refuse(world, id);
+                return Progress::Blocked;
+            }
             self.bake_job = Some(BakeJob {
                 id,
                 cube,
@@ -998,6 +1029,11 @@ impl Builder {
         }
         match self.bake.step(&set) {
             Step::Working => Progress::Busy,
+            Step::Refused => {
+                self.bake_job = None;
+                self.refuse(world, id);
+                Progress::Blocked
+            }
             Step::NeedMesh(words) => {
                 // Every slot the mesh fills is held for it at once, or none
                 // is and the bake is thrown away: a mesh is never cut, never
