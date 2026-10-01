@@ -82,3 +82,15 @@ fn a_bore_is_drawn_under_its_roof_and_comes_up_at_its_portal() {
     // Between, no steeper than a cutting, and open to the sky.
     assert_eq!(over(25.0).occupies(10), Occupies::Through { air: [8, 10] });
 }
+
+#[test]
+fn a_tunnel_keeps_its_middle_up_the_pyramid() {
+    // Straight and level, its portals at both ends: only how far it is from
+    // them bends at the middle.
+    let mut b = Builder::default();
+    let points = [[0.0, 0.0], [50.0, 0.0], [100.0, 0.0]];
+    b.push(points.iter().zip([0u16, 50, 0]).map(|(&p, d)| (p, 10, d)), 4 * POINT_SCALE as u8, 3, Form::Bore);
+    let empty = Decks::default();
+    let up = fold_decks([&b.finish(), &empty, &empty, &empty], 1);
+    assert_eq!(up.deck(0).portal, [0, 25, 0]);
+}

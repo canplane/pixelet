@@ -199,7 +199,8 @@ pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<Solve
 }
 
 /// How far each point of a graph is from the nearest of `sources` along
-/// it, in its metres: Dijkstra's, from all of them at once.
+/// it, in metres on the ground as its edges are: Dijkstra's, from all of
+/// them at once.
 fn nearest_along(adj: &[Vec<(u32, f64)>], sources: impl Iterator<Item = u32>) -> Vec<f64> {
     use std::cmp::Reverse;
     use std::collections::BinaryHeap;

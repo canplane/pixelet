@@ -323,7 +323,7 @@ pub struct DeckOut<'a> {
     /// Each point, its top in metres as Z.
     pub points: Vec<[f64; 3]>,
     /// How far each point is from the nearest portal down its tunnel, in
-    /// EPSG:3857 metres; empty on a deck and on a bore with none.
+    /// metres on the ground; empty on a deck and on a bore with none.
     pub portal_m: Vec<f32>,
 }
 

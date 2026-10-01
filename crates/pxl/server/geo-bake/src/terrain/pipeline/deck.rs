@@ -34,9 +34,10 @@ pub fn bake_decks(rows: &[DeckRow], page_min: G3857) -> Option<Decks> {
         let form = Form::of(row.form);
         let portal_m: Vec<f32> = row.portal_m.as_chunks::<4>().0.iter().map(|&b| f32::from_le_bytes(b)).collect();
         for g in wkb_to_geometries(&row.geom_wkb) {
-            // How far from a portal, in the page's cells, as a position is.
+            // How far from a portal, in the page's cells: a length on the
+            // ground, so its metres are the page's as a width's are.
             let from_portal = |i: usize| match portal_m.get(i) {
-                Some(&m) if portal_m.len() == g.points.len() => (f64::from(m) * XY_CELL_PER_M).round().min(f64::from(NO_PORTAL - 1)) as u16,
+                Some(&m) if portal_m.len() == g.points.len() => (f64::from(m) * cell_per_m).round().min(f64::from(NO_PORTAL - 1)) as u16,
                 _ => NO_PORTAL,
             };
             let local: Vec<([f64; 2], i16, u16)> = g

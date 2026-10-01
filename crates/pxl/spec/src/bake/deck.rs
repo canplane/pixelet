@@ -431,11 +431,11 @@ pub fn fold_decks(children: [&Decks; 4], level: u32) -> Decks {
                 continue;
             }
             let points: Vec<[f64; 2]> = (0..deck.points.len()).map(|i| deck.point(i)).map(|[x, y]| [(x + qx) / 2.0, (y + qy) / 2.0]).collect();
-            let keep = simplify(&points, deck.tops, 0.5, height_tolerance);
-            let kept: Vec<usize> = (0..points.len()).filter(|&i| keep[i]).collect();
             // A parent's cell is two of the child's.
-            let portal = |i: usize| if deck.portal[i] == NO_PORTAL { NO_PORTAL } else { deck.portal[i] / 2 };
-            out.push(kept.iter().map(|&i| (points[i], deck.tops[i], portal(i))), width, deck.kind, deck.form);
+            let portal: Vec<u16> = deck.portal.iter().map(|&p| if p == NO_PORTAL { NO_PORTAL } else { p / 2 }).collect();
+            let keep = simplify(&points, deck.tops, &portal, 0.5, height_tolerance);
+            let kept: Vec<usize> = (0..points.len()).filter(|&i| keep[i]).collect();
+            out.push(kept.iter().map(|&i| (points[i], deck.tops[i], portal[i])), width, deck.kind, deck.form);
         }
     }
     out.finish()
@@ -443,8 +443,10 @@ pub fn fold_decks(children: [&Decks; 4], level: u32) -> Decks {
 
 /// Which points of a line Douglas–Peucker keeps at `across` cells and
 /// `height` z16 cells: the ends, and every point the line without it would
-/// miss by more than either.
-fn simplify(points: &[[f64; 2]], tops: &[i16], across: f64, height: f64) -> Vec<bool> {
+/// miss by more than either — across, in height, or by more than a cell, the
+/// unit it is counted in, in how far it is from a portal, so a tunnel's
+/// middle, the farthest from its portals, stays.
+fn simplify(points: &[[f64; 2]], tops: &[i16], portal: &[u16], across: f64, height: f64) -> Vec<bool> {
     let mut keep = vec![false; points.len()];
     if points.is_empty() {
         return keep;
@@ -465,7 +467,11 @@ fn simplify(points: &[[f64; 2]], tops: &[i16], across: f64, height: f64) -> Vec<
             let t = if len2 > 0.0 { (((p[0] - pa[0]) * dx + (p[1] - pa[1]) * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
             let off = (p[0] - pa[0] - dx * t).hypot(p[1] - pa[1] - dy * t) / across;
             let rise = (f64::from(tops[i]) - (f64::from(tops[a]) + (f64::from(tops[b]) - f64::from(tops[a])) * t)).abs() / height;
-            let e = off.max(rise);
+            let far = match (portal[a], portal[i], portal[b]) {
+                (NO_PORTAL, _, _) | (_, NO_PORTAL, _) | (_, _, NO_PORTAL) => 0.0,
+                (pa, pi, pb) => (f64::from(pi) - (f64::from(pa) + (f64::from(pb) - f64::from(pa)) * t)).abs(),
+            };
+            let e = off.max(rise).max(far);
             if e > worst.0 {
                 worst = (e, i);
             }

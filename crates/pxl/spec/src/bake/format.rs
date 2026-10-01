@@ -99,7 +99,7 @@ pub struct DeckRow {
     /// A deck over the ground or a bore through it (bake/deck.rs `Form`).
     pub form: u8,
     /// How far each point of a bore is from the nearest portal down its
-    /// tunnel, in EPSG:3857 metres, as `f32`s; empty on a deck and on a bore
+    /// tunnel, in metres on the ground, as `f32`s; empty on a deck and on a bore
     /// with none (bake/deck.rs `Decks::portal`).
     pub portal_m: Box<[u8]>,
     pub geom_wkb: Box<[u8]>, // WKB, LineString Z
