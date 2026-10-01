@@ -106,8 +106,9 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
 
     let mut pos = [0.0; 3];
     projection::unproject(&mut pos, device.i, device.f);
-    // What a walker would stand on there (world/access.rs `support`).
-    if let Some(z) = Access::now().support(&device).value() {
+    // What stands on the surface there (world/access.rs `surface_support`):
+    // the fix names a place and not how high.
+    if let Some(z) = Access::now().surface_support(&device).value() {
         p.last_known_center_z = Some(z);
     }
     let Some(center_z) = p.last_known_center_z else {

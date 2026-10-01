@@ -32,7 +32,7 @@ export const SETTINGS = (__IS_DEV__ ? EVERY : SHIPPED) as Spec;
 export type SettingCost = "low" | "med" | "high";
 
 /** The sheet's sections, in the order they are shown (schema.json). */
-export type SettingSection = "display" | "camera" | "editing" | "lighting" | "quality" | "debug" | "character";
+export type SettingSection = "display" | "camera" | "lighting" | "quality" | "debug" | "character";
 
 export type SettingName = keyof Spec;
 

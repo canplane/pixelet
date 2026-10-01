@@ -61,6 +61,9 @@ pub struct CameraStore {
     /// The scattered decor under the cursor, if that is what is under it:
     /// no entry, what is made there.
     pub hovered_scattered: Option<Scattered>,
+    /// The cell across the face the cursor is on: where a walker sent there
+    /// starts from.
+    pub hovered_approach: Option<Pvf3>,
     /// What the controls ask of the camera (`Intent`).
     pub intent: Intent,
     /// Follow mode flag.
@@ -74,6 +77,7 @@ impl CameraStore {
             hovered_coord: None,
             hovered_object_at: None,
             hovered_scattered: None,
+            hovered_approach: None,
             intent: Intent {
                 dist: DEFAULT_DIST,
                 azimuth: DEFAULT_AZIMUTH,

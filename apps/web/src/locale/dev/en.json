@@ -26,14 +26,6 @@
         "label": "Shadows",
         "description": "The sun casts shadows from the terrain, objects and characters onto the ground."
       }
-    },
-    "editing": {
-      "section_title": "Editing",
-      "section_caption": "What the tools may change",
-      "terrain_carving": {
-        "label": "Terrain Carving",
-        "description": "Lets the eraser dig into the real terrain itself, one block at a time, when nothing is placed there."
-      }
     }
   },
   "map": {

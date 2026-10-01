@@ -70,7 +70,6 @@ export function SettingsModal(props: BaseModalProps) {
               <Separator />
               <SettingsSection section="display" />
               <SettingsSection section="camera" />
-              <SettingsSection section="editing" />
               <SettingsSection section="lighting" />
               <SettingsSection section="quality" />
               <SettingsSection section="debug" />

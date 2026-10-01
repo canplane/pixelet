@@ -6,7 +6,6 @@ use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::v3::V3;
 
-use crate::world::frame::coord::local_world_to_canonical;
 
 use crate::layer::object::store::OccupiedEntry;
 
@@ -16,12 +15,10 @@ use crate::layer::object::store::OccupiedEntry;
 /// centered on. "Tap the highlighted box, the camera goes to that box."
 ///
 /// `+ half` on every axis, symmetric — a hover anchor is a cell's (min-x,
-/// min-y, min-z) corner on all three (camera/ray.rs: X/Y straight from
-/// box_min, Z the surface stepped down one cell to the struck voxel's floor),
-/// so an anchor at (x,y,z) occupies (x,y,z)..(x+1,y+1,z+1) and its middle is
-/// (x+.5, y+.5, z+.5) — v3's own span3/center3 convention, Minecraft's block
-/// model. object_center below is the placed-cube counterpart: the exact same
-/// shape, since a cube's anchor is a true min corner too.
+/// min-y, min-z) corner on all three (camera/ray.rs `world_struck_corner`,
+/// `world_adjacent_corner`), so an anchor at (x,y,z) occupies
+/// (x,y,z)..(x+1,y+1,z+1) and its middle is (x+.5, y+.5, z+.5) — v3's own
+/// span3/center3 convention, Minecraft's block model.
 ///
 /// User-placed decor is centered the same way on X/Y but
 /// keeps Z on the slot (a decor model's origin sits at its base, not its
@@ -50,15 +47,4 @@ pub fn object_aabb(obj: &OccupiedEntry, map_origin: IVec) -> Aabb {
     let min = object_local_corner(obj.i, obj.f, map_origin);
     let max = [min[0] + obj.size, min[1] + obj.size, min[2] + obj.size];
     Aabb { min, max }
-}
-
-/// This object's true center (corner + size/2 on every axis), as an absolute
-/// PVF3 — e.g. for recentering the map on an object rather than its corner.
-pub fn object_center(obj: &OccupiedEntry, map_origin: IVec) -> Pvf3 {
-    let corner = object_local_corner(obj.i, obj.f, map_origin);
-    let half = obj.size / 2.0;
-    let center = [corner[0] + half, corner[1] + half, corner[2] + half];
-    let mut out = Pvf3::default();
-    local_world_to_canonical(&mut out, &center, map_origin);
-    out
 }

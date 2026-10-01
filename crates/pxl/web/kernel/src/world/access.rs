@@ -20,7 +20,7 @@
 //!
 //! **Two surfaces, kept apart.** What a query answers with is the surface
 //! the records draw at the level asked — a level's cell, its height the
-//! page's interpolant at the cell's center plus its shift, read from the
+//! page's interpolant at the cell's center less its recess, read from the
 //! page the chunk there is painted from, by the paint's own function
 //! (pxl-render mesh/paint/terrain/elevation.rs `ground_ele_at`) — so a pick,
 //! a snap and a marker stand on what is on the screen. Whether to go down
@@ -359,14 +359,30 @@ impl<'a> Access<'a> {
     /// picked and not what is stood on. Decor is passed through: it is drawn
     /// and hit, and stood on nowhere.
     ///
-    /// From the surface drawn there it goes down through the empty cells
-    /// under it to the first solid's top — a carve, a bore come out at the
-    /// surface — or up through the solid cells over it to where they end — a
-    /// stack of cubes — or stays. Only what touches the surface moves it: a
-    /// deck with air under it, or a bore with ground over it, leaves a thing
-    /// on the surface, since nothing says it is on the one or in the other.
+    /// It starts from the cell `at` lies in, at its own height, and from
+    /// there goes down through the empty cells under it to the first solid's
+    /// top — a cave's floor, a carve, the ground — or, where that cell is
+    /// solid, up through the solid cells over it to where they end — a step,
+    /// a stack of cubes. So a walker in a cave stays in it, and one walking
+    /// into a wall goes over it; nothing sends it to the surface but the
+    /// surface being what is under it.
     pub fn support(&self, at: &Pvf3) -> Answer<f64> {
+        let [ix, iy, iz] = CELL.index_of(at);
+        self.stand([ix, iy], Some(iz))
+    }
+
+    /// `support` from the surface drawn at `at`'s X and Y, its height
+    /// discarded: where only a place is named and not how high — a fix, a
+    /// search result — what stands there is what stands on the surface, or in
+    /// a carve or a bore come out at it, or on a stack on it.
+    pub fn surface_support(&self, at: &Pvf3) -> Answer<f64> {
         let [ix, iy, _] = CELL.index_of(at);
+        self.stand([ix, iy], None)
+    }
+
+    /// Where a thing stands in z16 column `cell`, starting from cell `from`
+    /// of it, the surface's where none.
+    fn stand(&self, [ix, iy]: [i64; 2], from: Option<i64>) -> Answer<f64> {
         self.composed([ix, iy]).map(|c| {
             let side = CELL.side();
             let top = (c.top / side).round() as i64;
@@ -392,12 +408,11 @@ impl<'a> Access<'a> {
             // As far as a position reaches, so a shaft or a stack of any
             // height is followed to its end.
             let [lo, hi] = [REACH.min[2] / side, REACH.max[2] / side].map(|z| z as i64);
-            let stand = if !solid(top - 1) {
-                (lo..top - 1).rev().find(|&cz| solid(cz)).map_or(top, |cz| cz + 1)
-            } else if solid(top) {
-                (top + 1..hi).find(|&cz| !solid(cz)).unwrap_or(top)
+            let from = from.unwrap_or(top);
+            let stand = if solid(from) {
+                (from + 1..hi).find(|&cz| !solid(cz)).unwrap_or(from)
             } else {
-                top
+                (lo..from).rev().find(|&cz| solid(cz)).map_or(from, |cz| cz + 1)
             };
             stand as f64 * side
         })

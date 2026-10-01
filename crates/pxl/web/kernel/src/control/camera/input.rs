@@ -25,13 +25,13 @@ pub use crate::abi::cmd::{ActiveTool, PointerKind};
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::controller::{active, Active};
 use crate::control::camera::gesture::{linear, Anchor};
-use crate::control::camera::ray::{ray_pick, resolve_hit_object, world_adjacent_corner, world_hover_pvf3, world_struck_corner};
+use crate::control::camera::ray::{ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner};
 use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
 use crate::control::navigation::destination::cancel as cancel_destination;
 use crate::global::Global;
 use crate::layer::decor::hit::{raycast_decor, DecorStruck, Scattered};
 use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
-use crate::layer::object::geometry::{anchor_center, object_aabb, object_center};
+use crate::layer::object::geometry::{anchor_center, object_aabb};
 use crate::layer::object::size::{DECOR_SIZE, DEFAULT_OBJECT_SIZE};
 use crate::layer::object::store::{get_placed_object, place, place_air, place_decor, remove, OccupiedEntry};
 use crate::layer::terrain::ground_snap::ground_or_raw;
@@ -228,15 +228,13 @@ fn handle_tap(hovered: Pvf3) {
 
     match ui.active_tool {
         ActiveTool::Pointer => {
-            // Recenter where a walker would stand over what the tap struck —
-            // an object or the ground, only its X/Y — pivoted by the ground's
-            // own rule, what every pan, the bootstrap and follow mode set
-            // too, so a pan after a tap changes nothing.
-            let struck = match camera_store().hovered_object_at.and_then(get_placed_object) {
-                Some(o) => object_center(&o, local_world_origin()),
-                None => anchor_center(&hovered),
-            };
-            let target = ground_or_raw(&struck);
+            // Recenter where a walker would stand from the cell across the
+            // face the tap struck — on top of a cube or the ground, beside a
+            // wall, under a cave's ceiling on its floor — pivoted by the
+            // ground's own rule, what every pan sets too, so a pan after a
+            // tap changes nothing.
+            let Some(approach) = camera_store().hovered_approach else { return };
+            let target = ground_or_raw(&anchor_center(&approach));
             crate::control::navigation::destination::go_to(target, crate::control::camera::controller::Motion::Smooth);
         }
         ActiveTool::Eraser => {
@@ -245,11 +243,10 @@ fn handle_tap(hovered: Pvf3) {
             match (camera_store().hovered_object_at, camera_store().hovered_scattered) {
                 (Some(at), _) => remove(at),
                 // A scattered instance: air written over the cell it stands
-                // in, as over the ground, and with no setting asked, since it
-                // takes away nothing the ground is.
+                // in, as over the ground.
                 (None, Some(s)) => place_air(&CELL.base_of(s.cell), U_PER_CELL),
-                // Nothing placed here — dig into the terrain's own real surface,
-                // once the user has opted into that. AIR, not VOID: real terrain
+                // Nothing placed here — dig into the cell of the terrain the
+                // ray struck, through whichever face. AIR, not VOID: real terrain
                 // has no object-layer leaf of its own to delete, so an explicit
                 // "nothing here on purpose" leaf is the only way to override it.
                 //
@@ -258,8 +255,7 @@ fn handle_tap(hovered: Pvf3) {
                 // (pxl-render mesh/voxel_scan.rs), so a smaller leaf would still
                 // take the cell whole while recording a bite nobody took — and
                 // the store is saved, so that number outlives the session.
-                (None, None) if settings_store().terrain_carving => place_air(&hovered, U_PER_CELL),
-                (None, None) => {}
+                (None, None) => place_air(&hovered, U_PER_CELL),
             }
         }
         ActiveTool::Decor | ActiveTool::Object => {
@@ -532,6 +528,7 @@ fn clear_hovered_once() {
         camera.hovered_object_at = None;
     }
     camera.hovered_scattered = None;
+    camera.hovered_approach = None;
 }
 
 fn update_hover(s: &Input) {
@@ -554,6 +551,7 @@ fn update_hover(s: &Input) {
         // places at its own fixed DECOR_SIZE.
         camera.hovered_object_at = None;
         camera.hovered_scattered = None;
+        camera.hovered_approach = None;
         let placement_size = if ui.active_tool == ActiveTool::Decor { DECOR_SIZE } else { ui.object_size };
         // The box of the entry the hit resolves to: a decor met in front of
         // what the pick struck is what the new cube goes flush against.
@@ -573,22 +571,23 @@ fn update_hover(s: &Input) {
         Some(Struck::Scattered(s)) => Some(s),
         _ => None,
     };
-    if let Some(Struck::Object(o)) = struck {
-        camera.hovered_coord = Some(Pvf3 { i: o.i, f: o.f });
-    } else if let Some(s) = camera.hovered_scattered {
-        camera.hovered_coord = Some(CELL.base_of(s.cell));
-    } else if ui.active_tool == ActiveTool::Eraser && settings_store().terrain_carving {
-        // Bare terrain under the eraser wants the struck voxel's OWN corner
-        // (real, possibly dug-into height included), not the baked-elevation
-        // "flush on top" slot. On the cell's grid and not the tier's, because
-        // that is the size the carve is written at.
-        camera.hovered_coord = Some(world_struck_corner(&hit, U_PER_CELL, map_origin));
-    } else {
-        match world_hover_pvf3(&hit, map_origin) {
-            Some(grounded) => camera.hovered_coord = Some(grounded),
-            None => clear_hovered_once(),
-        }
-    }
+    // The cell across the struck face, whatever face it is: where a walker
+    // sent here starts from (`handle_tap`). A scattered decor is passed
+    // through, so it is the cell it stands in.
+    camera.hovered_approach = Some(match &struck {
+        Some(Struck::Object(o)) => world_adjacent_corner(&hit, U_PER_CELL, map_origin, Some(&object_aabb(o, map_origin))),
+        Some(Struck::Scattered(s)) => CELL.base_of(s.cell),
+        None => world_adjacent_corner(&hit, U_PER_CELL, map_origin, None),
+    });
+    camera.hovered_coord = Some(match struck {
+        Some(Struck::Object(o)) => Pvf3 { i: o.i, f: o.f },
+        Some(Struck::Scattered(s)) => CELL.base_of(s.cell),
+        // Bare ground: the cell struck, through whichever face — a top, a
+        // wall, a skirt, a cave's ceiling — at its own height. On the cell's
+        // grid and not the tier's, because that is the size a carve is
+        // written at.
+        None => world_struck_corner(&hit, U_PER_CELL, map_origin),
+    });
 }
 
 fn tap_if_still(s: &Input, mode: DragMode) {

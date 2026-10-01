@@ -23,6 +23,7 @@
 //! Assets: Kenney's "Mini Characters" (person) and "Cube Pets" (pet) packs,
 //! both CC0, both real glTF.
 
+use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 
@@ -124,6 +125,8 @@ struct Surface {
     y: f64,
     origin: Option<IVec>,
     revision: [u32; 2],
+    /// The height it stands at, in world units: the frame's own Z moves on
+    /// a rebase, and where it stood is where its next step starts from.
     z: Option<f64>,
 }
 
@@ -341,13 +344,13 @@ impl Walker {
                 y: py,
                 origin: Some(map_origin),
                 revision,
-                z: footing(map_origin, px, py),
+                z: footing(map_origin, px, py, s.z),
             };
         }
         self.pose[0] = px;
         self.pose[1] = py;
         if let Some(z) = s.z {
-            self.pose[2] = z;
+            self.pose[2] = local_height(z, map_origin);
         }
 
         let Some(held) = &self.held else { return };
@@ -441,11 +444,20 @@ pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
 
 // ---- where a walker stands ----
 
-/// The height a walker stands at over a local XY (world/access.rs
-/// `support`), in the local frame. None where no page over the point is
-/// resident.
-fn footing(map_origin: IVec, local_x: f64, local_y: f64) -> Option<f64> {
+/// The height a walker stands at over a local XY, in world units, stepping
+/// from where it stood, `from` (world/access.rs `support`): into the cell
+/// beside at the same height, and down to its floor or up over what fills
+/// it. The surface where it has stood nowhere yet. None where no page over
+/// the point is resident.
+fn footing(map_origin: IVec, local_x: f64, local_y: f64, from: Option<f64>) -> Option<f64> {
+    // The cell its feet stand in: the middle of it, so the cell named does
+    // not rest on a rounding of its floor.
+    let z = from.map_or(0.0, |z| local_height(z, map_origin) + U_PER_CELL / 2.0);
     let mut at = Pvf3::default();
-    local_world_to_canonical(&mut at, &[local_x, local_y, 0.0], map_origin);
-    Some(local_height(Access::now().support(&at).value()?, map_origin))
+    local_world_to_canonical(&mut at, &[local_x, local_y, z], map_origin);
+    let access = Access::now();
+    match from {
+        Some(_) => access.support(&at).value(),
+        None => access.surface_support(&at).value(),
+    }
 }

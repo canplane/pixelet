@@ -20,7 +20,7 @@
     "builds the chunks again."
   ],
   "SETTING_SECTIONS": {
-    "$value": ["display", "camera", "editing", "lighting", "quality", "debug", "character"],
+    "$value": ["display", "camera", "lighting", "quality", "debug", "character"],
     "$doc": [
       "The sheet's sections, in the order they are shown. `character` is not a",
       "section of the sheet at all — its two settings are picked from the",
@@ -182,13 +182,6 @@
       "kind": "toggle",
       "default": true,
       "section": "camera",
-      "dev": true
-    },
-    "terrain_carving": {
-      "$doc": ["The eraser digs into the baked terrain where nothing is placed. Off by", "default: the terrain is real map data, not the player's scratch canvas."],
-      "kind": "toggle",
-      "default": false,
-      "section": "editing",
       "dev": true
     },
     "edge_shade": {

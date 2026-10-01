@@ -189,7 +189,7 @@ console.log(`[check-bundle] ok — ${forbidden.length} development-only string(s
 
 // A dev setting's row: the settings table is generated whole from
 // schema.json, and a build that filtered it at run time shipped every dev
-// row under its name — `terrain_carving:{kind:...}` and the rest,
+// row under its name — `ground_snap:{kind:...}` and the rest,
 // readable in the artifact with their defaults. The shell now takes the
 // table without them (feature/setting/schema.ts), and this reads the
 // artifact to see that it did. What is looked for is the row and not the

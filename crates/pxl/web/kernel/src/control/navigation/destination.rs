@@ -61,7 +61,7 @@ pub fn page() -> Option<LevelPage> {
 /// there, once. A coarser page over it is not its ground and puts nothing.
 pub fn destination_step() {
     let Some((at, motion)) = *destination() else { return };
-    let Some(top) = Access::now().support(&at).exact() else { return };
+    let Some(top) = Access::now().surface_support(&at).exact() else { return };
     *destination() = None;
     put_center(pivot_over(&at, top), motion);
 }

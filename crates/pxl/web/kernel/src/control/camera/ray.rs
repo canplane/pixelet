@@ -13,7 +13,7 @@
 
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
 
 use crate::layer::object::geometry::Aabb;
@@ -26,28 +26,6 @@ use crate::world::frame::coord::{local_world_origin, local_world_to_canonical};
 /// own length is that sphere — every hit along it lies within it. A product
 /// number: 32 cells.
 const PICK_REACH_U: f64 = 32.0 * U_PER_CELL;
-
-/// The struck column's top terrain cell's own (min-x, min-y, min-z) CORNER —
-/// for the pointer tool's hover cursor over plain terrain OR a wall (both give
-/// the same "which cell" answer via box_min's own XY, since a wall hit's box is
-/// still that wall's OWN cell, not a neighbor's). X/Y come straight from
-/// box_min; Z is the drawn surface there stepped DOWN one cell, so the anchor
-/// is the top voxel's floor, not its top face — the same min-corner
-/// convention world_struck_corner / world_adjacent_corner already use, which
-/// lets the ghost and the recenter both apply a symmetric + half a cell on all
-/// three axes. Objects don't go through this — see resolve_hit_object.
-pub fn world_hover_pvf3(hit: &Hit, map_origin: IVec) -> Option<Pvf3> {
-    // The cell's middle, so the cell it names does not rest on a rounding
-    // of its corner.
-    let mut at = Pvf3::default();
-    local_world_to_canonical(&mut at, &[hit.box_min[0] + U_PER_CELL / 2.0, hit.box_min[1] + U_PER_CELL / 2.0, 0.0], map_origin);
-    let top = Access::now().at(&at, FINEST).value()?.top;
-    let mut corner = Pvf3::default();
-    local_world_to_canonical(&mut corner, &[hit.box_min[0], hit.box_min[1], 0.0], map_origin);
-    let (x, y) = (pvf3::X(&corner), pvf3::Y(&corner));
-    pvf3::gather(&mut corner, x, y, pvf3::from_real(top - U_PER_CELL));
-    Some(corner)
-}
 
 // Tolerance for "same nominal size"/"integer-aligned" comparisons below —
 // bigger than the sub_cell 1/256-grid round trip's own worst-case error
