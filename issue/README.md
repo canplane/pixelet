@@ -49,7 +49,7 @@ ordinary editing and needs none of this — this convention applies to _conclusi
 
 ## Where each stands
 
-One line per document, as of 2026-09-18, so what is built, what is decided
+One line per document, as of the day it names, so what is built, what is decided
 and what is still open can be read without opening them. A document's own
 last section is the authority when the two disagree.
 

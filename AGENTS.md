@@ -151,7 +151,7 @@ The rules below keep it one thing. They come from finding it several.
   terrain, places and objects alike. A 2.5D shortcut (a height read off the raster,
   `ground_ele_at`) is an optimization where it is known to behave exactly as
   the 3D rule would, never a model of its own.
-- **A mark stands at a cell's center** (`cell_center`), at the height of the
+- **A mark stands at a cell's center** (`Cell::center`), at the height of the
   surface drawn there, never at a center derived from its data's bounds. A
   mark for many things stands at the z16 cell their centroid falls in,
   which folds by count as the things do (`pxl-spec bake/poi_page.rs`).

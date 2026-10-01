@@ -10,20 +10,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P0
 
-- **The atmosphere in the observation's test, an optimization held.** A
-  difference is observed where its projected angle leaks past a cell _and_
-  the contrast it makes is still distinguishable after the air (`T(d)`,
-  layer/environment/fog.rs). Transmittance weakens contrast, not geometry,
-  so the two are tested side by side, not multiplied into one cell. With no
-  bound on the contrast a region's representation can be off by, the
-  contrast test is only today's far edge — the visual range, where `T`
-  falls to the threshold — which is correct as it stands. What it would
-  save inside the far edge needs a conservative bound on the difference a
-  representation's error can make in the final image, and that is not a
-  record's variance: it turns on material, light, shadow, emission and what
-  stands behind a silhouette. No lane is added to a page until such a
-  quantity is defined. The planet's horizon stays a separate, geometric
-  limit.
 - **How the samples are drawn.** On the iPhone 13 mini, four shapes over the
   same pages and views: today's boxes, the same as masked faces, a ray a
   pixel, and a bounded observation a cell — what the rule asks for, a cell

@@ -78,7 +78,7 @@
       "           the floor along a cube and the inside of a corner, over about",
       "           half a cell, scaling the ambient and hemisphere light only.",
       "           A few fragment ops behind a uniform.",
-      "  screen — N8AO as the three.js build ran it until 2026-09-14",
+      "  screen — N8AO",
       "           (crates/pxl/web/render/src/gpu/ao.rs): the world's depth drawn",
       "           once more, the occlusion sampled from it at half resolution,",
       "           denoised, and applied to every lit surface as a warm dark",
