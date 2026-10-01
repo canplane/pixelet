@@ -1,8 +1,8 @@
 # Architecture — xpute
 
-[xpute](./README.xpute.md) runs one program inside another. The outer one, the **host**, owns the machine: the clock, the memory, the I/O. The inner one, the **guest**, computes and owns nothing. It cannot take memory from the system, cannot open a connection, and cannot decide when it runs. Everything it has, the host gave it, and the host gives each thing a slice at a time — the memory once at boot, and a quota of time on every turn. What it wants done outside itself, it asks the host for.
+[xpute](./README.xpute.md) runs one program inside another, and gives it resources rather than abstractions. The outer one, the **host**, owns the platform: the clock, the memory, whatever reaches outside. The inner one, the **guest**, owns nothing of it. It cannot take memory from the system, cannot open a connection, and cannot decide when it runs. The host grants it a fixed memory once and a quota of time on every turn, and does the outside work it asks for. What those resources mean is the guest's: over them it builds what it needs — an allocator, a scheduler, paging, tables of what it holds — and the policy each runs by.
 
-That is the arrangement an operating system has with a process, without the hardware that enforces it: nothing stops a guest from spending a whole quota inside one function.
+That split is an exokernel's with its library operating system more than an operating system's with a process: the outer side grants concrete resources, a real region and a real quota, and their management lives with the program. Nothing is virtualized, and the guest knows exactly what it was given. Unlike an exokernel, nothing enforces the grant: a guest can spend a whole quota inside one function, and the host cannot take the turn back until it returns.
 
 xpute is that arrangement, in two layers. `core` is generic code — collections, codecs, a wire format, an errno table, scalar math — that any program can link and call, host or no host. `runtime` is the arrangement itself: the memory, the messages, the turn. `runtime` is written against `core`, and `core` knows nothing of `runtime`. `core` exists in every language xpute has, and each end of `runtime` in the languages that end is built in; what that means for each of them is the last section, once the pieces have names.
 
@@ -117,7 +117,7 @@ That call has two edges, like a clock's. On the rising edge the host calls in wi
 
 How long a turn may take, and how that time is spent inside it, are separate problems. They are settled at three levels, from the outside in.
 
-1. **Quantum** (`sched/quantum`) is the host's, and it decides the quota itself. The size comes from a frame interval the host measures rather than assumes. The shape comes from the guest, which declares a policy the host applies: a margin share for interactive turns, a number of frames for batch turns, a settle time after input, and what the falling edge is allowed to answer with. A turn that runs long is not cut off; the overrun is subtracted from the next quota, down to nothing.
+1. **Quantum** (`sched/quantum`) is the host's, and it decides the quota itself — a cooperative counterpart of the CPU time slice an exokernel hands a program (Aegis), which the program schedules within, ended here by the guest's return rather than by a timer. The size comes from a frame interval the host measures rather than assumes. The shape comes from the guest, which declares a policy the host applies: a margin share for interactive turns, a number of frames for batch turns, a settle time after input, and what the falling edge is allowed to answer with. A turn that runs long is not cut off; the overrun is subtracted from the next quota, down to nothing.
 2. **Tick** (`sched/tick`) is the guest's, and it divides the quota. The guest runs its phases in a fixed order against one budget, counted from the rising edge. Which phases exist and what share each gets is the guest's; the tick knows the quota and the clock and nothing else. Nothing enforces the quota — a phase that runs past its share is not stopped, it is simply counted against the turn.
 3. **Pass** (`sched/frame_budget`) is one phase's share spent on one ordered list of steps, until a wall-time budget or a step cap says stop. It is not a registry — what is eligible, and in what order, is the caller's. What it does guarantee is forward progress: the first step that has work always runs, so nothing can be starved by whatever sits ahead of it in the list.
 
@@ -195,6 +195,8 @@ Most of what is above is how one end happens to be built. A tick is how one gues
 7. **The clock.** During a turn the guest reads the host's clock (`now`) in milliseconds. It never runs backward, and only the difference between two readings means anything.
 
 Everything else is one end's own. The guest's: where its ranges lie, the heap and its allocator, the tick, its passes and tasks, and its files. The host's: how large a quota is, when to ring, and how it reads what a turn left. Neither end may lean on how the other does any of it.
+
+The unit the contract describes is one host and one guest. Several guests under one host — each with its memory, passing buffers between them by ownership rather than sharing them — is a composition it says nothing of yet, and one that would need what an exokernel has and this does not: a way to take back a turn a guest will not return.
 
 ---
 
