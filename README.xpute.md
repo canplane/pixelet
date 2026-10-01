@@ -1,6 +1,6 @@
 # xpute
 
-xpute runs one program inside another, and gives it resources rather than abstractions. The **host** owns the platform — the clock, the memory, whatever reaches outside — and the **guest** owns nothing of it. Everything the guest has, the host granted it, a slice at a time: the memory once at boot, and a quota of time on every turn. What the guest builds over them — its allocator, its scheduler, its tables — is its own, as a library operating system's is over an exokernel, without the hardware that enforces the grant.
+xpute runs one program inside another, and gives it resources rather than abstractions. The **host** owns the platform — the clock, the memory, whatever reaches outside — and the **guest** owns none of it on its own account: it controls what it is granted. Everything the guest has, the host granted it, a slice at a time: the memory once at boot, and a quota of time on every turn. What the guest builds over them — its allocator, its scheduler, its tables — is its own, as a library operating system's is over an exokernel, without the hardware that enforces the grant.
 
 **xpute is both ends of that arrangement, and `core`, the generic code underneath them.** `core` is written in every language xpute has, and each end in the languages it is built in.
 
