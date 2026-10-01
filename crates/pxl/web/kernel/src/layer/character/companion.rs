@@ -5,10 +5,11 @@
 //! drag, a click-to-navigate tween, a GPS recenter, whatever moved it — it
 //! makes a fixed-duration catch-up walk there and ends up facing its direction
 //! of travel, which it then just keeps. While map_center is still actively
-//! changing it stays put. Its height is where it stood until it has come to
-//! map_center, and map_center's then — map_center is the character's place,
-//! and the walk only shows it getting there: a wall on the way holds it,
-//! walking in place, until the walk's end puts it there.
+//! changing it stays put. On the way it steps as a walker does, from where
+//! it stood — down to the floor beside, up a step, held walking in place by
+//! a wall — and come to map_center it takes map_center's height:
+//! map_center is the character's place, and the walk only shows it getting
+//! there.
 //!
 //! Follow mode (is_follow_mode) is a different regime: map_center is a live
 //! ~1 Hz GPS stream, so the settle-then-dash above never gets to rest and its
@@ -322,17 +323,21 @@ impl Walker {
         self.was_follow_mode = is_follow_mode;
         self.was_dragging = dragging;
 
-        // Its height is where it stood until it has come to the map center,
-        // and the map center's there: a jump at the walk's end, never a
-        // footing of its own along the way. A wall where it walks holds it
-        // where it is, walking in place, until the walk's end puts it at the
-        // map center.
+        // Along the way it steps from where it stood (world/access.rs
+        // `support`): down to the floor beside, up a step, and a wall holds
+        // it where it is, walking in place, until the walk's end puts it at
+        // the map center. Come to the map center, its height is the map
+        // center's, which is the character's place.
         let arrived = (target.x - px).hypot(target.y - py) <= WALK_EPS;
         let stands = self.stands_z.get_or_insert(center_z);
         if arrived {
             *stands = center_z;
-        } else if walled(map_origin, [px, py], *stands) {
-            (px, py) = (self.pose[0], self.pose[1]);
+        } else {
+            match step_from(map_origin, [px, py], *stands) {
+                Some(Some(z)) => *stands = z,
+                Some(None) => (px, py) = (self.pose[0], self.pose[1]),
+                None => {}
+            }
         }
         self.pose[0] = px;
         self.pose[1] = py;
@@ -429,13 +434,14 @@ pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
     [&c.person, &c.pet].into_iter().flatten().filter_map(|w| w.held.as_ref()).map(|h| (h.model.model, h.skin))
 }
 
-// ---- where a walker is held ----
+// ---- where a walker steps ----
 
-/// Whether a wall stands at local `[x, y]` for a walker standing at height
-/// `stands`, in world units: the cell it would walk into filled taller than
-/// a step (world/access.rs `support`).
-fn walled(map_origin: IVec, [x, y]: [f64; 2], stands: f64) -> bool {
+/// Where a walker standing at height `stands`, in world units, stands at
+/// local `[x, y]` (world/access.rs `support`): the height, in world units;
+/// none inside where a wall holds it; none outside where no page over the
+/// point is resident.
+fn step_from(map_origin: IVec, [x, y]: [f64; 2], stands: f64) -> Option<Option<f64>> {
     let mut at = Pvf3::default();
     local_world_to_canonical(&mut at, &[x, y, local_height(stands, map_origin) + U_PER_CELL / 2.0], map_origin);
-    matches!(Access::now().support(&at).value(), Some(None))
+    Access::now().support(&at).value()
 }
