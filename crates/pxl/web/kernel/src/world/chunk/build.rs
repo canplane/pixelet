@@ -18,8 +18,8 @@ use pxl_render::mesh::paint::object::adapter::{Claims, Entries, Painted, Painter
 use pxl_render::mesh::paint::terrain::adapter::{beside_index, Around, ChunkSample, PageSource, PageView};
 use pxl_render::mesh::volume::Volumes;
 use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
-use pxl_spec::bake::constant::{pack_pos, BandZ, EntryAt, BAND, CELL, OBJECT_FINEST};
-use pxl_spec::space::indexer::{FROM_L2_IDX, L2, L2_IDX};
+use pxl_spec::bake::constant::{pack_pos, BandZ, EntryAt, CELL, OBJECT_FINEST};
+use pxl_spec::space::indexer::L2_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use std::collections::{HashMap, TryReserveError};
 use xpute_runtime::mem::base::ptr_at;
@@ -401,11 +401,9 @@ pub struct Builder {
     bands: Vec<BandView<'static>>,
     /// The scan job's paint's claimed voxels, kept between its steps.
     claimed: Claims,
-    /// Objects folded, a level chunk's or a z16 chunk's to its cube, as the
-    /// store keeps them (layer/object/store.rs `Store::fold_at`), and those
-    /// cells in order, kept for their capacity.
+    /// Objects folded to a level chunk's cells, as the store keeps them
+    /// (layer/object/store.rs `Store::fold_at`), kept for its capacity.
     folded: HashMap<[i64; 3], u32>,
-    fold_cells: Vec<([i64; 3], u32)>,
     /// What stands in each column of a level chunk, by column and height
     /// (pxl-render mesh/paint/level.rs `write_level_runs`).
     stands: Vec<(u32, Stands)>,
@@ -439,7 +437,6 @@ impl Builder {
             bands: Vec::new(),
             claimed: Claims::new(),
             folded: HashMap::new(),
-            fold_cells: Vec::new(),
             stands: Vec::new(),
             fold_band: Vec::new(),
             fold_pos: Vec::new(),
@@ -821,41 +818,32 @@ impl Builder {
         Some(volume)
     }
 
-    /// A column's voxel entries folded to `scale` by the fold every level
-    /// shares, as the store keeps it (layer/object/store.rs `fold_cell`), as
-    /// entries of that scale in the builder's fold lanes: what a z16 chunk
-    /// paints for a cube coarser than an object's finest tier. The hidden
-    /// entry is left out, as the paint would leave it out.
-    /// An error, and nothing folded, where the heap refused the fold room.
+    /// A column's voxel entries as a paint at `scale` takes them, in the
+    /// builder's fold lanes: those finer than `scale` folded to it, the rest
+    /// at their own size (layer/object/store.rs `Store::fold_entries`) —
+    /// what a z16 chunk paints for a cube coarser than an object's finest
+    /// tier. The hidden entry is left out, as the paint would leave it out.
+    /// An error where the heap refused the fold room.
     fn fold_objects(&mut self, world: &mut World, col_idx: IVec, scale: Scale) -> Result<(), TryReserveError> {
-        let o = FROM_L2_IDX(col_idx);
-        let (x0, y0) = (ivec::X(o), ivec::Y(o));
-        let cells = scale.count_in(L2) as i64;
-        let at = [ivec::X(col_idx) * cells, ivec::Y(col_idx) * cells];
-        world.store.fold_at(scale, at, [at[0] + cells, at[1] + cells], self.hide, &mut self.folded)?;
-        // A cell's corner in finest steps: absolute, then from the column's
-        // corner and its band's floor.
-        let n = OBJECT_FINEST.count_in(scale) as i64;
-        let band_steps = OBJECT_FINEST.count_in(BAND) as i64;
-        let (fx, fy) = (OBJECT_FINEST.index(x0), OBJECT_FINEST.index(y0));
-        let n_folded = self.folded.len();
-        self.fold_cells.clear();
-        self.fold_band.clear();
-        self.fold_pos.clear();
-        self.fold_state.clear();
-        self.fold_cells.try_reserve(n_folded)?;
-        self.fold_band.try_reserve(n_folded)?;
-        self.fold_pos.try_reserve(n_folded)?;
-        self.fold_state.try_reserve(n_folded)?;
-        self.fold_cells.extend(self.folded.iter().map(|(&c, &state)| (c, state)));
-        self.fold_cells.sort_unstable();
-        for &([cx, cy, cz], state) in &self.fold_cells {
-            let z = cz * n;
-            self.fold_band.push(z.div_euclid(band_steps) as BandZ);
-            self.fold_pos.push(pack_pos((cx * n - fx) as u32, (cy * n - fy) as u32, z.rem_euclid(band_steps) as u32, scale));
-            self.fold_state.push(state);
-        }
-        Ok(())
+        let (band, pos, state) = (&mut self.fold_band, &mut self.fold_pos, &mut self.fold_state);
+        band.clear();
+        pos.clear();
+        state.clear();
+        let mut refused = Ok(());
+        world.store.fold_entries(col_idx, scale, self.hide, &mut |b, [x, y, z], s, v| {
+            if refused.is_ok() {
+                refused = (|| {
+                    band.try_reserve(1)?;
+                    pos.try_reserve(1)?;
+                    state.try_reserve(1)?;
+                    band.push(b);
+                    pos.push(pack_pos(x, y, z, s));
+                    state.push(v);
+                    Ok(())
+                })();
+            }
+        });
+        refused
     }
 
     /// A step of the scan job's paint of the chunk's objects. Once every

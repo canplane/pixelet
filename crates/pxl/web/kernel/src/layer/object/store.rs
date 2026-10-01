@@ -1441,6 +1441,47 @@ impl Store {
     /// The cell of `target` the entry `hide` is in, and what it folds to with
     /// the entry gone: the fold made again up the entry's one path, its
     /// siblings read where they are kept. None where nothing is there.
+    /// Column `col_idx`'s voxel entries as a paint at `target` takes them:
+    /// a leaf finer than `target` folded to it (`fold_cell`), and one at
+    /// least as coarse kept whole, at its own size. `fold_at` answers which
+    /// cells are filled, so a coarse leaf is in every cell under it there;
+    /// painted cell by cell, a placed 1u cube would come out as a quarter
+    /// cell's sixty-four sub-cell entries, which the mesher draws a box each
+    /// and never merges — one block seen split 4 × 4. `visit` is handed the
+    /// band, the entry's corner in the band's finest steps, its scale and its
+    /// state; `hide`, the one entry the eraser shows gone, is left out as the
+    /// fold leaves it out.
+    pub fn fold_entries(&self, col_idx: IVec, target: Scale, hide: Option<EntryAt>, visit: &mut dyn FnMut(BandZ, [u32; 3], Scale, u32)) {
+        let Some(column) = self.columns.get(&col_idx) else { return };
+        let hidden = hide.filter(|h| h.col_idx == col_idx).and_then(|h| {
+            let own = unpack_pos(h.pos).3;
+            let (at, v) = self.hidden(h, target)?;
+            Some((h.band_idx, at, if own > target { own } else { target }, u32::from(v)))
+        });
+        for (&band_idx, tree) in &column.bands {
+            let corner = [ivec::X(col_idx), ivec::Y(col_idx), i64::from(band_idx)];
+            mem::walk_to(
+                &tree.mem,
+                &tree.layout,
+                target,
+                &mut |x, y, z, s, v| {
+                    let mut v = u32::from(v);
+                    if let Some((band, at, scale, w)) = hidden {
+                        let (cells, per) = (s.count_in(BAND) as i64, OBJECT_FINEST.count_in(s) as i64);
+                        let cell: [i64; 3] = core::array::from_fn(|k| corner[k] * cells + i64::from([x, y, z][k]) / per);
+                        if band == band_idx && scale == s && cell == at {
+                            v = w;
+                        }
+                    }
+                    if object_value_is_voxel(v) {
+                        visit(band_idx, [x, y, z].map(|c| c as u32), s, v);
+                    }
+                },
+                0,
+            );
+        }
+    }
+
     fn hidden(&self, hide: EntryAt, target: Scale) -> Option<([i64; 3], u16)> {
         self.columns.get(&hide.col_idx)?.bands.get(&hide.band_idx)?;
         let (x, y, z, own) = unpack_pos(hide.pos);

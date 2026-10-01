@@ -276,3 +276,19 @@ fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
         assert_eq!(stores[2].bound_in(&turn_box(turn_box(query))), given.map(|b| turn_box(turn_box(b))), "{query:?}");
     }
 }
+
+/// A paint finer than a leaf takes the leaf whole: a placed cube is one
+/// entry at its own size, never the sub-cells under it, which the mesher
+/// would draw a box each.
+#[test]
+fn a_paint_finer_than_a_cube_takes_it_whole() {
+    let mut store = Store::new();
+    let col_idx = ivec::gather(1, -1, 0);
+    let step = OBJECT_FINEST.count_in(CELL);
+    store.write([Write { col_idx, band_idx: 0, at: [3 * step, 4 * step, 5 * step], scale: CELL, state: red() }].into_iter());
+    for target in [OBJECT_FINEST.up(1), CELL.down(1)] {
+        let mut out = Vec::new();
+        store.fold_entries(col_idx, target, None, &mut |band, at, scale, v| out.push((band, at, scale, v)));
+        assert_eq!(out, [(0, [3 * step, 4 * step, 5 * step], CELL, red())]);
+    }
+}
