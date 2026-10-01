@@ -17,7 +17,6 @@
 
 pub mod terrain_gate;
 
-use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 
 use pxl_spec::space::v3::V3;
@@ -33,9 +32,9 @@ use crate::control::camera::gesture::{spread, Anchor};
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
 use crate::global::Global;
 use crate::shell::setting::store::{settings_store, CameraCollisionMode};
+use crate::world::access::support_revision;
 use crate::world::frame::coord::canonical_to_local;
 use crate::world::frame::view::{view, view_compose};
-use crate::world::pyramid::Layer as _;
 use terrain_gate::{allowed_pan, allowed_view, climb_polar, ViewTriple};
 
 /// The orbit's own state, as drawn: the radius, how far ahead of the eye the
@@ -88,14 +87,15 @@ const CLIMB_RELAX_DAMP: f64 = 5.0;
 /// climb_polar's answer for the last inputs: the climb samples the terrain
 /// twice through the page tables and page math, and every ticked frame asked
 /// it again with the view at rest. The answer changes only with the view, the
-/// map center, or a page arriving — the terrain pyramid's revision moves for
-/// the last, which is also when ground not known yet becomes known.
+/// map center, or what the eye stands over changing — a page arriving, which
+/// is also when ground not known yet becomes known, or an object placed or
+/// carved (world/access.rs `support_revision`).
 struct ClimbMemo {
     dist: f64,
     polar: f64,
     azimuth: f64,
     center: Option<Pvf3>,
-    revision: u32,
+    revision: [u32; 2],
     polar_out: f64,
 }
 
@@ -107,11 +107,11 @@ fn climb_polar_memo(dist: f64, polar: f64, azimuth: f64) -> f64 {
         polar: f64::NAN,
         azimuth: f64::NAN,
         center: None,
-        revision: u32::MAX,
+        revision: [u32::MAX; 2],
         polar_out: f64::NAN,
     });
     let center = map_center();
-    let revision = Terrain::pyramid().revision();
+    let revision = support_revision();
     if dist == memo.dist && polar == memo.polar && azimuth == memo.azimuth && center == memo.center && revision == memo.revision {
         return memo.polar_out;
     }

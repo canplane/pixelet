@@ -22,7 +22,7 @@ use crate::control::camera::config::camera_cfg;
 use crate::layer::environment::config::render_cfg;
 use crate::layer::environment::state::globe;
 use crate::param;
-use crate::world::access::{Access, FINEST};
+use crate::world::access::Access;
 use crate::world::observation::eye;
 
 /// Where the planet turns away, seen from `height` above it.
@@ -48,13 +48,14 @@ pub fn reach_at(height: f64) -> f64 {
     horizon_at(height).min(levels_reach_at(height)).max(NEAREST_REACH)
 }
 
-/// How high the ground under a point stands over the datum the projection
-/// measures from, as it is drawn there, and the datum where nothing over it
-/// is held.
+/// How high the floor under a point stands over the datum the projection
+/// measures from: what is under it from its own height (world/access.rs
+/// `floor_under`) — a cave's floor in a cave, a deck or a roof under it as
+/// much as the ground — and the datum where nothing over it is held.
 fn ground_under(at: [f64; 3]) -> f64 {
-    let mut foot = Pvf3::default();
-    projection::project(&mut foot, at[0], at[1], 0.0);
-    Access::now().at(&foot, FINEST).value().map_or(0.0, |g| g.top)
+    let mut point = Pvf3::default();
+    projection::project(&mut point, at[0], at[1], at[2]);
+    Access::now().floor_under(&point).value().unwrap_or(0.0)
 }
 
 /// How high the ground under the eye stands: where the sky draws its own

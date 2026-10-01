@@ -14,7 +14,7 @@ use xpute_core::math::scalar::wrap;
 use crate::control::camera::config::camera_cfg::view::EYE_CLEARANCE_U;
 use crate::control::camera::orbit::orbit_eye_offset;
 use crate::shell::setting::store::{settings_store, CameraCollisionMode};
-use crate::world::access::{Access, FINEST};
+use crate::world::access::Access;
 use crate::world::frame::coord::{canonical_to_local, local_height, local_world_origin, local_world_to_canonical};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -61,14 +61,17 @@ pub fn pose(view: ViewTriple, center: Option<&Pvf3>) -> Option<ViewPose> {
     })
 }
 
-/// How far above the target the eye must sit to clear the ground drawn
-/// beneath it, or None where no page over it is resident — an unarrived
-/// sample says nothing.
+/// How far above the target the eye must sit to clear what is under it,
+/// or None where no page over it is resident — an unarrived sample says
+/// nothing. What is under it is asked from the eye's own cell, as a walker's
+/// footing is (world/access.rs `floor_under`): a cave's floor where the eye
+/// is in the cave, the top of what it is inside where it is in the ground —
+/// never the surface's height alone, which a cave is under.
 fn required_rise(at: &ViewPose) -> Option<f64> {
     let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
-    let mut below = Pvf3::default();
-    local_world_to_canonical(&mut below, &[at.target[0] + offset[0], at.target[1] + offset[1], 0.0], at.origin);
-    let ground = local_height(Access::now().at(&below, FINEST).value()?.top, at.origin);
+    let mut eye = Pvf3::default();
+    local_world_to_canonical(&mut eye, &std::array::from_fn(|k| at.target[k] + offset[k]), at.origin);
+    let ground = local_height(Access::now().floor_under(&eye).value()?, at.origin);
     Some(ground + EYE_CLEARANCE_U - at.target[2])
 }
 

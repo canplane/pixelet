@@ -385,10 +385,25 @@ impl<'a> Access<'a> {
         self.stand([ix, iy], None).map(Option::unwrap_or_default)
     }
 
+    /// `support` with no step to it: from the cell `at` lies in, down to the
+    /// floor under it, or up over whatever fills it however tall — what an
+    /// eye that walks nowhere has under it, in a cave as over a hill.
+    pub fn floor_under(&self, at: &Pvf3) -> Answer<f64> {
+        let [ix, iy, iz] = CELL.index_of(at);
+        // Climbing a position's whole reach meets no wall (`stand`), so it
+        // is never none.
+        self.stand_climbing([ix, iy], Some(iz), true).map(Option::unwrap_or_default)
+    }
+
     /// Where a thing stands in z16 column `cell`, starting from cell `from`
     /// of it and climbing a step at most, or from the surface and climbing
     /// any height where none; none where a step from `from` meets a wall.
-    fn stand(&self, [ix, iy]: [i64; 2], from: Option<i64>) -> Answer<Option<f64>> {
+    fn stand(&self, cell: [i64; 2], from: Option<i64>) -> Answer<Option<f64>> {
+        self.stand_climbing(cell, from, from.is_none())
+    }
+
+    /// `stand`, climbing any height where `any_height` and a step otherwise.
+    fn stand_climbing(&self, [ix, iy]: [i64; 2], from: Option<i64>, any_height: bool) -> Answer<Option<f64>> {
         self.composed([ix, iy]).map(|c| {
             let side = CELL.side();
             let top = (c.top / side).round() as i64;
@@ -414,17 +429,20 @@ impl<'a> Access<'a> {
             // As far as a position reaches, so a shaft or a stack of any
             // height is followed to its end.
             let [lo, hi] = [REACH.min[2] / side, REACH.max[2] / side].map(|z| z as i64);
-            let (start, climb) = match from {
-                Some(cz) => (cz, STEP_CELLS),
-                None => (top, hi - top),
-            };
-            let stand = if solid(start) {
+            let start = from.unwrap_or(top);
+            let climb = if any_height { hi - start } else { STEP_CELLS };
+            // Nothing is filled over the ground's top, the lines' highest and
+            // the objects' highest band: a start over all three goes down
+            // from there, not a cell at a time from a height far over them.
+            let lines_top = c.lines.boxes.iter().map(|b| (b[1] / side).ceil() as i64).max().unwrap_or(i64::MIN);
+            let ceiling = top.max(lines_top).max(self.objects.ceiling([ix, iy]).unwrap_or(i64::MIN));
+            let stand = if start < ceiling && solid(start) {
                 let over = (start + 1..=start + climb).find(|&cz| !solid(cz));
-                // From the surface a stack filling a position's whole reach
-                // is stood in, as the surface was before.
-                if from.is_none() { over.or(Some(start)) } else { over }
+                // Climbing any height, a stack filling a position's whole
+                // reach is stood in.
+                if any_height { over.or(Some(start)) } else { over }
             } else {
-                Some((lo..start).rev().find(|&cz| solid(cz)).map_or(start, |cz| cz + 1))
+                Some((lo..start.min(ceiling)).rev().find(|&cz| solid(cz)).map_or(start, |cz| cz + 1))
             };
             stand.map(|cz| cz as f64 * side)
         })

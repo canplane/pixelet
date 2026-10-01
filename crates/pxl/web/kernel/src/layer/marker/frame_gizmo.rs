@@ -25,7 +25,7 @@ use crate::kernel::kernel;
 use crate::layer::billboard::field::BILLBOARD_FLOATS;
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::text::text_width;
-use crate::world::access::{Access, FINEST};
+use crate::world::access::Access;
 use crate::world::change::request_world_tick;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
@@ -214,7 +214,7 @@ fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
     // raw_v: the map center as placed, no elevation override. quant_v: the cell
     // it floors to, ground-snapped — a cell, so a box.
     let raw_v = local_of(map_center, map_origin);
-    let ground = |at: &Pvf3| Access::now().at(at, FINEST).value().map(|g| crate::world::frame::coord::local_height(g.top, map_origin));
+    let ground = |at: &Pvf3| Access::now().floor_under(at).value().map(|top| crate::world::frame::coord::local_height(top, map_origin));
     let gnd_v = [raw_v[0], raw_v[1], ground(map_center).unwrap_or(0.0)];
     let mut quant_v = [0.0; 3];
     floor3n(&gnd_v, U_PER_CELL, &mut quant_v);
