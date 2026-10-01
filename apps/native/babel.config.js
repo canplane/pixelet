@@ -8,93 +8,58 @@
  * `__IS_DEV__ ? EVERY : SHIPPED` read at run time carries both.
  */
 
-const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "../..");
 
 /**
- * Every member of every `export const enum` under the shell and the xpute
- * packages, by enum and member: a const enum is a compile-time name for a
- * number, and a bundle should hold the number alone. A transpiler that sees
- * one file at a time cannot inline a name declared in another, and Babel's
- * TypeScript transform emits the enum as an object instead — every command's
- * and errno's name as a string, reverse mapping and all. So the declarations
- * are read up front, as vite.config.ts's const_enum did, and `inlineEnums`
- * below does the rest.
- *
- * It refuses rather than guesses: a member whose value is not a plain
- * literal or arithmetic over literals leaves its whole enum alone, and is
- * named in `refused` so that leaving it is not taken for a table gone stale.
+ * The const enums of the shell, the xpute packages and this app, read by the
+ * table both bundlers share (apps/web/script/const-enum.cjs): a const enum is
+ * a compile-time name for a number, and a bundle holds the number alone. A
+ * transpiler that sees one file at a time cannot inline a name declared in
+ * another, and Babel's TypeScript transform emits the enum as an object
+ * instead — every command's and errno's name as a string, reverse mapping
+ * and all. The table refuses an enum it cannot inline; `inlineEnums` below
+ * does the rest.
  */
-function readEnums() {
-  const DECL = /export\s+const\s+enum\s+(\w+)\s*\{([^}]*)\}/g;
-  const VALUE = /^(?:0x[0-9a-fA-F]+|\d+|"[^"\\]*"|'[^'\\]*'|[-+*/|&^~()<>\s])+$/;
-  const enums = new Map();
-  const refused = new Set();
-  const walk = (dir) => {
-    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, e.name);
-      if (e.isDirectory()) {
-        if (e.name !== "node_modules") walk(full);
-        continue;
-      }
-      if (!/\.tsx?$/.test(e.name) || e.name.includes(".test.")) continue;
-      for (const [, name, body] of fs.readFileSync(full, "utf8").matchAll(DECL)) {
-        const members = new Map();
-        let whole = true;
-        for (let line of body.replace(/\/\*[\s\S]*?\*\//g, "").split("\n")) {
-          line = line.replace(/\/\/.*/, "").trim().replace(/,$/, "");
-          if (!line) continue;
-          const at = line.indexOf("=");
-          const key = at < 0 ? "" : line.slice(0, at).trim();
-          const value = at < 0 ? "" : line.slice(at + 1).trim();
-          if (!/^\w+$/.test(key) || !VALUE.test(value)) {
-            whole = false;
-            break;
-          }
-          members.set(key, /^["']/.test(value) ? value.slice(1, -1) : Function(`return (${value})`)());
-        }
-        if (whole) enums.set(name, members);
-        else refused.add(name);
-      }
-    }
-  };
-  walk(path.join(root, "apps/web/src"));
-  walk(path.join(root, "packages"));
-  return { enums, refused };
-}
-const { enums: ENUMS, refused: REFUSED } = readEnums();
+const { readEnums, stale: staleIn } = require(path.join(root, "apps/web/script/const-enum.cjs"));
+const { exported: EXPORTED, local: LOCAL } = readEnums([path.join(root, "apps/web/src"), path.join(root, "packages"), path.join(root, "apps/native/src")]);
 
 /** The table is read once, when Metro loads this file, so an enum or a member
  * added since — a spec regenerated under a running Metro — is not in it. Left
  * alone, it bundles as a name nothing binds and throws on the device; said
  * here, it stops the build with what to do. */
-const stale = (what) => `${what} is not in the const enum table Metro read when it started; the enums changed since, so restart Metro with --clear`;
+const stale = (what) => staleIn(what, "restart Metro with --clear");
 
 /** Replaces each `Enum.Member` with its value and strikes the declarations,
  * so the import that named the enum is left with no use and goes with the
- * TypeScript transform's other type-only imports. A use of an enum as a
+ * TypeScript transform's other type-only imports. A file's own enums are
+ * replaced in that file only. An enum that is not const, or a use of one as a
  * value that is left — `Command[x]`, the enum handed on whole — is a build
- * error, never a bundle that reaches a device and throws. */
+ * error, never a bundle that reaches a device and throws or carries a name. */
 const inlineEnums = ({ types: t }) => ({
   visitor: {
     MemberExpression(p, state) {
       const { object, property, computed } = p.node;
       if (computed || !t.isIdentifier(object) || !t.isIdentifier(property)) return;
-      const members = ENUMS.get(object.name);
-      if (!members) return;
+      // A struck declaration takes its binding with it, so a use below one
+      // of the file's own is found by its name.
       const binding = p.scope.getBinding(object.name);
-      if (binding && !binding.path.isImportSpecifier() && !state.declared.has(binding.identifier)) return;
+      const members = !binding
+        ? state.own.get(object.name) ?? EXPORTED.get(object.name)
+        : state.declared.has(binding.identifier)
+        ? state.declared.get(binding.identifier)
+        : binding.path.isImportSpecifier()
+        ? EXPORTED.get(object.name)
+        : undefined;
+      if (!members) return;
       if (!members.has(property.name)) throw p.buildCodeFrameError(stale(`${object.name}.${property.name}`));
       p.replaceWith(t.valueToNode(members.get(property.name)));
     },
-    TSEnumDeclaration(p) {
-      if (!p.node.const) return;
-      if (!ENUMS.has(p.node.id.name)) {
-        if (p.parentPath.isExportNamedDeclaration() && !REFUSED.has(p.node.id.name)) throw p.buildCodeFrameError(stale(`const enum ${p.node.id.name}`));
-        return;
-      }
+    TSEnumDeclaration(p, state) {
+      const name = p.node.id.name;
+      if (!p.node.const) throw p.buildCodeFrameError(`const-enum: enum ${name} is not const, so a bundle would carry its members' names; declare it \`const enum\``);
+      if (!state.declared.has(p.node.id)) throw p.buildCodeFrameError(stale(`const enum ${name}`));
       // The declaration itself first: a path struck only through its parent
       // still reads as live to the plugins after this one on the same node,
       // and the TypeScript transform turns it into a declaration with no
@@ -108,16 +73,22 @@ const inlineEnums = ({ types: t }) => ({
       // before any is struck: the traversal reaches a declaration before the
       // uses below it, and a struck path answers no question about itself.
       enter(p, state) {
-        state.declared = new Set();
-        for (const s of p.get("body")) {
-          const d = s.isExportNamedDeclaration() ? s.get("declaration") : s;
-          if (d.isTSEnumDeclaration() && d.node.const && ENUMS.has(d.node.id.name)) state.declared.add(d.node.id);
-        }
+        state.declared = new Map();
+        const own = LOCAL.get(state.filename) ?? new Map();
+        p.traverse({
+          TSEnumDeclaration(d) {
+            if (!d.node.const) return;
+            const members = d.parentPath.isExportNamedDeclaration() ? EXPORTED.get(d.node.id.name) : own.get(d.node.id.name);
+            if (members) state.declared.set(d.node.id, members);
+          },
+        });
+        state.own = new Map([...state.declared].map(([id, members]) => [id.name, members]));
+        state.names = new Set([...EXPORTED.keys(), ...state.own.keys()]);
       },
       exit(p, state) {
         p.traverse({
           ReferencedIdentifier(r) {
-            if (!ENUMS.has(r.node.name) || r.parentPath.isTSTypeReference() || r.parentPath.isTSQualifiedName()) return;
+            if (!state.names.has(r.node.name) || r.parentPath.isTSTypeReference() || r.parentPath.isTSQualifiedName()) return;
             if (r.findParent((a) => a.isTSType() || a.isTSTypeAnnotation() || a.isTSTypeParameterInstantiation())) return;
             const binding = r.scope.getBinding(r.node.name);
             if (binding && !binding.path.isImportSpecifier()) return;

@@ -3,7 +3,8 @@
 import { defineConfig, type HmrContext, loadEnv, type Plugin, type ProxyOptions } from "vite";
 import deno from "@deno/vite-plugin";
 import { execSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import process from "node:process";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,6 +13,8 @@ import react from "@vitejs/plugin-react";
 import svgr from "vite-plugin-svgr";
 
 import { DEV_PROXY_ROUTES } from "./src/config/route.ts";
+
+const { DECL, readEnums, literal, stale } = createRequire(import.meta.url)("./script/const-enum.cjs");
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -144,68 +147,28 @@ function buildStamp(): Plugin {
 /**
  * A `const enum` is a compile-time name for a number, and a published bundle
  * should hold the number alone. It does not, because Vite transpiles each
- * file on its own and nothing ever sees the declaration and its use at once.
- * What that costs depends on which transpiler is under it, and neither
- * answer is the one wanted: esbuild emitted the runtime object, reverse
- * mapping and all, so a build carried every command's and every errno's name
- * as a string (`e[e.WORLD_SNAPSHOT=6933]="WORLD_SNAPSHOT"`); oxc erases the
- * declaration as the type syntax it is, which leaves every importer bound to
- * an export that no longer exists.
+ * file on its own and nothing ever sees the declaration and its use at once:
+ * esbuild emitted the runtime object, reverse mapping and all, so a build
+ * carried every command's and every errno's name as a string
+ * (`e[e.WORLD_SNAPSHOT=6933]="WORLD_SNAPSHOT"`); oxc erases the declaration
+ * as the type syntax it is, which leaves every importer bound to an export
+ * that no longer exists.
  *
- * What a per-file pass cannot do is done by reading the declarations up front:
- * every member of every `export const enum` under `roots`, then each member
- * access replaced by its value and the declarations struck. The sources keep
- * their enums; only the bundle loses them.
- *
- * It refuses rather than guesses. A member whose value is not a plain literal
- * or arithmetic over literals leaves its whole enum alone, and an access left
- * behind after the declaration went is a build error, never a bundle that
- * reaches a browser and throws. The table is read once, as the server starts,
- * so an enum declared since, or a member added to one, is the same error,
- * saying the server has to be restarted.
+ * The table is script/const-enum.cjs's, shared with the device's Babel pass,
+ * and it refuses an enum it cannot inline rather than leave one. Here each
+ * use is replaced by its value — a file's own enums in that file only — and
+ * the declarations struck. An access left behind after a declaration went
+ * is a build error, never a bundle that reaches a browser and throws. The
+ * table is read once, as the server starts, so an enum declared since, or a
+ * member added to one, is the same error, saying the server has to be
+ * restarted.
  */
 function constEnum(roots: string[]): Plugin {
-  const DECL = /export\s+const\s+enum\s+(\w+)\s*\{([^}]*)\}/g;
-  /** Numbers, strings and arithmetic over them, and nothing that runs. */
-  const VALUE = /^(?:0x[0-9a-fA-F]+|\d+|"[^"\\]*"|'[^'\\]*'|[-+*/|&^~()<>\s])+$/;
-  const enums = new Map<string, Map<string, string>>();
-  /** Enums left alone on purpose, so that leaving them is not taken for a
-   * table gone stale. */
-  const refused = new Set<string>();
-  const stale = (what: string) => `const-enum: ${what} is not in the enum table read when the dev server started; the enums changed since, so restart it`;
-
-  for (const root of roots) {
-    const stack = [root];
-    while (stack.length) {
-      const dir = stack.pop()!;
-      for (const e of readdirSync(dir, { withFileTypes: true })) {
-        const full = path.join(dir, e.name);
-        if (e.isDirectory()) {
-          if (e.name !== "node_modules") stack.push(full);
-          continue;
-        }
-        if (!/\.tsx?$/.test(e.name) || e.name.includes(".test.")) continue;
-        for (const [, name, body] of readFileSync(full, "utf8").matchAll(DECL)) {
-          const members = new Map<string, string>();
-          let whole = true;
-          for (let line of body.replace(/\/\*[\s\S]*?\*\//g, "").split("\n")) {
-            line = line.replace(/\/\/.*/, "").trim().replace(/,$/, "");
-            if (!line || line.startsWith("*")) continue;
-            const at = line.indexOf("=");
-            const key = at < 0 ? "" : line.slice(0, at).trim();
-            const value = at < 0 ? "" : line.slice(at + 1).trim();
-            if (!/^\w+$/.test(key) || !VALUE.test(value)) {
-              whole = false;
-              break;
-            }
-            members.set(key, /^["']/.test(value) ? value : String(Function(`return (${value})`)()));
-          }
-          if (whole) enums.set(name, members);
-          else refused.add(name);
-        }
-      }
-    }
-  }
+  const { exported, local } = readEnums(roots) as {
+    exported: Map<string, Map<string, number | string>>;
+    local: Map<string, Map<string, Map<string, number | string>>>;
+  };
+  const restart = "restart the dev server";
 
   // An id can carry a query or a hash — `?worker`, and the `#deno` the Deno
   // resolver appends to the virtual id it hands back — and either one hides
@@ -220,20 +183,27 @@ function constEnum(roots: string[]): Plugin {
     // Before the transpiler reaches the types: the declarations are still here.
     enforce: "pre",
     transform(code, id) {
-      if (!/\.tsx?$/.test(sourceOf(id)) || id.includes("node_modules")) return null;
-      for (const [, name] of code.matchAll(DECL)) {
-        if (!enums.has(name) && !refused.has(name)) throw new Error(`${stale(`const enum ${name}`)} (${id})`);
+      const file = sourceOf(id);
+      if (!/\.tsx?$/.test(file) || id.includes("node_modules")) return null;
+      const own = local.get(path.resolve(file)) ?? new Map<string, Map<string, number | string>>();
+      for (const [, isExported, name] of code.matchAll(DECL)) {
+        if (isExported ? !exported.has(name) : !own.has(name)) throw new Error(`${stale(`const enum ${name}`, restart)} (${id})`);
       }
       let out = code;
       const struck: string[] = [];
-      for (const [name, members] of enums) {
-        if (!out.includes(name)) continue;
+      const inline = (name: string, members: Map<string, number | string>) => {
         // Whole names only: a member that is a prefix of another — a table
         // read before SENSOR_ENABLE became SENSOR_ENABLE_LOCATION — would
         // otherwise leave `7444_LOCATION` for the parser instead of a name
         // the stale check below can say.
-        out = out.replace(new RegExp(`\\b${name}\\.(\\w+)\\b`, "g"), (whole, key: string) => members.get(key) ?? whole);
+        out = out.replace(new RegExp(`\\b${name}\\.(\\w+)\\b`, "g"), (whole, key: string) => (members.has(key) ? literal(members.get(key)) : whole));
         struck.push(name);
+      };
+      // A file's own enum first: its name is the file's, whatever another
+      // file exports under it.
+      for (const [name, members] of own) inline(name, members);
+      for (const [name, members] of exported) {
+        if (!own.has(name) && out.includes(name)) inline(name, members);
       }
       if (!struck.length) return null;
       out = out.replace(DECL, "");
@@ -250,7 +220,7 @@ function constEnum(roots: string[]): Plugin {
       });
       for (const name of struck) {
         const left = new RegExp(`\\b${name}\\.\\w`).exec(out);
-        if (left) throw new Error(`${stale(`${name}.${/\w+/.exec(out.slice(left.index + name.length + 1))![0]}`)} (${id})`);
+        if (left) throw new Error(`${stale(`${name}.${/\w+/.exec(out.slice(left.index + name.length + 1))![0]}`, restart)} (${id})`);
       }
       return { code: out, map: null };
     },

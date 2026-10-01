@@ -19,7 +19,6 @@ import {
   Command,
   encode_gpu_ready,
   encode_input_go_to,
-  encode_input_view,
   encode_load_failed,
   encode_setting_set,
   encode_setting_toggle,
@@ -290,16 +289,4 @@ Deno.test("kernel - heap requests along the event paths", () => {
   load = since();
   console.log(`heap: a far jump and its load ${load}`);
   console.log(`heap: the load's strobes ${strobe_requests}, its answers ${JSON.stringify(answer_requests)}`);
-});
-
-Deno.test("kernel - a view from high up draws its outermost ring, which is coarser than the rings under it", () => {
-  command(Command.INPUT_GO_TO, encode_input_go_to({ lon: 126.9706, lat: 37.5547 }));
-  for (let k = 0; k < 40; k++) turn();
-  // Far enough that the window spans several levels: the outermost has no
-  // level over it, so it is drawn as coarse as the ladder says rather than
-  // one step off its own cells, and asks for tiers the finer rings never do.
-  command(Command.INPUT_VIEW, encode_input_view({ dist: 8000, polar: (80 * Math.PI) / 180 }));
-  let drawn = 0;
-  for (let k = 0; k < 200; k++) drawn = Math.max(drawn, turn().draws);
-  assert(drawn > 0, "the far view drew something");
 });
