@@ -421,15 +421,37 @@ pub fn camera_step(ctx: &mut TickContext) {
 
 /// The change of camera mode the settings ask, taken: whether there was one.
 fn switch() -> bool {
-    let want = settings_store().camera_mode;
+    if !take_mode(settings_store().camera_mode) {
+        return false;
+    }
+    view_compose();
+    request_world_tick();
+    true
+}
+
+/// The change to camera mode `want`, as a change of the controllers' state
+/// alone: whether there was one. The map center the camera has now is the
+/// map center after — the other controller's camera put at it at once, its
+/// target there and its controls where it then is, so nothing eases away
+/// and no move under way in the one goes on in the other. A tracker holds
+/// the pose, and no base under it is moved in its place: the change is taken
+/// once it lets go, at the map center the base has then, so the new camera
+/// is never left unplaced.
+fn take_mode(want: CameraMode) -> bool {
     let c = controllers();
-    // A tracker holds the pose, and no base under it is moved in its place
-    // (`put_center`): the change is taken once it lets go, at the map center
-    // the base has then, so the new camera is never left unplaced.
     if c.base == want || c.tracked.is_some() {
         return false;
     }
-    let center = map_center();
+    // The drawn map center to the nearest point a canonical one holds, not
+    // the one under it the conversion rounds down to: a center derived as
+    // a hair under a point would otherwise step a 256th of a unit down every
+    // change, and a few round trips walk the character away.
+    let center = center_local().map(|local| {
+        let one = pxl_spec::space::pvf3::core::ONE as f64;
+        let mut c = Pvf3::default();
+        local_world_to_canonical(&mut c, &local.map(|v| (v * one).round() / one), view().origin);
+        c
+    });
     c.base = want;
     let cam = camera();
     if want == CameraMode::orbit {
@@ -440,9 +462,11 @@ fn switch() -> bool {
         });
     }
     if let Some(center) = center {
-        put_center(center, Motion::Snap);
+        match want {
+            CameraMode::orbit => crate::control::camera::orbit::put(center, true),
+            CameraMode::free => crate::control::camera::free::put(center, true),
+        }
     }
-    view_compose();
     true
 }
 
