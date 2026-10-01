@@ -33,7 +33,7 @@ use crate::control::camera::free::look_point;
 use crate::control::camera::orbit::orbit;
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
 use crate::global::Global;
-use crate::layer::terrain::ground_snap::{moved, walk};
+use crate::layer::terrain::ground_snap::walk;
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::{settings_store, CameraMode};
 use crate::world::change::request_world_tick;
@@ -214,13 +214,21 @@ pub fn pan(dx: f64, dy: f64) {
         Active::Orbit => camera_store().intent.dist,
         Active::Free | Active::Tracked => DEFAULT_DIST,
     };
-    let yaw = camera().yaw;
-    // The ground snap is the walk's support, in either person: off, the
-    // map center moves at its own height.
-    let to = match settings_store().ground_snap {
-        true => walk(&from, dx, dy, units_per_px_at(across), yaw),
-        false => moved(&from, dx, dy, units_per_px_at(across), yaw),
-    };
+    let (yaw, upp) = (camera().yaw, units_per_px_at(across));
+    // The map center is the character's place, on its support whatever the
+    // snap says. With the snap off third person keeps its eye's height
+    // instead: the eye walks level and the map center and the radius follow
+    // where its look meets the world, so the view does not ride the ground.
+    // First person's eye is the map center, and walks.
+    if active() == Active::Orbit && !settings_store().ground_snap {
+        if let Some((to, dist)) = crate::control::camera::orbit::level_pan(&from, dx, dy, upp, yaw) {
+            let c = camera_store();
+            c.commit_intent(Intent { dist, ..c.intent });
+            put_center(crate::control::camera::orbit::gate_pan(&to), Motion::Smooth);
+            return;
+        }
+    }
+    let to = walk(&from, dx, dy, upp, yaw);
     let to = match active() {
         Active::Orbit => crate::control::camera::orbit::gate_pan(&to),
         Active::Free | Active::Tracked => to,
