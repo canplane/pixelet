@@ -17,6 +17,13 @@
 //! they lack can be had. A page past the server's top level is not served,
 //! and a ray that needs one answers coarser, as the client's would.
 //!
+//! Each view's steps are also written as a heatmap in screen coordinates
+//! (`crates/target/ray_steps/<view>.ppm`, black none, through blue and green to
+//! white at the most any ray took): where on the screen the long rays lie —
+//! a line at the horizon, a whole slope, every ridge — decides more of what
+//! a GPU pays than their mean, since rays run in groups that wait on their
+//! longest.
+//!
 //!   cargo run --release -p pxl-kernel --example ray_steps -- [lon lat] [server]
 
 use std::cell::Cell;
@@ -59,9 +66,21 @@ struct View {
 }
 
 const VIEWS: [View; 3] = [
-    View { name: "from above", height: 1_500.0, pitch_deg: -89.9 },
-    View { name: "at 45°", height: 400.0, pitch_deg: -45.0 },
-    View { name: "street level", height: 1.0, pitch_deg: -5.0 },
+    View {
+        name: "from above",
+        height: 1_500.0,
+        pitch_deg: -89.9,
+    },
+    View {
+        name: "at 45°",
+        height: 400.0,
+        pitch_deg: -45.0,
+    },
+    View {
+        name: "street level",
+        height: 1.0,
+        pitch_deg: -5.0,
+    },
 ];
 
 /// Gives up no frame: what does not fit is refused, as residency would.
@@ -87,7 +106,9 @@ impl Pages {
             return false;
         }
         let url = format!("{}/tile/terrain/{}", self.server, page_name(p));
-        let Ok(out) = Command::new("sh").arg("-c").arg(format!("curl -sf '{url}' | zstd -dq")).output() else { return false };
+        let Ok(out) = Command::new("sh").arg("-c").arg(format!("curl -sf '{url}' | zstd -dq")).output() else {
+            return false;
+        };
         if !out.status.success() || out.stdout.is_empty() {
             return false;
         }
@@ -138,7 +159,13 @@ struct Tally {
 }
 
 fn cast(pages: &Pages, store: &Store, rays: &[Ray]) -> (Tally, Vec<LevelPage>) {
-    let mut t = Tally { steps: Vec::with_capacity(rays.len()), exact: 0, coarser: 0, nothing: 0, hit: 0 };
+    let mut t = Tally {
+        steps: Vec::with_capacity(rays.len()),
+        exact: 0,
+        coarser: 0,
+        nothing: 0,
+        hit: 0,
+    };
     let mut lacked = Vec::new();
     for ray in rays {
         let visits = Cell::new(0);
@@ -161,6 +188,25 @@ fn cast(pages: &Pages, store: &Store, rays: &[Ray]) -> (Tally, Vec<LevelPage>) {
         }
     }
     (t, lacked)
+}
+
+/// `steps`, in the rays' order — row by row from the screen's top — as an
+/// image of the screen at one pixel a ray, the brightest the longest.
+fn heatmap(name: &str, steps: &[u64]) {
+    let (w, h) = ((SCREEN_PT[0] / STRIDE_PT) as usize, (SCREEN_PT[1] / STRIDE_PT) as usize);
+    let most = steps.iter().copied().max().unwrap_or(1).max(1) as f64;
+    let mut out = format!("P6\n{w} {h}\n255\n").into_bytes();
+    for &n in steps {
+        // Black to blue to green to white, as the share of the longest grows.
+        let v = n as f64 / most;
+        let rgb = [(v * 3.0 - 2.0).clamp(0.0, 1.0), (v * 3.0 - 1.0).clamp(0.0, 1.0), (v * 3.0).clamp(0.0, 1.0)];
+        out.extend(rgb.map(|c| (c * 255.0) as u8));
+    }
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../target/ray_steps");
+    std::fs::create_dir_all(&dir).expect("the heatmaps' directory");
+    let file = dir.join(format!("{}.ppm", name.replace([' ', '°'], "_")));
+    std::fs::write(&file, out).expect("a heatmap");
+    println!("  heatmap: {}", file.display());
 }
 
 fn percentile(sorted: &[u64], q: f64) -> u64 {
@@ -212,6 +258,7 @@ fn main() {
             }
         }
         let mut t = tally.expect("one round at least");
+        heatmap(view.name, &t.steps);
         t.steps.sort_unstable();
         let n = t.steps.len();
         let mean = t.steps.iter().sum::<u64>() as f64 / n as f64;

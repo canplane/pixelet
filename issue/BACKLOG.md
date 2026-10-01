@@ -24,9 +24,13 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   stands behind a silhouette. No lane is added to a page until such a
   quantity is defined. The planet's horizon stays a separate, geometric
   limit.
-- **How the samples are drawn.** Raster against casting into the records,
-  on the iPhone 13 mini, with today's box format (36 unindexed vertices)
-  against faces alone.
+- **How the samples are drawn.** On the iPhone 13 mini, four shapes over the
+  same pages and views: today's boxes, the same as masked faces, a ray a
+  pixel, and a bounded observation a cell — what the rule asks for, a cell
+  being an angular footprint and not a sample point. The steps a cast pays
+  are measured already, and where on the screen they lie
+  ([20260928-what-is-drawn-is-what-the-screen-covers.md](./20260928-what-is-drawn-is-what-the-screen-covers.md),
+  "the steps, measured").
 
 ## P1
 
