@@ -136,14 +136,15 @@ pub fn tracking_action(tracking: Tracking) {
                 go_to_ground(device, Motion::Snap);
             }
             camera.is_follow_mode = false;
-            // Back to where the user is is back to the distance the view
-            // starts at, too.
-            crate::control::camera::controller::reset_dist();
+            // Back to where the user is: a view far out comes in to the
+            // distance it starts at, and one brought nearer stays, as the
+            // maps the button is from do. Following the heading, below,
+            // leaves the zoom alone.
+            crate::control::camera::controller::come_in_to_default();
         }
         Tracking::Follow => {
             if request_orientation(world_platform().orientation) {
                 camera.is_follow_mode = true;
-                crate::control::camera::controller::reset_dist();
             }
         }
         Tracking::Unfollow => {

@@ -354,6 +354,15 @@ pub fn reset_dist() {
     });
 }
 
+/// The distance the controls ask, no farther than its default: a view
+/// farther out comes in to it, and one the user brought nearer stays.
+pub fn come_in_to_default() {
+    let default = crate::control::camera::config::camera_cfg::view::DEFAULT_DIST;
+    if camera_store().intent.dist > default {
+        reset_dist();
+    }
+}
+
 /// Whether a zoom is in hand — the orbit's alone, as the free camera has
 /// none.
 pub fn zooming() -> bool {
