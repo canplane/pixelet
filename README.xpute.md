@@ -2,7 +2,7 @@
 
 xpute runs one program inside another. The **host** owns the machine — the clock, the memory, the I/O — and the **guest** computes and owns nothing. Everything the guest has, the host granted it, a slice at a time: the memory once at boot, and a quota of time on every turn. That is what an operating system has with a process, without the hardware that enforces it.
 
-**xpute is both ends of that arrangement, and `core`, the generic code underneath them.** All of it is written in Rust and in TypeScript, and `core` and a guest's end a third time, in C++.
+**xpute is both ends of that arrangement, and `core`, the generic code underneath them.** `core` is written in every language xpute has, and each end of `runtime` in the languages that end is built in.
 
 It was written for a program driven by TypeScript: compiled to one WebAssembly module in a browser tab, or linked into a native app. Nothing in xpute knows what that program computes.
 
@@ -37,7 +37,7 @@ What the guest cannot do itself — a file, a call to a device — it asks for i
 
 Golden records under `spec/xpute/golden/` hold the languages to each other wherever bytes cross.
 
-`runtime` is the arrangement above. Its host end and its guest end are the two ends of one thing, not two implementations of it: a module on one side with nothing facing it is not a gap to fill, and what the two owe each other is not matching module lists but matching formats. Its guest end exists twice, and those two are one end written in two languages, so they match as `core` does.
+`runtime` is the arrangement above. Its host end and its guest end are the two ends of one thing, not two implementations of it: a module on one side with nothing facing it is not a gap to fill, and what the two owe each other is not matching module lists but matching formats. Its guest end exists in more than one language, and those are one end, so they match as `core` does.
 
 ```text
 crates/xpute/core  ·  packages/xpute/core  ·  cpp/xpute/core     the same kit, in each language

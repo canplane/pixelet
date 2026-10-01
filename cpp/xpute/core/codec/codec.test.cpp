@@ -53,7 +53,7 @@ XPUTE_TEST(codec_hex_is_two_lowercase_digits_a_byte_and_reads_either_case) {
     XPUTE_CHECK(!hex_decode("zz", back).ok());
 }
 
-// FNV-1a's published values, which the other two languages compute too.
+// FNV-1a's published values, which the other languages compute too.
 XPUTE_TEST(codec_fnv1a64_is_the_published_word) {
     XPUTE_CHECK_EQ(fnv1a64(""), FNV64_OFFSET, "the empty string");
     XPUTE_CHECK_EQ(fnv1a64("a"), std::uint64_t{0xaf63dc4c8601ec8cu}, "\"a\"");

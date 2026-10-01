@@ -6,10 +6,10 @@
 // an array, a bitset are views of its bytes, and a branch is its cursor — so
 // nothing is allocated and the packet outlives what is read from it — save
 // `get_deep` and a string decoded into its own, which take the caller's
-// allocator, as the other two materialize a subtree whole.
+// allocator, as the other languages materialize a subtree whole.
 //
 // The packet need not be aligned in memory: an element is loaded where it
-// lies rather than viewed in place, which the other two need a word-aligned
+// lies rather than viewed in place, which the other languages need a word-aligned
 // packet for. Its nodes must be aligned within it, as the format says.
 
 #pragma once

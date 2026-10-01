@@ -54,12 +54,14 @@ erode by accident:
   works in any program; the runtime means a turn on a doorbell, a quota from
   the frame, I/O asked of the host. `runtime` depends on `core`, never the
   reverse.
-  `core` is symmetric across Rust, TypeScript and C++, and the golden
-  records under `spec/xpute/golden/` hold them to each other. `runtime`'s
-  host and guest are two ends of one arrangement, so a module missing on one
-  of those sides is not a gap to fill — only the format must agree; its Rust
-  and C++ guests are one end twice, and symmetric as `core` is, each in its
-  own language's shape.
+  `core` is symmetric across every language xpute is written in, and the
+  golden records under `spec/xpute/golden/` hold them to each other.
+  `runtime`'s host and guest are two ends of one arrangement, so a module
+  missing on one of those sides is not a gap to fill — only the format must
+  agree; its guests in different languages are one end, and symmetric as
+  `core` is, each in its own language's shape. Say it without a count: a
+  line that numbers the languages, the hosts or the guests is stale the day
+  one more arrives.
 - **`pxl-spec` is the one model and has no TypeScript twin.** The shell reads
   a page through the kernel, never by decoding one. What the shell holds — the
   cell catalog, the asset tables, the ABI enums — is generated into

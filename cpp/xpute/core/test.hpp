@@ -3,7 +3,7 @@
 // What the C++ tests are written with: a test is a function registered by its
 // name, and a check that fails says where and what, then stops the run — no
 // framework, since there are no exceptions to unwind to one and nothing to
-// gain from a runner the other two languages do not share. The tests are run
+// gain from a runner the other languages do not share. The tests are run
 // by script/cpp.ts, which builds them with the platform's compiler.
 
 #pragma once

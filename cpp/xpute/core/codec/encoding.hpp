@@ -1,7 +1,7 @@
 // cpp/xpute/core/codec/encoding.hpp
 
 // Bytes as text, the two ways the kit writes them: hex, lowercase, two digits
-// a byte; and base64url without padding, the form the other two languages
+// a byte; and base64url without padding, the form the other languages
 // write a blob in (@xpute/core codec/encoding.ts; Rust's `base64` crate at
 // URL_SAFE_NO_PAD). The standard library has neither, so they are here, as
 // TypeScript's are.
