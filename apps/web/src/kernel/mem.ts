@@ -17,7 +17,6 @@ import type { f64 } from "@xpute/core/abi/word.ts";
 import { Doorbell } from "@xpute/runtime/ipc/doorbell.ts";
 import { openCore } from "@platform/core.ts";
 import { key } from "@xpute/runtime/ipc/directory.spec.ts";
-import { key as kernel_key } from "@/kernel/abi/directory.spec.ts";
 import { type Core, directory } from "@/kernel/module.ts";
 import { run_host_stream } from "@/kernel/host.ts";
 
@@ -44,7 +43,7 @@ export let CORE_DOORBELL: Doorbell;
 export async function load_core(): Promise<void> {
   const core = await openCore();
   const dir = directory(core.buffer);
-  const host_stream = dir.get(kernel_key.HOST_STREAM);
+  const host_stream = dir.get(key.SYS);
   CORE = core;
   CORE_DOORBELL = new Doorbell(core.buffer, dir.get(key.SUBMISSION), dir.get(key.COMPLETION), (quota_ms) => {
     let wake: f64;

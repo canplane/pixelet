@@ -38,6 +38,8 @@ export const key = {
   BATCH_FRAMES: 4 as number,
   /** The quantum policy's settle time, in QUANTUM_SCALE of a millisecond. */
   SETTLE_MS: 5 as number,
+  /** Where the system-call stream's words begin (ipc/sys.json). */
+  SYS: 6 as number,
   /** The bit every key a program numbers for itself carries: xpute gives none of
    * them a meaning, and a host that is not the program's passes over them. */
   PROGRAM: 2147483648 as number,

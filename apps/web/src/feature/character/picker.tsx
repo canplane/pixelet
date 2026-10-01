@@ -7,7 +7,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { alpha, chrome, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
 import { CharacterPreview } from "@/feature/character/preview.tsx";
 import type { u32 } from "@xpute/core/abi/word.ts";
-import { Command, encode_setting_update } from "@/kernel/abi/cmd.spec.ts";
+import { Command, encode_setting_set } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, useKernel } from "@/kernel/shell.ts";
 import { SETTINGS } from "@/feature/setting/schema.ts";
 import { findPersonVariant, findPetVariant, type Gender, genderOf, GENDERS, personVariantNumbered, personVariantsOf, PET_VARIANTS } from "@/feature/character/variant.ts";
@@ -125,7 +125,7 @@ export function CharacterPicker() {
   const petVariant = useKernel((s) => s.settings[SETTINGS.pet.key] ?? -1);
   const personVariantKey = personVariantNumbered(personVariant)?.key ?? "";
   const petVariantKey = PET_VARIANTS.find((v) => v.number === petVariant)?.key ?? "";
-  const setSetting = (key: u32, value: u32) => kernel_command(Command.SETTING_UPDATE, encode_setting_update({ key, value }));
+  const setSetting = (key: u32, value: u32) => kernel_command(Command.SETTING_SET, encode_setting_set({ key, value }));
 
   // Opens on whichever gender the current selection already belongs to,
   // not always the first — so a variant of another picked earlier doesn't

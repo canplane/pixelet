@@ -22,7 +22,7 @@ export const PUBLISHED_VERSION = {
 
 export type BakeKind = keyof typeof PUBLISHED_VERSION;
 
-/** The kinds by the number the kernel names one by (FETCH_CREATE's `bake`). */
+/** The kinds by the number the kernel names one by (FETCH_START's `bake`). */
 export const BAKE_KINDS: readonly BakeKind[] = ["terrain", "poi", "geocode"];
 
 /** What a tile source declares of itself: SOURCE's shape, which the dev tile

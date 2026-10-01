@@ -14,25 +14,23 @@ import { assert, assertEquals } from "@std/assert";
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { TreeReader } from "@xpute/core/wire/xtp/mod.ts";
 import { FetchFail } from "@xpute/runtime/abi/fetch.spec.ts";
+import { Command as XputeCommand, encode_fetch_done, FetchOutcome, read_fetch_start } from "@xpute/runtime/abi/cmd.spec.ts";
 import {
   Command,
-  encode_fetch_update,
-  encode_gpu_create,
+  encode_gpu_ready,
   encode_input_go_to,
   encode_input_view,
-  encode_load_delete,
+  encode_load_failed,
+  encode_setting_set,
   encode_setting_toggle,
-  encode_setting_update,
-  encode_world_create,
+  encode_world_boot,
+  encode_world_frame,
   encode_world_source,
-  encode_world_update,
-  FetchOutcome,
   MapStatus,
-  read_fetch_create,
-  read_load_create,
+  read_load_start,
   read_snapshot,
+  read_world_frame,
   read_world_snapshot,
-  read_world_update,
   type Snapshot,
 } from "@/kernel/abi/cmd.spec.ts";
 import { cube_types } from "@/catalog/cell/cube_type.spec.ts";
@@ -43,7 +41,7 @@ import { ELE_PADDED_SPAN, encode_terrain, pack_ground_cell, PAGE_CELLS } from "@
 
 import { CORE, CORE_DOORBELL, load_core } from "@/kernel/mem.ts";
 import { key as entry } from "@/kernel/abi/directory.spec.ts";
-import { bytes_at, directory, hold_body } from "@/kernel/module.ts";
+import { BODIES, bytes_at, directory } from "@/kernel/module.ts";
 import { acquireDevice } from "@/platform/web/webgpu.ts";
 
 // The module the tests drive, loaded before any of them reads it.
@@ -83,11 +81,11 @@ CORE_DOORBELL.signal = (_tag, cmd, f) => {
   if (cmd === Command.WORLD_SNAPSHOT) {
     const { at, len } = read_world_snapshot(f!);
     snapshot = read_snapshot(new TreeReader(bytes_at(CORE.buffer, at, len)).read_branch());
-  } else if (cmd === Command.WORLD_UPDATE) draws = read_world_update(f!).draws;
-  else if (cmd === Command.FETCH_CREATE) {
-    const { key, bake, name } = read_fetch_create(f!);
+  } else if (cmd === Command.WORLD_FRAME) draws = read_world_frame(f!).draws;
+  else if (cmd === XputeCommand.FETCH_START) {
+    const { key, source: bake, name } = read_fetch_start(f!);
     fetched.push({ key, bake, name, category: category_of(bake, name) });
-  } else if (cmd === Command.LOAD_CREATE) loads.push(read_load_create(f!).key);
+  } else if (cmd === Command.LOAD_START) loads.push(read_load_start(f!).key);
 };
 
 /** A page's body as the bake encodes it: a rolling elevation raster and
@@ -124,8 +122,8 @@ function answer(f: Fetched, outcome: FetchOutcome, body: U8Array | null): void {
   const requests = heap_row[HEAP_REQUESTS];
   try {
     const bytes = body?.byteLength ?? 0;
-    const held = body !== null && bytes > 0 ? hold_body(body) : 0;
-    CORE_DOORBELL.send(0, Command.FETCH_UPDATE, encode_fetch_update({ key: f.key, outcome, body: held, body_bytes: bytes, fail: FetchFail.None, detail: 0, net_ms: 0 }));
+    const held = body !== null && bytes > 0 ? BODIES.hold(body) : 0;
+    CORE_DOORBELL.send(0, XputeCommand.FETCH_DONE, encode_fetch_done({ key: f.key, outcome, body: held, body_bytes: bytes, fail: FetchFail.None, detail: 0, net_ms: 0 }));
     CORE_DOORBELL.ring(0);
   } finally {
     answer_requests[f.category] = (answer_requests[f.category] ?? 0) + heap_row[HEAP_REQUESTS] - requests;
@@ -133,7 +131,7 @@ function answer(f: Fetched, outcome: FetchOutcome, body: U8Array | null): void {
 }
 
 function fail(f: Fetched): void {
-  CORE_DOORBELL.send(0, Command.FETCH_UPDATE, encode_fetch_update({ key: f.key, outcome: FetchOutcome.Error, body: 0, body_bytes: 0, fail: FetchFail.Network, detail: 0, net_ms: 0 }));
+  CORE_DOORBELL.send(0, XputeCommand.FETCH_DONE, encode_fetch_done({ key: f.key, outcome: FetchOutcome.Error, body: 0, body_bytes: 0, fail: FetchFail.Network, detail: 0, net_ms: 0 }));
   CORE_DOORBELL.ring(0);
 }
 
@@ -144,8 +142,8 @@ function turn(delta = 1 / 60): Turn {
   const requests = heap_row[HEAP_REQUESTS];
   CORE_DOORBELL.send(
     0,
-    Command.WORLD_UPDATE,
-    encode_world_update({ width: 1280, height: 720, dpr: 1, delta_s: delta, frame_ms: 1000 / 60, interactive: true, credits: 6, unix_ms: 0, hours: 12, minutes: 0, seconds: 0, day_start_ms: 0 }),
+    Command.WORLD_FRAME,
+    encode_world_frame({ width: 1280, height: 720, dpr: 1, delta_s: delta, frame_ms: 1000 / 60, interactive: true, credits: 6, unix_ms: 0, hours: 12, minutes: 0, seconds: 0, day_start_ms: 0 }),
   );
   CORE_DOORBELL.ring(8);
   strobe_requests += heap_row[HEAP_REQUESTS] - requests;
@@ -156,7 +154,7 @@ function turn(delta = 1 / 60): Turn {
   }
   // An asset's read is a read: it is settled by the key it was started with,
   // and the kernel asks again in its own time.
-  for (const key of loads) CORE_DOORBELL.send(0, Command.LOAD_DELETE, encode_load_delete({ key }));
+  for (const key of loads) CORE_DOORBELL.send(0, Command.LOAD_FAILED, encode_load_failed({ key }));
   assert(snapshot !== null, "the kernel posted its snapshot");
   return { snapshot, fetched: started, draws };
 }
@@ -168,8 +166,8 @@ function command(cmd: Command, pkt?: U8Array): void {
 }
 
 CORE_DOORBELL.call(
-  Command.WORLD_CREATE,
-  encode_world_create({
+  Command.WORLD_BOOT,
+  encode_world_boot({
     development: false,
     handheld: false,
     geolocation: false,
@@ -215,7 +213,7 @@ Object.defineProperty(navigator, "gpu", {
 });
 const device = await acquireDevice(() => {});
 assert(device, "the stand-in device answered");
-CORE_DOORBELL.send(0, Command.GPU_CREATE, encode_gpu_create({ min_uniform_offset_alignment: device.align, timestamps: device.timestamps }));
+CORE_DOORBELL.send(0, Command.GPU_READY, encode_gpu_ready({ min_uniform_offset_alignment: device.align, timestamps: device.timestamps }));
 CORE_DOORBELL.ring(0);
 turn();
 console.log(`heap: through the first turn ${heap_row[HEAP_REQUESTS]} requests, top ${heap_row[HEAP_TOP]}`);
@@ -265,7 +263,7 @@ Deno.test("kernel - the settings commands reach the snapshot", () => {
   const before = turn().snapshot.settings[tilt];
   command(Command.SETTING_TOGGLE, encode_setting_toggle({ key: tilt }));
   assertEquals(turn().snapshot.settings[tilt], 1 - before);
-  command(Command.SETTING_UPDATE, encode_setting_update({ key: tilt, value: before }));
+  command(Command.SETTING_SET, encode_setting_set({ key: tilt, value: before }));
   assertEquals(turn().snapshot.settings[tilt], before);
 });
 

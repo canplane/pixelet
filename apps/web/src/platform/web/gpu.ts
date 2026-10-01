@@ -7,7 +7,7 @@
  * through its own and is told nothing from here.
  */
 
-import { Command, encode_gpu_create } from "@/kernel/abi/cmd.spec.ts";
+import { Command, encode_gpu_ready } from "@/kernel/abi/cmd.spec.ts";
 import { CORE_DOORBELL } from "@/kernel/mem.ts";
 import { acquireDevice } from "@/platform/web/webgpu.ts";
 import { request_frame } from "@/kernel/sched.ts";
@@ -46,7 +46,7 @@ function askAgain(): void {
  * one is lost. */
 export function gpuBoot(): void {
   const lost = () => {
-    CORE_DOORBELL.send(0, Command.GPU_DELETE);
+    CORE_DOORBELL.send(0, Command.GPU_LOST);
     askAgain();
     request_frame();
   };
@@ -58,7 +58,7 @@ export function gpuBoot(): void {
     }
     if (tries > 1) console.info(`[gpu] a device answered after ${tries} requests`);
     tries = 0;
-    CORE_DOORBELL.send(0, Command.GPU_CREATE, encode_gpu_create({ min_uniform_offset_alignment: info.align, timestamps: info.timestamps }));
+    CORE_DOORBELL.send(0, Command.GPU_READY, encode_gpu_ready({ min_uniform_offset_alignment: info.align, timestamps: info.timestamps }));
     request_frame();
   }, (err) => console.error("[gpu] the device request failed; nothing can be drawn:", err));
 }

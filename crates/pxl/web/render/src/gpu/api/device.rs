@@ -86,7 +86,7 @@ fn decode_webp(file: &[u8]) -> Option<Image> {
     Some(Image { width, height, pixels })
 }
 
-/// What the device answers the kernel with (the shell's GPU_CREATE).
+/// What the device answers the kernel with (the shell's GPU_READY).
 #[derive(Clone, Copy, Debug)]
 pub struct DeviceInfo {
     pub align: u32,

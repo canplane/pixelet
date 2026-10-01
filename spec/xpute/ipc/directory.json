@@ -43,6 +43,7 @@
     "MARGIN_SHARE": { "$value": 3, "$doc": ["The quantum policy's margin share (sched/quantum.rs), in QUANTUM_SCALE."] },
     "BATCH_FRAMES": { "$value": 4, "$doc": ["The quantum policy's batch frames, in QUANTUM_SCALE."] },
     "SETTLE_MS": { "$value": 5, "$doc": ["The quantum policy's settle time, in QUANTUM_SCALE of a millisecond."] },
+    "SYS": { "$value": 6, "$doc": ["Where the system-call stream's words begin (ipc/sys.json)."] },
     "PROGRAM": {
       "$value": 2147483648,
       "$doc": [
