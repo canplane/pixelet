@@ -204,16 +204,15 @@ fn handle_tap(hovered: Pvf3) {
 
     match ui.active_tool {
         ActiveTool::Pointer => {
-            // Recenter on the center of the cube the tap names: an object's own
-            // center, or the center of the cube standing on the struck ground,
-            // pivoted by the ground's own rule — what every pan, the bootstrap
-            // and follow mode set too, so a pan after a terrain tap changes
-            // nothing.
-            let hovered_object = camera_store().hovered_object_at.and_then(get_placed_object);
-            let target = match hovered_object {
+            // Recenter where a walker would stand over what the tap struck —
+            // an object or the ground, only its X/Y — pivoted by the ground's
+            // own rule, what every pan, the bootstrap and follow mode set
+            // too, so a pan after a tap changes nothing.
+            let struck = match camera_store().hovered_object_at.and_then(get_placed_object) {
                 Some(o) => object_center(&o, local_world_origin()),
-                None => ground_or_raw(&anchor_center(&hovered)),
+                None => anchor_center(&hovered),
             };
+            let target = ground_or_raw(&struck);
             crate::control::navigation::destination::go_to(target, crate::control::camera::controller::Motion::Smooth);
         }
         ActiveTool::Eraser => {

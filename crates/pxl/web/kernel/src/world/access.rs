@@ -52,6 +52,7 @@ use pxl_spec::space::lod::Tau;
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::pvf3::REACH;
 use pxl_spec::space::pyramid::{Cell, LevelPage, EXTENT, GROUND, TOP_LEVEL};
 use pxl_spec::space::v3::{Aabb, V3};
 use pxl_spec::space::xy::TO_XY;
@@ -146,6 +147,15 @@ impl<T> Answer<T> {
             Answer::Coarser(_, l) | Answer::Nothing(l) => Some(*l),
         }
     }
+
+    /// The same answer of what `f` makes of its value.
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Answer<U> {
+        match self {
+            Answer::Exact(v) => Answer::Exact(f(v)),
+            Answer::Coarser(v, l) => Answer::Coarser(f(v), l),
+            Answer::Nothing(l) => Answer::Nothing(l),
+        }
+    }
 }
 
 /// What a node says of the ground over it (`Access::relief`).
@@ -178,6 +188,20 @@ pub struct Ground {
 struct Lines {
     boxes: Vec<[f64; 2]>,
     air: Option<[f64; 2]>,
+}
+
+/// A z16 cell column as the world composes it: the ground drawn there, the
+/// lines over it, and where its objects are filed — what a ray through the
+/// column and a footing on it both read, so the ground, a bore and a deck
+/// are composed once. The objects are read at the resolution each asks: a
+/// ray at their own boxes, a footing as they fold to the cell.
+struct Composed {
+    cell: [i64; 2],
+    top: f64,
+    lines: Lines,
+    col_idx: IVec,
+    /// The cell's place in its column of objects.
+    local: [i64; 2],
 }
 
 /// A ray, in units: where it starts, a unit direction, and how far along it
@@ -288,6 +312,74 @@ impl<'a> Access<'a> {
     /// in, as the chunk there paints it (`Ground`).
     pub fn at(&self, at: &Pvf3, level: u32) -> Answer<Ground> {
         self.ground(GROUND.cell_of(level, at))
+    }
+
+    /// Where a thing stands at `at`: what a walker, the location puck and a
+    /// move's destination stand on. It is asked on the 1u lattice, the cell
+    /// the ground and a carve are made in: a cell of the column is solid where
+    /// its objects fold to a solid there, empty where they fold to air, and
+    /// otherwise the ground's — under its top and out of a bore's air — or a
+    /// deck's. What is placed finer than a cell counts only as it folds, so a
+    /// small cube or a small bite is what is seen and picked and not what is
+    /// stood on, and decor is nothing to stand on.
+    ///
+    /// From the surface drawn there it goes down through the empty cells
+    /// under it to the first solid's top — a carve, a bore come out at the
+    /// surface — or up through the solid cells over it to where they end — a
+    /// stack of cubes — or stays. Only what touches the surface moves it: a
+    /// deck with air under it, or a bore with ground over it, leaves a thing
+    /// on the surface, since nothing says it is on the one or in the other.
+    pub fn support(&self, at: &Pvf3) -> Answer<f64> {
+        let [ix, iy, _] = CELL.index_of(at);
+        self.composed([ix, iy]).map(|c| {
+            let side = CELL.side();
+            let top = (c.top / side).round() as i64;
+            let solid = |cz: i64| {
+                let v = u32::from(self.objects.folded_value(CELL, [ix, iy, cz]));
+                if object_value_is_voxel(v) {
+                    return !object_value_is_air(v);
+                }
+                let z = cz as f64 * side;
+                let inside = |[lo, hi]: [f64; 2]| z >= lo && z < hi;
+                (cz < top && !c.lines.air.is_some_and(inside)) || c.lines.boxes.iter().any(|&b| inside(b))
+            };
+            // As far as a position reaches, so a shaft or a stack of any
+            // height is followed to its end.
+            let [lo, hi] = [REACH.min[2] / side, REACH.max[2] / side].map(|z| z as i64);
+            let stand = if !solid(top - 1) {
+                (lo..top - 1).rev().find(|&cz| solid(cz)).map_or(top, |cz| cz + 1)
+            } else if solid(top) {
+                (top + 1..hi).find(|&cz| !solid(cz)).unwrap_or(top)
+            } else {
+                top
+            };
+            stand as f64 * side
+        })
+    }
+
+    /// The z16 column `cell`, composed.
+    fn composed(&self, cell: [i64; 2]) -> Answer<Composed> {
+        let [ix, iy] = cell;
+        let base = CELL.base_of([ix, iy, 0]);
+        let ground = self.ground(GROUND.cell_of(0, &base));
+        let [kx, ky, _] = L2.index_of(&base);
+        let col_idx = L2_IDX(TO_XY(base.i));
+        let local = [ix - kx * cells_across(), iy - ky * cells_across()];
+        ground.map(|g| Composed {
+            cell,
+            top: g.top,
+            lines: self.lines_over(GROUND.cell_of(0, &base), g.top),
+            col_idx,
+            local,
+        })
+    }
+
+    /// Whether the column's cell at height `cz` is ground where the ground
+    /// reaches it: neither in the air a bore takes out nor taken by an
+    /// object's voxel entry, air as much as a solid.
+    fn holds(&self, c: &Composed, cz: i64) -> bool {
+        let z = cz as f64 * CELL.side();
+        !c.lines.air.is_some_and(|[lo, hi]| z >= lo && z < hi) && !self.taken(c.col_idx, c.local, cz)
     }
 
     /// The ground a cell draws, from its page or the nearest resident page
@@ -596,11 +688,9 @@ impl<'a> Access<'a> {
     /// `cell` while it is over it, between `t0` and `t1`.
     fn column(&self, ray: &Ray, [ix, iy]: [i64; 2], t0: f64, t1: f64) -> Option<Hit> {
         let side = CELL.side();
-        let cell = GROUND.cell_of(0, &CELL.base_of([ix, iy, 0]));
-        let top = self.ground(cell).value()?.top;
-        let lines = self.lines_over(cell, top);
-        let ground = self.ground_column(ray, [ix, iy], (top, lines.air), t0, t1);
-        self.with_decks(ray, &lines.boxes, ([ix as f64 * side, iy as f64 * side], side), (t0, t1), ground)
+        let c = self.composed([ix, iy]).value()?;
+        let ground = self.ground_column(ray, &c, t0, t1);
+        self.with_decks(ray, &c.lines.boxes, ([ix as f64 * side, iy as f64 * side], side), (t0, t1), ground)
     }
 
     /// Where the ray first meets the ground in z16 cell column `cell` while
@@ -610,10 +700,9 @@ impl<'a> Access<'a> {
     /// stepped a cell of height at a time only once it is under the top.
     /// What the ray starts inside is not met, and nor is the air a bore
     /// takes out of the column.
-    fn ground_column(&self, ray: &Ray, [ix, iy]: [i64; 2], (top, air): (f64, Option<[f64; 2]>), t0: f64, t1: f64) -> Option<Hit> {
-        let solid = |cz: i64| !air.is_some_and(|[lo, hi]| (cz as f64) * CELL.side() >= lo && (cz as f64) * CELL.side() < hi);
+    fn ground_column(&self, ray: &Ray, c: &Composed, t0: f64, t1: f64) -> Option<Hit> {
+        let ([ix, iy], top) = (c.cell, c.top);
         let side = CELL.side();
-        let base = CELL.base_of([ix, iy, 0]);
         let (za, zb) = (ray.at(t0)[2], ray.at(t1)[2]);
         let dz = ray.direction[2];
         let at_z = |z: f64| (z - ray.origin[2]) / dz;
@@ -624,11 +713,8 @@ impl<'a> Access<'a> {
             }
             from = at_z(top);
         }
-        let [kx, ky, _] = L2.index_of(&base);
-        let col_idx = L2_IDX(TO_XY(base.i));
-        let (cx, cy) = (ix - kx * cells_across(), iy - ky * cells_across());
         let mut cz = (ray.at(from)[2] / side).floor() as i64;
-        if from <= 0.0 && solid(cz) && !self.taken(col_idx, [cx, cy], cz) {
+        if from <= 0.0 && self.holds(c, cz) {
             // It starts inside the ground.
             return None;
         }
@@ -639,7 +725,7 @@ impl<'a> Access<'a> {
                 let face = if dz > 0.0 { (cz + 1) as f64 * side } else { cz as f64 * side };
                 at_z(face).min(t1)
             };
-            if (cz as f64) * side < top && from > 0.0 && solid(cz) && !self.taken(col_idx, [cx, cy], cz) {
+            if (cz as f64) * side < top && from > 0.0 && self.holds(c, cz) {
                 // In through the column's side where this is the cell the ray
                 // came into the column at, and through the cell's floor or
                 // ceiling past it.

@@ -20,7 +20,8 @@ use crate::kernel::{kernel, with_world};
 use crate::layer::environment::fog::view_reach;
 use crate::layer::environment::theme::Theme;
 use crate::layer::environment::theme_clock::theme_key;
-use crate::world::access::{Access, FINEST};
+use crate::layer::object::store::objects_revision;
+use crate::world::access::Access;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::table::Frame;
 use crate::world::pyramid::Layer as _;
@@ -78,10 +79,10 @@ struct Puck {
     /// Not yet grounded gates drawing, instead of drawing the marker at a
     /// guessed height while the device's own page isn't loaded yet.
     last_known_center_z: Option<f64>,
-    /// The zone as last written: its center, and the tiles it was grounded
-    /// against. A zone sample can reach a page not yet loaded; a page arriving
-    /// grounds it again.
-    zone_for: Option<(V3, u32)>,
+    /// The zone as last written: its center, and the tiles and the objects it
+    /// was grounded against. A zone sample can reach a page not yet loaded; a
+    /// page arriving, or an object placed or carved, grounds it again.
+    zone_for: Option<(V3, u32, u32)>,
     beacon_for: Option<([f64; 2], bool)>,
     shown: bool,
 }
@@ -107,8 +108,9 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
 
     let mut pos = [0.0; 3];
     projection::unproject(&mut pos, device.i, device.f);
-    if let Some(ground) = Access::now().at(&device, FINEST).value() {
-        p.last_known_center_z = Some(ground.top);
+    // What a walker would stand on there (world/access.rs `support`).
+    if let Some(z) = Access::now().support(&device).value() {
+        p.last_known_center_z = Some(z);
     }
     let Some(center_z) = p.last_known_center_z else {
         return clear(p);
@@ -117,9 +119,9 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
     let mut center_pos = [0.0; 3];
     floor3n(&raw, U_PER_CELL, &mut center_pos);
 
-    let tiles = Terrain::pyramid().revision();
-    if p.zone_for != Some((center_pos, tiles)) {
-        p.zone_for = Some((center_pos, tiles));
+    let (tiles, objects) = (Terrain::pyramid().revision(), objects_revision());
+    if p.zone_for != Some((center_pos, tiles, objects)) {
+        p.zone_for = Some((center_pos, tiles, objects));
         let mut lane: Vec<f32> = Vec::with_capacity(p.samples.len() * 7);
         let mut v = [0.0; 3];
         for s in &p.samples {
@@ -129,7 +131,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
             // Falls back to flat (center height) rather than 0 when a sample
             // lands on an unloaded neighboring page — absolute 0 would sink or
             // launch that instance away from the rest of the zone.
-            let delta_ele = Access::now().at(&coord, FINEST).value().map_or(center_pos[2], |g| g.top) - center_pos[2];
+            let delta_ele = Access::now().support(&coord).value().unwrap_or(center_pos[2]) - center_pos[2];
             let lifted = [s.off[0], s.off[1], s.off[2] + delta_ele];
             center3n(&lifted, U_PER_CELL, &mut v);
             lane.extend([

@@ -23,15 +23,11 @@
 //! Assets: Kenney's "Mini Characters" (person) and "Cube Pets" (pet) packs,
 //! both CC0, both real glTF.
 
-use pxl_spec::bake::constant::U_PER_CELL;
-use pxl_spec::cell::object::object_value_is_air;
-use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::xy::TO_XY;
 
-use crate::control::camera::config::camera_cfg;
 use crate::control::camera::approach::damp_alpha;
+use crate::control::camera::config::camera_cfg;
 use crate::control::camera::store::{camera_store, CameraStatus};
 use crate::global::Global;
 use crate::io::load::{load_gltf, load_image, Load};
@@ -42,10 +38,10 @@ use crate::layer::character::store::companion_load_store;
 use crate::layer::character::variant::{character_variant, CharacterGroup, CharacterVariant};
 use crate::layer::character::variant_spec::IDLE_CLIP;
 use crate::layer::model::asset::{register_model, ModelHandle};
-use crate::layer::object::store::{each_col_entry, objects_revision};
+use crate::layer::object::store::objects_revision;
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::settings_store;
-use crate::world::access::{Access, FINEST};
+use crate::world::access::Access;
 use crate::world::change::wake_at;
 use crate::world::frame::coord::{local_height, local_world_to_canonical};
 use crate::world::frame::view::view;
@@ -129,7 +125,6 @@ struct Held {
 struct Surface {
     x: f64,
     y: f64,
-    hint: f64,
     origin: Option<IVec>,
     revision: u32,
     tiles: u32,
@@ -178,7 +173,6 @@ impl Walker {
             surface: Surface {
                 x: f64::NAN,
                 y: f64::NAN,
-                hint: f64::NAN,
                 origin: None,
                 revision: u32::MAX,
                 tiles: u32::MAX,
@@ -221,7 +215,7 @@ impl Walker {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn step(&mut self, ctx: &TickContext, variant: &CharacterVariant, map_origin: IVec, target: Vec2, target_z: f64, is_follow_mode: bool) {
+    fn step(&mut self, ctx: &TickContext, variant: &CharacterVariant, map_origin: IVec, target: Vec2, is_follow_mode: bool) {
         self.acquire(variant, target);
         if self.held.is_none() {
             return;
@@ -342,21 +336,19 @@ impl Walker {
         self.was_follow_mode = is_follow_mode;
         self.was_dragging = dragging;
 
-        // Z aligns to the surface under the walker — terrain, or the top of a
-        // placed object standing on it, whichever is higher. Asked again only
-        // when something it depends on moved.
+        // Z is what the walker stands on there (world/access.rs `support`):
+        // asked again only when something it depends on moved.
         let s = &mut self.surface;
         let revision = objects_revision();
         let tiles = Terrain::pyramid().revision();
-        if s.x != px || s.y != py || s.hint != target_z || s.origin != Some(map_origin) || s.revision != revision || s.tiles != tiles {
+        if s.x != px || s.y != py || s.origin != Some(map_origin) || s.revision != revision || s.tiles != tiles {
             *s = Surface {
                 x: px,
                 y: py,
-                hint: target_z,
                 origin: Some(map_origin),
                 revision,
                 tiles,
-                z: footing(map_origin, px, py, target_z),
+                z: footing(map_origin, px, py),
             };
         }
         self.pose[0] = px;
@@ -402,7 +394,6 @@ pub struct CompanionProps {
     pub map_origin: IVec,
     pub center_x: f64,
     pub center_y: f64,
-    pub center_z: f64,
 }
 
 fn walker_for<'a>(slot: &'a mut Option<Walker>, variant: &CharacterVariant, target: Vec2, map_origin: IVec) -> &'a mut Walker {
@@ -436,7 +427,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
 
     let person_target = Vec2 { x: p.center_x, y: p.center_y };
     let person = walker_for(&mut c.person, person_variant, person_target, p.map_origin);
-    person.step(ctx, person_variant, p.map_origin, person_target, p.center_z, is_follow_mode);
+    person.step(ctx, person_variant, p.map_origin, person_target, is_follow_mode);
     // Only the person talks — the pet doesn't get a chat bubble.
     chat_bubble_step(person.held.as_ref().map(|h| h.actor), person_variant.height_u);
 
@@ -445,7 +436,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
         y: p.center_y + PET_OFFSET.y,
     };
     let pet = walker_for(&mut c.pet, pet_variant, pet_target, p.map_origin);
-    pet.step(ctx, pet_variant, p.map_origin, pet_target, p.center_z, is_follow_mode);
+    pet.step(ctx, pet_variant, p.map_origin, pet_target, is_follow_mode);
 }
 
 /// Which skin each live companion model is drawn with: (model, image handle),
@@ -457,95 +448,11 @@ pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
 
 // ---- where a walker stands ----
 
-// Two Z values within this of each other count as "flush" — guards the climb
-// loop against re-finding the object that just set `surface` on the next pass,
-// and the "is this actually resting there" / "is this at or past the hint"
-// checks below, against float noise from PVF3 round-trips.
-const SAME_SURFACE_EPS: f64 = 1e-6;
-
-/// The z extents of every placed object whose footprint covers a local XY,
-/// gathered in one pass over the column the point stands in.
-///
-/// One pass rather than a 27-cell neighborhood query at each step upward: with
-/// nothing placed at the XY a probe runs to its 64-cell guard on every call,
-/// and the companion asks twice a frame. A placed object is at most a cell and
-/// lies inside one, so one whose footprint covers the point is in the point's
-/// own column.
-fn boxes_over(map_origin: IVec, local_x: f64, local_y: f64) -> Vec<(f64, f64)> {
-    let mut boxes = Vec::new();
+/// The height a walker stands at over a local XY (world/access.rs
+/// `support`), in the local frame. None where no page over the point is
+/// resident.
+fn footing(map_origin: IVec, local_x: f64, local_y: f64) -> Option<f64> {
     let mut at = Pvf3::default();
     local_world_to_canonical(&mut at, &[local_x, local_y, 0.0], map_origin);
-    let col_idx = L2_IDX(TO_XY(at.i));
-    // The column's corner in the local frame; entries are relative to it.
-    let [bx, by, bz] = crate::world::frame::coord::offset(FROM_L2_IDX(col_idx), map_origin);
-    each_col_entry(col_idx, &mut |entry| {
-        if object_value_is_air(entry.state) {
-            return;
-        }
-        let (x0, y0) = (bx + entry.lx, by + entry.ly);
-        if local_x < x0 || local_x >= x0 + entry.size || local_y < y0 || local_y >= y0 + entry.size {
-            return;
-        }
-        let z0 = bz + entry.lz;
-        boxes.push((z0, z0 + entry.size));
-    });
-    boxes
-}
-
-/// The height a walker stands at over a local XY: the ground drawn there
-/// (world/access.rs), or the top of a placed object standing on it — walking
-/// onto a placed block, or a stack of them, stands on top. None where no page
-/// over the point is resident.
-///
-/// `hint_z` is roughly where the walker's target is vertically — used only to
-/// pick *which* shelf to land on when the stack at this XY has a gap in it:
-/// scans upward from the hint for the lowest object whose top is at or above
-/// it, i.e. snaps up past a gap onto the next real platform rather than always
-/// defaulting to the first one reachable from the ground. Once landed, still
-/// climbs any further objects resting flush on top of that shelf, so the
-/// walker ends up on the true top of whatever contiguous structure it's
-/// standing on. Falls back to climbing from the ground when nothing qualifies
-/// above the hint.
-fn footing(map_origin: IVec, local_x: f64, local_y: f64, hint_z: f64) -> Option<f64> {
-    let mut at = Pvf3::default();
-    local_world_to_canonical(&mut at, &[local_x, local_y, 0.0], map_origin);
-    let ground = local_height(Access::now().at(&at, FINEST).value()?.top, map_origin);
-    let boxes = boxes_over(map_origin, local_x, local_y);
-    if boxes.is_empty() {
-        return Some(ground);
-    }
-
-    // Snap-up: the lowest top at or above the hint, among boxes from the cell
-    // below where the search starts — what stepping upward from there found.
-    let search_from = hint_z.max(ground);
-    let floor_z = ((search_from / U_PER_CELL).floor() - 1.0) * U_PER_CELL;
-    let mut landing: Option<f64> = None;
-    for &(min_z, max_z) in &boxes {
-        if min_z < floor_z || max_z < hint_z - SAME_SURFACE_EPS {
-            continue;
-        }
-        if landing.is_none_or(|l| max_z < l) {
-            landing = Some(max_z);
-        }
-    }
-
-    let mut surface = landing.unwrap_or(ground);
-
-    // Climb any further objects resting flush on top of the landing spot. Each
-    // pass lifts the surface past at least one box, so it ends within the box
-    // count.
-    for _ in 0..boxes.len() {
-        let mut top: Option<f64> = None;
-        for &(min_z, max_z) in &boxes {
-            if min_z > surface + SAME_SURFACE_EPS || max_z <= surface + SAME_SURFACE_EPS {
-                continue;
-            }
-            if top.is_none_or(|t| max_z > t) {
-                top = Some(max_z);
-            }
-        }
-        let Some(top) = top else { break };
-        surface = top;
-    }
-    Some(surface)
+    Some(local_height(Access::now().support(&at).value()?, map_origin))
 }

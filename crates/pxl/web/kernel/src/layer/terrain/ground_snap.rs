@@ -6,23 +6,21 @@
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 
-use crate::world::access::{Access, FINEST};
+use crate::world::access::Access;
 
-/// Where the camera's pivot sits on the ground at a coordinate's X/Y: the
-/// center of the cube standing on the ground drawn there — the cell the
-/// character occupies, the cell a placement's ghost fills — its original Z
-/// discarded. None where no page over it is resident.
+/// Where the camera's pivot sits at a coordinate's X/Y: the center of the
+/// cube standing on what supports a walker there (world/access.rs
+/// `support`) — the cell the character occupies — its original Z discarded.
+/// None where no page over it is resident.
 ///
-/// A center, not the top face, because everything the camera pivots on is a
-/// cube: a tap on an object pivots on that cube's center
-/// (object/geometry.rs's object_center), and a tap on the ground on the
-/// center of the cube above it (camera/input). A pivot that merely sits on
-/// the ground has to agree with those, or the first pan after a tap moves the
-/// camera by the half cell between the two. Standing things (the puck,
-/// decor, a place) are grounded to the top face itself; this is the one
-/// place the camera's own convention is applied.
+/// A center, not the top face, because the camera pivots on the cube the
+/// character would fill. Every map center an interaction sets — a pan, a
+/// tap, the GPS recenter — is this one, so the first pan after a tap moves
+/// nothing. Standing things (the puck, decor, a place) are grounded to the
+/// top face itself; this is the one place the camera's own convention is
+/// applied.
 pub fn ground_pivot(at: &Pvf3) -> Option<Pvf3> {
-    Some(pivot_over(at, Access::now().at(at, FINEST).value()?.top))
+    Some(pivot_over(at, Access::now().support(at).value()?))
 }
 
 /// The pivot over `at` on ground whose top is `top`.

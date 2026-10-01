@@ -64,7 +64,6 @@ fn companion_props() -> Option<CompanionProps> {
         map_origin,
         center_x: local[0],
         center_y: local[1],
-        center_z: local[2],
     })
 }
 
