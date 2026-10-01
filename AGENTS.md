@@ -396,7 +396,9 @@ art where one exists (Minecraft's chunk model for grid content, Cesium's
     bug, so the size is never a measurement or a knob.
   - **A bounded flow** — a stream to the host, a ring, the profiler's
     window: a capacity said as a product number, where full is ordinary
-    and means wait, or the oldest dropped. Full is never a bug.
+    and is met by its owner's policy — the producer waits, the oldest is
+    dropped, or what does not fit is cut off and said to be. Full is never
+    a bug.
   - **A workspace that grows with what stands in the world** — the heap's,
     asked for room before it grows; a refusal is backpressure: the work
     waits and what is drawn stays drawn.
