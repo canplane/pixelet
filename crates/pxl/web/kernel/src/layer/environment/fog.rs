@@ -4,11 +4,12 @@
 //!
 //! The ground ends twice and the nearer end wins. The planet turns it away at
 //! the **horizon**, `√(2Rh + h²)` from a camera `h` above it, which the height
-//! alone sets and the tilt does not. And the view stops drawing it: past the
-//! ground under the eye, or z16's split distance where that is nearer, a
-//! view draws `param::VIEW_LEVELS` levels and no more, a level a doubling of
-//! distance, so what a view costs is set by that count at any height rather
-//! than by how far the planet lets it see. The fog is laid over the second
+//! alone sets and the tilt does not. And the view stops drawing it:
+//! `param::VIEW_LEVELS` doublings of distance past the ground under the eye,
+//! or z16's split distance where that is nearer, a level a doubling — so a
+//! view draws at most that many levels and one at any height, and what it
+//! costs is held by that count rather than by how far the planet lets it
+//! see. The fog is laid over the second
 //! end as a sphere about the eye: it says where drawing stops, and does not
 //! stand for the air (issue/20260923-the-ground-runs-to-the-horizon.md says
 //! how the reach was the air's before).

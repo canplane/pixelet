@@ -54,14 +54,15 @@ pub const CENTER_CELL_LOGICAL_PX: f64 = 6.0;
 
 // ---- the view's reach (layer/environment/fog.rs) ----
 
-/// How many levels a view draws past the finest it stands on: its far edge
-/// is this many doublings past the nearer of the ground under the eye and
-/// z16's split distance, and the fog closes there. A level a doubling of
-/// distance, so whatever the height a view draws this many levels and one,
-/// and what it asks of the arena is a constant set by this rather than by
-/// how far the planet lets it see: five puts a street view's edge at about
-/// 12 km, a kilometre up at about 32. A product number, not a likeness of
-/// the air: the fog only hides where drawing stops.
+/// The most doublings of distance a view draws past the ground under the
+/// eye, or z16's split distance where that is nearer: its far edge, where
+/// the fog closes. A level a doubling, so a view draws at most this many
+/// levels and one whatever its height — fewer where it looks across and the
+/// first ground it sees lies past what is under it — and what it asks of the
+/// arena is held by this rather than by how far the planet lets it see. On
+/// the ground the horizon is usually the nearer end; five puts the edge at
+/// about 12 km there and about 32 from a kilometre up. A product number, not
+/// a likeness of the air: the fog only hides where drawing stops.
 pub const VIEW_LEVELS: u32 = 5;
 
 // ---- what refinement observes (world/observer.rs) ----
