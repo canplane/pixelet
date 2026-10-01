@@ -21,7 +21,7 @@
 //!   segments  = [[gers_id, subtype, class, flags, widths, access, subclass, subclasses, geom_wkb], ...]
 //!   base      = [[gers_id, source, subtype, class, geom_wkb], ...]  (source: land_use|water|land|infrastructure)
 //!   coasts    = [[id, geom_wkb, covers_page], ...]
-//!   decks     = [[gers_id, subtype, class, width_m, form, geom_wkb], ...]  (LineStringZ, the top in m)
+//!   decks     = [[gers_id, subtype, class, width_m, form, portal, geom_wkb], ...]  (LineStringZ, the top in m)
 //!
 //! baked wire = [ele, cells, extent, occupancy, decks]
 //!   cells     = one u16 a cell, the four ground channels packed into it
@@ -39,7 +39,7 @@ use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, T
 use std::borrow::Cow;
 
 use super::constant::ELE_PADDED_SPAN;
-use super::deck::{self, Decks};
+use super::deck::{self, Decks, BORE_DEPTH};
 use super::ground::SHIFT_RANGE;
 use super::pack::{channel_of, GroundCell};
 use super::surface::extent_of;
@@ -98,6 +98,8 @@ pub struct DeckRow {
     pub width_m: f64,
     /// A deck over the ground or a bore through it (bake/deck.rs `Form`).
     pub form: u8,
+    /// Which of its ends are portals (bake/deck.rs `START`, `END`).
+    pub portal: u8,
     pub geom_wkb: Box<[u8]>, // WKB, LineString Z
 }
 
@@ -279,12 +281,15 @@ pub struct Block {
 /// How far past what the lane holds the client draws over a cell, down and
 /// up, in cells. The lane holds the facts — the ground's surface and the
 /// lines' heights — and the client draws a cell a step off its surface
-/// (bake/ground.rs `shift`) and the way's cell under a bore's floor
-/// (bake/deck.rs `Occupies::Through`). Both are the client's to change, so
-/// the lane holds neither and every read of it widens it by them.
+/// (bake/ground.rs `shift`), and a bore's floor as deep as `BORE_DEPTH`
+/// under its ground with the way's cell under it (bake/deck.rs
+/// `Occupies::Through`). These are the client's to change, so the lane holds
+/// none of them and every read of it widens it by them.
 pub const DRAWN_PAST: [i16; 2] = {
     let [lo, hi] = SHIFT_RANGE;
-    [if lo < -1 { lo } else { -1 }, hi]
+    // A floor is drawn as deep as `BORE_DEPTH`, rounded, under a ground
+    // that may itself stand a shift down, and the way's cell is under it.
+    [lo - (BORE_DEPTH as i16 + 1) - 1, hi]
 };
 
 /// What is drawn over a lane's cell `[lo, hi]` stands within.
@@ -293,13 +298,16 @@ pub fn drawn([lo, hi]: [i16; 2]) -> [i16; 2] {
 }
 
 impl Block {
-    /// A lane's cell as a block of one, as it is drawn (`drawn`).
+    /// A lane's cell as a block of one: its bound as it is drawn
+    /// (`drawn`), and its span as the lane holds it, which is how far the
+    /// ground and the lines over the cell rise, and nothing of what the
+    /// client draws past them.
     pub fn of(cell: [i16; 2]) -> Block {
         let [lo, hi] = drawn(cell);
         Block {
             lo,
             hi,
-            span: (i32::from(hi) - i32::from(lo)).max(0) as u16,
+            span: (i32::from(cell[1]) - i32::from(cell[0])).max(0) as u16,
         }
     }
 

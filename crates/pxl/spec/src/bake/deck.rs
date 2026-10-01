@@ -61,6 +61,33 @@ pub const LINE_PAST: f64 = 1.0;
 /// number, set by choice.
 pub const BORE_HEIGHT: i32 = 3;
 
+/// The least ground a bore is drawn under over its air, in z16 cells. The
+/// line is the way's floor where the solve put it, at the ground at a portal
+/// and under it between; how deep under the ground a bore is drawn is the
+/// client's, its floor taken down until its air and this roof fit under the
+/// ground, as far as `PORTAL_SLOPE` lets it from a portal. A product number,
+/// set by choice.
+pub const ROOF: f64 = 1.5;
+
+/// How steeply a bore's drawn floor goes down from a portal, rise over run
+/// in its page's cells — a road's 8 % at z16, and gentler in a coarser
+/// page's own cells. Short of its depth the bore is open to the sky, the
+/// cutting a road drops through to a portal. A product number, set by
+/// choice.
+pub const PORTAL_SLOPE: f64 = 0.08;
+
+/// How far past its page a page carries a bore's line, in its page's cells:
+/// a contract the bake keeps a page's bores by, so a column sees every portal
+/// its floor can be taken down from — as far as the deepest a bore is drawn
+/// over `PORTAL_SLOPE` — whichever page it is drawn from.
+pub const BORE_CONTEXT: f64 = 128.0;
+
+const _: () = assert!(BORE_CONTEXT >= (BORE_HEIGHT as f64 + ROOF) / PORTAL_SLOPE);
+
+/// How far a bore's drawn floor may lie under its ground, in z16 cells: its
+/// air and its roof.
+pub const BORE_DEPTH: f64 = BORE_HEIGHT as f64 + ROOF;
+
 /// What a line is to the ground.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Form {
@@ -71,9 +98,6 @@ pub enum Form {
     /// Built up on it: the embankment a bridge's approach climbs on, solid
     /// from the ground to its top.
     Ramp,
-    /// Cut down into it: the open cutting a tunnel's approach drops through
-    /// to its portal, nothing over it from its floor to the sky.
-    Cut,
 }
 
 impl Form {
@@ -81,7 +105,6 @@ impl Form {
         match byte {
             1 => Form::Bore,
             2 => Form::Ramp,
-            3 => Form::Cut,
             _ => Form::Deck,
         }
     }
@@ -91,13 +114,12 @@ impl Form {
             Form::Deck => 0,
             Form::Bore => 1,
             Form::Ramp => 2,
-            Form::Cut => 3,
         }
     }
 
     /// Whether it lies under the ground's top rather than over it.
     pub fn cuts(self) -> bool {
-        matches!(self, Form::Bore | Form::Cut)
+        self == Form::Bore
     }
 }
 
@@ -128,7 +150,15 @@ pub struct Decks {
     pub kind: Cow<'static, [u8]>,
     /// Each line's `Form`, as its byte.
     pub form: Cow<'static, [u8]>,
+    /// Which of a line's ends are portals, where a bore meets the ground and
+    /// its way carries on at the surface: `START` and `END`.
+    pub portal: Cow<'static, [u8]>,
 }
+
+/// A line's first point is a portal (`Decks::portal`).
+pub const START: u8 = 1;
+/// … its last point.
+pub const END: u8 = 2;
 
 impl Default for Decks {
     fn default() -> Self {
@@ -144,17 +174,20 @@ pub struct Deck<'a> {
     pub width: u8,
     pub kind: u8,
     pub form: Form,
+    pub portal: u8,
 }
 
 /// What a line is over a column — one it covers as a way covers the ground
 /// (bake/way.rs): its top there (a bore's, its floor), in z16 cells, its
-/// kind and form, and whether a pier carries it there.
+/// kind and form, whether a pier carries it there, and how far the column
+/// is from the nearest portal of the page's bores, in the page's cells.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Over {
     pub top: f64,
     pub kind: u8,
     pub form: Form,
     pub pier: bool,
+    pub portal: f64,
 }
 
 /// What a line occupies of one column, in z16 cells, each `[lo, hi)`. The
@@ -186,10 +219,20 @@ impl Over {
                 }
             }
             Form::Ramp if top > ground => Occupies::Above { slab: [ground, top], pier: None },
-            Form::Bore if top < ground => Occupies::Through {
-                air: [top, (top + BORE_HEIGHT).min(ground)],
-            },
-            Form::Cut if top < ground => Occupies::Through { air: [top, ground] },
+            Form::Bore => {
+                // Taken down until its air and its roof fit under the
+                // ground, and no steeper than a cutting from a portal.
+                let under = f64::from(ground) - self.top;
+                let down = (BORE_DEPTH - under).clamp(0.0, self.portal * PORTAL_SLOPE);
+                let floor = (self.top - down).round() as i32;
+                if floor < ground {
+                    Occupies::Through {
+                        air: [floor, (floor + BORE_HEIGHT).min(ground)],
+                    }
+                } else {
+                    Occupies::Grade
+                }
+            }
             _ => Occupies::Grade,
         }
     }
@@ -212,6 +255,7 @@ impl Decks {
             width: self.width[d],
             kind: self.kind[d],
             form: Form::of(self.form[d]),
+            portal: self.portal[d],
         }
     }
 
@@ -239,7 +283,7 @@ impl Decks {
                 for j in range(1) {
                     for i in range(0) {
                         let at = [origin[0] + (i as f64 + 0.5) * step, origin[1] + (j as f64 + 0.5) * step];
-                        if let Some(over) = deck.over_segment(s, along, at) {
+                        if let Some(over) = deck.over_segment(s, along, at, |at| self.portal_from(at)) {
                             each(i, j, d, over);
                         }
                     }
@@ -254,7 +298,7 @@ impl Decks {
         self.iter().flat_map(move |deck| {
             let mut along = 0.0;
             (0..deck.points.len().saturating_sub(1)).filter_map(move |s| {
-                let over = deck.over_segment(s, along, at);
+                let over = deck.over_segment(s, along, at, |at| self.portal_from(at));
                 let (a, b) = (deck.point(s), deck.point(s + 1));
                 along += (b[0] - a[0]).hypot(b[1] - a[1]);
                 over
@@ -262,7 +306,17 @@ impl Decks {
         })
     }
 
-    /// The lowest floor a bore or a cutting has inside the `[x0, x1) × [y0, y1)` cells,
+    /// How far `at` is from the nearest place a bore of the page meets the
+    /// ground, in its cells.
+    fn portal_from(&self, at: [f64; 2]) -> f64 {
+        let ends = self.iter().filter(|d| d.form.cuts()).flat_map(|bore| {
+            let last = bore.points.len() - 1;
+            [(START, 0), (END, last)].into_iter().filter(move |&(end, _)| bore.portal & end != 0).map(move |(_, i)| bore.point(i))
+        });
+        ends.map(|p| (at[0] - p[0]).hypot(at[1] - p[1])).fold(f64::INFINITY, f64::min)
+    }
+
+    /// The lowest floor a bore has inside the `[x0, x1) × [y0, y1)` cells,
     /// conservatively, as `highest_in`.
     pub fn lowest_in(&self, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> Option<i16> {
         let mut low = None;
@@ -340,8 +394,9 @@ impl Deck<'_> {
     /// `at`. A pier stands every `PIER_STEP` down the line and takes the cell
     /// it is in, at least, and half the deck's width across; it is told
     /// wherever it stands, and `Over::occupies` raises it only where the
-    /// ground is under the slab.
-    fn over_segment(&self, s: usize, along: f64, at: [f64; 2]) -> Option<Over> {
+    /// ground is under the slab. A bore is told how far `at` is from the
+    /// nearest portal, as `portal_from` says.
+    fn over_segment(&self, s: usize, along: f64, at: [f64; 2], portal_from: impl Fn([f64; 2]) -> f64) -> Option<Over> {
         let (a, b) = (self.point(s), self.point(s + 1));
         let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
         let len2 = dx * dx + dy * dy;
@@ -360,6 +415,7 @@ impl Deck<'_> {
             kind: self.kind,
             form: self.form,
             pier: off_step <= pier_radius && across <= pier_radius,
+            portal: if self.form.cuts() { portal_from(at) } else { f64::INFINITY },
         })
     }
 }
@@ -392,7 +448,7 @@ pub fn fold_decks(children: [&Decks; 4], level: u32) -> Decks {
             let points: Vec<[f64; 2]> = (0..deck.points.len()).map(|i| deck.point(i)).map(|[x, y]| [(x + qx) / 2.0, (y + qy) / 2.0]).collect();
             let keep = simplify(&points, deck.tops, 0.5, height_tolerance);
             let kept: Vec<usize> = (0..points.len()).filter(|&i| keep[i]).collect();
-            out.push(kept.iter().map(|&i| (points[i], deck.tops[i])), width, deck.kind, deck.form);
+            out.push(kept.iter().map(|&i| (points[i], deck.tops[i])), width, deck.kind, deck.form, deck.portal);
         }
     }
     out.finish()
@@ -445,12 +501,14 @@ pub struct Builder {
     width: Vec<u8>,
     kind: Vec<u8>,
     form: Vec<u8>,
+    portal: Vec<u8>,
 }
 
 impl Builder {
-    /// A deck from its points in the page's cells, each with its top. A
-    /// line of fewer than two points, or of no width, is no deck.
-    pub fn push(&mut self, points: impl IntoIterator<Item = ([f64; 2], i16)>, width: u8, kind: u8, form: Form) {
+    /// A deck from its points in the page's cells, each with its top, and
+    /// which of its ends are portals. A line of fewer than two points, or of
+    /// no width, is no deck.
+    pub fn push(&mut self, points: impl IntoIterator<Item = ([f64; 2], i16)>, width: u8, kind: u8, form: Form, portal: u8) {
         let at = self.points.len();
         for ([x, y], top) in points {
             let q = |v: f64| (v * POINT_SCALE).round().clamp(f64::from(i16::MIN), f64::from(i16::MAX)) as i16;
@@ -466,6 +524,7 @@ impl Builder {
         self.width.push(width);
         self.kind.push(kind);
         self.form.push(form.byte());
+        self.portal.push(portal);
     }
 
     /// Whether the decks so far fit a record.
@@ -482,13 +541,14 @@ impl Builder {
             width: self.width.into(),
             kind: self.kind.into(),
             form: self.form.into(),
+            portal: self.portal.into(),
         }
     }
 }
 
 // ---- The wire ----
 
-// decks = [starts, points, tops, width, kind, form], the points
+// decks = [starts, points, tops, width, kind, form, portal], the points
 // flattened.
 
 /// A page's decks as its packet's branch.
@@ -499,7 +559,8 @@ pub fn write_branch<'a>(decks: &'a Decks, b: &mut BranchViewImpl<'a>) {
             .i16_array(Some(&decks.tops))
             .u8_array(Some(&decks.width))
             .u8_array(Some(&decks.kind))
-            .u8_array(Some(&decks.form));
+            .u8_array(Some(&decks.form))
+            .u8_array(Some(&decks.portal));
     }));
 }
 
@@ -511,10 +572,11 @@ pub struct Lanes<'a> {
     width: &'a [u8],
     kind: &'a [u8],
     form: &'a [u8],
+    portal: &'a [u8],
 }
 
 /// The branch's lanes: refused unless they are one page's decks — as many
-/// widths and kinds as decks, as many tops as points, the starts
+/// widths, kinds, forms and portals as decks, as many tops as points, the starts
 /// rising from the first point to past the last, and no more than a record
 /// holds.
 pub fn read_branch(d: BranchCursor<'_>) -> Result<Lanes<'_>, MarshalError> {
@@ -531,10 +593,12 @@ pub fn read_branch(d: BranchCursor<'_>) -> Result<Lanes<'_>, MarshalError> {
         width: d.at(3)?.get_array::<u8>()?,
         kind: d.at(4)?.get_array::<u8>()?,
         form: d.at(5)?.get_array::<u8>()?,
+        portal: d.at(6)?.get_array::<u8>()?,
     };
     let n = lanes.width.len();
     let shaped = lanes.kind.len() == n
         && lanes.form.len() == n
+        && lanes.portal.len() == n
         && starts.len() == n + 1
         && lanes.tops.len() == points.len()
         && n <= MAX_DECKS
@@ -555,6 +619,7 @@ impl Lanes<'_> {
             width: self.width.to_vec().into(),
             kind: self.kind.to_vec().into(),
             form: self.form.to_vec().into(),
+            portal: self.portal.to_vec().into(),
         }
     }
 
@@ -572,6 +637,7 @@ impl Lanes<'_> {
             width: put(room.width, self.width).into(),
             kind: put(room.kind, self.kind).into(),
             form: put(room.form, self.form).into(),
+            portal: put(room.portal, self.portal).into(),
         }
     }
 }
@@ -585,6 +651,7 @@ pub struct Room {
     pub width: &'static mut [u8],
     pub kind: &'static mut [u8],
     pub form: &'static mut [u8],
+    pub portal: &'static mut [u8],
 }
 
 #[cfg(test)]

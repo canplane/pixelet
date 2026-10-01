@@ -342,7 +342,7 @@ pub struct Draw {
 ///
 /// A scatter fills only a cell whose shown ground is its own (scatter.rs
 /// `DecorRules`) and that no line of any form is in — a deck over it, a ramp
-/// or a cutting in it, a bore under it: where something stands over the
+/// in it, a bore under it: where something stands over the
 /// ground or cuts into it, nothing is scattered.
 pub fn draw(kind: &Kind, cells: &[GroundCell], lines: &Decks, level: u32, at: [i64; 2], page_at: [u32; 2]) -> Option<Draw> {
     let [cell_x, cell_y] = page_at;

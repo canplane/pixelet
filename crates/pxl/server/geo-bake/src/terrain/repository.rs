@@ -42,7 +42,7 @@ WHERE geom && env.e";
 const OVERTURE_DECK_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
-SELECT gers_id, subtype, class, width_m, form, ST_AsBinary(geom) AS geom_wkb
+SELECT gers_id, subtype, class, width_m, form, portal, ST_AsBinary(geom) AS geom_wkb
 FROM overture_deck, env
 WHERE geom && env.e";
 
@@ -212,6 +212,7 @@ impl TerrainRepository {
                 class: row.get("class"),
                 width_m: row.get::<_, f32>("width_m").into(),
                 form: row.get::<_, i16>("form") as u8,
+                portal: row.get::<_, i16>("portal") as u8,
                 geom_wkb: wkb(row),
             })
             .collect())

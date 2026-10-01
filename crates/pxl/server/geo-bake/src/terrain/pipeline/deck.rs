@@ -14,7 +14,7 @@
 //! can be drawn there.
 
 use pxl_spec::bake::constant::{CELL_PER_M, XY_CELL_PER_M};
-use pxl_spec::bake::deck::{self, Builder, Decks, Form, POINT_SCALE};
+use pxl_spec::bake::deck::{self, Builder, Decks, Form, BORE_CONTEXT, END, POINT_SCALE, START};
 use pxl_spec::bake::format::DeckRow;
 use pxl_spec::space::adapter::epsg3857::G3857;
 use pxl_spec::space::pyramid::PAGE_CELLS;
@@ -31,7 +31,13 @@ pub fn bake_decks(rows: &[DeckRow], page_min: G3857) -> Option<Decks> {
         let kind = segment_type(&row.subtype, row.class.as_deref());
         let width = row.width_m * cell_per_m;
         let width_code = (width * POINT_SCALE).round().clamp(1.0, f64::from(u8::MAX)) as u8;
-        for g in wkb_to_geometries(&row.geom_wkb) {
+        let form = Form::of(row.form);
+        // A bore is carried past the page as far as a column in it looks for
+        // a portal (pxl-spec bake/deck.rs `BORE_CONTEXT`).
+        let reach = deck::footprint(width) + if form.cuts() { BORE_CONTEXT } else { 0.0 };
+        let lines = wkb_to_geometries(&row.geom_wkb);
+        let count = lines.len();
+        for (n, g) in lines.into_iter().enumerate() {
             let local: Vec<([f64; 2], i16)> = g
                 .points
                 .iter()
@@ -40,8 +46,12 @@ pub fn bake_decks(rows: &[DeckRow], page_min: G3857) -> Option<Decks> {
                     (at, (p[2] * cell_per_m).round() as i16)
                 })
                 .collect();
-            for run in runs_within(&local, deck::footprint(width)) {
-                decks.push(run.iter().copied(), width_code, kind, Form::of(row.form));
+            let last = local.len() - 1;
+            for [a, b] in runs_within(&local, reach) {
+                // A run's end is the line's own only where the run reaches it.
+                let start = if n == 0 && a == 0 { row.portal & START } else { 0 };
+                let end = if n + 1 == count && b == last { row.portal & END } else { 0 };
+                decks.push(local[a..=b].iter().copied(), width_code, kind, form, start | end);
             }
         }
     }
@@ -49,8 +59,8 @@ pub fn bake_decks(rows: &[DeckRow], page_min: G3857) -> Option<Decks> {
 }
 
 /// The runs of consecutive segments of a line that come within `reach`
-/// cells of the page.
-fn runs_within(points: &[([f64; 2], i16)], reach: f64) -> Vec<&[([f64; 2], i16)]> {
+/// cells of the page, as their first and last points.
+fn runs_within(points: &[([f64; 2], i16)], reach: f64) -> Vec<[usize; 2]> {
     let (lo, hi) = (-reach, f64::from(PAGE_CELLS) + reach);
     let near = |a: [f64; 2], b: [f64; 2]| (0..2).all(|k| a[k].max(b[k]) >= lo && a[k].min(b[k]) <= hi);
     let mut runs = Vec::new();
@@ -59,14 +69,14 @@ fn runs_within(points: &[([f64; 2], i16)], reach: f64) -> Vec<&[([f64; 2], i16)]
         match (near(points[s].0, points[s + 1].0), start) {
             (true, None) => start = Some(s),
             (false, Some(a)) => {
-                runs.push(&points[a..=s]);
+                runs.push([a, s]);
                 start = None;
             }
             _ => {}
         }
     }
     if let Some(a) = start {
-        runs.push(&points[a..]);
+        runs.push([a, points.len() - 1]);
     }
     runs
 }

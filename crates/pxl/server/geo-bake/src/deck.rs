@@ -43,7 +43,7 @@ use postgres::Client;
 use clearance::{Under, STACKED};
 use piece::{pieces_of, Piece};
 use profile::{solve as solve_profile, Problem, Profile};
-use pxl_spec::bake::deck::Form;
+use pxl_spec::bake::deck::{Form, END, START};
 use source::DeckOut;
 use structure::{end_of, group, key_of, side_by_side, Graph};
 
@@ -177,7 +177,12 @@ pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<Solve
             .map(|&(node, _)| [g.at[node as usize][0], g.at[node as usize][1], top[node as usize]])
             .collect();
         if points.len() >= 2 {
-            out.push(DeckOut { piece, form: piece.form, points });
+            out.push(DeckOut {
+                piece,
+                form: piece.form,
+                points,
+                portal: 0,
+            });
         }
     }
     log(&slopes.say("deck"));
@@ -255,7 +260,14 @@ fn bores_of<'a>(tunnels: &'a [Piece], portal_at: &HashSet<(i64, i64)>, structure
                 .map(|&(node, _)| [g.at[node as usize][0], g.at[node as usize][1], floor[node as usize]])
                 .collect();
             if points.len() >= 2 {
-                out.push(DeckOut { piece, form: piece.form, points });
+                let at = |p: &[f64; 3]| u8::from(portal_at.contains(&key_of([p[0], p[1], 0.0])));
+                let portal = (at(&points[0]) * START) | (at(&points[points.len() - 1]) * END);
+                out.push(DeckOut {
+                    piece,
+                    form: piece.form,
+                    points,
+                    portal,
+                });
             }
         }
     }

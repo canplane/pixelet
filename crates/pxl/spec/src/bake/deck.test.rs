@@ -4,7 +4,7 @@ use super::*;
 
 fn one(points: &[[f64; 2]], tops: &[i16], width_cells: f64) -> Decks {
     let mut b = Builder::default();
-    b.push(points.iter().zip(tops).map(|(&p, &t)| (p, t)), (width_cells * POINT_SCALE) as u8, 3, Form::Deck);
+    b.push(points.iter().zip(tops).map(|(&p, &t)| (p, t)), (width_cells * POINT_SCALE) as u8, 3, Form::Deck, 0);
     b.finish()
 }
 
@@ -59,8 +59,26 @@ fn a_bore_carves_only_where_the_ground_stands_over_its_floor() {
         kind: 3,
         form: Form::Bore,
         pier: false,
+        portal: 0.0,
     };
     assert_eq!(over(10.0).occupies(10), Occupies::Grade);
     assert_eq!(over(10.0).occupies(11), Occupies::Through { air: [10, 11] });
     assert_eq!(over(10.0).occupies(40), Occupies::Through { air: [10, 10 + BORE_HEIGHT] });
+}
+
+#[test]
+fn a_bore_is_drawn_under_its_roof_and_comes_up_at_its_portal() {
+    let over = |portal: f64| Over {
+        top: 10.0,
+        kind: 3,
+        form: Form::Bore,
+        pier: false,
+        portal,
+    };
+    // Its floor at the ground: at a portal it is the way on the ground, and
+    // away from one it is taken down until its air and its roof fit under.
+    assert_eq!(over(0.0).occupies(10), Occupies::Grade);
+    assert_eq!(over(f64::INFINITY).occupies(10), Occupies::Through { air: [6, 9] });
+    // Between, no steeper than a cutting, and open to the sky.
+    assert_eq!(over(25.0).occupies(10), Occupies::Through { air: [8, 10] });
 }

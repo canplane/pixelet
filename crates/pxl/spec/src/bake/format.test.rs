@@ -33,7 +33,7 @@ fn page(seed: u64) -> Terrain {
     let mut decks = deck::Builder::default();
     for _ in 0..3 {
         let points: Vec<([f64; 2], i16)> = (0..4).map(|_| ([(rng.next() % 600) as f64, (rng.next() % 600) as f64], rng.next() as i16)).collect();
-        decks.push(points, 1 + (rng.next() % 200) as u8, rng.next() as u8, deck::Form::of((rng.next() % 2) as u8));
+        decks.push(points, 1 + (rng.next() % 200) as u8, rng.next() as u8, deck::Form::of((rng.next() % 2) as u8), (rng.next() % 4) as u8);
     }
     Terrain {
         ele: ele.into(),
@@ -57,6 +57,7 @@ fn room() -> PageRoom {
             width: vec![0; deck::MAX_DECKS].leak(),
             kind: vec![0; deck::MAX_DECKS].leak(),
             form: vec![0; deck::MAX_DECKS].leak(),
+            portal: vec![0; deck::MAX_DECKS].leak(),
         },
     }
 }
@@ -103,9 +104,9 @@ fn a_block_says_what_its_cells_say() {
             for y in (0..n).step_by(side as usize) {
                 for x in (0..n).step_by(side as usize) {
                     let lane = index.extent();
-                    let cells = (y..y + side).flat_map(|cy| (x..x + side).map(move |cx| drawn(lane[EXTENT.cell_index(cx, cy) as usize])));
-                    let lo = cells.clone().map(|[l, _]| l).min().unwrap();
-                    let hi = cells.clone().map(|[_, h]| h).max().unwrap();
+                    let cells = (y..y + side).flat_map(|cy| (x..x + side).map(move |cx| lane[EXTENT.cell_index(cx, cy) as usize]));
+                    let lo = cells.clone().map(|c| drawn(c)[0]).min().unwrap();
+                    let hi = cells.clone().map(|c| drawn(c)[1]).max().unwrap();
                     let span = cells.map(|[l, h]| (i32::from(h) - i32::from(l)) as u16).max().unwrap();
                     assert_eq!(index.over([x, y], side), Block { lo, hi, span }, "{side} from ({x}, {y})");
                 }
