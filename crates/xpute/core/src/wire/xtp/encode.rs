@@ -563,13 +563,27 @@ impl<'a> PacketWriter<'a> {
     }
 
     /// UTF-8 with the trailing NUL the wire carries, which `len` excludes.
+    /// What the room refuses is what the tree encoder refuses at the same
+    /// cap: a string judged by its UTF-16 units, four bytes each.
     pub fn str(&mut self, s: Option<&str>) -> &mut Self {
         match s {
-            Some(s) => self.seq(SequenceType::STR, s.len() as u32, s.len() as u32 + 1, |out| {
+            Some(s) if self.utf16_fits(s) => self.seq(SequenceType::STR, s.len() as u32, s.len() as u32 + 1, |out| {
                 out[..s.len()].copy_from_slice(s.as_bytes());
             }),
+            Some(_) => {
+                self.fits = false;
+                self.entry(None, SequenceType::STR as u8)
+            }
             None => self.entry(None, SequenceType::STR as u8),
         }
+    }
+
+    /// Whether `s`'s UTF-16 units, four bytes each, fit the room past the
+    /// next string's length slot.
+    fn utf16_fits(&self, s: &str) -> bool {
+        let payload = align(self.lim, WORD_SZ) as usize + WORD_SZ as usize;
+        let room = self.buf.len().saturating_sub(payload);
+        s.encode_utf16().count() <= room >> 2
     }
 
     /// Many strings as one leaf (`SequenceType::STRS`).
@@ -621,6 +635,12 @@ impl<'a> PacketWriter<'a> {
             self.fits = false;
             return self.entry(None, SequenceType::STR as u8);
         };
+        // Judged as `str` judges a string, once it is written.
+        let written = core::str::from_utf8(&self.buf[payload..payload + len]).unwrap_or_default();
+        if !self.utf16_fits(written) {
+            self.fits = false;
+            return self.entry(None, SequenceType::STR as u8);
+        }
         self.buf[self.lim as usize..payload].fill(0);
         self.buf[payload + len..end].fill(0);
         self.word(base as u32, len as u32, RESERVED);

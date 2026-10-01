@@ -114,6 +114,19 @@ pub const EXTENT_CELL: Scale = L3.down(EXTENT_SPAN.trailing_zeros());
 
 const _: () = assert!(EXTENT_SPAN.is_power_of_two(), "an index cell is a block of the lattice, a power of two of the unit");
 
+// ---- The deck lane ----
+
+/// A deck cell's side against the unit (bake/deck.rs): two of the ground's
+/// cells. A deck is a way carried over the ground — a bridge, a viaduct — and
+/// a page holds it in a lane of its own, which every resident record carries
+/// whether or not anything crosses the page: at the ground's resolution that
+/// lane is half the ground lane again, some 30 MiB across the records, and at
+/// two cells a side it is an eighth of that. Two cells is about 4 m at the
+/// equator, which a carriageway, a sidewalk or a track is no narrower than,
+/// so what the coarser lane loses is where a deck's edge falls inside a
+/// cell, not whether it is there.
+pub const DECK_CELL: Scale = CELL.up(1);
+
 /// How many sizes an object places at: a cell and its halvings, each tier a
 /// level of the object layout below.
 ///

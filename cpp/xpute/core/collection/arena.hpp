@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <limits>
+#include <span>
 #include <vector>
 
 #include "../status/bug.hpp"
@@ -44,7 +45,13 @@ template <class T, class Alloc> class Arena {
     bool is_empty() const noexcept { return len_ == 0; }
     std::uint32_t max_cap() const noexcept { return max_cap_; }
 
-    T &get(std::uint32_t idx) noexcept { return mem_[idx]; }
+    T &get(std::uint32_t idx) noexcept {
+        ensure(idx < mem_.size(), Errno::enotrecoverable, idx, mem_.size());
+        return mem_[idx];
+    }
+    // The slots as they lie, and the cap a growth may not pass.
+    std::span<T> mem() noexcept { return mem_; }
+    void set_max_cap(std::uint32_t cap) noexcept { max_cap_ = cap; }
 
     // Hands out the next slot.
     Result<T *> alloc() {

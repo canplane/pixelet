@@ -41,6 +41,7 @@ class Golden {
     // Calls `f` with `base.0`, `base.1`, … while an entry has that prefix.
     void each(std::string_view base, const std::function<void(const std::string &)> &f) const;
     std::size_t len(std::string_view base) const;
+    bool is_empty() const noexcept { return map_.empty(); }
 
   private:
     std::unordered_map<std::string, std::string> map_;

@@ -7,6 +7,9 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
+#include <string_view>
+#include <utility>
 
 namespace xpute {
 
@@ -82,5 +85,76 @@ enum class Errno : std::int32_t {
     ecanceled = -125, // Operation canceled
     enotrecoverable = -131, // State not recoverable: an invariant the code stands on does not hold
 };
+
+// An errno's name, as Rust's Display prints an error's.
+constexpr std::string_view errno_name(Errno e) noexcept {
+    switch (e) {
+    case Errno::ok: return "OK";
+    case Errno::eperm: return "EPERM";
+    case Errno::enoent: return "ENOENT";
+    case Errno::esrch: return "ESRCH";
+    case Errno::eintr: return "EINTR";
+    case Errno::eio: return "EIO";
+    case Errno::enxio: return "ENXIO";
+    case Errno::e2big: return "E2BIG";
+    case Errno::enoexec: return "ENOEXEC";
+    case Errno::ebadf: return "EBADF";
+    case Errno::echild: return "ECHILD";
+    case Errno::eagain: return "EAGAIN";
+    case Errno::enomem: return "ENOMEM";
+    case Errno::eacces: return "EACCES";
+    case Errno::efault: return "EFAULT";
+    case Errno::ebusy: return "EBUSY";
+    case Errno::eexist: return "EEXIST";
+    case Errno::exdev: return "EXDEV";
+    case Errno::enodev: return "ENODEV";
+    case Errno::enotdir: return "ENOTDIR";
+    case Errno::eisdir: return "EISDIR";
+    case Errno::einval: return "EINVAL";
+    case Errno::enfile: return "ENFILE";
+    case Errno::emfile: return "EMFILE";
+    case Errno::enotty: return "ENOTTY";
+    case Errno::efbig: return "EFBIG";
+    case Errno::enospc: return "ENOSPC";
+    case Errno::espipe: return "ESPIPE";
+    case Errno::erofs: return "EROFS";
+    case Errno::emlink: return "EMLINK";
+    case Errno::epipe: return "EPIPE";
+    case Errno::edom: return "EDOM";
+    case Errno::erange: return "ERANGE";
+    case Errno::enosys: return "ENOSYS";
+    case Errno::eproto: return "EPROTO";
+    case Errno::ebadmsg: return "EBADMSG";
+    case Errno::eoverflow: return "EOVERFLOW";
+    case Errno::emsgsize: return "EMSGSIZE";
+    case Errno::enotsup: return "ENOTSUP";
+    case Errno::eilseq: return "EILSEQ";
+    case Errno::eaddrinuse: return "EADDRINUSE";
+    case Errno::eaddrnotavail: return "EADDRNOTAVAIL";
+    case Errno::enetdown: return "ENETDOWN";
+    case Errno::enetunreach: return "ENETUNREACH";
+    case Errno::enetreset: return "ENETRESET";
+    case Errno::econnaborted: return "ECONNABORTED";
+    case Errno::econnreset: return "ECONNRESET";
+    case Errno::enobufs: return "ENOBUFS";
+    case Errno::eisconn: return "EISCONN";
+    case Errno::enotconn: return "ENOTCONN";
+    case Errno::eshutdown: return "ESHUTDOWN";
+    case Errno::etoomanyrefs: return "ETOOMANYREFS";
+    case Errno::etimedout: return "ETIMEDOUT";
+    case Errno::econnrefused: return "ECONNREFUSED";
+    case Errno::ehostdown: return "EHOSTDOWN";
+    case Errno::ehostunreach: return "EHOSTUNREACH";
+    case Errno::ealready: return "EALREADY";
+    case Errno::einprogress: return "EINPROGRESS";
+    case Errno::ecanceled: return "ECANCELED";
+    case Errno::enotrecoverable: return "ENOTRECOVERABLE";
+    }
+    return "errno";
+}
+
+// A result as a pair, as Rust's ErrnoResult is: the errno, and the value
+// where there is one.
+template <class T> using ErrnoResult = std::pair<Errno, std::optional<T>>;
 
 } // namespace xpute

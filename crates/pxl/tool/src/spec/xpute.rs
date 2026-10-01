@@ -127,14 +127,44 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
     // that name no longer reads as one. The numbers are what cross.
     let mut cpp = vec!["// cpp/xpute/core/status/errno.spec.hpp".to_string()];
     cpp.extend(head.iter().cloned());
-    cpp.extend(["", "#pragma once", "", "#include <cstdint>", "", "namespace xpute {", "", "enum class Errno : std::int32_t {"].map(String::from));
+    cpp.extend(
+        ["", "#pragma once", "", "#include <cstdint>", "#include <optional>", "#include <string_view>", "#include <utility>", "", "namespace xpute {", "", "enum class Errno : std::int32_t {"]
+            .map(String::from),
+    );
     for e in &spec.entries {
         match e {
             ErrnoEntry::Section { section } => cpp.extend([String::new(), format!("    // ---- {section} ----")]),
             ErrnoEntry::Member(m) => cpp.push(format!("    {} = {}, // {}", m.name.to_lowercase(), m.value, m.doc)),
         }
     }
-    cpp.extend(["};", "", "} // namespace xpute"].map(String::from));
+    cpp.extend(["};", ""].map(String::from));
+    cpp.extend(
+        [
+            "// An errno's name, as Rust's Display prints an error's.",
+            "constexpr std::string_view errno_name(Errno e) noexcept {",
+            "    switch (e) {",
+        ]
+        .map(String::from),
+    );
+    for e in &spec.entries {
+        if let ErrnoEntry::Member(m) = e {
+            cpp.push(format!("    case Errno::{}: return \"{}\";", m.name.to_lowercase(), m.name));
+        }
+    }
+    cpp.extend(
+        [
+            "    }",
+            "    return \"errno\";",
+            "}",
+            "",
+            "// A result as a pair, as Rust's ErrnoResult is: the errno, and the value",
+            "// where there is one.",
+            "template <class T> using ErrnoResult = std::pair<Errno, std::optional<T>>;",
+            "",
+            "} // namespace xpute",
+        ]
+        .map(String::from),
+    );
     Ok(vec![
         Output::new("packages/xpute/core/src/status/errno.spec.ts", file(&ts)),
         Output::new("crates/xpute/core/src/status/errno.spec.rs", file(&rs)),

@@ -28,6 +28,7 @@
 #include <string_view>
 #include <variant>
 
+#include "../codec/encoding.hpp"
 #include "../status/error.hpp"
 
 namespace xpute::tlv {
@@ -49,9 +50,12 @@ enum class Tag : std::uint8_t {
     bytes = 0x20,
 };
 
+// A string as it lies. What a reader decodes of it — what is not UTF-8 as
+// U+FFFD, as Rust's reader and the host's decode it — is `decode`'s.
 struct Str {
     std::string_view text;
     bool operator==(const Str &) const = default;
+    template <class Put> void decode(Put &&put) const { utf8_lossy(text, std::forward<Put>(put)); }
 };
 
 struct Bytes {

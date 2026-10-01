@@ -14,6 +14,7 @@
 #include <source_location>
 
 #include "errno.spec.hpp"
+#include "error.hpp"
 
 namespace xpute {
 
@@ -35,6 +36,12 @@ inline void ensure(bool cond, Errno code, std::uint64_t a = 0, std::uint64_t b =
 template <class T> T or_bug(std::optional<T> v, Errno code, std::source_location at = std::source_location::current()) noexcept {
     if (!v) bug(code, 0, 0, at);
     return *v;
+}
+
+// A result's value, or a bug where there is none.
+template <class T> T or_bug(Result<T> v, Errno code, std::source_location at = std::source_location::current()) noexcept {
+    ensure(v.ok(), code, 0, 0, at);
+    return std::move(*v);
 }
 
 } // namespace xpute

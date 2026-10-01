@@ -7,6 +7,10 @@
 
 #pragma once
 
+// Bit for bit with Rust, which never fuses a multiply and an add: held here,
+// not only in the build's flags.
+#pragma STDC FP_CONTRACT OFF
+
 #include <cmath>
 
 namespace xpute {
@@ -44,7 +48,13 @@ inline double round_half_away(double x) noexcept {
 // To even: IEEE 754's. 2.5 is 2, -2.5 is -2. `nearbyint` rounds by the
 // current mode, which nothing here changes from its default, to nearest even.
 inline double round_half_even(double x) noexcept {
-    return std::nearbyint(x);
+    // x − floor(x) is exact for every double, and 0 past 2^52, where every
+    // double is whole: so the tie is told exactly, whatever the rounding mode.
+    double f = std::floor(x), d = x - f;
+    double r = d < 0.5 ? f : d > 0.5 ? f + 1 : std::fmod(f, 2.0) == 0 ? f : f + 1;
+    // A zero keeps the sign of what was rounded, as Rust's round_ties_even
+    // gives -0 for -0.5.
+    return r == 0 ? std::copysign(0.0, x) : r;
 }
 
 // The project's rounding, which is to even.

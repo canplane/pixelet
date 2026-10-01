@@ -1,12 +1,11 @@
 // cpp/xpute/core/wire/xtp/encode.hpp
 
-// The write end: a packet written in place, into bytes the caller holds — a
+// The write end in place: a packet written into bytes the caller holds — a
 // ring slot's payload, or a buffer sized for it — with no tree built first
-// and nothing allocated. The other two build a tree of nodes and encode it
-// after (Rust's TreeView and TreeEncoder, TypeScript's the same); Rust adds
-// a writer like this one for the root branch of a ring's packet. Here that
-// writer is the only one: it writes any root, every node type and a graft,
-// and gives the bytes the tree encoder gives for the same tree.
+// and nothing allocated, as Rust's `PacketWriter`. It writes any root, every
+// node type and a graft, and gives the bytes the tree encoder gives for the
+// same tree; the tree and its encoder are view.hpp, which encodes through
+// this writer.
 //
 // A packet is one root node. A branch declares its child count up front,
 // since its table precedes its children, and then writes them as the packet

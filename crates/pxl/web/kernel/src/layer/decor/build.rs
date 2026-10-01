@@ -40,7 +40,6 @@ use crate::layer::decor::kind::DecorKindDef;
 use crate::layer::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
 use crate::layer::decor::scatter::{DecorKindSeed, DecorOrientationMode, DecorRules};
 use crate::layer::object::store::{At, EntryAt, Store};
-use crate::world::chunk::table::Drawn;
 use pxl_spec::asset::ingested::Asset;
 
 const AIR: u32 = cube_types::common::air as u32;
@@ -251,10 +250,6 @@ pub struct Ground<'a> {
     /// ground of many columns and the objects are folded into the chunk's
     /// cubes rather than standing in its cells.
     pub col_idx: Option<IVec>,
-    /// The surface the chunk's tier is drawn with, which an instance stands
-    /// on, as every mark stands on the surface drawn under it; the page's
-    /// height where none is built yet.
-    pub surface: Option<&'a Drawn<'a>>,
     /// Above z16, the chunk's objects folded to its level's cell, as its
     /// runs draw them: a candidate is kept off a cell they fill.
     pub folded: Option<&'a HashMap<[i64; 3], u32>>,
@@ -440,7 +435,7 @@ impl<'s> DecorBuild<'s> {
                     continue;
                 }
                 let (x, y) = ((gx as f64 + 0.5) * atom.side() - ground.x0 as f64, (gy as f64 + 0.5) * atom.side() - ground.y0 as f64);
-                let z = ground.surface.and_then(|d| d.top_under(x, y)).unwrap_or(ele as f64);
+                let z = ele as f64;
                 scratch.push(
                     first + variant as usize,
                     Instance {

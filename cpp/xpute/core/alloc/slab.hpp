@@ -74,6 +74,8 @@ template <Range R> class SlabMalloc {
     // The page allocator underneath, for a caller that wants whole pages.
     BuddyMalloc<R> &pages() noexcept { return buddy_; }
     const BuddyMalloc<R> &pages() const noexcept { return buddy_; }
+    // Where the page level's row lies, for a host to read in place.
+    const std::uintptr_t *stat() const noexcept { return buddy_.stat(); }
 
     std::size_t used() const noexcept { return buddy_.used(); }
     // Borrowed from the range and not given back, runs at their whole size.

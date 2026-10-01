@@ -453,7 +453,7 @@ pub type AlignUnit = u32;
 /// - `unit` must be a power of two
 /// - `unit` must not exceed WORD_SZ
 pub fn ALIGN(nbyte: u32, unit: AlignUnit) -> Result<u32, MarshalError> {
-    if (unit & unit.wrapping_sub(1)) != 0 || unit > WORD_SZ {
+    if unit == 0 || (unit & unit.wrapping_sub(1)) != 0 || unit > WORD_SZ {
         return Err(MarshalError::new(Errno::EINVAL));
     }
 

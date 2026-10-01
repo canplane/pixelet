@@ -63,6 +63,9 @@ concept Range = requires {
 
 template <Range R> class BuddyMalloc {
     static constexpr std::size_t BUCKET_COUNT = R::MAX_LOG2 - R::MIN_LOG2 + 1;
+    // A tree of fewer than four buckets has no split bit to keep, and one of
+    // more than 33 a bitmap past what a 32-bit range can address.
+    static_assert(BUCKET_COUNT >= 4 && BUCKET_COUNT <= 33, "a buddy tree's bucket count");
 
     // Free lists are circular doubly-linked lists, one a bucket, threaded
     // through the free blocks of that size.
@@ -89,6 +92,9 @@ template <Range R> class BuddyMalloc {
     // Blocks given back. A request refused before might be served once this
     // has moved, and not before.
     std::uint32_t releases() const noexcept { return releases_; }
+    // Where the row lies — base, max, end, live, then releases and allocs as
+    // half-words — for a host to read in place.
+    const std::uintptr_t *stat() const noexcept { return &base_ptr_; }
     // Requests served since the first call.
     std::size_t allocs() const noexcept { return allocs_; }
 

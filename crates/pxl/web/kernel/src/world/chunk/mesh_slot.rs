@@ -172,12 +172,6 @@ impl Pool {
         }
     }
 
-    /// Words a slot's surface lane holds: a sample at the center of each
-    /// block its tier draws.
-    const fn surface_words(self) -> u32 {
-        let axis = CHUNK_CELLS / self.step();
-        axis * axis
-    }
 
     /// The first of its slots: the coarse pool's, then the leaves', then
     /// the cover's.
@@ -205,14 +199,6 @@ impl Pool {
         }
     }
 
-    /// Where its surface lanes begin in `.fixed.surface`, in words.
-    const fn surface_first(self) -> u32 {
-        match self {
-            Pool::Coarse => 0,
-            Pool::Fine => Pool::Coarse.slots() * Pool::Coarse.surface_words(),
-            Pool::Cover => Pool::Coarse.slots() * Pool::Coarse.surface_words() + Pool::Fine.slots() * Pool::Fine.surface_words(),
-        }
-    }
 }
 
 /// Every pool's slots, by `Pool` as an index: the arena the quality policy
@@ -292,16 +278,8 @@ pub struct MeshSlot {
     pub index: usize,
 }
 
-/// `.fixed.surface`: every slot's surface lane, each pool's in turn.
 pub const SURFACE_BYTES: u32 = Pool::Cover.surface_first() * 4 + Pool::Cover.slots() * Pool::Cover.surface_words() * 4;
 
-/// Where slot `index`'s surface lane lies in `.fixed.surface`, and the words
-/// it holds.
-pub const fn surface_of(index: usize) -> (u32, u32) {
-    let pool = Pool::at(index);
-    let n = (index - pool.first()) as u32;
-    ((pool.surface_first() + n * pool.surface_words()) * 4, pool.surface_words())
-}
 
 /// The slot an index names: which group's arena it is in, where in it, and
 /// how many boxes it holds.

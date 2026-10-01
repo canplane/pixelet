@@ -89,7 +89,6 @@ use crate::mem::section::{map, PAGE_BYTES};
 use crate::param::RUN_SET_BYTES;
 use crate::sched::profiler::record::PROFILER_BYTES;
 use crate::world::chunk::build::{BAKE_BYTES, RUN_SETS};
-use crate::world::chunk::mesh_slot::SURFACE_BYTES;
 use crate::world::chunk::table::MOUNTS_BYTES;
 
 /// A range of `.fixed`.
@@ -99,7 +98,6 @@ pub enum Range {
     /// Run set `n`, below RUN_SETS.
     Run(usize),
     Bake,
-    Surface,
     Mounts,
     Decor,
     Blocks,
@@ -108,7 +106,7 @@ pub enum Range {
     Profiler,
 }
 
-const COUNT: usize = 9 + RUN_SETS;
+const COUNT: usize = 8 + RUN_SETS;
 
 impl Range {
     /// Its place in address order.
@@ -124,13 +122,12 @@ impl Range {
                 1 + set
             }
             Range::Bake => 1 + RUN_SETS,
-            Range::Surface => 2 + RUN_SETS,
-            Range::Mounts => 3 + RUN_SETS,
-            Range::Decor => 4 + RUN_SETS,
-            Range::Blocks => 5 + RUN_SETS,
-            Range::Gpu => 6 + RUN_SETS,
-            Range::Host => 7 + RUN_SETS,
-            Range::Profiler => 8 + RUN_SETS,
+            Range::Mounts => 2 + RUN_SETS,
+            Range::Decor => 3 + RUN_SETS,
+            Range::Blocks => 4 + RUN_SETS,
+            Range::Gpu => 5 + RUN_SETS,
+            Range::Host => 6 + RUN_SETS,
+            Range::Profiler => 7 + RUN_SETS,
         }
     }
 }
@@ -146,7 +143,6 @@ const RANGES: [u32; COUNT] = {
         set += 1;
     }
     r[Range::Bake.index()] = BAKE_BYTES;
-    r[Range::Surface.index()] = SURFACE_BYTES;
     r[Range::Mounts.index()] = MOUNTS_BYTES;
     r[Range::Decor.index()] = DECOR_BYTES;
     r[Range::Blocks.index()] = BLOCKS_BYTES;

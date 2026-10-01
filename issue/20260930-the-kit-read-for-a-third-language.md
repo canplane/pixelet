@@ -95,8 +95,8 @@ The three reasons, applied to C++ rather than copied from either side:
 - **The language.** The standard library has no base64, hex, FNV or
   order-keeping map, so `codec/{hex,base64,fnv}` is written, as TypeScript's
   is; the map waits for a runtime that asks for one, since Rust's `core` has
-  none either. `codec/json` waits for a C++ guest that reads the records it was
-  written for.
+  none either. ~~`codec/json` waits for a C++ guest that reads the records it
+  was written for.~~ Withdrawn 10-01: see below.
 - **Errors, as Rust's.** Exceptions are off, so what came from outside is a
   small `Result<T>` (C++20 has no `std::expected`), a broken invariant is `bug`,
   and absence is `std::optional`.
@@ -146,14 +146,46 @@ vector's root type from GRAFT to BRANCH.
   stderr and imported WASI's file calls; a module that imports anything but
   its memory and the clock fails the traces.
 
+## C++ is held to Rust, item for item (10-01)
+
+Two things C++ was let off were not the language's or the platform's but a
+judgment that nothing needed them yet: `codec/json`, "until a C++ guest reads
+the records", and the tree builder, XTP's `TreeView` and encoder, since C++
+had its one writer in place. That is not one of the three reasons, and it is
+withdrawn: what Rust's `core` has, C++'s has. What one side lacks for its
+language or its platform — TypeScript's allocator, Rust's typed-array
+helpers — is still not a gap.
+
+Read item for item against Rust, C++ then took, beside `codec/json`
+(`json.{hpp,cpp}`, held to `golden/codec/json.tsv`) and the tree
+(`xtp/view.hpp`, held to `golden/wire/xtp/encode.tsv` through the tree and a
+buffer that grows): a string read where it lies checked as UTF-8 and one
+decoded into its own with U+FFFD where it is not, as Rust's `get_str_ref`
+and `get_str`; the same check for a string sequence; `get_deep` and a
+branch's values and children; `Strs`'s checked access; TLV's string decoded
+as Rust's reader decodes it; the allocators' `stat` row; a deque's slot let
+go of on a pop and a clear; a slot past the arena's end a bug; `or_bug` for a
+result; errno names and `ErrnoResult`; ties to even by arithmetic rather than
+the FP environment's mode, with the contraction held off in the header; a
+record's number read as Rust reads one; `elem_sz` of a string sequence its
+offsets' word; offsets stored little-endian. Two went the other way, where
+Rust was the one that differed: its `PacketWriter` now judges a string by its
+UTF-16 units as the tree encoder and C++ do, and `get_array` reads an array
+only as the type it was written as. A unit of 0 is EINVAL to `align` in both.
+
+What stays apart is said where it is: a Rust packet must lie on a word to be
+read, since Rust views elements in place, and C++ loads them where they lie;
+and a shallow value's shape follows each language — a bitset packed or a
+list of bytes, a string sequence its own type or a list.
+
 ## Where it stands
 
 **Built** 09-30. The C++ `core` is the kit: `abi`, `alloc`, `codec`,
 `collection`, `math`, `status`, `wire` and `golden`, tested by
-`deno task test:cpp` against the records the other two read. Its XTP is one
-writer, in place, that gives the tree encoder's bytes, and a reader that loads
-elements where they lie, so a packet need not be aligned and nothing is
-allocated.
+`deno task test:cpp` against the records the other two read. Its XTP has a
+writer in place that gives the tree encoder's bytes, the tree and its
+encoder over it (10-01), and a reader that loads elements where they lie, so
+a packet need not be aligned.
 
 The Rust harness is gone. Each guest is a library of the same two C calls, its
 state in the memory it is booted over, and one host —

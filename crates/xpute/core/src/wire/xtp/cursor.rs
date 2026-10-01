@@ -19,7 +19,7 @@ use crate::status::errno::Errno;
 use crate::status::error::MarshalError;
 
 use super::spec::{
-    AlignUnit, Array, NodeType, NodeValue, ScalarType, SequenceType, SpecialType, ALIGN_SZ, DESC_TYPE_MASK, DESC_TYPE_SHAMT, GET_WORD, HDR_SZ, MAGIC, NONE, TYPE_IS_LEAF, TYPE_IS_SEQ, WORD_SZ,
+    AlignUnit, Array, NodeType, NodeValue, ScalarType, SequenceType, SpecialType, ALIGN_SZ, DESC_TYPE_MASK, DESC_TYPE_SHAMT, GET_WORD, HDR_SZ, MAGIC, NONE, TYPE_IS_LEAF, WORD_SZ,
 };
 
 /// A shallow read's value: a leaf's value, null, or a branch's cursor.
@@ -95,11 +95,12 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// A typed-array leaf's elements, as the type the caller names. A read
-    /// of any other node is EBADMSG rather than a wrong slice.
-    pub fn get_array<T: Copy>(&self) -> Result<&'a [T], MarshalError> {
+    /// A typed-array leaf's elements, as the type it was written as: a read
+    /// of any other node, or of an array of another type, is EBADMSG rather
+    /// than its bytes read as another width.
+    pub fn get_array<T: ArrayElem>(&self) -> Result<&'a [T], MarshalError> {
         match self {
-            Cursor::Node(c) if TYPE_IS_SEQ(c.type_) && ![SequenceType::BITSET as u8, SequenceType::STR as u8, SequenceType::STRS as u8].contains(&c.type_) => c.array::<T>(),
+            Cursor::Node(c) if c.type_ == T::TYPE as u8 => c.array::<T>(),
             _ => Err(MarshalError::new(Errno::EBADMSG)),
         }
     }
@@ -816,3 +817,18 @@ impl<'a> Strs<'a> {
         (0..s.len).filter_map(move |i| s.get(i))
     }
 }
+
+/// An element a typed-array leaf holds, and the leaf's type for it.
+pub trait ArrayElem: Copy {
+    const TYPE: SequenceType;
+}
+
+macro_rules! array_elem {
+    ($($t:ty => $seq:ident),* $(,)?) => {
+        $(impl ArrayElem for $t {
+            const TYPE: SequenceType = SequenceType::$seq;
+        })*
+    };
+}
+
+array_elem!(u8 => U8_ARRAY, i8 => I8_ARRAY, u16 => U16_ARRAY, i16 => I16_ARRAY, u32 => U32_ARRAY, i32 => I32_ARRAY, u64 => U64_ARRAY, i64 => I64_ARRAY, f32 => F32_ARRAY, f64 => F64_ARRAY);

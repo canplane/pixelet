@@ -125,12 +125,12 @@ PacketWriter &PacketWriter::strs(std::optional<std::span<const std::string_view>
         if (at) {
             std::uint8_t *payload = buf_.data() + *at + WORD_SZ;
             std::uint32_t off = 0;
-            std::memcpy(payload, &off, 4);
+            store<std::uint32_t>(payload, off);
             for (std::uint32_t i = 0; i < n; i++) {
                 std::string_view s = (*items)[i];
                 std::memcpy(payload + lane + off, s.data(), s.size());
                 off += static_cast<std::uint32_t>(s.size());
-                std::memcpy(payload + 4 * (i + 1), &off, 4);
+                store<std::uint32_t>(payload + 4 * (i + 1), off);
             }
         }
     }

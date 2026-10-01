@@ -193,6 +193,9 @@ pub const GROUND: Lattice = Lattice::new(CELL);
 /// the heights of every page under it, a block of the ground's cells a side.
 pub const EXTENT: Lattice = Lattice::new(EXTENT_CELL);
 
+/// The deck lane's lattice (bake/deck.rs): the ground's cell twice over.
+pub const DECK: Lattice = Lattice::new(DECK_CELL);
+
 /// Cells on a page's side in the ground's lattice.
 pub const PAGE_CELLS: u32 = GROUND.page_cells();
 

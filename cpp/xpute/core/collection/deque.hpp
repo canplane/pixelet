@@ -45,7 +45,7 @@ template <class T> struct Deque {
 
     std::optional<T> pop_front() noexcept {
         if (len == 0) return std::nullopt;
-        T v = std::move(buf[head]);
+        T v = std::exchange(buf[head], T{});
         head = (head + 1) % cap();
         len--;
         return v;
@@ -54,10 +54,12 @@ template <class T> struct Deque {
     std::optional<T> pop_back() noexcept {
         if (len == 0) return std::nullopt;
         len--;
-        return std::move(buf[(head + len) % cap()]);
+        return std::exchange(buf[(head + len) % cap()], T{});
     }
 
+    // Lets every value go, as popping each would.
     void clear() noexcept {
+        for (std::size_t i = 0; i < len; i++) buf[(head + i) % cap()] = T{};
         head = 0;
         len = 0;
     }
