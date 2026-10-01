@@ -251,8 +251,9 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
     o.dist = clamp(dist, MIN_DIST, MAX_DIST);
     moving |= m;
 
-    // `climb` grants the controls and answers terrain by pitching the look
-    // toward straight down: the tilt the look eases to is the controls',
+    // `climb` grants the controls the eye can climb to through the air
+    // (terrain_gate.rs `allowed_step`) and answers terrain by pitching the
+    // look toward straight down: the tilt the look eases to is the controls',
     // bounded by the shallowest that clears the ground, and it steepens
     // quickly and relaxes slowly while the ground still bounds it. dist
     // stays exactly what the controls ask; only the angle gives way, and it

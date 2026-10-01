@@ -96,31 +96,27 @@ const STEP_SAMPLES: u32 = 16;
 /// completely and left it open, since nothing that followed could ever close
 /// it again.
 pub fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
-    // Checked first so the setting skips the heightfield walk, not its result.
-    // `climb` grants every control too — it answers terrain by pitching the
-    // view, not by holding a control back.
-    if settings_store().camera_collision != CameraCollisionMode::stop {
-        return *to;
+    // Checked first so the setting skips the floor's walk, not its result.
+    match settings_store().camera_collision {
+        CameraCollisionMode::through => return *to,
+        // `climb` grants a control and answers the ground by pitching the
+        // view up — where the eye gets there through the air. Where it would
+        // go through something solid to get there — a tunnel's roof, to the
+        // surface over it — that is not climbing over the ground but passing
+        // through it, and the control is held as `stop` holds it.
+        CameraCollisionMode::climb => {
+            if path_clear(from, &climbed(*to)) {
+                return *to;
+            }
+        }
+        CameraCollisionMode::stop => {}
     }
 
     let limit = penetration(from).map_or(0.0, |start| start.max(0.0));
 
-    // The short way round, matching how the orbit's step damps azimuth.
-    let turn = wrap(to.azimuth - from.azimuth, -core::f64::consts::PI, core::f64::consts::PI);
     let mut last = *from;
     for i in 1..=STEP_SAMPLES {
-        let t = i as f64 / STEP_SAMPLES as f64;
-        let at = ViewPose {
-            origin: from.origin,
-            target: [
-                from.target[0] + (to.target[0] - from.target[0]) * t,
-                from.target[1] + (to.target[1] - from.target[1]) * t,
-                from.target[2] + (to.target[2] - from.target[2]) * t,
-            ],
-            dist: from.dist + (to.dist - from.dist) * t,
-            polar: from.polar + (to.polar - from.polar) * t,
-            azimuth: from.azimuth + turn * t,
-        };
+        let at = between(from, to, i as f64 / STEP_SAMPLES as f64);
         // The last clear sample, not the crossing point: landing on the boundary
         // leaves the next frame's rounding to decide which side the eye is on.
         if penetration(&at).is_some_and(|deep| deep > limit) {
@@ -131,6 +127,39 @@ pub fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
     // `to` itself rather than the t=1 sample, so an unobstructed step is the
     // exact values the control asked for.
     *to
+}
+
+/// The pose `t` of the way from `from` to `to`: the straight line in pose
+/// space the orbit's step takes, the azimuth the short way round as the step
+/// damps it.
+fn between(from: &ViewPose, to: &ViewPose, t: f64) -> ViewPose {
+    let turn = wrap(to.azimuth - from.azimuth, -core::f64::consts::PI, core::f64::consts::PI);
+    ViewPose {
+        origin: from.origin,
+        target: std::array::from_fn(|k| from.target[k] + (to.target[k] - from.target[k]) * t),
+        dist: from.dist + (to.dist - from.dist) * t,
+        polar: from.polar + (to.polar - from.polar) * t,
+        azimuth: from.azimuth + turn * t,
+    }
+}
+
+/// Whether the eye of `at` is inside what fills the world: the floor under
+/// it, asked from its own cell (`required_rise`), standing over it. Where
+/// the ground is not known yet nothing says it is.
+fn in_solid(at: &ViewPose) -> bool {
+    let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
+    let eye: V3 = std::array::from_fn(|k| at.target[k] + offset[k]);
+    let mut point = Pvf3::default();
+    local_world_to_canonical(&mut point, &eye, at.origin);
+    Access::now().floor_under(&point).value().is_some_and(|top| local_height(top, at.origin) > eye[2])
+}
+
+/// Whether the eye goes from `from`'s to `to`'s through nothing solid, along
+/// the path the orbit's step takes. What lies between the eye and the map
+/// center is not asked: that hides the map center, and is not the eye
+/// running into anything.
+fn path_clear(from: &ViewPose, to: &ViewPose) -> bool {
+    (1..=STEP_SAMPLES).all(|i| !in_solid(&between(from, to, i as f64 / STEP_SAMPLES as f64)))
 }
 
 /// The orbit half, where the target holds still.
@@ -182,13 +211,17 @@ const CLIMB_PASSES: u32 = 2;
 /// There is nearly always an answer. Straight down the eye is directly above
 /// the target and only terrain higher than `target + dist` could block it.
 pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
-    let Some(mut at) = pose(ViewTriple { dist, polar, azimuth }, None) else { return polar };
+    pose(ViewTriple { dist, polar, azimuth }, None).map_or(polar, |at| climbed(at).polar)
+}
+
+/// `at` with its pitch steepened as `climb_polar` solves it.
+fn climbed(mut at: ViewPose) -> ViewPose {
     for _ in 0..CLIMB_PASSES {
         let Some(rise) = required_rise(&at).filter(|r| *r > 0.0) else { break };
         // Only ever steepens: an eye already high enough is left where the
         // controls put it.
-        let solved = (rise / dist).min(1.0).acos();
+        let solved = (rise / at.dist).min(1.0).acos();
         at.polar = at.polar.min(solved);
     }
-    at.polar
+    at
 }

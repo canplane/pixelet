@@ -12,8 +12,9 @@
 use super::*;
 use crate::control::camera::config::camera_cfg;
 use crate::global::serial;
-use crate::world::frame::coord::canonical_to_local;
+use crate::shell::setting::store::CameraCollisionMode;
 use crate::world::fixture::place;
+use crate::world::frame::coord::canonical_to_local;
 
 struct Rng(u64);
 
@@ -105,13 +106,15 @@ fn a_change_of_person_leaves_the_map_center() {
 /// A pinch is the fingers' spread against where it began, and keeps no
 /// debt: brought back untouched by a limit it asks the distance it began
 /// at; driven past one, the share refused is gone, and the first closing of
-/// the fingers zooms back out from where the limit held it. No ground is
-/// resident here, so the gate allows what is asked and the limits are the
+/// the fingers zooms back out from where the limit held it. The ground has
+/// no say here — the collision set to pass through — so the limits are the
 /// distance's own.
 #[test]
 fn a_pinch_keeps_no_debt() {
     let _g = serial();
     third_person();
+    let collision = settings_store().camera_collision;
+    settings_store().camera_collision = CameraCollisionMode::through;
     place([0.0, 0.0, 10.0], 300.0, 0.9, 0.4);
     let from = camera_store().intent.dist;
     pinch_begin(100.0);
@@ -123,6 +126,7 @@ fn a_pinch_keeps_no_debt() {
     assert_eq!(camera_store().intent.dist, camera_cfg::view::MAX_DIST, "past the farthest");
     pinch(2.0e-3);
     assert_eq!(camera_store().intent.dist, camera_cfg::view::MAX_DIST / 2.0, "the closing went to the refused share");
+    settings_store().camera_collision = collision;
     third_person();
 }
 
