@@ -212,7 +212,7 @@ impl TerrainRepository {
                 class: row.get("class"),
                 width_m: row.get::<_, f32>("width_m").into(),
                 form: row.get::<_, i16>("form") as u8,
-                portal: row.get::<_, i16>("portal") as u8,
+                portal_m: row.get::<_, &[u8]>("portal").into(),
                 geom_wkb: wkb(row),
             })
             .collect())

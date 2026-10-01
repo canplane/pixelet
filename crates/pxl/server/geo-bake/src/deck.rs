@@ -43,7 +43,7 @@ use postgres::Client;
 use clearance::{Under, STACKED};
 use piece::{pieces_of, Piece};
 use profile::{solve as solve_profile, Problem, Profile};
-use pxl_spec::bake::deck::{Form, END, START};
+use pxl_spec::bake::deck::Form;
 use source::DeckOut;
 use structure::{end_of, group, key_of, side_by_side, Graph};
 
@@ -181,7 +181,7 @@ pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<Solve
                 piece,
                 form: piece.form,
                 points,
-                portal: 0,
+                portal_m: Vec::new(),
             });
         }
     }
@@ -196,6 +196,33 @@ pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<Solve
         structures: structures.len(),
         points,
     })
+}
+
+/// How far each point of a graph is from the nearest of `sources` along
+/// it, in its metres: Dijkstra's, from all of them at once.
+fn nearest_along(adj: &[Vec<(u32, f64)>], sources: impl Iterator<Item = u32>) -> Vec<f64> {
+    use std::cmp::Reverse;
+    use std::collections::BinaryHeap;
+    let mut dist = vec![f64::INFINITY; adj.len()];
+    let mut heap = BinaryHeap::new();
+    for s in sources {
+        dist[s as usize] = 0.0;
+        heap.push(Reverse((0u64, s)));
+    }
+    while let Some(Reverse((d, n))) = heap.pop() {
+        let d = f64::from_bits(d);
+        if d > dist[n as usize] {
+            continue;
+        }
+        for &(m, len) in &adj[n as usize] {
+            let next = d + len;
+            if next < dist[m as usize] {
+                dist[m as usize] = next;
+                heap.push(Reverse((next.to_bits(), m)));
+            }
+        }
+    }
+    dist
 }
 
 /// The ends of tunnels that are portals, as (piece, its last end): an end
@@ -253,20 +280,16 @@ fn bores_of<'a>(tunnels: &'a [Piece], portal_at: &HashSet<(i64, i64)>, structure
         });
         slopes.count(&profile);
         let floor = below(&profile.top);
+        let from_portal = nearest_along(&g.adj, ends.iter().map(|&(e, _)| e));
         for (k, &m) in members.iter().enumerate() {
             let piece = &tunnels[m];
-            let points: Vec<[f64; 3]> = on_structure(piece, &g.along[k], |n| floor[n] < ground[n])
-                .iter()
-                .map(|&(node, _)| [g.at[node as usize][0], g.at[node as usize][1], floor[node as usize]])
-                .collect();
-            if points.len() >= 2 {
-                let at = |p: &[f64; 3]| u8::from(portal_at.contains(&key_of([p[0], p[1], 0.0])));
-                let portal = (at(&points[0]) * START) | (at(&points[points.len() - 1]) * END);
+            let nodes = on_structure(piece, &g.along[k], |n| floor[n] < ground[n]);
+            if nodes.len() >= 2 {
                 out.push(DeckOut {
                     piece,
                     form: piece.form,
-                    points,
-                    portal,
+                    points: nodes.iter().map(|&(n, _)| [g.at[n as usize][0], g.at[n as usize][1], floor[n as usize]]).collect(),
+                    portal_m: nodes.iter().map(|&(n, _)| from_portal[n as usize] as f32).collect(),
                 });
             }
         }

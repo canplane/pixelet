@@ -32,8 +32,8 @@ fn page(seed: u64) -> Terrain {
         .collect();
     let mut decks = deck::Builder::default();
     for _ in 0..3 {
-        let points: Vec<([f64; 2], i16)> = (0..4).map(|_| ([(rng.next() % 600) as f64, (rng.next() % 600) as f64], rng.next() as i16)).collect();
-        decks.push(points, 1 + (rng.next() % 200) as u8, rng.next() as u8, deck::Form::of((rng.next() % 2) as u8), (rng.next() % 4) as u8);
+        let points: Vec<([f64; 2], i16, u16)> = (0..4).map(|_| ([(rng.next() % 600) as f64, (rng.next() % 600) as f64], rng.next() as i16, rng.next() as u16)).collect();
+        decks.push(points, 1 + (rng.next() % 200) as u8, rng.next() as u8, deck::Form::of((rng.next() % 2) as u8));
     }
     Terrain {
         ele: ele.into(),
@@ -57,7 +57,7 @@ fn room() -> PageRoom {
             width: vec![0; deck::MAX_DECKS].leak(),
             kind: vec![0; deck::MAX_DECKS].leak(),
             form: vec![0; deck::MAX_DECKS].leak(),
-            portal: vec![0; deck::MAX_DECKS].leak(),
+            portal: vec![0; deck::MAX_POINTS].leak(),
         },
     }
 }

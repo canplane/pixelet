@@ -322,8 +322,9 @@ pub struct DeckOut<'a> {
     pub form: Form,
     /// Each point, its top in metres as Z.
     pub points: Vec<[f64; 3]>,
-    /// Which of its ends are portals (pxl-spec bake/deck.rs `START`, `END`).
-    pub portal: u8,
+    /// How far each point is from the nearest portal down its tunnel, in
+    /// EPSG:3857 metres; empty on a deck and on a bore with none.
+    pub portal_m: Vec<f32>,
 }
 
 /// `overture_deck`, made again whole: the bake reads it a page at a time
@@ -331,7 +332,7 @@ pub struct DeckOut<'a> {
 pub fn write(client: &mut Client, decks: &[DeckOut]) -> Result<(), postgres::Error> {
     client.batch_execute(
         "DROP TABLE IF EXISTS overture_deck;
-         CREATE TABLE overture_deck (gers_id TEXT NOT NULL, subtype TEXT NOT NULL, class TEXT, width_m REAL NOT NULL, form SMALLINT NOT NULL, portal SMALLINT NOT NULL, geom GEOMETRY(LineStringZ, 3857) NOT NULL);",
+         CREATE TABLE overture_deck (gers_id TEXT NOT NULL, subtype TEXT NOT NULL, class TEXT, width_m REAL NOT NULL, form SMALLINT NOT NULL, portal BYTEA NOT NULL, geom GEOMETRY(LineStringZ, 3857) NOT NULL);",
     )?;
     for batch in decks.chunks(BATCH) {
         let gers: Vec<&str> = batch.iter().map(|d| d.piece.gers_id.as_str()).collect();
@@ -339,10 +340,10 @@ pub fn write(client: &mut Client, decks: &[DeckOut]) -> Result<(), postgres::Err
         let classes: Vec<Option<&str>> = batch.iter().map(|d| d.piece.class.as_deref()).collect();
         let widths: Vec<f32> = batch.iter().map(|d| d.piece.width_m as f32).collect();
         let forms: Vec<i16> = batch.iter().map(|d| i16::from(d.form.byte())).collect();
-        let portals: Vec<i16> = batch.iter().map(|d| i16::from(d.portal)).collect();
+        let portals: Vec<Vec<u8>> = batch.iter().map(|d| d.portal_m.iter().flat_map(|m| m.to_le_bytes()).collect()).collect();
         let lines: Vec<String> = batch.iter().map(|d| wkt(d.points.iter().map(|q| format!("{} {} {:.2}", q[0], q[1], q[2])), true)).collect();
         client.execute(
-            "INSERT INTO overture_deck SELECT g, s, c, m, f, p, ST_GeomFromText(w, 3857) FROM unnest($1::text[], $2::text[], $3::text[], $4::real[], $5::int2[], $6::int2[], $7::text[]) AS t(g, s, c, m, f, p, w)",
+            "INSERT INTO overture_deck SELECT g, s, c, m, f, p, ST_GeomFromText(w, 3857) FROM unnest($1::text[], $2::text[], $3::text[], $4::real[], $5::int2[], $6::bytea[], $7::text[]) AS t(g, s, c, m, f, p, w)",
             &[&gers, &subtypes, &classes, &widths, &forms, &portals, &lines],
         )?;
     }

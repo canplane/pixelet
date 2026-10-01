@@ -4,7 +4,7 @@ use super::*;
 
 fn one(points: &[[f64; 2]], tops: &[i16], width_cells: f64) -> Decks {
     let mut b = Builder::default();
-    b.push(points.iter().zip(tops).map(|(&p, &t)| (p, t)), (width_cells * POINT_SCALE) as u8, 3, Form::Deck, 0);
+    b.push(points.iter().zip(tops).map(|(&p, &t)| (p, t, NO_PORTAL)), (width_cells * POINT_SCALE) as u8, 3, Form::Deck);
     b.finish()
 }
 

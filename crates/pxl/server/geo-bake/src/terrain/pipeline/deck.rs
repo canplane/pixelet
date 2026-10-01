@@ -14,7 +14,7 @@
 //! can be drawn there.
 
 use pxl_spec::bake::constant::{CELL_PER_M, XY_CELL_PER_M};
-use pxl_spec::bake::deck::{self, Builder, Decks, Form, BORE_CONTEXT, END, POINT_SCALE, START};
+use pxl_spec::bake::deck::{self, Builder, Decks, Form, NO_PORTAL, POINT_SCALE};
 use pxl_spec::bake::format::DeckRow;
 use pxl_spec::space::adapter::epsg3857::G3857;
 use pxl_spec::space::pyramid::PAGE_CELLS;
@@ -32,26 +32,24 @@ pub fn bake_decks(rows: &[DeckRow], page_min: G3857) -> Option<Decks> {
         let width = row.width_m * cell_per_m;
         let width_code = (width * POINT_SCALE).round().clamp(1.0, f64::from(u8::MAX)) as u8;
         let form = Form::of(row.form);
-        // A bore is carried past the page as far as a column in it looks for
-        // a portal (pxl-spec bake/deck.rs `BORE_CONTEXT`).
-        let reach = deck::footprint(width) + if form.cuts() { BORE_CONTEXT } else { 0.0 };
-        let lines = wkb_to_geometries(&row.geom_wkb);
-        let count = lines.len();
-        for (n, g) in lines.into_iter().enumerate() {
-            let local: Vec<([f64; 2], i16)> = g
+        let portal_m: Vec<f32> = row.portal_m.as_chunks::<4>().0.iter().map(|&b| f32::from_le_bytes(b)).collect();
+        for g in wkb_to_geometries(&row.geom_wkb) {
+            // How far from a portal, in the page's cells, as a position is.
+            let from_portal = |i: usize| match portal_m.get(i) {
+                Some(&m) if portal_m.len() == g.points.len() => (f64::from(m) * XY_CELL_PER_M).round().min(f64::from(NO_PORTAL - 1)) as u16,
+                _ => NO_PORTAL,
+            };
+            let local: Vec<([f64; 2], i16, u16)> = g
                 .points
                 .iter()
-                .map(|p| {
+                .enumerate()
+                .map(|(i, p)| {
                     let at = [(p[0] - page_min[0]) * XY_CELL_PER_M, (p[1] - page_min[1]) * XY_CELL_PER_M];
-                    (at, (p[2] * cell_per_m).round() as i16)
+                    (at, (p[2] * cell_per_m).round() as i16, from_portal(i))
                 })
                 .collect();
-            let last = local.len() - 1;
-            for [a, b] in runs_within(&local, reach) {
-                // A run's end is the line's own only where the run reaches it.
-                let start = if n == 0 && a == 0 { row.portal & START } else { 0 };
-                let end = if n + 1 == count && b == last { row.portal & END } else { 0 };
-                decks.push(local[a..=b].iter().copied(), width_code, kind, form, start | end);
+            for [a, b] in runs_within(&local, deck::footprint(width)) {
+                decks.push(local[a..=b].iter().copied(), width_code, kind, form);
             }
         }
     }
@@ -60,7 +58,7 @@ pub fn bake_decks(rows: &[DeckRow], page_min: G3857) -> Option<Decks> {
 
 /// The runs of consecutive segments of a line that come within `reach`
 /// cells of the page, as their first and last points.
-fn runs_within(points: &[([f64; 2], i16)], reach: f64) -> Vec<[usize; 2]> {
+fn runs_within(points: &[([f64; 2], i16, u16)], reach: f64) -> Vec<[usize; 2]> {
     let (lo, hi) = (-reach, f64::from(PAGE_CELLS) + reach);
     let near = |a: [f64; 2], b: [f64; 2]| (0..2).all(|k| a[k].max(b[k]) >= lo && a[k].min(b[k]) <= hi);
     let mut runs = Vec::new();

@@ -56,7 +56,7 @@ const fn deck_lane(count: usize, size: usize) -> u32 {
 
 /// A page's deck lanes, in the order their planes lie: where each deck's
 /// points start, the points, their tops, each deck's width, its kind, its
-/// form and its portals.
+/// form, and how far each point is from a portal.
 pub const DECK_LANE_BYTES: [u32; 7] = [
     deck_lane(MAX_DECKS + 1, 4),
     deck_lane(MAX_POINTS, 4),
@@ -64,7 +64,7 @@ pub const DECK_LANE_BYTES: [u32; 7] = [
     deck_lane(MAX_DECKS, 1),
     deck_lane(MAX_DECKS, 1),
     deck_lane(MAX_DECKS, 1),
-    deck_lane(MAX_DECKS, 1),
+    deck_lane(MAX_POINTS, 2),
 ];
 
 /// The deck planes across every record.
