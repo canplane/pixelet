@@ -799,11 +799,11 @@ impl Builder {
         }
     }
 
-    /// A new volume with the chunk's terrain painted in, open; none when a
-    /// paint was refused.
+    /// A new volume with the chunk's terrain painted in, open; none when the
+    /// sample or the paint was refused.
     fn paint_terrain(&mut self, world: &mut World, id: u32, read: Read) -> Option<u32> {
         let show = self.chunks[&id].structures;
-        self.sample.read(&read.around(), read.first, hidden_ground(show));
+        self.sample.read(&read.around(), read.first, hidden_ground(show)).ok()?;
         let volume = world.volumes.open();
         if !self.sample.paint(world.volumes, volume) {
             world.volumes.release(volume);
@@ -902,7 +902,10 @@ impl Builder {
             return Progress::Blocked;
         }
         let show = self.chunks[&id].structures;
-        self.sample.read(&read.around(), read.first, hidden_ground(show));
+        if self.sample.read(&read.around(), read.first, hidden_ground(show)).is_err() {
+            self.refuse(world, id);
+            return Progress::Blocked;
+        }
         xpute_core::ensure!(self.direct.begin_direct(), ENOTRECOVERABLE);
         // Every column of the set, the chunk's own and the apron's: the
         // sample holds both, and the writer wants them in one order.
@@ -927,7 +930,10 @@ impl Builder {
         }
         let c = &self.chunks[&id];
         let (show, level, base) = (c.structures, c.level(), c.base());
-        self.sample.read(&read.around(), read.first, hidden_ground(show));
+        if self.sample.read(&read.around(), read.first, hidden_ground(show)).is_err() {
+            self.refuse(world, id);
+            return Progress::Blocked;
+        }
         let target = GROUND.scale(level);
         let (x0, y0) = (ivec::X(base), ivec::Y(base));
         // Its own cells and the apron of one a fold reads, which reaches into

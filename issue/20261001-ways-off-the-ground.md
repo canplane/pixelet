@@ -182,10 +182,52 @@ a whole city of them would put on the device is a decision of its own.
 Nothing draws what is under the ground; a cut-away view would put tunnels
 in the same deck records, below it.
 
+## What came after, the same evening
+
+Seen on the screen, the first decks stood, and three things were wrong
+with the ground around them, each decided from what the precedents do.
+
+- **Widths.** A way was painted at a square kernel's odd width and at its
+  class's guess, so a residential street was six metres and a diagonal
+  road wider than an axis-aligned one. A way now covers a cell whose center
+  lies within half its width of its line, never under half a cell's
+  diagonal so it stays connected (`pxl-spec bake/way.rs`), on the ground
+  and on a deck alike. The width is `width_rules` where the source gives
+  one — on about one segment in a hundred, much of it an import's width
+  classes — and else its lanes: 3.5 m a lane, osm2lanes' default, the
+  lanes and margins of the class's usual cross-section as Arnis lands on
+  them, one way for a carriageway of a road drawn as two
+  (`terrain/pipeline/overture/width.rs`).
+- **Order and roles.** Ways paint in OpenStreetMap Carto's `z_order`: paths
+  under service lanes under every link, links under every through road,
+  railways over all. Overture's `subclass` says a footway is a sidewalk or
+  a crossing: a crossing is not painted over the road it crosses, and the
+  gap between a sidewalk and its road, or between a road's two
+  carriageways, is paved where it is no wider than osm2lanes' 2 m buffer
+  and left as land where it is wider, as osm2streets models a separated
+  sidewalk with a planted buffer (`terrain/pipeline/corridor.rs`).
+- **Classes.** The transport types follow OpenMapTiles' transportation
+  classes: trunk, tertiary, service and track are types of their own, a
+  living street is a road and a tram a transit line, in Carto's colors.
+
+Every cell was painted half a cell north-east of where its feature lies,
+lines and polygons alike, against the elevation's and the decks' centers;
+it is painted at its center now. Buildings stand a cell above the ground,
+as water lies one below it.
+
+Decks running side by side — two carriageways, a sidewalk beside a road —
+are one structure with one profile, joined where their edges lie within
+2 m and their headings within 20°, as Arnis unions parallel decks; a deck
+over wide water clears a metre more for every hundred metres of it, up to
+fifteen.
+
 ## Where it stands
 
-**Done:** the ingest carries the flags and keeps its extract; the bake
-paints only what is seen (5f634ce5 and the commits before it).
-**Decided:** decks as lines in the terrain page, solved offline after
-Arnis. **Next:** the solve, the deck branch of the page and its fold, the
-chunk's drawing and the ray's hit, and terrain v8.
+**Done:** the ingest carries the flags, widths, one-way rules and
+subclasses and keeps its extract; the bake paints only what is seen, at
+the cells' centers, with real widths, Carto's order and the corridor's
+gaps; decks are solved, baked as lines, folded, drawn and met by the ray;
+terrain is v8 on the dev stack. **Next:** a tunnel's mouth carved where
+it meets a hillside; `Access::at`'s callers, each asked what it wants now
+that a column can hold more than its ground; the surface named in the
+`Terrain` type; terrain v8 baked whole and published.

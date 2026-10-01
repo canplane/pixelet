@@ -276,7 +276,7 @@ fn build(c: &mut Cells, cell: DecorCell, kinds: &[Kind], store: &Store, draw: &m
             own: PageSource { page: view, origin: [0, 0], n: 1 },
             beside: [None; 8],
         };
-        c.sample.read(&around, [tx0 as i64, ty0 as i64], hidden_ground(settings_store().structures));
+        c.sample.read(&around, [tx0 as i64, ty0 as i64], hidden_ground(settings_store().structures)).ok()?;
     }
     c.placed.clear();
     c.placed.try_reserve(c.cols.len()).ok()?;

@@ -35,6 +35,7 @@ use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, PAGE_CELLS};
 use crate::mesh::paint::palette::shader_meta::{ground_color_lookup, ground_layer_index_lookup};
 use crate::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
 use crate::mesh::volume::{MaterialClasses, Volumes, Voxel, NO_LAYER};
+use crate::mesh::{try_push, Refused};
 use crate::mesh::voxel_scan::{apron_col, APRON, COL_SPAN};
 use std::sync::LazyLock;
 
@@ -130,6 +131,22 @@ impl Materials {
     }
 }
 
+/// The decks over a chunk's own columns, from the page they are drawn from:
+/// a column, a deck and what it is there.
+fn collect_decks(over: &mut Vec<(usize, usize, Over)>, own: Option<&PageSource>, first: [i64; 2]) -> Result<(), Refused> {
+    let Some(s) = own else { return Ok(()) };
+    let n = f64::from(s.n);
+    let origin = [0, 1].map(|k| (s.origin[k] + first[k]) as f64 / n);
+    let side = CHUNK_CELLS as i64;
+    let mut grown = Ok(());
+    s.page.decks.over_grid(origin, 1.0 / n, [side, side], |cx, cy, d, o| {
+        if grown.is_ok() {
+            grown = try_push(over, (apron_col(cx as u32, cy as u32) as usize, d, o));
+        }
+    });
+    grown
+}
+
 /// A voxel material: the class over the color.
 fn pack(class: u8, rgb: [u8; 3]) -> u32 {
     ((class as u32) << 24) | ((rgb[0] as u32) << 16) | ((rgb[1] as u32) << 8) | rgb[2] as u32
@@ -194,6 +211,9 @@ pub struct ChunkSample {
     /// lowest first and none overlapping; the apron's columns have none.
     pub span_at: Vec<u32>,
     pub spans: Vec<Span>,
+    /// The decks over each column as they are read, kept between reads: a
+    /// column, a deck and what it is there.
+    over: Vec<(usize, usize, Over)>,
 }
 
 /// A run off the ground: a deck's slab or a pier, from `lo` up to `hi`
@@ -215,6 +235,7 @@ impl Default for ChunkSample {
             floor: 0,
             span_at: vec![0; COL_SPAN2 + 1],
             spans: Vec::new(),
+            over: Vec::new(),
         }
     }
 }
@@ -226,8 +247,9 @@ impl ChunkSample {
     /// height of the source's surface at its own center, so a cell read from
     /// a coarser page is that page's ground at the chunk's step and nothing
     /// invented. A channel in `hidden` is stepped over, as `shown_ground`
-    /// steps over it.
-    pub fn read(&mut self, around: &Around, first: [i64; 2], hidden: ChannelMask) {
+    /// steps over it. Refused where the decks over it need more room than
+    /// the heap grants.
+    pub fn read(&mut self, around: &Around, first: [i64; 2], hidden: ChannelMask) -> Result<(), Refused> {
         let tables = &*MATERIALS;
         let skip = GROUND_CH_KEYS.map(|k| hidden & channel_bit(k) != 0);
         let mut min_ele = i32::MAX;
@@ -291,22 +313,22 @@ impl ChunkSample {
         // One band-aligned floor shared by the whole chunk, under every peak.
         self.floor = (min_ele - TERRAIN_Z_MARGIN).div_euclid(BAND_CELLS as i32) * BAND_CELLS as i32;
         let shown = !skip[ch_index(GroundChannelKey::TRANSPORT)];
-        self.read_decks(if shown { Some(&around.own) } else { None }, first);
+        self.read_decks(if shown { Some(&around.own) } else { None }, first)
     }
 
     /// The decks over the chunk's own columns, from the page they are drawn
     /// from: each column's highest top of each deck, as its slab and pier.
-    fn read_decks(&mut self, own: Option<&PageSource>, first: [i64; 2]) {
+    fn read_decks(&mut self, own: Option<&PageSource>, first: [i64; 2]) -> Result<(), Refused> {
+        let mut over = core::mem::take(&mut self.over);
+        over.clear();
+        let built = collect_decks(&mut over, own, first).and_then(|()| self.spans_of(&mut over));
+        self.over = over;
+        built
+    }
+
+    /// Each column's spans off the ground from the decks over it.
+    fn spans_of(&mut self, over: &mut Vec<(usize, usize, Over)>) -> Result<(), Refused> {
         let tables = &*MATERIALS;
-        let mut over: Vec<(usize, usize, Over)> = Vec::new();
-        if let Some(s) = own {
-            let n = f64::from(s.n);
-            let origin = [0, 1].map(|k| (s.origin[k] + first[k]) as f64 / n);
-            let side = CHUNK_CELLS as i64;
-            s.page.decks.over_grid(origin, 1.0 / n, [side, side], |cx, cy, d, o| {
-                over.push((apron_col(cx as u32, cy as u32) as usize, d, o));
-            });
-        }
         // A deck's highest over a column, where two of its segments meet.
         over.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)).then(b.2.top.total_cmp(&a.2.top)));
         over.dedup_by_key(|o| (o.0, o.1));
@@ -325,19 +347,25 @@ impl ChunkSample {
                     continue;
                 };
                 let [lo, hi] = occupied.slab;
-                self.spans.push(Span {
-                    lo,
-                    hi,
-                    material: slab,
-                    layer: slab_layer,
-                });
-                if let (Some([lo, hi]), Some((pier, pier_layer))) = (occupied.pier, tables.of(PIER.0, PIER.1)) {
-                    self.spans.push(Span {
+                try_push(
+                    &mut self.spans,
+                    Span {
                         lo,
                         hi,
-                        material: pier,
-                        layer: pier_layer,
-                    });
+                        material: slab,
+                        layer: slab_layer,
+                    },
+                )?;
+                if let (Some([lo, hi]), Some((pier, pier_layer))) = (occupied.pier, tables.of(PIER.0, PIER.1)) {
+                    try_push(
+                        &mut self.spans,
+                        Span {
+                            lo,
+                            hi,
+                            material: pier,
+                            layer: pier_layer,
+                        },
+                    )?;
                 }
             }
             // Lowest first, and a higher span keeps what two of them share.
@@ -357,6 +385,7 @@ impl ChunkSample {
             col += 1;
         }
         self.span_at[COL_SPAN2] = self.spans.len() as u32;
+        Ok(())
     }
 
     /// Column `i`'s runs, lowest first: its ground from `floor`, then what
