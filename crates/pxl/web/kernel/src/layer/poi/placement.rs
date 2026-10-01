@@ -2,16 +2,16 @@
 
 //! Where the counts are drawn. What the POI pages draw of the view is the
 //! layer's own cover (world/pyramid/cover.rs `Cover`): pieces of the ground in
-//! view, none over another, so every place under them is counted once. Each
-//! of their cells — cells of the POI lattice (pxl-spec bake/poi_page.rs
-//! `POI_LATTICE`) — is counted into itself, or into the cell over it at the
-//! level the view wants there, where a finer page stands in for it: how
-//! coarse places are is the camera's distance and nothing else, the ground's
-//! the same way but apart from it. A cell holding two places or more is a
-//! count, a cell holding one is the place, and either stands at the center
-//! of the z16 ground cell its places' centroid falls in — the page's, or the
-//! centroids of the finer cells counted into it weighted by their counts. It
-//! stands in all three axes, on the surface the model says is drawn there:
+//! view, none over another, so every place under them is counted once. A
+//! piece is read from the page that says its ground (`Paging::source`): its
+//! own, at the piece's level, or a page over it that settles it, whose cells
+//! there hold one place or none. Either way each cell of the POI lattice
+//! (pxl-spec bake/poi_page.rs `POI_LATTICE`) under the piece is one badge,
+//! already folded as the pyramid keeps it, and no two of them meet in one
+//! cell of the piece's level. A cell holding two places or more is a count,
+//! a cell holding one is the place, and either stands at the center of the
+//! z16 ground cell its places' centroid falls in. It stands in all three
+//! axes, on the surface the model says is drawn there:
 //! what a ray down through the cell meets first, ground or a placed object,
 //! at the level the view draws that ground at (world/access.rs `first_hit`)
 //! — the world as it is known, never the state of a mesh being built.
@@ -33,8 +33,8 @@ use pxl_render::asset::atlas::NO_SLOT;
 use pxl_spec::bake::poi_page::{PoiPage, POI_LATTICE};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::{ivec, projection, REACH};
-use pxl_spec::space::pyramid::{Cell, LevelPage, GROUND};
-use std::collections::{BTreeMap, HashSet};
+use pxl_spec::space::pyramid::{Cell, GROUND};
+use std::collections::HashSet;
 
 #[derive(Default)]
 struct Placement {
@@ -48,8 +48,11 @@ struct Placement {
     /// it is drawn over, on the surface there.
     hits: Vec<([f64; 4], Label, Pvf3)>,
     /// What a turn works in, kept so a settled turn asks the heap for
-    /// nothing: each badge's label and where it stands, and the instances
-    /// written for the set.
+    /// nothing: each badge found, by the cell of the piece's level it stands
+    /// in — the order the badges are listed in — with its label and the z16
+    /// cell and height it stands at; each badge's label and where it stands;
+    /// and the instances written for the set.
+    found: Vec<(Cell, Label, Cell, f64)>,
     labeled: Vec<(Label, Pvf3)>,
     instances: Vec<f32>,
 }
@@ -71,19 +74,6 @@ fn top_at(at: &Pvf3, level: u32) -> Option<f64> {
     Some(high - hit.t)
 }
 
-/// How many places a badge's cell holds, where it holds one, that place —
-/// its page and pool index, read only once the count is known to be one —
-/// and the sum of its places' z16 ground cells, as offsets in the badge's
-/// cell, which over the count is their centroid.
-#[derive(Clone, Copy, Default)]
-struct Tally {
-    count: u32,
-    /// The level the view draws the ground its places stand on at.
-    level: u32,
-    place: Option<(LevelPage, u32)>,
-    at: [u64; 2],
-}
-
 pub fn step(ctx: &mut TickContext) {
     let p = PLACEMENT.get(Placement::default);
     if !enabled() || crate::control::camera::controller::map_center().is_none() {
@@ -98,18 +88,18 @@ pub fn step(ctx: &mut TickContext) {
     let origin = local_world_origin();
     let base = [ivec::to_real(ivec::X(origin)), ivec::to_real(ivec::Y(origin)), ivec::to_real(ivec::Z(origin))];
     let pages = PoiPage::pyramid();
-    let mut cells: BTreeMap<Cell, Tally> = BTreeMap::new();
-    let Some(domain) = crate::world::pyramid::domain::current() else { return };
+    // No pieces made yet: what was placed stands.
+    if crate::world::pyramid::domain::current().is_none() {
+        return;
+    }
+    let mut found = core::mem::take(&mut p.found);
+    found.clear();
     for &chunk in &crate::world::pyramid::cover::cover::<PoiPage>().0.drawn {
         // The page that draws the chunk's ground: its own, or where the tree
         // stops above it, the page over it that says that ground — whose cells
         // there hold one place or none, each standing where it stands.
         let Some(src) = pages.source(chunk.page()) else { continue };
         let Some(poi) = pages.get(src) else { continue };
-        // The level the view wants the ground at: a finer page standing in
-        // counts into its cells, and a coarser one is counted where its places
-        // stand, which is its own cells where it is the chunk's page.
-        let level = domain.wanted_over(chunk).level();
         // The chunk's ground in the source's cells: a block of them, or where
         // the source is so much coarser that one of its cells is wider than
         // the chunk, part of one, whose place is the chunk's only if it stands
@@ -136,29 +126,19 @@ pub fn step(ctx: &mut TickContext) {
                 if top - 1.0 < z0 || top - 1.0 >= z1 {
                     continue;
                 }
-                let up = POI_LATTICE.cell_of(level, &ground.mid());
-                let at = up.offset_of(ground);
-                let t = cells.entry(up).or_default();
-                t.count += c.count;
-                t.level = chunk.level();
-                t.place = poi.place(c).map(|_| (src, c.place));
-                for (sum, lane) in t.at.iter_mut().zip(at) {
-                    *sum += lane as u64 * c.count as u64;
-                }
+                let label = match poi.place(c) {
+                    Some(_) => Label::Place { page: src, place: c.place },
+                    None => Label::Count(c.count),
+                };
+                found.push((POI_LATTICE.cell_of(chunk.level(), &ground.mid()), label, ground, top));
             }
         }
     }
+    found.sort_unstable_by_key(|f| f.0);
     p.batch.reset();
     let mut labeled = core::mem::take(&mut p.labeled);
     labeled.clear();
-    for (cell, t) in cells {
-        let label = match (t.count, t.place) {
-            (1, Some((page, place))) => Label::Place { page, place },
-            _ => Label::Count(t.count),
-        };
-        let mean = |sum: u64| ((sum + t.count as u64 / 2) / t.count as u64) as u32;
-        let stands = cell.inner_at(GROUND, 0, t.at.map(mean));
-        let Some(top) = top_at(&stands.mid(), t.level) else { continue };
+    for &(_, label, stands, top) in &found {
         let Some(width) = badge::width(label) else { continue };
         let center = stands.center(top);
         let local = crate::world::frame::coord::canonical_to_local(&center, origin);
@@ -166,6 +146,7 @@ pub fn step(ctx: &mut TickContext) {
         labeled.push((label, center));
     }
     badge::retain(&labeled.iter().map(|l| l.0).collect());
+    p.found = found;
     let v = view();
     select_visible_billboards(&mut p.batch, v.width, v.height, &mut p.kept);
     p.drawn.clear();
