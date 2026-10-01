@@ -103,7 +103,7 @@ fn a_block_says_what_its_cells_say() {
             for y in (0..n).step_by(side as usize) {
                 for x in (0..n).step_by(side as usize) {
                     let lane = index.extent();
-                    let cells = (y..y + side).flat_map(|cy| (x..x + side).map(move |cx| lane[EXTENT.cell_index(cx, cy) as usize]));
+                    let cells = (y..y + side).flat_map(|cy| (x..x + side).map(move |cx| drawn(lane[EXTENT.cell_index(cx, cy) as usize])));
                     let lo = cells.clone().map(|[l, _]| l).min().unwrap();
                     let hi = cells.clone().map(|[_, h]| h).max().unwrap();
                     let span = cells.map(|[l, h]| (i32::from(h) - i32::from(l)) as u16).max().unwrap();

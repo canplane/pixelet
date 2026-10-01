@@ -10,8 +10,6 @@ use xpute_core::math::scalar::round;
 
 use super::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
 use super::deck::Decks;
-use super::ground::cell_shift;
-use super::pack::GroundCell;
 use crate::space::pyramid::{EXTENT, GROUND, PAGE_CELLS};
 
 /// Cells a sample stands for along an axis.
@@ -109,35 +107,25 @@ pub fn bound(page_ele: &[i16], [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> [i32; 
 }
 
 /// A page's own surface's extent: for each of the index lattice's cells
-/// (`EXTENT`), the lowest and highest the ground drawn anywhere in it stands,
-/// in cells — the interpolation's overshoot and the cells' shift included,
-/// so a point anywhere over the cell, a cell's center or a finer cell read
-/// from this page, lies inside it — the highest any deck over it is, and the
-/// lowest a bore through it cuts.
+/// (`EXTENT`), the lowest and highest the ground's surface stands anywhere
+/// in it, in cells — the interpolation's overshoot included, so a point
+/// anywhere over the cell, a cell's center or a finer cell read from this
+/// page, lies inside it — the highest any deck over it is, and the lowest
+/// any bore's floor under it is. What the client draws past these is its
+/// own, and widens them where they are read (bake/format.rs `drawn`).
 /// Saturated at an i16's range, which is some 78 km at the equator and is
 /// never met.
-pub fn extent_of(page_ele: &[i16], cells: &[GroundCell], decks: &Decks) -> Vec<[i16; 2]> {
+pub fn extent_of(page_ele: &[i16], decks: &Decks) -> Vec<[i16; 2]> {
     let n = GROUND.scale(0).count_in(EXTENT.scale(0)) as f64;
     let side = EXTENT.page_cells();
     (0..side * side)
         .map(|index| {
             let [ex, ey] = EXTENT.in_page(index).map(|v| v as f64 * n);
             let [lo, hi] = bound(page_ele, [ex, ex + n], [ey, ey + n]);
-            let (mut slo, mut shi) = (i32::MAX, i32::MIN);
-            let mut last = None;
-            for i in GROUND.under(EXTENT, index) {
-                let cell = cells[i as usize];
-                if last == Some(cell) {
-                    continue;
-                }
-                last = Some(cell);
-                let s = cell_shift(cell) as i32;
-                (slo, shi) = (slo.min(s), shi.max(s));
-            }
             let deck = decks.highest_in([ex, ex + n], [ey, ey + n]).map_or(i32::MIN, i32::from);
             let bore = decks.lowest_in([ex, ex + n], [ey, ey + n]).map_or(i32::MAX, i32::from);
             let clamp = |v: i32| v.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
-            [clamp((lo + slo).min(bore)), clamp((hi + shi).max(deck))]
+            [clamp(lo.min(bore)), clamp(hi.max(deck))]
         })
         .collect()
 }

@@ -40,7 +40,7 @@ use std::collections::HashSet;
 
 use postgres::Client;
 
-use clearance::{Under, BORE_DEPTH, STACKED};
+use clearance::{Under, STACKED};
 use piece::{pieces_of, Piece};
 use profile::{solve as solve_profile, Problem, Profile};
 use pxl_spec::bake::deck::Form;
@@ -82,7 +82,7 @@ pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<Solve
 
     source::stage(client, &pieces)?;
     let mut needs = needs_of(client, url, &pieces)?;
-    let ramps = approach::approaches(url, &pieces, &approach::free_ends(&pieces), Form::Ramp)?;
+    let ramps = approach::approaches(url, &pieces, &approach::free_ends(&pieces))?;
     log(&format!("{} approaches graded with their bridges", ramps.len()));
     pieces.extend(ramps);
     needs.resize(pieces.len(), Vec::new());
@@ -111,14 +111,11 @@ pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<Solve
         }
     }
     let tunnel_rows = source::flagged_rows(client, "is_tunnel")?;
-    let mut tunnels: Vec<Piece> = tunnel_rows.iter().flat_map(|r| pieces_of(r, Form::Bore)).collect();
+    let tunnels: Vec<Piece> = tunnel_rows.iter().flat_map(|r| pieces_of(r, Form::Bore)).collect();
     drop(tunnel_rows);
-    // Each portal's cutting, and the structures with them.
     let portals = portals_of(url, &tunnels)?;
-    let cuttings = approach::approaches(url, &tunnels, &portals, Form::Cut)?;
-    log(&format!("{} portals, {} cut to", portals.len(), cuttings.len()));
+    log(&format!("{} portals", portals.len()));
     let portal_at: HashSet<(i64, i64)> = portals.iter().map(|&(i, last)| key_of([end_of(&tunnels[i], last).0[0], end_of(&tunnels[i], last).0[1], 0.0])).collect();
-    tunnels.extend(cuttings);
     let bored = group(&tunnels, &[]);
     let bore_graphs: Vec<Graph> = bored.iter().map(|m| Graph::build(&tunnels, m, &[])).collect();
 
@@ -215,16 +212,14 @@ fn portals_of(url: &str, tunnels: &[Piece]) -> Result<Vec<(usize, bool)>, postgr
 }
 
 /// The bores of the tunnels that come out to the ground, cut their whole
-/// length so a first-person view can go through, and their cuttings. A
-/// bore's floor is a deck's profile turned over (profile.rs), one rule for a
-/// road tunnel and a subway alike: under its roof it lies `BORE_DEPTH`
-/// under the ground, so the portal, where OSM begins the
-/// tunnel, is where its roof begins; the drop to that depth is the cutting's
-/// before the portal (approach.rs), open from its floor to the sky; and
-/// between portals the floor runs straight where that already holds, no
-/// steeper than a way climbs anywhere. A tunnel's structure meets the ground
-/// at its cuttings' far ends, and at a portal with no way to cut along. One
-/// that meets it nowhere — a subway between stations — is cut nowhere.
+/// length so a first-person view can go through. A bore's floor is a deck's
+/// profile turned over (profile.rs), one rule for a road tunnel and a
+/// subway alike: it meets the ground at its portals, where OSM begins the
+/// tunnel, and between them runs under the ground, straight where that
+/// already holds and no steeper than a way climbs anywhere. How deep under
+/// the ground a bore is drawn, and how it opens to its portal, is the
+/// client's; the line is the way's floor. One that meets the ground nowhere
+/// — a subway between stations — is cut nowhere.
 fn bores_of<'a>(tunnels: &'a [Piece], portal_at: &HashSet<(i64, i64)>, structures: &[Vec<usize>], graphs: &[Graph], grounds: &[Vec<f64>]) -> (Vec<DeckOut<'a>>, Slopes) {
     let mut out = Vec::new();
     let mut slopes = Slopes::default();
@@ -233,17 +228,16 @@ fn bores_of<'a>(tunnels: &'a [Piece], portal_at: &HashSet<(i64, i64)>, structure
             .free_ends
             .iter()
             .zip(&g.free_end_of)
-            .filter(|&(&e, &k)| tunnels[members[k]].approach || portal_at.contains(&key_of([g.at[e as usize][0], g.at[e as usize][1], 0.0])))
+            .filter(|&(&e, _)| portal_at.contains(&key_of([g.at[e as usize][0], g.at[e as usize][1], 0.0])))
             .map(|(&e, _)| (e, -ground[e as usize]))
             .collect();
         if ends.is_empty() {
             continue;
         }
         // Turned over, a floor's depth under the ground is a deck's height
-        // over it: under a roof it keeps the cover, and in a cutting it is no
-        // higher than the ground.
+        // over it, and it is no higher than the ground.
         let carried = carried_of(tunnels, members, g);
-        let need: Vec<f64> = (0..g.at.len()).map(|v| if carried[v] { BORE_DEPTH - ground[v] } else { -ground[v] }).collect();
+        let need: Vec<f64> = ground.iter().map(|v| -v).collect();
         let below = |x: &[f64]| x.iter().map(|v| -v).collect::<Vec<f64>>();
         let profile = solve_profile(&Problem {
             adj: &g.adj,

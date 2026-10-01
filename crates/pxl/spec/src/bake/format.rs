@@ -40,6 +40,7 @@ use std::borrow::Cow;
 
 use super::constant::ELE_PADDED_SPAN;
 use super::deck::{self, Decks};
+use super::ground::SHIFT_RANGE;
 use super::pack::{channel_of, GroundCell};
 use super::surface::extent_of;
 use crate::space::pyramid::{EXTENT, PAGE_CELLS};
@@ -275,9 +276,26 @@ pub struct Block {
     pub span: u16,
 }
 
+/// How far past what the lane holds the client draws over a cell, down and
+/// up, in cells. The lane holds the facts — the ground's surface and the
+/// lines' heights — and the client draws a cell a step off its surface
+/// (bake/ground.rs `shift`) and the way's cell under a bore's floor
+/// (bake/deck.rs `Occupies::Through`). Both are the client's to change, so
+/// the lane holds neither and every read of it widens it by them.
+pub const DRAWN_PAST: [i16; 2] = {
+    let [lo, hi] = SHIFT_RANGE;
+    [if lo < -1 { lo } else { -1 }, hi]
+};
+
+/// What is drawn over a lane's cell `[lo, hi]` stands within.
+pub fn drawn([lo, hi]: [i16; 2]) -> [i16; 2] {
+    [lo.saturating_add(DRAWN_PAST[0]), hi.saturating_add(DRAWN_PAST[1])]
+}
+
 impl Block {
-    /// A lane's cell as a block of one.
-    pub fn of([lo, hi]: [i16; 2]) -> Block {
+    /// A lane's cell as a block of one, as it is drawn (`drawn`).
+    pub fn of(cell: [i16; 2]) -> Block {
+        let [lo, hi] = drawn(cell);
         Block {
             lo,
             hi,
@@ -357,7 +375,7 @@ impl Terrain {
     /// A baked page of the finest level: its index is its own surface's,
     /// its decks' tops included.
     pub fn leaf(ele: Vec<i16>, ground: Ground, decks: Decks) -> Terrain {
-        let extent = extent_of(&ele, &ground.cells, &decks);
+        let extent = extent_of(&ele, &decks);
         Terrain {
             ground,
             decks,

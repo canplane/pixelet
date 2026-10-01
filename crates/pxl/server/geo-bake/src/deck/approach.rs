@@ -1,39 +1,28 @@
 // pxl-geo-bake/deck/approach.rs
 
-//! A structure's approaches: the way at the surface a bridge is carried down
-//! to the ground on, and the way a tunnel drops through to its portal.
+//! A bridge's approaches: the way at the surface it is carried down to the
+//! ground on.
 //!
-//! OSM tags a bridge where the bridge is and a tunnel where its roof is, and
-//! the approach to either — the embankment a bridge climbs on, the cutting a
-//! tunnel's road drops through — as a way of its own:
+//! OSM tags a bridge where the bridge is, and the embankment it climbs on as
+//! a way of its own. Arnis takes a way joined to a bridge's end as its ramp
+//! only where it is tagged an embankment or stands at `layer` 1 or over, and
+//! otherwise brings the deck down to the ground inside its own length.
+//! Overture carries no embankment, but it carries the layer (`level_rules`),
+//! so a ramp is the stretch of a joined way that stands at level 1 or over,
+//! from the bridge's end to where that stretch ends.
 //!
-//! - **A ramp.** Arnis takes a way joined to a bridge's end as its ramp only
-//!   where it is tagged an embankment or stands at `layer` 1 or over, and
-//!   otherwise brings the deck down to the ground inside its own length.
-//!   Overture carries no embankment, but it carries the layer
-//!   (`level_rules`), so a ramp is the stretch of a joined way that stands at
-//!   level 1 or over, from the bridge's end to where that stretch ends.
-//! - **A cutting.** A tunnel's portal is where its roof begins, so the floor
-//!   is already a bore and its roof under the ground there, and the drop to
-//!   it is the way before the portal's, cut open — as Arnis descends the
-//!   surface way into a portal so that the bore starts at depth. It is as
-//!   long as that drop takes at the steepest a way climbs, along the way at
-//!   the surface joined to the portal, and no longer: past it the way is on
-//!   the ground. Deeper than that is the tunnel's own to go, inside.
-//!
-//! Either is a piece of the structure whose far end is on the ground, and the
-//! solve grades the whole of it, as far as it leaves the ground (deck.rs
+//! A ramp is a piece of the structure whose far end is on the ground, and
+//! the solve grades the whole of it, as far as it leaves the ground (deck.rs
 //! `on_structure`).
 
 use std::collections::HashMap;
 
 use pxl_spec::bake::deck::Form;
 
-use crate::deck::clearance::{BORE_DEPTH, MAX_SLOPE};
 use crate::deck::piece::Piece;
 use crate::deck::source;
 use crate::deck::structure::{end_of, key_of};
-use crate::terrain::pipeline::overture::between::{flag_ranges, value_ranges, without, Line, Range};
+use crate::terrain::pipeline::overture::between::{flag_ranges, value_ranges, without, Line};
 use crate::terrain::pipeline::overture::policy::{DECK_FLAGS, UNSEEN_FLAGS};
 use crate::terrain::pipeline::overture::width::{width_m, WayShape};
 use crate::wkb::wkb_to_geometries;
@@ -60,11 +49,10 @@ pub fn free_ends(pieces: &[Piece]) -> Vec<(usize, bool)> {
         .collect()
 }
 
-/// Each end's approach of `form` — a ramp up to a deck, a cutting down to a
-/// portal: the way joined to it at the surface that carries on most nearly
-/// straight, over the stretch the approach takes of it, as a piece of the
-/// structure.
-pub fn approaches(url: &str, pieces: &[Piece], ends: &[(usize, bool)], form: Form) -> Result<Vec<Piece>, postgres::Error> {
+/// Each end's ramp up to a deck: the way joined to it at the surface that
+/// carries on most nearly straight, over the stretch it climbs of it, as a
+/// piece of the structure.
+pub fn approaches(url: &str, pieces: &[Piece], ends: &[(usize, bool)]) -> Result<Vec<Piece>, postgres::Error> {
     let asked: Vec<([f64; 2], &str)> = ends.iter().map(|&(i, last)| (end_of(&pieces[i], last).0, pieces[i].gers_id.as_str())).collect();
 
     // The best candidate each end has: how straight it carries on, and the
@@ -79,19 +67,11 @@ pub fn approaches(url: &str, pieces: &[Piece], ends: &[(usize, bool)], form: For
         let len = line.length();
         let step = (0.5 / len).min(0.5);
         let off = flag_ranges(row.flags.as_deref(), &[UNSEEN_FLAGS, DECK_FLAGS].concat());
-        let (stretches, most): (Vec<Range>, f64) = match form {
-            Form::Ramp => (without(&value_ranges(row.levels.as_deref(), |v| v >= 1.0), &off), f64::INFINITY),
-            _ => {
-                let mut below: Vec<Range> = [off, value_ranges(row.levels.as_deref(), |v| v < 0.0)].concat();
-                below.sort_by(|x, y| x[0].total_cmp(&y[0]));
-                // The drop to the portal, at the steepest a way climbs.
-                (without(&[[0.0, 1.0]], &below), BORE_DEPTH / MAX_SLOPE * structure.scale() / len)
-            }
-        };
+        let stretches = without(&value_ranges(row.levels.as_deref(), |v| v >= 1.0), &off);
         for outward in [1.0, -1.0] {
             let next = own_at + outward * step;
             let Some(&[from, to]) = stretches.iter().find(|r| (r[0]..=r[1]).contains(&next)) else { continue };
-            let (a, b) = if outward > 0.0 { (own_at, to.min(own_at + most)) } else { (from.max(own_at - most), own_at) };
+            let (a, b) = if outward > 0.0 { (own_at, to) } else { (from, own_at) };
             if (b - a) * len < 1.0 {
                 continue;
             }
@@ -112,7 +92,7 @@ pub fn approaches(url: &str, pieces: &[Piece], ends: &[(usize, bool)], form: For
                 class: row.class.clone(),
                 level: 0,
                 width_m: width_m(&row.subtype, row.class.as_deref(), shape),
-                form,
+                form: Form::Ramp,
                 approach: true,
                 points,
             };

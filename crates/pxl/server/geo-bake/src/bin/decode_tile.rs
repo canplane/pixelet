@@ -150,7 +150,7 @@ fn summarize(page: &Page) -> Summary {
     if high > 0 {
         faults.push(format!("{high} cell(s) with bits set past the pack's {} bits", ground_pack::CELL_BITS));
     }
-    let short = extent_of(&page.ele, &page.cells, &page.decks)
+    let short = extent_of(&page.ele, &page.decks)
         .iter()
         .zip(&page.extent)
         .filter(|([lo, hi], [ilo, ihi])| ilo > lo || ihi < hi)

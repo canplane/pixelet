@@ -29,17 +29,6 @@ pub const STREAM: f64 = 2.0;
 /// … over a lower deck it crosses, from that deck's top.
 pub const STACKED: f64 = 6.0;
 
-/// How deep under the ground a tunnel's floor lies wherever a roof is over
-/// it, in metres: the depth its cutting drops to at the portal, and the
-/// least it keeps between portals. A temporary minimum bore floor depth
-/// until tunnel-depth semantics are modelled: Overture gives a tunnel's
-/// `level`, an order among what crosses, and its class, and no depth, and
-/// what a road tunnel, a subway and a deep metro each lie at is not yet
-/// told apart. Carried over from the depth the solve kept before, as it
-/// stood at Seoul's latitude. The bore drawn about the floor is the
-/// client's (pxl-spec bake/deck.rs `BORE_HEIGHT`) and asks nothing of it.
-pub const BORE_DEPTH: f64 = 8.5;
-
 /// The steepest a deck climbs, or a bore descends, rise over run, from where
 /// it meets the ground. Pixelet's, not a precedent's: a city's ramps run
 /// about 6 to 8 percent, and with the approach graded with the bridge

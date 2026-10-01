@@ -50,6 +50,12 @@ pub const THICKNESS: i32 = 1;
 /// shift where the deck crosses into another page.
 pub const PIER_STEP: f64 = 24.0;
 
+/// The farthest past half its width the client draws a line, in its page's
+/// cells: a contract the bake keeps a line's page and its extent by, so how
+/// the client covers cells with a line — its own (bake/way.rs) — can change
+/// within it and nothing is baked again.
+pub const LINE_PAST: f64 = 1.0;
+
 /// A bore's air, floor to roof, in z16 cells: about six metres, a road
 /// tunnel's 4.5 to 5 m clearance and the lights and fans over it. A product
 /// number, set by choice.
@@ -256,18 +262,18 @@ impl Decks {
         })
     }
 
-    /// The lowest a bore or a cutting cuts inside the `[x0, x1) × [y0, y1)` cells — the
-    /// cell of the way under its floor — conservatively, as `highest_in`.
+    /// The lowest floor a bore or a cutting has inside the `[x0, x1) × [y0, y1)` cells,
+    /// conservatively, as `highest_in`.
     pub fn lowest_in(&self, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> Option<i16> {
         let mut low = None;
         for bore in self.iter().filter(|d| d.form.cuts()) {
-            let half = bore.reach();
+            let half = bore.footprint();
             for s in 0..bore.points.len().saturating_sub(1) {
                 let (a, b) = (bore.point(s), bore.point(s + 1));
                 if a[0].max(b[0]) + half < x0 || a[0].min(b[0]) - half > x1 || a[1].max(b[1]) + half < y0 || a[1].min(b[1]) - half > y1 {
                     continue;
                 }
-                let floor = bore.tops[s].min(bore.tops[s + 1]).saturating_sub(1);
+                let floor = bore.tops[s].min(bore.tops[s + 1]);
                 low = Some(low.map_or(floor, |v: i16| v.min(floor)));
             }
         }
@@ -276,11 +282,11 @@ impl Decks {
 
     /// The highest top any deck has inside the `[x0, x1) × [y0, y1)` cells,
     /// conservatively: a deck's highest point counts wherever its line comes
-    /// within its reach of the box.
+    /// within its footprint of the box.
     pub fn highest_in(&self, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> Option<i16> {
         let mut top = None;
         for deck in self.iter().filter(|d| !d.form.cuts()) {
-            let half = deck.reach();
+            let half = deck.footprint();
             for s in 0..deck.points.len().saturating_sub(1) {
                 let (a, b) = (deck.point(s), deck.point(s + 1));
                 if a[0].max(b[0]) + half < x0 || a[0].min(b[0]) - half > x1 || a[1].max(b[1]) + half < y0 || a[1].min(b[1]) - half > y1 {
@@ -309,6 +315,12 @@ impl Deck<'_> {
     /// (bake/way.rs).
     pub fn reach(&self) -> f64 {
         way::reach(self.width_cells())
+    }
+
+    /// How far from its line the client may draw it, in the page's cells:
+    /// half its width and `LINE_PAST`.
+    pub fn footprint(&self) -> f64 {
+        footprint(self.width_cells())
     }
 
     /// The corners of the box its line lies in, in the page's cells.
@@ -350,6 +362,11 @@ impl Deck<'_> {
             pier: off_step <= pier_radius && across <= pier_radius,
         })
     }
+}
+
+/// How far from its line a line `width` cells wide may be drawn.
+pub fn footprint(width: f64) -> f64 {
+    width / 2.0 + LINE_PAST
 }
 
 /// A page's decks one level up, from its four children's: each child's

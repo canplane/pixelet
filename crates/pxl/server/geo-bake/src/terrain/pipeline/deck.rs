@@ -7,16 +7,15 @@
 //! (overture/policy.rs), so a way reads the same on a bridge as off it.
 //!
 //! A deck's row is its whole line, and a page keeps the runs of it whose
-//! segments come within reach of the page — whole segments, so every point
-//! a page keeps is one the solve placed and two pages that share a deck agree
-//! on it point for point. A segment is within reach where it comes within
-//! the deck's reach of the page (pxl-spec bake/way.rs), past which nothing
-//! of it can be drawn there.
+//! segments come within its footprint of the page — whole segments, so every
+//! point a page keeps is one the solve placed and two pages that share a deck
+//! agree on it point for point. The footprint is the farthest the client may
+//! draw a line (pxl-spec bake/deck.rs `footprint`), past which nothing of it
+//! can be drawn there.
 
 use pxl_spec::bake::constant::{CELL_PER_M, XY_CELL_PER_M};
-use pxl_spec::bake::deck::{Builder, Decks, Form, POINT_SCALE};
+use pxl_spec::bake::deck::{self, Builder, Decks, Form, POINT_SCALE};
 use pxl_spec::bake::format::DeckRow;
-use pxl_spec::bake::way;
 use pxl_spec::space::adapter::epsg3857::G3857;
 use pxl_spec::space::pyramid::PAGE_CELLS;
 
@@ -41,7 +40,7 @@ pub fn bake_decks(rows: &[DeckRow], page_min: G3857) -> Option<Decks> {
                     (at, (p[2] * cell_per_m).round() as i16)
                 })
                 .collect();
-            for run in runs_within(&local, way::reach(width)) {
+            for run in runs_within(&local, deck::footprint(width)) {
                 decks.push(run.iter().copied(), width_code, kind, Form::of(row.form));
             }
         }

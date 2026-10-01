@@ -72,6 +72,28 @@ pub fn shift(shown: ShownGround) -> i16 {
     column.iter().find(|(t, _)| *t as u32 == shown.type_id).map_or(0, |&(_, r)| r)
 }
 
+/// The lowest and highest `shift` any type has, in cells.
+pub const SHIFT_RANGE: [i16; 2] = {
+    let columns = [cube_types::land::SHIFT, cube_types::water::SHIFT, cube_types::structure::SHIFT, cube_types::transport::SHIFT];
+    let (mut lo, mut hi) = (0, 0);
+    let mut c = 0;
+    while c < columns.len() {
+        let mut i = 0;
+        while i < columns[c].len() {
+            let r = columns[c][i].1;
+            if r < lo {
+                lo = r;
+            }
+            if r > hi {
+                hi = r;
+            }
+            i += 1;
+        }
+        c += 1;
+    }
+    [lo, hi]
+};
+
 /// How far off its sampled height a packed cell stands: `shift` of what it
 /// shows with no channel hidden, which is the height every reader of the
 /// ground takes, whatever a view hides.

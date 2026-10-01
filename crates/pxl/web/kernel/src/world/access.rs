@@ -44,7 +44,7 @@ use pxl_render::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
 use pxl_spec::bake::constant::{CellZ, CELL, CELL_STEPS, OBJECT_FINEST, U_PER_CELL};
 use pxl_spec::bake::deck::Occupies;
 use pxl_spec::bake::fold::majority;
-use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::format::{drawn, Terrain};
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::cell::object::{object_value_is_air, object_value_is_decor, object_value_is_voxel};
 use pxl_spec::space::hierarchy::Scale;
@@ -58,10 +58,10 @@ use pxl_spec::space::pyramid::{Cell, LevelPage, EXTENT, GROUND, TOP_LEVEL};
 use pxl_spec::space::v3::{Aabb, V3};
 use pxl_spec::space::xy::TO_XY;
 
-use crate::param::STEP_CELLS;
 use crate::io::demand::Category;
 use crate::kernel::kernel;
 use crate::layer::object::store::{objects_revision, EntryAt, EntryCursor, Store};
+use crate::param::STEP_CELLS;
 use crate::world::paging::Paging;
 use crate::world::pyramid::{Layer as _, Pyramid};
 
@@ -440,7 +440,11 @@ impl<'a> Access<'a> {
                 let over = (start + 1..=start + climb).find(|&cz| !solid(cz));
                 // Climbing any height, a stack filling a position's whole
                 // reach is stood in.
-                if any_height { over.or(Some(start)) } else { over }
+                if any_height {
+                    over.or(Some(start))
+                } else {
+                    over
+                }
             } else {
                 Some((lo..start.min(ceiling)).rev().find(|&cz| solid(cz)).map_or(start, |cz| cz + 1))
             };
@@ -657,7 +661,7 @@ impl<'a> Access<'a> {
         (level + 1..=TOP_LEVEL).rev().find_map(|lv| {
             let body = self.terrain.get(GROUND.cell_of(lv, &at).page())?;
             let e = EXTENT.cell_of(lv, &at);
-            let [_, hi] = body.index.extent()[e.index() as usize];
+            let [_, hi] = drawn(body.index.extent()[e.index() as usize]);
             let scale = e.scale();
             let [ix, iy, _] = scale.index_of(&at);
             let base = scale.base_of([ix, iy, 0]);
@@ -680,7 +684,7 @@ impl<'a> Access<'a> {
                 // asked where that is the smaller: either way one bound and
                 // one page across it.
                 let e = EXTENT.cell_of(src.level, &at);
-                let [lo, hi] = body.index.extent()[e.index() as usize];
+                let [lo, hi] = drawn(body.index.extent()[e.index() as usize]);
                 let exact = self.terrain.source(page).is_some();
                 (e.scale().min(page_scale), Some(((lo as f64 * U_PER_CELL, hi as f64 * U_PER_CELL), exact)))
             }
