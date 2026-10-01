@@ -26,7 +26,7 @@ use pxl_spec::space::mat4::mat4_transform_point;
 use crate::layer::billboard::batch::BillboardBatch;
 use crate::layer::billboard::distance_fade::distance_fade_far;
 use crate::layer::environment::state::globe;
-use crate::world::frame::view::{view, view_sees_sphere};
+use crate::world::frame::view::{globe_anchor_local, view, view_sees_sphere};
 
 /// How far around its anchor a billboard can reach, as a fraction of its own
 /// distance from the camera. A fraction rather than a world length because the
@@ -49,18 +49,19 @@ const MIN_LEGIBLE_FAR: f64 = 0.12;
 /// root frame (world/frame/view.rs).
 pub fn select_visible_billboards(batch: &mut BillboardBatch, viewport_w: f64, viewport_h: f64, out: &mut Vec<u32>) {
     let v = view();
-    let eye = v.eye;
+    let eye = v.pose.eye;
+    let anchor = globe_anchor_local();
 
     let mut n = 0usize;
-    let mut pos = [0.0; 3];
     let globe = globe();
     for i in 0..batch.count as usize {
-        // Through the root and onto the planet, as badge.wgsl places it,
-        // gives the point the frustum test needs, the point the distance is
+        // Onto the planet about its anchor, as badge.wgsl places it, gives
+        // the point the frustum test needs, the point the distance is
         // measured from, and the point the screen box is projected from —
         // done once, and kept in the lanes.
-        mat4_transform_point(&mut pos, &v.root, batch.local_x[i], batch.local_y[i], batch.local_z[i]);
-        let pos = globe.place_turned(pos, v.root[1], v.root[0]);
+        let from = [batch.local_x[i] - anchor[0], batch.local_y[i] - anchor[1], batch.local_z[i] - anchor[2]];
+        let placed = globe.place(from);
+        let pos = [anchor[0] + placed[0], anchor[1] + placed[1], anchor[2] + placed[2]];
         let dist2 = (pos[0] - eye[0]).powi(2) + (pos[1] - eye[1]).powi(2) + (pos[2] - eye[2]).powi(2);
         if !view_sees_sphere(pos[0], pos[1], pos[2], dist2.sqrt() * ANCHOR_REACH) {
             continue;
@@ -73,15 +74,11 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, viewport_w: f64, vi
         n += 1;
     }
 
-    // Nearest what the view looks at first, which is how the pyramid orders
-    // what it asks for too (world/pyramid.rs). Squared, since only the order
-    // matters; the tiebreak decides nothing on its own and only keeps two at
-    // equal distance from swapping frame to frame.
-    let focus = [-v.tx, -v.ty, -v.tz];
-    let at = |i: u32| {
-        let i = i as usize;
-        (batch.local_x[i] - focus[0]).powi(2) + (batch.local_y[i] - focus[1]).powi(2) + (batch.local_z[i] - focus[2]).powi(2)
-    };
+    // Nearest the eye first, which is how the pyramid orders what it asks
+    // for too (world/pyramid.rs). Squared, since only the order matters; the
+    // tiebreak decides nothing on its own and only keeps two at equal
+    // distance from swapping frame to frame.
+    let at = |i: u32| batch.d2[i as usize];
     let tiebreak = &batch.tiebreak;
     batch.order[..n].sort_by(|&a, &b| at(a).total_cmp(&at(b)).then(tiebreak[a as usize].total_cmp(&tiebreak[b as usize])));
 
@@ -98,7 +95,7 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, viewport_w: f64, vi
             continue;
         }
 
-        mat4_transform_point(&mut ndc, &v.view_proj, batch.world_x[i], batch.world_y[i], batch.world_z[i]);
+        mat4_transform_point(&mut ndc, &v.local_view_proj, batch.world_x[i], batch.world_y[i], batch.world_z[i]);
         let sx = (ndc[0] * 0.5 + 0.5) * viewport_w;
         let sy = (-ndc[1] * 0.5 + 0.5) * viewport_h;
 

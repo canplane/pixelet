@@ -227,7 +227,6 @@ pub struct LodSample {
     pub in_frustum: f64,
     pub pending: f64,
     pub settling: f64,
-    pub blend_active: f64,
     /// Pending chunks outside the frustum — releases waiting to run. They sort
     /// last by design, so this is where starvation would show first, and what
     /// it would cost is memory.
@@ -236,10 +235,6 @@ pub struct LodSample {
     /// on-screen chunk has.
     pub oldest_release_ms: f64,
     pub oldest_visible_ms: f64,
-    /// Levels the byte budget has pulled the view's criterion coarser by
-    /// (world/pyramid/pressure.rs): 0 is the criterion as the view asks for
-    /// it.
-    pub pressure: f64,
 }
 
 #[repr(C)]
@@ -302,8 +297,8 @@ pub struct WorkSample {
     /// The largest mesh a bake handed over since the last frame, in boxes,
     /// of each kind of slot — a high-water mark where `scans` and `bakes`
     /// beside it are counts. What a slot is read against
-    /// (world/chunk/mesh_slot.rs): a mesh past its slot is baked a step
-    /// coarser, which `coarser` counts.
+    /// (world/chunk/mesh_slot.rs): a mesh past its slot fills more slots,
+    /// which `chained` counts.
     pub fine_peak: f64,
     pub coarse_peak: f64,
 }
@@ -359,10 +354,13 @@ pub struct FrameSample {
     pub cover: CoverSample,
 }
 
-/// What the terrain's cover made of the view: the chunks the rule draws with
-/// everything resident, and of those the chunks it draws from the pages it
-/// holds and the ones it leaves open. The three apart are what tells a view
-/// waiting on its pages from one whose pages came and are not drawn.
+/// What the terrain's cover made of the view: the chunks the goal would be
+/// at the target quality, the pieces at the effective one, and the columns
+/// of the pyramid's top within the reach with no answer yet — nothing over
+/// them resident, which the goal has no piece of (world/pyramid/domain.rs
+/// `unanswered`). The first against the second is how far the quality
+/// policy holds the view back (world/quality.rs); the third is a view
+/// waiting on its floor, a cold start or a jump.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CoverSample {
@@ -371,32 +369,26 @@ pub struct CoverSample {
     pub gaps: f64,
 }
 
-/// The chunks a view has moved off and that are kept until what replaces
-/// them is whole (world/chunk/table.rs `retire`): where they outstay it, they
-/// hide the ground that replaced them.
+/// The frontier's moves (world/chunk/frontier.rs). The lanes' names are the
+/// profiler spec's (spec/pxl/web/kernel/sched/profiler/profiler.json), which
+/// the web side reads them by; what each counts is said beside it, and the
+/// two that count nothing are zero.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct StaleSample {
-    pub chunks: f64,
-    /// Of those, the ones drawn, and their levels as bits.
-    pub drawn: f64,
-    pub levels: f64,
-    /// Wanted chunks with a layout that a drawn stale chunk hides.
+    /// Chunks built for a move and ready, waiting on the rest of it.
     pub hidden: f64,
-    /// Why the stale chunks stay: what replaces them does not cover them;
-    /// covers them but is not laid out; and of those, where what is not laid
-    /// out is waiting on a slot.
+    /// Moves the arena had no room for this frame, and moves under way and
+    /// not all ready.
     pub uncovered: f64,
     pub unready: f64,
-    pub on_waiter: f64,
-    /// Meshes thrown away because their slot is still drawn from, and the
-    /// levels of the chunks that waited and that held the slots, as bits.
+    /// Meshes thrown away because their pool had no free slot, and the
+    /// levels of the chunks they were for as bits.
     pub slot_waits: f64,
     pub wait_levels: f64,
-    pub holder_levels: f64,
-    /// Tiers baked a step coarser than asked: they had more boxes than their
+    /// Tiers landed across more than one slot: they had more boxes than one
     /// slot holds (world/chunk/mesh_slot.rs `capacity`).
-    pub coarser: f64,
+    pub chained: f64,
 }
 
 /// The turn, in parts that add up. `task_ms` is the whole of it, and the
@@ -424,12 +416,11 @@ pub struct TurnSample {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CapSample {
-    /// Chunks on screen still wanting a layout that the commit pass did not
-    /// reach, and chunks the selection wants that are not mounted.
+    /// Chunks still wanting a layout that the commit pass did not reach, and
+    /// moves of the frontier that found no room this frame.
     pub commit_left: f64,
     pub mount_left: f64,
-    /// Whether the mount pass stopped because the table is full, rather than
-    /// because the frame's own cap was spent.
+    /// Whether any move found no room this frame.
     pub mount_full: f64,
     /// Pages that arrived and found every record carrying one worth more.
     pub record_refused: f64,
@@ -486,8 +477,8 @@ words!(FrameSample, FRAME::WORDS,
     device.buffers => FRAME::buffers, device.buffer_mb => FRAME::buffer_mb, device.arena_mb => FRAME::arena_mb,
     device.depth_mb => FRAME::tex_depth_mb, device.shadow_mb => FRAME::tex_shadow_mb, device.layers_mb => FRAME::tex_layers_mb,
     lod.chunks => FRAME::lod_chunks, lod.in_frustum => FRAME::lod_in_frustum, lod.pending => FRAME::lod_pending, lod.settling => FRAME::lod_settling,
-    lod.blend_active => FRAME::lod_blend_active, lod.offscreen_pending => FRAME::lod_offscreen_pending,
-    lod.oldest_release_ms => FRAME::lod_oldest_release_ms, lod.oldest_visible_ms => FRAME::lod_oldest_visible_ms, lod.pressure => FRAME::lod_pressure,
+    lod.offscreen_pending => FRAME::lod_offscreen_pending,
+    lod.oldest_release_ms => FRAME::lod_oldest_release_ms, lod.oldest_visible_ms => FRAME::lod_oldest_visible_ms,
     mounts.added => FRAME::mounts_added, mounts.removed => FRAME::mounts_removed, mounts.layouts => FRAME::mounts_layouts,
     pages.total => FRAME::pages_total, pages.by_level => FRAME::pages_by_level, pages.poi => FRAME::pages_poi,
     heap.used_mb => FRAME::heap_used_mb, heap.live_mb => FRAME::heap_live_mb, heap.run_mb => FRAME::heap_run_mb,
@@ -495,10 +486,9 @@ words!(FrameSample, FRAME::WORDS,
     heap.refusals => FRAME::heap_refusals, heap.largest_free_mb => FRAME::heap_largest_free_mb,
     rings.cq_peak => FRAME::ring_cq_peak, rings.held_peak => FRAME::ring_held_peak,
     work.scans => FRAME::work_scans, work.bakes => FRAME::work_bakes, work.fine_peak => FRAME::work_fine_peak, work.coarse_peak => FRAME::work_coarse_peak, q_terrain => FRAME::q_terrain, q_poi => FRAME::q_poi,
-    stale.chunks => FRAME::stale_chunks, stale.drawn => FRAME::stale_drawn, stale.levels => FRAME::stale_levels, stale.hidden => FRAME::stale_hidden,
-    stale.uncovered => FRAME::stale_uncovered, stale.unready => FRAME::stale_unready, stale.on_waiter => FRAME::stale_on_waiter,
-    stale.slot_waits => FRAME::slot_waits, stale.wait_levels => FRAME::slot_wait_levels, stale.holder_levels => FRAME::slot_holder_levels,
-    stale.coarser => FRAME::slot_coarser,
+    stale.hidden => FRAME::stale_hidden, stale.uncovered => FRAME::stale_uncovered, stale.unready => FRAME::stale_unready,
+    stale.slot_waits => FRAME::slot_waits, stale.wait_levels => FRAME::slot_wait_levels,
+    stale.chained => FRAME::slot_chained,
     cap.commit_left => FRAME::cap_commit_left, cap.mount_left => FRAME::cap_mount_left,
     cap.mount_full => FRAME::cap_mount_full, cap.record_refused => FRAME::cap_record_refused,
     turn.effects_ms => FRAME::turn_effects_ms, turn.stage_ms => FRAME::turn_stage_ms,
@@ -520,7 +510,7 @@ words!(FramePeak, SUMMARY::peak::WORDS,
     chunks_ms => SUMMARY::peak::chunks_ms, gpu_ms => SUMMARY::peak::gpu_ms, draw_calls => SUMMARY::peak::draw_calls,
     triangles => SUMMARY::peak::triangles, q_terrain => SUMMARY::peak::q_terrain, q_poi => SUMMARY::peak::q_poi,
     chunks => SUMMARY::peak::chunks, in_frustum => SUMMARY::peak::in_frustum, pending => SUMMARY::peak::pending,
-    settling => SUMMARY::peak::settling, blend_active => SUMMARY::peak::blend_active, pressure => SUMMARY::peak::pressure,
+    settling => SUMMARY::peak::settling,
     offscreen_pending => SUMMARY::peak::offscreen_pending, oldest_release_ms => SUMMARY::peak::oldest_release_ms,
     oldest_visible_ms => SUMMARY::peak::oldest_visible_ms, fine_peak => SUMMARY::peak::fine_peak,
     coarse_peak => SUMMARY::peak::coarse_peak,
@@ -667,8 +657,6 @@ pub struct FramePeak {
     pub in_frustum: f64,
     pub pending: f64,
     pub settling: f64,
-    pub blend_active: f64,
-    pub pressure: f64,
     pub offscreen_pending: f64,
     pub oldest_release_ms: f64,
     pub oldest_visible_ms: f64,
@@ -860,8 +848,6 @@ pub fn profiler_record_frame(s: FrameSample) {
     p.oldest_release_ms = p.oldest_release_ms.max(s.lod.oldest_release_ms);
     p.oldest_visible_ms = p.oldest_visible_ms.max(s.lod.oldest_visible_ms);
     p.settling = p.settling.max(s.lod.settling);
-    p.blend_active = p.blend_active.max(s.lod.blend_active);
-    p.pressure = p.pressure.max(s.lod.pressure);
 
     if let Some(frame) = l.sink.frame {
         frame(&s);

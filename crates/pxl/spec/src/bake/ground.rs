@@ -13,6 +13,8 @@
 
 use crate::cell::cube::cube_types;
 
+use super::pack::{channel_of, GroundCell};
+
 pub use super::format::{GroundChannelKey, GROUND_CH_KEYS};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -66,4 +68,11 @@ pub fn recess(shown: ShownGround) -> i16 {
         GroundChannelKey::TRANSPORT => cube_types::transport::RECESS,
     };
     column.iter().find(|(t, _)| *t as u32 == shown.type_id).map_or(0, |&(_, r)| r)
+}
+
+/// How far below its sampled height a packed cell sits: `recess` of what it
+/// shows with no channel hidden, which is the height every reader of the
+/// ground takes, whatever a view hides.
+pub fn cell_recess(cell: GroundCell) -> i16 {
+    recess(shown_ground(|k| channel_of(cell, k) as u32, 0))
 }

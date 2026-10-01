@@ -144,35 +144,23 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
             warn={Math.max(f.last.lod_oldest_release_ms, f.last.lod_oldest_visible_ms) > STARVED_MS}
           />
           {
-            /* The stale population, and how much of it is doing anything: one
-              that is on screen with a layout is holding ground up, one that is
-              not is only waiting to be let go. `hid` is the wanted chunks that
-              have a layout a drawn stale chunk is standing over. */
+            /* Moves waiting: chunks built for a move and ready while the rest
+              of it is not, moves the arena had no room for, and moves under
+              way and not all ready. */
           }
           <Row
-            k="stale n/drawn/hid"
-            v={`${round(f.last.stale_chunks)}/${round(f.last.stale_drawn)}/${round(f.last.stale_hidden)}`}
+            k="move hid/unc/unrdy"
+            v={`${round(f.last.stale_hidden)}/${round(f.last.stale_uncovered)}/${round(f.last.stale_unready)}`}
           />
           {
-            /* Stale ground kept because nothing covers it yet, and of those the
-              ones whose cover is itself waiting on a slot — a wait that closes
-              on itself. */
-          }
-          <Row
-            k="stale unc/unrdy/wait"
-            v={`${round(f.last.stale_uncovered)}/${round(f.last.stale_unready)}/${round(f.last.stale_on_waiter)}`}
-            warn={f.last.stale_on_waiter > 0}
-          />
-          {
-            /* A finished mesh thrown away because every slot of its pool is
-              held by a chunk drawing from it, and the tiers baked a step
-              coarser than asked because they had more boxes than a slot holds:
-              the levels are the waiters' and the holders'
+            /* A bake thrown away because the slots its mesh fills were not
+              free, and the tiers landed across more than one slot because they
+              had more boxes than one holds: the levels are the waiters'
               (world/chunk/mesh_slot.rs). */
           }
           <Row
-            k="slot wait/coarser"
-            v={`${round(f.last.slot_waits)}/${round(f.last.slot_coarser)} L${levelBits(f.last.slot_wait_levels)} on ${levelBits(f.last.slot_holder_levels)}`}
+            k="slot wait/chained"
+            v={`${round(f.last.slot_waits)}/${round(f.last.slot_chained)} L${levelBits(f.last.slot_wait_levels)}`}
             warn={f.last.slot_waits > 0}
           />
           {

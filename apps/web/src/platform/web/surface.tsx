@@ -21,6 +21,10 @@ import { surface_create, surface_delete, surface_size } from "@/kernel/render/su
 import { request_frame } from "@/kernel/sched.ts";
 import { bindSurface, unbindSurface } from "@/platform/web/webgpu.ts";
 
+/** A wheel's line in CSS pixels, for a browser that turns it in lines: the
+ * line height a page's default text has. */
+const LINE_PX = 16;
+
 const FILL = { position: "absolute", inset: 0, width: "100%", height: "100%" } as const;
 
 function dpr(): f64 {
@@ -89,7 +93,10 @@ function drive(canvas: HTMLCanvasElement): () => void {
   };
   const onWheel = (e: WheelEvent) => {
     if (e.ctrlKey) e.preventDefault();
-    kernel_wheel(e.deltaY);
+    // A turn may come in lines or pages rather than the pixels the kernel
+    // takes it in.
+    const per = e.deltaMode === WheelEvent.DOM_DELTA_LINE ? LINE_PX : e.deltaMode === WheelEvent.DOM_DELTA_PAGE ? globalThis.innerHeight : 1;
+    kernel_wheel(e.deltaY * per);
   };
   const onContextMenu = (e: MouseEvent) => e.preventDefault();
   const onResize = () => {

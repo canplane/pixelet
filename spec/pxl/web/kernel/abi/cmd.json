@@ -106,7 +106,9 @@
         { "name": "VIEW", "value": 19 },
         { "name": "RESET_DIST", "value": 20 },
         { "name": "COMPASS_RESET", "value": 21 },
-        { "name": "GO_TO", "value": 22 }
+        { "name": "GO_TO", "value": 22 },
+        { "name": "POSE", "value": 23 },
+        { "name": "POSE_END", "value": 24 }
       ]
     },
     {
@@ -161,7 +163,8 @@
         {
           "name": "SNAPSHOT",
           "value": 21
-        }
+        },
+        { "name": "SOURCE", "value": 22 }
       ]
     },
     {
@@ -431,6 +434,17 @@
           "signal": [{ "name": "draws", "type": "u32" }]
         },
         {
+          "name": "WORLD_SOURCE",
+          "value": 6934,
+          "doc": [
+            "What the tile source declares of itself, once the shell has it (published.json's",
+            "SOURCE, or the dev tile server's answer in the same form). Until it comes nothing is",
+            "observed: the floor is held at the level it names, and no view is drawn from a",
+            "level the source does not supply whole."
+          ],
+          "packet": [{ "name": "top_level", "type": "u32", "doc": ["The coarsest level of the pyramid the source supplies whole."] }]
+        },
+        {
           "name": "INPUT_UPDATE",
           "value": 7171,
           "doc": ["The canvas's client rect."],
@@ -471,7 +485,12 @@
             { "name": "tier", "type": "u32", "doc": ["The object size, by its index in the snapshot's object_sizes."] }
           ]
         },
-        { "name": "INPUT_WHEEL", "value": 7185, "packet": [{ "name": "delta_y", "type": "f64" }] },
+        {
+          "name": "INPUT_WHEEL",
+          "value": 7185,
+          "doc": ["A wheel's turn in CSS pixels, whatever unit the platform turned it in."],
+          "packet": [{ "name": "delta_y", "type": "f64" }]
+        },
         {
           "name": "INPUT_TRACKING",
           "value": 7186,
@@ -500,6 +519,30 @@
             { "name": "lon", "type": "f64" },
             { "name": "lat", "type": "f64" }
           ]
+        },
+        {
+          "name": "INPUT_POSE",
+          "value": 7191,
+          "doc": [
+            "A tracked pose: where a tracker has the camera, and its turn as a unit quaternion",
+            "(x, y, z, w) from the camera's axes to the tracker's, in the world's units. The",
+            "first of a run is taken to be where the camera already is, so nothing moves as",
+            "it begins; the camera follows the tracker from there until POSE_END."
+          ],
+          "packet": [
+            { "name": "x", "type": "f64" },
+            { "name": "y", "type": "f64" },
+            { "name": "z", "type": "f64" },
+            { "name": "qx", "type": "f64" },
+            { "name": "qy", "type": "f64" },
+            { "name": "qz", "type": "f64" },
+            { "name": "qw", "type": "f64" }
+          ]
+        },
+        {
+          "name": "INPUT_POSE_END",
+          "value": 7192,
+          "doc": ["The tracker let the camera go: back to the controller it had."]
         },
         {
           "name": "SENSOR_UPDATE",

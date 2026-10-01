@@ -15,6 +15,7 @@ pub use xpute_runtime::sched::tick::{FrameBudget, Phase, StepStats, TickReport, 
 use xpute_runtime::sched::tick::{Tick, TickPolicy};
 
 use crate::global::Global;
+use crate::param;
 pub use crate::sched::profiler::spec::StepName;
 
 /// What a step reads of the frame beside the tick's own numbers.
@@ -42,22 +43,14 @@ pub type TickStep = xpute_runtime::sched::tick::TickStep<TickState>;
 
 /// The quantum the kernel declares to the central scheduler.
 pub const QUANTUM: QuantumPolicy = QuantumPolicy {
-    // A share of the frame rather than a constant, so a fast display does not
-    // lose most of its frame to it.
-    margin_share: 0.15,
-    // Past a frame on purpose: with nothing moving, a turn that takes two
-    // vsyncs shows the same image twice, and nothing the eye can follow is
-    // waiting on it.
-    batch_frames: 2.0,
-    // Long enough that a pause inside one drag does not count.
-    settle_ms: 150.0,
+    margin_share: param::QUANTUM_MARGIN_SHARE,
+    batch_frames: param::QUANTUM_BATCH_FRAMES,
+    settle_ms: param::QUANTUM_SETTLE_MS,
 };
 
 pub const POLICY: TickPolicy = TickPolicy {
-    hard_slack_ms: 4.0,
-    // Without a share of its own, content waits for as long as a load keeps
-    // the visible phase busy. A fixed share, not a feedback loop.
-    content_share: 0.2,
+    hard_slack_ms: param::HARD_SLACK_MS,
+    content_share: param::CONTENT_SHARE,
 };
 
 pub const HARD_SLACK_MS: f64 = POLICY.hard_slack_ms;

@@ -200,3 +200,71 @@ pub fn snap3n<'a>(v: &V3, mask: i32, out: &'a mut V3) -> &'a mut V3 {
     out[2] = (to_int32(v[2]) & !mask) as f64;
     out
 }
+
+/// An axis-aligned box: its lowest corner and its highest, in units, every
+/// axis alike.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Aabb {
+    pub min: V3,
+    pub max: V3,
+}
+
+impl Aabb {
+    /// The part of it inside `other`, closed: none only where they miss.
+    pub fn meet(self, other: Aabb) -> Option<Aabb> {
+        let min: V3 = std::array::from_fn(|k| self.min[k].max(other.min[k]));
+        let max: V3 = std::array::from_fn(|k| self.max[k].min(other.max[k]));
+        (0..3).all(|k| min[k] <= max[k]).then_some(Aabb { min, max })
+    }
+
+    /// The least box holding both.
+    pub fn join(self, other: Aabb) -> Aabb {
+        Aabb {
+            min: std::array::from_fn(|k| self.min[k].min(other.min[k])),
+            max: std::array::from_fn(|k| self.max[k].max(other.max[k])),
+        }
+    }
+
+    /// How far it runs along each axis.
+    pub fn extent(self) -> V3 {
+        std::array::from_fn(|k| self.max[k] - self.min[k])
+    }
+
+    pub fn center(self) -> V3 {
+        std::array::from_fn(|k| (self.min[k] + self.max[k]) / 2.0)
+    }
+
+    /// Where along the ray from `origin` along `direction` it is inside —
+    /// where the ray enters it and where it leaves, unclipped, so either may
+    /// be behind the origin — and the axis it enters across: the slab test.
+    /// None where the ray misses it. An axis the ray does not move along is
+    /// inside where the origin is.
+    pub fn span_along(self, origin: V3, direction: V3) -> Option<(f64, f64, usize)> {
+        let (mut enter, mut leave, mut axis) = (f64::NEG_INFINITY, f64::INFINITY, 0);
+        for k in 0..3 {
+            if direction[k].abs() < 1e-12 {
+                if origin[k] < self.min[k] || origin[k] > self.max[k] {
+                    return None;
+                }
+                continue;
+            }
+            let (a, b) = ((self.min[k] - origin[k]) / direction[k], (self.max[k] - origin[k]) / direction[k]);
+            let (near, far) = if direction[k] > 0.0 { (a, b) } else { (b, a) };
+            if near > enter {
+                (enter, axis) = (near, k);
+            }
+            leave = leave.min(far);
+        }
+        (enter <= leave).then_some((enter, leave, axis))
+    }
+
+    /// The point of it nearest `p`.
+    pub fn nearest(self, p: V3) -> V3 {
+        std::array::from_fn(|k| p[k].clamp(self.min[k], self.max[k]))
+    }
+
+    /// Whether it ends along every axis.
+    pub fn bounded(self) -> bool {
+        self.min.iter().chain(&self.max).all(|c| c.is_finite())
+    }
+}

@@ -5,5 +5,6 @@
 //! positions the world when a fix genuinely never comes.
 
 pub mod bootstrap;
+pub mod destination;
 pub mod follow_mode;
 pub mod store;

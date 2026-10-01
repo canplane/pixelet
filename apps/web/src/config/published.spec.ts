@@ -15,7 +15,7 @@
  * by a level and a decimal index (pxl-spec bake/quadkey.rs).
  */
 export const PUBLISHED_VERSION = {
-  terrain: "v6",
+  terrain: "v7",
   poi: "v8",
   geocode: "v4",
 } as const;
@@ -24,3 +24,19 @@ export type BakeKind = keyof typeof PUBLISHED_VERSION;
 
 /** The kinds by the number the kernel names one by (FETCH_CREATE's `bake`). */
 export const BAKE_KINDS: readonly BakeKind[] = ["terrain", "poi", "geocode"];
+
+/** What a tile source declares of itself: SOURCE's shape, which the dev tile
+ * server answers too. */
+export interface TileSource {
+  readonly top_level: number;
+}
+
+/**
+ * What the published bake declares of itself to the client: `top_level`, the
+ * coarsest level of the pyramid it supplies whole, terrain and POI alike. The
+ * client's floor is held there, all around the eye, and the far edge is where
+ * that level ends (pxl-kernel world/paging/floor.rs). The dev tile server
+ * answers the same object at the tile root's `source`, with its `--top-level`
+ * (pxl-geo-bake bin/serve_tiles.rs); neither is guessed from what fails.
+ */
+export const PUBLISHED_SOURCE: TileSource = { top_level: 10 };

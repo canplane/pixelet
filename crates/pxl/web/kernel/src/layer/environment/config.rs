@@ -37,7 +37,7 @@ pub mod render_cfg {
     pub const FOG_NEAR: f64 = 4608.0;
     /// The reach the two above were tuned against, and what the near plane's
     /// scale is measured in: five levels from the leaves draw step 2^5, which
-    /// the rule wants out to 192 · 2^5 (world/pyramid/domain.rs's level_for).
+    /// the rule wants out to 192 · 2^5 (pxl-spec space/lod.rs's `level`).
     pub const FOG_FAR: f64 = 6144.0;
 }
 

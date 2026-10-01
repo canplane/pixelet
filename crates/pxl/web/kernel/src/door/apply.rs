@@ -84,6 +84,10 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             }
             Ok(Some(0))
         }
+        Command::WORLD_SOURCE => {
+            crate::world::paging::floor::declare(abi::WorldSource::read(packet(pkt)?)?.top_level);
+            Ok(Some(0))
+        }
         Command::INPUT_UPDATE => {
             let p = abi::InputUpdate::read(packet(pkt)?)?;
             camera_input_rect(Rect {
@@ -139,7 +143,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             applied(s)
         }
         Command::INPUT_RESET_DIST => {
-            crate::control::camera::store::camera_store().reset_dist();
+            crate::control::camera::controller::reset_dist();
             applied(s)
         }
         Command::INPUT_COMPASS_RESET => {
@@ -149,6 +153,15 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         Command::INPUT_GO_TO => {
             let p = abi::InputGoTo::read(packet(pkt)?)?;
             ui::go_to_degrees(p.lon, p.lat);
+            applied(s)
+        }
+        Command::INPUT_POSE => {
+            let p = abi::InputPose::read(packet(pkt)?)?;
+            crate::control::camera::controller::tracked_pose([p.x, p.y, p.z], [p.qx, p.qy, p.qz, p.qw]);
+            applied(s)
+        }
+        Command::INPUT_POSE_END => {
+            crate::control::camera::controller::tracked_end();
             applied(s)
         }
         Command::SENSOR_UPDATE => {

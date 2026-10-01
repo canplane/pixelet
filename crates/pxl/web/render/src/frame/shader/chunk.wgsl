@@ -3,8 +3,8 @@
 // nothing (chunk_mesher.rs's BOX_WORDS). Every rule here was GLSL injected into three's
 // standard material (b9e31004) — the
 // real-size tile UV from a box's own corner and scale, the edge shading
-// from the mesher's face bits, the screen-space dither a blend is punched
-// with — with the lighting three did for us written out in shade.wgsl. No
+// from the mesher's face bits — with the lighting three did for us written
+// out in shade.wgsl. No
 // tone mapping: three applied it only when drawing to the screen, and the
 // shipped path drew into the composer's target.
 
@@ -15,10 +15,10 @@
 // and unlike the other shaders' draw records, this one is a struct inside a
 // `var<storage>` array, read in the vertex stage, on every device there is.
 struct Draw {
-  // The mesh's corner in the frame's own space, and whether the draw shows:
-  // 0 or 1, and past 2 the same blend inverted (dissolve.wgsl).
+  // The mesh's corner in the frame's own space, and a fourth word the chunk
+  // does not read.
   place: vec4f,
-  // The blend's opacity; the cell a box of this draw is measured in, in
+  // The draw's opacity; the cell a box of this draw is measured in, in
   // units — a leaf's own cell is one, a tier's is its step, and a level's is
   // that shifted by the level; the step its floor and height count, from the
   // mesh's own floor, which is in the corner above; and a fourth word the
@@ -436,9 +436,6 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
       + sample_tap(i.layer_taps.y, is_side, i.box_uv, ddx, ddy, i.rgb)
       + sample_tap(i.layer_taps.z, is_side, i.box_uv, ddx, ddy, i.rgb)
       + sample_tap(i.layer_taps.w, is_side, i.box_uv, ddx, ddy, i.rgb)) * 0.25;
-  }
-  if (dissolved(d.place.w, i.clip.xy)) {
-    discard;
   }
   var base = taps;
   base = base * mix(1.0, 1.0 - frame_edge_strength(), edge_factor(i.local_pos, i.box_scale, i.normal, i.faces));

@@ -12,7 +12,6 @@ mod terrain;
 use cache::Cache;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 pub mod job;
 use job::{Limits, Runner};
@@ -56,7 +55,6 @@ impl From<String> for Failure {
 
 struct Dataset {
     cache: Cache,
-    revision: u64,
     source: Source,
 }
 enum Source {
@@ -67,10 +65,12 @@ enum Source {
 /// What a layer's source says about its pyramid that the pyramid cannot:
 /// where it has nothing, and the one page terrain's open water reads as.
 impl Source {
-    /// A shared object a name addresses rather than a page.
-    fn shared(&self, name: &str) -> Option<&[u8]> {
+    /// The object a name addresses rather than a page, which is also what a
+    /// fold reads for a page the source left as no object where that is not
+    /// simply an empty page: terrain's open water.
+    fn shared(&self) -> Option<(&'static str, &[u8])> {
         match self {
-            Source::Terrain(s) if name == crate::terrain::leaf::OCEAN_KEY => Some(&s.raw_ocean),
+            Source::Terrain(s) => Some((crate::terrain::leaf::OCEAN_KEY, &s.raw_ocean)),
             _ => None,
         }
     }
@@ -92,31 +92,27 @@ impl Source {
             _ => pxl_spec::bake::poi_page::PoiPage::sources(p),
         }
     }
-
-    /// The object a fold reads for a page the source left as no object,
-    /// where that is not simply an empty page.
-    fn absent(&self) -> Option<(&'static str, &[u8])> {
-        match self {
-            Source::Terrain(s) => Some((crate::terrain::leaf::OCEAN_KEY, &s.raw_ocean)),
-            _ => None,
-        }
-    }
 }
 impl Dataset {
-    fn open(base: &std::path::Path, kind: Kind, revision: u64, runner: &Runner) -> Result<Self, String> {
-        Ok(Self {
-            cache: Cache::with_admission(
-                base.join(kind.name()).join(revision.to_string()),
-                runner.admission.clone(),
-                std::time::Duration::from_secs(runner.limits.seconds),
-            )?,
-            revision,
+    /// The shared object is the same for the generation's whole life, so it
+    /// is published here, before the generation can be asked for anything,
+    /// and every fold only reads it. Written by the folds that read it, it
+    /// would have a writer for every fold in flight, and those race on the one
+    /// staging path an atomic write goes through: the loser's rename finds
+    /// nothing, and its page fails for the rest of the generation.
+    fn open(base: &std::path::Path, kind: Kind, runner: &Runner) -> Result<Self, String> {
+        let data = Self {
+            cache: Cache::with_admission(base.join(kind.name()), runner.admission.clone(), std::time::Duration::from_secs(runner.limits.seconds))?,
             source: match kind {
                 Kind::Terrain => Source::Terrain(terrain::Source::new()?),
                 Kind::Poi => Source::Poi,
                 Kind::Geocode => Source::Geocode,
             },
-        })
+        };
+        if let Some((name, bytes)) = data.source.shared() {
+            data.cache.publish(name, Some(bytes))?;
+        }
+        Ok(data)
     }
 }
 
@@ -133,10 +129,12 @@ impl Server {
     pub fn open(url: &str, workers: usize, base: PathBuf, top_level: u32, limits: Limits) -> Result<Self, String> {
         let owner = claim(&base)?;
         let runner = Arc::new(Runner::new(url.to_owned(), workers, limits)?);
-        let revision = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|e| e.to_string())?.as_micros() as u64;
         let current = [Kind::Terrain, Kind::Poi, Kind::Geocode]
             .into_iter()
-            .map(|k| Dataset::open(&base, k, revision, &runner).map(Arc::new))
+            .map(|k| {
+                prune(&base.join(k.name()))?;
+                Dataset::open(&base, k, &runner).map(Arc::new)
+            })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             _owner: owner,
@@ -160,28 +158,35 @@ impl Server {
 
     pub fn invalidate(&self, kind: Kind) -> Result<(), String> {
         let mut current = self.current.lock().expect("datasets");
-        let revision = current[kind as usize].revision.checked_add(1).ok_or("revision exhausted")?;
-        current[kind as usize] = Arc::new(Dataset::open(&self.base, kind, revision, &self.runner)?);
+        current[kind as usize].cache.purge()?;
+        current[kind as usize] = Arc::new(Dataset::open(&self.base, kind, &self.runner)?);
         Ok(())
     }
 }
 
-/// Takes the cache directory for this process. A generation is private to
-/// the process that opened it, and is removed when its `Cache` drops — which
-/// a signal never lets happen, so every generation a stopped server leaves
-/// is an orphan. What this process did not create is cleared before its
-/// first generation opens; the lock keeps that from reaching a server that
-/// is still running on the same directory.
+/// What a stopped server left in a kind's cache that is not a page: the
+/// staging its jobs were killed in (job.rs `Staging`), and a purge it was
+/// killed in the middle of. The pages themselves stay — a page is cached
+/// while its file is there, and a change to what a page would be is a purge
+/// (`Server::invalidate`), not a restart.
+fn prune(root: &std::path::Path) -> Result<(), String> {
+    for entry in std::fs::read_dir(root).into_iter().flatten().flatten() {
+        if entry.file_name().to_string_lossy().starts_with(".work-") {
+            std::fs::remove_dir_all(entry.path()).map_err(|e| e.to_string())?;
+        }
+    }
+    match std::fs::remove_dir_all(cache::purged(root)) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
+        _ => Ok(()),
+    }
+}
+
+/// Takes the cache directory for this process: one server writes it at a
+/// time, and the lock keeps a second from pruning under a running one.
 fn claim(base: &std::path::Path) -> Result<std::fs::File, String> {
     std::fs::create_dir_all(base).map_err(|e| e.to_string())?;
     let owner = std::fs::File::options().create(true).truncate(false).write(true).open(base.join(".lock")).map_err(|e| e.to_string())?;
     owner.try_lock().map_err(|_| format!("{}: another server owns this cache", base.display()))?;
-    for kind in [Kind::Terrain, Kind::Poi, Kind::Geocode] {
-        match std::fs::remove_dir_all(base.join(kind.name())) {
-            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
-            _ => {}
-        }
-    }
     Ok(owner)
 }
 

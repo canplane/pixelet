@@ -2,7 +2,9 @@
 
 //! Local demand bakes. Each tile kind uses the same generation, job and
 //! response path; the deployment still serves immutable bucket objects.
-//! --cache is the parent of private terrain/poi/geocode generation directories.
+//! --cache is the parent of the terrain/poi/geocode directories: a page is
+//! cached while its file is there, across restarts, until its kind is
+//! invalidated (demand.rs `prune`).
 
 use axum::body::Bytes;
 use axum::extract::{Path, State};
@@ -23,6 +25,9 @@ use std::sync::Arc;
 
 struct App {
     demand: Server,
+    /// The coarsest level served whole, `--top-level`: what the client's floor
+    /// is leased at.
+    top_level: u32,
     asset_dir: PathBuf,
     admin_token: Option<String>,
 }
@@ -48,6 +53,18 @@ async fn tile(State(app): State<Arc<App>>, Path((kind, name)): Path<(String, Str
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
     }
+}
+
+/// What this source declares of itself, in the form a published bake's
+/// `SOURCE` has (spec/pxl/spec/bake/published.json), so the client reads
+/// either the same way and learns its floor from the source rather than from
+/// what fails (pxl-kernel world/paging/floor.rs).
+async fn source(State(app): State<Arc<App>>) -> Response {
+    (
+        [(header::CONTENT_TYPE, "application/json"), (header::CACHE_CONTROL, "no-store")],
+        serde_json::json!({ "top_level": app.top_level }).to_string(),
+    )
+        .into_response()
 }
 
 async fn invalidate(State(app): State<Arc<App>>, headers: HeaderMap, Path(kind): Path<String>, body: String) -> Response {
@@ -128,6 +145,7 @@ fn run() -> Result<(), String> {
     let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
     let app = Arc::new(App {
         demand: Server::open(&url, workers, cache, top_level, limits)?,
+        top_level,
         asset_dir,
         admin_token: std::env::var("ADMIN_TOKEN").ok().filter(|t| !t.is_empty()),
     });
@@ -135,6 +153,7 @@ fn run() -> Result<(), String> {
     // The roots and branches are spec/pxl/spec/route.json's, as the client's and the
     // relays' are; what each one carries past them is this server's.
     let router = Router::new()
+        .route(&format!("{TILE_ROOT}/source"), get(source))
         .route(&format!("{TILE_ROOT}/{{kind}}/{{name}}"), get(tile))
         // Its own root: an asset is neither server's, and its URL is its bucket
         // key with a leading slash.

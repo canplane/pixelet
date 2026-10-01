@@ -37,6 +37,17 @@
     "camera": {
       "section_title": "Camera",
       "section_caption": "Adjust how the camera moves",
+      "camera_mode": {
+        "label": "Camera",
+        "orbit": {
+          "label": "Third person",
+          "description": "The camera circles the place it looks at, and dragging moves that place."
+        },
+        "free": {
+          "label": "First person",
+          "description": "You look around where you stand; dragging walks you over the ground, your eye at your height over it."
+        }
+      },
       "tilt_lock": {
         "label": "Lock Camera Tilt",
         "description": "Locks vertical camera rotation while leaving horizontal rotation free."
@@ -86,10 +97,6 @@
           "label": "Low",
           "description": "Draws at a lower resolution to save battery and heat. Looks a little softer."
         }
-      },
-      "lod_crossfade": {
-        "label": "LOD Crossfade",
-        "description": "Blocks fade into their new level of detail as you zoom or move, instead of switching at once. Draws the changing blocks twice while they fade."
       }
     },
     "debug": {

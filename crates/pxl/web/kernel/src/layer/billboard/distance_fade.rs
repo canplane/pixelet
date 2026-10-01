@@ -6,7 +6,7 @@
 //! box a billboard will take. A billboard at full strength is drawn at one
 //! screen pixel per logical pixel, so its drawn width is `logical_w * far`.
 
-use crate::world::frame::view::view;
+use crate::control::camera::controller::look_distance;
 
 /// Where a billboard is at full strength and where it is gone, in the
 /// camera's distance to what it looks at: a sphere about the eye that grows
@@ -19,7 +19,7 @@ const FADE_END_ZOOMS: f64 = 4.0;
 
 /// Where the fade starts and ends, in units from the eye, this frame.
 pub fn fade_range() -> (f64, f64) {
-    let zoom = view().dist;
+    let zoom = look_distance();
     (FADE_START_ZOOMS * zoom, FADE_END_ZOOMS * zoom)
 }
 

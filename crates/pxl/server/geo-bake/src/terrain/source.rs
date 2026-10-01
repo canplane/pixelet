@@ -10,7 +10,7 @@
 
 use postgres::Client;
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::bake::format::{BaseRow, BuildingRow, CoastRow, SegmentRow};
+use pxl_spec::bake::format::{encode_terrain, BaseRow, BuildingRow, CoastRow, SegmentRow};
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
 use xpute_core::status::error::MarshalError;
@@ -131,7 +131,7 @@ pub fn fetch_terrain_source(repo: &TerrainRepository, client: &mut Client, page_
 /// Raw Overture and elevation source, baked into client-ready ground channels.
 pub fn fetch_tile(repo: &TerrainRepository, client: &mut Client, page_idx: IVec, stats: &mut SourceStats) -> Result<Vec<u8>, BakeError> {
     let raw = fetch_terrain_source(repo, client, page_idx, stats)?;
-    Ok(bake_terrain(page_idx, &raw)?)
+    Ok(encode_terrain(&bake_terrain(page_idx, &raw)?)?)
 }
 
 #[derive(Debug)]

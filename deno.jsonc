@@ -87,6 +87,8 @@
 
     // ── The gate ──
     "check": "deno task check:fmt && deno task check:toolchain && deno task check:rules && deno task check:web && deno task check:native && deno task check:xpute && deno task check:rust && deno task check:cpp && deno task check:spec",
+    // The same checks, each only where what changed against HEAD can break it.
+    "check:diff": "./script/check-diff.ts",
     // What check:rust's own `cargo fmt --check` does for the Rust: everything
     // Deno formats — TypeScript, JSON, JSONC, Markdown — held to one shape.
     // Without it the two languages were gated unevenly, and the half nothing
@@ -162,6 +164,7 @@
 
     // script/, apps/web/script/
     "@std/path": "jsr:@std/path@^1",
+    "@std/jsonc": "jsr:@std/jsonc@^1",
 
     // build tools
     "vite": "npm:vite@^8.3.0",

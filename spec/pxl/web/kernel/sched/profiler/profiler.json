@@ -45,11 +45,10 @@
     "adopt_ms"
   ],
   "STEP_NAMES": [
+    "controller",
     "input",
     "camera",
     "environment",
-    "view_rotation",
-    "view_translation",
     "companion",
     "preview",
     "chunks",
@@ -59,13 +58,14 @@
   "EFFECT_NAMES": [
     "navigation",
     "bootstrap",
-    "shell",
     "geolocation",
     "orientation",
+    "follow",
+    "destination",
+    "view",
     "tiles",
     "poi",
     "geocode",
-    "follow",
     "theme",
     "decor",
     "chunk_sources",
@@ -122,55 +122,48 @@
     "lod_in_frustum": 62,
     "lod_pending": 63,
     "lod_settling": 64,
-    "lod_blend_active": 65,
-    "lod_offscreen_pending": 66,
-    "lod_oldest_release_ms": 67,
-    "lod_oldest_visible_ms": 68,
-    "lod_pressure": 69,
-    "mounts_added": 70,
-    "mounts_removed": 71,
-    "mounts_layouts": 72,
-    "pages_total": 73,
-    "pages_by_level": 74,
-    "pages_poi": 85,
-    "heap_used_mb": 86,
-    "heap_live_mb": 87,
-    "heap_run_mb": 88,
-    "heap_slot_mb": 89,
-    "heap_range_mb": 90,
-    "heap_refusals": 91,
-    "heap_largest_free_mb": 92,
-    "ring_cq_peak": 93,
-    "ring_held_peak": 94,
-    "work_scans": 95,
-    "work_bakes": 96,
-    "work_fine_peak": 97,
-    "work_coarse_peak": 98,
-    "q_terrain": 99,
-    "q_poi": 100,
-    "stale_chunks": 101,
-    "stale_drawn": 102,
-    "stale_levels": 103,
-    "stale_hidden": 104,
-    "stale_uncovered": 105,
-    "stale_unready": 106,
-    "stale_on_waiter": 107,
-    "slot_waits": 108,
-    "slot_wait_levels": 109,
-    "slot_holder_levels": 110,
-    "slot_coarser": 111,
-    "cap_commit_left": 112,
-    "cap_mount_left": 113,
-    "cap_mount_full": 114,
-    "cap_record_refused": 115,
-    "turn_effects_ms": 116,
-    "turn_stage_ms": 117,
-    "turn_step_ms": 118,
-    "turn_step_name": 119,
-    "cover_rule": 120,
-    "cover_drawn": 121,
-    "cover_gaps": 122,
-    "WORDS": 123
+    "lod_offscreen_pending": 65,
+    "lod_oldest_release_ms": 66,
+    "lod_oldest_visible_ms": 67,
+    "mounts_added": 68,
+    "mounts_removed": 69,
+    "mounts_layouts": 70,
+    "pages_total": 71,
+    "pages_by_level": 72,
+    "pages_poi": 83,
+    "heap_used_mb": 84,
+    "heap_live_mb": 85,
+    "heap_run_mb": 86,
+    "heap_slot_mb": 87,
+    "heap_range_mb": 88,
+    "heap_refusals": 89,
+    "heap_largest_free_mb": 90,
+    "ring_cq_peak": 91,
+    "ring_held_peak": 92,
+    "work_scans": 93,
+    "work_bakes": 94,
+    "work_fine_peak": 95,
+    "work_coarse_peak": 96,
+    "q_terrain": 97,
+    "q_poi": 98,
+    "stale_hidden": 99,
+    "stale_uncovered": 100,
+    "stale_unready": 101,
+    "slot_waits": 102,
+    "slot_wait_levels": 103,
+    "slot_chained": 104,
+    "cap_commit_left": 105,
+    "cap_mount_left": 106,
+    "cap_mount_full": 107,
+    "cap_record_refused": 108,
+    "turn_effects_ms": 109,
+    "turn_stage_ms": 110,
+    "turn_step_ms": 111,
+    "turn_step_name": 112,
+    "cover_rule": 113,
+    "cover_drawn": 114,
+    "cover_gaps": 115,
+    "WORDS": 116
   },
   "FRAME_GROUPS": {
     "$doc": [
@@ -207,11 +200,9 @@
       "lod_in_frustum",
       "lod_pending",
       "lod_settling",
-      "lod_blend_active",
       "lod_offscreen_pending",
       "lod_oldest_release_ms",
-      "lod_oldest_visible_ms",
-      "lod_pressure"
+      "lod_oldest_visible_ms"
     ],
     "mounts": [
       "mounts_added",
@@ -219,19 +210,14 @@
       "mounts_layouts"
     ],
     "stale": [
-      "stale_chunks",
-      "stale_drawn",
-      "stale_levels",
       "stale_hidden",
       "stale_uncovered",
-      "stale_unready",
-      "stale_on_waiter"
+      "stale_unready"
     ],
     "slot": [
       "slot_waits",
       "slot_wait_levels",
-      "slot_holder_levels",
-      "slot_coarser"
+      "slot_chained"
     ],
     "cap": [
       "cap_commit_left",
@@ -309,9 +295,9 @@
       "One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0."
     ],
     "sample": 0,
-    "has_prev": 123,
-    "prev": 124,
-    "WORDS": 247
+    "has_prev": 116,
+    "prev": 117,
+    "WORDS": 233
   },
   "SPREAD": {
     "$type": "u32",
@@ -392,15 +378,15 @@
       "census": 71,
       "level_tris": 91,
       "last": 102,
-      "WORDS": 225
+      "WORDS": 218
     },
     "tasks": {
-      "AT": 230,
+      "AT": 223,
       "slots": 0,
       "WORDS": 150
     },
     "counters": {
-      "AT": 380,
+      "AT": 373,
       "faces_kept": 0,
       "faces_possible": 1,
       "runs_culled": 2,
@@ -419,7 +405,7 @@
       "WORDS": 15
     },
     "atlas": {
-      "AT": 395,
+      "AT": 388,
       "size": 0,
       "entries": 1,
       "shelves": 2,
@@ -427,7 +413,7 @@
       "WORDS": 4
     },
     "retain": {
-      "AT": 399,
+      "AT": 392,
       "run_sets": 0,
       "run_set_mb": 1,
       "tiers": 2,
@@ -439,14 +425,14 @@
       "WORDS": 8
     },
     "fetch": {
-      "AT": 407,
+      "AT": 400,
       "queued": 0,
       "running": 1,
       "credits": 2,
       "WORDS": 3
     },
     "peak": {
-      "AT": 410,
+      "AT": 403,
       "present": 0,
       "dt_ms": 1,
       "sched_ms": 2,
@@ -460,22 +446,32 @@
       "in_frustum": 10,
       "pending": 11,
       "settling": 12,
-      "blend_active": 13,
-      "pressure": 14,
-      "offscreen_pending": 15,
-      "oldest_release_ms": 16,
-      "oldest_visible_ms": 17,
-      "fine_peak": 18,
-      "coarse_peak": 19,
-      "WORDS": 20
+      "offscreen_pending": 13,
+      "oldest_release_ms": 14,
+      "oldest_visible_ms": 15,
+      "fine_peak": 16,
+      "coarse_peak": 17,
+      "WORDS": 18
     },
     "steps": {
-      "AT": 430,
+      "AT": 421,
       "count": 0,
       "slots": 1,
       "WORDS": 161
     },
-    "WORDS": 591
+    "quality": {
+      "AT": 582,
+      "step": 0,
+      "star": 1,
+      "frames_held": 2,
+      "admitted": 3,
+      "evicted": 4,
+      "refined": 5,
+      "recubed": 6,
+      "changes_peak": 7,
+      "WORDS": 8
+    },
+    "WORDS": 590
   },
   "READ": {
     "$type": "u32",

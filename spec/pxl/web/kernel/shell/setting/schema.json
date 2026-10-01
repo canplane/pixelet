@@ -38,6 +38,18 @@
       "  low   — one."
     ]
   },
+  "CAMERA_MODES": {
+    "$value": ["orbit", "free"],
+    "$doc": [
+      "Which controller makes the camera's pose.",
+      "",
+      "  orbit — third person: the camera turns about the map center, its",
+      "          radius ahead of the eye, and a drag moves the map center.",
+      "  free  — first person: the eye is the map center and turns in place;",
+      "          a drag walks it over the ground, the eye at its height over",
+      "          the ground it reaches, and nothing moves it up or down."
+    ]
+  },
   "CAMERA_COLLISION_MODES": {
     "$value": ["through", "stop", "climb"],
     "$doc": [
@@ -136,6 +148,18 @@
       "default": false,
       "section": "camera"
     },
+    "camera_mode": {
+      "$doc": [
+        "Which controller makes the camera's pose; CAMERA_MODES says each. To",
+        "first person the person stands at the map center, the eye at its",
+        "height over the ground; to third the map center is laid on the ground",
+        "and the eye steps back by the radius."
+      ],
+      "kind": "choice",
+      "default": "orbit",
+      "options": "CAMERA_MODES",
+      "section": "camera"
+    },
     "camera_collision": {
       "$doc": [
         "What the camera does when the controls would put it underground;",
@@ -215,19 +239,6 @@
       "default": "auto",
       "options": "RESOLUTION_MODES",
       "section": "quality"
-    },
-    "lod_crossfade": {
-      "$doc": [
-        "A change of what a chunk draws dissolves over 150 ms of frames instead",
-        "of switching at once (crates/pxl/web/kernel/src/world/chunk/table.rs's",
-        "Fade): a cube for another, a stale chunk for what replaced it. The two",
-        "draw on complementary halves of one screen-space pattern, so a chunk",
-        "in a dissolve is drawn twice while it lasts."
-      ],
-      "kind": "toggle",
-      "default": true,
-      "section": "quality",
-      "cost": "low"
     },
     "profiler": {
       "$doc": ["The performance overlay: the profiler's panel, and the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`)."],

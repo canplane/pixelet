@@ -1,7 +1,7 @@
 // pxl-kernel/layer/poi/placement.rs
 
 //! Where the counts are drawn. What the POI pages draw of the view is the
-//! layer's own cover (world/pyramid.rs `Cover`): pieces of the ground in
+//! layer's own cover (world/pyramid/cover.rs `Cover`): pieces of the ground in
 //! view, none over another, so every place under them is counted once. Each
 //! of their cells — cells of the POI lattice (pxl-spec bake/poi_page.rs
 //! `POI_LATTICE`) — is counted into itself, or into the cell over it at the
@@ -23,7 +23,6 @@ use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_b
 use crate::layer::poi::badge::{self, Label};
 use crate::layer::poi::enabled;
 use crate::sched::tick::TickContext;
-use crate::shell::map_store::map_store;
 use crate::world::frame::coord::local_world_origin;
 use crate::world::frame::view::view;
 use crate::world::pyramid::chunk::Chunk;
@@ -31,8 +30,8 @@ use crate::world::pyramid::Layer;
 use pxl_render::asset::atlas::NO_SLOT;
 
 use pxl_spec::bake::poi_page::{PoiPage, POI_LATTICE};
+use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pvf3::{ivec, projection};
 use pxl_spec::space::pyramid::{Cell, LevelPage, GROUND};
 use std::collections::{BTreeMap, HashSet};
 
@@ -44,8 +43,9 @@ struct Placement {
     /// What `kept` has on the sheet, in the order it is drawn.
     drawn: Vec<u32>,
     /// The badges drawn, as a tap finds them: nearest the eye first, each by
-    /// its box on the screen, what it says and where it stands.
-    hits: Vec<([f64; 4], Label, Cell)>,
+    /// its box on the screen, what it says and where it stands: the point
+    /// it is drawn over, on the surface there.
+    hits: Vec<([f64; 4], Label, Pvf3)>,
 }
 static PLACEMENT: Global<Placement> = Global::new();
 
@@ -62,7 +62,7 @@ struct Tally {
 
 pub fn step(ctx: &mut TickContext) {
     let p = PLACEMENT.get(Placement::default);
-    if !enabled() || map_store().map_center.is_none() {
+    if !enabled() || crate::control::camera::controller::map_center().is_none() {
         if let Some(set) = p.set.take() {
             remove_billboard_set(set);
             ctx.invalidate();
@@ -76,8 +76,8 @@ pub fn step(ctx: &mut TickContext) {
     let pages = PoiPage::pyramid();
     let sched = &crate::kernel::kernel().sched;
     let mut cells: BTreeMap<Cell, Tally> = BTreeMap::new();
-    let Some(domain) = pages.domain() else { return };
-    for &chunk in &pages.cover().0.drawn {
+    let Some(domain) = crate::world::pyramid::domain::current() else { return };
+    for &chunk in &crate::world::pyramid::cover::cover::<PoiPage>().0.drawn {
         // The page that draws the chunk's ground: its own, or where the tree
         // stops above it, the page over it that says that ground — whose cells
         // there hold one place or none, each standing where it stands.
@@ -135,10 +135,9 @@ pub fn step(ctx: &mut TickContext) {
         let Some((_, top)) = sched.surface_at(&stands.mid()) else { continue };
         let Some(width) = badge::width(label) else { continue };
         let center = stands.center(top);
-        let mut local = [0.0; 3];
-        projection::unproject(&mut local, ivec::sub(center.i, origin), center.f);
+        let local = crate::world::frame::coord::canonical_to_local(&center, origin);
         p.batch.push(local[0], local[1], local[2], width, badge::ANCHOR, labeled.len() as f64);
-        labeled.push((label, stands));
+        labeled.push((label, center));
     }
     badge::retain(&labeled.iter().map(|l| l.0).collect());
     let v = view();
@@ -199,11 +198,10 @@ pub fn tap(ndc_x: f64, ndc_y: f64) -> bool {
     let Some(&(_, label, stands)) = hits.iter().find(|(r, _, _)| (r[0]..=r[2]).contains(&x) && (r[1]..=r[3]).contains(&y)) else {
         return false;
     };
-    crate::shell::shell::go_to(stands.mid());
-    if let Label::Count(_) = label {
-        let camera = crate::control::camera::store::camera_store();
-        let dist = Some(camera.view_state.dist / 2.0);
-        camera.set_view_state(crate::control::camera::store::ViewPatch { dist, azimuth: None, polar: None });
+    match label {
+        // A count opens up as it is looked at closer.
+        Label::Count(_) => crate::control::camera::controller::focus(stands),
+        _ => crate::shell::shell::go_to(stands),
     }
     true
 }

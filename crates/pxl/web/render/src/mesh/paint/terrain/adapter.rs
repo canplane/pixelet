@@ -114,6 +114,7 @@ impl Materials {
 }
 
 /// One page's lanes, as the client keeps them in the core memory.
+#[derive(Clone, Copy)]
 pub struct PageView<'a> {
     /// The page's ground, a cell's four channels packed into one
     /// `GroundCell` (pxl-spec bake/pack.rs), in the lattice's cell order.
@@ -121,12 +122,40 @@ pub struct PageView<'a> {
     pub ele: &'a [i16],
 }
 
+/// What a page's cells are read from: the page drawn in its place — its own,
+/// or one over it whose cell stands for `n` × `n` of its own until its own
+/// comes — and the page's first cell as its own cells from that page's
+/// corner.
+#[derive(Clone, Copy)]
+pub struct PageSource<'a> {
+    pub page: PageView<'a>,
+    pub origin: [i64; 2],
+    pub n: u32,
+}
+
+/// The pages a chunk's cells lie in, each with what it is drawn from: the
+/// chunk's own, and those beside it its apron reaches into.
+pub struct Around<'a> {
+    pub own: PageSource<'a>,
+    /// The page (qx, qy) from the chunk's own at `beside_index`: none where
+    /// the apron does not reach or nothing is drawn there, and those cells
+    /// are read from `own`, whose elevation is padded past its edge.
+    pub beside: [Option<PageSource<'a>>; 8],
+}
+
+/// Where the page (qx, qy) from a chunk's own, each in -1..=1 and not both
+/// zero, is kept in `Around::beside`.
+pub const fn beside_index(qx: i64, qy: i64) -> usize {
+    let k = (qx + 1) + 3 * (qy + 1);
+    (if k > 4 { k - 1 } else { k }) as usize
+}
+
 /// One chunk of a page, sampled: a material and a top a cell, and the
 /// floor the columns share, over the run set's padded column grid: the
-/// chunk's own cells and the ring of neighbors around them (voxel_scan.rs's APRON). The
-/// ring is sampled from the same page — the elevation raster is padded, so a
-/// cell outside the page still has a height — and is never painted into the
-/// volume or emitted; it is there for the face mask to ask about.
+/// chunk's own cells and the ring of neighbors around them (voxel_scan.rs's
+/// APRON). A ring cell is read from what its own page is drawn from, as the
+/// chunk beside draws it, so the face mask asks about the surface that is on
+/// the screen there; it is never painted into the volume or emitted.
 pub struct ChunkSample {
     /// Packed 0xCC_RRGGBB a cell.
     pub material: Vec<u32>,
@@ -148,15 +177,14 @@ impl Default for ChunkSample {
 }
 
 impl ChunkSample {
-    /// Samples the chunk whose first cell is `origin` of its own cells from
-    /// `page`'s corner, a page cell standing for `n` × `n` of them: 1 where
-    /// the page is the chunk's own, more where it is a page over it read in
-    /// the chunk's place until its own comes. Each cell takes the material of
-    /// the page cell it lies in and the height of the page's surface at its
-    /// own center, so a chunk read from a coarser page is that page's ground
-    /// at the chunk's step and nothing invented. A channel in `hidden` is
-    /// stepped over, as `shown_ground` steps over it.
-    pub fn read(&mut self, page: &PageView, origin: [i64; 2], n: u32, hidden: ChannelMask) {
+    /// Samples the chunk whose first cell is `first` of its page's cells,
+    /// each cell from what the page it lies in is drawn from (`Around`).
+    /// Each cell takes the material of the source cell it lies in and the
+    /// height of the source's surface at its own center, so a cell read from
+    /// a coarser page is that page's ground at the chunk's step and nothing
+    /// invented. A channel in `hidden` is stepped over, as `shown_ground`
+    /// steps over it.
+    pub fn read(&mut self, around: &Around, first: [i64; 2], hidden: ChannelMask) {
         let tables = &*MATERIALS;
         let skip = GROUND_CH_KEYS.map(|k| hidden & channel_bit(k) != 0);
         let mut min_ele = i32::MAX;
@@ -166,7 +194,18 @@ impl ChunkSample {
                 let i = (py * COL_SPAN + px) as usize;
                 let own = APRON..COL_SPAN - APRON;
                 let inner = own.contains(&px) && own.contains(&py);
-                let (x, y) = (origin[0] + px as i64 - APRON as i64, origin[1] + py as i64 - APRON as i64);
+                let (x, y) = (first[0] + px as i64 - APRON as i64, first[1] + py as i64 - APRON as i64);
+                let span = PAGE_CELLS as i64;
+                let (qx, qy) = (x.div_euclid(span), y.div_euclid(span));
+                let (source, x, y) = match (qx, qy) {
+                    (0, 0) => (&around.own, x, y),
+                    _ => match &around.beside[beside_index(qx, qy)] {
+                        Some(s) => (s, x - qx * span, y - qy * span),
+                        None => (&around.own, x, y),
+                    },
+                };
+                let (page, n) = (&source.page, source.n);
+                let (x, y) = (source.origin[0] + x, source.origin[1] + y);
                 let (tx, ty) = (x.div_euclid(n as i64) as i32, y.div_euclid(n as i64) as i32);
                 // The ground channels are the page's own span; only the
                 // elevation is padded past it. An apron cell outside the

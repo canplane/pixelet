@@ -9,7 +9,6 @@
 use pxl_render::look::color::linear_rgb;
 use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS, NIGHT, THEME_FLOATS};
 use pxl_render::look::globe::Globe;
-use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
@@ -23,11 +22,9 @@ use crate::layer::environment::config::light_cfg;
 use crate::layer::environment::fog::{band_at, eye_ground, eye_height, reach_at};
 use crate::layer::environment::theme::{themes, Theme};
 use crate::layer::environment::theme_clock::theme_key;
-use crate::shell::map_store::map_store;
 use crate::world::change::{request_world_tick, wake_at};
 use crate::world::chunk::table::Frame;
-use crate::world::frame::view::camera_center;
-use crate::world::pyramid::Layer as _;
+use crate::world::frame::view::globe_anchor;
 
 // The map's own fallback, so the first frames before map_center exists light
 // the world from a real place instead of computing sun and moon for (0, 0).
@@ -81,7 +78,7 @@ pub fn km_per_u() -> f64 {
     epsg3857::M_PER_U * environment().observed_lat.to_radians().cos() / 1000.0
 }
 
-/// The sphere about the camera center (view.rs's camera_center), which the
+/// The sphere about the globe's anchor (world/frame/view.rs `globe_anchor`), which the
 /// flat map is laid back on (pxl-render's look/globe.rs), for the chunks'
 /// culling as the renderer takes it for its frame.
 pub fn globe() -> Globe {
@@ -103,9 +100,9 @@ pub fn map_environment_step() {
         request_world_tick();
     }
 
-    // Observed from the camera center, the one the world is laid on the
+    // Observed from the globe's anchor, the one the world is laid on the
     // planet about, so the sphere's latitude and the sky over it are its.
-    let center = map_store().map_center.map(|_| camera_center());
+    let center = globe_anchor();
     if center != e.observed_center {
         e.observed_center = center;
         if let Some(c) = center {
@@ -285,7 +282,7 @@ impl EnvironmentDraw {
         let height = eye_height();
         // What the ground's pyramid last drew, the view it was made from:
         // read, not made again a frame at a time.
-        let drawn = Terrain::pyramid().domain().map(|d| d.far);
+        let drawn = crate::world::pyramid::domain::current().map(|d| d.observation().far);
         let band = band_at(height, drawn.unwrap_or_else(|| reach_at(height)));
         let light = Light {
             theme: self.current,

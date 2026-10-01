@@ -97,6 +97,23 @@ pub const PAGE_ELE_SPAN: u32 = 1 << (L3.shamt() + 1 - 5);
 pub const ELE_PAD: u32 = 2;
 pub const ELE_PADDED_SPAN: u32 = PAGE_ELE_SPAN + 2 * ELE_PAD;
 
+// ---- The index lane ----
+
+/// Cells on a page's side in its index lane (bake/format.rs `Index`): how
+/// finely a page says how high everything under it stands. One maximum a page
+/// would let a grazing ray descend everywhere it passes and, drawn, stand a
+/// page as one box; a grid of them is the top of a max mipmap. 32 puts one
+/// cell over each elevation sample's spacing (`PAGE_ELE_SPAN`), finer than
+/// which a bound taken window by window gains little, at 4 KiB a page against
+/// a record of about 1.2 MiB. A parameter: the same at every level, since a
+/// page is the same number of its own cells at every level.
+pub const EXTENT_SPAN: u32 = 32;
+
+/// An index cell's side against the unit: a page's side over `EXTENT_SPAN`.
+pub const EXTENT_CELL: Scale = L3.down(EXTENT_SPAN.trailing_zeros());
+
+const _: () = assert!(EXTENT_SPAN.is_power_of_two(), "an index cell is a block of the lattice, a power of two of the unit");
+
 /// How many sizes an object places at: a cell and its halvings, each tier a
 /// level of the object layout below.
 ///

@@ -27,8 +27,15 @@ fn run() -> Result<(), String> {
             .collect::<Result<Vec<_>, String>>()
     })?;
     let root = root();
+    let stale: Vec<&Output> = outputs
+        .iter()
+        .filter(|o| std::fs::read_to_string(root.join(&o.path)).ok().as_deref() != Some(o.text.as_str()))
+        .collect();
     if write {
-        for o in &outputs {
+        // Only what differs: a file rewritten with its own text still moves
+        // its mtime, and cargo and Vite take that as a change — every crate
+        // over pxl-spec rebuilt and the dev servers with it.
+        for o in &stale {
             let at = root.join(&o.path);
             std::fs::create_dir_all(at.parent().ok_or("a path with no parent")?).map_err(|e| e.to_string())?;
             std::fs::write(&at, &o.text).map_err(|e| format!("{}: {e}", o.path))?;
@@ -36,11 +43,7 @@ fn run() -> Result<(), String> {
         }
         return Ok(());
     }
-    let stale: Vec<&str> = outputs
-        .iter()
-        .filter(|o| std::fs::read_to_string(root.join(&o.path)).ok().as_deref() != Some(o.text.as_str()))
-        .map(|o| o.path.as_str())
-        .collect();
+    let stale: Vec<&str> = stale.iter().map(|o| o.path.as_str()).collect();
     if !stale.is_empty() {
         for s in &stale {
             eprintln!("spec: {s} is not what its JSON writes — run `deno task spec`");

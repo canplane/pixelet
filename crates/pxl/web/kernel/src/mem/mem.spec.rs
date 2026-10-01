@@ -95,8 +95,8 @@ pub const GLOBAL_BASE: u32 = 33554432;
 /// constants), so a terrain grown past a phone fails to build; and at boot
 /// against where it actually started and what the device actually gave.
 ///
-/// 256 MiB with the terrain at 24.62 leaves the phone 447.61 in practice, so
-/// there are 191 MiB of headroom over the guarantee.
+/// 256 MiB with the terrain at 60.30 leaves the phone 392.62 in practice, so
+/// there are 136 MiB of headroom over the guarantee.
 pub const MIN_HEAP_BYTES: u32 = 268435456;
 
 /// What a device's memory is counted in: a reservation is a whole number of

@@ -245,6 +245,31 @@ words!(FetchBlock, SUMMARY::fetch::WORDS,
     queued => SUMMARY::fetch::queued, running => SUMMARY::fetch::running, credits => SUMMARY::fetch::credits,
 );
 
+/// The quality policy, the ground's residency and the frontier's pace, as
+/// they stand: the step of the ladder in force and the feasible one, the
+/// frames held, the pages taken in and given up since load, and the
+/// refinements and changes of cube since load and the most changes to what
+/// is drawn in one step — what a view's turnover is told apart by, a
+/// quality's step from pages let go from a recut.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct QualityBlock {
+    pub step: f64,
+    pub star: f64,
+    pub frames_held: f64,
+    pub admitted: f64,
+    pub evicted: f64,
+    pub refined: f64,
+    pub recubed: f64,
+    pub changes_peak: f64,
+}
+
+words!(QualityBlock, SUMMARY::quality::WORDS,
+    step => SUMMARY::quality::step, star => SUMMARY::quality::star, frames_held => SUMMARY::quality::frames_held,
+    admitted => SUMMARY::quality::admitted, evicted => SUMMARY::quality::evicted,
+    refined => SUMMARY::quality::refined, recubed => SUMMARY::quality::recubed, changes_peak => SUMMARY::quality::changes_peak,
+);
+
 /// One step of the tick, as the window saw it.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

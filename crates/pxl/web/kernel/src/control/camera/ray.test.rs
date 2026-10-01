@@ -16,21 +16,21 @@ use super::*;
 
 /// The voxel spanning [3,4] x [5,6] x [2,3], struck on the face `normal` names
 /// at a point deliberately off every tier boundary.
-fn struck(normal: V3, hit_point: V3) -> WorldHit {
-    WorldHit {
-        material_class: MaterialClasses::LAND,
-        face_normal: normal,
-        hit_point,
+fn struck(normal: V3, point: V3) -> Hit {
+    Hit {
         t: 1.0,
+        point,
+        normal,
         box_min: [3.0, 5.0, 2.0],
         box_max: [4.0, 6.0, 3.0],
+        struck: Struck::Ground,
     }
 }
 
 /// One hit per branch of world_struck_corner: a positive normal, a negative
 /// one, and the axes with no normal component at all, which every case has two
 /// of.
-fn cases() -> [(&'static str, WorldHit); 3] {
+fn cases() -> [(&'static str, Hit); 3] {
     [
         ("top", struck([0.0, 0.0, 1.0], [3.62, 5.37, 3.0])),
         ("+x wall", struck([1.0, 0.0, 0.0], [4.0, 5.37, 2.44])),

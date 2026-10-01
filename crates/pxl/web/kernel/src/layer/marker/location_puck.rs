@@ -20,7 +20,7 @@ use crate::kernel::{kernel, with_world};
 use crate::layer::environment::fog::view_reach;
 use crate::layer::environment::theme::Theme;
 use crate::layer::environment::theme_clock::theme_key;
-use crate::layer::terrain::elevation::ground_at;
+use crate::world::access::{Access, FINEST};
 use crate::world::change::request_world_tick;
 use crate::world::chunk::table::Frame;
 use crate::world::pyramid::Layer as _;
@@ -107,8 +107,8 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
 
     let mut pos = [0.0; 3];
     projection::unproject(&mut pos, device.i, device.f);
-    if let Some(ele) = ground_at(&device) {
-        p.last_known_center_z = Some(ele);
+    if let Some(ground) = Access::now().at(&device, FINEST).value() {
+        p.last_known_center_z = Some(ground.top);
     }
     let Some(center_z) = p.last_known_center_z else {
         return clear(p);
@@ -129,7 +129,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
             // Falls back to flat (center height) rather than 0 when a sample
             // lands on an unloaded neighboring page — absolute 0 would sink or
             // launch that instance away from the rest of the zone.
-            let delta_ele = ground_at(&coord).unwrap_or(center_pos[2]) - center_pos[2];
+            let delta_ele = Access::now().at(&coord, FINEST).value().map_or(center_pos[2], |g| g.top) - center_pos[2];
             let lifted = [s.off[0], s.off[1], s.off[2] + delta_ele];
             center3n(&lifted, U_PER_CELL, &mut v);
             lane.extend([
@@ -287,12 +287,12 @@ impl Markers {
         p.visible
     }
 
-    pub fn draw(&self, draw: &mut DrawList, origin: V3) {
+    pub fn draw(&self, draw: &mut DrawList, eye: V3) {
         let Some(p) = &self.puck else { return };
         if !p.visible || p.handle == 0 {
             return;
         }
-        let center = DrawList::translation(p.center, origin);
+        let center = DrawList::translation(p.center, eye);
         draw.draw_as(PIPELINE_PUCK_ZONE, p.handle, p.count, 0, center, 0.0, 1.0);
         let shown = p.shown.unwrap_or(p.target);
         let beacon = [

@@ -20,15 +20,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 pub(super) async fn resolve(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, name: &str, top: u32) -> Result<Option<String>, Failure> {
-    if data.source.shared(name).is_some() {
-        let (d, shared) = (data.clone(), name.to_owned());
-        data.cache
-            .once(name.into(), move |_deadline| async move {
-                let name = shared;
-                let bytes = d.source.shared(&name).expect("a shared object");
-                d.cache.publish(&name, Some(bytes)).map_err(Failure::from)
-            })
-            .await?;
+    if data.source.shared().is_some_and(|(shared, _)| shared == name) {
         return Ok(Some(name.into()));
     }
     let p = page_of_name(name).ok_or(Failure::BadName)?;
@@ -57,9 +49,6 @@ fn fault(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, p: LevelPage) -> P
                         tokio::time::timeout_at(deadline, fault(d.clone(), runner.clone(), kind, below))
                             .await
                             .map_err(|_| Failure::Limited("demand dependency deadline"))??;
-                    }
-                    if let Some((name, bytes)) = d.source.absent() {
-                        d.cache.publish(name, Some(bytes))?;
                     }
                 }
                 let job = Job::Page {

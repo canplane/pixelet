@@ -23,7 +23,7 @@ use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::build::RETAIN_BUDGET_BYTES;
 use crate::world::chunk::table::{builds, Census, Frame};
-use crate::world::frame::view::{view, view_resize};
+use crate::world::frame::view::{globe_anchor_local, view, view_resize};
 use crate::world::pyramid::Layer;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_page::PoiPage;
@@ -146,18 +146,25 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     view_resize(ctx.state.width, ctx.state.height);
     let v = view();
 
-    let origin = v.origin;
+    let origin = [ivec::to_real(ivec::X(v.origin)), ivec::to_real(ivec::Y(v.origin)), ivec::to_real(ivec::Z(v.origin))];
 
+    let anchor = globe_anchor_local();
+    let mut planes = v.planes;
+    for p in planes.as_chunks_mut::<4>().0 {
+        p[3] += p[0] * anchor[0] + p[1] * anchor[1] + p[2] * anchor[2];
+    }
+    let e = v.pose.eye;
     let frame = Frame {
-        root: v.root,
-        origin: [ivec::to_real(ivec::X(origin)), ivec::to_real(ivec::Y(origin)), ivec::to_real(ivec::Z(origin))],
-        planes: v.planes,
-        camera: v.eye,
+        anchor,
+        origin,
+        eye: v.eye_at(),
+        planes,
+        camera: [e[0] - anchor[0], e[1] - anchor[1], e[2] - anchor[2]],
         delta_s: ctx.delta,
         remaining_ms: ctx.budget.remaining(),
         hard_slack_ms: HARD_SLACK_MS,
         retain_budget_bytes: RETAIN_BUDGET_BYTES(),
-        center_z: ivec::to_real(ivec::Z(v.origin)) - v.tz,
+        center_z: ivec::to_real(ivec::Z(v.origin)) + anchor[2],
         globe: Some(globe()),
     };
 
@@ -165,7 +172,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     let draw = with_world(|world, sched| sched.tick(world, frame, &now)).unwrap_or(false);
     crate::layer::poi::placement::step(ctx);
     let sched = &mut kernel().sched;
-    sched.billboards.draw(&mut sched.draw, &sched.models, frame.origin);
+    sched.billboards.draw(&mut sched.draw, &sched.models, frame.eye);
     if draw {
         c.draw = true;
         ctx.invalidate();
@@ -204,10 +211,10 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     let host = c.host.clone();
     let mut pages = PageSample::default();
     for (level, n) in pages.by_level.iter_mut().enumerate() {
-        *n = Terrain::pyramid().level(level as u32).count() as f64;
+        *n = Terrain::pyramid().paging().level(level as u32).count() as f64;
     }
     pages.total = pages.by_level.iter().sum();
-    pages.poi = (0..=TOP_LEVEL).map(|level| PoiPage::pyramid().level(level).count() as f64).sum();
+    pages.poi = (0..=TOP_LEVEL).map(|level| PoiPage::pyramid().paging().level(level).count() as f64).sum();
     let mut gpu = host.gpu;
     for (tris, boxes) in gpu.level_tris.iter_mut().zip(census.level_boxes) {
         *tris = boxes as f64 * BOX_TRIANGLES;
@@ -234,11 +241,9 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
             pending: census.pending as f64,
             in_frustum: census.in_frustum as f64,
             settling: census.settling as f64,
-            blend_active: census.blend_active as f64,
             offscreen_pending: census.offscreen_pending as f64,
-            oldest_release_ms: census.oldest_release_ms,
+            oldest_release_ms: census.oldest_offscreen_ms,
             oldest_visible_ms: census.oldest_visible_ms,
-            pressure: census.pressure as f64,
         },
         pages,
         heap: heap_sample(),
@@ -247,32 +252,30 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         q_terrain: pending_count(Terrain::CATEGORY) as f64,
         q_poi: pending_count(PoiPage::CATEGORY) as f64,
         stale: StaleSample {
-            chunks: census.stale as f64,
-            drawn: census.stale_drawn as f64,
-            levels: census.stale_levels as f64,
-            hidden: census.hidden as f64,
+            hidden: census.ready_waiting as f64,
             slot_waits: census.slot_waits as f64,
             wait_levels: census.wait_levels as f64,
-            holder_levels: census.holder_levels as f64,
-            coarser: census.coarser as f64,
-            uncovered: census.stale_uncovered as f64,
-            unready: census.stale_unready as f64,
-            on_waiter: census.stale_on_waiter as f64,
+            chained: census.chained as f64,
+            uncovered: census.refused as f64,
+            unready: census.waiting as f64,
         },
         turn: TurnSample::default(),
         cover: {
-            let terrain = Terrain::pyramid();
-            let (cover, _) = terrain.cover();
+            let (cover, _) = crate::world::pyramid::cover::cover::<Terrain>();
+            // The target's cut is made for this where the quality in force
+            // is coarser, which only a view past its arena pays for.
+            let rule = crate::world::pyramid::domain::cut_at(0).map_or(0.0, |(_, cut)| cut.pieces().len() as f64);
+            let domain = crate::world::pyramid::domain::current();
             CoverSample {
-                rule: terrain.domain().map_or(0.0, |d| d.chunks() as f64),
+                rule,
                 drawn: cover.drawn.len() as f64,
-                gaps: cover.gaps.len() as f64,
+                gaps: domain.map_or(0.0, |d| d.unanswered() as f64),
             }
         },
         cap: CapSample {
             commit_left: census.commit_left as f64,
-            mount_left: census.mount_left as f64,
-            mount_full: census.mount_full as f64,
+            mount_left: census.refused as f64,
+            mount_full: (census.refused > 0) as u32 as f64,
             record_refused: Terrain::pyramid().take_refusals() as f64,
         },
     });

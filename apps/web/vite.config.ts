@@ -325,6 +325,49 @@ function fullReloadOnCoreChange() {
   };
 }
 
+// The kernel's module, built again when what it is built from changes. It is
+// built once as the server starts (deno.jsonc `dev`'s dependency), and the
+// page reloads when the module under src/kernel/ is replaced
+// (fullReloadOnCoreChange), so a Rust edit otherwise waited for a hand-run
+// build or a restart of everything. Every change under crates/ asks, outside
+// cargo's own target/: cargo knows which of them the module is built from, and
+// build-wasm writes nothing when it is not one of them. One build at a time; a
+// change during one asks for one more after it, which covers every change it
+// missed.
+function rebuildKernelOnRustChange(): Plugin {
+  return {
+    name: "rebuild-kernel",
+    apply: "serve",
+    configureServer(server) {
+      const crates = path.resolve(__dirname, "..", "..", "crates");
+      const target = path.join(crates, "target") + path.sep;
+      let [running, again] = [false, false];
+      const build = async () => {
+        if (running) {
+          again = true;
+          return;
+        }
+        running = true;
+        do {
+          again = false;
+          const done = await new Deno.Command("deno", { args: ["run", "-A", "script/build-wasm.ts"], cwd: __dirname }).output();
+          const said = new TextDecoder().decode(done.success ? done.stdout : done.stderr).trim();
+          if (done.success) server.config.logger.info(said.split("\n").at(-1) ?? "", { timestamp: true });
+          else server.config.logger.error(`kernel build failed\n${said}`, { timestamp: true });
+        } while (again);
+        running = false;
+      };
+      const watcher = Deno.watchFs(crates);
+      server.httpServer?.once("close", () => watcher.close());
+      (async () => {
+        for await (const event of watcher) {
+          if (event.paths.some((p) => !p.startsWith(target))) build();
+        }
+      })();
+    },
+  };
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, Deno.cwd(), "VITE_");
@@ -396,6 +439,8 @@ export default defineConfig(({ mode }) => {
       deno(),
       react(),
       svgr({ svgrOptions: { titleProp: true } }), // SVGR
+
+      rebuildKernelOnRustChange(),
 
       // monorepo core packages change => force full reload (no HMR)
       fullReloadOnCoreChange(),

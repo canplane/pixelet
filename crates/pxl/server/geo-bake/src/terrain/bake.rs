@@ -1,6 +1,8 @@
 // pxl-geo-bake/terrain/bake.rs
 
-//! One page's raw source packet, baked into the client-ready ground channels.
+//! One page's raw source packet, baked into the client-ready ground channels,
+//! and the index lane its own surface gives a leaf (pxl-spec bake/format.rs
+//! `Terrain::leaf`).
 //!
 //! The packet is what terrain/source.rs assembles from the database:
 //!
@@ -10,7 +12,7 @@
 //! bake/format.rs, `BuildingRow` and the rest). A reader knows the order by
 //! position, so the rows are read here by index in that order.
 
-use pxl_spec::bake::format::{encode_terrain, BaseRow, BuildingRow, CoastRow, Ground, SegmentRow};
+use pxl_spec::bake::format::{BaseRow, BuildingRow, CoastRow, Ground, SegmentRow, Terrain};
 use pxl_spec::bake::model::feature::Feature;
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
@@ -91,7 +93,7 @@ fn coast_row(row: &BranchCursor<'_>) -> Result<CoastRow, MarshalError> {
     })
 }
 
-pub fn bake_terrain(page_idx: IVec, pkt: &[u8]) -> Result<Vec<u8>, MarshalError> {
+pub fn bake_terrain(page_idx: IVec, pkt: &[u8]) -> Result<Terrain, MarshalError> {
     let page_bbox = epsg3857::get_page_bbox(page_idx);
     let page_min = page_bbox[0];
 
@@ -134,5 +136,5 @@ pub fn bake_terrain(page_idx: IVec, pkt: &[u8]) -> Result<Vec<u8>, MarshalError>
 
     let ground: Ground = bake_ground(&feats, has_coast_row);
 
-    encode_terrain(ele, &ground)
+    Ok(Terrain::leaf(ele.to_vec(), ground))
 }

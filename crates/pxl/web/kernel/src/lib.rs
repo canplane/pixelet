@@ -16,7 +16,12 @@ pub mod io;
 pub mod kernel;
 pub mod layer;
 pub mod mem;
+pub mod param;
 pub mod sched;
 pub mod shell;
 pub mod text;
 pub mod world;
+
+#[cfg(test)]
+#[path = "allocations.test.rs"]
+pub mod allocations;

@@ -19,12 +19,14 @@ use crate::host::now;
 use crate::io::sched::{counts, credits};
 use crate::kernel::{kernel, with_world};
 use crate::layer::billboard::sheet::billboard_sheet;
-use crate::sched::profiler::block::{AtlasBlock, FetchBlock, FramesBlock, RecBlock, RetainBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock};
+use crate::sched::profiler::block::{AtlasBlock, FetchBlock, FramesBlock, QualityBlock, RecBlock, RetainBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock};
 use crate::sched::profiler::log::window_counters;
 use crate::sched::profiler::record::{fixed_lane, profiler_frame_peak, profiler_frames_since, profiler_recording_state, profiler_tasks_since, put, FrameSample, Lane, Outcome, TaskRow, SPREAD_LIMIT};
 use crate::sched::profiler::spec::{LIMITS, SUMMARY, TASK_PHASE_NAMES};
 use crate::sched::tick::{tick_step_stats, HARD_SLACK_MS};
 use crate::world::chunk::build::RETAIN_BUDGET_BYTES;
+use crate::world::pyramid::Layer as _;
+use pxl_spec::bake::format::Terrain;
 
 /// A gap this many display intervals long skipped a vsync.
 const MISSED_INTERVALS: f64 = 1.5;
@@ -258,6 +260,25 @@ fn side(out: &mut [f64]) {
             queued: queued as f64,
             running: running as f64,
             credits: credits() as f64,
+        },
+    );
+
+    let [step, star] = crate::world::quality::reading();
+    let paging = Terrain::pyramid().paging();
+    let [admitted, evicted] = paging.churn();
+    let [refined, recubed, changes_peak] = kernel().sched.pace();
+    put(
+        out,
+        SUMMARY::quality::AT,
+        &QualityBlock {
+            step: step as f64,
+            star: star as f64,
+            frames_held: paging.frames_used() as f64,
+            admitted: admitted as f64,
+            evicted: evicted as f64,
+            refined: refined as f64,
+            recubed: recubed as f64,
+            changes_peak: changes_peak as f64,
         },
     );
 

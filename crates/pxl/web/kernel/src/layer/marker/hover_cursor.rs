@@ -11,6 +11,7 @@ use pxl_render::mesh::chunk_mesher::{mesh_words, write_lone_box, Heights, FINE_B
 use pxl_render::mesh::volume::NO_LAYER;
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::ground::shown_ground;
+use pxl_spec::bake::pack::channel_of;
 use pxl_spec::cell::object::{placeable_cube_num_id, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::{fvec, ivec};
@@ -29,8 +30,8 @@ use crate::layer::decor::registry::{decor_bundle_for, DECOR_BUNDLES};
 use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::{clear_virtual_carve_preview, get_placed_object, set_virtual_carve_preview, set_virtual_hide, EntryAt, EntryKind};
-use crate::layer::terrain::elevation::get_ground_type;
 use crate::shell::setting::store::{hidden_ground, settings_store};
+use crate::world::access::{Access, FINEST};
 use crate::world::change::request_world_tick;
 use crate::world::chunk::build::World;
 
@@ -139,7 +140,9 @@ pub fn hover_cursor_step() {
     // that looks like one: its terrain-styled id.
     let carved_style_cube: Option<PlaceableCube> = match (&hovered, digging_terrain) {
         (Some(h), true) => {
-            let shown = shown_ground(|ch| get_ground_type(h, ch).unwrap_or(0), hidden_ground(structures));
+            // The cell as it is drawn there, from whichever page it is.
+            let cell = Access::now().at(h, FINEST).value().map_or(0, |g| g.cell);
+            let shown = shown_ground(|ch| channel_of(cell, ch) as u32, hidden_ground(structures));
             terrain_style_cube_for(shown.channel, shown.type_id)
         }
         _ => None,
@@ -340,15 +343,15 @@ impl GhostDraw {
     }
 
     /// The ghost's draw this frame, placed against the frame's origin.
-    pub fn draw(&self, draw: &mut DrawList, origin: V3) {
+    pub fn draw(&self, draw: &mut DrawList, eye: V3) {
         let Some(h) = &self.held else { return };
-        let t = DrawList::translation(self.at, origin);
+        let t = DrawList::translation(self.at, eye);
         match h.shape {
             Shape::Box { coplanar, size_bits, .. } => {
                 let pipeline = if coplanar { PIPELINE_GHOST_BOX_COPLANAR } else { PIPELINE_GHOST_BOX };
                 // The box was written in a cell of its own size (write_lone_box).
                 let unit = f64::from_bits(size_bits) as f32;
-                draw.draw_in(pipeline, h.handle, 1, 0, t, 1.0, GHOST_OPACITY, unit, h.heights.step as f32);
+                draw.draw_in(pipeline, h.handle, 1, 0, t, GHOST_OPACITY, unit, h.heights.step as f32);
             }
             Shape::Decor { group, .. } => draw.draw_as(PIPELINE_GHOST_DECOR, h.handle, group, 1, t, 0.0, GHOST_OPACITY),
         }
