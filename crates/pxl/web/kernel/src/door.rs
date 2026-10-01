@@ -213,7 +213,7 @@ fn lay_out(b: &Bracket) -> u32 {
     // alone.
     unsafe {
         crate::host::set_host_stream(fixed_at(Range::Host));
-        pxl_render::gpu::renderer::set_blocks(fixed_at(Range::Blocks));
+        pxl_render::gpu::renderer::set_blocks(fixed_at(Range::Blocks), crate::mem::fixed::BLOCK_SLOTS);
         pxl_render::gpu::api::install(fixed_at(Range::Gpu))
     }
 }

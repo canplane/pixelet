@@ -54,9 +54,20 @@ fn cases() -> &'static mut Cases {
     })
 }
 
+/// Models the cases register at most: one an asset, and the assets are the
+/// character variants' (`Cases::models`).
+pub const MODELS_MAX: usize = crate::layer::character::variant::CHARACTER_VARIANTS;
+
+/// Cases open at most, and so actors: one a surface, since a case is named
+/// by the surface it draws on and opening one on a surface replaces it.
+pub const CASES_MAX: usize = pxl_render::gpu::surface::SURFACES;
+
 /// Opens case `id` over variant `number` of `group`; a case already open under
-/// `id` is replaced.
+/// `id` is replaced. False where `id` names no surface or no variant.
 pub fn preview_open(id: u32, group: CharacterGroup, number: u8) -> bool {
+    if id as usize >= CASES_MAX {
+        return false;
+    }
     preview_close(id);
     let Some(variant) = character_variant(group, number) else { return false };
     cases().cases.push(Case {

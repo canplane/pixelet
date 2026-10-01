@@ -149,7 +149,7 @@ fn folded(cells: &[(u32, u32, u32, u32)], level: u32) -> (HashMap<[i64; 3], u32>
     let per = target.count_in(BAND) as i64;
     let corner = [per, -per];
     let mut out = HashMap::new();
-    store.fold_at(target, corner, [corner[0] + per, corner[1] + per], None, &mut out);
+    store.fold_at(target, corner, [corner[0] + per, corner[1] + per], None, &mut out).unwrap();
     (out, corner)
 }
 

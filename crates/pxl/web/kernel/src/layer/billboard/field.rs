@@ -47,6 +47,9 @@ pub struct Billboards {
 impl Billboards {
     /// A set, empty and standing at the origin, drawn in `order`.
     pub fn new_set(&mut self, order: u32) -> u32 {
+        // One set an order (order.rs `SETS_MAX`): an owner making a second
+        // before letting its first go is the bound broken.
+        xpute_core::ensure!(self.sets.iter().all(|(_, s)| s.order != order), ENOTRECOVERABLE, order);
         let set = Set {
             order,
             anchor: Anchor::At([0.0; 3]),

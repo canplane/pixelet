@@ -21,7 +21,7 @@ use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanSte
 use pxl_spec::bake::constant::{pack_pos, BandZ, EntryAt, BAND, CELL, OBJECT_FINEST};
 use pxl_spec::space::indexer::{FROM_L2_IDX, L2, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use std::collections::HashMap;
+use std::collections::{HashMap, TryReserveError};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free, Block};
 
@@ -725,8 +725,10 @@ impl Builder {
             self.claimed.clear();
             let fold = object_fold(self.chunks[&id].wanted().next().or_bug(Errno::ENOTRECOVERABLE));
             let folded = fold > OBJECT_FINEST;
-            if folded {
-                self.fold_objects(world, col_idx, fold);
+            if folded && self.fold_objects(world, col_idx, fold).is_err() {
+                world.volumes.release(volume);
+                self.refuse(world, id);
+                return Progress::Blocked;
             }
             let paint = PaintJob {
                 next: 0,
@@ -804,12 +806,13 @@ impl Builder {
     /// entries of that scale in the builder's fold lanes: what a z16 chunk
     /// paints for a cube coarser than an object's finest tier. The hidden
     /// entry is left out, as the paint would leave it out.
-    fn fold_objects(&mut self, world: &mut World, col_idx: IVec, scale: Scale) {
+    /// An error, and nothing folded, where the heap refused the fold room.
+    fn fold_objects(&mut self, world: &mut World, col_idx: IVec, scale: Scale) -> Result<(), TryReserveError> {
         let o = FROM_L2_IDX(col_idx);
         let (x0, y0) = (ivec::X(o), ivec::Y(o));
         let cells = scale.count_in(L2) as i64;
         let at = [ivec::X(col_idx) * cells, ivec::Y(col_idx) * cells];
-        world.store.fold_at(scale, at, [at[0] + cells, at[1] + cells], self.hide, &mut self.folded);
+        world.store.fold_at(scale, at, [at[0] + cells, at[1] + cells], self.hide, &mut self.folded)?;
         // A cell's corner in finest steps: absolute, then from the column's
         // corner and its band's floor.
         let n = OBJECT_FINEST.count_in(scale) as i64;
@@ -827,6 +830,7 @@ impl Builder {
             self.fold_pos.push(pack_pos((cx * n - fx) as u32, (cy * n - fy) as u32, z.rem_euclid(band_steps) as u32, scale));
             self.fold_state.push(state);
         }
+        Ok(())
     }
 
     /// A step of the scan job's paint of the chunk's objects. Once every
@@ -907,7 +911,10 @@ impl Builder {
         // Its own cells and the apron of one a fold reads, which reaches into
         // the chunks beside it (world/chunk/source.rs `folds_into`).
         let (cx, cy, span) = (target.index(x0), target.index(y0), CHUNK_CELLS as i64);
-        world.store.fold_at(target, [cx - 1, cy - 1], [cx + span + 1, cy + span + 1], self.hide, &mut self.folded);
+        if world.store.fold_at(target, [cx - 1, cy - 1], [cx + span + 1, cy + span + 1], self.hide, &mut self.folded).is_err() {
+            self.refuse(world, id);
+            return Progress::Blocked;
+        }
         xpute_core::ensure!(self.direct.begin_direct(), ENOTRECOVERABLE);
         write_level_runs(
             &mut self.direct,

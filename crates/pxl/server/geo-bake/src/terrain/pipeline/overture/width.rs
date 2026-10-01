@@ -17,7 +17,10 @@
 //!
 //! A one-way way is one carriageway of a road drawn as two, or a lane of its
 //! own, and carries its lanes one way; any other carries them both ways. A
-//! link — a slip road — is one lane.
+//! link — a slip road — is one lane, and so is a service road's own lane
+//! (role.rs), a little narrower than a through lane.
+
+use crate::terrain::pipeline::overture::role::Role;
 
 /// A motor lane's width.
 const LANE: f64 = 3.5;
@@ -66,7 +69,7 @@ pub struct WayShape {
     /// The source's width, where it gives one.
     pub measured: Option<f64>,
     pub oneway: bool,
-    pub link: bool,
+    pub role: Role,
 }
 
 /// A way's width in metres.
@@ -74,9 +77,13 @@ pub fn width_m(subtype: &str, class: Option<&str>, shape: WayShape) -> f64 {
     if let Some(w) = shape.measured.filter(|w| w.is_finite() && *w > 0.0) {
         return w;
     }
-    let s = section_of(subtype, class.unwrap_or(""));
+    let s = match shape.role {
+        Role::Lane => section(None, 3.0, 0.0),
+        Role::Sidewalk | Role::Crossing => section_of(subtype, "footway"),
+        _ => section_of(subtype, class.unwrap_or("")),
+    };
     let lanes = match s.each_way {
-        _ if shape.link => 1.0,
+        _ if shape.role == Role::Link => 1.0,
         None => 1.0,
         Some(n) if shape.oneway => n,
         Some(n) => 2.0 * n,

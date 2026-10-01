@@ -7,4 +7,5 @@
 pub mod adapter;
 pub mod between;
 pub mod policy;
+pub mod role;
 pub mod width;

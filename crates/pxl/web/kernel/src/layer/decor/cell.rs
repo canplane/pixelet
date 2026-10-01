@@ -25,7 +25,7 @@ use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, PageSource}
 use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::lod::fault_radius;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::{chunk_span_of, LevelPage, CHUNK_CELLS, GROUND};
+use pxl_spec::space::pyramid::{chunk_span_of, LevelPage, CHUNK_CELLS, GROUND, TOP_LEVEL};
 use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::alloc;
@@ -144,6 +144,39 @@ fn cells() -> &'static mut Cells {
     CELLS.get(Cells::default)
 }
 
+/// The most cells a frontier holds, whatever the eye: a sum over the levels
+/// of how many cells the solve can reach at each (`solve`), the frustum and
+/// the sprite's floor, which only drop cells, left out.
+///
+/// At the source's top the solve starts from the square of cells within
+/// `fault_radius(top)` of the eye's cell, one more each way: `2n + 1` a side
+/// with `n = ⌈r / side⌉ + 1`. Under it a cell is a child of one refined,
+/// which is refined only where the rule wants a finer level at its nearest
+/// point — nearer than `split_distance(L + 1) / τ`, no further than
+/// `fault_radius(L)` since τ ≥ 1, measured in 3D and so no nearer than over
+/// the ground. The parents of level L's cells are squares of level L + 1
+/// meeting a disc of that radius: an interval of `2r` meets at most
+/// `⌊2r / side⌋ + 2` of them a side, and each has two children a side. A
+/// split distance and a chunk grow by the same factor a level, so the count
+/// is one number for every level under the top, and the top's is another;
+/// the bound is the top's and `TOP_LEVEL` of the other, the most levels a
+/// source has under its top.
+pub const FRONTIER_MAX: usize = {
+    let side = chunk_span_of(TOP_LEVEL) as u64;
+    let n = (fault_radius(TOP_LEVEL) as u64).div_ceil(side) + 1;
+    let top = (2 * n + 1) * (2 * n + 1);
+    let across = 2 * ((2 * fault_radius(0) as u64) / chunk_span_of(1) as u64 + 2);
+    (top + TOP_LEVEL as u64 * across * across) as usize
+};
+
+/// Blocks decor holds at once at most: the cells of the frontier wanted now,
+/// and those drawn the turn before that still stand in for some not ready
+/// (`step`) — the second no more than a frontier while the cover drawn is
+/// one frontier's. A wanted parent left unready while the eye moves on can
+/// keep an older cover under it beside a newer one elsewhere, and this
+/// bound is then not one the replacement rule proves.
+pub const BLOCKS_MAX: usize = 2 * FRONTIER_MAX;
+
 /// Blocks a frame builds at most: a cell's scatter walks its cells and a
 /// frame has other work; what is not built this frame is the next's.
 const BUILDS_PER_FRAME: u32 = 4;
@@ -179,12 +212,13 @@ fn solve(kinds: &[Kind], stack: &mut Vec<DecorCell>, out: &mut Vec<DecorCell>) {
     let frustum = frustum_of_view();
     let largest = largest_possible(kinds);
     let floor_px = *pxl_render::look::lod::TARGET_CELL_PX * crate::param::IMPOSTOR_GONE_CELLS;
-    let reach = fault_radius(top);
+    let view_reach = crate::layer::environment::fog::view_reach();
+    // Nothing past the view's reach is drawn, so the roots reach no further.
+    let reach = fault_radius(top).min(view_reach);
     let side = chunk_span_of(top);
     let (cx, cy) = ((eye[0] / side).floor() as i64, (eye[1] / side).floor() as i64);
     let n = (reach / side).ceil() as i64 + 1;
     let ground = crate::layer::environment::fog::eye_ground();
-    let view_reach = crate::layer::environment::fog::view_reach();
     for y in cy - n..=cy + n {
         for x in cx - n..=cx + n {
             stack.push(DecorCell { level: top, at: [x, y] });
@@ -208,21 +242,22 @@ fn solve(kinds: &[Kind], stack: &mut Vec<DecorCell>, out: &mut Vec<DecorCell>) {
     out.sort_unstable();
 }
 
-/// What cell `cell`'s population is made of now.
-fn sources_of(cell: DecorCell, store: &Store, cols: &mut Vec<IVec>, hide: Option<EntryAt>) -> Sources {
+/// What cell `cell`'s population is made of now; none where the heap
+/// refused the room to list its columns, and the cell stays as it is.
+fn sources_of(cell: DecorCell, store: &Store, cols: &mut Vec<IVec>, hide: Option<EntryAt>) -> Option<Sources> {
     cols.clear();
-    store.cols_under(cell.chunk().column(), cols);
+    store.cols_under(cell.chunk().column(), cols).ok()?;
     let revision = cols.iter().fold(0u32, |r, &c| r.wrapping_mul(31).wrapping_add(object_col_revision(c)));
     let (x0, y0, side) = cell.rect();
     let hide = hide.filter(|at| {
         let o = FROM_L2_IDX(at.col_idx);
         (x0..x0 + side).contains(&(ivec::X(o) as f64)) && (y0..y0 + side).contains(&(ivec::Y(o) as f64))
     });
-    Sources {
+    Some(Sources {
         revision,
         shown: settings_store().decor,
         hide,
-    }
+    })
 }
 
 /// Builds cell `cell`'s block where its page is resident; none where it is
@@ -243,6 +278,7 @@ fn build(c: &mut Cells, cell: DecorCell, kinds: &[Kind], store: &Store, draw: &m
         c.sample.read(&around, [tx0 as i64, ty0 as i64], hidden_ground(settings_store().structures));
     }
     c.placed.clear();
+    c.placed.try_reserve(c.cols.len()).ok()?;
     c.placed.extend(c.cols.iter().map(|&col_idx| {
         let o = FROM_L2_IDX(col_idx);
         Placed {
@@ -255,7 +291,7 @@ fn build(c: &mut Cells, cell: DecorCell, kinds: &[Kind], store: &Store, draw: &m
     let target = GROUND.scale(level);
     let (cx, cy, span) = (target.index(x0), target.index(y0), CHUNK_CELLS as i64);
     match level > 0 && sources.shown {
-        true => store.fold_at(target, [cx, cy], [cx + span, cy + span], sources.hide, &mut c.folded),
+        true => store.fold_at(target, [cx, cy], [cx + span, cy + span], sources.hide, &mut c.folded).ok()?,
         false => c.folded.clear(),
     }
     let ground = Ground {
@@ -306,19 +342,21 @@ fn release(block: Block, draw: &mut DrawList) {
 /// goes; cells coarsening into their parent stay drawn until the parent
 /// is ready. Ready is a built block, or a page a coarser one settles,
 /// which has nothing to scatter. So a change of level never leaves a
-/// region with nothing drawn on it, and no region is drawn twice: what
-/// waits under a cell that is still drawn is held hidden.
+/// region with nothing drawn on it, and no region is drawn twice: a wanted
+/// cell waiting under one still drawn is held hidden, and a cell neither
+/// wanted nor drawn the turn before is let go.
 pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<EntryAt>, frame_eye: V3) {
     let c = cells();
     let mut frontier = core::mem::take(&mut c.frontier);
     solve(kinds, &mut c.stack, &mut frontier);
+    xpute_core::ensure!(frontier.len() <= FRONTIER_MAX, ENOTRECOVERABLE, frontier.len());
     let top = floor::level().unwrap_or(0);
     let pages = Terrain::pyramid();
 
     let mut built = 0;
     let mut cols = core::mem::take(&mut c.cols);
     for &cell in &frontier {
-        let sources = sources_of(cell, store, &mut cols, hide);
+        let Some(sources) = sources_of(cell, store, &mut cols, hide) else { continue };
         if c.blocks.get(&cell).is_some_and(|b| b.sources == sources) {
             continue;
         }
@@ -350,7 +388,14 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Ent
         }
     }
     let under = &c.under;
-    let kept = |cell: DecorCell, blocks: &HashMap<DecorCell, Block>| wanted(&cell) || under.get(&cell) == Some(&false) || ancestors(cell).find(wanted).is_some_and(|a| !ready(a, blocks));
+    // A cell is kept where it is wanted, or where it was drawn the turn
+    // before and still stands in for wanted cells not ready: as a cover over
+    // them, or under a wanted parent not ready. Nothing else is held — a
+    // cell built for a frontier the eye has since left, and never drawn, is
+    // let go rather than kept as history.
+    let kept = |cell: DecorCell, blocks: &HashMap<DecorCell, Block>| {
+        wanted(&cell) || blocks[&cell].drawn && (under.get(&cell) == Some(&false) || ancestors(cell).find(wanted).is_some_and(|a| !ready(a, blocks)))
+    };
     c.cells.clear();
     c.cells.extend(c.blocks.keys().copied().filter(|&k| !kept(k, &c.blocks)));
     for k in c.cells.drain(..) {

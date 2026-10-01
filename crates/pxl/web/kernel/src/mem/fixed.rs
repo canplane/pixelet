@@ -73,7 +73,7 @@ use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::section::{span_of, Section};
 
 use pxl_render::gpu::api_spec::stream;
-use pxl_render::gpu::renderer::BLOCKS_BYTES;
+use pxl_render::gpu::renderer::{block_slots, blocks_bytes};
 
 use crate::abi::host::stream as host_stream;
 
@@ -112,6 +112,28 @@ impl Range {
     }
 }
 
+/// Models registered at most: the companion's, the cases' and decor's, each
+/// bounded where it registers them. None is let go (layer/model/store.rs).
+pub const MODELS_MAX: usize = crate::layer::character::companion::MODELS_MAX + crate::layer::character::preview::MODELS_MAX + crate::layer::decor::asset_store::MODELS_MAX;
+
+/// Actors at once at most: the companion's walkers and a case's on every
+/// surface.
+pub const ACTORS_MAX: usize = crate::layer::character::companion::ACTORS_MAX + crate::layer::character::preview::CASES_MAX;
+
+/// Blocks only one of which is ever held: the location puck's zone, the
+/// hover ghost and the debug lines.
+const SINGLE_BLOCKS: usize = 3;
+
+/// The most blocks the renderer's table names at once: each owner's bound —
+/// decor's cells (layer/decor/cell.rs `BLOCKS_MAX`), the models and the
+/// actors' joint palettes, a billboard set's instances an order, and the
+/// blocks one of which is held — summed, so the table cannot fill.
+pub const MAX_LIVE_BLOCKS: usize = crate::layer::decor::cell::BLOCKS_MAX + MODELS_MAX + ACTORS_MAX + crate::layer::billboard::order::SETS_MAX + SINGLE_BLOCKS;
+
+/// The table's slots, from that bound at the table's load (pxl-render
+/// gpu/renderer.rs `block_slots`).
+pub const BLOCK_SLOTS: usize = block_slots(MAX_LIVE_BLOCKS);
+
 /// Each range's bytes, in address order. What a range holds is its own
 /// affair; this says how many bytes it takes and nothing more.
 const RANGES: [u32; COUNT] = {
@@ -119,7 +141,7 @@ const RANGES: [u32; COUNT] = {
     r[Range::Terrain.index()] = TERRAIN_BYTES;
     r[Range::Bake.index()] = BAKE_BYTES;
     r[Range::Mounts.index()] = MOUNTS_BYTES;
-    r[Range::Blocks.index()] = BLOCKS_BYTES;
+    r[Range::Blocks.index()] = blocks_bytes(BLOCK_SLOTS);
     r[Range::Gpu.index()] = stream::BYTES;
     r[Range::Host.index()] = host_stream::BYTES;
     r[Range::Profiler.index()] = PROFILER_BYTES;

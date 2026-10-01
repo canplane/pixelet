@@ -47,6 +47,11 @@ struct Store {
 
 static STORE: Global<Store> = Global::new();
 
+/// Models decor registers at most: one an asset, since an arrival is
+/// settled into every variant naming it (`settle`) and a variant with its
+/// model asks for none.
+pub const MODELS_MAX: usize = pxl_spec::asset::ingested::Asset::ALL.len();
+
 /// Writes what arrived for `asset` into every variant naming it, across every
 /// kind: two kinds may name the same model or the same skin, and both should
 /// reach one object; and the frame that draws what arrived is asked for.
