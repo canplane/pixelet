@@ -193,6 +193,12 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P1
 
+- **xpute's system calls as a guest's files.** `openat(root, path)`, `read`,
+  `write`, `close` on a descriptor the guest issues, Plan 9's structure with
+  POSIX's words; the body numbers, the fetch commands and the whole-file
+  write go. Waits until `xpute-cpp-guest` and `observation-paging` are both
+  on main
+  ([20261001-a-guest-s-files-as-plan-9-s.md](./20261001-a-guest-s-files-as-plan-9-s.md)).
 - **The move to React Native, the rest.** Built for iOS 2026-09-26
   (apps/native, crates/pxl/web/native); what is left of the move itself —
   what the device costs to run is the budgets' items, not this one:

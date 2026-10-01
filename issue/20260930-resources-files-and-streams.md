@@ -128,3 +128,6 @@ flow abstraction is shown to recur as a thing of its own.
 host's own services and left the table; the guest's requests are one
 channel packed two ways; the minors' reading is written in `core abi/cmd`
 and no command needed renaming.
+**Superseded** 10-01 in part: "no system-call or descriptor API now" and "no
+namespace" gave way to a guest's files reached as Plan 9 reaches them
+([20261001-a-guest-s-files-as-plan-9-s.md](./20261001-a-guest-s-files-as-plan-9-s.md)).
