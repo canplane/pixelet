@@ -294,12 +294,12 @@ address        bytes                    range                  placed by
                ↑ __data_end, rounded up to 4 KiB (PAGE_BYTES)
 ~32.7 MiB      66.62 MiB                .fixed.terrain         the kernel (mem/fixed.rs)
 ~99.3 MiB      96 KiB                   .fixed.bake            the kernel (mem/fixed.rs)
-~99.4 MiB      0.25 MiB                 .fixed.mounts          the kernel (mem/fixed.rs)
-~99.7 MiB      0.88 MiB                 .fixed.blocks          the kernel (mem/fixed.rs)
-~100.6 MiB     4 MiB                    .fixed.gpu             the kernel (mem/fixed.rs)
-~104.6 MiB     64 KiB                   .fixed.host            the kernel (mem/fixed.rs)
-~104.6 MiB     4.62 MiB                 .fixed.profiler        the kernel (mem/fixed.rs)
-~109.2 MiB     403 MiB  (phone)         .heap                  the allocator
+~99.4 MiB      260 KiB                  .fixed.mounts          the kernel (mem/fixed.rs)
+~99.7 MiB      448 KiB                  .fixed.blocks          the kernel (mem/fixed.rs)
+~100.1 MiB     4 MiB                    .fixed.gpu             the kernel (mem/fixed.rs)
+~104.1 MiB     64 KiB                   .fixed.host            the kernel (mem/fixed.rs)
+~104.2 MiB     4.62 MiB                 .fixed.profiler        the kernel (mem/fixed.rs)
+~108.8 MiB     403 MiB  (phone)         .heap                  the allocator
                915 MiB  (desktop)
 512 MiB / 1 GiB                         end
 ──────────────────────────────────────────────────────────────────────────────────────
@@ -353,7 +353,7 @@ Objects paint after terrain, so a placed value wins the voxel. A chunk records t
 
 **What to build next** is one priority. A chunk build runs in two stages, a scan and a mesh bake, one of each open at a time; the priority (`world/chunk/table.rs` `priority`) puts the two chunks holding those slots first, then what the view sees nearest the eye, then what it does not, so the view fills out from the eye. Builds run in the build task on what the tick left of the quota.
 
-**Memory is bounded before it is asked for.** The pages a view reads are bounded by its reach and live in records of `.fixed`, so they never ask the heap. A refused block ends the tick's builds and the chunk waits for a release; reclaim gives back off-screen decor, farthest first, and past a heap 90% live whatever the retain budget says (`world/chunk/table.rs` `reclaim`). The client does not die.
+**Memory is bounded before it is asked for.** The pages a view reads are bounded by its reach and live in records of `.fixed`, so they never ask the heap. Where the arena has no room for what the view asks, the quality is chosen coarser (`world/quality.rs`); a block the heap refuses leaves what asked for it unbuilt — a decor cell keeps its parent drawn — and it is asked again on a later turn. The client does not die.
 
 ## Rendering
 
