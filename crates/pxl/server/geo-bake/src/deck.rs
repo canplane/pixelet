@@ -17,6 +17,7 @@
 //!   along them.
 //! - `clearance`: what a deck has to clear, and how steeply it may climb.
 //! - `profile`: a structure's tops, from its ends and its clearances.
+//! - `elevation`: the ground's height at the points, a raster tile at a time.
 //! - `source`: the geo DB, read and written.
 //!
 //! It runs in two passes. A deck that crosses a lower one clears that
@@ -25,6 +26,7 @@
 //! ramp over its own interchange's mainline clears it too.
 
 pub mod clearance;
+pub mod elevation;
 pub mod piece;
 pub mod profile;
 pub mod source;
@@ -84,7 +86,7 @@ pub fn solve(client: &mut Client, log: impl Fn(&str)) -> Result<Solved, postgres
         }
     }
     let all: Vec<[f64; 2]> = graphs.iter().flat_map(|g| g.at.iter().copied()).collect();
-    let flat = source::ground(client, &all)?;
+    let flat = elevation::ground(client, &all)?;
     let mut grounds: Vec<Vec<f64>> = Vec::with_capacity(graphs.len());
     let mut at = 0;
     for g in &graphs {

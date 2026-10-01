@@ -214,7 +214,7 @@ fn handle_tap(hovered: Pvf3) {
                 Some(o) => object_center(&o, local_world_origin()),
                 None => ground_or_raw(&anchor_center(&hovered)),
             };
-            crate::control::navigation::destination::go_to(target);
+            crate::control::navigation::destination::go_to(target, crate::control::camera::controller::Motion::Smooth);
         }
         ActiveTool::Eraser => {
             // Targets the object the raycast actually struck, not a grid-key

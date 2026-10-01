@@ -17,13 +17,20 @@
 //!
 //! What a placed cube folds to stands over the ground where it lies, a level
 //! cell tall, and air folded to a cell takes the ground out of it, as the
-//! paint lays each at the finest level.
+//! paint lays each at the finest level. A deck over the column (pxl-spec
+//! bake/deck.rs) stands over it as its span says, in z16 cells like the
+//! ground.
 
 use std::collections::HashMap;
 
 use crate::mesh::paint::object::adapter::Painter;
 use crate::mesh::paint::terrain::adapter::ChunkSample;
 use crate::mesh::voxel_scan::{ScanContext, APRON, COL_SPAN};
+
+/// What stands in a column, from its bottom to its top exclusive, in z16
+/// cells: an object folded to a level cell, air where its material is none,
+/// or a deck's span.
+type Stands = (i32, i32, Option<(u32, u8)>);
 
 /// Writes a level chunk's runs into `direct`, an open direct writer: every
 /// column of the padded grid, the chunk's own and the apron's. `sample` is the
@@ -35,15 +42,20 @@ pub fn write_level_runs(direct: &mut ScanContext, sample: &ChunkSample, painter:
     let span = COL_SPAN as i64;
     let apron = APRON as i64;
     let s = step as i32;
-    let mut by_column: Vec<Vec<(i32, u32)>> = vec![Vec::new(); (COL_SPAN * COL_SPAN) as usize];
+    let mut by_column: Vec<Vec<Stands>> = vec![Vec::new(); (COL_SPAN * COL_SPAN) as usize];
     for (&[x, y, z], &state) in cells {
         let (px, py) = (x - cx0 + apron, y - cy0 + apron);
         if (0..span).contains(&px) && (0..span).contains(&py) {
-            by_column[(py * span + px) as usize].push((z as i32 * s, state));
+            by_column[(py * span + px) as usize].push((z as i32 * s, z as i32 * s + s, painter.material_of(state)));
         }
     }
-    for (i, objects) in by_column.iter_mut().enumerate() {
-        objects.sort_unstable_by_key(|&(z, _)| z);
+    for (i, column) in by_column.iter_mut().enumerate() {
+        for d in &sample.spans[sample.span_at[i] as usize..sample.span_at[i + 1] as usize] {
+            column.push((d.lo, d.hi, Some((d.material, d.layer))));
+        }
+    }
+    for (i, column) in by_column.iter_mut().enumerate() {
+        column.sort_unstable_by_key(|&(z, _, _)| z);
         direct.direct_column(i as u32);
         let (material, layer) = (sample.material[i], sample.layer_idx[i]);
         let height = sample.ele[i] as i32;
@@ -55,15 +67,15 @@ pub fn write_level_runs(direct: &mut ScanContext, sample: &ChunkSample, painter:
             }
         };
         let mut z = sample.floor;
-        for &(oz, state) in objects.iter() {
-            if oz < z {
+        for &(lo, hi, stands) in column.iter() {
+            if lo < z {
                 continue;
             }
-            ground(direct, z, oz);
-            if let Some((m, l)) = painter.material_of(state) {
-                direct.direct_run(oz, oz + s - 1, m, l);
+            ground(direct, z, lo);
+            if let Some((m, l)) = stands {
+                direct.direct_run(lo, hi - 1, m, l);
             }
-            z = oz + s;
+            z = hi;
         }
         ground(direct, z, i32::MAX);
     }

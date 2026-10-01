@@ -9,7 +9,8 @@
 //! point a radius ahead of it, third person, its `dist`. The map center is
 //! that point — the eye first person — derived and never kept (`map_center`);
 //! a navigation command puts the camera so the map center is where it says
-//! (`put_center`). First person walks the ground, its eye at a person's
+//! (`put_center`), at once or as every other move comes, as the command
+//! says (`Motion`). First person walks the ground, its eye at a person's
 //! height over it (free.rs `stand`); third person turns about a point on the
 //! ground. A change from first person to third lays the map center straight
 //! down on the ground and steps the eye back by the radius; from third to
@@ -25,9 +26,8 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
 
 use crate::control::camera::config::camera_cfg::projection::FOV;
-use crate::control::camera::config::camera_cfg::smooth::POS_DAMP;
 use crate::control::camera::config::camera_cfg::view::{DEFAULT_AZIMUTH, DEFAULT_POLAR};
-use crate::control::camera::free::{hold, look_point};
+use crate::control::camera::free::look_point;
 use crate::control::camera::orbit::orbit;
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
 use crate::global::Global;
@@ -35,7 +35,7 @@ use crate::layer::terrain::ground_snap::ground_or_raw;
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::{settings_store, CameraMode};
 use crate::world::change::request_world_tick;
-use crate::world::frame::coord::{canonical_to_local, local_world_to_canonical};
+use crate::world::frame::coord::local_world_to_canonical;
 use crate::world::frame::view::{view, view_compose, ObserverPose};
 use xpute_core::math::scalar::wrap;
 
@@ -94,44 +94,6 @@ pub fn look_rotation(theta: f64, phi: f64) -> Mat4 {
 /// the finger.
 pub fn units_per_px_at(dist: f64) -> f64 {
     2.0 * dist * (FOV * core::f64::consts::PI / 360.0).tan() / view().height
-}
-
-/// Exponential-decay ease-toward-target factor for one frame of `delta`
-/// seconds at rate `k` (bigger k = snappier convergence). Shared by every
-/// damped camera value in this module tree (the orbit's in its `turn`, the
-/// free camera's in free.rs) so they all converge with the same
-/// characteristic curve — apply as
-/// `current += (target - current) * damp_alpha(k, delta)`.
-pub fn damp_alpha(k: f64, delta: f64) -> f64 {
-    1.0 - libm::exp(-k * delta)
-}
-
-/// What is left of a hand's move once it is under this, in world units: a
-/// sub-pixel remainder at any distance the view is looked across, taken
-/// whole so the camera comes to rest.
-const TRAVEL_EPS: f64 = 0.001;
-
-/// This turn's share of the hand's move (`CameraStore::travel`), taken out
-/// of it whatever the controller then makes of it: eased over `delta`
-/// seconds, the whole of a remainder too small to see. None where nothing
-/// is left to move by.
-pub(crate) fn spend_travel(delta: f64) -> Option<[f64; 2]> {
-    let travel = &mut camera_store().travel;
-    if *travel == [0.0; 2] {
-        return None;
-    }
-    let a = damp_alpha(POS_DAMP, delta);
-    let rest: [f64; 2] = std::array::from_fn(|k| travel[k] * (1.0 - a));
-    let share = if rest.iter().all(|r| r.abs() < TRAVEL_EPS) {
-        *travel
-    } else {
-        std::array::from_fn(|k| travel[k] * a)
-    };
-    *travel = std::array::from_fn(|k| travel[k] - share[k]);
-    if travel.iter().all(|r| r.abs() < TRAVEL_EPS) {
-        *travel = [0.0; 2];
-    }
-    Some(share)
 }
 
 /// The observer: where the eye is and which way it looks, as drawn. The eye
@@ -199,22 +161,27 @@ pub fn map_center() -> Option<Pvf3> {
     Some(c)
 }
 
-/// The camera put so the map center is `target`, its look kept: a
-/// navigation command or a change of person, a place said outright, so
-/// what the hand had still to move by goes with what it moved from. A
-/// tracker's pose takes none: its eye is the tracker's, and no base under
-/// it is moved in its place.
-pub fn put_center(target: Pvf3) {
-    camera_store().travel = [0.0; 2];
-    if active() == Active::Tracked {
-        return;
-    }
-    let at = canonical_to_local(&target, view().origin);
-    let c = camera();
-    let (d, r) = (look_dir(c.pitch, c.yaw), radius());
-    set_eye_local(&std::array::from_fn(|k| at[k] - d[k] * r));
-    if active() == Active::Free {
-        hold();
+/// How a place said outright is reached: what the command means, never how
+/// far it is. A place found elsewhere — a search, the device's fix the
+/// recenter names, where the map starts, a change of person — is put at
+/// once; a place on the screen or a fix followed is moved to as the hand's
+/// moves are.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Motion {
+    Snap,
+    Smooth,
+}
+
+/// The camera's target put so the map center is `target`, its look kept, and
+/// with `Motion::Snap` the camera there at once. A tracker's pose takes
+/// none: its eye is the tracker's, and no base under it is moved in its
+/// place.
+pub fn put_center(target: Pvf3, motion: Motion) {
+    let snap = motion == Motion::Snap;
+    match active() {
+        Active::Tracked => return,
+        Active::Orbit => crate::control::camera::orbit::put(target, snap),
+        Active::Free => crate::control::camera::free::put(target, snap),
     }
     view_compose();
     request_world_tick();
@@ -434,7 +401,7 @@ fn switch() -> bool {
         });
     }
     if let Some(center) = center {
-        put_center(if want == CameraMode::orbit { ground_or_raw(&center) } else { center });
+        put_center(if want == CameraMode::orbit { ground_or_raw(&center) } else { center }, Motion::Snap);
     }
     view_compose();
     true

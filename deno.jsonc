@@ -59,6 +59,7 @@
 
     // ── Fill the bucket ──
     // Terrain and geocode resume; POI writes one immutable summary snapshot.
+    "solve:decks": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin solve_decks -- \"$@\"' --",
     "bake:tiles": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_tiles -- \"$@\"' --",
     "bake:poi": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_poi_tiles -- \"$@\"' --",
     "bake:geocode": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_geocode_tiles -- \"$@\"' --",

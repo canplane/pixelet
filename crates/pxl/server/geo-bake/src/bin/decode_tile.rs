@@ -250,7 +250,7 @@ fn decks_png(page: &Page) -> Vec<u8> {
     let n = PAGE_CELLS as i64;
     let mut top = vec![f64::NEG_INFINITY; (n * n) as usize];
     let mut px = vec![0u8; (n * n * 3) as usize];
-    page.decks.over_cells([0, n], [0, n], |x, y, _, over| {
+    page.decks.over_grid([0.0, 0.0], 1.0, [n, n], |x, y, _, over| {
         let i = (y * n + x) as usize;
         if over.top < top[i] {
             return;

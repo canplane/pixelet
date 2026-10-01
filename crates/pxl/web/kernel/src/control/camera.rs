@@ -5,6 +5,7 @@
 //! drawn, the pick a control needs, and how far one gets before terrain is
 //! in the way.
 
+pub mod approach;
 pub mod config;
 pub mod controller;
 pub mod free;

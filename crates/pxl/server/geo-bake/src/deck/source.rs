@@ -104,14 +104,29 @@ pub struct WaterUnder {
     pub class: Option<String>,
 }
 
+///
+/// The water is cut into pieces of a few hundred points first: a river or a
+/// reservoir is one polygon of up to some 440,000 points whose box covers a
+/// province, and every deck in that box would otherwise intersect all of it.
+/// A deck crossing a seam between two pieces is under both, which says the
+/// same water twice.
 pub fn water_under(client: &mut Client) -> Result<Vec<WaterUnder>, postgres::Error> {
+    client.batch_execute(
+        "DROP TABLE IF EXISTS deck_water;
+         CREATE TEMP TABLE deck_water AS
+           SELECT w.subtype, w.class, ST_Subdivide(w.geom, 256) AS geom
+           FROM overture_base_water w
+           WHERE w.subtype <> 'ocean' AND EXISTS (SELECT 1 FROM deck_piece p WHERE p.geom && w.geom);
+         CREATE INDEX ON deck_water USING GIST (geom);
+         ANALYZE deck_water;",
+    )?;
     let rows = client.query(
         "SELECT p.id,
-                ST_LineLocatePoint(p.geom, ST_StartPoint(d.geom)) * ST_Length(p.geom) AS a,
-                ST_LineLocatePoint(p.geom, ST_EndPoint(d.geom)) * ST_Length(p.geom) AS b,
+                ST_LineLocatePoint(p.geom, COALESCE(ST_StartPoint(d.geom), d.geom)) * ST_Length(p.geom) AS a,
+                ST_LineLocatePoint(p.geom, COALESCE(ST_EndPoint(d.geom), d.geom)) * ST_Length(p.geom) AS b,
                 w.subtype, w.class
          FROM deck_piece p
-         JOIN overture_base_water w ON w.geom && p.geom AND w.subtype <> 'ocean' AND ST_Intersects(w.geom, p.geom)
+         JOIN deck_water w ON w.geom && p.geom AND ST_Intersects(w.geom, p.geom)
          CROSS JOIN LATERAL ST_Dump(ST_Intersection(p.geom, w.geom)) d
          WHERE GeometryType(d.geom) IN ('POINT', 'LINESTRING')",
         &[],
@@ -159,29 +174,6 @@ pub fn decks_crossing(client: &mut Client) -> Result<Vec<DeckCrossing>, postgres
             lower_at: r.get("lower_at"),
         })
         .collect())
-}
-
-/// The ground at each point, in metres, sampled from the elevation raster
-/// the pages' own is resampled from: zero where it has none, which is the
-/// sea's.
-pub fn ground(client: &mut Client, points: &[[f64; 2]]) -> Result<Vec<f64>, postgres::Error> {
-    let mut out = vec![0.0; points.len()];
-    for (b, batch) in points.chunks(BATCH).enumerate() {
-        let xs: Vec<f64> = batch.iter().map(|p| p[0]).collect();
-        let ys: Vec<f64> = batch.iter().map(|p| p[1]).collect();
-        let rows = client.query(
-            "SELECT DISTINCT ON (u.i) u.i, ST_Value(r.rast, 1, u.p, true, 'bilinear') AS z
-             FROM (SELECT i, ST_SetSRID(ST_MakePoint(x, y), 3857) AS p FROM unnest($1::float8[], $2::float8[]) WITH ORDINALITY AS t(x, y, i)) u
-             JOIN elevation_raster r ON ST_Intersects(r.rast, u.p)
-             ORDER BY u.i",
-            &[&xs, &ys],
-        )?;
-        for r in rows {
-            let i = r.get::<_, i64>("i") as usize - 1;
-            out[b * BATCH + i] = r.get::<_, Option<f64>>("z").unwrap_or(0.0);
-        }
-    }
-    Ok(out)
 }
 
 /// A solved deck, as `overture_deck` holds it.

@@ -62,13 +62,13 @@ fn rough_leaf(rng: &mut Rng) -> Terrain {
             with_channel(with_channel(0, GroundChannelKey::LAND, land), GroundChannelKey::WATER, water)
         })
         .collect::<Vec<_>>();
-    Terrain::leaf(ele, Ground { cells: cells.into() })
+    Terrain::leaf(ele, Ground { cells: cells.into() }, Default::default())
 }
 
 /// The open ocean, as the bake makes it.
 fn zero_page() -> Terrain {
     let cells = vec![with_channel(0, GroundChannelKey::LAND, cube_types::land::sea); SPAN * SPAN];
-    Terrain::leaf(vec![0; PADDED * PADDED], Ground { cells: cells.into() })
+    Terrain::leaf(vec![0; PADDED * PADDED], Ground { cells: cells.into() }, Default::default())
 }
 
 /// The parent the fixture's leaves fold into.

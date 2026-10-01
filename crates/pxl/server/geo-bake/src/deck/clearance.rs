@@ -5,8 +5,8 @@
 //! A deck's height is not its layer times a step: OSM's `layer` is an order
 //! among what crosses, and says nothing of metres. A deck is as high as what
 //! passes under it needs, which is how Arnis, which builds bridges from OSM
-//! into Minecraft, solves them (`src/element_processing/bridges.rs`,
-//! Apache-2.0); the numbers here are its, in metres, its block being one.
+//! into Minecraft, solves them (its bridge module, Apache-2.0); the numbers
+//! here are its, in metres, its block being one.
 
 /// A deck's top over the ground where a road passes under it.
 pub const ROAD: f64 = 6.0;

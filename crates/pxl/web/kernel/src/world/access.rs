@@ -520,16 +520,65 @@ impl<'a> Access<'a> {
         None
     }
 
+    /// What the decks over a cell occupy, as the chunk there paints them
+    /// (pxl-spec bake/deck.rs `Over::occupies`): each slab and pier, its
+    /// bottom and top in units, read from the page the cell is drawn from at
+    /// the cell's center.
+    fn decks_over(&self, cell: Cell, ground_top: f64) -> Vec<[f64; 2]> {
+        let Some((src, body)) = self.drawn_from(cell.page()) else { return Vec::new() };
+        let n = GROUND.scale(cell.level()).count_in(GROUND.scale(src.level)) as f64;
+        let [ox, oy] = cell.in_page_above(src.level - cell.level());
+        let ground = (ground_top / U_PER_CELL).round() as i32;
+        let units = |[lo, hi]: [i32; 2]| [f64::from(lo) * U_PER_CELL, f64::from(hi) * U_PER_CELL];
+        body.decks
+            .over_point([(ox as f64 + 0.5) / n, (oy as f64 + 0.5) / n])
+            .filter_map(|o| o.occupies(ground))
+            .flat_map(|o| [Some(o.slab), o.pier].into_iter().flatten().map(units))
+            .collect()
+    }
+
+    /// The nearest of the decks over a cell column the ray meets while it
+    /// is over the column, between `t0` and `t1`, beside `ground`, the
+    /// column's own hit: each slab or pier a box the column's width.
+    fn with_decks(&self, ray: &Ray, cell: Cell, ground_top: f64, (corner, side): ([f64; 2], f64), (t0, t1): (f64, f64), ground: Option<Hit>) -> Option<Hit> {
+        let mut best = ground;
+        for [lo, hi] in self.decks_over(cell, ground_top) {
+            let (min, max) = ([corner[0], corner[1], lo], [corner[0] + side, corner[1] + side, hi]);
+            let Some((t, normal)) = ray_box(ray, &min, &max) else { continue };
+            if t < t0 || t > t1 || best.is_some_and(|b| b.t <= t) {
+                continue;
+            }
+            best = Some(Hit {
+                t,
+                point: ray.at(t),
+                normal,
+                box_min: min,
+                box_max: max,
+                struck: Struck::Ground,
+            });
+        }
+        best
+    }
+
+    /// Where the ray first meets the ground or a deck in z16 cell column
+    /// `cell` while it is over it, between `t0` and `t1`.
+    fn column(&self, ray: &Ray, [ix, iy]: [i64; 2], t0: f64, t1: f64) -> Option<Hit> {
+        let side = CELL.side();
+        let cell = GROUND.cell_of(0, &CELL.base_of([ix, iy, 0]));
+        let top = self.ground(cell).value()?.top;
+        let ground = self.ground_column(ray, [ix, iy], top, t0, t1);
+        self.with_decks(ray, cell, top, ([ix as f64 * side, iy as f64 * side], side), (t0, t1), ground)
+    }
+
     /// Where the ray first meets the ground in z16 cell column `cell` while
     /// it is over it, between `t0` and `t1`: a cell under the column's drawn
     /// top that no voxel entry takes, since a cell holding one is its
     /// objects' and not the ground's — air as much as a solid. The ray is
     /// stepped a cell of height at a time only once it is under the top.
     /// What the ray starts inside is not met.
-    fn column(&self, ray: &Ray, [ix, iy]: [i64; 2], t0: f64, t1: f64) -> Option<Hit> {
+    fn ground_column(&self, ray: &Ray, [ix, iy]: [i64; 2], top: f64, t0: f64, t1: f64) -> Option<Hit> {
         let side = CELL.side();
         let base = CELL.base_of([ix, iy, 0]);
-        let top = self.ground(GROUND.cell_of(0, &base)).value()?.top;
         let (za, zb) = (ray.at(t0)[2], ray.at(t1)[2]);
         let dz = ray.direction[2];
         let at_z = |z: f64| (z - ray.origin[2]) / dz;
@@ -582,15 +631,24 @@ impl<'a> Access<'a> {
         }
     }
 
+    /// Where the ray first meets the ground or a deck in cell column `cell`
+    /// of `level`, over z16, while it is over it, between `t0` and `t1`.
+    fn folded(&self, ray: &Ray, [ix, iy]: [i64; 2], t0: f64, t1: f64, level: u32) -> Option<Hit> {
+        let scale = GROUND.scale(level);
+        let side = scale.side();
+        let cell = GROUND.cell_of(level, &scale.base_of([ix, iy, 0]));
+        let top = self.ground(cell).value()?.top;
+        let ground = self.folded_ground(ray, [ix, iy], top, t0, t1, level);
+        self.with_decks(ray, cell, top, ([ix as f64 * side, iy as f64 * side], side), (t0, t1), ground)
+    }
+
     /// Where the ray first meets the ground in cell column `cell` of
     /// `level`, over z16, while it is over it, between `t0` and `t1`: the
     /// column's cells under the top the level draws. What the ray starts
     /// inside is not met.
-    fn folded(&self, ray: &Ray, [ix, iy]: [i64; 2], t0: f64, t1: f64, level: u32) -> Option<Hit> {
+    fn folded_ground(&self, ray: &Ray, [ix, iy]: [i64; 2], top: f64, t0: f64, t1: f64, level: u32) -> Option<Hit> {
         let scale = GROUND.scale(level);
         let side = scale.side();
-        let base = scale.base_of([ix, iy, 0]);
-        let top = self.ground(GROUND.cell_of(level, &base)).value()?.top;
         let (za, zb) = (ray.at(t0)[2], ray.at(t1)[2]);
         let (t, normal) = if za <= top {
             (t0 > 0.0).then(|| (t0, wall_normal(ray, t0, side)))?

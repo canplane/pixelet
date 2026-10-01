@@ -12,8 +12,8 @@ use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::gpu::renderer::{render_frame, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
 
-use crate::sched::profiler::record::MB;
 use crate::layer::billboard::distance_fade::fade_range;
+use crate::sched::profiler::record::MB;
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::space::pvf3::ivec;
 use xpute_core::math::scalar::round;

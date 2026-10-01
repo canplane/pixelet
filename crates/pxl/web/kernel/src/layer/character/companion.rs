@@ -31,7 +31,7 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::xy::TO_XY;
 
 use crate::control::camera::config::camera_cfg;
-use crate::control::camera::controller::damp_alpha;
+use crate::control::camera::approach::damp_alpha;
 use crate::control::camera::store::{camera_store, CameraStatus};
 use crate::global::Global;
 use crate::io::load::{load_gltf, load_image, Load};

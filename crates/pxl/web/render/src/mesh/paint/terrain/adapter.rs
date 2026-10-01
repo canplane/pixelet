@@ -10,6 +10,13 @@
 //! column a cell from a floor shared by the chunk, and what the direct path
 //! writes as one run a column without a volume.
 //!
+//! A page's decks (pxl-spec bake/deck.rs) stand off that column: a deck over
+//! a cell is a slab a cell thick under its top, and where a pier carries it,
+//! the pier from the ground to the slab, so a column holds its ground and
+//! whatever decks cross over it, each a run of its own. A deck at or under
+//! the ground there — where a bridge comes down to its ends — is the way on
+//! the ground, painted as the column's own material.
+//!
 //! The floor is rounded down to a whole band (`min_ele - TERRAIN_Z_MARGIN`,
 //! floored to BAND_CELLS) because a volume allocates in whole bands: a floor
 //! anywhere inside one would open a band below it for the few voxels that
@@ -18,9 +25,11 @@
 //! same level.
 
 use pxl_spec::bake::constant::BAND_CELLS;
-use pxl_spec::bake::format::{GroundChannelKey, GROUND_CH_KEYS};
+use pxl_spec::bake::deck::{Decks, Over};
+use pxl_spec::bake::format::{ch_index, GroundChannelKey, GROUND_CH_KEYS};
 use pxl_spec::bake::ground::{channel_bit, ChannelMask, BASE};
 use pxl_spec::bake::pack::{unpack, GroundCell};
+use pxl_spec::cell::cube::cube_types;
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, PAGE_CELLS};
 
 use crate::mesh::paint::palette::shader_meta::{ground_color_lookup, ground_layer_index_lookup};
@@ -88,6 +97,14 @@ fn class_of(ch: GroundChannelKey) -> u8 {
 }
 
 impl Materials {
+    /// A ground type's voxel material, packed `0xCC_RRGGBB`, and its layer;
+    /// none for a type the palette gives no color.
+    pub fn of(&self, ch: GroundChannelKey, t: u8) -> Option<(u32, u8)> {
+        let c = &self.channels[ch_index(ch)];
+        let t = t as usize;
+        c.has_color[t].then(|| (pack(c.class, c.rgb[t]), if c.has_layer[t] { c.layer[t] } else { NO_LAYER as u8 }))
+    }
+
     fn of_palette() -> Materials {
         let rgb_of = |ch, t: usize| ground_color_lookup(ch).filter(|c| c.has[t] != 0).map(|c| [c.rgb[t * 3], c.rgb[t * 3 + 1], c.rgb[t * 3 + 2]]);
         let layer_of = |ch, t: usize| ground_layer_index_lookup(ch).filter(|l| l.has[t] != 0).map(|l| l.index[t]);
@@ -113,6 +130,15 @@ impl Materials {
     }
 }
 
+/// A voxel material: the class over the color.
+fn pack(class: u8, rgb: [u8; 3]) -> u32 {
+    ((class as u32) << 24) | ((rgb[0] as u32) << 16) | ((rgb[1] as u32) << 8) | rgb[2] as u32
+}
+
+/// What a pier is painted as: a building's concrete, since nothing in the
+/// catalog is a pier's own and the catalog is what a voxel's material is.
+const PIER: (GroundChannelKey, u8) = (GroundChannelKey::STRUCTURE, cube_types::structure::building);
+
 /// One page's lanes, as the client keeps them in the core memory.
 #[derive(Clone, Copy)]
 pub struct PageView<'a> {
@@ -120,6 +146,7 @@ pub struct PageView<'a> {
     /// `GroundCell` (pxl-spec bake/pack.rs), in the lattice's cell order.
     pub cells: &'a [GroundCell],
     pub ele: &'a [i16],
+    pub decks: &'a Decks,
 }
 
 /// What a page's cells are read from: the page drawn in its place — its own,
@@ -163,6 +190,20 @@ pub struct ChunkSample {
     /// The elevation a cell, in cells; a column's top is one below it.
     pub ele: Vec<i16>,
     pub floor: i32,
+    /// Column `i`'s spans over its ground are `spans[span_at[i]..span_at[i + 1]]`,
+    /// lowest first and none overlapping; the apron's columns have none.
+    pub span_at: Vec<u32>,
+    pub spans: Vec<Span>,
+}
+
+/// A run off the ground: a deck's slab or a pier, from `lo` up to `hi`
+/// exclusive, in cells.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Span {
+    pub lo: i32,
+    pub hi: i32,
+    pub material: u32,
+    pub layer: u8,
 }
 
 impl Default for ChunkSample {
@@ -172,6 +213,8 @@ impl Default for ChunkSample {
             layer_idx: vec![0; COL_SPAN2],
             ele: vec![0; COL_SPAN2],
             floor: 0,
+            span_at: vec![0; COL_SPAN2 + 1],
+            spans: Vec::new(),
         }
     }
 }
@@ -219,20 +262,16 @@ impl ChunkSample {
                 };
 
                 // The material: the base, then each channel in order.
-                let (mut rgb, mut class, mut layer) = (tables.base_rgb, tables.base_class, tables.base_layer);
+                let (mut material, mut layer) = (pack(tables.base_class, tables.base_rgb), tables.base_layer);
                 for (ch, &t) in types.iter().enumerate() {
                     if skip[ch] || t == VOID {
                         continue;
                     }
-                    let c = &tables.channels[ch];
-                    if !c.has_color[t as usize] {
-                        continue;
+                    if let Some(m) = tables.of(GROUND_CH_KEYS[ch], t) {
+                        (material, layer) = m;
                     }
-                    rgb = c.rgb[t as usize];
-                    class = c.class;
-                    layer = if c.has_layer[t as usize] { c.layer[t as usize] } else { NO_LAYER as u8 };
                 }
-                self.material[i] = ((class as u32) << 24) | ((rgb[0] as u32) << 16) | ((rgb[1] as u32) << 8) | rgb[2] as u32;
+                self.material[i] = material;
                 self.layer_idx[i] = layer;
 
                 // The height every consumer of this page takes, recess and
@@ -251,21 +290,88 @@ impl ChunkSample {
         }
         // One band-aligned floor shared by the whole chunk, under every peak.
         self.floor = (min_ele - TERRAIN_Z_MARGIN).div_euclid(BAND_CELLS as i32) * BAND_CELLS as i32;
+        let shown = !skip[ch_index(GroundChannelKey::TRANSPORT)];
+        self.read_decks(if shown { Some(&around.own) } else { None }, first);
     }
 
-    /// Paints the chunk's own columns into `volume`, floor to top. The
-    /// apron's are not painted: the volume is the chunk's, and they exist
-    /// only as columns of the run set.
+    /// The decks over the chunk's own columns, from the page they are drawn
+    /// from: each column's highest top of each deck, as its slab and pier.
+    fn read_decks(&mut self, own: Option<&PageSource>, first: [i64; 2]) {
+        let tables = &*MATERIALS;
+        let mut over: Vec<(usize, usize, Over)> = Vec::new();
+        if let Some(s) = own {
+            let n = f64::from(s.n);
+            let origin = [0, 1].map(|k| (s.origin[k] + first[k]) as f64 / n);
+            let side = CHUNK_CELLS as i64;
+            s.page.decks.over_grid(origin, 1.0 / n, [side, side], |cx, cy, d, o| {
+                over.push((apron_col(cx as u32, cy as u32) as usize, d, o));
+            });
+        }
+        // A deck's highest over a column, where two of its segments meet.
+        over.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)).then(b.2.top.total_cmp(&a.2.top)));
+        over.dedup_by_key(|o| (o.0, o.1));
+        self.spans.clear();
+        let mut col = 0;
+        let mut i = 0;
+        while col < COL_SPAN2 {
+            self.span_at[col] = self.spans.len() as u32;
+            let from = self.spans.len();
+            while i < over.len() && over[i].0 == col {
+                let o = over[i].2;
+                i += 1;
+                let Some((slab, slab_layer)) = tables.of(GroundChannelKey::TRANSPORT, o.kind) else { continue };
+                let Some(occupied) = o.occupies(self.ele[col] as i32) else {
+                    (self.material[col], self.layer_idx[col]) = (slab, slab_layer);
+                    continue;
+                };
+                let [lo, hi] = occupied.slab;
+                self.spans.push(Span { lo, hi, material: slab, layer: slab_layer });
+                if let (Some([lo, hi]), Some((pier, pier_layer))) = (occupied.pier, tables.of(PIER.0, PIER.1)) {
+                    self.spans.push(Span { lo, hi, material: pier, layer: pier_layer });
+                }
+            }
+            // Lowest first, and a higher span keeps what two of them share.
+            let column = &mut self.spans[from..];
+            column.sort_by_key(|s| (s.lo, s.hi));
+            for k in (1..column.len()).rev() {
+                column[k - 1].hi = column[k - 1].hi.min(column[k].lo);
+            }
+            let mut k = from;
+            for j in from..self.spans.len() {
+                if self.spans[j].hi > self.spans[j].lo {
+                    self.spans[k] = self.spans[j];
+                    k += 1;
+                }
+            }
+            self.spans.truncate(k);
+            col += 1;
+        }
+        self.span_at[COL_SPAN2] = self.spans.len() as u32;
+    }
+
+    /// Column `i`'s runs, lowest first: its ground from `floor`, then what
+    /// stands off it, as `run(lo, hi, material, layer)`, both ends inside.
+    pub fn column_runs(&self, i: usize, mut run: impl FnMut(i32, i32, u32, u8)) {
+        let top = self.ele[i] as i32 - 1;
+        if top >= self.floor {
+            run(self.floor, top, self.material[i], self.layer_idx[i]);
+        }
+        for s in &self.spans[self.span_at[i] as usize..self.span_at[i + 1] as usize] {
+            run(s.lo, s.hi - 1, s.material, s.layer);
+        }
+    }
+
+    /// Paints the chunk's own columns into `volume`, floor to top and what
+    /// stands off it. The apron's are not painted: the volume is the
+    /// chunk's, and they exist only as columns of the run set.
     pub fn paint(&self, volumes: &mut Volumes, volume: u32) -> bool {
+        let mut painted = true;
         for cy in 0..CHUNK_CELLS {
             for cx in 0..CHUNK_CELLS {
-                let i = apron_col(cx, cy) as usize;
-                let v = Voxel {
-                    material: self.material[i],
-                    layer_idx: self.layer_idx[i],
-                    sub: 0,
-                };
-                if !volumes.fill_column(volume, (cx, cy), self.floor, self.ele[i] as i32 - 1, v) {
+                self.column_runs(apron_col(cx, cy) as usize, |lo, hi, material, layer_idx| {
+                    painted &= volumes.fill_column(volume, (cx, cy), lo, hi, Voxel { material, layer_idx, sub: 0 });
+                });
+                if !painted {
                     return false;
                 }
             }

@@ -24,7 +24,6 @@
 //! tiers; the chunk stage (stage.rs) composes the frame — the camera, the
 //! anchor root's matrix, the frustum — and calls the tick.
 
-
 use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::arena::{arena_configure, arena_epoch, arena_write};
 use pxl_render::look::globe::Globe;
@@ -39,8 +38,6 @@ use xpute_runtime::mem::section::span_of;
 use xpute_runtime::sched::edge::Notify;
 use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats};
 
-use crate::sched::profiler::record::MB;
-use crate::world::paging::LEVELS;
 use crate::global::Global;
 use crate::layer::billboard::field::Billboards;
 use crate::layer::environment::state::EnvironmentDraw;
@@ -51,11 +48,13 @@ use crate::layer::model::store::Models;
 use crate::layer::object::store::{render_edits, EntryAt, RenderEdits};
 use crate::mem::fixed::{lane, range, Range};
 use crate::param;
+use crate::sched::profiler::record::MB;
 use crate::shell::setting::store::settings_store;
 use crate::world::chunk::build::{mesh_step, BuildEvent, Builder, Cube, World};
 use crate::world::chunk::frontier::{self, cube_of, drawn_cube, pool_of, wanted_cube, Env, Frontier, Now, Slots};
 use crate::world::chunk::mesh_slot::{capacity, group_box_words, group_bytes, group_is_fine, slot_at, MeshSlot, Pool, ARENA, COVER_SLOTS, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::source::{draws_band, objects_revision_of, tiers_draw};
+use crate::world::paging::LEVELS;
 use xpute_core::math::scalar::round;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
@@ -375,7 +374,6 @@ pub struct Census {
     /// the frame's cap is what holds the screen back.
     pub commit_left: u32,
 }
-
 
 /// A slot's or a mount's number in a lane of `.fixed.mounts`, or none: one
 /// past the number, so a lane as it is laid, zeroed, reads as none.
@@ -1173,15 +1171,7 @@ impl Scheduler {
             while let (Some(at_slot), true) = (slot, left > 0) {
                 let m = slot_at(at_slot);
                 let n = left.min(m.capacity);
-                self.draw.draw_arena(
-                    m.group,
-                    m.first_box,
-                    n,
-                    at,
-                    unit,
-                    z_step,
-                    group_is_fine(m.group),
-                );
+                self.draw.draw_arena(m.group, m.first_box, n, at, unit, z_step, group_is_fine(m.group));
                 left -= n;
                 slot = self.meshes.next[at_slot].get();
             }
@@ -1812,4 +1802,3 @@ fn land(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
         heights,
     });
 }
-

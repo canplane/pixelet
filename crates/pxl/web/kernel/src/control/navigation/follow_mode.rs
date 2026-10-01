@@ -4,6 +4,7 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_core::math::scalar::wrap;
 
 use crate::control::camera::store::{camera_store, IntentPatch};
+use crate::control::camera::controller::Motion;
 use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::store::{device_location_store, device_orientation_store, DevicePoseStatus};
@@ -99,12 +100,13 @@ pub fn follow_mode_step() {
         return;
     }
 
-    // 1. [Position sync] only when the GPS coordinate changes. No EMA here: the
-    // companion's catch-up glide is the single smoothing stage. On the ground
+    // 1. [Position sync] only when the GPS coordinate changes. No EMA here:
+    // a fix followed is moved to as the hand's moves are (controller.rs
+    // `Motion::Smooth`), and that approach is the one smoothing stage. On the ground
     // there, as the recenter button puts it: device_coord's Z is the fix's
     // altitude, not the map's height.
     if let Some(device) = device_coord.filter(|d| entered || Some(*d) != f.last_device) {
-        go_to_ground(device);
+        go_to_ground(device, Motion::Smooth);
     }
     f.last_device = device_coord;
 

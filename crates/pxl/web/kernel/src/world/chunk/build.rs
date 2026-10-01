@@ -60,7 +60,6 @@ pub fn object_fold(cube: Cube) -> Scale {
     cube.clamp(OBJECT_FINEST, CELL)
 }
 
-
 // ---- the build as the kernel runs it ----
 //
 // A chunk's build, from its sources to its meshes, a chunk at a time under
@@ -424,11 +423,9 @@ impl Builder {
         }
     }
 
-
     pub fn generation_of(&self, id: u32) -> Option<u32> {
         self.chunks.get(&id).map(|c| c.generation)
     }
-
 
     /// The chunks holding the scan slot and the bake slot.
     pub fn holders(&self) -> [Option<u32>; 2] {
@@ -765,6 +762,7 @@ impl Builder {
         PageView {
             cells: &page.ground.cells,
             ele: &page.ele,
+            decks: &page.decks,
         }
     }
 
@@ -864,15 +862,12 @@ impl Builder {
         let show = self.chunks[&id].structures;
         self.sample.read(&read.around(), read.first, hidden_ground(show));
         xpute_core::ensure!(self.direct.begin_direct(), ENOTRECOVERABLE);
-        let floor = self.sample.floor;
         // Every column of the set, the chunk's own and the apron's: the
         // sample holds both, and the writer wants them in one order.
         for i in 0..(COL_SPAN * COL_SPAN) as usize {
             self.direct.direct_column(i as u32);
-            let top = self.sample.ele[i] as i32 - 1;
-            if top >= floor {
-                self.direct.direct_run(floor, top, self.sample.material[i], self.sample.layer_idx[i]);
-            }
+            let direct = &mut self.direct;
+            self.sample.column_runs(i, |lo, hi, material, layer| direct.direct_run(lo, hi, material, layer));
         }
         self.close_direct(world, id)
     }

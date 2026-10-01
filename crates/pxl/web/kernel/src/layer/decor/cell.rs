@@ -41,7 +41,6 @@ use crate::layer::object::store::{object_col_revision, EntryAt, Store};
 use crate::param::IMPOSTOR_GONE_CELLS;
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::chunk::build::Builder;
-use xpute_runtime::mem::heap::free;
 use crate::world::observation::{eye, frustum_of_view};
 use crate::world::paging::floor;
 use crate::world::pyramid::chunk::Chunk;
@@ -49,6 +48,7 @@ use crate::world::pyramid::Layer;
 use crate::world::quality;
 use pxl_render::look::lod::TARGET_CELL_PX;
 use pxl_spec::bake::format::Terrain;
+use xpute_runtime::mem::heap::free;
 
 /// A decor cell: a column of level `level`'s chunks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -347,9 +347,7 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Ent
         }
     }
     let under = &c.under;
-    let kept = |cell: DecorCell, blocks: &HashMap<DecorCell, Block>| {
-        wanted(&cell) || under.get(&cell) == Some(&false) || ancestors(cell).find(wanted).is_some_and(|a| !ready(a, blocks))
-    };
+    let kept = |cell: DecorCell, blocks: &HashMap<DecorCell, Block>| wanted(&cell) || under.get(&cell) == Some(&false) || ancestors(cell).find(wanted).is_some_and(|a| !ready(a, blocks));
     c.cells.clear();
     c.cells.extend(c.blocks.keys().copied().filter(|&k| !kept(k, &c.blocks)));
     for k in c.cells.drain(..) {

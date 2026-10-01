@@ -93,6 +93,33 @@ pub struct Over {
     pub pier: bool,
 }
 
+/// What a deck occupies over one column, in z16 cells, each `[lo, hi)`: its
+/// slab under its top, and where a pier carries it, the pier from the
+/// ground to the slab. The one rule the paint draws a deck by and the query
+/// meets it by.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Occupied {
+    pub slab: [i32; 2],
+    pub pier: Option<[i32; 2]>,
+}
+
+impl Over {
+    /// Over a column whose ground stands `ground` cells high; none where the
+    /// deck is at or under the ground there — where a bridge comes down to
+    /// its end, which is the way on the ground.
+    pub fn occupies(&self, ground: i32) -> Option<Occupied> {
+        let top = self.top.round() as i32;
+        if top <= ground {
+            return None;
+        }
+        let lo = (top - THICKNESS).max(ground);
+        Some(Occupied {
+            slab: [lo, top],
+            pier: (self.pier && lo > ground).then_some([ground, lo]),
+        })
+    }
+}
+
 impl Decks {
     pub fn len(&self) -> usize {
         self.width.len()
@@ -117,25 +144,27 @@ impl Decks {
         (0..self.len()).map(|d| self.deck(d))
     }
 
-    /// Every deck over each column of the `[x0, x1) × [y0, y1)` cells of the
-    /// page, as `each(x, y, deck, over)`. A column is under a deck where its
-    /// center lies within half the deck's width of the deck's line; a column
-    /// under two of a deck's segments, at a joint, is told of both, and the
-    /// caller keeps the higher.
-    pub fn over_cells(&self, [x0, x1]: [i64; 2], [y0, y1]: [i64; 2], mut each: impl FnMut(i64, i64, usize, Over)) {
+    /// Every deck over each point of a grid laid on the page: `size` columns
+    /// by rows, point (i, j) at `origin + (i + ½, j + ½) · step` in the
+    /// page's cells — its own cells' centers at a step of one, and finer
+    /// than its cells where a chunk is drawn from a page over its own. Told
+    /// as `each(i, j, deck, over)`; a point under two of a deck's segments,
+    /// at a joint, is told of both, and the caller keeps the higher.
+    pub fn over_grid(&self, origin: [f64; 2], step: f64, size: [i64; 2], mut each: impl FnMut(i64, i64, usize, Over)) {
+        let cell = |v: f64, k: usize| (v - origin[k]) / step - 0.5;
         for (d, deck) in self.iter().enumerate() {
             let half = deck.half_width();
-            let [lo, hi] = deck.bounds();
-            if hi[0] + half < x0 as f64 || lo[0] - half > x1 as f64 || hi[1] + half < y0 as f64 || lo[1] - half > y1 as f64 {
-                continue;
-            }
             for s in 0..deck.points.len().saturating_sub(1) {
                 let (a, b) = (deck.point(s), deck.point(s + 1));
-                let cells = |u: f64, v: f64, lo: i64, hi: i64| ((u.min(v) - half).floor() as i64).max(lo)..((u.max(v) + half).ceil() as i64).min(hi);
-                for y in cells(a[1], b[1], y0, y1) {
-                    for x in cells(a[0], b[0], x0, x1) {
-                        if let Some(over) = deck.over_segment(s, [x as f64 + 0.5, y as f64 + 0.5]) {
-                            each(x, y, d, over);
+                let range = |k: usize| {
+                    let (lo, hi) = (cell(a[k].min(b[k]) - half, k).ceil() as i64, cell(a[k].max(b[k]) + half, k).floor() as i64);
+                    lo.max(0)..=hi.min(size[k] - 1)
+                };
+                for j in range(1) {
+                    for i in range(0) {
+                        let at = [origin[0] + (i as f64 + 0.5) * step, origin[1] + (j as f64 + 0.5) * step];
+                        if let Some(over) = deck.over_segment(s, at) {
+                            each(i, j, d, over);
                         }
                     }
                 }

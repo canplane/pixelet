@@ -5,6 +5,7 @@ use pxl_spec::space::pvf3::core::FRAC_W;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 
 use crate::control::camera::controller::map_center;
+use crate::control::camera::controller::Motion;
 use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::store::{device_location_store, DevicePoseStatus};
@@ -70,6 +71,6 @@ pub fn map_bootstrap_step() {
     // Still at the fallback counts as nothing real yet: a real fix landing
     // after the fallback takes over.
     if center.is_none_or(|c| is_at(&c, &fallback)) {
-        go_to_ground(seed);
+        go_to_ground(seed, Motion::Snap);
     }
 }

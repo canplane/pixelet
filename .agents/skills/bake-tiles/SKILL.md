@@ -62,7 +62,8 @@ docker compose -f infra/local/docker-compose.yml --env-file .env up -d
 ```
 
 Terrain needs `overture_buildings`, `overture_transportation`,
-`overture_base_{land,land_use,water,infrastructure}` and `elevation_raster`;
+`overture_base_{land,land_use,water,infrastructure}`, `elevation_raster`
+and `overture_deck`;
 POI needs `overture_places`; geocode needs `overture_divisions` and
 `overture_division_points`. If a table is missing, that is an ingestion
 job, not a bake job — [infra/geo/README.md](../../../infra/geo/README.md).
@@ -71,7 +72,14 @@ ingested data.
 
 ## Terrain
 
+The decks' heights come first. `overture_deck` is derived from
+`overture_transportation`, the water and the elevation, over the whole
+coverage at once, since a viaduct's height is decided by where it meets the
+ground pages away (`geo-bake deck.rs`). Solve it again after a
+transportation ingest or a change to the solve, then bake:
+
 ```bash
+deno task solve:decks
 deno task bake:tiles --out ./out/terrain/<version> --concurrency 8
 ```
 

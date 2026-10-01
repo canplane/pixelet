@@ -15,6 +15,7 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_core::wire::xtp::PacketWriter;
 
 pub use crate::abi::cmd::Tracking;
+use crate::control::camera::controller::Motion;
 use crate::abi::cmd::{CompanionState, LocationState, LonLat, MapState, OrientationState, PlaceName, PlacePart, ScaleBar, Snapshot};
 use crate::control::camera::controller::radius;
 use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
@@ -132,7 +133,7 @@ pub fn tracking_action(tracking: Tracking) {
             // Z is the fix's altitude, absent on most and never the ground's
             // height on the map, so the recenter stands on the ground there.
             if let Some(device) = map_navigation().device_coord {
-                go_to_ground(device);
+                go_to_ground(device, Motion::Snap);
             }
             camera.is_follow_mode = false;
         }
@@ -148,12 +149,13 @@ pub fn tracking_action(tracking: Tracking) {
     }
 }
 
-/// The camera put so the map center is at `target`, a place named with its
-/// height.
+/// The camera moved so the map center is at `target`, a place named with
+/// its height on the screen — a badge, an object — reached as the hand's
+/// moves are.
 pub fn go_to(target: Pvf3) {
     // The user drove the camera: GPS stops overriding it.
     camera_store().is_follow_mode = false;
-    destination::go_to(target);
+    destination::go_to(target, Motion::Smooth);
 }
 
 /// A search result: the center moved to degrees, on the ground there once
@@ -162,7 +164,7 @@ pub fn go_to_degrees(lon: f64, lat: f64) {
     camera_store().is_follow_mode = false;
     let mut target = Pvf3::default();
     epsg4326::project(&mut target, &[lon, lat, 0.0]);
-    go_to_ground(target);
+    go_to_ground(target, Motion::Snap);
 }
 
 /// Where the camera stands, set outright rather than driven: what the

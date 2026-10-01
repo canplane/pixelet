@@ -142,7 +142,6 @@ impl Pool {
         }
     }
 
-
     /// Slots it holds.
     pub const fn slots(self) -> u32 {
         match self {
@@ -160,7 +159,6 @@ impl Pool {
             Pool::Cover => COVER_BOXES,
         }
     }
-
 
     /// The first of its slots: the coarse pool's, then the leaves', then
     /// the cover's.
@@ -187,7 +185,6 @@ impl Pool {
             Pool::Cover
         }
     }
-
 }
 
 /// Every pool's slots, by `Pool` as an index: the arena the quality policy

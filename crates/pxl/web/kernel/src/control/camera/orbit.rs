@@ -2,11 +2,18 @@
 
 //! The orbit camera. It turns the camera (controller.rs `Camera`) about a
 //! point its radius ahead of the eye along the look — the map center —
-//! keeping that point where it is: the eye moves over the
-//! sphere about it, and the radius, eased toward the controls' distance
-//! (`turn`), is the zoom. A drag moves the map center over the ground
-//! (`pan`). Its own state is the radius; the
-//! eye and the look are the camera's.
+//! keeping that point where it is: the eye moves over the sphere about it,
+//! and the radius is the zoom. A drag moves the map center over the ground
+//! (`pan`).
+//!
+//! What the controls ask of it and what is drawn are kept apart: the
+//! controls write the target — the look and the distance in the camera
+//! store's intent, and the map center where the hand has put it, standing on
+//! the ground where the ground snap stands it — and `turn` brings what is
+//! drawn to it, every channel by the one law (approach.rs). The drawn state
+//! is the radius here and the eye and the look in the camera; the map center
+//! drawn is derived from them. The target is the controls' alone: what draws
+//! or reads the world reads the drawn state.
 
 pub mod terrain_gate;
 
@@ -14,13 +21,14 @@ use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 
 use pxl_spec::space::v3::V3;
-use xpute_core::math::scalar::{clamp, wrap};
+use xpute_core::math::scalar::clamp;
 
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::config::camera_cfg::input::DOLLY_GAIN;
-use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, ROT_DAMP};
+use crate::control::camera::approach::{approach_angle, approach_scalar, approach_vec};
+use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, POS_DAMP, ROT_DAMP};
 use crate::control::camera::config::camera_cfg::view::{MAX_DIST, MIN_DIST};
-use crate::control::camera::controller::{camera, center_local, damp_alpha, look_dir, look_domain, map_center, set_eye_local, spend_travel, units_per_px_at};
+use crate::control::camera::controller::{camera, center_local, look_dir, look_domain, map_center, set_eye_local, units_per_px_at};
 use crate::control::camera::gesture::{spread, Anchor};
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
 use crate::global::Global;
@@ -36,6 +44,10 @@ use terrain_gate::{allowed_pan, allowed_view, climb_polar, ViewTriple};
 /// map center stands.
 pub struct OrbitState {
     pub dist: f64,
+    /// Where the controls have put the map center, canonical, so a rebase
+    /// leaves it where it is: what the drawn center comes to. None until
+    /// the camera is first put anywhere.
+    to: Option<Pvf3>,
     /// A pinch's anchor: the distance the controls asked and the fingers'
     /// spread as it began, or where it was last held to (gesture.rs). A
     /// snapshot of the gesture, not a second distance.
@@ -47,6 +59,7 @@ static ORBIT: Global<OrbitState> = Global::new();
 pub fn orbit() -> &'static mut OrbitState {
     ORBIT.get(|| OrbitState {
         dist: camera_cfg::view::DEFAULT_DIST,
+        to: None,
         pinch_from: Anchor::new(camera_cfg::view::DEFAULT_DIST, 1.0),
     })
 }
@@ -56,13 +69,10 @@ pub fn orbit_eye_offset(dist: f64, polar: f64, azimuth: f64) -> V3 {
     look_dir(polar, azimuth).map(|v| -v * dist)
 }
 
-// The tick runs another frame only when something asks (sched/tick.rs) —
-// this damping is the main thing asking while the camera is settling after a
-// drag/zoom, and needs to stop once it's close enough that a further frame
-// wouldn't look any different, or it would ask forever and the view would
-// never be idle. World units for dist, radians for the angles —
-// all small enough that the remaining error is sub-pixel at any zoom level in
-// view.
+// How close each channel comes before it takes its target whole
+// (approach.rs): world units for the center and the radius, radians for the
+// angles — all sub-pixel at any distance the view is looked across.
+const CENTER_EPS: f64 = 0.001;
 const DIST_EPS: f64 = 0.001;
 const POLAR_EPS: f64 = 0.0001;
 const AZIMUTH_EPS: f64 = 0.0001;
@@ -201,54 +211,57 @@ pub fn zoom_to(dist: f64) -> f64 {
     .dist
 }
 
-/// A drag moves the map center over the ground, the ground following the
-/// finger at the distance the view looks across, over the turns to come
-/// (`walk`).
+/// A drag moves the map center's target over the ground, the ground
+/// following the finger at the distance the view looks across: on the
+/// ground where the ground snap stands it, which sets the target's height as
+/// the drag sets its X and Y, so the height comes by the same approach and
+/// a step in the ground is no jump; and no further than the terrain gate
+/// lets the drawn orbit go.
 pub fn pan(dx: f64, dy: f64) {
-    if map_center().is_none() {
-        return;
-    }
+    let Some(from) = orbit().to.or_else(map_center) else { return };
     let units_per_px = units_per_px_at(camera_store().intent.dist);
     let (lx, ly) = (-dx * units_per_px, dy * units_per_px);
     let (s, c) = camera().yaw.sin_cos();
-    let travel = &mut camera_store().travel;
-    travel[0] += lx * c + ly * s;
-    travel[1] += -lx * s + ly * c;
-    request_world_tick();
-}
-
-/// The map center, at `center` in the root frame, moved by this turn's
-/// share of the hand's move: on the ground where the ground is known, and
-/// stopped where the terrain gate stops it. None where there is nothing to
-/// move by.
-fn walk(center: V3, delta: f64) -> Option<V3> {
-    let share = spend_travel(delta)?;
     let origin = view().origin;
+    let at = canonical_to_local(&from, origin);
     let mut next = Pvf3::default();
-    local_world_to_canonical(&mut next, &[center[0] + share[0], center[1] + share[1], center[2]], origin);
+    local_world_to_canonical(&mut next, &[at[0] + lx * c + ly * s, at[1] - lx * s + ly * c, at[2]], origin);
     let desired = if settings_store().ground_snap { ground_or_raw(&next) } else { next };
     // Gated after the snap, not before: the snap moves the center's Z, and
     // the eye rides on it.
-    let reached = allowed_pan(drawn(), &desired);
-    Some(canonical_to_local(&reached, origin))
+    orbit().to = Some(allowed_pan(drawn(), &desired));
+    request_world_tick();
 }
 
-/// The orbit's turn over `delta` seconds: the map center walked by the
-/// hand's move, the radius and the look eased toward the controls — the tilt
-/// no shallower than the ground allows where the collision setting climbs —
-/// and the eye put where they have it about the map center. Whether it is
-/// still moving; none where the camera stands nowhere.
+/// The map center's target put at `at`: where a place said outright puts
+/// it, and with `snap` the drawn center there at once.
+pub(crate) fn put(at: Pvf3, snap: bool) {
+    orbit().to = Some(at);
+    if snap {
+        let local = canonical_to_local(&at, view().origin);
+        let (o, cam) = (orbit(), camera());
+        let e = orbit_eye_offset(o.dist, cam.pitch, cam.yaw);
+        set_eye_local(&std::array::from_fn(|k| local[k] + e[k]));
+    }
+}
+
+/// The orbit's turn over `delta` seconds: the map center, the radius and
+/// the look each brought toward their targets — the tilt no shallower than
+/// the ground allows where the collision setting climbs — and the eye put
+/// where they have it about the map center. Whether it is still moving; none
+/// where the camera stands nowhere.
 pub(crate) fn turn(delta: f64) -> Option<bool> {
-    let mut center = center_local()?;
-    let walked = walk(center, delta).map(|at| center = at).is_some();
+    let drawn_center = center_local()?;
     let vs = camera_store().intent;
     let (o, cam) = (orbit(), camera());
-    let was = (o.dist, cam.pitch, cam.yaw);
-    let mut moving = camera_store().travel != [0.0; 2];
+    let was = (drawn_center, o.dist, cam.pitch, cam.yaw);
 
-    let alpha = damp_alpha(CAM_DAMP, delta);
-    o.dist = clamp(o.dist + (vs.dist - o.dist) * alpha, MIN_DIST, MAX_DIST);
-    moving |= (vs.dist - o.dist).abs() > DIST_EPS;
+    let to = o.to.map_or(drawn_center, |at| canonical_to_local(&at, view().origin));
+    let (center, mut moving) = approach_vec(drawn_center, to, POS_DAMP, delta, CENTER_EPS);
+
+    let (dist, m) = approach_scalar(o.dist, vs.dist, CAM_DAMP, delta, DIST_EPS);
+    o.dist = clamp(dist, MIN_DIST, MAX_DIST);
+    moving |= m;
 
     // `climb` grants the controls and answers terrain by pitching the look
     // toward straight down: the tilt the look eases to is the controls',
@@ -265,17 +278,15 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
         (true, false) => CLIMB_RELAX_DAMP,
         (false, _) => CAM_DAMP,
     };
-    let pitch = cam.pitch + (polar - cam.pitch) * damp_alpha(rate, delta);
-    moving |= (polar - pitch).abs() > POLAR_EPS;
-
-    let turn = wrap(vs.azimuth - cam.yaw, -core::f64::consts::PI, core::f64::consts::PI);
-    let a = damp_alpha(ROT_DAMP, delta);
-    (cam.pitch, cam.yaw) = look_domain(pitch, cam.yaw + turn * a);
-    moving |= (turn * (1.0 - a)).abs() > AZIMUTH_EPS;
+    let (pitch, m) = approach_scalar(cam.pitch, polar, rate, delta, POLAR_EPS);
+    moving |= m;
+    let (yaw, m) = approach_angle(cam.yaw, vs.azimuth, ROT_DAMP, delta, AZIMUTH_EPS);
+    moving |= m;
+    (cam.pitch, cam.yaw) = look_domain(pitch, yaw);
 
     // The eye is written only where the center, the radius or the look
     // moved: at rest nothing is derived and written back.
-    if walked || (o.dist, cam.pitch, cam.yaw) != was {
+    if (center, o.dist, cam.pitch, cam.yaw) != was {
         let e = orbit_eye_offset(o.dist, cam.pitch, cam.yaw);
         set_eye_local(&std::array::from_fn(|k| center[k] + e[k]));
     }

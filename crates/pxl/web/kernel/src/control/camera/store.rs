@@ -59,15 +59,6 @@ pub struct CameraStore {
     pub hovered_object_at: Option<EntryAt>,
     /// What the controls ask of the camera (`Intent`).
     pub intent: Intent,
-    /// What the hand has moved the map center by over the ground and the
-    /// eye has not yet taken, east and north in world units: a residual of
-    /// control, spent into the eye a share a turn (controller.rs
-    /// `spend_travel`) and read by nothing else. Over the ground only, since
-    /// both controllers take the height from the ground they reach. A
-    /// difference and not a place, so a rebase leaves it as it is; a step the
-    /// terrain refuses is spent all the same, so nothing refused is kept to
-    /// be paid back before a move the other way.
-    pub travel: [f64; 2],
     /// Follow mode flag.
     pub is_follow_mode: bool,
 }
@@ -83,7 +74,6 @@ impl CameraStore {
                 azimuth: DEFAULT_AZIMUTH,
                 polar: DEFAULT_POLAR,
             },
-            travel: [0.0; 2],
             is_follow_mode: false,
         }
     }

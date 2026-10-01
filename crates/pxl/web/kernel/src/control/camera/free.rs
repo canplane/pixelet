@@ -2,26 +2,32 @@
 
 //! The free camera. It turns the camera (controller.rs `Camera`) about its
 //! eye, which is the map center, and walks it over the ground (`pan`), at one
-//! speed wherever it stands, eased as the orbit's drag is. The eye's height
-//! is no control: it is the ground's where it stands, and `EYE_HEIGHT_U` over
-//! it (`stand`). It keeps no state of its own.
+//! speed wherever it stands. The eye's height is no control: it is the
+//! ground's where it stands, and `EYE_HEIGHT_U` over it (`stand`).
+//!
+//! As the orbit's, its target and what is drawn are kept apart: the controls
+//! write where the eye is to stand and the look in the camera store's
+//! intent, and `turn` brings the drawn eye and look to them by the one law
+//! (approach.rs). The ground sets the target's height as the drag sets its X
+//! and Y, so a step in the ground comes as every other move does.
 
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::REACH;
 use pxl_spec::space::pvf3::{ivec, projection};
 use pxl_spec::space::v3::V3;
-use xpute_core::math::scalar::wrap;
 
 use crate::control::camera::config::camera_cfg::free::EYE_HEIGHT_U;
-use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, ROT_DAMP};
+use crate::control::camera::approach::{approach_angle, approach_scalar, approach_vec};
+use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, POS_DAMP, ROT_DAMP};
 use crate::control::camera::config::camera_cfg::view::DEFAULT_DIST;
 use crate::control::camera::controller::{camera, eye_local, set_eye_local};
-use crate::control::camera::controller::{damp_alpha, look_domain, spend_travel, units_per_px_at};
+use crate::control::camera::controller::{look_domain, units_per_px_at};
+use crate::global::Global;
 use crate::control::camera::store::camera_store;
 use crate::world::access::{Access, Detail, Ray, FINEST};
 use crate::world::change::request_world_tick;
-use crate::world::frame::coord::local_height;
+use crate::world::frame::coord::{canonical_to_local, local_height, local_world_to_canonical};
 use crate::world::frame::view::{view, view_compose};
 
 /// What a look from `eye` along `forward` falls on, in the root frame: the
@@ -46,32 +52,52 @@ pub fn look_point(eye: V3, forward: V3, fallback: f64) -> V3 {
     std::array::from_fn(|k| eye[k] + forward[k] * t)
 }
 
-/// A drag walks the eye over the ground: `dx`, `dy` in pixels, over the
-/// turns to come (controller.rs `spend_travel`). One speed wherever it stands
-/// and whichever way it goes, and the orbit's at the distance it starts at
-/// (`DEFAULT_DIST`): a drag carries the ground as far under either.
+/// Where the controls have the eye stand, canonical, so a rebase leaves it
+/// where it is: what the drawn eye comes to. None until the camera is first
+/// put anywhere.
+static TO: Global<Option<Pvf3>> = Global::new();
+
+fn to() -> &'static mut Option<Pvf3> {
+    TO.get(|| None)
+}
+
+/// How close the drawn eye comes, in units, and the look, in radians,
+/// before each takes its target whole: sub-pixel at any distance.
+const EYE_EPS: f64 = 0.001;
+const LOOK_EPS: f64 = 0.0001;
+
+/// A drag walks the eye's target over the ground: `dx`, `dy` in pixels. One
+/// speed wherever it stands and whichever way it goes, and the orbit's at
+/// the distance it starts at (`DEFAULT_DIST`): a drag carries the ground as
+/// far under either.
 pub fn pan(dx: f64, dy: f64) {
-    if eye_local().is_none() {
-        return;
-    }
+    let Some(from) = to().or_else(|| eye_local().map(|e| canonical(&e))) else { return };
     let units_per_px = units_per_px_at(DEFAULT_DIST);
     let (lx, ly) = (-dx * units_per_px, dy * units_per_px);
     let (s, c) = camera().yaw.sin_cos();
-    let travel = &mut camera_store().travel;
-    travel[0] += lx * c + ly * s;
-    travel[1] += -lx * s + ly * c;
+    let at = canonical_to_local(&from, view().origin);
+    let mut next = [at[0] + lx * c + ly * s, at[1] - lx * s + ly * c, at[2]];
+    stand(&mut next);
+    *to() = Some(canonical(&next));
     request_world_tick();
 }
 
-/// The eye stood where it was put: a place put outright is where it stands,
-/// `EYE_HEIGHT_U` over the ground there.
-pub fn hold() {
-    let Some(at) = eye_local() else { return };
-    let mut to = at;
-    stand(&mut to);
-    if to != at {
-        set_eye_local(&to);
+/// The eye's target put standing at `at`, `EYE_HEIGHT_U` over the ground
+/// there: where a place said outright puts it, and with `snap` the drawn
+/// eye there at once.
+pub(crate) fn put(at: Pvf3, snap: bool) {
+    let mut eye = canonical_to_local(&at, view().origin);
+    stand(&mut eye);
+    *to() = Some(canonical(&eye));
+    if snap {
+        set_eye_local(&eye);
     }
+}
+
+fn canonical(local: &V3) -> Pvf3 {
+    let mut out = Pvf3::default();
+    local_world_to_canonical(&mut out, local, view().origin);
+    out
 }
 
 /// Where an eye over `eye`'s X and Y stands: within the lattice's rows
@@ -90,23 +116,25 @@ fn stand(eye: &mut V3) {
     }
 }
 
-/// The free camera's turn over `delta` seconds: its look eased toward the
-/// controls' heading and tilt, and its eye walked by this turn's share of the
-/// hand's move, standing on the ground it walks to. Whether it is still
-/// moving.
+/// The free camera's turn over `delta` seconds: its eye and its look each
+/// brought toward their targets. Whether it is still moving.
 pub(crate) fn turn(delta: f64) -> bool {
-    let walked = spend_travel(delta).is_some_and(|share| {
-        let Some(from) = eye_local() else { return false };
-        let mut to = [from[0] + share[0], from[1] + share[1], from[2]];
-        stand(&mut to);
-        set_eye_local(&to);
-        true
-    });
+    let mut moving = false;
+    if let Some(eye) = eye_local() {
+        let target = to().map_or(eye, |at| canonical_to_local(&at, view().origin));
+        let (next, m) = approach_vec(eye, target, POS_DAMP, delta, EYE_EPS);
+        if next != eye {
+            set_eye_local(&next);
+        }
+        moving |= m;
+    }
     let vs = camera_store().intent;
     let cam = camera();
-    let heading = wrap(vs.azimuth - cam.yaw, -core::f64::consts::PI, core::f64::consts::PI);
-    let tilt = vs.polar - cam.pitch;
-    (cam.pitch, cam.yaw) = look_domain(cam.pitch + tilt * damp_alpha(CAM_DAMP, delta), cam.yaw + heading * damp_alpha(ROT_DAMP, delta));
+    let (pitch, m) = approach_scalar(cam.pitch, vs.polar, CAM_DAMP, delta, LOOK_EPS);
+    moving |= m;
+    let (yaw, m) = approach_angle(cam.yaw, vs.azimuth, ROT_DAMP, delta, LOOK_EPS);
+    moving |= m;
+    (cam.pitch, cam.yaw) = look_domain(pitch, yaw);
     view_compose();
-    walked || heading.abs() > 1e-4 || tilt.abs() > 1e-4
+    moving
 }
