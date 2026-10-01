@@ -22,7 +22,7 @@
 
 use postgres::{Client, Row, Statement};
 use pxl_geo_spec::overture::division::{broad_rank, rank_of, FINE_SUBTYPE_PRIORITY};
-use pxl_spec::bake::place_page::{leaf_slot, Division, PlaceGroup, APPROX, GROUP_PAGES, NO_LABEL};
+use pxl_spec::bake::place_page::{leaf_slot, Named, PlaceGroup, APPROX, GROUP_PAGES, LOCAL, NO_LABEL};
 use pxl_spec::place::PlaceRank;
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -102,7 +102,7 @@ impl GeocodeProvider {
     /// Every place a polygon names, paired with the id a label refers to it
     /// by. A subtype on no rung of the ladder is not one of them — nothing can
     /// refer to it, because `reverse` will not return it.
-    pub fn divisions(&self, client: &mut Client) -> Result<Vec<(String, Division)>, postgres::Error> {
+    pub fn dictionary(&self, client: &mut Client) -> Result<Vec<(String, Named)>, postgres::Error> {
         Ok(client
             .query(ALL_DIVISIONS_SQL, &[])?
             .iter()
@@ -110,7 +110,7 @@ impl GeocodeProvider {
                 let rank = rank_of(r.get("subtype"))?;
                 Some((
                     r.get("gers_id"),
-                    Division {
+                    Named {
                         rank,
                         name: r.get("name"),
                         names: names_of(&r.get("names_common")).into_iter().collect(),
@@ -174,12 +174,12 @@ impl GeocodeProvider {
                 continue;
             }
             seen.push(&a.name);
-            parts.push(PartSource::Division(a.gers_id.clone()));
+            parts.push(PartSource::Shared(a.gers_id.clone()));
         }
         if let Some(fine) = fine_from_polygon {
             if !seen.contains(&fine.name.as_str()) && rank_of(&fine.subtype).is_some() {
                 seen.push(&fine.name);
-                parts.push(PartSource::Division(fine.gers_id.clone()));
+                parts.push(PartSource::Shared(fine.gers_id.clone()));
             }
         }
         // Appended, not substituted: a real polygon match and a nested
@@ -191,11 +191,17 @@ impl GeocodeProvider {
                 // A point carries a subtype like a polygon does, and it is the
                 // rung the part sits on. A subtype the ladder has no rung for
                 // is still the finest thing this page has a name from.
-                parts.push(PartSource::Near(Division {
-                    rank: rank_of(&point.subtype).unwrap_or(PlaceRank::Neighborhood),
-                    name: point.name.clone(),
-                    names: names_of(&point.common).into_iter().collect(),
-                }));
+                // A point names the place near the page rather than one it
+                // is in, which is an approximation, and Overture's points are
+                // too many to put in the dictionary.
+                parts.push(PartSource::Local {
+                    place: Named {
+                        rank: rank_of(&point.subtype).unwrap_or(PlaceRank::Neighborhood),
+                        name: point.name.clone(),
+                        names: names_of(&point.common).into_iter().collect(),
+                    },
+                    approx: true,
+                });
             }
         }
 
@@ -220,13 +226,13 @@ impl GeocodeProvider {
             let mut numbers: Vec<u32> = Vec::with_capacity(parts.len());
             for part in parts {
                 numbers.push(match part {
-                    PartSource::Division(id) => dict.number(&id).ok_or_else(|| format!("a label names a division the dictionary has not: {id}"))?,
-                    PartSource::Near(place) => {
+                    PartSource::Shared(id) => dict.number(&id).ok_or_else(|| format!("a label names a place the dictionary has not: {id}"))?,
+                    PartSource::Local { place, approx } => {
                         let i = group.locals.iter().position(|l| *l == place).unwrap_or_else(|| {
                             group.locals.push(place);
                             group.locals.len() - 1
                         });
-                        i as u32 | APPROX
+                        i as u32 | LOCAL | if approx { APPROX } else { 0 }
                     }
                 });
             }

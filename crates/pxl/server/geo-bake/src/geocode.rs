@@ -12,37 +12,38 @@ use std::collections::{BTreeMap, HashMap};
 
 use xpute_core::status::error::MarshalError;
 
-use pxl_spec::bake::place_page::{encode_place_dict, Division};
+use pxl_spec::bake::place_page::{encode_place_dict, Named};
 
 /// Where one part of a page's label came from.
 ///
-/// A polygon containing the page names a place the dictionary already has,
-/// so the label carries its id and nothing else. A point *near* the page
-/// names one nothing else has — the provider's points are a set of their own
-/// — so the label carries the place itself and the group it is in keeps it
-/// (pxl-spec bake/place_page.rs).
+/// A place many pages are named by is one the dictionary has, so the label
+/// carries the provider's id for it and nothing else. One only a stretch of
+/// pages is named by is carried as the place itself, and the group it is in
+/// keeps it, with whether the provider gives it as an approximation (pxl-spec
+/// bake/place_page.rs). Which a part is, is the provider's to say.
 pub enum PartSource {
-    Division(String),
-    Near(Division),
+    Shared(String),
+    Local { place: Named, approx: bool },
 }
 
-/// Every place a polygon names, and the number a label refers to each by.
+/// The places many pages are named by, and the number a label refers to
+/// each by.
 ///
 /// The number is a place in the dictionary, so the dictionary a group was
 /// written against and the one a reader holds have to be the same list in the
 /// same order. Both come from one read in the provider's own order, which is
 /// why the whole thing is read before a single group is written.
 pub struct PlaceDict {
-    pub divisions: Vec<Division>,
+    pub places: Vec<Named>,
     at: HashMap<String, u32>,
 }
 
 impl PlaceDict {
     /// From the provider's rows, each its id and the place it names.
-    pub fn of(rows: Vec<(String, Division)>) -> PlaceDict {
+    pub fn of(rows: Vec<(String, Named)>) -> PlaceDict {
         let at = rows.iter().enumerate().map(|(i, (id, _))| (id.clone(), i as u32)).collect();
         PlaceDict {
-            divisions: rows.into_iter().map(|(_, d)| d).collect(),
+            places: rows.into_iter().map(|(_, d)| d).collect(),
             at,
         }
     }
@@ -52,7 +53,7 @@ impl PlaceDict {
     }
 
     pub fn packet(&self) -> Result<Vec<u8>, MarshalError> {
-        encode_place_dict(&self.divisions)
+        encode_place_dict(&self.places)
     }
 }
 

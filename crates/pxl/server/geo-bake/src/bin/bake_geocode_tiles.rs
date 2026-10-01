@@ -47,8 +47,8 @@ fn run() -> Result<(), String> {
 
     let mut client = Client::connect(&url, NoTls).map_err(|e| e.to_string())?;
     let provider = GeocodeProvider::prepare(&mut client).map_err(|e| e.to_string())?;
-    let dict = PlaceDict::of(provider.divisions(&mut client).map_err(|e| e.to_string())?);
-    println!("[bake/geocode] {} divisions in the dictionary", dict.divisions.len());
+    let dict = PlaceDict::of(provider.dictionary(&mut client).map_err(|e| e.to_string())?);
+    println!("[bake/geocode] {} places in the dictionary", dict.places.len());
     let packed_dict = pack(&dict.packet().map_err(|e| format!("{e:?}"))?, Level::Stored).map_err(|e| e.to_string())?;
     drop(client);
 

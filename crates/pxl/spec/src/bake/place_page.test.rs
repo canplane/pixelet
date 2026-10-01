@@ -2,20 +2,21 @@
 
 use super::*;
 
-fn division(rank: PlaceRank, name: &str, en: &str) -> Division {
-    Division {
+fn named(rank: PlaceRank, name: &str, en: &str) -> Named {
+    Named {
         rank,
         name: name.to_string(),
         names: vec![("en".to_string(), en.to_string())],
     }
 }
 
-/// 경기도 → 성남시 → 수내동, and a 백현동 that only a nearby point named.
-fn dict() -> Vec<Division> {
+/// 경기도 → 성남시 → 수내동, the places many pages are named by, and a
+/// 백현동 only a stretch of them is.
+fn dict() -> Vec<Named> {
     vec![
-        division(PlaceRank::Region, "경기도", "Gyeonggi-do"),
-        division(PlaceRank::County, "성남시", "Seongnam-si"),
-        division(PlaceRank::Neighborhood, "수내동", "Sunae-dong"),
+        named(PlaceRank::Region, "경기도", "Gyeonggi-do"),
+        named(PlaceRank::County, "성남시", "Seongnam-si"),
+        named(PlaceRank::Neighborhood, "수내동", "Sunae-dong"),
     ]
 }
 
@@ -24,11 +25,11 @@ fn group() -> PlaceGroup {
     pages[0] = 0;
     pages[GROUP_PAGES - 1] = 1;
     PlaceGroup {
-        labels: vec![vec![0, 1, 2], vec![0, 1, APPROX]],
+        labels: vec![vec![0, 1, 2], vec![0, 1, LOCAL | APPROX], vec![0, 1, LOCAL]],
         pages,
-        // A place no polygon named: the group carries it rather than the
-        // dictionary, which holds only what a polygon names.
-        locals: vec![division(PlaceRank::Neighborhood, "백현동", "Baekhyeon-dong")],
+        // A place only this group's pages are named by: the group carries it
+        // rather than the dictionary.
+        locals: vec![named(PlaceRank::Neighborhood, "백현동", "Baekhyeon-dong")],
     }
 }
 
@@ -70,7 +71,7 @@ fn a_part_a_nearby_place_named_comes_from_the_groups_own_and_says_it_is_one() {
     let (g, d) = (open_place_group(&gp).expect("opens"), open_place_dict(&dp).expect("opens"));
     let parts: Vec<_> = g.place_of(GROUP_PAGES - 1, &d).expect("a page with a label").collect();
     assert_eq!(parts.iter().map(|p| p.approx).collect::<Vec<_>>(), [false, false, true]);
-    // Number 0 with the bit set is the group's first place, not the
+    // Number 0 with `LOCAL` set is the group's first place, not the
     // dictionary's — which is 경기도, and would be read as one twice.
     assert_eq!(parts[2].name, "백현동");
     assert_eq!(parts[2].in_language("en"), "Baekhyeon-dong");
@@ -110,7 +111,7 @@ fn a_group_that_is_not_the_pages_under_one_is_refused() {
 
 /// A group's own lanes, written straight rather than through
 /// `encode_place_group`, which cannot produce an inconsistent one.
-fn group_pkt(starts: &[u32], flat: &[u32], pages: &[u16], locals: &[Division]) -> Vec<u8> {
+fn group_pkt(starts: &[u32], flat: &[u32], pages: &[u16], locals: &[Named]) -> Vec<u8> {
     let lanes = place_lanes(locals);
     let mut t: TreeView<'_> = TreeView::new();
     t.branch(Some(&mut |b| {
@@ -146,4 +147,16 @@ fn a_run_of_places_whose_lanes_disagree_is_refused() {
     t.branch(Some(&mut |b| write_places(b, &lanes)));
     let pkt = encoder().encode(&t, TreeEncoderOptions::default()).expect("encodes");
     assert!(open_place_dict(&pkt).is_err());
+}
+
+/// Where a part's name is kept and whether it is an approximation are two
+/// facts: a group's own place the source gives as exact reads as exact.
+#[test]
+fn a_groups_own_place_is_not_an_approximation_unless_said() {
+    let mut g = group();
+    g.pages[1] = 2;
+    let (gp, dp) = (encode_place_group(&g).expect("encodes"), encode_place_dict(&dict()).expect("encodes"));
+    let (g, d) = (open_place_group(&gp).expect("opens"), open_place_dict(&dp).expect("opens"));
+    let parts: Vec<_> = g.place_of(1, &d).expect("a page with a label").collect();
+    assert_eq!(parts.iter().map(|p| (p.name, p.approx)).collect::<Vec<_>>(), [("경기도", false), ("성남시", false), ("백현동", false)]);
 }

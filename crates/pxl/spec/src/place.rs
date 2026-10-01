@@ -20,9 +20,8 @@
 //! `types` and Naver's carries `region.area1..4`. Without a rank the parts
 //! are an ordered list nobody outside the provider can cut.
 //!
-//! **The ladder is ours.** A provider maps its own vocabulary onto it —
-//! Overture's `region`, `county` and its four sub-city subtypes
-//! (`pxl-geo-spec`), another's whatever it has — and nothing of that
+//! **The ladder is ours.** A provider maps its own vocabulary onto it, in its
+//! own adapter (pxl-geo-bake geocode/provider/), and nothing of that
 //! vocabulary reaches this file. That is the line the two servers each drew
 //! and each crossed, by passing a provider's own name map through as an
 //! opaque blob.
