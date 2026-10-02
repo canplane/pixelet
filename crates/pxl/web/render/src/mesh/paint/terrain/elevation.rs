@@ -38,9 +38,9 @@ impl<'a> GroundLanes<'a> {
     }
 }
 
-/// The one ground height every consumer takes: sampled elevation plus the
-/// cell's shift. `ground` is none outside the page, where the padded raster
-/// still has a height but the channels stop, and the shift is not applied.
+/// The ground's top face, in cells: the stored height h means cells up to
+/// h − 1 are ground and the surface is at z = h. A layer's raise or sink
+/// (`cell_shift`) goes on top; outside the page (`ground` none) there is none.
 pub fn ground_ele(page_ele: &[i16], ground: Option<GroundLanes>, tx: i32, ty: i32) -> i16 {
     ground_ele_at(page_ele, ground, tx as f64 + 0.5, ty as f64 + 0.5)
 }

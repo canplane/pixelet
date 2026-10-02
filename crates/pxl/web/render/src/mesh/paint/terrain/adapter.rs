@@ -348,8 +348,9 @@ impl ChunkSample {
         Ok(())
     }
 
-    /// Through a bore: the ground under its floor, the way on the floor's cell,
-    /// and the ground standing over its air.
+    /// The column's ground as inclusive runs: a top face at `ele` is cells up to
+    /// `ele − 1` (`hi − 1` below). Through a bore: the ground under its floor,
+    /// the way on the floor's cell, and the ground standing over its air.
     pub fn ground_runs<E>(&self, i: usize, from: i32, to: i32, mut run: impl FnMut(i32, i32, u32, u8) -> Result<(), E>) -> Result<(), E> {
         let top = (self.ele[i] as i32).min(to);
         let (m, l) = (self.material[i], self.layer_idx[i]);

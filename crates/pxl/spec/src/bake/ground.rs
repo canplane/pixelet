@@ -45,8 +45,8 @@ pub fn shown_ground(read: impl Fn(GroundChannelKey) -> u32, hidden: ChannelMask)
     shown
 }
 
-/// How far off its sampled height a cell showing `shown` stands, up positive:
-/// the catalog's `shift` column, by type whatever channel it came from.
+/// A raise or a sink that sets one layer's cells apart from the ground
+/// around them, up positive: the catalog's `shift` column, by type.
 pub fn shift(shown: ShownGround) -> i16 {
     let column = match shown.channel {
         GroundChannelKey::LAND => cube_types::land::SHIFT,
