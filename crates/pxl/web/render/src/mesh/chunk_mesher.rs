@@ -479,7 +479,7 @@ impl BakeContext {
                         let i = i as usize;
                         self.counters.total_runs += 1;
                         let mask = run_face_mask(set, span, cx, cy, i) | if set.z1[i] >= set.z0[i] { rim(cx, cy) } else { 0 };
-                        self.counters.faces_possible += if run_include_bottom(set, i) { FULL_FACE_CNT } else { OPEN_BOTTOM_FACE_CNT };
+                        self.counters.faces_possible += if run_include_bottom(set, col as usize, i) { FULL_FACE_CNT } else { OPEN_BOTTOM_FACE_CNT };
                         if mask & ALL_FACES == 0 {
                             self.counters.culled += 1;
                             continue;
@@ -1004,9 +1004,11 @@ fn neighbor_relation(set: &RunSet, col: u32, z0: i32, z1: i32) -> u32 {
     rel
 }
 
-/// A placed cube may stand clear of the ground, and an inset box rests on nothing.
-fn run_include_bottom(set: &RunSet, i: usize) -> bool {
-    set.material_class[i] == MATERIAL_OBJECT || set.sub_s[i] != SUB_CELL_NONE
+/// Only a column's lowest run rests on the ground; any run over it, a deck's
+/// slab or a placed cube, can be seen from below. A solid cell under it
+/// still hides the face (`run_faces`).
+fn run_include_bottom(set: &RunSet, col: usize, i: usize) -> bool {
+    i != set.start[col] as usize
 }
 
 fn wants_diagonal(mask: u32, a: u32, b: u32) -> bool {
@@ -1038,14 +1040,14 @@ fn run_face_mask(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize) -> u32 {
 }
 
 fn run_faces(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize) -> u32 {
-    let mask_all = if run_include_bottom(set, i) { ALL_FACES } else { OPEN_BOTTOM_FACES };
+    let col = cy * span + cx;
+    let mask_all = if run_include_bottom(set, col as usize, i) { ALL_FACES } else { OPEN_BOTTOM_FACES };
     if set.sub_s[i] != SUB_CELL_NONE {
         // A coarse box is the ground itself shrunk, so its underside is more ground.
         let under = if set.material_class[i] == MATERIAL_OBJECT { 0 } else { UNDER_AS_TOP };
         return mask_all | ALL_CREASES | under;
     }
     let mut mask = mask_all;
-    let col = cy * span + cx;
     let (z0, z1) = (set.z0[i], set.z1[i]);
     // A filled cell above or below hides the face. Left in, the face between
     // stacked cubes striped them in the shadow map, which draws both sides.
