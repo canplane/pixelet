@@ -97,7 +97,7 @@ unsafe fn room_of(record: u32) -> PageRoom {
 
 pub fn terrain_step() {
     let terrain = Terrain::pyramid();
-    terrain.step(crate::control::navigation::destination::page(), crate::layer::decor::cell::pages());
+    terrain.step(crate::control::navigation::destination::page());
     crate::world::pyramid::cover::step::<Terrain>();
     // Derived from the scheduler so a superseded batch cannot leave a stale
     // Success. Nothing sets Error, so the shell's Error toast is never met; known,

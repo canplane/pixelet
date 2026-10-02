@@ -13,6 +13,7 @@ pub mod chunk;
 pub mod cover;
 pub mod domain;
 
+use std::any::TypeId;
 use std::collections::HashMap;
 
 use pxl_spec::space::lod::{fault_radius, pages_within, Tau};
@@ -77,7 +78,11 @@ pub struct Pyramid<L: Layer> {
     demand: Vec<LevelPage>,
     wants: Vec<(u64, Ask)>,
     last: Option<Seen>,
+    /// What each consumer derived from this layer reads of it, as it last said.
+    required: Vec<(TypeId, Vec<LevelPage>)>,
+    /// Their union, as last observed with, and the one being made.
     readers: Vec<LevelPage>,
+    union: Vec<LevelPage>,
     /// Reused across observations so observing stops allocating once warm.
     asks: HashMap<LevelPage, Ask>,
     hints: Vec<(Order, LevelPage)>,
@@ -91,7 +96,9 @@ impl<L: Layer> Default for Pyramid<L> {
             demand: Vec::new(),
             wants: Vec::new(),
             last: None,
+            required: Vec::new(),
             readers: Vec::new(),
+            union: Vec::new(),
             asks: HashMap::with_capacity(ASKS as usize),
             hints: Vec::new(),
         }
@@ -282,7 +289,20 @@ impl<L: Layer> Pyramid<L> {
     /// `destination` is asked for with its line even with no observation yet:
     /// at the first fix the camera waits for that ground. `far` cuts the
     /// observation where the layer stops being drawn.
-    pub fn step(&mut self, destination: Option<LevelPage>, readers: &[LevelPage]) {
+    /// The pages consumer `C` reads of this layer for what it derives from
+    /// them, in place of what it said before; the step asks for them.
+    pub fn require<C: 'static>(&mut self, pages: &[LevelPage]) {
+        let id = TypeId::of::<C>();
+        match self.required.iter_mut().find(|(k, _)| *k == id) {
+            Some((_, held)) => {
+                held.clear();
+                held.extend_from_slice(pages);
+            }
+            None => self.required.push((id, pages.to_vec())),
+        }
+    }
+
+    pub fn step(&mut self, destination: Option<LevelPage>) {
         let Some(top) = floor::level() else { return };
         let seen_from = observation();
         if seen_from.is_none() && destination.is_none() {
@@ -303,13 +323,23 @@ impl<L: Layer> Pyramid<L> {
             },
         });
         let seen = (o, destination, self.paging.revision(), heights_revision(), tau, domain::walks());
-        if self.last != Some(seen) || self.readers != readers {
+        let readers_moved = {
+            let mut union = core::mem::take(&mut self.union);
+            union.clear();
+            union.extend(self.required.iter().flat_map(|(_, pages)| pages.iter().copied()));
+            union.sort_unstable();
+            union.dedup();
+            let moved = union != self.readers;
+            self.union = core::mem::replace(&mut self.readers, union);
+            moved
+        };
+        if self.last != Some(seen) || readers_moved {
             let line = destination.into_iter().flat_map(|p| std::iter::successors(Some(p), move |q| (q.level < top).then(|| q.parent())));
-            self.observe(o.as_ref(), line, readers, &Known, &ByFootprints { tau, sight: domain::sight() }, &PREFETCH, tau, param::HINT_ALLOWANCE);
+            let readers = core::mem::take(&mut self.readers);
+            self.observe(o.as_ref(), line, &readers, &Known, &ByFootprints { tau, sight: domain::sight() }, &PREFETCH, tau, param::HINT_ALLOWANCE);
+            self.readers = readers;
             // Observing can let pages go, moving the revision: record the state after it.
             self.last = Some((o, destination, self.paging.revision(), heights_revision(), tau, domain::walks()));
-            self.readers.clear();
-            self.readers.extend_from_slice(readers);
         }
         declare(L::CATEGORY, &self.wants);
         self.declare_shared();

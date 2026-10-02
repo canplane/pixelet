@@ -31,13 +31,14 @@ use crate::param::IMPOSTOR_GONE_CELLS;
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::change::request_world_tick;
 use crate::world::chunk::build::Builder;
-use crate::world::observation::{eye, frustum_of_view};
+use crate::world::observation::{eye, observation};
 use crate::world::paging::floor;
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer;
 use crate::world::quality;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::lod::target_cell_px;
+use pxl_spec::space::observation::Observation;
 use xpute_runtime::mem::heap::free;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -171,17 +172,24 @@ fn nearest(cell: DecorCell, eye: V3, ground: f64) -> f64 {
 fn solve(kinds: &[Kind], stack: &mut Vec<DecorCell>, out: &mut Vec<DecorCell>) {
     out.clear();
     stack.clear();
-    let (Some(eye), Some(top)) = (eye(), floor::level()) else { return };
+    // The view the pyramids observe: its eye, reach, frustum and ground.
+    let Some(Observation {
+        eye,
+        frustum,
+        far: reach,
+        top,
+        ground,
+        ..
+    }) = observation()
+    else {
+        return;
+    };
     let tau = quality::effective().tau();
-    let frustum = frustum_of_view();
     let largest = largest_possible(kinds);
     let floor_px = target_cell_px() * crate::param::IMPOSTOR_GONE_CELLS;
-    let view_reach = crate::layer::environment::fog::view_reach();
-    let reach = fault_radius(top).min(view_reach);
     let side = chunk_span_of(top);
     let (cx, cy) = ((eye[0] / side).floor() as i64, (eye[1] / side).floor() as i64);
     let n = (reach / side).ceil() as i64 + 1;
-    let ground = crate::layer::environment::fog::eye_ground();
     for y in cy - n..=cy + n {
         for x in cx - n..=cx + n {
             stack.push(DecorCell { level: top, at: [x, y] });
@@ -189,11 +197,11 @@ fn solve(kinds: &[Kind], stack: &mut Vec<DecorCell>, out: &mut Vec<DecorCell>) {
     }
     while let Some(cell) = stack.pop() {
         let d = nearest(cell, eye, ground).max(1e-3);
-        if d > view_reach || largest / units_per_px_at(d) < floor_px {
+        if d > reach || largest / units_per_px_at(d) < floor_px {
             continue;
         }
         let (x0, y0, s) = cell.rect();
-        if !frustum.sees([x0 + s / 2.0, y0 + s / 2.0, ground], s * 0.75 + largest) {
+        if !frustum.is_none_or(|f| f.sees([x0 + s / 2.0, y0 + s / 2.0, ground], s * 0.75 + largest)) {
             continue;
         }
         if cell.level > 0 && (tau.level(d).max(0) as u32) < cell.level {
@@ -373,6 +381,8 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Dec
     c.pages.extend(frontier.iter().map(|c| c.page()));
     c.pages.sort_unstable();
     c.pages.dedup();
+    // Asked for by decor itself rather than left to what the terrain draws.
+    Terrain::pyramid().require::<DecorCell>(&c.pages);
     c.frontier = frontier;
     present(c, draw, frame_eye);
 }
@@ -464,9 +474,4 @@ pub fn counts() -> (u32, u32) {
         })
         .sum();
     (c.blocks.len() as u32, instances)
-}
-
-/// Asked for by decor itself rather than left to what the terrain draws.
-pub fn pages() -> &'static [LevelPage] {
-    &cells().pages
 }
