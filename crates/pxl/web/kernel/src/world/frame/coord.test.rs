@@ -5,6 +5,7 @@
 
 use super::*;
 use pxl_spec::space::pvf3::pvf3;
+use xpute_core::math::rng::SplitMix64;
 
 #[test]
 fn a_height_over_the_ground_is_the_same_from_every_origin() {
@@ -23,13 +24,8 @@ fn a_height_over_the_ground_is_the_same_from_every_origin() {
 #[test]
 fn a_canonical_point_comes_back_through_floats() {
     let one = pxl_spec::space::pvf3::core::ONE as i64;
-    let mut seed = 0x9e37_79b9_7f4a_7c15_u64;
-    let mut next = |span: i64| {
-        seed ^= seed << 13;
-        seed ^= seed >> 7;
-        seed ^= seed << 17;
-        (seed % (2 * span as u64 + 1)) as i64 - span
-    };
+    let mut rng = SplitMix64::new(0x9e37_79b9_7f4a_7c15);
+    let mut next = |span: i64| (u64::from(rng.next_u32()) % (2 * span as u64 + 1)) as i64 - span;
     let origins = [
         ivec::gather(0, 0, 0),
         ivec::gather(249_856, -94_208, 4096),

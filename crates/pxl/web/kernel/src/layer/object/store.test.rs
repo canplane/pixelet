@@ -5,6 +5,7 @@ use pxl_spec::cell::cube_types::Block;
 use pxl_spec::space::pvf3::ivec;
 
 use super::*;
+use xpute_core::math::rng::SplitMix64;
 
 // Far-apart corners per test: the store is kernel-global across the binary.
 fn corner(x: i64, y: i64, z: i64) -> Pvf3 {
@@ -107,14 +108,11 @@ fn the_lanes_are_in_band_and_walk_order_so_a_cell_s_entries_are_one_run() {
 }
 
 /// Deterministic edits on every run.
-struct Rng(u64);
+struct Rng(SplitMix64);
 
 impl Rng {
     fn next(&mut self) -> u64 {
-        self.0 ^= self.0 << 13;
-        self.0 ^= self.0 >> 7;
-        self.0 ^= self.0 << 17;
-        self.0
+        u64::from(self.0.next_u32())
     }
 
     fn pick<T: Copy>(&mut self, of: &[T]) -> T {
@@ -204,7 +202,7 @@ fn cube_at(store: &mut Store, [x, y, z]: [i64; 3], state: u32) {
 /// is; checked after every edit, over boxes of every size across zero.
 #[test]
 fn where_the_objects_in_a_box_are_is_never_missed_and_never_past_it() {
-    let mut rng = Rng(0x5851_f42d_4c95_7f2d);
+    let mut rng = Rng(SplitMix64::new(0x5851_f42d_4c95_7f2d));
     let mut store = Store::new();
     let red = placeable_cube_num_id(PlaceableCube::Block(Block::red));
     let mut met = 0;
@@ -232,7 +230,7 @@ fn where_the_objects_in_a_box_are_is_never_missed_and_never_past_it() {
 
 #[test]
 fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
-    let mut rng = Rng(0x2c1b_3c6d_a5b4_9f1e);
+    let mut rng = Rng(SplitMix64::new(0x2c1b_3c6d_a5b4_9f1e));
     let red = placeable_cube_num_id(PlaceableCube::Block(Block::red));
     let turn = |[x, y, z]: [i64; 3]| [y, z, x];
     let turn_box = |b: Aabb| Aabb {

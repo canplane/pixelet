@@ -10,6 +10,7 @@ use pxl_spec::cell::cube_types;
 use pxl_spec::cell::object::{placeable_cube_num_id, PlaceableCube};
 use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pyramid::{Folds, PAGE_CELLS};
+use xpute_core::math::rng::SplitMix64;
 
 use super::*;
 use crate::global::serial;
@@ -28,14 +29,11 @@ impl Victim for Keep {
     }
 }
 
-struct Rng(u64);
+struct Rng(SplitMix64);
 
 impl Rng {
     fn below(&mut self, n: u64) -> i64 {
-        self.0 ^= self.0 << 13;
-        self.0 ^= self.0 >> 7;
-        self.0 ^= self.0 << 17;
-        (self.0 % n) as i64
+        (u64::from(self.0.next_u32()) % n) as i64
     }
 }
 
@@ -63,7 +61,7 @@ fn top() -> LevelPage {
 }
 
 fn pages() -> (Vec<(LevelPage, Terrain)>, Terrain) {
-    let mut rng = Rng(0x9e37_79b9_7f4a_7c15);
+    let mut rng = Rng(SplitMix64::new(0x9e37_79b9_7f4a_7c15));
     let leaves: Vec<(LevelPage, Terrain)> = top().children().iter().map(|&c| (c, rough_leaf(&mut rng))).collect();
     let zero = zero_page();
     let parent = Terrain::fold_page(top(), |p| Some(leaves.iter().find(|(q, _)| *q == p).map_or(&zero, |(_, t)| t))).unwrap();
