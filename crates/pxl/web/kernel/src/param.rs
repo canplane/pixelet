@@ -85,7 +85,6 @@ pub const IMPOSTOR_GONE_CELLS: f64 = 0.5;
 // ---- per-frame work caps ----
 
 /// A page's chunks, so a page of flat ground starts building in the frame it arrives.
-/// Checked before each move; a move is never split.
 pub const STARTS_PER_FRAME: u32 = PAGE_CHUNKS * PAGE_CHUNKS;
 
 pub const COMMITS_PER_FRAME: u32 = 8;

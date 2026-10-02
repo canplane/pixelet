@@ -182,8 +182,6 @@ struct Move {
     order: Order,
     leave: Run,
     enter: Run,
-    /// a refine's one-level fallback, when `enter` skips levels
-    step: Run,
 }
 
 /// Kept between steps for capacity. Only `asked` and `short` carry state.
@@ -196,8 +194,7 @@ pub struct Frontier {
     plan: Plan,
     moves: Vec<Move>,
     under: Vec<(Chunk, Chunk)>,
-    over: Vec<(Chunk, Chunk, Chunk)>,
-    steps: Vec<Chunk>,
+    over: Vec<(Chunk, Chunk)>,
     wanted: Vec<Chunk>,
     open: Vec<u32>,
     recube: Vec<(Chunk, (Pool, u32))>,
@@ -216,7 +213,6 @@ impl Frontier {
             moves,
             under,
             over,
-            steps,
             wanted,
             open,
             recube,
@@ -269,7 +265,6 @@ impl Frontier {
                 order: env.order(a),
                 leave,
                 enter,
-                step: Run::default(),
             });
         }
         for &g in now.goal {
@@ -286,7 +281,7 @@ impl Frontier {
                 below = a;
             }
             match above {
-                Some(d) => over.push((d, below, g)),
+                Some(d) => over.push((d, below)),
                 None => {
                     let enter = push(chunks, [g]);
                     moves.push(Move {
@@ -294,7 +289,6 @@ impl Frontier {
                         order: env.order(g),
                         leave: Run::default(),
                         enter,
-                        step: Run::default(),
                     });
                 }
             }
@@ -304,33 +298,18 @@ impl Frontier {
         for group in over.chunk_by(|x, y| x.0 == y.0) {
             let d = group[0].0;
             let leave = push(chunks, [d]);
-            // on each goal's line, the topmost chunk building, else the goal
-            steps.clear();
-            steps.extend(group.iter().map(|&(_, _, g)| core::iter::once(g).chain(g.ancestors()).take_while(|a| *a != d).filter(building).last().unwrap_or(g)));
-            steps.sort_unstable();
-            steps.dedup();
-            let enter = push(chunks, steps.iter().copied());
-            // one level instead, for a fresh move that skips some
-            steps.clear();
-            if !enter.of(chunks).iter().any(building) {
-                steps.extend(group.iter().map(|&(_, s, _)| s));
-                steps.sort_unstable();
-                steps.dedup();
-            }
-            let step = if steps.is_empty() || steps[..] == *enter.of(chunks) { Run::default() } else { push(chunks, steps.iter().copied()) };
+            let enter = push(chunks, group.iter().map(|&(_, s)| s));
             moves.push(Move {
                 kind: Kind::Refine,
                 order: env.order(d),
                 leave,
                 enter,
-                step,
             });
         }
-        drop.retain(|d| over.binary_search_by_key(d, |&(o, _, _)| o).is_err());
+        drop.retain(|d| over.binary_search_by_key(d, |&(o, _)| o).is_err());
 
         for m in moves.iter() {
             wanted.extend_from_slice(m.enter.of(chunks));
-            wanted.extend_from_slice(m.step.of(chunks));
         }
         wanted.sort_unstable();
         cancel.extend(now.building.iter().map(|&(c, _)| c).filter(|c| wanted.binary_search(c).is_err()));
@@ -389,22 +368,15 @@ impl Frontier {
                 *refused += 1;
                 continue;
             }
-            let cost = |e: &[Chunk]| {
-                let mut need = [0; POOLS];
-                for &c in e.iter().filter(|c| !building(c)) {
-                    let (pool, k) = env.slots(c);
-                    need[pool as usize] += k;
-                }
-                need
-            };
-            let reserve = if m.kind == Kind::Coarsen { [0; POOLS] } else { RESERVE };
-            // direct if it fits, else one level
-            let (mut enter, mut need) = (m.enter.of(chunks), cost(m.enter.of(chunks)));
-            if !m.step.of(chunks).is_empty() && !take(&free, &need, reserve) {
-                (enter, need) = (m.step.of(chunks), cost(m.step.of(chunks)));
-            }
+            let enter = m.enter.of(chunks);
             let missing = || enter.iter().copied().filter(|c| !building(c));
             let fresh = !enter.iter().any(building);
+            let mut need = [0; POOLS];
+            for c in missing() {
+                let (pool, k) = env.slots(c);
+                need[pool as usize] += k;
+            }
+            let reserve = if m.kind == Kind::Coarsen { [0; POOLS] } else { RESERVE };
             let fits = take(&free, &need, reserve);
             cramped |= !fits;
             let room = missing().all(|c| env.buildable(c)) && fits && !(m.kind == Kind::Refine && fresh && in_flight >= REFINEMENTS_IN_FLIGHT);
