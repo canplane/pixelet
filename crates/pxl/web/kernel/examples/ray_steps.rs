@@ -44,7 +44,7 @@ use pxl_spec::space::pyramid::{LevelPage, GROUND};
 /// points, drawn at the two ratios it names.
 const SCREEN_PT: [f64; 2] = [375.0, 812.0];
 const RATIOS: [f64; 2] = [2.0, 3.0];
-/// The camera's vertical field of view (pxl-render look/lod.rs
+/// The camera's vertical field of view (pxl-spec space/lod.rs
 /// `REFERENCE_FOV_DEG`).
 const FOV_DEG: f64 = 50.0;
 /// One ray every this many points across and down: the steps' spread, not

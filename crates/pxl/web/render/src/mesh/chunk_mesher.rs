@@ -80,7 +80,7 @@ const BAKE_BOXES_PER_STEP: usize = 512;
 ///
 /// The coarse format drops the taps (only leaf cells are textured) and holds
 /// corner and width in a byte an axis: a level-k chunk is never drawn nearer
-/// than 192·2^k, so its cell is one to two TARGET_CELL_PX and an eighth of it
+/// than 192·2^k, so its cell is one to two `target_cell_px` (pxl-spec space/lod.rs) and an eighth of it
 /// is at most 1.5 px; its mesh is at most 32 cells across, so cell index and
 /// eighth fit a byte exactly. 24 and 16 bytes a box, against 84 a vertex once.
 pub const FINE_BOX_WORDS: u32 = 6;

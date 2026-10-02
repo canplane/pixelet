@@ -35,7 +35,7 @@ use crate::world::paging::floor;
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer;
 use crate::world::quality;
-use pxl_render::look::lod::TARGET_CELL_PX;
+use pxl_spec::space::lod::target_cell_px;
 use pxl_spec::bake::format::Terrain;
 use xpute_runtime::mem::heap::free;
 
@@ -176,7 +176,7 @@ fn solve(kinds: &[Kind], stack: &mut Vec<DecorCell>, out: &mut Vec<DecorCell>) {
     let tau = quality::effective().tau();
     let frustum = frustum_of_view();
     let largest = largest_possible(kinds);
-    let floor_px = *pxl_render::look::lod::TARGET_CELL_PX * crate::param::IMPOSTOR_GONE_CELLS;
+    let floor_px = target_cell_px() * crate::param::IMPOSTOR_GONE_CELLS;
     let view_reach = crate::layer::environment::fog::view_reach();
     let reach = fault_radius(top).min(view_reach);
     let side = chunk_span_of(top);
@@ -384,7 +384,7 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Dec
 fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
     let Some(eye) = eye() else { return };
     let model_px = decor_gone_px();
-    let sprite_px = *TARGET_CELL_PX * IMPOSTOR_GONE_CELLS;
+    let sprite_px = target_cell_px() * IMPOSTOR_GONE_CELLS;
     let sprites = &mut c.sprites;
     for (&cell, block) in c.blocks.iter().filter(|(_, b)| b.drawn) {
         let (x0, y0, _) = cell.rect();

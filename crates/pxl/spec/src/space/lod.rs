@@ -13,6 +13,22 @@ use super::v3::Aabb;
 /// 192u at 1080 px and 50°.
 pub const SPLIT: f64 = 192.0;
 
+/// The view `SPLIT` is stated at: 1080 px high and 50° across it.
+pub const REFERENCE_VIEWPORT_H: f64 = 1080.0;
+pub const REFERENCE_FOV_DEG: f64 = 50.0;
+
+/// Pixels a unit at unit distance spans, for a viewport `viewport_h` high
+/// and `fov_deg` across it.
+pub fn px_per_unit(viewport_h: f64, fov_deg: f64) -> f64 {
+    viewport_h / (2.0 * libm::tan((fov_deg * core::f64::consts::PI) / 360.0))
+}
+
+/// The pixels a cell spans at its level's split distance, at the reference
+/// view: about six.
+pub fn target_cell_px() -> f64 {
+    px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG) / SPLIT
+}
+
 /// Where ground stops being drawn at `level` at `Tau::FINEST`; any integer level.
 pub const fn split_distance(level: i32) -> f64 {
     SPLIT * GROUND.scale(0).up(level).side()

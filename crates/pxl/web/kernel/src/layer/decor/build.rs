@@ -6,7 +6,7 @@
 //! candidate out at build time.
 
 use pxl_render::gpu::api::word_bytes;
-use pxl_render::look::lod::{LodStep, TARGET_CELL_PX};
+use pxl_spec::space::lod::target_cell_px;
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
 use pxl_render::mesh::voxel_scan::apron_col;
 use pxl_spec::bake::constant::{unpack_pos, U_PER_CELL};
@@ -46,7 +46,7 @@ pub const DECOR_MASTER_SEED: u64 = 0xd0c0_dec0_5eed_0001;
 /// maps stop drawing buildings in 3D), then as a sprite down to
 /// `IMPOSTOR_GONE_CELLS`. No fade: the edge is per instance, so it staggers.
 pub fn decor_gone_px() -> f64 {
-    *TARGET_CELL_PX * 2.0
+    target_cell_px() * 2.0
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,18 +57,18 @@ pub enum DecorTier {
     Gone,
 }
 
-pub fn decor_tier(extent_u: f64, lod_step: LodStep) -> DecorTier {
-    let projected_px = (extent_u / U_PER_CELL) * *TARGET_CELL_PX / lod_step as f64;
+pub fn decor_tier(extent_u: f64, lod_step: u32) -> DecorTier {
+    let projected_px = (extent_u / U_PER_CELL) * target_cell_px() / lod_step as f64;
     if projected_px >= decor_gone_px() {
         DecorTier::Model
-    } else if projected_px >= *TARGET_CELL_PX * crate::param::IMPOSTOR_GONE_CELLS {
+    } else if projected_px >= target_cell_px() * crate::param::IMPOSTOR_GONE_CELLS {
         DecorTier::Impostor
     } else {
         DecorTier::Gone
     }
 }
 
-pub fn decor_density(extent_u: f64, lod_step: LodStep) -> f64 {
+pub fn decor_density(extent_u: f64, lod_step: u32) -> f64 {
     if decor_tier(extent_u, lod_step) == DecorTier::Gone {
         0.0
     } else {

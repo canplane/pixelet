@@ -15,7 +15,7 @@
 //! always possible. A coarsening waits `COARSEN_HOLD_MS` before it is made,
 //! unless the arena refused a move last step.
 
-use pxl_render::look::lod::COARSEST;
+use crate::world::chunk::mesh_slot::COARSEST;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::pyramid::{GROUND, TOP_LEVEL};
