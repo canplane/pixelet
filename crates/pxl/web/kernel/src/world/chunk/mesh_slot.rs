@@ -32,11 +32,8 @@ pub const COARSE_TIER_SLOTS: u32 = (2 * (CHUNK_CELLS / 2).pow(3)).div_ceil(COARS
 
 pub const POOLS: usize = 3;
 
-/// The widest box a chunk's mesh is cut into, in its cells: one box a chunk.
-pub const COARSEST: u32 = 64;
-
 /// At its coarsest a chunk is one cell: its box and the floor under it.
-pub const COVER_BOXES: u32 = 2 * (CHUNK_CELLS / COARSEST).pow(3);
+pub const COVER_BOXES: u32 = 2;
 
 /// The most cover pieces over any top. Exact: each root holds one slot at
 /// most, so a root the cover lacks always finds one free.
@@ -61,7 +58,7 @@ pub enum Pool {
 
 impl Pool {
     pub const fn of(level: u32, step: u32) -> Pool {
-        if step == COARSEST {
+        if step == CHUNK_CELLS {
             Pool::Cover
         } else if level == 0 && step == 1 {
             Pool::Fine

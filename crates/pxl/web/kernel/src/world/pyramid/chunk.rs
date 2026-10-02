@@ -5,7 +5,7 @@
 //! made. Its page and place in the page derive from its column, so they
 //! cannot disagree with where it is.
 
-use pxl_spec::space::hierarchy::{ancestor_of, child_of, first_descendant_of, parent_of, Scale};
+use pxl_spec::space::hierarchy::{ancestor_of, child_of, offset_in, parent_of, Scale};
 use pxl_spec::space::indexer::{L2, L3};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
@@ -58,9 +58,8 @@ impl Chunk {
     }
 
     pub fn in_page(self) -> (u32, u32) {
-        let [x, y] = self.column().1;
-        let [x0, y0] = first_descendant_of(ancestor_of([x, y], PAGE_LEVELS), PAGE_LEVELS);
-        ((x - x0) as u32 * CHUNK_CELLS, (y - y0) as u32 * CHUNK_CELLS)
+        let [x, y] = offset_in(self.column().1, PAGE_LEVELS);
+        (x as u32 * CHUNK_CELLS, y as u32 * CHUNK_CELLS)
     }
 
     /// Neighbouring pages an apron of `apron` cells reaches into, with their

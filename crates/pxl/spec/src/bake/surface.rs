@@ -6,7 +6,7 @@
 
 use xpute_core::math::scalar::round;
 
-use super::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
+use super::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
 use super::deck::Decks;
 use crate::space::pyramid::{EXTENT, GROUND, PAGE_CELLS};
 
@@ -37,12 +37,12 @@ pub fn bicubic(page_ele: &[i16], tx: f64, ty: f64) -> i16 {
     let wy = [-0.5 * y3 + y2 - 0.5 * fdy, 1.5 * y3 - 2.5 * y2 + 1.0, -1.5 * y3 + 2.0 * y2 + 0.5 * fdy, 0.5 * y3 - 0.5 * y2];
 
     let span = ELE_PADDED_SPAN as i32;
-    let e = |idx: i32| page_ele[idx as usize] as f64;
+    let e = |idx: usize| page_ele[idx] as f64;
 
     if sx0 >= 1 && sx0 <= span - 3 && sy0 >= 1 && sy0 <= span - 3 {
         let row = |y: i32| {
-            let idx = y * span + sx0;
-            e(idx - 1) * wx[0] + e(idx) * wx[1] + e(idx + 1) * wx[2] + e(idx + 2) * wx[3]
+            let at = |x: i32| e(ele_index(x as u32, y as u32));
+            at(sx0 - 1) * wx[0] + at(sx0) * wx[1] + at(sx0 + 1) * wx[2] + at(sx0 + 2) * wx[3]
         };
         return round(row(sy0 - 1) * wy[0] + row(sy0) * wy[1] + row(sy0 + 1) * wy[2] + row(sy0 + 2) * wy[3]) as i16;
     }
@@ -53,7 +53,7 @@ pub fn bicubic(page_ele: &[i16], tx: f64, ty: f64) -> i16 {
         let mut row_out = 0.0;
         for (i, wxi) in wx.iter().enumerate() {
             let px = (sx0 - 1 + i as i32).clamp(0, span - 1);
-            row_out += e(py * span + px) * wxi;
+            row_out += e(ele_index(px as u32, py as u32)) * wxi;
         }
         out += row_out * wyj;
     }
@@ -72,7 +72,7 @@ pub fn bound(page_ele: &[i16], [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> [i32; 
             let (mut wlo, mut whi) = (i32::MAX, i32::MIN);
             for y in wy - 1..=wy + 2 {
                 for x in wx - 1..=wx + 2 {
-                    let e = page_ele[(y.clamp(0, span - 1) * span + x.clamp(0, span - 1)) as usize] as i32;
+                    let e = page_ele[ele_index(x.clamp(0, span - 1) as u32, y.clamp(0, span - 1) as u32)] as i32;
                     (wlo, whi) = (wlo.min(e), whi.max(e));
                 }
             }

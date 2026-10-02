@@ -15,10 +15,9 @@
 //! always possible. A coarsening waits `COARSEN_HOLD_MS` before it is made,
 //! unless the arena refused a move last step.
 
-use crate::world::chunk::mesh_slot::COARSEST;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::lod::Tau;
-use pxl_spec::space::pyramid::{GROUND, TOP_LEVEL};
+use pxl_spec::space::pyramid::{chunk_scale, GROUND, TOP_LEVEL};
 
 use crate::param::REFINEMENTS_IN_FLIGHT;
 use crate::world::chunk::build::{mesh_step, Cube};
@@ -43,7 +42,7 @@ pub const HEADROOM: Slots = [REFINEMENTS_IN_FLIGHT + RESERVE[0], REFINEMENTS_IN_
 pub fn wanted_cube(near: f64, tau: Tau) -> Cube {
     let finest = OBJECT_FINEST.above(GROUND.scale(0));
     let level = tau.level(near).max(finest - 1) + 1;
-    GROUND.scale(0).up(level.min((COARSEST.trailing_zeros() + TOP_LEVEL) as i32))
+    GROUND.scale(0).up(level).min(chunk_scale(TOP_LEVEL))
 }
 
 /// A wanted cube as a chunk of `level` draws it: clamped to its own cells
@@ -67,7 +66,7 @@ pub fn drawn_cube(cube: Cube, level: u32, outermost: bool, objects: bool) -> Cub
 }
 
 pub fn coarsest(level: u32) -> Cube {
-    GROUND.scale(level).up(COARSEST.trailing_zeros() as i32)
+    chunk_scale(level)
 }
 
 /// The quality alone moves the cube; a mesh too big for one slot fills more

@@ -13,6 +13,7 @@ use pxl_spec::bake::format::{ch_index, GroundChannelKey, GROUND_CH_KEYS};
 use pxl_spec::bake::ground::{channel_bit, ChannelMask, BASE};
 use pxl_spec::bake::pack::{unpack, GroundCell};
 use pxl_spec::cell::cube::cube_types;
+use pxl_spec::space::hierarchy::{ancestor_of, offset_in};
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, PAGE_CELLS};
 
 use crate::mesh::paint::palette::shader_meta::{ground_color_lookup, ground_layer_index_lookup};
@@ -214,13 +215,12 @@ impl ChunkSample {
                 let own = APRON..COL_SPAN - APRON;
                 let inner = own.contains(&px) && own.contains(&py);
                 let (x, y) = (first[0] + px as i64 - APRON as i64, first[1] + py as i64 - APRON as i64);
-                let span = PAGE_CELLS as i64;
-                let (qx, qy) = (x.div_euclid(span), y.div_euclid(span));
-                let (source, x, y) = match (qx, qy) {
-                    (0, 0) => (&around.own, x, y),
+                let [qx, qy] = ancestor_of([x, y], GROUND.page_cell_shamt());
+                let (source, [x, y]) = match (qx, qy) {
+                    (0, 0) => (&around.own, [x, y]),
                     _ => match &around.beside[beside_index(qx, qy)] {
-                        Some(s) => (s, x - qx * span, y - qy * span),
-                        None => (&around.own, x, y),
+                        Some(s) => (s, offset_in([x, y], GROUND.page_cell_shamt())),
+                        None => (&around.own, [x, y]),
                     },
                 };
                 let (page, n) = (&source.page, source.n);

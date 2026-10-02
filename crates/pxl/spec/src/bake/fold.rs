@@ -10,12 +10,12 @@
 use crate::space::pyramid::PAGE_CELLS;
 use xpute_core::math::scalar::round;
 
-use super::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
+use super::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
 use super::deck::fold_decks;
 use super::format::{Ground, Index, Occupancy, Terrain, GROUND_CH_KEYS};
 use super::pack::{channel_of, with_channel, GroundCell};
 use super::surface::extent_of;
-use crate::space::pyramid::{neighborhood, Folds, LevelPage, CHILDREN, EXTENT, GROUND};
+use crate::space::pyramid::{neighbor_index, neighborhood, Folds, LevelPage, CHILDREN, EXTENT, GROUND};
 
 /// The value filling more than half of a 2×2 (or 2×2×2) block, `v[dx + 2·dy +
 /// 4·dz]`; otherwise the tie child's. The tie corner alternates by `level`,
@@ -53,7 +53,7 @@ pub fn fold_ground(children: [&Ground; 4], level: u32) -> Ground {
     Ground { cells: out.into() }
 }
 
-/// The elevation folded: `around[(qx + 1) + 4·(qy + 1)]` is the padded grid of
+/// The elevation folded: `around[neighbor_index(qx, qy)]` is the padded grid of
 /// the child at (qx, qy), qx, qy in −1..=2. A parent's padding reaches four
 /// child samples past the block, so it is read from the neighbors' inner
 /// samples. A missing page is ocean (0); a missing ring page falls back to the
@@ -62,9 +62,8 @@ pub fn fold_ele(around: [Option<&[i16]>; 16], out: &mut [i16]) {
     let inner = PAGE_ELE_SPAN as i64;
     let (pad, padded) = (ELE_PAD as i64, ELE_PADDED_SPAN as usize);
     let read = |qx: i64, qy: i64, mx: i64, my: i64| -> Option<i64> {
-        let grid = around[((qx + 1) + 4 * (qy + 1)) as usize]?;
-        let (ix, iy) = ((mx - qx * inner + pad) as usize, (my - qy * inner + pad) as usize);
-        Some(grid[iy * padded + ix] as i64)
+        let grid = around[neighbor_index(qx, qy)]?;
+        Some(grid[ele_index((mx - qx * inner + pad) as u32, (my - qy * inner + pad) as u32)] as i64)
     };
     let of_block = |mx: i64, my: i64| -> Option<i64> {
         let near = |m: i64| m.clamp(-pad, 2 * inner - 1 + pad);
@@ -83,7 +82,7 @@ pub fn fold_ele(around: [Option<&[i16]>; 16], out: &mut [i16]) {
             let ix = sx as i64 - pad;
             let (mx, my) = (2 * ix, 2 * iy);
             let sum = sample(mx, my) + sample(mx + 1, my) + sample(mx, my + 1) + sample(mx + 1, my + 1);
-            out[sy * padded + sx] = round(sum as f64 / 4.0) as i16;
+            out[ele_index(sx as u32, sy as u32)] = round(sum as f64 / 4.0) as i16;
         }
     }
 }

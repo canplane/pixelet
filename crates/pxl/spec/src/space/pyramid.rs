@@ -48,7 +48,7 @@ impl Lattice {
     }
 
     /// `page_cells` as a shift.
-    const fn page_cell_shamt(self) -> u32 {
+    pub const fn page_cell_shamt(self) -> u32 {
         L3.above(self.cell) as u32
     }
 
@@ -246,8 +246,13 @@ pub const fn span_of(level: u32) -> f64 {
     L3.up(level as i32).side()
 }
 
+/// A level-`level` chunk's side.
+pub const fn chunk_scale(level: u32) -> Scale {
+    L2.up(level as i32)
+}
+
 pub const fn chunk_span_of(level: u32) -> f64 {
-    L2.up(level as i32).side()
+    chunk_scale(level).side()
 }
 
 /// A level-`level` anchor's side in units: the floating origin's cell.
@@ -255,14 +260,20 @@ pub const fn anchor_span_of(level: u32) -> i64 {
     L1.count_in(L4.up(level as i32)) as i64
 }
 
-/// The 4×4 pages a level down around a page's children, index
-/// (qx + 1) + 4·(qy + 1); X wraps and a page past Y's edge has no object.
+/// The 4×4 pages a level down around a page's children, each at
+/// `neighbor_index`; X wraps and a page past Y's edge has no object.
 pub fn neighborhood(p: LevelPage) -> [LevelPage; 16] {
     let [x, y] = child_of(p.at(), 0);
     std::array::from_fn(|k| {
         let (qx, qy) = ((k % 4) as i64 - 1, (k / 4) as i64 - 1);
         page_at(p.level - 1, [x + qx, y + qy])
     })
+}
+
+/// Where the page (qx, qy) from a parent's first child, each −1 to 2, lies in
+/// its `neighborhood`.
+pub const fn neighbor_index(qx: i64, qy: i64) -> usize {
+    ((qx + 1) + 4 * (qy + 1)) as usize
 }
 
 /// The level-`level` page at (x, y), X wrapped around the world.

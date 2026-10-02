@@ -36,6 +36,11 @@ pub const PAGE_ELE_SPAN: u32 = 1 << (L3.shamt() + 1 - 5);
 pub const ELE_PAD: u32 = 2;
 pub const ELE_PADDED_SPAN: u32 = PAGE_ELE_SPAN + 2 * ELE_PAD;
 
+/// Sample (x, y) of a padded elevation grid, rows from the south.
+pub const fn ele_index(x: u32, y: u32) -> usize {
+    (y * ELE_PADDED_SPAN + x) as usize
+}
+
 /// Cells on a page's side in its index lane (bake/format.rs `Index`): one per
 /// elevation sample spacing, at 4 KiB a page.
 pub const EXTENT_SPAN: u32 = 32;
