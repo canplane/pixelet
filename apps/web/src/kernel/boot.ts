@@ -1,4 +1,4 @@
-// @pxl/web/kernel/kernel.ts
+// @pxl/web/kernel/boot.ts
 
 /**
  * Hands the completion ring's signals to whoever runs them, and boots

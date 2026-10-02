@@ -2,10 +2,10 @@
 
 import type { LanguageDetectorModule } from "i18next";
 
+import { storage, STORAGE_KEYS } from "@/kernel/abi/host.spec.ts";
 import { storageGet, storageSet } from "./storage.ts";
 
-/** The page detector's key. */
-const KEY = "pxl:lang";
+const KEY = STORAGE_KEYS[storage.LANG];
 
 export const languageDetector: LanguageDetectorModule = {
   type: "languageDetector",

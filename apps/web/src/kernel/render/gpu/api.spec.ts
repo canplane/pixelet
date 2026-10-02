@@ -87,6 +87,11 @@ export const stream = {
   RESERVE: 1048576 as number,
 } as const;
 
+/** A pass's timestamp write index (api.rs Stamp): NONE where the pass writes none. */
+export const stamp = {
+  NONE: 4294967295 as number,
+} as const;
+
 /** A record's operation, then its arguments. Bytes go as their count, then the bytes padded to a word. */
 export const op = {
   /** every object the host holds let go */

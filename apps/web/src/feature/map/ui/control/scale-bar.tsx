@@ -21,16 +21,16 @@ const LABEL_GAP_PX = 8;
 
 /** Line and ticks are one path, stroked as the halo's rings, so the halo is unbroken where they meet. */
 export function MapScaleBar({ show }: { show: boolean }) {
-  const total_meters = useKernel((s) => s.scale_bar.total_meters);
-  const bar_width_px = useKernel((s) => s.scale_bar.bar_width_px);
+  const totalMeters = useKernel((s) => s.scale_bar.total_meters);
+  const barWidthPx = useKernel((s) => s.scale_bar.bar_width_px);
   const veil = useVeil(1, SNAP);
 
   // SI units are case-sensitive: never upper-case the label.
-  const label: string = total_meters >= 1000 ? `${total_meters / 1000}km` : `${total_meters}m`;
+  const label: string = totalMeters >= 1000 ? `${totalMeters / 1000}km` : `${totalMeters}m`;
 
-  const width = bar_width_px + PAD_PX * 2;
+  const width = barWidthPx + PAD_PX * 2;
   const left = PAD_PX + 0.5;
-  const right = left + bar_width_px - 1;
+  const right = left + barWidthPx - 1;
   const at = (f: f64) => Math.round(left + (right - left) * f - 0.5) + 0.5;
   const tick = (f: f64, px: f64) => `M${at(f)} ${PAD_PX}V${PAD_PX + px}`;
   const d = `M${left} ${PAD_PX + TICK_PX}V${PAD_PX}H${right}V${PAD_PX + TICK_PX}` + tick(0.5, TICK_PX) + tick(0.25, QUARTER_TICK_PX) + tick(0.75, QUARTER_TICK_PX);

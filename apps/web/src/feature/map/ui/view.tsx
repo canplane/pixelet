@@ -9,10 +9,10 @@ import { useViewportTop } from "@platform/viewport.ts";
 import { WorldSurface } from "@platform/surface.tsx";
 import { ProfilerOverlay } from "@/feature/debug/profiler/overlay.tsx";
 import { bottomRest } from "@/shared/ui/bottom-rest.ts";
-import { Toaster } from "@/shared/ui/toast/toaster.tsx";
+import { Toaster } from "@/shared/ui/toast/stack.tsx";
 import { chrome } from "@/shared/ui/theme.ts";
 
-import { Overlays } from "./overlay/overlays.tsx";
+import { Overlays } from "./overlay/all.tsx";
 import { MODE_BAR_HEIGHT_PX } from "./overlay/mode-bar.tsx";
 import { ToastController } from "./toast-controller.tsx";
 

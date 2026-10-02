@@ -1,4 +1,4 @@
-// @pxl/web/app/app.tsx
+// @pxl/web/app/root.tsx
 
 import { AppRouter } from "./router.tsx";
 

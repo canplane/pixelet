@@ -5,7 +5,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { bootstrapApp } from "@/app/bootstrap.ts";
 import { AppLayout } from "@/app/layout.tsx";
-import MapPage from "@/page/map-page.tsx";
+import MapPage from "@/page/map.tsx";
 
 bootstrapApp();
 

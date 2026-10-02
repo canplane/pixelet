@@ -3,9 +3,9 @@
 import { createBrowserRouter, Navigate, Outlet, RouterProvider } from "react-router-dom";
 import type { RouteObject } from "react-router-dom";
 
-import { devRoutes } from "@/feature/dev/dev-route.tsx";
+import { devRoutes } from "@/feature/dev/route.tsx";
 import { AppLayout } from "./layout.tsx";
-import MapPage from "@/page/map-page.tsx";
+import MapPage from "@/page/map.tsx";
 
 const routes: RouteObject[] = [
   {

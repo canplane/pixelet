@@ -1,4 +1,4 @@
-// @pxl/web/shared/ui/toast/toaster.tsx
+// @pxl/web/shared/ui/toast/stack.tsx
 
 import { useEffect, useRef, useState } from "react";
 import { PanResponder, PixelRatio, StyleSheet, View } from "react-native";
@@ -7,7 +7,7 @@ import { Motion } from "@platform/motion.tsx";
 import { type Key, usePresent } from "@/shared/ui/motion/presence.tsx";
 import { after, LEAVE, SETTLE } from "@/shared/ui/motion/transition.ts";
 import { setToastDragging, toastDepth, toastRotate, useToastStore } from "./store.ts";
-import { Toast } from "./toast.tsx";
+import { Toast } from "./item.tsx";
 
 const MAX_STACK_DEPTH = 2;
 const STACK_PEEK_PX = 8;

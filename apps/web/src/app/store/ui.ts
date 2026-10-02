@@ -1,4 +1,4 @@
-// @pxl/web/app/store/ui-store.ts
+// @pxl/web/app/store/ui.ts
 
 import { create } from "zustand";
 
@@ -6,8 +6,8 @@ import type { u32, u8 } from "@xpute/core/abi/word.ts";
 import { cube_types, GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
 import { decorKinds, type PlaceableCube, placeableCubes, sameCube } from "@/catalog/cell/mod.ts";
 import { ActiveTool, Command, encode_chat_send } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_command } from "@/kernel/shell.ts";
-import { kernel_hold } from "@/kernel/shell.ts";
+import { storage, STORAGE_KEYS } from "@/kernel/abi/host.spec.ts";
+import { kernel_command, kernel_hold } from "@/kernel/shell.ts";
 import { storageGet, storageSet } from "@platform/storage.ts";
 
 interface ChatLine {
@@ -42,7 +42,7 @@ function touchRecent(recentPicks: readonly RecentPick[], pick: RecentPick): Rece
 
 interface UiState {
   activeTool: ActiveTool;
-  set_activeTool: (activeTool: ActiveTool) => void;
+  setActiveTool: (activeTool: ActiveTool) => void;
 
   cube: PlaceableCube;
 
@@ -73,7 +73,7 @@ const SEED: readonly RecentPick[] = [
 ];
 
 // The tool and chat lines are not stored: a load starts at the pointer tool.
-const STORAGE_KEY = "pxl:ui_hotbar";
+const STORAGE_KEY = STORAGE_KEYS[storage.HOTBAR];
 
 interface Stored {
   cube: PlaceableCube;
@@ -105,7 +105,7 @@ const stored = load();
 
 export const useUiStore = create<UiState>()((set) => ({
   activeTool: ActiveTool.Pointer,
-  set_activeTool: (activeTool) => {
+  setActiveTool: (activeTool) => {
     set({ activeTool });
   },
 

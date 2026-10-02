@@ -97,6 +97,11 @@
       ]
     }
   },
+  "stamp": {
+    "$type": "u32",
+    "$doc": ["A pass's timestamp write index (api.rs Stamp): NONE where the pass writes none."],
+    "NONE": 4294967295
+  },
   "op": {
     "$type": "u32",
     "$doc": ["A record's operation, then its arguments. Bytes go as their count, then the bytes padded to a word."],

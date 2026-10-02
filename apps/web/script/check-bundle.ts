@@ -4,6 +4,8 @@
 //
 //   deno run -A script/check-bundle.ts   (from apps/web, after a build)
 
+import { SETTINGS, SETTINGS_SHIPPED } from "../src/feature/setting/schema.spec.ts";
+
 const DIST = "./dist";
 
 const DEV_LOCALE_FILES = [
@@ -116,19 +118,17 @@ console.log(`[check-bundle] ok — ${forbidden.length} development-only string(s
 
 // A dev settings row is looked for as `name:{`, not the bare name; a row
 // every build offers is the sentinel.
-const SETTINGS_SPEC = "../../spec/pxl/web/kernel/shell/setting/schema.json";
-const SETTING_ROW_SENTINEL = "structures";
+const devRows = Object.keys(SETTINGS).filter((k) => !(k in SETTINGS_SHIPPED));
+const SETTING_ROW_SENTINEL = Object.keys(SETTINGS_SHIPPED)[0];
 
 function row(bundle: string, key: string): boolean {
   return new RegExp(`[{,]\\s*["'\`]?${key}["'\`]?\\s*:\\s*\\{`).test(bundle);
 }
 
-const settingsSpec = JSON.parse(await Deno.readTextFile(SETTINGS_SPEC)) as { SETTINGS: Record<string, { dev?: boolean }> };
 if (!row(bundle, SETTING_ROW_SENTINEL)) {
   console.error(`[check-bundle] sentinel row ${JSON.stringify(SETTING_ROW_SENTINEL)} missing from the bundle — the settings table is not written the way this reads it, so a pass would mean nothing`);
   Deno.exit(1);
 }
-const devRows = Object.entries(settingsSpec.SETTINGS).filter(([, s]) => s.dev === true).map(([k]) => k);
 const shippedRows = devRows.filter((k) => row(bundle, k));
 if (shippedRows.length > 0) {
   console.error(`[check-bundle] ${shippedRows.length} development-only setting row(s) present in the production bundle:`);

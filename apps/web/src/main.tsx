@@ -8,7 +8,7 @@
 import { StrictMode } from "react";
 import { AppRegistry, type RootTag } from "react-native";
 
-import { App } from "@/app/app.tsx";
+import { App } from "@/app/root.tsx";
 import { bootstrapApp } from "@/app/bootstrap.ts";
 import { bootstrapI18n } from "@/locale/i18n.ts";
 import { Unsupported } from "@/platform/web/unsupported.tsx";
@@ -16,7 +16,7 @@ import { whatIsMissing } from "@/platform/web/webgpu.ts";
 import "@/app/style/index.css";
 
 if (import.meta.env.DEV) {
-  const { installRemoteConsole } = await import("@/feature/dev/remote-console.ts");
+  const { installRemoteConsole } = await import("@/platform/web/remote-console.ts");
   installRemoteConsole();
 }
 

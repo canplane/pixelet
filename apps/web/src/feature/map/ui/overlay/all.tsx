@@ -1,9 +1,9 @@
-// @pxl/web/feature/map/ui/overlay/overlays.tsx
+// @pxl/web/feature/map/ui/overlay/all.tsx
 
 import { useVisualViewport } from "@platform/viewport.ts";
 
-import { TopOverlays } from "./top-overlays.tsx";
-import { BottomOverlays } from "./bottom-overlays.tsx";
+import { TopOverlays } from "./top.tsx";
+import { BottomOverlays } from "./bottom.tsx";
 
 export function Overlays() {
   useVisualViewport();

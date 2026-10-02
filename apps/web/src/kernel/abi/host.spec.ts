@@ -42,13 +42,16 @@ export const root = {
   ASSET: 257 as number,
 } as const;
 
-/** What the platform's storage keeps, by `STORAGE_KEYS`' order. */
+/** What the platform's storage keeps, by `STORAGE_KEYS`' order: the kernel opens
+ * SETTINGS and OBJECTS below STORAGE, and the shell keeps LANG and HOTBAR itself. */
 export const storage = {
   SETTINGS: 0 as number,
   OBJECTS: 1 as number,
+  LANG: 2 as number,
+  HOTBAR: 3 as number,
 } as const;
 
 /** The keys, in `storage`'s order. The objects' carries the encoding's version: a blob
  * of an older one is not read, so bump it whenever a change makes an older entry
  * mean something other than it meant when it was written (layer/object/store.rs). */
-export const STORAGE_KEYS = ["pxl:settings", "pxl:object:v10"] as const;
+export const STORAGE_KEYS = ["pxl:settings", "pxl:object:v10", "pxl:lang", "pxl:ui_hotbar"] as const;

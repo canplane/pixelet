@@ -80,7 +80,7 @@ function buildNumber(id: string): string {
  * UTC: it is formatted for the reader's own timezone where it is shown
  * (feature/setting/section/about.tsx).
  */
-/** The other half of `feature/dev/remote-console.ts`: what a device posts to
+/** The other half of `platform/web/remote-console.ts`: what a device posts to
  * `/__console` is printed where this server's own output goes, so a phone or a
  * tablet on a tunnel can be read without attaching a debugger to it. Dev only
  * — a plugin's `configureServer` never runs for a build. */

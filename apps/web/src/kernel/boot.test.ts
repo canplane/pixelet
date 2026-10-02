@@ -1,7 +1,7 @@
-// @pxl/web/kernel/kernel.test.ts
+// @pxl/web/kernel/boot.test.ts
 
 /**
- * The kernel driven as kernel.ts drives it, without a page and with no bake
+ * The kernel driven as boot.ts drives it, without a page and with no bake
  * bound, so every object is absent and the ground is open water.
  */
 
@@ -25,7 +25,7 @@ import { PUBLISHED_SOURCE } from "@/config/published.spec.ts";
 import { SETTINGS } from "@/feature/setting/schema.spec.ts";
 
 import { CORE, CORE_DOORBELL, load_core } from "@/kernel/mem.ts";
-import { key as entry } from "@/kernel/abi/directory.spec.ts";
+import { heap_row, key as entry } from "@/kernel/abi/directory.spec.ts";
 import { bytes_at, directory } from "@/kernel/module.ts";
 import { start_sched } from "@/kernel/sched.ts";
 import { acquireDevice } from "@/platform/web/webgpu.ts";
@@ -42,10 +42,7 @@ CORE_DOORBELL.signal = (_tag, cmd, f) => {
   }
 };
 
-/** Index of `used` in the heap's row. */
-const HEAP_TOP = 1;
-const HEAP_REQUESTS = 8;
-const heap_row = new Uint32Array(CORE.buffer, directory(CORE.buffer).get(entry.HEAP_ROW), 9);
+const heap = new Uint32Array(CORE.buffer, directory(CORE.buffer).get(entry.HEAP_ROW), heap_row.WORDS);
 
 async function turn(delta = 1 / 60): Promise<Snapshot> {
   CORE_DOORBELL.send(
@@ -118,7 +115,7 @@ Deno.test("kernel - the settings commands reach the snapshot", async () => {
 
 Deno.test("kernel - a settled turn asks the module heap for nothing", async () => {
   for (let i = 0; i < 200; i++) await turn();
-  const [top, requests] = [heap_row[HEAP_TOP], heap_row[HEAP_REQUESTS]];
+  const [top, requests] = [heap[heap_row.USED], heap[heap_row.REQUESTS]];
   for (let i = 0; i < 100; i++) await turn();
-  assertEquals([heap_row[HEAP_REQUESTS] - requests, heap_row[HEAP_TOP] - top], [0, 0], "a hundred settled turns: no request, and the heap's top where it was");
+  assertEquals([heap[heap_row.REQUESTS] - requests, heap[heap_row.USED] - top], [0, 0], "a hundred settled turns: no request, and the heap's top where it was");
 });

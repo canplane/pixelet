@@ -12,7 +12,7 @@ import { handle_slot } from "@xpute/runtime/abi/handle.ts";
 import { bytes_of, each_record, text_of } from "@xpute/runtime/ipc/stream.ts";
 
 import { DEV_BUNDLE } from "@/config/bundle.ts";
-import { address, compare, dimension, filter, format, load, op, record, resource, stream } from "@/kernel/render/gpu/api.spec.ts";
+import { address, compare, dimension, filter, format, load, op, record, resource, stamp, stream } from "@/kernel/render/gpu/api.spec.ts";
 
 type GpuObject =
   | GPUBuffer
@@ -114,12 +114,20 @@ export function registerImage(handle: u32, image: ImageBitmap): void {
   images.set(handle, image);
 }
 
-const TOPOLOGY: GPUPrimitiveTopology[] = ["triangle-list", "triangle-strip", "line-list"];
-const CULL: GPUCullMode[] = ["none", "back"];
-const COMPARE: GPUCompareFunction[] = ["always", "greater", "greater-equal", "less"];
-const STEP: GPUVertexStepMode[] = ["vertex", "instance"];
-const VERTEX_FORMAT: GPUVertexFormat[] = ["float32", "float32x2", "float32x3", "float32x4", "uint32x4", "uint32", "uint32x2"];
-const NONE = 0xffffffff;
+const TOPOLOGY: Record<number, GPUPrimitiveTopology> = { [record.TRIANGLES]: "triangle-list", [record.STRIP]: "triangle-strip", [record.LINES]: "line-list" };
+const CULL: Record<number, GPUCullMode> = { [record.CULL_NONE]: "none", [record.CULL_BACK]: "back" };
+const COMPARE: Record<number, GPUCompareFunction> = { [record.ALWAYS]: "always", [record.GREATER]: "greater", [record.GREATER_EQUAL]: "greater-equal", [record.LESS]: "less" };
+const STEP: Record<number, GPUVertexStepMode> = { [record.PER_VERTEX]: "vertex", [record.PER_INSTANCE]: "instance" };
+const VERTEX_FORMAT: Record<number, GPUVertexFormat> = {
+  [record.F32]: "float32",
+  [record.F32X2]: "float32x2",
+  [record.F32X3]: "float32x3",
+  [record.F32X4]: "float32x4",
+  [record.U32X4]: "uint32x4",
+  [record.U32]: "uint32",
+  [record.U32X2]: "uint32x2",
+};
+const VERTEX_ENTRY: Record<number, string> = { [record.VS]: "vs", [record.VS_COARSE]: "vs_coarse", [record.VS_DEPTH]: "vs_depth", [record.VS_COARSE_DEPTH]: "vs_coarse_depth" };
 
 const ALPHA_BLEND: GPUBlendState = {
   color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },
@@ -190,8 +198,6 @@ function layoutEntries(words: U32Array): GPUBindGroupLayoutEntry[] {
   return out;
 }
 
-const VERTEX_ENTRY = ["vs", "vs_coarse", "vs_depth", "vs_coarse_depth"];
-
 function pipelineDescriptor(words: U32Array, layouts: GPUBindGroupLayout[], module: GPUShaderModule, target: GPUTextureFormat): GPURenderPipelineDescriptor {
   let at = record.HEAD;
   const next = () => words[at++];
@@ -242,7 +248,11 @@ function beginPass(encoder: GPUCommandEncoder, w: U32Array): GPURenderPassEncode
       : { view, depthLoadOp: depth_load === load.LOAD ? "load" : "clear", depthClearValue: float(depth_clear), depthStoreOp: "store" };
   }
   if (query_set !== 0) {
-    descriptor.timestampWrites = { querySet: get<GPUQuerySet>(query_set), beginningOfPassWriteIndex: begin === NONE ? undefined : begin, endOfPassWriteIndex: end === NONE ? undefined : end };
+    descriptor.timestampWrites = {
+      querySet: get<GPUQuerySet>(query_set),
+      beginningOfPassWriteIndex: begin === stamp.NONE ? undefined : begin,
+      endOfPassWriteIndex: end === stamp.NONE ? undefined : end,
+    };
   }
   return encoder.beginRenderPass(descriptor);
 }

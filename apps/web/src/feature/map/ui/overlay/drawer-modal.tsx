@@ -8,7 +8,7 @@ import type { u8 } from "@xpute/core/abi/word.ts";
 import { type ChannelName, decorKinds, decorName, type PlaceableCube, placeableCubeChannel, placeableCubeId, placeableCubes } from "@/catalog/cell/mod.ts";
 
 import type { BaseModalProps } from "@/app/type/ui.type.ts";
-import { useInHand, useUiStore } from "@/app/store/ui-store.ts";
+import { useInHand, useUiStore } from "@/app/store/ui.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { useSafeArea } from "@platform/safe-area.ts";
 import { Panel } from "@platform/panel.tsx";
