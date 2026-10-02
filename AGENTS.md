@@ -479,6 +479,10 @@ size.
   A broken intermediate state is allowed; correctness is held at the
   checkpoints where the work is integrated — optimistic execution, conflict
   detection, deterministic serialization, resume.
+  An agent commits its own paths and only those (`git commit -- <paths>`):
+  the index is shared, and a plain commit takes whatever another left
+  staged. A build that fails on the working tree is not yet anyone's
+  commit; say whose uncommitted file it is before calling main broken.
 - **Design in the conversation, not in a planning artifact.** Plan documents,
   approval gates and agent fan-outs are overhead here; skip them unless asked.
 - Code, comments and documentation stay in English.
