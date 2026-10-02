@@ -91,7 +91,7 @@ impl TaskPhaseName {
     }
 }
 
-pub const STEP_NAMES: &[&str] = &["controller", "input", "camera", "environment", "companion", "preview", "chunks", "debug_gizmos", "profiler"];
+pub const STEP_NAMES: &[&str] = &["controller", "input", "camera", "environment", "companion", "preview", "view", "chunks", "debug_gizmos", "profiler"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum StepName {
@@ -101,20 +101,22 @@ pub enum StepName {
     environment = 3,
     companion = 4,
     preview = 5,
-    chunks = 6,
-    debug_gizmos = 7,
-    profiler = 8,
+    view = 6,
+    chunks = 7,
+    debug_gizmos = 8,
+    profiler = 9,
 }
 
 impl StepName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [StepName; 9] = [
+    pub const ALL: [StepName; 10] = [
         StepName::controller,
         StepName::input,
         StepName::camera,
         StepName::environment,
         StepName::companion,
         StepName::preview,
+        StepName::view,
         StepName::chunks,
         StepName::debug_gizmos,
         StepName::profiler,
@@ -135,8 +137,6 @@ pub const EFFECT_NAMES: &[&str] = &[
     "follow",
     "destination",
     "view",
-    "tiles",
-    "poi",
     "geocode",
     "theme",
     "decor",
@@ -157,22 +157,20 @@ pub enum EffectName {
     follow = 4,
     destination = 5,
     view = 6,
-    tiles = 7,
-    poi = 8,
-    geocode = 9,
-    theme = 10,
-    decor = 11,
-    chunk_sources = 12,
-    hover = 13,
-    puck = 14,
-    objects = 15,
-    assets = 16,
-    pump = 17,
+    geocode = 7,
+    theme = 8,
+    decor = 9,
+    chunk_sources = 10,
+    hover = 11,
+    puck = 12,
+    objects = 13,
+    assets = 14,
+    pump = 15,
 }
 
 impl EffectName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [EffectName; 18] = [
+    pub const ALL: [EffectName; 16] = [
         EffectName::navigation,
         EffectName::bootstrap,
         EffectName::geolocation,
@@ -180,8 +178,6 @@ impl EffectName {
         EffectName::follow,
         EffectName::destination,
         EffectName::view,
-        EffectName::tiles,
-        EffectName::poi,
         EffectName::geocode,
         EffectName::theme,
         EffectName::decor,

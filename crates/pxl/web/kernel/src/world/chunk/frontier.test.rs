@@ -12,6 +12,7 @@ use super::*;
 
 use crate::allocations;
 use crate::world::fixture::{self, eye, World};
+use crate::world::pyramid::domain::Domain;
 
 /// Objects go finer than the ground's cube only under z16's reach.
 #[test]
@@ -336,16 +337,12 @@ fn ladder() -> Vec<Tau> {
 
 fn domain_at(height: f64, world: &World) -> Domain {
     let at = [EYE[0], EYE[1], LAND + height];
-    fixture::domain(eye(at, Some([1.0, 0.05, -0.25]), FAR, LAND), &ladder(), world)
+    let price = Need { slots: |_, _| 1, admit: false };
+    fixture::domain_priced(eye(at, Some([1.0, 0.05, -0.25]), FAR, LAND), &ladder(), world, &price)
 }
 
 fn counts(d: &mut Domain) -> Vec<Slots> {
-    (0..d.ladder().len())
-        .map(|k| {
-            d.cut_at(k);
-            need(d, d.cut(k).expect("made above"), |_, _| 1)
-        })
-        .collect()
+    (0..d.ladder().len()).map(|k| d.need(k).expect("every step counted")).collect()
 }
 
 #[test]

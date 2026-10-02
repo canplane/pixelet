@@ -21,10 +21,11 @@ use pxl_spec::space::pyramid::{chunk_scale, GROUND, TOP_LEVEL};
 
 use crate::param::REFINEMENTS_IN_FLIGHT;
 use crate::world::chunk::build::{mesh_step, Cube};
-use crate::world::chunk::mesh_slot::{Pool, COARSE_TIER_SLOTS, POOLS};
+use crate::world::chunk::mesh_slot::{Pool, ARENA, COARSE_TIER_SLOTS, POOLS};
 use crate::world::observation::Order;
 use crate::world::pyramid::chunk::Chunk;
-use crate::world::pyramid::domain::{Cut, Domain};
+use crate::world::pyramid::domain::Price;
+use crate::world::quality::fits;
 
 pub type Slots = [u32; POOLS];
 
@@ -79,27 +80,39 @@ pub fn pool_of(c: Chunk, cube: Cube) -> Pool {
     Pool::of(c.level(), mesh_step(cube, c.level()))
 }
 
-/// Slots per pool the frontier needs at `cut`, counted before anything is
-/// allocated. Never less than what the frontier holds on its way there, and
-/// monotonic in quality: refinements pass through coarse ancestors, which
-/// never outnumber the goal's pieces above z16 plus z16 pieces' parents, so
-/// every z16 piece is counted once in the coarse pool too.
-pub fn need(d: &Domain, cut: &Cut, slots: impl Fn(Chunk, Cube) -> u32) -> Slots {
-    let mut n = [0; POOLS];
-    for &c in cut.pieces() {
-        let cube = cube_of(c, d.outermost(c), d.nearest_to(c), cut.tau());
-        let k = slots(c, cube);
+/// The frontier's slots per pool, piece by piece, counted by the goal's walk
+/// before anything is allocated. Never less than what the frontier holds on its
+/// way there, and monotonic in quality: refinements pass through coarse
+/// ancestors, which never outnumber the goal's pieces above z16 plus z16
+/// pieces' parents, so every z16 piece is counted once in the coarse pool too.
+pub struct Need<F> {
+    pub slots: F,
+    /// Whether a step past the arena stops being counted.
+    pub admit: bool,
+}
+
+impl<F: Fn(Chunk, Cube) -> u32> Price for Need<F> {
+    fn piece(&self, c: Chunk, outermost: bool, near: f64, tau: Tau) -> Slots {
+        let cube = cube_of(c, outermost, near, tau);
+        let k = (self.slots)(c, cube);
         match pool_of(c, cube) {
-            Pool::Coarse => n[Pool::Coarse as usize] += k,
-            Pool::Cover => n[Pool::Cover as usize] += k,
-            Pool::Fine => {
-                n[Pool::Fine as usize] += k;
-                n[Pool::Coarse as usize] += 1;
-            }
+            Pool::Coarse => [0, k, 0],
+            Pool::Cover => [0, 0, k],
+            Pool::Fine => [k, 1, 0],
         }
     }
-    n[Pool::Coarse as usize] += cut.splits().filter(|c| c.level() == 1).count() as u32;
-    n
+
+    fn split(&self, c: Chunk) -> Slots {
+        if c.level() == 1 {
+            [0, 1, 0]
+        } else {
+            [0; POOLS]
+        }
+    }
+
+    fn over(&self, n: &Slots) -> bool {
+        self.admit && !fits(*n, ARENA, HEADROOM, [0; POOLS])
+    }
 }
 
 pub trait Env {

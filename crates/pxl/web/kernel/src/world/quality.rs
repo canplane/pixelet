@@ -11,10 +11,11 @@
 //! τ* = the finest τ ≥ τ_target with frontier(O, K, τ) + headroom ≤ B
 //! ```
 //!
-//! `frontier` (frontier.rs `need`) never counts less at a finer τ, so only
-//! the steps the smoothing reads need counting (`around`). Smoothing moves
-//! `τ_eff` coarser to `τ*` in the same frame, and finer one step at a time
-//! after `QUALITY_WAIT_MS` with `QUALITY_MARGIN` to spare.
+//! The goal's one walk counts `frontier` at every step (domain.rs, priced by
+//! frontier.rs `Need`) and stops counting a step once it is past the arena,
+//! since a finer τ never counts less. Smoothing moves `τ_eff` coarser to `τ*`
+//! as soon as a goal is published, and finer one step at a time after
+//! `QUALITY_WAIT_MS` with `QUALITY_MARGIN` to spare.
 
 use pxl_render::look::globe::MERCATOR_RADIUS_U;
 use pxl_spec::bake::published::PUBLISHED_TOP_LEVEL;
@@ -23,7 +24,7 @@ use pxl_spec::space::lod::{Tau, SPLIT};
 use crate::global::Global;
 use crate::kernel::kernel;
 use crate::param;
-use crate::world::chunk::frontier::{need, Slots, HEADROOM};
+use crate::world::chunk::frontier::{Need, Slots, HEADROOM};
 use crate::world::chunk::mesh_slot::{Pool, ARENA, POOLS};
 use crate::world::frame::view::view;
 use crate::world::pyramid::domain::{self, cover_pieces};
@@ -127,14 +128,14 @@ impl Smooth {
 struct Quality {
     smooth: Smooth,
     star: usize,
-    counts: [Option<Slots>; param::TAU_STEPS + 1],
-    counted: Option<(u32, u32)>,
 }
 
 static QUALITY: Global<Quality> = Global::new();
 
+/// The goal in force's own τ, so demand and drawing read the τ the drawn goal
+/// was cut at even while a resize's new ladder is still being walked.
 pub fn effective() -> Effective {
-    Effective(ladder()[QUALITY.get(Quality::default).smooth.at()])
+    Effective(domain::current().map_or_else(|| ladder()[QUALITY.get(Quality::default).smooth.at()], |d| d.tau()))
 }
 
 pub fn reading() -> [usize; 2] {
@@ -142,28 +143,23 @@ pub fn reading() -> [usize; 2] {
     [q.smooth.at(), q.star]
 }
 
-/// The policy's turn, before anything reads the quality. Idempotent within
-/// an instant, so every reader may call it first.
-pub fn step() {
+/// The policy's turn: the goal's walk advanced by a slice under `stop`, then
+/// the step its published counts say fits. Only the view step calls it.
+pub fn step(stop: &dyn Fn() -> bool) {
     let q = QUALITY.get(Quality::default);
     let ladder = ladder();
-    domain::step(&ladder, Effective(ladder[q.smooth.at()]));
-    if domain::current().is_none() {
-        return;
-    }
     let sched = &kernel().sched;
-    let key = Some((domain::walks(), sched.needs_revision()));
-    if q.counted != key {
-        q.counted = key;
-        q.counts = [None; param::TAU_STEPS + 1];
-    }
-    let counts = &mut q.counts;
-    let mut count = |k: usize| *counts[k].get_or_insert_with(|| domain::cut_at(k).map_or([0; POOLS], |(d, cut)| need(d, cut, |c, cube| sched.slots_of(c, cube))));
+    let price = Need {
+        slots: |c, cube| sched.slots_of(c, cube),
+        admit: true,
+    };
+    domain::advance(&ladder, q.smooth.at(), &price, stop, sched.needs_revision());
+    let Some(d) = domain::current() else { return };
     let spare = margin();
-    let (star, roomy) = around(q.smooth.at(), ladder.len(), |k, roomy| fits(count(k), ARENA, HEADROOM, if roomy { spare } else { [0; POOLS] }));
+    let (star, roomy) = around(q.smooth.at(), ladder.len(), |k, roomy| d.need(k).is_some_and(|n| fits(n, ARENA, HEADROOM, if roomy { spare } else { [0; POOLS] })));
     q.star = star;
     let at = q.smooth.follow(star, roomy, param::QUALITY_WAIT_MS, crate::host::now());
-    domain::step(&ladder, Effective(ladder[at]));
+    domain::put(at);
 }
 
 #[cfg(test)]

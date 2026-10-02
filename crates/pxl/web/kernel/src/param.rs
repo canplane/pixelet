@@ -121,6 +121,10 @@ pub const QUANTUM_SETTLE_MS: f64 = 150.0;
 /// How far a pass may overrun, so a step that reports nothing done cannot walk the whole list.
 pub const HARD_SLACK_MS: f64 = 4.0;
 
+/// Share of the visible phase's remaining budget the goal's walk takes before
+/// the chunk pass; half until a measurement says otherwise.
+pub const VIEW_SHARE: f64 = 0.5;
+
 /// Share of the budget held back from the visible phase for content, which
 /// would otherwise starve while a load keeps the visible phase busy.
 pub const CONTENT_SHARE: f64 = 0.2;

@@ -40,7 +40,6 @@ fn covered<L: Layer>() -> &'static mut Covered {
 
 /// Remade only when the pieces or `L`'s residency moved; most eye moves change neither.
 pub fn step<L: Layer>() {
-    crate::world::quality::step();
     let Some(d) = domain::current() else { return };
     let key = Some((domain::revision(), L::pyramid().revision()));
     let c = covered::<L>();

@@ -18,7 +18,7 @@ export const OUTCOME_NAMES = ["ok", "aborted", "error"] as const;
 
 export const TASK_PHASE_NAMES = ["net_ms", "bytes", "decode_ms", "adopt_ms"] as const;
 
-export const STEP_NAMES = ["controller", "input", "camera", "environment", "companion", "preview", "chunks", "debug_gizmos", "profiler"] as const;
+export const STEP_NAMES = ["controller", "input", "camera", "environment", "companion", "preview", "view", "chunks", "debug_gizmos", "profiler"] as const;
 
 export const EFFECT_NAMES = [
   "navigation",
@@ -28,8 +28,6 @@ export const EFFECT_NAMES = [
   "follow",
   "destination",
   "view",
-  "tiles",
-  "poi",
   "geocode",
   "theme",
   "decor",

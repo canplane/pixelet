@@ -51,6 +51,7 @@
     "environment",
     "companion",
     "preview",
+    "view",
     "chunks",
     "debug_gizmos",
     "profiler"
@@ -63,8 +64,6 @@
     "follow",
     "destination",
     "view",
-    "tiles",
-    "poi",
     "geocode",
     "theme",
     "decor",

@@ -66,6 +66,19 @@ fn debug_gizmos_tick(_: &mut TickContext) {
     debug_gizmos_step(show, map_center, local_world_origin());
 }
 
+/// The view's one owner, in order: the goal's walk a slice, the quality from
+/// it, then what each pyramid layer asks for and covers. A walk left unfinished
+/// asks for another turn, or a still view would never get its goal.
+fn view_tick(ctx: &mut TickContext) {
+    let end = now() + ctx.budget.remaining() * crate::param::VIEW_SHARE;
+    crate::world::quality::step(&|| now() >= end);
+    terrain_step();
+    crate::layer::poi::poi_step();
+    if crate::world::pyramid::domain::walking() {
+        ctx.invalidate();
+    }
+}
+
 fn camera_input_tick(_: &mut TickContext) {
     camera_input_step();
 }
@@ -84,6 +97,7 @@ pub fn boot() {
     on_tick(INTERACTION, environment_tick, StepName::environment);
     on_tick(INTERACTION, companion_tick, StepName::companion);
     on_tick(INTERACTION, crate::layer::character::preview::preview_step, StepName::preview);
+    on_tick(VISIBLE, view_tick, StepName::view);
     on_tick(VISIBLE, core_tick_visible_step, StepName::chunks);
     on_tick(COSMETIC, debug_gizmos_tick, StepName::debug_gizmos);
     on_tick(REPORT, core_tick_report_step, StepName::profiler);
@@ -150,8 +164,6 @@ pub fn world_turn() -> f64 {
     effect!(worst, destination, crate::control::navigation::destination::destination_step());
     // After every writer of the map center, before anything observes the view.
     effect!(worst, view, crate::world::frame::view::view_compose());
-    effect!(worst, tiles, terrain_step());
-    effect!(worst, poi, crate::layer::poi::poi_step());
     effect!(worst, geocode, geocode_fetcher_step());
     effect!(worst, theme, theme_clock_step());
     effect!(worst, decor, decor_assets_wanted());

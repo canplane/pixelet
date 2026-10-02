@@ -9,7 +9,7 @@ use pxl_spec::space::pyramid::{GROUND, TOP_LEVEL};
 use pxl_spec::space::v3::{Aabb, V3};
 
 use crate::world::observer::{Footprint, Grid, Met, Observer, OnTile, Sight};
-use crate::world::pyramid::domain::Domain;
+use crate::world::pyramid::domain::{Domain, Price};
 
 #[derive(Clone)]
 pub struct World {
@@ -126,6 +126,10 @@ pub fn footprints(o: &Observation, world: &World) -> Vec<Footprint> {
 
 pub fn domain(o: Observation, ladder: &[Tau], world: &World) -> Domain {
     Domain::of(o, ladder, 0, Box::new(world.clone()), &footprints(&o, world))
+}
+
+pub fn domain_priced(o: Observation, ladder: &[Tau], world: &World, price: &dyn Price) -> Domain {
+    Domain::priced(o, ladder, 0, Box::new(world.clone()), &footprints(&o, world), price)
 }
 
 fn unit(v: V3) -> V3 {

@@ -249,9 +249,9 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         turn: TurnSample::default(),
         cover: {
             let (cover, _) = crate::world::pyramid::cover::cover::<Terrain>();
-            // Cutting the target here costs something only when the view is past its arena.
-            let rule = crate::world::pyramid::domain::cut_at(0).map_or(0.0, |(_, cut)| cut.pieces().len() as f64);
             let domain = crate::world::pyramid::domain::current();
+            // NaN where the target's step does not fit, which the walk stopped counting.
+            let rule = domain.map_or(0.0, |d| d.counted(0).map_or(f64::NAN, f64::from));
             CoverSample {
                 rule,
                 drawn: cover.drawn.len() as f64,

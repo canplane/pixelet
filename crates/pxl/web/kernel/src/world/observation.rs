@@ -8,8 +8,8 @@ use std::cmp::Ordering;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::hierarchy::{ancestor_of, Scale};
 use pxl_spec::space::indexer::{L2, L3};
-use pxl_spec::space::lod::Tau;
 use pxl_spec::space::lod::fault_radius;
+use pxl_spec::space::lod::Tau;
 use pxl_spec::space::observation::{band, Bounds, Contents, DemandEstimator, Frustum, Observation, Requirement};
 use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pvf3::REACH;
@@ -22,7 +22,7 @@ use crate::layer::environment::state::globe;
 use crate::layer::object::store::objects_revision;
 use crate::world::access::Access;
 use crate::world::frame::view::view;
-use crate::world::observer::Sight;
+use crate::world::observer::Footprint;
 use crate::world::paging::floor;
 use crate::world::pyramid::Layer as _;
 
@@ -158,7 +158,8 @@ fn under(level: u32, region: Aabb, each: &mut dyn FnMut((Scale, [i64; 2]), Aabb)
 /// short of it.
 pub struct ByFootprints<'a> {
     pub tau: Tau,
-    pub sight: &'a Sight,
+    pub footprints: &'a [Footprint],
+    pub lacks: &'a [Requirement],
 }
 
 impl DemandEstimator for ByFootprints<'_> {
@@ -173,14 +174,14 @@ impl DemandEstimator for ByFootprints<'_> {
             let m = o.measure(&held);
             (m.seen && m.near < to && m.near <= o.far && m.far >= from).then_some(Requirement { level, region })
         };
-        for lack in self.sight.lacks() {
+        for lack in self.lacks {
             let r = lack.region;
             let region = column(r.min[0], r.min[1], r.max[0], r.max[1]);
             if let Some(r) = (lack.level..=o.top).find_map(|level| required(level, region)) {
                 each(r);
             }
         }
-        for f in self.sight.footprints() {
+        for f in self.footprints {
             let b = f.aabb();
             for level in 0..=o.top {
                 let Some((_, to)) = band(o, self.tau, level) else { break };

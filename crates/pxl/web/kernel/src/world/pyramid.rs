@@ -66,7 +66,7 @@ pub trait Layer: Folds + Clone + 'static {
 
 /// Everything the asks depend on; two turns agreeing on all of it ask for
 /// the same pages, so the second decides nothing.
-type Seen = (Option<Observation>, Option<LevelPage>, u32, (u32, u32), Tau, u32);
+type Seen = (Option<Observation>, [Option<LevelPage>; Floor::PAGES as usize], Option<LevelPage>, u32, (u32, u32), Tau, u32);
 
 /// No speculation: the view converges to exact on faults alone, and
 /// speculation would only buy latency.
@@ -200,6 +200,8 @@ impl<L: Layer> Pyramid<L> {
     pub fn observe(
         &mut self,
         o: Option<&Observation>,
+        // Where the fallback is held, when it is not where `o` sees from.
+        floor_at: Option<&Observation>,
         destination: impl Iterator<Item = LevelPage>,
         readers: &[LevelPage],
         bounds: &impl Bounds,
@@ -237,7 +239,8 @@ impl<L: Layer> Pyramid<L> {
             }
             xpute_core::ensure!(read.iter().all(|&n| n <= LEVEL_DEMAND_PAGES), ENOTRECOVERABLE, *read.iter().max().unwrap_or(&0));
             let mut floor = 0u32;
-            Floor::floor(o.top, o.eye, o.far, |p| {
+            let f = floor_at.unwrap_or(o);
+            Floor::floor(f.top, f.eye, f.far, |p| {
                 floor += 1;
                 ask(&mut asks, p, Ask { why: Why::Floor, order: order(o, p) });
             });
@@ -321,15 +324,27 @@ impl<L: Layer> Pyramid<L> {
 
     pub fn step(&mut self, destination: Option<LevelPage>) {
         let Some(top) = floor::level() else { return };
-        let seen_from = observation();
+        // The published goal's observation, so demand serves the goal the frontier draws toward.
+        let published = domain::current();
+        let live = observation();
+        let seen_from = live.map(|live| published.map_or(live, |d| *d.observation()));
+        // The fallback is a law of the observation now, not of the goal being drawn toward:
+        // after a jump it is asked for where the eye is, in the jump's own turn.
+        let mut floor_now = [None; Floor::PAGES as usize];
+        if let Some(l) = &live {
+            let mut n = 0;
+            Floor::floor(l.top, l.eye, l.far, |p| {
+                if n < floor_now.len() {
+                    floor_now[n] = Some(p);
+                }
+                n += 1;
+            });
+        }
         if seen_from.is_none() && destination.is_none() {
             return;
         }
         let tau = match seen_from {
-            Some(_) => {
-                quality::step();
-                quality::effective().tau()
-            }
+            Some(_) => quality::effective().tau(),
             None => Tau::FINEST,
         };
         let o = seen_from.map(|o| match L::COARSEST {
@@ -339,7 +354,7 @@ impl<L: Layer> Pyramid<L> {
                 ..o
             },
         });
-        let seen = (o, destination, self.paging.revision(), heights_revision(), tau, domain::walks());
+        let seen = (o, floor_now, destination, self.paging.revision(), heights_revision(), tau, domain::walks());
         let readers_moved = {
             let mut union = core::mem::take(&mut self.union);
             union.clear();
@@ -353,10 +368,14 @@ impl<L: Layer> Pyramid<L> {
         if self.last != Some(seen) || readers_moved {
             let line = destination.into_iter().flat_map(|p| std::iter::successors(Some(p), move |q| (q.level < top).then(|| q.parent())));
             let readers = core::mem::take(&mut self.readers);
-            self.observe(o.as_ref(), line, &readers, &Known, &ByFootprints { tau, sight: domain::sight() }, &PREFETCH, tau, param::HINT_ALLOWANCE);
+            self.observe(o.as_ref(), live.as_ref(), line, &readers, &Known, &ByFootprints {
+                    tau,
+                    footprints: published.map_or(&[], |d| d.footprints()),
+                    lacks: published.map_or(&[], |d| d.lacks()),
+                }, &PREFETCH, tau, param::HINT_ALLOWANCE);
             self.readers = readers;
             // Observing can let pages go, moving the revision: record the state after it.
-            self.last = Some((o, destination, self.paging.revision(), heights_revision(), tau, domain::walks()));
+            self.last = Some((o, floor_now, destination, self.paging.revision(), heights_revision(), tau, domain::walks()));
         }
         declare(L::CATEGORY, &self.wants);
         self.declare_shared();

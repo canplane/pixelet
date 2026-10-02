@@ -1,7 +1,7 @@
 // pxl-kernel/world/paging.test.rs
 //
-// Residency under hostile policies (arbitrary or LIFO serving, maximal
-// preemption, no or flooding speculation, newest-first answers): frames are
+// Residency under hostile policies (arbitrary, LIFO or nearest-first serving,
+// no or flooding speculation, newest-first answers): frames are
 // never exceeded, the floor and the view are never refused a frame, and
 // every demanded page ends up read exactly.
 
@@ -68,7 +68,7 @@ fn mix(x: u64) -> u64 {
 enum Hostile {
     Random(u64),
     Lifo,
-    Preempt,
+    Nearest,
 }
 
 impl Serve for Hostile {
@@ -76,13 +76,9 @@ impl Serve for Hostile {
         let distance = match self {
             Hostile::Random(seed) => (mix(subject ^ seed) >> 11) as f64,
             Hostile::Lifo => -enqueue_ms,
-            Hostile::Preempt => ask.order.near,
+            Hostile::Nearest => ask.order.near,
         };
         Rank { class: 0, distance }
-    }
-
-    fn preempts(&self, _waiting: Rank, _running: Rank) -> bool {
-        matches!(self, Hostile::Preempt)
     }
 
     fn intake(&self) -> u32 {
@@ -115,6 +111,7 @@ fn converge_on<S: Serve>(pyramid: &mut Pyramid<PoiPage>, observation: fn() -> Ob
         let at = turn as f64 * 16.0;
         pyramid.observe(
             Some(&observation()),
+            None,
             core::iter::empty(),
             &[],
             &Unknown,
@@ -162,7 +159,7 @@ fn the_view_converges_exact_with_the_reach_prefetched_under_every_order() {
         converge(Policy::standard(), &reach, allowance);
         converge(Hostile::Random(11), &reach, allowance);
         converge(Hostile::Lifo, &reach, allowance);
-        converge(Hostile::Preempt, &reach, allowance);
+        converge(Hostile::Nearest, &reach, allowance);
     }
 }
 
