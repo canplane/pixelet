@@ -24,17 +24,9 @@ impl Default for Limits {
 
 #[derive(Serialize, Deserialize)]
 pub enum Job {
-    /// A page of a layer held as a pyramid, by its demand subject.
-    Page {
-        kind: super::Kind,
-        subject: u64,
-        cache: PathBuf,
-    },
+    Page { kind: super::Kind, subject: u64, cache: PathBuf },
     Dictionary,
-    Geocode {
-        group: u64,
-        dictionary: PathBuf,
-    },
+    Geocode { group: u64, dictionary: PathBuf },
 }
 
 pub struct Runner {
@@ -131,8 +123,7 @@ async fn supervise(mut command: Command, deadline: tokio::time::Instant) -> Resu
             }
         }
         Err(_) => {
-            // A blocking thread would keep baking after a timeout. Reap the
-            // process before releasing its execution slot or removing staging.
+            // Reap the process before releasing its slot or removing staging.
             child.kill().await.map_err(|e| e.to_string())?;
             child.wait().await.map_err(|e| e.to_string())?;
             Err(Failure::Limited("demand generation deadline"))
