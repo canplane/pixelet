@@ -187,6 +187,46 @@ impl Env for Heavy {
     }
 }
 
+/// A refine skips to the goal when it fits, else goes one level; a started
+/// way is kept, and a building chunk off every goal line is cancelled.
+#[test]
+fn a_refine_skips_levels_keeps_the_way_it_started_and_drops_what_left_the_goal() {
+    let d = at(2, 0, 0);
+    let under = |c: &Chunk| c.ancestors().any(|a| a == d);
+    let goal: Vec<Chunk> = level(0).into_iter().filter(under).collect();
+    // the children on the goal's lines
+    let mut children: Vec<Chunk> = d.children().into_iter().filter(|c| goal.iter().any(|g| g.ancestors().any(|a| a == *c))).collect();
+    children.sort_unstable();
+    let plan = |free: Slots, building: &[(Chunk, bool)], goal: &[Chunk]| {
+        let now = Now {
+            ms: 0.0,
+            goal,
+            drawn: &[d],
+            building,
+            recubing: 0,
+            recube: &[],
+            free,
+        };
+        let mut f = Frontier::default();
+        let p = f.plan(&now, &Heavy(3));
+        (p.start.clone(), p.cancel.clone())
+    };
+    // direct fits: the goal itself
+    let (start, _) = plan([100, 100, 0], &[], &goal);
+    assert_eq!(start, goal);
+    // direct does not: one level
+    let (start, _) = plan([3, 100, 0], &[], &goal);
+    assert_eq!(start, children);
+    // the started level is kept though direct would fit now
+    let building: Vec<(Chunk, bool)> = children.iter().map(|&c| (c, false)).collect();
+    let (start, cancel) = plan([100, 100, 0], &building, &goal);
+    assert!(start.is_empty() && cancel.is_empty(), "the started way was dropped or doubled");
+    // a goal moved off a started chunk's line cancels it
+    let moved: Vec<Chunk> = goal.iter().copied().filter(|g| g.ancestors().any(|a| a == children[0])).collect();
+    let (_, cancel) = plan([100, 100, 0], &building, &moved);
+    assert_eq!(cancel, children[1..].to_vec());
+}
+
 /// A refinement into eight z16 chunks of three slots each waits for all
 /// twenty-four plus the reserve.
 #[test]
