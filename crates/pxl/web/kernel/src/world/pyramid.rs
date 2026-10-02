@@ -32,6 +32,10 @@ use crate::world::quality;
 pub trait Layer: Folds + Clone + 'static {
     const CATEGORY: Category;
 
+    /// The coarsest level the layer has pages at; past where that level
+    /// hands off, nothing of it is asked for.
+    const COARSEST: u32 = TOP_LEVEL;
+
     fn pyramid() -> &'static mut Pyramid<Self>;
 
     fn receive(record: u32, pkt: &[u8], phases: &mut Phases) -> Result<Self, Failure>;
@@ -260,19 +264,26 @@ impl<L: Layer> Pyramid<L> {
     /// `destination` is asked for with its line even with no observation yet:
     /// at the first fix the camera waits for that ground. `far` cuts the
     /// observation where the layer stops being drawn.
-    pub fn step(&mut self, destination: Option<LevelPage>, readers: &[LevelPage], far: f64) {
+    pub fn step(&mut self, destination: Option<LevelPage>, readers: &[LevelPage]) {
         let Some(top) = floor::level() else { return };
-        let o = observation().map(|o| Observation { far: o.far.min(far), ..o });
-        if o.is_none() && destination.is_none() {
+        let seen_from = observation();
+        if seen_from.is_none() && destination.is_none() {
             return;
         }
-        let tau = match o {
+        let tau = match seen_from {
             Some(_) => {
                 quality::step();
                 quality::effective().tau()
             }
             None => Tau::FINEST,
         };
+        let o = seen_from.map(|o| match L::COARSEST {
+            TOP_LEVEL => o,
+            coarsest => Observation {
+                far: o.far.min(tau.split_distance(coarsest as i32 + 1)),
+                ..o
+            },
+        });
         let seen = (o, destination, self.paging.revision(), heights_revision(), tau, domain::walks());
         if self.last != Some(seen) || self.readers != readers {
             let line = destination.into_iter().flat_map(|p| std::iter::successors(Some(p), move |q| (q.level < top).then(|| q.parent())));
