@@ -22,11 +22,6 @@ pub enum GeolocationCommand {
     Stop,
 }
 
-/// A fresh high-accuracy fix within 10 s is more than a phone indoors gives;
-/// a 5 s old fix is indistinguishable at walking pace.
-pub const MAXIMUM_AGE_MS: f64 = 5000.0;
-pub const TIMEOUT_MS: f64 = 30000.0;
-
 struct Geolocation {
     /// What a return to the foreground resumes.
     open: bool,

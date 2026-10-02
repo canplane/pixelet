@@ -11,7 +11,6 @@ use pxl_spec::space::v3::V3;
 
 use crate::control::camera::config::camera_cfg::projection::FOV;
 use crate::control::camera::config::camera_cfg::view::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR};
-use crate::control::camera::free::look_point;
 use crate::control::camera::orbit::orbit;
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
 use crate::global::Global;
@@ -173,7 +172,6 @@ struct Tracked {
 struct Controllers {
     base: CameraMode,
     tracked: Option<Tracked>,
-    look: Option<(ObserverPose, f64)>,
 }
 
 static CONTROLLERS: Global<Controllers> = Global::new();
@@ -182,7 +180,6 @@ fn controllers() -> &'static mut Controllers {
     CONTROLLERS.get(|| Controllers {
         base: CameraMode::orbit,
         tracked: None,
-        look: None,
     })
 }
 
@@ -215,24 +212,6 @@ pub fn pose() -> ObserverPose {
             }
         }
     }
-}
-
-/// The orbit's radius, or what the look falls on, measured once per pose.
-pub fn look_distance() -> f64 {
-    if active() == Active::Orbit {
-        return orbit().dist;
-    }
-    let now = view().pose;
-    let c = controllers();
-    if let Some((_, d)) = c.look.filter(|(at, _)| *at == now) {
-        return d;
-    }
-    let r = &now.rotation;
-    let forward = [-r[2], -r[6], -r[10]];
-    let at = look_point(now.eye, forward, view().far);
-    let d = (0..3).map(|k| (at[k] - now.eye[k]).powi(2)).sum::<f64>().sqrt();
-    c.look = Some((now, d));
-    d
 }
 
 pub fn rebase(by: V3) {
