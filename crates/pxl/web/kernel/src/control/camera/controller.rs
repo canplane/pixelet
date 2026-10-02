@@ -280,13 +280,6 @@ pub fn pinch(span: f64) {
     }
 }
 
-pub fn focus(at: Pvf3) {
-    crate::shell::shell::go_to(at);
-    if active() == Active::Orbit {
-        crate::control::camera::orbit::zoom_by(0.5);
-    }
-}
-
 pub fn controller_step(ctx: &mut TickContext) {
     if switch() {
         ctx.invalidate();

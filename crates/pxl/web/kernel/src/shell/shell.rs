@@ -144,6 +144,14 @@ pub fn go_to(target: Pvf3) {
     go_to_ground(target, Motion::Smooth);
 }
 
+/// `go_to`, and nearer where the camera has a nearer to be: the orbit halves its distance.
+pub fn go_into(target: Pvf3) {
+    go_to(target);
+    if crate::control::camera::controller::active() == crate::control::camera::controller::Active::Orbit {
+        crate::control::camera::orbit::zoom_by(0.5);
+    }
+}
+
 pub fn go_to_degrees(lon: f64, lat: f64) {
     camera_store().is_follow_mode = false;
     let mut target = Pvf3::default();
