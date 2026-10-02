@@ -30,12 +30,19 @@ use crate::world::paging::{Candidate, Paging, Victim, ABSENT, ASKS, DESTINATION_
 use crate::world::prefetch::{NoPrefetch, Prefetch};
 use crate::world::quality;
 
+/// What answers a page the bucket has no object for.
+pub enum Absent {
+    /// The page over it, which settles it; at the top, `Layer::empty`.
+    Above,
+    /// The one body every such page shares, fetched under the category and
+    /// held in `ABSENT`.
+    Shared(Category),
+}
+
 pub trait Layer: Folds + Clone + 'static {
     const CATEGORY: Category;
 
-    /// The category of the one body every page with no object shares, held
-    /// in `ABSENT`; none where such a page is answered otherwise (`absent`).
-    const SHARED_ABSENT: Option<Category> = None;
+    const ON_ABSENT: Absent = Absent::Above;
 
     /// The coarsest level the layer has pages at; past where that level
     /// hands off, nothing of it is asked for.
@@ -45,7 +52,10 @@ pub trait Layer: Folds + Clone + 'static {
 
     fn receive(record: u32, pkt: &[u8], phases: &mut Phases) -> Result<Self, Failure>;
 
-    fn absent(p: LevelPage);
+    /// A page with nothing in it, which answers an absent page at the top.
+    fn empty() -> Option<Self> {
+        None
+    }
 
     fn changed(_p: LevelPage, _present: bool) {}
 
@@ -164,8 +174,15 @@ impl<L: Layer> Pyramid<L> {
         Ok(())
     }
 
+    /// The bucket has no object for `p`: answered as the layer says.
     pub fn absent(&mut self, p: LevelPage) {
-        self.paging.absent(p);
+        match L::ON_ABSENT {
+            Absent::Shared(_) => self.paging.absent(p),
+            Absent::Above => match L::empty() {
+                Some(empty) if p.level >= TOP_LEVEL => self.paging.set(p, empty),
+                _ => self.paging.answer_above(p),
+            },
+        }
     }
 
     pub fn admit(&mut self, p: LevelPage, receive: impl FnOnce(u32) -> Result<L, Failure>) -> Result<(), Failure> {
@@ -346,7 +363,7 @@ impl<L: Layer> Pyramid<L> {
     }
 
     fn declare_shared(&self) {
-        if let Some(category) = L::SHARED_ABSENT {
+        if let Absent::Shared(category) = L::ON_ABSENT {
             declare(category, if self.paging.awaits_shared() { &[(0, Ask::PLAIN)] } else { &[] });
         }
     }

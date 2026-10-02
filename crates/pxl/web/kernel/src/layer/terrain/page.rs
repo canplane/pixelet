@@ -22,7 +22,7 @@ use crate::io::sched::pending_count;
 use crate::layer::terrain::fixed::{blocks_off, deck_off, ele_off, extent_off, ground_off, BLOCK_LANE_BYTES, DECK_LANE_BYTES, ELE_LANE_BYTES, EXTENT_LANE_BYTES, GROUND_LANE_BYTES};
 use crate::mem::fixed::{at, Range};
 use crate::shell::map_store::{map_store, MapStatus};
-use crate::world::pyramid::{Layer, Pyramid};
+use crate::world::pyramid::{Absent, Layer, Pyramid};
 
 pub use pxl_spec::bake::format::OCEAN_KEY;
 
@@ -32,7 +32,7 @@ static TERRAIN: Global<Pyramid<Terrain>> = Global::new();
 
 impl Layer for Terrain {
     const CATEGORY: Category = Category::terrain;
-    const SHARED_ABSENT: Option<Category> = Some(OCEAN_CATEGORY);
+    const ON_ABSENT: Absent = Absent::Shared(OCEAN_CATEGORY);
     // The leaves carry the terrain topic; the levels above are read through the
     // chunks that draw them.
 
@@ -48,10 +48,6 @@ impl Layer for Terrain {
         let terrain = decode_terrain_into(pkt, unsafe { room_of(record) })?;
         phases.push(TaskPhaseName::decode_ms, now() - t0);
         Ok(terrain)
-    }
-
-    fn absent(p: LevelPage) {
-        Terrain::pyramid().absent(p);
     }
 
     /// The ground under whatever this page is the finest resident one over

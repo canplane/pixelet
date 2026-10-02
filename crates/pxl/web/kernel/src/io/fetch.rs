@@ -182,8 +182,8 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
 /// tile must exist, so its absence is a fault.
 fn absent(category: Category, subject: u64) -> Result<(), Errno> {
     match category {
-        Category::terrain => Terrain::absent(LevelPage::of_subject(subject)),
-        Category::poi => PoiPage::absent(LevelPage::of_subject(subject)),
+        Category::terrain => Terrain::pyramid().absent(LevelPage::of_subject(subject)),
+        Category::poi => PoiPage::pyramid().absent(LevelPage::of_subject(subject)),
         Category::geocode => geocode_store::absent_group(subject),
         // A bake with no dictionary names nothing: an answer, so not asked again.
         Category::geocode_dict => geocode_store::absent_dict(),

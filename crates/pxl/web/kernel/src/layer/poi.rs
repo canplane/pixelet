@@ -8,7 +8,6 @@ pub mod placement;
 
 use pxl_spec::bake::poi_badge::KIND_CATEGORIES;
 use pxl_spec::bake::poi_page::{self, PoiPage};
-use pxl_spec::space::pyramid::{LevelPage, TOP_LEVEL};
 
 use crate::global::Global;
 use crate::io::demand::{Category, Phases};
@@ -31,13 +30,8 @@ impl Layer for PoiPage {
         Ok(poi_page::decode(pkt)?)
     }
 
-    /// At the top, a page with no places; under it, one the page above settles.
-    fn absent(p: LevelPage) {
-        if p.level < TOP_LEVEL {
-            PoiPage::pyramid().answer_above(p);
-        } else {
-            PoiPage::pyramid().set(p, PoiPage::default());
-        }
+    fn empty() -> Option<PoiPage> {
+        Some(PoiPage::default())
     }
 }
 
