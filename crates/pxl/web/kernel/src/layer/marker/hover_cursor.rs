@@ -17,8 +17,7 @@ use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 
-use crate::control::camera::input::{holding, ActiveTool};
-use crate::control::camera::store::camera_store;
+use crate::control::interaction::{holding, hover, ActiveTool};
 use crate::global::Global;
 use crate::kernel::with_world;
 use crate::layer::decor::asset_store::{decor_assets_for, decor_bundle_assets};
@@ -57,15 +56,15 @@ pub fn hover_cursor_step() {
         carve_preview: None,
         ghost: Ghost::None,
     });
-    let camera = camera_store();
+    let hover = hover();
     let ui = holding();
     let settings = settings_store();
-    let hovered = camera.hovered_coord;
+    let hovered = hover.coord;
     let active_tool = ui.active_tool;
 
-    let hovered_object = camera.hovered_object_at.and_then(get_placed_object);
+    let hovered_object = hover.object_at.and_then(get_placed_object);
 
-    let scattered = camera.hovered_scattered.is_some();
+    let scattered = hover.scattered.is_some();
     let digging_terrain = active_tool == ActiveTool::Eraser && hovered_object.is_none() && !scattered;
     let structures = settings.structures;
     let textures = settings.textures;
@@ -101,7 +100,7 @@ pub fn hover_cursor_step() {
         set_virtual_hide(virtual_hide_target);
         c.virtual_hide_target = virtual_hide_target;
     }
-    set_scattered_hide(camera.hovered_scattered.filter(|_| active_tool == ActiveTool::Eraser).map(|s| s.cell));
+    set_scattered_hide(hover.scattered.filter(|_| active_tool == ActiveTool::Eraser).map(|s| s.cell));
 
     // Bare terrain has no leaf to hide, so the preview injects an AIR entry and
     // what is one voxel below shows through the ghost.
@@ -171,8 +170,8 @@ pub fn hover_cursor_step() {
     // while the cursor is on it.
     let coplanar_with_terrain = !use_object_style;
 
-    let scattered_ghost = camera
-        .hovered_scattered
+    let scattered_ghost = hover
+        .scattered
         .filter(|_| matches!(active_tool, ActiveTool::Pointer | ActiveTool::Eraser))
         .map(|s| Ghost::Decor {
             at: s.at,

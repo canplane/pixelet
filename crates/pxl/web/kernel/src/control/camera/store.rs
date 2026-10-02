@@ -1,13 +1,10 @@
 // pxl-kernel/control/camera/store.rs
 
-use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_core::math::scalar::clamp;
 
 use crate::control::camera::config::camera_cfg::view::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR, MAX_DIST, MIN_DIST};
 use crate::control::camera::controller::look_domain;
 use crate::global::Global;
-use crate::layer::decor::hit::Scattered;
-use crate::layer::object::store::EntryAt;
 use crate::world::change::request_world_tick;
 
 fn norm_dist(dist: f64) -> f64 {
@@ -48,12 +45,6 @@ pub struct IntentPatch {
 
 pub struct CameraStore {
     pub camera_status: CameraStatus,
-    pub hovered_coord: Option<Pvf3>,
-    pub hovered_object_at: Option<EntryAt>,
-    /// A scattered decor has no entry.
-    pub hovered_scattered: Option<Scattered>,
-    /// Where a walker sent there starts from.
-    pub hovered_approach: Option<Pvf3>,
     pub intent: Intent,
     pub is_follow_mode: bool,
 }
@@ -62,10 +53,6 @@ impl CameraStore {
     fn new() -> CameraStore {
         CameraStore {
             camera_status: CameraStatus::Idle,
-            hovered_coord: None,
-            hovered_object_at: None,
-            hovered_scattered: None,
-            hovered_approach: None,
             intent: Intent {
                 dist: DEFAULT_DIST,
                 azimuth: DEFAULT_AZIMUTH,
