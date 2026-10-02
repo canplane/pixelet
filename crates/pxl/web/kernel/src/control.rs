@@ -1,6 +1,7 @@
 // pxl-kernel/control.rs
 
-//! What moves the view: the camera, navigation, and the device's sensors.
+//! What the user does to the world and the view: the camera, the pointer's
+//! picks and edits, navigation, and the device's sensors.
 
 pub mod camera;
 pub mod interaction;

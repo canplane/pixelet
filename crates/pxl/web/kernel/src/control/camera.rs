@@ -9,5 +9,4 @@ pub mod free;
 pub mod gesture;
 pub mod input;
 pub mod orbit;
-pub mod ray;
 pub mod store;

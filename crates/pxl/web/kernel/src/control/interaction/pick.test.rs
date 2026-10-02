@@ -1,4 +1,4 @@
-// pxl-kernel/control/camera/ray.test.rs
+// pxl-kernel/control/interaction/pick.test.rs
 
 // A carve writes a cell-sized AIR leaf, so its corner must be the cell's,
 // not the size tier's; the store is saved, so a wrong bite outlives the

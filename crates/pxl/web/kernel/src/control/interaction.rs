@@ -3,6 +3,8 @@
 //! What the pointer picks and edits, apart from what it does to the camera:
 //! the tool it holds, what is under it, and what a tap does with that.
 
+pub mod pick;
+
 use pxl_spec::bake::constant::{CELL, U_PER_CELL};
 use pxl_spec::cell::object::PlaceableCube;
 use pxl_spec::cell::{cube_types, DecorId};
@@ -11,7 +13,7 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
 
 pub use crate::abi::cmd::ActiveTool;
-use crate::control::camera::ray::{ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner};
+use crate::control::interaction::pick::{ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner};
 use crate::control::navigation::walk::stand_or_raw;
 use crate::global::Global;
 use crate::layer::decor::hit::{raycast_decor, DecorStruck, Scattered};
