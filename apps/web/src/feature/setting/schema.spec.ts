@@ -48,6 +48,7 @@ export const SETTINGS = {
     kind: "toggle",
     default: true,
     section: "display",
+    dev: true,
   },
   /** Procedurally scattered decor only; what the player placed stays.
    *
@@ -94,16 +95,11 @@ export const SETTINGS = {
     options: ["orbit", "free"],
     section: "camera",
   },
-  /** What the camera does when the controls would put it underground;
-   * CAMERA_COLLISION_MODES says each. The default is climb, because the one
-   * thing a map camera must not do is refuse to
-   * move. stop is the more literal answer and the worse default: it hands
-   * back a control that did nothing, which reads as the app being stuck
-   * rather than as the ground being in the way. */
+  /** What the camera does when the controls would put it underground; CAMERA_COLLISION_MODES says each. */
   camera_collision: {
     key: 6 as number,
     kind: "choice",
-    default: "climb",
+    default: "stop",
     options: ["through", "stop", "climb"],
     section: "camera",
     dev: true,
@@ -204,14 +200,6 @@ export const SETTINGS_SHIPPED = {
     default: true,
     section: "display",
     cost: "low",
-  },
-  /** Whether the STRUCTURE ground channel is painted. The bake writes it
-   * either way (pxl-geo-bake terrain/pipeline/overture/policy.rs); this is a render decision. */
-  structures: {
-    key: 1 as number,
-    kind: "toggle",
-    default: true,
-    section: "display",
   },
   /** Procedurally scattered decor only; what the player placed stays.
    *

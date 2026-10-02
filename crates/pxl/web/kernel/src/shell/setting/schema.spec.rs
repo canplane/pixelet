@@ -181,12 +181,7 @@ pub enum SettingKey {
     /// height over the ground; to third the map center is laid on the ground
     /// and the eye steps back by the radius.
     camera_mode = 5,
-    /// What the camera does when the controls would put it underground;
-    /// CAMERA_COLLISION_MODES says each. The default is climb, because the one
-    /// thing a map camera must not do is refuse to
-    /// move. stop is the more literal answer and the worse default: it hands
-    /// back a control that did nothing, which reads as the app being stuck
-    /// rather than as the ground being in the way.
+    /// What the camera does when the controls would put it underground; CAMERA_COLLISION_MODES says each.
     camera_collision = 6,
     /// Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.
@@ -293,7 +288,7 @@ impl SettingKey {
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(self, SettingKey::camera_collision | SettingKey::shadows)
+        matches!(self, SettingKey::structures | SettingKey::camera_collision | SettingKey::shadows)
     }
 
     /// Read by a chunk's build, so a change builds the chunks again.
@@ -332,7 +327,7 @@ impl Settings {
         poi: false,
         tilt_lock: false,
         camera_mode: CameraMode::orbit,
-        camera_collision: CameraCollisionMode::climb,
+        camera_collision: CameraCollisionMode::stop,
         edge_shade: true,
         rim_light: true,
         ao: AoMode::corner,

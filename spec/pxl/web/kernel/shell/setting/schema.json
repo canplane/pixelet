@@ -112,7 +112,8 @@
       "kind": "toggle",
       "default": true,
       "section": "display",
-      "sources_chunks": true
+      "sources_chunks": true,
+      "dev": true
     },
     "decor": {
       "$doc": [
@@ -163,16 +164,9 @@
       "section": "camera"
     },
     "camera_collision": {
-      "$doc": [
-        "What the camera does when the controls would put it underground;",
-        "CAMERA_COLLISION_MODES says each. The default is climb, because the one",
-        "thing a map camera must not do is refuse to",
-        "move. stop is the more literal answer and the worse default: it hands",
-        "back a control that did nothing, which reads as the app being stuck",
-        "rather than as the ground being in the way."
-      ],
+      "$doc": ["What the camera does when the controls would put it underground; CAMERA_COLLISION_MODES says each."],
       "kind": "choice",
-      "default": "climb",
+      "default": "stop",
       "options": "CAMERA_COLLISION_MODES",
       "section": "camera",
       "dev": true
