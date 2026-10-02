@@ -19,7 +19,6 @@ fn anything_that_is_not_a_name_a_reader_can_be_shown_is_nothing() {
     assert_eq!(mixed.len(), 1, "the readable half is kept");
 }
 
-/// The wire the bake writes: what a reader gets and what it does not.
 #[test]
 fn a_place_survives_the_wire_and_says_nothing_it_need_not() {
     use pxl_spec::place::{Place, PlacePart, PlaceRank};

@@ -1,25 +1,8 @@
 // pxl-spec/bake/deck.rs
 
-//! A page's decks: the ways it carries above its ground — bridges,
-//! viaducts, the ramps of an interchange.
-//!
-//! The ground is a heightfield and a cell of it holds one way, flat on the
-//! surface. A deck is neither: it stands off the ground, crosses other ways
-//! and other decks, and has a height of its own along its length. So it is
-//! kept in its own shape, a line, and drawn into the chunk's columns when the
-//! chunk is built (issue/20261001-ways-off-the-ground.md). Decks are sparse —
-//! most pages carry none — and a line is a few bytes a point where a lane
-//! would be a byte a cell on every page.
-//!
-//! A deck is a polyline in its page's cells, a top at each point, a width and
-//! the transport type its surface shows. A bore is the same line through
-//! the ground rather than over it — a tunnel's mouth, where it meets a hillside — its points the way's floor. Where a
-//! deck lies is the page's lattice, the ground's (space/pyramid.rs
-//! `GROUND`), so a level's page holds its decks in its own cells as it holds
-//! its ground. A top is in z16 cells, as the elevation is, at every level.
-//!
-//! The heights are solved offline over the whole network, structure by
-//! structure (pxl-geo-bake deck/); nothing here decides one.
+//! A page's decks and bores: ways above or through the ground, kept as
+//! polylines in the page's cells with a top in z16 cells at each point, and
+//! drawn into the chunk's columns by the client. Heights are solved offline.
 
 use std::borrow::Cow;
 
@@ -31,64 +14,39 @@ use super::way;
 use crate::space::hierarchy::child_of;
 use crate::space::pyramid::PAGE_CELLS;
 
-/// A point's coordinate in eighths of its page's cell, from the page's
-/// south-west corner: an `i16` reaches four thousand cells either way, far
-/// past a page's 512, so a deck's points outside its page are held as
-/// exactly as those inside it.
+/// Points are in eighths of the page's cell, which an `i16` holds far past the page's edge.
 pub const POINT_SCALE: f64 = 8.0;
 
-/// A deck's slab, top to underside, in z16 cells. One cell is about the
-/// two metres a road deck's structure is.
+/// A deck's slab in z16 cells: about a road deck's two metres.
 pub const THICKNESS: i32 = 1;
 
-/// How far apart a deck's piers stand along its line, in its page's cells:
-/// at z16 about the 30 m of a short span, and in a coarser page's own cells
-/// as far apart on the screen. A product number, set by choice. A pier is
-/// the deck's shape, made where the deck is drawn and nothing the bake
-/// decides (issue/20261001-ways-off-the-ground.md); counted from the first
-/// point of the line a page carries, so a pier's place along a deck may
-/// shift where the deck crosses into another page.
+/// Pier spacing in the page's cells: about a 30 m span at z16. A product
+/// number; piers are drawn by the client and may shift at page borders.
 pub const PIER_STEP: f64 = 24.0;
 
 /// The farthest past half its width the client draws a line, in its page's
-/// cells: a contract the bake keeps a line's page and its extent by, so how
-/// the client covers cells with a line — its own (bake/way.rs) — can change
-/// within it and nothing is baked again.
+/// cells; the bake sizes a line's page and extent by it.
 pub const LINE_PAST: f64 = 1.0;
 
-/// A bore's air, floor to roof, in z16 cells: about six metres, a road
-/// tunnel's 4.5 to 5 m clearance and the lights and fans over it. A product
-/// number, set by choice.
+/// A bore's air in z16 cells: about six metres, a road tunnel's clearance
+/// plus fittings. A product number.
 pub const BORE_HEIGHT: i32 = 3;
 
-/// The least ground a bore is drawn under over its air, in z16 cells. The
-/// line is the way's floor where the solve put it, at the ground at a portal
-/// and under it between; how deep under the ground a bore is drawn is the
-/// client's, its floor taken down until its air and this roof fit under the
-/// ground, as far as `PORTAL_SLOPE` lets it from a portal. A product number,
-/// set by choice.
+/// The least ground over a bore's air, in z16 cells. A product number.
 pub const ROOF: f64 = 1.5;
 
-/// How steeply a bore's drawn floor goes down from a portal, rise over run
-/// in its page's cells — a road's 8 % at z16, and gentler in a coarser
-/// page's own cells. Short of its depth the bore is open to the sky, the
-/// cutting a road drops through to a portal. A product number, set by
-/// choice.
+/// A bore's drawn floor slope down from a portal: a road's 8 % at z16. A product number.
 pub const PORTAL_SLOPE: f64 = 0.08;
 
-/// How far a bore's drawn floor may lie under its ground, in z16 cells: its
-/// air and its roof.
 pub const BORE_DEPTH: f64 = BORE_HEIGHT as f64 + ROOF;
 
-/// What a line is to the ground.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Form {
     /// Carried over it: a bridge, a viaduct, a ramp.
     Deck,
     /// Cut through it: a tunnel, under a roof of the ground over it.
     Bore,
-    /// Built up on it: the embankment a bridge's approach climbs on, solid
-    /// from the ground to its top.
+    /// Built up on it: an approach embankment, solid from the ground to its top.
     Ramp,
 }
 
@@ -109,47 +67,34 @@ impl Form {
         }
     }
 
-    /// Whether it lies under the ground's top rather than over it.
     pub fn cuts(self) -> bool {
         self == Form::Bore
     }
 }
 
-/// A resident record's room for decks and their points (pxl-kernel
-/// layer/terrain/fixed.rs). The bake keeps every page within them, and
-/// refuses to write one it cannot keep within them. Chosen from the memory
-/// a record can spend on decks — 48 KiB, an eighth of what a lane a byte a
-/// cell would — not from the data, and each lane a whole number of cache
-/// lines. At about one point every five metres of deck, the points are some
-/// thirty kilometres of deck under one page.
+/// A resident record's room for decks and their points: 48 KiB, chosen from
+/// what a record can spend, not from the data; each lane whole cache lines.
 pub const MAX_DECKS: usize = 1023;
 pub const MAX_POINTS: usize = 6144;
 
-/// A page's decks, as structure-of-arrays: deck `d` is points
-/// `starts[d]..starts[d + 1]`, so `starts` is one longer than the decks and
-/// none is `[0]`.
+/// Structure-of-arrays: deck `d` is points `starts[d]..starts[d + 1]`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Decks {
     pub starts: Cow<'static, [u32]>,
-    /// (x, y) in eighths of the page's cell (`POINT_SCALE`).
+    /// (x, y) in `POINT_SCALE` units.
     pub points: Cow<'static, [[i16; 2]]>,
-    /// The deck's top at each point, in z16 cells.
+    /// z16 cells.
     pub tops: Cow<'static, [i16]>,
-    /// A deck's width, in eighths of the page's cell.
+    /// In `POINT_SCALE` units.
     pub width: Cow<'static, [u8]>,
-    /// The transport type a deck's surface shows, as the catalog numbers it
-    /// (cell/cube_type.spec.rs `transport`).
+    /// The catalog's transport type.
     pub kind: Cow<'static, [u8]>,
-    /// Each line's `Form`, as its byte.
     pub form: Cow<'static, [u8]>,
-    /// How far each point of a bore is from the nearest portal down its
-    /// tunnel — where it meets the ground and its way carries on at the
-    /// surface — in the page's cells; `NO_PORTAL` on a deck, and on a bore
-    /// none of whose ends comes out to the ground.
+    /// Each bore point's distance to the nearest portal down its tunnel, in
+    /// the page's cells; `NO_PORTAL` on a deck or a bore with no open end.
     pub portal: Cow<'static, [u16]>,
 }
 
-/// `Decks::portal` where there is none to measure from.
 pub const NO_PORTAL: u16 = u16::MAX;
 
 impl Default for Decks {
@@ -158,7 +103,6 @@ impl Default for Decks {
     }
 }
 
-/// One deck of a page, read where it lies.
 #[derive(Clone, Copy, Debug)]
 pub struct Deck<'a> {
     pub points: &'a [[i16; 2]],
@@ -169,10 +113,8 @@ pub struct Deck<'a> {
     pub portal: &'a [u16],
 }
 
-/// What a line is over a column — one it covers as a way covers the ground
-/// (bake/way.rs): its top there (a bore's, its floor), in z16 cells, its
-/// kind and form, whether a pier carries it there, and how far the column
-/// is from the nearest portal down its tunnel, in the page's cells.
+/// A line over one column: its top (a bore's floor) in z16 cells, whether a
+/// pier stands there, and its distance to a portal in the page's cells.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Over {
     pub top: f64,
@@ -182,24 +124,19 @@ pub struct Over {
     pub portal: f64,
 }
 
-/// What a line occupies of one column, in z16 cells, each `[lo, hi)`. The
-/// one rule the paint draws a line by and the query meets it by.
+/// What a line occupies of one column, in z16 cells, each `[lo, hi)`; the
+/// paint and the query both use it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Occupies {
-    /// The way on the ground: where a bridge comes down to its end, or a
-    /// tunnel's floor is the ground's top. The column's top cell is its
-    /// surface.
+    /// The way on the ground; the column's top cell is its surface.
     Grade,
-    /// A slab under its top, and where a pier carries it, the pier from the
-    /// ground to the slab.
+    /// A slab under its top, and a pier from the ground where one stands.
     Above { slab: [i32; 2], pier: Option<[i32; 2]> },
-    /// Air through the ground from the floor up, as far as the ground
-    /// stands; the cell under the floor is the way's surface.
+    /// Air from the floor up; the cell under the floor is the way's surface.
     Through { air: [i32; 2] },
 }
 
 impl Over {
-    /// Over a column whose ground stands `ground` cells high.
     pub fn occupies(&self, ground: i32) -> Occupies {
         let top = self.top.round() as i32;
         match self.form {
@@ -212,8 +149,7 @@ impl Over {
             }
             Form::Ramp if top > ground => Occupies::Above { slab: [ground, top], pier: None },
             Form::Bore => {
-                // Taken down until its air and its roof fit under the
-                // ground, and no steeper than a cutting from a portal.
+                // Down until air and roof fit under the ground, no steeper than `PORTAL_SLOPE` from a portal.
                 let under = f64::from(ground) - self.top;
                 let down = (BORE_DEPTH - under).clamp(0.0, self.portal * PORTAL_SLOPE);
                 let floor = (self.top - down).round() as i32;
@@ -255,12 +191,9 @@ impl Decks {
         (0..self.len()).map(|d| self.deck(d))
     }
 
-    /// Every deck over each point of a grid laid on the page: `size` columns
-    /// by rows, point (i, j) at `origin + (i + ½, j + ½) · step` in the
-    /// page's cells — its own cells' centers at a step of one, and finer
-    /// than its cells where a chunk is drawn from a page over its own. Told
-    /// as `each(i, j, deck, over)`; a point under two of a deck's segments,
-    /// at a joint, is told of both, and the caller keeps the higher.
+    /// Every deck over each point of a grid: point (i, j) at
+    /// `origin + (i + ½, j + ½) · step` in the page's cells. A point at a
+    /// joint is reported for both segments; the caller keeps the higher.
     pub fn over_grid(&self, origin: [f64; 2], step: f64, size: [i64; 2], mut each: impl FnMut(i64, i64, usize, Over)) {
         let cell = |v: f64, k: usize| (v - origin[k]) / step - 0.5;
         for (d, deck) in self.iter().enumerate() {
@@ -285,7 +218,6 @@ impl Decks {
         }
     }
 
-    /// Every deck over the point `at`, in the page's cells.
     pub fn over_point(&self, at: [f64; 2]) -> impl Iterator<Item = Over> + '_ {
         self.iter().flat_map(move |deck| {
             let mut along = 0.0;
@@ -298,8 +230,7 @@ impl Decks {
         })
     }
 
-    /// The lowest floor a bore has inside the `[x0, x1) × [y0, y1)` cells,
-    /// conservatively, as `highest_in`.
+    /// The lowest bore floor inside the box, conservatively.
     pub fn lowest_in(&self, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> Option<i16> {
         let mut low = None;
         for bore in self.iter().filter(|d| d.form.cuts()) {
@@ -316,9 +247,8 @@ impl Decks {
         low
     }
 
-    /// The highest top any deck has inside the `[x0, x1) × [y0, y1)` cells,
-    /// conservatively: a deck's highest point counts wherever its line comes
-    /// within its footprint of the box.
+    /// The highest deck top inside the box, conservatively: a deck's highest
+    /// point counts wherever its footprint reaches the box.
     pub fn highest_in(&self, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> Option<i16> {
         let mut top = None;
         for deck in self.iter().filter(|d| !d.form.cuts()) {
@@ -337,29 +267,22 @@ impl Decks {
 }
 
 impl Deck<'_> {
-    /// Point `i` in the page's cells.
     pub fn point(&self, i: usize) -> [f64; 2] {
         self.points[i].map(|v| f64::from(v) / POINT_SCALE)
     }
 
-    /// Its width in the page's cells.
     pub fn width_cells(&self) -> f64 {
         f64::from(self.width) / POINT_SCALE
     }
 
-    /// How far from its line it covers a cell's center, in the page's cells
-    /// (bake/way.rs).
     pub fn reach(&self) -> f64 {
         way::reach(self.width_cells())
     }
 
-    /// How far from its line the client may draw it, in the page's cells:
-    /// half its width and `LINE_PAST`.
     pub fn footprint(&self) -> f64 {
         footprint(self.width_cells())
     }
 
-    /// The corners of the box its line lies in, in the page's cells.
     pub fn bounds(&self) -> [[f64; 2]; 2] {
         let mut b = [[f64::INFINITY; 2], [f64::NEG_INFINITY; 2]];
         for i in 0..self.points.len() {
@@ -371,13 +294,9 @@ impl Deck<'_> {
         b
     }
 
-    /// What segment `s`, which starts `along` cells down the line, is over
-    /// `at`: the top at the nearest point of the segment, if the deck covers
-    /// `at`. A pier stands every `PIER_STEP` down the line and takes the cell
-    /// it is in, at least, and half the deck's width across; it is told
-    /// wherever it stands, and `Over::occupies` raises it only where the
-    /// ground is under the slab. A bore is told how far the nearest point
-    /// of the segment is from a portal down its tunnel.
+    /// What segment `s`, starting `along` cells down the line, is over `at`:
+    /// the top at its nearest point if the deck covers `at`. A pier stands
+    /// every `PIER_STEP` down the line.
     fn over_segment(&self, s: usize, along: f64, at: [f64; 2]) -> Option<Over> {
         let (a, b) = (self.point(s), self.point(s + 1));
         let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
@@ -405,23 +324,17 @@ impl Deck<'_> {
     }
 }
 
-/// How far from its line a line `width` cells wide may be drawn.
 pub fn footprint(width: f64) -> f64 {
     width / 2.0 + LINE_PAST
 }
 
-/// A page's decks one level up, from its four children's: each child's
-/// decks in the parent's cells, at their own width, kept while they are as
-/// wide as half the parent's cell — by their size and nothing of what they
-/// are — and each line simplified to the parent's cell — a point
-/// goes where the line without it stays within half a cell of it across and
-/// half a cell of height. A deck two children both carry is carried twice,
-/// which draws the same columns twice.
+/// A page's decks one level up: children's decks in the parent's cells, kept
+/// while at least half a parent cell wide, each simplified to half a cell
+/// across and in height. A deck two children carry is carried twice.
 pub fn fold_decks(children: [&Decks; 4], level: u32) -> Decks {
     let mut out = Builder::default();
     let n = f64::from(PAGE_CELLS);
-    // A z16 cell is 2^level of them under a level-`level` cell; the parent's
-    // half cell of height, in z16 cells.
+    // The parent's half cell of height, in z16 cells.
     let height_tolerance = f64::from(1u32 << level) / 2.0;
     for (q, child) in children.iter().enumerate() {
         let [qx, qy] = child_of([0, 0], q).map(|v| v as f64 * n);
@@ -431,7 +344,6 @@ pub fn fold_decks(children: [&Decks; 4], level: u32) -> Decks {
                 continue;
             }
             let points: Vec<[f64; 2]> = (0..deck.points.len()).map(|i| deck.point(i)).map(|[x, y]| [(x + qx) / 2.0, (y + qy) / 2.0]).collect();
-            // A parent's cell is two of the child's.
             let portal: Vec<u16> = deck.portal.iter().map(|&p| if p == NO_PORTAL { NO_PORTAL } else { p / 2 }).collect();
             let keep = simplify(&points, deck.tops, &portal, 0.5, height_tolerance);
             let kept: Vec<usize> = (0..points.len()).filter(|&i| keep[i]).collect();
@@ -441,11 +353,8 @@ pub fn fold_decks(children: [&Decks; 4], level: u32) -> Decks {
     out.finish()
 }
 
-/// Which points of a line Douglas–Peucker keeps at `across` cells and
-/// `height` z16 cells: the ends, and every point the line without it would
-/// miss by more than either — across, in height, or by more than a cell, the
-/// unit it is counted in, in how far it is from a portal, so a tunnel's
-/// middle, the farthest from its portals, stays.
+/// Douglas–Peucker over position, height and portal distance; a tunnel's
+/// middle, farthest from its portals, therefore stays.
 fn simplify(points: &[[f64; 2]], tops: &[i16], portal: &[u16], across: f64, height: f64) -> Vec<bool> {
     let mut keep = vec![false; points.len()];
     if points.is_empty() {
@@ -485,7 +394,6 @@ fn simplify(points: &[[f64; 2]], tops: &[i16], portal: &[u16], across: f64, heig
     keep
 }
 
-/// A page's decks, written one at a time.
 #[derive(Default)]
 pub struct Builder {
     starts: Vec<u32>,
@@ -498,9 +406,7 @@ pub struct Builder {
 }
 
 impl Builder {
-    /// A deck from its points in the page's cells, each with its top and
-    /// how far it is from a portal (`Decks::portal`). A line of fewer than
-    /// two points, or of no width, is no deck.
+    /// A line of fewer than two points, or of no width, is dropped.
     pub fn push(&mut self, points: impl IntoIterator<Item = ([f64; 2], i16, u16)>, width: u8, kind: u8, form: Form) {
         let at = self.points.len();
         for ([x, y], top, portal) in points {
@@ -521,7 +427,6 @@ impl Builder {
         self.form.push(form.byte());
     }
 
-    /// Whether the decks so far fit a record.
     pub fn fits(&self) -> bool {
         self.width.len() <= MAX_DECKS && self.points.len() <= MAX_POINTS
     }
@@ -540,12 +445,7 @@ impl Builder {
     }
 }
 
-// ---- The wire ----
-
-// decks = [starts, points, tops, width, kind, form, portal], the points
-// flattened.
-
-/// A page's decks as its packet's branch.
+// decks = [starts, points (flattened), tops, width, kind, form, portal]
 pub fn write_branch<'a>(decks: &'a Decks, b: &mut BranchViewImpl<'a>) {
     b.branch(Some(&mut |d| {
         d.u32_array(Some(&decks.starts))
@@ -558,7 +458,6 @@ pub fn write_branch<'a>(decks: &'a Decks, b: &mut BranchViewImpl<'a>) {
     }));
 }
 
-/// A packet's decks, where they lie.
 pub struct Lanes<'a> {
     starts: &'a [u32],
     points: &'a [[i16; 2]],
@@ -569,10 +468,7 @@ pub struct Lanes<'a> {
     portal: &'a [u16],
 }
 
-/// The branch's lanes: refused unless they are one page's decks — as many
-/// widths, kinds and forms as decks, as many tops and portals as points, the starts
-/// rising from the first point to past the last, and no more than a record
-/// holds.
+/// Refused unless the lanes are one page's decks, consistently sized and within a record's room.
 pub fn read_branch(d: BranchCursor<'_>) -> Result<Lanes<'_>, MarshalError> {
     let bad = || MarshalError::new(Errno::EBADMSG);
     let starts = d.at(0)?.get_array::<u32>()?;
@@ -604,7 +500,6 @@ pub fn read_branch(d: BranchCursor<'_>) -> Result<Lanes<'_>, MarshalError> {
 }
 
 impl Lanes<'_> {
-    /// Copied out, for a page held in hand.
     pub fn to_decks(&self) -> Decks {
         Decks {
             starts: self.starts.to_vec().into(),
@@ -617,7 +512,6 @@ impl Lanes<'_> {
         }
     }
 
-    /// Copied into a record's room, and read from there.
     pub fn into_room(&self, room: Room) -> Decks {
         fn put<T: Copy>(dst: &'static mut [T], src: &[T]) -> &'static [T] {
             let dst = &mut dst[..src.len()];
@@ -636,8 +530,7 @@ impl Lanes<'_> {
     }
 }
 
-/// A record's room for decks, each lane as long as a record holds
-/// (`MAX_DECKS`, `MAX_POINTS`).
+/// A record's room for decks, each lane `MAX_DECKS` or `MAX_POINTS` long.
 pub struct Room {
     pub starts: &'static mut [u32],
     pub points: &'static mut [[i16; 2]],

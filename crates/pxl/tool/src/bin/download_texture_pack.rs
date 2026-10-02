@@ -1,16 +1,7 @@
 // pxl-tool/bin/download_texture_pack.rs
 
-//! The texture pack, normalized.
-//!
-//! For every entry in `asset/cube/manifest.json`: fetch the URL only if
-//! `asset/cube/original/` does not already hold a valid copy from that same
-//! URL, then always re-normalize to a `TILE_SIZE` square opaque RGBA PNG under
-//! `asset/cube/{terrain,block}/`. The client fetches those by content hash from
-//! the bucket, so a changed image is followed by `ingest:asset`.
-//!
-//! Re-runnable and idempotent for an unchanged manifest: the cached original
-//! is the resize source, so a re-run never reaches the network merely to
-//! re-normalize.
+//! Fetches each `asset/cube/manifest.json` entry not already cached and
+//! normalizes it to a `TILE_SIZE` opaque PNG. Follow with `ingest:asset`.
 //!
 //!   deno task download:pack
 
@@ -23,8 +14,6 @@ use pxl_tool::root;
 
 const RETRY_ATTEMPTS: u32 = 3;
 
-/// A few attempts with a growing pause, because the sources are third-party
-/// URLs and one refused connection is not a reason to fail a whole pack.
 fn fetch_with_retry(url: &str) -> Result<Vec<u8>, String> {
     let mut last = String::new();
     for attempt in 1..=RETRY_ATTEMPTS {
@@ -47,9 +36,6 @@ fn fetch_with_retry(url: &str) -> Result<Vec<u8>, String> {
     Err(last)
 }
 
-/// The cached original, if the manifest's URL for this item still matches what
-/// produced it. `None` — never fetched, or the manifest moved on — means the
-/// caller has to fetch.
 fn cached_original(item: &Item, state: &pack::State) -> Option<RgbaImage> {
     if state.get(&item.file).map(String::as_str) != Some(item.url.as_str()) {
         return None;
@@ -85,9 +71,6 @@ fn process(item: &Item, state: &mut pack::State) -> Result<Outcome, String> {
             ));
         }
         img = match item.style {
-            // Lanczos3 band-limits before downsampling, where nearest would
-            // just drop samples and alias the fine painted detail these
-            // sources were chosen for into pixelation.
             Style::Painted => image::imageops::resize(&img, TILE_SIZE, TILE_SIZE, image::imageops::FilterType::Lanczos3),
             Style::Legacy => {
                 let (w, h) = (img.width(), img.height());
@@ -102,9 +85,8 @@ fn process(item: &Item, state: &mut pack::State) -> Result<Outcome, String> {
     std::fs::create_dir_all(item.dest.parent().ok_or("no parent")?).map_err(|e| e.to_string())?;
     img.save_with_format(&item.dest, ImageFormat::Png).map_err(|e| format!("{}: {e}", item.dest.display()))?;
 
-    // What landed on disk, not the buffer that was meant to: an encoder that
-    // wrote a different size or left an alpha behind would otherwise reach the
-    // bucket as a layer the array texture cannot take.
+    // Check what landed on disk, not the buffer: a wrong size or a leftover alpha
+    // would reach the bucket as a layer the array texture cannot take.
     let written = image::open(&item.dest).map_err(|e| format!("post-write: {e}"))?.to_rgba8();
     if written.width() != TILE_SIZE || written.height() != TILE_SIZE {
         return Err(format!("post-write validation failed: got {}x{}", written.width(), written.height()));

@@ -1,21 +1,15 @@
 // pxl-spec/space/observation.test.rs
 //
-// The estimator's laws, against an exact solver on fixtures: flat ground
-// with towers standing on it, whose heights are known exactly, and bare
-// ground on a small planet. The exact demand is every sample cast through
-// the frustum to its first hit, asking for the page holding the hit at the
-// level its distance chooses.
+// The estimator's laws against an exact ray-cast solver on fixtures with
+// known heights.
 
 use std::collections::HashSet;
 
 use super::*;
 use crate::space::lod::FAULT_PAGES;
 
-/// The qualities every law is held at: the criterion itself, and coarser
-/// ones, which bring every level's band nearer.
 const TAUS: [Tau; 3] = [Tau::FINEST, Tau::of(1.5), Tau::of(8.0)];
 
-/// A box standing on the ground: its footprint and its height.
 #[derive(Clone, Copy)]
 struct Tower {
     x: [f64; 2],
@@ -23,8 +17,7 @@ struct Tower {
     h: f64,
 }
 
-/// Flat ground at zero, towers on it, and the planet's radius: infinite for
-/// a flat world, finite for bare ground drawn lower as it recedes.
+/// Flat ground at zero with towers, and a planet radius (infinite for flat).
 struct World {
     towers: Vec<Tower>,
     planet: f64,
@@ -47,10 +40,8 @@ impl Bounds for World {
 }
 
 impl World {
-    /// Where a ray from `e` along the unit `v` first meets anything, as a
-    /// distance along it.
+    /// The first hit's distance along the unit ray.
     fn first_hit(&self, e: [f64; 3], v: [f64; 3]) -> Option<f64> {
-        // The ground drawn at z = −d² / 2R, d the run along it from the eye.
         let (a, b, c) = ((v[0] * v[0] + v[1] * v[1]) / (2.0 * self.planet), v[2], e[2]);
         let ground = if a == 0.0 {
             (b < 0.0).then(|| -c / b)
@@ -76,8 +67,7 @@ impl World {
     }
 }
 
-/// An eye and where it looks: a yaw about the vertical, a pitch under the
-/// horizon, and half the field across and up.
+/// Yaw, pitch under the horizon, and half the field across and up.
 #[derive(Clone, Copy)]
 struct Look {
     eye: [f64; 3],
@@ -89,7 +79,6 @@ struct Look {
 const NEAR: f64 = 0.1;
 
 impl Look {
-    /// Forward, right and up.
     fn basis(self) -> [[f64; 3]; 3] {
         let (cy, sy, cp, sp) = (self.yaw.cos(), self.yaw.sin(), self.pitch.cos(), self.pitch.sin());
         let f = [cy * cp, sy * cp, -sp];
@@ -119,7 +108,6 @@ impl Look {
         Frustum { planes }
     }
 
-    /// Unit directions across the field, `n` × `n`.
     fn rays(self, n: u32) -> impl Iterator<Item = [f64; 3]> {
         let [f, r, u] = self.basis();
         let [tx, ty] = self.half.map(f64::tan);
@@ -145,16 +133,13 @@ fn observation(look: Look, far: f64, planet: f64, frustum: bool) -> Observation 
     }
 }
 
-/// The pages the estimator's requirements map to at `tau`.
 fn demand(o: &Observation, bounds: &impl Bounds, tau: Tau) -> HashSet<LevelPage> {
     let mut out = HashSet::new();
     ByBounds { tau }.requirements(o, bounds, &mut |r| Paged.pages(&r, &mut |p| _ = out.insert(p)));
     out
 }
 
-/// The exact demand of `look`'s samples at `tau`: each ray's first hit, if
-/// it is answered, asks for the page holding it at the level its distance
-/// chooses.
+/// The exact demand: each answered ray asks for the page of its first hit at its distance's level.
 fn exact(world: &World, look: Look, far: f64, tau: Tau) -> HashSet<LevelPage> {
     let mut out = HashSet::new();
     for v in look.rays(96) {
@@ -175,8 +160,7 @@ fn next(seed: &mut u64) -> f64 {
     (*seed >> 11) as f64 / (1u64 << 53) as f64
 }
 
-/// Towers scattered about `at`, some tall and near, some wide and far, and
-/// none over `at` itself, where the eye stands.
+/// None over `at`, where the eye stands.
 fn towers(at: [f64; 2], seed: u64) -> Vec<Tower> {
     let mut seed = seed;
     (0..60)
@@ -201,8 +185,7 @@ fn looks() -> Vec<Look> {
     out
 }
 
-/// Where the planet draws the far ground lower, what it lowers is still
-/// named: a small planet, so the drop is large.
+/// A small planet, so far ground drops a lot and must still be named.
 #[test]
 fn ground_the_planet_draws_lower_is_named_where_it_is_drawn() {
     let world = World { towers: Vec::new(), planet: 60_000.0 };
@@ -216,9 +199,7 @@ fn ground_the_planet_draws_lower_is_named_where_it_is_drawn() {
     }
 }
 
-/// Knowing less never names less: with nothing known, every page the bounds
-/// name is still named. And a level names no more than the fault bound,
-/// with the frustum or looking all around, known or not, at every quality.
+/// Knowing less never names less, and no level names more than the fault bound.
 #[test]
 fn a_level_names_no_more_than_the_fault_bound_and_less_known_names_more() {
     for (k, look) in looks().into_iter().enumerate() {
@@ -242,8 +223,6 @@ fn a_level_names_no_more_than_the_fault_bound_and_less_known_names_more() {
     }
 }
 
-/// A region over a square of a level's lattice is one page, whatever its
-/// heights, and a wider one every page under it.
 #[test]
 fn paged_storage_maps_a_square_to_its_page_and_ground_to_every_page_under_it() {
     for level in [0, 3, TOP_LEVEL] {

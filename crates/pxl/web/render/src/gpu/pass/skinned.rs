@@ -1,13 +1,8 @@
 // pxl-render/gpu/pass/skinned.rs
 
-//! Actors on the device: the scheduler's skinned draws (crates/pxl/web/kernel/src/layer/model/store.rs)
-//! executed against each model's mesh block and each actor's joint palette,
-//! both as the scheduler wrote them, under shader/skinned.wgsl. A model's skin
-//! is the image its asset loaded, by model id.
-//!
-//! The world's pass lights them under the sun's shadow; a case of the variant
-//! picker draws its one actor through a pass of its own, at one sample, with a
-//! blank map where the shadow would be.
+//! Actors: each model's mesh block skinned by each actor's joint palette. A
+//! case of the variant picker draws one actor in a pass of its own, with a
+//! blank shadow map.
 
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED};
 use crate::frame::shader::record::{PIPELINE_SKINNED_DEPTH, PIPELINE_SKINNED_PREPASS};
@@ -17,8 +12,7 @@ use crate::gpu::pass::model::{draw_models, uniform_of, DrawUniforms, ModelDraw, 
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{release_skin, skin_group, Blocks};
 
-/// shader/skinned.wgsl's Draw: translation, the turn about Z, the opacity, the
-/// scale, padding.
+/// Translation, turn about Z, opacity, scale, padding.
 const DRAW_UNIFORM_BYTES: u32 = 32;
 const SKINS: usize = 16;
 
@@ -26,10 +20,7 @@ const SKINS: usize = 16;
 struct Skin {
     model: u32,
     image: u32,
-    /// Texture, view, group.
     ids: [u32; 3],
-    /// When the slot was last asked for, so the one longest unasked is the one
-    /// a new model takes.
     seq: u32,
 }
 
@@ -40,7 +31,6 @@ pub struct SkinnedPass {
     sampler: u32,
     uniforms: DrawUniforms,
     skins: [Skin; SKINS],
-    /// Counts `set_skin` calls, to stamp the slot each one lands in.
     seq: u32,
 }
 
@@ -59,19 +49,16 @@ impl SkinnedPass {
         }
     }
 
-    /// Model `model`'s skin; the same image again changes nothing, and one not
-    /// yet arrived is asked for again next frame.
+    /// One not yet arrived is asked for again next frame.
     pub fn set_skin(&mut self, g: &Gpu, model: u32, image: u32) {
         let at = self
             .skins
             .iter()
             .position(|s| s.model == model && s.ids[2] != 0)
             .or_else(|| self.skins.iter().position(|s| s.ids[2] == 0))
-            // Nothing tells the pass a model is gone, so a slot is never freed
-            // on its own: with the table full a new model would go untextured
-            // for good. The character preview walks every shipped variant,
-            // more of them than there are slots. The slot asked for longest
-            // ago is the one not drawn.
+            // Nothing says a model is gone, so a full table would leave new models
+            // untextured for good (the character preview walks more variants than slots).
+            // The least recently asked slot is taken.
             .unwrap_or_else(|| self.skins.iter().enumerate().min_by_key(|(_, s)| s.seq).map_or(0, |(i, _)| i));
         self.seq += 1;
         let seq = self.seq;
@@ -89,8 +76,6 @@ impl SkinnedPass {
         self.skins.iter().find(|s| s.model == model && s.ids[2] != 0).map(|s| s.ids[2])
     }
 
-    /// Writes every skinned draw's uniforms in one write: the first six of
-    /// the draw's floats, padded.
     pub fn prepare<'a>(&mut self, g: &Gpu, draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]>, uniforms: &[f32]) {
         self.uniforms.write(g, self.lit.layouts[1], draws.len() as u32, draws, |buf, d| {
             let u = uniform_of(uniforms, d);
@@ -99,8 +84,6 @@ impl SkinnedPass {
         });
     }
 
-    /// The actors into the open pass at `stage`, after `prepare`, under group
-    /// 0 `frame`; `bound` is the group 0 the pass has.
     pub fn draw<'a>(&self, g: &Gpu, pass: u32, draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>, blocks: &mut Blocks, stage: Stage, frame: (u32, &mut u32)) {
         let Some(slots) = self.uniforms.slots() else { return };
         let pipeline = match stage {
@@ -120,7 +103,6 @@ impl SkinnedPass {
         });
     }
 
-    /// Lets go of what the pass made on the device.
     pub fn release(mut self) {
         for s in self.skins {
             release_skin(s.ids);

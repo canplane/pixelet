@@ -1,23 +1,16 @@
 // pxl-spec/space/pvf3/pvec.rs
 
-//! The packed word the two vector families share, and the one operation
-//! contract both modules meet: `PVecTraits`, implemented by a marker type per
-//! module so a caller can be generic over which word it packs.
+//! `PVecTraits`: the operation contract ivec and fvec share, implemented by
+//! a marker type per module so a caller can be generic over the word.
 
 use super::fvec::{self, FVec};
 use super::ivec::{self, IVec};
 
-/// Packed Word Vector Union
-/// Collective union of the packed-word vector families: ivec and fvec.
 pub type PVec = u64;
 
-/// Common operation contract implemented by the packed-word vector modules
-/// (ivec and fvec).
 #[allow(non_snake_case)]
 pub trait PVecTraits {
     type V;
-
-    // ---- Components ---
 
     fn X(v: Self::V) -> i64;
     fn Y(v: Self::V) -> i64;
@@ -26,32 +19,19 @@ pub trait PVecTraits {
     fn to_real(comp: i64) -> f64;
     fn from_real(real: f64) -> i64;
 
-    // ---- Logging ----
-
     fn repr(v: Self::V) -> String;
-
-    // ---- Construction ----
 
     fn fill(e: i64) -> Self::V;
     fn gather(x: i64, y: i64, z: i64) -> Self::V;
     fn scatter(out: &mut [i64], v: Self::V);
 
-    // ---- Bitwise ----
-
-    fn not(v: Self::V) -> Self::V; // bitwise NOT within the module's packed word width
+    fn not(v: Self::V) -> Self::V;
     fn and(v: Self::V, w: Self::V) -> Self::V;
     fn or(v: Self::V, w: Self::V) -> Self::V;
     fn xor(v: Self::V, w: Self::V) -> Self::V;
 
-    /// Signed shift: +k shifts left by k, -k right by k, per lane.
-    /// - ivec: lanes are signed, so a right shift is arithmetic.
-    /// - fvec: lanes are non-negative residues, so the arithmetic shift is a
-    ///   logical one.
-    ///
-    /// No guards: a shift past the word is the caller's bug.
+    /// +k shifts left, -k right, per lane. No guard: a shift past the word is the caller's bug.
     fn sh(v: Self::V, shamt: i32) -> Self::V;
-
-    // ---- Arithmetic ----
 
     fn add(v: Self::V, w: Self::V) -> Self::V;
     fn sub(v: Self::V, w: Self::V) -> Self::V;
@@ -59,9 +39,7 @@ pub trait PVecTraits {
     fn div(v: Self::V, w: Self::V) -> Self::V;
     fn r#mod(v: Self::V, w: Self::V) -> Self::V;
 
-    // ---- Comparison ----
-
-    fn eq(v: Self::V, w: Self::V) -> Self::V; // packed per-lane boolean mask
+    fn eq(v: Self::V, w: Self::V) -> Self::V; // a per-lane boolean mask
     fn equals(v: Self::V, w: Self::V) -> bool;
     fn lt(v: Self::V, w: Self::V) -> Self::V;
     fn gt(v: Self::V, w: Self::V) -> Self::V;
@@ -71,8 +49,6 @@ pub trait PVecTraits {
     fn min(v: Self::V, w: Self::V) -> Self::V;
     fn clamp(v: Self::V, min: i64, max: i64) -> Self::V;
 
-    // ---- Reduction ----
-
     fn sum(v: Self::V) -> i64;
     fn dot(v: Self::V, w: Self::V) -> i64;
     fn norm1(v: Self::V) -> i64;
@@ -81,9 +57,7 @@ pub trait PVecTraits {
     fn dist_sq(v: Self::V, w: Self::V) -> i64;
 }
 
-/// `ivec satisfies PVecTraits<IVec>`: the module as a type.
 pub struct Ivec;
-/// `fvec satisfies PVecTraits<FVec>`.
 pub struct Fvec;
 
 macro_rules! satisfies {

@@ -14,21 +14,8 @@ import { findPersonVariant, findPetVariant, type Gender, genderOf, GENDERS, pers
 import { LABEL } from "@platform/palette.ts";
 import { PANEL_EDGE, PANEL_SECTION_GAP } from "@/shared/ui/panel.tsx";
 
-// Not a setting: person/pet variant is a companion *appearance* pick, the
-// same "which of these do I want equipped" shape as a cube color or decor
-// kind, just always-on-one-of-each instead of placed-many — so it lives in
-// drawer-modal.tsx's Character tab rather than the settings sheet.
-
-// Every chip in this component — gender, person variant, pet variant alike —
-// is this one component, not a look-alike, since a gender chip and a variant
-// chip are literally the same kind of control.
-// Its three sizes (issue/20260928-three-sizes-of-a-control.md): a press lands
-// on 44, the least target, a box laid out around the chip that reaches into
-// the gaps by half, which the gaps are sized to hold so no two chips' boxes
-// overlap; the chip one sees is 32, as a Material chip is, a choice set in a
-// panel; its words are the footnote's.
+// The chip one sees is 32; a press lands on 44 (issue/20260928-three-sizes-of-a-control.md).
 const CHIP_HEIGHT = 32;
-/** A companion's preview, a square. */
 const PREVIEW = 96;
 const CHIP_GAP_X = 8;
 const CHIP_GAP_Y = chrome.target - CHIP_HEIGHT;
@@ -39,9 +26,7 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
     <Pressable onPress={onPress} accessibilityRole="radio" aria-checked={active} style={CHIP_REACH}>
       <View style={[styles.chip, active && styles.chipOn]}>
         {
-          /* The chip is as wide as its label in the heavier weight, whichever it
-        shows: a pick that widened its chip would rewrap the row under the
-        finger. */
+          /* Sized to the label's heavier weight, so a pick never rewraps the row. */
         }
         <Text aria-hidden style={[styles.chipText, styles.chipTextOn, styles.sizer]}>{label}</Text>
         <Text style={[styles.chipText, styles.label, active && styles.chipTextOn]}>{label}</Text>
@@ -57,11 +42,7 @@ interface PersonPickerProps {
   onSelect: (key: string) => void;
 }
 
-/** Preview always tracks the actually-equipped variant (findPersonVariant
- * searches both genders), never the currently-browsed gender's own first
- * entry — switching the gender row is just browsing a different chip set,
- * not a selection, so neither the preview nor the equipped companion may
- * change until a variant chip itself is clicked. */
+/** The preview tracks the equipped variant; browsing genders changes nothing until a variant is picked. */
 function PersonPicker(props: PersonPickerProps) {
   const { gender, onGenderChange, selectedKey, onSelect } = props;
   const { t } = useTranslation();
@@ -112,24 +93,15 @@ function PetPicker(props: PetPickerProps) {
   );
 }
 
-/** drawer-modal.tsx's Character tab content — equips the single always-on
- * companion (the one the kernel's layer/character/ draws), never a
- * placed-into-the-world pick the way Cube/Decor are; selecting a chip here
- * takes effect immediately and the sheet stays open (unlike CubeSwatchButton/
- * DecorGridButton, which close it) since browsing/comparing several variants
- * is the expected flow, not "equip once then go place it." */
+/** Picks take effect at once and the sheet stays open, for comparing variants. */
 export function CharacterPicker() {
-  // The settings hold a variant as its number; the picker reads its key off
-  // the same catalog the kernel was numbered from.
   const personVariant = useKernel((s) => s.settings[SETTINGS.person.key] ?? -1);
   const petVariant = useKernel((s) => s.settings[SETTINGS.pet.key] ?? -1);
   const personVariantKey = personVariantNumbered(personVariant)?.key ?? "";
   const petVariantKey = PET_VARIANTS.find((v) => v.number === petVariant)?.key ?? "";
   const setSetting = (key: u32, value: u32) => kernel_command(Command.SETTING_SET, encode_setting_set({ key, value }));
 
-  // Opens on whichever gender the current selection already belongs to,
-  // not always the first — so a variant of another picked earlier doesn't
-  // look like it silently reset when the drawer reopens.
+  // Opens on the selection's gender, so a pick does not look reset on reopen.
   const [gender, setGender] = useState<Gender>(genderOf(personVariantKey));
 
   return (
@@ -144,12 +116,8 @@ const styles = StyleSheet.create({
   pickers: { gap: PANEL_SECTION_GAP },
   picker: { gap: 8 },
   pickerLabel: { ...sectionTitle, color: LABEL.secondary },
-  // The preview stands off the chips by the sheet's own edge.
   pickerRow: { flexDirection: "row", alignItems: "flex-start", gap: PANEL_EDGE },
   preview: { width: PREVIEW, height: PREVIEW, flexShrink: 0, borderRadius: 12, overflow: "hidden", backgroundColor: alpha(color.fill, 0.4) },
-  // The chips' boxes stand edge to edge, and the column reaches out by as
-  // much as they do, so the chips one sees keep their gaps and their
-  // alignment with the preview.
   chipColumn: { flexShrink: 1, minWidth: 0, gap: CHIP_GAP_Y / 2, marginHorizontal: -CHIP_GAP_X / 2, marginVertical: -CHIP_GAP_Y / 2 },
   chips: { flexDirection: "row", flexWrap: "wrap" },
   rule: { height: 1, marginHorizontal: CHIP_GAP_X / 2, backgroundColor: hairline },

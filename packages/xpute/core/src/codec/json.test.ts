@@ -1,11 +1,6 @@
 // @xpute/core/codec/json.test.ts
 
-/**
- * The host's end of golden/codec/json.tsv: which texts are JSON at all, as
- * the platform's own `JSON.parse` judges them. The guests' readers
- * (xpute-core's codec/json.rs and its C++ twin) are held to the same
- * judgments, so a document a guest reads is one the host would have read.
- */
+/** golden/codec/json.tsv as `JSON.parse` judges it; the guests' readers are held to the same record. */
 
 import { assertEquals } from "@std/assert";
 

@@ -1,45 +1,24 @@
 // @pxl/web/config/deploy.ts
 
 /**
- * Deployment configuration: values that ship as data.
- *
- * `__IS_DEV__` and friends deliberately stay bare `__SCREAMING__` globals at
- * their call sites — the name says "compile-time constant, this branch
- * disappears from the bundle", which an imported identifier does not. Do not
- * centralize those here. What belongs here gates nothing away.
- *
- * `__IS_DEV__` is also not `import.meta.env.DEV`: it is the *application*
- * environment from `VITE_APP_ENV`, so a dev server started with
- * `VITE_APP_ENV=production` has `import.meta.env.DEV === true` while
- * `__IS_DEV__ === false`.
+ * Deployment values that ship as data. `__IS_DEV__` and friends stay bare
+ * globals at call sites, so the branch visibly drops from the bundle. It is
+ * `VITE_APP_ENV`, not `import.meta.env.DEV`.
  */
 
 import { id as buildId, number as buildNumber, time as buildTime } from "virtual:pxl-build";
 
-/** Application environment name, from VITE_APP_ENV (falling back to Vite's
- * mode). Shown in settings so it is possible to tell which build is on screen
- * — on a phone there is no URL bar or devtools to check against. */
+/** Shown in settings: a phone has no URL bar to tell which build is on screen. */
 export const APP_ENV: string = __APP_ENV__;
 
-/** When this bundle was built, ISO-8601 in UTC. On a dev server, when the
- * page was loaded (vite.config.ts#buildStamp). */
+/** ISO-8601 UTC; on a dev server, the page load. */
 export const BUILD_TIME: string = buildTime;
 
-/** Which source this bundle was built from, `<hash>[-dirty]`
- * (vite.config.ts#buildId). Stamped on every profiler report and trace so a
- * measurement names what it measured, and carried in BUILD_NUMBER where the
- * build is not one CI numbered. */
+/** `<hash>[-dirty]`. */
 export const BUILD_ID: string = buildId;
 
-/** Which build this is, counted per deploy outside git: `#<n>`, and
- * `#<n>-<id>` for one built after it from source CI did not number
- * (vite.config.ts#buildNumber). */
+/** `#<n>`, or `#<n>-<id>` for a build after it that CI did not number. */
 export const BUILD_NUMBER: string = buildNumber;
 
-/**
- * Whether tiles come from a published bake rather than a live API. Decides
- * whether a version token is in the path, where the dev proxy forwards, and
- * whether a 404 means "never baked" — open ocean, an empty POI page, ground
- * outside Overture's Divisions coverage — or a genuine failure.
- */
+/** Also decides whether a 404 means never baked (ocean, empty page) or a failure. */
 export const PUBLISHED_TILES: boolean = __PUBLISHED_TILES__;

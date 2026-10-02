@@ -1,12 +1,7 @@
 // pxl-kernel/control/camera/gesture.test.rs
-//
-// A gesture keeps no debt: driven past what the camera takes, the share
-// refused is gone, and the first move back moves the control. Untouched by a
-// limit, a gesture brought back asks what it began at.
 
 use super::*;
 
-/// The camera as a limit: it takes what is asked up to `max`.
 fn drive(anchor: &mut Anchor, now: f64, max: f64) -> f64 {
     let asked = anchor.ask(now, linear(1.0));
     let took = asked.min(max);

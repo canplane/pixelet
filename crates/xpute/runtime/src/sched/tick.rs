@@ -1,43 +1,9 @@
 // xpute-runtime/sched/tick.rs
 
-//! A guest's scheduler: the middle of the scheduler's three levels.
-//!
-//! The guest knows little of what is outside it. The host
-//! strobes it with a quota (sched/quantum.rs); in that turn the guest takes
-//! what waits on its submission ring, runs its own tasks here, cooperatively,
-//! and leaves what goes back on its completion ring. The quota says about how
-//! long the turn should take, not a deadline: nothing here is real time. The
-//! tick sees the quota and the clock, and nothing of the host.
-//!
-//! One tick a turn, its phases in a fixed order against one budget. The order
-//! *is* the priority:
-//!
-//!   interaction   what the hand is doing. Not budgeted, and must stay O(1):
-//!                 the budget clock is already running, so anything spent
-//!                 here comes off what the phases below receive.
-//!   visible       what is on screen now.
-//!   content       what is about to be on screen.
-//!   cosmetic      what only looks better for running.
-//!   report        the guest's own record of the turn, after everything
-//!                 else, so it sees everything.
-//!
-//! Within a phase, steps run in the order they registered.
-//!
-//! **The budget is the quota, counted from the rising edge**, not from the
-//! tick's own start: what the guest did before the tick in the same turn has
-//! already been spent.
-//!
-//! **The content phase is guaranteed a share.** The visible phase may not take
-//! `content_share` of the budget: phases run in priority order on one budget,
-//! and without the reserve content got only the forward-progress floor while
-//! a load kept the visible phase busy.
-//!
-//! What this does not do: preempt. A step still runs to completion. Steps are
-//! small by construction instead.
-//!
-//! The step table is the tick's own and fixed at N: a guest registers its
-//! steps when it starts, and a step past the table is refused there rather
-//! than grown into.
+//! A guest's cooperative scheduler: one tick a turn, its phases in priority
+//! order against one budget, the host's quota counted from the rising edge.
+//! The interaction phase is unbudgeted and must stay O(1). The visible phase
+//! may not take `content_share`, or content starves while a load keeps it busy.
 
 use super::frame_budget::{run_under_budget, BudgetOpts, PassStats};
 use crate::clock::now;
@@ -52,37 +18,28 @@ pub const COSMETIC: Phase = 3;
 pub const REPORT: Phase = 4;
 pub const PHASES: [&str; 5] = ["interaction", "visible", "content", "cosmetic", "report"];
 
-/// Steps a step may unregister in one call.
+/// Steps unregistered from inside one step.
 const OFFS_MAX: usize = 8;
 
-/// The guest's numbers.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TickPolicy {
-    /// How far a pass may run past what is left, so a step that costs real
-    /// time and reports nothing done cannot walk the whole list —
-    /// frame_budget.rs's hard ceiling, as slack over the pool.
+    /// The hard ceiling over what is left, so steps that report no work
+    /// cannot walk the whole list.
     pub hard_slack_ms: f64,
-    /// The share of the budget held back from the visible phase for content.
     pub content_share: f64,
 }
 
-/// One turn's allowance, shared by every phase.
-///
-/// `run` is `run_under_budget` with the numbers filled in from what is left,
-/// so a caller states what it wants to do and never what it may spend.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FrameBudget {
     pub t0: f64,
     pub total_ms: f64,
-    /// Held back from whoever asks now, for the phases after it. The tick sets
-    /// it before the visible phase and clears it before content.
+    /// Held back for the phases after the current one.
     pub reserve_ms: f64,
     pub hard_slack_ms: f64,
 }
 
 impl FrameBudget {
-    /// `t0` is the rising edge, not this call's: what the turn spent before
-    /// comes off the budget.
+    /// `t0` is the rising edge, so what the turn spent before comes off.
     pub fn new(total_ms: f64, t0: f64, hard_slack_ms: f64) -> FrameBudget {
         FrameBudget {
             t0,
@@ -110,13 +67,10 @@ impl FrameBudget {
     }
 }
 
-/// What a step may ask of the turn, and the guest's own state it runs over.
 pub struct TickContext<'a, S> {
     pub state: &'a mut S,
     pub delta: f64,
     pub budget: FrameBudget,
-    /// Wall time each phase has taken so far this tick, filled in as phases
-    /// complete — so the report phase can read everything before it.
     pub phase_ms: [f64; 5],
     invalidated: bool,
     offs: [u32; OFFS_MAX],
@@ -124,14 +78,11 @@ pub struct TickContext<'a, S> {
 }
 
 impl<S> TickContext<'_, S> {
-    /// Asks for a turn after this one: the guest is strobed only when
-    /// something asked, so a step that changes something over time asks for
-    /// the next.
+    /// The guest is strobed only when something asked for a turn.
     pub fn invalidate(&mut self) {
         self.invalidated = true;
     }
 
-    /// Unregisters a step from inside the tick, before the next step runs.
     pub fn off_tick(&mut self, id: u32) {
         xpute_core::ensure!(self.off_len < OFFS_MAX, ENOSPC, OFFS_MAX);
         self.offs[self.off_len] = id;
@@ -141,9 +92,7 @@ impl<S> TickContext<'_, S> {
 
 pub type TickStep<S> = fn(&mut TickContext<S>);
 
-/// Wall time per step, cumulative until reset. The phase totals can say a
-/// phase is heavy and not which of its steps is; this can. Two registrations
-/// under one name in one phase add into one row.
+/// Cumulative until reset; registrations sharing a phase and name share a row.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct StepStats {
     pub phase: Phase,
@@ -153,14 +102,11 @@ pub struct StepStats {
     pub max_ms: f64,
 }
 
-/// What a turn spent: what the guest reports back to the host.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TickReport {
     pub budget_ms: f64,
     pub phase_ms: [f64; 5],
-    /// The whole tick, interaction through report.
     pub total_ms: f64,
-    /// A turn after this one was asked for.
     pub invalidated: bool,
 }
 
@@ -204,9 +150,7 @@ impl<S, const N: usize> Tick<S, N> {
         }
     }
 
-    /// Registers a step into a phase. Returns the id `off_tick` takes. `name`
-    /// is what the step's time is reported under: the caller's own number for
-    /// it, which the words for it are looked up by where they are printed.
+    /// `name` is the caller's number the step's time is reported under.
     pub fn on_tick(&mut self, phase: Phase, step: TickStep<S>, name: u32) -> u32 {
         xpute_core::ensure!(self.len < N, ENOSPC, N);
         let id = self.next_id;
@@ -216,12 +160,11 @@ impl<S, const N: usize> Tick<S, N> {
         id
     }
 
-    /// Unregisters a step outside a tick; inside one, a step asks its context.
+    /// Inside a tick, a step asks its context instead.
     pub fn off_tick(&mut self, id: u32) {
         self.remove(id);
     }
 
-    /// Whether steps are timed one by one.
     pub fn set_step_timing(&mut self, on: bool) {
         self.step_timing = on;
     }
@@ -234,7 +177,6 @@ impl<S, const N: usize> Tick<S, N> {
         self.stats_len = 0;
     }
 
-    /// What the previous turn spent.
     pub fn last(&self) -> TickReport {
         self.last_report
     }
@@ -247,7 +189,7 @@ impl<S, const N: usize> Tick<S, N> {
         Some(at)
     }
 
-    /// A step's time into its row; a table with no row left drops it.
+    /// A full table drops the time.
     fn record(&mut self, phase: Phase, name: u32, ms: f64) {
         let at = match (0..self.stats_len).find(|&k| self.stats[k].phase == phase && self.stats[k].name == name) {
             Some(k) => k,
@@ -292,7 +234,6 @@ impl<S, const N: usize> Tick<S, N> {
         ctx.phase_ms[phase] = now() - start;
     }
 
-    /// The guest's turn, on the quota it was strobed with at `t0`.
     pub fn run(&mut self, state: &mut S, delta: f64, quota_ms: f64, t0: f64) -> TickReport {
         let start = now();
         let mut ctx = TickContext {

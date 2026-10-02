@@ -6,9 +6,7 @@ use crate::status::errno::Errno;
 use crate::status::error::MarshalError;
 
 pub struct ArenaOptions {
-    /// Slots built at construction; growth passes it.
     pub init_cap: u32,
-    /// Growth past it is refused.
     pub max_cap: u32,
 }
 
@@ -18,14 +16,8 @@ impl Default for ArenaOptions {
     }
 }
 
-/// Slots are built once and live as long as the arena: `truncate` moves the
-/// cursor and drops nothing, so whatever a slot owns — a buffer, a string —
-/// is still allocated when the slot is handed out again. For work whose
-/// lifetime is one pass, a parse's nodes or a build's scratch, that is one
-/// rewind against a free and an allocation per object.
-///
-/// The cost is the caller's: a slot arrives in whatever state its last user
-/// left it, and reinitializing it is theirs.
+/// `truncate` drops nothing: a slot comes back in whatever state its last
+/// user left it, buffers still allocated, and the caller reinitializes it.
 pub struct Arena<T: Default> {
     pub mem: Vec<T>,
 
@@ -62,10 +54,8 @@ impl<T: Default> Arena<T> {
         &mut self.mem[idx as usize]
     }
 
-    /// Hands out the next slot.
     pub fn alloc(&mut self) -> Result<&mut T, MarshalError> {
-        // Saturating so a doubling past u32 lands above max_cap and is
-        // refused there, rather than wrapping under it and passing.
+        // Saturating, so a doubling past u32 is refused rather than wrapping.
         if self.len_of >= self.cap_of {
             self.grow(self.cap_of.saturating_mul(2).max(1))?;
         }
@@ -75,7 +65,6 @@ impl<T: Default> Arena<T> {
         Ok(&mut self.mem[i])
     }
 
-    /// Grows now so that the next `cnt` allocs do not.
     pub fn reserve(&mut self, cnt: u32) -> Result<(), MarshalError> {
         let req = self.len_of.saturating_add(cnt);
         if req > self.cap_of {
@@ -84,11 +73,7 @@ impl<T: Default> Arena<T> {
         Ok(())
     }
 
-    /// Rewinds the cursor. Slots above `new_len` stay constructed.
-    ///
-    /// Which `new_len` is live is the caller's to know; one above the cursor
-    /// is a mistake rather than a resize request, so it is a broken
-    /// invariant and not a clamp.
+    /// A `new_len` above the cursor is a bug, not a resize.
     pub fn truncate(&mut self, new_len: u32) {
         crate::ensure!(new_len <= self.len_of, EINVAL, new_len, self.len_of);
         self.len_of = new_len;

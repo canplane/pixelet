@@ -1,19 +1,7 @@
 // pxl-render/gpu/renderer.rs
 
-//! The renderer: what the scheduler lists (draw.rs) drawn on the device
-//! through the host's calls (api.rs) into the canvases the shell handed the
-//! kernel (surface.rs), in the kernel's own turn. Nothing of the draw leaves
-//! the module but the calls. A block the scheduler names goes to the GPU
-//! whole, as the mesher laid it out; the frame's uniforms are laid out from the
-//! stage (stage.rs) and the environment; every pipeline and shader is
-//! frame/shader/record.rs's.
-//!
-//! What the frame is drawn into is sized here and its cost counted: the depth
-//! buffer, the sun's shadow map, the texture pack's layers with their mip chains, the
-//! badge sheet. Reversed float depth throughout, near at 1 and far at 0: a
-//! float's precision is densest near zero and a perspective depth densest near
-//! the eye, so the two cancel and the far terrain's coplanar faces stop
-//! fighting.
+//! Executes the scheduler's draw lists on the device, in the kernel's own turn.
+//! Depth is reversed f32 throughout (depth.wgsl).
 
 use pxl_spec::space::mat4::{mat4, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation, Mat4};
 use pxl_spec::space::pvf3::ivec;
@@ -58,7 +46,6 @@ use xpute_core::status::errno::Errno;
 /// GL clip z [-1, 1] to reversed WebGPU clip z [1, 0], column-major.
 pub const GL_TO_WGPU: Mat4 = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0, 0.0, 0.5, 1.0];
 
-/// The frame uniform's fields, in floats (frame/shader/record.rs's FRAME_AT).
 pub(crate) const VIEW_PROJ: usize = FRAME_AT[0];
 pub(crate) const CAMERA_POS: usize = FRAME_AT[1];
 const EDGE_STRENGTH: usize = FRAME_AT[2];
@@ -77,22 +64,15 @@ const OTHER: usize = FRAME_AT[14];
 pub(crate) const PLANET: usize = FRAME_AT[15];
 pub(crate) const GLOBE: usize = FRAME_AT[16];
 
-/// Floats the sky uniform holds (shader/sky.wgsl's Sky): the ray, the
-/// celestial pole, and whether the Moon's face has arrived.
+/// The ray, the celestial pole, and whether the Moon's face has arrived.
 pub(crate) const SKY_FLOATS: usize = 16;
 pub(crate) const SKY_POLE: usize = 12;
 pub(crate) const SKY_MAPPED: usize = 15;
-/// Vertices a chunk mesh's box is drawn with: chunk.wgsl's BOX_VERTICES.
 const BOX_VERTICES: u32 = 36;
-/// Floats of the frame's draws storage made before the first frame needs more.
 const DRAWS_INITIAL: u32 = 256 * UNIFORM_FLOATS as u32;
 const MB: f64 = 1_048_576.0;
 
-/// What a frame's GPU time is taken apart into, in the order the frame
-/// encodes them: the air's tables, the sun's shadow map, the depth prepass,
-/// the screen-space occlusion from it, the world's own pass, the billboards'
-/// and the cases'. The profiler names them in the same order (profiler.json's
-/// GPU_SPAN_NAMES), and a pair of queries a span is the frame's set.
+/// In the order the frame encodes them; the profiler's GPU_SPAN_NAMES match.
 pub const GPU_SPANS: [&str; 7] = ["air", "shadow", "prepass", "ao", "world", "badges", "cases"];
 const _: () = assert!(GPU_SPANS.len() <= 32, "a span a bit of the mask the host is told");
 const SPAN_AIR: usize = 0;
@@ -105,41 +85,27 @@ const SPAN_CASES: usize = 6;
 
 pub type Frame = [f32; FRAME_FLOATS];
 
-/// What the kernel hands a turn's draw: every input the frame's passes read
-/// that is not the renderer's own.
 pub struct FrameInput<'a> {
-    /// The draw list's lanes, as the scheduler's `DrawList::take` gave them.
     pub lists: Lists<'a>,
-    /// The environment's lane (look/environment.rs), ENV_FLOATS floats.
     pub environment: &'a [f32],
-    /// Each decor group's model block, by the list's handle (0 while it
-    /// loads), its skin's image and its extent, in group order.
+    /// 0 while it loads.
     pub decor: &'a [(u32, Option<u32>, Extent)],
-    /// The world's actors' models and the images they are skinned with.
     pub skins: &'a [(u32, u32)],
-    /// The variant picker's cases: the surface, the model and its skin.
     pub cases: &'a [(u32, u32, u32)],
-    /// The texture pack's sheet as an image, asked for until it is drawn.
     pub sheet: fn() -> Option<u32>,
-    /// The Moon's face as an image, asked for until it is copied in.
     pub moon: fn() -> Option<u32>,
-    /// The billboards' sheet, whose changes the badge texture mirrors.
     pub atlas: &'a mut BillboardAtlas,
-    /// A line of text as the platform draws it, asked for until it is.
     pub text: TextOf,
-    /// Whether the device is a phone's: the shadow map is made smaller.
+    /// A phone gets a smaller shadow map.
     pub handheld: bool,
 }
 
-/// What a turn's draw hands back.
 pub struct FrameOutput {
     /// A surface waits on a size to settle, so another turn is wanted.
     pub redraw: bool,
-    /// What the frame cost, when one was drawn.
     pub stat: Option<FrameStat>,
 }
 
-/// A drawn frame's cost: the device's time, the draws, what the device holds.
 #[derive(Clone, Copy)]
 pub struct FrameStat {
     pub gpu_ms: f64,
@@ -147,18 +113,12 @@ pub struct FrameStat {
     pub triangles: f64,
     pub buffers: f64,
     pub buffer_bytes: f64,
-    /// The targets' and textures' megabytes: depth, the shadow map, the
-    /// texture pack's layers.
     pub depth_mb: f64,
     pub shadow_mb: f64,
     pub layers_mb: f64,
-    /// The world surface's width times its height.
     pub px: f64,
-    /// Draws and triangles, by pipeline.
     pub census: [[f64; 2]; PIPELINES as usize],
-    /// The GPU's time by span, GPU_SPANS' order; `gpu_ms` is theirs end to end.
     pub gpu_spans: [f64; GPU_SPANS.len()],
-    /// What the mesh arena holds on the device, which is no block's.
     pub arena_mb: f64,
 }
 
@@ -176,21 +136,9 @@ fn put_mat(out: &mut [f32], at: usize, m: &Mat4) {
     }
 }
 
-/// A pixel's ray for a full-screen pass, as the three columns of a WGSL
-/// `mat3x3f` at `at`: the ray under NDC (x, y) runs along
-/// `x·col0 + y·col1 + col2`, in the frame `view_proj` takes to WebGPU clip,
-/// from the eye at `eye` in it.
-///
-/// Not the inverse matrix itself, un-projecting two points in the shader:
-/// those sit a near plane's tenth of a unit apart, hundreds of units from
-/// the frame's origin, and their f32 difference kept a direction to about a
-/// thousandth of a radian that changed its rounding with every move of the
-/// camera. A ray meeting the cloud layer at a grazing angle carries that
-/// error out by the secant — kilometers at the horizon — and the clouds
-/// there shook on their own. Taken in f64 here, the ray is exact to the f32
-/// it lands in.
-/// Points at one depth un-project onto a plane, so the ray is affine in
-/// (x, y) and three columns hold it.
+/// The ray under NDC (x, y) is `x·col0 + y·col1 + col2`, taken in f64. Un-
+/// projecting two points in the shader kept a direction to only ~1e-3 rad,
+/// which the secant carried out to kilometers at the horizon: the clouds shook.
 pub(crate) fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4, eye: &V3) {
     let mut inv = mat4();
     mat4_invert(&mut inv, view_proj);
@@ -209,8 +157,6 @@ pub(crate) fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4, eye: &V3) {
     }
 }
 
-/// A frame group: the frame uniform at 0, a shadow map's two entries, the
-/// occlusion map and the air's entries (gpu/atmosphere.rs).
 pub fn frame_group(g: &Gpu, layout: u32, frame: u32, shadow: [u32; 10], ao: [u32; 5], air: [u32; AIR_WORDS]) -> u32 {
     let id = object();
     let mut e = [0u32; 20 + AIR_WORDS];
@@ -222,8 +168,7 @@ pub fn frame_group(g: &Gpu, layout: u32, frame: u32, shadow: [u32; 10], ao: [u32
     id
 }
 
-/// A skin's texture and its sampler as a group, over the image `image`. The
-/// texture, its view and the group.
+/// Returns the texture, its view and the group.
 pub fn skin_group(g: &Gpu, layout: u32, sampler: u32, image: u32) -> [u32; 3] {
     let texture = object();
     g.image_texture(texture, image);
@@ -234,28 +179,23 @@ pub fn skin_group(g: &Gpu, layout: u32, sampler: u32, image: u32) -> [u32; 3] {
     [texture, view, group]
 }
 
-/// What `skin_group` made, let go: the group, the view, the texture.
 pub fn release_skin(ids: [u32; 3]) {
     for id in ids.into_iter().rev() {
         release(id);
     }
 }
 
-/// The frame's draw records by pipeline: sorted once a frame on the
-/// pipeline word, a counting sort that keeps the list's order within each,
-/// so a pass walks its own records and no other. `order` is the renderer's,
-/// grown and never shrunk.
+/// Records sorted by pipeline with a stable counting sort, so a pass walks
+/// only its own records.
 pub struct Draws<'a> {
     records: &'a [[u32; DRAW_WORDS]],
     order: &'a [u32],
-    /// Where each pipeline's run starts in `order`, and the end past the last.
     starts: [u32; PIPELINES as usize + 1],
 }
 
 impl<'a> Draws<'a> {
     fn sort(records: &'a [[u32; DRAW_WORDS]], order: &'a mut Vec<u32>) -> Draws<'a> {
         let mut starts = [0u32; PIPELINES as usize + 1];
-        // A pipeline word no pipeline has names nothing a pass draws.
         for d in records {
             if let Some(n) = starts.get_mut(d[4] as usize + 1) {
                 *n += 1;
@@ -276,7 +216,6 @@ impl<'a> Draws<'a> {
         Draws { records, order, starts }
     }
 
-    /// Pipeline `pipeline`'s records, in the order listed.
     pub fn of(&self, pipeline: u32) -> impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]> + Clone + 'a {
         let p = (pipeline as usize).min(PIPELINES as usize);
         let end = if p < PIPELINES as usize { self.starts[p + 1] } else { self.starts[p] };
@@ -284,14 +223,12 @@ impl<'a> Draws<'a> {
         self.order[self.starts[p] as usize..end as usize].iter().map(move |&i| &records[i as usize])
     }
 
-    /// Every record listed.
     pub fn all(&self) -> &'a [[u32; DRAW_WORDS]] {
         self.records
     }
 }
 
-/// A heap block words are laid out in before they go to the
-/// device: grown to the next power of two when a frame needs more, never shrunk.
+/// Grown to the next power of two when a frame needs more, never shrunk.
 #[derive(Default)]
 pub struct Scratch {
     at: usize,
@@ -308,12 +245,10 @@ impl Scratch {
             let size = bytes.next_power_of_two().max(4096);
             (self.at, self.bytes) = alloc(size).or_bug(Errno::ENOMEM);
         }
-        // SAFETY: a heap block this scratch holds alone, at
-        // least `bytes` long.
+        // SAFETY: a heap block this scratch holds alone, at least `bytes` long.
         unsafe { core::slice::from_raw_parts_mut(ptr_at::<u8>(self.at), bytes as usize) }
     }
 
-    /// Gives the block back.
     pub fn free(&mut self) {
         if self.bytes > 0 {
             // SAFETY: the block this scratch held alone.
@@ -325,23 +260,15 @@ impl Scratch {
 
 const EMPTY: u32 = 0;
 
-/// The table's slots for at most `live` blocks at once: a power of two, so a
-/// position wraps by masking, and at least twice `live`, so open addressing
-/// never fills past half. How many blocks can be live is the module's, whose
-/// owners make them (pxl-kernel mem/fixed.rs `MAX_LIVE_BLOCKS`); the
-/// renderer knows only the table.
+/// A power of two so a position wraps by masking, at least twice `live` so
+/// open addressing never fills past half.
 pub const fn block_slots(live: usize) -> usize {
     (2 * live).next_power_of_two()
 }
 
-/// The blocks the draw list named, by the handle it gave each: where the block
-/// lies in the memory and its counts, and once a device has it the buffer and
-/// the one group made over it — the decor instances, a joint palette or the
-/// puck's zone, whichever the block is. The memory is the source and the
-/// device a copy: a block stays in the heap until its free is listed, so a
-/// device that went away, or lists taken while there was none, are made good
-/// from the addresses. Open addressing in `.fixed.blocks`'s lanes, since the
-/// handles are the list's and sparse.
+/// Blocks by the list's handle: open addressing in `.fixed.blocks`. The heap
+/// is the source and the device a copy, so a lost device is restored from the
+/// addresses.
 pub struct Blocks {
     handle: &'static mut [u32],
     at: &'static mut [u32],
@@ -352,36 +279,28 @@ pub struct Blocks {
     group: &'static mut [u32],
     pub count: u32,
     pub bytes: u64,
-    /// Live blocks with no buffer on the device the renderer has.
     missing: u32,
 }
 
-/// A block's buffer size: its bytes to the word, never empty.
 fn buffer_size(len: u32) -> u32 {
     ((len + 3) & !3).max(4)
 }
 
-/// `n` bytes of the memory at `at`.
 fn memory(at: u32, n: u32) -> &'static [u8] {
-    // SAFETY: a heap block the draw list named, live until its free is
-    // listed.
+    // SAFETY: a heap block the draw list named, live until its free is listed.
     unsafe { core::slice::from_raw_parts(ptr_at::<u8>(at as usize), n as usize) }
 }
 
-/// Lanes the table is: handle, where, length, the two counts, buffer, group.
+/// Handle, address, length, the two counts, buffer, group.
 const BLOCK_LANES: usize = 7;
 
-/// The table's lanes end to end for `slots` slots: `.fixed.blocks`, which the
-/// kernel lays out (pxl-kernel mem/fixed.rs) and installs with `set_blocks`.
 pub const fn blocks_bytes(slots: usize) -> u32 {
     (BLOCK_LANES * slots * 4) as u32
 }
 
-/// Installs a table of `slots` slots in the `blocks_bytes(slots)` at `at`.
-///
 /// # Safety
-/// `at` must address that range, 4-aligned and zeroed, the renderer's alone
-/// for as long as the module runs.
+/// `at` must address `blocks_bytes(slots)`, 4-aligned and zeroed, the
+/// renderer's alone for as long as the module runs.
 pub unsafe fn set_blocks(at: u32, slots: usize) {
     xpute_core::ensure!(slots.is_power_of_two(), EINVAL, slots);
     // SAFETY: the caller's range, one lane of `slots` words after another.
@@ -400,22 +319,18 @@ pub unsafe fn set_blocks(at: u32, slots: usize) {
     });
 }
 
-/// Where a handle's probe begins in a table of `slots` slots.
 fn home(handle: u32, slots: usize) -> usize {
     (handle.wrapping_mul(0x9e37_79b1) >> (32 - slots.trailing_zeros())) as usize
 }
 
 impl Blocks {
-    /// The device went away with every buffer and group: the blocks stand,
-    /// each to be put on the next one.
     fn lose(&mut self) {
         self.buffer.fill(0);
         self.group.fill(0);
         self.missing = self.count;
     }
 
-    /// Puts every block that has no buffer on the device, as far as the
-    /// turn's stream has room.
+    /// As far as the turn's stream has room.
     fn restore(&mut self, g: &Gpu) {
         if self.missing == 0 {
             return;
@@ -427,15 +342,12 @@ impl Blocks {
         }
     }
 
-    /// A buffer for the block at `i`, its bytes written; false, and the
-    /// block still missing, where the turn's stream has no room for them.
+    /// False, the block still missing, where the turn's stream has no room.
     fn put(&mut self, g: &Gpu, i: usize) -> bool {
         if !room(self.len[i]) {
             return false;
         }
         let buffer = object();
-        // Every block is usable every way a draw reads one: a mesh's lanes as
-        // vertices and indices, a decor block's as storage.
         g.buffer(
             buffer,
             buffer_size(self.len[i]),
@@ -462,18 +374,14 @@ impl Blocks {
         }
     }
 
-    /// A block's buffer and its vertex and index counts; none until the block
-    /// is on the device.
+    /// None until the block is on the device.
     pub fn get(&self, handle: u32) -> Option<(u32, u32, u32)> {
         self.find(handle).filter(|&i| self.buffer[i] != 0).map(|i| (self.buffer[i], self.vertex_cnt[i], self.index_cnt[i]))
     }
 
-    /// Records a block, and puts it on the device when there is one; what the
-    /// handle held before is let go.
     fn insert(&mut self, g: Option<&Gpu>, handle: u32, at: u32, len: u32, vertex_cnt: u32, index_cnt: u32) {
         self.remove(handle);
-        // The slots are twice the most blocks the module's owners can hold
-        // at once (`block_slots`), so this is that bound broken.
+        // Slots are twice the most blocks the owners can hold, so this is that bound broken.
         xpute_core::ensure!((self.count as usize) < self.handle.len() / 2, ENOTRECOVERABLE, self.handle.len() / 2);
         let mut i = home(handle, self.handle.len());
         while self.handle[i] != EMPTY {
@@ -494,10 +402,8 @@ impl Blocks {
         }
     }
 
-    /// The block at `at` changed `len` bytes from byte `from`: written into
-    /// its buffer when it has one, and read from there when it is next put
-    /// on a device. Where the turn's stream has no room for them, the buffer
-    /// goes and the block is missing, put again whole once there is.
+    /// Where the turn's stream has no room, the buffer goes and the block is put
+    /// again whole once there is.
     fn rewrite(&mut self, g: Option<&Gpu>, handle: u32, at: u32, from: u32, len: u32) {
         let Some(i) = self.find(handle) else { return };
         self.at[i] = at;
@@ -513,7 +419,6 @@ impl Blocks {
         }
     }
 
-    /// Forgets a block, its buffer and group let go.
     fn remove(&mut self, handle: u32) {
         let Some(mut i) = self.find(handle) else { return };
         release(self.group[i]);
@@ -523,8 +428,8 @@ impl Blocks {
         release(self.buffer[i]);
         self.count -= 1;
         self.bytes -= buffer_size(self.len[i]) as u64;
-        // Backward shift: an entry past the hole moves into it unless its home
-        // lies between the hole and it, so no probe ever stops early.
+        // Backward shift: an entry past the hole moves into it unless its home lies
+        // between the hole and it, so no probe ever stops early.
         loop {
             let mut j = i;
             loop {
@@ -550,14 +455,11 @@ impl Blocks {
         }
     }
 
-    /// A block's buffer, for a draw that binds it as vertex rather than as a
-    /// group: the ghost's one box goes through the chunk pipeline, whose mesh
-    /// is a vertex buffer (gpu/arena.rs).
+    /// For a draw binding it as a vertex buffer: the ghost's box goes through the chunk pipeline.
     pub fn buffer(&self, handle: u32) -> Option<u32> {
         self.find(handle).filter(|&i| self.buffer[i] != 0).map(|i| self.buffer[i])
     }
 
-    /// The group over a block's buffer in `layout`, made on first use.
     pub fn group(&mut self, g: &Gpu, handle: u32, layout: u32) -> Option<u32> {
         let i = self.find(handle).filter(|&i| self.buffer[i] != 0)?;
         if self.group[i] == 0 {
@@ -571,7 +473,6 @@ impl Blocks {
 
 static BLOCKS: Global<Blocks> = Global::new();
 
-/// The table, which the module installs at boot (`set_blocks`).
 fn blocks() -> &'static mut Blocks {
     BLOCKS.get(|| xpute_core::bug!(ENOTRECOVERABLE))
 }
@@ -585,22 +486,16 @@ struct Device {
 static DEVICE: Global<Option<Device>> = Global::new();
 static RENDERER: Global<Option<Renderer>> = Global::new();
 
-/// Set when a surface waits a turn for its size to settle: the draw's
-/// answer that another turn is wanted.
 static REDRAW: Global<bool> = Global::new();
 
-/// The host's report that a device answered: its uniform offset alignment, and
-/// whether it measures its passes. The caller asks for the turn that draws.
 pub fn gpu_created(align: u32, timestamps: bool) {
     DEVICE.set(Some(Device { align, timestamps }));
 }
 
-/// Whether a device answered and has not gone.
 pub fn device_ready() -> bool {
     DEVICE.get(|| None).is_some()
 }
 
-/// The host's report that the device went away, and everything on it.
 pub fn gpu_lost() {
     DEVICE.set(None);
     RENDERER.set(None);
@@ -610,7 +505,6 @@ pub fn gpu_lost() {
     surfaces_lost();
 }
 
-/// A surface closed: what it held on the device let go.
 pub fn surface_closed(s: Surface) {
     for id in [s.depth_view, s.depth] {
         release(id);
@@ -647,7 +541,6 @@ impl DebugPass {
         }
     }
 
-    /// The frame's segments into the open pass.
     fn draw(&self, g: &Gpu, pass: u32, draws: &Draws, uniforms: &[f32], blocks: &Blocks) {
         let Some(d) = draws.of(PIPELINE_DEBUG).next() else { return };
         let (Some((block, _, _)), count) = (blocks.get(d[0]), d[1]) else { return };
@@ -664,9 +557,7 @@ impl DebugPass {
     }
 }
 
-/// A case of the variant picker: its own frame and group 0 over it, and the
-/// skinned pass that draws its one actor into it at one sample, with no
-/// shadow.
+/// A variant picker case: its own frame, drawn at one sample with no shadow.
 struct Case {
     frame_buffer: u32,
     frame: Frame,
@@ -674,7 +565,6 @@ struct Case {
     skinned: SkinnedPass,
 }
 
-/// The eye and what it looks at, in a case's own Z-up frame, and its field.
 const CASE_EYE: V3 = [0.0, -2.2, 0.9];
 const CASE_TARGET: V3 = [0.0, 0.0, 0.55];
 const CASE_FOV_DEG: f64 = 35.0;
@@ -712,8 +602,6 @@ pub struct Renderer {
     chunk: Built,
     chunk_depth: Built,
     chunk_prepass: Built,
-    /// The same three over the coarse box format, which differs from the
-    /// leaf's own in stride alone (frame/shader/record.rs's chunk_lanes).
     chunk_coarse: Built,
     chunk_coarse_depth: Built,
     chunk_coarse_prepass: Built,
@@ -722,8 +610,6 @@ pub struct Renderer {
     draws_bytes: u32,
     bind_group: u32,
     light_group: u32,
-    /// Group 0 of decor, the impostors and the actors, which is one group
-    /// over one layout for the three (gpu/pass/model.rs's frame_layout).
     models: FrameGroups,
     shadow: Shadow,
     shadows: bool,
@@ -742,8 +628,6 @@ pub struct Renderer {
     badges: BadgePass,
     debug: DebugPass,
     cases: [Option<Case>; SURFACES],
-    /// The frame's draws sorted by pipeline (`Draws`), kept to be sorted into
-    /// again.
     order: Vec<u32>,
     gpu_ms: f64,
     gpu_spans: [f64; GPU_SPANS.len()],
@@ -840,9 +724,6 @@ impl Renderer {
         r
     }
 
-    /// The chunk pass's group over `frame`: the frame, a shadow map, the draws,
-    /// the texture pack's array, the table its faces are found through and
-    /// their sampler, the occlusion map, the air.
     fn chunk_group(&self, g: &Gpu, frame: u32, shadow: [u32; 10]) -> u32 {
         let mut e = [0u32; 40 + AIR_WORDS];
         e[..5].copy_from_slice(&buffer_entry(0, frame));
@@ -858,8 +739,6 @@ impl Renderer {
         id
     }
 
-    /// The chunk pass's groups over the eye's frame and the light's, made
-    /// again over what they hold now; what they held before let go.
     fn chunk_groups(&mut self, g: &Gpu) {
         release(self.bind_group);
         release(self.light_group);
@@ -867,23 +746,19 @@ impl Renderer {
         self.light_group = self.chunk_group(g, self.shadow.light_frame, self.shadow.blank_entries(1));
     }
 
-    /// Every lit pass's group 0 again: the occlusion map is a new object.
+    /// The occlusion map is a new object, so every lit pass's group 0 is remade.
     fn rebind(&mut self, g: &Gpu) {
         self.chunk_groups(g);
         let light = Some((self.shadow.light_frame, self.shadow.blank_entries(1)));
         self.models.rebind(g, self.frame_buffer, self.shadow.entries(1), light, self.ao.entry(7));
     }
 
-    /// The frame's uniforms and the sky's, laid out from the stage and the
-    /// environment `env` for the world's surface at (width, height) device
-    /// pixels.
     fn lay_out(&mut self, g: &Gpu, width: u32, height: u32, env: &[f32]) {
         let s = stage_lane();
         let (mut a, mut m, mut proj) = (mat4(), mat4(), mat4());
         a.copy_from_slice(&s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16]);
         mat4_mul(&mut proj, &GL_TO_WGPU, &a);
-        // The badges take the view and the projection apart: their size is
-        // measured in view space.
+        // The badges measure their size in view space.
         let b = &mut self.badges;
         put_mat(&mut b.view, 0, s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].try_into().or_bug(Errno::ENOTRECOVERABLE));
         put_mat(&mut b.proj, 0, &proj);
@@ -896,27 +771,15 @@ impl Renderer {
         a.copy_from_slice(&s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16]);
         mat4_mul(&mut m, &GL_TO_WGPU, &a);
         put_mat(u, VIEW_PROJ, &m);
-        // Everything is drawn in the eye's frame, the root frame with the eye
-        // at its origin (frame/draw.rs `DrawList::translation`): the meshes,
-        // the sky and the stars, each pixel's ray from the eye, and the
-        // clouds, anchored to the ground by the cell the eye is over on the
-        // map. What stands anywhere in it — the globe's anchor below — is
-        // written against the eye in doubles before it is narrowed.
+        // Everything is drawn in the eye's frame; positions are taken against the eye
+        // in f64 before they are narrowed.
         let eye_local = [s[STAGE_AT::EYE_LOCAL], s[STAGE_AT::EYE_LOCAL + 1], s[STAGE_AT::EYE_LOCAL + 2]];
         let eye = [0.0; 3];
         let origin = ivec::gather(ivec::from_real(s[STAGE_AT::ORIGIN]), ivec::from_real(s[STAGE_AT::ORIGIN + 1]), 0);
-        // The globe's anchor, which the sun's shadow is aimed at and the map
-        // is laid back on the planet about (look/globe.rs): its latitude's
-        // values and the planet's radius in the units the map has there. The
-        // globe's placement is a function of a point's offset from it and its
-        // height over it alone, so it places a point of the eye's frame where
-        // it places the same point of the root frame, less the eye.
+        // The globe places by offset from its anchor and height alone, so placing in
+        // the eye's frame matches the root frame less the eye.
         let center: [f64; 3] = core::array::from_fn(|k| s[STAGE_AT::GLOBE_ANCHOR + k] - eye_local[k]);
         let sphere = Globe::at(env[ENV_AIR + 2] as f64);
-        // Straight up where the eye stands: away from the planet's center,
-        // the radius below the globe's anchor, which is under the eye — the
-        // air, the clouds and the stars are measured from it, on the sphere
-        // the world is laid on.
         let planet_center = [center[0], center[1], center[2] - sphere.radius_u()];
         let mut up = [0.0; 3];
         norm3(sub3(&eye, &planet_center, &mut [0.0; 3]), &mut up);
@@ -924,11 +787,8 @@ impl Renderer {
         self.atmosphere.set_clouds(&clouds::field(origin, [eye_local[0], eye_local[1]], env));
         self.stars.lay_out(g, &m, env, width, height, &up);
         put_ray(&mut self.sky, 0, &m, &eye);
-        // The celestial pole in the root frame, the stars' frame's third
-        // column: which way the Moon's north is turned.
         self.sky[SKY_POLE..SKY_POLE + 3].copy_from_slice(&env[ENV_STARS + 8..ENV_STARS + 11]);
         self.sky[SKY_MAPPED] = if self.moon.loaded { 1.0 } else { 0.0 };
-        // The camera's position in the eye's frame, where the meshes are.
         for i in 0..3 {
             u[CAMERA_POS + i] = eye[i] as f32;
         }
@@ -960,7 +820,6 @@ impl Renderer {
         u[PLANET..PLANET + 4].copy_from_slice(&globe[..4]);
         u[GLOBE..GLOBE + 4].copy_from_slice(&globe[4..]);
         self.badges.globe = globe;
-        // The sun's shadow, from the light the environment lit the terrain with.
         self.shadows = s[STAGE_AT::SHADOWS] != 0.0;
         u[SHADOW_STRENGTH] = if self.shadows { 1.0 } else { 0.0 };
         u[SHADOW_TEXEL] = self.shadow.texel as f32;
@@ -972,20 +831,9 @@ impl Renderer {
         self.atmosphere.lay_out(g, env, &up);
     }
 
-    /// Every draw of chunk pipeline `which`; with `own`, that pipeline set before the first, under the chunk
-    /// group. A mesh is its boxes: a chunk's in its arena group, the hover
-    /// ghost's in a block of its own (gpu/arena.rs).
-    ///
-    /// A box is one instance and the thirty-six vertices of a cube share it,
-    /// so the mesh is bound as a vertex buffer from its start, and a draw's
-    /// own first box is its first instance: an instance-stepped attribute is
-    /// fetched at `first_instance + i`, a stride the pipeline's format fixes
-    /// apart (frame/shader/record.rs's chunk_lanes). Draws out of one buffer then bind
-    /// nothing between them. Both slots take the one buffer: the second reads
-    /// the two words a coarse box does not have, which its layout puts back
-    /// at offset zero so that one shader serves both formats. The draw
-    /// record's index goes on the first vertex, which no attribute steps by,
-    /// and the shader divides it back out (chunk.wgsl).
+    /// A box is one instance shared by 36 vertices; a draw's first box is its first
+    /// instance. Both vertex slots bind the same buffer so one shader serves both
+    /// formats; the record index rides on the first vertex.
     fn draw_meshes(&self, g: &Gpu, pass: u32, draws: &Draws, which: u32, own: Option<u32>) {
         let b = blocks();
         let mut bound = 0;
@@ -996,11 +844,8 @@ impl Renderer {
             } else {
                 b.buffer(handle)
             };
-            // A draw naming a buffer that is not there is a fault in the list
-            // and not a frame to get through. Skipping it drew nothing and
-            // said nothing, and the census counted it drawn either way — which
-            // is how a device came to draw no ground at all with every gauge
-            // reading normal.
+            // A missing buffer is a fault in the list. Skipping it silently once drew no
+            // ground at all with every gauge reading normal.
             let Some(buffer) = buffer else { xpute_core::bug!(ENOTRECOVERABLE, handle, which) };
             if let (Some(p), 0) = (own, bound) {
                 g.set_pipeline(pass, p);
@@ -1015,10 +860,7 @@ impl Renderer {
         }
     }
 
-    /// One pass's opaque world: the chunks of both formats under `group` at
-    /// the pipelines `chunk`, then decor and the actors at `stage` under
-    /// `models`; the impostors are the lit pass's alone. `bound` comes back
-    /// as the group 0 the pass has.
+    /// The impostors are the lit pass's alone. `bound` comes back as the group 0 the pass has.
     #[allow(clippy::too_many_arguments)]
     fn draw_opaque(&mut self, g: &Gpu, pass: u32, draws: &Draws, b: &mut Blocks, stage: Stage, chunk: [u32; 2], group: u32, models: u32) -> u32 {
         g.set_pipeline(pass, chunk[0]);
@@ -1032,8 +874,6 @@ impl Renderer {
         bound
     }
 
-    /// The world, on the world's surface, and every case on its own; what the
-    /// frame cost.
     fn frame(&mut self, g: &Gpu, world: &mut Surface, input: FrameInput) -> FrameStat {
         self.decor.set_models(input.decor);
         self.impostor.set_models(input.decor);
@@ -1073,16 +913,10 @@ impl Renderer {
         let encoder = object();
         g.encoder(encoder);
         let q = self.query_set;
-        // A span a pair of queries, each written only by the passes the frame
-        // ran: which were is told with the set, since a query no pass wrote
-        // holds whatever an earlier frame left in it.
+        // A query no pass wrote holds an earlier frame's value, so which were written is passed along.
         let mut stamps: [Stamp; GPU_SPANS.len()] = core::array::from_fn(|span| Stamp::of(q, span));
-        // A variant's sprite, where its model or skin came or changed, before
-        // the world's pass reads the atlas.
         self.impostor.bake(g, encoder, &mut self.decor, b);
-        // The air's tables, where any is due, before any pass reads them.
         self.atmosphere.draw(g, encoder, &mut stamps[SPAN_AIR]);
-        // The sun's shadow map first, from the frame's lists, where it is on.
         if self.shadows {
             let pass = self.shadow.begin(g, encoder, &mut stamps[SPAN_SHADOW]);
             let chunk = [self.chunk_depth.pipeline, self.chunk_coarse_depth.pipeline];
@@ -1090,8 +924,6 @@ impl Renderer {
             g.end(pass);
             release(pass);
         }
-        // The world's depth from the eye, and the screen-space occlusion
-        // from it, where that mode is on: the lit passes read the map.
         if self.screen_ao {
             let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);
             let chunk = [self.chunk_prepass.pipeline, self.chunk_coarse_prepass.pipeline];
@@ -1106,27 +938,18 @@ impl Renderer {
         g.pass(pass, encoder, &pass_desc(canvas_view, load::CLEAR, world.depth_view, load::CLEAR, 0.0, stamps[SPAN_WORLD].pass()));
         let chunk = [self.chunk.pipeline, self.chunk_coarse.pipeline];
         let mut bound = self.draw_opaque(g, pass, &draws, b, Stage::Lit, chunk, self.bind_group, self.models.frame);
-        // The impostors after every other opaque pipeline: alpha-tested, a
-        // fragment they discard is one the opaque world had to fill first.
+        // Last among opaque pipelines: alpha-tested fragments they discard were already filled.
         self.impostor.draw(g, pass, draws.of(PIPELINE_IMPOSTOR), b, (self.models.frame, &mut bound));
-        // The sky and the stars after the opaque world, at the far plane, so
-        // only a pixel it left empty runs the sky's shader: looking down at the
-        // map, none does.
+        // At the far plane after the opaque world, so only empty pixels run the sky shader.
         g.set_pipeline(pass, self.sky_built.pipeline);
         g.set_bind_group(pass, 0, self.sky_group, &[]);
         g.draw(pass, 3, 1, 0, 0);
         self.stars.draw(g, pass);
-        // The clouds over the opaque world and the sky: from under the layer
-        // where the world left the sky, from over it over everything
-        // (gpu/clouds.rs).
         self.clouds.draw(g, pass);
         self.puck.draw_beacon(g, pass, &draws, uniforms);
         self.puck.draw_zone(g, pass, &draws, uniforms, b);
-        // What is blended goes last, over everything opaque.
         self.draw_meshes(g, pass, &draws, PIPELINE_GHOST_BOX, Some(self.ghost[0].pipeline));
         self.draw_meshes(g, pass, &draws, PIPELINE_GHOST_BOX_COPLANAR, Some(self.ghost[1].pipeline));
-        // The sky, the clouds, the puck and the ghost box have bound group 0
-        // their own way since the models drew.
         let mut bound = 0;
         self.decor.draw_ghosts(g, pass, &draws, b, (self.models.frame, &mut bound));
         self.debug.draw(g, pass, &draws, uniforms, b);
@@ -1157,8 +980,6 @@ impl Renderer {
             if s.role != surface_role::CASE {
                 continue;
             }
-            // The case's actor's draw, and where it stands; nothing drawn until
-            // the actor has one.
             let Some(own) = draws.of(PIPELINE_SKINNED).find(|d| d[2] == model) else {
                 continue;
             };
@@ -1172,8 +993,6 @@ impl Renderer {
             case.skinned.set_skin(g, model, image);
             let at = own[3] as usize * UNIFORM_FLOATS;
             let actor = [uniforms[at] as f64, uniforms[at + 1] as f64, uniforms[at + 2] as f64];
-            // The case's view, with the actor's place in the world taken back
-            // out so it stands at the case's origin; the eye where the fog reads it.
             let u = &mut case.frame;
             *u = world_frame;
             let (mut proj, mut view, mut t, mut m, mut n) = (mat4(), mat4(), mat4(), mat4(), mat4());
@@ -1187,8 +1006,7 @@ impl Renderer {
             u[CAMERA_POS] = (CASE_EYE[0] + actor[0]) as f32;
             u[CAMERA_POS + 1] = (CASE_EYE[1] + actor[1]) as f32;
             u[CAMERA_POS + 2] = (CASE_EYE[2] + actor[2]) as f32;
-            // No fog: the near and far pushed out of reach (crates/pxl/web/kernel/src/layer/environment/state.rs's
-            // fog_near and fog_far in the run).
+            // No fog: near and far pushed out of reach.
             u[ENV + 7] = 1e9;
             u[ENV + 11] = 2e9;
             u[VIEWPORT] = s.width as f32;
@@ -1211,11 +1029,8 @@ impl Renderer {
         }
     }
 
-    /// The frame's census, taken from the draw list: what the scheduler
-    /// asked for. A chunk's draw is issued or the module stops
-    /// (`draw_meshes`); a model, an impostor, a puck zone or a badge set whose
-    /// block, skin or sprite is not on the device yet is passed over and
-    /// still counted, as is a badge set past the frame's SETS.
+    /// What the scheduler asked for: a draw passed over because its block, skin or
+    /// sprite is not on the device yet is still counted.
     fn stat(&self, draws: &[[u32; DRAW_WORDS]], world: &Surface) -> FrameStat {
         let b = blocks();
         let mut triangles = 0u32;
@@ -1255,13 +1070,9 @@ impl Renderer {
     }
 }
 
-/// A surface's context configured, and its depth made at its buffer's size:
-/// at once where there is none, and for a new size once it has held
-/// SETTLE_TURNS turns — until then the buffer it has is drawn and the page
-/// scales it.
+/// A new size is applied once it has held SETTLE_TURNS turns; until then the
+/// page scales the old buffer.
 fn targets(g: &Gpu, s: &mut Surface) {
-    // The world's surface at what the kernel's resolution chose; a case at
-    // the device's own.
     let ratio = (s.role == surface_role::WORLD).then(|| stage_lane()[STAGE_AT::RESOLUTION]).filter(|r| *r > 0.0);
     let (width, height) = s.buffer_px(ratio);
     if !s.configured {
@@ -1298,9 +1109,7 @@ fn targets(g: &Gpu, s: &mut Surface) {
     s.height = height;
 }
 
-/// The turn's draw: the world's surface and every case, once a device has
-/// answered and the world's canvas is here. Without either the lists are
-/// recorded for the frame that has both, and nothing is drawn.
+/// Without a device or the world's canvas, the lists are recorded for the frame that has both.
 pub fn render_frame(input: FrameInput) -> FrameOutput {
     REDRAW.set(false);
     let world = surfaces().find(|s| s.role == surface_role::WORLD);
@@ -1308,8 +1117,7 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
         take_lists(RENDERER.get(|| None).as_ref().and(gpu()), input.lists);
         return FrameOutput { redraw: false, stat: None };
     };
-    // The GPU has as many frames as it may hold: this one is skipped rather
-    // than waited for, what it listed put on the device, and the next asked.
+    // The GPU holds as many frames as it may: skip rather than wait.
     if !frame_room() {
         take_lists(Some(g), input.lists);
         return FrameOutput { redraw: true, stat: None };
@@ -1324,15 +1132,10 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
     }
 }
 
-/// The lists the scheduler left: the blocks it named recorded, and put on the device or let go there when `g` has one;
-/// and the frame's draws and their uniforms. Blocks listed with no device
-/// wait in the table for the next one.
+/// Blocks listed with no device wait in the table for the next one.
 fn take_lists<'a>(g: Option<&Gpu>, lists: Lists<'a>) -> (&'a [u32], &'a [f32]) {
     let b = blocks();
-    // What goes, first: a block replaced in the same list is never there
-    // with its replacement, so the table holds no more than the owners do
-    // when the list is done. A handle freed in a list is never uploaded in
-    // it (draw.rs `DrawList::free` drops an upload not yet taken).
+    // Frees first, so the table never holds a block beside its replacement.
     for &handle in lists.frees {
         b.remove(handle);
     }

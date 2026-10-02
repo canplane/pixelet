@@ -1,6 +1,9 @@
 // pxl-geo-bake/bin/decode_tile.rs
 
-//! A baked terrain page, read back the way the kernel reads it.
+//! A baked terrain page read back the way the kernel reads it, checked
+//! against the bake's contract. A packed field past its row clamps on read
+//! and draws wrong ground silently, so it is checked here. Run `--all` after
+//! `deno task bake:tiles`; one page also writes PNGs for the eye.
 //!
 //!   decode_tile 12720250262323200                # one leaf: summary + PNGs
 //!   decode_tile 3179787687624704 --level 2       # a page of a level above
@@ -8,28 +11,6 @@
 //!   decode_tile out/terrain/v7/_ocean            # a path works too
 //!   decode_tile --all                            # every page of every level, checked
 //!   decode_tile --all --version v7
-//!
-//! (`cargo run --manifest-path crates/Cargo.toml --profile server --bin
-//! decode_tile -- …`, from the repository root, where `out/` is.)
-//!
-//! A page is read by the model's own `decode_terrain`, so a page this cannot
-//! read is one the client cannot either. What it checks past that is the
-//! bake's contract: the elevation is the padded page's, the ground and the
-//! index lane the page's own size, nothing follows the tree, every packed
-//! cell names a type its channel gives out, and the index lane holds at least
-//! the page's own surface — what it says of the pages under it is the fold's
-//! (pxl-spec bake/fold.rs `fold_index`), whose laws are tested there. A cell's fields are indices into the pack's
-//! rows, and reading one past its row clamps to the row's last entry
-//! (pxl-spec bake/pack.rs), so a writer that disagrees with the reader draws
-//! the wrong ground rather than failing — which is why it is checked here.
-//! A bake that drifts is caught before it is published, which is what
-//! `--all` after `deno task bake:tiles` is for.
-//!
-//! For one page it also writes `heights.png` (the raster stretched to its own
-//! range, so a flat page is flat gray), one PNG a channel in the palette's
-//! colors, with `void` left black and an index the pack has no type for in
-//! magenta, and `decks.png`, the decks from above with their piers white.
-//! The picture is for the eye; the summary is the check.
 
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -54,9 +35,8 @@ use xpute_core::wire::xtp::{HDR_SZ, WORD_SZ};
 
 const MAGENTA: u32 = 0xff00ff;
 
-/// A stored page's bytes as the bake left them: zstd now, gzip in the tile
-/// sets baked before it, and identity where a page was fetched from a
-/// deployment, which decodes it on the way. Told apart by their first bytes.
+/// zstd, gzip in older sets, or identity from a deployment; told apart by
+/// their first bytes.
 fn read_page(path: &Path) -> Result<Vec<u8>, String> {
     let raw = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     if raw.starts_with(&[0x28, 0xb5, 0x2f, 0xfd]) {
@@ -78,14 +58,10 @@ struct Page {
     decks: Decks,
 }
 
-/// The page as the kernel reads it, or what is wrong with its shape.
 fn decode(pkt: &[u8]) -> Result<Page, String> {
-    // A packet whose lanes are not a page's is refused by the decoder.
     let t = decode_terrain(pkt).map_err(|e| format!("not a page: {e:?}"))?;
     let (ele, cells, extent, occupancy, decks) = (t.ele.into_owned(), t.ground.cells.into_owned(), t.index.extent().to_vec(), t.index.occupancy, t.decks);
-    // Nothing may follow: a page is exactly its tree, and bytes past it are a
-    // writer that disagrees with the reader, which only checks that the
-    // payload the header names is there.
+    // Nothing may follow the tree: the decoder only checks the payload is there.
     let at = WORD_SZ as usize;
     let payload = u32::from_le_bytes(pkt[at..at + 4].try_into().expect("a header word")) as usize;
     if payload + HDR_SZ as usize != pkt.len() {
@@ -94,13 +70,10 @@ fn decode(pkt: &[u8]) -> Result<Page, String> {
     Ok(Page { ele, cells, extent, occupancy, decks })
 }
 
-/// A packed cell's field `f` as the dense index the word holds, which may lie
-/// past its row: the fault `channel_of` would hide.
 fn index_of(cell: GroundCell, f: usize) -> usize {
     ((cell as u32 >> ground_pack::SHIFT[f]) & ((1 << ground_pack::BITS[f]) - 1)) as usize
 }
 
-/// A type's name in a channel, `void` and the other sentinels included.
 fn name_of(channel: &str, number: u8) -> &'static str {
     cube_types::CHANNELS
         .iter()
@@ -114,10 +87,8 @@ struct Summary {
     min: i16,
     max: i16,
     mean: f64,
-    /// The index lane's lowest and highest over the whole page.
     extent: [i16; 2],
     occupancy: Occupancy,
-    /// Per channel in the pack's order: cells by type name.
     counts: Vec<BTreeMap<&'static str, u32>>,
     faults: Vec<String>,
 }
@@ -176,8 +147,6 @@ fn print_summary(name: &str, s: &Summary) {
     }
 }
 
-/// The bores, and how deep each point's floor lies under the surface the
-/// page draws there: a bore cuts only where it is under.
 fn print_bores(page: &Page) {
     let bores: Vec<_> = page.decks.iter().filter(|d| d.form.cuts()).collect();
     if bores.is_empty() {
@@ -204,8 +173,6 @@ fn print_decks(decks: &Decks) {
     }
 }
 
-// ---- PNG ----
-
 fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
     out.extend_from_slice(&(data.len() as u32).to_be_bytes());
     let mut crc = Crc::new();
@@ -216,7 +183,6 @@ fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
     out.extend_from_slice(&crc.sum().to_be_bytes());
 }
 
-/// A PNG of `width`×`height` pixels, `channels` bytes each (1 gray, 3 RGB).
 fn png(width: u32, height: u32, channels: u8, pixels: &[u8]) -> Vec<u8> {
     let stride = (width * channels as u32) as usize;
     let mut z = ZlibEncoder::new(Vec::new(), Compression::default());
@@ -245,7 +211,6 @@ fn heights_png(page: &Page, s: &Summary) -> Vec<u8> {
     png(ELE_PADDED_SPAN, ELE_PADDED_SPAN, 1, &gray)
 }
 
-/// Channel `f` in the palette's colors.
 fn channel_png(page: &Page, f: usize) -> Vec<u8> {
     let channel = GroundChannelKey::from_id(f as u32).expect("a packed field is a ground channel");
     let rgb_of = |cell: GroundCell| match ground_pack::NUMBER[f].get(index_of(cell, f)) {
@@ -264,8 +229,6 @@ fn channel_png(page: &Page, f: usize) -> Vec<u8> {
     png(PAGE_CELLS, PAGE_CELLS, 3, &px)
 }
 
-/// The decks drawn from above: each covered cell its surface's color, the
-/// higher deck where two cross, and a pier white.
 fn decks_png(page: &Page) -> Vec<u8> {
     let n = PAGE_CELLS as i64;
     let mut top = vec![f64::NEG_INFINITY; (n * n) as usize];
@@ -286,9 +249,6 @@ fn decks_png(page: &Page) -> Vec<u8> {
     png(PAGE_CELLS, PAGE_CELLS, 3, &px)
 }
 
-// ---- driver ----
-
-/// Every stored page under a tile set: the ocean page, and each level's.
 fn stored_pages(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
     for entry in std::fs::read_dir(dir)? {
         let path = entry?.path();

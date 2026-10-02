@@ -5,9 +5,8 @@
 namespace xpute {
 
 namespace {
-// None until the guest installs its own: the platform's allocator is never a
-// guest's, and on WebAssembly reaching it links the libc that prints its
-// failures through WASI.
+// The platform's allocator is never a guest's: on wasm it links the libc that
+// prints its failures through WASI.
 Heap installed{nullptr, nullptr};
 } // namespace
 

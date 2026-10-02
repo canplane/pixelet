@@ -1,13 +1,6 @@
 // @pxl/web/locale/message-key.ts
 
-/**
- * The locale key a kernel message reads as — `strerror` to the kernel's
- * `errno`.
- *
- * The kernel sends a number and never the words. This is the one place that
- * knows which words a number stands for, and it is here rather than beside
- * the enum because the words are the shell's.
- */
+/** The locale key a kernel message number reads as: `strerror` to its `errno`. */
 
 import { Message } from "@/kernel/abi/cmd.spec.ts";
 

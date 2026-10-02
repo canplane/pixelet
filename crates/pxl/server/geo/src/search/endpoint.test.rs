@@ -1,11 +1,6 @@
 // pxl-geo/search/endpoint.test.rs
 
-//! What the endpoint decides before it reaches the database.
-//!
-//! A deadpool pool connects lazily, so a pool built against a URL nothing
-//! answers on is enough to drive every path that refuses or gates a request —
-//! which is the point, since `deno task check` and `deno task test` both have
-//! to pass on a machine with no geo DB up.
+//! A deadpool pool connects lazily, so these run with no geo DB up.
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -35,7 +30,6 @@ async fn get(uri: &str) -> StatusCode {
 async fn a_query_outside_the_length_bounds_is_refused_before_the_database() {
     assert_eq!(get("/geo/search").await, StatusCode::BAD_REQUEST);
     assert_eq!(get("/geo/search?q=").await, StatusCode::BAD_REQUEST);
-    // Whitespace only: trimmed to empty, so it is the empty query.
     assert_eq!(get("/geo/search?q=%20%20").await, StatusCode::BAD_REQUEST);
 
     let over = "a".repeat(MAX_QUERY_LEN + 1);
@@ -44,9 +38,7 @@ async fn a_query_outside_the_length_bounds_is_refused_before_the_database() {
 
 #[tokio::test]
 async fn the_length_bound_counts_characters_rather_than_bytes() {
-    // 100 Korean syllables is 300 bytes, and a byte cap would refuse it. This
-    // is the case that makes the two readings of "length" differ, and the
-    // TypeScript's own bound was UTF-16 units, which agrees here.
+    // 100 syllables is 300 bytes; a byte cap would refuse it.
     let korean = "가".repeat(MAX_QUERY_LEN);
     assert_ne!(get(&format!("/geo/search?q={korean}")).await, StatusCode::BAD_REQUEST);
 

@@ -2,7 +2,6 @@
 
 use super::*;
 
-/// One run as a column holds it: its heights, its color and its layer.
 struct Run {
     z0: i32,
     z1: i32,
@@ -10,8 +9,7 @@ struct Run {
     layer: u32,
 }
 
-/// A set of `span`² columns, `runs` a column in the order the columns are
-/// indexed. Every run is whole-cell terrain.
+/// Every run is whole-cell terrain.
 fn set_of(span: u32, columns: &[Vec<Run>]) -> OwnedRunSet {
     let mut set = OwnedRunSet {
         span,
@@ -44,7 +42,6 @@ fn ground(z1: i32) -> Vec<Run> {
 
 #[test]
 fn a_cell_walled_in_on_every_side_shows_only_its_top_and_its_bottom() {
-    // Three columns a side, the middle one as tall as its neighbors.
     let columns: Vec<Vec<Run>> = (0..9).map(|_| ground(3)).collect();
     let set = set_of(3, &columns);
     let view = set.view();
@@ -54,11 +51,9 @@ fn a_cell_walled_in_on_every_side_shows_only_its_top_and_its_bottom() {
 
 #[test]
 fn a_wall_shows_the_side_it_stands_above() {
-    // The middle column stands four cells over its neighbors' one.
     let columns: Vec<Vec<Run>> = (0..9).map(|k| ground(if k == 4 { 4 } else { 0 })).collect();
     let set = set_of(3, &columns);
     let view = set.view();
-    // Its top, its bottom, and four sides of the four cells standing clear.
     assert_eq!(exposed_faces(&view, 4, 0, 0, 4), 2.0 + 4.0 * 4.0);
 }
 
@@ -71,8 +66,6 @@ fn a_column_off_the_sets_edge_is_air_and_leaves_the_side_open() {
     assert_eq!(exposed_faces(&view, 0, 0, 0, 0), 2.0 + 2.0);
 }
 
-/// Bakes `set` at `lod_step`, the mesh handed a block of `block` boxes at a
-/// time, and the words it wrote, in order.
 fn bake_in_blocks(set: &OwnedRunSet, lod_step: u32, block: u32) -> Vec<u32> {
     let mut bake = BakeContext::new();
     let view = set.view();
@@ -86,8 +79,7 @@ fn bake_in_blocks(set: &OwnedRunSet, lod_step: u32, block: u32) -> Vec<u32> {
             Step::Working => {}
             Step::NeedMesh(words) => {
                 let n = words.min(block * words_a_box);
-                // SAFETY: `buf`, untouched until the block is full or the bake
-                // is done.
+                // SAFETY: `buf`, untouched until the block is full or the bake is done.
                 unsafe { bake.provide_mesh(buf.as_mut_ptr(), n) };
                 handed = n as usize;
             }
@@ -110,12 +102,9 @@ fn bake_in_blocks(set: &OwnedRunSet, lod_step: u32, block: u32) -> Vec<u32> {
     }
 }
 
-/// A mesh handed a block at a time is the mesh handed whole: the same boxes
-/// in the same order, whatever the block — one box, a few, or all of it —
-/// at a leaf's own cells and coarser.
+/// A mesh handed a block at a time is the mesh handed whole, whatever the block size.
 #[test]
 fn a_mesh_written_through_blocks_is_the_mesh_written_whole() {
-    // Sixteen columns and the ring about them, which every step divides.
     let span = 18;
     let columns: Vec<Vec<Run>> = (0..span * span).map(|k| ground(1 + ((k * 7919) % 13) as i32)).collect();
     let set = set_of(span, &columns);
@@ -128,8 +117,6 @@ fn a_mesh_written_through_blocks_is_the_mesh_written_whole() {
     }
 }
 
-/// The z spans the mesh's +X faces cover, in cells, lowest first, read
-/// back through the heights the bake encoded them in.
 fn east_faces(set: &OwnedRunSet, lod_step: u32) -> Vec<(f64, f64)> {
     let mut bake = BakeContext::new();
     let view = set.view();
@@ -163,7 +150,6 @@ fn east_faces(set: &OwnedRunSet, lod_step: u32) -> Vec<(f64, f64)> {
     out
 }
 
-/// Whether `spans` leave no gap in `lo..hi`.
 fn covers(spans: &[(f64, f64)], lo: f64, hi: f64) -> bool {
     let mut reached = lo;
     for &(a, b) in spans {
@@ -175,11 +161,8 @@ fn covers(spans: &[(f64, f64)], lo: f64, hi: f64) -> bool {
     reached + 1e-6 >= hi
 }
 
-/// Two chunks that meet leave no open interval on the plane between them:
-/// where the one beside stands lower than this chunk's floor — a cliff at
-/// the edge, or a coarser chunk whose cell is read lower at its center — the
-/// wall on the edge reaches down to the lower ground, at a leaf's own cells
-/// and at a coarser step. The ground beside is the apron's run at its top.
+/// Where the chunk beside stands lower than this one's floor, the edge wall
+/// reaches down to it, so no open interval is left between them.
 #[test]
 fn an_edge_wall_reaches_down_to_the_ground_beside_it() {
     for (span, lod_step) in [(3u32, 1u32), (4, 2)] {
@@ -193,7 +176,7 @@ fn an_edge_wall_reaches_down_to_the_ground_beside_it() {
             .collect();
         let set = set_of(span, &columns);
         let faces = east_faces(&set, lod_step);
-        // To within a step of the heights' encoding, which rounds every face alike.
+        // To within a step of the heights' encoding.
         assert!(covers(&faces, 1.0 + 1e-3, 20.0), "step {lod_step}: east faces {faces:?} leave the drop to the ground beside open");
     }
 }

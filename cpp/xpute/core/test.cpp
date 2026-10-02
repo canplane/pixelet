@@ -1,9 +1,5 @@
 // cpp/xpute/core/test.cpp
 
-// The C++ tests' one entry point: every registered test, in the order they
-// were written, each named as it runs. A failure has already stopped the run
-// by the time one returns; reaching the end is every test passing.
-
 #include "test.hpp"
 
 namespace xpute::test {

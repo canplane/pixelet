@@ -1,15 +1,8 @@
 // pxl-spec/bake/ground.rs
 
-//! Which of a cell's four ground channels the viewer actually sees.
-//!
-//! A baked cell carries land/water/structure/transport at once, and later
-//! channels paint over earlier ones. Every consumer that asks "what is this
-//! cell" has to agree on that precedence or they answer differently about
-//! the same cell: the terrain shader picks a texture layer from it, and the
-//! object layer asks whether a placed terrain-styled cube would show
-//! anything the terrain does not already show. A road over bare ground reads
-//! `land = BARE` while rendering as road, so comparing one channel would
-//! cancel a bare-ground cube into a road.
+//! Which of a cell's four ground channels shows. Later channels paint over
+//! earlier ones, and every consumer must agree: a road over bare ground reads
+//! `land = BARE`, so comparing one channel would mistake it for bare ground.
 
 use crate::cell::cube::cube_types;
 
@@ -23,24 +16,21 @@ pub struct ShownGround {
     pub type_id: u32,
 }
 
-/// What a cell shows when no channel has painted it, the catalog's `base`
-/// (cube_type.json): a cell with nothing on it is still ground.
+/// What an unpainted cell shows: the catalog's `base`.
 pub const BASE: ShownGround = ShownGround {
     channel: cube_types::base::CHANNEL,
     type_id: cube_types::base::TYPE as u32,
 };
 
-/// A set of ground channels, a bit a channel by its identity (`key as u8`).
+/// A bit per channel, by its identity.
 pub type ChannelMask = u8;
 
 pub const fn channel_bit(key: GroundChannelKey) -> ChannelMask {
     1 << key as u8
 }
 
-/// `read` returns a channel's raw baked type id (0 = unpainted). A channel in
-/// `hidden` is stepped over as though it were unpainted, so a cell whose
-/// building is hidden shows what is under it — the same answer the paint
-/// gives with the same channels hidden.
+/// `read` gives a channel's raw type id (0 = unpainted). A channel in `hidden`
+/// is skipped, matching what the paint shows with it hidden.
 pub fn shown_ground(read: impl Fn(GroundChannelKey) -> u32, hidden: ChannelMask) -> ShownGround {
     let mut shown = BASE;
     for channel in GROUND_CH_KEYS {
@@ -55,13 +45,8 @@ pub fn shown_ground(read: impl Fn(GroundChannelKey) -> u32, hidden: ChannelMask)
     shown
 }
 
-/// How far off its sampled height a cell showing `shown` stands, in units,
-/// up positive: the catalog's `shift` column, one rule for every type that
-/// does not stand at the surface — water and a building's footprint a step
-/// down, so a shoreline is water meeting land a step lower and a block's edge
-/// reads against its street. A column of the type, so it is the same whichever
-/// channel the type came from — the sea is a land type and lies where a
-/// river does.
+/// How far off its sampled height a cell showing `shown` stands, up positive:
+/// the catalog's `shift` column, by type whatever channel it came from.
 pub fn shift(shown: ShownGround) -> i16 {
     let column = match shown.channel {
         GroundChannelKey::LAND => cube_types::land::SHIFT,
@@ -72,7 +57,7 @@ pub fn shift(shown: ShownGround) -> i16 {
     column.iter().find(|(t, _)| *t as u32 == shown.type_id).map_or(0, |&(_, r)| r)
 }
 
-/// The lowest and highest `shift` any type has, in cells.
+/// In cells.
 pub const SHIFT_RANGE: [i16; 2] = {
     let columns = [cube_types::land::SHIFT, cube_types::water::SHIFT, cube_types::structure::SHIFT, cube_types::transport::SHIFT];
     let (mut lo, mut hi) = (0, 0);
@@ -94,9 +79,7 @@ pub const SHIFT_RANGE: [i16; 2] = {
     [lo, hi]
 };
 
-/// How far off its sampled height a packed cell stands: `shift` of what it
-/// shows with no channel hidden, which is the height every reader of the
-/// ground takes, whatever a view hides.
+/// `shift` with no channel hidden: the height every reader takes.
 pub fn cell_shift(cell: GroundCell) -> i16 {
     shift(shown_ground(|k| channel_of(cell, k) as u32, 0))
 }

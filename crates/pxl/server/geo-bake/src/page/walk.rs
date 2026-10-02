@@ -1,26 +1,8 @@
 // pxl-geo-bake/page/walk.rs
 
-//! The reverse-geocode bake's walk: terrain's own land-page list, one object
-//! per group of pages, resumable. The walk is over whatever the bake made of
-//! the land list rather than over the list itself.
-//!
-//! Reusing terrain's land/ocean split rather than a classification of its own
-//! is deliberate. "Does this bbox touch any land polygon" is a cheap, purely
-//! geometric pre-filter that already rules out every page a label could never
-//! fall on; a real "does this group have a named division" pass would cost
-//! about what fetching costs, so there is nothing cheaper to filter on than
-//! what terrain already computed. A land group with nothing on it still costs
-//! one round trip — the `.empty` marker's job is to make that a one-time cost,
-//! not to remove it.
-//!
-//! There is no shared fallback the way terrain's `_ocean` is one: "nothing
-//! here" is an empty result rather than a payload some other page's bytes
-//! could stand in for, so a missing key is enough on its own and the client
-//! reads a 404 as empty directly.
-//!
-//! The pyramid bakes do not go through this. Terrain's walk is over a
-//! candidate grid it classifies itself, and POI's leaves are wherever a place
-//! is; both then fold (pyramid.rs), which a flat group set has no use for.
+//! The reverse-geocode bake's walk over terrain's land pages, one object per
+//! group, resumable. A missing object reads as empty, so there is no shared
+//! fallback.
 
 use pxl_spec::bake::quadkey::quadkey_of;
 use std::collections::HashMap;
@@ -36,8 +18,7 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 
 use crate::util::{fmt_bytes, fmt_dur, pack, write_atomic, Level};
 
-/// A local marker saying "already asked, nothing here". Never uploaded — the
-/// publish step excludes it.
+/// "Already asked, nothing here", for resume; never uploaded.
 pub const EMPTY_SUFFIX: &str = ".empty";
 
 pub struct Args {
@@ -49,8 +30,6 @@ pub struct Args {
 }
 
 impl Args {
-    /// The five flags both bakes take, with the output directory's default left
-    /// to the caller since it names its own kind.
     pub fn parse(default_out: PathBuf) -> Result<Args, String> {
         let mut args = Args {
             out: default_out,
@@ -75,20 +54,16 @@ impl Args {
     }
 }
 
-/// What one target came to, and how many labels it holds.
 pub enum Page {
     Object { raw: Vec<u8>, items: u64 },
     Empty,
 }
 
-/// One object of the walk: the index it is named by, and the land pages it
-/// covers.
 pub struct Target {
     pub idx: IVec,
     pub leaves: Vec<IVec>,
 }
 
-/// The land pages gathered `shamt` levels up, first-seen order.
 pub fn targets_of(land: &[IVec], shamt: u32) -> Vec<Target> {
     let mut out: Vec<Target> = Vec::new();
     let mut at: HashMap<IVec, usize> = HashMap::new();
@@ -118,12 +93,8 @@ pub struct Walked {
     pub elapsed_ms: f64,
 }
 
-/// Terrain's land pages, as its own classification wrote them.
-///
-/// A page index means a different square of ground at every page size, so the
-/// list carries the L3 shift it was classified at and is refused at any
-/// other. Reused silently, a list from a larger page names a quarter of the
-/// land at the wrong places, and a bake of it looks like a bake.
+/// Refused at any page size but the one it was classified at: a stale list
+/// names the wrong ground and still bakes.
 pub fn land_pages(path: &Path) -> Result<Vec<IVec>, String> {
     let reclassify = "run bake_tiles, which writes it as a side effect of its own classification (`--limit 0` does the classification and bakes nothing)";
     let raw = std::fs::read_to_string(path).map_err(|_| format!("{} not found — {reclassify}.", path.display()))?;
@@ -138,17 +109,12 @@ pub fn land_pages(path: &Path) -> Result<Vec<IVec>, String> {
     list.iter().map(|s| s.as_str().ok_or("a page is not a string")?.parse::<IVec>().map_err(|e| e.to_string())).collect()
 }
 
-/// Writes the land list with the page size it was classified at.
 pub fn write_land_pages(path: &Path, land: &[IVec]) -> Result<(), String> {
     let pages: Vec<String> = land.iter().map(|p| p.to_string()).collect();
     let v = serde_json::json!({ "l3_shamt": L3.shamt(), "pages": pages });
     std::fs::write(path, serde_json::to_string(&v).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
 }
 
-/// Walks the pages with one worker per connection, writing what `one` returns.
-///
-/// `connect` is called once per worker, so a worker owns its connection and its
-/// prepared statements for the whole run.
 pub fn walk<T>(
     args: &Args,
     tag: &str,
@@ -174,10 +140,6 @@ pub fn walk<T>(
                     let i = next.fetch_add(1, Ordering::Relaxed);
                     let Some(target) = targets.get(i) else { break };
                     let page_idx = target.idx;
-                    // The name the bucket serves the object under, written
-                    // here so that publishing is a plain sync: unlike terrain,
-                    // these bakes keep no level directories, so nothing on
-                    // disk wants the index as a name (pxl-spec bake/quadkey.rs).
                     let name = quadkey_of(zoom, page_idx).to_string();
                     let path = args.out.join(&name);
                     let marker = args.out.join(format!("{name}{EMPTY_SUFFIX}"));
@@ -216,8 +178,7 @@ pub fn walk<T>(
                     if done.is_multiple_of(every) {
                         let t = totals.lock().expect("totals");
                         let elapsed = started.elapsed().as_secs_f64() * 1000.0;
-                        // A skipped page cost nothing, so the rate that
-                        // predicts the rest is over the pages actually done.
+                        // Skipped pages cost nothing, so the rate is over pages actually done.
                         let worked = done - t.skipped;
                         let rate = if worked > 0 { elapsed / worked as f64 } else { 0.0 };
                         println!(

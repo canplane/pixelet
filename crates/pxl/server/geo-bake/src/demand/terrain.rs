@@ -16,8 +16,6 @@ impl Source {
     }
 }
 
-/// A terrain page: a leaf baked from the database where it has land, a page
-/// above folded with the ocean page for open water.
 pub(super) fn execute(p: LevelPage, cache: &std::path::Path, out: &std::path::Path, seconds: u64) -> Result<(), String> {
     use crate::terrain::{leaf, repository::TerrainRepository, source::SourceStats};
     use crate::util::{unpack, Level};

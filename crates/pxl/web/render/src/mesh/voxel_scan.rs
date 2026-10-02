@@ -1,26 +1,8 @@
 // pxl-render/mesh/voxel_scan.rs
 
-//! A chunk's bands to its column runs: the whole-chunk scan.
-//!
-//! A row of columns a step, each column read bottom to top across its bands,
-//! a run opened at its first voxel and extended while the material holds, a
-//! band's overflow sub-voxels pushed after its voxels. The set is packed in
-//! voxel_scan.rs's layout.
-//!
-//! A run is emitted when it opens rather than when it closes because the
-//! sink writes forward only: a run's length is patched into the word already
-//! written once the run ends, which is what lets the walk and the packing be
-//! one pass. The sub-voxels trail their band for the same reason — they are
-//! found after the band's voxels and are appended where the walk is.
-//!
-//! The runs are gathered into one vector of structs as the walk finds them,
-//! since the count is known only at the end; the set they are packed into
-//! is the caller's (`ScanStep::NeedSet`, `provide_set`), acquired then and
-//! refusable, as the mesher's mesh is.
-//!
-//! The same scratch and packing serve the direct path (`begin_direct`),
-//! where the runs are not walked out of bands but written one call each by
-//! a layer's own source — one a column for terrain.
+//! A chunk's bands to its column runs. A run is emitted when it opens and its
+//! length patched in when it ends, so walk and packing are one pass. The direct
+//! path (`begin_direct`) writes runs one call each from a layer's own source.
 
 use pxl_spec::bake::constant::BAND_CELLS;
 
@@ -29,39 +11,20 @@ use crate::mesh::{grow, try_push, Refused};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
-/// Cells on a band's side; a chunk is one column of bands.
-/// The ring of neighbor columns a run set carries around the chunk's own.
-///
-/// A chunk is meshed from its own columns, and every question the face mask
-/// asks — is the face hidden, does the cell beside it rise above this run,
-/// is the corner filled — is about the column next door. At the chunk's edge
-/// that column is the next chunk's, whose voxels are not here and may not be
-/// resident, so the mask was left saying "open air" and every seam lost its
-/// occlusion, its crease, and the culling of the face behind it.
-///
-/// The ring answers those questions without the neighbor. The ground beyond
-/// a page's own span is in the page already — the elevation raster is padded
-/// (pxl-spec's ELE_PAD) — so a column of it can be written here from the same
-/// source the chunk's own terrain came from. Nothing is emitted from an apron
-/// column: it exists to be asked about.
+/// The ring of neighbor columns a run set carries. Without it the face mask
+/// read every chunk seam as open air, losing occlusion, creases and culling
+/// there. Nothing is emitted from an apron column.
 pub const APRON: u32 = 1;
-/// Columns on a side of a run set: the chunk's own and the ring.
 pub const COL_SPAN: u32 = BAND_CELLS + 2 * APRON;
 const COLUMN_CNT: usize = (COL_SPAN * COL_SPAN) as usize;
 
-/// A padded column's index, from the chunk's own (cx, cy).
 pub fn apron_col(cx: u32, cy: u32) -> u32 {
     (cy + APRON) * COL_SPAN + cx + APRON
 }
 
-/// What the apron columns are written from: the chunk's terrain sample, laid
-/// out over the padded column grid, and the floor every run starts at. The
-/// interior entries are never read — those columns come from the bands. A
-/// column whose ground does not reach the floor gets no run, and reads as
-/// open air exactly as an absent neighbor used to.
+/// Interior entries are never read; those columns come from the bands.
 pub struct Apron<'a> {
-    /// The ground's height a cell, as the sample holds it: the column's top
-    /// is one below.
+    /// A column's top is one below.
     pub ele: &'a [i16],
     pub material: &'a [u32],
     pub layer_idx: &'a [u8],
@@ -69,7 +32,6 @@ pub struct Apron<'a> {
 }
 const SCAN_ROWS_PER_STEP: u32 = 8;
 
-/// One band's overflow sub-voxels, sorted by column (volume.rs's Extras).
 pub struct ExtraView<'a> {
     pub col: &'a [u32],
     pub z: &'a [i32],
@@ -78,9 +40,7 @@ pub struct ExtraView<'a> {
     pub sub: &'a [u32],
 }
 
-/// One band as the scan reads it (volume.rs's Band): materials packed
-/// `0xCC_RRGGBB`, zero for air; four sub-cell bytes a voxel when the band
-/// has any.
+/// Materials packed `0xCC_RRGGBB`, zero for air.
 pub struct BandView<'a> {
     pub band_z: i32,
     pub material: &'a [u32],
@@ -116,27 +76,22 @@ struct Run {
     sub_s: u8,
 }
 
-/// Where a scan stands after a step.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ScanStep {
     Working,
-    /// Every column is walked and the set's size is known: `provide_set`
-    /// this many bytes. Returned again by every step until then.
+    /// Returned by every step until `provide_set` hands this many bytes.
     NeedSet(u32),
     Done,
-    /// The heap refused the runs room: the scan is over, and asked for
-    /// again once the heap has let something go.
+    /// The heap refused the runs room: the scan is over, and asked for again later.
     Refused,
 }
 
-/// One scan at a time, and the scratch every scan reuses.
 pub struct ScanContext {
     runs: Vec<Run>,
     starts: Vec<u32>,
     open: bool,
     row: u32,
     packed: bool,
-    /// The direct path's next column to start, while its writer is open.
     next_col: Option<u32>,
 }
 
@@ -158,7 +113,7 @@ impl ScanContext {
         }
     }
 
-    /// Opens a scan of `bands`, ascending by band_z. False when one is open.
+    /// `bands` ascending by band_z. False when one is open.
     pub fn begin(&mut self, bands: &[BandView]) -> bool {
         if self.open {
             return false;
@@ -174,10 +129,8 @@ impl ScanContext {
         true
     }
 
-    /// Opens the direct path's writer instead of a scan: the runs come one
-    /// call each from a layer's own source, columns in row-major order,
-    /// each column's runs together, then `close_direct` asks for the set as
-    /// a finished scan does. False when a scan or a writer is open.
+    /// Columns in row-major order, each column's runs together. False when a scan
+    /// or a writer is open.
     pub fn begin_direct(&mut self) -> bool {
         if self.open {
             return false;
@@ -190,8 +143,6 @@ impl ScanContext {
         true
     }
 
-    /// Starts column `col`; the columns skipped since the last are empty,
-    /// their prefix entries all pointing at the current run count.
     pub fn direct_column(&mut self, col: u32) {
         let next = self.next_col.or_bug(Errno::ENOTRECOVERABLE);
         xpute_core::ensure!(col < COLUMN_CNT as u32, ENOSPC);
@@ -201,16 +152,11 @@ impl ScanContext {
         self.next_col = Some(col + 1);
     }
 
-    /// One full-cell run `[z0, z1]` of the column last started, in a
-    /// packed 0xCC_RRGGBB material on `layer_idx`; an error where the heap
-    /// refused the runs room.
     pub fn direct_run(&mut self, z0: i32, z1: i32, material: u32, layer_idx: u8) -> Result<(), Refused> {
         xpute_core::ensure!(self.next_col.is_some_and(|n| n > 0), ENOTRECOVERABLE);
         try_push(&mut self.runs, run_of(z0, z1, material, layer_idx))
     }
 
-    /// Closes the writer: the columns not started are empty, and the set
-    /// is asked for — `provide_set` this many bytes, then `finish`.
     pub fn close_direct(&mut self) -> u32 {
         let next = self.next_col.take().or_bug(Errno::ENOTRECOVERABLE);
         for c in next..=COLUMN_CNT as u32 {
@@ -220,10 +166,7 @@ impl ScanContext {
         self.set_bytes()
     }
 
-    /// Walks up to a step's rows of `bands`, the bands it was opened with,
-    /// writing the apron's columns as it reaches them: the rows are the
-    /// padded ones, so every column of the set is written in the one order
-    /// its prefix array is read in.
+    /// The rows are the padded ones, so every column is written in prefix-array order.
     pub fn step(&mut self, bands: &[BandView], apron: &Apron) -> ScanStep {
         xpute_core::ensure!(self.open, ENOTRECOVERABLE);
         if self.packed {
@@ -259,10 +202,8 @@ impl ScanContext {
         }
     }
 
-    /// The one run an apron column holds: floor to its ground, or, where its
-    /// ground stands below the floor, the one cell at its top — what the
-    /// chunk's edge wall reaches down to (chunk_mesher.rs `edge_low`). It
-    /// is never painted or emitted, so it changes no occupancy.
+    /// Floor to its ground, or where the ground is below the floor, its top cell,
+    /// which the chunk's edge wall reaches down to. Never painted or emitted.
     fn apron_run(&mut self, apron: &Apron, col: usize) -> Result<(), Refused> {
         let top = apron.ele[col] as i32 - 1;
         let z0 = if top < apron.floor { top } else { apron.floor };
@@ -273,9 +214,6 @@ impl ScanContext {
         run_set_bytes(self.runs.len() as u32, COL_SPAN)
     }
 
-    /// Packs the walked runs into `bytes` bytes at `ptr`, in
-    /// voxel_scan.rs's layout, after `ScanStep::NeedSet`.
-    ///
     /// # Safety
     /// `ptr` must address at least the bytes asked for, 4-aligned, and be
     /// the caller's to write.
@@ -317,7 +255,6 @@ impl ScanContext {
         self.packed = true;
     }
 
-    /// Closes the packed scan: how many runs the set holds.
     pub fn finish(&mut self) -> u32 {
         xpute_core::ensure!(self.open && self.packed, ENOTRECOVERABLE);
         self.open = false;
@@ -331,7 +268,6 @@ impl ScanContext {
     }
 }
 
-/// One full-cell run in a packed 0xCC_RRGGBB material on `layer_idx`.
 fn run_of(z0: i32, z1: i32, material: u32, layer_idx: u8) -> Run {
     Run {
         z0,
@@ -358,8 +294,8 @@ fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) -> Res
     let mut open: Option<usize> = None;
     let mut previous_band_z: Option<i32> = None;
     for band in bands {
-        // Empty signed-Z bands break a material run. Adjacent bands do
-        // not: buried faces at a cache boundary must not reappear.
+        // Empty signed-Z bands break a material run; adjacent bands do not, or buried
+        // faces at a band boundary would reappear.
         if previous_band_z.is_some_and(|p| band.band_z != p + 1) {
             open = None;
         }
@@ -451,12 +387,10 @@ fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) -> Res
     Ok(())
 }
 
-/// A fine run has one material, written into all four taps.
 fn taps_of(layer_idx: u8) -> u32 {
     layer_idx as u32 * 0x0101_0101
 }
 
-/// The range of a band's sorted extras in column `col`.
 fn extra_range(cols: &[u32], col: u32) -> (usize, usize) {
     let lo = cols.partition_point(|&c| c < col);
     let mut hi = lo;
@@ -466,22 +400,14 @@ fn extra_range(cols: &[u32], col: u32) -> (usize, usize) {
     (lo, hi)
 }
 
-// ---- the run set ----
-//
-// A chunk's column runs.
-//
-// One block of lanes in carve order, widest element first, so a set read
-// back out of the block it was written into needs no translation and the
-// views below are the block itself.
+// The run set: one block of lanes, widest element first, so a set read back
+// from its block needs no translation.
 
-/// Views over one run set's lanes.
 pub struct RunSet<'a> {
     pub count: u32,
-    /// Columns on a side; column `(cx, cy)` is `cy * span + cx`.
+    /// Column `(cx, cy)` is `cy * span + cx`.
     pub span: u32,
-    /// The ring of neighbor columns around the chunk's own, in columns: one
-    /// for a scanned or directly written set, none for a coarse tier's,
-    /// which is summarized from one and carries no neighbors of its own.
+    /// None for a coarse tier's set, which carries no neighbors of its own.
     pub apron: u32,
     pub start: &'a [u32],
     pub z0: &'a [i32],
@@ -494,24 +420,19 @@ pub struct RunSet<'a> {
     pub sub_ox: &'a [u8],
     pub sub_oy: &'a [u8],
     pub sub_oz: &'a [u8],
-    /// A sub-cell box's side, one on every axis — a scanned sub-voxel is a
-    /// cube, and a coarse cell's sparse box is one too — or SUB_CELL_NONE
-    /// for a run that fills its cells.
+    /// One side on every axis, or SUB_CELL_NONE for a run that fills its cells.
     pub sub_s: &'a [u8],
 }
 
 const RUN_I32_FIELDS: u32 = 3;
 const RUN_U8_FIELDS: u32 = 8;
 
-/// The bytes a set of `count` runs over `span`² columns occupies.
 pub fn run_set_bytes(count: u32, span: u32) -> u32 {
     (span * span + 1) * 4 + count * (RUN_I32_FIELDS * 4 + RUN_U8_FIELDS)
 }
 
 impl<'a> RunSet<'a> {
-    /// Carves the lanes out of `bytes`, which must start 4-aligned and hold
-    /// at least `run_set_bytes(count, span)`; both are checked, so a wrong
-    /// block is a panic and never a misread.
+    /// Alignment and length are checked, so a wrong block panics rather than misreads.
     pub fn carve(bytes: &'a [u8], count: u32, span: u32, apron: u32) -> RunSet<'a> {
         let need = run_set_bytes(count, span) as usize;
         xpute_core::ensure!(bytes.len() >= need, EINVAL, bytes.len(), need);
@@ -520,9 +441,8 @@ impl<'a> RunSet<'a> {
         let n = count as usize;
         let cols = (span * span + 1) as usize;
         let mut at = 0usize;
-        // SAFETY: every span below lies inside `bytes` — the length was
-        // checked against the layout's total — and the word lanes start
-        // 4-aligned, as the base was checked to.
+        // SAFETY: every span lies inside `bytes`, whose length was checked against the
+        // layout's total, and the word lanes start 4-aligned as the base was checked to.
         let mut words = |len: usize| unsafe {
             let p = base.add(at);
             at += len * 4;
@@ -558,8 +478,6 @@ impl<'a> RunSet<'a> {
     }
 }
 
-/// A run set the mesher builds itself — a coarse tier's — with the same
-/// lanes, owned.
 #[derive(Default)]
 pub struct OwnedRunSet {
     pub span: u32,
@@ -579,7 +497,6 @@ pub struct OwnedRunSet {
 }
 
 impl OwnedRunSet {
-    /// Empties every lane, keeping their capacity.
     pub fn clear(&mut self) {
         self.start.clear();
         self.z0.clear();
@@ -599,13 +516,8 @@ impl OwnedRunSet {
         }
     }
 
-    /// `set` cut to the heights `z0..z1`, in units: every run that reaches
-    /// into them, cut to them, and none that does not. What a chunk of the
-    /// view draws of the column its runs were read from, since a chunk is a
-    /// cube and its column's contents run through every chunk over it
-    /// (kernel world/pyramid/chunk.rs). A run cut at a face ends there as
-    /// any run ends, and the chunk beside it across that face draws the rest.
-    /// An error, and the cut empty, where the heap refused it room.
+    /// A chunk is a cube while its column's runs pass through every chunk over it,
+    /// so the set is cut to the chunk's heights; the chunk across a cut face draws the rest.
     pub fn clip_from(&mut self, set: &RunSet, z0: i32, z1: i32) -> Result<(), Refused> {
         self.clear();
         self.span = set.span;
@@ -636,7 +548,6 @@ impl OwnedRunSet {
         Ok(())
     }
 
-    /// Room for `n` more runs in every lane.
     pub(crate) fn grow_runs(&mut self, n: usize) -> Result<(), Refused> {
         grow(&mut self.z0, n)?;
         grow(&mut self.z1, n)?;

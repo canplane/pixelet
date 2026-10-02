@@ -1,27 +1,14 @@
 // pxl-render/frame/stage.rs
 
-//! The frame's uniforms as the kernel decides them, in one lane of doubles at
-//! a fixed address: the camera and the root frame, the LOD fade, and what the
-//! settings switch on. The kernel writes it after every frame's turn
-//! (crates/pxl/web/kernel/src/world/frame/stage.rs); the renderer reads it in place,
-//! converts the projections to WebGPU's depth range, lays the numbers into its
-//! own uniform buffers and draws; it decides nothing.
+//! The frame's uniforms as the kernel decides them, in one lane of doubles at a
+//! fixed address; the renderer reads it in place.
 
 use xpute_runtime::global::Global;
 
-/// A cube edge's shade where it borders open air, while edge shading is on,
-/// and the shaded band's width.
 pub const EDGE_STRENGTH: f64 = 0.3;
 pub const EDGE_WIDTH: f64 = 0.03;
-/// How much of the ambient light a face loses where it meets a wall, at the
-/// wall itself, while the corner occlusion is on. It is a Rust constant and
-/// not one of chunk.wgsl's, where the rest of the shading's numbers are,
-/// because the kernel decides whether the mode is on and writes this or
-/// zero into the lane; the shader cannot see a setting. It scales the warm
-/// tint by the same amount as the darkening, so a face reads no more
-/// colored than it reads dark. How far the shading reaches from the wall,
-/// and how it falls away over that distance, are chunk.wgsl's AO_REACH and
-/// occlusion_of.
+/// A Rust constant because the kernel decides whether the mode is on and writes
+/// this or zero; the shader cannot see a setting.
 pub const AO_STRENGTH: f64 = 0.2;
 
 pub const STAGE_WORDS: usize = 80;
@@ -29,21 +16,13 @@ pub const STAGE_WORDS: usize = 80;
 /// Where each value sits in the lane.
 #[allow(non_snake_case)]
 pub mod STAGE_AT {
-    /// The badges' view: the view matrix through the root frame, from the
-    /// eye's frame (16).
+    /// The view matrix through the root frame (16).
     pub const BADGE_VIEW: usize = 0;
     /// Camera to GL clip (16).
     pub const PROJ: usize = 16;
-    /// The eye's frame to GL clip: the root frame with the eye at its
-    /// origin, where every point a draw lists stands (frame/draw.rs
-    /// `DrawList::translation`), so the matrix holds no translation of the
-    /// eye's for a point's to cancel against (16).
+    /// Eye-relative, so the matrix holds no eye translation for a point's to cancel against (16).
     pub const EYE_VIEW_PROJ: usize = 32;
-    /// The eye in the root frame (3): what the eye's frame is the root frame
-    /// less of.
     pub const EYE_LOCAL: usize = 48;
-    /// Where the flat map is laid back on the planet about, in the root
-    /// frame (3): the shadow aims at it too.
     pub const GLOBE_ANCHOR: usize = 51;
     /// The viewport in CSS pixels (2).
     pub const VIEWPORT: usize = 54;
@@ -57,25 +36,19 @@ pub mod STAGE_AT {
     pub const RIM_INTENSITY: usize = 63;
     pub const SHADOWS: usize = 64;
     pub const AO_STRENGTH: usize = 65;
-    /// The screen-space occlusion (gpu/ao.rs): 1 to run it, 0 not to.
     pub const SCREEN_AO: usize = 66;
-    /// The map origin the root frame is relative to, east and north, in
-    /// units (2): with the eye past it, where the clouds are anchored to the
-    /// ground.
+    /// East and north, in units (2); the clouds are anchored to it.
     pub const ORIGIN: usize = 67;
-    /// The device pixels the world's surface is drawn at to a CSS pixel,
-    /// as the kernel's resolution chose them this frame.
+    /// Device pixels per CSS pixel the world is drawn at this frame.
     pub const RESOLUTION: usize = 69;
 }
 
 static STAGE: Global<[f64; STAGE_WORDS]> = Global::new();
 
-/// The lane, for the kernel to write the frame's uniforms into.
 pub fn stage_lane_mut() -> &'static mut [f64; STAGE_WORDS] {
     STAGE.get(|| [0.0; STAGE_WORDS])
 }
 
-/// The lane, for the renderer to lay the frame's uniforms out from.
 pub fn stage_lane() -> &'static [f64; STAGE_WORDS] {
     stage_lane_mut()
 }

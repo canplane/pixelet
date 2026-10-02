@@ -2,9 +2,7 @@
 
 use super::*;
 
-/// A level cell's candidate is a z16 cell inside it, and the candidate of
-/// the cell under it that it lies in: coarser levels keep a subset of the
-/// finer ones' instances, so a zoom never moves one.
+/// Coarser levels keep a subset of the finer ones' instances, so a zoom never moves one.
 #[test]
 fn a_levels_candidate_is_the_candidate_of_a_cell_under_it() {
     for tag in [1u64, 0xdead_beef] {

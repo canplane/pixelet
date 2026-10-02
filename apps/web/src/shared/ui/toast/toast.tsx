@@ -17,24 +17,16 @@ import { alpha, chrome, color, shadow, surface, SYSTEM, textStyle, weight } from
 import { type ToastSpec, ToastTone } from "./store.ts";
 
 const SIDE = 32;
-/** The message's room either side, inside the card. */
 const MESSAGE_PAD = 4;
-/** Kept clear of the window's sides, outside the card. */
 const EDGE = 4;
 
-/** How long a card stands as a circle, its glyph alone, before it opens. */
 const OPEN_AFTER_MS = 450;
 
-/** The check's arrival: under critical damping on purpose, a small bounce. */
+/** Underdamped on purpose: a small bounce. */
 const POP: Transition = spring({ stiffness: 260, damping: 12, mass: 0.8 });
 
-/** A tone's glyph and its dot: a status as Apple draws one
- * (checkmark.circle.fill, xmark.circle.fill), a white glyph in a disc of the
- * status's color. A stroked glyph in the color alone is too thin to read —
- * green's stroke on the glass stands under 2:1 against it — where a filled
- * disc is read by its shape whatever it stands on. */
+/** A filled disc, as Apple's status glyphs: a green stroke on glass stood under 2:1. */
 const TONE: Record<ToastTone, { mark: "checkmark" | "xmark" | null; status: string }> = {
-  // On its way: the green it will turn, faint, as iOS's own green at 30%.
   [ToastTone.Loading]: { mark: null, status: alpha(SYSTEM.green, 0.3) },
   [ToastTone.Error]: { mark: "xmark", status: STATUS.failed },
   [ToastTone.Ready]: { mark: "checkmark", status: STATUS.ready },
@@ -51,20 +43,11 @@ function ToneGlyph({ tone }: { tone: ToastTone }) {
 }
 
 interface ToastProps extends ToastSpec {
-  /** How present the card is in the deck, and how a change is moved
-   * through; it mounts gone and arrives. */
   fade: f64;
   fadeTransition: Transition;
-  /** What a finger on the card does. */
   touch?: GestureResponderHandlers;
 }
 
-/**
- * One card of the deck: a circle holding a glyph for its tone, which opens
- * into a pill saying what it reports, with a dot at its end, centered on the
- * deck's point so it grows from its middle — on a whole pixel, where a
- * page's pill cuts its shadow cleanly (platform/web/pill.tsx).
- */
 export function Toast({ message, tone, fade, fadeTransition, touch }: ToastProps) {
   const error = tone === ToastTone.Error;
   const span = useWindowSize().width;
@@ -85,8 +68,6 @@ export function Toast({ message, tone, fade, fadeTransition, touch }: ToastProps
       height={SIDE}
       span={span}
       fill={error ? surface.alarm.fill : color.ground}
-      // On glass the tint is all the color it carries: the system draws the
-      // rim, and a border is the fill's alone (platform backing.tsx).
       tint={error ? surface.alarm.glass : undefined}
       place={BackingPlace.OverMap}
       border={{ width: 2, color: error ? surface.alarm.edge : alpha(color.white, 0.9) }}

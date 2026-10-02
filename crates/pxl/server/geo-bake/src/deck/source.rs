@@ -1,35 +1,20 @@
 // pxl-geo-bake/deck/source.rs
 
-//! What the solve reads from the geo DB and the table it writes.
-//!
-//! The geometry questions — what crosses a deck, where along it, over which
-//! water — are PostGIS's, asked of the pieces staged in a table of their own
-//! so that every one is a join on an index; what the answers mean is the
-//! solve's (deck.rs).
-//!
-//! Each question is asked as the bake asks for its pages: in shares over
-//! several connections at once, each worker owning its connection, since one
-//! connection is one backend and one core (bin/bake_tiles.rs). The staging
-//! tables are unlogged rather than temporary so that every connection sees
-//! them, and go when the solve writes its answer.
+//! The solve's PostGIS queries over a staged, indexed `deck_piece` table,
+//! fanned over several connections. Staging is unlogged, not temporary, so
+//! every connection sees it.
 
 use postgres::{Client, NoTls};
 
 use crate::deck::piece::{BridgeRow, Piece};
 use pxl_spec::bake::deck::Form;
 
-/// Rows a batched insert sends at once.
 const BATCH: usize = 20_000;
 
-/// Points a lookup asks about at once, small enough that the shares of a
-/// few hundred thousand come out even.
 const LOOKUP: usize = 2_000;
 
-/// Connections a question is asked over at once: the bake's own default.
 const WORKERS: usize = 8;
 
-/// `ask` asked over `WORKERS` connections at once, the k-th for the k-th
-/// share of it, and the answers together.
 pub fn fan<T: Send>(url: &str, ask: impl Fn(&mut Client, usize, usize) -> Result<Vec<T>, postgres::Error> + Sync) -> Result<Vec<T>, postgres::Error> {
     std::thread::scope(|scope| {
         let ask = &ask;
@@ -49,12 +34,10 @@ pub fn fan<T: Send>(url: &str, ask: impl Fn(&mut Client, usize, usize) -> Result
     })
 }
 
-/// The share of a piece table's rows the k-th of n workers asks about.
 fn share(k: usize, n: usize) -> (i32, i32) {
     (n as i32, k as i32)
 }
 
-/// Every segment `flag` is on, somewhere along it.
 pub fn flagged_rows(client: &mut Client, flag: &str) -> Result<Vec<BridgeRow>, postgres::Error> {
     let rows = client.query(
         "SELECT gers_id, subtype, class, COALESCE(road_flags, rail_flags)::text AS flags, level_rules::text AS levels,
@@ -85,7 +68,6 @@ fn wkt(points: impl Iterator<Item = String>, z: bool) -> String {
     format!("LINESTRING{} ({})", if z { " Z" } else { "" }, points.collect::<Vec<_>>().join(","))
 }
 
-/// The pieces as `deck_piece`, a table indexed for the joins below.
 pub fn stage(client: &mut Client, pieces: &[Piece]) -> Result<(), postgres::Error> {
     client.batch_execute(
         "DROP TABLE IF EXISTS deck_piece;
@@ -104,9 +86,6 @@ pub fn stage(client: &mut Client, pieces: &[Piece]) -> Result<(), postgres::Erro
     client.batch_execute("CREATE INDEX ON deck_piece USING GIST (geom); ANALYZE deck_piece;")
 }
 
-/// A way that crosses a piece: where along the piece, in metres, what it is,
-/// and where along itself, as a fraction, so its own flags can say whether
-/// it is under the deck there or a tunnel or a deck of its own.
 pub struct WayCrossing {
     pub piece: usize,
     pub at: f64,
@@ -143,8 +122,6 @@ pub fn ways_crossing(url: &str) -> Result<Vec<WayCrossing>, postgres::Error> {
     })
 }
 
-/// Water under a piece: from and to, in metres along it — the same where a
-/// line of water crosses it — and the water's subtype and class.
 pub struct WaterUnder {
     pub piece: usize,
     pub from: f64,
@@ -153,12 +130,8 @@ pub struct WaterUnder {
     pub class: Option<String>,
 }
 
-///
-/// The water is cut into pieces of a few hundred points first: a river or a
-/// reservoir is one polygon of up to some 440,000 points whose box covers a
-/// province, and every deck in that box would otherwise intersect all of it.
-/// A deck crossing a seam between two pieces is under both, which says the
-/// same water twice.
+/// The water is subdivided first: one river polygon reaches 440,000 points
+/// over a province's box. A deck on a seam is under both pieces.
 pub fn water_under(client: &mut Client, url: &str) -> Result<Vec<WaterUnder>, postgres::Error> {
     client.batch_execute(
         "DROP TABLE IF EXISTS deck_water;
@@ -198,8 +171,6 @@ pub fn water_under(client: &mut Client, url: &str) -> Result<Vec<WaterUnder>, po
     })
 }
 
-/// Where a piece crosses one of a lower level: the upper's piece and how far
-/// along it, the lower's and how far along it, in metres.
 pub struct DeckCrossing {
     pub upper: usize,
     pub upper_at: f64,
@@ -231,20 +202,16 @@ pub fn decks_crossing(url: &str) -> Result<Vec<DeckCrossing>, postgres::Error> {
     })
 }
 
-/// A way that touches a point — where it is along itself, as a fraction,
-/// and the flags and levels that say what it is there.
 pub struct Touch {
     pub point: usize,
     pub own_at: f64,
-    /// Half a metre along the way, as a fraction of it.
     pub step: f64,
     pub flags: Option<String>,
     pub levels: Option<String>,
 }
 
-/// Every way connected at each point — one that ends there, as ways that
-/// meet at a connector do, or the point's own segment `gers` — and not one
-/// that only passes over or under it.
+/// Ways connected at each point (ending there, or the point's own segment),
+/// not ones passing over or under.
 pub fn touching(url: &str, points: &[([f64; 2], &str)]) -> Result<Vec<Touch>, postgres::Error> {
     fan(url, |client, k, n| {
         let mut out = Vec::new();
@@ -274,8 +241,6 @@ pub fn touching(url: &str, points: &[([f64; 2], &str)]) -> Result<Vec<Touch>, po
     })
 }
 
-/// Every way connected at each point, as `touching` finds them, whole: its
-/// row, and where along it the point is, as a fraction.
 pub fn connected_rows(url: &str, points: &[([f64; 2], &str)]) -> Result<Vec<(usize, f64, BridgeRow)>, postgres::Error> {
     fan(url, |client, k, n| {
         let mut out = Vec::new();
@@ -316,19 +281,14 @@ pub fn connected_rows(url: &str, points: &[([f64; 2], &str)]) -> Result<Vec<(usi
     })
 }
 
-/// A solved deck, as `overture_deck` holds it.
 pub struct DeckOut<'a> {
     pub piece: &'a Piece,
     pub form: Form,
-    /// Each point, its top in metres as Z.
     pub points: Vec<[f64; 3]>,
-    /// How far each point is from the nearest portal down its tunnel, in
-    /// metres on the ground; empty on a deck and on a bore with none.
+    /// Empty on a deck and on a bore with no portal.
     pub portal_m: Vec<f32>,
 }
 
-/// `overture_deck`, made again whole: the bake reads it a page at a time
-/// (terrain/repository.rs).
 pub fn write(client: &mut Client, decks: &[DeckOut]) -> Result<(), postgres::Error> {
     client.batch_execute(
         "DROP TABLE IF EXISTS overture_deck;

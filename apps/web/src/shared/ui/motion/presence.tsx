@@ -1,11 +1,8 @@
 // @pxl/web/shared/ui/motion/presence.tsx
 
 /**
- * What leaves is kept until it has left. React drops a view the render it
- * stops being asked for, so a view that is to fade or slide away has to stay
- * rendered, told to go, until its motion settles — and only then be dropped.
- * The leaving is the view's alone: a store or a caller that removes a thing
- * removes it at once, and never waits on an animation.
+ * Keeps a leaving view rendered until its exit motion settles. Stores and
+ * callers remove things at once and never wait on an animation.
  */
 
 import { type ReactNode, useMemo, useRef, useState } from "react";
@@ -17,20 +14,15 @@ import type { Transition } from "./transition.ts";
 
 interface PresenceProps {
   show: boolean;
-  /** Where it comes in from. */
   from: Pose;
-  /** Where it stands while shown; at rest unless said. */
   to?: Pose;
-  /** Where it goes before it is dropped. */
   exit: Pose;
   transition: Transition;
-  /** Leaving, where it differs from arriving. */
   exitTransition?: Transition;
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
 }
 
-/** One view that comes and goes with `show`. */
 export function Presence({ show, from, to = {}, exit, transition, exitTransition = transition, style, children }: PresenceProps) {
   const [held, setHeld] = useState(show);
   if (show && !held) setHeld(true);
@@ -48,7 +40,6 @@ export function Presence({ show, from, to = {}, exit, transition, exitTransition
   );
 }
 
-/** What an item is told apart by, as React keys it. */
 export type Key = string | number;
 
 interface Present<T> {
@@ -63,13 +54,7 @@ interface Leaving<T> {
   key: Key;
 }
 
-/**
- * A list whose members leave rather than vanish: every item asked for, then
- * every item that has stopped being asked for and has not yet called
- * `gone`, as it last was. An item asked for again while leaving comes back
- * as itself. `items` is compared by identity, so a caller hands the same
- * array until the list changes.
- */
+/** `items` is compared by identity, so pass the same array until the list changes. */
 export function usePresent<T>(items: readonly T[], keyOf: (item: T) => Key): { list: Present<T>[]; gone: (key: Key) => void } {
   const [prev, setPrev] = useState(items);
   const [leaving, setLeaving] = useState<Leaving<T>[]>([]);
@@ -91,23 +76,18 @@ export function usePresent<T>(items: readonly T[], keyOf: (item: T) => Key): { l
 }
 
 interface SwapProps {
-  /** What is shown; a new id's view comes in once the old one has left. */
   id: Key;
   from: Pose;
   exit: Pose;
   transition: Transition;
   exitTransition?: Transition;
-  /** Where each stands, the leaving one and the next in turn. */
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
 }
 
-/** One view at a time: the last one leaves, then the next arrives. What it
- * mounts with is simply there; only a change comes and goes. */
 export function Swap({ id, from, exit, transition, exitTransition = transition, style, children }: SwapProps) {
   const ids = useMemo(() => [id], [id]);
-  // What each id last drew, so one leaving keeps drawing it. Written in
-  // render, and the same on a second render of the same props.
+  // What each id last drew, so a leaving one keeps drawing it.
   const nodes = useRef(new Map<Key, ReactNode>());
   nodes.current.set(id, children);
   const [initial, setInitial] = useState<Key | null>(id);

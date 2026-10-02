@@ -1,12 +1,9 @@
 // xpute-core/collection/arena.test.rs
-// (no pair: arena.ts has no test file)
 
 use super::*;
 
 #[derive(Default, PartialEq, Debug)]
 struct Slot {
-    /// What a slot owns and keeps across a rewind, which is the whole point:
-    /// a `Vec`'s buffer is still allocated when the slot is handed out again.
     kept: Vec<u32>,
     mark: u32,
 }
@@ -15,8 +12,6 @@ fn arena(init_cap: u32, max_cap: u32) -> Arena<Slot> {
     Arena::new(ArenaOptions { init_cap, max_cap }).unwrap()
 }
 
-/// The reason a pool is not a `Vec`: what a slot owns survives the rewind, so
-/// a pass that fills the same slots again pays no allocation for them.
 #[test]
 fn a_rewind_drops_nothing_so_a_slot_s_own_buffer_is_there_the_next_time() {
     let mut a = arena(4, 1 << 10);
@@ -40,8 +35,6 @@ fn a_rewind_drops_nothing_so_a_slot_s_own_buffer_is_there_the_next_time() {
     assert_eq!(after, caps, "a rewind gave a slot's buffer back");
 }
 
-/// Growth doubles and carries what was there; `reserve` does it in one step so
-/// that the allocs after it do not.
 #[test]
 fn growth_doubles_past_the_cap_and_carries_what_was_written() {
     let mut a = arena(2, 1 << 10);
@@ -63,8 +56,6 @@ fn growth_doubles_past_the_cap_and_carries_what_was_written() {
     assert_eq!(a.cap(), cap, "an alloc after reserve grew again");
 }
 
-/// `max_cap` is a refusal and not a clamp: the arena is left as it was, and
-/// what was in it is still readable.
 #[test]
 fn growth_past_max_cap_is_refused_and_leaves_the_arena_as_it_was() {
     let mut a = arena(2, 4);
@@ -83,8 +74,6 @@ fn growth_past_max_cap_is_refused_and_leaves_the_arena_as_it_was() {
     assert!(a.reserve(1).is_err());
 }
 
-/// The scope is the rewind written as a lifetime: what a pass took is given
-/// back when it ends, whichever way it ends.
 #[test]
 fn a_scope_rewinds_to_where_it_began() {
     let mut a = arena(8, 1 << 10);

@@ -222,9 +222,9 @@ cited under paths that stayed after the functions were renamed.
 
 So a derived fact goes where a check already reaches it: a value from
 `spec/` is generated, a path and a name cited right after it
-(`world/access.rs` `first_hit`) are held by `check:rules`, and a table of
-sizes is held by a test of the code it comes from, which prints the rows it
-expects (`pxl-kernel mem/fixed.test.rs`). Before adding a table of numbers
+(`world/access.rs` `first_hit`) are held by `check:rules`, and a size is
+said by what it is derived from, never copied as a number into a document.
+Before adding a table of numbers
 or a citation, ask whether an existing check can hold it, and cite in the
 form it reads. A new mechanism is built only for drift that has recurred,
 and as far as it recurred.

@@ -1,21 +1,8 @@
 // pxl-spec/space/adapter/yup.rs
 
-//! Y-up <-> Z-up conversion on the CPU, for a boundary where a Y-up basis
-//! meets this project's.
-//!
-//! **Nothing imports this, and that is the expected state, not rot.** The
-//! engine is Z-up throughout; ENU maps straight onto the render axes. The one
-//! Y-up input it has, glTF models, is not converted here either:
-//! crates/pxl/web/render/src/asset/gltf.rs keeps a model's own basis, and
-//! crates/pxl/web/render/src/frame/shader/place.wgsl turns it to Z-up on the GPU as the model is placed.
-//!
-//! So: don't reach for these while working inside the world. Reach for them
-//! only where Y-up coordinates have to be read on the CPU at an asset or
-//! third-party boundary, and keep the conversion localized there rather than
-//! letting Y-up coordinates travel inward.
-//!
-//! Basis transform:
-//!   Z-up (X, Y, Z) -> Y-up (X, Z, -Y)
+//! Y-up <-> Z-up conversion on the CPU, for an asset or third-party boundary
+//! only; the engine is Z-up and glTF models are turned on the GPU. Nothing
+//! imports it, on purpose. Z-up (X, Y, Z) -> Y-up (X, Z, -Y).
 
 use crate::space::v3::V3;
 

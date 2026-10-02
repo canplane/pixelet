@@ -1,10 +1,7 @@
 // pxl-spec/space.rs
 
-//! Where anything is, and in what: the fixed-point vector the world is
-//! addressed by (pvf3), the levels a coordinate indexes into, the two map
-//! projections a real location arrives in, and the structures over an integer
-//! lattice a page's cells are kept in. Every side computes a position the
-//! same way because it computes it here.
+//! Positions and their structures: the fixed-point vector, the level
+//! hierarchy, map projections and lattice structures.
 
 pub mod adapter;
 pub mod hierarchy;

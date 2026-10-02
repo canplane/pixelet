@@ -1,7 +1,4 @@
 // pxl-kernel/control/camera/store.test.rs
-//
-// The tilt goes from straight down to straight up and no further: a drag
-// past either end holds there.
 
 use super::*;
 use crate::global::serial;

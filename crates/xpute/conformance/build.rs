@@ -1,11 +1,7 @@
 // xpute-conformance/build.rs
 
-// The guest built as a WebAssembly module: the memory is the host's, imported
-// rather than defined, as a page's is, and the stack is said here rather than
-// left to the target's default. What lies past the stack and the linker's
-// data is the guest's range (guest.rs), so neither number reaches a host; the
-// stack is 1 MiB, the target's own default written down so that the C++
-// build (script/cpp.ts) can say the same.
+// As wasm the memory is imported. The stack is the target's default 1 MiB,
+// written down so the C++ build (script/cpp.ts) can match it.
 
 const STACK_BYTES: u32 = 1 << 20;
 

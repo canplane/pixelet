@@ -1,12 +1,7 @@
 // pxl-geo-bake/terrain/source.rs
 
-//! One page's raw database source, packed into the tree the bake step reads.
-//!
-//! This sits between the repository and the bake rather than inside either,
-//! because the offline tool and the live endpoint have to produce *byte
-//! identical* tiles — the published copy and the served copy are meant to be
-//! interchangeable, so they cannot be allowed to drift by way of two
-//! independent assembly paths.
+//! One page's raw source packed for the bake; the offline tool and the dev
+//! server share this so their tiles are byte-identical.
 
 use postgres::Client;
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
@@ -25,13 +20,8 @@ use crate::terrain::repository::{PageSource, TerrainRepository};
 
 const ELE_PADDED_SPAN2: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
 
-/// Degradations that are survivable per page but matter in bulk.
-///
-/// `flat_ele` in particular: a page the elevation raster does not reach gets a
-/// zero-filled grid and bakes perfectly flat.
-/// One such page is a warning line nobody reads; several hundred is a visible
-/// property of the dataset, and a bake over tens of thousands of pages has no
-/// other way to notice.
+/// Survivable per page, visible only in bulk: a page off the elevation raster
+/// bakes flat (`flat_ele`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SourceStats {
     pub flat_ele: u64,
@@ -84,9 +74,6 @@ fn coast_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a CoastRow) {
     }));
 }
 
-/// Packs what the database gave into `[ele, buildings, segments, base, coasts]`,
-/// each row a tuple in the order of its row type's fields (pxl-spec
-/// bake/format.rs).
 pub fn pack_source(source: &PageSource, stats: &mut SourceStats) -> Result<Vec<u8>, MarshalError> {
     let ele = match &source.ele {
         Some(v) => v.clone(),
@@ -129,20 +116,17 @@ pub fn pack_source(source: &PageSource, stats: &mut SourceStats) -> Result<Vec<u
     encoder().encode(&root, TreeEncoderOptions::default())
 }
 
-/// The page's source, assembled straight out of the database.
 pub fn fetch_terrain_source(repo: &TerrainRepository, client: &mut Client, page_idx: IVec, stats: &mut SourceStats) -> Result<Vec<u8>, BakeError> {
     let page_bbox = epsg3857::get_page_bbox(page_idx);
     let source = repo.fetch_page_source(client, page_bbox)?;
     Ok(pack_source(&source, stats)?)
 }
 
-/// A page's surface, from the database (terrain/artifact.rs).
 pub fn fetch_surface(repo: &TerrainRepository, client: &mut Client, page_idx: IVec, stats: &mut SourceStats) -> Result<Surface, BakeError> {
     let raw = fetch_terrain_source(repo, client, page_idx, stats)?;
     Ok(bake_surface(page_idx, &raw)?)
 }
 
-/// A page's lines, from the solve's table (terrain/artifact.rs).
 pub fn fetch_lines(repo: &TerrainRepository, client: &mut Client, page_idx: IVec) -> Result<Decks, BakeError> {
     let page_bbox = epsg3857::get_page_bbox(page_idx);
     let rows = repo.fetch_deck_rows(client, page_bbox)?;

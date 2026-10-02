@@ -1,26 +1,14 @@
 // @pxl/web/shared/ui/motion/transition.ts
 
 /**
- * How a pose is reached, said once for both platforms. Every move is solved
- * here into a curve over a fixed duration, and each platform plays that curve
- * on its compositor: the page as a CSS `linear()` easing, a device as the
- * easing of a native-driven timing. So a move is the same on both, and
- * settles at the same moment, which is what an exit waits on.
- *
- * Nothing here runs per frame. The kernel spends the JavaScript thread's
- * frame (xpute-runtime sched/quantum.rs), so a curve evaluated there would
- * stutter whenever the world is loading; a curve handed over whole does not.
+ * Every move is solved here into a sampled curve, which each platform plays
+ * on its compositor. Nothing runs per frame: the kernel spends the JS
+ * thread's frame, so a per-frame curve would stutter while loading.
  */
 
 import type { f64 } from "@xpute/core/abi/word.ts";
 
-/**
- * A move as both platforms play it: how long it runs, and where it stands
- * at evenly spaced moments across that time, from 0 to 1 (past 1 where a
- * spring overshoots). A spring and a Bézier ease are both solved into this
- * once, so nothing downstream asks which one it was; changing the duration
- * alone keeps the curve's shape.
- */
+/** Samples from 0 to 1 at evenly spaced moments (past 1 where a spring overshoots). */
 export interface Transition {
   durationMs: f64;
   samples: readonly f64[];
@@ -40,7 +28,6 @@ interface SpringConstants {
   mass: f64;
 }
 
-/** The spring's unit step response at `seconds`. */
 function position(s: SpringConstants, seconds: f64): f64 {
   const w0 = Math.sqrt(s.stiffness / s.mass);
   const zeta = s.damping / (2 * Math.sqrt(s.stiffness * s.mass));
@@ -55,7 +42,6 @@ function position(s: SpringConstants, seconds: f64): f64 {
   return 1 - (r2 * Math.exp(r1 * seconds) - r1 * Math.exp(r2 * seconds)) / (r2 - r1);
 }
 
-/** A spring, run until it settles: its duration is the spring's own. */
 export function spring(s: SpringConstants): Transition {
   let lastMs = 0;
   for (let t = 0; t <= MAX_MS; t += STEP_MS) {
@@ -66,9 +52,7 @@ export function spring(s: SpringConstants): Transition {
   return { durationMs, samples };
 }
 
-/** A cubic Bézier's value at `x`, as CSS's `cubic-bezier(x1, y1, x2, y2)`
- * reads it: its parameter found by bisection, since x rises monotonically
- * over it for every control point CSS allows. */
+/** Bisection is safe: x rises monotonically for every control point CSS allows. */
 function bezierAt([x1, y1, x2, y2]: readonly [f64, f64, f64, f64], x: f64): f64 {
   const at = (a: f64, b: f64, t: f64) => 3 * a * t * (1 - t) ** 2 + 3 * b * t * t * (1 - t) + t ** 3;
   let lo = 0;
@@ -81,13 +65,10 @@ function bezierAt([x1, y1, x2, y2]: readonly [f64, f64, f64, f64], x: f64): f64 
   return at(y1, y2, (lo + hi) / 2);
 }
 
-/** An ease over `durationMs`, along a cubic Bézier. */
 export function ease(durationMs: f64, bezier: readonly [f64, f64, f64, f64]): Transition {
   return { durationMs, samples: Array.from({ length: SAMPLES + 1 }, (_, i) => bezierAt(bezier, i / SAMPLES)) };
 }
 
-/** A transition's curve at progress `p` from 0 to 1, straight between its
- * samples, as CSS's `linear()` reads them. */
 export function curveAt(t: Transition, p: f64): f64 {
   const at = Math.min(1, Math.max(0, p)) * (t.samples.length - 1);
   const i = Math.floor(at);
@@ -95,41 +76,26 @@ export function curveAt(t: Transition, p: f64): f64 {
   return t.samples[i] + (t.samples[i + 1] - t.samples[i]) * (at - i);
 }
 
-/** Quick and settled, for what moves under the finger's eye: a control's
- * shape and place. Over critical damping, so a target that moves again
- * mid-flight does not ring. */
+/** Overdamped, so a target that moves mid-flight does not ring. */
 export const SNAP: Transition = spring({ stiffness: 500, damping: 40, mass: 0.5 });
 
-/** A card of the deck finding its depth. */
 export const SETTLE: Transition = ease(300, [0, 0, 0.58, 1]);
 
-/** Something leaving: quicker than it came. */
 export const LEAVE: Transition = ease(150, [0, 0, 0.58, 1]);
 
-/** One thing giving way to another in the same place: a word or a glyph
- * that changes, or a field that empties on a send. */
 export const FADE: Transition = ease(200, [0, 0, 0.58, 1]);
 
-/** A control arriving on the map: a long, soft landing. */
 export const ARRIVE: Transition = ease(600, [0.16, 1, 0.3, 1]);
 
-/** A panel sliding over the map: a spring at critical damping, so it leaves
- * at full speed the moment it is asked for and lands without a bounce —
- * three fifths of the way in 100 ms and all but settled by 250. An ease even
- * at both ends, as this was, had moved a panel 8% in its first 100 ms, and
- * read as the app being slow to answer. */
+/** Critical damping: leaves at full speed and lands without a bounce. An
+ * ease-in-out moved a panel 8% in 100 ms and read as slow. */
 export const SLIDE: Transition = spring({ stiffness: 420, damping: 41, mass: 1 });
 
-/** A panel sliding away: slow to let go and quick to be gone, in 200 ms —
- * Material's emphasized accelerate. A spring would linger at the end, where
- * nothing is left to see. */
+/** Material's emphasized accelerate; a spring would linger at the end. */
 export const SLIDE_AWAY: Transition = ease(200, [0.3, 0, 0.8, 0.15]);
 
-/** The chrome dimming while the camera is busy: a change in place rather
- * than a move, even at both ends. */
 export const DIM: Transition = ease(500, [0.42, 0, 0.58, 1]);
 
-/** A delay added to a transition. */
 export function after(t: Transition, delayMs: f64): Transition {
   return { ...t, delayMs };
 }

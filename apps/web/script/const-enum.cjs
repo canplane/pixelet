@@ -1,42 +1,23 @@
 // @pxl/web/script/const-enum.cjs
 
 /**
- * The const enums of the tree, read once for both bundlers: the page's
- * (vite.config.ts `constEnum`) and the device's (apps/native/babel.config.js
- * `inlineEnums`). A const enum is a compile-time name for a number, and a
- * bundle holds the number alone — not one member's name as a string. A
- * transpiler that sees one file at a time cannot get there by itself: it
- * emits the enum as an object, reverse mapping and all
- * (`e[e.WORLD_SNAPSHOT=6933]="WORLD_SNAPSHOT"`), or erases the declaration and
- * leaves its importers bound to nothing. So the declarations are read up
- * front, here, and each bundler only replaces a use with its value and
- * strikes the declaration.
- *
- * Nothing is left alone. An enum that is not const, or a member whose value
- * is not a plain literal or arithmetic over literals, is an error here,
- * before either bundler runs, since either would put a name in a bundle as a
- * string. A use is the enum its import names, followed to the file that
- * declares it, so two files exporting one name are two enums. An enum that is
- * not exported is its file's alone and is replaced in that file only.
- *
- * CommonJS, because Metro requires the Babel config that reads this.
+ * The tree's const enums, read once for both bundlers (Vite and Metro's
+ * Babel): a one-file-at-a-time transpiler emits an enum as an object with
+ * member names as strings. A non-const enum or a non-literal member is an
+ * error here. A use is resolved through its import, so two files exporting
+ * one name are two enums. CommonJS, because Metro requires the Babel config.
  */
 
 const fs = require("node:fs");
 const path = require("node:path");
 
-/** A const enum's declaration, exported or not. */
 const DECL = /(export\s+)?const\s+enum\s+(\w+)\s*\{([^}]*)\}/g;
-/** An enum that is not const, which no bundler can strike. */
 const PLAIN = /(?:^|[\n;])\s*(?:export\s+)?(?:declare\s+)?enum\s+(\w+)\s*\{/g;
-/** Numbers, strings and arithmetic over them, and nothing that runs. */
 const VALUE = /^(?:0x[0-9a-fA-F]+|\d+|"[^"\\]*"|'[^'\\]*'|[-+*/|&^~()<>\s])+$/;
 
-/** A declaration's members by name, each its value: a number or a string. */
 function membersOf(body, where) {
   const members = new Map();
-  // A member ends at a line's end or at a comma outside a string, so an enum
-  // written on one line reads as one written a member a line.
+  // Split on commas outside strings too, so a one-line enum reads the same.
   const lines = body.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").map((line) => line.replace(/\/\/.*/, ""));
   for (let line of lines.flatMap((line) => line.split(/,(?=(?:[^"']*["'][^"']*["'])*[^"']*$)/))) {
     line = line.trim();
@@ -52,13 +33,7 @@ function membersOf(body, where) {
   return members;
 }
 
-/**
- * Every const enum under `roots`, by the file that declares it: `exported`
- * and `local` each by the file's path and then by name. Two files may export
- * one name — xpute's command table and pixelet's both export `Command` — so a
- * use is found through its import, never by its name alone (`enumAt`). Tests
- * are not bundled and are not read.
- */
+/** Tests are not bundled and are not read. */
 function readEnums(roots) {
   const exported = new Map();
   const local = new Map();
@@ -85,8 +60,6 @@ function readEnums(roots) {
   return { exported, local };
 }
 
-/** The import map's prefixes, as the page's deno.jsonc and Metro's config
- * name them. */
 function aliases(root) {
   return [
     ["@/", path.join(root, "apps/web/src/")],
@@ -96,8 +69,6 @@ function aliases(root) {
   ];
 }
 
-/** The file `spec` names from `from`: relative to it, or through an alias;
- * none for a package or a file that is not there. */
 function fileOf(from, spec, root) {
   let base = null;
   if (spec.startsWith(".")) base = path.resolve(path.dirname(from), spec);
@@ -111,11 +82,7 @@ function fileOf(from, spec, root) {
   return null;
 }
 
-/**
- * The members of the enum a file `from` imports as `name` from `spec`, or
- * none where that is no const enum: the file it names declares it, or
- * passes it on, one `export { … } from` or `export * from` at a time.
- */
+/** Follows `export { … } from` and `export * from` to the declaring file. */
 function enumAt(table, root, from, spec, name, depth = 0) {
   const file = fileOf(from, spec, root);
   if (file === null || depth > 8) return null;
@@ -135,13 +102,10 @@ function enumAt(table, root, from, spec, name, depth = 0) {
   return null;
 }
 
-/** A member's value as source text. */
 function literal(value) {
   return typeof value === "string" ? JSON.stringify(value) : String(value);
 }
 
-/** What a use or a declaration the table does not have means: the enums
- * changed after the table was read, and `restart` is how to read it again. */
 function stale(what, restart) {
   return `const-enum: ${what} is not in the enum table read when the bundler started; the enums changed since, so ${restart}`;
 }

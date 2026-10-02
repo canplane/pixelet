@@ -1,20 +1,12 @@
 // @xpute/core/collection/deque.ts
-// deque primitives over an external ring buffer (0-based) — DOD view.
-//
-// Storage contract (caller-owned):
-//   - buf.length is the fixed capacity (cap)
-//   - head: pop-front index
-//   - len : live element count
-//
-// A pop from an empty deque is undefined, as xpute-core's is None; a push
-// onto a full one is the caller's bug, since it would overwrite the front.
+// A deque over a caller-owned ring buffer. A pop from an empty deque is
+// undefined; a push onto a full one overwrites the front and is the caller's bug.
 
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { InvariantError } from "@xpute/core/status/error.ts";
 
 export class Deque<T> {
-  // external storage (DOD-friendly): caller owns the ring buffer.
   constructor(
     public readonly buf: (T | undefined)[],
     public head: u32 = 0,

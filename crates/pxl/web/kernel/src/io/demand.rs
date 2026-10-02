@@ -1,28 +1,16 @@
 // pxl-kernel/io/demand.rs
 
-//! One unit of deferrable I/O handed to io/sched.rs.
-//!
-//! The scheduler owns ordering, the concurrency quota, and cancellation of
-//! demands that stop being wanted; the shell owns the actual transport — the
-//! scheduler starts a demand by handing its key to the shell, and the shell
-//! settles it. The scheduler never reads or writes a store.
-//!
-//! This is the category-B (I/O) shape of the task contract in
-//! issue/20260909-cooperative-scheduler-and-task-ledger.md: a black box the
-//! scheduler drives by key/priority, nothing more.
+//! One unit of deferrable I/O for the ledger (io/sched.rs). The ledger
+//! orders and cancels; the shell does the transport.
 
 use pxl_spec::bake::published::BakeKind;
 
 pub use crate::sched::profiler::spec::TaskPhaseName;
 use crate::world::observation::Order;
 
-/// The most sub-timings one run reports.
 pub const PHASES_MAX: usize = 6;
 
-/// Optional sub-timings a demand's own run can hand back — terrain splitting
-/// its network wait from its decode, say. Lands in TaskRecord.phases, so the
-/// report can state whether a category is actually network- or memory-bound
-/// instead of leaning on category.rs's static guess. Named by the run.
+/// Sub-timings a run reports (e.g. network vs decode), named by the run.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Phases {
     items: [(TaskPhaseName, f64); PHASES_MAX],
@@ -39,7 +27,7 @@ impl Default for Phases {
 }
 
 impl Phases {
-    /// One more timing; past PHASES_MAX it is left out.
+    /// Past PHASES_MAX a timing is left out.
     pub fn push(&mut self, name: TaskPhaseName, value: f64) {
         if self.len < PHASES_MAX {
             self.items[self.len] = (name, value);
@@ -56,25 +44,12 @@ impl Phases {
     }
 }
 
-/// Which stream of deferrable I/O a demand belongs to. Coarse grouping —
-/// scopes sync's diff, and is what map_status and the profiler roll up by, so
-/// it is the profiler's own list (profiler.json's CATEGORY_NAMES):
-///
-/// - `ocean`: the one tile every open-water page shares.
-/// - `geocode`: one group of pages of the reverse-geocode bake, and
-///   `geocode_dict` its dictionary, which is a stream of one.
-/// - `asset`: a model or an image from the catalog. It shares the credits
-///   with the pages and nothing else: a page is wanted while the view is
-///   where it is, and an asset is wanted from the first time something needs
-///   it until it is there, so it is never stale and never withdrawn.
+/// A stream of demands; the profiler's CATEGORY_NAMES. An asset shares the
+/// pages' credits but is never withdrawn: it is wanted until it arrives.
 pub use crate::sched::profiler::spec::CategoryName as Category;
 
 impl Category {
-    /// Which bake an object of this category belongs to, for the categories
-    /// whose objects are pages. The name inside that bake is the layer's
-    /// (`DemandName`); where the two together are read from is the host's,
-    /// and nothing here knows it. An asset belongs to no bake — it is named
-    /// by its content — and is asked for by its own command.
+    /// An asset belongs to no bake and is asked for by its own command.
     pub fn bake(self) -> Option<BakeKind> {
         match self {
             Category::terrain | Category::ocean => Some(BakeKind::terrain),
@@ -85,11 +60,7 @@ impl Category {
     }
 }
 
-/// What names one demand: the stream it belongs to, and the one thing in that
-/// stream it is for.
-///
-/// The subject is a page's own coordinate where the stream is pages, and
-/// nothing where the stream has one member.
+/// `subject` is a page's coordinate, or nothing for a stream of one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct DemandKey {
     pub category: Category,
@@ -102,26 +73,16 @@ impl DemandKey {
     }
 }
 
-/// Why a page is asked for: the hold residency keeps it by (world/paging.rs),
-/// strongest first.
+/// Why a page is asked for, strongest first: the hold residency keeps it by.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Why {
-    /// A page of the fallback that keeps every observation answered
-    /// (world/paging/floor.rs).
     Floor,
-    /// A page on the line over a destination the camera is not put at
-    /// before its ground is known exactly (control/navigation/destination.rs).
+    /// On the line over a destination, which the camera waits for exactly.
     Destination,
-    /// A page the view reads now: a fault where it is not resident.
     Fault,
-    /// Speculation (world/prefetch.rs): more than was asked, in case it will
-    /// be.
     Hint,
 }
 
-/// What a producer says of one thing it wants: why, and where it falls in
-/// the view's order. What the want is worth against the others is the serve
-/// policy's to say (io/policy.rs), from this and nothing else.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Ask {
     pub why: Why,
@@ -129,13 +90,11 @@ pub struct Ask {
 }
 
 impl Ask {
-    /// A want with no place in the view: an asset, the geocode, the ocean,
-    /// which the serve policy orders by their category alone.
+    /// A want with no place in the view, ordered by its category alone.
     pub const PLAIN: Ask = Ask { why: Why::Fault, order: Order::LAST };
 
-    /// One page asked for twice: held by the stronger reason, and placed
-    /// where the earlier of the two falls — the two are apart, since how a
-    /// page is held says nothing of when the view needs it.
+    /// The stronger reason and the earlier place, taken separately: how a page
+    /// is held says nothing of when the view needs it.
     pub fn best(self, other: Ask) -> Ask {
         Ask {
             why: self.why.min(other.why),

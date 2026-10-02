@@ -1,13 +1,6 @@
-// The shading every lit pass shares, over `frame` and the air
-// (atmos_view.wgsl): `shade` lights an albedo at a world point with a
-// normal — the Lambert sun, ambient and hemisphere three's standard
-// material summed (albedo over pi), the emissive floor, the rim light —
-// then sees it through the air between it and the eye. One source, so a
-// chunk, a decor instance and an actor cannot be lit differently.
+// The shading every lit pass shares, so a chunk, decor and an actor cannot be lit differently.
 
-// pow(1 - N.V, RIM_POWER): the exponent does not change the peak (at the
-// silhouette pow(1, n) is 1 whatever n), only how wide the lit band reads;
-// frame.rim_intensity is the one that scales the peak.
+// The exponent only sets the band's width; rim_intensity scales the peak.
 const RIM_POWER: f32 = 1.0;
 
 fn rim_light(n: vec3f, world_pos: vec3f) -> vec3f {
@@ -16,39 +9,18 @@ fn rim_light(n: vec3f, world_pos: vec3f) -> vec3f {
   return vec3f(1.0) * rim * frame_rim_intensity();
 }
 
-// `open` is how much of the ambient sky the point sees, per channel, 1 for
-// all of it: the corner occlusion a chunk computes from
-// its own geometry (chunk.wgsl's occlusion), tinted warm so a corner reads
-// as a contact shadow and not as a rendering artifact. It scales the
-// ambient, hemisphere and second light, which come from everywhere, and
-// not the sun, whose visibility is the shadow map's to say.
-//
-// `seen` is the air in front of the point, as its vertices took it
-// (atmos_view.wgsl's seen_from_eye) and the rasterizer blended it.
+// `open` scales only the light from everywhere (ambient, hemisphere, second
+// light), never the sun, whose visibility is the shadow map's.
 fn shade(albedo: vec3f, n: vec3f, world_pos: vec3f, lit: f32, open: vec3f, seen: Seen) -> vec3f {
-  // three's standard material, roughness 1, metalness 0: the Lambert BRDF
-  // is the albedo over pi, for the direct sun and for the ambient and
-  // hemisphere irradiance alike; the emissive floor is added as it is. The
-  // two directional lights are summed as three summed them; the shadow is
-  // the brighter's.
+  // three's standard material at roughness 1, metalness 0: Lambert, albedo over pi.
   let sun = frame_sun_color() * max(dot(n, frame_sun_dir()), 0.0) * lit;
   let other = frame_other_color() * max(dot(n, frame_other_dir()), 0.0);
-  // The hemisphere: the ground's bounce below, the sky's own light above,
-  // both the air's (atmos_view.wgsl's ground_bounce and sky_fill, the latter
-  // as the vertices took it).
   let hemi = mix(ground_bounce(seen.fill), seen.fill, n.z * 0.5 + 0.5);
   var color = albedo * (sun + (other + frame_ambient() + hemi) * open) / PI + albedo * frame_floor() * open;
   color += rim_light(n, world_pos);
   color = color * seen.through + seen.scattered;
-  // Past the band the ground is not drawn, so it fades out before it ends:
-  // into what the sky pass draws past it along the same ray, so the edge is
-  // not a seam. A smoothstep over the band, not a ramp, on the distance from
-  // the eye: the band is a sphere round it, which meets the ground inside
-  // the circle round the eye's foot that the ground is drawn out to
-  // (world/pyramid/domain.rs's Domain::far), so the drawn edge lies past where the band
-  // has hidden the ground, toward every corner of the screen as toward its
-  // middle — where a depth along the view axis reaches a corner's ground
-  // further out than its middle's.
+  // A smoothstep on distance from the eye, a sphere, so the band hides the
+  // ground before its drawn edge toward the screen's corners as at its middle.
   let fade = smoothstep(frame_fog_near(), frame_fog_far(), length(world_pos - frame_camera_pos()));
   return mix(color, seen.past, fade);
 }

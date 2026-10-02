@@ -1,8 +1,7 @@
 // pxl-kernel/control/sensor/geolocation.rs
 
-//! The device's GPS sensor, as decisions: when a watch should run, what an
-//! error means, and when to try again. The watch itself is the shell's — it
-//! takes `take_geolocation_commands` and reports fixes and errors back.
+//! The GPS sensor's decisions: when a watch runs, what an error means, and
+//! when to retry. The watch itself is the shell's.
 
 pub use crate::abi::cmd::GeolocationErrorCode;
 use crate::abi::cmd::Message;
@@ -11,38 +10,25 @@ use crate::global::Global;
 use crate::host::now;
 use crate::world::change::wake_at;
 
-/// A TIMEOUT or POSITION_UNAVAILABLE is a report about this moment, not about
-/// the session: indoors, in a tunnel, between buildings, a fix simply does not
-/// arrive for a while. The error path has to stop the watch — a dead watch left
-/// subscribed races the next one and flickers device_coord between none and
-/// some — but stopping it alone leaves nothing running afterward, and the
-/// only things that ever restart it are a permission change or a return to the
-/// foreground. So one bad minute underground ended location tracking until the
-/// app was backgrounded and reopened, taking follow mode with it.
-///
-/// Retried instead, once, after a pause. One pending retry, cleared by a stop,
-/// so this cannot become the second racing watch.
+/// A timeout or unavailable fix is momentary (indoors, tunnels). The watch
+/// must stop on error, or a dead one races the next, but nothing else
+/// restarted it: one bad minute underground ended tracking until the app was
+/// reopened. One pending retry, cleared by a stop.
 const GEOLOCATION_RETRY_MS: f64 = 5000.0;
 
-/// What the shell's watch should do.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GeolocationCommand {
-    /// Start watching: high accuracy, a fix at most MAXIMUM_AGE_MS old, and a
-    /// TIMEOUT_MS timeout.
     Start,
     Stop,
 }
 
-/// A brand-new high-accuracy fix within ten seconds is more than a phone indoors
-/// routinely produces; a five-second-old fix is indistinguishable at walking
-/// pace, and the longer 30s timeout rides out a gap instead of declaring
-/// failure in the middle of one.
+/// A fresh high-accuracy fix within 10 s is more than a phone indoors gives;
+/// a 5 s old fix is indistinguishable at walking pace.
 pub const MAXIMUM_AGE_MS: f64 = 5000.0;
 pub const TIMEOUT_MS: f64 = 30000.0;
 
 struct Geolocation {
-    /// Whether the map wants the sensor: what a return to the foreground
-    /// resumes.
+    /// What a return to the foreground resumes.
     open: bool,
     watching: bool,
     retry_at: Option<f64>,
@@ -60,7 +46,6 @@ fn geolocation() -> &'static mut Geolocation {
     })
 }
 
-/// Starts sensor reception, guarded against duplicate activation.
 pub fn start_watching(supported: bool) {
     let g = geolocation();
     g.retry_at = None;
@@ -78,7 +63,6 @@ pub fn start_watching(supported: bool) {
     g.commands.push(GeolocationCommand::Start);
 }
 
-/// Stops sensor reception and releases resources.
 pub fn stop_watching() {
     let g = geolocation();
     g.retry_at = None;
@@ -89,21 +73,17 @@ pub fn stop_watching() {
     }
 }
 
-/// The map opened: the sensor starts.
 pub fn geolocation_open(supported: bool) {
     geolocation().open = true;
     start_watching(supported);
 }
 
-/// The map closed: the sensor stops.
 pub fn geolocation_close() {
     geolocation().open = false;
     stop_watching();
     device_location_store().status = DevicePoseStatus::Idle;
 }
 
-/// The tab's visibility: paused in the background to save battery, resumed on
-/// returning to the foreground.
 pub fn geolocation_visibility(visible: bool, supported: bool) {
     if !visible {
         stop_watching();
@@ -112,41 +92,34 @@ pub fn geolocation_visibility(visible: bool, supported: bool) {
     }
 }
 
-/// Recovers from a denied/error state the moment the user grants location
-/// access from outside the app — without this a denial leaves the store stuck
-/// in ERROR until the page reloads.
+/// A grant from outside the app recovers; otherwise a denial stuck until reload.
 pub fn geolocation_permission_granted(supported: bool) {
     if !device_location_store().is_tracking_location {
         start_watching(supported);
     }
 }
 
-/// A fix from the watch. The adapter normalizes across browsers: lat/lng are
-/// required, altitude can be absent, accuracy and heading are guarded too.
 pub fn geolocation_fix(longitude: f64, latitude: f64, altitude: Option<f64>, accuracy: f64, heading: Option<f64>) {
     device_location_store().set_location([longitude, latitude, altitude.unwrap_or(0.0)], accuracy, heading);
 }
 
-/// An error from the watch. The watch is stopped by the shell before this — a
-/// dead watch keeps calling back, and a later start would race it.
+/// The shell stops the watch before this: a dead watch keeps calling back
+/// and a later start would race it.
 pub fn geolocation_error(code: GeolocationErrorCode) {
     let g = geolocation();
     g.watching = false;
     let store = device_location_store();
     store.set_is_tracking_location(false);
     store.set_error(match code {
-        // Actionable, not just descriptive: the one case the user can fix.
         GeolocationErrorCode::PermissionDenied => Message::GeolocationPermissionDenied,
         GeolocationErrorCode::PositionUnavailable => Message::GeolocationPositionUnavailable,
         GeolocationErrorCode::Timeout => Message::GeolocationTimeout,
         GeolocationErrorCode::Other => Message::GeolocationGenericError,
     });
-    // Permission denial is the user's to undo; anything else is worth another
-    // try, since the sensor itself is presumed fine.
+    // Denial is the user's to undo; anything else is retried.
     g.retry_at = (code != GeolocationErrorCode::PermissionDenied).then(|| now() + GEOLOCATION_RETRY_MS);
 }
 
-/// The sensor's turn: a due retry starts the watch again.
 pub fn geolocation_step(supported: bool) {
     match geolocation().retry_at {
         Some(at) if now() >= at => start_watching(supported),
@@ -155,7 +128,6 @@ pub fn geolocation_step(supported: bool) {
     }
 }
 
-/// What the shell's watch should do, in order.
 pub fn take_geolocation_commands() -> Vec<GeolocationCommand> {
     core::mem::take(&mut geolocation().commands)
 }

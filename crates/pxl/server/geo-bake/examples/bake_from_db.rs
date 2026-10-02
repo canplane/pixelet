@@ -1,14 +1,9 @@
 // pxl-geo-bake/examples/bake_from_db.rs
 
-//! Bakes pages straight out of the geo database, the whole path the offline
-//! tool walks — five queries, the packet, the rasterize — and writes each
-//! tile beside the last. One page at a time, without the walk's threads,
-//! resume or manifest, which is what makes it useful for looking at a single
-//! page that came out wrong.
+//! Bakes single pages straight from the geo DB, without the walk's threads,
+//! resume or manifest, for inspecting one page.
 //!
 //!   cargo run -p pxl-geo-bake --example bake_from_db -- <dir> <page>...
-//!
-//! Reads DB_GEO_URL from the environment.
 
 use std::fs;
 use std::sync::Arc;

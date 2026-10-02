@@ -1,18 +1,8 @@
 // pxl-kernel/sched/profiler/summary.rs
 
-//! The profiler window, reduced once, into a block the shell reads in place.
-//!
-//! The panel and the report both read this block, so a number on the panel and
-//! the same number in a pasted report agree. It is laid out as profiler.json's
-//! SUMMARY, every word an f64, written where it stays: a read builds nothing,
-//! and the sorts a percentile needs run in a scratch lane taken once, so
-//! reading the instrument does not allocate from the heap it measures.
-//!
-//! A section is built as its record (profiler/block.rs) and handed to `put`,
-//! which is the only way anything reaches the block. Nothing here indexes a
-//! lane, so no section can be written in an order of its own and no field can
-//! be quietly left out — which is what this file used to allow, and did
-//! (2026-09-23).
+//! The profiler window reduced into profiler.json's SUMMARY block, read in
+//! place by the panel and the report so both agree. Sections go only through
+//! `put`; indexing lanes by hand let sections drift out of order (2026-09-23).
 
 use crate::global::Global;
 use crate::host::now;
@@ -27,18 +17,15 @@ use crate::sched::tick::{tick_step_stats, HARD_SLACK_MS};
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 
-/// A gap this many display intervals long skipped a vsync.
 const MISSED_INTERVALS: f64 = 1.5;
 
-/// A frame that dropped a vsync while the view was moving. A still frame is
-/// excluded: the tick takes a larger budget then on purpose (tick.rs), and a
-/// repeated image is not a stutter anyone sees.
+/// A frame that dropped a vsync while moving. Still frames take a larger
+/// budget on purpose, and a repeated image is no visible stutter.
 pub fn missed(f: &FrameSample) -> bool {
     f.settled == 0.0 && f.dt_ms > f.frame_ms * MISSED_INTERVALS
 }
 
-/// The tick ran past what even the hard ceiling allows — a single step too big
-/// for the forward-progress waiver to excuse.
+/// Past even the hard ceiling: one step too big for the forward-progress waiver.
 pub fn overran(f: &FrameSample) -> bool {
     f.sched_ms > f.budget_ms + HARD_SLACK_MS
 }
@@ -49,11 +36,8 @@ const REASONS: usize = LIMITS::REASONS as usize;
 const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
 
 struct Block {
-    /// On the heap rather than in the static: the shell reads it in the
-    /// memory, and a native build's statics are not in it.
+    /// On the heap, not a static: a native build's statics are outside the shell-readable memory.
     words: Box<[f64; WORDS]>,
-    /// Where a spread's values are gathered and sorted: as long as the longer
-    /// ring, taken on the first read.
     scratch: &'static mut [f64],
 }
 
@@ -66,7 +50,6 @@ fn block() -> &'static mut Block {
     })
 }
 
-/// p50, p95 and max of `values`, zeros for none.
 fn spread(scratch: &mut [f64], values: impl Iterator<Item = f64>) -> Spread {
     let mut n = 0;
     for v in values.take(scratch.len()) {
@@ -83,8 +66,7 @@ fn spread(scratch: &mut [f64], values: impl Iterator<Item = f64>) -> Spread {
     }
 }
 
-/// The window since `now - window_ms` reduced into the block, and the block —
-/// an infinite window is the whole recording.
+/// An infinite window is the whole recording.
 pub fn profiler_summarize(window_ms: f64) -> &'static [f64] {
     let b = block();
     if b.scratch.is_empty() {
@@ -140,9 +122,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
         sched: spread(scratch, frames.iter().map(|f| f.sched_ms)),
         chunks: spread(scratch, frames.iter().map(|f| f.chunks_ms)),
         phases: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.phases[k]))),
-        // A span the frame did not run reads 0 and is left out, so the air's
-        // tables, drawn when the sun has moved, are what they cost when they
-        // are.
+        // A span the frame did not run reads 0 and is left out.
         gpu_spans: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0))),
         work_scans: scans,
         work_bakes: bakes,
@@ -171,8 +151,6 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksBlock {
             continue;
         }
 
-        // Failures by (reason, status), commonest first: a short list, counted
-        // on the stack.
         let mut counted = [(0.0f64, 0.0f64, 0.0f64); 16];
         let mut kinds = 0;
         for r in mine().filter(|r| r.outcome == error) {
@@ -217,8 +195,6 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksBlock {
     block
 }
 
-/// What the report prints beside the rings: the side counters, the badge
-/// sheet, what chunks keep, the fetch queue, the POI placement and the steps.
 fn side(out: &mut [f64]) {
     put(out, SUMMARY::counters::AT, &window_counters());
 
@@ -279,9 +255,7 @@ fn side(out: &mut [f64]) {
         },
     );
 
-    // Per step, so a phase that costs more than its steps should does not hide
-    // which step is not yielding: a cooperative scheduler is only as
-    // cooperative as its longest step.
+    // Per step: a cooperative scheduler is only as cooperative as its longest step.
     let mut steps = StepsBlock::default();
     for s in tick_step_stats().iter().filter(|s| s.count > 0).take(STEP_SLOTS) {
         steps.slots[steps.count as usize] = StepBlock {

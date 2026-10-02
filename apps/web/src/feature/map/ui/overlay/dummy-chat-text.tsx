@@ -8,8 +8,6 @@ import { useUiStore } from "@/app/store/ui-store.ts";
 import { alpha, color, textEdge, textStyle, weight } from "@/shared/ui/theme.ts";
 import { useWindowSize } from "@platform/viewport.ts";
 
-/** The lines said so far, fading with age; a pointer over them brings them
- * all back up to be read. */
 export function DummyChatText() {
   const { t } = useTranslation();
   const { width } = useWindowSize();
@@ -33,7 +31,6 @@ export function DummyChatText() {
 const styles = StyleSheet.create({
   lines: { alignItems: "flex-start", gap: 4 },
   line: { flexDirection: "row", alignItems: "baseline", gap: 8, maxWidth: "100%" },
-  // A dark edge so white words read over any ground.
   text: {
     ...textStyle.caption,
     fontWeight: weight.medium,

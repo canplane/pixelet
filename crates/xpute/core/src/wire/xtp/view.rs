@@ -1,16 +1,8 @@
 // xpute-core/wire/xtp/view.rs
 
-//! The write end: a `TreeView` holds a root node, a `BranchView` a branch's
-//! children, and both write through the same typed writers — `NodeView` is
-//! one write primitive (`set_node` for a tree, `put_node` for a branch),
-//! and every writer on top of it.
+//! The write end: a tree of nodes built before `TreeEncoder` lays it out.
 
-// Uppercase throughout, as the notation these operations are written in: one
-// that holds no state and closes over nothing is named the way a C header
-// names its macros. Rust's own answer to a macro like that is a `const fn`,
-// which it cases snake, so the notation and the language disagree here and
-// the file keeps the notation — suspended once for the file, which is the
-// level the choice is made at rather than item by item.
+// Stateless helpers are uppercase, as the C header's macros they mirror.
 #![allow(non_snake_case)]
 
 use crate::status::error::MarshalError;
@@ -25,8 +17,7 @@ fn seq<'a>(type_: SequenceType, val: Option<SequenceVal<'a>>) -> Node<'a> {
 }
 fn array<'a, T: Copy>(type_: SequenceType, arr: Option<&'a [T]>) -> Option<SequenceVal<'a>> {
     arr.map(|a| {
-        // SAFETY: a leaf's elements are its bytes, little-endian, as the
-        // packet lays them out.
+        // SAFETY: plain numbers read back as their bytes.
         let bytes = unsafe { core::slice::from_raw_parts(a.as_ptr() as *const u8, core::mem::size_of_val(a)) };
         SequenceVal::Array(Array { type_, bytes: bytes.into() })
     })
@@ -58,7 +49,6 @@ fn STRS_NODE<'a, S: AsRef<str>>(items: Option<&[S]>) -> Node<'a> {
     seq(SequenceType::STRS, items.map(|items| SequenceVal::Strs(items.iter().map(|s| s.as_ref().to_string()).collect())))
 }
 
-/// A view's node, as the value a `set` or `put` takes in place of the view.
 pub type ViewValue<'a> = NodeValue<'a, Node<'a>>;
 
 fn val_to_node<'a>(val: ViewValue<'a>) -> Result<Node<'a>, MarshalError> {
@@ -92,24 +82,15 @@ fn val_to_node<'a>(val: ViewValue<'a>) -> Result<Node<'a>, MarshalError> {
     })
 }
 
-// ============ View ============
-
 pub trait NodeView<'a> {
     fn node(&self) -> &Node<'a>;
 
-    /// The write primitive: a tree replaces its root, a branch appends a child.
+    /// A tree replaces its root, a branch appends a child.
     fn write(&mut self, node: Node<'a>) -> &mut Self;
 
     fn nil(&mut self) -> &mut Self {
-        // generic/untyped null lowering
         self.write(NIL_NODE)
     }
-
-    // ---- Scalar ----
-    // explicit scalar writers are caller-chosen constructors;
-    // inputs are normalized through the corresponding word cast helpers.
-    // typed optional leaf writers preserve node kind;
-    // physical presence is decided during encode.
 
     fn u8(&mut self, u: Option<u8>) -> &mut Self {
         self.write(U8_NODE(u))
@@ -145,8 +126,6 @@ pub trait NodeView<'a> {
     fn bool(&mut self, b: Option<bool>) -> &mut Self {
         self.write(BOOL_NODE(b))
     }
-
-    // ---- Sequence ----
 
     fn u8_array(&mut self, arr: Option<&'a [u8]>) -> &mut Self {
         self.write(ARRAY_NODE(SequenceType::U8_ARRAY, arr))
@@ -191,11 +170,7 @@ pub trait NodeView<'a> {
         self.write(STRS_NODE(items))
     }
 
-    // ---- Subtree ----
-
-    /// Builds a branch subtree inline and writes it into the current view.
     fn branch(&mut self, f: Option<&mut dyn FnMut(&mut BranchViewImpl<'a>)>) -> &mut Self {
-        // typed optional branch; node kind is preserved and physical presence is decided during encode
         let Some(f) = f else { return self.write(Node::Branch(BranchNode { val: None })) };
 
         let mut branch = BranchViewImpl::new();
@@ -204,15 +179,7 @@ pub trait NodeView<'a> {
         self.write(node)
     }
 
-    /// Grafts an already-encoded subtree packet.
-    ///
-    /// Contract:
-    /// - `pkt` must be a tree packet carrier intended for this format
-    /// - The grafted root may be physically null
-    /// - The caller must not mutate `pkt` after grafting it
-    ///
-    /// This method enforces only construction-boundary checks.
-    /// Packet header validation remains a read/encode-side concern.
+    /// `pkt` is an encoded packet; its header is checked at encode.
     fn graft(&mut self, pkt: &'a [u8]) -> Result<&mut Self, MarshalError> {
         Ok(self.write(Node::Graft(GraftNode { val: pkt })))
     }
@@ -233,20 +200,11 @@ impl<'a> TreeView<'a> {
         TreeView { node: NIL_NODE }
     }
 
-    // ---- Write Primitive ----
-
-    /// Replaces the current root node.
     fn set_node(&mut self, node: Node<'a>) -> &mut Self {
         self.node = node;
         self
     }
 
-    /// Lowers a value into the root node: each width its own leaf, an array
-    /// the matching array node, a list a branch in element order.
-    ///
-    /// There is no keyed value here — an object is a higher schema's to
-    /// model — and the explicit writers, `u8()` and `i64()` and the rest,
-    /// are the caller's choice of leaf rather than a lowering to check.
     pub fn set(&mut self, val: ViewValue<'a>) -> Result<&mut Self, MarshalError> {
         let node = val_to_node(val)?;
         Ok(self.set_node(node))
@@ -263,16 +221,11 @@ impl<'a> NodeView<'a> for TreeView<'a> {
     }
 }
 
-/// The branch view: what `branch(|b| ...)` hands its closure.
 pub trait BranchView<'a>: NodeView<'a> {
-    /// Replaces all existing children with the provided sequence.
     fn set(&mut self, vals: Vec<ViewValue<'a>>) -> Result<&mut Self, MarshalError>;
 
-    /// Lowers one generic value and appends it as a child.
     fn put(&mut self, val: ViewValue<'a>) -> Result<&mut Self, MarshalError>;
 
-    /// Appends an in-memory subtree as one child.
-    /// The subtree is encoded inline as part of the current tree.
     fn subtree<V: NodeView<'a>>(&mut self, subtree: &V) -> &mut Self;
 }
 
@@ -300,9 +253,6 @@ impl<'a> BranchViewImpl<'a> {
         }
     }
 
-    // ---- Append Primitive ----
-
-    /// Appends one child node to the current branch.
     fn put_node(&mut self, node: Node<'a>) -> &mut Self {
         self.children().push(node);
         self

@@ -1,19 +1,9 @@
 // @xpute/runtime/sched/strobe.ts
 
 /**
- * The host's clock for one guest: the turns, alternating
- * between the host and the guest like a clock's two edges.
- *
- * A turn starts on an animation frame, and only when something asked for
- * one: the host, for an input or an arrival (`request`), or the guest, on
- * its last falling edge. The guest asks for the next frame, or for a time —
- * a debounce, a retry — or for nothing, and a guest asking for nothing is
- * rung for nothing: no turn runs on a timer of the host's own.
- *
- * On the frame the host takes the grant (quantum.ts), lets the caller submit
- * what the frame carries, and rings the doorbell with the quota. The host
- * never sees what the guest runs inside; what it learns is how long the turn
- * took and what the guest asked for.
+ * The host's clock for one guest: a turn runs on an animation frame only when
+ * the host (`request`) or the guest's last falling edge asked for one, never on
+ * a timer of the host's own.
  */
 
 import type { f64 } from "@xpute/core/abi/word.ts";
@@ -29,9 +19,7 @@ export class Strobe {
   private running = false;
   private readonly run = (now: f64): void => this.turn(now);
 
-  /** `submit` writes what the frame carries into the rings before the
-   * doorbell is rung, given the grant and the gap since the last frame;
-   * `next_frame` runs its callback on the host's next frame, with its time. */
+  /** `submit` fills the rings before the doorbell rings. */
   constructor(
     private readonly doorbell: Doorbell,
     policy: QuantumPolicy,
@@ -54,14 +42,12 @@ export class Strobe {
     this.timer_at = Infinity;
   }
 
-  /** Asks for a turn on the next animation frame. */
   request(): void {
     if (this.frame || !this.running) return;
     this.frame = true;
     this.next_frame(this.run);
   }
 
-  /** The host saw input: the turns after it are interactive. */
   input(): void {
     this.quantum.input(performance.now());
   }
@@ -83,13 +69,10 @@ export class Strobe {
   private turn(now: f64): void {
     this.frame = false;
     if (!this.running) return;
-    // What actually passed, and not what the guest may safely step over: how
-    // long a gap still counts as motion is a question about what the guest
-    // simulates, so the guest holds it. A host that clamps here cannot report
-    // the frames worth reporting, because the clamp is where they all land.
+    // Unclamped: how long a gap still counts as motion is the guest's call,
+    // and a clamp here is where every frame worth reporting would land.
     const delta_s = Math.max(0, (now - this.last) / 1000);
     this.last = now;
-    // The turn asks again for whatever it still waits on.
     clearTimeout(this.timer);
     this.timer_at = Infinity;
     const grant = this.quantum.grant(performance.now());

@@ -19,10 +19,8 @@ pub struct Cache {
     flights: Arc<Mutex<HashMap<String, Arc<Flight>>>>,
     admission: Arc<Semaphore>,
     deadline: std::time::Duration,
-    /// Whether this generation still owns `root`: false once purged, after
-    /// which nothing it was still baking is written there. Every write holds
-    /// it shared and the purge holds it alone, so no write lands between a
-    /// purge and the next generation's first read.
+    /// False once purged. Writes hold it shared and the purge alone, so no write
+    /// lands between a purge and the next generation.
     live: RwLock<bool>,
 }
 
@@ -43,14 +41,9 @@ impl Cache {
         })
     }
 
-    /// The job owns its lifetime, not the HTTP connection that first asks.
-    /// A key is the path its job publishes, so what is published answers
-    /// from the disk, and a flight is held only while the work runs or after
-    /// the source failed: failures stay failed within the generation, and
-    /// resource refusals leave nothing and may be admitted by a later request.
-    /// The owner passes one deadline through dependencies and execution. It
-    /// awaits process reaping and publication before settling the flight;
-    /// timing out this future would release identity before its work stopped.
+    /// The job, not the HTTP connection, owns its lifetime. Failures stay failed
+    /// within the generation; resource refusals leave nothing. Do not time out this
+    /// future: it would release the key before the work stopped.
     pub async fn once<F>(&self, key: String, make: impl FnOnce(tokio::time::Instant) -> F + Send + 'static) -> Result<(), Failure>
     where
         F: Future<Output = Result<(), Failure>> + Send + 'static,
@@ -60,8 +53,7 @@ impl Cache {
             match jobs.entry(key.clone()) {
                 std::collections::hash_map::Entry::Occupied(e) => (e.get().clone(), None),
                 std::collections::hash_map::Entry::Vacant(e) => {
-                    // Under the lock: a finished job leaves the map only after
-                    // it has published, so a vacancy here cannot miss one.
+                    // A finished job leaves the map only after publishing, so a vacancy cannot miss one.
                     if self.published(&key) {
                         return Ok(());
                     }
@@ -118,8 +110,6 @@ impl Cache {
         })
     }
 
-    /// A write into `root`, made only while this generation still owns it: a
-    /// purged one's late result is dropped, not published over the next's.
     pub fn commit(&self, write: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
         let live = self.live.read().expect("live");
         if *live {
@@ -129,8 +119,6 @@ impl Cache {
         }
     }
 
-    /// Everything this generation published, gone: `root` is moved aside and
-    /// removed, and the generation can write nothing more into it.
     pub fn purge(&self) -> Result<(), String> {
         let mut live = self.live.write().expect("live");
         *live = false;
@@ -156,8 +144,6 @@ impl Cache {
     }
 }
 
-/// Where a purge moves a cache's directory before removing it, beside it so
-/// the move is a rename; a start clears what a killed purge left there.
 pub fn purged(root: &std::path::Path) -> PathBuf {
     let mut name = root.file_name().unwrap_or_default().to_owned();
     name.push(".purged");

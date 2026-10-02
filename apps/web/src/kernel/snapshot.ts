@@ -1,13 +1,5 @@
 // @pxl/web/kernel/snapshot.ts
 
-/**
- * The one snapshot the UI renders (crates/pxl/web/kernel/src/shell/shell.rs):
- * a Snapshot packet in a block the kernel holds, read whole when it is
- * signaled and replaced whole — a component subscribes and re-renders on the
- * part it selects. Its own module so the host that fills it and the shell
- * that reads it do not reach through each other.
- */
-
 import { useSyncExternalStore } from "react";
 
 import type { U8Array } from "@xpute/core/abi/array.ts";
@@ -33,14 +25,12 @@ const INITIAL: Snapshot = {
 let snapshot: Snapshot = INITIAL;
 const snapshot_listeners = new Set<() => void>();
 
-/** Reads the kernel's snapshot out of the bytes it holds it in: all of it,
- * now, since the kernel writes the next one there. */
+/** Read whole now: the kernel writes the next one in the same place. */
 export function set_snapshot(bytes: U8Array): void {
   snapshot = read_snapshot(new TreeReader(bytes).read_branch());
   for (const listener of snapshot_listeners) listener();
 }
 
-/** Calls `listener` with every snapshot the kernel posts from now on. */
 function subscribe_snapshot(listener: () => void): () => void {
   snapshot_listeners.add(listener);
   return () => snapshot_listeners.delete(listener);
@@ -50,10 +40,7 @@ export function kernel_snapshot(): Snapshot {
   return snapshot;
 }
 
-/** The part of the kernel's snapshot a component shows. A component
- * re-renders only when what it selects changes, so `select` returns a
- * primitive or a reference the snapshot already holds: one that builds a
- * new array or object each call never compares equal and renders forever. */
+/** `select` must return a primitive or an existing reference; a fresh object renders forever. */
 export function useKernel<T>(select: (s: Snapshot) => T): T {
   return useSyncExternalStore(subscribe_snapshot, () => select(snapshot));
 }

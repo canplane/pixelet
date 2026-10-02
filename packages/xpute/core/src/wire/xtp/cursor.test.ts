@@ -1,13 +1,6 @@
 // @xpute/core/wire/xtp/cursor.test.ts
 
-/**
- * The half of xpute-core/wire/xtp/cursor.test.rs that runs here. A packet is
- * written by one side and read by the other, so the record is a claim about
- * both and each has to be held to it.
- *
- * No aligned buffer is needed where the Rust builds one: a fresh `Uint8Array`
- * begins at offset 0 of its own buffer, which is what the reader asks for.
- */
+/** The TypeScript half of xpute-core/wire/xtp/cursor.test.rs, held to the same record. */
 
 import { assertEquals } from "@std/assert";
 
@@ -18,7 +11,6 @@ import { ALIGN, type NodeCursor, type NodeValue, TreeEncoder, TreeReader, TreeVi
 
 const te = new TextEncoder();
 
-/** A value as the record prints it. */
 function show(v: NodeValue): string {
   if (v === null) return "null";
   if (Array.isArray(v)) return `[${v.map(show).join(",")}]`;
@@ -30,12 +22,10 @@ function show(v: NodeValue): string {
   return `${typeof v}:${v}`;
 }
 
-/** A cursor read right through, whichever kind it is. */
 function deep(c: NodeCursor): NodeValue {
   return c.is_branch() ? c.get_deep() : c.get();
 }
 
-/** What reading `hex` right through comes to: the value, or the errno refusing it. */
 function refused(hex: string): string {
   try {
     deep(new TreeReader(hex_to_bytes(hex)).root);

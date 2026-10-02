@@ -1,86 +1,30 @@
 #!/usr/bin/env -S deno run -A
-// Fails a production build that still carries development-only material.
+// Fails a production build whose bundle still carries dev-only material:
+// dev catalog strings, dev markers, dev settings rows, bundled models.
 //
-// Gating a dev surface behind __IS_DEV__ removes the *component*, but not
-// necessarily everything attached to it: the debug settings section was
-// eliminated correctly while its labels rode along inside the bundled i18n
-// catalog, so a production bundle named every debug toggle it offered. And
-// before that, `VITE_APP_ENV=development` in a local .env — which Vite loads
-// for every mode — made __IS_DEV__ true in the deployed build outright.
-//
-// Both were found by reading the built bundle, so that is what this does.
-// "Unreachable at runtime" is not the bar; absent from the artifact is.
-//
-// Usage (from apps/web, after a production build):
-//   deno run -A script/check-bundle.ts
+//   deno run -A script/check-bundle.ts   (from apps/web, after a build)
 
 const DIST = "./dist";
 
-/** Files whose every leaf string must not appear in a production bundle. The
- * dev catalogs are the authoritative list of dev-only copy, so deriving the
- * check from them means a new dev string is covered the day it is added. */
 const DEV_LOCALE_FILES = [
   "./src/locale/dev/en.json",
   "./src/locale/dev/ko.json",
 ];
 
-/** The catalogs a production build is supposed to carry. A string one of
- * these holds cannot be evidence that the dev catalog leaked — the bundle
- * is meant to have it — so a dev string that is also one of these is not
- * counted against the build. `Places` is the case that found this: the
- * attribution section names Overture's Places theme, and the dev row for the
- * place badges is the same word. What is only ever dev-only still fires, and
- * a whole catalog riding along would light up every string of it that is
- * not shared, which is nearly all of them. */
+/** A dev string also shipped here (e.g. "Places") is not evidence of a leak. */
 const SHIPPED_LOCALE_FILES = [
   "./src/locale/en.json",
   "./src/locale/ko.json",
 ];
 
-/** Markers that are not copy — route paths and the like.
- *
- * "development" is __APP_ENV__'s value, which the settings panel prints. A
- * production build shipped it once: the guard that forces a production build
- * out of development mode had been written into the isDev boolean only, so
- * the name kept whatever .env said and the deployed panel labeled itself
- * "development" while the debug section it implies was correctly absent.
- * Confirmed absent from a correct production bundle, so it is safe to forbid
- * outright rather than to check contextually. */
+/** "development" is __APP_ENV__'s value; a production build once shipped it. */
 const DEV_MARKERS = ["dev/test", "development"];
 
-/** Strings that prove the check is looking at a real bundle. Without this a
- * broken glob or an empty dist would pass silently, which is the failure mode
- * a guard like this most easily falls into.
- *
- * These have to be literals that survive minification, not paths the app
- * composes at runtime, and what survives is the whole branch the client
- * requests rather than the root it hangs off: spec/pxl/spec/route.json folds a branch
- * into one constant, so `"/geo/search"` reaches an artifact and `"/geo"` never
- * does. A root the client requests whole, as it does the baked pages under
- * `"/tile"`, reaches one as itself.
- *
- * Which artifact is the point of the split. A path is a literal in whichever
- * of the two asks for it, and asking moves — it has moved twice. The tile
- * address was the shell's until the kernel took over composing a page's URL, at
- * which point the shell's copy had no consumer, the bundler dropped it, and
- * this failed a deploy over a path that was present all along, in the other
- * file (2026-09-23). It is the shell's again now that the kernel names an
- * object and never an address (io/fetch.rs), and this failed a deploy the
- * other way round (2026-09-24). So the spec's `bundle` flag names the artifact
- * rather than asserting there is one, and pxl-tool/spec/route.rs fails when either
- * list here and the flag disagree.
- *
- * Neither failure was caught before the deploy, because this runs there and
- * not in `deno task check`: it reads a built `dist/`, which the gate does not
- * produce.
- *
- * KERNEL_SENTINELS is what no route names: the ocean tile's name is the
- * kernel's own (layer/terrain/page.rs `OCEAN_KEY`), so nothing generates it
- * and there is nothing to check it against. */
+/** Proves the check reads a real bundle, so an empty dist cannot pass. Each
+ * is a literal the minifier keeps, in the artifact that requests it; the
+ * spec's `bundle` flag names which, and pxl-tool/spec/route.rs checks it. */
 const SENTINELS = ["/geo/search", "/tile"];
-// Empty, and kept rather than deleted: the generator's error when this list is
-// missing is what would catch a branch marked for the kernel with nothing here
-// to check it.
+// Kept empty: the generator fails if this list is missing.
 const KERNEL_ROUTE_SENTINELS = [] as string[];
 const KERNEL_SENTINELS = ["_ocean"];
 
@@ -106,8 +50,7 @@ async function readBundle(): Promise<string> {
   return out;
 }
 
-/** The kernel's module, as bytes read one to a character: its string data
- * lies in it uncompressed. */
+/** Read one byte to a character: its string data lies in it uncompressed. */
 async function readKernel(): Promise<string> {
   const modules: string[] = [];
   for await (const entry of Deno.readDir(`${DIST}/assets`)) {
@@ -120,11 +63,7 @@ async function readKernel(): Promise<string> {
 const bundle = await readBundle();
 const kernel = await readKernel();
 
-/** A string as a bundler may have written it. Which delimiter comes out is
- * the minifier's own choice and it does change: esbuild quotes, and oxc —
- * what Vite bundles with from 8 — writes backticks, so every check here went
- * blind on a bundle that was carrying the strings all along. The sentinels
- * are what caught that, which is what they are for. */
+/** esbuild quotes and oxc (Vite 8) writes backticks; both count. */
 function quoted(text: string, v: string): boolean {
   return text.includes(JSON.stringify(v)) || text.includes(`'${v}'`) || text.includes(`\`${v}\``);
 }
@@ -135,7 +74,6 @@ for (const s of SENTINELS) {
     Deno.exit(1);
   }
 }
-// Raw bytes, not a literal in source: the kernel's strings lie in its data.
 for (const s of [...KERNEL_ROUTE_SENTINELS, ...KERNEL_SENTINELS]) {
   if (!kernel.includes(s)) {
     console.error(`[check-bundle] sentinel ${JSON.stringify(s)} missing from the kernel — the build is not what this expects, so a pass would mean nothing`);
@@ -148,18 +86,8 @@ for (const f of DEV_LOCALE_FILES) {
   forbidden.push(...leaves(JSON.parse(await Deno.readTextFile(f))).map(([p, v]): [string, string] => [`${f}:${p}`, v]));
 }
 
-/**
- * Matches the quoted literal, not the bare substring. A bare search flagged
- * the English string "Debug" because React's `useDebugValue` contains those
- * letters — short dictionary words will collide with minified identifiers
- * every time. A catalog string reaches the bundle as a string literal, so
- * requiring its delimiters is both stricter and closer to what is being
- * asked.
- *
- * Very short strings are skipped regardless: at that length a collision is
- * likely even quoted, and a false failure that blocks deploys would get this
- * check disabled rather than fixed.
- */
+/** Only quoted literals count: a bare "Debug" matched `useDebugValue`.
+ * Shorter strings collide even quoted, so they are skipped. */
 const MIN_LEN = 4;
 
 function present(bundle: string, v: string): boolean {
@@ -171,7 +99,6 @@ const shipped = new Set<string>();
 for (const f of SHIPPED_LOCALE_FILES) {
   for (const [, v] of leaves(JSON.parse(await Deno.readTextFile(f)))) shipped.add(v);
 }
-// A marker is not copy, so the catalogs cannot excuse one.
 const shared = (where: string, v: string) => where !== "marker" && shipped.has(v);
 const leaked = forbidden.filter(([where, v]) => present(bundle, v) && !shared(where, v));
 
@@ -187,17 +114,8 @@ if (leaked.length > 0) {
 const excused = forbidden.filter(([where, v]) => shared(where, v)).length;
 console.log(`[check-bundle] ok — ${forbidden.length} development-only string(s), none present${excused > 0 ? ` (${excused} the shipped catalogs carry too)` : ""}`);
 
-// A dev setting's row: the settings table is generated whole from
-// schema.json, and a build that filtered it at run time shipped every dev
-// row under its name — `shadows:{kind:...}` and the rest,
-// readable in the artifact with their defaults. The shell now takes the
-// table without them (feature/setting/schema.ts), and this reads the
-// artifact to see that it did. What is looked for is the row and not the
-// bare name: a name may be read elsewhere for its own reasons, and a row is
-// a property whose value is
-// an object. A row every build offers is the sentinel, so that a minifier
-// writing rows some other way fails this loudly rather than passing it
-// blind.
+// A dev settings row is looked for as `name:{`, not the bare name; a row
+// every build offers is the sentinel.
 const SETTINGS_SPEC = "../../spec/pxl/web/kernel/shell/setting/schema.json";
 const SETTING_ROW_SENTINEL = "structures";
 
@@ -220,10 +138,7 @@ if (shippedRows.length > 0) {
 }
 console.log(`[check-bundle] ok — ${devRows.length} development-only setting row(s), none present`);
 
-// The kernel's table has the same rows, and the module `build` bundles is
-// built without them (pxl-kernel's `dev` feature, off under build-wasm.ts's
-// `--published`), so their names are not in its data either. Raw bytes, as
-// the kernel's sentinel is.
+// The published kernel is built without the `dev` feature, so its rows are absent too.
 const named = devRows.filter((k) => kernel.includes(k));
 if (named.length > 0) {
   console.error(`[check-bundle] ${named.length} development-only setting name(s) in the kernel module:`);
@@ -233,11 +148,7 @@ if (named.length > 0) {
 }
 console.log(`[check-bundle] ok — none of the ${devRows.length} named in the kernel module`);
 
-// A model or a texture in the bundle is a file the deploy is carrying that
-// the bucket should — every one the client draws is named by the shipped
-// palette and fetched by content key. A `?url` import of a
-// .glb or .png would put it back here silently, so the artifact is checked
-// rather than the source.
+// Every model and texture is fetched from the bucket; a `?url` import would bundle it.
 const carried: string[] = [];
 for await (const entry of Deno.readDir(`${DIST}/assets`)) {
   if (entry.isFile && /\.(glb|gltf|png|jpe?g|webp)$/.test(entry.name)) carried.push(entry.name);

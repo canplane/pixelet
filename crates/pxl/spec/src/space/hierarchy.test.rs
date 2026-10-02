@@ -2,9 +2,7 @@
 
 use super::*;
 
-/// The hierarchy is one algebra in any number of dimensions: a child's
-/// parent and slot give it back, and a parent's children are the 2^D nodes
-/// whose parent it is.
+/// A child's parent and slot give it back, in any number of dimensions.
 #[test]
 fn a_child_is_its_parent_and_slot_in_two_and_three_dimensions() {
     for at in [[5i64, -3], [-1, -1], [0, 8]] {
@@ -17,8 +15,7 @@ fn a_child_is_its_parent_and_slot_in_two_and_three_dimensions() {
     }
 }
 
-/// Several levels at once are one level taken as many times: an ancestor is
-/// its parent's parent, and the first descendant is the one it gives back.
+/// Several levels are one level taken as many times.
 #[test]
 fn several_levels_are_one_level_taken_as_many_times() {
     for at in [[5i64, -3], [-1, -1], [0, 8], [-9, 17]] {
@@ -38,9 +35,6 @@ fn several_levels_are_one_level_taken_as_many_times() {
     }
 }
 
-/// A scale counts, steps and measures as one power of two: a side is the
-/// count of the unit in it, stepping up and back is the identity, and a count
-/// across several levels is the product of the counts across each.
 #[test]
 fn a_scale_is_one_power_of_two_however_it_is_read() {
     let unit = Scale::of(0);
@@ -54,9 +48,7 @@ fn a_scale_is_one_power_of_two_however_it_is_read() {
     assert_eq!(Scale::of(-3).side(), 0.125);
 }
 
-/// A point's side at a scale is the one whose corner is at or below it and
-/// whose next is above it, on either side of the origin and finer than a
-/// unit too, and a side's corner lies in that side.
+/// A point's side at a scale holds it, either side of the origin and below a unit.
 #[test]
 fn a_point_lies_in_the_side_whose_corner_is_under_it() {
     for s in [Scale::of(-3), Scale::of(0), Scale::of(6)] {
@@ -69,8 +61,7 @@ fn a_point_lies_in_the_side_whose_corner_is_under_it() {
     }
 }
 
-/// Two nodes share ground exactly when one lies under the other, however
-/// many levels apart, and a node shares none with its neighbor's children.
+/// Two nodes overlap exactly when one lies under the other.
 #[test]
 fn nodes_share_ground_only_where_one_lies_under_the_other() {
     let at = (Scale::of(4), [3i64, -2]);
@@ -84,9 +75,7 @@ fn nodes_share_ground_only_where_one_lies_under_the_other() {
     }
 }
 
-/// A walk's order is its inverse's, and it keeps a coarser node's leaves
-/// together: every leaf of one node falls in one run, the node's own order
-/// shifted up by the levels below it.
+/// Walk order inverts, and keeps a coarser node's leaves in one run.
 #[test]
 fn a_walk_order_is_invertible_and_keeps_a_node_s_leaves_in_one_run() {
     for at in [[0u32, 0, 0], [5, 3, 7], [63, 0, 31], [12, 40, 9]] {

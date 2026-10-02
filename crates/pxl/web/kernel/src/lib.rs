@@ -1,11 +1,8 @@
 // pxl-kernel/lib.rs
 
-//! pixelet's kernel, in Rust: the world's state and what runs over it — the
-//! stores, the fetches, the schedulers, the turn — over the model
-//! (pxl-spec), drawn through the view (pxl-render), which knows nothing of
-//! it. Nothing here knows about WebAssembly, a browser or a thread — pxl-wasm
-//! is the one crate that does — so the same code runs under `cargo test`
-//! natively and inside the module the client loads.
+//! pixelet's kernel: the world's state and what runs over it. Nothing here
+//! knows of WebAssembly, a browser or threads (pxl-wasm does), so the same
+//! code runs under `cargo test` and in the client's module.
 
 pub mod abi;
 pub mod control;

@@ -1,15 +1,11 @@
 // pxl-render/gpu/pipeline.rs
 
-//! The pipelines as frame/shader/record.rs defines them, made on the device once
-//! each: a pipeline at a format, its shader modules, and
-//! its bind group layouts — shared by their words, so every pipeline that
-//! declares the same group gets the same layout and a bind group made for one
-//! serves the others.
+//! Pipelines made once each. Bind group layouts are shared by their words, so a
+//! bind group made for one pipeline serves every one declaring the same group.
 
 use crate::frame::shader::record::{pipeline as record_of, source, HEAD, SHADERS};
 use crate::gpu::api::{object, Gpu};
 
-/// Group layouts a pipeline has at most, and vertex lanes.
 pub const GROUPS: usize = 4;
 pub const LANES: usize = 8;
 
@@ -17,7 +13,6 @@ pub const LANES: usize = 8;
 pub struct Built {
     pub pipeline: u32,
     pub layouts: [u32; GROUPS],
-    /// Each vertex buffer's stride, in the record's order.
     pub strides: [u32; LANES],
     pub lanes: usize,
 }
@@ -76,7 +71,6 @@ impl Pipelines {
         id
     }
 
-    /// Pipeline `id` drawing into `format`.
     pub fn build(&mut self, g: &Gpu, id: u32, format: u32) -> Built {
         let key = fold(fold(0xcbf29ce484222325, id), format);
         if let Some(&(_, b)) = self.built[..self.built_len].iter().find(|(k, _)| *k == key) {

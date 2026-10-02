@@ -1,19 +1,9 @@
 // pxl-kernel/control/camera/orbit.rs
 
-//! The orbit camera. It turns the camera (controller.rs `Camera`) about a
-//! point its radius ahead of the eye along the look — the map center —
-//! keeping that point where it is: the eye moves over the sphere about it,
-//! and the radius is the zoom. A drag walks the map center (controller.rs
-//! `pan`).
-//!
-//! What the controls ask of it and what is drawn are kept apart: the
-//! controls write the target — the look and the distance in the camera
-//! store's intent, and the map center where the hand has put it, where the
-//! walk stands it (controller.rs `pan`) — and `turn` brings what is
-//! drawn to it, every channel by the one law (approach.rs). The drawn state
-//! is the radius here and the eye and the look in the camera; the map center
-//! drawn is derived from them. The target is the controls' alone: what draws
-//! or reads the world reads the drawn state.
+//! The orbit camera: the eye moves over a sphere about the map center, the
+//! radius being the zoom. The controls write the target; `turn` brings what
+//! is drawn to it (approach.rs). Everything that reads the world reads the
+//! drawn state.
 
 pub mod terrain_gate;
 
@@ -37,17 +27,10 @@ use crate::world::frame::coord::canonical_to_local;
 use crate::world::frame::view::{view, view_compose};
 use terrain_gate::{allowed_pan, allowed_view, climb_polar, ViewTriple};
 
-/// The orbit's own state, as drawn: the radius, how far ahead of the eye the
-/// map center stands.
 pub struct OrbitState {
     pub dist: f64,
-    /// Where the controls have put the map center, canonical, so a rebase
-    /// leaves it where it is: what the drawn center comes to. None until
-    /// the camera is first put anywhere.
+    /// Canonical, so a rebase leaves it where it is. None until first put.
     to: Option<Pvf3>,
-    /// A pinch's anchor: the distance the controls asked and the fingers'
-    /// spread as it began, or where it was last held to (gesture.rs). A
-    /// snapshot of the gesture, not a second distance.
     pinch_from: Anchor,
 }
 
@@ -61,35 +44,24 @@ pub fn orbit() -> &'static mut OrbitState {
     })
 }
 
-/// The eye's offset from what it looks at, `dist` back along the look.
 pub fn orbit_eye_offset(dist: f64, polar: f64, azimuth: f64) -> V3 {
     look_dir(polar, azimuth).map(|v| -v * dist)
 }
 
-// How close each channel comes before it takes its target whole
-// (approach.rs): world units for the center and the radius, radians for the
-// angles — all sub-pixel at any distance the view is looked across.
+// Sub-pixel at any distance the view is looked across.
 const CENTER_EPS: f64 = 0.001;
 const DIST_EPS: f64 = 0.001;
 const POLAR_EPS: f64 = 0.0001;
 const AZIMUTH_EPS: f64 = 0.0001;
 
-/// How quickly the look steepens where the ground asks it to (the collision
-/// setting's climb): faster than the controls ease, since late to rise is
-/// the eye briefly inside a hill.
+/// Faster than the controls ease: late to rise is the eye briefly inside a hill.
 const CLIMB_RISE_DAMP: f64 = 20.0;
 
-/// How quickly the look comes back up as the ground lets it, while the
-/// ground still bounds it: slower than the controls ease, so passing over a
-/// ridge does not bob the view.
+/// Slower than the controls ease, so passing over a ridge does not bob the view.
 const CLIMB_RELAX_DAMP: f64 = 5.0;
 
-/// climb_polar's answer for the last inputs: the climb samples the terrain
-/// twice through the page tables and page math, and every ticked frame asked
-/// it again with the view at rest. The answer changes only with the view, the
-/// map center, or what the eye stands over changing — a page arriving, which
-/// is also when ground not known yet becomes known, or an object placed or
-/// carved (world/access.rs `support_revision`).
+/// The climb samples terrain twice and was asked every ticked frame at rest;
+/// it changes only with the view, the map center or `support_revision`.
 struct ClimbMemo {
     dist: f64,
     polar: f64,
@@ -127,15 +99,9 @@ fn climb_polar_memo(dist: f64, polar: f64, azimuth: f64) -> f64 {
     out
 }
 
-/// The controls ask `partial` of the orbit: the intent as far from where the
-/// controls stood as terrain lets the orbit go (terrain_gate.rs
-/// `allowed_view`), and a tilt asked no shallower than `climb` can clear the
-/// ground — taken where the controls are written, so what they hold is where
-/// the orbit can stand and turning back moves it at once. What it took.
-///
-/// `climb` limits only a tilt asked: a zoom it answers by pitching the drawn
-/// look (`turn`), which comes back as the ground does, and writing that
-/// into the controls would keep it.
+/// Gated by terrain where the controls are written, so turning back moves at
+/// once. `climb` limits only a tilt asked: a zoom it answers by pitching the
+/// drawn look, which would stick if written into the controls.
 pub fn ask(partial: IntentPatch) -> Intent {
     let c = camera_store();
     let mut asked = c.merged(partial);
@@ -160,7 +126,6 @@ fn gate(from: Intent, to: Intent) -> Intent {
     }
 }
 
-/// The orbit as drawn, as the terrain gate reads a view.
 fn drawn() -> ViewTriple {
     let cam = camera();
     ViewTriple {
@@ -170,37 +135,32 @@ fn drawn() -> ViewTriple {
     }
 }
 
-/// Whether the radius is still coming to the distance the controls ask.
 pub fn zoom_settling() -> bool {
     (camera_store().intent.dist - orbit().dist).abs() > DIST_EPS
 }
 
-/// A wheel's turn, `delta_y` in CSS pixels: the distance scaled by it, away
-/// as the wheel turns toward the hand's back.
+/// `delta_y` in CSS pixels.
 pub fn wheel(delta_y: f64) {
     zoom_by((delta_y * DOLLY_GAIN).exp());
 }
 
-/// The zoom, `factor` of the distance the controls ask: under one closer.
+/// Under one zooms closer.
 pub fn zoom_by(factor: f64) {
     zoom_to(camera_store().intent.dist * factor);
 }
 
-/// Two fingers came down `span` pixels apart.
 pub fn pinch_begin(span: f64) {
     orbit().pinch_from = Anchor::new(camera_store().intent.dist, span);
 }
 
-/// The fingers `span` pixels apart: the distance the pinch began at, by as
-/// much as they have come together since — spreading them zooms in.
+/// Spreading the fingers zooms in.
 pub fn pinch(span: f64) {
     let asked = orbit().pinch_from.ask(span, spread);
     let took = zoom_to(asked);
     orbit().pinch_from.settle(asked, took, span);
 }
 
-/// The zoom to `dist`, as far as the limits and the ground let it: the
-/// distance it took.
+/// Returns the distance taken.
 pub fn zoom_to(dist: f64) -> f64 {
     ask(IntentPatch {
         dist: Some(dist),
@@ -209,20 +169,15 @@ pub fn zoom_to(dist: f64) -> f64 {
     .dist
 }
 
-/// The map center the controls have put, not yet drawn.
 pub(crate) fn target_center() -> Option<Pvf3> {
     orbit().to.or_else(map_center)
 }
 
-/// A pan's map center `to`, no further than the terrain gate lets the drawn
-/// orbit go (terrain_gate.rs `allowed_pan`). Gated after the walk, not
-/// before: the walk moves the center's Z, and the eye rides on it.
+/// Gated after the walk, since the walk moves the center's Z.
 pub(crate) fn gate_pan(to: &Pvf3) -> Pvf3 {
     allowed_pan(drawn(), to)
 }
 
-/// The map center's target put at `at`: where a place said outright puts
-/// it, and with `snap` the drawn center there at once.
 pub(crate) fn put(at: Pvf3, snap: bool) {
     orbit().to = Some(at);
     if snap {
@@ -233,11 +188,7 @@ pub(crate) fn put(at: Pvf3, snap: bool) {
     }
 }
 
-/// The orbit's turn over `delta` seconds: the map center, the radius and
-/// the look each brought toward their targets — the tilt no shallower than
-/// the ground allows where the collision setting climbs — and the eye put
-/// where they have it about the map center. Whether it is still moving; none
-/// where the camera stands nowhere.
+/// Whether still moving; None where the camera stands nowhere.
 pub(crate) fn turn(delta: f64) -> Option<bool> {
     let drawn_center = center_local()?;
     let vs = camera_store().intent;
@@ -251,13 +202,8 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
     o.dist = clamp(dist, MIN_DIST, MAX_DIST);
     moving |= m;
 
-    // `climb` grants the controls the eye can climb to through the air
-    // (terrain_gate.rs `allowed_step`) and answers terrain by pitching the
-    // look toward straight down: the tilt the look eases to is the controls',
-    // bounded by the shallowest that clears the ground, and it steepens
-    // quickly and relaxes slowly while the ground still bounds it. dist
-    // stays exactly what the controls ask; only the angle gives way, and it
-    // comes back on its own once the ground does.
+    // `climb` pitches the look toward straight down instead of shortening dist:
+    // rising fast and relaxing slowly while the ground bounds it.
     let polar = match settings_store().camera_collision {
         CameraCollisionMode::climb => climb_polar_memo(o.dist, vs.polar, vs.azimuth),
         _ => vs.polar,
@@ -273,8 +219,7 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
     moving |= m;
     (cam.pitch, cam.yaw) = look_domain(pitch, yaw);
 
-    // The eye is written only where the center, the radius or the look
-    // moved: at rest nothing is derived and written back.
+    // Written only where something moved, so nothing is written back at rest.
     if (center, o.dist, cam.pitch, cam.yaw) != was {
         let e = orbit_eye_offset(o.dist, cam.pitch, cam.yaw);
         set_eye_local(&std::array::from_fn(|k| center[k] + e[k]));

@@ -1,5 +1,4 @@
-// One triangle over a table, for the passes that draw the atmosphere's:
-// `uv` is the fragment's place on it, texel centers at the half steps.
+// Fullscreen triangle over a table; texel centers at half steps.
 
 struct TableOut {
   @builtin(position) clip: vec4f,

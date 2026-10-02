@@ -1,10 +1,7 @@
 // xpute-conformance/lib.rs
 
-//! The Rust conformance guest, built as a library a host opens: the few
-//! commands spec/xpute/conformance/guest.json numbers, over xpute-runtime,
-//! computing nothing. What holds it to the contract (ARCHITECTURE.xpute.md)
-//! are the traces under spec/xpute/conformance/, which one host runs against every guest —
-//! this one, and cpp/xpute/conformance/ (packages/xpute/conformance/).
+//! The Rust conformance guest, a library a host opens and runs the traces
+//! under spec/xpute/conformance/ against.
 
 #[path = "guest.spec.rs"]
 pub mod spec;

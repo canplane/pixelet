@@ -1,10 +1,8 @@
 // pxl-kernel/shell/ui/scale_bar.rs
 
-//! What the view's scale reads as. The bar: how many meters a bar of at most
-//! SCALE_BAR_MAX_WIDTH_PX shows at the current distance and latitude, rounded to
-//! the 1/2/5 steps the convention uses, and how wide that is — the shell draws
-//! the bar and its label from this. And the zoom the same resolution is, for
-//! whatever is scaled the way a tiled map is.
+//! What the view's scale reads as: the scale bar (at most
+//! SCALE_BAR_MAX_WIDTH_PX, rounded to 1/2/5 steps) and the equivalent Web
+//! Mercator zoom.
 
 use pxl_spec::space::adapter::epsg3857;
 
@@ -37,22 +35,16 @@ pub struct ScaleBar {
     pub bar_width_px: f64,
 }
 
-/// The scale bar for a viewport `screen_height` CSS pixels tall.
-/// The Web Mercator meters one pixel covers: the projection's own units,
-/// before the latitude a real distance needs.
+/// Web Mercator meters, before the latitude correction a real distance needs.
 fn planar_m_per_px(screen_height: f64) -> f64 {
     let dist = crate::control::camera::controller::radius();
     let fov_rad = camera_cfg::projection::FOV.to_radians();
     let visible_u = 2.0 * (fov_rad / 2.0).tan() * dist;
-    // `dist` is in canonical "u" units, not meters — the conversion is required.
     visible_u / epsg3857::U_PER_M / screen_height
 }
 
-/// The Web Mercator zoom the view is at. A tile pyramid's level z has
-/// `EQUATOR_M / (TILE_PX * 2^z)` planar meters a pixel, so the zoom is what
-/// the view's own planar resolution reads as on that ladder — which is what
-/// makes a convention written against tile zooms, like Nominatim's address
-/// depth (pxl-spec place.rs), apply to a view that has no tiles.
+/// The zoom whose tile resolution matches the view's, so tile-zoom
+/// conventions (Nominatim's address depth) apply to a view with no tiles.
 pub fn mercator_zoom(screen_height: f64) -> f64 {
     const TILE_PX: f64 = 256.0;
     libm::log2(epsg3857::WORLD_WIDTH_3857 / TILE_PX / planar_m_per_px(screen_height))

@@ -1,9 +1,7 @@
 // pxl-kernel/world.rs
 
-//! The world the kernel keeps: the pages resident in the client, the one
-//! query every reader of them asks, the chunks meshed out of them, and the
-//! frame's own view of it all. The world's revisions are here too, so a
-//! rebuild knows what moved rather than rebuilding on a guess.
+//! The world the kernel keeps: resident pages, the query over them, the
+//! chunks meshed from them, and the frame's view.
 
 pub mod access;
 pub mod change;

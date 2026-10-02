@@ -1,25 +1,9 @@
 // pxl-render/gpu/ao.rs
 
-//! The screen-space occlusion: N8AO as the three.js build ran it until
-//! 2026-09-14, brought over so it can be switched in beside the corner
-//! occlusion a chunk shades itself with (chunk.wgsl's occlusion) and
-//! compared. Five passes a frame while the setting is on: the world's depth
-//! drawn once more from the eye, ahead of the frame's own, since the lit
-//! passes that read the occlusion draw that one; that depth to half
-//! resolution with a normal (ao_downsample.wgsl); the occlusion at half
-//! resolution (ao_sample.wgsl); the denoise over it, twice
-//! (ao_blur.wgsl); and the occlusion back at the frame's resolution, one
-//! byte a pixel (ao_upsample.wgsl), which every lit pass then reads at
-//! group 0 binding 7 and applies before its grade (ao_map.wgsl), where the
-//! post stack had it. The numbers are shader/ao_view.wgsl's.
-//!
-//! What it costs, at a frame of W x H pixels: the geometry once more with no
-//! fragment stage; a full-resolution depth (4 bytes a pixel), the
-//! half-resolution depth and normal (16 bytes a half-pixel, 4 a pixel), two
-//! half-resolution occlusion images (4 bytes a half-pixel, 1 a pixel each),
-//! and the full-resolution map (1 byte a pixel) — 11 bytes a pixel — and
-//! three half-resolution and one full-resolution fragment pass. The blue
-//! noise is 64 KB in the module.
+//! Screen-space occlusion (N8AO), switchable beside the chunk's own corner
+//! occlusion: a depth prepass, then downsample, sample, denoise twice and
+//! upsample to a one-byte map every lit pass reads at group 0 binding 7.
+//! About 11 bytes a pixel and one extra geometry pass.
 
 use pxl_spec::space::mat4::{mat4_invert, Mat4};
 
@@ -28,30 +12,24 @@ use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, rele
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::pipeline::{Built, Pipelines};
 
-/// Floats the Ao uniform (ao_view.wgsl's Ao) holds: proj, inv_proj, full,
-/// half, fog_near, fog_far, padding.
+/// proj, inv_proj, full, half, fog_near, fog_far, padding.
 const AO_FLOATS: usize = 40;
 const FULL: usize = 32;
 const HALF: usize = 34;
 const FOG_NEAR: usize = 36;
 const FOG_FAR: usize = 37;
 
-/// N8AO's blue noise: 128 x 128, four channels of it, one a purpose — the
-/// spin of the hemisphere, the push along its rays, and the two denoise
-/// runs' spins.
+/// N8AO's blue noise; its four channels are the hemisphere spin, the ray push
+/// and the two denoise spins.
 const NOISE_SIDE: u32 = 128;
 const NOISE: &[u8] = include_bytes!("../frame/shader/blue-noise.bin");
 
 pub struct ScreenAo {
-    /// A 1 x 1 map reading as unoccluded, bound where the frame's map is
-    /// not yet made — a case's pass, and every lit pass before the first
-    /// frame at a size.
+    /// Bound until the frame's map exists at this size.
     pub blank_view: u32,
     noise_view: u32,
     uniform: u32,
     uniform_words: [f32; AO_FLOATS],
-    /// The denoise's two runs, at one stride each: a dynamic offset says
-    /// which.
     run: u32,
     stride: u32,
     sampler: u32,
@@ -61,20 +39,15 @@ pub struct ScreenAo {
     upsample: Built,
     width: u32,
     height: u32,
-    /// The world's depth from the eye at one sample; its texture and view.
     depth: u32,
     pub depth_view: u32,
-    /// Half resolution: the depth and normal, and the occlusion, twice.
     half: u32,
     half_view: u32,
     ping: [u32; 2],
     ping_view: [u32; 2],
-    /// The occlusion at the frame's resolution, one byte a pixel.
     map: u32,
     map_view: u32,
-    /// The groups: the downsample's, the sample's, the denoise's two
-    /// (the first into ping[1] from ping[0], the second back), the
-    /// upsample's.
+    /// Downsample, sample, denoise ping[0]->ping[1], denoise back, upsample.
     groups: [u32; 5],
 }
 
@@ -125,19 +98,14 @@ impl ScreenAo {
         }
     }
 
-    /// The map as a lit pass's group entry at `binding`: the frame's where
-    /// one is made, the blank before that.
     pub fn entry(&self, binding: u32) -> [u32; 5] {
         [binding, resource::VIEW, if self.map_view != 0 { self.map_view } else { self.blank_view }, 0, 0]
     }
 
-    /// The blank map as a group entry at `binding`.
     pub fn blank_entry(&self, binding: u32) -> [u32; 5] {
         [binding, resource::VIEW, self.blank_view, 0, 0]
     }
 
-    /// The camera as the passes read it — `proj` view to WebGPU clip — over
-    /// a frame of `width` x `height` pixels with the fog band given.
     pub fn lay_out(&mut self, g: &Gpu, proj: &Mat4, width: u32, height: u32, fog_near: f32, fog_far: f32) {
         let u = &mut self.uniform_words;
         let mut inv = [0.0; 16];
@@ -155,9 +123,7 @@ impl ScreenAo {
         g.write_buffer(self.uniform, 0, bytes(u));
     }
 
-    /// The images at the frame's size, made where the size is new. Whether
-    /// they were made, in which case the map every lit pass binds is a new
-    /// object and their groups are to be made again.
+    /// True when the images were remade, so the groups that bind them must be too.
     pub fn ensure(&mut self, g: &Gpu, width: u32, height: u32) -> bool {
         if self.map != 0 && self.width == width && self.height == height {
             return false;
@@ -242,19 +208,12 @@ impl ScreenAo {
         self.map_view = 0;
     }
 
-    /// Opens the depth pass from the eye; the caller draws the world into
-    /// it with the prepass pipelines under the frame's group, and ends it.
-    /// Timed under `stamp`.
     pub fn begin_prepass(&self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> u32 {
         let pass = object();
         g.pass(pass, encoder, &pass_desc(0, load::CLEAR, self.depth_view, load::CLEAR, 0.0, stamp.pass()));
         pass
     }
 
-    /// The four full-screen passes, from the depth the prepass drew to the
-    /// map: the downsample into the half-resolution depth, the occlusion
-    /// into ping[0], the denoise into ping[1] and back into ping[0], the
-    /// upsample into the map. Timed under `stamp`, the five as one.
     pub fn run(&self, g: &Gpu, encoder: u32, stamp: &mut Stamp) {
         let steps: [(u32, u32, u32, u32); 5] = [
             (self.downsample.pipeline, self.groups[0], self.half_view, 0),

@@ -1,53 +1,18 @@
 #!/usr/bin/env -S deno run -A
-// Copies xpute out of pixelet, as the repository it will be when it leaves.
+// Copies xpute out of pixelet byte for byte, keeping its paths, since every
+// language reaches spec/xpute/golden/ by a path from its own tree. Only the
+// four manifests (Cargo workspace, deno.jsonc, notices, license) are written.
 //
-// pixelet stays the source of truth and the export is a derived artifact, the
-// way the build counter and the build log are: one place holds the thing, and
-// what leaves is produced rather than maintained. The alternative — developing
-// xpute in its own repository and consuming it by version — costs a publish
-// and a bump for every change, and the boundary is still moving (38 of the 49
-// commits that touched xpute in its first month landed in one week).
-//
-// **The layout is preserved exactly.** `crates/xpute/`, `packages/xpute/`,
-// `cpp/xpute/` and `spec/xpute/` keep their paths, which is not cosmetic: every
-// language reaches the records under `spec/xpute/golden/` by a path from its
-// own tree, because one copy read from every side is the only arrangement
-// that cannot drift silently. Rewriting a path to flatten the tree would reintroduce exactly
-// what that arrangement avoids — and the day xpute really leaves, nothing has
-// to change.
-//
-// So **no source file is edited**. Every `.rs`, `.ts`, `.cpp`, `.hpp`, `.tsv` and
-// `.json` under the four trees is copied byte for byte, listed by `git ls-files` so
-// that no build output can come along. Four manifests are written instead of
-// copied, because pixelet's own say things that are not xpute's: the Cargo
-// workspace (whose members and header describe pxl), `deno.jsonc` (28 tasks,
-// all of them pixelet's), the notices (pixelet's point into its shell) and the license
-// — pixelet's is proprietary and xpute is MIT.
-//
-// The export carries the commit it came from. It cannot stop someone from
-// letting the copy go stale, so it makes staleness legible instead: `--check`
-// answers whether the two agree, and the stamp in README says what it was
-// taken from.
-//
-// Usage (from the repo root):
-//   deno task export:xpute --to ../xpute
-//   deno task export:xpute --to ../xpute --check
+//   deno task export:xpute --to ../xpute [--check]
 
 import { dirname, join, relative } from "@std/path";
 
 const ROOT = dirname(dirname(new URL(import.meta.url).pathname));
 
-/** The trees that are xpute's, and the files outside them that belong with
- * them: the C++ is built by a script of its own, as the Rust is by Cargo. */
 const TREES = ["crates/xpute", "packages/xpute", "cpp/xpute", "spec/xpute"];
 const ROOT_FILES = ["rustfmt.toml", "ARCHITECTURE.xpute.md", "LICENSE.xpute", "THIRD_PARTY_NOTICES.xpute.md", "script/cpp.ts"];
 
-/** What each `.xpute` name is called over there — what a copied file lands as,
- * and what `relink` rewrites a cross-reference to. The `.xpute` infix tells
- * two documents apart in pixelet, where there are two; here there is one, and
- * the infix would name the other repository's arrangement in a tree that has
- * no second document to be told apart from. `README.xpute.md` is here for the
- * rewrite only: the README that ships is assembled by `readme`, not copied. */
+/** What each `.xpute` name becomes there, for copied files and for `relink`. */
 const RENAMED: Record<string, string> = {
   "ARCHITECTURE.xpute.md": "ARCHITECTURE.md",
   "README.xpute.md": "README.md",
@@ -55,28 +20,17 @@ const RENAMED: Record<string, string> = {
   "THIRD_PARTY_NOTICES.xpute.md": "THIRD_PARTY_NOTICES.md",
 };
 
-/** Names an earlier export wrote and this one does not. Leaving one behind is
- * not inert: where both are present Deno reads `deno.json` and never looks at
- * `deno.jsonc`, so the stale copy would go on being the repository's tasks. */
+/** Names an earlier export wrote: Deno reads a stale `deno.json` before `deno.jsonc`. */
 const RETIRED = ["deno.json"];
 
-/** The Cargo workspace members, in the order the source manifest lists them. */
 const CRATES = ["xpute/core", "xpute/runtime", "xpute/conformance"];
 
-/** What an export carries, for the purpose of saying what it carries: the
- * four trees and the two files that are copied, the README this tree keeps
- * for the other repository, and this script, which decides the rest. */
 const CARRIED = [...TREES, ...ROOT_FILES, "README.xpute.md", "script/export-xpute.ts"];
 
-/** What the Rust half actually depends on. The versions and the reasons are
- * read out of pixelet's manifest rather than repeated here, so a re-pin
- * upstream cannot leave the export behind. */
+/** Versions and reasons are read from pixelet's manifest, not repeated here. */
 const RUST_DEPS = ["fnv", "indexmap", "hex"];
 
-/** What the export does not manage, and so neither writes nor objects to:
- * build output, and the lock files, which belong to whoever runs the gate
- * there. Two libraries' locks bind no consumer, and pixelet's own are the
- * ones its builds are held to. */
+/** Neither written nor compared: build output and lock files. */
 const UNMANAGED = ["crates/target/", "node_modules/", "crates/Cargo.lock", "deno.lock"];
 
 const unmanaged = (path: string) => UNMANAGED.some((u) => (u.endsWith("/") ? path.startsWith(u) || path.includes(`/${u}`) : path === u));
@@ -92,36 +46,22 @@ function die(message: string): never {
   Deno.exit(1);
 }
 
-/** Progress and findings go to stderr, so that stdout carries the commit
- * message alone and can be piped into `git commit -F -`. */
+/** stderr, so stdout carries only the commit message for `git commit -F -`. */
 function note(message: string): void {
   console.error(`[export-xpute] ${message}`);
 }
 
-/** Whether a commit is still here. Asked rather than assumed, because the
- * history a previous export named may have been rewritten since — and `git`
- * above dies on a failure, which this one is not. */
+/** A previous export's commit may have been rewritten away. */
 function resolves(sha: string): boolean {
   return new Deno.Command("git", { args: ["cat-file", "-e", `${sha}^{commit}`], cwd: ROOT, stdout: "null", stderr: "null" }).outputSync().success;
 }
 
-/** Which commit this export was taken from, `-dirty` when the tree held
- * uncommitted changes — the same claim `buildId()` makes about a build, and
- * for the same reason: a name that does not resolve back to these bytes is
- * worth saying out loud. */
 function stamp(): string {
-  // What the export is made of and not the whole repository: work in flight
-  // elsewhere in pixelet says nothing about whether checking out this commit
-  // gives these bytes. This script counts, though it is not copied — four of
-  // the exported files are what it writes.
+  // Only what the export is made of counts, including this script.
   const dirty = git(["status", "--porcelain", "--", ...CARRIED]) !== "" ? "-dirty" : "";
   return `pixelet@${git(["rev-parse", "--short", "HEAD"])}${dirty}`;
 }
 
-// ---- the four manifests, written rather than copied ----
-
-/** A `[section]` of a TOML file, from its header to the next one, with the
- * comment block above the header. */
 function section(toml: string, header: string): string {
   const lines = toml.split("\n");
   const at = lines.findIndex((l) => l.trim() === header);
@@ -133,8 +73,6 @@ function section(toml: string, header: string): string {
   return lines.slice(from, to).join("\n").trimEnd();
 }
 
-/** One dependency's line and the comment block above it, so that the reason a
- * version is pinned travels with the pin. */
 function dependency(toml: string, name: string): string {
   const lines = section(toml, "[workspace.dependencies]").split("\n");
   const at = lines.findIndex((l) => l.startsWith(`${name} = `) || l.startsWith(`${name}.`) || l.startsWith(`${name} =`));
@@ -213,15 +151,10 @@ function denoManifest(): string {
 `;
 }
 
-/** The files here that are someone else's — one port, in two languages —
- * and the file that says so. A notice naming a path that is no longer
- * exported would be a claim with nothing behind it, so the export refuses
- * rather than shipping one. */
+/** The export refuses a notice naming a path it no longer carries. */
 const PORTED = ["crates/xpute/core/src/alloc/buddy_tree.rs", "cpp/xpute/core/alloc/buddy_tree.hpp"];
 
-/** The sections of pixelet's own `.gitignore` that apply to a repository with
- * no `apps/web`, no bake output and no bundler — taken by name rather than
- * copied as text, so that a tool added upstream is ignored here too. */
+/** Taken by name so a section added upstream is ignored here too. */
 const IGNORE_SECTIONS = [
   "# General OS files",
   "# Logs",
@@ -231,8 +164,6 @@ const IGNORE_SECTIONS = [
   "# Backup files sometimes created by rustfmt/editor tooling",
 ];
 
-/** A block of a `.gitignore`, from its header comment to the blank line after
- * it. Comment lines directly under the header belong to it. */
 function ignoreSection(text: string, header: string): string {
   const lines = text.split("\n");
   const at = lines.findIndex((l) => l === header);
@@ -257,22 +188,14 @@ function gitignore(): string {
 `;
 }
 
-/** A markdown link to a `.xpute` document, as the export renames it. The two
- * documents point at each other, and each name has to be the right one in the
- * repository the file is sitting in: `ARCHITECTURE.xpute.md` here, where a
- * bare `ARCHITECTURE.md` is pixelet's own, and `ARCHITECTURE.md` there, where
- * there is only one. Renaming the file without renaming what points at it
- * would send out a link to something that does not exist. */
+/** Rewrites links to `.xpute` documents to their exported names. */
 function relink(md: string): string {
   let out = md;
   for (const [from, to] of Object.entries(RENAMED)) out = out.replaceAll(`(./${from})`, `(./${to})`).replaceAll(`[${from}]`, `[${to}]`);
   return out;
 }
 
-/** The README as it goes out: this tree's `README.xpute.md`, with the one
- * section it cannot carry spliced in. That section names pixelet, and a
- * document that names pixelet cannot be the xpute repository's own — the
- * point of the `.xpute` infix is that dropping it is the whole migration. */
+/** `README.xpute.md` with the section that names pixelet spliced in. */
 function readme(at: string): string {
   const doc = relink(Deno.readTextFileSync(join(ROOT, "README.xpute.md")));
   const atLicense = doc.indexOf("## License");
@@ -291,9 +214,6 @@ The files generated from \`spec/xpute/\` are checked in as pixelet generates the
   return doc.slice(0, atLicense) + provenance + doc.slice(atLicense);
 }
 
-/** The stamp the copy already carries, read before it is overwritten. It is
- * what makes a draft possible: the range from there to here is what this
- * export is carrying that the last one did not. */
 function previousStamp(to: string): string | null {
   try {
     return Deno.readTextFileSync(join(to, "README.md")).match(/pixelet@([0-9a-f]+)/)?.[1] ?? null;
@@ -302,13 +222,7 @@ function previousStamp(to: string): string | null {
   }
 }
 
-/** What to say about an export: which commit it is, and the subjects of the
- * upstream commits it carries. A mirror's commit has no single kind — it holds
- * whatever happened upstream, a feature and three fixes at once — so it is
- * named by what it is rather than prefixed by what it does.
- *
- * A previous stamp that no longer resolves, because the history it named was
- * rewritten, leaves the stamp alone as the only honest thing to say. */
+/** The stamp plus the upstream subjects since the previous stamp, when that still resolves. */
 function draft(to: string, at: string): string {
   const previous = previousStamp(to);
   const reachable = previous !== null && resolves(previous);
@@ -318,15 +232,9 @@ function draft(to: string, at: string): string {
   return `${at}\n\n${carried.map((s) => `  ${s}`).join("\n")}\n`;
 }
 
-// ---- building it ----
-
-/** A file as it goes out: its bytes, and whether git records it as one to
- * run — a script that opens on its interpreter is called by path from the
- * tasks, and the bytes alone would arrive unable to run. */
+/** `executable` keeps the mode of scripts the tasks call by path. */
 type File = { path: string; bytes: Uint8Array; executable: boolean };
 
-/** Everything the export holds: the tracked source byte for byte, then the
- * files that are written because pixelet's own say what is not xpute's. */
 function build(): File[] {
   const encoder = new TextEncoder();
   // `mode sha stage<TAB>path`, one to a NUL.
@@ -335,8 +243,7 @@ function build(): File[] {
   const executable = new Set(staged.filter((l) => l.startsWith("100755 ")).map((l) => l.slice(l.indexOf("\t") + 1)));
   if (listed.length === 0) die("git listed nothing to export");
 
-  // The notices are a file now, so the path in them and the path here can drift.
-  // Neither is allowed to: the notice has to name the file it is a notice for.
+  // The notice must name the file it is a notice for.
   const notices = Deno.readTextFileSync(join(ROOT, "THIRD_PARTY_NOTICES.xpute.md"));
   for (const ported of PORTED) {
     if (!listed.includes(ported)) die(`${ported} is not being exported, and the notices name it`);
@@ -362,12 +269,7 @@ function build(): File[] {
   return files;
 }
 
-/** Every relative link in the markdown, held against what is actually going
- * out. A sentence that is true in pixelet is not true here by itself — a
- * cross-reference to a document this repository does not carry reads as a
- * file it lost rather than one it never had, and the first export shipped two
- * of those. The strings are copied verbatim on purpose, so the check is what
- * catches the ones that stop being true on the way. */
+/** Every relative markdown link must resolve inside the export; the first one shipped two that did not. */
 function checkLinks(files: File[]): void {
   const here = new Set(files.map((f) => f.path));
   const decoder = new TextDecoder();
@@ -391,9 +293,7 @@ function same(a: Uint8Array, b: Uint8Array): boolean {
   return a.length === b.length && a.every((byte, i) => byte === b[i]);
 }
 
-/** What the export holds that is not the target's, and what the target holds
- * that the export does not. The stamp is left out of the comparison: it moves
- * with every commit, and a copy that is otherwise identical is not stale. */
+/** The stamp is left out: it moves with every commit. */
 function compare(files: File[], to: string): { differs: string[]; extra: string[] } {
   const differs: string[] = [];
   for (const file of files) {
@@ -428,15 +328,12 @@ function compare(files: File[], to: string): { differs: string[]; extra: string[
 }
 
 function write(files: File[], to: string): void {
-  // Only what this script manages is cleared, so anything the repository keeps
-  // of its own — `.git`, a workflow, an issue template — survives an export.
+  // Only managed trees are cleared, so `.git` and the like survive.
   for (const tree of TREES) {
     try {
       Deno.removeSync(join(to, tree), { recursive: true });
     } catch { /* not there yet */ }
   }
-  // A file that used to go out under its own name and now goes out under
-  // another would otherwise sit beside its replacement for good.
   for (const was of [...Object.keys(RENAMED), ...RETIRED]) {
     try {
       Deno.removeSync(join(to, was));
@@ -449,8 +346,6 @@ function write(files: File[], to: string): void {
     Deno.chmodSync(full, file.executable ? 0o755 : 0o644);
   }
 }
-
-// ---- the command ----
 
 const args = Deno.args;
 const toAt = args.indexOf("--to");

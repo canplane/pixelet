@@ -3,30 +3,25 @@
 use super::*;
 use crate::space::pvf3::ivec;
 
-/// The z16 page every place below stands in.
 fn leaf() -> LevelPage {
     LevelPage::new(0, ivec::gather(3, -2, 0))
 }
 
-/// A point in `leaf()`: the corner of its POI cell (tx, ty), then `dx`, `dy`
-/// z16 ground cells in.
+/// The corner of POI cell (tx, ty), then `dx`, `dy` z16 cells in.
 fn point(tx: u32, ty: u32, dx: u32, dy: u32) -> Pvf3 {
     let base = POI_LATTICE.cell_base(leaf(), tx, ty);
     POI_LATTICE.cell_of(0, &base).inner_at(GROUND, 0, [dx, dy]).mid()
 }
 
-/// A place of no kind, called `name`, of id `id`.
 fn called(name: &str, id: u64) -> Place<'_> {
     Place { name, kind: 0, id }
 }
 
-/// Each cell's count and its places, as (name, where it stands).
+/// Each cell's count and its places as (name, where it stands).
 fn cells(page: &PoiPage) -> Vec<(u32, Vec<(&str, [u32; 2])>)> {
     page.cells.iter().map(|c| (c.count, page.shown(c).map(|(_, p, at)| (p.name, at)).collect())).collect()
 }
 
-/// A page survives the wire whole: its cells, their places and where each
-/// stands, the pool and the ids.
 #[test]
 fn a_page_and_its_places_come_back_as_they_went() {
     let station = Place {
@@ -54,9 +49,7 @@ fn a_page_and_its_places_come_back_as_they_went() {
         true,
     );
     assert_eq!(decode(&encode(&page).unwrap()).unwrap(), page);
-    // A place standing in two cells is held once, two of one kind are held
-    // as the one of least id, a nameless one is counted and not held, and a
-    // name is cut to what a badge shows.
+    // Held once across cells; least id per kind; nameless counted not held; names cut.
     assert_eq!(page.places.len(), 3);
     assert_eq!(
         cells(&page),
@@ -70,9 +63,7 @@ fn a_page_and_its_places_come_back_as_they_went() {
     );
 }
 
-/// A lone place is its cell's at every level: a parent with one place under
-/// it holds that place, its kind and id with it, and stands it on the same
-/// z16 ground cell its leaf did.
+/// A lone place stays its cell's at every level, on the same z16 cell.
 #[test]
 fn a_lone_place_folds_up_with_its_kind_and_its_ground_cell() {
     let at = point(5, 4, 3, 1);
@@ -96,9 +87,7 @@ fn a_lone_place_folds_up_with_its_kind_and_its_ground_cell() {
     }
 }
 
-/// A page settles a child where no cell over it holds a crowd: a lone place
-/// and an empty stretch are said whole a level up, and only a crowd comes
-/// apart under it.
+/// Only a crowd comes apart a level down.
 #[test]
 fn a_page_settles_every_child_but_one_under_a_crowd() {
     let p = LevelPage::over(1, leaf().page);
@@ -115,9 +104,7 @@ fn a_page_settles_every_child_but_one_under_a_crowd() {
     assert!(page.settles(p, empty));
 }
 
-/// A crowd holds one place of each kind among it, the one of least id, and a
-/// parent the least of its children's: folded from the leaves it is what a
-/// page made at that level from the places has.
+/// Folded from the leaves, a crowd matches a page built at that level.
 #[test]
 fn a_crowd_holds_one_place_of_each_kind() {
     let station = Place {
@@ -137,8 +124,6 @@ fn a_crowd_holds_one_place_of_each_kind() {
     let empty = PoiPage::default();
     let folded = PoiPage::fold_page(p, |k| Some(if k == leaf() { &leaf_page } else { &empty })).unwrap();
     assert_eq!(folded, PoiPage::of_places(1, places, true));
-    // Of kinds in the table's order: the cafe of least id, two cells in, and
-    // the station, 64 ground cells and 5 in from the parent's corner.
     let mut held: Vec<_> = folded.shown(&folded.cells[0]).map(|(_, p, at)| (p.kind, p.id, at)).collect();
     held.sort_unstable();
     assert_eq!(folded.cells[0].count, 3);
@@ -149,9 +134,7 @@ fn a_crowd_holds_one_place_of_each_kind() {
     });
 }
 
-/// What the wire cannot hold is refused: a place past the pool, a cell's
-/// places out of kind order, a name split across a character or past
-/// `NAME_CHARS`, a kind past the theme.
+/// What the wire cannot hold is refused.
 #[test]
 fn a_page_that_names_no_place_or_splits_a_character_is_refused() {
     let page = PoiPage::of_places(
@@ -183,18 +166,15 @@ fn a_page_that_names_no_place_or_splits_a_character_is_refused() {
     swapped.shown.swap(0, 1);
     assert!(encode(&swapped).is_err());
     let good = encode(&PoiPage::of_places(0, [(point(1, 0, 0, 0), called("역", 1)), (point(2, 0, 0, 0), called("a", 2))], true)).unwrap();
-    // Two cells, two places shown, two places: the ids, then the ends.
     let ends = 20 + 2 * CELL_BYTES + 2 * SHOWN_BYTES + 2 * 8;
     let mut split = good.clone();
-    // The first name's end moved into the middle of its one character.
+    // The first name's end moved into the middle of its character.
     split[ends..ends + 4].copy_from_slice(&1u32.to_le_bytes());
     assert!(decode(&split).is_err());
     let mut unknown = good;
-    // The first place's kind, past the theme's last.
     unknown[ends + 2 * 4] = KIND_CATEGORIES.len() as u8 + 1;
     assert!(decode(&unknown).is_err());
     let mut bytes = encode(&PoiPage::of_places(0, [(point(1, 0, 0, 0), called("a", 1))], true)).unwrap();
-    // One code point past the bound, written in over the pool's one name.
     let name = "a".repeat(NAME_CHARS + 1);
     bytes.truncate(bytes.len() - 1);
     bytes.extend_from_slice(name.as_bytes());
@@ -204,8 +184,7 @@ fn a_page_that_names_no_place_or_splits_a_character_is_refused() {
     assert!(decode(&bytes).is_err());
 }
 
-/// A count from a source that gave only some of what stands there is a floor
-/// at every level over it, and one of a source that gave all is a total.
+/// A partial count stays a floor at every level over it.
 #[test]
 fn a_floor_stays_a_floor_as_it_folds() {
     let some = PoiPage::of_places(0, [(point(0, 0, 0, 0), called("A", 1))], false);
@@ -216,7 +195,6 @@ fn a_floor_stays_a_floor_as_it_folds() {
     for (leaf_page, partial) in [(&some, true), (&all, false)] {
         let up = PoiPage::fold_page(p, |k| Some(if k == leaf() { leaf_page } else { &empty })).unwrap();
         assert_eq!(up.cells[0].partial, partial);
-        // A floor of one is no proof that one is all, so it settles nothing.
         assert_eq!(up.settles(p, leaf()), !partial);
     }
 }

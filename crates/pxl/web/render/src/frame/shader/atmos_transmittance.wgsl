@@ -1,12 +1,7 @@
-// The transmittance table: from each (r, mu) a texel stands for, the light
-// left after the air between there and the top, marched and summed. Drawn
-// once for the device; the atmosphere does not change.
+// Transmittance table, drawn once per device.
 
-// Held as vec4 words, each field read from its own by `atmos_<field>()`:
-// what the host and a shader share has no room inside it for a driver to
-// lay out its own way (issue/20260927-a-matrix-the-driver-reads-its-own-way.md),
-// and nothing builds the struct back, with which Safari's WebGPU lost its
-// GPU process.
+// Read field by field from vec4 words, never as a struct: a struct here lost
+// Safari's WebGPU its GPU process.
 @group(0) @binding(8) var<uniform> atmos_words: array<vec4f, 14>;
 
 const TRANSMITTANCE_STEPS: i32 = 40;

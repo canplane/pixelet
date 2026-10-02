@@ -4,14 +4,10 @@ use crate::bake::format::CellConfig;
 use crate::space::adapter::epsg3857::G3857;
 use crate::space::v3::V3;
 
-/// Synthetic tag set attached to coastline rows (pipeline/coast/adapter.rs's
-/// from_coast_row) — coast/policy.rs's own IS_COAST check reads `natural`/
-/// `source` off this shape.
+/// Synthetic tag set attached to coastline rows.
 pub type CoastTags = Vec<(String, Option<String>)>;
 
-/// Raw coastline row form exchanged between coast/adapter.rs and
-/// pipeline/normalizer.rs. Coordinates are expected to be in EPSG:3857 meters. This
-/// type preserves source geometry before local page projection.
+/// A raw coastline row in EPSG:3857 metres, before page projection.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CoastRawFeature {
     pub id: String,
@@ -27,85 +23,63 @@ pub struct CoastGeometry {
     pub is_polygon_source: Option<bool>,
 }
 
-/// Derived flags computed during normalization for downstream bake/render logic.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FeatureExtra {
-    /// Rendering priority score. Higher values indicate more important features.
+    /// Higher is more important.
     pub rank: u32,
 
-    /// True when the feature represents ocean/sea fill.
     pub is_ocean: bool,
 
-    /// Parking-area marker.
     pub is_parking: bool,
-    /// Institutional-area marker.
     pub is_institutional: bool,
-    /// Sports-area marker.
     pub is_sports: bool,
-    /// True where nothing of the feature shows from above — it runs under the
-    /// ground or inside a building, is not built yet or is no longer there,
-    /// or is a route rather than a way — so the ground does not paint it.
+    /// Nothing of it shows from above (underground, inside, unbuilt, or a
+    /// route), so the ground does not paint it.
     pub is_unseen: bool,
-    /// True where the feature is carried above the ground: the page's decks
-    /// draw it (bake/deck.rs), and the ground does not.
+    /// Carried above the ground: drawn by the decks, not the ground.
     pub is_deck: bool,
-    /// Which way beside it the feature shares one paved strip with, where it
-    /// does: the gap between them is paved too (pxl-geo-bake
-    /// terrain/pipeline/corridor.rs).
+    /// The way beside it that it shares one paved strip with; the gap is paved too.
     pub joins: Option<Joins>,
 }
 
-/// What way beside a way the gap to is paved.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Joins {
-    /// A sidewalk: to the road it runs along, as its own paving.
     Road,
-    /// One carriageway of a road drawn as two: to the other, as the road.
     Carriageway,
 }
 
-/// Final normalized feature form ready for bake/runtime use, shared by every
-/// source provider (coastline, Overture Buildings/Transportation/Base).
-/// Geometry is already projected into local page space and computed metrics
-/// are already converted into engine-local units.
+/// A normalized feature from any source, geometry in local page space and
+/// metrics in engine units.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Feature {
-    /// Source-provider identifier (Overture GERS id, or coast/adapter.rs's synthetic row id) carried through normalization.
+    /// The source id (an Overture GERS id or a synthetic coast id).
     pub id: String,
-    /// Feature center used for labels, POI markers, and camera focus.
     pub center: V3,
 
-    /// Final geometry payload ready for rasterization or line rendering.
     pub shape: FeatureShape,
 
-    /// Computed metrics derived from source tags.
     pub computed: FeatureComputed,
 
-    /// Final coarse rendering category.
     pub category: String,
 
-    /// Derived policy flags used by later bake and render stages.
     pub extra: FeatureExtra,
 
-    /// Target ground channel + cell type, resolved by the source provider's own policy. None when the feature should not be rasterized.
+    /// None when the feature should not be rasterized.
     pub cell_cfg: Option<CellConfig>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct FeatureShape {
     pub points: Vec<V3>,
-    /// Closed-loop marker used to choose fill vs. stroke behavior.
     pub is_closed: bool,
-    /// Hole rings assembled from polygon inner members.
     pub holes: Option<Vec<Vec<V3>>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FeatureComputed {
-    /// Final building height in local cell scale.
+    /// In local cells.
     pub height: f64,
-    /// Final width in local cell scale.
+    /// In local cells.
     pub width: f64,
-    /// Layer used for vertical ordering and offset policy.
     pub layer: i32,
 }

@@ -2,34 +2,12 @@
 
 #![cfg(any(test, feature = "golden"))]
 
-//! The reader of the golden records — xpute's under spec/xpute/golden/, which
-//! every language reads, and any a crate keeps in its own `golden/`: lines of
-//! `path<TAB>value`, the path the keys and indices down to the value joined
-//! by dots. A split per line and no parser, so reading is not itself a thing
-//! to verify.
+//! Reads golden records: lines of `dotted.path<TAB>value`.
 //!
-//! A record is an output that was checked once and then frozen. The
-//! TypeScript the Rust was ported from wrote them, and what wrote them is
-//! gone; the lines a rule below has since moved were re-recorded from the
-//! Rust. They are not all worth the same thing, because the languages are not
-//! held to each other everywhere.
-//!
-//! **Inside a language, each follows its own.** Where a value never leaves the
-//! side that computed it, the languages are free to differ — Rust rounds to even
-//! where JavaScript's `Math` rounds half up, and neither is
-//! wrong. A record of one of those holds that implementation to what it did,
-//! and nothing more: a deliberate change to it is re-recorded, and an
-//! accidental one is what the record is there to catch.
-//!
-//! **Across a protocol, the results must match exactly.** XTP's packets and
-//! TLV's bytes are read by a side that did not write them, and which texts
-//! are JSON is the host's to judge and every guest's to agree with, so a
-//! record of one of those is a claim about every language. It is never re-recorded to
-//! make a test pass: a difference there is not a stale baseline, it is the
-//! protocol having come apart, and the fix is in whichever side moved.
-//!
-//! Under `cargo test` only: the crate's own tests, and another crate's
-//! through the `golden` feature on its dev-dependency.
+//! A record of a protocol (XTP packets, TLV bytes, which texts are JSON) binds
+//! every language and is never re-recorded to make a test pass: a difference
+//! means one side moved. A record of a value that stays inside one language
+//! may be re-recorded on a deliberate change.
 
 use std::collections::HashMap;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -39,7 +17,6 @@ pub struct Golden {
 }
 
 impl Golden {
-    /// The vector an `include_str!` read.
     pub fn load(src: &'static str) -> Golden {
         Golden {
             map: src.lines().filter_map(|l| l.split_once('\t')).collect(),
@@ -108,7 +85,6 @@ impl Golden {
         crate::ensure!(k > 0, ENOENT);
     }
 
-    /// How many entries `base` has.
     pub fn len(&self, base: &str) -> usize {
         let mut n = 0;
         self.each(base, |_| n += 1);
@@ -120,7 +96,7 @@ impl Golden {
     }
 }
 
-/// A result, or none where the TypeScript threw — "throw" in a vector.
+/// None where the call panicked: "throw" in a record.
 pub fn caught<T>(f: impl FnOnce() -> T) -> Option<T> {
     let hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));

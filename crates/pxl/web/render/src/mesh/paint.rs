@@ -1,9 +1,6 @@
 // pxl-render/mesh/paint.rs
 
-//! What a cell's number looks like once drawn: the terrain's four ground
-//! channels, the objects a person placed, and the palette both are colored
-//! from. The catalogs are the spec's (pxl-spec cell/); this is what reading
-//! one paints.
+//! What a cell looks like drawn: terrain, placed objects, and their palette.
 
 pub mod level;
 pub mod object;

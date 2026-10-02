@@ -285,13 +285,13 @@ index or address; `f64` for a millisecond or coordinate; `u64` for a key;
 storage keys abbreviate (`@xpute/core`, `pxl:lang`); provisioned resources
 spell it out (`pixelet-db-geo`, `pixelet-tiles`).
 
-**Comments explain why, not what.** The long rationale comments — which bug a
-branch prevents, why an obvious optimization is wrong, what a constant was
-derived from — are the most valuable thing in many files; preserve and extend
-them, never trim one for length, in English. A comment earns its place only
-when the current reasoning is non-obvious: never restate what the next line
-shows, never write it as a changelog ("X → Y because…", "previously…"). Trivial
-or visual code gets none unless the choice rests on profiling or a derivation.
+**Comments are few and short.** A comment says what a reader would get
+wrong without it, and nothing else: the reproducible failure a branch
+prevents, where a number comes from, a non-obvious algorithm or invariant. One
+or two sentences, in English. Never restate what the code shows, never narrate
+a design, its alternatives or its history ("X → Y because…", "previously…"),
+and never write a reference list; that belongs in `issue/`, if anywhere.
+Trivial or visual code gets none.
 
 **Comments are working notes, not a contract.** Never cite an in-repo comment
 as evidence; verify against the code, its behavior or git history. When the

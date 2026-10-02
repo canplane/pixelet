@@ -7,7 +7,6 @@ import { devRoutes } from "@/feature/dev/dev-route.tsx";
 import { AppLayout } from "./layout.tsx";
 import MapPage from "@/page/map-page.tsx";
 
-/** Main Router Configuration */
 const routes: RouteObject[] = [
   {
     path: "/",
@@ -17,9 +16,9 @@ const routes: RouteObject[] = [
       </AppLayout>
     ),
     children: [
-      { path: "", element: <MapPage /> }, // Map page
+      { path: "", element: <MapPage /> },
 
-      ...(__IS_DEV__ ? devRoutes : []), // Debug mode only accessible routes
+      ...(__IS_DEV__ ? devRoutes : []),
 
       { path: "*", element: <Navigate to="/" replace /> },
     ],

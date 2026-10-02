@@ -1,10 +1,5 @@
-// Hillaire's multiple scattering table: for a point at each altitude under
-// a sun at each height, what light scattered twice or more adds, as a
-// factor on the local scattering. The second order is marched over a
-// sphere of directions with an isotropic phase — the orders past the
-// first have lost the phase's shape anyway — and the orders past it are
-// that one's geometric series, 1 / (1 - f), `f` the fraction of light a
-// point sends back into itself. Drawn once, after the transmittance table.
+// Hillaire's multiple scattering table: second order marched with an isotropic
+// phase, higher orders as its geometric series 1 / (1 - f).
 
 const MULTISCATTER_DIRS: i32 = 8;
 const MULTISCATTER_STEPS: i32 = 20;
@@ -19,8 +14,7 @@ fn fs(v: TableOut) -> @location(0) vec4f {
 
   var second = vec3f(0.0);
   var back = vec3f(0.0);
-  // A regular grid over the sphere, equal in area: cos(theta) evenly
-  // spaced, the azimuth evenly spaced.
+  // Equal-area grid: cos(theta) and azimuth evenly spaced.
   for (var a = 0; a < MULTISCATTER_DIRS; a++) {
     for (var b = 0; b < MULTISCATTER_DIRS; b++) {
       let mu = 1.0 - 2.0 * (f32(a) + 0.5) / f32(MULTISCATTER_DIRS);
@@ -36,8 +30,7 @@ fn fs(v: TableOut) -> @location(0) vec4f {
         let pr = length(p);
         let m = medium_at(pr - atmos_bottom_radius());
         let step = exp(-m.extinction * dt);
-        // The analytic integral over the step, of a source constant across
-        // it: (S - S * T) / extinction.
+        // Analytic integral of a constant source over the step.
         let fill = (vec3f(1.0) - step) / max(m.extinction, vec3f(1e-7));
         let lit = sun_transmittance(pr, dot(p / pr, sun));
         second += through * m.scattering * INV_4PI * lit * fill;
@@ -53,8 +46,6 @@ fn fs(v: TableOut) -> @location(0) vec4f {
     }
   }
   let n = f32(MULTISCATTER_DIRS * MULTISCATTER_DIRS);
-  // The sphere's average, which is the integral against an isotropic
-  // phase: the radiance scattered once more, and the fraction returned.
   let l2 = second / n;
   let f = back / n;
   return vec4f(l2 / (vec3f(1.0) - f), 1.0);

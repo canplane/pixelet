@@ -1,9 +1,6 @@
 // pxl-kernel/layer/character/path.rs
 
-//! Pure companion-movement math — no renderer of any kind. Positioning/timing
-//! logic is kept independent of the renderer on purpose, which is how it
-//! survived the move from three to the kernel's actors
-//! (crates/pxl/web/kernel/src/layer/model/store.rs) unchanged.
+//! Companion movement math, independent of any renderer.
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Vec2 {
@@ -11,7 +8,7 @@ pub struct Vec2 {
     pub y: f64,
 }
 
-/// Bearing from `from` to `to`, in radians (0 = +x).
+/// Radians, 0 = +x.
 pub fn heading_to(from: Vec2, to: Vec2) -> f64 {
     libm::atan2(to.y - from.y, to.x - from.x)
 }
@@ -20,10 +17,8 @@ pub fn heading_to(from: Vec2, to: Vec2) -> f64 {
 pub struct WalkPlan {
     pub start: Vec2,
     pub target: Vec2,
-    /// The clock's elapsed time at the moment this plan was created.
     pub start_time: f64,
-    /// Seconds the whole start->target traversal takes, regardless of
-    /// distance — see sample_walk_plan's own doc comment for why.
+    /// Fixed whatever the distance (see sample_walk_plan).
     pub duration: f64,
 }
 
@@ -31,18 +26,14 @@ pub struct WalkPlan {
 pub struct WalkSample {
     pub x: f64,
     pub y: f64,
-    /// Direction of travel, or None once arrived — callers should fall back to
-    /// some other default facing (e.g. facing the camera) in that case.
+    /// None once arrived.
     pub heading: Option<f64>,
     pub arrived: bool,
 }
 
-/// Samples a straight-line move from `plan.start` to `plan.target` that always
-/// takes exactly `plan.duration` seconds — distance-independent by design. A
-/// companion catching up after a pan should reappear at your side on roughly
-/// the same beat whether you panned 1 unit or 1000; a fixed real-world walking
-/// *speed* would instead make a big pan take proportionally, sometimes
-/// absurdly, longer.
+/// Takes `plan.duration` whatever the distance, so the companion catches up
+/// on the same beat after a pan of 1 unit or 1000; a fixed speed made big
+/// pans absurdly long.
 pub fn sample_walk_plan(plan: &WalkPlan, now: f64) -> WalkSample {
     let elapsed = now - plan.start_time;
     let frac = if plan.duration > 0.0 { (elapsed / plan.duration).clamp(0.0, 1.0) } else { 1.0 };
@@ -57,11 +48,8 @@ pub fn sample_walk_plan(plan: &WalkPlan, now: f64) -> WalkSample {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SettleTracker {
-    /// Most recent raw target seen, whether or not it's stopped moving yet.
     pub last_seen: Vec2,
-    /// When `last_seen` last actually changed.
     pub last_change_time: f64,
-    /// The last target this tracker has reported as settled.
     pub settled: Vec2,
 }
 
@@ -80,14 +68,8 @@ pub struct SettleUpdate {
     pub moved: bool,
 }
 
-/// Tracks a moving target (e.g. map_center) and reports the instant it stops
-/// changing, instead of reacting to any one specific gesture. A drag, a
-/// click-to-navigate tween, a GPS recenter, a keyboard nudge — anything that
-/// moves the target eventually stops changing it, and that's the one moment
-/// this fires `just_settled`, regardless of which of those caused it.
-/// (camera_status: DRAG/IDLE was tried first — it only fires for drag/
-/// rotate/pinch, so a click-driven camera animation that never touches
-/// pointer-drag state never triggered a catch-up at all.)
+/// Fires `just_settled` when the target stops changing, whatever moved it.
+/// Keying on drag state missed click-driven camera animations entirely.
 pub fn update_settle_tracker(tracker: &SettleTracker, target: Vec2, now: f64, settle_delay: f64) -> SettleUpdate {
     let moved = target.x != tracker.last_seen.x || target.y != tracker.last_seen.y;
     let last_seen = if moved { target } else { tracker.last_seen };

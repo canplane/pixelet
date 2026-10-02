@@ -1,33 +1,9 @@
 // pxl-render/gpu/atmosphere.rs
 
-//! The atmosphere on the device: the uniform its numbers are read through
-//! (look/atmosphere.rs's, with the frame's sun and camera), and the three
-//! tables Hillaire's technique draws the sky from, each a full-screen pass
-//! into a texture of four half floats.
-//!
-//! - The transmittance, 256 x 64: what light survives from the top of the
-//!   atmosphere to each altitude along each direction. Once for a device.
-//! - The multiple scattering, 32 x 32: what light scattered more than once
-//!   adds at each altitude under each height of the sun. Once, after it.
-//! - The sky view, 192 x 108: the sky in every direction from the camera's
-//!   altitude with the sun at its height. Drawn again only when either has
-//!   moved: the sun crawls, and the camera's altitude changes while it
-//!   zooms and not while it pans or turns, since the table is kept relative
-//!   to the sun's azimuth.
-//! - The exposure, 2 x 1: what the eye has adapted the air's light to, from
-//!   the sky view and the sun, with the zenith's sky beside it; and the
-//!   sky's irradiance on a face turned up, the terrain's fill
-//!   (atmos_exposure.wgsl). Drawn after the sky view, whenever that is;
-//!   nothing reads it back.
-//! - The moonlit sky, 192 x 108: the sky view again, lit by the moon and
-//!   kept relative to its azimuth. Drawn only while the moon lights a sky
-//!   the frame shows, and again when its height or the camera's altitude
-//!   has moved.
-//!
-//! What it costs: the two fixed tables once, about two million samples of
-//! the air between them; the sky view's 20,736 texels of 30 steps each when
-//! it moves; and about 300 KB of textures, eight bytes a texel. The sky and
-//! every lit fragment then read the tables instead of marching.
+//! The atmosphere's uniform and Hillaire's tables: transmittance and multiple
+//! scattering once per device; the sun's and moon's sky views redrawn only when
+//! the light's height or the camera's altitude moves (the table is kept relative
+//! to the light's azimuth); and the exposure texel after them.
 
 use pxl_spec::space::v3::V3;
 
@@ -39,13 +15,9 @@ use crate::gpu::pipeline::{Built, Pipelines};
 use crate::look::atmosphere as model;
 use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_SUN};
 
-/// Floats the atmosphere uniform (atmos_medium.wgsl's Atmosphere) holds.
-/// Two past the last field: the struct is laid out in 16-byte rows and the
-/// device rounds it up to one (record.test.rs holds this to naga).
+/// Two past the last field: the device rounds the struct up to a 16-byte row.
 pub const ATMOS_FLOATS: usize = 56;
-/// Where each field sits in it, in floats (record.test.rs holds them to the
-/// struct). The frame's own are written every frame; the rest are the
-/// model's, laid out once.
+/// Offsets in floats; record.test.rs holds them to the struct.
 pub(crate) const RAYLEIGH_SCATTERING: usize = 0;
 pub(crate) const BOTTOM_RADIUS: usize = 3;
 pub(crate) const OZONE_ABSORPTION: usize = 4;
@@ -72,25 +44,19 @@ pub(crate) const LAND: usize = 32;
 pub(crate) const LAND_ALTITUDE: usize = 35;
 pub(crate) const SUN_SEEN: usize = 36;
 pub(crate) const UP: usize = 40;
-/// The cloud field (gpu/clouds.rs's `field`), in its order: the lattice
-/// index and fraction, the clock, the count, the layer's height and where
-/// it is gone.
 pub(crate) const CLOUD_BASE: usize = 44;
 pub(crate) const CLOUD_FRAC: usize = 46;
 pub(crate) const CLOUD_TIME: usize = 48;
 pub(crate) const CLOUD_COUNT: usize = 49;
 pub(crate) const CLOUD_ALTITUDE: usize = 50;
 pub(crate) const CLOUD_GONE: usize = 51;
-/// The surface haze (look/atmosphere.rs), read by the aerial perspective.
 pub(crate) const HAZE_EXTINCTION: usize = 52;
 pub(crate) const HAZE_SCALE_HEIGHT: usize = 53;
 
-/// The air's entries in a pass's group, 8 through 15, six of five words.
+/// Bindings 8 through 15, six entries of five words.
 pub const AIR_WORDS: usize = 30;
 
-/// The tables' sizes, as atmos_medium.wgsl's *_SIZE constants (record.test.rs
-/// holds them to it), the exposure's texel, and the moonlit sky's, the sky
-/// view's.
+/// Transmittance, multiple scattering, sky view, exposure, moonlit sky.
 pub(crate) const SIZES: [(u32, u32); 5] = [(256, 64), (32, 32), (192, 108), (2, 1), (192, 108)];
 pub(crate) const TRANSMITTANCE: usize = 0;
 pub(crate) const MULTISCATTER: usize = 1;
@@ -98,12 +64,9 @@ pub(crate) const SKY_VIEW: usize = 2;
 const EXPOSURE_TEXEL: usize = 3;
 const MOON_VIEW: usize = 4;
 
-/// How far the sun's height, as a cosine, moves before the sky is drawn
-/// again: a thousandth of a radian or so near the horizon, where the colors
-/// move fastest.
+/// About a thousandth of a radian near the horizon, where the colors move fastest.
 const SUN_MU_STEP: f32 = 2e-4;
-/// How far the camera's altitude moves before the sky is drawn again, as a
-/// share of it, and at least a meter.
+/// A share of the altitude, and at least a meter.
 const ALTITUDE_SHARE: f32 = 0.005;
 const ALTITUDE_FLOOR_KM: f32 = 0.001;
 
@@ -114,15 +77,9 @@ pub struct Atmosphere {
     views: [u32; 5],
     passes: [Built; 4],
     groups: [u32; 5],
-    /// Whether the two fixed tables are drawn on this device.
     baked: bool,
-    /// The sun's cosine and the camera's altitude the sky view was drawn
-    /// for; none before the first.
     drawn_for: Option<(f32, f32)>,
-    /// The moon's cosine and the camera's altitude the moonlit sky was
-    /// drawn for.
     moon_drawn_for: Option<(f32, f32)>,
-    /// The sun's and the moon's cosines from the zenith at the eye this frame.
     sun_mu: f32,
     moon_mu: f32,
 }
@@ -193,7 +150,6 @@ impl Atmosphere {
             groups[k] = object();
             g.bind_group(groups[k], passes[k].layouts[0], &e[..n]);
         }
-        // The sky view's two groups, told which light by a word of their own.
         for (k, which) in [(SKY_VIEW, 0.0f32), (MOON_VIEW, 1.0)] {
             let light = object();
             g.buffer(light, 16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
@@ -220,9 +176,6 @@ impl Atmosphere {
         }
     }
 
-    /// The air as a pass's group entries, bindings 8 through 15: the
-    /// uniform, the transmittance and sky-view tables, their sampler, the
-    /// exposure's texel and the moonlit sky's table.
     pub fn entries(&self) -> [u32; AIR_WORDS] {
         let mut e = [0u32; AIR_WORDS];
         e[..5].copy_from_slice(&buffer_entry(8, self.uniform));
@@ -234,12 +187,7 @@ impl Atmosphere {
         e
     }
 
-    /// The frame's air, from the environment's lane `env`: the sun's
-    /// direction in the world's axes; the moon's and how bright its
-    /// sky is shown; the camera's altitude in kilometers, a unit's length in
-    /// them and the ground's own height, which the sky draws its ground at;
-    /// and straight up where the eye stands, which every height of a light or
-    /// a ray is measured from.
+    /// `up` is straight up where the eye stands, which every light and ray height is measured from.
     pub fn lay_out(&mut self, g: &Gpu, env: &[f32], up: &V3) {
         let (sun, moon) = (&env[ENV_SUN..ENV_SUN + 3], &env[ENV_MOON..ENV_MOON + 4]);
         let altitude_km = env[ENV_AIR];
@@ -260,8 +208,7 @@ impl Atmosphere {
         g.write_buffer(self.uniform, 0, bytes(&self.words));
     }
 
-    /// The cloud field for the frame (gpu/clouds.rs's `field`): written with
-    /// the rest by `lay_out`, which the renderer calls after it.
+    /// Written by `lay_out`, which the renderer calls after this.
     pub fn set_clouds(&mut self, field: &CloudField) {
         let w = &mut self.words;
         for k in 0..2 {
@@ -274,9 +221,6 @@ impl Atmosphere {
         w[CLOUD_GONE] = field.gone_km;
     }
 
-    /// Draws what is due into `encoder`, ahead of every pass that reads the
-    /// tables: the fixed two the first time, the sky view when the sun or the
-    /// camera has moved far enough to show; timed under `stamp`.
     pub fn draw(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) {
         if !self.baked {
             self.table(g, encoder, TRANSMITTANCE, stamp);
@@ -310,8 +254,6 @@ impl Atmosphere {
     }
 }
 
-/// Whether a table drawn for `drawn` — its light's cosine and the camera's
-/// altitude — is due again at `now`.
 fn moved(drawn: Option<(f32, f32)>, now: (f32, f32)) -> bool {
     match drawn {
         None => true,

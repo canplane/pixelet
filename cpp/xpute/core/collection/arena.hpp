@@ -1,16 +1,8 @@
 // cpp/xpute/core/collection/arena.hpp
 
-// A pool of constructed slots, bump-allocated and rewound whole.
-//
-// Slots are built once and live as long as the arena: `truncate` moves the
-// cursor and destroys nothing, so whatever a slot owns is still allocated when
-// the slot is handed out again. For work whose lifetime is one pass, that is
-// one rewind against a free and an allocation per object. The cost is the
-// caller's: a slot arrives in whatever state its last user left it.
-//
-// The slots' memory comes from `Alloc`, which the caller names and which has
-// no default: a guest's comes from its own heap, and a default would be the
-// system's.
+// A pool of constructed slots, bump-allocated and rewound whole. `truncate`
+// destroys nothing, so a slot arrives in whatever state its last user left it.
+// `Alloc` has no default, since a default would be the system's heap.
 
 #pragma once
 
@@ -26,9 +18,7 @@
 namespace xpute {
 
 struct ArenaOptions {
-    // Slots built at construction; growth passes it.
     std::uint32_t init_cap = 1 << 10;
-    // Growth past it is refused.
     std::uint32_t max_cap = 1 << 24;
 };
 
@@ -49,11 +39,9 @@ template <class T, class Alloc> class Arena {
         ensure(idx < mem_.size(), Errno::enotrecoverable, idx, mem_.size());
         return mem_[idx];
     }
-    // The slots as they lie, and the cap a growth may not pass.
     std::span<T> mem() noexcept { return mem_; }
     void set_max_cap(std::uint32_t cap) noexcept { max_cap_ = cap; }
 
-    // Hands out the next slot.
     Result<T *> alloc() {
         if (len_ >= cap_) {
             if (Result<void> r = grow(std::max(saturating_mul2(cap_), 1u)); !r) return r.error();
@@ -61,22 +49,18 @@ template <class T, class Alloc> class Arena {
         return &mem_[len_++];
     }
 
-    // Grows now so that the next `cnt` allocs do not.
     Result<void> reserve(std::uint32_t cnt) {
         std::uint32_t req = len_ > std::numeric_limits<std::uint32_t>::max() - cnt ? std::numeric_limits<std::uint32_t>::max() : len_ + cnt;
         if (req > cap_) return grow(std::max(saturating_mul2(cap_), req));
         return {};
     }
 
-    // Rewinds the cursor. Slots above `new_len` stay constructed. One above
-    // the cursor is a mistake rather than a resize request, so it is a
-    // broken invariant and not a clamp.
+    // Past the cursor is a broken invariant, not a resize request.
     void truncate(std::uint32_t new_len) noexcept {
         ensure(new_len <= len_, Errno::einval, new_len, len_);
         len_ = new_len;
     }
 
-    // Marks here and rewinds to the mark when the guard goes.
     class Scope {
       public:
         explicit Scope(Arena &arena) noexcept : arena_(arena), mark_(arena.len()) {}
@@ -96,8 +80,7 @@ template <class T, class Alloc> class Arena {
   private:
     Arena(std::uint32_t max_cap, const Alloc &alloc) : mem_(alloc), max_cap_(max_cap) {}
 
-    // Doubling that saturates, so one past u32 lands above max_cap and is
-    // refused there rather than wrapping under it and passing.
+    // Saturates, so one past u32 is refused at max_cap rather than wrapping under it.
     static std::uint32_t saturating_mul2(std::uint32_t x) noexcept {
         return x > std::numeric_limits<std::uint32_t>::max() / 2 ? std::numeric_limits<std::uint32_t>::max() : x * 2;
     }

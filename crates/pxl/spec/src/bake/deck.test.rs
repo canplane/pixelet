@@ -75,18 +75,16 @@ fn a_bore_is_drawn_under_its_roof_and_comes_up_at_its_portal() {
         pier: false,
         portal,
     };
-    // Its floor at the ground: at a portal it is the way on the ground, and
-    // away from one it is taken down until its air and its roof fit under.
+    // At a portal the floor is the way on the ground; away from it, taken down until air and roof fit.
     assert_eq!(over(0.0).occupies(10), Occupies::Grade);
     assert_eq!(over(f64::INFINITY).occupies(10), Occupies::Through { air: [6, 9] });
-    // Between, no steeper than a cutting, and open to the sky.
+    // Between, no steeper than a cutting.
     assert_eq!(over(25.0).occupies(10), Occupies::Through { air: [8, 10] });
 }
 
 #[test]
 fn a_tunnel_keeps_its_middle_up_the_pyramid() {
-    // Straight and level, its portals at both ends: only how far it is from
-    // them bends at the middle.
+    // Straight and level with portals at both ends: only portal distance peaks at the middle.
     let mut b = Builder::default();
     let points = [[0.0, 0.0], [50.0, 0.0], [100.0, 0.0]];
     b.push(points.iter().zip([0u16, 50, 0]).map(|(&p, d)| (p, 10, d)), 4 * POINT_SCALE as u8, 3, Form::Bore);

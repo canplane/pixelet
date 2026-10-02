@@ -1,32 +1,13 @@
 // pxl-kernel/world/pyramid.rs
 
-//! The pyramid as the client holds it, for every layer the ground carries
-//! (pxl-spec space/pyramid.rs is the hierarchy itself): a layer's pages held
-//! (world/paging.rs), and what an observation asks for of them.
+//! The pyramid as the client holds it, for every layer on the ground: the
+//! pages held (paging.rs) and what an observation asks for of them.
 //!
-//! What is asked for is the observation's demand and nothing drawn: what its
-//! samples require, before it is pages (pxl-spec space/observation.rs), as a
-//! conservative estimator names it from what is known of the heights, mapped
-//! to the layer's pages by the layer's storage. Each such page is asked for
-//! at the page that says its ground — itself, or where the bake left it no
-//! page, the one over it; one not resident is a fault, answered meanwhile
-//! by the nearest resident page over it. The fallback's pages
-//! (paging/floor.rs), a destination's (control/navigation/destination.rs)
-//! and speculation (prefetch.rs) are merged in, the best reason per page,
-//! and what of that is not held is said to the scheduler once a turn. How the pages are drawn
-//! — the pieces the view is cut into (pyramid/domain.rs), what a layer draws
-//! of them (pyramid/cover.rs, chunk/frontier.rs) — is made from what is
-//! resident and enters none of it, but through the one quality both are
-//! held to (world/quality.rs), which is decided before either reads it.
-//!
-//! The tree is as deep as a layer's data needs and no deeper: where a page
-//! says all of a child's ground (`Folds::settles`), the child is no page, is
-//! never asked for, and its ground is drawn from the page over it
-//! (`source`). Only the finest level is a bound.
-//!
-//! None of that is a layer's. A layer says what its page is, how a fetched
-//! body becomes one in a record, what a page with
-//! no object is, and who reads its pages; the rest is here, once.
+//! Asks are the observation's demand, as the estimator names it, merged with
+//! the fallback's pages, a destination's and speculation, the best reason per
+//! page. Nothing drawn enters them except the shared quality, which is
+//! decided first. Where a page settles a child's ground (`Folds::settles`),
+//! the child is never asked for.
 
 pub mod chunk;
 pub mod cover;
@@ -48,51 +29,31 @@ use crate::world::paging::{Candidate, Paging, Victim, ASKS, DESTINATION_PAGES, F
 use crate::world::prefetch::{NoPrefetch, Prefetch};
 use crate::world::quality;
 
-/// A layer the pyramid holds: its page is itself, folded by `Folds`.
 pub trait Layer: Folds + Clone + 'static {
-    /// The stream a page of this layer is asked for under.
     const CATEGORY: Category;
 
     fn pyramid() -> &'static mut Pyramid<Self>;
 
-    /// A fetched body, made the page `record` holds.
     fn receive(record: u32, pkt: &[u8], phases: &mut Phases) -> Result<Self, Failure>;
 
-    /// A page the bake left as no object: what it reads as, set now or once
-    /// the layer has it.
     fn absent(p: LevelPage);
 
-    /// A page became resident or stopped being; whoever reads this layer's
-    /// pages is told.
     fn changed(_p: LevelPage, _present: bool) {}
 
-    /// The pages that meet a requirement (pxl-spec space/observation.rs
-    /// `Storage`): the pyramid's own, 2D, for every layer on it now.
     fn pages(r: &Requirement, each: &mut dyn FnMut(LevelPage)) {
         Paged.pages(r, each);
     }
 }
 
-/// What the asks are a function of: the observation, the destination, what
-/// is held
-/// (`Paging::revision`), what is known of the heights
-/// (`heights_revision`), which neither the observation nor this layer's
-/// pages move, the quality the view is held to (world/quality.rs), and
-/// which casting of the screen's tiles the demand is estimated from
-/// (world/pyramid/domain.rs `walks`). Two turns agreeing on all of it ask
-/// for the same pages, so the second decides nothing again.
+/// Everything the asks depend on; two turns agreeing on all of it ask for
+/// the same pages, so the second decides nothing.
 type Seen = (Option<Observation>, Option<LevelPage>, u32, (u32, u32), Tau, u32);
 
-/// The speculation the kernel runs: none. The view is paged by its faults,
-/// and with no speculation at all it converges to exact
-/// (world/paging.test.rs); what speculation would buy is latency, and which
-/// policy buys it is chosen here — `Reach`, with param.rs's numbers, is the
-/// one there is.
+/// No speculation: the view converges to exact on faults alone, and
+/// speculation would only buy latency.
 const PREFETCH: NoPrefetch = NoPrefetch;
 
-/// The victim policy the kernel pages by: a page speculation does not ask
-/// for before one it does, and among those, the one last in the view's
-/// order, the one the eye is least likely to reach again.
+/// Evicts unhinted pages before hinted ones, then the one last in view order.
 struct Farthest<'a>(Option<&'a Observation>);
 
 impl Victim for Farthest<'_> {
@@ -104,18 +65,12 @@ impl Victim for Farthest<'_> {
 
 pub struct Pyramid<L: Layer> {
     paging: Paging<L>,
-    /// The observation last asked for.
     observation: Option<Observation>,
-    /// The pages it requires, as the estimator names them.
     demand: Vec<LevelPage>,
-    /// What is asked for and not held, said again every turn as it stands.
     wants: Vec<(u64, Ask)>,
     last: Option<Seen>,
-    /// The `readers` the last observation was made with.
     readers: Vec<LevelPage>,
-    /// What an observation asks for, and the speculation it gathers on the
-    /// way, held across observations so observing allocates nothing once it
-    /// has held the most it asks for: the asks are at most `ASKS`.
+    /// Reused across observations so observing stops allocating once warm.
     asks: HashMap<LevelPage, Ask>,
     hints: Vec<(Order, LevelPage)>,
 }
@@ -136,98 +91,65 @@ impl<L: Layer> Default for Pyramid<L> {
 }
 
 impl<L: Layer> Pyramid<L> {
-    /// A resident page. None past the pyramid's top too, which is what a top
-    /// page's parent is.
     pub fn get(&self, p: LevelPage) -> Option<&L> {
         self.paging.get(p)
     }
 
-    /// Whether `p` is no page because one over it says its ground
-    /// (`Paging::settled`).
     pub fn settled(&self, p: LevelPage) -> bool {
         self.paging.settled(p)
     }
 
-    /// What is held, and how.
     pub fn paging(&self) -> &Paging<L> {
         &self.paging
     }
 
-    /// Holds a page the bake left as no object (`Paging::set`).
     pub fn set(&mut self, p: LevelPage, page: L) {
         self.paging.set(p, page);
     }
 
-    /// Which resident set this is (`Paging::revision`).
     pub fn revision(&self) -> u32 {
         self.paging.revision()
     }
 
-    /// The bucket has no object for `p`, under the top (`Paging::answer_above`).
     pub fn answer_above(&mut self, p: LevelPage) {
         self.paging.answer_above(p);
     }
 
-    /// The resident page that says `p`'s ground exactly (`Paging::source`).
     pub fn source(&self, p: LevelPage) -> Option<LevelPage> {
         self.paging.source(p)
     }
 
-    /// The resident page `p`'s ground is drawn from (`Paging::drawn_from`).
     pub fn drawn_from(&self, p: LevelPage) -> Option<LevelPage> {
         self.paging.drawn_from(p)
     }
 
-    /// Whether anything asks for `p` now.
     pub fn asked(&self, p: LevelPage) -> bool {
         self.paging.asked(p).is_some()
     }
 
-    /// Arrivals given no frame since the last take, for the profiler.
     pub fn take_refusals(&mut self) -> u32 {
         self.paging.take_refusals()
     }
 
-    /// The pages the last observation requires, as the estimator named them.
     pub fn demand(&self) -> &[LevelPage] {
         &self.demand
     }
 
-    // ---- arriving ----
-
-    /// A page's fetched body, made resident.
     pub fn adopt(&mut self, p: LevelPage, pkt: &[u8], phases: &mut Phases) -> Result<(), Failure> {
         self.admit(p, |record| L::receive(record, pkt, phases))
     }
 
-    /// `p` has arrived, and `receive` makes it the page a frame holds
-    /// (`Paging::admit`), the frame given up if one must be by the kernel's
-    /// victim policy.
     pub fn admit(&mut self, p: LevelPage, receive: impl FnOnce(u32) -> Result<L, Failure>) -> Result<(), Failure> {
         self.paging.admit(p, &Farthest(self.observation.as_ref()), receive)
     }
 
-    // ---- asking ----
-
-    /// What the observation `o` asks for, where there is one: what
-    /// `estimator` says `o` requires, as far as `bounds` know the heights,
-    /// the fallback's pages, and what `prefetch` speculates on at `tau`, at
-    /// most `allowance` of it — and with or without it, the `destination`'s
-    /// pages, the best reason per page; and the pages another layer reads
-    /// from this one (`readers`). What of it is not held is what the layer
-    /// wants.
+    /// Builds the asks for `o`: the estimator's demand, the floor, the
+    /// destination's line, `readers`, and speculation up to `allowance`.
     ///
-    /// A reader's page is demanded where a fault could name it — inside
-    /// its level's fault radius about the eye's foot, where the demand's
-    /// bound already counts it — and is a hint past that. Decor's cells
-    /// reach past the radius by a parent's diagonal, a split forced by a
-    /// sibling's, which would take a level's pages from three a side to
-    /// four; what such a cell does not get, it draws its parent's
-    /// population for (layer/decor/cell.rs `step`).
-    ///
-    /// Speculation is asked for only as far as frames are left over once
-    /// everything held hard and everything demanded has one, so none of it
-    /// is fetched only to find no frame.
+    /// A reader's page is demanded only inside its level's fault radius, where
+    /// the demand bound already counts it, and a hint past that. Speculation
+    /// only takes frames left over after everything hard and demanded, so
+    /// nothing is fetched just to find no frame.
     #[allow(clippy::too_many_arguments)]
     pub fn observe(
         &mut self,
@@ -262,9 +184,7 @@ impl<L: Layer> Pyramid<L> {
                     ask(&mut asks, p, Ask { why: Why::Fault, order: order(o, p) });
                 }
             }
-            // What is demanded is inside the demand's bound, whatever the
-            // ground: more is the structure's bound broken, and the capacity
-            // with it.
+            // More demanded than the structure's bound means the capacity is broken too.
             let mut read = [0u32; TOP_LEVEL as usize + 1];
             for p in asks.keys() {
                 read[p.level as usize] += 1;
@@ -277,11 +197,9 @@ impl<L: Layer> Pyramid<L> {
             });
             xpute_core::ensure!(floor <= Floor::PAGES, ENOTRECOVERABLE, floor);
         }
-        // Every page on the line rather than the finest alone: which of them
-        // says the destination's ground is known only once those over it are
-        // (`Paging::source`), and asking them one after another would be a
-        // round trip a level. First in the order, since the eye is going
-        // there.
+        // The whole line, not only the finest page: which one says the ground is
+        // known only once those above are, and asking one at a time would cost a
+        // round trip per level.
         let mut named = 0u32;
         for p in destination {
             named += 1;
@@ -309,10 +227,7 @@ impl<L: Layer> Pyramid<L> {
             hints.extend(readers.iter().filter(|p| !asks.contains_key(p)).map(|&p| (order(o, p), p)));
             hints.sort_unstable();
             hints.dedup_by_key(|h| h.1);
-            // Nor for more pages than are left of what may be asked at once,
-            // whether or not each takes a frame: a page settled or held in
-            // `ABSENT` takes none, and is known only while it is asked for
-            // (paging.rs `ASKS`).
+            // Settled or `ABSENT` pages take no frame but still count against `ASKS`.
             let mut pages = ASKS.saturating_sub(asks.len() as u32);
             for &(order, p) in &hints {
                 let new = u32::from(self.paging.takes_frame(p));
@@ -335,35 +250,16 @@ impl<L: Layer> Pyramid<L> {
         self.demand = demand;
     }
 
-    /// What the layer wants of the scheduler: every page asked for and not
-    /// held.
     pub fn wants(&self) -> &[(u64, Ask)] {
         &self.wants
     }
 
-    /// The layer's turn. The quality is decided first (world/quality.rs),
-    /// so what is asked for is at the quality what is drawn is cut at.
-    /// Wherever the observation, the destination, what is held, the heights,
-    /// the quality or what the screen's tiles saw have changed, it is
-    /// observed again (`observe`), since the asks are functions of all of
-    /// them. A turn where none changed decides nothing and says the wants it
-    /// has.
+    /// The layer's turn. Quality is decided first so asks match what is drawn.
+    /// Observes again whenever anything in `Seen` or `readers` changed.
     ///
-    /// The estimator is the one from what the tiles saw (world/observation.rs
-    /// `ByFootprints`), which the quality's turn has just cast: the ground
-    /// the screen reaches, and what it lacked, and not what is hidden.
-    ///
-    /// `destination` is the z16 page a destination stands in, whose ground
-    /// is wanted exactly: asked for with the line over it, up to the top the
-    /// source supplies, whether or not there is an observation yet — at the
-    /// first fix there is none, since the camera waits for that ground to be
-    /// put at all.
-    ///
-    /// `readers` are the pages another layer reads from this one, as
-    /// `observe` takes them.
-    ///
-    /// `far` is how far the layer is seen, its observation cut there: what
-    /// it draws past that is nothing, so it asks for nothing past it.
+    /// `destination` is asked for with its line even with no observation yet:
+    /// at the first fix the camera waits for that ground. `far` cuts the
+    /// observation where the layer stops being drawn.
     pub fn step(&mut self, destination: Option<LevelPage>, readers: &[LevelPage], far: f64) {
         let Some(top) = floor::level() else { return };
         let o = observation().map(|o| Observation { far: o.far.min(far), ..o });
@@ -375,15 +271,13 @@ impl<L: Layer> Pyramid<L> {
                 quality::step();
                 quality::effective().tau()
             }
-            // Nothing is observed, so nothing is asked at a quality.
             None => Tau::FINEST,
         };
         let seen = (o, destination, self.paging.revision(), heights_revision(), tau, domain::walks());
         if self.last != Some(seen) || self.readers != readers {
             let line = destination.into_iter().flat_map(|p| std::iter::successors(Some(p), move |q| (q.level < top).then(|| q.parent())));
             self.observe(o.as_ref(), line, readers, &Known, &ByFootprints { tau, sight: domain::sight() }, &PREFETCH, tau, param::HINT_ALLOWANCE);
-            // Observing lets go; what is recorded is the state the
-            // observation was made against.
+            // Observing can let pages go, moving the revision: record the state after it.
             self.last = Some((o, destination, self.paging.revision(), heights_revision(), tau, domain::walks()));
             self.readers.clear();
             self.readers.extend_from_slice(readers);
@@ -391,8 +285,7 @@ impl<L: Layer> Pyramid<L> {
         declare(L::CATEGORY, &self.wants);
     }
 
-    /// Asks for nothing: a layer the view does not show holds what it has
-    /// and wants no more.
+    /// A layer the view does not show keeps what it holds and asks for nothing.
     pub fn idle(&mut self) {
         self.wants.clear();
         self.asks.clear();

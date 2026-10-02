@@ -1,32 +1,16 @@
 // pxl-tool/asset/glb.rs
 
-//! A model's size, measured from the file rather than typed into a catalog.
-//!
-//! The extent is the axis-aligned bounds over every node of every scene, node
-//! transforms applied, read from the POSITION accessors' own `min`/`max` —
-//! which glTF requires a writer to provide. That is the same bounds a runtime
-//! loader computes, so the number the range criterion reads is the one the
-//! mesh actually has.
-//!
-//! glTF is y-up and the world is ENU (x, y, z-up), so the extent is recorded
-//! as `(dx, dz, dy)`.
-//!
-//! Only the JSON chunk is read. The buffers are never decoded: an accessor's
-//! `min`/`max` is what bounds the mesh, and reading a few hundred thousand
-//! vertices to rediscover it would be slower and no more correct.
+//! A model's extent, read from the POSITION accessors' `min`/`max` (which glTF
+//! requires) under the node transforms; buffers are never decoded.
 
 use serde::Deserialize;
 
-/// A node's transform, column-major as glTF writes it. glTF holds a node to
-/// an affine transform — a matrix it can decompose into TRS — so a point is
-/// carried with no projective divide. Its own two operations rather than
-/// pxl-spec's: the ingest writes part of pxl-spec, and must build where what
-/// it last wrote does not.
+/// Column-major, as glTF writes it. Kept local rather than pxl-spec's: the
+/// ingest writes part of pxl-spec and must build when that output is broken.
 type Mat4 = [f64; 16];
 
 const IDENTITY: Mat4 = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
 
-/// `a × b`.
 fn mul(a: &Mat4, b: &Mat4) -> Mat4 {
     let mut out = [0.0; 16];
     for c in 0..4 {
@@ -37,7 +21,6 @@ fn mul(a: &Mat4, b: &Mat4) -> Mat4 {
     out
 }
 
-/// `m × (p, 1)`.
 fn apply(m: &Mat4, p: [f64; 3]) -> [f64; 3] {
     [0, 1, 2].map(|r| m[r] * p[0] + m[4 + r] * p[1] + m[8 + r] * p[2] + m[12 + r])
 }
@@ -46,9 +29,8 @@ fn apply(m: &Mat4, p: [f64; 3]) -> [f64; 3] {
 struct Gltf {
     #[serde(default)]
     scenes: Vec<Scene>,
-    /// The scene a viewer opens. Only this one is measured when it is named —
-    /// a file with more than one scene carries variants of the same model,
-    /// and taking them all would bound the union rather than the model.
+    /// Only the named scene is measured: other scenes are variants, and their
+    /// union is not the model.
     scene: Option<usize>,
     #[serde(default)]
     nodes: Vec<Node>,
@@ -111,8 +93,6 @@ fn json_chunk(bytes: &[u8]) -> Result<&[u8], String> {
     bytes.get(20..20 + len).ok_or_else(|| "truncated JSON chunk".to_string())
 }
 
-/// A node's local transform: its `matrix` when it has one, else its TRS.
-/// glTF's rotation is a quaternion in `(x, y, z, w)`.
 fn local(node: &Node) -> Mat4 {
     if let Some(m) = &node.matrix {
         let mut out = [0.0; 16];
@@ -165,8 +145,7 @@ impl Bounds {
 }
 
 fn visit(gltf: &Gltf, index: usize, parent: &Mat4, bounds: &mut Bounds, depth: usize) {
-    // A scene graph is a tree in every file this reads, but glTF's own schema
-    // does not forbid a cycle, and a cycle here would not terminate.
+    // glTF does not forbid a cycle, which would not terminate.
     if depth > 64 {
         return;
     }
@@ -182,9 +161,7 @@ fn visit(gltf: &Gltf, index: usize, parent: &Mat4, bounds: &mut Bounds, depth: u
             if min.len() < 3 || max.len() < 3 {
                 continue;
             }
-            // Every corner of the accessor's own box, because a rotation
-            // takes a box's corners somewhere its min and max do not
-            // describe.
+            // Every corner: a rotation takes a box's corners outside its min and max.
             for corner in 0..8u8 {
                 let p = [
                     if corner & 1 != 0 { max[0] } else { min[0] },
@@ -200,8 +177,8 @@ fn visit(gltf: &Gltf, index: usize, parent: &Mat4, bounds: &mut Bounds, depth: u
     }
 }
 
-/// The glb's extent in ENU world units: `(dx, dz, dy)` of its world-space
-/// bounds, each rounded to two decimals the way a catalog reads it.
+/// glTF is y-up and the world z-up, so the extent is `(dx, dz, dy)`, rounded
+/// to two decimals.
 pub fn extent(bytes: &[u8]) -> Result<[f64; 3], String> {
     let gltf: Gltf = serde_json::from_slice(json_chunk(bytes)?).map_err(|e| e.to_string())?;
     let mut bounds = Bounds::new();

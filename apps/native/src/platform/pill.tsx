@@ -1,17 +1,9 @@
 // @pxl/native/platform/pill.tsx
 
 /**
- * A pill on a device (shared/ui/pill.ts): one piece of the platform's glass,
- * laid out where it stands and as wide as it shows. A change of either is laid
- * out at once and the system animates the frame on the UI thread
- * (LayoutAnimation), so the glass is redrawn whole at every width — its round
- * ends, its rim and what it bends behind it — where pieces moved under clips
- * showed their seams through it.
- *
- * What it holds stands at its left end, clipped to its round shape, so the
- * content is revealed as the pill opens and hidden as it closes. Its presence
- * is the glass's to show (backing.tsx), and what it holds fades by opacity on
- * the glass, never over it.
+ * A pill on a device: one piece of glass relaid at its new place and width,
+ * animated by LayoutAnimation, since clipped pieces showed seams through the
+ * glass. Content fades on the glass, never over it.
  */
 
 import { useRef } from "react";
@@ -22,28 +14,22 @@ import { Backing } from "@platform/backing.tsx";
 import { SNAP } from "@/shared/ui/motion/transition.ts";
 import { type PillProps, touchReach } from "@/shared/ui/pill.ts";
 
-/** A control's move, as long as the page's (shared/ui/motion/transition.ts).
- * Only what changes size or place is animated: a view that comes or goes in
- * the same commit does so at once, as the page's does. */
+/** Only size and place animate; a view that comes or goes does so at once. */
 const MOVE: LayoutAnimationConfig = {
   duration: SNAP.durationMs,
   update: { type: "spring", springDamping: 1 },
 };
 
 export function Pill({ x, width, height, fill, tint, place, interactive, border, shadow, fade = 1, fadeFrom, fadeTransition = SNAP, touch, children, onContentWidth }: PillProps) {
-  // Asked for in render, before the commit that lays the new frame out: a
-  // layout animation applies to the next commit, and after this one's is too
-  // late. The same on a second render of the same props.
+  // In render: a layout animation applies to the next commit.
   const last = useRef<[f64, f64] | null>(null);
   if (last.current !== null && (last.current[0] !== x || last.current[1] !== width)) LayoutAnimation.configureNext(MOVE);
   last.current = [x, width];
 
   const r = height / 2;
   const reach = touch ? touchReach(height) : 0;
-  // What a finger lands on reaches the least target around the pill, as the
-  // page's does. What it holds stands in the glass rather than beside it: a
-  // touch reaches the glass only through what the glass contains, and
-  // interactive glass answers no touch it is not given.
+  // Content stands inside the glass: interactive glass answers only touches
+  // given through what it contains.
   return (
     <View {...touch} style={[touch ? styles.reach : styles.at, { left: x - reach, top: -reach, width: width + 2 * reach, height: height + 2 * reach, padding: reach }]}>
       <Backing

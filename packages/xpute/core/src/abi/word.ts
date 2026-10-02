@@ -7,10 +7,7 @@ export type Vec<N extends number, T = number, R extends unknown[] = []> = R["len
 
 export const BOOL = (x: unknown): 1 | 0 => x ? 1 : 0;
 
-// scalar widths (ABI surface); 96/128 are composite widths
 export type bits = 8 | 16 | 32 | 64 | 96 | 128;
-
-// ============ Numeric Types ============
 
 export type u8 = number;
 export type i8 = number;
@@ -27,14 +24,10 @@ export type i64 = bigint;
 export type f32 = number;
 export type f64 = number;
 
-// ============ Numeric Sizes ============
-
 export const U8_SZ: u32 = 1;
 export const U16_SZ: u32 = 2;
 export const U32_SZ: u32 = 4;
 export const U64_SZ: u32 = 8;
-
-// ============ Numeric Limits ============
 
 export const U8_MAX: u32 = 0xff;
 export const I8_MIN: i32 = -0x80;
@@ -52,8 +45,6 @@ export const U64_MAX: u64 = (1n << 64n) - 1n;
 export const I64_MIN: i64 = -(1n << 63n);
 export const I64_MAX: i64 = (1n << 63n) - 1n;
 
-// ============ Fit Checks ============
-
 export const is_int = (x: number): boolean => Number.isInteger(x);
 
 export const fits_u8 = (x: number): boolean => is_int(x) && 0 <= x && x <= U8_MAX;
@@ -68,13 +59,7 @@ export const fits_i64 = (x: bigint): boolean => I64_MIN <= x && x <= I64_MAX;
 
 export const fits_f32 = (x: number): boolean => Number.isFinite(x) && Math.fround(x) === x;
 
-// JS number is already IEEE-754 binary64.
-// This check answers only whether the value may be lowered through the JS f64 path.
-// It is NOT an integer-precision guarantee: large integral magnitudes may already
-// have lost precision before reaching this predicate.
 export const fits_f64 = (_x: number): boolean => true;
-
-// ============ Numeric Casts: 32-bit ============
 
 export const U8 = (u: number): u8 => u & U8_MAX;
 export const I8 = (i: number): i8 => (i << 24) >> 24;
@@ -86,37 +71,16 @@ export const I32 = (i: number): i32 => i | 0;
 
 export const F32 = (f: number): f32 => Math.fround(f);
 
-// JS number storage is already binary64, so F64 is an identity cast.
-// Like fits_f64(), this does NOT restore integer precision that may already
-// have been lost in the incoming JS number.
 export const F64 = (f: number): f64 => f;
-
-// ============ Bit Ops: 32-bit ============
 
 export const SET_BITS = (u: u32, bits: u32): u32 => U32(u | bits);
 export const CLR_BITS = (u: u32, bits: u32): u32 => U32(u & ~bits);
 export const HAS_BITS = (u: u32, bits: u32): boolean => (u & bits) !== 0;
 
-export const BIT = (nbit: u32): u32 => U32(1 << nbit); // k: 0..31
+export const BIT = (nbit: u32): u32 => U32(1 << nbit);
 export const HAS_BIT = (u: u32, nbit: u32): boolean => HAS_BITS(u, BIT(nbit));
 
-/**
- * Returns a contiguous bit-field mask.
- *
- * Semantics:
- * - nbit : field width in bits
- * - shamt: starting bit position
- *
- * Examples:
- * - FIELD_MASK(3)    => 0b00000111
- * - FIELD_MASK(3, 5) => 0b11100000
- * - FIELD_MASK(32)   => 0xffffffff, a field the whole word
- * - FIELD_MASK(3, 32) => 0, a field past the word
- *
- * The bounds are said because JavaScript takes a shift count modulo 32, so
- * `1 << 32` is 1 and a whole-word mask would come out 0; xpute-core's
- * field_mask32 gives the same answers.
- */
+/** JS takes a shift count modulo 32, so a whole-word field and one past the word are special-cased, as xpute-core's field_mask32. */
 export const FIELD_MASK = (nbit: u32, shamt: u32 = 0): u32 => {
   if (shamt >= 32) return 0;
   const field = nbit >= 32 ? 0xffff_ffff : (1 << nbit) - 1;
@@ -125,34 +89,16 @@ export const FIELD_MASK = (nbit: u32, shamt: u32 = 0): u32 => {
 export const FIELD_GET = (u: u32, shamt: u32, mask: u32): u32 => U32((u >>> shamt) & mask);
 export const FIELD_SET = (u: u32, shamt: u32, mask: u32, v: u32): u32 => U32((u & ~(mask << shamt)) | ((v & mask) << shamt));
 
-// ============ Numeric Casts: 64-bit ============
-
 export const U64 = (x: bigint): u64 => x & U64_MAX;
 export const I64 = (x: bigint): i64 => BigInt.asIntN(64, x);
-
-// ============ Bit Ops: 64-bit ============
 
 export const SET_BITS64 = (x: u64, bits: u64): u64 => U64(x | bits);
 export const CLR_BITS64 = (x: u64, bits: u64): u64 => U64(x & ~bits);
 export const HAS_BITS64 = (x: u64, bits: u64): boolean => (x & bits) !== 0n;
 
-export const BIT64 = (shamt: u32): u64 => U64(1n << BigInt(shamt)); // k: 0..63
+export const BIT64 = (shamt: u32): u64 => U64(1n << BigInt(shamt));
 export const HAS_BIT64 = (x: u64, shamt: u32): boolean => HAS_BITS64(x, BIT64(shamt));
 
-/**
- * Returns a contiguous 64-bit field mask.
- *
- * Semantics:
- * - nbit : field width in bits
- * - shamt: starting bit position
- *
- * Examples:
- * - FIELD_MASK64(3)    => 0b111n
- * - FIELD_MASK64(3, 5) => 0b11100000n
- *
- * A bigint shift does not wrap, so a whole-word field is all ones and a
- * field past the word is 0 without saying so, as xpute-core's field_mask64.
- */
 export const FIELD_MASK64 = (nbit: u32, shamt: u32 = 0): u64 => U64(((1n << BigInt(nbit)) - 1n) << BigInt(shamt));
 export const FIELD_GET64 = (x: u64, shamt: u32, mask: u64): u64 => U64((x >> BigInt(shamt)) & mask);
 export const FIELD_SET64 = (x: u64, shamt: u32, mask: u64, v: u64): u64 => U64((x & ~(mask << BigInt(shamt))) | ((v & mask) << BigInt(shamt)));

@@ -1,16 +1,8 @@
 // pxl-geo-bake/terrain/pipeline/overture/policy.rs
 
-//! Policy for interpreting Overture Buildings/Transportation/Base rows into
-//! categories, metrics, flags and terrain cell configuration — the
-//! counterpart to coast/policy.rs (coastline only).
-//!
-//! Mapped value by value against each theme's own subtype/class vocabulary.
-//! The Segments/Land_use/Water/Land class and subtype values below are the
-//! ones a real Gangnam-area sample actually produced (100% populated for all
-//! four); Buildings' class enum is not sample-confirmed the same way (only
-//! ~14% of Korean buildings carry `class`/`subtype` at all) — mapped against
-//! Overture's published buildings schema instead, and it barely matters
-//! either way since only the coarse structure category is ever baked.
+//! Overture Buildings/Transportation/Base rows to categories, metrics and cell
+//! config. Segment and base values come from a Gangnam sample; building
+//! classes from the published schema (only ~14% of Korean buildings have one).
 
 use pxl_spec::bake::format::{CellConfig, GroundChannelKey};
 use pxl_spec::bake::model::feature::{FeatureComputed, FeatureExtra, Joins};
@@ -22,13 +14,7 @@ use crate::terrain::pipeline::overture::adapter::{BaseSource, OvertureRawFeature
 use crate::terrain::pipeline::overture::role::Role;
 use crate::terrain::pipeline::overture::width::width_m;
 
-// ============ Domain knowledge constants ============
-
-/// The transport type a way shows, on the ground or on a deck: its class
-/// as OpenMapTiles' transportation layer classes it (MapTiler's schema) —
-/// motorway, trunk, primary, secondary, tertiary, minor, service, track and
-/// path, rail and transit — one type a class, as neither finer nor coarser
-/// than the maps the data is read on.
+/// One type per OpenMapTiles transportation class (MapTiler's schema).
 pub fn segment_type(subtype: &str, class: Option<&str>) -> u8 {
     use cube_types::transport as t;
     let c = class.unwrap_or("");
@@ -51,17 +37,15 @@ pub fn segment_type(subtype: &str, class: Option<&str>) -> u8 {
     }
 }
 
-/// The classes whose one-way ways are a road's carriageways rather than a
-/// one-way street of their own.
+/// One-way ways of these classes are carriageways, not one-way streets.
 const THROUGH_CLASSES: [&str; 5] = ["motorway", "trunk", "primary", "secondary", "tertiary"];
 
-/// OpenMapTiles' path class: what is walked, cycled or ridden.
+/// OpenMapTiles' path class.
 const PEDESTRIAN_CLASSES: [&str; 6] = ["footway", "path", "steps", "cycleway", "pedestrian", "bridleway"];
 
 const FLOWING_WATER_SUBTYPES: [&str; 3] = ["river", "stream", "canal"];
 const TREE_COVER_LAND_SUBTYPES: [&str; 4] = ["tree", "forest", "tree_row", "wood"];
 
-/// Land_use `class` -> land cell, using the values the sample turned up.
 fn land_use_class_map(class: &str) -> Option<u8> {
     Some(match class {
         "residential" => cube_types::land::residential,
@@ -75,34 +59,20 @@ fn land_use_class_map(class: &str) -> Option<u8> {
     })
 }
 
-/// Buildings `class`/`subtype` treated as institutional (against Overture's
-/// published schema, not sample-confirmed — see this file's top comment).
 const INSTITUTIONAL_BUILDING_CLASSES: [&str; 5] = ["education", "medical_care", "civic", "government_service", "religious"];
 const SPORTS_CLASSES: [&str; 2] = ["pitch", "playground"];
 
-/// Segment flags under which nothing of a way shows from above: the ground
-/// is the surface, and a tunnel, an indoor passage, a line not built yet and
-/// one whose track is gone are not on it. `is_disused` is not here — its
-/// rails are still there — nor `is_covered`, which is under a roof that the
-/// buildings paint over where they have it.
+/// Nothing of a way under these shows from above. Not `is_disused` (the rails
+/// remain) nor `is_covered` (the buildings paint over it).
 pub const UNSEEN_FLAGS: &[&str] = &["is_tunnel", "is_indoor", "is_under_construction", "is_abandoned"];
 
-/// Segment flags under which a way runs through the ground, where a bore
-/// is cut for it at a hillside (deck/).
 pub const BORE_FLAGS: &[&str] = &["is_tunnel"];
 
-/// Segment flags under which a way is a link — a slip road, one lane.
 pub const LINK_FLAGS: &[&str] = &["is_link"];
 
-/// Segment flags under which a way is carried above the ground: a deck,
-/// which the page's decks draw (terrain/pipeline/deck.rs) and the ground
-/// does not.
+/// Drawn by the page's decks, not the ground.
 pub const DECK_FLAGS: &[&str] = &["is_bridge"];
 
-// ============ Policy logic ============
-
-/// `feat.class ?? feat.subtype ?? ""`, the building's own type as the policy
-/// reads it.
 fn building_type(feat: &OvertureRawFeature) -> &str {
     match feat {
         OvertureRawFeature::Building(b) => b.class.as_deref().or(b.subtype.as_deref()).unwrap_or(""),
@@ -148,8 +118,6 @@ fn compute_metrics(feat: &OvertureRawFeature, _category: &str) -> FeatureCompute
 
     match feat {
         OvertureRawFeature::Building(b) => {
-            // Real height/num_floors when Overture has them; missing both
-            // falls back to a single-level default.
             height = match (b.height, b.num_floors) {
                 (Some(h), _) => h,
                 (None, Some(n)) => n * 3.5,
@@ -165,16 +133,13 @@ fn compute_metrics(feat: &OvertureRawFeature, _category: &str) -> FeatureCompute
     FeatureComputed {
         height: height.max(0.0),
         width: width.max(0.0),
-        // `level_rules` is in the table, but nothing places a feature off the
-        // surface yet: what is seen from above is painted on the ground.
+        // `level_rules` is read, but nothing is placed off the surface yet.
         layer: 0,
     }
 }
 
-/// Whether nothing of a feature shows from above. A `water` segment is a
-/// ferry's route and a strait's line is where its name is written: neither is
-/// a thing on the surface, and a route paints over the sea, which no mask
-/// stops a transport cell at.
+/// A `water` segment is a ferry route or a strait's label line, not on the
+/// surface, and no mask would stop it painting over the sea.
 fn is_unseen(feat: &OvertureRawFeature) -> bool {
     match feat {
         OvertureRawFeature::Segment(s) => s.is_unseen || s.subtype == "water",
@@ -188,16 +153,8 @@ fn is_institutional(feat: &OvertureRawFeature) -> bool {
     INSTITUTIONAL_BUILDING_CLASSES.contains(&building_type(feat)) || land_use == "school" || land_use == "hospital"
 }
 
-/// Where a way paints among the transport channel's, lowest first: where
-/// two overlap — a junction, a road beside its sidewalk, a railway across a
-/// street — the later keeps the cell. Every other feature on the channel, a
-/// parking lot, ranks under all of them (`calculate_rank`'s base of ten).
-///
-/// The order is OpenStreetMap Carto's, the standard map's (`roads_info` in
-/// `openstreetmap-carto-flex.lua`, CC0), its `z` taken as is: a footway or a
-/// sidewalk under a service lane under every link, the links under every
-/// through road in their classes' order, the through roads in theirs, and a
-/// railway over them all, as a level crossing is drawn.
+/// Later keeps the cell. OpenStreetMap Carto's `z` from `roads_info`
+/// (openstreetmap-carto-flex.lua, CC0); other transport features rank under all.
 fn paint_order(subtype: &str, class: Option<&str>, role: Role) -> u32 {
     let c = class.unwrap_or("");
     if subtype == "rail" {
@@ -263,7 +220,6 @@ fn compute_extra(feat: &OvertureRawFeature, category: &str) -> FeatureExtra {
     let institutional = is_institutional(feat);
     FeatureExtra {
         rank: calculate_rank(feat, category, institutional),
-        // Sea fill is coast/policy.rs's job, never this policy's.
         is_ocean: false,
         is_parking: category == "parking",
         is_institutional: institutional,
@@ -386,8 +342,6 @@ impl NormalizePolicy<OvertureRawFeature> for OverturePolicy {
         determine_cell_cfg(raw, category, extra)
     }
 
-    /// Every theme but segments is WKB polygon geometry already
-    /// (`is_polygon_source` covers closure), so there is nothing left to force.
     fn should_force_closed(&self, _raw: &OvertureRawFeature) -> bool {
         false
     }

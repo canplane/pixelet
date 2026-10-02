@@ -1,12 +1,8 @@
 // @pxl/web/kernel/kernel.ts
 
 /**
- * The completion ring's signals, and the boot that starts everything.
- *
- * A turn leaves on the completion ring what the kernel asks of the host — the
- * sensors' watches — and the shell's snapshot when it changed, which the host
- * hands on; this is where each is handed to whoever runs it. Nothing is
- * decided here: every branch is one line to the module that does the work.
+ * Hands the completion ring's signals to whoever runs them, and boots
+ * everything. Nothing is decided here.
  */
 
 import type { u32 } from "@xpute/core/abi/word.ts";
@@ -39,9 +35,7 @@ import { set_snapshot } from "@/kernel/snapshot.ts";
 function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
   switch (cmd) {
     case Command.WORLD_SNAPSHOT: {
-      // The packet is far past a ring frame, so the kernel names the block
-      // it holds it in. It is the kernel's and stays valid until it writes
-      // the next one, which is a turn away.
+      // Too large for a ring frame; valid until the kernel writes the next, a turn away.
       const { at, len } = read_world_snapshot(f!);
       set_snapshot(bytes_at(CORE.buffer, at, len));
       return;
@@ -58,13 +52,9 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
   console.warn(`[kernel] signal 0x${cmd.toString(16)} with no one to hear it`);
 }
 
-/** Starts the kernel: the module, the turns it is given and who hears what
- * a turn leaves, then a device to draw with and the world it draws. Called
- * once by the app's boot (app/bootstrap.ts), so that what boots is ordered
- * rather than whichever module happened to be imported first. */
+/** Called once from app/bootstrap.ts, so boot order is explicit, not import order. */
 export async function boot_kernel(): Promise<void> {
   await load_core();
-  // A bake's root is its kind's number, below the roots of host.json's own.
   BAKE_KINDS.forEach((_, bake) => bind_root(bake, (name, signal) => read_object(bake, name, signal)));
   bind_root(root.ASSET, (path, signal) => read_asset(Number(path), signal));
   start_sched();
@@ -79,13 +69,10 @@ export async function boot_kernel(): Promise<void> {
       orientation: orientationSupported(),
       orientation_permission: orientationNeedsPermission(),
       orientation_silence_is_loss: orientationSilenceIsLoss(),
-      // The kernel's own file, handed over unread: it reads it, and writes it
-      // from then on.
       settings: storageGet(STORAGE_KEYS[storage.SETTINGS]) ?? "",
     }),
     (result) => result,
   );
-  // Not awaited: a dev tile server may answer late, and the kernel observes
-  // nothing until it has, which the boot does not wait on.
+  // Not awaited: a dev tile server may answer late.
   void declare_source();
 }

@@ -1,18 +1,8 @@
 // pxl-render/gpu/pass/impostor.rs
 
-//! Decor's impostor tier: each variant drawn once, from the side, into its
-//! layer of a sprite atlas, and every instance the scheduler lists as an
-//! impostor drawn as a quad turned to the eye with that sprite on it — two
-//! triangles where the model is thousands, for a variant too small on the
-//! screen for its model to be worth them (kernel layer/decor/build.rs
-//! `decor_tier`). The instances are the decor block's, read as the decor
-//! pass reads them; the sprite is the model's own, so it is made from what
-//! the variant is and from nothing chosen per kind.
-//!
-//! A layer is drawn once its model and skin are on the device and drawn
-//! again only when either changes. The fit is the variant's extent: its
-//! side, foot at the bottom, in a square; the quad is that square at the
-//! instance's scale.
+//! Decor's impostor tier: each variant drawn once from the side into an atlas
+//! layer, redrawn only when its model or skin changes, and drawn per instance as
+//! a quad turned to the eye.
 
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_IMPOSTOR};
 use crate::frame::shader::record::PIPELINE_IMPOSTOR_BAKE;
@@ -23,22 +13,16 @@ use crate::gpu::pass::model::{draw_model, draw_models, put_instances, uniform_of
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::Blocks;
 
-/// A sprite's side in texels: a variant drawn as an impostor covers fewer
-/// pixels than the model tier's floor, twelve at the reference viewport, so
-/// this is several times what any one is drawn at.
+/// Impostors cover fewer pixels than the model tier's floor (twelve at the
+/// reference viewport), so this is several times any one's drawn size.
 const SPRITE: u32 = 128;
-/// An impostor draw's dynamic uniform (shader/impostor.wgsl's words):
-/// translation, the group's first lane word, its stride, the opacity, the
-/// layer, the index list's first word.
+/// Translation, first lane word, stride, opacity, layer, index list's first word.
 const DRAW_UNIFORM_BYTES: u32 = 32;
-/// A bake's dynamic uniform: the fit.
 const FIT_BYTES: u32 = 16;
 
-/// A variant's extent as the kernel has it, glTF's: across, up, and deep.
+/// glTF's across, up and deep.
 pub type Extent = [f32; 3];
 
-/// What a layer was drawn from: the model's block, its skin's image, its
-/// extent.
 type Baked = (u32, Option<u32>, Extent);
 
 pub struct ImpostorPass {
@@ -46,22 +30,17 @@ pub struct ImpostorPass {
     bake: Built,
     uniforms: DrawUniforms,
     fit_uniforms: DrawUniforms,
-    /// The atlas a layer is drawn into, and the depth a layer's draw tests.
     atlas: u32,
     depth_view: u32,
     fits: u32,
     group: u32,
-    /// Each layer's fit, as the draw reads it: center across, center up,
-    /// half side, half depth.
+    /// Center across, center up, half side, half depth.
     fit: [[f32; 4]; GROUPS],
-    /// What each layer holds now; none until it is drawn.
     baked: [Option<Baked>; GROUPS],
-    /// What each group is now.
     wanted: [Option<Baked>; GROUPS],
 }
 
-/// A variant's fit in its square: its side centered across, its foot at the
-/// bottom, a little room around it so a filtered edge reads nothing past it.
+/// A little room around it so a filtered edge reads nothing past it.
 fn fit_of(extent: Extent) -> [f32; 4] {
     let [x, y, z] = extent;
     let half = 0.5 * x.max(y) * 1.05;
@@ -129,16 +108,12 @@ impl ImpostorPass {
         }
     }
 
-    /// Each group's model block, skin image and extent as the kernel has them
-    /// now, in group order.
     pub fn set_models(&mut self, groups: &[(u32, Option<u32>, Extent)]) {
         for (group, &want) in groups.iter().take(GROUPS).enumerate() {
             self.wanted[group] = Some(want);
         }
     }
 
-    /// Draws every layer whose model or skin changed and is on the device
-    /// now, before the frame's passes read the atlas.
     pub fn bake(&mut self, g: &Gpu, encoder: u32, decor: &mut DecorPass, blocks: &Blocks) {
         let due: Vec<(usize, Baked)> = (0..GROUPS)
             .filter_map(|k| self.wanted[k].filter(|w| w.0 != 0 && w.1.is_some() && self.baked[k] != Some(*w)).map(|w| (k, w)))
@@ -172,15 +147,13 @@ impl ImpostorPass {
         g.write_buffer(self.fits, 0, bytes(self.fit.as_flattened()));
     }
 
-    /// Writes every impostor draw's uniform, in one write.
     pub fn prepare<'a>(&mut self, g: &Gpu, draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]>, uniforms: &[f32]) {
         self.uniforms.write(g, self.draw.layouts[1], draws.len() as u32, draws, |buf, d| {
             put_instances(buf, uniform_of(uniforms, d), d[1]);
         });
     }
 
-    /// The impostors into the open pass, after `prepare`, under group 0
-    /// `frame`: a group whose layer is not drawn yet is not drawn.
+    /// A group whose layer is not drawn yet is not drawn.
     pub fn draw<'a>(&self, g: &Gpu, pass: u32, draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>, blocks: &mut Blocks, frame: (u32, &mut u32)) {
         let Some(slots) = self.uniforms.slots() else { return };
         let block_layout = self.draw.layouts[3];

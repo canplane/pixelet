@@ -9,7 +9,7 @@ export const comp_str = (a: string, b: string): i32 => (a < b ? -1 : a > b ? 1 :
 
 export function make_comp<T, K extends numeric = f64>(
   key_fn: (e: T) => K,
-  tie_fn?: (a: T, b: T) => i32, // defaults to 0 if omitted (ties: implementation-defined ordering)
+  tie_fn?: (a: T, b: T) => i32,
 ): Comp<T> {
   const tie = tie_fn ?? (() => 0);
 
@@ -20,5 +20,3 @@ export function make_comp<T, K extends numeric = f64>(
     return c ? c : tie(a, b);
   };
 }
-
-// export const clamp = <T extends numeric>(x: T, min: T, max: T) => x < min ? min : x > max ? max : x;

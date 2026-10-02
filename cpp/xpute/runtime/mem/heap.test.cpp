@@ -1,8 +1,4 @@
 // cpp/xpute/runtime/mem/heap.test.cpp
-//
-// A heap as a guest has one: xpute's slab over a range of its own, and the
-// memory named from where that range begins, so every block's offset is a
-// u32 into it.
 
 #include "heap.hpp"
 

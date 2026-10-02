@@ -1,30 +1,12 @@
 // @pxl/web/platform/web/pill.tsx
 
 /**
- * A pill on the page (shared/ui/pill.ts): its place and its width move
- * without anything being laid out, by transforms alone
- * (shared/ui/motion/pose.ts).
- *
- * Scaling a pill would squash its round ends into ovals, and animating its
- * width reflows and ghosts over the canvas on iOS. So it is two pieces that
- * never change size. A circle stands still at its left end; its body, a pill
- * as wide as the widest it will be asked to show, slides out from behind it
- * under a clip that starts at the circle's center. What shows is the circle's
- * left half and the body's right part, which is a pill of exactly the width
- * asked for, round at both ends at every moment of the slide.
- *
- * The whole circle lies under the body, so the clip's edge always falls on
- * the same fill and has nothing to show through: two pieces cut to meet on
- * one line left a hairline there, which a compositor snapping the two clips
- * apart by a device pixel opened on whole pixels as well. Shadows cannot
- * overlap that way — two would darken each other — so they are cast apart,
- * each piece's inside a clip of its own either side of the center, under
- * both fills. They meet cleanly only on a pixel's edge, so a caller stands
- * the pill on whole pixels (PixelRatio.roundToNearestPixel).
- *
- * What it holds is revealed the same way: laid out once at its full width,
- * in a window that slides with the body while the content slides back by as
- * much, so the content stands still and its right edge follows the pill's.
+ * A pill on the page, moved by transforms alone: scaling squashes its round
+ * ends, and animating width ghosts over the canvas on iOS. So a fixed circle
+ * at its left end and a full-width body sliding out under a clip from the
+ * circle's center. The circle lies wholly under the body, since two pieces
+ * cut to meet left a hairline; shadows are clipped apart to avoid doubling,
+ * which meets cleanly only on whole pixels.
  */
 
 import { StyleSheet, View, type ViewStyle } from "react-native";
@@ -34,10 +16,8 @@ import { SNAP } from "@/shared/ui/motion/transition.ts";
 import { useVeil } from "@/shared/ui/motion/veil.ts";
 import { type PillProps, touchReach } from "@/shared/ui/pill.ts";
 
-/** Room for a shadow around a piece, inside the clip that holds it. */
 const SHADOW_ROOM = 32;
-// A page's backing is its fill (backing.tsx), so `tint`, `place` and
-// `interactive`, which are the system's backing's, only apply on a device.
+// `tint`, `place` and `interactive` only apply on a device.
 export function Pill({ x, width, height, span, fill, border, shadow, fade = 1, fadeFrom, fadeTransition = SNAP, touch, children, onContentWidth }: PillProps) {
   const transition = SNAP;
   const veil = useVeil(fade, fadeTransition);
@@ -51,11 +31,6 @@ export function Pill({ x, width, height, span, fill, border, shadow, fade = 1, f
 
   return (
     <Motion to={{ translateX: x }} transition={transition} style={styles.at}>
-      {
-        /* As large as all it can draw, shadows and the widest it opens to:
-          a device fades it as one layer, cut at its bounds (@platform
-          motion.tsx). What it holds stands back at the pill's corner. */
-      }
       <Motion
         from={fadeFrom === undefined ? undefined : { opacity: fadeFrom }}
         to={{ opacity: veil.level }}
@@ -63,10 +38,6 @@ export function Pill({ x, width, height, span, fill, border, shadow, fade = 1, f
         style={[styles.fade, { width: span + 2 * SHADOW_ROOM, height: height + 2 * SHADOW_ROOM }]}
       >
         <View style={styles.corner}>
-          {
-            /* What a finger lands on reaches the least target around the pill,
-            and holds it, so a touch on what the pill holds is the pill's. */
-          }
           <View {...touch} style={[touch ? styles.reach : styles.box, { left: -reach, top: -reach, width: width + 2 * reach, height: height + 2 * reach }]}>
             <View style={[styles.box, { left: reach, top: reach, width, height }]}>
               {shadow && (
@@ -111,8 +82,7 @@ const styles = StyleSheet.create({
   at: { position: "absolute", left: 0, top: 0, pointerEvents: "box-none" },
   fade: { position: "absolute", left: -SHADOW_ROOM, top: -SHADOW_ROOM, pointerEvents: "box-none" },
   corner: { position: "absolute", left: SHADOW_ROOM, top: SHADOW_ROOM, pointerEvents: "box-none" },
-  // From the sheet: an inline `box-none` is drawn as a `none` the content
-  // inherits (feature/map/ui/busy-dim.tsx).
+  // From the sheet: an inline `box-none` is drawn as a `none` the content inherits.
   box: { position: "absolute", pointerEvents: "box-none" },
   reach: { position: "absolute" },
   clip: { position: "absolute", overflow: "hidden", pointerEvents: "none" },

@@ -9,7 +9,6 @@ import { useKernel } from "@/kernel/shell.ts";
 
 import { toastDismiss, toastShow, ToastTone } from "@/shared/ui/toast/store.ts";
 
-/** The reports the map keeps up, each one toast that replaces itself. */
 const enum Report {
   Location = 0,
   World = 1,
@@ -18,28 +17,17 @@ const enum Report {
 export function ToastController() {
   const { t } = useTranslation();
   const locationStatus = useKernel((s) => s.location.status);
-  // Rendered through t() here (not resolved to a message where the error
-  // fires) because i18next loads its catalog over the network — an
-  // imperative t() at sensor-error/startup time would freeze the raw key
-  // in the store and never follow a later language change.
+  // Translated here, not where the error fires, so a language change follows.
   const locationError = useKernel((s) => s.location.error);
   const locationErrorKey: string | null = locationError === null ? null : locationMessageKey(locationError);
 
   const mapStatus = useKernel((s) => s.map.status);
-  // The L3 page the map center falls in — what "the area I am looking at"
-  // means to the kernel, and the key the world toast is announced per.
   const mapPage = useKernel((s) => s.map.page);
-  // Merged with mapStatus below into a single Report.World toast, not a
-  // toast of its own — both represent the same thing to a viewer ("is the
-  // world I'm looking at actually ready yet"), unlike locationStatus
-  // (device GPS sensor state, a genuinely separate concern that keeps its
-  // own toast).
+  // Folded into the world toast, not its own.
   const companionLoading: boolean = useKernel((s) => !s.companion.person_ready || !s.companion.pet_ready);
 
   const shownLocationToastRef = useRef(false);
-  // t via a ref, not a dependency — react-i18next hands back a new function
-  // identity on every language change, so listing it as a dependency re-ran
-  // these effects and re-showed a toast just from switching language.
+  // A ref: react-i18next's new `t` on a language change re-showed toasts.
   const tRef = useRef(t);
   tRef.current = t;
 
@@ -62,17 +50,11 @@ export function ToastController() {
     });
   }, [locationStatus, locationErrorKey]);
 
-  // Tracks only "was the combined loading/error state active last run" —
-  // the transition into !isLoading && !isError is what distinguishes
-  // "just finished, flash success" from "never started, nothing to show."
   const wasWorldLoadingRef = useRef(false);
-  // The last page announced as ready. `undefined` rather than null so that the
-  // very first announcement is not swallowed by a center that has none yet.
+  // `undefined`, not null, so the first announcement is not swallowed.
   const announcedPageRef = useRef<bigint | null | undefined>(undefined);
   const shownWorldToastRef = useRef(false);
-  // The ready toast's own timer, held here rather than returned as the
-  // effect's cleanup: the effect re-runs whenever the page changes, and a
-  // cleanup that canceled the timer would leave the toast standing forever.
+  // Not the effect's cleanup: the effect re-runs per page, which would leave the toast up forever.
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dropWorldToast = () => {
     if (dismissTimerRef.current !== null) {
@@ -84,11 +66,7 @@ export function ToastController() {
     shownWorldToastRef.current = false;
   };
   useEffect(() => dropWorldToast, []);
-  // Once the companion has completed its very first load, every later
-  // person_ready/pet_ready dip is from the user swapping a variant in
-  // settings (the companion replaces its walker on a variant switch, and a
-  // new one starts unloaded) — a costume change, not the world going unready —
-  // so companionLoading stops feeding this toast after that point.
+  // After the first load, companion dips are variant swaps, not the world loading.
   const companionFirstLoadDoneRef = useRef(false);
   useEffect(() => {
     const isMapLoading = mapStatus === MapStatus.Loading;
@@ -97,13 +75,8 @@ export function ToastController() {
     if (!companionLoading) companionFirstLoadDoneRef.current = true;
     const isLoading = isMapLoading || relevantCompanionLoading;
 
-    // A page already announced is one the user has been told about, and what
-    // reaches the terrain queue for it afterward is the fetcher asking again
-    // for a tile that did not arrive — every RETRY_MS, for as long as it
-    // keeps not arriving (pxl-kernel param.rs, io/policy.rs). The queue filling and
-    // draining on that beat is not the world loading and becoming ready, and
-    // announcing it as such replayed this toast every two seconds forever.
-    // An error still speaks, since that is news whatever page it is on.
+    // Retries for an announced page are not the world loading; announcing them
+    // replayed this toast every two seconds forever. Errors still speak.
     const alreadyAnnounced = mapPage === announcedPageRef.current;
 
     if (isLoading || isError) {
@@ -112,10 +85,6 @@ export function ToastController() {
         dropWorldToast();
         return;
       }
-      // Map load takes priority in the message when both are in flight —
-      // it's the more foundational "is there a world to stand on at all"
-      // concern; companionLoading only surfaces once mapStatus has
-      // nothing left to report.
       const messageKey = isError ? "toast.map_load_error" : isMapLoading ? "toast.map_loading" : "toast.companion_loading";
       shownWorldToastRef.current = true;
       toastShow(Report.World, { message: tRef.current(messageKey), tone: isError ? ToastTone.Error : ToastTone.Loading });

@@ -1,17 +1,8 @@
 // xpute-core/wire/xtp/cursor.rs
 
-//! The read end: lazy cursors over a packet. A read hands back a `Cursor`,
-//! which is one of three — a leaf's `NodeCursor`, a `NullCursor` for a node
-//! that is physically absent but keeps its type, or a `BranchCursor` over a
-//! child table — since a child can be any of them. Nothing is decoded until
-//! a `get`.
+//! The read end: lazy cursors over a packet. Nothing is decoded until a `get`.
 
-// Uppercase throughout, as the notation these operations are written in: one
-// that holds no state and closes over nothing is named the way a C header
-// names its macros. Rust's own answer to a macro like that is a `const fn`,
-// which it cases snake, so the notation and the language disagree here and
-// the file keeps the notation — suspended once for the file, which is the
-// level the choice is made at rather than item by item.
+// Stateless helpers are uppercase, as the C header's macros they mirror.
 #![allow(non_snake_case)]
 
 use crate::abi::word::field_get32;
@@ -20,11 +11,8 @@ use crate::status::error::MarshalError;
 
 use super::spec::{AlignUnit, Array, NodeType, NodeValue, ScalarType, SequenceType, SpecialType, ALIGN_SZ, DESC_TYPE_MASK, DESC_TYPE_SHAMT, GET_WORD, HDR_SZ, MAGIC, NONE, TYPE_IS_LEAF, WORD_SZ};
 
-/// A shallow read's value: a leaf's value, null, or a branch's cursor.
 pub type ShallowNodeValue<'a> = NodeValue<'a, BranchCursor<'a>>;
 
-/// Scratchpad for 64-bit word operations to avoid allocation.
-/// [lo32, hi32]
 const WORD_REG: [u32; 2] = [NONE, NONE];
 
 fn CURSOR(pkt: &[u8], base: u32, type_: NodeType) -> Result<Cursor<'_>, MarshalError> {
@@ -45,7 +33,7 @@ fn ENTRY_OFF(base: u32, idx: u32) -> u32 {
     (base + WORD_SZ) + idx * WORD_SZ
 }
 
-/// What a read hands back: a leaf cursor, a null cursor or a branch cursor.
+/// `Null` is a physically absent node that keeps its type.
 #[derive(Clone, Debug)]
 pub enum Cursor<'a> {
     Node(NodeCursor<'a>),
@@ -66,8 +54,6 @@ impl<'a> Cursor<'a> {
         matches!(self, Cursor::Branch(_))
     }
 
-    /// Reinterpret current node as a branch cursor.
-    /// Fails if the current node is not a branch.
     pub fn as_branch(self) -> Result<BranchCursor<'a>, MarshalError> {
         match self {
             Cursor::Branch(b) => Ok(b),
@@ -76,7 +62,6 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// Optional chaining helper: `None` for a physically absent node.
     pub fn opt(self) -> Option<Cursor<'a>> {
         match self {
             Cursor::Null(_) => None,
@@ -84,7 +69,6 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// Reads the current node at shallow depth.
     pub fn get(&self) -> Result<ShallowNodeValue<'a>, MarshalError> {
         match self {
             Cursor::Node(c) => c.get(),
@@ -93,9 +77,7 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// A typed-array leaf's elements, as the type it was written as: a read
-    /// of any other node, or of an array of another type, is EBADMSG rather
-    /// than its bytes read as another width.
+    /// An array of another element type is EBADMSG, never reinterpreted.
     pub fn get_array<T: ArrayElem>(&self) -> Result<&'a [T], MarshalError> {
         match self {
             Cursor::Node(c) if c.type_ == T::TYPE as u8 => c.array::<T>(),
@@ -103,7 +85,6 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// `get<u64>()`, checked as `get_array` is.
     pub fn get_u64(&self) -> Result<u64, MarshalError> {
         match self.get()? {
             NodeValue::U64(x) => Ok(x),
@@ -111,7 +92,6 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// `get<i64>()`, checked as `get_array` is.
     pub fn get_i64(&self) -> Result<i64, MarshalError> {
         match self.get()? {
             NodeValue::I64(x) => Ok(x),
@@ -119,7 +99,6 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// `get<boolean>()`, checked as `get_array` is.
     pub fn get_bool(&self) -> Result<bool, MarshalError> {
         match self.get()? {
             NodeValue::Bool(b) => Ok(b),
@@ -127,7 +106,6 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// `get<string>()`, checked as `get_array` is.
     pub fn get_str(&self) -> Result<String, MarshalError> {
         match self.get()? {
             NodeValue::Str(s) => Ok(s),
@@ -135,8 +113,6 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// A string sequence's strings, read where they lie. A string that is not
-    /// UTF-8, or offsets that do not climb within the payload, are EBADMSG.
     pub fn get_strs(&self) -> Result<Strs<'a>, MarshalError> {
         match self {
             Cursor::Node(c) if c.type_ == SequenceType::STRS as u8 => c.strs(),
@@ -144,11 +120,7 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// `get<string>()` read where it lies: the packet's own bytes, with
-    /// nothing decoded into a string of its own — it outlives the cursor and
-    /// lives as long as the packet does. A string that is not UTF-8 is
-    /// EBADMSG, where the host's decode would have replaced what does not
-    /// read.
+    /// Invalid UTF-8 is EBADMSG here, where `get_str` replaces it.
     pub fn get_str_ref(&self) -> Result<&'a str, MarshalError> {
         match self {
             Cursor::Node(c) if c.type_ == SequenceType::STR as u8 => c.str_ref(),
@@ -156,9 +128,7 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// A scalar leaf of any width up to 32 bits, or a float, as a double —
-    /// every one of those is exact in an f64. A 64-bit integer is not, and is
-    /// not here: `get_u64`/`get_i64`.
+    /// Only types exact in an f64; 64-bit integers are refused.
     pub fn get_number(&self) -> Result<f64, MarshalError> {
         Ok(match self.get()? {
             NodeValue::U8(v) => v as f64,
@@ -173,7 +143,6 @@ impl<'a> Cursor<'a> {
         })
     }
 
-    /// Reads the current node at full depth.
     pub fn get_deep(&self) -> Result<NodeValue<'a>, MarshalError> {
         match self {
             Cursor::Node(c) => Ok(deepen(c.get()?)),
@@ -183,7 +152,6 @@ impl<'a> Cursor<'a> {
     }
 }
 
-/// A leaf's or null's shallow value holds no cursor, so it is its deep value.
 fn deepen(v: ShallowNodeValue<'_>) -> NodeValue<'_> {
     match v {
         NodeValue::Extra(_) => crate::bug!(ENOTRECOVERABLE),
@@ -205,15 +173,7 @@ fn deepen(v: ShallowNodeValue<'_>) -> NodeValue<'_> {
     }
 }
 
-// ============ Reader ============
-
-/// Packet reader and root cursor entry point.
-///
-/// Contract:
-/// - requires packet base offset to be WORD_SZ-aligned
-/// - validates the fixed packet header
-/// - returns a root cursor on success
-/// - errs on malformed packet
+/// The packet must start WORD_SZ-aligned.
 pub struct TreeReader<'a> {
     pub pkt: &'a [u8],
 
@@ -232,14 +192,13 @@ impl<'a> TreeReader<'a> {
         }
         let hdr_view = &pkt[..HDR_SZ as usize];
 
-        // packet header
         let mut reg = WORD_REG;
-        let [magic, _] = GET_WORD(hdr_view, 0, &mut reg); // word0
+        let [magic, _] = GET_WORD(hdr_view, 0, &mut reg);
         if magic != MAGIC {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
 
-        // word1: the root header stores payload byte size, not a relative offset
+        // The root's word holds the payload size, not a relative offset.
         let [payload_sz, desc] = GET_WORD(hdr_view, WORD_SZ, &mut reg);
         if payload_sz > pkt.len() as u32 - HDR_SZ {
             return Err(MarshalError::new(Errno::EBADMSG));
@@ -254,7 +213,6 @@ impl<'a> TreeReader<'a> {
         Ok(TreeReader { pkt, root })
     }
 
-    /// Returns the root cursor after constructor-time packet validation.
     pub fn read(&self) -> Cursor<'a> {
         self.root.clone()
     }
@@ -263,8 +221,6 @@ impl<'a> TreeReader<'a> {
         self.root.clone().as_branch()
     }
 }
-
-// ============ Cursors ============
 
 #[derive(Clone, Debug)]
 pub struct NodeCursor<'a> {
@@ -275,8 +231,6 @@ pub struct NodeCursor<'a> {
 }
 
 impl<'a> NodeCursor<'a> {
-    /// - `pkt`: source packet bytes
-    /// - `base`: logical node base offset
     pub fn new(pkt: &'a [u8], base: u32, type_: NodeType) -> NodeCursor<'a> {
         NodeCursor { pkt, base, type_ }
     }
@@ -285,8 +239,6 @@ impl<'a> NodeCursor<'a> {
         self.type_ == SpecialType::BRANCH as u8
     }
 
-    /// Reinterpret current node as a branch cursor.
-    /// Fails if the current node is not a branch.
     pub fn as_branch(self) -> Result<BranchCursor<'a>, MarshalError> {
         if self.type_ != SpecialType::BRANCH as u8 {
             return Err(MarshalError::new(Errno::EBADMSG));
@@ -294,27 +246,13 @@ impl<'a> NodeCursor<'a> {
         BranchCursor::new(self.pkt, self.base)
     }
 
-    // ---- Optional Guard ----
-
-    /// Optional chaining helper.
-    /// Returns `this` for a present node.
-    /// NullCursor's returns `None`.
     pub fn opt(self) -> Option<NodeCursor<'a>> {
         Some(self)
     }
 
-    // ---- Shallow Getter ----
-
-    /// Reads the current node at shallow depth.
-    ///
-    /// Shallow contract:
-    /// - leaf cursor  -> materialized leaf value
-    /// - null cursor  -> null
-    /// - branch cursor is handled by BranchCursor's
     pub fn get(&self) -> Result<ShallowNodeValue<'a>, MarshalError> {
         let t = self.type_;
         Ok(match t {
-            // -- Scalars --
             t if t == ScalarType::U8 as u8 => NodeValue::U8(self.u8_of()?),
             t if t == ScalarType::I8 as u8 => NodeValue::I8(self.i8_of()?),
             t if t == ScalarType::U16 as u8 => NodeValue::U16(self.u16_of()?),
@@ -327,7 +265,6 @@ impl<'a> NodeCursor<'a> {
             t if t == ScalarType::F64 as u8 => NodeValue::F64(self.f64_of()?),
             t if t == ScalarType::BOOL as u8 => NodeValue::Bool(self.bool_of()?),
 
-            // -- Sequences --
             t if t == SequenceType::U8_ARRAY as u8 => NodeValue::Array(Array {
                 type_: SequenceType::U8_ARRAY,
                 bytes: bytes_of(self.u8_array()?).into(),
@@ -379,8 +316,6 @@ impl<'a> NodeCursor<'a> {
         })
     }
 
-    // ---- Internal Leaf Readers ----
-
     fn scalar<const N: usize>(&self) -> Result<[u8; N], MarshalError> {
         if self.base as usize + N > self.pkt.len() {
             return Err(MarshalError::new(Errno::EBADMSG));
@@ -422,14 +357,7 @@ impl<'a> NodeCursor<'a> {
         Ok(u8::from_le_bytes(self.scalar()?) != 0)
     }
 
-    /// Reads a typed-array sequence leaf as a zero-copy view over the packet buffer.
-    ///
-    /// Contract:
-    /// - checks only len/payload overflow against packet bounds
-    /// - assumes packet base alignment was validated by TreeReader
-    /// - sequence payload starts immediately after the len slot: base + WORD_SZ
-    /// - because sequence node bases are WORD_SZ-aligned, payload_start is also
-    ///   naturally aligned for all supported typed-array element sizes (<= 8)
+    /// Zero-copy; relies on `TreeReader` having checked the packet's alignment.
     fn array<T: Copy>(&self) -> Result<&'a [T], MarshalError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
             return Err(MarshalError::new(Errno::EBADMSG));
@@ -453,10 +381,8 @@ impl<'a> NodeCursor<'a> {
         }
 
         let at = payload_start as usize;
-        // SAFETY: a sequence node's base is WORD_SZ-aligned and the packet's
-        // own base was checked, so the payload is aligned for every element
-        // the format carries (8 bytes at most); the bounds above hold it
-        // inside the packet.
+        // SAFETY: the payload is WORD_SZ-aligned, enough for every element
+        // type (8 bytes at most), and the bounds above keep it in the packet.
         Ok(unsafe { core::slice::from_raw_parts(self.pkt[at..].as_ptr() as *const T, len as usize) })
     }
 
@@ -516,7 +442,6 @@ impl<'a> NodeCursor<'a> {
         Ok(arr)
     }
 
-    /// The string's own bytes where they lie, checked as `str_of` checks them.
     fn str_ref(&self) -> Result<&'a str, MarshalError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
             return Err(MarshalError::new(Errno::EBADMSG));
@@ -534,8 +459,8 @@ impl<'a> NodeCursor<'a> {
         core::str::from_utf8(&bytes[payload_start as usize..(payload_start + nbyte) as usize]).map_err(|_| MarshalError::new(Errno::EBADMSG))
     }
 
-    /// A STRS payload: `len` + 1 offsets, each no less than the one before,
-    /// into the UTF-8 after them; every string checked before any is given.
+    /// `len` + 1 non-decreasing offsets into the UTF-8 after them; every
+    /// string is checked before any is given.
     fn strs(&self) -> Result<Strs<'a>, MarshalError> {
         let bad = || MarshalError::new(Errno::EBADMSG);
         if self.base + WORD_SZ > self.pkt.len() as u32 {
@@ -567,7 +492,7 @@ impl<'a> NodeCursor<'a> {
         Ok(strs)
     }
 
-    // STR stores UTF-8 bytes with a trailing NUL on wire, while len excludes that terminator.
+    // On the wire a STR has a trailing NUL that `len` excludes.
     fn str_of(&self) -> Result<String, MarshalError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
             return Err(MarshalError::new(Errno::EBADMSG));
@@ -594,36 +519,23 @@ impl<'a> NodeCursor<'a> {
 pub struct NullCursor<'a>(pub NodeCursor<'a>);
 
 impl<'a> NullCursor<'a> {
-    /// - `pkt`: source packet bytes
     pub fn new(pkt: &'a [u8], type_: NodeType) -> NullCursor<'a> {
         NullCursor(NodeCursor::new(pkt, NONE, type_))
     }
 
-    // NullCursor preserves original node type metadata,
-    // but is never considered a usable structural cursor.
     pub fn is_branch(&self) -> bool {
         false
     }
 
-    /// Reinterpret current node as a branch cursor.
-    /// Fails if the current node is not a branch.
     pub fn as_branch(self) -> Result<BranchCursor<'a>, MarshalError> {
         Err(MarshalError::new(Errno::EFAULT))
     }
 
-    // ---- Nullable Guard ----
-
-    /// Optional chaining helper.
-    /// Returns `None` for a physically absent node and `this` otherwise.
     pub fn opt(self) -> Option<NullCursor<'a>> {
         None
     }
 
-    // ---- Shallow Getter ----
-
-    /// Shallow read of a physically absent node reconstructs generic null.
     pub fn get(&self) -> ShallowNodeValue<'a> {
-        // generic optional reconstruction
         NodeValue::Null
     }
 }
@@ -678,15 +590,7 @@ impl<'a> BranchCursor<'a> {
         Some(self)
     }
 
-    // ---- Shallow / Deep Getter ----
-
-    /// Shallow branch read.
-    ///
-    /// Contract:
-    /// - get()      -> array of direct children
-    /// - leaf child -> materialized leaf value
-    /// - branch child -> its cursor (not recursive)
-    /// - null child -> null
+    /// A child branch comes back as its cursor, not recursed into.
     pub fn get(&self) -> Result<ShallowNodeValue<'a>, MarshalError> {
         let mut arr = Vec::with_capacity(self.len as usize);
         for i in 0..self.len {
@@ -699,15 +603,10 @@ impl<'a> BranchCursor<'a> {
         Ok(NodeValue::List(arr))
     }
 
-    /// get(idx): the direct child at idx, shallow-materialized at that
-    /// child boundary.
     pub fn get_at(&self, idx: u32) -> Result<ShallowNodeValue<'a>, MarshalError> {
         self.at(idx)?.get()
     }
 
-    /// Deep branch read.
-    ///
-    /// Recursively materializes the entire child subtree.
     pub fn get_deep(&self) -> Result<NodeValue<'a>, MarshalError> {
         let mut arr = Vec::with_capacity(self.len as usize);
         for i in 0..self.len {
@@ -717,12 +616,7 @@ impl<'a> BranchCursor<'a> {
         Ok(NodeValue::List(arr))
     }
 
-    /// Returns the child cursor at `idx`.
-    ///
-    /// Contract:
-    /// - preserves child type metadata even when physically absent
-    /// - returns NullCursor when child_rel_off == 0
-    /// - validates child offset bounds against the enclosing branch table
+    /// A zero offset is an absent child, which keeps its type.
     pub fn at(&self, idx: u32) -> Result<Cursor<'a>, MarshalError> {
         if idx >= self.len {
             return Err(MarshalError::new(Errno::EFAULT));
@@ -750,24 +644,20 @@ impl<'a> BranchCursor<'a> {
         self.at(idx)?.as_branch()
     }
 
-    /// Returns all direct child cursors without materializing them.
     pub fn children(&self) -> Result<Vec<Cursor<'a>>, MarshalError> {
         (0..self.len).map(|i| self.at(i)).collect()
     }
 
-    /// The children in order.
     pub fn iter(&self) -> impl Iterator<Item = Result<Cursor<'a>, MarshalError>> + '_ {
         (0..self.len).map(move |i| self.at(i))
     }
 }
 
-/// A leaf's elements as the bytes they lie in.
 fn bytes_of<T: Copy>(a: &[T]) -> &[u8] {
     // SAFETY: the elements are the packet's own bytes, read back as bytes.
     unsafe { core::slice::from_raw_parts(a.as_ptr() as *const u8, core::mem::size_of_val(a)) }
 }
 
-/// A sequence leaf's bytes read as the element the caller names.
 pub fn elements<'b, T: Copy>(a: &'b Array<'_>) -> &'b [T] {
     let n = a.bytes.len() / core::mem::size_of::<T>();
     // SAFETY: a leaf's bytes are its elements, as the packet laid them out.
@@ -778,9 +668,7 @@ pub fn elements<'b, T: Copy>(a: &'b Array<'_>) -> &'b [T] {
 #[path = "cursor.test.rs"]
 mod test;
 
-/// A string sequence's strings, as they lie in the packet: `len` of them,
-/// each the span between two offsets into the UTF-8 after the offsets,
-/// checked when the sequence was read.
+/// Validated as UTF-8 when the sequence was read.
 #[derive(Clone, Copy, Debug)]
 pub struct Strs<'a> {
     offs: &'a [u8],
@@ -801,7 +689,6 @@ impl<'a> Strs<'a> {
         self.len == 0
     }
 
-    /// The string at `i`, or none past the end.
     pub fn get(&self, i: u32) -> Option<&'a str> {
         (i < self.len).then(|| {
             let blob: &'a [u8] = self.blob;
@@ -816,7 +703,6 @@ impl<'a> Strs<'a> {
     }
 }
 
-/// An element a typed-array leaf holds, and the leaf's type for it.
 pub trait ArrayElem: Copy {
     const TYPE: SequenceType;
 }

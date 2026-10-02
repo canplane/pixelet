@@ -1,17 +1,7 @@
 // pxl-tool/spec.rs
 
-//! The specs are JSON, and the TypeScript and the Rust that carry them are
-//! written from it: neither language is where a number or a name is decided.
-//! `deno task spec` writes every generated file, and `deno task check:spec`
-//! (part of `deno task check`) fails where one on disk is not what its JSON
-//! writes.
-//!
-//! A generated file is imported as any module is — the client's bundler does
-//! not take a JSON import from outside its root — and is never edited by
-//! hand.
-//!
-//! It links none of the crates it writes into (pxl-tool's Cargo.toml says
-//! why), so everything it knows of the specs is what it reads here.
+//! Writes the TypeScript and Rust generated from `spec/` JSON. It links none
+//! of the crates it writes into, so it builds when their generated code is broken.
 
 pub mod bake;
 pub mod cell;
@@ -26,8 +16,6 @@ use serde::Deserialize;
 
 use crate::root;
 
-/// One generated file: its path from the repository's root, and its text
-/// before the formatter has seen it.
 pub struct Output {
     pub path: String,
     pub text: String,
@@ -39,7 +27,6 @@ impl Output {
     }
 }
 
-/// Every generated file, each generator's in the order it writes them.
 pub fn outputs() -> Result<Vec<Output>, String> {
     let mut out = Vec::new();
     out.extend(cmd::outputs()?);
@@ -55,14 +42,8 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     Ok(out)
 }
 
-// ---- the JSON ----
-
-/// A JSON value with its objects in the order the file writes them, which is
-/// the order a generated enum numbers its members in and a table lists its
-/// rows in. `serde_json::Value` sorts its keys unless a feature every crate
-/// in the workspace would then share says otherwise. A spec whose objects
-/// are records rather than tables — cmd.json, errno.json — is
-/// read into types of its own instead (`read_as`).
+/// A JSON value in file order, which numbers enums and orders tables;
+/// `serde_json::Value` sorts its keys.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Node {
     Null,
@@ -132,7 +113,6 @@ impl Node {
         }
     }
 
-    /// An object's entries, the `$` keys that annotate it among them.
     pub fn entries(&self) -> &[(String, Node)] {
         match self {
             Node::Obj(entries) => entries,
@@ -140,7 +120,6 @@ impl Node {
         }
     }
 
-    /// An object's entries less the `$` keys, which annotate rather than name.
     pub fn named(&self) -> impl Iterator<Item = (&str, &Node)> {
         self.entries().iter().filter(|(k, _)| !k.starts_with('$')).map(|(k, v)| (k.as_str(), v))
     }
@@ -170,43 +149,33 @@ impl Node {
         }
     }
 
-    /// A leaf that carries its reason: `{ "$value": …, "$doc": [lines] }`.
     pub fn is_wrapper(&self) -> bool {
         self.get("$value").is_some()
     }
 
-    /// A value, through the wrapper that carries its reason where it has one.
     pub fn value(&self) -> &Node {
         self.get("$value").unwrap_or(self)
     }
 
-    /// A string field of an object, where it has one.
     pub fn str_at(&self, key: &str) -> Option<&str> {
         self.get(key).and_then(Node::str)
     }
 
-    /// A list of lines, as every `doc` and `$doc` is written.
     pub fn lines_at(&self, key: &str) -> Option<Vec<String>> {
         self.get(key)?.arr().map(|a| a.iter().filter_map(|l| l.str().map(str::to_string)).collect())
     }
 }
 
-/// A spec file, read from the repository's root.
 pub fn read(path: &str) -> Result<Node, String> {
     let text = std::fs::read_to_string(root().join(path)).map_err(|e| format!("{path}: {e}"))?;
     serde_json::from_str(&text).map_err(|e| format!("{path}: {e}"))
 }
 
-/// A spec file into a type of its own, for one whose objects are records
-/// rather than ordered tables.
 pub fn read_as<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, String> {
     let text = std::fs::read_to_string(root().join(path)).map_err(|e| format!("{path}: {e}"))?;
     serde_json::from_str(&text).map_err(|e| format!("{path}: {e}"))
 }
 
-/// A number as a JavaScript literal writes it, and as TypeScript and Rust
-/// both read it back: an integral one with no point, a very large or very
-/// small one with an exponent.
 pub fn js_num(n: f64) -> String {
     if n == 0.0 {
         return "0".to_string();
@@ -222,14 +191,10 @@ pub fn js_num(n: f64) -> String {
     }
 }
 
-/// A string as a JSON literal, which is also a TypeScript and a Rust one for
-/// everything a spec says.
 pub fn json_str(s: &str) -> String {
     serde_json::to_string(s).unwrap_or_default()
 }
 
-/// A JSON value laid out two spaces an indent, as `JSON.stringify(v, null, 2)`
-/// lays it out.
 pub fn pretty(n: &Node, indent: &str, out: &mut String) {
     match n {
         Node::Null => out.push_str("null"),
@@ -265,9 +230,6 @@ pub fn pretty(n: &Node, indent: &str, out: &mut String) {
     }
 }
 
-// ---- how the two languages are written ----
-
-/// A doc comment in TypeScript: one line on one line, several as a block.
 pub fn ts_doc(doc: &[String], indent: &str) -> Vec<String> {
     if doc.len() == 1 {
         return vec![format!("{indent}/** {} */", doc[0])];
@@ -291,19 +253,14 @@ pub fn ts_doc(doc: &[String], indent: &str) -> Vec<String> {
         .collect()
 }
 
-/// A doc comment in Rust, `///` or a module's `//!`.
 pub fn rs_doc(doc: &[String], indent: &str, mark: &str) -> Vec<String> {
     doc.iter().map(|l| if l.is_empty() { format!("{indent}{mark}") } else { format!("{indent}{mark} {l}") }).collect()
 }
 
-/// Comment lines, `//` each, a blank one bare.
 pub fn line_comments(doc: &[String], indent: &str) -> Vec<String> {
     doc.iter().map(|l| if l.is_empty() { format!("{indent}//") } else { format!("{indent}// {l}") }).collect()
 }
 
-/// What a generated Rust file says above the `allow` that suspends the
-/// casing lints. A reader who meets one of these files otherwise has to guess
-/// whether the attribute is a reason or an oversight.
 pub const RS_CASING_NOTE: [&str; 3] = [
     "// Casing here is the spec's and not Rust's: a name is spelled as the JSON",
     "// spells it, so that one record is indexed by one name on both sides. To",
@@ -314,7 +271,6 @@ pub fn casing_note() -> Vec<String> {
     RS_CASING_NOTE.iter().map(|l| l.to_string()).collect()
 }
 
-/// `PlacePart` as a function's name spells it.
 pub fn snake(name: &str) -> String {
     let mut out = String::new();
     let mut prev: Option<char> = None;
@@ -328,7 +284,6 @@ pub fn snake(name: &str) -> String {
     out.to_lowercase()
 }
 
-/// `PLACE_PART` or `place_part` as a type's name spells it.
 pub fn pascal(name: &str) -> String {
     name.to_lowercase()
         .split('_')
@@ -339,8 +294,6 @@ pub fn pascal(name: &str) -> String {
         .collect()
 }
 
-/// An enum's name: the set's name, singular, as cube_type.json's `Land` and
-/// decor.json's `Decor` are.
 pub fn enum_name(name: &str) -> String {
     let e = pascal(name);
     if let Some(stem) = e.strip_suffix("ies") {
@@ -358,8 +311,6 @@ const RS_KEYWORDS: [&str; 50] = [
     "final", "override", "typeof", "unsized",
 ];
 
-/// A JSON name as a Rust identifier: a keyword raw, a leading digit behind an
-/// underscore, anything else an identifier cannot hold as an underscore.
 pub fn rs_ident(k: &str) -> String {
     let id: String = k.chars().map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' }).collect();
     if RS_KEYWORDS.contains(&id.as_str()) {
@@ -371,22 +322,15 @@ pub fn rs_ident(k: &str) -> String {
     }
 }
 
-/// `#RRGGBB` as the one number it is. The JSON is written in hex because a
-/// person picks a color that way; nothing downstream reads it back as text.
 pub fn packed(hex: &str) -> Result<u32, String> {
     let digits = hex.strip_prefix('#').filter(|d| d.len() == 6 && d.chars().all(|c| c.is_ascii_hexdigit()));
     digits.and_then(|d| u32::from_str_radix(d, 16).ok()).ok_or(format!("color JSON: \"{hex}\" is not #RRGGBB"))
 }
 
-/// A `$type: "rgb"` leaf: written `#RRGGBB` because a person picks a color
-/// that way, emitted as the one number it is because nothing that lights or
-/// blends with it wants text.
 pub fn rgb_literal(hex: &str) -> Result<String, String> {
     Ok(format!("0x{:06x}", packed(hex)?))
 }
 
-/// A line of a doc block that opens on `indent` then `*`, pushed in a space so
-/// its star lines up under the `/**` above it.
 pub fn align_star(line: String, indent: &str) -> String {
     match line.strip_prefix(indent).and_then(|rest| rest.strip_prefix('*')) {
         Some(rest) => format!("{indent} *{rest}"),
@@ -394,7 +338,6 @@ pub fn align_star(line: String, indent: &str) -> String {
     }
 }
 
-/// Lines joined as a file is: one to a line, and a newline at the end.
 pub fn file(lines: &[String]) -> String {
     lines.join("\n") + "\n"
 }

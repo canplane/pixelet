@@ -2,7 +2,7 @@
 
 //! Camera projection and interaction limits.
 
-/// Default tilt angle in degrees from the ground plane.
+/// Degrees from the ground plane.
 pub const DEFAULT_TILT_DEG: f64 = 30.0;
 
 pub mod camera_cfg {
@@ -11,70 +11,37 @@ pub mod camera_cfg {
         pub const NEAR: f64 = 0.1;
     }
     pub mod view {
-        /// How far over the floor under it (world/access.rs `floor_under`) the
-        /// orbit's eye stands at least, where the collision setting holds it:
-        /// one cell, so the eye is never in the cell its floor tops.
+        /// The orbit eye's least height over its floor: one cell, so the eye is never
+        /// in the cell its floor tops.
         pub const EYE_CLEARANCE_U: f64 = 1.0;
 
-        /// 4 * 4.
         pub const DEFAULT_DIST: f64 = 16.0;
         pub const DEFAULT_AZIMUTH: f64 = 0.0;
-        /// 0 = straight down from above, PI / 2 = horizontal. (90 - DEFAULT_TILT_DEG) * PI / 180.
+        /// 0 = straight down, PI / 2 = horizontal; (90 - DEFAULT_TILT_DEG)°.
         pub const DEFAULT_POLAR: f64 = 1.0471975511965976;
-        /// Picked against the scale bar's own reading, not as a raw distance
-        /// number with no felt meaning: at a 1080px viewport and Seoul's
-        /// latitude, a bar of at most 56px reads total_meters ≈ 0.092 * dist
-        /// before its 1/2/5 rounding (see shell/ui/scale_bar.rs), giving
-        /// MIN_DIST ≈ 0.18m — a felt-right target, not an exact contract (it
-        /// shifts with real screen size and latitude, as the scale bar's own
-        /// reading does). 1 * 2.
+        /// Felt-right against the scale bar: about 0.18 m on a 1080px viewport at
+        /// Seoul's latitude.
         pub const MIN_DIST: f64 = 2.0;
-        /// As far out as the terrain goes: looking straight down from here the
-        /// ground wants step 2^11, which level 10, the pyramid's top
-        /// (TOP_LEVEL), draws with its cells averaged 2×2 — about 24 km
-        /// on the scale bar. Past it no level is coarse enough. The band and
-        /// the clip planes follow the reach from up here, which is the planet's
-        /// own edge, so every zoom out to here shows the same octaves of
-        /// ground. 1024 * 2^8.
+        /// Looking straight down from here the ground wants step 2^11, which the
+        /// pyramid's top level draws (about 24 km on the scale bar); past it no level
+        /// is coarse enough.
         pub const MAX_DIST: f64 = 262144.0;
     }
     pub mod input {
-        /// How much of the viewport a vertical drag has to cover to sweep the
-        /// whole tilt range. Stated against the screen rather than as a rad/px
-        /// rate, because that is the only form comparable to azimuth: azimuth
-        /// has no gain at all, it tracks the cursor's angle around screen center
-        /// 1:1 (arcball — control/camera/input.rs's do_rotate).
-        ///
-        /// A fixed rad/px rate is what makes the two diverge: -0.012 at a 1080px
-        /// reference puts the whole 90-degree range inside about a tenth of a
-        /// screen height, roughly six times azimuth's angular speed for the same
-        /// finger travel. Both damp toward their target at the same rate, so a
-        /// polar settle after release would cover six times the distance and read
-        /// as the gesture still being held.
+        /// Stated against the screen, not as rad/px, to match azimuth's 1:1 arcball:
+        /// a fixed rate of -0.012 rad/px moved tilt six times faster than azimuth, and
+        /// its settle after release read as the gesture still being held.
         pub const TILT_SWEEP_FRACTION: f64 = 0.5;
         pub const DOLLY_GAIN: f64 = 0.0022;
-        /// azimuth is derived from atan2, unstable at small radius (Δangle ≈
-        /// tangential_jitter / radius — a few px of jitter swings the angle
-        /// wildly up close). Below this radius, azimuth tracking freezes instead
-        /// of following it (control/camera/input.rs's do_rotate and update_pinch).
+        /// atan2 swings wildly near the pivot; below this, azimuth freezes.
         pub const MIN_ROTATE_RADIUS_PX: f64 = 24.0;
         pub const MIN_TWIST_DIST_PX: f64 = 24.0;
-        /// Once a rotate-drag's total displacement passes this radius, whichever
-        /// axis dominates locks in for the rest of the gesture
-        /// (control/camera/input.rs's do_rotate). Without the lock a visually
-        /// "straight down" drag also sweeps azimuth unless it starts exactly on
-        /// the vertical centerline, which reads as a large unrelated spin once
-        /// polar has saturated against the ground-collision clamp. Smaller than MIN_ROTATE_RADIUS_PX on purpose — this needs only
-        /// enough displacement to tell vertical from horizontal, not a stable
-        /// angle reading.
+        /// Past this displacement the dominant axis locks for the gesture, or an
+        /// off-center vertical drag spins once tilt saturates. Smaller than
+        /// MIN_ROTATE_RADIUS_PX: it only needs to tell vertical from horizontal.
         pub const AXIS_LOCK_THRESHOLD_PX: f64 = 12.0;
-        /// A tap is a press whose total displacement from pointerdown stays
-        /// inside this (control/camera/input.rs's tap_start_x/y). Gating on any
-        /// nonzero pointermove delta instead would swallow genuine taps — map
-        /// recenter, object place and erase — because real pointers (trackpad
-        /// clicks, high-DPI mice, touch) report a pixel or two of jitter even on
-        /// a stationary click. Small enough that an intentional drag still starts
-        /// panning immediately, large enough to absorb that jitter.
+        /// Real pointers jitter a pixel or two on a still click; gating taps on any
+        /// movement swallowed them.
         pub const TAP_DRAG_THRESHOLD_PX: f64 = 4.0;
     }
     pub mod smooth {

@@ -12,8 +12,7 @@ constexpr std::uint64_t word_up(std::uint64_t n) noexcept {
     return (n + WORD_SZ - 1) & ~std::uint64_t{WORD_SZ - 1};
 }
 
-// The UTF-16 code units UTF-8 bytes decode to: one for each character, and
-// two for one past the basic plane, which four bytes encode.
+// Two units for a character past the basic plane, which UTF-8 encodes in four bytes.
 std::uint32_t utf16_units(std::span<const std::uint8_t> utf8) noexcept {
     std::uint32_t units = 0;
     for (std::uint8_t b : utf8) {

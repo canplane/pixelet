@@ -1,9 +1,4 @@
-// The frame's uniform as every pass declares it, at group 0 binding 0: the
-// view, the camera, the environment's run (look/environment.rs's output, sun_dir
-// through its padding), the effects' strengths, and the light's view for the
-// shadow, and the second light — the dimmer of the sun and the moon, which
-// casts no shadow; and the planet's curvature. The layout is record.rs's
-// FRAME_AT to name; the renderer fills it (gpu/renderer.rs `lay_out`).
+// The frame uniform, group 0 binding 0; layout named by record.rs's FRAME_AT.
 
 struct Frame {
   view_proj: mat4x4f,
@@ -33,19 +28,14 @@ struct Frame {
   _p3: f32,
   other_color: vec3f,
   _p4: f32,
-  // The planet the flat map is laid back on (look/globe.rs): the map
-  // center in the root frame, the planet's radius in its units (0 for none),
-  // and the center's ground height; then the center's Mercator exponential,
-  // its latitude's sine and cosine, and Mercator's radius in units.
+  // Map center in the root frame, planet radius (0 for none), center ground
+  // height; then the center's Mercator exponential, sin and cos of latitude, Mercator radius.
   planet: vec4f,
   globe: vec4f,
 };
 
-// Held as vec4 words, each field read from its own by `frame_<field>()`:
-// what the host and a shader share has no room inside it for a driver to
-// lay out its own way (issue/20260927-a-matrix-the-driver-reads-its-own-way.md),
-// and nothing builds the struct back, with which Safari's WebGPU lost its
-// GPU process.
+// Read field by field from vec4 words, never as a struct: a struct here lost
+// Safari's WebGPU its GPU process.
 @group(0) @binding(0) var<uniform> frame_words: array<vec4f, 21>;
 
 fn frame_view_proj() -> mat4x4f { return mat4x4f(frame_words[0], frame_words[1], frame_words[2], frame_words[3]); }
@@ -72,8 +62,6 @@ fn frame_other_color() -> vec3f { return frame_words[18].xyz; }
 fn frame_planet() -> vec4f { return frame_words[19]; }
 fn frame_globe() -> vec4f { return frame_words[20]; }
 
-// A point of the flat map where the planet has it, by the frame's values
-// (globe.wgsl).
 fn on_globe(p: vec3f) -> vec3f {
   return on_globe_of(p, frame_planet(), frame_globe());
 }

@@ -28,6 +28,5 @@ export function LanguageSection() {
 
 const styles = StyleSheet.create({
   section: { gap: 4 },
-  // A row reaches past the panel's padding to its edge, as a setting's does.
   choices: { marginHorizontal: -12 },
 });

@@ -1,22 +1,8 @@
 // @pxl/web/feature/debug/profiler/gauge.tsx
 
 /**
- * The gauge half of the instrument in
- * issue/20260909-cooperative-scheduler-and-task-ledger.md: the kernel's
- * numbers over the last few seconds, painted as a corner panel. It reads and
- * never writes — nothing here feeds back into scheduling.
- *
- * What the report has and this does not is detail, not kind: per-unit costs,
- * what is held, band reuse, mounts and the window peak stay in the report.
- * Everything here comes from the kernel's summary block, read in place
- * (view.ts) — the same block the report is built from. It is grouped the way
- * the report's lanes are (profiler.json FRAME_GROUPS), in the order a reader
- * asks: **pace**, where the turn's time went against the display's measured
- * frame; **ground**, what the chunk scheduler is holding and what its
- * ceilings left behind; **draw**, the GPU's time and what it drew; **work**,
- * what is being built and fetched; **memory**, what all of it holds. Task
- * latency with its commonest failure and the LoAF CPU-vs-render split follow.
- * A value reads as lane.ts says a lane does.
+ * The kernel's numbers over the last few seconds as a corner panel, read in
+ * place from the summary block the report is built from. Read-only.
  */
 
 import { round } from "@xpute/core/math/scalar.ts";
@@ -31,34 +17,23 @@ import { loafSupported, type LongFrame } from "./long-frame.ts";
 import { CORE } from "@/kernel/mem.ts";
 import { alpha, color, font } from "@/shared/ui/theme.ts";
 
-/** Tags listed under the triangle total — the heaviest few carry the cost —
- * and spans under the GPU's time, and levels under the terrain's triangles. */
 const CENSUS_ROWS = 5;
 const SPAN_ROWS = 3;
 const LEVEL_ROWS = 3;
-/** Share of moving frames allowed to miss a vsync before the row warns. */
 const MISSED_WARN_SHARE = 0.1;
 /** LoAF's own threshold for a long frame. */
 const LONG_FRAME_MS = 50;
-/** The interaction phase runs unbudgeted and is meant to be O(1) — camera,
- * frame, puck, companion. Past this it is eating the budget the phases after
- * it receive. */
+/** The unbudgeted interaction phase is meant to be O(1). */
 const INTERACTION_WARN_MS = 2;
-/** A pending chunk waiting longer than this is being passed over rather than
- * queued. Ten seconds is above what a full zoom-out's queue takes to drain
- * (~7 s against one scan slot), so an ordinary backlog never trips it, and
- * below the sixteen-second wait that aging exists to prevent: past it, aging
- * is not doing its job. */
+/** Above a full zoom-out's drain (~7 s) and below the 16 s wait aging
+ * exists to prevent. */
 const STARVED_MS = 10_000;
 
-/** The levels a bitmask names, as the census packs them (world/chunk/table.rs). */
 function levelBits(mask: number): string {
   const out: number[] = [];
   for (let k = 0; mask >>> k; k++) if (mask & (1 << k)) out.push(k);
   return out.length ? out.join("\u00b7") : "-";
 }
-/** A sheet larger than it starts, and this sparse, is one compaction should
- * already have halved. */
 const ATLAS_INITIAL = 1024;
 const ATLAS_SPARSE_PCT = 25;
 
@@ -71,14 +46,10 @@ function Row(props: { k: string; v: string; warn?: boolean }) {
   );
 }
 
-/** A note where a row's numbers would be. */
 const Note = ({ children }: { children: string }) => <Text style={[gauge.text, gauge.key]}>{children}</Text>;
 
 const Rule = () => <View style={gauge.rule} />;
 
-/** A section's start: the rule that separated one from the next, with the word
- * it separates on it. The panel runs to forty rows and a reader is looking for
- * one of them; a bare rule says where a group ends and never what it is. */
 export const Head = ({ children, end }: { children: string; end?: ReactNode }) => (
   <View style={gauge.head}>
     <Text style={[gauge.text, gauge.headText]}>{children}</Text>
@@ -89,8 +60,6 @@ export const Head = ({ children, end }: { children: string; end?: ReactNode }) =
 
 const phase = (f: FrameSummary, name: string): Spread => f.phases.find((p) => p.name === name)?.spread ?? { p50: 0, p95: 0, max: 0 };
 
-/** The panel over one read of the window; the overlay polls and hands it down,
- * since the start/stop buttons above the panel read the same `rec`. */
 export function ProfilerGauge({ g }: { g: Gauge | null }) {
   if (g === null) return <Note>no window open</Note>;
 
@@ -125,13 +94,8 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           />
           <Row k="chunks p95" v={n1(f.chunks.p95)} />
           {
-            /* The turn in parts: the effects, the stage, and the longest
-              single effect with its name. The tick's own numbers are above,
-              so what none of the three accounts for is `task` less them —
-              the region nobody has measured, which is where a fold once took
-              seventy milliseconds of a turn whose tick was one and a half.
-              Nothing in the effects may be work; they decide what is wanted
-              and are not budgeted. */
+            /* `task` less the three parts is the unmeasured region, where a fold
+                          once took 70 ms of a turn. */
           }
           <Row k="turn eff/stage" v={`${n1(f.last.turn_effects_ms)}/${n1(f.last.turn_stage_ms)}ms`} warn={f.last.turn_effects_ms > 4} />
           <Row k="worst effect" v={`${n1(f.last.turn_step_ms)}ms ${EFFECT_NAMES[f.last.turn_step_name] ?? "-"}`} warn={f.last.turn_step_ms > 4} />
@@ -143,35 +107,18 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
             v={`${f.last.lod_offscreen_pending} ${round(f.last.lod_oldest_release_ms)}/${round(f.last.lod_oldest_visible_ms)}ms`}
             warn={Math.max(f.last.lod_oldest_release_ms, f.last.lod_oldest_visible_ms) > STARVED_MS}
           />
-          {
-            /* Moves waiting: chunks built for a move and ready while the rest
-              of it is not, moves the arena had no room for, and moves under
-              way and not all ready. */
-          }
           <Row
             k="move hid/unc/unrdy"
             v={`${round(f.last.stale_hidden)}/${round(f.last.stale_uncovered)}/${round(f.last.stale_unready)}`}
           />
-          {
-            /* A bake thrown away because the slots its mesh fills were not
-              free, and the tiers landed across more than one slot because they
-              had more boxes than one holds: the levels are the waiters'
-              (world/chunk/mesh_slot.rs). */
-          }
           <Row
             k="slot wait/chained"
             v={`${round(f.last.slot_waits)}/${round(f.last.slot_chained)} L${levelBits(f.last.slot_wait_levels)}`}
             warn={f.last.slot_waits > 0}
           />
           {
-            /* What the frame's ceilings left behind: chunks on screen wanting a
-              layout the commit pass did not reach, chunks the selection wants
-              that are not mounted, and pages that found every record carrying
-              one worth more. `full` where the mount pass stopped because the
-              table is full rather than because its own cap was spent — the one
-              of the three that says a number is too small rather than that a
-              frame was short. None of those numbers was derived; this is what
-              says whether one of them is holding the screen back. */
+            /* `full`: the mount pass stopped on a full table rather than its own
+                          cap, i.e. a number is too small. */
           }
           <Row
             k="cap commit/mount/page"
@@ -197,18 +144,8 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           <Head>memory</Head>
           <Row k="heap Δ" v={`${f.used_delta_mb >= 0 ? "+" : ""}${f.used_delta_mb}MB`} />
           {
-            /* How far the allocator has ever reached into its range, what is
-              on loan now, the range, what a run holds against what is out in
-              slots of it, what it refused and the largest block it has free.
-              All come from the kernel's own seam to it (host.rs) — the shell
-              never decodes the allocator's bytes, which is what let the last
-              probe read a deleted structure's row for two commits without
-              saying so. The two shares are the reader's arithmetic on lanes
-              beside them and not lanes of their own: a lane that restates
-              two others is the one that goes stale unnoticed. `live` counts a
-              carved run whole, so it is what the heap has committed; `slot`
-              is what anything actually holds, and the gap between the two is
-              what the carving costs. */
+            /* `live` counts a carved run whole; `slot` is what is held. The shares
+                          are computed here, not separate lanes. */
           }
           <Row
             k="used/live of"
@@ -221,19 +158,10 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
             warn={f.last.heap_run_mb > 1 && f.last.heap_slot_mb < f.last.heap_run_mb / 2}
           />
           <Row k="refused / free" v={`${f.last.heap_refusals} / ${n1(f.last.heap_largest_free_mb)}MB`} warn={f.last.heap_refusals > 0} />
-          {
-            /* Pages are records in `.fixed`, a fixed number of them a level,
-              so the count is what the window holds and not a cost in bytes. */
-          }
           <Row
             k="pages"
             v={`${f.last.pages_total}${f.last.pages_total > 0 ? ` in L${f.last.pages_by_level.findIndex((n) => n > 0)}..L${f.last.pages_by_level.findLastIndex((n) => n > 0)}` : ""}`}
           />
-          {
-            /* The shell's own number: the reservation is the central scheduler's,
-              and the kernel is handed a range rather than told how big the page
-              thinks it is. */
-          }
           <Row k="core MB" v={`${round(CORE.buffer.byteLength / 1048576)}MB`} />
           <Row k="buffers / arena" v={`${f.last.buffers} ${valueText("_mb", f.last.buffer_mb)} / ${valueText("_mb", f.last.arena_mb)}`} />
           <Row k="targets MB" v={`d${f.last.tex_depth_mb} s${f.last.tex_shadow_mb} l${f.last.tex_layers_mb}`} />
@@ -263,7 +191,6 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
   );
 }
 
-/** The panel's type: a small monospace, which the numbers line up in. */
 export const gauge = StyleSheet.create({
   text: { fontFamily: font.mono, fontSize: 10.5, lineHeight: 16, color: alpha(color.white, 0.9) },
   key: { color: alpha(color.white, 0.45) },
@@ -271,8 +198,7 @@ export const gauge = StyleSheet.create({
   row: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
   rule: { marginVertical: 4, borderTopWidth: 1, borderTopColor: alpha(color.white, 0.1) },
   head: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8, marginBottom: 2 },
-  // Ten, macOS's smallest text style: the panel is dense on purpose, and
-  // what is smaller than any scale sets does not render on a 1x screen.
+  // macOS's smallest text style; smaller does not render on a 1x screen.
   headText: { fontSize: 10, letterSpacing: 0.4, textTransform: "uppercase", color: alpha(color.white, 0.3) },
   headLine: { flex: 1, borderTopWidth: 1, borderTopColor: alpha(color.white, 0.1) },
 });

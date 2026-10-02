@@ -1,22 +1,10 @@
 // @pxl/native/platform/sensor.ts
 
 /**
- * The device's two sensors as the OS grants them, through
- * expo-horizon-location: the position the kernel's geolocation watches and
- * the heading its compass does (crates/pxl/web/kernel/src/control/sensor).
- * It is expo-location, forked so a Quest build reads the position without
- * Google Play Services, which Horizon OS has none of; a Quest has no GPS
- * either, and answers from the network, and no compass, which
- * `headingAvailable` says. Each crosses as the page's do
- * (platform/web/sensor.ts), so the kernel hears a device and a browser the
- * same way — the heading in the place Safari's `webkitCompassHeading` takes.
- *
- * The OS asks for the one permission both need, on the first watch. A watch
- * that ends — refused, failed — is let go here and reported, as a page clears
- * a dead geolocation watch: the kernel's next start begins a new one rather
- * than finding the old one still held. The compass is where a device and a
- * browser part: Core Location speaks only when the heading turns and says
- * when it fails, so its silence is no loss (`orientationSilenceIsLoss`).
+ * Position and heading through expo-horizon-location, the expo-location fork
+ * that reads position without Google Play Services (Horizon OS has none).
+ * Each crosses as the page's do, the heading where Safari's
+ * `webkitCompassHeading` goes.
  */
 
 import { AppState } from "react-native";
@@ -34,7 +22,6 @@ export function orientationSupported(): boolean {
   return PLATFORM.headingAvailable();
 }
 
-/** The heading needs no prompt of its own: the location permission covers it. */
 export function orientationNeedsPermission(): boolean {
   return false;
 }
@@ -51,18 +38,10 @@ function sendPermission(sensor: Sensor, answer: PermissionAnswer): void {
   send_next(Command.SENSOR_PERMISSION, encode_sensor_permission({ sensor, answer }));
 }
 
-/** The permission as last seen: what a return to the app compares against. */
 let granted: boolean | null = null;
 
-/** Whether the OS lets the app read where it is, asking only the first time.
- *
- * Asking is a system screen over the app even when the answer is already
- * given: Android opens its permission activity and closes it at once, and
- * the app pauses and resumes under it. A resume restarts the sensors, and a
- * sensor that asked on every start asked again — seven times a second, the
- * position never landing. So what is already answered is only read, as a
- * page's permission is; a refusal is not asked again, and a grant made in the
- * settings reaches the kernel on the way back (`recheck`). */
+/** Only reads an answered permission: asking opens an Android activity,
+ * and the resume restarted the sensors, which asked again in a loop. */
 async function permitted(): Promise<boolean> {
   const now = await Location.getForegroundPermissionsAsync();
   const { status } = now.status === Location.PermissionStatus.UNDETERMINED ? await Location.requestForegroundPermissionsAsync() : now;
@@ -70,11 +49,7 @@ async function permitted(): Promise<boolean> {
   return granted;
 }
 
-/** A grant made in the device's settings, which the app can only leave for
- * and come back from, reaches the kernel as it comes back — as a page's
- * permission `change` does (platform/web/sensor.ts), the one way back from a
- * refusal, since nothing else would ask again. What it returns stops
- * following. */
+/** A grant made in the device's settings reaches the kernel on return. */
 export function permissionFollow(): () => void {
   const back = AppState.addEventListener("change", (state) => {
     if (state === "active") recheck();
@@ -92,9 +67,6 @@ function recheck(): void {
   });
 }
 
-/** A watch, or one being started: a stop while the permission is still being
- * asked for ends the start where it lands rather than leaving a watch no one
- * holds. */
 interface Watch {
   subscription: Location.LocationSubscription | null;
   stopped: boolean;
@@ -108,8 +80,6 @@ function watchEnd(watch: Watch): void {
 
 let geolocation: Watch | null = null;
 
-/** The watch ended on its own: let go of it, and the kernel hears why. A
- * watch already stopped or replaced says nothing. */
 function geolocationFail(watch: Watch, code: GeolocationErrorCode): void {
   if (geolocation !== watch) return;
   watchEnd(watch);
@@ -144,8 +114,6 @@ export function geolocationStop(): void {
 
 let orientation: Watch | null = null;
 
-/** The compass ended on its own: a refusal is the permission's answer, and a
- * failure is the compass lost. */
 function orientationFail(watch: Watch, refused: boolean): void {
   if (orientation !== watch) return;
   watchEnd(watch);
@@ -162,7 +130,6 @@ export function orientationListen(): void {
     if (!(await permitted())) return orientationFail(watch, true);
     const subscription = await Location.watchHeadingAsync(
       (h) => {
-        // True north where the OS has a fix to correct by, magnetic otherwise.
         const heading = h.trueHeading >= 0 ? h.trueHeading : h.magHeading;
         send_next(Command.SENSOR_ORIENTATION, encode_sensor_orientation({ webkit_compass_heading: heading, alpha: null, beta: null, gamma: null }));
       },

@@ -1,29 +1,9 @@
 // cpp/xpute/runtime/sched/task.hpp
 
-// The executor a guest's tasks run on, installed once, the way a global
-// allocator is: `Executor` is the interface; the program that assembles the
-// guest installs one (`set_executor`); and code spawns through `spawn`
-// without naming it. Which tasks there are is the code's own, not the
-// assembly's.
-//
-// A task is a coroutine, `Task<>`, as a Rust one is a future. Its frame is
-// taken from the guest's heap once, when it is made — through the global
-// `operator new` the guest's allocator replaces (mem/heap.hpp) — and a frame
-// that finds no room makes no task, which `spawn` answers false for. A task
-// awaits another `Task<T>` as a future awaits one: the awaited runs in the
-// awaiting one's place and hands back its value, and when it waits, the
-// whole chain waits.
-//
-// What wakes a waiting task is a `Waker`: the task's handle and the executor
-// it runs on, which queues it again. What an executor does with a task — a
-// pool, a queue, a priority — is its own. A task yields against the turn
-// (edge.hpp), and the guest polls the executor inside its turn; `pending` is
-// how a turn that polled nothing learns it still owes the tasks it woke a
-// turn.
-//
-// A task carries its priority from the start, and an executor may ignore
-// it. Until one orders by it, nothing may rest on the order tasks are polled
-// in: work that has an order within a turn runs in one task, in that order.
+// Coroutine tasks and the executor they run on, installed once like a global
+// allocator. A task's frame comes from the guest's heap; one that finds no
+// room makes no task. An executor may ignore priority, so nothing may rest on
+// the order tasks are polled in.
 
 #pragma once
 
@@ -38,25 +18,21 @@
 
 namespace xpute {
 
-// How soon a task wants polling among those queued: lower sooner.
+// Lower is sooner.
 using Priority = std::uint8_t;
 
 class Executor {
   public:
-    // Takes `task` to resume at `priority`; false when it has no room for it.
     virtual bool spawn(std::coroutine_handle<> task, Priority priority) noexcept = 0;
-    // Queues a task that was waiting, to be resumed by the next poll.
     virtual void wake(std::coroutine_handle<> task) noexcept = 0;
-    // Resumes every task queued since the last poll. Never from inside a task.
+    // Never from inside a task.
     virtual void poll() noexcept = 0;
-    // Whether a task was queued since the last poll began.
     virtual bool pending() const noexcept = 0;
 
   protected:
     ~Executor() = default;
 };
 
-// What a waiting task is woken by: its handle and the executor it runs on.
 struct Waker {
     std::coroutine_handle<> task;
     Executor *executor = nullptr;
@@ -70,14 +46,11 @@ template <class T = void> class Task;
 
 namespace task_detail {
 
-// What every task's promise holds: the executor it runs on, which a task it
-// awaits inherits, and the task to go on with once it is done — none for one
-// spawned, whose frame goes when it is.
+// A spawned task has no continuation; its frame is destroyed when it ends.
 struct PromiseBase {
     Executor *executor = nullptr;
     std::coroutine_handle<> continuation;
 
-    // The frame from the guest's heap, and none where there is no room.
     static void *operator new(std::size_t n) noexcept { return ::operator new(n, std::nothrow); }
     static void operator delete(void *p, std::size_t n) noexcept { ::operator delete(p, n); }
 
@@ -135,10 +108,8 @@ template <class T> class [[nodiscard]] Task {
         if (h_) h_.destroy();
     }
 
-    // False for a task whose frame found no room.
     explicit operator bool() const noexcept { return bool(h_); }
 
-    // The frame, given up: what `spawn` hands an executor.
     Handle release() noexcept { return std::exchange(h_, {}); }
 
     struct Awaiter {
@@ -154,8 +125,6 @@ template <class T> class [[nodiscard]] Task {
         }
     };
 
-    // Awaited from another task: runs in its place, on its executor, and
-    // hands back its value.
     Awaiter operator co_await() noexcept { return Awaiter{h_}; }
 
   private:
@@ -179,25 +148,18 @@ inline Task<void> Promise<void>::get_return_object_on_allocation_failure() noexc
 
 } // namespace task_detail
 
-// The waker of the task `h` is the frame of.
 template <class P> Waker waker_of(std::coroutine_handle<P> h) noexcept {
     return Waker{h, h.promise().executor};
 }
 
-// Installs the executor, before anything spawns.
 void set_executor(Executor &executor) noexcept;
 
-// The installed executor, or none.
 Executor *executor() noexcept;
 
-// Spawns `task` at `priority` for as long as it runs. False when no
-// executor is installed, its frame found no room, or the executor has none.
 bool spawn(Task<> task, Priority priority) noexcept;
 
-// Polls the installed executor, if there is one.
 void poll() noexcept;
 
-// Whether the installed executor has a task queued and not yet polled.
 bool pending() noexcept;
 
 } // namespace xpute

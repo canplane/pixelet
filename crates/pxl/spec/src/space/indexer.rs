@@ -1,70 +1,10 @@
 // pxl-spec/space/indexer.rs
-// Multi-level spatial indexing and hierarchy helpers.
-
-//! Multi-level spatial topology and packed hierarchy helpers.
-//!
-//! This module defines the packed level hierarchy over IVec and provides:
-//! - aligned level boundary helpers (BASE / CENTER / LIMIT)
-//! - parent-relative local indices (IDX_IN)
-//! - packed logical index conversion (IDX / FROM_*_IDX)
-//!
-//! Hierarchy (dimension-agnostic — a space-axis scale tier, independent of
-//! what shape of data any given layer stores at that tier):
-//! - L5 (Shard)         : global sharding domain
-//! - L4 (Anchor)        : floating-origin anchor domain
-//! - L3 (Page)          : network transaction / paging unit
-//! - L2 (Chunk)         : render / LOD batching unit
-//! - L1 (Block)         : fundamental canonical spatial unit (`u`)
-//! - L0 (Sub-block/SVO) : fractional / sub-block layer handled outside this module
-//!
-//! Packed lane layout (inherited from PVF3 IVec):
-//! [ 63 ................. 40 | 39 ................. 16 | 15 ................. 0 ]
-//! [      Lane X (24 bits)   |      Lane Y (24 bits)   |      Lane Z (16 bits)   ]
-//!
-//! Physical coordinate interpretation:
-//! - X: signed lane with cyclic seam semantics
-//! - Y: signed lane for north-south extent
-//! - Z: signed lane for altitude
-//!
-//! Address / index domain:
-//! - `addr` is a packed L1-granularity address in IVec space.
-//! - IVec storage is a packed bitfield. Signedness is a lane interpretation rule,
-//!   not a storage rule.
-//! - IDX / IDX_IN are per-axis coordinates at the named level, computed via
-//!   ivec.sh's per-lane shift — never a raw packed-word shift, which leaks
-//!   bits across lane boundaries and corrupts every lane but the outermost
-//!   one, positive or negative alike. Safe to reuse for spatial arithmetic
-//!   (add/sub) directly.
-//!
-//! Offset rule:
-//! - "offset" is reserved for addr diffs only, i.e. differences between two L1 addrs.
-//! - Higher-level hierarchy relations use IDX / IDX_IN, not "offset".
-//!
-//! Axis participation rule:
-//! - BASE / LIMIT are computed mechanically from packed masks and ranges.
-//! - If a level range reaches or exceeds a lane width, that lane collapses at that
-//!   level.
-//! - In a collapsed lane, BASE and LIMIT become identical on that axis, so that
-//!   axis contributes no partition range above that level.
-//!
-//! Current consequence:
-//! - X / Y remain hierarchical through L5.
-//! - Z collapses at L5 (Z_W = 16, L5 = 2^16), so L5 is effectively horizontal.
-//!
-//! Naming:
-//! - RANGE   = absolute coordinate range at that level, measured in canonical `u` units
-//! - SPAN_IN = number of child slots / units contained in the parent level
-//!
-//! Range convention:
-//! - BASE is inclusive
-//! - LIMIT is exclusive
-
-// Uppercase throughout, as the notation these operations are written in: one
-// that holds no state and closes over nothing is named the way a C header
-// names its macros. Rust's own answer to a macro like that is a `const fn`,
-// which it cases snake, so the notation and the language disagree here and
-// the file keeps the notation — suspended once for the file, which is the
-// level the choice is made at rather than item by item.
+//! The packed level hierarchy over IVec: L4 anchor, L3 page, L2 chunk, L1
+//! block (`u`). Lanes are X 24 bits (wraps at the seam), Y 24, Z 16, each
+//! signed. Per-level indices shift each lane on its own (`ivec::sh`); a
+//! whole-word shift would leak bits across lanes. BASE is inclusive and LIMIT
+//! exclusive; a lane narrower than a level collapses there.
+// Uppercase as the notation these macro-like helpers are written in.
 #![allow(non_snake_case)]
 
 use super::hierarchy::Scale;
@@ -72,51 +12,28 @@ use super::pvf3::ivec::{self, add, fill, IVec};
 use super::pvf3::pvf3::{self, Pvf3};
 use xpute_core::abi::word::{bit64, field_mask64};
 
-// ---- Hierarchy Configuration ----
-
-/// Each tier's side: its cumulative packed bit distance from the canonical
-/// base unit (`u` = L1). The one place a tier's size is spelled; every other
-/// extent that is a tier's is stepped from these.
+/// Each tier's side against the unit `u` = L1. Every other tier extent steps from these.
 pub const L1: Scale = Scale::of(0);
 pub const L2: Scale = Scale::of(6);
 pub const L3: Scale = Scale::of(9);
 pub const L4: Scale = Scale::of(12);
-// pub const L5: Scale = Scale::of(16);
-
-// ---- Absolute Ranges (in Canonical `u` Units) ----
-
-// canonical base unit: 1u = 1 L1 block
-pub const L2_RANGE: u64 = L1.count_in(L2) as u64; // 1 << 6  = 64u
-pub const L3_RANGE: u64 = L1.count_in(L3) as u64; // 1 << 9  = 512u
-pub const L4_RANGE: u64 = L1.count_in(L4) as u64; // 1 << 12 = 4096u
-                                                  // pub const L5_RANGE: u64 = L1.count_in(L5) as u64; // 1 << 16 = 65536u
-
-// ---- Relative Spans inside Parent Levels ----
+pub const L2_RANGE: u64 = L1.count_in(L2) as u64;
+pub const L3_RANGE: u64 = L1.count_in(L3) as u64;
+pub const L4_RANGE: u64 = L1.count_in(L4) as u64;
 
 pub const L2_SPAN_IN_L3: u64 = L2.count_in(L3) as u64;
 pub const L2_SPAN_IN_L4: u64 = L2.count_in(L4) as u64;
 pub const L3_SPAN_IN_L4: u64 = L3.count_in(L4) as u64;
-// pub const L3_SPAN_IN_L5: u64 = L3.count_in(L5) as u64;
-// pub const L4_SPAN_IN_L5: u64 = L4.count_in(L5) as u64;
-
-// ---- Hierarchy Masks ----
-
-/// These are component-wise packed masks used to isolate lower-level bits.
-/// `ivec::fill` is not const, so each is the word it evaluates to, pinned
+/// `ivec::fill` is not const, so each is the word it evaluates to, pinned by a test against `fill`.
 /// by a test against `fill`.
 pub const L2_MASK: IVec = fill_const(field_mask64(L2.shamt() as u32, 0));
 pub const L3_MASK: IVec = fill_const(field_mask64(L3.shamt() as u32, 0));
 pub const L4_MASK: IVec = fill_const(field_mask64(L4.shamt() as u32, 0));
-// pub const L5_MASK: IVec = fill_const(field_mask64(L5.shamt() as u32)); // Z masks out completely at this level (Z_W = 16)
 
-/// `ivec::fill(e)` for a non-negative `e`, at compile time.
 const fn fill_const(e: u64) -> IVec {
     ((e & 0xff_ffff) << 40) | ((e & 0xff_ffff) << 16) | (e & 0xffff)
 }
 
-// ---- Level Navigation ----
-
-/// Resolves aligned level boundaries from an absolute packed L1 address.
 pub fn L2_BASE(addr: IVec) -> IVec {
     addr & !L2_MASK
 }
@@ -126,7 +43,6 @@ pub fn L3_BASE(addr: IVec) -> IVec {
 pub fn L4_BASE(addr: IVec) -> IVec {
     addr & !L4_MASK
 }
-// pub fn L5_BASE(addr: IVec) -> IVec { addr & !L5_MASK }
 
 pub fn L2_CENTER(addr: IVec) -> IVec {
     L2_BASE(addr) | (fill(L2_RANGE as i64) >> 1)
@@ -137,23 +53,9 @@ pub fn L3_CENTER(addr: IVec) -> IVec {
 pub fn L4_CENTER(addr: IVec) -> IVec {
     L4_BASE(addr) | (fill(L4_RANGE as i64) >> 1)
 }
-// pub fn L5_CENTER(addr: IVec) -> IVec { L5_BASE(addr) | (fill(L5_RANGE as i64) >> 1) }
 
-/// The center of the cell that contains `addr`, for a span of `1 << shamt`
-/// canonical units — the parameterized form of the three CENTER helpers
-/// above, for a span resolved at runtime (a render tier, say) rather than
-/// named at compile time.
-///
-/// PVF3 rather than IVec, because the half is sub-integer at the base level:
-/// a 1u cell's center is 0.5u and lives in the fractional lane. L2/L3/L4 can
-/// OR their half into the integer lane only because their spans are 64u and
-/// up; this is the same expression written where it also holds at shamt 0.
-///
-/// All three axes, symmetric. A cell is a cube and its center is its center —
-/// X/Y quantized while Z is left raw (or the reverse) is two coordinate
-/// systems in one point, and everything that marks a cell here already avoids
-/// it: a cell's anchor center adds the half on every axis, and hover, placed
-/// cubes and the location puck all read a cell the same way.
+/// The center of the `1 << shamt` cell holding `addr`, on all three axes.
+/// PVF3 because at shamt 0 the half is fractional.
 pub fn SPAN_CENTER(out: &mut Pvf3, addr: IVec, shamt: u32) -> &mut Pvf3 {
     out.i = if shamt == 0 { addr } else { addr & !fill(field_mask64(shamt, 0) as i64) };
     out.f = 0;
@@ -171,15 +73,7 @@ pub fn L3_LIMIT(addr: IVec) -> IVec {
 pub fn L4_LIMIT(addr: IVec) -> IVec {
     add(L4_BASE(addr), fill(L4_RANGE as i64))
 }
-// pub fn L5_LIMIT(addr: IVec) -> IVec { add(L5_BASE(addr), fill(L5_RANGE as i64)) }
-
-// ---- Parent-relative Local Indexing ----
-
-/// Returns the raw packed local index of a child level within its parent level.
-///
-/// Semantics:
-/// - IDX_IN is a logical local key, derived by isolating the bits that
-///   participate inside the parent level.
+/// The packed local index of a child level within its parent.
 pub fn L1_IDX_IN_L2(addr: IVec) -> IVec {
     addr & L2_MASK
 }
@@ -198,18 +92,7 @@ pub fn L2_IDX_IN_L4(addr: IVec) -> IVec {
 pub fn L3_IDX_IN_L4(addr: IVec) -> IVec {
     addr & (L4_MASK & !L3_MASK)
 }
-// pub fn L3_IDX_IN_L5(addr: IVec) -> IVec { addr & (L5_MASK & !L3_MASK) }
-// pub fn L4_IDX_IN_L5(addr: IVec) -> IVec { addr & (L5_MASK & !L4_MASK) }
-
-// ---- Global Index Conversion ----
-
-/// Converts between aligned packed level bases and logical indices.
-///
-/// Semantics:
-/// - BASE(addr) first clears lower-level bits; ivec.sh then shifts each lane
-///   independently, never the whole packed word, so no lane leaks bits into
-///   its neighbor.
-/// - FROM_*_IDX restores packed base form from that logical index field.
+/// Packed base to per-level index and back.
 pub fn L2_IDX(addr: IVec) -> IVec {
     ivec::sh(L2_BASE(addr), -L2.shamt())
 }
@@ -219,7 +102,6 @@ pub fn L3_IDX(addr: IVec) -> IVec {
 pub fn L4_IDX(addr: IVec) -> IVec {
     ivec::sh(L4_BASE(addr), -L4.shamt())
 }
-// pub fn L5_IDX(addr: IVec) -> IVec { ivec::sh(L5_BASE(addr), -L5.shamt()) } // Z has collapsed at L5
 
 pub fn FROM_L2_IDX(idx: IVec) -> IVec {
     ivec::sh(idx, L2.shamt())
@@ -230,7 +112,6 @@ pub fn FROM_L3_IDX(idx: IVec) -> IVec {
 pub fn FROM_L4_IDX(idx: IVec) -> IVec {
     ivec::sh(idx, L4.shamt())
 }
-// pub fn FROM_L5_IDX(idx: IVec) -> IVec { ivec::sh(idx, L5.shamt()) }
 
 #[cfg(test)]
 #[path = "indexer.test.rs"]

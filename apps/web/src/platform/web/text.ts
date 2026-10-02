@@ -1,17 +1,14 @@
 // @pxl/web/platform/web/text.ts
 
 /**
- * Text in the platform's own family, as the kernel asks for it
- * (kernel/host.ts): how wide a line runs, and a line drawn. On the web, the
- * page's family on the browser's canvas, which falls back through every
- * script and draws color emoji as the page's own text does.
+ * Text measured and drawn on the browser's canvas, which falls back through
+ * every script and draws color emoji as the page does.
  */
 
 import type { f32, u32 } from "@xpute/core/abi/word.ts";
 
 let family: string | null = null;
 
-/** A weight and a size in the page's own family, read off the page once. */
 function cssFont(weight: u32, px: f32): string {
   family ??= globalThis.document ? getComputedStyle(document.body).fontFamily : "sans-serif";
   return `${weight} ${px}px ${family}`;
@@ -19,13 +16,11 @@ function cssFont(weight: u32, px: f32): string {
 
 let canvas: OffscreenCanvasRenderingContext2D | null | undefined;
 
-/** A 2D context, where the runtime has one. */
 function context(): OffscreenCanvasRenderingContext2D | null {
   if (canvas === undefined) canvas = typeof OffscreenCanvas === "undefined" ? null : new OffscreenCanvas(1, 1).getContext("2d", { willReadFrequently: true });
   return canvas;
 }
 
-/** How far a line of `text` runs at `weight` and `px`, in pixels. */
 export function textWidth(weight: u32, px: f32, text: string): f32 {
   const ctx = context();
   if (ctx === null) return text.length * px * 0.6;
@@ -33,10 +28,7 @@ export function textWidth(weight: u32, px: f32, text: string): f32 {
   return ctx.measureText(text).width;
 }
 
-/** A line of `text` at `weight` and `px` in `rgba` (0xRRGGBBAA), starting at
- * `x` with the middle of its em box on the middle row, drawn into `out`:
- * `width` by `height` pixels, RGBA a byte a channel, top row first, alpha not
- * premultiplied. */
+/** `rgba` is 0xRRGGBBAA; `out` is RGBA, top row first, not premultiplied. */
 export function textRaster(weight: u32, px: f32, rgba: u32, text: string, x: f32, width: u32, height: u32, out: Uint8Array): void {
   const ctx = context();
   if (ctx === null) return;

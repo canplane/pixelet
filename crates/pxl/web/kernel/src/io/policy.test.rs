@@ -1,6 +1,4 @@
 // pxl-kernel/io/policy.test.rs
-//
-// The kernel's order, as the module's comment argues it.
 
 use super::*;
 
@@ -27,8 +25,6 @@ fn the_ocean_goes_before_any_page_and_the_ground_before_what_stands_on_it() {
     assert!(before(ocean, terrain) && before(terrain, asset) && before(asset, places));
 }
 
-/// What the view needs goes out from the eye, what it sees first; every
-/// reason it needs a page for is one order; speculation follows.
 #[test]
 fn what_the_view_needs_is_asked_for_out_from_the_eye_and_speculation_after() {
     let t = |why, seen, near| key(Category::terrain, at(why, seen, near));

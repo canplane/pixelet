@@ -1,21 +1,8 @@
 // pxl-render/gpu/stars.rs
 
-//! The stars: the Yale Bright Star Catalog (Hoffleit and Warren, fifth
-//! revised edition, 1991; CDS V/50), baked by pxl-tool/bin/bake_stars.rs into eight
-//! bytes a star, and drawn as one instanced strip of four corners a star
-//! (frame/shader/stars.wgsl) right after the sky, under everything else.
-//!
-//! What never changes of a star is taken once, here, when the pass is made:
-//! its direction in the equatorial frame, its flux from its magnitude, and
-//! its color from its temperature — Planck's law at three wavelengths,
-//! which the vertex stage would otherwise work out for each of a star's four
-//! corners every frame. What the frame changes — where the sky has turned
-//! to, the air the star is seen through — stays the vertex stage's.
-//!
-//! What it costs: 72,768 bytes in the module, 291,072 on the device, eight
-//! floats a star; a draw of 9,096 quads, most of whose stars are culled in
-//! the vertex stage as too faint for the frame's eight bits, and none at all
-//! while the stars are faded out, which is every hour of daylight.
+//! The Yale Bright Star Catalog (Hoffleit and Warren 1991, CDS V/50), drawn
+//! after the sky as one instanced strip. Direction, flux and color are computed
+//! once here rather than per corner per frame. Nothing is drawn in daylight.
 
 use pxl_spec::space::mat4::Mat4;
 use pxl_spec::space::v3::V3;
@@ -28,14 +15,11 @@ use crate::gpu::pipeline::{Built, Pipelines};
 use crate::look::atmosphere::transmittance;
 use crate::look::environment::{ENV_AIR, ENV_SKY, ENV_STARS};
 
-/// The catalog as the bake wrote it.
 const CATALOG: &[u8] = include_bytes!("../frame/shader/bright-stars.bin");
 const STAR_BYTES: usize = 8;
-/// Floats a star takes on the device: its direction and its flux, then its
-/// color and a word of padding (stars.wgsl's `catalog`).
+/// Direction and flux, then color and padding.
 const STAR_FLOATS: usize = 8;
 
-/// Floats the Stars uniform (stars.wgsl's Stars) holds.
 pub(crate) const STARS_FLOATS: usize = 16 + 16 + 4 + 4 + 4;
 pub(crate) const SKY: usize = 16;
 pub(crate) const VIEWPORT: usize = 32;
@@ -44,7 +28,6 @@ pub(crate) const DEPTH: usize = 36;
 pub(crate) const DENSITY: usize = 39;
 pub(crate) const UP: usize = 40;
 
-/// Below this the stars have faded out, and the pass draws nothing.
 const SHOWN: f32 = 0.001;
 
 pub struct StarPass {
@@ -76,11 +59,7 @@ impl StarPass {
         }
     }
 
-    /// The frame's stars: `view_proj`, the root frame to WebGPU clip,
-    /// the environment's lane `env`, the world surface's size in device
-    /// pixels, and straight up where the eye stands, which a star's height
-    /// and the air it is seen through are measured from. Nothing is written
-    /// while they are faded out.
+    /// Nothing is written while the stars are faded out.
     pub fn lay_out(&mut self, g: &Gpu, view_proj: &Mat4, env: &[f32], width: u32, height: u32, up: &V3) {
         let u = &mut self.words;
         u[INTENSITY] = env[ENV_SKY];
@@ -99,8 +78,7 @@ impl StarPass {
         for (w, v) in u[UP..UP + 3].iter_mut().zip(up) {
             *w = *v as f32;
         }
-        // The air overhead from where the camera stands: from orbit a star
-        // crosses none of it.
+        // From orbit a star crosses none of the air.
         let t = transmittance(env[ENV_AIR] as f64, 1.0);
         for k in 0..3 {
             u[DEPTH + k] = -(t[k].max(1e-6)).ln() as f32;
@@ -108,7 +86,6 @@ impl StarPass {
         g.write_buffer(self.uniform, 0, bytes(u));
     }
 
-    /// Every star into the open pass, where they show.
     pub fn draw(&self, g: &Gpu, pass: u32) {
         if self.words[INTENSITY] <= SHOWN {
             return;
@@ -119,10 +96,8 @@ impl StarPass {
     }
 }
 
-/// A star as the bake packed it — its right ascension as a u16 of a turn,
-/// its declination as an i16 of a quarter turn, its visual magnitude and its
-/// B−V color index as i16 thousandths (pxl-tool/bin/bake_stars.rs) — as the
-/// vertex stage reads it.
+/// RA as a u16 of a turn, declination as an i16 of a quarter turn, magnitude
+/// and B−V as i16 thousandths.
 fn star(packed: &[u8; STAR_BYTES]) -> [f32; STAR_FLOATS] {
     let word = |k: usize| [packed[2 * k], packed[2 * k + 1]];
     let ra = u16::from_le_bytes(word(0)) as f64 / 65536.0 * core::f64::consts::TAU;
@@ -143,17 +118,14 @@ fn star(packed: &[u8; STAR_BYTES]) -> [f32; STAR_FLOATS] {
     ]
 }
 
-/// Planck's law at a wavelength `lambda` (nm) and a temperature `t` (K), up
-/// to a constant the color divides out.
+/// Up to a constant the color divides out.
 fn planck(lambda: f64, t: f64) -> f64 {
     let l = lambda * 1e-9;
     1.0 / (l.powi(5) * ((1.4388e-2 / (l * t)).exp() - 1.0))
 }
 
-/// B−V to temperature (Ballesteros 2012), and the temperature to a color at
-/// the three primaries' wavelengths relative to a 6,500 K white, normalized
-/// to its brightest channel and taken half-way to white: the eye's cone
-/// response at night leaves a star's color a tint.
+/// Ballesteros 2012 B−V to temperature, relative to 6,500 K white, taken
+/// half-way to white: night cone response leaves a star only a tint.
 fn star_color(bv: f64) -> [f64; 3] {
     let t = 4600.0 * (1.0 / (0.92 * bv + 1.7) + 1.0 / (0.92 * bv + 0.62));
     let c = [610.0, 550.0, 465.0].map(|lambda| planck(lambda, t) / planck(lambda, 6500.0));

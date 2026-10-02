@@ -1,24 +1,9 @@
 // pxl-kernel/sched/profiler/record.rs
 
-//! Read-only instrument for the schedulers: records where time and work go so
-//! it can be seen. Never read back into a scheduling decision — the
-//! observation→execution edge is one-directional on purpose
-//! (issue/20260909-cooperative-scheduler-and-task-ledger.md).
-//!
-//! Two record types, one instrument:
-//! - TaskRow — one finished unit of deferred work (an io/sched.rs
-//!   demand today; a CPU task later), as the TaskRecord a scheduler settles
-//!   reduced to numbers.
-//! - FrameSample — one rendered frame's gauges (pacing, GPU ask, memory, queue
-//!   pressure). Only accrues while frames actually render (the tick runs only
-//!   when asked), which is correct: idle means nothing to sample.
-//!
-//! Both are laid out word for word as profiler.json says, and the rings holding
-//! them are lanes the shell reads where they lie (PROFILER_READ):
-//! nothing is built to be read, so reading the instrument allocates nothing in
-//! the heap it measures. The summary a panel or a report shows is summary.rs's,
-//! written into a block of the same kind; the words for any of it are the
-//! shell's. Long frames are the shell's own measurement and stay there.
+//! Read-only instrument: records where time and work go. Never read back
+//! into a scheduling decision. Records are laid out word for word as
+//! profiler.json says, in lanes the shell reads in place, so reading the
+//! profiler allocates nothing in the heap it measures.
 
 use core::fmt;
 use core::mem::{offset_of, size_of};
@@ -41,37 +26,24 @@ use crate::sched::tick::PHASES;
 pub use crate::sched::profiler::spec::OutcomeName as Outcome;
 pub use crate::sched::profiler::spec::CENSUS_TAGS;
 
-/// A task as a scheduler settles it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TaskRecord {
-    /// The stream and the one thing in it.
     pub key: DemandKey,
     pub priority: f64,
-    /// monotonic ms at enqueue / first run / settle.
     pub enqueue_ms: f64,
     pub start_ms: Option<f64>,
     pub end_ms: f64,
-    /// whatever split the demand's own run reported (terrain: net vs decode).
-    /// None when it reported none — the run is then one opaque step.
+    /// None when the run reported no split.
     pub phases: Option<Phases>,
     pub outcome: Outcome,
-    /// Why it failed, when `outcome` is Error. The count alone could not say
-    /// whether twelve failures were one cause or twelve.
     pub fail: Failure,
 }
 
-/// Why a task failed: the errno it failed with — the host's, as an open's
-/// answer carries it, or the kernel's own — and whatever number the host
-/// refused with beside it. Two numbers, so a record is a row of plain values
-/// and the summary counts by them rather than by prose — the words for an
-/// errno are the shell's, as `strerror` is libc's. What `detail` means is
-/// the host's too: nothing here reads it, and it exists to be printed.
-///
-/// A failure the kernel made carries where it made it, which a decode fault
-/// needs: EBADMSG says a body was wrong and not which rule it broke.
+/// Why a task failed, as numbers the summary can count by. A kernel-made
+/// failure carries its source location: EBADMSG alone does not say which
+/// rule a body broke.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Failure {
-    /// 0 where nothing failed.
     pub errno: i32,
     pub detail: u16,
     pub at: Option<&'static Location<'static>>,
@@ -99,7 +71,6 @@ impl From<MarshalError> for Failure {
 }
 
 impl fmt::Display for Failure {
-    /// `errno -13 503`: the numbers, as the record holds them.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match (self.errno, self.detail) {
             (0, _) => Ok(()),
@@ -112,11 +83,9 @@ impl fmt::Display for Failure {
 const PHASES_MAX: usize = LIMITS::PHASES_MAX as usize;
 const _: () = assert!(PHASES_MAX == crate::io::demand::PHASES_MAX, "a task row holds every phase a run can report");
 
-/// A task as the ring holds it: every word a number, as TASK lays it out.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TaskRow {
-    /// An index into CATEGORY_NAMES.
     pub category: f64,
     pub subject: u64,
     pub priority: f64,
@@ -124,19 +93,14 @@ pub struct TaskRow {
     /// NaN for a task that never ran.
     pub start_ms: f64,
     pub end_ms: f64,
-    /// An index into OUTCOME_NAMES.
     pub outcome: f64,
-    /// The errno, and the host's own number beside it.
     pub fail: f64,
     pub detail: f64,
-    /// Where the failure was made: its file name's address and length, and
-    /// its line. 0 for one the host raised.
+    /// Failure location: file name address and length, and line. 0 when the host raised it.
     pub at_file: f64,
     pub at_file_bytes: f64,
     pub at_line: f64,
-    /// How many of the phase lanes are filled; 0 where the run reported none.
     pub phase_count: f64,
-    /// Indices into TASK_PHASE_NAMES.
     pub phase_ids: [f64; PHASES_MAX],
     pub phase_values: [f64; PHASES_MAX],
 }
@@ -169,51 +133,35 @@ impl TaskRow {
     }
 }
 
-/// Source files' names, each copied once into the kernel's memory, by where
-/// the binary keeps them.
 static FILES: Global<HashMap<usize, Box<str>>> = Global::new();
 
-/// `file` where the shell can read it. A location's file name is the
-/// binary's own data, which lies in the kernel's memory on the page but
-/// outside it on a device, so a row names a copy the heap holds. The names
-/// are the source files', so the copies are few and kept for good.
+/// A location's file name lies outside kernel memory on a device, so rows
+/// name a heap copy; the names are few and kept for good.
 fn file_in_memory(file: &'static str) -> &'static str {
     FILES.get(HashMap::new).entry(file.as_ptr().addr()).or_insert_with(|| file.into())
 }
 
 pub const CENSUS_LEN: usize = CENSUS_TAGS.len();
 
-/// (draws, triangles) by the pipeline a draw names (crates/pxl/web/render/src/frame/draw.rs), for one
-/// frame's render, in CENSUS_TAGS' order.
+/// (draws, triangles) per pipeline, in CENSUS_TAGS' order.
 pub type DrawCensus = [[f64; 2]; CENSUS_LEN];
 
-/// The GPU's side of a frame: its time, in all and by span; what it drew, by
-/// pipeline and, of the terrain, by level; and the pixels it filled.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct GpuSample {
-    /// From the frame's first pass to its last, as the queue reports it once
-    /// done: lags a frame or two, and 0 before the renderer exists or where
-    /// the device keeps no time.
+    /// Lags a frame or two; 0 before the renderer exists or without GPU timing.
     pub ms: f64,
-    /// That time by span, GPU_SPAN_NAMES' order (pxl-render's GPU_SPANS).
     pub spans: [f64; GPU_SPANS],
     pub draw_calls: f64,
     pub triangles: f64,
     pub census: DrawCensus,
-    /// The terrain's triangles by the level its chunks are of.
     pub level_tris: [f64; LEVELS],
-    /// The canvas's width*height — the raw fill-rate primitive.
     pub px: f64,
 }
 
-/// What the device holds for the frame: its buffers — the blocks, and the
-/// mesh arena, which is no block's — and its targets and textures.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct DeviceSample {
-    /// Blocks held, and what they hold in MiB — their deltas across frames
-    /// are the upload churn.
     pub buffers: f64,
     pub buffer_mb: f64,
     pub arena_mb: f64,
@@ -229,12 +177,8 @@ pub struct LodSample {
     pub in_frustum: f64,
     pub pending: f64,
     pub settling: f64,
-    /// Pending chunks outside the frustum — releases waiting to run. They sort
-    /// last by design, so this is where starvation would show first, and what
-    /// it would cost is memory.
+    /// Pending chunks outside the frustum. They sort last, so starvation shows here first.
     pub offscreen_pending: f64,
-    /// The longest any pending release has waited, and the longest any pending
-    /// on-screen chunk has.
     pub oldest_release_ms: f64,
     pub oldest_visible_ms: f64,
 }
@@ -247,7 +191,6 @@ pub struct MountSample {
     pub layouts: f64,
 }
 
-/// The pages resident, every level's, and a level's own count.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct PageSample {
@@ -256,23 +199,14 @@ pub struct PageSample {
     pub poi: f64,
 }
 
-/// The heap as facts rather than one derived word: how far the allocator has
-/// ever reached into its range, how much of it is out on loan right now — runs
-/// at their whole size, not the slots live inside them — and how large the
-/// range is; then the two ways it runs out, requests refused since boot and
-/// the largest block its free lists hold.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct HeapSample {
     pub used_mb: f64,
-    /// What the page level has handed out, a carved run counted whole: what
-    /// the heap has committed, against `range_mb`.
+    /// Handed out by the page level, carved runs counted whole.
     pub live_mb: f64,
-    /// Of `live_mb`, what was borrowed to be carved into slots, and of that
-    /// what is out in slots. `run_mb` less `slot_mb` is what the carving
-    /// costs — a run's header and every slot standing free in a run that
-    /// cannot go back until its last one does. `live_mb` less `run_mb` went
-    /// straight down as whole pages.
+    /// Of `live_mb`, what was carved into slots, and what is out in slots;
+    /// the difference is the carving's overhead.
     pub run_mb: f64,
     pub slot_mb: f64,
     pub range_mb: f64,
@@ -280,10 +214,8 @@ pub struct HeapSample {
     pub largest_free_mb: f64,
 }
 
-/// The completion ring at its fullest since the last frame, and the most
-/// submissions a turn left unapplied for want of room in it: a turn that
-/// holds some back answers them a frame later, so this is when the ring's
-/// size started to cost latency.
+/// The completion ring's peak, and the most submissions a turn held back for
+/// lack of room (each answered a frame late).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct RingSample {
@@ -296,48 +228,29 @@ pub struct RingSample {
 pub struct WorkSample {
     pub scans: f64,
     pub bakes: f64,
-    /// The largest mesh a bake handed over since the last frame, in boxes,
-    /// of each kind of slot — a high-water mark where `scans` and `bakes`
-    /// beside it are counts. What a slot is read against
-    /// (world/chunk/mesh_slot.rs): a mesh past its slot fills more slots,
-    /// which `chained` counts.
+    /// Largest mesh handed over since the last frame, in boxes, per slot kind.
     pub fine_peak: f64,
     pub coarse_peak: f64,
 }
 
-/// One rendered frame. Lean on purpose — latency percentiles, decode bandwidth
-/// and upload cost are derived from task rows or added later.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FrameSample {
-    /// monotonic ms at record time.
     pub t: f64,
-    /// rAF interval in ms — pacing, read against `frame_ms`. The gap the host
-    /// measured, not the step the world took: the two part past MAX_STEP_S
-    /// (sched/turn.rs), and the frames worth reading are all past it.
+    /// The host's rAF interval, not the world's step: they differ past
+    /// MAX_STEP_S, which is where the frames worth reading are.
     pub dt_ms: f64,
-    /// The display's measured frame interval when this frame was scheduled
-    /// (sched/tick.rs) — what `dt_ms` has to beat.
     pub frame_ms: f64,
-    /// 1 when the view had held still long enough that the tick took the
-    /// large, throughput budget: a long dt on such a frame was chosen, not
-    /// suffered. 0 otherwise.
+    /// 1 when the tick took the large settled budget, so a long dt was chosen.
     pub settled: f64,
-    /// From the turn's rising edge to the end of the tick, which is what
-    /// `budget_ms` is a quota on — so it holds the effects (`turn.effects_ms`)
-    /// and whatever passed before the frame task was polled, as well as every
-    /// phase. What `phases` sums to is the tick alone, and the difference
-    /// between the two is the region nothing else names.
+    /// From the turn's rising edge to the end of the tick: what `budget_ms` is a
+    /// quota on. It exceeds the sum of `phases` by the effects and wait before the
+    /// frame task.
     pub sched_ms: f64,
-    /// What the turn was allowed — derived, so it moves.
     pub budget_ms: f64,
-    /// The tick by phase, in its own order, as PHASES names them.
     pub phases: [f64; PHASES.len()],
-    /// The chunk scheduler's own pass, inside the visible phase.
     pub chunks_ms: f64,
-    /// The kernel's whole turn: the strobe in, the tick, the draw and the
-    /// submit. `dt_ms - task_ms` is then everything outside it — vsync wait,
-    /// compositor, GPU, GC between frames, and the shell's own glue.
+    /// The kernel's whole turn; `dt_ms - task_ms` is everything outside it.
     pub task_ms: f64,
     pub gpu: GpuSample,
     pub device: DeviceSample,
@@ -347,7 +260,7 @@ pub struct FrameSample {
     pub heap: HeapSample,
     pub rings: RingSample,
     pub work: WorkSample,
-    // network pressure — io/scheduler queued + in-flight, per category
+    // Queued plus in-flight requests, per category.
     pub q_terrain: f64,
     pub q_poi: f64,
     pub stale: StaleSample,
@@ -356,13 +269,8 @@ pub struct FrameSample {
     pub cover: CoverSample,
 }
 
-/// What the terrain's cover made of the view: the chunks the goal would be
-/// at the target quality, the pieces at the effective one, and the columns
-/// of the pyramid's top within the reach with no answer yet — nothing over
-/// them resident, which the goal has no piece of (world/pyramid/domain.rs
-/// `unanswered`). The first against the second is how far the quality
-/// policy holds the view back (world/quality.rs); the third is a view
-/// waiting on its floor, a cold start or a jump.
+/// Chunks the goal would be at target quality, pieces at the effective one,
+/// and top-level columns with nothing resident yet (`unanswered`).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CoverSample {
@@ -371,38 +279,21 @@ pub struct CoverSample {
     pub gaps: f64,
 }
 
-/// The frontier's moves (world/chunk/frontier.rs). The lanes' names are the
-/// profiler spec's (spec/pxl/web/kernel/sched/profiler/profiler.json), which
-/// the web side reads them by; what each counts is said beside it, and the
-/// two that count nothing are zero.
+/// Lane names follow profiler.json.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct StaleSample {
-    /// Chunks built for a move and ready, waiting on the rest of it.
     pub hidden: f64,
-    /// Moves the arena had no room for this frame, and moves under way and
-    /// not all ready.
     pub uncovered: f64,
     pub unready: f64,
-    /// Meshes thrown away because their pool had no free slot, and the
-    /// levels of the chunks they were for as bits.
     pub slot_waits: f64,
     pub wait_levels: f64,
-    /// Tiers landed across more than one slot: they had more boxes than one
-    /// slot holds (world/chunk/mesh_slot.rs `capacity`).
     pub chained: f64,
 }
 
-/// The turn, in parts that add up. `task_ms` is the whole of it, and the
-/// effects, the tick and the stage are what it is spent on — so what none of
-/// them accounts for is visible as the difference, and a region nobody
-/// measured cannot hide in it. The effects had no timing at all until a fold
-/// running there took seventy milliseconds of a turn whose tick was one and
-/// a half (2026-09-23).
-///
-/// `step_ms` is the longest single effect of the turn and `step_name` which
-/// one, since a turn is only as cooperative as its longest step and a total
-/// does not say where to look.
+/// The turn in parts that add up to `task_ms`, so unmeasured time shows as
+/// the difference. Effects went untimed until one took 70 ms of a turn whose
+/// tick was 1.5 ms (2026-09-23).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TurnSample {
@@ -412,55 +303,39 @@ pub struct TurnSample {
     pub step_name: f64,
 }
 
-/// What the frame's ceilings left behind. None of them is a number anyone
-/// derived, so none of them is changed on an argument: this is what says
-/// whether one is holding the screen back at all.
+/// What the frame's ceilings left undone: whether one is holding the screen back.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CapSample {
-    /// Chunks still wanting a layout that the commit pass did not reach, and
-    /// moves of the frontier that found no room this frame.
     pub commit_left: f64,
     pub mount_left: f64,
-    /// Whether any move found no room this frame.
     pub mount_full: f64,
-    /// Pages that arrived and found every record carrying one worth more.
     pub record_refused: f64,
 }
 
-/// One of the window's worst frames by dt, kept whole with the frame before
-/// it, because geometry, textures and the heap only mean anything as deltas.
+/// Kept with the frame before it, since geometry, textures and heap only mean anything as deltas.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct WorstFrame {
     pub sample: FrameSample,
-    /// 1 where `prev` is the frame before; 0 for the first frame of a window.
     pub has_prev: f64,
     pub prev: FrameSample,
 }
 
-/// A record laid out as a block of profiler.json: every word a plain f64 at the
-/// word that block gives it. It is what `put` may write, and the only way to
-/// implement it is `words!`, which is what checks the claim — so a block
-/// cannot be written by hand into an index, and a lane with no field, a field
-/// with no lane and a field at the wrong word are each a compile error.
+/// A record laid out as a profiler.json block. Implemented only through
+/// `words!`, which checks every field's offset at compile time.
 ///
 /// # Safety
-/// The implementor is `#[repr(C)]` and every one of its words is an f64 (or
-/// another such record), with no padding.
+/// The implementor is `#[repr(C)]` and all f64 (or such records), no padding.
 pub unsafe trait Words: Sized {}
 
-/// `block` of the summary written from `value`, by the layout both agree on.
 pub fn put<T: Words>(out: &mut [f64], block: u32, value: &T) {
-    // SAFETY: Words says the record is plain f64s laid end to end, and
-    // `words!` is what let it say so.
+    // SAFETY: `Words` guarantees plain f64s laid end to end.
     let words = unsafe { core::slice::from_raw_parts(std::ptr::from_ref::<T>(value).cast::<f64>(), size_of::<T>() / 8) };
     let at = block as usize;
     out[at..at + words.len()].copy_from_slice(words);
 }
 
-/// Each named field at the word profiler.json gives it, and the record marked as
-/// a block's own layout.
 macro_rules! words {
     ($t:ty, $words:expr, $($($field:ident).+ => $at:expr),+ $(,)?) => {
         const _: () = assert!(size_of::<$t>() == $words as usize * 8, concat!(stringify!($t), " is not the size profiler.json lays out"));
@@ -520,11 +395,9 @@ words!(FramePeak, SUMMARY::peak::WORDS,
 
 const _: () = assert!(PHASE_NAMES.len() == PHASES.len(), "profiler.json names the tick's phases");
 
-/// The GPU's spans and the pyramid's levels, a lane of each.
 pub const GPU_SPANS: usize = GPU_SPAN_NAMES.len();
 pub const LEVELS: usize = LIMITS::LEVELS as usize;
 
-/// A mebibyte, which the samples count memory in.
 pub const MB: f64 = 1_048_576.0;
 const _: () = assert!(GPU_SPANS == pxl_render::gpu::renderer::GPU_SPANS.len(), "profiler.json names the renderer's spans");
 
@@ -533,24 +406,17 @@ const _: () = assert!(GPU_SPANS == pxl_render::gpu::renderer::GPU_SPANS.len(), "
 mod test;
 const _: () = assert!(LEVELS == pxl_spec::space::pyramid::TOP_LEVEL as usize + 1, "a lane a level holds every level of the pyramid");
 
-/// The rings keep the last minute: a record older than WINDOW_MS is dropped as
-/// a new one lands, so what the profiler holds is bounded by the display's rate,
-/// not by how long the tab has been open. A report or a trace covers the minute
-/// before it was taken. The rings are lanes at the capacities below — a minute
-/// at 60 Hz is 3,600 frames, about 2 MB of samples — so a faster display, or a
-/// minute of more tasks than a pan asks for, fills its lane before the minute
-/// passes; filling one sets `truncated`.
+/// The rings keep the last minute. At 60 Hz that is 3,600 frames; a faster
+/// display or a heavy minute fills a lane early and sets `truncated`.
 pub const WINDOW_MS: f64 = 60_000.0;
 pub const TASK_LIMIT: usize = 2_048;
 pub const FRAME_LIMIT: usize = 4_096;
 const WORST_CAP: usize = 12;
-/// Values a spread is taken over at most: the longer ring's.
 pub const SPREAD_LIMIT: usize = if FRAME_LIMIT > TASK_LIMIT { FRAME_LIMIT } else { TASK_LIMIT };
 
-/// Steps `head` past the records at the front of `ring[*head..]` older than
-/// `cutoff`; how many to drop from the front now — the head, once the dropped
-/// part is the larger half, so a drop is a step of the head and not a shift of
-/// every record.
+/// Advances `head` past records older than `cutoff`; returns how many to drop
+/// now, only once the dropped part is the larger half, so most trims are a
+/// head step rather than a shift.
 fn trim<T>(ring: &[T], head: &mut usize, cutoff: f64, t: impl Fn(&T) -> f64) -> usize {
     while *head < ring.len() && t(&ring[*head]) < cutoff {
         *head += 1;
@@ -562,9 +428,6 @@ fn trim<T>(ring: &[T], head: &mut usize, cutoff: f64, t: impl Fn(&T) -> f64) -> 
     }
 }
 
-/// `rec` onto a lane holding `len` records past its trim; when the lane is
-/// full the records the window already dropped make room first, and past that
-/// the ring is truncated.
 fn land_lane<T: Copy>(ring: &mut [T], len: &mut usize, head: &mut usize, rec: T) -> bool {
     if *len == ring.len() && *head > 0 {
         drop_front(ring, len, core::mem::take(head));
@@ -577,26 +440,21 @@ fn land_lane<T: Copy>(ring: &mut [T], len: &mut usize, head: &mut usize, rec: T)
     true
 }
 
-/// The first `n` of a lane's `len` records dropped, the rest moved to the front.
 pub(super) fn drop_front<T: Copy>(ring: &mut [T], len: &mut usize, n: usize) {
     ring.copy_within(n..*len, 0);
     *len -= n;
 }
 
-/// The profiler's lanes in `.fixed.profiler`, in the order they are laid.
 #[derive(Clone, Copy)]
 pub(super) enum Lane {
     Tasks,
     Frames,
     Worst,
-    /// Where a summary's spreads are sorted (summary.rs).
     Scratch,
-    /// What the console stream holds for the shell (log.rs).
     LogTasks,
     LogFrames,
 }
 
-/// Each lane's bytes, in `Lane`'s order.
 const LANES: [u32; 6] = [
     (TASK_LIMIT * size_of::<TaskRow>()) as u32,
     (FRAME_LIMIT * size_of::<FrameSample>()) as u32,
@@ -606,41 +464,28 @@ const LANES: [u32; 6] = [
     (PENDING * size_of::<FrameSample>()) as u32,
 ];
 
-/// What a lane begins on: a cache line, past any record's alignment.
 const LANE_ALIGN: u32 = 64;
 
-/// `.fixed.profiler`: every lane, end to end.
 pub const PROFILER_BYTES: u32 = span_of(&LANES, LANE_ALIGN);
 
-/// `lane`, as `cap` records, zeroed.
 pub(super) fn fixed_lane<T: Copy>(which: Lane, cap: usize) -> &'static mut [T] {
-    // SAFETY: the lane's own bytes, which only its ring holds, zeroed as the
-    // range was laid; a zeroed record is a valid one for the plain numbers
-    // the rings hold.
+    // SAFETY: the lane's own bytes, held only by its ring, zeroed when laid;
+    // zero is a valid record.
     unsafe { lane(range(Range::Profiler).nth(&LANES, LANE_ALIGN, which as usize), 0, cap) }
 }
 
-/// Live consumer for records as they land — log.rs's console stream. One sink,
-/// not a list: the instrument has a single output mode at a time.
 #[derive(Clone, Copy, Default)]
 pub struct ProfilerSink {
     pub task: Option<fn(&TaskRow)>,
     pub frame: Option<fn(&FrameSample)>,
 }
 
-/// The worst-seen values since recording started, kept as frames land so the
-/// report never scans the ring for them — and past the minute the ring keeps,
-/// so a stall noticed late is still on record. Reset with the recording.
-///
-/// Laid out as the block it is written into, and held to it by `words!` the
-/// way a frame is. It used to be copied field by field into a hand-ordered
-/// slice, and two lanes appended to the block's end were inserted in the
-/// middle of that slice: every lane from the fifth on carried its
-/// neighbor's number, and nothing said so (2026-09-23).
+/// Worst values since recording started, kept past the ring's minute.
+/// Written through `words!`: a hand-ordered copy once shifted every lane
+/// from the fifth on by one (2026-09-23).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FramePeak {
-    /// 1 once a frame has landed: the block reads as absent until then.
     pub present: f64,
     pub dt_ms: f64,
     pub sched_ms: f64,
@@ -664,7 +509,6 @@ pub struct FramePeak {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct RecordingState {
     pub recording: bool,
-    /// ms of wall time the window spans; live while recording.
     pub elapsed_ms: f64,
     pub tasks: usize,
     pub frames: usize,
@@ -672,35 +516,22 @@ pub struct RecordingState {
 }
 
 struct Profiler {
-    /// The rings, lanes taken at their first record, `*_len` of each in use.
     task_ring: &'static mut [TaskRow],
     task_len: usize,
     frame_ring: &'static mut [FrameSample],
     frame_len: usize,
-    /// Where each ring's live window starts: records before it are past the
-    /// minute and wait for `trim` to drop them.
     task_head: usize,
     frame_head: usize,
     truncated: bool,
     sink: ProfilerSink,
-    /// Explicit recording window: stopping freezes the data so an export is
-    /// stable while it is being read; restarting clears and begins a fresh one.
-    ///
-    /// Off until someone asks. Nothing in the world reads the profiler — the one
-    /// caller outside the instrument writes a turn's task time back into the
-    /// frame it belongs to and does nothing when there is no frame — so a
-    /// client with no dev overlay pays for none of this: the rings are lanes of
-    /// `.fixed.profiler`, 3.75 MiB of frames and 368 KiB of tasks, and nothing
-    /// writes them while this is off.
+    /// Off until asked, so a client without the dev overlay writes nothing.
+    /// Stopping freezes the data for a stable export.
     recording: bool,
     started_at: f64,
     stopped_at: Option<f64>,
     frame_peak: FramePeak,
-    /// Slowest first, in a lane so they lie where they are read.
     worst: &'static mut [WorstFrame],
     worst_len: usize,
-    /// The completion ring's fullest, and the most submissions held back,
-    /// since the last frame.
     rings: RingSample,
 }
 
@@ -726,7 +557,6 @@ fn profiler() -> &'static mut Profiler {
     })
 }
 
-/// True once any limit was hit and recording stopped being exhaustive.
 pub fn profiler_truncated() -> bool {
     profiler().truncated
 }
@@ -735,8 +565,6 @@ pub fn profiler_set_sink(sink: Option<ProfilerSink>) {
     profiler().sink = sink.unwrap_or_default();
 }
 
-/// Whether a recording is open, which is the only time a frame sample is
-/// kept.
 pub fn profiler_recording() -> bool {
     profiler().recording
 }
@@ -752,7 +580,6 @@ pub fn profiler_recording_state() -> RecordingState {
     }
 }
 
-/// Clears everything and opens a fresh window.
 pub fn profiler_recording_start() {
     let l = profiler();
     (l.task_len, l.frame_len, l.worst_len) = (0, 0, 0);
@@ -764,7 +591,6 @@ pub fn profiler_recording_start() {
     l.recording = true;
 }
 
-/// Freezes the window; exports taken afterward see exactly this data.
 pub fn profiler_recording_stop() {
     let l = profiler();
     if !l.recording {
@@ -793,20 +619,16 @@ pub fn profiler_record(rec: TaskRecord) {
     }
 }
 
-/// Copy of the window's worst-seen frame values.
 pub fn profiler_frame_peak() -> FramePeak {
     profiler().frame_peak
 }
 
-/// The completion ring as a post left it, and the submissions a drain left
-/// unapplied: kept at their fullest until the next frame takes them.
 pub fn profiler_note_rings(cq_len: u32, held: u32) {
     let r = &mut profiler().rings;
     r.cq_peak = r.cq_peak.max(cq_len as f64);
     r.held_peak = r.held_peak.max(held as f64);
 }
 
-/// The rings' fullest since the last take, cleared by taking.
 pub fn profiler_take_rings() -> RingSample {
     core::mem::take(&mut profiler().rings)
 }
@@ -865,10 +687,8 @@ pub fn profiler_record_frame(s: FrameSample) {
     }
 }
 
-/// The frame sample just recorded, so a late-arriving measurement (task_ms,
-/// which is only known once the turn is over) can be written into the frame it
-/// belongs to instead of being attributed to the next one. None once
-/// recording has stopped, since a stopped recording is frozen for export.
+/// The frame just recorded, so `task_ms`, known only after the turn, lands
+/// in the right frame. None once recording stopped.
 pub fn profiler_last_frame() -> Option<&'static mut FrameSample> {
     let l = profiler();
     if !l.recording {
@@ -877,38 +697,31 @@ pub fn profiler_last_frame() -> Option<&'static mut FrameSample> {
     l.frame_ring[..l.frame_len].last_mut()
 }
 
-/// First index in a ring, ordered by `at`, whose record is at or after `t`.
 fn first_at<T>(ring: &[T], t: f64, at: impl Fn(&T) -> f64) -> usize {
     ring.partition_point(|rec| at(rec) < t)
 }
 
-/// The frame window, newest last.
 pub fn profiler_frames() -> &'static [FrameSample] {
     let l = profiler();
     &l.frame_ring[l.frame_head..l.frame_len]
 }
 
-/// The task window, newest last. A task is recorded as it settles, so the ring
-/// is in `end_ms` order.
+/// In `end_ms` order, since a task is recorded as it settles.
 pub fn profiler_tasks() -> &'static [TaskRow] {
     let l = profiler();
     &l.task_ring[l.task_head..l.task_len]
 }
 
-/// The window's worst frames, slowest first.
 pub fn profiler_worst() -> &'static [WorstFrame] {
     let l = profiler();
     &l.worst[..l.worst_len]
 }
 
-/// Frames recorded at or after `t`, newest last — a live reader's window, so
-/// it costs the tail it reads and not the whole recording.
 pub fn profiler_frames_since(t: f64) -> &'static [FrameSample] {
     let ring = profiler_frames();
     &ring[first_at(ring, t, |f| f.t)..]
 }
 
-/// Tasks settled at or after `t`.
 pub fn profiler_tasks_since(t: f64) -> &'static [TaskRow] {
     let ring = profiler_tasks();
     &ring[first_at(ring, t, |r| r.end_ms)..]

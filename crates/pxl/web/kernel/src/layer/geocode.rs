@@ -1,12 +1,7 @@
 // pxl-kernel/layer/geocode.rs
 
-//! What the place under the map center is called: the dictionary of every
-//! place the country has, the group of pages the center is in, and the two
-//! fetches that keep them.
-//!
-//! Nothing here is drawn. The label is read out of the packets where they
-//! lie and written into the UI snapshot, so the layer holds bytes and a
-//! wishlist and nothing else.
+//! The name of the place under the map center, read out of resident packets
+//! straight into the UI snapshot; nothing here is drawn.
 
 pub mod fetcher;
 pub mod repository;

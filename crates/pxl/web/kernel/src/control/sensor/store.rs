@@ -1,8 +1,7 @@
 // pxl-kernel/control/sensor/store.rs
 
-//! The device's physical sensors (GPS, compass) — data and reception state.
-//! The sensors themselves are the shell's; what they report lands here, and
-//! what is significant enough to keep is decided here.
+//! The device's GPS and compass readings, and which changes are significant
+//! enough to keep.
 
 use pxl_spec::space::adapter::epsg4326::G4326;
 
@@ -13,22 +12,22 @@ use crate::host::now;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DeviceLocation {
-    /// Current longitude/latitude/altitude.
+    /// Longitude, latitude, altitude.
     pub coords: G4326,
-    /// GPS accuracy, in meters.
+    /// Meters.
     pub accuracy: f64,
-    /// Heading of travel from GPS course, 0-360 degrees.
+    /// Course over ground, 0-360 degrees.
     pub course: Option<f64>,
     pub timestamp: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DeviceOrientation {
-    /// 0-360: compass heading (Z rotation).
+    /// 0-360 compass heading.
     pub heading: Option<f64>,
-    /// -180-180: front/back tilt (X rotation).
+    /// -180-180 front/back tilt.
     pub beta: Option<f64>,
-    /// -90-90: left/right tilt (Y rotation).
+    /// -90-90 left/right tilt.
     pub gamma: Option<f64>,
     pub timestamp: f64,
 }
@@ -40,9 +39,6 @@ fn is_delta_over(a: Option<f64>, b: Option<f64>, eps: f64) -> bool {
     }
 }
 
-/// Shortest distance between two values on a circle of the given period (e.g.
-/// 360 for compass degrees) — unlike a plain subtraction, this stays small
-/// across the wrap (359 vs 1 is a 2-unit gap, not 358).
 fn circular_delta(a: f64, b: f64, period: f64) -> f64 {
     let raw = (a - b).abs() % period;
     if raw > period / 2.0 {
@@ -52,9 +48,7 @@ fn circular_delta(a: f64, b: f64, period: f64) -> f64 {
     }
 }
 
-/// Same dead-zone check as is_delta_over, but for a circular (wrapping) value
-/// like compass heading. Plain is_delta_over would see 359° vs 1° as a 358°
-/// jump and let every bit of sensor noise through right around due north.
+/// A plain delta would see 359° vs 1° as 358° and let noise through around north.
 fn is_heading_delta_over(a: Option<f64>, b: Option<f64>, eps: f64) -> bool {
     match (a, b) {
         (Some(a), Some(b)) => circular_delta(a, b, 360.0) > eps,
@@ -64,35 +58,30 @@ fn is_heading_delta_over(a: Option<f64>, b: Option<f64>, eps: f64) -> bool {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct DeviceLocationStore {
-    /// Whether location tracking is active.
     pub is_tracking_location: bool,
     pub location: Option<DeviceLocation>,
-    /// Overall location-service reception status.
     pub status: DevicePoseStatus,
-    /// What went wrong; the shell turns it into the words it shows.
     pub error: Option<Message>,
 }
 
 impl DeviceLocationStore {
-    /// Validates raw GPS data from hardware, and only updates state on a
-    /// significant change.
+    /// Updates only on a significant change.
     pub fn set_location(&mut self, coords: G4326, accuracy: f64, course: Option<f64>) {
         let timestamp = now();
         let Some(prev) = self.location else {
-            // 1. First-fix pass
             self.location = Some(DeviceLocation { coords, accuracy, course, timestamp });
             self.status = DevicePoseStatus::Ready;
             self.error = None;
             return;
         };
 
-        // 2. Accuracy guard (accept if < 100m, or if accuracy is improving)
+        // Accepted under 100 m, or while accuracy improves.
         let is_improving = accuracy < prev.accuracy;
         if accuracy > 100.0 && !is_improving {
             return;
         }
 
-        // 3. Dead-zone filtering (~1.1m for lat/lng, 0.5m for altitude)
+        // Dead zone: ~1.1 m horizontally, 0.5 m in altitude.
         let lng_diff = (prev.coords[0] - coords[0]).abs();
         let lat_diff = (prev.coords[1] - coords[1]).abs();
         let alt_diff = (prev.coords[2] - coords[2]).abs();
@@ -102,9 +91,7 @@ impl DeviceLocationStore {
             return;
         }
 
-        // 4. Update strategy: even without significant movement, refresh
-        // metadata (accuracy/course/timestamp) so the UI has the freshest
-        // signal info.
+        // Without movement the metadata still refreshes, so the UI has the freshest signal.
         self.location = Some(DeviceLocation {
             coords: if is_significant_change { coords } else { prev.coords },
             accuracy,
@@ -120,7 +107,6 @@ impl DeviceLocationStore {
             return;
         }
         self.is_tracking_location = enabled;
-        // reset location on stop, to avoid stale data
         if !enabled {
             self.location = None;
         }
@@ -137,30 +123,25 @@ impl DeviceLocationStore {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct DeviceOrientationStore {
-    /// Whether the compass listener is registered and running.
     pub is_tracking_orientation: bool,
     pub orientation: Option<DeviceOrientation>,
     pub status: DevicePoseStatus,
-    /// What went wrong; the shell turns it into the words it shows.
     pub error: Option<Message>,
 }
 
 impl DeviceOrientationStore {
-    /// Updates compass sensor data (dead-zone filtered).
+    /// Dead-zone filtered: 1.5° of heading, 2° of tilt.
     pub fn set_orientation(&mut self, heading: Option<f64>, beta: Option<f64>, gamma: Option<f64>) {
         let timestamp = now();
         let Some(prev) = self.orientation else {
             self.orientation = Some(DeviceOrientation { heading, beta, gamma, timestamp });
-            // orientation data alone is enough to count as usable
+            // Orientation alone counts as usable.
             self.status = DevicePoseStatus::Ready;
             self.error = None;
             return;
         };
 
-        // dead-zone filter, keyed on heading (the most important field): 1.5°
-        // change, using the circular-aware delta since heading wraps
         let is_heading_changed = is_heading_delta_over(heading, prev.heading, 1.5);
-        // tilt (beta/gamma) change check, ~2° — avoids visible jitter
         let is_tilt_changed = is_delta_over(beta, prev.beta, 2.0) || is_delta_over(gamma, prev.gamma, 2.0);
         if !is_heading_changed && !is_tilt_changed {
             return;

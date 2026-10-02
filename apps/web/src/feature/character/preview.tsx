@@ -1,13 +1,6 @@
 // @pxl/web/feature/character/preview.tsx
 
-/**
- * Small display case for the variant picker — one character playing its idle
- * clip while slowly spinning in place, so a pick can actually be seen before
- * committing to it. The surface is handed to the kernel as a case; the actor,
- * its model, its spin and the drawing are the kernel's
- * (crates/pxl/web/kernel/src/layer/character/preview.rs,
- * crates/pxl/web/render/src/gpu/renderer.rs).
- */
+/** The variant picker's display case: the kernel draws the character spinning in place. */
 
 import { type StyleProp, View, type ViewStyle } from "react-native";
 

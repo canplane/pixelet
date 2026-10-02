@@ -1,14 +1,8 @@
 // pxl-kernel/layer/marker/frame_gizmo.rs
 
-//! The debug gizmos (the `gizmos` setting): the cell the map center
-//! floors to, the map center itself, the floating origin, the page's base and
-//! center corners, and the two frames' gyro rings — one fixed to the screen
-//! whatever the azimuth, one turning with the map so its vertex points north —
-//! as line segments the kernel holds and the renderer draws over everything
-//! (debug_lines.rs), with labels at points drawn as billboards: a line of
-//! text a label in the one sheet (layer/billboard/sheet.rs), one set standing
-//! where the lines do. The map's part is rebuilt when the map moves, the
-//! frames' part when the view does; both go to the kernel as one set.
+//! The debug gizmos (the `gizmos` setting): the map center's cell, the
+//! floating origin, the page's corners and the frames' gyro rings, as debug
+//! lines with billboard labels.
 
 use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::pass::badges::LABEL_FONT;
@@ -35,30 +29,25 @@ use xpute_core::status::errno::Errno;
 const COLOR: V3 = [0.0, 0.0, 0.0];
 const DASH: f64 = 0.3;
 const GAP: f64 = 0.2;
-/// The most dashes a line is drawn in, said aloud: past this its dashes
-/// lengthen rather than multiply. A line between the map center and the
-/// floating origin reaches as far as the coarsest level the origin is floored
-/// to, hundreds of thousands of units at a zoom out, and at a fixed dash that
-/// was millions of them a frame — a block the heap refused, and a trap.
+/// Past this a line's dashes lengthen rather than multiply: a line to the
+/// floating origin can span hundreds of thousands of units, and a fixed dash
+/// made millions a frame, a block the heap refused.
 const DASHES: f64 = 256.0;
-/// Half the cross a point is drawn as, in units.
+/// Half the cross a point is drawn as.
 const POINT_HALF: f64 = 0.15;
 const RING_RADIUS: f64 = 4.0;
 const RING_SEGMENTS: u32 = 64;
-/// A label's height, as the view paints it (gpu/pass/badges.rs's LABEL_H); its
-/// width is measured here in the font the view paints it in.
+/// As gpu/pass/badges.rs paints it.
 const LABEL_H: f64 = 12.0;
 const LABEL_PAD_X: f64 = 2.0;
 
-/// A label, at a point of the root frame.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Label {
     pub at: V3,
     pub text: String,
 }
 
-/// A sketch: segments as pairs of vertices (position and color), and labels at
-/// points.
+/// Segments as pairs of vertices (position, color), and labels.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Sketch {
     pub vertices: Vec<f32>,
@@ -162,9 +151,7 @@ impl Sketch {
         }
     }
 
-    /// A gyro ring: a horizontal ring and a vertical one through `vertex`, the
-    /// vertex marked, and the radius drawn when asked, all in the frame
-    /// `to_local` maps into the root frame.
+    /// In the frame `to_local` maps into the root frame.
     pub fn gyro(&mut self, to_local: &dyn Fn(V3) -> V3, vertex: V3, label: &str, show_radius: bool) {
         let horiz = (vertex[0] * vertex[0] + vertex[1] * vertex[1]).sqrt();
         let dir = if horiz > 1e-9 { [vertex[0] / horiz, vertex[1] / horiz, 0.0] } else { [1.0, 0.0, 0.0] };
@@ -188,8 +175,7 @@ impl Sketch {
     }
 }
 
-/// The frames' rings about what the orbit looks at: the observer's heading, which
-/// turns with the orbit, and the world's axes, which never turn.
+/// About the orbit's pivot: the heading frame turns with the orbit, the world's never.
 fn sketch_frames(s: &mut Sketch) {
     if crate::control::camera::controller::radius() == 0.0 {
         return;
@@ -203,7 +189,6 @@ fn sketch_frames(s: &mut Sketch) {
     s.gyro(&world_frame, [0.0, RING_RADIUS, 0.0], "north (world)", true);
 }
 
-/// A point in the root frame: its address's offset from the map origin.
 fn local_of(p: &Pvf3, map_origin: IVec) -> V3 {
     crate::world::frame::coord::canonical_to_local(p, map_origin)
 }
@@ -211,15 +196,12 @@ fn local_of(p: &Pvf3, map_origin: IVec) -> V3 {
 fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
     let mut s = Sketch::default();
 
-    // raw_v: the map center as placed, no elevation override. quant_v: the cell
-    // it floors to, ground-snapped — a cell, so a box.
     let raw_v = local_of(map_center, map_origin);
     let ground = |at: &Pvf3| Access::now().floor_under(at).value().map(|top| crate::world::frame::coord::local_height(top, map_origin));
     let gnd_v = [raw_v[0], raw_v[1], ground(map_center).unwrap_or(0.0)];
     let mut quant_v = [0.0; 3];
     floor3n(&gnd_v, U_PER_CELL, &mut quant_v);
 
-    // The floating origin, grounded and floored: local (0, 0, ground).
     let mut anchor_base_gnd_v = [0.0; 3];
     anchor_base_gnd_v[2] = ground(&Pvf3 { i: map_origin, f: 0 }).unwrap_or(0.0);
     let mut anchor_base_quant_v = [0.0; 3];
@@ -243,18 +225,14 @@ fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
 }
 
 struct Gizmos {
-    /// What the drawn sketch was built from: the map center, the origin, the
-    /// tiles' revision, and the view's frame.
+    /// Map center, origin, tiles' revision, and the view's yaw.
     built_for: Option<(Pvf3, IVec, u32, f64)>,
     drawn: Sketch,
     shown: bool,
-    /// The labels' billboard set, and each drawn label's slot of the sheet
-    /// with its logical width, in the sketch's order; a label the sheet had
-    /// no room for has NO_SLOT.
+    /// A label the sheet had no room for has NO_SLOT.
     set: Option<u32>,
     slots: Vec<(i32, f64)>,
-    /// The sheet's generation the instances were written against: a repack
-    /// moves every rectangle, and the instances are written again.
+    /// A repack moves every rectangle, so instances are rewritten per generation.
     written: Option<u32>,
 }
 
@@ -271,7 +249,6 @@ fn gizmos() -> &'static mut Gizmos {
     })
 }
 
-/// Lets the labels' set and slots go.
 fn drop_labels(g: &mut Gizmos) {
     if let Some(set) = g.set.take() {
         remove_billboard_set(set);
@@ -284,10 +261,7 @@ fn drop_labels(g: &mut Gizmos) {
     g.written = None;
 }
 
-/// Paints the drawn sketch's labels into the sheet and stands their set at
-/// `origin`; the instances follow on the next `write_labels`. Where a label
-/// is not laid out yet, nothing is painted and the sketch is built again on a
-/// later frame, when it is.
+/// Where a label is not laid out yet, the sketch is rebuilt on a later frame.
 fn make_labels(g: &mut Gizmos, origin: V3) {
     drop_labels(g);
     if g.drawn.labels.is_empty() {
@@ -309,8 +283,6 @@ fn make_labels(g: &mut Gizmos, origin: V3) {
     g.set = Some(set);
 }
 
-/// Writes the labels' instances, once per sheet generation: each label's
-/// point, its logical size, its rectangle of the sheet, centered on the point.
 fn write_labels(g: &mut Gizmos) {
     let Some(set) = g.set else { return };
     let sheet = billboard_sheet();
@@ -343,12 +315,9 @@ fn write_labels(g: &mut Gizmos) {
 
 fn set_lines(at: V3, vertices: &[f32]) {
     let Some((_, sched)) = kernel().world() else { return };
-    // SAFETY: the vertices are f32s of the kernel's memory, read before this returns.
     sched.debug.set(&mut sched.draw, at, vertices);
 }
 
-/// The gizmos' turn, while `show` is on: the set rebuilt when the map or the
-/// view moved, and gone when `show` turns off.
 pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>, map_origin: IVec) {
     let g = gizmos();
     let Some(center) = map_center.filter(|_| show) else {

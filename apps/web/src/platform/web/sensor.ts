@@ -1,14 +1,8 @@
 // @pxl/web/platform/web/sensor.ts
 
 /**
- * The device's two sensors as the browser grants them
- * (crates/pxl/web/kernel/src/control/sensor): the watch the kernel asked for,
- * the events it is told about, and the permission each waits on.
- *
- * A reading is never taken at face value. A dead geolocation watch keeps
- * calling back, so it is cleared rather than forgotten; the compass is gated
- * behind a prompt on iOS, and that prompt has to be raised inside the gesture
- * that asked for it.
+ * The device's sensors as the browser grants them. iOS gates the compass
+ * behind a prompt that must be raised inside the gesture.
  */
 
 import { Command, encode_sensor_error, encode_sensor_orientation, encode_sensor_permission, encode_sensor_position, GeolocationErrorCode, PermissionAnswer, Sensor } from "@/kernel/abi/cmd.spec.ts";
@@ -31,8 +25,7 @@ export function orientationNeedsPermission(): boolean {
   return orientationSupported() && typeof (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission === "function";
 }
 
-/** A browser dispatches orientation while the device lies still and never
- * says the listener stopped hearing, so silence is how a loss shows. */
+/** No event says the listener stopped hearing, so silence is how a loss shows. */
 export function orientationSilenceIsLoss(): boolean {
   return true;
 }
@@ -52,8 +45,7 @@ export function geolocationStart(): void {
       send_next(Command.SENSOR_POSITION, encode_sensor_position({ lon: longitude, lat: latitude, altitude, accuracy, heading }));
     },
     (err) => {
-      // The dead watch is cleared, not just forgotten: it keeps calling back,
-      // and a later start would race it.
+      // Cleared, not just forgotten: a dead watch keeps calling back and would race a later start.
       geolocationStop();
       const code = err.code === err.PERMISSION_DENIED
         ? GeolocationErrorCode.PermissionDenied
@@ -89,10 +81,7 @@ function sendPermission(sensor: Sensor, answer: PermissionAnswer): void {
   send_next(Command.SENSOR_PERMISSION, encode_sensor_permission({ sensor, answer }));
 }
 
-/** Follows the location permission while the map is up, so a grant made
- * outside the app — the browser's site settings — reaches the kernel the
- * moment it is made, since nothing else would ask again after a refusal.
- * What it returns stops following. */
+/** A grant in the browser's site settings reaches the kernel, since nothing re-asks after a refusal. */
 export function permissionFollow(): () => void {
   let status: PermissionStatus | null = null;
   let stopped = false;
@@ -108,11 +97,7 @@ export function permissionFollow(): () => void {
   };
 }
 
-/**
- * Whether the compass may be listened to, prompting where iOS gates it. The
- * prompt is called before anything is awaited, so it stays inside the gesture
- * that called this; a listener already running needs no prompt.
- */
+/** The prompt is called before any await, so it stays inside the gesture. */
 export function orientationPermit(): Promise<boolean> {
   if (!orientationNeedsPermission() || orientationEvent !== null) return Promise.resolve(true);
   const prompt = (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission!();

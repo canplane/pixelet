@@ -1,20 +1,13 @@
-// The atmosphere as a medium: what fills it at an altitude, how that
-// scatters, and where a ray through it ends. Every number is the uniform's
-// (look/atmosphere.rs is their one home, gpu/atmosphere.rs lays them out);
-// a shader that includes this declares `atmos` at a binding of its own.
-// Distances are kilometers, and a point is its radius from the planet's
-// center `r` and the cosine `mu` of its ray from the local zenith, as
-// Bruneton writes them.
+// The atmosphere as a medium. Distances are km; a point is (r, mu) as Bruneton writes them.
 
 struct Atmosphere {
   rayleigh_scattering: vec3f,
   bottom_radius: f32,
   ozone_absorption: vec3f,
   top_radius: f32,
-  // The white balance, by channel: a sun overhead at sea level as white.
+  // A sun overhead at sea level as white.
   white: vec3f,
   rayleigh_scale_height: f32,
-  // Toward the sun, in the root frame the meshes are placed in.
   sun_dir: vec3f,
   mie_scattering: f32,
   camera_altitude: f32,
@@ -26,51 +19,29 @@ struct Atmosphere {
   ozone_half_width: f32,
   ground_albedo: f32,
   sun_angular_radius: f32,
-  // What a table's radiance, for a sun of illuminance 1, is shown at under
-  // a sun overhead, how far the eye raises it as the light falls at most,
-  // and by what power of the fall (look/atmosphere.rs's ADAPTATION).
   exposure: f32,
   max_adaptation: f32,
   adaptation: f32,
-  // Toward the moon, in the root frame, and how bright the sky it lights is
-  // shown, its phase and the sun's height in it (look/environment.rs); 0
-  // while the sun's sky is the one to see.
+  // 0 while the sun's sky is the one shown.
   moon_dir: vec3f,
   moon_light: f32,
-  // The ground's color past the terrain, in linear light
-  // (look/atmosphere.rs's `land`), and how high that ground stands over the
-  // datum the model's radii are measured from — the elevation under the eye
-  // (kernel environment/fog.rs's `eye_ground`). The terrain is
-  // drawn at its own elevation, so a planet whose surface is the sea would
-  // leave it standing over the ground the sky draws past it, its chunk walls
-  // showing at the edge.
+  // `land` is drawn at the elevation under the eye: a sea-level surface would
+  // leave the terrain floating, its chunk walls showing at the edge.
   land: vec3f,
   land_altitude_km: f32,
-  // What reaches the eye of the Sun's light, by channel, unexposed: the
-  // same for every pixel of the frame, so the CPU takes it once
-  // (look/atmosphere.rs's light_at). What the glare is of.
+  // The same for every pixel, so the CPU computes it once.
   sun_seen: vec3f,
   _p1: f32,
-  // Straight up where the eye stands, in the root frame: away from the
-  // planet's center, which lies under the camera center and not under the
-  // eye (gpu/renderer.rs). Every height of a ray or a light the air is read
-  // with is measured from it.
+  // Away from the planet's center, which lies under the camera center, not the eye.
   up: vec3f,
   _p2: f32,
-  // The cloud layer (cloud_field.wgsl, gpu/clouds.rs's `field`): the
-  // lattice index the root frame's origin lies in, exact, and the fraction
-  // of a unit past it; the sky's clock; the lattice's count across the
-  // world, where it wraps; the layer's height, and the camera's height past
-  // which it is gone.
   cloud_base: vec2u,
   cloud_frac: vec2f,
   cloud_time: f32,
   cloud_count: u32,
   cloud_altitude_km: f32,
   cloud_gone_km: f32,
-  // The aerosol near the ground (look/atmosphere.rs), which the tables do
-  // not carry: the aerial perspective's alone, so the sky keeps the medium's
-  // own color while the far ground goes as Earth's does.
+  // Aerosol the tables do not carry, applied only in aerial perspective.
   haze_extinction: f32,
   haze_scale_height: f32,
 };
@@ -110,10 +81,7 @@ fn atmos_cloud_gone_km() -> f32 { return atmos_words[12].w; }
 fn atmos_haze_extinction() -> f32 { return atmos_words[13].x; }
 fn atmos_haze_scale_height() -> f32 { return atmos_words[13].y; }
 
-// The camera's radius from the planet's center: over the ground, and above
-// the atmosphere too, where the view is from space — the sky-view table is
-// drawn from there (atmos_skyview.wgsl marches from where a ray enters the
-// air) and the ground and the horizon are where the planet puts them.
+// Can be above the atmosphere: the view from space.
 fn camera_r() -> f32 {
   return atmos_bottom_radius() + max(atmos_camera_altitude(), 0.001);
 }
@@ -141,16 +109,14 @@ fn rayleigh_phase(c: f32) -> f32 {
   return 3.0 * INV_4PI / 4.0 * (1.0 + c * c);
 }
 
-// Cornette-Shanks: Henyey-Greenstein's shape with Rayleigh's symmetry
-// folded in, which is what keeps a hazy sky bright opposite the sun too.
+// Cornette-Shanks: Henyey-Greenstein with Rayleigh's symmetry, which keeps a
+// hazy sky bright opposite the sun.
 fn mie_phase(c: f32) -> f32 {
   let g = atmos_mie_g();
   let k = 3.0 * INV_4PI / 2.0 * (1.0 - g * g) / (2.0 + g * g);
   return k * (1.0 + c * c) / pow(max(1.0 + g * g - 2.0 * g * c, 1e-4), 1.5);
 }
 
-// Where a ray from radius `r` at `mu` meets a sphere of `radius` about the
-// planet's center, and whether it does at all.
 fn meets_sphere(r: f32, mu: f32, radius: f32) -> bool {
   return mu < 0.0 && r * r * (mu * mu - 1.0) + radius * radius >= 0.0;
 }
@@ -159,7 +125,6 @@ fn to_sphere(r: f32, mu: f32, radius: f32) -> f32 {
   return max(-r * mu - sqrt(max(r * r * (mu * mu - 1.0) + radius * radius, 0.0)), 0.0);
 }
 
-// The model's own surface, which the tables are baked against.
 fn meets_ground(r: f32, mu: f32) -> bool {
   return meets_sphere(r, mu, atmos_bottom_radius());
 }
@@ -172,10 +137,8 @@ fn to_ground(r: f32, mu: f32) -> f32 {
   return to_sphere(r, mu, atmos_bottom_radius());
 }
 
-// The surface a view ray is drawn against: the model's raised to the ground
-// under the map center. Only what is drawn moves — the tables keep the
-// radius they were baked at, and a meter of ground against a planet's radius
-// is nothing to the air along a ray.
+// Raised to the ground under the map center for drawing only; the tables keep
+// the radius they were baked at.
 fn land_radius() -> f32 {
   return atmos_bottom_radius() + atmos_land_altitude_km();
 }
@@ -188,8 +151,7 @@ fn to_land(r: f32, mu: f32) -> f32 {
   return to_sphere(r, mu, land_radius());
 }
 
-// A table's texel centers to [0, 1] and back: the ends of a range land on
-// the first and last texels' centers, so nothing reads past them.
+// Range ends land on the first and last texel centers, so nothing reads past them.
 fn unit_of(u: f32, size: f32) -> f32 {
   return (u - 0.5 / size) / (1.0 - 1.0 / size);
 }
@@ -202,14 +164,10 @@ const TRANSMITTANCE_SIZE: vec2f = vec2f(256.0, 64.0);
 const MULTISCATTER_SIZE: vec2f = vec2f(32.0, 32.0);
 const SKY_VIEW_SIZE: vec2f = vec2f(192.0, 108.0);
 
-// Bruneton's transmittance parameterization: the height through rho, the
-// distance to the top through the range a height allows, which spends the
-// table's rows where the transmittance changes and not where it is flat.
+// Bruneton's parameterization, which spends rows where transmittance changes.
 fn transmittance_uv(r_in: f32, mu: f32) -> vec2f {
   let bottom = atmos_bottom_radius();
   let top = atmos_top_radius();
-  // Above the top there is no air left to cross: what is left from there is
-  // what is left from the top.
   let r = min(r_in, top);
   let h = sqrt(top * top - bottom * bottom);
   let rho = sqrt(max(r * r - bottom * bottom, 0.0));
@@ -221,7 +179,6 @@ fn transmittance_uv(r_in: f32, mu: f32) -> vec2f {
   return vec2f(coord_of(x_mu, TRANSMITTANCE_SIZE.x), coord_of(x_r, TRANSMITTANCE_SIZE.y));
 }
 
-// The inverse, for the pass that draws the table: the (r, mu) a texel is.
 fn transmittance_r_mu(uv: vec2f) -> vec2f {
   let bottom = atmos_bottom_radius();
   let top = atmos_top_radius();
@@ -240,26 +197,19 @@ fn transmittance_r_mu(uv: vec2f) -> vec2f {
   return vec2f(r, mu);
 }
 
-// The multiple scattering's table: the sun's cosine across, the altitude up.
 fn multiscatter_uv(r: f32, mu_s: f32) -> vec2f {
   let x = mu_s * 0.5 + 0.5;
   let y = (r - atmos_bottom_radius()) / (atmos_top_radius() - atmos_bottom_radius());
   return vec2f(coord_of(clamp(x, 0.0, 1.0), MULTISCATTER_SIZE.x), coord_of(clamp(y, 0.0, 1.0), MULTISCATTER_SIZE.y));
 }
 
-// How far below the level the horizon lies from radius `r`, as an angle:
-// the sky-view table splits its rows there, the sky above and the ground
-// below.
 fn horizon_dip(r: f32) -> f32 {
   let v_horizon = sqrt(max(r * r - atmos_bottom_radius() * atmos_bottom_radius(), 0.0));
   return acos(clamp(v_horizon / r, -1.0, 1.0));
 }
 
-// The sky as seen from one altitude (Hillaire's sky-view table): the view
-// zenith up the rows, squared toward the horizon from both sides, where
-// the sky changes fastest; the view's azimuth from the sun across, squared
-// toward the sun, where the Mie glow is. `light_cos` is the cosine of the
-// angle between the view's and the sun's azimuths.
+// Hillaire's sky-view table: zenith squared toward the horizon, azimuth
+// squared toward the sun, where the sky changes fastest.
 fn sky_view_uv(r: f32, mu: f32, light_cos: f32) -> vec2f {
   let beta = horizon_dip(r);
   let zenith_horizon = PI - beta;

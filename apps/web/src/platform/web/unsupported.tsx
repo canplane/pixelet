@@ -7,12 +7,7 @@ import { color, textStyle } from "@/shared/ui/theme.ts";
 import { LABEL } from "@platform/palette.ts";
 import type { Missing } from "@/platform/web/webgpu.ts";
 
-/**
- * The page, in place of the app, when the browser cannot run it
- * (webgpu.ts `whatIsMissing`): found before anything is started, so there is
- * no map behind it and nothing loading. A page's alone — a device app installs
- * only where it can draw.
- */
+/** Shown in place of the app before anything starts. */
 export function Unsupported({ reason }: { reason: Missing }) {
   const { t } = useTranslation();
   return (

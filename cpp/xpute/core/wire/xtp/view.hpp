@@ -1,16 +1,7 @@
 // cpp/xpute/core/wire/xtp/view.hpp
 
-// The write end as a tree, as Rust's view.rs and its TreeEncoder are: a
-// `TreeView` holds a root node, a `BranchView` a branch's children, and both
-// write through the same typed writers; `encode` lays the tree into a packet.
-//
-// A node borrows what it carries — an array's elements, a string, a graft's
-// packet — as Rust's view borrows its slices, so the caller keeps them until
-// the tree is encoded; only a branch's children are held, with the caller's
-// allocator, as `arena` holds its slots. Encoding walks the tree into a
-// `PacketWriter` (encode.hpp), which lays out the bytes the tree encoder
-// gives for the same tree, over a buffer that doubles until the packet fits
-// or the cap refuses it.
+// The write end as a tree. A node borrows what it carries (an array, a string,
+// a graft's packet), so the caller keeps them alive until the tree is encoded.
 
 #pragma once
 
@@ -30,24 +21,20 @@
 
 namespace xpute::xtp {
 
-// What a node is, past its wire type: which writer lays it out.
 enum class NodeKind : std::uint8_t { nil, scalar, array, bitset, str, strs, branch, graft };
 
-// One node of a tree, as the tree encoder takes one (Rust spec.rs `Node`).
 template <class Alloc = std::allocator<std::byte>> struct Node {
     using Children = std::vector<Node, typename std::allocator_traits<Alloc>::template rebind_alloc<Node>>;
 
     NodeKind kind = NodeKind::nil;
     NodeType type = type_of(SpecialType::nil);
-    // Whether the node is there: a typed null keeps its type and is absent.
+    // A typed null keeps its type and is absent.
     bool present = true;
-    // A scalar's value, its bits little end first.
+    // Little end first.
     std::uint64_t bits = 0;
-    // An array's, a bitset's or a graft's bytes; a string's.
     std::span<const std::uint8_t> bytes;
     std::string_view str;
     std::span<const std::string_view> strs;
-    // A branch's children.
     Children children;
 
     explicit Node(const Alloc &alloc = Alloc()) : children(alloc) {}
@@ -77,12 +64,8 @@ template <class Alloc, class T> Node<Alloc> array(std::optional<std::span<const 
 
 template <class Alloc> class BranchView;
 
-// A value lowered into a node (Rust's `ViewValue`): each width its own leaf,
-// an array the matching array node, a list a branch in element order, a
-// node as it is.
 template <class Alloc = std::allocator<std::byte>> struct ViewValue {
     struct Null {};
-    // An array's elements, as its type lays them out.
     struct Array {
         SequenceType type;
         std::span<const std::uint8_t> bytes;
@@ -92,8 +75,7 @@ template <class Alloc = std::allocator<std::byte>> struct ViewValue {
         v;
 };
 
-// The typed writers both views write through; `Self` is the view, whose
-// `write` replaces a tree's root or appends a branch's child.
+// `Self::write` replaces a tree's root or appends a branch's child.
 template <class Self, class Alloc> class NodeView {
   public:
     Self &nil() { return self().write(Node<Alloc>(alloc())); }
@@ -142,7 +124,6 @@ template <class Self, class Alloc> class NodeView {
         return self().write(std::move(n));
     }
 
-    // Many strings as one leaf.
     Self &strs(std::optional<std::span<const std::string_view>> items) {
         Node<Alloc> n(alloc());
         n.kind = NodeKind::strs;
@@ -152,8 +133,7 @@ template <class Self, class Alloc> class NodeView {
         return self().write(std::move(n));
     }
 
-    // A branch built inline by `fill`, which is given its view; with no
-    // `fill`, a branch that is not there, its type kept.
+    // With no `fill`, an absent branch that keeps its type.
     template <class F> Self &branch(F &&fill) {
         BranchView<Alloc> b(alloc());
         fill(b);
@@ -167,8 +147,7 @@ template <class Self, class Alloc> class NodeView {
         return self().write(std::move(n));
     }
 
-    // An already-encoded packet, grafted whole. Only the construction is
-    // checked here; the packet's header is read when the tree is encoded.
+    // Only the construction is checked here; the header is read at encode.
     Self &graft(std::span<const std::uint8_t> packet) {
         Node<Alloc> n(alloc());
         n.kind = NodeKind::graft;
@@ -178,7 +157,6 @@ template <class Self, class Alloc> class NodeView {
     }
 
   protected:
-    // A value lowered into a node.
     Result<Node<Alloc>> lower(const ViewValue<Alloc> &val) {
         using V = ViewValue<Alloc>;
         const Alloc &a = alloc();
@@ -233,13 +211,11 @@ template <class Alloc = std::allocator<std::byte>> class TreeView : public NodeV
   public:
     explicit TreeView(const Alloc &alloc = Alloc()) : alloc_(alloc), node_(alloc) {}
 
-    // Replaces the root.
     TreeView &write(Node<Alloc> node) {
         node_ = std::move(node);
         return *this;
     }
 
-    // Lowers a value into the root.
     Result<TreeView *> set(const ViewValue<Alloc> &val) {
         Result<Node<Alloc>> n = this->lower(val);
         if (!n) return n.error();
@@ -262,13 +238,11 @@ template <class Alloc = std::allocator<std::byte>> class BranchView : public Nod
         node_.type = type_of(SpecialType::branch);
     }
 
-    // Appends a child.
     BranchView &write(Node<Alloc> node) {
         node_.children.push_back(std::move(node));
         return *this;
     }
 
-    // Replaces every child with `vals`, lowered.
     Result<BranchView *> set(std::span<const ViewValue<Alloc>> vals) {
         node_.children.clear();
         for (const ViewValue<Alloc> &val : vals) {
@@ -278,7 +252,6 @@ template <class Alloc = std::allocator<std::byte>> class BranchView : public Nod
         return this;
     }
 
-    // Lowers one value and appends it.
     Result<BranchView *> put(const ViewValue<Alloc> &val) {
         Result<Node<Alloc>> n = this->lower(val);
         if (!n) return n.error();
@@ -286,7 +259,6 @@ template <class Alloc = std::allocator<std::byte>> class BranchView : public Nod
         return this;
     }
 
-    // Appends another view's tree as one child, encoded inline.
     template <class V> BranchView &subtree(const V &view) { return write(view.node()); }
 
     Node<Alloc> &node() noexcept { return node_; }
@@ -299,12 +271,8 @@ template <class Alloc = std::allocator<std::byte>> class BranchView : public Nod
     Node<Alloc> node_;
 };
 
-// ============ Encoding ============
-
 struct TreeEncoderOptions {
-    // A soft first size for the buffer.
     std::optional<std::uint32_t> init_cap;
-    // The packet's hard limit.
     std::optional<std::uint32_t> max_cap;
 };
 
@@ -354,7 +322,6 @@ template <class Alloc> void walk(PacketWriter &w, const Node<Alloc> &n) {
     case NodeKind::scalar: scalar_into(w, n); return;
     case NodeKind::array:
         if (!n.present) {
-            // A typed null array: its type, no elements.
             switch (static_cast<SequenceType>(n.type)) {
             case SequenceType::u8_array: w.u8_array(std::nullopt); return;
             case SequenceType::i8_array: w.i8_array(std::nullopt); return;
@@ -398,10 +365,7 @@ template <class Alloc> void walk(PacketWriter &w, const Node<Alloc> &n) {
 
 } // namespace view_detail
 
-// The packet a view's tree lays out: its bytes, header included and to the
-// word, in a buffer of the caller's allocator; EINVAL for a cap outside a
-// packet's sizes, EOVERFLOW for a tree past the cap, and what the writer
-// refuses (a graft that is not a packet: EBADMSG).
+// EINVAL for a cap outside a packet's sizes, EOVERFLOW for a tree past the cap.
 template <class Alloc, class View>
 Result<std::vector<std::uint8_t, typename std::allocator_traits<Alloc>::template rebind_alloc<std::uint8_t>>> encode(const View &view, TreeEncoderOptions opts = {},
                                                                                                                      const Alloc &alloc = Alloc()) {

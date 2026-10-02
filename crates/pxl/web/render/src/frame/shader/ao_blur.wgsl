@@ -1,9 +1,5 @@
-// The occlusion denoised at half resolution: a Poisson disc of
-// AO_DENOISE_SAMPLES taps AO_DENOISE_RADIUS texels wide, spun per pixel by
-// its blue noise, each tap weighed by how far it lies off the pixel's
-// tangent plane and how far its normal turns away, so the blur never
-// crosses an edge. Run twice, the second time spun by the noise's other
-// channel; which run this is comes at a dynamic offset.
+// Half-resolution AO denoise: a blue-noise-spun Poisson disc whose taps are
+// weighed by plane distance and normal, so the blur never crosses an edge.
 
 @group(0) @binding(1) var half_depth: texture_2d<f32>;
 @group(0) @binding(2) var blue_noise: texture_2d<f32>;
@@ -16,8 +12,7 @@ struct Run {
 
 @group(0) @binding(5) var<uniform> run: Run;
 
-// N8AO's generateDenoiseSamples(4, 11): four taps on a spiral of eleven
-// turns, radius to the three quarters.
+// N8AO's generateDenoiseSamples(4, 11).
 const DISC = array<vec2f, 4>(
   vec2f(0.353553, 0.000000),
   vec2f(0.000000, -0.594604),

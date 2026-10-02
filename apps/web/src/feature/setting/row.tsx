@@ -25,8 +25,6 @@ function Badge({ text, tint }: { text: string; tint: string }) {
   );
 }
 
-/** A setting's badges: that only a development build offers it, and what it
- * costs the device. */
 function Badges({ cost, dev }: { cost?: SettingCost; dev?: boolean }) {
   return (
     <>
@@ -36,7 +34,6 @@ function Badges({ cost, dev }: { cost?: SettingCost; dev?: boolean }) {
   );
 }
 
-/** A name, its badges, and an optional description under it. */
 function Described({ label, description, cost, dev }: { label: string; description?: string; cost?: SettingCost; dev?: boolean }) {
   return (
     <View style={styles.described}>
@@ -53,16 +50,12 @@ interface SettingRowProps {
   label: string;
   description: string;
   active: boolean;
-  /** Called with the switch's new value, which is sent to the kernel as is.
-   * Sending a flip instead would depend on the current value having arrived
-   * already. */
+  /** The new value, not a flip, which would depend on the current value having arrived. */
   onChange: (active: boolean) => void;
   cost?: SettingCost;
-  /** Marks a setting only a development build offers (schema.json's `dev`) — the table decides whether the row is there at all, this just labels it once shown. */
   dev?: boolean;
 }
 
-/** A toggle: the platform's row for a switch (platform toggle-row.tsx). */
 export function SettingRow(props: SettingRowProps) {
   const { label, description, active, onChange, cost, dev } = props;
   return (
@@ -79,11 +72,6 @@ interface SettingGroupProps {
   children: ReactNode;
 }
 
-/** A choice's answers in one box, the setting's name set into its border as a
- * fieldset's legend: on the panel's ground, so the line seems to run behind
- * it, and at the left, where the answers' names start. The box stands apart
- * from the rows around it so it reads as a box and not another row, more
- * above than below, since the name rises out of it by half its height. */
 export function SettingGroup(props: SettingGroupProps) {
   const { label, cost, dev, children } = props;
   return (
@@ -105,11 +93,7 @@ interface SettingChoiceRowProps {
   cost?: SettingCost;
 }
 
-/** One option of a single choice (a setting's options, the language list).
- * Same layout as SettingRow; the selected option shows a check, the others
- * nothing. The check slot keeps its width when empty so selecting does not
- * rewrap the text. Unlike SettingRow it does not reach into the panel's
- * padding: its group box or list handles that. */
+/** The check slot keeps its width when empty, so selecting does not rewrap. */
 export function SettingChoiceRow(props: SettingChoiceRowProps) {
   const { label, description, selected, onSelect, cost } = props;
   return (
@@ -139,7 +123,6 @@ export function SectionTitle(props: SectionTitleProps) {
   );
 }
 
-/** Settings' shared type: the panel's small print. */
 export const settingText = StyleSheet.create({
   small: { ...textStyle.caption, color: LABEL.secondary },
   faint: { ...textStyle.caption2, fontWeight: weight.regular, color: LABEL.secondary },
@@ -148,26 +131,17 @@ export const settingText = StyleSheet.create({
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 12, paddingVertical: 12, borderRadius: 8 },
-  // A row reaches into the panel's padding by its own, so its words line up
-  // with the section title's.
   bleed: { marginHorizontal: -12 },
   described: { flexShrink: 1, minWidth: 0, gap: 4 },
   nameLine: { flexDirection: "row", alignItems: "center", gap: 8 },
   name: { ...textStyle.body, color: LABEL.primary },
 
-  // iOS's tinted style: the tint as a faint ground and the words in it, no
-  // edge — a full fill is what a chosen chip says.
   badge: { height: 16, justifyContent: "center", borderRadius: 8, paddingHorizontal: 4 },
-  // Under the smallest style on purpose: a badge is a tag, read as a shape at
-  // a glance and not as text, the size iOS's own tab labels and an app's
-  // counters go down to. Its capitals, weight and color carry it. The badge
-  // stands 16 tall, Material's badge height.
   badgeText: { ...textStyle.caption2, fontSize: 9, lineHeight: 10, letterSpacing: 0.4 },
 
   group: { marginTop: 16, marginBottom: 12, borderWidth: 1, borderColor: hairline, borderRadius: 12, padding: 4, paddingTop: 12 },
   legend: {
     position: "absolute",
-    // The name's middle on the box's one-point border.
     top: 1 - textStyle.caption.lineHeight / 2,
     left: 8,
     flexDirection: "row",

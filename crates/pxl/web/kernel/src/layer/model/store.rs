@@ -1,23 +1,10 @@
 // pxl-kernel/layer/model/store.rs
 
-//! Models and the actors that play them: a glTF asset as the core holds it,
-//! and the instances placed in the world that animate it.
-//!
-//! A model is parsed from bytes the shell fetches — the core does not read
-//! files. Its mesh is one heap block in a layout a draw reads
-//! lane by lane (positions, normals, UVs, four joints and four weights a
-//! vertex, then the indices); its skeleton is each joint's parent, its rest
-//! pose and its inverse bind matrix, the vertices already in the space the
-//! bind matrices expect; its clips are channels of keyframes, one joint and
-//! one of translation, rotation or scale each. A model with no joints is
-//! drawn as it lies. The mesh stands in glTF's Y-up with its height scaled
-//! to the height it is registered with; an actor turns it to this world's Z-up.
-//!
-//! An actor is a model at a place, facing a way, playing a clip. Each tick
-//! the core advances every actor's clips, samples them — linear keys, the
-//! rotations slerped — blends a clip fading in over the one fading out, as
-//! three's mixer did, walks the joints parent first, and writes the joint
-//! palette into the actor's block, which the renderer is told to rewrite.
+//! Models and the actors that play them. A model's mesh is one heap block
+//! read lane by lane (positions, normals, UVs, joints, weights, indices),
+//! in glTF's Y-up scaled to its registered height; an actor turns it Z-up.
+//! Each tick advances every actor's clips, cross-fades as three's mixer did,
+//! and writes the joint palette into the actor's block.
 
 use pxl_render::frame::draw::{DrawList, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
 use pxl_render::gpu::api::word_bytes;
@@ -26,7 +13,7 @@ use xpute_runtime::abi::handle::Slots;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 
-/// A channel's path: translation, rotation; anything else is scale.
+/// Translation, rotation; anything else is scale.
 const T: u8 = 0;
 const R: u8 = 1;
 
@@ -45,11 +32,9 @@ struct Clip {
     channels: Vec<Channel>,
 }
 
-/// Where a model's mesh is and how big, for a hit test (layer/decor/hit.rs).
 #[derive(Clone, Copy)]
 pub struct MeshRef {
     pub at: usize,
-    /// The renderer's buffer, once sealed.
     pub handle: u32,
     pub vertex_cnt: u32,
     pub index_cnt: u32,
@@ -72,10 +57,8 @@ pub struct Model {
     clips: Vec<Clip>,
     /// Joints in an order where a parent comes before its children.
     order: Vec<u32>,
-    /// What the mesh is scaled by to stand as tall as it is registered.
     scale: f32,
-    /// How far a vertex reaches from the model's origin, unscaled: a
-    /// bounding sphere for a hit test to reject by.
+    /// Unscaled bounding sphere for a hit test to reject by.
     radius: f32,
 }
 
@@ -87,34 +70,28 @@ struct Playing {
 
 pub struct Actor {
     model: u32,
-    /// Where it stands, in units, and its turn about Z.
+    /// In units, and its turn about Z.
     pub at: V3,
     pub rotation_z: f32,
     pub visible: bool,
     current: Option<Playing>,
-    /// The clip fading out, and how far the fade has gone of its length.
     previous: Option<Playing>,
     fade: f32,
     fade_len: f32,
     palette_at: usize,
     palette_bytes: u32,
     palette_handle: u32,
-    /// Scratch: each joint's local and global transform this tick.
     local: Vec<[f32; 10]>,
     global: Vec<[f32; 16]>,
 }
 
 #[derive(Default)]
 pub struct Models {
-    /// Every model registered, by number: none is let go, since a model is
-    /// an asset of the build and the build's assets stay while it runs.
+    /// Never let go: a model is a build asset and stays while the build runs.
     models: Vec<Model>,
     actors: Slots<Actor>,
-    /// The pose a cross-fade blends from, worked in a turn at a time.
     from: Vec<[f32; 10]>,
 }
-
-// ---- small math over column-major f32 matrices ----
 
 fn mat_mul(a: &[f32; 16], b: &[f32; 16]) -> [f32; 16] {
     let mut o = [0.0; 16];
@@ -224,9 +201,7 @@ fn blend(a: &[f32; 10], b: &[f32; 10], w: f32) -> [f32; 10] {
 }
 
 impl Models {
-    /// A model of `vertex_cnt` vertices, `index_cnt` indices and `joint_cnt`
-    /// joints, its mesh block acquired: its id and the block's address, for
-    /// the caller to write; none when the heap refused.
+    /// None when the heap refused.
     pub fn new_model(&mut self, vertex_cnt: u32, index_cnt: u32, joint_cnt: u32) -> Option<(u32, usize)> {
         xpute_core::ensure!(self.models.len() < crate::mem::fixed::MODELS_MAX, ENOTRECOVERABLE, self.models.len());
         let bytes = (vertex_cnt * MODEL_VERTEX_WORDS + index_cnt) * 4;
@@ -251,8 +226,7 @@ impl Models {
         Some(((self.models.len() - 1) as u32, at))
     }
 
-    /// A joint: its parent (-1 for a root), its rest pose, the transform
-    /// above it when it is a root, and its inverse bind matrix.
+    /// `parent` is -1 for a root; `root_pre` is the transform above a root.
     pub fn joint(&mut self, model: u32, joint: u32, parent: i32, rest: [f32; 10], root_pre: [f32; 16], inverse_bind: [f32; 16]) {
         let Some(m) = self.models.get_mut(model as usize) else { return };
         let j = joint as usize;
@@ -265,15 +239,13 @@ impl Models {
         m.inverse_bind[j] = inverse_bind;
     }
 
-    /// A clip; its index in the model.
     pub fn clip(&mut self, model: u32, duration: f32) -> u32 {
         let Some(m) = self.models.get_mut(model as usize) else { return u32::MAX };
         m.clips.push(Clip { duration, channels: Vec::new() });
         (m.clips.len() - 1) as u32
     }
 
-    /// A channel of a clip: keys' times and values, `values` holding the
-    /// keys' values end to end — four for a rotation and three otherwise.
+    /// `values` end to end: four a key for a rotation, three otherwise.
     #[allow(clippy::too_many_arguments)]
     pub fn channel(&mut self, model: u32, clip: u32, joint: u32, path: u8, step: bool, times: &[f32], values: &[f32]) {
         let Some(m) = self.models.get_mut(model as usize) else { return };
@@ -284,9 +256,6 @@ impl Models {
         c.channels.push(Channel { joint, path, step, times, values });
     }
 
-    /// The model is complete: its block goes to the GPU and its joints are
-    /// ordered parent first.
-    ///
     /// # Safety
     /// The model's block has been written.
     pub unsafe fn seal(&mut self, draw: &mut DrawList, model: u32, scale: f32) {
@@ -319,8 +288,6 @@ impl Models {
         }
     }
 
-    /// A model's mesh, for a hit test: where its block is, its counts, its
-    /// reach from the origin and its scale.
     pub fn mesh(&self, model: u32) -> Option<MeshRef> {
         let m = self.models.get(model as usize)?;
         Some(MeshRef {
@@ -375,8 +342,7 @@ impl Models {
         self.actors.get(id)
     }
 
-    /// Starts `clip` from its beginning, fading over `fade_s` from what
-    /// played before; a clip already playing is left alone.
+    /// A clip already playing is left alone.
     pub fn play(&mut self, id: u32, clip: u32, fade_s: f32) {
         let Some(a) = self.actor(id) else { return };
         if a.current.is_some_and(|c| c.clip == clip) {
@@ -396,10 +362,8 @@ impl Models {
         }
     }
 
-    /// Advances every actor's clips by `dt` seconds and writes the palettes;
-    /// whether any
-    /// actor is playing a clip of some length, which is what asks for the
-    /// next frame — nothing else says an actor moved.
+    /// Whether any actor plays a clip of some length: the only thing that asks
+    /// for the next frame.
     pub fn tick(&mut self, draw: &mut DrawList, dt: f32) -> bool {
         let mut animating = false;
         let Models { models, actors, from } = self;
@@ -467,7 +431,6 @@ impl Models {
         animating
     }
 
-    /// Every visible actor's draw, placed against the frame's origin.
     pub fn draw(&self, draw: &mut DrawList, eye: V3) {
         for (_, a) in self.actors.iter() {
             if !a.visible {

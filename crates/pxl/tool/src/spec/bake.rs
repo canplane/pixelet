@@ -1,9 +1,5 @@
 // pxl-tool/spec/bake.rs
 
-//! What the bake and the client agree on about what the bucket holds: the
-//! version each kind of page is published at, the coarsest level it supplies
-//! whole, and the POI badges a page's kinds are drawn with.
-
 use super::{file, json_str, line_comments, packed, read, rs_doc, Output};
 
 pub fn published_outputs() -> Result<Vec<Output>, String> {
@@ -101,14 +97,8 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
     ])
 }
 
-// ---- the POI badges ----
-//
-// The shell reads the table by a place's category key, which a search result
-// carries as text (the data spec writes that). What the Rust reads is a kind
-// as the number a POI page carries it by, so it is written as lists in the
-// JSON's order, indexed alike: the categories, which the bake numbers a place
-// by, and the icons and colors, which the kernel draws a badge from — apart,
-// so a module that only draws carries no category name.
+// The shell reads badges by category key; the Rust by kind number, with
+// categories and icons in separate lists so a drawing module carries no names.
 
 pub fn poi_badge_outputs() -> Result<Vec<Output>, String> {
     let json = "spec/pxl/spec/bake/poi_badge.json";

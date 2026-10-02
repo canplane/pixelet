@@ -1,17 +1,8 @@
 // pxl-render/gpu/api/device.rs
 
-//! The renderer's calls made on the device itself, through wgpu: what the
-//! page's player does with a turn's records (apps/web/src/platform/web/webgpu.ts)
-//! done as each call is made, since a kernel linked into an app reaches its
-//! GPU without a host between. Every object is kept at its handle's slot, and
-//! every call means what the record of it means to the page — the same codes,
-//! the same defaults — so the renderer cannot tell the two apart.
-//!
-//! A call that names an object the device does not hold does nothing, as the
-//! page's does no more than log a WebGPU error: an object a refused call never
-//! made, or a surface's texture a frame could not have, stays missing until
-//! the renderer makes it again. A device times its passes where its GPU can
-//! (`TIMESTAMP_QUERY`), read back a turn or more later as the page's are.
+//! The renderer's calls made directly through wgpu, meaning what each record
+//! means to the page, so the renderer cannot tell the two apart. A call naming
+//! an object the device does not hold does nothing, as a WebGPU error does on the page.
 
 use std::num::NonZeroU64;
 use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
@@ -24,24 +15,18 @@ use super::NONE;
 use crate::frame::shader::record::VERTEX_ENTRY;
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, record, resource};
 
-/// An image a load holds: the file's own pixels, RGBA, top row first, no
-/// color conversion and no premultiplied alpha, as the page's bitmap is.
+/// RGBA, top row first, unconverted and not premultiplied, as the page's bitmap is.
 struct Image {
     width: u32,
     height: u32,
     pixels: Box<[u8]>,
 }
 
-/// The images the kernel had decoded, by the handle it issued each — the
-/// whole handle, generation and all, so a slot issued again names only its
-/// new image. Held for the app's life, as the page's bitmaps are: the
-/// renderer may make a texture of one again, and names it only by its
-/// handle. Behind a lock, since an image is decoded off the kernel's thread
-/// and read on it.
+/// Keyed by the whole handle, generation included, so a reissued slot names
+/// only its new image. Locked because images decode off the kernel's thread.
 static IMAGES: Mutex<Option<std::collections::HashMap<u32, Image>>> = Mutex::new(None);
 
-/// Decodes a PNG or a WebP and holds it for the renderer as `handle`, the
-/// kernel's own: false for a file that does not decode. Runs on any thread.
+/// False for a file that does not decode. Runs on any thread.
 pub fn hold_image(handle: u32, file: &[u8]) -> bool {
     let image = if file.starts_with(b"RIFF") { decode_webp(file) } else { decode_png(file) };
     let Some(image) = image else { return false };
@@ -51,8 +36,6 @@ pub fn hold_image(handle: u32, file: &[u8]) -> bool {
 
 fn decode_png(file: &[u8]) -> Option<Image> {
     let mut decoder = png::Decoder::new(std::io::Cursor::new(file));
-    // Palettes and low bit depths expanded, sixteen bits cut to eight: what
-    // is left is gray, gray and alpha, RGB or RGBA, a byte a channel.
     decoder.set_transformations(png::Transformations::normalize_to_color8());
     let mut reader = decoder.read_info().ok()?;
     let mut buf = vec![0; reader.output_buffer_size()?];
@@ -85,7 +68,6 @@ fn decode_webp(file: &[u8]) -> Option<Image> {
     Some(Image { width, height, pixels })
 }
 
-/// What the device answers the kernel with (the shell's GPU_READY).
 #[derive(Clone, Copy, Debug)]
 pub struct DeviceInfo {
     pub align: u32,
@@ -102,15 +84,12 @@ enum Object {
     Pipeline(wgpu::RenderPipeline),
     Group(wgpu::BindGroup),
     Encoder(wgpu::CommandEncoder),
-    /// Boxed: a pass is far larger than any other object, and passes are few.
     Pass(Box<wgpu::RenderPass<'static>>),
-    /// A timestamp query set, and how many queries it holds.
     QuerySet(wgpu::QuerySet, u32),
 }
 
-/// Where a set's timestamps are read back: resolved into one buffer and
-/// copied into one of three, so a read still on its way does not hold the
-/// next frame's up, as the page's are (apps/web/src/platform/web/webgpu.ts).
+/// Resolved into one buffer and copied into one of three, so a pending read
+/// does not hold up the next frame's.
 struct Stamps {
     count: u32,
     resolve: wgpu::Buffer,
@@ -121,7 +100,6 @@ struct StampRead {
     buffer: wgpu::Buffer,
     /// FREE, COPIED (the copy is recorded, not yet mapped), MAPPING, MAPPED.
     state: Arc<AtomicU8>,
-    /// Which spans' pairs the frame wrote.
     written: u32,
 }
 
@@ -130,13 +108,10 @@ const COPIED: u8 = 1;
 const MAPPING: u8 = 2;
 const MAPPED: u8 = 3;
 
-/// A surface the kernel draws into, configured from the moment it is bound:
-/// the renderer configures its surfaces when it opens them, which on a device
-/// is before the app's view has a layer to bind, so binding is what
-/// configures, and a bound surface is always one a frame can be taken from.
+/// Binding configures: the renderer configures surfaces before the app's view
+/// has a layer, so a bound surface is always one a frame can be taken from.
 struct Surface {
-    /// The handle it is bound under: a slot outlives its handle, and a view
-    /// letting an old one go must not take the one bound there since.
+    /// A slot outlives its handle; unbinding an old handle must not take the one bound since.
     handle: u32,
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
@@ -149,28 +124,16 @@ struct Device {
     queue: wgpu::Queue,
     objects: Vec<Option<Object>>,
     surfaces: Vec<Option<Surface>>,
-    /// The size the renderer last gave each surface, with its handle, by
-    /// slot, bound or not: a layer bound after it is configured at it, since
-    /// the renderer says a size when it changes and not again when a view
-    /// comes back.
+    /// Kept by slot so a layer bound later is configured at the last size given.
     sizes: Vec<Option<(u32, [u32; 2])>>,
-    /// The surfaces' textures this turn drew into, shown at its fall.
     frames: Vec<wgpu::SurfaceTexture>,
     stamps: Option<Stamps>,
-    /// What the last read brought, in milliseconds: each span's, then the
-    /// whole frame's from its first pass's start to its last's end.
     gpu_ms: Vec<f64>,
-    /// Where a turn's buffer writes are staged: chunks mapped once and used
-    /// again, where `Queue::write_buffer` makes a buffer of its own for every
-    /// write — a Metal buffer, and its mapping, a dozen times a frame. A
-    /// page's WebGPU keeps such a belt behind its `writeBuffer`; on a device
-    /// the renderer's calls meet wgpu, and the belt is this backend's.
+    /// `Queue::write_buffer` makes a Metal buffer and mapping per write, a dozen a
+    /// frame; the belt maps chunks once and reuses them.
     belt: wgpu::util::StagingBelt,
-    /// The copies the belt's writes are, this turn's, submitted ahead of the
-    /// next encoder so a write lands before whatever reads it, as a queue's
-    /// write does.
+    /// Submitted ahead of the next encoder so a write lands before what reads it.
     uploads: Option<wgpu::CommandEncoder>,
-    /// Frames shown that the GPU has not finished (`frame_room`).
     in_flight: Arc<AtomicU32>,
 }
 
@@ -180,19 +143,14 @@ fn device() -> Option<&'static mut Device> {
     DEVICE.get(|| None).as_mut()
 }
 
-/// The format a surface is drawn in, and what the renderer's CANVAS means: the
-/// one the system prefers, as the page takes the browser's
-/// (`getPreferredCanvasFormat`, which answers the same on each) — BGRA on
-/// Apple's, RGBA on Android's, whose Vulkan surfaces offer no BGRA. The
-/// shaders write the same values in either.
+/// BGRA on Apple, RGBA on Android, whose Vulkan surfaces offer no BGRA.
 #[cfg(target_vendor = "apple")]
 const SURFACE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8Unorm;
 #[cfg(not(target_vendor = "apple"))]
 const SURFACE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
-/// Opens the device, once: the adapter the system prefers, asked for the
-/// limits it has — the simulator's Metal falls short of WebGPU's defaults and
-/// refuses a device that asks for them. None where there is no GPU.
+/// Asks for the adapter's own limits: the simulator's Metal falls short of
+/// WebGPU's defaults and refuses a device that asks for them.
 pub fn open_device() -> Option<DeviceInfo> {
     if device().is_none() {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -233,21 +191,14 @@ pub fn open_device() -> Option<DeviceInfo> {
     })
 }
 
-/// Why a surface could not be bound.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BindRefused {
-    /// No device is open yet.
     NoDevice,
-    /// The system would not make a surface of what the app handed over, or
-    /// the device cannot draw into it.
     NoSurface,
 }
 
-/// Binds the kernel's surface `handle` to what the app draws it into.
-///
 /// # Safety
-/// `target` stays valid for as long as the surface is bound: the app unbinds
-/// it before what it names goes.
+/// `target` stays valid while the surface is bound: the app unbinds it first.
 pub unsafe fn surface_bind(handle: u32, target: wgpu::SurfaceTargetUnsafe) -> Result<(), BindRefused> {
     let d = device().ok_or(BindRefused::NoDevice)?;
     // SAFETY: the caller's target.
@@ -259,10 +210,8 @@ pub unsafe fn surface_bind(handle: u32, target: wgpu::SurfaceTargetUnsafe) -> Re
     let mut config = surface.get_default_config(&d.adapter, width, height).ok_or(BindRefused::NoSurface)?;
     config.format = SURFACE_FORMAT;
     config.present_mode = wgpu::PresentMode::Fifo;
-    // What the view shows under a surface shows through where it is clear, as
-    // under the page's canvas, which is configured premultiplied. Metal offers
-    // only opaque and post-multiplied, and either blending mode shows a
-    // cleared pixel through.
+    // Shows through where clear, as the page's premultiplied canvas does. Metal
+    // offers only opaque and post-multiplied.
     let modes = surface.get_capabilities(&d.adapter).alpha_modes;
     if let Some(mode) = [wgpu::CompositeAlphaMode::PreMultiplied, wgpu::CompositeAlphaMode::PostMultiplied]
         .into_iter()
@@ -287,44 +236,32 @@ pub fn surface_unbind(handle: u32) {
     }
 }
 
-/// No stream on a device: the kernel makes its calls itself.
-///
 /// # Safety
 /// None; unsafe as the page's `install` is.
 pub unsafe fn install(_at: u32) -> u32 {
     0
 }
 
-/// The renderer's calls, made on the device.
 pub struct Gpu(());
 
 static GPU: Gpu = Gpu(());
 
-/// The calls, once the device is open.
 pub fn gpu() -> Option<&'static Gpu> {
     device().map(|_| &GPU)
 }
 
-/// Frames the GPU may have in hand at once. The layer keeps three drawables
-/// (wgpu's default latency of two, and one on screen), so with no more than
-/// two frames unfinished a third always finds one free, and taking it never
-/// waits. Taking one waits for the GPU otherwise, inside the turn, and on a
-/// device the caller's thread — the JavaScript's — waits with it: a page's
-/// browser holds its frames back instead, and this is that.
+/// The layer keeps three drawables, so with at most two frames unfinished a
+/// third is always free and taking it never blocks the JavaScript thread.
 const FRAMES_IN_FLIGHT: u32 = 2;
 
-/// Staged writes a chunk holds: a baked mesh, the largest a turn usually
-/// sends, is 1 MiB (.fixed.bake); a larger write takes a chunk of its own.
+/// A baked mesh, usually the largest write a turn sends, is 1 MiB; larger writes take their own chunk.
 const BELT_CHUNK_BYTES: u64 = 1 << 20;
 
-/// Whether a frame may be drawn now: false while the GPU has as many frames
-/// unfinished as it may hold, and the frame is better skipped than waited
-/// for.
+/// False while the GPU holds as many unfinished frames as it may: skip rather than wait.
 pub fn frame_room() -> bool {
     device().is_none_or(|d| d.in_flight.load(Ordering::Acquire) < FRAMES_IN_FLIGHT)
 }
 
-/// Submits what the turn staged, ahead of `then` if there is one.
 fn flush(d: &mut Device, then: Option<wgpu::CommandBuffer>) {
     let uploads = d.uploads.take().map(|e| {
         d.belt.finish();
@@ -337,8 +274,6 @@ fn flush(d: &mut Device, then: Option<wgpu::CommandBuffer>) {
     }
 }
 
-/// The turn's fall: what it staged sent, what it drew into a surface shown,
-/// and the GPU's finished work taken in.
 pub fn gpu_publish() {
     if let Some(d) = device() {
         if d.uploads.is_some() {
@@ -354,15 +289,11 @@ pub fn gpu_publish() {
                 in_flight.fetch_sub(1, Ordering::AcqRel);
             });
         }
-        // What the GPU finished is heard here: a frame done, a belt chunk
-        // free again, a timestamp mapped.
         let _ = d.device.poll(wgpu::PollType::Poll);
         read_stamps(d);
     }
 }
 
-/// Maps what the turn's encoders copied, now that they are submitted, and
-/// takes what an earlier turn's maps brought.
 fn read_stamps(d: &mut Device) {
     let Some(s) = d.stamps.as_mut() else { return };
     for r in &s.reads {
@@ -401,7 +332,6 @@ fn read_stamps(d: &mut Device) {
     }
 }
 
-/// An upload always goes: there is no stream to fill.
 pub fn room(_bytes: u32) -> bool {
     true
 }
@@ -488,7 +418,6 @@ impl Device {
     }
 }
 
-/// A layout's (binding, stages, kind) words as wgpu's entries.
 fn layout_entries(words: &[u32]) -> Vec<wgpu::BindGroupLayoutEntry> {
     words
         .as_chunks::<3>()
@@ -545,7 +474,6 @@ const VERTEX_FORMAT: [wgpu::VertexFormat; 7] = [
     wgpu::VertexFormat::Uint32x2,
 ];
 
-/// Straight alpha over what is drawn.
 const ALPHA_BLEND: wgpu::BlendState = wgpu::BlendState {
     color: wgpu::BlendComponent {
         src_factor: wgpu::BlendFactor::SrcAlpha,
@@ -558,7 +486,6 @@ const ALPHA_BLEND: wgpu::BlendState = wgpu::BlendState {
         operation: wgpu::BlendOperation::Add,
     },
 };
-/// Light added to what is drawn: the stars over the sky.
 const ADD_BLEND: wgpu::BlendState = wgpu::BlendState {
     color: wgpu::BlendComponent {
         src_factor: wgpu::BlendFactor::One,
@@ -604,9 +531,7 @@ impl Gpu {
         d.put(id, Object::Texture(t));
     }
 
-    /// A texture of an image a load holds, at the image's size, with the
-    /// image in it. The image was held before the kernel heard of it, so one
-    /// the kernel names is there.
+    /// The image was held before the kernel heard of it, so one the kernel names is there.
     pub fn image_texture(&self, id: u32, image: u32) {
         let Some(d) = device() else { return };
         let images = IMAGES.lock().unwrap_or_else(|e| e.into_inner());
@@ -685,7 +610,6 @@ impl Gpu {
         d.put(id, Object::Shader(m));
     }
 
-    /// A bind group layout: (binding, stages, kind) words.
     pub fn layout(&self, id: u32, entries: &[u32]) {
         let Some(d) = device() else { return };
         let l = d.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -695,8 +619,6 @@ impl Gpu {
         d.put(id, Object::Layout(l));
     }
 
-    /// A pipeline from its record (frame/shader/record.rs), its group layouts,
-    /// its shader module and the format it draws into.
     pub fn pipeline(&self, id: u32, words: &[u32], layouts: &[u32], module: u32, fmt: u32) {
         let Some(d) = device() else { return };
         let Some(Object::Shader(module)) = d.get(module) else { return };
@@ -790,8 +712,7 @@ impl Gpu {
         d.put(id, Object::Pipeline(p));
     }
 
-    /// A bind group: (binding, resource kind, object, offset, size — 0 the
-    /// whole buffer) words.
+    /// Entries are (binding, resource kind, object, offset, size; 0 the whole buffer).
     pub fn bind_group(&self, id: u32, layout: u32, entries: &[u32]) {
         let Some(d) = device() else { return };
         let Some(layout) = d.layout(layout) else { return };
@@ -834,8 +755,7 @@ impl Gpu {
         let Some(d) = device() else { return };
         let Some(b) = d.buffer(id).cloned() else { return };
         let (Some(size), true) = (NonZeroU64::new(bytes.len() as u64), offset.is_multiple_of(4) && bytes.len().is_multiple_of(4)) else {
-            // What the belt cannot copy — nothing, or a span off the copy
-            // alignment — goes by the queue.
+            // Empty spans and spans off the copy alignment go by the queue.
             d.queue.write_buffer(&b, offset as u64, bytes);
             return;
         };
@@ -843,7 +763,6 @@ impl Gpu {
         d.belt.write_buffer(encoder, &b, offset as u64, size).copy_from_slice(bytes);
     }
 
-    /// A texture's first mip of one layer, whole.
     pub fn write_texture(&self, id: u32, layer: u32, width: u32, height: u32, bytes: &[u8]) {
         let Some(d) = device() else { return };
         let Some(Object::Texture(texture)) = d.get(id) else { return };
@@ -874,8 +793,6 @@ impl Gpu {
         d.put(id, Object::Encoder(e));
     }
 
-    /// A region of `source`'s first mip at (x, y) into `target`'s `layer` at
-    /// (tx, ty), recorded into `encoder`.
     #[allow(clippy::too_many_arguments)]
     pub fn copy_texture(&self, encoder: u32, source: u32, x: u32, y: u32, target: u32, tx: u32, ty: u32, layer: u32, width: u32, height: u32) {
         let Some(d) = device() else { return };
@@ -905,10 +822,7 @@ impl Gpu {
         d.put(encoder, Object::Encoder(e));
     }
 
-    /// A render pass: color view, color load, clear r g b a (f32 bits), depth
-    /// view, depth load, depth clear (f32 bits), query set, the begin and end
-    /// timestamp indices; NONE or 0 for what is absent. A pass whose views
-    /// are missing is not begun, and every call on it does nothing.
+    /// A pass whose views are missing is not begun, and every call on it does nothing.
     pub fn pass(&self, id: u32, encoder: u32, desc: &[u32]) {
         let Some(d) = device() else { return };
         let [color, color_load, r, g, b, a, depth, depth_load, depth_clear, query_set, begin, end] = *desc else {
@@ -1035,7 +949,6 @@ impl Gpu {
         }
     }
 
-    /// A pass ends when it is let go.
     pub fn end(&self, pass: u32) {
         if let Some(d) = device() {
             d.take(pass);
@@ -1049,7 +962,7 @@ impl Gpu {
         }
     }
 
-    /// Nothing: a surface is configured when it is bound (`Surface`).
+    /// A surface is configured when it is bound.
     pub fn configure(&self, _surface: u32) {}
 
     pub fn resize(&self, surface: u32, width: u32, height: u32) {
@@ -1068,9 +981,7 @@ impl Gpu {
         s.surface.configure(&d.device, &s.config);
     }
 
-    /// A view of the surface's texture for this frame, shown at the turn's
-    /// fall; none when the surface has no texture to give, and the frame's
-    /// passes into it are not begun.
+    /// None when the surface has no texture to give; the frame's passes into it are not begun.
     pub fn current(&self, surface: u32, view: u32) {
         let Some(d) = device() else { return };
         let Some(Some(s)) = d.surfaces.get_mut(handle_slot(surface) as usize) else { return };
@@ -1104,9 +1015,7 @@ impl Gpu {
         d.put(id, Object::QuerySet(set, count));
     }
 
-    /// Reads the timestamps an encoder's passes wrote into the set, once the
-    /// GPU has them: `written` says which spans' pairs the frame wrote. None
-    /// is read while every read is still on its way.
+    /// Nothing is read while every read is still on its way.
     pub fn timestamps(&self, encoder: u32, query_set: u32, written: u32) {
         let Some(d) = device() else { return };
         let Some(Object::QuerySet(set, count)) = d.get(query_set) else { return };
@@ -1143,8 +1052,6 @@ impl Gpu {
         r.state.store(COPIED, Ordering::Release);
     }
 
-    /// Span `span`'s time the last read brought, in milliseconds; the one past
-    /// the spans is the whole frame's.
     pub fn gpu_ms(&self, span: u32) -> f64 {
         device().and_then(|d| d.gpu_ms.get(span as usize).copied()).unwrap_or(0.0)
     }

@@ -2,9 +2,7 @@
 
 use super::*;
 
-/// A block of cells is a cell of a coarser level, so a cell's center and
-/// its block's are one computation: the block's cell `up` levels over, its
-/// XY the middle of its span and its Z half its side above the ground.
+/// A cell's center and its block's are one computation: the cell `up` levels over.
 #[test]
 fn a_cells_center_is_its_middle_and_half_its_side_above_the_ground() {
     let point = Pvf3 {
@@ -27,9 +25,7 @@ fn a_cells_center_is_its_middle_and_half_its_side_above_the_ground() {
     }
 }
 
-/// A fine cell found by its offset in a coarse one is the cell the offset was
-/// read from, whichever lattices the two are cut in and however far apart
-/// their levels are.
+/// A cell found by its offset in a coarser one is the cell the offset came from, across lattices and levels.
 #[test]
 fn a_cell_found_by_its_offset_in_a_coarser_one_is_itself() {
     let coarse = Lattice::new(GROUND.scale(0).up(2));
@@ -48,10 +44,7 @@ fn a_cell_found_by_its_offset_in_a_coarser_one_is_itself() {
     }
 }
 
-/// A cell's place in a page some levels over it, counted in its own sides,
-/// is its own place where the page is its own, and lies inside the cell of
-/// that page it falls in: a block of them per page cell, as a chunk read from
-/// a coarser page reads it.
+/// A cell's place in a page levels above it, in its own sides, lies inside the page cell it falls in.
 #[test]
 fn a_cells_place_in_a_page_above_lies_in_the_page_cell_over_it() {
     for (x, y) in [(-1234, 5678), (0, 0), (97, -3), (400_000, -250_000)] {
@@ -74,10 +67,7 @@ fn a_cells_place_in_a_page_above_lies_in_the_page_cell_over_it() {
     }
 }
 
-/// A lattice is shifts against the unit, so two lattices whose cells are the
-/// same size cut the same ground: a lattice two shifts coarser than the
-/// ground has at z16 the ground's z14 cell, held in a z16 page
-/// rather than a level-2 one.
+/// Two lattices with equal cell sizes cut the same ground.
 #[test]
 fn a_coarser_lattices_cell_is_the_grounds_cell_as_many_levels_up() {
     let coarse = Lattice::new(GROUND.scale(0).up(2));
@@ -94,10 +84,7 @@ fn a_coarser_lattices_cell_is_the_grounds_cell_as_many_levels_up() {
     }
 }
 
-/// A page's children in its neighborhood are its children, and a cell and
-/// the block it folds from are parent and children whichever child page the
-/// cell lies in: `child_block` gives back the cell `parent_cell` names, in
-/// every lattice a page is cut into.
+/// `child_block` inverts `parent_cell` in every lattice.
 #[test]
 fn a_parent_cell_and_its_child_block_are_one_relation() {
     let p = LevelPage::new(3, ivec::gather(-5, 7, 0));

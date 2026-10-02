@@ -1,33 +1,18 @@
 // @pxl/web/platform/web/gpu.ts
 
-/**
- * The device the kernel draws with, on the web: the page's WebGPU, asked for
- * once the kernel has booted and again after one is lost, and the kernel told
- * of each (webgpu.ts runs the calls it records). A device's core draws
- * through its own and is told nothing from here.
- */
-
 import { Command, encode_gpu_ready } from "@/kernel/abi/cmd.spec.ts";
 import { acquireDevice } from "@/platform/web/webgpu.ts";
 import { send_next } from "@/kernel/sched.ts";
 
-/** How long to wait before asking again while the page is shown: after a
- * device is lost, and after each request no adapter answers. Only a device
- * lost after boot gets here — a browser with none never boots (main.tsx) —
- * and there is no telling when a browser will give one again: Safari, its
- * GPU process lost, gave none for a while after, to this tab and every
- * other. So the page keeps asking. The first request after a loss waits as
- * well: an adapter that answers with a device already lost would otherwise
- * be asked again at once, and again, with nothing between. */
+/** Safari, after losing its GPU process, gave no device for a while, so the
+ * page keeps asking. The first retry waits too, or an adapter returning an
+ * already-lost device loops at once. */
 const RETRY_MS = 1000;
 
-/** Requests made since a device last answered: said once when an outage
- * starts and once when it ends, rather than on every retry. */
+/** So an outage is logged once at start and once at end. */
 let tries = 0;
 
-/** Asks again once the page is shown, or after RETRY_MS if it is: a hidden
- * page draws nothing, so there is nothing a device is wanted for until it is
- * shown again. */
+/** A hidden page draws nothing, so it waits to be shown. */
 function askAgain(): void {
   if (document.visibilityState === "visible") {
     setTimeout(gpuBoot, RETRY_MS);
@@ -41,8 +26,6 @@ function askAgain(): void {
   document.addEventListener("visibilitychange", shown);
 }
 
-/** Asks for a device and tells the kernel when one answers, and again after
- * one is lost. */
 export function gpuBoot(): void {
   const lost = () => {
     send_next(Command.GPU_LOST);

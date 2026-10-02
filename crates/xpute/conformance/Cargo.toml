@@ -4,8 +4,7 @@ edition.workspace = true
 version.workspace = true
 publish.workspace = true
 
-# A library a host opens, as the C++ guest is: the traces are run by the
-# host (packages/xpute/conformance/), not by a test in this crate.
+# The traces are run by the host, not by a test in this crate.
 [lib]
 path = "src/lib.rs"
 crate-type = ["cdylib"]

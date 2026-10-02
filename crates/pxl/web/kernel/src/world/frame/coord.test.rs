@@ -1,9 +1,7 @@
 // pxl-kernel/world/frame/coord.test.rs
 //
-// The frame is a translation: the same world read against another origin
-// says the same things. Where a point stands over the ground is one height,
-// whichever origin the view is drawn against — on the ground, at the eye's
-// height and past the Z lane's half, where the lanes alone would wrap.
+// A height over the ground is the same from every origin, including past
+// the Z lane's half, where the lanes alone would wrap.
 
 use super::*;
 use pxl_spec::space::pvf3::pvf3;
@@ -20,11 +18,8 @@ fn a_height_over_the_ground_is_the_same_from_every_origin() {
     }
 }
 
-/// A canonical point put through local floats and taken back nearest is the
-/// point it was: off either side of a whole unit, below zero, and against
-/// origins near it, far from it and past the Z lane's half. Taken back by
-/// the cell it lies in, a point the floats leave a hair under itself would
-/// fall a 256th of a unit, which is what the nearest taking is for.
+/// Taken back by its cell, a point the floats leave a hair under itself
+/// would fall a 256th of a unit each trip.
 #[test]
 fn a_canonical_point_comes_back_through_floats() {
     let one = pxl_spec::space::pvf3::core::ONE as i64;
@@ -42,8 +37,7 @@ fn a_canonical_point_comes_back_through_floats() {
         ivec::gather(1 << 20, -(1 << 20), -4096),
     ];
     for n in 0..20_000 {
-        // Whole units near the origin and far from it, and a fraction with
-        // the ones a hair off a whole unit drawn often.
+        // Whole units near and far from the origin, and fractions a hair off a whole unit.
         let fraction = |r: i64| match r % 4 {
             0 => 0,
             1 => 1,

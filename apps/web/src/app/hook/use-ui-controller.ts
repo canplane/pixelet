@@ -4,26 +4,14 @@ import { useCallback, useMemo, useState } from "react";
 
 import type { UiController } from "../type/ui.type.ts";
 
-/**
- * Hook for managing the global UI controller.
- * Provides a stable imperative interface to trigger UI actions from anywhere.
- */
 export function useUiController() {
-  // Pure data store for registered actions
   const [actions, setActions] = useState<Partial<UiController>>({});
 
-  /**
-   * Progressively registers new UI actions into the controller.
-   * Uses useCallback to maintain referential stability for child effects.
-   */
   const mergeUiController = useCallback((newActions: Partial<UiController>) => {
     setActions((prev) => ({ ...prev, ...newActions }));
   }, []);
 
-  /**
-   * The actual controller interface exposed to the app.
-   * Wrapped in a Proxy to prevent "is not a function" errors before registration.
-   */
+  /** A Proxy, so calling an action before it is registered is a no-op, not a TypeError. */
   const uiController = useMemo(() => {
     return new Proxy(actions as UiController, {
       get: (target, prop) => {
@@ -31,7 +19,6 @@ export function useUiController() {
 
         if (action) return action;
 
-        // Fallback for unregistered actions
         return (...args: unknown[]) => {
           console.warn(`[uiController] action "${String(prop)}" called but not registered.`, { args });
         };

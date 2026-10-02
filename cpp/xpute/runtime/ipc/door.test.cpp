@@ -14,7 +14,6 @@ namespace {
 constexpr std::uint32_t SQ = 8;
 constexpr std::uint32_t CQ = 256;
 constexpr std::uint32_t SLOT = 64;
-// Signals one command may raise, and what it may leave with its reply.
 constexpr std::uint32_t MOST_SIGNALS = 64;
 constexpr std::uint32_t MOST_COMPLETIONS = MOST_SIGNALS + 1;
 
@@ -23,8 +22,6 @@ struct Fixture {
     Door door;
 };
 
-// A door over a buffer of its own: the submission ring's descriptors at 8,
-// the completion ring's past them, then both rings' payloads.
 Fixture door() {
     std::uint32_t sq_desc = 8, cq_desc = sq_desc + Ring::bytes(SQ), sq_slot = cq_desc + Ring::bytes(CQ), cq_slot = sq_slot + Ring::slots_bytes(SQ, SLOT);
     std::vector<std::uint64_t> buf((cq_slot + Ring::slots_bytes(CQ, SLOT)) / 8 + 1);
@@ -41,14 +38,13 @@ XPUTE_TEST(door_a_turn_applies_while_a_command_s_signals_and_reply_fit_and_leave
     for (std::uint32_t k = 0; k < SQ; k++) XPUTE_CHECK(d.submission().push(k, 1, frame::ACKREQ, 0) == Errno::ok);
     std::uint32_t answered = 0, turns = 0;
     for (;;) {
-        // Every command raises as much as one may, then asks for its reply:
-        // a turn that starts one never runs out of room for it.
+        // Every command raises as much as one may: a turn that starts one never runs
+        // out of room for it.
         d.drain([&](std::uint32_t, std::span<const std::uint8_t>) {
             for (std::uint32_t k = 0; k < MOST_SIGNALS; k++) d.post(0, 2, 0, 0);
             return Applied{.value = 7};
         });
         turns++;
-        // The host reads what the turn left, dry, before the next.
         const Ring &cq = d.completion();
         while (std::optional<Ring::Message> m = cq.peek()) {
             if (m->flags & frame::RES) {
@@ -85,7 +81,6 @@ XPUTE_TEST(door_a_signal_s_packet_is_written_in_place_and_a_packet_that_does_not
     XPUTE_CHECK(*xtp::TreeReader::make(*d.completion().packet(*m))->read_branch()->at(0)->get_number() == 41.0);
     d.completion().advance();
 
-    // A frame that names bytes outside a slot is never handed to `apply`.
     XPUTE_CHECK(d.submission().push(5, 1, 0, 0) == Errno::ok);
     std::uint32_t frame_at = 8 + 4 * (Ring::HEADER_WORDS + 0 * frame::WORDS);
     Memory mem(reinterpret_cast<std::uintptr_t>(f.buf.data()), f.buf.size() * 8);

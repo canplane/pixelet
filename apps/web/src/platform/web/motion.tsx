@@ -1,15 +1,9 @@
 // @pxl/web/platform/web/motion.tsx
 
 /**
- * A view that moves to the pose it is given, on the page: the browser's own
- * animation of the element (Web Animations), which runs opacity and a
- * transform on the compositor. The script's part is one call per new pose;
- * no frame of it runs on the thread the kernel spends.
- *
- * The committed style is always the pose given, and an animation only plays
- * over it, so whatever interrupts or cancels one leaves the view where it was
- * told to be. A pose that arrives mid-flight starts from where the running
- * one has it, read off the element, so a turn back never jumps.
+ * A view moved by Web Animations on the compositor. The committed style is
+ * always the given pose, so a cancel leaves the view where it was told to be;
+ * a mid-flight pose starts from the computed style.
  */
 
 import { useLayoutEffect, useRef } from "react";
@@ -30,15 +24,12 @@ function same(a: Required<Pose>, b: Required<Pose>): boolean {
 }
 
 function timing(t: Transition): KeyframeAnimationOptions {
-  // `backwards` holds the start through a delay; after the end the committed
-  // style, which is the end, shows by itself.
   return { delay: t.delayMs ?? 0, fill: "backwards", duration: t.durationMs, easing: `linear(${t.samples.join(", ")})` };
 }
 
 export function Motion({ to, from, replay = null, transition, onSettled, style, onLayout, children }: MotionProps) {
   const node = useRef<View | null>(null);
   const running = useRef<Animation | null>(null);
-  /** The pose last committed; null before the first. */
   const stood = useRef<Required<Pose> | null>(null);
   const replayed = useRef(replay);
   const settled = useRef(onSettled);
@@ -57,8 +48,7 @@ export function Motion({ to, from, replay = null, transition, onSettled, style, 
     if (stood.current === null || replaying) {
       start = from ? keyframe(resolve(from)) : null;
     } else if (running.current !== null) {
-      // Read before the cancel below: while it runs, the animation is what
-      // the element computes to, not its committed style.
+      // Read before the cancel: while running, the animation is what the element computes to.
       const computed = getComputedStyle(el);
       start = { opacity: computed.opacity, transform: computed.transform };
     } else {
@@ -81,17 +71,12 @@ export function Motion({ to, from, replay = null, transition, onSettled, style, 
         running.current = null;
         settled.current?.();
       },
-      // Canceled: whatever canceled it has taken over.
       () => {},
     );
-    // `transition` and `from` are read when a pose arrives, not watched: a
-    // new transition alone moves nothing.
   }, [target.opacity, target.translateX, target.translateY, target.scale, target.rotate, replay]);
 
-  // Unmounted — or, under StrictMode, taken down to be put straight back:
-  // what runs stops, and a view put back arrives again from `from` as a new
-  // one does. Kept as if it had stood where it was going, it would read its
-  // own canceled start back as the end and play nothing.
+  // Under StrictMode a view put back must arrive again from `from`; kept as
+  // it was, it would read its canceled start as the end and play nothing.
   useLayoutEffect(() => () => {
     running.current?.cancel();
     running.current = null;
@@ -115,9 +100,6 @@ export function Motion({ to, from, replay = null, transition, onSettled, style, 
   );
 }
 
-/** A view turning round and round, once a period, at an even rate: a load
- * that has not said how far along it is. The browser's animation, on the
- * compositor, for as long as it is mounted. */
 export function Spin({ periodMs, children }: SpinProps) {
   const node = useRef<View | null>(null);
   useLayoutEffect(() => {

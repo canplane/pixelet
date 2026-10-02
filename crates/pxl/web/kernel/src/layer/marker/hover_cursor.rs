@@ -1,9 +1,7 @@
 // pxl-kernel/layer/marker/hover_cursor.rs
 
-//! The hover cursor's ghost: a box written in the mesher's layout and drawn by
-//! the chunk shader, or one decor instance drawn by decor's, half transparent.
-//! The first half decides which ghost and where; the second holds what it is
-//! drawn from.
+//! The hover cursor's ghost, half transparent: a box in the mesher's layout
+//! drawn by the chunk shader, or one decor instance drawn by decor's.
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR};
 use pxl_render::look::style::marker_colors;
@@ -44,19 +42,15 @@ enum Ghost {
 }
 
 struct Cursor {
-    /// The hide as last set: the address alone, so an unrelated re-derivation
-    /// of the same cell doesn't clear-then-reset the hide and force a chunk
-    /// rebuild.
+    /// The address alone, so re-deriving the same cell does not reset the hide
+    /// and force a chunk rebuild.
     virtual_hide_target: Option<EntryAt>,
-    /// The carve preview as last set: its cell and size, compared as words, so
-    /// two hover ticks landing in the same cell skip re-running.
     carve_preview: Option<(Pvf3, f64)>,
     ghost: Ghost,
 }
 
 static CURSOR: Global<Cursor> = Global::new();
 
-/// The hover cursor's turn.
 pub fn hover_cursor_step() {
     let c = CURSOR.get(|| Cursor {
         virtual_hide_target: None,
@@ -71,9 +65,6 @@ pub fn hover_cursor_step() {
 
     let hovered_object = camera.hovered_object_at.and_then(get_placed_object);
 
-    // Eraser's own "dig into the terrain itself" case (camera/input.rs's
-    // handle_tap/update_hover): bare ground under it, nothing placed and no
-    // scattered decor, as the tap handler decides it.
     let scattered = camera.hovered_scattered.is_some();
     let digging_terrain = active_tool == ActiveTool::Eraser && hovered_object.is_none() && !scattered;
     let structures = settings.structures;
@@ -81,12 +72,8 @@ pub fn hover_cursor_step() {
 
     let use_object_style = matches!(active_tool, ActiveTool::Object | ActiveTool::Decor | ActiveTool::Eraser) || hovered_object.is_some();
 
-    // Eraser sizes to whatever's actually hovered when there's a real object
-    // under the cursor, and to the cell when it is carving terrain: a carve
-    // writes AIR, and a zero material is a voxel the scan emits nothing for
-    // whatever its sub-cell bytes say (pxl-render mesh/voxel_scan.rs), so the cell
-    // goes whole however small the tier is set. Everything else takes the tier
-    // picker object placement uses.
+    // A terrain carve is a whole cell: the scan emits nothing for a zero
+    // material whatever its sub-cell bytes, so the cell goes whole anyway.
     let preview_size = match (&hovered_object, active_tool) {
         (Some(o), ActiveTool::Eraser | ActiveTool::Pointer) => o.size,
         (_, ActiveTool::Decor) => DECOR_SIZE,
@@ -94,12 +81,8 @@ pub fn hover_cursor_step() {
         _ => ui.object_size,
     };
 
-    // The ghost box fills [anchor, anchor + current_scale] on every axis — every
-    // anchor this file sees is a min corner.
     let current_scale = if use_object_style { preview_size } else { U_PER_CELL };
-    // object/collision.rs's is_placement_blocked is the one shared place that
-    // decides what counts as blocked, so the preview here and the real commit
-    // can't silently disagree.
+    // The same check as the commit, so preview and placement cannot disagree.
     let blocked = match (&hovered, active_tool) {
         (None, _) => false,
         (Some(h), ActiveTool::Object | ActiveTool::Decor) => {
@@ -109,10 +92,7 @@ pub fn hover_cursor_step() {
         _ => false,
     };
 
-    // Makes the real erase candidate stop rendering, so the ghost reads as a
-    // translucent preview over whatever's really behind it. The real object's
-    // hide lands on the next build of its chunk, a tick or more after the
-    // ghost — accepted as-is.
+    // The real object's hide lands a tick or more after the ghost, accepted.
     let virtual_hide_target = match (&hovered_object, active_tool) {
         (Some(o), ActiveTool::Eraser) => Some(o.at),
         _ => None,
@@ -121,13 +101,10 @@ pub fn hover_cursor_step() {
         set_virtual_hide(virtual_hide_target);
         c.virtual_hide_target = virtual_hide_target;
     }
-    // A scattered decor has no entry to hide; it is hidden by the cell it
-    // stands in.
     set_scattered_hide(camera.hovered_scattered.filter(|_| active_tool == ActiveTool::Eraser).map(|s| s.cell));
 
-    // Terrain's own counterpart: eraser hovering bare terrain has no real leaf
-    // to hide, so the carve preview injects a real AIR entry into the build at
-    // this hover, so whatever's one voxel below shows through the ghost.
+    // Bare terrain has no leaf to hide, so the preview injects an AIR entry and
+    // what is one voxel below shows through the ghost.
     let carve_preview = hovered.filter(|_| digging_terrain).map(|h| (h, preview_size));
     if c.carve_preview != carve_preview {
         match carve_preview {
@@ -137,11 +114,8 @@ pub fn hover_cursor_step() {
         c.carve_preview = carve_preview;
     }
 
-    // Carving bare terrain previews the terrain voxel it removes, as the cube
-    // that looks like one: its terrain-styled id.
     let carved_style_cube: Option<PlaceableCube> = match (&hovered, digging_terrain) {
         (Some(h), true) => {
-            // The cell as it is drawn there, from whichever page it is.
             let cell = Access::now().at(h, FINEST).value().map_or(0, |g| g.cell);
             let shown = shown_ground(|ch| channel_of(cell, ch) as u32, hidden_ground(structures));
             terrain_style_cube_for(shown.channel, shown.type_id)
@@ -149,8 +123,6 @@ pub fn hover_cursor_step() {
         _ => None,
     };
 
-    // Pointer always reads as the generic marker color; object placement and
-    // eraser-on-an-object ghost at the real thing's own color.
     let cube: Option<PlaceableCube> = match (active_tool, hovered_object.as_ref().map(|o| &o.kind)) {
         (ActiveTool::Pointer | ActiveTool::Decor, _) => None,
         (_, Some(EntryKind::Solid { cube })) => Some(*cube),
@@ -158,7 +130,6 @@ pub fn hover_cursor_step() {
         _ => carved_style_cube,
     };
 
-    // Which decor kind's own real silhouette this ghost should show, if any.
     let decor_id = match (active_tool, hovered_object.as_ref().map(|o| &o.kind)) {
         (ActiveTool::Decor, _) => Some(ui.decor_id),
         (_, Some(EntryKind::Decor { decor_id })) => Some(*decor_id),
@@ -167,16 +138,13 @@ pub fn hover_cursor_step() {
     let decor_bundle = decor_id.and_then(decor_bundle_for);
     let decor_assets = decor_assets_for(decor_bundle, decor_bundle_assets());
 
-    // The exact `i` a real placement/hover resolves to — user_decor_pick is pure
-    // and keyed only on this, so the ghost predicts the real variant/heading.
     let decor_pick_i = match (active_tool, &hovered_object) {
         (ActiveTool::Decor, _) => hovered.map(|h| h.i),
         (_, Some(o)) if matches!(o.kind, EntryKind::Decor { .. }) => Some(o.i),
         _ => None,
     };
-    // Placing back the decor an erase took from where the scatter stands it
-    // brings that one back, its own variant, turn and size; the ghost shows
-    // what the placement leaves.
+    // Placing back an erased scattered decor restores that instance; the ghost
+    // shows it.
     let restored = match (active_tool, &hovered) {
         (ActiveTool::Decor, Some(h)) => restores_scattered(h, DECOR_SIZE, ui.decor_id),
         _ => None,
@@ -189,26 +157,20 @@ pub fn hover_cursor_step() {
         }
         _ => None,
     };
-    // Both must be ready — an untextured white silhouette would read as a
-    // rendering glitch, so this falls back to the box ghost until both resolve.
+    // An untextured white silhouette reads as a glitch, so the box ghost stands
+    // in until model and skin both arrive.
     let is_decor_ghost = match (decor_assets, decor_pick) {
         (Some(a), Some((variant, _, _))) => a.models.get(variant as usize).is_some_and(Option::is_some) && a.skins.get(variant as usize).is_some_and(Option::is_some),
         _ => false,
     };
 
-    // Without a texture the ghost falls back to the thing's own swatch. Nothing
-    // resolves a swatch only when the eraser is over decor whose model has not
-    // arrived: that box takes ERASE, the tool being what has to read off it.
     let swatch = cube.and_then(placeable_cube_rgb);
     let fallback = if active_tool == ActiveTool::Eraser { marker_colors::ERASE } else { marker_colors::ACTION };
 
-    // The pointer's bare-terrain ghost sits flush with real geometry and needs
-    // the coplanar bias; a carve no longer does, its voxel being gone from the
-    // mesh while the cursor is on it.
+    // A carve no longer needs the coplanar bias: its voxel is gone from the mesh
+    // while the cursor is on it.
     let coplanar_with_terrain = !use_object_style;
 
-    // A scattered decor under the pointer or the eraser is previewed as
-    // itself, as a placed one is: its own model, where and as it is drawn.
     let scattered_ghost = camera
         .hovered_scattered
         .filter(|_| matches!(active_tool, ActiveTool::Pointer | ActiveTool::Eraser))
@@ -261,15 +223,6 @@ pub fn hover_cursor_step() {
     }
 }
 
-// ---- the ghost as the kernel holds it ----
-//
-// What a placement or an erase would change, drawn half transparent where the
-// cursor is — a box written in the mesher's layout (chunk_mesher.rs's
-// write_lone_box), so a ghost cube is lit, textured and edge-shaded by the
-// chunk shader exactly as the cube it previews, or one decor instance in a
-// block of decor/build.rs's layout, drawn by decor's shader from the same model a
-// placed one uses.
-
 pub const GHOST_OPACITY: f32 = 0.5;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -283,20 +236,18 @@ struct Held {
     at: usize,
     bytes: u32,
     handle: u32,
-    /// What a box's heights are held in, as its bake wrote them.
     heights: Heights,
 }
 
 #[derive(Default)]
 pub struct GhostDraw {
     held: Option<Held>,
-    /// Where it stands, in units: a box's min corner, a decor instance's base.
+    /// A box's min corner, a decor instance's base.
     at: V3,
 }
 
 impl GhostDraw {
-    /// A box of `size` at `at`, painted as object value `state` paints, or
-    /// as `rgb` with no texture when `state` paints nothing.
+    /// Painted as `state` paints, or as untextured `rgb` where it paints nothing.
     #[allow(clippy::too_many_arguments)]
     pub fn set_box(&mut self, world: &mut World, draw: &mut DrawList, at: V3, size: f64, state: u32, rgb: u32, coplanar: bool) {
         let (rgb, layer) = match world.painter.material_of(state) {
@@ -322,7 +273,6 @@ impl GhostDraw {
         self.upload(draw, 1, 0);
     }
 
-    /// One instance of decor group `group`, turned `rotation` about Z, at `at`.
     pub fn set_decor(&mut self, draw: &mut DrawList, at: V3, group: u32, rotation: f32, scale: f32) {
         let shape = Shape::Decor {
             group,
@@ -333,8 +283,7 @@ impl GhostDraw {
         if self.held.as_ref().is_some_and(|h| h.shape == shape) {
             return;
         }
-        // A group of one: five float lanes, the flags in a word, band, pos;
-        // and an index list naming it.
+        // One group of one: five float lanes, flags, band, pos, and the index list.
         let bytes = 9 * 4;
         let Some(block) = self.replace(draw, shape, bytes) else { return };
         // SAFETY: as for the box.
@@ -369,14 +318,13 @@ impl GhostDraw {
         h.handle = draw.upload(h.at as u32, h.bytes, vertex_cnt, index_cnt);
     }
 
-    /// The ghost's draw this frame, placed against the frame's origin.
     pub fn draw(&self, draw: &mut DrawList, eye: V3) {
         let Some(h) = &self.held else { return };
         let t = DrawList::translation(self.at, eye);
         match h.shape {
             Shape::Box { coplanar, size_bits, .. } => {
                 let pipeline = if coplanar { PIPELINE_GHOST_BOX_COPLANAR } else { PIPELINE_GHOST_BOX };
-                // The box was written in a cell of its own size (write_lone_box).
+                // Written in a cell of its own size (write_lone_box).
                 let unit = f64::from_bits(size_bits) as f32;
                 draw.draw_in(pipeline, h.handle, 1, 0, t, GHOST_OPACITY, unit, h.heights.step as f32);
             }

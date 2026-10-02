@@ -1,20 +1,9 @@
 // @pxl/web/feature/debug/profiler/trace.ts
 
 /**
- * The profiler window as Chrome's Trace Event Format, saved as a file openable
- * at ui.perfetto.dev or chrome://tracing. Aggregates the same numbers the profiler's
- * panel shows, but on one timeline — the "trace, not just aggregates" point
- * in issue/20260909-cooperative-scheduler-and-task-ledger.md: p95 says a
- * category is slow, the timeline shows it's slow *because* it's contending
- * with a fetch burst that the same pan kicked off.
- *
- * Built here from the kernel's rings read in place (view.ts) and the
- * shell's own long frames, so the tens of megabytes a window's trace runs to
- * are this side's to allocate and never the kernel heap's. A file rather
- * than the clipboard — a download on a page, the share sheet on a device
- * (platform/save.ts): the clipboard handles that size badly, and Perfetto
- * wants a file anyway. Wired to `window` while the panel is on (overlay.tsx), so it
- * is reachable from the console.
+ * The profiler window as Chrome's Trace Event Format, for ui.perfetto.dev.
+ * Built here so the tens of megabytes are never the kernel heap's, and saved
+ * as a file, since the clipboard handles that size badly.
  */
 
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
@@ -32,7 +21,6 @@ const PID = 1;
 const TID_FRAMES = 1;
 const TID_LONG = 2;
 const TID_WORST = 3;
-/** Task threads are assigned per category from here up. */
 const TID_TASK_BASE = 10;
 
 type Args = Record<string, f64 | string | null>;
@@ -56,10 +44,7 @@ function event(name: string, cat: string, ph: string, ts: f64, dur: f64 | null, 
 
 const threadName = (tid: u32, name: string) => event("thread_name", "__metadata", "M", 0, null, tid, { name });
 
-/** One frame's numbers as trace args — the counter track and the worst-frame
- * spans both carry them, so the two never disagree on what a frame was. Every
- * lane, by its own name, and a list lane's words by the lane's and theirs:
- * what the kernel adds is on the timeline without a line written here. */
+/** Shared by the counter track and the worst-frame spans, so they agree. */
 function frameArgs(f: Frame): Args {
   const args: Args = {};
   for (const { name } of LANES) {
@@ -71,13 +56,11 @@ function frameArgs(f: Frame): Args {
     if (name === "census") f.census.forEach(([, t], i) => (args[`census_${names[i]}_tris`] = t));
     else f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixed(v, 2)));
   }
-  // Everything the kernel's turn did not account for: vsync wait,
-  // compositor, GPU, GC between frames, the shell's glue.
+  // Vsync wait, compositor, GPU, GC, the shell's glue.
   args.offthread_ms = fixed(Math.max(0, f.dt_ms - f.task_ms), 2);
   return args;
 }
 
-/** The trace as a JSON string. */
 function profilerTraceJson(): string {
   const { frames, tasks, worst } = profilerRingsRead();
   const longs = longFramesSince(-Infinity);
@@ -113,15 +96,12 @@ function profilerTraceJson(): string {
     for (const f of frames) {
       const ts = us(f.t);
       events.push(event("frame", "frame", "C", ts, null, TID_FRAMES, frameArgs(f)));
-      // Also a duration bar for the scheduler pass, so a slow frame is
-      // visible as width, not only as a counter spike.
       events.push(event("sched pass", "frame", "X", ts - us(f.sched_ms), us(f.sched_ms), TID_FRAMES));
     }
   }
 
   // ---- worst frames of the window ----
-  // Already on the counter track above; repeated as labeled spans so a
-  // stall can be found without scrubbing, at its real timestamp.
+  // Repeated as spans so a stall is found without scrubbing.
   if (worst.length > 0) {
     events.push(threadName(TID_WORST, "worst frames"));
     for (const w of worst) {
@@ -142,12 +122,9 @@ function profilerTraceJson(): string {
     }
   }
 
-  // Chrome's trace format keeps a top-level `metadata` object; a trace read
-  // back later names the build it came from.
   return JSON.stringify({ traceEvents: events, displayTimeUnit: "ms", metadata: { build_number: BUILD_NUMBER, build_id: BUILD_ID, build_time: BUILD_TIME } });
 }
 
-/** Saves the trace as a file: what became of it, as the panel says it. */
 export async function profilerTraceSave(): Promise<string> {
   const json = profilerTraceJson();
   const mb = `${(json.length / 1e6).toFixed(1)} MB`;

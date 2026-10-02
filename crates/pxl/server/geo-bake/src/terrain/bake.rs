@@ -1,15 +1,7 @@
 // pxl-geo-bake/terrain/bake.rs
 
-//! One page's raw source packet, baked into its surface: the client-ready
-//! ground channels and the elevation (terrain/artifact.rs).
-//!
-//! The packet is what terrain/source.rs assembles from the database:
-//!
-//!   [ele, buildings, segments, base, coasts]
-//!
-//! with each row a tuple in the order of its row type's fields (pxl-spec
-//! bake/format.rs, `BuildingRow` and the rest). A reader knows the order by
-//! position, so the rows are read here by index in that order.
+//! One page's raw source packet `[ele, buildings, segments, base, coasts]`
+//! baked into its surface. Rows are tuples read by position (pxl-spec bake/format.rs).
 
 use pxl_spec::bake::format::{BaseRow, BuildingRow, CoastRow, Ground, SegmentRow};
 use pxl_spec::bake::model::feature::Feature;
@@ -34,18 +26,8 @@ fn opt_str(row: &BranchCursor, at: u32) -> Result<Option<String>, MarshalError> 
     }
 }
 
-/// A number column, which the packet may carry as text.
-///
-/// `overture_buildings.height` is `double precision`, and the Deno driver
-/// decodes those as strings rather than numbers — the same thing the forward
-/// search had to undo on its own coordinates. So the row says `f64` and the
-/// packet holds a `str` for every building that has a height, while
-/// `num_floors` is an `integer` and arrives as a number. Both forms are
-/// read.
-///
-/// Nothing downstream reads the result — `FeatureComputed::height` reaches no
-/// rasterizer — so this is about decoding the packet that exists rather than
-/// about the tile.
+/// `overture_buildings.height` arrives as a string (the Deno driver decodes
+/// doubles as text) and `num_floors` as a number; both forms are read.
 fn opt_num(row: &BranchCursor, at: u32) -> Result<Option<f64>, MarshalError> {
     let Some(c) = row.at(at)?.opt() else { return Ok(None) };
     if c.type_() == SequenceType::STR as u8 {
@@ -133,10 +115,7 @@ pub fn bake_surface(page_idx: IVec, pkt: &[u8]) -> Result<Surface, MarshalError>
         }
     }
 
-    // Whether *any* coastline row touched this page's envelope at all, even if
-    // from_coast_row dropped it (covers_page => full land). bake_ground needs
-    // this to tell "no land data at all (open ocean)" apart from "land data
-    // present but not worth rasterizing (full land)".
+    // Tells open ocean (no coast row) from full land (a row dropped as covering the page).
     let has_coast_row = coasts.len > 0;
 
     let fills = corridor_fills(&feats);

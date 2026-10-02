@@ -14,8 +14,6 @@ fn gzip(raw: &[u8]) -> Vec<u8> {
     enc.finish().unwrap()
 }
 
-/// A directory of its own under the system's temp directory, gone with the
-/// test's process.
 fn scratch(name: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("pxl-geo-bake-util-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);

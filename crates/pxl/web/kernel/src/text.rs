@@ -1,18 +1,9 @@
 // pxl-kernel/text.rs
 
-//! Text, as the platform lays it out and draws it (pxl_render::gpu::text).
-//! The kernel asks through the host stream (abi/host.json): a text's lines
-//! and their widths (TEXT_LAYOUT), and a line's pixels (TEXT_RASTER). What is
-//! asked on one turn is answered by the next, as every host record is.
-//!
-//! An answer is kept while it is read: each world frame keeps what the frame
-//! before it read and lets the rest go, so what is held is what is in use,
-//! not what was ever asked. A line's pixels are read once — the billboard
-//! sheet they are drawn into is what keeps them — and go with the frame
-//! after; a sheet drawn again asks again.
-//!
-//! A native test has no host: a text is one line of a fixed width a
-//! character, and no line is ever drawn.
+//! Text laid out and drawn by the platform, asked through the host stream
+//! (TEXT_LAYOUT, TEXT_RASTER) and answered next turn. Each world frame keeps
+//! only the answers the frame before read. A native test has no host: a text
+//! is one line of fixed width per character and is never drawn.
 
 use std::collections::HashMap;
 
@@ -24,18 +15,15 @@ use crate::abi::host::op;
 use crate::global::Global;
 use crate::host::{host_record, turn};
 
-/// A text as it was asked for: in a font, within a width (bits; 0 for one
-/// line), and the text.
+/// (weight, px bits, max width bits; 0 for one line, text).
 type LayoutKey = (u32, u32, u32, String);
-/// A line as it was asked for: in a font and a color, and the text.
+/// (weight, px bits, color, text).
 type RasterKey = (u32, u32, u32, String);
 
 struct Answer<T> {
-    /// The turn it was asked on: the host has written it on any turn after.
+    /// The host has written it on any turn after this.
     asked: u64,
-    /// Read since the last frame's rise.
     read: bool,
-    /// Where the host writes it, kept until the answer goes.
     at: T,
 }
 
@@ -58,25 +46,20 @@ fn text() -> &'static mut Text {
     TEXT.get(Text::default)
 }
 
-/// Every answer let go: the host that was asked is gone (door.rs
-/// `host_attached`), and one it never ran would read as empty for as long as
-/// it is read.
+/// The host that was asked is gone; an answer it never ran would read as empty forever.
 pub fn text_forget() {
     let t = text();
     t.layouts.clear();
     t.rasters.clear();
 }
 
-/// A world frame's rise: what the last frame did not read goes.
 pub fn text_rise() {
     let t = text();
     t.layouts.retain(|_, a| std::mem::take(&mut a.read) || a.asked == turn());
     t.rasters.retain(|_, a| std::mem::take(&mut a.read) || a.asked == turn());
 }
 
-/// `text` in `font` broken into lines no wider than `max_width` where it can
-/// be (0 for one line): each line and its width. None until the platform has
-/// laid it out, and it is asked for: a later turn has it.
+/// None until the platform has laid it out; a later turn has it.
 pub fn text_lines(font: Font, max_width: f64, text_in: &str) -> Option<Vec<(&str, f64)>> {
     let key: LayoutKey = (font.weight, font.px.to_bits(), (max_width as f32).to_bits(), text_in.to_owned());
     let t = text();
@@ -106,14 +89,11 @@ pub fn text_lines(font: Font, max_width: f64, text_in: &str) -> Option<Vec<(&str
     Some(lines)
 }
 
-/// The width `text` takes on one line in `font`. None until it is laid out.
 pub fn text_width(font: Font, text_in: &str) -> Option<f64> {
     text_lines(font, 0.0, text_in).map(|lines| lines.iter().map(|&(_, w)| w).sum())
 }
 
-/// One line of `text` in `font` and `color` (0xRRGGBBAA), drawn at the
-/// sheet's scale (pxl_render::gpu::text::raster_box). None until the
-/// platform has drawn it, and it is asked for.
+/// `color` is 0xRRGGBBAA. None until the platform has drawn it.
 pub fn text_raster(font: Font, color: u32, text_in: &str) -> Option<Raster<'static>> {
     let key: RasterKey = (font.weight, font.px.to_bits(), color, text_in.to_owned());
     if let Some(answer) = text().rasters.get_mut(&key) {
@@ -122,9 +102,8 @@ pub fn text_raster(font: Font, color: u32, text_in: &str) -> Option<Raster<'stat
             return None;
         }
         let a = &answer.at;
-        // SAFETY: the pixels are the answer's, which stays until the next
-        // frame's rise at the earliest; what reads a raster reads it within
-        // the frame it was handed out in.
+        // SAFETY: the answer's pixels stay until the next frame's rise at the
+        // earliest, and a raster is read within the frame it was handed out in.
         let pixels = unsafe { core::slice::from_raw_parts(a.pixels.as_ptr(), a.pixels.len()) };
         return Some(Raster {
             pixels,

@@ -1,5 +1,4 @@
 // xpute-core/math/scalar.test.rs
-// (no pair: scalar.ts has no test file)
 
 use super::*;
 use crate::golden::Golden;

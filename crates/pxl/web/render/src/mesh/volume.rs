@@ -1,28 +1,9 @@
 // pxl-render/mesh/volume.rs
 
-//! The render-time volume for one 64×64 chunk.
-//!
-//! World layers paint into whole 64³ signed-Z bands, and the scan reads the
-//! same flat lanes back; a band is allocated in full even
-//! if one peak or object touches it, and sparsity exists only between
-//! bands. What a band is made of and why (materials packed `0xCC_RRGGBB`,
-//! a layer byte apart so the direct payload is five bytes a voxel, sub-cell
-//! bytes only for bands that hold sub-cell objects, the overflow list for
-//! objects sharing a base voxel) is what voxel_scan.rs reads back, so the two
-//! agree on the payload's shape and nothing between them converts.
-//!
-//! Bands are stores kept for reuse. A composite produces several, one chunk
-//! at a time, and building them fresh was measured as the heap's worst churn,
-//! so up to POOLED_BANDS of them are held with their lanes and handed to the
-//! next band that needs one; past that a released store gives its lanes back
-//! and is refilled when it is next taken.
-
-// ---- the voxel ----
-//
-// What one voxel's bytes mean: its material class and color packed into a
-// word, its texture layer, and the inset of a box that fills only part of
-// its cell. Pure encoding, shared by the volume that stores voxels, the
-// scan that reads them into runs and the mesher that draws the runs.
+//! The render-time volume for one 64×64 chunk: whole 64³ signed-Z bands that
+//! layers paint into and the scan reads back in the same lanes. Up to
+//! POOLED_BANDS band stores keep their lanes for reuse, since building them
+//! fresh was the heap's worst churn.
 
 use crate::mesh::{grow, try_push, Refused};
 use pxl_spec::bake::constant::{band_of, BAND_CELLS};
@@ -35,28 +16,18 @@ use xpute_runtime::mem::heap::{alloc, free, Block, Guard};
 
 use crate::mesh::voxel_scan::{BandView, ExtraView};
 
-/// A run whose material is a placed object: exempt from hiding its
-/// neighbors' faces, and drawn with its bottom face.
+/// Exempt from hiding its neighbors' faces, and drawn with its bottom face.
 pub const MATERIAL_OBJECT: u8 = 5;
-/// A coarse tier's cells, whatever they summarize.
 pub const MATERIAL_LAND: u8 = 1;
 
-/// No texture-array layer applies; use the material's flat RGB.
 pub const NO_LAYER: u32 = 255;
 
-/// A full-cell run: no inset.
 pub const SUB_CELL_NONE: u8 = 0;
 const SUB_CELL_SCALE: f64 = 256.0;
-/// The largest packed value, read as exactly 1 rather than 255/256.
-///
-/// An offset of 1 is meaningless, so `unpack_sub_cell_fraction` never needs
-/// to express it. A *size* of 1 is not: coarse LOD fits a box to what is
-/// actually inside a cell, and a box that fills one axis while shrinking
-/// another is the ordinary case, not an edge one. Reading the top value as
-/// full costs a comparison and keeps 0 free as SUB_CELL_NONE.
+/// Read as exactly 1, not 255/256: a coarse box filling one axis while
+/// shrinking another is ordinary, and 0 stays free for SUB_CELL_NONE.
 const SUB_CELL_FULL: u8 = 255;
 
-/// A fraction of a cell packed into a byte, rounded to the nearest 1/256.
 pub fn pack_sub_cell_fraction(fraction: f64) -> u32 {
     round(fraction * SUB_CELL_SCALE).clamp(0.0, SUB_CELL_SCALE - 1.0) as u32
 }
@@ -73,7 +44,6 @@ pub fn unpack_sub_cell_size(packed: u8) -> f64 {
     }
 }
 
-/// `MaterialClass`.
 pub type MaterialClass = u32;
 
 pub struct MaterialClasses;
@@ -100,30 +70,21 @@ pub fn pack_material(material: &VoxelMaterial) -> u32 {
     ((material.material_class & 255) << 24) | ((material.r & 255) << 16) | ((material.g & 255) << 8) | (material.b & 255)
 }
 
-// ---- the volume ----
-
 const BAND_MASK: u32 = BAND_CELLS - 1;
 const BAND_AREA: usize = (BAND_CELLS * BAND_CELLS) as usize;
 pub const BAND_VOXELS: usize = BAND_AREA * BAND_CELLS as usize;
-/// A band's lanes: a word of material, a byte of layer and a word of
-/// sub-cell a voxel.
 const MATERIAL_BYTES: u32 = BAND_VOXELS as u32 * 4;
 const LAYER_BYTES: u32 = BAND_VOXELS as u32;
 const SUB_CELL_BYTES: u32 = BAND_VOXELS as u32 * 4;
 
-/// Column-major band-local index: Z is contiguous for paint and scan.
+/// Column-major: Z is contiguous for paint and scan.
 pub fn band_voxel_idx(x: u32, y: u32, z: u32) -> usize {
     ((y * BAND_CELLS + x) * BAND_CELLS + z) as usize
 }
 
-/// How many band stores keep their lanes when their band is released. Past
-/// this a store gives its lanes back and takes them again when it is next
-/// used, so the list never grows past the most bands alive at once.
 pub const POOLED_BANDS: usize = 16;
 
-/// The overflow when several sub-cell objects share one base voxel: the
-/// first takes the voxel, the rest are listed here, sorted by column once
-/// the volume is sealed.
+/// Sub-cell objects sharing a base voxel past the first, sorted by column at seal.
 #[derive(Default)]
 pub struct Extras {
     pub col: Vec<u32>,
@@ -146,9 +107,7 @@ impl Extras {
         self.col.len()
     }
 
-    /// One more entry; an error, and every lane as it was, where the heap
-    /// refused room — the lanes are grown before any is written, so they
-    /// never stand at different lengths.
+    /// Lanes are grown before any is written, so a refusal leaves them all as they were.
     fn push(&mut self, col: u32, z: i32, material: u32, layer_idx: u8, sub: u32) -> Result<(), Refused> {
         grow(&mut self.col, 1)?;
         grow(&mut self.z, 1)?;
@@ -163,8 +122,7 @@ impl Extras {
         Ok(())
     }
 
-    /// Drops every entry at `(col, z)`: a later layer replacing the voxel
-    /// takes its overflow with it.
+    /// A later layer replacing the voxel takes its overflow with it.
     fn remove_at(&mut self, col: u32, z: i32) {
         let mut w = 0;
         for i in 0..self.len() {
@@ -185,11 +143,8 @@ impl Extras {
         self.sub.truncate(w);
     }
 
-    /// By column, every lane together, stably: a column's own entries stay in
-    /// the order they were appended, which is the order the scan reads them
-    /// back in. `order` is the caller's to keep, so a seal asks the heap for
-    /// nothing once it has held a band's worth; the lanes are permuted where
-    /// they lie, a cycle at a time.
+    /// Stable, so a column's entries keep the order the scan reads them in. The
+    /// lanes are permuted in place, a cycle at a time.
     fn sort_by_column(&mut self, order: &mut Vec<u32>) -> Result<(), Refused> {
         let n = self.len();
         order.clear();
@@ -217,7 +172,7 @@ impl Extras {
     }
 }
 
-/// A cell of the chunk: chunk-local x and y, absolute z.
+/// Chunk-local x and y, absolute z.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Cell {
     pub cx: u32,
@@ -225,8 +180,7 @@ pub struct Cell {
     pub z: i32,
 }
 
-/// What is painted: the packed material, the layer, and the four sub-cell
-/// bytes as one word with the size in the top byte — zero for a full cell.
+/// The sub-cell word has the size in its top byte; zero for a full cell.
 #[derive(Clone, Copy)]
 pub struct Voxel {
     pub material: u32,
@@ -234,56 +188,41 @@ pub struct Voxel {
     pub sub: u32,
 }
 
-/// One band's lanes: heap blocks, addressed in the memory. A store
-/// past the cap gives its lanes back when its band is released and is
-/// refilled by the next band that needs one, so the list never grows past
-/// the most bands alive at once.
 struct Store {
     material: usize,
     layer_idx: usize,
-    /// Lazily taken for a band with sub-cell objects; four bytes a voxel.
+    /// Four bytes a voxel, taken only for a band with sub-cell objects.
     sub_cell: Option<Block>,
     extra: Extras,
 }
 
-/// One band of a volume: its store, and where it sits in Z.
 pub struct Band {
     pub band_z: i32,
     store: usize,
 }
 
 pub struct Volume {
-    /// Ascending by band_z.
     pub bands: Vec<Band>,
     pub sealed: bool,
 }
 
-/// What a band's row says to a reader, as ten words: the band's Z, its three
-/// lane addresses (the sub-cell one 0 where the band has none), the extras'
-/// count and their five lane addresses.
+/// band_z, three lane addresses (sub-cell 0 when none), extras' count, five extras lane addresses.
 pub const BAND_WORDS: usize = 10;
 
 #[derive(Clone, Copy, Default, Debug)]
 #[repr(C)]
 pub struct VolumeStat {
-    /// Bands built fresh from the heap, and bands reused from the stores.
     pub allocated: u32,
     pub reused: u32,
-    /// Volumes and bands refused for want of a block.
     pub refused: u32,
 }
 
-/// Every volume alive, and the stores they draw on.
 pub struct Volumes {
     stores: Vec<Store>,
-    /// Where a seal sorts a band's extras, kept from seal to seal.
     order: Vec<u32>,
-    /// Stores with their lanes, waiting for a band.
     free_stores: Vec<usize>,
-    /// Stores whose lanes were given back.
     empty_stores: Vec<usize>,
     volumes: Slots<Volume>,
-    /// The current band row, for readers.
     row: [u32; BAND_WORDS],
     pub stat: VolumeStat,
 }
@@ -295,7 +234,6 @@ impl Default for Volumes {
 }
 
 impl Volumes {
-    /// None yet: the standing stores are taken from the heap as bands ask.
     pub fn new() -> Volumes {
         Volumes {
             stores: Vec::new(),
@@ -308,8 +246,6 @@ impl Volumes {
         }
     }
 
-    /// A volume with no bands: its handle, which names nothing once it is
-    /// released.
     pub fn open(&mut self) -> u32 {
         self.volumes.insert(Volume { bands: Vec::new(), sealed: false })
     }
@@ -330,7 +266,6 @@ impl Volumes {
         self.stores[store].sub_cell.map(|(at, _)| ptr_at(at))
     }
 
-    /// A store for a new band: a free one, or one built from the heap —
     /// None when the heap has no room.
     fn take_store(&mut self) -> Option<usize> {
         if let Some(s) = self.free_stores.pop() {
@@ -371,8 +306,6 @@ impl Volumes {
         Some(self.stores.len() - 1)
     }
 
-    /// The band at `band_z`, made if the volume has none there: the index
-    /// into the volume's bands, or None when no store could be had.
     fn get_or_create_band(&mut self, id: u32, band_z: i32) -> Option<usize> {
         xpute_core::ensure!(!self.volume(id).sealed, ENOTRECOVERABLE);
         let bands = &self.volume(id).bands;
@@ -401,8 +334,7 @@ impl Volumes {
         }
     }
 
-    /// The sub-cell lane of `store`, taken from the heap and zeroed, since
-    /// zero is SUB_CELL_NONE.
+    /// Zeroed, since zero is SUB_CELL_NONE.
     fn ensure_sub_cell(&mut self, store: usize) -> Option<*mut u8> {
         if self.stores[store].sub_cell.is_none() {
             let (at, bytes) = alloc(SUB_CELL_BYTES)?;
@@ -417,12 +349,10 @@ impl Volumes {
         band_of(z as i64)
     }
 
-    /// Full replacement at one voxel: later layers overwrite earlier ones.
-    /// False when a band could not be made.
+    /// Later layers overwrite earlier ones. False when a band could not be made.
     pub fn set_voxel(&mut self, id: u32, at: Cell, v: Voxel) -> bool {
         let Cell { cx, cy, z } = at;
-        // A column past the band would index the next block in the heap:
-        // refused rather than written.
+        // A column past the band would index the next heap block.
         if cx >= BAND_CELLS || cy >= BAND_CELLS {
             return false;
         }
@@ -456,8 +386,6 @@ impl Volumes {
         true
     }
 
-    /// Another sub-cell object on a base voxel already claimed in the same
-    /// layer.
     pub fn append_sub_voxel(&mut self, id: u32, at: Cell, v: Voxel) -> bool {
         let Cell { cx, cy, z } = at;
         if cx >= BAND_CELLS || cy >= BAND_CELLS {
@@ -471,7 +399,6 @@ impl Volumes {
         self.stores[store].extra.push(col, z, material, layer_idx, sub).is_ok()
     }
 
-    /// Paints one solid column across as many whole bands as it needs.
     pub fn fill_column(&mut self, id: u32, column: (u32, u32), z0: i32, z1: i32, v: Voxel) -> bool {
         let (cx, cy) = column;
         if cx >= BAND_CELLS || cy >= BAND_CELLS {
@@ -502,9 +429,8 @@ impl Volumes {
         true
     }
 
-    /// Closes the volume to painting and orders every band's extras by
-    /// column, which is what lets a column find its own during the scan.
-    /// False where the heap refused the sort its room.
+    /// Orders every band's extras by column so the scan can find a column's own.
+    /// False where the heap refused the sort room.
     pub fn seal(&mut self, id: u32) -> bool {
         self.volume(id).sealed = true;
         let mut order = core::mem::take(&mut self.order);
@@ -520,8 +446,6 @@ impl Volumes {
         sealed
     }
 
-    /// Returns the volume's bands to the stores, and the stores past the
-    /// cap to the heap.
     pub fn release(&mut self, id: u32) {
         let Some(v) = self.volumes.remove(id) else { return };
         for band in v.bands {
@@ -542,8 +466,6 @@ impl Volumes {
         }
     }
 
-    /// Band `i` of volume `id` as the scan reads it, over the memory.
-    ///
     /// # Safety
     /// The views are valid until the volume is painted again or released.
     pub unsafe fn band_view(&mut self, id: u32, i: usize) -> BandView<'static> {
@@ -566,13 +488,10 @@ impl Volumes {
         }
     }
 
-    /// Every band of volume `id` into `out`, cleared first: the scan walks
-    /// a volume by its bands many times a tick, so the list is its to keep,
-    /// not built anew each walk.
+    /// False, and `out` empty, where the heap refused it room.
     ///
     /// # Safety
     /// As `band_view`: valid until the volume is painted again or released.
-    /// False, and `out` empty, where the heap refused it room.
     pub unsafe fn band_views(&mut self, id: u32, out: &mut Vec<BandView<'static>>) -> bool {
         out.clear();
         let n = self.band_count(id);
@@ -589,9 +508,7 @@ impl Volumes {
         self.volumes.get(id).map_or(0, |v| v.bands.len())
     }
 
-    /// The row of band `i` of volume `id`: band_z, the lanes' addresses (the
-    /// sub-cell one 0 when the band has none), the extras' count and their
-    /// five lanes' addresses — valid until the volume is painted again.
+    /// Valid until the volume is painted again.
     pub fn band_row(&mut self, id: u32, i: usize) -> &[u32; BAND_WORDS] {
         let band = &self.volumes.get(id).or_bug(Errno::ENOTRECOVERABLE).bands[i];
         let store = &self.stores[band.store];

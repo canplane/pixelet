@@ -1,30 +1,9 @@
 #!/usr/bin/env -S deno run -A
-// Takes the next official build number off the counter and prints it.
+// Takes the next official build number off the counter and prints it. The
+// counter is one object in the bucket, so no history rewrite renumbers it,
+// and it is never reset. The take is read-add-write; the gate's concurrency
+// group (.github/workflows/check-and-deploy.yml) keeps two runs apart.
 //
-// The count is a build lab's: one place hands numbers out, every build of
-// deploy gets one, and some of those are shipped. That place is CI — the gate
-// job, which runs on every push to deploy that builds anything, whether or not the
-// build turns out to be shippable. A number that a red gate consumed is a
-// number nobody sees, which is what a build lab's count does too. A push of
-// prose alone does not run the gate and so is not a build
-// (.github/workflows/check-and-deploy.yml).
-//
-// The counter is one object in the bucket rather than anything in git, where
-// no squash, rebase or fresh clone can renumber it, and rather than the
-// workflow's own run number, which restarts at 1 if the workflow is ever
-// recreated. It is never reset.
-//
-// Counter and number are not the same word. The counter is the state that
-// keeps going up, as TeamCity's `build.counter` is; the number is what one
-// build carries, as `BUILD_NUMBER` is everywhere. The object holds the first
-// and `PXL_BUILD_NUMBER` carries the second.
-//
-// The take is not atomic: read, add one, write. What keeps two runs from
-// taking the same number is that only one holds the gate's concurrency group
-// at a time (.github/workflows/check-and-deploy.yml). A hand deploy is outside
-// that group and does not take a number at all — it publishes unnumbered.
-//
-// Usage (from the repo root):
 //   ./script/build-counter.ts
 
 const BUCKET = "pixelet-tiles";
@@ -45,8 +24,7 @@ function die(message: string): never {
 const got = await run(wrangler("r2", "object", "get", `${BUCKET}/${KEY}`, "--remote", "--pipe"));
 if (!got.ok) {
   console.error(got.stderr);
-  // Not "so this is build 1". A count that restarts is worse than a build
-  // that does not happen, and the only way to start one is to say so:
+  // A count that restarts is worse than no build; start one explicitly:
   //   echo N | wrangler r2 object put pixelet-tiles/_meta/build-counter --remote --pipe --content-type text/plain
   die(`no counter at ${KEY}; no number was taken`);
 }
@@ -65,5 +43,4 @@ if (!put.ok) {
   die(`could not write the counter back; #${next} was not taken and the next build would reuse it`);
 }
 
-// The number alone on stdout: the workflow reads it into a job output.
 console.log(String(next));

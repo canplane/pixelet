@@ -6,177 +6,70 @@ use crate::space::indexer::{L2, L3};
 use crate::space::pvf3::ivec::IVec;
 use crate::space::sparse_tree::mem::SparseTreeLayout;
 
-// ---- Unit System ----
-
-/// UNIT DEFINITIONS:
-/// - [u]    : Canonical world unit.
-/// - [cell] : Discrete raster unit.
-/// - [m]    : Physical meters (EPSG:3857 based).
-///
-/// SCALE HIERARCHY:
-/// - CELL is the cell's side against the unit: 1 cell = CELL.side() u.
-/// - at `Scale::of(-1)`, 1u = 2cell, and terrain is baked and drawn at 0.5u.
-///
-/// It is the raster's resolution and nothing else, so it is a root of its
-/// own beside the tiers (space/indexer.rs) rather than one of them: a page
-/// and a chunk stay the L3 and L2 blocks whatever it is, and how many cells
-/// stand across one is counted from the two. Everything below is derived
-/// from it rather than written out, so changing it rescales the page and
-/// chunk cell counts, the object ladder and the band's cells together.
+/// The raster cell's side against the unit. It is a root of its own beside
+/// the tiers: changing it rescales page and chunk cell counts, the object
+/// ladder and the band's cells together.
 pub const CELL: Scale = Scale::of(0);
 
 pub const U_PER_CELL: f64 = CELL.side();
 
-/// [cell] units per EPSG:3857 planar meter: what turns a position, which is
-/// in Mercator's meters, into a page's cells.
+/// Cells per EPSG:3857 planar metre: turns a position into a page's cells.
 pub const XY_CELL_PER_M: f64 = U_PER_M / U_PER_CELL;
 
-/// [cell] units per physical meter at the owning L3 page, in any direction.
-///
-/// Mercator is conformal: at a latitude it scales a length by one factor
-/// whichever way it lies, so a metre measured on the ground — a height, a
-/// road's width, a clearance — is this many cells across as well as up. A
-/// position is already in Mercator's metres and takes `XY_CELL_PER_M`; a
-/// length measured in the world takes this.
-///
-/// Semantics:
-/// - Input `y_m` is EPSG:3857 planar Y in meters.
-/// - Mercator's scale is snapped to the owning L3 page base via `Z_SCALE(y_m)`.
-/// - All points within the same L3 page therefore share the same factor, so
-///   terrain, decks and objects quantize heights alike on a page.
+/// Cells per ground metre at the owning L3 page, in any direction (Mercator
+/// is conformal). Snapped to the page base so terrain, decks and objects
+/// quantize heights alike across a page.
 #[allow(non_snake_case)]
 pub fn CELL_PER_M(y_m: f64) -> f64 {
     XY_CELL_PER_M * Z_SCALE(y_m)
 }
 
-// ---- Elevation (Sampling Contract) ----
-
-// ELEVATION SAMPLING CONTRACT:
-//
-// 1. CENTER-SAMPLE CONVENTION:
-//    Both DB-side resampling (SQL) and Client-side reconstruction (Bicubic)
-//    MUST use cell-center coordinates (x + 0.5, y + 0.5).
-//
-// 2. INTERPOLATION MAPPING:
-//    Source grid coordinates [sx, sy] are derived from texel [tx, ty] via:
-//    step = PAGE_CELLS / PAGE_ELE_SPAN (512 / 32 = 16 cells a sample)
-//    sx = tx / step + pad - 0.5
-//
-// 3. QUANTIZATION:
-//    Elevation is stored as I16 [cell] units.
-//    Renderer must multiply by U_PER_CELL to restore world [u] units.
-
-/// Inner elevation sample count across one L3 page.
-///
-/// Derivation:
-/// - One terrain page spans 2^L3.shamt() [u].
-/// - In the EPSG:3857 adapter, physical page width is therefore:
-///   2^L3.shamt() * M_PER_U  [m]
-/// - With the current mapping, M_PER_U is approximately 2.388 m/u,
-///   so one L3 page is approximately 2^(L3.shamt() + 1) meters wide.
-/// - Elevation source resolution is approximately 30 meters.
-/// - We approximate that as 32 meters = 2^5 meters for power-of-two alignment.
-///
-/// So the per-page inner sample span is approximated as:
-///   2^(L3.shamt() + 1) / 2^5
-/// = 2^(L3.shamt() + 1 - 5)
-///
-/// This intentionally tracks source data density rather than oversampling it.
-/// Boundary continuity is recovered separately by padded reconstruction
-/// (ELE_PAD + bicubic interpolation), not by increasing the inner sample count.
+// Elevation is sampled at cell centers (x + 0.5, y + 0.5) by both the SQL
+// resample and the client's bicubic, and stored as i16 cells.
+/// Inner elevation samples across one L3 page: a page is about 2^(L3 + 1) m
+/// wide and the source is about 30 m, rounded to 32 m.
 pub const PAGE_ELE_SPAN: u32 = 1 << (L3.shamt() + 1 - 5);
 
-/// Two-cell padding (ELE_PAD=2) enables C1 continuous Bicubic interpolation
-/// at page boundaries by providing a 4x4 sample kernel for every edge texel.
-/// (32 inner + 2*2 padding = 36x36 total grid).
-///
-/// The pad buys a second thing, and that is why it is a property of the
-/// format rather than of the interpolator that reads it: the padded raster
-/// reaches ELE_PAD samples — 2 * (PAGE_CELLS / PAGE_ELE_SPAN) = 32 cells
-/// — past the page's own span, so the ground height of a cell outside the
-/// page is readable from inside it. Whatever has to know what the ground
-/// beyond its own span does can ask without the neighboring page being
-/// resident: a mesh deciding whether the cell past its edge rises above the
-/// face it is about to draw, a raycast stepping off the page. Reconstruction
-/// is the reason the pad is two samples wide; this is the reason it is worth
-/// carrying in every page rather than recomputed from neighbors.
+/// Two samples of padding give the bicubic a 4×4 kernel at every edge texel,
+/// and let the ground height 32 cells past the page be read without the
+/// neighboring page resident.
 pub const ELE_PAD: u32 = 2;
 pub const ELE_PADDED_SPAN: u32 = PAGE_ELE_SPAN + 2 * ELE_PAD;
 
-// ---- The index lane ----
-
-/// Cells on a page's side in its index lane (bake/format.rs `Index`): how
-/// finely a page says how high everything under it stands. One maximum a page
-/// would let a grazing ray descend everywhere it passes and, drawn, stand a
-/// page as one box; a grid of them is the top of a max mipmap. 32 puts one
-/// cell over each elevation sample's spacing (`PAGE_ELE_SPAN`), finer than
-/// which a bound taken window by window gains little, at 4 KiB a page against
-/// a record of about 1.2 MiB. A parameter: the same at every level, since a
-/// page is the same number of its own cells at every level.
+/// Cells on a page's side in its index lane (bake/format.rs `Index`): one per
+/// elevation sample spacing, at 4 KiB a page.
 pub const EXTENT_SPAN: u32 = 32;
 
-/// An index cell's side against the unit: a page's side over `EXTENT_SPAN`.
 pub const EXTENT_CELL: Scale = L3.down(EXTENT_SPAN.trailing_zeros());
 
 const _: () = assert!(EXTENT_SPAN.is_power_of_two(), "an index cell is a block of the lattice, a power of two of the unit");
 
-// ---- The deck lane ----
-
-/// A deck cell's side against the unit (bake/deck.rs): two of the ground's
-/// cells. A deck is a way carried over the ground — a bridge, a viaduct — and
-/// a page holds it in a lane of its own, which every resident record carries
-/// whether or not anything crosses the page: at the ground's resolution that
-/// lane is half the ground lane again, some 30 MiB across the records, and at
-/// two cells a side it is an eighth of that. Two cells is about 4 m at the
-/// equator, which a carriageway, a sidewalk or a track is no narrower than,
-/// so what the coarser lane loses is where a deck's edge falls inside a
-/// cell, not whether it is there.
+/// A deck cell: two ground cells, about 4 m at the equator, narrower than no
+/// way; at the ground's resolution the lane would cost some 30 MiB of records.
 pub const DECK_CELL: Scale = CELL.up(1);
 
-/// How many sizes an object places at: a cell and its halvings, each tier a
-/// level of the object layout below.
-///
-/// 4 deliberately, not 3. When the cell changed U_PER_CELL from 0.5u to 1u,
-/// sliding a fixed count of tiers down from it would have silently dropped
-/// the finest one (0.125u) that building at sub-block detail already
-/// depended on, instead of gaining a coarser option to match the new cell
-/// size. One more halving keeps every size that already worked.
+/// How many sizes an object places at: a cell and its halvings. Four, so the
+/// 0.125u tier kept working when the cell grew from 0.5u to 1u.
 pub const OBJECT_TIERS: usize = 4;
 
-/// The finest tier's side: the cell halved once a tier below it.
 pub const OBJECT_FINEST: Scale = CELL.down(OBJECT_TIERS as u32 - 1);
 
-/// A band: a column's chunk stood up as a cube. A column is the L2 block's
-/// footprint and its objects are cut into bands along Z, one octree each, and
-/// an octree's root is a cube, so a band is as tall as a column is wide —
-/// the L2 block's side, in whatever cells the raster is cut into.
+/// A band: a column's chunk stood up as a cube, so one octree each.
 pub const BAND: Scale = L2;
 
-/// A band's octree: from the finest tier to the band. Objects never place
-/// coarser than a cell, but a tree folds a uniform block up to its root, so
-/// a leaf may stand for a whole band (store.rs splits it back into cells).
+/// A band's octree, from the finest tier to the band. A uniform block folds up
+/// to the root, so a leaf may stand for a whole band.
 pub const OBJECT_LAYOUT: SparseTreeLayout = SparseTreeLayout {
     dim: 3,
     min: OBJECT_FINEST,
     max: BAND,
 };
 
-// ---- An object entry, as a column's lanes hold it ----
-
-/// A cell's Z and a band's, as wide as the coordinate carries them. PVF3
-/// gives Z sixteen bits (pvf3/core.rs's IVEC_Z_W), so a cell's Z is an i16 and
-/// a band's — that Z over BAND_CELLS — is narrower still. They are i32 here
-/// because the arithmetic over them (a band times its cells) leaves the range
-/// a Z has, and a type that cannot hold its own product is worse than a wide
-/// one: what the width is for is written down rather than enforced.
+/// Z widths: PVF3 gives Z 16 bits, but products of them leave that range, so they are i32.
 pub type CellZ = i32;
 pub type BandZ = i32;
 
-/// Where an entry of the object layer is, which is also what names it: the
-/// column it is filed under (the L2 index of its XY), its band, and its
-/// packed position in that band (`pack_pos`). One address for everything
-/// that points at an entry — the store, the eraser's edits, the paint and
-/// the fold, a hit — so none of them spells it another way.
+/// An object entry's address: its column (the L2 index of its XY), band and packed position.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct EntryAt {
     pub col_idx: IVec,
@@ -184,29 +77,21 @@ pub struct EntryAt {
     pub pos: u32,
 }
 
-/// Cells along a band's side, and as a shift: a band-local column is
-/// `(cy << BAND_CELL_SHAMT) | cx`.
+/// A band-local column is `(cy << BAND_CELL_SHAMT) | cx`.
 pub const BAND_CELLS: u32 = CELL.count_in(BAND);
 pub const BAND_CELL_SHAMT: u32 = BAND.above(CELL) as u32;
-/// Finest-tier steps along one side of a cell, and one such step in
-/// world units.
 pub const CELL_STEPS: u32 = OBJECT_FINEST.count_in(CELL);
 pub const STEP_UNITS: f64 = OBJECT_FINEST.side();
-/// One band's side, in world units.
 pub const BAND_UNITS: f64 = BAND.side();
-/// An entry's packed position: an axis in finest-tier steps across a band,
-/// then its tier above the finest in the bits left over.
 pub const POS_BITS: u32 = BAND.above(OBJECT_FINEST) as u32;
 pub const POS_MASK: u32 = (1 << POS_BITS) - 1;
 
-/// An entry's packed position: x, y and z in finest-tier steps from its
-/// band's corner, and its scale as the tiers above the finest. The one
-/// encoding the store writes and the paint and the fold read.
+/// An entry's packed position: x, y, z in finest-tier steps from its band's
+/// corner, then its tier above the finest.
 pub const fn pack_pos(x: u32, y: u32, z: u32, scale: Scale) -> u32 {
     x | (y << POS_BITS) | (z << (2 * POS_BITS)) | ((scale.above(OBJECT_FINEST) as u32) << (3 * POS_BITS))
 }
 
-/// `pack_pos`'s parts.
 pub const fn unpack_pos(pos: u32) -> (u32, u32, u32, Scale) {
     (
         pos & POS_MASK,
@@ -216,23 +101,18 @@ pub const fn unpack_pos(pos: u32) -> (u32, u32, u32, Scale) {
     )
 }
 
-// An entry is at most a cell, so its tier above the finest is below
-// OBJECT_TIERS, and it has to fit in what three axes leave of the word.
 const _: () = assert!(3 * POS_BITS < 32 && OBJECT_TIERS <= 1 << (32 - 3 * POS_BITS), "an entry's tier fits beside its position");
 
-/// The band a cell's Z lies in, and the cell's Z within that band.
 pub fn band_of(cell_z: i64) -> (BandZ, u32) {
     let [band] = ancestor_of([cell_z], BAND_CELL_SHAMT);
     (band as BandZ, (cell_z - band_cell_z(band as BandZ)) as u32)
 }
 
-/// The Z of a band's lowest cell.
 pub fn band_cell_z(band: BandZ) -> i64 {
     first_descendant_of([i64::from(band)], BAND_CELL_SHAMT)[0]
 }
 
-/// A position within a band, in finest-tier steps, as the band-local cell it
-/// is in and the steps into that cell.
+/// A band position in finest-tier steps as its band-local cell and the steps into it.
 pub fn in_cell(step: [u32; 3]) -> ([u32; 3], [u32; 3]) {
     let levels = CELL.above(OBJECT_FINEST) as u32;
     let cell = ancestor_of(step.map(i64::from), levels);

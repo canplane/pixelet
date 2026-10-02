@@ -1,11 +1,6 @@
-// Decor's impostor tier: each instance of a decor block drawn as a quad
-// turned to the eye about the world's up, its variant's sprite on it
-// (impostor_bake.wgsl), where the variant is too small on the screen for its
-// model to be worth its triangles (kernel layer/decor/build.rs `decor_tier`).
-// The instances are decor.wgsl's, read the same way, through the index list.
+// Decor instances too small on screen for their model, drawn as quads turned
+// to the eye about the world's up.
 
-// Held as vec4 words, as decor.wgsl's, with the sprite's layer where decor
-// has padding.
 struct Draw {
   translation: vec3f,
   offset: u32,
@@ -26,8 +21,6 @@ fn draw_index() -> u32 { return bitcast<u32>(draw_words[1].w); }
 
 @group(2) @binding(0) var sprites: texture_2d_array<f32>;
 @group(2) @binding(1) var sprite_sampler: sampler;
-// Each layer's fit, as the bake drew it: the model's center across and up
-// and its half side, in the model's units.
 @group(2) @binding(2) var<uniform> fits: array<vec4f, 64>;
 @group(3) @binding(0) var<storage, read> block: array<u32>;
 
@@ -36,8 +29,6 @@ struct VertexIn {
   @builtin(vertex_index) k: u32,
 };
 
-// The normal is the quad's, turned to the eye once for all four corners,
-// and the sky's fill the frame's: both flat.
 struct VertexOut {
   @builtin(position) clip: vec4f,
   @location(0) uv: vec2f,

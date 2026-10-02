@@ -1,17 +1,12 @@
 // pxl-kernel/layer/object/store.test.rs
 
-//
-// A col_idx's changes are read as its revisions moving, which is what
-// world/chunk/source.rs follows.
-
 use pxl_spec::bake::constant::{BAND_CELLS, CELL, CELL_STEPS};
 use pxl_spec::cell::cube_types::Block;
 use pxl_spec::space::pvf3::ivec;
 
 use super::*;
 
-// Distinct, far-apart corners per test so leftover state from one test never
-// collides with another: the store is kernel-global across the test binary.
+// Far-apart corners per test: the store is kernel-global across the binary.
 fn corner(x: i64, y: i64, z: i64) -> Pvf3 {
     Pvf3 { i: ivec::gather(x, y, z), f: 0 }
 }
@@ -55,8 +50,6 @@ fn a_void_write_prunes_the_band_and_the_chunk() {
 #[test]
 fn a_merged_block_comes_back_as_its_cells_each_found_where_it_lies() {
     let mut store = Store::new();
-    // A 4×4×4 block of whole cells folds into one leaf two levels above the
-    // cell; its cells come back one entry each, in the lanes' own order.
     let writes = (0..64u32).map(|k| {
         let [x, y, z] = at_walk_order::<3>(k as u64, 2);
         Write {
@@ -83,8 +76,6 @@ fn a_merged_block_comes_back_as_its_cells_each_found_where_it_lies() {
 #[test]
 fn the_lanes_are_in_band_and_walk_order_so_a_cell_s_entries_are_one_run() {
     let mut store = Store::new();
-    // Sub-cell leaves in two cells and a whole cell between them, over two
-    // bands, written out of order.
     let finest = |x: u32, y: u32, z: u32| Write {
         col_idx: 3,
         band_idx: 0,
@@ -115,7 +106,7 @@ fn the_lanes_are_in_band_and_walk_order_so_a_cell_s_entries_are_one_run() {
     assert_eq!(store.cell(3, 1, 0, BAND_CELLS as i32).map(|c| c.count), Some(1));
 }
 
-/// xorshift64: the same edits on every run.
+/// Deterministic edits on every run.
 struct Rng(u64);
 
 impl Rng {
@@ -131,9 +122,8 @@ impl Rng {
     }
 }
 
-/// `cells` — (x, y, z, value), a whole cell each in band 0 of one column —
-/// written into a store, and what it keeps folded at `level` over that
-/// column; with the column's corner in that level's cells.
+/// Whole cells in band 0 of one column, and what the store keeps folded at
+/// `level`, with the column's corner in that level's cells.
 fn folded(cells: &[(u32, u32, u32, u32)], level: u32) -> (HashMap<[i64; 3], u32>, [i64; 2]) {
     let mut store = Store::new();
     let col_idx = ivec::gather(1, -1, 0);
@@ -185,7 +175,6 @@ fn air_is_a_value_and_folds_like_one() {
     assert_eq!(out.get(&[x, y, 0]), Some(&AIR));
 }
 
-/// Every entry's box, in units.
 fn entry_boxes(store: &Store) -> Vec<Aabb> {
     let mut out = Vec::new();
     for &col_idx in store.columns.keys() {
@@ -207,18 +196,12 @@ fn entry_boxes(store: &Store) -> Vec<Aabb> {
     out
 }
 
-/// A whole cell of `state` with its corner at (x, y, z) units.
 fn cube_at(store: &mut Store, [x, y, z]: [i64; 3], state: u32) {
     store.write([write_of(&corner(x, y, z), 1.0, state)]);
 }
 
-/// Where the objects in a box are is never missed and never past the box:
-/// the box of every part of every entry inside it lies within what the
-/// index gives, which lies within the box, and none is given only where
-/// no entry is inside. The index may give a box where no entry is — a
-/// band's bound, cut to the box, holds the air between its entries — but
-/// never none where one is. After every edit, over boxes of every size,
-/// across zero on every axis, where the coarsest cubes meet.
+/// The index may give a box with only air in it, never none where an entry
+/// is; checked after every edit, over boxes of every size across zero.
 #[test]
 fn where_the_objects_in_a_box_are_is_never_missed_and_never_past_it() {
     let mut rng = Rng(0x5851_f42d_4c95_7f2d);
@@ -247,9 +230,6 @@ fn where_the_objects_in_a_box_are_is_never_missed_and_never_past_it() {
     assert!(met > 1_000, "only {met} boxes held an entry");
 }
 
-/// No axis is the index's own: the same objects with their axes turned,
-/// asked the same box turned, give the same box turned — whatever the
-/// store keeps them by, a column across and a band up.
 #[test]
 fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
     let mut rng = Rng(0x2c1b_3c6d_a5b4_9f1e);
@@ -277,9 +257,7 @@ fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
     }
 }
 
-/// A paint finer than a leaf takes the leaf whole: a placed cube is one
-/// entry at its own size, never the sub-cells under it, which the mesher
-/// would draw a box each.
+/// Painted as sub-cells, the mesher would draw a box each.
 #[test]
 fn a_paint_finer_than_a_cube_takes_it_whole() {
     let mut store = Store::new();

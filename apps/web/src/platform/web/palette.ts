@@ -1,12 +1,6 @@
 // @pxl/web/platform/web/palette.ts
 
-/**
- * The chrome's words and glyphs by what they are, not by a color: labels at
- * iOS's strengths, a compass's north, and the three states a sensor or a
- * report can be in. On the page, iOS's own in light mode, so the page and an
- * iPhone draw alike. A device names its system's colors here instead, which
- * follow its contrast settings.
- */
+/** iOS's light-mode label and status colors, so the page and an iPhone draw alike. */
 
 import { alpha, color, SYSTEM } from "@/shared/ui/theme.ts";
 
@@ -17,7 +11,6 @@ export const LABEL: { primary: string; secondary: string; tertiary: string; plac
   placeholder: alpha(color.labelGray, 0.3),
 };
 
-/** As iOS's own Maps and Compass draw it. */
 export const NORTH: string = SYSTEM.red;
 
 export const STATUS: { ready: string; pending: string; failed: string } = {

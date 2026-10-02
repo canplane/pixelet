@@ -1,17 +1,9 @@
 // pxl-kernel/world/paging.test.rs
 //
-// The split between mechanism and policy, proved by running the mechanism
-// under policies that do their worst: the ledger serving in an arbitrary
-// order, last in first out, or stopping whatever it may; speculation off, or
-// a flood of it; and a host answering the newest attempt first. With the
-// camera at rest, whatever the policy:
-//
-// - residency never holds more frames than it has;
-// - the fallback's pages and what the view reads are never refused a frame
-//   (a refusal of one is a bug and aborts), and a page of the fallback once
-//   resident stays so;
-// - every page the observation demands ends up read exactly, at its level,
-//   and nothing is left asked for.
+// Residency under hostile policies (arbitrary or LIFO serving, maximal
+// preemption, no or flooding speculation, newest-first answers): frames are
+// never exceeded, the floor and the view are never refused a frame, and
+// every demanded page ends up read exactly.
 
 use std::collections::HashSet;
 
@@ -28,15 +20,14 @@ use crate::world::pyramid::Pyramid;
 use pxl_spec::space::lod::{fault_radius, Tau};
 use pxl_spec::space::observation::{ByBounds, Observation, Unknown};
 
-/// How high the eye stands over flat ground.
 const HEIGHT: f64 = 1000.0;
 
 fn the_observation() -> Observation {
     observation_at([30_000.0, -17_000.0])
 }
 
-/// Looking all around from `HEIGHT` over flat ground, with nothing known of
-/// the heights: the most an observation from there can demand.
+/// Looking all around, knowing nothing of the heights: the most an
+/// observation from there can demand.
 fn observation_at([x, y]: [f64; 2]) -> Observation {
     Observation {
         eye: [x, y, HEIGHT],
@@ -48,15 +39,13 @@ fn observation_at([x, y]: [f64; 2]) -> Observation {
     }
 }
 
-/// The fallback's pages for `o`.
 fn floor_of(o: &Observation) -> Vec<LevelPage> {
     let mut out = Vec::new();
     Floor::floor(o.top, o.eye, o.far, |p| out.push(p));
     out
 }
 
-/// A page with a crowd over each of its children, so it settles none of them
-/// and the tree runs to the finest level everywhere.
+/// Settles none of its children, so the tree runs to the finest level everywhere.
 fn crowded(p: LevelPage) -> PoiPage {
     if p.level == 0 {
         return PoiPage::default();
@@ -76,13 +65,9 @@ fn mix(x: u64) -> u64 {
     (x ^ (x >> 31)).wrapping_mul(0xbf58_476d_1ce4_e5b9)
 }
 
-/// Serve policies made hostile.
 enum Hostile {
-    /// An arbitrary order: a function of the want, with nothing of the view.
     Random(u64),
-    /// The newest want first.
     Lifo,
-    /// Stops whatever it is let stop, for whatever is ahead of it.
     Preempt,
 }
 
@@ -109,22 +94,17 @@ impl Serve for Hostile {
     }
 }
 
-/// Whether every page the observation demands is read exactly.
 fn exact(pyramid: &Pyramid<PoiPage>) -> bool {
     pyramid.demand().iter().all(|&p| pyramid.source(p).is_some())
 }
 
-/// Runs the mechanism under `serve` and `prefetch` with the camera at rest,
-/// holding the invariants every turn, until the view is exact and nothing is
-/// left asked for; what is held then.
+/// Holds the invariants every turn until the view is exact and nothing is asked for.
 fn converge<S: Serve>(serve: S, prefetch: &impl Prefetch, allowance: u32) -> Pyramid<PoiPage> {
     let mut pyramid = Pyramid::<PoiPage>::default();
     converge_on(&mut pyramid, the_observation, serve, prefetch, allowance);
     pyramid
 }
 
-/// As `converge`, for `pyramid` as it is, with the camera at rest on
-/// `observation`.
 fn converge_on<S: Serve>(pyramid: &mut Pyramid<PoiPage>, observation: fn() -> Observation, serve: S, prefetch: &impl Prefetch, allowance: u32) {
     let mut ledger = Ledger::new(serve);
     ledger.set_credits(4);
@@ -154,7 +134,6 @@ fn converge_on<S: Serve>(pyramid: &mut Pyramid<PoiPage>, observation: fn() -> Ob
         out.retain(|key| !stops.contains(key));
         ledger.take_started(|key, _, _| out.push(key));
         assert!(out.len() <= 4, "no more out than the credits");
-        // The host answers the newest half of what is out, newest first.
         let answered = out.len().div_ceil(2);
         for key in out.split_off(out.len() - answered).into_iter().rev() {
             let (_, subject) = ledger.attempt_of(key).expect("an attempt out");

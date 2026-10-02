@@ -1,15 +1,7 @@
 // pxl-tool/asset/sheet.rs
 
-//! The texture pack as one image.
-//!
-//! The client's layer array is filled from a single download rather than from
-//! sixty: the pack is one file, which is what a pack is. The order is the
-//! pack's own path order, which is what the generated table records, so
-//! nothing has to agree about it twice.
-//!
-//! Lossy WebP at quality 92, through libwebp. Sixty 256² tiles lossless is
-//! several megabytes; this is around four hundred kilobytes, and it is
-//! downloaded on every cold start.
+//! The texture pack as one lossy WebP (q92): about 400 KB against several MB
+//! lossless, downloaded on every cold start.
 
 use image::RgbaImage;
 
@@ -19,17 +11,12 @@ const QUALITY: f32 = 92.0;
 
 pub struct Sheet {
     pub bytes: Vec<u8>,
-    /// The asset path of each tile, in the order they were laid out.
     pub tiles: Vec<String>,
-    /// Each tile's own mean color, as sRGB bytes: what a patch of that
-    /// material reads as once it is too far to see the tile itself. The mean
-    /// is taken in linear light, which is where light adds up — a mean of the
-    /// sRGB bytes of a tile that is half dark and half light comes out darker
-    /// than the tile looks.
+    /// Each tile's mean color, averaged in linear light; a mean of sRGB bytes
+    /// reads darker than the tile.
     pub means: Vec<[u8; 3]>,
 }
 
-/// One tile's mean color, in linear light and back.
 fn mean_of(img: &RgbaImage) -> [u8; 3] {
     let mut sum = [0.0f64; 3];
     for px in img.pixels() {
@@ -55,17 +42,11 @@ fn linear_to_srgb(c: f64) -> u8 {
     (s * 255.0).round().clamp(0.0, 255.0) as u8
 }
 
-/// Composes `tiles` — paths relative to `root`, in order — into one image.
-///
-/// Every tile has to be exactly one cell square, which is the size
-/// `download_texture_pack` normalizes to. A tile that is not says so by name
-/// rather than being scaled silently: a pack image at the wrong size is a
-/// mistake upstream, and resizing it here would hide which one.
+/// Every tile must be exactly one cell; a wrong size is an upstream mistake
+/// and is refused rather than resized.
 pub fn compose(root: &std::path::Path, tiles: &[String]) -> Result<Sheet, String> {
     let rows = tiles.len().div_ceil(COLUMNS as usize) as u32;
-    // Opaque black, not transparent: a tile that failed to cover its cell
-    // would otherwise blend with whatever the renderer draws under it, and a
-    // black square is visible.
+    // Opaque black, so an uncovered cell is visible rather than blended.
     let mut sheet = RgbaImage::from_pixel(COLUMNS * CELL, rows.max(1) * CELL, image::Rgba([0, 0, 0, 255]));
     let mut means = Vec::with_capacity(tiles.len());
 

@@ -1,9 +1,7 @@
 // pxl-kernel/world/fixture.test.rs
 //
-// A world the goal's tests observe, known exactly: flat ground at a height
-// and solid boxes on it, as the bounds a domain reads (`Bounds`) and
-// as what an eye's tiles touch of it (`Observer`); and an eye looking one
-// way, as the observation whose frustum is its screen.
+// A world known exactly for the goal's tests: flat ground with solid boxes,
+// as bounds (`Bounds`) and as what tiles touch (`Observer`).
 
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::observation::{Bounds, Contents, Frustum, Observation};
@@ -13,16 +11,12 @@ use pxl_spec::space::v3::{Aabb, V3};
 use crate::world::observer::{Footprint, Grid, Met, Observer, OnTile, Sight};
 use crate::world::pyramid::domain::Domain;
 
-/// Flat ground and boxes on it, each as solid as the ground and known as
-/// objects are, by the span they reach and the heights they are in.
 #[derive(Clone)]
 pub struct World {
     pub ground: f64,
     pub boxes: Vec<(V3, V3)>,
-    /// Whether anything over the ground is resident: without, nothing is
-    /// known and nothing is seen.
+    /// Without anything resident, nothing is known and nothing is seen.
     pub answered: bool,
-    /// How much looser than the truth the bounds are, each way.
     pub slack: f64,
 }
 
@@ -43,11 +37,9 @@ impl World {
 }
 
 impl Bounds for World {
-    /// The ground and the boxes in `region`, each by the heights it stands
-    /// at over the region's square. The ground's lowest is its top cell's
-    /// floor, as the index lane bounds it: what stands is the cells under
-    /// the top. Flat, it rises a cell's step over an index cell of z16's
-    /// sixteen, and steeper by the slack; a box is off by all of itself.
+    /// The ground's lowest is its top cell's floor, as the index lane bounds
+    /// it. Flat, it rises a cell's step over an index cell; a box is off by all
+    /// of itself.
     fn contents(&self, level: u32, region: Aabb) -> Contents {
         if !self.answered {
             return Contents::Unknown;
@@ -81,7 +73,6 @@ impl Bounds for World {
     }
 }
 
-/// Where a ray from `o` along `d` enters the box, and through which face.
 fn enter(o: V3, d: V3, lo: V3, hi: V3) -> Option<(f64, V3)> {
     let (mut near, mut far, mut normal) = (f64::NEG_INFINITY, f64::INFINITY, [0.0; 3]);
     for k in 0..3 {
@@ -104,8 +95,6 @@ fn enter(o: V3, d: V3, lo: V3, hi: V3) -> Option<(f64, V3)> {
 }
 
 impl World {
-    /// The first point a ray from `o` along `d` meets within `far`, just
-    /// inside what it met, and how far along.
     pub fn first(&self, o: V3, d: V3, far: f64) -> Option<(V3, f64)> {
         let ground = (d[2] < 0.0).then(|| ((self.ground - o[2]) / d[2], [0.0, 0.0, 1.0]));
         let (t, n) = self
@@ -129,15 +118,12 @@ impl Observer for World {
     }
 }
 
-/// What the tiles of `o`'s screen touch of `world`, all of them cast.
 pub fn footprints(o: &Observation, world: &World) -> Vec<Footprint> {
     let mut sight = Sight::default();
     sight.observe(o, world, true, &[]);
     sight.footprints().cloned().collect()
 }
 
-/// The domain of `o` over `world` at each quality of `ladder`, the finest in
-/// force.
 pub fn domain(o: Observation, ladder: &[Tau], world: &World) -> Domain {
     Domain::of(o, ladder, 0, Box::new(world.clone()), &footprints(&o, world))
 }
@@ -151,9 +137,7 @@ fn cross(a: V3, b: V3) -> V3 {
     [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
 }
 
-/// The planes of an eye at `eye` looking along `forward`, Z up, its screen
-/// `tan` of its half-angles across and up, out to `far`: left, right,
-/// bottom, top, near, far, normals in, as the view's are.
+/// Left, right, bottom, top, near, far; normals in, as the view's are.
 pub fn frustum(eye: V3, forward: V3, tan: [f64; 2], far: f64) -> Frustum {
     let f = unit(forward);
     let r = unit(cross(f, [0.0, 0.0, 1.0]));
@@ -173,12 +157,10 @@ pub fn frustum(eye: V3, forward: V3, tan: [f64; 2], far: f64) -> Frustum {
     Frustum { planes }
 }
 
-/// The reference screen's tangents: 50° up and down, 16:9.
+/// 50° up and down, 16:9.
 pub const REFERENCE: [f64; 2] = [0.466_307_658_154_998_6 * 16.0 / 9.0, 0.466_307_658_154_998_6];
 
-/// An eye at `eye` over ground at `ground` looking along `forward` through
-/// the reference screen, or all around where `forward` is none, out to
-/// `far`, on a flat planet, over a source that supplies every level.
+/// All around where `forward` is none; flat planet; every level supplied.
 pub fn eye(eye: V3, forward: Option<V3>, far: f64, ground: f64) -> Observation {
     Observation {
         eye,
@@ -190,8 +172,6 @@ pub fn eye(eye: V3, forward: Option<V3>, far: f64, ground: f64) -> Observation {
     }
 }
 
-/// The orbit at `dist`, looking at (θ, φ) = (`polar`, `azimuth`) — controls
-/// and drawn alike — about `center` in the view's root frame.
 pub fn place(center: V3, dist: f64, polar: f64, azimuth: f64) {
     use crate::control::camera::controller::{camera, set_eye_local};
     use crate::control::camera::orbit::{orbit, orbit_eye_offset};

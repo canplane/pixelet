@@ -1,16 +1,8 @@
 // cpp/xpute/core/wire/xtp/cursor.hpp
 
-// The read end: cursors over a packet, and nothing read until a `get`. A
-// cursor is a node's place and type; one physically absent keeps its type
-// and reads as null. What a read hands back lies in the packet — a string,
-// an array, a bitset are views of its bytes, and a branch is its cursor — so
-// nothing is allocated and the packet outlives what is read from it — save
-// `get_deep` and a string decoded into its own, which take the caller's
-// allocator, as the other languages materialize a subtree whole.
-//
-// The packet need not be aligned in memory: an element is loaded where it
-// lies rather than viewed in place, which the other languages need a word-aligned
-// packet for. Its nodes must be aligned within it, as the format says.
+// Cursors over a packet; what a read hands back is a view of the packet's
+// bytes, so the packet must outlive it. The packet need not be aligned in
+// memory, but its nodes must be aligned within it.
 
 #pragma once
 
@@ -35,7 +27,6 @@ struct Null {
     bool operator==(const Null &) const = default;
 };
 
-// A number array's elements, loaded one at a time.
 template <class T> class Elements {
   public:
     Elements(std::span<const std::uint8_t> bytes) noexcept : bytes_(bytes) {}
@@ -46,7 +37,6 @@ template <class T> class Elements {
     std::span<const std::uint8_t> bytes_;
 };
 
-// A sequence leaf of numbers: its type and its elements' bytes.
 struct Array {
     SequenceType type;
     std::span<const std::uint8_t> bytes;
@@ -54,7 +44,7 @@ struct Array {
     template <class T> Elements<T> elements() const noexcept { return bytes; }
 };
 
-// A bitset's bits, packed low bit first.
+// Low bit first.
 struct Bitset {
     std::span<const std::uint8_t> packed;
     std::uint32_t len;
@@ -62,12 +52,8 @@ struct Bitset {
     bool operator[](std::uint32_t i) const noexcept { return (packed[i >> 3] >> (i & 7)) & 1; }
 };
 
-// Whether `bytes` are UTF-8: what a string read where it lies must be.
 bool is_utf8(std::span<const std::uint8_t> bytes) noexcept;
 
-// A string sequence's strings, as they lie: `len` of them, each the span
-// between two offsets into the UTF-8 after the offsets, every one checked
-// when the sequence was read.
 struct Strs {
     std::span<const std::uint8_t> offs;
     std::span<const std::uint8_t> blob;
@@ -76,13 +62,11 @@ struct Strs {
     std::uint32_t size() const noexcept { return len; }
     bool empty() const noexcept { return len == 0; }
 
-    // The string at `i`, or none past the end.
     std::optional<std::string_view> get(std::uint32_t i) const noexcept {
         if (i >= len) return std::nullopt;
         std::uint32_t a = load<std::uint32_t>(offs.data() + 4 * i), b = load<std::uint32_t>(offs.data() + 4 * (i + 1));
         return std::string_view(reinterpret_cast<const char *>(blob.data() + a), b - a);
     }
-    // The string at `i`; past the end is a bug.
     std::string_view operator[](std::uint32_t i) const noexcept {
         std::optional<std::string_view> s = get(i);
         ensure(s.has_value(), Errno::enotrecoverable, i, len);
@@ -108,8 +92,6 @@ struct Strs {
 class BranchCursor;
 template <class Alloc> struct DeepValue;
 
-// What a read hands back: a leaf's value at the width it was written, null,
-// or a branch's cursor.
 using Value = std::variant<Null, bool, std::uint8_t, std::int8_t, std::uint16_t, std::int16_t, std::uint32_t, std::int32_t, std::uint64_t, std::int64_t, float,
                            double, std::string_view, Array, Bitset, Strs, BranchCursor>;
 
@@ -119,16 +101,12 @@ class Cursor {
     bool is_null() const noexcept { return base_ == 0; }
     bool is_branch() const noexcept { return !is_null() && type_ == type_of(SpecialType::branch); }
 
-    // None for a node physically absent.
     std::optional<Cursor> opt() const noexcept { return is_null() ? std::nullopt : std::optional(*this); }
 
-    // A branch's cursor: EFAULT for an absent node, EBADMSG for a leaf.
     Result<BranchCursor> as_branch() const noexcept;
 
     Result<Value> get() const noexcept;
 
-    // A number array's elements as the type it was written as: EBADMSG for
-    // any other node, rather than the bytes read as another width.
     template <class T> Result<Elements<T>> get_array() const noexcept {
         if (is_null() || type_ != type_of(ARRAY_OF<T>)) return marshal_error(Errno::ebadmsg);
         Result<Array> a = array(sizeof(T));
@@ -139,12 +117,8 @@ class Cursor {
     Result<std::uint64_t> get_u64() const noexcept;
     Result<std::int64_t> get_i64() const noexcept;
     Result<bool> get_bool() const noexcept;
-    // A string read where it lies, without the NUL: EBADMSG for one that is
-    // not UTF-8, as Rust's `get_str_ref`.
     Result<std::string_view> get_str_ref() const noexcept;
-    // A string decoded into one of its own with the caller's allocator, what
-    // is not UTF-8 replaced by U+FFFD, as Rust's `get_str` and the host's
-    // decode replace it.
+    // Invalid UTF-8 becomes U+FFFD, as the host decodes it.
     template <class Alloc = std::allocator<char>> Result<std::basic_string<char, std::char_traits<char>, Alloc>> get_str(const Alloc &alloc = Alloc()) const {
         Result<std::string_view> raw = str_of_type();
         if (!raw) return raw.error();
@@ -152,19 +126,12 @@ class Cursor {
         utf8_lossy(*raw, [&out](std::string_view piece) { out.append(piece); });
         return out;
     }
-    // A string sequence, its offsets checked to climb within its payload and
-    // every string to be UTF-8.
     Result<Strs> get_strs() const noexcept;
-    // The node and everything under it, a branch as a list of its children
-    // read right through, built with the caller's allocator.
     template <class Alloc = std::allocator<std::byte>> Result<DeepValue<Alloc>> get_deep(const Alloc &alloc = Alloc()) const;
 
-    // `s` handed to `put` with every byte that is not part of UTF-8 as
-    // U+FFFD, a maximal bad prefix one replacement, as a host decodes.
     template <class Put> static void utf8_lossy(std::string_view s, Put &&put);
 
-    // A scalar of 32 bits or fewer, or a float, as a double, which holds
-    // every one of them exactly. A 64-bit integer is not one: get_u64/get_i64.
+    // Not for 64-bit integers, which a double cannot hold exactly.
     Result<double> get_number() const noexcept;
 
   private:
@@ -173,15 +140,11 @@ class Cursor {
 
     Cursor(std::span<const std::uint8_t> pkt, std::uint32_t base, NodeType type, std::uint32_t len = 0) noexcept : pkt_(pkt), base_(base), type_(type), len_(len) {}
 
-    // The node of `type` at `base`, checked for its place and, a branch, for
-    // its table.
     static Result<Cursor> at(std::span<const std::uint8_t> pkt, std::uint32_t base, NodeType type) noexcept;
 
-    // Defined where they are used, once Value is whole.
     template <class T> Result<T> get_as() const noexcept;
     template <class T> Result<Value> scalar() const noexcept;
 
-    // A sequence's payload, checked to lie in the packet.
     Result<Array> array(std::uint32_t elem) const noexcept;
     Result<Bitset> bitset() const noexcept;
     Result<std::string_view> str() const noexcept;
@@ -189,10 +152,9 @@ class Cursor {
     Result<Strs> strs() const noexcept;
 
     std::span<const std::uint8_t> pkt_;
-    // 0 for a node physically absent, where no node can start.
+    // 0 for an absent node; no node can start there.
     std::uint32_t base_;
     NodeType type_;
-    // A branch's child count.
     std::uint32_t len_;
 };
 
@@ -204,13 +166,9 @@ class BranchCursor {
     Result<BranchCursor> as_branch() const noexcept { return *this; }
     std::optional<BranchCursor> opt() const noexcept { return *this; }
 
-    // Child `idx`'s value: `at(idx)` then `get()`.
     Result<Value> get_at(std::uint32_t idx) const noexcept;
-    // Every child's value, shallow — a branch child as its cursor — into
-    // `out`, a vector of the caller's.
     template <class Vec> Result<void> get(Vec &out) const;
 
-    // The children's cursors, in order.
     class iterator {
       public:
         Result<Cursor> operator*() const noexcept { return b_->at(i_); }
@@ -226,8 +184,6 @@ class BranchCursor {
     iterator begin() const noexcept { return iterator(this, 0); }
     iterator end() const noexcept { return iterator(this, len()); }
 
-    // The child at `idx`: EFAULT past the end, EBADMSG for an offset that
-    // does not point past the table and into the packet.
     Result<Cursor> at(std::uint32_t idx) const noexcept;
     Result<BranchCursor> at_branch(std::uint32_t idx) const noexcept;
 
@@ -240,7 +196,6 @@ class BranchCursor {
     Cursor node_;
 };
 
-// A packet's header, checked, and its root.
 class TreeReader {
   public:
     static Result<TreeReader> make(std::span<const std::uint8_t> pkt) noexcept;
@@ -254,8 +209,6 @@ class TreeReader {
     Cursor root_;
 };
 
-// A value read right through (`Cursor::get_deep`): a leaf as `Value` reads
-// it, a branch as the list of its children.
 template <class Alloc> struct DeepValue {
     using List = std::vector<DeepValue, typename std::allocator_traits<Alloc>::template rebind_alloc<DeepValue>>;
     std::variant<Value, List> v;

@@ -14,8 +14,6 @@ Deno.test("placeable_cubes - every cube is spelled once and has a color to swatc
     seen.add(id);
     assert(placeableCubeHex(cube) !== null, `no color for ${id}`);
   }
-  // Every flat color, under the block channel like any other, and a
-  // terrain-styled cube of every ground channel.
   for (const name of Object.keys(cube_types.block)) assert(seen.has(`block.${name}`), name);
   for (const id of ["land.green_deep", "water.river", "structure.building", "transport.road_default"]) assert(seen.has(id), id);
 });

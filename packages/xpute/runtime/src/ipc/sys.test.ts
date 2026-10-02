@@ -1,12 +1,6 @@
 // @xpute/runtime/ipc/sys.test.ts
 
-/**
- * The file service's traces (spec/xpute/conformance/sys/file.tsv), run
- * against the host's end of xpute's system calls: a step writes a record as
- * a guest's turn would, `turn` runs them as the host does after a turn, a
- * stand-in host answers from the trace's files, and what reaches the guest is
- * held to the trace.
- */
+/** Runs spec/xpute/conformance/sys/file.tsv against the host's end of the system calls. */
 
 import { assertEquals } from "@std/assert";
 
@@ -17,16 +11,13 @@ import { END } from "./stream.ts";
 import { FileError, Sys, type SysHost } from "./sys.ts";
 import { flag, HEAD, op } from "./sys.spec.ts";
 
-/** Where a read puts its bytes in the guest's memory. */
 const SCRATCH = 1 << 15;
 
 const hex = (s: string): U8Array => new Uint8Array((s.match(/../g) ?? []).map((b) => parseInt(b, 16)));
 const text = new TextEncoder();
 
-/** One guest's memory and the turn's records, written as its stream would. */
 class Turn {
   readonly memory = new ArrayBuffer(1 << 16);
-  /** Writes recorded so far, each given its own bytes. */
   writes = 0;
   private words: number[] = [];
 
@@ -41,7 +32,6 @@ class Turn {
     this.words.push(code, body.length, ...body);
   }
 
-  /** The turn's records laid in the stream, which the host is then given. */
   publish(): void {
     const w = new Uint32Array(this.memory, 0, HEAD + this.words.length);
     w.fill(0);
@@ -51,7 +41,6 @@ class Turn {
   }
 }
 
-/** The errnos a trace names. */
 const ERRNO: Record<string, number> = { ENOENT: Errno.ENOENT, EACCES: Errno.EACCES };
 const errno = (name: string): number => ERRNO[name];
 

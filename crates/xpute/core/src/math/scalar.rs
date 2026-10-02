@@ -1,35 +1,22 @@
 // xpute-core/math/scalar.rs
 
-//! Functions of one double: comparison within a tolerance, the three ways a
-//! half rounds and the one the project takes, interpolation, and clamping or
-//! wrapping into a range.
-
 pub const EPS: f64 = 1e-5;
 
-/// Precision equality check using both absolute and relative tolerance.
-/// As magnitudes grow, the allowed error scales proportionally with them.
+/// Absolute tolerance near zero, relative beyond.
 pub fn approx_eq(a: f64, b: f64, eps: Option<f64>) -> bool {
     let eps = eps.unwrap_or(EPS);
     if a == b {
         return true;
     }
     let diff = (a - b).abs();
-    // absolute tolerance (small values) || relative tolerance (large values)
     diff < eps || diff < eps * a.abs().max(b.abs())
 }
 
-/// Physical/intuitive proximity check using only absolute distance.
 pub fn near(a: f64, b: f64, tol: f64) -> bool {
     (a - b).abs() < tol
 }
 
-/// The three ways a half rounds, each by the name of where it goes. The
-/// project rounds to even — IEEE 754's default, and what WGSL's `round`
-/// does — so a value the CPU and a shader both round lands on one integer;
-/// the other two are here for the places that have to agree with a
-/// language that chose otherwise.
-///
-/// Toward +∞: JavaScript's `Math.round`, Java's. `-2.5` is `-2`.
+/// JavaScript's `Math.round`: `-2.5` is `-2`.
 pub fn round_half_up(x: f64) -> f64 {
     if x.fract() == -0.5 {
         x.ceil()
@@ -38,18 +25,18 @@ pub fn round_half_up(x: f64) -> f64 {
     }
 }
 
-/// Away from zero: C's `round`, Rust's. `-2.5` is `-3`.
+/// C's and Rust's `round`: `-2.5` is `-3`.
 pub fn round_half_away(x: f64) -> f64 {
     x.round()
 }
 
-/// To even: IEEE 754's, WGSL's, Python's. `2.5` is `2`, `-2.5` is `-2`.
+/// IEEE 754's and WGSL's: `2.5` is `2`.
 pub fn round_half_even(x: f64) -> f64 {
     x.round_ties_even()
 }
 
-/// The project's rounding, which is to even. One line to change if it ever
-/// is not; `f64::round` is not it and does not appear in the project.
+/// To even, as WGSL's `round`, so the CPU and a shader land on one integer.
+/// `f64::round` is not this.
 pub use self::round_half_even as round;
 
 pub fn lerp(a: f64, b: f64, t: f64) -> f64 {

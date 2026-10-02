@@ -1,27 +1,9 @@
 // pxl-geo-bake/elevation.rs
 
-//! A page's elevation grid: the one definition of the ground's height. The
-//! terrain bake writes it into every page (terrain/source.rs), the client
-//! draws the ground from it, and the deck solve stands decks and bores on it
-//! (deck/elevation.rs), so the three cannot disagree about where the ground
-//! is.
-//!
-//! The grid is `ELE_PADDED_SPAN` samples a side, `PAGE_ELE_SPAN` across the
-//! page and `ELE_PAD` beyond each edge, in cells at the page's latitude, rows
-//! from the south. It is the elevation raster resampled the way PostGIS's
-//! `ST_Resample(…, 'Bilinear')` resamples it, which is GDAL's warper, and
-//! which is what the grid was until this computed it: the raster's tiles
-//! that reach the page, joined; an output grid aligned to the page's samples
-//! and widened to cover all of them; and each sample a triangle filter over
-//! the raster's pixels around it, widened by the ratio of the two pixel
-//! sizes because a sample is coarser than a pixel (GDAL alg/
-//! gdalwarpkernel.cpp `GWKResample`, the ratio its `dfXScale`) and
-//! normalized over the pixels that have data. Each step below names the
-//! GDAL or PostGIS step it is, because that is where its rule comes from;
-//! the grids it makes are the grids the SQL made, value for value.
-//!
-//! The raster is read a tile at a time, by id, and kept: a tile is a few
-//! pages across, so a walk over pages in order reads each about once.
+//! A page's elevation grid, the one definition of ground height for the bake,
+//! the client and the deck solve. It reproduces PostGIS's
+//! `ST_Resample(…, 'Bilinear')` (GDAL's warper) value for value; the steps
+//! below name the GDAL/PostGIS function each copies.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -30,19 +12,13 @@ use postgres::Client;
 use pxl_spec::bake::constant::{CELL_PER_M, ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
 use pxl_spec::space::adapter::epsg3857::BBox3857;
 
-/// Tiles held at once: several rows of pages' worth, about 128 MiB.
 const HELD: usize = 512;
 
-/// The raster's tiles: where each is, and those read so far.
 pub struct Raster {
-    /// The grid every tile is aligned to: its origin and pixel size, `sy`
-    /// negative as the raster's rows run south.
     origin: [f64; 2],
     sx: f64,
     sy: f64,
-    /// Each tile's first pixel on that grid, its size, and its id.
     tiles: Vec<TileAt>,
-    /// The tiles by which tile of the grid they are.
     by_key: HashMap<(i64, i64), usize>,
     side: i64,
     held: Mutex<Held>,
@@ -51,7 +27,6 @@ pub struct Raster {
 #[derive(Clone, Copy)]
 struct TileAt {
     rid: i32,
-    /// Its corner as its header says, and as a pixel of the grid.
     x0: f64,
     y0: f64,
     gx: i64,
@@ -60,15 +35,11 @@ struct TileAt {
     h: i64,
 }
 
-/// One tile's pixels, none where a pixel has no data.
 struct Tile {
     values: Vec<f32>,
 }
 
-/// The tiles read, by index into `tiles`, each with when it was last asked
-/// for. A slot is taken before its tile is read, so two workers asking for
-/// one tile read it once.
-/// A tile once it is read; its lock is held while it is being read.
+/// Taken before its tile is read, so two workers asking for one tile read it once.
 type Slot = Mutex<Option<Arc<Tile>>>;
 
 #[derive(Default)]
@@ -78,7 +49,6 @@ struct Held {
 }
 
 impl Raster {
-    /// The raster's tiles, by their headers, which detoast nothing past them.
     pub fn open(client: &mut Client) -> Result<Raster, postgres::Error> {
         let rows = client.query(
             "SELECT rid, ST_UpperLeftX(rast) AS x0, ST_UpperLeftY(rast) AS y0, ST_ScaleX(rast) AS sx, ST_ScaleY(rast) AS sy,
@@ -112,7 +82,6 @@ impl Raster {
         })
     }
 
-    /// Tile `i`'s pixels, read once and kept while it is asked for.
     fn tile(&self, client: &mut Client, i: usize) -> Result<Arc<Tile>, postgres::Error> {
         let slot = {
             let mut held = self.held.lock().expect("raster");
@@ -139,24 +108,18 @@ impl Raster {
         Ok(tile)
     }
 
-    /// The page's elevation grid, or none where the raster has nothing near
-    /// it, as `ST_Union` of nothing is none.
     pub fn page_grid(&self, client: &mut Client, page_bbox: BBox3857) -> Result<Option<Vec<i16>>, postgres::Error> {
         let [min, max] = page_bbox;
         let span = ELE_PADDED_SPAN as usize;
         let pad = f64::from(ELE_PAD);
-        // The page's samples: `ST_MakeEmptyRaster` at the stride, its corner
-        // `pad` samples out.
+        // `ST_MakeEmptyRaster` at the stride.
         let stride = (max[0] - min[0]) / f64::from(PAGE_ELE_SPAN);
         let ref_x = min[0] - pad * stride;
         let ref_y = max[1] + pad * stride;
-        // The source envelope, two samples wider than the grid each way.
         let reach = stride * 2.0;
         let env = [ref_x - reach, ref_y - span as f64 * stride - reach, ref_x + span as f64 * stride + reach, ref_y + reach];
 
-        // `ST_Union(ST_Clip(tile, env))`: each tile cut to the envelope, as
-        // `ST_Clip` cuts it, and the union their hull, with no data where no
-        // tile is.
+        // `ST_Union(ST_Clip(tile, env))`.
         let gx = |x: f64| (x - self.origin[0]) / self.sx;
         let gy = |y: f64| (y - self.origin[1]) / self.sy;
         let (cx0, cx1) = (gx(env[0]).floor() as i64, gx(env[2]).ceil() as i64);
@@ -187,10 +150,7 @@ impl Raster {
         let m_x = self.origin[0] + mx0 as f64 * self.sx;
         let m_y = self.origin[1] + my0 as f64 * self.sy;
 
-        // `ST_Resample(mosaic, ref)`: an output grid of the page's stride,
-        // as wide as the mosaic rounds to and one more where its corner had
-        // to move onto the page's samples (PostGIS rt_core/rt_warp.c
-        // `rt_raster_gdal_warp`), the same rule `ST_Clip` sizes by.
+        // `ST_Resample`'s output grid (rt_warp.c `rt_raster_gdal_warp`).
         let snap = |r: f64| if (r.round() - r).abs() <= f64::from(f32::EPSILON) { r.round() } else { r.floor() };
         let along = |w: f64| ((w + stride / 2.0) / stride).max(1.0) as i64;
         let kx = snap((m_x - ref_x) / stride);
@@ -207,9 +167,7 @@ impl Raster {
         }
         let (out_w, out_h) = (out_w as usize, out_h as usize);
 
-        // The warper's transform, output pixel to mosaic pixel: the output's
-        // geotransform, then the mosaic's inverted (GDAL alg/gdaltransformer.cpp
-        // `GDALGenImgProjTransform`, `GDALInvGeoTransform`).
+        // Output pixel to mosaic pixel (`GDALGenImgProjTransform`).
         let inv = [-m_x / self.sx, 1.0 / self.sx, -m_y / self.sy, 1.0 / self.sy];
         let to_src = |x: f64, y: f64| -> (f64, f64) {
             let (gx, gy) = (out_x + x * stride + y * 0.0, out_y + x * 0.0 + y * -stride);
@@ -224,11 +182,6 @@ impl Raster {
             y: y_axis,
         };
 
-        // Each output row as the warper transforms one: its first and last
-        // pixel exactly and the rest along the line between, the approximate
-        // transformer PostGIS hands it (`GDALApproxTransform`). It checks the
-        // middle pixel against the line and splits the row where they part,
-        // which a transform between two north-up grids never makes them.
         let cell_per_m = CELL_PER_M(min[1]);
         let mut grid = vec![0i16; span * span];
         let (col0, row0) = ((-kx) as usize, (-ky) as usize);
@@ -241,8 +194,7 @@ impl Raster {
             for c in 0..span {
                 let dist = (col0 + c) as f64;
                 let (px, py) = (s0.0 + dx * dist, s0.1 + dy * dist);
-                // What `ST_DumpValues` reads back, in cells, `round` as
-                // PostgreSQL rounds a double, half to even; no data is 0.
+                // PostgreSQL rounds half to even; no data is 0.
                 if let Some(v) = source.sample(px, py) {
                     grid[(span - 1 - r) * span + c] = (f64::from(v) * cell_per_m).round_ties_even() as i16;
                 }
@@ -253,12 +205,7 @@ impl Raster {
 }
 
 impl Raster {
-    /// The pixels of tile `t` that `ST_Clip` keeps of it, cut to `env`, on
-    /// the grid: the tile's outline and the envelope intersected, rasterized
-    /// onto the tile's grid at its pixel size — as many pixels as the width
-    /// rounds to, and one more where its corner had to move to the grid
-    /// (PostGIS rt_core/rt_raster.c `rt_raster_gdal_rasterize`,
-    /// `rt_raster_geopoint_to_cell`) — and that cut to the tile.
+    /// `ST_Clip`'s pixels of tile `t` (rt_raster.c `rt_raster_gdal_rasterize`).
     fn clip(&self, t: TileAt, env: [f64; 4]) -> Option<[i64; 4]> {
         let (sx, sy) = (self.sx, self.sy);
         let left = env[0].max(t.x0);
@@ -286,8 +233,6 @@ impl Raster {
 }
 
 impl Tile {
-    /// A tile's first band from its raster WKB (PostGIS's own, not OGC's):
-    /// one 32-bit float band, in the row; anything else reads as no data.
     fn of_wkb(b: &[u8], pixels: usize) -> Tile {
         Tile::read(b, pixels).unwrap_or(Tile { values: vec![f32::NAN; pixels] })
     }
@@ -319,24 +264,16 @@ impl Tile {
     }
 }
 
-/// How one axis of the output maps onto the mosaic, as the warper sizes its
-/// source window and its filter (GDAL alg/gdalwarpoperation.cpp
-/// `ComputeSourceWindow`, alg/gdalwarpkernel.cpp `PerformWarp`).
+/// One axis as the warper sizes it (`ComputeSourceWindow`, `PerformWarp`).
 #[derive(Clone, Copy)]
 struct Axis {
-    /// The window's first pixel and its size.
     off: i64,
     size: i64,
-    /// The filter's scale: output pixels per source pixel, under one where
-    /// an output pixel is coarser.
     scale: f64,
-    /// Source pixels the filter reaches each way.
     radius: i64,
 }
 
 impl Axis {
-    /// `from` and `to`: where the output's two edges fall, in mosaic
-    /// pixels; `out` the output's size and `raster` the mosaic's.
     fn of(from: f64, to: f64, out: usize, raster: usize) -> Axis {
         let (lo, hi) = (from.min(to), from.max(to));
         let (out, raster) = (out as f64, raster as i64);
@@ -380,16 +317,12 @@ impl Source<'_> {
         self.mosaic[y as usize * self.w + x as usize].map(f64::from)
     }
 
-    /// The output value at mosaic pixel (px, py), as the warper writes it
-    /// into a 32-bit band, or none where it writes nothing (GDAL
-    /// alg/gdalwarpkernel.cpp `GWKRealCaseThread`,
-    /// `GWKCheckAndComputeSrcOffsets`, `GWKResample`).
+    /// As `GWKRealCaseThread`/`GWKResample` write it into a 32-bit band.
     fn sample(&self, px: f64, py: f64) -> Option<f32> {
         let (x, y) = (self.x, self.y);
         if px < x.off as f64 || py < y.off as f64 || px + 1e-10 > (x.size + x.off) as f64 || py + 1e-10 > (y.size + y.off) as f64 {
             return None;
         }
-        // The pixel the point is in has to have data.
         let cx = ((px + 1e-10) as i64 - x.off).min(x.size - 1);
         let cy = ((py + 1e-10) as i64 - y.off).min(y.size - 1);
         self.pixel(cx + x.off, cy + y.off)?;
@@ -408,9 +341,8 @@ impl Source<'_> {
         };
         let (j0, j1) = ((-y.radius).max(-iy), y.radius.min(y.size - iy - 1));
         let (i0, i1) = ((-x.radius).max(-ix), x.radius.min(x.size - ix - 1));
-        // A pixel with no data takes no part, and the weights of those that
-        // do are normalized, but not when they already sum to one within
-        // the warper's tolerance.
+        // Weights are renormalized over pixels with data, except when they already
+        // sum to one within the warper's tolerance.
         let (mut value, mut total) = (0.0, 0.0);
         for j in j0..=j1 {
             let wy = weight(j as f64 - fy, y);

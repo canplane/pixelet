@@ -29,7 +29,7 @@ std::vector<std::uint8_t> bytes(const std::string &hex_text) {
     return out;
 }
 
-// A number as JavaScript prints one: the shortest digits that read back.
+// The shortest digits that read back, as JavaScript prints.
 std::string js_number(double x) {
     if (std::isnan(x)) return "NaN";
     char buf[64];
@@ -52,8 +52,7 @@ template <class T> std::string elements(const Array &a) {
     return out;
 }
 
-// A read value as the TypeScript prints it: a width a `number` carries
-// prints `number:`, a 64-bit one `bigint:`, an array its typed-array class.
+// As the TypeScript prints it, so the traces compare.
 std::string show(const Value &v) {
     return std::visit(
         [](const auto &x) -> std::string {
@@ -105,8 +104,6 @@ std::string show(const Value &v) {
         v);
 }
 
-// The whole subtree under `c`, walked, as the TypeScript's deep read prints
-// it; or the first refusal met on the way.
 Result<std::string> deep(const Cursor &c) {
     if (!c.is_branch()) {
         Result<Value> v = c.get();
@@ -193,17 +190,14 @@ XPUTE_TEST(xtp_a_packet_reads_back_what_was_written) {
     BranchCursor root = TreeReader::make(pkt)->read_branch().value();
     XPUTE_CHECK_EQ(root.len(), 6u, "the root's children");
     XPUTE_CHECK_EQ(deep(TreeReader::make(pkt)->read()).value(), std::string("[number:42,string:68656c6c6f,boolean:true,null,[number:1,bigint:-2],Int32Array(7 8)]"), "deep");
-    // A shallow read keeps the inner branch as a cursor.
     XPUTE_CHECK(std::holds_alternative<BranchCursor>(root.at(4)->get().value()));
     XPUTE_CHECK(root.at_branch(4).value() == std::get<BranchCursor>(root.at(4)->get().value()));
-    // An array reads as the width it was written at and no other.
     XPUTE_CHECK_EQ(root.at(5)->get_array<std::int32_t>().value()[1], 8, "an element");
     XPUTE_CHECK(!root.at(5)->get_array<std::uint32_t>().ok());
     XPUTE_CHECK(!root.at_branch(4)->at(1)->get_number().ok());
     XPUTE_CHECK_EQ(root.at_branch(4)->at(1)->get_i64().value(), -2, "a 64-bit integer");
     XPUTE_CHECK_EQ(root.at(6).error().code, Errno::efault, "past the last child");
 
-    // An absent child keeps its type and reads as null.
     std::array<std::uint8_t, 64> one{};
     PacketWriter n(one);
     n.branch(1, [](PacketWriter &b) { b.u32(std::nullopt); });
@@ -214,8 +208,6 @@ XPUTE_TEST(xtp_a_packet_reads_back_what_was_written) {
     XPUTE_CHECK_EQ(absent.as_branch().error().code, Errno::efault, "an absent node is no branch");
 }
 
-// Elements are loaded where they lie, so a packet at an odd address reads as
-// one on a word does.
 XPUTE_TEST(xtp_a_packet_reads_wherever_it_lies) {
     std::array<std::uint8_t, 64> buf{};
     PacketWriter w(std::span(buf).subspan(1));

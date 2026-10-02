@@ -19,15 +19,11 @@ const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {
   debug: "ladybug",
 };
 
-/** One section of the sheet, its rows generated from the schema. A row is
- * a switch for a toggle and a bordered radio group for a choice — one
- * answer, not one switch per option. Strings come from
- * `settings.<section>.<key>` and, for a choice, `.<option>` under that. */
+/** Strings come from `settings.<section>.<key>` and, for a choice, `.<option>` under that. */
 export function SettingsSection(props: { section: SettingSection; children?: ReactNode }) {
   const { section, children } = props;
   const { t } = useTranslation();
   const keys = settingsIn(section);
-  // A section whose every entry is dev-only has nothing to show outside dev.
   if (keys.length === 0 && children === undefined) return null;
 
   return (

@@ -1,7 +1,6 @@
 // xpute-core/codec.rs
 
-//! The pair of packages/xpute/core/src/codec, less what Rust has as a crate:
-//! base64url is `base64`, hex is `hex`, FNV is `fnv`, and `json` is what is
-//! left — the host's JSON, which no crate writes.
+//! Only `json`: TypeScript's base64url, hex and FNV are the `base64`, `hex`
+//! and `fnv` crates here.
 
 pub mod json;

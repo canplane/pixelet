@@ -1,7 +1,6 @@
 // pxl-kernel/door/apply.rs
 
-//! The commands, applied: what each one the shell submits does to the kernel,
-//! and the profiler read in place for the two that ask for it.
+//! The shell's commands, applied.
 
 use super::{post_shell, State};
 use crate::abi::cmd::{self as abi, Command};
@@ -10,24 +9,20 @@ use xpute_core::status::error::MarshalError;
 use xpute_runtime::abi::cmd as xpute_cmd;
 use xpute_runtime::mem::base::{off_of, off_of_slice};
 
-/// A command's packet, refused when the command needs one and the message
-/// has none.
 fn packet<'a>(pkt: &Option<&'a [u8]>) -> Result<&'a [u8], MarshalError> {
     pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))
 }
 
-/// A command from the page's UI, applied: a turn asked for, and what it asks
-/// of the host raised before the call returns — the shell rings for these at
-/// once, so a sensor's close sent after the strobe has stopped is still heard.
+/// A UI command: asks for a turn and raises what it asks of the host before
+/// returning, so a sensor close sent after the strobe stopped is still heard.
 fn applied(s: &mut State) -> Result<Option<i32>, MarshalError> {
     crate::world::change::request_world_tick();
     post_shell(s);
     Ok(Some(0))
 }
 
-/// Applies one submission: its reply's value, or none for a command nobody
-/// numbers or a signal submitted as a command, which replies ENOSYS; a packet
-/// that does not read as the command's replies with its errno.
+/// Applies one submission. None (replied as ENOSYS) for an unknown command
+/// or a signal submitted as one.
 pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>, MarshalError> {
     use crate::control::camera::input::{camera_input_rect, camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, camera_wheel, Holding, Rect};
     use crate::control::sensor::{device_orientation, geolocation};
@@ -271,9 +266,8 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             crate::layer::character::preview::preview_close(abi::PreviewClose::read(packet(pkt)?)?.surface);
             applied(s)
         }
-        // The profiler records only while its setting is on (log.rs
-        // `profiler_follow`): a window opened with the panel off would be
-        // recording that nothing shows and nothing stops.
+        // Records only while the profiler setting is on: a window opened with the
+        // panel off would record with nothing to show or stop it.
         Command::PROFILER_START => {
             if settings_store().profiler {
                 profiler_window_start();
@@ -289,15 +283,13 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             profiler_set_logging(on && settings_store().profiler);
             applied(s)
         }
-        // An address in a memory of at most a gibibyte, which an i32 holds.
+        // Memory is at most 1 GiB, so an address fits an i32.
         Command::PROFILER_READ => Ok(Some(profiler_read(abi::ProfilerRead::read(packet(pkt)?)?.window_ms) as i32)),
         Command::PROFILER_TAKE => Ok(Some(profiler_take(s) as i32)),
         Command::WORLD_SNAPSHOT | Command::SENSOR_START | Command::SENSOR_STOP => Ok(None),
     }
 }
 
-/// Every program's commands (xpute-runtime abi/cmd): the rings' own test, and
-/// an open the host answered.
 fn apply_xpute(cmd: xpute_cmd::Command, pkt: &Option<&[u8]>) -> Result<Option<i32>, MarshalError> {
     match cmd {
         xpute_cmd::Command::NOP => {
@@ -315,23 +307,14 @@ fn apply_xpute(cmd: xpute_cmd::Command, pkt: &Option<&[u8]>) -> Result<Option<i3
     }
 }
 
-/// The profiler, where it lies: the address of READ's words (profiler.json) —
-/// the summary block over the last `window_ms`, an infinite window being the
-/// whole recording, and the frame, task and worst-frame rings, each an address
-/// and a record count.
-///
-/// Read in place rather than sent: this is instrumentation, and
-/// instrumentation does not go out on the control ring, whose failure policy
-/// is that `Door::post` (xpute-runtime ipc/doorbell.rs) asserts when the completion ring is
-/// full. Nothing is built for the read either — the rings are the profiler's
-/// own lanes and the summary a block written where it stays — so a reader
-/// allocates nothing from the heap the profiler measures. The addresses are good
-/// until the next turn.
+/// The address of READ's words (profiler.json): the summary over
+/// `window_ms` and the three rings. Read in place rather than posted:
+/// `Door::post` asserts on a full completion ring, and reading allocates
+/// nothing in the heap being measured. Valid until the next turn.
 fn profiler_read(window_ms: f64) -> u32 {
     use crate::sched::profiler::record::{profiler_frames, profiler_tasks, profiler_worst};
     use crate::sched::profiler::spec::READ;
-    // On the heap rather than in a static: the shell reads it in the memory,
-    // and a native build's statics are not in it.
+    // On the heap, not a static: a native build's statics are outside the shell-readable memory.
     static WORDS: crate::global::Global<Box<[u32; READ::WORDS as usize]>> = crate::global::Global::new();
     let summary = crate::sched::profiler::summary::profiler_summarize(window_ms);
     let (frames, tasks, worst) = (profiler_frames(), profiler_tasks(), profiler_worst());
@@ -347,10 +330,8 @@ fn profiler_read(window_ms: f64) -> u32 {
     off_of(w.as_ptr()) as u32
 }
 
-/// What the live stream kept since the shell last cleared it: the address of
-/// LOG's words (profiler.json), the task rows and the frames, each an address
-/// and a count. Zero counts when nothing is waiting, which a shell polling is
-/// asking about most of the time. The rows are let go on the next turn.
+/// The address of LOG's words: rows the live stream kept since the last
+/// take, let go next turn.
 fn profiler_take(s: &mut State) -> u32 {
     use crate::sched::profiler::spec::LOG;
     // On the heap, as READ's words are.

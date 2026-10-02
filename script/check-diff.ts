@@ -1,15 +1,6 @@
 #!/usr/bin/env -S deno run -A
-// The gate, held to what the working tree changed against HEAD: the checks
-// `deno task check` runs, each run only where a changed file can break it.
-//
-// A crate is checked when it or a crate it depends on changed, since an edit
-// to pxl-spec can break pxl-kernel without touching it. The clippy runs are
-// check:rust's own, read out of deno.jsonc and narrowed to those crates, so
-// the targets and features each crate is checked under have one source. The
-// TypeScript follows what imports what: the shell is the device app's too,
-// and @xpute/ is under both.
-//
-// Run when asked; the whole gate is still what runs before a deploy.
+// `deno task check`, narrowed to what the working tree changed against HEAD:
+// a crate when it or a dependency changed, TypeScript by what imports what.
 //
 //   deno run -A script/check-diff.ts
 
@@ -48,8 +39,7 @@ const metadata = new Deno.Command("cargo", {
 if (!metadata.success) throw new Error("cargo metadata failed");
 const packages: Package[] = JSON.parse(new TextDecoder().decode(metadata.stdout)).packages;
 
-// The deepest crate a file is under is its own: pxl/server holds
-// pxl/server/geo's directory too.
+// The deepest crate a file is under is its own.
 const crateDirs = packages
   .map((p) => ({ name: p.name, dir: dirname(p.manifest_path).slice(root.length + 1) + "/" }))
   .sort((a, b) => b.dir.length - a.dir.length);
@@ -71,7 +61,6 @@ while (grew) {
 
 const tasks = (parse(await Deno.readTextFile(join(root, "deno.jsonc"))) as { tasks: Record<string, string> }).tasks;
 
-/** check:rust's commands, each kept for the crates of it that are touched. */
 function rust(): string[][] {
   const out: string[][] = [];
   for (const command of tasks["check:rust"].split("&&")) {
@@ -86,7 +75,6 @@ function rust(): string[][] {
         }
         i++;
       } else if (args[i] === "--all") {
-        // cargo fmt over the touched crates rather than the workspace.
         for (const name of touched) kept.push("-p", name);
         any = touched.size > 0;
       } else {

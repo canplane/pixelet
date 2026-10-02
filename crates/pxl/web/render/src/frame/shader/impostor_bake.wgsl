@@ -1,10 +1,7 @@
-// Decor's impostor sprite: a variant's model drawn once from the side into
-// its layer of the sprite atlas (gpu/pass/impostor.rs), its color as its skin
-// gives it and its coverage as alpha, which the layer is cleared to none of.
-// glTF's Y is up and its +Z faces the viewer; the fit puts the model's side
-// in the layer, its foot at the bottom, and its depth between the planes.
+// Draws a variant's model once from the side into its sprite layer, coverage
+// as alpha. glTF is Y-up with +Z toward the viewer.
 
-// The fit: the model's center across and up, its half side, its half depth.
+// Center across and up, half side, half depth.
 @group(0) @binding(0) var<uniform> fit_words: array<vec4f, 1>;
 @group(1) @binding(0) var skin: texture_2d<f32>;
 @group(1) @binding(1) var skin_sampler: sampler;

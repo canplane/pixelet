@@ -1,14 +1,7 @@
 // pxl-geo-bake/deck/elevation.rs
 
-//! The ground's height at many points, as the pages draw it.
-//!
-//! A deck comes down to the ground and a tunnel's bore is cut under it, so
-//! the height they are solved against is the surface the client draws, not
-//! the raster under it: each page's elevation grid (elevation.rs), read with
-//! the client's own interpolation, so a deck's end and a bore's floor meet
-//! the ground on the screen. The pages are made in shares over several
-//! connections (source.rs `fan`), and the raster's tiles they read are
-//! shared between them.
+//! The ground's height at points as the client draws it (the page grids with
+//! the client's interpolation), so deck ends and bore floors meet the drawn ground.
 
 use std::collections::HashMap;
 
@@ -23,7 +16,6 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use crate::deck::source::fan;
 use crate::elevation::Raster;
 
-/// The drawn surface at each point, in metres.
 pub fn surface(client: &mut Client, url: &str, points: &[[f64; 2]]) -> Result<Vec<f64>, postgres::Error> {
     let raster = Raster::open(client)?;
     let mut by_page: HashMap<IVec, Vec<usize>> = HashMap::new();
@@ -32,8 +24,7 @@ pub fn surface(client: &mut Client, url: &str, points: &[[f64; 2]]) -> Result<Ve
         epsg3857::project(&mut at, p[0], p[1], 0.0);
         by_page.entry(L3_IDX(at.i)).or_default().push(i);
     }
-    // Pages in rows, so the workers move over the raster together and a
-    // tile is read about once.
+    // Pages in rows, so a raster tile is read about once.
     let mut pages: Vec<(&IVec, &Vec<usize>)> = by_page.iter().collect();
     pages.sort_by_key(|(&p, _)| (ivec::Y(p), ivec::X(p)));
     let span = ELE_PADDED_SPAN as usize;
@@ -42,8 +33,7 @@ pub fn surface(client: &mut Client, url: &str, points: &[[f64; 2]]) -> Result<Ve
         for &(&page, at) in pages.iter().skip(k).step_by(n) {
             let bbox = epsg3857::get_page_bbox(page);
             let [min, _] = bbox;
-            // A page the raster does not reach is drawn flat at sea level, as
-            // the bake draws it.
+            // Drawn flat at sea level, as the bake draws it.
             let grid = raster.page_grid(client, bbox)?.unwrap_or_else(|| vec![0; span * span]);
             let cell_per_m = CELL_PER_M(min[1]);
             out.extend(at.iter().map(|&i| {

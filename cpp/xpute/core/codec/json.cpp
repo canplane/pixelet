@@ -51,11 +51,9 @@ std::optional<std::uint32_t> hex4(std::string_view s, std::size_t at) noexcept {
 using json_detail::hex4;
 using json_detail::skip_ws;
 
-// How deep arrays and objects may nest before a text is refused: the check
-// recurses, and a module's stack is fixed.
+// The check recurses, and a module's stack is fixed.
 static constexpr std::uint32_t MAX_DEPTH = 128;
 
-// Where the string opening at `at` ends, past its closing quote.
 static std::optional<std::size_t> skip_string(std::string_view s, std::size_t at) noexcept {
     at++;
     for (;;) {
@@ -75,15 +73,13 @@ static std::optional<std::size_t> skip_string(std::string_view s, std::size_t at
             continue;
         }
         if (b < 0x20) return std::nullopt;
-        // A byte of a UTF-8 sequence is never a quote or a backslash, so the
-        // text is walked a byte at a time.
+        // A UTF-8 continuation byte is never a quote or a backslash.
         at++;
     }
 }
 
-// Where the number starting at `at` ends, by JSON's grammar: a minus only,
-// no leading zero, digits on both sides of a point. `+1`, `.5`, `1.` and
-// `01` are what the host's `JSON.parse` refuses, and so are they here.
+// By JSON's grammar: `+1`, `.5`, `1.` and `01` are refused, as `JSON.parse`
+// refuses them.
 static std::optional<std::size_t> skip_number(std::string_view s, std::size_t at) noexcept {
     auto digits = [&](std::size_t from) {
         std::size_t i = from;
@@ -109,7 +105,6 @@ static std::optional<std::size_t> skip_number(std::string_view s, std::size_t at
     return at;
 }
 
-// Where the value starting at `at` ends.
 static std::optional<std::size_t> skip_value(std::string_view s, std::size_t at, std::uint32_t depth) noexcept {
     if (depth > MAX_DEPTH || at >= s.size()) return std::nullopt;
     auto literal = [&](std::string_view word) -> std::optional<std::size_t> {
@@ -225,7 +220,7 @@ std::optional<JsonValue> JsonItems::next() noexcept {
         at_ = s_.size();
         return std::nullopt;
     }
-    // The text was checked whole, so a value is where the grammar says.
+    // The text was checked whole.
     std::size_t end = *skip_value(s_, start, 0);
     at_ = skip_ws(s_, end) + 1;
     return JsonValue(s_.substr(start, end - start));
@@ -249,7 +244,6 @@ std::optional<std::string_view> JsonStr::as_plain() const noexcept {
     return raw_;
 }
 
-// The next code point of UTF-8 `s` at `at`, which it advances past.
 static char32_t utf8_next(std::string_view s, std::size_t &at) noexcept {
     auto b = static_cast<unsigned char>(s[at]);
     std::size_t len = b < 0x80 ? 1 : b < 0xe0 ? 2 : b < 0xf0 ? 3 : 4;

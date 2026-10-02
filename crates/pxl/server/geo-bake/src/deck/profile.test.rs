@@ -2,7 +2,6 @@
 
 use super::*;
 
-/// A chain of `n` points `step` metres apart.
 fn chain(n: usize, step: f64) -> Vec<Vec<(u32, f64)>> {
     let mut adj = vec![Vec::new(); n];
     for i in 1..n {
@@ -31,7 +30,6 @@ fn a_bare_span_is_the_straight_line_between_its_ends() {
 
 #[test]
 fn a_clearance_raises_the_deck_and_it_still_meets_its_ends() {
-    // Long enough either side to climb 6 m at the steepest a deck may.
     let half = (6.0 / MAX_SLOPE / 5.0).ceil() as usize + 1;
     let n = 2 * half + 1;
     let adj = chain(n, 5.0);
@@ -70,8 +68,6 @@ fn a_clearance_too_near_an_end_is_held_to_what_the_deck_can_climb() {
 
 #[test]
 fn an_approach_lies_on_its_ground_past_where_the_deck_comes_down_to_it() {
-    // A bridge over a 6 m clearance at 58..=62, its approaches out to ground
-    // at 0 m on either side, and a valley 20 m deep beside one of them.
     let n = 121;
     let adj = chain(n, 10.0);
     let ground: Vec<f64> = (0..n).map(|i| if (5..15).contains(&i) { -20.0 } else { 0.0 }).collect();
@@ -92,8 +88,6 @@ fn an_approach_lies_on_its_ground_past_where_the_deck_comes_down_to_it() {
     }
 }
 
-/// A junction of three arms `arm` metres long in `step` metre steps, its
-/// ends the arms' tips: the junction is point 0.
 fn star(arm: usize, step: f64) -> (Vec<Vec<(u32, f64)>>, [u32; 3]) {
     let n = 1 + 3 * arm;
     let mut adj = vec![Vec::new(); n];
@@ -113,8 +107,7 @@ fn star(arm: usize, step: f64) -> (Vec<Vec<(u32, f64)>>, [u32; 3]) {
 
 #[test]
 fn where_spans_meet_no_step_is_steeper_than_the_steepest_two_ends() {
-    // Tips 10 m out at 0, 0 and 1.6 m: the steepest pair is 1.6 m over
-    // 20 m, a deck's steepest exactly, and a deck can meet all three.
+    // The steepest pair is 1.6 m over 20 m, exactly a deck's steepest.
     let (adj, tips) = star(2, 5.0);
     let need = vec![f64::NEG_INFINITY; adj.len()];
     let ground = vec![0.0; adj.len()];
@@ -137,9 +130,7 @@ fn where_spans_meet_no_step_is_steeper_than_the_steepest_two_ends() {
 
 #[test]
 fn ends_steeper_apart_than_a_deck_climbs_force_only_the_stretch_between_them() {
-    // Two tips 10 m from the junction 2 m apart in height, steeper than a
-    // deck climbs; the third arm's tip at the lower one's height, 20 m from
-    // the junction, is set by the gentler stretch it makes and is not forced.
+    // Two tips 2 m apart in 20 m are forced; the third arm's gentler stretch is not.
     let mut adj = vec![Vec::new(); 6];
     for &(a, b, d) in &[(0u32, 1u32, 5.0), (1, 2, 5.0), (0, 3, 5.0), (3, 4, 5.0), (0, 5, 20.0)] {
         adj[a as usize].push((b, d));

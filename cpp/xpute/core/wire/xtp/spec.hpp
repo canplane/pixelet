@@ -1,20 +1,14 @@
 // cpp/xpute/core/wire/xtp/spec.hpp
 
-// XTP, the Xpute Tree Packet (packages/xpute/core/src/wire/xtp/README.md):
-// a relocatable packet of one tree, the format xpute-core's wire/xtp/spec.rs
-// and @xpute/core's wire/xtp/spec.ts define and golden/wire/xtp/ holds all
-// three to, byte for byte.
+// XTP, a relocatable packet of one tree; the golden records hold every
+// language's encoding to the same bytes.
 //
 //   word0  [MAGIC 32 | reserved 32]
 //   word1  [root payload bytes 32 | type 8 | reserved 24]
-//   root payload …
 //
-// A scalar leaf is its little-endian bytes, aligned to its width. A sequence
-// leaf is an 8-byte slot of its length, then its elements from the next word.
-// A branch is an 8-byte slot of its child count, then one word per child —
-// its offset from the branch in the low half, its type in the next byte —
-// and the children after the table. An absent node keeps its type: a root's
-// payload size is 0, a child's offset is 0. The packet ends on a word.
+// A branch is an 8-byte child count, then one word per child (offset in the
+// low half, type in the next byte). An absent node keeps its type with a size
+// or offset of 0.
 
 #pragma once
 
@@ -30,7 +24,6 @@
 
 namespace xpute::xtp {
 
-// A node type as the wire has it: one byte.
 using NodeType = std::uint8_t;
 
 // A leaf's type byte, when its top bit is set:
@@ -86,17 +79,15 @@ enum class SequenceType : NodeType {
     f64_array = BIT_SEQ | float_type(3),
     bitset = BIT_SEQ | nonnum_type(0),
     str = BIT_SEQ | nonnum_type(1),
-    // Many strings as one leaf: len + 1 offsets into the UTF-8 after them.
+    // len + 1 offsets into the UTF-8 after them.
     strs = BIT_SEQ | nonnum_type(2),
 };
 
-// The types whose top bit is clear.
 enum class SpecialType : NodeType {
-    // Null with no type of its own.
     nil = 0x00,
     branch = 0x20,
-    // A packet spliced in whole. The wire never carries it: a graft is
-    // written as its packet's root, under that root's type.
+    // Never on the wire: a graft is written as its packet's root, under that
+    // root's type.
     graft = 0x40,
 };
 
@@ -129,7 +120,6 @@ constexpr std::uint32_t type_arg_of(NodeType t) noexcept {
     return t & ARG_MASK;
 }
 
-// The array type whose elements are `T`, for the element types the wire has.
 template <class T> inline constexpr SequenceType ARRAY_OF = [] {
     if constexpr (std::is_same_v<T, std::uint8_t>) return SequenceType::u8_array;
     else if constexpr (std::is_same_v<T, std::int8_t>) return SequenceType::i8_array;
@@ -168,7 +158,7 @@ template <class T> void store(std::uint8_t *p, T x) noexcept {
     std::memcpy(p, raw.data(), sizeof(T));
 }
 
-// A slot's two halves, low first.
+// Low half first.
 inline void set_word(std::span<std::uint8_t> buf, std::uint32_t off, std::uint32_t lo, std::uint32_t hi) noexcept {
     store(buf.data() + off, lo);
     store(buf.data() + off + 4, hi);
@@ -177,7 +167,7 @@ inline std::array<std::uint32_t, 2> get_word(std::span<const std::uint8_t> buf, 
     return {load<std::uint32_t>(buf.data() + off), load<std::uint32_t>(buf.data() + off + 4)};
 }
 
-// `nbyte` rounded up to `unit`, a power of two no wider than a word.
+// `unit` is a power of two no wider than a word.
 inline Result<std::uint32_t> align(std::uint32_t nbyte, std::uint32_t unit) noexcept {
     if (unit == 0 || (unit & (unit - 1)) != 0 || unit > WORD_SZ) return marshal_error(Errno::einval);
     std::uint32_t mask = unit - 1;
@@ -185,8 +175,7 @@ inline Result<std::uint32_t> align(std::uint32_t nbyte, std::uint32_t unit) noex
     return (nbyte + mask) & ~mask;
 }
 
-// Where a node of type `t` may start: a scalar on its own width, a sequence
-// or a branch on a word so its leading slot is one. No other type is laid out.
+// A sequence or a branch starts on a word so its leading slot is one.
 inline Result<std::uint32_t> align_sz(NodeType t) noexcept {
     if (t == type_of(SpecialType::branch) || type_is_seq(t)) return WORD_SZ;
     switch (static_cast<ScalarType>(t)) {
@@ -209,8 +198,7 @@ inline Result<std::uint32_t> align_sz(NodeType t) noexcept {
     return marshal_error(Errno::ebadmsg);
 }
 
-// A sequence's element size in bytes; a bitset's and a string's are a byte,
-// a string sequence's its offsets' word.
+// A string sequence's element is its offsets' word.
 constexpr std::uint32_t elem_sz(SequenceType t) noexcept {
     if (t == SequenceType::strs) return 4;
     return type_is_nonnum(type_of(t)) ? 1 : 1u << type_arg_of(type_of(t));

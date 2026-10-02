@@ -1,21 +1,10 @@
 // @pxl/native/platform/backing.tsx
 
 /**
- * What a floating control stands on — its backing — on an iPhone: the
- * system's glass, Liquid Glass from iOS 26, which bends and lights what is
- * under it, the map included. Where the system has none it draws the fill,
- * as the page does (platform/web/backing.tsx, which Android draws).
- *
- * Its presence (shared/ui/motion/veil.ts) is never an opacity on the glass or
- * above it: UIKit renders a visual effect wrongly under any alpha below one,
- * or skips it and never installs it again. So presence is shown by the
- * glass style instead: its place's style when fully present, "clear"
- * while fading, "none" when gone. The system animates between them.
- * The content on the glass fades by opacity, which is safe.
- *
- * The system glass draws its own rim and depth, so a border or a shadow in
- * the style is the fill's alone: on the glass, it would neither fade with it
- * nor match it. A color it is to carry is its tint.
+ * A floating control's backing on an iPhone: Liquid Glass where the system
+ * has it, else the fill. Presence is never an opacity on the glass: UIKit
+ * renders a visual effect wrongly under any alpha below one, or never
+ * installs it again. It goes through the glass styles ("clear", "none").
  */
 
 import { requireNativeView } from "expo";
@@ -31,42 +20,27 @@ import { BackingPlace } from "@/shared/ui/backing-place.ts";
 import { alpha, type Material } from "@/shared/ui/theme.ts";
 
 export interface BackingProps {
-  /** The backing where the system draws none; with a material, its color
-   * as a `#rrggbb`, which the material sets the opacity of. */
+  /** With a material, a `#rrggbb` the material sets the opacity of. */
   fill: ColorValue;
-  /** Where the system draws none, see-through, as this recipe says; the
-   * glass is see-through of its own. */
   material?: Material;
-  /** The glass's tint. */
   tint?: ColorValue;
-  /** Whether the glass answers a touch, as a control's does. */
   interactive?: boolean;
-  /** Where it stands (shared/ui/backing-place.ts): clear glass on a sheet's
-   * plain ground, regular over the map or over content that scrolls. */
   place: BackingPlace;
-  /** How present it is, from 1 to 0 (gone); and what it mounts at. */
   fade?: f64;
   fadeFrom?: f64;
-  /** How a change of `fade` is moved through. */
   transition?: Transition;
-  /** Its box, border and shadow; no transform, which is its fade's. */
+  /** No transform: that is the fade's. */
   style?: StyleProp<ViewStyle>;
   children?: ReactNode;
 }
 
-/** Whether the backing here is the system's glass. Asked once: the OS does
- * not gain or lose glass while the app runs. */
 export const SYSTEM_BACKING = isLiquidGlassAvailable();
 
-/** The system's blur a see-through backing stands on
- * (modules/platform/ios/Blur.swift). UIKit blurs by a material, not a
- * radius, so a material's `blur` has no meaning here. */
+/** UIKit blurs by a material, not a radius, so `blur` has no meaning here. */
 const Blur: ComponentType<ViewProps> = requireNativeView("PxlPlatform", "Blur");
 
 type Effect = "none" | "clear" | "regular";
 
-/** expo-glass-effect's style for a place at a presence level: "none" at 0,
- * "clear" while fading, the place's own style at 1. */
 function effectAt(level: f64, place: BackingPlace): Effect {
   if (level <= 0) return "none";
   if (level < 1 || place === BackingPlace.OnSheet) return "clear";
@@ -79,11 +53,8 @@ export function Backing({ fill, material, tint, interactive, place, fade = 1, fa
 
   const target = effectAt(veil.level, place);
   const [shown, setShown] = useState<Effect>(fadeFrom === undefined ? target : effectAt(fadeFrom, place));
-  // A style is applied only once the glass has been laid out: the native view
-  // installs its effect in its first layout, and a style set before that is
-  // installed as it is, without the animation: glass meant to materialize
-  // would stand whole from its first frame. And after the transition's
-  // delay, which the glass has none of its own for.
+  // A style set before the first layout is installed without animation, so
+  // it waits for layout and the transition's delay.
   const [laidOut, setLaidOut] = useState(false);
   useEffect(() => {
     if (!laidOut || shown === target) return;
@@ -93,13 +64,9 @@ export function Backing({ fill, material, tint, interactive, place, fade = 1, fa
     return () => clearTimeout(timer);
   }, [target, laidOut]);
 
-  // A see-through backing is the system's blur, which every iPhone has,
-  // under the fill at the material's `system` opacity, and not the glass:
-  // the glass rims what it covers, which ran along a bar's foot as a line
-  // across the sheet, and reads as a control, where this is a surface.
-  // The blur and the fill take the backing's corners and are cut to them:
-  // laid over it, they stood square in a round flyout. The backing itself
-  // is not cut, which would cut its shadow away.
+  // A see-through backing is the system blur, not the glass, whose rim ran as
+  // a line across the sheet. The blur and fill are cut to the corners; the
+  // backing is not, which would cut its shadow.
   if (material) {
     const { borderRadius } = StyleSheet.flatten(style) ?? {};
     const round = { borderRadius, overflow: "hidden" as const };
@@ -142,6 +109,5 @@ export function Backing({ fill, material, tint, interactive, place, fade = 1, fa
 }
 
 const styles = StyleSheet.create({
-  // What stands on the glass, laid out as the glass's own style says.
   layout: { flexGrow: 1, alignSelf: "stretch" },
 });

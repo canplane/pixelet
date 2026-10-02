@@ -1,17 +1,9 @@
 // @pxl/native/platform/conform.ts
 
 /**
- * The device's platform held to the web's: every module here exports what
- * the web's does, of the type the web's has. The shell is type-checked with
- * `@platform/` as the web's (apps/web/deno.jsonc), so a device's module that
- * lacked a name, or took another shape, would pass the check and fail only
- * when Metro ran it; root deno.jsonc's check:native checks this file and fails
- * there instead. A module may export more than the web's does, never less.
- * A module's Android file beside it — `panel.android.tsx` beside `panel.tsx`
- * — is what Metro takes for Android (metro.config.js); it is held to the
- * web's the same way.
- *
- * Nothing imports this. It is a check, not code, and Metro never sees it.
+ * Type-checks every device platform module against the web's exports
+ * (check:native), which would otherwise only fail when Metro ran it. Nothing
+ * imports this.
  */
 
 import type * as WebAboveKeyboard from "../../../web/src/platform/web/above-keyboard.tsx";

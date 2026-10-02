@@ -1,8 +1,7 @@
 // cpp/xpute/runtime/sched/frame_budget.test.cpp
 //
-// A clock the test moves: the pass reads `now()` and nothing else, so a step
-// costs exactly what it says here, and what a pass does with a budget is a
-// fact rather than a race with whatever else the machine is doing.
+// A clock the test moves, so a step costs exactly what it says and a pass is
+// not a race with the machine.
 
 #include "frame_budget.hpp"
 
@@ -21,7 +20,6 @@ double test_clock() {
     return clock_ms;
 }
 
-// A step that costs `ms`.
 void burn(double ms) {
     clock_ms += ms;
 }
@@ -50,8 +48,7 @@ XPUTE_TEST(run_under_budget_runs_everything_when_the_budget_is_ample) {
 XPUTE_TEST(run_under_budget_stops_once_the_time_budget_is_spent) {
     std::vector<int> seen;
     PassStats s = run_under_budget(std::array{1, 2, 3, 4, 5}, [&](int n) { return seen.push_back(n), burn(6), true; }, opts(10));
-    // The first runs at 0 and the second at 6, both inside the ten; the
-    // third is refused at twelve.
+    // The third is refused at 12 ms.
     XPUTE_CHECK((seen == std::vector{1, 2}));
     XPUTE_CHECK(s.stopped_early && s.ran == seen.size());
 }
@@ -87,9 +84,7 @@ XPUTE_TEST(run_under_budget_hard_budget_ms_bounds_a_pass_of_expensive_no_ops) {
     o.hard_budget_ms = 12;
     PassStats s = run_under_budget(range(40), [&](int n) { return seen.push_back(n), burn(3), false; }, o);
     XPUTE_CHECK(s.ran == 0 && s.stopped_early);
-    // Nothing reports work, so the budget never arms and only the ceiling
-    // stops it: four at three milliseconds each stand the clock at twelve,
-    // and the fifth is refused there.
+    // Nothing reports work, so only the ceiling stops it, at the fifth.
     XPUTE_CHECK(seen.size() == 4);
 }
 

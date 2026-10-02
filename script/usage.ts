@@ -1,20 +1,8 @@
 #!/usr/bin/env -S deno run -A
-// What the deployment has used against what it may use for free.
+// What the deployment has used against its free allowances: R2's writes and
+// Hetzner traffic, which the free Workers plan does not bound. Uses
+// wrangler's credential and hcloud's active context.
 //
-// The guarantee that nothing bills is a composition (infra/README.md, and
-// issue/20260816-deployment-hosting.md for why): the Worker on the free plan
-// fails closed at 100k requests a day, and every read of the private bucket
-// goes through it. What that does not bound is the bucket's writes — a bake's
-// upload is a Class A operation per object, and the free month has a million —
-// and a Hetzner box's traffic past what its type includes. Those are numbers
-// to look at, and this is where they are looked at.
-//
-// Cloudflare's come from its GraphQL analytics, with whichever credential
-// wrangler would use: `CLOUDFLARE_API_TOKEN` where CI's is set, else the
-// OAuth login `wrangler login` left, whose `account (read)` reaches the
-// analytics. Hetzner's come from hcloud's active context.
-//
-// Usage (from the repo root):
 //   ./script/usage.ts
 
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
@@ -23,16 +11,12 @@ const WORKER = "pixelet";
 const BUCKET = "pixelet-tiles";
 const SERVER = "pixelet-prod";
 
-/** The free allowances, as Cloudflare states them: a Workers free plan's
- * requests per UTC day, and R2's storage and operations per month. */
 const WORKER_REQUESTS_PER_DAY = 100_000;
 const R2_STORAGE_BYTES = 10e9;
 const R2_CLASS_A_PER_MONTH = 1_000_000;
 const R2_CLASS_B_PER_MONTH = 10_000_000;
 
-/** How R2 bills an operation: Class A mutates or lists, Class B reads, and
- * the rest (deletes, an aborted upload) are free. An action named in neither
- * list is counted as A, the dearer class, and said aloud. */
+/** An action in neither list is counted as A, the dearer class, and said aloud. */
 const CLASS_A = new Set([
   "ListBuckets",
   "PutBucket",
@@ -73,12 +57,10 @@ async function run(cmd: string, args: string[]): Promise<string> {
   return new TextDecoder().decode(out.stdout);
 }
 
-/** CI's token where it is set, else the login wrangler keeps and refreshes. */
 async function token(): Promise<string> {
   const set = Deno.env.get("CLOUDFLARE_API_TOKEN");
   if (set) return set;
   const out = await run("deno", ["run", "-A", "--node-modules-dir=auto", "npm:wrangler", "auth", "token", "--json"]);
-  // wrangler prints its banner before the JSON.
   const got = JSON.parse(out.slice(out.indexOf("{"))) as { token?: string };
   return got.token ?? die("wrangler has no credential: run `wrangler login`");
 }
@@ -94,7 +76,6 @@ async function cloudflare<T>(auth: string, path: string, body?: unknown): Promis
   return got as T;
 }
 
-/** The account: CI's where it is named, else the one the credential reaches. */
 async function account(auth: string): Promise<string> {
   const set = Deno.env.get("CLOUDFLARE_ACCOUNT_ID");
   if (set) return set;
@@ -187,8 +168,6 @@ async function hetznerUsage(): Promise<void> {
   const s = JSON.parse(await run("hcloud", ["server", "describe", SERVER, "-o", "json"])) as Server;
   const out = s.outgoing_traffic ?? 0;
   const gib = (bytes: f64) => `${(bytes / 2 ** 30).toFixed(2)} GiB`;
-  // Hetzner bills what leaves the box past the type's allowance; what arrives
-  // is free and shown only for scale.
   console.log(`\nHetzner '${SERVER}' (${s.server_type.name}) — this billing period`);
   console.log(`  outgoing  ${gib(out).padStart(11)}  ${share(out, s.included_traffic).padStart(6)} of ${gib(s.included_traffic)}`);
   console.log(`  incoming  ${gib(s.ingoing_traffic ?? 0).padStart(11)}`);

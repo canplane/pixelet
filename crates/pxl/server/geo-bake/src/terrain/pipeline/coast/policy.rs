@@ -1,10 +1,6 @@
 // pxl-geo-bake/terrain/pipeline/coast/policy.rs
 
-//! Coastline-only normalize policy — the repository's OVERTURE_COAST_SQL,
-//! computed from `overture_base_water`'s `ocean` subtype, feeds
-//! coast/adapter.rs's `from_coast_row`, which synthesizes
-//! `{natural: "ocean", source: "overture_ocean"}` tags for this file and
-//! normalizer.rs to key off of.
+//! Normalize policy for coastline rows.
 
 use pxl_spec::bake::format::{CellConfig, GroundChannelKey};
 use pxl_spec::bake::model::feature::{CoastRawFeature, FeatureComputed, FeatureExtra};
@@ -47,8 +43,6 @@ impl NormalizePolicy<CoastRawFeature> for CoastPolicy {
         is_coast(raw)
     }
 
-    /// Coastline polygons are the only thing left flowing through this policy
-    /// — never linear.
     fn is_linear(&self, _raw: &CoastRawFeature) -> bool {
         false
     }

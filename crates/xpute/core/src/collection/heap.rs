@@ -1,18 +1,7 @@
 // xpute-core/collection/heap.rs
 
-//! A binary heap over an array the caller owns, keyed by whatever orders.
-//!
-//! `BinaryHeap` takes the storage and wants `Ord`; here the array stays the
-//! caller's and the key is anything `PartialOrd`, so a distance or a score
-//! in `f64` keys it as it is, without a `total_cmp` newtype.
-//!
-//! One implementation serves both directions: `MIN` picks which way a key
-//! outranks another and folds away at instantiation, so `MinHeap` and
-//! `MaxHeap` are the same source and neither pays a comparison call.
-//!
-//! Keys are totally ordered and the caller upholds it: a NaN key makes the
-//! two ways of asking — `ahead` and its negation — disagree, and the sift
-//! walks off the order.
+//! A binary heap over an array the caller owns, keyed by any `PartialOrd`
+//! (an `f64` needs no `total_cmp` newtype). A NaN key breaks the order.
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Element<K, T> {
@@ -20,8 +9,6 @@ pub struct Element<K, T> {
     pub val: T,
 }
 
-/// The array is the caller's, and `MIN` is the direction: smaller key first
-/// when true, larger when false.
 pub struct Heap<'a, K, T, const MIN: bool> {
     pub a: &'a mut Vec<Element<K, T>>,
 }
@@ -36,7 +23,6 @@ impl<'a, K: PartialOrd + Copy, T: Copy, const MIN: bool> Heap<'a, K, T, MIN> {
 }
 
 impl<K: PartialOrd + Copy, T: Copy, const MIN: bool> Heap<'_, K, T, MIN> {
-    /// Whether `x` outranks `y`. The only place the direction is read.
     fn ahead(x: K, y: K) -> bool {
         if MIN {
             x < y
@@ -45,13 +31,11 @@ impl<K: PartialOrd + Copy, T: Copy, const MIN: bool> Heap<'_, K, T, MIN> {
         }
     }
 
-    /// The root: the smallest key, or the largest.
     pub fn top(&self) -> Option<&Element<K, T>> {
         self.a.first()
     }
 
-    /// Restores the heap property in `a[0..size)`, given that both of the
-    /// root's subtrees already hold it.
+    /// Sifts `root` down; both of its subtrees must already be heaps.
     pub fn heapify(a: &mut [Element<K, T>], root: usize, size: usize) {
         let mut i = root;
         let e = a[i];
@@ -74,7 +58,6 @@ impl<K: PartialOrd + Copy, T: Copy, const MIN: bool> Heap<'_, K, T, MIN> {
         a[i] = e;
     }
 
-    /// Bottom-up heapify, O(n).
     pub fn build_of(a: &mut [Element<K, T>]) {
         let n = a.len();
         for i in (0..(n >> 1)).rev() {
@@ -86,8 +69,6 @@ impl<K: PartialOrd + Copy, T: Copy, const MIN: bool> Heap<'_, K, T, MIN> {
         Self::build_of(self.a);
     }
 
-    /// Hole sift-up: the new element's place is opened by moving parents
-    /// down, so one write lands it rather than a swap per level.
     pub fn push(&mut self, e: Element<K, T>) {
         let mut i = self.a.len();
         self.a.push(e);
@@ -104,7 +85,6 @@ impl<K: PartialOrd + Copy, T: Copy, const MIN: bool> Heap<'_, K, T, MIN> {
         self.a[i] = e;
     }
 
-    /// Removes the root and returns it.
     pub fn pop(&mut self) -> Option<Element<K, T>> {
         if self.a.is_empty() {
             return None;
@@ -117,7 +97,7 @@ impl<K: PartialOrd + Copy, T: Copy, const MIN: bool> Heap<'_, K, T, MIN> {
         Some(out)
     }
 
-    /// Overwrites the root and sifts it down. The heap must not be empty.
+    /// The heap must not be empty.
     pub fn replace_root(&mut self, e: Element<K, T>) {
         self.a[0] = e;
         let n = self.a.len();
@@ -125,8 +105,7 @@ impl<K: PartialOrd + Copy, T: Copy, const MIN: bool> Heap<'_, K, T, MIN> {
     }
 }
 
-/// Sorts ascending by key: unstable, in place, O(n log n). A max-heap over
-/// the whole array, then each root swapped to the end of the unsorted part.
+/// Ascending, unstable, in place.
 pub fn heapsort<K: PartialOrd + Copy, T: Copy>(a: &mut [Element<K, T>]) {
     let n = a.len();
     if n <= 1 {

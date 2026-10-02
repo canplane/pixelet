@@ -1,24 +1,9 @@
 // @xpute/conformance/trace.test.ts
 
 /**
- * The traces (spec/xpute/conformance/) run against every guest, by the one
- * host there is: this runtime's ring, directory and stream reader. A guest is
- * Rust or C++, and built as a native library the host opens or as a
- * WebAssembly module it instantiates; each exports the same two calls
- * (cpp/xpute/conformance/guest.hpp), so none is where another is held.
- *
- * The host knows only what the contract lets it: the directory's offset,
- * which the guest's boot answers, and then what the directory names. It sends
- * what a step says, rings, runs the stream and reads the completion ring dry
- * after every turn, as rule 5 asks of a host, and holds what it saw to what
- * the trace says it must see.
- *
- * Two rules are not in any trace because the host here is what keeps them:
- * the memory never moves (rule 1), and the host never runs while a turn does
- * (rule 2's exclusion). A trace holds what a guest could get wrong.
- *
- * The guests are built before this runs: the Rust ones by Cargo, the C++
- * ones by script/cpp.ts.
+ * Runs the traces under spec/xpute/conformance/ against every guest, Rust or
+ * C++, native or WebAssembly, through this runtime's host. Build the guests
+ * first: Cargo for Rust, script/cpp.ts for C++.
  */
 
 import { assert, assertEquals, assertNotEquals } from "@std/assert";
@@ -39,7 +24,6 @@ import { cmd, key, MEMORY_BYTES } from "./guest.spec.ts";
 const ROOT = fromFileUrl(new URL("../../../../", import.meta.url));
 const CARGO_TARGET = resolve(Deno.env.get("CARGO_TARGET_DIR") ?? join(ROOT, "crates/target"));
 
-/** A shared library under `dir`, its file named as the platform names one. */
 function library(dir: string, name: string): string {
   return join(dir, Deno.build.os === "darwin" ? `lib${name}.dylib` : Deno.build.os === "windows" ? `${name}.dll` : `lib${name}.so`);
 }
@@ -49,33 +33,22 @@ const SYMBOLS = {
   xpute_conformance_interrupt: { parameters: ["buffer", "f64"], result: "f64" },
 } as const;
 
-/** The memory a host reserves a WebAssembly guest: the guest's range and
- * room past it for the module's own stack and data, which are the build's
- * and no number the host is told. A module that needs more says so by
- * failing to instantiate. */
+/** Room past the guest's range for the module's own stack and data, which the build decides. */
 const MODULE_BYTES = 4 << 20;
 
-/** What a WebAssembly guest may import: its memory and the host's clock,
- * the contract's one call out, and nothing that would be a second way to the
- * host beside it. */
 const MODULE_IMPORTS = ["env.memory", "env.now"];
 
-/** A guest as the host holds one, however it was built: the memory, where
- * its boot said the directory is, and its turn. */
 interface Guest {
   memory: ArrayBuffer;
   directory_at: number;
   interrupt(quota_ms: number): number;
 }
 
-/** A way to boot a fresh guest, and to let go of what it was opened from. */
 interface Opener {
   open(): Guest;
   close(): void;
 }
 
-/** A guest built as a native library: booted into a region the host holds,
- * with the host's clock handed over. */
 function native(path: string): Opener {
   const lib = Deno.dlopen(path, SYMBOLS);
   const now = new Deno.UnsafeCallback({ parameters: [], result: "f64" } as const, () => clock_ms);
@@ -94,8 +67,6 @@ function native(path: string): Opener {
   };
 }
 
-/** A guest built as a WebAssembly module: instantiated over a memory the
- * host reserves, which never grows, with the clock as its import. */
 function module(path: string): Opener {
   const compiled = new WebAssembly.Module(Deno.readFileSync(path));
   const imports = WebAssembly.Module.imports(compiled).map((i) => `${i.module}.${i.name}`).sort();
@@ -113,7 +84,6 @@ function module(path: string): Opener {
   };
 }
 
-/** Every guest, by how it is built: Cargo's builds and script/cpp.ts's. */
 const GUESTS: Record<string, () => Opener> = {
   "rust native": () => native(library(join(CARGO_TARGET, "debug"), "xpute_conformance")),
   "cpp native": () => native(library(join(ROOT, "target/cpp"), "xpute_conformance")),
@@ -121,11 +91,8 @@ const GUESTS: Record<string, () => Opener> = {
   "cpp wasm": () => module(join(ROOT, "target/cpp/xpute_conformance.wasm")),
 };
 
-/** Turns a `settle` rings at most before the trace is taken to have stalled. */
 const MOST_SETTLE_TURNS = 64;
 
-/** The host's clock, which a `clock` step sets: a trace's times are its
- * inputs, and only what a guest makes of them is held to anything. */
 let clock_ms = 0;
 
 interface Completion {
@@ -135,7 +102,6 @@ interface Completion {
   result: number;
 }
 
-/** What one turn left, each place on its own. */
 interface Turn {
   completions: Completion[];
   stream: number[];
@@ -150,7 +116,6 @@ class Host {
   private readonly cq: Ring;
   private readonly stream_at: number;
 
-  /** A fresh guest, found through the directory its boot pointed at. */
   constructor(private readonly guest: Guest) {
     const mem = guest.memory;
     this.directory = new Directory(mem, guest.directory_at);
@@ -160,13 +125,11 @@ class Host {
     this.stream_at = this.directory.get(key.STREAM);
   }
 
-  /** A message whose packet, where it has numbers, is a branch of them. */
   submit(tag: number, command: number, ack: boolean, args: number[]): void {
     const packet = args.length === 0 ? null : encoder.encode(new TreeView().branch((b) => args.forEach((a) => b.u32(a))));
     assertEquals(this.sq.push(tag, command, ack ? FrameFlag.ACKREQ : 0, packet), Errno.OK);
   }
 
-  /** A turn, and everything it left taken before anything else. */
   ring(quota_ms: number): Turn {
     const wake = this.guest.interrupt(quota_ms);
     const stream: number[] = [];
@@ -179,7 +142,6 @@ class Host {
     return { completions, stream, wake };
   }
 
-  /** Whether the directory names `k`. */
   names(k: number): boolean {
     try {
       this.directory.get(k);
@@ -190,14 +152,12 @@ class Host {
   }
 }
 
-/** A directory key a trace names. */
 function key_number(name: string): number {
   const keys: Record<string, number> = { SUBMISSION: directory_key.SUBMISSION, COMPLETION: directory_key.COMPLETION, STREAM: key.STREAM };
   if (!(name in keys)) throw new Error(`no key ${name}`);
   return keys[name];
 }
 
-/** The fixture's commands, and xpute's own the host answers a guest with. */
 const CMD_NAMES = [...Object.entries(cmd).filter(([, v]) => typeof v === "number"), ["SYS_OPENED", Command.SYS_OPENED]] as [string, number][];
 
 function cmd_number(name: string): number {
@@ -243,10 +203,7 @@ function render_stream(ops: number[]): string {
   return ops.length === 0 ? "-" : ops.join(" ");
 }
 
-/** Holds what was seen to what a trace says, token by token. A result written
- * `$n` names a value the trace does not fix — a handle — and binds it the
- * first time, so a later step or relation can use it; after that it must be
- * the same. */
+/** A result written `$n` binds on first sight and must match after. */
 function expect(seen: string, said: string, vars: Map<string, number>, what: string): void {
   const seen_tokens = seen.split(" ");
   const said_tokens = said.split(" ");
@@ -295,8 +252,6 @@ function wake_name(wake: number): string {
   return wake === 0 ? "next" : wake > 0 ? "later" : "none";
 }
 
-/** Runs one scenario's steps on a fresh guest and holds every turn, and the
- * whole, to what the trace says of them. */
 function run(g: Golden, guest: string, opener: Opener, trace: string): void {
   const name = `${guest}: ${trace}`;
   clock_ms = 0;

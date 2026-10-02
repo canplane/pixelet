@@ -1,18 +1,8 @@
 // pxl-kernel/control/camera/free.rs
 
-//! The free camera. It turns the camera (controller.rs `Camera`) about its
-//! eye, which is the map center and the character's place, and walks it
-//! (controller.rs `pan`), at one speed wherever it stands. The eye's height
-//! is no control: the eye's target stands where the walk every camera pans
-//! by stands (layer/terrain/ground_snap.rs `walk`) — in a cave as on the
-//! surface — and the drawn eye comes to that target, so on a slope or a
-//! step it is on its way there rather than at that height every frame.
-//!
-//! As the orbit's, its target and what is drawn are kept apart: the controls
-//! write where the eye is to stand and the look in the camera store's
-//! intent, and `turn` brings the drawn eye and look to them by the one law
-//! (approach.rs). The ground sets the target's height as the drag sets its X
-//! and Y, so a step in the ground comes as every other move does.
+//! The free camera turns about its eye, which is the map center. Its height
+//! is no control: the target stands where the pan's walk stands it, and the
+//! drawn eye eases to it, so a step comes as every other move does.
 
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::pvf3::ivec;
@@ -29,51 +19,40 @@ use crate::world::access::{Access, Detail, Ray};
 use crate::world::frame::coord::canonical_to_local;
 use crate::world::frame::view::{view, view_compose};
 
-/// What a look from `eye` along `forward` falls on, in the root frame: the
-/// first thing it meets that is resident, else the sea, else `fallback`
-/// along it.
+/// The first resident thing it meets, else the sea, else `fallback` along it.
 pub fn look_point(eye: V3, forward: V3, fallback: f64) -> V3 {
     let o = view().origin;
     let frame = [ivec::to_real(ivec::X(o)), ivec::to_real(ivec::Y(o)), ivec::to_real(ivec::Z(o))];
     let ray = Ray {
         origin: std::array::from_fn(|k| eye[k] + frame[k]),
         direction: forward,
-        // As far as the view reaches: past it nothing is drawn to look at.
         reach: view().far,
     };
-    // Far along it the ground is read as coarse as it is drawn there.
     let t = match Access::now().first_hit(&ray, Detail::Distance(Tau::FINEST)).value().flatten() {
         Some(hit) => hit.t,
-        // The sea is z = 0 in the world's units.
+        // The sea is z = 0.
         None if forward[2] < -1e-9 && ray.origin[2] > 0.0 => -ray.origin[2] / forward[2],
         None => fallback,
     };
     std::array::from_fn(|k| eye[k] + forward[k] * t)
 }
 
-/// Where the controls have the eye stand, canonical, so a rebase leaves it
-/// where it is: what the drawn eye comes to. None until the camera is first
-/// put anywhere.
+/// Canonical, so a rebase leaves it where it is. None until first put.
 static TO: Global<Option<Pvf3>> = Global::new();
 
 fn to() -> &'static mut Option<Pvf3> {
     TO.get(|| None)
 }
 
-/// How close the drawn eye comes, in units, and the look, in radians,
-/// before each takes its target whole: sub-pixel at any distance.
+// Sub-pixel at any distance.
 const EYE_EPS: f64 = 0.001;
 const LOOK_EPS: f64 = 0.0001;
 
-/// The map center the eye's target has: the eye's target itself, as the
-/// drawn map center is the drawn eye (controller.rs `center_local`).
+/// First person, the eye's target is the map center.
 pub(crate) fn target_center() -> Option<Pvf3> {
     to().or_else(map_center)
 }
 
-/// The eye's target put at `at`, a map center, which first person is the
-/// eye: where a place said outright puts it, and with `snap` the drawn eye
-/// there at once.
 pub(crate) fn put(at: Pvf3, snap: bool) {
     let eye = at;
     *to() = Some(eye);
@@ -82,8 +61,7 @@ pub(crate) fn put(at: Pvf3, snap: bool) {
     }
 }
 
-/// The free camera's turn over `delta` seconds: its eye and its look each
-/// brought toward their targets. Whether it is still moving.
+/// Whether still moving.
 pub(crate) fn turn(delta: f64) -> bool {
     let mut moving = false;
     if let Some(eye) = eye_local() {

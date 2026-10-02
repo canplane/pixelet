@@ -1,16 +1,7 @@
 // xpute-runtime/lib.rs
 
-//! The runtime, in Rust: what a guest and its host agree on, over
-//! `xpute-core`'s kit.
-//!
-//! The rings a linear memory's two sides talk across, the
-//! three levels of the scheduler that divide one turn, the clock and the
-//! memory a browser does not give a module, and the one value per module that
-//! running on a single thread makes sound.
-//!
-//! Using this means running the way it runs: a turn on a doorbell, a quota
-//! measured from the frame, I/O asked of the host. That is the line between
-//! it and `xpute-core`, which asks nothing of its caller.
+//! The guest's side of the runtime, over `xpute-core`. Using it means running
+//! its way: a turn on a doorbell, a quota from the frame, I/O asked of the host.
 
 pub mod abi;
 pub mod clock;

@@ -2,9 +2,8 @@
 
 use super::*;
 
-/// Seoul at local noon on the day before the solstice: the direction comes
-/// back with Z at 96.2 of 100, an altitude near 74°, and X and Y putting it
-/// a little east of south.
+/// Seoul at local noon the day before the solstice: altitude near 74°, a
+/// little east of south.
 #[test]
 fn the_sun_at_seoul_noon_is_high_and_south_south_east() {
     let d = 1_718_852_400_000.0 / 86_400_000.0 + 2_440_587.5 - 2_451_545.0;
@@ -15,9 +14,6 @@ fn the_sun_at_seoul_noon_is_high_and_south_south_east() {
     }
 }
 
-/// The stars' matrix and the bodies' construction agree: the same cataloged
-/// directions come out where `local_direction` puts them, Sirius, Polaris and
-/// a star on the celestial equator, at Seoul and at Sydney.
 #[test]
 fn the_stars_turn_with_the_sun_and_the_moon() {
     let d = 1_718_852_400_000.0 / 86_400_000.0 + 2_440_587.5 - 2_451_545.0;

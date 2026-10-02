@@ -1,20 +1,8 @@
 // pxl-kernel/layer/poi/placement.rs
 
-//! Where the counts are drawn. What the POI pages draw of the view is the
-//! layer's own cover (world/pyramid/cover.rs `Cover`): pieces of the ground in
-//! view, none over another, so every place under them is counted once. A
-//! piece is read from the page that says its ground (`Paging::source`): its
-//! own, at the piece's level, or a page over it that settles it, whose cells
-//! there hold one place or none. Either way each cell of the POI lattice
-//! (pxl-spec bake/poi_page.rs `POI_LATTICE`) under the piece is one badge,
-//! already folded as the pyramid keeps it, and no two of them meet in one
-//! cell of the piece's level. What a cell is shown as is chosen here, from
-//! what its page holds (`step`), and a badge stands at the center of a z16
-//! ground cell — its place's, or its cell's middle's for a count. It stands
-//! in all three axes, on the surface the model says is drawn there:
-//! what a ray down through the cell meets first, ground or a placed object,
-//! at the level the view draws that ground at (world/access.rs `first_hit`)
-//! — the world as it is known, never the state of a mesh being built.
+//! Where the POI counts are drawn: one badge per POI-lattice cell under each
+//! piece of the layer's cover, read from the page that settles that ground,
+//! standing at a z16 cell's center on the surface a ray down meets first.
 
 use crate::global::Global;
 use crate::layer::billboard::batch::BillboardBatch;
@@ -42,25 +30,16 @@ struct Placement {
     batch: BillboardBatch,
     kept: Vec<u32>,
     set: Option<u32>,
-    /// What `kept` has on the sheet, in the order it is drawn.
     drawn: Vec<u32>,
-    /// The badges drawn, as a tap finds them: nearest the eye first, each by
-    /// its box on the screen, what it says and where it stands: the point
-    /// it is drawn over, on the surface there.
+    /// Nearest the eye first: screen box, label, and where it stands.
     hits: Vec<([f64; 4], Label, Pvf3)>,
-    /// What a turn works in, kept so a settled turn asks the heap for
-    /// nothing: each badge found, by the cell of the piece's level it stands
-    /// in — the order the badges are listed in — with its label and the z16
-    /// cell and height it stands at; each badge's label and where it stands;
-    /// and the instances written for the set.
+    /// Kept so a settled turn asks the heap for nothing.
     found: Vec<(Cell, Label, Cell, f64)>,
     labeled: Vec<(Label, Pvf3)>,
     instances: Vec<f32>,
 }
 static PLACEMENT: Global<Placement> = Global::new();
 
-/// The top of what stands at `at`'s X and Y as the view draws it at `level`:
-/// where a ray straight down first meets the ground or a placed object.
 /// None where nothing over it is known.
 fn top_at(at: &Pvf3, level: u32) -> Option<f64> {
     let mut xy = [0.0; 3];
@@ -89,29 +68,21 @@ pub fn step(ctx: &mut TickContext) {
     let origin = local_world_origin();
     let base = [ivec::to_real(ivec::X(origin)), ivec::to_real(ivec::Y(origin)), ivec::to_real(ivec::Z(origin))];
     let pages = PoiPage::pyramid();
-    // No pieces made yet: what was placed stands.
     if crate::world::pyramid::domain::current().is_none() {
         return;
     }
     let mut found = core::mem::take(&mut p.found);
     found.clear();
     for &chunk in &crate::world::pyramid::cover::cover::<PoiPage>().0.drawn {
-        // Places are shown by the zoom their ground is drawn at, as a map
-        // shows them: none coarser than `POI_MAJOR_LEVEL`, only the most
-        // prominent between it and `POI_ALL_LEVEL` (param.rs).
+        // None coarser than POI_MAJOR_LEVEL, only the most prominent up to POI_ALL_LEVEL.
         if chunk.level() > POI_MAJOR_LEVEL {
             continue;
         }
         let major_only = chunk.level() > POI_ALL_LEVEL;
-        // The page that draws the chunk's ground: its own, or where the tree
-        // stops above it, the page over it that says that ground — whose cells
-        // there hold one place or none, each standing where it stands.
         let Some(src) = pages.source(chunk.page()) else { continue };
         let Some(poi) = pages.get(src) else { continue };
-        // The chunk's ground in the source's cells: a block of them, or where
-        // the source is so much coarser that one of its cells is wider than
-        // the chunk, part of one, whose place is the chunk's only if it stands
-        // on the chunk's ground.
+        // Where the source cell is wider than the chunk, its place counts only if it
+        // stands on the chunk's ground.
         let (side, cell) = (chunk.column().0, POI_LATTICE.scale(src.level));
         let m = if cell <= side { cell.count_in(side) } else { 0 };
         let [x0, y0] = POI_LATTICE.cell_of(src.level, &Pvf3 { i: chunk.corner(), f: 0 }).in_page();
@@ -121,13 +92,8 @@ pub fn step(ctx: &mut TickContext) {
             let from = poi.cells.partition_point(|c| c.cell < lo);
             for c in poi.cells[from..].iter().take_while(|c| c.cell < hi) {
                 let cell = POI_LATTICE.cell_at(src, c.cell);
-                // What the cell is shown as, which is the reader's to choose
-                // (layer/poi.rs `rank_of`): every cell from `POI_ALL_LEVEL`, a
-                // place where it holds one and a count where it holds more,
-                // as the clusters of a map's markers are; coarser, only the
-                // most prominent place it holds, where that is prominent
-                // enough. A place stands where it does, a count at its cell's
-                // middle.
+                // From POI_ALL_LEVEL, a place or a count; coarser, only a prominent enough
+                // place. A count stands at its cell's middle.
                 let (label, ground) = if major_only {
                     let Some((place, _, at)) = poi.shown(c).map(|(i, p, at)| (i, rank_of(p.kind), at)).filter(|s| s.1 <= POI_MAJOR_RANK).min_by_key(|s| s.1) else {
                         continue;
@@ -142,11 +108,8 @@ pub fn step(ctx: &mut TickContext) {
                 if m == 0 && Chunk::of(chunk.level(), &ground.mid()).column() != chunk.column() {
                     continue;
                 }
-                // A column is drawn by every chunk over it that holds
-                // something (world/pyramid/chunk.rs); a place is counted by
-                // the one the top of what stands on its ground is in, and by
-                // none where nothing under it is known, where no badge could
-                // stand.
+                // Counted only by the chunk the top of what stands there is in, so a
+                // column's several chunks do not repeat it.
                 let Some(top) = top_at(&ground.mid(), chunk.level()) else { continue };
                 if top - 1.0 < z0 || top - 1.0 >= z1 {
                     continue;
@@ -177,9 +140,7 @@ pub fn step(ctx: &mut TickContext) {
         }
         p.drawn.push(i);
     }
-    // Farthest from the eye first. The pass reads the world's depth and
-    // writes none of its own, so where two badges cross, the one drawn later
-    // is on top, and that has to be the nearer.
+    // Farthest first: the pass writes no depth, so the nearer must draw last.
     let batch = &p.batch;
     p.drawn.sort_by(|&a, &b| {
         batch.d2[b as usize]
@@ -215,11 +176,8 @@ pub fn step(ctx: &mut TickContext) {
     (p.labeled, p.instances) = (labeled, instances);
 }
 
-/// A tap at `ndc_x`, `ndc_y` (in [−1, 1], y up) on the badges: the nearest
-/// one whose box it falls in takes it, and the view goes to where that badge
-/// stands — a place to the place, a crowd a level closer too, where the
-/// ladder draws that ground a level finer and it comes apart into the places
-/// under it. Whether a badge took the tap.
+/// `ndc` in [−1, 1], y up. A count is also zoomed into, so it comes apart
+/// into its places. Whether a badge took the tap.
 pub fn tap(ndc_x: f64, ndc_y: f64) -> bool {
     let v = view();
     let (x, y) = ((ndc_x * 0.5 + 0.5) * v.width, (-ndc_y * 0.5 + 0.5) * v.height);
@@ -228,7 +186,6 @@ pub fn tap(ndc_x: f64, ndc_y: f64) -> bool {
         return false;
     };
     match label {
-        // A count opens up as it is looked at closer.
         Label::Count(..) => crate::control::camera::controller::focus(stands),
         _ => crate::shell::shell::go_to(stands),
     }

@@ -1,18 +1,9 @@
 // @pxl/native/platform/surface.tsx
 
 /**
- * What the kernel draws into, on a device: a native view backed by a Metal
- * layer (modules/platform/ios/SurfaceView.swift), which the kernel draws into
- * directly through wgpu (crates/pxl/web/render/src/gpu/api/device.rs). A
- * view is a kernel surface as a page's canvas is (platform/web/surface.tsx):
- * opened while it is mounted, bound to the view's layer by the view itself
- * while it has one — it says when, since its layer comes after it is mounted
- * and laid out — and sized in device pixels as it is laid out.
- *
- * The world's view is also the app's driver (kernel/control/input.ts), as a
- * page's canvas is: its size is the frame's viewport, its touches are
- * pointers the kernel reads into drags and pinches, and the app in front or
- * in the background is the kernel's visibility.
+ * The kernel's surface on a device: a native view backed by a Metal layer,
+ * drawn by wgpu directly. The view says when its layer is bound, since the
+ * layer arrives after mount. The world's view is also the app's input driver.
  */
 
 import type { u32 } from "@xpute/core/abi/word.ts";
@@ -28,24 +19,16 @@ import { surface_close, surface_open, surface_size } from "@/kernel/render/surfa
 import { request_frame, type Viewport } from "@/kernel/sched.ts";
 
 interface SurfaceProps extends ViewProps {
-  /** The kernel's surface to show; 0 for none. */
   surface: u32;
-  /** The view bound its layer to `surface`. */
   onAttach: (e: NativeSyntheticEvent<{ surface: u32 }>) => void;
   onDetach: () => void;
 }
 
 const SurfaceView: ComponentType<SurfaceProps> = requireNativeView("PxlPlatform");
 
-/** A kernel surface of `role` for a SurfaceView: opened while mounted and
- * again whenever `key` changes, `opened` handed it once it is the kernel's —
- * what that returns is run before it is let go — and sized in device pixels
- * once the view has bound its layer to it. `size` is the view's, in its own
- * pixels. */
 function useSurface(role: u32, key: string, opened?: (surface: u32) => () => void) {
   const [handle, setHandle] = useState<u32>(0);
   const size = useRef<Viewport>({ width: 0, height: 0, dpr: PixelRatio.get() });
-  /** The surface the view says its layer is bound to; 0 for none. */
   const bound = useRef<u32>(0);
   const open = useRef(opened);
   open.current = opened;
@@ -99,13 +82,10 @@ export function WorldSurface() {
 
   const onLayout = (e: LayoutChangeEvent) => {
     props.onLayout?.(e);
-    // A touch's place is the view's own (`locationX`), so the view is the
-    // frame it is read against, wherever the view lies.
     kernel_rect(0, 0, e.nativeEvent.layout.width, e.nativeEvent.layout.height);
     request_frame();
   };
 
-  /** Every touch the event changed, as a pointer in `phase`. */
   const touches = (phase: PointerPhase) => (e: GestureResponderEvent) => {
     for (const t of e.nativeEvent.changedTouches) kernel_pointer(phase, PointerKind.Touch, Number(t.identifier), 0, t.locationX, t.locationY);
   };
@@ -123,9 +103,6 @@ export function WorldSurface() {
   );
 }
 
-/** A display case: a surface the kernel draws one thing into. `onOpen` is
- * handed the surface once it is the kernel's, and what it returns is run
- * before the surface is let go; it opens again whenever `openKey` changes. */
 export function CaseSurface({ onOpen, openKey }: { onOpen: (surface: u32) => () => void; openKey: string }) {
   const { props } = useSurface(surface_role.CASE, openKey, onOpen);
   return <SurfaceView {...props} style={StyleSheet.absoluteFill} />;

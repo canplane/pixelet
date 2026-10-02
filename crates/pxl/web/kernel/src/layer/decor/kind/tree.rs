@@ -1,22 +1,8 @@
 // pxl-kernel/layer/decor/kind/tree.rs
 
-//! A decor kind: its seed, its rules and its models, as the registry
-//! (decor/registry.rs) binds them.
-//!
-//! Trees on green/forest terrain, and only where nothing else (water, a
-//! structure, a road) already claims the cell — the same "what actually
-//! renders there" precedence the terrain paint applies, since a cell whose
-//! land channel says green_light but whose transport channel is a road is a
-//! road, not grass.
-//!
-//! bare is included alongside the two explicit GREEN_* types even though its
-//! own name says "bare ground": it's the fallback land type for any cell
-//! with no real landuse tag, and this pack's actual land_bare.png texture is
-//! a grassy yellow-green speckle nearly indistinguishable from
-//! land_green_light.png — visually it *is* the plain grass most of an
-//! untagged map reads as, not dirt. SPORTS was considered too (its own
-//! texture leans mint-green) but left out: it's a maintained field, not
-//! natural ground, and reads wrong with trees scattered across it.
+//! Trees on green and bare land. Bare is the fallback type for untagged land
+//! and this pack draws it as grass; sports fields are left out as maintained,
+//! not natural, ground.
 
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::bake::format::GroundChannelKey;
@@ -27,13 +13,7 @@ use crate::layer::decor::build::DecorVariantAsset;
 use crate::layer::decor::kind::DecorKindDef;
 use crate::layer::decor::scatter::{DecorKindSeed, DecorOrientationMode, DecorRules};
 
-/// The kind's variants, each a model by its path under asset/, in the
-/// order the scatter picks among them: the fantasy town kit's five trees
-/// and the graveyard kit's four pines.
-///
-/// Each variant's colormap, row for row with `models`: the Kenney packs keep
-/// the texture outside the glb and share it across the pack, and a kind's
-/// variants can come from more than one pack.
+/// Each variant's colormap is per pack, since Kenney keeps textures outside the glb.
 const VARIANTS: [DecorVariantAsset; 9] = [
     DecorVariantAsset {
         model: Asset::decor_kenney_fantasy_town_tree_glb,
@@ -75,14 +55,9 @@ const VARIANTS: [DecorVariantAsset; 9] = [
 
 pub const DEF: DecorKindDef = DecorKindDef {
     seed: DecorKindSeed {
-        // Arbitrary, fixed — only has to stay stable across sessions; a big odd
-        // constant rather than a small number so it mixes well even before
-        // combining with a per-page seed.
+        // Arbitrary; changing it reshuffles every tree.
         tag: 0x7ee5eed7eec0de1,
-        // Moderate, deliberately sparse — a scattered handful of trees reading as
-        // "this hillside has some trees on it", not a solid forest wall at 1u
-        // spacing (which a much higher density would read as, given every eligible
-        // cell is only 1u wide).
+        // Sparse: a hillside with some trees, not a forest wall at 1u spacing.
         density: 0.04,
         orientation: DecorOrientationMode::Random,
     },

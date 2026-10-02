@@ -1,6 +1,4 @@
-// The sky's dither: a hash of a pixel's position, a value in [0, 1) that
-// changes from each pixel to the next, which breaks the eight-bit steps of
-// a smooth gradient into noise.
+// Breaks the 8-bit steps of a smooth gradient into noise.
 
 fn hash(q: vec2f) -> f32 {
   var p = fract(q * vec2f(123.34, 456.21));

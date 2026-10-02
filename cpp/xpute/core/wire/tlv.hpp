@@ -1,27 +1,8 @@
 // cpp/xpute/core/wire/tlv.hpp
 
-// TLV: xpute's forward-only typed value sequence — the format xpute-core's
-// wire/tlv.rs and @xpute/core wire/tlv.ts write, and golden/wire/tlv.tsv
-// holds all three to, byte for byte. Rust's module comment is the contract in
-// full; in short:
-//
-//   [tag | payload] … [END]
-//
-// A producer appends values; a consumer reads them once, in order, and keeps
-// nothing it has passed — no table, offset or tree, which is what sets it
-// apart from XTP, a retained structured value. A tag is its payload's length
-// as well as its type: a scalar is its little-endian bytes, STR and BYTES a
-// u32 length and that many bytes.
-//
-// Where reading stops is one of three facts, and the reader says which: END
-// read (closed); the input run out at an element's boundary (unclosed); or
-// the input run out inside an element, or a tag unknown — EBADMSG, the values
-// before it standing. Which end a sequence must have is its user's.
-//
-// The writer appends to a byte container the caller owns — any with the
-// vector's `push_back` and `insert`, so one over the guest's heap — and a
-// value read back names the width it was written at. A string or bytes read
-// back is a view into the buffer, which outlives it.
+// TLV, a forward-only typed value sequence: [tag, payload] … [END]. A reader
+// keeps nothing it has passed. Reading stops closed (END), unclosed (input
+// ran out at a boundary), or EBADMSG (inside an element or an unknown tag).
 
 #pragma once
 
@@ -57,8 +38,7 @@ enum class Tag : std::uint8_t {
     bytes = 0x20,
 };
 
-// A string as it lies. What a reader decodes of it — what is not UTF-8 as
-// U+FFFD, as Rust's reader and the host's decode it — is `decode`'s.
+// Invalid UTF-8 decodes to U+FFFD, as the host decodes it.
 struct Str {
     std::string_view text;
     bool operator==(const Str &) const = default;
@@ -70,15 +50,12 @@ struct Bytes {
     bool operator==(const Bytes &o) const { return std::equal(data.begin(), data.end(), o.data.begin(), o.data.end()); }
 };
 
-// Where a sequence stopped without a fault.
 enum class End : std::uint8_t {
-    // END was read.
     closed,
-    // The input ran out at an element's boundary, without END.
     unclosed,
 };
 
-// One variant per tag, in the tags' order.
+// In the tags' order.
 using Value = std::variant<bool, std::uint8_t, std::int8_t, std::uint16_t, std::int16_t, std::uint32_t, std::int32_t, std::uint64_t, std::int64_t, float, double, Str, Bytes>;
 
 template <class Buf> class Writer {
@@ -87,7 +64,7 @@ template <class Buf> class Writer {
 
     const Buf &data() const noexcept { return buf_; }
 
-    // Seals the stream with END, once. The writer is not written to after.
+    // The writer is not written to after.
     const Buf &finish() {
         if (!sealed_) {
             buf_.push_back(static_cast<std::uint8_t>(Tag::end));
@@ -102,7 +79,6 @@ template <class Buf> class Writer {
         return {};
     }
 
-    // Writes every value in turn; the first refusal stops it.
     Result<void> write_all(std::span<const Value> vals) {
         for (const Value &v : vals) {
             if (Result<void> r = write(v); !r) return r;
@@ -152,15 +128,12 @@ class Reader {
   public:
     explicit Reader(std::span<const std::uint8_t> buf) noexcept : buf_(buf) {}
 
-    // The next value, or none at END or at the input's end, which `end`
-    // then tells apart.
+    // None at END or at the input's end, which `end` tells apart.
     Result<std::optional<Value>> next() noexcept;
 
-    // How the sequence ended, once reading has reached its end: none while
-    // values remain, and none after a fault.
+    // None while values remain, and none after a fault.
     std::optional<End> end() const noexcept { return end_; }
 
-    // Every value until END, appended to `out`.
     template <class Vec> Result<void> read_all(Vec &out) {
         for (;;) {
             Result<std::optional<Value>> v = next();
@@ -171,8 +144,7 @@ class Reader {
     }
 
   private:
-    // Whether `n` more bytes are there, in 64 bits: a length read off the wire
-    // past 2^32 would otherwise wrap under the end rather than pass it.
+    // In 64 bits: a length past 2^32 off the wire would otherwise wrap.
     bool has(std::uint64_t n) const noexcept { return off_ + n <= buf_.size(); }
 
     template <class T> T le() noexcept {

@@ -1,19 +1,8 @@
 // pxl-geo-bake/deck/approach.rs
 
-//! A bridge's approaches: the way at the surface it is carried down to the
-//! ground on.
-//!
-//! OSM tags a bridge where the bridge is, and the embankment it climbs on as
-//! a way of its own. Arnis takes a way joined to a bridge's end as its ramp
-//! only where it is tagged an embankment or stands at `layer` 1 or over, and
-//! otherwise brings the deck down to the ground inside its own length.
-//! Overture carries no embankment, but it carries the layer (`level_rules`),
-//! so a ramp is the stretch of a joined way that stands at level 1 or over,
-//! from the bridge's end to where that stretch ends.
-//!
-//! A ramp is a piece of the structure whose far end is on the ground, and
-//! the solve grades the whole of it, as far as it leaves the ground (deck.rs
-//! `on_structure`).
+//! A bridge's approaches. Arnis takes a joined way as a ramp where it is an
+//! embankment or at `layer` 1 or over; Overture has no embankment, so a ramp
+//! is the joined stretch at level 1 or over.
 
 use std::collections::HashMap;
 
@@ -27,12 +16,10 @@ use crate::terrain::pipeline::overture::policy::{DECK_FLAGS, UNSEEN_FLAGS};
 use crate::terrain::pipeline::overture::width::{width_m, WayShape};
 use crate::wkb::wkb_to_geometries;
 
-/// How far an approach may turn from the structure it continues and still be
-/// its approach: a slip road leaving at an angle is another way.
+/// A slip road leaving at an angle is another way.
 const APPROACH_TURN_COS: f64 = 0.5; // 60°
 
-/// The ends of `pieces` only one of them reaches: where a structure meets
-/// the ground or stops, as (piece, its last end).
+/// Ends only one piece reaches.
 pub fn free_ends(pieces: &[Piece]) -> Vec<(usize, bool)> {
     let mut count: HashMap<(i64, i64), usize> = HashMap::new();
     for p in pieces {
@@ -49,14 +36,10 @@ pub fn free_ends(pieces: &[Piece]) -> Vec<(usize, bool)> {
         .collect()
 }
 
-/// Each end's ramp up to a deck: the way joined to it at the surface that
-/// carries on most nearly straight, over the stretch it climbs of it, as a
-/// piece of the structure.
+/// Each end's ramp: the joined way at the surface that carries on most nearly straight.
 pub fn approaches(url: &str, pieces: &[Piece], ends: &[(usize, bool)]) -> Result<Vec<Piece>, postgres::Error> {
     let asked: Vec<([f64; 2], &str)> = ends.iter().map(|&(i, last)| (end_of(&pieces[i], last).0, pieces[i].gers_id.as_str())).collect();
 
-    // The best candidate each end has: how straight it carries on, and the
-    // approach it makes.
     let mut best: HashMap<usize, (f64, Piece)> = HashMap::new();
     for (e, own_at, row) in source::connected_rows(url, &asked)? {
         let (i, last) = ends[e];

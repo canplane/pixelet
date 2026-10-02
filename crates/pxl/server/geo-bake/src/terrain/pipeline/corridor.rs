@@ -1,19 +1,9 @@
 // pxl-geo-bake/terrain/pipeline/corridor.rs
 
-//! The gap between two ways that are one strip of road on the ground: a
-//! sidewalk drawn apart from its road, the two carriageways of a road drawn
-//! as two (pxl-spec bake/model/feature.rs `Joins`).
-//!
-//! A gap a cell wide or wider is land the page can draw, and it stays the
-//! land it is: osm2streets, which builds street geometry from OSM, zips a
-//! sidewalk into its road with a buffer lane between them — the physical
-//! separation that made a mapper draw it apart, a planted buffer or a verge
-//! of a typical 2 m (osm2lanes `typical_lane_widths`). A gap narrower than a
-//! cell is a sliver the page cannot draw as what it is: left unpainted it
-//! comes out, cell centre by cell centre, as a broken thread of land between
-//! two ways, which folds a level up into a broken road. So it is paved as the
-//! way that joins across it — a collapse of what the raster cannot resolve,
-//! not a claim about the street.
+//! Paves the gap between two ways that are one strip of road (a sidewalk drawn
+//! apart from its road, two carriageways). A gap a cell or wider stays land,
+//! as osm2streets keeps a buffer; a narrower one would rasterize as a broken
+//! thread of land that folds into a broken road, so it is paved.
 
 use pxl_spec::bake::format::{CellConfig, GroundChannelKey};
 use pxl_spec::bake::model::feature::{Feature, FeatureShape, Joins};
@@ -21,24 +11,19 @@ use pxl_spec::bake::way;
 use pxl_spec::cell::cube::cube_types;
 use std::collections::HashMap;
 
-/// The widest gap paved, in the page's cells: under one.
 const GAP: f64 = 1.0;
 
-/// How far apart two ways' headings may be and still run side by side, as
-/// Arnis takes a dual carriageway's.
+/// As Arnis takes a dual carriageway's.
 const SIDE_HEADING_COS: f64 = 0.939_692_620_785_908_4; // cos 20°
 
-/// Grid cells the partner index is bucketed in, in page cells.
 const BUCKET: f64 = 16.0;
 
-/// A segment of a way a joiner may join, in page cells.
 struct Seg {
     feat: usize,
     a: [f64; 2],
     b: [f64; 2],
 }
 
-/// The paved gaps of a page's ways, as features to paint under them.
 pub fn corridor_fills(feats: &[Feature]) -> Vec<Feature> {
     let line = |f: &Feature| !f.shape.is_closed && !f.extra.is_unseen && !f.extra.is_deck && f.cell_cfg.is_some_and(|c| c.ch_key == GroundChannelKey::TRANSPORT);
     let gap = GAP;
@@ -62,8 +47,6 @@ pub fn corridor_fills(feats: &[Feature]) -> Vec<Feature> {
             Joins::Carriageway => g.extra.joins == Some(Joins::Carriageway) && g.cell_cfg == f.cell_cfg,
         };
         let reach = way::reach(f.computed.width);
-        // Each point a cell apart along the way, and where across the gap it
-        // is paved to, if anywhere.
         let mut strip: Vec<([f64; 2], [f64; 2])> = Vec::new();
         let flush = |strip: &mut Vec<([f64; 2], [f64; 2])>, out: &mut Vec<Feature>| {
             for pair in strip.windows(2) {
@@ -120,8 +103,6 @@ pub fn corridor_fills(feats: &[Feature]) -> Vec<Feature> {
     out
 }
 
-/// The quad between two points along a way and where each is paved to, as a
-/// feature that paints just under the way.
 fn fill(f: &Feature, cfg: CellConfig, quad: [[f64; 2]; 4]) -> Feature {
     let mut extra = f.extra;
     extra.joins = None;

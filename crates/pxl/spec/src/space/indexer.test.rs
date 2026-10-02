@@ -11,9 +11,7 @@ fn indexer_l3_idx_from_l3_idx_round_trip_on_all_three_axes() {
     assert_eq!(ivec::repr(FROM_L3_IDX(idx)), "-512:2048:1536");
 }
 
-/// The half has to track the span. A marker that snaps to a cell center with
-/// a fixed half is right at exactly one tier and wrong at every other, which
-/// is what happens the moment the thing being marked changes LOD.
+/// The half tracks the span; a fixed half is right at only one tier.
 #[test]
 fn indexer_span_center_s_half_is_half_of_the_span_at_every_span() {
     let mut p = Pvf3::default();
@@ -31,9 +29,7 @@ fn indexer_span_center_s_half_is_half_of_the_span_at_every_span() {
     }
 }
 
-/// A 1u cell's center is 0.5u, which is not an integer — so it lands in the
-/// fractional lane, and the packed-OR the named CENTER helpers use would drop
-/// it. This is the case that makes the parameterized form necessary.
+/// A 1u cell's center is 0.5u, in the fraction lane, which the packed-OR helpers would drop.
 #[test]
 fn indexer_span_center_at_1u_puts_the_half_in_the_fractional_lane() {
     let mut out = Pvf3::default();
@@ -45,10 +41,7 @@ fn indexer_span_center_at_1u_puts_the_half_in_the_fractional_lane() {
     assert_eq!(u, [10.5, -2.5, 7.5]);
 }
 
-/// The stability the whole thing rests on: where a badge sits must depend on
-/// the cell, never on which member of it was asked. Two points in one cell
-/// have to resolve to the same anchor, or the badge moves when the camera
-/// does.
+/// Two points in one cell resolve to the same anchor.
 #[test]
 fn indexer_every_point_in_a_cell_resolves_to_the_same_center() {
     let (mut pa, mut pb, mut oa, mut ob) = (Pvf3::default(), Pvf3::default(), Pvf3::default(), Pvf3::default());
@@ -56,7 +49,6 @@ fn indexer_every_point_in_a_cell_resolves_to_the_same_center() {
     let b = *SPAN_CENTER(&mut ob, projection::project(&mut pb, 120.8, 250.4, 60.7).i, 6);
     assert_eq!(a.i, b.i);
     assert_eq!(a.f, b.f);
-    // and it agrees with the named helper at the level it names
     let mut pc = Pvf3::default();
     assert_eq!(ivec::repr(a.i), ivec::repr(L2_CENTER(projection::project(&mut pc, 100.1, 200.9, 33.2).i)));
     assert_eq!(a.f, 0);

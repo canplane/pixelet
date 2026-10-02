@@ -1,101 +1,15 @@
 // xpute-core/wire/tlv.rs
 
-//! TLV: xpute's forward-only typed value sequence.
+//! TLV: a forward-only sequence of `[tag u8 | payload]`, closed by END, all
+//! little-endian. A tag fixes its payload's size; STR and BYTES lead with a
+//! u32 length. Unlike XTP there is no table or offset: read once, in order.
 //!
-//! What it is
-//! ----------
-//! A producer appends values in the order it has them; a consumer reads them
-//! in that order, once, and keeps nothing it has passed. Nothing in the format
-//! lets a reader go back to a value or jump ahead to one: there is no table,
-//! no offset and no tree. That is the line between it and XTP, which is a
-//! retained structured value — a whole packet kept and walked where it lies.
-//! A small argument list already whole in memory is as much a TLV as values
-//! arriving over time; what makes it one is that it is read forward and
-//! dropped.
+//! The reader reports how a sequence ended (`end`): closed by END, unclosed
+//! at an element boundary, or cut (EBADMSG, the values before it stand).
+//! Whether unclosed is acceptable is the caller's call.
 //!
-//! Wire Layout
-//! -----------
-//! Repeated sequence of:
-//!   [tag | payload]
-//! closed by:
-//!   [END]
-//!
-//! Tag domain:
-//! - u8 tag values
-//! - tag space is format-owned
-//! - END is a control tag, not a value payload kind
-//!
-//! Payload Layout
-//! --------------
-//! - BOOL  = [u8]
-//! - U8    = [u8]
-//! - I8    = [i8]
-//! - U16   = [u16]
-//! - I16   = [i16]
-//! - U32   = [u32]
-//! - I32   = [i32]
-//! - U64   = [u64]
-//! - I64   = [i64]
-//! - F32   = [f32]
-//! - F64   = [f64]
-//! - STR   = [u32 len][utf8 bytes]
-//! - BYTES = [u32 len][raw bytes]
-//!
-//! A tag is its payload's length as well as its type: a scalar carries no
-//! length of its own.
-//!
-//! Endianness
-//! ----------
-//! - All scalar payloads are little-endian.
-//!
-//! How a sequence ends
-//! -------------------
-//! The values before any point are readable on their own: a reader hands each
-//! one out as it is complete. Where reading stops is one of three facts, and
-//! the reader says which (`end`):
-//! - closed: END was read. Bytes after it are not read.
-//! - unclosed: the input ran out at an element's boundary, without END.
-//! - cut: the input ran out inside an element, or a tag is unknown —
-//!   EBADMSG, and the values before it stand.
-//!
-//! Which of the first two a sequence must end in is the user's: a message may
-//! require END, and a journal written until its writer died accepts an
-//! unclosed prefix. The reader reports; it does not decide.
-//!
-//! Reader / Writer Contract
-//! ------------------------
-//! - TlvWriter is append-only until finish(); write-after-finish is invalid.
-//! - finish() appends END exactly once.
-//! - The same values, each written by the same writer method, are the same
-//!   bytes. That is not one byte form per value: 1 is a U8, a U32 or an F64
-//!   as the writer chose, so bytes that must be equal for equal values — a
-//!   hash taken for an identity — need a schema that fixes each type.
-//!
-//! What it does not do yet
-//! -----------------------
-//! Each of these waits for a user that needs it, since designing it first
-//! would fix the wire before anything asked:
-//! - An unknown tag cannot be passed over, since its payload's length is the
-//!   tag's: two ends versioned apart need a tag that says its length class,
-//!   or an escape that carries one, before they talk TLV.
-//! - The reader takes its input whole. A consumer fed bytes cut anywhere —
-//!   a socket's reads — needs a reader fed in pieces that answers a value,
-//!   more needed, or an end.
-//! - A STR or BYTES is written with its length first, so a producer must
-//!   have the whole value before writing it. One that streams a value of a
-//!   size it does not know yet needs it in chunks, not a tree.
-//!
-//! Non-Goals
-//! ---------
-//! - No schema, field table, or offset index.
-//! - No nested container protocol in this base format.
-//! - No checksum/hash/compression/encryption inside this format.
-//! - No length of the whole sequence: a transport that frames its messages
-//!   frames them outside it.
-//!
-//! A value read back is a `TlvValue`, one variant per tag: the width that
-//! was written is the width that comes back, and `write_all` picks the
-//! writer from the variant.
+//! Equal values are equal bytes only under a fixed schema: 1 may be written
+//! as a U8, a U32 or an F64.
 
 use crate::status::errno::Errno;
 use crate::status::error::MarshalError;
@@ -105,21 +19,14 @@ const U16_SZ: u32 = size_of::<u16>() as u32;
 const U32_SZ: u32 = size_of::<u32>() as u32;
 const U64_SZ: u32 = size_of::<u64>() as u32;
 
-// ============ ABI ============
-
-// ---- Elements ----
-
-// TLV tag domain includes both value tags and control tags (e.g. END)
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-// The widths are the format's names and cannot be anything but `U8` and
-// `I16`, so the control tags are written the same way rather than the enum
-// carrying two styles at once.
+// The width tags are `U8`, `I16`, so the rest match them.
 #[allow(clippy::upper_case_acronyms)]
 enum Tag {
-    END = 0x00, // END is a stream terminator control tag, not a payload element kind.
+    END = 0x00,
 
-    BOOL = 0x01, // [u8 0|1]
+    BOOL = 0x01,
 
     U8 = 0x02,
     I8 = 0x03,
@@ -132,15 +39,13 @@ enum Tag {
     F32 = 0x0a,
     F64 = 0x0b,
 
-    STR = 0x10, // [u32 len][utf8 bytes]
+    STR = 0x10,
 
-    BYTES = 0x20, // [u32 len][raw bytes], opaque binary blob (nonce/token/key/u8 payload)
+    BYTES = 0x20,
 }
 
-/// Where a sequence stopped without a fault.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TlvEnd {
-    /// END was read.
     Closed,
     /// The input ran out at an element's boundary, without END.
     Unclosed,
@@ -162,12 +67,6 @@ pub enum TlvValue {
     Str(String),
     Bytes(Vec<u8>),
 }
-
-// ============ Tag I/O ============
-
-// ============ Writer ============
-
-// ---- Writer core ----
 
 pub struct TlvWriter {
     buf: Vec<u8>,
@@ -197,7 +96,7 @@ impl TlvWriter {
         &self.buf
     }
 
-    /// Seal stream by appending END. Writer must not be used after this.
+    /// Appends END once; any write after it fails.
     pub fn finish(&mut self) -> &[u8] {
         if !self.sealed {
             self.buf.push(Tag::END as u8);
@@ -212,8 +111,6 @@ impl TlvWriter {
         }
         Ok(())
     }
-
-    // ---- Primitive writers ----
 
     pub fn u8(&mut self, x: u8) -> Result<&mut Self, MarshalError> {
         self.check_unsealed()?;
@@ -272,8 +169,6 @@ impl TlvWriter {
         Ok(self)
     }
 
-    // ---- Ref writers ----
-
     pub fn str(&mut self, s: &str) -> Result<&mut Self, MarshalError> {
         self.check_unsealed()?;
         let data = s.as_bytes();
@@ -288,8 +183,6 @@ impl TlvWriter {
         self.buf.extend_from_slice(b);
         Ok(self)
     }
-
-    // ---- Convenience writers ----
 
     pub fn write_all(&mut self, vals: &[TlvValue]) -> Result<&mut Self, MarshalError> {
         for v in vals {
@@ -313,10 +206,6 @@ impl TlvWriter {
     }
 }
 
-// ============ Reader ============
-
-// ---- Reader core ----
-
 pub struct TlvReader<'a> {
     buf: &'a [u8],
     off: usize,
@@ -328,8 +217,7 @@ impl<'a> TlvReader<'a> {
         TlvReader { buf, off: 0, end: None }
     }
 
-    /// How the sequence ended, once reading has reached its end: none while
-    /// values remain, and none after a fault.
+    /// None while values remain, and after a fault.
     pub fn end(&self) -> Option<TlvEnd> {
         self.end
     }
@@ -340,7 +228,6 @@ impl<'a> TlvReader<'a> {
         self.buf[at..at + N].try_into().unwrap()
     }
 
-    /// Materialize the remaining stream into an array (until END).
     pub fn read_all(&mut self) -> Result<Vec<TlvValue>, MarshalError> {
         let mut out = Vec::new();
         while let Some(v) = self.next_value()? {
@@ -349,8 +236,6 @@ impl<'a> TlvReader<'a> {
         Ok(out)
     }
 
-    /// The iterator's step: the next element, or none at END or at the
-    /// input's end, which `end` then tells apart.
     pub fn next_value(&mut self) -> Result<Option<TlvValue>, MarshalError> {
         if self.end.is_some() {
             return Ok(None);
@@ -384,19 +269,14 @@ impl<'a> TlvReader<'a> {
         }))
     }
 
-    // ---- Reader bounds ----
-
     #[track_caller]
     fn need(&self, n: u32) -> Result<(), MarshalError> {
-        // In u64: `n` is a length read off the wire, and the sum past 2^32
-        // would wrap under the end rather than exceed it.
+        // In u64: a wire length near 2^32 would otherwise wrap under the end.
         if self.off as u64 + n as u64 > self.buf.len() as u64 {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
         Ok(())
     }
-
-    // ---- Primitive readers ----
 
     fn u8_of(&mut self) -> Result<u8, MarshalError> {
         self.need(U8_SZ)?;
@@ -443,8 +323,6 @@ impl<'a> TlvReader<'a> {
         self.need(U8_SZ)?;
         Ok(u8::from_le_bytes(self.take()) != 0)
     }
-
-    // ---- Ref readers ----
 
     fn str_of(&mut self) -> Result<String, MarshalError> {
         let len = self.u32_of()?;

@@ -17,9 +17,8 @@ constexpr std::size_t MIN = 12;
 constexpr std::size_t MAX = 20;
 constexpr std::size_t PAGE = std::size_t{1} << MIN;
 
-// A range over memory the test owns, so a block handed out can be written
-// through and read back — which is how an overlap shows itself. One a test,
-// made once and never given back: the allocator over a range outlives it.
+// Memory the test owns, so a block can be written and read back, which is how
+// an overlap shows.
 template <int Tag> struct TestRange {
     static constexpr std::size_t MIN_LOG2 = MIN;
     static constexpr std::size_t MAX_LOG2 = MAX;
@@ -41,9 +40,6 @@ bool all(const void *p, std::size_t n, std::uint8_t byte) {
 
 } // namespace
 
-// The one thing an allocator must never do: every live block is written with
-// a byte of its own, and every one still reads back after the blocks around it
-// have come and gone.
 XPUTE_TEST(buddy_what_was_written_in_a_block_is_still_there_after_its_neighbors_come_and_go) {
     using R = TestRange<0>;
     static BuddyMalloc<R> heap;
@@ -70,7 +66,6 @@ XPUTE_TEST(buddy_what_was_written_in_a_block_is_still_there_after_its_neighbors_
     for (auto &[p, size, byte] : kept) XPUTE_CHECK_EQ(all(p, size, byte), true, "a block was written over");
 }
 
-// Two halves of one block, both given back, are the block again.
 XPUTE_TEST(buddy_two_buddies_freed_are_the_block_they_came_from) {
     static BuddyMalloc<TestRange<1>> heap;
     void *a = heap.malloc(PAGE);
@@ -82,8 +77,6 @@ XPUTE_TEST(buddy_two_buddies_freed_are_the_block_they_came_from) {
     XPUTE_CHECK_EQ(heap.malloc(PAGE * 2), low, "the pair did not join");
 }
 
-// Past the range there is nothing to hand out, and saying so is all that may
-// happen.
 XPUTE_TEST(buddy_a_request_past_the_range_is_refused_and_leaves_what_is_live_alone) {
     static BuddyMalloc<TestRange<2>> heap;
     void *first = heap.malloc(PAGE);
@@ -98,8 +91,6 @@ XPUTE_TEST(buddy_a_request_past_the_range_is_refused_and_leaves_what_is_live_alo
     XPUTE_CHECK_EQ(all(first, PAGE, 0x5a), true, "a refusal wrote over a live block");
 }
 
-// What is given back is handed out again rather than the range being walked
-// further.
 XPUTE_TEST(buddy_what_is_freed_is_handed_out_again_rather_than_more_of_the_range) {
     static BuddyMalloc<TestRange<3>> heap;
     std::size_t size = std::size_t{1} << (MIN + 2);
@@ -137,8 +128,6 @@ XPUTE_TEST(slab_what_was_written_in_a_slot_is_still_there_after_its_neighbors_co
     for (auto &[p, size, byte] : kept) XPUTE_CHECK_EQ(all(p, size, byte), true, "a slot was written over");
 }
 
-// A run goes back to the pages when its last slot does, so what one class
-// gives back is a page every other class can have.
 XPUTE_TEST(slab_a_run_goes_back_to_the_pages_when_its_last_slot_does) {
     static SlabMalloc<TestRange<5>> heap;
     void *first = heap.alloc(24, 8);
@@ -151,8 +140,7 @@ XPUTE_TEST(slab_a_run_goes_back_to_the_pages_when_its_last_slot_does) {
         XPUTE_CHECK(p != nullptr);
         live.push_back(p);
     }
-    // The one that made a second run goes back first, leaving exactly the
-    // first run's slots.
+    // The one that made a second run goes back first.
     heap.dealloc(live.back(), 24, 8);
     live.pop_back();
     XPUTE_CHECK_EQ(heap.pages().live(), one_run, "the second run did not go back");
@@ -160,7 +148,6 @@ XPUTE_TEST(slab_a_run_goes_back_to_the_pages_when_its_last_slot_does) {
     XPUTE_CHECK_EQ(heap.pages().live(), std::size_t{0}, "the last slot of a run did not give the run back");
 }
 
-// A page or more is not carved at all.
 XPUTE_TEST(slab_a_request_of_a_page_or_more_is_the_page_allocator_s_own) {
     static SlabMalloc<TestRange<6>> heap;
     for (std::size_t size : {PAGE, PAGE + 1, PAGE * 4}) {
@@ -174,8 +161,6 @@ XPUTE_TEST(slab_a_request_of_a_page_or_more_is_the_page_allocator_s_own) {
     }
 }
 
-// A slot is inside a run, a run is borrowed from the pages, and both come
-// back to nothing.
 XPUTE_TEST(slab_what_is_out_in_slots_is_inside_the_runs_it_is_carved_from) {
     static SlabMalloc<TestRange<7>> heap;
     const std::size_t sizes[] = {16, 24, 64, 300, 1000, PAGE, PAGE * 3};

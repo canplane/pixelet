@@ -1,11 +1,8 @@
 // pxl-kernel/world/frame/stage.rs
 
-//! The kernel's side of a drawn frame: the stage written from the view
-//! (view.rs) and the settings, and what the view's renderer is handed for the
-//! frame (pxl-render's gpu/renderer.rs) — the draw list the scheduler left,
-//! the environment, the models and skins as they stand — with what it hands
-//! back: whether another turn is wanted, and what the frame cost, for the
-//! profiler. The renderer reads nothing of the kernel on its own.
+//! The kernel's side of a drawn frame: the stage written from the view and
+//! the settings, and everything the renderer is handed, since it reads
+//! nothing of the kernel on its own.
 
 use pxl_render::frame::stage::{stage_lane_mut, AO_STRENGTH, EDGE_STRENGTH, EDGE_WIDTH, STAGE_AT};
 use pxl_render::gpu::pass::decor::GROUPS;
@@ -33,14 +30,11 @@ use crate::world::chunk::stage::set_host_frame_stat;
 use crate::world::frame::resolution::resolution_observe;
 use crate::world::frame::view::{globe_anchor_local, view};
 
-/// Writes the frame's uniforms from the view and the settings as they stand,
-/// the world drawn at `resolution` device pixels to a CSS pixel.
 pub fn stage_write(resolution: f64) {
     let v = view();
     let settings = settings_store();
     let s = stage_lane_mut();
-    // The GPU is handed the eye's frame, where the draws' points are (the
-    // chunk stage's `Frame::eye`).
+    // The GPU gets the eye's frame, where the draws' points are.
     let (view_proj, camera) = v.eye_frame();
     s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].copy_from_slice(&camera);
     s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16].copy_from_slice(&v.proj);
@@ -54,11 +48,9 @@ pub fn stage_write(resolution: f64) {
     s[STAGE_AT::FOV] = v.fov;
     s[STAGE_AT::NEAR] = v.near;
     s[STAGE_AT::FAR] = v.far;
-    // The largest drawn cell per unit of distance: past a level's split
-    // distance its cells are drawn averaged 2 × 2, so a cell there is twice
-    // the level's over the distance, and half that just before the next
-    // split — at the quality the view is drawn at. For whoever has to
-    // tolerate a drawn cell's height — the badge occlusion test.
+    // Largest drawn cell per unit of distance, for the badge occlusion test:
+    // past a split distance cells are drawn 2 × 2, so twice the level's cell
+    // over the distance.
     s[STAGE_AT::LOD_CELL] = 2.0 / crate::world::quality::effective().tau().split_distance(0);
     s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { EDGE_STRENGTH } else { 0.0 };
     s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { AO_STRENGTH } else { 0.0 };
@@ -70,9 +62,6 @@ pub fn stage_write(resolution: f64) {
     s[STAGE_AT::RESOLUTION] = resolution;
 }
 
-/// The turn's draw: the stage's frame handed to the renderer with the
-/// scheduler's lists and what the frame's passes read, and what it reports
-/// taken back.
 pub fn stage_render() {
     let lists = kernel().sched.draw.take();
     let models = &kernel().sched.models;

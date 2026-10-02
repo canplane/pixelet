@@ -1,43 +1,10 @@
 // pxl-spec/bake/place_page.rs
 
-//! What the reverse-geocode bake writes: a dictionary of the places a
-//! country has, and one object per group of pages saying which of them each
-//! page is in.
-//!
-//! A label is the same for every page of a district, so a page of its own is
-//! the wrong unit to store one in: the set was 167,495 objects naming 3,426
-//! distinct places, each name spelled out where it appeared
-//! (issue/20260923-a-place-name-is-a-rank-and-an-id.md). A **group** is the
-//! page `GROUP_SHAMT` levels up — 16 leaves on a side, 256 of them — and it
-//! holds the labels its leaves take and an index a leaf, so a reader crossing
-//! a district fetches once rather than once a page.
-//!
-//! The **dictionary** holds the places the source names many pages by, once:
-//! each one's rank, its own name, and that name by language. It is fetched
-//! once and held, so a group carries numbers rather than names. A place the
-//! source names only a stretch of pages by is a group's own instead, so the
-//! dictionary is not the size of everything the source has ever named once:
-//! which places go where is the source's adapter's to decide, and a reader
-//! reads both the same way.
-//!
-//! A part is said to be an approximation where the source says so — a name
-//! for near the page rather than one it is in — which is a fact of the part,
-//! apart from where its name is kept.
-//!
-//! ```text
-//!   dictionary   the places many pages are named by, once
-//!   group        labels: [place, ...] each   what the pages under it are in
-//!                page[256] -> a label
-//!                the places only this group's pages are named by
-//! ```
-//!
-//! The bake writes from the owned `Named` and `PlaceGroup`; a reader opens
-//! a view over the packet where it lies and reads a name out of it without
-//! decoding the rest. A run of places is stored as a rank a place, the place
-//! its language names start at, and the names themselves — each set of
-//! strings one leaf of offsets and UTF-8 (XTP's STRS) rather than a node a
-//! string — so reaching the thousandth place in the dictionary is an index
-//! rather than a walk.
+//! The reverse-geocode bake's output: a dictionary of places named by many
+//! pages, fetched once, and one object per group of 16 × 16 leaf pages
+//! holding its labels, a label index per page and its own local places.
+//! Readers view the packet in place; names are XTP string leaves so a
+//! place is reached by index.
 
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
@@ -50,46 +17,37 @@ use crate::space::pvf3::ivec::IVec;
 use crate::space::pyramid::PAGE_ZOOM;
 use xpute_core::status::bug::OrBug;
 
-/// The one object the dictionary is under, beside the groups.
 pub const DICT_OBJECT: &str = "_dict";
 
-/// Levels a group is above a page: 16 pages on a side.
+/// 16 pages on a side.
 pub const GROUP_SHAMT: u32 = 4;
 
-/// The zoom a group is named at: `GROUP_SHAMT` coarser than a page's.
 pub const GROUP_ZOOM: u32 = PAGE_ZOOM - GROUP_SHAMT;
 
-/// A group's name in its bake (bake/quadkey.rs).
 pub fn group_name(group_idx: IVec) -> Quadkey {
     quadkey_of(GROUP_ZOOM, group_idx)
 }
-/// Pages under one group.
 pub const GROUP_PAGES: usize = 1 << (2 * GROUP_SHAMT);
 
-/// A leaf's place among its group's, from the low bits of its page index.
+/// From the low bits of its page index.
 pub fn leaf_slot(x: i64, y: i64) -> usize {
     let mask = (1i64 << GROUP_SHAMT) - 1;
     ((y & mask) << GROUP_SHAMT | (x & mask)) as usize
 }
 
-/// A place a label names: what it is called and where it sits.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Named {
     pub rank: PlaceRank,
     pub name: String,
-    /// The same name by language tag, flattened for the wire: `(tag, name)`.
+    /// `(tag, name)` pairs.
     pub names: Vec<(String, String)>,
 }
 
-/// The lanes of a run of places, which the caller holds while the branch
-/// that borrows them is built.
 struct PlaceLanes<'a> {
     ranks: Vec<u8>,
-    /// Where each place's language names start among the flattened pairs,
-    /// one longer than the places so the last one's end is there too.
+    /// Where each place's language names start among the pairs; one longer than the places.
     starts: Vec<u32>,
     names: Vec<&'a str>,
-    /// `(tag, name)` pairs, flattened.
     langs: Vec<&'a str>,
 }
 
@@ -114,8 +72,7 @@ fn write_places<'a>(b: &mut BranchViewImpl<'a>, lanes: &'a PlaceLanes<'a>) {
     b.strs(Some(&lanes.names)).strs(Some(&lanes.langs));
 }
 
-/// A run of places read where it lies. The dictionary is one of these and a
-/// group's own places are another, so the two are written and read one way.
+/// A run of places read where it lies: the dictionary or a group's locals.
 #[derive(Clone)]
 pub struct PlacesView<'a> {
     ranks: &'a [u8],
@@ -149,8 +106,6 @@ impl<'a> PlacesView<'a> {
         self.ranks.is_empty()
     }
 
-    /// The place stored at `i`, or none where the packet has no readable one
-    /// there.
     pub fn at(&self, i: u32) -> Option<PlaceRef<'a>> {
         Some(PlaceRef {
             rank: PlaceRank::of(*self.ranks.get(i as usize)?)?,
@@ -163,15 +118,12 @@ impl<'a> PlacesView<'a> {
     }
 }
 
-/// One part of a label, read out of the packet it was stored in.
 #[derive(Clone)]
 pub struct PlaceRef<'a> {
     pub rank: PlaceRank,
-    /// The source's own name for the place, in whatever language it holds
-    /// it in.
+    /// The source's own name, in whatever language it holds.
     pub name: &'a str,
-    /// The part came from a place near the page rather than one containing
-    /// it.
+    /// From a place near the page rather than one containing it.
     pub approx: bool,
     langs: Strs<'a>,
     from: u32,
@@ -179,20 +131,18 @@ pub struct PlaceRef<'a> {
 }
 
 impl<'a> PlaceRef<'a> {
-    /// Every language the source had a name in, as `(tag, name)`.
     pub fn languages(&self) -> impl Iterator<Item = (&'a str, &'a str)> {
         let langs = self.langs;
         (self.from..self.to).filter_map(move |i| Some((langs.get(i * 2)?, langs.get(i * 2 + 1)?)))
     }
 
-    /// The name in `tag`'s language, or the source's own where it has none
-    /// — a name a reader cannot read beats no name at all.
+    /// Falls back to the source's own name: an unreadable name beats none.
     pub fn in_language(&self, tag: &str) -> &'a str {
         self.languages().find(|&(stored, _)| stored == tag).map_or(self.name, |(_, name)| name)
     }
 }
 
-/// The dictionary's places, in the order a group's numbers name them.
+/// In the order a group's numbers name them.
 pub fn encode_place_dict(places: &[Named]) -> Result<Vec<u8>, MarshalError> {
     let lanes = place_lanes(places);
     let mut t: TreeView<'_> = TreeView::new();
@@ -200,34 +150,25 @@ pub fn encode_place_dict(places: &[Named]) -> Result<Vec<u8>, MarshalError> {
     encoder().encode(&t, TreeEncoderOptions::default())
 }
 
-/// The dictionary read where it lies.
 pub fn open_place_dict(pkt: &[u8]) -> Result<PlacesView<'_>, MarshalError> {
     read_places(&TreeReader::new(pkt)?.read_branch()?, 0)
 }
 
-/// One group: the labels its pages take, and which of them each page is in.
-///
-/// A label is a place read broad to narrow, by number: a place of the
-/// dictionary's, or with `LOCAL` set one of the group's own, and with
-/// `APPROX` set a part the source gives as an approximation — so a label is a
-/// plain run of numbers with nothing beside it.
+/// One group. A label is a broad-to-narrow run of place numbers, each a
+/// dictionary index or, with `LOCAL`, a local one; `APPROX` marks an
+/// approximate part.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlaceGroup {
-    /// Broad-to-narrow numbers, a label each.
     pub labels: Vec<Vec<u32>>,
-    /// The label each of the group's pages takes, or `NO_LABEL`.
+    /// Per page; `NO_LABEL` outside every known place.
     pub pages: Vec<u16>,
-    /// The places only this group's pages are named by.
     pub locals: Vec<Named>,
 }
 
-/// What a page outside every place the source knows takes.
 pub const NO_LABEL: u16 = u16::MAX;
-/// On a number: it names one of the group's own places rather than one of
-/// the dictionary's. The high bit, which a group baked before `APPROX` was a
-/// bit of its own set for every such part, so it reads as it was written.
+/// Marks a group-local place. The high bit, which groups baked before
+/// `APPROX` existed also set on every local.
 pub const LOCAL: u32 = 1 << 31;
-/// On a number: the source gives the part as an approximation.
 pub const APPROX: u32 = 1 << 30;
 
 pub fn encode_place_group(group: &PlaceGroup) -> Result<Vec<u8>, MarshalError> {
@@ -248,7 +189,6 @@ pub fn encode_place_group(group: &PlaceGroup) -> Result<Vec<u8>, MarshalError> {
     encoder().encode(&t, TreeEncoderOptions::default())
 }
 
-/// One group read where it lies.
 #[derive(Clone)]
 pub struct PlaceGroupView<'a> {
     starts: &'a [u32],
@@ -275,7 +215,6 @@ pub fn open_place_group(pkt: &[u8]) -> Result<PlaceGroupView<'_>, MarshalError> 
 }
 
 impl<'a> PlaceGroupView<'a> {
-    /// The numbers naming the place page `slot` is in.
     pub fn label_of(&self, slot: usize) -> Option<&'a [u32]> {
         let label = *self.pages.get(slot)?;
         if label == NO_LABEL {
@@ -286,8 +225,7 @@ impl<'a> PlaceGroupView<'a> {
         Some(&self.flat[from..to])
     }
 
-    /// The place page `slot` is in, broad to narrow, read against the
-    /// dictionary.
+    /// Broad to narrow, read against the dictionary.
     pub fn place_of(&self, slot: usize, dict: &PlacesView<'a>) -> Option<impl Iterator<Item = PlaceRef<'a>>> {
         let label = self.label_of(slot)?;
         let (locals, dict) = (self.locals.clone(), dict.clone());

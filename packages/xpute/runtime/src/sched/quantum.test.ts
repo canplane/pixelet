@@ -6,8 +6,6 @@ import { FRAME_WINDOW, type Grant, NO_WAKE, Quantum, type QuantumPolicy } from "
 
 const POLICY: QuantumPolicy = { margin_share: 0.15, batch_frames: 2, settle_ms: 150 };
 
-/** A whole window of turns on what each grant said, so what came before is
- * gone; the grant after them. */
 function fill(q: Quantum, delta_s: number, turn_ms: number, wake_ms: number): Grant {
   for (let i = 0; i < FRAME_WINDOW; i++) q.observe(delta_s, turn_ms, q.grant(0), wake_ms);
   return q.grant(0);

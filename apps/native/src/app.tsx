@@ -9,8 +9,6 @@ import MapPage from "@/page/map-page.tsx";
 
 bootstrapApp();
 
-/** The map, as the web's one route shows it. A device has no URL to route
- * by, and the dev routes are the web's. */
 export function App() {
   return (
     <StrictMode>

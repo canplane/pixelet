@@ -1,75 +1,32 @@
 // pxl-geo-bake/deck/profile.rs
 
-//! A structure's deck profile, solved on the graph of its points.
-//!
-//! Three things decide a deck's top at a point, all along the structure and
-//! never across it:
-//!
-//! - **The line between where it meets the ground.** A bridge is carried
-//!   from end to end, so where nothing is under it, it runs straight between
-//!   its ends' ground — over a valley as much as over a flat. On a single
-//!   span that is the straight line; where spans branch, each stretch is as
-//!   gentle as the ends around it allow (`line`). Only the
-//!   carried part has a line: an approach is a way on the ground, and its
-//!   ends are where it joins the bridge, so the line never runs from one
-//!   approach's far end to the other's across whatever lies between.
-//! - **What it has to clear.** Each point asks a height of its own: the
-//!   ground under it, and over a road, a river or a lower deck the clearance
-//!   that asks (clearance.rs). A clearance raises the deck about it, falling
-//!   off at the steepest a deck climbs.
-//! - **Coming down again.** A clearance is held to what a deck could climb to
-//!   from every end it has, so it never leaves a step at an end.
-//!
-//! The top is the higher of the line and the raised clearances: on an
-//! approach, where there is no line, its ground or the deck coming down to
-//! it, whichever is higher. A structure that reaches the ground nowhere — a
-//! loop of joints — has no line, and is its clearances.
-//!
-//! So the top is never steeper than `MAX_SLOPE` along the carried part: the
-//! raised clearances are no steeper by how they spread, the line no steeper
-//! than its ends make it, and the higher of two such is no steeper either —
-//! except on a stretch between two ends whose own ground is steeper than
-//! that apart, which no deck could meet, and which the profile marks as
-//! forced (`Profile::forced`) rather than leaving it to look like the
-//! solver's.
+//! A structure's deck profile on the graph of its points: the higher of the
+//! line between its ground ends and each clearance raised at `MAX_SLOPE`, the
+//! clearances capped so the deck can come down to every end. Only where two
+//! ends' own ground is steeper than `MAX_SLOPE` is a step left, marked forced.
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
 use crate::deck::clearance::MAX_SLOPE;
 
-/// What one structure asks, by point.
 pub struct Problem<'a> {
     pub adj: &'a [Vec<(u32, f64)>],
-    /// The top each point needs at least, in metres: its ground, or what
-    /// passes under it with its clearance.
     pub need: &'a [f64],
-    /// Points where the deck meets the ground, and the ground there.
     pub ends: &'a [(u32, f64)],
-    /// The ground at each point, in metres.
     pub ground: &'a [f64],
-    /// Whether each point is carried — a bridge's or a tunnel's own — rather
-    /// than on an approach.
     pub carried: &'a [bool],
 }
 
-/// A structure's tops.
 pub struct Profile {
-    /// Each point's top, in metres.
     pub top: Vec<f64>,
-    /// Each point the line had to make steeper than `MAX_SLOPE`, because
-    /// the ends it runs between are steeper than that apart.
     pub forced: Vec<bool>,
 }
 
-/// Each point's top.
 pub fn solve(p: &Problem) -> Profile {
     let n = p.need.len();
     // The highest each point can be and still come down to every end.
     let cap = spread(p.adj, p.ends.iter().copied(), |v, d| v + MAX_SLOPE * d, Ordering::Less);
-    // Each clearance the carried part asks, held to the cap, and the deck
-    // raised about it. An approach asks only its own ground, which raises
-    // nothing past it.
     let held = (0..n).filter(|&v| p.carried[v]).map(|v| (v as u32, p.need[v].min(cap[v])));
     let raised = spread(p.adj, held, |v, d| v - MAX_SLOPE * d, Ordering::Greater);
     let (line, slope) = between_ends(p);
@@ -78,9 +35,6 @@ pub fn solve(p: &Problem) -> Profile {
     Profile { top, forced }
 }
 
-/// The line between the carried part's ends, at each carried point, and how
-/// steep the stretch is that set it. Its ends are the structure's own ends
-/// and the points where it joins an approach.
 fn between_ends(p: &Problem) -> (Vec<f64>, Vec<f64>) {
     let n = p.need.len();
     let carried: Vec<Vec<(u32, f64)>> = (0..n)
@@ -99,20 +53,10 @@ fn between_ends(p: &Problem) -> (Vec<f64>, Vec<f64>) {
     line(&carried, &ends)
 }
 
-/// The line through `ends` over a graph, and at each point how steep the
-/// stretch is that set it: the steepest stretch first, then the steepest of
-/// what is left. Of every path between two points already set that passes
-/// only points not yet set, the steepest is laid straight and set, and each
-/// part of the graph it leaves is done the same way on its own, until every
-/// point an end reaches is set; a part that touches one set point only is
-/// that point's height. This is the line that is as gentle as its ends allow
-/// on every stretch, not only on the steepest — the absolutely minimizing
-/// Lipschitz extension, by the steepest-path algorithm of Lazarus, Loeb,
-/// Propp and Ullman as Kyng, Rao, Sachdeva and Spielman put it to graphs —
-/// so on a single span it is the straight line, where spans meet the
-/// junction stands where the steepest pair of ends puts it, and a pair of
-/// ends steeper than a deck climbs makes only the stretch between them
-/// steep. A point no end reaches has none.
+/// The absolutely minimizing Lipschitz extension through `ends`, by the
+/// steepest-path algorithm (Lazarus et al., as Kyng, Rao, Sachdeva and
+/// Spielman put it to graphs): the steepest path between set points is laid
+/// straight, repeatedly. Also returns each point's slope.
 fn line(adj: &[Vec<(u32, f64)>], ends: &[(u32, f64)]) -> (Vec<f64>, Vec<f64>) {
     let n = adj.len();
     let mut height: Vec<Option<f64>> = vec![None; n];
@@ -121,8 +65,6 @@ fn line(adj: &[Vec<(u32, f64)>], ends: &[(u32, f64)]) -> (Vec<f64>, Vec<f64>) {
         height[e as usize] = Some(h);
     }
     loop {
-        // The steepest path between two set points through unset ones, from
-        // each set point that has an unset neighbour.
         let mut best: Option<(f64, Vec<u32>)> = None;
         for a in 0..n {
             let Some(ha) = height[a] else { continue };
@@ -146,7 +88,6 @@ fn line(adj: &[Vec<(u32, f64)>], ends: &[(u32, f64)]) -> (Vec<f64>, Vec<f64>) {
             }
         }
         let Some((s, path)) = best else { break };
-        // Laid straight between its two set ends, by distance along it.
         let (hb, ha) = (height[path[0] as usize].unwrap(), height[*path.last().unwrap() as usize].unwrap());
         let along: Vec<f64> = path
             .windows(2)
@@ -161,7 +102,7 @@ fn line(adj: &[Vec<(u32, f64)>], ends: &[(u32, f64)]) -> (Vec<f64>, Vec<f64>) {
             slope[v as usize] = s;
         }
     }
-    // What is left touches one set point at most: it is that point's height.
+    // What is left touches one set point at most: it takes that point's height.
     let mut queue: Vec<u32> = (0..n as u32).filter(|&v| height[v as usize].is_some()).collect();
     while let Some(v) = queue.pop() {
         for &(w, _) in &adj[v as usize] {
@@ -174,9 +115,6 @@ fn line(adj: &[Vec<(u32, f64)>], ends: &[(u32, f64)]) -> (Vec<f64>, Vec<f64>) {
     (height.into_iter().map(|h| h.unwrap_or(f64::NEG_INFINITY)).collect(), slope)
 }
 
-/// Distances from set point `a` to every point, over unset points only — a
-/// set point is reached but not passed through — and each point's
-/// predecessor on the way.
 fn through_unset(adj: &[Vec<(u32, f64)>], height: &[Option<f64>], a: u32) -> (Vec<Option<f64>>, Vec<u32>) {
     let n = adj.len();
     let mut dist = vec![None; n];
@@ -208,9 +146,6 @@ fn through_unset(adj: &[Vec<(u32, f64)>], height: &[Option<f64>], a: u32) -> (Ve
     (dist, from)
 }
 
-/// A value spread from `sources` over the graph by `along` per metre: each
-/// point the best — least for `Less`, greatest for `Greater` — of what any
-/// source reaches it with. Dijkstra, best first.
 fn spread(adj: &[Vec<(u32, f64)>], sources: impl IntoIterator<Item = (u32, f64)>, along: impl Fn(f64, f64) -> f64, best: Ordering) -> Vec<f64> {
     let worst = if best == Ordering::Less { f64::INFINITY } else { f64::NEG_INFINITY };
     let mut value = vec![worst; adj.len()];
@@ -236,7 +171,6 @@ fn spread(adj: &[Vec<(u32, f64)>], sources: impl IntoIterator<Item = (u32, f64)>
     value
 }
 
-/// A heap entry whose best value pops first.
 struct Entry {
     value: f64,
     node: u32,

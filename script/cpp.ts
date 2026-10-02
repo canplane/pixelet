@@ -1,23 +1,9 @@
 #!/usr/bin/env -S deno run -A
-// Builds xpute's C++ (cpp/xpute/) with the platform's compiler, as the other
-// two languages are built with their own tools: nothing of it goes through
-// Cargo, since the C++ is a third implementation beside the Rust and not a
-// part of it.
+// Builds xpute's C++ with the platform's compiler (`$CXX` or `c++`), and
+// the wasm guest with the WASI SDK's clang (`$WASI_SDK_PATH` or
+// /opt/wasi-sdk). Output goes under target/cpp/.
 //
-//   ./script/cpp.ts test    the tests, built and run (deno task test:cpp)
-//   ./script/cpp.ts check   every file compiled, warnings as errors
-//                           (deno task check:cpp)
-//   ./script/cpp.ts guest   the conformance guest, as the shared library
-//                           the host opens (packages/xpute/conformance/)
-//   ./script/cpp.ts wasm    the conformance guest, as the WebAssembly module
-//                           the host instantiates
-//
-// C++20 with exceptions and RTTI off, as AGENTS.md says a guest is written.
-// The compiler is `$CXX`, or `c++`: whichever the platform has, since what
-// the code asks of one is the language and not a vendor. The module is built
-// with the WASI SDK's clang, at `$WASI_SDK_PATH` or /opt/wasi-sdk, for its
-// linker and its libc++; the guest calls nothing of an operating system, so
-// it imports nothing of WASI. Output goes under target/cpp/.
+//   ./script/cpp.ts test | check | guest | wasm
 
 import { dirname, fromFileUrl, join, relative } from "@std/path";
 
@@ -26,16 +12,10 @@ const TREE = join(ROOT, "cpp/xpute");
 const OUT = join(ROOT, "target/cpp");
 const CXX = Deno.env.get("CXX") ?? "c++";
 const WASI_CXX = join(Deno.env.get("WASI_SDK_PATH") ?? "/opt/wasi-sdk", "bin/clang++");
-// `-ffp-contract=off`: a compiler may otherwise fuse `a + b * c` into one
-// fused multiply-add, which rounds once where the source rounds twice. Rust
-// and JavaScript never fuse, so a double computed here would stop being the
-// bits the other two compute — `lerp` is not, against
-// golden/math/scalar.tsv, with contraction on.
+// `-ffp-contract=off`: a fused multiply-add rounds once where Rust and JS
+// round twice; `lerp` fails golden/math/scalar.tsv with contraction on.
 const FLAGS = ["-std=c++20", "-fno-exceptions", "-fno-rtti", "-ffp-contract=off", "-Wall", "-Wextra", "-Werror", "-g"];
-// The module's memory is the host's, imported as a page's is, and its stack
-// is said rather than left to a default: 1 MiB, the Rust build's number
-// (crates/xpute/conformance/build.rs). What lies past the stack and the
-// linker's data is the guest's range, so neither number reaches a host.
+// 1 MiB, the Rust build's number.
 const STACK_BYTES = 1 << 20;
 const WASM_LINK = [
   "--target=wasm32-wasip1",
@@ -48,7 +28,6 @@ const WASM_LINK = [
   "-Wl,--export=xpute_conformance_interrupt",
 ];
 
-/** Every `.cpp` under the tree, by its path from the root. */
 function sources(dir: string): string[] {
   const out: string[] = [];
   for (const e of Deno.readDirSync(dir)) {
@@ -59,8 +38,6 @@ function sources(dir: string): string[] {
   return out.sort();
 }
 
-/** A test's own file, or the harness the tests run in: neither is part of a
- * guest. */
 function testOnly(path: string): boolean {
   return path.endsWith(".test.cpp") || path === "cpp/xpute/core/test.cpp" || path === "cpp/xpute/core/golden.cpp";
 }
@@ -70,7 +47,6 @@ async function run(cmd: string, args: string[]): Promise<void> {
   if (!out.success) Deno.exit(out.code || 1);
 }
 
-/** Compiles `files` with `cxx` to objects under `dir`, a few at a time. */
 async function compile(cxx: string, files: string[], dir: string, extra: string[]): Promise<string[]> {
   await Deno.mkdir(dir, { recursive: true });
   const objects = files.map((f) => join(dir, f.replaceAll("/", "__") + ".o"));

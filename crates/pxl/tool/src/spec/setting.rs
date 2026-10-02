@@ -1,16 +1,8 @@
 // pxl-tool/spec/setting.rs
 
-//! The settings. A setting is numbered by its place in SETTINGS, and that
-//! number is what crosses and what the kernel holds; its name is storage's
-//! and the sheet's. The kernel gets the settings as one struct of typed
-//! fields, with the number's reading and writing beside it, so nothing past
-//! the store names a setting by text. A `dev` setting's name, and its
-//! options' names, are under the kernel's `dev` feature: a module built
-//! without it holds the setting at its default and carries none of its
-//! words. The shell gets the rows the sheet draws, and the same rows without
-//! the `dev` ones for a production bundle to carry in their place: a filter
-//! on the whole table at run time leaves every name in the artifact, and a
-//! literal the build does not read is one the bundler drops.
+//! The settings, numbered by position in SETTINGS. A `dev` setting's names are
+//! behind the kernel's `dev` feature, and the shell gets a separate production
+//! table so the bundler drops them.
 
 use super::data::ts_literal;
 use super::{casing_note, enum_name, file, js_num, line_comments, pascal, read, rs_doc, rs_ident, Node, Output};
@@ -37,7 +29,6 @@ impl Setting<'_> {
     }
 }
 
-/// A list the settings name, such as a choice's options.
 struct List<'a> {
     name: &'a str,
     values: Vec<String>,
@@ -69,7 +60,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         }
     }
 
-    // ---- Rust ----
     let mut rs = vec![
         "// pxl-kernel/shell/setting/schema.spec.rs".to_string(),
         "//".into(),
@@ -289,7 +279,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     }
     rs.extend(["            _ => return false,", "        }", "        true", "    }", "}"].map(String::from));
 
-    // ---- TypeScript ----
     let row = |s: &Setting, i: usize| -> Result<Node, String> {
         let mut out: Vec<(String, Node)> = vec![(
             "key".to_string(),

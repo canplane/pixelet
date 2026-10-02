@@ -1,13 +1,4 @@
 // pxl-kernel/control/camera/controller.test.rs
-//
-// The camera is an eye and a look, and the map center is derived from it:
-//
-// - the map center is the eye pushed the radius along the look, the eye
-//   itself first person;
-// - a change of person leaves the map center where it is;
-// - a pinch keeps no debt past a limit;
-// - the look's coordinates hold over their whole domain: every tilt a
-//   rotation, and at either pole every heading the one direction.
 
 use super::*;
 use crate::control::camera::config::camera_cfg;
@@ -31,15 +22,13 @@ fn near(a: V3, b: V3, tol: f64) -> bool {
     (0..3).all(|k| (a[k] - b[k]).abs() <= tol * a[k].abs().max(1.0))
 }
 
-/// The controllers back to third person, as every test leaves them.
 fn third_person() {
     tracked_end();
     controllers().base = CameraMode::orbit;
     settings_store().camera_mode = CameraMode::orbit;
 }
 
-/// The map center is the eye pushed the radius along the look: the orbit's
-/// distance third person, none first.
+/// The orbit's distance third person, none first.
 #[test]
 fn the_map_center_is_the_eye_pushed_the_radius_along_the_look() {
     let _g = serial();
@@ -56,18 +45,14 @@ fn the_map_center_is_the_eye_pushed_the_radius_along_the_look() {
     }
 }
 
-/// The map center is the character's place, and a change of person moves
-/// the camera about it and never it (`take_mode`): third person to first
-/// and back, twice, it stays where it was; a move under way in the one is
-/// not carried into the other; and a change asked while a tracker holds the
-/// pose is not taken until it lets go.
+/// A change of person moves the camera about the map center, never the
+/// center; under a tracker it waits until the tracker lets go.
 #[test]
 fn a_change_of_person_leaves_the_map_center() {
     let _g = serial();
     third_person();
-    // A canonical point keeps its fraction in 256ths of a unit, so the first
-    // change lands the map center within one of them; every change after
-    // keeps it exactly there, so round trips do not drift.
+    // A canonical point keeps 256ths of a unit: the first change lands within
+    // one, and every later change keeps it exactly there.
     let near = |a: V3, b: V3, tol: f64| (0..3).all(|k| (a[k] - b[k]).abs() <= tol);
     let mut rng = Rng(0xc0de);
     for n in 0..100 {
@@ -103,12 +88,7 @@ fn a_change_of_person_leaves_the_map_center() {
     third_person();
 }
 
-/// A pinch is the fingers' spread against where it began, and keeps no
-/// debt: brought back untouched by a limit it asks the distance it began
-/// at; driven past one, the share refused is gone, and the first closing of
-/// the fingers zooms back out from where the limit held it. The ground has
-/// no say here — the collision set to pass through — so the limits are the
-/// distance's own.
+/// Collision set to pass through, so the limits are the distance's own.
 #[test]
 fn a_pinch_keeps_no_debt() {
     let _g = serial();
@@ -130,9 +110,6 @@ fn a_pinch_keeps_no_debt() {
     third_person();
 }
 
-/// A look tilts over the whole of its domain: at every tilt, straight down
-/// to straight up, the camera's turn is a rotation, it looks the way its
-/// heading and tilt say, and nothing in it comes apart.
 #[test]
 fn a_look_tilts_over_its_whole_domain() {
     for n in 0..=360 {
@@ -158,9 +135,7 @@ fn a_look_tilts_over_its_whole_domain() {
     }
 }
 
-/// At either pole every heading names the one direction — spherical
-/// coordinates' own degeneracy — and the camera's turn there is still a
-/// rotation, near the poles and on them.
+/// Spherical coordinates' own degeneracy: the turn is still a rotation there.
 #[test]
 fn at_a_pole_every_heading_looks_the_same_way() {
     let pi = core::f64::consts::PI;

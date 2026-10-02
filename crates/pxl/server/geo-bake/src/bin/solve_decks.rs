@@ -1,9 +1,7 @@
 // pxl-geo-bake/bin/solve_decks.rs
 
-//! Every deck's heights, solved over the whole geo DB and written to
-//! `overture_deck` (pxl-geo-bake deck.rs), which the terrain bake reads. It
-//! runs after the transportation ingest and before a terrain bake, and again
-//! whenever either the ingest or the solve changes.
+//! Every deck's heights, solved over the whole geo DB into `overture_deck`.
+//! Rerun after the transportation ingest or a solve change.
 
 use std::time::Instant;
 

@@ -1,24 +1,13 @@
 // pxl-geo-bake/bin/rekey_tiles.rs
 
-//! Objects renamed onto their quadkeys (pxl-geo-bake page/rekey.rs), in the
-//! two places a rename is needed.
-//!
-//! **What is already published**, renamed inside the bucket. A rename there is
-//! a server-side copy, so the bytes never leave R2:
+//! Objects renamed onto their quadkeys (page/rekey.rs).
 //!
 //!   s5cmd --endpoint-url $R2 ls 's3://pixelet-tiles/terrain/v5/*' \
 //!     | awk '{print $NF}' \
 //!     | rekey_tiles emit --bucket pixelet-tiles --from terrain/v5 --to terrain/v6 \
 //!     | s5cmd --endpoint-url $R2 run
 //!
-//! **A fresh pyramid bake**, terrain or POI, whose disk keeps
-//! `<level>/<page index>` because the bake redoes and resumes a level by its
-//! directory. The tree to upload is hard links, so it costs no bytes:
-//!
 //!   rekey_tiles link --bake terrain --from ./out/terrain/v6 --to ./out/terrain/v6.bucket
-//!
-//! Geocode needs neither: it keeps no level directories, so its bake writes
-//! the bucket's name directly.
 
 use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
@@ -27,11 +16,8 @@ use std::path::{Path, PathBuf};
 use pxl_geo_bake::cli::Flags;
 use pxl_geo_bake::page::rekey::Bake;
 
-/// What the bake leaves beside an object for its own use and the bucket never
-/// holds.
 const LOCAL_ONLY: [&str; 2] = [".part", ".empty"];
 
-/// A subcommand's flags, every one `--name value`, by name.
 struct Named(HashMap<String, String>);
 
 impl Named {
@@ -49,7 +35,6 @@ impl Named {
     }
 }
 
-/// A key a line in, an `s5cmd` copy a line out.
 fn emit(flags: &Named) -> Result<(), String> {
     let bucket = flags.get("--bucket")?;
     let from = flags.get("--from")?.trim_matches('/').to_string();
@@ -75,7 +60,6 @@ fn emit(flags: &Named) -> Result<(), String> {
     Ok(())
 }
 
-/// Every object under `dir`, as the name the bake gave it relative to `dir`.
 fn objects(dir: &Path, under: &str, out: &mut Vec<String>) -> Result<(), String> {
     for entry in std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))? {
         let entry = entry.map_err(|e| e.to_string())?;
@@ -91,7 +75,6 @@ fn objects(dir: &Path, under: &str, out: &mut Vec<String>) -> Result<(), String>
     Ok(())
 }
 
-/// A tree of hard links under the names the bucket serves.
 fn link(flags: &Named) -> Result<(), String> {
     let bake = Bake::of(&flags.get("--bake")?)?;
     let from = PathBuf::from(flags.get("--from")?);

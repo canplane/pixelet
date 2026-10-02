@@ -6,7 +6,7 @@ use super::*;
 
 const GOLDEN: &str = include_str!("../../golden/bake/format.tsv");
 
-/// xorshift64: a page's lanes the same on every run.
+/// xorshift64, so a page's lanes are the same on every run.
 struct Rng(u64);
 
 impl Rng {
@@ -18,8 +18,7 @@ impl Rng {
     }
 }
 
-/// A page of lanes drawn from `seed`: the ground's words and the heights
-/// anything, and each index cell a lowest under its highest.
+/// Random lanes, each index cell's lowest under its highest.
 fn page(seed: u64) -> Terrain {
     let mut rng = Rng(seed);
     let ele: Vec<i16> = (0..ELE_LANE).map(|_| rng.next() as i16).collect();
@@ -43,7 +42,6 @@ fn page(seed: u64) -> Terrain {
     }
 }
 
-/// A record's room, as the kernel's fixed range would give it.
 fn room() -> PageRoom {
     PageRoom {
         cells: vec![0; GROUND_LANE].leak(),
@@ -62,14 +60,12 @@ fn room() -> PageRoom {
     }
 }
 
-/// FNV-1a over 64 bits: what the golden holds of a page's bytes, which are
-/// a megabyte.
+/// FNV-1a 64 of a page's bytes, for the golden.
 fn fnv(bytes: &[u8]) -> u64 {
     bytes.iter().fold(0xcbf2_9ce4_8422_2325, |h, &b| (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3))
 }
 
-/// A page is written as the golden holds it and reads back as it was
-/// written, in hand and into a record's room alike.
+/// A page round-trips as the golden holds it, in hand and into a record's room.
 #[test]
 fn the_formats_write_and_read_what_the_record_holds() {
     let v = Golden::load(GOLDEN);
@@ -81,7 +77,6 @@ fn the_formats_write_and_read_what_the_record_holds() {
     assert_eq!(decode_terrain_into(&terrain, room).unwrap(), page, "a page reads into its room as it was written");
 }
 
-/// A packet whose lanes are not a page's is no page, in hand or into a room.
 #[test]
 fn a_packet_that_is_not_a_page_is_refused() {
     let v = Golden::load(GOLDEN);
@@ -91,9 +86,7 @@ fn a_packet_that_is_not_a_page_is_refused() {
     assert!(decode_terrain_into(&small, room).is_err());
 }
 
-/// Every block of an index says exactly what its cells say together: the
-/// lowest of their lowest, the highest of their highest, and the widest any
-/// one spans — at every size from one cell to the page.
+/// Every index block is exactly the join of its cells, at every size.
 #[test]
 fn a_block_says_what_its_cells_say() {
     for seed in [1, 0x2545_f491, 0x9e37_79b9_7f4a_7c15] {
@@ -115,8 +108,7 @@ fn a_block_says_what_its_cells_say() {
     }
 }
 
-/// Every byte a page can carry names an occupancy and reads back as it, and
-/// no other byte is taken: a child without its page, or a bit past the five.
+/// Every valid occupancy byte round-trips and no other is accepted.
 #[test]
 fn an_occupancy_is_a_page_and_its_children_or_nothing() {
     for bits in 0..=u8::MAX {

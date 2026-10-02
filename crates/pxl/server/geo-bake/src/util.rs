@@ -1,44 +1,29 @@
 // pxl-geo-bake/util.rs
 
-//! What every bake tool needs and none of them owns.
-
 use std::io::Read;
 use std::path::Path;
 use std::process::Command;
 
 use xpute_core::math::scalar::round;
 
-/// How every baked page is stored and served: the `Content-Encoding` its
-/// upload carries, so a browser or an app's HTTP stack decodes it on the way
-/// in and nothing past the transport sees the codec
-/// (issue/20260913-compression-by-traffic.md).
+/// The `Content-Encoding` every baked page is uploaded with, so the transport decodes it.
 pub const CONTENT_ENCODING: &str = "zstd";
 
-/// How hard a page is packed. The level is the transport's business, like
-/// the codec: what a page holds is its packet, and two packings of one packet
-/// are the same page.
 #[derive(Clone, Copy, Debug)]
 pub enum Level {
-    /// What a bake stores: the top of zstd's regular levels, the usual choice
-    /// for a file compressed once and fetched many times. Measured on v4's
-    /// leaves: 39% under gzip -6, four times its compression time, the same
-    /// decode. The ultra levels take another tenth off at five times the
-    /// time again, which every leaf of a bake would pay.
+    /// Measured on v4 leaves: 39% under gzip -6 at four times its time; the
+    /// ultra levels save a tenth more at five times again.
     Stored = 19,
-    /// What is packed while someone waits for it — the dev tile server's
-    /// pages — at zstd's own default.
     Live = 3,
 }
 
 const ZSTD_MAGIC: [u8; 4] = [0x28, 0xb5, 0x2f, 0xfd];
 const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
 
-/// A page's raw packet, packed.
 pub fn pack(raw: &[u8], level: Level) -> std::io::Result<Vec<u8>> {
     zstd::bulk::compress(raw, level as i32)
 }
 
-/// The encoding a stored object is in, by its own first bytes.
 pub fn encoding_of(stored: &[u8]) -> Option<&'static str> {
     if stored.starts_with(&ZSTD_MAGIC) {
         Some("zstd")
@@ -49,9 +34,7 @@ pub fn encoding_of(stored: &[u8]) -> Option<&'static str> {
     }
 }
 
-/// A stored object back to its raw packet, in whichever encoding it was
-/// stored: a tile set baked before zstd is gzip, and it is told apart by its
-/// bytes rather than by a manifest that may describe another run.
+/// Told apart by bytes, not by a manifest: older sets are gzip.
 pub fn unpack(stored: &[u8]) -> std::io::Result<Vec<u8>> {
     match encoding_of(stored) {
         Some("zstd") => zstd::stream::decode_all(stored),
@@ -64,10 +47,8 @@ pub fn unpack(stored: &[u8]) -> std::io::Result<Vec<u8>> {
     }
 }
 
-/// Refuses to add objects to a directory whose objects are in another
-/// encoding. An upload gives a whole directory one Content-Encoding, so a
-/// resumed bake that skipped the old objects and wrote new ones beside them
-/// would publish half of them wrongly labeled.
+/// An upload gives a directory one Content-Encoding, so a resumed bake must
+/// not mix encodings.
 pub fn refuse_mixed(dir: &Path) -> Result<(), String> {
     let Ok(entries) = std::fs::read_dir(dir) else { return Ok(()) };
     for entry in entries {
@@ -110,18 +91,11 @@ pub fn fmt_dur(ms: f64) -> String {
     }
 }
 
-/// The commit that produced a published set — the other half of "what is v2":
-/// a catalog says which *data* it was baked from, this says which *code* did
-/// the baking. None rather than an error outside a git checkout: a missing sha
-/// in a manifest is a visible gap, not a reason to fail the bake.
 pub fn git_sha() -> Option<String> {
     let out = Command::new("git").args(["rev-parse", "HEAD"]).output().ok()?;
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// `new Date().toISOString()`, which is what the manifests have always carried.
-/// Written out rather than taken from a date crate: one timestamp, one format,
-/// and no dependency that would then be in the workspace for everything else.
 pub fn now_iso8601() -> String {
     let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("after the epoch").as_secs();
     let (days, rem) = (secs / 86_400, secs % 86_400);
@@ -141,16 +115,9 @@ pub fn now_iso8601() -> String {
     format!("{y:04}-{mo:02}-{d:02}T{h:02}:{m:02}:{s:02}.000Z")
 }
 
-/// Writes to a temp name and renames. A crash mid-write would otherwise leave
-/// a truncated file that the resume path — the file existing — treats as a
-/// finished object forever after.
-///
-/// The temp name is the writer's own: the file's whole name, then the
-/// process and this write's number in it, then `.part`. A name shared by two
-/// writers of one file — the dev tile server's folds, a bake beside it —
-/// lets one rename the other's half-written bytes into place or find its own
-/// staging file gone; a name that only swapped the extension was shared by
-/// two files besides.
+/// A truncated file would otherwise count as finished on resume. The temp
+/// name is per process and write, so two writers of one file cannot rename
+/// each other's half-written bytes.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     static WRITES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let n = WRITES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -161,9 +128,6 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     std::fs::rename(&part, path)
 }
 
-/// Counts and sizes every finished object in a directory, ignoring the `.part`
-/// files an interrupted write leaves and the `.empty` markers that are local
-/// to a resume and never uploaded.
 pub fn measure_output(dir: &Path) -> std::io::Result<(u64, u64)> {
     let (mut count, mut bytes) = (0u64, 0u64);
     for entry in std::fs::read_dir(dir)? {

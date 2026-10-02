@@ -1,9 +1,5 @@
-// The frame's depth at half resolution with the normal beside it: of each
-// 2x2 of depths, the nearest on one pixel of a checkerboard and the
-// farthest on the other, so an edge keeps both of its sides and neither
-// side's depth is invented; the normal is taken from the full-resolution
-// depth around the pixel that was kept. Into four floats: the depth, then
-// the normal.
+// Depth at half resolution, nearest and farthest on a checkerboard so an edge
+// keeps both sides; the normal comes from the full-resolution depth.
 
 @group(0) @binding(1) var scene_depth: texture_depth_2d;
 

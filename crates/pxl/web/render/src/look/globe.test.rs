@@ -8,8 +8,7 @@ const SEOUL: f64 = 37.5665 * core::f64::consts::PI / 180.0;
 fn the_map_center_is_left_where_it_is() {
     let globe = Globe::at(SEOUL);
     assert_eq!(globe.place([0.0, 0.0, 0.0]), [0.0, 0.0, 0.0]);
-    // A unit out, and a unit up, stay a unit to within a millionth: the
-    // placement is the identity to first order.
+    // The identity to first order: a unit stays a unit to a millionth.
     for d in [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [-1.0, -1.0, 0.0]] {
         let p = globe.place(d);
         for k in 0..3 {
@@ -20,9 +19,6 @@ fn the_map_center_is_left_where_it_is() {
 
 #[test]
 fn a_point_due_north_is_where_its_latitude_is() {
-    // A point 2° north of the center, found by its Mercator ordinate: on the
-    // sphere it is 2° of arc away, the arc's chord along north and its
-    // sagitta down — where the flat map had it a few percent further off.
     let globe = Globe::at(SEOUL);
     let north = SEOUL + 2f64.to_radians();
     let dy = MERCATOR_RADIUS_U * ((core::f64::consts::FRAC_PI_4 + north / 2.0).tan().ln() - (core::f64::consts::FRAC_PI_4 + SEOUL / 2.0).tan().ln());
@@ -32,7 +28,7 @@ fn a_point_due_north_is_where_its_latitude_is() {
     assert!((p[1] - r * arc.sin()).abs() < 1e-3, "{} vs {}", p[1], r * arc.sin());
     assert!((p[2] + r * (1.0 - arc.cos())).abs() < 1e-3, "{} vs {}", p[2], -r * (1.0 - arc.cos()));
     assert!(p[0].abs() < 1e-9);
-    // By the secant between the two latitudes: about 1.4% at 2°.
+    // The secant between the two latitudes: about 1.4% at 2°.
     assert!(dy > p[1] * 1.01, "the flat map stretched it: {dy} against {}", p[1]);
 }
 
@@ -51,9 +47,6 @@ fn every_point_lies_on_the_sphere_at_its_height() {
 
 #[test]
 fn unplace_takes_a_placed_point_back_to_the_map() {
-    // Out to the window's reach and beyond, at heights from the ground to a
-    // cloud's: back to where it was on the flat map, to a hundredth of a
-    // unit, whatever its height.
     let globe = Globe::at(SEOUL);
     for d in [[0.0, 0.0, 0.0], [1.0, 1.0, 0.0], [3e4, -2e4, 700.0], [-4e5, 3e5, 0.0], [2e5, 1e5, 2000.0]] {
         let back = globe.unplace(globe.place(d));
@@ -61,11 +54,8 @@ fn unplace_takes_a_placed_point_back_to_the_map() {
     }
 }
 
-/// The planet a point is laid on is the one sphere whichever point the map
-/// is laid about: points laid about one anchor and about another, a few
-/// kilometers off it, stand as far apart in meters, each frame in its own
-/// center's units, and span the same signed volume — turned, not mirrored. So an anchor is a frame to write the sphere in, and
-/// moving it moves nothing but the frame.
+/// One sphere whichever point the map is laid about: moving the anchor moves
+/// only the frame (same distances, same signed volume).
 #[test]
 fn the_sphere_is_one_whichever_point_it_is_laid_about() {
     let a = Globe::at(SEOUL);
@@ -78,8 +68,6 @@ fn the_sphere_is_one_whichever_point_it_is_laid_about() {
         (seed >> 11) as f64 / (1u64 << 53) as f64 - 0.5
     };
     for _ in 0..200 {
-        // The other anchor, up to twenty kilometers off, and its latitude by
-        // its Mercator ordinate.
         let off = [unit() * 1.0e5, unit() * 1.0e5];
         let e = a.e0 * (off[1] / MERCATOR_RADIUS_U).exp();
         let b = Globe::at(2.0 * e.atan() - core::f64::consts::FRAC_PI_2);
@@ -95,7 +83,7 @@ fn the_sphere_is_one_whichever_point_it_is_laid_about() {
                 let (da, db) = (apart(pa[i], pa[j]) * meters_a, apart(pb[i], pb[j]) * meters_b);
                 assert!((da - db).abs() <= 1e-9 * da.max(1.0), "{:?} {:?} about {off:?}: {da} m against {db} m", pts[i], pts[j]);
             }
-            // And turned, not mirrored: the four span the same signed volume.
+            // Turned, not mirrored.
             let volume = |q: &[V3], m: f64| {
                 let (u, v, w) = (sub(q[1], q[0]), sub(q[2], q[0]), sub(q[3], q[0]));
                 (u[0] * (v[1] * w[2] - v[2] * w[1]) - u[1] * (v[0] * w[2] - v[2] * w[0]) + u[2] * (v[0] * w[1] - v[1] * w[0])) * m * m * m

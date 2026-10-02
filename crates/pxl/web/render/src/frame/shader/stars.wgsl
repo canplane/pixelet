@@ -1,37 +1,21 @@
-// The stars: the Yale Bright Star Catalog (pxl-tool/bin/bake_stars.rs), every
-// star an eye sees on a dark night, each a quad a few pixels wide at
-// infinity, drawn over the sky and under everything else. A star's place is
-// the catalog's turned by the stars' frame — the sidereal time and the
-// latitude (look/environment.rs) — and drawn through the root frame's
-// matrix, which turns it with the map; its brightness is
-// its magnitude, its color its temperature, both dimmed by the air it is
-// seen through. Added to the sky, which is already encoded: a point this
-// small reads the same added either side of the encode.
+// Yale Bright Star Catalog stars as quads at infinity, dimmed by the air. Added
+// after the encode, which a point this small cannot tell apart.
 
 struct Stars {
   view_proj: mat4x4f,
-  // The equatorial frame to the map's, in its upper three columns.
   sky: mat4x4f,
   viewport: vec2f,
   intensity: f32,
   _p0: f32,
-  // The air's optical depth overhead, by channel, from the camera's
-  // altitude: what an airmass of one takes off a star.
   depth: vec3f,
-  // Device pixels to a CSS pixel: a star's size is the page's, so a dense
-  // screen does not shrink it to a fraction of what the eye is shown.
+  // Sized in CSS pixels so a dense screen does not shrink them.
   density: f32,
-  // Straight up where the eye stands (atmos_medium.wgsl's `up`): a star's
-  // height, and the air it is seen through, are measured from it.
   up: vec3f,
   _p1: f32,
 };
 
-// Held as vec4 words, each field read from its own by `stars_<field>()`:
-// what the host and a shader share has no room inside it for a driver to
-// lay out its own way (issue/20260927-a-matrix-the-driver-reads-its-own-way.md),
-// and nothing builds the struct back, with which Safari's WebGPU lost its
-// GPU process.
+// Read field by field from vec4 words, never as a struct: a struct here lost
+// Safari's WebGPU its GPU process.
 @group(0) @binding(0) var<uniform> stars_words: array<vec4f, 11>;
 
 fn stars_view_proj() -> mat4x4f { return mat4x4f(stars_words[0], stars_words[1], stars_words[2], stars_words[3]); }
@@ -42,25 +26,17 @@ fn stars_depth() -> vec3f { return stars_words[9].xyz; }
 fn stars_density() -> f32 { return stars_words[9].w; }
 fn stars_up() -> vec3f { return stars_words[10].xyz; }
 
-// Each star as gpu/stars.rs took it once: its direction in the equatorial
-// frame and its flux, then its color.
 @group(0) @binding(1) var<storage, read> catalog: array<vec4f>;
 
-// A magnitude-0 star's peak, and how a brighter one swells rather than
-// clipping: a photograph's and an eye's bright star is a larger point. In
-// CSS pixels, as a planetarium draws them: a point a pixel wide would read
-// as a speck the eye passes over.
+// In CSS pixels: a point a pixel wide reads as a speck the eye passes over.
 const STAR_GAIN: f32 = 1.5;
 const STAR_SIGMA_PX: f32 = 0.85;
 const STAR_SWELL_PX: f32 = 0.6;
-// The glare round a star brighter than first magnitude: a wide, faint
-// second gaussian, which is how a screen with an eight-bit range says one
-// star outshines another when their cores have both reached white — the
-// bright stars a constellation is drawn from then read from across the sky.
+// A faint wide halo shows which star is brighter once both cores are white.
 const HALO_FROM: f32 = 0.398;
 const HALO_SIGMA: f32 = 4.0;
 const HALO_GAIN: f32 = 0.06;
-// Below this the star is under an eight-bit step and is not drawn.
+// Below one 8-bit step.
 const STAR_FLOOR: f32 = 0.002;
 
 struct StarOut {
@@ -71,8 +47,7 @@ struct StarOut {
   @location(3) halo: f32,
 };
 
-// The air a star is seen through, as a share of the air overhead (Kasten
-// and Young 1989), which stays finite at the horizon where 1/sin does not.
+// Kasten and Young 1989, finite at the horizon where 1/sin is not.
 fn airmass(sin_alt: f32) -> f32 {
   let alt = degrees(asin(clamp(sin_alt, 0.0, 1.0)));
   return 1.0 / (max(sin_alt, 0.0) + 0.50572 * pow(alt + 6.07995, -1.6364));
@@ -86,9 +61,8 @@ fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> StarOut
 
   var o: StarOut;
   let flux = at.w;
-  // No scintillation: a twinkle is motion, and the frame is drawn only when
-  // something moves — at rest every two seconds, which turns a twinkle into
-  // a blink — and drawing every frame for it is the device's to pay.
+  // No twinkle: the frame redraws only on motion, so a twinkle would become a
+  // blink, and redrawing every frame for it costs the device.
   let height = dot(dir, stars_up());
   let light = color * flux * STAR_GAIN * exp(-stars_depth() * airmass(height)) * stars_intensity();
   var clip = stars_view_proj() * vec4f(dir, 0.0);

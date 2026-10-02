@@ -1,42 +1,12 @@
 // pxl-geo-bake/bin/bake_tiles.rs
 
-//! Offline pre-bake pass: walks every L3 page inside the geo DB's coverage
-//! bbox, skips the ones that are pure open ocean, and bakes the rest into
-//! packed tile objects (util.rs's CONTENT_ENCODING) ready to upload to a static object store and be served
-//! straight to the client with no API server in the loop.
+//! The terrain bake, in three stages: `surface` (ground and elevation from the
+//! DB, resumable), `lines` (decks and bores from `solve:decks`, whole every
+//! time) and `assemble` (leaves and the levels above, no DB). After a deck
+//! solve change, run `--stage lines --stage assemble`.
 //!
-//! A page is built in three stages, because its two halves change for
-//! different reasons (terrain/artifact.rs):
-//!
-//! - `surface`: each land page's ground and elevation, from the database,
-//!   into `<build>/surface/`. The expensive one, run when the source data
-//!   changes; resumed by what is on disk.
-//! - `lines`: each land page's decks, ramps and bores, from what
-//!   `solve:decks` wrote, into `<build>/lines/`. Cheap, and made again whole
-//!   every time, so a page that lost its lines keeps none: run after every
-//!   solve.
-//! - `assemble`: each leaf made of its surface and its lines, under
-//!   `<out>/0/`, and every level above folded from the one below it
-//!   (pyramid.rs) into `<out>/<level>/` up to TOP_LEVEL — with no database
-//!   in the loop. Always whole.
-//!
-//! So a change to how decks are solved is `solve:decks`, then `--stage
-//! lines --stage assemble`, and no surface is baked again. With no
-//! `--stage`, all three run.
-//!
-//! Land/ocean classification is a coarse pre-filter, cheaper and separate from
-//! the bake path's own fine-grained coastline carving. It checks
-//! `overture_base_land` directly for existence, not the full carve; a page with
-//! zero touching land rows is open ocean and gets served by the client's single
-//! shared fallback tile instead.
-//!
-//! A page is the same bytes the dev tile server makes of it, which makes and
-//! assembles both halves in one go (terrain/leaf.rs `bake_leaf`).
-//!
-//! Usage (from the repo root):
 //!   cargo run --profile server -p pxl-geo-bake --bin bake_tiles -- [flags]
 //!
-//! Flags:
 //!   --stage <s>          surface, lines or assemble; repeatable (default: all three)
 //!   --out <dir>          published pages (default ./out/terrain/<published version>)
 //!   --build <dir>        the stages' artifacts (default ./out/build/terrain)
@@ -69,8 +39,6 @@ use pxl_geo_bake::terrain::source::{fetch_lines, fetch_surface, SourceStats};
 use pxl_geo_bake::util::{fmt_bytes, fmt_dur, git_sha, pack, refuse_mixed, unpack, Level};
 
 const CLASSIFY_BATCH: usize = 2000;
-
-// ---- args ----
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Stage {
@@ -124,13 +92,7 @@ fn parse_args() -> Result<Args, String> {
     Ok(args)
 }
 
-// ---- helpers ----
-
-/// Snapshot of what the geo DB was holding when a version was baked. A URL
-/// prefix like `v1` is a cache key — deliberately short and stable, since
-/// putting a date in it would drag the app build along on every re-bake. That
-/// leaves it opaque about *what* v1 actually is, which is what this records
-/// instead.
+/// What the geo DB held when a version was baked; the version name says nothing of it.
 fn read_source_catalogs(client: &mut Client) -> serde_json::Value {
     let mut out = serde_json::Map::new();
     for table in ["overture_catalog", "elevation_catalog"] {
@@ -138,8 +100,6 @@ fn read_source_catalogs(client: &mut Client) -> serde_json::Value {
         let rows = match client.query(sql.as_str(), &[]) {
             Ok(rows) => rows,
             Err(err) => {
-                // A missing catalog table is not fatal to the bake — record the
-                // gap rather than pretending the provenance is complete.
                 eprintln!("[bake/provenance] could not read {table}: {err}");
                 out.insert(table.to_string(), serde_json::Value::Array(vec![]));
                 continue;
@@ -161,8 +121,6 @@ fn read_source_catalogs(client: &mut Client) -> serde_json::Value {
     serde_json::Value::Object(out)
 }
 
-// ---- classification ----
-
 fn classify_land_pages(client: &mut Client, candidates: &[IVec]) -> Result<Vec<IVec>, postgres::Error> {
     let mut land: Vec<IVec> = Vec::new();
     for (at, batch) in candidates.chunks(CLASSIFY_BATCH).enumerate() {
@@ -177,9 +135,6 @@ fn classify_land_pages(client: &mut Client, candidates: &[IVec]) -> Result<Vec<I
     Ok(land)
 }
 
-// ---- run ----
-
-/// What one stage did, over the pages it was given.
 #[derive(Default)]
 struct Totals {
     done: u64,
@@ -189,9 +144,6 @@ struct Totals {
     flat_ele: u64,
 }
 
-/// Runs `each` over `pages` on `workers` threads, each with what `open`
-/// gives it for the whole run, and reports as it goes. `each` says how many
-/// bytes it wrote, or that it skipped the page.
 fn over_pages<W>(what: &str, pages: &[IVec], workers: usize, open: impl Fn() -> Result<W, String> + Sync, each: impl Fn(&mut W, IVec, &mut Totals) -> Result<Option<u64>, String> + Sync) -> Totals {
     let next = AtomicUsize::new(0);
     let totals = Mutex::new(Totals::default());
@@ -250,7 +202,6 @@ fn over_pages<W>(what: &str, pages: &[IVec], workers: usize, open: impl Fn() -> 
     t
 }
 
-/// A worker's connection and the statements it asks with.
 struct Db {
     client: Client,
     repo: TerrainRepository,
@@ -275,15 +226,12 @@ fn run() -> Result<(), String> {
     let surfaces = PageSet::new(args.build.join("surface"));
     let lines = PageSet::new(args.build.join("lines"));
     let coverage = Coverage::of_source();
-    // Beside the published versions, which share it.
     let land_cache = args.out.parent().unwrap_or(Path::new(".")).join("land_pages.json");
-    // The database is only asked by the stages that read it.
     let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing".to_string());
 
     if args.stages.contains(&Stage::Surface) {
         let url = url.as_deref().map_err(Clone::clone)?;
         let mut client = Client::connect(url, NoTls).map_err(|e| e.to_string())?;
-        // One raster for every worker, so a tile pages share is read once.
         let raster = Arc::new(Raster::open(&mut client).map_err(|e| e.to_string())?);
         let candidates = coverage.pages();
         println!(
@@ -295,9 +243,7 @@ fn run() -> Result<(), String> {
             candidates.len()
         );
 
-        // The scan is deterministic and slow-ish, so it is kept; a list
-        // classified at another page size is not reusable, and this is the
-        // one stage that can classify again, so a refused cache is redone.
+        // A list classified at another page size is refused and redone.
         let cached = if args.reclassify { Err("--reclassify".to_string()) } else { land_pages(&land_cache) };
         let land: Vec<IVec> = match cached {
             Ok(land) => {
@@ -336,9 +282,7 @@ fn run() -> Result<(), String> {
                 Ok(Some(packed.len() as u64))
             },
         );
-        // A degraded page still writes successfully, so it never shows up in
-        // `failed` — surface it here rather than leaving it buried in
-        // per-page warnings that nobody greps for after a long run.
+        // A degraded page never shows up in `failed`, so report it here.
         if t.flat_ele > 0 {
             eprintln!(
                 "[bake/surface] WARNING: {} pages are out of the elevation raster's reach and were baked FLAT (zero-filled elevation).",
@@ -388,8 +332,6 @@ fn run() -> Result<(), String> {
 
     if args.stages.contains(&Stage::Assemble) {
         let tiles = PageSet::new(&args.out);
-        // Whole every time, as the levels above always were: a leaf is a
-        // function of its two artifacts, and none is left from another run.
         if tiles.root.exists() {
             fs::remove_dir_all(&tiles.root).map_err(|e| e.to_string())?;
         }

@@ -1,12 +1,7 @@
 // pxl-tool/spec/cmd.rs
 
-//! The command tables: xpute's (spec/xpute/abi/cmd.json), every program's
-//! commands, and a program's own (pixelet's spec/pxl/web/kernel/abi/cmd.json),
-//! which names xpute's as its base — the numbers a doorbell's packet is sent
-//! under, the packets the host writes and the guest reads, and the signals the
-//! guest writes back, each as the side that writes it and the side that reads
-//! it. The majors below xpute's `program_major` are xpute's and the rest a
-//! program's, and a number is given out once across the two.
+//! The command tables, xpute's and a program's on top of it. Majors below
+//! xpute's `program_major` are xpute's; a number is given out once across both.
 
 use serde::Deserialize;
 
@@ -75,9 +70,7 @@ struct Record {
 #[derive(Deserialize)]
 struct Spec {
     doc: Vec<String>,
-    /// The table this one numbers past: a program's names xpute's.
     base: Option<String>,
-    /// Where a program's majors begin; xpute's table says it.
     program_major: Option<u32>,
     #[serde(rename = "extern")]
     externs: Vec<Extern>,
@@ -85,8 +78,6 @@ struct Spec {
     records: Vec<Record>,
 }
 
-/// What a field's type is: a number or a bool, a string, one of the spec's
-/// enums or another spec's, or one of its records.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
     Number,
@@ -97,7 +88,6 @@ enum Kind {
     Record,
 }
 
-/// The numbers a field can be, by the width the wire gives them.
 const NUMBERS: [&str; 5] = ["u8", "u32", "i32", "u64", "f64"];
 
 impl Spec {
@@ -157,8 +147,6 @@ fn typed_array(ty: &str, arrays: [&str; 3], name: &str) -> Result<String, String
     }
 }
 
-// ---- TypeScript ----
-
 fn ts_type(spec: &Spec, f: &Field) -> Result<String, String> {
     let one = match spec.kind(&f.ty)? {
         Kind::Number => f.ty.clone(),
@@ -176,12 +164,9 @@ fn ts_type(spec: &Spec, f: &Field) -> Result<String, String> {
     })
 }
 
-/// A field as the shell writes it into a packet.
 fn ts_write(spec: &Spec, f: &Field, value: &str) -> Result<String, String> {
     let kind = spec.kind(&f.ty)?;
     if f.list && kind == Kind::Number {
-        // A list of numbers is one typed-array leaf, which the kernel reads
-        // where it lies (`get_array`).
         let array = typed_array(&f.ty, ["Uint32Array", "BigUint64Array", "Float64Array"], &f.name)?;
         return Ok(format!(".{}_array({array}.from({value}))", f.ty));
     }
@@ -197,7 +182,6 @@ fn ts_write(spec: &Spec, f: &Field, value: &str) -> Result<String, String> {
     Ok(format!(".{method}({value})"))
 }
 
-/// A field as the shell reads it out of the branch `b`, at `i`.
 fn ts_read(spec: &Spec, f: &Field, i: usize) -> Result<String, String> {
     let kind = spec.kind(&f.ty)?;
     if f.list {
@@ -220,8 +204,6 @@ fn ts_read(spec: &Spec, f: &Field, i: usize) -> Result<String, String> {
     Ok(format!("b.at({i}).get<{}>()", ts_type(spec, f)?))
 }
 
-/// What the TypeScript names, gathered as its lines are written, so that an
-/// import is written only where something uses it.
 struct TsUses {
     words: Vec<String>,
     arrays: Vec<String>,
@@ -278,8 +260,6 @@ fn ts(spec: &Spec, t: &Target) -> Result<String, String> {
     ];
     out.extend(spec.doc.iter().map(|l| if l.is_empty() { " *".to_string() } else { format!(" * {l}") }));
     out.push(" */".into());
-    // What the records and the commands are written as, after the enums they
-    // name; the imports are what that uses, so an unused one is never written.
     let mut tail: Vec<String> = Vec::new();
     let mut uses = TsUses {
         words: Vec::new(),
@@ -369,13 +349,6 @@ fn ts(spec: &Spec, t: &Target) -> Result<String, String> {
     Ok(file(&out))
 }
 
-// ---- C++ ----
-//
-// The guest's end in C++: the enums, each with its members for `member_of`
-// (core abi/cmd.hpp), what a guest reads off a packet, and what it writes
-// into a signal. Names are the spec's, as the Rust's are.
-
-/// A field as a C++ guest reads it, from a packet the host wrote.
 fn cpp_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
     let kind = spec.kind(&f.ty)?;
     if f.list && kind == Kind::Number {
@@ -404,8 +377,6 @@ fn cpp_number(ty: &str) -> &'static str {
     }
 }
 
-/// The statements that read one field out of the cursor `c` into `to`,
-/// returning the error where it does not read.
 fn cpp_read_one(spec: &Spec, f: &Field, c: &str, to: &str) -> Result<Vec<String>, String> {
     let kind = spec.kind(&f.ty)?;
     let (call, conv) = if f.list {
@@ -454,9 +425,8 @@ fn cpp_read(spec: &Spec, f: &Field, i: usize) -> Result<Vec<String>, String> {
     Ok(out)
 }
 
-/// A field as a C++ guest writes it. A list of records is a function that
-/// hands each item to the callback it is given — called twice, once to count
-/// them, since a branch's table precedes its children.
+/// A list of records is a callback called twice, once to count, since a
+/// branch's table precedes its children.
 fn cpp_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
     let kind = spec.kind(&f.ty)?;
     if f.list {
@@ -624,9 +594,6 @@ fn cpp(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<String, S
     Ok(file(&out))
 }
 
-// ---- Rust ----
-
-/// Whether a record, as Rust writes it, borrows what it carries.
 fn rs_borrows(spec: &Spec, fields: &[Field]) -> Result<bool, String> {
     for f in fields {
         let kind = spec.kind(&f.ty)?;
@@ -637,8 +604,6 @@ fn rs_borrows(spec: &Spec, fields: &[Field]) -> Result<bool, String> {
     Ok(false)
 }
 
-/// A record's or a signal's type as a field names it: with its lifetime, or
-/// with a fresh one where it is an item a list hands out.
 fn rs_record(spec: &Spec, name: &str, lifetime: &str) -> Result<String, String> {
     Ok(if rs_borrows(spec, &spec.record(name).fields)? {
         format!("{name}<{lifetime}>")
@@ -647,12 +612,10 @@ fn rs_record(spec: &Spec, name: &str, lifetime: &str) -> Result<String, String> 
     })
 }
 
-/// The path a field's enum is named by.
 fn rs_enum(spec: &Spec, ty: &str) -> String {
     spec.extern_of(ty).map(|x| x.rs.clone()).unwrap_or_else(|| ty.to_string())
 }
 
-/// A field as the kernel reads it, from a packet the shell wrote.
 fn rs_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
     let kind = spec.kind(&f.ty)?;
     if f.list && kind == Kind::Number {
@@ -670,7 +633,6 @@ fn rs_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
     Ok(if f.optional { format!("Option<{one}>") } else { one })
 }
 
-/// The expression that reads one field out of the cursor `c`.
 fn rs_read_one(spec: &Spec, f: &Field, c: &str) -> Result<String, String> {
     let kind = spec.kind(&f.ty)?;
     if f.list {
@@ -716,10 +678,8 @@ fn rs_read(spec: &Spec, f: &Field, i: usize) -> Result<String, String> {
     })
 }
 
-/// A field as the kernel writes it. A string is anything that displays, since
-/// what it names often lies in no string, and a list is a function handing
-/// out its items, which the writer walks twice: once to count them, since a
-/// branch's table precedes its children, and once to write them.
+/// A list is walked twice, once to count, since a branch's table precedes its
+/// children.
 fn rs_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
     let kind = spec.kind(&f.ty)?;
     if f.list {
@@ -795,7 +755,6 @@ fn rs_writer(spec: &Spec, out: &mut Vec<String>, name: &str, doc: Option<&[Strin
         "    /// The children it is written as.".to_string(),
         format!("    pub const FIELDS: u32 = {};", fields.len()),
         String::new(),
-        // A packet of no fields writes nothing, and names no writer.
         format!("    pub fn write(&self, {}: &mut PacketWriter) {{", if fields.is_empty() { "_" } else { "w" }),
     ]);
     for f in fields {
@@ -923,9 +882,6 @@ fn rs(spec: &Spec, t: &Target) -> Result<String, String> {
     Ok(file(&out))
 }
 
-/// The command table's own test, beside it rather than inside it: every `.rs`
-/// in the crates keeps its tests in a `.test.rs` at the same path, and a
-/// generated file is no exception.
 fn test_rs(spec: &Spec, t: &Target) -> Result<String, String> {
     let mut cmds: Vec<&Member> = Vec::new();
     let mut minors: Vec<&Enum> = Vec::new();
@@ -994,16 +950,12 @@ fn test_rs(spec: &Spec, t: &Target) -> Result<String, String> {
     Ok(file(&out))
 }
 
-/// Where a table's code is written, and the names its files open on.
 struct Target {
     json: &'static str,
     ts: &'static str,
     ts_logical: &'static str,
-    /// The directory the Rust files go in.
     rs_dir: &'static str,
-    /// The crate and path under `src/` they are named by.
     rs_logical: &'static str,
-    /// The C++ header written from it, and the namespace its names are in.
     cpp: Option<(&'static str, &'static str)>,
 }
 
@@ -1026,13 +978,11 @@ const TARGETS: [Target; 2] = [
     },
 ];
 
-/// A table's majors, by number.
 fn majors(spec: &Spec) -> Vec<(u32, &str)> {
     spec.enums.iter().filter(|e| e.name == "Major").flat_map(|e| members(e).map(|m| (m.value, m.name.as_str()))).collect()
 }
 
-/// A program's table against the base it names: its majors past the base's
-/// `program_major`, the base's under it, and no command named in both.
+/// A program's majors are past the base's `program_major`, and no command is named in both.
 fn check_base(spec: &Spec, json: &str) -> Result<(), String> {
     let Some(base_path) = &spec.base else { return Ok(()) };
     let base: Spec = read_as(base_path)?;

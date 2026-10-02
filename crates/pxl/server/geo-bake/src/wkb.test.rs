@@ -2,8 +2,6 @@
 
 use super::*;
 
-/// Builds little-endian WKB the way PostGIS's `ST_AsBinary` does, so a test
-/// reads as the shape it is describing rather than as a hex blob.
 struct Wkb(Vec<u8>);
 
 impl Wkb {
@@ -34,8 +32,6 @@ impl Wkb {
 }
 
 impl Wkb {
-    /// A Point carries its coordinates with no count in front of them, unlike
-    /// every other shape here.
     fn point(mut self, x: f64, y: f64) -> Wkb {
         self.0.extend_from_slice(&x.to_le_bytes());
         self.0.extend_from_slice(&y.to_le_bytes());
@@ -76,9 +72,8 @@ fn a_polygons_first_ring_is_the_outer_and_the_rest_are_holes() {
     assert_eq!(g[0].holes[0][0], [2.0, 2.0, 0.0]);
 }
 
-/// An empty polygon still reports itself as polygon-sourced. The
-/// distinction is load-bearing downstream: `is_polygon_source` is what
-/// closes a feature, and a ringless row must not be read as a line.
+/// `is_polygon_source` is what closes a feature, so a ringless row must not
+/// read as a line.
 #[test]
 fn a_polygon_with_no_rings_is_still_a_polygon() {
     let bytes = Wkb::new(3).u32(0).0;
@@ -100,8 +95,6 @@ fn a_multipolygon_is_flattened_to_one_polygon_each() {
     assert_eq!(g[1].points[0], [5.0, 5.0, 0.0]);
 }
 
-/// EWKB's SRID word is skipped — the pipeline is 3857 throughout — and its
-/// Z kept, which is a deck's top.
 #[test]
 fn ewkb_srid_is_skipped_and_z_kept() {
     let mut bytes = vec![1u8];
@@ -114,8 +107,6 @@ fn ewkb_srid_is_skipped_and_z_kept() {
     assert_eq!(g[0].points, vec![[1.0, 2.0, 99.0]]);
 }
 
-/// ISO's dimensions are thousands of the type, as `ST_AsBinary` writes a
-/// line with Z: 1002, and an M past it is passed over.
 #[test]
 fn iso_z_and_m_are_read() {
     let mut bytes = vec![1u8];
@@ -131,12 +122,9 @@ fn iso_z_and_m_are_read() {
 #[test]
 fn an_unsupported_type_and_an_empty_buffer_are_both_no_geometry() {
     assert!(wkb_to_geometries(&[]).is_empty());
-    // 7 is GeometryCollection, which this decoder does not carry.
     assert!(wkb_to_geometries(&Wkb::new(7).u32(0).0).is_empty());
 }
 
-/// A length word off the wire is not trusted to size an allocation, and a
-/// buffer that ends mid-ring decodes to nothing rather than panicking.
 #[test]
 fn a_truncated_ring_is_refused_rather_than_read() {
     let mut bytes = Wkb::new(2).ring(&[(0.0, 0.0), (1.0, 1.0)]).0;

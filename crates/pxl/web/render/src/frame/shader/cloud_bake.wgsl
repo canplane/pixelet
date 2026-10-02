@@ -1,34 +1,15 @@
-// The cloud tile's own pass (cloud_tile.wgsl): a texel's place on the
-// lattice through the octaves, once for a device. The lattice is the tile's,
-// so what the fbm wraps at is the tile's own width and the texture tiles
-// seamlessly; the octaves run whole, since a texel is the finest the tile
-// holds and its mip chain is what a pixel reads instead of a footprint.
-//
-// What a texel keeps is not the shape but what the shape comes to: how much
-// of the light through it the cloud there stops. The whole curve from one to
-// the other is here, so a pixel does none of it, and so the mip chain
-// averages the quantity a pixel wider than a cloud wants averaged — a pixel
-// over half a cloud and half clear sky is half opaque, where the mean of the
-// shape under it would have been the field's own mean and left clear sky.
+// Bakes the cloud tile once per device. A texel stores opacity, not shape, so
+// the mips average what a wide pixel needs: half a cloud is half opaque.
 
-// How much of the sky the layer covers, and how thick a full cloud is to
-// light, as optical depth: past a few, its underside is in its own shadow
-// and gray, and its edges, thin, are bright.
+// Optical depth of a full cloud: past a few its underside is self-shadowed.
 const CLOUD_COVER: f32 = 0.42;
 const CLOUD_DEPTH: f32 = 6.0;
-// The share of the cover that is a cloud's full thickness rather than its
-// edge. A curve laid over the shape itself covered half the sky and reached
-// full thickness nowhere: the field is octaves of value noise summed, so it
-// is heaped about its mean, and a threshold near that mean cuts it where it
-// is densest — a thin veil everywhere and a cloud nowhere.
+// A threshold near the summed noise's mean cut it where it is densest: a thin
+// veil everywhere and a full cloud nowhere.
 const CLOUD_FULL_SHARE: f32 = 0.25;
-// Being that sum, the field is near normal: its mean is the octaves'
-// amplitudes halved, 0.46875 exactly, and its deviation, measured over the
-// tile, is 0.0963. Through the normal's own distribution the shape becomes
-// its quantile, and a threshold on a quantile is the share of the sky it
-// leaves, which is what CLOUD_COVER then means. The logistic stands in for
-// the normal's integral, which WGSL has no builtin for, within a hundredth
-// of it over the range a cloud's edge lies in.
+// The octave sum is near normal: mean 0.46875 exactly, deviation 0.0963
+// measured over the tile. A threshold on its quantile is the covered share;
+// the logistic approximates the normal CDF to within 0.01.
 const CLOUD_SHAPE_MEAN: f32 = 0.46875;
 const CLOUD_SHAPE_SIGMA: f32 = 0.0963;
 const LOGISTIC_SCALE: f32 = 1.702;

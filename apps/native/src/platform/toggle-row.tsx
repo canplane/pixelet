@@ -1,16 +1,9 @@
 // @pxl/native/platform/toggle-row.tsx
 
 /**
- * A row that holds a setting's switch, on an iPhone: the system's own switch,
- * which alone takes the touch, as a device's settings do — the row's words
- * are not a second way to flip it. Taking the touch itself is what gives the
- * switch its press: iOS 26 swells its thumb into glass under a finger, and a
- * switch only shown never is.
- *
- * It is UIKit's switch (React Native's Switch), not SwiftUI's Toggle. Inside
- * a sheet the Toggle sat in SwiftUI under React Native's scroll view under
- * SwiftUI again, and missed a quick tap about two times in five on a phone;
- * UIKit's is a control React Native's scroll view does not take a touch from.
+ * A settings row on an iPhone: the switch alone takes the touch. UIKit's
+ * switch, not SwiftUI's Toggle, which inside a sheet missed about two quick
+ * taps in five.
  */
 
 import type { ReactNode } from "react";
@@ -29,10 +22,6 @@ export function ToggleRow({ value, onValueChange, style, children }: ToggleRowPr
   return (
     <View style={style}>
       {children}
-      {
-        // On, the switch is the panel's chosen color, as a radio and a chip
-        // are; off, the system's.
-      }
       <Switch value={value} onValueChange={onValueChange} trackColor={{ true: color.chosen }} />
     </View>
   );

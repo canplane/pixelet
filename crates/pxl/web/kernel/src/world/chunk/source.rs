@@ -1,11 +1,8 @@
 // pxl-kernel/world/chunk/source.rs
 
-//! What a chunk is made of, past its page: which columns' objects it draws
-//! in its tiers, and of those which bands — a chunk is a
-//! cube, so an object written is in one chunk a level and not in every chunk
-//! over its column — the revisions those are read as, and the
-//! flag that has the scheduler compare every chunk's against what it was
-//! built from (table.rs `Scheduler::sources_step`).
+//! What a chunk is made of past its page: which columns' objects and which
+//! bands it draws, and their revisions. A chunk is a cube, so an object
+//! written is in one chunk per level, not every chunk over its column.
 
 use pxl_spec::bake::constant::BandZ;
 use pxl_spec::space::indexer::{FROM_L2_IDX, L1, L2, L2_IDX};
@@ -20,9 +17,7 @@ use crate::world::pyramid::chunk::Chunk as PyramidChunk;
 
 static SOURCES_CHANGED: Global<bool> = Global::new();
 
-/// A chunk's sources changed somewhere — a column written, a setting a chunk
-/// paints with: the scheduler compares each chunk's own at its next turn
-/// (table.rs `Scheduler::sources_step`).
+/// The table compares every chunk's sources at its next turn (`sources_step`).
 pub fn chunk_sources_changed() {
     *SOURCES_CHANGED.get(|| false) = true;
 }
@@ -33,9 +28,8 @@ pub fn chunk_sources_step() {
     }
 }
 
-/// Whether a chunk of `level` at `base` draws the objects of column `col`
-/// in its tiers: its own column's for a leaf chunk, and every column under a
-/// level chunk and its apron, since what it draws is all of theirs folded.
+/// A leaf draws its own column; a level chunk draws every column under it
+/// and its apron, folded.
 pub fn tiers_draw(level: u32, base: IVec, col: IVec) -> bool {
     if level == 0 {
         col == L2_IDX(base)
@@ -44,18 +38,13 @@ pub fn tiers_draw(level: u32, base: IVec, col: IVec) -> bool {
     }
 }
 
-/// Whether chunk `k` draws what lies in band `band` of a column: a band is a
-/// z16 chunk's height, so a band is in the chunk of any level whose height
-/// holds it, one a level.
+/// A band is a z16 chunk's height, so it lies in one chunk per level.
 pub fn draws_band(k: PyramidChunk, band: BandZ) -> bool {
     i64::from(band) >> k.level() == k.node().1[2]
 }
 
-/// A chunk as its revisions key it, in one word: its coordinate among its
-/// level's chunks, and its level beside its height in the height's lane. A
-/// chunk's height index is a band's shifted by its level, and a band is 64
-/// units of a lane of ±32,768, so eleven bits hold it and the level takes the
-/// four over them.
+/// One word: the coordinate, with the level beside the height. A band is 64
+/// units of a ±32,768 lane, so the height fits 11 bits and the level the 4 above.
 fn chunk_key(k: PyramidChunk) -> i64 {
     let [x, y, z] = k.node().1;
     ivec::gather(x, y, (k.level() as i64) << 11 | (z & 0x7ff)) as i64
@@ -63,17 +52,12 @@ fn chunk_key(k: PyramidChunk) -> i64 {
 
 const _: () = assert!((TOP_LEVEL as i64 + 1) << 11 <= 1 << 15, "a chunk's level and height past the lane they share");
 
-/// What a chunk's objects are made of, as a revision: the one every band its
-/// tiers draw moves (`band_written`).
 pub fn objects_revision_of(k: PyramidChunk) -> u32 {
     world_changes().revision_of(TIERS_CHUNK, chunk_key(k))
 }
 
-/// A write to band `band` of column `col`: every chunk whose tiers draw it
-/// moves, and no other — a chunk over the column that does not hold the band
-/// is not made again. Those are the chunk the band lies in at each level
-/// and, above z16, through the apron a fold reads, its neighbors at that
-/// height.
+/// Moves exactly the chunks whose tiers draw the band: the one holding it at
+/// each level, and above z16 its neighbours through the fold's apron.
 pub fn band_written(col: IVec, band: BandZ) {
     let corner = Pvf3 { i: FROM_L2_IDX(col), f: 0 };
     for level in 0..=TOP_LEVEL {
@@ -89,14 +73,10 @@ pub fn band_written(col: IVec, band: BandZ) {
     }
 }
 
-/// A chunk and the eight beside it.
 const NEAR: [(i64, i64); 9] = [(-1, -1), (0, -1), (1, -1), (-1, 0), (0, 0), (1, 0), (-1, 1), (0, 1), (1, 1)];
 
-/// Whether the objects of column `col` fold into the level-`level` chunk at
-/// `base`: its own cells, and the one-cell apron around them a fold reads.
+/// Its own cells and the one-cell apron a fold reads.
 fn folds_into(level: u32, base: IVec, col: IVec) -> bool {
-    // In cells of the level: the chunk's with its apron, and the first and
-    // last a column, a leaf chunk, reaches.
     let (cell, o, last) = (GROUND.scale(level), FROM_L2_IDX(col), i64::from(L1.count_in(L2)) - 1);
     let across = |b: i64, o: i64| cell.index(o) <= cell.index(b) + CHUNK_CELLS as i64 && cell.index(o + last) >= cell.index(b) - 1;
     across(ivec::X(base), ivec::X(o)) && across(ivec::Y(base), ivec::Y(o))

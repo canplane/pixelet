@@ -12,10 +12,6 @@ import { ALIGN_SZ, DESC_TYPE_MASK, DESC_TYPE_SHAMT, GET_WORD, HDR_SZ, LE, MAGIC,
 
 type ShallowNodeValue = NodeValue | BranchCursor;
 
-/**
- * Scratchpad for 64-bit word operations to avoid allocation.
- * [lo32, hi32]
- */
 const WORD_REG: [u32, u32] = [NONE, NONE];
 
 const CURSOR = (pkt: U8Array, base: u32, type: NodeType): NodeCursor => {
@@ -28,17 +24,7 @@ const CURSOR = (pkt: U8Array, base: u32, type: NodeType): NodeCursor => {
 
 const ENTRY_OFF = (base: u32, idx: u32) => (base + WORD_SZ) + idx * WORD_SZ;
 
-// ============ Reader ============
-
-/**
- * Packet reader and root cursor entry point.
- *
- * Contract:
- * - requires packet base offset to be WORD_SZ-aligned
- * - validates the fixed packet header
- * - returns a root cursor on success
- * - throws on malformed packet
- */
+/** Throws on a malformed packet; `pkt` must start WORD_SZ-aligned. */
 export class TreeReader {
   readonly pkt: U8Array;
 
@@ -52,19 +38,16 @@ export class TreeReader {
     if (this.pkt.byteLength < HDR_SZ) throw new MarshalError(Errno.EBADMSG);
     const hdr_view = new DataView(this.pkt.buffer, this.pkt.byteOffset, HDR_SZ);
 
-    // packet header
-    const [magic] = GET_WORD(hdr_view, 0, WORD_REG); // word0
+    const [magic] = GET_WORD(hdr_view, 0, WORD_REG);
     if (magic !== MAGIC) throw new MarshalError(Errno.EBADMSG);
 
-    const [payload_sz, desc] = GET_WORD(hdr_view, WORD_SZ, WORD_REG); // word1
-    // root header stores payload byte size, not a relative offset
+    const [payload_sz, desc] = GET_WORD(hdr_view, WORD_SZ, WORD_REG);
     if (payload_sz > pkt.byteLength - HDR_SZ) throw new MarshalError(Errno.EBADMSG);
     const type: NodeType = FIELD_GET(desc, DESC_TYPE_SHAMT, DESC_TYPE_MASK) as NodeType;
 
     this.root = payload_sz ? CURSOR(this.pkt, HDR_SZ, type) : new NullCursorImpl(this.pkt, type);
   }
 
-  /** Returns the root cursor after constructor-time packet validation. */
   read(): NodeCursor {
     return this.root;
   }
@@ -74,8 +57,6 @@ export class TreeReader {
   }
 }
 
-// ============ Cursors ============
-
 export abstract class NodeCursor {
   readonly pkt: U8Array;
   readonly pkt_view: DataView<ArrayBuffer>;
@@ -83,10 +64,6 @@ export abstract class NodeCursor {
 
   readonly type: NodeType;
 
-  /**
-   * @param pkt source packet bytes
-   * @param base logical node base offset
-   */
   constructor(pkt: U8Array, base: u32, type: NodeType) {
     this.pkt = pkt;
     this.pkt_view = new DataView(this.pkt.buffer, this.pkt.byteOffset, this.pkt.byteLength);
@@ -99,41 +76,17 @@ export abstract class NodeCursor {
     return this.type === SpecialType.BRANCH;
   }
 
-  /**
-   * Reinterpret current node as a branch cursor.
-   * Fails if the current node is not a branch.
-   */
   as_branch(): BranchCursor {
     if (this.type !== SpecialType.BRANCH) throw new MarshalError(Errno.EBADMSG);
     return this as unknown as BranchCursor;
   }
 
-  // ---- Optional Guard ----
-
-  /**
-   * Optional chaining helper.
-   * Returns `this` for a present node.
-   * NullCursor overrides this to return `undefined`.
-   */
   opt(): this | undefined {
     return this;
   }
 
-  // ---- Shallow Getter ----
-
-  /**
-   * Reads the current node at shallow depth.
-   *
-   * Shallow contract:
-   * - leaf cursor  -> materialized leaf value
-   * - null cursor  -> null
-   * - branch cursor is handled by BranchCursor override
-   *
-   * Use an explicit type parameter when a narrower result type is known.
-   */
   get<T extends ShallowNodeValue = ShallowNodeValue>(): T {
     switch (this.type) {
-      // -- Scalars --
       case ScalarType.U8:
         return this._u8() as T;
       case ScalarType.I8:
@@ -157,7 +110,6 @@ export abstract class NodeCursor {
       case ScalarType.BOOL:
         return this._bool() as T;
 
-      // -- Sequences --
       case SequenceType.U8_ARRAY:
         return this._u8_array() as T;
       case SequenceType.I8_ARRAY:
@@ -189,8 +141,6 @@ export abstract class NodeCursor {
         throw new MarshalError(Errno.EBADMSG);
     }
   }
-
-  // ---- Internal Leaf Readers ----
 
   protected _u8(): u8 {
     if (this.base + 1 > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
@@ -237,16 +187,7 @@ export abstract class NodeCursor {
     return this.pkt_view.getUint8(this.base) !== 0;
   }
 
-  /**
-   * Reads a typed-array sequence leaf as a zero-copy view over the packet buffer.
-   *
-   * Contract:
-   * - checks only len/payload overflow against packet bounds
-   * - assumes packet base alignment was validated by TreeReader
-   * - sequence payload starts immediately after the len slot: base + WORD_SZ
-   * - because sequence node bases are WORD_SZ-aligned, payload_start is also
-   *   naturally aligned for all supported typed-array element sizes (<= 8)
-   */
+  /** A zero-copy view: a sequence's base is WORD_SZ-aligned, so its payload is aligned for any element size. */
   protected _array<T extends AnyTypedArray>(ctor: AnyTypedArrayCtor<T>): T {
     if (this.base + WORD_SZ > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
     const [len] = GET_WORD(this.pkt_view, this.base, WORD_REG);
@@ -349,43 +290,23 @@ export abstract class NodeCursor {
 class NodeCursorImpl extends NodeCursor {}
 
 export abstract class NullCursor extends NodeCursor {
-  /**
-   * @param pkt source packet bytes
-   * @param base logical node base offset
-   */
   constructor(pkt: U8Array, type: NodeType) {
     super(pkt, NONE, type);
   }
 
-  // NullCursor preserves original node type metadata,
-  // but is never considered a usable structural cursor.
   override is_branch(): this is BranchCursor {
     return false;
   }
 
-  /**
-   * Reinterpret current node as a branch cursor.
-   * Fails if the current node is not a branch.
-   */
   override as_branch(): BranchCursor {
     throw new MarshalError(Errno.EFAULT);
   }
 
-  // ---- Nullable Guard ----
-
-  /**
-   * Optional chaining helper.
-   * Returns `undefined` for a physically absent node and `this` otherwise.
-   */
   override opt(): this | undefined {
     return undefined;
   }
 
-  // ---- Shallow Getter ----
-
-  /** Shallow read of a physically absent node reconstructs generic null. */
   override get<T extends ShallowNodeValue = ShallowNodeValue>(): T {
-    // generic optional reconstruction
     return null as T;
   }
 }
@@ -395,7 +316,7 @@ export abstract class BranchCursor extends NodeCursor {
   override readonly type = SpecialType.BRANCH;
 
   readonly len: u32;
-  readonly child_start: u32; // first byte where child payloads may begin
+  readonly child_start: u32;
 
   constructor(pkt: U8Array, base: u32) {
     super(pkt, base, SpecialType.BRANCH);
@@ -410,18 +331,7 @@ export abstract class BranchCursor extends NodeCursor {
     this.child_start = ENTRY_OFF(this.base, len);
   }
 
-  // ---- Shallow / Deep Getter ----
-
-  /**
-   * Shallow branch read.
-   *
-   * Contract:
-   * - get()      -> array of direct children
-   * - get(idx)   -> direct child at idx, shallow-materialized at that child boundary
-   * - leaf child -> materialized leaf value
-   * - branch child -> direct-child array (not recursive)
-   * - null child -> null
-   */
+  /** Shallow: a branch child reads as its direct-child array, not recursively. */
   override get<T extends ShallowNodeValue[] = ShallowNodeValue[]>(): T;
   override get<T extends ShallowNodeValue = ShallowNodeValue>(idx: u32): T;
 
@@ -436,11 +346,6 @@ export abstract class BranchCursor extends NodeCursor {
     return arr as unknown as T;
   }
 
-  /**
-   * Deep branch read.
-   *
-   * Recursively materializes the entire child subtree into NodeValue[].
-   */
   get_deep<T extends NodeValue[] = NodeValue[]>(): T {
     const arr: NodeValue[] = new Array(this.len);
     for (let i = 0; i < this.len; i++) {
@@ -450,14 +355,6 @@ export abstract class BranchCursor extends NodeCursor {
     return arr as unknown as T;
   }
 
-  /**
-   * Returns the child cursor at `idx`.
-   *
-   * Contract:
-   * - preserves child type metadata even when physically absent
-   * - returns NullCursor when child_rel_off == 0
-   * - validates child offset bounds against the enclosing branch table
-   */
   at(idx: u32): NodeCursor {
     if (idx >= this.len) throw new MarshalError(Errno.EFAULT);
     const entry_off: u32 = ENTRY_OFF(this.base, idx);
@@ -478,7 +375,6 @@ export abstract class BranchCursor extends NodeCursor {
     return this.at(idx).as_branch();
   }
 
-  /** Returns all direct child cursors without materializing them. */
   children(): NodeCursor[] {
     const arr = new Array<NodeCursor>(this.len);
     for (let i = 0; i < this.len; i++) {

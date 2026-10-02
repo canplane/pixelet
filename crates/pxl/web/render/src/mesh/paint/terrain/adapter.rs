@@ -1,30 +1,11 @@
 // pxl-render/mesh/paint/terrain/adapter.rs
 
-//! A terrain page's chunk as the render pipeline reads it.
-//!
-//! A page is a heightmap — four ground channels of one type byte a cell,
-//! and a coarse elevation raster sampled bicubically at cell centers to the
-//! chunk's 64×64 — and a chunk of it becomes, cell by cell, one material
-//! (the last non-void channel wins, in the channels' fixed order) and one
-//! top. That is what the terrain layer paints into a volume, one solid
-//! column a cell from a floor shared by the chunk, and what the direct path
-//! writes as one run a column without a volume.
-//!
-//! A page's decks (pxl-spec bake/deck.rs) stand off that column: a deck over
-//! a cell is a slab a cell thick under its top, and where a pier carries it,
-//! the pier from the ground to the slab, so a column holds its ground and
-//! whatever decks cross over it, each a run of its own. A deck at or under
-//! the ground there — where a bridge comes down to its ends — is the way on
-//! the ground, painted as the column's own material. A bore through the
-//! ground — a tunnel's mouth — takes the air over its floor out of the
-//! column, and the cell under the floor is the way.
-//!
-//! The floor is rounded down to a whole band (`min_ele - TERRAIN_Z_MARGIN`,
-//! floored to BAND_CELLS) because a volume allocates in whole bands: a floor
-//! anywhere inside one would open a band below it for the few voxels that
-//! cross. A cell stands its type's shift off its sampled height, so a
-//! shoreline reads as water meeting land rather than as two surfaces at the
-//! same level.
+//! A terrain page's chunk as the render pipeline reads it: per cell one
+//! material (the last non-void channel wins) and one top, painted as a column
+//! from a floor shared by the chunk. Decks stand off the column as runs of
+//! their own; a bore takes the air over its floor out of the column.
+//! The floor is rounded down to a whole band, since a volume allocates whole
+//! bands and a floor inside one would open another for a few voxels.
 
 use pxl_spec::bake::constant::BAND_CELLS;
 use pxl_spec::bake::deck::{Decks, Occupies, Over};
@@ -41,19 +22,14 @@ use crate::mesh::voxel_scan::{apron_col, APRON, COL_SPAN};
 use crate::mesh::{try_push, Refused};
 use std::sync::LazyLock;
 
-/// How far below the chunk's lowest cell the shared floor sits, before it
-/// is rounded down to a band.
 const TERRAIN_Z_MARGIN: i32 = 4;
 const COL_SPAN2: usize = (COL_SPAN * COL_SPAN) as usize;
 
-/// The channels, in `GROUND_CH_KEYS`' order, which is also the order they
-/// paint in: a later one's non-void type wins.
+/// In `GROUND_CH_KEYS`' order, which is the paint order: a later non-void type wins.
 pub const CHANNELS: usize = 4;
 
 const VOID: u8 = 0;
 
-/// What a channel's type byte means: the color and the texture-array
-/// layer of each type it has, and the material class the channel paints.
 #[derive(Clone, Copy)]
 pub struct Channel {
     pub rgb: [[u8; 3]; 256],
@@ -75,7 +51,6 @@ impl Default for Channel {
     }
 }
 
-/// The tables and the base material every cell starts from.
 pub struct Materials {
     pub channels: [Channel; CHANNELS],
     pub base_rgb: [u8; 3],
@@ -83,13 +58,8 @@ pub struct Materials {
     pub base_class: u8,
 }
 
-/// Every ground type's color and layer, from the palette's tables
-/// (palette/shader_meta.rs), each channel's class, and the catalog's base:
-/// a function of the palette and the catalog alone, so made once, here,
-/// where the paint reads it.
 pub static MATERIALS: LazyLock<Materials> = LazyLock::new(Materials::of_palette);
 
-/// The class a channel's cells are painted as.
 fn class_of(ch: GroundChannelKey) -> u8 {
     (match ch {
         GroundChannelKey::LAND => MaterialClasses::LAND,
@@ -100,8 +70,7 @@ fn class_of(ch: GroundChannelKey) -> u8 {
 }
 
 impl Materials {
-    /// A ground type's voxel material, packed `0xCC_RRGGBB`, and its layer;
-    /// none for a type the palette gives no color.
+    /// Packed `0xCC_RRGGBB`; none for a type the palette gives no color.
     pub fn of(&self, ch: GroundChannelKey, t: u8) -> Option<(u32, u8)> {
         let c = &self.channels[ch_index(ch)];
         let t = t as usize;
@@ -133,8 +102,6 @@ impl Materials {
     }
 }
 
-/// The decks over a chunk's own columns, from the page they are drawn from:
-/// a column, a deck and what it is there.
 fn collect_decks(over: &mut Vec<(usize, usize, Over)>, own: Option<&PageSource>, first: [i64; 2]) -> Result<(), Refused> {
     let Some(s) = own else { return Ok(()) };
     let n = f64::from(s.n);
@@ -149,29 +116,22 @@ fn collect_decks(over: &mut Vec<(usize, usize, Over)>, own: Option<&PageSource>,
     grown
 }
 
-/// A voxel material: the class over the color.
 fn pack(class: u8, rgb: [u8; 3]) -> u32 {
     ((class as u32) << 24) | ((rgb[0] as u32) << 16) | ((rgb[1] as u32) << 8) | rgb[2] as u32
 }
 
-/// What a pier is painted as: a building's concrete, since nothing in the
-/// catalog is a pier's own and the catalog is what a voxel's material is.
+/// A building's concrete: nothing in the catalog is a pier's own.
 const PIER: (GroundChannelKey, u8) = (GroundChannelKey::STRUCTURE, cube_types::structure::building);
 
-/// One page's lanes, as the client keeps them in the core memory.
 #[derive(Clone, Copy)]
 pub struct PageView<'a> {
-    /// The page's ground, a cell's four channels packed into one
-    /// `GroundCell` (pxl-spec bake/pack.rs), in the lattice's cell order.
     pub cells: &'a [GroundCell],
     pub ele: &'a [i16],
     pub decks: &'a Decks,
 }
 
-/// What a page's cells are read from: the page drawn in its place — its own,
-/// or one over it whose cell stands for `n` × `n` of its own until its own
-/// comes — and the page's first cell as its own cells from that page's
-/// corner.
+/// The page drawn in place of this one (its own, or a coarser one whose cell
+/// stands for `n` × `n` of its cells until its own comes).
 #[derive(Clone, Copy)]
 pub struct PageSource<'a> {
     pub page: PageView<'a>,
@@ -179,50 +139,36 @@ pub struct PageSource<'a> {
     pub n: u32,
 }
 
-/// The pages a chunk's cells lie in, each with what it is drawn from: the
-/// chunk's own, and those beside it its apron reaches into.
 pub struct Around<'a> {
     pub own: PageSource<'a>,
-    /// The page (qx, qy) from the chunk's own at `beside_index`: none where
-    /// the apron does not reach or nothing is drawn there, and those cells
-    /// are read from `own`, whose elevation is padded past its edge.
+    /// None where the apron does not reach or nothing is drawn; those cells are
+    /// read from `own`, whose elevation is padded past its edge.
     pub beside: [Option<PageSource<'a>>; 8],
 }
 
-/// Where the page (qx, qy) from a chunk's own, each in -1..=1 and not both
-/// zero, is kept in `Around::beside`.
 pub const fn beside_index(qx: i64, qy: i64) -> usize {
     let k = (qx + 1) + 3 * (qy + 1);
     (if k > 4 { k - 1 } else { k }) as usize
 }
 
-/// One chunk of a page, sampled: a material and a top a cell, and the
-/// floor the columns share, over the run set's padded column grid: the
-/// chunk's own cells and the ring of neighbors around them (voxel_scan.rs's
-/// APRON). A ring cell is read from what its own page is drawn from, as the
-/// chunk beside draws it, so the face mask asks about the surface that is on
-/// the screen there; it is never painted into the volume or emitted.
+/// Apron cells are read from what their own page is drawn from, as the chunk
+/// beside draws it, so the face mask sees what is on screen; they are never painted or emitted.
 pub struct ChunkSample {
-    /// Packed 0xCC_RRGGBB a cell.
+    /// Packed 0xCC_RRGGBB.
     pub material: Vec<u32>,
     pub layer_idx: Vec<u8>,
-    /// The elevation a cell, in cells; a column's top is one below it.
+    /// In cells; a column's top is one below it.
     pub ele: Vec<i16>,
     pub floor: i32,
-    /// Column `i`'s spans over its ground are `spans[span_at[i]..span_at[i + 1]]`,
-    /// lowest first and none overlapping; the apron's columns have none.
+    /// Column `i`'s spans are `spans[span_at[i]..span_at[i + 1]]`, lowest first,
+    /// none overlapping; the apron's have none.
     pub span_at: Vec<u32>,
     pub spans: Vec<Span>,
-    /// The air a bore takes out of each column's ground, `[lo, hi)`, empty
-    /// where none does, and the way's material on the cell under it.
+    /// `[lo, hi)`, empty where none does.
     pub bore: Vec<Bore>,
-    /// The decks over each column as they are read, kept between reads: a
-    /// column, a deck and what it is there.
     over: Vec<(usize, usize, Over)>,
 }
 
-/// The air a bore takes out of a column, `[lo, hi)` in cells, and the
-/// surface of the way on its floor.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Bore {
     pub air: [i32; 2],
@@ -230,8 +176,7 @@ pub struct Bore {
     pub layer: u8,
 }
 
-/// A run off the ground: a deck's slab or a pier, from `lo` up to `hi`
-/// exclusive, in cells.
+/// `lo` up to `hi` exclusive, in cells.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Span {
     pub lo: i32,
@@ -256,14 +201,8 @@ impl Default for ChunkSample {
 }
 
 impl ChunkSample {
-    /// Samples the chunk whose first cell is `first` of its page's cells,
-    /// each cell from what the page it lies in is drawn from (`Around`).
-    /// Each cell takes the material of the source cell it lies in and the
-    /// height of the source's surface at its own center, so a cell read from
-    /// a coarser page is that page's ground at the chunk's step and nothing
-    /// invented. A channel in `hidden` is stepped over, as `shown_ground`
-    /// steps over it. Refused where the decks over it need more room than
-    /// the heap grants.
+    /// Each cell takes the material of the source cell it lies in and the source
+    /// surface's height at its own center, so a coarser page invents nothing.
     pub fn read(&mut self, around: &Around, first: [i64; 2], hidden: ChannelMask) -> Result<(), Refused> {
         let tables = &*MATERIALS;
         let skip = GROUND_CH_KEYS.map(|k| hidden & channel_bit(k) != 0);
@@ -287,10 +226,8 @@ impl ChunkSample {
                 let (page, n) = (&source.page, source.n);
                 let (x, y) = (source.origin[0] + x, source.origin[1] + y);
                 let (tx, ty) = (x.div_euclid(n as i64) as i32, y.div_euclid(n as i64) as i32);
-                // The ground channels are the page's own span; only the
-                // elevation is padded past it. An apron cell outside the
-                // page keeps the height — which is all the face mask reads
-                // — and takes the base material, which nothing draws.
+                // Only the elevation is padded past the page. An apron cell off it keeps its
+                // height, all the face mask reads, and a base material nothing draws.
                 let on_page = (0..=last).contains(&tx) && (0..=last).contains(&ty);
                 let types = if on_page {
                     unpack(page.cells[GROUND.cell_index(tx as u32, ty as u32) as usize])
@@ -298,7 +235,6 @@ impl ChunkSample {
                     [VOID; 4]
                 };
 
-                // The material: the base, then each channel in order.
                 let (mut material, mut layer) = (pack(tables.base_class, tables.base_rgb), tables.base_layer);
                 for (ch, &t) in types.iter().enumerate() {
                     if skip[ch] || t == VOID {
@@ -311,15 +247,12 @@ impl ChunkSample {
                 self.material[i] = material;
                 self.layer_idx[i] = layer;
 
-                // The height every consumer of this page takes, shift and
-                // all (elevation.rs's ground_ele). An apron cell off the page
-                // has no channels to judge by and takes the raw height.
+                // An apron cell off the page has no channels and takes the raw height.
                 let lanes = on_page.then_some(GroundLanes { cells: page.cells });
                 let center = |v: i64| (v as f64 + 0.5) / n as f64;
                 let ele = ground_ele_at(page.ele, lanes, center(x), center(y)) as i32;
                 self.ele[i] = ele as i16;
-                // The floor is the chunk's own: an apron column is written
-                // from it, and a neighbor's valley must not drop it.
+                // The floor is the chunk's own: a neighbor's valley must not drop it.
                 if inner {
                     min_ele = min_ele.min(ele);
                 }
@@ -327,16 +260,11 @@ impl ChunkSample {
         }
         let shown = !skip[ch_index(GroundChannelKey::TRANSPORT)];
         self.read_decks(if shown { Some(&around.own) } else { None }, first)?;
-        // One band-aligned floor shared by the whole chunk, under every peak
-        // and under every bore's floor, whose way is the ground's cell under
-        // its air.
         let bored = self.bore.iter().filter(|b| b.air[0] < b.air[1]).map(|b| b.air[0] - 1).min().unwrap_or(i32::MAX);
         self.floor = (min_ele.min(bored) - TERRAIN_Z_MARGIN).div_euclid(BAND_CELLS as i32) * BAND_CELLS as i32;
         Ok(())
     }
 
-    /// The decks over the chunk's own columns, from the page they are drawn
-    /// from: each column's highest top of each deck, as its slab and pier.
     fn read_decks(&mut self, own: Option<&PageSource>, first: [i64; 2]) -> Result<(), Refused> {
         let mut over = core::mem::take(&mut self.over);
         over.clear();
@@ -345,7 +273,6 @@ impl ChunkSample {
         built
     }
 
-    /// Each column's spans off the ground from the decks over it.
     fn spans_of(&mut self, over: &mut Vec<(usize, usize, Over)>) -> Result<(), Refused> {
         let tables = &*MATERIALS;
         // A deck's highest over a column, where two of its segments meet.
@@ -368,8 +295,6 @@ impl ChunkSample {
                         continue;
                     }
                     Occupies::Through { air } => {
-                        // Of two bores through one column, the one that takes
-                        // more of it.
                         if air[1] - air[0] > self.bore[col].air[1] - self.bore[col].air[0] {
                             self.bore[col] = Bore {
                                 air,
@@ -403,7 +328,7 @@ impl ChunkSample {
                     )?;
                 }
             }
-            // Lowest first, and a higher span keeps what two of them share.
+            // Lowest first; a higher span keeps what two share.
             let column = &mut self.spans[from..];
             column.sort_by_key(|s| (s.lo, s.hi));
             for k in (1..column.len()).rev() {
@@ -423,10 +348,8 @@ impl ChunkSample {
         Ok(())
     }
 
-    /// Column `i`'s ground from `from` up to `to` exclusive, lowest first,
-    /// as `run(lo, hi, material, layer)`, both ends inside: one run, or
-    /// where a bore goes through it, the ground under the bore's floor, the
-    /// way on the floor's cell, and the ground standing over its air.
+    /// Through a bore: the ground under its floor, the way on the floor's cell,
+    /// and the ground standing over its air.
     pub fn ground_runs<E>(&self, i: usize, from: i32, to: i32, mut run: impl FnMut(i32, i32, u32, u8) -> Result<(), E>) -> Result<(), E> {
         let top = (self.ele[i] as i32).min(to);
         let (m, l) = (self.material[i], self.layer_idx[i]);
@@ -441,8 +364,6 @@ impl ChunkSample {
         part(b.air[1], top, m, l)
     }
 
-    /// Column `i`'s runs, lowest first: its ground from `floor`, then what
-    /// stands off it, as `run(lo, hi, material, layer)`, both ends inside.
     pub fn column_runs<E>(&self, i: usize, mut run: impl FnMut(i32, i32, u32, u8) -> Result<(), E>) -> Result<(), E> {
         self.ground_runs(i, self.floor, i32::MAX, &mut run)?;
         for s in &self.spans[self.span_at[i] as usize..self.span_at[i + 1] as usize] {
@@ -451,9 +372,7 @@ impl ChunkSample {
         Ok(())
     }
 
-    /// Paints the chunk's own columns into `volume`, floor to top and what
-    /// stands off it. The apron's are not painted: the volume is the
-    /// chunk's, and they exist only as columns of the run set.
+    /// The apron's columns are not painted: the volume is the chunk's.
     pub fn paint(&self, volumes: &mut Volumes, volume: u32) -> bool {
         let mut painted = true;
         for cy in 0..CHUNK_CELLS {

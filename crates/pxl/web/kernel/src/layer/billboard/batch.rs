@@ -1,46 +1,38 @@
 // pxl-kernel/layer/billboard/batch.rs
 
-//! One frame's billboard candidates, as lanes rather than objects.
-//!
-//! Candidate membership belongs to the caller. These lanes contain only
-//! presentation inputs and the screen selector's scratch values.
+//! One frame's billboard candidates, as lanes.
 
 #[derive(Clone, Debug, Default)]
 pub struct BillboardBatch {
     pub count: u32,
 
-    /// Position relative to the local world frame's origin (frame/coord.rs).
+    /// Relative to the local world frame's origin.
     pub local_x: Vec<f64>,
     pub local_y: Vec<f64>,
     pub local_z: Vec<f64>,
 
-    /// Drawn width in CSS pixels.
+    /// CSS pixels.
     pub w_px: Vec<f32>,
-    /// Canvas-space Y of the anchor, in CSS pixels.
+    /// Canvas-space Y of the anchor, CSS pixels.
     pub anchor_px: Vec<f32>,
-    /// Stable per candidate, used only to keep two at equal distance from
-    /// swapping places between frames.
+    /// Only keeps two at equal distance from swapping between frames.
     pub tiebreak: Vec<f64>,
 
-    // Filled by the selector rather than the producer. They live here so the
-    // whole pass has one capacity and one allocation site.
-    /// The position laid on the planet, in the root frame, resolved once
-    /// from the local one.
+    // Filled by the selector, kept here so the pass has one allocation site.
+    /// Laid on the planet, in the root frame.
     pub world_x: Vec<f64>,
     pub world_y: Vec<f64>,
     pub world_z: Vec<f64>,
-    /// Squared distance to the eye. Squared because only the order is used.
+    /// Squared: only the order is used.
     pub d2: Vec<f64>,
-    /// Where a candidate kept is on the screen, in viewport pixels: its box
-    /// as drawn, left, top, right, bottom.
+    /// Viewport pixels: left, top, right, bottom.
     pub screen: Vec<[f64; 4]>,
-    /// Candidate indices that passed the frustum, in the order they will be
-    /// offered to the placement pass.
+    /// Indices that passed the frustum.
     pub order: Vec<u32>,
 }
 
 impl BillboardBatch {
-    /// Backing capacity, which is the high-water mark rather than a limit.
+    /// A high-water mark, not a limit.
     pub fn cap(&self) -> usize {
         self.local_x.len()
     }

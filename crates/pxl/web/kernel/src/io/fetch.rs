@@ -1,24 +1,10 @@
 // pxl-kernel/io/fetch.rs
 
-//! The world's reads at the shell's edge. What the kernel asks for is an
-//! **object it names** — which bake it belongs to and its name inside that
-//! bake (`DemandName`) — opened as a file below the bake's root (io/file.rs),
-//! and the host is the one that knows what address that is and what protocol
-//! reaches it. Nothing here spells a URL, a scheme or a status.
-//!
-//! What comes back is one of four: the bytes, no such object (ENOENT), the
-//! read was stopped (the kernel closed it), the read failed. The host decides
-//! which — a protocol's own way of saying "there is none" is the host's to
-//! read — and the open's answer takes a block, reads the file into it and
-//! closes it; `fetch_task`, on a turn's quota, decodes it once it is in. What
-//! an absent object *means* for its category is decided here, and that is
-//! world knowledge rather than transport.
-//!
-//! Every body is a heap block the kernel owns throughout. A body is decoded or
-//! read and released in the same command. A terrain body does not outlive its
-//! command — the page it carries is written into `.fixed.terrain`, whose
-//! record is the page's own coordinate. POI summary packets are decoded into
-//! bounded records and their bodies are released in the same command.
+//! The world's reads. The kernel names an object (its bake and its name in
+//! it, `DemandName`) and opens it as a file; the host alone knows the address
+//! and protocol. What an absent object means is decided here per category.
+//! Every body is a heap block released in the command that decodes it,
+//! unless a store keeps it.
 
 use core::fmt;
 
@@ -44,8 +30,6 @@ use pxl_spec::bake::poi_page::PoiPage;
 use pxl_spec::bake::quadkey::page_name;
 use pxl_spec::space::pyramid::LevelPage;
 
-/// A started attempt's object, named inside its bake — the path it is opened
-/// at. Which bake is `Category::bake`, the root it is opened below.
 pub struct DemandName(pub Category, pub u64);
 
 impl fmt::Display for DemandName {
@@ -53,28 +37,23 @@ impl fmt::Display for DemandName {
         let key = self;
         match key.0 {
             Category::terrain => write!(f, "{}", page_name(LevelPage::of_subject(key.1))),
-            // The one tile the stream has, at the name the bake gives it.
             Category::ocean => f.write_str(OCEAN_KEY),
             Category::poi => write!(f, "{}", page_name(LevelPage::of_subject(key.1))),
             Category::geocode => write!(f, "{}", group_name(key.1)),
-            // The one packet the stream has, at the name the bake gives it.
             Category::geocode_dict => write!(f, "{}", geocode_repository::dict_name()),
-            // An asset is named by its content and belongs to no bake, so it
-            // is opened below the assets' root (io/load.rs) and never here.
+            // Assets are opened below the assets' root (io/load.rs), never here.
             Category::asset => Ok(()),
         }
     }
 }
 
-/// Opens the object the scheduler's attempt `key` is for.
 pub fn start(key: u64, category: Category, subject: u64) {
     let Some(bake) = category.bake() else { return };
     let name = DemandName(category, subject).to_string();
     file::open(bake as u32, &name, Owner::Fetch { key, at_ms: now() });
 }
 
-/// Stops the read of attempt `key`, if one is open: closed, and settled as
-/// stopped at once, since nothing is said of a closed descriptor again.
+/// Settled as stopped at once: nothing is reported for a closed descriptor.
 pub fn cancel(key: u64) -> bool {
     let Some(fd) = file::held_for(|o| matches!(o, Owner::Fetch { key: k, .. } if *k == key)) else {
         return false;
@@ -91,18 +70,15 @@ fn release(block: Option<Block>) {
     }
 }
 
-/// A body's bytes, read where the host copied them.
 fn view<'a>((at, bytes): Block) -> &'a [u8] {
-    // SAFETY: the block is one `opened` acquired for this body alone,
-    // `bytes` long, and it is not released while the view is read.
+    // SAFETY: the block `opened` acquired for this body alone, `bytes` long,
+    // not released while the view is read.
     unsafe { core::slice::from_raw_parts(ptr_at::<u8>(at), bytes as usize) }
 }
 
-/// What an open came to.
 enum Got {
-    /// The file, read into a block of its own; None for an empty one.
+    /// None for an empty file.
     Read(Option<Block>),
-    /// There is no such object.
     Absent,
     Failed(Failure),
 }
@@ -124,10 +100,8 @@ fn arrivals() -> &'static mut Notify {
     ARRIVALS.get(Notify::new)
 }
 
-/// The host's answer to a read's open: a block taken for the file and the
-/// file read into it, or why there is none. `detail` is whatever number the
-/// host refused with, kept for the profiler to print; nothing branches on it,
-/// which is what keeps a protocol out of here.
+/// `detail` is only printed by the profiler; nothing branches on it, which
+/// keeps the protocol out of here.
 pub fn opened(fd: Fd, key: u64, at_ms: f64, res: i32, detail: u32) {
     let got = if res < 0 {
         file::close(fd);
@@ -148,8 +122,6 @@ pub fn opened(fd: Fd, key: u64, at_ms: f64, res: i32, detail: u32) {
     arrivals().notify();
 }
 
-/// What an open that did not give a file says: an object that is not there,
-/// or the errno it failed with, as the profiler counts it.
 fn failure(res: i32, detail: u32) -> Got {
     if res == Errno::ENOENT as i32 {
         return Got::Absent;
@@ -161,9 +133,8 @@ fn failure(res: i32, detail: u32) -> Got {
     })
 }
 
-/// The fetches' task: the arrivals taken together, then each decoded and
-/// settled on a later turn, when their bytes are in, as many as the quota
-/// lets and one at least. A body is one unit.
+/// Arrivals are decoded on a later turn, once their bytes are in, as many
+/// as the quota allows and at least one.
 pub async fn fetch_task() {
     loop {
         notified(arrivals).await;
@@ -183,7 +154,7 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
         Got::Read(block) => block,
         _ => None,
     };
-    // A key the scheduler does not hold is one a reset forgot.
+    // A key the ledger does not hold is one a reset forgot.
     let Some((category, subject)) = attempt_of(key) else {
         release(block);
         return;
@@ -198,9 +169,6 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
             Ok(()) => (Outcome::ok, Failure::default()),
             Err(fail) => (Outcome::error, fail),
         },
-        // There is no such object, and for most categories that is an answer
-        // rather than a fault — which of the two is the category's own and
-        // is the one piece of this the world decides.
         Got::Absent => match absent(category, subject) {
             Ok(()) => (Outcome::ok, Failure::default()),
             Err(fail) => (Outcome::error, fail.into()),
@@ -210,30 +178,24 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
     settle(key, outcome, Some(phases), fail);
 }
 
-/// There is no such object. What that means is the category's: open water
-/// for a terrain page, no label for a geocode group. POI snapshots must exist.
-/// The shared ocean tile and the dictionary are the two that must exist, so
-/// their absence is a fault.
+/// Open water for a terrain page, no label for a geocode group. The ocean
+/// tile must exist, so its absence is a fault.
 fn absent(category: Category, subject: u64) -> Result<(), Errno> {
     match category {
         Category::terrain => Terrain::absent(LevelPage::of_subject(subject)),
         Category::poi => PoiPage::absent(LevelPage::of_subject(subject)),
         Category::geocode => geocode_store::set_group(subject, None),
-        // A bake with no dictionary is one whose groups name nothing: an
-        // answer, so the demand is not made again.
+        // A bake with no dictionary names nothing: an answer, so not asked again.
         Category::geocode_dict => geocode_store::set_dict(None),
         Category::ocean => return Err(Errno::ENOENT),
-        // An asset's read is settled where it is asked for (io/load.rs) and
-        // never arrives here.
         Category::asset => return Err(Errno::ENOTRECOVERABLE),
     };
     Ok(())
 }
 
-/// The bytes arrived. The block is released here, unless the page keeps it.
+/// The block is released here unless the page keeps it.
 fn adopt(category: Category, subject: u64, block: Option<Block>, phases: &mut Phases) -> Result<(), Failure> {
-    // A read that answered with nothing is not an object; only `absent` says
-    // there is none, and it carries no body.
+    // Only `absent` says there is none; an empty read is not an object.
     let Some(b) = block else { return Err(Errno::EBADMSG.into()) };
     match category {
         Category::terrain => {
@@ -246,9 +208,8 @@ fn adopt(category: Category, subject: u64, block: Option<Block>, phases: &mut Ph
             release(block);
             result
         }
-        // SAFETY of each `open_*` below: the block is the heap's, given for
-        // this body alone; the page or packet keeps it and the store releases
-        // it with them.
+        // SAFETY (each `open_*` below): the heap block given for this body alone;
+        // the store keeps and releases it.
         Category::poi => {
             let result = PoiPage::pyramid().adopt(LevelPage::of_subject(subject), view(b), phases);
             release(block);
@@ -264,7 +225,6 @@ fn adopt(category: Category, subject: u64, block: Option<Block>, phases: &mut Ph
                 Err(err.into())
             }
         },
-        // As `absent`: an asset never arrives here.
         Category::asset => Err(Errno::ENOTRECOVERABLE.into()),
         Category::geocode_dict => match unsafe { geocode_repository::open_dict(b.0, b.1) } {
             Ok(resident) => {

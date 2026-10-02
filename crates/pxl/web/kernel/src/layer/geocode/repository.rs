@@ -1,33 +1,22 @@
 // pxl-kernel/layer/geocode/repository.rs
 
-//! The two packets the reverse-geocode bake writes, resident: the dictionary
-//! and one group of pages (pxl-spec bake/place_page.rs). Each is the heap
-//! block the shell fetched the body into and a view opened over it, so a
-//! name reaches the snapshot without being decoded into a string of its own.
-//!
-//! Where they are fetched from: the pre-baked static set when one is
-//! configured, the dev tile server otherwise. A group the bake wrote no
-//! object for answers 404, which is "no page under it is in any place"
-//! rather than a failure.
+//! The reverse-geocode bake's two packets, resident: the dictionary and one
+//! group of pages, each a view over the heap block the shell fetched into, so
+//! names are never decoded into strings. A group with no object answers 404,
+//! meaning no page under it is in any place.
 
 use pxl_spec::bake::place_page::{open_place_dict, open_place_group, PlaceGroupView, PlacesView, DICT_OBJECT};
 use xpute_core::status::error::MarshalError;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{free, Block};
 
-/// The dictionary, which the set has one of at the name the bake gives it.
 pub fn dict_name() -> &'static str {
     DICT_OBJECT
 }
 
-/// Every place a polygon names, held for the session: a group's numbers are
-/// places in it, so it outlives every group.
-///
-/// The block goes back when the packet does. A `'static` view over a block
-/// is the shape a resident page has here (layer/terrain/page.rs) and the
-/// lifetime is a claim the type cannot keep — what it is really good for is
-/// the block's own life, which is why giving the block back is the packet's
-/// own business and not a caller's to remember.
+/// Held for the session: a group's numbers are places in it. The block goes
+/// back when the packet drops, since the `'static` view cannot keep its own
+/// lifetime.
 pub struct ResidentDict {
     pub view: PlacesView<'static>,
     block: Block,
@@ -35,13 +24,12 @@ pub struct ResidentDict {
 
 impl Drop for ResidentDict {
     fn drop(&mut self) {
-        // SAFETY: the block `open_dict` took for this packet alone, given
-        // back once, and the view that read it dies with it.
+        // SAFETY: the block `open_dict` took for this packet alone, freed once; the
+        // view dies with it.
         unsafe { free(self.block) }
     }
 }
 
-/// One group of pages, held while the center is in it.
 pub struct ResidentGroup {
     pub view: PlaceGroupView<'static>,
     block: Block,
@@ -54,8 +42,6 @@ impl Drop for ResidentGroup {
     }
 }
 
-/// The bytes of a body the host copied into a block of its own.
-///
 /// # Safety
 /// The block is a heap block held for this packet alone, `bytes` long, until
 /// the packet is released.

@@ -5,7 +5,7 @@ use crate::golden::Golden;
 
 const GOLDEN: &str = include_str!("../../../../../spec/xpute/golden/wire/tlv.tsv");
 
-/// A read value as the TypeScript prints it: `typeof`, a colon, the value.
+/// As the TypeScript prints it: `typeof`, a colon, the value.
 fn show(v: &TlvValue) -> String {
     match v {
         TlvValue::Bool(b) => format!("boolean:{b}"),
@@ -52,8 +52,6 @@ fn tlv_computes_what_the_typescript_computes() {
     let want: Vec<&str> = (0..v.len("read")).map(|j| v.s(&format!("read.{j}"))).collect();
     assert_eq!(read, want);
 
-    // How a sequence stops: the values handed out before it did, then END
-    // read, the input run out at a boundary, or a fault.
     v.each("end", |k| {
         let pkt = hex::decode(v.s(&format!("{k}.packet"))).unwrap();
         let mut r = TlvReader::new(&pkt);
