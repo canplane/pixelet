@@ -2,7 +2,7 @@
 
 pub mod provider;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 use xpute_core::status::error::MarshalError;
 
@@ -38,11 +38,6 @@ impl PlaceDict {
     pub fn packet(&self) -> Result<Vec<u8>, MarshalError> {
         encode_place_dict(&self.places)
     }
-}
-
-pub fn names_of(common: &Option<serde_json::Value>) -> BTreeMap<String, String> {
-    let Some(serde_json::Value::Object(map)) = common else { return BTreeMap::new() };
-    map.iter().filter_map(|(lang, name)| name.as_str().map(|n| (lang.clone(), n.to_string()))).collect()
 }
 
 #[cfg(test)]

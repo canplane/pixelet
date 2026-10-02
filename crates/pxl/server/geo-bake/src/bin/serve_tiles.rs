@@ -17,6 +17,7 @@ use pxl_geo_bake::demand::{
 use pxl_geo_bake::pyramid::PageSet;
 use pxl_geo_bake::terrain::leaf::OCEAN_KEY;
 use pxl_geo_bake::util::CONTENT_ENCODING;
+use pxl_server::admin_auth::admin_auth;
 use pxl_spec::bake::published::{PUBLISHED_TOP_LEVEL, PUBLISHED_VERSION};
 use pxl_spec::bake::quadkey::page_of_name;
 use pxl_spec::route::{ASSET_ROOT, GEO_INTERNAL, TILE_ROOT};
@@ -33,7 +34,6 @@ struct App {
     pages: Pages,
     top_level: u32,
     asset_dir: PathBuf,
-    admin_token: Option<String>,
 }
 
 async fn tile(State(app): State<Arc<App>>, Path((kind, name)): Path<(String, String)>) -> Response {
@@ -73,7 +73,9 @@ fn published_version(kind: Kind) -> &'static str {
 
 /// The bucket's address, `<kind>/<version>/<name>`, as a production build asks for it.
 async fn tile_versioned(State(app): State<Arc<App>>, Path((kind, version, name)): Path<(String, String, String)>) -> Response {
-    let (Pages::Baked(dir), Some(kind)) = (&app.pages, Kind::parse(&kind)) else { return StatusCode::NOT_FOUND.into_response() };
+    let (Pages::Baked(dir), Some(kind)) = (&app.pages, Kind::parse(&kind)) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
     if !version.strip_prefix('v').is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())) {
         return StatusCode::NOT_FOUND.into_response();
     }
@@ -114,12 +116,7 @@ async fn source(State(app): State<Arc<App>>) -> Response {
         .into_response()
 }
 
-async fn invalidate(State(app): State<Arc<App>>, headers: HeaderMap, Path(kind): Path<String>, body: String) -> Response {
-    if let Some(token) = &app.admin_token {
-        if headers.get("x-admin-token").and_then(|v| v.to_str().ok()) != Some(token.as_str()) {
-            return StatusCode::UNAUTHORIZED.into_response();
-        }
-    }
+async fn invalidate(State(app): State<Arc<App>>, Path(kind): Path<String>, body: String) -> Response {
     let Some(kind) = Kind::parse(&kind) else { return StatusCode::NOT_FOUND.into_response() };
     let Pages::Demand(demand) = &app.pages else {
         return (StatusCode::CONFLICT, "a finished bake is served as it is: nothing to invalidate").into_response();
@@ -196,19 +193,19 @@ fn run() -> Result<(), String> {
             (Pages::Demand(Server::open(&url, workers, cache, top_level, limits)?), top_level)
         }
     };
-    let app = Arc::new(App {
-        pages,
-        top_level,
-        asset_dir,
-        admin_token: std::env::var("ADMIN_TOKEN").ok().filter(|t| !t.is_empty()),
-    });
+    let app = Arc::new(App { pages, top_level, asset_dir });
 
+    // Without ADMIN_TOKEN, as in local dev, the internal route is open.
+    let mut internal = Router::new().route(&format!("{GEO_INTERNAL}/world/{{kind}}/cache/invalidate"), post(invalidate));
+    if let Some(token) = std::env::var("ADMIN_TOKEN").ok().filter(|t| !t.is_empty()) {
+        internal = internal.route_layer(axum::middleware::from_fn_with_state(token, admin_auth));
+    }
     let router = Router::new()
         .route(&format!("{TILE_ROOT}/source"), get(source))
         .route(&format!("{TILE_ROOT}/{{kind}}/{{name}}"), get(tile))
         .route(&format!("{TILE_ROOT}/{{kind}}/{{version}}/{{name}}"), get(tile_versioned))
         .route(&format!("{ASSET_ROOT}/{{*name}}"), get(asset))
-        .route(&format!("{GEO_INTERNAL}/world/{{kind}}/cache/invalidate"), post(invalidate))
+        .merge(internal)
         .with_state(app.clone());
 
     let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().map_err(|e| e.to_string())?;
