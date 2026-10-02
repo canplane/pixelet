@@ -81,19 +81,19 @@ fn saying_the_same_set_again_changes_nothing() {
 }
 
 #[test]
-fn an_attempt_ending_does_not_answer_the_demand() {
+fn an_answer_is_asked_once() {
     let mut l = ledger();
     l.declare(Category::terrain, &[(1, ask(Why::Fault, 0.0))], 0.0);
     l.pump(0.0);
     let key = started(&mut l)[0];
     ok(&mut l, key, 0.0);
-    // An attempt is not an answer; only the producer withdraws a demand.
-    assert_eq!(l.pending_count(Category::terrain), 1);
     l.pump(0.0);
-    assert_eq!(started(&mut l).len(), 1, "and it is tried again");
-    l.declare(Category::terrain, &[], 0.0);
-    assert_eq!(l.pending_count(Category::terrain), 1, "the attempt is still out");
-    assert_eq!(l.counts().0, 0, "but nothing is waiting");
+    assert!(started(&mut l).is_empty(), "an answered want was asked again");
+    assert!(stopped(&mut l).is_empty());
+    assert_eq!(l.pending_count(Category::terrain), 0);
+    l.declare(Category::terrain, &[(1, ask(Why::Fault, 0.0))], 1.0);
+    l.pump(1.0);
+    assert_eq!(started(&mut l).len(), 1);
 }
 
 #[test]

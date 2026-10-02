@@ -2,13 +2,10 @@
 
 //! The kernel's I/O ledger: what is wanted (`desired`, replaced whole per
 //! category each turn) and what is out (`attempt`). Ordering, intake and
-//! retry waits are the `Serve` policy's. A running attempt is never stopped
-//! for a better want: a restart throws away what it already spent, so rank
-//! orders only what starts.
+//! retry waits are the `Serve` policy's.
 //!
-//! A completion ends an attempt and nothing else: a producer stops wanting
-//! something by not saying it again. A failure's wait lives on its want, so
-//! it is bounded by the wants and forgotten when the want is.
+//! An answer ends its want; a failure ends only its attempt and waits on the
+//! want. A running attempt is never preempted.
 //!
 //! Invariants: no more attempts than credits and no want past its category's
 //! bound; ties broken by category then subject so the order is total; a free
@@ -280,15 +277,20 @@ impl<S: Serve> Ledger<S> {
         self.attempt[slot].map(|a| (a.category, a.subject))
     }
 
-    /// The want is left alone; if the policy says the outcome waits, a still
-    /// standing want is held back that long.
+    /// An answer ends the want; a failure holds it back.
     pub fn settle(&mut self, key: u64, outcome: Outcome, phases: Option<Phases>, fail: Failure, at: f64) {
         let Some(slot) = self.slot_of(key) else { return };
         let a = self.attempt[slot].take().or_bug(Errno::ENOTRECOVERABLE);
         self.generation[slot] = self.generation[slot].wrapping_add(1);
-        if let (Some(wait), Some(i)) = (self.serve.retry_after(outcome), self.find(a.category, a.subject)) {
-            if let Some(w) = &mut self.desired[i] {
-                w.until_ms = at + wait;
+        if let Some(i) = self.find(a.category, a.subject) {
+            match self.serve.retry_after(outcome) {
+                _ if outcome == Outcome::ok => self.desired[i] = None,
+                Some(wait) => {
+                    if let Some(w) = &mut self.desired[i] {
+                        w.until_ms = at + wait;
+                    }
+                }
+                None => {}
             }
         }
         profiler_record(TaskRecord {
