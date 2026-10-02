@@ -25,12 +25,16 @@ use crate::param;
 use crate::sched::profiler::record::Failure;
 use crate::world::observation::{heights_revision, observation, ByFootprints, Known, Order};
 use crate::world::paging::floor::{self, Fallback, Floor};
-use crate::world::paging::{Candidate, Paging, Victim, ASKS, DESTINATION_PAGES, FRAMES, LEVEL_DEMAND_PAGES};
+use crate::world::paging::{Candidate, Paging, Victim, ABSENT, ASKS, DESTINATION_PAGES, FRAMES, LEVEL_DEMAND_PAGES};
 use crate::world::prefetch::{NoPrefetch, Prefetch};
 use crate::world::quality;
 
 pub trait Layer: Folds + Clone + 'static {
     const CATEGORY: Category;
+
+    /// The category of the one body every page with no object shares, held
+    /// in `ABSENT`; none where such a page is answered otherwise (`absent`).
+    const SHARED_ABSENT: Option<Category> = None;
 
     /// The coarsest level the layer has pages at; past where that level
     /// hands off, nothing of it is asked for.
@@ -141,6 +145,20 @@ impl<L: Layer> Pyramid<L> {
 
     pub fn adopt(&mut self, p: LevelPage, pkt: &[u8], phases: &mut Phases) -> Result<(), Failure> {
         self.admit(p, |record| L::receive(record, pkt, phases))
+    }
+
+    /// The body every absent page shares, decoded once into `ABSENT`.
+    pub fn adopt_shared(&mut self, pkt: &[u8], phases: &mut Phases) -> Result<(), Failure> {
+        if self.paging.has_shared() {
+            return Ok(());
+        }
+        let body = L::receive(ABSENT, pkt, phases)?;
+        self.paging.adopt_shared(body);
+        Ok(())
+    }
+
+    pub fn absent(&mut self, p: LevelPage) {
+        self.paging.absent(p);
     }
 
     pub fn admit(&mut self, p: LevelPage, receive: impl FnOnce(u32) -> Result<L, Failure>) -> Result<(), Failure> {
@@ -294,6 +312,13 @@ impl<L: Layer> Pyramid<L> {
             self.readers.extend_from_slice(readers);
         }
         declare(L::CATEGORY, &self.wants);
+        self.declare_shared();
+    }
+
+    fn declare_shared(&self) {
+        if let Some(category) = L::SHARED_ABSENT {
+            declare(category, if self.paging.awaits_shared() { &[(0, Ask::PLAIN)] } else { &[] });
+        }
     }
 
     /// A layer the view does not show keeps what it holds and asks for nothing.
@@ -302,6 +327,7 @@ impl<L: Layer> Pyramid<L> {
         self.asks.clear();
         self.paging.ask(&self.asks);
         declare(L::CATEGORY, &[]);
+        self.declare_shared();
         self.last = None;
     }
 }

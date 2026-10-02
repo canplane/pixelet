@@ -20,7 +20,7 @@ use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::io::file::{self, Owner};
 use crate::io::sched::{attempt_of, settle};
 use crate::layer::geocode::store as geocode_store;
-use crate::layer::terrain::page::{adopt_ocean, OCEAN_KEY};
+use crate::layer::terrain::page::OCEAN_KEY;
 use crate::sched::profiler::record::{Failure, Outcome};
 use crate::world::change::world_edge;
 use crate::world::pyramid::Layer;
@@ -204,7 +204,7 @@ fn adopt(category: Category, subject: u64, block: Option<Block>, phases: &mut Ph
             result
         }
         Category::ocean => {
-            let result = adopt_ocean(view(b));
+            let result = Terrain::pyramid().adopt_shared(view(b), phases);
             release(block);
             result
         }

@@ -87,6 +87,9 @@ struct Entry<L> {
     ask: Option<Ask>,
     /// The bucket has no object for it, so the page over it says its ground.
     answered: bool,
+    /// The bucket has no object for it, and it reads the body every such
+    /// page shares, once that has come.
+    absent: bool,
 }
 
 impl<L> Entry<L> {
@@ -94,6 +97,7 @@ impl<L> Entry<L> {
         held: None,
         ask: None,
         answered: false,
+        absent: false,
     };
 
     fn idle(&self) -> bool {
@@ -103,6 +107,8 @@ impl<L> Entry<L> {
 
 pub struct Paging<L: Layer> {
     pages: HashMap<LevelPage, Entry<L>>,
+    /// The body every absent page reads, decoded once into `ABSENT`.
+    shared: Option<L>,
     free: Vec<u32>,
     /// Kept so `ask` allocates nothing.
     going: Vec<LevelPage>,
@@ -117,6 +123,7 @@ impl<L: Layer> Default for Paging<L> {
     fn default() -> Self {
         Paging {
             pages: HashMap::with_capacity(ENTRIES as usize),
+            shared: None,
             // Lowest first, as the frames are taken.
             free: (ABSENT + 1..RECORDS).rev().collect(),
             going: Vec::with_capacity(ENTRIES as usize),
@@ -332,6 +339,35 @@ impl<L: Layer> Paging<L> {
             self.free.push(record);
         }
         self.put(p, page, ABSENT);
+    }
+
+    /// `p` has no object: it reads the shared body, or waits for it.
+    pub fn absent(&mut self, p: LevelPage) {
+        if self.asked(p).is_none() {
+            return;
+        }
+        match &self.shared {
+            Some(body) => self.set(p, body.clone()),
+            None => self.entry_mut(p).absent = true,
+        }
+    }
+
+    /// Whether an asked page waits for the shared body.
+    pub fn awaits_shared(&self) -> bool {
+        self.shared.is_none() && self.pages.values().any(|e| e.absent && e.ask.is_some())
+    }
+
+    pub fn has_shared(&self) -> bool {
+        self.shared.is_some()
+    }
+
+    /// The shared body has come: every page waiting for it reads it.
+    pub fn adopt_shared(&mut self, body: L) {
+        let waiting: Vec<LevelPage> = self.pages.iter().filter(|(_, e)| e.absent && e.held.is_none()).map(|(&p, _)| p).collect();
+        for p in waiting {
+            self.set(p, body.clone());
+        }
+        self.shared = Some(body);
     }
 
     pub fn answer_above(&mut self, p: LevelPage) {
