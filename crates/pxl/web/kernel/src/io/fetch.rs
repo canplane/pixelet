@@ -19,13 +19,13 @@ use crate::host::now;
 use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::io::file::{self, Owner};
 use crate::io::sched::{attempt_of, settle};
-use crate::layer::geocode::{repository as geocode_repository, store as geocode_store};
+use crate::layer::geocode::store as geocode_store;
 use crate::layer::terrain::page::{adopt_ocean, OCEAN_KEY};
 use crate::sched::profiler::record::{Failure, Outcome};
 use crate::world::change::world_edge;
 use crate::world::pyramid::Layer;
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::bake::place_page::group_name;
+use pxl_spec::bake::place_page::{group_name, DICT_OBJECT};
 use pxl_spec::bake::poi_page::PoiPage;
 use pxl_spec::bake::quadkey::page_name;
 use pxl_spec::space::pyramid::LevelPage;
@@ -40,7 +40,7 @@ impl fmt::Display for DemandName {
             Category::ocean => f.write_str(OCEAN_KEY),
             Category::poi => write!(f, "{}", page_name(LevelPage::of_subject(key.1))),
             Category::geocode => write!(f, "{}", group_name(key.1)),
-            Category::geocode_dict => write!(f, "{}", geocode_repository::dict_name()),
+            Category::geocode_dict => f.write_str(DICT_OBJECT),
             // Assets are opened below the assets' root (io/load.rs), never here.
             Category::asset => Ok(()),
         }
@@ -184,9 +184,9 @@ fn absent(category: Category, subject: u64) -> Result<(), Errno> {
     match category {
         Category::terrain => Terrain::absent(LevelPage::of_subject(subject)),
         Category::poi => PoiPage::absent(LevelPage::of_subject(subject)),
-        Category::geocode => geocode_store::set_group(subject, None),
+        Category::geocode => geocode_store::absent_group(subject),
         // A bake with no dictionary names nothing: an answer, so not asked again.
-        Category::geocode_dict => geocode_store::set_dict(None),
+        Category::geocode_dict => geocode_store::absent_dict(),
         Category::ocean => return Err(Errno::ENOENT),
         Category::asset => return Err(Errno::ENOTRECOVERABLE),
     };
@@ -208,33 +208,15 @@ fn adopt(category: Category, subject: u64, block: Option<Block>, phases: &mut Ph
             release(block);
             result
         }
-        // SAFETY (each `open_*` below): the heap block given for this body alone;
-        // the store keeps and releases it.
         Category::poi => {
             let result = PoiPage::pyramid().adopt(LevelPage::of_subject(subject), view(b), phases);
             release(block);
             result
         }
-        Category::geocode => match unsafe { geocode_repository::open_group(b.0, b.1) } {
-            Ok(resident) => {
-                geocode_store::set_group(subject, Some(resident));
-                Ok(())
-            }
-            Err(err) => {
-                release(block);
-                Err(err.into())
-            }
-        },
+        // SAFETY (both): the heap block given for this body alone; the store
+        // keeps it, or frees it if it does not open.
+        Category::geocode => unsafe { geocode_store::adopt_group(subject, b) }.map_err(Into::into),
+        Category::geocode_dict => unsafe { geocode_store::adopt_dict(b) }.map_err(Into::into),
         Category::asset => Err(Errno::ENOTRECOVERABLE.into()),
-        Category::geocode_dict => match unsafe { geocode_repository::open_dict(b.0, b.1) } {
-            Ok(resident) => {
-                geocode_store::set_dict(Some(resident));
-                Ok(())
-            }
-            Err(err) => {
-                release(block);
-                Err(err.into())
-            }
-        },
     }
 }

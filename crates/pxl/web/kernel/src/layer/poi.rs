@@ -20,6 +20,7 @@ static POI: Global<Pyramid<PoiPage>> = Global::new();
 
 impl Layer for PoiPage {
     const CATEGORY: Category = Category::poi;
+    const COARSEST: u32 = crate::param::POI_MAJOR_LEVEL;
 
     fn pyramid() -> &'static mut Pyramid<PoiPage> {
         POI.get(Pyramid::default)
@@ -70,12 +71,10 @@ pub fn rank_of(kind: u8) -> u16 {
     }
 }
 
-/// Fetches out to where the ground is drawn coarser than POI_MAJOR_LEVEL,
-/// and nothing while places are hidden.
+/// Nothing is fetched while places are hidden.
 pub fn poi_step() {
     if enabled() {
-        let far = crate::world::quality::effective().tau().split_distance(crate::param::POI_MAJOR_LEVEL as i32 + 1);
-        PoiPage::pyramid().step(None, &[], far);
+        PoiPage::pyramid().step(None, &[]);
         crate::world::pyramid::cover::step::<PoiPage>();
     } else {
         PoiPage::pyramid().idle();

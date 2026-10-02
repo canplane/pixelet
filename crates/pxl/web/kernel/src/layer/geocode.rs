@@ -4,5 +4,4 @@
 //! straight into the UI snapshot; nothing here is drawn.
 
 pub mod fetcher;
-pub mod repository;
 pub mod store;

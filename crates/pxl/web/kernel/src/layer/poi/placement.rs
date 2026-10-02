@@ -10,7 +10,7 @@ use crate::layer::billboard::selection::select_visible_billboards;
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::layer::poi::badge::{self, Label};
 use crate::layer::poi::{enabled, rank_of};
-use crate::param::{POI_ALL_LEVEL, POI_MAJOR_LEVEL, POI_MAJOR_RANK};
+use crate::param::{POI_ALL_LEVEL, POI_MAJOR_RANK};
 use crate::sched::tick::TickContext;
 use crate::world::access::{Access, Detail, Ray};
 use crate::world::frame::coord::local_world_origin;
@@ -56,7 +56,7 @@ fn top_at(at: &Pvf3, level: u32) -> Option<f64> {
 
 pub fn step(ctx: &mut TickContext) {
     let p = PLACEMENT.get(Placement::default);
-    if !enabled() || crate::control::camera::controller::map_center().is_none() {
+    if !enabled() || crate::world::observation::eye().is_none() {
         if let Some(set) = p.set.take() {
             remove_billboard_set(set);
             ctx.invalidate();
@@ -74,8 +74,8 @@ pub fn step(ctx: &mut TickContext) {
     let mut found = core::mem::take(&mut p.found);
     found.clear();
     for &chunk in &crate::world::pyramid::cover::cover::<PoiPage>().0.drawn {
-        // None coarser than POI_MAJOR_LEVEL, only the most prominent up to POI_ALL_LEVEL.
-        if chunk.level() > POI_MAJOR_LEVEL {
+        // None coarser than COARSEST, only the most prominent up to POI_ALL_LEVEL.
+        if chunk.level() > PoiPage::COARSEST {
             continue;
         }
         let major_only = chunk.level() > POI_ALL_LEVEL;
