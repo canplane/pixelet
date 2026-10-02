@@ -1,8 +1,10 @@
 // pxl-kernel/io/sched.rs
 
 //! The kernel's I/O ledger: what is wanted (`desired`, replaced whole per
-//! category each turn) and what is out (`attempt`). Ordering, preemption,
-//! intake and retry waits are the `Serve` policy's.
+//! category each turn) and what is out (`attempt`). Ordering, intake and
+//! retry waits are the `Serve` policy's. A running attempt is never stopped
+//! for a better want: a restart throws away what it already spent, so rank
+//! orders only what starts.
 //!
 //! A completion ends an attempt and nothing else: a producer stops wanting
 //! something by not saying it again. A failure's wait lives on its want, so
@@ -10,8 +12,8 @@
 //!
 //! Invariants: no more attempts than credits and no want past its category's
 //! bound; ties broken by category then subject so the order is total; a free
-//! credit and a ready want never both outlast a pump; preemption only for a
-//! strictly earlier want, so with ranks held still stops terminate.
+//! credit and a ready want never both outlast a pump; an attempt stops only
+//! when nobody wants it any more.
 
 use core::cmp::Ordering;
 
@@ -37,9 +39,6 @@ pub struct Rank {
 pub trait Serve {
     /// Asked again every pump: the order is the view's now.
     fn rank(&self, category: Category, subject: u64, ask: Ask, enqueue_ms: f64) -> Rank;
-
-    /// Asked only where `waiting` already stands strictly before `running`.
-    fn preempts(&self, waiting: Rank, running: Rank) -> bool;
 
     fn intake(&self) -> u32;
 
@@ -201,7 +200,7 @@ impl<S: Serve> Ledger<S> {
     }
 
     /// Stops what nobody wants, then starts ready wants in order up to the
-    /// intake, preempting where allowed. One pump per turn after every producer
+    /// intake, into free credits only. One pump per turn after every producer
     /// has spoken, or the first producer would fill every slot.
     pub fn pump(&mut self, at: f64) {
         // Stop abandoned work in the turn it is abandoned: after a zoom out and
@@ -224,8 +223,7 @@ impl<S: Serve> Ledger<S> {
 
         let intake = self.serve.intake().max(1) as usize;
         for &(placed, i) in ready.iter().take(intake) {
-            // In order: if nothing makes room for this one, nothing does for the rest.
-            let Some(slot) = self.free_slot().or_else(|| self.preempt(placed, at)) else { break };
+            let Some(slot) = self.free_slot() else { break };
             let w = self.desired[i].or_bug(Errno::ENOTRECOVERABLE);
             self.start(slot, w, placed.rank, at);
         }
@@ -245,22 +243,6 @@ impl<S: Serve> Ledger<S> {
             start_ms: at,
         });
         self.started.push((key_of(slot, self.generation[slot]), w.category, w.subject));
-    }
-
-    /// Frees the last-standing attempt's credit for `waiting`; its want stays
-    /// desired and restarts on a later pump.
-    fn preempt(&mut self, waiting: Placed, at: f64) -> Option<usize> {
-        let running = |k: usize| {
-            let a = self.attempt[k]?;
-            let w = self.desired[self.find(a.category, a.subject)?]?;
-            Some((self.placed(&w), k))
-        };
-        let (last, slot) = (0..self.credits as usize).filter_map(running).max_by(|a, b| a.0.cmp(&b.0))?;
-        if waiting.cmp(&last).is_ge() || !self.serve.preempts(waiting.rank, last.rank) {
-            return None;
-        }
-        self.stop(slot, at);
-        Some(slot)
     }
 
     /// The key is spent, so whatever the host still reports under it (an abort

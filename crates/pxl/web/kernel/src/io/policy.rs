@@ -12,8 +12,8 @@
 //!    Ranking holes before coarse ground instead put the top page's 2 km
 //!    cubes in front of the eye for seconds on a cold start (2026-09-26).
 //!
-//! Everything else ties, after the view. A running attempt is preempted only
-//! for a whole class better: a restart throws away what it already spent.
+//! Everything else ties, after the view. Rank orders what starts; nothing
+//! running is stopped for it.
 
 use crate::io::demand::{Ask, Category, Why};
 use crate::io::sched::{Rank, Serve};
@@ -63,10 +63,6 @@ impl Serve for Policy {
             // Neither blocks the other: the label renders on the turn both are there.
             Category::geocode | Category::geocode_dict => Rank { class: ASIDE, distance: 0.0 },
         }
-    }
-
-    fn preempts(&self, waiting: Rank, running: Rank) -> bool {
-        waiting.class < running.class
     }
 
     fn intake(&self) -> u32 {

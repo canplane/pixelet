@@ -35,15 +35,6 @@ fn what_the_view_needs_is_asked_for_out_from_the_eye_and_speculation_after() {
 }
 
 #[test]
-fn only_a_whole_class_better_takes_a_running_credit() {
-    let p = Policy::standard();
-    let r = |why, seen, near| p.rank(Category::terrain, 0, at(why, seen, near), 0.0);
-    assert!(!p.preempts(r(Why::Fault, true, 0.0), r(Why::Fault, true, 5.0)));
-    assert!(p.preempts(r(Why::Fault, true, 9.0), r(Why::Fault, false, 0.0)));
-    assert!(p.preempts(r(Why::Fault, false, 9.0), r(Why::Hint, true, 0.0)));
-}
-
-#[test]
 fn only_a_failure_waits() {
     let p = Policy::standard();
     assert_eq!(p.retry_after(Outcome::error), Some(param::RETRY_MS));
