@@ -30,6 +30,9 @@
     "sync:build-number": "sh -c './script/build-log.ts >/dev/null || echo \"[build-number] not synced: this build is labeled from the cached number\" >&2'",
     // Measure the client here: the dev server's unbundled modules are not what ships.
     "preview": "deno task --cwd apps/web preview",
+    "preview:local": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles) & (deno task preview:web) & wait\"",
+    "preview:baked": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles --baked ./out) & (deno task preview:web) & wait\"",
+    "preview:web": "deno task --cwd apps/web preview:local",
 
     // Terrain and geocode resume; POI writes one immutable snapshot.
     "solve:decks": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin solve_decks -- \"$@\"' --",

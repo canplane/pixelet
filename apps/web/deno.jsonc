@@ -28,7 +28,7 @@
 
     "build": { "command": "deno run -A --node-modules-dir=auto npm:vite build", "dependencies": ["build:wasm:published"] },
     "preview": { "command": "deno run -A --node-modules-dir=auto npm:vite preview", "dependencies": ["build"] },
-    "preview:local": "VITE_DEV_SOURCE=local deno run -A --node-modules-dir=auto npm:vite preview",
+    "preview:local": { "command": "VITE_DEV_SOURCE=local deno run -A --node-modules-dir=auto npm:vite preview", "dependencies": ["build"] },
 
     // Build, then publish the Worker (app + R2 tile route). Run through Deno
     // rather than npx: wrangler requires Node >=22 and the system Node may be

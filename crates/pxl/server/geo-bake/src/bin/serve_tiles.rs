@@ -40,7 +40,7 @@ async fn tile(State(app): State<Arc<App>>, Path((kind, name)): Path<(String, Str
     let Some(kind) = Kind::parse(&kind) else { return StatusCode::NOT_FOUND.into_response() };
     let demand = match &app.pages {
         Pages::Demand(demand) => demand,
-        Pages::Baked(dir) => return baked(dir, kind, &name).await,
+        Pages::Baked(dir) => return baked(dir, kind, published_version(kind), &name).await,
     };
     match demand.get(kind, &name).await {
         Ok(Some(bytes)) => (
@@ -63,12 +63,24 @@ async fn tile(State(app): State<Arc<App>>, Path((kind, name)): Path<(String, Str
     }
 }
 
-async fn baked(dir: &std::path::Path, kind: Kind, name: &str) -> Response {
-    let version = match kind {
+fn published_version(kind: Kind) -> &'static str {
+    match kind {
         Kind::Terrain => PUBLISHED_VERSION.terrain,
         Kind::Poi => PUBLISHED_VERSION.poi,
         Kind::Geocode => PUBLISHED_VERSION.geocode,
-    };
+    }
+}
+
+/// The bucket's address, `<kind>/<version>/<name>`, as a production build asks for it.
+async fn tile_versioned(State(app): State<Arc<App>>, Path((kind, version, name)): Path<(String, String, String)>) -> Response {
+    let (Pages::Baked(dir), Some(kind)) = (&app.pages, Kind::parse(&kind)) else { return StatusCode::NOT_FOUND.into_response() };
+    if !version.strip_prefix('v').is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())) {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    baked(dir, kind, &version, &name).await
+}
+
+async fn baked(dir: &std::path::Path, kind: Kind, version: &str, name: &str) -> Response {
     let root = dir.join(kind.name()).join(version);
     // A pyramid's pages are on disk as `<level>/<page index>` until the publish renames them.
     let path = match kind {
@@ -194,6 +206,7 @@ fn run() -> Result<(), String> {
     let router = Router::new()
         .route(&format!("{TILE_ROOT}/source"), get(source))
         .route(&format!("{TILE_ROOT}/{{kind}}/{{name}}"), get(tile))
+        .route(&format!("{TILE_ROOT}/{{kind}}/{{version}}/{{name}}"), get(tile_versioned))
         .route(&format!("{ASSET_ROOT}/{{*name}}"), get(asset))
         .route(&format!("{GEO_INTERNAL}/world/{{kind}}/cache/invalidate"), post(invalidate))
         .with_state(app.clone());
