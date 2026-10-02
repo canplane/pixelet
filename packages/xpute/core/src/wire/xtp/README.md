@@ -391,38 +391,38 @@ A common real-world pattern is to build subtrees separately and then assemble th
 import { encoder, TreeView } from "@xpute/core/wire/xtp/mod.ts";
 import { to_tuple } from "@xpute/core/wire/lower.ts";
 
-const FEAT_ROW_KEYS = ["id", "name"] as const;
-const COAST_ROW_KEYS = ["id", "ring"] as const;
+const USER_KEYS = ["id", "name"] as const;
+const BLOB_KEYS = ["id", "body"] as const;
 
-const feat_rows = [
-  { id: 1, name: "road" },
-  { id: 2, name: "building" },
+const users = [
+  { id: 1, name: "ada" },
+  { id: 2, name: "grace" },
 ];
 
-const coast_rows = [
-  { id: 10, ring: new Uint8Array([1, 2, 3]) },
+const blobs = [
+  { id: 10, body: new Uint8Array([1, 2, 3]) },
 ];
 
-const ele = new Int16Array([10, 20, 30, 40]);
+const samples = new Int16Array([10, 20, 30, 40]);
 
-const feats_view = new TreeView().branch((b) => {
-  for (const row of feat_rows) {
-    b.put(to_tuple(row, FEAT_ROW_KEYS));
+const users_view = new TreeView().branch((b) => {
+  for (const row of users) {
+    b.put(to_tuple(row, USER_KEYS));
   }
 });
 
-const coasts_view = new TreeView().branch((b) => {
-  for (const row of coast_rows) {
-    b.put(to_tuple(row, COAST_ROW_KEYS));
+const blobs_view = new TreeView().branch((b) => {
+  for (const row of blobs) {
+    b.put(to_tuple(row, BLOB_KEYS));
   }
 });
 
 const packet = encoder.encode(
   new TreeView().branch((b) =>
     b
-      .i16_array(ele)
-      .subtree(feats_view)
-      .subtree(coasts_view)
+      .i16_array(samples)
+      .subtree(users_view)
+      .subtree(blobs_view)
   ),
 );
 ```

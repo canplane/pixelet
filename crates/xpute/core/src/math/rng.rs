@@ -37,7 +37,7 @@ impl SplitMix64 {
         z ^= z >> 31;
 
         // Not `z as u32`: rounding through an f64 is the sequence
-        // `spec/xpute/golden/math/rng.tsv` holds and placed scatter depends on.
+        // `spec/xpute/golden/math/rng.tsv` holds for every language.
         ((z as f64) % 4_294_967_296.0) as u32
     }
 }
