@@ -96,6 +96,8 @@ docker compose --env-file .env -f infra/local/docker-compose.yml up -d
 deno task dev:local
 ```
 
+`dev:baked` is the same stack with the tiles read from the finished bakes under `./out` and nothing baked on demand: what a publish of them would show, before it is uploaded. `preview:local` and `preview:baked` are the two over the production bundle.
+
 | Task                                 | Description                                                           |
 | ------------------------------------ | --------------------------------------------------------------------- |
 | `deno task dev`                      | The client alone, every route served by the live deployment           |
@@ -103,11 +105,14 @@ deno task dev:local
 | `deno task dev:web`                  | The client alone, against those servers                               |
 | `deno task dev:geo`                  | pxl-geo only (`/geo`)                                                 |
 | `deno task dev:api`                  | pxl-api only (`/api`)                                                 |
+| `deno task dev:baked`                | The same, with the tiles read from the bakes under `./out`            |
 | `deno task dev:tiles`                | The dev tile server, demand-paging each page out of the bake          |
 | `deno task preview`                  | The production bundle, served locally, data from the live deployment  |
+| `deno task preview:{local,baked}`    | The production bundle over `dev:local`'s or `dev:baked`'s servers     |
 | `deno task build:web`                | Build the client                                                      |
 | `deno task build:wasm`               | Build the kernel module into `apps/web/src/kernel/kernel.wasm`        |
 | `deno task dev:native`               | Metro, for the device app                                             |
+| `deno task solve:decks`              | The decks' heights over the whole coverage, into db-geo               |
 | `deno task bake:{tiles,poi,geocode}` | db-geo into `./out/<kind>/<version>`                                  |
 | `deno task ingest:asset`             | Hash `asset/` into `./out/asset`, regenerate the asset tables         |
 | `deno task download:{pack,moon}`     | Normalize the texture pack's sources, or cut the Moon's near side     |
@@ -182,7 +187,8 @@ Two formats are this project's: **PVF3**, a packed fixed-point coordinate, and *
 ├── crates/                   # The Rust workspace, grouped by where a crate runs
 │   ├── xpute/
 │   │   ├── core/             #   xpute-core: collections, codecs, XTP, errno — no domain
-│   │   └── runtime/          #   xpute-runtime: the rings, the turn, the memory a module is given
+│   │   ├── runtime/          #   xpute-runtime: the rings, the turn, the memory a module is given
+│   │   └── conformance/      #   a Rust guest the contract's traces run against
 │   └── pxl/
 │       ├── spec/             #   pxl-spec: the model both ends follow
 │       ├── web/              #   what the client runs
@@ -199,7 +205,9 @@ Two formats are this project's: **PVF3**, a packed fixed-point coordinate, and *
 ├── packages/                 # The TypeScript workspace packages
 │   └── xpute/
 │       ├── core/             #   @xpute/core: the same kit in TypeScript
-│       └── runtime/          #   @xpute/runtime: the rings' host end and the reservation
+│       ├── runtime/          #   @xpute/runtime: the rings' host end and the reservation
+│       └── conformance/      #   the host that runs the traces against every guest
+├── cpp/xpute/                # xpute in C++: core, runtime, and a guest for the traces
 ├── spec/                     # JSON every language is generated from (pxl-tool),
 │                             #   grouped as crates/ is: xpute/, pxl/{spec, web, server}
 ├── asset/                    # Shipped models and texture pack (cube, decor, actor),
@@ -212,14 +220,14 @@ Two formats are this project's: **PVF3**, a packed fixed-point coordinate, and *
 
 A crate's root holds its modules, the directories sorted by kind and the one-file modules after them; `pxl-geo`, `pxl-api` and `pxl-geo-spec` are flat.
 
-| Crate           | Directories                                                                            |
-| --------------- | -------------------------------------------------------------------------------------- |
-| `xpute-core`    | `abi` `alloc` `codec` `collection` `math` `status` `wire`, plus `golden`               |
-| `xpute-runtime` | `abi` `ipc` `mem` `sched`, plus `clock`, `global`, `io`                                |
-| `pxl-spec`      | `asset` `bake` `cell` `space`, plus `place`, `route`                                   |
-| `pxl-render`    | `mesh` `asset` `look` `frame` `gpu`                                                    |
-| `pxl-kernel`    | `abi` `door` `mem` `sched` `world` `layer` `io` `control` `shell`, plus `host`, `text` |
-| `pxl-geo-bake`  | `terrain` `geocode` `page` `demand`, plus `poi`, `pyramid`, and `bin`                  |
+| Crate           | Directories                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `xpute-core`    | `abi` `alloc` `codec` `collection` `math` `status` `wire`, plus `golden`                                            |
+| `xpute-runtime` | `abi` `ipc` `mem` `sched`, plus `clock`, `global`                                                                   |
+| `pxl-spec`      | `asset` `bake` `cell` `space`, plus `place`, `route`                                                                |
+| `pxl-render`    | `mesh` `asset` `look` `frame` `gpu`                                                                                 |
+| `pxl-kernel`    | `abi` `door` `mem` `sched` `world` `layer` `io` `control` `shell`, plus `global`, `host`, `kernel`, `param`, `text` |
+| `pxl-geo-bake`  | `terrain` `deck` `geocode` `page` `demand`, plus `poi`, `pyramid`, and `bin`                                        |
 
 The casing in the tree is not mixed by accident. Rust, the xpute packages and the kernel's driver (`apps/web/src/kernel/`) share one `snake_case` vocabulary across the boundary: `len`, `u32`, `new_len`. The rest of the shell and the scripts are `camelCase`, as TypeScript is. A name that crosses — a snapshot field, a packet's field, a catalog entry — keeps the kernel's.
 
