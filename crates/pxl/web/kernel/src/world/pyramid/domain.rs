@@ -386,11 +386,6 @@ impl Domain {
         &self.roots
     }
 
-    pub fn root_of(&self, c: Chunk) -> Option<Chunk> {
-        let top = core::iter::once(c).chain(c.ancestors()).find(|&a| self.outermost(a))?;
-        self.roots.binary_search(&top).is_ok().then_some(top)
-    }
-
     pub fn ladder(&self) -> &[Tau] {
         &self.ladder
     }

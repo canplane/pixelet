@@ -184,6 +184,9 @@ pub struct Block {
     pub span: u16,
 }
 
+/// The object every page of open water resolves to.
+pub const OCEAN_KEY: &str = "_ocean";
+
 /// How far past the lane's facts the client draws a cell, down and up: the
 /// ground's shift and a bore's floor. Every read of the lane widens by it.
 pub const DRAWN_PAST: [i16; 2] = {

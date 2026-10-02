@@ -1,6 +1,7 @@
 // pxl-render/mesh/paint/object/adapter.test.rs
 
 use super::*;
+use pxl_spec::cell::object::object_value_is_voxel;
 
 #[test]
 fn the_painter_s_voxels_are_the_catalog_s() {

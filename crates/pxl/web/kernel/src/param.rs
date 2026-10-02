@@ -94,12 +94,6 @@ pub const INTAKE: u32 = u32::MAX;
 
 // ---- latency hiding ----
 
-/// Prefetch radius as a factor of each level's reach; 1 is the reach itself.
-pub const PREFETCH_SLACK: f64 = 1.0;
-
-/// Prefetch margin for the eye's motion, in units. Nothing measures speed yet.
-pub const MOTION_MARGIN: f64 = 0.0;
-
 /// Most speculative pages a layer asks for at once.
 pub const HINT_ALLOWANCE: u32 = 128;
 

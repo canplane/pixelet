@@ -160,10 +160,6 @@ impl DrawList {
         self.draws.extend_from_slice(&[handle, group, count, uniform, pipeline]);
     }
 
-    pub fn draw_count(&self) -> u32 {
-        (self.draws.len() / DRAW_WORDS) as u32
-    }
-
     /// Uploads, rewrites and frees start fresh; draws stay until the next frame.
     pub fn take(&mut self) -> Lists<'_> {
         let [uploads, rewrites, frees] = &mut self.taken;

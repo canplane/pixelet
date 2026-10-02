@@ -26,7 +26,7 @@ use crate::world::observation::eye;
 use crate::world::paging::ABSENT;
 use crate::world::pyramid::{Layer, Pyramid};
 
-pub const OCEAN_KEY: &str = "_ocean";
+pub use pxl_spec::bake::format::OCEAN_KEY;
 
 pub const OCEAN_CATEGORY: Category = Category::ocean;
 

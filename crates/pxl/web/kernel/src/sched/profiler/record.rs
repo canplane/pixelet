@@ -557,10 +557,6 @@ fn profiler() -> &'static mut Profiler {
     })
 }
 
-pub fn profiler_truncated() -> bool {
-    profiler().truncated
-}
-
 pub fn profiler_set_sink(sink: Option<ProfilerSink>) {
     profiler().sink = sink.unwrap_or_default();
 }
