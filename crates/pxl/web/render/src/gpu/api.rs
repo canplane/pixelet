@@ -40,7 +40,7 @@ pub mod texture_usage {
     pub const RENDER_ATTACHMENT: u32 = 0x10;
 }
 
-pub const NONE: u32 = u32::MAX;
+pub use crate::gpu::api_spec::stamp::NONE;
 
 pub const OBJECTS: usize = 1 << 15;
 
