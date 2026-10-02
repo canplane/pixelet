@@ -11,10 +11,8 @@
 //! τ* = the finest τ ≥ τ_target with frontier(O, K, τ) + headroom ≤ B
 //! ```
 //!
-//! The goal's one walk counts `frontier` at every step (domain.rs, priced by
-//! frontier.rs `Need`) and stops counting a step once it is past the arena,
-//! since a finer τ never counts less. Smoothing moves `τ_eff` coarser to `τ*`
-//! as soon as a goal is published, and finer one step at a time after
+//! Counts come from the goal's one walk (domain.rs, priced by frontier.rs
+//! `Need`). Smoothing coarsens at a publish, and refines one step after
 //! `QUALITY_WAIT_MS` with `QUALITY_MARGIN` to spare.
 
 use pxl_render::look::globe::MERCATOR_RADIUS_U;
@@ -132,8 +130,7 @@ struct Quality {
 
 static QUALITY: Global<Quality> = Global::new();
 
-/// The goal in force's own τ, so demand and drawing read the τ the drawn goal
-/// was cut at even while a resize's new ladder is still being walked.
+/// The goal in force's τ, not the live ladder's.
 pub fn effective() -> Effective {
     Effective(domain::current().map_or_else(|| ladder()[QUALITY.get(Quality::default).smooth.at()], |d| d.tau()))
 }
@@ -143,8 +140,7 @@ pub fn reading() -> [usize; 2] {
     [q.smooth.at(), q.star]
 }
 
-/// The policy's turn: the goal's walk advanced by a slice under `stop`, then
-/// the step its published counts say fits. Only the view step calls it.
+/// A slice of the goal walk, then the step that fits.
 pub fn step(stop: &dyn Fn() -> bool) {
     let q = QUALITY.get(Quality::default);
     let ladder = ladder();

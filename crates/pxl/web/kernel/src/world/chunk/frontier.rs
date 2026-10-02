@@ -80,14 +80,11 @@ pub fn pool_of(c: Chunk, cube: Cube) -> Pool {
     Pool::of(c.level(), mesh_step(cube, c.level()))
 }
 
-/// The frontier's slots per pool, piece by piece, counted by the goal's walk
-/// before anything is allocated. Never less than what the frontier holds on its
-/// way there, and monotonic in quality: refinements pass through coarse
-/// ancestors, which never outnumber the goal's pieces above z16 plus z16
-/// pieces' parents, so every z16 piece is counted once in the coarse pool too.
+/// Slots per pool, counted before allocation. A z16 piece also takes a coarse
+/// slot, for the ancestor it refines through.
 pub struct Need<F> {
     pub slots: F,
-    /// Whether a step past the arena stops being counted.
+    /// stop counting a step past the arena
     pub admit: bool,
 }
 

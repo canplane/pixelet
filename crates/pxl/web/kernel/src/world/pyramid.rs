@@ -200,7 +200,7 @@ impl<L: Layer> Pyramid<L> {
     pub fn observe(
         &mut self,
         o: Option<&Observation>,
-        // Where the fallback is held, when it is not where `o` sees from.
+        // the floor's eye, if not `o`'s
         floor_at: Option<&Observation>,
         destination: impl Iterator<Item = LevelPage>,
         readers: &[LevelPage],
@@ -324,12 +324,11 @@ impl<L: Layer> Pyramid<L> {
 
     pub fn step(&mut self, destination: Option<LevelPage>) {
         let Some(top) = floor::level() else { return };
-        // The published goal's observation, so demand serves the goal the frontier draws toward.
+        // demand follows the published goal
         let published = domain::current();
         let live = observation();
         let seen_from = live.map(|live| published.map_or(live, |d| *d.observation()));
-        // The fallback is a law of the observation now, not of the goal being drawn toward:
-        // after a jump it is asked for where the eye is, in the jump's own turn.
+        // the floor follows the live eye, so a jump asks for it at once
         let mut floor_now = [None; Floor::PAGES as usize];
         if let Some(l) = &live {
             let mut n = 0;

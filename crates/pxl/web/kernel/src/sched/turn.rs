@@ -66,9 +66,7 @@ fn debug_gizmos_tick(_: &mut TickContext) {
     debug_gizmos_step(show, map_center, local_world_origin());
 }
 
-/// The view's one owner, in order: the goal's walk a slice, the quality from
-/// it, then what each pyramid layer asks for and covers. A walk left unfinished
-/// asks for another turn, or a still view would never get its goal.
+/// Goal walk, quality, then each pyramid layer. An unfinished walk asks for another turn.
 fn view_tick(ctx: &mut TickContext) {
     let end = now() + ctx.budget.remaining() * crate::param::VIEW_SHARE;
     crate::world::quality::step(&|| now() >= end);

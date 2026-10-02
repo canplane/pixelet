@@ -1,13 +1,11 @@
 // pxl-kernel/world/pyramid/domain.rs
 
 //! The frontier's goal: the view's ground cut into pyramid chunks, the same
-//! for every layer, made from the observation and what is resident; paging
-//! never reads it.
+//! for every layer. Paging never reads it.
 //!
-//! One walk makes the goal at every quality step at once: a chunk is a piece
-//! over an interval of steps, since a coarser step splits a subset of what a
-//! finer one does. The walk is a job a slice a turn under the tick's budget,
-//! against the observation it began with, and only a whole goal is published.
+//! One walk gives every quality step's cut: a chunk is a piece over an
+//! interval of steps. It runs a slice a turn on the observation it began
+//! with, and is published whole.
 //!
 //! Every top-level chunk within reach that holds anything is a piece (the
 //! cover), all around the eye, so ground turned to shows the cover and never
@@ -81,15 +79,15 @@ impl Cut {
     }
 }
 
-/// What a goal costs in mesh slots, per pool.
+/// Mesh slots per pool.
 pub trait Price {
     fn piece(&self, c: Chunk, outermost: bool, near: f64, tau: Tau) -> [u32; POOLS];
     fn split(&self, c: Chunk) -> [u32; POOLS];
-    /// Whether a step needing `n` cannot be the goal; the walk stops counting it.
+    /// stop counting a step needing `n`
     fn over(&self, n: &[u32; POOLS]) -> bool;
 }
 
-/// Costs nothing and never stops a step.
+/// No cost, no limit.
 pub struct Free;
 
 impl Price for Free {
@@ -110,17 +108,17 @@ impl Price for Free {
 struct Seen {
     order: Order,
     bound: Aabb,
-    /// A piece at the steps `from..to`; it splits at the steps below both.
+    /// piece at `from..to`, split below both
     from: u8,
     to: u8,
 }
 
 struct Open {
     c: Chunk,
-    /// The steps its parent splits at.
+    /// steps the parent splits at
     to: u8,
     from: Option<(u32, u32)>,
-    /// The parent's contents, which a child that reads unknown mid-walk takes.
+    /// taken by a child read unknown mid-walk
     parent: Option<(Aabb, [f64; 3])>,
 }
 
@@ -136,7 +134,7 @@ pub struct Domain {
     touching: Vec<u32>,
     open: Vec<Open>,
     ladder: Vec<Tau>,
-    /// The finest step still counted: every finer one was found not to fit.
+    /// finest step still counted
     tracked: usize,
     need: Vec<[u32; POOLS]>,
     counted: Vec<u32>,
@@ -180,7 +178,7 @@ impl Domain {
         }
     }
 
-    /// Made again in place, whole, allocating nothing once warm.
+    /// Whole, in place; allocation-free once warm.
     pub fn remake<'a>(&mut self, o: Observation, ladder: &[Tau], at: usize, footprints: impl IntoIterator<Item = &'a Footprint>) {
         self.begin(o, ladder, footprints, core::iter::empty());
         self.run(&Free, &|| false);
@@ -231,9 +229,9 @@ impl Domain {
         }
     }
 
-    /// Walks until done or `stop` says the slice is spent; whether done.
+    /// Whether done.
     fn run(&mut self, price: &dyn Price, stop: &dyn Fn() -> bool) -> bool {
-        // A slice always advances, so a turn with no budget left still finishes the job in time.
+        // at least a slice a turn
         const SLICE: u32 = 32;
         let mut n = 0;
         while let Some(open) = self.open.pop() {
@@ -262,7 +260,7 @@ impl Domain {
                 (bound, [half, half, bound.extent()[2]])
             }
             (Contents::Holds { bound, error }, _) => (bound, error),
-            // A page under a known parent left between slices: the parent's bound still holds.
+            // evicted between slices: the parent's bound holds
             (_, Some((bound, error))) => (bound.meet(c.region()).unwrap_or(c.region()), error),
             _ => (c.region(), [0.0; 3]),
         };
@@ -330,7 +328,7 @@ impl Domain {
         }
     }
 
-    /// The cut at step `k`, from the walk; empty for a step the walk stopped counting.
+    /// Empty for a step no longer counted.
     pub fn cut_at(&mut self, k: usize) -> &Cut {
         if !self.cuts[k].made {
             let at = k as u8;
@@ -384,12 +382,12 @@ impl Domain {
         self.unanswered
     }
 
-    /// Slots per pool the goal at step `k` needs, or None where the walk found it does not fit.
+    /// None: past the arena.
     pub fn need(&self, k: usize) -> Option<[u32; POOLS]> {
         (k >= self.tracked).then(|| self.need[k])
     }
 
-    /// The pieces at step `k`, or None where the walk stopped counting it.
+    /// None: past the arena.
     pub fn counted(&self, k: usize) -> Option<u32> {
         (k >= self.tracked).then(|| self.counted[k])
     }
@@ -405,9 +403,9 @@ impl Domain {
 
 #[derive(Default)]
 struct Made {
-    /// The goal in force, whole.
+    /// whole
     published: Option<Domain>,
-    /// The next goal, a slice a turn against the observation it began with.
+    /// sliced
     job: Option<Domain>,
     spare: Option<Domain>,
     key: Option<(Observation, (u32, u32), Tau, u32)>,
@@ -421,10 +419,8 @@ struct Made {
 
 static MADE: Global<Made> = Global::new();
 
-/// Advances the next goal by a slice and publishes it whole when done; a
-/// job is never restarted, so a moving view still gets its goal, at most a
-/// job late. A job begins when the observation, what is held, the target or
-/// `extra` moved since the last one. Returns whether a goal was published.
+/// A slice of the next goal; publishes it whole. A job starts when the
+/// observation, residency, target or `extra` moved, and is never restarted.
 pub fn advance(ladder: &[Tau], at: usize, price: &dyn Price, stop: &dyn Fn() -> bool, extra: u32) -> bool {
     let made = MADE.get(Made::default);
     if made.job.is_none() {
@@ -459,7 +455,6 @@ pub fn advance(ladder: &[Tau], at: usize, price: &dyn Price, stop: &dyn Fn() -> 
     true
 }
 
-/// Puts the published goal's step `k` in force.
 pub fn put(k: usize) {
     let made = MADE.get(Made::default);
     if made.published.as_mut().is_some_and(|d| d.put(k)) {
@@ -467,7 +462,6 @@ pub fn put(k: usize) {
     }
 }
 
-/// Whether a goal is being walked and not yet published.
 pub fn walking() -> bool {
     MADE.get(Made::default).job.is_some()
 }

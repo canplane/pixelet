@@ -525,7 +525,7 @@ fn loaded() {
     }
     let (blob, _) = st.loading.take().or_bug(Errno::ENOTRECOVERABLE);
     if core::str::from_utf8(&blob).map_or(true, |raw| decode_objects(raw).is_err()) {
-        // What the blob decoded before it failed is in the store, and its readers keyed on it.
+        // what decoded before the failure was already read
         for (col_idx, band_idx) in kernel().objects.clear() {
             chunk_sources_changed();
             bump_world(OBJECT_COLUMN, col_idx);
@@ -1262,7 +1262,7 @@ impl Store {
         })
     }
 
-    /// Returns the bands it held, which the world's revisions must move for.
+    /// Returns the bands held.
     pub fn clear(&mut self) -> Vec<(IVec, BandZ)> {
         let held = self.columns.iter().flat_map(|(&col, c)| c.bands.keys().map(move |&band| (col, band))).collect();
         self.columns.clear();

@@ -250,7 +250,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         cover: {
             let (cover, _) = crate::world::pyramid::cover::cover::<Terrain>();
             let domain = crate::world::pyramid::domain::current();
-            // NaN where the target's step does not fit, which the walk stopped counting.
+            // NaN: step 0 is past the arena
             let rule = domain.map_or(0.0, |d| d.counted(0).map_or(f64::NAN, f64::from));
             CoverSample {
                 rule,
