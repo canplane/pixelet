@@ -28,7 +28,7 @@ use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
 use crate::layer::object::geometry::{anchor_center, object_aabb};
 use crate::layer::object::size::{DECOR_SIZE, DEFAULT_OBJECT_SIZE};
 use crate::layer::object::store::{get_placed_object, place, place_air, place_decor, remove, OccupiedEntry};
-use crate::layer::terrain::ground_snap::ground_or_raw;
+use crate::control::navigation::walk::stand_or_raw;
 use crate::shell::setting::store::settings_store;
 use crate::world::access::Hit;
 use crate::world::change::request_world_tick;
@@ -196,7 +196,7 @@ fn handle_tap(hovered: Pvf3) {
             // Recenter where a walker would stand across the struck face, by the
             // ground's own rule, so a pan after a tap changes nothing.
             let Some(approach) = camera_store().hovered_approach else { return };
-            let target = ground_or_raw(&anchor_center(&approach));
+            let target = stand_or_raw(&anchor_center(&approach));
             crate::control::navigation::destination::go_to(target, crate::control::camera::controller::Motion::Smooth);
         }
         ActiveTool::Eraser => {

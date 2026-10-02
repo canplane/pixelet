@@ -1,4 +1,4 @@
-// pxl-kernel/layer/terrain/ground_snap.rs
+// pxl-kernel/control/navigation/walk.rs
 
 //! The map center standing on the ground, and the one walk every camera's
 //! pan takes. The center's Z is half a cell over the floor the character
@@ -12,9 +12,9 @@ use pxl_spec::space::pyramid::GROUND;
 use crate::world::access::{Access, Answer, FINEST};
 use crate::world::frame::coord::{canonical_to_local, local_height, local_world_origin, local_world_to_canonical};
 
-pub enum Pivot {
+pub enum Stand {
     /// Half a cell over the floor that supports a walker from its cell.
-    Stands(Pvf3),
+    On(Pvf3),
     /// Filled taller than a step: a wall.
     Blocked,
     Unknown,
@@ -22,25 +22,25 @@ pub enum Pivot {
 
 /// Every interaction sets its center through this, so the first pan after a
 /// tap moves nothing.
-pub fn ground_pivot(at: &Pvf3) -> Pivot {
+pub fn stand(at: &Pvf3) -> Stand {
     match Access::now().support(at) {
-        Answer::Exact(Some(top)) | Answer::Coarser(Some(top), _) => Pivot::Stands(pivot_over(at, top)),
-        Answer::Exact(None) | Answer::Coarser(None, _) => Pivot::Blocked,
-        Answer::Nothing(_) => Pivot::Unknown,
+        Answer::Exact(Some(top)) | Answer::Coarser(Some(top), _) => Stand::On(stand_over(at, top)),
+        Answer::Exact(None) | Answer::Coarser(None, _) => Stand::Blocked,
+        Answer::Nothing(_) => Stand::Unknown,
     }
 }
 
-pub fn pivot_over(at: &Pvf3, top: f64) -> Pvf3 {
+pub fn stand_over(at: &Pvf3, top: f64) -> Pvf3 {
     let mut out = Pvf3::default();
     pvf3::gather(&mut out, pvf3::X(at), pvf3::Y(at), pvf3::from_real(top + CELL.side() / 2.0));
     out
 }
 
 /// Falls back to the coordinate itself where it stands nowhere known.
-pub fn ground_or_raw(coord: &Pvf3) -> Pvf3 {
-    match ground_pivot(coord) {
-        Pivot::Stands(p) => p,
-        Pivot::Blocked | Pivot::Unknown => *coord,
+pub fn stand_or_raw(coord: &Pvf3) -> Pvf3 {
+    match stand(coord) {
+        Stand::On(p) => p,
+        Stand::Blocked | Stand::Unknown => *coord,
     }
 }
 

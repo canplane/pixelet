@@ -10,7 +10,7 @@ use pxl_spec::space::pyramid::{LevelPage, GROUND};
 
 use crate::control::camera::controller::{put_center, Motion};
 use crate::global::Global;
-use crate::layer::terrain::ground_snap::pivot_over;
+use crate::control::navigation::walk::stand_over;
 use crate::world::access::{Access, FINEST};
 
 static DESTINATION: Global<Option<(Pvf3, Motion)>> = Global::new();
@@ -47,5 +47,5 @@ pub fn destination_step() {
     let Some((at, motion)) = *destination() else { return };
     let Some(top) = Access::now().surface_support(&at).exact() else { return };
     *destination() = None;
-    put_center(pivot_over(&at, top), motion);
+    put_center(stand_over(&at, top), motion);
 }

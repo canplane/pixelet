@@ -14,7 +14,7 @@ use crate::control::camera::config::camera_cfg::view::{DEFAULT_AZIMUTH, DEFAULT_
 use crate::control::camera::orbit::orbit;
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
 use crate::global::Global;
-use crate::layer::terrain::ground_snap::walk;
+use crate::control::navigation::walk::walk;
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::{settings_store, CameraMode};
 use crate::world::change::request_world_tick;
