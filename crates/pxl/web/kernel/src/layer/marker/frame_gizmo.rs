@@ -181,7 +181,7 @@ fn sketch_frames(s: &mut Sketch) {
         return;
     }
     let Some(pivot) = crate::control::camera::controller::center_local() else { return };
-    let (sin, cos) = (-crate::control::camera::controller::camera().yaw).sin_cos();
+    let (sin, cos) = (-crate::control::camera::controller::heading()).sin_cos();
     let heading_frame = move |p: V3| [pivot[0] + p[0] * cos - p[1] * sin, pivot[1] + p[0] * sin + p[1] * cos, pivot[2] + p[2]];
     s.gyro(&heading_frame, [4.0, 0.0, 0.0], "heading (4,0,0)", false);
     s.point(heading_frame([0.0, 0.0, 4.0]), Some("heading (0,0,4)"));
@@ -330,7 +330,7 @@ pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>, map_origin: IVec)
         }
         return;
     };
-    let key = (center, map_origin, Terrain::pyramid().revision(), crate::control::camera::controller::camera().yaw);
+    let key = (center, map_origin, Terrain::pyramid().revision(), crate::control::camera::controller::heading());
     if g.built_for == Some(key) {
         write_labels(g);
         return;
