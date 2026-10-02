@@ -13,6 +13,7 @@ use pxl_render::mesh::paint::terrain::adapter::beside_index;
 use pxl_render::mesh::voxel_scan::APRON;
 
 use pxl_spec::space::observation::Bounds as _;
+use pxl_spec::space::pyramid::GROUND;
 use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::section::span_of;
@@ -909,7 +910,7 @@ impl Scheduler {
             }
             // Mesh heights are steps from the tier's floor, so the floor goes in the translation.
             let at = [translation[0], translation[1], translation[2] + t.heights.floor as f32];
-            let (unit, z_step) = ((mesh_step(cube, s.level()) << s.level()) as f32, t.heights.step as f32);
+            let (unit, z_step) = ((mesh_step(cube, s.level()) * GROUND.finest_in(s.level())) as f32, t.heights.step as f32);
             let (mut left, mut slot) = (t.box_cnt, Some(t.slot.index));
             while let (Some(at_slot), true) = (slot, left > 0) {
                 let m = slot_at(at_slot);
@@ -1335,7 +1336,7 @@ fn part(slots: &[Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
     // SAFETY: the block's boxes in `.fixed.bake`, just written by the bake, in
     // the slot group's format.
     let words = unsafe { core::slice::from_raw_parts(ptr_at::<u32>(at as usize), (box_cnt * box_words) as usize) };
-    let unit = (step << level) as f64;
+    let unit = (step * GROUND.finest_in(level)) as f64;
     let mut bounds = meshes.landing.as_ref().and_then(|l| l.bounds);
     for r in words.chunks_exact(box_words as usize) {
         let (min, size) = box_bounds(r, unit, heights);

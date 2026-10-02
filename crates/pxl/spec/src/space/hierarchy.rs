@@ -105,6 +105,12 @@ pub fn ancestor_of<const D: usize>(at: [i64; D], levels: u32) -> [i64; D] {
     at.map(|v| v >> levels)
 }
 
+/// Where `at` lies in its ancestor `levels` up, from that ancestor's first
+/// descendant.
+pub fn offset_in<const D: usize>(at: [i64; D], levels: u32) -> [i64; D] {
+    at.map(|v| v & ((1 << levels) - 1))
+}
+
 /// Every slot 0: `ancestor_of`'s inverse.
 pub fn first_descendant_of<const D: usize>(at: [i64; D], levels: u32) -> [i64; D] {
     at.map(|v| v << levels)

@@ -10,6 +10,7 @@ use std::collections::HashMap;
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, PageSource};
+use pxl_spec::space::hierarchy::{child_of, parent_of};
 use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::lod::fault_radius;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -35,8 +36,8 @@ use crate::world::paging::floor;
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer;
 use crate::world::quality;
-use pxl_spec::space::lod::target_cell_px;
 use pxl_spec::bake::format::Terrain;
+use pxl_spec::space::lod::target_cell_px;
 use xpute_runtime::mem::heap::free;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -62,16 +63,14 @@ impl DecorCell {
     fn parent(self) -> DecorCell {
         DecorCell {
             level: self.level + 1,
-            at: self.at.map(|v| v.div_euclid(2)),
+            at: parent_of(self.at),
         }
     }
 
     fn children(self) -> [DecorCell; 4] {
-        let [x, y] = self.at;
-        let l = self.level - 1;
-        [[0, 0], [1, 0], [0, 1], [1, 1]].map(|[dx, dy]| DecorCell {
-            level: l,
-            at: [x * 2 + dx, y * 2 + dy],
+        core::array::from_fn(|slot| DecorCell {
+            level: self.level - 1,
+            at: child_of(self.at, slot),
         })
     }
 }

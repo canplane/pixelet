@@ -52,6 +52,11 @@ impl Lattice {
         L3.above(self.cell) as u32
     }
 
+    /// How many of its first level's cells stand across one at `level`.
+    pub const fn finest_in(self, level: u32) -> u32 {
+        self.scale(0).count_in(self.scale(level))
+    }
+
     pub const fn page_cells(self) -> u32 {
         self.cell.count_in(L3)
     }

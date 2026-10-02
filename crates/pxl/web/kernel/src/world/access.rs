@@ -16,7 +16,7 @@ use pxl_spec::bake::fold::majority;
 use pxl_spec::bake::format::{drawn, Terrain};
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::cell::object::{object_value_is_air, object_value_is_decor, object_value_is_voxel};
-use pxl_spec::space::hierarchy::Scale;
+use pxl_spec::space::hierarchy::{ancestor_of, child_of, first_descendant_of, offset_in, Scale};
 use pxl_spec::space::indexer::{L2, L2_IDX, L3};
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::pvf3::ivec::IVec;
@@ -223,8 +223,11 @@ fn filled_cell(filled: impl Fn([i64; 3]) -> bool) -> bool {
         scale = scale.up(1);
         let h = m / 2;
         for k in 0..h * h * h {
-            let [x, y, z] = [k % h, k / h % h, k / (h * h)].map(|c| c * 2);
-            let eight: [bool; 8] = core::array::from_fn(|c| v[((z + (c >> 2)) * m + y + (c >> 1 & 1)) * m + x + (c & 1)]);
+            let parent = [k % h, k / h % h, k / (h * h)].map(|c| c as i64);
+            let eight: [bool; 8] = core::array::from_fn(|slot| {
+                let [x, y, z] = child_of(parent, slot).map(|c| c as usize);
+                v[(z * m + y) * m + x]
+            });
             v[k] = majority(eight, scale.above(CELL));
         }
         m = h;
@@ -703,10 +706,11 @@ impl<'a> Access<'a> {
         let mut met = None;
         self.objects.along_ray(ray.origin, ray.direction, (t0, t1), scale, &mut |[x, y, z]| {
             met = if level == FINEST {
-                let across = cells_across();
-                let col_idx = pxl_spec::space::pvf3::ivec::gather(x.div_euclid(across), y.div_euclid(across), 0);
-                let entries = self.cell_entries(col_idx, [x.rem_euclid(across), y.rem_euclid(across)], z);
-                let corner = [(x.div_euclid(across) * across) as f64 * side, (y.div_euclid(across) * across) as f64 * side];
+                let levels = L2.above(CELL) as u32;
+                let [cx, cy] = ancestor_of([x, y], levels);
+                let col_idx = pxl_spec::space::pvf3::ivec::gather(cx, cy, 0);
+                let entries = self.cell_entries(col_idx, offset_in([x, y], levels), z);
+                let corner = first_descendant_of([cx, cy], levels).map(|v| v as f64 * side);
                 object_hit(ray, entries, corner)
             } else {
                 let v = u32::from(self.objects.folded_value(scale, [x, y, z]));

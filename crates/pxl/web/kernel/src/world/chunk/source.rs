@@ -5,6 +5,7 @@
 //! written is in one chunk per level, not every chunk over its column.
 
 use pxl_spec::bake::constant::BandZ;
+use pxl_spec::space::hierarchy::ancestor_of;
 use pxl_spec::space::indexer::{FROM_L2_IDX, L1, L2, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
@@ -40,7 +41,7 @@ pub fn tiers_draw(level: u32, base: IVec, col: IVec) -> bool {
 
 /// A band is a z16 chunk's height, so it lies in one chunk per level.
 pub fn draws_band(k: PyramidChunk, band: BandZ) -> bool {
-    i64::from(band) >> k.level() == k.node().1[2]
+    ancestor_of([i64::from(band)], k.level())[0] == k.node().1[2]
 }
 
 /// One word: the coordinate, with the level beside the height. A band is 64
@@ -62,7 +63,7 @@ pub fn band_written(col: IVec, band: BandZ) {
     let corner = Pvf3 { i: FROM_L2_IDX(col), f: 0 };
     for level in 0..=TOP_LEVEL {
         let column = PyramidChunk::of(level, &corner);
-        let home = column.beside(0, 0, (i64::from(band) >> level) - column.node().1[2]);
+        let home = column.beside(0, 0, ancestor_of([i64::from(band)], level)[0] - column.node().1[2]);
         let near: &[(i64, i64)] = if level == 0 { &[(0, 0)] } else { &NEAR };
         for &(dx, dy) in near {
             let k = home.beside(dx, dy, 0);

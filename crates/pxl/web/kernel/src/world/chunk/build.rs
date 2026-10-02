@@ -67,7 +67,12 @@ pub const RUN_SETS: usize = 2;
 pub enum BuildEvent {
     /// All slots for a tier are asked for at once, before any is written. If
     /// refused, the bake is thrown away and the need recorded (`Slot::need`).
-    Reserve { id: u32, generation: u32, cube: Cube, boxes: u32 },
+    Reserve {
+        id: u32,
+        generation: u32,
+        cube: Cube,
+        boxes: u32,
+    },
     /// One slot's worth of boxes (less for the last) at `at` in `.fixed.bake`.
     Part {
         id: u32,
@@ -78,7 +83,13 @@ pub enum BuildEvent {
         box_cnt: u32,
         heights: Heights,
     },
-    Tier { id: u32, generation: u32, cube: Cube, box_cnt: u32, heights: Heights },
+    Tier {
+        id: u32,
+        generation: u32,
+        cube: Cube,
+        box_cnt: u32,
+        heights: Heights,
+    },
 }
 
 /// A column split across cube boundaries is several chunks; its runs are
@@ -855,7 +866,7 @@ impl Builder {
             // Runs span the whole column; this chunk bakes only its own heights.
             let (z0, z1) = c.at.z_range();
             let clip = Some((z0 as i32, z1 as i32));
-            if self.bake.begin(&set, mesh_step(cube, c.level()), 1 << c.level(), settings_store().textures, clip).is_err() {
+            if self.bake.begin(&set, mesh_step(cube, c.level()), GROUND.finest_in(c.level()), settings_store().textures, clip).is_err() {
                 self.refuse(world, id);
                 return Progress::Blocked;
             }

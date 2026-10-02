@@ -19,7 +19,7 @@ use pxl_spec::cell::object::{
     decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, object_value_is_voxel, placeable_cube_num_id, placeable_cube_of, terrain_style_cube_source, PlaceableCube,
 };
 use pxl_spec::cell::{cube_types, DecorId};
-use pxl_spec::space::hierarchy::{at_walk_order, child_of, first_descendant_of, parent_of, walk_order, Scale};
+use pxl_spec::space::hierarchy::{ancestor_of, at_walk_order, child_of, first_descendant_of, offset_in, parent_of, walk_order, Scale};
 use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX, L3, L3_IDX};
 use pxl_spec::space::pvf3::fvec::FVec;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -739,7 +739,7 @@ impl Column {
                 }
                 // In walk order, so the lanes stay sorted.
                 let levels = scale.above(CELL) as u32;
-                for k in 0..1u64 << (3 * levels) {
+                for k in 0..u64::from(CELL.count_in(scale)).pow(3) {
                     let cell = at_walk_order::<3>(k, levels).map(i64::from);
                     let [dx, dy, dz] = first_descendant_of(cell, CELL.above(OBJECT_FINEST) as u32).map(|v| v as u32);
                     self.e_band.push(bz);
@@ -1110,17 +1110,16 @@ impl Store {
 
     /// False says nothing is placed in that band cell; true only that something may be.
     pub fn may_hold(&self, at: [i64; 3]) -> bool {
-        let cells = CELL.count_in(BAND) as i64;
-        let col_idx = ivec::gather(at[0].div_euclid(cells), at[1].div_euclid(cells), 0);
-        self.columns.get(&col_idx).is_some_and(|c| c.bands.contains_key(&(at[2].div_euclid(cells) as BandZ)))
+        let [x, y, band] = ancestor_of(at, BAND.above(CELL) as u32);
+        self.columns.get(&ivec::gather(x, y, 0)).is_some_and(|c| c.bands.contains_key(&(band as BandZ)))
     }
 
     /// The cell over the highest band in the column of cell `[x, y]`.
     pub fn ceiling(&self, [x, y]: [i64; 2]) -> Option<i64> {
-        let cells = CELL.count_in(BAND) as i64;
-        let col_idx = ivec::gather(x.div_euclid(cells), y.div_euclid(cells), 0);
-        let band = *self.columns.get(&col_idx)?.bands.keys().next_back()?;
-        Some((i64::from(band) + 1) * cells)
+        let levels = BAND.above(CELL) as u32;
+        let [cx, cy] = ancestor_of([x, y], levels);
+        let band = *self.columns.get(&ivec::gather(cx, cy, 0))?.bands.keys().next_back()?;
+        Some(first_descendant_of([i64::from(band) + 1], levels)[0])
     }
 
     /// VOID where nothing; a non-voxel value is returned as is.
@@ -1128,13 +1127,12 @@ impl Store {
         if scale >= BAND {
             return self.folds.get(&(scale, at)).copied().unwrap_or(VOID as u16);
         }
-        let cells = scale.count_in(BAND) as i64;
-        let col_idx = ivec::gather(at[0].div_euclid(cells), at[1].div_euclid(cells), 0);
-        let Some(tree) = self.columns.get(&col_idx).and_then(|c| c.bands.get(&(at[2].div_euclid(cells) as BandZ))) else {
+        let levels = BAND.above(scale) as u32;
+        let [x, y, band] = ancestor_of(at, levels);
+        let Some(tree) = self.columns.get(&ivec::gather(x, y, 0)).and_then(|c| c.bands.get(&(band as BandZ))) else {
             return VOID as u16;
         };
-        let step = OBJECT_FINEST.count_in(scale) as i64;
-        let key = band_key(at.map(|c| (c.rem_euclid(cells) * step) as u32));
+        let key = band_key(first_descendant_of(offset_in(at, levels), scale.above(OBJECT_FINEST) as u32).map(|c| c as u32));
         tree.mem.data[mem::resolve::<Ivec, u16>(&tree.mem, &tree.layout, key, scale, 0) as usize]
     }
 

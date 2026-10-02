@@ -6,13 +6,13 @@
 //! candidate out at build time.
 
 use pxl_render::gpu::api::word_bytes;
-use pxl_spec::space::lod::target_cell_px;
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
 use pxl_render::mesh::voxel_scan::apron_col;
 use pxl_spec::bake::constant::{unpack_pos, U_PER_CELL};
 use pxl_spec::cell::object::decor_num_id;
 use pxl_spec::cell::DecorId;
 use pxl_spec::space::hierarchy::child_of;
+use pxl_spec::space::lod::target_cell_px;
 use pxl_spec::space::pvf3::ivec::{gather, IVec};
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
 use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};

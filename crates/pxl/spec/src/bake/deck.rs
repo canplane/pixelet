@@ -12,7 +12,7 @@ use xpute_core::wire::xtp::{BranchCursor, BranchViewImpl, NodeView};
 
 use super::way;
 use crate::space::hierarchy::child_of;
-use crate::space::pyramid::PAGE_CELLS;
+use crate::space::pyramid::{GROUND, PAGE_CELLS};
 
 /// Points are in eighths of the page's cell, which an `i16` holds far past the page's edge.
 pub const POINT_SCALE: f64 = 8.0;
@@ -335,7 +335,7 @@ pub fn fold_decks(children: [&Decks; 4], level: u32) -> Decks {
     let mut out = Builder::default();
     let n = f64::from(PAGE_CELLS);
     // The parent's half cell of height, in z16 cells.
-    let height_tolerance = f64::from(1u32 << level) / 2.0;
+    let height_tolerance = f64::from(GROUND.finest_in(level)) / 2.0;
     for (q, child) in children.iter().enumerate() {
         let [qx, qy] = child_of([0, 0], q).map(|v| v as f64 * n);
         for deck in child.iter() {
