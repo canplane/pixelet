@@ -247,8 +247,7 @@ looks unfinished.
 
 **The bar is [.agents/reference/calab-loader/](./.agents/reference/calab-loader/).**
 Code and its comments are held to it, and a change is judged by it. A
-layout is one block derived top-down from a few roots (`common.c`'s
-`/* memory layout */`); each fact is said once, and a derived name exists
+layout is one block derived top-down from a few roots; each fact is said once, and a derived name exists
 only where more than one place reads it; a procedure is straight steps under
 short section comments; a comment is a few words at the line it explains. A
 change that leaves two names for one fact, one conversion in two places, or a
