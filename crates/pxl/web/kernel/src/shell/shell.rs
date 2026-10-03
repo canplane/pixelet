@@ -27,7 +27,6 @@ use crate::layer::geocode::store as geocode_store;
 use crate::sched::turn::world_platform;
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::{settings_store, SettingKey};
-use crate::shell::ui::compass::compass_state;
 use crate::shell::ui::scale_bar::{mercator_zoom, scale_bar};
 use crate::world::frame::view::view;
 
@@ -97,7 +96,6 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         is_follow_mode: camera.is_follow_mode,
         camera_busy: camera.camera_status != CameraStatus::Idle,
         zooming: crate::control::camera::controller::zooming(),
-        compass: compass_state(),
         settings: &values,
         scale_bar: ScaleBar {
             total_meters: bar.total_meters,

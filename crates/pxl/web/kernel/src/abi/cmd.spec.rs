@@ -368,27 +368,6 @@ impl Tracking {
     }
 }
 
-/// The compass over the map (shell/ui/compass.rs), as the kernel decides it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum CompassState {
-    /// The map is north up, near enough.
-    Hidden = 0,
-    /// The map is turned; a press turns it north up again.
-    Shown = 1,
-    /// The map follows the device's heading: shown for where north is, dimmed and taking no press, since north up is the tracking button's to ask.
-    Following = 2,
-}
-
-impl CompassState {
-    pub const ALL: [CompassState; 3] = [CompassState::Hidden, CompassState::Shown, CompassState::Following];
-
-    /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<CompassState> {
-        CompassState::ALL.into_iter().find(|m| *m as u32 == number)
-    }
-}
-
 /// The browser's PositionError codes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
@@ -731,7 +710,6 @@ pub struct Snapshot<'a> {
     pub camera_busy: bool,
     /// A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is.
     pub zooming: bool,
-    pub compass: CompassState,
     /// Every setting's value by its SettingKey, as SETTING_SET carries one.
     pub settings: &'a [u32],
     pub scale_bar: ScaleBar,
@@ -745,7 +723,7 @@ pub struct Snapshot<'a> {
 
 impl Snapshot<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 13;
+    pub const FIELDS: u32 = 12;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.branch(MapState::FIELDS, |w| self.map.write(w));
@@ -756,7 +734,6 @@ impl Snapshot<'_> {
         w.bool(Some(self.is_follow_mode));
         w.bool(Some(self.camera_busy));
         w.bool(Some(self.zooming));
-        w.u32(Some(self.compass as u32));
         w.u32_array(Some(self.settings));
         w.branch(ScaleBar::FIELDS, |w| self.scale_bar.write(w));
         let mut n = 0;

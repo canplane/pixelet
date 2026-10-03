@@ -159,16 +159,6 @@ export const enum Tracking {
   Unfollow = 2,
 }
 
-/** The compass over the map (shell/ui/compass.rs), as the kernel decides it. */
-export const enum CompassState {
-  /** The map is north up, near enough. */
-  Hidden = 0,
-  /** The map is turned; a press turns it north up again. */
-  Shown = 1,
-  /** The map follows the device's heading: shown for where north is, dimmed and taking no press, since north up is the tracking button's to ask. */
-  Following = 2,
-}
-
 /** The browser's PositionError codes. */
 export const enum GeolocationErrorCode {
   Other = 0,
@@ -382,7 +372,6 @@ export interface Snapshot {
   camera_busy: boolean;
   /** A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is. */
   zooming: boolean;
-  compass: CompassState;
   /** Every setting's value by its SettingKey, as SETTING_SET carries one. */
   settings: u32[];
   scale_bar: ScaleBar;
@@ -404,11 +393,10 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     is_follow_mode: b.at(5).get<boolean>(),
     camera_busy: b.at(6).get<boolean>(),
     zooming: b.at(7).get<boolean>(),
-    compass: b.at(8).get<CompassState>(),
-    settings: Array.from(b.at(9).get<U32Array>()),
-    scale_bar: read_scale_bar(b.at_branch(10)),
-    place: list(b.at_branch(11), read_place_part),
-    object_sizes: Array.from(b.at(12).get<F64Array>()),
+    settings: Array.from(b.at(8).get<U32Array>()),
+    scale_bar: read_scale_bar(b.at_branch(9)),
+    place: list(b.at_branch(10), read_place_part),
+    object_sizes: Array.from(b.at(11).get<F64Array>()),
   };
 }
 

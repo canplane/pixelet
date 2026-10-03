@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react";
 
 import type { U8Array } from "@xpute/core/abi/array.ts";
 import { TreeReader } from "@xpute/core/wire/xtp/mod.ts";
-import { CompassState, DevicePoseStatus, MapStatus, read_snapshot, type Snapshot } from "@/kernel/abi/cmd.spec.ts";
+import { DevicePoseStatus, MapStatus, read_snapshot, type Snapshot } from "@/kernel/abi/cmd.spec.ts";
 
 const INITIAL: Snapshot = {
   map: { status: MapStatus.Idle, is_off_center: false, center: null, page: null },
@@ -15,7 +15,6 @@ const INITIAL: Snapshot = {
   is_follow_mode: false,
   camera_busy: false,
   zooming: false,
-  compass: CompassState.Hidden,
   settings: [],
   scale_bar: { total_meters: 0, bar_width_px: 0 },
   place: [],
