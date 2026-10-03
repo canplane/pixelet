@@ -75,15 +75,12 @@ struct Figure {
     was_dragging: bool,
     settle: SettleTracker,
     initial_facing_done: bool,
-    /// To snap rather than glide across an L4 rebase.
-    prev_map_origin: IVec,
     follow_walk_until: f64,
-    /// In world units, since the frame's own Z moves on a rebase.
     stands_z: Option<f64>,
 }
 
 impl Figure {
-    fn new(variant: &CharacterVariant, target: Vec2, map_origin: IVec) -> Figure {
+    fn new(variant: &CharacterVariant, target: Vec2) -> Figure {
         Figure {
             variant: *variant,
             held: None,
@@ -94,7 +91,6 @@ impl Figure {
             was_dragging: false,
             settle: init_settle_tracker(target, 0.0),
             initial_facing_done: false,
-            prev_map_origin: map_origin,
             follow_walk_until: 0.0,
             stands_z: None,
         }
@@ -143,13 +139,12 @@ impl Figure {
         // Wall seconds: the tick's elapsed is clamped per delta, which stretches
         // these spans across a gap where the world did not tick.
         let now = crate::host::now() / 1000.0;
-        let rebased = map_origin != self.prev_map_origin;
         let dragging = camera_store().camera_status == CameraStatus::Drag;
         let released = self.was_dragging && !dragging;
         let (mut px, mut py, is_walking);
 
         if is_follow_mode {
-            if rebased || !self.was_follow_mode {
+            if !self.was_follow_mode {
                 px = target.x;
                 py = target.y;
             } else {
@@ -225,7 +220,6 @@ impl Figure {
             }
         }
 
-        self.prev_map_origin = map_origin;
         self.was_follow_mode = is_follow_mode;
         self.was_dragging = dragging;
 
@@ -249,16 +243,12 @@ impl Figure {
         }
         self.pose[0] = px;
         self.pose[1] = py;
-        self.pose[2] = local_height(*stands, map_origin);
+        self.pose[2] = *stands;
 
         let Some(held) = &self.held else { return };
         let sched = &mut kernel().sched;
         if let Some(a) = sched.models.actor(held.actor) {
-            a.at = [
-                ivec::to_real(ivec::X(map_origin)) + px,
-                ivec::to_real(ivec::Y(map_origin)) + py,
-                ivec::to_real(ivec::Z(map_origin)) + self.pose[2],
-            ];
+            a.at = [px, py, self.pose[2]];
             a.rotation_z = self.pose[3] as f32;
             a.visible = true;
         }
@@ -283,22 +273,22 @@ fn companion() -> &'static mut Companion {
     COMPANION.get(|| Companion { person: None, pet: None })
 }
 
+/// In world units, so a rebase moves nothing.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CompanionProps {
     pub map_origin: IVec,
-    pub center_x: f64,
-    pub center_y: f64,
-    /// The top of the floor under the map center, in world units.
+    pub center: [f64; 2],
+    /// The top of the floor under the map center.
     pub floor: f64,
 }
 
-fn figure_for<'a>(slot: &'a mut Option<Figure>, variant: &CharacterVariant, target: Vec2, map_origin: IVec) -> &'a mut Figure {
+fn figure_for<'a>(slot: &'a mut Option<Figure>, variant: &CharacterVariant, target: Vec2) -> &'a mut Figure {
     if slot.as_ref().is_some_and(|w| w.variant.number != variant.number) {
         if let Some(mut old) = slot.take() {
             old.release();
         }
     }
-    slot.get_or_insert_with(|| Figure::new(variant, target, map_origin))
+    slot.get_or_insert_with(|| Figure::new(variant, target))
 }
 
 pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
@@ -319,16 +309,16 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     let (person_variant, pet_variant) = (&person_variant, &pet_variant);
     let is_follow_mode = camera_store().is_follow_mode;
 
-    let person_target = Vec2 { x: p.center_x, y: p.center_y };
-    let person = figure_for(&mut c.person, person_variant, person_target, p.map_origin);
+    let person_target = Vec2 { x: p.center[0], y: p.center[1] };
+    let person = figure_for(&mut c.person, person_variant, person_target);
     person.step(ctx, p.map_origin, person_target, p.floor, is_follow_mode);
     chat_bubble_step(person.held.as_ref().map(|h| h.actor), person_variant.height_u);
 
     let pet_target = Vec2 {
-        x: p.center_x + PET_OFFSET.x,
-        y: p.center_y + PET_OFFSET.y,
+        x: p.center[0] + PET_OFFSET.x,
+        y: p.center[1] + PET_OFFSET.y,
     };
-    let pet = figure_for(&mut c.pet, pet_variant, pet_target, p.map_origin);
+    let pet = figure_for(&mut c.pet, pet_variant, pet_target);
     // Its own floor beside the person, stepped to from the person's height.
     let pet_z = step_from(p.map_origin, [pet_target.x, pet_target.y], p.floor).flatten().unwrap_or(p.floor);
     pet.step(ctx, p.map_origin, pet_target, pet_z, is_follow_mode);
@@ -342,6 +332,7 @@ pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
 
 /// None inside where a wall holds it; None outside where no page is resident.
 fn step_from(map_origin: IVec, [x, y]: [f64; 2], stands: f64) -> Option<Option<f64>> {
-    let at = *local_world_to_canonical(&mut Pvf3::default(), &[x, y, local_height(over(stands), map_origin)], map_origin);
+    let o = ivec::to_v3(map_origin);
+    let at = *local_world_to_canonical(&mut Pvf3::default(), &[x - o[0], y - o[1], local_height(over(stands), map_origin)], map_origin);
     Access::now().support(&at, COMPANION_STEP_CELLS).value()
 }
