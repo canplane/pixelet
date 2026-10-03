@@ -89,15 +89,15 @@ export const SETTINGS = {
     section: "map",
   },
   /** The map center stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck. */
-  center_support: {
+  surface_follow: {
     key: 5 as number,
     kind: "toggle",
     default: true,
     section: "navigation",
     dev: true,
   },
-  /** What the camera does when the controls would put it underground; CAMERA_COLLISION_MODES says each. */
-  camera_collision: {
+  /** What the camera does when the controls would put it underground; OBSTACLE_MODES says each. */
+  obstacle: {
     key: 6 as number,
     kind: "choice",
     default: "climb",
@@ -151,7 +151,7 @@ export const SETTINGS = {
     kind: "choice",
     default: "auto",
     options: ["auto", "fixed", "low"],
-    section: "quality",
+    section: "display",
   },
   /** The performance overlay: the profiler's panel, and the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`). */
   profiler: {
@@ -211,8 +211,8 @@ export const SETTINGS_SHIPPED = {
     options: ["orbit", "free"],
     section: "map",
   },
-  /** What the camera does when the controls would put it underground; CAMERA_COLLISION_MODES says each. */
-  camera_collision: {
+  /** What the camera does when the controls would put it underground; OBSTACLE_MODES says each. */
+  obstacle: {
     key: 6 as number,
     kind: "choice",
     default: "climb",
@@ -255,7 +255,7 @@ export const SETTINGS_SHIPPED = {
     kind: "choice",
     default: "auto",
     options: ["auto", "fixed", "low"],
-    section: "quality",
+    section: "display",
   },
   /** The performance overlay: the profiler's panel, and the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`). */
   profiler: {

@@ -7,9 +7,9 @@
       }
     },
     "navigation": {
-      "center_support": {
-        "label": "Follow the ground",
-        "description": "Dragging moves the center along terrain and objects, over what blocks it. Off, it keeps its height and passes through anything."
+      "surface_follow": {
+        "label": "Follow surfaces",
+        "description": "Dragging moves the map center along terrain and object surfaces. Turn it off to keep the current height and pass through obstacles."
       }
     }
   },

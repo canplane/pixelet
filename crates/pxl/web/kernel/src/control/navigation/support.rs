@@ -101,7 +101,7 @@ pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, yaw: f64) -> Pvf
     if is_unknown(from) {
         return unknown_z(&to);
     }
-    if !settings_store().center_support {
+    if !settings_store().surface_follow {
         return to;
     }
     if way == [0.0, 0.0] {

@@ -5,18 +5,16 @@
     "trigger_aria_label": "설정",
     "close": "닫기",
     "tabs": {
-      "effects": "옵션",
+      "options": "옵션",
       "info": "정보"
     },
     "language": {
-      "section_title": "언어",
-      "korean": "한국어",
-      "english": "English"
+      "section_title": "언어"
     },
     "cost_legend": "LOW / MED / HIGH는 성능 부담 수준을 나타냅니다. 프레임이 끊기면 HIGH 항목부터 조정해 보세요.",
     "display": {
       "section_title": "화면",
-      "section_caption": "화면에 그리는 요소를 설정합니다.",
+      "section_caption": "화면에 그리는 요소와 해상도를 설정합니다.",
       "decor": {
         "label": "데코",
         "description": "지형에 자동으로 배치되는 나무·차량 등의 장식을 표시합니다. 직접 배치한 오브젝트에는 영향을 주지 않습니다."
@@ -24,6 +22,21 @@
       "textures": {
         "label": "텍스처",
         "description": "블록 표면에 단색 대신 텍스처를 표시합니다."
+      },
+      "resolution": {
+        "label": "해상도",
+        "auto": {
+          "label": "자동",
+          "description": "기기 해상도로 그리다가 버벅이면 잠시 낮추고, 여유가 생기면 되돌립니다."
+        },
+        "fixed": {
+          "label": "고정",
+          "description": "항상 기기 해상도로 그립니다. 가장 선명하지만 성능이 낮은 기기에서는 끊길 수 있습니다."
+        },
+        "low": {
+          "label": "저해상도",
+          "description": "낮은 해상도로 그려 배터리와 발열을 줄입니다. 조금 흐려 보입니다."
+        }
       }
     },
     "camera": {
@@ -31,23 +44,23 @@
       "section_caption": "카메라의 회전과 3인칭 동작을 설정합니다.",
       "tilt_lock": {
         "label": "기울기 고정",
-        "description": "기울기를 고정하고 좌우 회전만 허용합니다."
+        "description": "기울기를 고정하고 좌우로만 회전합니다."
       },
-      "camera_collision": {
-        "label": "3인칭 장애물 처리",
+      "obstacle": {
+        "label": "장애물 대응",
         "through": {
           "label": "통과",
           "description": "장애물을 무시하고 그대로 통과합니다."
         },
         "stop": {
           "label": "멈춤",
-          "description": "장애물에 닿기 직전에서 줌·회전·기울이기를 멈춥니다. 위로 피하지 않습니다."
+          "description": "장애물에 닿기 직전에서 움직임을 멈춥니다."
         },
         "climb": {
           "label": "타고 넘기",
-          "description": "장애물에 막히면 카메라 각도를 세워 지지면을 타고 넘습니다. 위쪽도 막혀 있으면 멈춥니다."
+          "description": "장애물에 막히면 카메라를 세워 타고 넘습니다. 위쪽도 막혀 있으면 멈춥니다."
         },
-        "description": "3인칭 카메라가 지형이나 물체에 막힐 때의 동작을 정합니다. 1인칭에는 적용되지 않습니다."
+        "description": "3인칭 카메라가 지형이나 오브젝트에 막힐 때의 동작입니다. 1인칭에는 적용되지 않습니다."
       }
     },
     "lighting": {
@@ -77,25 +90,6 @@
         "description": "블록과 데코, 캐릭터의 윤곽에 은은한 하이라이트를 더해 배경과 선명하게 구분합니다."
       }
     },
-    "quality": {
-      "section_title": "그래픽 품질",
-      "section_caption": "화면 선명도를 설정합니다",
-      "resolution": {
-        "label": "해상도",
-        "auto": {
-          "label": "자동",
-          "description": "기기 해상도로 그리다가 버벅이면 잠시 낮추고, 여유가 생기면 되돌립니다."
-        },
-        "fixed": {
-          "label": "고정",
-          "description": "항상 기기 해상도로 그립니다. 가장 선명하지만 성능이 낮은 기기에서는 끊길 수 있습니다."
-        },
-        "low": {
-          "label": "저해상도",
-          "description": "낮은 해상도로 그려 배터리와 발열을 줄입니다. 조금 흐려 보입니다."
-        }
-      }
-    },
     "debug": {
       "section_title": "디버그",
       "section_caption": "화면과 스케줄러를 들여다보는 진단 도구입니다",
@@ -122,23 +116,6 @@
     "about": {
       "section_title": "정보",
       "tagline": "현실 세계를 캔버스 삼아 블록을 쌓습니다."
-    },
-    "map": {
-      "camera_mode": {
-        "label": "카메라",
-        "orbit": {
-          "label": "3인칭",
-          "description": "캐릭터를 중심으로 카메라가 돌고, 드래그하면 지도가 옮겨집니다."
-        },
-        "free": {
-          "label": "1인칭",
-          "description": "캐릭터의 눈으로 둘러봅니다. 드래그하면 지도가 옮겨집니다."
-        }
-      },
-      "poi": {
-        "label": "장소",
-        "description": "주변 장소(카페, 상점, 랜드마크 등) 뱃지를 표시합니다."
-      }
     },
     "navigation": {
       "section_title": "지도 이동",
@@ -228,20 +205,6 @@
       "female_label": "여성",
       "male_label": "남성",
       "pet_label": "펫",
-      "persons": {
-        "female-1": "1",
-        "female-2": "2",
-        "female-3": "3",
-        "female-4": "4",
-        "female-5": "5",
-        "female-6": "6",
-        "male-1": "1",
-        "male-2": "2",
-        "male-3": "3",
-        "male-4": "4",
-        "male-5": "5",
-        "male-6": "6"
-      },
       "pets": {
         "beaver": "비버",
         "bee": "꿀벌",

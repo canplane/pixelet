@@ -5,18 +5,16 @@
     "trigger_aria_label": "Settings",
     "close": "Close",
     "tabs": {
-      "effects": "Options",
+      "options": "Options",
       "info": "Info"
     },
     "language": {
-      "section_title": "Language",
-      "korean": "한국어",
-      "english": "English"
+      "section_title": "Language"
     },
     "cost_legend": "LOW / MED / HIGH is how much each costs. If frames stutter, turn HIGH items off first.",
     "display": {
       "section_title": "Display",
-      "section_caption": "What the world draws",
+      "section_caption": "What the world draws, and at what resolution",
       "decor": {
         "label": "Decor",
         "description": "Shows the trees, cars and other decor placed on the terrain. Objects you placed are not affected."
@@ -24,6 +22,21 @@
       "textures": {
         "label": "Textures",
         "description": "Textures block faces instead of a flat color."
+      },
+      "resolution": {
+        "label": "Resolution",
+        "auto": {
+          "label": "Auto",
+          "description": "Draws at the device's resolution, lowering it for a while when frames stutter and restoring it once there is room."
+        },
+        "fixed": {
+          "label": "Fixed",
+          "description": "Always draws at the device's resolution. Sharpest, but may stutter on slower devices."
+        },
+        "low": {
+          "label": "Low",
+          "description": "Draws at a lower resolution to save battery and heat. Looks a little softer."
+        }
       }
     },
     "camera": {
@@ -31,23 +44,23 @@
       "section_caption": "Rotation and the third-person view",
       "tilt_lock": {
         "label": "Lock tilt",
-        "description": "Fixes the up-down tilt; only turning left and right is allowed."
+        "description": "Fixes the tilt; turns left and right only."
       },
-      "camera_collision": {
-        "label": "Third-person obstacles",
+      "obstacle": {
+        "label": "Obstacles",
         "through": {
           "label": "Pass through",
-          "description": "Ignores obstacles. Inside terrain the view may look broken."
+          "description": "Ignores obstacles and passes through."
         },
         "stop": {
           "label": "Stop",
-          "description": "Zoom, turn and tilt stop just short of the obstacle."
+          "description": "Stops just short of the obstacle."
         },
         "climb": {
-          "label": "Go over",
-          "description": "Raises the camera over what blocks it; stops where the way up is blocked too."
+          "label": "Climb over",
+          "description": "Tilts the camera up to climb over what blocks it. Stops where the way up is blocked too."
         },
-        "description": "What the third-person camera does when terrain or an object blocks it. First person has none."
+        "description": "What the third-person camera does when terrain or an object blocks it. Not used in first person."
       }
     },
     "lighting": {
@@ -77,25 +90,6 @@
         "description": "Adds a subtle highlight around the edges of blocks, decor and characters to make them stand out from the background."
       }
     },
-    "quality": {
-      "section_title": "Graphics Quality",
-      "section_caption": "How sharp the view is",
-      "resolution": {
-        "label": "Resolution",
-        "auto": {
-          "label": "Auto",
-          "description": "Draws at the device's resolution, lowering it for a while when frames stutter and restoring it once there is room."
-        },
-        "fixed": {
-          "label": "Fixed",
-          "description": "Always draws at the device's resolution. Sharpest, but may stutter on slower devices."
-        },
-        "low": {
-          "label": "Low",
-          "description": "Draws at a lower resolution to save battery and heat. Looks a little softer."
-        }
-      }
-    },
     "debug": {
       "section_title": "Debug",
       "section_caption": "Diagnostics for the view and the scheduler",
@@ -122,23 +116,6 @@
     "about": {
       "section_title": "About",
       "tagline": "Turn the real world into a canvas and build with blocks."
-    },
-    "map": {
-      "camera_mode": {
-        "label": "Camera",
-        "orbit": {
-          "label": "Third person",
-          "description": "The camera turns around the character; dragging moves the map."
-        },
-        "free": {
-          "label": "First person",
-          "description": "Looks through the character's eyes; dragging moves the map."
-        }
-      },
-      "poi": {
-        "label": "Places",
-        "description": "Shows nearby place badges (cafes, stores, landmarks, ...) on the map."
-      }
     },
     "navigation": {
       "section_title": "Map moves",
@@ -228,20 +205,6 @@
       "female_label": "Female",
       "male_label": "Male",
       "pet_label": "Pet",
-      "persons": {
-        "female-1": "1",
-        "female-2": "2",
-        "female-3": "3",
-        "female-4": "4",
-        "female-5": "5",
-        "female-6": "6",
-        "male-1": "1",
-        "male-2": "2",
-        "male-3": "3",
-        "male-4": "4",
-        "male-5": "5",
-        "male-6": "6"
-      },
       "pets": {
         "beaver": "Beaver",
         "bee": "Bee",

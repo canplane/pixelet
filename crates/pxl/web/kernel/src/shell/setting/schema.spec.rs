@@ -61,18 +61,18 @@ impl CameraMode {
 ///             reachable at the cost of an angle nobody asked for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
-pub enum CameraCollisionMode {
+pub enum ObstacleMode {
     through = 0,
     stop = 1,
     climb = 2,
 }
 
-impl CameraCollisionMode {
-    pub const ALL: [CameraCollisionMode; 3] = [CameraCollisionMode::through, CameraCollisionMode::stop, CameraCollisionMode::climb];
+impl ObstacleMode {
+    pub const ALL: [ObstacleMode; 3] = [ObstacleMode::through, ObstacleMode::stop, ObstacleMode::climb];
 
     /// The option an index names, or none for an index past the list.
-    pub fn of(index: u32) -> Option<CameraCollisionMode> {
-        CameraCollisionMode::ALL.get(index as usize).copied()
+    pub fn of(index: u32) -> Option<ObstacleMode> {
+        ObstacleMode::ALL.get(index as usize).copied()
     }
 }
 
@@ -179,9 +179,9 @@ pub enum SettingKey {
     /// and the eye steps back by the radius.
     camera_mode = 4,
     /// The map center stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck.
-    center_support = 5,
-    /// What the camera does when the controls would put it underground; CAMERA_COLLISION_MODES says each.
-    camera_collision = 6,
+    surface_follow = 5,
+    /// What the camera does when the controls would put it underground; OBSTACLE_MODES says each.
+    obstacle = 6,
     /// Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.
     edge_shade = 7,
@@ -213,8 +213,8 @@ impl SettingKey {
         SettingKey::poi,
         SettingKey::tilt_lock,
         SettingKey::camera_mode,
-        SettingKey::center_support,
-        SettingKey::camera_collision,
+        SettingKey::surface_follow,
+        SettingKey::obstacle,
         SettingKey::edge_shade,
         SettingKey::rim_light,
         SettingKey::ao,
@@ -238,8 +238,8 @@ impl SettingKey {
             SettingKey::poi => SettingKind::Toggle,
             SettingKey::tilt_lock => SettingKind::Toggle,
             SettingKey::camera_mode => SettingKind::Choice,
-            SettingKey::center_support => SettingKind::Toggle,
-            SettingKey::camera_collision => SettingKind::Choice,
+            SettingKey::surface_follow => SettingKind::Toggle,
+            SettingKey::obstacle => SettingKind::Choice,
             SettingKey::edge_shade => SettingKind::Toggle,
             SettingKey::rim_light => SettingKind::Toggle,
             SettingKey::ao => SettingKind::Choice,
@@ -260,8 +260,8 @@ impl SettingKey {
             SettingKey::poi => "poi",
             SettingKey::tilt_lock => "tilt_lock",
             SettingKey::camera_mode => "camera_mode",
-            SettingKey::center_support => "center_support",
-            SettingKey::camera_collision => "camera_collision",
+            SettingKey::surface_follow => "surface_follow",
+            SettingKey::obstacle => "obstacle",
             SettingKey::edge_shade => "edge_shade",
             SettingKey::rim_light => "rim_light",
             SettingKey::ao => "ao",
@@ -278,7 +278,7 @@ impl SettingKey {
     pub fn options(self) -> &'static [&'static str] {
         match self {
             SettingKey::camera_mode => &["orbit", "free"],
-            SettingKey::camera_collision => &["through", "stop", "climb"],
+            SettingKey::obstacle => &["through", "stop", "climb"],
             SettingKey::ao => &["off", "corner", "screen"],
             SettingKey::resolution => &["auto", "fixed", "low"],
             _ => &[],
@@ -287,13 +287,13 @@ impl SettingKey {
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(self, SettingKey::textures | SettingKey::decor | SettingKey::center_support | SettingKey::shadows)
+        matches!(self, SettingKey::textures | SettingKey::decor | SettingKey::surface_follow | SettingKey::shadows)
     }
 
     /// A choice's option a development build only offers.
     pub fn dev_option(self, value: u32) -> bool {
         match self {
-            SettingKey::camera_collision => matches!(value, 0),
+            SettingKey::obstacle => matches!(value, 0),
             _ => false,
         }
     }
@@ -312,8 +312,8 @@ pub struct Settings {
     pub poi: bool,
     pub tilt_lock: bool,
     pub camera_mode: CameraMode,
-    pub center_support: bool,
-    pub camera_collision: CameraCollisionMode,
+    pub surface_follow: bool,
+    pub obstacle: ObstacleMode,
     pub edge_shade: bool,
     pub rim_light: bool,
     pub ao: AoMode,
@@ -333,8 +333,8 @@ impl Settings {
         poi: false,
         tilt_lock: false,
         camera_mode: CameraMode::orbit,
-        center_support: true,
-        camera_collision: CameraCollisionMode::climb,
+        surface_follow: true,
+        obstacle: ObstacleMode::climb,
         edge_shade: true,
         rim_light: true,
         ao: AoMode::corner,
@@ -355,8 +355,8 @@ impl Settings {
             SettingKey::poi => self.poi as u32,
             SettingKey::tilt_lock => self.tilt_lock as u32,
             SettingKey::camera_mode => self.camera_mode as u32,
-            SettingKey::center_support => self.center_support as u32,
-            SettingKey::camera_collision => self.camera_collision as u32,
+            SettingKey::surface_follow => self.surface_follow as u32,
+            SettingKey::obstacle => self.obstacle as u32,
             SettingKey::edge_shade => self.edge_shade as u32,
             SettingKey::rim_light => self.rim_light as u32,
             SettingKey::ao => self.ao as u32,
@@ -381,9 +381,9 @@ impl Settings {
                 Some(o) => self.camera_mode = o,
                 None => return false,
             },
-            SettingKey::center_support if value <= 1 => self.center_support = value == 1,
-            SettingKey::camera_collision => match CameraCollisionMode::of(value) {
-                Some(o) => self.camera_collision = o,
+            SettingKey::surface_follow if value <= 1 => self.surface_follow = value == 1,
+            SettingKey::obstacle => match ObstacleMode::of(value) {
+                Some(o) => self.obstacle = o,
                 None => return false,
             },
             SettingKey::edge_shade if value <= 1 => self.edge_shade = value == 1,

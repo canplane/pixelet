@@ -5,9 +5,10 @@ import { StyleSheet, View } from "react-native";
 
 import { SectionTitle, SettingChoiceRow } from "@/feature/setting/row.tsx";
 
+/** Each language by its own name. */
 const SUPPORTED_LANGUAGES = [
-  { code: "en", labelKey: "settings.language.english" },
-  { code: "ko", labelKey: "settings.language.korean" },
+  { code: "en", label: "English" },
+  { code: "ko", label: "한국어" },
 ] as const;
 
 export function LanguageSection() {
@@ -17,9 +18,9 @@ export function LanguageSection() {
     <View style={styles.section}>
       <SectionTitle icon="globe">{t("settings.language.section_title")}</SectionTitle>
       <View style={styles.choices}>
-        {SUPPORTED_LANGUAGES.map(({ code, labelKey }) => {
+        {SUPPORTED_LANGUAGES.map(({ code, label }) => {
           const on = i18n.resolvedLanguage === code;
-          return <SettingChoiceRow key={code} label={t(labelKey)} selected={on} onSelect={() => i18n.changeLanguage(code)} />;
+          return <SettingChoiceRow key={code} label={label} selected={on} onSelect={() => i18n.changeLanguage(code)} />;
         })}
       </View>
     </View>

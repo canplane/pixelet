@@ -119,10 +119,8 @@ export const Group = {
   pet: 1,
 } as const;
 
-/** Split by gender (not one flat list) so the settings UI can show two
- * separate rows instead of one row a user has to scan by label text to tell
- * apart — display names live in locale files
- * (palette_modal.character.persons.<key>). */
+/** Split by gender, so the picker shows two rows; a person is shown by
+ * its place in its row. */
 export const PERSON_GENDER_PREFIXES = {
   female: "female-",
   male: "male-",

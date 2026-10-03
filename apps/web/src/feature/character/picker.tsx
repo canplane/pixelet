@@ -60,7 +60,7 @@ function PersonPicker(props: PersonPickerProps) {
           </View>
           <View style={styles.rule} />
           <View style={styles.chips}>
-            {variants.map((v) => <Chip key={v.key} label={t(`drawer_modal.character.persons.${v.key}`)} active={v.key === selectedKey} onPress={() => onSelect(v.key)} />)}
+            {variants.map((v, i) => <Chip key={v.key} label={`${i + 1}`} active={v.key === selectedKey} onPress={() => onSelect(v.key)} />)}
           </View>
         </View>
       </View>

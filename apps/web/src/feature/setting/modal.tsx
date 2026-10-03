@@ -18,7 +18,7 @@ import { AboutSection } from "./section/about.tsx";
 import { AttributionSection } from "./section/attribution.tsx";
 
 export const enum SettingsTab {
-  Effects = 0,
+  Options = 0,
   Info = 1,
 }
 
@@ -38,7 +38,7 @@ function TabScroll({ children }: { children: React.ReactNode }) {
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<SettingsTab>(SettingsTab.Effects);
+  const [tab, setTab] = useState<SettingsTab>(SettingsTab.Options);
 
   return (
     <Panel label={t("settings.title")} onClose={onClose}>
@@ -49,22 +49,21 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             value={tab}
             onChange={setTab}
             segments={[
-              { value: SettingsTab.Effects, label: t("settings.tabs.effects") },
+              { value: SettingsTab.Options, label: t("settings.tabs.options") },
               { value: SettingsTab.Info, label: t("settings.tabs.info") },
             ]}
           />
         }
       >
-        {tab === SettingsTab.Effects
+        {tab === SettingsTab.Options
           ? (
-            <TabScroll key={SettingsTab.Effects}>
+            <TabScroll key={SettingsTab.Options}>
               <Text style={settingText.faint}>{t("settings.cost_legend")}</Text>
               <Separator />
               <SettingsSection section="display" />
               <SettingsSection section="navigation" />
               <SettingsSection section="camera" />
               <SettingsSection section="lighting" />
-              <SettingsSection section="quality" />
               <SettingsSection section="debug" />
             </TabScroll>
           )

@@ -3,7 +3,7 @@
 use super::*;
 use crate::control::camera::config::camera_cfg;
 use crate::global::serial;
-use crate::shell::setting::store::CameraCollisionMode;
+use crate::shell::setting::store::ObstacleMode;
 use crate::world::fixture::place;
 use crate::world::frame::coord::canonical_to_local;
 
@@ -93,8 +93,8 @@ fn a_change_of_person_leaves_the_map_center() {
 fn a_pinch_keeps_no_debt() {
     let _g = serial();
     third_person();
-    let collision = settings_store().camera_collision;
-    settings_store().camera_collision = CameraCollisionMode::through;
+    let collision = settings_store().obstacle;
+    settings_store().obstacle = ObstacleMode::through;
     place([0.0, 0.0, 10.0], 300.0, 0.9, 0.4);
     let from = camera_store().intent.dist;
     pinch_begin(100.0);
@@ -106,7 +106,7 @@ fn a_pinch_keeps_no_debt() {
     assert_eq!(camera_store().intent.dist, camera_cfg::view::MAX_DIST, "past the farthest");
     pinch(2.0e-3);
     assert_eq!(camera_store().intent.dist, camera_cfg::view::MAX_DIST / 2.0, "the closing went to the refused share");
-    settings_store().camera_collision = collision;
+    settings_store().obstacle = collision;
     third_person();
 }
 
