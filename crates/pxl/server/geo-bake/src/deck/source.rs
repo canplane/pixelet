@@ -43,15 +43,17 @@ fn share(k: usize, n: usize) -> (i32, i32) {
     (n as i32, k as i32)
 }
 
-/// By id: piece numbers break the solve's ties.
-pub fn flagged_rows(client: &mut Client, flag: &str) -> Result<Vec<BridgeRow>, postgres::Error> {
+/// By id: piece numbers break the solve's ties. `within` is lon/lat.
+pub fn flagged_rows(client: &mut Client, flag: &str, within: Option<[f64; 4]>) -> Result<Vec<BridgeRow>, postgres::Error> {
+    let [w, s, e, n] = within.map_or([None; 4], |b| b.map(Some));
     let rows = client.query(
         "SELECT gers_id, subtype, class, COALESCE(road_flags, rail_flags)::text AS flags, level_rules::text AS levels,
                 width_rules::text AS widths, access_restrictions::text AS access,
                 subclass, subclass_rules::text AS subclasses, ST_AsBinary(geom) AS geom_wkb
          FROM overture_transportation
-         WHERE COALESCE(road_flags, rail_flags)::text LIKE '%' || $1 || '%'",
-        &[&flag],
+         WHERE COALESCE(road_flags, rail_flags)::text LIKE '%' || $1 || '%'
+           AND ($2::float8 IS NULL OR geom && ST_Transform(ST_MakeEnvelope($2, $3, $4, $5, 4326), 3857))",
+        &[&flag, &w, &s, &e, &n],
     )?;
     let mut out: Vec<BridgeRow> = rows
         .iter()
@@ -262,11 +264,21 @@ pub struct DeckOut<'a> {
     pub points: Vec<[f64; 3]>,
 }
 
-pub fn write(client: &mut Client, decks: &[DeckOut]) -> Result<(), postgres::Error> {
-    client.batch_execute(
-        "DROP TABLE IF EXISTS overture_deck;
-         CREATE TABLE overture_deck (gers_id TEXT NOT NULL, subtype TEXT NOT NULL, class TEXT, width_m REAL NOT NULL, form SMALLINT NOT NULL, geom GEOMETRY(LineStringZ, 3857) NOT NULL);",
-    )?;
+/// The whole table, or with `within` only the rows of what was solved there.
+pub fn write(client: &mut Client, decks: &[DeckOut], within: Option<[f64; 4]>) -> Result<(), postgres::Error> {
+    match within {
+        None => client.batch_execute(
+            "DROP TABLE IF EXISTS overture_deck;
+             CREATE TABLE overture_deck (gers_id TEXT NOT NULL, subtype TEXT NOT NULL, class TEXT, width_m REAL NOT NULL, form SMALLINT NOT NULL, geom GEOMETRY(LineStringZ, 3857) NOT NULL);",
+        )?,
+        Some([w, s, e, n]) => {
+            let gers: Vec<&str> = decks.iter().map(|d| d.piece.gers_id.as_str()).collect();
+            client.execute(
+                "DELETE FROM overture_deck WHERE geom && ST_Transform(ST_MakeEnvelope($1, $2, $3, $4, 4326), 3857) OR gers_id = ANY($5)",
+                &[&w, &s, &e, &n, &gers],
+            )?;
+        }
+    }
     for batch in decks.chunks(BATCH) {
         let gers: Vec<&str> = batch.iter().map(|d| d.piece.gers_id.as_str()).collect();
         let subtypes: Vec<&str> = batch.iter().map(|d| d.piece.subtype.as_str()).collect();
@@ -279,5 +291,6 @@ pub fn write(client: &mut Client, decks: &[DeckOut]) -> Result<(), postgres::Err
             &[&gers, &subtypes, &classes, &widths, &forms, &lines],
         )?;
     }
-    client.batch_execute("CREATE INDEX ON overture_deck USING GIST (geom); ANALYZE overture_deck; DROP TABLE IF EXISTS deck_piece, deck_water;")
+    let index = if within.is_none() { "CREATE INDEX ON overture_deck USING GIST (geom);" } else { "" };
+    client.batch_execute(&format!("{index} ANALYZE overture_deck; DROP TABLE IF EXISTS deck_piece, deck_water;"))
 }
