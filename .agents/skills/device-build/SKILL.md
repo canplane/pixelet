@@ -60,8 +60,8 @@ file is added to the pod only by `pod install`), after `app.json` or a plugin
 changes, or after a dependency is added.
 
 `plugin/ios-build.js` sets the iOS the pods and the app target: the highest
-floor of what the app links, which its dependencies decide, not a release's
-look.
+floor of what the app links, which its dependencies decide. A target is where
+a build links, not a promise of what runs.
 
 ### Build, install, launch
 
@@ -167,7 +167,7 @@ not run it yet.
 `plugin/android-build.js` writes what the build is for into
 `gradle.properties`: arm64-v8a alone, since the kernel is built for no other
 ABI and an APK carrying one without it dies on those phones, and API 29 and
-later, from where Vulkan, which the device draws through, is dependable.
+later, the Vulkan floor this build takes for wgpu.
 
 expo-horizon-core's plugin splits the app into two flavors, `mobile` for a
 phone and `quest` for a Meta Quest, so every variant is named for both:
