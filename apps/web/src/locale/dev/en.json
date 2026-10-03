@@ -8,8 +8,8 @@
     },
     "navigation": {
       "center_support": {
-        "label": "Center support",
-        "description": "The map center moves along what supports it. Off, it keeps its height and passes through terrain and objects."
+        "label": "Follow the ground",
+        "description": "Dragging moves the center along terrain and objects, over what blocks it. Off, it keeps its height and passes through anything."
       }
     }
   },

@@ -1,11 +1,11 @@
 {
   "settings": {
     "title": "Settings",
-    "description": "Adjust language, graphics, and quality settings.",
+    "description": "Display, map moves, camera and language",
     "trigger_aria_label": "Settings",
     "close": "Close",
     "tabs": {
-      "effects": "Settings",
+      "effects": "Options",
       "info": "Info"
     },
     "language": {
@@ -13,46 +13,46 @@
       "korean": "한국어",
       "english": "English"
     },
-    "cost_legend": "LOW / MED / HIGH indicates the performance impact of each option. If you experience frame drops, try disabling HIGH-impact options first.",
+    "cost_legend": "LOW / MED / HIGH is how much each costs. If frames stutter, turn HIGH items off first.",
     "display": {
       "section_title": "Display",
-      "section_caption": "Choose what appears in the world",
+      "section_caption": "What the world draws",
       "decor": {
         "label": "Decor",
-        "description": "Shows trees, vehicles and other decor placed on the terrain automatically. Objects you place yourself are always shown."
+        "description": "Shows the trees, cars and other decor placed on the terrain. Objects you placed are not affected."
       },
       "textures": {
         "label": "Textures",
-        "description": "Applies detailed textures to blocks instead of flat colors."
+        "description": "Textures block faces instead of a flat color."
       }
     },
     "camera": {
       "section_title": "Camera",
-      "section_caption": "Adjust how the camera moves",
+      "section_caption": "Rotation and the third-person view",
       "tilt_lock": {
-        "label": "Lock Camera Tilt",
-        "description": "Locks vertical camera rotation while leaving horizontal rotation free."
+        "label": "Lock tilt",
+        "description": "Fixes the up-down tilt; only turning left and right is allowed."
       },
       "camera_collision": {
-        "label": "Third-person camera collision",
+        "label": "Third-person obstacles",
         "through": {
           "label": "Pass through",
-          "description": "Passes through terrain and objects."
+          "description": "Ignores obstacles. Inside terrain the view may look broken."
         },
         "stop": {
           "label": "Stop",
-          "description": "Stops the camera control just short of the collision."
+          "description": "Zoom, turn and tilt stop just short of the obstacle."
         },
         "climb": {
-          "label": "Climb over",
-          "description": "Rises over what blocks it; stops where the way up is blocked too."
+          "label": "Go over",
+          "description": "Raises the camera over what blocks it; stops where the way up is blocked too."
         },
         "description": "What the third-person camera does when terrain or an object blocks it. First person has none."
       }
     },
     "lighting": {
-      "section_title": "Lighting & Shadows",
-      "section_caption": "Enhance shapes, edges, and depth",
+      "section_title": "Light and shadow",
+      "section_caption": "Light, shadow and outlines",
       "edge_shade": {
         "label": "Block Outlines",
         "description": "Darkens only edges exposed to open air, keeping flat ground seamless while outlining changes in height."
@@ -64,7 +64,7 @@
           "description": "Applies uniform ambient lighting to all surfaces."
         },
         "corner": {
-          "label": "Corner (Geometry)",
+          "label": "Corners",
           "description": "Darkens contact areas and inside corners so blocks look grounded instead of floating. Light on performance."
         },
         "screen": {
@@ -79,7 +79,7 @@
     },
     "quality": {
       "section_title": "Graphics Quality",
-      "section_caption": "Adjust visual clarity and detail",
+      "section_caption": "How sharp the view is",
       "resolution": {
         "label": "Resolution",
         "auto": {
@@ -128,11 +128,11 @@
         "label": "Camera",
         "orbit": {
           "label": "Third person",
-          "description": "The camera circles the place it looks at, and dragging moves that place."
+          "description": "The camera turns around the character; dragging moves the map."
         },
         "free": {
           "label": "First person",
-          "description": "You look around where you stand; dragging walks you over the ground, your eye at your height over it."
+          "description": "Looks through the character's eyes; dragging moves the map."
         }
       },
       "poi": {
@@ -141,8 +141,8 @@
       }
     },
     "navigation": {
-      "section_title": "Navigation",
-      "section_caption": "How the map center meets the world"
+      "section_title": "Map moves",
+      "section_caption": "How the map moves when you drag it"
     }
   },
   "cubes": {

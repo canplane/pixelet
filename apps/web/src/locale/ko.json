@@ -1,11 +1,11 @@
 {
   "settings": {
     "title": "설정",
-    "description": "언어, 그래픽, 품질 옵션을 조정합니다",
+    "description": "화면, 지도 이동, 카메라, 언어를 설정합니다",
     "trigger_aria_label": "설정",
     "close": "닫기",
     "tabs": {
-      "effects": "설정",
+      "effects": "옵션",
       "info": "정보"
     },
     "language": {
@@ -13,46 +13,46 @@
       "korean": "한국어",
       "english": "English"
     },
-    "cost_legend": "LOW / MED / HIGH는 각 옵션이 성능에 미치는 영향을 나타냅니다. 프레임 드랍이 발생하면 HIGH 항목부터 꺼 보세요.",
+    "cost_legend": "LOW / MED / HIGH는 성능 부담 정도입니다. 화면이 끊기면 HIGH 항목부터 꺼 보세요.",
     "display": {
-      "section_title": "표시",
-      "section_caption": "세계에 표시할 요소를 설정합니다",
+      "section_title": "화면",
+      "section_caption": "화면에 그릴 요소를 설정합니다",
       "decor": {
         "label": "데코",
-        "description": "지형에 자동으로 배치된 나무와 차량 등의 데코를 표시합니다. 직접 놓은 오브젝트는 이 설정과 관계없이 표시됩니다."
+        "description": "지형에 자동으로 놓인 나무, 차량 같은 장식을 표시합니다. 직접 놓은 오브젝트에는 영향이 없습니다."
       },
       "textures": {
         "label": "텍스처",
-        "description": "블록 표면에 단색 대신 디테일한 텍스처를 적용합니다."
+        "description": "블록 표면에 단색 대신 텍스처를 입힙니다."
       }
     },
     "camera": {
       "section_title": "카메라",
-      "section_caption": "카메라가 움직이는 방식을 설정합니다",
+      "section_caption": "카메라의 회전과 3인칭 시점을 설정합니다",
       "tilt_lock": {
-        "label": "카메라 기울기 고정",
-        "description": "카메라의 수직 회전을 고정하고 수평 회전만 허용합니다."
+        "label": "기울기 고정",
+        "description": "위아래 기울기를 고정하고 좌우 회전만 허용합니다."
       },
       "camera_collision": {
-        "label": "3인칭 카메라 충돌",
+        "label": "3인칭 장애물 처리",
         "through": {
           "label": "통과",
-          "description": "지형과 물체를 그대로 통과합니다."
+          "description": "장애물을 무시하고 지나갑니다. 지형 속에서는 화면이 깨져 보일 수 있습니다."
         },
         "stop": {
           "label": "멈춤",
-          "description": "충돌 직전에서 카메라 조작을 멈춥니다."
+          "description": "장애물에 닿기 직전에서 줌·회전·기울이기를 멈춥니다."
         },
         "climb": {
-          "label": "타고 넘기",
-          "description": "충돌하면 위쪽으로 넘어갑니다. 위쪽도 막혀 있으면 멈춥니다."
+          "label": "넘어가기",
+          "description": "장애물에 막히면 카메라를 위로 세워 넘어갑니다. 위쪽도 막혀 있으면 멈춥니다."
         },
-        "description": "3인칭에서 카메라가 지형이나 물체에 막힐 때의 동작입니다. 1인칭에는 적용되지 않습니다."
+        "description": "3인칭에서 카메라가 지형이나 물체에 막힐 때의 동작입니다. 1인칭에는 해당하지 않습니다."
       }
     },
     "lighting": {
-      "section_title": "조명 & 그림자",
-      "section_caption": "형태와 경계, 깊이감을 강조합니다",
+      "section_title": "조명과 그림자",
+      "section_caption": "빛과 그림자, 윤곽 표현을 설정합니다",
       "edge_shade": {
         "label": "블록 외곽선",
         "description": "허공과 맞닿은 모서리만 어둡게 하여 평지는 매끄럽게 이어지고, 높낮이가 바뀌는 곳만 선으로 드러나게 합니다."
@@ -64,12 +64,12 @@
           "description": "모든 면에 동일한 주변광을 적용합니다."
         },
         "corner": {
-          "label": "모서리 (기하)",
-          "description": "블록이 땅과 맞닿는 부분과 안쪽 모서리를 어둡게 하여 떠 있지 않고 땅에 놓인 것처럼 보이게 합니다. 성능 부담이 적습니다."
+          "label": "모서리",
+          "description": "블록이 땅과 맞닿는 곳과 안쪽 모서리를 어둡게 해 땅에 놓인 느낌을 줍니다. 부담이 적습니다."
         },
         "screen": {
           "label": "정밀 (SSAO)",
-          "description": "맞닿는 부분과 구석, 틈새에 세밀한 음영을 더해 입체감을 높입니다. 화면 전체를 처리하므로 가장 많은 성능을 사용합니다."
+          "description": "구석과 틈새까지 세밀한 음영을 더해 입체감을 높입니다. 화면 전체를 처리해 부담이 가장 큽니다."
         }
       },
       "rim_light": {
@@ -79,12 +79,12 @@
     },
     "quality": {
       "section_title": "그래픽 품질",
-      "section_caption": "화면의 선명도와 디테일을 설정합니다",
+      "section_caption": "화면 선명도를 설정합니다",
       "resolution": {
         "label": "해상도",
         "auto": {
           "label": "자동",
-          "description": "기기 해상도로 그리다가, 화면이 버벅이면 잠시 해상도를 낮추고 여유가 생기면 되돌립니다."
+          "description": "기기 해상도로 그리다가 버벅이면 잠시 낮추고, 여유가 생기면 되돌립니다."
         },
         "fixed": {
           "label": "고정",
@@ -92,7 +92,7 @@
         },
         "low": {
           "label": "저해상도",
-          "description": "화면을 낮은 해상도로 그려 배터리와 발열을 줄입니다. 조금 흐려 보입니다."
+          "description": "낮은 해상도로 그려 배터리와 발열을 줄입니다. 조금 흐려 보입니다."
         }
       }
     },
@@ -128,11 +128,11 @@
         "label": "카메라",
         "orbit": {
           "label": "3인칭",
-          "description": "카메라가 바라보는 곳을 중심으로 돌고, 드래그하면 그곳이 움직입니다."
+          "description": "캐릭터를 중심으로 카메라가 돌고, 드래그하면 지도가 옮겨집니다."
         },
         "free": {
           "label": "1인칭",
-          "description": "제자리에서 둘러봅니다. 드래그하면 땅 위를 걷고, 눈높이는 서 있는 땅을 따라갑니다."
+          "description": "캐릭터의 눈으로 둘러봅니다. 드래그하면 지도가 옮겨집니다."
         }
       },
       "poi": {
@@ -141,8 +141,8 @@
       }
     },
     "navigation": {
-      "section_title": "내비게이션",
-      "section_caption": "지도 중심이 세계와 맞닿는 방식을 설정합니다"
+      "section_title": "지도 이동",
+      "section_caption": "지도를 끌어 옮길 때의 동작을 설정합니다"
     }
   },
   "cubes": {
