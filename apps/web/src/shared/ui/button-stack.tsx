@@ -19,15 +19,22 @@ export interface StackItem {
   glyph?: GlyphName;
   /** Instead of `glyph`: a face of its own. */
   face?: ReactNode;
-  /** Its mode is on: ringed, as a lone button is. */
+  /** On: drawn in the action color. */
   isActive?: boolean;
   disabled?: boolean;
 }
 
-/** Buttons of one kind in one capsule over the map, as iPhone Maps groups its map controls. */
-export function ButtonStack({ items }: { items: StackItem[] }) {
+/** Buttons of one kind in one capsule over the map, as iPhone Maps groups its map
+ * controls; the capsule is ringed while their mode is on, as a lone button is. */
+export function ButtonStack({ items, isActive }: { items: StackItem[]; isActive?: boolean }) {
   return (
-    <Backing fill={color.ground} place={BackingPlace.OverMap} interactive style={styles.capsule}>
+    <Backing
+      fill={isActive ? surface.chosen.fill : color.ground}
+      tint={isActive ? surface.chosen.glass : undefined}
+      place={BackingPlace.OverMap}
+      interactive
+      style={[styles.capsule, isActive && styles.chosen]}
+    >
       {items.map((item) => (
         <Pressable
           key={item.label}
@@ -36,14 +43,14 @@ export function ButtonStack({ items }: { items: StackItem[] }) {
           accessibilityRole="button"
           accessibilityLabel={item.label}
           accessibilityState={{ disabled: item.disabled }}
-          style={[styles.item, item.isActive && styles.chosen]}
+          style={styles.item}
         >
           {({ pressed }) => (
             <Motion
               to={{ opacity: item.disabled ? disabledContent : pressed && !SYSTEM_BACKING ? 0.5 : 1 }}
               transition={SNAP}
             >
-              {item.face ?? (item.glyph && <Glyph glyph={item.glyph} size={chrome.glyph} color={LABEL.primary} />)}
+              {item.face ?? (item.glyph && <Glyph glyph={item.glyph} size={chrome.glyph} color={item.isActive ? color.action : LABEL.primary} />)}
             </Motion>
           )}
         </Pressable>
@@ -55,5 +62,5 @@ export function ButtonStack({ items }: { items: StackItem[] }) {
 const styles = StyleSheet.create({
   capsule: { width: chrome.control, borderRadius: chrome.control / 2, overflow: "hidden" },
   item: { width: chrome.control, height: chrome.control, alignItems: "center", justifyContent: "center" },
-  chosen: { borderRadius: chrome.control / 2, borderWidth: 2, borderColor: surface.chosen.edge, backgroundColor: surface.chosen.fill },
+  chosen: { boxShadow: `0 0 0 2px ${surface.chosen.edge}` },
 });
