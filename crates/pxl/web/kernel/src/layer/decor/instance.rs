@@ -23,8 +23,7 @@ pub(crate) struct Instance {
     pub(crate) pos: u32,
 }
 
-/// As many as the renderer's decor pass draws.
-pub const DECOR_GROUPS: usize = 64;
+pub use pxl_render::gpu::pass::decor::GROUPS as DECOR_GROUPS;
 
 /// Grows rather than being a `.fixed` range: placed instances are unbounded,
 /// and a fixed workspace would drop what someone placed. Where the heap

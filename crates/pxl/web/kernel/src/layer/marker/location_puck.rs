@@ -110,7 +110,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
     let revision = heights_revision();
     if p.zone_for != Some((center_pos, revision)) {
         p.zone_for = Some((center_pos, revision));
-        let mut lane: Vec<f32> = Vec::with_capacity(p.samples.len() * 7);
+        let mut lane: Vec<f32> = Vec::with_capacity(p.samples.len() * ZONE_INSTANCE_FLOATS);
         let mut v = [0.0; 3];
         for s in &p.samples {
             add3(&center_pos, &s.off, &mut v);

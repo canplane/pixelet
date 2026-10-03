@@ -47,31 +47,13 @@ pub fn decor_gone_px() -> f64 {
     target_cell_px() * 2.0
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DecorTier {
-    Model,
-    /// A quad an instance: too small for a model's triangles, large enough to be seen.
-    Impostor,
-    Gone,
+/// Under this a kind's sprite is not drawn.
+pub fn decor_sprite_px() -> f64 {
+    target_cell_px() * crate::param::IMPOSTOR_GONE_CELLS
 }
 
-pub fn decor_tier(extent_u: f64, lod_step: u32) -> DecorTier {
-    let projected_px = (extent_u / U_PER_CELL) * target_cell_px() / lod_step as f64;
-    if projected_px >= decor_gone_px() {
-        DecorTier::Model
-    } else if projected_px >= target_cell_px() * crate::param::IMPOSTOR_GONE_CELLS {
-        DecorTier::Impostor
-    } else {
-        DecorTier::Gone
-    }
-}
-
-pub fn decor_density(extent_u: f64, lod_step: u32) -> f64 {
-    if decor_tier(extent_u, lod_step) == DecorTier::Gone {
-        0.0
-    } else {
-        1.0
-    }
+fn decor_shown(extent_u: f64, lod_step: u32) -> bool {
+    (extent_u / U_PER_CELL) * target_cell_px() / lod_step as f64 >= decor_sprite_px()
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -272,7 +254,7 @@ impl<'s> DecorBuild<'s> {
                 break;
             }
             scratch.group_count += kind.variant_count as usize;
-            if decor_density(kind.extent, step) == 0.0 {
+            if !decor_shown(kind.extent, step) {
                 continue;
             }
             for column in placed {

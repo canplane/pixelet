@@ -23,12 +23,11 @@ use xpute_runtime::mem::heap::alloc;
 use crate::control::camera::controller::units_per_px_at;
 use crate::global::Global;
 use crate::layer::decor::asset_store::decor_bundle_assets;
-use crate::layer::decor::build::{decor_gone_px, variant_extent, DecorBuild, DecorHide, Ground, Kind, Placed};
+use crate::layer::decor::build::{decor_gone_px, decor_sprite_px, variant_extent, DecorBuild, DecorHide, Ground, Kind, Placed};
 use crate::layer::decor::instance::{decor_groups, DecorScratch, GroupLanes};
 use crate::layer::decor::scatter::SCALE_JITTER;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::{object_col_revision, Store};
-use crate::param::IMPOSTOR_GONE_CELLS;
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::change::request_world_tick;
 use crate::world::chunk::build::Builder;
@@ -38,7 +37,6 @@ use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer;
 use crate::world::quality;
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::lod::target_cell_px;
 use pxl_spec::space::observation::Observation;
 use xpute_runtime::mem::heap::free;
 
@@ -88,6 +86,13 @@ struct Block {
     sources: Sources,
     /// Held hidden while it waits on the rest of a replacement (`step`).
     drawn: bool,
+}
+
+impl Block {
+    fn words(&self) -> &'static [u32] {
+        // SAFETY: the cell's block, `bytes` long, until given back on a later turn.
+        unsafe { core::slice::from_raw_parts(ptr_at::<u32>(self.at as usize), self.bytes as usize / 4) }
+    }
 }
 
 /// What a population depends on beyond its page and the seed.
@@ -189,7 +194,7 @@ fn solve(kinds: &[Kind], stack: &mut Vec<DecorCell>, out: &mut Vec<DecorCell>) {
     };
     let tau = quality::effective().tau();
     let largest = largest_possible(kinds);
-    let floor_px = target_cell_px() * crate::param::IMPOSTOR_GONE_CELLS;
+    let floor_px = decor_sprite_px();
     let side = chunk_span_of(top);
     let (cx, cy) = ((eye[0] / side).floor() as i64, (eye[1] / side).floor() as i64);
     let n = (reach / side).ceil() as i64 + 1;
@@ -404,7 +409,7 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Dec
 fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
     let Some(eye) = eye() else { return };
     let model_px = decor_gone_px();
-    let sprite_px = target_cell_px() * IMPOSTOR_GONE_CELLS;
+    let sprite_px = decor_sprite_px();
     let sprites = &mut c.sprites;
     for (&cell, block) in c.blocks.iter().filter(|(_, b)| b.drawn) {
         let (x0, y0, side) = cell.rect();
@@ -471,9 +476,7 @@ fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
 pub fn shown() -> impl Iterator<Item = (DecorCell, f64, f64, &'static [u32])> {
     cells().blocks.iter().filter(|(_, b)| b.drawn).map(|(&cell, b)| {
         let (x0, y0, _) = cell.rect();
-        // SAFETY: the cell's block, `bytes` long, until given back on a later turn.
-        let words: &'static [u32] = unsafe { core::slice::from_raw_parts(ptr_at::<u32>(b.at as usize), b.bytes as usize / 4) };
-        (cell, x0, y0, words)
+        (cell, x0, y0, b.words())
     })
 }
 
@@ -490,14 +493,6 @@ pub fn bytes() -> u32 {
 
 pub fn counts() -> (u32, u32) {
     let c = cells();
-    let instances = c
-        .blocks
-        .values()
-        .map(|b| {
-            // SAFETY: the cell's block, `bytes` long.
-            let words: &[u32] = unsafe { core::slice::from_raw_parts(ptr_at::<u32>(b.at as usize), b.bytes as usize / 4) };
-            decor_groups(words).map(|(_, n)| n).sum::<u32>()
-        })
-        .sum();
+    let instances = c.blocks.values().map(|b| decor_groups(b.words()).map(|(_, n)| n).sum::<u32>()).sum();
     (c.blocks.len() as u32, instances)
 }

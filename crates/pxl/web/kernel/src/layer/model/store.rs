@@ -153,12 +153,21 @@ fn slerp(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
     [q[0] / n, q[1] / n, q[2] / n, q[3] / n]
 }
 
+/// Floats a key: four for a rotation, three otherwise.
+fn width(path: u8) -> usize {
+    if path == R {
+        4
+    } else {
+        3
+    }
+}
+
 fn sample(ch: &Channel, time: f32, out: &mut [f32; 10]) {
     let n = ch.times.len();
     if n == 0 {
         return;
     }
-    let width = if ch.path == R { 4 } else { 3 };
+    let width = width(ch.path);
     let at = |k: usize| &ch.values[k * width..k * width + width];
     let (k0, k1, t) = if time <= ch.times[0] {
         (0, 0, 0.0)
@@ -250,7 +259,7 @@ impl Models {
     pub fn channel(&mut self, model: u32, clip: u32, joint: u32, path: u8, step: bool, times: &[f32], values: &[f32]) {
         let Some(m) = self.models.get_mut(model as usize) else { return };
         let Some(c) = m.clips.get_mut(clip as usize) else { return };
-        let width = if path == R { 4 } else { 3 };
+        let width = width(path);
         let values = values[..times.len() * width].to_vec();
         let times = times.to_vec();
         c.channels.push(Channel { joint, path, step, times, values });

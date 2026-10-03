@@ -168,11 +168,6 @@ impl Sketch {
         }
         self.point(to_local(vertex), Some(label));
     }
-
-    pub fn append(&mut self, other: &Sketch) {
-        self.vertices.extend_from_slice(&other.vertices);
-        self.labels.extend_from_slice(&other.labels);
-    }
 }
 
 /// About the orbit's pivot: the heading frame turns with the orbit, the world's never.
