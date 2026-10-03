@@ -41,8 +41,7 @@ members = [
   "pxl/tool",
 ]
 
-# Why libm is pinned, which is pixelet's answer and not xpute's: a release
-# within 0.2 may change an algorithm's last bits (0.2.12 replaced `cbrt`).
+# libm is pinned so transcendentals are bit-reproducible in every environment.
 #
 # It sits above the header on purpose. script/export-xpute.ts carries a
 # dependency's reason by reading back from its line to the one before it,
