@@ -16,10 +16,6 @@ use xpute_runtime::mem::heap::{alloc, free, Block, Guard};
 
 use crate::mesh::voxel_scan::{BandView, ExtraView};
 
-/// Exempt from hiding its neighbors' faces, and drawn with its bottom face.
-pub const MATERIAL_OBJECT: u8 = 5;
-pub const MATERIAL_LAND: u8 = 1;
-
 pub const NO_LAYER: u32 = 255;
 
 pub const SUB_CELL_NONE: u8 = 0;
@@ -44,30 +40,26 @@ pub fn unpack_sub_cell_size(packed: u8) -> f64 {
     }
 }
 
-pub type MaterialClass = u32;
-
 pub struct MaterialClasses;
 
 impl MaterialClasses {
-    pub const AIR: MaterialClass = 0;
-    pub const LAND: MaterialClass = 1;
-    pub const WATER: MaterialClass = 2;
-    pub const TRANSPORT: MaterialClass = 3;
-    pub const STRUCTURE: MaterialClass = 4;
-    pub const OBJECT: MaterialClass = 5;
+    pub const AIR: u8 = 0;
+    pub const LAND: u8 = 1;
+    pub const WATER: u8 = 2;
+    pub const TRANSPORT: u8 = 3;
+    pub const STRUCTURE: u8 = 4;
+    /// Exempt from hiding its neighbors' faces, and drawn with its bottom face.
+    pub const OBJECT: u8 = 5;
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct VoxelMaterial {
-    pub material_class: MaterialClass,
-    pub r: u32,
-    pub g: u32,
-    pub b: u32,
-    pub layer_idx: u32,
+/// A voxel's material word, `0xCC_RRGGBB`: its class, then its color.
+pub fn pack_material(class: u8, [r, g, b]: [u8; 3]) -> u32 {
+    u32::from_be_bytes([class, r, g, b])
 }
 
-pub fn pack_material(material: &VoxelMaterial) -> u32 {
-    ((material.material_class & 255) << 24) | ((material.r & 255) << 16) | ((material.g & 255) << 8) | (material.b & 255)
+pub fn unpack_material(word: u32) -> (u8, [u8; 3]) {
+    let [class, r, g, b] = word.to_be_bytes();
+    (class, [r, g, b])
 }
 
 const BAND_MASK: u32 = BAND_CELLS - 1;

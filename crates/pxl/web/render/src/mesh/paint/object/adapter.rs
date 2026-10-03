@@ -11,7 +11,7 @@ use pxl_spec::cell::object::{decor_ids, decor_num_id, placeable_cube_num_id, pla
 use crate::mesh::paint::object::material::solid_material;
 use pxl_spec::space::pvf3::ivec::IVec;
 
-use crate::mesh::volume::{pack_material, pack_sub_cell_fraction, Cell, Volumes, Voxel, NO_LAYER, SUB_CELL_NONE};
+use crate::mesh::volume::{pack_sub_cell_fraction, Cell, Volumes, Voxel, NO_LAYER, SUB_CELL_NONE};
 
 const AIR: u32 = cube_types::common::air as u32;
 
@@ -81,8 +81,8 @@ impl Painter {
             claimed: HashSet::new(),
         };
         for &cube in placeable_cubes.iter() {
-            let m = solid_material(cube);
-            p.set(placeable_cube_num_id(cube), Kind::Solid, pack_material(&m), m.layer_idx as u8);
+            let (material, layer) = solid_material(cube);
+            p.set(placeable_cube_num_id(cube), Kind::Solid, material, layer);
         }
         p.set(AIR, Kind::Air, 0, NO_LAYER as u8);
         for &id in decor_ids.iter() {

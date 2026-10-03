@@ -6,7 +6,7 @@
 
 use pxl_spec::bake::constant::BAND_CELLS;
 
-use crate::mesh::volume::{BAND_VOXELS, MATERIAL_OBJECT, SUB_CELL_NONE};
+use crate::mesh::volume::{unpack_material, MaterialClasses, BAND_VOXELS, SUB_CELL_NONE};
 use crate::mesh::{grow, try_push, Refused};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
@@ -269,14 +269,15 @@ impl ScanContext {
 }
 
 fn run_of(z0: i32, z1: i32, material: u32, layer_idx: u8) -> Run {
+    let (material_class, [r, g, b]) = unpack_material(material);
     Run {
         z0,
         z1,
         layer_taps: taps_of(layer_idx),
-        r: (material >> 16) as u8,
-        g: (material >> 8) as u8,
-        b: material as u8,
-        material_class: (material >> 24) as u8,
+        r,
+        g,
+        b,
+        material_class,
         sub_ox: 0,
         sub_oy: 0,
         sub_oz: 0,
@@ -310,8 +311,7 @@ fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) -> Res
                 continue;
             }
             let z = band.band_z * BAND_CELLS as i32 + local_z as i32;
-            let (r, g, b) = ((packed >> 16) as u8, (packed >> 8) as u8, packed as u8);
-            let material_class = (packed >> 24) as u8;
+            let (material_class, [r, g, b]) = unpack_material(packed);
             let layer_idx = band.layer_idx[idx];
             let sub = band.sub_cell.map(|s| &s[idx * 4..idx * 4 + 4]);
             let sub_s = sub.map_or(SUB_CELL_NONE, |s| s[3]);
@@ -336,7 +336,7 @@ fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) -> Res
                 open = None;
             } else if let Some(i) = open.filter(|&i| {
                 let o = &runs[i];
-                material_class != MATERIAL_OBJECT && o.r == r && o.g == g && o.b == b && o.layer_taps == taps_of(layer_idx) && o.material_class == material_class
+                material_class != MaterialClasses::OBJECT && o.r == r && o.g == g && o.b == b && o.layer_taps == taps_of(layer_idx) && o.material_class == material_class
             }) {
                 runs[i].z1 = z;
             } else {
@@ -363,7 +363,7 @@ fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) -> Res
         if !e.col.is_empty() {
             let (lo, hi) = extra_range(e.col, col as u32);
             for i in lo..hi {
-                let m = e.material[i];
+                let (material_class, [r, g, b]) = unpack_material(e.material[i]);
                 let s = e.sub[i];
                 push(
                     runs,
@@ -371,10 +371,10 @@ fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) -> Res
                         z0: e.z[i],
                         z1: e.z[i],
                         layer_taps: taps_of(e.layer_idx[i]),
-                        r: (m >> 16) as u8,
-                        g: (m >> 8) as u8,
-                        b: m as u8,
-                        material_class: (m >> 24) as u8,
+                        r,
+                        g,
+                        b,
+                        material_class,
                         sub_ox: s as u8,
                         sub_oy: (s >> 8) as u8,
                         sub_oz: (s >> 16) as u8,

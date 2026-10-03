@@ -8,19 +8,19 @@
 //! bands and a floor inside one would open another for a few voxels.
 
 use pxl_spec::bake::constant::{BAND_CELLS, U_PER_CELL};
-use pxl_spec::space::adapter::epsg3857::u_per_m;
 use pxl_spec::bake::deck::{Decks, Occupies, Over};
-use pxl_spec::procedural::{pier_stands, Frame};
 use pxl_spec::bake::format::{ch_index, GroundChannelKey, GROUND_CH_KEYS};
 use pxl_spec::bake::ground::{shown_ground, ShownGround, BASE};
 use pxl_spec::bake::pack::{unpack, GroundCell};
 use pxl_spec::cell::cube::cube_types;
+use pxl_spec::procedural::{pier_stands, Frame};
+use pxl_spec::space::adapter::epsg3857::u_per_m;
 use pxl_spec::space::hierarchy::{ancestor_of, offset_in};
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, PAGE_CELLS};
 
 use crate::mesh::paint::palette::shader_meta::{ground_color_lookup, ground_layer_index_lookup};
 use crate::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
-use crate::mesh::volume::{MaterialClasses, Volumes, Voxel, NO_LAYER};
+use crate::mesh::volume::{pack_material, MaterialClasses, Volumes, Voxel, NO_LAYER};
 use crate::mesh::voxel_scan::{apron_col, APRON, COL_SPAN};
 use crate::mesh::{try_push, Refused};
 use std::sync::LazyLock;
@@ -64,12 +64,12 @@ pub struct Materials {
 pub static MATERIALS: LazyLock<Materials> = LazyLock::new(Materials::of_palette);
 
 fn class_of(ch: GroundChannelKey) -> u8 {
-    (match ch {
+    match ch {
         GroundChannelKey::LAND => MaterialClasses::LAND,
         GroundChannelKey::WATER => MaterialClasses::WATER,
         GroundChannelKey::STRUCTURE => MaterialClasses::STRUCTURE,
         GroundChannelKey::TRANSPORT => MaterialClasses::TRANSPORT,
-    }) as u8
+    }
 }
 
 impl Materials {
@@ -77,7 +77,7 @@ impl Materials {
     pub fn of(&self, ch: GroundChannelKey, t: u8) -> Option<(u32, u8)> {
         let c = &self.channels[ch_index(ch)];
         let t = t as usize;
-        c.has_color[t].then(|| (pack(c.class, c.rgb[t]), if c.has_layer[t] { c.layer[t] } else { NO_LAYER as u8 }))
+        c.has_color[t].then(|| (pack_material(c.class, c.rgb[t]), if c.has_layer[t] { c.layer[t] } else { NO_LAYER as u8 }))
     }
 
     fn of_palette() -> Materials {
@@ -117,11 +117,6 @@ fn collect_decks(over: &mut Vec<(usize, usize, Over)>, s: &PageSource, first: [i
     });
     grown
 }
-
-fn pack(class: u8, rgb: [u8; 3]) -> u32 {
-    ((class as u32) << 24) | ((rgb[0] as u32) << 16) | ((rgb[1] as u32) << 8) | rgb[2] as u32
-}
-
 
 /// A building's concrete: nothing in the catalog is a pier's own.
 const PIER: (GroundChannelKey, u8) = (GroundChannelKey::STRUCTURE, cube_types::structure::building);
@@ -242,7 +237,7 @@ impl ChunkSample {
                 };
                 self.shown[i] = shown_ground(|k| u32::from(types[ch_index(k)]));
 
-                let (mut material, mut layer) = (pack(tables.base_class, tables.base_rgb), tables.base_layer);
+                let (mut material, mut layer) = (pack_material(tables.base_class, tables.base_rgb), tables.base_layer);
                 for (ch, &t) in types.iter().enumerate() {
                     if t == VOID {
                         continue;
