@@ -11,7 +11,8 @@ use pxl_spec::space::v3::V3;
 
 use crate::layer::object::store::{get_placed_object, OccupiedEntry};
 use crate::world::access::{Access, Detail, Hit, Ray, Struck, FINEST};
-use crate::world::frame::coord::{local_world_origin, local_world_to_canonical};
+use crate::world::frame::coord::local_world_to_canonical;
+use crate::world::frame::view::view;
 use pxl_spec::space::v3::Aabb;
 
 /// A product number: what can be edited is a sphere about the observer.
@@ -93,7 +94,7 @@ pub struct PickResult {
 
 /// In the root frame, from the eye.
 pub fn ray_pick(origin: V3, direction: V3) -> Option<PickResult> {
-    let frame = ivec::to_v3(local_world_origin());
+    let frame = ivec::to_v3(view().origin);
     let ray = Ray {
         origin: std::array::from_fn(|k| origin[k] + frame[k]),
         direction,

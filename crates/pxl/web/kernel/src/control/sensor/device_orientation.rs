@@ -124,10 +124,6 @@ pub fn orientation_lost() {
     store.set_error(Message::OrientationSignalLost);
 }
 
-pub fn orientation_open(platform: OrientationPlatform) {
-    request_orientation(platform);
-}
-
 pub fn orientation_close() {
     orientation().commands.push(OrientationCommand::Remove);
     let store = device_orientation_store();

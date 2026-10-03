@@ -21,6 +21,7 @@ use crate::layer::billboard::field::BILLBOARD_FLOATS;
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::text::text_width;
 use crate::world::access::Access;
+use crate::world::frame::coord::canonical_to_local;
 use crate::world::change::request_world_tick;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
@@ -181,14 +182,10 @@ fn sketch_frames(s: &mut Sketch) {
     s.gyro(&world_frame, [0.0, RING_RADIUS, 0.0], "north (world)", true);
 }
 
-fn local_of(p: &Pvf3, map_origin: IVec) -> V3 {
-    crate::world::frame::coord::canonical_to_local(p, map_origin)
-}
-
 fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
     let mut s = Sketch::default();
 
-    let raw_v = local_of(map_center, map_origin);
+    let raw_v = canonical_to_local(map_center, map_origin);
     let ground = |at: &Pvf3| Access::now().floor_under(at).value().map(|top| crate::world::frame::coord::local_height(top, map_origin));
     let gnd_v = [raw_v[0], raw_v[1], ground(map_center).unwrap_or(0.0)];
     let mut quant_v = [0.0; 3];
@@ -209,7 +206,7 @@ fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
         if let Some(top) = ground(&at) {
             let mut grounded = at;
             pvf3::gather(&mut grounded, pvf3::X(&at), pvf3::Y(&at), pvf3::Z(&at) + pvf3::from_real(top));
-            s.r#box(local_of(&grounded, map_origin), 1.0, Some(label));
+            s.r#box(canonical_to_local(&grounded, map_origin), 1.0, Some(label));
         }
     }
     s.point(raw_v, Some("map_center"));

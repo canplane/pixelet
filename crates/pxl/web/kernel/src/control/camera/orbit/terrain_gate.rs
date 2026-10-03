@@ -14,7 +14,7 @@ use crate::control::camera::orbit::orbit_eye_offset;
 use crate::control::navigation::support::{in_cell, passage, Passage};
 use crate::shell::setting::store::{settings_store, CameraCollisionMode};
 use crate::world::access::{Access, Answer};
-use crate::world::frame::coord::{local_height, local_world_origin, local_world_to_canonical};
+use crate::world::frame::coord::{local_height, local_world_to_canonical};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewTriple {
@@ -39,7 +39,7 @@ pub struct ViewPose {
 /// crosses frames.
 pub fn pose(view: ViewTriple) -> Option<ViewPose> {
     Some(ViewPose {
-        origin: local_world_origin(),
+        origin: crate::world::frame::view::view().origin,
         target: crate::control::camera::controller::center_local()?,
         dist: view.dist,
         polar: view.polar,

@@ -16,7 +16,7 @@ use crate::control::camera::controller::Motion;
 use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
 use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::store::map_navigation;
-use crate::control::sensor::device_orientation::{orientation_close, orientation_open, request_orientation};
+use crate::control::sensor::device_orientation::{orientation_close, request_orientation};
 use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
 use crate::control::sensor::store::{device_location_store, device_orientation_store};
 use crate::layer::character::store::companion_load_store;
@@ -158,7 +158,7 @@ pub fn location_enable() {
 pub fn sensors_open() {
     let platform = world_platform();
     geolocation_open(platform.geolocation);
-    orientation_open(platform.orientation);
+    request_orientation(platform.orientation);
 }
 
 pub fn sensors_close() {

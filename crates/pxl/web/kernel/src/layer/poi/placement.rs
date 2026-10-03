@@ -14,8 +14,7 @@ use crate::layer::poi::{enabled, rank_of};
 use crate::param::{POI_ALL_LEVEL, POI_MAJOR_RANK};
 use crate::sched::tick::TickContext;
 use crate::world::access::{Access, Detail, Ray};
-use crate::world::frame::coord::local_world_origin;
-use crate::world::frame::view::ndc_to_px;
+use crate::world::frame::view::{ndc_to_px, view};
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer;
 use pxl_render::asset::atlas::NO_SLOT;
@@ -66,7 +65,7 @@ pub fn step(ctx: &mut TickContext) {
         badge::retain(&HashSet::new());
         return;
     }
-    let origin = local_world_origin();
+    let origin = view().origin;
     let base = ivec::to_v3(origin);
     let pages = PoiPage::pyramid();
     if crate::world::pyramid::domain::current().is_none() {

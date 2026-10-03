@@ -22,8 +22,7 @@ use crate::layer::object::geometry::{anchor_center, object_aabb};
 use crate::layer::object::size::{DECOR_SIZE, DEFAULT_OBJECT_SIZE};
 use crate::layer::object::store::{get_placed_object, place, place_air, place_decor, remove, EntryAt, OccupiedEntry};
 use crate::world::access::Hit;
-use crate::world::frame::coord::local_world_origin;
-use crate::world::frame::view::view_ray_local;
+use crate::world::frame::view::{view, view_ray_local};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Holding {
@@ -125,7 +124,7 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
     view_ray_local(ndc_x, ndc_y, &mut origin, &mut direction);
 
     let ui = interaction().holding;
-    let map_origin = local_world_origin();
+    let map_origin = view().origin;
     let Some(pick) = ray_pick(origin, direction) else {
         return clear_hover();
     };

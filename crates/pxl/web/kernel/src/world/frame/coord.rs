@@ -6,7 +6,6 @@ use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
 
-use crate::world::frame::view::view;
 use pxl_spec::space::pyramid::anchor_span_of;
 use xpute_core::math::scalar::round;
 
@@ -18,10 +17,6 @@ pub fn origin_for(center: IVec, level: u32) -> IVec {
     let up = L4_RANGE as i64;
     let floor = |v: i64, s: i64| v.div_euclid(s) * s;
     ivec::gather(floor(ivec::X(center), across), floor(ivec::Y(center), across), floor(ivec::Z(center), up))
-}
-
-pub fn local_world_origin() -> IVec {
-    view().origin
 }
 
 /// X the short way round, since its lane wraps the world. Y and Z are

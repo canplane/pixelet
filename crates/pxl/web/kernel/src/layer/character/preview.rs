@@ -12,10 +12,10 @@ use crate::io::load::{load_image, Load};
 use crate::kernel::{kernel, with_world};
 use crate::layer::character::variant::{character_variant, model_of, CharacterVariant, Group};
 use crate::layer::character::variant_spec::IDLE_CLIP;
+use crate::world::frame::view::view;
 use crate::layer::model::asset::ModelHandle;
 use crate::sched::tick::TickContext;
 use crate::world::change::request_world_tick;
-use crate::world::frame::coord::local_world_origin;
 
 const SPIN_RATE_RAD_S: f64 = 0.6;
 /// Past any terrain and the fog, so the world never draws it.
@@ -80,7 +80,7 @@ pub fn preview_step(ctx: &mut TickContext) {
     }
     // Under the map origin: the case reads the actor's place from an f32
     // uniform, which cannot resolve a unit-tall model millions of units out.
-    let origin = local_world_origin();
+    let origin = view().origin;
     let mut at = ivec::to_v3(origin);
     at[2] -= CASE_DEPTH_U;
     for case in &mut c.cases {

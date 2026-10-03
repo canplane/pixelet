@@ -31,7 +31,7 @@ use crate::text::text_rise;
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::source::chunk_sources_step;
 use crate::world::chunk::stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms, set_turn_timing, take_draw};
-use crate::world::frame::coord::local_world_origin;
+use crate::world::frame::view::view;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Platform {
@@ -45,7 +45,7 @@ fn companion_props() -> Option<CompanionProps> {
         return None;
     }
     let map_center = crate::control::camera::controller::map_center()?;
-    let map_origin = local_world_origin();
+    let map_origin = view().origin;
     let local = crate::world::frame::coord::canonical_to_local(&map_center, map_origin);
     Some(CompanionProps {
         map_origin,
@@ -62,7 +62,7 @@ fn companion_tick(ctx: &mut TickContext) {
 fn debug_gizmos_tick(_: &mut TickContext) {
     let map_center = crate::control::camera::controller::map_center();
     let show = settings_store().gizmos && map_center.is_some();
-    debug_gizmos_step(show, map_center, local_world_origin());
+    debug_gizmos_step(show, map_center, view().origin);
 }
 
 /// The rays a new goal starts from.
