@@ -25,7 +25,7 @@ use crate::global::Global;
 use crate::shell::setting::store::{settings_store, CameraCollisionMode};
 use crate::world::frame::view::{view, view_compose};
 use crate::world::observation::heights_revision;
-use terrain_gate::{allowed_pan, allowed_view, climb_polar, ViewTriple};
+use terrain_gate::{allowed_view, climb_polar, ViewTriple};
 
 pub struct OrbitState {
     pub dist: f64,
@@ -126,15 +126,6 @@ fn gate(from: Intent, to: Intent) -> Intent {
     }
 }
 
-fn drawn() -> ViewTriple {
-    let cam = camera();
-    ViewTriple {
-        dist: orbit().dist,
-        polar: cam.pitch,
-        azimuth: cam.yaw,
-    }
-}
-
 pub fn zoom_settling() -> bool {
     (camera_store().intent.dist - orbit().dist).abs() > DIST_EPS
 }
@@ -171,11 +162,6 @@ pub fn zoom_to(dist: f64) -> f64 {
 
 pub(crate) fn target_center() -> Option<Pvf3> {
     orbit().to.or_else(map_center)
-}
-
-/// Gated after the walk, since the walk moves the center's Z.
-pub(crate) fn gate_pan(to: &Pvf3) -> Pvf3 {
-    allowed_pan(drawn(), to)
 }
 
 pub(crate) fn put(at: Pvf3, snap: bool) {

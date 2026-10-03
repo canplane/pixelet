@@ -151,10 +151,6 @@ pub fn pan(dx: f64, dy: f64) {
     };
     let (yaw, upp) = (camera().yaw, units_per_px_at(across));
     let to = pan_to(&from, dx, dy, upp, yaw);
-    let to = match active() {
-        Active::Orbit => crate::control::camera::orbit::gate_pan(&to),
-        Active::Free | Active::Tracked => to,
-    };
     put_center(to, Motion::Smooth);
 }
 

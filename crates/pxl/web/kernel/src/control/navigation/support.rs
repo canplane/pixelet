@@ -29,14 +29,6 @@ pub fn is_unknown(at: &Pvf3) -> bool {
     pvf3::Z(at) == UNKNOWN_Z
 }
 
-/// Keeps `at`'s Z only where z16 is known.
-pub fn settle(at: &Pvf3) -> Pvf3 {
-    match Access::now().surface_support(at) {
-        Answer::Exact(_) => *at,
-        _ => unknown_z(at),
-    }
-}
-
 /// A tap names the surface it struck: the center stands in the cell across
 /// that face, on the floor under it.
 pub fn stand(at: &Pvf3) -> Pvf3 {
@@ -114,9 +106,7 @@ pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, yaw: f64) -> Pvf
     }
     let mut at = to;
     match passage(from, way, CELL.index_of(from)[2]) {
-        Passage::Open(cz) => {
-            pvf3::gather(&mut at, pvf3::X(&to), pvf3::Y(&to), pvf3::from_real((cz as f64 + 0.5) * CELL.side()));
-        }
+        Passage::Open(cz) => at = in_cell(&to, cz),
         Passage::Unknown => {}
         Passage::Blocked => return *from,
     }
@@ -124,6 +114,18 @@ pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, yaw: f64) -> Pvf
         Answer::Exact(top) => stand_over(&at, top),
         _ => unknown_z(&at),
     }
+}
+
+/// A cell height's middle, in units.
+fn mid(cz: i64) -> f64 {
+    (cz as f64 + 0.5) * CELL.side()
+}
+
+/// `at` moved to the middle of cell height `cz`.
+pub fn in_cell(at: &Pvf3, cz: i64) -> Pvf3 {
+    let mut out = Pvf3::default();
+    pvf3::gather(&mut out, pvf3::X(at), pvf3::Y(at), pvf3::from_real(mid(cz)));
+    out
 }
 
 pub enum Passage {
@@ -149,7 +151,7 @@ pub fn passage(from: &Pvf3, way: [f64; 2], start: i64) -> Passage {
             return Passage::Blocked;
         }
         let ray = Ray {
-            origin: [x + dir[0] * t, y + dir[1] * t, (cz as f64 + 0.5) * side],
+            origin: [x + dir[0] * t, y + dir[1] * t, mid(cz)],
             direction: [dir[0], dir[1], 0.0],
             reach: length - t,
         };

@@ -5,13 +5,13 @@
 
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::bake::constant::CELL;
-use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
 use xpute_core::math::scalar::wrap;
 
 use crate::control::camera::config::camera_cfg::view::EYE_CLEARANCE_U;
 use crate::control::camera::orbit::orbit_eye_offset;
-use crate::control::navigation::support::{passage, resolve, settle, Passage};
+use crate::control::navigation::support::{in_cell, passage, Passage};
 use crate::shell::setting::store::{settings_store, CameraCollisionMode};
 use crate::world::access::{Access, Answer};
 use crate::world::frame::coord::{local_height, local_world_origin, local_world_to_canonical};
@@ -37,12 +37,10 @@ pub struct ViewPose {
 
 /// Both ends of a step must share one origin, or the walk between them
 /// crosses frames.
-pub fn pose(view: ViewTriple, center: Option<&Pvf3>) -> Option<ViewPose> {
-    let held = crate::control::camera::controller::center_local()?;
-    let origin = local_world_origin();
+pub fn pose(view: ViewTriple) -> Option<ViewPose> {
     Some(ViewPose {
-        origin,
-        target: center.map_or(held, |at| resolve(at, held, origin)),
+        origin: local_world_origin(),
+        target: crate::control::camera::controller::center_local()?,
         dist: view.dist,
         polar: view.polar,
         azimuth: view.azimuth,
@@ -52,26 +50,19 @@ pub fn pose(view: ViewTriple, center: Option<&Pvf3>) -> Option<ViewPose> {
 /// None where no page is resident. Asked from the eye's own cell, so a cave's
 /// floor counts where the eye is in the cave.
 fn required_rise(at: &ViewPose) -> Option<f64> {
-    let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
-    let mut eye = Pvf3::default();
-    local_world_to_canonical(&mut eye, &std::array::from_fn(|k| at.target[k] + offset[k]), at.origin);
+    let (_, eye) = eye(at);
     let ground = local_height(Access::now().floor_under(&eye).value()?, at.origin);
     Some(ground + EYE_CLEARANCE_U - at.target[2])
 }
 
 /// Rise to the ground `passage` reaches under the eye; none where blocked.
 fn climb_rise(at: &ViewPose) -> Option<f64> {
-    let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
-    let (mut center, mut eye) = (Pvf3::default(), Pvf3::default());
+    let (local, eye) = eye(at);
+    let mut center = Pvf3::default();
     local_world_to_canonical(&mut center, &at.target, at.origin);
-    local_world_to_canonical(&mut eye, &std::array::from_fn(|k| at.target[k] + offset[k]), at.origin);
     let access = Access::now();
-    let ground = match passage(&center, [offset[0], offset[1]], CELL.index_of(&eye)[2]) {
-        Passage::Open(cz) => {
-            let mut over = Pvf3::default();
-            pvf3::gather(&mut over, pvf3::X(&eye), pvf3::Y(&eye), pvf3::from_real((cz as f64 + 0.5) * CELL.side()));
-            access.floor_under(&over)
-        }
+    let ground = match passage(&center, [local[0] - at.target[0], local[1] - at.target[1]], CELL.index_of(&eye)[2]) {
+        Passage::Open(cz) => access.floor_under(&in_cell(&eye, cz)),
         Passage::Unknown => access.floor_under(&eye),
         Passage::Blocked => return None,
     };
@@ -84,7 +75,16 @@ fn climb_rise(at: &ViewPose) -> Option<f64> {
 
 /// Positive inside the terrain.
 fn penetration(at: &ViewPose) -> Option<f64> {
-    Some(required_rise(at)? - orbit_eye_offset(at.dist, at.polar, at.azimuth)[2])
+    Some(required_rise(at)? - (eye(at).0[2] - at.target[2]))
+}
+
+/// The eye, local and canonical.
+fn eye(at: &ViewPose) -> (V3, Pvf3) {
+    let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
+    let local: V3 = std::array::from_fn(|k| at.target[k] + offset[k]);
+    let mut eye = Pvf3::default();
+    local_world_to_canonical(&mut eye, &local, at.origin);
+    (local, eye)
 }
 
 /// Testing only where a step lands lets the camera tunnel, since the orbit's
@@ -136,11 +136,8 @@ fn between(from: &ViewPose, to: &ViewPose, t: f64) -> ViewPose {
 }
 
 fn in_solid(at: &ViewPose) -> bool {
-    let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
-    let eye: V3 = std::array::from_fn(|k| at.target[k] + offset[k]);
-    let mut point = Pvf3::default();
-    local_world_to_canonical(&mut point, &eye, at.origin);
-    Access::now().floor_under(&point).value().is_some_and(|top| local_height(top, at.origin) > eye[2])
+    let (local, eye) = eye(at);
+    Access::now().floor_under(&eye).value().is_some_and(|top| local_height(top, at.origin) > local[2])
 }
 
 /// What lies between the eye and the map center is not asked: that hides the
@@ -150,29 +147,13 @@ fn path_clear(from: &ViewPose, to: &ViewPose) -> bool {
 }
 
 pub fn allowed_view(to: ViewTriple, from: ViewTriple) -> ViewTriple {
-    let (Some(from_pose), Some(to_pose)) = (pose(from, None), pose(to, None)) else { return to };
+    let (Some(from_pose), Some(to_pose)) = (pose(from), pose(to)) else { return to };
     let reached = allowed_step(&to_pose, &from_pose);
     ViewTriple {
         dist: reached.dist,
         polar: reached.polar,
         azimuth: reached.azimuth,
     }
-}
-
-/// Panning once went through no gate, so walking into a hill sideways worked.
-/// Jumps (search, recenter) do not come through here.
-pub fn allowed_pan(view: ViewTriple, to_center: &Pvf3) -> Pvf3 {
-    let (Some(from_pose), Some(to_pose)) = (pose(view, None), pose(view, Some(to_center))) else {
-        return *to_center;
-    };
-    let reached = allowed_step(&to_pose, &from_pose);
-    if reached == to_pose {
-        return *to_center;
-    }
-    let map_origin = local_world_origin();
-    let mut out = Pvf3::default();
-    local_world_to_canonical(&mut out, &reached.target, map_origin);
-    settle(&out)
 }
 
 /// Steepening moves the eye and so the ground under it; two passes settle it,
@@ -183,7 +164,7 @@ const CLIMB_PASSES: u32 = 2;
 /// rather than scanned: a scan's fixed angles made the camera judder on flat
 /// ground.
 pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
-    pose(ViewTriple { dist, polar, azimuth }, None).map_or(polar, |at| climbed(at).polar)
+    pose(ViewTriple { dist, polar, azimuth }).map_or(polar, |at| climbed(at).polar)
 }
 
 fn climbed(mut at: ViewPose) -> ViewPose {
