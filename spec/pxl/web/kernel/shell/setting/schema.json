@@ -158,6 +158,13 @@
       "options": "CAMERA_MODES",
       "section": "map"
     },
+    "center_support": {
+      "$doc": ["The map center stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck."],
+      "kind": "toggle",
+      "default": true,
+      "section": "camera",
+      "dev": true
+    },
     "camera_collision": {
       "$doc": ["What the camera does when the controls would put it underground; CAMERA_COLLISION_MODES says each."],
       "kind": "choice",

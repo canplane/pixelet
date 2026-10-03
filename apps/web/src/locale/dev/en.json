@@ -15,6 +15,10 @@
           "label": "Climb over",
           "description": "Zoom always takes effect and the view pitches up to clear the ground instead. Every zoom level stays reachable, at the cost of an angle you did not set."
         }
+      },
+      "center_support": {
+        "label": "Center support",
+        "description": "The map center stands on what supports it, and a pan takes the lowest way over what is in it. Off, it keeps its height and passes through anything."
       }
     },
     "lighting": {

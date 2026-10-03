@@ -12,6 +12,7 @@ use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::v3::V3;
 
+use crate::shell::setting::store::settings_store;
 use crate::world::access::{Access, Answer, Detail, Ray, FINEST};
 use crate::world::frame::coord::{canonical_to_local, local_world_origin, local_world_to_canonical};
 
@@ -114,21 +115,52 @@ pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, yaw: f64) -> Pvf
     if is_unknown(from) {
         return unknown_z(&to);
     }
-    let access = Access::now();
-    let Some(ceiling) = access.ceiling_over(from).exact() else { return *from };
-    let length = libm::hypot(way[0], way[1]);
-    if length == 0.0 {
+    if !settings_store().center_support {
+        return to;
+    }
+    if way == [0.0, 0.0] {
         return *from;
     }
+    let mut at = to;
+    match passage(from, way, CELL.index_of(from)[2]) {
+        Passage::Open(cz) => {
+            pvf3::gather(&mut at, pvf3::X(&to), pvf3::Y(&to), pvf3::from_real((cz as f64 + 0.5) * CELL.side()));
+        }
+        Passage::Unknown => {}
+        Passage::Blocked => return *from,
+    }
+    match Access::now().floor_under(&at) {
+        Answer::Exact(top) => stand_over(&at, top),
+        _ => unknown_z(&at),
+    }
+}
+
+pub enum Passage {
+    /// The cell height the way is open at.
+    Open(i64),
+    /// Under the open sky, a way not known exactly: over anything, at no height known.
+    Unknown,
+    Blocked,
+}
+
+/// The lowest way from `from` along `way` (world units across), starting at
+/// cell height `start`: along the way at that height, and where something
+/// solid stands across it, over it — tried again from the top of what it
+/// struck, a height `from`'s own column must reach before its ceiling does.
+/// What a pan and the orbit's climb both stand on.
+pub fn passage(from: &Pvf3, way: [f64; 2], start: i64) -> Passage {
+    let access = Access::now();
+    let Some(ceiling) = access.ceiling_over(from).exact() else { return Passage::Blocked };
+    let length = libm::hypot(way[0], way[1]);
     let side = CELL.side();
     let [x, y] = [pvf3::to_real(pvf3::X(from)), pvf3::to_real(pvf3::Y(from))];
-    let dir = [way[0] / length, way[1] / length];
-    let mut cz = CELL.index_of(from)[2];
+    let dir = if length > 0.0 { [way[0] / length, way[1] / length] } else { [0.0, 0.0] };
+    let mut cz = start;
     // Along the way from `t`: a struck thing nothing stands on (decor) is passed.
     let mut t = 0.0;
-    let landed = loop {
+    loop {
         if ceiling.is_some_and(|top| cz >= top) {
-            return *from;
+            return Passage::Blocked;
         }
         let ray = Ray {
             origin: [x + dir[0] * t, y + dir[1] * t, (cz as f64 + 0.5) * side],
@@ -136,7 +168,7 @@ pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, yaw: f64) -> Pvf
             reach: length - t,
         };
         match access.first_hit(&ray, Detail::Level(FINEST)) {
-            Answer::Exact(None) => break Some(cz),
+            Answer::Exact(None) => return Passage::Open(cz),
             Answer::Exact(Some(hit)) => {
                 // Into the struck cell, then up its column past what fills it.
                 let p = ray.at(hit.t + side / 2.0);
@@ -145,20 +177,11 @@ pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, yaw: f64) -> Pvf
                 match access.open_from(&cell).exact() {
                     Some(open) if open > cz => (cz, t) = (open, 0.0),
                     Some(_) => t += hit.t + side,
-                    None => return *from,
+                    None => return Passage::Blocked,
                 }
             }
-            _ => break None,
+            _ if ceiling.is_none() => return Passage::Unknown,
+            _ => return Passage::Blocked,
         }
-    };
-    let mut at = to;
-    if let Some(cz) = landed {
-        pvf3::gather(&mut at, pvf3::X(&to), pvf3::Y(&to), pvf3::from_real((cz as f64 + 0.5) * side));
-    } else if ceiling.is_some() {
-        return *from;
-    }
-    match access.floor_under(&at) {
-        Answer::Exact(top) => stand_over(&at, top),
-        _ => unknown_z(&at),
     }
 }

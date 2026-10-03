@@ -4,15 +4,16 @@
 //! the way. The controls keep what was asked; the drawn orbit stops short.
 
 use pxl_spec::space::pvf3::ivec::IVec;
-use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::bake::constant::CELL;
+use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::v3::V3;
 use xpute_core::math::scalar::wrap;
 
 use crate::control::camera::config::camera_cfg::view::EYE_CLEARANCE_U;
 use crate::control::camera::orbit::orbit_eye_offset;
-use crate::control::navigation::support::{resolve, settle};
+use crate::control::navigation::support::{passage, resolve, settle, Passage};
 use crate::shell::setting::store::{settings_store, CameraCollisionMode};
-use crate::world::access::Access;
+use crate::world::access::{Access, Answer};
 use crate::world::frame::coord::{local_height, local_world_origin, local_world_to_canonical};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -56,6 +57,31 @@ fn required_rise(at: &ViewPose) -> Option<f64> {
     local_world_to_canonical(&mut eye, &std::array::from_fn(|k| at.target[k] + offset[k]), at.origin);
     let ground = local_height(Access::now().floor_under(&eye).value()?, at.origin);
     Some(ground + EYE_CLEARANCE_U - at.target[2])
+}
+
+/// The rise a climb needs: the ground under the eye on the layer the way
+/// from the map center reaches it by (`passage`), not the top of whatever
+/// fills its column. None where the way is blocked, so the climb holds.
+fn climb_rise(at: &ViewPose) -> Option<f64> {
+    let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
+    let (mut center, mut eye) = (Pvf3::default(), Pvf3::default());
+    local_world_to_canonical(&mut center, &at.target, at.origin);
+    local_world_to_canonical(&mut eye, &std::array::from_fn(|k| at.target[k] + offset[k]), at.origin);
+    let access = Access::now();
+    let ground = match passage(&center, [offset[0], offset[1]], CELL.index_of(&eye)[2]) {
+        Passage::Open(cz) => {
+            let mut over = Pvf3::default();
+            pvf3::gather(&mut over, pvf3::X(&eye), pvf3::Y(&eye), pvf3::from_real((cz as f64 + 0.5) * CELL.side()));
+            access.floor_under(&over)
+        }
+        Passage::Unknown => access.floor_under(&eye),
+        Passage::Blocked => return None,
+    };
+    let ground = match ground {
+        Answer::Exact(top) | Answer::Coarser(top, _) => top,
+        Answer::Nothing(_) => return None,
+    };
+    Some(local_height(ground, at.origin) + EYE_CLEARANCE_U - at.target[2])
 }
 
 /// Positive inside the terrain.
@@ -164,7 +190,7 @@ pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
 
 fn climbed(mut at: ViewPose) -> ViewPose {
     for _ in 0..CLIMB_PASSES {
-        let Some(rise) = required_rise(&at).filter(|r| *r > 0.0) else { break };
+        let Some(rise) = climb_rise(&at).filter(|r| *r > 0.0) else { break };
         // Only ever steepens.
         let solved = libm::acos((rise / at.dist).min(1.0));
         at.polar = at.polar.min(solved);

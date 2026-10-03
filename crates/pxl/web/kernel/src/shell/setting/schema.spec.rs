@@ -178,39 +178,42 @@ pub enum SettingKey {
     /// height over the ground; to third the map center is laid on the ground
     /// and the eye steps back by the radius.
     camera_mode = 4,
+    /// The map center stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck.
+    center_support = 5,
     /// What the camera does when the controls would put it underground; CAMERA_COLLISION_MODES says each.
-    camera_collision = 5,
+    camera_collision = 6,
     /// Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.
-    edge_shade = 6,
+    edge_shade = 7,
     /// A uniform on an already-compiled shader term; not a pass.
-    rim_light = 7,
+    rim_light = 8,
     /// corner, the occlusion a voxel world gets from its own geometry with no
     /// screen-space pass; screen, N8AO's screen-space pass, the costliest of
     /// the three. AO_MODES says each.
-    ao = 8,
+    ao = 9,
     /// The sun's shadow map (crates/pxl/web/render/src/gpu/shadow.rs): the world drawn once more
     /// from the sun each frame, depth only, and a 3x3 compare per fragment;
     /// 16 MB of map on a desktop, 4 on a phone.
-    shadows = 9,
+    shadows = 10,
     /// The pixels the world is filled at, the GPU's largest cost: two to a
     /// CSS pixel is four times the fragments of one. RESOLUTION_MODES says each.
-    resolution = 10,
+    resolution = 11,
     /// The performance overlay: the profiler's panel, and the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`).
-    profiler = 11,
+    profiler = 12,
     /// Markers for the map center and the cell it floors to, the floating origin, the page's corners and the two gyro rings (layer/marker/frame_gizmo.rs).
-    gizmos = 12,
-    person = 13,
-    pet = 14,
+    gizmos = 13,
+    person = 14,
+    pet = 15,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 15] = [
+    pub const ALL: [SettingKey; 16] = [
         SettingKey::textures,
         SettingKey::decor,
         SettingKey::poi,
         SettingKey::tilt_lock,
         SettingKey::camera_mode,
+        SettingKey::center_support,
         SettingKey::camera_collision,
         SettingKey::edge_shade,
         SettingKey::rim_light,
@@ -235,6 +238,7 @@ impl SettingKey {
             SettingKey::poi => SettingKind::Toggle,
             SettingKey::tilt_lock => SettingKind::Toggle,
             SettingKey::camera_mode => SettingKind::Choice,
+            SettingKey::center_support => SettingKind::Toggle,
             SettingKey::camera_collision => SettingKind::Choice,
             SettingKey::edge_shade => SettingKind::Toggle,
             SettingKey::rim_light => SettingKind::Toggle,
@@ -256,6 +260,7 @@ impl SettingKey {
             SettingKey::poi => "poi",
             SettingKey::tilt_lock => "tilt_lock",
             SettingKey::camera_mode => "camera_mode",
+            SettingKey::center_support => "center_support",
             SettingKey::camera_collision => "camera_collision",
             SettingKey::edge_shade => "edge_shade",
             SettingKey::rim_light => "rim_light",
@@ -282,7 +287,10 @@ impl SettingKey {
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(self, SettingKey::textures | SettingKey::decor | SettingKey::camera_collision | SettingKey::shadows)
+        matches!(
+            self,
+            SettingKey::textures | SettingKey::decor | SettingKey::center_support | SettingKey::camera_collision | SettingKey::shadows
+        )
     }
 
     /// Read by a chunk's build, so a change builds the chunks again.
@@ -299,6 +307,7 @@ pub struct Settings {
     pub poi: bool,
     pub tilt_lock: bool,
     pub camera_mode: CameraMode,
+    pub center_support: bool,
     pub camera_collision: CameraCollisionMode,
     pub edge_shade: bool,
     pub rim_light: bool,
@@ -319,6 +328,7 @@ impl Settings {
         poi: false,
         tilt_lock: false,
         camera_mode: CameraMode::orbit,
+        center_support: true,
         camera_collision: CameraCollisionMode::stop,
         edge_shade: true,
         rim_light: true,
@@ -340,6 +350,7 @@ impl Settings {
             SettingKey::poi => self.poi as u32,
             SettingKey::tilt_lock => self.tilt_lock as u32,
             SettingKey::camera_mode => self.camera_mode as u32,
+            SettingKey::center_support => self.center_support as u32,
             SettingKey::camera_collision => self.camera_collision as u32,
             SettingKey::edge_shade => self.edge_shade as u32,
             SettingKey::rim_light => self.rim_light as u32,
@@ -365,6 +376,7 @@ impl Settings {
                 Some(o) => self.camera_mode = o,
                 None => return false,
             },
+            SettingKey::center_support if value <= 1 => self.center_support = value == 1,
             SettingKey::camera_collision => match CameraCollisionMode::of(value) {
                 Some(o) => self.camera_collision = o,
                 None => return false,
