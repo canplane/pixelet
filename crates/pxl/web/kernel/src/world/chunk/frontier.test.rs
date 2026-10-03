@@ -358,7 +358,7 @@ fn the_count_is_never_less_at_a_finer_quality_nor_less_than_the_cut() {
             }
             let cut = d.cut_at(k);
             let (tau, pieces) = (cut.tau(), cut.pieces().to_vec());
-            let of = |pool: Pool| pieces.iter().filter(|&&c| pool_of(c, cube_of(c, d.outermost(c), d.nearest_to(c), tau)) == pool).count() as u32;
+            let of = |pool: Pool| pieces.iter().filter(|&&c| pool_of(c, cube_of(c, d.outermost(c), d.order_of(c).near, tau)) == pool).count() as u32;
             assert!(
                 n[k][Pool::Coarse as usize] + n[k][Pool::Cover as usize] >= pieces.len() as u32,
                 "height {height}, {tau:?}: coarse under the cut"

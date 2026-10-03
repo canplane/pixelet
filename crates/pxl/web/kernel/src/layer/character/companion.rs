@@ -6,11 +6,11 @@
 //! the world-scroll rate so the two cancel and it holds at screen center.
 //! Assets: Kenney's "Mini Characters" and "Cube Pets", CC0.
 
-use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 
 use crate::control::camera::approach::damp_alpha;
+use crate::control::navigation::walk::over;
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::store::{camera_store, CameraStatus};
 use crate::global::Global;
@@ -301,8 +301,8 @@ pub struct CompanionProps {
     pub map_origin: IVec,
     pub center_x: f64,
     pub center_y: f64,
-    /// Half a cell under the map center, in world units.
-    pub center_z: f64,
+    /// The top of the floor under the map center, in world units.
+    pub floor: f64,
 }
 
 fn walker_for<'a>(slot: &'a mut Option<Walker>, variant: &CharacterVariant, target: Vec2, map_origin: IVec) -> &'a mut Walker {
@@ -334,7 +334,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
 
     let person_target = Vec2 { x: p.center_x, y: p.center_y };
     let person = walker_for(&mut c.person, person_variant, person_target, p.map_origin);
-    person.step(ctx, person_variant, p.map_origin, person_target, p.center_z, is_follow_mode);
+    person.step(ctx, person_variant, p.map_origin, person_target, p.floor, is_follow_mode);
     chat_bubble_step(person.held.as_ref().map(|h| h.actor), person_variant.height_u);
 
     let pet_target = Vec2 {
@@ -343,7 +343,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     };
     let pet = walker_for(&mut c.pet, pet_variant, pet_target, p.map_origin);
     // Its own floor beside the person, stepped to from the person's height.
-    let pet_z = step_from(p.map_origin, [pet_target.x, pet_target.y], p.center_z).flatten().unwrap_or(p.center_z);
+    let pet_z = step_from(p.map_origin, [pet_target.x, pet_target.y], p.floor).flatten().unwrap_or(p.floor);
     pet.step(ctx, pet_variant, p.map_origin, pet_target, pet_z, is_follow_mode);
 }
 
@@ -355,7 +355,6 @@ pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
 
 /// None inside where a wall holds it; None outside where no page is resident.
 fn step_from(map_origin: IVec, [x, y]: [f64; 2], stands: f64) -> Option<Option<f64>> {
-    let mut at = Pvf3::default();
-    local_world_to_canonical(&mut at, &[x, y, local_height(stands, map_origin) + U_PER_CELL / 2.0], map_origin);
+    let at = *local_world_to_canonical(&mut Pvf3::default(), &[x, y, local_height(over(stands), map_origin)], map_origin);
     Access::now().support(&at).value()
 }

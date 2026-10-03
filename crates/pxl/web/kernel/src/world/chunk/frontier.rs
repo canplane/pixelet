@@ -55,7 +55,7 @@ pub fn wanted_cube(near: f64, tau: Tau) -> Cube {
 /// that page's cells made blocks over the sea after a jump (2026-09-26).
 pub fn drawn_cube(cube: Cube, level: u32, outermost: bool, objects: bool) -> Cube {
     if outermost {
-        return coarsest(level);
+        return chunk_scale(level);
     }
     let own = GROUND.scale(level);
     let finest = match (level, objects) {
@@ -64,10 +64,6 @@ pub fn drawn_cube(cube: Cube, level: u32, outermost: bool, objects: bool) -> Cub
         _ => own.up(1),
     };
     cube.clamp(finest, own.up(1))
-}
-
-pub fn coarsest(level: u32) -> Cube {
-    chunk_scale(level)
 }
 
 /// The quality alone moves the cube; a mesh too big for one slot fills more

@@ -6,13 +6,12 @@
 //! that floor; a center put over coarser ground keeps its Z unknown and
 //! stands on the finest ground known there until z16 is.
 
+use pxl_spec::bake::constant::CELL;
 use pxl_spec::space::pvf3::core::{FRAC_W, IVEC_Z_W};
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::v3::V3;
-
-use pxl_spec::bake::constant::CELL;
 use pxl_spec::space::pyramid::GROUND;
+use pxl_spec::space::v3::V3;
 
 use crate::world::access::{Access, Answer, FINEST};
 use crate::world::frame::coord::{canonical_to_local, local_height, local_world_origin, local_world_to_canonical};
@@ -48,9 +47,19 @@ pub fn stand(at: &Pvf3) -> Pvf3 {
     }
 }
 
+/// The center's height over a floor whose top is `top`.
+pub fn over(top: f64) -> f64 {
+    top + CELL.side() / 2.0
+}
+
+/// The top of the floor `center` stands over.
+pub fn floor_of(center: &Pvf3) -> f64 {
+    pvf3::to_real(pvf3::Z(center)) - CELL.side() / 2.0
+}
+
 fn stand_over(at: &Pvf3, top: f64) -> Pvf3 {
     let mut out = Pvf3::default();
-    pvf3::gather(&mut out, pvf3::X(at), pvf3::Y(at), pvf3::from_real(top + CELL.side() / 2.0));
+    pvf3::gather(&mut out, pvf3::X(at), pvf3::Y(at), pvf3::from_real(over(top)));
     out
 }
 
@@ -99,28 +108,24 @@ pub fn walk(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, yaw: f64) -> Pvf3 
     let length = way[0].hypot(way[1]);
     let origin = local_world_origin();
     let access = Access::now();
+    let canonical = |l: &V3| *local_world_to_canonical(&mut Pvf3::default(), l, origin);
     let Some(from) = standing(from).value() else {
-        let mut out = Pvf3::default();
         let l = canonical_to_local(from, origin);
-        local_world_to_canonical(&mut out, &[l[0] + way[0], l[1] + way[1], 0.0], origin);
-        return unknown_z(&out);
+        return unknown_z(&canonical(&[l[0] + way[0], l[1] + way[1], 0.0]));
     };
     let mut here = canonical_to_local(&from, origin);
     // A block placed where the center stands buries it.
     if let Answer::Exact(top) = access.floor_under(&from) {
-        here[2] = here[2].max(local_height(top, origin) + CELL.side() / 2.0);
+        here[2] = here[2].max(local_height(over(top), origin));
     }
     // Whether the height came from z16; a gap with nothing known keeps it.
     let mut exact = access.known_level(&from) == Some(FINEST);
     let mut gone = 0.0;
     while gone < length {
-        let mut at = Pvf3::default();
-        local_world_to_canonical(&mut at, &here, origin);
-        let known = access.known_level(&at);
+        let known = access.known_level(&canonical(&here));
         let step = known.map_or(CELL.side(), |level| GROUND.scale(level).side()).min(length - gone);
         let next = [here[0] + way[0] / length * step, here[1] + way[1] / length * step, here[2]];
-        let mut probe = Pvf3::default();
-        local_world_to_canonical(&mut probe, &next, origin);
+        let probe = canonical(&next);
         let z = match access.known_level(&probe) {
             // A height from coarser ground was its surface's, so z16's surface takes over, with no wall.
             Some(FINEST) if !exact => {
@@ -138,10 +143,8 @@ pub fn walk(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, yaw: f64) -> Pvf3 
             }
             None => None,
         };
-        here = [next[0], next[1], z.map_or(next[2], |top| local_height(top, origin) + CELL.side() / 2.0)];
+        here = [next[0], next[1], z.map_or(next[2], |top| local_height(over(top), origin))];
         gone += step;
     }
-    let mut out = Pvf3::default();
-    local_world_to_canonical(&mut out, &here, origin);
-    settle(&out)
+    settle(&canonical(&here))
 }

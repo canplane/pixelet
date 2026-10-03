@@ -125,7 +125,7 @@ pub fn footprints(o: &Observation, world: &World) -> Vec<Footprint> {
 }
 
 pub fn domain(o: Observation, ladder: &[Tau], world: &World) -> Domain {
-    Domain::of(o, ladder, 0, Box::new(world.clone()), &footprints(&o, world))
+    domain_priced(o, ladder, world, &crate::world::pyramid::domain::Free)
 }
 
 pub fn domain_priced(o: Observation, ladder: &[Tau], world: &World, price: &dyn Price) -> Domain {

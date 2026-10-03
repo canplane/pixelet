@@ -353,7 +353,7 @@ impl<L: Layer> Pyramid<L> {
                 ..o
             },
         });
-        let seen = (o, floor_now, destination, self.paging.revision(), heights_revision(), tau, domain::walks());
+        let seen = (o, floor_now, destination, self.paging.revision(), heights_revision(), tau, domain::revision());
         let readers_moved = {
             let mut union = core::mem::take(&mut self.union);
             union.clear();
@@ -374,7 +374,7 @@ impl<L: Layer> Pyramid<L> {
                 }, &PREFETCH, tau, param::HINT_ALLOWANCE);
             self.readers = readers;
             // Observing can let pages go, moving the revision: record the state after it.
-            self.last = Some((o, floor_now, destination, self.paging.revision(), heights_revision(), tau, domain::walks()));
+            self.last = Some((o, floor_now, destination, self.paging.revision(), heights_revision(), tau, domain::revision()));
         }
         declare(L::CATEGORY, &self.wants);
         self.declare_shared();

@@ -68,15 +68,10 @@ pub fn fits(count: Slots, arena: Slots, headroom: Slots, spare: Slots) -> bool {
     (0..POOLS).all(|p| count[p] + headroom[p] + spare[p] <= arena[p])
 }
 
-/// The finest step that fits; every coarser one fits too, since counts never
-/// grow coarser.
-pub fn feasible(frontier: &[Slots], arena: Slots, headroom: Slots, spare: Slots) -> Option<usize> {
-    (0..frontier.len()).find(|&k| fits(frontier[k], arena, headroom, spare))
-}
-
-/// `feasible` without and with the margin, asking only the steps the
-/// smoothing at `at` reads: the one in force, the one finer, and coarser ones
-/// until one fits.
+/// The finest step that fits without and with the margin, asking only the
+/// steps the smoothing at `at` reads: the one in force, the one finer, and
+/// coarser ones until one fits. Every coarser step fits too, since counts
+/// never grow coarser.
 pub fn around(at: usize, len: usize, mut fit: impl FnMut(usize, bool) -> bool) -> (usize, usize) {
     let last = len - 1;
     if !fit(at, false) {
@@ -140,14 +135,14 @@ pub fn reading() -> [usize; 2] {
     [q.smooth.at(), q.star]
 }
 
-/// A slice of the goal walk, then the step that fits.
+/// Starts the next goal walk over the ladder.
 pub fn sight() {
     domain::start(&ladder(), kernel().sched.needs_revision());
 }
 
+/// A slice of the goal walk, then the step that fits.
 pub fn step(stop: &dyn Fn() -> bool) {
     let q = QUALITY.get(Quality::default);
-    let ladder = ladder();
     let sched = &kernel().sched;
     let price = Need {
         slots: |c, cube| sched.slots_of(c, cube),
@@ -156,7 +151,7 @@ pub fn step(stop: &dyn Fn() -> bool) {
     domain::advance(q.smooth.at(), &price, stop);
     let Some(d) = domain::current() else { return };
     let spare = margin();
-    let (star, roomy) = around(q.smooth.at(), ladder.len(), |k, roomy| {
+    let (star, roomy) = around(q.smooth.at(), param::TAU_STEPS + 1, |k, roomy| {
         d.need(k).is_some_and(|n| fits(n, ARENA, HEADROOM, if roomy { spare } else { [0; POOLS] }))
     });
     q.star = star;

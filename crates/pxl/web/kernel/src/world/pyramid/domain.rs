@@ -52,7 +52,7 @@ pub const fn cover_pieces(top: u32, planet: f64) -> u32 {
 
 /// How near a chunk of `level` must come for its error to cross a cell:
 /// the error is at most its diagonal over its distance less the diagonal.
-pub fn split_reach(level: u32, tau: Tau) -> f64 {
+fn split_reach(level: u32, tau: Tau) -> f64 {
     3f64.sqrt() * chunk_span_of(level) * (1.0 + 1.0 / cell_angle(tau))
 }
 
@@ -106,7 +106,6 @@ impl Price for Free {
 #[derive(Clone, Copy)]
 struct Seen {
     order: Order,
-    bound: Aabb,
     /// piece at `from..to`, split below both
     from: u8,
     to: u8,
@@ -143,10 +142,6 @@ pub struct Domain {
 }
 
 impl Domain {
-    pub fn of<'a>(o: Observation, ladder: &[Tau], at: usize, known: Box<dyn Bounds>, footprints: impl IntoIterator<Item = &'a Footprint>) -> Domain {
-        Self::priced(o, ladder, at, known, footprints, &Free)
-    }
-
     pub fn priced<'a>(o: Observation, ladder: &[Tau], at: usize, known: Box<dyn Bounds>, footprints: impl IntoIterator<Item = &'a Footprint>, price: &dyn Price) -> Domain {
         let mut d = Domain::empty(o, known);
         d.begin(o, ladder, footprints, core::iter::empty());
@@ -175,13 +170,6 @@ impl Domain {
             at: 0,
             done: false,
         }
-    }
-
-    /// Whole, in place; allocation-free once warm.
-    pub fn remake<'a>(&mut self, o: Observation, ladder: &[Tau], at: usize, footprints: impl IntoIterator<Item = &'a Footprint>) {
-        self.begin(o, ladder, footprints, core::iter::empty());
-        self.run(&Free, &|| false, &mut 0);
-        self.put(at);
     }
 
     fn begin<'a, 'b>(&mut self, o: Observation, ladder: &[Tau], footprints: impl IntoIterator<Item = &'a Footprint>, lacks: impl IntoIterator<Item = &'b Requirement>) {
@@ -228,8 +216,7 @@ impl Domain {
         }
     }
 
-    /// Whether done.
-    /// Counts what it takes off the stack into `n`.
+    /// Whether done; counts what it takes off the stack into `n`.
     fn run(&mut self, price: &dyn Price, stop: &dyn Fn() -> bool, n: &mut u32) -> bool {
         // at least a slice a turn
         const SLICE: u32 = 32;
@@ -304,7 +291,7 @@ impl Domain {
             }
         }
         let splits_to = from_step.min(to);
-        self.seen.insert(c, Seen { order, bound, from: from_step, to });
+        self.seen.insert(c, Seen { order, from: from_step, to });
         let outermost = self.outermost(c);
         for k in self.tracked..self.ladder.len() {
             let at = k as u8;
@@ -351,10 +338,6 @@ impl Domain {
             };
         }
         &self.cuts[k]
-    }
-
-    pub fn cut(&self, k: usize) -> Option<&Cut> {
-        self.cuts.get(k).filter(|c| c.made)
     }
 
     /// Returns whether the pieces changed.
@@ -408,10 +391,7 @@ struct Made {
     key: Option<(Observation, (u32, u32), Tau, u32)>,
     sight: Sight,
     resident: HashSet<LevelPage>,
-    objects: u32,
-    target: Option<Tau>,
     revision: u32,
-    walks: u32,
     /// rays cast and nodes visited since `take_work`
     work: [u32; 2],
 }
@@ -426,20 +406,17 @@ pub fn start(ladder: &[Tau], extra: u32) {
         return;
     }
     let Some(o) = observation() else { return };
-    let key = Some((o, heights_revision(), ladder[0], extra));
-    if made.key == key && made.published.is_some() {
+    let key = (o, heights_revision(), ladder[0], extra);
+    if made.key == Some(key) && made.published.is_some() {
         return;
     }
-    made.key = key;
-    let retarget = made.target != Some(ladder[0]);
-    made.target = Some(ladder[0]);
-    let paging = Terrain::pyramid().paging();
-    let resident: HashSet<LevelPage> = paging.held().map(|(p, _)| p).collect();
+    // a new target or moved objects recast every tile; moved pages the ones over them
+    let everything = made.key.is_none_or(|(_, (_, objects), tau, _)| tau != key.2 || objects != key.1 .1);
+    made.key = Some(key);
+    let resident: HashSet<LevelPage> = Terrain::pyramid().paging().held().map(|(p, _)| p).collect();
     let moved: Vec<(f64, f64, f64)> = resident.symmetric_difference(&made.resident).map(|p| p.rect()).collect();
-    let objects = heights_revision().1;
-    made.work[0] += made.sight.observe(&o, &EdgeRays(Access::now(), ladder[0]), retarget || objects != made.objects, &moved);
+    made.work[0] += made.sight.observe(&o, &EdgeRays(Access::now(), ladder[0]), everything, &moved);
     made.resident = resident;
-    made.objects = objects;
     let mut job = made.spare.take().unwrap_or_else(|| Domain::empty(o, Box::new(Known)));
     job.begin(o, ladder, made.sight.footprints(), made.sight.lacks());
     made.job = Some(job);
@@ -456,7 +433,6 @@ pub fn advance(at: usize, price: &dyn Price, stop: &dyn Fn() -> bool) -> bool {
     done.put(at);
     made.spare = made.published.replace(done);
     made.revision = made.revision.wrapping_add(1);
-    made.walks = made.walks.wrapping_add(1);
     true
 }
 
@@ -479,10 +455,6 @@ pub fn current() -> Option<&'static Domain> {
     MADE.get(Made::default).published.as_ref()
 }
 
-pub fn walks() -> u32 {
-    MADE.get(Made::default).walks
-}
-
 pub fn revision() -> u32 {
     MADE.get(Made::default).revision
 }
@@ -492,32 +464,18 @@ impl Domain {
         self.known.contents(c.level(), c.region())
     }
 
-    /// Where in `c` anything stands. A bound, not the drawn surface: a coarse
-    /// page's surface averages a peak away, which would leave the chunk empty
-    /// until the finer page came. A bound errs nearer.
-    pub fn occupied(&self, c: Chunk) -> Option<Aabb> {
-        if let Some(s) = self.seen.get(&c) {
-            return Some(s.bound);
-        }
-        match self.contents(c) {
-            Contents::Holds { bound, .. } => Some(bound),
-            _ => None,
-        }
-    }
-
-    fn measure(&self, c: Chunk) -> Order {
+    /// Measured from where in `c` anything stands: a bound, not the drawn
+    /// surface, which on a coarse page averages a peak away and would leave
+    /// the chunk empty until the finer page came. A bound errs nearer.
+    pub fn order_of(&self, c: Chunk) -> Order {
         if let Some(s) = self.seen.get(&c) {
             return s.order;
         }
-        Order::of(&self.o, &self.occupied(c).unwrap_or(c.region()))
-    }
-
-    pub fn nearest_to(&self, c: Chunk) -> f64 {
-        self.measure(c).near
-    }
-
-    pub fn order_of(&self, c: Chunk) -> Order {
-        self.measure(c)
+        let bound = match self.contents(c) {
+            Contents::Holds { bound, .. } => bound,
+            _ => c.region(),
+        };
+        Order::of(&self.o, &bound)
     }
 
     pub fn outermost(&self, c: Chunk) -> bool {

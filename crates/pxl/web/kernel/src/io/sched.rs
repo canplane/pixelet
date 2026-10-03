@@ -52,7 +52,14 @@ const fn bound(category: Category) -> usize {
     }
 }
 
-const DESIRED: usize = bound(Category::terrain) + bound(Category::poi) + bound(Category::asset) + 3;
+const DESIRED: usize = {
+    let (mut n, mut k) = (0, 0);
+    while k < Category::ALL.len() {
+        n += bound(Category::ALL[k]);
+        k += 1;
+    }
+    n
+};
 
 #[derive(Clone, Copy, Debug)]
 struct Wanted {
@@ -242,22 +249,18 @@ impl<S: Serve> Ledger<S> {
         self.started.push((key_of(slot, self.generation[slot]), w.category, w.subject));
     }
 
-    /// The key is spent, so whatever the host still reports under it (an abort
-    /// or a body that raced the stop) is dropped.
-    fn stop(&mut self, slot: usize, at: f64) {
+    /// Ends the slot's attempt; its key is spent, so whatever the host still
+    /// reports under it (an abort or a body that raced the stop) is dropped.
+    fn end(&mut self, slot: usize) -> Attempt {
         let a = self.attempt[slot].take().or_bug(Errno::ENOTRECOVERABLE);
-        self.stops.push(key_of(slot, self.generation[slot]));
         self.generation[slot] = self.generation[slot].wrapping_add(1);
-        profiler_record(TaskRecord {
-            key: DemandKey::new(a.category, a.subject),
-            priority: a.rank.class as f64 + a.rank.distance,
-            enqueue_ms: a.enqueue_ms,
-            start_ms: Some(a.start_ms),
-            end_ms: at,
-            phases: None,
-            outcome: Outcome::aborted,
-            fail: Failure::default(),
-        });
+        a
+    }
+
+    fn stop(&mut self, slot: usize, at: f64) {
+        self.stops.push(key_of(slot, self.generation[slot]));
+        let a = self.end(slot);
+        record(&a, at, Outcome::aborted, None, Failure::default());
     }
 
     pub fn take_started(&mut self, mut each: impl FnMut(u64, Category, u64)) {
@@ -280,42 +283,41 @@ impl<S: Serve> Ledger<S> {
     /// An answer ends the want; a failure holds it back.
     pub fn settle(&mut self, key: u64, outcome: Outcome, phases: Option<Phases>, fail: Failure, at: f64) {
         let Some(slot) = self.slot_of(key) else { return };
-        let a = self.attempt[slot].take().or_bug(Errno::ENOTRECOVERABLE);
-        self.generation[slot] = self.generation[slot].wrapping_add(1);
+        let a = self.end(slot);
         if let Some(i) = self.find(a.category, a.subject) {
-            match self.serve.retry_after(outcome) {
-                _ if outcome == Outcome::ok => self.desired[i] = None,
-                Some(wait) => {
-                    if let Some(w) = &mut self.desired[i] {
-                        w.until_ms = at + wait;
-                    }
-                }
-                None => {}
+            if outcome == Outcome::ok {
+                self.desired[i] = None;
+            } else if let (Some(wait), Some(w)) = (self.serve.retry_after(outcome), &mut self.desired[i]) {
+                w.until_ms = at + wait;
             }
         }
-        profiler_record(TaskRecord {
-            key: DemandKey::new(a.category, a.subject),
-            priority: a.rank.class as f64 + a.rank.distance,
-            enqueue_ms: a.enqueue_ms,
-            start_ms: Some(a.start_ms),
-            end_ms: at,
-            phases,
-            outcome,
-            fail,
-        });
+        record(&a, at, outcome, phases, fail);
     }
 
     /// The module is being reset under a host that will not answer what it was told to run.
     pub fn reset(&mut self) {
         for slot in 0..self.attempt.len() {
-            if self.attempt[slot].take().is_some() {
-                self.generation[slot] = self.generation[slot].wrapping_add(1);
+            if self.attempt[slot].is_some() {
+                self.end(slot);
             }
         }
         self.desired.fill(None);
         self.started.clear();
         self.stops.clear();
     }
+}
+
+fn record(a: &Attempt, at: f64, outcome: Outcome, phases: Option<Phases>, fail: Failure) {
+    profiler_record(TaskRecord {
+        key: DemandKey::new(a.category, a.subject),
+        priority: a.rank.class as f64 + a.rank.distance,
+        enqueue_ms: a.enqueue_ms,
+        start_ms: Some(a.start_ms),
+        end_ms: at,
+        phases,
+        outcome,
+        fail,
+    });
 }
 
 static SCHED: Global<Ledger<Policy>> = Global::new();

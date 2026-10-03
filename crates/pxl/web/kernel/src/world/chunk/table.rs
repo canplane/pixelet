@@ -13,7 +13,7 @@ use pxl_render::mesh::paint::terrain::adapter::beside_index;
 use pxl_render::mesh::voxel_scan::APRON;
 
 use pxl_spec::space::observation::Bounds as _;
-use pxl_spec::space::pyramid::GROUND;
+use pxl_spec::space::pyramid::{chunk_scale, GROUND};
 use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::section::span_of;
@@ -33,7 +33,7 @@ use crate::param;
 use crate::sched::profiler::record::MB;
 use crate::shell::setting::store::settings_store;
 use crate::world::chunk::build::{mesh_step, BuildEvent, Builder, Cube, World};
-use crate::world::chunk::frontier::{self, cube_of, drawn_cube, pool_of, wanted_cube, Env, Frontier, Now, Slots};
+use crate::world::chunk::frontier::{cube_of, drawn_cube, pool_of, wanted_cube, Env, Frontier, Now, Slots};
 use crate::world::chunk::mesh_slot::{capacity, group_box_words, group_bytes, group_is_fine, slot_at, MeshSlot, Pool, ARENA, COVER_SLOTS, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::source::{draws_band, objects_revision_of, tiers_draw};
 use crate::world::paging::LEVELS;
@@ -458,7 +458,7 @@ struct Pieces<'a> {
 
 impl Env for Pieces<'_> {
     fn slots(&self, c: Chunk) -> (Pool, u32) {
-        let cube = cube_of(c, self.d.outermost(c), self.d.nearest_to(c), self.d.tau());
+        let cube = cube_of(c, self.d.outermost(c), self.d.order_of(c).near, self.d.tau());
         (pool_of(c, cube), self.table.slots_of(c, cube))
     }
 
@@ -554,10 +554,10 @@ impl Scheduler {
             need: None,
             recube: false,
             tiers: Held::EMPTY,
-            layout_primary: frontier::coarsest(level),
+            layout_primary: chunk_scale(level),
             layout_generation: 0,
             layout_ready: false,
-            desired: frontier::coarsest(level),
+            desired: chunk_scale(level),
             sources,
         };
         slot.unmeasured();
@@ -977,7 +977,7 @@ impl Scheduler {
         let (level, chunk) = (s.level(), s.chunk);
         let objects = level == 0 && world.store.entries(L2_IDX(chunk.corner())).is_some();
         let current = self.generation(i);
-        let desired = drawn_cube(wanted_cube(d.nearest_to(chunk), d.tau()), level, d.outermost(chunk), objects);
+        let desired = drawn_cube(wanted_cube(d.order_of(chunk).near, d.tau()), level, d.outermost(chunk), objects);
         if self.slots[i].role == Role::Building && self.slots[i].layout_ready && self.slots[i].layout_primary != desired {
             self.release_tiers(i, |_, _| false);
         }
