@@ -6,15 +6,16 @@
 
 use crate::global::Global;
 use crate::layer::billboard::batch::BillboardBatch;
+use crate::layer::billboard::field::billboard_instance;
 use crate::layer::billboard::selection::select_visible_billboards;
-use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
+use crate::layer::billboard::sheet::{new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::layer::poi::badge::{self, Label};
 use crate::layer::poi::{enabled, rank_of};
 use crate::param::{POI_ALL_LEVEL, POI_MAJOR_RANK};
 use crate::sched::tick::TickContext;
 use crate::world::access::{Access, Detail, Ray};
 use crate::world::frame::coord::local_world_origin;
-use crate::world::frame::view::view;
+use crate::world::frame::view::ndc_to_px;
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer;
 use pxl_render::asset::atlas::NO_SLOT;
@@ -131,8 +132,7 @@ pub fn step(ctx: &mut TickContext) {
     }
     badge::retain(&labeled.iter().map(|l| l.0).collect());
     p.found = found;
-    let v = view();
-    select_visible_billboards(&mut p.batch, v.width, v.height, &mut p.kept);
+    select_visible_billboards(&mut p.batch, &mut p.kept);
     p.drawn.clear();
     for &i in &p.kept {
         if badge::slot(labeled[i as usize].0) == NO_SLOT {
@@ -153,19 +153,13 @@ pub fn step(ctx: &mut TickContext) {
     instances.clear();
     for &i in &p.drawn {
         let i = i as usize;
-        let (sheet, slot) = (billboard_sheet(), badge::slot(labeled[i].0) as u32);
-        instances.extend_from_slice(&[
-            p.batch.local_x[i] as f32,
-            p.batch.local_y[i] as f32,
-            p.batch.local_z[i] as f32,
-            p.batch.w_px[i],
-            badge::HEIGHT as f32,
-            sheet.u0(slot) as f32,
-            sheet.v0(slot) as f32,
-            sheet.u1(slot) as f32,
-            sheet.v1(slot) as f32,
-            (badge::ANCHOR / badge::HEIGHT) as f32,
-        ]);
+        let at = [p.batch.local_x[i], p.batch.local_y[i], p.batch.local_z[i]];
+        instances.extend_from_slice(&billboard_instance(
+            at,
+            [p.batch.w_px[i] as f64, badge::HEIGHT],
+            badge::slot(labeled[i].0) as u32,
+            badge::ANCHOR / badge::HEIGHT,
+        ));
     }
     if p.set.is_some() || !instances.is_empty() {
         let set = *p.set.get_or_insert_with(|| new_billboard_set(BillboardOrder::Poi));
@@ -179,8 +173,7 @@ pub fn step(ctx: &mut TickContext) {
 /// `ndc` in [−1, 1], y up. A count is also zoomed into, so it comes apart
 /// into its places. Whether a badge took the tap.
 pub fn tap(ndc_x: f64, ndc_y: f64) -> bool {
-    let v = view();
-    let (x, y) = ((ndc_x * 0.5 + 0.5) * v.width, (-ndc_y * 0.5 + 0.5) * v.height);
+    let [x, y] = ndc_to_px([ndc_x, ndc_y]);
     let hits = &PLACEMENT.get(Placement::default).hits;
     let Some(&(_, label, stands)) = hits.iter().find(|(r, _, _)| (r[0]..=r[2]).contains(&x) && (r[1]..=r[3]).contains(&y)) else {
         return false;

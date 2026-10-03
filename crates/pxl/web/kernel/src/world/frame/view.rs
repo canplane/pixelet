@@ -167,6 +167,12 @@ pub fn view_ray_local(ndc_x: f64, ndc_y: f64, origin: &mut V3, direction: &mut V
     mat4_transform_direction(direction, &mat4(), far[0] - origin[0], far[1] - origin[1], far[2] - origin[2]);
 }
 
+/// `ndc` in [−1, 1], y up, as logical pixels from the view's top left.
+pub fn ndc_to_px([x, y]: [f64; 2]) -> [f64; 2] {
+    let v = view();
+    [(x * 0.5 + 0.5) * v.width, (-y * 0.5 + 0.5) * v.height]
+}
+
 pub fn view_sees_sphere(x: f64, y: f64, z: f64, radius: f64) -> bool {
     let p = &view().planes;
     for k in (0..24).step_by(4) {

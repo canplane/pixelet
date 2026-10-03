@@ -16,6 +16,7 @@ use pxl_spec::space::xy::TO_XY;
 
 use crate::global::Global;
 use crate::kernel::kernel;
+use crate::layer::billboard::field::billboard_instance;
 use crate::layer::billboard::field::BILLBOARD_FLOATS;
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::text::text_width;
@@ -291,19 +292,7 @@ fn write_labels(g: &mut Gizmos) {
         if slot == NO_SLOT {
             continue;
         }
-        let s = slot as u32;
-        lane.extend_from_slice(&[
-            label.at[0] as f32,
-            label.at[1] as f32,
-            label.at[2] as f32,
-            logical_w as f32,
-            LABEL_H as f32,
-            sheet.u0(s) as f32,
-            sheet.v0(s) as f32,
-            sheet.u1(s) as f32,
-            sheet.v1(s) as f32,
-            0.5,
-        ]);
+        lane.extend_from_slice(&billboard_instance(label.at, [logical_w as f64, LABEL_H as f64], slot as u32, 0.5));
     }
     write_billboard_set(set, &lane);
 }
