@@ -258,13 +258,11 @@ impl<'a> Side<'a> {
                         }
                     }
                 }
-                let approaches: Vec<&[(u32, f64)]> = members.iter().enumerate().filter(|&(_, &m)| self.pieces[m].approach).map(|(k, _)| &g.along[k][..]).collect();
                 let profile = solve_profile(&Problem {
                     adj: &g.adj,
                     need: &need,
                     ground: qg,
                     carried: &carried[s],
-                    approaches: &approaches,
                     halo: halo_m(g.at[0][1]),
                 });
                 forced += profile.forced.iter().filter(|&&f| f).count();

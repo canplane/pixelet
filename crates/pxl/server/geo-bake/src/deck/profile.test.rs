@@ -14,7 +14,7 @@ fn chain(n: usize, step: f64) -> Vec<Vec<(u32, f64)>> {
 /// A carried chain 5 m a step over flat ground.
 fn deck(need: &[f64], halo: f64) -> Profile {
     let adj = chain(need.len(), 5.0);
-    solve(&Problem { adj: &adj, need, ground: &vec![0.0; need.len()], carried: &vec![true; need.len()], approaches: &[], halo })
+    solve(&Problem { adj: &adj, need, ground: &vec![0.0; need.len()], carried: &vec![true; need.len()], halo })
 }
 
 #[test]
@@ -50,63 +50,13 @@ fn a_need_too_high_for_the_grade_lands_on_the_ground_by_the_halo_without_a_step(
     }
 }
 
-/// `shell` over `deck`, an approach out of each end; 5 m a step.
-fn with_approaches(ground: &[f64], deck: std::ops::RangeInclusive<usize>, shell: f64) -> Profile {
-    let n = ground.len();
+#[test]
+fn an_approach_comes_down_from_its_joint_to_its_next_point() {
+    // a deck over 20..=30 on flat ground, an approach either side
+    let n = 60;
     let adj = chain(n, 5.0);
-    let carried: Vec<bool> = (0..n).map(|i| deck.contains(&i)).collect();
-    let need: Vec<f64> = (0..n).map(|i| ground[i] + if carried[i] { shell } else { 0.0 }).collect();
-    let left: Vec<(u32, f64)> = (0..=*deck.start()).rev().map(|i| (i as u32, (*deck.start() - i) as f64 * 5.0)).collect();
-    let right: Vec<(u32, f64)> = (*deck.end()..n).map(|i| (i as u32, (i - *deck.end()) as f64 * 5.0)).collect();
-    solve(&Problem {
-        adj: &adj,
-        need: &need,
-        ground,
-        carried: &carried,
-        approaches: &[&left, &right],
-        halo: 1000.0,
-    })
+    let carried: Vec<bool> = (0..n).map(|i| (20..=30).contains(&i)).collect();
+    let need: Vec<f64> = (0..n).map(|i| if carried[i] { 2.0 } else { 0.0 }).collect();
+    let p = solve(&Problem { adj: &adj, need: &need, ground: &vec![0.0; n], carried: &carried, halo: 1000.0 });
+    assert_eq!((p.top[30], p.top[31]), (2.0, 0.0));
 }
-
-/// Right approach: over its ground, falling, then on it.
-fn assert_meets_its_ground(p: &Profile, ground: &[f64], from: usize) {
-    let contact = (from + 1..ground.len()).find(|&i| p.top[i] == ground[i]).expect("the approach meets its ground");
-    for (i, (&top, &g)) in p.top.iter().zip(ground).enumerate().skip(from + 1) {
-        assert!(top >= g, "{i} under its ground");
-        if i < contact {
-            assert!(top <= p.top[i - 1] + 1e-9, "{i} rises before its contact");
-        } else {
-            assert_eq!(top, g, "{i} off its ground past its contact");
-        }
-    }
-}
-
-#[test]
-fn an_approach_meets_its_ground_at_the_grade_and_follows_it_from_there() {
-    // a dip past the contact
-    let ground: Vec<f64> = (0..60).map(|i| if (40..45).contains(&i) { -6.0 } else { 0.0 }).collect();
-    let p = with_approaches(&ground, 20..=30, 2.0);
-    assert_meets_its_ground(&p, &ground, 30);
-    assert_eq!(p.top[30 + 5], 0.0, "2 m at 8 % is 25 m");
-    assert!(p.forced.iter().skip(31).all(|f| !f));
-}
-
-#[test]
-fn an_approach_down_a_slope_steeper_than_the_grade_meets_it_soon_not_as_a_wall() {
-    // ground falling 20 %: no contact in grade, so the first within the steepest
-    let ground: Vec<f64> = (0..60).map(|i| if i <= 30 { 0.0 } else { -(i - 30) as f64 }).collect();
-    let p = with_approaches(&ground, 20..=30, 2.0);
-    assert_meets_its_ground(&p, &ground, 30);
-    assert_eq!(p.top[31], ground[31], "met on the first step");
-}
-
-#[test]
-fn a_cutting_past_a_hollow_by_its_portal_does_not_dip_and_climb() {
-    // a bore 7.5 m deep, a hollow by its portal
-    let mut ground: Vec<f64> = (0..80).map(|i| if i <= 30 { 0.0 } else { -3.2 }).collect();
-    ground[31] = 5.7;
-    ground[32] = 5.7;
-    let p = with_approaches(&ground, 10..=30, 7.5);
-    assert_meets_its_ground(&p, &ground, 30);
-}
-
