@@ -23,7 +23,6 @@ export const PANEL_HEADER = {
 
 export const PANEL_SECTION_GAP = 24;
 export const PANEL_HEAD_HEIGHT = PANEL_EDGE + PANEL_CONTROL + PANEL_EDGE;
-const TABS_TOP = PANEL_EDGE + PANEL_CONTROL + chrome.controlGap;
 export const PANEL_CONTENT_TOP = PANEL_EDGE + PANEL_CONTROL + PANEL_SECTION_GAP;
 export const PANEL_TABS_ROOM = PANEL_CONTENT_TOP + chrome.controlGap + PANEL_CONTROL;
 
@@ -53,14 +52,13 @@ export function PanelBody({ header, tabs, children }: { header: ReactNode; tabs?
   return (
     <View style={styles.body}>
       <View style={styles.scroll}>{children}</View>
-      <Backing fill={color.ground} material={material.bar} place={BackingPlace.OverContent} style={styles.head}>
+      {
+        // The bar holds the tabs whole, as a navigation bar holds its palette.
+      }
+      <Backing fill={color.ground} material={material.bar} place={BackingPlace.OverContent} style={[styles.head, tabs ? styles.headTabs : null]}>
         {header}
+        {tabs && <View style={styles.tabs}>{tabs}</View>}
       </Backing>
-      {tabs && (
-        <Backing fill={color.ground} place={BackingPlace.OverContent} style={styles.tabs}>
-          {tabs}
-        </Backing>
-      )}
     </View>
   );
 }
@@ -75,15 +73,7 @@ const styles = StyleSheet.create({
   title: { position: "absolute", left: 0, right: 0, textAlign: "center", pointerEvents: "none", ...textStyle.title, color: LABEL.primary },
   body: { flex: 1 },
   head: { position: "absolute", top: 0, left: 0, right: 0, height: PANEL_HEAD_HEIGHT },
+  headTabs: { height: PANEL_HEAD_HEIGHT + chrome.controlGap + PANEL_CONTROL },
   scroll: { flex: 1, overflow: "hidden" },
-  tabs: {
-    position: "absolute",
-    top: TABS_TOP,
-    left: PANEL_EDGE,
-    right: PANEL_EDGE,
-    height: PANEL_CONTROL,
-    borderRadius: PANEL_CONTROL / 2,
-    justifyContent: "center",
-    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
-  },
+  tabs: { marginTop: chrome.controlGap, marginHorizontal: PANEL_EDGE, height: PANEL_CONTROL, justifyContent: "center" },
 });
