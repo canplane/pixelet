@@ -161,16 +161,17 @@ impl<L: Layer> Paging<L> {
         self.held_as(p).is_some()
     }
 
+    /// Held in a frame of its own, not the shared `ABSENT` record.
+    fn framed(&self, p: LevelPage) -> bool {
+        self.held_as(p).is_some_and(|h| h.record != ABSENT)
+    }
+
     pub fn get(&self, p: LevelPage) -> Option<&L> {
         self.held_as(p).map(|h| &h.body)
     }
 
     pub fn held(&self) -> impl Iterator<Item = (LevelPage, &L)> {
         self.pages.iter().filter_map(|(&p, e)| Some((p, &e.held.as_ref()?.body)))
-    }
-
-    pub fn level(&self, level: u32) -> impl Iterator<Item = (LevelPage, &L)> {
-        self.held().filter(move |(p, _)| p.level == level)
     }
 
     pub fn frames_used(&self) -> u32 {
@@ -255,7 +256,7 @@ impl<L: Layer> Paging<L> {
 
     /// A page not yet held counts as taking one: whether it is empty is known only on arrival.
     pub fn takes_frame(&self, p: LevelPage) -> bool {
-        !self.settled(p) && self.held_as(p).is_none_or(|h| h.record != ABSENT)
+        !self.settled(p) && (self.framed(p) || !self.resident(p))
     }
 
     pub fn asked(&self, p: LevelPage) -> Option<Ask> {
@@ -280,7 +281,7 @@ impl<L: Layer> Paging<L> {
     /// only for a speculative page, counted; for anything stronger, none means
     /// the capacity bound is broken.
     fn frame_for(&mut self, p: LevelPage, victim: &impl Victim) -> Option<u32> {
-        if self.held_as(p).is_some_and(|h| h.record != ABSENT) {
+        if self.framed(p) {
             return self.remove(p);
         }
         if let Some(free) = self.free.pop() {
@@ -290,7 +291,7 @@ impl<L: Layer> Paging<L> {
         let mut candidates: Vec<Candidate> = self
             .pages
             .iter()
-            .filter(|&(&q, e)| e.held.as_ref().is_some_and(|h| h.record != ABSENT) && self.hold(q) == Hold::Cache)
+            .filter(|&(&q, _)| self.framed(q) && self.hold(q) == Hold::Cache)
             .map(|(&q, _)| Candidate { page: q, hinted: self.hinted(q) })
             .filter(|c| !(speculative && c.hinted))
             .collect();

@@ -139,11 +139,7 @@ fn converge_on<S: Serve>(pyramid: &mut Pyramid<PoiPage>, observation: fn() -> Ob
             ledger.settle(key, Outcome::ok, None, Failure::default(), at);
         }
         assert!(pyramid.paging().frames_used() <= FRAMES, "turn {turn}: past the frames");
-        for (p, _) in (0..=TOP_LEVEL).flat_map(|level| pyramid.paging().level(level)).collect::<Vec<_>>() {
-            if pyramid.paging().resident(p) {
-                resident.insert(p);
-            }
-        }
+        resident.extend(pyramid.paging().held().map(|(p, _)| p));
         for &p in floor.iter().filter(|p| resident.contains(p)) {
             assert!(pyramid.paging().resident(p), "turn {turn}: the floor's {p:?} given up");
         }
