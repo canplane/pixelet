@@ -328,7 +328,7 @@ export const SUMMARY = {
     admitted: 3 as number,
     evicted: 4 as number,
     refined: 5 as number,
-    recubed: 6 as number,
+    retiered: 6 as number,
     changes_peak: 7 as number,
     WORDS: 8 as number,
   },

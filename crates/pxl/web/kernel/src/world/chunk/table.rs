@@ -126,7 +126,7 @@ struct Slot {
     /// fit (`BuildEvent::Reserve`); not asked for again until that many are free.
     need: Option<(u32, Scale, u32)>,
     /// A drawn piece the frontier let build another scale; a slot is held for it.
-    recube: bool,
+    retier: bool,
     /// The layout's tiers plus the last one landed. A source change keeps the
     /// old generation's tiers drawn until a layout of the new one is applied.
     tiers: Held<Tier>,
@@ -211,15 +211,15 @@ impl Slot {
         self.tiers.iter().find(|t| t.scale == scale && t.generation == generation)
     }
 
-    fn recubes(&self) -> bool {
+    fn retiers(&self) -> bool {
         self.layout.is_some_and(|(p, _)| p != self.desired)
     }
 
     /// The scale it builds now: the desired one, except a drawn piece the frontier
-    /// has not let recube rebuilds its shown scale in place, so an edit still shows.
+    /// has not let retier rebuilds its shown scale in place, so an edit still shows.
     fn target(&self) -> Scale {
         match self.layout {
-            Some((p, _)) if self.role == Role::Drawn && self.recubes() && !self.recube => p,
+            Some((p, _)) if self.role == Role::Drawn && self.retiers() && !self.retier => p,
             _ => self.desired,
         }
     }
@@ -389,7 +389,7 @@ pub struct Scheduler {
     moves: (u32, u32),
     /// Recut pace for the profiler.
     refined: u32,
-    recubed: u32,
+    retiered: u32,
     changes: u32,
     /// Moves whenever the set of drawn chunks does.
     drawn_revision: u32,
@@ -406,7 +406,7 @@ struct Scratch {
     eligible: Vec<usize>,
     drawn: Vec<Chunk>,
     building: Vec<(Chunk, bool)>,
-    recube: Vec<(Chunk, (Pool, u32))>,
+    retier: Vec<(Chunk, (Pool, u32))>,
     frontier: Frontier,
 }
 
@@ -499,7 +499,7 @@ impl Scheduler {
             build_committed: 0,
             moves: (0, 0),
             refined: 0,
-            recubed: 0,
+            retiered: 0,
             changes: 0,
             drawn_revision: 0,
             changes_peak: 0,
@@ -511,7 +511,7 @@ impl Scheduler {
     }
 
     pub fn pace(&self) -> [u32; 3] {
-        [self.refined, self.recubed, self.changes_peak]
+        [self.refined, self.retiered, self.changes_peak]
     }
 
     /// Each mounted chunk, whether it is drawn, and whether it is in the frustum.
@@ -547,7 +547,7 @@ impl Scheduler {
             fresh: true,
             pending_since: None,
             need: None,
-            recube: false,
+            retier: false,
             tiers: Held::EMPTY,
             layout: None,
             desired: chunk_scale(level),
@@ -695,16 +695,16 @@ impl Scheduler {
         let Some(d) = domain::current() else { return };
         sc.drawn.clear();
         sc.building.clear();
-        sc.recube.clear();
+        sc.retier.clear();
         let mut recubing = 0;
         for (i, s) in self.slots.iter().enumerate() {
             match s.role {
                 Role::Drawn => {
                     sc.drawn.push(s.chunk);
-                    if s.recube {
+                    if s.retier {
                         recubing += 1;
-                    } else if s.recubes() {
-                        sc.recube.push((s.chunk, (pool_of(s.chunk, s.desired), s.slots_for(s.desired, self.generation(i)))));
+                    } else if s.retiers() {
+                        sc.retier.push((s.chunk, (pool_of(s.chunk, s.desired), s.slots_for(s.desired, self.generation(i)))));
                     }
                 }
                 Role::Building => sc.building.push((s.chunk, s.layout.is_some())),
@@ -718,7 +718,7 @@ impl Scheduler {
             drawn: &sc.drawn,
             building: &sc.building,
             recubing,
-            recube: &sc.recube,
+            retier: &sc.retier,
             free: self.free(),
         };
         let plan = sc.frontier.plan(&now, &Pieces { d, table: self });
@@ -750,9 +750,9 @@ impl Scheduler {
             self.add(world, k);
             self.counts.added += 1;
         }
-        for &k in &plan.recube {
+        for &k in &plan.retier {
             if let Some(i) = self.find(&k) {
-                self.slots[i].recube = true;
+                self.slots[i].retier = true;
                 self.recheck(world, i, now);
             }
         }
@@ -973,8 +973,8 @@ impl Scheduler {
         }
         let s = &mut self.slots[i];
         s.desired = desired;
-        if !s.recubes() {
-            s.recube = false;
+        if !s.retiers() {
+            s.retier = false;
         }
         let pending = s.layout != Some((s.target(), current));
         self.set_pending(i, pending, now);
@@ -1033,15 +1033,15 @@ impl Scheduler {
             return false;
         }
         let s = &self.slots[i];
-        let recubed = s.role == Role::Drawn && s.layout.is_some_and(|(q, g)| g == generation && q != p);
+        let retiered = s.role == Role::Drawn && s.layout.is_some_and(|(q, g)| g == generation && q != p);
         self.apply_layout(i, p, generation);
         self.trim(i);
-        if recubed {
-            self.recubed = self.recubed.wrapping_add(1);
+        if retiered {
+            self.retiered = self.retiered.wrapping_add(1);
             self.changes += 1;
         }
         let s = &mut self.slots[i];
-        s.recube = s.recubes() && s.recube;
+        s.retier = s.retiers() && s.retier;
         self.set_pending(i, false, 0.0);
         true
     }

@@ -121,7 +121,7 @@ pub struct Now<'a> {
     pub drawn: &'a [Chunk],
     pub building: &'a [(Chunk, bool)],
     pub recubing: u32,
-    pub recube: &'a [(Chunk, (Pool, u32))],
+    pub retier: &'a [(Chunk, (Pool, u32))],
     /// Free slots after what started moves will take.
     pub free: Slots,
 }
@@ -131,7 +131,7 @@ pub struct Plan {
     pub start: Vec<Chunk>,
     pub cancel: Vec<Chunk>,
     pub drop: Vec<Chunk>,
-    pub recube: Vec<Chunk>,
+    pub retier: Vec<Chunk>,
     pub refused: u32,
     pub waiting: u32,
     /// Coarsenings waiting their hold; a turn is requested while any does, or
@@ -194,7 +194,7 @@ pub struct Frontier {
     over: Vec<(Chunk, Chunk)>,
     wanted: Vec<Chunk>,
     open: Vec<u32>,
-    recube: Vec<(Chunk, (Pool, u32))>,
+    retier: Vec<(Chunk, (Pool, u32))>,
 }
 
 impl Frontier {
@@ -212,13 +212,13 @@ impl Frontier {
             over,
             wanted,
             open,
-            recube,
+            retier,
         } = self;
         let Plan {
             start,
             cancel,
             drop,
-            recube: recubed,
+            retier: retiered,
             refused,
             waiting,
             held: held_n,
@@ -226,7 +226,7 @@ impl Frontier {
             swaps,
             chunks,
         } = plan;
-        for v in [&mut *start, &mut *cancel, &mut *drop, &mut *recubed, &mut *chunks] {
+        for v in [&mut *start, &mut *cancel, &mut *drop, &mut *retiered, &mut *chunks] {
             v.clear();
         }
         swaps.clear();
@@ -236,7 +236,7 @@ impl Frontier {
         over.clear();
         wanted.clear();
         open.clear();
-        recube.clear();
+        retier.clear();
 
         let in_goal = |c: &Chunk| now.goal.binary_search(c).is_ok();
         let drawn = |c: &Chunk| now.drawn.binary_search(c).is_ok();
@@ -390,10 +390,10 @@ impl Frontier {
             start.extend(missing());
         }
 
-        recube.extend_from_slice(now.recube);
+        retier.extend_from_slice(now.retier);
         // The chunk only makes the order total, so ties do not follow table history.
-        recube.sort_unstable_by_key(|&(c, _)| (env.order(c), c));
-        for &(c, (pool, k)) in recube.iter() {
+        retier.sort_unstable_by_key(|&(c, _)| (env.order(c), c));
+        for &(c, (pool, k)) in retier.iter() {
             let mut need = [0; POOLS];
             need[pool as usize] = k;
             let fits = take(&free, &need, RESERVE);
@@ -404,7 +404,7 @@ impl Frontier {
             }
             free[pool as usize] -= k;
             in_flight += 1;
-            recubed.push(c);
+            retiered.push(c);
         }
         *short = cramped;
         plan

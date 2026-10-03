@@ -686,10 +686,10 @@ pub mod SUMMARY {
         pub const admitted: u32 = 3;
         pub const evicted: u32 = 4;
         pub const refined: u32 = 5;
-        pub const recubed: u32 = 6;
+        pub const retiered: u32 = 6;
         pub const changes_peak: u32 = 7;
         pub const WORDS: u32 = 8;
-        pub const KEYS: &[&str] = &["AT", "step", "star", "frames_held", "admitted", "evicted", "refined", "recubed", "changes_peak", "WORDS"];
+        pub const KEYS: &[&str] = &["AT", "step", "star", "frames_held", "admitted", "evicted", "refined", "retiered", "changes_peak", "WORDS"];
     }
     /// The heap as the read finds it, recording or not: `used_mb` its top, `requests` the pages it has ever asked for.
     pub mod heap {

@@ -140,7 +140,7 @@ impl Table {
             drawn: &drawn,
             building: &ready,
             recubing: 0,
-            recube: &[],
+            retier: &[],
             free,
         };
         let (allocated, plan) = allocations::during(|| self.frontier.plan(&now, &Flat));
@@ -205,7 +205,7 @@ fn a_piece_filling_several_slots_starts_only_with_all_of_them_free() {
             drawn: &drawn,
             building: &[],
             recubing: 0,
-            recube: &[],
+            retier: &[],
             free: [fine, 100, 0],
         };
         Frontier::default().plan(&now, &Heavy(3)).start.len() as u32
@@ -226,7 +226,7 @@ fn a_coarsening_waits_its_hold_unless_the_arena_is_short() {
             drawn,
             building: &[],
             recubing: 0,
-            recube: &[],
+            retier: &[],
             free,
         }
     }
@@ -279,7 +279,7 @@ fn a_coarsening_is_always_started_with_only_the_reserve_free() {
         drawn: &children,
         building: &[],
         recubing: 0,
-        recube: &[],
+        retier: &[],
         free: RESERVE,
     };
     let mut frontier = Frontier::default();
