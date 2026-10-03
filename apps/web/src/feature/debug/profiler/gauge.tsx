@@ -68,13 +68,13 @@ export function ProfilerView({ v }: { v: Gauge["view"] }) {
   return (
     <>
       <Head>camera</Head>
-      <Row k="distance" v={`${n1(v.dist)} z16 cells`} />
+      <Row k="distance" v={`${n1(v.dist)} u`} />
       <Row k="polar/azimuth" v={`${n1(deg(v.polar))}°/${n1(deg(v.azimuth))}°`} />
       <Row k="τ" v={or(v.tau)} />
       <Row k="center" v={geo(v.center_lat, v.center_lon)} />
       <Row k="center altitude" v={metres(v.center_z)} />
       <Head>pointer</Head>
-      <Row k="hover cell (z16)" v={hovering ? `${Math.floor(v.hover_x)}, ${Math.floor(v.hover_y)}, ${Math.floor(v.hover_z)}` : "-"} />
+      <Row k="hover (u)" v={hovering ? `${Math.floor(v.hover_x)}, ${Math.floor(v.hover_y)}, ${Math.floor(v.hover_z)}` : "-"} />
       <Row k="hover" v={geo(v.hover_lat, v.hover_lon)} />
       <Row k="hover altitude" v={metres(v.hover_alt)} />
       <Row k="chunk/tier/page" v={hovering ? `${zoomName(v.chunk_zoom)}/${zoomName(v.tier_zoom)}/${zoomName(v.read_zoom)}` : "-"} warn={v.read_zoom < v.chunk_zoom} />
