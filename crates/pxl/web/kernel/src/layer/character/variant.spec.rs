@@ -255,7 +255,3 @@ pub mod PERSON_GENDER_PREFIXES {
     pub const female: &str = "female-";
     pub const male: &str = "male-";
 }
-
-pub const DEFAULT_PERSON_VARIANT_KEY: crate::layer::character::variant_spec::groups::person::Key = crate::layer::character::variant_spec::groups::person::Key::female_2;
-
-pub const DEFAULT_PET_VARIANT_KEY: crate::layer::character::variant_spec::groups::pet::Key = crate::layer::character::variant_spec::groups::pet::Key::chick;
