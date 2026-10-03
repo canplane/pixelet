@@ -79,8 +79,8 @@ export function TopOverlays() {
       </BusyDim>
 
       <BusyDim style={[styles.right, { top }]}>
-        <ViewButtons />
         <LocationButtons />
+        <ViewButtons />
       </BusyDim>
     </>
   );
