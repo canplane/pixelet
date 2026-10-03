@@ -12,11 +12,21 @@ export interface WindowSize {
 }
 
 let size: WindowSize = measure();
+const sizeListeners = new Set<() => void>();
 
 function measure(): WindowSize {
   const root = document.documentElement;
   return { width: root.clientWidth, height: root.clientHeight };
 }
+
+// One listener for every subscriber: one each, comparing against the shared
+// size, told only the first of them, and a sheet kept the old width.
+globalThis.addEventListener("resize", () => {
+  const next = measure();
+  if (next.width === size.width && next.height === size.height) return;
+  size = next;
+  for (const l of sizeListeners) l();
+});
 
 /**
  * The layout viewport, which a keyboard or pinch leaves alone. RN-web's
@@ -26,14 +36,8 @@ function measure(): WindowSize {
 export function useWindowSize(): WindowSize {
   return useSyncExternalStore(
     (l) => {
-      const resize = () => {
-        const next = measure();
-        if (next.width === size.width && next.height === size.height) return;
-        size = next;
-        l();
-      };
-      globalThis.addEventListener("resize", resize);
-      return () => globalThis.removeEventListener("resize", resize);
+      sizeListeners.add(l);
+      return () => sizeListeners.delete(l);
     },
     () => size,
   );
