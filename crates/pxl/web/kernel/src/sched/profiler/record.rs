@@ -417,7 +417,8 @@ mod test;
 const _: () = assert!(LEVELS == pxl_spec::space::pyramid::TOP_LEVEL as usize + 1, "a lane a level holds every level of the pyramid");
 
 /// The rings keep the last minute. At 60 Hz that is 3,600 frames; a faster
-/// display or a heavy minute fills a lane early and sets `truncated`.
+/// display or a heavy minute fills a lane early, which drops its oldest and
+/// sets `truncated`.
 pub const WINDOW_MS: f64 = 60_000.0;
 pub const TASK_LIMIT: usize = 2_048;
 pub const FRAME_LIMIT: usize = 4_096;
@@ -438,16 +439,17 @@ fn trim<T>(ring: &[T], head: &mut usize, cutoff: f64, t: impl Fn(&T) -> f64) -> 
     }
 }
 
+/// Returns false where a full lane dropped its oldest quarter for `rec`: a
+/// shift a quarter of the lane apart rather than one a record.
 fn land_lane<T: Copy>(ring: &mut [T], len: &mut usize, head: &mut usize, rec: T) -> bool {
-    if *len == ring.len() && *head > 0 {
-        drop_front(ring, len, core::mem::take(head));
-    }
+    let full = *len == ring.len() && *head == 0;
     if *len == ring.len() {
-        return false;
+        let n = if full { ring.len() / 4 } else { core::mem::take(head) };
+        drop_front(ring, len, n);
     }
     ring[*len] = rec;
     *len += 1;
-    true
+    !full
 }
 
 pub(super) fn drop_front<T: Copy>(ring: &mut [T], len: &mut usize, n: usize) {
