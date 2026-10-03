@@ -156,7 +156,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::SENSOR_POSITION => {
             let p = abi::SensorPosition::read(packet(pkt)?)?;
-            geolocation::geolocation_fix(p.lon, p.lat, p.altitude, p.accuracy, p.heading);
+            geolocation::geolocation_fix(p.lon, p.lat, p.altitude, p.accuracy, p.course);
             Ok(Some(0))
         }
         Command::SENSOR_ERROR => {

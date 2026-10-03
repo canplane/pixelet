@@ -489,11 +489,11 @@ export interface SensorPosition {
   lat: f64;
   altitude: f64 | null;
   accuracy: f64;
-  heading: f64 | null;
+  course: f64 | null;
 }
 
 export function encode_sensor_position(p: SensorPosition): U8Array {
-  return packet((b) => b.f64(p.lon).f64(p.lat).f64(p.altitude).f64(p.accuracy).f64(p.heading));
+  return packet((b) => b.f64(p.lon).f64(p.lat).f64(p.altitude).f64(p.accuracy).f64(p.course));
 }
 
 /** Command.SENSOR_ORIENTATION's packet. */

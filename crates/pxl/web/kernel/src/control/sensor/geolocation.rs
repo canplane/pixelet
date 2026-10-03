@@ -94,8 +94,8 @@ pub fn geolocation_permission_granted(supported: bool) {
     }
 }
 
-pub fn geolocation_fix(longitude: f64, latitude: f64, altitude: Option<f64>, accuracy: f64, heading: Option<f64>) {
-    device_location_store().set_location([longitude, latitude, altitude.unwrap_or(0.0)], accuracy, heading);
+pub fn geolocation_fix(longitude: f64, latitude: f64, altitude: Option<f64>, accuracy: f64, course: Option<f64>) {
+    device_location_store().set_location([longitude, latitude, altitude.unwrap_or(0.0)], accuracy, course);
 }
 
 /// The shell stops the watch before this: a dead watch keeps calling back

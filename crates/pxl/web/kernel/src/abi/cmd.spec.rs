@@ -902,7 +902,7 @@ pub struct SensorPosition {
     pub lat: f64,
     pub altitude: Option<f64>,
     pub accuracy: f64,
-    pub heading: Option<f64>,
+    pub course: Option<f64>,
 }
 
 impl SensorPosition {
@@ -916,7 +916,7 @@ impl SensorPosition {
                 None => None,
             },
             accuracy: f.at(3)?.get_number()?,
-            heading: match f.at(4)?.opt() {
+            course: match f.at(4)?.opt() {
                 Some(c) => Some(c.get_number()?),
                 None => None,
             },

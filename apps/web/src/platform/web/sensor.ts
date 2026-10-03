@@ -42,7 +42,7 @@ export function geolocationStart(): void {
   geolocationWatch = navigator.geolocation.watchPosition(
     (pos) => {
       const { latitude, longitude, altitude, accuracy, heading } = pos.coords;
-      kernel_position({ lon: longitude, lat: latitude, altitude, accuracy, heading });
+      kernel_position({ lon: longitude, lat: latitude, altitude, accuracy, course: heading });
     },
     (err) => {
       // Cleared, not just forgotten: a dead watch keeps calling back and would race a later start.
