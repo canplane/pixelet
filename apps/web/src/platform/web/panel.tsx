@@ -99,7 +99,7 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
       >
         <View {...responder.panHandlers} accessibilityViewIsModal accessibilityLabel={label} style={[styles.body, { height: bodyFull ? fullHeight : halfHeight }]}>
           {children}
-          {half && <View style={styles.handle} />}
+          <View style={styles.handle} />
         </View>
       </Motion>
     </View>
