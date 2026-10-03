@@ -147,7 +147,7 @@ pub fn prune<L: Layer>(set: &PageSet, top: u32) -> Result<usize, String> {
 
 /// Measured from disk, not the run: a resumed run that skipped everything
 /// would describe an empty set.
-pub fn write_manifest(set: &PageSet, top: u32, layer: serde_json::Value) -> Result<(), String> {
+pub fn write_manifest(set: &PageSet, top: u32, built: Option<&str>, layer: serde_json::Value) -> Result<(), String> {
     let (mut objects, mut bytes) = measure_output(&set.root).map_err(|e| e.to_string())?;
     let mut levels = Vec::new();
     for l in 0..=top {
@@ -160,7 +160,7 @@ pub fn write_manifest(set: &PageSet, top: u32, layer: serde_json::Value) -> Resu
     if let (Some(out), serde_json::Value::Object(layer)) = (fields.as_object_mut(), layer) {
         out.extend(layer);
     }
-    crate::util::write_manifest(&set.root, fields)
+    crate::util::write_manifest(&set.root, built, fields)
 }
 
 /// A parent reads the 4×4 children around it, so each worker keeps only the

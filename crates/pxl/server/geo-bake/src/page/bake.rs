@@ -7,7 +7,7 @@ use pxl_spec::bake::quadkey::PAGE_KEY_DEPTH;
 use crate::coverage::{Coverage, Overture};
 use crate::page::walk::{self, Args, Page, Target};
 use crate::terrain::leaf::land_pages;
-use crate::util::{fmt_bytes, measure_output, refuse_mixed, write_manifest};
+use crate::util::{fmt_bytes, git_sha, measure_output, refuse_mixed, write_manifest};
 
 pub struct Bake<'a> {
     pub kind: &'a str,
@@ -27,6 +27,7 @@ pub fn bake<T>(
     connect: impl Fn() -> Result<T, String> + Sync,
     one: impl Fn(&mut T, &Target) -> Result<Page, String> + Sync,
 ) -> Result<(), String> {
+    let built = git_sha();
     let args = Args::parse(b.out.clone())?;
     println!(
         "[bake/{}] out={} land_cache={} concurrency={} limit={} force={}",
@@ -67,5 +68,5 @@ pub fn bake<T>(
     if let Some(format) = b.format {
         fields["format"] = serde_json::Value::String(format.to_string());
     }
-    write_manifest(&args.out, fields)
+    write_manifest(&args.out, built.as_deref(), fields)
 }

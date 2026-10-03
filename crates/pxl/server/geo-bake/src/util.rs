@@ -102,7 +102,9 @@ pub fn fmt_dur(ms: f64) -> String {
 }
 
 /// HEAD, and where the working tree differs, `+` its tree (untracked files
-/// too): a bake from uncommitted code names that code.
+/// too): a bake from uncommitted code names that code. Read when a bake
+/// starts, which is when its binary was built: commits made while it runs
+/// are not what it ran.
 pub fn git_sha() -> Option<String> {
     let index = std::env::temp_dir().join(format!("pxl-bake-index-{}", std::process::id()));
     let git = |args: &[&str]| {
@@ -151,12 +153,12 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 }
 
 /// A set's manifest beside its version directory: `fields`, and what every
-/// set says of itself.
-pub fn write_manifest(root: &Path, fields: serde_json::Value) -> Result<(), String> {
+/// set says of itself; `built` is the `git_sha` the bake started at.
+pub fn write_manifest(root: &Path, built: Option<&str>, fields: serde_json::Value) -> Result<(), String> {
     let mut manifest = serde_json::json!({
         "version": root.file_name().map(|n| n.to_string_lossy().to_string()),
         "updated_at": now_iso8601(),
-        "git_sha": git_sha(),
+        "git_sha": built,
         "content_encoding": CONTENT_ENCODING,
     });
     if let (Some(out), serde_json::Value::Object(fields)) = (manifest.as_object_mut(), fields) {

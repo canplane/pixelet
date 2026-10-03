@@ -12,12 +12,13 @@ use pxl_geo_bake::cli::Flags;
 use pxl_geo_bake::coverage::{Coverage, Overture};
 use pxl_geo_bake::poi::{self, leaves};
 use pxl_geo_bake::pyramid::{build, prune, write_manifest, Layer, PageSet};
-use pxl_geo_bake::util::{pack, refuse_mixed, Level};
+use pxl_geo_bake::util::{git_sha, pack, refuse_mixed, Level};
 use pxl_spec::bake::poi_page::PoiPage;
 use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::space::pyramid::LevelPage;
 
 fn run() -> Result<(), String> {
+    let built = git_sha();
     let mut out = PathBuf::from(format!("out/poi/{}", PUBLISHED_VERSION.poi));
     let mut concurrency = 8;
     let mut flags = Flags::from_env();
@@ -41,7 +42,7 @@ fn run() -> Result<(), String> {
     println!("[bake/poi] z16: {} pages", pages.len());
     let top = build(&set, &PoiPage::default(), concurrency)?;
     println!("[bake/poi] {} pages their parent settles let go", prune::<PoiPage>(&set, top)?);
-    write_manifest(&set, top, serde_json::json!({ "source": source.manifest() }))?;
+    write_manifest(&set, top, built.as_deref(), serde_json::json!({ "source": source.manifest() }))?;
     println!("[bake/poi] complete to level {top}: {}", out.display());
     Ok(())
 }

@@ -223,6 +223,7 @@ fn read_json(path: &Path) -> serde_json::Value {
 }
 
 fn run() -> Result<(), String> {
+    let built = git_sha();
     let args = parse_args()?;
     let leaves = PageSet::new(args.build.join("leaf"));
     let coverage = Coverage::of_source()?;
@@ -341,7 +342,7 @@ fn run() -> Result<(), String> {
         write_json(
             &args.build.join("leaf.json"),
             &serde_json::json!({
-                "git_sha": git_sha(),
+                "git_sha": built,
                 "land_pages": land.len(),
                 "flat_elevation_pages": t.flat_ele,
                 "source": read_source_catalogs(&mut client, source),
@@ -385,6 +386,7 @@ fn run() -> Result<(), String> {
         write_manifest(
             &tiles,
             top,
+            built.as_deref(),
             serde_json::json!({
                 "bbox_4326": coverage::source_bbox()?,
                 "ingest_bbox": coverage.ingest_bbox(),
