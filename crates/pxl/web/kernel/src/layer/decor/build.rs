@@ -12,6 +12,7 @@ use pxl_spec::procedural::{scatter, scatter_at, Candidate, MASTER_SEED};
 use pxl_spec::space::lod::target_cell_px;
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
+use pxl_spec::space::v3::Aabb;
 use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
 use std::collections::{HashMap, TryReserveError};
@@ -178,8 +179,9 @@ pub fn scatters_at(value: u32, at: &Pvf3) -> Option<Draw> {
 impl<'s> DecorBuild<'s> {
     /// None where the heap refused scratch room, and the cell is not built.
     #[allow(clippy::too_many_arguments)]
-    /// Only what stands in the chunk whose heights are `z`.
-    pub fn build(scratch: &'s mut DecorScratch, kinds: &[&Kind], ground: Option<&Ground>, placed: &[Placed], hide: Option<DecorHide>, store: &Store, step: u32, decor: bool, z: (f64, f64)) -> Option<DecorBuild<'s>> {
+    /// Only what stands in `chunk`, the region of the chunk drawing it; the
+    /// ground may be a coarser chunk's over it.
+    pub fn build(scratch: &'s mut DecorScratch, kinds: &[&Kind], ground: Option<&Ground>, placed: &[Placed], hide: Option<DecorHide>, store: &Store, step: u32, decor: bool, chunk: Aabb) -> Option<DecorBuild<'s>> {
         scratch.clear();
         for kind in kinds {
             if kind.variant_count() == 0 {
@@ -195,16 +197,16 @@ impl<'s> DecorBuild<'s> {
                 continue;
             }
             for column in placed {
-                Self::placed(scratch, kind, first, column, hide.and_then(DecorHide::placed), store, z).ok()?;
+                Self::placed(scratch, kind, first, column, hide.and_then(DecorHide::placed), store, chunk).ok()?;
             }
             if let Some(ground) = ground.filter(|_| decor) {
-                Self::scatter(scratch, kind, first, ground, hide, store, z).ok()?;
+                Self::scatter(scratch, kind, first, ground, hide, store, chunk).ok()?;
             }
         }
         Some(DecorBuild { scratch })
     }
 
-    fn placed(scratch: &mut DecorScratch, kind: &Kind, first: usize, column: &Placed, hide: Option<EntryAt>, store: &Store, (z0, z1): (f64, f64)) -> Result<(), TryReserveError> {
+    fn placed(scratch: &mut DecorScratch, kind: &Kind, first: usize, column: &Placed, hide: Option<EntryAt>, store: &Store, chunk: Aabb) -> Result<(), TryReserveError> {
         let (Some(value), Some(e)) = (kind.decor_value(), store.entries(column.col_idx)) else {
             return Ok(());
         };
@@ -224,7 +226,7 @@ impl<'s> DecorBuild<'s> {
             // Turned and varied by position, as the placing ghost predicted.
             let (variant, rotation) = user_decor_pick(at.corner().i, kind.variant_count());
             let [lx, ly, lz] = at.local();
-            if !(z0..z1).contains(&lz) {
+            if !(chunk.min[2]..chunk.max[2]).contains(&lz) {
                 continue;
             }
             let hidden = hide == Some(e.at(k));
@@ -249,7 +251,7 @@ impl<'s> DecorBuild<'s> {
     /// Whether a kind may stand on a cell, and its transport alignment, are read
     /// off the level's own cells: a tree above z16 stands on the grass the view
     /// sees, not on z16 cells it cannot.
-    fn scatter(scratch: &mut DecorScratch, kind: &Kind, first: usize, ground: &Ground, hide: Option<DecorHide>, store: &Store, (z0, z1): (f64, f64)) -> Result<(), TryReserveError> {
+    fn scatter(scratch: &mut DecorScratch, kind: &Kind, first: usize, ground: &Ground, hide: Option<DecorHide>, store: &Store, chunk: Aabb) -> Result<(), TryReserveError> {
         let (cells, lines) = (ground.page.cells, ground.page.decks);
         let (level, atom) = (GROUND.scale(ground.level), GROUND.scale(0));
         let (lx0, ly0) = (level.index(ground.x0), level.index(ground.y0));
@@ -265,8 +267,9 @@ impl<'s> DecorBuild<'s> {
                 continue;
             };
             let ele = ground.sample.ele[apron_col(dx, dy) as usize] as i32;
+            let at = [(gx as f64 + 0.5) * atom.side(), (gy as f64 + 0.5) * atom.side(), f64::from(ele)];
             // In the chunk holding the cell it stands on.
-            if !(z0 < f64::from(ele) && f64::from(ele) <= z1) {
+            if !((0..2).all(|k| (chunk.min[k]..chunk.max[k]).contains(&at[k])) && chunk.min[2] < at[2] && at[2] <= chunk.max[2]) {
                 continue;
             }
             // A leaf in the cell overrides the scatter: a cube or air hides it, the leaf gone brings it back.
@@ -277,8 +280,7 @@ impl<'s> DecorBuild<'s> {
             if ground.folded.is_some_and(filled) {
                 continue;
             }
-            let (x, y) = ((gx as f64 + 0.5) * atom.side() - ground.x0 as f64, (gy as f64 + 0.5) * atom.side() - ground.y0 as f64);
-            let z = ele as f64;
+            let [x, y, z] = [at[0] - chunk.min[0], at[1] - chunk.min[1], at[2]];
             let hidden = ground.level == 0 && hide == Some(DecorHide::Scattered([gx, gy, i64::from(ele)]));
             scratch.push(
                 first + variant as usize,

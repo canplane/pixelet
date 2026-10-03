@@ -13,7 +13,7 @@ use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, PageSource}
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::{LevelPage, CHUNK_CELLS, GROUND};
+use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
 use pxl_spec::space::v3::{len3, V3};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::alloc;
@@ -60,6 +60,8 @@ impl Block {
 /// What a population depends on beyond its page and the seed.
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct Sources {
+    /// The level of the page it is built from, coarser until its own comes.
+    read_from: u32,
     revision: u32,
     shown: bool,
     hide: Option<DecorHide>,
@@ -76,7 +78,6 @@ struct Cells {
     /// Kept so a settled turn asks the heap for nothing.
     mounted: Vec<(Chunk, bool, bool)>,
     gone: Vec<Chunk>,
-    pages: Vec<LevelPage>,
     sprites: Vec<u32>,
 }
 
@@ -136,6 +137,7 @@ fn sources_of(chunk: Chunk, store: &Store, cols: &mut Vec<IVec>, hide: Option<De
         DecorHide::Scattered([x, y, _]) => chunk.level() == 0 && inside(x, y),
     });
     Some(Sources {
+        read_from: Terrain::pyramid().paging().drawn_from(chunk.page())?.level,
         revision,
         shown: settings_store().decor,
         hide,
@@ -144,17 +146,24 @@ fn sources_of(chunk: Chunk, store: &Store, cols: &mut Vec<IVec>, hide: Option<De
 
 fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut DrawList, sources: Sources) -> Option<Block> {
     let pages = Terrain::pyramid();
-    let page = pages.paging().get(chunk.page())?;
-    let level = chunk.level();
-    let (x0, y0, _) = chunk.rect();
+    // The page the terrain draws the chunk from, read over the chunk of its level.
+    let src = pages.paging().drawn_from(chunk.page())?;
+    let page = pages.paging().get(src)?;
+    let mut over = chunk;
+    while over.level() < src.level {
+        over = over.parent()?;
+    }
+    let level = over.level();
+    let (cx0, cy0, _) = chunk.rect();
+    let (x0, y0, _) = over.rect();
     let (x0, y0) = (x0 as i64, y0 as i64);
-    let (tx0, ty0) = chunk.in_page();
+    let (tx0, ty0) = over.in_page();
     let view = Builder::page_view(page);
     if sources.shown {
         let around = Around {
             own: PageSource {
                 page: view,
-                frame: Frame::of(chunk.page()),
+                frame: Frame::of(src),
                 origin: [0, 0],
                 n: 1,
             },
@@ -168,9 +177,9 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
         let o = FROM_L2_IDX(col_idx);
         Placed {
             col_idx,
-            ox: (ivec::X(o) - x0) as f64,
-            oy: (ivec::Y(o) - y0) as f64,
-            hittable: level == 0,
+            ox: ivec::X(o) as f64 - cx0,
+            oy: ivec::Y(o) as f64 - cy0,
+            hittable: chunk.level() == 0,
         }
     }));
     let target = GROUND.scale(level);
@@ -192,7 +201,7 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
     };
     let scratch = c.scratch.get_or_insert_with(DecorScratch::default);
     let step = GROUND.scale(0).count_in(target.max(GROUND.scale(0)));
-    let built = DecorBuild::build(scratch, kinds, Some(&ground), &c.placed, sources.hide, store, step, sources.shown, chunk.z_range())?;
+    let built = DecorBuild::build(scratch, kinds, Some(&ground), &c.placed, sources.hide, store, step, sources.shown, chunk.region())?;
     let index = built.bytes();
     let heights = built.heights();
     let instances = built.instances() as u32;
@@ -257,12 +266,6 @@ pub fn step(kinds: &[&Kind], store: &Store, sched: &mut Scheduler, hide: Option<
             b.drawn = drawn && seen;
         }
     }
-    c.pages.clear();
-    c.pages.extend(mounted.iter().filter(|m| may_show(m.0, largest)).map(|m| m.0.page()));
-    c.pages.sort_unstable();
-    c.pages.dedup();
-    // Asked for by decor itself rather than left to what the terrain draws.
-    Terrain::pyramid().require::<Cells>(&c.pages);
     c.mounted = mounted;
     present(c, &mut sched.draw, frame_eye);
 }
