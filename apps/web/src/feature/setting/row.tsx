@@ -8,7 +8,7 @@ import { ToggleRow } from "@platform/toggle-row.tsx";
 
 import type { SettingCost } from "@/feature/setting/schema.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
-import { alpha, chrome, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color, hairline, sectionTitle, textScale, textStyle, weight } from "@/shared/ui/theme.ts";
 import { LABEL } from "@platform/palette.ts";
 
 const INSET = 12;
@@ -22,7 +22,7 @@ const COST_COLOR: Record<SettingCost, string> = {
 function Badge({ text, tint }: { text: string; tint: string }) {
   return (
     <View style={[styles.badge, { backgroundColor: alpha(tint, 0.15) }]}>
-      <Text style={[styles.badgeText, { color: tint }]}>{text}</Text>
+      <Text maxFontSizeMultiplier={textScale.mark} style={[styles.badgeText, { color: tint }]}>{text}</Text>
     </View>
   );
 }
@@ -80,7 +80,7 @@ export function SettingGroup(props: SettingGroupProps) {
   return (
     <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[styles.group, styles.bleed]}>
       <View style={styles.legend}>
-        <Text style={styles.legendText}>{label}</Text>
+        <Text maxFontSizeMultiplier={textScale.chrome} style={styles.legendText}>{label}</Text>
         <Badges cost={cost} dev={dev} />
       </View>
       {description && <Text style={[settingText.small, styles.groupDescription]}>{description}</Text>}

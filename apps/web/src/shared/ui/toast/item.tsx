@@ -13,7 +13,7 @@ import { BackingPlace } from "@/shared/ui/backing.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
 import { Swap } from "@/shared/ui/motion/presence.tsx";
 import { FADE, SNAP, spring, type Transition } from "@/shared/ui/motion/transition.ts";
-import { alpha, chrome, color, shadow, surface, SYSTEM, textStyle, weight } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color, shadow, surface, SYSTEM, textScale, textStyle, weight } from "@/shared/ui/theme.ts";
 import { type ToastSpec, ToastTone } from "./store.ts";
 
 export const TOAST_SIDE = 32;
@@ -91,7 +91,7 @@ export function Toast({ message, tone, fade, fadeTransition, touch }: ToastProps
         </Swap>
       </View>
       <Motion to={open ? {} : { opacity: 0, translateX: -10 }} transition={SNAP}>
-        <Text numberOfLines={1} style={[styles.message, { maxWidth: span - 2 * TOAST_SIDE - 2 * MESSAGE_PAD - 2 * EDGE }]}>{message}</Text>
+        <Text numberOfLines={1} maxFontSizeMultiplier={textScale.chrome} style={[styles.message, { maxWidth: span - 2 * TOAST_SIDE - 2 * MESSAGE_PAD - 2 * EDGE }]}>{message}</Text>
       </Motion>
       <View style={styles.slot}>
         <Motion to={open ? {} : { opacity: 0, scale: 0 }} transition={SNAP}>

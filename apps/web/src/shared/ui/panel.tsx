@@ -7,7 +7,7 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { Backing } from "@platform/backing.tsx";
 import { BackingPlace } from "@/shared/ui/backing.ts";
 import { CircularButton } from "@/shared/ui/circular-button.tsx";
-import { chrome, color, material, textStyle } from "@/shared/ui/theme.ts";
+import { chrome, color, material, textScale, textStyle } from "@/shared/ui/theme.ts";
 import { LABEL } from "@platform/palette.ts";
 import { useSafeArea } from "@platform/safe-area.ts";
 
@@ -45,7 +45,7 @@ export const PanelPresence = createContext<{ open: boolean; gone: () => void }>(
 export function PanelHeader({ title, onClose }: { title: string; onClose: () => void }) {
   return (
     <View style={styles.headerRow}>
-      <Text accessibilityRole="header" style={styles.title}>{title}</Text>
+      <Text accessibilityRole="header" maxFontSizeMultiplier={textScale.chrome} style={styles.title}>{title}</Text>
       <PanelClose onClose={onClose} />
     </View>
   );

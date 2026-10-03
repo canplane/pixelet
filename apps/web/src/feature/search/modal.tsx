@@ -10,7 +10,7 @@ import { Panel } from "@platform/panel.tsx";
 import { PANEL_CONTENT_TOP, PANEL_CONTROL, PANEL_EDGE, PANEL_HEADER, PANEL_SECTION_GAP, PanelBody, PanelClose } from "@/shared/ui/panel.tsx";
 import { KEEPS_KEYBOARD } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
-import { alpha, chrome, color, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color, sectionTitle, textScale, textStyle, weight } from "@/shared/ui/theme.ts";
 import { Command, DevicePoseStatus, encode_input_go_to } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, kernel_enable_location, kernel_snapshot, useKernel } from "@/kernel/shell.ts";
 import { LABEL, STATUS } from "@platform/palette.ts";
@@ -101,8 +101,8 @@ function LocateCard() {
       <Backing fill={color.ground} place={BackingPlace.OnSheet} interactive style={styles.locateCard}>
         <Pressable onPress={kernel_enable_location} accessibilityRole="button" style={styles.locateRow}>
           <Glyph glyph="location" size={chrome.glyph} color={poseColor(location)} />
-          <Text numberOfLines={1} style={styles.locateLabel}>{t("map.sensors.label")}</Text>
-          <Text style={styles.locateAction}>{t("map.sensors.turn_on")}</Text>
+          <Text numberOfLines={1} maxFontSizeMultiplier={textScale.chrome} style={styles.locateLabel}>{t("map.sensors.label")}</Text>
+          <Text maxFontSizeMultiplier={textScale.chrome} style={styles.locateAction}>{t("map.sensors.turn_on")}</Text>
         </Pressable>
       </Backing>
     </AboveKeyboard>
@@ -227,7 +227,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
 const styles = StyleSheet.create({
   locateCard: { borderRadius: chrome.target / 2, pointerEvents: "auto", boxShadow: "0 6px 20px rgba(0, 0, 0, 0.12)" },
-  locateRow: { height: chrome.target, flexDirection: "row", alignItems: "center", gap: 12, paddingLeft: (chrome.target - chrome.glyph) / 2, paddingRight: PANEL_EDGE },
+  locateRow: { minHeight: chrome.target, flexDirection: "row", alignItems: "center", gap: 12, paddingLeft: (chrome.target - chrome.glyph) / 2, paddingRight: PANEL_EDGE },
   locateLabel: { flex: 1, ...textStyle.body, color: LABEL.primary },
   locateAction: { ...textStyle.body, fontWeight: weight.semibold, color: color.action },
   resultsRoom: { paddingTop: PANEL_CONTENT_TOP, paddingBottom: chrome.target + 2 * PANEL_EDGE, gap: PANEL_SECTION_GAP },
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
   well: {
     flex: 1,
     minWidth: 0,
-    height: PANEL_CONTROL,
+    minHeight: PANEL_CONTROL,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { alpha, chrome, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color, hairline, sectionTitle, textScale, textStyle, weight } from "@/shared/ui/theme.ts";
 import { CharacterPreview } from "@/feature/character/preview.tsx";
 import { kernel_setting, useKernel } from "@/kernel/shell.ts";
 import { SETTINGS } from "@/feature/setting/schema.ts";
@@ -26,8 +26,8 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
         {
           /* Sized to the label's heavier weight, so a pick never rewraps the row. */
         }
-        <Text aria-hidden style={[styles.chipText, styles.chipTextOn, styles.sizer]}>{label}</Text>
-        <Text style={[styles.chipText, styles.label, active && styles.chipTextOn]}>{label}</Text>
+        <Text aria-hidden maxFontSizeMultiplier={textScale.chrome} style={[styles.chipText, styles.chipTextOn, styles.sizer]}>{label}</Text>
+        <Text maxFontSizeMultiplier={textScale.chrome} style={[styles.chipText, styles.label, active && styles.chipTextOn]}>{label}</Text>
       </View>
     </Pressable>
   );

@@ -10,7 +10,7 @@
 import type { Ref } from "react";
 import { StyleSheet, TextInput, type TextInputProps, type TextStyle } from "react-native";
 
-import { color, textStyle } from "@/shared/ui/theme.ts";
+import { color, textScale, textStyle } from "@/shared/ui/theme.ts";
 
 type TextFieldProps = Omit<TextInputProps, "onSubmitEditing"> & {
   ref?: Ref<TextInput>;
@@ -26,6 +26,7 @@ export function TextField({ style, onSubmit, ...props }: TextFieldProps) {
       // RN-web still reads only the older `blurOnSubmit`.
       submitBehavior="submit"
       blurOnSubmit={false}
+      maxFontSizeMultiplier={textScale.chrome}
       selectionColor={color.chosen}
       cursorColor={color.chosen}
       style={[styles.field, style, styles.size, styles.caret]}

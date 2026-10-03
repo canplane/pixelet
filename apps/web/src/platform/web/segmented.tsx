@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { PANEL_CONTROL } from "@/shared/ui/panel.tsx";
 import type { SegmentedProps } from "@/shared/ui/segmented.ts";
-import { chrome, color, textStyle, weight } from "@/shared/ui/theme.ts";
+import { chrome, color, textScale, textStyle, weight } from "@/shared/ui/theme.ts";
 import { LABEL } from "@platform/palette.ts";
 
 export function Segmented<T extends string | number>({ segments, value, onChange }: SegmentedProps<T>) {
@@ -22,7 +22,7 @@ export function Segmented<T extends string | number>({ segments, value, onChange
           >
             {/* Always mounted, as dock.tsx `ToolButton` is. */}
             <View collapsable={false} style={[styles.segment, on && styles.on]}>
-              <Text style={[styles.label, on && styles.labelOn]}>{s.label}</Text>
+              <Text maxFontSizeMultiplier={textScale.chrome} style={[styles.label, on && styles.labelOn]}>{s.label}</Text>
             </View>
           </Pressable>
         );
