@@ -20,7 +20,7 @@ use crate::layer::decor::hit::{raycast_decor, DecorStruck, Scattered};
 use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
 use crate::layer::object::geometry::{anchor_center, object_aabb};
 use crate::layer::object::size::{DECOR_SIZE, DEFAULT_OBJECT_SIZE};
-use crate::layer::object::store::{get_placed_object, place, place_air, place_decor, remove, EntryAt, OccupiedEntry};
+use crate::layer::object::store::{get_placed_object, place, place_air, place_decor, remove, EntryAt, Entry};
 use crate::world::access::Hit;
 use crate::world::frame::view::{view, view_ray_local};
 
@@ -91,7 +91,7 @@ pub(crate) fn clear_hover_coord() {
 }
 
 enum Struck {
-    Object(OccupiedEntry),
+    Object(Entry),
     Scattered(Scattered),
 }
 
@@ -110,7 +110,7 @@ fn resolve_struck(hit: &Hit, origin: V3, direction: V3, map_origin: IVec) -> Opt
 }
 
 /// A scattered instance is not an entry, so a placement lands as on the ground.
-fn resolve_hit_target(hit: &Hit, origin: V3, direction: V3, map_origin: IVec) -> Option<OccupiedEntry> {
+fn resolve_hit_target(hit: &Hit, origin: V3, direction: V3, map_origin: IVec) -> Option<Entry> {
     match resolve_struck(hit, origin, direction, map_origin) {
         Some(Struck::Object(o)) => Some(o),
         _ => resolve_hit_object(hit),
@@ -144,7 +144,7 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
 
     let struck = resolve_struck(&hit, origin, direction, map_origin);
     hover.object_at = match &struck {
-        Some(Struck::Object(o)) => Some(o.at),
+        Some(Struck::Object(o)) => Some(o.at()),
         _ => None,
     };
     hover.scattered = match struck {
@@ -158,7 +158,7 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
         None => world_adjacent_corner(&hit, U_PER_CELL, map_origin, None),
     });
     hover.coord = Some(match struck {
-        Some(Struck::Object(o)) => Pvf3 { i: o.i, f: o.f },
+        Some(Struck::Object(o)) => o.corner(),
         Some(Struck::Scattered(s)) => CELL.base_of(s.cell),
         // On the cell's grid, not the tier's: that is the size a carve is written at.
         None => world_struck_corner(&hit, U_PER_CELL, map_origin),

@@ -32,7 +32,7 @@ use pxl_spec::space::xy::TO_XY;
 
 use crate::io::demand::Category;
 use crate::kernel::kernel;
-use crate::layer::object::store::{EntryAt, EntryCursor, Store};
+use crate::layer::object::store::{EntryAt, Entry, Store};
 use crate::world::paging::Paging;
 use crate::world::pyramid::{Layer as _, Pyramid};
 use xpute_core::math::scalar::round;
@@ -701,7 +701,7 @@ impl<'a> Access<'a> {
     }
 
     /// Decor paints no voxel, so a cell of decor alone is the ground's.
-    fn cell_entries(&self, col_idx: IVec, [cx, cy]: [i64; 2], cz: i64) -> impl Iterator<Item = EntryCursor> + '_ {
+    fn cell_entries(&self, col_idx: IVec, [cx, cy]: [i64; 2], cz: i64) -> impl Iterator<Item = Entry> + '_ {
         let run = self.objects.cell(col_idx, cx as u32, cy as u32, cz as CellZ);
         let e = run.and(self.objects.entries(col_idx));
         let ks = match (run, e) {
@@ -711,7 +711,7 @@ impl<'a> Access<'a> {
         ks.filter_map(move |k| {
             let e = e?;
             (!object_value_is_decor(e.state[k])).then(|| {
-                let mut cursor = EntryCursor::default();
+                let mut cursor = Entry::default();
                 cursor.at_column(col_idx);
                 cursor.load(e.band[k], e.pos[k], e.state[k]);
                 cursor
@@ -751,11 +751,12 @@ fn wall_normal(ray: &Ray, t: f64, side: f64) -> V3 {
     n
 }
 
-fn object_hit(ray: &Ray, entries: impl Iterator<Item = EntryCursor>, [x0, y0]: [f64; 2]) -> Option<Hit> {
+fn object_hit(ray: &Ray, entries: impl Iterator<Item = Entry>, [x0, y0]: [f64; 2]) -> Option<Hit> {
     let mut best: Option<Hit> = None;
     for e in entries.filter(|e| !object_value_is_air(e.state)) {
-        let min = [x0 + e.lx, y0 + e.ly, e.lz];
-        let cube = Aabb { min, max: min.map(|v| v + e.size) };
+        let [lx, ly, lz] = e.local();
+        let min = [x0 + lx, y0 + ly, lz];
+        let cube = Aabb { min, max: min.map(|v| v + e.size()) };
         let Some((t, normal)) = ray_box(ray, cube) else { continue };
         if best.is_some_and(|b| b.t <= t) {
             continue;

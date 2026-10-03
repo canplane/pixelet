@@ -21,7 +21,6 @@ use pxl_spec::cell::object::{
 use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::hierarchy::{ancestor_of, at_walk_order, child_of, first_descendant_of, offset_in, parent_of, walk_order, Scale};
 use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX, L3, L3_IDX};
-use pxl_spec::space::pvf3::fvec::FVec;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::pvf3::Ivec;
@@ -55,16 +54,6 @@ pub enum EntryKind {
 }
 
 pub use pxl_spec::bake::constant::EntryAt;
-
-#[derive(Clone, Debug, PartialEq)]
-/// A placed thing: never air, which is the eraser's marker.
-pub struct OccupiedEntry {
-    pub at: EntryAt,
-    pub i: IVec,
-    pub f: FVec,
-    pub size: f64,
-    pub kind: EntryKind,
-}
 
 /// The L2 index of the cell's XY column, Z dropped: the renderer asks for a
 /// column with z = 0, so a key that kept Z left every object above 64u
@@ -129,53 +118,55 @@ fn read_state(coord: &Pvf3) -> u32 {
 
 // A leaf larger than a cell is split into the cells it covers, since
 // collision and the pick assume an entry is at most a cell.
-#[derive(Clone, Debug, Default)]
-pub struct EntryCursor {
-    /// Corner relative to the column's base (z = 0).
-    pub lx: f64,
-    pub ly: f64,
-    pub lz: f64,
-    pub size: f64,
+/// An entry where it is filed and the value it holds.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Entry {
+    at: EntryAt,
     pub state: u32,
-
-    at: At,
-    pos: u32,
 }
 
-impl EntryCursor {
+impl Entry {
     pub fn at_column(&mut self, col_idx: IVec) {
         self.at.col_idx = col_idx;
     }
 
     pub fn load(&mut self, band_idx: BandZ, pos: u32, state: u32) {
-        let (x, y, z, scale) = unpack_pos(pos);
-        self.at.band = band_idx;
-        self.at.step = [x, y, z];
-        self.pos = pos;
-        [self.lx, self.ly, self.lz] = self.at.local();
-        self.size = scale.side();
-        self.state = state;
+        (self.at.band_idx, self.at.pos, self.state) = (band_idx, pos, state);
     }
 
-    pub fn cell(&self) -> [i64; 3] {
-        self.at.cell()
-    }
-
-    pub fn corner(&self) -> Pvf3 {
-        self.at.corner()
-    }
-
-    pub fn at(&self) -> EntryAt {
-        EntryAt {
+    fn filed(&self) -> At {
+        let (x, y, z, _) = unpack_pos(self.at.pos);
+        At {
             col_idx: self.at.col_idx,
-            band_idx: self.at.band,
-            pos: self.pos,
+            band: self.at.band_idx,
+            step: [x, y, z],
         }
     }
 
-    pub fn object(&self) -> OccupiedEntry {
-        let Pvf3 { i, f } = self.corner();
-        let kind = if object_value_is_decor(self.state) {
+    /// Corner relative to the column's base (z = 0).
+    pub fn local(&self) -> [f64; 3] {
+        self.filed().local()
+    }
+
+    pub fn size(&self) -> f64 {
+        unpack_pos(self.at.pos).3.side()
+    }
+
+    pub fn cell(&self) -> [i64; 3] {
+        self.filed().cell()
+    }
+
+    pub fn corner(&self) -> Pvf3 {
+        self.filed().corner()
+    }
+
+    pub fn at(&self) -> EntryAt {
+        self.at
+    }
+
+    /// Not for air, which is the eraser's marker.
+    pub fn kind(&self) -> EntryKind {
+        if object_value_is_decor(self.state) {
             EntryKind::Decor {
                 decor_id: decor_id_from_num(self.state),
             }
@@ -184,13 +175,6 @@ impl EntryCursor {
                 // Every value the store writes is one the catalog gives out.
                 cube: placeable_cube_of(self.state).or_bug(Errno::ENOTRECOVERABLE),
             }
-        };
-        OccupiedEntry {
-            at: self.at(),
-            i,
-            f,
-            size: self.size,
-            kind,
         }
     }
 }
@@ -219,17 +203,17 @@ fn changed(bands: impl IntoIterator<Item = (IVec, BandZ)>) {
     }
 }
 
-fn cursor_at(at: EntryAt) -> EntryCursor {
-    let mut cursor = EntryCursor::default();
+fn cursor_at(at: EntryAt) -> Entry {
+    let mut cursor = Entry::default();
     cursor.at_column(at.col_idx);
     cursor.load(at.band_idx, at.pos, 0);
     cursor
 }
 
 /// Every entry a column stores, without the eraser's render-only edits.
-pub fn each_col_entry(col_idx: IVec, visit: &mut dyn FnMut(&EntryCursor)) {
+pub fn each_col_entry(col_idx: IVec, visit: &mut dyn FnMut(&Entry)) {
     let Some(e) = kernel().objects.entries(col_idx) else { return };
-    let mut cursor = EntryCursor::default();
+    let mut cursor = Entry::default();
     cursor.at_column(col_idx);
     for k in 0..e.band.len() {
         cursor.load(e.band[k], e.pos[k], e.state[k]);
@@ -237,11 +221,11 @@ pub fn each_col_entry(col_idx: IVec, visit: &mut dyn FnMut(&EntryCursor)) {
     }
 }
 
-fn each_cell_entry(ix: i64, iy: i64, iz: i64, visit: &mut dyn FnMut(&EntryCursor)) {
+fn each_cell_entry(ix: i64, iy: i64, iz: i64, visit: &mut dyn FnMut(&Entry)) {
     let Some(run) = cell_run(ix, iy, iz) else { return };
     let col_idx = column_of([ix, iy, iz]);
     let Some(e) = kernel().objects.entries(col_idx) else { return };
-    let mut cursor = EntryCursor::default();
+    let mut cursor = Entry::default();
     cursor.at_column(col_idx);
     for k in run.start as usize..(run.start + run.count) as usize {
         cursor.load(e.band[k], e.pos[k], e.state[k]);
@@ -256,23 +240,23 @@ pub fn holds_entry(at: &Pvf3) -> bool {
 }
 
 /// What stands in the cell `at` lies in, air left out.
-pub fn objects_at(at: &Pvf3) -> Vec<OccupiedEntry> {
+pub fn objects_at(at: &Pvf3) -> Vec<Entry> {
     let [ix, iy, iz] = CELL.index_of(at);
     let mut out = Vec::new();
     each_cell_entry(ix, iy, iz, &mut |entry| {
         if !object_value_is_air(entry.state) {
-            out.push(entry.object());
+            out.push(*entry);
         }
     });
     out
 }
 
-pub fn get_placed_object(at: EntryAt) -> Option<OccupiedEntry> {
+pub fn get_placed_object(at: EntryAt) -> Option<Entry> {
     let [ix, iy, iz] = cursor_at(at).cell();
     let mut found = None;
     each_cell_entry(ix, iy, iz, &mut |entry| {
         if found.is_none() && !object_value_is_air(entry.state) && entry.at() == at {
-            found = Some(entry.object());
+            found = Some(*entry);
         }
     });
     found
@@ -317,7 +301,7 @@ pub fn set_virtual_hide(at: Option<EntryAt>) {
         return;
     }
     st.virtual_hide = at;
-    let kind = at.and_then(get_placed_object).map(|o| o.kind);
+    let kind = at.and_then(get_placed_object).map(|o| o.kind());
     st.hide_in = (!matches!(kind, Some(EntryKind::Decor { .. })), !matches!(kind, Some(EntryKind::Solid { .. })));
     send_render_edits();
 }
@@ -417,7 +401,7 @@ fn collect_col(by_page: &mut Vec<(IVec, PageRows)>, col_idx: IVec) {
         rows.x.push(pvf3::to_real(pvf3::X(&local)) as f32);
         rows.y.push(pvf3::to_real(pvf3::Y(&local)) as f32);
         rows.z.push(pvf3::to_real(pvf3::Z(&local)) as f32);
-        rows.size.push(entry.size as f32);
+        rows.size.push(entry.size() as f32);
         rows.value.push(entry.state);
     });
 }
@@ -652,7 +636,7 @@ pub fn place_air(at: &Pvf3, size: f64) {
 
 pub fn remove(at: EntryAt) {
     let cursor = cursor_at(at);
-    write_object_value(&cursor.corner(), cursor.size, VOID);
+    write_object_value(&cursor.corner(), cursor.size(), VOID);
 }
 
 fn partition_point(n: usize, before: impl Fn(usize) -> bool) -> usize {

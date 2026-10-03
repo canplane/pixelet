@@ -9,7 +9,7 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
 
-use crate::layer::object::store::{get_placed_object, OccupiedEntry};
+use crate::layer::object::store::{get_placed_object, Entry};
 use crate::world::access::{Access, Detail, Hit, Ray, Struck, FINEST};
 use crate::world::frame::coord::local_world_to_canonical;
 use crate::world::frame::view::view;
@@ -79,7 +79,7 @@ pub fn world_struck_corner(hit: &Hit, size: f64, map_origin: IVec) -> Pvf3 {
 }
 
 /// Decor is never resolved here; it paints no voxel and has its own hit test.
-pub fn resolve_hit_object(hit: &Hit) -> Option<OccupiedEntry> {
+pub fn resolve_hit_object(hit: &Hit) -> Option<Entry> {
     match hit.struck {
         Struck::Object(at) => get_placed_object(at),
         Struck::Ground | Struck::Objects => None,

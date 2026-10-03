@@ -73,7 +73,7 @@ pub fn hover_cursor_step() {
     // A terrain carve is a whole cell: the scan emits nothing for a zero
     // material whatever its sub-cell bytes, so the cell goes whole anyway.
     let preview_size = match (&hovered_object, active_tool) {
-        (Some(o), ActiveTool::Eraser | ActiveTool::Pointer) => o.size,
+        (Some(o), ActiveTool::Eraser | ActiveTool::Pointer) => o.size(),
         (_, ActiveTool::Decor) => DECOR_SIZE,
         _ if digging_terrain || scattered => U_PER_CELL,
         _ => ui.object_size,
@@ -92,7 +92,7 @@ pub fn hover_cursor_step() {
 
     // The real object's hide lands a tick or more after the ghost, accepted.
     let virtual_hide_target = match (&hovered_object, active_tool) {
-        (Some(o), ActiveTool::Eraser) => Some(o.at),
+        (Some(o), ActiveTool::Eraser) => Some(o.at()),
         _ => None,
     };
     if c.virtual_hide_target != virtual_hide_target {
@@ -121,16 +121,16 @@ pub fn hover_cursor_step() {
         _ => None,
     };
 
-    let cube: Option<PlaceableCube> = match (active_tool, hovered_object.as_ref().map(|o| &o.kind)) {
+    let cube: Option<PlaceableCube> = match (active_tool, hovered_object.map(|o| o.kind())) {
         (ActiveTool::Pointer | ActiveTool::Decor, _) => None,
-        (_, Some(EntryKind::Solid { cube })) => Some(*cube),
+        (_, Some(EntryKind::Solid { cube })) => Some(cube),
         (ActiveTool::Object, _) => Some(ui.object_cube),
         _ => carved_style_cube,
     };
 
-    let decor_id = match (active_tool, hovered_object.as_ref().map(|o| &o.kind)) {
+    let decor_id = match (active_tool, hovered_object.map(|o| o.kind())) {
         (ActiveTool::Decor, _) => Some(ui.decor_id),
-        (_, Some(EntryKind::Decor { decor_id })) => Some(*decor_id),
+        (_, Some(EntryKind::Decor { decor_id })) => Some(decor_id),
         _ => None,
     };
     let decor_kind = decor_id.and_then(kind_for);
@@ -138,7 +138,7 @@ pub fn hover_cursor_step() {
 
     let decor_pick_i = match (active_tool, &hovered_object) {
         (ActiveTool::Decor, _) => hovered.map(|h| h.i),
-        (_, Some(o)) if matches!(o.kind, EntryKind::Decor { .. }) => Some(o.i),
+        (_, Some(o)) if matches!(o.kind(), EntryKind::Decor { .. }) => Some(o.corner().i),
         _ => None,
     };
     // Placing back an erased scattered decor restores that instance; the ghost
