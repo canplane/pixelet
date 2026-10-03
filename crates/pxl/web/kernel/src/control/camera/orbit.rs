@@ -20,10 +20,10 @@ use crate::control::camera::config::camera_cfg::view::{MAX_DIST, MIN_DIST};
 use crate::control::camera::controller::{camera, center_local, look_dir, look_domain, map_center, set_eye_local};
 use crate::control::camera::gesture::{spread, Anchor};
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
+use crate::control::navigation::walk::target;
 use crate::global::Global;
 use crate::shell::setting::store::{settings_store, CameraCollisionMode};
 use crate::world::access::support_revision;
-use crate::world::frame::coord::canonical_to_local;
 use crate::world::frame::view::{view, view_compose};
 use terrain_gate::{allowed_pan, allowed_view, climb_polar, ViewTriple};
 
@@ -181,8 +181,8 @@ pub(crate) fn gate_pan(to: &Pvf3) -> Pvf3 {
 pub(crate) fn put(at: Pvf3, snap: bool) {
     orbit().to = Some(at);
     if snap {
-        let local = canonical_to_local(&at, view().origin);
         let (o, cam) = (orbit(), camera());
+        let local = target(&mut o.to, center_local().unwrap_or_default(), view().origin);
         let e = orbit_eye_offset(o.dist, cam.pitch, cam.yaw);
         set_eye_local(&std::array::from_fn(|k| local[k] + e[k]));
     }
@@ -195,7 +195,7 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
     let (o, cam) = (orbit(), camera());
     let was = (drawn_center, o.dist, cam.pitch, cam.yaw);
 
-    let to = o.to.map_or(drawn_center, |at| canonical_to_local(&at, view().origin));
+    let to = target(&mut o.to, drawn_center, view().origin);
     let (center, mut moving) = approach_vec(drawn_center, to, POS_DAMP, delta, CENTER_EPS);
 
     let (dist, m) = approach_scalar(o.dist, vs.dist, CAM_DAMP, delta, DIST_EPS);

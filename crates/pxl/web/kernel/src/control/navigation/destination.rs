@@ -9,9 +9,9 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pyramid::{LevelPage, GROUND};
 
 use crate::control::camera::controller::{put_center, Motion};
+use crate::control::navigation::walk::{exact, unknown_z};
 use crate::global::Global;
-use crate::control::navigation::walk::stand_over;
-use crate::world::access::{Access, FINEST};
+use crate::world::access::FINEST;
 
 static DESTINATION: Global<Option<(Pvf3, Motion)>> = Global::new();
 
@@ -21,7 +21,7 @@ fn destination() -> &'static mut Option<(Pvf3, Motion)> {
 
 /// A later destination or a `go_to` replaces it.
 pub fn go_to_ground(at: Pvf3, motion: Motion) {
-    *destination() = Some((at, motion));
+    *destination() = Some((unknown_z(&at), motion));
     crate::world::change::request_world_tick();
 }
 
@@ -45,7 +45,7 @@ pub fn page() -> Option<LevelPage> {
 /// Only the exact ground puts it; a coarser page over it is not its ground.
 pub fn destination_step() {
     let Some((at, motion)) = *destination() else { return };
-    let Some(top) = Access::now().surface_support(&at).exact() else { return };
+    let Some(to) = exact(&at) else { return };
     *destination() = None;
-    put_center(stand_over(&at, top), motion);
+    put_center(to, motion);
 }

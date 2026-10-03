@@ -10,9 +10,10 @@ use xpute_core::math::scalar::wrap;
 
 use crate::control::camera::config::camera_cfg::view::EYE_CLEARANCE_U;
 use crate::control::camera::orbit::orbit_eye_offset;
+use crate::control::navigation::walk::{resolve, settle};
 use crate::shell::setting::store::{settings_store, CameraCollisionMode};
 use crate::world::access::Access;
-use crate::world::frame::coord::{canonical_to_local, local_height, local_world_origin, local_world_to_canonical};
+use crate::world::frame::coord::{local_height, local_world_origin, local_world_to_canonical};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewTriple {
@@ -36,12 +37,11 @@ pub struct ViewPose {
 /// Both ends of a step must share one origin, or the walk between them
 /// crosses frames.
 pub fn pose(view: ViewTriple, center: Option<&Pvf3>) -> Option<ViewPose> {
-    let map_center = crate::control::camera::controller::map_center()?;
-    let at = center.copied().unwrap_or(map_center);
+    let held = crate::control::camera::controller::center_local()?;
     let origin = local_world_origin();
     Some(ViewPose {
         origin,
-        target: canonical_to_local(&at, origin),
+        target: center.map_or(held, |at| resolve(at, held, origin)),
         dist: view.dist,
         polar: view.polar,
         azimuth: view.azimuth,
@@ -148,7 +148,7 @@ pub fn allowed_pan(view: ViewTriple, to_center: &Pvf3) -> Pvf3 {
     let map_origin = local_world_origin();
     let mut out = Pvf3::default();
     local_world_to_canonical(&mut out, &reached.target, map_origin);
-    out
+    settle(&out)
 }
 
 /// Steepening moves the eye and so the ground under it; two passes settle it,

@@ -14,9 +14,9 @@ use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, POS_DAMP, ROT
 use crate::control::camera::controller::look_domain;
 use crate::control::camera::controller::{camera, eye_local, map_center, set_eye_local};
 use crate::control::camera::store::camera_store;
+use crate::control::navigation::walk::target;
 use crate::global::Global;
 use crate::world::access::{Access, Detail, Ray};
-use crate::world::frame::coord::canonical_to_local;
 use crate::world::frame::view::{view, view_compose};
 
 /// The first resident thing it meets, else the sea, else `fallback` along it.
@@ -54,10 +54,9 @@ pub(crate) fn target_center() -> Option<Pvf3> {
 }
 
 pub(crate) fn put(at: Pvf3, snap: bool) {
-    let eye = at;
-    *to() = Some(eye);
+    *to() = Some(at);
     if snap {
-        set_eye_local(&canonical_to_local(&eye, view().origin));
+        set_eye_local(&target(to(), eye_local().unwrap_or_default(), view().origin));
     }
 }
 
@@ -65,8 +64,8 @@ pub(crate) fn put(at: Pvf3, snap: bool) {
 pub(crate) fn turn(delta: f64) -> bool {
     let mut moving = false;
     if let Some(eye) = eye_local() {
-        let target = to().map_or(eye, |at| canonical_to_local(&at, view().origin));
-        let (next, m) = approach_vec(eye, target, POS_DAMP, delta, EYE_EPS);
+        let to = target(to(), eye, view().origin);
+        let (next, m) = approach_vec(eye, to, POS_DAMP, delta, EYE_EPS);
         if next != eye {
             set_eye_local(&next);
         }

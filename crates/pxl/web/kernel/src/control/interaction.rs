@@ -14,7 +14,7 @@ use pxl_spec::space::v3::V3;
 
 pub use crate::abi::cmd::ActiveTool;
 use crate::control::interaction::pick::{ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner};
-use crate::control::navigation::walk::stand_or_raw;
+use crate::control::navigation::walk::stand;
 use crate::global::Global;
 use crate::layer::decor::hit::{raycast_decor, DecorStruck, Scattered};
 use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
@@ -184,7 +184,7 @@ pub(crate) fn tap(ndc_x: f64, ndc_y: f64) {
             // Recenter where a walker would stand across the struck face, by the
             // ground's own rule, so a pan after a tap changes nothing.
             let Some(approach) = hover.approach else { return };
-            let target = stand_or_raw(&anchor_center(&approach));
+            let target = stand(&anchor_center(&approach));
             crate::control::navigation::destination::go_to(target, crate::control::camera::controller::Motion::Smooth);
         }
         ActiveTool::Eraser => {
