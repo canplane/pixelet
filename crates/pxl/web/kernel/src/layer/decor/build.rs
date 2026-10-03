@@ -1,7 +1,6 @@
 // pxl-kernel/layer/decor/build.rs
 
-//! The decor layer: the kinds taught to the scheduler, and a decor cell's
-//! build. Scattered decor is never stored: it is a pure function of terrain
+//! The decor layer: a decor cell's build. Scattered decor is never stored: it is a pure function of terrain
 //! and a fixed seed, and a cell holding a placed object filters its
 //! candidate out at build time.
 
@@ -9,8 +8,6 @@ use pxl_render::gpu::api::word_bytes;
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
 use pxl_render::mesh::voxel_scan::apron_col;
 use pxl_spec::bake::constant::{unpack_pos, U_PER_CELL};
-use pxl_spec::cell::object::decor_num_id;
-use pxl_spec::cell::DecorId;
 use pxl_spec::procedural::{scatter, scatter_at, Candidate, MASTER_SEED};
 use pxl_spec::space::lod::target_cell_px;
 use pxl_spec::space::pvf3::ivec::IVec;
@@ -21,11 +18,9 @@ use std::collections::{HashMap, TryReserveError};
 
 use pxl_spec::cell::cube_types;
 
-use crate::global::Global;
 use crate::layer::decor::instance::{DecorScratch, GroupLanes, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
-use crate::layer::decor::kind::DecorKindDef;
+use crate::layer::decor::kind::{Kind, KINDS};
 use crate::layer::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
-use crate::layer::decor::scatter::{DecorKindSeed, DecorOrientationMode, DecorRules};
 use crate::layer::object::store::{At, EntryAt, Store};
 use crate::world::access::{Access, FINEST};
 use crate::world::pyramid::Layer as _;
@@ -63,59 +58,13 @@ pub struct DecorVariantAsset {
     pub skin: Asset,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct DecorKindBundle {
-    pub seed: DecorKindSeed,
-    pub rules: DecorRules,
-    pub variants: Vec<DecorVariantAsset>,
-    /// None for a kind with no user-placeable equivalent.
-    pub decor_id: Option<DecorId>,
-    /// The largest dimension over every variant's model, in world units.
-    pub extent: f64,
-}
-
 /// NaN is kept rather than dropped.
-fn largest(values: impl Iterator<Item = f64>) -> f64 {
+pub fn largest(values: impl Iterator<Item = f64>) -> f64 {
     values.fold(0.0, |a: f64, b| if a.is_nan() || b.is_nan() { f64::NAN } else { a.max(b) })
 }
 
 pub fn variant_extent(v: &DecorVariantAsset) -> f64 {
     largest(v.model.ingested().extent.unwrap_or([0.0; 3]).into_iter())
-}
-
-pub fn bind_models(def: &DecorKindDef) -> DecorKindBundle {
-    let extent = largest(def.variants.iter().map(variant_extent));
-    DecorKindBundle {
-        seed: def.seed,
-        rules: def.rules,
-        variants: def.variants.to_vec(),
-        decor_id: def.decor_id,
-        extent,
-    }
-}
-
-static KINDS: Global<Vec<Kind>> = Global::new();
-
-/// In taught order, which is the order of the groups in every decor block.
-pub fn kinds() -> &'static [Kind] {
-    KINDS.get(Vec::new)
-}
-
-/// One group per variant, kinds in bundle order.
-pub fn teach_decor_kinds(bundles: &[&DecorKindBundle]) {
-    let kinds = KINDS.get(Vec::new);
-    kinds.clear();
-    for bundle in bundles {
-        kinds.push(Kind {
-            tag: bundle.seed.tag,
-            density: bundle.seed.density,
-            variant_count: bundle.variants.len() as u32,
-            align_transport: bundle.seed.orientation == DecorOrientationMode::AlignTransport,
-            extent: bundle.extent,
-            decor_value: bundle.decor_id.map(decor_num_id),
-            rules: bundle.rules,
-        });
-    }
 }
 
 /// Seeded only by the placed object's position, its one stable identity, so
@@ -138,17 +87,6 @@ impl Rng {
     fn unit(&mut self) -> f64 {
         u32_to_unit(self.0.next_u32())
     }
-}
-
-#[derive(Clone, Copy)]
-pub struct Kind {
-    pub tag: u64,
-    pub density: f64,
-    pub variant_count: u32,
-    pub align_transport: bool,
-    pub extent: f64,
-    pub decor_value: Option<u32>,
-    pub rules: DecorRules,
 }
 
 pub struct DecorBuild<'s> {
@@ -212,8 +150,8 @@ pub fn draw(kind: &Kind, candidate: Candidate, cells: &[GroundCell], lines: &Dec
         return None;
     }
     let mut rng = Rng::new(candidate.seed);
-    let variant = ((rng.unit() * kind.variant_count as f64).floor() as u32).min(kind.variant_count - 1);
-    let rotation = if kind.align_transport {
+    let variant = ((rng.unit() * kind.variant_count() as f64).floor() as u32).min(kind.variant_count() - 1);
+    let rotation = if kind.align_transport() {
         let flip = rng.unit() < 0.5;
         transport_aligned_rotation(cells, cell_x, cell_y, flip)
     } else {
@@ -230,31 +168,31 @@ pub fn draw(kind: &Kind, candidate: Candidate, cells: &[GroundCell], lines: &Dec
 /// What the z16 scatter stands of `value` in the cell `at` lies in, with
 /// nothing written there. None where the page is not resident.
 pub fn scatters_at(value: u32, at: &Pvf3) -> Option<Draw> {
-    let kind = kinds().iter().find(|k| k.decor_value == Some(value))?;
+    let kind = KINDS.iter().find(|k| k.decor_value() == Some(value))?;
     let z16 = GROUND.cell_of(0, at);
     let page = Terrain::pyramid().paging().get(z16.page())?;
     let ground = Access::now().at(at, FINEST).exact()?;
     let [ix, iy, iz] = CELL.index_of(at);
-    let candidate = scatter_at(kind.tag, kind.density, [ix, iy])?;
+    let candidate = scatter_at(kind.seed.tag, kind.seed.density, [ix, iy])?;
     (iz == round(ground.top / CELL.side()) as i64).then(|| draw(kind, candidate, &page.ground.cells, &page.decks, z16.in_page()))?
 }
 
 impl<'s> DecorBuild<'s> {
     /// None where the heap refused scratch room, and the cell is not built.
     #[allow(clippy::too_many_arguments)]
-    pub fn build(scratch: &'s mut DecorScratch, kinds: &[Kind], ground: Option<&Ground>, placed: &[Placed], hide: Option<DecorHide>, store: &Store, step: u32, decor: bool) -> Option<DecorBuild<'s>> {
+    pub fn build(scratch: &'s mut DecorScratch, kinds: &[&Kind], ground: Option<&Ground>, placed: &[Placed], hide: Option<DecorHide>, store: &Store, step: u32, decor: bool) -> Option<DecorBuild<'s>> {
         scratch.clear();
         for kind in kinds {
-            if kind.variant_count == 0 {
+            if kind.variant_count() == 0 {
                 continue;
             }
             // Past what a block holds, the kinds after have none.
             let first = scratch.group_count;
-            if first + kind.variant_count as usize > DECOR_GROUPS {
+            if first + kind.variant_count() as usize > DECOR_GROUPS {
                 break;
             }
-            scratch.group_count += kind.variant_count as usize;
-            if !decor_shown(kind.extent, step) {
+            scratch.group_count += kind.variant_count() as usize;
+            if !decor_shown(kind.extent(), step) {
                 continue;
             }
             for column in placed {
@@ -268,7 +206,7 @@ impl<'s> DecorBuild<'s> {
     }
 
     fn placed(scratch: &mut DecorScratch, kind: &Kind, first: usize, column: &Placed, hide: Option<EntryAt>, store: &Store) -> Result<(), TryReserveError> {
-        let (Some(value), Some(e)) = (kind.decor_value, store.entries(column.col_idx)) else {
+        let (Some(value), Some(e)) = (kind.decor_value(), store.entries(column.col_idx)) else {
             return Ok(());
         };
         let (bands, poss, states) = (e.band, e.pos, e.state);
@@ -285,7 +223,7 @@ impl<'s> DecorBuild<'s> {
                 step: [x, y, z],
             };
             // Turned and varied by position, as the placing ghost predicted.
-            let (variant, rotation) = user_decor_pick(at.corner().i, kind.variant_count);
+            let (variant, rotation) = user_decor_pick(at.corner().i, kind.variant_count());
             let [lx, ly, lz] = at.local();
             let hidden = hide == Some(e.at(k));
             let h = size / 2.0;
@@ -317,7 +255,7 @@ impl<'s> DecorBuild<'s> {
         let min = [atom.index(ground.x0), atom.index(ground.y0)];
         let span = i64::from(CHUNK_CELLS) * per;
         let has_entries = ground.col_idx.is_some_and(|c| store.entries(c).is_some());
-        scatter(kind.tag, kind.density, ground.level, [min, [min[0] + span, min[1] + span]], &mut scratch.candidates)?;
+        scatter(kind.seed.tag, kind.seed.density, ground.level, [min, [min[0] + span, min[1] + span]], &mut scratch.candidates)?;
         for i in 0..scratch.candidates.len() {
             let candidate = scratch.candidates[i];
             let (dx, dy) = ((candidate.cell[0] - min[0]).div_euclid(per) as u32, (candidate.cell[1] - min[1]).div_euclid(per) as u32);

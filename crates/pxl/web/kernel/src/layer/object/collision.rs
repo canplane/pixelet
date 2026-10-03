@@ -4,7 +4,8 @@ use pxl_spec::bake::constant::CELL;
 use pxl_spec::space::hierarchy::share;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 
-use crate::layer::decor::build::{kinds, scatters_at};
+use crate::layer::decor::build::scatters_at;
+use crate::layer::decor::kind::KINDS;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::{cube_node, holds_entry, objects_at, EntryKind, OccupiedEntry};
 
@@ -32,5 +33,5 @@ fn decor_under(corner: &Pvf3) -> bool {
     let mut under = *corner;
     pvf3::add(&mut under, corner, &CELL.base_of([0, 0, -1]));
     let placed = objects_at(&under).iter().any(|o| matches!(o.kind, EntryKind::Decor { .. }));
-    placed || !holds_entry(&under) && kinds().iter().filter_map(|k| k.decor_value).any(|v| scatters_at(v, &under).is_some())
+    placed || !holds_entry(&under) && KINDS.iter().filter_map(|k| k.decor_value()).any(|v| scatters_at(v, &under).is_some())
 }

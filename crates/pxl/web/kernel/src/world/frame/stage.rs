@@ -20,7 +20,7 @@ use crate::kernel::kernel;
 use crate::layer::billboard::sheet::billboard_sheet;
 use crate::layer::character::companion::companion_skins;
 use crate::layer::character::preview::preview_rows;
-use crate::layer::decor::asset_store::decor_bundle_assets;
+use crate::layer::decor::asset_store::kind_assets;
 use crate::layer::environment::config::rim_cfg;
 use crate::sched::profiler::record::{DeviceSample, DrawCensus, GpuSample, CENSUS_LEN};
 use crate::shell::setting::store::{settings_store, AoMode};
@@ -66,9 +66,9 @@ pub fn stage_render() {
     let lists = kernel().sched.draw.take();
     let models = &kernel().sched.models;
     let mut decor = [(0u32, None, [0.0f32; 3]); GROUPS];
-    let variants = decor_bundle_assets().iter().flat_map(|entry| {
+    let variants = kind_assets().iter().flat_map(|entry| {
         (0..entry.models.len()).map(move |v| {
-            let extent = entry.bundle.variants.get(v).and_then(|a| a.model.ingested().extent).unwrap_or([0.0; 3]);
+            let extent = entry.kind.variants.get(v).and_then(|a| a.model.ingested().extent).unwrap_or([0.0; 3]);
             (entry.models[v], entry.skins.get(v).copied().flatten(), extent.map(|e| e as f32))
         })
     });

@@ -20,11 +20,11 @@ use xpute_runtime::mem::heap::{alloc, free};
 use crate::control::interaction::{holding, hover, ActiveTool};
 use crate::global::Global;
 use crate::kernel::with_world;
-use crate::layer::decor::asset_store::{decor_assets_for, decor_bundle_assets};
+use crate::layer::decor::asset_store::decor_assets_for;
 use crate::layer::decor::build::user_decor_pick;
 use crate::layer::decor::cell::set_scattered_hide;
 use crate::layer::decor::instance::NO_ENTRY;
-use crate::layer::decor::registry::{decor_bundle_for, DECOR_BUNDLES};
+use crate::layer::decor::kind::kind_for;
 use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::{clear_virtual_carve_preview, get_placed_object, restores_scattered, set_virtual_carve_preview, set_virtual_hide, EntryAt, EntryKind};
@@ -134,8 +134,8 @@ pub fn hover_cursor_step() {
         (_, Some(EntryKind::Decor { decor_id })) => Some(*decor_id),
         _ => None,
     };
-    let decor_bundle = decor_id.and_then(decor_bundle_for);
-    let decor_assets = decor_assets_for(decor_bundle, decor_bundle_assets());
+    let decor_kind = decor_id.and_then(kind_for);
+    let decor_assets = decor_kind.and_then(decor_assets_for);
 
     let decor_pick_i = match (active_tool, &hovered_object) {
         (ActiveTool::Decor, _) => hovered.map(|h| h.i),
@@ -148,10 +148,10 @@ pub fn hover_cursor_step() {
         (ActiveTool::Decor, Some(h)) => restores_scattered(h, DECOR_SIZE, ui.decor_id),
         _ => None,
     };
-    let decor_pick = match (decor_bundle, decor_pick_i, restored) {
+    let decor_pick = match (decor_kind, decor_pick_i, restored) {
         (Some(_), _, Some(d)) => Some((d.variant, d.rotation, d.scale)),
         (Some(b), Some(i), None) => {
-            let (variant, rotation) = user_decor_pick(i, b.variants.len() as u32);
+            let (variant, rotation) = user_decor_pick(i, b.variant_count());
             Some((variant, rotation, 1.0))
         }
         _ => None,
@@ -182,16 +182,13 @@ pub fn hover_cursor_step() {
             let x = ivec::to_real(ivec::X(h.i)) + fvec::to_real(fvec::X(h.f));
             let y = ivec::to_real(ivec::Y(h.i)) + fvec::to_real(fvec::Y(h.f));
             let z = ivec::to_real(ivec::Z(h.i)) + fvec::to_real(fvec::Z(h.f));
-            match (decor_bundle, decor_pick) {
-                (Some(bundle), Some((variant, rotation, scale))) if is_decor_ghost => {
-                    let before: u32 = DECOR_BUNDLES().iter().take_while(|b| !core::ptr::eq(*b, bundle)).map(|b| b.variants.len() as u32).sum();
-                    Ghost::Decor {
-                        at: [x + preview_size / 2.0, y + preview_size / 2.0, z],
-                        group: before + variant,
-                        rotation,
-                        scale,
-                    }
-                }
+            match (decor_kind, decor_pick) {
+                (Some(kind), Some((variant, rotation, scale))) if is_decor_ghost => Ghost::Decor {
+                    at: [x + preview_size / 2.0, y + preview_size / 2.0, z],
+                    group: kind.first_group() + variant,
+                    rotation,
+                    scale,
+                },
                 _ => Ghost::Box {
                     at: [x, y, z],
                     size: current_scale,

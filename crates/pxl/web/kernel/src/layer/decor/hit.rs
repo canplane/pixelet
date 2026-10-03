@@ -11,7 +11,7 @@ use pxl_spec::space::v3::{Aabb, V3};
 use xpute_runtime::mem::base::ptr_at;
 
 use crate::kernel::kernel;
-use crate::layer::decor::asset_store::decor_bundle_assets;
+use crate::layer::decor::asset_store::kind_assets;
 use crate::layer::decor::instance::{decor_groups, GroupLanes, NO_ENTRY};
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::EntryAt;
@@ -75,7 +75,7 @@ struct DecorHit {
 
 /// None while it loads.
 fn group_models() -> impl Iterator<Item = Option<u32>> {
-    decor_bundle_assets().iter().flat_map(|e| e.models.iter().copied())
+    kind_assets().iter().flat_map(|e| e.models.iter().copied())
 }
 
 /// The largest model's bounding radius at the largest decor size; only for

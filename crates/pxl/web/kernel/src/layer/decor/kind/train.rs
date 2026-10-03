@@ -8,7 +8,7 @@ use pxl_spec::bake::format::GroundChannelKey;
 use pxl_spec::cell::cube_types::Transport;
 
 use crate::layer::decor::build::DecorVariantAsset;
-use crate::layer::decor::kind::DecorKindDef;
+use crate::layer::decor::kind::Kind;
 use crate::layer::decor::scatter::{DecorKindSeed, DecorOrientationMode, DecorRules};
 
 const VARIANTS: [DecorVariantAsset; 4] = [
@@ -30,7 +30,7 @@ const VARIANTS: [DecorVariantAsset; 4] = [
     },
 ];
 
-pub const DEF: DecorKindDef = DecorKindDef {
+pub const DEF: Kind = Kind {
     seed: DecorKindSeed {
         tag: 0x7ba15eed0004dec0,
         // Very sparse: trains should read as occasional.

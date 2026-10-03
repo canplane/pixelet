@@ -22,9 +22,9 @@ use xpute_runtime::mem::heap::alloc;
 
 use crate::control::camera::controller::units_per_px_at;
 use crate::global::Global;
-use crate::layer::decor::asset_store::decor_bundle_assets;
-use crate::layer::decor::build::{decor_gone_px, decor_sprite_px, variant_extent, DecorBuild, DecorHide, Ground, Kind, Placed};
+use crate::layer::decor::build::{decor_gone_px, decor_sprite_px, variant_extent, DecorBuild, DecorHide, Ground, Placed};
 use crate::layer::decor::instance::{decor_groups, DecorScratch, GroupLanes};
+use crate::layer::decor::kind::{Kind, KINDS};
 use crate::layer::decor::scatter::SCALE_JITTER;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::{object_col_revision, Store};
@@ -163,8 +163,8 @@ pub const BLOCKS_MAX: usize = 2 * FRONTIER_MAX;
 const BUILDS_PER_FRAME: u32 = 4;
 
 /// What a cell is admitted by before its block says what it holds.
-fn largest_possible(kinds: &[Kind]) -> f64 {
-    let extent = kinds.iter().map(|k| k.extent).fold(0.0, f64::max);
+fn largest_possible(kinds: &[&Kind]) -> f64 {
+    let extent = kinds.iter().map(|k| k.extent()).fold(0.0, f64::max);
     extent * (1.0f64 + SCALE_JITTER).max(DECOR_SIZE)
 }
 
@@ -177,7 +177,7 @@ fn nearest(cell: DecorCell, eye: V3, ground: f64) -> f64 {
 
 /// Kept within the view's reach, in the frustum, and where its largest
 /// possible instance covers the sprite's floor.
-fn solve(kinds: &[Kind], stack: &mut Vec<DecorCell>, out: &mut Vec<DecorCell>) {
+fn solve(kinds: &[&Kind], stack: &mut Vec<DecorCell>, out: &mut Vec<DecorCell>) {
     out.clear();
     stack.clear();
     // The view the pyramids observe: its eye, reach, frustum and ground.
@@ -242,7 +242,7 @@ fn sources_of(cell: DecorCell, store: &Store, cols: &mut Vec<IVec>, hide: Option
     })
 }
 
-fn build(c: &mut Cells, cell: DecorCell, kinds: &[Kind], store: &Store, draw: &mut DrawList, sources: Sources) -> Option<Block> {
+fn build(c: &mut Cells, cell: DecorCell, kinds: &[&Kind], store: &Store, draw: &mut DrawList, sources: Sources) -> Option<Block> {
     let pages = Terrain::pyramid();
     let page = pages.paging().get(cell.page())?;
     let level = cell.level;
@@ -320,7 +320,7 @@ fn release(block: Block, draw: &mut DrawList) {
 /// Moves what is drawn toward the frontier one whole replacement at a time:
 /// a refining cell stays drawn until every wanted child is ready, coarsening
 /// cells until the parent is ready. No region is ever left empty or drawn twice.
-pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<DecorHide>, frame_eye: V3) {
+pub fn step(kinds: &[&Kind], store: &Store, draw: &mut DrawList, hide: Option<DecorHide>, frame_eye: V3) {
     let c = cells();
     let mut frontier = core::mem::take(&mut c.frontier);
     solve(kinds, &mut c.stack, &mut frontier);
@@ -422,7 +422,7 @@ fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
         // SAFETY: the cell's block, `bytes` long, its own to write past `index`.
         let words: &mut [u32] = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block.at as usize), block.bytes as usize / 4) };
         let (lanes_of, list) = words.split_at_mut(block.index as usize / 4);
-        let mut extents = decor_bundle_assets().iter().flat_map(|e| e.bundle.variants.iter().map(variant_extent));
+        let mut extents = KINDS.iter().flat_map(|k| k.variants.iter().map(variant_extent));
         let (mut at, mut changed) = (0usize, false);
         for (group, (offset, count)) in decor_groups(lanes_of).enumerate() {
             let extent = extents.next().unwrap_or(0.0);
