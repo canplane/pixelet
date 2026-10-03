@@ -19,13 +19,14 @@ function measure(): WindowSize {
   return { width: root.clientWidth, height: root.clientHeight };
 }
 
-// One listener: one each told only the first.
-globalThis.addEventListener("resize", () => {
+// Observed after layout: a page zoom's `resize` came before the root's new
+// size, and a sheet stayed centered on the old width.
+new ResizeObserver(() => {
   const next = measure();
   if (next.width === size.width && next.height === size.height) return;
   size = next;
   for (const l of sizeListeners) l();
-});
+}).observe(document.documentElement);
 
 /**
  * The layout viewport, which a keyboard or pinch leaves alone. RN-web's
