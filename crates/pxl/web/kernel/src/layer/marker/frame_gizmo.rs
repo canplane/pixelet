@@ -33,9 +33,6 @@ const DASHES: f64 = 256.0;
 /// Half the cross a point is drawn as.
 const POINT_HALF: f64 = 0.15;
 const RING_RADIUS: f64 = 4.0;
-/// The view's rings inside the world's, which they would lie on wherever an
-/// axis of one meets an axis of the other.
-const VIEW_RING_RADIUS: f64 = 3.0;
 const RING_SEGMENTS: u32 = 64;
 
 /// Segments as pairs of vertices: position, then color.
@@ -109,8 +106,8 @@ impl Sketch {
         }
     }
 
-    /// In the frame `to_local` maps into the root frame: a ring level through
-    /// `vertex`, one upright through it, and the point itself.
+    /// In the frame `to_local` maps into the root frame: a level ring through
+    /// `vertex` and an upright one through it.
     fn gyro(&mut self, to_local: &dyn Fn(V3) -> V3, vertex: V3, color: V3) {
         let horiz = (vertex[0] * vertex[0] + vertex[1] * vertex[1]).sqrt();
         let dir = if horiz > 1e-9 { [vertex[0] / horiz, vertex[1] / horiz, 0.0] } else { [1.0, 0.0, 0.0] };
@@ -122,11 +119,12 @@ impl Sketch {
         };
         self.ring(center, radius, axis([1.0, 0.0, 0.0]), axis([0.0, 1.0, 0.0]), color);
         self.ring(center, radius, axis(dir), axis([0.0, 0.0, 1.0]), color);
-        self.point(to_local(vertex), color);
     }
 }
 
-/// About the map center: the view's frame turns with the azimuth, the world's never.
+/// About the map center: the view's frame turns with the azimuth, its upright
+/// ring through the right so it faces the screen; the world's never turns, its
+/// upright ring through north.
 fn sketch_frames(s: &mut Sketch) {
     if crate::control::camera::controller::dist() == 0.0 {
         return;
@@ -134,10 +132,12 @@ fn sketch_frames(s: &mut Sketch) {
     let Some(center) = crate::control::camera::controller::center_local() else { return };
     let (sin, cos) = libm::sincos(-crate::control::camera::controller::azimuth());
     let view_frame = move |p: V3| [center[0] + p[0] * cos - p[1] * sin, center[1] + p[0] * sin + p[1] * cos, center[2] + p[2]];
-    s.gyro(&view_frame, [0.0, VIEW_RING_RADIUS, 0.0], FORWARD);
-    s.point(view_frame([0.0, 0.0, VIEW_RING_RADIUS]), UP);
+    s.gyro(&view_frame, [RING_RADIUS, 0.0, 0.0], FORWARD);
+    s.point(view_frame([0.0, RING_RADIUS, 0.0]), FORWARD);
+    s.point(view_frame([0.0, 0.0, RING_RADIUS]), UP);
     let world_frame = move |p: V3| [center[0] + p[0], center[1] + p[1], center[2] + p[2]];
     s.gyro(&world_frame, [0.0, RING_RADIUS, 0.0], NORTH);
+    s.point(world_frame([0.0, RING_RADIUS, 0.0]), NORTH);
 }
 
 fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
