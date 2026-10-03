@@ -256,11 +256,9 @@
   },
   "map": {
     "dock": {
-      "palette_tooltip": "Palette",
       "pointer": "Pointer",
       "eraser": "Eraser",
       "message_placeholder": "Type a message…",
-      "message_tooltip": "Message",
       "send": "Send",
       "drawer_tooltip": "Open Drawer",
       "object_size": "Size {{n}}"

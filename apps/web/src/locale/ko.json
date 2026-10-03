@@ -256,11 +256,9 @@
   },
   "map": {
     "dock": {
-      "palette_tooltip": "팔레트",
       "pointer": "포인터",
       "eraser": "지우개",
       "message_placeholder": "메시지 입력…",
-      "message_tooltip": "메시지",
       "send": "전송",
       "drawer_tooltip": "서랍 열기",
       "object_size": "크기 {{n}}"
