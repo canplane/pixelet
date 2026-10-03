@@ -5,7 +5,6 @@
 //! stored default would be a decision nobody made, and changing it in source
 //! would then reach only people with empty storage.
 
-use pxl_spec::bake::ground::{channel_bit, ChannelMask, GroundChannelKey};
 
 use xpute_core::codec::json::{read_json, JsonKind};
 
@@ -22,15 +21,6 @@ use crate::world::chunk::source::chunk_sources_changed;
 /// in force. Loading drops it and `set_setting` refuses it from the console.
 pub fn is_offered(key: SettingKey) -> bool {
     !key.dev() || (cfg!(feature = "dev") && development())
-}
-
-/// `structures` off hides the structure channel.
-pub fn hidden_ground(structures: bool) -> ChannelMask {
-    if structures {
-        0
-    } else {
-        channel_bit(GroundChannelKey::STRUCTURE)
-    }
 }
 
 impl Settings {

@@ -21,7 +21,6 @@ use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
 use crate::layer::object::geometry::{anchor_center, object_aabb};
 use crate::layer::object::size::{DECOR_SIZE, DEFAULT_OBJECT_SIZE};
 use crate::layer::object::store::{get_placed_object, place, place_air, place_decor, remove, EntryAt, OccupiedEntry};
-use crate::shell::setting::store::settings_store;
 use crate::world::access::Hit;
 use crate::world::frame::coord::local_world_origin;
 use crate::world::frame::view::view_ray_local;
@@ -204,7 +203,7 @@ pub(crate) fn tap(ndc_x: f64, ndc_y: f64) {
                     place_decor(&hovered, DECOR_SIZE, ui.decor_id);
                 }
             } else if !is_placement_blocked(PlacementTool::Object, &hovered, object_size) {
-                place(&hovered, object_size, ui.object_cube, settings_store().structures);
+                place(&hovered, object_size, ui.object_cube);
             }
         }
     }

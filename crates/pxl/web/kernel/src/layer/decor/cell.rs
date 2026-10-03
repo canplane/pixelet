@@ -28,7 +28,7 @@ use crate::layer::decor::kind::{Kind, KINDS};
 use crate::layer::decor::scatter::SCALE_JITTER;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::{object_col_revision, Store};
-use crate::shell::setting::store::{hidden_ground, settings_store};
+use crate::shell::setting::store::settings_store;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::build::Builder;
 use crate::world::observation::{eye, observation};
@@ -260,7 +260,7 @@ fn build(c: &mut Cells, cell: DecorCell, kinds: &[&Kind], store: &Store, draw: &
             },
             beside: [None; 8],
         };
-        c.sample.read(&around, [tx0 as i64, ty0 as i64], hidden_ground(settings_store().structures)).ok()?;
+        c.sample.read(&around, [tx0 as i64, ty0 as i64]).ok()?;
     }
     c.placed.clear();
     c.placed.try_reserve(c.cols.len()).ok()?;

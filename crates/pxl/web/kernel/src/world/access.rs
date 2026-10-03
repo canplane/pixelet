@@ -559,7 +559,7 @@ impl<'a> Access<'a> {
         let frame = Some(page);
         let cell_per_m = u_per_m(page.corner[1]) / U_PER_CELL;
         let [tx, ty] = at.map(|v| v as u32);
-        let shown = shown_ground(|k| u32::from(channel_of(body.ground.cells[GROUND.cell_index(tx, ty) as usize], k)), 0);
+        let shown = shown_ground(|k| u32::from(channel_of(body.ground.cells[GROUND.cell_index(tx, ty) as usize], k)));
         for o in body.decks.over_point(frame, at) {
             match o.occupies(ground, cell_per_m) {
                 Occupies::Grade => {}

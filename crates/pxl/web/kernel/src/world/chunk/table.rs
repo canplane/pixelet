@@ -144,7 +144,6 @@ struct Slot {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct Sources {
-    structures: bool,
     /// A tier above a leaf bakes one color with no texture layer, so the setting
     /// is part of what the tier was built from.
     textured: bool,
@@ -163,7 +162,6 @@ impl Sources {
         let (level, base) = (k.level(), k.corner());
         let drawn = |at: &EntryAt| tiers_draw(level, base, at.col_idx) && draws_band(k, at.band_idx);
         Sources {
-            structures: settings.structures,
             textured: settings.textures,
             objects_revision: objects_revision_of(k),
             hide: edits.hide.filter(|at| edits.hide_in.0 && drawn(at)),
@@ -533,7 +531,7 @@ impl Scheduler {
         let edits = render_edits();
         let sources = Sources::of(k, edits);
         self.builder.add(id, k);
-        self.builder.source(world, id, sources.structures);
+        self.builder.source(world, id);
         let mut slot = Slot {
             id,
             chunk: k,
@@ -604,8 +602,8 @@ impl Scheduler {
     /// generation is whole, and the rebuild goes into the old tier's slot.
     fn source(&mut self, world: &mut World, i: usize) {
         self.view_dirty = true;
-        let (id, structures) = (self.slots[i].id, self.slots[i].sources.structures);
-        self.builder.source(world, id, structures);
+        let id = self.slots[i].id;
+        self.builder.source(world, id);
         let s = &mut self.slots[i];
         if !s.layout_ready {
             s.unmeasured();

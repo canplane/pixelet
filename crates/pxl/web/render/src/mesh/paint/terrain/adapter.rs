@@ -12,7 +12,7 @@ use pxl_spec::space::adapter::epsg3857::u_per_m;
 use pxl_spec::bake::deck::{Decks, Occupies, Over};
 use pxl_spec::procedural::{pier_stands, Frame};
 use pxl_spec::bake::format::{ch_index, GroundChannelKey, GROUND_CH_KEYS};
-use pxl_spec::bake::ground::{channel_bit, shown_ground, ChannelMask, ShownGround, BASE};
+use pxl_spec::bake::ground::{shown_ground, ShownGround, BASE};
 use pxl_spec::bake::pack::{unpack, GroundCell};
 use pxl_spec::cell::cube::cube_types;
 use pxl_spec::space::hierarchy::{ancestor_of, offset_in};
@@ -105,8 +105,7 @@ impl Materials {
     }
 }
 
-fn collect_decks(over: &mut Vec<(usize, usize, Over)>, own: Option<&PageSource>, first: [i64; 2]) -> Result<(), Refused> {
-    let Some(s) = own else { return Ok(()) };
+fn collect_decks(over: &mut Vec<(usize, usize, Over)>, s: &PageSource, first: [i64; 2]) -> Result<(), Refused> {
     let n = f64::from(s.n);
     let origin = [0, 1].map(|k| (s.origin[k] + first[k]) as f64 / n);
     let side = CHUNK_CELLS as i64;
@@ -212,9 +211,8 @@ impl Default for ChunkSample {
 impl ChunkSample {
     /// Each cell takes the material of the source cell it lies in and the source
     /// surface's height at its own center, so a coarser page invents nothing.
-    pub fn read(&mut self, around: &Around, first: [i64; 2], hidden: ChannelMask) -> Result<(), Refused> {
+    pub fn read(&mut self, around: &Around, first: [i64; 2]) -> Result<(), Refused> {
         let tables = &*MATERIALS;
-        let skip = GROUND_CH_KEYS.map(|k| hidden & channel_bit(k) != 0);
         let mut min_ele = i32::MAX;
         let last = PAGE_CELLS as i32 - 1;
         for py in 0..COL_SPAN {
@@ -242,11 +240,11 @@ impl ChunkSample {
                 } else {
                     [VOID; 4]
                 };
-                self.shown[i] = shown_ground(|k| u32::from(types[ch_index(k)]), 0);
+                self.shown[i] = shown_ground(|k| u32::from(types[ch_index(k)]));
 
                 let (mut material, mut layer) = (pack(tables.base_class, tables.base_rgb), tables.base_layer);
                 for (ch, &t) in types.iter().enumerate() {
-                    if skip[ch] || t == VOID {
+                    if t == VOID {
                         continue;
                     }
                     if let Some(m) = tables.of(GROUND_CH_KEYS[ch], t) {
@@ -267,17 +265,16 @@ impl ChunkSample {
                 }
             }
         }
-        let shown = !skip[ch_index(GroundChannelKey::TRANSPORT)];
-        self.read_decks(if shown { Some(&around.own) } else { None }, first)?;
+        self.read_decks(&around.own, first)?;
         let bored = self.bore.iter().filter(|b| b.air[0] < b.air[1]).map(|b| b.air[0] - 1).min().unwrap_or(i32::MAX);
         self.floor = (min_ele.min(bored) - TERRAIN_Z_MARGIN).div_euclid(BAND_CELLS as i32) * BAND_CELLS as i32;
         Ok(())
     }
 
-    fn read_decks(&mut self, own: Option<&PageSource>, first: [i64; 2]) -> Result<(), Refused> {
+    fn read_decks(&mut self, own: &PageSource, first: [i64; 2]) -> Result<(), Refused> {
         let mut over = core::mem::take(&mut self.over);
         over.clear();
-        let cell_per_m = own.map_or(0.0, |s| u_per_m(s.frame.corner[1]) / U_PER_CELL);
+        let cell_per_m = u_per_m(own.frame.corner[1]) / U_PER_CELL;
         let built = collect_decks(&mut over, own, first).and_then(|()| self.spans_of(&mut over, cell_per_m));
         self.over = over;
         built

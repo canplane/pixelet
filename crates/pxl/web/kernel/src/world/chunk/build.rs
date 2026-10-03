@@ -23,7 +23,7 @@ use xpute_runtime::mem::heap::{alloc, free, Block};
 
 use crate::layer::object::store::{object_col_revision, Store};
 use crate::mem::fixed::{at, Range};
-use crate::shell::setting::store::{hidden_ground, settings_store};
+use crate::shell::setting::store::settings_store;
 use pxl_spec::bake::constant::BAND_CELLS;
 
 use crate::world::chunk::mesh_slot::{capacity, COARSE_BOXES, FINE_BOXES, OCCUPANCY};
@@ -176,7 +176,6 @@ impl Read {
 #[derive(Clone, Copy)]
 struct Chunk {
     at: PyramidChunk,
-    structures: bool,
     generation: u32,
     want: [Option<Cube>; 2],
     /// Heap release count at the last refusal: until something is freed the same
@@ -373,7 +372,6 @@ impl Builder {
             id,
             Chunk {
                 at,
-                structures: false,
                 generation: 0,
                 want: [None; 2],
                 refused: None,
@@ -387,10 +385,9 @@ impl Builder {
         self.chunks.remove(&id);
     }
 
-    pub fn source(&mut self, world: &mut World, id: u32, structures: bool) {
+    pub fn source(&mut self, world: &mut World, id: u32) {
         self.drop_work(world, id);
         if let Some(c) = self.chunks.get_mut(&id) {
-            c.structures = structures;
             c.generation = c.generation.wrapping_add(1);
         }
     }
@@ -596,7 +593,7 @@ impl Builder {
             if self.scan_job.is_some() || self.run_set_for(id).is_none() {
                 return Progress::Blocked;
             }
-            let Some(volume) = self.paint_terrain(world, id, read) else {
+            let Some(volume) = self.paint_terrain(world, read) else {
                 self.refuse(world, id);
                 return Progress::Blocked;
             };
@@ -678,9 +675,8 @@ impl Builder {
         }
     }
 
-    fn paint_terrain(&mut self, world: &mut World, id: u32, read: Read) -> Option<u32> {
-        let show = self.chunks[&id].structures;
-        self.sample.read(&read.around(), read.first, hidden_ground(show)).ok()?;
+    fn paint_terrain(&mut self, world: &mut World, read: Read) -> Option<u32> {
+        self.sample.read(&read.around(), read.first).ok()?;
         let volume = world.volumes.open();
         if !self.sample.paint(world.volumes, volume) {
             world.volumes.release(volume);
@@ -761,8 +757,7 @@ impl Builder {
         if self.run_set_for(id).is_none() {
             return Progress::Blocked;
         }
-        let show = self.chunks[&id].structures;
-        if self.sample.read(&read.around(), read.first, hidden_ground(show)).is_err() {
+        if self.sample.read(&read.around(), read.first).is_err() {
             self.refuse(world, id);
             return Progress::Blocked;
         }
@@ -787,8 +782,8 @@ impl Builder {
             return Progress::Blocked;
         }
         let c = &self.chunks[&id];
-        let (show, level, base) = (c.structures, c.level(), c.base());
-        if self.sample.read(&read.around(), read.first, hidden_ground(show)).is_err() {
+        let (level, base) = (c.level(), c.base());
+        if self.sample.read(&read.around(), read.first).is_err() {
             self.refuse(world, id);
             return Progress::Blocked;
         }

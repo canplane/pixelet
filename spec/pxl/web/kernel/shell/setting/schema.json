@@ -108,14 +108,6 @@
       "cost": "low",
       "sources_chunks": true
     },
-    "structures": {
-      "$doc": ["Whether the STRUCTURE ground channel is painted. The bake writes it", "either way (pxl-geo-bake terrain/pipeline/overture/policy.rs); this is a render decision."],
-      "kind": "toggle",
-      "default": true,
-      "section": "display",
-      "sources_chunks": true,
-      "dev": true
-    },
     "decor": {
       "$doc": [
         "Procedurally scattered decor only; what the player placed stays.",

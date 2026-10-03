@@ -22,21 +22,10 @@ pub const BASE: ShownGround = ShownGround {
     type_id: cube_types::base::TYPE as u32,
 };
 
-/// A bit per channel, by its identity.
-pub type ChannelMask = u8;
-
-pub const fn channel_bit(key: GroundChannelKey) -> ChannelMask {
-    1 << key as u8
-}
-
-/// `read` gives a channel's raw type id (0 = unpainted). A channel in `hidden`
-/// is skipped, matching what the paint shows with it hidden.
-pub fn shown_ground(read: impl Fn(GroundChannelKey) -> u32, hidden: ChannelMask) -> ShownGround {
+/// `read` gives a channel's raw type id (0 = unpainted).
+pub fn shown_ground(read: impl Fn(GroundChannelKey) -> u32) -> ShownGround {
     let mut shown = BASE;
     for channel in GROUND_CH_KEYS {
-        if hidden & channel_bit(channel) != 0 {
-            continue;
-        }
         let type_id = read(channel);
         if type_id > 0 {
             shown = ShownGround { channel, type_id };
@@ -81,5 +70,5 @@ pub const SHIFT_RANGE: [i16; 2] = {
 
 /// `shift` with no channel hidden: the height every reader takes.
 pub fn cell_shift(cell: GroundCell) -> i16 {
-    shift(shown_ground(|k| channel_of(cell, k) as u32, 0))
+    shift(shown_ground(|k| channel_of(cell, k) as u32))
 }
