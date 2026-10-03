@@ -76,19 +76,16 @@ impl Bounds for Known {
                 known = false;
                 return;
             };
-            let mut hold = |(lo, hi): (f64, f64)| {
-                let b = Aabb {
+            let mut hold = |b: Aabb| bound = Some(bound.map_or(b, |a| a.join(b)));
+            if let Some((lo, hi)) = cut(n.ground) {
+                hold(Aabb {
                     min: [square.min[0], square.min[1], lo],
                     max: [square.max[0], square.max[1], hi],
-                };
-                bound = Some(bound.map_or(b, |a| a.join(b)));
-            };
-            if let Some(ground) = cut(n.ground) {
-                hold(ground);
+                });
                 rise = rise.max(n.slope * cell);
             }
             if let Some(objects) = kernel().objects.bound_in(&square) {
-                bound = Some(bound.map_or(objects, |a| a.join(objects)));
+                hold(objects);
                 rise = rise.max(objects.max[2] - objects.min[2]);
             }
         });

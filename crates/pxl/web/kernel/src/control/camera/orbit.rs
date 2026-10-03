@@ -23,8 +23,8 @@ use crate::control::camera::store::{camera_store, Intent, IntentPatch};
 use crate::control::navigation::walk::target;
 use crate::global::Global;
 use crate::shell::setting::store::{settings_store, CameraCollisionMode};
-use crate::world::access::support_revision;
 use crate::world::frame::view::{view, view_compose};
+use crate::world::observation::heights_revision;
 use terrain_gate::{allowed_pan, allowed_view, climb_polar, ViewTriple};
 
 pub struct OrbitState {
@@ -61,13 +61,13 @@ const CLIMB_RISE_DAMP: f64 = 20.0;
 const CLIMB_RELAX_DAMP: f64 = 5.0;
 
 /// The climb samples terrain twice and was asked every ticked frame at rest;
-/// it changes only with the view, the map center or `support_revision`.
+/// it changes only with the view, the map center or `heights_revision`.
 struct ClimbMemo {
     dist: f64,
     polar: f64,
     azimuth: f64,
     center: Option<Pvf3>,
-    revision: [u32; 2],
+    revision: (u32, u32),
     polar_out: f64,
 }
 
@@ -79,11 +79,11 @@ fn climb_polar_memo(dist: f64, polar: f64, azimuth: f64) -> f64 {
         polar: f64::NAN,
         azimuth: f64::NAN,
         center: None,
-        revision: [u32::MAX; 2],
+        revision: (u32::MAX, u32::MAX),
         polar_out: f64::NAN,
     });
     let center = map_center();
-    let revision = support_revision();
+    let revision = heights_revision();
     if dist == memo.dist && polar == memo.polar && azimuth == memo.azimuth && center == memo.center && revision == memo.revision {
         return memo.polar_out;
     }

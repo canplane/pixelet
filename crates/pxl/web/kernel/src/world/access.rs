@@ -32,7 +32,7 @@ use pxl_spec::space::xy::TO_XY;
 
 use crate::io::demand::Category;
 use crate::kernel::kernel;
-use crate::layer::object::store::{objects_revision, EntryAt, EntryCursor, Store};
+use crate::layer::object::store::{EntryAt, EntryCursor, Store};
 use crate::param::STEP_CELLS;
 use crate::world::paging::Paging;
 use crate::world::pyramid::{Layer as _, Pyramid};
@@ -208,10 +208,6 @@ struct Region {
     page: LevelPage,
     /// Index bounds and whether read from the page asked; none if nothing is resident.
     terrain: Option<((f64, f64), bool)>,
-}
-
-pub fn support_revision() -> [u32; 2] {
-    [Terrain::pyramid().paging().revision(), objects_revision()]
 }
 
 /// Folds sub-cell fill to the cell by majority, a level at a time, with the
