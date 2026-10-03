@@ -71,12 +71,6 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
 
   return (
     <>
-      <Row
-        k={rec.recording ? "REC" : "stopped"}
-        v={`${(rec.elapsed_ms / 1000).toFixed(1)}s ${rec.frames}f/${rec.tasks}t${rec.truncated ? " TRUNC" : ""}`}
-        warn={rec.recording || rec.truncated}
-      />
-
       <Head>view</Head>
       <Row k="dist z16 cells" v={n1(v.dist)} />
       <Row k="polar/azimuth °" v={`${n1(deg(v.polar))} / ${n1(deg(v.azimuth))}`} />
@@ -87,6 +81,13 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
       <Row k="hover lat/lon °" v={geo(v.hover_lat, v.hover_lon)} />
       <Row k="hover alt m" v={or(v.hover_alt)} />
       <Row k="chunk/tier/page level" v={`${lv(v.chunk_level)} / ${lv(v.tier_level)} / ${lv(v.read_from)}`} warn={v.read_from > v.chunk_level} />
+
+      <Head>recording</Head>
+      <Row
+        k={rec.recording ? "REC" : "stopped"}
+        v={`${(rec.elapsed_ms / 1000).toFixed(1)}s ${rec.frames}f/${rec.tasks}t${rec.truncated ? " TRUNC" : ""}`}
+        warn={rec.recording || rec.truncated}
+      />
 
       {f === null && <Note>no frames sampled yet</Note>}
       {f !== null && (
