@@ -14,18 +14,18 @@ use crate::allocations;
 use crate::world::fixture::{self, eye, World};
 use crate::world::pyramid::domain::Domain;
 
-/// Objects go finer than the ground's cube only under z16's reach.
+/// Objects go finer than the ground's scale only under z16's reach.
 #[test]
 fn objects_draw_the_grounds_cube_and_go_finer_only_under_z16() {
     let z16 = GROUND.scale(0);
     for shamt in -6..=8 {
-        let cube = Scale::of(shamt);
-        let (ground, objects) = (drawn_cube(cube, 0, false, false), drawn_cube(cube, 0, false, true));
-        if cube >= z16 {
-            assert_eq!(objects, ground, "{cube:?}");
+        let scale = Scale::of(shamt);
+        let (ground, objects) = (drawn_scale(scale, 0, false, false), drawn_scale(scale, 0, false, true));
+        if scale >= z16 {
+            assert_eq!(objects, ground, "{scale:?}");
         } else {
-            assert_eq!(ground, z16, "{cube:?}");
-            assert_eq!(objects, cube.max(OBJECT_FINEST), "{cube:?}");
+            assert_eq!(ground, z16, "{scale:?}");
+            assert_eq!(objects, scale.max(OBJECT_FINEST), "{scale:?}");
         }
     }
 }
@@ -358,7 +358,7 @@ fn the_count_is_never_less_at_a_finer_quality_nor_less_than_the_cut() {
             }
             let cut = d.cut_at(k);
             let (tau, pieces) = (cut.tau(), cut.pieces().to_vec());
-            let of = |pool: Pool| pieces.iter().filter(|&&c| pool_of(c, cube_of(c, d.outermost(c), d.order_of(c).near, tau, false)) == pool).count() as u32;
+            let of = |pool: Pool| pieces.iter().filter(|&&c| pool_of(c, scale_of(c, d.outermost(c), d.order_of(c).near, tau, false)) == pool).count() as u32;
             assert!(
                 n[k][Pool::Coarse as usize] + n[k][Pool::Cover as usize] >= pieces.len() as u32,
                 "height {height}, {tau:?}: coarse under the cut"

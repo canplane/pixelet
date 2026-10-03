@@ -241,7 +241,7 @@ impl Domain {
             return;
         }
         let (bound, error) = match (self.contents(c), parent) {
-            // A cover piece is drawn one cell per chunk (`drawn_cube`) and measured
+            // A cover piece is drawn one cell per chunk (`drawn_scale`) and measured
             // as drawn: half that cell across, and the box's full height.
             (Contents::Holds { bound, .. }, _) if self.outermost(c) => {
                 let half = chunk_span_of(c.level()) / 2.0;

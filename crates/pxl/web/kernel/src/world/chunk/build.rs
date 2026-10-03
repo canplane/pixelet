@@ -35,20 +35,16 @@ use pxl_spec::space::hierarchy::Scale;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
-/// The cube a chunk is drawn in. Terrain averages to it where it is coarser
-/// than the level's cell; objects fold to it down to their finest tier.
-pub type Cube = Scale;
-
-/// How many of a level's cells a cube spans along an axis (the mesher's step).
-pub fn mesh_step(cube: Cube, level: u32) -> u32 {
+/// How many of a level's cells a scale spans along an axis (the mesher's step).
+pub fn mesh_step(scale: Scale, level: u32) -> u32 {
     let own = GROUND.scale(level);
-    own.count_in(cube.max(own))
+    own.count_in(scale.max(own))
 }
 
-/// Objects fold to the cube, clamped between their finest tier and a cell;
+/// Objects fold to the scale, clamped between their finest tier and a cell;
 /// past a cell the mesher averages them with the ground.
-pub fn object_fold(cube: Cube) -> Scale {
-    cube.clamp(OBJECT_FINEST, CELL)
+pub fn object_fold(scale: Scale) -> Scale {
+    scale.clamp(OBJECT_FINEST, CELL)
 }
 
 // A chunk's runs live in a heap block exactly as large as its column needs,
@@ -72,14 +68,14 @@ pub enum BuildEvent {
     Reserve {
         id: u32,
         generation: u32,
-        cube: Cube,
+        scale: Scale,
         boxes: u32,
     },
     /// One slot's worth of boxes (less for the last) at `at` in `.fixed.bake`.
     Part {
         id: u32,
         generation: u32,
-        cube: Cube,
+        scale: Scale,
         at: u32,
         first: u32,
         box_cnt: u32,
@@ -88,13 +84,13 @@ pub enum BuildEvent {
     Tier {
         id: u32,
         generation: u32,
-        cube: Cube,
+        scale: Scale,
         box_cnt: u32,
         heights: Heights,
     },
 }
 
-/// A column split across cube boundaries is several chunks; its runs are
+/// A column split across scale boundaries is several chunks; its runs are
 /// made once and each chunk bakes its cut of them.
 struct RunHold {
     column: (Scale, [i64; 2]),
@@ -111,7 +107,7 @@ impl Drop for RunHold {
     }
 }
 
-/// `fold`: the scale objects were folded to, if any; only cubes that fold to
+/// `fold`: the scale objects were folded to, if any; only scales that fold to
 /// it may bake from these runs.
 #[derive(Clone, Copy)]
 struct Runs {
@@ -178,7 +174,7 @@ impl Read {
 struct Chunk {
     at: PyramidChunk,
     generation: u32,
-    want: [Option<Cube>; 2],
+    want: [Option<Scale>; 2],
     /// Heap release count at the last refusal: until something is freed the same
     /// request would fail, so the chunk is skipped.
     refused: Option<u32>,
@@ -210,11 +206,11 @@ impl Chunk {
         })
     }
 
-    fn wants(&self, cube: Cube) -> bool {
-        self.want.contains(&Some(cube))
+    fn wants(&self, scale: Scale) -> bool {
+        self.want.contains(&Some(scale))
     }
 
-    fn wanted(&self) -> impl Iterator<Item = Cube> + '_ {
+    fn wanted(&self) -> impl Iterator<Item = Scale> + '_ {
         self.want.iter().copied().flatten()
     }
 }
@@ -243,7 +239,7 @@ const PAINT_VOXELS: usize = (BAND_CELLS * BAND_CELLS) as usize;
 
 struct BakeJob {
     id: u32,
-    cube: Cube,
+    scale: Scale,
     generation: u32,
     mesh: Option<Block>,
     handed: u32,
@@ -317,7 +313,7 @@ pub struct Builder {
     claimed: Claims,
     folded: HashMap<[i64; 3], u32>,
     stands: Vec<(u32, Stands)>,
-    /// A z16 chunk's objects folded to its cube, for cubes coarser than an object's finest tier.
+    /// A z16 chunk's objects folded to its scale, for scales coarser than an object's finest tier.
     fold_band: Vec<BandZ>,
     fold_pos: Vec<u32>,
     fold_state: Vec<u32>,
@@ -389,15 +385,15 @@ impl Builder {
         }
     }
 
-    pub fn baking(&self) -> Option<(u32, Cube, u32)> {
-        self.bake_job.as_ref().map(|j| (j.id, j.cube, j.generation))
+    pub fn baking(&self) -> Option<(u32, Scale, u32)> {
+        self.bake_job.as_ref().map(|j| (j.id, j.scale, j.generation))
     }
 
     /// A bake of a tier no longer wanted gives its slot back now.
-    pub fn want(&mut self, world: &mut World, id: u32, want: [Option<Cube>; 2]) {
+    pub fn want(&mut self, world: &mut World, id: u32, want: [Option<Scale>; 2]) {
         let Some(c) = self.chunks.get_mut(&id) else { return };
         c.want = want;
-        let stale = matches!(&self.bake_job, Some(j) if j.id == id && !c.wants(j.cube));
+        let stale = matches!(&self.bake_job, Some(j) if j.id == id && !c.wants(j.scale));
         if stale {
             self.abort_bake();
         }
@@ -487,9 +483,9 @@ impl Builder {
         }
     }
 
-    fn unwant(&mut self, id: u32, cube: Cube) {
+    fn unwant(&mut self, id: u32, scale: Scale) {
         let Some(c) = self.chunks.get_mut(&id) else { return };
-        for w in c.want.iter_mut().filter(|w| **w == Some(cube)) {
+        for w in c.want.iter_mut().filter(|w| **w == Some(scale)) {
             *w = None;
         }
         if c.wanted().next().is_none() {
@@ -549,7 +545,7 @@ impl Builder {
         if c.refused.is_some_and(|r| r == crate::host::heap_stat().releases) {
             return Progress::Blocked;
         }
-        // Runs folded for another cube draw the wrong objects: remake them.
+        // Runs folded for another scale draw the wrong objects: remake them.
         let next = c.wanted().next().or_bug(Errno::ENOTRECOVERABLE);
         if self.runs_of(id).is_some_and(|r| r.fold.is_some_and(|f| f != object_fold(next))) && !matches!(&self.bake_job, Some(j) if j.id == id) {
             self.drop_runs(id);
@@ -853,17 +849,17 @@ impl Builder {
             if self.bake_job.is_some() {
                 return Progress::Blocked;
             }
-            let cube = c.wanted().next().unwrap();
+            let scale = c.wanted().next().unwrap();
             // Runs span the whole column; this chunk bakes only its own heights.
             let (z0, z1) = c.at.z_range();
             let clip = Some((z0 as i32, z1 as i32));
-            if self.bake.begin(&set, mesh_step(cube, c.level()), GROUND.finest_in(c.level()), settings_store().textures, clip).is_err() {
+            if self.bake.begin(&set, mesh_step(scale, c.level()), GROUND.finest_in(c.level()), settings_store().textures, clip).is_err() {
                 self.refuse(world, id);
                 return Progress::Blocked;
             }
             self.bake_job = Some(BakeJob {
                 id,
-                cube,
+                scale,
                 generation: c.generation,
                 mesh: None,
                 handed: 0,
@@ -880,19 +876,19 @@ impl Builder {
                 // All slots are held at once or the bake is thrown away: a mesh is never
                 // cut, never baked coarser, and never waits while holding the one bake.
                 let job = self.bake_job.as_ref().unwrap();
-                let step = mesh_step(job.cube, c.level());
+                let step = mesh_step(job.scale, c.level());
                 let (words_a_box, room_a_slot) = (box_words(step), capacity(c.level(), step));
                 let boxes = words / words_a_box;
                 let asked = BuildEvent::Reserve {
                     id,
                     generation: job.generation,
-                    cube: job.cube,
+                    scale: job.scale,
                     boxes,
                 };
                 if !emit(asked) {
                     let job = self.bake_job.take().unwrap();
                     self.bake.abort();
-                    self.unwant(id, job.cube);
+                    self.unwant(id, job.scale);
                     return Progress::Busy;
                 }
                 let block = boxes.min(room_a_slot) * words_a_box;
@@ -912,13 +908,13 @@ impl Builder {
                 if gpu().is_some() && device_ready() && !room(bytes) {
                     return Progress::Blocked;
                 }
-                let step = mesh_step(job.cube, c.level());
+                let step = mesh_step(job.scale, c.level());
                 let words_a_box = box_words(step);
                 let n = bytes / 4 / words_a_box;
                 emit(BuildEvent::Part {
                     id,
                     generation: job.generation,
-                    cube: job.cube,
+                    scale: job.scale,
                     at: at as u32,
                     first: job.handed,
                     box_cnt: n,
@@ -949,18 +945,18 @@ impl Builder {
                     emit(BuildEvent::Part {
                         id,
                         generation: job.generation,
-                        cube: job.cube,
+                        scale: job.scale,
                         at: at as u32,
                         first: job.handed,
                         box_cnt: mesh.box_cnt - job.handed,
                         heights: mesh.heights,
                     });
                 }
-                self.unwant(id, job.cube);
+                self.unwant(id, job.scale);
                 emit(BuildEvent::Tier {
                     id,
                     generation: job.generation,
-                    cube: job.cube,
+                    scale: job.scale,
                     box_cnt: mesh.box_cnt,
                     heights: mesh.heights,
                 });

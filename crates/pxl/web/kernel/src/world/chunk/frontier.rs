@@ -20,7 +20,8 @@ use pxl_spec::space::lod::Tau;
 use pxl_spec::space::pyramid::{chunk_scale, GROUND, TOP_LEVEL};
 
 use crate::param::REFINEMENTS_IN_FLIGHT;
-use crate::world::chunk::build::{mesh_step, Cube};
+use crate::world::chunk::build::mesh_step;
+use pxl_spec::space::hierarchy::Scale;
 use crate::world::chunk::mesh_slot::{Pool, ARENA, COARSE_TIER_SLOTS, POOLS};
 use crate::world::observation::Order;
 use crate::world::pyramid::chunk::Chunk;
@@ -37,23 +38,23 @@ pub const RESERVE: Slots = [0, COARSE_TIER_SLOTS, 0];
 /// for each refinement in flight holding the piece it replaces.
 pub const HEADROOM: Slots = [REFINEMENTS_IN_FLIGHT + RESERVE[0], REFINEMENTS_IN_FLIGHT + RESERVE[1], 0];
 
-/// The cube the rule wants at `near`: a level coarser than the LOD level,
+/// The scale the rule wants at `near`: a level coarser than the LOD level,
 /// since terrain draws a level's cells averaged 2 × 2. Below z16 it goes on
 /// to the objects' finest tier.
-fn wanted_cube(near: f64, tau: Tau) -> Cube {
+fn wanted_scale(near: f64, tau: Tau) -> Scale {
     let finest = OBJECT_FINEST.above(GROUND.scale(0));
     let level = tau.level(near).max(finest - 1) + 1;
     GROUND.scale(0).up(level).min(chunk_scale(TOP_LEVEL))
 }
 
-/// A wanted cube as a chunk of `level` draws it: clamped to its own cells
+/// A wanted scale as a chunk of `level` draws it: clamped to its own cells
 /// averaged 2 × 2, and finer than its cells only at z16 where it holds
-/// objects. The outermost (cover) pieces always take the coarsest cube, one
+/// objects. The outermost (cover) pieces always take the coarsest scale, one
 /// slot each.
 ///
-/// A chunk read from a coarser page still uses its own cube: drawing it at
+/// A chunk read from a coarser page still uses its own scale: drawing it at
 /// that page's cells made blocks over the sea after a jump (2026-09-26).
-fn drawn_cube(cube: Cube, level: u32, outermost: bool, objects: bool) -> Cube {
+fn drawn_scale(scale: Scale, level: u32, outermost: bool, objects: bool) -> Scale {
     if outermost {
         return chunk_scale(level);
     }
@@ -63,17 +64,17 @@ fn drawn_cube(cube: Cube, level: u32, outermost: bool, objects: bool) -> Cube {
         (0, false) => own,
         _ => own.up(1),
     };
-    cube.clamp(finest, own.up(1))
+    scale.clamp(finest, own.up(1))
 }
 
-/// The quality alone moves the cube; a mesh too big for one slot fills more
+/// The quality alone moves the scale; a mesh too big for one slot fills more
 /// slots and is never drawn coarser for it.
-pub fn cube_of(c: Chunk, outermost: bool, near: f64, tau: Tau, objects: bool) -> Cube {
-    drawn_cube(wanted_cube(near, tau), c.level(), outermost, objects)
+pub fn scale_of(c: Chunk, outermost: bool, near: f64, tau: Tau, objects: bool) -> Scale {
+    drawn_scale(wanted_scale(near, tau), c.level(), outermost, objects)
 }
 
-pub fn pool_of(c: Chunk, cube: Cube) -> Pool {
-    Pool::of(c.level(), mesh_step(cube, c.level()))
+pub fn pool_of(c: Chunk, scale: Scale) -> Pool {
+    Pool::of(c.level(), mesh_step(scale, c.level()))
 }
 
 /// Slots per pool, counted before allocation. A z16 piece also takes a coarse
@@ -84,11 +85,11 @@ pub struct Need<F> {
     pub admit: bool,
 }
 
-impl<F: Fn(Chunk, Cube) -> u32> Price for Need<F> {
+impl<F: Fn(Chunk, Scale) -> u32> Price for Need<F> {
     fn piece(&self, c: Chunk, outermost: bool, near: f64, tau: Tau) -> Slots {
-        let cube = cube_of(c, outermost, near, tau, false);
-        let k = (self.slots)(c, cube);
-        match pool_of(c, cube) {
+        let scale = scale_of(c, outermost, near, tau, false);
+        let k = (self.slots)(c, scale);
+        match pool_of(c, scale) {
             Pool::Coarse => [0, k, 0],
             Pool::Cover => [0, 0, k],
             Pool::Fine => [k, 1, 0],
