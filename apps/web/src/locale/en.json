@@ -171,8 +171,12 @@
     "transport": {
       "road_default": "Road",
       "road_motorway": "Motorway",
+      "road_trunk": "Trunk Road",
       "road_primary": "Primary Road",
       "road_secondary": "Secondary Road",
+      "road_tertiary": "Tertiary Road",
+      "road_service": "Service Road",
+      "track": "Track",
       "pedestrian": "Pedestrian Path",
       "parking": "Parking Lot",
       "rail_main": "Railway",

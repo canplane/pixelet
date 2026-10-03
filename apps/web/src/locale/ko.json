@@ -171,8 +171,12 @@
     "transport": {
       "road_default": "도로",
       "road_motorway": "고속도로",
+      "road_trunk": "간선도로",
       "road_primary": "주요도로",
       "road_secondary": "보조도로",
+      "road_tertiary": "지선도로",
+      "road_service": "서비스 도로",
+      "track": "농로·임도",
       "pedestrian": "보행로",
       "parking": "주차장",
       "rail_main": "철도",
