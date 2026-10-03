@@ -262,18 +262,7 @@ pub fn get_placed_object(at: EntryAt) -> Option<Entry> {
     found
 }
 
-#[derive(Clone, Copy, Debug)]
-struct CarvePreview {
-    cell: [i64; 3],
-    at: EntryAt,
-}
-
 struct StoreState {
-    /// The one object hidden from the drawn build, and whether it is drawn
-    /// in tiers, decor, or (already gone) either.
-    virtual_hide: Option<EntryAt>,
-    hide_in: (bool, bool),
-    virtual_carve_preview: Option<CarvePreview>,
     save_due_ms: Option<f64>,
     /// The saved blob and the turn it was asked on: read on a later one.
     loading: Option<(Vec<u8>, u64)>,
@@ -283,70 +272,20 @@ static STORE: Global<StoreState> = Global::new();
 
 fn store_state() -> &'static mut StoreState {
     STORE.get(|| StoreState {
-        virtual_hide: None,
-        hide_in: (false, false),
-        virtual_carve_preview: None,
         save_due_ms: None,
         loading: None,
     })
 }
 
-/// Hides one placed object from the drawn build only, for the eraser's hover
-/// preview. The pick and the cell queries still see it: if the pick stopped
-/// seeing it, hover would clear, the hide would lift and the pick would hit
-/// it again, forever. No revision moves, so saves do not see the hover.
-pub fn set_virtual_hide(at: Option<EntryAt>) {
-    let st = store_state();
-    if st.virtual_hide == at {
-        return;
-    }
-    st.virtual_hide = at;
-    let kind = at.and_then(get_placed_object).map(|o| o.kind());
-    st.hide_in = (!matches!(kind, Some(EntryKind::Decor { .. })), !matches!(kind, Some(EntryKind::Solid { .. })));
-    chunk_sources_changed();
-}
-
-/// Injects one never-written AIR entry into the drawn build, where the
-/// eraser hovers bare terrain and there is no leaf to hide. Render-only, as
-/// set_virtual_hide is.
-pub fn set_virtual_carve_preview(at: &Pvf3, size: f64) {
+/// The never-written AIR entry the eraser's preview injects into the drawn
+/// build where it hovers bare terrain: the cube of `size` holding `at`.
+pub fn carve_entry(at: &Pvf3, size: f64) -> EntryAt {
     let lowered = At::of_cube(at, Scale::of_side(size));
-    let cell = lowered.cell();
-    let st = store_state();
-    if st.virtual_carve_preview.as_ref().is_some_and(|c| c.cell == cell) {
-        return;
-    }
     let [x, y, z] = lowered.step;
-    let at = EntryAt {
+    EntryAt {
         col_idx: lowered.col_idx,
         band_idx: lowered.band,
         pos: pack_pos(x, y, z, Scale::of_side(size)),
-    };
-    st.virtual_carve_preview = Some(CarvePreview { cell, at });
-    chunk_sources_changed();
-}
-
-pub fn clear_virtual_carve_preview() {
-    if store_state().virtual_carve_preview.take().is_some() {
-        chunk_sources_changed();
-    }
-}
-
-/// The drawn build's two edits, compared as part of a chunk's and a decor
-/// cell's sources.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct RenderEdits {
-    pub hide: Option<EntryAt>,
-    pub hide_in: (bool, bool),
-    pub carve: Option<EntryAt>,
-}
-
-pub fn render_edits() -> RenderEdits {
-    let st = store_state();
-    RenderEdits {
-        hide: st.virtual_hide,
-        hide_in: st.hide_in,
-        carve: st.virtual_carve_preview.map(|c| c.at),
     }
 }
 

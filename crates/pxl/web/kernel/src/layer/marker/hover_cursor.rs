@@ -11,7 +11,6 @@ use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::ground::shown_ground;
 use pxl_spec::bake::pack::channel_of;
 use pxl_spec::cell::object::{placeable_cube_num_id, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
-use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::{fvec, ivec};
 use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::base::ptr_at;
@@ -22,40 +21,56 @@ use crate::global::Global;
 use crate::kernel::with_world;
 use crate::layer::decor::asset_store::decor_assets_for;
 use crate::layer::decor::build::user_decor_pick;
-use crate::layer::decor::cell::set_scattered_hide;
 use crate::layer::decor::instance::NO_ENTRY;
 use crate::layer::decor::kind::kind_for;
 use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
 use crate::layer::object::size::DECOR_SIZE;
-use crate::layer::object::store::{clear_virtual_carve_preview, get_placed_object, restores_scattered, set_virtual_carve_preview, set_virtual_hide, EntryAt, EntryKind};
+use crate::layer::object::store::{carve_entry, get_placed_object, restores_scattered, EntryAt, EntryKind};
 use crate::shell::setting::store::settings_store;
 use crate::world::access::{Access, FINEST};
+use crate::world::chunk::source::chunk_sources_changed;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::build::World;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 enum Ghost {
+    #[default]
     None,
     Decor { at: V3, group: u32, rotation: f64, scale: f64 },
     Box { at: V3, size: f64, value: u32, rgb: u32, coplanar: bool },
 }
 
+/// What the eraser's preview changes in the drawn build only: the pick and
+/// the cell queries still see what it hides, or hover would clear, the hide
+/// lift and the pick hit it again, forever. No revision moves, so saves do
+/// not see the hover.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RenderEdits {
+    /// The placed object hidden, and whether it is drawn in tiers, decor, or
+    /// (already gone) either.
+    pub hide: Option<EntryAt>,
+    pub hide_in: (bool, bool),
+    /// An AIR entry over bare terrain, which has no leaf to hide.
+    pub carve: Option<EntryAt>,
+    /// The scattered decor hidden, by the cell it stands in.
+    pub scattered: Option<[i64; 3]>,
+}
+
+#[derive(Default)]
 struct Cursor {
-    /// The address alone, so re-deriving the same cell does not reset the hide
-    /// and force a chunk rebuild.
-    virtual_hide_target: Option<EntryAt>,
-    carve_preview: Option<(Pvf3, f64)>,
+    edits: RenderEdits,
     ghost: Ghost,
+}
+
+/// Compared as part of a chunk's sources, so an unchanged one rebuilds nothing.
+pub fn render_edits() -> RenderEdits {
+    CURSOR.get(Cursor::default).edits
 }
 
 static CURSOR: Global<Cursor> = Global::new();
 
 pub fn hover_cursor_step() {
-    let c = CURSOR.get(|| Cursor {
-        virtual_hide_target: None,
-        carve_preview: None,
-        ghost: Ghost::None,
-    });
+    let c = CURSOR.get(Cursor::default);
     let hover = hover();
     let ui = holding();
     let settings = settings_store();
@@ -91,25 +106,19 @@ pub fn hover_cursor_step() {
     };
 
     // The real object's hide lands a tick or more after the ghost, accepted.
-    let virtual_hide_target = match (&hovered_object, active_tool) {
-        (Some(o), ActiveTool::Eraser) => Some(o.at()),
-        _ => None,
+    let hidden = hovered_object.filter(|_| active_tool == ActiveTool::Eraser);
+    let kind = hidden.map(|o| o.kind());
+    let edits = RenderEdits {
+        hide: hidden.map(|o| o.at()),
+        hide_in: (!matches!(kind, Some(EntryKind::Decor { .. })), !matches!(kind, Some(EntryKind::Solid { .. }))),
+        // What is one voxel below shows through the ghost.
+        carve: hovered.filter(|_| digging_terrain).map(|h| carve_entry(&h, preview_size)),
+        scattered: hover.scattered.filter(|_| active_tool == ActiveTool::Eraser).map(|s| s.cell),
     };
-    if c.virtual_hide_target != virtual_hide_target {
-        set_virtual_hide(virtual_hide_target);
-        c.virtual_hide_target = virtual_hide_target;
-    }
-    set_scattered_hide(hover.scattered.filter(|_| active_tool == ActiveTool::Eraser).map(|s| s.cell));
-
-    // Bare terrain has no leaf to hide, so the preview injects an AIR entry and
-    // what is one voxel below shows through the ghost.
-    let carve_preview = hovered.filter(|_| digging_terrain).map(|h| (h, preview_size));
-    if c.carve_preview != carve_preview {
-        match carve_preview {
-            Some((at, size)) => set_virtual_carve_preview(&at, size),
-            None => clear_virtual_carve_preview(),
-        }
-        c.carve_preview = carve_preview;
+    if c.edits != edits {
+        c.edits = edits;
+        chunk_sources_changed();
+        request_world_tick();
     }
 
     let carved_style_cube: Option<PlaceableCube> = match (&hovered, digging_terrain) {

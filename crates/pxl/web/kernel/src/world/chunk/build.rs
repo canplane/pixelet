@@ -21,7 +21,8 @@ use std::collections::{HashMap, TryReserveError};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free, Block};
 
-use crate::layer::object::store::{object_col_revision, render_edits, Store};
+use crate::layer::marker::hover_cursor::render_edits;
+use crate::layer::object::store::{object_col_revision, Store};
 use crate::mem::fixed::{at, Range};
 use crate::shell::setting::store::settings_store;
 use pxl_spec::bake::constant::BAND_CELLS;
