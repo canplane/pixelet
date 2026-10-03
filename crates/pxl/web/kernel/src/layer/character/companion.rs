@@ -10,16 +10,16 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 
 use crate::control::camera::approach::damp_alpha;
-use crate::control::navigation::walk::over;
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::store::{camera_store, CameraStatus};
+use crate::control::navigation::walk::over;
 use crate::global::Global;
 use crate::io::load::{load_gltf, load_image, Load};
 use crate::kernel::{kernel, with_world};
 use crate::layer::character::chat_bubble::chat_bubble_step;
 use crate::layer::character::path::{init_settle_tracker, sample_walk_plan, update_settle_tracker, SettleTracker, Vec2, WalkPlan, WalkSample};
 use crate::layer::character::store::companion_load_store;
-use crate::layer::character::variant::{character_variant, CharacterGroup, CharacterVariant};
+use crate::layer::character::variant::{character_variant, CharacterVariant, Group};
 use crate::layer::character::variant_spec::IDLE_CLIP;
 use crate::layer::model::asset::{register_model, ModelHandle};
 use crate::sched::tick::TickContext;
@@ -34,7 +34,7 @@ type ModelHandles = Vec<(Load, u64, Option<ModelHandle>)>;
 
 pub const MODELS_MAX: usize = crate::layer::character::variant::CHARACTER_VARIANTS;
 
-pub const ACTORS_MAX: usize = crate::layer::character::variant_spec::Group::ALL.len();
+pub const ACTORS_MAX: usize = Group::ALL.len();
 
 static MODEL_HANDLES: Global<ModelHandles> = Global::new();
 
@@ -121,8 +121,8 @@ impl Walker {
     fn set_ready(&self, ready: bool) {
         let store = companion_load_store();
         match self.variant.group {
-            CharacterGroup::person => store.person_ready = ready,
-            CharacterGroup::pet => store.pet_ready = ready,
+            Group::person => store.person_ready = ready,
+            Group::pet => store.pet_ready = ready,
         }
     }
 
@@ -223,10 +223,9 @@ impl Walker {
                     x: self.pose[0],
                     y: self.pose[1],
                     heading: None,
-                    arrived: true,
                 },
             };
-            if step.arrived {
+            if step.heading.is_none() {
                 self.walk_plan = None;
             }
             px = step.x;
@@ -326,7 +325,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
         return;
     };
     let settings = settings_store();
-    let (Some(person_variant), Some(pet_variant)) = (character_variant(CharacterGroup::person, settings.person), character_variant(CharacterGroup::pet, settings.pet)) else {
+    let (Some(person_variant), Some(pet_variant)) = (character_variant(Group::person, settings.person), character_variant(Group::pet, settings.pet)) else {
         return;
     };
     let (person_variant, pet_variant) = (&person_variant, &pet_variant);

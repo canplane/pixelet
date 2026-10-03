@@ -53,22 +53,19 @@ use xpute_core::status::bug::OrBug;
 pub enum EntryKind {
     Solid { cube: PlaceableCube },
     Decor { decor_id: DecorId },
-    Air,
 }
 
 pub use pxl_spec::bake::constant::EntryAt;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct ObjectLayerEntry {
+/// A placed thing: never air, which is the eraser's marker.
+pub struct OccupiedEntry {
     pub at: EntryAt,
     pub i: IVec,
     pub f: FVec,
     pub size: f64,
     pub kind: EntryKind,
 }
-
-/// Never `EntryKind::Air`, which is the eraser's marker, not a placed thing.
-pub type OccupiedEntry = ObjectLayerEntry;
 
 /// The L2 index of the cell's XY column, Z dropped: the renderer asks for a
 /// column with z = 0, so a key that kept Z left every object above 64u
@@ -177,21 +174,19 @@ impl EntryCursor {
         }
     }
 
-    pub fn object(&self) -> ObjectLayerEntry {
+    pub fn object(&self) -> OccupiedEntry {
         let Pvf3 { i, f } = self.corner();
         let kind = if object_value_is_decor(self.state) {
             EntryKind::Decor {
                 decor_id: decor_id_from_num(self.state),
             }
-        } else if object_value_is_air(self.state) {
-            EntryKind::Air
         } else {
             EntryKind::Solid {
                 // Every value the store writes is one the catalog gives out.
                 cube: placeable_cube_of(self.state).or_bug(Errno::ENOTRECOVERABLE),
             }
         };
-        ObjectLayerEntry {
+        OccupiedEntry {
             at: self.at(),
             i,
             f,
@@ -213,7 +208,12 @@ pub fn objects_revision() -> u32 {
 }
 
 fn apply(writes: impl IntoIterator<Item = Write>) {
-    for (col_idx, band_idx) in kernel().objects.write(writes) {
+    changed(kernel().objects.write(writes));
+}
+
+/// What reads a band hears it changed.
+fn changed(bands: impl IntoIterator<Item = (IVec, BandZ)>) {
+    for (col_idx, band_idx) in bands {
         chunk_sources_changed();
         bump_world(OBJECT_COLUMN, col_idx);
         band_written(col_idx, band_idx);
@@ -405,14 +405,6 @@ struct PageRows {
     value: Vec<u32>,
 }
 
-pub fn encode_objects() -> Result<String, MarshalError> {
-    let mut by_page: Vec<(IVec, PageRows)> = Vec::new();
-    for col_idx in object_cols() {
-        collect_col(&mut by_page, col_idx);
-    }
-    encode_pages(&by_page)
-}
-
 fn collect_col(by_page: &mut Vec<(IVec, PageRows)>, col_idx: IVec) {
     let page_idx = TO_XY(L3_IDX(FROM_L2_IDX(col_idx)));
     let page_base = FROM_L3_IDX(page_idx);
@@ -466,7 +458,7 @@ fn encode_pages(by_page: &[(IVec, PageRows)]) -> Result<String, MarshalError> {
     Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&pkt))
 }
 
-pub fn decode_objects(blob: &str) -> Result<(), MarshalError> {
+fn decode_objects(blob: &str) -> Result<(), MarshalError> {
     let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(blob).map_err(|_| MarshalError::new(Errno::EINVAL))?;
     let root = TreeReader::new(&bytes)?.read_branch()?;
     // One batch, so each column's entries are rebuilt once.
@@ -519,11 +511,7 @@ fn loaded() {
     let (blob, _) = st.loading.take().or_bug(Errno::ENOTRECOVERABLE);
     if core::str::from_utf8(&blob).map_or(true, |raw| decode_objects(raw).is_err()) {
         // what decoded before the failure was already read
-        for (col_idx, band_idx) in kernel().objects.clear() {
-            chunk_sources_changed();
-            bump_world(OBJECT_COLUMN, col_idx);
-            band_written(col_idx, band_idx);
-        }
+        changed(kernel().objects.clear());
     }
 }
 
@@ -591,7 +579,11 @@ pub fn flush_save() {
     if store_state().save_due_ms.take().is_none() {
         return;
     }
-    if let Ok(blob) = encode_objects() {
+    let mut by_page: Vec<(IVec, PageRows)> = Vec::new();
+    for col_idx in object_cols() {
+        collect_col(&mut by_page, col_idx);
+    }
+    if let Ok(blob) = encode_pages(&by_page) {
         keep(blob);
     }
 }
@@ -752,12 +744,11 @@ impl Column {
     }
 }
 
-/// A run of a column's entries in one cell; `solid` counts all but AIR.
+/// A run of a column's entries in one cell.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CellRun {
     pub start: u32,
     pub count: u32,
-    pub solid: u32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -769,6 +760,7 @@ pub struct Write {
     pub state: u32,
 }
 
+#[derive(Default)]
 pub struct Store {
     /// Only columns with a non-VOID leaf; an emptied band and column are dropped.
     columns: BTreeMap<IVec, Column>,
@@ -866,21 +858,7 @@ fn cells_along((o, d): (V3, V3), (t0, t1): (f64, f64), side: f64, each: &mut dyn
     }
 }
 
-impl Default for Store {
-    fn default() -> Self {
-        Store::new()
-    }
-}
-
 impl Store {
-    pub fn new() -> Store {
-        Store {
-            columns: BTreeMap::new(),
-            bounds: HashMap::new(),
-            folds: HashMap::new(),
-        }
-    }
-
     pub fn cols(&self) -> impl Iterator<Item = IVec> + '_ {
         self.columns.keys().copied()
     }
@@ -1251,7 +1229,6 @@ impl Store {
         (end > start).then(|| CellRun {
             start: start as u32,
             count: (end - start) as u32,
-            solid: (start..end).filter(|&k| column.e_state[k] != AIR).count() as u32,
         })
     }
 

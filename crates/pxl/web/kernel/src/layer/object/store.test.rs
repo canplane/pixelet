@@ -23,24 +23,23 @@ fn write(store: &mut Store, col_idx: IVec, band_idx: BandZ, at: [u32; 3], scale:
 
 #[test]
 fn a_write_is_read_back_and_its_entries_are_made_within_it() {
-    let mut store = Store::new();
+    let mut store = Store::default();
     assert_eq!(write(&mut store, 7, 0, [8, 16, 24], CELL, 3), BTreeSet::from([(7, 0)]));
     assert_eq!(store.read(7, 0, [8, 16, 24]), 3);
     assert_eq!(store.read(7, 0, [15, 23, 31]), 3, "a cell leaf covers its eight steps");
     assert_eq!(store.read(7, 0, [16, 16, 24]), VOID);
     assert_eq!(entries(&store, 7), vec![(0, pack_pos(8, 16, 24, CELL), 3)]);
     let cell = store.cell(7, 1, 2, 3).expect("the cell is found");
-    assert_eq!((cell.start, cell.count, cell.solid), (0, 1, 1));
+    assert_eq!((cell.start, cell.count), (0, 1));
     assert!(store.cell(7, 2, 2, 3).is_none());
 }
 
 #[test]
 fn a_void_write_prunes_the_band_and_the_chunk() {
-    let mut store = Store::new();
+    let mut store = Store::default();
     write(&mut store, 7, 2, [0, 0, 0], OBJECT_FINEST, AIR);
     assert_eq!(store.cols().count(), 1);
-    let cell = store.cell(7, 0, 0, 2 * BAND_CELLS as i32).expect("the cell is found");
-    assert_eq!(cell.solid, 0, "AIR does not occupy");
+    assert!(store.cell(7, 0, 0, 2 * BAND_CELLS as i32).is_some(), "AIR is an entry");
     assert_eq!(write(&mut store, 7, 2, [0, 0, 0], OBJECT_FINEST, VOID), BTreeSet::from([(7, 2)]));
     assert_eq!(store.cols().count(), 0);
     assert_eq!(entries(&store, 7), vec![]);
@@ -50,7 +49,7 @@ fn a_void_write_prunes_the_band_and_the_chunk() {
 
 #[test]
 fn a_merged_block_comes_back_as_its_cells_each_found_where_it_lies() {
-    let mut store = Store::new();
+    let mut store = Store::default();
     let writes = (0..64u32).map(|k| {
         let [x, y, z] = at_walk_order::<3>(k as u64, 2);
         Write {
@@ -76,7 +75,7 @@ fn a_merged_block_comes_back_as_its_cells_each_found_where_it_lies() {
 
 #[test]
 fn the_lanes_are_in_band_and_walk_order_so_a_cell_s_entries_are_one_run() {
-    let mut store = Store::new();
+    let mut store = Store::default();
     let finest = |x: u32, y: u32, z: u32| Write {
         col_idx: 3,
         band_idx: 0,
@@ -123,7 +122,7 @@ impl Rng {
 /// Whole cells in band 0 of one column, and what the store keeps folded at
 /// `level`, with the column's corner in that level's cells.
 fn folded(cells: &[(u32, u32, u32, u32)], level: u32) -> (HashMap<[i64; 3], u32>, [i64; 2]) {
-    let mut store = Store::new();
+    let mut store = Store::default();
     let col_idx = ivec::gather(1, -1, 0);
     let step = OBJECT_FINEST.count_in(CELL);
     store.write(cells.iter().map(|&(x, y, z, state)| Write {
@@ -203,7 +202,7 @@ fn cube_at(store: &mut Store, [x, y, z]: [i64; 3], state: u32) {
 #[test]
 fn where_the_objects_in_a_box_are_is_never_missed_and_never_past_it() {
     let mut rng = Rng(SplitMix64::new(0x5851_f42d_4c95_7f2d));
-    let mut store = Store::new();
+    let mut store = Store::default();
     let red = placeable_cube_num_id(PlaceableCube::Block(Block::red));
     let mut met = 0;
     for step in 0..200 {
@@ -237,7 +236,7 @@ fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
         min: [b.min[1], b.min[2], b.min[0]],
         max: [b.max[1], b.max[2], b.max[0]],
     };
-    let mut stores = [Store::new(), Store::new(), Store::new()];
+    let mut stores = [Store::default(), Store::default(), Store::default()];
     for _ in 0..300 {
         let at = [0, 1, 2].map(|_| (rng.next() % 300) as i64 - 150);
         let state = rng.pick(&[red, red, AIR, VOID]);
@@ -258,7 +257,7 @@ fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
 /// Painted as sub-cells, the mesher would draw a box each.
 #[test]
 fn a_paint_finer_than_a_cube_takes_it_whole() {
-    let mut store = Store::new();
+    let mut store = Store::default();
     let col_idx = ivec::gather(1, -1, 0);
     let step = OBJECT_FINEST.count_in(CELL);
     store.write(

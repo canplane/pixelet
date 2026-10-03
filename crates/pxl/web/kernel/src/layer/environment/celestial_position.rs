@@ -58,6 +58,11 @@ fn local_direction(ra: f64, dec: f64, lat: f64, lon: f64, d: f64) -> V3 {
     [az.sin() * horizontal, az.cos() * horizontal, alt.sin() * 100.0]
 }
 
+/// Days since J2000.0 at Unix milliseconds `unix_ms`.
+pub fn j2000_days(unix_ms: f64) -> f64 {
+    unix_ms / 86_400_000.0 + 2_440_587.5 - 2_451_545.0
+}
+
 pub fn sun_position(d: f64, lat: f64, lon: f64) -> V3 {
     let (ra, dec, _) = sun_equatorial(d);
     local_direction(ra, dec, lat, lon, d)

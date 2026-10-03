@@ -115,11 +115,11 @@ fn a_level_s_ray_meets_the_objects_in_the_cells_the_level_draws_from() {
     let cell = GROUND.scale(level).side();
     let red = placeable_cube_num_id(PlaceableCube::Block(cube_types::Block::red));
     let (bx, by) = ((x0 / cell).floor() * cell + 4.0 * cell, (y0 / cell).floor() * cell + 4.0 * cell);
-    let bare = Access::new(&paging, &Store::new()).at(&point(bx, by), level).value().unwrap().top;
+    let bare = Access::new(&paging, &Store::default()).at(&point(bx, by), level).value().unwrap().top;
     let bz = ((bare / cell).floor() + 3.0) * cell;
 
     // Five of the cell's eight: the bottom four and one over them.
-    let mut store = Store::new();
+    let mut store = Store::default();
     for [dx, dy, dz] in [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1]] {
         write(&mut store, [bx + dx as f64, by + dy as f64, bz + dz as f64], CELL, red);
     }
@@ -138,6 +138,6 @@ fn a_level_s_ray_meets_the_objects_in_the_cells_the_level_draws_from() {
 
     let alone = [lx + 0.5, ly + 0.5];
     let hit = access.first_hit(&down(alone), Detail::Level(level)).value().flatten().unwrap();
-    let ground = Access::new(&paging, &Store::new()).first_hit(&down(alone), Detail::Level(level)).value().flatten().unwrap();
+    let ground = Access::new(&paging, &Store::default()).first_hit(&down(alone), Detail::Level(level)).value().flatten().unwrap();
     assert_eq!((hit.struck, hit.point), (Struck::Ground, ground.point));
 }

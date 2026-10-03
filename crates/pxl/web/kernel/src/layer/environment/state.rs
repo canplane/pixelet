@@ -15,7 +15,7 @@ use crate::control::navigation::bootstrap::FALLBACK_G4326;
 use crate::global::Global;
 use crate::host::{now, wall_now};
 use crate::kernel::kernel;
-use crate::layer::environment::celestial_position::{equatorial_to_local, moon_position, sun_position};
+use crate::layer::environment::celestial_position::{equatorial_to_local, j2000_days, moon_position, sun_position};
 use crate::layer::environment::config::light_cfg;
 use crate::layer::environment::fog::{band_at, eye_ground, eye_height, reach_at};
 use crate::layer::environment::theme::{themes, Theme};
@@ -173,7 +173,7 @@ impl EnvironmentDraw {
     pub fn observe(&mut self, lat: f64, lon: f64, unix_ms: f64) {
         self.lat = lat;
         self.lon = lon;
-        self.days = unix_ms / 86_400_000.0 + 2_440_587.5 - 2_451_545.0;
+        self.days = j2000_days(unix_ms);
         let first = *self.first_ms.get_or_insert(unix_ms);
         self.time = (unix_ms - first) / 1000.0;
     }
@@ -184,7 +184,7 @@ impl EnvironmentDraw {
     pub fn daylight(&mut self, lat: f64, lon: f64, day_start_ms: f64) {
         const SAMPLES: u32 = 288;
         let altitude = |hour: f64| {
-            let d = (day_start_ms + hour * 3_600_000.0) / 86_400_000.0 + 2_440_587.5 - 2_451_545.0;
+            let d = j2000_days(day_start_ms + hour * 3_600_000.0);
             let p = sun_position(d, lat, lon);
             p[2]
         };

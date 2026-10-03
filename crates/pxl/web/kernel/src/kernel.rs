@@ -20,7 +20,7 @@ impl Kernel {
     fn new() -> Kernel {
         Kernel {
             volumes: None,
-            objects: Store::new(),
+            objects: Store::default(),
             painter: Painter::new(),
             sched: Scheduler::new(),
             changes: Revisions::default(),

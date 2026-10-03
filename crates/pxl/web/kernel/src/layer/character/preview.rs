@@ -11,7 +11,7 @@ use pxl_spec::space::pvf3::ivec;
 use crate::global::Global;
 use crate::io::load::{load_gltf, load_image, Load};
 use crate::kernel::{kernel, with_world};
-use crate::layer::character::variant::{character_variant, CharacterGroup, CharacterVariant};
+use crate::layer::character::variant::{character_variant, CharacterVariant, Group};
 use crate::layer::character::variant_spec::IDLE_CLIP;
 use crate::layer::model::asset::{register_model, ModelHandle};
 use crate::sched::tick::TickContext;
@@ -53,7 +53,7 @@ pub const CASES_MAX: usize = pxl_render::gpu::surface::SURFACES;
 
 /// Replaces a case already open under `id`. False where `id` names no
 /// surface or no variant.
-pub fn preview_open(id: u32, group: CharacterGroup, number: u8) -> bool {
+pub fn preview_open(id: u32, group: Group, number: u8) -> bool {
     if id as usize >= CASES_MAX {
         return false;
     }

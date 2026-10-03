@@ -5,13 +5,11 @@
 use pxl_spec::asset::ingested::Asset;
 
 use crate::layer::character::variant_spec::groups::{person, pet};
-pub use crate::layer::character::variant_spec::{DEFAULT_PERSON_VARIANT_KEY, DEFAULT_PET_VARIANT_KEY};
-
-pub type CharacterGroup = crate::layer::character::variant_spec::Group;
+pub use crate::layer::character::variant_spec::Group;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CharacterVariant {
-    pub group: CharacterGroup,
+    pub group: Group,
     /// As the settings store holds it.
     pub number: u8,
     pub model: Asset,
@@ -24,13 +22,13 @@ pub struct CharacterVariant {
 
 pub const CHARACTER_VARIANTS: usize = person::Key::ALL.len() + pet::Key::ALL.len();
 
-pub fn character_variant(group: CharacterGroup, number: u8) -> Option<CharacterVariant> {
+pub fn character_variant(group: Group, number: u8) -> Option<CharacterVariant> {
     let (model, skin, height_u, move_clip) = match group {
-        CharacterGroup::person => {
+        Group::person => {
             let row = person::Key::ALL.iter().position(|k| *k as u8 == number)?;
             (person::models[row], person::skin, person::size, person::move_clip)
         }
-        CharacterGroup::pet => {
+        Group::pet => {
             let row = pet::Key::ALL.iter().position(|k| *k as u8 == number)?;
             (pet::models[row], pet::skin, pet::size, pet::move_clip)
         }

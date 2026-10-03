@@ -226,7 +226,7 @@ fn main() {
     epsg4326::project(&mut at, &[lon, lat, 0.0]);
     let (x, y) = (pvf3::to_real(pvf3::X(&at)), pvf3::to_real(pvf3::Y(&at)));
 
-    let store = Store::new();
+    let store = Store::default();
     let mut pages = Pages {
         server,
         paging: Paging::default(),

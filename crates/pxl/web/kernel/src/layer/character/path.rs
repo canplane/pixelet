@@ -28,7 +28,6 @@ pub struct WalkSample {
     pub y: f64,
     /// None once arrived.
     pub heading: Option<f64>,
-    pub arrived: bool,
 }
 
 /// Takes `plan.duration` whatever the distance, so the companion catches up
@@ -42,7 +41,6 @@ pub fn sample_walk_plan(plan: &WalkPlan, now: f64) -> WalkSample {
         x: plan.start.x + (plan.target.x - plan.start.x) * frac,
         y: plan.start.y + (plan.target.y - plan.start.y) * frac,
         heading: if arrived { None } else { Some(heading_to(plan.start, plan.target)) },
-        arrived,
     }
 }
 
@@ -65,7 +63,6 @@ pub fn init_settle_tracker(initial: Vec2, now: f64) -> SettleTracker {
 pub struct SettleUpdate {
     pub tracker: SettleTracker,
     pub just_settled: bool,
-    pub moved: bool,
 }
 
 /// Fires `just_settled` when the target stops changing, whatever moved it.
@@ -86,7 +83,6 @@ pub fn update_settle_tracker(tracker: &SettleTracker, target: Vec2, now: f64, se
                 settled: last_seen,
             },
             just_settled: true,
-            moved,
         };
     }
     SettleUpdate {
@@ -96,6 +92,5 @@ pub fn update_settle_tracker(tracker: &SettleTracker, target: Vec2, now: f64, se
             settled: tracker.settled,
         },
         just_settled: false,
-        moved,
     }
 }
