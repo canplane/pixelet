@@ -46,9 +46,10 @@ interface ToastProps extends ToastSpec {
   fade: f64;
   fadeTransition: Transition;
   touch?: GestureResponderHandlers;
+  touchBelow?: f64;
 }
 
-export function Toast({ message, tone, fade, fadeTransition, touch }: ToastProps) {
+export function Toast({ message, tone, fade, fadeTransition, touch, touchBelow }: ToastProps) {
   const error = tone === ToastTone.Error;
   const span = useWindowSize().width;
   const [open, setOpen] = useState(false);
@@ -76,6 +77,7 @@ export function Toast({ message, tone, fade, fadeTransition, touch }: ToastProps
       fadeFrom={0}
       fadeTransition={fadeTransition}
       touch={touch}
+      touchBelow={touchBelow}
       onContentWidth={setContent}
     >
       <View style={styles.slot}>

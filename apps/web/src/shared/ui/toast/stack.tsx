@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { PanResponder, PixelRatio, StyleSheet, View } from "react-native";
 
 import { Motion } from "@platform/motion.tsx";
-import { cardPose, deckSwipe, frontFirst, useTurnedBack } from "@/shared/ui/deck.ts";
+import { cardPose, deckSwipe, frontFirst, peekBelow, useTurnedBack } from "@/shared/ui/deck.ts";
 import { type Key, usePresent } from "@/shared/ui/motion/presence.tsx";
 import { after, LEAVE, SETTLE } from "@/shared/ui/motion/transition.ts";
 import { setToastDragging, toastRotate, useToastStore } from "./store.ts";
@@ -70,6 +70,7 @@ export function Toaster() {
               fade={present ? pose.fade : 0}
               fadeTransition={transition}
               touch={front ? swipe.current!.panHandlers : undefined}
+              touchBelow={front ? peekBelow(entries.length, PEEK_PX) : 0}
             />
           </Motion>
         );

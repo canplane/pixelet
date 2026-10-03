@@ -46,6 +46,11 @@ export function cardPose(depth: u32, peek: f64): CardPose {
   };
 }
 
+/** How far the cards behind show under the front one, which the front one's touch covers. */
+export function peekBelow(count: u32, peek: f64): f64 {
+  return Math.min(Math.max(count - 1, 0), DEPTH) * peek;
+}
+
 /** Whether the last turn brought the back card forward, so the new front comes from above. */
 export function useTurnedBack(rotation: i32): boolean {
   const last = useRef(rotation);

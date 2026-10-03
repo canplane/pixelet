@@ -18,7 +18,7 @@ import { type PillProps, touchReach } from "@/shared/ui/pill.ts";
 
 const SHADOW_ROOM = 32;
 // `tint`, `place` and `interactive` only apply on an iPhone.
-export function Pill({ x, width, height, span, fill, border, shadow, fade = 1, fadeFrom, fadeTransition = SNAP, touch, children, onContentWidth }: PillProps) {
+export function Pill({ x, width, height, span, fill, border, shadow, fade = 1, fadeFrom, fadeTransition = SNAP, touch, touchBelow = 0, children, onContentWidth }: PillProps) {
   const transition = SNAP;
   const veil = useVeil(fade, fadeTransition, fadeFrom);
   const r = height / 2;
@@ -36,7 +36,7 @@ export function Pill({ x, width, height, span, fill, border, shadow, fade = 1, f
         style={[styles.fade, { width: span + 2 * SHADOW_ROOM, height: height + 2 * SHADOW_ROOM }]}
       >
         <View style={styles.corner}>
-          <View {...touch} style={[touch ? styles.reach : styles.box, { left: -reach, top: -reach, width: width + 2 * reach, height: height + 2 * reach }]}>
+          <View {...touch} style={[touch ? styles.reach : styles.box, { left: -reach, top: -reach, width: width + 2 * reach, height: height + 2 * reach + touchBelow }]}>
             <View style={[styles.box, { left: reach, top: reach, width, height }]}>
               {shadow && (
                 <>

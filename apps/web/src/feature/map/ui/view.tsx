@@ -13,6 +13,7 @@ import { Toaster } from "@/shared/ui/toast/stack.tsx";
 import { chrome } from "@/shared/ui/theme.ts";
 
 import { Overlays } from "./overlay/all.tsx";
+import { DOCK_HEIGHT } from "./overlay/dock.tsx";
 import { ToastController } from "./toast-controller.tsx";
 
 const TOAST_LIFT_PX = chrome.inset + 20;
@@ -23,7 +24,7 @@ const PANEL_GAP_PX = 12;
 function BetweenChrome({ children }: { children: ReactNode }) {
   const area = useSafeArea();
   const top = chrome.inset + area.top + useViewportTop() + chrome.control + PANEL_GAP_PX;
-  const bottom = bottomRest(area, chrome.inset) + chrome.control + PANEL_GAP_PX;
+  const bottom = bottomRest(area, chrome.inset) + DOCK_HEIGHT + PANEL_GAP_PX;
   return <View style={[styles.between, { top, bottom }]}>{children}</View>;
 }
 
@@ -42,7 +43,7 @@ export function MapView() {
       {
         /* Under the chrome: the size flyout is meant to cover the toasts. */
       }
-      <AboveKeyboard inset={chrome.inset} lift={chrome.control + TOAST_LIFT_PX}>
+      <AboveKeyboard inset={chrome.inset} lift={DOCK_HEIGHT + TOAST_LIFT_PX}>
         <Toaster />
       </AboveKeyboard>
 

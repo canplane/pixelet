@@ -34,6 +34,8 @@ export interface PillProps {
   fadeFrom?: f64;
   fadeTransition?: Transition;
   touch?: GestureResponderHandlers;
+  /** More of `touch`'s reach under it, over a deck's cards peeking out. */
+  touchBelow?: f64;
   children?: ReactNode;
   onContentWidth?: (width: f64) => void;
 }

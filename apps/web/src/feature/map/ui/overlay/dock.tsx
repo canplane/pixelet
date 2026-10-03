@@ -14,7 +14,7 @@ import { Glyph } from "@/shared/ui/glyph.tsx";
 import { Motion } from "@platform/motion.tsx";
 import { LABEL } from "@platform/palette.ts";
 import { Pill } from "@platform/pill.tsx";
-import { cardPose, deckDepth, deckSwipe, useTurnedBack } from "@/shared/ui/deck.ts";
+import { cardPose, deckDepth, deckSwipe, peekBelow, useTurnedBack } from "@/shared/ui/deck.ts";
 import { Presence } from "@/shared/ui/motion/presence.tsx";
 import { FADE, SETTLE, SNAP } from "@/shared/ui/motion/transition.ts";
 import { keepKeyboard } from "@/shared/ui/keyboard.tsx";
@@ -31,15 +31,22 @@ import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/catal
 const SEND_FROM_SCALE = 0.5;
 const PEEK_PX = 10;
 
+/** The dock stands tall enough for the card behind to peek out under the front one. */
+export const DOCK_HEIGHT = chrome.control + PEEK_PX;
+
+/** The bar's swipe takes the card's drags; this only keeps a touch on it off the map. */
+const BAR_TOUCH = {};
+
 const ITEM = 24;
 const ITEM_GLYPH = 16;
 
-const FLYOUT_LIFT_PX = 20;
+/** Above the card, where the sizes and their seed stand. */
+const FLYOUT_LIFT_PX = 6;
 const FLYOUT_GAP_PX = 8;
 const FLYOUT_PAD_Y = 8;
 const FLYOUT_WIDTH = chrome.target + 12;
-const FLYOUT_FOOT = (chrome.control + ITEM) / 2 + FLYOUT_LIFT_PX;
-const FLYOUT_HOLD_MS = 150;
+const FLYOUT_FOOT = chrome.control + FLYOUT_LIFT_PX;
+const FLYOUT_HOLD_MS = 300;
 const FLYOUT_PITCH = chrome.target + FLYOUT_GAP_PX;
 /** A move this far before the hold is a drag: the strip's sideways, the deck's up and down. */
 const DRAG_PX = 12;
@@ -66,11 +73,21 @@ function sizeMark(tier: u32): f64 {
 /** Finest first, so the coarsest stands nearest the swatch. */
 const TIERS: readonly u32[] = Array.from({ length: OBJECT_TIERS }, (_, i) => OBJECT_TIERS - 1 - i);
 
+/** A press on a swatch shows the sizes' seed; held, it grows into them. */
+const enum Sizes {
+  Seed = 0,
+  Open = 1,
+}
+
+/** The seed of the sizes, at their foot. */
+const SEED = 10;
+
 interface Flyout {
   left: f64;
   centerX: f64;
   foot: f64;
   hover: u32 | null;
+  sizes: Sizes;
 }
 
 function tierAt(at: Flyout, x: f64, y: f64): u32 | null {
@@ -111,7 +128,8 @@ function SizeFlyout({ hover }: { hover: u32 | null }) {
 
 interface SizeGesture {
   tap: () => void;
-  open: (swatch: View) => void;
+  press: (swatch: View) => void;
+  open: () => void;
   move: (x: f64, y: f64) => void;
   lift: (x: f64, y: f64) => void;
   close: () => void;
@@ -131,14 +149,15 @@ function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
     };
     const open = () => {
       stopHold();
-      if (state !== Gesture.Pending || !swatch.current) return;
+      if (state !== Gesture.Pending) return;
       state = Gesture.Flyout;
-      handlers.current.open(swatch.current);
+      handlers.current.open();
     };
     responder.current = PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
         state = Gesture.Pending;
+        if (swatch.current) handlers.current.press(swatch.current);
         hold = setTimeout(open, FLYOUT_HOLD_MS);
       },
       onPanResponderMove: (_e, s) => {
@@ -146,16 +165,18 @@ function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
         if (state === Gesture.Drag || (Math.abs(s.dx) < DRAG_PX && Math.abs(s.dy) < DRAG_PX)) return;
         state = Gesture.Drag;
         stopHold();
+        handlers.current.close();
       },
       onPanResponderRelease: (_e, s) => {
         stopHold();
         if (state === Gesture.Flyout) handlers.current.lift(s.moveX, s.moveY);
         else if (state === Gesture.Pending) handlers.current.tap();
+        handlers.current.close();
         state = Gesture.Pending;
       },
       onPanResponderTerminate: () => {
         stopHold();
-        if (state === Gesture.Flyout) handlers.current.close();
+        handlers.current.close();
         state = Gesture.Pending;
       },
       onPanResponderTerminationRequest: () => state !== Gesture.Flyout,
@@ -173,9 +194,9 @@ function SwatchButton({ cube, sizes }: { cube: PlaceableCube; sizes: Omit<SizeGe
   const handlers = useSizeGesture(ref, {
     ...sizes,
     tap: () => selectCube(cube),
-    open: (swatch) => {
+    open: () => {
       selectCube(cube);
-      sizes.open(swatch);
+      sizes.open();
     },
   });
 
@@ -239,6 +260,8 @@ export function Dock() {
   const [barWidth, setBarWidth] = useState<f64>(0);
   const [stripWidth, setStripWidth] = useState<f64>(chrome.control);
   const [flyout, setFlyout] = useState<Flyout | null>(null);
+  // A release can come before the swatch's place is measured.
+  const pressing = useRef(false);
   const inputRef = useRef<TextInput | null>(null);
   const bar = useRef<View | null>(null);
 
@@ -262,27 +285,32 @@ export function Dock() {
   }
 
   const sizes: Omit<SizeGesture, "tap"> = {
-    open: (swatch) => {
+    press: (swatch) => {
+      pressing.current = true;
       swatch.measureInWindow((sx, _sy, sw) => {
         bar.current?.measureInWindow((bx, by) => {
-          setFlyout({ left: sx + sw / 2 - bx, centerX: sx + sw / 2, foot: by + chrome.control - FLYOUT_FOOT, hover: null });
+          if (!pressing.current) return;
+          setFlyout({ left: sx + sw / 2 - bx, centerX: sx + sw / 2, foot: by + chrome.control - FLYOUT_FOOT, hover: null, sizes: Sizes.Seed });
         });
       });
     },
+    open: () => setFlyout((f) => f && { ...f, sizes: Sizes.Open }),
     move: (x, y) => {
-      if (flyout === null) return;
+      if (flyout?.sizes !== Sizes.Open) return;
       const hover = tierAt(flyout, x, y);
       if (hover !== flyout.hover) setFlyout({ ...flyout, hover });
     },
     lift: (x, y) => {
-      const tier = flyout === null ? null : tierAt(flyout, x, y);
+      const tier = flyout?.sizes === Sizes.Open ? tierAt(flyout, x, y) : null;
       if (tier !== null) holdTier(tier);
+    },
+    close: () => {
+      pressing.current = false;
       setFlyout(null);
     },
-    close: () => setFlyout(null),
   };
 
-  const openFlyout = front === Pane.Palette ? flyout : null;
+  const shownFlyout = front === Pane.Palette ? flyout : null;
   // Every card is as wide as the palette's tools; whole pixels, where a page's pill cuts its shadow cleanly.
   const width = Math.min(stripWidth, barWidth);
   const x = PixelRatio.roundToNearestPixel((barWidth - width) / 2);
@@ -312,6 +340,8 @@ export function Dock() {
           shadow={shadow.lift}
           fade={pose.fade}
           fadeTransition={SETTLE}
+          touch={depth === 0 ? BAR_TOUCH : undefined}
+          touchBelow={depth === 0 ? peekBelow(PANES.length, PEEK_PX) : 0}
           onContentWidth={onContentWidth}
         >
           {content}
@@ -371,7 +401,7 @@ export function Dock() {
 
               <ScrollView
                 horizontal
-                scrollEnabled={flyout === null}
+                scrollEnabled={flyout?.sizes !== Sizes.Open}
                 showsHorizontalScrollIndicator={false}
                 style={styles.picks}
                 contentContainerStyle={styles.picksContent}
@@ -390,9 +420,11 @@ export function Dock() {
             setStripWidth,
           )}
 
-          {openFlyout && (
-            <View style={[styles.flyoutAt, { left: openFlyout.left - FLYOUT_WIDTH / 2 }]}>
-              <SizeFlyout hover={openFlyout.hover} />
+          {shownFlyout && (
+            <View style={[styles.flyoutAt, shownFlyout.sizes === Sizes.Open ? styles.flyoutTakes : styles.block, { left: shownFlyout.left - FLYOUT_WIDTH / 2 }]}>
+              {shownFlyout.sizes === Sizes.Open
+                ? <SizeFlyout hover={shownFlyout.hover} />
+                : <Backing fill={STRIP.ground} material={material.flyout} place={BackingPlace.OverMap} style={styles.seed} />}
             </View>
           )}
         </>
@@ -414,7 +446,7 @@ const STRIP = {
 };
 
 const styles = StyleSheet.create({
-  bar: { height: chrome.control, width: "100%", minWidth: 0, pointerEvents: "box-none" },
+  bar: { height: DOCK_HEIGHT, width: "100%", minWidth: 0, pointerEvents: "box-none" },
 
   card: { position: "absolute", left: 0, top: 0, right: 0, height: chrome.control, transformOrigin: "center bottom" },
   // An inline `box-none` is drawn as a `none` the card's controls inherit.
@@ -443,14 +475,15 @@ const styles = StyleSheet.create({
   swatchIdle: { boxShadow: `0 0 0 1px ${STRIP.swatchLine}` },
   swatchSelected: { boxShadow: heldRing(STRIP.ground, STRIP.mark, 1) },
 
-  // Takes the pointer whole, so the map under it draws no hover.
   flyoutAt: {
     position: "absolute",
-    bottom: FLYOUT_FOOT,
+    bottom: PEEK_PX + FLYOUT_FOOT,
     width: FLYOUT_WIDTH,
     zIndex: 10,
-    pointerEvents: "box-only",
   },
+  // Takes the pointer whole, so the map under it draws no hover.
+  flyoutTakes: { pointerEvents: "box-only" },
+  seed: { alignSelf: "center", width: SEED, height: SEED, borderRadius: SEED / 2, boxShadow: shadow.lift },
   flyout: {
     alignItems: "center",
     gap: FLYOUT_GAP_PX,
