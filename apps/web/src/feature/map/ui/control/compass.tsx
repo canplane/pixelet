@@ -9,13 +9,13 @@ import { LABEL, NORTH } from "@platform/palette.ts";
 import { chrome } from "@/shared/ui/theme.ts";
 import type { f64 } from "@xpute/core/abi/word.ts";
 
-const NEEDLE_HALF = 20;
-const NEEDLE_WIDTH = 10;
+const NEEDLE_HALF = 16;
+const NEEDLE_WIDTH = 9;
 const LIT = 0.75;
 const NEEDLE_ROUND = 2;
 /** How far toward south the halves' seam bends at the middle, so the two
  * colors meet in a chevron, as a physical needle's bevel does. */
-const SEAM_BEND = 3;
+const SEAM_BEND = 2;
 const TICK_TO = chrome.control / 2 - 3;
 const TICK_FROM = TICK_TO - 2.5;
 const QUARTER_STROKE = 1.5;
