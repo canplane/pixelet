@@ -70,24 +70,23 @@ export function ToastController() {
   const companionFirstLoadDoneRef = useRef(false);
   useEffect(() => {
     const isMapLoading = mapStatus === MapStatus.Loading;
-    const isError = mapStatus === MapStatus.Error;
     const relevantCompanionLoading = companionLoading && !companionFirstLoadDoneRef.current;
     if (!companionLoading) companionFirstLoadDoneRef.current = true;
     const isLoading = isMapLoading || relevantCompanionLoading;
 
     // Retries for an announced page are not the world loading; announcing them
-    // replayed this toast every two seconds forever. Errors still speak.
+    // replayed this toast every two seconds forever.
     const alreadyAnnounced = mapPage === announcedPageRef.current;
 
-    if (isLoading || isError) {
+    if (isLoading) {
       wasWorldLoadingRef.current = true;
-      if (alreadyAnnounced && !isError) {
+      if (alreadyAnnounced) {
         dropWorldToast();
         return;
       }
-      const messageKey = isError ? "toast.map_load_error" : isMapLoading ? "toast.map_loading" : "toast.companion_loading";
+      const messageKey = isMapLoading ? "toast.map_loading" : "toast.companion_loading";
       shownWorldToastRef.current = true;
-      toastShow(Report.World, { message: tRef.current(messageKey), tone: isError ? ToastTone.Error : ToastTone.Loading });
+      toastShow(Report.World, { message: tRef.current(messageKey), tone: ToastTone.Loading });
       return;
     }
 

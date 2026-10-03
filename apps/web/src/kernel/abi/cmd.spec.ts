@@ -198,7 +198,6 @@ export const enum MapStatus {
   Idle = 0,
   Loading = 1,
   Success = 2,
-  Error = 3,
 }
 
 /** Where a sensor's reading is: none asked for, asked for, arriving, failed, or none to be had, the device having no such sensor. */
@@ -228,7 +227,6 @@ export const enum Message {
   // ---- 0x01 the world's own state ----
 
   MapLoading = 0x0101,
-  MapLoadError = 0x0102,
   CompanionLoading = 0x0103,
   WorldReady = 0x0104,
 

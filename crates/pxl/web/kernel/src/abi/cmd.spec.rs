@@ -459,11 +459,10 @@ pub enum MapStatus {
     Idle = 0,
     Loading = 1,
     Success = 2,
-    Error = 3,
 }
 
 impl MapStatus {
-    pub const ALL: [MapStatus; 4] = [MapStatus::Idle, MapStatus::Loading, MapStatus::Success, MapStatus::Error];
+    pub const ALL: [MapStatus; 3] = [MapStatus::Idle, MapStatus::Loading, MapStatus::Success];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<MapStatus> {
@@ -517,7 +516,6 @@ pub enum Message {
 
     // ---- 0x01 the world's own state ----
     MapLoading = 0x0101,
-    MapLoadError = 0x0102,
     CompanionLoading = 0x0103,
     WorldReady = 0x0104,
 
@@ -537,10 +535,9 @@ pub enum Message {
 }
 
 impl Message {
-    pub const ALL: [Message; 15] = [
+    pub const ALL: [Message; 14] = [
         Message::None,
         Message::MapLoading,
-        Message::MapLoadError,
         Message::CompanionLoading,
         Message::WorldReady,
         Message::LocationChecking,

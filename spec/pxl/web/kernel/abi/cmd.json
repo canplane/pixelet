@@ -584,10 +584,6 @@
         {
           "name": "Success",
           "value": 2
-        },
-        {
-          "name": "Error",
-          "value": 3
         }
       ]
     },
@@ -649,10 +645,6 @@
         {
           "name": "MapLoading",
           "value": 257
-        },
-        {
-          "name": "MapLoadError",
-          "value": 258
         },
         {
           "name": "CompanionLoading",

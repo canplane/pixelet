@@ -96,8 +96,7 @@ pub fn terrain_step() {
     terrain.step(crate::control::navigation::destination::page());
     crate::world::pyramid::cover::step::<Terrain>();
     // Derived from the scheduler so a superseded batch cannot leave a stale
-    // Success. Nothing sets Error, so the shell's Error toast is never met; known,
-    // and left alone.
+    // Success. A failed fetch keeps its want and is retried, so it reads as Loading.
     let map = map_store();
     if pending_count(Terrain::CATEGORY) + pending_count(OCEAN_CATEGORY) > 0 {
         map.map_status = MapStatus::Loading;

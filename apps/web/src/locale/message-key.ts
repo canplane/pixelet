@@ -11,8 +11,6 @@ export function messageKey(message: Message): string | null {
 
     case Message.MapLoading:
       return "toast.map_loading";
-    case Message.MapLoadError:
-      return "toast.map_load_error";
     case Message.CompanionLoading:
       return "toast.companion_loading";
     case Message.WorldReady:
