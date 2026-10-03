@@ -287,10 +287,15 @@ impl SettingKey {
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(
-            self,
-            SettingKey::textures | SettingKey::decor | SettingKey::center_support | SettingKey::camera_collision | SettingKey::shadows
-        )
+        matches!(self, SettingKey::textures | SettingKey::decor | SettingKey::center_support | SettingKey::shadows)
+    }
+
+    /// A choice's option a development build only offers.
+    pub fn dev_option(self, value: u32) -> bool {
+        match self {
+            SettingKey::camera_collision => matches!(value, 0),
+            _ => false,
+        }
     }
 
     /// Read by a chunk's build, so a change builds the chunks again.
@@ -329,7 +334,7 @@ impl Settings {
         tilt_lock: false,
         camera_mode: CameraMode::orbit,
         center_support: true,
-        camera_collision: CameraCollisionMode::stop,
+        camera_collision: CameraCollisionMode::climb,
         edge_shade: true,
         rim_light: true,
         ao: AoMode::corner,

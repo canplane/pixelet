@@ -100,10 +100,10 @@ export const SETTINGS = {
   camera_collision: {
     key: 6 as number,
     kind: "choice",
-    default: "stop",
+    default: "climb",
     options: ["through", "stop", "climb"],
     section: "camera",
-    dev: true,
+    dev_options: ["through"],
   },
   /** Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
@@ -210,6 +210,15 @@ export const SETTINGS_SHIPPED = {
     default: "orbit",
     options: ["orbit", "free"],
     section: "map",
+  },
+  /** What the camera does when the controls would put it underground; CAMERA_COLLISION_MODES says each. */
+  camera_collision: {
+    key: 6 as number,
+    kind: "choice",
+    default: "climb",
+    options: ["through", "stop", "climb"],
+    section: "camera",
+    dev_options: ["through"],
   },
   /** Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */

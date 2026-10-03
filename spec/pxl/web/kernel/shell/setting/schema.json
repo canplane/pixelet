@@ -168,10 +168,10 @@
     "camera_collision": {
       "$doc": ["What the camera does when the controls would put it underground; CAMERA_COLLISION_MODES says each."],
       "kind": "choice",
-      "default": "stop",
+      "default": "climb",
       "options": "CAMERA_COLLISION_MODES",
       "section": "camera",
-      "dev": true
+      "dev_options": ["through"]
     },
     "edge_shade": {
       "$doc": [

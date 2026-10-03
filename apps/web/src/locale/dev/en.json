@@ -1,23 +1,5 @@
 {
   "settings": {
-    "camera": {
-      "camera_collision": {
-        "label": "Third-person camera collision",
-        "through": {
-          "label": "Pass through",
-          "description": "Passes through terrain and objects."
-        },
-        "stop": {
-          "label": "Stop",
-          "description": "Stops the camera control just short of the collision."
-        },
-        "climb": {
-          "label": "Climb over",
-          "description": "Rises over what blocks it; stops where the way up is blocked too."
-        },
-        "description": "What the third-person camera does when terrain or an object blocks it. First person has none."
-      }
-    },
     "lighting": {
       "shadows": {
         "label": "Shadows",

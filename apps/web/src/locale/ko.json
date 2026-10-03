@@ -32,6 +32,22 @@
       "tilt_lock": {
         "label": "카메라 기울기 고정",
         "description": "카메라의 수직 회전을 고정하고 수평 회전만 허용합니다."
+      },
+      "camera_collision": {
+        "label": "3인칭 카메라 충돌",
+        "through": {
+          "label": "통과",
+          "description": "지형과 물체를 그대로 통과합니다."
+        },
+        "stop": {
+          "label": "멈춤",
+          "description": "충돌 직전에서 카메라 조작을 멈춥니다."
+        },
+        "climb": {
+          "label": "타고 넘기",
+          "description": "충돌하면 위쪽으로 넘어갑니다. 위쪽도 막혀 있으면 멈춥니다."
+        },
+        "description": "3인칭에서 카메라가 지형이나 물체에 막힐 때의 동작입니다. 1인칭에는 적용되지 않습니다."
       }
     },
     "lighting": {

@@ -19,15 +19,15 @@ use crate::world::chunk::source::chunk_sources_changed;
 /// A dev-only setting outside a development build is not offered: storage
 /// outlives the build, and a value with no row left to turn it off would stay
 /// in force. Loading drops it and `set_setting` refuses it from the console.
-pub fn is_offered(key: SettingKey) -> bool {
-    !key.dev() || (cfg!(feature = "dev") && development())
+pub fn is_offered(key: SettingKey, value: u32) -> bool {
+    !(key.dev() || key.dev_option(value)) || (cfg!(feature = "dev") && development())
 }
 
 impl Settings {
     /// Does nothing for a value the key may not hold, the current value, or a
     /// setting not offered (see `is_offered`).
     pub fn set_setting(&mut self, key: SettingKey, value: u32) {
-        if !is_offered(key) || self.get(key) == value || !self.set(key, value) {
+        if !is_offered(key, value) || self.get(key) == value || !self.set(key, value) {
             return;
         }
         if key.sources_chunks() {
@@ -47,7 +47,7 @@ impl Settings {
         let mut out = String::from("{");
         for key in SettingKey::ALL {
             let value = self.get(key);
-            if !is_offered(key) || value == Settings::DEFAULT.get(key) {
+            if !is_offered(key, value) || value == Settings::DEFAULT.get(key) {
                 continue;
             }
             if out.len() > 1 {
@@ -81,13 +81,13 @@ fn read_kept(kept: &str) -> Settings {
     let mut s = Settings::DEFAULT;
     if let Some(kept) = read_json(kept).filter(|v| v.kind() == JsonKind::Object) {
         for key in SettingKey::ALL {
-            let Some(v) = kept.get(key.name()).filter(|_| is_offered(key)) else { continue };
+            let Some(v) = kept.get(key.name()) else { continue };
             let value = match key.kind() {
                 SettingKind::Toggle => v.as_bool().map(u32::from),
                 SettingKind::Choice => v.as_str().and_then(|o| key.options().iter().position(|n| o.eq_str(n))).map(|i| i as u32),
                 SettingKind::Index => v.as_f64().filter(|n| n.fract() == 0.0 && *n >= 0.0 && *n <= u32::MAX as f64).map(|n| n as u32),
             };
-            if let Some(value) = value {
+            if let Some(value) = value.filter(|&value| is_offered(key, value)) {
                 s.set(key, value);
             }
         }

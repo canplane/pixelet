@@ -179,6 +179,20 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         format!("        {}", keys_where(&|s| s.flag("dev"))),
         "    }".into(),
         String::new(),
+        "    /// A choice's option a development build only offers.".into(),
+        "    pub fn dev_option(self, value: u32) -> bool {".into(),
+        "        match self {".into(),
+    ]);
+    for s in settings.iter().filter(|s| s.spec.get("dev_options").is_some()) {
+        let names = options_of(s)?;
+        let dev: Vec<String> = s.spec.get("dev_options").and_then(Node::arr).unwrap_or_default().iter().filter_map(|n| n.str()).map(|n| names.iter().position(|o| o == n).map(|i| i.to_string()).ok_or(format!("{JSON}: {}'s dev option {n} is not one of its options", s.key))).collect::<Result<_, _>>()?;
+        rs.push(format!("            SettingKey::{} => matches!(value, {}),", s.key, dev.join(" | ")));
+    }
+    rs.extend([
+        "            _ => false,".to_string(),
+        "        }".into(),
+        "    }".into(),
+        String::new(),
         "    /// Read by a chunk's build, so a change builds the chunks again.".into(),
         "    pub fn sources_chunks(self) -> bool {".into(),
         format!("        {}", keys_where(&|s| s.flag("sources_chunks"))),
