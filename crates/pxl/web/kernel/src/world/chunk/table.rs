@@ -49,11 +49,6 @@ use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::indexer::L2_IDX;
 
-pub const IN_FRUSTUM: u16 = 1;
-pub const PENDING: u16 = 4;
-pub const SETTLING: u16 = 32;
-/// Mounted and not yet rechecked; its first recheck ignores the frame budget.
-pub const FRESH: u16 = 128;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Role {
@@ -120,8 +115,12 @@ struct Slot {
     bc: V3,
     radius: f64,
     order: Order,
-    flags: u16,
-    pending_since: f64,
+    in_frustum: bool,
+    /// Mounted and not yet rechecked; its first recheck ignores the frame budget.
+    fresh: bool,
+    settling: bool,
+    /// Since when it has wanted a build; none while it wants none.
+    pending_since: Option<f64>,
     /// Slots a tier needs, for (generation, cube), found when a bake did not
     /// fit (`BuildEvent::Reserve`); not asked for again until that many are free.
     need: Option<(u32, Cube, u32)>,
@@ -130,9 +129,9 @@ struct Slot {
     /// The layout's tiers plus the last one landed. A source change keeps the
     /// old generation's tiers drawn until a layout of the new one is applied.
     tiers: Held<Tier>,
-    layout_primary: Cube,
-    layout_generation: u32,
-    layout_ready: bool,
+    /// The applied layout's primary cube and generation; none until one is, or
+    /// once its tier is gone.
+    layout: Option<(Cube, u32)>,
     desired: Cube,
     sources: Sources,
 }
@@ -198,16 +197,8 @@ impl Slot {
         self.need.filter(|&(g, c, _)| g == generation && c == cube).map_or(1, |(_, _, k)| k)
     }
 
-    fn has(&self, f: u16) -> bool {
-        self.flags & f != 0
-    }
-
-    fn set(&mut self, f: u16, on: bool) {
-        if on {
-            self.flags |= f
-        } else {
-            self.flags &= !f
-        }
+    fn pending(&self) -> bool {
+        self.pending_since.is_some()
     }
 
     fn tier(&self, cube: Cube, generation: u32) -> Option<&Tier> {
@@ -215,16 +206,15 @@ impl Slot {
     }
 
     fn recubes(&self) -> bool {
-        self.layout_ready && self.layout_primary != self.desired
+        self.layout.is_some_and(|(p, _)| p != self.desired)
     }
 
     /// The cube it builds now: the desired one, except a drawn piece the frontier
     /// has not let recube rebuilds its shown cube in place, so an edit still shows.
     fn target(&self) -> Cube {
-        if self.role == Role::Drawn && self.recubes() && !self.recube {
-            self.layout_primary
-        } else {
-            self.desired
+        match self.layout {
+            Some((p, _)) if self.role == Role::Drawn && self.recubes() && !self.recube => p,
+            _ => self.desired,
         }
     }
 
@@ -534,20 +524,20 @@ impl Scheduler {
             bc: [0.0; 3],
             radius: 0.0,
             order: Order::LAST,
-            flags: FRESH,
-            pending_since: -1.0,
+            in_frustum: false,
+            fresh: true,
+            settling: false,
+            pending_since: None,
             need: None,
             recube: false,
             tiers: Held::EMPTY,
-            layout_primary: chunk_scale(level),
-            layout_generation: 0,
-            layout_ready: false,
+            layout: None,
             desired: chunk_scale(level),
             sources,
         };
         slot.unmeasured();
         if let Some(frame) = self.frame {
-            slot.set(IN_FRUSTUM, visible(&frame, &slot));
+            slot.in_frustum = visible(&frame, &slot);
         }
         if let Some(d) = domain::current() {
             slot.order = d.order_of(k);
@@ -600,10 +590,10 @@ impl Scheduler {
         let id = self.slots[i].id;
         self.builder.source(world, id);
         let s = &mut self.slots[i];
-        if !s.layout_ready {
+        if s.layout.is_none() {
             s.unmeasured();
         }
-        s.set(FRESH, true);
+        s.fresh = true;
     }
 
     /// A page that goes is not a change: a build finds no page and waits, and
@@ -699,7 +689,7 @@ impl Scheduler {
                         sc.recube.push((s.chunk, (pool_of(s.chunk, s.desired), s.slots_for(s.desired, self.generation(i)))));
                     }
                 }
-                Role::Building => sc.building.push((s.chunk, s.layout_ready)),
+                Role::Building => sc.building.push((s.chunk, s.layout.is_some())),
             }
         }
         sc.drawn.sort_unstable();
@@ -767,7 +757,7 @@ impl Scheduler {
         self.meshes.holder.fill(Nth::NONE);
         for s in self.slots.iter_mut() {
             s.tiers.clear();
-            s.layout_ready = false;
+            s.layout = None;
         }
         self.view_dirty = true;
     }
@@ -796,7 +786,7 @@ impl Scheduler {
         // A recheck touches only its own chunk, so order does not matter.
         let full_recheck = self.view_dirty;
         sc.eligible.clear();
-        sc.eligible.extend((0..self.slots.len()).filter(|&i| full_recheck || self.slots[i].flags & (FRESH | SETTLING) != 0));
+        sc.eligible.extend((0..self.slots.len()).filter(|&i| full_recheck || (self.slots[i].fresh || self.slots[i].settling)));
         for k in 0..sc.eligible.len() {
             let i = sc.eligible[k];
             self.recheck(world, i, t0);
@@ -809,7 +799,7 @@ impl Scheduler {
         self.order(&mut sc.order, &mut sc.keys);
 
         sc.pending.clear();
-        sc.pending.extend(sc.order.iter().copied().filter(|&i| self.slots[i].has(PENDING)));
+        sc.pending.extend(sc.order.iter().copied().filter(|&i| self.slots[i].pending()));
         let pending_total = sc.pending.len() as u32;
 
         let commits = under_budget(&sc.pending, param::COMMITS_PER_FRAME, deadline, hard, now, |i| self.commit(world, i));
@@ -818,7 +808,7 @@ impl Scheduler {
 
         let slots = &self.slots;
         self.builds.clear();
-        self.builds.extend(sc.pending.iter().filter(|&&i| slots[i].has(PENDING)).map(|&i| slots[i].id));
+        self.builds.extend(sc.pending.iter().filter(|&&i| slots[i].pending()).map(|&i| slots[i].id));
         if !self.builds.is_empty() {
             builds().notify();
         }
@@ -836,21 +826,21 @@ impl Scheduler {
             ..Census::default()
         };
         for s in &self.slots {
-            if s.has(IN_FRUSTUM) {
+            if s.in_frustum {
                 c.in_frustum += 1;
             }
-            if s.has(SETTLING) {
+            if s.settling {
                 c.settling += 1;
             }
-            if s.has(PENDING) {
+            if s.pending() {
                 c.pending += 1;
             }
-            if s.role == Role::Building && s.layout_ready {
+            if s.role == Role::Building && s.layout.is_some() {
                 c.ready_waiting += 1;
             }
-            if s.has(PENDING) && s.pending_since >= 0.0 {
-                let waited = t0 - s.pending_since;
-                if s.has(IN_FRUSTUM) {
+            if let Some(since) = s.pending_since {
+                let waited = t0 - since;
+                if s.in_frustum {
                     c.oldest_visible_ms = c.oldest_visible_ms.max(waited);
                 } else {
                     c.offscreen_pending += 1;
@@ -880,13 +870,13 @@ impl Scheduler {
         self.debug.draw(&mut self.draw, frame.eye);
         let holder = &self.meshes.holder;
         for s in &self.slots {
-            if s.role == Role::Building || !s.has(IN_FRUSTUM) || !s.layout_ready {
+            let Some((cube, generation)) = s.layout else { continue };
+            if s.role == Role::Building || !s.in_frustum {
                 continue;
             }
             let (x0, y0) = s.base();
             let translation = DrawList::translation([x0, y0, 0.0], frame.eye);
-            let cube = s.layout_primary;
-            let Some(t) = s.tier(cube, s.layout_generation) else { continue };
+            let Some(t) = s.tier(cube, generation) else { continue };
             // Slots are recycled between chunks, so a chunk must draw only from a slot
             // it holds; otherwise it can draw another chunk's ground.
             xpute_core::ensure!(holder[t.slot.index] == Nth::of(s.id as usize), ENOTRECOVERABLE);
@@ -915,9 +905,9 @@ impl Scheduler {
             let order = domain.map_or(Order::LAST, |d| d.order_of(self.slots[i].chunk));
             let s = &mut self.slots[i];
             s.order = order;
-            let was = s.has(IN_FRUSTUM);
+            let was = s.in_frustum;
             if visible != was {
-                s.set(IN_FRUSTUM, visible);
+                s.in_frustum = visible;
                 self.view_dirty = true;
             }
         }
@@ -938,13 +928,7 @@ impl Scheduler {
 
     fn set_pending(&mut self, i: usize, pending: bool, now: f64) {
         let s = &mut self.slots[i];
-        if pending && !s.has(PENDING) {
-            s.pending_since = now;
-        }
-        if !pending {
-            s.pending_since = -1.0;
-        }
-        s.set(PENDING, pending);
+        s.pending_since = pending.then(|| s.pending_since.unwrap_or(now));
     }
 
     fn stop_work(&mut self, world: &mut World, i: usize) {
@@ -954,16 +938,16 @@ impl Scheduler {
 
     /// Sets the desired cube and whether the chunk is pending. A drawn piece
     /// wanting another cube waits for the frontier (`materialize`); a building
-    /// chunk drops a tier no longer wanted. SETTLING is pending with a layout up.
+    /// chunk drops a tier no longer wanted. `settling` is pending with a layout up.
     fn recheck(&mut self, world: &mut World, i: usize, now: f64) {
-        self.slots[i].set(FRESH, false);
+        self.slots[i].fresh = false;
         let Some(d) = domain::current() else { return };
         let s = &self.slots[i];
         let (level, chunk) = (s.level(), s.chunk);
         let objects = level == 0 && world.store.entries(L2_IDX(chunk.corner())).is_some();
         let current = self.generation(i);
         let desired = cube_of(chunk, d.outermost(chunk), d.order_of(chunk).near, d.tau(), objects);
-        if self.slots[i].role == Role::Building && self.slots[i].layout_ready && self.slots[i].layout_primary != desired {
+        if self.slots[i].role == Role::Building && self.slots[i].layout.is_some_and(|(p, _)| p != desired) {
             self.release_tiers(i, |_, _| false);
         }
         let s = &mut self.slots[i];
@@ -971,12 +955,12 @@ impl Scheduler {
         if !s.recubes() {
             s.recube = false;
         }
-        let pending = !s.layout_ready || s.layout_primary != s.target() || s.layout_generation != current;
+        let pending = s.layout != Some((s.target(), current));
         self.set_pending(i, pending, now);
         let s = &mut self.slots[i];
-        let settling = s.has(PENDING) && s.layout_ready;
-        s.set(SETTLING, settling);
-        if !s.has(PENDING) {
+        let settling = s.pending() && s.layout.is_some();
+        s.settling = settling;
+        if !s.pending() {
             self.stop_work(world, i);
         }
     }
@@ -984,8 +968,8 @@ impl Scheduler {
     fn release_tiers(&mut self, i: usize, keep: impl Fn(Cube, u32) -> bool) {
         let s = &mut self.slots[i];
         prune(s, &mut self.meshes, |t| keep(t.cube, t.generation), None);
-        if s.tier(s.layout_primary, s.layout_generation).is_none() {
-            s.layout_ready = false;
+        if s.layout.is_some_and(|(p, g)| s.tier(p, g).is_none()) {
+            s.layout = None;
         }
     }
 
@@ -999,7 +983,7 @@ impl Scheduler {
         self.builder.want(world, s.id, [(lacks && room).then_some(primary), None]);
         settle(&mut self.meshes, &self.builder);
         if !room {
-            self.slots[i].set(FRESH, true);
+            self.slots[i].fresh = true;
         }
         !lacks
     }
@@ -1007,9 +991,7 @@ impl Scheduler {
     fn apply_layout(&mut self, i: usize, primary: Cube, generation: u32) {
         self.counts.layouts += 1;
         let s = &mut self.slots[i];
-        s.layout_primary = primary;
-        s.layout_generation = generation;
-        s.layout_ready = true;
+        s.layout = Some((primary, generation));
         match s.tier(primary, generation).and_then(|t| t.bounds) {
             Some(b) => (s.bc, s.radius) = (b.center(), b.radius()),
             None => s.unmeasured(),
@@ -1017,14 +999,13 @@ impl Scheduler {
     }
 
     fn trim(&mut self, i: usize) {
-        let s = &self.slots[i];
-        let (p, g) = (s.layout_primary, s.layout_generation);
-        self.release_tiers(i, move |cube, generation| generation == g && cube == p);
+        let layout = self.slots[i].layout;
+        self.release_tiers(i, move |cube, generation| layout == Some((cube, generation)));
     }
 
     fn commit(&mut self, world: &mut World, i: usize) -> bool {
         let s = &self.slots[i];
-        if !s.has(PENDING) {
+        if !s.pending() {
             return false;
         }
         let (p, generation) = (s.target(), self.generation(i));
@@ -1033,7 +1014,7 @@ impl Scheduler {
             return false;
         }
         let s = &self.slots[i];
-        let recubed = s.role == Role::Drawn && s.layout_ready && s.layout_generation == generation && s.layout_primary != p;
+        let recubed = s.role == Role::Drawn && s.layout.is_some_and(|(q, g)| g == generation && q != p);
         self.apply_layout(i, p, generation);
         self.trim(i);
         if recubed {
@@ -1273,7 +1254,7 @@ fn release(meshes: &mut Meshes, l: Landing) {
 
 fn refuse(slots: &mut [Slot], i: usize, meshes: &mut Meshes, generation: u32, cube: Cube, k: u32, level: u32) -> bool {
     slots[i].need = Some((generation, cube, k));
-    slots[i].set(FRESH, true);
+    slots[i].fresh = true;
     meshes.needs = meshes.needs.wrapping_add(1);
     meshes.waits += 1;
     meshes.wait_levels |= 1 << level;
@@ -1392,8 +1373,8 @@ fn land(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
     }
     let slot = slot_at(landing.first);
     let s = &mut slots[i];
-    let (p, g) = (s.layout_primary, s.layout_generation);
-    prune(s, meshes, |t| t.generation == g && t.cube == p, Some(slot.index));
+    let layout = s.layout;
+    prune(s, meshes, |t| layout == Some((t.cube, t.generation)), Some(slot.index));
     // An older-generation tier on the same slots now shows these boxes.
     for t in s.tiers.iter_mut().filter(|t| t.slot.index == slot.index) {
         t.box_cnt = box_cnt;
