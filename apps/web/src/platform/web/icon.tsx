@@ -38,7 +38,7 @@ const LUCIDE = {
   "hand.point.up.left": [Pointer, false],
   "eraser": [Eraser, false],
   "eye": [Eye, false],
-  "figure.walk": [PersonStanding, false],
+  "figure.stand": [PersonStanding, false],
   "gauge.medium": [Gauge, false],
   "gearshape": [Settings, false],
   "globe": [Globe, false],
