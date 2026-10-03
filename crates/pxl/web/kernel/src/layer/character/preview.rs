@@ -46,7 +46,7 @@ pub const CASES_MAX: usize = pxl_render::gpu::surface::SURFACES;
 /// Replaces a case already open under `id`. False where `id` names no
 /// surface or no variant.
 pub fn preview_open(id: u32, group: Group, number: u8) -> bool {
-    if id as usize >= CASES_MAX {
+    if pxl_render::gpu::surface::surface(id).is_none() {
         return false;
     }
     preview_close(id);
