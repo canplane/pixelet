@@ -815,6 +815,17 @@ fn propagate_up<V: Copy>(map: &mut HashMap<(Scale, [i64; 3]), V>, (mut scale, mu
     }
 }
 
+/// A band as a node of `BAND`'s lattice.
+fn band_node(col_idx: IVec, band_idx: BandZ) -> [i64; 3] {
+    [ivec::X(col_idx), ivec::Y(col_idx), i64::from(band_idx)]
+}
+
+/// The cell of `scale` holding the leaf at `step` in the band at `band`.
+fn leaf_cell(band: [i64; 3], step: [i64; 3], scale: Scale) -> [i64; 3] {
+    let (cells, per) = (scale.count_in(BAND) as i64, OBJECT_FINEST.count_in(scale) as i64);
+    core::array::from_fn(|k| band[k] * cells + step[k] / per)
+}
+
 fn grown(b: &Aabb, side: f64) -> Aabb {
     Aabb {
         min: b.min.map(|v| (v / side).floor() * side),
@@ -966,7 +977,7 @@ impl Store {
     }
 
     fn index_up(&mut self, col_idx: IVec, band_idx: BandZ) {
-        let at = [ivec::X(col_idx), ivec::Y(col_idx), i64::from(band_idx)];
+        let at = band_node(col_idx, band_idx);
         let corner = FROM_L2_IDX(col_idx);
         let (x0, y0) = (ivec::X(corner) as f64, ivec::Y(corner) as f64);
         let bound = self.columns.get(&col_idx).and_then(|c| c.bounds.get(&band_idx)).map(|b| Aabb {
@@ -1037,12 +1048,12 @@ impl Store {
                 }
             });
         } else {
-            let (cells, per) = (target.count_in(BAND) as i64, OBJECT_FINEST.count_in(target) as i64);
+            let cells = target.count_in(BAND) as i64;
             for cy in from[1].div_euclid(cells)..=(to[1] - 1).div_euclid(cells) {
                 for cx in from[0].div_euclid(cells)..=(to[0] - 1).div_euclid(cells) {
                     let Some(column) = self.columns.get(&ivec::gather(cx, cy, 0)) else { continue };
                     for (&band_idx, tree) in &column.bands {
-                        let corner = [cx * cells, cy * cells, i64::from(band_idx) * cells];
+                        let band = [cx, cy, i64::from(band_idx)];
                         mem::walk_to(
                             &tree.mem,
                             &tree.layout,
@@ -1052,11 +1063,11 @@ impl Store {
                                     return;
                                 }
                                 let n = target.count_in(s) as i64;
-                                let at = [x, y, z].map(|c| i64::from(c) / per);
+                                let at = leaf_cell(band, [x, y, z].map(i64::from), target);
                                 for dz in 0..n {
                                     for dy in 0..n {
                                         for dx in 0..n {
-                                            let cell = [corner[0] + at[0] + dx, corner[1] + at[1] + dy, corner[2] + at[2] + dz];
+                                            let cell = [at[0] + dx, at[1] + dy, at[2] + dz];
                                             if inside(cell[0], cell[1]) && refused.is_ok() {
                                                 refused = try_insert(out, cell, u32::from(v));
                                             }
@@ -1123,17 +1134,15 @@ impl Store {
             Some((h.band_idx, at, if own > target { own } else { target }, u32::from(v)))
         });
         for (&band_idx, tree) in &column.bands {
-            let corner = [ivec::X(col_idx), ivec::Y(col_idx), i64::from(band_idx)];
+            let band = band_node(col_idx, band_idx);
             mem::walk_to(
                 &tree.mem,
                 &tree.layout,
                 target,
                 &mut |x, y, z, s, v| {
                     let mut v = u32::from(v);
-                    if let Some((band, at, scale, w)) = hidden {
-                        let (cells, per) = (s.count_in(BAND) as i64, OBJECT_FINEST.count_in(s) as i64);
-                        let cell: [i64; 3] = core::array::from_fn(|k| corner[k] * cells + i64::from([x, y, z][k]) / per);
-                        if band == band_idx && scale == s && cell == at {
+                    if let Some((hidden_band, at, scale, w)) = hidden {
+                        if hidden_band == band_idx && scale == s && leaf_cell(band, [x, y, z].map(i64::from), s) == at {
                             v = w;
                         }
                     }
@@ -1149,10 +1158,7 @@ impl Store {
     fn hidden(&self, hide: EntryAt, target: Scale) -> Option<([i64; 3], u16)> {
         self.columns.get(&hide.col_idx)?.bands.get(&hide.band_idx)?;
         let (x, y, z, own) = unpack_pos(hide.pos);
-        let per = OBJECT_FINEST.count_in(own) as i64;
-        let cells = own.count_in(BAND) as i64;
-        let corner = [ivec::X(hide.col_idx), ivec::Y(hide.col_idx), i64::from(hide.band_idx)].map(|c| c * cells);
-        let mut at: [i64; 3] = core::array::from_fn(|k| corner[k] + i64::from([x, y, z][k]) / per);
+        let mut at = leaf_cell(band_node(hide.col_idx, hide.band_idx), [x, y, z].map(i64::from), own);
         let (mut scale, mut v) = (own, VOID as u16);
         while scale < target {
             let (parent, up) = (parent_of(at), scale.up(1));
@@ -1170,7 +1176,7 @@ impl Store {
     }
 
     fn fold_up(&mut self, col_idx: IVec, band_idx: BandZ) {
-        let at = [ivec::X(col_idx), ivec::Y(col_idx), i64::from(band_idx)];
+        let at = band_node(col_idx, band_idx);
         let band = self.columns.get(&col_idx).and_then(|c| c.bands.get(&band_idx));
         let v = band.map(|t| fold_cell(&t.mem.data[..8], BAND)).filter(|&v| v != VOID as u16);
         propagate_up(&mut self.folds, (BAND, at), TOP_CELL, v, |scale, children| {
