@@ -106,7 +106,7 @@ impl Piece {
                     }
                 }
             }
-            if t0 > t1 {
+            if t0 >= t1 {
                 if run.len() >= 2 {
                     runs.push(std::mem::take(&mut run));
                 }
@@ -191,3 +191,7 @@ pub fn pieces_of(row: &BridgeRow, form: Form) -> Vec<Piece> {
         .filter(|p| p.points.len() >= 2)
         .collect()
 }
+
+#[cfg(test)]
+#[path = "piece.test.rs"]
+mod test;

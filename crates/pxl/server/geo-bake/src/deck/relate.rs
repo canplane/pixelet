@@ -295,3 +295,7 @@ pub fn connected<'a>(points: &[(P, &str)], ways: &'a [Way]) -> Vec<(usize, f64, 
     }
     out
 }
+
+#[cfg(test)]
+#[path = "relate.test.rs"]
+mod test;
