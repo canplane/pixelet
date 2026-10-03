@@ -10,21 +10,4 @@
 export const key = {
   /** Where the renderer's stream is, run after every turn; 0 where the kernel draws itself. */
   GPU_STREAM: 2147483650 as number,
-  /** Where the heap's row is: the bracket's reading (HeapStat) as words, written at
-   * every turn's fall. */
-  HEAP_ROW: 2147483651 as number,
-} as const;
-
-/** The heap row's words (pxl-kernel door.rs), each a HeapStat field, then its length. */
-export const heap_row = {
-  RANGE: 0 as number,
-  USED: 1 as number,
-  LIVE: 2 as number,
-  RUN: 3 as number,
-  SLOT: 4 as number,
-  LARGEST_FREE: 5 as number,
-  RELEASES: 6 as number,
-  REFUSALS: 7 as number,
-  REQUESTS: 8 as number,
-  WORDS: 9 as number,
 } as const;

@@ -475,7 +475,14 @@
       "changes_peak": 7,
       "WORDS": 8
     },
-    "WORDS": 589
+    "heap": {
+      "$doc": ["The heap as the read finds it, recording or not: `used_mb` its top, `requests` the pages it has ever asked for."],
+      "AT": 589,
+      "used_mb": 0,
+      "requests": 1,
+      "WORDS": 2
+    },
+    "WORDS": 591
   },
   "READ": {
     "$type": "u32",

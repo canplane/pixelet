@@ -18,23 +18,5 @@
 pub mod key {
     /// Where the renderer's stream is, run after every turn; 0 where the kernel draws itself.
     pub const GPU_STREAM: u32 = 2147483650;
-    /// Where the heap's row is: the bracket's reading (HeapStat) as words, written at
-    /// every turn's fall.
-    pub const HEAP_ROW: u32 = 2147483651;
-    pub const KEYS: &[&str] = &["GPU_STREAM", "HEAP_ROW"];
-}
-
-/// The heap row's words (pxl-kernel door.rs), each a HeapStat field, then its length.
-pub mod heap_row {
-    pub const RANGE: u32 = 0;
-    pub const USED: u32 = 1;
-    pub const LIVE: u32 = 2;
-    pub const RUN: u32 = 3;
-    pub const SLOT: u32 = 4;
-    pub const LARGEST_FREE: u32 = 5;
-    pub const RELEASES: u32 = 6;
-    pub const REFUSALS: u32 = 7;
-    pub const REQUESTS: u32 = 8;
-    pub const WORDS: u32 = 9;
-    pub const KEYS: &[&str] = &["RANGE", "USED", "LIVE", "RUN", "SLOT", "LARGEST_FREE", "RELEASES", "REFUSALS", "REQUESTS", "WORDS"];
+    pub const KEYS: &[&str] = &["GPU_STREAM"];
 }

@@ -226,6 +226,15 @@ pub struct QualityBlock {
     pub changes_peak: f64,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct HeapBlock {
+    pub used_mb: f64,
+    pub requests: f64,
+}
+
+words!(HeapBlock, SUMMARY::heap::WORDS, used_mb => SUMMARY::heap::used_mb, requests => SUMMARY::heap::requests);
+
 words!(QualityBlock, SUMMARY::quality::WORDS,
     step => SUMMARY::quality::step, star => SUMMARY::quality::star, frames_held => SUMMARY::quality::frames_held,
     admitted => SUMMARY::quality::admitted, evicted => SUMMARY::quality::evicted,

@@ -12,6 +12,7 @@ import { TreeReader } from "@xpute/core/wire/xtp/mod.ts";
 import {
   Command,
   encode_gpu_ready,
+  encode_profiler_read,
   encode_setting_set,
   encode_world_boot,
   encode_world_frame,
@@ -24,9 +25,9 @@ import { PUBLISHED_SOURCE } from "@/config/published.spec.ts";
 import { SETTINGS } from "@/feature/setting/schema.spec.ts";
 
 import { CORE, CORE_DOORBELL, load_core } from "@/kernel/mem.ts";
-import { heap_row, key as entry } from "@/kernel/abi/directory.spec.ts";
-import { bytes_at, directory } from "@/kernel/module.ts";
+import { bytes_at } from "@/kernel/module.ts";
 import { start_sched } from "@/kernel/sched.ts";
+import { READ, SUMMARY } from "@/feature/debug/profiler/profiler.spec.ts";
 import { acquireDevice } from "@/platform/web/webgpu.ts";
 
 await load_core();
@@ -40,8 +41,6 @@ CORE_DOORBELL.signal = (_tag, cmd, f) => {
     snapshot = read_snapshot(new TreeReader(bytes_at(CORE.buffer, at, len)).read_branch());
   }
 };
-
-const heap = new Uint32Array(CORE.buffer, directory(CORE.buffer).get(entry.HEAP_ROW), heap_row.WORDS);
 
 async function turn(delta = 1 / 60): Promise<Snapshot> {
   CORE_DOORBELL.send(
@@ -114,7 +113,14 @@ Deno.test("kernel - the settings commands reach the snapshot", async () => {
 
 Deno.test("kernel - a settled turn asks the module heap for nothing", async () => {
   for (let i = 0; i < 200; i++) await turn();
-  const [top, requests] = [heap[heap_row.USED], heap[heap_row.REQUESTS]];
+  // The heap as PROFILER_READ's summary finds it.
+  const heap = () => {
+    const read = new Uint32Array(CORE.buffer, CORE_DOORBELL.call(Command.PROFILER_READ, encode_profiler_read({ window_ms: 0 }), (at) => at >>> 0), READ.WORDS);
+    const summary = new Float64Array(CORE.buffer, read[READ.summary_at], read[READ.summary_words]);
+    return [summary[SUMMARY.heap.AT + SUMMARY.heap.requests], summary[SUMMARY.heap.AT + SUMMARY.heap.used_mb]];
+  };
+  const [requests, top] = heap();
   for (let i = 0; i < 100; i++) await turn();
-  assertEquals([heap[heap_row.REQUESTS] - requests, heap[heap_row.USED] - top], [0, 0], "a hundred settled turns: no request, and the heap's top where it was");
+  const [requestsAfter, topAfter] = heap();
+  assertEquals([requestsAfter - requests, topAfter - top], [0, 0], "a hundred settled turns: no request, and the heap's top where it was");
 });

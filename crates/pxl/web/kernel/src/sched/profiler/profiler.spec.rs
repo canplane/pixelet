@@ -691,8 +691,16 @@ pub mod SUMMARY {
         pub const WORDS: u32 = 8;
         pub const KEYS: &[&str] = &["AT", "step", "star", "frames_held", "admitted", "evicted", "refined", "recubed", "changes_peak", "WORDS"];
     }
-    pub const WORDS: u32 = 589;
-    pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "held", "fetch", "peak", "steps", "quality", "WORDS"];
+    /// The heap as the read finds it, recording or not: `used_mb` its top, `requests` the pages it has ever asked for.
+    pub mod heap {
+        pub const AT: u32 = 589;
+        pub const used_mb: u32 = 0;
+        pub const requests: u32 = 1;
+        pub const WORDS: u32 = 2;
+        pub const KEYS: &[&str] = &["AT", "used_mb", "requests", "WORDS"];
+    }
+    pub const WORDS: u32 = 591;
+    pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "held", "fetch", "peak", "steps", "quality", "heap", "WORDS"];
 }
 
 /// What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count.

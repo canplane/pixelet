@@ -9,7 +9,7 @@ use crate::host::now;
 use crate::io::sched::{counts, credits};
 use crate::kernel::{kernel, with_world};
 use crate::layer::billboard::sheet::billboard_sheet;
-use crate::sched::profiler::block::{AtlasBlock, FetchBlock, FramesBlock, HeldBlock, QualityBlock, RecBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock};
+use crate::sched::profiler::block::{AtlasBlock, FetchBlock, FramesBlock, HeapBlock, HeldBlock, QualityBlock, RecBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock};
 use crate::sched::profiler::log::window_counters;
 use crate::sched::profiler::record::{fixed_lane, profiler_frame_peak, profiler_frames_since, profiler_recording_state, profiler_tasks_since, put, FrameSample, Lane, Outcome, TaskRow, SPREAD_LIMIT};
 use crate::sched::profiler::spec::{LIMITS, SUMMARY, TASK_PHASE_NAMES};
@@ -254,6 +254,9 @@ fn side(out: &mut [f64]) {
             changes_peak: changes_peak as f64,
         },
     );
+
+    let h = crate::host::heap_stat();
+    put(out, SUMMARY::heap::AT, &HeapBlock { used_mb: h.used as f64 / (1 << 20) as f64, requests: h.requests as f64 });
 
     // Per step: a cooperative scheduler is only as cooperative as its longest step.
     let mut steps = StepsBlock::default();

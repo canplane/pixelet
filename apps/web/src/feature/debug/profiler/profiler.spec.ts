@@ -332,7 +332,14 @@ export const SUMMARY = {
     changes_peak: 7 as number,
     WORDS: 8 as number,
   },
-  WORDS: 589 as number,
+  /** The heap as the read finds it, recording or not: `used_mb` its top, `requests` the pages it has ever asked for. */
+  heap: {
+    AT: 589 as number,
+    used_mb: 0 as number,
+    requests: 1 as number,
+    WORDS: 2 as number,
+  },
+  WORDS: 591 as number,
 } as const;
 
 /** What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count. */
