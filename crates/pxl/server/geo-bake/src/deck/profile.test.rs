@@ -11,64 +11,43 @@ fn chain(n: usize, step: f64) -> Vec<Vec<(u32, f64)>> {
     adj
 }
 
-#[test]
-fn a_bare_span_is_the_straight_line_between_its_ends() {
-    let adj = chain(11, 10.0);
-    let need = vec![0.0; 11];
-    let top = solve(&Problem {
-        adj: &adj,
-        need: &need,
-        ends: &[(0, 20.0), (10, 40.0)],
-        ground: &need,
-        carried: &[true; 11],
-        approaches: &[],
-    })
-    .top;
-    for (i, t) in top.iter().enumerate() {
-        assert!((t - (20.0 + 2.0 * i as f64)).abs() < 1e-9, "{i}: {t}");
-    }
+/// A carried chain 5 m a step over flat ground.
+fn deck(need: &[f64], halo: f64) -> Profile {
+    let adj = chain(need.len(), 5.0);
+    solve(&Problem { adj: &adj, need, ground: &vec![0.0; need.len()], carried: &vec![true; need.len()], approaches: &[], halo })
 }
 
 #[test]
-fn a_clearance_raises_the_deck_and_it_still_meets_its_ends() {
-    let half = (6.0 / PREFERRED_SLOPE / 5.0).ceil() as usize + 1;
-    let n = 2 * half + 1;
-    let adj = chain(n, 5.0);
-    let mut need = vec![0.0; n];
-    need[half] = 6.0;
-    let top = solve(&Problem {
-        adj: &adj,
-        need: &need,
-        ends: &[(0, 0.0), (n as u32 - 1, 0.0)],
-        ground: &need,
-        carried: &vec![true; n],
-        approaches: &[],
-    })
-    .top;
-    assert_eq!(top[half], 6.0);
-    assert_eq!((top[0], top[n - 1]), (0.0, 0.0));
-    for w in top.windows(2) {
-        assert!((w[1] - w[0]).abs() <= PREFERRED_SLOPE * 5.0 + 1e-9, "a step: {w:?}");
-    }
+fn a_need_stands_over_its_point_and_falls_away_at_the_grade() {
+    let mut need = vec![2.0; 101];
+    need[50] = 8.0;
+    let p = deck(&need, 1000.0);
+    assert_eq!(p.top[50], 8.0);
+    assert!((p.top[49] - (8.0 - PREFERRED_SLOPE * 5.0)).abs() < 1e-9);
+    assert!(p.top.iter().zip(&need).all(|(t, n)| t >= n));
+    assert!(p.forced.iter().all(|f| !f));
 }
 
 #[test]
-fn a_clearance_too_near_an_end_is_met_by_a_steeper_grade() {
-    let adj = chain(5, 5.0);
-    let mut need = vec![0.0; 5];
-    need[1] = 50.0;
-    need[2] = 10.0;
-    let top = solve(&Problem {
-        adj: &adj,
-        need: &need,
-        ends: &[(0, 0.0), (4, 0.0)],
-        ground: &[0.0; 5],
-        carried: &[true; 5],
-        approaches: &[],
-    })
-    .top;
-    assert_eq!(top[1], 50.0);
-    assert!((top[2] - 50.0 * 2.0 / 3.0).abs() < 1e-9, "on the line from the held point to the end: {top:?}");
+fn nothing_past_the_halo_moves_a_point() {
+    let mut need = vec![2.0; 101];
+    need[0] = 30.0;
+    let near = deck(&need, 100.0);
+    need[0] = 60.0;
+    let far = deck(&need, 100.0);
+    assert_eq!(near.top[25..], far.top[25..], "20 steps is past a 100 m halo");
+}
+
+#[test]
+fn a_need_too_high_for_the_grade_lands_on_the_ground_by_the_halo_without_a_step() {
+    let mut need = vec![2.0; 101];
+    need[0] = 30.0;
+    let p = deck(&need, 100.0);
+    assert!((p.top[20] - 2.0).abs() < 1e-9, "on its need at the halo: {}", p.top[20]);
+    assert!(p.forced[1]);
+    for w in p.top.windows(2) {
+        assert!((w[0] - w[1]).abs() <= (30.0 - 2.0) / 100.0 * 5.0 + 1e-9);
+    }
 }
 
 /// `shell` over `deck`, an approach out of each end; 5 m a step.
@@ -82,10 +61,10 @@ fn with_approaches(ground: &[f64], deck: std::ops::RangeInclusive<usize>, shell:
     solve(&Problem {
         adj: &adj,
         need: &need,
-        ends: &[],
         ground,
         carried: &carried,
         approaches: &[&left, &right],
+        halo: 1000.0,
     })
 }
 
@@ -133,82 +112,3 @@ fn a_cutting_past_a_hollow_by_its_portal_does_not_dip_and_climb() {
     assert_meets_its_ground(&p, &ground, 30);
 }
 
-fn star(arm: usize, step: f64) -> (Vec<Vec<(u32, f64)>>, [u32; 3]) {
-    let n = 1 + 3 * arm;
-    let mut adj = vec![Vec::new(); n];
-    let mut tips = [0; 3];
-    for (a, tip) in tips.iter_mut().enumerate() {
-        let mut prev = 0u32;
-        for i in 0..arm {
-            let v = (1 + a * arm + i) as u32;
-            adj[prev as usize].push((v, step));
-            adj[v as usize].push((prev, step));
-            prev = v;
-        }
-        *tip = prev;
-    }
-    (adj, tips)
-}
-
-#[test]
-fn where_spans_meet_no_step_is_steeper_than_the_steepest_two_ends() {
-    // The steepest pair is 1.6 m over 20 m, exactly a deck's steepest.
-    let (adj, tips) = star(2, 5.0);
-    let need = vec![f64::NEG_INFINITY; adj.len()];
-    let ground = vec![0.0; adj.len()];
-    let ends = [(tips[0], 0.0), (tips[1], 0.0), (tips[2], PREFERRED_SLOPE * 20.0)];
-    let p = solve(&Problem {
-        adj: &adj,
-        need: &need,
-        ends: &ends,
-        ground: &ground,
-        carried: &vec![true; adj.len()],
-        approaches: &[],
-    });
-    assert!(p.forced.iter().all(|f| !f));
-    assert!((p.top[0] - PREFERRED_SLOPE * 10.0).abs() < 1e-9, "the junction: {}", p.top[0]);
-    for (v, edges) in adj.iter().enumerate() {
-        for &(w, d) in edges {
-            assert!((p.top[v] - p.top[w as usize]).abs() <= PREFERRED_SLOPE * d + 1e-9, "{v}-{w}: {:?}", (p.top[v], p.top[w as usize]));
-        }
-    }
-}
-
-#[test]
-fn ends_steeper_apart_than_a_deck_climbs_force_only_the_stretch_between_them() {
-    // Two tips 2 m apart in 20 m are forced; the third arm's gentler stretch is not.
-    let mut adj = vec![Vec::new(); 6];
-    for &(a, b, d) in &[(0u32, 1u32, 5.0), (1, 2, 5.0), (0, 3, 5.0), (3, 4, 5.0), (0, 5, 20.0)] {
-        adj[a as usize].push((b, d));
-        adj[b as usize].push((a, d));
-    }
-    let need = vec![f64::NEG_INFINITY; 6];
-    let ground = vec![0.0; 6];
-    let p = solve(&Problem {
-        adj: &adj,
-        need: &need,
-        ends: &[(2, 0.0), (4, 2.0), (5, 0.0)],
-        ground: &ground,
-        carried: &[true; 6],
-        approaches: &[],
-    });
-    assert!((p.top[0] - 1.0).abs() < 1e-9, "the junction: {}", p.top[0]);
-    assert!(p.forced[0] && p.forced[1] && p.forced[3]);
-    assert!((p.top[5] - 0.0).abs() < 1e-9);
-}
-
-#[test]
-fn a_pair_of_ends_steeper_than_a_deck_climbs_is_forced() {
-    let adj = chain(3, 2.5);
-    let need = vec![0.0; 3];
-    let p = solve(&Problem {
-        adj: &adj,
-        need: &need,
-        ends: &[(0, 0.0), (2, 1.0)],
-        ground: &need,
-        carried: &[true; 3],
-        approaches: &[],
-    });
-    assert!(p.forced[1]);
-    assert_eq!(p.top, vec![0.0, 0.5, 1.0]);
-}

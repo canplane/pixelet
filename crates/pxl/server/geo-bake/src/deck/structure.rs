@@ -127,13 +127,17 @@ impl Graph {
                 continue;
             };
             let len = line.length();
-            let steps = (pieces[m].to_m(len) / STEP_M).ceil().max(1.0) as usize;
-            let mut nodes: Vec<(u32, f64)> = Vec::with_capacity(steps + 1);
-            for k in 0..=steps {
-                let along = len * k as f64 / steps as f64;
+            // on the way's own lattice, so a piece clipped anywhere samples where the whole does
+            let step = STEP_M * len / pieces[m].to_m(len);
+            let start = pieces[m].start;
+            let first = (libm::floor(start / step) + 1.0) * step - start;
+            let inner = (0..).map(|k| first + k as f64 * step).take_while(|&a| a < len);
+            let at: Vec<f64> = std::iter::once(0.0).chain(inner).chain(std::iter::once(len)).collect();
+            let mut nodes: Vec<(u32, f64)> = Vec::with_capacity(at.len());
+            for (k, &along) in at.iter().enumerate() {
                 let p = line.at(along);
                 let d = pieces[m].to_m(along);
-                let node = if k == 0 || k == steps {
+                let node = if k == 0 || k + 1 == at.len() {
                     let e = ends.entry(pieces[m].end(k != 0)).or_insert_with(|| (u32::MAX, 0));
                     if e.0 == u32::MAX {
                         e.0 = point(&mut g, p);

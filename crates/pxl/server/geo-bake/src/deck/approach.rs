@@ -72,6 +72,7 @@ pub fn approaches(input: &Input, pieces: &[Piece], ends: &[(usize, bool)], form:
                 form,
                 approach: true,
                 ends: [structure.end(last).clone(), far],
+                start: if outward > 0.0 { own_at * len } else { (1.0 - own_at) * len },
                 points,
             };
             best.insert(e, (key, piece));

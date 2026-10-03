@@ -16,7 +16,12 @@ use std::collections::HashSet;
 
 use postgres::Client;
 use pxl_spec::bake::deck::{clearance_m, Form, BORE_COVER_M, DECK_THICKNESS_M};
+use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::format::DeckRow;
+use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m};
+use pxl_spec::space::pyramid::PAGE_CELLS;
+
+use crate::terrain::repository::DRAWN_REACH_U;
 use std::path::Path;
 
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -184,6 +189,12 @@ pub fn calculate<E>(input: &Input, ground: impl FnOnce(&[[f64; 2]]) -> Result<Ve
     Ok(out)
 }
 
+/// How far a need reaches: a page's side less what is drawn past one, so a
+/// page's points read nothing past the pages around it.
+fn halo_m(y_db: f64) -> f64 {
+    (f64::from(PAGE_CELLS) * U_PER_CELL - DRAWN_REACH_U) / u_per_m(from_db(y_db))
+}
+
 fn kind_of(p: &Piece) -> u8 {
     segment_type(&p.subtype, p.class.as_deref())
 }
@@ -230,8 +241,7 @@ impl<'a> Side<'a> {
             let mut next = Vec::with_capacity(self.structures.len());
             for (s, members) in self.structures.iter().enumerate() {
                 let (g, qg) = (&self.graphs[s], &q_ground[s]);
-                let ends: Vec<(u32, f64)> = g.free_ends.iter().filter(|(_, end)| pinned(end)).map(|&(e, _)| (e, qg[e as usize])).collect();
-                if ends.is_empty() && sign < 0.0 {
+                if sign < 0.0 && !g.free_ends.iter().any(|(_, end)| pinned(end)) {
                     next.push(None);
                     continue;
                 }
@@ -263,10 +273,10 @@ impl<'a> Side<'a> {
                 let profile = solve_profile(&Problem {
                     adj: &g.adj,
                     need: &need,
-                    ends: &ends,
                     ground: qg,
                     carried: &carried[s],
                     approaches: &approaches,
+                    halo: halo_m(g.at[0][1]),
                 });
                 forced += profile.forced.iter().filter(|&&f| f).count();
                 next.push(Some(profile.top));

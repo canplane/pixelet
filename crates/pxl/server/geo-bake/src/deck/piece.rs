@@ -5,7 +5,7 @@
 use pxl_spec::bake::deck::Form;
 use pxl_spec::space::adapter::epsg3857::{from_db, scale_at, G3857};
 
-use crate::terrain::pipeline::overture::between::{flag_ranges, split_ranged, value_at, without};
+use crate::terrain::pipeline::overture::between::{flag_ranges, split_ranged, value_at, without, Line};
 use crate::terrain::pipeline::overture::policy::{BORE_FLAGS, DECK_FLAGS, UNSEEN_FLAGS};
 use crate::terrain::pipeline::overture::width::{width_m, WayColumns, WayShape};
 use crate::wkb::wkb_to_geometries;
@@ -49,6 +49,9 @@ pub struct Piece {
     pub points: Vec<G3857>,
     /// What each end is, first and last; ends meet where these are equal.
     pub ends: [End; 2],
+    /// How far along its way, the way it runs, it starts, in DB coordinates:
+    /// what its samples are laid from, so a clipped piece's fall where the whole's do.
+    pub start: f64,
 }
 
 /// An end by identity, never by a computed point: a segment's own first or
@@ -87,11 +90,13 @@ impl Piece {
         if self.points.iter().all(inside) {
             return vec![self];
         }
-        let mut runs: Vec<Vec<G3857>> = Vec::new();
+        let mut runs: Vec<(f64, Vec<G3857>)> = Vec::new();
         let mut run: Vec<G3857> = Vec::new();
+        let (mut done, mut run_start) = (0.0, 0.0);
         for w in self.points.windows(2) {
             let (a, b) = (w[0], w[1]);
             let d = [b[0] - a[0], b[1] - a[1]];
+            let seg = libm::hypot(d[0], d[1]);
             let (mut t0, mut t1) = (0.0f64, 1.0f64);
             for k in 0..2 {
                 for (p, q) in [(-d[k], a[k] - lo[k]), (d[k], hi[k] - a[k])] {
@@ -108,25 +113,28 @@ impl Piece {
             }
             if t0 >= t1 {
                 if run.len() >= 2 {
-                    runs.push(std::mem::take(&mut run));
+                    runs.push((run_start, std::mem::take(&mut run)));
                 }
                 run.clear();
+                done += seg;
                 continue;
             }
             let at = |t: f64| [a[0] + d[0] * t, a[1] + d[1] * t, a[2] + (b[2] - a[2]) * t];
             if run.is_empty() || t0 > 0.0 {
                 if run.len() >= 2 {
-                    runs.push(std::mem::take(&mut run));
+                    runs.push((run_start, std::mem::take(&mut run)));
                 }
                 run = vec![at(t0)];
+                run_start = done + t0 * seg;
             }
             run.push(at(t1));
             if t1 < 1.0 {
-                runs.push(std::mem::take(&mut run));
+                runs.push((run_start, std::mem::take(&mut run)));
             }
+            done += seg;
         }
         if run.len() >= 2 {
-            runs.push(run);
+            runs.push((run_start, run));
         }
         let (first, last) = (self.points[0], self.points[self.points.len() - 1]);
         let end_at = |p: G3857| match p {
@@ -135,7 +143,7 @@ impl Piece {
             p => End::Cut(format!("{}#clip", self.gers_id), (p[0] + 0.0).to_bits() ^ (p[1] + 0.0).to_bits().rotate_left(32)),
         };
         runs.into_iter()
-            .map(|points| Piece {
+            .map(|(offset, points)| Piece {
                 gers_id: self.gers_id.clone(),
                 subtype: self.subtype.clone(),
                 class: self.class.clone(),
@@ -144,6 +152,7 @@ impl Piece {
                 form: self.form,
                 approach: self.approach,
                 ends: [end_at(points[0]), end_at(points[points.len() - 1])],
+                start: self.start + offset,
                 points,
             })
             .collect()
@@ -169,11 +178,12 @@ pub fn pieces_of(row: &BridgeRow, form: Form) -> Vec<Piece> {
         .into_iter()
         .filter_map(|g| {
             let whole = [*g.points.first()?, *g.points.last()?];
-            Some(split_ranged(g, [&deck]).into_iter().map(move |cut| (cut, whole)))
+            let length = Line::of(&g.points)?.length();
+            Some(split_ranged(g, [&deck]).into_iter().map(move |cut| (cut, whole, length)))
         })
         .flatten()
-        .filter(|(([on], _, _), _)| *on)
-        .map(|((_, [a, b], g), whole)| {
+        .filter(|(([on], _, _), _, _)| *on)
+        .map(|((_, [a, b], g), whole, length)| {
             let mid = (a + b) / 2.0;
             let shape = WayShape::at(row.columns(), mid);
             Piece {
@@ -185,6 +195,7 @@ pub fn pieces_of(row: &BridgeRow, form: Form) -> Vec<Piece> {
                 form,
                 approach: false,
                 ends: [End::of(&row.gers_id, whole, a), End::of(&row.gers_id, whole, b)],
+                start: a * length,
                 points: g.points,
             }
         })

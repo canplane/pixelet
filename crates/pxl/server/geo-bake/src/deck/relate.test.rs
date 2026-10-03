@@ -41,6 +41,7 @@ fn piece(id: &str, level: i64, points: &[[f64; 2]]) -> Piece {
         form: Form::Deck,
         approach: false,
         ends: [End::of(id, whole, 0.0), End::of(id, whole, 1.0)],
+        start: 0.0,
         points,
     }
 }

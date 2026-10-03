@@ -14,6 +14,7 @@ fn piece(points: &[[f64; 2]]) -> Piece {
         form: Form::Deck,
         approach: false,
         ends: [End::of("a", whole, 0.0), End::of("a", whole, 1.0)],
+        start: 0.0,
         points,
     }
 }
