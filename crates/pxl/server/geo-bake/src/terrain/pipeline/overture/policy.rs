@@ -226,6 +226,10 @@ fn compute_extra(feat: &OvertureRawFeature, category: &str) -> FeatureExtra {
         is_sports: SPORTS_CLASSES.contains(&building_type(feat)) || SPORTS_CLASSES.contains(&land_use_class(feat)),
         is_unseen: is_unseen(feat),
         is_deck: matches!(feat, OvertureRawFeature::Segment(s) if s.is_deck),
+        cut: match feat {
+            OvertureRawFeature::Segment(s) => s.cut,
+            _ => [false; 2],
+        },
         joins: match feat {
             OvertureRawFeature::Segment(s) if s.shape.role == Role::Sidewalk => Some(Joins::Road),
             OvertureRawFeature::Segment(s) if s.shape.oneway && s.subtype == "road" && THROUGH_CLASSES.contains(&s.class.as_deref().unwrap_or("")) => Some(Joins::Carriageway),

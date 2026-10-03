@@ -93,7 +93,7 @@ fn paint(feat: &Feature, value: u8, target: &mut Target, mask: Mask) {
     if feat.shape.is_closed {
         render_polygon(&feat.shape.points, value, target, feat.shape.holes.as_deref(), mask);
     } else {
-        render_linear_feat(&feat.shape.points, value, target, feat.computed.width, mask);
+        render_linear_feat(&feat.shape.points, value, target, feat.computed.width, feat.extra.cut, mask);
     }
 }
 
@@ -153,9 +153,10 @@ fn render_polygon(points: &[V3], value: u8, target: &mut Target, holes: Option<&
 
 /// Every cell whose center lies within the way's half width of a segment;
 /// segment distance rounds the ends, so bends need no cap.
-fn render_linear_feat(points: &[V3], value: u8, target: &mut Target, width_cell: f64, mask: Mask) {
+fn render_linear_feat(points: &[V3], value: u8, target: &mut Target, width_cell: f64, cut: [bool; 2], mask: Mask) {
     let reach = way::reach(width_cell);
-    for w in points.windows(2) {
+    let last = points.len().saturating_sub(2);
+    for (s, w) in points.windows(2).enumerate() {
         let (a, b) = ([w[0][0], w[0][1]], [w[1][0], w[1][1]]);
         let cells = |k: usize| {
             let lo = (a[k].min(b[k]) - reach - PX_CENTER).ceil().max(0.0) as i64;
@@ -165,6 +166,10 @@ fn render_linear_feat(points: &[V3], value: u8, target: &mut Target, width_cell:
         for y in cells(1) {
             for x in cells(0) {
                 let at = [x as f64 + PX_CENTER, y as f64 + PX_CENTER];
+                let t = along(at, a, b);
+                if (s == 0 && cut[0] && t < 0.0) || (s == last && cut[1] && t > 1.0) {
+                    continue;
+                }
                 if way::covers(width_cell, distance_to_segment(at, a, b)) {
                     put(target, mask, cell_idx(x, y), value);
                 }
@@ -173,11 +178,16 @@ fn render_linear_feat(points: &[V3], value: u8, target: &mut Target, width_cell:
     }
 }
 
-fn distance_to_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
+/// Where `p` falls along `a`–`b`: 0 at `a`, 1 at `b`.
+fn along(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
     let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
     let len2 = dx * dx + dy * dy;
-    let t = if len2 > 0.0 { (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
-    (p[0] - a[0] - dx * t).hypot(p[1] - a[1] - dy * t)
+    if len2 > 0.0 { ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2 } else { 0.0 }
+}
+
+fn distance_to_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
+    let t = along(p, a, b).clamp(0.0, 1.0);
+    (p[0] - a[0] - (b[0] - a[0]) * t).hypot(p[1] - a[1] - (b[1] - a[1]) * t)
 }
 
 fn find_intersections(nodes: &[V3], ys: f64, out: &mut Vec<f64>) {
@@ -197,3 +207,7 @@ fn find_intersections(nodes: &[V3], ys: f64, out: &mut Vec<f64>) {
         j = i;
     }
 }
+
+#[cfg(test)]
+#[path = "ground.test.rs"]
+mod test;
