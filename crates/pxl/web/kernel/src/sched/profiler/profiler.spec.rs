@@ -91,7 +91,20 @@ impl TaskPhaseName {
     }
 }
 
-pub const STEP_NAMES: &[&str] = &["controller", "input", "camera", "environment", "companion", "preview", "view", "chunks", "debug_gizmos", "profiler"];
+pub const STEP_NAMES: &[&str] = &[
+    "controller",
+    "input",
+    "camera",
+    "environment",
+    "companion",
+    "preview",
+    "sight",
+    "goal",
+    "demand",
+    "chunks",
+    "debug_gizmos",
+    "profiler",
+];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum StepName {
@@ -101,22 +114,26 @@ pub enum StepName {
     environment = 3,
     companion = 4,
     preview = 5,
-    view = 6,
-    chunks = 7,
-    debug_gizmos = 8,
-    profiler = 9,
+    sight = 6,
+    goal = 7,
+    demand = 8,
+    chunks = 9,
+    debug_gizmos = 10,
+    profiler = 11,
 }
 
 impl StepName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [StepName; 10] = [
+    pub const ALL: [StepName; 12] = [
         StepName::controller,
         StepName::input,
         StepName::camera,
         StepName::environment,
         StepName::companion,
         StepName::preview,
-        StepName::view,
+        StepName::sight,
+        StepName::goal,
+        StepName::demand,
         StepName::chunks,
         StepName::debug_gizmos,
         StepName::profiler,
@@ -275,7 +292,9 @@ pub mod FRAME {
     pub const cover_rule: u32 = 113;
     pub const cover_drawn: u32 = 114;
     pub const cover_gaps: u32 = 115;
-    pub const WORDS: u32 = 116;
+    pub const view_rays: u32 = 116;
+    pub const view_visits: u32 = 117;
+    pub const WORDS: u32 = 118;
     pub const KEYS: &[&str] = &[
         "t",
         "dt_ms",
@@ -344,6 +363,8 @@ pub mod FRAME {
         "cover_rule",
         "cover_drawn",
         "cover_gaps",
+        "view_rays",
+        "view_visits",
         "WORDS",
     ];
 }
@@ -370,10 +391,13 @@ pub mod FRAME_GROUPS {
     pub const q: &[&str] = &["q_terrain", "q_poi"];
     pub const pages: &[&str] = &["pages_total", "pages_by_level", "pages_poi"];
     pub const cover: &[&str] = &["cover_rule", "cover_drawn", "cover_gaps"];
+    pub const view: &[&str] = &["view_rays", "view_visits"];
     pub const device: &[&str] = &["buffers", "buffer_mb", "arena_mb", "tex_depth_mb", "tex_shadow_mb", "tex_layers_mb"];
     pub const heap: &[&str] = &["heap_used_mb", "heap_live_mb", "heap_run_mb", "heap_slot_mb", "heap_range_mb", "heap_refusals", "heap_largest_free_mb"];
     pub const ring: &[&str] = &["ring_cq_peak", "ring_held_peak"];
-    pub const KEYS: &[&str] = &["pace", "turn", "gpu", "lod", "mounts", "stale", "slot", "cap", "work", "q", "pages", "cover", "device", "heap", "ring"];
+    pub const KEYS: &[&str] = &[
+        "pace", "turn", "gpu", "lod", "mounts", "stale", "slot", "cap", "work", "q", "pages", "cover", "view", "device", "heap", "ring",
+    ];
 }
 
 /// One settled task (sched/profiler/record.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `category`, `outcome` and each of `phase_ids` index CATEGORY_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the host's.
@@ -417,9 +441,9 @@ pub mod TASK {
 /// One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0.
 pub mod WORST {
     pub const sample: u32 = 0;
-    pub const has_prev: u32 = 116;
-    pub const prev: u32 = 117;
-    pub const WORDS: u32 = 233;
+    pub const has_prev: u32 = 118;
+    pub const prev: u32 = 119;
+    pub const WORDS: u32 = 237;
     pub const KEYS: &[&str] = &["sample", "has_prev", "prev", "WORDS"];
 }
 
@@ -499,7 +523,7 @@ pub mod SUMMARY {
         pub const census: u32 = 71;
         pub const level_tris: u32 = 91;
         pub const last: u32 = 102;
-        pub const WORDS: u32 = 218;
+        pub const WORDS: u32 = 220;
         pub const KEYS: &[&str] = &[
             "present",
             "n",
@@ -534,13 +558,13 @@ pub mod SUMMARY {
         ];
     }
     pub mod tasks {
-        pub const AT: u32 = 223;
+        pub const AT: u32 = 225;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 150;
         pub const KEYS: &[&str] = &["AT", "slots", "WORDS"];
     }
     pub mod counters {
-        pub const AT: u32 = 373;
+        pub const AT: u32 = 375;
         pub const faces_kept: u32 = 0;
         pub const faces_possible: u32 = 1;
         pub const runs_culled: u32 = 2;
@@ -576,7 +600,7 @@ pub mod SUMMARY {
         ];
     }
     pub mod atlas {
-        pub const AT: u32 = 387;
+        pub const AT: u32 = 389;
         pub const size: u32 = 0;
         pub const entries: u32 = 1;
         pub const shelves: u32 = 2;
@@ -585,7 +609,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "WORDS"];
     }
     pub mod held {
-        pub const AT: u32 = 391;
+        pub const AT: u32 = 393;
         pub const run_sets: u32 = 0;
         pub const run_set_mb: u32 = 1;
         pub const tiers: u32 = 2;
@@ -596,7 +620,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "run_sets", "run_set_mb", "tiers", "decor_cells", "decor_instances", "decor_bytes", "WORDS"];
     }
     pub mod fetch {
-        pub const AT: u32 = 397;
+        pub const AT: u32 = 399;
         pub const queued: u32 = 0;
         pub const running: u32 = 1;
         pub const credits: u32 = 2;
@@ -604,7 +628,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "queued", "running", "credits", "WORDS"];
     }
     pub mod peak {
-        pub const AT: u32 = 400;
+        pub const AT: u32 = 402;
         pub const present: u32 = 0;
         pub const dt_ms: u32 = 1;
         pub const sched_ms: u32 = 2;
@@ -648,14 +672,14 @@ pub mod SUMMARY {
         ];
     }
     pub mod steps {
-        pub const AT: u32 = 418;
+        pub const AT: u32 = 420;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
     pub mod quality {
-        pub const AT: u32 = 579;
+        pub const AT: u32 = 581;
         pub const step: u32 = 0;
         pub const star: u32 = 1;
         pub const frames_held: u32 = 2;
@@ -667,7 +691,7 @@ pub mod SUMMARY {
         pub const WORDS: u32 = 8;
         pub const KEYS: &[&str] = &["AT", "step", "star", "frames_held", "admitted", "evicted", "refined", "recubed", "changes_peak", "WORDS"];
     }
-    pub const WORDS: u32 = 587;
+    pub const WORDS: u32 = 589;
     pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "held", "fetch", "peak", "steps", "quality", "WORDS"];
 }
 

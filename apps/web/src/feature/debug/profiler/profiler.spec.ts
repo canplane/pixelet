@@ -18,7 +18,7 @@ export const OUTCOME_NAMES = ["ok", "aborted", "error"] as const;
 
 export const TASK_PHASE_NAMES = ["net_ms", "bytes", "decode_ms", "adopt_ms"] as const;
 
-export const STEP_NAMES = ["controller", "input", "camera", "environment", "companion", "preview", "view", "chunks", "debug_gizmos", "profiler"] as const;
+export const STEP_NAMES = ["controller", "input", "camera", "environment", "companion", "preview", "sight", "goal", "demand", "chunks", "debug_gizmos", "profiler"] as const;
 
 export const EFFECT_NAMES = [
   "navigation",
@@ -117,7 +117,9 @@ export const FRAME = {
   cover_rule: 113 as number,
   cover_drawn: 114 as number,
   cover_gaps: 115 as number,
-  WORDS: 116 as number,
+  view_rays: 116 as number,
+  view_visits: 117 as number,
+  WORDS: 118 as number,
 } as const;
 
 /** What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what the chunk scheduler is doing, what it built and fetched, and what it all holds — and the report and the panel both follow it. */
@@ -134,6 +136,7 @@ export const FRAME_GROUPS = {
   q: ["q_terrain", "q_poi"],
   pages: ["pages_total", "pages_by_level", "pages_poi"],
   cover: ["cover_rule", "cover_drawn", "cover_gaps"],
+  view: ["view_rays", "view_visits"],
   device: ["buffers", "buffer_mb", "arena_mb", "tex_depth_mb", "tex_shadow_mb", "tex_layers_mb"],
   heap: ["heap_used_mb", "heap_live_mb", "heap_run_mb", "heap_slot_mb", "heap_range_mb", "heap_refusals", "heap_largest_free_mb"],
   ring: ["ring_cq_peak", "ring_held_peak"],
@@ -162,9 +165,9 @@ export const TASK = {
 /** One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0. */
 export const WORST = {
   sample: 0 as number,
-  has_prev: 116 as number,
-  prev: 117 as number,
-  WORDS: 233 as number,
+  has_prev: 118 as number,
+  prev: 119 as number,
+  WORDS: 237 as number,
 } as const;
 
 export const SPREAD = {
@@ -239,15 +242,15 @@ export const SUMMARY = {
     census: 71 as number,
     level_tris: 91 as number,
     last: 102 as number,
-    WORDS: 218 as number,
+    WORDS: 220 as number,
   },
   tasks: {
-    AT: 223 as number,
+    AT: 225 as number,
     slots: 0 as number,
     WORDS: 150 as number,
   },
   counters: {
-    AT: 373 as number,
+    AT: 375 as number,
     faces_kept: 0 as number,
     faces_possible: 1 as number,
     runs_culled: 2 as number,
@@ -265,7 +268,7 @@ export const SUMMARY = {
     WORDS: 14 as number,
   },
   atlas: {
-    AT: 387 as number,
+    AT: 389 as number,
     size: 0 as number,
     entries: 1 as number,
     shelves: 2 as number,
@@ -273,7 +276,7 @@ export const SUMMARY = {
     WORDS: 4 as number,
   },
   held: {
-    AT: 391 as number,
+    AT: 393 as number,
     run_sets: 0 as number,
     run_set_mb: 1 as number,
     tiers: 2 as number,
@@ -283,14 +286,14 @@ export const SUMMARY = {
     WORDS: 6 as number,
   },
   fetch: {
-    AT: 397 as number,
+    AT: 399 as number,
     queued: 0 as number,
     running: 1 as number,
     credits: 2 as number,
     WORDS: 3 as number,
   },
   peak: {
-    AT: 400 as number,
+    AT: 402 as number,
     present: 0 as number,
     dt_ms: 1 as number,
     sched_ms: 2 as number,
@@ -312,13 +315,13 @@ export const SUMMARY = {
     WORDS: 18 as number,
   },
   steps: {
-    AT: 418 as number,
+    AT: 420 as number,
     count: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
   quality: {
-    AT: 579 as number,
+    AT: 581 as number,
     step: 0 as number,
     star: 1 as number,
     frames_held: 2 as number,
@@ -329,7 +332,7 @@ export const SUMMARY = {
     changes_peak: 7 as number,
     WORDS: 8 as number,
   },
-  WORDS: 587 as number,
+  WORDS: 589 as number,
 } as const;
 
 /** What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count. */

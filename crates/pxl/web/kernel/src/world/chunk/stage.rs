@@ -16,7 +16,7 @@ use crate::layer::decor::build::DecorHide;
 use crate::layer::environment::state::globe;
 use crate::sched::profiler::record::{
     profiler_record_frame, profiler_recording, profiler_take_rings, CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample,
-    TurnSample, WorkSample, MB,
+    TurnSample, ViewSample, WorkSample, MB,
 };
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::world::change::{request_world_tick, world_edge};
@@ -60,17 +60,16 @@ pub fn set_host_frame_stat(gpu: GpuSample, device: DeviceSample) {
 
 pub fn set_host_task_ms(task_ms: f64) {
     core_tick().host.task_ms = task_ms;
-    // Known only after the turn, when its frame is already recorded; written
-    // back there, or every frame would carry the one before's.
-    if let Some(frame) = crate::sched::profiler::record::profiler_last_frame() {
+    // Known only after the turn, when its frame is already recorded.
+    if let Some(frame) = crate::sched::profiler::record::profiler_open_frame() {
         frame.task_ms = task_ms;
     }
 }
 
-/// Written onto the recorded frame like `set_host_task_ms`, so the parts of
+/// Written onto the open frame like `set_host_task_ms`, so the parts of
 /// `task_ms` add up and unmeasured time shows as the difference.
 pub fn set_turn_timing(effects_ms: f64, stage_ms: f64) {
-    let Some(frame) = crate::sched::profiler::record::profiler_last_frame() else { return };
+    let Some(frame) = crate::sched::profiler::record::profiler_open_frame() else { return };
     let (step_ms, step_name) = crate::sched::turn::worst_effect();
     frame.turn = TurnSample {
         effects_ms,
@@ -192,6 +191,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     let rings = profiler_take_rings();
     let work = work_sample(c, &census);
     let record_refused = Terrain::pyramid().take_refusals() as f64;
+    let [rays, visits] = crate::world::pyramid::domain::take_work();
     if !profiler_recording() {
         return;
     }
@@ -257,6 +257,10 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
                 drawn: cover.drawn.len() as f64,
                 gaps: domain.map_or(0.0, |d| d.unanswered() as f64),
             }
+        },
+        view: ViewSample {
+            rays: rays as f64,
+            visits: visits as f64,
         },
         cap: CapSample {
             commit_left: census.commit_left as f64,

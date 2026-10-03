@@ -141,6 +141,10 @@ pub fn reading() -> [usize; 2] {
 }
 
 /// A slice of the goal walk, then the step that fits.
+pub fn sight() {
+    domain::start(&ladder(), kernel().sched.needs_revision());
+}
+
 pub fn step(stop: &dyn Fn() -> bool) {
     let q = QUALITY.get(Quality::default);
     let ladder = ladder();
@@ -149,10 +153,12 @@ pub fn step(stop: &dyn Fn() -> bool) {
         slots: |c, cube| sched.slots_of(c, cube),
         admit: true,
     };
-    domain::advance(&ladder, q.smooth.at(), &price, stop, sched.needs_revision());
+    domain::advance(q.smooth.at(), &price, stop);
     let Some(d) = domain::current() else { return };
     let spare = margin();
-    let (star, roomy) = around(q.smooth.at(), ladder.len(), |k, roomy| d.need(k).is_some_and(|n| fits(n, ARENA, HEADROOM, if roomy { spare } else { [0; POOLS] })));
+    let (star, roomy) = around(q.smooth.at(), ladder.len(), |k, roomy| {
+        d.need(k).is_some_and(|n| fits(n, ARENA, HEADROOM, if roomy { spare } else { [0; POOLS] }))
+    });
     q.star = star;
     let at = q.smooth.follow(star, roomy, param::QUALITY_WAIT_MS, crate::host::now());
     domain::put(at);

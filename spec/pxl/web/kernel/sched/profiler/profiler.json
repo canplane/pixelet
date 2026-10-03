@@ -51,7 +51,9 @@
     "environment",
     "companion",
     "preview",
-    "view",
+    "sight",
+    "goal",
+    "demand",
     "chunks",
     "debug_gizmos",
     "profiler"
@@ -162,7 +164,9 @@
     "cover_rule": 113,
     "cover_drawn": 114,
     "cover_gaps": 115,
-    "WORDS": 116
+    "view_rays": 116,
+    "view_visits": 117,
+    "WORDS": 118
   },
   "FRAME_GROUPS": {
     "$doc": [
@@ -244,6 +248,10 @@
       "cover_drawn",
       "cover_gaps"
     ],
+    "view": [
+      "view_rays",
+      "view_visits"
+    ],
     "device": [
       "buffers",
       "buffer_mb",
@@ -294,9 +302,9 @@
       "One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0."
     ],
     "sample": 0,
-    "has_prev": 116,
-    "prev": 117,
-    "WORDS": 233
+    "has_prev": 118,
+    "prev": 119,
+    "WORDS": 237
   },
   "SPREAD": {
     "$type": "u32",
@@ -377,15 +385,15 @@
       "census": 71,
       "level_tris": 91,
       "last": 102,
-      "WORDS": 218
+      "WORDS": 220
     },
     "tasks": {
-      "AT": 223,
+      "AT": 225,
       "slots": 0,
       "WORDS": 150
     },
     "counters": {
-      "AT": 373,
+      "AT": 375,
       "faces_kept": 0,
       "faces_possible": 1,
       "runs_culled": 2,
@@ -403,7 +411,7 @@
       "WORDS": 14
     },
     "atlas": {
-      "AT": 387,
+      "AT": 389,
       "size": 0,
       "entries": 1,
       "shelves": 2,
@@ -411,7 +419,7 @@
       "WORDS": 4
     },
     "held": {
-      "AT": 391,
+      "AT": 393,
       "run_sets": 0,
       "run_set_mb": 1,
       "tiers": 2,
@@ -421,14 +429,14 @@
       "WORDS": 6
     },
     "fetch": {
-      "AT": 397,
+      "AT": 399,
       "queued": 0,
       "running": 1,
       "credits": 2,
       "WORDS": 3
     },
     "peak": {
-      "AT": 400,
+      "AT": 402,
       "present": 0,
       "dt_ms": 1,
       "sched_ms": 2,
@@ -450,13 +458,13 @@
       "WORDS": 18
     },
     "steps": {
-      "AT": 418,
+      "AT": 420,
       "count": 0,
       "slots": 1,
       "WORDS": 161
     },
     "quality": {
-      "AT": 579,
+      "AT": 581,
       "step": 0,
       "star": 1,
       "frames_held": 2,
@@ -467,7 +475,7 @@
       "changes_peak": 7,
       "WORDS": 8
     },
-    "WORDS": 587
+    "WORDS": 589
   },
   "READ": {
     "$type": "u32",

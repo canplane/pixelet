@@ -16,7 +16,6 @@
 
 use std::collections::{HashMap, HashSet};
 
-
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::lod::{cubes_meeting, fault_radius, Tau};
 use pxl_spec::space::observation::{Bounds, Contents, Observation};
@@ -26,10 +25,10 @@ use pxl_spec::space::v3::Aabb;
 
 use crate::global::Global;
 use crate::world::access::Access;
+use crate::world::chunk::mesh_slot::POOLS;
 use crate::world::observation::{heights_revision, observation, Known, Order};
 use crate::world::observer::{cell_angle, EdgeRays, Footprint, Lens, Sight};
 use pxl_spec::space::observation::Requirement;
-use crate::world::chunk::mesh_slot::POOLS;
 
 use super::chunk::Chunk;
 use super::Layer as _;
@@ -151,7 +150,7 @@ impl Domain {
     pub fn priced<'a>(o: Observation, ladder: &[Tau], at: usize, known: Box<dyn Bounds>, footprints: impl IntoIterator<Item = &'a Footprint>, price: &dyn Price) -> Domain {
         let mut d = Domain::empty(o, known);
         d.begin(o, ladder, footprints, core::iter::empty());
-        d.run(price, &|| false);
+        d.run(price, &|| false, &mut 0);
         d.put(at);
         d
     }
@@ -181,7 +180,7 @@ impl Domain {
     /// Whole, in place; allocation-free once warm.
     pub fn remake<'a>(&mut self, o: Observation, ladder: &[Tau], at: usize, footprints: impl IntoIterator<Item = &'a Footprint>) {
         self.begin(o, ladder, footprints, core::iter::empty());
-        self.run(&Free, &|| false);
+        self.run(&Free, &|| false, &mut 0);
         self.put(at);
     }
 
@@ -230,16 +229,18 @@ impl Domain {
     }
 
     /// Whether done.
-    fn run(&mut self, price: &dyn Price, stop: &dyn Fn() -> bool) -> bool {
+    /// Counts what it takes off the stack into `n`.
+    fn run(&mut self, price: &dyn Price, stop: &dyn Fn() -> bool, n: &mut u32) -> bool {
         // at least a slice a turn
         const SLICE: u32 = 32;
-        let mut n = 0;
+        let mut k = 0;
         while let Some(open) = self.open.pop() {
             if (open.to as usize) > self.tracked {
                 self.visit(open, price);
             }
-            n += 1;
-            if n % SLICE == 0 && stop() {
+            k += 1;
+            *n += 1;
+            if k % SLICE == 0 && stop() {
                 return false;
             }
         }
@@ -276,7 +277,11 @@ impl Domain {
         let nearest = bound.nearest(self.o.eye);
         let error_angle = self.lens.map_or(0.0, |l| l.error(nearest, error).into_iter().fold(0.0, f64::max));
         let order = Order::of(&self.o, &bound);
-        let mut from_step = if c.level() > 0 && touching.1 > 0 { self.ladder.iter().take_while(|&&tau| error_angle > cell_angle(tau)).count() as u8 } else { 0 };
+        let mut from_step = if c.level() > 0 && touching.1 > 0 {
+            self.ladder.iter().take_while(|&&tau| error_angle > cell_angle(tau)).count() as u8
+        } else {
+            0
+        };
         let splits_to = from_step.min(to);
         if splits_to as usize > self.tracked {
             let mut any = false;
@@ -299,15 +304,7 @@ impl Domain {
             }
         }
         let splits_to = from_step.min(to);
-        self.seen.insert(
-            c,
-            Seen {
-                order,
-                bound,
-                from: from_step,
-                to,
-            },
-        );
+        self.seen.insert(c, Seen { order, bound, from: from_step, to });
         let outermost = self.outermost(c);
         for k in self.tracked..self.ladder.len() {
             let at = k as u8;
@@ -415,36 +412,44 @@ struct Made {
     target: Option<Tau>,
     revision: u32,
     walks: u32,
+    /// rays cast and nodes visited since `take_work`
+    work: [u32; 2],
 }
 
 static MADE: Global<Made> = Global::new();
 
-/// A slice of the next goal; publishes it whole. A job starts when the
-/// observation, residency, target or `extra` moved, and is never restarted.
-pub fn advance(ladder: &[Tau], at: usize, price: &dyn Price, stop: &dyn Fn() -> bool, extra: u32) -> bool {
+/// Starts the next goal's job, casting the screen's rays for it, when the
+/// observation, residency, target or `extra` moved; a job is never restarted.
+pub fn start(ladder: &[Tau], extra: u32) {
     let made = MADE.get(Made::default);
-    if made.job.is_none() {
-        let Some(o) = observation() else { return false };
-        let key = Some((o, heights_revision(), ladder[0], extra));
-        if made.key == key && made.published.is_some() {
-            return false;
-        }
-        made.key = key;
-        let retarget = made.target != Some(ladder[0]);
-        made.target = Some(ladder[0]);
-        let paging = Terrain::pyramid().paging();
-        let resident: HashSet<LevelPage> = paging.held().map(|(p, _)| p).collect();
-        let moved: Vec<(f64, f64, f64)> = resident.symmetric_difference(&made.resident).map(|p| p.rect()).collect();
-        let objects = heights_revision().1;
-        made.sight.observe(&o, &EdgeRays(Access::now(), ladder[0]), retarget || objects != made.objects, &moved);
-        made.resident = resident;
-        made.objects = objects;
-        let mut job = made.spare.take().unwrap_or_else(|| Domain::empty(o, Box::new(Known)));
-        job.begin(o, ladder, made.sight.footprints(), made.sight.lacks());
-        made.job = Some(job);
+    if made.job.is_some() {
+        return;
     }
+    let Some(o) = observation() else { return };
+    let key = Some((o, heights_revision(), ladder[0], extra));
+    if made.key == key && made.published.is_some() {
+        return;
+    }
+    made.key = key;
+    let retarget = made.target != Some(ladder[0]);
+    made.target = Some(ladder[0]);
+    let paging = Terrain::pyramid().paging();
+    let resident: HashSet<LevelPage> = paging.held().map(|(p, _)| p).collect();
+    let moved: Vec<(f64, f64, f64)> = resident.symmetric_difference(&made.resident).map(|p| p.rect()).collect();
+    let objects = heights_revision().1;
+    made.work[0] += made.sight.observe(&o, &EdgeRays(Access::now(), ladder[0]), retarget || objects != made.objects, &moved);
+    made.resident = resident;
+    made.objects = objects;
+    let mut job = made.spare.take().unwrap_or_else(|| Domain::empty(o, Box::new(Known)));
+    job.begin(o, ladder, made.sight.footprints(), made.sight.lacks());
+    made.job = Some(job);
+}
+
+/// A slice of the started goal; publishes it whole.
+pub fn advance(at: usize, price: &dyn Price, stop: &dyn Fn() -> bool) -> bool {
+    let made = MADE.get(Made::default);
     let Some(job) = made.job.as_mut() else { return false };
-    if !job.run(price, stop) {
+    if !job.run(price, stop, &mut made.work[1]) {
         return false;
     }
     let Some(mut done) = made.job.take() else { return false };
@@ -453,6 +458,10 @@ pub fn advance(ladder: &[Tau], at: usize, price: &dyn Price, stop: &dyn Fn() -> 
     made.revision = made.revision.wrapping_add(1);
     made.walks = made.walks.wrapping_add(1);
     true
+}
+
+pub fn take_work() -> [u32; 2] {
+    core::mem::take(&mut MADE.get(Made::default).work)
 }
 
 pub fn put(k: usize) {

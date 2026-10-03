@@ -267,6 +267,15 @@ pub struct FrameSample {
     pub cap: CapSample,
     pub turn: TurnSample,
     pub cover: CoverSample,
+    pub view: ViewSample,
+}
+
+/// The goal's rays cast and nodes visited this turn.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ViewSample {
+    pub rays: f64,
+    pub visits: f64,
 }
 
 /// Chunks the goal would be at target quality, pieces at the effective one,
@@ -371,6 +380,7 @@ words!(FrameSample, FRAME::WORDS,
     turn.effects_ms => FRAME::turn_effects_ms, turn.stage_ms => FRAME::turn_stage_ms,
     turn.step_ms => FRAME::turn_step_ms, turn.step_name => FRAME::turn_step_name,
     cover.rule => FRAME::cover_rule, cover.drawn => FRAME::cover_drawn, cover.gaps => FRAME::cover_gaps,
+    view.rays => FRAME::view_rays, view.visits => FRAME::view_visits,
 );
 
 words!(TaskRow, TASK::WORDS,
@@ -533,6 +543,8 @@ struct Profiler {
     worst: &'static mut [WorstFrame],
     worst_len: usize,
     rings: RingSample,
+    /// The frame whose task and the gap after it are not known yet.
+    open: Option<FrameSample>,
 }
 
 static PROFILER: Global<Profiler> = Global::new();
@@ -554,6 +566,7 @@ fn profiler() -> &'static mut Profiler {
         worst: &mut [],
         worst_len: 0,
         rings: RingSample::default(),
+        open: None,
     })
 }
 
@@ -581,6 +594,7 @@ pub fn profiler_recording_start() {
     (l.task_len, l.frame_len, l.worst_len) = (0, 0, 0);
     (l.task_head, l.frame_head) = (0, 0);
     l.frame_peak = FramePeak::default();
+    l.open = None;
     l.truncated = false;
     l.started_at = now();
     l.stopped_at = None;
@@ -629,11 +643,16 @@ pub fn profiler_take_rings() -> RingSample {
     core::mem::take(&mut profiler().rings)
 }
 
+/// Lands the open frame with the gap that ended at `s`, which its turn made,
+/// and opens `s`.
 pub fn profiler_record_frame(s: FrameSample) {
     let l = profiler();
     if !l.recording {
         return;
     }
+    let Some(mut f) = l.open.replace(s) else { return };
+    (f.dt_ms, f.settled) = (s.dt_ms, s.settled);
+    let s = f;
     if l.worst.is_empty() {
         l.worst = fixed_lane(Lane::Worst, WORST_CAP);
     }
@@ -683,14 +702,14 @@ pub fn profiler_record_frame(s: FrameSample) {
     }
 }
 
-/// The frame just recorded, so `task_ms`, known only after the turn, lands
-/// in the right frame. None once recording stopped.
-pub fn profiler_last_frame() -> Option<&'static mut FrameSample> {
+/// The open frame, so `task_ms`, known only after the turn, lands in it.
+/// None once recording stopped.
+pub fn profiler_open_frame() -> Option<&'static mut FrameSample> {
     let l = profiler();
     if !l.recording {
         return None;
     }
-    l.frame_ring[..l.frame_len].last_mut()
+    l.open.as_mut()
 }
 
 fn first_at<T>(ring: &[T], t: f64, at: impl Fn(&T) -> f64) -> usize {
