@@ -1,7 +1,6 @@
 // @pxl/web/feature/map/ui/control/tracking-button.tsx
 
 import { useTranslation } from "react-i18next";
-import { View } from "react-native";
 
 import { type GlyphName, Spinner } from "@platform/icon.tsx";
 import { LABEL } from "@platform/palette.ts";
@@ -25,14 +24,11 @@ export function TrackingButton() {
 
   const status = useKernel((s) => s.location.status);
   const hasLocation = useKernel((s) => s.location.has_location);
-  const heading = useKernel((s) => s.orientation.heading);
-  const azimuth = useKernel((s) => s.azimuth);
   const following = useKernel((s) => s.is_follow_mode);
   const offCenter = useKernel((s) => s.map.is_off_center);
 
   const press = following ? Tracking.Unfollow : offCenter ? Tracking.Recenter : Tracking.Follow;
   const { glyph, label } = PRESS[press];
-  const turn = following ? (heading ?? 0) - (azimuth * 180) / Math.PI : 0;
 
   return (
     <CircularButton
@@ -42,10 +38,9 @@ export function TrackingButton() {
       label={t(label)}
     >
       {status === DevicePoseStatus.Loading ? <Spinner size={chrome.glyph} color={LABEL.primary} /> : (
-        // RN's transform: a device's SVG refuses a CSS string.
-        <View style={{ transform: [{ rotate: `${turn}deg` }] }}>
-          <Glyph glyph={glyph} size={chrome.glyph} color={LABEL.primary} />
-        </View>
+        // Held still, as iPhone Maps holds it: the map is what turns with the
+        // heading.
+        <Glyph glyph={glyph} size={chrome.glyph} color={LABEL.primary} />
       )}
     </CircularButton>
   );
