@@ -52,12 +52,13 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               <SettingsSection section="navigation" />
               <SettingsSection section="camera" />
               <SettingsSection section="lighting" />
-              <LanguageSection />
               <SettingsSection section="debug" />
             </PanelScroll>
           )
           : (
             <PanelScroll key={SettingsTab.Info}>
+              <LanguageSection />
+              <Separator />
               <DisclaimerSection />
               <AttributionSection />
               <AboutSection />
