@@ -13,7 +13,7 @@ import { Motion } from "@platform/motion.tsx";
 import { SNAP } from "@/shared/ui/motion/transition.ts";
 import { chrome, color, disabledContent, surface } from "@/shared/ui/theme.ts";
 
-export interface StackItem {
+interface StackItem {
   label: string;
   onPress: () => void;
   glyph?: GlyphName;

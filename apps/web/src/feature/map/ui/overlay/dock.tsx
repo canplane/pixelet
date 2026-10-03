@@ -22,9 +22,9 @@ import { alpha, chrome, color, material, shadow } from "@/shared/ui/theme.ts";
 import { openModal } from "@/app/modal.tsx";
 import { useInHand, useUiStore } from "@/app/store/ui.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
-import { decorName, type PlaceableCube, placeableCubeId } from "@/catalog/cell/mod.ts";
+import { type PlaceableCube, placeableCubeId } from "@/catalog/cell/mod.ts";
 import { OBJECT_TIERS } from "@/config/object.spec.ts";
-import { cubeLabel, CubeSwatch, DECOR_GLYPH, heldRing } from "@/feature/drawer/swatch.tsx";
+import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/catalog/cell/swatch.tsx";
 
 const SEND_FROM_SCALE = 0.5;
 
@@ -202,14 +202,13 @@ function SwatchButton({ cube, sizes }: { cube: PlaceableCube; sizes: Omit<SizeGe
 function DecorIconButton({ kind }: { kind: u8 }) {
   const { t } = useTranslation();
   const selectDecor = useUiStore.getState().selectDecor;
-  const name = decorName(kind);
   const active = useInHand({ tool: ActiveTool.Decor, kind });
 
   return (
-    <Pressable onPress={() => selectDecor(kind)} accessibilityRole="button" accessibilityLabel={t(`decor.${name}`)} style={styles.slot}>
+    <Pressable onPress={() => selectDecor(kind)} accessibilityRole="button" accessibilityLabel={decorLabel(t, kind)} style={styles.slot}>
       <Motion to={{ scale: active ? 1.1 : 1 }} transition={SNAP}>
         <View style={[styles.decorDisc, active ? styles.swatchSelected : styles.swatchIdle]}>
-          <Glyph glyph={DECOR_GLYPH[name]} size={ITEM_GLYPH} color={active ? STRIP.glyphOn : STRIP.glyph} />
+          <Glyph glyph={decorGlyph(kind)} size={ITEM_GLYPH} color={active ? STRIP.glyphOn : STRIP.glyph} />
         </View>
       </Motion>
     </Pressable>

@@ -1,9 +1,8 @@
 {
+  "close": "닫기",
   "settings": {
     "title": "설정",
-    "description": "화면, 지도 이동, 카메라, 언어를 설정합니다",
     "trigger_aria_label": "설정",
-    "close": "닫기",
     "tabs": {
       "options": "옵션",
       "info": "정보"
@@ -190,8 +189,6 @@
   },
   "drawer": {
     "title": "서랍",
-    "description": "놓을 수 있는 모든 블록과 데코, 캐릭터를 둘러봅니다.",
-    "close": "닫기",
     "tabs": {
       "cube": "블록",
       "decor": "데코",
@@ -293,7 +290,8 @@
       "loading": "검색 중…",
       "no_results": "검색 결과가 없습니다",
       "section_areas": "지역",
-      "section_places": "장소"
+      "section_places": "장소",
+      "map_center": "지도 중심"
     }
   },
   "unsupported": {

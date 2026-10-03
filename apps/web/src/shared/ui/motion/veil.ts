@@ -14,7 +14,7 @@ import { DIM, type Transition } from "./transition.ts";
 
 export const Dim = createContext<f64>(1);
 
-export interface Veil {
+interface Veil {
   level: f64;
   /** A Motion's props for it. */
   motion: { from?: Pose; to: Pose; transition: Transition };

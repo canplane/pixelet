@@ -3,7 +3,7 @@
 import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, View } from "react-native";
 
-import { SectionTitle, settingText } from "@/feature/setting/row.tsx";
+import { Prose, Section, settingText } from "@/feature/setting/row.tsx";
 import { BrandSymbol } from "@/shared/ui/brand-symbol.tsx";
 import { textStyle } from "@/shared/ui/theme.ts";
 import { APP_ENV, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/config/deploy.ts";
@@ -31,9 +31,8 @@ function buildLabel(): string {
 export function AboutSection() {
   const { t } = useTranslation();
   return (
-    <View style={styles.section}>
-      <SectionTitle>{t("settings.about.section_title")}</SectionTitle>
-      <View style={styles.body}>
+    <Section title={t("settings.about.section_title")}>
+      <Prose>
         <View style={styles.name}>
           <BrandSymbol size={20} color={LABEL.primary} />
           <Text style={styles.nameText}>pixelet</Text>
@@ -51,14 +50,12 @@ export function AboutSection() {
           </Text>
           <Text style={settingText.faint}>{dataLabel()}</Text>
         </View>
-      </View>
-    </View>
+      </Prose>
+    </Section>
   );
 }
 
 const styles = StyleSheet.create({
-  section: { gap: 4 },
-  body: { gap: 8, paddingVertical: 4 },
   name: { flexDirection: "row", alignItems: "center", gap: 8 },
   nameText: { ...textStyle.title, color: LABEL.primary },
 });

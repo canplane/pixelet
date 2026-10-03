@@ -20,7 +20,8 @@ import { Backing } from "@platform/backing.tsx";
 import { BackingPlace } from "@/shared/ui/backing.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
 import { resolvePoiBadge } from "@/feature/search/poi-badge.ts";
-import { assembleLabel } from "@/feature/map/geocode/label.ts";
+import { assembleLabel, localName, primaryLanguage } from "@/feature/map/geocode/label.ts";
+import { useCenterCoordinates, usePlaceLabel } from "@/feature/map/geocode/center.ts";
 import { fetchSearch, type SearchResult } from "@/feature/search/repository.ts";
 
 const DEBOUNCE_MS = 300;
@@ -49,10 +50,6 @@ function formatDistance(m: f64): string {
   return `${round(m / 1000).toLocaleString()}km`;
 }
 
-function displayName(result: SearchResult, lang: string): string {
-  return result.common?.[lang] ?? result.name;
-}
-
 /** Where a result is comes from its coordinates, never a source's address text, which could name another city. */
 function ResultRow({ result, lang, distance, onPress }: { result: SearchResult; lang: string; distance: string | null; onPress: () => void }) {
   const where = result.context.length > 0 ? assembleLabel(result.context, lang) : "";
@@ -65,7 +62,7 @@ function ResultRow({ result, lang, distance, onPress }: { result: SearchResult; 
         </View>
       )}
       <View style={styles.rowText}>
-        <Text numberOfLines={1} style={styles.name}>{displayName(result, lang)}</Text>
+        <Text numberOfLines={1} style={styles.name}>{localName({ name: result.name, names: result.common }, lang)}</Text>
         {(where !== "" || distance !== null) && (
           <View style={styles.subtitle}>
             <Text numberOfLines={1} style={[styles.small, styles.context]}>{where}</Text>
@@ -112,6 +109,23 @@ function LocateCard() {
   );
 }
 
+/** Where the search looks from: the map center, which is not the device's location. */
+function MapCenter() {
+  const { t } = useTranslation();
+  const place = usePlaceLabel();
+  const coordinates = useCenterCoordinates();
+  if (coordinates === null) return null;
+  return (
+    <View>
+      <Text style={styles.sectionHeader}>{t("map.search.map_center")}</Text>
+      <View style={styles.center}>
+        {place !== null && <Text numberOfLines={2} style={styles.name}>{place}</Text>}
+        <Text style={[styles.small, styles.numbers]}>{coordinates}</Text>
+      </View>
+    </View>
+  );
+}
+
 /** Distances are measured from the point the query ran at, so they agree
  * with the API's order while the camera drifts. */
 interface Found {
@@ -123,7 +137,7 @@ interface Found {
 /** Forward search, always live: nothing is baked for it. */
 export function SearchModal({ onClose }: { onClose: () => void }) {
   const { t, i18n } = useTranslation();
-  const lang = i18n.language.split("-")[0].toLowerCase();
+  const lang = primaryLanguage(i18n.language);
 
   const [query, setQuery] = useState("");
   const [found, setFound] = useState<Found>({ query: "", results: [], origin: null });
@@ -184,12 +198,13 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                   </Pressable>
                 )}
               </Backing>
-              <PanelClose label={t("settings.close")} onClose={() => onClose()} />
+              <PanelClose onClose={() => onClose()} />
             </View>
           </>
         }
       >
         <ScrollView style={styles.results} contentContainerStyle={styles.resultsRoom} keyboardShouldPersistTaps="handled">
+          {q === "" && <MapCenter />}
           {q !== "" && results.length === 0 && <Text style={styles.empty}>{loading ? t("map.search.loading") : t("map.search.no_results")}</Text>}
 
           {SECTIONS.map(({ kind, label }) => {
@@ -251,6 +266,8 @@ const styles = StyleSheet.create({
   subtitle: { flexDirection: "row", alignItems: "baseline", gap: 8 },
   small: { ...textStyle.caption, color: LABEL.secondary },
   context: { flexShrink: 1 },
+  center: { gap: 4, paddingHorizontal: PANEL_EDGE },
+  numbers: { fontVariant: ["tabular-nums"] },
   distance: { marginLeft: "auto", flexShrink: 0, fontVariant: ["tabular-nums"] },
   badge: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   badgeIcon: { fontSize: textStyle.footnote.fontSize },

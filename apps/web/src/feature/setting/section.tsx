@@ -1,13 +1,10 @@
 // @pxl/web/feature/setting/section.tsx
 
-import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { View } from "react-native";
-
 import type { GlyphName } from "@platform/icon.tsx";
 
 import { type Setting, type SettingName, SETTINGS, type SettingSection, settingsIn } from "@/feature/setting/schema.ts";
-import { SectionTitle, SettingChoiceRow, SettingGroup, SettingRow } from "./row.tsx";
+import { Section, SettingChoiceRow, SettingGroup, SettingRow } from "./row.tsx";
 import { kernel_setting, useKernel } from "@/kernel/shell.ts";
 
 const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {
@@ -19,32 +16,30 @@ const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {
 };
 
 function devOption(setting: Setting, option: string): boolean {
-  return "dev_options" in setting && (setting.dev_options as readonly string[]).includes(option);
+  return "dev_options" in setting && setting.dev_options.some((o) => o === option);
 }
 
 /** Strings come from `settings.<section>.<key>` and, for a choice, `.<option>` under that. */
-export function SettingsSection(props: { section: SettingSection; children?: ReactNode }) {
-  const { section, children } = props;
+export function SettingsSection(props: { section: SettingSection }) {
+  const { section } = props;
   const { t } = useTranslation();
   const keys = settingsIn(section);
-  if (keys.length === 0 && children === undefined) return null;
+  if (keys.length === 0) return null;
 
   return (
-    <View style={{ gap: 4 }}>
-      <SectionTitle icon={SECTION_ICONS[section]} caption={t(`settings.${section}.section_caption`)}>
-        {t(`settings.${section}.section_title`)}
-      </SectionTitle>
+    <Section title={t(`settings.${section}.section_title`)} icon={SECTION_ICONS[section]} caption={t(`settings.${section}.section_caption`)}>
       {keys.map((key) => <SettingControl key={key} name={key} />)}
-      {children}
-    </View>
+    </Section>
   );
 }
 
 function SettingControl(props: { name: SettingName }) {
   const { name } = props;
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const setting: Setting = SETTINGS[name];
   const { key } = setting;
+  const cost = "cost" in setting ? setting.cost : undefined;
+  const dev = "dev" in setting && setting.dev;
   const value = useKernel((s) => s.settings[key]);
   const base = `settings.${setting.section}.${name}`;
 
@@ -56,24 +51,26 @@ function SettingControl(props: { name: SettingName }) {
           description={t(`${base}.description`)}
           active={value === 1}
           onChange={(on) => kernel_setting(key, on ? 1 : 0)}
-          cost={setting.cost}
-          dev={setting.dev}
+          cost={cost}
+          dev={dev}
         />
       );
     case "choice":
       return (
-        <SettingGroup label={t(`${base}.label`)} cost={setting.cost} dev={setting.dev}>
-          {setting.options.map((option, i) => (__IS_DEV__ || !devOption(setting, option)) && (
-            <SettingChoiceRow
-              key={option}
-              label={t(`${base}.${option}.label`)}
-              description={t(`${base}.${option}.description`)}
-              selected={value === i}
-              onSelect={() => kernel_setting(key, i)}
-              cost={setting.costs?.[i] || setting.cost}
-              dev={devOption(setting, option)}
-            />
-          ))}
+        <SettingGroup label={t(`${base}.label`)} description={i18n.exists(`${base}.description`) ? t(`${base}.description`) : undefined} cost={cost} dev={dev}>
+          {setting.options.map((option, i) =>
+            (__IS_DEV__ || !devOption(setting, option)) && (
+              <SettingChoiceRow
+                key={option}
+                label={t(`${base}.${option}.label`)}
+                description={t(`${base}.${option}.description`)}
+                selected={value === i}
+                onSelect={() => kernel_setting(key, i)}
+                cost={("costs" in setting ? setting.costs[i] : "") || cost}
+                dev={devOption(setting, option)}
+              />
+            )
+          )}
         </SettingGroup>
       );
     case "index":

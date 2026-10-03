@@ -1,9 +1,8 @@
 {
+  "close": "Close",
   "settings": {
     "title": "Settings",
-    "description": "Display, map moves, camera and language",
     "trigger_aria_label": "Settings",
-    "close": "Close",
     "tabs": {
       "options": "Options",
       "info": "Info"
@@ -190,8 +189,6 @@
   },
   "drawer": {
     "title": "Drawer",
-    "description": "Browse all available block colors, decor, and characters.",
-    "close": "Close",
     "tabs": {
       "cube": "Block",
       "decor": "Decor",
@@ -293,7 +290,8 @@
       "loading": "Searching…",
       "no_results": "No results found",
       "section_areas": "Areas",
-      "section_places": "Places"
+      "section_places": "Places",
+      "map_center": "Map center"
     }
   },
   "unsupported": {

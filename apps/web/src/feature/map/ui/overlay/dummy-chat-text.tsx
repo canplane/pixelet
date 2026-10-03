@@ -5,7 +5,8 @@ import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useUiStore } from "@/app/store/ui.ts";
-import { alpha, color, textEdge, textStyle, weight } from "@/shared/ui/theme.ts";
+import { alpha, color, textStyle, weight } from "@/shared/ui/theme.ts";
+import { textEdge } from "@platform/typeface.ts";
 import { useWindowSize } from "@platform/viewport.ts";
 
 export function DummyChatText() {

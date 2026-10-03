@@ -6,8 +6,8 @@ import { PanResponder, PixelRatio, StyleSheet, View } from "react-native";
 import { Motion } from "@platform/motion.tsx";
 import { type Key, usePresent } from "@/shared/ui/motion/presence.tsx";
 import { after, LEAVE, SETTLE } from "@/shared/ui/motion/transition.ts";
-import { setToastDragging, toastDepth, toastRotate, useToastStore } from "./store.ts";
-import { Toast } from "./item.tsx";
+import { frontFirst, setToastDragging, toastRotate, useToastStore } from "./store.ts";
+import { Toast, TOAST_SIDE } from "./item.tsx";
 
 const MAX_STACK_DEPTH = 2;
 const STACK_PEEK_PX = 8;
@@ -32,10 +32,7 @@ export function Toaster() {
   const lastOrder = useRef<Key[]>([]);
   const lastRotation = useRef(rotation);
   const turnedBack = rotation < lastRotation.current;
-  const order: Key[] = entries
-    .map((e, i) => ({ key: e.id, depth: toastDepth(i, rotation, entries.length) }))
-    .sort((a, b) => a.depth - b.depth)
-    .map((c) => c.key);
+  const order: Key[] = frontFirst(entries, rotation).map((e) => e.id);
   const arrivals = new Set<Key>(order.filter((key) => !lastOrder.current.includes(key)));
   const arrived = arrivals.size;
   for (const key of list.filter((c) => !c.present).map((c) => c.key).sort((a, b) => lastOrder.current.indexOf(a) - lastOrder.current.indexOf(b))) {
@@ -110,6 +107,6 @@ export function Toaster() {
 
 const styles = StyleSheet.create({
   // No card is placed by measuring another.
-  anchor: { alignItems: "center", height: 32, pointerEvents: "box-none" },
-  card: { position: "absolute", bottom: 0, width: 0, height: 32, transformOrigin: "center bottom" },
+  anchor: { alignItems: "center", height: TOAST_SIDE, pointerEvents: "box-none" },
+  card: { position: "absolute", bottom: 0, width: 0, height: TOAST_SIDE, transformOrigin: "center bottom" },
 });

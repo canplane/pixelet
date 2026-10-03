@@ -36,14 +36,18 @@ export function toastDepth(i: number, rotation: i32, count: number): number {
   return count > 0 ? ((i - rotation) % count + count) % count : 0;
 }
 
-// Before inserting at index 0 while turned, or the new entry lands behind the front card.
-function unturned(): Entry[] {
-  const { entries, rotation } = get();
-  if (rotation === 0 || entries.length <= 1) return entries;
+/** The entries front card first, as the stack shows them turned by `rotation`. */
+export function frontFirst<T>(entries: readonly T[], rotation: i32): T[] {
   return entries
     .map((e, i) => ({ e, depth: toastDepth(i, rotation, entries.length) }))
     .sort((a, b) => a.depth - b.depth)
     .map((x) => x.e);
+}
+
+// Before inserting at index 0 while turned, or the new entry lands behind the front card.
+function unturned(): Entry[] {
+  const { entries, rotation } = get();
+  return frontFirst(entries, rotation);
 }
 
 function toFront(id: u32): void {

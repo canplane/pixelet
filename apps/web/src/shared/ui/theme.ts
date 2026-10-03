@@ -6,7 +6,7 @@
  * their hue, so two uses sharing a value can change apart.
  */
 
-import { FAMILY, MONO, textEdge } from "@platform/typeface.ts";
+import { FAMILY, MONO } from "@platform/typeface.ts";
 import { round } from "@xpute/core/math/scalar.ts";
 
 export function alpha(hex: string, a: number): string {
@@ -127,8 +127,6 @@ export const textStyle = {
 } as const;
 
 export const sectionTitle = { ...textStyle.caption, fontWeight: weight.medium, letterSpacing: 0.6, textTransform: "uppercase" } as const;
-
-export { textEdge };
 
 export const chrome = {
   inset: 16,

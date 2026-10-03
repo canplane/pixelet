@@ -7,7 +7,6 @@ import type { SegmentedProps } from "@/shared/ui/segmented.ts";
 import { chrome, color, textStyle, weight } from "@/shared/ui/theme.ts";
 import { LABEL } from "@platform/palette.ts";
 
-
 export function Segmented<T extends string | number>({ segments, value, onChange }: SegmentedProps<T>) {
   return (
     <View accessibilityRole="tablist" style={styles.track}>

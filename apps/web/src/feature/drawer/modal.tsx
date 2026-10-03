@@ -2,25 +2,23 @@
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { u8 } from "@xpute/core/abi/word.ts";
-import { type ChannelName, decorKinds, decorName, type PlaceableCube, placeableCubeChannel, placeableCubeId, placeableCubes } from "@/catalog/cell/mod.ts";
+import { type ChannelName, decorKinds, type PlaceableCube, placeableCubeChannel, placeableCubeId, placeableCubes } from "@/catalog/cell/mod.ts";
 
 import { useInHand, useUiStore } from "@/app/store/ui.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
-import { useSafeArea } from "@platform/safe-area.ts";
 import { Panel } from "@platform/panel.tsx";
 import { Glyph } from "@/shared/ui/glyph.tsx";
-import { PANEL_EDGE, PANEL_SECTION_GAP, PANEL_TABS_ROOM, PanelBody, PanelHeader } from "@/shared/ui/panel.tsx";
+import { PanelBody, PanelHeader, PanelScroll } from "@/shared/ui/panel.tsx";
 import { Segmented } from "@platform/segmented.tsx";
 import { chrome, color, hairline, sectionTitle, textStyle } from "@/shared/ui/theme.ts";
 import { CharacterPicker } from "@/feature/character/picker.tsx";
-import { cubeLabel, CubeSwatch, DECOR_GLYPH, heldRing } from "./swatch.tsx";
+import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/catalog/cell/swatch.tsx";
 import { LABEL } from "@platform/palette.ts";
 
-const SECTION_ORDER: readonly ChannelName[] = ["block", "land", "water", "structure", "transport"];
-
+/** In the catalog's order. */
 const SECTIONS = new Map<ChannelName, PlaceableCube[]>();
 for (const cube of placeableCubes) {
   const section = placeableCubeChannel(cube);
@@ -68,12 +66,11 @@ function CubeSwatchButton({ cube, onPick }: { cube: PlaceableCube; onPick: (cube
 function DecorGridButton({ kind, onPick }: { kind: u8; onPick: (kind: u8) => void }) {
   const { t } = useTranslation();
   const active = useInHand({ tool: ActiveTool.Decor, kind });
-  const name = decorName(kind);
 
   return (
-    <GridButton label={t(`decor.${name}`)} active={active} onPress={() => onPick(kind)}>
+    <GridButton label={decorLabel(t, kind)} active={active} onPress={() => onPick(kind)}>
       <View style={[styles.decor, active ? [styles.markOn, styles.decorOn] : styles.markOff]}>
-        <Glyph glyph={DECOR_GLYPH[name]} size={chrome.glyph} color={LABEL.primary} />
+        <Glyph glyph={decorGlyph(kind)} size={chrome.glyph} color={LABEL.primary} />
       </View>
     </GridButton>
   );
@@ -88,7 +85,6 @@ const enum DrawerTab {
 /** Cube and decor picks close the sheet; character picks apply at once and leave it open. */
 export function DrawerModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
-  const { bottom } = useSafeArea();
   const [tab, setTab] = useState<DrawerTab>(DrawerTab.Cube);
   const selectCube = useUiStore.getState().selectCube;
   const selectDecor = useUiStore.getState().selectDecor;
@@ -110,7 +106,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
   return (
     <Panel label={t("drawer.title")} onClose={onClose} half>
       <PanelBody
-        header={<PanelHeader title={t("drawer.title")} closeLabel={t("drawer.close")} onClose={onClose} />}
+        header={<PanelHeader title={t("drawer.title")} onClose={onClose} />}
         tabs={
           <Segmented
             value={tab}
@@ -123,10 +119,8 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
           />
         }
       >
-        <ScrollView key={tab} style={styles.scroll} contentContainerStyle={[styles.scrollContent, { paddingBottom: bottom + PANEL_EDGE }]}>
-          {tab === DrawerTab.Cube && SECTION_ORDER.map((section) => {
-            const cubes = SECTIONS.get(section);
-            if (!cubes) return null;
+        <PanelScroll key={tab}>
+          {tab === DrawerTab.Cube && [...SECTIONS].map(([section, cubes]) => {
             return (
               <View key={section} style={styles.section}>
                 <SectionHead title={t(`drawer.sections.${section}`)} held={section === heldSection ? cubeLabel(t, heldCube) : null} />
@@ -139,7 +133,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
 
           {tab === DrawerTab.Decor && (
             <View style={styles.section}>
-              <SectionHead held={activeTool === ActiveTool.Decor ? t(`decor.${decorName(heldDecor)}`) : null} />
+              <SectionHead held={activeTool === ActiveTool.Decor ? decorLabel(t, heldDecor) : null} />
               <View style={styles.grid}>
                 {decorKinds.map((kind) => <DecorGridButton key={kind} kind={kind} onPick={pickDecor} />)}
               </View>
@@ -147,15 +141,13 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
           )}
 
           {tab === DrawerTab.Character && <CharacterPicker />}
-        </ScrollView>
+        </PanelScroll>
       </PanelBody>
     </Panel>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: PANEL_EDGE, paddingTop: PANEL_TABS_ROOM, gap: PANEL_SECTION_GAP },
   section: { gap: 8 },
   sectionHead: { flexDirection: "row", alignItems: "baseline", gap: 8 },
   sectionTitle: { ...sectionTitle, color: LABEL.secondary },
