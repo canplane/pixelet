@@ -47,20 +47,20 @@
         "description": "Fixes the tilt; turns left and right only."
       },
       "orbit_obstacle": {
-        "label": "Obstacles",
+        "label": "Third-person collision",
         "through": {
           "label": "Pass through",
           "description": "Ignores obstacles and passes through."
         },
         "stop": {
           "label": "Stop",
-          "description": "Stops just short of the obstacle."
+          "description": "Stops the camera control just short of the obstacle."
         },
         "climb": {
           "label": "Climb over",
           "description": "Tilts the camera up to climb over what blocks it. Stops where the way up is blocked too."
         },
-        "description": "What the third-person camera does when terrain or an object blocks it. Not used in first person."
+        "description": "Controls what happens when zooming, turning, or tilting would move the camera into terrain or an object."
       }
     },
     "lighting": {
