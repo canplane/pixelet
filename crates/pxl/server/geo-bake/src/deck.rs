@@ -243,7 +243,7 @@ impl<'a> Side<'a> {
                     ground: z,
                     floor: &floor,
                     ceiling: &ceiling,
-                    halo: halo_m(g.at[0][1]),
+                    halo: &g.at.iter().map(|a| halo_m(a[1])).collect::<Vec<_>>(),
                 });
                 forced += profile.forced.iter().filter(|&&f| f).count();
                 next.push(profile.top);

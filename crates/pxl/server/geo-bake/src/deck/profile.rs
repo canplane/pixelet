@@ -21,8 +21,9 @@ pub struct Problem<'a> {
     pub floor: &'a [f64],
     /// +∞ where none.
     pub ceiling: &'a [f64],
-    /// How far, in metres, a bound reaches.
-    pub halo: f64,
+    /// How far, in metres, a point's bound reaches: its own latitude's, so no
+    /// window's choice of points moves it.
+    pub halo: &'a [f64],
 }
 
 pub struct Profile {
@@ -48,12 +49,12 @@ fn envelope(p: &Problem, least: &[f64], most: &[f64], sign: f64) -> Vec<f64> {
     let mut env = least.to_vec();
     let mut near = Near::new(n);
     for u in (0..n).filter(|&u| least[u].is_finite()) {
-        near.from(p.adj, u as u32, p.halo);
+        near.from(p.adj, u as u32, p.halo[u]);
         let reached = || near.reached.iter().map(|&v| (v as usize, near.dist[v as usize]));
         let pass = reached().filter(|&(w, d)| most[w].is_finite() && d > 0.0).map(|(w, d)| (least[u] - most[w]) / d).fold(PREFERRED_SLOPE, f64::max);
         for (v, d) in reached() {
             // steeper only to land on v's own by the halo, so no step there
-            let slope = pass.max((least[u] - own(v)) / p.halo);
+            let slope = pass.max((least[u] - own(v)) / p.halo[u]);
             env[v] = env[v].max(least[u] - slope * d);
         }
     }
