@@ -26,7 +26,6 @@ use crate::sched::turn::world_platform;
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::{settings_store, SettingKey};
 use crate::shell::ui::scale::m_per_px;
-use crate::world::frame::view::view;
 
 /// The center page's place, broad to narrow. Every language is sent, so
 /// switching language re-reads rather than refetches.
@@ -58,8 +57,9 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     let camera = camera_store();
     let settings = settings_store();
     let companion = companion_load_store();
-    let page = crate::control::camera::controller::map_center().map(|c| L3_IDX(c.i));
-    let center = crate::control::camera::controller::map_center().map(|c| {
+    let at = crate::control::camera::controller::map_center();
+    let page = at.map(|c| L3_IDX(c.i));
+    let center = at.map(|c| {
         let mut g = [0.0; 3];
         epsg4326::unproject(&mut g, c.i, c.f);
         LonLat { lon: g[0], lat: g[1] }
@@ -88,7 +88,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         camera_busy: camera.camera_status != CameraStatus::Idle,
         zooming: crate::control::camera::controller::zooming(),
         settings: &values,
-        m_per_px: m_per_px(view().height.max(1.0)),
+        m_per_px: m_per_px(),
         place: &|each| place_parts(page, each),
     };
     let mut w = PacketWriter::new(out, Snapshot::FIELDS);
