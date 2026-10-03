@@ -5,7 +5,12 @@ use std::sync::Arc;
 use postgres::types::ToSql;
 use postgres::{Client, Statement};
 use pxl_spec::bake::format::{BaseRow, BuildingRow, CoastRow, DeckRow, SegmentRow};
+use pxl_spec::bake::constant::U_PER_CELL;
+use pxl_spec::space::adapter::epsg3857::to_db;
+use pxl_spec::bake::deck::WIDEST;
 use pxl_spec::space::adapter::epsg3857::BBox3857;
+
+use crate::terrain::pipeline::corridor::GAP;
 
 use crate::elevation::Raster;
 
@@ -30,9 +35,20 @@ WHERE geom && env.e";
 const OVERTURE_DECK_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
-SELECT gers_id, subtype, class, width_m, form, portal, ST_AsBinary(geom) AS geom_wkb
+SELECT gers_id, subtype, class, width_m, form, ST_AsBinary(geom) AS geom_wkb
 FROM overture_deck, env
 WHERE geom && env.e";
+
+/// How far past a page what is drawn on it can come from: a way at its
+/// widest, and a corridor's gap past another (pipeline/corridor.rs).
+pub const DRAWN_REACH_U: f64 = (WIDEST + GAP) * U_PER_CELL;
+
+/// A page's bbox grown by `DRAWN_REACH_U`, the area its rows are read from; what
+/// is baked is still the page's own cells.
+pub fn drawn_from([min, max]: BBox3857) -> BBox3857 {
+    let r = to_db(DRAWN_REACH_U);
+    [[min[0] - r, min[1] - r, min[2]], [max[0] + r, max[1] + r, max[2]]]
+}
 
 /// Four tables, one row shape; `source` says whose vocabulary a row uses.
 const OVERTURE_BASE_SQL: &str = "WITH env AS (
@@ -49,7 +65,7 @@ SELECT gers_id, 'water' AS source, subtype, class, ST_AsBinary(clipped) AS geom_
 UNION ALL
 SELECT gers_id, 'land' AS source, subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_land, env WHERE geom && env.e
 UNION ALL
-SELECT gers_id, 'infrastructure' AS source, subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_infrastructure, env WHERE geom && env.e";
+SELECT gers_id, 'infrastructure' AS source, subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_infrastructure, env WHERE geom && env.e AND class IN ('parking', 'helipad')";
 
 /// Overture's ocean polygons inverted into a land polygon for the page: empty
 /// means pure ocean, the whole envelope means all land, both dropped.
@@ -72,6 +88,10 @@ SELECT
 FROM land
 WHERE NOT ST_IsEmpty(g)";
 
+/// Every statement a page's bake runs, in the order `prepare` takes them, so
+/// the catalog check (`coverage.rs` `Overture`) sees each table they read.
+pub const READS: [&str; 5] = [OVERTURE_BUILDINGS_SQL, OVERTURE_TRANSPORTATION_SQL, OVERTURE_BASE_SQL, OVERTURE_COAST_SQL, OVERTURE_DECK_SQL];
+
 pub struct PageSource {
     pub ele: Option<Vec<i16>>,
     pub building_rows: Vec<BuildingRow>,
@@ -93,18 +113,19 @@ pub struct TerrainRepository {
 
 impl TerrainRepository {
     pub fn prepare(client: &mut Client, raster: Arc<Raster>) -> Result<TerrainRepository, postgres::Error> {
+        let [buildings, segments, base, coast, deck] = READS.map(|sql| client.prepare(sql));
         Ok(TerrainRepository {
             raster,
-            buildings: client.prepare(OVERTURE_BUILDINGS_SQL)?,
-            segments: client.prepare(OVERTURE_TRANSPORTATION_SQL)?,
-            base: client.prepare(OVERTURE_BASE_SQL)?,
-            coast: client.prepare(OVERTURE_COAST_SQL)?,
-            deck: client.prepare(OVERTURE_DECK_SQL)?,
+            buildings: buildings?,
+            segments: segments?,
+            base: base?,
+            coast: coast?,
+            deck: deck?,
         })
     }
 
     pub fn fetch_page_source(&self, client: &mut Client, page_bbox: BBox3857) -> Result<PageSource, postgres::Error> {
-        let (minx, miny, maxx, maxy) = (page_bbox[0][0], page_bbox[0][1], page_bbox[1][0], page_bbox[1][1]);
+        let [[minx, miny, _], [maxx, maxy, _]] = drawn_from(page_bbox);
         let bbox: [&(dyn ToSql + Sync); 4] = [&minx, &miny, &maxx, &maxy];
 
         let ele = self.raster.page_grid(client, page_bbox)?;
@@ -170,7 +191,7 @@ impl TerrainRepository {
     }
 
     pub fn fetch_deck_rows(&self, client: &mut Client, page_bbox: BBox3857) -> Result<Vec<DeckRow>, postgres::Error> {
-        let (minx, miny, maxx, maxy) = (page_bbox[0][0], page_bbox[0][1], page_bbox[1][0], page_bbox[1][1]);
+        let [[minx, miny, _], [maxx, maxy, _]] = drawn_from(page_bbox);
         Ok(client
             .query(&self.deck, &[&minx, &miny, &maxx, &maxy])?
             .iter()
@@ -180,7 +201,6 @@ impl TerrainRepository {
                 class: row.get("class"),
                 width_m: row.get::<_, f32>("width_m").into(),
                 form: row.get::<_, i16>("form") as u8,
-                portal_m: row.get::<_, &[u8]>("portal").into(),
                 geom_wkb: wkb(row),
             })
             .collect())

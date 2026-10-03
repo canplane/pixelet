@@ -5,7 +5,7 @@
 //! open ocean (about 65% of the bbox) as no object, so a 404 means water and
 //! every such page shares one decoded tile, fetched under its own category.
 
-use pxl_spec::bake::deck::{self, MAX_DECKS, MAX_POINTS};
+use pxl_spec::bake::deck::{self, MAX_BOXES, MAX_DECKS, MAX_POINTS};
 use pxl_spec::bake::format::{decode_terrain_into, Block, PageRoom, Terrain, BLOCK_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::pyramid::LevelPage;
@@ -85,7 +85,7 @@ unsafe fn room_of(record: u32) -> PageRoom {
                 width: core::slice::from_raw_parts_mut(ptr_at::<u8>(deck_lane(3)), MAX_DECKS),
                 kind: core::slice::from_raw_parts_mut(ptr_at::<u8>(deck_lane(4)), MAX_DECKS),
                 form: core::slice::from_raw_parts_mut(ptr_at::<u8>(deck_lane(5)), MAX_DECKS),
-                portal: core::slice::from_raw_parts_mut(ptr_at::<u16>(deck_lane(6)), MAX_POINTS),
+                boxes: core::slice::from_raw_parts_mut(ptr_at::<[i16; 4]>(deck_lane(6)), MAX_BOXES),
             },
         }
     }

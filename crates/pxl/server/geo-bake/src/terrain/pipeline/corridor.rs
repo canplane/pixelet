@@ -11,10 +11,10 @@ use pxl_spec::bake::way;
 use pxl_spec::cell::cube::cube_types;
 use std::collections::HashMap;
 
-const GAP: f64 = 1.0;
+pub(crate) const GAP: f64 = 1.0;
 
 /// As Arnis takes a dual carriageway's.
-const SIDE_HEADING_COS: f64 = 0.939_692_620_785_908_4; // cos 20°
+pub(crate) const SIDE_HEADING_COS: f64 = 0.939_692_620_785_908_4; // cos 20°
 
 const BUCKET: f64 = 16.0;
 

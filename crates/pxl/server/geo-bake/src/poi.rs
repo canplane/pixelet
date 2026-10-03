@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 
 use postgres::Client;
 use pxl_geo_spec::overture::properties::{category_named, CATEGORY_SQL};
+use crate::coverage::Coverage;
 use pxl_spec::bake::poi_page::{self, kind_of, Place, PoiPage, POI_LATTICE};
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
@@ -19,9 +20,15 @@ impl crate::pyramid::Layer for PoiPage {
     }
 }
 
-/// A place belongs to the POI-lattice cell its projected position floors into.
-pub fn leaves(client: &mut Client, within: Option<IVec>) -> Result<BTreeMap<IVec, PoiPage>, String> {
-    let select = format!("SELECT ST_X(geom), ST_Y(geom), name, {CATEGORY_SQL}, gers_id FROM overture_places");
+const PLACES_SQL: &str = "SELECT ST_X(geom), ST_Y(geom), name, {category}, gers_id FROM overture_places";
+
+/// Every statement the POI bake runs, for the catalog check.
+pub const READS: [&str; 2] = [PLACES_SQL, CATEGORY_SQL];
+
+/// A place belongs to the POI-lattice cell its projected position floors
+/// into, and is published only on a page of the coverage.
+pub fn leaves(client: &mut Client, coverage: &Coverage, within: Option<IVec>) -> Result<BTreeMap<IVec, PoiPage>, String> {
+    let select = PLACES_SQL.replace("{category}", CATEGORY_SQL);
     let rows = match within {
         Some(p) => {
             let [[x0, y0, _], [x1, y1, _]] = epsg3857::get_page_bbox(p);
@@ -35,7 +42,7 @@ pub fn leaves(client: &mut Client, within: Option<IVec>) -> Result<BTreeMap<IVec
         let mut at = Pvf3::default();
         epsg3857::project(&mut at, row.get(0), row.get(1), 0.0);
         let leaf = POI_LATTICE.cell_of(0, &at).page();
-        if within.is_some_and(|w| leaf.page != w) {
+        if within.is_some_and(|w| leaf.page != w) || !coverage.contains(leaf.page) {
             continue;
         }
         let kind = kind_of(category_named(row.get::<_, Option<&str>>(3)));
@@ -49,5 +56,5 @@ pub fn leaves(client: &mut Client, within: Option<IVec>) -> Result<BTreeMap<IVec
 
 /// FNV-1a 64 of the source's id, so the page carries no provider id format.
 fn id_of(source_id: &str) -> u64 {
-    source_id.bytes().fold(0xcbf2_9ce4_8422_2325, |h, b| (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3))
+    crate::util::fnv1a(source_id.as_bytes())
 }

@@ -6,7 +6,8 @@
 use std::collections::HashMap;
 
 use postgres::Client;
-use pxl_spec::bake::constant::{CELL_PER_M, ELE_PADDED_SPAN, XY_CELL_PER_M};
+use pxl_spec::bake::constant::{ELE_PADDED_SPAN, U_PER_CELL};
+use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m};
 use pxl_spec::bake::surface::bicubic;
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::indexer::L3_IDX;
@@ -35,10 +36,10 @@ pub fn surface(client: &mut Client, url: &str, points: &[[f64; 2]]) -> Result<Ve
             let [min, _] = bbox;
             // Drawn flat at sea level, as the bake draws it.
             let grid = raster.page_grid(client, bbox)?.unwrap_or_else(|| vec![0; span * span]);
-            let cell_per_m = CELL_PER_M(min[1]);
+            let cell_per_m = u_per_m(from_db(min[1])) / U_PER_CELL;
             out.extend(at.iter().map(|&i| {
                 let [x, y] = points[i];
-                let (tx, ty) = ((x - min[0]) * XY_CELL_PER_M, (y - min[1]) * XY_CELL_PER_M);
+                let (tx, ty) = (from_db(x - min[0]) / U_PER_CELL, from_db(y - min[1]) / U_PER_CELL);
                 (i, f64::from(bicubic(&grid, tx, ty)) / cell_per_m)
             }));
         }

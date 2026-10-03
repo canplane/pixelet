@@ -5,15 +5,18 @@
 
 use std::time::Instant;
 
+use pxl_geo_bake::coverage::Overture;
 use pxl_geo_bake::deck::solve;
+use pxl_geo_spec::table::{BASE_WATER, DECK, TRANSPORTATION};
 
 fn run() -> Result<(), String> {
-    let url = std::env::var("DB_GEO_URL").map_err(|_| "DB_GEO_URL required")?;
-    let mut client = postgres::Client::connect(&url, postgres::NoTls).map_err(|e| e.to_string())?;
+    // Named, since deck/source.rs runs its statements inline.
+    let (source, mut client) = Overture::open(&[BASE_WATER, TRANSPORTATION])?;
+    source.forget(&mut client, DECK)?;
     let started = Instant::now();
     let log = |line: &str| println!("[solve/deck] {line} ({:.0}s)", started.elapsed().as_secs_f64());
-    let s = solve(&mut client, &url, log).map_err(|e| e.to_string())?;
-    log(&format!("{} decks in {} structures, {} points: overture_deck", s.pieces, s.structures, s.points));
+    solve(&mut client, source.url(), log).map_err(|e| e.to_string())?;
+    source.stamp(&mut client, DECK)?;
     Ok(())
 }
 

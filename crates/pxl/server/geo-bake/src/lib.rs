@@ -5,6 +5,7 @@
 //! fetch per page, `page` walks a coverage.
 
 pub mod cli;
+pub mod coverage;
 pub mod deck;
 pub mod elevation;
 pub mod geocode;

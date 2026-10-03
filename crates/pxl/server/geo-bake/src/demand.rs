@@ -56,7 +56,7 @@ struct Dataset {
 }
 enum Source {
     Terrain(terrain::Source),
-    Poi,
+    Poi(crate::coverage::Coverage),
     Geocode,
 }
 impl Source {
@@ -70,7 +70,8 @@ impl Source {
     fn holds(&self, p: pxl_spec::space::pyramid::LevelPage) -> bool {
         match self {
             Source::Terrain(s) => s.coverage.meets(p.level, p.page),
-            _ => true,
+            Source::Poi(coverage) => coverage.meets(p.level, p.page),
+            Source::Geocode => true,
         }
     }
 
@@ -90,7 +91,7 @@ impl Dataset {
             cache: Cache::with_admission(base.join(kind.name()), runner.admission.clone(), std::time::Duration::from_secs(runner.limits.seconds))?,
             source: match kind {
                 Kind::Terrain => Source::Terrain(terrain::Source::new()?),
-                Kind::Poi => Source::Poi,
+                Kind::Poi => Source::Poi(crate::coverage::Coverage::of_source()?),
                 Kind::Geocode => Source::Geocode,
             },
         };
@@ -109,9 +110,9 @@ pub struct Server {
     top_level: u32,
 }
 impl Server {
-    pub fn open(url: &str, workers: usize, base: PathBuf, top_level: u32, limits: Limits) -> Result<Self, String> {
+    pub fn open(workers: usize, base: PathBuf, top_level: u32, limits: Limits) -> Result<Self, String> {
         let owner = claim(&base)?;
-        let runner = Arc::new(Runner::new(url.to_owned(), workers, limits)?);
+        let runner = Arc::new(Runner::new(workers, limits)?);
         let current = [Kind::Terrain, Kind::Poi, Kind::Geocode]
             .into_iter()
             .map(|k| {

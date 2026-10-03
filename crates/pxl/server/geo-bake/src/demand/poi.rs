@@ -9,7 +9,7 @@ pub(super) fn execute(p: LevelPage, cache: &std::path::Path, out: &std::path::Pa
         p,
         cache,
         out,
-        || Ok(crate::poi::leaves(&mut job::connect(seconds)?, Some(p.page))?.remove(&p.page)),
+        || Ok(crate::poi::leaves(&mut job::connect(&[&crate::poi::READS], seconds)?, &crate::coverage::Coverage::of_source()?, Some(p.page))?.remove(&p.page)),
         || Ok(PoiPage::default()),
     )
 }

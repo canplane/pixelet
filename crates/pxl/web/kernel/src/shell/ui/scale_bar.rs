@@ -5,6 +5,7 @@
 //! Mercator zoom.
 
 use pxl_spec::space::adapter::epsg3857;
+use pxl_spec::space::pvf3::pvf3;
 
 use crate::control::camera::config::camera_cfg;
 
@@ -35,32 +36,23 @@ pub struct ScaleBar {
     pub bar_width_px: f64,
 }
 
-/// Web Mercator meters, before the latitude correction a real distance needs.
-fn planar_m_per_px(screen_height: f64) -> f64 {
+/// u a pixel spans at the camera's distance.
+fn u_per_px(screen_height: f64) -> f64 {
     let dist = crate::control::camera::controller::radius();
     let fov_rad = camera_cfg::projection::FOV.to_radians();
-    let visible_u = 2.0 * (fov_rad / 2.0).tan() * dist;
-    visible_u / epsg3857::U_PER_M / screen_height
+    2.0 * (fov_rad / 2.0).tan() * dist / screen_height
 }
 
 /// The zoom whose tile resolution matches the view's, so tile-zoom
 /// conventions (Nominatim's address depth) apply to a view with no tiles.
 pub fn mercator_zoom(screen_height: f64) -> f64 {
     const TILE_PX: f64 = 256.0;
-    libm::log2(epsg3857::WORLD_WIDTH_3857 / TILE_PX / planar_m_per_px(screen_height))
+    libm::log2(epsg3857::U_TOTAL_X / TILE_PX / u_per_px(screen_height))
 }
 
 pub fn scale_bar(screen_height: f64) -> ScaleBar {
-    let planar_m_per_px = planar_m_per_px(screen_height);
-    let mercator_scale = match crate::control::camera::controller::map_center() {
-        Some(c) => {
-            let mut g = [0.0; 3];
-            epsg3857::unproject(&mut g, c.i, c.f);
-            epsg3857::Z_SCALE(g[1])
-        }
-        None => 1.0,
-    };
-    let real_m_per_px = planar_m_per_px / mercator_scale;
+    let y_u = crate::control::camera::controller::map_center().map_or(0.0, |c| pvf3::to_real(pvf3::Y(&c)));
+    let real_m_per_px = u_per_px(screen_height) / epsg3857::u_per_m(y_u);
     let total_meters = round_to_nice_scale(SCALE_BAR_MAX_WIDTH_PX * real_m_per_px);
     ScaleBar {
         total_meters,

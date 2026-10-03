@@ -188,10 +188,7 @@ fn run() -> Result<(), String> {
 
     let (pages, top_level) = match baked {
         Some(dir) => (Pages::Baked(dir), PUBLISHED_TOP_LEVEL),
-        None => {
-            let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
-            (Pages::Demand(Server::open(&url, workers, cache, top_level, limits)?), top_level)
-        }
+        None => (Pages::Demand(Server::open(workers, cache, top_level, limits)?), top_level),
     };
     let app = Arc::new(App { pages, top_level, asset_dir });
 

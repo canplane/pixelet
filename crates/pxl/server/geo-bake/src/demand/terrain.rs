@@ -1,7 +1,8 @@
 // pxl-geo-bake/demand/terrain.rs
 
 use super::job;
-use crate::terrain::leaf::{bake_ocean, ocean_samples, Coverage};
+use crate::coverage::Coverage;
+use crate::terrain::leaf::{bake_ocean, ocean_samples};
 use pxl_spec::space::pyramid::LevelPage;
 
 pub(super) struct Source {
@@ -10,7 +11,7 @@ pub(super) struct Source {
 }
 impl Source {
     pub fn new() -> Result<Self, String> {
-        let coverage = Coverage::of_source();
+        let coverage = Coverage::of_source()?;
         let raw_ocean = bake_ocean(&ocean_samples(&coverage))?;
         Ok(Self { coverage, raw_ocean })
     }
@@ -25,8 +26,8 @@ pub(super) fn execute(p: LevelPage, cache: &std::path::Path, out: &std::path::Pa
         cache,
         out,
         || {
-            let mut client = job::connect(seconds)?;
-            if !leaf::has_land(&mut client, &[p.page]).map_err(|e| e.to_string())?[0] {
+            let mut client = job::connect(&leaf::READS, seconds)?;
+            if !leaf::has_ground(&mut client, &[p.page]).map_err(|e| e.to_string())?[0] {
                 return Ok(None);
             }
             let raster = std::sync::Arc::new(crate::elevation::Raster::open(&mut client).map_err(|e| e.to_string())?);

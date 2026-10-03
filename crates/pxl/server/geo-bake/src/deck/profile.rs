@@ -1,14 +1,15 @@
 // pxl-geo-bake/deck/profile.rs
 
-//! A structure's deck profile on the graph of its points: the higher of the
-//! line between its ground ends and each clearance raised at `MAX_SLOPE`, the
-//! clearances capped so the deck can come down to every end. Only where two
-//! ends' own ground is steeper than `MAX_SLOPE` is a step left, marked forced.
+//! A structure's road surface on the graph of its points, in `q`: a deck's
+//! height, a bore's depth. Each point's need is hard: where `PREFERRED_SLOPE`
+//! cannot reach it from the ends, the line between ends and held points is
+//! laid as gently as the needs allow; elsewhere a need is raised at
+//! `PREFERRED_SLOPE`. A step steeper than `PREFERRED_SLOPE` is marked forced.
 
 use std::cmp::Ordering;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashMap};
 
-use crate::deck::clearance::MAX_SLOPE;
+use crate::deck::param::PREFERRED_SLOPE;
 
 pub struct Problem<'a> {
     pub adj: &'a [Vec<(u32, f64)>],
@@ -26,16 +27,65 @@ pub struct Profile {
 pub fn solve(p: &Problem) -> Profile {
     let n = p.need.len();
     // The highest each point can be and still come down to every end.
-    let cap = spread(p.adj, p.ends.iter().copied(), |v, d| v + MAX_SLOPE * d, Ordering::Less);
+    let cap = spread(p.adj, p.ends.iter().copied(), |v, d| v + PREFERRED_SLOPE * d, Ordering::Less);
     let held = (0..n).filter(|&v| p.carried[v]).map(|v| (v as u32, p.need[v].min(cap[v])));
-    let raised = spread(p.adj, held, |v, d| v - MAX_SLOPE * d, Ordering::Greater);
-    let (line, slope) = between_ends(p);
-    let top = (0..n).map(|v| if p.carried[v] { line[v].max(raised[v]) } else { p.need[v].max(raised[v]) }).collect();
-    let forced = slope.iter().map(|&s| s > MAX_SLOPE + 1e-9).collect();
-    Profile { top, forced }
+    let raised = spread(p.adj, held, |v, d| v - PREFERRED_SLOPE * d, Ordering::Greater);
+    // Points the grade cannot reach are held, in each stretch between set
+    // points the one furthest under its line: over a chord that is a vertex of
+    // the upper hull, so the line is a taut string over the needs, not a
+    // staircase along them. Stretches are apart, so each round holds one in each.
+    let mut unreached: Vec<(u32, f64)> = Vec::new();
+    loop {
+        let (line, slope, set) = between_ends(p, unreached.iter().copied());
+        let top: Vec<f64> = (0..n).map(|v| if p.carried[v] { line[v].max(raised[v]) } else { p.need[v].max(raised[v]) }).collect();
+        let under = |v: usize| p.need[v] - top[v];
+        let stretch = stretches(p, &set);
+        let mut worst: HashMap<usize, usize> = HashMap::new();
+        for v in (0..n).filter(|&v| p.carried[v] && under(v) > 1e-9) {
+            let w = worst.entry(stretch[v]).or_insert(v);
+            if under(v) > under(*w) {
+                *w = v;
+            }
+        }
+        if worst.is_empty() {
+            let forced = slope.iter().map(|&s| s > PREFERRED_SLOPE + 1e-9).collect();
+            return Profile { top, forced };
+        }
+        for v in worst.into_values() {
+            assert!(!unreached.iter().any(|&(u, _)| u as usize == v), "a held point under its need: a structure's form is broken");
+            unreached.push((v as u32, p.need[v]));
+        }
+    }
 }
 
-fn between_ends(p: &Problem) -> (Vec<f64>, Vec<f64>) {
+/// Each point's stretch: carried points joined without passing a set point;
+/// a set point is a stretch of its own.
+fn stretches(p: &Problem, set: &[bool]) -> Vec<usize> {
+    let n = p.need.len();
+    let mut id = vec![usize::MAX; n];
+    for s in 0..n {
+        if id[s] != usize::MAX {
+            continue;
+        }
+        id[s] = s;
+        if set[s] || !p.carried[s] {
+            continue;
+        }
+        let mut stack = vec![s];
+        while let Some(v) = stack.pop() {
+            for &(w, _) in &p.adj[v] {
+                let w = w as usize;
+                if id[w] == usize::MAX && p.carried[w] && !set[w] {
+                    id[w] = s;
+                    stack.push(w);
+                }
+            }
+        }
+    }
+    id
+}
+
+fn between_ends(p: &Problem, held: impl Iterator<Item = (u32, f64)>) -> (Vec<f64>, Vec<f64>, Vec<bool>) {
     let n = p.need.len();
     let carried: Vec<Vec<(u32, f64)>> = (0..n)
         .map(|v| {
@@ -49,8 +99,18 @@ fn between_ends(p: &Problem) -> (Vec<f64>, Vec<f64>) {
     let joints = (0..n)
         .filter(|&v| p.carried[v] && p.adj[v].iter().any(|&(w, _)| !p.carried[w as usize]))
         .map(|v| (v as u32, p.ground[v]));
-    let ends: Vec<(u32, f64)> = p.ends.iter().copied().filter(|&(e, _)| p.carried[e as usize]).chain(joints).collect();
-    line(&carried, &ends)
+    let mut ends: Vec<(u32, f64)> = p.ends.iter().copied().filter(|&(e, _)| p.carried[e as usize]).chain(joints).collect();
+    // A held point wins over an end or a joint on the same point.
+    for (v, h) in held {
+        ends.retain(|&(e, _)| e != v);
+        ends.push((v, h));
+    }
+    let mut set = vec![false; n];
+    for &(e, _) in &ends {
+        set[e as usize] = true;
+    }
+    let (line, slope) = line(&carried, &ends);
+    (line, slope, set)
 }
 
 /// The absolutely minimizing Lipschitz extension through `ends`, by the

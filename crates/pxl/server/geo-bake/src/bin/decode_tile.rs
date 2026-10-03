@@ -31,6 +31,7 @@ use pxl_spec::bake::surface::extent_of;
 use pxl_spec::cell::cube::ground_pack;
 use pxl_spec::cell::{color, cube_types};
 use pxl_spec::space::pyramid::PAGE_CELLS;
+use xpute_core::math::scalar::round;
 use xpute_core::wire::xtp::{HDR_SZ, WORD_SZ};
 
 const MAGENTA: u32 = 0xff00ff;
@@ -206,7 +207,7 @@ fn heights_png(page: &Page, s: &Summary) -> Vec<u8> {
     let gray: Vec<u8> = page
         .ele
         .iter()
-        .map(|&h| if span == 0.0 { 128 } else { ((h as f64 - s.min as f64) / span * 255.0).round() as u8 })
+        .map(|&h| if span == 0.0 { 128 } else { round((h as f64 - s.min as f64) / span * 255.0) as u8 })
         .collect();
     png(ELE_PADDED_SPAN, ELE_PADDED_SPAN, 1, &gray)
 }
@@ -233,17 +234,13 @@ fn decks_png(page: &Page) -> Vec<u8> {
     let n = PAGE_CELLS as i64;
     let mut top = vec![f64::NEG_INFINITY; (n * n) as usize];
     let mut px = vec![0u8; (n * n * 3) as usize];
-    page.decks.over_grid([0.0, 0.0], 1.0, [n, n], |x, y, _, over| {
+    page.decks.over_grid(None, [0.0, 0.0], 1.0, [n, n], |x, y, _, over| {
         let i = (y * n + x) as usize;
         if over.top < top[i] {
             return;
         }
         top[i] = over.top;
-        let v = if over.pier {
-            0xffffff
-        } else {
-            color::ground(GroundChannelKey::TRANSPORT, over.kind).map_or(MAGENTA, |s| s.rgb)
-        };
+        let v = color::ground(GroundChannelKey::TRANSPORT, over.kind).map_or(MAGENTA, |s| s.rgb);
         px[i * 3..i * 3 + 3].copy_from_slice(&[(v >> 16) as u8, (v >> 8) as u8, v as u8]);
     });
     png(PAGE_CELLS, PAGE_CELLS, 3, &px)

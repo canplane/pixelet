@@ -10,8 +10,8 @@
 use pxl_spec::space::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::v3::V3;
 
-pub const MERCATOR_RADIUS_KM: f64 = epsg4326::EARTH_RADIUS / 1000.0;
-pub const MERCATOR_RADIUS_U: f64 = epsg4326::EARTH_RADIUS * epsg3857::U_PER_M;
+pub const MERCATOR_RADIUS_KM: f64 = epsg4326::EARTH_RADIUS_M / 1000.0;
+pub const MERCATOR_RADIUS_U: f64 = epsg3857::U_TOTAL_X / core::f64::consts::TAU;
 
 /// e^(y/R) = tan(π/4 + φ/2) and the latitude's sine and cosine, taken once a frame.
 #[derive(Clone, Copy, Debug, PartialEq)]

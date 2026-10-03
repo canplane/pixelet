@@ -9,6 +9,16 @@ use xpute_core::math::scalar::round;
 /// The `Content-Encoding` every baked page is uploaded with, so the transport decodes it.
 pub const CONTENT_ENCODING: &str = "zstd";
 
+/// FNV-1a 64.
+pub const fn fnv1a(bytes: &[u8]) -> u64 {
+    let (mut h, mut i) = (0xcbf2_9ce4_8422_2325u64, 0);
+    while i < bytes.len() {
+        h = (h ^ bytes[i] as u64).wrapping_mul(0x0100_0000_01b3);
+        i += 1;
+    }
+    h
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum Level {
     /// Measured on v4 leaves: 39% under gzip -6 at four times its time; the
@@ -91,9 +101,21 @@ pub fn fmt_dur(ms: f64) -> String {
     }
 }
 
+/// HEAD, and where the working tree differs, `+` its tree (untracked files
+/// too): a bake from uncommitted code names that code.
 pub fn git_sha() -> Option<String> {
-    let out = Command::new("git").args(["rev-parse", "HEAD"]).output().ok()?;
-    out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+    let index = std::env::temp_dir().join(format!("pxl-bake-index-{}", std::process::id()));
+    let git = |args: &[&str]| {
+        let out = Command::new("git").args(args).env("GIT_INDEX_FILE", &index).output().ok()?;
+        out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+    };
+    let head = git(&["rev-parse", "HEAD"])?;
+    let tree = git(&["add", "-A"]).and_then(|_| git(&["write-tree"]));
+    let _ = std::fs::remove_file(&index);
+    match tree {
+        Some(t) if git(&["rev-parse", "HEAD^{tree}"]).as_deref() != Some(t.as_str()) => Some(format!("{head}+{t}")),
+        _ => Some(head),
+    }
 }
 
 pub fn now_iso8601() -> String {

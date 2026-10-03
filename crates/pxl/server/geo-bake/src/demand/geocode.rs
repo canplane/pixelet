@@ -2,7 +2,8 @@
 
 use super::job::{self, Job, Publication, Runner};
 use super::{Dataset, Failure};
-use crate::geocode::{provider::overture::GeocodeProvider, PlaceDict};
+use crate::geocode::provider::overture::{GeocodeProvider, READS};
+use crate::geocode::PlaceDict;
 use crate::util::{pack, Level};
 use pxl_spec::bake::place_page::{encode_place_group, Named, GROUP_PAGES};
 use pxl_spec::bake::place_page::{DICT_OBJECT, GROUP_SHAMT, GROUP_ZOOM};
@@ -62,7 +63,7 @@ type Dictionary = Vec<(String, PlaceRank, String, Vec<(String, String)>)>;
 pub(super) fn dictionary(out: &Path, seconds: u64) -> Result<(), String> {
     let out = out.join("dictionary");
     std::fs::create_dir(&out).map_err(|e| e.to_string())?;
-    let mut client = job::connect(seconds)?;
+    let mut client = job::connect(&[&READS], seconds)?;
     let provider = GeocodeProvider::prepare(&mut client).map_err(|e| e.to_string())?;
     let rows = provider.dictionary(&mut client).map_err(|e| e.to_string())?;
     let backing: Dictionary = rows.iter().map(|(id, d)| (id.clone(), d.rank, d.name.clone(), d.names.clone())).collect();
@@ -74,11 +75,12 @@ pub(super) fn dictionary(out: &Path, seconds: u64) -> Result<(), String> {
 pub(super) fn execute(group: u64, dictionary: &Path, out: &Path, seconds: u64) -> Result<(), String> {
     let rows: Dictionary = serde_json::from_slice(&std::fs::read(dictionary).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     let dict = PlaceDict::of(rows.into_iter().map(|(id, rank, name, names)| (id, Named { rank, name, names })).collect());
-    let mut client = job::connect(seconds)?;
+    let mut client = job::connect(&[&READS], seconds)?;
     let provider = GeocodeProvider::prepare(&mut client).map_err(|e| e.to_string())?;
     let base = ivec::sh(group, GROUP_SHAMT as i32);
     let side = 1i64 << GROUP_SHAMT;
-    let leaves: Vec<_> = (0..GROUP_PAGES as i64).map(|k| ivec::add(base, ivec::gather(k % side, k / side, 0))).collect();
+    let coverage = crate::coverage::Coverage::of_source()?;
+    let leaves: Vec<_> = (0..GROUP_PAGES as i64).map(|k| ivec::add(base, ivec::gather(k % side, k / side, 0))).filter(|&l| coverage.contains(l)).collect();
     let packet = provider
         .group(&mut client, &dict, &leaves)?
         .map(|g| {

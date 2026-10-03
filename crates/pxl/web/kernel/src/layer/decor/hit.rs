@@ -17,11 +17,6 @@ use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::EntryAt;
 use crate::world::chunk::table::Scheduler;
 
-// A tree's trunk base meets the ground at almost exactly `max_dist`, from two
-// independent algorithms; a strict reject made the hover ghost flicker under
-// sub-pixel jitter. Small enough never to let occluded decor win.
-const SAME_SURFACE_EPS: f64 = 1e-3;
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DecorStruck {
     Placed(EntryAt),
@@ -39,11 +34,12 @@ pub struct Scattered {
     pub scale: f64,
 }
 
-/// The ray is in the root frame, relative to `map_origin`.
+/// The ray is in the root frame, relative to `map_origin`. A decor wins only
+/// strictly nearer than `max_dist`, the world's hit, as a depth test decides.
 pub fn raycast_decor(origin: V3, direction: V3, map_origin: IVec, max_dist: f64) -> Option<DecorStruck> {
     let (_, sched) = kernel().world()?;
     let frame = [ivec::to_real(ivec::X(map_origin)), ivec::to_real(ivec::Y(map_origin))];
-    let hit = hit_decor(sched, frame, origin, direction, max_dist + SAME_SURFACE_EPS)?;
+    let hit = hit_decor(sched, frame, origin, direction, max_dist)?;
     if hit.band == NO_ENTRY {
         return Some(DecorStruck::Scattered(Scattered {
             cell: hit.at.map(|v| (v / CELL.side()).floor() as i64),

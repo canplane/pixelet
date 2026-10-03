@@ -7,10 +7,12 @@
 //! The floor is rounded down to a whole band, since a volume allocates whole
 //! bands and a floor inside one would open another for a few voxels.
 
-use pxl_spec::bake::constant::BAND_CELLS;
+use pxl_spec::bake::constant::{BAND_CELLS, U_PER_CELL};
+use pxl_spec::space::adapter::epsg3857::u_per_m;
 use pxl_spec::bake::deck::{Decks, Occupies, Over};
+use pxl_spec::procedural::{pier_stands, Frame};
 use pxl_spec::bake::format::{ch_index, GroundChannelKey, GROUND_CH_KEYS};
-use pxl_spec::bake::ground::{channel_bit, ChannelMask, BASE};
+use pxl_spec::bake::ground::{channel_bit, shown_ground, ChannelMask, ShownGround, BASE};
 use pxl_spec::bake::pack::{unpack, GroundCell};
 use pxl_spec::cell::cube::cube_types;
 use pxl_spec::space::hierarchy::{ancestor_of, offset_in};
@@ -109,7 +111,7 @@ fn collect_decks(over: &mut Vec<(usize, usize, Over)>, own: Option<&PageSource>,
     let origin = [0, 1].map(|k| (s.origin[k] + first[k]) as f64 / n);
     let side = CHUNK_CELLS as i64;
     let mut grown = Ok(());
-    s.page.decks.over_grid(origin, 1.0 / n, [side, side], |cx, cy, d, o| {
+    s.page.decks.over_grid(Some(s.frame), origin, 1.0 / n, [side, side], |cx, cy, d, o| {
         if grown.is_ok() {
             grown = try_push(over, (apron_col(cx as u32, cy as u32) as usize, d, o));
         }
@@ -120,6 +122,7 @@ fn collect_decks(over: &mut Vec<(usize, usize, Over)>, own: Option<&PageSource>,
 fn pack(class: u8, rgb: [u8; 3]) -> u32 {
     ((class as u32) << 24) | ((rgb[0] as u32) << 16) | ((rgb[1] as u32) << 8) | rgb[2] as u32
 }
+
 
 /// A building's concrete: nothing in the catalog is a pier's own.
 const PIER: (GroundChannelKey, u8) = (GroundChannelKey::STRUCTURE, cube_types::structure::building);
@@ -136,6 +139,8 @@ pub struct PageView<'a> {
 #[derive(Clone, Copy)]
 pub struct PageSource<'a> {
     pub page: PageView<'a>,
+    /// Where the page lies, for its piers' stations.
+    pub frame: Frame,
     pub origin: [i64; 2],
     pub n: u32,
 }
@@ -167,6 +172,8 @@ pub struct ChunkSample {
     pub spans: Vec<Span>,
     /// `[lo, hi)`, empty where none does.
     pub bore: Vec<Bore>,
+    /// Each column's shown ground, nothing hidden: where a pier stands is the data's.
+    shown: Vec<ShownGround>,
     over: Vec<(usize, usize, Over)>,
 }
 
@@ -196,6 +203,7 @@ impl Default for ChunkSample {
             span_at: vec![0; COL_SPAN2 + 1],
             spans: Vec::new(),
             bore: vec![Bore::default(); COL_SPAN2],
+            shown: vec![BASE; COL_SPAN2],
             over: Vec::new(),
         }
     }
@@ -234,6 +242,7 @@ impl ChunkSample {
                 } else {
                     [VOID; 4]
                 };
+                self.shown[i] = shown_ground(|k| u32::from(types[ch_index(k)]), 0);
 
                 let (mut material, mut layer) = (pack(tables.base_class, tables.base_rgb), tables.base_layer);
                 for (ch, &t) in types.iter().enumerate() {
@@ -268,16 +277,21 @@ impl ChunkSample {
     fn read_decks(&mut self, own: Option<&PageSource>, first: [i64; 2]) -> Result<(), Refused> {
         let mut over = core::mem::take(&mut self.over);
         over.clear();
-        let built = collect_decks(&mut over, own, first).and_then(|()| self.spans_of(&mut over));
+        let cell_per_m = own.map_or(0.0, |s| u_per_m(s.frame.corner[1]) / U_PER_CELL);
+        let built = collect_decks(&mut over, own, first).and_then(|()| self.spans_of(&mut over, cell_per_m));
         self.over = over;
         built
     }
 
-    fn spans_of(&mut self, over: &mut Vec<(usize, usize, Over)>) -> Result<(), Refused> {
+    fn spans_of(&mut self, over: &mut Vec<(usize, usize, Over)>, cell_per_m: f64) -> Result<(), Refused> {
         let tables = &*MATERIALS;
-        // A deck's highest over a column, where two of its segments meet.
+        // A deck's highest over a column; a station is one segment's, so the pier is either's.
         over.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)).then(b.2.top.total_cmp(&a.2.top)));
-        over.dedup_by_key(|o| (o.0, o.1));
+        over.dedup_by(|b, a| {
+            let same = (a.0, a.1) == (b.0, b.1);
+            a.2.pier |= same && b.2.pier;
+            same
+        });
         self.spans.clear();
         let mut col = 0;
         let mut i = 0;
@@ -285,11 +299,13 @@ impl ChunkSample {
             self.span_at[col] = self.spans.len() as u32;
             self.bore[col] = Bore::default();
             let from = self.spans.len();
+            let col_from = i;
             while i < over.len() && over[i].0 == col {
                 let o = over[i].2;
                 i += 1;
                 let Some((slab, slab_layer)) = tables.of(GroundChannelKey::TRANSPORT, o.kind) else { continue };
-                let (slab_at, pier_at) = match o.occupies(self.ele[col] as i32) {
+                let ground = self.ele[col] as i32;
+                let (slab_at, pier_at) = match o.occupies(ground, cell_per_m) {
                     Occupies::Grade => {
                         (self.material[col], self.layer_idx[col]) = (slab, slab_layer);
                         continue;
@@ -316,7 +332,8 @@ impl ChunkSample {
                         layer: slab_layer,
                     },
                 )?;
-                if let (Some([lo, hi]), Some((pier, pier_layer))) = (pier_at, tables.of(PIER.0, PIER.1)) {
+                let column = over[col_from..].iter().take_while(|c| c.0 == col).map(|c| c.2);
+                if let (Some([lo, hi]), Some((pier, pier_layer))) = (pier_at.and_then(|p| pier_stands(p, self.shown[col], column, ground, cell_per_m)), tables.of(PIER.0, PIER.1)) {
                     try_push(
                         &mut self.spans,
                         Span {

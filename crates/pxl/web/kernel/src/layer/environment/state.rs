@@ -63,9 +63,10 @@ fn environment() -> &'static mut Environment {
     })
 }
 
-/// Mercator stretches by the secant of the latitude, heights alike.
+/// Mercator stretches by the secant of the latitude, heights alike; at the
+/// equator it is `u_per_m(0)`.
 pub fn km_per_u() -> f64 {
-    epsg3857::M_PER_U * environment().observed_lat.to_radians().cos() / 1000.0
+    environment().observed_lat.to_radians().cos() / epsg3857::u_per_m(0.0) / 1000.0
 }
 
 pub fn globe() -> Globe {

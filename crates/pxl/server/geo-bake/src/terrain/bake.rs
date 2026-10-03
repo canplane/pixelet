@@ -1,14 +1,11 @@
 // pxl-geo-bake/terrain/bake.rs
 
-//! One page's raw source packet `[ele, buildings, segments, base, coasts]`
-//! baked into its surface. Rows are tuples read by position (pxl-spec bake/format.rs).
+//! One page's source rows baked into its surface.
 
-use pxl_spec::bake::format::{BaseRow, BuildingRow, CoastRow, Ground, SegmentRow};
+use pxl_spec::bake::format::Ground;
 use pxl_spec::bake::model::feature::Feature;
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
-use xpute_core::status::error::MarshalError;
-use xpute_core::wire::xtp::{BranchCursor, SequenceType, TreeReader};
 
 use crate::terrain::artifact::Surface;
 use crate::terrain::pipeline::coast::adapter::from_coast_row;
@@ -18,108 +15,29 @@ use crate::terrain::pipeline::ground::bake_ground;
 use crate::terrain::pipeline::normalizer::normalize;
 use crate::terrain::pipeline::overture::adapter::{from_base_row, from_building_row, from_segment_row};
 use crate::terrain::pipeline::overture::policy::OverturePolicy;
+use crate::terrain::repository::PageSource;
 
-fn opt_str(row: &BranchCursor, at: u32) -> Result<Option<String>, MarshalError> {
-    match row.at(at)?.opt() {
-        Some(c) => Ok(Some(c.get_str()?)),
-        None => Ok(None),
-    }
-}
-
-/// `overture_buildings.height` arrives as a string (the Deno driver decodes
-/// doubles as text) and `num_floors` as a number; both forms are read.
-fn opt_num(row: &BranchCursor, at: u32) -> Result<Option<f64>, MarshalError> {
-    let Some(c) = row.at(at)?.opt() else { return Ok(None) };
-    if c.type_() == SequenceType::STR as u8 {
-        // An unparseable string is NaN, which the caller clamps away.
-        return Ok(Some(c.get_str()?.trim().parse::<f64>().unwrap_or(f64::NAN)));
-    }
-    Ok(Some(c.get_number()?))
-}
-
-fn building_row(row: &BranchCursor<'_>) -> Result<BuildingRow, MarshalError> {
-    Ok(BuildingRow {
-        gers_id: row.at(0)?.get_str()?,
-        subtype: opt_str(row, 1)?,
-        class: opt_str(row, 2)?,
-        height: opt_num(row, 3)?,
-        num_floors: opt_num(row, 4)?,
-        geom_wkb: row.at(5)?.get_array::<u8>()?.into(),
-    })
-}
-
-fn segment_row(row: &BranchCursor<'_>) -> Result<SegmentRow, MarshalError> {
-    Ok(SegmentRow {
-        gers_id: row.at(0)?.get_str()?,
-        subtype: row.at(1)?.get_str()?,
-        class: opt_str(row, 2)?,
-        flags: opt_str(row, 3)?,
-        widths: opt_str(row, 4)?,
-        access: opt_str(row, 5)?,
-        subclass: opt_str(row, 6)?,
-        subclasses: opt_str(row, 7)?,
-        geom_wkb: row.at(8)?.get_array::<u8>()?.into(),
-    })
-}
-
-fn base_row(row: &BranchCursor<'_>) -> Result<BaseRow, MarshalError> {
-    Ok(BaseRow {
-        gers_id: row.at(0)?.get_str()?,
-        source: row.at(1)?.get_str()?,
-        subtype: opt_str(row, 2)?,
-        class: opt_str(row, 3)?,
-        geom_wkb: row.at(4)?.get_array::<u8>()?.into(),
-    })
-}
-
-fn coast_row(row: &BranchCursor<'_>) -> Result<CoastRow, MarshalError> {
-    Ok(CoastRow {
-        id: row.at(0)?.get_str()?,
-        geom_wkb: row.at(1)?.get_array::<u8>()?.into(),
-        covers_page: row.at(2)?.get_bool()?,
-    })
-}
-
-pub fn bake_surface(page_idx: IVec, pkt: &[u8]) -> Result<Surface, MarshalError> {
-    let page_bbox = epsg3857::get_page_bbox(page_idx);
-    let page_min = page_bbox[0];
-
-    let root = TreeReader::new(pkt)?.read_branch()?;
-
-    let ele: &[i16] = root.at(0)?.get_array::<i16>()?;
-    let buildings = root.at(1)?.as_branch()?;
-    let segments = root.at(2)?.as_branch()?;
-    let base = root.at(3)?.as_branch()?;
-    let coasts = root.at(4)?.as_branch()?;
-
+pub fn bake_surface(page_idx: IVec, ele: Vec<i16>, source: &PageSource) -> Surface {
+    let page_min = epsg3857::get_page_bbox(page_idx)[0];
     let mut feats: Vec<Feature> = Vec::new();
-
-    for i in 0..buildings.len {
-        for raw in from_building_row(&building_row(&buildings.at_branch(i)?)?) {
-            feats.extend(normalize(&raw, page_min, &OverturePolicy));
-        }
+    for row in &source.building_rows {
+        feats.extend(from_building_row(row).iter().filter_map(|raw| normalize(raw, page_min, &OverturePolicy)));
     }
-    for i in 0..segments.len {
-        for raw in from_segment_row(&segment_row(&segments.at_branch(i)?)?) {
-            feats.extend(normalize(&raw, page_min, &OverturePolicy));
-        }
+    for row in &source.segment_rows {
+        feats.extend(from_segment_row(row).iter().filter_map(|raw| normalize(raw, page_min, &OverturePolicy)));
     }
-    for i in 0..base.len {
-        for raw in from_base_row(&base_row(&base.at_branch(i)?)?) {
-            feats.extend(normalize(&raw, page_min, &OverturePolicy));
-        }
+    for row in &source.base_rows {
+        feats.extend(from_base_row(row).iter().filter_map(|raw| normalize(raw, page_min, &OverturePolicy)));
     }
-    for i in 0..coasts.len {
-        for raw in from_coast_row(&coast_row(&coasts.at_branch(i)?)?) {
-            feats.extend(normalize(&raw, page_min, &CoastPolicy));
-        }
+    for row in &source.coast_rows {
+        feats.extend(from_coast_row(row).iter().filter_map(|raw| normalize(raw, page_min, &CoastPolicy)));
     }
 
     // Tells open ocean (no coast row) from full land (a row dropped as covering the page).
-    let has_coast_row = coasts.len > 0;
+    let has_coast_row = !source.coast_rows.is_empty();
 
     let fills = corridor_fills(&feats);
     feats.extend(fills);
     let ground: Ground = bake_ground(&feats, has_coast_row);
-    Ok(Surface { ele: ele.to_vec(), ground })
+    Surface { ele, ground }
 }

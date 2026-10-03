@@ -1,7 +1,7 @@
 // pxl-geo-bake/demand/job.rs
 
 use super::{Dataset, Failure};
-use postgres::{Client, NoTls};
+use postgres::Client;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::{
@@ -32,7 +32,6 @@ pub enum Job {
 pub struct Runner {
     pub(super) admission: Arc<Semaphore>,
     running: Arc<Semaphore>,
-    url: String,
     pub(super) limits: Limits,
 }
 
@@ -71,14 +70,13 @@ impl Staging {
 }
 
 impl Runner {
-    pub fn new(url: String, workers: usize, limits: Limits) -> Result<Self, String> {
+    pub fn new(workers: usize, limits: Limits) -> Result<Self, String> {
         if workers == 0 || limits.seconds == 0 || workers.checked_add(limits.queued).is_none_or(|n| n > Semaphore::MAX_PERMITS) {
             return Err("invalid demand worker, queue or time limit".into());
         }
         Ok(Self {
             admission: Arc::new(Semaphore::new(workers + limits.queued)),
             running: Arc::new(Semaphore::new(workers)),
-            url,
             limits,
         })
     }
@@ -97,7 +95,6 @@ impl Runner {
             .arg(serde_json::to_string(&job).map_err(|e| e.to_string())?)
             .arg(&out.0)
             .arg(self.limits.seconds.to_string())
-            .env("DB_GEO_URL", &self.url)
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .kill_on_drop(true);
@@ -131,11 +128,12 @@ async fn supervise(mut command: Command, deadline: tokio::time::Instant) -> Resu
     }
 }
 
-pub fn connect(seconds: u64) -> Result<Client, String> {
-    let url = std::env::var("DB_GEO_URL").map_err(|e| e.to_string())?;
-    let mut config: postgres::Config = url.parse().map_err(|e: postgres::Error| e.to_string())?;
-    config.options(&format!("-c statement_timeout={}", seconds.saturating_mul(1000)));
-    config.connect(NoTls).map_err(|e| e.to_string())
+/// Each job opens the DB for what it reads, so a re-ingest while the server
+/// runs is checked by the next job.
+pub fn connect(reads: &[&[&str]], seconds: u64) -> Result<Client, String> {
+    let (_, mut client) = crate::coverage::Overture::reading(reads)?;
+    client.batch_execute(&format!("SET statement_timeout = {}", seconds.saturating_mul(1000))).map_err(|e| e.to_string())?;
+    Ok(client)
 }
 
 pub fn execute(job: Job, out: &Path, seconds: u64) -> Result<(), String> {

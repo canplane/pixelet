@@ -5,8 +5,9 @@ use std::path::PathBuf;
 
 use std::path::Path;
 
-use crate::page::catalog;
+use crate::coverage::{Coverage, Overture};
 use crate::page::walk::{self, Args, Page, Target};
+use crate::terrain::leaf::land_pages;
 use crate::util::{fmt_bytes, git_sha, measure_output, now_iso8601, refuse_mixed, CONTENT_ENCODING};
 
 pub struct Bake<'a> {
@@ -17,8 +18,8 @@ pub struct Bake<'a> {
     pub group_shamt: u32,
     pub content_type: &'a str,
     pub format: Option<&'a str>,
-    /// Named, not taken whole: the catalog holds terrain's tables too.
-    pub sources: &'a [&'a str],
+    /// Opened for what the bake reads, the land list's classification too.
+    pub source: &'a Overture,
 }
 
 pub fn bake<T>(
@@ -44,7 +45,7 @@ pub fn bake<T>(
     }
     prelude(&args.out)?;
 
-    let land = walk::land_pages(&args.land_cache)?;
+    let land = land_pages(&args.land_cache, &Coverage::of_source()?, Some(&b.source.release))?;
     println!("[bake/{}] {} land pages from {}", b.kind, land.len(), args.land_cache.display());
     let mut targets = walk::targets_of(&land, b.group_shamt);
     if let Some(n) = args.limit {
@@ -55,8 +56,6 @@ pub fn bake<T>(
     let t = &walked.tally;
     println!("[bake/{}] {} items across {} non-empty pages, {}", b.kind, t.items, t.baked, fmt_bytes(t.bytes as f64));
 
-    let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
-    let mut client = postgres::Client::connect(&url, postgres::NoTls).map_err(|e| e.to_string())?;
     let (objects, bytes) = measure_output(&args.out).map_err(|e| e.to_string())?;
     let mut manifest = serde_json::json!({
         "version": args.out.file_name().map(|n| n.to_string_lossy().to_string()),
@@ -73,7 +72,7 @@ pub fn bake<T>(
         "content_type": b.content_type,
         "content_encoding": CONTENT_ENCODING,
 
-        "source": catalog::sources(&mut client, b.sources),
+        "source": b.source.manifest(),
     });
     if let Some(format) = b.format {
         manifest["format"] = serde_json::Value::String(format.to_string());

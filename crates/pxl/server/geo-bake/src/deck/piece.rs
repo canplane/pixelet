@@ -2,13 +2,13 @@
 
 //! A segment's bridge or tunnel ranges, less what is not built or gone.
 
-use pxl_spec::space::adapter::epsg3857::{G3857, Z_SCALE};
+use pxl_spec::bake::deck::Form;
+use pxl_spec::space::adapter::epsg3857::{from_db, scale_at, G3857};
 
 use crate::terrain::pipeline::overture::between::{flag_ranges, split_ranged, value_at, without};
 use crate::terrain::pipeline::overture::policy::{BORE_FLAGS, DECK_FLAGS, UNSEEN_FLAGS};
 use crate::terrain::pipeline::overture::width::{width_m, WayColumns, WayShape};
 use crate::wkb::wkb_to_geometries;
-use pxl_spec::bake::deck::Form;
 
 pub struct BridgeRow {
     pub gers_id: String,
@@ -46,13 +46,42 @@ pub struct Piece {
     /// A surface way the structure is carried down on (approach.rs).
     pub approach: bool,
     pub points: Vec<G3857>,
+    /// What each end is, first and last; ends meet where these are equal.
+    pub ends: [End; 2],
+}
+
+/// An end by identity, never by a computed point: a segment's own first or
+/// last vertex, which every segment at that connector carries bit for bit,
+/// or a cut at a fraction of one segment, which only its pieces share.
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub enum End {
+    Vertex(u64, u64),
+    Cut(String, u64),
+}
+
+impl End {
+    /// The end at fraction `at` of segment `gers_id`, which runs from `first`
+    /// to `last`. `+ 0.0` makes −0 the bits of 0, as `==` has it.
+    pub fn of(gers_id: &str, [first, last]: [G3857; 2], at: f64) -> End {
+        let vertex = |p: G3857| End::Vertex((p[0] + 0.0).to_bits(), (p[1] + 0.0).to_bits());
+        if at == 0.0 {
+            vertex(first)
+        } else if at == 1.0 {
+            vertex(last)
+        } else {
+            End::Cut(gers_id.to_string(), (at + 0.0).to_bits())
+        }
+    }
 }
 
 impl Piece {
-    /// Mercator metres per physical metre here; lengths compared with measured
-    /// ones are divided by it.
-    pub fn scale(&self) -> f64 {
-        Z_SCALE(self.points[0][1])
+    pub fn end(&self, last: bool) -> &End {
+        &self.ends[usize::from(last)]
+    }
+
+    /// A length along the piece in DB coordinates, in ground metres.
+    pub fn to_m(&self, db: f64) -> f64 {
+        db / scale_at(from_db(self.points[0][1]))
     }
 }
 
@@ -60,7 +89,7 @@ pub fn pieces_of(row: &BridgeRow, form: Form) -> Vec<Piece> {
     let flags = row.flags.as_deref();
     let (on, less): (&[&str], Vec<&str>) = match form {
         Form::Deck | Form::Ramp => (DECK_FLAGS, UNSEEN_FLAGS.to_vec()),
-        Form::Bore => (BORE_FLAGS, UNSEEN_FLAGS.iter().copied().filter(|f| !BORE_FLAGS.contains(f)).collect()),
+        Form::Bore | Form::Cut => (BORE_FLAGS, UNSEEN_FLAGS.iter().copied().filter(|f| !BORE_FLAGS.contains(f)).collect()),
     };
     let deck = without(&flag_ranges(flags, on), &flag_ranges(flags, &less));
     if deck.is_empty() {
@@ -68,9 +97,13 @@ pub fn pieces_of(row: &BridgeRow, form: Form) -> Vec<Piece> {
     }
     wkb_to_geometries(&row.geom_wkb)
         .into_iter()
-        .flat_map(|g| split_ranged(g, [&deck]))
-        .filter(|([on], _, _)| *on)
-        .map(|(_, [a, b], g)| {
+        .filter_map(|g| {
+            let whole = [*g.points.first()?, *g.points.last()?];
+            Some(split_ranged(g, [&deck]).into_iter().map(move |cut| (cut, whole)))
+        })
+        .flatten()
+        .filter(|(([on], _, _), _)| *on)
+        .map(|((_, [a, b], g), whole)| {
             let mid = (a + b) / 2.0;
             let shape = WayShape::at(row.columns(), mid);
             Piece {
@@ -81,6 +114,7 @@ pub fn pieces_of(row: &BridgeRow, form: Form) -> Vec<Piece> {
                 width_m: width_m(&row.subtype, row.class.as_deref(), shape),
                 form,
                 approach: false,
+                ends: [End::of(&row.gers_id, whole, a), End::of(&row.gers_id, whole, b)],
                 points: g.points,
             }
         })

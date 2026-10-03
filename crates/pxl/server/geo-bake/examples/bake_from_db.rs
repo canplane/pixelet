@@ -8,9 +8,9 @@
 use std::fs;
 use std::sync::Arc;
 
-use postgres::{Client, NoTls};
+use pxl_geo_bake::coverage::{Coverage, Overture};
 use pxl_geo_bake::elevation::Raster;
-use pxl_geo_bake::terrain::leaf::bake_leaf;
+use pxl_geo_bake::terrain::leaf::{self, bake_leaf};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
 use pxl_geo_bake::terrain::source::SourceStats;
 use pxl_geo_bake::util::{unpack, Level};
@@ -19,14 +19,15 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let (dir, pages) = args.split_first().expect("usage: <dir> <page>...");
 
-    let url = std::env::var("DB_GEO_URL").expect("DB_GEO_URL");
-    let mut client = Client::connect(&url, NoTls).expect("connect");
+    let coverage = Coverage::of_source().expect("coverage");
+    let (_, mut client) = Overture::reading(&leaf::READS).expect("geo DB");
     let raster = Arc::new(Raster::open(&mut client).expect("raster"));
     let repo = TerrainRepository::prepare(&mut client, raster).expect("prepare");
     let mut stats = SourceStats::default();
 
     for page in pages {
         let idx = page.parse().expect("page_idx");
+        assert!(coverage.contains(idx), "{page} is not a page of the coverage");
         let (_, packed) = bake_leaf(&repo, &mut client, idx, &mut stats, Level::Stored).expect("bake");
         let tile = unpack(&packed).expect("unpack");
         fs::write(format!("{dir}/{page}.db.tile"), &tile).expect("write");

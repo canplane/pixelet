@@ -6,12 +6,10 @@
 
 use pxl_spec::bake::quadkey::quadkey_of;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::time::Instant;
-
-use pxl_spec::space::indexer::L3;
 
 use crate::cli::Flags;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -91,28 +89,6 @@ pub struct Tally {
 pub struct Walked {
     pub tally: Tally,
     pub elapsed_ms: f64,
-}
-
-/// Refused at any page size but the one it was classified at: a stale list
-/// names the wrong ground and still bakes.
-pub fn land_pages(path: &Path) -> Result<Vec<IVec>, String> {
-    let reclassify = "run bake_tiles, which writes it as a side effect of its own classification (`--limit 0` does the classification and bakes nothing)";
-    let raw = std::fs::read_to_string(path).map_err(|_| format!("{} not found — {reclassify}.", path.display()))?;
-    let v: serde_json::Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
-    let Some(shamt) = v.get("l3_shamt").and_then(|s| s.as_u64()) else {
-        return Err(format!("{} does not say the page size it was classified at — {reclassify}.", path.display()));
-    };
-    if shamt != L3.shamt() as u64 {
-        return Err(format!("{} was classified at an L3 shift of {shamt}, and a page is now {} — {reclassify}.", path.display(), L3.shamt()));
-    }
-    let list = v.get("pages").and_then(|p| p.as_array()).ok_or_else(|| format!("{} has no page list", path.display()))?;
-    list.iter().map(|s| s.as_str().ok_or("a page is not a string")?.parse::<IVec>().map_err(|e| e.to_string())).collect()
-}
-
-pub fn write_land_pages(path: &Path, land: &[IVec]) -> Result<(), String> {
-    let pages: Vec<String> = land.iter().map(|p| p.to_string()).collect();
-    let v = serde_json::json!({ "l3_shamt": L3.shamt(), "pages": pages });
-    std::fs::write(path, serde_json::to_string(&v).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
 }
 
 pub fn walk<T>(

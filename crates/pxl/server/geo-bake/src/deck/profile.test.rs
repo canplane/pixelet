@@ -30,7 +30,7 @@ fn a_bare_span_is_the_straight_line_between_its_ends() {
 
 #[test]
 fn a_clearance_raises_the_deck_and_it_still_meets_its_ends() {
-    let half = (6.0 / MAX_SLOPE / 5.0).ceil() as usize + 1;
+    let half = (6.0 / PREFERRED_SLOPE / 5.0).ceil() as usize + 1;
     let n = 2 * half + 1;
     let adj = chain(n, 5.0);
     let mut need = vec![0.0; n];
@@ -46,15 +46,16 @@ fn a_clearance_raises_the_deck_and_it_still_meets_its_ends() {
     assert_eq!(top[half], 6.0);
     assert_eq!((top[0], top[n - 1]), (0.0, 0.0));
     for w in top.windows(2) {
-        assert!((w[1] - w[0]).abs() <= MAX_SLOPE * 5.0 + 1e-9, "a step: {w:?}");
+        assert!((w[1] - w[0]).abs() <= PREFERRED_SLOPE * 5.0 + 1e-9, "a step: {w:?}");
     }
 }
 
 #[test]
-fn a_clearance_too_near_an_end_is_held_to_what_the_deck_can_climb() {
+fn a_clearance_too_near_an_end_is_met_by_a_steeper_grade() {
     let adj = chain(5, 5.0);
     let mut need = vec![0.0; 5];
     need[1] = 50.0;
+    need[2] = 10.0;
     let top = solve(&Problem {
         adj: &adj,
         need: &need,
@@ -63,7 +64,8 @@ fn a_clearance_too_near_an_end_is_held_to_what_the_deck_can_climb() {
         carried: &[true; 5],
     })
     .top;
-    assert_eq!(top[1], MAX_SLOPE * 5.0);
+    assert_eq!(top[1], 50.0);
+    assert!((top[2] - 50.0 * 2.0 / 3.0).abs() < 1e-9, "on the line from the held point to the end: {top:?}");
 }
 
 #[test]
@@ -111,7 +113,7 @@ fn where_spans_meet_no_step_is_steeper_than_the_steepest_two_ends() {
     let (adj, tips) = star(2, 5.0);
     let need = vec![f64::NEG_INFINITY; adj.len()];
     let ground = vec![0.0; adj.len()];
-    let ends = [(tips[0], 0.0), (tips[1], 0.0), (tips[2], MAX_SLOPE * 20.0)];
+    let ends = [(tips[0], 0.0), (tips[1], 0.0), (tips[2], PREFERRED_SLOPE * 20.0)];
     let p = solve(&Problem {
         adj: &adj,
         need: &need,
@@ -120,10 +122,10 @@ fn where_spans_meet_no_step_is_steeper_than_the_steepest_two_ends() {
         carried: &vec![true; adj.len()],
     });
     assert!(p.forced.iter().all(|f| !f));
-    assert!((p.top[0] - MAX_SLOPE * 10.0).abs() < 1e-9, "the junction: {}", p.top[0]);
+    assert!((p.top[0] - PREFERRED_SLOPE * 10.0).abs() < 1e-9, "the junction: {}", p.top[0]);
     for (v, edges) in adj.iter().enumerate() {
         for &(w, d) in edges {
-            assert!((p.top[v] - p.top[w as usize]).abs() <= MAX_SLOPE * d + 1e-9, "{v}-{w}: {:?}", (p.top[v], p.top[w as usize]));
+            assert!((p.top[v] - p.top[w as usize]).abs() <= PREFERRED_SLOPE * d + 1e-9, "{v}-{w}: {:?}", (p.top[v], p.top[w as usize]));
         }
     }
 }

@@ -170,15 +170,12 @@ pub fn hover_cursor_step() {
     // while the cursor is on it.
     let coplanar_with_terrain = !use_object_style;
 
-    let scattered_ghost = hover
-        .scattered
-        .filter(|_| matches!(active_tool, ActiveTool::Pointer | ActiveTool::Eraser))
-        .map(|s| Ghost::Decor {
-            at: s.at,
-            group: s.group,
-            rotation: s.rotation,
-            scale: s.scale,
-        });
+    let scattered_ghost = hover.scattered.filter(|_| matches!(active_tool, ActiveTool::Pointer | ActiveTool::Eraser)).map(|s| Ghost::Decor {
+        at: s.at,
+        group: s.group,
+        rotation: s.rotation,
+        scale: s.scale,
+    });
     let ghost = match (scattered_ghost, hovered, blocked) {
         (Some(g), _, _) => g,
         (None, Some(h), false) => {

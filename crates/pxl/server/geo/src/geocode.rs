@@ -29,7 +29,8 @@ pub async fn resolve_point_context_batch(pool: &Pool, xs: &[f64], ys: &[f64]) ->
     let client = pool.get().await?;
     let areas = division::by_point(xs.len(), client.query(CONTAINING_SQL, &[&xs, &ys]).await?.iter().map(division_of));
     let within: Vec<Option<String>> = areas.iter().map(|a| division::within(a)).collect();
-    let points = division::by_point(xs.len(), client.query(NEAREST_POINT_SQL, &[&xs, &ys, &within]).await?.iter().map(division_of));
+    let reach: Vec<f64> = ys.iter().map(|&y| division::reach_at(y)).collect();
+    let points = division::by_point(xs.len(), client.query(NEAREST_POINT_SQL, &[&xs, &ys, &within, &reach]).await?.iter().map(division_of));
     Ok(areas
         .iter()
         .zip(&points)

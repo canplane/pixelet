@@ -14,6 +14,7 @@ use pxl_spec::space::hierarchy::{child_of, parent_of};
 use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::lod::fault_radius;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::procedural::Frame;
 use pxl_spec::space::pyramid::{chunk_span_of, LevelPage, CHUNK_CELLS, GROUND, TOP_LEVEL};
 use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::base::ptr_at;
@@ -82,6 +83,8 @@ struct Block {
     handle: u32,
     /// Byte offset of the index list past the instances, rewritten each frame by `present`.
     index: u32,
+    /// The lowest and highest instance, in units.
+    heights: [f32; 2],
     sources: Sources,
     /// Held hidden while it waits on the rest of a replacement (`step`).
     drawn: bool,
@@ -244,7 +247,12 @@ fn build(c: &mut Cells, cell: DecorCell, kinds: &[Kind], store: &Store, draw: &m
     let view = Builder::page_view(page);
     if sources.shown {
         let around = Around {
-            own: PageSource { page: view, origin: [0, 0], n: 1 },
+            own: PageSource {
+                page: view,
+                frame: Frame::of(cell.page()),
+                origin: [0, 0],
+                n: 1,
+            },
             beside: [None; 8],
         };
         c.sample.read(&around, [tx0 as i64, ty0 as i64], hidden_ground(settings_store().structures)).ok()?;
@@ -281,6 +289,7 @@ fn build(c: &mut Cells, cell: DecorCell, kinds: &[Kind], store: &Store, draw: &m
     let step = GROUND.scale(0).count_in(target.max(GROUND.scale(0)));
     let built = DecorBuild::build(scratch, kinds, Some(&ground), &c.placed, sources.hide, store, step, sources.shown)?;
     let index = built.bytes();
+    let heights = built.heights();
     let instances = built.instances() as u32;
     let (at, bytes) = alloc(index + instances * 4)?;
     // SAFETY: a block of the bytes the build asked for, the cell's until given back.
@@ -291,6 +300,7 @@ fn build(c: &mut Cells, cell: DecorCell, kinds: &[Kind], store: &Store, draw: &m
         bytes,
         handle,
         index,
+        heights,
         sources,
         drawn: false,
     })
@@ -388,16 +398,22 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Dec
 }
 
 /// Per frame, each instance as model, sprite or nothing by its projected
-/// size. Within a group, models come first in the index list, then sprites;
-/// the list is re-uploaded only where it changed.
+/// size; a group surely one or the other over the cell's nearest and farthest
+/// distance is settled whole. Models come first in a group's index list, then
+/// sprites; the list is re-uploaded only where it changed.
 fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
     let Some(eye) = eye() else { return };
     let model_px = decor_gone_px();
     let sprite_px = target_cell_px() * IMPOSTOR_GONE_CELLS;
     let sprites = &mut c.sprites;
     for (&cell, block) in c.blocks.iter().filter(|(_, b)| b.drawn) {
-        let (x0, y0, _) = cell.rect();
+        let (x0, y0, side) = cell.rect();
         let translation = DrawList::translation([x0, y0, 0.0], frame_eye);
+        let [zlo, zhi] = block.heights.map(f64::from);
+        let gap = |lo: f64, hi: f64, v: f64| (lo - v).max(v - hi).max(0.0);
+        let reach = |lo: f64, hi: f64, v: f64| (v - lo).abs().max((hi - v).abs());
+        let nearest = gap(x0, x0 + side, eye[0]).hypot(gap(y0, y0 + side, eye[1])).hypot(gap(zlo, zhi, eye[2])).max(1e-3);
+        let farthest = reach(x0, x0 + side, eye[0]).hypot(reach(y0, y0 + side, eye[1])).hypot(reach(zlo, zhi, eye[2])).max(1e-3);
         // SAFETY: the cell's block, `bytes` long, its own to write past `index`.
         let words: &mut [u32] = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block.at as usize), block.bytes as usize / 4) };
         let (lanes_of, list) = words.split_at_mut(block.index as usize / 4);
@@ -408,8 +424,18 @@ fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
             let lane = lanes(offset, count);
             let first = at;
             sprites.clear();
-            for i in 0..count as usize {
+            // Scattered scales are within the jitter; a placed one's is 1.
+            let (small, large) = (1.0 - SCALE_JITTER, 1.0 + SCALE_JITTER);
+            let gone = extent * large / units_per_px_at(nearest) < sprite_px;
+            let modeled = extent * small / units_per_px_at(farthest) >= model_px;
+            for i in 0..if gone { 0 } else { count as usize } {
                 if (lanes_of[lane.flags()..][i / 4] >> ((i % 4) * 8)) & 1 != 0 {
+                    continue;
+                }
+                if modeled {
+                    changed |= list[at] != i as u32;
+                    list[at] = i as u32;
+                    at += 1;
                     continue;
                 }
                 let f = |l: usize| f32::from_bits(lanes_of[lane.f32_at(l, i)]) as f64;

@@ -4,23 +4,13 @@
 //! gap and heading (as Arnis unions parallel decks), solved as one. Level is
 //! not compared: a viaduct's layer changes along it.
 
+use pxl_spec::space::adapter::epsg3857::{from_db, scale_at};
 use std::collections::HashMap;
 
-use crate::deck::clearance::STEP;
-use crate::deck::piece::Piece;
+use crate::deck::param::{SIDE_GAP_M, STEP_M};
+use crate::deck::piece::{End, Piece};
+use crate::terrain::pipeline::corridor::SIDE_HEADING_COS;
 use crate::terrain::pipeline::overture::between::Line;
-
-/// Centimetre-rounded, which two segments sharing a connector agree on.
-pub type Key = (i64, i64);
-
-pub fn key_of(p: [f64; 3]) -> Key {
-    ((p[0] * 100.0).round() as i64, (p[1] * 100.0).round() as i64)
-}
-
-/// Arnis's.
-const SIDE_GAP: f64 = 2.0;
-
-const SIDE_HEADING: f64 = 20.0 * core::f64::consts::PI / 180.0;
 
 #[derive(Clone, Copy)]
 pub struct Beside {
@@ -38,8 +28,9 @@ pub fn end_of(p: &Piece, last: bool) -> ([f64; 2], [f64; 2]) {
 }
 
 pub fn side_by_side(pieces: &[Piece]) -> Vec<Beside> {
-    let widest = pieces.iter().map(|p| p.width_m * p.scale()).fold(0.0, f64::max);
-    let cell = widest + SIDE_GAP * 2.0;
+    let widest = pieces.iter().map(|p| p.width_m).fold(0.0, f64::max);
+    let largest = pieces.iter().map(|p| scale_at(from_db(p.points[0][1]))).fold(0.0, f64::max);
+    let cell = (widest + SIDE_GAP_M * 2.0) * largest;
     let mut grid: HashMap<(i64, i64), Vec<(usize, bool)>> = HashMap::new();
     let cell_of = |at: [f64; 2]| ((at[0] / cell).floor() as i64, (at[1] / cell).floor() as i64);
     for (i, p) in pieces.iter().enumerate() {
@@ -57,10 +48,10 @@ pub fn side_by_side(pieces: &[Piece]) -> Vec<Beside> {
                     continue;
                 }
                 let (other, other_heading) = end_of(&pieces[j], other_last);
-                let d = (at[0] - other[0]).hypot(at[1] - other[1]) / p.scale();
-                let meet = key_of([at[0], at[1], 0.0]) == key_of([other[0], other[1], 0.0]);
-                let near = d <= (p.width_m + pieces[j].width_m) / 2.0 + SIDE_GAP;
-                let parallel = (heading[0] * other_heading[0] + heading[1] * other_heading[1]).clamp(-1.0, 1.0).acos() <= SIDE_HEADING;
+                let d = (at[0] - other[0]).hypot(at[1] - other[1]) / scale_at(from_db(at[1]));
+                let meet = p.end(last) == pieces[j].end(other_last);
+                let near = d <= (p.width_m + pieces[j].width_m) / 2.0 + SIDE_GAP_M;
+                let parallel = heading[0] * other_heading[0] + heading[1] * other_heading[1] >= SIDE_HEADING_COS;
                 if !meet && near && parallel {
                     out.push(Beside { a: (i, last), b: (j, other_last), d });
                 }
@@ -79,16 +70,16 @@ pub fn group(pieces: &[Piece], beside: &[Beside]) -> Vec<Vec<usize>> {
         }
         i
     }
-    let mut first_at: HashMap<Key, usize> = HashMap::new();
+    let mut first_at: HashMap<&End, usize> = HashMap::new();
     for (i, p) in pieces.iter().enumerate() {
-        for end in [p.points[0], *p.points.last().unwrap()] {
-            match first_at.get(&key_of(end)) {
+        for end in &p.ends {
+            match first_at.get(end) {
                 Some(&j) => {
                     let (a, b) = (root(&mut parent, i), root(&mut parent, j));
                     parent[a] = b;
                 }
                 None => {
-                    first_at.insert(key_of(end), i);
+                    first_at.insert(end, i);
                 }
             }
         }
@@ -107,13 +98,13 @@ pub fn group(pieces: &[Piece], beside: &[Beside]) -> Vec<Vec<usize>> {
     out
 }
 
-/// Points every `STEP` metres and at every end, distances in physical metres.
+/// Points every `STEP_M` and at every end, distances in physical metres.
 pub struct Graph {
     pub at: Vec<[f64; 2]>,
     pub adj: Vec<Vec<(u32, f64)>>,
     pub along: Vec<Vec<(u32, f64)>>,
-    pub free_ends: Vec<u32>,
-    pub free_end_of: Vec<usize>,
+    /// Nodes only one member reaches, and what end each is.
+    pub free_ends: Vec<(u32, End)>,
 }
 
 impl Graph {
@@ -123,9 +114,8 @@ impl Graph {
             adj: Vec::new(),
             along: Vec::new(),
             free_ends: Vec::new(),
-            free_end_of: Vec::new(),
         };
-        let mut ends: HashMap<Key, (u32, u32)> = HashMap::new();
+        let mut ends: HashMap<&End, (u32, u32)> = HashMap::new();
         let point = |g: &mut Graph, p: [f64; 3]| -> u32 {
             g.at.push([p[0], p[1]]);
             g.adj.push(Vec::new());
@@ -136,15 +126,15 @@ impl Graph {
                 g.along.push(Vec::new());
                 continue;
             };
-            let (len, scale) = (line.length(), pieces[m].scale());
-            let steps = (len / scale / STEP).ceil().max(1.0) as usize;
+            let len = line.length();
+            let steps = (pieces[m].to_m(len) / STEP_M).ceil().max(1.0) as usize;
             let mut nodes: Vec<(u32, f64)> = Vec::with_capacity(steps + 1);
             for k in 0..=steps {
                 let along = len * k as f64 / steps as f64;
                 let p = line.at(along);
-                let d = along / scale;
+                let d = pieces[m].to_m(along);
                 let node = if k == 0 || k == steps {
-                    let e = ends.entry(key_of(p)).or_insert_with(|| (u32::MAX, 0));
+                    let e = ends.entry(pieces[m].end(k != 0)).or_insert_with(|| (u32::MAX, 0));
                     if e.0 == u32::MAX {
                         e.0 = point(&mut g, p);
                     }
@@ -172,18 +162,8 @@ impl Graph {
                 g.adj[y as usize].push((x, b.d));
             }
         }
-        g.free_ends = ends.into_values().filter(|&(_, n)| n == 1).map(|(node, _)| node).collect();
-        g.free_ends.sort_unstable();
-        g.free_end_of = g
-            .free_ends
-            .iter()
-            .map(|&e| {
-                g.along
-                    .iter()
-                    .position(|nodes| nodes.first().map(|n| n.0) == Some(e) || nodes.last().map(|n| n.0) == Some(e))
-                    .unwrap_or(0)
-            })
-            .collect();
+        g.free_ends = ends.into_iter().filter(|&(_, (_, n))| n == 1).map(|(end, (node, _))| (node, end.clone())).collect();
+        g.free_ends.sort_unstable_by_key(|&(node, _)| node);
         g
     }
 

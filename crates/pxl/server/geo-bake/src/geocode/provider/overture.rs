@@ -12,9 +12,19 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use crate::geocode::{PartSource, PlaceDict};
 
 /// A stable order: a resumed bake must number places the same way.
-const ALL_DIVISIONS_SQL: &str = "SELECT gers_id, subtype, name, names_common
+const ALL_DIVISIONS_SQL: &str = concat!(
+    "SELECT gers_id, subtype, name, ",
+    pxl_geo_spec::division_names!("overture_divisions"),
+    " AS names_common
 FROM overture_divisions
-ORDER BY gers_id";
+WHERE name IS NOT NULL AND subtype IN ",
+    pxl_geo_spec::division_areas!(),
+    "
+ORDER BY gers_id"
+);
+
+/// Every statement the provider runs, for the catalog check.
+pub const READS: [&str; 3] = [CONTAINING_SQL, NEAREST_POINT_SQL, ALL_DIVISIONS_SQL];
 
 pub struct GeocodeProvider {
     containing: Statement,
@@ -63,7 +73,8 @@ impl GeocodeProvider {
             .unzip();
         let areas = division::by_point(leaves.len(), client.query(&self.containing, &[&xs, &ys])?.iter().map(division_of));
         let within: Vec<Option<String>> = areas.iter().map(|a| division::within(a)).collect();
-        let points = division::by_point(leaves.len(), client.query(&self.nearest, &[&xs, &ys, &within])?.iter().map(division_of));
+        let reach: Vec<f64> = ys.iter().map(|&y| division::reach_at(y)).collect();
+        let points = division::by_point(leaves.len(), client.query(&self.nearest, &[&xs, &ys, &within, &reach])?.iter().map(division_of));
         Ok(areas
             .iter()
             .zip(&points)

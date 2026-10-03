@@ -10,7 +10,7 @@ use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, T
 use std::borrow::Cow;
 
 use super::constant::ELE_PADDED_SPAN;
-use super::deck::{self, Decks, BORE_DEPTH};
+use super::deck::{self, Decks};
 use super::ground::SHIFT_RANGE;
 use super::pack::{channel_of, GroundCell};
 use super::surface::extent_of;
@@ -51,16 +51,13 @@ pub struct BaseRow {
     pub geom_wkb: Box<[u8]>,
 }
 
-/// A deck as the offline solve left it, its line's Z the deck's top in metres.
+/// A line as the offline solve left it, its Z the road surface in metres.
 pub struct DeckRow {
     pub gers_id: String,
     pub subtype: String,
     pub class: Option<String>,
     pub width_m: f64,
     pub form: u8,
-    /// Each bore point's distance to the nearest portal down its tunnel, in
-    /// ground metres, as `f32`s; empty on a deck.
-    pub portal_m: Box<[u8]>,
     pub geom_wkb: Box<[u8]>, // LineString Z
 }
 
@@ -162,16 +159,13 @@ impl Occupancy {
     }
 }
 
-/// A page's index lane: per `EXTENT` cell, the lowest and highest the ground
-/// stands at this level and every level under it, conservatively, so a ray
-/// over a cell's highest misses everything finer there. `blocks` sums the
-/// lane over every aligned 2^j square and is rebuilt whenever the lane is;
-/// it is never on the wire.
+/// What a ray and a fetch need before the pages under one are held. On every
+/// level, the leaf too, so a page has one contract.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Index {
-    extent: Cow<'static, [[i16; 2]]>,
-    blocks: Cow<'static, [Block]>,
-    pub occupancy: Occupancy,
+    extent: Cow<'static, [[i16; 2]]>, // lo, hi for each `EXTENT` cell, over this level and all below: a ray above hi misses them
+    blocks: Cow<'static, [Block]>,    // `extent` joined over 2^j squares: rebuilt from it, never on the wire
+    pub occupancy: Occupancy,         // which children are pages: none is asked for that is not
 }
 
 /// An aligned block's lowest and highest extent and widest single-cell span;
@@ -191,8 +185,8 @@ pub const OCEAN_KEY: &str = "_ocean";
 /// ground's shift and a bore's floor. Every read of the lane widens by it.
 pub const DRAWN_PAST: [i16; 2] = {
     let [lo, hi] = SHIFT_RANGE;
-    // A floor goes `BORE_DEPTH`, rounded, under a ground that may be shifted down, with the way's cell under it.
-    [lo - (BORE_DEPTH as i16 + 1) - 1, hi]
+    // Ground shifted down, or the way's own cell under a bore's or a cutting's surface.
+    [if lo < -1 { lo } else { -1 }, hi]
 };
 
 pub fn drawn([lo, hi]: [i16; 2]) -> [i16; 2] {
@@ -263,12 +257,14 @@ fn blocks_of(lane: &[[i16; 2]], blocks: &mut [Block]) {
     }
 }
 
+/// A page: one lane a fact the client cannot make. What it draws by rule —
+/// a slab, a bore, a pier — is not here.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Terrain {
-    pub ground: Ground,
-    pub decks: Decks,
-    pub ele: std::borrow::Cow<'static, [i16]>,
-    pub index: Index,
+    pub ground: Ground,                        // a class a cell: the source rasterized
+    pub decks: Decks,                          // ways off the ground: source lines, tops solved offline
+    pub ele: std::borrow::Cow<'static, [i16]>, // padded height samples, in z16 cells: from the raster
+    pub index: Index,                          // bounds over the page and all under it: no one page holds them
 }
 
 impl Terrain {

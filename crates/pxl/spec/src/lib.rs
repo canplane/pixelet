@@ -7,6 +7,7 @@ pub mod asset;
 pub mod bake;
 pub mod cell;
 pub mod place;
+pub mod procedural;
 #[path = "route.spec.rs"]
 pub mod route;
 pub mod space;

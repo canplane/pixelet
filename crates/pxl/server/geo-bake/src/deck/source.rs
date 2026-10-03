@@ -7,13 +7,18 @@
 use postgres::{Client, NoTls};
 
 use crate::deck::piece::{BridgeRow, Piece};
-use pxl_spec::bake::deck::Form;
 
 const BATCH: usize = 20_000;
 
 const LOOKUP: usize = 2_000;
 
 const WORKERS: usize = 8;
+
+/// A way within this of a point, in DB coordinates, passes through or ends there.
+const TOUCH_REACH: f64 = 0.5;
+
+/// A step along a way from a point, in DB coordinates.
+pub const SIDE_STEP: f64 = 0.5;
 
 pub fn fan<T: Send>(url: &str, ask: impl Fn(&mut Client, usize, usize) -> Result<Vec<T>, postgres::Error> + Sync) -> Result<Vec<T>, postgres::Error> {
     std::thread::scope(|scope| {
@@ -68,7 +73,7 @@ fn wkt(points: impl Iterator<Item = String>, z: bool) -> String {
     format!("LINESTRING{} ({})", if z { " Z" } else { "" }, points.collect::<Vec<_>>().join(","))
 }
 
-pub fn stage(client: &mut Client, pieces: &[Piece]) -> Result<(), postgres::Error> {
+pub fn stage(client: &mut Client, pieces: &[&Piece]) -> Result<(), postgres::Error> {
     client.batch_execute(
         "DROP TABLE IF EXISTS deck_piece;
          CREATE UNLOGGED TABLE deck_piece (id INT PRIMARY KEY, gers_id TEXT NOT NULL, level INT NOT NULL, geom GEOMETRY(LineString, 3857) NOT NULL);",
@@ -171,11 +176,15 @@ pub fn water_under(client: &mut Client, url: &str) -> Result<Vec<WaterUnder>, po
     })
 }
 
+/// Two staged pieces crossing through each other, not meeting at an end:
+/// `upper` over `lower` by `layer`, and where the layers tie, by id, so the
+/// order is one total order.
 pub struct DeckCrossing {
     pub upper: usize,
     pub upper_at: f64,
     pub lower: usize,
     pub lower_at: f64,
+    pub tied: bool,
 }
 
 pub fn decks_crossing(url: &str) -> Result<Vec<DeckCrossing>, postgres::Error> {
@@ -183,9 +192,9 @@ pub fn decks_crossing(url: &str) -> Result<Vec<DeckCrossing>, postgres::Error> {
         let (n, k) = share(k, n);
         let rows = client.query(
             "SELECT u.id AS upper, ST_LineLocatePoint(u.geom, d.geom) * ST_Length(u.geom) AS upper_at,
-                l.id AS lower, ST_LineLocatePoint(l.geom, d.geom) * ST_Length(l.geom) AS lower_at
+                l.id AS lower, ST_LineLocatePoint(l.geom, d.geom) * ST_Length(l.geom) AS lower_at, l.level = u.level AS tied
          FROM deck_piece u
-         JOIN deck_piece l ON l.geom && u.geom AND l.level < u.level AND ST_Intersects(l.geom, u.geom)
+         JOIN deck_piece l ON l.geom && u.geom AND (l.level, l.gers_id) < (u.level, u.gers_id) AND ST_Crosses(l.geom, u.geom)
          CROSS JOIN LATERAL ST_Dump(ST_Intersection(u.geom, l.geom)) d
          WHERE u.id % $1 = $2 AND GeometryType(d.geom) = 'POINT'",
             &[&n, &k],
@@ -197,50 +206,14 @@ pub fn decks_crossing(url: &str) -> Result<Vec<DeckCrossing>, postgres::Error> {
                 upper_at: r.get("upper_at"),
                 lower: r.get::<_, i32>("lower") as usize,
                 lower_at: r.get("lower_at"),
+                tied: r.get("tied"),
             })
             .collect())
     })
 }
 
-pub struct Touch {
-    pub point: usize,
-    pub own_at: f64,
-    pub step: f64,
-    pub flags: Option<String>,
-    pub levels: Option<String>,
-}
-
 /// Ways connected at each point (ending there, or the point's own segment),
-/// not ones passing over or under.
-pub fn touching(url: &str, points: &[([f64; 2], &str)]) -> Result<Vec<Touch>, postgres::Error> {
-    fan(url, |client, k, n| {
-        let mut out = Vec::new();
-        for (b, batch) in points.chunks(LOOKUP).enumerate().filter(|(b, _)| b % n == k) {
-            let xs: Vec<f64> = batch.iter().map(|p| p.0[0]).collect();
-            let ys: Vec<f64> = batch.iter().map(|p| p.0[1]).collect();
-            let gers: Vec<&str> = batch.iter().map(|p| p.1).collect();
-            let rows = client.query(
-                "SELECT u.i, ST_LineLocatePoint(t.geom, u.p) AS own_at, 0.5 / GREATEST(ST_Length(t.geom), 0.5) AS step,
-                    COALESCE(t.road_flags, t.rail_flags)::text AS flags, t.level_rules::text AS levels
-             FROM (SELECT i, g, ST_SetSRID(ST_MakePoint(x, y), 3857) AS p FROM unnest($1::float8[], $2::float8[], $3::text[]) WITH ORDINALITY AS t(x, y, g, i)) u
-             JOIN overture_transportation t ON t.geom && ST_Expand(u.p, 0.5) AND ST_DWithin(t.geom, u.p, 0.5)
-               AND (t.gers_id = u.g OR ST_DWithin(ST_StartPoint(t.geom), u.p, 0.5) OR ST_DWithin(ST_EndPoint(t.geom), u.p, 0.5))",
-                &[&xs, &ys, &gers],
-            )?;
-            for r in rows {
-                out.push(Touch {
-                    point: b * LOOKUP + r.get::<_, i64>("i") as usize - 1,
-                    own_at: r.get("own_at"),
-                    step: r.get("step"),
-                    flags: r.get("flags"),
-                    levels: r.get("levels"),
-                });
-            }
-        }
-        Ok(out)
-    })
-}
-
+/// not ones passing over or under, and where along each the point is.
 pub fn connected_rows(url: &str, points: &[([f64; 2], &str)]) -> Result<Vec<(usize, f64, BridgeRow)>, postgres::Error> {
     fan(url, |client, k, n| {
         let mut out = Vec::new();
@@ -254,9 +227,9 @@ pub fn connected_rows(url: &str, points: &[([f64; 2], &str)]) -> Result<Vec<(usi
                     t.width_rules::text AS widths, t.access_restrictions::text AS access,
                     t.subclass, t.subclass_rules::text AS subclasses, ST_AsBinary(t.geom) AS geom_wkb
              FROM (SELECT i, g, ST_SetSRID(ST_MakePoint(x, y), 3857) AS p FROM unnest($1::float8[], $2::float8[], $3::text[]) WITH ORDINALITY AS t(x, y, g, i)) u
-             JOIN overture_transportation t ON t.geom && ST_Expand(u.p, 0.5) AND ST_DWithin(t.geom, u.p, 0.5)
-               AND (t.gers_id = u.g OR ST_DWithin(ST_StartPoint(t.geom), u.p, 0.5) OR ST_DWithin(ST_EndPoint(t.geom), u.p, 0.5))",
-                &[&xs, &ys, &gers],
+             JOIN overture_transportation t ON t.geom && ST_Expand(u.p, $4::float8) AND ST_DWithin(t.geom, u.p, $4::float8)
+               AND (t.gers_id = u.g OR ST_DWithin(ST_StartPoint(t.geom), u.p, $4::float8) OR ST_DWithin(ST_EndPoint(t.geom), u.p, $4::float8))",
+                &[&xs, &ys, &gers, &TOUCH_REACH],
             )?;
             for r in rows {
                 out.push((
@@ -283,28 +256,24 @@ pub fn connected_rows(url: &str, points: &[([f64; 2], &str)]) -> Result<Vec<(usi
 
 pub struct DeckOut<'a> {
     pub piece: &'a Piece,
-    pub form: Form,
     pub points: Vec<[f64; 3]>,
-    /// Empty on a deck and on a bore with no portal.
-    pub portal_m: Vec<f32>,
 }
 
 pub fn write(client: &mut Client, decks: &[DeckOut]) -> Result<(), postgres::Error> {
     client.batch_execute(
         "DROP TABLE IF EXISTS overture_deck;
-         CREATE TABLE overture_deck (gers_id TEXT NOT NULL, subtype TEXT NOT NULL, class TEXT, width_m REAL NOT NULL, form SMALLINT NOT NULL, portal BYTEA NOT NULL, geom GEOMETRY(LineStringZ, 3857) NOT NULL);",
+         CREATE TABLE overture_deck (gers_id TEXT NOT NULL, subtype TEXT NOT NULL, class TEXT, width_m REAL NOT NULL, form SMALLINT NOT NULL, geom GEOMETRY(LineStringZ, 3857) NOT NULL);",
     )?;
     for batch in decks.chunks(BATCH) {
         let gers: Vec<&str> = batch.iter().map(|d| d.piece.gers_id.as_str()).collect();
         let subtypes: Vec<&str> = batch.iter().map(|d| d.piece.subtype.as_str()).collect();
         let classes: Vec<Option<&str>> = batch.iter().map(|d| d.piece.class.as_deref()).collect();
         let widths: Vec<f32> = batch.iter().map(|d| d.piece.width_m as f32).collect();
-        let forms: Vec<i16> = batch.iter().map(|d| i16::from(d.form.byte())).collect();
-        let portals: Vec<Vec<u8>> = batch.iter().map(|d| d.portal_m.iter().flat_map(|m| m.to_le_bytes()).collect()).collect();
+        let forms: Vec<i16> = batch.iter().map(|d| i16::from(d.piece.form.byte())).collect();
         let lines: Vec<String> = batch.iter().map(|d| wkt(d.points.iter().map(|q| format!("{} {} {:.2}", q[0], q[1], q[2])), true)).collect();
         client.execute(
-            "INSERT INTO overture_deck SELECT g, s, c, m, f, p, ST_GeomFromText(w, 3857) FROM unnest($1::text[], $2::text[], $3::text[], $4::real[], $5::int2[], $6::bytea[], $7::text[]) AS t(g, s, c, m, f, p, w)",
-            &[&gers, &subtypes, &classes, &widths, &forms, &portals, &lines],
+            "INSERT INTO overture_deck SELECT g, s, c, m, f, ST_GeomFromText(w, 3857) FROM unnest($1::text[], $2::text[], $3::text[], $4::real[], $5::int2[], $6::text[]) AS t(g, s, c, m, f, w)",
+            &[&gers, &subtypes, &classes, &widths, &forms, &lines],
         )?;
     }
     client.batch_execute("CREATE INDEX ON overture_deck USING GIST (geom); ANALYZE overture_deck; DROP TABLE IF EXISTS deck_piece, deck_water;")

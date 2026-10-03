@@ -12,9 +12,12 @@
 use pxl_render::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
 use pxl_spec::bake::constant::{CellZ, CELL, CELL_STEPS, OBJECT_FINEST, U_PER_CELL};
 use pxl_spec::bake::deck::Occupies;
+use pxl_spec::procedural::{pier_stands, Frame};
+use pxl_spec::space::adapter::epsg3857::u_per_m;
+use pxl_spec::bake::ground::shown_ground;
 use pxl_spec::bake::fold::majority;
 use pxl_spec::bake::format::{drawn, Terrain};
-use pxl_spec::bake::pack::GroundCell;
+use pxl_spec::bake::pack::{channel_of, GroundCell};
 use pxl_spec::cell::object::{object_value_is_air, object_value_is_decor, object_value_is_voxel};
 use pxl_spec::space::hierarchy::{ancestor_of, child_of, first_descendant_of, offset_in, Scale};
 use pxl_spec::space::indexer::{L2, L2_IDX, L3};
@@ -33,6 +36,7 @@ use crate::layer::object::store::{objects_revision, EntryAt, EntryCursor, Store}
 use crate::param::STEP_CELLS;
 use crate::world::paging::Paging;
 use crate::world::pyramid::{Layer as _, Pyramid};
+use xpute_core::math::scalar::round;
 
 /// Terrain's finest level, z16, where every point observer stands.
 pub const FINEST: u32 = 0;
@@ -287,7 +291,7 @@ impl<'a> Access<'a> {
     fn stand_climbing(&self, [ix, iy]: [i64; 2], from: Option<i64>, any_height: bool) -> Answer<Option<f64>> {
         self.composed([ix, iy]).map(|c| {
             let side = CELL.side();
-            let top = (c.top / side).round() as i64;
+            let top = round(c.top / side) as i64;
             let made = |z: f64| {
                 let inside = |[lo, hi]: [f64; 2]| z >= lo && z < hi;
                 (z < top as f64 * side && !c.lines.air.is_some_and(inside)) || c.lines.boxes.iter().any(|&b| inside(b))
@@ -573,12 +577,22 @@ impl<'a> Access<'a> {
         let Some((src, body)) = self.drawn_from(cell.page()) else { return lines };
         let n = GROUND.scale(cell.level()).count_in(GROUND.scale(src.level)) as f64;
         let [ox, oy] = cell.in_page_above(src.level - cell.level());
-        let ground = (ground_top / U_PER_CELL).round() as i32;
+        let ground = round(ground_top / U_PER_CELL) as i32;
         let units = |[lo, hi]: [i32; 2]| [f64::from(lo) * U_PER_CELL, f64::from(hi) * U_PER_CELL];
-        for o in body.decks.over_point([(ox as f64 + 0.5) / n, (oy as f64 + 0.5) / n]) {
-            match o.occupies(ground) {
+        let page = Frame::of(src);
+        let (frame, at) = (Some(page), [(ox as f64 + 0.5) / n, (oy as f64 + 0.5) / n]);
+        let cell_per_m = u_per_m(page.corner[1]) / U_PER_CELL;
+        let [tx, ty] = at.map(|v| v as u32);
+        let shown = shown_ground(|k| u32::from(channel_of(body.ground.cells[GROUND.cell_index(tx, ty) as usize], k)), 0);
+        for o in body.decks.over_point(frame, at) {
+            match o.occupies(ground, cell_per_m) {
                 Occupies::Grade => {}
-                Occupies::Above { slab, pier } => lines.boxes.extend([Some(slab), pier].into_iter().flatten().map(units)),
+                Occupies::Above { slab, pier } => {
+                    lines.boxes.push(units(slab));
+                    if let Some(pier) = pier.and_then(|p| pier_stands(p, shown, body.decks.over_point(frame, at), ground, cell_per_m)) {
+                        lines.boxes.push(units(pier));
+                    }
+                }
                 Occupies::Through { air } => lines.air = Some(units(air)),
             }
         }

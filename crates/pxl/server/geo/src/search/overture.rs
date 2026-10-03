@@ -39,26 +39,36 @@ LIMIT $2";
 
 /// Area rows before point rows; the caller keeps the first of each name.
 /// UNION's ORDER BY cannot call `similarity()`, so each branch computes `sim`.
-const DIVISION_SEARCH_SQL: &str = "
+const DIVISION_SEARCH_SQL: &str = concat!(
+    "
 (
-  SELECT gers_id, name, subtype, names_common, 0 AS is_point, similarity(name, $1) AS sim,
+  SELECT gers_id, name, subtype, ",
+    pxl_geo_spec::division_names!("overture_divisions"),
+    " AS names_common, 0 AS is_point, similarity(name, $1) AS sim,
     ST_X(ST_Centroid(geom)) AS x3857, ST_Y(ST_Centroid(geom)) AS y3857,
     ST_X(ST_Transform(ST_Centroid(geom), 4326)) AS lon,
     ST_Y(ST_Transform(ST_Centroid(geom), 4326)) AS lat
   FROM overture_divisions
-  WHERE name <> '' AND name ILIKE '%' || $1 || '%'
+  WHERE name <> '' AND name ILIKE '%' || $1 || '%' AND subtype IN ",
+    pxl_geo_spec::division_areas!(),
+    "
 )
 UNION ALL
 (
-  SELECT gers_id, name, subtype, names_common, 1 AS is_point, similarity(name, $1) AS sim,
+  SELECT gers_id, name, subtype, ",
+    pxl_geo_spec::division_names!("overture_division_points"),
+    " AS names_common, 1 AS is_point, similarity(name, $1) AS sim,
     ST_X(geom) AS x3857, ST_Y(geom) AS y3857,
     ST_X(ST_Transform(geom, 4326)) AS lon,
     ST_Y(ST_Transform(geom, 4326)) AS lat
   FROM overture_division_points
-  WHERE name <> '' AND name ILIKE '%' || $1 || '%'
+  WHERE name <> '' AND name ILIKE '%' || $1 || '%' AND subtype IN ",
+    pxl_geo_spec::division_points!(),
+    "
 )
 ORDER BY is_point ASC, sim DESC
-LIMIT $2";
+LIMIT $2"
+);
 
 #[derive(Serialize)]
 pub struct SearchResult {

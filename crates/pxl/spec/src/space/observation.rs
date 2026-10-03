@@ -91,7 +91,10 @@ pub enum Contents {
     Empty,
     /// Everything is inside `bound`, drawn off by up to `error` per axis.
     /// Conservative, not tight.
-    Holds { bound: Aabb, error: V3 },
+    Holds {
+        bound: Aabb,
+        error: V3,
+    },
 }
 
 impl Contents {

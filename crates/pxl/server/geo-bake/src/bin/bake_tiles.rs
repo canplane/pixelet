@@ -13,7 +13,7 @@
 //!   --concurrency <n>    parallel pages, one connection each (default 8)
 //!   --limit <n>          stop after n land pages (smoke test)
 //!   --force              bake surfaces that already exist on disk again
-//!   --reclassify         ignore a cached land_pages.json and re-run the scan
+//!   --reclassify         classify again though land_pages.json is current
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -22,18 +22,18 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use postgres::{Client, NoTls};
+use postgres::Client;
 use pxl_spec::bake::format::{encode_terrain, Terrain};
 use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::LevelPage;
 
 use pxl_geo_bake::cli::Flags;
+use pxl_geo_bake::coverage::{self, Coverage, Overture};
 use pxl_geo_bake::elevation::Raster;
-use pxl_geo_bake::page::walk::{land_pages, write_land_pages};
 use pxl_geo_bake::pyramid::{build, write_manifest, Layer, PageSet};
 use pxl_geo_bake::terrain::artifact::{assemble, decode_lines, encode_lines, Surface};
-use pxl_geo_bake::terrain::leaf::{bake_ocean, has_land, ocean_samples, Coverage, NE, OCEAN_KEY, SW};
+use pxl_geo_bake::terrain::leaf::{self, bake_ocean, has_ground, land_pages, ocean_samples, write_land_pages, OCEAN_KEY};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
 use pxl_geo_bake::terrain::source::{fetch_lines, fetch_surface, SourceStats};
 use pxl_geo_bake::util::{fmt_bytes, fmt_dur, git_sha, pack, refuse_mixed, unpack, Level};
@@ -93,19 +93,10 @@ fn parse_args() -> Result<Args, String> {
 }
 
 /// What the geo DB held when a version was baked; the version name says nothing of it.
-fn read_source_catalogs(client: &mut Client) -> serde_json::Value {
-    let mut out = serde_json::Map::new();
-    for table in ["overture_catalog", "elevation_catalog"] {
-        let sql = format!("SELECT region_code, data_date::text AS data_date, file_name, status FROM {table} ORDER BY file_name");
-        let rows = match client.query(sql.as_str(), &[]) {
-            Ok(rows) => rows,
-            Err(err) => {
-                eprintln!("[bake/provenance] could not read {table}: {err}");
-                out.insert(table.to_string(), serde_json::Value::Array(vec![]));
-                continue;
-            }
-        };
-        let list: Vec<serde_json::Value> = rows
+fn read_source_catalogs(client: &mut Client, source: &Overture) -> serde_json::Value {
+    let sql = "SELECT region_code, data_date::text AS data_date, file_name, status FROM elevation_catalog ORDER BY file_name";
+    let elevation: Vec<serde_json::Value> = match client.query(sql, &[]) {
+        Ok(rows) => rows
             .iter()
             .map(|r| {
                 serde_json::json!({
@@ -115,16 +106,19 @@ fn read_source_catalogs(client: &mut Client) -> serde_json::Value {
                     "status": r.get::<_, String>("status"),
                 })
             })
-            .collect();
-        out.insert(table.to_string(), serde_json::Value::Array(list));
-    }
-    serde_json::Value::Object(out)
+            .collect(),
+        Err(err) => {
+            eprintln!("[bake/provenance] could not read elevation_catalog: {err}");
+            Vec::new()
+        }
+    };
+    serde_json::json!({ "overture": source.manifest(), "elevation_catalog": elevation })
 }
 
 fn classify_land_pages(client: &mut Client, candidates: &[IVec]) -> Result<Vec<IVec>, postgres::Error> {
     let mut land: Vec<IVec> = Vec::new();
     for (at, batch) in candidates.chunks(CLASSIFY_BATCH).enumerate() {
-        for (&page, touches) in batch.iter().zip(has_land(client, batch)?) {
+        for (&page, touches) in batch.iter().zip(has_ground(client, batch)?) {
             if touches {
                 land.push(page);
             }
@@ -207,8 +201,8 @@ struct Db {
     repo: TerrainRepository,
 }
 
-fn connect(url: &str, raster: &Arc<Raster>) -> Result<Db, String> {
-    let mut client = Client::connect(url, NoTls).map_err(|e| e.to_string())?;
+fn connect(source: &Overture, raster: &Arc<Raster>) -> Result<Db, String> {
+    let mut client = source.connect()?;
     let repo = TerrainRepository::prepare(&mut client, raster.clone()).map_err(|e| e.to_string())?;
     Ok(Db { client, repo })
 }
@@ -225,13 +219,19 @@ fn run() -> Result<(), String> {
     let args = parse_args()?;
     let surfaces = PageSet::new(args.build.join("surface"));
     let lines = PageSet::new(args.build.join("lines"));
-    let coverage = Coverage::of_source();
+    let coverage = Coverage::of_source()?;
     let land_cache = args.out.parent().unwrap_or(Path::new(".")).join("land_pages.json");
-    let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing".to_string());
+    let (source, mut checked) = match args.stages.iter().any(|&s| s != Stage::Assemble) {
+        true => Overture::reading(&leaf::READS).map(|(s, c)| (Some(s), Some(c)))?,
+        false => (None, None),
+    };
 
     if args.stages.contains(&Stage::Surface) {
-        let url = url.as_deref().map_err(Clone::clone)?;
-        let mut client = Client::connect(url, NoTls).map_err(|e| e.to_string())?;
+        let source = source.as_ref().expect("opened for a stage that reads the DB");
+        let mut client = match checked.take() {
+            Some(client) => client,
+            None => source.connect()?,
+        };
         let raster = Arc::new(Raster::open(&mut client).map_err(|e| e.to_string())?);
         let candidates = coverage.pages();
         println!(
@@ -243,8 +243,7 @@ fn run() -> Result<(), String> {
             candidates.len()
         );
 
-        // A list classified at another page size is refused and redone.
-        let cached = if args.reclassify { Err("--reclassify".to_string()) } else { land_pages(&land_cache) };
+        let cached = if args.reclassify { Err("--reclassify".to_string()) } else { land_pages(&land_cache, &coverage, Some(&source.release)) };
         let land: Vec<IVec> = match cached {
             Ok(land) => {
                 println!("[bake/classify] reusing cached list: {} land pages ({})", land.len(), land_cache.display());
@@ -254,7 +253,7 @@ fn run() -> Result<(), String> {
                 println!("[bake/classify] classifying: {why}");
                 let land = classify_land_pages(&mut client, &candidates).map_err(|e| e.to_string())?;
                 fs::create_dir_all(land_cache.parent().unwrap_or(Path::new("."))).map_err(|e| e.to_string())?;
-                write_land_pages(&land_cache, &land)?;
+                write_land_pages(&land_cache, &coverage, &source.release, &land)?;
                 println!("[bake/classify] done: land={} ocean={} -> {}", land.len(), candidates.len() - land.len(), land_cache.display());
                 land
             }
@@ -268,7 +267,7 @@ fn run() -> Result<(), String> {
             "surface",
             targets,
             args.concurrency,
-            || connect(url, &raster),
+            || connect(source, &raster),
             |db, page, t| {
                 let at = LevelPage::new(0, page);
                 if !args.force && surfaces.path(at).exists() {
@@ -295,17 +294,20 @@ fn run() -> Result<(), String> {
                 "git_sha": git_sha(),
                 "land_pages": land.len(),
                 "flat_elevation_pages": t.flat_ele,
-                "source": read_source_catalogs(&mut client),
+                "source": read_source_catalogs(&mut client, source),
             }),
         )?;
     }
 
-    let land = land_pages(&land_cache)?;
+    let land = land_pages(&land_cache, &coverage, source.as_ref().map(|s| s.release.as_str()))?;
     let targets = &land[..args.limit.map_or(land.len(), |n| n.min(land.len()))];
 
     if args.stages.contains(&Stage::Lines) {
-        let url = url.as_deref().map_err(Clone::clone)?;
-        let mut client = Client::connect(url, NoTls).map_err(|e| e.to_string())?;
+        let source = source.as_ref().expect("opened for a stage that reads the DB");
+        let mut client = match checked.take() {
+            Some(client) => client,
+            None => source.connect()?,
+        };
         let raster = Arc::new(Raster::open(&mut client).map_err(|e| e.to_string())?);
         // Whole every time: a page whose lines the solve took away keeps none.
         if lines.root.exists() {
@@ -316,7 +318,7 @@ fn run() -> Result<(), String> {
             "lines",
             targets,
             args.concurrency,
-            || connect(url, &raster),
+            || connect(source, &raster),
             |db, page, _| {
                 let decks = fetch_lines(&db.repo, &mut db.client, page).map_err(|e| e.to_string())?;
                 if decks.is_empty() {
@@ -378,7 +380,8 @@ fn run() -> Result<(), String> {
             &tiles,
             top,
             serde_json::json!({
-                "bbox_4326": { "sw": SW, "ne": NE },
+                "bbox_4326": coverage::source_bbox()?,
+                "ingest_bbox": coverage.ingest_bbox(),
                 "candidate_pages": coverage.pages().len(),
                 "land_pages": land.len(),
                 "ocean_key": OCEAN_KEY,

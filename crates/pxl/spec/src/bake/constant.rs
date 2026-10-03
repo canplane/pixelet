@@ -1,6 +1,5 @@
 // pxl-spec/bake/constant.rs
 
-use crate::space::adapter::epsg3857::{U_PER_M, Z_SCALE};
 use crate::space::hierarchy::{ancestor_of, first_descendant_of, Scale};
 use crate::space::indexer::{L2, L3};
 use crate::space::pvf3::ivec::IVec;
@@ -12,17 +11,6 @@ use crate::space::sparse_tree::mem::SparseTreeLayout;
 pub const CELL: Scale = Scale::of(0);
 
 pub const U_PER_CELL: f64 = CELL.side();
-
-/// Cells per EPSG:3857 planar metre: turns a position into a page's cells.
-pub const XY_CELL_PER_M: f64 = U_PER_M / U_PER_CELL;
-
-/// Cells per ground metre at the owning L3 page, in any direction (Mercator
-/// is conformal). Snapped to the page base so terrain, decks and objects
-/// quantize heights alike across a page.
-#[allow(non_snake_case)]
-pub fn CELL_PER_M(y_m: f64) -> f64 {
-    XY_CELL_PER_M * Z_SCALE(y_m)
-}
 
 // Elevation is sampled at cell centers (x + 0.5, y + 0.5) by both the SQL
 // resample and the client's bicubic, and stored as i16 cells.
@@ -43,7 +31,7 @@ pub const fn ele_index(x: u32, y: u32) -> usize {
 
 /// Cells on a page's side in its index lane (bake/format.rs `Index`): one per
 /// elevation sample spacing, at 4 KiB a page.
-pub const EXTENT_SPAN: u32 = 32;
+pub const EXTENT_SPAN: u32 = PAGE_ELE_SPAN;
 
 pub const EXTENT_CELL: Scale = L3.down(EXTENT_SPAN.trailing_zeros());
 

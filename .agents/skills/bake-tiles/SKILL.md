@@ -67,6 +67,14 @@ and `overture_deck`;
 POI needs `overture_places`; geocode needs `overture_divisions` and
 `overture_division_points`. If a table is missing, that is an ingestion
 job, not a bake job — [infra/geo/README.md](../../../infra/geo/README.md).
+Every bake reaches the DB only through `geo-bake coverage.rs` `Overture`,
+which takes the `overture_*` tables from the statements the bake runs and
+refuses unless each has an `overture_catalog` row of one release over
+exactly the bbox `cargo run -q --manifest-path crates/Cargo.toml --bin
+ingest_bbox` prints; the error names the `--bbox` to ingest with.
+`solve_decks`, whose tables are named by hand since the deck solve runs
+its statements inline, records `overture_deck` the same way, so
+re-ingesting transportation means solving again before a terrain bake.
 Never `down -v` to "reset" the database; the volume is several gigabytes of
 ingested data.
 
@@ -118,7 +126,8 @@ grep '^\[bake\] ' /tmp/bake.log | tail -2
 What it produces, beside `surface/` and `lines/` under `--build` with a
 `surface.json` and `lines.json` of what built them:
 
-- `0/`, one packed object per land-or-coastal page — the leaves
+- `0/`, one packed object per page anything is drawn in — land, or a way,
+  building, deck or bore — the leaves
 - `1/`, `2/`, … each level folded from the one below it until a level is a
   single page, refolded whole on every run (they are a function of the leaves,
   so a resumed run never leaves a stale pyramid over them)
@@ -129,8 +138,28 @@ What it produces, beside `surface/` and `lines/` under `--build` with a
 
 Open-ocean pages are deliberately not baked. Roughly two thirds of the
 coverage bbox is open sea, and the client turns a 404 into the shared
-`_ocean` tile. The land/ocean classification is cached in `land_pages.json`
-and reused unless `--reclassify` is passed.
+`_ocean` tile. A page counts as open ocean only when nothing is drawn in it:
+a bridge or an undersea tunnel over open water makes its pages leaves. The
+classification is cached in `land_pages.json`, keyed by the page size, the
+coverage, the release and the rule that classified it (`terrain/leaf.rs`
+`land_pages`); a list made under any other is refused and made again.
+
+**A page is baked from more than its own bbox, and cropped to it.** What is
+drawn in a page can come from past its edge, so every read reaches as far as
+that, worked back from how far each thing draws:
+
+- **Rows** (ways, buildings, decks, bores, water) are read from the page's
+  bbox grown by `DRAWN_REACH_U` (terrain/repository.rs `drawn_from`): a way
+  drawn its widest, `WIDEST` cells (the width a deck's byte holds, and the
+  ground draws no wider), plus the corridor gap one way paves to another.
+  The page keeps only its own cells, and its lines' runs within their
+  footprint (pxl-spec bake/deck.rs `footprint`).
+- **Elevation** is sampled `ELE_PAD` samples past the page, what a bicubic
+  window at the page's edge reads. Past the raster a sample is no data, so
+  the published coverage is cropped to pages whose padded grid lies inside
+  the raster (coverage.rs `Coverage::of_source`, from
+  `infra/geo/elevation/metadata.json`); the source must reach
+  that far past the area to be published, never end at it.
 
 ### Verifying
 

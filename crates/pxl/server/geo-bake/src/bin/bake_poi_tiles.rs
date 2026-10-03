@@ -9,11 +9,10 @@ use std::fs;
 use std::path::PathBuf;
 
 use pxl_geo_bake::cli::Flags;
-use pxl_geo_bake::page::catalog;
-use pxl_geo_bake::poi::leaves;
+use pxl_geo_bake::coverage::{Coverage, Overture};
+use pxl_geo_bake::poi::{self, leaves};
 use pxl_geo_bake::pyramid::{build, prune, write_manifest, Layer, PageSet};
 use pxl_geo_bake::util::{pack, refuse_mixed, Level};
-use pxl_geo_spec::table::PLACES;
 use pxl_spec::bake::poi_page::PoiPage;
 use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::space::pyramid::LevelPage;
@@ -34,16 +33,15 @@ fn run() -> Result<(), String> {
         refuse_mixed(&set.root)?;
         fs::remove_dir_all(&set.root).map_err(|e| e.to_string())?;
     }
-    let url = std::env::var("DB_GEO_URL").map_err(|_| "DB_GEO_URL required")?;
-    let mut client = postgres::Client::connect(&url, postgres::NoTls).map_err(|e| e.to_string())?;
-    let pages = leaves(&mut client, None)?;
+    let (source, mut client) = Overture::reading(&[&poi::READS])?;
+    let pages = leaves(&mut client, &Coverage::of_source()?, None)?;
     for (page, poi) in &pages {
         set.write(LevelPage::new(0, *page), &pack(&poi.encode()?, Level::Stored).map_err(|e| e.to_string())?)?;
     }
     println!("[bake/poi] z16: {} pages", pages.len());
     let top = build(&set, &PoiPage::default(), concurrency)?;
     println!("[bake/poi] {} pages their parent settles let go", prune::<PoiPage>(&set, top)?);
-    write_manifest(&set, top, serde_json::json!({ "source": catalog::sources(&mut client, &[PLACES]) }))?;
+    write_manifest(&set, top, serde_json::json!({ "source": source.manifest() }))?;
     println!("[bake/poi] complete to level {top}: {}", out.display());
     Ok(())
 }

@@ -33,15 +33,16 @@ infra/geo/
 
 | Source                                                                           | Tables                                                                                                                                                 | Catalog             | Fills them                                                  |
 | :------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------ | :---------------------------------------------------------- |
-| **Overture — Buildings, Transportation, Base**<br>terrain features and coastline | `overture_buildings`, `overture_transportation`, `overture_base_land`, `overture_base_land_use`, `overture_base_water`, `overture_base_infrastructure` | `overture_catalog`  | `overture/script/ingest_{buildings,transportation,base}.rs` |
-| **Overture — Places, Divisions**<br>POI, reverse geocode, forward search         | `overture_places`, `overture_divisions`, `overture_division_points`                                                                                    | `overture_catalog`  | `overture/script/ingest_{places,divisions}.rs`              |
+| **Overture — Buildings, Transportation, Base**<br>terrain features and coastline | `overture_buildings`, `overture_transportation`, `overture_base_land`, `overture_base_land_use`, `overture_base_water`, `overture_base_infrastructure` | `overture_catalog`  | `overture/script/ingest.rs`                                 |
+| **Overture — Places, Divisions**<br>POI, reverse geocode, forward search         | `overture_places`, `overture_divisions`, `overture_division_points`                                                                                    | `overture_catalog`  | `overture/script/ingest.rs`                                 |
 | **GEDTM30**<br>ground elevation                                                  | `elevation_raster`                                                                                                                                     | `elevation_catalog` | `elevation/script/setup-elevation.sh`                       |
 
 Coastline is not a table of its own. `OVERTURE_COAST_SQL`
 (`crates/pxl/server/geo-bake/src/terrain/repository.rs`) carves it at bake time out of
-`overture_base_water`'s `ocean` subtype, and `HAS_LAND_SQL`
-(`crates/pxl/server/geo-bake/src/bin/bake_tiles.rs`) calls a page open ocean
-when no `overture_base_land` row touches its bbox.
+`overture_base_water`'s `ocean` subtype, and `HAS_GROUND_SQL`
+(`crates/pxl/server/geo-bake/src/terrain/leaf.rs`) calls a page open water
+when no `overture_base_land` row or building touches its bbox and no
+`overture_deck` row or way (not a ferry) comes within `DRAWN_REACH_U` of it.
 
 Both catalogs keep one row per table: which bbox it was pulled with and which
 release it is from. `read_source_catalogs()` (`bake_tiles.rs`) copies them into
@@ -56,8 +57,8 @@ official `overturemaps` Python CLI, installed on first use into
 extract a line at a time: South Korea's full Places theme is 700,000+ features,
 and as one pretty-printed document it runs to about 900 MB.
 
-`--bbox` defaults to `124,33,132,39` — mainland plus Jeju, the far western
-islands, Ulleungdo and Dokdo.
+There is no default bbox: it is derived from the elevation's `bbox_4326`
+(§4).
 
 ### GEDTM30 v1.2 (OpenGeoHub / OpenLandMap)
 
@@ -103,28 +104,35 @@ That starts a database that is already built. Emptying it first takes a
 
 ## 4. Run the ingests
 
-Order does not matter — no table here reads another. Each script finds the
-repository's `.env` for itself, so none of them needs a wrapper or a task:
+One script takes every Overture type, and every feature of each in the
+bbox, into a table a type; the elevation is its own:
 
 ```sh
-./infra/geo/overture/script/ingest_buildings.rs
-./infra/geo/overture/script/ingest_transportation.rs
-./infra/geo/overture/script/ingest_base.rs
-./infra/geo/overture/script/ingest_places.rs
-./infra/geo/overture/script/ingest_divisions.rs
-
 ./infra/geo/elevation/script/setup-elevation.sh
+
+./infra/geo/overture/script/ingest.rs --bbox "$(cargo run -q --manifest-path crates/Cargo.toml --bin ingest_bbox)"
 ```
 
-Buildings is the long one: 7.2 million rows for Korea. Places takes about four
-minutes, the rest less.
+The bbox is the bake's to say, and `ingest_bbox` prints it: the pages whose
+elevation grid reads only `metadata.json`'s `bbox_4326` are what is
+published (`crates/pxl/server/geo-bake/src/coverage.rs`), and the bbox is
+their rectangle grown by whole pages on each side, the fewest that hold the
+farthest an Overture read goes past a page (`Coverage::margin_pages`), in
+lon/lat. Pass it as printed: a bake refuses to run
+unless every `overture_*` table its statements read has a catalog row with
+exactly that bbox, all of one release, and the error prints the `--bbox` to
+ingest with. Then run `solve_decks`, which records `overture_deck` under the
+release and bbox it was solved from; it names the tables it reads by hand,
+since the deck solve runs its statements inline.
 
-Each ingest's own header says what it pulls and what it drops on the way —
-which `--type` values it asks Overture for, which subtypes and classes it
-keeps, and why. Read that before changing one; several of the filters are
-there because a theme carries far more than this project paints.
+Buildings is the long one: 7.2 million rows for Korea.
 
-The flags are the same everywhere: `--bbox` for the coverage, `--out` for the
+Every row is its GERS id, all of its properties in `properties` and its
+geometry. Nothing is dropped on the way in: what a reader uses of a table is
+chosen in its own query, and a column it filters on is generated from
+`properties` by Postgres.
+
+The flags are `--bbox`, required, and `--out` for the
 directory the extract is kept in. An extract is every column of every feature
 in the box, and an ingest whose extract is already the latest release over the
 same bbox reads it instead of downloading it again — so a change to what a
@@ -142,7 +150,13 @@ UNION ALL SELECT 'overture_base_water', count(*) FROM overture_base_water
 UNION ALL SELECT 'overture_base_infrastructure', count(*) FROM overture_base_infrastructure
 UNION ALL SELECT 'overture_places', count(*) FROM overture_places
 UNION ALL SELECT 'overture_divisions', count(*) FROM overture_divisions
-UNION ALL SELECT 'overture_division_points', count(*) FROM overture_division_points;
+UNION ALL SELECT 'overture_division_points', count(*) FROM overture_division_points
+UNION ALL SELECT 'overture_division_boundaries', count(*) FROM overture_division_boundaries
+UNION ALL SELECT 'overture_building_parts', count(*) FROM overture_building_parts
+UNION ALL SELECT 'overture_connectors', count(*) FROM overture_connectors
+UNION ALL SELECT 'overture_base_land_cover', count(*) FROM overture_base_land_cover
+UNION ALL SELECT 'overture_base_bathymetry', count(*) FROM overture_base_bathymetry
+UNION ALL SELECT 'overture_addresses', count(*) FROM overture_addresses;
 
 SELECT r_table_name, srid, scale_x, scale_y FROM raster_columns
 WHERE r_table_name = 'elevation_raster';

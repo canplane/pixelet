@@ -11,10 +11,10 @@ use pxl_render::mesh::voxel_scan::apron_col;
 use pxl_spec::bake::constant::{unpack_pos, U_PER_CELL};
 use pxl_spec::cell::object::decor_num_id;
 use pxl_spec::cell::DecorId;
-use pxl_spec::space::hierarchy::child_of;
 use pxl_spec::space::lod::target_cell_px;
-use pxl_spec::space::pvf3::ivec::{gather, IVec};
+use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
+use pxl_spec::procedural::{scatter, scatter_at, Candidate, MASTER_SEED};
 use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
 use std::collections::{HashMap, TryReserveError};
@@ -35,11 +35,9 @@ use pxl_spec::bake::deck::Decks;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
+use xpute_core::math::scalar::round;
 
 const AIR: u32 = cube_types::common::air as u32;
-
-// Changing this reshuffles every decoration in the world.
-pub const DECOR_MASTER_SEED: u64 = 0xd0c0_dec0_5eed_0001;
 
 /// A kind is drawn as a model while it covers at least two of a tier's cells
 /// on screen (twelve pixels at the reference viewport, by eye, where Google's
@@ -141,7 +139,7 @@ pub fn teach_decor_kinds(bundles: &[&DecorKindBundle]) {
 /// Seeded only by the placed object's position, its one stable identity, so
 /// the hover ghost predicts exactly the variant and heading a placement gets.
 pub fn user_decor_pick(i: IVec, variant_count: u32) -> (u32, f64) {
-    let mut stream = SplitMix64::new(derive_seed_u64(DECOR_MASTER_SEED, i));
+    let mut stream = SplitMix64::new(derive_seed_u64(MASTER_SEED, i));
     let mut rng = || stream.next_u32();
     let variant = ((u32_to_unit(rng()) * variant_count as f64).floor() as u32).min(variant_count - 1);
     let rotation = u32_to_unit(rng()) * core::f64::consts::PI * 2.0;
@@ -199,17 +197,6 @@ pub struct Placed {
     pub hittable: bool,
 }
 
-/// The z16 cell a level cell's candidate is drawn from: one of four children
-/// per level, keyed to the kind and node alone, so zooming keeps the
-/// instances it had and adds or drops a quarter per level.
-fn representative(tag: u64, level: u32, x: i64, y: i64) -> (i64, i64) {
-    let [x, y] = (1..=level).rev().fold([x, y], |[x, y], l| {
-        let slot = derive_seed_u64(derive_seed_u64(derive_seed_u64(DECOR_MASTER_SEED, tag), gather(x, y, 0)), l as u64);
-        child_of([x, y], slot as usize)
-    });
-    (x, y)
-}
-
 /// Hidden rather than left out, so the hit that put the eraser there still
 /// meets it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -235,22 +222,14 @@ pub struct Draw {
     pub scale: f64,
 }
 
-/// `kind`'s candidate at cell `at` of `level`. None where the shown ground
-/// is not the kind's, where any deck, ramp or bore line is in the cell, or
-/// where the density leaves it out.
-pub fn draw(kind: &Kind, cells: &[GroundCell], lines: &Decks, level: u32, at: [i64; 2], page_at: [u32; 2]) -> Option<Draw> {
+/// What `candidate` draws in the page's cell `page_at`: none off the kind's
+/// ground or under a line.
+pub fn draw(kind: &Kind, candidate: Candidate, cells: &[GroundCell], lines: &Decks, page_at: [u32; 2]) -> Option<Draw> {
     let [cell_x, cell_y] = page_at;
     if !kind.rules.allows(cells[GROUND.cell_index(cell_x, cell_y) as usize]) {
         return None;
     }
-    let (gx, gy) = representative(kind.tag, level, at[0], at[1]);
-    let z16 = GROUND.cell_of(0, &GROUND.scale(0).base_of([gx, gy, 0]));
-    let [px, py] = z16.in_page().map(u64::from);
-    let kind_seed = derive_seed_u64(derive_seed_u64(DECOR_MASTER_SEED, z16.page().page), kind.tag);
-    let mut rng = Rng::new(derive_seed_u64(kind_seed, (px << 16) | py));
-    if rng.unit() >= kind.density {
-        return None;
-    }
+    let mut rng = Rng::new(candidate.seed);
     let variant = ((rng.unit() * kind.variant_count as f64).floor() as u32).min(kind.variant_count - 1);
     let rotation = if kind.align_transport {
         let flip = rng.unit() < 0.5;
@@ -259,10 +238,10 @@ pub fn draw(kind: &Kind, cells: &[GroundCell], lines: &Decks, level: u32, at: [i
         rng.unit() * core::f64::consts::PI * 2.0
     };
     let scale = 1.0 + (rng.unit() * 2.0 - 1.0) * SCALE_JITTER;
-    // After the draws, so a page's lines are walked only for cells a kind would fill.
-    if lines.over_point([f64::from(cell_x) + 0.5, f64::from(cell_y) + 0.5]).next().is_some() {
+    if lines.over_point(None, [f64::from(cell_x) + 0.5, f64::from(cell_y) + 0.5]).next().is_some() {
         return None;
     }
+    let [gx, gy] = candidate.cell;
     Some(Draw { gx, gy, variant, rotation, scale })
 }
 
@@ -274,7 +253,8 @@ pub fn scatters_at(value: u32, at: &Pvf3) -> Option<Draw> {
     let page = Terrain::pyramid().get(z16.page())?;
     let ground = Access::now().at(at, FINEST).exact()?;
     let [ix, iy, iz] = CELL.index_of(at);
-    (iz == (ground.top / CELL.side()).round() as i64).then(|| draw(kind, &page.ground.cells, &page.decks, 0, [ix, iy], z16.in_page()))?
+    let candidate = scatter_at(kind.tag, kind.density, [ix, iy])?;
+    (iz == round(ground.top / CELL.side()) as i64).then(|| draw(kind, candidate, &page.ground.cells, &page.decks, z16.in_page()))?
 }
 
 impl<'s> DecorBuild<'s> {
@@ -351,42 +331,53 @@ impl<'s> DecorBuild<'s> {
         let (cells, lines) = (ground.page.cells, ground.page.decks);
         let (level, atom) = (GROUND.scale(ground.level), GROUND.scale(0));
         let (lx0, ly0) = (level.index(ground.x0), level.index(ground.y0));
+        let per = i64::from(atom.count_in(level));
+        let min = [atom.index(ground.x0), atom.index(ground.y0)];
+        let span = i64::from(CHUNK_CELLS) * per;
         let has_entries = ground.col_idx.is_some_and(|c| store.entries(c).is_some());
-        for dy in 0..CHUNK_CELLS {
-            let cell_y = ground.ty0 + dy;
-            for dx in 0..CHUNK_CELLS {
-                let cell_x = ground.tx0 + dx;
-                let Some(Draw { gx, gy, variant, rotation, scale }) = draw(kind, cells, lines, ground.level, [lx0 + dx as i64, ly0 + dy as i64], [cell_x, cell_y]) else {
-                    continue;
-                };
-                let ele = ground.sample.ele[apron_col(dx, dy) as usize] as i32;
-                // A leaf in the cell overrides the scatter: a cube or air hides it, the leaf gone brings it back.
-                if has_entries && ground.col_idx.is_some_and(|c| store.cell(c, dx, dy, ele).is_some()) {
-                    continue;
-                }
-                let filled = |f: &HashMap<[i64; 3], u32>| f.get(&[lx0 + dx as i64, ly0 + dy as i64, level.index(ele as i64)]).is_some_and(|&s| s != AIR);
-                if ground.folded.is_some_and(filled) {
-                    continue;
-                }
-                let (x, y) = ((gx as f64 + 0.5) * atom.side() - ground.x0 as f64, (gy as f64 + 0.5) * atom.side() - ground.y0 as f64);
-                let z = ele as f64;
-                let hidden = ground.level == 0 && hide == Some(DecorHide::Scattered([gx, gy, i64::from(ele)]));
-                scratch.push(
-                    first + variant as usize,
-                    Instance {
-                        x: x as f32,
-                        y: y as f32,
-                        z: z as f32,
-                        rotation: rotation as f32,
-                        scale: scale as f32,
-                        flags: if hidden { HIDDEN_FLAG } else { 0 },
-                        band: NO_ENTRY,
-                        pos: 0,
-                    },
-                )?;
+        scatter(kind.tag, kind.density, ground.level, [min, [min[0] + span, min[1] + span]], &mut scratch.candidates)?;
+        for i in 0..scratch.candidates.len() {
+            let candidate = scratch.candidates[i];
+            let (dx, dy) = ((candidate.cell[0] - min[0]).div_euclid(per) as u32, (candidate.cell[1] - min[1]).div_euclid(per) as u32);
+            let Some(Draw { gx, gy, variant, rotation, scale }) = draw(kind, candidate, cells, lines, [ground.tx0 + dx, ground.ty0 + dy]) else {
+                continue;
+            };
+            let ele = ground.sample.ele[apron_col(dx, dy) as usize] as i32;
+            // A leaf in the cell overrides the scatter: a cube or air hides it, the leaf gone brings it back.
+            if has_entries && ground.col_idx.is_some_and(|c| store.cell(c, dx, dy, ele).is_some()) {
+                continue;
             }
+            let filled = |f: &HashMap<[i64; 3], u32>| f.get(&[lx0 + dx as i64, ly0 + dy as i64, level.index(ele as i64)]).is_some_and(|&s| s != AIR);
+            if ground.folded.is_some_and(filled) {
+                continue;
+            }
+            let (x, y) = ((gx as f64 + 0.5) * atom.side() - ground.x0 as f64, (gy as f64 + 0.5) * atom.side() - ground.y0 as f64);
+            let z = ele as f64;
+            let hidden = ground.level == 0 && hide == Some(DecorHide::Scattered([gx, gy, i64::from(ele)]));
+            scratch.push(
+                first + variant as usize,
+                Instance {
+                    x: x as f32,
+                    y: y as f32,
+                    z: z as f32,
+                    rotation: rotation as f32,
+                    scale: scale as f32,
+                    flags: if hidden { HIDDEN_FLAG } else { 0 },
+                    band: NO_ENTRY,
+                    pos: 0,
+                },
+            )?;
         }
         Ok(())
+    }
+
+    /// The lowest and highest instance; `[0, 0]` with none.
+    pub fn heights(&self) -> [f32; 2] {
+        let z = self.scratch.instances.iter().map(|i| i.z);
+        match z.clone().reduce(f32::min) {
+            Some(lo) => [lo, z.fold(lo, f32::max)],
+            None => [0.0, 0.0],
+        }
     }
 
     pub fn instances(&self) -> usize {
@@ -431,6 +422,3 @@ impl<'s> DecorBuild<'s> {
     }
 }
 
-#[cfg(test)]
-#[path = "build.test.rs"]
-mod test;

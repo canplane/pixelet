@@ -9,10 +9,28 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use postgres::Client;
-use pxl_spec::bake::constant::{ele_index, CELL_PER_M, ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
+use pxl_spec::bake::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN, U_PER_CELL};
+use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m};
 use pxl_spec::space::adapter::epsg3857::BBox3857;
+use xpute_core::math::scalar::round;
 
 const HELD: usize = 512;
+
+/// A page's padded grid, `ST_MakeEmptyRaster` at the stride: its top-left
+/// corner, `ELE_PAD` samples out from the page's, and the stride.
+fn grid_of([min, max]: BBox3857) -> ([f64; 2], f64) {
+    let stride = (max[0] - min[0]) / f64::from(PAGE_ELE_SPAN);
+    let pad = f64::from(ELE_PAD) * stride;
+    ([min[0] - pad, max[1] + pad], stride)
+}
+
+/// What a page's grid reads of the raster, `[minx, miny, maxx, maxy]` in
+/// EPSG:3857: its padded samples and the resample's reach past them.
+pub fn page_reads(page_bbox: BBox3857) -> [f64; 4] {
+    let ([ref_x, ref_y], stride) = grid_of(page_bbox);
+    let (side, reach) = (f64::from(ELE_PADDED_SPAN) * stride, stride * 2.0);
+    [ref_x - reach, ref_y - side - reach, ref_x + side + reach, ref_y + reach]
+}
 
 pub struct Raster {
     origin: [f64; 2],
@@ -64,8 +82,8 @@ impl Raster {
                 rid: r.get("rid"),
                 x0: r.get("x0"),
                 y0: r.get("y0"),
-                gx: ((r.get::<_, f64>("x0") - origin[0]) / sx).round() as i64,
-                gy: ((r.get::<_, f64>("y0") - origin[1]) / sy).round() as i64,
+                gx: round((r.get::<_, f64>("x0") - origin[0]) / sx) as i64,
+                gy: round((r.get::<_, f64>("y0") - origin[1]) / sy) as i64,
                 w: i64::from(r.get::<_, i32>("w")),
                 h: i64::from(r.get::<_, i32>("h")),
             })
@@ -109,15 +127,10 @@ impl Raster {
     }
 
     pub fn page_grid(&self, client: &mut Client, page_bbox: BBox3857) -> Result<Option<Vec<i16>>, postgres::Error> {
-        let [min, max] = page_bbox;
+        let [min, _] = page_bbox;
         let span = ELE_PADDED_SPAN as usize;
-        let pad = f64::from(ELE_PAD);
-        // `ST_MakeEmptyRaster` at the stride.
-        let stride = (max[0] - min[0]) / f64::from(PAGE_ELE_SPAN);
-        let ref_x = min[0] - pad * stride;
-        let ref_y = max[1] + pad * stride;
-        let reach = stride * 2.0;
-        let env = [ref_x - reach, ref_y - span as f64 * stride - reach, ref_x + span as f64 * stride + reach, ref_y + reach];
+        let ([ref_x, ref_y], stride) = grid_of(page_bbox);
+        let env = page_reads(page_bbox);
 
         // `ST_Union(ST_Clip(tile, env))`.
         let gx = |x: f64| (x - self.origin[0]) / self.sx;
@@ -151,7 +164,7 @@ impl Raster {
         let m_y = self.origin[1] + my0 as f64 * self.sy;
 
         // `ST_Resample`'s output grid (rt_warp.c `rt_raster_gdal_warp`).
-        let snap = |r: f64| if (r.round() - r).abs() <= f64::from(f32::EPSILON) { r.round() } else { r.floor() };
+        let snap = |r: f64| if (round(r) - r).abs() <= f64::from(f32::EPSILON) { round(r) } else { r.floor() };
         let along = |w: f64| ((w + stride / 2.0) / stride).max(1.0) as i64;
         let kx = snap((m_x - ref_x) / stride);
         let ky = snap((m_y - ref_y) / -stride);
@@ -170,8 +183,8 @@ impl Raster {
         // Output pixel to mosaic pixel (`GDALGenImgProjTransform`).
         let inv = [-m_x / self.sx, 1.0 / self.sx, -m_y / self.sy, 1.0 / self.sy];
         let to_src = |x: f64, y: f64| -> (f64, f64) {
-            let (gx, gy) = (out_x + x * stride + y * 0.0, out_y + x * 0.0 + y * -stride);
-            (inv[0] + gx * inv[1] + gy * 0.0, inv[2] + gx * 0.0 + gy * inv[3])
+            let (gx, gy) = (out_x + x * stride, out_y + y * -stride);
+            (inv[0] + gx * inv[1], inv[2] + gy * inv[3])
         };
         let x_axis = Axis::of(to_src(0.0, 0.0).0, to_src(out_w as f64, 0.0).0, out_w, mw);
         let y_axis = Axis::of(to_src(0.0, 0.0).1, to_src(0.0, out_h as f64).1, out_h, mh);
@@ -182,21 +195,23 @@ impl Raster {
             y: y_axis,
         };
 
-        let cell_per_m = CELL_PER_M(min[1]);
+        let cell_per_m = u_per_m(from_db(min[1])) / U_PER_CELL;
         let mut grid = vec![0i16; span * span];
-        let (col0, row0) = ((-kx) as usize, (-ky) as usize);
+        // The page's grid from the warp's: an offset either way, since the
+        // raster can start inside the padded page at the coverage's edge.
+        let (col0, row0) = (-kx, -ky);
         let last = out_w - 1;
         for r in 0..span {
-            let y = (row0 + r) as f64 + 0.5;
+            let y = row0 + r as f64 + 0.5;
             let (s0, s1) = (to_src(0.5, y), to_src(last as f64 + 0.5, y));
             let reach = last as f64;
             let (dx, dy) = ((s1.0 - s0.0) / reach, (s1.1 - s0.1) / reach);
             for c in 0..span {
-                let dist = (col0 + c) as f64;
+                let dist = col0 + c as f64;
                 let (px, py) = (s0.0 + dx * dist, s0.1 + dy * dist);
                 // PostgreSQL rounds half to even; no data is 0.
                 if let Some(v) = source.sample(px, py) {
-                    grid[ele_index(c as u32, (span - 1 - r) as u32)] = (f64::from(v) * cell_per_m).round_ties_even() as i16;
+                    grid[ele_index(c as u32, (span - 1 - r) as u32)] = round(f64::from(v) * cell_per_m) as i16;
                 }
             }
         }
@@ -216,7 +231,7 @@ impl Raster {
             return None;
         }
         let along = |w: f64, scale: f64| ((w + scale.abs() / 2.0) / scale.abs()).max(1.0) as i64;
-        let snap = |r: f64| if (r.round() - r).abs() <= f64::from(f32::EPSILON) { r.round() } else { r.floor() };
+        let snap = |r: f64| if (round(r) - r).abs() <= f64::from(f32::EPSILON) { round(r) } else { r.floor() };
         let (cx, cy) = (snap((left - t.x0) / sx), snap((top - t.y0) / sy));
         let mut w = along(right - left, sx);
         let mut h = along(top - bottom, sy);
@@ -294,7 +309,7 @@ impl Axis {
         }
         if scale < 1.0 {
             let reciprocal = 1.0 / scale;
-            let whole = (reciprocal + 0.5) as i64;
+            let whole = round(reciprocal) as i64;
             if (reciprocal - whole as f64).abs() < 0.05 {
                 scale = 1.0 / whole as f64;
             }
