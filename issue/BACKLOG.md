@@ -25,6 +25,12 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   Kotlin bindings (`PlatformModule`, `PxlCore`); the Rust side is checked for
   both targets, the bindings only by a device build, at the next one.
 
+- **Decor and the badges on the drawn chunks, seen running.** `4da038fc`
+  and `98e4f790` moved them onto the chunks the terrain draws; checked by
+  the tests and the build only. Zoom and pan on the dev stack: decor and
+  badges change with the ground under them, and no tree is lost or doubled
+  at a chunk's top or edge.
+
 ## P3
 
 - **What the sky left open.** Recorded 2026-09-22
