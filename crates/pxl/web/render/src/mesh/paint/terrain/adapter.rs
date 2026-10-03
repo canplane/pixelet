@@ -18,7 +18,7 @@ use pxl_spec::space::adapter::epsg3857::u_per_m;
 use pxl_spec::space::hierarchy::{ancestor_of, offset_in};
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, PAGE_CELLS};
 
-use crate::mesh::paint::palette::shader_meta::{ground_color_lookup, ground_layer_index_lookup};
+use crate::mesh::paint::palette::shader_meta::{rgb255, GROUND_LAYER_META};
 use crate::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
 use crate::mesh::volume::{pack_material, MaterialClasses, Volumes, Voxel, NO_LAYER};
 use crate::mesh::voxel_scan::{apron_col, APRON, COL_SPAN};
@@ -29,16 +29,17 @@ const TERRAIN_Z_MARGIN: i32 = 4;
 const COL_SPAN2: usize = (COL_SPAN * COL_SPAN) as usize;
 
 /// In `GROUND_CH_KEYS`' order, which is the paint order: a later non-void type wins.
-pub const CHANNELS: usize = 4;
+pub const CHANNELS: usize = GROUND_CH_KEYS.len();
 
 const VOID: u8 = 0;
 
+/// Flat arrays rather than a map: the per-cell decode was dominated by map
+/// lookups. `has` is separate because [0,0,0] and layer 0 are real.
 #[derive(Clone, Copy)]
 pub struct Channel {
     pub rgb: [[u8; 3]; 256],
-    pub has_color: [bool; 256],
     pub layer: [u8; 256],
-    pub has_layer: [bool; 256],
+    pub has: [bool; 256],
     pub class: u8,
 }
 
@@ -46,9 +47,8 @@ impl Default for Channel {
     fn default() -> Self {
         Channel {
             rgb: [[0; 3]; 256],
-            has_color: [false; 256],
             layer: [0; 256],
-            has_layer: [false; 256],
+            has: [false; 256],
             class: 0,
         }
     }
@@ -77,31 +77,27 @@ impl Materials {
     pub fn of(&self, ch: GroundChannelKey, t: u8) -> Option<(u32, u8)> {
         let c = &self.channels[ch_index(ch)];
         let t = t as usize;
-        c.has_color[t].then(|| (pack_material(c.class, c.rgb[t]), if c.has_layer[t] { c.layer[t] } else { NO_LAYER as u8 }))
+        c.has[t].then(|| (pack_material(c.class, c.rgb[t]), c.layer[t]))
     }
 
     fn of_palette() -> Materials {
-        let rgb_of = |ch, t: usize| ground_color_lookup(ch).filter(|c| c.has[t] != 0).map(|c| [c.rgb[t * 3], c.rgb[t * 3 + 1], c.rgb[t * 3 + 2]]);
-        let layer_of = |ch, t: usize| ground_layer_index_lookup(ch).filter(|l| l.has[t] != 0).map(|l| l.index[t]);
-        let base = BASE.type_id as usize;
-        let mut m = Materials {
-            channels: [Channel::default(); CHANNELS],
-            base_rgb: rgb_of(BASE.channel, base).unwrap_or([0; 3]),
-            base_layer: layer_of(BASE.channel, base).unwrap_or(NO_LAYER as u8),
-            base_class: class_of(BASE.channel),
-        };
-        for (dst, ch) in m.channels.iter_mut().zip(GROUND_CH_KEYS) {
+        let mut channels = [Channel::default(); CHANNELS];
+        for (dst, ch) in channels.iter_mut().zip(GROUND_CH_KEYS) {
             dst.class = class_of(ch);
-            for t in 0..256 {
-                if let Some(rgb) = rgb_of(ch, t) {
-                    (dst.rgb[t], dst.has_color[t]) = (rgb, true);
-                }
-                if let Some(layer) = layer_of(ch, t) {
-                    (dst.layer[t], dst.has_layer[t]) = (layer, true);
-                }
-            }
         }
-        m
+        for m in GROUND_LAYER_META.iter() {
+            let (dst, t) = (&mut channels[ch_index(m.ch_key)], m.type_id as usize);
+            (dst.rgb[t], dst.layer[t], dst.has[t]) = (rgb255(m.rgb), m.layer_index as u8, true);
+        }
+        let base = &channels[ch_index(BASE.channel)];
+        let t = BASE.type_id as usize;
+        let (base_rgb, base_layer) = if base.has[t] { (base.rgb[t], base.layer[t]) } else { ([0; 3], NO_LAYER as u8) };
+        Materials {
+            channels,
+            base_rgb,
+            base_layer,
+            base_class: class_of(BASE.channel),
+        }
     }
 }
 
