@@ -10,7 +10,7 @@ import { Panel } from "@platform/panel.tsx";
 import { PANEL_CONTENT_TOP, PANEL_CONTROL, PANEL_EDGE, PANEL_HEADER, PANEL_SECTION_GAP, PanelBody, PanelClose } from "@/shared/ui/panel.tsx";
 import { KEEPS_KEYBOARD } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
-import { alpha, chrome, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
 import { Command, DevicePoseStatus, encode_input_go_to } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, kernel_enable_location, kernel_snapshot, useKernel } from "@/kernel/shell.ts";
 import { LABEL, STATUS } from "@platform/palette.ts";
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
     ...sectionTitle,
     color: LABEL.secondary,
   },
-  row: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: PANEL_EDGE, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: hairline },
+  row: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: PANEL_EDGE, paddingVertical: 12 },
   rowText: { flex: 1, minWidth: 0, gap: 4 },
   name: { ...textStyle.body, color: LABEL.primary },
   subtitle: { flexDirection: "row", alignItems: "baseline", gap: 8 },
