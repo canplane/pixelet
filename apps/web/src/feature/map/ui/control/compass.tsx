@@ -20,6 +20,9 @@ const NEEDLE_HALF = 20;
 const NEEDLE_WIDTH = 10;
 const LIT = 0.75;
 const NEEDLE_ROUND = 2;
+/** How far toward south the halves' seam bends at the middle, so the two
+ * colors meet in a chevron, as a physical needle's bevel does. */
+const SEAM_BEND = 3;
 const TICK_TO = DIAL / 2 - 3;
 const TICK_FROM = TICK_TO - 2.5;
 const QUARTER_STROKE = 1.5;
@@ -34,12 +37,12 @@ const [QUARTERS, EIGHTHS] = [0, 1].map((odd) =>
 const BOX = `${-DIAL / 2} ${-DIAL / 2} ${DIAL} ${DIAL}`;
 
 /** One face of the needle; its mirror meets it with the same tangent, making one rounded end. */
-function face(end: f64, side: f64): string {
+function face(end: f64, side: f64, seam: f64): string {
   const ridge = end - Math.sign(end) * NEEDLE_ROUND;
   const turn = (side * NEEDLE_ROUND) / Math.abs(end);
   const edge = Math.hypot(side, end);
   const [x, y] = [turn + (side / edge) * Math.abs(turn), ridge - (end / edge) * Math.abs(turn)];
-  return `M0 0L${side} 0L${x} ${y}Q${turn} ${ridge} 0 ${ridge}Z`;
+  return `M0 ${seam}L${side} 0L${x} ${y}Q${turn} ${ridge} 0 ${ridge}Z`;
 }
 
 /** So a momentary turn past the threshold does not flash the button. */
@@ -88,10 +91,10 @@ export function MapCompass() {
           }
           <View style={[StyleSheet.absoluteFill, { transform: [{ rotate: `${turn}rad` }] }]}>
             <Svg width={DIAL} height={DIAL} viewBox={BOX}>
-              <Path d={face(-NEEDLE_HALF, -w)} fill={NORTH} fillOpacity={LIT} />
-              <Path d={face(-NEEDLE_HALF, w)} fill={NORTH} />
-              <Path d={face(NEEDLE_HALF, -w)} fill={LABEL.primary} fillOpacity={LIT} />
-              <Path d={face(NEEDLE_HALF, w)} fill={LABEL.primary} />
+              <Path d={face(-NEEDLE_HALF, -w, SEAM_BEND)} fill={NORTH} fillOpacity={LIT} />
+              <Path d={face(-NEEDLE_HALF, w, SEAM_BEND)} fill={NORTH} />
+              <Path d={face(NEEDLE_HALF, -w, SEAM_BEND)} fill={LABEL.primary} fillOpacity={LIT} />
+              <Path d={face(NEEDLE_HALF, w, SEAM_BEND)} fill={LABEL.primary} />
             </Svg>
           </View>
         </View>
