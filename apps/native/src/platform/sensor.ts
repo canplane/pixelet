@@ -74,12 +74,17 @@ function watchEnd(watch: Watch): void {
   watch.subscription = null;
 }
 
+/** A subscription that arrives after its stop is let go at once. */
+function watchKeep(watch: Watch, subscription: Location.LocationSubscription): void {
+  if (watch.stopped) subscription.remove();
+  else watch.subscription = subscription;
+}
+
 let geolocation: Watch | null = null;
 
 function geolocationFail(watch: Watch, code: GeolocationErrorCode): void {
   if (geolocation !== watch) return;
-  watchEnd(watch);
-  geolocation = null;
+  geolocationStop();
   kernel_position_error({ code });
 }
 
@@ -97,8 +102,7 @@ export function geolocationStart(): void {
       },
       () => geolocationFail(watch, GeolocationErrorCode.PositionUnavailable),
     );
-    if (watch.stopped) subscription.remove();
-    else watch.subscription = subscription;
+    watchKeep(watch, subscription);
   })().catch(() => geolocationFail(watch, GeolocationErrorCode.Other));
 }
 
@@ -112,8 +116,7 @@ let orientation: Watch | null = null;
 
 function orientationFail(watch: Watch, refused: boolean): void {
   if (orientation !== watch) return;
-  watchEnd(watch);
-  orientation = null;
+  orientationRemove();
   if (refused) kernel_permission({ sensor: Sensor.Orientation, answer: PermissionAnswer.Denied });
   else kernel_orientation_lost();
 }
@@ -134,8 +137,7 @@ export function orientationListen(): void {
         orientationFail(watch, false);
       },
     );
-    if (watch.stopped) subscription.remove();
-    else watch.subscription = subscription;
+    watchKeep(watch, subscription);
   })().catch((err) => {
     console.error("[sensor] heading:", err);
     orientationFail(watch, false);
