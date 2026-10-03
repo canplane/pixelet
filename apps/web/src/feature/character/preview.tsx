@@ -29,7 +29,7 @@ export function CharacterPreview(props: CharacterPreviewProps) {
       {
         // Hidden until drawn: the canvas still holds the last variant's frame.
       }
-      <View style={[styles.fill, !drawn && styles.hidden]}>
+      <View style={[StyleSheet.absoluteFill, !drawn && styles.hidden]}>
         <CaseSurface
           openKey={`${variant.group}:${variant.number}`}
           onOpen={(surface) => {
@@ -49,7 +49,6 @@ export function CharacterPreview(props: CharacterPreviewProps) {
 }
 
 const styles = StyleSheet.create({
-  fill: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0 },
   hidden: { opacity: 0 },
-  loading: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, alignItems: "center", justifyContent: "center", pointerEvents: "none" },
+  loading: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center", pointerEvents: "none" },
 });

@@ -10,8 +10,9 @@ import { Panel } from "@platform/panel.tsx";
 import { PANEL_CONTENT_TOP, PANEL_CONTROL, PANEL_EDGE, PANEL_SECTION_GAP, PanelBar, PanelBody } from "@/shared/ui/panel.tsx";
 import { KEEPS_KEYBOARD } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
-import { alpha, chrome, color, sectionTitle, textScale, textStyle, weight } from "@/shared/ui/theme.ts";
-import { Command, DevicePoseStatus, encode_input_go_to } from "@/kernel/abi/cmd.spec.ts";
+import { alpha, chrome, color, textScale, textStyle, weight } from "@/shared/ui/theme.ts";
+import { SectionTitle } from "@/shared/ui/section-title.tsx";
+import { Command, DevicePoseStatus, encode_input_go_to, type LonLat } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, kernel_enable_location, kernel_snapshot, useKernel } from "@/kernel/shell.ts";
 import { LABEL, STATUS } from "@platform/palette.ts";
 import { AboveKeyboard } from "@platform/above-keyboard.tsx";
@@ -25,11 +26,6 @@ import { useCenterCoordinates, usePlaceLabel } from "@/feature/map/geocode/cente
 import { fetchSearch, type SearchResult } from "@/feature/search/repository.ts";
 
 const DEBOUNCE_MS = 300;
-
-interface LonLat {
-  lon: f64;
-  lat: f64;
-}
 
 const EARTH_RADIUS_M = 6378137;
 const DEG_TO_RAD = Math.PI / 180;
@@ -117,7 +113,7 @@ function MapCenter() {
   if (coordinates === null) return null;
   return (
     <View>
-      <Text style={styles.sectionHeader}>{t("map.search.map_center")}</Text>
+      <SectionTitle style={styles.sectionHeader}>{t("map.search.map_center")}</SectionTitle>
       <View style={styles.center}>
         {place !== null && <Text numberOfLines={2} style={styles.name}>{place}</Text>}
         <Text style={[styles.small, styles.numbers]}>{coordinates}</Text>
@@ -170,10 +166,10 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Panel label={t("map.search.placeholder")} onClose={() => onClose()}>
+    <Panel label={t("map.search.placeholder")} onClose={onClose}>
       <PanelBody
         bar={
-          <PanelBar {...KEEPS_KEYBOARD} onClose={() => onClose()}>
+          <PanelBar {...KEEPS_KEYBOARD} onClose={onClose}>
             <Backing fill={color.faint} place={BackingPlace.OnSheet} style={styles.well}>
               <Glyph glyph="magnifyingglass" size={chrome.glyph} color={LABEL.secondary} />
               <TextField
@@ -209,7 +205,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
             if (rows.length === 0) return null;
             return (
               <View key={kind}>
-                <Text style={styles.sectionHeader}>{t(label)}</Text>
+                <SectionTitle style={styles.sectionHeader}>{t(label)}</SectionTitle>
                 {rows.map((r) => <ResultRow key={r.gers_id} result={r} lang={lang} distance={distanceOf(r)} onPress={() => select(r)} />)}
               </View>
             );
@@ -250,12 +246,7 @@ const styles = StyleSheet.create({
   clear: { width: CLEAR, height: CLEAR, borderRadius: CLEAR / 2, alignItems: "center", justifyContent: "center", backgroundColor: LABEL.tertiary },
   results: { flex: 1 },
   empty: { paddingHorizontal: PANEL_EDGE, ...textStyle.footnote, color: LABEL.secondary },
-  sectionHeader: {
-    paddingHorizontal: PANEL_EDGE,
-    paddingBottom: 8,
-    ...sectionTitle,
-    color: LABEL.secondary,
-  },
+  sectionHeader: { paddingHorizontal: PANEL_EDGE, paddingBottom: 8 },
   row: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: PANEL_EDGE, paddingVertical: 12 },
   rowText: { flex: 1, minWidth: 0, gap: 4 },
   name: { ...textStyle.body, color: LABEL.primary },

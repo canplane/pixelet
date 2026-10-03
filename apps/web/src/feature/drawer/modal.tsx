@@ -14,7 +14,8 @@ import { Panel } from "@platform/panel.tsx";
 import { Glyph } from "@/shared/ui/glyph.tsx";
 import { PanelBar, PanelBody, PanelScroll } from "@/shared/ui/panel.tsx";
 import { Segmented } from "@platform/segmented.tsx";
-import { chrome, color, hairline, sectionTitle, textStyle } from "@/shared/ui/theme.ts";
+import { chrome, color, hairline, textStyle } from "@/shared/ui/theme.ts";
+import { SectionTitle } from "@/shared/ui/section-title.tsx";
 import { CharacterPicker } from "@/feature/character/picker.tsx";
 import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/catalog/cell/swatch.tsx";
 import { LABEL } from "@platform/palette.ts";
@@ -47,7 +48,7 @@ function SectionHead({ title, held }: { title?: string; held: string | null }) {
   if (title === undefined && held === null) return null;
   return (
     <View style={styles.sectionHead}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+      <SectionTitle>{title}</SectionTitle>
       {held !== null && <Text numberOfLines={1} style={styles.held}>{held}</Text>}
     </View>
   );
@@ -121,16 +122,14 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
         }
       >
         <PanelScroll key={tab}>
-          {tab === DrawerTab.Cube && [...SECTIONS].map(([section, cubes]) => {
-            return (
-              <View key={section} style={styles.section}>
-                <SectionHead title={t(`drawer.sections.${section}`)} held={section === heldSection ? cubeLabel(t, held) : null} />
-                <View style={styles.grid}>
-                  {cubes.map((cube) => <CubeSwatchButton key={placeableCubeId(cube)} cube={cube} onPick={pickCube} />)}
-                </View>
+          {tab === DrawerTab.Cube && [...SECTIONS].map(([section, cubes]) => (
+            <View key={section} style={styles.section}>
+              <SectionHead title={t(`drawer.sections.${section}`)} held={section === heldSection ? cubeLabel(t, held) : null} />
+              <View style={styles.grid}>
+                {cubes.map((cube) => <CubeSwatchButton key={placeableCubeId(cube)} cube={cube} onPick={pickCube} />)}
               </View>
-            );
-          })}
+            </View>
+          ))}
 
           {tab === DrawerTab.Decor && (
             <View style={styles.section}>
@@ -151,7 +150,6 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
 const styles = StyleSheet.create({
   section: { gap: 8 },
   sectionHead: { flexDirection: "row", alignItems: "baseline", gap: 8 },
-  sectionTitle: { ...sectionTitle, color: LABEL.secondary },
   held: { flex: 1, textAlign: "right", ...textStyle.caption, color: LABEL.primary },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: GRID_GAP },
   cell: { width: chrome.target, height: chrome.target, alignItems: "center", justifyContent: "center" },

@@ -8,7 +8,8 @@ import { ToggleRow } from "@platform/toggle-row.tsx";
 
 import type { SettingCost } from "@/feature/setting/schema.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
-import { alpha, chrome, color, hairline, sectionTitle, textScale, textStyle, weight } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color, hairline, textScale, textStyle, weight } from "@/shared/ui/theme.ts";
+import { SectionTitle } from "@/shared/ui/section-title.tsx";
 import { LABEL } from "@platform/palette.ts";
 
 const INSET = 12;
@@ -131,7 +132,7 @@ export function Section(props: SectionProps) {
       <View style={styles.titleBlock}>
         <View style={styles.titleLine}>
           {icon && <Glyph glyph={icon} size={16} color={LABEL.secondary} />}
-          <Text accessibilityRole="header" style={styles.title}>{title}</Text>
+          <SectionTitle>{title}</SectionTitle>
         </View>
         {caption && <Text style={settingText.faint}>{caption}</Text>}
       </View>
@@ -179,5 +180,4 @@ const styles = StyleSheet.create({
   link: { textDecorationLine: "underline" },
   titleBlock: { gap: 4, marginBottom: 4 },
   titleLine: { flexDirection: "row", alignItems: "center", gap: 8 },
-  title: { ...sectionTitle, color: LABEL.secondary },
 });

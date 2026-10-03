@@ -15,7 +15,8 @@ import { useSafeArea } from "@platform/safe-area.ts";
 import { useWindowSize } from "@platform/viewport.ts";
 import { ease, SLIDE, SLIDE_AWAY } from "@/shared/ui/motion/transition.ts";
 import { PANEL_HEAD_HEIGHT, PANEL_TOP, PanelPresence, type PanelProps, SHEET_RADIUS } from "@/shared/ui/panel.tsx";
-import { alpha, chrome, color } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color, layer } from "@/shared/ui/theme.ts";
+import { touches } from "@/shared/ui/touch.ts";
 import { LABEL } from "@platform/palette.ts";
 
 const MAX_WIDTH = 540;
@@ -51,8 +52,9 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
     { height: fullHeight, settle: () => detent(true) },
   ];
 
-  const live = useRef({ top: window.height - shown, center: window.width / 2, shown, full, half, stops });
-  live.current = { top: window.height - shown, center: window.width / 2, shown, full, half, stops };
+  const now = { top: window.height - shown, center: window.width / 2, shown, full, half, stops };
+  const live = useRef(now);
+  live.current = now;
 
   const responder = useRef(
     PanResponder.create({
@@ -87,7 +89,7 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
   const away = { translateY: fullHeight + 16 };
 
   return (
-    <View style={[styles.layer, open ? styles.pass : styles.block]}>
+    <View style={[styles.layer, open ? touches.pass : touches.block]}>
       <Motion from={{ opacity: 0 }} to={{ opacity: open ? 1 : 0 }} transition={open ? SLIDE : SLIDE_AWAY} style={StyleSheet.absoluteFill}>
         <Pressable accessible={false} onPress={onClose} style={styles.dim} />
       </Motion>
@@ -108,11 +110,8 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
 }
 
 const styles = StyleSheet.create({
-  layer: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, zIndex: 70 },
+  layer: { ...StyleSheet.absoluteFill, zIndex: layer.sheet },
   body: { width: "100%" },
-  // From the sheet, not inline: RN-web draws an inline `box-none` as `none`.
-  pass: { pointerEvents: "box-none" },
-  block: { pointerEvents: "none" },
   dim: { flex: 1, backgroundColor: alpha(color.black, 0.2) },
   sheet: {
     position: "absolute",

@@ -4,8 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Defs, LinearGradient, Mask, Rect, Stop, Svg } from "react-native-svg";
 
-import { useSafeArea } from "@platform/safe-area.ts";
-import { useViewportTop, useWindowSize } from "@platform/viewport.ts";
+import { useWindowSize } from "@platform/viewport.ts";
 import { openModal } from "@/app/modal.tsx";
 import { useKernel } from "@/kernel/shell.ts";
 import { Motion } from "@platform/motion.tsx";
@@ -13,18 +12,19 @@ import { Presence } from "@/shared/ui/motion/presence.tsx";
 import { LEAVE, SETTLE, SNAP } from "@/shared/ui/motion/transition.ts";
 import { useVeil } from "@/shared/ui/motion/veil.ts";
 import { haloGap, HaloIcon } from "@/shared/ui/halo.tsx";
-import { chrome, color } from "@/shared/ui/theme.ts";
+import { chrome, color, layer } from "@/shared/ui/theme.ts";
 import { CurrentAddress } from "./current-address.tsx";
 import { SensorStatus } from "./sensor-status.tsx";
 import { DummyChatText } from "./dummy-chat-text.tsx";
 import { MapScaleBar } from "../control/scale-bar.tsx";
-import { LocationButtons } from "@/feature/map/ui/control/location-buttons.tsx";
-import { ViewButtons } from "@/feature/map/ui/control/view-buttons.tsx";
-import { BusyDim } from "@/feature/map/ui/busy-dim.tsx";
+import { LocationButtons } from "../control/location-buttons.tsx";
+import { ViewButtons } from "../control/view-buttons.tsx";
+import { BusyDim } from "../busy-dim.tsx";
+import { useChromeTop } from "../chrome.ts";
 import { SettingsTriggerButton } from "@/feature/setting/trigger-button.tsx";
 
 export function TopOverlays() {
-  const top = chrome.inset + useSafeArea().top + useViewportTop();
+  const top = useChromeTop();
 
   const { width } = useWindowSize();
   const scrimDepth = top + chrome.control + SCRIM_TAIL;
@@ -106,19 +106,19 @@ const SCRIM_EASE = Array.from({ length: 9 }, (_, i) => {
 });
 
 const styles = StyleSheet.create({
-  scrim: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 49, pointerEvents: "none" },
-  left: { position: "absolute", left: chrome.inset, zIndex: 50, alignItems: "flex-start", gap: 12 },
+  scrim: { position: "absolute", top: 0, left: 0, right: 0, zIndex: layer.scrim, pointerEvents: "none" },
+  left: { position: "absolute", left: chrome.inset, zIndex: layer.chrome, alignItems: "flex-start", gap: 12 },
   center: {
     position: "absolute",
     left: 0,
     right: 0,
     paddingHorizontal: chrome.inset + chrome.control + chrome.controlGap,
     minHeight: chrome.control,
-    zIndex: 50,
+    zIndex: layer.chrome,
     alignItems: "center",
     justifyContent: "center",
   },
-  right: { position: "absolute", right: chrome.inset, zIndex: 50, alignItems: "center", gap: chrome.controlGap },
+  right: { position: "absolute", right: chrome.inset, zIndex: layer.chrome, alignItems: "center", gap: chrome.controlGap },
   fill: { alignSelf: "stretch", flex: 1 },
   // The whole strip, scale shown or not.
   strip: { flex: 1, alignItems: "center", justifyContent: "center" },
@@ -126,5 +126,5 @@ const styles = StyleSheet.create({
   title: { alignItems: "center", gap: haloGap(8) },
   // Bounded: a page lays a no-wrap row at content width, and the address overran the buttons.
   search: { flexDirection: "row", alignItems: "center", gap: haloGap(8), minWidth: 0, maxWidth: "100%", flexShrink: 1 },
-  scale: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, alignItems: "center", justifyContent: "center", pointerEvents: "none" },
+  scale: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center", pointerEvents: "none" },
 });

@@ -86,9 +86,10 @@ function drive(canvas: HTMLCanvasElement): () => void {
   const onMove = pointer(PointerPhase.Move);
   const onUp = pointer(PointerPhase.Up);
   const onLeave = pointer(PointerPhase.Out);
+  const down = pointer(PointerPhase.Down);
   const onDown = (e: PointerEvent) => {
     sendRect();
-    kernel_pointer(PointerPhase.Down, pointerKind(e), e.pointerId, e.button, e.clientX, e.clientY);
+    down(e);
   };
   const onWheel = (e: WheelEvent) => {
     if (e.ctrlKey) e.preventDefault();

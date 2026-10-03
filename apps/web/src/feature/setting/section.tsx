@@ -58,8 +58,9 @@ function SettingControl(props: { name: SettingName }) {
     case "choice":
       return (
         <SettingGroup label={t(`${base}.label`)} description={i18n.exists(`${base}.description`) ? t(`${base}.description`) : undefined} cost={cost} dev={dev}>
-          {setting.options.map((option, i) =>
-            (__IS_DEV__ || !devOption(setting, option)) && (
+          {setting.options.map((option, i) => {
+            const devOnly = devOption(setting, option);
+            return (__IS_DEV__ || !devOnly) && (
               <SettingChoiceRow
                 key={option}
                 label={t(`${base}.${option}.label`)}
@@ -67,10 +68,10 @@ function SettingControl(props: { name: SettingName }) {
                 selected={value === i}
                 onSelect={() => kernel_setting(key, i)}
                 cost={("costs" in setting ? setting.costs[i] : "") || cost}
-                dev={devOption(setting, option)}
+                dev={devOnly}
               />
-            )
-          )}
+            );
+          })}
         </SettingGroup>
       );
     case "index":

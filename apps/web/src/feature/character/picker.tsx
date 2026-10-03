@@ -1,10 +1,11 @@
 // @pxl/web/feature/character/picker.tsx
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { alpha, chrome, color, hairline, sectionTitle, textScale, textStyle, weight } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color, hairline, textScale, textStyle, weight } from "@/shared/ui/theme.ts";
+import { SectionTitle } from "@/shared/ui/section-title.tsx";
 import { CharacterPreview } from "@/feature/character/preview.tsx";
 import { kernel_setting, useKernel } from "@/kernel/shell.ts";
 import { SETTINGS } from "@/feature/setting/schema.ts";
@@ -35,6 +36,19 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
   );
 }
 
+/** A preview of the one picked beside the chips that pick it. */
+function PickerCard({ label, selected, children }: { label: string; selected: CharacterVariant; children: ReactNode }) {
+  return (
+    <View style={styles.picker}>
+      <SectionTitle>{label}</SectionTitle>
+      <View style={styles.pickerRow}>
+        <CharacterPreview variant={selected} style={styles.preview} />
+        <View style={styles.chipColumn}>{children}</View>
+      </View>
+    </View>
+  );
+}
+
 interface PersonPickerProps {
   gender: Gender;
   onGenderChange: (gender: Gender) => void;
@@ -49,21 +63,15 @@ function PersonPicker(props: PersonPickerProps) {
   const variants = personVariantsOf(gender);
 
   return (
-    <View style={styles.picker}>
-      <Text style={styles.pickerLabel}>{t("drawer.character.person_label")}</Text>
-      <View style={styles.pickerRow}>
-        <CharacterPreview variant={selected} style={styles.preview} />
-        <View style={styles.chipColumn}>
-          <View style={styles.chips}>
-            {GENDERS.map((g) => <Chip key={g} label={t(`drawer.character.${g}_label`)} active={gender === g} onPress={() => onGenderChange(g)} />)}
-          </View>
-          <View style={styles.rule} />
-          <View style={styles.chips}>
-            {variants.map((v, i) => <Chip key={v.key} label={`${i + 1}`} active={v.number === selected.number} onPress={() => onSelect(v)} />)}
-          </View>
-        </View>
+    <PickerCard label={t("drawer.character.person_label")} selected={selected}>
+      <View style={styles.chips}>
+        {GENDERS.map((g) => <Chip key={g} label={t(`drawer.character.${g}_label`)} active={gender === g} onPress={() => onGenderChange(g)} />)}
       </View>
-    </View>
+      <View style={styles.rule} />
+      <View style={styles.chips}>
+        {variants.map((v, i) => <Chip key={v.key} label={`${i + 1}`} active={v.number === selected.number} onPress={() => onSelect(v)} />)}
+      </View>
+    </PickerCard>
   );
 }
 
@@ -77,17 +85,11 @@ function PetPicker(props: PetPickerProps) {
   const { t } = useTranslation();
 
   return (
-    <View style={styles.picker}>
-      <Text style={styles.pickerLabel}>{t("drawer.character.pet_label")}</Text>
-      <View style={styles.pickerRow}>
-        <CharacterPreview variant={selected} style={styles.preview} />
-        <View style={styles.chipColumn}>
-          <View style={styles.chips}>
-            {PET_VARIANTS.map((v) => <Chip key={v.key} label={t(`drawer.character.pets.${v.key}`)} active={v.number === selected.number} onPress={() => onSelect(v)} />)}
-          </View>
-        </View>
+    <PickerCard label={t("drawer.character.pet_label")} selected={selected}>
+      <View style={styles.chips}>
+        {PET_VARIANTS.map((v) => <Chip key={v.key} label={t(`drawer.character.pets.${v.key}`)} active={v.number === selected.number} onPress={() => onSelect(v)} />)}
       </View>
-    </View>
+    </PickerCard>
   );
 }
 
@@ -110,7 +112,6 @@ export function CharacterPicker() {
 const styles = StyleSheet.create({
   pickers: { gap: PANEL_SECTION_GAP },
   picker: { gap: 8 },
-  pickerLabel: { ...sectionTitle, color: LABEL.secondary },
   pickerRow: { flexDirection: "row", alignItems: "flex-start", gap: PANEL_EDGE },
   preview: { width: PREVIEW, height: PREVIEW, flexShrink: 0, borderRadius: 12, overflow: "hidden", backgroundColor: alpha(color.fill, 0.4) },
   chipColumn: { flexShrink: 1, minWidth: 0, gap: CHIP_GAP_Y / 2, marginHorizontal: -CHIP_GAP_X / 2, marginVertical: -CHIP_GAP_Y / 2 },
@@ -121,6 +122,6 @@ const styles = StyleSheet.create({
   chipText: { ...textStyle.footnote, fontWeight: weight.medium, color: LABEL.primary },
   chipTextOn: { fontWeight: weight.semibold, color: color.ground },
   sizer: { opacity: 0 },
-  label: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, justifyContent: "center" },
+  label: { ...StyleSheet.absoluteFill, justifyContent: "center" },
   centered: { textAlign: "center" },
 });

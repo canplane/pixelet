@@ -2,6 +2,7 @@
 
 import { useSafeArea } from "@platform/safe-area.ts";
 import { type AboveKeyboardProps, bottomRest } from "@/shared/ui/bottom-rest.ts";
+import { layer } from "@/shared/ui/theme.ts";
 
 /**
  * A bottom layer standing `inset` above the keyboard via `--vv-bottom`, a CSS
@@ -17,7 +18,7 @@ export function AboveKeyboard({ inset, lift = 0, children }: AboveKeyboardProps)
         left: inset,
         right: inset,
         bottom: `calc(max(${rest}px, ${inset}px + var(--vv-bottom, 0px)) + ${lift}px)`,
-        zIndex: 40,
+        zIndex: layer.bottom,
         transition: "bottom 150ms ease-out",
         pointerEvents: "none",
       }}

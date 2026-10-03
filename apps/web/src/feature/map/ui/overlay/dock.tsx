@@ -19,6 +19,7 @@ import { Presence } from "@/shared/ui/motion/presence.tsx";
 import { FADE, SETTLE, SNAP } from "@/shared/ui/motion/transition.ts";
 import { keepKeyboard } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
+import { touches } from "@/shared/ui/touch.ts";
 import { alpha, chrome, color, material, shadow } from "@/shared/ui/theme.ts";
 import { openModal } from "@/app/modal.tsx";
 import { holdTier, holdTool, useInHand, useUiStore } from "@/app/store/ui.ts";
@@ -28,7 +29,6 @@ import { type PlaceableCube, placeableCubeId } from "@/catalog/cell/mod.ts";
 import { OBJECT_TIERS } from "@/config/object.spec.ts";
 import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/catalog/cell/swatch.tsx";
 
-const SEND_FROM_SCALE = 0.5;
 const PEEK_PX = 10;
 
 /** The dock stands tall enough for the card behind to peek out under the front one. */
@@ -38,14 +38,12 @@ export const DOCK_HEIGHT = chrome.control + PEEK_PX;
 const BAR_TOUCH = {};
 
 const ITEM = 24;
-const ITEM_GLYPH = 16;
 
 /** Above the card, where the sizes and their seed stand. */
 const FLYOUT_LIFT_PX = 6;
 const FLYOUT_GAP_PX = 8;
 const FLYOUT_PAD_Y = 8;
 const FLYOUT_WIDTH = chrome.target + 12;
-const FLYOUT_FOOT = chrome.control + FLYOUT_LIFT_PX;
 const FLYOUT_HOLD_MS = 300;
 const FLYOUT_PITCH = chrome.target + FLYOUT_GAP_PX;
 /** A move this far before the hold is a drag: the strip's sideways, the deck's up and down. */
@@ -82,17 +80,18 @@ const enum Sizes {
 /** The seed of the sizes, at their foot. */
 const SEED = 10;
 
+/** In the bar's frame, whose top is the card's; `bar` is where the bar is on the page. */
 interface Flyout {
-  left: f64;
   centerX: f64;
-  foot: f64;
+  bar: [f64, f64];
   hover: u32 | null;
   sizes: Sizes;
 }
 
+/** `x` and `y` on the page. */
 function tierAt(at: Flyout, x: f64, y: f64): u32 | null {
-  if (Math.abs(x - at.centerX) > FLYOUT_WIDTH / 2) return null;
-  const top = at.foot - (2 * FLYOUT_PAD_Y + OBJECT_TIERS * FLYOUT_PITCH - FLYOUT_GAP_PX);
+  if (Math.abs(x - at.bar[0] - at.centerX) > FLYOUT_WIDTH / 2) return null;
+  const top = at.bar[1] - FLYOUT_LIFT_PX - (2 * FLYOUT_PAD_Y + OBJECT_TIERS * FLYOUT_PITCH - FLYOUT_GAP_PX);
   const along = y - top - FLYOUT_PAD_Y;
   if (along < 0) return null;
   const row = Math.floor(along / FLYOUT_PITCH);
@@ -218,7 +217,7 @@ function DecorIconButton({ kind }: { kind: u8 }) {
     <Pressable onPress={() => selectDecor(kind)} accessibilityRole="button" accessibilityLabel={decorLabel(t, kind)} style={styles.slot}>
       <Motion to={{ scale: active ? 1.1 : 1 }} transition={SNAP}>
         <View style={[styles.decorDisc, active ? styles.swatchSelected : styles.swatchIdle]}>
-          <Glyph glyph={decorGlyph(kind)} size={ITEM_GLYPH} color={active ? STRIP.glyphOn : STRIP.glyph} />
+          <Glyph glyph={decorGlyph(kind)} size={16} color={active ? STRIP.glyphOn : STRIP.glyph} />
         </View>
       </Motion>
     </Pressable>
@@ -289,7 +288,7 @@ export function Dock() {
       swatch.measureInWindow((sx, _sy, sw) => {
         bar.current?.measureInWindow((bx, by) => {
           if (!pressing.current) return;
-          setFlyout({ left: sx + sw / 2 - bx, centerX: sx + sw / 2, foot: by + chrome.control - FLYOUT_FOOT, hover: null, sizes: Sizes.Seed });
+          setFlyout({ centerX: sx + sw / 2 - bx, bar: [bx, by], hover: null, sizes: Sizes.Seed });
         });
       });
     },
@@ -315,7 +314,7 @@ export function Dock() {
   const x = PixelRatio.roundToNearestPixel((barWidth - width) / 2);
   const canSend = messageText.trim() !== "";
 
-  const card = (pane: Pane, fill: string, tint: string | undefined, content: React.ReactNode, onContentWidth?: (w: f64) => void) => {
+  const card = (pane: Pane, fill: string, content: React.ReactNode, { tint, onContentWidth }: { tint?: string; onContentWidth?: (w: f64) => void } = {}) => {
     const depth = deckDepth(pane, rotation, PANES.length);
     const pose = cardPose(depth, PEEK_PX);
     const fromAbove = depth === 0 && turnedBack;
@@ -326,7 +325,7 @@ export function Dock() {
         replay={fromAbove ? rotation : null}
         to={pose.rest}
         transition={SETTLE}
-        style={[styles.card, depth === 0 ? styles.pass : styles.block, { zIndex: pose.zIndex }]}
+        style={[styles.card, depth === 0 ? touches.pass : touches.block, { zIndex: pose.zIndex }]}
       >
         <Pill
           x={x}
@@ -356,7 +355,6 @@ export function Dock() {
           {card(
             Pane.Message,
             color.ground,
-            undefined,
             <View style={[styles.message, { width }]}>
               <View style={styles.messageIcon}>
                 <Glyph glyph="bubble.left" size={chrome.glyph} color={LABEL.primary} />
@@ -372,7 +370,7 @@ export function Dock() {
                   style={styles.messageInput}
                 />
               </Motion>
-              <Presence show={canSend} from={{ opacity: 0, scale: SEND_FROM_SCALE }} exit={{ opacity: 0 }} transition={SNAP} style={styles.slot}>
+              <Presence show={canSend} from={{ opacity: 0, scale: 0.5 }} exit={{ opacity: 0 }} transition={SNAP} style={styles.slot}>
                 <Pressable
                   onPress={sendMessage}
                   disabled={isSending}
@@ -388,7 +386,6 @@ export function Dock() {
 
           {card(
             Pane.Palette,
-            STRIP.ground,
             STRIP.ground,
             <View style={[styles.strip, { maxWidth: barWidth }]}>
               <View style={styles.group}>
@@ -416,11 +413,11 @@ export function Dock() {
                 <ToolButton label={t("map.dock.drawer_tooltip")} glyph="square.grid.2x2" onPress={() => openModal("drawer")} />
               </View>
             </View>,
-            setStripWidth,
+            { tint: STRIP.ground, onContentWidth: setStripWidth },
           )}
 
           {shownFlyout && (
-            <View style={[styles.flyoutAt, shownFlyout.sizes === Sizes.Open ? styles.flyoutTakes : styles.block, { left: shownFlyout.left - FLYOUT_WIDTH / 2 }]}>
+            <View style={[styles.flyoutAt, shownFlyout.sizes === Sizes.Open ? styles.flyoutTakes : touches.block, { left: shownFlyout.centerX - FLYOUT_WIDTH / 2 }]}>
               {shownFlyout.sizes === Sizes.Open
                 ? <SizeFlyout hover={shownFlyout.hover} />
                 : <Backing fill={STRIP.ground} material={material.flyout} place={BackingPlace.OverMap} style={styles.seed} />}
@@ -431,8 +428,6 @@ export function Dock() {
     </View>
   );
 }
-
-const PILL = { height: chrome.control, borderRadius: chrome.control / 2 };
 
 const STRIP = {
   glyph: alpha(color.white, 0.6),
@@ -448,9 +443,6 @@ const styles = StyleSheet.create({
   bar: { height: DOCK_HEIGHT, width: "100%", minWidth: 0, pointerEvents: "box-none" },
 
   card: { position: "absolute", left: 0, top: 0, right: 0, height: chrome.control, transformOrigin: "center bottom" },
-  // An inline `box-none` is drawn as a `none` the card's controls inherit.
-  pass: { pointerEvents: "box-none" },
-  block: { pointerEvents: "none" },
 
   message: { flexDirection: "row", alignItems: "center", height: chrome.control, paddingRight: (chrome.control - chrome.target) / 2 },
   messageIcon: { width: chrome.control, height: chrome.control, alignItems: "center", justifyContent: "center" },
@@ -459,7 +451,7 @@ const styles = StyleSheet.create({
   send: { width: chrome.selection, height: chrome.selection, borderRadius: chrome.selection / 2, alignItems: "center", justifyContent: "center", backgroundColor: color.send },
   sendPressed: { opacity: 0.7 },
 
-  strip: { ...PILL, flexDirection: "row", alignItems: "center" },
+  strip: { height: chrome.control, borderRadius: chrome.control / 2, flexDirection: "row", alignItems: "center" },
   group: { flexDirection: "row", alignItems: "center", padding: (chrome.control - chrome.target) / 2, flexShrink: 0 },
   divider: { width: 1, height: 28, backgroundColor: STRIP.line, flexShrink: 0 },
   picks: { flexShrink: 1, minWidth: 0 },
@@ -476,7 +468,7 @@ const styles = StyleSheet.create({
 
   flyoutAt: {
     position: "absolute",
-    bottom: PEEK_PX + FLYOUT_FOOT,
+    bottom: DOCK_HEIGHT + FLYOUT_LIFT_PX,
     width: FLYOUT_WIDTH,
     zIndex: 10,
   },
