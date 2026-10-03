@@ -184,7 +184,7 @@
   "decor": {
     "tree": "Tree"
   },
-  "drawer_modal": {
+  "drawer": {
     "title": "Drawer",
     "description": "Browse all available block colors, decor, and characters.",
     "close": "Close",

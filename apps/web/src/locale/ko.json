@@ -184,7 +184,7 @@
   "decor": {
     "tree": "나무"
   },
-  "drawer_modal": {
+  "drawer": {
     "title": "서랍",
     "description": "놓을 수 있는 모든 블록과 데코, 캐릭터를 둘러봅니다.",
     "close": "닫기",

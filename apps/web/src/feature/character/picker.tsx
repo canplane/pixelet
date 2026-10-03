@@ -49,12 +49,12 @@ function PersonPicker(props: PersonPickerProps) {
 
   return (
     <View style={styles.picker}>
-      <Text style={styles.pickerLabel}>{t("drawer_modal.character.person_label")}</Text>
+      <Text style={styles.pickerLabel}>{t("drawer.character.person_label")}</Text>
       <View style={styles.pickerRow}>
         <CharacterPreview variant={selected} style={styles.preview} />
         <View style={styles.chipColumn}>
           <View style={styles.chips}>
-            {GENDERS.map((g) => <Chip key={g} label={t(`drawer_modal.character.${g}_label`)} active={gender === g} onPress={() => onGenderChange(g)} />)}
+            {GENDERS.map((g) => <Chip key={g} label={t(`drawer.character.${g}_label`)} active={gender === g} onPress={() => onGenderChange(g)} />)}
           </View>
           <View style={styles.rule} />
           <View style={styles.chips}>
@@ -78,12 +78,12 @@ function PetPicker(props: PetPickerProps) {
 
   return (
     <View style={styles.picker}>
-      <Text style={styles.pickerLabel}>{t("drawer_modal.character.pet_label")}</Text>
+      <Text style={styles.pickerLabel}>{t("drawer.character.pet_label")}</Text>
       <View style={styles.pickerRow}>
         <CharacterPreview variant={selected} style={styles.preview} />
         <View style={styles.chipColumn}>
           <View style={styles.chips}>
-            {PET_VARIANTS.map((v) => <Chip key={v.key} label={t(`drawer_modal.character.pets.${v.key}`)} active={v.key === selectedKey} onPress={() => onSelect(v.key)} />)}
+            {PET_VARIANTS.map((v) => <Chip key={v.key} label={t(`drawer.character.pets.${v.key}`)} active={v.key === selectedKey} onPress={() => onSelect(v.key)} />)}
           </View>
         </View>
       </View>

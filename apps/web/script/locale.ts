@@ -35,8 +35,8 @@ const channels = [...new Set(placeableCubes.map(placeableCubeChannel))];
 for (const locale of LOCALES) {
   const doc: Catalog = JSON.parse(await Deno.readTextFile(join(web, `src/locale/${locale}.json`)));
   branch(locale, doc, "cubes", cubeIds);
-  branch(locale, doc, "decors", decorKinds.map(decorName));
-  const sections = doc["drawer_modal"];
+  branch(locale, doc, "decor", decorKinds.map(decorName));
+  const sections = doc["drawer"];
   branch(locale, typeof sections === "object" ? sections : {}, "sections", channels);
 }
 

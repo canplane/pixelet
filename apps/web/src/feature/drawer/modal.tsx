@@ -108,17 +108,17 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Panel label={t("drawer_modal.title")} onClose={onClose} half>
+    <Panel label={t("drawer.title")} onClose={onClose} half>
       <PanelBody
-        header={<PanelHeader title={t("drawer_modal.title")} closeLabel={t("drawer_modal.close")} onClose={onClose} />}
+        header={<PanelHeader title={t("drawer.title")} closeLabel={t("drawer.close")} onClose={onClose} />}
         tabs={
           <Segmented
             value={tab}
             onChange={setTab}
             segments={[
-              { value: DrawerTab.Cube, label: t("drawer_modal.tabs.cube") },
-              { value: DrawerTab.Decor, label: t("drawer_modal.tabs.decor") },
-              { value: DrawerTab.Character, label: t("drawer_modal.tabs.character") },
+              { value: DrawerTab.Cube, label: t("drawer.tabs.cube") },
+              { value: DrawerTab.Decor, label: t("drawer.tabs.decor") },
+              { value: DrawerTab.Character, label: t("drawer.tabs.character") },
             ]}
           />
         }
@@ -129,7 +129,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
             if (!cubes) return null;
             return (
               <View key={section} style={styles.section}>
-                <SectionHead title={t(`drawer_modal.sections.${section}`)} held={section === heldSection ? cubeLabel(t, heldCube) : null} />
+                <SectionHead title={t(`drawer.sections.${section}`)} held={section === heldSection ? cubeLabel(t, heldCube) : null} />
                 <View style={styles.grid}>
                   {cubes.map((cube) => <CubeSwatchButton key={placeableCubeId(cube)} cube={cube} onPick={pickCube} />)}
                 </View>
