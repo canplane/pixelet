@@ -60,13 +60,13 @@ struct Need {
     under: Under,
 }
 
-pub fn solve(client: &mut Client, url: &str, within: Option<[f64; 4]>, log: impl Fn(&str)) -> Result<(), postgres::Error> {
+pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<(), postgres::Error> {
     // two would drop each other's staging tables
     client.execute("SELECT pg_advisory_lock(hashtext('pxl-geo-bake deck solve'))", &[])?;
-    let rows = source::flagged_rows(client, "is_bridge", within)?;
+    let rows = source::flagged_rows(client, "is_bridge")?;
     let mut decks: Vec<Piece> = rows.iter().flat_map(|r| pieces_of(r, Form::Deck)).collect();
     drop(rows);
-    let rows = source::flagged_rows(client, "is_tunnel", within)?;
+    let rows = source::flagged_rows(client, "is_tunnel")?;
     let mut bores: Vec<Piece> = rows.iter().flat_map(|r| pieces_of(r, Form::Bore)).collect();
     drop(rows);
     log(&format!("{} deck pieces, {} bore pieces", decks.len(), bores.len()));
@@ -139,7 +139,7 @@ pub fn solve(client: &mut Client, url: &str, within: Option<[f64; 4]>, log: impl
 
     let mut out = deck_side.out(&deck_ground, &deck_tops, 1.0);
     out.extend(bore_side.out(&bore_ground, &bore_tops, -1.0));
-    source::write(client, &out, within)?;
+    source::write(client, &out)?;
     let unpinned = bore_tops.iter().filter(|t| t.is_none()).count();
     let count = |f: Form| out.iter().filter(|d| d.piece.form == f).count();
     log(&format!(
