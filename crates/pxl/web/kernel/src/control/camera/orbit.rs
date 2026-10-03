@@ -169,7 +169,7 @@ pub(crate) fn put(at: Pvf3, snap: bool) {
     if snap {
         let (o, cam) = (orbit(), camera());
         let local = target(&mut o.to, center_local().unwrap_or_default(), view().origin);
-        let e = orbit_eye_offset(o.dist, cam.pitch, cam.yaw);
+        let e = orbit_eye_offset(o.dist, cam.polar, cam.azimuth);
         set_eye_local(&std::array::from_fn(|k| local[k] + e[k]));
     }
 }
@@ -179,7 +179,7 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
     let drawn_center = center_local()?;
     let vs = camera_store().intent;
     let (o, cam) = (orbit(), camera());
-    let was = (drawn_center, o.dist, cam.pitch, cam.yaw);
+    let was = (drawn_center, o.dist, cam.polar, cam.azimuth);
 
     let to = target(&mut o.to, drawn_center, view().origin);
     let (center, mut moving) = approach_vec(drawn_center, to, POS_DAMP, delta, CENTER_EPS);
@@ -194,20 +194,20 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
         OrbitObstacleMode::climb => climb_polar_memo(o.dist, vs.polar, vs.azimuth),
         _ => vs.polar,
     };
-    let rate = match (polar < vs.polar, polar < cam.pitch) {
+    let rate = match (polar < vs.polar, polar < cam.polar) {
         (true, true) => CLIMB_RISE_DAMP,
         (true, false) => CLIMB_RELAX_DAMP,
         (false, _) => CAM_DAMP,
     };
-    let (pitch, m) = approach_scalar(cam.pitch, polar, rate, delta, POLAR_EPS);
+    let (polar, m) = approach_scalar(cam.polar, polar, rate, delta, POLAR_EPS);
     moving |= m;
-    let (yaw, m) = approach_angle(cam.yaw, vs.azimuth, ROT_DAMP, delta, AZIMUTH_EPS);
+    let (azimuth, m) = approach_angle(cam.azimuth, vs.azimuth, ROT_DAMP, delta, AZIMUTH_EPS);
     moving |= m;
-    (cam.pitch, cam.yaw) = look_domain(pitch, yaw);
+    (cam.polar, cam.azimuth) = look_domain(polar, azimuth);
 
     // Written only where something moved, so nothing is written back at rest.
-    if (center, o.dist, cam.pitch, cam.yaw) != was {
-        let e = orbit_eye_offset(o.dist, cam.pitch, cam.yaw);
+    if (center, o.dist, cam.polar, cam.azimuth) != was {
+        let e = orbit_eye_offset(o.dist, cam.polar, cam.azimuth);
         set_eye_local(&std::array::from_fn(|k| center[k] + e[k]));
     }
     view_compose();

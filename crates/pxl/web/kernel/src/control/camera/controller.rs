@@ -22,29 +22,30 @@ use crate::world::frame::coord::{local_world_to_canonical, local_world_to_canoni
 use crate::world::frame::view::{view, view_compose, ObserverPose};
 use xpute_core::math::scalar::wrap;
 
-// A look is (θ, φ) about the world's Z: θ from straight down, clamped to
-// [0, π]; φ the heading from north toward east, wrapped. At either pole φ
-// still names the heading the look returns along. There is no roll control.
-pub fn look_domain(theta: f64, phi: f64) -> (f64, f64) {
-    (theta.clamp(0.0, core::f64::consts::PI), wrap(phi, -core::f64::consts::PI, core::f64::consts::PI))
+// A look in spherical coordinates about the world's Z, θ = polar and
+// φ = azimuth: θ from straight down, clamped to [0, π]; φ from north toward
+// east, wrapped. At either pole φ still names the direction the look returns
+// along. The orbit adds r = dist. There is no roll control.
+pub fn look_domain(polar: f64, azimuth: f64) -> (f64, f64) {
+    (polar.clamp(0.0, core::f64::consts::PI), wrap(azimuth, -core::f64::consts::PI, core::f64::consts::PI))
 }
 
-pub fn look_dir(theta: f64, phi: f64) -> V3 {
-    let (st, ct) = (libm::sin(theta), libm::cos(theta));
-    let (sp, cp) = (libm::sin(phi), libm::cos(phi));
+pub fn look_dir(polar: f64, azimuth: f64) -> V3 {
+    let (st, ct) = (libm::sin(polar), libm::cos(polar));
+    let (sp, cp) = (libm::sin(azimuth), libm::cos(azimuth));
     [st * sp, st * cp, -ct]
 }
 
-/// Straight down at θ = 0 with the heading up the screen; at the poles φ only
-/// turns the screen about the look.
-pub fn look_rotation(theta: f64, phi: f64) -> Mat4 {
-    let mut heading = mat4();
-    mat4_rotation_z(&mut heading, phi);
-    let (s, c) = (libm::sin(theta), libm::cos(theta));
-    let mut tilt = mat4();
-    (tilt[5], tilt[6], tilt[9], tilt[10]) = (c, -s, s, c);
+/// Straight down at polar 0 with the azimuth up the screen; at the poles the
+/// azimuth only turns the screen about the look.
+pub fn look_rotation(polar: f64, azimuth: f64) -> Mat4 {
+    let mut about_z = mat4();
+    mat4_rotation_z(&mut about_z, azimuth);
+    let (s, c) = (libm::sin(polar), libm::cos(polar));
+    let mut about_x = mat4();
+    (about_x[5], about_x[6], about_x[9], about_x[10]) = (c, -s, s, c);
     let mut rotation: Mat4 = mat4();
-    mat4_mul(&mut rotation, &tilt, &heading);
+    mat4_mul(&mut rotation, &about_x, &about_z);
     rotation
 }
 
@@ -60,8 +61,8 @@ pub fn units_per_px_at(dist: f64) -> f64 {
 pub struct Camera {
     pub eye: Option<V3>,
     /// Heading about Z, and the angle down from vertical.
-    pub yaw: f64,
-    pub pitch: f64,
+    pub azimuth: f64,
+    pub polar: f64,
 }
 
 static CAMERA: Global<Camera> = Global::new();
@@ -70,8 +71,8 @@ pub fn camera() -> &'static mut Camera {
     // Where the controls start, so nothing eases at the first frame.
     CAMERA.get(|| Camera {
         eye: None,
-        yaw: DEFAULT_AZIMUTH,
-        pitch: DEFAULT_POLAR,
+        azimuth: DEFAULT_AZIMUTH,
+        polar: DEFAULT_POLAR,
     })
 }
 
@@ -84,16 +85,16 @@ pub fn set_eye_local(at: &V3) {
 }
 
 /// Zero first person or tracked.
-pub fn radius() -> f64 {
+pub fn dist() -> f64 {
     match active() {
         Active::Orbit => orbit().dist,
         Active::Free | Active::Tracked => 0.0,
     }
 }
 
-/// The drawn heading, radians about the vertical.
-pub fn heading() -> f64 {
-    camera().yaw
+/// The drawn azimuth, radians from north toward east.
+pub fn azimuth() -> f64 {
+    camera().azimuth
 }
 
 pub fn center_local() -> Option<V3> {
@@ -102,7 +103,7 @@ pub fn center_local() -> Option<V3> {
         return Some(view().pose.eye);
     }
     let (e, c) = (eye_local()?, camera());
-    let (d, r) = (look_dir(c.pitch, c.yaw), radius());
+    let (d, r) = (look_dir(c.polar, c.azimuth), dist());
     Some(std::array::from_fn(|k| e[k] + d[k] * r))
 }
 
@@ -149,8 +150,8 @@ pub fn pan(dx: f64, dy: f64) {
         Active::Orbit => camera_store().intent.dist,
         Active::Free | Active::Tracked => DEFAULT_DIST,
     };
-    let (yaw, upp) = (camera().yaw, units_per_px_at(across));
-    let to = pan_to(&from, dx, dy, upp, yaw);
+    let (azimuth, upp) = (camera().azimuth, units_per_px_at(across));
+    let to = pan_to(&from, dx, dy, upp, azimuth);
     put_center(to, Motion::Smooth);
 }
 
@@ -209,7 +210,7 @@ pub fn pose() -> ObserverPose {
             let cam = camera();
             ObserverPose {
                 eye: eye_local().unwrap_or_default(),
-                rotation: look_rotation(cam.pitch, cam.yaw),
+                rotation: look_rotation(cam.polar, cam.azimuth),
             }
         }
     }
@@ -332,8 +333,8 @@ fn take_mode(want: CameraMode) -> bool {
     if want == CameraMode::orbit {
         camera_store().commit_intent(Intent {
             dist: orbit().dist,
-            azimuth: cam.yaw,
-            polar: cam.pitch,
+            azimuth: cam.azimuth,
+            polar: cam.polar,
         });
     }
     if let Some(center) = center {

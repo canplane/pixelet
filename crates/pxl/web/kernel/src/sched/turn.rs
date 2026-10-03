@@ -41,7 +41,7 @@ pub struct Platform {
 
 /// None while the eye is the map center: then the character is the one looking.
 fn companion_props() -> Option<CompanionProps> {
-    if crate::control::camera::controller::radius() == 0.0 {
+    if crate::control::camera::controller::dist() == 0.0 {
         return None;
     }
     let map_center = crate::control::camera::controller::map_center()?;

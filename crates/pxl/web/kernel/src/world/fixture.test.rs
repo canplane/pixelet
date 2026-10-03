@@ -182,7 +182,7 @@ pub fn place(center: V3, dist: f64, polar: f64, azimuth: f64) {
     use crate::control::camera::store::{camera_store, Intent};
     orbit().dist = dist;
     let cam = camera();
-    (cam.pitch, cam.yaw) = (polar, azimuth);
+    (cam.polar, cam.azimuth) = (polar, azimuth);
     camera_store().intent = Intent { dist, azimuth, polar };
     let e = orbit_eye_offset(dist, polar, azimuth);
     set_eye_local(&std::array::from_fn(|k| center[k] + e[k]));

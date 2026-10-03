@@ -72,11 +72,11 @@ pub(crate) fn turn(delta: f64) -> bool {
     }
     let vs = camera_store().intent;
     let cam = camera();
-    let (pitch, m) = approach_scalar(cam.pitch, vs.polar, CAM_DAMP, delta, LOOK_EPS);
+    let (polar, m) = approach_scalar(cam.polar, vs.polar, CAM_DAMP, delta, LOOK_EPS);
     moving |= m;
-    let (yaw, m) = approach_angle(cam.yaw, vs.azimuth, ROT_DAMP, delta, LOOK_EPS);
+    let (azimuth, m) = approach_angle(cam.azimuth, vs.azimuth, ROT_DAMP, delta, LOOK_EPS);
     moving |= m;
-    (cam.pitch, cam.yaw) = look_domain(pitch, yaw);
+    (cam.polar, cam.azimuth) = look_domain(polar, azimuth);
     view_compose();
     moving
 }

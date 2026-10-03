@@ -28,7 +28,6 @@ use crate::shell::setting::store::settings_store;
 use crate::world::access::Access;
 use crate::world::change::wake_at;
 use crate::world::frame::coord::{local_height, local_world_to_canonical};
-use crate::world::frame::view::view;
 
 pub const ACTORS_MAX: usize = Group::ALL.len();
 
@@ -47,9 +46,9 @@ const FOLLOW_LERP_K: f64 = camera_cfg::smooth::POS_DAMP;
 // +PI turns a model whose forward is -Y into the screen, back to the camera.
 const FOLLOW_FACING: f64 = core::f64::consts::PI;
 
-/// The screen's up laid on the ground is a quarter turn from east at heading zero.
+/// Turned against the azimuth, which is the screen's up laid on the ground.
 fn back_to_camera() -> f64 {
-    FOLLOW_FACING + view().up_heading() - core::f64::consts::FRAC_PI_2
+    FOLLOW_FACING - crate::control::camera::controller::azimuth()
 }
 
 // Under one GPS fix's travel at a walking pace (~0.5u), over the near-zero gap

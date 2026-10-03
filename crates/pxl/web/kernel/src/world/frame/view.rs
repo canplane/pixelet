@@ -81,13 +81,6 @@ impl View {
         mat4_mul(&mut view_proj, &self.proj, &self.pose.rotation);
         (view_proj, self.pose.rotation)
     }
-
-    /// The camera's up laid flat on the ground, as an angle counter-clockwise from east.
-    pub fn up_heading(&self) -> f64 {
-        let r = &self.pose.rotation;
-        // The camera's Y in the world's axes is the rotation's second row.
-        libm::atan2(r[5], r[1])
-    }
 }
 
 static VIEW: Global<View> = Global::new();

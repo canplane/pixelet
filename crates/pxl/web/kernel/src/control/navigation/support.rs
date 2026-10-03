@@ -91,9 +91,9 @@ pub fn target(to: &mut Option<Pvf3>, held: V3, origin: IVec) -> V3 {
 }
 
 /// By `passage`, then down to the floor.
-pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, yaw: f64) -> Pvf3 {
+pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, azimuth: f64) -> Pvf3 {
     let (lx, ly) = (-dx * units_per_px, dy * units_per_px);
-    let (s, c) = libm::sincos(yaw);
+    let (s, c) = libm::sincos(azimuth);
     let origin = view().origin;
     let l = canonical_to_local(from, origin);
     let way = [lx * c + ly * s, -lx * s + ly * c];

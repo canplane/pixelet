@@ -143,16 +143,17 @@ impl Sketch {
     }
 }
 
-/// About the map center: the heading frame turns with the orbit, the world's never.
+/// About the map center: the view's frame turns with the azimuth — right,
+/// forward and up — the world's never.
 fn sketch_frames(s: &mut Sketch) {
-    if crate::control::camera::controller::radius() == 0.0 {
+    if crate::control::camera::controller::dist() == 0.0 {
         return;
     }
     let Some(center) = crate::control::camera::controller::center_local() else { return };
-    let (sin, cos) = libm::sincos(-crate::control::camera::controller::heading());
-    let heading_frame = move |p: V3| [center[0] + p[0] * cos - p[1] * sin, center[1] + p[0] * sin + p[1] * cos, center[2] + p[2]];
-    s.gyro(&heading_frame, [RING_RADIUS, 0.0, 0.0], "heading");
-    s.point(heading_frame([0.0, 0.0, RING_RADIUS]), Some("up"));
+    let (sin, cos) = libm::sincos(-crate::control::camera::controller::azimuth());
+    let view_frame = move |p: V3| [center[0] + p[0] * cos - p[1] * sin, center[1] + p[0] * sin + p[1] * cos, center[2] + p[2]];
+    s.gyro(&view_frame, [0.0, RING_RADIUS, 0.0], "forward");
+    s.point(view_frame([0.0, 0.0, RING_RADIUS]), Some("up"));
     let world_frame = move |p: V3| [center[0] + p[0], center[1] + p[1], center[2] + p[2]];
     s.gyro(&world_frame, [0.0, RING_RADIUS, 0.0], "north");
 }
@@ -188,7 +189,7 @@ fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
 }
 
 struct Gizmos {
-    /// Map center, origin, tiles' revision, and the view's yaw.
+    /// Map center, origin, tiles' revision, and the azimuth.
     built_for: Option<(Pvf3, IVec, u32, f64)>,
     drawn: Sketch,
     shown: bool,
@@ -289,7 +290,7 @@ pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>, map_origin: IVec)
         }
         return;
     };
-    let key = (center, map_origin, Terrain::pyramid().paging().revision(), crate::control::camera::controller::heading());
+    let key = (center, map_origin, Terrain::pyramid().paging().revision(), crate::control::camera::controller::azimuth());
     if g.built_for == Some(key) {
         write_labels(g);
         return;
