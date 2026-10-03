@@ -26,7 +26,7 @@
  */
 
 import type { BranchCursor, NodeCursor } from "@xpute/core/wire/xtp/mod.ts";
-import type { F64Array, U32Array, U8Array } from "@xpute/core/abi/array.ts";
+import type { U32Array, U8Array } from "@xpute/core/abi/array.ts";
 import type { f64, i32, u32, u64 } from "@xpute/core/abi/word.ts";
 import { packet } from "@xpute/runtime/ipc/doorbell.ts";
 import type { GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
@@ -367,8 +367,6 @@ export interface Snapshot {
    * current zoom asks for; empty where the center is in none or the packets it is
    * read out of have not arrived. */
   place: PlacePart[];
-  /** The sizes an object places at, in units, coarsest first: the tiers the size flyout offers, one of which the shell holds by its index. */
-  object_sizes: f64[];
 }
 
 export function read_snapshot(b: BranchCursor): Snapshot {
@@ -384,7 +382,6 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     settings: Array.from(b.at(8).get<U32Array>()),
     scale_bar: read_scale_bar(b.at_branch(9)),
     place: list(b.at_branch(10), read_place_part),
-    object_sizes: Array.from(b.at(11).get<F64Array>()),
   };
 }
 
@@ -634,7 +631,7 @@ export interface InputPointer {
   channel: GroundChannelKey | null;
   /** The held cube's type in its channel, or the decor kind, by the catalog's number; what the object store keeps is the kernel's to derive. */
   value: u32;
-  /** The object size, by its index in the snapshot's object_sizes. */
+  /** The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs). */
   tier: u32;
 }
 

@@ -102,7 +102,6 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
             bar_width_px: bar.bar_width_px,
         },
         place: &|each| place_parts(page, zoom, each),
-        object_sizes: &crate::layer::object::size::OBJECT_SIZES,
     };
     let mut w = PacketWriter::new(out, Snapshot::FIELDS);
     snapshot.write(&mut w);

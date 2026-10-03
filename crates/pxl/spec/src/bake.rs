@@ -8,6 +8,8 @@ pub mod fold;
 pub mod format;
 pub mod ground;
 pub mod model;
+#[path = "bake/object.spec.rs"]
+pub mod object;
 pub mod pack;
 pub mod place_page;
 #[path = "bake/poi_badge.spec.rs"]

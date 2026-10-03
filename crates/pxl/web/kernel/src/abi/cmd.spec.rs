@@ -700,13 +700,11 @@ pub struct Snapshot<'a> {
     /// current zoom asks for; empty where the center is in none or the packets it is
     /// read out of have not arrived.
     pub place: &'a dyn Fn(&mut dyn FnMut(&PlacePart<'_>)),
-    /// The sizes an object places at, in units, coarsest first: the tiers the size flyout offers, one of which the shell holds by its index.
-    pub object_sizes: &'a [f64],
 }
 
 impl Snapshot<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 12;
+    pub const FIELDS: u32 = 11;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.branch(MapState::FIELDS, |w| self.map.write(w));
@@ -726,7 +724,6 @@ impl Snapshot<'_> {
                 w.branch(PlacePart::FIELDS, |w| item.write(w));
             })
         });
-        w.f64_array(Some(self.object_sizes));
     }
 }
 
@@ -1150,7 +1147,7 @@ pub struct InputPointer {
     pub channel: Option<pxl_spec::bake::format::GroundChannelKey>,
     /// The held cube's type in its channel, or the decor kind, by the catalog's number; what the object store keeps is the kernel's to derive.
     pub value: u32,
-    /// The object size, by its index in the snapshot's object_sizes.
+    /// The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs).
     pub tier: u32,
 }
 

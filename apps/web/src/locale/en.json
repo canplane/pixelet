@@ -286,7 +286,8 @@
       "message_placeholder": "Type a message…",
       "message_tooltip": "Message",
       "send": "Send",
-      "catalog_tooltip": "Open Full Catalog"
+      "catalog_tooltip": "Open Full Catalog",
+      "object_size": "Size {{n}}"
     },
     "controls": {
       "reset_orientation": "Face North",

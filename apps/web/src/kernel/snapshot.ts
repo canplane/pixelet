@@ -18,7 +18,6 @@ const INITIAL: Snapshot = {
   settings: [],
   scale_bar: { total_meters: 0, bar_width_px: 0 },
   place: [],
-  object_sizes: [],
 };
 
 let snapshot: Snapshot = INITIAL;

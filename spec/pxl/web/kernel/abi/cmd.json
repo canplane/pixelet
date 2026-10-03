@@ -1039,7 +1039,7 @@
               "name": "tier",
               "type": "u32",
               "doc": [
-                "The object size, by its index in the snapshot's object_sizes."
+                "The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs)."
               ]
             }
           ]
@@ -1460,14 +1460,6 @@
             "The place the map center is in, broad to narrow, already cut at the rung the",
             "current zoom asks for; empty where the center is in none or the packets it is",
             "read out of have not arrived."
-          ]
-        },
-        {
-          "name": "object_sizes",
-          "type": "f64",
-          "list": true,
-          "doc": [
-            "The sizes an object places at, in units, coarsest first: the tiers the size flyout offers, one of which the shell holds by its index."
           ]
         }
       ]

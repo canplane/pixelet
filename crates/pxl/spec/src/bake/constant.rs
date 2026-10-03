@@ -41,9 +41,7 @@ const _: () = assert!(EXTENT_SPAN.is_power_of_two(), "an index cell is a block o
 /// way; at the ground's resolution the lane would cost some 30 MiB of records.
 pub const DECK_CELL: Scale = CELL.up(1);
 
-/// How many sizes an object places at: a cell and its halvings. Four, so the
-/// 0.125u tier kept working when the cell grew from 0.5u to 1u.
-pub const OBJECT_TIERS: usize = 4;
+pub use super::object::OBJECT_TIERS;
 
 pub const OBJECT_FINEST: Scale = CELL.down(OBJECT_TIERS as u32 - 1);
 

@@ -36,6 +36,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     out.extend(cell::cube_type_outputs()?);
     out.extend(cell::decor_outputs()?);
     out.extend(bake::published_outputs()?);
+    out.extend(bake::object_outputs()?);
     out.extend(bake::poi_badge_outputs()?);
     out.extend(data::outputs()?);
     out.extend(route::outputs()?);

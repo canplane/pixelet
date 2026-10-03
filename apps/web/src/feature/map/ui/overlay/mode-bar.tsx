@@ -22,7 +22,7 @@ import { openModal } from "@/app/modal.tsx";
 import { useInHand, useUiStore } from "@/app/store/ui.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { decorName, type PlaceableCube, placeableCubeId } from "@/catalog/cell/mod.ts";
-import { useKernel } from "@/kernel/shell.ts";
+import { OBJECT_TIERS } from "@/config/object.spec.ts";
 import { cubeLabel, CubeSwatch, DECOR_GLYPH, heldRing } from "./cube-swatch.tsx";
 
 const SEND_FROM_SCALE = 0.5;
@@ -61,9 +61,7 @@ function sizeMark(tier: u32): f64 {
 }
 
 /** Finest first, so the coarsest stands nearest the swatch. */
-function sizeTiers(count: u32): u32[] {
-  return Array.from({ length: count }, (_, i) => count - 1 - i);
-}
+const TIERS: readonly u32[] = Array.from({ length: OBJECT_TIERS }, (_, i) => OBJECT_TIERS - 1 - i);
 
 interface Flyout {
   left: f64;
@@ -72,27 +70,27 @@ interface Flyout {
   hover: u32 | null;
 }
 
-function tierAt(at: Flyout, count: u32, x: f64, y: f64): u32 | null {
+function tierAt(at: Flyout, x: f64, y: f64): u32 | null {
   if (Math.abs(x - at.centerX) > FLYOUT_WIDTH / 2) return null;
-  const top = at.foot - (2 * FLYOUT_PAD_Y + count * chrome.target + (count - 1) * FLYOUT_GAP_PX);
+  const top = at.foot - (2 * FLYOUT_PAD_Y + OBJECT_TIERS * chrome.target + (OBJECT_TIERS - 1) * FLYOUT_GAP_PX);
   const along = y - top - FLYOUT_PAD_Y;
   if (along < 0) return null;
   const row = Math.floor(along / (chrome.target + FLYOUT_GAP_PX));
-  if (row >= count || along - row * (chrome.target + FLYOUT_GAP_PX) > chrome.target) return null;
-  return sizeTiers(count)[row];
+  if (row >= OBJECT_TIERS || along - row * (chrome.target + FLYOUT_GAP_PX) > chrome.target) return null;
+  return TIERS[row];
 }
 
 /** Drawn from the bar, not the swatch, whose scrolling strip would clip it. */
 function SizeFlyout({ hover }: { hover: u32 | null }) {
+  const { t } = useTranslation();
   const objectTier = useUiStore((s) => s.objectTier);
-  const sizes = useKernel((s) => s.object_sizes);
 
   return (
     <Backing fill={STRIP.ground} material={material.flyout} place={BackingPlace.OverMap} style={styles.flyout}>
-      {sizeTiers(sizes.length).map((tier) => {
+      {TIERS.map((tier) => {
         const mark = sizeMark(tier);
         return (
-          <View key={tier} accessibilityLabel={`${sizes[tier]}u`} style={styles.flyoutItem}>
+          <View key={tier} accessibilityLabel={t("map.mode_bar.object_size", { n: OBJECT_TIERS - tier })} style={styles.flyoutItem}>
             <Motion to={{ scale: hover === tier ? 1.25 : 1 }} transition={SNAP}>
               <View
                 style={[
@@ -248,7 +246,6 @@ export function ModeBar() {
   const [barWidth, setBarWidth] = useState<f64>(0);
   const [stripWidth, setStripWidth] = useState<f64>(MODE_BAR_HEIGHT_PX);
   const [flyout, setFlyout] = useState<Flyout | null>(null);
-  const sizeCount = useKernel((s) => s.object_sizes.length);
   const inputRef = useRef<TextInput | null>(null);
   const bar = useRef<View | null>(null);
 
@@ -274,11 +271,11 @@ export function ModeBar() {
     },
     move: (x, y) => {
       if (flyout === null) return;
-      const hover = tierAt(flyout, sizeCount, x, y);
+      const hover = tierAt(flyout, x, y);
       if (hover !== flyout.hover) setFlyout({ ...flyout, hover });
     },
     lift: (x, y) => {
-      const tier = flyout === null ? null : tierAt(flyout, sizeCount, x, y);
+      const tier = flyout === null ? null : tierAt(flyout, x, y);
       if (tier !== null) setObjectTier(tier);
       setFlyout(null);
     },
