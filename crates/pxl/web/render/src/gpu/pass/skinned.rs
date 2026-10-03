@@ -4,11 +4,12 @@
 //! case of the variant picker draws one actor in a pass of its own, with a
 //! blank shadow map.
 
+use crate::frame::draw::uniform_of;
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED};
 use crate::frame::shader::record::{PIPELINE_SKINNED_DEPTH, PIPELINE_SKINNED_PREPASS};
 use crate::gpu::api::{bytes, object, release, Gpu};
 use crate::gpu::api_spec::{address, compare, filter, format};
-use crate::gpu::pass::model::{draw_models, uniform_of, DrawUniforms, ModelDraw, Stage};
+use crate::gpu::pass::model::{draw_models, DrawUniforms, ModelDraw, Stage};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{release_skin, skin_group, Blocks};
 

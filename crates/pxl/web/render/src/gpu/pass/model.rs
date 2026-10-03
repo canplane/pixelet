@@ -3,7 +3,7 @@
 //! What the model passes (decor, impostors, actors) share: group 0, per-draw
 //! uniform slots written once before the pass, and the draw loop.
 
-use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED, UNIFORM_FLOATS};
+use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
 use crate::gpu::api::{buffer_usage, object, release, Gpu};
 use crate::gpu::api_spec::{format, resource};
 use crate::gpu::atmosphere::AIR_WORDS;
@@ -121,10 +121,6 @@ impl DrawUniforms {
         release(self.buffer);
         self.scratch.free();
     }
-}
-
-pub fn uniform_of<'a>(uniforms: &'a [f32], d: &[u32; DRAW_WORDS]) -> &'a [f32] {
-    &uniforms[d[3] as usize * UNIFORM_FLOATS..][..UNIFORM_FLOATS]
 }
 
 /// `third` is decor's padding or the impostor's sprite layer.

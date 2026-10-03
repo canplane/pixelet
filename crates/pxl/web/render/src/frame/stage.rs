@@ -5,12 +5,6 @@
 
 use xpute_runtime::global::Global;
 
-pub const EDGE_STRENGTH: f64 = 0.3;
-pub const EDGE_WIDTH: f64 = 0.03;
-/// A Rust constant because the kernel decides whether the mode is on and writes
-/// this or zero; the shader cannot see a setting.
-pub const AO_STRENGTH: f64 = 0.2;
-
 pub const STAGE_WORDS: usize = 80;
 
 /// Where each value sits in the lane.

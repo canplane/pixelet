@@ -10,7 +10,7 @@ use pxl_spec::space::v3::V3;
 use crate::frame::shader::record::FRAME_FLOATS;
 use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, texture_usage, word_bytes, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
-use crate::gpu::renderer::{GLOBE, PLANET, VIEW_PROJ};
+use crate::gpu::renderer::{put_globe, put_mat, VIEW_PROJ};
 
 const HALF_EXTENT: f64 = 200.0;
 const LIGHT_DISTANCE: f64 = 1200.0;
@@ -97,11 +97,8 @@ impl Shadow {
         mat4_look_at(&mut view, eye, target, [0.0, 0.0, 1.0]);
         ortho(&mut proj, HALF_EXTENT, 0.1, LIGHT_FAR);
         mat4_mul(&mut self.light_view_proj, &proj, &view);
-        for (i, v) in self.light_view_proj.iter().enumerate() {
-            self.light[VIEW_PROJ + i] = *v as f32;
-        }
-        self.light[PLANET..PLANET + 4].copy_from_slice(&globe[..4]);
-        self.light[GLOBE..GLOBE + 4].copy_from_slice(&globe[4..]);
+        put_mat(&mut self.light, VIEW_PROJ, &self.light_view_proj);
+        put_globe(&mut self.light, &globe);
         g.write_buffer(self.light_frame, 0, bytes(&self.light));
     }
 

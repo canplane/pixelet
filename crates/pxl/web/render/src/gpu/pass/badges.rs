@@ -6,7 +6,7 @@
 //! the supersampled sheet crawls with every camera micro-movement.
 
 use crate::asset::atlas::{BillboardAtlas, DrawSpec};
-use crate::frame::draw::{PIPELINE_BADGE, UNIFORM_FLOATS};
+use crate::frame::draw::{uniform_of, PIPELINE_BADGE};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::layers::{mip_levels, Mips};
@@ -257,11 +257,10 @@ impl BadgePass {
                 set.uniform = object();
                 g.buffer(set.uniform, word_bytes(BADGE_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
             }
-            let at = d[3] as usize * UNIFORM_FLOATS;
             let s = &mut self.uniform;
             s[..16].copy_from_slice(&self.view);
             s[16..32].copy_from_slice(&self.proj);
-            s[32..35].copy_from_slice(&uniforms[at..at + 3]);
+            s[32..35].copy_from_slice(&uniform_of(uniforms, d)[..3]);
             s[35..44].copy_from_slice(&[self.px_k, self.near, self.far, self.cell, 1.0, viewport[0] as f32, viewport[1] as f32, 0.0, 0.0]);
             s[44..52].copy_from_slice(&self.globe);
             g.write_buffer(set.uniform, 0, bytes(s));

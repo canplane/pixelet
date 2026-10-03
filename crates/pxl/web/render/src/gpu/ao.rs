@@ -11,6 +11,7 @@ use crate::frame::shader::record::{PIPELINE_AO_BLUR, PIPELINE_AO_DOWNSAMPLE, PIP
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::renderer::put_mat;
 
 /// proj, inv_proj, full, half, fog_near, fog_far, padding.
 const AO_FLOATS: usize = 40;
@@ -110,10 +111,8 @@ impl ScreenAo {
         let u = &mut self.uniform_words;
         let mut inv = [0.0; 16];
         mat4_invert(&mut inv, proj);
-        for i in 0..16 {
-            u[i] = proj[i] as f32;
-            u[16 + i] = inv[i] as f32;
-        }
+        put_mat(u, 0, proj);
+        put_mat(u, 16, &inv);
         u[FULL] = width as f32;
         u[FULL + 1] = height as f32;
         u[HALF] = (width / 2) as f32;

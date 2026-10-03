@@ -4,12 +4,13 @@
 //! layer, redrawn only when its model or skin changes, and drawn per instance as
 //! a quad turned to the eye.
 
+use crate::frame::draw::uniform_of;
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_IMPOSTOR};
 use crate::frame::shader::record::PIPELINE_IMPOSTOR_BAKE;
 use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, release, texture_usage, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::pass::decor::{DecorPass, GROUPS};
-use crate::gpu::pass::model::{draw_model, draw_models, put_instances, uniform_of, DrawUniforms, ModelDraw};
+use crate::gpu::pass::model::{draw_model, draw_models, put_instances, DrawUniforms, ModelDraw};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::Blocks;
 

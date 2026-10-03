@@ -16,6 +16,10 @@ pub const DRAW_WORDS: usize = 5;
 /// opacity, padding to 32 bytes.
 pub const UNIFORM_FLOATS: usize = 8;
 
+pub fn uniform_of<'a>(uniforms: &'a [f32], d: &[u32; DRAW_WORDS]) -> &'a [f32] {
+    &uniforms[d[3] as usize * UNIFORM_FLOATS..][..UNIFORM_FLOATS]
+}
+
 /// Chunk draw: (arena group, box count, first box, uniform, pipeline).
 /// Decor draw: (block handle, group, instance count, uniform, pipeline); the
 /// uniform carries the group's first lane word, stride and index-list start.

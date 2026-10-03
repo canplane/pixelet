@@ -27,3 +27,15 @@ pub mod light_cfg {
 pub mod rim_cfg {
     pub const INTENSITY: f64 = 0.1;
 }
+
+/// Edge shading on a cube's silhouette: its darkening and its width as a share of a face.
+pub mod edge_cfg {
+    pub const STRENGTH: f64 = 0.3;
+    pub const WIDTH: f64 = 0.03;
+}
+
+/// Corner occlusion's darkening, written where the setting asks for it; the
+/// shader cannot see a setting.
+pub mod ao_cfg {
+    pub const STRENGTH: f64 = 0.2;
+}

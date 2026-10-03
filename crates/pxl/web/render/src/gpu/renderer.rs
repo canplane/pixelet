@@ -14,8 +14,8 @@ use xpute_runtime::mem::heap::{alloc, free};
 
 use crate::asset::atlas::BillboardAtlas;
 use crate::frame::draw::{
-    Lists, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_CHUNK_COARSE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
-    PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
+    uniform_of, Lists, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_CHUNK_COARSE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR,
+    PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
 use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_COARSE_DEPTH, PIPELINE_CHUNK_COARSE_PREPASS, PIPELINE_CHUNK_DEPTH, PIPELINE_CHUNK_PREPASS, PIPELINE_SKY};
 use crate::frame::stage::{stage_lane, STAGE_AT};
@@ -38,7 +38,7 @@ use crate::gpu::shadow::Shadow;
 use crate::gpu::stars::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
 use crate::gpu::text::TextOf;
-use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
+use crate::look::environment::{ENV_AIR, ENV_FOG_FAR, ENV_FOG_NEAR, ENV_OTHER_LIGHT, ENV_STARS};
 use crate::look::globe::{Globe, MERCATOR_RADIUS_U};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
@@ -130,7 +130,13 @@ pub fn put_u32(buf: &mut [u8], at: usize, v: u32) {
     buf[at..at + 4].copy_from_slice(&v.to_le_bytes());
 }
 
-fn put_mat(out: &mut [f32], at: usize, m: &Mat4) {
+/// The planet's and the globe's four floats each into a frame.
+pub(crate) fn put_globe(frame: &mut [f32], globe: &[f32; 8]) {
+    frame[PLANET..PLANET + 4].copy_from_slice(&globe[..4]);
+    frame[GLOBE..GLOBE + 4].copy_from_slice(&globe[4..]);
+}
+
+pub(crate) fn put_mat(out: &mut [f32], at: usize, m: &Mat4) {
     for (i, v) in m.iter().enumerate() {
         out[at + i] = *v as f32;
     }
@@ -222,10 +228,6 @@ impl<'a> Draws<'a> {
         let records = self.records;
         self.order[self.starts[p] as usize..end as usize].iter().map(move |&i| &records[i as usize])
     }
-
-    pub fn all(&self) -> &'a [[u32; DRAW_WORDS]] {
-        self.records
-    }
 }
 
 /// Grown to the next power of two when a frame needs more, never shrunk.
@@ -282,7 +284,7 @@ pub struct Blocks {
     missing: u32,
 }
 
-fn buffer_size(len: u32) -> u32 {
+pub(crate) fn buffer_size(len: u32) -> u32 {
     ((len + 3) & !3).max(4)
 }
 
@@ -456,10 +458,6 @@ impl Blocks {
     }
 
     /// For a draw binding it as a vertex buffer: the ghost's box goes through the chunk pipeline.
-    pub fn buffer(&self, handle: u32) -> Option<u32> {
-        self.find(handle).filter(|&i| self.buffer[i] != 0).map(|i| self.buffer[i])
-    }
-
     pub fn group(&mut self, g: &Gpu, handle: u32, layout: u32) -> Option<u32> {
         let i = self.find(handle).filter(|&i| self.buffer[i] != 0)?;
         if self.group[i] == 0 {
@@ -547,8 +545,8 @@ impl DebugPass {
         if count == 0 {
             return;
         }
-        let at = d[3] as usize * UNIFORM_FLOATS;
-        g.write_buffer(self.draw_buffer, 0, bytes(&[uniforms[at], uniforms[at + 1], uniforms[at + 2], 0.0]));
+        let u = uniform_of(uniforms, d);
+        g.write_buffer(self.draw_buffer, 0, bytes(&[u[0], u[1], u[2], 0.0]));
         g.set_pipeline(pass, self.built.pipeline);
         g.set_bind_group(pass, 0, self.frame_group, &[]);
         g.set_bind_group(pass, 1, self.draw_group, &[]);
@@ -805,7 +803,7 @@ impl Renderer {
         self.screen_ao = s[STAGE_AT::SCREEN_AO] != 0.0;
         u[SCREEN_AO] = if self.screen_ao { 1.0 } else { 0.0 };
         if self.screen_ao {
-            self.ao.lay_out(g, &proj, width, height, env[7], env[11]);
+            self.ao.lay_out(g, &proj, width, height, env[ENV_FOG_NEAR], env[ENV_FOG_FAR]);
         }
         let globe = [
             center[0] as f32,
@@ -817,8 +815,7 @@ impl Renderer {
             sphere.cos_lat as f32,
             MERCATOR_RADIUS_U as f32,
         ];
-        u[PLANET..PLANET + 4].copy_from_slice(&globe[..4]);
-        u[GLOBE..GLOBE + 4].copy_from_slice(&globe[4..]);
+        put_globe(u, &globe);
         self.badges.globe = globe;
         self.shadows = s[STAGE_AT::SHADOWS] != 0.0;
         u[SHADOW_STRENGTH] = if self.shadows { 1.0 } else { 0.0 };
@@ -842,7 +839,7 @@ impl Renderer {
             let buffer = if matches!(which, PIPELINE_CHUNK | PIPELINE_CHUNK_COARSE) {
                 arena_buffer(handle as usize)
             } else {
-                b.buffer(handle)
+                b.get(handle).map(|(buffer, ..)| buffer)
             };
             // A missing buffer is a fault in the list. Skipping it silently once drew no
             // ground at all with every gauge reading normal.
@@ -969,7 +966,7 @@ impl Renderer {
         g.submit(encoder);
         release(encoder);
         release(canvas_view);
-        let stat = self.stat(draws.all(), world);
+        let stat = self.stat(draws.records, world);
         self.order = order;
         stat
     }
@@ -991,8 +988,8 @@ impl Renderer {
             let world_frame = self.frame;
             let case = self.cases[slot].as_mut().or_bug(Errno::ENOTRECOVERABLE);
             case.skinned.set_skin(g, model, image);
-            let at = own[3] as usize * UNIFORM_FLOATS;
-            let actor = [uniforms[at] as f64, uniforms[at + 1] as f64, uniforms[at + 2] as f64];
+            let u = uniform_of(uniforms, own);
+            let actor = [u[0] as f64, u[1] as f64, u[2] as f64];
             let u = &mut case.frame;
             *u = world_frame;
             let (mut proj, mut view, mut t, mut m, mut n) = (mat4(), mat4(), mat4(), mat4(), mat4());
@@ -1007,8 +1004,8 @@ impl Renderer {
             u[CAMERA_POS + 1] = (CASE_EYE[1] + actor[1]) as f32;
             u[CAMERA_POS + 2] = (CASE_EYE[2] + actor[2]) as f32;
             // No fog: near and far pushed out of reach.
-            u[ENV + 7] = 1e9;
-            u[ENV + 11] = 2e9;
+            u[ENV + ENV_FOG_NEAR] = 1e9;
+            u[ENV + ENV_FOG_FAR] = 2e9;
             u[VIEWPORT] = s.width as f32;
             u[VIEWPORT + 1] = s.height as f32;
             u[SHADOW_STRENGTH] = 0.0;

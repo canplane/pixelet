@@ -12,6 +12,7 @@ use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, word_bytes, Gpu};
 use crate::gpu::api_spec::format;
 use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::renderer::put_mat;
 use crate::look::atmosphere::transmittance;
 use crate::look::environment::{ENV_AIR, ENV_SKY, ENV_STARS};
 
@@ -66,9 +67,7 @@ impl StarPass {
         if u[INTENSITY] <= SHOWN {
             return;
         }
-        for (k, v) in view_proj.iter().enumerate() {
-            u[k] = *v as f32;
-        }
+        put_mat(u, 0, view_proj);
         u[SKY..SKY + 12].copy_from_slice(&env[ENV_STARS..ENV_STARS + 12]);
         u[SKY + 12..SKY + 16].copy_from_slice(&[0.0, 0.0, 0.0, 1.0]);
         u[VIEWPORT] = width as f32;
