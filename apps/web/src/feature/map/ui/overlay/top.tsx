@@ -7,12 +7,13 @@ import { Defs, LinearGradient, Mask, Rect, Stop, Svg } from "react-native-svg";
 import { useViewportTop, useWindowSize } from "@platform/viewport.ts";
 import { openModal } from "@/app/modal.tsx";
 import { useKernel } from "@/kernel/shell.ts";
+import { Motion } from "@platform/motion.tsx";
 import { Presence } from "@/shared/ui/motion/presence.tsx";
-import { LEAVE, SETTLE } from "@/shared/ui/motion/transition.ts";
+import { LEAVE, SETTLE, SNAP } from "@/shared/ui/motion/transition.ts";
+import { useVeil } from "@/shared/ui/motion/veil.ts";
 import { haloGap, HaloIcon } from "@/shared/ui/halo.tsx";
 import { chrome, color } from "@/shared/ui/theme.ts";
 import { CurrentAddress } from "./current-address.tsx";
-import { useReverseGeocode } from "./use-reverse-geocode.ts";
 import { SensorStatus } from "./sensor-status.tsx";
 import { DummyChatText } from "./dummy-chat-text.tsx";
 import { MapScaleBar } from "../control/scale-bar.tsx";
@@ -22,11 +23,8 @@ import { BusyDim } from "@/feature/map/ui/busy-dim.tsx";
 import { SettingsTriggerButton } from "@/feature/setting/trigger-button.tsx";
 
 export function TopOverlays() {
-  const { t } = useTranslation();
   const top = chrome.inset + useViewportTop();
 
-  const addressLabel = useReverseGeocode();
-  const zooming = useKernel((s) => s.zooming);
   const { width } = useWindowSize();
   const scrimDepth = top + chrome.control + SCRIM_TAIL;
   const from = (width - Math.min(width, SCRIM_WIDTH)) / 2 - SCRIM_FADE;
@@ -59,23 +57,7 @@ export function TopOverlays() {
       </BusyDim>
 
       <BusyDim style={[styles.center, { top }]}>
-        {
-          // The whole strip, scale shown or not.
-        }
-        <Pressable onPress={() => openModal("search")} accessibilityRole="button" accessibilityLabel={t("map.search.trigger_aria_label")} style={styles.strip}>
-          <Presence show={!zooming} from={{ opacity: 0 }} exit={{ opacity: 0 }} transition={SETTLE} exitTransition={LEAVE} style={styles.place}>
-            <View style={styles.title}>
-              <View style={styles.search}>
-                <HaloIcon glyph="magnifyingglass" size={12} weight="semibold" color={color.white} />
-                <CurrentAddress label={addressLabel} />
-              </View>
-              <SensorStatus />
-            </View>
-          </Presence>
-          <View style={styles.scale}>
-            <MapScaleBar show={zooming} />
-          </View>
-        </Pressable>
+        <SearchStrip />
       </BusyDim>
 
       <BusyDim style={[styles.right, { top }]}>
@@ -83,6 +65,31 @@ export function TopOverlays() {
         <ViewButtons />
       </BusyDim>
     </>
+  );
+}
+
+/** Inside the dim, so the address and the scale fade with the buttons. */
+function SearchStrip() {
+  const { t } = useTranslation();
+  const zooming = useKernel((s) => s.zooming);
+  const veil = useVeil(1, SNAP);
+  return (
+    <Motion to={{ opacity: veil.level }} transition={veil.transition} style={styles.fill}>
+      <Pressable onPress={() => openModal("search")} accessibilityRole="button" accessibilityLabel={t("map.search.trigger_aria_label")} style={styles.strip}>
+        <Presence show={!zooming} from={{ opacity: 0 }} exit={{ opacity: 0 }} transition={SETTLE} exitTransition={LEAVE} style={styles.place}>
+          <View style={styles.title}>
+            <View style={styles.search}>
+              <HaloIcon glyph="magnifyingglass" size={12} weight="semibold" color={color.white} />
+              <CurrentAddress />
+            </View>
+            <SensorStatus />
+          </View>
+        </Presence>
+        <View style={styles.scale}>
+          <MapScaleBar show={zooming} />
+        </View>
+      </Pressable>
+    </Motion>
   );
 }
 
@@ -111,7 +118,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   right: { position: "absolute", right: chrome.inset, zIndex: 50, alignItems: "center", gap: chrome.controlGap },
-  strip: { alignSelf: "stretch", flex: 1, alignItems: "center", justifyContent: "center" },
+  fill: { alignSelf: "stretch", flex: 1 },
+  // The whole strip, scale shown or not.
+  strip: { flex: 1, alignItems: "center", justifyContent: "center" },
   place: { maxWidth: "100%" },
   title: { alignItems: "center", gap: haloGap(8) },
   // Bounded: a page lays a no-wrap row at content width, and the address overran the buttons.

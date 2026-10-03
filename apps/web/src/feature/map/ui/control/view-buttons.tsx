@@ -2,8 +2,7 @@
 
 import { useTranslation } from "react-i18next";
 
-import { Command, encode_setting_set } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_command, useKernel } from "@/kernel/shell.ts";
+import { kernel_setting, useKernel } from "@/kernel/shell.ts";
 import { SETTINGS } from "@/feature/setting/schema.ts";
 import { ButtonStack } from "@/shared/ui/button-stack.tsx";
 
@@ -11,8 +10,6 @@ const MODE = SETTINGS.camera_mode;
 const FREE = MODE.options.indexOf("free");
 const ORBIT = MODE.options.indexOf("orbit");
 const POI = SETTINGS.poi.key;
-
-const set = (key: number, value: number) => kernel_command(Command.SETTING_SET, encode_setting_set({ key, value }));
 
 export function ViewButtons() {
   const { t } = useTranslation();
@@ -24,12 +21,12 @@ export function ViewButtons() {
         {
           glyph: first ? "eye" : "figure.stand",
           label: t(first ? "map.controls.third_person" : "map.controls.first_person"),
-          onPress: () => set(MODE.key, first ? ORBIT : FREE),
+          onPress: () => kernel_setting(MODE.key, first ? ORBIT : FREE),
         },
         {
           glyph: places ? "mappin.circle.fill" : "mappin.circle",
           label: t(places ? "map.controls.hide_places" : "map.controls.show_places"),
-          onPress: () => set(POI, places ? 0 : 1),
+          onPress: () => kernel_setting(POI, places ? 0 : 1),
           isActive: places,
         },
       ]}

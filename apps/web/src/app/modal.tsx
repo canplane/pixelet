@@ -6,7 +6,7 @@ import { create } from "zustand";
 import { PanelPresence } from "@/shared/ui/panel.tsx";
 
 import { SettingsModal } from "@/feature/setting/modal.tsx";
-import { DrawerModal } from "@/feature/map/ui/overlay/drawer-modal.tsx";
+import { DrawerModal } from "@/feature/drawer/modal.tsx";
 import { SearchModal } from "@/feature/search/modal.tsx";
 
 type Modal = "settings" | "drawer" | "search";

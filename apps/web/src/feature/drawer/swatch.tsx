@@ -1,4 +1,4 @@
-// @pxl/web/feature/map/ui/overlay/cube-swatch.tsx
+// @pxl/web/feature/drawer/swatch.tsx
 
 import { Image, type StyleProp, View, type ViewStyle } from "react-native";
 

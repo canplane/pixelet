@@ -6,9 +6,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { alpha, chrome, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
 import { CharacterPreview } from "@/feature/character/preview.tsx";
-import type { u32 } from "@xpute/core/abi/word.ts";
-import { Command, encode_setting_set } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_command, useKernel } from "@/kernel/shell.ts";
+import { kernel_setting, useKernel } from "@/kernel/shell.ts";
 import { SETTINGS } from "@/feature/setting/schema.ts";
 import { findPersonVariant, findPetVariant, type Gender, genderOf, GENDERS, personVariantNumbered, personVariantsOf, PET_VARIANTS } from "@/feature/character/variant.ts";
 import { LABEL } from "@platform/palette.ts";
@@ -99,15 +97,14 @@ export function CharacterPicker() {
   const petVariant = useKernel((s) => s.settings[SETTINGS.pet.key] ?? -1);
   const personVariantKey = personVariantNumbered(personVariant)?.key ?? "";
   const petVariantKey = PET_VARIANTS.find((v) => v.number === petVariant)?.key ?? "";
-  const setSetting = (key: u32, value: u32) => kernel_command(Command.SETTING_SET, encode_setting_set({ key, value }));
 
   // Opens on the selection's gender, so a pick does not look reset on reopen.
   const [gender, setGender] = useState<Gender>(genderOf(personVariantKey));
 
   return (
     <View style={styles.pickers}>
-      <PersonPicker gender={gender} onGenderChange={setGender} selectedKey={personVariantKey} onSelect={(key) => setSetting(SETTINGS.person.key, findPersonVariant(key).number)} />
-      <PetPicker selectedKey={petVariantKey} onSelect={(key) => setSetting(SETTINGS.pet.key, findPetVariant(key).number)} />
+      <PersonPicker gender={gender} onGenderChange={setGender} selectedKey={personVariantKey} onSelect={(key) => kernel_setting(SETTINGS.person.key, findPersonVariant(key).number)} />
+      <PetPicker selectedKey={petVariantKey} onSelect={(key) => kernel_setting(SETTINGS.pet.key, findPetVariant(key).number)} />
     </View>
   );
 }

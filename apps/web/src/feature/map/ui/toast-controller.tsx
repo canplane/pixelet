@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
-import { messageKey as locationMessageKey } from "@/locale/message-key.ts";
+import { messageKey } from "@/locale/message-key.ts";
 import { DevicePoseStatus, MapStatus } from "@/kernel/abi/cmd.spec.ts";
 import { useKernel } from "@/kernel/shell.ts";
 
@@ -25,7 +25,7 @@ export function ToastController() {
   const locationStatus = useKernel((s) => s.location.status);
   // Translated here, not where the error fires, so a language change follows.
   const locationError = useKernel((s) => s.location.error);
-  const locationErrorKey: string | null = locationError === null ? null : locationMessageKey(locationError);
+  const locationErrorKey: string | null = locationError === null ? null : messageKey(locationError);
 
   useEffect(() => {
     if (locationStatus === DevicePoseStatus.Loading) {

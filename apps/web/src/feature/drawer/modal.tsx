@@ -1,4 +1,4 @@
-// @pxl/web/feature/map/ui/overlay/drawer-modal.tsx
+// @pxl/web/feature/drawer/modal.tsx
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -16,7 +16,7 @@ import { PANEL_EDGE, PANEL_SECTION_GAP, PANEL_TABS_ROOM, PanelBody, PanelHeader 
 import { Segmented } from "@platform/segmented.tsx";
 import { chrome, color, hairline, sectionTitle, textStyle } from "@/shared/ui/theme.ts";
 import { CharacterPicker } from "@/feature/character/picker.tsx";
-import { cubeLabel, CubeSwatch, DECOR_GLYPH, heldRing } from "./cube-swatch.tsx";
+import { cubeLabel, CubeSwatch, DECOR_GLYPH, heldRing } from "./swatch.tsx";
 import { LABEL } from "@platform/palette.ts";
 
 const SECTION_ORDER: readonly ChannelName[] = ["block", "land", "water", "structure", "transport"];

@@ -2,7 +2,7 @@
 
 import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { u32 } from "@xpute/core/abi/word.ts";
-import { Command, encode_input_tracking, Tracking } from "@/kernel/abi/cmd.spec.ts";
+import { Command, encode_input_tracking, encode_setting_set, Tracking } from "@/kernel/abi/cmd.spec.ts";
 import { CORE, CORE_DOORBELL } from "@/kernel/mem.ts";
 import { ring_now, send_input } from "@/kernel/sched.ts";
 import { orientationPermit } from "@platform/sensor.ts";
@@ -18,6 +18,10 @@ export async function kernel_tracking(tracking: Tracking): Promise<void> {
     return;
   }
   send_input(Command.INPUT_TRACKING, encode_input_tracking({ tracking }));
+}
+
+export function kernel_setting(key: u32, value: u32): void {
+  ring_now(Command.SETTING_SET, encode_setting_set({ key, value }));
 }
 
 export function kernel_enable_location(): void {

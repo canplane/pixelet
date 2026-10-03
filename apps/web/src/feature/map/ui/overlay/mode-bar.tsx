@@ -8,6 +8,7 @@ import { PAN_X } from "@platform/gesture.ts";
 import type { f64, u32, u8 } from "@xpute/core/abi/word.ts";
 import { round } from "@xpute/core/math/scalar.ts";
 import { Backing } from "@platform/backing.tsx";
+import type { GlyphName } from "@platform/icon.tsx";
 import { BackingPlace } from "@/shared/ui/backing-place.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
 import { Motion } from "@platform/motion.tsx";
@@ -23,22 +24,22 @@ import { useInHand, useUiStore } from "@/app/store/ui.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { decorName, type PlaceableCube, placeableCubeId } from "@/catalog/cell/mod.ts";
 import { OBJECT_TIERS } from "@/config/object.spec.ts";
-import { cubeLabel, CubeSwatch, DECOR_GLYPH, heldRing } from "./cube-swatch.tsx";
+import { cubeLabel, CubeSwatch, DECOR_GLYPH, heldRing } from "@/feature/drawer/swatch.tsx";
 
 const SEND_FROM_SCALE = 0.5;
 
-export const MODE_BAR_HEIGHT_PX = chrome.control;
 const ITEM = 24;
 const ITEM_GLYPH = 16;
 const FIELD_PX = 384;
-const MESSAGE_OPEN_PX = MODE_BAR_HEIGHT_PX + FIELD_PX + 16;
+const MESSAGE_OPEN_PX = chrome.control + FIELD_PX + 16;
 
 const FLYOUT_LIFT_PX = 20;
 const FLYOUT_GAP_PX = 8;
 const FLYOUT_PAD_Y = 8;
 const FLYOUT_WIDTH = chrome.target + 12;
-const FLYOUT_FOOT = (MODE_BAR_HEIGHT_PX + ITEM) / 2 + FLYOUT_LIFT_PX;
+const FLYOUT_FOOT = (chrome.control + ITEM) / 2 + FLYOUT_LIFT_PX;
 const FLYOUT_HOLD_MS = 150;
+const FLYOUT_PITCH = chrome.target + FLYOUT_GAP_PX;
 /** The first move this far decides: up opens the sizes, sideways scrolls the strip. */
 const FLYOUT_AXIS_PX = 12;
 
@@ -72,11 +73,11 @@ interface Flyout {
 
 function tierAt(at: Flyout, x: f64, y: f64): u32 | null {
   if (Math.abs(x - at.centerX) > FLYOUT_WIDTH / 2) return null;
-  const top = at.foot - (2 * FLYOUT_PAD_Y + OBJECT_TIERS * chrome.target + (OBJECT_TIERS - 1) * FLYOUT_GAP_PX);
+  const top = at.foot - (2 * FLYOUT_PAD_Y + OBJECT_TIERS * FLYOUT_PITCH - FLYOUT_GAP_PX);
   const along = y - top - FLYOUT_PAD_Y;
   if (along < 0) return null;
-  const row = Math.floor(along / (chrome.target + FLYOUT_GAP_PX));
-  if (row >= OBJECT_TIERS || along - row * (chrome.target + FLYOUT_GAP_PX) > chrome.target) return null;
+  const row = Math.floor(along / FLYOUT_PITCH);
+  if (row >= OBJECT_TIERS || along - row * FLYOUT_PITCH > chrome.target) return null;
   return TIERS[row];
 }
 
@@ -169,21 +170,19 @@ function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
   return responder.current.panHandlers;
 }
 
-function ColorSwatchButton({ cube, sizes }: { cube: PlaceableCube; sizes: Omit<SizeGesture, "tap"> }) {
+function SwatchButton({ cube, sizes }: { cube: PlaceableCube; sizes: Omit<SizeGesture, "tap"> }) {
   const { t } = useTranslation();
   const selectCube = useUiStore.getState().selectCube;
   const selected = useInHand({ tool: ActiveTool.Object, cube });
   const ref = useRef<View | null>(null);
 
   const handlers = useSizeGesture(ref, {
+    ...sizes,
     tap: () => selectCube(cube),
     open: (swatch) => {
       selectCube(cube);
       sizes.open(swatch);
     },
-    move: sizes.move,
-    lift: sizes.lift,
-    close: sizes.close,
   });
 
   return (
@@ -212,14 +211,16 @@ function DecorIconButton({ kind }: { kind: u8 }) {
   );
 }
 
-function ToolButton({ label, active, onPress, children }: { label: string; active?: boolean; onPress: () => void; children: React.ReactNode }) {
+function ToolButton({ label, glyph, active, onPress }: { label: string; glyph: GlyphName; active?: boolean; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={styles.slot}>
       {
         /* Always mounted: Android, creating it once lit, drew its ground without
                 its corners. */
       }
-      <View collapsable={false} style={[styles.held, active && styles.toolActive]}>{children}</View>
+      <View collapsable={false} style={[styles.held, active && styles.toolActive]}>
+        <Glyph glyph={glyph} size={chrome.glyph} color={active ? STRIP.glyphOn : STRIP.glyph} />
+      </View>
     </Pressable>
   );
 }
@@ -244,7 +245,7 @@ export function ModeBar() {
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [barWidth, setBarWidth] = useState<f64>(0);
-  const [stripWidth, setStripWidth] = useState<f64>(MODE_BAR_HEIGHT_PX);
+  const [stripWidth, setStripWidth] = useState<f64>(chrome.control);
   const [flyout, setFlyout] = useState<Flyout | null>(null);
   const inputRef = useRef<TextInput | null>(null);
   const bar = useRef<View | null>(null);
@@ -265,7 +266,7 @@ export function ModeBar() {
     open: (swatch) => {
       swatch.measureInWindow((sx, _sy, sw) => {
         bar.current?.measureInWindow((bx, by) => {
-          setFlyout({ left: sx + sw / 2 - bx, centerX: sx + sw / 2, foot: by + MODE_BAR_HEIGHT_PX - FLYOUT_FOOT, hover: null });
+          setFlyout({ left: sx + sw / 2 - bx, centerX: sx + sw / 2, foot: by + chrome.control - FLYOUT_FOOT, hover: null });
         });
       });
     },
@@ -284,15 +285,14 @@ export function ModeBar() {
 
   const paletteExpanded = !messageExpanded;
   const openFlyout = paletteExpanded ? flyout : null;
-  // The send button reuses the palette pill's slot on purpose.
-  const showSendInPaletteSlot = messageExpanded && messageText.trim() !== "";
-  const pillColor = showSendInPaletteSlot ? color.send : STRIP.ground;
-  const slot = paletteExpanded ? Slot.Empty : showSendInPaletteSlot ? Slot.Send : Slot.Palette;
+  // The send button takes the folded palette's place.
+  const slot = paletteExpanded ? Slot.Empty : messageText.trim() !== "" ? Slot.Send : Slot.Palette;
+  const pillColor = slot === Slot.Send ? color.send : STRIP.ground;
 
-  const room = Math.max(MODE_BAR_HEIGHT_PX, barWidth - MODE_BAR_HEIGHT_PX - chrome.controlGap);
+  const room = Math.max(chrome.control, barWidth - chrome.control - chrome.controlGap);
   const messageOpen = Math.min(MESSAGE_OPEN_PX, room);
-  const messageWidth = messageExpanded ? messageOpen : MODE_BAR_HEIGHT_PX;
-  const paletteWidth = paletteExpanded ? Math.min(stripWidth, room) : MODE_BAR_HEIGHT_PX;
+  const messageWidth = messageExpanded ? messageOpen : chrome.control;
+  const paletteWidth = paletteExpanded ? Math.min(stripWidth, room) : chrome.control;
   // Whole pixels, where a page's pill cuts its shadow cleanly.
   const messageX = PixelRatio.roundToNearestPixel((barWidth - (messageWidth + chrome.controlGap + paletteWidth)) / 2);
   const paletteX = PixelRatio.roundToNearestPixel(messageX + messageWidth + chrome.controlGap);
@@ -304,7 +304,7 @@ export function ModeBar() {
           <Pill
             x={messageX}
             width={messageWidth}
-            height={MODE_BAR_HEIGHT_PX}
+            height={chrome.control}
             span={barWidth}
             fill={color.ground}
             place={BackingPlace.OverMap}
@@ -324,7 +324,7 @@ export function ModeBar() {
               from={{ opacity: 0, translateX: -10 }}
               exit={{ opacity: 0, translateX: -10 }}
               transition={SNAP}
-              style={[styles.messageField, { width: messageOpen - MODE_BAR_HEIGHT_PX - 8 }]}
+              style={[styles.messageField, { width: messageOpen - chrome.control - 8 }]}
             >
               <Motion to={{ opacity: isSending ? 0 : 1 }} transition={FADE} style={styles.fieldFill}>
                 <TextField
@@ -344,7 +344,7 @@ export function ModeBar() {
           <Pill
             x={paletteX}
             width={paletteWidth}
-            height={MODE_BAR_HEIGHT_PX}
+            height={chrome.control}
             span={barWidth}
             fill={pillColor}
             tint={pillColor}
@@ -359,12 +359,8 @@ export function ModeBar() {
               style={[styles.strip, { maxWidth: room }, paletteExpanded ? styles.pass : styles.block]}
             >
               <View style={styles.group}>
-                <ToolButton label={t("map.mode_bar.pointer")} active={activeTool === ActiveTool.Pointer} onPress={() => setActiveTool(ActiveTool.Pointer)}>
-                  <Glyph glyph="hand.point.up.left" size={chrome.glyph} color={activeTool === ActiveTool.Pointer ? STRIP.glyphOn : STRIP.glyph} />
-                </ToolButton>
-                <ToolButton label={t("map.mode_bar.eraser")} active={activeTool === ActiveTool.Eraser} onPress={() => setActiveTool(ActiveTool.Eraser)}>
-                  <Glyph glyph="eraser" size={chrome.glyph} color={activeTool === ActiveTool.Eraser ? STRIP.glyphOn : STRIP.glyph} />
-                </ToolButton>
+                <ToolButton label={t("map.mode_bar.pointer")} glyph="hand.point.up.left" active={activeTool === ActiveTool.Pointer} onPress={() => setActiveTool(ActiveTool.Pointer)} />
+                <ToolButton label={t("map.mode_bar.eraser")} glyph="eraser" active={activeTool === ActiveTool.Eraser} onPress={() => setActiveTool(ActiveTool.Eraser)} />
               </View>
 
               <View style={styles.divider} />
@@ -377,18 +373,14 @@ export function ModeBar() {
                 contentContainerStyle={styles.picksContent}
               >
                 {recentPicks.map((pick) =>
-                  pick.tool === ActiveTool.Object
-                    ? <ColorSwatchButton key={placeableCubeId(pick.cube)} cube={pick.cube} sizes={sizes} />
-                    : <DecorIconButton key={`decor:${pick.kind}`} kind={pick.kind} />
+                  pick.tool === ActiveTool.Object ? <SwatchButton key={placeableCubeId(pick.cube)} cube={pick.cube} sizes={sizes} /> : <DecorIconButton key={`decor:${pick.kind}`} kind={pick.kind} />
                 )}
               </ScrollView>
 
               <View style={styles.divider} />
 
               <View style={styles.group}>
-                <ToolButton label={t("map.mode_bar.catalog_tooltip")} onPress={() => openModal("drawer")}>
-                  <Glyph glyph="square.grid.2x2" size={chrome.glyph} color={STRIP.glyph} />
-                </ToolButton>
+                <ToolButton label={t("map.mode_bar.catalog_tooltip")} glyph="square.grid.2x2" onPress={() => openModal("drawer")} />
               </View>
             </Motion>
 
@@ -438,7 +430,7 @@ export function ModeBar() {
   );
 }
 
-const PILL = { height: MODE_BAR_HEIGHT_PX, borderRadius: MODE_BAR_HEIGHT_PX / 2 };
+const PILL = { height: chrome.control, borderRadius: chrome.control / 2 };
 
 const STRIP = {
   glyph: alpha(color.white, 0.6),
@@ -451,24 +443,24 @@ const STRIP = {
 };
 
 const styles = StyleSheet.create({
-  bar: { height: MODE_BAR_HEIGHT_PX, width: "100%", minWidth: 0, pointerEvents: "box-none" },
+  bar: { height: chrome.control, width: "100%", minWidth: 0, pointerEvents: "box-none" },
 
-  messageIcon: { width: MODE_BAR_HEIGHT_PX, height: MODE_BAR_HEIGHT_PX, alignItems: "center", justifyContent: "center" },
+  messageIcon: { width: chrome.control, height: chrome.control, alignItems: "center", justifyContent: "center" },
   messageField: { flexDirection: "row", alignItems: "center", minWidth: 0 },
   fieldFill: { flex: 1 },
   messageInput: { width: "100%", color: LABEL.primary },
 
-  slotButton: { ...PILL, position: "absolute", left: 0, top: 0, width: MODE_BAR_HEIGHT_PX, alignItems: "center", justifyContent: "center" },
+  slotButton: { ...PILL, position: "absolute", left: 0, top: 0, width: chrome.control, alignItems: "center", justifyContent: "center" },
   sendPressed: { opacity: 0.7 },
 
   strip: { ...PILL, flexDirection: "row", alignItems: "center" },
   // An inline `box-none` is drawn as a `none` the strip's tools inherit.
   pass: { pointerEvents: "box-none" },
   block: { pointerEvents: "none" },
-  group: { flexDirection: "row", alignItems: "center", padding: (MODE_BAR_HEIGHT_PX - chrome.target) / 2, flexShrink: 0 },
+  group: { flexDirection: "row", alignItems: "center", padding: (chrome.control - chrome.target) / 2, flexShrink: 0 },
   divider: { width: 1, height: 28, backgroundColor: STRIP.line, flexShrink: 0 },
   picks: { flexShrink: 1, minWidth: 0 },
-  picksContent: { alignItems: "center", paddingHorizontal: (MODE_BAR_HEIGHT_PX - chrome.target) / 2 },
+  picksContent: { alignItems: "center", paddingHorizontal: (chrome.control - chrome.target) / 2 },
 
   // No wider than a target: past it, the later neighbor in the tree takes the tap.
   slot: { width: chrome.target, height: chrome.target, alignItems: "center", justifyContent: "center", flexShrink: 0 },

@@ -8,9 +8,7 @@ import { round } from "@xpute/core/math/scalar.ts";
 import { useKernel } from "@/kernel/shell.ts";
 
 import { Presence } from "@/shared/ui/motion/presence.tsx";
-import { LEAVE, SETTLE, SNAP } from "@/shared/ui/motion/transition.ts";
-import { useVeil } from "@/shared/ui/motion/veil.ts";
-import { Motion } from "@platform/motion.tsx";
+import { LEAVE, SETTLE } from "@/shared/ui/motion/transition.ts";
 import { HaloText } from "@/shared/ui/halo.tsx";
 import { color, halo, haloRings, textStyle, weight } from "@/shared/ui/theme.ts";
 
@@ -34,7 +32,6 @@ export function MapScaleBar({ show }: { show: boolean }) {
   const mPerPx = useKernel((s) => s.m_per_px);
   const totalMeters = niceLength(BAR_MAX_PX * mPerPx);
   const barWidthPx = mPerPx > 0 ? totalMeters / mPerPx : 0;
-  const veil = useVeil(1, SNAP);
 
   // SI units are case-sensitive: never upper-case the label.
   const label: string = totalMeters >= 1000 ? `${totalMeters / 1000}km` : `${totalMeters}m`;
@@ -56,18 +53,17 @@ export function MapScaleBar({ show }: { show: boolean }) {
       exit={{ opacity: 0 }}
       transition={SETTLE}
       exitTransition={LEAVE}
+      style={[styles.root, { paddingBottom: 2 * line - height }]}
     >
-      <Motion to={{ opacity: veil.level }} transition={veil.transition} style={[styles.root, { paddingBottom: 2 * line - height }]}>
-        <HaloText style={styles.label}>{label}</HaloText>
-        <Svg width={width} height={svgHeight} viewBox={`0 0 ${width} ${svgHeight}`} style={styles.bar}>
-          {haloRings.map((px) => (
-            <G key={px} opacity={halo.ring}>
-              <Path d={d} stroke={color.black} strokeWidth={LINE_PX + 2 * px} fill="none" strokeLinecap="square" />
-            </G>
-          ))}
-          <Path d={d} stroke={color.white} strokeWidth={LINE_PX} fill="none" strokeLinecap="square" />
-        </Svg>
-      </Motion>
+      <HaloText style={styles.label}>{label}</HaloText>
+      <Svg width={width} height={svgHeight} viewBox={`0 0 ${width} ${svgHeight}`} style={styles.bar}>
+        {haloRings.map((px) => (
+          <G key={px} opacity={halo.ring}>
+            <Path d={d} stroke={color.black} strokeWidth={LINE_PX + 2 * px} fill="none" strokeLinecap="square" />
+          </G>
+        ))}
+        <Path d={d} stroke={color.white} strokeWidth={LINE_PX} fill="none" strokeLinecap="square" />
+      </Svg>
     </Presence>
   );
 }

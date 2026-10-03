@@ -12,13 +12,6 @@ import type { GlyphName } from "@platform/icon.tsx";
 import { haloGap, HaloIcon } from "@/shared/ui/halo.tsx";
 import { color } from "@/shared/ui/theme.ts";
 
-export function useSensors() {
-  const location = useKernel((s) => s.location.status);
-  const orientation = useKernel((s) => s.orientation.status);
-  const hasCompass = HANDHELD && orientation !== DevicePoseStatus.Unavailable;
-  return { location, orientation, hasCompass };
-}
-
 const LOOK: Record<DevicePoseStatus, { color: string; presence: f64 }> = {
   [DevicePoseStatus.Idle]: { color: color.white, presence: 0.35 },
   [DevicePoseStatus.Loading]: { color: color.pendingGlyph, presence: 1 },
@@ -28,7 +21,8 @@ const LOOK: Record<DevicePoseStatus, { color: string; presence: f64 }> = {
 };
 
 export function SensorStatus() {
-  const { location, orientation, hasCompass } = useSensors();
+  const location = useKernel((s) => s.location.status);
+  const orientation = useKernel((s) => s.orientation.status);
 
   // Faded as one layer with its halo: faded apart, the halo greyed the glyph.
   const icon = (glyph: GlyphName, status: DevicePoseStatus) => (
@@ -40,7 +34,7 @@ export function SensorStatus() {
   return (
     <View style={styles.row}>
       {icon("location", location)}
-      {hasCompass && icon("location.north.circle", orientation)}
+      {HANDHELD && orientation !== DevicePoseStatus.Unavailable && icon("location.north.circle", orientation)}
     </View>
   );
 }

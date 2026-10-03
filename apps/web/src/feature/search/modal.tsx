@@ -12,8 +12,7 @@ import { KEEPS_KEYBOARD } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
 import { alpha, chrome, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
 import { Command, DevicePoseStatus, encode_input_go_to } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_command, kernel_enable_location, kernel_snapshot } from "@/kernel/shell.ts";
-import { useSensors } from "@/feature/map/ui/overlay/sensor-status.tsx";
+import { kernel_command, kernel_enable_location, kernel_snapshot, useKernel } from "@/kernel/shell.ts";
 import { LABEL, STATUS } from "@platform/palette.ts";
 import { AboveKeyboard } from "@platform/above-keyboard.tsx";
 import { SYSTEM_CLEAR } from "@platform/text-field.ts";
@@ -98,7 +97,7 @@ const CLEAR = 16;
 
 function LocateCard() {
   const { t } = useTranslation();
-  const { location } = useSensors();
+  const location = useKernel((s) => s.location.status);
   if (location === DevicePoseStatus.Ready) return null;
   return (
     <AboveKeyboard inset={PANEL_EDGE}>

@@ -8,8 +8,7 @@ import type { GlyphName } from "@platform/icon.tsx";
 
 import { type Setting, type SettingName, SETTINGS, type SettingSection, settingsIn } from "@/feature/setting/schema.ts";
 import { SectionTitle, SettingChoiceRow, SettingGroup, SettingRow } from "./row.tsx";
-import { Command, encode_setting_set } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_command, useKernel } from "@/kernel/shell.ts";
+import { kernel_setting, useKernel } from "@/kernel/shell.ts";
 
 const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {
   display: "eye",
@@ -56,7 +55,7 @@ function SettingControl(props: { name: SettingName }) {
           label={t(`${base}.label`)}
           description={t(`${base}.description`)}
           active={value === 1}
-          onChange={(on) => kernel_command(Command.SETTING_SET, encode_setting_set({ key, value: on ? 1 : 0 }))}
+          onChange={(on) => kernel_setting(key, on ? 1 : 0)}
           cost={setting.cost}
           dev={setting.dev}
         />
@@ -70,7 +69,7 @@ function SettingControl(props: { name: SettingName }) {
               label={t(`${base}.${option}.label`)}
               description={t(`${base}.${option}.description`)}
               selected={value === i}
-              onSelect={() => kernel_command(Command.SETTING_SET, encode_setting_set({ key, value: i }))}
+              onSelect={() => kernel_setting(key, i)}
               cost={setting.costs?.[i] || setting.cost}
               dev={devOption(setting, option)}
             />
