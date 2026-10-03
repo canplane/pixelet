@@ -61,18 +61,18 @@ impl CameraMode {
 ///             reachable at the cost of an angle nobody asked for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
-pub enum ObstacleMode {
+pub enum OrbitObstacleMode {
     through = 0,
     stop = 1,
     climb = 2,
 }
 
-impl ObstacleMode {
-    pub const ALL: [ObstacleMode; 3] = [ObstacleMode::through, ObstacleMode::stop, ObstacleMode::climb];
+impl OrbitObstacleMode {
+    pub const ALL: [OrbitObstacleMode; 3] = [OrbitObstacleMode::through, OrbitObstacleMode::stop, OrbitObstacleMode::climb];
 
     /// The option an index names, or none for an index past the list.
-    pub fn of(index: u32) -> Option<ObstacleMode> {
-        ObstacleMode::ALL.get(index as usize).copied()
+    pub fn of(index: u32) -> Option<OrbitObstacleMode> {
+        OrbitObstacleMode::ALL.get(index as usize).copied()
     }
 }
 
@@ -180,8 +180,8 @@ pub enum SettingKey {
     camera_mode = 4,
     /// The map center stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck.
     surface_follow = 5,
-    /// What the camera does when the controls would put it underground; OBSTACLE_MODES says each.
-    obstacle = 6,
+    /// What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each.
+    orbit_obstacle = 6,
     /// Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.
     edge_shade = 7,
@@ -214,7 +214,7 @@ impl SettingKey {
         SettingKey::tilt_lock,
         SettingKey::camera_mode,
         SettingKey::surface_follow,
-        SettingKey::obstacle,
+        SettingKey::orbit_obstacle,
         SettingKey::edge_shade,
         SettingKey::rim_light,
         SettingKey::ao,
@@ -239,7 +239,7 @@ impl SettingKey {
             SettingKey::tilt_lock => SettingKind::Toggle,
             SettingKey::camera_mode => SettingKind::Choice,
             SettingKey::surface_follow => SettingKind::Toggle,
-            SettingKey::obstacle => SettingKind::Choice,
+            SettingKey::orbit_obstacle => SettingKind::Choice,
             SettingKey::edge_shade => SettingKind::Toggle,
             SettingKey::rim_light => SettingKind::Toggle,
             SettingKey::ao => SettingKind::Choice,
@@ -261,7 +261,7 @@ impl SettingKey {
             SettingKey::tilt_lock => "tilt_lock",
             SettingKey::camera_mode => "camera_mode",
             SettingKey::surface_follow => "surface_follow",
-            SettingKey::obstacle => "obstacle",
+            SettingKey::orbit_obstacle => "orbit_obstacle",
             SettingKey::edge_shade => "edge_shade",
             SettingKey::rim_light => "rim_light",
             SettingKey::ao => "ao",
@@ -278,7 +278,7 @@ impl SettingKey {
     pub fn options(self) -> &'static [&'static str] {
         match self {
             SettingKey::camera_mode => &["orbit", "free"],
-            SettingKey::obstacle => &["through", "stop", "climb"],
+            SettingKey::orbit_obstacle => &["through", "stop", "climb"],
             SettingKey::ao => &["off", "corner", "screen"],
             SettingKey::resolution => &["auto", "fixed", "low"],
             _ => &[],
@@ -293,7 +293,7 @@ impl SettingKey {
     /// A choice's option a development build only offers.
     pub fn dev_option(self, value: u32) -> bool {
         match self {
-            SettingKey::obstacle => matches!(value, 0),
+            SettingKey::orbit_obstacle => matches!(value, 0),
             _ => false,
         }
     }
@@ -313,7 +313,7 @@ pub struct Settings {
     pub tilt_lock: bool,
     pub camera_mode: CameraMode,
     pub surface_follow: bool,
-    pub obstacle: ObstacleMode,
+    pub orbit_obstacle: OrbitObstacleMode,
     pub edge_shade: bool,
     pub rim_light: bool,
     pub ao: AoMode,
@@ -334,7 +334,7 @@ impl Settings {
         tilt_lock: false,
         camera_mode: CameraMode::orbit,
         surface_follow: true,
-        obstacle: ObstacleMode::climb,
+        orbit_obstacle: OrbitObstacleMode::climb,
         edge_shade: true,
         rim_light: true,
         ao: AoMode::corner,
@@ -356,7 +356,7 @@ impl Settings {
             SettingKey::tilt_lock => self.tilt_lock as u32,
             SettingKey::camera_mode => self.camera_mode as u32,
             SettingKey::surface_follow => self.surface_follow as u32,
-            SettingKey::obstacle => self.obstacle as u32,
+            SettingKey::orbit_obstacle => self.orbit_obstacle as u32,
             SettingKey::edge_shade => self.edge_shade as u32,
             SettingKey::rim_light => self.rim_light as u32,
             SettingKey::ao => self.ao as u32,
@@ -382,8 +382,8 @@ impl Settings {
                 None => return false,
             },
             SettingKey::surface_follow if value <= 1 => self.surface_follow = value == 1,
-            SettingKey::obstacle => match ObstacleMode::of(value) {
-                Some(o) => self.obstacle = o,
+            SettingKey::orbit_obstacle => match OrbitObstacleMode::of(value) {
+                Some(o) => self.orbit_obstacle = o,
                 None => return false,
             },
             SettingKey::edge_shade if value <= 1 => self.edge_shade = value == 1,

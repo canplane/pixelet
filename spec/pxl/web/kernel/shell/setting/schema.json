@@ -53,7 +53,7 @@
       "          height over where the walk stands."
     ]
   },
-  "OBSTACLE_MODES": {
+  "ORBIT_OBSTACLE_MODES": {
     "$value": ["through", "stop", "climb"],
     "$doc": [
       "What terrain does to the camera.",
@@ -165,11 +165,11 @@
       "section": "navigation",
       "dev": true
     },
-    "obstacle": {
-      "$doc": ["What the camera does when the controls would put it underground; OBSTACLE_MODES says each."],
+    "orbit_obstacle": {
+      "$doc": ["What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each."],
       "kind": "choice",
       "default": "climb",
-      "options": "OBSTACLE_MODES",
+      "options": "ORBIT_OBSTACLE_MODES",
       "section": "camera",
       "dev_options": ["through"]
     },

@@ -96,8 +96,8 @@ export const SETTINGS = {
     section: "navigation",
     dev: true,
   },
-  /** What the camera does when the controls would put it underground; OBSTACLE_MODES says each. */
-  obstacle: {
+  /** What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. */
+  orbit_obstacle: {
     key: 6 as number,
     kind: "choice",
     default: "climb",
@@ -211,8 +211,8 @@ export const SETTINGS_SHIPPED = {
     options: ["orbit", "free"],
     section: "map",
   },
-  /** What the camera does when the controls would put it underground; OBSTACLE_MODES says each. */
-  obstacle: {
+  /** What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. */
+  orbit_obstacle: {
     key: 6 as number,
     kind: "choice",
     default: "climb",

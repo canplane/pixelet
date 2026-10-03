@@ -22,7 +22,7 @@ use crate::control::camera::gesture::{spread, Anchor};
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
 use crate::control::navigation::support::target;
 use crate::global::Global;
-use crate::shell::setting::store::{settings_store, ObstacleMode};
+use crate::shell::setting::store::{settings_store, OrbitObstacleMode};
 use crate::world::frame::view::{view, view_compose};
 use crate::world::observation::heights_revision;
 use terrain_gate::{allowed_view, climb_polar, ViewTriple};
@@ -105,7 +105,7 @@ fn climb_polar_memo(dist: f64, polar: f64, azimuth: f64) -> f64 {
 pub fn ask(partial: IntentPatch) -> Intent {
     let c = camera_store();
     let mut asked = c.merged(partial);
-    if partial.polar.is_some() && settings_store().obstacle == ObstacleMode::climb {
+    if partial.polar.is_some() && settings_store().orbit_obstacle == OrbitObstacleMode::climb {
         asked.polar = climb_polar(asked.dist, asked.polar, asked.azimuth);
     }
     c.commit_intent(gate(c.intent, asked));
@@ -190,8 +190,8 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
 
     // `climb` pitches the look toward straight down instead of shortening dist:
     // rising fast and relaxing slowly while the ground bounds it.
-    let polar = match settings_store().obstacle {
-        ObstacleMode::climb => climb_polar_memo(o.dist, vs.polar, vs.azimuth),
+    let polar = match settings_store().orbit_obstacle {
+        OrbitObstacleMode::climb => climb_polar_memo(o.dist, vs.polar, vs.azimuth),
         _ => vs.polar,
     };
     let rate = match (polar < vs.polar, polar < cam.pitch) {

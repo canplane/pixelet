@@ -13,7 +13,7 @@ use crate::global::Global;
 use crate::host::development;
 use crate::io::file;
 use crate::sched::profiler::log::profiler_follow;
-pub use crate::shell::setting::schema_spec::{AoMode, ObstacleMode, CameraMode, ResolutionMode, SettingKey, SettingKind, Settings};
+pub use crate::shell::setting::schema_spec::{AoMode, OrbitObstacleMode, CameraMode, ResolutionMode, SettingKey, SettingKind, Settings};
 use crate::world::chunk::source::chunk_sources_changed;
 
 /// A dev-only setting outside a development build is not offered: storage

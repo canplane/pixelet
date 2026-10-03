@@ -12,7 +12,7 @@ use xpute_core::math::scalar::wrap;
 use crate::control::camera::config::camera_cfg::view::EYE_CLEARANCE_U;
 use crate::control::camera::orbit::orbit_eye_offset;
 use crate::control::navigation::support::{in_cell, passage, Passage};
-use crate::shell::setting::store::{settings_store, ObstacleMode};
+use crate::shell::setting::store::{settings_store, OrbitObstacleMode};
 use crate::world::access::{Access, Answer};
 use crate::world::frame::coord::{local_height, local_world_to_canonical};
 
@@ -95,16 +95,16 @@ const STEP_SAMPLES: u32 = 16;
 /// exemption for an already-blocked start once opened the gate for good.
 pub fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
     // Checked first so the setting skips the floor's walk.
-    match settings_store().obstacle {
-        ObstacleMode::through => return *to,
+    match settings_store().orbit_obstacle {
+        OrbitObstacleMode::through => return *to,
         // A climb that would pass through something solid (a tunnel's roof to the
         // surface over it) is held as `stop` holds it.
-        ObstacleMode::climb => {
+        OrbitObstacleMode::climb => {
             if path_clear(from, &climbed(*to)) {
                 return *to;
             }
         }
-        ObstacleMode::stop => {}
+        OrbitObstacleMode::stop => {}
     }
 
     let limit = penetration(from).map_or(0.0, |start| start.max(0.0));

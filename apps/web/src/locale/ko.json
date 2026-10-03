@@ -46,7 +46,7 @@
         "label": "기울기 고정",
         "description": "기울기를 고정하고 좌우로만 회전합니다."
       },
-      "obstacle": {
+      "orbit_obstacle": {
         "label": "장애물 대응",
         "through": {
           "label": "통과",

@@ -46,7 +46,7 @@
         "label": "Lock tilt",
         "description": "Fixes the tilt; turns left and right only."
       },
-      "obstacle": {
+      "orbit_obstacle": {
         "label": "Obstacles",
         "through": {
           "label": "Pass through",
