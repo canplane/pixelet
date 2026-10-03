@@ -19,10 +19,14 @@ use crate::world::frame::coord::{canonical_to_local, local_world_origin, local_w
 /// The Z lane's floor, under any ground.
 const UNKNOWN_Z: i64 = -(1 << (IVEC_Z_W - 1)) << FRAC_W;
 
-pub fn unknown_z(at: &Pvf3) -> Pvf3 {
+fn with_z(at: &Pvf3, z: i64) -> Pvf3 {
     let mut out = Pvf3::default();
-    pvf3::gather(&mut out, pvf3::X(at), pvf3::Y(at), UNKNOWN_Z);
+    pvf3::gather(&mut out, pvf3::X(at), pvf3::Y(at), z);
     out
+}
+
+pub fn unknown_z(at: &Pvf3) -> Pvf3 {
+    with_z(at, UNKNOWN_Z)
 }
 
 pub fn is_unknown(at: &Pvf3) -> bool {
@@ -49,9 +53,7 @@ pub fn floor_of(center: &Pvf3) -> f64 {
 }
 
 fn stand_over(at: &Pvf3, top: f64) -> Pvf3 {
-    let mut out = Pvf3::default();
-    pvf3::gather(&mut out, pvf3::X(at), pvf3::Y(at), pvf3::from_real(over(top)));
-    out
+    with_z(at, pvf3::from_real(over(top)))
 }
 
 /// An unknown Z on the surface of the finest ground known there.
@@ -116,16 +118,9 @@ pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, yaw: f64) -> Pvf
     }
 }
 
-/// A cell height's middle, in units.
-fn mid(cz: i64) -> f64 {
-    (cz as f64 + 0.5) * CELL.side()
-}
-
-/// `at` moved to the middle of cell height `cz`.
+/// `at` in cell height `cz`.
 pub fn in_cell(at: &Pvf3, cz: i64) -> Pvf3 {
-    let mut out = Pvf3::default();
-    pvf3::gather(&mut out, pvf3::X(at), pvf3::Y(at), pvf3::from_real(mid(cz)));
-    out
+    stand_over(at, cz as f64 * CELL.side())
 }
 
 pub enum Passage {
@@ -151,7 +146,7 @@ pub fn passage(from: &Pvf3, way: [f64; 2], start: i64) -> Passage {
             return Passage::Blocked;
         }
         let ray = Ray {
-            origin: [x + dir[0] * t, y + dir[1] * t, mid(cz)],
+            origin: [x + dir[0] * t, y + dir[1] * t, over(cz as f64 * side)],
             direction: [dir[0], dir[1], 0.0],
             reach: length - t,
         };
