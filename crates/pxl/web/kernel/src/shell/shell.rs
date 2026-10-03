@@ -4,6 +4,7 @@
 //! only when changed) and the commands it applies to the stores.
 
 use pxl_spec::bake::place_page::leaf_slot;
+use pxl_spec::cell::object::{decor_num_id, placeable_cube_parts};
 use pxl_spec::space::adapter::epsg4326;
 use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -11,7 +12,7 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_core::wire::xtp::PacketWriter;
 
 pub use crate::abi::cmd::Tracking;
-use crate::abi::cmd::{CompanionState, LocationState, LonLat, MapState, OrientationState, PlaceName, PlacePart, Snapshot};
+use crate::abi::cmd::{CompanionState, HoldingState, LocationState, LonLat, MapState, OrientationState, PlaceName, PlacePart, Snapshot};
 use crate::control::camera::controller::Motion;
 use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
 use crate::control::navigation::destination::go_to_ground;
@@ -19,6 +20,7 @@ use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::device_orientation::{orientation_close, request_orientation};
 use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
 use crate::control::sensor::store::{device_location_store, device_orientation_store};
+use crate::control::interaction::holding;
 use crate::layer::character::preview::{preview_rows, CASES_MAX};
 use crate::layer::character::store::companion_load_store;
 use crate::layer::geocode::fetcher::center_group;
@@ -69,6 +71,8 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         LonLat { lon: g[0], lat: g[1] }
     });
     let values = SettingKey::ALL.map(|key| settings.get(key));
+    let held = holding();
+    let (held_channel, held_cube) = placeable_cube_parts(held.object_cube);
     let mut previews = [0u32; CASES_MAX];
     let mut preview_cnt = 0;
     for (slot, (surface, _, _)) in previews.iter_mut().zip(preview_rows()) {
@@ -89,6 +93,13 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         companion: CompanionState {
             person_ready: companion.person_ready,
             pet_ready: companion.pet_ready,
+        },
+        holding: HoldingState {
+            tool: held.active_tool,
+            channel: held_channel,
+            cube: held_cube as u32,
+            decor: decor_num_id(held.decor_id),
+            tier: held.object_tier,
         },
         orientation: OrientationState { status: orientation.pose.status() },
         azimuth: camera.intent.azimuth,

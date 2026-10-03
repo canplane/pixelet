@@ -23,7 +23,7 @@ use crate::layer::decor::build::user_decor_pick;
 use crate::layer::decor::instance::NO_ENTRY;
 use crate::layer::decor::kind::kind_for;
 use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
-use crate::layer::object::size::DECOR_SIZE;
+use crate::layer::object::size::{object_size_of, DECOR_SIZE};
 use crate::layer::object::store::{carve_entry, get_placed_object, restores_scattered, EntryAt, EntryKind};
 use crate::shell::setting::store::settings_store;
 use crate::world::access::{Access, FINEST};
@@ -88,7 +88,7 @@ pub fn hover_cursor_step() {
         (Some(o), ActiveTool::Eraser | ActiveTool::Pointer) => o.size(),
         (_, ActiveTool::Decor) => DECOR_SIZE,
         _ if digging_terrain || scattered => U_PER_CELL,
-        _ => ui.object_size,
+        _ => object_size_of(ui.object_tier),
     };
 
     let current_scale = if use_object_style { preview_size } else { U_PER_CELL };
@@ -97,7 +97,7 @@ pub fn hover_cursor_step() {
         (None, _) => false,
         (Some(h), ActiveTool::Object | ActiveTool::Decor) => {
             let tool = if active_tool == ActiveTool::Object { PlacementTool::Object } else { PlacementTool::Decor };
-            is_placement_blocked(tool, h, ui.object_size)
+            is_placement_blocked(tool, h, object_size_of(ui.object_tier))
         }
         _ => false,
     };

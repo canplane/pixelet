@@ -18,7 +18,7 @@ use crate::control::navigation::support::stand;
 use crate::layer::decor::hit::{raycast_decor, DecorStruck, Scattered};
 use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
 use crate::layer::object::geometry::{anchor_center, object_aabb};
-use crate::layer::object::size::{DECOR_SIZE, DEFAULT_OBJECT_SIZE};
+use crate::layer::object::size::{object_size_of, DECOR_SIZE};
 use crate::layer::object::store::{get_placed_object, place, place_air, place_decor, remove, Entry, EntryAt};
 use crate::world::access::Hit;
 use crate::world::frame::view::{view, view_ray_local};
@@ -30,7 +30,8 @@ pub struct Holding {
     /// The hotbar only ever sets this to a flat color, but the drawer picks
     /// terrain-styled cubes too.
     pub object_cube: PlaceableCube,
-    pub object_size: f64,
+    /// The object size by its tier (`object_size_of`).
+    pub object_tier: u32,
     pub decor_id: DecorId,
 }
 
@@ -39,7 +40,7 @@ impl Default for Holding {
         Holding {
             active_tool: ActiveTool::Pointer,
             object_cube: PlaceableCube::Block(cube_types::Block::red),
-            object_size: DEFAULT_OBJECT_SIZE,
+            object_tier: 0,
             decor_id: DecorId::tree,
         }
     }
@@ -135,7 +136,7 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
         hover.object_at = None;
         hover.scattered = None;
         hover.approach = None;
-        let placement_size = if ui.active_tool == ActiveTool::Decor { DECOR_SIZE } else { ui.object_size };
+        let placement_size = if ui.active_tool == ActiveTool::Decor { DECOR_SIZE } else { object_size_of(ui.object_tier) };
         // A decor met in front of the pick is what the new cube goes flush against.
         let precise_box = resolve_hit_target(&hit, origin, direction, map_origin).map(|o| object_aabb(&o, map_origin));
         hover.coord = Some(world_adjacent_corner(&hit, placement_size, map_origin, precise_box.as_ref()));
@@ -175,7 +176,7 @@ pub(crate) fn tap(ndc_x: f64, ndc_y: f64) {
     let Some(hovered) = interaction().hover.coord else { return };
     let ui = interaction().holding;
     let hover = interaction().hover;
-    let object_size = ui.object_size;
+    let object_size = object_size_of(ui.object_tier);
 
     match ui.active_tool {
         ActiveTool::Pointer => {

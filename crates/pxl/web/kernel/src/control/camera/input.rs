@@ -15,7 +15,7 @@ use crate::control::camera::config::camera_cfg;
 use crate::control::camera::controller::{active, Active};
 use crate::control::camera::gesture::{linear, Anchor};
 use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
-use crate::control::interaction::{clear_hover, clear_hover_coord, hold, hover_at, tap, Holding};
+use crate::control::interaction::{clear_hover, clear_hover_coord, hover_at, tap};
 use crate::control::navigation::destination::cancel as cancel_destination;
 use crate::shell::setting::store::settings_store;
 use crate::world::change::request_world_tick;
@@ -64,6 +64,8 @@ struct Input {
     // Total displacement from pointerdown, not per-event deltas, decides tap vs drag.
     tap_start_x: f64,
     tap_start_y: f64,
+    /// A mouse over the canvas and not dragging, whose hover a new holding redoes.
+    hovering: bool,
     hover_pending: bool,
 
     // Pointer moves fire far more often than frames; uncoalesced store writes
@@ -105,6 +107,7 @@ fn input() -> &'static mut Input {
         last_y: 0.0,
         tap_start_x: 0.0,
         tap_start_y: 0.0,
+        hovering: false,
         hover_pending: false,
         drag_pending: false,
         pending_pan_dx: 0.0,
@@ -241,11 +244,11 @@ fn update_pinch(s: &mut Input) {
     }
 }
 
-pub fn camera_pointer_down(kind: PointerKind, pointer_id: i32, button: i32, client_x: f64, client_y: f64, holding: Holding) {
+pub fn camera_pointer_down(kind: PointerKind, pointer_id: i32, button: i32, client_x: f64, client_y: f64) {
     let s = input();
-    hold(holding);
     let camera = camera_store();
     if kind == PointerKind::Touch {
+        s.hovering = false;
         s.active_pointers.insert(pointer_id, PointerPos { x: client_x, y: client_y });
         camera.camera_status = CameraStatus::Drag;
         camera.is_follow_mode = false;
@@ -288,9 +291,8 @@ pub fn camera_pointer_down(kind: PointerKind, pointer_id: i32, button: i32, clie
     camera.is_follow_mode = false;
 }
 
-pub fn camera_pointer_move(kind: PointerKind, pointer_id: i32, client_x: f64, client_y: f64, holding: Holding) {
+pub fn camera_pointer_move(kind: PointerKind, pointer_id: i32, client_x: f64, client_y: f64) {
     let s = input();
-    hold(holding);
     if kind == PointerKind::Touch {
         if let Some(pt) = s.active_pointers.get_mut(&pointer_id) {
             *pt = PointerPos { x: client_x, y: client_y };
@@ -314,6 +316,7 @@ pub fn camera_pointer_move(kind: PointerKind, pointer_id: i32, client_x: f64, cl
 
     update_pointer(s, client_x, client_y);
     if s.drag_mode == DragMode::None {
+        s.hovering = true;
         s.hover_pending = true;
         return;
     }
@@ -339,9 +342,8 @@ fn tap_if_still(s: &Input, mode: DragMode) {
 }
 
 /// A pointer went up, or was canceled.
-pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32, holding: Holding) {
+pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32) {
     let s = input();
-    hold(holding);
     let camera = camera_store();
     if kind == PointerKind::Touch {
         s.active_pointers.remove(&pointer_id);
@@ -380,7 +382,16 @@ pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32, holding: Holding) {
 }
 
 pub fn camera_pointer_out() {
+    input().hovering = false;
     clear_hover();
+}
+
+/// What the pointer holds changed: a hovering pointer picks again where it stands.
+pub fn camera_rehover() {
+    let s = input();
+    if s.hovering {
+        s.hover_pending = true;
+    }
 }
 
 /// In CSS pixels.

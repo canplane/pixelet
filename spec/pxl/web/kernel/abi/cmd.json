@@ -176,6 +176,10 @@
         {
           "name": "POSE_END",
           "value": 10
+        },
+        {
+          "name": "HOLD",
+          "value": 11
         }
       ]
     },
@@ -987,9 +991,7 @@
           "name": "INPUT_POINTER",
           "value": 4354,
           "doc": [
-            "A pointer event on the canvas, in client pixels, with what the pointer holds; the",
-            "shell sends a move at the last position when the holding changes, as a browser",
-            "synthesizes a mouse move."
+            "A pointer event on the canvas, in client pixels."
           ],
           "packet": [
             {
@@ -1015,7 +1017,16 @@
             {
               "name": "y",
               "type": "f64"
-            },
+            }
+          ]
+        },
+        {
+          "name": "INPUT_HOLD",
+          "value": 4363,
+          "doc": [
+            "What the pointer holds, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer."
+          ],
+          "packet": [
             {
               "name": "tool",
               "type": "ActiveTool"
@@ -1415,6 +1426,10 @@
           "type": "CompanionState"
         },
         {
+          "name": "holding",
+          "type": "HoldingState"
+        },
+        {
           "name": "orientation",
           "type": "OrientationState"
         },
@@ -1536,6 +1551,41 @@
         {
           "name": "pet_ready",
           "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "HoldingState",
+      "doc": [
+        "What the pointer holds, as INPUT_HOLD set it: the cube and the decor are each remembered whichever tool is held."
+      ],
+      "fields": [
+        {
+          "name": "tool",
+          "type": "ActiveTool"
+        },
+        {
+          "name": "channel",
+          "type": "GroundChannelKey",
+          "optional": true,
+          "doc": [
+            "The held cube's ground channel; absent for a flat color."
+          ]
+        },
+        {
+          "name": "cube",
+          "type": "u32",
+          "doc": [
+            "The held cube's type in its channel."
+          ]
+        },
+        {
+          "name": "decor",
+          "type": "u32"
+        },
+        {
+          "name": "tier",
+          "type": "u32"
         }
       ]
     },

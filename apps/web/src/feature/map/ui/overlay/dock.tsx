@@ -20,7 +20,8 @@ import { keepKeyboard } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
 import { alpha, chrome, color, material, shadow } from "@/shared/ui/theme.ts";
 import { openModal } from "@/app/modal.tsx";
-import { useInHand, useUiStore } from "@/app/store/ui.ts";
+import { holdTier, holdTool, useInHand, useUiStore } from "@/app/store/ui.ts";
+import { useKernel } from "@/kernel/shell.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { type PlaceableCube, placeableCubeId } from "@/catalog/cell/mod.ts";
 import { OBJECT_TIERS } from "@/config/object.spec.ts";
@@ -89,7 +90,7 @@ function tierAt(at: Flyout, x: f64, y: f64): u32 | null {
 /** Drawn from the bar, not the swatch, whose scrolling strip would clip it. */
 function SizeFlyout({ hover }: { hover: u32 | null }) {
   const { t } = useTranslation();
-  const objectTier = useUiStore((s) => s.objectTier);
+  const objectTier = useKernel((s) => s.holding.tier);
 
   return (
     <Backing fill={STRIP.ground} material={material.flyout} place={BackingPlace.OverMap} style={styles.flyout}>
@@ -241,11 +242,9 @@ export function Dock() {
       onPanResponderGrant: () => Keyboard.dismiss(),
     }),
   ).current;
-  const activeTool = useUiStore((s) => s.activeTool);
-  const setActiveTool = useUiStore.getState().setActiveTool;
+  const activeTool = useKernel((s) => s.holding.tool);
   const recentPicks = useUiStore((s) => s.recentPicks);
   const appendChatLine = useUiStore.getState().appendChatLine;
-  const setObjectTier = useUiStore.getState().setObjectTier;
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [barWidth, setBarWidth] = useState<f64>(0);
@@ -281,7 +280,7 @@ export function Dock() {
     },
     lift: (x, y) => {
       const tier = flyout === null ? null : tierAt(flyout, x, y);
-      if (tier !== null) setObjectTier(tier);
+      if (tier !== null) holdTier(tier);
       setFlyout(null);
     },
     close: () => setFlyout(null),
@@ -366,8 +365,8 @@ export function Dock() {
               style={[styles.strip, { maxWidth: room }, open === Pane.Palette ? styles.pass : styles.block]}
             >
               <View style={styles.group}>
-                <ToolButton label={t("map.dock.pointer")} glyph="hand.point.up.left" active={activeTool === ActiveTool.Pointer} onPress={() => setActiveTool(ActiveTool.Pointer)} />
-                <ToolButton label={t("map.dock.eraser")} glyph="eraser" active={activeTool === ActiveTool.Eraser} onPress={() => setActiveTool(ActiveTool.Eraser)} />
+                <ToolButton label={t("map.dock.pointer")} glyph="hand.point.up.left" active={activeTool === ActiveTool.Pointer} onPress={() => holdTool(ActiveTool.Pointer)} />
+                <ToolButton label={t("map.dock.eraser")} glyph="eraser" active={activeTool === ActiveTool.Eraser} onPress={() => holdTool(ActiveTool.Eraser)} />
               </View>
 
               <View style={styles.divider} />
