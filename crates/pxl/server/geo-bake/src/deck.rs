@@ -311,8 +311,8 @@ impl<'a> Side<'a> {
 
             // over, on or under the ground by whole cells, as `Over::occupies` reads it
             let cell_per_m = u_per_m(from_db(piece.points[0][1])) / U_PER_CELL;
-            let side: Vec<i8> = over.iter().map(|h| round(h * cell_per_m).signum() as i8).collect();
-            let form = |s: i8| [None, Some(Form::Bore), Some(Form::Deck)][(s + 1) as usize];
+            let side: Vec<i8> = over.iter().map(|h| round(h * cell_per_m)).map(|c| i8::from(c > 0.0) - i8::from(c < 0.0)).collect();
+            let form = |s: i8| [Some(Form::Bore), None, Some(Form::Deck)][(s + 1) as usize];
 
             // runs of one side, each ending where the surface meets the ground
             let mut run = vec![points[0]];
