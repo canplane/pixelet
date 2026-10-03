@@ -37,24 +37,6 @@ struct TickPolicy {
     double content_share = 0;
 };
 
-struct FrameBudget {
-    double t0 = 0;
-    double total_ms = 0;
-    // Held back from the visible phase for content.
-    double reserve_ms = 0;
-    double hard_slack_ms = 0;
-
-    // `t0` is the rising edge: what the turn spent before the tick is spent.
-    FrameBudget(double total, double rise, double slack) noexcept : t0(rise), total_ms(total), hard_slack_ms(slack) {}
-
-    double remaining() const noexcept { return std::max(t0 + total_ms - reserve_ms - now(), 0.0); }
-
-    template <class Items, class Step> PassStats run(Items &&items, Step &&step, std::optional<std::uint32_t> max_steps = std::nullopt) const {
-        double left = remaining();
-        return run_under_budget(items, step, BudgetOpts{.budget_ms = left, .hard_budget_ms = left + hard_slack_ms, .max_steps = max_steps});
-    }
-};
-
 inline constexpr std::size_t OFFS_MAX = 8;
 
 template <class S> class TickContext {

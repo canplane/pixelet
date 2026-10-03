@@ -17,7 +17,7 @@ use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
 use pxl_spec::space::v3::{len3, sub3, V3};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::alloc;
-use xpute_runtime::sched::tick::FrameBudget;
+use xpute_runtime::sched::frame_budget::FrameBudget;
 
 use crate::control::camera::controller::units_per_px_at;
 use crate::global::Global;

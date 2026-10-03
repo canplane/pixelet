@@ -59,6 +59,44 @@ pub fn run_under_budget<T>(items: impl IntoIterator<Item = T>, mut step: impl Fn
     }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct FrameBudget {
+    pub t0: f64,
+    pub total_ms: f64,
+    /// Held back for the phases after the current one.
+    pub reserve_ms: f64,
+    pub hard_slack_ms: f64,
+}
+
+impl FrameBudget {
+    /// `t0` is the rising edge, so what the turn spent before comes off.
+    pub fn new(total_ms: f64, t0: f64, hard_slack_ms: f64) -> FrameBudget {
+        FrameBudget {
+            t0,
+            total_ms,
+            reserve_ms: 0.0,
+            hard_slack_ms,
+        }
+    }
+
+    pub fn remaining(&self) -> f64 {
+        (self.t0 + self.total_ms - self.reserve_ms - now()).max(0.0)
+    }
+
+    pub fn run<T>(&self, items: impl IntoIterator<Item = T>, step: impl FnMut(T) -> bool, max_steps: Option<u32>) -> PassStats {
+        let remaining = self.remaining();
+        run_under_budget(
+            items,
+            step,
+            BudgetOpts {
+                budget_ms: remaining,
+                hard_budget_ms: Some(remaining + self.hard_slack_ms),
+                max_steps,
+            },
+        )
+    }
+}
+
 #[cfg(test)]
 #[path = "frame_budget.test.rs"]
 mod test;
