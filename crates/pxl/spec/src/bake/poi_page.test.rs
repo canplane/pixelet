@@ -149,7 +149,7 @@ fn a_page_that_names_no_place_or_splits_a_character_is_refused() {
 fn lanes(cells: &[u32], counts: &[u32], starts: &[u32], shown: &[u32], kinds: &[&str], names: &[&str]) -> Vec<u8> {
     let (partial, at) = (vec![0u8; cells.len()], vec![0u16; 2 * shown.len()]);
     let ids: Vec<&str> = names.iter().map(|_| "x").collect();
-    let named = NameLanes::of(names.iter().map(|&n| (n, &[][..])));
+    let named = NameLanes::of(names.iter().map(|&n| (n, [])));
     let mut t: TreeView<'_> = TreeView::new();
     t.branch(Some(&mut |b| {
         b.u32_array(Some(cells)).u32_array(Some(counts)).u8_array(Some(&partial)).u32_array(Some(starts));
@@ -163,8 +163,8 @@ fn lanes(cells: &[u32], counts: &[u32], starts: &[u32], shown: &[u32], kinds: &[
 /// come back as the source gave them; the unknown kind reads as none.
 #[test]
 fn what_any_source_gives_comes_back() {
-    let names = [("en".to_owned(), "Seoul Station".to_owned()), ("ja".to_owned(), "ソウル駅".to_owned())];
-    let station = Place { name: "서울역", names: &names, kind: kind_of("subway"), id: "ChIJ3S-JXmauEmsRUcIaWtf4MzE" };
+    let langs = Strings::of(["en", "Seoul Station", "ja", "ソウル駅"]);
+    let station = Place { name: "서울역", langs: Langs::all(&langs), kind: kind_of("subway"), id: "ChIJ3S-JXmauEmsRUcIaWtf4MzE" };
     let page = PoiPage::of_places(0, [(point(1, 0, 0, 0), station)], true);
     let back = decode(&encode(&page).unwrap()).unwrap();
     assert_eq!(back, page);

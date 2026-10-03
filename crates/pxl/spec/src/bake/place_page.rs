@@ -51,7 +51,7 @@ fn write_places<'a>(b: &mut BranchViewImpl<'a>, ranks: &'a [u8], names: &'a Name
 }
 
 fn place_lanes(places: &[Named]) -> (Vec<u8>, NameLanes<'_>) {
-    (places.iter().map(|d| d.rank as u8).collect(), NameLanes::of(places.iter().map(|d| (d.name.as_str(), d.names.as_slice()))))
+    (places.iter().map(|d| d.rank as u8).collect(), NameLanes::of(places.iter().map(|d| (d.name.as_str(), d.names.iter().map(|(tag, name)| (tag.as_str(), name.as_str()))))))
 }
 
 /// A run of places read where it lies: the dictionary or a group's locals.

@@ -68,35 +68,117 @@ pub struct Shown {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Place<'a> {
     pub name: &'a str,
-    pub names: &'a [(String, String)],
+    pub langs: Langs<'a>,
     pub kind: u8,
     pub id: &'a str,
 }
 
+/// Strings end to end in one buffer, read by index.
 #[derive(Clone, Debug, Default, PartialEq)]
-struct Record {
-    name: String,
-    names: Vec<(String, String)>,
-    kind: u8,
-    id: String,
+pub struct Strings {
+    bytes: String,
+    ends: Vec<u32>,
 }
 
-/// A page's places, each once.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct Places(Vec<Record>);
+impl Strings {
+    pub fn of<'s>(items: impl IntoIterator<Item = &'s str>) -> Strings {
+        let mut s = Strings::default();
+        items.into_iter().for_each(|item| s.push(item));
+        s
+    }
 
-impl Places {
-    pub fn get(&self, i: u32) -> Place<'_> {
-        self.0.get(i as usize).map_or(Place::default(), |r| Place {
-            name: &r.name,
-            names: &r.names,
-            kind: r.kind,
-            id: &r.id,
-        })
+    fn push(&mut self, s: &str) {
+        self.bytes.push_str(s);
+        self.ends.push(self.bytes.len() as u32);
+    }
+
+    pub fn get(&self, i: u32) -> &str {
+        let Some(&end) = self.ends.get(i as usize) else { return "" };
+        let start = if i == 0 { 0 } else { self.ends[i as usize - 1] };
+        &self.bytes[start as usize..end as usize]
     }
 
     fn len(&self) -> u32 {
-        self.0.len() as u32
+        self.ends.len() as u32
+    }
+}
+
+/// A place's names by language: pairs `from..to` of a pool of (tag, name).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Langs<'a> {
+    pool: Option<&'a Strings>,
+    from: u32,
+    to: u32,
+}
+
+impl<'a> Langs<'a> {
+    /// Every pair of `pool`, tag then name.
+    pub fn all(pool: &'a Strings) -> Langs<'a> {
+        Langs { pool: Some(pool), from: 0, to: pool.len() / 2 }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&'a str, &'a str)> + 'a {
+        let pool = self.pool;
+        (self.from..self.to).filter_map(move |p| pool.map(|s| (s.get(2 * p), s.get(2 * p + 1))))
+    }
+}
+
+impl PartialEq for Langs<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.iter().eq(other.iter())
+    }
+}
+
+impl Eq for Langs<'_> {}
+
+impl std::hash::Hash for Langs<'_> {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.iter().for_each(|pair| pair.hash(h));
+    }
+}
+
+/// A page's places, each once, in a few buffers a page.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Places {
+    names: Strings,
+    ids: Strings,
+    kinds: Vec<u8>,
+    /// Where each place's pairs start in `langs`; one longer than the places.
+    lang_starts: Vec<u32>,
+    langs: Strings,
+}
+
+impl Places {
+    pub fn get(&self, i: u32) -> Place<'_> {
+        if i >= self.len() {
+            return Place::default();
+        }
+        let span = |k: u32| self.lang_starts.get(k as usize).copied().unwrap_or(0);
+        Place {
+            name: self.names.get(i),
+            langs: Langs { pool: Some(&self.langs), from: span(i), to: span(i + 1) },
+            kind: self.kinds[i as usize],
+            id: self.ids.get(i),
+        }
+    }
+
+    fn push(&mut self, name: &str, langs: impl Iterator<Item = (impl AsRef<str>, impl AsRef<str>)>, kind: u8, id: &str) -> u32 {
+        if self.lang_starts.is_empty() {
+            self.lang_starts.push(0);
+        }
+        self.names.push(name);
+        self.ids.push(id);
+        self.kinds.push(kind);
+        for (tag, name) in langs {
+            self.langs.push(tag.as_ref());
+            self.langs.push(name.as_ref());
+        }
+        self.lang_starts.push(self.langs.len() / 2);
+        self.len() - 1
+    }
+
+    fn len(&self) -> u32 {
+        self.kinds.len() as u32
     }
 }
 
@@ -109,15 +191,7 @@ struct Pool<'a> {
 impl<'a> Pool<'a> {
     fn add(&mut self, place: Place<'a>) -> u32 {
         let places = &mut self.places;
-        *self.at.entry(place).or_insert_with(|| {
-            places.0.push(Record {
-                name: place.name.to_owned(),
-                names: place.names.to_vec(),
-                kind: place.kind,
-                id: place.id.to_owned(),
-            });
-            places.len() - 1
-        })
+        *self.at.entry(place).or_insert_with(|| places.push(place.name, place.langs.iter(), place.kind, place.id))
     }
 }
 
@@ -249,10 +323,10 @@ pub fn encode(page: &PoiPage) -> Result<Vec<u8>, MarshalError> {
     let starts: Vec<u32> = page.cells.iter().map(|c| c.first).chain([page.shown.len() as u32]).collect();
     let shown: Vec<u32> = page.shown.iter().map(|s| s.place).collect();
     let at: Vec<u16> = page.shown.iter().flat_map(|s| s.at.map(|l| l as u16)).collect();
-    let records = &page.places.0;
-    let kinds: Vec<&str> = records.iter().map(|r| r.kind.checked_sub(1).map_or("", |k| KIND_CATEGORIES[k as usize])).collect();
-    let ids: Vec<&str> = records.iter().map(|r| r.id.as_str()).collect();
-    let names = NameLanes::of(records.iter().map(|r| (r.name.as_str(), r.names.as_slice())));
+    let places = &page.places;
+    let kinds: Vec<&str> = places.kinds.iter().map(|&k| k.checked_sub(1).map_or("", |k| KIND_CATEGORIES[k as usize])).collect();
+    let ids: Vec<&str> = (0..places.len()).map(|i| places.ids.get(i)).collect();
+    let names = NameLanes::of((0..places.len()).map(|i| (places.names.get(i), places.get(i).langs.iter())));
     let mut t: TreeView<'_> = TreeView::new();
     t.branch(Some(&mut |b| {
         b.u32_array(Some(&cells)).u32_array(Some(&counts)).u8_array(Some(&partial)).u32_array(Some(&starts));
@@ -274,18 +348,13 @@ pub fn decode(bytes: &[u8]) -> Result<PoiPage, MarshalError> {
         return Err(bad());
     }
     let names = NamesView::read(&root, 8, places)?;
-    let mut records = Vec::with_capacity(places);
+    let mut pooled = Places::default();
     for i in 0..places as u32 {
         let name = names.name(i).ok_or_else(bad)?;
         if name.is_empty() || name.chars().nth(NAME_CHARS).is_some() {
             return Err(bad());
         }
-        records.push(Record {
-            name: name.to_owned(),
-            names: names.languages(i).map(|(tag, name)| (tag.to_owned(), name.to_owned())).collect(),
-            kind: kind_of(kinds.get(i).ok_or_else(bad)?),
-            id: ids.get(i).ok_or_else(bad)?.to_owned(),
-        });
+        pooled.push(name, names.languages(i), kind_of(kinds.get(i).ok_or_else(bad)?), ids.get(i).ok_or_else(bad)?);
     }
     let page = PoiPage {
         cells: (0..n)
@@ -298,7 +367,7 @@ pub fn decode(bytes: &[u8]) -> Result<PoiPage, MarshalError> {
             })
             .collect(),
         shown: shown.iter().zip(at.as_chunks::<2>().0).map(|(&place, &[x, y])| Shown { place, at: [x as u32, y as u32] }).collect(),
-        places: Places(records),
+        places: pooled,
     };
     let cells_fit = page.cells.iter().all(|c| c.cell < CELLS && c.count > 0) && page.cells.windows(2).all(|w| w[0].cell < w[1].cell);
     if !cells_fit || page.shown.iter().any(|s| s.place >= page.places.len()) {
@@ -328,8 +397,9 @@ fn validate(page: &PoiPage) -> Result<(), MarshalError> {
             return Err(bad());
         }
     }
-    let records = &page.places.0;
-    if next as usize != page.shown.len() || records.iter().any(|r| r.kind as usize > KIND_CATEGORIES.len() || r.name.is_empty() || r.name.chars().nth(NAME_CHARS).is_some()) {
+    let places = &page.places;
+    let bad_place = |i: u32| places.kinds[i as usize] as usize > KIND_CATEGORIES.len() || places.names.get(i).is_empty() || places.names.get(i).chars().nth(NAME_CHARS).is_some();
+    if next as usize != page.shown.len() || (0..places.len()).any(bad_place) {
         return Err(bad());
     }
     Ok(())
