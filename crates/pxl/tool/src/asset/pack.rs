@@ -194,7 +194,7 @@ pub fn flatten_alpha(data: &mut [u8], palette_hex: Option<&str>) {
         }
         let t = px[3] as f64 / 255.0;
         for c in 0..3 {
-            px[c] = (px[c] as f64 * t + bg[c] as f64 * (1.0 - t)).round() as u8;
+            px[c] = (px[c] as f64 * t + bg[c] as f64 * (1.0 - t)).round_ties_even() as u8;
         }
         px[3] = 255;
     }

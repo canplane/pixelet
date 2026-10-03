@@ -54,10 +54,9 @@ fn star(line: &str) -> Result<Option<Star>, String> {
     Ok(Some(Star { ra, dec, vmag: num(vmag)?, bv }))
 }
 
-/// Half up; `f64::round` rounds away from zero and would move negative values
-/// off the committed catalog.
+/// Half to even, as everything rounds; the tool links no xpute.
 fn round(x: f64) -> f64 {
-    (x + 0.5).floor()
+    x.round_ties_even()
 }
 
 fn run() -> Result<(), String> {

@@ -7,6 +7,7 @@
  */
 
 import { FAMILY, MONO, textEdge } from "@platform/typeface.ts";
+import { round } from "@xpute/core/math/scalar.ts";
 
 export function alpha(hex: string, a: number): string {
   const n = parseInt(hex.slice(1), 16);
@@ -17,7 +18,7 @@ export function alpha(hex: string, a: number): string {
 function tint(hex: string, a: number, over = "#ffffff"): string {
   const n = parseInt(hex.slice(1), 16);
   const g = parseInt(over.slice(1), 16);
-  const mix = (c: number, b: number) => Math.round(b + (c - b) * a).toString(16).padStart(2, "0");
+  const mix = (c: number, b: number) => round(b + (c - b) * a).toString(16).padStart(2, "0");
   return `#${[16, 8, 0].map((s) => mix((n >> s) & 255, (g >> s) & 255)).join("")}`;
 }
 

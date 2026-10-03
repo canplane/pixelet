@@ -11,6 +11,7 @@ use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, re
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::surface::DPR_MAX;
 use crate::gpu::text::{Font, Raster, TextOf};
+use xpute_core::math::scalar::round;
 
 const SHAPE_FLOATS: usize = 20;
 
@@ -140,8 +141,8 @@ impl SheetPainter {
                 Align::Left => px(line.at[0]),
                 Align::Center => px(line.at[0]) - r.advance / 2.0,
             };
-            let x0 = (start - r.origin[0]).round();
-            let y0 = (px(line.at[1]) - r.origin[1]).round();
+            let x0 = round(start - r.origin[0]);
+            let y0 = round(px(line.at[1]) - r.origin[1]);
             let place = [x0, y0, x0 + r.width as f32, y0 + r.height as f32];
             let cover = [layer as f32, r.width as f32 / layer_w as f32, r.height as f32 / layer_h as f32, 0.0];
             shapes.push(shape(TEXT, place, 0, cover, [0.0; 2]));

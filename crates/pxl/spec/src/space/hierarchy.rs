@@ -8,6 +8,7 @@
 use super::pvf3::core::FRAC_W;
 use super::pvf3::pvf3::{self, Pvf3};
 use super::v3::Aabb;
+use xpute_core::math::scalar::round;
 
 /// A side of 2^shamt units: negative where it is finer than a unit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -82,7 +83,7 @@ impl Scale {
     }
 
     pub fn of_side(units: f64) -> Scale {
-        Scale(units.log2().round() as i32)
+        Scale(round(units.log2()) as i32)
     }
 }
 

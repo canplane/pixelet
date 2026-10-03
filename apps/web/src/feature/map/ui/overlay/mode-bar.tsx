@@ -6,6 +6,7 @@ import { Keyboard, PanResponder, PixelRatio, Pressable, ScrollView, StyleSheet, 
 import { PAN_X } from "@platform/gesture.ts";
 
 import type { f64, u32, u8 } from "@xpute/core/abi/word.ts";
+import { round } from "@xpute/core/math/scalar.ts";
 import { Backing } from "@platform/backing.tsx";
 import { BackingPlace } from "@/shared/ui/backing-place.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
@@ -62,7 +63,7 @@ const enum Slot {
 /** A dot whose area halves per tier, so the finest stays visible: 28, 20, 14, 10. */
 const MARK_COARSEST = 28;
 function sizeMark(tier: u32): f64 {
-  return Math.round(MARK_COARSEST / Math.SQRT2 ** tier);
+  return round(MARK_COARSEST / Math.SQRT2 ** tier);
 }
 
 /** Finest first, so the coarsest stands nearest the swatch. */
@@ -436,13 +437,11 @@ export function ModeBar() {
             </Swap>
           </Pill>
 
-          {
-            openFlyout && (
-              <View style={[styles.flyoutAt, { left: openFlyout.left - FLYOUT_WIDTH / 2 }]}>
-                <SizeFlyout hover={openFlyout.hover} />
-              </View>
-            )
-          }
+          {openFlyout && (
+            <View style={[styles.flyoutAt, { left: openFlyout.left - FLYOUT_WIDTH / 2 }]}>
+              <SizeFlyout hover={openFlyout.hover} />
+            </View>
+          )}
         </>
       )}
     </View>

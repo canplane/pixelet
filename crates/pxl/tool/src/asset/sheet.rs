@@ -39,7 +39,7 @@ fn srgb_to_linear(v: u8) -> f64 {
 
 fn linear_to_srgb(c: f64) -> u8 {
     let s = if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * c.powf(1.0 / 2.4) - 0.055 };
-    (s * 255.0).round().clamp(0.0, 255.0) as u8
+    (s * 255.0).round_ties_even().clamp(0.0, 255.0) as u8
 }
 
 /// Every tile must be exactly one cell; a wrong size is an upstream mistake
