@@ -17,15 +17,12 @@ export interface StackItem {
   label: string;
   onPress: () => void;
   glyph?: GlyphName;
-  /** Instead of `glyph`: a face of its own. */
   face?: ReactNode;
-  /** On: drawn in the action color. */
   isActive?: boolean;
   disabled?: boolean;
 }
 
-/** Buttons of one kind in one capsule over the map, as iPhone Maps groups its map
- * controls; the capsule is ringed while their mode is on, as a lone button is. */
+/** iPhone Maps' grouped controls. */
 export function ButtonStack({ items, isActive }: { items: StackItem[]; isActive?: boolean }) {
   return (
     <Backing
@@ -38,7 +35,7 @@ export function ButtonStack({ items, isActive }: { items: StackItem[]; isActive?
       {items.map((item) => (
         <Pressable
           key={item.label}
-          // Disabled still takes the touch, so a tap does not fall through to the map.
+          // Disabled still takes the touch: no tap through to the map.
           onPress={item.disabled ? undefined : item.onPress}
           accessibilityRole="button"
           accessibilityLabel={item.label}

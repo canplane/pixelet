@@ -13,15 +13,13 @@ import { Glyph } from "@/shared/ui/glyph.tsx";
 import { SETTLE } from "@/shared/ui/motion/transition.ts";
 import { chrome, color } from "@/shared/ui/theme.ts";
 
-/** As MKUserTrackingButton draws it: an outline arrow away from where one
- * is, filled on it, and a north arrow in the action color while the map follows. */
+/** MKUserTrackingButton's glyphs. */
 const PRESS: Record<Tracking, { glyph: GlyphName; label: string }> = {
   [Tracking.Recenter]: { glyph: "location", label: "map.controls.move_to_location" },
   [Tracking.Follow]: { glyph: "location.fill", label: "map.controls.start_compass_mode" },
   [Tracking.Unfollow]: { glyph: "location.north.line.fill", label: "map.controls.exit_compass_mode" },
 };
 
-/** Where one is and which way is north, always shown, as Google Earth's. */
 export function LocationButtons() {
   const { t } = useTranslation();
   const status = useKernel((s) => s.location.status);
@@ -42,7 +40,7 @@ export function LocationButtons() {
           isActive: following,
           disabled: status !== DevicePoseStatus.Ready || !hasLocation,
           face: status === DevicePoseStatus.Loading ? <Spinner size={chrome.glyph} color={LABEL.primary} /> : (
-            // Turns once into place as following starts, so the change of mode is seen.
+            // One turn as following starts.
             <Motion to={{ rotate: 0 }} from={{ rotate: -90 }} replay={following ? "follow" : null} transition={SETTLE}>
               <Glyph glyph={glyph} size={chrome.glyph} color={following ? color.action : LABEL.primary} />
             </Motion>
@@ -51,7 +49,6 @@ export function LocationButtons() {
         {
           label: t("map.controls.reset_orientation"),
           onPress: () => kernel_command(Command.INPUT_COMPASS_RESET),
-          // North up is the tracking button's to ask while following.
           disabled: following,
           face: <CompassFace />,
         },

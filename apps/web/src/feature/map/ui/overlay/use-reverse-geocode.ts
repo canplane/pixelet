@@ -6,11 +6,7 @@ import { deepestRank } from "@/feature/map/geocode/depth.ts";
 import { assembleLabel } from "@/feature/map/geocode/label.ts";
 import { useKernel } from "@/kernel/shell.ts";
 
-/**
- * The place the map center is in, as one line, as deep as the view's scale
- * names. The kernel resolves and fetches it; the label is assembled per
- * snapshot, so a language switch reorders it without asking again.
- */
+/** Assembled per snapshot, so a language switch needs no refetch. */
 export function useReverseGeocode(): string | null {
   const { i18n } = useTranslation();
   return useKernel((s) => {

@@ -21,7 +21,7 @@ const PAD_PX = LINE_PX + halo.reach + 1;
 const LABEL_GAP_PX = 8;
 const BAR_MAX_PX = 80;
 
-/** `m` to the nearest 1, 2 or 5 times a power of ten, a length a scale bar names. */
+/** Nearest 1, 2 or 5 × 10ⁿ. */
 function niceLength(m: f64): f64 {
   if (!(m > 0)) return 0;
   const base = 10 ** Math.floor(Math.log10(m));

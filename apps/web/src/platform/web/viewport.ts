@@ -19,8 +19,7 @@ function measure(): WindowSize {
   return { width: root.clientWidth, height: root.clientHeight };
 }
 
-// One listener for every subscriber: one each, comparing against the shared
-// size, told only the first of them, and a sheet kept the old width.
+// One listener: one each told only the first.
 globalThis.addEventListener("resize", () => {
   const next = measure();
   if (next.width === size.width && next.height === size.height) return;

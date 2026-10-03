@@ -253,11 +253,7 @@ impl<'a> Access<'a> {
         self.ground(GROUND.cell_of(level, at))
     }
 
-    /// Where a thing stands at `at`, on the 1u lattice (`cells`; decor
-    /// is never stood on).
-    ///
-    /// Goes down from the cell to the first solid's top, or up at most `rise`
-    /// cells where the cell is solid; taller gives none.
+    /// Down to the first solid's top, or up at most `rise` cells; taller gives none.
     pub fn support(&self, at: &Pvf3, rise: i64) -> Answer<Option<f64>> {
         let [ix, iy, iz] = CELL.index_of(at);
         self.stand_climbing([ix, iy], Some(iz), Some(rise))
@@ -270,22 +266,20 @@ impl<'a> Access<'a> {
         self.stand_climbing([ix, iy], None, None).map(Option::unwrap_or_default)
     }
 
-    /// `support` rising any height: where a tap or a pan in the open stands the
-    /// map center, and what an eye has under it.
+    /// `support` rising any height.
     pub fn floor_under(&self, at: &Pvf3) -> Answer<f64> {
         let [ix, iy, iz] = CELL.index_of(at);
         // Climbing the whole reach meets no wall, so it is never none.
         self.stand_climbing([ix, iy], Some(iz), None).map(Option::unwrap_or_default)
     }
 
-    /// The first solid cell over `at`'s in its column — a roof, a deck, a
-    /// cave's rock — or none under the open sky.
+    /// First solid cell over `at`; none under open sky.
     pub fn ceiling_over(&self, at: &Pvf3) -> Answer<Option<i64>> {
         let [ix, iy, iz] = CELL.index_of(at);
         self.cells([ix, iy], |_, ceiling, solid| (iz + 1..ceiling).find(|&cz| solid(cz)))
     }
 
-    /// The first open cell of `at`'s column at its cell or over it.
+    /// First open cell at or over `at`.
     pub fn open_from(&self, at: &Pvf3) -> Answer<i64> {
         let [ix, iy, iz] = CELL.index_of(at);
         self.cells([ix, iy], |_, ceiling, solid| (iz..ceiling).find(|&cz| !solid(cz)).unwrap_or(iz.max(ceiling)))
@@ -311,9 +305,7 @@ impl<'a> Access<'a> {
         })
     }
 
-    /// A column's ground top and ceiling, in cells, and whether a cell of it is
-    /// solid. Sub-cells are filled by object leaves, else ground (outside bore
-    /// air) or decks, and folded to the cell by majority of filled vs empty.
+    /// Ground top, ceiling and solidity of a column, in cells; sub-cells fold by majority.
     fn cells<R>(&self, [ix, iy]: [i64; 2], f: impl FnOnce(i64, i64, &dyn Fn(i64) -> bool) -> R) -> Answer<R> {
         self.composed([ix, iy]).map(|c| {
             let side = CELL.side();
@@ -336,7 +328,6 @@ impl<'a> Access<'a> {
                     }
                 })
             };
-            // Above the ground, the lines and the objects' top nothing is filled.
             let lines_top = c.lines.boxes.iter().map(|b| (b[1] / side).ceil() as i64).max().unwrap_or(i64::MIN);
             let ceiling = top.max(lines_top).max(self.objects.ceiling([ix, iy]).unwrap_or(i64::MIN));
             f(top, ceiling, &solid)

@@ -37,8 +37,7 @@ export function ToastController() {
     }
   }, [locationStatus, locationErrorKey]);
 
-  // Only the first world is announced: after it, the map streams in as one
-  // moves, and a load per area is no news.
+  // The first world only.
   const mapStatus = useKernel((s) => s.map.status);
   const companionLoading = useKernel((s) => !s.companion.person_ready || !s.companion.pet_ready);
   const announced = useRef(false);
@@ -51,7 +50,7 @@ export function ToastController() {
     } else if (mapStatus === MapStatus.Success) {
       announced.current = true;
       toastShow(Report.World, { message: tRef.current("toast.world_ready"), tone: ToastTone.Ready });
-      // Not the effect's cleanup, which the next status would run before it fires.
+      // Not the effect's cleanup: the next status would run it first.
       setTimeout(() => toastDismiss(Report.World), READY_MS);
     }
   }, [mapStatus, companionLoading]);

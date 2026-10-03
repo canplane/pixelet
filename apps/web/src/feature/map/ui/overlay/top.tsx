@@ -60,8 +60,7 @@ export function TopOverlays() {
 
       <BusyDim style={[styles.center, { top }]}>
         {
-          // The whole strip between the buttons opens search, the scale shown
-          // in it or not: where one is and where one wants to go share a slot.
+          // The whole strip, scale shown or not.
         }
         <Pressable onPress={() => openModal("search")} accessibilityRole="button" accessibilityLabel={t("map.search.trigger_aria_label")} style={styles.strip}>
           <Presence show={!zooming} from={{ opacity: 0 }} exit={{ opacity: 0 }} transition={SETTLE} exitTransition={LEAVE} style={styles.place}>

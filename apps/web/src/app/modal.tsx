@@ -19,7 +19,7 @@ export function openModal(modal: Modal): void {
 
 export function Modals() {
   const asked = useAsked((s) => s.asked);
-  // The last modal stays drawn while it slides away; a new one replaces it at once.
+  // Drawn until it has slid away.
   const [shown, setShown] = useState<Modal | null>(null);
   if (asked !== null && asked !== shown) setShown(asked);
   if (shown === null) return null;

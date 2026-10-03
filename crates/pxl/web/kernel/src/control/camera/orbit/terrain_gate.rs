@@ -59,9 +59,7 @@ fn required_rise(at: &ViewPose) -> Option<f64> {
     Some(ground + EYE_CLEARANCE_U - at.target[2])
 }
 
-/// The rise a climb needs: the ground under the eye on the layer the way
-/// from the map center reaches it by (`passage`), not the top of whatever
-/// fills its column. None where the way is blocked, so the climb holds.
+/// Rise to the ground `passage` reaches under the eye; none where blocked.
 fn climb_rise(at: &ViewPose) -> Option<f64> {
     let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
     let (mut center, mut eye) = (Pvf3::default(), Pvf3::default());
