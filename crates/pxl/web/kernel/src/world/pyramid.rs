@@ -10,7 +10,6 @@
 //! the child is never asked for.
 
 pub mod chunk;
-pub mod cover;
 pub mod domain;
 
 use std::collections::HashMap;

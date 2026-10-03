@@ -244,13 +244,15 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         },
         turn: TurnSample::default(),
         cover: {
-            let (cover, _) = crate::world::pyramid::cover::cover::<Terrain>();
             let domain = crate::world::pyramid::domain::current();
             // NaN: step 0 is past the arena
             let rule = domain.map_or(0.0, |d| d.counted(0).map_or(f64::NAN, f64::from));
+            // The goal's pieces a resident page draws.
+            let paging = Terrain::pyramid().paging();
+            let drawn = domain.map_or(0, |d| d.pieces().iter().filter(|c| paging.drawn_from(c.page()).is_some()).count());
             CoverSample {
                 rule,
-                drawn: cover.drawn.len() as f64,
+                drawn: drawn as f64,
                 gaps: domain.map_or(0.0, |d| d.unanswered() as f64),
             }
         },

@@ -94,7 +94,6 @@ unsafe fn room_of(record: u32) -> PageRoom {
 pub fn terrain_step() {
     let terrain = Terrain::pyramid();
     terrain.step(crate::control::navigation::destination::page());
-    crate::world::pyramid::cover::step::<Terrain>();
     // Derived from the scheduler so a superseded batch cannot leave a stale
     // Success. A failed fetch keeps its want and is retried, so it reads as Loading.
     let map = map_store();
