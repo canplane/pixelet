@@ -93,7 +93,7 @@ export const SETTINGS = {
     kind: "choice",
     default: "orbit",
     options: ["orbit", "free"],
-    section: "camera",
+    section: "map",
   },
   /** What the camera does when the controls would put it underground; CAMERA_COLLISION_MODES says each. */
   camera_collision: {
@@ -244,7 +244,7 @@ export const SETTINGS_SHIPPED = {
     kind: "choice",
     default: "orbit",
     options: ["orbit", "free"],
-    section: "camera",
+    section: "map",
   },
   /** Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */

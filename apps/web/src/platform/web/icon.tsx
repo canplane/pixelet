@@ -22,6 +22,7 @@ import {
   Settings,
   Sun,
   TreeDeciduous,
+  User,
   X,
 } from "lucide-react-native";
 
@@ -47,6 +48,7 @@ const LUCIDE = {
   "magnifyingglass": [Search, false],
   "move.3d": [Move3d, false],
   "paintpalette": [Palette, false],
+  "person.fill": [User, true],
   "square.grid.2x2": [LayoutGrid, false],
   "sun.max": [Sun, false],
   "tree": [TreeDeciduous, false],

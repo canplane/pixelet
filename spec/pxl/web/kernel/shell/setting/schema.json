@@ -20,11 +20,12 @@
     "builds the chunks again."
   ],
   "SETTING_SECTIONS": {
-    "$value": ["display", "camera", "lighting", "quality", "debug", "character"],
+    "$value": ["display", "camera", "lighting", "quality", "debug", "character", "map"],
     "$doc": [
       "The sheet's sections, in the order they are shown. `character` is not a",
       "section of the sheet at all — its two settings are picked from the",
-      "drawer's Character tab (feature/character/picker.tsx)."
+      "drawer's Character tab (feature/character/picker.tsx), and `map`'s from the",
+      "buttons floating over the map (feature/map/ui/control/)."
     ]
   },
   "RESOLUTION_MODES": {
@@ -161,7 +162,7 @@
       "kind": "choice",
       "default": "orbit",
       "options": "CAMERA_MODES",
-      "section": "camera"
+      "section": "map"
     },
     "camera_collision": {
       "$doc": ["What the camera does when the controls would put it underground; CAMERA_COLLISION_MODES says each."],
