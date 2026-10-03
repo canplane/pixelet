@@ -1,21 +1,19 @@
 // pxl-kernel/layer/decor/cell.rs
 
-//! Decor as its own layer. A decor cell is a column of a level's chunks; the
-//! frontier is the cells the eye wants, refined by `Tau::level` and dropped
-//! where the largest possible instance is below the sprite's floor or out of
-//! view. A block is immutable once built; how each instance is drawn
-//! (`present`) is decided per frame and rebuilds nothing.
+//! Decor as a payload of the chunks the terrain materializes: each mounted
+//! chunk holds the decor standing inside it, built over its level's page and
+//! the object store, and drawn while the chunk is. A block is immutable once
+//! built; how each instance is drawn (`present`) is decided per frame and
+//! rebuilds nothing.
 
 use std::collections::HashMap;
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, PageSource};
 use pxl_spec::procedural::Frame;
-use pxl_spec::space::hierarchy::{child_of, parent_of};
 use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
-use pxl_spec::space::lod::fault_radius;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::{chunk_span_of, LevelPage, CHUNK_CELLS, GROUND, TOP_LEVEL};
+use pxl_spec::space::pyramid::{LevelPage, CHUNK_CELLS, GROUND};
 use pxl_spec::space::v3::{len3, V3};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::alloc;
@@ -31,49 +29,13 @@ use crate::layer::object::store::{object_col_revision, Store};
 use crate::shell::setting::store::settings_store;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::build::Builder;
+use crate::world::chunk::mesh_slot::OCCUPANCY;
+use crate::world::chunk::table::Scheduler;
 use crate::world::observation::{eye, observation};
-use crate::world::paging::floor;
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer;
-use crate::world::quality;
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::observation::Observation;
 use xpute_runtime::mem::heap::free;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct DecorCell {
-    pub level: u32,
-    pub at: [i64; 2],
-}
-
-impl DecorCell {
-    fn chunk(self) -> Chunk {
-        Chunk::at(self.level, [self.at[0], self.at[1], 0])
-    }
-
-    /// Corner and side, in units.
-    pub fn rect(self) -> (f64, f64, f64) {
-        self.chunk().rect()
-    }
-
-    fn page(self) -> LevelPage {
-        self.chunk().page()
-    }
-
-    fn parent(self) -> DecorCell {
-        DecorCell {
-            level: self.level + 1,
-            at: parent_of(self.at),
-        }
-    }
-
-    fn children(self) -> [DecorCell; 4] {
-        core::array::from_fn(|slot| DecorCell {
-            level: self.level - 1,
-            at: child_of(self.at, slot),
-        })
-    }
-}
 
 struct Block {
     at: u32,
@@ -84,13 +46,13 @@ struct Block {
     /// The lowest and highest instance, in units.
     heights: [f32; 2],
     sources: Sources,
-    /// Held hidden while it waits on the rest of a replacement (`step`).
+    /// Its chunk is drawn and in the frustum.
     drawn: bool,
 }
 
 impl Block {
     fn words(&self) -> &'static [u32] {
-        // SAFETY: the cell's block, `bytes` long, until given back on a later turn.
+        // SAFETY: the chunk's block, `bytes` long, until given back on a later turn.
         unsafe { core::slice::from_raw_parts(ptr_at::<u32>(self.at as usize), self.bytes as usize / 4) }
     }
 }
@@ -105,20 +67,16 @@ struct Sources {
 
 #[derive(Default)]
 struct Cells {
-    frontier: Vec<DecorCell>,
-    pages: Vec<LevelPage>,
-    blocks: HashMap<DecorCell, Block>,
+    blocks: HashMap<Chunk, Block>,
     scratch: Option<DecorScratch>,
     sample: ChunkSample,
     cols: Vec<IVec>,
     placed: Vec<Placed>,
     folded: HashMap<[i64; 3], u32>,
     /// Kept so a settled turn asks the heap for nothing.
-    stack: Vec<DecorCell>,
-    under: HashMap<DecorCell, bool>,
-    cells: Vec<DecorCell>,
-    covers: Vec<DecorCell>,
-    over: Vec<DecorCell>,
+    mounted: Vec<(Chunk, bool)>,
+    gone: Vec<Chunk>,
+    pages: Vec<LevelPage>,
     sprites: Vec<u32>,
 }
 
@@ -143,97 +101,39 @@ fn cells() -> &'static mut Cells {
     CELLS.get(Cells::default)
 }
 
-/// Upper bound on a frontier: the top's (2n + 1)² roots with
-/// n = ⌈fault_radius(top) / side⌉ + 1, plus, for each of `TOP_LEVEL` levels
-/// under it, the children of the parents a disc of `fault_radius(L)` meets
-/// (⌊2r / side⌋ + 2 a side, two children each). Split distance and chunk
-/// grow by the same factor a level, so that count is level-independent.
-pub const FRONTIER_MAX: usize = {
-    let side = chunk_span_of(TOP_LEVEL) as u64;
-    let n = (fault_radius(TOP_LEVEL) as u64).div_ceil(side) + 1;
-    let top = (2 * n + 1) * (2 * n + 1);
-    let across = 2 * ((2 * fault_radius(0) as u64) / chunk_span_of(1) as u64 + 2);
-    (top + TOP_LEVEL as u64 * across * across) as usize
-};
-
-/// A residency budget kept by admission: a frontier wanted plus a frontier
-/// drawn standing in for it.
-pub const BLOCKS_MAX: usize = 2 * FRONTIER_MAX;
+/// One a mounted chunk.
+pub const BLOCKS_MAX: usize = OCCUPANCY;
 
 const BUILDS_PER_FRAME: u32 = 4;
 
-/// What a cell is admitted by before its block says what it holds.
+/// What a chunk is admitted by before its block says what it holds.
 fn largest_possible(kinds: &[&Kind]) -> f64 {
     let extent = kinds.iter().map(|k| k.extent()).fold(0.0, f64::max);
     extent * (1.0f64 + SCALE_JITTER).max(DECOR_SIZE)
 }
 
-fn nearest(cell: DecorCell, eye: V3, ground: f64) -> f64 {
-    let (x0, y0, side) = cell.rect();
-    let dx = (x0 - eye[0]).max(eye[0] - (x0 + side)).max(0.0);
-    let dy = (y0 - eye[1]).max(eye[1] - (y0 + side)).max(0.0);
-    len3(&[dx, dy, eye[2] - ground])
-}
-
-/// Kept within the view's reach, in the frustum, and where its largest
-/// possible instance covers the sprite's floor.
-fn solve(kinds: &[&Kind], stack: &mut Vec<DecorCell>, out: &mut Vec<DecorCell>) {
-    out.clear();
-    stack.clear();
-    // The view the pyramids observe: its eye, reach, frustum and ground.
-    let Some(Observation {
-        eye,
-        frustum,
-        far: reach,
-        top,
-        ground,
-        ..
-    }) = observation()
-    else {
-        return;
-    };
-    let tau = quality::effective().tau();
-    let largest = largest_possible(kinds);
-    let floor_px = decor_sprite_px();
-    let side = chunk_span_of(top);
-    let (cx, cy) = ((eye[0] / side).floor() as i64, (eye[1] / side).floor() as i64);
-    let n = (reach / side).ceil() as i64 + 1;
-    for y in cy - n..=cy + n {
-        for x in cx - n..=cx + n {
-            stack.push(DecorCell { level: top, at: [x, y] });
-        }
-    }
-    while let Some(cell) = stack.pop() {
-        let d = nearest(cell, eye, ground).max(1e-3);
-        if d > reach || largest / units_per_px_at(d) < floor_px {
-            continue;
-        }
-        let (x0, y0, s) = cell.rect();
-        if !frustum.is_none_or(|f| f.sees([x0 + s / 2.0, y0 + s / 2.0, ground], s * 0.75 + largest)) {
-            continue;
-        }
-        if cell.level > 0 && (tau.level(d).max(0) as u32) < cell.level {
-            stack.extend(cell.children());
-            continue;
-        }
-        out.push(cell);
-    }
-    out.sort_unstable();
+/// Whether anything a chunk could hold is in reach and over the sprite's floor.
+fn may_show(chunk: Chunk, largest: f64) -> bool {
+    let Some(o) = observation() else { return false };
+    let region = chunk.region();
+    let near = region.nearest(o.eye);
+    let d = len3(&[near[0] - o.eye[0], near[1] - o.eye[1], near[2] - o.eye[2]]).max(1e-3);
+    d <= o.far && largest / units_per_px_at(d) >= decor_sprite_px()
 }
 
 /// None where the heap refused room to list the columns.
-fn sources_of(cell: DecorCell, store: &Store, cols: &mut Vec<IVec>, hide: Option<DecorHide>) -> Option<Sources> {
+fn sources_of(chunk: Chunk, store: &Store, cols: &mut Vec<IVec>, hide: Option<DecorHide>) -> Option<Sources> {
     cols.clear();
-    store.cols_under(cell.chunk().column(), cols).ok()?;
+    store.cols_under(chunk.column(), cols).ok()?;
     let revision = cols.iter().fold(0u32, |r, &c| r.wrapping_mul(31).wrapping_add(object_col_revision(c)));
-    let (x0, y0, side) = cell.rect();
+    let (x0, y0, side) = chunk.rect();
     let inside = |x: i64, y: i64| (x0..x0 + side).contains(&(x as f64)) && (y0..y0 + side).contains(&(y as f64));
     let hide = hide.filter(|h| match *h {
         DecorHide::Placed(at) => {
             let o = FROM_L2_IDX(at.col_idx);
             inside(ivec::X(o), ivec::Y(o))
         }
-        DecorHide::Scattered([x, y, _]) => cell.level == 0 && inside(x, y),
+        DecorHide::Scattered([x, y, _]) => chunk.level() == 0 && inside(x, y),
     });
     Some(Sources {
         revision,
@@ -242,19 +142,19 @@ fn sources_of(cell: DecorCell, store: &Store, cols: &mut Vec<IVec>, hide: Option
     })
 }
 
-fn build(c: &mut Cells, cell: DecorCell, kinds: &[&Kind], store: &Store, draw: &mut DrawList, sources: Sources) -> Option<Block> {
+fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut DrawList, sources: Sources) -> Option<Block> {
     let pages = Terrain::pyramid();
-    let page = pages.paging().get(cell.page())?;
-    let level = cell.level;
-    let (x0, y0, _) = cell.rect();
+    let page = pages.paging().get(chunk.page())?;
+    let level = chunk.level();
+    let (x0, y0, _) = chunk.rect();
     let (x0, y0) = (x0 as i64, y0 as i64);
-    let (tx0, ty0) = cell.chunk().in_page();
+    let (tx0, ty0) = chunk.in_page();
     let view = Builder::page_view(page);
     if sources.shown {
         let around = Around {
             own: PageSource {
                 page: view,
-                frame: Frame::of(cell.page()),
+                frame: Frame::of(chunk.page()),
                 origin: [0, 0],
                 n: 1,
             },
@@ -292,12 +192,12 @@ fn build(c: &mut Cells, cell: DecorCell, kinds: &[&Kind], store: &Store, draw: &
     };
     let scratch = c.scratch.get_or_insert_with(DecorScratch::default);
     let step = GROUND.scale(0).count_in(target.max(GROUND.scale(0)));
-    let built = DecorBuild::build(scratch, kinds, Some(&ground), &c.placed, sources.hide, store, step, sources.shown)?;
+    let built = DecorBuild::build(scratch, kinds, Some(&ground), &c.placed, sources.hide, store, step, sources.shown, chunk.z_range())?;
     let index = built.bytes();
     let heights = built.heights();
     let instances = built.instances() as u32;
     let (at, bytes) = alloc(index + instances * 4)?;
-    // SAFETY: a block of the bytes the build asked for, the cell's until given back.
+    // SAFETY: a block of the bytes the build asked for, the chunk's until given back.
     unsafe { built.write(ptr_at::<u8>(at)) };
     let handle = draw.upload(at as u32, bytes, 0, 0);
     Some(Block {
@@ -313,97 +213,62 @@ fn build(c: &mut Cells, cell: DecorCell, kinds: &[&Kind], store: &Store, draw: &
 
 fn release(block: Block, draw: &mut DrawList) {
     draw.free(block.handle);
-    // SAFETY: the cell's block, not given back yet; nothing reads it past this turn.
+    // SAFETY: the chunk's block, not given back yet; nothing reads it past this turn.
     unsafe { free((block.at as usize, block.bytes)) };
 }
 
-/// Moves what is drawn toward the frontier one whole replacement at a time:
-/// a refining cell stays drawn until every wanted child is ready, coarsening
-/// cells until the parent is ready. No region is ever left empty or drawn twice.
-pub fn step(kinds: &[&Kind], store: &Store, draw: &mut DrawList, hide: Option<DecorHide>, frame_eye: V3) {
+/// Builds the decor of the chunks the terrain has mounted, a few a frame, and
+/// lets go of what an unmounted chunk held.
+pub fn step(kinds: &[&Kind], store: &Store, sched: &mut Scheduler, hide: Option<DecorHide>, frame_eye: V3) {
     let c = cells();
-    let mut frontier = core::mem::take(&mut c.frontier);
-    solve(kinds, &mut c.stack, &mut frontier);
-    xpute_core::ensure!(frontier.len() <= FRONTIER_MAX, ENOTRECOVERABLE, frontier.len());
-    let top = floor::level().unwrap_or(0);
-    let ancestors = move |cell: DecorCell| core::iter::successors(Some(cell), move |a| (a.level < top).then(|| a.parent())).skip(1);
-    let pages = Terrain::pyramid();
-
-    // Admission against `BLOCKS_MAX`: a coarsening comes first and is admitted
-    // at the budget, since it lets more go than it takes; other new cells only
-    // below it. A cell not admitted waits while what stands in stays drawn.
-    c.over.clear();
-    c.over.extend(c.blocks.keys().flat_map(|&k| ancestors(k)));
-    c.over.sort_unstable();
-    c.over.dedup();
-    let mut built = 0;
-    for coarsening in [true, false] {
-        for &cell in &frontier {
-            if built >= BUILDS_PER_FRAME {
-                break;
-            }
-            if c.over.binary_search(&cell).is_ok() != coarsening {
-                continue;
-            }
-            let Some(sources) = sources_of(cell, store, &mut c.cols, hide) else { continue };
-            let held = c.blocks.get(&cell);
-            if held.is_some_and(|b| b.sources == sources) {
-                continue;
-            }
-            if held.is_none() && !coarsening && c.blocks.len() >= BLOCKS_MAX {
-                continue;
-            }
-            if let Some(mut b) = build(c, cell, kinds, store, draw, sources) {
-                b.drawn = c.blocks.get(&cell).is_some_and(|old| old.drawn);
-                if let Some(old) = c.blocks.insert(cell, b) {
-                    release(old, draw);
-                }
-                built += 1;
-            }
-        }
-    }
-
-    let wanted = |cell: &DecorCell| frontier.binary_search(cell).is_ok();
-    let ready = |cell: DecorCell, blocks: &HashMap<DecorCell, Block>| blocks.contains_key(&cell) || pages.paging().settled(cell.page());
-    c.under.clear();
-    for &cell in &frontier {
-        let r = ready(cell, &c.blocks);
-        for a in ancestors(cell) {
-            *c.under.entry(a).or_insert(true) &= r;
-        }
-    }
-    let under = &c.under;
-    // Kept where wanted, or drawn last turn and still standing in for wanted
-    // cells not ready.
-    let kept = |cell: DecorCell, blocks: &HashMap<DecorCell, Block>| {
-        wanted(&cell) || blocks[&cell].drawn && (under.get(&cell) == Some(&false) || ancestors(cell).find(wanted).is_some_and(|a| !ready(a, blocks)))
-    };
-    c.cells.clear();
-    c.cells.extend(c.blocks.keys().copied().filter(|&k| !kept(k, &c.blocks)));
-    for k in c.cells.drain(..) {
+    let mut mounted = core::mem::take(&mut c.mounted);
+    sched.mounted(&mut mounted);
+    mounted.sort_unstable_by_key(|m| m.0);
+    let largest = largest_possible(kinds);
+    let held = |k: &Chunk| mounted.binary_search_by_key(k, |m| m.0).is_ok_and(|i| may_show(mounted[i].0, largest));
+    c.gone.clear();
+    c.gone.extend(c.blocks.keys().copied().filter(|k| !held(k)));
+    for k in c.gone.drain(..) {
         if let Some(b) = c.blocks.remove(&k) {
-            release(b, draw);
+            release(b, &mut sched.draw);
         }
     }
-    c.covers.clear();
-    c.covers.extend(c.blocks.keys().copied().filter(|k| under.get(k) == Some(&false) && !wanted(k)));
-    c.covers.sort_unstable();
-    for (&cell, b) in c.blocks.iter_mut() {
-        b.drawn = !ancestors(cell).any(|a| c.covers.binary_search(&a).is_ok());
+    let mut built = 0;
+    for &(chunk, _) in &mounted {
+        if built >= BUILDS_PER_FRAME {
+            break;
+        }
+        if !may_show(chunk, largest) {
+            continue;
+        }
+        let Some(sources) = sources_of(chunk, store, &mut c.cols, hide) else { continue };
+        if c.blocks.get(&chunk).is_some_and(|b| b.sources == sources) {
+            continue;
+        }
+        if let Some(b) = build(c, chunk, kinds, store, &mut sched.draw, sources) {
+            if let Some(old) = c.blocks.insert(chunk, b) {
+                release(old, &mut sched.draw);
+            }
+            built += 1;
+        }
     }
-    xpute_core::ensure!(c.blocks.len() <= BLOCKS_MAX, ENOTRECOVERABLE, c.blocks.len());
+    for &(chunk, drawn) in &mounted {
+        if let Some(b) = c.blocks.get_mut(&chunk) {
+            b.drawn = drawn;
+        }
+    }
     c.pages.clear();
-    c.pages.extend(frontier.iter().map(|c| c.page()));
+    c.pages.extend(mounted.iter().filter(|m| may_show(m.0, largest)).map(|m| m.0.page()));
     c.pages.sort_unstable();
     c.pages.dedup();
     // Asked for by decor itself rather than left to what the terrain draws.
-    Terrain::pyramid().require::<DecorCell>(&c.pages);
-    c.frontier = frontier;
-    present(c, draw, frame_eye);
+    Terrain::pyramid().require::<Cells>(&c.pages);
+    c.mounted = mounted;
+    present(c, &mut sched.draw, frame_eye);
 }
 
 /// Per frame, each instance as model, sprite or nothing by its projected
-/// size; a group surely one or the other over the cell's nearest and farthest
+/// size; a group surely one or the other over the chunk's nearest and farthest
 /// distance is settled whole. Models come first in a group's index list, then
 /// sprites; the list is re-uploaded only where it changed.
 fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
@@ -411,15 +276,15 @@ fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
     let model_px = decor_gone_px();
     let sprite_px = decor_sprite_px();
     let sprites = &mut c.sprites;
-    for (&cell, block) in c.blocks.iter().filter(|(_, b)| b.drawn) {
-        let (x0, y0, side) = cell.rect();
+    for (&chunk, block) in c.blocks.iter().filter(|(_, b)| b.drawn) {
+        let (x0, y0, side) = chunk.rect();
         let translation = DrawList::translation([x0, y0, 0.0], frame_eye);
         let [zlo, zhi] = block.heights.map(f64::from);
         let gap = |lo: f64, hi: f64, v: f64| (lo - v).max(v - hi).max(0.0);
         let reach = |lo: f64, hi: f64, v: f64| (v - lo).abs().max((hi - v).abs());
         let nearest = len3(&[gap(x0, x0 + side, eye[0]), gap(y0, y0 + side, eye[1]), gap(zlo, zhi, eye[2])]).max(1e-3);
         let farthest = len3(&[reach(x0, x0 + side, eye[0]), reach(y0, y0 + side, eye[1]), reach(zlo, zhi, eye[2])]).max(1e-3);
-        // SAFETY: the cell's block, `bytes` long, its own to write past `index`.
+        // SAFETY: the chunk's block, `bytes` long, its own to write past `index`.
         let words: &mut [u32] = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block.at as usize), block.bytes as usize / 4) };
         let (lanes_of, list) = words.split_at_mut(block.index as usize / 4);
         let mut extents = KINDS.iter().flat_map(|k| k.variants.iter().map(variant_extent));
@@ -473,10 +338,11 @@ fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
     }
 }
 
-pub fn shown() -> impl Iterator<Item = (DecorCell, f64, f64, &'static [u32])> {
-    cells().blocks.iter().filter(|(_, b)| b.drawn).map(|(&cell, b)| {
-        let (x0, y0, _) = cell.rect();
-        (cell, x0, y0, b.words())
+/// The drawn chunks' decor: the chunk, its corner and its block.
+pub fn shown() -> impl Iterator<Item = (Chunk, f64, f64, &'static [u32])> {
+    cells().blocks.iter().filter(|(_, b)| b.drawn).map(|(&chunk, b)| {
+        let (x0, y0, _) = chunk.rect();
+        (chunk, x0, y0, b.words())
     })
 }
 

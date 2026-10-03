@@ -1,6 +1,6 @@
 // pxl-kernel/layer/decor/build.rs
 
-//! The decor layer: a decor cell's build. Scattered decor is never stored: it is a pure function of terrain
+//! A chunk's decor build. Scattered decor is never stored: it is a pure function of terrain
 //! and a fixed seed, and a cell holding a placed object filters its
 //! candidate out at build time.
 
@@ -107,7 +107,7 @@ pub struct Ground<'a> {
 
 pub struct Placed {
     pub col_idx: IVec,
-    /// The column's corner relative to the decor cell drawing it, in units.
+    /// The column's corner relative to the chunk drawing it, in units.
     pub ox: f64,
     pub oy: f64,
     /// A coarser cell draws several columns' decor and names none of their
@@ -178,7 +178,8 @@ pub fn scatters_at(value: u32, at: &Pvf3) -> Option<Draw> {
 impl<'s> DecorBuild<'s> {
     /// None where the heap refused scratch room, and the cell is not built.
     #[allow(clippy::too_many_arguments)]
-    pub fn build(scratch: &'s mut DecorScratch, kinds: &[&Kind], ground: Option<&Ground>, placed: &[Placed], hide: Option<DecorHide>, store: &Store, step: u32, decor: bool) -> Option<DecorBuild<'s>> {
+    /// Only what stands in the chunk whose heights are `z`.
+    pub fn build(scratch: &'s mut DecorScratch, kinds: &[&Kind], ground: Option<&Ground>, placed: &[Placed], hide: Option<DecorHide>, store: &Store, step: u32, decor: bool, z: (f64, f64)) -> Option<DecorBuild<'s>> {
         scratch.clear();
         for kind in kinds {
             if kind.variant_count() == 0 {
@@ -194,16 +195,16 @@ impl<'s> DecorBuild<'s> {
                 continue;
             }
             for column in placed {
-                Self::placed(scratch, kind, first, column, hide.and_then(DecorHide::placed), store).ok()?;
+                Self::placed(scratch, kind, first, column, hide.and_then(DecorHide::placed), store, z).ok()?;
             }
             if let Some(ground) = ground.filter(|_| decor) {
-                Self::scatter(scratch, kind, first, ground, hide, store).ok()?;
+                Self::scatter(scratch, kind, first, ground, hide, store, z).ok()?;
             }
         }
         Some(DecorBuild { scratch })
     }
 
-    fn placed(scratch: &mut DecorScratch, kind: &Kind, first: usize, column: &Placed, hide: Option<EntryAt>, store: &Store) -> Result<(), TryReserveError> {
+    fn placed(scratch: &mut DecorScratch, kind: &Kind, first: usize, column: &Placed, hide: Option<EntryAt>, store: &Store, (z0, z1): (f64, f64)) -> Result<(), TryReserveError> {
         let (Some(value), Some(e)) = (kind.decor_value(), store.entries(column.col_idx)) else {
             return Ok(());
         };
@@ -223,6 +224,9 @@ impl<'s> DecorBuild<'s> {
             // Turned and varied by position, as the placing ghost predicted.
             let (variant, rotation) = user_decor_pick(at.corner().i, kind.variant_count());
             let [lx, ly, lz] = at.local();
+            if !(z0..z1).contains(&lz) {
+                continue;
+            }
             let hidden = hide == Some(e.at(k));
             let h = size / 2.0;
             scratch.push(
@@ -245,7 +249,7 @@ impl<'s> DecorBuild<'s> {
     /// Whether a kind may stand on a cell, and its transport alignment, are read
     /// off the level's own cells: a tree above z16 stands on the grass the view
     /// sees, not on z16 cells it cannot.
-    fn scatter(scratch: &mut DecorScratch, kind: &Kind, first: usize, ground: &Ground, hide: Option<DecorHide>, store: &Store) -> Result<(), TryReserveError> {
+    fn scatter(scratch: &mut DecorScratch, kind: &Kind, first: usize, ground: &Ground, hide: Option<DecorHide>, store: &Store, (z0, z1): (f64, f64)) -> Result<(), TryReserveError> {
         let (cells, lines) = (ground.page.cells, ground.page.decks);
         let (level, atom) = (GROUND.scale(ground.level), GROUND.scale(0));
         let (lx0, ly0) = (level.index(ground.x0), level.index(ground.y0));
@@ -261,6 +265,10 @@ impl<'s> DecorBuild<'s> {
                 continue;
             };
             let ele = ground.sample.ele[apron_col(dx, dy) as usize] as i32;
+            // In the chunk holding the cell it stands on.
+            if !(z0 < f64::from(ele) && f64::from(ele) <= z1) {
+                continue;
+            }
             // A leaf in the cell overrides the scatter: a cube or air hides it, the leaf gone brings it back.
             if has_entries && ground.col_idx.is_some_and(|c| store.cell(c, dx, dy, ele).is_some()) {
                 continue;

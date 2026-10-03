@@ -352,7 +352,7 @@ Objects paint after terrain, so a placed value wins the voxel. A chunk records t
 
 **What to build next** is one priority. A chunk build runs in two stages, a scan and a mesh bake, one of each open at a time; the priority (`world/chunk/table.rs` `priority`) puts the two chunks holding those slots first, then what the view sees nearest the eye, then what it does not, so the view fills out from the eye. Builds run in the build task on what the tick left of the quota.
 
-**Memory is bounded before it is asked for.** The pages a view reads are bounded by its reach and live in records of `.fixed`, so they never ask the heap. Where the arena has no room for what the view asks, the quality is chosen coarser (`world/quality.rs`); a block the heap refuses leaves what asked for it unbuilt — a chunk's build and a model wait for the heap's next release (`world/chunk/build.rs` `refuse`), and a decor cell keeps its parent drawn. The client does not die.
+**Memory is bounded before it is asked for.** The pages a view reads are bounded by its reach and live in records of `.fixed`, so they never ask the heap. Where the arena has no room for what the view asks, the quality is chosen coarser (`world/quality.rs`); a block the heap refuses leaves what asked for it unbuilt — a chunk's build and a model wait for the heap's next release (`world/chunk/build.rs` `refuse`), and a chunk's decor waits with it. The client does not die.
 
 ## Rendering
 

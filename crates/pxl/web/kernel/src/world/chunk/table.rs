@@ -509,6 +509,12 @@ impl Scheduler {
         [self.refined, self.recubed, self.changes_peak]
     }
 
+    /// Each mounted chunk, and whether it is drawn and in the frustum now.
+    pub fn mounted(&self, out: &mut Vec<(Chunk, bool)>) {
+        out.clear();
+        out.extend(self.slots.iter().map(|s| (s.chunk, s.role == Role::Drawn && s.in_frustum)));
+    }
+
     pub fn needs_revision(&self) -> u32 {
         self.meshes.needs
     }

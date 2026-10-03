@@ -1,7 +1,7 @@
 // pxl-kernel/layer/decor/hit.rs
 
 //! Which decor the pointer's ray strikes, against the drawn triangles of the
-//! z16 decor cells: decor paints no voxel, so the access's ray passes through
+//! z16 chunks' decor: decor paints no voxel, so the access's ray passes through
 //! it. A placed instance resolves to its entry; a scattered one to its cell.
 
 use pxl_spec::bake::constant::CELL;
@@ -63,7 +63,7 @@ pub fn raycast_decor(origin: V3, direction: V3, map_origin: IVec, max_dist: f64)
 /// `band` is NO_ENTRY for a scattered instance.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct DecorHit {
-    pub cell: crate::layer::decor::cell::DecorCell,
+    pub cell: crate::world::pyramid::chunk::Chunk,
     pub band: u32,
     pub pos: u32,
     pub at: [f64; 3],
@@ -96,7 +96,7 @@ fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: 
     let reach = decor_reach(sched);
     for (cell, base_x, base_y, words) in crate::layer::decor::cell::shown() {
         // Only z16 cells name their placed entries; edits are made close by.
-        if cell.level != 0 {
+        if cell.level() != 0 {
             continue;
         }
         let side = cell.rect().2;

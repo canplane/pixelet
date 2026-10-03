@@ -1,6 +1,6 @@
 // pxl-kernel/layer/decor/instance.rs
 
-//! A decor cell's instances as lanes, and the block they are laid into. A
+//! A chunk's decor instances as lanes, and the block they are laid into. A
 //! placed instance carries its entry's band and packed position; `hidden` is
 //! a flag so the hit test keeps seeing what the presentation leaves out.
 
