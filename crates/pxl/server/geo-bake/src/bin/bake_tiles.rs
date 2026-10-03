@@ -343,7 +343,7 @@ fn run() -> Result<(), String> {
                     };
                     let mut held = deck::source::Walk::default();
                     for &page in walk {
-                        held.keep_from(ivec::Y(page) - 1);
+                        held.keep_around(page);
                         let [min, _] = epsg3857::get_page_bbox(page);
                         let baked = deck::solve_page(&mut client, page, &mut held)
                             .and_then(|rows| bake_decks(&rows, min).ok_or_else(|| "a page's decks overflow a record".to_string()))

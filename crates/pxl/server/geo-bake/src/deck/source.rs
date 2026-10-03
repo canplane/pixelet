@@ -89,16 +89,18 @@ impl Store for Disk<'_> {
     }
 }
 
-/// In memory, for a walk over rows of pages that drops each row once past it.
+/// In memory, for a walk from page to neighbouring page: holds a page's
+/// eight around it and no more.
 #[derive(Default)]
 pub struct Walk {
     held: HashMap<IVec, PageRows>,
 }
 
 impl Walk {
-    /// Drops the rows under `y`.
-    pub fn keep_from(&mut self, y: i64) {
-        self.held.retain(|&p, _| ivec::Y(p) >= y);
+    /// Drops what is not in `page`'s 3×3.
+    pub fn keep_around(&mut self, page: IVec) {
+        let near = |p: IVec| (ivec::X(p) - ivec::X(page)).abs() <= 1 && (ivec::Y(p) - ivec::Y(page)).abs() <= 1;
+        self.held.retain(|&p, _| near(p));
     }
 }
 
