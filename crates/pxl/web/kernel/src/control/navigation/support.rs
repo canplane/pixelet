@@ -1,4 +1,4 @@
-// pxl-kernel/control/navigation/walk.rs
+// pxl-kernel/control/navigation/support.rs
 
 //! The map center standing on the ground, and where every camera's pan
 //! puts it. The center's Z is half a cell over the floor the character
@@ -36,12 +36,11 @@ pub fn settle(at: &Pvf3) -> Pvf3 {
     }
 }
 
-/// Every interaction sets its center through this, so the first pan after a
-/// tap moves nothing. A wall keeps the coordinate itself.
+/// Every interaction sets its center through this, by the rule a pan lands
+/// by, so the first pan after a tap moves nothing.
 pub fn stand(at: &Pvf3) -> Pvf3 {
-    match Access::now().support(at) {
-        Answer::Exact(Some(top)) => stand_over(at, top),
-        Answer::Exact(None) => *at,
+    match Access::now().floor_under(at) {
+        Answer::Exact(top) => stand_over(at, top),
         Answer::Coarser(..) | Answer::Nothing(_) => unknown_z(at),
     }
 }

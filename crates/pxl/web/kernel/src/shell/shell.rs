@@ -123,7 +123,7 @@ pub fn tracking_action(tracking: Tracking) {
     }
 }
 
-/// A badge's height is its level's, coarser than where a walker stands, so
+/// A badge's height is its level's, coarser than where the center stands, so
 /// the center goes on the surface once it is known exactly.
 pub fn go_to(target: Pvf3) {
     camera_store().is_follow_mode = false;

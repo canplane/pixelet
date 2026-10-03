@@ -10,7 +10,7 @@ use xpute_core::math::scalar::wrap;
 
 use crate::control::camera::config::camera_cfg::view::EYE_CLEARANCE_U;
 use crate::control::camera::orbit::orbit_eye_offset;
-use crate::control::navigation::walk::{resolve, settle};
+use crate::control::navigation::support::{resolve, settle};
 use crate::shell::setting::store::{settings_store, CameraCollisionMode};
 use crate::world::access::Access;
 use crate::world::frame::coord::{local_height, local_world_origin, local_world_to_canonical};

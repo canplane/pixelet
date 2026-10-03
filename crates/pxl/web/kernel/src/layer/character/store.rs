@@ -3,7 +3,7 @@
 use crate::global::Global;
 
 /// Whether the companion's models have loaded: a live, unpersisted signal
-/// for the map toast. A fresh walker always starts unloaded.
+/// for the map toast. A fresh figure always starts unloaded.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct CompanionLoadStore {
     pub person_ready: bool,

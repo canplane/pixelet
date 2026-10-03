@@ -20,7 +20,7 @@ use crate::control::camera::config::camera_cfg::view::{MAX_DIST, MIN_DIST};
 use crate::control::camera::controller::{camera, center_local, look_dir, look_domain, map_center, set_eye_local};
 use crate::control::camera::gesture::{spread, Anchor};
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
-use crate::control::navigation::walk::target;
+use crate::control::navigation::support::target;
 use crate::global::Global;
 use crate::shell::setting::store::{settings_store, CameraCollisionMode};
 use crate::world::frame::view::{view, view_compose};

@@ -14,7 +14,7 @@ use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, POS_DAMP, ROT
 use crate::control::camera::controller::look_domain;
 use crate::control::camera::controller::{camera, eye_local, map_center, set_eye_local};
 use crate::control::camera::store::camera_store;
-use crate::control::navigation::walk::target;
+use crate::control::navigation::support::target;
 use crate::global::Global;
 use crate::world::access::{Access, Detail, Ray};
 use crate::world::frame::view::{view, view_compose};

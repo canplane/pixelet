@@ -33,7 +33,6 @@ use pxl_spec::space::xy::TO_XY;
 use crate::io::demand::Category;
 use crate::kernel::kernel;
 use crate::layer::object::store::{EntryAt, EntryCursor, Store};
-use crate::param::STEP_CELLS;
 use crate::world::paging::Paging;
 use crate::world::pyramid::{Layer as _, Pyramid};
 use xpute_core::math::scalar::round;
@@ -258,33 +257,29 @@ impl<'a> Access<'a> {
     /// object leaves, else ground (outside bore air) or decks, and folded to the
     /// cell by majority of filled vs empty. Decor is never stood on.
     ///
-    /// Goes down from the cell to the first solid's top, or up a step
-    /// (`STEP_CELLS`) where the cell is solid; taller is a wall and gives none,
-    /// so a walker in a cave stays in it.
-    pub fn support(&self, at: &Pvf3) -> Answer<Option<f64>> {
+    /// Goes down from the cell to the first solid's top, or up at most `rise`
+    /// cells where the cell is solid; taller gives none.
+    pub fn support(&self, at: &Pvf3, rise: i64) -> Answer<Option<f64>> {
         let [ix, iy, iz] = CELL.index_of(at);
-        self.stand([ix, iy], Some(iz))
+        self.stand_climbing([ix, iy], Some(iz), Some(rise))
     }
 
     /// `support` from the drawn surface, ignoring `at`'s height (a fix, a search result).
     pub fn surface_support(&self, at: &Pvf3) -> Answer<f64> {
         let [ix, iy, _] = CELL.index_of(at);
         // From the surface there is no wall, so it is never none.
-        self.stand([ix, iy], None).map(Option::unwrap_or_default)
+        self.stand_climbing([ix, iy], None, None).map(Option::unwrap_or_default)
     }
 
-    /// `support` climbing any height: what an eye that walks nowhere has under it.
+    /// `support` rising any height: where a pan or a tap stands the map center,
+    /// and what an eye has under it.
     pub fn floor_under(&self, at: &Pvf3) -> Answer<f64> {
         let [ix, iy, iz] = CELL.index_of(at);
         // Climbing the whole reach meets no wall, so it is never none.
-        self.stand_climbing([ix, iy], Some(iz), true).map(Option::unwrap_or_default)
+        self.stand_climbing([ix, iy], Some(iz), None).map(Option::unwrap_or_default)
     }
 
-    fn stand(&self, cell: [i64; 2], from: Option<i64>) -> Answer<Option<f64>> {
-        self.stand_climbing(cell, from, from.is_none())
-    }
-
-    fn stand_climbing(&self, [ix, iy]: [i64; 2], from: Option<i64>, any_height: bool) -> Answer<Option<f64>> {
+    fn stand_climbing(&self, [ix, iy]: [i64; 2], from: Option<i64>, rise: Option<i64>) -> Answer<Option<f64>> {
         self.composed([ix, iy]).map(|c| {
             let side = CELL.side();
             let top = round(c.top / side) as i64;
@@ -308,14 +303,14 @@ impl<'a> Access<'a> {
             };
             let [lo, hi] = [REACH.min[2] / side, REACH.max[2] / side].map(|z| z as i64);
             let start = from.unwrap_or(top);
-            let climb = if any_height { hi - start } else { STEP_CELLS };
+            let climb = rise.unwrap_or(hi - start);
             // Above the ground, the lines and the objects' top nothing is filled, so
             // start the descent there rather than a cell at a time from far above.
             let lines_top = c.lines.boxes.iter().map(|b| (b[1] / side).ceil() as i64).max().unwrap_or(i64::MIN);
             let ceiling = top.max(lines_top).max(self.objects.ceiling([ix, iy]).unwrap_or(i64::MIN));
             let stand = if start < ceiling && solid(start) {
                 let over = (start + 1..=start + climb).find(|&cz| !solid(cz));
-                if any_height {
+                if rise.is_none() {
                     over.or(Some(start))
                 } else {
                     over

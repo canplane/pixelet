@@ -12,7 +12,8 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use crate::control::camera::approach::damp_alpha;
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::store::{camera_store, CameraStatus};
-use crate::control::navigation::walk::over;
+use crate::control::navigation::support::over;
+use crate::param::COMPANION_STEP_CELLS;
 use crate::global::Global;
 use crate::io::load::{load_image, Load};
 use crate::kernel::{kernel, with_world};
@@ -63,7 +64,7 @@ struct Held {
     skin: u32,
 }
 
-struct Walker {
+struct Figure {
     variant: CharacterVariant,
     held: Option<Held>,
     pose: [f64; 4],
@@ -81,9 +82,9 @@ struct Walker {
     stands_z: Option<f64>,
 }
 
-impl Walker {
-    fn new(variant: &CharacterVariant, target: Vec2, map_origin: IVec) -> Walker {
-        Walker {
+impl Figure {
+    fn new(variant: &CharacterVariant, target: Vec2, map_origin: IVec) -> Figure {
+        Figure {
             variant: *variant,
             held: None,
             pose: [0.0; 4],
@@ -199,7 +200,7 @@ impl Walker {
                 }
             }
             // A plan in flight finishes even once the map moves again: dropping it
-            // stalled the walker during gestures and a run of quick pans ended in one jump.
+            // stalled the figure during gestures and a run of quick pans ended in one jump.
             let step = match &self.walk_plan {
                 Some(plan) => sample_walk_plan(plan, now),
                 None => WalkSample {
@@ -272,8 +273,8 @@ impl Walker {
 }
 
 struct Companion {
-    person: Option<Walker>,
-    pet: Option<Walker>,
+    person: Option<Figure>,
+    pet: Option<Figure>,
 }
 
 static COMPANION: Global<Companion> = Global::new();
@@ -291,13 +292,13 @@ pub struct CompanionProps {
     pub floor: f64,
 }
 
-fn walker_for<'a>(slot: &'a mut Option<Walker>, variant: &CharacterVariant, target: Vec2, map_origin: IVec) -> &'a mut Walker {
+fn figure_for<'a>(slot: &'a mut Option<Figure>, variant: &CharacterVariant, target: Vec2, map_origin: IVec) -> &'a mut Figure {
     if slot.as_ref().is_some_and(|w| w.variant.number != variant.number) {
         if let Some(mut old) = slot.take() {
             old.release();
         }
     }
-    slot.get_or_insert_with(|| Walker::new(variant, target, map_origin))
+    slot.get_or_insert_with(|| Figure::new(variant, target, map_origin))
 }
 
 pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
@@ -319,7 +320,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     let is_follow_mode = camera_store().is_follow_mode;
 
     let person_target = Vec2 { x: p.center_x, y: p.center_y };
-    let person = walker_for(&mut c.person, person_variant, person_target, p.map_origin);
+    let person = figure_for(&mut c.person, person_variant, person_target, p.map_origin);
     person.step(ctx, p.map_origin, person_target, p.floor, is_follow_mode);
     chat_bubble_step(person.held.as_ref().map(|h| h.actor), person_variant.height_u);
 
@@ -327,7 +328,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
         x: p.center_x + PET_OFFSET.x,
         y: p.center_y + PET_OFFSET.y,
     };
-    let pet = walker_for(&mut c.pet, pet_variant, pet_target, p.map_origin);
+    let pet = figure_for(&mut c.pet, pet_variant, pet_target, p.map_origin);
     // Its own floor beside the person, stepped to from the person's height.
     let pet_z = step_from(p.map_origin, [pet_target.x, pet_target.y], p.floor).flatten().unwrap_or(p.floor);
     pet.step(ctx, p.map_origin, pet_target, pet_z, is_follow_mode);
@@ -342,5 +343,5 @@ pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
 /// None inside where a wall holds it; None outside where no page is resident.
 fn step_from(map_origin: IVec, [x, y]: [f64; 2], stands: f64) -> Option<Option<f64>> {
     let at = *local_world_to_canonical(&mut Pvf3::default(), &[x, y, local_height(over(stands), map_origin)], map_origin);
-    Access::now().support(&at).value()
+    Access::now().support(&at, COMPANION_STEP_CELLS).value()
 }

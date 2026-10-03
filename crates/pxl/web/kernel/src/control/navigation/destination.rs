@@ -9,7 +9,7 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pyramid::{LevelPage, GROUND};
 
 use crate::control::camera::controller::{put_center, Motion};
-use crate::control::navigation::walk::{exact, unknown_z};
+use crate::control::navigation::support::{exact, unknown_z};
 use crate::global::Global;
 use crate::world::access::FINEST;
 

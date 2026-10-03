@@ -51,7 +51,7 @@ fn companion_props() -> Option<CompanionProps> {
         map_origin,
         center_x: local[0],
         center_y: local[1],
-        floor: crate::control::navigation::walk::floor_of(&map_center),
+        floor: crate::control::navigation::support::floor_of(&map_center),
     })
 }
 

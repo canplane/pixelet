@@ -14,7 +14,7 @@ its own clips, its joint palette written each tick — rather than an instance
 of a static model the way decor's population is, with position and animation
 driven in a step of the frame's tick (`../../sched/tick.rs`, the interaction
 phase) rather than by anything the shell holds, at "a few, individually
-distinct" instance count. `companion.rs`'s `Walker` (person + pet) is the
+distinct" instance count. `companion.rs`'s `Figure` (person + pet) is the
 only instance today.
 
 `chat_bubble.rs` lives here too — it's not itself an Actor (it's a
