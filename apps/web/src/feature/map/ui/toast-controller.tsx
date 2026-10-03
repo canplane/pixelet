@@ -12,6 +12,7 @@ import { toastDismiss, toastShow, ToastTone } from "@/shared/ui/toast/store.ts";
 const enum Report {
   Location = 0,
   World = 1,
+  Orientation = 2,
 }
 
 const READY_MS = 3000;
@@ -23,19 +24,27 @@ export function ToastController() {
   tRef.current = t;
 
   const locationStatus = useKernel((s) => s.location.status);
-  // Translated here, not where the error fires, so a language change follows.
+  // A failure is its message; translated here, so a language change follows.
   const locationError = useKernel((s) => s.location.error);
-  const locationErrorKey: string | null = locationError === null ? null : messageKey(locationError);
+  const orientationError = useKernel((s) => s.orientation.error);
 
   useEffect(() => {
-    if (locationStatus === DevicePoseStatus.Loading) {
+    if (locationError !== null) {
+      toastShow(Report.Location, { message: tRef.current(messageKey(locationError)), tone: ToastTone.Error });
+    } else if (locationStatus === DevicePoseStatus.Loading) {
       toastShow(Report.Location, { message: tRef.current("toast.location_checking"), tone: ToastTone.Loading });
-    } else if (locationStatus === DevicePoseStatus.Error) {
-      toastShow(Report.Location, { message: tRef.current(locationErrorKey ?? "toast.location_weak_signal"), tone: ToastTone.Error });
     } else {
       toastDismiss(Report.Location);
     }
-  }, [locationStatus, locationErrorKey]);
+  }, [locationStatus, locationError]);
+
+  useEffect(() => {
+    if (orientationError !== null) {
+      toastShow(Report.Orientation, { message: tRef.current(messageKey(orientationError)), tone: ToastTone.Error });
+    } else {
+      toastDismiss(Report.Orientation);
+    }
+  }, [orientationError]);
 
   // The first world only.
   const mapStatus = useKernel((s) => s.map.status);

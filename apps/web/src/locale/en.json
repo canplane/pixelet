@@ -249,7 +249,6 @@
     }
   },
   "toast": {
-    "location_weak_signal": "Location signal is weak.",
     "location_checking": "Checking your location…",
     "world_ready": "Area loaded.",
     "map_loading": "Loading area…",

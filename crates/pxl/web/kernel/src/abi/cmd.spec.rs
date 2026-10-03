@@ -490,11 +490,7 @@ impl DevicePoseStatus {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Message {
-    None = 0x0000,
-
     // ---- 0x02 where the device says it is ----
-    LocationChecking = 0x0201,
-    LocationWeakSignal = 0x0202,
     GeolocationUnsupported = 0x0203,
     GeolocationPermissionDenied = 0x0204,
     GeolocationPositionUnavailable = 0x0205,
@@ -508,10 +504,7 @@ pub enum Message {
 }
 
 impl Message {
-    pub const ALL: [Message; 11] = [
-        Message::None,
-        Message::LocationChecking,
-        Message::LocationWeakSignal,
+    pub const ALL: [Message; 8] = [
         Message::GeolocationUnsupported,
         Message::GeolocationPermissionDenied,
         Message::GeolocationPositionUnavailable,
@@ -774,6 +767,7 @@ impl LonLat {
 pub struct LocationState {
     pub status: DevicePoseStatus,
     pub has_location: bool,
+    /// Present exactly when status is Error: the failure the kernel chose.
     pub error: Option<Message>,
 }
 
@@ -829,14 +823,17 @@ impl HoldingState {
 
 pub struct OrientationState {
     pub status: DevicePoseStatus,
+    /// Present exactly when status is Error: the failure the kernel chose.
+    pub error: Option<Message>,
 }
 
 impl OrientationState {
     /// The children it is written as.
-    pub const FIELDS: u32 = 1;
+    pub const FIELDS: u32 = 2;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.status as u32));
+        w.u32(self.error.map(|m| m as u32));
     }
 }
 

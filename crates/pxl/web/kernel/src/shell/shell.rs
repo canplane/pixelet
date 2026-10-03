@@ -101,7 +101,10 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
             decor: decor_num_id(held.decor_id),
             tier: held.object_tier,
         },
-        orientation: OrientationState { status: orientation.pose.status() },
+        orientation: OrientationState {
+            status: orientation.pose.status(),
+            error: orientation.pose.error(),
+        },
         azimuth: camera.intent.azimuth,
         is_follow_mode: camera.is_follow_mode,
         camera_busy: camera.camera_status != CameraStatus::Idle,

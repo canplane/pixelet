@@ -249,7 +249,6 @@
     }
   },
   "toast": {
-    "location_weak_signal": "위치 신호가 약합니다.",
     "location_checking": "현재 위치를 확인하고 있습니다.",
     "world_ready": "공간을 불러왔습니다.",
     "map_loading": "공간을 불러오고 있습니다.",

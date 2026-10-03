@@ -602,19 +602,7 @@
       "format": "hex4",
       "entries": [
         {
-          "name": "None",
-          "value": 0
-        },
-        {
           "section": "0x02 where the device says it is"
-        },
-        {
-          "name": "LocationChecking",
-          "value": 513
-        },
-        {
-          "name": "LocationWeakSignal",
-          "value": 514
         },
         {
           "name": "GeolocationUnsupported",
@@ -1537,7 +1525,10 @@
         {
           "name": "error",
           "type": "Message",
-          "optional": true
+          "optional": true,
+          "doc": [
+            "Present exactly when status is Error: the failure the kernel chose."
+          ]
         }
       ]
     },
@@ -1595,6 +1586,14 @@
         {
           "name": "status",
           "type": "DevicePoseStatus"
+        },
+        {
+          "name": "error",
+          "type": "Message",
+          "optional": true,
+          "doc": [
+            "Present exactly when status is Error: the failure the kernel chose."
+          ]
         }
       ]
     },

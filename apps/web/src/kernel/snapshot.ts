@@ -11,7 +11,7 @@ const INITIAL: Snapshot = {
   location: { status: DevicePoseStatus.Idle, has_location: false, error: null },
   companion: { person_ready: false, pet_ready: false },
   holding: { tool: ActiveTool.Pointer, channel: null, cube: 0, decor: 0, tier: 0 },
-  orientation: { status: DevicePoseStatus.Idle },
+  orientation: { status: DevicePoseStatus.Idle, error: null },
   azimuth: 0,
   is_follow_mode: false,
   camera_busy: false,

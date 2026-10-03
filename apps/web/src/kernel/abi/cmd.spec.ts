@@ -211,12 +211,8 @@ export const enum DevicePoseStatus {
  * something must never come to mean another thing. Retire one by leaving
  * the gap. */
 export const enum Message {
-  None = 0x0000,
-
   // ---- 0x02 where the device says it is ----
 
-  LocationChecking = 0x0201,
-  LocationWeakSignal = 0x0202,
   GeolocationUnsupported = 0x0203,
   GeolocationPermissionDenied = 0x0204,
   GeolocationPositionUnavailable = 0x0205,
@@ -414,6 +410,7 @@ export function read_lon_lat(b: BranchCursor): LonLat {
 export interface LocationState {
   status: DevicePoseStatus;
   has_location: boolean;
+  /** Present exactly when status is Error: the failure the kernel chose. */
   error: Message | null;
 }
 
@@ -447,10 +444,12 @@ export function read_holding_state(b: BranchCursor): HoldingState {
 
 export interface OrientationState {
   status: DevicePoseStatus;
+  /** Present exactly when status is Error: the failure the kernel chose. */
+  error: Message | null;
 }
 
 export function read_orientation_state(b: BranchCursor): OrientationState {
-  return { status: b.at(0).get<DevicePoseStatus>() };
+  return { status: b.at(0).get<DevicePoseStatus>(), error: b.at(1).get<Message | null>() };
 }
 
 /** One rung of the place, in every language the provider had rather than one resolved
