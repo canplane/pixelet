@@ -141,7 +141,7 @@ pub fn zoom_settling() -> bool {
 
 /// `delta_y` in CSS pixels.
 pub fn wheel(delta_y: f64) {
-    zoom_by((delta_y * DOLLY_GAIN).exp());
+    zoom_by(libm::exp(delta_y * DOLLY_GAIN));
 }
 
 /// Under one zooms closer.

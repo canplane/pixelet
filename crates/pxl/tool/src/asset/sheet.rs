@@ -33,12 +33,12 @@ fn srgb_to_linear(v: u8) -> f64 {
     if c <= 0.04045 {
         c / 12.92
     } else {
-        ((c + 0.055) / 1.055).powf(2.4)
+        libm::pow((c + 0.055) / 1.055, 2.4)
     }
 }
 
 fn linear_to_srgb(c: f64) -> u8 {
-    let s = if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * c.powf(1.0 / 2.4) - 0.055 };
+    let s = if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * libm::pow(c, 1.0 / 2.4) - 0.055 };
     (s * 255.0).round_ties_even().clamp(0.0, 255.0) as u8
 }
 

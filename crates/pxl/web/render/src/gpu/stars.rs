@@ -80,7 +80,7 @@ impl StarPass {
         // From orbit a star crosses none of the air.
         let t = transmittance(env[ENV_AIR] as f64, 1.0);
         for k in 0..3 {
-            u[DEPTH + k] = -(t[k].max(1e-6)).ln() as f32;
+            u[DEPTH + k] = -libm::log(t[k].max(1e-6)) as f32;
         }
         g.write_buffer(self.uniform, 0, bytes(u));
     }
@@ -103,12 +103,12 @@ fn star(packed: &[u8; STAR_BYTES]) -> [f32; STAR_FLOATS] {
     let dec = i16::from_le_bytes(word(1)) as f64 / 32767.0 * core::f64::consts::FRAC_PI_2;
     let vmag = i16::from_le_bytes(word(2)) as f64 / 1000.0;
     let bv = i16::from_le_bytes(word(3)) as f64 / 1000.0;
-    let flux = 10f64.powf(-0.4 * vmag);
+    let flux = libm::pow(10f64, -0.4 * vmag);
     let [r, g, b] = star_color(bv);
     [
-        (dec.cos() * ra.cos()) as f32,
-        (dec.cos() * ra.sin()) as f32,
-        dec.sin() as f32,
+        (libm::cos(dec) * libm::cos(ra)) as f32,
+        (libm::cos(dec) * libm::sin(ra)) as f32,
+        libm::sin(dec) as f32,
         flux as f32,
         r as f32,
         g as f32,
@@ -120,7 +120,7 @@ fn star(packed: &[u8; STAR_BYTES]) -> [f32; STAR_FLOATS] {
 /// Up to a constant the color divides out.
 fn planck(lambda: f64, t: f64) -> f64 {
     let l = lambda * 1e-9;
-    1.0 / (l.powi(5) * ((1.4388e-2 / (l * t)).exp() - 1.0))
+    1.0 / (l.powi(5) * (libm::exp(1.4388e-2 / (l * t)) - 1.0))
 }
 
 /// Ballesteros 2012 B−V to temperature, relative to 6,500 K white, taken

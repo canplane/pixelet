@@ -61,7 +61,7 @@ fn each_candidate(tag: u64, density: f64, level: u32, [min, max]: [[i64; 2]; 2],
 
 /// The count whose cumulative Poisson probability first reaches `u`.
 fn poisson(mean: f64, u: f64) -> u64 {
-    let (mut k, mut p) = (0, (-mean).exp());
+    let (mut k, mut p) = (0, libm::exp(-mean));
     let mut cumulative = p;
     while u >= cumulative && p > 0.0 {
         k += 1;
@@ -138,7 +138,7 @@ pub fn pier_covers(frame: Frame, width: f64, a: [f64; 2], d: [f64; 2], near: [f6
     if !(0.0..1.0).contains(&t) {
         return false;
     }
-    let len = d[0].hypot(d[1]);
+    let len = libm::hypot(d[0], d[1]);
     let dir = [d[0] / len, d[1] / len];
     let rel = [at[0] - (a[0] + d[0] * t), at[1] - (a[1] + d[1] * t)];
     let along = (rel[0] * dir[0] + rel[1] * dir[1]).abs();

@@ -34,7 +34,7 @@ fn a_lens_is_the_screen_its_frustum_was_made_from() {
         let lens = Lens::of(&viewed(eye, target, fov, aspect)).expect("a screen");
         let look = unit(sub(target, eye)).unwrap();
         assert!(dot(lens.forward, look) > 1.0 - 1e-9, "{:?} looks elsewhere than {look:?}", lens.forward);
-        let tan_up = (fov / 2.0).to_radians().tan();
+        let tan_up = libm::tan((fov / 2.0).to_radians());
         assert!((lens.tan[1] - tan_up).abs() < 1e-9 && (lens.tan[0] - tan_up * aspect).abs() < 1e-9, "{:?}", lens.tan);
         assert!(dot(lens.right, lens.forward).abs() < 1e-9 && dot(lens.up, lens.forward).abs() < 1e-9 && lens.up[2] > 0.0);
     }
@@ -59,7 +59,7 @@ fn the_tiles_cover_the_screen_and_none_is_wider_than_a_tile() {
     for j in 0..=ny {
         for i in 0..=nx {
             for next in [[i + 1, j], [i, j + 1]].into_iter().filter(|c| c[0] <= nx && c[1] <= ny) {
-                let apart = dot(grid.corner([i, j]), grid.corner(next)).clamp(-1.0, 1.0).acos();
+                let apart = libm::acos(dot(grid.corner([i, j]), grid.corner(next)).clamp(-1.0, 1.0));
                 assert!(apart <= param::OBSERVED_TILE + 1e-9, "[{i}, {j}] is {apart} from {next:?}");
             }
         }
@@ -104,14 +104,14 @@ fn an_error_box_projects_within_its_bound() {
         let (u, v, r) = ((next() * 2.0 - 1.0) * lens.tan[0] * 0.95, (next() * 2.0 - 1.0) * lens.tan[1] * 0.95, 1.0 + next() * 2_000.0);
         let dir = unit(std::array::from_fn(|k| lens.forward[k] + u * lens.right[k] + v * lens.up[k])).unwrap();
         let at: V3 = std::array::from_fn(|k| eye[k] + r * dir[k]);
-        let scale = r * 10f64.powf(-4.0 + next() * 3.9);
+        let scale = r * libm::pow(10f64, -4.0 + next() * 3.9);
         let e: V3 = [next() * scale, next() * scale, next() * scale];
         let bound = lens.error(at, e);
         for (k, axis) in [lens.right, lens.up].into_iter().enumerate() {
             let a = unit(std::array::from_fn(|j| axis[j] - dir[j] * dot(axis, dir))).unwrap();
             for corner in 0..8 {
                 let delta: V3 = std::array::from_fn(|j| if corner >> j & 1 == 1 { e[j] } else { -e[j] });
-                let angle = dot(delta, a).atan2(r + dot(delta, dir)).abs();
+                let angle = libm::atan2(dot(delta, a), r + dot(delta, dir)).abs();
                 assert!(angle <= bound[k] * (1.0 + 1e-9), "{angle} past {} at {r} for {e:?}", bound[k]);
             }
         }

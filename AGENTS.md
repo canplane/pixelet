@@ -300,6 +300,10 @@ index or address; `f64` for a millisecond or coordinate; `u64` for a key;
 `i32` for what can be −errno; a typed array that may sit in a
 `SharedArrayBuffer` keeps `Uint32Array`, one that cannot is `U32Array`.
 
+**A double is the same bits on every platform.** Rounding is xpute's `round`
+(half to even, as WGSL); a transcendental is the pinned `libm`'s, never the
+platform's, which `crates/pxl/clippy.toml` refuses.
+
 **`pxl` is for code, `pixelet` is for infrastructure.** Import paths and
 storage keys abbreviate (`@xpute/core`, `pxl:lang`); provisioned resources
 spell it out (`pixelet-db-geo`, `pixelet-tiles`).

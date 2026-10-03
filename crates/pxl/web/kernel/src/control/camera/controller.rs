@@ -51,7 +51,7 @@ pub fn look_rotation(theta: f64, phi: f64) -> Mat4 {
 /// A drag that moves the ground this far a pixel keeps what is at `dist`
 /// under the finger.
 pub fn units_per_px_at(dist: f64) -> f64 {
-    2.0 * dist * (FOV * core::f64::consts::PI / 360.0).tan() / view().height
+    2.0 * dist * libm::tan(FOV * core::f64::consts::PI / 360.0) / view().height
 }
 
 /// The eye is kept in doubles in the view's root frame and moves with the

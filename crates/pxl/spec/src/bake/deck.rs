@@ -306,7 +306,7 @@ impl Deck<'_> {
         let len2 = dx * dx + dy * dy;
         let t = if len2 > 0.0 { (((at[0] - a[0]) * dx + (at[1] - a[1]) * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
         let near = [a[0] + dx * t, a[1] + dy * t];
-        if !way::covers(self.width_cells(), (at[0] - near[0]).hypot(at[1] - near[1])) {
+        if !way::covers(self.width_cells(), libm::hypot(at[0] - near[0], at[1] - near[1])) {
             return None;
         }
         let top = f64::from(self.tops[s]) + (f64::from(self.tops[s + 1]) - f64::from(self.tops[s])) * t;
@@ -384,7 +384,7 @@ fn simplify(points: &[[f64; 2]], tops: &[i16], across: f64, height: f64) -> Vec<
         for i in a + 1..b {
             let p = points[i];
             let t = if len2 > 0.0 { (((p[0] - pa[0]) * dx + (p[1] - pa[1]) * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
-            let off = (p[0] - pa[0] - dx * t).hypot(p[1] - pa[1] - dy * t) / across;
+            let off = libm::hypot(p[0] - pa[0] - dx * t, p[1] - pa[1] - dy * t) / across;
             let rise = (f64::from(tops[i]) - (f64::from(tops[a]) + (f64::from(tops[b]) - f64::from(tops[a])) * t)).abs() / height;
             let e = off.max(rise);
             if e > worst.0 {

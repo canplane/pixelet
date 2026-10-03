@@ -57,7 +57,7 @@ pub fn corridor_fills(feats: &[Feature]) -> Vec<Feature> {
         };
         for w in f.shape.points.windows(2) {
             let (a, b) = ([w[0][0], w[0][1]], [w[1][0], w[1][1]]);
-            let len = (b[0] - a[0]).hypot(b[1] - a[1]);
+            let len = libm::hypot(b[0] - a[0], b[1] - a[1]);
             if len == 0.0 {
                 continue;
             }
@@ -78,13 +78,13 @@ pub fn corridor_fills(feats: &[Feature]) -> Vec<Feature> {
                                 continue;
                             }
                             let (dx, dy) = (s.b[0] - s.a[0], s.b[1] - s.a[1]);
-                            let slen = dx.hypot(dy);
+                            let slen = libm::hypot(dx, dy);
                             if slen == 0.0 || (dir[0] * dx + dir[1] * dy).abs() / slen < SIDE_HEADING_COS {
                                 continue;
                             }
                             let u = (((p[0] - s.a[0]) * dx + (p[1] - s.a[1]) * dy) / (slen * slen)).clamp(0.0, 1.0);
                             let q = [s.a[0] + dx * u, s.a[1] + dy * u];
-                            let d = (p[0] - q[0]).hypot(p[1] - q[1]);
+                            let d = libm::hypot(p[0] - q[0], p[1] - q[1]);
                             let between = d - reach - way::reach(g.computed.width);
                             if between > 0.0 && between < gap && best.is_none_or(|(bd, _)| d < bd) {
                                 best = Some((d, q));

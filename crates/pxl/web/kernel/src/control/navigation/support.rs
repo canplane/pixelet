@@ -106,7 +106,7 @@ pub fn target(to: &mut Option<Pvf3>, held: V3, origin: IVec) -> V3 {
 /// unknown and the surface stands it once known.
 pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, yaw: f64) -> Pvf3 {
     let (lx, ly) = (-dx * units_per_px, dy * units_per_px);
-    let (s, c) = yaw.sin_cos();
+    let (s, c) = libm::sincos(yaw);
     let origin = local_world_origin();
     let l = canonical_to_local(from, origin);
     let way = [lx * c + ly * s, -lx * s + ly * c];
@@ -116,7 +116,7 @@ pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, yaw: f64) -> Pvf
     }
     let access = Access::now();
     let Some(ceiling) = access.ceiling_over(from).exact() else { return *from };
-    let length = way[0].hypot(way[1]);
+    let length = libm::hypot(way[0], way[1]);
     if length == 0.0 {
         return *from;
     }
@@ -130,7 +130,11 @@ pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, yaw: f64) -> Pvf
         if ceiling.is_some_and(|top| cz >= top) {
             return *from;
         }
-        let ray = Ray { origin: [x + dir[0] * t, y + dir[1] * t, (cz as f64 + 0.5) * side], direction: [dir[0], dir[1], 0.0], reach: length - t };
+        let ray = Ray {
+            origin: [x + dir[0] * t, y + dir[1] * t, (cz as f64 + 0.5) * side],
+            direction: [dir[0], dir[1], 0.0],
+            reach: length - t,
+        };
         match access.first_hit(&ray, Detail::Level(FINEST)) {
             Answer::Exact(None) => break Some(cz),
             Answer::Exact(Some(hit)) => {

@@ -41,13 +41,12 @@ members = [
   "pxl/tool",
 ]
 
-# Why libm is not pinned, which is pixelet's answer and not xpute's: it was
-# held at 0.2.11 against 0.2.12's correctly rounded `cbrt`, for two
-# agreements that turn out not to reach the one place `cbrt` is called —
-# the coarse tier's inset in pxl-render's chunk_mesher. No server or bake
-# crate depends on pxl-render, so no page is written through it, and no
-# TypeScript computes that inset, so there is no second answer for the bits
-# to differ from.
+# Why libm is pinned to one release, which is pixelet's answer and not
+# xpute's: its results are part of what the kernel, the bakes and the tools
+# agree on bit for bit (pxl/clippy.toml holds them to it), and a
+# release within 0.2 may change an algorithm's last bits — 0.2.12 replaced
+# `cbrt`. Moving it is changing that agreement, so a bake made before it may
+# have to be made again.
 #
 # It sits above the header on purpose. script/export-xpute.ts carries a
 # dependency's reason by reading back from its line to the one before it,
@@ -58,7 +57,7 @@ members = [
 # The transcendental functions, FreeBSD msun's as the libm crate carries
 # them, so a double is the same bits on the server, in the module and in a
 # test, whichever libm the platform has.
-libm = "0.2"
+libm = "=0.2.16"
 # FNV-1a, 64 bits: what a POI page keys a record by (id_hash) and the
 # kernel keys a demand by. Over UTF-8 bytes, the same as pxl-tool/spec/data.rs's.
 fnv = "1"

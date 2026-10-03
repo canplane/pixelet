@@ -66,7 +66,7 @@ fn environment() -> &'static mut Environment {
 /// Mercator stretches by the secant of the latitude, heights alike; at the
 /// equator it is `u_per_m(0)`.
 pub fn km_per_u() -> f64 {
-    environment().observed_lat.to_radians().cos() / epsg3857::u_per_m(0.0) / 1000.0
+    libm::cos(environment().observed_lat.to_radians()) / epsg3857::u_per_m(0.0) / 1000.0
 }
 
 pub fn globe() -> Globe {
@@ -231,7 +231,7 @@ impl EnvironmentDraw {
         // and the planet falls away under a camera standing off it.
         let km_per_u = km_per_u();
         let r = globe().radius_u();
-        let over = frame.camera[0].hypot(frame.camera[1]).hypot(frame.camera[2] + r) - r;
+        let over = libm::hypot(libm::hypot(frame.camera[0], frame.camera[1]), frame.camera[2] + r) - r;
         let height = eye_height();
         // The ground pyramid's last observation, read rather than remade per frame.
         let drawn = crate::world::pyramid::domain::current().map(|d| d.observation().far);

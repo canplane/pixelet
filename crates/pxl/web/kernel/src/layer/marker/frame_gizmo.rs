@@ -143,7 +143,7 @@ impl Sketch {
         let mut prev: Option<V3> = None;
         for i in 0..=RING_SEGMENTS {
             let t = (i as f64 / RING_SEGMENTS as f64) * core::f64::consts::PI * 2.0;
-            let (c, sn) = (t.cos() * radius, t.sin() * radius);
+            let (c, sn) = (libm::cos(t) * radius, libm::sin(t) * radius);
             let at = [center[0] + a[0] * c + b[0] * sn, center[1] + a[1] * c + b[1] * sn, center[2] + a[2] * c + b[2] * sn];
             if let Some(p) = prev.filter(|_| i % 2 == 1) {
                 self.line(p, at);
@@ -177,7 +177,7 @@ fn sketch_frames(s: &mut Sketch) {
         return;
     }
     let Some(pivot) = crate::control::camera::controller::center_local() else { return };
-    let (sin, cos) = (-crate::control::camera::controller::heading()).sin_cos();
+    let (sin, cos) = libm::sincos(-crate::control::camera::controller::heading());
     let heading_frame = move |p: V3| [pivot[0] + p[0] * cos - p[1] * sin, pivot[1] + p[0] * sin + p[1] * cos, pivot[2] + p[2]];
     s.gyro(&heading_frame, [4.0, 0.0, 0.0], "heading (4,0,0)", false);
     s.point(heading_frame([0.0, 0.0, 4.0]), Some("heading (0,0,4)"));
@@ -292,7 +292,7 @@ fn write_labels(g: &mut Gizmos) {
         if slot == NO_SLOT {
             continue;
         }
-        lane.extend_from_slice(&billboard_instance(label.at, [logical_w as f64, LABEL_H as f64], slot as u32, 0.5));
+        lane.extend_from_slice(&billboard_instance(label.at, [logical_w, LABEL_H], slot as u32, 0.5));
     }
     write_billboard_set(set, &lane);
 }

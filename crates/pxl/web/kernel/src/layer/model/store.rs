@@ -144,9 +144,9 @@ fn slerp(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
     let (wa, wb) = if d > 0.9995 {
         (1.0 - t, t)
     } else {
-        let th = d.acos();
-        let s = th.sin();
-        (((1.0 - t) * th).sin() / s, (t * th).sin() / s)
+        let th = libm::acosf(d);
+        let s = libm::sinf(th);
+        (libm::sinf((1.0 - t) * th) / s, libm::sinf(t * th) / s)
     };
     let q = [a[0] * wa + b[0] * wb, a[1] * wa + b[1] * wb, a[2] * wa + b[2] * wb, a[3] * wa + b[3] * wb];
     let n = (q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]).sqrt().max(1e-12);

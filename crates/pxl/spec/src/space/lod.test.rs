@@ -53,8 +53,8 @@ fn a_hit_asks_for_a_page_inside_the_fault_bound() {
                 for k in 0..64 {
                     let angle = k as f64 * 0.37;
                     for run in [0.5, 7.0, 100.0, 383.9, 900.0, 5_000.0, 40_000.0, 300_000.0] {
-                        let at = [foot[0] + run * angle.cos(), foot[1] + run * angle.sin()];
-                        let asked = super::level(run.hypot(height)).max(0);
+                        let at = [foot[0] + run * libm::cos(angle), foot[1] + run * libm::sin(angle)];
+                        let asked = super::level(libm::hypot(run, height)).max(0);
                         if asked != level as i32 {
                             continue;
                         }

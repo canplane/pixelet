@@ -110,7 +110,7 @@ fn the_target_is_the_screens_cell_and_never_finer_than_the_criterion() {
         view().height = height;
         target().scale()
     };
-    let span = |height: f64| 2.0 * (param::CENTER_CELL_LOGICAL_PX * 25f64.to_radians().tan() / height).atan() * SPLIT;
+    let span = |height: f64| 2.0 * libm::atan(param::CENTER_CELL_LOGICAL_PX * libm::tan(25f64.to_radians()) / height) * SPLIT;
     assert!((span(1080.0) - 1.0).abs() < 0.01, "the reference view's cell is not the criterion's: {}", span(1080.0));
     assert_eq!(at(1080.0), 1.0);
     assert!((at(540.0) - span(540.0)).abs() < 1e-12, "not the angle half the height's cell spans: {}", at(540.0));

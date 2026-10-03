@@ -46,8 +46,8 @@ const _: () = assert!(
 /// span `2 · atan(n / 2 / that)`.
 pub fn target() -> Tau {
     let v = view();
-    let half = param::CENTER_CELL_LOGICAL_PX * (v.fov.to_radians() / 2.0).tan() / v.height;
-    Tau::of((2.0 * half.atan() * SPLIT).max(1.0))
+    let half = param::CENTER_CELL_LOGICAL_PX * libm::tan(v.fov.to_radians() / 2.0) / v.height;
+    Tau::of((2.0 * libm::atan(half) * SPLIT).max(1.0))
 }
 
 pub fn ladder() -> [Tau; param::TAU_STEPS + 1] {

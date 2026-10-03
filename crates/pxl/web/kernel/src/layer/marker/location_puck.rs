@@ -245,7 +245,7 @@ impl Markers {
         if gap[0] * gap[0] + gap[1] * gap[1] > p.snap_dist2 {
             *shown = p.target;
         } else {
-            let a = 1.0 - (-BEACON_SMOOTH_RATE * dt).exp();
+            let a = 1.0 - libm::exp(-BEACON_SMOOTH_RATE * dt);
             shown[0] += gap[0] * a;
             shown[1] += gap[1] * a;
         }
@@ -267,7 +267,7 @@ impl Markers {
         let beacon = [
             center[0] + shown[0] as f32,
             center[1] + shown[1] as f32,
-            center[2] + (BEACON_Z_BIAS + (p.time * 2.0).sin() * 0.1) as f32,
+            center[2] + (BEACON_Z_BIAS + libm::sin(p.time * 2.0) * 0.1) as f32,
         ];
         draw.draw_as(PIPELINE_PUCK_BEACON, 0, p.night as u32, 0, beacon, (p.time * 1.2) as f32, 1.0);
     }

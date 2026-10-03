@@ -89,7 +89,7 @@ impl Env for Flat {
         let (x, y, side) = c.rect();
         Order {
             seen: true,
-            near: (x + side / 2.0).hypot(y + side / 2.0),
+            near: libm::hypot(x + side / 2.0, y + side / 2.0),
         }
     }
 }
@@ -332,7 +332,7 @@ fn relief(slack: f64) -> World {
 }
 
 fn ladder() -> Vec<Tau> {
-    (0..8).map(|k| Tau::of(2f64.powf(k as f64 / 2.0))).collect()
+    (0..8).map(|k| Tau::of(libm::pow(2f64, k as f64 / 2.0))).collect()
 }
 
 fn domain_at(height: f64, world: &World) -> Domain {

@@ -267,12 +267,8 @@ impl Volumes {
             self.stat.reused += 1;
             return Some(s);
         }
-        let Some(material) = Guard::alloc(MATERIAL_BYTES) else {
-            return None;
-        };
-        let Some((layer_idx, _)) = alloc(LAYER_BYTES) else {
-            return None;
-        };
+        let material = Guard::alloc(MATERIAL_BYTES)?;
+        let (layer_idx, _) = alloc(LAYER_BYTES)?;
         let (material, _) = material.keep();
         self.stat.allocated += 1;
         if let Some(s) = self.empty_stores.pop() {
@@ -479,6 +475,8 @@ impl Volumes {
         }
     }
 
+    /// # Safety
+    /// As `band_view`'s.
     pub unsafe fn band_views(&self, id: u32, out: &mut Vec<BandView<'static>>) -> bool {
         out.clear();
         let n = self.band_count(id);

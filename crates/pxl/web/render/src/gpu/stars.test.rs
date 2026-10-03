@@ -17,12 +17,12 @@ fn the_baked_catalog_reads_back_as_the_catalog_s_brightest_stars() {
     for (packed, (name, ra, dec, vmag)) in records.iter().zip(BRIGHTEST) {
         let s = star(packed);
         let (ra, dec) = (ra.to_radians(), dec.to_radians());
-        let want = [dec.cos() * ra.cos(), dec.cos() * ra.sin(), dec.sin()];
+        let want = [libm::cos(dec) * libm::cos(ra), libm::cos(dec) * libm::sin(ra), libm::sin(dec)];
         // Chord, not acos of the dot: an f32 dot near one cannot tell arcseconds apart.
         let chord = (0..3).map(|k| (s[k] as f64 - want[k]).powi(2)).sum::<f64>().sqrt();
-        let off = (2.0 * (chord / 2.0).asin()).to_degrees() * 3600.0;
+        let off = (2.0 * libm::asin(chord / 2.0)).to_degrees() * 3600.0;
         assert!(off < 30.0, "{name} reads {off:.1}″ from where the catalog puts it");
-        let read = -2.5 * (s[3] as f64).log10();
+        let read = -2.5 * libm::log10(s[3] as f64);
         assert!((read - vmag).abs() < 2e-3, "{name} reads magnitude {read:.3}, the catalog says {vmag}");
     }
 }

@@ -88,7 +88,7 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     put3(o, ENV_SUN, f32s(&sun_dir));
 
     // Faded out as the sun reaches the horizon, past which the eye is day-adapted.
-    let elongation = dot3(&sun_dir, &moon_dir).clamp(-1.0, 1.0).acos();
+    let elongation = libm::acos(dot3(&sun_dir, &moon_dir).clamp(-1.0, 1.0));
     let night = 1.0 - smoothstep(-0.1, 0.0, sun_dir[2]);
     put3(o, ENV_MOON, f32s(&moon_dir));
     o[ENV_MOON + 3] = (MOONLIT_SKY * moon_phase_light(core::f64::consts::PI - elongation) * night) as f32;

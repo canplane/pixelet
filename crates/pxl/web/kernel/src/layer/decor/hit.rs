@@ -133,7 +133,7 @@ fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: 
                     continue;
                 }
                 // Into the model's frame: spin undone, the stand-up quarter turn about X, scale.
-                let (sn, cs) = (-spin).sin_cos();
+                let (sn, cs) = libm::sincos(-spin);
                 let unturn = |v: [f64; 3]| [v[0] * cs - v[1] * sn, v[0] * sn + v[1] * cs, v[2]];
                 let to_model = |v: [f64; 3]| {
                     let u = unturn(v);

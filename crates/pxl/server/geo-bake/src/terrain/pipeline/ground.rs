@@ -182,12 +182,16 @@ fn render_linear_feat(points: &[V3], value: u8, target: &mut Target, width_cell:
 fn along(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
     let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
     let len2 = dx * dx + dy * dy;
-    if len2 > 0.0 { ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2 } else { 0.0 }
+    if len2 > 0.0 {
+        ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2
+    } else {
+        0.0
+    }
 }
 
 fn distance_to_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
     let t = along(p, a, b).clamp(0.0, 1.0);
-    (p[0] - a[0] - (b[0] - a[0]) * t).hypot(p[1] - a[1] - (b[1] - a[1]) * t)
+    libm::hypot(p[0] - a[0] - (b[0] - a[0]) * t, p[1] - a[1] - (b[1] - a[1]) * t)
 }
 
 fn find_intersections(nodes: &[V3], ys: f64, out: &mut Vec<f64>) {

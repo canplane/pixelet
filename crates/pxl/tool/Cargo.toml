@@ -10,6 +10,7 @@ path = "src/lib.rs"
 # No workspace crate is a dependency: the generators write into them and must
 # build when that output is broken.
 [dependencies]
+libm.workspace = true
 sha2 = "0.11"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }

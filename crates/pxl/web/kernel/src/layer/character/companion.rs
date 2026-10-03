@@ -13,7 +13,6 @@ use crate::control::camera::approach::damp_alpha;
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::store::{camera_store, CameraStatus};
 use crate::control::navigation::support::over;
-use crate::param::COMPANION_STEP_CELLS;
 use crate::global::Global;
 use crate::io::load::{load_image, Load};
 use crate::kernel::{kernel, with_world};
@@ -23,6 +22,7 @@ use crate::layer::character::store::companion_load_store;
 use crate::layer::character::variant::{character_variant, model_of, CharacterVariant, Group};
 use crate::layer::character::variant_spec::IDLE_CLIP;
 use crate::layer::model::asset::ModelHandle;
+use crate::param::COMPANION_STEP_CELLS;
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::settings_store;
 use crate::world::access::Access;
@@ -158,7 +158,7 @@ impl Figure {
                 py = self.pose[1] + (target.y - self.pose[1]) * a;
             }
             self.pose[3] = back_to_camera();
-            if (target.x - px).hypot(target.y - py) > WALK_EPS {
+            if libm::hypot(target.x - px, target.y - py) > WALK_EPS {
                 self.follow_walk_until = now + FOLLOW_WALK_LINGER_S;
             }
             is_walking = now < self.follow_walk_until;
@@ -189,8 +189,8 @@ impl Figure {
             if let Some(to) = destination {
                 // Re-planning toward the same place would restart the clock and slow the
                 // walk to a crawl.
-                let under_way = self.walk_plan.as_ref().is_some_and(|plan| (plan.target.x - to.x).hypot(plan.target.y - to.y) <= WALK_EPS);
-                if !under_way && (to.x - self.pose[0]).hypot(to.y - self.pose[1]) > WALK_EPS {
+                let under_way = self.walk_plan.as_ref().is_some_and(|plan| libm::hypot(plan.target.x - to.x, plan.target.y - to.y) <= WALK_EPS);
+                if !under_way && libm::hypot(to.x - self.pose[0], to.y - self.pose[1]) > WALK_EPS {
                     self.walk_plan = Some(WalkPlan {
                         start: Vec2 { x: self.pose[0], y: self.pose[1] },
                         target: to,
@@ -231,7 +231,7 @@ impl Figure {
 
         // A wall holds it walking in place until the walk ends; following a fix
         // there is no end to wait for, so a wall puts it at its target at once.
-        let arrived = (target.x - px).hypot(target.y - py) <= WALK_EPS;
+        let arrived = libm::hypot(target.x - px, target.y - py) <= WALK_EPS;
         let moved = (px, py) != (self.pose[0], self.pose[1]);
         let stands = self.stands_z.get_or_insert(arrive_z);
         if arrived {

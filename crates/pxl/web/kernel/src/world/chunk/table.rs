@@ -1087,7 +1087,7 @@ fn visible(frame: &Frame, s: &Slot) -> bool {
     };
     let c = frame.camera;
     // A chunk whose sphere contains the camera is always visible.
-    let mut visible = (c[0] - x).hypot(c[1] - y).hypot(c[2] - z) <= s.radius;
+    let mut visible = libm::hypot(libm::hypot(c[0] - x, c[1] - y), c[2] - z) <= s.radius;
     if !visible {
         visible = true;
         for p in frame.planes.as_chunks::<4>().0 {

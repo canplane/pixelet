@@ -155,7 +155,7 @@ fn do_rotate(s: &mut Input, client_x: f64, client_y: f64) {
     if s.rotate_axis_lock == RotateAxisLock::None {
         let total_dx = client_x - s.rotate_drag_start_x;
         let total_dy = client_y - s.rotate_drag_start_y;
-        if total_dx.hypot(total_dy) < AXIS_LOCK_THRESHOLD_PX {
+        if libm::hypot(total_dx, total_dy) < AXIS_LOCK_THRESHOLD_PX {
             return;
         }
         s.rotate_axis_lock = if total_dy.abs() > total_dx.abs() { RotateAxisLock::Tilt } else { RotateAxisLock::Rotate };
@@ -178,11 +178,11 @@ fn do_rotate(s: &mut Input, client_x: f64, client_y: f64) {
     let dx = client_x - (rect.left + rect.width / 2.0);
     let dyc = client_y - (rect.top + rect.height / 2.0);
     // atan2 is unstable near the pivot: drop the anchor and re-anchor later.
-    if dx.hypot(dyc) < MIN_ROTATE_RADIUS_PX {
+    if libm::hypot(dx, dyc) < MIN_ROTATE_RADIUS_PX {
         s.rotate_turn = None;
         return;
     }
-    let angle = dyc.atan2(dx);
+    let angle = libm::atan2(dyc, dx);
     let turn = s.rotate_turn.get_or_insert(Anchor::new(camera_store().intent.azimuth, angle));
     let azimuth = turn.ask(angle, linear(-1.0));
     let took = crate::control::camera::controller::set_intent(IntentPatch {
@@ -200,7 +200,7 @@ fn pointer_pair(s: &Input) -> Option<(PointerPos, PointerPos)> {
 /// On the second finger down, and again when a third lifts, so the gesture never jumps.
 fn begin_pinch(s: &mut Input) {
     let Some((p0, p1)) = pointer_pair(s) else { return };
-    s.pinch_start_dist = (p1.x - p0.x).hypot(p1.y - p0.y);
+    s.pinch_start_dist = libm::hypot(p1.x - p0.x, p1.y - p0.y);
     crate::control::camera::controller::pinch_begin(s.pinch_start_dist);
     let camera = camera_store();
     s.pinch_tilt = Anchor::new(camera.intent.polar, (p0.y + p1.y) / 2.0);
@@ -215,7 +215,7 @@ fn update_pinch(s: &mut Input) {
     if s.pinch_start_dist < 1.0 {
         return;
     }
-    let dist = (p1.x - p0.x).hypot(p1.y - p0.y);
+    let dist = libm::hypot(p1.x - p0.x, p1.y - p0.y);
     let midpoint_y = (p0.y + p1.y) / 2.0;
     crate::control::camera::controller::pinch(dist);
 
@@ -223,7 +223,7 @@ fn update_pinch(s: &mut Input) {
     // An unmoved control is not asked, so a zoom-only pinch writes no tilt.
     let polar = s.pinch_tilt.ask(midpoint_y, linear(tilt_gain()));
     let polar = (!settings_store().tilt_lock && polar != intent.polar).then_some(polar);
-    let angle = (p1.y - p0.y).atan2(p1.x - p0.x);
+    let angle = libm::atan2(p1.y - p0.y, p1.x - p0.x);
     if dist < MIN_TWIST_DIST_PX {
         s.pinch_twist = None;
     }
@@ -300,7 +300,7 @@ pub fn camera_pointer_move(kind: PointerKind, pointer_id: i32, client_x: f64, cl
             return;
         }
         if s.drag_mode == DragMode::Pan && s.active_pointers.len() == 1 {
-            if (client_x - s.tap_start_x).hypot(client_y - s.tap_start_y) > TAP_DRAG_THRESHOLD_PX {
+            if libm::hypot(client_x - s.tap_start_x, client_y - s.tap_start_y) > TAP_DRAG_THRESHOLD_PX {
                 s.did_drag = true;
             }
             s.pending_pan_dx += client_x - s.last_x;
@@ -318,7 +318,7 @@ pub fn camera_pointer_move(kind: PointerKind, pointer_id: i32, client_x: f64, cl
         return;
     }
 
-    if (client_x - s.tap_start_x).hypot(client_y - s.tap_start_y) > TAP_DRAG_THRESHOLD_PX {
+    if libm::hypot(client_x - s.tap_start_x, client_y - s.tap_start_y) > TAP_DRAG_THRESHOLD_PX {
         s.did_drag = true;
     }
     if s.drag_mode == DragMode::Pan {

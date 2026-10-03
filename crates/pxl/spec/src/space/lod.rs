@@ -38,7 +38,7 @@ pub const fn split_distance(level: i32) -> f64 {
 /// with the surface angle in, the skyline would be drawn coarsest. Negative
 /// (finer than z16) near the eye.
 pub fn level(r: f64) -> i32 {
-    (r / split_distance(0)).log2().floor() as i32
+    libm::log2(r / split_distance(0)).floor() as i32
 }
 
 /// The criterion's one scale factor, at least 1: every level's split
@@ -98,7 +98,7 @@ pub fn squares_within(level: u32, at: [f64; 2], radius: f64) -> impl Iterator<It
     let (xs, ys) = (rows(at[0]), rows(at[1]));
     let gap = move |c: f64, i: i64| (i as f64 * span - c).max(c - (i + 1) as f64 * span).max(0.0);
     ys.flat_map(move |y| xs.clone().map(move |x| [x, y]))
-        .filter(move |&[x, y]| gap(at[0], x).hypot(gap(at[1], y)) <= radius)
+        .filter(move |&[x, y]| libm::hypot(gap(at[0], x), gap(at[1], y)) <= radius)
 }
 
 /// The cubes `side` wide meeting `b` inside `REACH`.

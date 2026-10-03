@@ -60,14 +60,14 @@ pub const MOONLIT_SKY: f64 = 0.15;
 /// A half moon gives a tenth of a full one's light, not half.
 pub fn moon_phase_light(alpha: f64) -> f64 {
     let a = alpha.to_degrees().abs();
-    10f64.powf(-0.4 * (0.026 * a + 4e-9 * a.powi(4)))
+    libm::pow(10f64, -0.4 * (0.026 * a + 4e-9 * a.powi(4)))
 }
 
 const STEPS: u32 = 64;
 
 fn extinction(h: f64) -> [f64; 3] {
-    let r = (-h / RAYLEIGH_SCALE_HEIGHT_KM).exp();
-    let m = (-h / MIE_SCALE_HEIGHT_KM).exp();
+    let r = libm::exp(-h / RAYLEIGH_SCALE_HEIGHT_KM);
+    let m = libm::exp(-h / MIE_SCALE_HEIGHT_KM);
     let o = (1.0 - (h - OZONE_CENTER_KM).abs() / OZONE_HALF_WIDTH_KM).max(0.0);
     core::array::from_fn(|k| RAYLEIGH_SCATTERING[k] * r + MIE_EXTINCTION * m + OZONE_ABSORPTION[k] * o)
 }
@@ -93,7 +93,7 @@ pub fn transmittance(altitude_km: f64, mu: f64) -> [f64; 3] {
             depth[k] += e[k] * dt;
         }
     }
-    depth.map(|d| (-d).exp())
+    depth.map(|d| libm::exp(-d))
 }
 
 /// The inverse of what the air leaves of a sun overhead at sea level.

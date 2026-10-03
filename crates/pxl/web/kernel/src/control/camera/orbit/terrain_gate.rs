@@ -166,7 +166,7 @@ fn climbed(mut at: ViewPose) -> ViewPose {
     for _ in 0..CLIMB_PASSES {
         let Some(rise) = required_rise(&at).filter(|r| *r > 0.0) else { break };
         // Only ever steepens.
-        let solved = (rise / at.dist).min(1.0).acos();
+        let solved = libm::acos((rise / at.dist).min(1.0));
         at.polar = at.polar.min(solved);
     }
     at

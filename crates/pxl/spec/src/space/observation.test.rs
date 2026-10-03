@@ -80,7 +80,7 @@ const NEAR: f64 = 0.1;
 
 impl Look {
     fn basis(self) -> [[f64; 3]; 3] {
-        let (cy, sy, cp, sp) = (self.yaw.cos(), self.yaw.sin(), self.pitch.cos(), self.pitch.sin());
+        let (cy, sy, cp, sp) = (libm::cos(self.yaw), libm::sin(self.yaw), libm::cos(self.pitch), libm::sin(self.pitch));
         let f = [cy * cp, sy * cp, -sp];
         let r = [sy, -cy, 0.0];
         let u = [cy * sp, sy * sp, cp];
@@ -93,10 +93,10 @@ impl Look {
         let mix = |a: [f64; 3], s: f64, b: [f64; 3], t: f64| [a[0] * s + b[0] * t, a[1] * s + b[1] * t, a[2] * s + b[2] * t];
         let [hx, hy] = self.half;
         let sides = [
-            mix(f, hx.sin(), r, hx.cos()),
-            mix(f, hx.sin(), r, -hx.cos()),
-            mix(f, hy.sin(), u, hy.cos()),
-            mix(f, hy.sin(), u, -hy.cos()),
+            mix(f, libm::sin(hx), r, libm::cos(hx)),
+            mix(f, libm::sin(hx), r, -libm::cos(hx)),
+            mix(f, libm::sin(hy), u, libm::cos(hy)),
+            mix(f, libm::sin(hy), u, -libm::cos(hy)),
         ];
         let mut planes = [0.0; 24];
         for (k, n) in sides.into_iter().enumerate() {
@@ -110,7 +110,7 @@ impl Look {
 
     fn rays(self, n: u32) -> impl Iterator<Item = [f64; 3]> {
         let [f, r, u] = self.basis();
-        let [tx, ty] = self.half.map(f64::tan);
+        let [tx, ty] = self.half.map(libm::tan);
         (0..n).flat_map(move |j| {
             (0..n).map(move |i| {
                 let (a, b) = ((2.0 * i as f64 / (n - 1) as f64 - 1.0) * tx, (2.0 * j as f64 / (n - 1) as f64 - 1.0) * ty);

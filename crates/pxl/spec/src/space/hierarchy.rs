@@ -83,7 +83,7 @@ impl Scale {
     }
 
     pub fn of_side(units: f64) -> Scale {
-        Scale(round(units.log2()) as i32)
+        Scale(round(libm::log2(units)) as i32)
     }
 }
 

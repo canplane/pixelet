@@ -92,7 +92,7 @@ impl Grid {
     pub fn of(lens: Lens) -> Grid {
         Grid {
             lens,
-            across: lens.tan.map(|t| ((2.0 * t.atan() / param::OBSERVED_TILE).ceil() as u32).max(1)),
+            across: lens.tan.map(|t| ((2.0 * libm::atan(t) / param::OBSERVED_TILE).ceil() as u32).max(1)),
         }
     }
 
@@ -111,8 +111,8 @@ impl Grid {
     pub fn corner(&self, [i, j]: [u32; 2]) -> V3 {
         let l = self.lens;
         let at = |k: usize, n: u32| {
-            let half = l.tan[k].atan();
-            (-half + 2.0 * half * n as f64 / self.across[k] as f64).tan()
+            let half = libm::atan(l.tan[k]);
+            libm::tan(-half + 2.0 * half * n as f64 / self.across[k] as f64)
         };
         let (tx, ty) = (at(0, i), at(1, j));
         unit(std::array::from_fn(|k| l.forward[k] + tx * l.right[k] + ty * l.up[k])).unwrap_or(l.forward)
@@ -302,7 +302,7 @@ impl Sight {
             || self.cast.is_none_or(|(was, across, far)| {
                 let turned = [(was.forward, lens.forward), (was.right, lens.right), (was.up, lens.up)]
                     .iter()
-                    .map(|&(a, b)| dot(a, b).clamp(-1.0, 1.0).acos())
+                    .map(|&(a, b)| libm::acos(dot(a, b).clamp(-1.0, 1.0)))
                     .fold(0.0, f64::max);
                 let reshaped = (0..2).any(|k| (was.tan[k] - lens.tan[k]).abs() > 1e-9 * lens.tan[k]);
                 across != grid.across() || reshaped || turned > shift || (o.far - far).abs() > shift * far

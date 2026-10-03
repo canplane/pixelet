@@ -185,8 +185,8 @@ fn the_skys_layouts_match_their_structs() {
     let (n, lo, hi) = (200_000, 1e-5f64, 180.0f64);
     let share: f64 = (0..n)
         .map(|i| {
-            let (t0, t1) = (lo * (hi / lo).powf(i as f64 / n as f64), lo * (hi / lo).powf((i + 1) as f64 / n as f64));
-            halo((t0 + t1) / 2.0) * core::f64::consts::TAU * ((t0 + t1) / 2.0).to_radians().sin() * (t1 - t0).to_radians()
+            let (t0, t1) = (lo * libm::pow(hi / lo, i as f64 / n as f64), lo * libm::pow(hi / lo, (i + 1) as f64 / n as f64));
+            halo((t0 + t1) / 2.0) * core::f64::consts::TAU * libm::sin(((t0 + t1) / 2.0).to_radians()) * (t1 - t0).to_radians()
         })
         .sum();
     assert!((constant(SHADER_SKY, "GLARE_HALO_SHARE")[0] - share).abs() < 1e-3, "the glare's halo carries {share}");

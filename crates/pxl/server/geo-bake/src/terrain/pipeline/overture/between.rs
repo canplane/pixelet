@@ -130,7 +130,7 @@ impl<'a> Line<'a> {
         for (i, p) in points.iter().enumerate() {
             if i > 0 {
                 let q = points[i - 1];
-                len += (p[0] - q[0]).hypot(p[1] - q[1]);
+                len += libm::hypot(p[0] - q[0], p[1] - q[1]);
             }
             cum.push(len);
         }

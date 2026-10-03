@@ -12,6 +12,7 @@ path = "src/lib.rs"
 serve = ["dep:axum", "dep:tokio", "dep:pxl-server"]
 
 [dependencies]
+libm.workspace = true
 pxl-geo-spec = { path = "../geo-spec" }
 pxl-spec = { path = "../../spec", features = ["serde"] }
 xpute-core = { path = "../../../xpute/core" }

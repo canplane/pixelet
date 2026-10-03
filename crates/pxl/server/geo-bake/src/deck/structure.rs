@@ -23,7 +23,7 @@ pub fn end_of(p: &Piece, last: bool) -> ([f64; 2], [f64; 2]) {
     let n = p.points.len();
     let (at, next) = if last { (p.points[n - 1], p.points[n - 2]) } else { (p.points[0], p.points[1]) };
     let (dx, dy) = (next[0] - at[0], next[1] - at[1]);
-    let len = dx.hypot(dy).max(f64::EPSILON);
+    let len = libm::hypot(dx, dy).max(f64::EPSILON);
     ([at[0], at[1]], [dx / len, dy / len])
 }
 
@@ -48,7 +48,7 @@ pub fn side_by_side(pieces: &[Piece]) -> Vec<Beside> {
                     continue;
                 }
                 let (other, other_heading) = end_of(&pieces[j], other_last);
-                let d = (at[0] - other[0]).hypot(at[1] - other[1]) / scale_at(from_db(at[1]));
+                let d = libm::hypot(at[0] - other[0], at[1] - other[1]) / scale_at(from_db(at[1]));
                 let meet = p.end(last) == pieces[j].end(other_last);
                 let near = d <= (p.width_m + pieces[j].width_m) / 2.0 + SIDE_GAP_M;
                 let parallel = heading[0] * other_heading[0] + heading[1] * other_heading[1] >= SIDE_HEADING_COS;
