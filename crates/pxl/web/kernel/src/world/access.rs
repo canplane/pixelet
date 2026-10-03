@@ -253,9 +253,8 @@ impl<'a> Access<'a> {
         self.ground(GROUND.cell_of(level, at))
     }
 
-    /// Where a thing stands at `at`, on the 1u lattice. Sub-cells are filled by
-    /// object leaves, else ground (outside bore air) or decks, and folded to the
-    /// cell by majority of filled vs empty. Decor is never stood on.
+    /// Where a thing stands at `at`, on the 1u lattice (`cells`; decor
+    /// is never stood on).
     ///
     /// Goes down from the cell to the first solid's top, or up at most `rise`
     /// cells where the cell is solid; taller gives none.
@@ -271,15 +270,45 @@ impl<'a> Access<'a> {
         self.stand_climbing([ix, iy], None, None).map(Option::unwrap_or_default)
     }
 
-    /// `support` rising any height: where a pan or a tap stands the map center,
-    /// and what an eye has under it.
+    /// `support` rising any height: where a tap or a pan in the open stands the
+    /// map center, and what an eye has under it.
     pub fn floor_under(&self, at: &Pvf3) -> Answer<f64> {
         let [ix, iy, iz] = CELL.index_of(at);
         // Climbing the whole reach meets no wall, so it is never none.
         self.stand_climbing([ix, iy], Some(iz), None).map(Option::unwrap_or_default)
     }
 
+    /// Whether something solid stands over `at` in its column: a roof, a
+    /// bridge's deck, a cave's rock. A pan from under one keeps its layer.
+    pub fn covered(&self, at: &Pvf3) -> Answer<bool> {
+        let [ix, iy, iz] = CELL.index_of(at);
+        self.cells([ix, iy], |_, ceiling, solid| (iz + 1..ceiling).any(solid))
+    }
+
     fn stand_climbing(&self, [ix, iy]: [i64; 2], from: Option<i64>, rise: Option<i64>) -> Answer<Option<f64>> {
+        self.cells([ix, iy], |top, ceiling, solid| {
+            let side = CELL.side();
+            let [lo, hi] = [REACH.min[2] / side, REACH.max[2] / side].map(|z| z as i64);
+            let start = from.unwrap_or(top);
+            let climb = rise.unwrap_or(hi - start);
+            let stand = if start < ceiling && solid(start) {
+                let over = (start + 1..=start + climb).find(|&cz| !solid(cz));
+                if rise.is_none() {
+                    over.or(Some(start))
+                } else {
+                    over
+                }
+            } else {
+                Some((lo..start.min(ceiling)).rev().find(|&cz| solid(cz)).map_or(start, |cz| cz + 1))
+            };
+            stand.map(|cz| cz as f64 * side)
+        })
+    }
+
+    /// A column's ground top and ceiling, in cells, and whether a cell of it is
+    /// solid. Sub-cells are filled by object leaves, else ground (outside bore
+    /// air) or decks, and folded to the cell by majority of filled vs empty.
+    fn cells<R>(&self, [ix, iy]: [i64; 2], f: impl FnOnce(i64, i64, &dyn Fn(i64) -> bool) -> R) -> Answer<R> {
         self.composed([ix, iy]).map(|c| {
             let side = CELL.side();
             let top = round(c.top / side) as i64;
@@ -301,24 +330,10 @@ impl<'a> Access<'a> {
                     }
                 })
             };
-            let [lo, hi] = [REACH.min[2] / side, REACH.max[2] / side].map(|z| z as i64);
-            let start = from.unwrap_or(top);
-            let climb = rise.unwrap_or(hi - start);
-            // Above the ground, the lines and the objects' top nothing is filled, so
-            // start the descent there rather than a cell at a time from far above.
+            // Above the ground, the lines and the objects' top nothing is filled.
             let lines_top = c.lines.boxes.iter().map(|b| (b[1] / side).ceil() as i64).max().unwrap_or(i64::MIN);
             let ceiling = top.max(lines_top).max(self.objects.ceiling([ix, iy]).unwrap_or(i64::MIN));
-            let stand = if start < ceiling && solid(start) {
-                let over = (start + 1..=start + climb).find(|&cz| !solid(cz));
-                if rise.is_none() {
-                    over.or(Some(start))
-                } else {
-                    over
-                }
-            } else {
-                Some((lo..start.min(ceiling)).rev().find(|&cz| solid(cz)).map_or(start, |cz| cz + 1))
-            };
-            stand.map(|cz| cz as f64 * side)
+            f(top, ceiling, &solid)
         })
     }
 
