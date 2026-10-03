@@ -695,10 +695,10 @@ pub struct Snapshot<'a> {
     pub zooming: bool,
     /// Every setting's value by its SettingKey, as SETTING_SET carries one.
     pub settings: &'a [u32],
-    pub scale_bar: ScaleBar,
-    /// The place the map center is in, broad to narrow, already cut at the rung the
-    /// current zoom asks for; empty where the center is in none or the packets it is
-    /// read out of have not arrived.
+    /// The meters a logical pixel spans at the map center, at the camera's distance; 0 where the camera stands there. The scale bar and the place's depth are the shell's to make of it.
+    pub m_per_px: f64,
+    /// The place the map center is in, broad to narrow, every rung of it; empty where
+    /// the center is in none or the packets it is read out of have not arrived.
     pub place: &'a dyn Fn(&mut dyn FnMut(&PlacePart<'_>)),
 }
 
@@ -716,7 +716,7 @@ impl Snapshot<'_> {
         w.bool(Some(self.camera_busy));
         w.bool(Some(self.zooming));
         w.u32_array(Some(self.settings));
-        w.branch(ScaleBar::FIELDS, |w| self.scale_bar.write(w));
+        w.f64(Some(self.m_per_px));
         let mut n = 0;
         (self.place)(&mut |_| n += 1);
         w.branch(n, |w| {
@@ -732,15 +732,11 @@ pub struct MapState {
     pub is_off_center: bool,
     /// The map center in degrees: what the search measures distance from.
     pub center: Option<LonLat>,
-    /// The L3 page the center falls in: what the area being looked at is announced per.
-    /// Sent because the shell would otherwise need a second implementation of the space
-    /// to reach it.
-    pub page: Option<u64>,
 }
 
 impl MapState {
     /// The children it is written as.
-    pub const FIELDS: u32 = 4;
+    pub const FIELDS: u32 = 3;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.status as u32));
@@ -749,7 +745,6 @@ impl MapState {
             Some(r) => w.branch(LonLat::FIELDS, |w| r.write(w)),
             None => w.no_branch(),
         };
-        w.u64(self.page);
     }
 }
 
@@ -815,34 +810,22 @@ impl OrientationState {
     }
 }
 
-pub struct ScaleBar {
-    pub total_meters: f64,
-    pub bar_width_px: f64,
-}
-
-impl ScaleBar {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 2;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.f64(Some(self.total_meters));
-        w.f64(Some(self.bar_width_px));
-    }
-}
-
 /// One rung of the place, in every language the provider had rather than one resolved
 /// name: the reader's language is the page's, and switching it re-reads a label already
 /// sent.
 pub struct PlacePart<'a> {
+    /// Where the part sits, broadest first (spec/pxl/spec/place.json).
+    pub rank: u8,
     pub name: &'a dyn Display,
     pub names: &'a dyn Fn(&mut dyn FnMut(&PlaceName<'_>)),
 }
 
 impl PlacePart<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 2;
+    pub const FIELDS: u32 = 3;
 
     pub fn write(&self, w: &mut PacketWriter) {
+        w.u8(Some(self.rank));
         w.str_display(self.name);
         let mut n = 0;
         (self.names)(&mut |_| n += 1);

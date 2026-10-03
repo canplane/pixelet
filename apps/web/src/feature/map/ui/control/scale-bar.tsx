@@ -19,11 +19,21 @@ const QUARTER_TICK_PX = 3;
 const LINE_PX = 1;
 const PAD_PX = LINE_PX + halo.reach + 1;
 const LABEL_GAP_PX = 8;
+const BAR_MAX_PX = 80;
+
+/** `m` to the nearest 1, 2 or 5 times a power of ten, a length a scale bar names. */
+function niceLength(m: f64): f64 {
+  if (!(m > 0)) return 0;
+  const base = 10 ** Math.floor(Math.log10(m));
+  const f = m / base;
+  return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * base;
+}
 
 /** Line and ticks are one path, stroked as the halo's rings, so the halo is unbroken where they meet. */
 export function MapScaleBar({ show }: { show: boolean }) {
-  const totalMeters = useKernel((s) => s.scale_bar.total_meters);
-  const barWidthPx = useKernel((s) => s.scale_bar.bar_width_px);
+  const mPerPx = useKernel((s) => s.m_per_px);
+  const totalMeters = niceLength(BAR_MAX_PX * mPerPx);
+  const barWidthPx = mPerPx > 0 ? totalMeters / mPerPx : 0;
   const veil = useVeil(1, SNAP);
 
   // SI units are case-sensitive: never upper-case the label.

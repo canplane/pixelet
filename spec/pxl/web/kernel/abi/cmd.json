@@ -1449,17 +1449,19 @@
           ]
         },
         {
-          "name": "scale_bar",
-          "type": "ScaleBar"
+          "name": "m_per_px",
+          "type": "f64",
+          "doc": [
+            "The meters a logical pixel spans at the map center, at the camera's distance; 0 where the camera stands there. The scale bar and the place's depth are the shell's to make of it."
+          ]
         },
         {
           "name": "place",
           "type": "PlacePart",
           "list": true,
           "doc": [
-            "The place the map center is in, broad to narrow, already cut at the rung the",
-            "current zoom asks for; empty where the center is in none or the packets it is",
-            "read out of have not arrived."
+            "The place the map center is in, broad to narrow, every rung of it; empty where",
+            "the center is in none or the packets it is read out of have not arrived."
           ]
         }
       ]
@@ -1481,16 +1483,6 @@
           "optional": true,
           "doc": [
             "The map center in degrees: what the search measures distance from."
-          ]
-        },
-        {
-          "name": "page",
-          "type": "u64",
-          "optional": true,
-          "doc": [
-            "The L3 page the center falls in: what the area being looked at is announced per.",
-            "Sent because the shell would otherwise need a second implementation of the space",
-            "to reach it."
           ]
         }
       ]
@@ -1554,19 +1546,6 @@
       ]
     },
     {
-      "name": "ScaleBar",
-      "fields": [
-        {
-          "name": "total_meters",
-          "type": "f64"
-        },
-        {
-          "name": "bar_width_px",
-          "type": "f64"
-        }
-      ]
-    },
-    {
       "name": "PlacePart",
       "doc": [
         "One rung of the place, in every language the provider had rather than one resolved",
@@ -1574,6 +1553,13 @@
         "sent."
       ],
       "fields": [
+        {
+          "name": "rank",
+          "type": "u8",
+          "doc": [
+            "Where the part sits, broadest first (spec/pxl/spec/place.json)."
+          ]
+        },
         {
           "name": "name",
           "type": "str"

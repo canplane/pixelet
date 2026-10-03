@@ -7,7 +7,7 @@ import { TreeReader } from "@xpute/core/wire/xtp/mod.ts";
 import { DevicePoseStatus, MapStatus, read_snapshot, type Snapshot } from "@/kernel/abi/cmd.spec.ts";
 
 const INITIAL: Snapshot = {
-  map: { status: MapStatus.Idle, is_off_center: false, center: null, page: null },
+  map: { status: MapStatus.Idle, is_off_center: false, center: null },
   location: { status: DevicePoseStatus.Idle, has_location: false, error: null },
   companion: { person_ready: false, pet_ready: false },
   orientation: { status: DevicePoseStatus.Idle, heading: null },
@@ -16,7 +16,7 @@ const INITIAL: Snapshot = {
   camera_busy: false,
   zooming: false,
   settings: [],
-  scale_bar: { total_meters: 0, bar_width_px: 0 },
+  m_per_px: 0,
   place: [],
 };
 

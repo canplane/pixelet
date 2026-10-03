@@ -27,7 +27,7 @@
 
 import type { BranchCursor, NodeCursor } from "@xpute/core/wire/xtp/mod.ts";
 import type { U32Array, U8Array } from "@xpute/core/abi/array.ts";
-import type { f64, i32, u32, u64 } from "@xpute/core/abi/word.ts";
+import type { f64, i32, u32, u8 } from "@xpute/core/abi/word.ts";
 import { packet } from "@xpute/runtime/ipc/doorbell.ts";
 import type { GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
 
@@ -362,10 +362,10 @@ export interface Snapshot {
   zooming: boolean;
   /** Every setting's value by its SettingKey, as SETTING_SET carries one. */
   settings: u32[];
-  scale_bar: ScaleBar;
-  /** The place the map center is in, broad to narrow, already cut at the rung the
-   * current zoom asks for; empty where the center is in none or the packets it is
-   * read out of have not arrived. */
+  /** The meters a logical pixel spans at the map center, at the camera's distance; 0 where the camera stands there. The scale bar and the place's depth are the shell's to make of it. */
+  m_per_px: f64;
+  /** The place the map center is in, broad to narrow, every rung of it; empty where
+   * the center is in none or the packets it is read out of have not arrived. */
   place: PlacePart[];
 }
 
@@ -380,7 +380,7 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     camera_busy: b.at(6).get<boolean>(),
     zooming: b.at(7).get<boolean>(),
     settings: Array.from(b.at(8).get<U32Array>()),
-    scale_bar: read_scale_bar(b.at_branch(9)),
+    m_per_px: b.at(9).get<f64>(),
     place: list(b.at_branch(10), read_place_part),
   };
 }
@@ -390,14 +390,10 @@ export interface MapState {
   is_off_center: boolean;
   /** The map center in degrees: what the search measures distance from. */
   center: LonLat | null;
-  /** The L3 page the center falls in: what the area being looked at is announced per.
-   * Sent because the shell would otherwise need a second implementation of the space
-   * to reach it. */
-  page: u64 | null;
 }
 
 export function read_map_state(b: BranchCursor): MapState {
-  return { status: b.at(0).get<MapStatus>(), is_off_center: b.at(1).get<boolean>(), center: optional(b.at(2), read_lon_lat), page: b.at(3).get<u64 | null>() };
+  return { status: b.at(0).get<MapStatus>(), is_off_center: b.at(1).get<boolean>(), center: optional(b.at(2), read_lon_lat) };
 }
 
 export interface LonLat {
@@ -437,25 +433,18 @@ export function read_orientation_state(b: BranchCursor): OrientationState {
   return { status: b.at(0).get<DevicePoseStatus>(), heading: b.at(1).get<f64 | null>() };
 }
 
-export interface ScaleBar {
-  total_meters: f64;
-  bar_width_px: f64;
-}
-
-export function read_scale_bar(b: BranchCursor): ScaleBar {
-  return { total_meters: b.at(0).get<f64>(), bar_width_px: b.at(1).get<f64>() };
-}
-
 /** One rung of the place, in every language the provider had rather than one resolved
  * name: the reader's language is the page's, and switching it re-reads a label already
  * sent. */
 export interface PlacePart {
+  /** Where the part sits, broadest first (spec/pxl/spec/place.json). */
+  rank: u8;
   name: string;
   names: PlaceName[];
 }
 
 export function read_place_part(b: BranchCursor): PlacePart {
-  return { name: b.at(0).get<string>(), names: list(b.at_branch(1), read_place_name) };
+  return { rank: b.at(0).get<u8>(), name: b.at(1).get<string>(), names: list(b.at_branch(2), read_place_name) };
 }
 
 export interface PlaceName {
