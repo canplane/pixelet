@@ -257,7 +257,8 @@ pub fn reset_dist() {
     });
 }
 
-/// A view the user brought nearer stays.
+/// Going to a place: a view far out comes back in; one the user brought
+/// nearer stays, as map apps do.
 pub fn come_in_to_default() {
     let default = crate::control::camera::config::camera_cfg::view::DEFAULT_DIST;
     if camera_store().intent.dist > default {

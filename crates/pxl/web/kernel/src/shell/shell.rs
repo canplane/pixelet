@@ -130,7 +130,6 @@ pub fn tracking_action(tracking: Tracking) {
                 go_to_ground(device, Motion::Snap);
             }
             camera.is_follow_mode = false;
-            // A view far out comes back in; one brought nearer stays, as map apps do.
             crate::control::camera::controller::come_in_to_default();
         }
         Tracking::Follow => {
@@ -148,23 +147,29 @@ pub fn tracking_action(tracking: Tracking) {
 
 /// A badge's height is its level's, coarser than where the center stands, so
 /// the center goes on the surface once it is known exactly.
-pub fn go_to(target: Pvf3) {
+fn go_on_ground(target: Pvf3, motion: Motion) {
     camera_store().is_follow_mode = false;
-    go_to_ground(target, Motion::Smooth);
+    go_to_ground(target, motion);
 }
 
-/// `go_to`, and nearer where the camera has a nearer to be: the orbit halves its distance.
+/// A place, as the location button goes to one: a view far out comes in.
+pub fn go_to(target: Pvf3) {
+    go_on_ground(target, Motion::Smooth);
+    crate::control::camera::controller::come_in_to_default();
+}
+
+/// Nearer where the camera has a nearer to be: the orbit halves its distance.
 pub fn go_into(target: Pvf3) {
-    go_to(target);
+    go_on_ground(target, Motion::Smooth);
     if crate::control::camera::controller::active() == crate::control::camera::controller::Active::Orbit {
         crate::control::camera::orbit::zoom_by(0.5);
     }
 }
 
+/// A search's place, as the location button goes to one.
 pub fn go_to_degrees(lon: f64, lat: f64) {
-    camera_store().is_follow_mode = false;
-    let target = epsg4326::project(&[lon, lat, 0.0]);
-    go_to_ground(target, Motion::Snap);
+    go_on_ground(epsg4326::project(&[lon, lat, 0.0]), Motion::Snap);
+    crate::control::camera::controller::come_in_to_default();
 }
 
 /// Set outright, for kernel tests and A/B comparisons at the same view.
