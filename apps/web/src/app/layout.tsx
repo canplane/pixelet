@@ -3,32 +3,17 @@
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { AppContext } from "./provider/context.ts";
-
 import { useBooted } from "./bootstrap.ts";
-import { useUiController } from "./hook/use-ui-controller.ts";
-import { ModalManager } from "./provider/modal-manager.tsx";
+import { Modals } from "./modal.tsx";
 import { KeyboardAway } from "@/shared/ui/keyboard.tsx";
 
-interface AppLayoutProps {
-  children: ReactNode;
-}
-
-export function AppLayout(props: AppLayoutProps) {
-  const { children } = props;
-
+export function AppLayout({ children }: { children: ReactNode }) {
   const booted = useBooted();
-
-  const { uiController, mergeUiController } = useUiController();
-
   return (
-    <AppContext.Provider value={{ ui: uiController }}>
-      <KeyboardAway>
-        <View style={styles.page}>{booted && children}</View>
-
-        <ModalManager mergeUiController={mergeUiController} />
-      </KeyboardAway>
-    </AppContext.Provider>
+    <KeyboardAway>
+      <View style={styles.page}>{booted && children}</View>
+      <Modals />
+    </KeyboardAway>
   );
 }
 

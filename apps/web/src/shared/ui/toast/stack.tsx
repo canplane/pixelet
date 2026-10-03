@@ -18,8 +18,7 @@ const SWIPE_PX = 24;
 const FROM_ABOVE_PX = -24;
 
 /** Pushed-back cards wait half the arrival, so the deck's front never drops before the new card is visible. */
-const ARRIVE = SETTLE;
-const MAKE_ROOM = after(SETTLE, ARRIVE.durationMs / 2);
+const MAKE_ROOM = after(SETTLE, SETTLE.durationMs / 2);
 
 export function Toaster() {
   const entries = useToastStore((s) => s.entries);
@@ -83,7 +82,7 @@ export function Toaster() {
         const front = present && depth === 0;
         const fromAbove = front && turnedBack && lastOrder.current.indexOf(key) !== 0;
         const rest = { translateY: depth * STACK_PEEK_PX, scale: STACK_SCALE[Math.min(depth, MAX_STACK_DEPTH)] };
-        const transition = !present ? LEAVE : arrivals.has(key) ? ARRIVE : arrived > 0 ? MAKE_ROOM : SETTLE;
+        const transition = !present ? LEAVE : arrivals.has(key) ? SETTLE : arrived > 0 ? MAKE_ROOM : SETTLE;
         // No opacity here: it would hide a device's glass wrongly.
         return (
           <Motion

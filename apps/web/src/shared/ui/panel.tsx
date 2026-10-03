@@ -21,13 +21,11 @@ export const PANEL_HEADER = {
   alignItems: "center",
 } as const;
 
-const STACK_GAP = chrome.controlGap;
 export const PANEL_SECTION_GAP = 24;
-const CONTENT_GAP = PANEL_SECTION_GAP;
 export const PANEL_HEAD_HEIGHT = PANEL_EDGE + PANEL_CONTROL + PANEL_EDGE;
-const TABS_TOP = PANEL_EDGE + PANEL_CONTROL + STACK_GAP;
-export const PANEL_CONTENT_TOP = PANEL_EDGE + PANEL_CONTROL + CONTENT_GAP;
-export const PANEL_TABS_ROOM = PANEL_CONTENT_TOP + STACK_GAP + PANEL_CONTROL;
+const TABS_TOP = PANEL_EDGE + PANEL_CONTROL + chrome.controlGap;
+export const PANEL_CONTENT_TOP = PANEL_EDGE + PANEL_CONTROL + PANEL_SECTION_GAP;
+export const PANEL_TABS_ROOM = PANEL_CONTENT_TOP + chrome.controlGap + PANEL_CONTROL;
 
 /** Concentric with the round controls in the top row. */
 export const SHEET_RADIUS = PANEL_EDGE + PANEL_CONTROL / 2;

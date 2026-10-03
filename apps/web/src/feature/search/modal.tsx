@@ -6,7 +6,6 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { round } from "@xpute/core/math/scalar.ts";
 import { useTranslation } from "react-i18next";
 
-import type { BaseModalProps } from "@/app/type/ui.type.ts";
 import { Panel } from "@platform/panel.tsx";
 import { PANEL_CONTENT_TOP, PANEL_CONTROL, PANEL_EDGE, PANEL_HEADER, PANEL_SECTION_GAP, PanelBody, PanelClose } from "@/shared/ui/panel.tsx";
 import { KEEPS_KEYBOARD } from "@/shared/ui/keyboard.tsx";
@@ -96,15 +95,13 @@ function poseColor(status: DevicePoseStatus): string {
 }
 
 const CLEAR = 16;
-const LOCATE_HEIGHT = chrome.target;
-const LOCATE_INSET = PANEL_EDGE;
 
 function LocateCard() {
   const { t } = useTranslation();
   const { location } = useSensors();
   if (location === DevicePoseStatus.Ready) return null;
   return (
-    <AboveKeyboard inset={LOCATE_INSET}>
+    <AboveKeyboard inset={PANEL_EDGE}>
       <Backing fill={color.ground} place={BackingPlace.OnSheet} interactive style={styles.locateCard}>
         <Pressable onPress={kernel_enable_location} accessibilityRole="button" style={styles.locateRow}>
           <Glyph glyph="location" size={chrome.glyph} color={poseColor(location)} />
@@ -125,8 +122,7 @@ interface Found {
 }
 
 /** Forward search, always live: nothing is baked for it. */
-export function SearchModal(props: BaseModalProps) {
-  const { onClose } = props;
+export function SearchModal({ onClose }: { onClose: () => void }) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language.split("-")[0].toLowerCase();
 
@@ -216,11 +212,11 @@ export function SearchModal(props: BaseModalProps) {
 }
 
 const styles = StyleSheet.create({
-  locateCard: { borderRadius: LOCATE_HEIGHT / 2, pointerEvents: "auto", boxShadow: "0 6px 20px rgba(0, 0, 0, 0.12)" },
-  locateRow: { height: LOCATE_HEIGHT, flexDirection: "row", alignItems: "center", gap: 12, paddingLeft: (LOCATE_HEIGHT - chrome.glyph) / 2, paddingRight: PANEL_EDGE },
+  locateCard: { borderRadius: chrome.target / 2, pointerEvents: "auto", boxShadow: "0 6px 20px rgba(0, 0, 0, 0.12)" },
+  locateRow: { height: chrome.target, flexDirection: "row", alignItems: "center", gap: 12, paddingLeft: (chrome.target - chrome.glyph) / 2, paddingRight: PANEL_EDGE },
   locateLabel: { flex: 1, ...textStyle.body, color: LABEL.primary },
   locateAction: { ...textStyle.body, fontWeight: weight.semibold, color: color.action },
-  resultsRoom: { paddingTop: PANEL_CONTENT_TOP, paddingBottom: LOCATE_HEIGHT + 2 * LOCATE_INSET, gap: PANEL_SECTION_GAP },
+  resultsRoom: { paddingTop: PANEL_CONTENT_TOP, paddingBottom: chrome.target + 2 * PANEL_EDGE, gap: PANEL_SECTION_GAP },
   headerRow: { ...PANEL_HEADER, gap: chrome.controlGap },
   well: {
     flex: 1,

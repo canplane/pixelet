@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { Defs, LinearGradient, Mask, Rect, Stop, Svg } from "react-native-svg";
 
 import { useViewportTop, useWindowSize } from "@platform/viewport.ts";
-import { useAppContext } from "@/app/provider/context.ts";
+import { openModal } from "@/app/modal.tsx";
 import { useKernel } from "@/kernel/shell.ts";
 import { Presence } from "@/shared/ui/motion/presence.tsx";
 import { LEAVE, SETTLE } from "@/shared/ui/motion/transition.ts";
@@ -22,7 +22,6 @@ import { BusyDim } from "@/feature/map/ui/busy-dim.tsx";
 import { SettingsTriggerButton } from "@/feature/setting/trigger-button.tsx";
 
 export function TopOverlays() {
-  const { ui } = useAppContext();
   const { t } = useTranslation();
   const top = chrome.inset + useViewportTop();
 
@@ -64,7 +63,7 @@ export function TopOverlays() {
           // The whole strip between the buttons opens search, the scale shown
           // in it or not: where one is and where one wants to go share a slot.
         }
-        <Pressable onPress={ui.openSearchModal} accessibilityRole="button" accessibilityLabel={t("map.search.trigger_aria_label")} style={styles.strip}>
+        <Pressable onPress={() => openModal("search")} accessibilityRole="button" accessibilityLabel={t("map.search.trigger_aria_label")} style={styles.strip}>
           <Presence show={!zooming} from={{ opacity: 0 }} exit={{ opacity: 0 }} transition={SETTLE} exitTransition={LEAVE} style={styles.place}>
             <View style={styles.title}>
               <View style={styles.search}>

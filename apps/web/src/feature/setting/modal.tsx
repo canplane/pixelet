@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
-import type { BaseModalProps } from "@/app/type/ui.type.ts";
 
 import { useSafeArea } from "@platform/safe-area.ts";
 import { Panel } from "@platform/panel.tsx";
@@ -37,8 +36,7 @@ function TabScroll({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function SettingsModal(props: BaseModalProps) {
-  const { onClose } = props;
+export function SettingsModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<SettingsTab>(SettingsTab.Effects);
 

@@ -18,7 +18,7 @@ import { FADE, LEAVE, SNAP } from "@/shared/ui/motion/transition.ts";
 import { keepKeyboard } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
 import { alpha, chrome, color, material, shadow } from "@/shared/ui/theme.ts";
-import { useAppContext } from "@/app/provider/context.ts";
+import { openModal } from "@/app/modal.tsx";
 import { useInHand, useUiStore } from "@/app/store/ui.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { decorName, type PlaceableCube, placeableCubeId } from "@/catalog/cell/mod.ts";
@@ -28,21 +28,15 @@ import { cubeLabel, CubeSwatch, DECOR_GLYPH, heldRing } from "./cube-swatch.tsx"
 const SEND_FROM_SCALE = 0.5;
 
 export const MODE_BAR_HEIGHT_PX = chrome.control;
-/** A tap target is as wide as the pitch and no wider: past it, the later
- * neighbor in the tree takes the tap. */
-const PITCH = chrome.target;
 const ITEM = 24;
 const ITEM_GLYPH = 16;
-const HELD_PX = chrome.selection;
-const PILL_GAP = chrome.controlGap;
 const FIELD_PX = 384;
 const MESSAGE_OPEN_PX = MODE_BAR_HEIGHT_PX + FIELD_PX + 16;
 
 const FLYOUT_LIFT_PX = 20;
-const FLYOUT_ITEM_PX = chrome.target;
 const FLYOUT_GAP_PX = 8;
 const FLYOUT_PAD_Y = 8;
-const FLYOUT_WIDTH = FLYOUT_ITEM_PX + 12;
+const FLYOUT_WIDTH = chrome.target + 12;
 const FLYOUT_FOOT = (MODE_BAR_HEIGHT_PX + ITEM) / 2 + FLYOUT_LIFT_PX;
 const FLYOUT_HOLD_MS = 150;
 /** The first move this far decides: up opens the sizes, sideways scrolls the strip. */
@@ -80,11 +74,11 @@ interface Flyout {
 
 function tierAt(at: Flyout, count: u32, x: f64, y: f64): u32 | null {
   if (Math.abs(x - at.centerX) > FLYOUT_WIDTH / 2) return null;
-  const top = at.foot - (2 * FLYOUT_PAD_Y + count * FLYOUT_ITEM_PX + (count - 1) * FLYOUT_GAP_PX);
+  const top = at.foot - (2 * FLYOUT_PAD_Y + count * chrome.target + (count - 1) * FLYOUT_GAP_PX);
   const along = y - top - FLYOUT_PAD_Y;
   if (along < 0) return null;
-  const row = Math.floor(along / (FLYOUT_ITEM_PX + FLYOUT_GAP_PX));
-  if (row >= count || along - row * (FLYOUT_ITEM_PX + FLYOUT_GAP_PX) > FLYOUT_ITEM_PX) return null;
+  const row = Math.floor(along / (chrome.target + FLYOUT_GAP_PX));
+  if (row >= count || along - row * (chrome.target + FLYOUT_GAP_PX) > chrome.target) return null;
   return sizeTiers(count)[row];
 }
 
@@ -234,7 +228,6 @@ function ToolButton({ label, active, onPress, children }: { label: string; activ
 
 export function ModeBar() {
   const { t } = useTranslation();
-  const { ui } = useAppContext();
   const [messageExpanded, setMessageExpanded] = useState(false);
   // A downward drag on the bar puts the keyboard away; swatches only open
   // upward, so the two gestures never compete.
@@ -299,13 +292,13 @@ export function ModeBar() {
   const pillColor = showSendInPaletteSlot ? color.send : STRIP.ground;
   const slot = paletteExpanded ? Slot.Empty : showSendInPaletteSlot ? Slot.Send : Slot.Palette;
 
-  const room = Math.max(MODE_BAR_HEIGHT_PX, barWidth - MODE_BAR_HEIGHT_PX - PILL_GAP);
+  const room = Math.max(MODE_BAR_HEIGHT_PX, barWidth - MODE_BAR_HEIGHT_PX - chrome.controlGap);
   const messageOpen = Math.min(MESSAGE_OPEN_PX, room);
   const messageWidth = messageExpanded ? messageOpen : MODE_BAR_HEIGHT_PX;
   const paletteWidth = paletteExpanded ? Math.min(stripWidth, room) : MODE_BAR_HEIGHT_PX;
   // Whole pixels, where a page's pill cuts its shadow cleanly.
-  const messageX = PixelRatio.roundToNearestPixel((barWidth - (messageWidth + PILL_GAP + paletteWidth)) / 2);
-  const paletteX = PixelRatio.roundToNearestPixel(messageX + messageWidth + PILL_GAP);
+  const messageX = PixelRatio.roundToNearestPixel((barWidth - (messageWidth + chrome.controlGap + paletteWidth)) / 2);
+  const paletteX = PixelRatio.roundToNearestPixel(messageX + messageWidth + chrome.controlGap);
 
   return (
     <View ref={bar} {...putAway.panHandlers} onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)} style={styles.bar}>
@@ -396,7 +389,7 @@ export function ModeBar() {
               <View style={styles.divider} />
 
               <View style={styles.group}>
-                <ToolButton label={t("map.mode_bar.catalog_tooltip")} onPress={ui.openDrawerModal}>
+                <ToolButton label={t("map.mode_bar.catalog_tooltip")} onPress={() => openModal("drawer")}>
                   <Glyph glyph="square.grid.2x2" size={chrome.glyph} color={STRIP.glyph} />
                 </ToolButton>
               </View>
@@ -475,14 +468,15 @@ const styles = StyleSheet.create({
   // An inline `box-none` is drawn as a `none` the strip's tools inherit.
   pass: { pointerEvents: "box-none" },
   block: { pointerEvents: "none" },
-  group: { flexDirection: "row", alignItems: "center", padding: (MODE_BAR_HEIGHT_PX - PITCH) / 2, flexShrink: 0 },
+  group: { flexDirection: "row", alignItems: "center", padding: (MODE_BAR_HEIGHT_PX - chrome.target) / 2, flexShrink: 0 },
   divider: { width: 1, height: 28, backgroundColor: STRIP.line, flexShrink: 0 },
   picks: { flexShrink: 1, minWidth: 0 },
-  picksContent: { alignItems: "center", paddingHorizontal: (MODE_BAR_HEIGHT_PX - PITCH) / 2 },
+  picksContent: { alignItems: "center", paddingHorizontal: (MODE_BAR_HEIGHT_PX - chrome.target) / 2 },
 
-  slot: { width: PITCH, height: PITCH, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  // No wider than a target: past it, the later neighbor in the tree takes the tap.
+  slot: { width: chrome.target, height: chrome.target, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   swatchSlot: PAN_X,
-  held: { width: HELD_PX, height: HELD_PX, borderRadius: HELD_PX / 2, alignItems: "center", justifyContent: "center" },
+  held: { width: chrome.selection, height: chrome.selection, borderRadius: chrome.selection / 2, alignItems: "center", justifyContent: "center" },
   toolActive: { backgroundColor: STRIP.held },
   decorDisc: { width: ITEM, height: ITEM, borderRadius: ITEM / 2, alignItems: "center", justifyContent: "center", backgroundColor: STRIP.held },
   swatchIdle: { boxShadow: `0 0 0 1px ${STRIP.swatchLine}` },
@@ -503,7 +497,7 @@ const styles = StyleSheet.create({
     borderRadius: FLYOUT_WIDTH / 2,
     boxShadow: shadow.lift,
   },
-  flyoutItem: { width: FLYOUT_ITEM_PX, height: FLYOUT_ITEM_PX, alignItems: "center", justifyContent: "center" },
+  flyoutItem: { width: chrome.target, height: chrome.target, alignItems: "center", justifyContent: "center" },
   markIdle: { backgroundColor: alpha(STRIP.mark, 0.4) },
   markHeld: { backgroundColor: alpha(STRIP.mark, 0.8) },
   markHover: { backgroundColor: STRIP.mark, boxShadow: `0 0 0 1px ${STRIP.mark}` },

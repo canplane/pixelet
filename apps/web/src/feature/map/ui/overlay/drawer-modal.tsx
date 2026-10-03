@@ -7,7 +7,6 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { u8 } from "@xpute/core/abi/word.ts";
 import { type ChannelName, decorKinds, decorName, type PlaceableCube, placeableCubeChannel, placeableCubeId, placeableCubes } from "@/catalog/cell/mod.ts";
 
-import type { BaseModalProps } from "@/app/type/ui.type.ts";
 import { useInHand, useUiStore } from "@/app/store/ui.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { useSafeArea } from "@platform/safe-area.ts";
@@ -29,12 +28,11 @@ for (const cube of placeableCubes) {
 }
 
 // A press lands on 44 (issue/20260928-three-sizes-of-a-control.md); a circle cut a block's texture away, so a rounded square.
-const CELL = chrome.target;
 const GRID_GAP = 4;
 const LIT_SCALE = 1.05;
 const LIT_INK = 2;
 /** Lit, a tile reaches no further than halfway into the gap: 40. */
-const TILE = (CELL + GRID_GAP - 2 * (1 + LIT_INK)) / LIT_SCALE;
+const TILE = (chrome.target + GRID_GAP - 2 * (1 + LIT_INK)) / LIT_SCALE;
 const TILE_RADIUS = 12;
 
 /** Pictures only: names under every tile read as a list. */
@@ -88,8 +86,7 @@ const enum DrawerTab {
 }
 
 /** Cube and decor picks close the sheet; character picks apply at once and leave it open. */
-export function DrawerModal(props: BaseModalProps) {
-  const { onClose } = props;
+export function DrawerModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const { bottom } = useSafeArea();
   const [tab, setTab] = useState<DrawerTab>(DrawerTab.Cube);
@@ -164,7 +161,7 @@ const styles = StyleSheet.create({
   sectionTitle: { ...sectionTitle, color: LABEL.secondary },
   held: { flex: 1, textAlign: "right", ...textStyle.caption, color: LABEL.primary },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: GRID_GAP },
-  cell: { width: CELL, height: CELL, alignItems: "center", justifyContent: "center" },
+  cell: { width: chrome.target, height: chrome.target, alignItems: "center", justifyContent: "center" },
   markOff: { boxShadow: `0 0 0 1px ${hairline}` },
   markOn: { boxShadow: heldRing(color.ground, color.black, LIT_INK), transform: [{ scale: LIT_SCALE }] },
   decor: { width: TILE, height: TILE, borderRadius: TILE_RADIUS, alignItems: "center", justifyContent: "center" },
