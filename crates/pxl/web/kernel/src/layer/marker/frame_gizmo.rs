@@ -150,11 +150,12 @@ fn sketch_frames(s: &mut Sketch) {
     s.point(world_frame([0.0, RING_RADIUS, 0.0]), NORTH);
 }
 
-/// The map center and its cell; the page it stands in, outlined; the origin,
-/// and the square the eye stays in before the origin moves, dashed. Both
-/// squares are bounds of coordinates, drawn level at the map center, and a
-/// line in each one's style leads from the map center to its corner, which
-/// is often off the screen.
+/// The map center and its cell; at the level the origin is floored at, the
+/// page the map center stands in, outlined, and the origin with the square
+/// the eye stays in before it moves, dashed, eight pages a side. Both squares
+/// are bounds of coordinates, drawn level at the map center, and a line in
+/// each one's style leads from the map center to its corner, which is often
+/// off the screen.
 fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
     let mut s = Sketch::default();
     let origin = ivec::to_v3(map_origin);
@@ -166,13 +167,14 @@ fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
     s.point(center_v, COLOR);
 
     let z = center_v[2];
-    let (x0, y0, side) = LevelPage::over(0, map_center.i).rect();
+    let level = origin_level(view().eye_at());
+    let (x0, y0, side) = LevelPage::over(level, map_center.i).rect();
     let page_v = [x0 - origin[0], y0 - origin[1], z];
     s.square(page_v, side, false);
     s.line(center_v, page_v, COLOR);
     s.point(page_v, COLOR);
 
-    let span = anchor_span_of(origin_level(view().eye_at())) as f64;
+    let span = anchor_span_of(level) as f64;
     let origin_v = [0.0, 0.0, z];
     s.square(origin_v, span, true);
     s.dashed(center_v, origin_v);
