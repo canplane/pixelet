@@ -84,7 +84,7 @@ const DATA_SPECS: [DataSpec; 11] = [
         rs: Some("crates/pxl/web/kernel/src/layer/character/variant.spec.rs"),
         module: Some("variant_spec"),
         enums: Enums::All,
-        ts_names: Some(&["groups", "DEFAULT_PERSON_VARIANT_KEY", "DEFAULT_PET_VARIANT_KEY", "PERSON_GENDER_PREFIXES"]),
+        ts_names: Some(&["groups", "PERSON_GENDER_PREFIXES"]),
         cpp: None,
     },
     DataSpec {

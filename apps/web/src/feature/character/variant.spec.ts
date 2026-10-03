@@ -125,7 +125,3 @@ export const PERSON_GENDER_PREFIXES = {
   female: "female-",
   male: "male-",
 } as const;
-
-export const DEFAULT_PERSON_VARIANT_KEY = "female-2";
-
-export const DEFAULT_PET_VARIANT_KEY = "chick";

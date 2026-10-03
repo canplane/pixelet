@@ -165,13 +165,5 @@
     ],
     "female": "female-",
     "male": "male-"
-  },
-  "DEFAULT_PERSON_VARIANT_KEY": {
-    "$type": "groups::person::Key",
-    "$value": "female-2"
-  },
-  "DEFAULT_PET_VARIANT_KEY": {
-    "$type": "groups::pet::Key",
-    "$value": "chick"
   }
 }

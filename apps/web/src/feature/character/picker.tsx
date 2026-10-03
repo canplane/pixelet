@@ -8,7 +8,7 @@ import { alpha, chrome, color, hairline, sectionTitle, textStyle, weight } from 
 import { CharacterPreview } from "@/feature/character/preview.tsx";
 import { kernel_setting, useKernel } from "@/kernel/shell.ts";
 import { SETTINGS } from "@/feature/setting/schema.ts";
-import { findPersonVariant, findPetVariant, type Gender, genderOf, GENDERS, personVariantNumbered, personVariantsOf, PET_VARIANTS } from "@/feature/character/variant.ts";
+import { type CharacterVariant, type Gender, genderOf, GENDERS, personVariant, personVariantsOf, PET_VARIANTS, petVariant } from "@/feature/character/variant.ts";
 import { LABEL } from "@platform/palette.ts";
 import { PANEL_EDGE, PANEL_SECTION_GAP } from "@/shared/ui/panel.tsx";
 
@@ -36,15 +36,14 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
 interface PersonPickerProps {
   gender: Gender;
   onGenderChange: (gender: Gender) => void;
-  selectedKey: string;
-  onSelect: (key: string) => void;
+  selected: CharacterVariant;
+  onSelect: (variant: CharacterVariant) => void;
 }
 
 /** The preview tracks the equipped variant; browsing genders changes nothing until a variant is picked. */
 function PersonPicker(props: PersonPickerProps) {
-  const { gender, onGenderChange, selectedKey, onSelect } = props;
+  const { gender, onGenderChange, selected, onSelect } = props;
   const { t } = useTranslation();
-  const selected = findPersonVariant(selectedKey);
   const variants = personVariantsOf(gender);
 
   return (
@@ -58,7 +57,7 @@ function PersonPicker(props: PersonPickerProps) {
           </View>
           <View style={styles.rule} />
           <View style={styles.chips}>
-            {variants.map((v, i) => <Chip key={v.key} label={`${i + 1}`} active={v.key === selectedKey} onPress={() => onSelect(v.key)} />)}
+            {variants.map((v, i) => <Chip key={v.key} label={`${i + 1}`} active={v.number === selected.number} onPress={() => onSelect(v)} />)}
           </View>
         </View>
       </View>
@@ -67,14 +66,13 @@ function PersonPicker(props: PersonPickerProps) {
 }
 
 interface PetPickerProps {
-  selectedKey: string;
-  onSelect: (key: string) => void;
+  selected: CharacterVariant;
+  onSelect: (variant: CharacterVariant) => void;
 }
 
 function PetPicker(props: PetPickerProps) {
-  const { selectedKey, onSelect } = props;
+  const { selected, onSelect } = props;
   const { t } = useTranslation();
-  const selected = findPetVariant(selectedKey);
 
   return (
     <View style={styles.picker}>
@@ -83,7 +81,7 @@ function PetPicker(props: PetPickerProps) {
         <CharacterPreview variant={selected} style={styles.preview} />
         <View style={styles.chipColumn}>
           <View style={styles.chips}>
-            {PET_VARIANTS.map((v) => <Chip key={v.key} label={t(`drawer.character.pets.${v.key}`)} active={v.key === selectedKey} onPress={() => onSelect(v.key)} />)}
+            {PET_VARIANTS.map((v) => <Chip key={v.key} label={t(`drawer.character.pets.${v.key}`)} active={v.number === selected.number} onPress={() => onSelect(v)} />)}
           </View>
         </View>
       </View>
@@ -93,18 +91,16 @@ function PetPicker(props: PetPickerProps) {
 
 /** Picks take effect at once and the sheet stays open, for comparing variants. */
 export function CharacterPicker() {
-  const personVariant = useKernel((s) => s.settings[SETTINGS.person.key] ?? -1);
-  const petVariant = useKernel((s) => s.settings[SETTINGS.pet.key] ?? -1);
-  const personVariantKey = personVariantNumbered(personVariant)?.key ?? "";
-  const petVariantKey = PET_VARIANTS.find((v) => v.number === petVariant)?.key ?? "";
+  const person = personVariant(useKernel((s) => s.settings[SETTINGS.person.key] ?? -1));
+  const pet = petVariant(useKernel((s) => s.settings[SETTINGS.pet.key] ?? -1));
 
   // Opens on the selection's gender, so a pick does not look reset on reopen.
-  const [gender, setGender] = useState<Gender>(genderOf(personVariantKey));
+  const [gender, setGender] = useState<Gender>(genderOf(person));
 
   return (
     <View style={styles.pickers}>
-      <PersonPicker gender={gender} onGenderChange={setGender} selectedKey={personVariantKey} onSelect={(key) => kernel_setting(SETTINGS.person.key, findPersonVariant(key).number)} />
-      <PetPicker selectedKey={petVariantKey} onSelect={(key) => kernel_setting(SETTINGS.pet.key, findPetVariant(key).number)} />
+      <PersonPicker gender={gender} onGenderChange={setGender} selected={person} onSelect={(v) => kernel_setting(SETTINGS.person.key, v.number)} />
+      <PetPicker selected={pet} onSelect={(v) => kernel_setting(SETTINGS.pet.key, v.number)} />
     </View>
   );
 }
