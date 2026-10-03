@@ -150,7 +150,7 @@ pub struct Ray {
 }
 
 impl Ray {
-    fn at(&self, t: f64) -> V3 {
+    pub fn at(&self, t: f64) -> V3 {
         std::array::from_fn(|k| self.origin[k] + self.direction[k] * t)
     }
 }
@@ -278,11 +278,17 @@ impl<'a> Access<'a> {
         self.stand_climbing([ix, iy], Some(iz), None).map(Option::unwrap_or_default)
     }
 
-    /// Whether something solid stands over `at` in its column: a roof, a
-    /// bridge's deck, a cave's rock. A pan from under one keeps its layer.
-    pub fn covered(&self, at: &Pvf3) -> Answer<bool> {
+    /// The first solid cell over `at`'s in its column — a roof, a deck, a
+    /// cave's rock — or none under the open sky.
+    pub fn ceiling_over(&self, at: &Pvf3) -> Answer<Option<i64>> {
         let [ix, iy, iz] = CELL.index_of(at);
-        self.cells([ix, iy], |_, ceiling, solid| (iz + 1..ceiling).any(solid))
+        self.cells([ix, iy], |_, ceiling, solid| (iz + 1..ceiling).find(|&cz| solid(cz)))
+    }
+
+    /// The first open cell of `at`'s column at its cell or over it.
+    pub fn open_from(&self, at: &Pvf3) -> Answer<i64> {
+        let [ix, iy, iz] = CELL.index_of(at);
+        self.cells([ix, iy], |_, ceiling, solid| (iz..ceiling).find(|&cz| !solid(cz)).unwrap_or(iz.max(ceiling)))
     }
 
     fn stand_climbing(&self, [ix, iy]: [i64; 2], from: Option<i64>, rise: Option<i64>) -> Answer<Option<f64>> {

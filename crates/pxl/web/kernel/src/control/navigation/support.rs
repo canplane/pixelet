@@ -94,46 +94,67 @@ pub fn target(to: &mut Option<Pvf3>, held: V3, origin: IVec) -> V3 {
     resolve(&to.unwrap_or(at), held, origin)
 }
 
-/// A pan moves the center to a new XY and stands it there. In the open it
-/// follows the destination's surface (`floor_under`): down where the cell is
-/// open, up over what fills it, nothing between walked. Covered — under a
-/// roof, a deck, a cave's rock — it keeps its layer: it goes as far along the
-/// way at its height as nothing solid stands (half a cell short of what
-/// does), at any zoom, and down to the floor there. Off z16, or from an
-/// unknown height, the Z is unknown and the surface stands it once known.
+/// A pan moves the center to a new XY by the lowest way there: along the way
+/// at its height, and where something solid stands across it, over it — the
+/// way is tried again from the top of what it struck, which the center's
+/// own column must reach before anything over it, a roof or a cave's rock,
+/// does; where it does not, the pan is refused. Then it stands on the floor
+/// under that height. Under the open sky it goes over anything; under a
+/// ceiling it keeps to its layer, at any zoom. Where the way is not known
+/// exactly, it lands on the destination's floor under its height in the
+/// open and goes nowhere under a ceiling; from an unknown height the Z stays
+/// unknown and the surface stands it once known.
 pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, yaw: f64) -> Pvf3 {
     let (lx, ly) = (-dx * units_per_px, dy * units_per_px);
     let (s, c) = yaw.sin_cos();
     let origin = local_world_origin();
     let l = canonical_to_local(from, origin);
     let way = [lx * c + ly * s, -lx * s + ly * c];
-    let along = |f: f64| *local_world_to_canonical(&mut Pvf3::default(), &[l[0] + way[0] * f, l[1] + way[1] * f, l[2]], origin);
-    let to = along(1.0);
+    let to = *local_world_to_canonical(&mut Pvf3::default(), &[l[0] + way[0], l[1] + way[1], l[2]], origin);
     if is_unknown(from) {
         return unknown_z(&to);
     }
     let access = Access::now();
-    if access.covered(from).exact() == Some(true) {
-        let length = way[0].hypot(way[1]);
-        let ray = Ray {
-            origin: [pvf3::to_real(pvf3::X(from)), pvf3::to_real(pvf3::Y(from)), pvf3::to_real(pvf3::Z(from))],
-            direction: [way[0] / length, way[1] / length, 0.0],
-            reach: length,
-        };
-        // Where the way is not known exactly, it goes nowhere.
-        let free = match access.first_hit(&ray, Detail::Level(FINEST)) {
-            Answer::Exact(None) => length,
-            Answer::Exact(Some(hit)) => (hit.t - CELL.side() / 2.0).max(0.0),
-            _ => 0.0,
-        };
-        let to = along(if length > 0.0 { free / length } else { 0.0 });
-        return match access.support(&to, 0) {
-            Answer::Exact(Some(top)) => stand_over(&to, top),
-            _ => *from,
-        };
+    let Some(ceiling) = access.ceiling_over(from).exact() else { return *from };
+    let length = way[0].hypot(way[1]);
+    if length == 0.0 {
+        return *from;
     }
-    match access.floor_under(&to) {
-        Answer::Exact(top) => stand_over(&to, top),
-        _ => unknown_z(&to),
+    let side = CELL.side();
+    let [x, y] = [pvf3::to_real(pvf3::X(from)), pvf3::to_real(pvf3::Y(from))];
+    let dir = [way[0] / length, way[1] / length];
+    let mut cz = CELL.index_of(from)[2];
+    // Along the way from `t`: a struck thing nothing stands on (decor) is passed.
+    let mut t = 0.0;
+    let landed = loop {
+        if ceiling.is_some_and(|top| cz >= top) {
+            return *from;
+        }
+        let ray = Ray { origin: [x + dir[0] * t, y + dir[1] * t, (cz as f64 + 0.5) * side], direction: [dir[0], dir[1], 0.0], reach: length - t };
+        match access.first_hit(&ray, Detail::Level(FINEST)) {
+            Answer::Exact(None) => break Some(cz),
+            Answer::Exact(Some(hit)) => {
+                // Into the struck cell, then up its column past what fills it.
+                let p = ray.at(hit.t + side / 2.0);
+                let mut cell = Pvf3::default();
+                pvf3::gather(&mut cell, pvf3::from_real(p[0]), pvf3::from_real(p[1]), pvf3::from_real(p[2]));
+                match access.open_from(&cell).exact() {
+                    Some(open) if open > cz => (cz, t) = (open, 0.0),
+                    Some(_) => t += hit.t + side,
+                    None => return *from,
+                }
+            }
+            _ => break None,
+        }
+    };
+    let mut at = to;
+    if let Some(cz) = landed {
+        pvf3::gather(&mut at, pvf3::X(&to), pvf3::Y(&to), pvf3::from_real((cz as f64 + 0.5) * side));
+    } else if ceiling.is_some() {
+        return *from;
+    }
+    match access.floor_under(&at) {
+        Answer::Exact(top) => stand_over(&at, top),
+        _ => unknown_z(&at),
     }
 }
