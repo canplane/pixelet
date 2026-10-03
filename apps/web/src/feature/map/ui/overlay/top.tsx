@@ -60,22 +60,24 @@ export function TopOverlays() {
       </BusyDim>
 
       <BusyDim style={[styles.center, { top }]}>
-        <Presence show={!zooming} from={{ opacity: 0 }} exit={{ opacity: 0 }} transition={SETTLE} exitTransition={LEAVE} style={styles.place}>
-          {
-            /* The address title opens search: where one is and where one wants to go
-                        share a slot on a map. */
-          }
-          <Pressable onPress={ui.openSearchModal} accessibilityRole="button" accessibilityLabel={t("map.search.trigger_aria_label")} style={styles.title}>
-            <View style={styles.search}>
-              <HaloIcon glyph="magnifyingglass" size={12} weight="semibold" color={color.white} />
-              <CurrentAddress label={addressLabel} />
+        {
+          // The whole strip between the buttons opens search, the scale shown
+          // in it or not: where one is and where one wants to go share a slot.
+        }
+        <Pressable onPress={ui.openSearchModal} accessibilityRole="button" accessibilityLabel={t("map.search.trigger_aria_label")} style={styles.strip}>
+          <Presence show={!zooming} from={{ opacity: 0 }} exit={{ opacity: 0 }} transition={SETTLE} exitTransition={LEAVE} style={styles.place}>
+            <View style={styles.title}>
+              <View style={styles.search}>
+                <HaloIcon glyph="magnifyingglass" size={12} weight="semibold" color={color.white} />
+                <CurrentAddress label={addressLabel} />
+              </View>
+              <SensorStatus />
             </View>
-            <SensorStatus />
-          </Pressable>
-        </Presence>
-        <View style={styles.scale}>
-          <MapScaleBar show={zooming} />
-        </View>
+          </Presence>
+          <View style={styles.scale}>
+            <MapScaleBar show={zooming} />
+          </View>
+        </Pressable>
       </BusyDim>
 
       <BusyDim style={[styles.right, { top }]}>
@@ -111,9 +113,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   right: { position: "absolute", right: chrome.inset, zIndex: 50, alignItems: "center", gap: chrome.controlGap },
+  strip: { alignSelf: "stretch", flex: 1, alignItems: "center", justifyContent: "center" },
   place: { maxWidth: "100%" },
   title: { alignItems: "center", gap: haloGap(8) },
   // Bounded: a page lays a no-wrap row at content width, and the address overran the buttons.
   search: { flexDirection: "row", alignItems: "center", gap: haloGap(8), minWidth: 0, maxWidth: "100%", flexShrink: 1 },
-  scale: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, alignItems: "center", justifyContent: "center", pointerEvents: "box-none" },
+  scale: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, alignItems: "center", justifyContent: "center", pointerEvents: "none" },
 });
