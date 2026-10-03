@@ -99,7 +99,7 @@ pub fn map_environment_step() {
         }
     }
     let unix_ms = wall_now();
-    sched.environment.observe(e.observed_lat, e.observed_lon, unix_ms);
+    sched.environment.observe(unix_ms);
 
     if unix_ms - e.clock_frame_at >= ENV_CLOCK_FRAME_MS {
         e.clock_frame_at = unix_ms;
@@ -119,8 +119,6 @@ pub struct EnvironmentDraw {
     current: [f32; THEME_FLOATS],
     has_theme: bool,
     started: bool,
-    lat: f64,
-    lon: f64,
     /// Days since J2000.0, from the host's wall clock.
     days: f64,
     sun: V3,
@@ -144,8 +142,6 @@ impl Default for EnvironmentDraw {
             current: [0.0; THEME_FLOATS],
             has_theme: false,
             started: false,
-            lat: 0.0,
-            lon: 0.0,
             days: 0.0,
             sun: [0.0; 3],
             moon: [0.0; 3],
@@ -169,10 +165,8 @@ impl EnvironmentDraw {
         }
     }
 
-    /// Degrees, and Unix milliseconds.
-    pub fn observe(&mut self, lat: f64, lon: f64, unix_ms: f64) {
-        self.lat = lat;
-        self.lon = lon;
+    /// Unix milliseconds.
+    pub fn observe(&mut self, unix_ms: f64) {
         self.days = j2000_days(unix_ms);
         let first = *self.first_ms.get_or_insert(unix_ms);
         self.time = (unix_ms - first) / 1000.0;
@@ -211,8 +205,9 @@ impl EnvironmentDraw {
             return false;
         }
         let night = self.target[NIGHT] > 0.5;
-        let sun = sun_position(self.days, self.lat, self.lon);
-        let moon = moon_position(self.days, self.lat, self.lon);
+        let (lat, lon) = (environment().observed_lat, environment().observed_lon);
+        let sun = sun_position(self.days, lat, lon);
+        let moon = moon_position(self.days, lat, lon);
         let a = if self.started { (frame.delta_s * EASE_RATE).clamp(0.0, 1.0) } else { 1.0 };
         if !self.started {
             self.sun = sun;
@@ -235,7 +230,7 @@ impl EnvironmentDraw {
         // Height over the planet: the world is tangent to it at the camera center
         // and the planet falls away under a camera standing off it.
         let km_per_u = km_per_u();
-        let r = Globe::at(self.lat.to_radians()).radius_u();
+        let r = globe().radius_u();
         let over = frame.camera[0].hypot(frame.camera[1]).hypot(frame.camera[2] + r) - r;
         let height = eye_height();
         // The ground pyramid's last observation, read rather than remade per frame.
@@ -254,8 +249,8 @@ impl EnvironmentDraw {
             altitude_km: (frame.center_z + over) * km_per_u,
             ground_km: eye_ground() * km_per_u,
             km_per_u,
-            latitude: self.lat.to_radians(),
-            star_frame: equatorial_to_local(self.days, self.lat, self.lon),
+            latitude: lat.to_radians(),
+            star_frame: equatorial_to_local(self.days, lat, lon),
         };
         write_environment(&mut self.out, &light);
         (self.stars - star_target).abs() > SETTLE_EPS

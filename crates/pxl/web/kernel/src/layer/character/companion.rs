@@ -109,7 +109,8 @@ impl Walker {
 
     /// Placed at the target on creation; walking from the frame's origin would
     /// take far too long.
-    fn acquire(&mut self, variant: &CharacterVariant, target: Vec2) {
+    fn acquire(&mut self, target: Vec2) {
+        let variant = self.variant;
         if self.held.is_some() {
             return;
         }
@@ -132,8 +133,9 @@ impl Walker {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn step(&mut self, ctx: &TickContext, variant: &CharacterVariant, map_origin: IVec, target: Vec2, arrive_z: f64, is_follow_mode: bool) {
-        self.acquire(variant, target);
+    fn step(&mut self, ctx: &TickContext, map_origin: IVec, target: Vec2, arrive_z: f64, is_follow_mode: bool) {
+        let variant = self.variant;
+        self.acquire(target);
         if self.held.is_none() {
             return;
         }
@@ -276,6 +278,10 @@ struct Companion {
 
 static COMPANION: Global<Companion> = Global::new();
 
+fn companion() -> &'static mut Companion {
+    COMPANION.get(|| Companion { person: None, pet: None })
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CompanionProps {
     pub map_origin: IVec,
@@ -295,7 +301,7 @@ fn walker_for<'a>(slot: &'a mut Option<Walker>, variant: &CharacterVariant, targ
 }
 
 pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
-    let c = COMPANION.get(|| Companion { person: None, pet: None });
+    let c = companion();
     let Some(p) = props else {
         for slot in [&mut c.person, &mut c.pet] {
             if let Some(mut w) = slot.take() {
@@ -314,7 +320,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
 
     let person_target = Vec2 { x: p.center_x, y: p.center_y };
     let person = walker_for(&mut c.person, person_variant, person_target, p.map_origin);
-    person.step(ctx, person_variant, p.map_origin, person_target, p.floor, is_follow_mode);
+    person.step(ctx, p.map_origin, person_target, p.floor, is_follow_mode);
     chat_bubble_step(person.held.as_ref().map(|h| h.actor), person_variant.height_u);
 
     let pet_target = Vec2 {
@@ -324,12 +330,12 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     let pet = walker_for(&mut c.pet, pet_variant, pet_target, p.map_origin);
     // Its own floor beside the person, stepped to from the person's height.
     let pet_z = step_from(p.map_origin, [pet_target.x, pet_target.y], p.floor).flatten().unwrap_or(p.floor);
-    pet.step(ctx, pet_variant, p.map_origin, pet_target, pet_z, is_follow_mode);
+    pet.step(ctx, p.map_origin, pet_target, pet_z, is_follow_mode);
 }
 
 /// (model, image handle) for the shell's skinned pass.
 pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
-    let c: &'static _ = COMPANION.get(|| Companion { person: None, pet: None });
+    let c: &'static _ = companion();
     [&c.person, &c.pet].into_iter().flatten().filter_map(|w| w.held.as_ref()).map(|h| (h.model.model, h.skin))
 }
 

@@ -268,13 +268,6 @@ pub fn objects_at(at: &Pvf3) -> Vec<OccupiedEntry> {
     out
 }
 
-/// Two cubes share space exactly when one's node lies under the other's,
-/// since every cube sits on its own size's lattice.
-pub fn cube_node(corner: &Pvf3, size: f64) -> (Scale, [i64; 3]) {
-    let side = Scale::of_side(size);
-    (side, side.index_of(corner))
-}
-
 pub fn get_placed_object(at: EntryAt) -> Option<OccupiedEntry> {
     let [ix, iy, iz] = cursor_at(at).cell();
     let mut found = None;

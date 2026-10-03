@@ -9,10 +9,10 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
 
-use crate::layer::object::geometry::Aabb;
 use crate::layer::object::store::{get_placed_object, OccupiedEntry};
 use crate::world::access::{Access, Detail, Hit, Ray, Struck, FINEST};
 use crate::world::frame::coord::{local_world_origin, local_world_to_canonical};
+use pxl_spec::space::v3::Aabb;
 
 /// A product number: what can be edited is a sphere about the observer.
 const PICK_REACH_U: f64 = 32.0 * U_PER_CELL;

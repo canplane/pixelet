@@ -1,17 +1,21 @@
 // pxl-kernel/layer/object/collision.rs
 
 use pxl_spec::bake::constant::CELL;
-use pxl_spec::space::hierarchy::share;
+use pxl_spec::space::hierarchy::{share, Scale};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 
 use crate::layer::decor::build::scatters_at;
 use crate::layer::decor::kind::KINDS;
 use crate::layer::object::size::DECOR_SIZE;
-use crate::layer::object::store::{cube_node, holds_entry, objects_at, EntryKind, OccupiedEntry};
+use crate::layer::object::store::{holds_entry, objects_at, EntryKind, OccupiedEntry};
 
 /// Every cube sits on its own size's lattice and is at most a cell, so two
 /// share space exactly when one's node lies under the other's.
 pub fn find_overlapping_object(corner: &Pvf3, size: f64) -> Option<OccupiedEntry> {
+    let cube_node = |corner: &Pvf3, size: f64| {
+        let side = Scale::of_side(size);
+        (side, side.index_of(corner))
+    };
     let candidate = cube_node(corner, size);
     objects_at(corner).into_iter().find(|o| share(candidate, cube_node(&Pvf3 { i: o.i, f: o.f }, o.size)))
 }
