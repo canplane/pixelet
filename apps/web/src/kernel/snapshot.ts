@@ -18,6 +18,7 @@ const INITIAL: Snapshot = {
   settings: [],
   m_per_px: 0,
   place: [],
+  previews: [],
 };
 
 let snapshot: Snapshot = INITIAL;

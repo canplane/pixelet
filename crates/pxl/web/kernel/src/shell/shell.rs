@@ -19,6 +19,7 @@ use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::device_orientation::{orientation_close, request_orientation};
 use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
 use crate::control::sensor::store::{device_location_store, device_orientation_store};
+use crate::layer::character::preview::{preview_rows, CASES_MAX};
 use crate::layer::character::store::companion_load_store;
 use crate::layer::geocode::fetcher::center_group;
 use crate::layer::geocode::store as geocode_store;
@@ -68,6 +69,12 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         LonLat { lon: g[0], lat: g[1] }
     });
     let values = SettingKey::ALL.map(|key| settings.get(key));
+    let mut previews = [0u32; CASES_MAX];
+    let mut preview_cnt = 0;
+    for (slot, (surface, _, _)) in previews.iter_mut().zip(preview_rows()) {
+        *slot = surface;
+        preview_cnt += 1;
+    }
     let snapshot = Snapshot {
         map: MapState {
             status: map.map_status,
@@ -91,6 +98,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         settings: &values,
         m_per_px: m_per_px(),
         place: &|each| place_parts(page, each),
+        previews: &previews[..preview_cnt],
     };
     let mut w = PacketWriter::new(out, Snapshot::FIELDS);
     snapshot.write(&mut w);

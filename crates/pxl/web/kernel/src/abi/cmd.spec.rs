@@ -700,11 +700,13 @@ pub struct Snapshot<'a> {
     /// The place the map center is in, broad to narrow, every rung of it; empty where
     /// the center is in none or the packets it is read out of have not arrived.
     pub place: &'a dyn Fn(&mut dyn FnMut(&PlacePart<'_>)),
+    /// The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here.
+    pub previews: &'a [u32],
 }
 
 impl Snapshot<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 11;
+    pub const FIELDS: u32 = 12;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.branch(MapState::FIELDS, |w| self.map.write(w));
@@ -724,6 +726,7 @@ impl Snapshot<'_> {
                 w.branch(PlacePart::FIELDS, |w| item.write(w));
             })
         });
+        w.u32_array(Some(self.previews));
     }
 }
 

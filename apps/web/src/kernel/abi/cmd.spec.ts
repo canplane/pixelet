@@ -367,6 +367,8 @@ export interface Snapshot {
   /** The place the map center is in, broad to narrow, every rung of it; empty where
    * the center is in none or the packets it is read out of have not arrived. */
   place: PlacePart[];
+  /** The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here. */
+  previews: u32[];
 }
 
 export function read_snapshot(b: BranchCursor): Snapshot {
@@ -382,6 +384,7 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     settings: Array.from(b.at(8).get<U32Array>()),
     m_per_px: b.at(9).get<f64>(),
     place: list(b.at_branch(10), read_place_part),
+    previews: Array.from(b.at(11).get<U32Array>()),
   };
 }
 
