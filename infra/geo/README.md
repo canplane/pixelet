@@ -41,8 +41,8 @@ Coastline is not a table of its own. `OVERTURE_COAST_SQL`
 (`crates/pxl/server/geo-bake/src/terrain/repository.rs`) carves it at bake time out of
 `overture_base_water`'s `ocean` subtype, and `HAS_GROUND_SQL`
 (`crates/pxl/server/geo-bake/src/terrain/leaf.rs`) calls a page open water
-when no `overture_base_land` row or building touches its bbox and no
-`overture_deck` row or way (not a ferry) comes within `DRAWN_REACH_U` of it.
+when no `overture_base_land` row or building touches its bbox and no way
+(not a ferry) comes within `DRAWN_REACH_U` of it.
 
 Both catalogs keep one row per table: which bbox it was pulled with and which
 release it is from. `read_source_catalogs()` (`bake_tiles.rs`) copies them into
@@ -121,9 +121,7 @@ farthest an Overture read goes past a page (`Coverage::margin_pages`), in
 lon/lat. Pass it as printed: a bake refuses to run
 unless every `overture_*` table its statements read has a catalog row with
 exactly that bbox, all of one release, and the error prints the `--bbox` to
-ingest with. Then run `solve_decks`, which records `overture_deck` under the
-release and bbox it was solved from; it names the tables it reads by hand,
-since the deck solve runs its statements inline.
+ingest with.
 
 Buildings is the long one: 7.2 million rows for Korea.
 

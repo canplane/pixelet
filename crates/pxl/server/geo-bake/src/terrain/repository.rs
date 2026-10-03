@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use postgres::types::ToSql;
 use postgres::{Client, Statement};
-use pxl_spec::bake::format::{BaseRow, BuildingRow, CoastRow, DeckRow, SegmentRow};
+use pxl_spec::bake::format::{BaseRow, BuildingRow, CoastRow, SegmentRow};
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::adapter::epsg3857::to_db;
 use pxl_spec::bake::deck::WIDEST;
@@ -13,7 +13,6 @@ use pxl_spec::space::adapter::epsg3857::BBox3857;
 use crate::terrain::pipeline::corridor::GAP;
 
 use crate::elevation::Raster;
-use crate::wkb::wkb_to_geometries;
 
 // Buildings and roads are not clipped: a naive bbox clip broke ring closure.
 // Water and coast are clipped, since their rows reach hundreds of thousands of points.
@@ -31,13 +30,6 @@ SELECT gers_id, subtype, class, COALESCE(road_flags, rail_flags)::text AS flags,
   width_rules::text AS widths, access_restrictions::text AS access,
   subclass, subclass_rules::text AS subclasses, ST_AsBinary(geom) AS geom_wkb
 FROM overture_transportation, env
-WHERE geom && env.e";
-
-const OVERTURE_DECK_SQL: &str = "WITH env AS (
-  SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
-)
-SELECT gers_id, subtype, class, width_m, form, ST_AsBinary(geom) AS geom_wkb
-FROM overture_deck, env
 WHERE geom && env.e";
 
 /// How far past a page what is drawn on it can come from: a way at its
@@ -92,9 +84,6 @@ WHERE NOT ST_IsEmpty(g)";
 /// Every statement a page's bake runs, in the order `prepare` takes them, so
 /// the catalog check (`coverage.rs` `Overture`) sees each table they read.
 pub const READS: [&str; 4] = [OVERTURE_BUILDINGS_SQL, OVERTURE_TRANSPORTATION_SQL, OVERTURE_BASE_SQL, OVERTURE_COAST_SQL];
-
-/// A published bake's lines: what the whole solve wrote.
-pub const DECK_READS: [&str; 1] = [OVERTURE_DECK_SQL];
 
 pub struct PageSource {
     pub ele: Option<Vec<i16>>,
@@ -190,22 +179,6 @@ impl TerrainRepository {
             base_rows,
             coast_rows,
         })
-    }
-
-    pub fn fetch_deck_rows(&self, client: &mut Client, page_bbox: BBox3857) -> Result<Vec<DeckRow>, postgres::Error> {
-        let [[minx, miny, _], [maxx, maxy, _]] = drawn_from(page_bbox);
-        Ok(client
-            .query(OVERTURE_DECK_SQL, &[&minx, &miny, &maxx, &maxy])?
-            .iter()
-            .map(|row| DeckRow {
-                gers_id: row.get("gers_id"),
-                subtype: row.get("subtype"),
-                class: row.get("class"),
-                width_m: row.get::<_, f32>("width_m").into(),
-                form: row.get::<_, i16>("form") as u8,
-                points: wkb_to_geometries(&wkb(row)).into_iter().next().map(|g| g.points).unwrap_or_default(),
-            })
-            .collect())
     }
 }
 

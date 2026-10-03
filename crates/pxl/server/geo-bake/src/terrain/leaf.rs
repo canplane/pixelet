@@ -25,13 +25,12 @@ use crate::util::{fnv1a, pack, Level};
 
 pub use pxl_spec::bake::format::OCEAN_KEY;
 
-/// Whether anything is drawn in a page: land or a building in it, a deck, bore
-/// or way (not a ferry) within `DRAWN_REACH_U`. `CASE` fixes the order, which
+/// Whether anything is drawn in a page: land or a building in it, or a way
+/// (not a ferry) within `DRAWN_REACH_U`. `CASE` fixes the order, which
 /// `OR` does not, so the costly coastline test runs last.
 const HAS_GROUND_SQL: &str = "
   SELECT t.ord, CASE
     WHEN EXISTS (SELECT 1 FROM overture_buildings b WHERE ST_Intersects(b.geom, t.page)) THEN true
-    WHEN EXISTS (SELECT 1 FROM overture_deck d WHERE ST_DWithin(d.geom, t.page, $6)) THEN true
     WHEN EXISTS (SELECT 1 FROM overture_transportation s WHERE ST_DWithin(s.geom, t.page, $6) AND s.subtype <> 'water') THEN true
     ELSE EXISTS (SELECT 1 FROM overture_base_land c WHERE ST_Intersects(c.geom, t.page))
   END AS has_ground
@@ -73,7 +72,7 @@ pub fn has_ground(client: &mut Client, pages: &[IVec]) -> Result<Vec<bool>, post
 /// Its decks solved from what it reaches, not read from a whole solve.
 pub fn bake_leaf(repo: &TerrainRepository, client: &mut Client, memo: &Path, page: IVec, stats: &mut SourceStats, level: Level) -> Result<(usize, Vec<u8>), String> {
     let surface = fetch_surface(repo, client, page, stats).map_err(|e| e.to_string())?;
-    let rows = deck::solve_page(client, page, memo)?;
+    let rows = deck::solve_page(client, page, &mut deck::source::Disk(memo))?;
     let lines = bake_decks(&rows, epsg3857::get_page_bbox(page)[0]).ok_or("a page's decks overflow a record")?;
     let raw = encode_terrain(&assemble(surface, lines)).map_err(|e| format!("{e:?}"))?;
     let packed = pack(raw.as_slice(), level).map_err(|e| e.to_string())?;

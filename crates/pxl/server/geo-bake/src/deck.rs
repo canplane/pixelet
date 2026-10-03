@@ -1,7 +1,7 @@
 // pxl-geo-bake/deck.rs
 
-//! Decks and bores, one solve in `q = sign · z`: over everything for a
-//! published bake, over what a page reaches when it is baked on demand.
+//! Decks and bores, one solve in `q = sign · z` over a page and the eight
+//! around it, the page's lines what comes of it.
 
 pub mod approach;
 pub mod elevation;
@@ -22,8 +22,6 @@ use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m};
 use pxl_spec::space::pyramid::PAGE_CELLS;
 
 use crate::terrain::repository::DRAWN_REACH_U;
-use std::path::Path;
-
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 
 use crate::terrain::pipeline::overture::between::{flag_at, flag_ranges, value_at};
@@ -69,18 +67,9 @@ struct Need {
     under: Under,
 }
 
-/// Every bridge and tunnel into `overture_deck`, for a published bake.
-pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<(), postgres::Error> {
-    let input = source::read_all(client)?;
-    let out = calculate(&input, |at| elevation::surface(client, url, at), &log)?;
-    source::write(client, &out)?;
-    log(&format!("{} lines: overture_deck", out.len()));
-    Ok(())
-}
-
 /// A page's lines, from what lies in it and the eight pages around it.
-pub fn solve_page(client: &mut Client, page: IVec, memo: &Path) -> Result<Vec<DeckRow>, String> {
-    let input = source::read_ring(client, page, memo)?;
+pub fn solve_page(client: &mut Client, page: IVec, store: &mut impl source::Store) -> Result<Vec<DeckRow>, String> {
+    let input = source::read_ring(client, page, store)?;
     let Some((_, grids)) = &input.window else { unreachable!("a ring is read bounded") };
     let (px, py) = (ivec::X(page), ivec::Y(page));
     let within = |p| {

@@ -62,8 +62,7 @@ docker compose -f infra/local/docker-compose.yml --env-file .env up -d
 ```
 
 Terrain needs `overture_buildings`, `overture_transportation`,
-`overture_base_{land,land_use,water,infrastructure}`, `elevation_raster`
-and `overture_deck`;
+`overture_base_{land,land_use,water,infrastructure}` and `elevation_raster`;
 POI needs `overture_places`; geocode needs `overture_divisions` and
 `overture_division_points`. If a table is missing, that is an ingestion
 job, not a bake job — [infra/geo/README.md](../../../infra/geo/README.md).
@@ -72,9 +71,6 @@ which takes the `overture_*` tables from the statements the bake runs and
 refuses unless each has an `overture_catalog` row of one release over
 exactly the bbox `cargo run -q --manifest-path crates/Cargo.toml --bin
 ingest_bbox` prints; the error names the `--bbox` to ingest with.
-`solve_decks`, whose tables are named by hand since the deck solve runs
-its statements inline, records `overture_deck` the same way, so
-re-ingesting transportation means solving again before a terrain bake.
 Never `down -v` to "reset" the database; the volume is several gigabytes of
 ingested data.
 
@@ -85,24 +81,21 @@ A page is built from two artifacts that change for different reasons
 
 - **surface** — ground and elevation, from the database. The expensive one,
   baked again only when the source data changes; resumable.
-- **lines** — decks, ramps and bores, from `overture_deck`, which the deck
-  solve writes over the whole coverage at once, since a viaduct's height is
-  decided by where it meets the ground pages away (`geo-bake deck.rs`).
-  Cheap, and made whole every time.
+- **lines** — decks, ramps and bores, each page solved from itself and the
+  eight pages around it (`geo-bake deck.rs`), as the dev server solves a page
+  on demand. Made whole every time.
 - **assemble** — each leaf of the two, and the pyramid folded over the
   leaves, with no database. Whole every time.
 
 A first bake, or one after an ingest:
 
 ```bash
-deno task solve:decks
 deno task bake:tiles --out ./out/terrain/<version> --concurrency 8
 ```
 
 After a change to how decks or bores are solved, nothing else:
 
 ```bash
-deno task solve:decks
 deno task bake:tiles --out ./out/terrain/<version> --stage lines --stage assemble
 ```
 

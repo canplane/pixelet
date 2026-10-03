@@ -1,9 +1,9 @@
 // pxl-geo-bake/bin/bake_tiles.rs
 
 //! The terrain bake, in three stages: `surface` (ground and elevation from the
-//! DB, resumable), `lines` (decks and bores from `solve:decks`, whole every
-//! time) and `assemble` (leaves and the levels above, no DB). After a deck
-//! solve change, run `--stage lines --stage assemble`.
+//! DB, resumable), `lines` (decks and bores, each page solved from its eight
+//! around it as on demand, whole every time) and `assemble` (leaves and the
+//! levels above, no DB). After a deck solve change, run `--stage lines --stage assemble`.
 //!
 //!   cargo run --profile server -p pxl-geo-bake --bin bake_tiles -- [flags]
 //!
@@ -25,6 +25,7 @@ use std::time::Instant;
 use postgres::Client;
 use pxl_spec::bake::format::{encode_terrain, Terrain};
 use pxl_spec::bake::published::PUBLISHED_VERSION;
+use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::LevelPage;
 
@@ -35,7 +36,9 @@ use pxl_geo_bake::pyramid::{build, write_manifest, Layer, PageSet};
 use pxl_geo_bake::terrain::artifact::{assemble, decode_lines, encode_lines, Surface};
 use pxl_geo_bake::terrain::leaf::{self, bake_ocean, has_ground, land_pages, ocean_samples, write_land_pages, OCEAN_KEY};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
-use pxl_geo_bake::terrain::source::{fetch_lines, fetch_surface, SourceStats};
+use pxl_geo_bake::deck;
+use pxl_geo_bake::terrain::pipeline::deck::bake_decks;
+use pxl_geo_bake::terrain::source::{fetch_surface, SourceStats};
 use pxl_geo_bake::util::{fmt_bytes, fmt_dur, git_sha, pack, refuse_mixed, unpack, Level};
 
 const CLASSIFY_BATCH: usize = 2000;
@@ -207,6 +210,19 @@ fn connect(source: &Overture, raster: &Arc<Raster>) -> Result<Db, String> {
     Ok(Db { client, repo })
 }
 
+/// A band's pages row by row, each row the way the last one ended.
+fn zigzag(band: &[IVec]) -> Vec<IVec> {
+    let mut out = Vec::with_capacity(band.len());
+    for (k, row) in band.chunk_by(|a, b| ivec::Y(*a) == ivec::Y(*b)).enumerate() {
+        if k % 2 == 0 {
+            out.extend(row.iter().copied());
+        } else {
+            out.extend(row.iter().rev().copied());
+        }
+    }
+    out
+}
+
 fn write_json(path: &Path, value: &serde_json::Value) -> Result<(), String> {
     fs::write(path, serde_json::to_string_pretty(value).map_err(|e| e.to_string())?).map_err(|e| format!("{}: {e}", path.display()))
 }
@@ -222,7 +238,7 @@ fn run() -> Result<(), String> {
     let coverage = Coverage::of_source()?;
     let land_cache = args.out.parent().unwrap_or(Path::new(".")).join("land_pages.json");
     let (source, mut checked) = match args.stages.iter().any(|&s| s != Stage::Assemble) {
-        true => Overture::reading(&[&leaf::GROUND_READS, &pxl_geo_bake::terrain::repository::READS, &pxl_geo_bake::terrain::repository::DECK_READS]).map(|(s, c)| (Some(s), Some(c)))?,
+        true => Overture::reading(&leaf::READS).map(|(s, c)| (Some(s), Some(c)))?,
         false => (None, None),
     };
 
@@ -304,31 +320,59 @@ fn run() -> Result<(), String> {
 
     if args.stages.contains(&Stage::Lines) {
         let source = source.as_ref().expect("opened for a stage that reads the DB");
-        let mut client = match checked.take() {
-            Some(client) => client,
-            None => source.connect()?,
-        };
-        let raster = Arc::new(Raster::open(&mut client).map_err(|e| e.to_string())?);
-        // Whole every time: a page whose lines the solve took away keeps none.
+        // Whole every time: a page whose lines a change took away keeps none.
         if lines.root.exists() {
             fs::remove_dir_all(&lines.root).map_err(|e| e.to_string())?;
         }
         fs::create_dir_all(lines.level_dir(0)).map_err(|e| e.to_string())?;
-        over_pages(
-            "lines",
-            targets,
-            args.concurrency,
-            || connect(source, &raster),
-            |db, page, _| {
-                let decks = fetch_lines(&db.repo, &mut db.client, page).map_err(|e| e.to_string())?;
-                if decks.is_empty() {
-                    return Ok(None);
-                }
-                let packed = pack(&encode_lines(&decks).map_err(|e| format!("{e:?}"))?, Level::Stored).map_err(|e| e.to_string())?;
-                lines.write(LevelPage::new(0, page), &packed)?;
-                Ok(Some(packed.len() as u64))
-            },
-        );
+        // Each worker walks its own band of rows, zigzag, so a page's eight
+        // around it were mostly read for the page before.
+        let mut rows: Vec<IVec> = targets.to_vec();
+        rows.sort_unstable_by_key(|&p| (ivec::Y(p), ivec::X(p)));
+        let band = rows.len().div_ceil(args.concurrency.max(1)).max(1);
+        let walks: Vec<Vec<IVec>> = rows.chunks(band).map(zigzag).collect();
+        let totals = Mutex::new(Totals::default());
+        std::thread::scope(|scope| {
+            let all = rows.len();
+            for walk in &walks {
+                let (totals, lines) = (&totals, &lines);
+                scope.spawn(move || {
+                    let mut client = match source.connect() {
+                        Ok(c) => c,
+                        Err(err) => return eprintln!("[bake/lines] worker failed to start: {err}"),
+                    };
+                    let mut held = deck::source::Walk::default();
+                    for &page in walk {
+                        held.keep_from(ivec::Y(page) - 1);
+                        let [min, _] = epsg3857::get_page_bbox(page);
+                        let baked = deck::solve_page(&mut client, page, &mut held)
+                            .and_then(|rows| bake_decks(&rows, min).ok_or_else(|| "a page's decks overflow a record".to_string()))
+                            .and_then(|decks| match decks.is_empty() {
+                                true => Ok(None),
+                                false => {
+                                    let packed = pack(&encode_lines(&decks).map_err(|e| format!("{e:?}"))?, Level::Stored).map_err(|e| e.to_string())?;
+                                    lines.write(LevelPage::new(0, page), &packed).map(|()| Some(packed.len() as u64))
+                                }
+                            });
+                        let mut t = totals.lock().expect("totals");
+                        match baked {
+                            Ok(Some(bytes)) => (t.done, t.bytes) = (t.done + 1, t.bytes + bytes),
+                            Ok(None) => t.skipped += 1,
+                            Err(err) => {
+                                t.failed += 1;
+                                eprintln!("[bake/lines/{}] failed: {err}", ivec::repr(page));
+                            }
+                        }
+                        let n = t.done + t.skipped + t.failed;
+                        if n.is_multiple_of(1000) {
+                            println!("[bake/lines] {n}/{all} done={} skipped={} failed={} {}", t.done, t.skipped, t.failed, fmt_bytes(t.bytes as f64));
+                        }
+                    }
+                });
+            }
+        });
+        let t = totals.into_inner().expect("totals");
+        println!("[bake/lines] done: done={} skipped={} failed={} {}", t.done, t.skipped, t.failed, fmt_bytes(t.bytes as f64));
         write_json(&args.build.join("lines.json"), &serde_json::json!({ "git_sha": git_sha() }))?;
     }
 

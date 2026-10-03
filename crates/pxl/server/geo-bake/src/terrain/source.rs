@@ -5,15 +5,12 @@
 
 use postgres::Client;
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::bake::deck::Decks;
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
-use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 
 use crate::terrain::artifact::Surface;
 use crate::terrain::bake::bake_surface;
-use crate::terrain::pipeline::deck::bake_decks;
 use crate::terrain::repository::TerrainRepository;
 
 const ELE_PADDED_SPAN2: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
@@ -33,12 +30,6 @@ pub fn fetch_surface(repo: &TerrainRepository, client: &mut Client, page_idx: IV
     });
     Ok(bake_surface(page_idx, ele, &source))
 }
-pub fn fetch_lines(repo: &TerrainRepository, client: &mut Client, page_idx: IVec) -> Result<Decks, BakeError> {
-    let page_bbox = epsg3857::get_page_bbox(page_idx);
-    let rows = repo.fetch_deck_rows(client, page_bbox)?;
-    bake_decks(&rows, page_bbox[0]).ok_or(BakeError::Marshal(MarshalError::new(Errno::ENOSPC)))
-}
-
 #[derive(Debug)]
 pub enum BakeError {
     Db(postgres::Error),
