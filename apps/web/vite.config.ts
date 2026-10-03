@@ -10,7 +10,6 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
-import svgr from "vite-plugin-svgr";
 
 import { DEV_PROXY_ROUTES } from "./src/config/route.ts";
 
@@ -430,7 +429,6 @@ export default defineConfig(({ mode }) => {
       constEnum([path.resolve(__dirname, "src"), path.resolve(__dirname, "..", "..", "packages")], path.resolve(__dirname, "..", "..")),
       deno(),
       react(),
-      svgr({ svgrOptions: { titleProp: true } }), // SVGR
 
       rebuildKernelOnRustChange(),
 
