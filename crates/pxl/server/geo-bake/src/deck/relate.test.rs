@@ -39,6 +39,7 @@ fn piece(id: &str, level: i64, points: &[[f64; 2]]) -> Piece {
         level,
         width_m: 4.0,
         form: Form::Deck,
+        approach: false,
         ends: [End::of(id, whole, 0.0), End::of(id, whole, 1.0)],
         start: 0.0,
         points,
@@ -57,7 +58,10 @@ fn a_way_under_a_deck_is_found_where_it_crosses() {
 fn water_under_a_deck_is_the_stretch_over_it_holes_left_out() {
     // A 4 wide square with a 2 wide hole in its middle.
     let mut wkb = vec![1u8, 3, 0, 0, 0, 2, 0, 0, 0];
-    for ring in [[[2.0, -2.0], [6.0, -2.0], [6.0, 2.0], [2.0, 2.0], [2.0, -2.0]], [[3.0, -1.0], [5.0, -1.0], [5.0, 1.0], [3.0, 1.0], [3.0, -1.0]]] {
+    for ring in [
+        [[2.0, -2.0], [6.0, -2.0], [6.0, 2.0], [2.0, 2.0], [2.0, -2.0]],
+        [[3.0, -1.0], [5.0, -1.0], [5.0, 1.0], [3.0, 1.0], [3.0, -1.0]],
+    ] {
         wkb.extend(5u32.to_le_bytes());
         for p in ring {
             wkb.extend(f64::to_le_bytes(p[0]));
@@ -72,7 +76,11 @@ fn water_under_a_deck_is_the_stretch_over_it_holes_left_out() {
 
 #[test]
 fn decks_cross_through_each_other_not_where_one_ends_on_the_other() {
-    let pieces = [piece("a", 1, &[[0.0, 0.0], [10.0, 0.0]]), piece("b", 2, &[[5.0, -5.0], [5.0, 5.0]]), piece("c", 2, &[[8.0, 0.0], [8.0, 5.0]])];
+    let pieces = [
+        piece("a", 1, &[[0.0, 0.0], [10.0, 0.0]]),
+        piece("b", 2, &[[5.0, -5.0], [5.0, 5.0]]),
+        piece("c", 2, &[[8.0, 0.0], [8.0, 5.0]]),
+    ];
     let lines: Vec<Polyline> = pieces.iter().map(|p| line(&p.points.iter().map(|q| [q[0], q[1]]).collect::<Vec<_>>())).collect();
     let refs: Vec<&Piece> = pieces.iter().collect();
     let c = decks_crossing(&refs, &lines);

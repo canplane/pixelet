@@ -44,6 +44,8 @@ pub struct Piece {
     pub level: i64,
     pub width_m: f64,
     pub form: Form,
+    /// The way it carries on along at the surface (approach.rs).
+    pub approach: bool,
     pub points: Vec<G3857>,
     /// What each end is, first and last; ends meet where these are equal.
     pub ends: [End; 2],
@@ -150,6 +152,7 @@ impl Piece {
                 level: self.level,
                 width_m: self.width_m,
                 form: self.form,
+                approach: self.approach,
                 ends: [end_at(points[0]), end_at(points[points.len() - 1])],
                 start: self.start + offset,
                 points,
@@ -193,6 +196,7 @@ pub fn pieces_of(row: &BridgeRow, form: Form) -> Vec<Piece> {
                 level: value_at(row.levels.as_deref(), mid).map_or(1, |v| v as i64),
                 width_m: width_m(&row.subtype, row.class.as_deref(), shape),
                 form,
+                approach: false,
                 ends: [End::of(&row.gers_id, whole, a), End::of(&row.gers_id, whole, b)],
                 start: a * length,
                 points: g.points,

@@ -11,11 +11,11 @@ fn chain(n: usize, step: f64) -> Vec<Vec<(u32, f64)>> {
     adj
 }
 
-/// A chain 5 m a step under a 2 m shell, pinned where `need` is 0.
+/// A chain 5 m a step over flat ground, its own where `need` is above it.
 fn deck(need: &[f64], halo: f64) -> Profile {
     let adj = chain(need.len(), 5.0);
-    let (hard, pinned): (Vec<bool>, Vec<bool>) = need.iter().map(|&n| (n > 2.0, n == 0.0)).unzip();
-    solve(&Problem { adj: &adj, need, ground: &vec![0.0; need.len()], hard: &hard, pinned: &pinned, halo })
+    let own: Vec<bool> = need.iter().map(|&n| n > 0.0).collect();
+    solve(&Problem { adj: &adj, need, own: &own, pinned: &vec![false; need.len()], halo })
 }
 
 #[test]
@@ -52,24 +52,24 @@ fn a_need_too_high_for_the_grade_lands_on_the_ground_by_the_halo_without_a_step(
 }
 
 #[test]
-fn a_deck_comes_down_to_its_pinned_ends_at_the_grade() {
-    let mut need = vec![2.0; 21];
-    (need[0], need[20]) = (0.0, 0.0);
+fn a_structure_keeps_its_form_to_its_end_and_its_approach_meets_the_ground_at_the_grade() {
+    // a 2 m shell over 20..=30, an approach either side
+    let need: Vec<f64> = (0..51).map(|i| if (20..=30).contains(&i) { 2.0 } else { 0.0 }).collect();
     let p = deck(&need, 1000.0);
-    assert_eq!((p.top[0], p.top[20]), (0.0, 0.0));
-    assert!((p.top[1] - PREFERRED_SLOPE * 5.0).abs() < 1e-9);
-    assert_eq!(p.top[10], 2.0);
+    assert!((20..=30).all(|i| p.top[i] == 2.0));
+    assert!((p.top[31] - (2.0 - PREFERRED_SLOPE * 5.0)).abs() < 1e-9);
+    assert_eq!((p.top[35], p.top[15]), (0.0, 0.0));
     assert!(p.forced.iter().all(|f| !f));
 }
 
 #[test]
-fn a_need_too_near_a_pin_takes_the_grade_it_must_and_no_step() {
-    let mut need = vec![2.0; 41];
-    (need[0], need[3]) = (0.0, 8.0);
-    let p = deck(&need, 1000.0);
-    assert_eq!((p.top[0], p.top[3]), (0.0, 8.0));
-    let grade = 8.0 / 15.0;
-    assert!((1..=3).all(|i| (p.top[i] - grade * 5.0 * i as f64).abs() < 1e-9));
-    assert!(p.top.iter().zip(&need).all(|(t, n)| t >= n));
-    assert!(p.forced[1] && !p.forced[10]);
+fn an_approach_whose_way_ends_first_meets_the_ground_there_as_steep_as_it_must() {
+    // a 6 m need over 0..=10, an approach of four steps ending on the ground
+    let adj = chain(15, 5.0);
+    let need: Vec<f64> = (0..15).map(|i| if i <= 10 { 6.0 } else { 0.0 }).collect();
+    let own: Vec<bool> = (0..15).map(|i| i <= 10).collect();
+    let pinned: Vec<bool> = (0..15).map(|i| i == 14).collect();
+    let p = solve(&Problem { adj: &adj, need: &need, own: &own, pinned: &pinned, halo: 1000.0 });
+    assert_eq!((p.top[10], p.top[14]), (6.0, 0.0));
+    assert!((11..14).all(|i| (p.top[i] - 6.0 * (14 - i) as f64 / 4.0).abs() < 1e-9));
 }

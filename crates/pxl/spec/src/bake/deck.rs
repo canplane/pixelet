@@ -33,7 +33,8 @@ pub const WIDEST: f64 = u8::MAX as f64 / POINT_SCALE;
 
 // clear under a deck
 pub const ROAD_CLEARANCE_M: f64 = 4.5; // over a road: UNECE AGR Annex II III.4
-                                       // Arnis's deck height over a path or a track, less the slab under it
+
+// Arnis's deck heights over a path or a track, less the slab under them
 pub const PATH_CLEARANCE_M: f64 = 5.0 - DECK_THICKNESS_M; // a footway, path or cycleway
 pub const RAIL_CLEARANCE_M: f64 = 8.0 - DECK_THICKNESS_M; // a railway: its catenary, 6 over the bed
 pub const DECK_THICKNESS_M: f64 = 2.0; // a deck's slab under its surface: Arnis's structure depth
@@ -164,7 +165,8 @@ pub enum Occupies {
     /// A slab under the surface, and a pier
     /// from the ground to the slab where its section covers the column.
     Above { slab: [i32; 2], pier: Option<[i32; 2]> },
-    /// Air from the surface up; the cell under it is the way's.
+    /// Air from the surface up, to the ground where less than a bore's cover
+    /// would stand over it: an approach's cutting; the cell under it is the way's.
     Through { air: [i32; 2] },
 }
 
@@ -181,9 +183,12 @@ impl Over {
                     pier: (self.pier && lo > ground).then_some([ground, lo]),
                 }
             }
-            Form::Bore if top < ground => Occupies::Through {
-                air: [top, (top + cells(headroom_m(self.kind))).min(ground)],
-            },
+            Form::Bore if top < ground => {
+                let clear = top + cells(headroom_m(self.kind));
+                Occupies::Through {
+                    air: [top, if ground - clear >= cells(BORE_COVER_M) { clear } else { ground }],
+                }
+            }
             _ => Occupies::Grade,
         }
     }
