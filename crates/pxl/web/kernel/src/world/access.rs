@@ -27,7 +27,7 @@ use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::pvf3::REACH;
 use pxl_spec::space::pyramid::{Cell, LevelPage, EXTENT, GROUND, TOP_LEVEL};
-use pxl_spec::space::v3::{Aabb, V3};
+use pxl_spec::space::v3::{add3, Aabb, V3};
 use pxl_spec::space::xy::TO_XY;
 
 use crate::io::demand::Category;
@@ -176,7 +176,7 @@ pub struct Hit {
 impl Hit {
     pub fn moved(self, by: V3) -> Hit {
         Hit {
-            point: std::array::from_fn(|k| self.point[k] + by[k]),
+            point: add3(&self.point, &by),
             cube: self.cube.moved(by),
             ..self
         }

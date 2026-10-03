@@ -7,7 +7,7 @@
 use pxl_spec::bake::constant::CELL;
 use pxl_spec::space::indexer::L2_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::v3::{cross3, dot3, Aabb, V3};
+use pxl_spec::space::v3::{cross3, dot3, sub3, Aabb, V3};
 use xpute_runtime::mem::base::ptr_at;
 
 use crate::kernel::kernel;
@@ -128,7 +128,7 @@ fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: 
                 let spin = lane(3, i);
                 let s = lane(4, i) * mesh.scale as f64;
                 let r = mesh.radius as f64 * s;
-                let p = [o[0] - c[0], o[1] - c[1], o[2] - c[2]];
+                let p = sub3(&o, &c);
                 if !ray_meets_sphere(&p, &d, r, limit) {
                     continue;
                 }
@@ -193,7 +193,7 @@ fn ray_meets_sphere(p: &V3, d: &[f64; 3], r: f64, limit: f64) -> bool {
 fn ray_triangle(o: &[f64; 3], d: &[f64; 3], a: &[f32], b: &[f32], c: &[f32]) -> Option<f64> {
     let e1 = [b[0] as f64 - a[0] as f64, b[1] as f64 - a[1] as f64, b[2] as f64 - a[2] as f64];
     let e2 = [c[0] as f64 - a[0] as f64, c[1] as f64 - a[1] as f64, c[2] as f64 - a[2] as f64];
-    let p = *cross3(d, &e2, &mut [0.0; 3]);
+    let p = cross3(d, &e2);
     let det = dot3(&e1, &p);
     if det.abs() < 1e-12 {
         return None;
@@ -204,7 +204,7 @@ fn ray_triangle(o: &[f64; 3], d: &[f64; 3], a: &[f32], b: &[f32], c: &[f32]) -> 
     if !(0.0..=1.0).contains(&u) {
         return None;
     }
-    let q = *cross3(&s, &e1, &mut [0.0; 3]);
+    let q = cross3(&s, &e1);
     let v = dot3(d, &q) * inv;
     if v < 0.0 || u + v > 1.0 {
         return None;

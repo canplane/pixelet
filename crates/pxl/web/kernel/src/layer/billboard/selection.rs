@@ -6,7 +6,7 @@
 //! screen. Overlaps are kept: a badge stands for the places under its cell.
 
 use pxl_spec::space::mat4::mat4_transform_point;
-use pxl_spec::space::v3::dot3;
+use pxl_spec::space::v3::{add3, dot3, sub3};
 
 use crate::layer::billboard::batch::BillboardBatch;
 use crate::layer::environment::state::globe;
@@ -28,8 +28,8 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, out: &mut Vec<u32>)
         // Placed on the planet once, as badge.wgsl does, and kept in the lanes.
         let from = [batch.local_x[i] - anchor[0], batch.local_y[i] - anchor[1], batch.local_z[i] - anchor[2]];
         let placed = globe.place(from);
-        let pos = [anchor[0] + placed[0], anchor[1] + placed[1], anchor[2] + placed[2]];
-        let to = std::array::from_fn(|k| pos[k] - eye[k]);
+        let pos = add3(&anchor, &placed);
+        let to = sub3(&pos, &eye);
         let dist2 = dot3(&to, &to);
         if !v.frustum.sees(pos, dist2.sqrt() * ANCHOR_REACH) {
             continue;

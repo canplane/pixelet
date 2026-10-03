@@ -7,7 +7,7 @@
 
 use pxl_spec::space::mat4::{mat4, mat4_mul, mat4_rotation_z, Mat4};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::v3::{add3, sub3, V3};
 
 use crate::control::camera::config::camera_cfg::projection::FOV;
 use crate::control::camera::config::camera_cfg::view::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR};
@@ -202,7 +202,7 @@ pub fn pose() -> ObserverPose {
             mul3(&mut camera_to_world, &t.world_turn, &t.turn);
             let moved = apply3(&t.world_turn, t.at);
             ObserverPose {
-                eye: std::array::from_fn(|k| t.world_at[k] + moved[k]),
+                eye: add3(&t.world_at, &moved),
                 rotation: transpose3(&camera_to_world),
             }
         }
@@ -218,10 +218,10 @@ pub fn pose() -> ObserverPose {
 
 pub fn rebase(by: V3) {
     if let Some(e) = &mut camera().eye {
-        *e = std::array::from_fn(|k| e[k] - by[k]);
+        *e = sub3(e, &by);
     }
     if let Some(t) = &mut controllers().tracked {
-        t.world_at = std::array::from_fn(|k| t.world_at[k] - by[k]);
+        t.world_at = sub3(&t.world_at, &by);
     }
 }
 
@@ -359,7 +359,7 @@ pub fn tracked_pose(at: V3, q: [f64; 4]) {
         let moved = apply3(&world_turn, at);
         c.tracked = Some(Tracked {
             world_turn,
-            world_at: std::array::from_fn(|k| now.eye[k] - moved[k]),
+            world_at: sub3(&now.eye, &moved),
             turn,
             at,
         });

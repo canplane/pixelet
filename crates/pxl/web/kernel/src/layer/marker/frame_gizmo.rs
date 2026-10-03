@@ -76,8 +76,7 @@ fn sketch(map_center: &Pvf3, map_origin: IVec) -> Sketch {
     let mut s = Sketch::default();
     let center = canonical_to_local(map_center, map_origin);
     let ground = Access::now().floor_under(map_center).value().map(|top| local_height(top, map_origin));
-    let mut cell = [0.0; 3];
-    floor3n(&[center[0], center[1], ground.unwrap_or(0.0)], U_PER_CELL, &mut cell);
+    let cell = floor3n(&[center[0], center[1], ground.unwrap_or(0.0)], U_PER_CELL);
     s.cube(cell, U_PER_CELL);
     s.point(center, BLACK);
     // First person the eye is the map center, and nothing about it is seen.

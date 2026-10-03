@@ -9,7 +9,7 @@ use pxl_spec::space::observation::Frustum;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::{projection, REACH};
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::v3::{add3, V3};
 
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::controller::{pose, rebase};
@@ -71,7 +71,7 @@ impl View {
 impl View {
     pub fn eye_at(&self) -> V3 {
         let (o, e) = (ivec::to_v3(self.origin), self.pose.eye);
-        std::array::from_fn(|k| o[k] + e[k])
+        add3(&o, &e)
     }
 
     /// Eye-relative matrices, as the GPU's points are (`DrawList::translation`):

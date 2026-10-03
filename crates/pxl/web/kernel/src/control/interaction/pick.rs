@@ -7,7 +7,7 @@
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::v3::{add3, V3};
 
 use crate::layer::object::store::{get_placed_object, Entry};
 use crate::world::access::{Access, Detail, Hit, Ray, Struck, FINEST};
@@ -95,7 +95,7 @@ pub struct PickResult {
 pub fn ray_pick(origin: V3, direction: V3) -> Option<PickResult> {
     let frame = ivec::to_v3(view().origin);
     let ray = Ray {
-        origin: std::array::from_fn(|k| origin[k] + frame[k]),
+        origin: add3(&origin, &frame),
         direction,
         reach: PICK_REACH_U,
     };

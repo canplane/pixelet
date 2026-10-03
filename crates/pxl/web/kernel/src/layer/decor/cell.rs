@@ -14,7 +14,7 @@ use pxl_spec::procedural::Frame;
 use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
-use pxl_spec::space::v3::{len3, V3};
+use pxl_spec::space::v3::{len3, sub3, V3};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::alloc;
 use xpute_runtime::sched::tick::FrameBudget;
@@ -101,7 +101,7 @@ fn may_show(chunk: Chunk, largest: f64) -> bool {
     let Some(o) = observation() else { return false };
     let region = chunk.region();
     let near = region.nearest(o.eye);
-    let d = len3(&[near[0] - o.eye[0], near[1] - o.eye[1], near[2] - o.eye[2]]).max(1e-3);
+    let d = len3(&sub3(&near, &o.eye)).max(1e-3);
     d <= o.far && largest / units_per_px_at(d) >= decor_sprite_px()
 }
 

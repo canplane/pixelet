@@ -6,7 +6,7 @@
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::observation::{Bounds, Contents, Frustum, Observation};
 use pxl_spec::space::pyramid::{GROUND, TOP_LEVEL};
-use pxl_spec::space::v3::{Aabb, V3};
+use pxl_spec::space::v3::{add3, Aabb, V3};
 
 use crate::world::observer::{Footprint, Grid, Met, Observer, OnTile, Sight};
 use crate::world::pyramid::domain::{Domain, Price};
@@ -185,5 +185,5 @@ pub fn place(center: V3, dist: f64, polar: f64, azimuth: f64) {
     (cam.polar, cam.azimuth) = (polar, azimuth);
     camera_store().intent = Intent { dist, azimuth, polar };
     let e = orbit_eye_offset(dist, polar, azimuth);
-    set_eye_local(&std::array::from_fn(|k| center[k] + e[k]));
+    set_eye_local(&add3(&center, &e));
 }

@@ -104,23 +104,21 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
         return clear(p);
     };
     let raw = [pos[0], pos[1], center_z];
-    let mut center_pos = [0.0; 3];
-    floor3n(&raw, U_PER_CELL, &mut center_pos);
+    let center_pos = floor3n(&raw, U_PER_CELL);
 
     let revision = heights_revision();
     if p.zone_for != Some((center_pos, revision)) {
         p.zone_for = Some((center_pos, revision));
         let mut lane: Vec<f32> = Vec::with_capacity(p.samples.len() * ZONE_INSTANCE_FLOATS);
-        let mut v = [0.0; 3];
         for s in &p.samples {
-            add3(&center_pos, &s.off, &mut v);
+            let v = add3(&center_pos, &s.off);
             let mut coord = Pvf3::default();
             projection::project(&mut coord, v[0], v[1], v[2]);
             // An unloaded neighbor page falls back to the center's height; 0 would sink
             // or launch that instance.
             let delta_ele = Access::now().surface_support(&coord).value().unwrap_or(center_pos[2]) - center_pos[2];
             let lifted = [s.off[0], s.off[1], s.off[2] + delta_ele];
-            center3n(&lifted, U_PER_CELL, &mut v);
+            let v = center3n(&lifted, U_PER_CELL);
             lane.extend([
                 v[0] as f32,
                 v[1] as f32,

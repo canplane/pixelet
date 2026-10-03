@@ -32,7 +32,7 @@ fn dot(a: V3, b: V3) -> f64 {
 fn a_lens_is_the_screen_its_frustum_was_made_from() {
     for (eye, target, fov, aspect) in [([0.0, 0.0, 10.0], [100.0, 0.0, 0.0], 50.0, 16.0 / 9.0), ([5.0, -3.0, 400.0], [-20.0, 60.0, 0.0], 70.0, 9.0 / 19.5)] {
         let lens = Lens::of(&viewed(eye, target, fov, aspect)).expect("a screen");
-        let look = unit(sub(target, eye)).unwrap();
+        let look = unit(sub3(&target, &eye)).unwrap();
         assert!(dot(lens.forward, look) > 1.0 - 1e-9, "{:?} looks elsewhere than {look:?}", lens.forward);
         let tan_up = libm::tan((fov / 2.0).to_radians());
         assert!((lens.tan[1] - tan_up).abs() < 1e-9 && (lens.tan[0] - tan_up * aspect).abs() < 1e-9, "{:?}", lens.tan);

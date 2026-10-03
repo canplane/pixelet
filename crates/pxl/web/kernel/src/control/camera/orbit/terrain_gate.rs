@@ -6,7 +6,7 @@
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::bake::constant::CELL;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::v3::{add3, V3};
 use xpute_core::math::scalar::wrap;
 
 use crate::control::camera::config::camera_cfg::view::EYE_CLEARANCE_U;
@@ -81,7 +81,7 @@ fn penetration(at: &ViewPose) -> Option<f64> {
 /// The eye, local and canonical.
 fn eye(at: &ViewPose) -> (V3, Pvf3) {
     let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
-    let local: V3 = std::array::from_fn(|k| at.target[k] + offset[k]);
+    let local: V3 = add3(&at.target, &offset);
     let mut eye = Pvf3::default();
     local_world_to_canonical(&mut eye, &local, at.origin);
     (local, eye)

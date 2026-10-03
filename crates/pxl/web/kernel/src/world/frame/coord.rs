@@ -4,7 +4,7 @@ use pxl_spec::space::indexer::L4_RANGE;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::v3::{add3, V3};
 
 use pxl_spec::space::pyramid::anchor_span_of;
 use xpute_core::math::scalar::round;
@@ -36,7 +36,7 @@ pub fn canonical_to_local(p: &Pvf3, origin: IVec) -> V3 {
     let at = offset(p.i, origin);
     let mut f = [0.0; 3];
     projection::unproject(&mut f, 0, p.f);
-    std::array::from_fn(|k| at[k] + f[k])
+    add3(&at, &f)
 }
 
 pub fn local_world_to_canonical<'a>(out: &'a mut Pvf3, local: &V3, map_origin: IVec) -> &'a mut Pvf3 {

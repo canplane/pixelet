@@ -156,10 +156,9 @@ pub(crate) fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4, eye: &V3) {
         [row(0) / w, row(1) / w, row(2) / w]
     };
     let c = point(0.0, 0.0);
-    let mut column = [0.0; 3];
     for (k, (to, from)) in [(point(1.0, 0.0), c), (point(0.0, 1.0), c), (c, *eye)].into_iter().enumerate() {
-        for (o, e) in out[at + 4 * k..at + 4 * k + 3].iter_mut().zip(sub3(&to, &from, &mut column).iter()) {
-            *o = *e as f32;
+        for (o, e) in out[at + 4 * k..at + 4 * k + 3].iter_mut().zip(sub3(&to, &from)) {
+            *o = e as f32;
         }
     }
 }
@@ -781,8 +780,7 @@ impl Renderer {
         let center: [f64; 3] = core::array::from_fn(|k| s[STAGE_AT::GLOBE_ANCHOR + k] - eye_local[k]);
         let sphere = Globe::at(env[ENV_AIR + 2] as f64);
         let planet_center = [center[0], center[1], center[2] - sphere.radius_u()];
-        let mut up = [0.0; 3];
-        norm3(sub3(&eye, &planet_center, &mut [0.0; 3]), &mut up);
+        let up = norm3(&sub3(&eye, &planet_center));
         self.clouds.lay_out(g, &m, &eye, env, &up);
         self.atmosphere.set_clouds(&clouds::field(origin, [eye_local[0], eye_local[1]], env));
         self.stars.lay_out(g, &m, env, width);

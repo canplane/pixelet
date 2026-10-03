@@ -7,7 +7,7 @@
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::v3::{add3, V3};
 
 use crate::control::camera::approach::{approach_angle, approach_scalar, approach_vec};
 use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, POS_DAMP, ROT_DAMP};
@@ -23,7 +23,7 @@ use crate::world::frame::view::{view, view_compose};
 pub fn look_point(eye: V3, forward: V3, fallback: f64) -> V3 {
     let frame = ivec::to_v3(view().origin);
     let ray = Ray {
-        origin: std::array::from_fn(|k| eye[k] + frame[k]),
+        origin: add3(&eye, &frame),
         direction: forward,
         reach: view().far,
     };

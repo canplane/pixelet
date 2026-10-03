@@ -12,7 +12,7 @@
 
 use pxl_spec::space::lod::{Tau, SPLIT};
 use pxl_spec::space::observation::{Observation, Requirement};
-use pxl_spec::space::v3::{dot3, len3, Aabb, V3};
+use pxl_spec::space::v3::{dot3, len3, mul3n, sub3, Aabb, V3};
 
 use crate::param;
 use crate::world::access::{Access, Detail, Ray};
@@ -41,8 +41,8 @@ impl Lens {
         let planes = o.frustum?.planes;
         let n = |k: usize| -> V3 { [planes[k * 4], planes[k * 4 + 1], planes[k * 4 + 2]] };
         let forward = unit(n(4))?;
-        let right = unit(sub(n(0), n(1)))?;
-        let up = unit(sub(n(2), n(3)))?;
+        let right = unit(sub3(&n(0), &n(1)))?;
+        let up = unit(sub3(&n(2), &n(3)))?;
         let tan = [dot3(&n(0), &forward) / dot3(&n(0), &right), dot3(&n(2), &forward) / dot3(&n(2), &up)];
         tan.iter().all(|t| t.is_finite() && *t > 0.0).then_some(Lens { eye: o.eye, forward, right, up, tan })
     }
@@ -54,7 +54,7 @@ impl Lens {
     /// An overestimate: the extent is divided by the nearest depth the box
     /// allows, `r` less its diagonal. Unbounded where the box reaches the eye.
     pub fn error(&self, at: V3, error: V3) -> [f64; 2] {
-        let d = sub(at, self.eye);
+        let d = sub3(&at, &self.eye);
         let r = len3(&d);
         let depth = r - len3(&error);
         if depth < INSIDE {
@@ -73,7 +73,7 @@ impl Lens {
         let (tx, ty) = (on(self.right, 0), on(self.up, 1));
         let d = unit(std::array::from_fn(|k| self.forward[k] + tx * self.right[k] + ty * self.up[k])).unwrap_or(self.forward);
         [self.right, self.up].map(|a| {
-            let square = sub(a, d.map(|c| c * dot3(&a, &d)));
+            let square = sub3(&a, &mul3n(&d, dot3(&a, &d)));
             let Some(a) = unit(square) else { return f64::INFINITY };
             (0..3).map(|k| error[k] * a[k].abs()).sum::<f64>() / depth
         })
@@ -318,7 +318,7 @@ impl Sight {
         }
         // A tile that met nothing is measured against the far edge.
         let stale = |k: usize| {
-            let moved_eye = len3(&sub(lens.eye, self.eyes[k]));
+            let moved_eye = len3(&sub3(&lens.eye, &self.eyes[k]));
             whole
                 || match &self.tiles[k] {
                     Some(f) => {
@@ -353,10 +353,6 @@ impl Sight {
     pub fn lacks(&self) -> impl Iterator<Item = &Requirement> {
         self.lacks.iter().flatten().flatten()
     }
-}
-
-fn sub(a: V3, b: V3) -> V3 {
-    std::array::from_fn(|k| a[k] - b[k])
 }
 
 fn unit(v: V3) -> Option<V3> {
