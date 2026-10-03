@@ -1,6 +1,8 @@
 // pxl-spec/space/v3.rs
 
-//! Three doubles, and the arithmetic over them, each returning its result.
+//! Three doubles, and the arithmetic over them. A V3 is a value, not storage,
+//! so each returns its result and the assignment says where it lands; what
+//! fills a buffer takes the buffer instead.
 
 pub type V3 = [f64; 3];
 

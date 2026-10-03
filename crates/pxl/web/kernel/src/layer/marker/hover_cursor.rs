@@ -11,7 +11,7 @@ use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::ground::shown_ground;
 use pxl_spec::bake::pack::channel_of;
 use pxl_spec::cell::object::{placeable_cube_num_id, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
-use pxl_spec::space::pvf3::{fvec, ivec};
+use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
@@ -32,9 +32,7 @@ use crate::world::chunk::source::chunk_sources_changed;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::build::World;
 
-#[derive(Clone, Debug, Default, PartialEq)]
 enum Ghost {
-    #[default]
     None,
     Decor { at: V3, group: u32, rotation: f64, scale: f64 },
     Box { at: V3, size: f64, value: u32, rgb: u32, coplanar: bool },
@@ -59,7 +57,6 @@ pub struct RenderEdits {
 #[derive(Default)]
 struct Cursor {
     edits: RenderEdits,
-    ghost: Ghost,
 }
 
 /// Compared as part of a chunk's sources, so an unchanged one rebuilds nothing.
@@ -187,9 +184,7 @@ pub fn hover_cursor_step() {
     let ghost = match (scattered_ghost, hovered, blocked) {
         (Some(g), _, _) => g,
         (None, Some(h), false) => {
-            let x = ivec::to_real(ivec::X(h.i)) + fvec::to_real(fvec::X(h.f));
-            let y = ivec::to_real(ivec::Y(h.i)) + fvec::to_real(fvec::Y(h.f));
-            let z = ivec::to_real(ivec::Z(h.i)) + fvec::to_real(fvec::Z(h.f));
+            let [x, y, z] = *projection::unproject(&mut [0.0; 3], h.i, h.f);
             match (decor_kind, decor_pick) {
                 (Some(kind), Some((variant, rotation, scale))) if is_decor_ghost => Ghost::Decor {
                     at: [x + preview_size / 2.0, y + preview_size / 2.0, z],
@@ -211,16 +206,13 @@ pub fn hover_cursor_step() {
         }
         _ => Ghost::None,
     };
-    if c.ghost != ghost {
-        let written = with_world(|world, sched| match &ghost {
-            Ghost::None => sched.ghost.clear(&mut sched.draw),
-            Ghost::Decor { at, group, rotation, scale } => sched.ghost.set_decor(&mut sched.draw, *at, *group, *rotation as f32, *scale as f32),
-            Ghost::Box { at, size, value, rgb, coplanar } => sched.ghost.set_box(world, &mut sched.draw, *at, *size, *value, *rgb, *coplanar),
-        });
-        if written.is_some() {
-            c.ghost = ghost;
-            request_world_tick();
-        }
+    let changed = with_world(|world, sched| match ghost {
+        Ghost::None => sched.ghost.clear(&mut sched.draw),
+        Ghost::Decor { at, group, rotation, scale } => sched.ghost.set_decor(&mut sched.draw, at, group, rotation as f32, scale as f32),
+        Ghost::Box { at, size, value, rgb, coplanar } => sched.ghost.set_box(world, &mut sched.draw, at, size, value, rgb, coplanar),
+    });
+    if changed == Some(true) {
+        request_world_tick();
     }
 }
 
@@ -248,9 +240,10 @@ pub struct GhostDraw {
 }
 
 impl GhostDraw {
-    /// Painted as `state` paints, or as untextured `rgb` where it paints nothing.
+    /// Painted as `state` paints, or as untextured `rgb` where it paints
+    /// nothing. Whether what is drawn changed.
     #[allow(clippy::too_many_arguments)]
-    pub fn set_box(&mut self, world: &mut World, draw: &mut DrawList, at: V3, size: f64, state: u32, rgb: u32, coplanar: bool) {
+    pub fn set_box(&mut self, world: &mut World, draw: &mut DrawList, at: V3, size: f64, state: u32, rgb: u32, coplanar: bool) -> bool {
         let (rgb, layer) = match world.painter.material_of(state) {
             Some((m, l)) => ([(m >> 16) as u8, (m >> 8) as u8, m as u8], l),
             None => ([(rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8], NO_LAYER as u8),
@@ -261,44 +254,47 @@ impl GhostDraw {
             layer,
             coplanar,
         };
-        self.at = at;
+        let moved = core::mem::replace(&mut self.at, at) != at;
         if self.held.as_ref().is_some_and(|h| h.shape == shape) {
-            return;
+            return moved;
         }
         let bytes = mesh_words(1, FINE_BOX_WORDS) * 4;
-        let Some(block) = self.replace(draw, shape, bytes) else { return };
+        let Some(block) = self.replace(draw, shape, bytes) else { return true };
         // SAFETY: a block of the words asked for, this ghost's until replaced.
         let m = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block), bytes as usize / 4) };
         let heights = write_lone_box(m, size, rgb, layer);
         self.held.as_mut().unwrap().heights = heights;
         self.upload(draw, 1, 0);
+        true
     }
 
-    pub fn set_decor(&mut self, draw: &mut DrawList, at: V3, group: u32, rotation: f32, scale: f32) {
+    pub fn set_decor(&mut self, draw: &mut DrawList, at: V3, group: u32, rotation: f32, scale: f32) -> bool {
         let shape = Shape::Decor {
             group,
             rotation_bits: rotation.to_bits(),
             scale_bits: scale.to_bits(),
         };
-        self.at = at;
+        let moved = core::mem::replace(&mut self.at, at) != at;
         if self.held.as_ref().is_some_and(|h| h.shape == shape) {
-            return;
+            return moved;
         }
         // One group of one: five float lanes, flags, band, pos, and the index list.
         let bytes = 9 * 4;
-        let Some(block) = self.replace(draw, shape, bytes) else { return };
+        let Some(block) = self.replace(draw, shape, bytes) else { return true };
         // SAFETY: as for the box.
         let m = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block), 9) };
         m.copy_from_slice(&[0f32.to_bits(), 0f32.to_bits(), 0f32.to_bits(), rotation.to_bits(), scale.to_bits(), 0, NO_ENTRY, 0, 0]);
         self.upload(draw, 0, 0);
+        true
     }
 
-    pub fn clear(&mut self, draw: &mut DrawList) {
-        if let Some(h) = self.held.take() {
-            draw.free(h.handle);
-            // SAFETY: the block the ghost took and has not given back.
-            unsafe { free((h.at, h.bytes)) };
-        }
+    /// Whether there was one.
+    pub fn clear(&mut self, draw: &mut DrawList) -> bool {
+        let Some(h) = self.held.take() else { return false };
+        draw.free(h.handle);
+        // SAFETY: the block the ghost took and has not given back.
+        unsafe { free((h.at, h.bytes)) };
+        true
     }
 
     fn replace(&mut self, draw: &mut DrawList, shape: Shape, bytes: u32) -> Option<usize> {
