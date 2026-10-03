@@ -13,46 +13,46 @@
       "korean": "한국어",
       "english": "English"
     },
-    "cost_legend": "LOW / MED / HIGH는 성능 부담 정도입니다. 화면이 끊기면 HIGH 항목부터 꺼 보세요.",
+    "cost_legend": "LOW / MED / HIGH는 성능 부담 수준을 나타냅니다. 프레임이 끊기면 HIGH 항목부터 조정해 보세요.",
     "display": {
       "section_title": "화면",
-      "section_caption": "화면에 그릴 요소를 설정합니다",
+      "section_caption": "화면에 그리는 요소와 품질을 설정합니다.",
       "decor": {
         "label": "데코",
-        "description": "지형에 자동으로 놓인 나무, 차량 같은 장식을 표시합니다. 직접 놓은 오브젝트에는 영향이 없습니다."
+        "description": "지형에 자동으로 배치되는 나무·차량 등의 장식을 표시합니다. 직접 배치한 오브젝트에는 영향을 주지 않습니다."
       },
       "textures": {
         "label": "텍스처",
-        "description": "블록 표면에 단색 대신 텍스처를 입힙니다."
+        "description": "블록 표면에 단색 대신 텍스처를 표시합니다."
       }
     },
     "camera": {
       "section_title": "카메라",
-      "section_caption": "카메라의 회전과 3인칭 시점을 설정합니다",
+      "section_caption": "카메라의 회전과 3인칭 동작을 설정합니다.",
       "tilt_lock": {
         "label": "기울기 고정",
-        "description": "위아래 기울기를 고정하고 좌우 회전만 허용합니다."
+        "description": "기울기를 고정하고 좌우 회전만 허용합니다."
       },
       "camera_collision": {
         "label": "3인칭 장애물 처리",
         "through": {
           "label": "통과",
-          "description": "장애물을 무시하고 지나갑니다. 지형 속에서는 화면이 깨져 보일 수 있습니다."
+          "description": "장애물을 무시하고 그대로 지나갑니다. 지형 내부에서는 화면이 비정상적으로 보일 수 있습니다."
         },
         "stop": {
           "label": "멈춤",
-          "description": "장애물에 닿기 직전에서 줌·회전·기울이기를 멈춥니다."
+          "description": "장애물에 닿기 직전에서 해당 카메라 조작을 멈춥니다. 위로 피하지 않습니다."
         },
         "climb": {
           "label": "넘어가기",
-          "description": "장애물에 막히면 카메라를 위로 세워 넘어갑니다. 위쪽도 막혀 있으면 멈춥니다."
+          "description": "장애물에 막히면 카메라 각도를 세워 위로 넘어갑니다. 위쪽도 막혀 있으면 멈춥니다."
         },
-        "description": "3인칭에서 카메라가 지형이나 물체에 막힐 때의 동작입니다. 1인칭에는 해당하지 않습니다."
+        "description": "3인칭 카메라가 지형이나 물체에 막힐 때의 동작을 정합니다. 1인칭에는 적용되지 않습니다."
       }
     },
     "lighting": {
       "section_title": "조명과 그림자",
-      "section_caption": "빛과 그림자, 윤곽 표현을 설정합니다",
+      "section_caption": "빛과 그림자의 표현을 설정합니다.",
       "edge_shade": {
         "label": "블록 외곽선",
         "description": "허공과 맞닿은 모서리만 어둡게 하여 평지는 매끄럽게 이어지고, 높낮이가 바뀌는 곳만 선으로 드러나게 합니다."
@@ -142,7 +142,7 @@
     },
     "navigation": {
       "section_title": "지도 이동",
-      "section_caption": "지도를 끌어 옮길 때의 동작을 설정합니다"
+      "section_caption": "지도를 끌어 중심을 옮길 때의 동작을 설정합니다."
     }
   },
   "cubes": {
