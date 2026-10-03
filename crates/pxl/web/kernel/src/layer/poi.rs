@@ -69,7 +69,6 @@ pub fn rank_of(kind: u8) -> u16 {
 pub fn poi_step() {
     if enabled() {
         PoiPage::pyramid().step(None);
-        crate::world::pyramid::cover::step::<PoiPage>();
     } else {
         PoiPage::pyramid().idle();
     }

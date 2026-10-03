@@ -389,6 +389,8 @@ pub struct Scheduler {
     refined: u32,
     recubed: u32,
     changes: u32,
+    /// Moves whenever the set of drawn chunks does.
+    drawn_revision: u32,
     changes_peak: u32,
     scratch: Scratch,
 }
@@ -497,6 +499,7 @@ impl Scheduler {
             refined: 0,
             recubed: 0,
             changes: 0,
+            drawn_revision: 0,
             changes_peak: 0,
         }
     }
@@ -509,10 +512,14 @@ impl Scheduler {
         [self.refined, self.recubed, self.changes_peak]
     }
 
-    /// Each mounted chunk, and whether it is drawn and in the frustum now.
-    pub fn mounted(&self, out: &mut Vec<(Chunk, bool)>) {
+    /// Each mounted chunk, whether it is drawn, and whether it is in the frustum.
+    pub fn mounted(&self, out: &mut Vec<(Chunk, bool, bool)>) {
         out.clear();
-        out.extend(self.slots.iter().map(|s| (s.chunk, s.role == Role::Drawn && s.in_frustum)));
+        out.extend(self.slots.iter().map(|s| (s.chunk, s.role == Role::Drawn, s.in_frustum)));
+    }
+
+    pub fn drawn_revision(&self) -> u32 {
+        self.drawn_revision
     }
 
     pub fn needs_revision(&self) -> u32 {
@@ -717,6 +724,9 @@ impl Scheduler {
         self.refined = self.refined.wrapping_add(plan.refined);
         self.changes_peak = self.changes_peak.max(self.changes);
         self.changes = plan.swaps().count() as u32;
+        if self.changes > 0 || !plan.drop.is_empty() {
+            self.drawn_revision = self.drawn_revision.wrapping_add(1);
+        }
 
         for &k in plan.cancel.iter().chain(&plan.drop) {
             self.remove(world, k);

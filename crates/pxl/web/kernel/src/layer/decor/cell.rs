@@ -74,7 +74,7 @@ struct Cells {
     placed: Vec<Placed>,
     folded: HashMap<[i64; 3], u32>,
     /// Kept so a settled turn asks the heap for nothing.
-    mounted: Vec<(Chunk, bool)>,
+    mounted: Vec<(Chunk, bool, bool)>,
     gone: Vec<Chunk>,
     pages: Vec<LevelPage>,
     sprites: Vec<u32>,
@@ -234,7 +234,7 @@ pub fn step(kinds: &[&Kind], store: &Store, sched: &mut Scheduler, hide: Option<
         }
     }
     let mut built = 0;
-    for &(chunk, _) in &mounted {
+    for &(chunk, _, _) in &mounted {
         if built >= BUILDS_PER_FRAME {
             break;
         }
@@ -252,9 +252,9 @@ pub fn step(kinds: &[&Kind], store: &Store, sched: &mut Scheduler, hide: Option<
             built += 1;
         }
     }
-    for &(chunk, drawn) in &mounted {
+    for &(chunk, drawn, seen) in &mounted {
         if let Some(b) = c.blocks.get_mut(&chunk) {
-            b.drawn = drawn;
+            b.drawn = drawn && seen;
         }
     }
     c.pages.clear();

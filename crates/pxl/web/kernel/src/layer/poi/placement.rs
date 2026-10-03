@@ -1,7 +1,7 @@
 // pxl-kernel/layer/poi/placement.rs
 
 //! Where the POI counts are drawn: one badge per POI-lattice cell under each
-//! piece of the layer's cover, read from the page that settles that ground,
+//! drawn chunk, read from the page that settles that ground,
 //! standing at a z16 cell's center on the surface a ray down meets first.
 
 use crate::global::Global;
@@ -35,9 +35,10 @@ struct Placement {
     hits: Vec<([f64; 4], Label, Pvf3)>,
     /// Kept so a settled turn asks the heap for nothing.
     found: Vec<(Cell, Label, Cell, f64)>,
-    /// The cover, the pages and the heights `found` was read from: an eye move
-    /// that changes none of them casts no ray.
+    /// The drawn chunks, the pages and the heights `found` was read from: an
+    /// eye move that changes none of them casts no ray.
     found_for: Option<(u32, u32, (u32, u32))>,
+    mounted: Vec<(Chunk, bool, bool)>,
     labeled: Vec<(Label, Pvf3)>,
     instances: Vec<f32>,
 }
@@ -74,16 +75,17 @@ pub fn step(ctx: &mut TickContext) {
     if crate::world::pyramid::domain::current().is_none() {
         return;
     }
-    let (cover, covers) = crate::world::pyramid::cover::cover::<PoiPage>();
-    let key = Some((covers, pages.paging().revision(), crate::world::observation::heights_revision()));
+    let sched = &crate::kernel::kernel().sched;
+    let key = Some((sched.drawn_revision(), pages.paging().revision(), crate::world::observation::heights_revision()));
     let stale = p.found_for != key;
     p.found_for = key;
     let mut found = core::mem::take(&mut p.found);
     if stale {
         found.clear();
+        sched.mounted(&mut p.mounted);
     }
-    let read: &[Chunk] = if stale { &cover.drawn } else { &[] };
-    for &chunk in read {
+    let read: &[(Chunk, bool, bool)] = if stale { &p.mounted } else { &[] };
+    for &(chunk, _, _) in read.iter().filter(|m| m.1) {
         // None coarser than COARSEST, only the most prominent up to POI_ALL_LEVEL.
         if chunk.level() > PoiPage::COARSEST {
             continue;
