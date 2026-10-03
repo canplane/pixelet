@@ -40,7 +40,7 @@ pub const HEADROOM: Slots = [REFINEMENTS_IN_FLIGHT + RESERVE[0], REFINEMENTS_IN_
 /// The cube the rule wants at `near`: a level coarser than the LOD level,
 /// since terrain draws a level's cells averaged 2 × 2. Below z16 it goes on
 /// to the objects' finest tier.
-pub fn wanted_cube(near: f64, tau: Tau) -> Cube {
+fn wanted_cube(near: f64, tau: Tau) -> Cube {
     let finest = OBJECT_FINEST.above(GROUND.scale(0));
     let level = tau.level(near).max(finest - 1) + 1;
     GROUND.scale(0).up(level).min(chunk_scale(TOP_LEVEL))
@@ -53,7 +53,7 @@ pub fn wanted_cube(near: f64, tau: Tau) -> Cube {
 ///
 /// A chunk read from a coarser page still uses its own cube: drawing it at
 /// that page's cells made blocks over the sea after a jump (2026-09-26).
-pub fn drawn_cube(cube: Cube, level: u32, outermost: bool, objects: bool) -> Cube {
+fn drawn_cube(cube: Cube, level: u32, outermost: bool, objects: bool) -> Cube {
     if outermost {
         return chunk_scale(level);
     }
@@ -68,8 +68,8 @@ pub fn drawn_cube(cube: Cube, level: u32, outermost: bool, objects: bool) -> Cub
 
 /// The quality alone moves the cube; a mesh too big for one slot fills more
 /// slots and is never drawn coarser for it.
-pub fn cube_of(c: Chunk, outermost: bool, near: f64, tau: Tau) -> Cube {
-    drawn_cube(wanted_cube(near, tau), c.level(), outermost, false)
+pub fn cube_of(c: Chunk, outermost: bool, near: f64, tau: Tau, objects: bool) -> Cube {
+    drawn_cube(wanted_cube(near, tau), c.level(), outermost, objects)
 }
 
 pub fn pool_of(c: Chunk, cube: Cube) -> Pool {
@@ -86,7 +86,7 @@ pub struct Need<F> {
 
 impl<F: Fn(Chunk, Cube) -> u32> Price for Need<F> {
     fn piece(&self, c: Chunk, outermost: bool, near: f64, tau: Tau) -> Slots {
-        let cube = cube_of(c, outermost, near, tau);
+        let cube = cube_of(c, outermost, near, tau, false);
         let k = (self.slots)(c, cube);
         match pool_of(c, cube) {
             Pool::Coarse => [0, k, 0],

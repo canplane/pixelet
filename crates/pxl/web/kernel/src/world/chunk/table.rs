@@ -33,7 +33,7 @@ use crate::param;
 use crate::sched::profiler::record::MB;
 use crate::shell::setting::store::settings_store;
 use crate::world::chunk::build::{mesh_step, BuildEvent, Builder, Cube, World};
-use crate::world::chunk::frontier::{cube_of, drawn_cube, pool_of, wanted_cube, Env, Frontier, Now, Slots};
+use crate::world::chunk::frontier::{cube_of, pool_of, Env, Frontier, Now, Slots};
 use crate::world::chunk::mesh_slot::{capacity, group_box_words, group_bytes, group_is_fine, slot_at, MeshSlot, Pool, ARENA, COVER_SLOTS, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::source::{draws_band, objects_revision_of, tiers_draw};
 use crate::world::paging::LEVELS;
@@ -196,9 +196,9 @@ impl Slot {
     fn unmeasured(&mut self) {
         let region = self.chunk.region();
         let b = Known.contents(self.chunk.level(), region).within(region).unwrap_or(region);
-        let (c, e) = (b.center(), b.extent());
+        let c = b.center();
         self.bc = [c[0] - region.min[0], c[1] - region.min[1], c[2]];
-        self.radius = (e[0] * e[0] + e[1] * e[1] + e[2] * e[2]).sqrt() * 0.5;
+        self.radius = half_diagonal(b.extent());
     }
 
     fn slots_for(&self, cube: Cube, generation: u32) -> u32 {
@@ -221,14 +221,6 @@ impl Slot {
         self.tiers.iter().find(|t| t.cube == cube && t.generation == generation)
     }
 
-    fn desired_pool(&self) -> Pool {
-        Pool::of(self.level(), mesh_step(self.desired, self.level()))
-    }
-
-    fn desired_slots(&self, generation: u32) -> (Pool, u32) {
-        (self.desired_pool(), self.slots_for(self.desired, generation))
-    }
-
     fn recubes(&self) -> bool {
         self.layout_ready && self.layout_primary != self.desired
     }
@@ -246,7 +238,7 @@ impl Slot {
     /// Slots held for it and not yet taken: none while it has a tier of the target cube.
     fn reserves(&self, generation: u32) -> Option<(Pool, u32)> {
         let cube = self.target();
-        (!self.tiers.iter().any(|t| t.cube == cube)).then(|| (Pool::of(self.level(), mesh_step(cube, self.level())), self.slots_for(cube, generation)))
+        (!self.tiers.iter().any(|t| t.cube == cube)).then(|| (pool_of(self.chunk, cube), self.slots_for(cube, generation)))
     }
 }
 
@@ -458,7 +450,7 @@ struct Pieces<'a> {
 
 impl Env for Pieces<'_> {
     fn slots(&self, c: Chunk) -> (Pool, u32) {
-        let cube = cube_of(c, self.d.outermost(c), self.d.order_of(c).near, self.d.tau());
+        let cube = cube_of(c, self.d.outermost(c), self.d.order_of(c).near, self.d.tau(), false);
         (pool_of(c, cube), self.table.slots_of(c, cube))
     }
 
@@ -562,7 +554,7 @@ impl Scheduler {
         };
         slot.unmeasured();
         if let Some(frame) = self.frame {
-            slot.set(IN_FRUSTUM, measure(&frame, &slot).0);
+            slot.set(IN_FRUSTUM, visible(&frame, &slot));
         }
         if let Some(d) = domain::current() {
             slot.order = d.order_of(k);
@@ -711,7 +703,7 @@ impl Scheduler {
                     if s.recube {
                         recubing += 1;
                     } else if s.recubes() {
-                        sc.recube.push((s.chunk, s.desired_slots(self.generation(i))));
+                        sc.recube.push((s.chunk, (pool_of(s.chunk, s.desired), s.slots_for(s.desired, self.generation(i)))));
                     }
                 }
                 Role::Building => sc.building.push((s.chunk, s.layout_ready)),
@@ -926,7 +918,7 @@ impl Scheduler {
     fn refresh(&mut self, frame: &Frame) {
         let domain = domain::current();
         for i in 0..self.slots.len() {
-            let visible = measure(frame, &self.slots[i]).0;
+            let visible = visible(frame, &self.slots[i]);
             let order = domain.map_or(Order::LAST, |d| d.order_of(self.slots[i].chunk));
             let s = &mut self.slots[i];
             s.order = order;
@@ -977,7 +969,7 @@ impl Scheduler {
         let (level, chunk) = (s.level(), s.chunk);
         let objects = level == 0 && world.store.entries(L2_IDX(chunk.corner())).is_some();
         let current = self.generation(i);
-        let desired = drawn_cube(wanted_cube(d.order_of(chunk).near, d.tau()), level, d.outermost(chunk), objects);
+        let desired = cube_of(chunk, d.outermost(chunk), d.order_of(chunk).near, d.tau(), objects);
         if self.slots[i].role == Role::Building && self.slots[i].layout_ready && self.slots[i].layout_primary != desired {
             self.release_tiers(i, |_, _| false);
         }
@@ -1010,7 +1002,7 @@ impl Scheduler {
         let generation = self.generation(i);
         let s = &self.slots[i];
         let lacks = s.tier(primary, generation).is_none();
-        let room = !lacks || s.slots_for(primary, generation) <= claimable(&self.meshes, Pool::of(s.level(), mesh_step(primary, s.level())));
+        let room = !lacks || s.slots_for(primary, generation) <= claimable(&self.meshes, pool_of(s.chunk, primary));
         self.builder.want(world, s.id, [(lacks && room).then_some(primary), None]);
         settle(&mut self.meshes, &self.builder);
         if !room {
@@ -1027,9 +1019,8 @@ impl Scheduler {
         s.layout_ready = true;
         match s.tier(primary, generation).and_then(|t| t.bounds) {
             Some(b) => {
-                let d = [(b.max[0] - b.min[0]) as f64, (b.max[1] - b.min[1]) as f64, (b.max[2] - b.min[2]) as f64];
-                s.bc = [(b.min[0] + b.max[0]) as f64 * 0.5, (b.min[1] + b.max[1]) as f64 * 0.5, (b.min[2] + b.max[2]) as f64 * 0.5];
-                s.radius = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt() * 0.5;
+                s.bc = [0, 1, 2].map(|k| (b.min[k] + b.max[k]) as f64 * 0.5);
+                s.radius = half_diagonal([0, 1, 2].map(|k| (b.max[k] - b.min[k]) as f64));
             }
             None => s.unmeasured(),
         }
@@ -1066,6 +1057,10 @@ impl Scheduler {
     }
 }
 
+fn half_diagonal(e: V3) -> f64 {
+    (e[0] * e[0] + e[1] * e[1] + e[2] * e[2]).sqrt() * 0.5
+}
+
 fn same_view(a: &Frame, b: &Frame) -> bool {
     a.anchor == b.anchor && a.origin == b.origin && a.planes == b.planes && a.camera == b.camera
 }
@@ -1083,7 +1078,7 @@ fn priority(a: &Priority, b: &Priority) -> core::cmp::Ordering {
     b.holds.cmp(&a.holds).then(a.order.cmp(&b.order))
 }
 
-fn measure(frame: &Frame, s: &Slot) -> (bool, V3) {
+fn visible(frame: &Frame, s: &Slot) -> bool {
     let (x0, y0) = s.base();
     let [x, y, z] = frame.world_of([x0 + s.bc[0], y0 + s.bc[1], s.bc[2]]);
     // Cull where the renderer draws it, on the globe; a flat-world cull leaves
@@ -1115,7 +1110,7 @@ fn measure(frame: &Frame, s: &Slot) -> (bool, V3) {
             }
         }
     }
-    (visible, [x, y, z])
+    visible
 }
 
 fn free_at(meshes: &Meshes, at: usize) -> bool {
@@ -1129,7 +1124,7 @@ fn claimable(meshes: &Meshes, pool: Pool) -> u32 {
 /// `k` free slots of `pool`, all or none, chained in order. Taking some and
 /// waiting for the rest would let two tiers deadlock on each other's slots.
 fn claim(meshes: &mut Meshes, pool: Pool, k: u32, holder: u32) -> Option<usize> {
-    if (pool.range().filter(|&at| free_at(meshes, at)).take(k as usize).count() as u32) < k {
+    if claimable(meshes, pool) < k {
         return None;
     }
     let (mut first, mut last): (Option<usize>, Option<usize>) = (None, None);
@@ -1249,7 +1244,7 @@ fn reserve(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent
         return false;
     }
     let level = s.level();
-    let pool = Pool::of(level, mesh_step(cube, level));
+    let pool = pool_of(s.chunk, cube);
     let k = boxes.div_ceil(capacity(level, mesh_step(cube, level))).max(1);
     let over = s.tiers.iter().find(|t| t.cube == cube).map(|t| t.slot.index);
     let taken = match over {
@@ -1397,7 +1392,7 @@ fn land(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
             let over = s.tiers.iter().find(|t| t.cube == cube).map(|t| t.slot.index);
             let taken = match over {
                 Some(first) => Some(first),
-                None => claim(meshes, Pool::of(level, mesh_step(cube, level)), 1, id),
+                None => claim(meshes, pool_of(s.chunk, cube), 1, id),
             };
             let Some(first) = taken else {
                 refuse(slots, i, meshes, generation, cube, 1, level);
