@@ -49,6 +49,13 @@ const enum Gesture {
   Scroll = 2,
 }
 
+/** The dock's pills, in bar order; one is open and the rest fold to a button. */
+const enum Pane {
+  Message = 0,
+  Palette = 1,
+}
+const PANES: readonly Pane[] = [Pane.Message, Pane.Palette];
+
 const enum Slot {
   Empty = 0,
   Palette = 1,
@@ -227,7 +234,7 @@ function ToolButton({ label, glyph, active, onPress }: { label: string; glyph: G
 
 export function Dock() {
   const { t } = useTranslation();
-  const [messageExpanded, setMessageExpanded] = useState(false);
+  const [open, setOpen] = useState<Pane>(Pane.Palette);
   // A downward drag on the bar puts the keyboard away; swatches only open
   // upward, so the two gestures never compete.
   const putAway = useRef(
@@ -283,36 +290,39 @@ export function Dock() {
     close: () => setFlyout(null),
   };
 
-  const paletteExpanded = !messageExpanded;
-  const openFlyout = paletteExpanded ? flyout : null;
+  const openFlyout = open === Pane.Palette ? flyout : null;
   // The send button takes the folded palette's place.
-  const slot = paletteExpanded ? Slot.Empty : messageText.trim() !== "" ? Slot.Send : Slot.Palette;
+  const slot = open === Pane.Palette ? Slot.Empty : messageText.trim() !== "" ? Slot.Send : Slot.Palette;
   const pillColor = slot === Slot.Send ? color.send : STRIP.ground;
 
-  const room = Math.max(chrome.control, barWidth - chrome.control - chrome.controlGap);
+  const room = Math.max(chrome.control, barWidth - (PANES.length - 1) * (chrome.control + chrome.controlGap));
   const messageOpen = Math.min(MESSAGE_OPEN_PX, room);
-  const messageWidth = messageExpanded ? messageOpen : chrome.control;
-  const paletteWidth = paletteExpanded ? Math.min(stripWidth, room) : chrome.control;
+  const opened: Record<Pane, f64> = { [Pane.Message]: messageOpen, [Pane.Palette]: Math.min(stripWidth, room) };
+  const widths = PANES.map((pane) => (pane === open ? opened[pane] : chrome.control));
+  const xs: f64[] = [];
   // Whole pixels, where a page's pill cuts its shadow cleanly.
-  const messageX = PixelRatio.roundToNearestPixel((barWidth - (messageWidth + chrome.controlGap + paletteWidth)) / 2);
-  const paletteX = PixelRatio.roundToNearestPixel(messageX + messageWidth + chrome.controlGap);
+  let x = (barWidth - widths.reduce((sum, w) => sum + w, 0) - (PANES.length - 1) * chrome.controlGap) / 2;
+  for (const w of widths) {
+    xs.push(PixelRatio.roundToNearestPixel(x));
+    x += w + chrome.controlGap;
+  }
 
   return (
     <View ref={bar} {...putAway.panHandlers} onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)} style={styles.bar}>
       {barWidth > 0 && (
         <>
           <Pill
-            x={messageX}
-            width={messageWidth}
+            x={xs[Pane.Message]}
+            width={widths[Pane.Message]}
             height={chrome.control}
             span={barWidth}
             fill={color.ground}
             place={BackingPlace.OverMap}
-            interactive={!messageExpanded}
+            interactive={open !== Pane.Message}
             shadow={shadow.lift}
           >
             <Pressable
-              onPress={() => setMessageExpanded(true)}
+              onPress={() => setOpen(Pane.Message)}
               accessibilityRole="button"
               accessibilityLabel={t("map.dock.message_tooltip")}
               style={styles.messageIcon}
@@ -320,7 +330,7 @@ export function Dock() {
               <Glyph glyph="bubble.left" size={chrome.glyph} color={LABEL.primary} />
             </Pressable>
             <Presence
-              show={messageExpanded}
+              show={open === Pane.Message}
               from={{ opacity: 0, translateX: -10 }}
               exit={{ opacity: 0, translateX: -10 }}
               transition={SNAP}
@@ -342,21 +352,21 @@ export function Dock() {
           </Pill>
 
           <Pill
-            x={paletteX}
-            width={paletteWidth}
+            x={xs[Pane.Palette]}
+            width={widths[Pane.Palette]}
             height={chrome.control}
             span={barWidth}
             fill={pillColor}
             tint={pillColor}
             place={BackingPlace.OverMap}
-            interactive={!paletteExpanded}
+            interactive={open !== Pane.Palette}
             shadow={shadow.lift}
             onContentWidth={setStripWidth}
           >
             <Motion
-              to={paletteExpanded ? {} : { opacity: 0, translateX: -10 }}
+              to={open === Pane.Palette ? {} : { opacity: 0, translateX: -10 }}
               transition={SNAP}
-              style={[styles.strip, { maxWidth: room }, paletteExpanded ? styles.pass : styles.block]}
+              style={[styles.strip, { maxWidth: room }, open === Pane.Palette ? styles.pass : styles.block]}
             >
               <View style={styles.group}>
                 <ToolButton label={t("map.dock.pointer")} glyph="hand.point.up.left" active={activeTool === ActiveTool.Pointer} onPress={() => setActiveTool(ActiveTool.Pointer)} />
@@ -390,7 +400,7 @@ export function Dock() {
               exit={{ opacity: 0 }}
               transition={slot === Slot.Send ? SNAP : LEAVE}
               exitTransition={LEAVE}
-              style={[styles.slotButton, { pointerEvents: paletteExpanded ? "none" : "auto" }]}
+              style={[styles.slotButton, { pointerEvents: open === Pane.Palette ? "none" : "auto" }]}
             >
               {slot === Slot.Empty ? null : slot === Slot.Send
                 ? (
@@ -408,7 +418,7 @@ export function Dock() {
                   <Pressable
                     // Not blurred here: blurring on press snapped the pills to the palette on a
                     // device instead of animating.
-                    onPress={() => setMessageExpanded(false)}
+                    onPress={() => setOpen(Pane.Palette)}
                     accessibilityRole="button"
                     accessibilityLabel={t("map.dock.palette_tooltip")}
                     style={styles.slotButton}
