@@ -92,13 +92,13 @@
     "debug": {
       "section_title": "Debug",
       "section_caption": "Diagnostics for the view and the scheduler",
-      "profiler": {
-        "label": "Performance Overlay",
-        "description": "Shows a panel with frame rate, GPU load, memory use, network requests and task timing."
+      "debug_overlay": {
+        "label": "Debug Overlay",
+        "description": "Shows camera and map state, frame timing, GPU, memory, and request activity."
       },
       "gizmos": {
         "label": "Gizmos",
-        "description": "Displays coordinate markers, such as the map center and tile boundaries, for debugging."
+        "description": "Draws the map center, its cell and the axis rings in the world, for debugging."
       }
     },
     "disclaimer": {

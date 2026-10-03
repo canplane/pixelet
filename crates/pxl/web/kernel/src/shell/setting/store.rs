@@ -32,7 +32,7 @@ impl Settings {
         if key.sources_chunks() {
             chunk_sources_changed();
         }
-        if key == SettingKey::profiler {
+        if key == SettingKey::debug_overlay {
             profiler_follow(value == 1);
         }
         self.keep();
@@ -73,7 +73,7 @@ fn settings_path() -> &'static str {
 /// What is not offered, unknown or invalid stays at the default.
 pub fn settings_load(kept: &str) {
     SETTINGS_STORE.set(read_kept(kept));
-    profiler_follow(settings_store().profiler);
+    profiler_follow(settings_store().debug_overlay);
 }
 
 fn read_kept(kept: &str) -> Settings {

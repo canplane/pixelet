@@ -92,13 +92,13 @@
     "debug": {
       "section_title": "디버그",
       "section_caption": "화면과 스케줄러를 들여다보는 진단 도구입니다",
-      "profiler": {
-        "label": "성능 오버레이",
-        "description": "프레임 속도, GPU 부하, 메모리 사용량, 네트워크 요청, 작업 시간을 보여주는 패널입니다."
+      "debug_overlay": {
+        "label": "디버그 오버레이",
+        "description": "카메라와 지도 위치, 프레임·GPU·메모리·요청 상태를 보여줍니다."
       },
       "gizmos": {
         "label": "기즈모",
-        "description": "지도 중심, 타일 경계 등 디버깅용 좌표 마커를 화면에 표시합니다."
+        "description": "지도 중심과 그 셀, 축 원을 월드 위에 그려 디버깅을 돕습니다."
       }
     },
     "disclaimer": {

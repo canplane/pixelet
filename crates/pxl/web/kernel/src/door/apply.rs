@@ -265,7 +265,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         // Records only while the profiler setting is on: a window opened with the
         // panel off would record with nothing to show or stop it.
         Command::PROFILER_START => {
-            if settings_store().profiler {
+            if settings_store().debug_overlay {
                 profiler_window_start();
             }
             applied(s)
@@ -276,7 +276,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::PROFILER_LOG => {
             let on = abi::ProfilerLog::read(packet(pkt)?)?.on;
-            profiler_set_logging(on && settings_store().profiler);
+            profiler_set_logging(on && settings_store().debug_overlay);
             applied(s)
         }
         // Memory is at most 1 GiB, so an address fits an i32.

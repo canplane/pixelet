@@ -153,14 +153,14 @@ export const SETTINGS = {
     options: ["auto", "fixed", "low"],
     section: "display",
   },
-  /** The performance overlay: the profiler's panel, and the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`). */
-  profiler: {
+  /** The debug overlay: where the camera and the pointer are, and the profiler's panel, with the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`). */
+  debug_overlay: {
     key: 12 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
-  /** Markers for the map center and the cell it floors to, the floating origin, the page's corners and the two gyro rings (layer/marker/frame_gizmo.rs). */
+  /** Markers for the map center and the cell it floors to, and rings in the level, the view's upright and the north–south planes (layer/marker/frame_gizmo.rs). */
   gizmos: {
     key: 13 as number,
     kind: "toggle",
@@ -257,14 +257,14 @@ export const SETTINGS_SHIPPED = {
     options: ["auto", "fixed", "low"],
     section: "display",
   },
-  /** The performance overlay: the profiler's panel, and the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`). */
-  profiler: {
+  /** The debug overlay: where the camera and the pointer are, and the profiler's panel, with the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`). */
+  debug_overlay: {
     key: 12 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
-  /** Markers for the map center and the cell it floors to, the floating origin, the page's corners and the two gyro rings (layer/marker/frame_gizmo.rs). */
+  /** Markers for the map center and the cell it floors to, and rings in the level, the view's upright and the north–south planes (layer/marker/frame_gizmo.rs). */
   gizmos: {
     key: 13 as number,
     kind: "toggle",

@@ -7,7 +7,7 @@ import { AboveKeyboard } from "@platform/above-keyboard.tsx";
 import { useSafeArea } from "@platform/safe-area.ts";
 import { useViewportTop } from "@platform/viewport.ts";
 import { WorldSurface } from "@platform/surface.tsx";
-import { ProfilerOverlay } from "@/feature/debug/profiler/overlay.tsx";
+import { DebugOverlay } from "@/feature/debug/overlay.tsx";
 import { bottomRest } from "@/shared/ui/bottom-rest.ts";
 import { Toaster } from "@/shared/ui/toast/stack.tsx";
 import { chrome } from "@/shared/ui/theme.ts";
@@ -32,7 +32,7 @@ export function MapView() {
     <View style={[StyleSheet.absoluteFill, styles.root]}>
       <ToastController />
       <BetweenChrome>
-        <ProfilerOverlay />
+        <DebugOverlay />
       </BetweenChrome>
 
       <View style={StyleSheet.absoluteFill}>
