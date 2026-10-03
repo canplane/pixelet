@@ -25,9 +25,9 @@ struct Follow {
     was_following: bool,
     last_device: Option<Pvf3>,
     last_heading: Option<f64>,
-    /// The give-up deadline, and the pair of statuses it was set for.
+    /// The give-up deadline, and the location status it was set for.
     grace_due: Option<f64>,
-    grace_for: Option<(DevicePoseStatus, DevicePoseStatus)>,
+    grace_for: Option<DevicePoseStatus>,
 }
 
 static FOLLOW: Global<Follow> = Global::new();
@@ -46,11 +46,12 @@ pub fn follow_mode_step() {
     let heading = device_orientation_store().orientation.and_then(|o| o.heading);
     let device_coord = map_navigation().device_coord;
 
-    // Follow needs both sensors READY. A blip must not drop it (it read as the
-    // mode switching itself off), but dead sensors must eventually, or the camera
-    // freezes behind a disabled button.
-    let status = (device_location_store().status, device_orientation_store().status);
-    let ready = status == (DevicePoseStatus::Ready, DevicePoseStatus::Ready);
+    // Follow needs the location READY; a heading only turns the map where there
+    // is one, so a device without a compass still follows where it is. A blip
+    // must not drop it (it read as the mode switching itself off), but a dead
+    // location must eventually, or the camera freezes behind a disabled button.
+    let status = device_location_store().status;
+    let ready = status == DevicePoseStatus::Ready;
     if is_follow_mode && !ready {
         // Restarted whenever a status moves: LOADING to ERROR is a fresh gap with its
         // own retry ahead.

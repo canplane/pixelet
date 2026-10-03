@@ -126,9 +126,10 @@ pub fn tracking_action(tracking: Tracking) {
             crate::control::camera::controller::come_in_to_default();
         }
         Tracking::Follow => {
-            if request_orientation(world_platform().orientation) {
-                camera.is_follow_mode = true;
-            }
+            // The heading is asked for, and the map turns with it once it comes;
+            // where there is none, following is where one is alone.
+            request_orientation(world_platform().orientation);
+            camera.is_follow_mode = true;
         }
         Tracking::Unfollow => {
             camera.is_follow_mode = false;
