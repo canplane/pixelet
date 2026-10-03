@@ -1,14 +1,13 @@
 // pxl-geo-bake/deck/profile.rs
 
-//! A structure's road surface in `q`: a deck's height, a bore's depth. Its
-//! own points stand at their needs, which keep it in its form; every point
-//! stands at least under a need within `halo` coming down at
-//! `PREFERRED_SLOPE`, steeper only where that would not reach its own need
-//! within `halo`. So an approach leaves the structure in its form and meets
-//! the ground where that line does. Where its way ends first, that end is
-//! pinned to the ground and caps what is within half the halo of it at the
-//! grade the structure's needs there ask, at least `PREFERRED_SLOPE`. So
-//! nothing past `halo` moves a point.
+//! A road's surface along a structure and the ways it carries on along, in
+//! z. A deck's points have a floor, a bore's a ceiling, and where a way ends
+//! on the ground both are the ground. Each bound reaches `halo`, coming away
+//! at `PREFERRED_SLOPE`, steeper only to land on a point's own by `halo` or to
+//! pass every bound the other way within `halo`. The surface stands on what
+//! the floors push up and under what the ceilings push down, at the ground
+//! between: so a structure keeps its form to its end, the road leaves it on
+//! the way it carries on along, and nothing past twice `halo` moves a point.
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
@@ -17,13 +16,12 @@ use crate::deck::param::PREFERRED_SLOPE;
 
 pub struct Problem<'a> {
     pub adj: &'a [Vec<(u32, f64)>],
-    /// An approach's is the ground.
-    pub need: &'a [f64],
-    /// The structure's own points, not its approaches'.
-    pub own: &'a [bool],
-    /// Where an approach's way ends: its need is the ground.
-    pub pinned: &'a [bool],
-    /// How far, in metres, a need reaches.
+    pub ground: &'a [f64],
+    /// −∞ where none.
+    pub floor: &'a [f64],
+    /// +∞ where none.
+    pub ceiling: &'a [f64],
+    /// How far, in metres, a bound reaches.
     pub halo: f64,
 }
 
@@ -33,29 +31,33 @@ pub struct Profile {
 }
 
 pub fn solve(p: &Problem) -> Profile {
-    let n = p.need.len();
-    let mut top = p.need.to_vec();
-    let mut near = Near::new(n);
-    for u in (0..n).filter(|&u| p.own[u]) {
-        near.from(p.adj, u as u32, p.halo);
-        for &v in &near.reached {
-            let (v, d) = (v as usize, near.dist[v as usize]);
-            // steeper only to land on v's own need by the halo, so no step there
-            let slope = PREFERRED_SLOPE.max((p.need[u] - p.need[v]) / p.halo);
-            top[v] = top[v].max(p.need[u] - slope * d);
-        }
-    }
-    for q in (0..n).filter(|&q| p.pinned[q]) {
-        near.from(p.adj, q as u32, p.halo / 2.0);
-        let away = || near.reached.iter().map(|&u| (u as usize, near.dist[u as usize])).filter(|&(_, d)| d > 0.0);
-        let grade = away().filter(|&(u, _)| p.own[u]).map(|(u, d)| (p.need[u] - p.need[q]) / d).fold(PREFERRED_SLOPE, f64::max);
-        for (v, d) in away() {
-            top[v] = top[v].min(p.need[q] + grade * d).max(p.need[v]);
-        }
-        top[q] = p.need[q];
-    }
+    let n = p.ground.len();
+    let neg = |v: &[f64]| v.iter().map(|x| -x).collect::<Vec<f64>>();
+    let lower = envelope(p, p.floor, p.ceiling, 1.0);
+    let upper = neg(&envelope(p, &neg(p.ceiling), &neg(p.floor), -1.0));
+    let top: Vec<f64> = (0..n).map(|v| lower[v].max(upper[v].min(p.ground[v]))).collect();
     let forced = (0..n).map(|v| p.adj[v].iter().any(|&(w, d)| d > 0.0 && (top[v] - top[w as usize]).abs() / d > PREFERRED_SLOPE + 1e-9)).collect();
     Profile { top, forced }
+}
+
+/// In `q = sign · z`: what the bounds `least` hold up, each coming away no
+/// steeper than it must to pass the bounds `most`.
+fn envelope(p: &Problem, least: &[f64], most: &[f64], sign: f64) -> Vec<f64> {
+    let n = least.len();
+    let own = |v: usize| if least[v].is_finite() { least[v] } else { sign * p.ground[v] };
+    let mut env = least.to_vec();
+    let mut near = Near::new(n);
+    for u in (0..n).filter(|&u| least[u].is_finite()) {
+        near.from(p.adj, u as u32, p.halo);
+        let reached = || near.reached.iter().map(|&v| (v as usize, near.dist[v as usize]));
+        let pass = reached().filter(|&(w, d)| most[w].is_finite() && d > 0.0).map(|(w, d)| (least[u] - most[w]) / d).fold(PREFERRED_SLOPE, f64::max);
+        for (v, d) in reached() {
+            // steeper only to land on v's own by the halo, so no step there
+            let slope = pass.max((least[u] - own(v)) / p.halo);
+            env[v] = env[v].max(least[u] - slope * d);
+        }
+    }
+    env
 }
 
 /// Distances from a point within a reach; resets only what it reached.

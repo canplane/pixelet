@@ -12,6 +12,7 @@ pub mod relate;
 pub mod source;
 pub mod structure;
 
+use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use postgres::Client;
@@ -87,105 +88,79 @@ pub fn calculate<E>(input: &Input, ground: impl FnOnce(&[[f64; 2]]) -> Result<Ve
             None => pieces,
         }
     };
-    let mut decks = clip(input.rows.iter().flat_map(|r| pieces_of(r, Form::Deck)).collect());
-    let mut bores = clip(input.rows.iter().flat_map(|r| pieces_of(r, Form::Bore)).collect());
+    let decks = clip(input.rows.iter().flat_map(|r| pieces_of(r, Form::Deck)).collect());
+    let bores = clip(input.rows.iter().flat_map(|r| pieces_of(r, Form::Bore)).collect());
     log(&format!("{} deck pieces, {} bore pieces", decks.len(), bores.len()));
     if decks.is_empty() && bores.is_empty() {
         return Ok(Vec::new());
     }
 
+    // decks, then bores, then the ways they carry on along
     let n_decks = decks.len();
-    let staged: Vec<&Piece> = decks.iter().chain(&bores).collect();
-    let lines: Vec<Polyline> = staged.iter().map(|p| Polyline::of(p.points.iter().map(|q| [q[0], q[1]]))).collect();
-    let crossings = relate::decks_crossing(&staged, &lines);
-    let mut needs = needs_of(input, &decks, &lines[..n_decks]);
-    let ramps = clip(approach::approaches(input, &decks, &grounded(input, &decks)));
-    let cuts = clip(approach::approaches(input, &bores, &grounded(input, &bores)));
-    log(&format!("{} approaches to decks, {} to bores", ramps.len(), cuts.len()));
-    decks.extend(ramps);
-    bores.extend(cuts);
-    needs.resize(decks.len(), Vec::new());
+    let mut pieces: Vec<Piece> = decks.into_iter().chain(bores).collect();
+    let lines: Vec<Polyline> = pieces.iter().map(|p| Polyline::of(p.points.iter().map(|q| [q[0], q[1]]))).collect();
+    let crossings = relate::decks_crossing(&pieces.iter().collect::<Vec<_>>(), &lines);
+    let mut needs = needs_of(input, &pieces[..n_decks], &lines[..n_decks]);
+    let ways = clip(approach::continuations(input, &pieces, &grounded(input, &pieces)));
+    log(&format!("{} stretches of way carried on along", ways.len()));
+    pieces.extend(ways);
+    needs.resize(pieces.len(), Vec::new());
 
-    let (mut over_decks, mut over_bores, mut tied) = (Vec::new(), Vec::new(), 0);
+    let (mut over, mut tied) = (Vec::new(), 0);
     for c in crossings {
-        match (c.upper < n_decks, c.lower < n_decks) {
-            (true, true) => over_decks.push(Crossing {
+        over.push(match (c.upper < n_decks, c.lower < n_decks) {
+            (true, true) => Crossing {
                 far: c.upper,
-                far_at: decks[c.upper].to_m(c.upper_at),
+                far_at: pieces[c.upper].to_m(c.upper_at),
                 near: c.lower,
-                near_at: decks[c.lower].to_m(c.lower_at),
-                gap: clearance_m(kind_of(&decks[c.lower])) + DECK_THICKNESS_M,
-            }),
-            (false, false) => {
-                let (upper, lower) = (c.upper - n_decks, c.lower - n_decks);
-                over_bores.push(Crossing {
-                    far: lower,
-                    far_at: bores[lower].to_m(c.lower_at),
-                    near: upper,
-                    near_at: bores[upper].to_m(c.upper_at),
-                    gap: headroom_m(kind_of(&bores[lower])) + BORE_COVER_M,
-                });
-            }
+                near_at: pieces[c.lower].to_m(c.lower_at),
+                gap: clearance_m(kind_of(&pieces[c.lower])) + DECK_THICKNESS_M,
+            },
+            (false, false) => Crossing {
+                far: c.lower,
+                far_at: pieces[c.lower].to_m(c.lower_at),
+                near: c.upper,
+                near_at: pieces[c.upper].to_m(c.upper_at),
+                gap: -(headroom_m(kind_of(&pieces[c.lower])) + BORE_COVER_M),
+            },
             _ => continue,
-        }
+        });
         tied += usize::from(c.tied);
     }
     log(&format!(
-        "{} ways and waters under decks; {} decks over decks, {} bores over bores, {} ordered by id where layers tie",
+        "{} ways and waters under decks; {} decks over decks or bores under bores, {} ordered by id where layers tie",
         needs.iter().map(Vec::len).sum::<usize>(),
-        over_decks.len(),
-        over_bores.len(),
+        over.len(),
         tied
     ));
 
-    let beside = side_by_side(&decks);
-    let deck_side = Side::of(&decks, &beside);
-    let bore_side = Side::of(&bores, &[]);
-    let all: Vec<[f64; 2]> = deck_side.graphs.iter().chain(&bore_side.graphs).flat_map(|g| g.at.iter().copied()).collect();
+    let beside = side_by_side(&pieces[..n_decks]);
+    let side = Side::of(&pieces, &beside);
+    let all: Vec<[f64; 2]> = side.graphs.iter().flat_map(|g| g.at.iter().copied()).collect();
     let mut flat = ground(&all)?.into_iter();
-    let mut ground_of = |side: &Side| -> Vec<Vec<f64>> { side.graphs.iter().map(|g| flat.by_ref().take(g.at.len()).collect()).collect() };
-    let (deck_ground, bore_ground) = (ground_of(&deck_side), ground_of(&bore_side));
-    let points = deck_side.graphs.iter().chain(&bore_side.graphs).map(|g| g.at.len()).sum::<usize>();
-    log(&format!(
-        "{} structures, {} pairs of decks side by side, {} points",
-        deck_side.structures.len() + bore_side.structures.len(),
-        beside.len(),
-        points
-    ));
+    let grounds: Vec<Vec<f64>> = side.graphs.iter().map(|g| flat.by_ref().take(g.at.len()).collect()).collect();
+    log(&format!("{} structures, {} pairs of decks side by side, {} points", side.structures.len(), beside.len(), all.len()));
 
-    // and a cell of air under it, so a deck stands off the ground
-    let deck_shell = |p: &Piece| DECK_THICKNESS_M + U_PER_CELL / u_per_m(from_db(p.points[0][1]));
-    let (deck_tops, forced) = deck_side.solve(1.0, &deck_ground, deck_shell, &needs, &over_decks);
-    log(&format!("deck: {forced} points steeper than the preferred grade"));
-    let bore_shell = |p: &Piece| headroom_m(kind_of(p)) + BORE_COVER_M;
-    let (bore_tops, forced) = bore_side.solve(-1.0, &bore_ground, bore_shell, &[], &over_bores);
-    log(&format!("bore: {forced} points steeper than the preferred grade"));
-
-    let mut out = deck_side.out(&deck_ground, &deck_tops, 1.0);
-    out.extend(bore_side.out(&bore_ground, &bore_tops, -1.0));
-    let unpinned = bore_tops.iter().filter(|t| t.is_none()).count();
+    let (tops, forced) = side.solve(&grounds, &needs, &over);
+    log(&format!("{forced} points steeper than the preferred grade"));
+    let out = side.out(&grounds, &tops);
     let count = |f: Form| out.iter().filter(|d| d.form == f.byte()).count();
-    log(&format!(
-        "{} lines in {} structures ({} deck, {} bore); {unpinned} bore structures with no portal left out",
-        out.len(),
-        deck_side.structures.len() + bore_side.structures.len(),
-        count(Form::Deck),
-        count(Form::Bore)
-    ));
+    log(&format!("{} lines ({} deck, {} bore)", out.len(), count(Form::Deck), count(Form::Bore)));
     Ok(out)
 }
 
-/// How far a need reaches: a page's side less what is drawn past one, so a
+/// How far a bound reaches: half a page's side less what is drawn past one,
+/// since what a point reads is a bound's reach from a bound's reach, so a
 /// page's points read nothing past the pages around it.
 fn halo_m(y_db: f64) -> f64 {
-    (f64::from(PAGE_CELLS) * U_PER_CELL - DRAWN_REACH_U) / u_per_m(from_db(y_db))
+    (f64::from(PAGE_CELLS) * U_PER_CELL - DRAWN_REACH_U) / 2.0 / u_per_m(from_db(y_db))
 }
 
 fn kind_of(p: &Piece) -> u8 {
     segment_type(&p.subtype, p.class.as_deref())
 }
 
-/// `far` stands `gap` past `near`, away from the ground.
+/// `far` stands `gap` over `near`, under where it is negative.
 struct Crossing {
     far: usize,
     far_at: f64,
@@ -194,7 +169,7 @@ struct Crossing {
     gap: f64,
 }
 
-/// One form's structures, each a graph of its pieces' points.
+/// Structures and the ways they carry on along, each a graph of its pieces' points.
 struct Side<'a> {
     pieces: &'a [Piece],
     structures: Vec<Vec<usize>>,
@@ -215,87 +190,109 @@ impl<'a> Side<'a> {
         Side { pieces, structures, graphs, place }
     }
 
-    /// Surfaces in `q`, a bore's `None` with no approach, and the forced count.
-    /// Twice: crossings read the first pass's surfaces.
-    fn solve(&self, sign: f64, ground: &[Vec<f64>], shell: impl Fn(&Piece) -> f64, needs: &[Vec<Need>], crossings: &[Crossing]) -> (Vec<Option<Vec<f64>>>, usize) {
-        let q_ground: Vec<Vec<f64>> = ground.iter().map(|g| g.iter().map(|v| sign * v).collect()).collect();
-        let mut tops: Vec<Option<Vec<f64>>> = q_ground.iter().map(|g| Some(g.clone())).collect();
+    /// Surfaces in z, and the forced count. Twice: crossings read the first
+    /// pass's surfaces.
+    fn solve(&self, ground: &[Vec<f64>], needs: &[Vec<Need>], crossings: &[Crossing]) -> (Vec<Vec<f64>>, usize) {
+        let mut tops: Vec<Vec<f64>> = ground.to_vec();
         let mut forced = 0;
         for pass in 0..2 {
             forced = 0;
             let mut next = Vec::with_capacity(self.structures.len());
             for (s, members) in self.structures.iter().enumerate() {
-                let (g, qg) = (&self.graphs[s], &q_ground[s]);
-                if sign < 0.0 && !members.iter().any(|&m| self.pieces[m].approach) {
-                    next.push(None);
-                    continue;
-                }
-                let mut need = qg.clone();
-                let mut own = vec![false; need.len()];
+                let (g, z) = (&self.graphs[s], &ground[s]);
+                let (mut floor, mut ceiling) = (vec![f64::NEG_INFINITY; z.len()], vec![f64::INFINITY; z.len()]);
                 for (k, &m) in members.iter().enumerate() {
                     let piece = &self.pieces[m];
-                    if !piece.approach {
-                        for &(node, _) in &g.along[k] {
-                            need[node as usize] = need[node as usize].max(qg[node as usize] + shell(piece));
-                            own[node as usize] = true;
+                    for &(node, _) in &g.along[k] {
+                        let n = node as usize;
+                        match (piece.approach, piece.form) {
+                            (true, _) => {}
+                            // and a cell of air under the slab, so a deck stands off the ground
+                            (false, Form::Deck) => floor[n] = floor[n].max(z[n] + DECK_THICKNESS_M + U_PER_CELL / u_per_m(from_db(g.at[n][1]))),
+                            (false, Form::Bore) => ceiling[n] = ceiling[n].min(z[n] - headroom_m(kind_of(piece)) - BORE_COVER_M),
                         }
                     }
                     for n in needs.get(m).into_iter().flatten() {
                         for node in nodes_within(g, k, n.from, n.to) {
-                            need[node] = need[node].max(qg[node] + n.under.headroom(n.to - n.from) + shell(piece));
+                            floor[node] = floor[node].max(z[node] + n.under.headroom(n.to - n.from) + DECK_THICKNESS_M);
                         }
                     }
                 }
                 if pass == 1 {
                     for c in crossings.iter().filter(|c| self.place[c.far].0 == s) {
                         let (ns, nk) = self.place[c.near];
-                        let Some(near_tops) = &tops[ns] else { continue };
-                        let near = top_along(&self.graphs[ns], near_tops, nk, c.near_at);
+                        let near = top_along(&self.graphs[ns], &tops[ns], nk, c.near_at) + c.gap;
                         if let Some(node) = g.nearest(self.place[c.far].1, c.far_at) {
-                            need[node as usize] = need[node as usize].max(near + c.gap);
+                            let n = node as usize;
+                            match c.gap > 0.0 {
+                                true => floor[n] = floor[n].max(near),
+                                false => ceiling[n] = ceiling[n].min(near),
+                            }
                         }
                     }
                 }
-                // a free end of an approach is its way's, the box's aside
-                let mut pinned = vec![false; need.len()];
-                for &(node, ref end) in &g.free_ends {
-                    pinned[node as usize] = !own[node as usize] && !matches!(end, End::Clip(..));
+                // a way's free end is where it carries on at the ground, a box's cut aside
+                for (node, end) in &g.free_ends {
+                    let n = *node as usize;
+                    if !floor[n].is_finite() && !ceiling[n].is_finite() && !matches!(end, End::Clip(..)) {
+                        (floor[n], ceiling[n]) = (z[n], z[n]);
+                    }
                 }
                 let profile = solve_profile(&Problem {
                     adj: &g.adj,
-                    need: &need,
-                    own: &own,
-                    pinned: &pinned,
+                    ground: z,
+                    floor: &floor,
+                    ceiling: &ceiling,
                     halo: halo_m(g.at[0][1]),
                 });
                 forced += profile.forced.iter().filter(|&&f| f).count();
-                next.push(Some(profile.top));
+                next.push(profile.top);
             }
             tops = next;
         }
         (tops, forced)
     }
 
-    /// In z; an approach up to where it meets the ground.
-    fn out(&self, ground: &[Vec<f64>], tops: &[Option<Vec<f64>>], sign: f64) -> Vec<DeckRow> {
+    /// A structure's pieces whole; a way's as its runs off the ground, a deck
+    /// over it and a bore under it. A bore no way reaches is a subway's, left out.
+    fn out(&self, ground: &[Vec<f64>], tops: &[Vec<f64>]) -> Vec<DeckRow> {
         let mut out = Vec::new();
+        let reached: Vec<bool> = self.structures.iter().map(|m| m.iter().any(|&i| self.pieces[i].approach)).collect();
         for (m, piece) in self.pieces.iter().enumerate() {
             let (s, k) = self.place[m];
-            let (Some(top), g) = (&tops[s], &self.graphs[s]) else { continue };
+            let (g, top, z) = (&self.graphs[s], &tops[s], &ground[s]);
             let along = &g.along[k];
-            let nodes = match piece.approach {
-                true => &along[..along.iter().position(|&(n, _)| top[n as usize] <= sign * ground[s][n as usize]).map_or(along.len(), |i| i + 1)],
-                false => &along[..],
+            let mut emit = |nodes: &[(u32, f64)], form: Form| {
+                if nodes.len() >= 2 {
+                    out.push(DeckRow {
+                        gers_id: piece.gers_id.clone(),
+                        subtype: piece.subtype.clone(),
+                        class: piece.class.clone(),
+                        width_m: piece.width_m,
+                        form: form.byte(),
+                        points: nodes.iter().map(|&(n, _)| [g.at[n as usize][0], g.at[n as usize][1], top[n as usize]]).collect(),
+                    });
+                }
             };
-            if nodes.len() >= 2 {
-                out.push(DeckRow {
-                    gers_id: piece.gers_id.clone(),
-                    subtype: piece.subtype.clone(),
-                    class: piece.class.clone(),
-                    width_m: piece.width_m,
-                    form: piece.form.byte(),
-                    points: nodes.iter().map(|&(n, _)| [g.at[n as usize][0], g.at[n as usize][1], sign * top[n as usize]]).collect(),
-                });
+            match (piece.approach, piece.form) {
+                (false, Form::Bore) if !reached[s] => {}
+                (false, form) => emit(along, form),
+                (true, _) => {
+                    let side = |n: u32| top[n as usize].total_cmp(&z[n as usize]);
+                    let mut i = 0;
+                    while i < along.len() {
+                        let off = side(along[i].0);
+                        let j = (i..along.len()).find(|&j| side(along[j].0) != off).unwrap_or(along.len());
+                        // a run takes the point either side where it meets the ground
+                        let run = &along[i.saturating_sub(1)..(j + 1).min(along.len())];
+                        match off {
+                            Ordering::Greater => emit(run, Form::Deck),
+                            Ordering::Less => emit(run, Form::Bore),
+                            Ordering::Equal => {}
+                        }
+                        i = j;
+                    }
+                }
             }
         }
         out
@@ -312,8 +309,7 @@ fn free_ends(pieces: &[Piece]) -> Vec<(usize, bool)> {
     (0..pieces.len()).flat_map(|i| [(i, false), (i, true)]).filter(free).collect()
 }
 
-/// Free ends whose way carries on on the ground, where an approach takes
-/// the structure to it; a subway's do not.
+/// Free ends whose way carries on on the ground; a subway's do not.
 fn grounded(input: &Input, pieces: &[Piece]) -> Vec<(usize, bool)> {
     let ends = free_ends(pieces);
     let asked: Vec<([f64; 2], &str)> = ends.iter().map(|&(i, last)| (end_of(&pieces[i], last).0, pieces[i].gers_id.as_str())).collect();
