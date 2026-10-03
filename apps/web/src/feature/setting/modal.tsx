@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, View } from "react-native";
 
 import { Panel } from "@platform/panel.tsx";
-import { PanelBody, PanelHeader, PanelScroll } from "@/shared/ui/panel.tsx";
+import { PanelBar, PanelBody, PanelScroll } from "@/shared/ui/panel.tsx";
 import { Segmented } from "@platform/segmented.tsx";
 import { hairline } from "@/shared/ui/theme.ts";
 import { SettingsSection } from "./section.tsx";
@@ -31,16 +31,17 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   return (
     <Panel label={t("settings.title")} onClose={onClose}>
       <PanelBody
-        header={<PanelHeader title={t("settings.title")} onClose={onClose} />}
-        tabs={
-          <Segmented
-            value={tab}
-            onChange={setTab}
-            segments={[
-              { value: SettingsTab.Options, label: t("settings.tabs.options") },
-              { value: SettingsTab.Info, label: t("settings.tabs.info") },
-            ]}
-          />
+        bar={
+          <PanelBar onClose={onClose}>
+            <Segmented
+              value={tab}
+              onChange={setTab}
+              segments={[
+                { value: SettingsTab.Options, label: t("settings.tabs.options") },
+                { value: SettingsTab.Info, label: t("settings.tabs.info") },
+              ]}
+            />
+          </PanelBar>
         }
       >
         {tab === SettingsTab.Options

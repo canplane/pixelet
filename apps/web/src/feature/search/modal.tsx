@@ -7,7 +7,7 @@ import { round } from "@xpute/core/math/scalar.ts";
 import { useTranslation } from "react-i18next";
 
 import { Panel } from "@platform/panel.tsx";
-import { PANEL_CONTENT_TOP, PANEL_CONTROL, PANEL_EDGE, PANEL_HEADER, PANEL_SECTION_GAP, PanelBody, PanelClose } from "@/shared/ui/panel.tsx";
+import { PANEL_CONTENT_TOP, PANEL_CONTROL, PANEL_EDGE, PANEL_SECTION_GAP, PanelBar, PanelBody } from "@/shared/ui/panel.tsx";
 import { KEEPS_KEYBOARD } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
 import { alpha, chrome, color, sectionTitle, textScale, textStyle, weight } from "@/shared/ui/theme.ts";
@@ -172,35 +172,32 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
   return (
     <Panel label={t("map.search.placeholder")} onClose={() => onClose()}>
       <PanelBody
-        header={
-          <>
-            <View {...KEEPS_KEYBOARD} style={styles.headerRow}>
-              <Backing fill={color.faint} place={BackingPlace.OnSheet} style={styles.well}>
-                <Glyph glyph="magnifyingglass" size={chrome.glyph} color={LABEL.secondary} />
-                <TextField
-                  value={query}
-                  onChangeText={setQuery}
-                  placeholder={t("map.search.placeholder")}
-                  placeholderTextColor={LABEL.placeholder}
-                  clearButtonMode={SYSTEM_CLEAR ? "while-editing" : undefined}
-                  style={styles.field}
-                />
-                {!SYSTEM_CLEAR && query.length > 0 && (
-                  <Pressable
-                    onPress={() => setQuery("")}
-                    accessibilityRole="button"
-                    accessibilityLabel={t("map.search.clear_aria_label")}
-                    style={styles.clearReach}
-                  >
-                    <View style={styles.clear}>
-                      <Glyph glyph="xmark" size={10} weight="heavy" color={color.ground} />
-                    </View>
-                  </Pressable>
-                )}
-              </Backing>
-              <PanelClose onClose={() => onClose()} />
-            </View>
-          </>
+        bar={
+          <PanelBar {...KEEPS_KEYBOARD} onClose={() => onClose()}>
+            <Backing fill={color.faint} place={BackingPlace.OnSheet} style={styles.well}>
+              <Glyph glyph="magnifyingglass" size={chrome.glyph} color={LABEL.secondary} />
+              <TextField
+                value={query}
+                onChangeText={setQuery}
+                placeholder={t("map.search.placeholder")}
+                placeholderTextColor={LABEL.placeholder}
+                clearButtonMode={SYSTEM_CLEAR ? "while-editing" : undefined}
+                style={styles.field}
+              />
+              {!SYSTEM_CLEAR && query.length > 0 && (
+                <Pressable
+                  onPress={() => setQuery("")}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("map.search.clear_aria_label")}
+                  style={styles.clearReach}
+                >
+                  <View style={styles.clear}>
+                    <Glyph glyph="xmark" size={10} weight="heavy" color={color.ground} />
+                  </View>
+                </Pressable>
+              )}
+            </Backing>
+          </PanelBar>
         }
       >
         <ScrollView style={styles.results} contentContainerStyle={styles.resultsRoom} keyboardShouldPersistTaps="handled">
@@ -231,7 +228,6 @@ const styles = StyleSheet.create({
   locateLabel: { flex: 1, ...textStyle.body, color: LABEL.primary },
   locateAction: { ...textStyle.body, fontWeight: weight.semibold, color: color.action },
   resultsRoom: { paddingTop: PANEL_CONTENT_TOP, paddingBottom: chrome.target + 2 * PANEL_EDGE, gap: PANEL_SECTION_GAP },
-  headerRow: { ...PANEL_HEADER, gap: chrome.controlGap },
   well: {
     flex: 1,
     minWidth: 0,

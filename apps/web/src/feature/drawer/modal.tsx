@@ -12,7 +12,7 @@ import { useKernel } from "@/kernel/shell.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { Panel } from "@platform/panel.tsx";
 import { Glyph } from "@/shared/ui/glyph.tsx";
-import { PanelBody, PanelHeader, PanelScroll } from "@/shared/ui/panel.tsx";
+import { PanelBar, PanelBody, PanelScroll } from "@/shared/ui/panel.tsx";
 import { Segmented } from "@platform/segmented.tsx";
 import { chrome, color, hairline, sectionTitle, textStyle } from "@/shared/ui/theme.ts";
 import { CharacterPicker } from "@/feature/character/picker.tsx";
@@ -106,17 +106,18 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
   return (
     <Panel label={t("drawer.title")} onClose={onClose} half>
       <PanelBody
-        header={<PanelHeader title={t("drawer.title")} onClose={onClose} />}
-        tabs={
-          <Segmented
-            value={tab}
-            onChange={setTab}
-            segments={[
-              { value: DrawerTab.Cube, label: t("drawer.tabs.cube") },
-              { value: DrawerTab.Decor, label: t("drawer.tabs.decor") },
-              { value: DrawerTab.Character, label: t("drawer.tabs.character") },
-            ]}
-          />
+        bar={
+          <PanelBar onClose={onClose}>
+            <Segmented
+              value={tab}
+              onChange={setTab}
+              segments={[
+                { value: DrawerTab.Cube, label: t("drawer.tabs.cube") },
+                { value: DrawerTab.Decor, label: t("drawer.tabs.decor") },
+                { value: DrawerTab.Character, label: t("drawer.tabs.character") },
+              ]}
+            />
+          </PanelBar>
         }
       >
         <PanelScroll key={tab}>
