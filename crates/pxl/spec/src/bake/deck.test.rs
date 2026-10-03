@@ -135,13 +135,15 @@ fn each_form_is_drawn_from_its_surface() {
         form,
         pier: false,
     };
-    // Two cells a metre: a 2 m slab is 4 cells, a road's 4.5 m clear height 9.
+    // Two cells a metre: a 2 m slab is 4 cells; a road's 4.5 m clear across a 30% grade
+    // is 9.4 cells straight up, so 10, and a staircase's step more.
     let cpm = 2.0;
     assert_eq!(over(Form::Deck, 30.0).occupies(10, cpm), Occupies::Above { slab: [26, 30], pier: None });
-    assert_eq!(over(Form::Bore, 10.0).occupies(40, cpm), Occupies::Through { air: [10, 19] });
-    assert_eq!(over(Form::Bore, 30.0).occupies(40, cpm), Occupies::Through { air: [30, 39] });
+    assert_eq!(over(Form::Bore, 10.0).occupies(40, cpm), Occupies::Through { air: [10, 21] });
+    // a road raised past a structure is a slab, down to the ground where it is thinner
+    assert_eq!(over(Form::Grade, 14.0).occupies(10, cpm), Occupies::Above { slab: [10, 14], pier: None });
+    assert_eq!(over(Form::Grade, 20.0).occupies(10, cpm), Occupies::Above { slab: [16, 20], pier: None });
     assert_eq!(over(Form::Grade, 10.0).occupies(14, cpm), Occupies::Through { air: [10, 14] });
-    assert_eq!(over(Form::Grade, 14.0).occupies(10, cpm), Occupies::Fill { body: [10, 13] });
     assert_eq!(over(Form::Grade, 10.0).occupies(10, cpm), Occupies::Grade);
 }
 

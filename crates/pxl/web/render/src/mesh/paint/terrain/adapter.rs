@@ -2,9 +2,9 @@
 
 //! A terrain page's chunk as the render pipeline reads it: per cell one
 //! material (the last non-void channel wins) and one top, painted as a column
-//! from a floor shared by the chunk. Decks and embankments stand off the
-//! column as runs of their own; a bore or a cutting takes the air over its
-//! floor out of the column.
+//! from a floor shared by the chunk. Decks stand off the column as runs of
+//! their own; a bore or a cutting takes the air over its floor out of the
+//! column.
 //! The floor is rounded down to a whole band, since a volume allocates whole
 //! bands and a floor inside one would open another for a few voxels.
 
@@ -324,26 +324,6 @@ impl ChunkSample {
                                 layer: slab_layer,
                             };
                         }
-                        continue;
-                    }
-                    Occupies::Fill { body: [lo, hi] } => {
-                        // the ground's own material under the way's cell, so an embankment's sides are earth
-                        let earth = Span {
-                            lo,
-                            hi,
-                            material: self.material[col],
-                            layer: self.layer_idx[col],
-                        };
-                        try_push(&mut self.spans, earth)?;
-                        try_push(
-                            &mut self.spans,
-                            Span {
-                                lo: hi,
-                                hi: hi + 1,
-                                material: slab,
-                                layer: slab_layer,
-                            },
-                        )?;
                         continue;
                     }
                     Occupies::Above { slab, pier } => (slab, pier),

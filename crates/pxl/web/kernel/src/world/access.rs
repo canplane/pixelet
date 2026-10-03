@@ -575,7 +575,6 @@ impl<'a> Access<'a> {
                     }
                 }
                 Occupies::Through { air } => lines.air = Some(units(air)),
-                Occupies::Fill { body } => lines.boxes.push(units([body[0], body[1] + 1])),
             }
         }
         lines

@@ -19,7 +19,7 @@ use std::path::Path;
 
 use postgres::Client;
 use pxl_spec::bake::constant::U_PER_CELL;
-use pxl_spec::bake::deck::{clearance_m, headroom_m, Form, BORE_COVER_M, DECK_THICKNESS_M};
+use pxl_spec::bake::deck::{clear_cells, clearance_m, headroom_m, Form, BORE_COVER_M, DECK_THICKNESS_M};
 use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m, G3857};
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pyramid::PAGE_CELLS;
@@ -253,7 +253,7 @@ pub fn solve_structure(r: &mut Reader<impl Store>, members: &[Piece], held: bool
             match form {
                 // and a cell of air under the slab, so a deck stands off the ground
                 Form::Deck => floor[n] = floor[n].max(z[n] + DECK_THICKNESS_M + U_PER_CELL / u_per_m(from_db(g.at[n][1]))),
-                Form::Bore => ceiling[n] = ceiling[n].min(z[n] - headroom_m(kind_of(piece)) - BORE_COVER_M),
+                Form::Bore => ceiling[n] = ceiling[n].min(z[n] - clear_m(headroom_m(kind_of(piece)), g.at[n][1]) - BORE_COVER_M),
                 Form::Grade => unreachable!("a structure's piece is a deck or a bore"),
             }
         }
@@ -263,7 +263,7 @@ pub fn solve_structure(r: &mut Reader<impl Store>, members: &[Piece], held: bool
         for (k, needs) in needs_of(&input.ways, &input.water, members, &lines).iter().enumerate() {
             for n in needs {
                 for node in nodes_within(&g, k, n.from, n.to) {
-                    floor[node] = floor[node].max(z[node] + n.under.headroom(n.to - n.from) + DECK_THICKNESS_M);
+                    floor[node] = floor[node].max(z[node] + clear_m(n.under.headroom(n.to - n.from), g.at[node][1]) + DECK_THICKNESS_M);
                 }
             }
         }
@@ -351,8 +351,8 @@ fn crossings(r: &mut Reader<impl Store>, members: &[Piece], lines: &[Polyline], 
         let (structure, profile) = &solved[at];
         let k = structure.iter().position(|p| p.id() == near_piece.id()).expect("the piece is its structure's");
         let gap = match form {
-            Form::Deck => clearance_m(kind_of(near_piece)) + DECK_THICKNESS_M,
-            _ => -(headroom_m(kind_of(pieces[far])) + BORE_COVER_M),
+            Form::Deck => clear_m(clearance_m(kind_of(near_piece)), near_piece.points[0][1]) + DECK_THICKNESS_M,
+            _ => -(clear_m(headroom_m(kind_of(pieces[far])), pieces[far].points[0][1]) + BORE_COVER_M),
         };
         out.push(Crossing {
             far,
@@ -368,6 +368,12 @@ fn crossings(r: &mut Reader<impl Store>, members: &[Piece], lines: &[Polyline], 
 /// what is drawn past one.
 fn halo_m(y_db: f64) -> f64 {
     (f64::from(PAGE_CELLS) * U_PER_CELL - DRAWN_REACH_U) / 2.0 / u_per_m(from_db(y_db))
+}
+
+/// What `m` metres clear takes in whole cells at `y_db`, back in metres.
+fn clear_m(m: f64, y_db: f64) -> f64 {
+    let cell_per_m = u_per_m(from_db(y_db)) / U_PER_CELL;
+    f64::from(clear_cells(m, cell_per_m)) / cell_per_m
 }
 
 fn kind_of(p: &Piece) -> u8 {

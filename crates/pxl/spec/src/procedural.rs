@@ -151,10 +151,6 @@ pub fn pier_stands(pier: [i32; 2], shown: ShownGround, column: impl IntoIterator
     if matches!(shown.channel, GroundChannelKey::TRANSPORT | GroundChannelKey::STRUCTURE) {
         return None;
     }
-    let lower = column.into_iter().any(|o| match o.occupies(ground, cell_per_m) {
-        Occupies::Above { slab, .. } => slab[1] <= pier[1],
-        Occupies::Fill { body } => body[1] < pier[1],
-        _ => false,
-    });
+    let lower = column.into_iter().any(|o| matches!(o.occupies(ground, cell_per_m), Occupies::Above { slab, .. } if slab[1] <= pier[1]));
     (!lower).then_some(pier)
 }

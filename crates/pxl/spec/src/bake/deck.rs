@@ -45,6 +45,18 @@ pub const PATH_HEADROOM_M: f64 = 2.5; // pixelet's, no source found
 pub const RAIL_HEADROOM_M: f64 = 8.0; // pixelet's, no source found
 pub const BORE_COVER_M: f64 = 3.0; // a bore's shell over its headroom: pixelet's, no source found
 
+/// The steepest a way under or through a structure is taken to climb, so a
+/// clearance holds across the road on any of them.
+pub const MAX_GRADE: f64 = 0.30;
+
+/// Whole cells clear for `m` metres across a road, `cell_per_m` cells a metre:
+/// up to `MAX_GRADE` the clear height stands higher by the grade's secant, a
+/// least rounds up, and one cell more gives back what a voxel staircase's
+/// step takes out of the clear height at its edge.
+pub fn clear_cells(m: f64, cell_per_m: f64) -> i32 {
+    libm::ceil(m * libm::hypot(1.0, MAX_GRADE) * cell_per_m) as i32 + 1
+}
+
 /// What a way of transport type `kind` needs clear under a deck over it.
 pub fn clearance_m(kind: u8) -> f64 {
     by_kind(kind, [ROAD_CLEARANCE_M, PATH_CLEARANCE_M, RAIL_CLEARANCE_M])
@@ -173,31 +185,29 @@ pub enum Occupies {
     Above { slab: [i32; 2], pier: Option<[i32; 2]> },
     /// Air from the surface up; the cell under it is the way's.
     Through { air: [i32; 2] },
-    /// An embankment: the column's own ground raised over `body`, and the way's
-    /// cell on it, its top the surface.
-    Fill { body: [i32; 2] },
 }
 
 impl Over {
     /// `cell_per_m`: z16 cells a ground metre on the column's page.
     pub fn occupies(&self, ground: i32, cell_per_m: f64) -> Occupies {
         let top = round(self.top) as i32;
-        let cells = |m: f64| (round(m * cell_per_m) as i32).max(1);
+        let slab = |floor: i32| {
+            let lo = (top - (round(DECK_THICKNESS_M * cell_per_m) as i32).max(1)).max(floor);
+            Occupies::Above {
+                slab: [lo, top],
+                pier: (self.pier && lo > ground).then_some([ground, lo]),
+            }
+        };
         // a deck or a bore is one whatever its height: the solve holds it off the ground
         match self.form {
-            Form::Deck => {
-                let lo = top - cells(DECK_THICKNESS_M);
-                Occupies::Above {
-                    slab: [lo, top],
-                    pier: (self.pier && lo > ground).then_some([ground, lo]),
-                }
-            }
+            Form::Deck => slab(i32::MIN),
             Form::Bore => Occupies::Through {
-                air: [top, top + cells(headroom_m(self.kind))],
+                air: [top, top + clear_cells(headroom_m(self.kind), cell_per_m)],
             },
-            // a cutting is open to the sky, an embankment solid to the ground
+            // a road off the ground past a structure stands on piers as a deck does, and is
+            // open to the sky where it is cut in
+            Form::Grade if top > ground => slab(ground),
             Form::Grade if top < ground => Occupies::Through { air: [top, ground] },
-            Form::Grade if top > ground => Occupies::Fill { body: [ground, top - 1] },
             Form::Grade => Occupies::Grade,
         }
     }
@@ -343,12 +353,11 @@ impl Deck<'_> {
         if !way::covers(self.width_cells(), libm::hypot(at[0] - near[0], at[1] - near[1])) {
             return None;
         }
-        let top = f64::from(self.tops[s]) + (f64::from(self.tops[s + 1]) - f64::from(self.tops[s])) * t;
         Some(Over {
-            top,
+            top: f64::from(self.tops[s]) + (f64::from(self.tops[s + 1]) - f64::from(self.tops[s])) * t,
             kind: self.kind,
             form: self.form,
-            pier: self.form == Form::Deck && frame.is_some_and(|f| pier_covers(f, self.width_cells(), a, [dx, dy], near, at)),
+            pier: self.form != Form::Bore && frame.is_some_and(|f| pier_covers(f, self.width_cells(), a, [dx, dy], near, at)),
         })
     }
 }
