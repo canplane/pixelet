@@ -6,8 +6,9 @@
 use pxl_spec::bake::format::{BaseRow, BuildingRow, SegmentRow};
 use pxl_spec::space::adapter::epsg3857::G3857;
 
-use crate::terrain::pipeline::overture::between::{cell_of, flag_ranges, length_of, split_ranged};
-use crate::terrain::pipeline::overture::policy::{DECK_FLAGS, UNSEEN_FLAGS};
+use crate::deck::Carried;
+use crate::terrain::pipeline::overture::between::{cell_of, flag_ranges, length_of, merged, split_ranged};
+use crate::terrain::pipeline::overture::policy::{BORE_FLAGS, UNSEEN_FLAGS};
 use crate::terrain::pipeline::overture::width::{WayColumns, WayShape};
 use crate::wkb::{wkb_to_geometries, WkbGeometry};
 
@@ -106,12 +107,14 @@ impl Columns for SegmentRow {
     }
 }
 
-/// Connectors are skipped. Overture flags a range of a segment, so a segment
-/// is cut where an unseen flag or its bridge starts or stops.
-pub fn from_segment_row(row: &SegmentRow) -> Vec<OvertureRawFeature> {
-    let flags = row.flags.as_deref();
-    let cell = cell_of(length_of(&row.geom_wkb));
-    let (unseen, deck) = (flag_ranges(flags, UNSEEN_FLAGS, cell), flag_ranges(flags, DECK_FLAGS, cell));
+/// Connectors are skipped. A segment is cut where the deck solve carries it
+/// off the ground, which owns whether a bridge or a tunnel is there, so the
+/// ground stops where its line starts; and where a flag that hides it from
+/// above without carrying it (indoor, unbuilt, gone) starts or stops.
+pub fn from_segment_row(row: &SegmentRow, carried: &[Carried]) -> Vec<OvertureRawFeature> {
+    let hidden: Vec<&str> = UNSEEN_FLAGS.iter().copied().filter(|f| !BORE_FLAGS.contains(f)).collect();
+    let unseen = flag_ranges(row.flags.as_deref(), &hidden, cell_of(length_of(&row.geom_wkb)));
+    let deck = merged(carried.iter().filter(|c| c.gers_id == row.gers_id).map(|c| c.range).collect(), 0.0);
     wkb_to_geometries(&row.geom_wkb)
         .into_iter()
         .flat_map(|g| split_ranged(g, [&unseen, &deck]))

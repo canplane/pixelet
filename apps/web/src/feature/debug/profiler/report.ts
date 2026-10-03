@@ -64,7 +64,7 @@ function windowSection(r: ProfilerReport): string[] {
   const c = r.sections.counters;
   const bands = c.bands_reused + c.bands_allocated;
   const spans = f.gpu_spans.filter((s) => s.spread.max > 0).map((s) => `${s.name} ${n1(s.spread.p95)}`).join("  ");
-  const levels = f.level_tris.map((t, k) => [k, t] as const).filter(([, t]) => t > 0).map(([k, t]) => `${zoomName(k)} ${tris(t)}`).join("  ");
+  const levels = f.zoom_tris.map((t, z) => [z, t] as const).filter(([, t]) => t > 0).map(([z, t]) => `${zoomName(z)} ${tris(t)}`).join("  ");
   const steps = r.steps.length === 0 ? "none" : [...r.steps].sort((a, b) => b.ms / b.count - a.ms / a.count).map((s) => `${s.phase}/${s.name} ${n1(s.ms / s.count)}/${n1(s.max_ms)}`).join("  ");
 
   return [

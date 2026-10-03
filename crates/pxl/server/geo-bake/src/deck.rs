@@ -12,15 +12,15 @@ pub mod relate;
 pub mod source;
 pub mod structure;
 
-use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use postgres::Client;
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::deck::{clearance_m, headroom_m, Form, BORE_COVER_M, DECK_THICKNESS_M};
 use pxl_spec::bake::format::DeckRow;
-use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m};
+use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m, G3857};
 use pxl_spec::space::pyramid::PAGE_CELLS;
+use xpute_core::math::scalar::round;
 
 use crate::terrain::repository::DRAWN_REACH_U;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -68,8 +68,25 @@ struct Need {
     under: Under,
 }
 
+/// What the solve decides: each way's ranges off the ground, the one fact the
+/// ground's paint and the lines both read, and the lines drawn there.
+#[derive(Default)]
+pub struct Solved {
+    pub carried: Vec<Carried>,
+    pub rows: Vec<DeckRow>,
+}
+
+/// A range of a way, as fractions of it, carried over the ground or under it;
+/// the rest of the way is on the ground.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Carried {
+    pub gers_id: String,
+    pub range: [f64; 2],
+    pub form: Form,
+}
+
 /// A page's lines, from what lies in it and the eight pages around it.
-pub fn solve_page(client: &mut Client, page: IVec, store: &mut impl source::Store) -> Result<Vec<DeckRow>, String> {
+pub fn solve_page(client: &mut Client, page: IVec, store: &mut impl source::Store) -> Result<Solved, String> {
     let input = source::read_ring(client, page, store)?;
     let Some((_, grids)) = &input.window else { unreachable!("a ring is read bounded") };
     let (px, py) = (ivec::X(page), ivec::Y(page));
@@ -81,7 +98,7 @@ pub fn solve_page(client: &mut Client, page: IVec, store: &mut impl source::Stor
 }
 
 /// The lines of what was read, the ground's height at points asked of `ground`.
-pub fn calculate<E>(input: &Input, ground: impl FnOnce(&[[f64; 2]]) -> Result<Vec<f64>, E>, log: impl Fn(&str)) -> Result<Vec<DeckRow>, E> {
+pub fn calculate<E>(input: &Input, ground: impl FnOnce(&[[f64; 2]]) -> Result<Vec<f64>, E>, log: impl Fn(&str)) -> Result<Solved, E> {
     let clip = |pieces: Vec<Piece>| -> Vec<Piece> {
         match &input.window {
             Some((bounds, _)) => pieces.into_iter().flat_map(|p| p.clip(*bounds)).collect(),
@@ -92,7 +109,7 @@ pub fn calculate<E>(input: &Input, ground: impl FnOnce(&[[f64; 2]]) -> Result<Ve
     let bores = clip(input.rows.iter().flat_map(|r| pieces_of(r, Form::Bore)).collect());
     log(&format!("{} deck pieces, {} bore pieces", decks.len(), bores.len()));
     if decks.is_empty() && bores.is_empty() {
-        return Ok(Vec::new());
+        return Ok(Solved::default());
     }
 
     // decks, then bores, then the ways they carry on along
@@ -144,8 +161,8 @@ pub fn calculate<E>(input: &Input, ground: impl FnOnce(&[[f64; 2]]) -> Result<Ve
     let (tops, forced) = side.solve(&grounds, &needs, &over);
     log(&format!("{forced} points steeper than the preferred grade"));
     let out = side.out(&grounds, &tops);
-    let count = |f: Form| out.iter().filter(|d| d.form == f.byte()).count();
-    log(&format!("{} lines ({} deck, {} bore)", out.len(), count(Form::Deck), count(Form::Bore)));
+    let count = |f: Form| out.rows.iter().filter(|d| d.form == f.byte()).count();
+    log(&format!("{} lines ({} deck, {} bore)", out.rows.len(), count(Form::Deck), count(Form::Bore)));
     Ok(out)
 }
 
@@ -254,45 +271,73 @@ impl<'a> Side<'a> {
     }
 
     /// A structure's pieces whole; a way's as its runs off the ground, a deck
-    /// over it and a bore under it. A bore no way reaches is a subway's, left out.
-    fn out(&self, ground: &[Vec<f64>], tops: &[Vec<f64>]) -> Vec<DeckRow> {
-        let mut out = Vec::new();
+    /// over it and a bore under it, split where the surface meets the ground,
+    /// so one run ends where the next or the ground begins. A bore no way
+    /// reaches is a subway's: carried under the ground, and no line drawn.
+    fn out(&self, ground: &[Vec<f64>], tops: &[Vec<f64>]) -> Solved {
+        let mut out = Solved::default();
         let reached: Vec<bool> = self.structures.iter().map(|m| m.iter().any(|&i| self.pieces[i].approach)).collect();
         for (m, piece) in self.pieces.iter().enumerate() {
             let (s, k) = self.place[m];
             let (g, top, z) = (&self.graphs[s], &tops[s], &ground[s]);
-            let along = &g.along[k];
-            let mut emit = |nodes: &[(u32, f64)], form: Form| {
-                if nodes.len() >= 2 {
-                    out.push(DeckRow {
+            // where along, in metres; the surface there; how far over the ground
+            let points: Vec<(f64, G3857)> = g.along[k].iter().map(|&(n, d)| (d, [g.at[n as usize][0], g.at[n as usize][1], top[n as usize]])).collect();
+            let over: Vec<f64> = g.along[k].iter().map(|&(n, _)| top[n as usize] - z[n as usize]).collect();
+            let mut emit = |run: &[(f64, G3857)], form: Form, drawn: bool| {
+                if run.len() < 2 {
+                    return;
+                }
+                let (a, b) = (piece.on_way(run[0].0), piece.on_way(run[run.len() - 1].0));
+                out.carried.push(Carried {
+                    gers_id: piece.gers_id.clone(),
+                    range: [a.min(b), a.max(b)],
+                    form,
+                });
+                if drawn {
+                    out.rows.push(DeckRow {
                         gers_id: piece.gers_id.clone(),
                         subtype: piece.subtype.clone(),
                         class: piece.class.clone(),
                         width_m: piece.width_m,
                         form: form.byte(),
-                        points: nodes.iter().map(|&(n, _)| [g.at[n as usize][0], g.at[n as usize][1], top[n as usize]]).collect(),
+                        points: run.iter().map(|&(_, p)| p).collect(),
                     });
                 }
             };
-            match (piece.approach, piece.form) {
-                (false, Form::Bore) if !reached[s] => {}
-                (false, form) => emit(along, form),
-                (true, _) => {
-                    let side = |n: u32| top[n as usize].total_cmp(&z[n as usize]);
-                    let mut i = 0;
-                    while i < along.len() {
-                        let off = side(along[i].0);
-                        let j = (i..along.len()).find(|&j| side(along[j].0) != off).unwrap_or(along.len());
-                        // a run takes the point either side where it meets the ground
-                        let run = &along[i.saturating_sub(1)..(j + 1).min(along.len())];
-                        match off {
-                            Ordering::Greater => emit(run, Form::Deck),
-                            Ordering::Less => emit(run, Form::Bore),
-                            Ordering::Equal => {}
-                        }
-                        i = j;
-                    }
+            if !piece.approach {
+                emit(&points, piece.form, piece.form == Form::Deck || reached[s]);
+                continue;
+            }
+
+            // over, on or under the ground by whole cells, as `Over::occupies` reads it
+            let cell_per_m = u_per_m(from_db(piece.points[0][1])) / U_PER_CELL;
+            let side: Vec<i8> = over.iter().map(|h| round(h * cell_per_m).signum() as i8).collect();
+            let form = |s: i8| [None, Some(Form::Bore), Some(Form::Deck)][(s + 1) as usize];
+
+            // runs of one side, each ending where the surface meets the ground
+            let mut run = vec![points[0]];
+            for i in 1..points.len() {
+                let (s0, s1) = (side[i - 1], side[i]);
+                if s0 == s1 {
+                    run.push(points[i]);
+                    continue;
                 }
+                let meet = match (s0, s1) {
+                    (0, _) => points[i - 1],
+                    (_, 0) => points[i],
+                    _ => {
+                        let ((d0, p0), (d1, p1), t) = (points[i - 1], points[i], over[i - 1] / (over[i - 1] - over[i]));
+                        (d0 + (d1 - d0) * t, std::array::from_fn(|c| p0[c] + (p1[c] - p0[c]) * t))
+                    }
+                };
+                if let Some(f) = form(s0) {
+                    run.push(meet);
+                    emit(&run, f, true);
+                }
+                run = if s1 == 0 { vec![meet] } else { vec![meet, points[i]] };
+            }
+            if let Some(f) = form(side[side.len() - 1]) {
+                emit(&run, f, true);
             }
         }
         out

@@ -4,7 +4,9 @@
 //! and runs the table's pass; in the report phase it hands the frame's
 //! numbers to the profiler.
 
+use pxl_spec::space::adapter::epsg3857::zoom_of;
 use pxl_spec::space::pvf3::ivec;
+use pxl_spec::space::pyramid::GROUND;
 use pxl_spec::space::v3::sub3;
 use xpute_core::math::scalar::round;
 use xpute_runtime::sched::edge::{notified, yield_if_spent};
@@ -191,12 +193,12 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     let host = c.host.clone();
     let mut pages = PageSample::default();
     for (p, _) in Terrain::pyramid().paging().held() {
-        pages.by_level[p.level as usize] += 1.0;
+        pages.by_zoom[zoom_of(GROUND.scale(p.level)) as usize] += 1.0;
     }
-    pages.total = pages.by_level.iter().sum();
+    pages.total = pages.by_zoom.iter().sum();
     pages.poi = PoiPage::pyramid().paging().held().count() as f64;
     let mut gpu = host.gpu;
-    for (tris, boxes) in gpu.level_tris.iter_mut().zip(census.level_boxes) {
+    for (tris, boxes) in gpu.zoom_tris.iter_mut().zip(census.zoom_boxes) {
         *tris = boxes as f64 * BOX_TRIANGLES;
     }
     profiler_record_frame(FrameSample {
@@ -234,7 +236,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         stale: StaleSample {
             hidden: census.ready_waiting as f64,
             slot_waits: census.slot_waits as f64,
-            wait_levels: census.wait_levels as f64,
+            wait_zooms: census.wait_zooms as f64,
             chained: census.chained as f64,
             uncovered: census.refused as f64,
             unready: census.waiting as f64,

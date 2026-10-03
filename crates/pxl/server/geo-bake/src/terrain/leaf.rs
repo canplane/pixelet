@@ -71,9 +71,9 @@ pub fn has_ground(client: &mut Client, pages: &[IVec]) -> Result<Vec<bool>, post
 
 /// Its decks solved from what it reaches, not read from a whole solve.
 pub fn bake_leaf(repo: &TerrainRepository, client: &mut Client, memo: &Path, page: IVec, stats: &mut SourceStats, level: Level) -> Result<(usize, Vec<u8>), String> {
-    let surface = fetch_surface(repo, client, page, stats).map_err(|e| e.to_string())?;
-    let rows = deck::solve_page(client, page, &mut deck::source::Disk(memo))?;
-    let lines = bake_decks(&rows, epsg3857::get_page_bbox(page)[0]).ok_or("a page's decks overflow a record")?;
+    let solved = deck::solve_page(client, page, &mut deck::source::Disk(memo))?;
+    let surface = fetch_surface(repo, client, page, &solved.carried, stats).map_err(|e| e.to_string())?;
+    let lines = bake_decks(&solved.rows, epsg3857::get_page_bbox(page)[0]).ok_or("a page's decks overflow a record")?;
     let raw = encode_terrain(&assemble(surface, lines)).map_err(|e| format!("{e:?}"))?;
     let packed = pack(raw.as_slice(), level).map_err(|e| e.to_string())?;
     Ok((raw.len(), packed))
@@ -97,7 +97,7 @@ pub fn bake_ocean(samples: &[IVec]) -> Result<Vec<u8>, String> {
     let src = empty_source();
     let baked: Vec<Vec<u8>> = samples
         .iter()
-        .map(|p| encode_terrain(&assemble(bake_surface(*p, vec![0; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize], &src), Default::default())).expect("ocean bake"))
+        .map(|p| encode_terrain(&assemble(bake_surface(*p, vec![0; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize], &src, &[]), Default::default())).expect("ocean bake"))
         .collect();
     for (i, page) in baked.iter().enumerate().skip(1) {
         if page != &baked[0] {

@@ -51,7 +51,7 @@ pub fn value_ranges(column: Option<&str>, keep: impl Fn(f64) -> bool) -> Vec<Ran
     merged(rules(column).iter().filter(|r| r["value"].as_f64().is_some_and(&keep)).filter_map(range_of).collect(), 0.0)
 }
 
-fn merged(mut ranges: Vec<Range>, gap: f64) -> Vec<Range> {
+pub fn merged(mut ranges: Vec<Range>, gap: f64) -> Vec<Range> {
     ranges.sort_by(|x, y| x[0].total_cmp(&y[0]));
     let mut merged: Vec<Range> = Vec::with_capacity(ranges.len());
     for r in ranges {

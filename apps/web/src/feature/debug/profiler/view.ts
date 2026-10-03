@@ -101,7 +101,7 @@ export interface FrameSummary {
   mounts: [f64, f64];
   used_delta_mb: f64;
   census: { tag: string; draws: f64; tris: f64 }[];
-  level_tris: f64[];
+  zoom_tris: f64[];
   last: Frame;
 }
 
@@ -176,7 +176,7 @@ function frameSummary(s: F64Array): FrameSummary | null {
     census: CENSUS_TAGS.map((tag, k) => ({ tag, draws: s[a + F.census + 2 * k], tris: s[a + F.census + 2 * k + 1] }))
       .filter((r) => r.draws > 0)
       .sort((x, y) => y.tris - x.tris),
-    level_tris: Array.from({ length: F.last - F.level_tris }, (_, k) => s[a + F.level_tris + k]),
+    zoom_tris: Array.from({ length: F.last - F.zoom_tris }, (_, k) => s[a + F.zoom_tris + k]),
     last: frameAt(s, a + F.last),
   };
 }

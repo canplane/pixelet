@@ -7,11 +7,10 @@
 
 use core::mem::{offset_of, size_of};
 
-use crate::sched::profiler::record::{words, FrameSample, Words, CENSUS_LEN, GPU_SPANS, LEVELS};
+use crate::sched::profiler::record::{words, FrameSample, Words, CENSUS_LEN, GPU_SPANS, ZOOMS};
 use crate::sched::profiler::spec::{FRAME, LIMITS, PHASE_NAMES, SPREAD, STEP, SUMMARY, TASK_PHASE_NAMES, TASK_SUMMARY};
 
 const REASONS: usize = LIMITS::REASONS as usize;
-const _: () = assert!(LIMITS::TERRAIN_ATOM_Z == pxl_spec::space::pyramid::TERRAIN_ATOM_Z, "the shell names a level by its cell's zoom");
 const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
 pub const TASK_PHASES: usize = TASK_PHASE_NAMES.len();
 const CATEGORIES: usize = crate::sched::profiler::spec::CATEGORY_NAMES.len();
@@ -71,7 +70,7 @@ pub struct FramesBlock {
     pub mounts_removed: f64,
     pub used_delta_mb: f64,
     pub census: [[f64; 2]; CENSUS_LEN],
-    pub level_tris: [f64; LEVELS],
+    pub zoom_tris: [f64; ZOOMS],
     pub last: FrameSample,
 }
 
@@ -89,7 +88,7 @@ words!(FramesBlock, SUMMARY::frames::WORDS,
     backlog_per_s_bakes => SUMMARY::frames::backlog_per_s_bakes, chunks_per_bake => SUMMARY::frames::chunks_per_bake,
     mounts_added => SUMMARY::frames::mounts_added, mounts_removed => SUMMARY::frames::mounts_removed,
     used_delta_mb => SUMMARY::frames::used_delta_mb, census => SUMMARY::frames::census,
-    level_tris => SUMMARY::frames::level_tris, last => SUMMARY::frames::last,
+    zoom_tris => SUMMARY::frames::zoom_tris, last => SUMMARY::frames::last,
 );
 
 #[repr(C)]
@@ -252,9 +251,9 @@ pub struct ViewBlock {
     pub hover_lon: f64,
     pub hover_lat: f64,
     pub hover_alt: f64,
-    pub chunk_level: f64,
-    pub tier_level: f64,
-    pub read_from: f64,
+    pub chunk_zoom: f64,
+    pub tier_zoom: f64,
+    pub read_zoom: f64,
 }
 
 words!(ViewBlock, SUMMARY::view::WORDS,
@@ -262,7 +261,7 @@ words!(ViewBlock, SUMMARY::view::WORDS,
     center_lon => SUMMARY::view::center_lon, center_lat => SUMMARY::view::center_lat, center_z => SUMMARY::view::center_z,
     hover_x => SUMMARY::view::hover_x, hover_y => SUMMARY::view::hover_y, hover_z => SUMMARY::view::hover_z,
     hover_lon => SUMMARY::view::hover_lon, hover_lat => SUMMARY::view::hover_lat, hover_alt => SUMMARY::view::hover_alt,
-    chunk_level => SUMMARY::view::chunk_level, tier_level => SUMMARY::view::tier_level, read_from => SUMMARY::view::read_from,
+    chunk_zoom => SUMMARY::view::chunk_zoom, tier_zoom => SUMMARY::view::tier_zoom, read_zoom => SUMMARY::view::read_zoom,
 );
 
 words!(QualityBlock, SUMMARY::quality::WORDS,

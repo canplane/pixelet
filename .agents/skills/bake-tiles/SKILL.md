@@ -76,14 +76,14 @@ ingested data.
 
 ## Terrain
 
-A page is built from two artifacts that change for different reasons
+A page is built from two artifacts made together from one deck solve
 (`geo-bake terrain/artifact.rs`), and assembled from them:
 
-- **surface** — ground and elevation, from the database. The expensive one,
-  baked again only when the source data changes; resumable.
-- **lines** — decks and bores, each page solved from itself and the
-  eight pages around it (`geo-bake deck.rs`), as the dev server solves a page
-  on demand. Made whole every time.
+- **leaf** — each page's deck solve, from itself and the eight pages around
+  it (`geo-bake deck.rs`), as the dev server solves a page on demand, and from
+  that one result both of the page's artifacts: its lines (decks and bores)
+  and its surface (ground and elevation), which paints a way only where the
+  solve leaves it on the ground. Resumable.
 - **assemble** — each leaf of the two, and the pyramid folded over the
   leaves, with no database. Whole every time.
 
@@ -93,20 +93,21 @@ A first bake, or one after an ingest:
 deno task bake:tiles --out ./out/terrain/<version> --concurrency 8
 ```
 
-After a change to how decks or bores are solved, nothing else:
+After a change to how decks or bores are solved, the leaves again, since the
+surface paints around what the solve carries:
 
 ```bash
-deno task bake:tiles --out ./out/terrain/<version> --stage lines --stage assemble
+deno task bake:tiles --out ./out/terrain/<version> --force
 ```
 
 | Flag                | Meaning                                                              |
 | ------------------- | -------------------------------------------------------------------- |
-| `--stage <s>`       | `surface`, `lines` or `assemble`, repeatable; all three when omitted |
+| `--stage <s>`       | `leaf` or `assemble`, repeatable; both when omitted                  |
 | `--out <dir>`       | published pages; its last path segment is the version                |
 | `--build <dir>`     | the artifacts (default `./out/build/terrain`)                        |
 | `--concurrency <n>` | parallel pages — match `DB_POOL_SIZE`, the DB is the bottleneck      |
 | `--limit <n>`       | stop after n pages (smoke test)                                      |
-| `--force`           | bake surfaces already on disk again                                  |
+| `--force`           | bake leaves already on disk again                                    |
 | `--reclassify`      | ignore the cached land/ocean scan and redo it                        |
 
 It runs long enough to want a log file rather than a terminal:
@@ -117,7 +118,7 @@ grep '^\[bake\] ' /tmp/bake.log | tail -2
 ```
 
 What it produces, beside `surface/` and `lines/` under `--build` with a
-`surface.json` and `lines.json` of what built them:
+`leaf.json` of what built them:
 
 - `0/`, one packed object per page anything is drawn in — land, or a way,
   building, deck or bore — the leaves

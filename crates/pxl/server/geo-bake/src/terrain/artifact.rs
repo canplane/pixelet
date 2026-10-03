@@ -1,9 +1,8 @@
 // pxl-geo-bake/terrain/artifact.rs
 
-//! A terrain page is assembled from two artifacts kept apart because they
-//! change for different reasons: the surface (ground and elevation, expensive)
-//! and the lines (decks and bores from the deck solve, cheap). A solve change
-//! never rebakes a surface.
+//! A terrain page is assembled from two artifacts made from one deck solve:
+//! the lines (decks and bores) and the surface (ground and elevation), which
+//! paints a way only where the solve leaves it on the ground.
 
 use pxl_spec::bake::deck::{self, Decks};
 use pxl_spec::bake::format::{Ground, Terrain};

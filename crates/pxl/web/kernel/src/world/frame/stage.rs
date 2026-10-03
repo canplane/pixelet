@@ -113,7 +113,7 @@ pub fn stage_render() {
             draw_calls: stat.draw_calls,
             triangles: stat.triangles,
             census,
-            level_tris: Default::default(),
+            zoom_tris: Default::default(),
             px: stat.px,
         },
         DeviceSample {

@@ -45,7 +45,7 @@ impl Polyline {
     }
 
     /// The nearest point's distance and where it is along, in DB coordinates.
-    fn nearest(&self, p: P) -> (f64, f64) {
+    pub fn nearest(&self, p: P) -> (f64, f64) {
         let mut best = (f64::INFINITY, 0.0);
         for (i, a, b) in self.segments() {
             let (dx, dy) = (b[0] - a[0], b[1] - a[1]);

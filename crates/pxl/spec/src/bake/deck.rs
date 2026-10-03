@@ -165,8 +165,7 @@ pub enum Occupies {
     /// A slab under the surface, and a pier
     /// from the ground to the slab where its section covers the column.
     Above { slab: [i32; 2], pier: Option<[i32; 2]> },
-    /// Air from the surface up, to the ground where less than a bore's cover
-    /// would stand over it: an approach's cutting; the cell under it is the way's.
+    /// Air from the surface up; the cell under it is the way's.
     Through { air: [i32; 2] },
 }
 
@@ -183,12 +182,9 @@ impl Over {
                     pier: (self.pier && lo > ground).then_some([ground, lo]),
                 }
             }
-            Form::Bore if top < ground => {
-                let clear = top + cells(headroom_m(self.kind));
-                Occupies::Through {
-                    air: [top, if ground - clear >= cells(BORE_COVER_M) { clear } else { ground }],
-                }
-            }
+            Form::Bore if top < ground => Occupies::Through {
+                air: [top, (top + cells(headroom_m(self.kind))).min(ground)],
+            },
             _ => Occupies::Grade,
         }
     }

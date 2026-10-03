@@ -39,6 +39,14 @@ impl PageSet {
         write_atomic(&path, packed).map_err(|e| format!("{}: {e}", path.display()))
     }
 
+    pub fn remove(&self, p: LevelPage) -> Result<(), String> {
+        let path = self.path(p);
+        match fs::remove_file(&path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("{}: {e}", path.display())),
+            _ => Ok(()),
+        }
+    }
+
     pub fn read<L: Layer>(&self, p: LevelPage) -> Result<Option<L>, String> {
         let path = self.path(p);
         if !path.exists() {

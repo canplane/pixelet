@@ -52,6 +52,8 @@ pub struct Piece {
     /// How far along its way, the way it runs, it starts, in DB coordinates:
     /// what its samples are laid from, so a clipped piece's fall where the whole's do.
     pub start: f64,
+    /// Its way's whole length, in DB coordinates.
+    pub way_length: f64,
 }
 
 /// An end by identity, never by a computed point: a segment's own first or
@@ -155,6 +157,7 @@ impl Piece {
                 approach: self.approach,
                 ends: [end_at(points[0]), end_at(points[points.len() - 1])],
                 start: self.start + offset,
+                way_length: self.way_length,
                 points,
             })
             .collect()
@@ -163,6 +166,11 @@ impl Piece {
     /// A length along the piece in DB coordinates, in ground metres.
     pub fn to_m(&self, db: f64) -> f64 {
         db / scale_at(from_db(self.points[0][1]))
+    }
+
+    /// Where `m` ground metres along the piece is on its way, as a fraction.
+    pub fn on_way(&self, m: f64) -> f64 {
+        (self.start + m * scale_at(from_db(self.points[0][1]))) / self.way_length
     }
 }
 
@@ -199,6 +207,7 @@ pub fn pieces_of(row: &BridgeRow, form: Form) -> Vec<Piece> {
                 approach: false,
                 ends: [End::of(&row.gers_id, whole, a), End::of(&row.gers_id, whole, b)],
                 start: a * length,
+                way_length: length,
                 points: g.points,
             }
         })

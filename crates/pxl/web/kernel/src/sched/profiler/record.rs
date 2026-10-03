@@ -19,6 +19,9 @@ use crate::io::demand::{DemandKey, Phases};
 use crate::mem::fixed::{lane, range, Range};
 use crate::sched::profiler::log::PENDING;
 use crate::sched::profiler::spec::{FRAME, GPU_SPAN_NAMES, LIMITS, PHASE_NAMES, SUMMARY, TASK, WORST};
+use pxl_spec::bake::constant::OBJECT_FINEST;
+use pxl_spec::space::adapter::epsg3857::zoom_of;
+use pxl_spec::space::pyramid::{GROUND, TOP_LEVEL};
 use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
 use xpute_runtime::sched::tick::PHASES;
@@ -155,7 +158,8 @@ pub struct GpuSample {
     pub draw_calls: f64,
     pub triangles: f64,
     pub census: DrawCensus,
-    pub level_tris: [f64; LEVELS],
+    /// Slot z: triangles of cells at zoom z.
+    pub zoom_tris: [f64; ZOOMS],
     pub px: f64,
 }
 
@@ -195,7 +199,7 @@ pub struct MountSample {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct PageSample {
     pub total: f64,
-    pub by_level: [f64; LEVELS],
+    pub by_zoom: [f64; ZOOMS],
     pub poi: f64,
 }
 
@@ -296,7 +300,7 @@ pub struct StaleSample {
     pub uncovered: f64,
     pub unready: f64,
     pub slot_waits: f64,
-    pub wait_levels: f64,
+    pub wait_zooms: f64,
     pub chained: f64,
 }
 
@@ -359,21 +363,21 @@ words!(FrameSample, FRAME::WORDS,
     t => FRAME::t, dt_ms => FRAME::dt_ms, frame_ms => FRAME::frame_ms, settled => FRAME::settled,
     sched_ms => FRAME::sched_ms, budget_ms => FRAME::budget_ms, phases => FRAME::phases, chunks_ms => FRAME::chunks_ms, task_ms => FRAME::task_ms,
     gpu.ms => FRAME::gpu_ms, gpu.spans => FRAME::gpu_spans, gpu.draw_calls => FRAME::draw_calls, gpu.triangles => FRAME::triangles,
-    gpu.census => FRAME::census, gpu.level_tris => FRAME::level_tris, gpu.px => FRAME::px,
+    gpu.census => FRAME::census, gpu.zoom_tris => FRAME::zoom_tris, gpu.px => FRAME::px,
     device.buffers => FRAME::buffers, device.buffer_mb => FRAME::buffer_mb, device.arena_mb => FRAME::arena_mb,
     device.depth_mb => FRAME::tex_depth_mb, device.shadow_mb => FRAME::tex_shadow_mb, device.layers_mb => FRAME::tex_layers_mb,
     lod.chunks => FRAME::lod_chunks, lod.in_frustum => FRAME::lod_in_frustum, lod.pending => FRAME::lod_pending, lod.settling => FRAME::lod_settling,
     lod.offscreen_pending => FRAME::lod_offscreen_pending,
     lod.oldest_release_ms => FRAME::lod_oldest_release_ms, lod.oldest_visible_ms => FRAME::lod_oldest_visible_ms,
     mounts.added => FRAME::mounts_added, mounts.removed => FRAME::mounts_removed, mounts.layouts => FRAME::mounts_layouts,
-    pages.total => FRAME::pages_total, pages.by_level => FRAME::pages_by_level, pages.poi => FRAME::pages_poi,
+    pages.total => FRAME::pages_total, pages.by_zoom => FRAME::zoom_pages, pages.poi => FRAME::pages_poi,
     heap.used_mb => FRAME::heap_used_mb, heap.live_mb => FRAME::heap_live_mb, heap.run_mb => FRAME::heap_run_mb,
     heap.slot_mb => FRAME::heap_slot_mb, heap.range_mb => FRAME::heap_range_mb,
     heap.refusals => FRAME::heap_refusals, heap.largest_free_mb => FRAME::heap_largest_free_mb,
     rings.cq_peak => FRAME::ring_cq_peak, rings.held_peak => FRAME::ring_held_peak,
     work.scans => FRAME::work_scans, work.bakes => FRAME::work_bakes, work.fine_peak => FRAME::work_fine_peak, work.coarse_peak => FRAME::work_coarse_peak, q_terrain => FRAME::q_terrain, q_poi => FRAME::q_poi,
     stale.hidden => FRAME::stale_hidden, stale.uncovered => FRAME::stale_uncovered, stale.unready => FRAME::stale_unready,
-    stale.slot_waits => FRAME::slot_waits, stale.wait_levels => FRAME::slot_wait_levels,
+    stale.slot_waits => FRAME::slot_waits, stale.wait_zooms => FRAME::slot_wait_zooms,
     stale.chained => FRAME::slot_chained,
     cap.commit_left => FRAME::cap_commit_left, cap.mount_left => FRAME::cap_mount_left,
     cap.mount_full => FRAME::cap_mount_full, cap.record_refused => FRAME::cap_record_refused,
@@ -406,7 +410,7 @@ words!(FramePeak, SUMMARY::peak::WORDS,
 const _: () = assert!(PHASE_NAMES.len() == PHASES.len(), "profiler.json names the tick's phases");
 
 pub const GPU_SPANS: usize = GPU_SPAN_NAMES.len();
-pub const LEVELS: usize = LIMITS::LEVELS as usize;
+pub const ZOOMS: usize = LIMITS::ZOOMS as usize;
 
 pub const MB: f64 = 1_048_576.0;
 const _: () = assert!(GPU_SPANS == pxl_render::gpu::renderer::GPU_SPANS.len(), "profiler.json names the renderer's spans");
@@ -414,7 +418,10 @@ const _: () = assert!(GPU_SPANS == pxl_render::gpu::renderer::GPU_SPANS.len(), "
 #[cfg(test)]
 #[path = "record.test.rs"]
 mod test;
-const _: () = assert!(LEVELS == pxl_spec::space::pyramid::TOP_LEVEL as usize + 1, "a lane a level holds every level of the pyramid");
+const _: () = assert!(
+    zoom_of(OBJECT_FINEST) < ZOOMS as i32 && zoom_of(GROUND.scale(TOP_LEVEL)) >= 0,
+    "a zoom slot for every cell drawn, the finest object tier to the pyramid's top"
+);
 
 /// The rings keep the last minute. At 60 Hz that is 3,600 frames; a faster
 /// display or a heavy minute fills a lane early, which drops its oldest and

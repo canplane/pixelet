@@ -77,6 +77,7 @@ pub fn continuations(input: &Input, pieces: &[Piece], ends: &[(usize, bool)]) ->
             approach: true,
             ends: [End::of(&row.gers_id, whole, from), End::of(&row.gers_id, whole, to)],
             start: from * line.length(),
+            way_length: line.length(),
             points: line.between(from, to),
         });
         let (at, _) = end_of(&pieces[i], last);

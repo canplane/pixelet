@@ -139,7 +139,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
         mounts_removed: sum(&|f| f.mounts.removed),
         used_delta_mb: last.heap.used_mb - first.heap.used_mb,
         census: core::array::from_fn(|k| [sum(&|f| f.gpu.census[k][0]) / n, sum(&|f| f.gpu.census[k][1]) / n]),
-        level_tris: core::array::from_fn(|k| sum(&|f| f.gpu.level_tris[k]) / n),
+        zoom_tris: core::array::from_fn(|z| sum(&|f| f.gpu.zoom_tris[z]) / n),
         last: *last,
     }
 }
@@ -265,8 +265,8 @@ fn side(out: &mut [f64]) {
     let [hover_x, hover_y, hover_z] = hover.map_or([f64::NAN; 3], |p| projection::unproject(p.i, p.f));
     let [hover_lon, hover_lat, hover_alt] = hover.map_or([f64::NAN; 3], |p| epsg4326::unproject(p.i, p.f));
     let [center_lon, center_lat, center_z] = controller::map_center().map_or([f64::NAN; 3], |p| epsg4326::unproject(p.i, p.f));
-    let (chunk_level, tier_level, read_from) = hover.and_then(|p| with_world(|_, sched| sched.drawn_at(&p)).flatten()).map_or((None, None, None), |(c, t, r)| (Some(c), t, r));
-    let level = |l: Option<f64>| l.unwrap_or(f64::NAN);
+    let (chunk_zoom, tier_zoom, read_zoom) = hover.and_then(|p| with_world(|_, sched| sched.drawn_at(&p)).flatten()).map_or((None, None, None), |(c, t, r)| (Some(c), t, r));
+    let zoom = |z: Option<i32>| z.map_or(f64::NAN, f64::from);
     put(
         out,
         SUMMARY::view::AT,
@@ -284,9 +284,9 @@ fn side(out: &mut [f64]) {
             hover_lon,
             hover_lat,
             hover_alt,
-            chunk_level: level(chunk_level.map(f64::from)),
-            tier_level: level(tier_level.map(f64::from)),
-            read_from: level(read_from.map(f64::from)),
+            chunk_zoom: zoom(chunk_zoom),
+            tier_zoom: zoom(tier_zoom),
+            read_zoom: zoom(read_zoom),
         },
     );
 

@@ -13,7 +13,9 @@ use pxl_render::mesh::paint::terrain::adapter::beside_index;
 use pxl_render::mesh::voxel_scan::APRON;
 
 use pxl_spec::space::observation::Bounds as _;
+use pxl_spec::space::adapter::epsg3857::zoom_of;
 use pxl_spec::space::pyramid::{chunk_scale, GROUND};
+use crate::sched::profiler::record::ZOOMS;
 use pxl_spec::space::observation::Frustum;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::{dot3, len3, Aabb, V3};
@@ -245,13 +247,14 @@ pub struct Census {
     pub oldest_offscreen_ms: f64,
     pub ready_waiting: u32,
     pub slot_waits: u32,
-    pub wait_levels: u32,
+    /// Bit z: a cell of zoom z waited for a slot.
+    pub wait_zooms: u32,
     pub chained: u32,
     pub fine_peak: u32,
     pub coarse_peak: u32,
     pub refused: u32,
     pub waiting: u32,
-    pub level_boxes: [u32; LEVELS as usize],
+    pub zoom_boxes: [u32; ZOOMS],
     /// Chunks wanting a layout the commit pass did not reach: whether the frame's cap is the bottleneck.
     pub commit_left: u32,
 }
@@ -357,12 +360,12 @@ pub struct Meshes {
     fine_peak: u32,
     coarse_peak: u32,
     waits: u32,
-    wait_levels: u32,
+    wait_zooms: u32,
 }
 
 pub struct Scheduler {
     pub meshes: Meshes,
-    level_boxes: [u32; LEVELS as usize],
+    zoom_boxes: [u32; ZOOMS],
     pub builder: Builder,
     pub draw: DrawList,
     pub ghost: GhostDraw,
@@ -465,7 +468,7 @@ impl Scheduler {
             *id = (OCCUPANCY - 1 - k) as u32;
         }
         Scheduler {
-            level_boxes: [0; LEVELS as usize],
+            zoom_boxes: [0; ZOOMS],
             meshes: Meshes {
                 holder,
                 next,
@@ -476,7 +479,7 @@ impl Scheduler {
                 fine_peak: 0,
                 coarse_peak: 0,
                 waits: 0,
-                wait_levels: 0,
+                wait_zooms: 0,
             },
             builder: Builder::new(),
             draw: DrawList::default(),
@@ -524,9 +527,9 @@ impl Scheduler {
             commit_left: self.commit_left,
             refused: self.moves.0,
             waiting: self.moves.1,
-            level_boxes: self.level_boxes,
+            zoom_boxes: self.zoom_boxes,
             slot_waits: core::mem::take(&mut self.meshes.waits),
-            wait_levels: core::mem::take(&mut self.meshes.wait_levels),
+            wait_zooms: core::mem::take(&mut self.meshes.wait_zooms),
             chained: core::mem::take(&mut self.meshes.chained),
             fine_peak: core::mem::take(&mut self.meshes.fine_peak),
             coarse_peak: core::mem::take(&mut self.meshes.coarse_peak),
@@ -559,11 +562,11 @@ impl Scheduler {
         out.extend(self.slots.iter().map(|s| (s.chunk, s.role == Role::Drawn, s.in_frustum)));
     }
 
-    /// The finest drawn chunk holding `p`: its level, the level its tier is
-    /// drawn at, and the level of the page it is read from.
-    pub fn drawn_at(&self, p: &Pvf3) -> Option<(u32, Option<i32>, Option<u32>)> {
+    /// The finest drawn chunk holding `p`, as zooms: its cells', its tier's,
+    /// and those of the page it is read from.
+    pub fn drawn_at(&self, p: &Pvf3) -> Option<(i32, Option<i32>, Option<i32>)> {
         let s = (0..LEVELS).find_map(|level| self.slots.iter().find(|s| s.role == Role::Drawn && s.chunk == Chunk::of(level, p)))?;
-        Some((s.level(), s.layout.map(|(scale, _)| scale.above(GROUND.scale(0))), s.sources.read_from))
+        Some((zoom_of(GROUND.scale(s.level())), s.layout.map(|(scale, _)| zoom_of(scale)), s.sources.read_from.map(|l| zoom_of(GROUND.scale(l)))))
     }
 
     pub fn drawn_revision(&self) -> u32 {
@@ -894,7 +897,7 @@ impl Scheduler {
     /// they replace covers their ground until then.
     fn draw_frame(&mut self, frame: &Frame) {
         self.draw.begin_frame();
-        self.level_boxes = [0; LEVELS as usize];
+        self.zoom_boxes = [0; ZOOMS];
         self.ghost.draw(&mut self.draw, frame.eye);
         self.models.draw(&mut self.draw, frame.eye);
         self.markers.draw(&mut self.draw, frame.eye);
@@ -925,7 +928,7 @@ impl Scheduler {
                 left -= n;
                 slot = self.meshes.next[at_slot].get();
             }
-            self.level_boxes[s.level() as usize] += t.box_cnt;
+            self.zoom_boxes[zoom_of(t.scale) as usize] += t.box_cnt;
         }
     }
 
@@ -1240,14 +1243,14 @@ fn reserve(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent
         None => claim(meshes, pool, k, id).map(|first| (first, 0)),
     };
     let Some((first, held)) = taken else {
-        return refuse(slots, i, meshes, generation, scale, k, level);
+        return refuse(slots, i, meshes, generation, scale, k);
     };
     if held > 0 && k > held {
         let last = chained(meshes, first, held - 1).unwrap_or(first);
         let more = claim(meshes, pool, k - held, id);
         match more {
             Some(more) => meshes.next[last] = Nth::of(more),
-            None => return refuse(slots, i, meshes, generation, scale, k, level),
+            None => return refuse(slots, i, meshes, generation, scale, k),
         }
     }
     meshes.landing = Some(Landing {
@@ -1281,12 +1284,12 @@ fn release(meshes: &mut Meshes, l: Landing) {
     }
 }
 
-fn refuse(slots: &mut [Slot], i: usize, meshes: &mut Meshes, generation: u32, scale: Scale, k: u32, level: u32) -> bool {
+fn refuse(slots: &mut [Slot], i: usize, meshes: &mut Meshes, generation: u32, scale: Scale, k: u32) -> bool {
     slots[i].need = Some((generation, scale, k));
     slots[i].fresh = true;
     meshes.needs = meshes.needs.wrapping_add(1);
     meshes.waits += 1;
-    meshes.wait_levels |= 1 << level;
+    meshes.wait_zooms |= 1 << zoom_of(scale);
     false
 }
 
@@ -1361,7 +1364,6 @@ fn land(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
     if s.tier(scale, generation).is_some() || scale != s.target() {
         return;
     }
-    let level = s.level();
     let landing = match meshes.landing.take() {
         Some(l) if (l.id, l.generation, l.scale) == (id, generation, scale) => l,
         other => {
@@ -1376,7 +1378,7 @@ fn land(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
                 None => claim(meshes, pool_of(s.chunk, scale), 1, id),
             };
             let Some(first) = taken else {
-                refuse(slots, i, meshes, generation, scale, 1, level);
+                refuse(slots, i, meshes, generation, scale, 1);
                 return;
             };
             Landing {

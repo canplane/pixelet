@@ -5,6 +5,7 @@
 
 use core::f64::consts::TAU;
 
+use crate::space::hierarchy::Scale;
 use crate::space::indexer::{FROM_L3_IDX, L3_RANGE};
 use crate::space::pvf3::core::{FRAC_W, IVEC_X_W, IVEC_Y_W};
 use crate::space::pvf3::{projection, FVec, IVec, Pvf3};
@@ -13,6 +14,12 @@ use super::epsg4326::EARTH_RADIUS_M;
 
 /// x and y in the DB's EPSG:3857 coordinates, z in ground metres.
 pub type G3857 = [f64; 3];
+
+/// A cell `side` wide as a web map's zoom (256-pixel tiles): the X lane is one
+/// world, so it spans 2^(IVEC_X_W − shamt) of them.
+pub const fn zoom_of(side: Scale) -> i32 {
+    IVEC_X_W as i32 - 8 - side.shamt()
+}
 
 /// One Mercator world on the 24-bit X lane: overflow crosses the antimeridian.
 pub const U_TOTAL_X: f64 = (1u64 << IVEC_X_W) as f64;

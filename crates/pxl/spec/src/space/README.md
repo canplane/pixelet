@@ -108,8 +108,8 @@ width and the world are the same thing.
 | **L5** shard  | 65536u | 156,543.0     |
 
 That identity holds by two constants agreeing — the X lane is one world, a
-cell is one unit — and `TERRAIN_ATOM_Z`'s assert in [`pyramid.rs`](./pyramid.rs)
-holds them to it. A page is no part of it: a page only bundles cells into a
+cell is one unit — and any cell's zoom follows from its size alone
+([`adapter/3857.rs`](./adapter/3857.rs) `zoom_of`). A page is no part of it: a page only bundles cells into a
 file, and its name's length follows its size, never a zoom.
 
 ## The pyramid is not a tier

@@ -2,7 +2,7 @@
 
 /**
  * One table of lanes the report, panel and trace all read. A lane's unit is
- * its name's suffix (`_ms`, `_mb`, `_levels`, `_name`), so a lane the kernel
+ * its name's suffix (`_ms`, `_mb`, `_zooms`, `_name`), so a lane the kernel
  * adds needs no word here; only list lanes are spelled out.
  */
 
@@ -13,27 +13,27 @@ import { CENSUS_TAGS, EFFECT_NAMES, FRAME, FRAME_GROUPS, GPU_SPAN_NAMES, LIMITS,
 
 const MB = 1048576;
 
-type ListLane = "phases" | "gpu_spans" | "census" | "level_tris" | "pages_by_level";
+type ListLane = "phases" | "gpu_spans" | "census" | "zoom_tris" | "zoom_pages";
 type FrameLane = Exclude<keyof typeof FRAME, "WORDS">;
 type ScalarLane = Exclude<FrameLane, ListLane>;
 
 export type Frame =
   & { [K in ScalarLane]: f64 }
-  & { phases: f64[]; gpu_spans: f64[]; census: [f64, f64][]; level_tris: f64[]; pages_by_level: f64[] };
+  & { phases: f64[]; gpu_spans: f64[]; census: [f64, f64][]; zoom_tris: f64[]; zoom_pages: f64[] };
 
-/** A lane's level k, a cell 2^k terrain cells wide, as its zoom; a finer tier is z17 and on. */
-export const zoomName = (k: number) => (Number.isNaN(k) ? "-" : `z${LIMITS.TERRAIN_ATOM_Z - k}`);
+/** The kernel counts by zoom: slot z, bit z or a value z is zoom z. */
+export const zoomName = (z: number) => (Number.isNaN(z) ? "-" : `z${z}`);
 
 /** A wait this old says a demand was starved, well before aging's 16 s. */
 export const STARVED_MS = 2000;
 
-const LEVEL_NAMES = Array.from({ length: LIMITS.LEVELS }, (_, k) => zoomName(k));
+const ZOOM_NAMES = Array.from({ length: LIMITS.ZOOMS }, (_, z) => zoomName(z));
 export const LIST_NAMES: Record<ListLane, readonly string[]> = {
   phases: PHASE_NAMES,
   gpu_spans: GPU_SPAN_NAMES,
   census: CENSUS_TAGS,
-  level_tris: LEVEL_NAMES,
-  pages_by_level: LEVEL_NAMES,
+  zoom_tris: ZOOM_NAMES,
+  zoom_pages: ZOOM_NAMES,
 };
 
 export const LANES: readonly { name: FrameLane; at: u32; width: u32 }[] = (() => {
@@ -64,9 +64,9 @@ export const pct = (part: number, whole: number) => (whole > 0 ? round((part / w
 
 export const tris = (t: number) => (t >= 1000 ? `${round(t / 1000)}k` : String(round(t)));
 
-export function levelsText(bits: f64): string {
+export function zoomsText(bits: f64): string {
   const out: string[] = [];
-  for (let k = 0; k < 32; k++) if (bits & (1 << k)) out.push(zoomName(k));
+  for (let z = 0; z < 32; z++) if (bits & (1 << z)) out.push(zoomName(z));
   return out.length > 0 ? out.join(",") : "-";
 }
 
@@ -77,7 +77,7 @@ export function valueText(name: string, v: f64): string {
   if (name.endsWith("_ms")) return `${n1(v)}ms`;
   if (name.endsWith("_mb")) return `${+v.toFixed(1)}MB`;
   if (name.endsWith("_bytes")) return `${+(v / MB).toFixed(1)}MB`;
-  if (name.endsWith("_levels")) return levelsText(v);
+  if (name.endsWith("_zooms")) return zoomsText(v);
   if (name === "triangles" || name.endsWith("_tris")) return tris(v);
   if (name === "px") return `${(v / 1e6).toFixed(1)}Mpx`;
   return Number.isInteger(v) ? String(v) : n1(v);
@@ -95,7 +95,7 @@ function listText(lane: ListLane, f: Frame): string {
     rows.sort((a, b) => b.t - a.t || b.draws - a.draws);
     return rows.map((r) => `${r.tag} ${round(r.draws)}/${tris(r.t)}`).join(" ");
   }
-  const unit = lane === "gpu_spans" || lane === "phases" ? "_ms" : lane === "level_tris" ? "_tris" : "";
+  const unit = lane === "gpu_spans" || lane === "phases" ? "_ms" : lane === "zoom_tris" ? "_tris" : "";
   return f[lane].map((v, i) => [names[i] ?? String(i), v] as const).filter(([, v]) => v > 0).map(([n, v]) => `${n} ${valueText(unit, v)}`).join(" ") || "-";
 }
 

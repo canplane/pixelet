@@ -9,6 +9,7 @@ use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
 use xpute_core::status::error::MarshalError;
 
+use crate::deck::Carried;
 use crate::terrain::artifact::Surface;
 use crate::terrain::bake::bake_surface;
 use crate::terrain::repository::TerrainRepository;
@@ -22,13 +23,13 @@ pub struct SourceStats {
     pub flat_ele: u64,
 }
 
-pub fn fetch_surface(repo: &TerrainRepository, client: &mut Client, page_idx: IVec, stats: &mut SourceStats) -> Result<Surface, BakeError> {
+pub fn fetch_surface(repo: &TerrainRepository, client: &mut Client, page_idx: IVec, carried: &[Carried], stats: &mut SourceStats) -> Result<Surface, BakeError> {
     let source = repo.fetch_page_source(client, epsg3857::get_page_bbox(page_idx))?;
     let ele = source.ele.clone().unwrap_or_else(|| {
         stats.flat_ele += 1;
         vec![0i16; ELE_PADDED_SPAN2]
     });
-    Ok(bake_surface(page_idx, ele, &source))
+    Ok(bake_surface(page_idx, ele, &source, carried))
 }
 #[derive(Debug)]
 pub enum BakeError {

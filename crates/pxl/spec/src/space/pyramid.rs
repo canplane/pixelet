@@ -22,9 +22,6 @@ use crate::bake::constant::{CELL, DECK_CELL, EXTENT_CELL};
 /// page-constant vertical scale is already 12% off.
 pub const TOP_LEVEL: u32 = 10;
 
-/// Where the terrain's cell sits on the zoom axis (256-pixel tiles): the X
-/// lane is one world of 2^IVEC_X_W cells. No level or page is counted from it.
-pub const TERRAIN_ATOM_Z: u32 = IVEC_X_W - 8;
 
 // A lattice is a scale against the unit: its level-k cell is k levels above
 // its first. Pages and chunks are fixed in units (L3, L2).
@@ -157,7 +154,7 @@ pub const CHUNK_CELLS: u32 = GROUND.chunk_cells();
 
 pub const PAGE_CHUNKS: u32 = PAGE_CELLS / CHUNK_CELLS;
 
-const _: () = assert!(TERRAIN_ATOM_Z == 16, "a cell is a z16 pixel");
+
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct LevelPage {
