@@ -72,7 +72,7 @@ export const SETTINGS = {
     key: 3 as number,
     kind: "toggle",
     default: false,
-    section: "display",
+    section: "map",
     cost: "low",
   },
   /** Rotate-drag and pinch stop writing polar; azimuth is unaffected.
@@ -223,7 +223,7 @@ export const SETTINGS_SHIPPED = {
     key: 3 as number,
     kind: "toggle",
     default: false,
-    section: "display",
+    section: "map",
     cost: "low",
   },
   /** Rotate-drag and pinch stop writing polar; azimuth is unaffected.

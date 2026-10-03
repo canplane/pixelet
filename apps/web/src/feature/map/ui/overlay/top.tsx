@@ -19,6 +19,7 @@ import { MapCompass } from "../control/compass.tsx";
 import { MapScaleBar } from "../control/scale-bar.tsx";
 import { TrackingButton } from "@/feature/map/ui/control/tracking-button.tsx";
 import { PersonButton } from "@/feature/map/ui/control/person-button.tsx";
+import { PlacesButton } from "@/feature/map/ui/control/places-button.tsx";
 import { BusyDim } from "@/feature/map/ui/busy-dim.tsx";
 import { SettingsTriggerButton } from "@/feature/setting/trigger-button.tsx";
 
@@ -81,6 +82,7 @@ export function TopOverlays() {
 
       <BusyDim style={[styles.right, { top }]}>
         <PersonButton />
+        <PlacesButton />
         <TrackingButton />
         <MapCompass />
       </BusyDim>

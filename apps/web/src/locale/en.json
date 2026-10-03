@@ -21,10 +21,6 @@
         "label": "Decor",
         "description": "Shows trees, vehicles and other decor placed on the terrain automatically. Objects you place yourself are always shown."
       },
-      "poi": {
-        "label": "Places",
-        "description": "Shows nearby place badges (cafes, stores, landmarks, ...) on the map."
-      },
       "structures": {
         "label": "Buildings",
         "description": "Shows or hides buildings on the terrain."
@@ -126,6 +122,10 @@
           "label": "First person",
           "description": "You look around where you stand; dragging walks you over the ground, your eye at your height over it."
         }
+      },
+      "poi": {
+        "label": "Places",
+        "description": "Shows nearby place badges (cafes, stores, landmarks, ...) on the map."
       }
     }
   },
@@ -294,7 +294,9 @@
       "start_compass_mode": "Start Compass Mode",
       "exit_compass_mode": "Exit Compass Mode",
       "first_person": "First Person",
-      "third_person": "Third Person"
+      "third_person": "Third Person",
+      "show_places": "Show Places",
+      "hide_places": "Hide Places"
     },
     "sensors": {
       "label": "Use my location",

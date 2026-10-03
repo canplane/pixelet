@@ -21,10 +21,6 @@
         "label": "데코",
         "description": "지형에 자동으로 배치된 나무와 차량 등의 데코를 표시합니다. 직접 놓은 오브젝트는 이 설정과 관계없이 표시됩니다."
       },
-      "poi": {
-        "label": "장소",
-        "description": "주변 장소(카페, 상점, 랜드마크 등) 뱃지를 표시합니다."
-      },
       "structures": {
         "label": "건물",
         "description": "지형 위의 건물을 표시하거나 숨깁니다."
@@ -126,6 +122,10 @@
           "label": "1인칭",
           "description": "제자리에서 둘러봅니다. 드래그하면 땅 위를 걷고, 눈높이는 서 있는 땅을 따라갑니다."
         }
+      },
+      "poi": {
+        "label": "장소",
+        "description": "주변 장소(카페, 상점, 랜드마크 등) 뱃지를 표시합니다."
       }
     }
   },
@@ -294,7 +294,9 @@
       "start_compass_mode": "나침반 모드 시작",
       "exit_compass_mode": "나침반 모드 종료",
       "first_person": "1인칭으로 보기",
-      "third_person": "3인칭으로 보기"
+      "third_person": "3인칭으로 보기",
+      "show_places": "장소 보기",
+      "hide_places": "장소 숨기기"
     },
     "sensors": {
       "label": "내 위치 사용",

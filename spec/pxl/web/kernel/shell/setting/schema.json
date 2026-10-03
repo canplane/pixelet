@@ -139,7 +139,7 @@
       "$doc": ["The places' badges over the map, from the published POI pages."],
       "kind": "toggle",
       "default": false,
-      "section": "display",
+      "section": "map",
       "cost": "low"
     },
     "tilt_lock": {
