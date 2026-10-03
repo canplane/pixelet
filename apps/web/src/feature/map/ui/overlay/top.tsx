@@ -15,7 +15,10 @@ import { CurrentAddress } from "./current-address.tsx";
 import { useReverseGeocode } from "./use-reverse-geocode.ts";
 import { SensorStatus } from "./sensor-status.tsx";
 import { DummyChatText } from "./dummy-chat-text.tsx";
+import { MapCompass } from "../control/compass.tsx";
 import { MapScaleBar } from "../control/scale-bar.tsx";
+import { TrackingButton } from "@/feature/map/ui/control/tracking-button.tsx";
+import { PersonButton } from "@/feature/map/ui/control/person-button.tsx";
 import { BusyDim } from "@/feature/map/ui/busy-dim.tsx";
 import { SettingsTriggerButton } from "@/feature/setting/trigger-button.tsx";
 
@@ -75,6 +78,12 @@ export function TopOverlays() {
           <MapScaleBar show={zooming} />
         </View>
       </BusyDim>
+
+      <BusyDim style={[styles.right, { top }]}>
+        <TrackingButton />
+        <PersonButton />
+        <MapCompass />
+      </BusyDim>
     </>
   );
 }
@@ -103,6 +112,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  right: { position: "absolute", right: chrome.inset, zIndex: 50, alignItems: "center", gap: chrome.controlGap },
   place: { maxWidth: "100%" },
   title: { alignItems: "center", gap: haloGap(8) },
   // Bounded: a page lays a no-wrap row at content width, and the address overran the buttons.
