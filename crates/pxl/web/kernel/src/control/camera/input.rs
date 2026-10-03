@@ -177,7 +177,7 @@ fn do_rotate(s: &mut Input, client_x: f64, client_y: f64) {
     let Some(rect) = s.rect else { return };
     let dx = client_x - (rect.left + rect.width / 2.0);
     let dyc = client_y - (rect.top + rect.height / 2.0);
-    // atan2 is unstable near the pivot: drop the anchor and re-anchor later.
+    // atan2 is unstable near the screen center: drop the anchor and re-anchor later.
     if libm::hypot(dx, dyc) < MIN_ROTATE_RADIUS_PX {
         s.rotate_turn = None;
         return;

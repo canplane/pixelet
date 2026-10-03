@@ -33,7 +33,7 @@ pub mod camera_cfg {
         /// its settle after release read as the gesture still being held.
         pub const TILT_SWEEP_FRACTION: f64 = 0.5;
         pub const DOLLY_GAIN: f64 = 0.0022;
-        /// atan2 swings wildly near the pivot; below this, azimuth freezes.
+        /// atan2 swings wildly near the screen center; below this, azimuth freezes.
         pub const MIN_ROTATE_RADIUS_PX: f64 = 24.0;
         pub const MIN_TWIST_DIST_PX: f64 = 24.0;
         /// Past this displacement the dominant axis locks for the gesture, or an

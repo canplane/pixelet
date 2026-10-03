@@ -143,17 +143,17 @@ impl Sketch {
     }
 }
 
-/// About the orbit's pivot: the heading frame turns with the orbit, the world's never.
+/// About the map center: the heading frame turns with the orbit, the world's never.
 fn sketch_frames(s: &mut Sketch) {
     if crate::control::camera::controller::radius() == 0.0 {
         return;
     }
-    let Some(pivot) = crate::control::camera::controller::center_local() else { return };
+    let Some(center) = crate::control::camera::controller::center_local() else { return };
     let (sin, cos) = libm::sincos(-crate::control::camera::controller::heading());
-    let heading_frame = move |p: V3| [pivot[0] + p[0] * cos - p[1] * sin, pivot[1] + p[0] * sin + p[1] * cos, pivot[2] + p[2]];
+    let heading_frame = move |p: V3| [center[0] + p[0] * cos - p[1] * sin, center[1] + p[0] * sin + p[1] * cos, center[2] + p[2]];
     s.gyro(&heading_frame, [RING_RADIUS, 0.0, 0.0], "heading");
     s.point(heading_frame([0.0, 0.0, RING_RADIUS]), Some("up"));
-    let world_frame = move |p: V3| [pivot[0] + p[0], pivot[1] + p[1], pivot[2] + p[2]];
+    let world_frame = move |p: V3| [center[0] + p[0], center[1] + p[1], center[2] + p[2]];
     s.gyro(&world_frame, [0.0, RING_RADIUS, 0.0], "north");
 }
 
