@@ -32,7 +32,7 @@ struct Frame {
   // height; then the center's Mercator exponential, sin and cos of latitude, Mercator radius.
   planet: vec4f,
   globe: vec4f,
-  // Away from the planet's center at the eye.
+  // Away from the planet's center, which lies under the map center, at the eye.
   up: vec3f,
   _p9: f32,
 };

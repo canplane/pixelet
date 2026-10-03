@@ -43,7 +43,6 @@ pub(crate) const MOON_LIGHT: usize = 31;
 pub(crate) const LAND: usize = 32;
 pub(crate) const LAND_ALTITUDE: usize = 35;
 pub(crate) const SUN_SEEN: usize = 36;
-pub(crate) const UP: usize = 40;
 pub(crate) const CLOUD_BASE: usize = 44;
 pub(crate) const CLOUD_FRAC: usize = 46;
 pub(crate) const CLOUD_TIME: usize = 48;
@@ -85,7 +84,7 @@ pub struct Atmosphere {
 }
 
 impl Atmosphere {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Atmosphere {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> Atmosphere {
         let uniform = object();
         g.buffer(uniform, word_bytes(ATMOS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let white = model::white();
@@ -141,7 +140,7 @@ impl Atmosphere {
         let multiscatter = [12, resource::VIEW, views[MULTISCATTER], 0, 0];
         let sky_view = [10, resource::VIEW, views[SKY_VIEW], 0, 0];
         let mut groups = [0; 5];
-        let mut e = [0u32; 25];
+        let mut e = [0u32; 30];
         e[..5].copy_from_slice(&air);
         e[5..10].copy_from_slice(&transmittance);
         e[10..15].copy_from_slice(&linear);
@@ -155,12 +154,15 @@ impl Atmosphere {
             g.buffer(light, 16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
             g.write_buffer(light, 0, bytes(&[which, 0.0, 0.0, 0.0]));
             e[20..25].copy_from_slice(&buffer_entry(14, light));
+            // The up the views are measured from is the frame's.
+            e[25..30].copy_from_slice(&buffer_entry(0, frame_buffer));
             groups[k] = object();
             g.bind_group(groups[k], passes[SKY_VIEW].layouts[0], &e);
         }
         e[15..20].copy_from_slice(&sky_view);
+        e[20..25].copy_from_slice(&buffer_entry(0, frame_buffer));
         groups[EXPOSURE_TEXEL] = object();
-        g.bind_group(groups[EXPOSURE_TEXEL], passes[EXPOSURE_TEXEL].layouts[0], &e[..20]);
+        g.bind_group(groups[EXPOSURE_TEXEL], passes[EXPOSURE_TEXEL].layouts[0], &e[..25]);
         Atmosphere {
             uniform,
             words,
@@ -197,9 +199,6 @@ impl Atmosphere {
         self.words[CAMERA_ALTITUDE] = altitude_km;
         self.words[KM_PER_U] = env[ENV_AIR + 1];
         self.words[LAND_ALTITUDE] = env[ENV_AIR + 3];
-        for (w, v) in self.words[UP..UP + 3].iter_mut().zip(up) {
-            *w = *v as f32;
-        }
         let height = |d: &[f32]| (d[0] as f64 * up[0] + d[1] as f64 * up[1] + d[2] as f64 * up[2]) as f32;
         (self.sun_mu, self.moon_mu) = (height(sun), height(moon));
         for (w, v) in self.words[SUN_SEEN..SUN_SEEN + 3].iter_mut().zip(model::light_at(altitude_km as f64, self.sun_mu as f64)) {

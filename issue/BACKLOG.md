@@ -31,7 +31,10 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   badges change with the ground under them, and no tree is lost or doubled
   at a chunk's top or edge. `e7893bdb` moved the badges' globe and viewport
   onto the frame's uniform: they stand, size and bend over the planet as
-  before. The gizmos' labels no longer blink while the camera moves.
+  before. The gizmos' labels no longer blink while the camera moves. `01215a04`
+  and the commit after it moved the up, the viewport and the fog onto the
+  frame's uniform: the stars, the screen-space AO, the sky and the clouds
+  look as before.
 
 ## P3
 

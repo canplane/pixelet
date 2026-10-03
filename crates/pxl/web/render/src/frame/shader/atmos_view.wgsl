@@ -22,7 +22,7 @@ fn zenith_sky() -> vec3f {
 fn sky_fill() -> vec3f {
   var fill = textureLoad(exposure_texel, vec2i(1, 0), 0).rgb * atmos_white() * atmos_exposure();
   if (atmos_moon_light() > 0.0) {
-    fill += moon_view(atmos_up()) * moon_shown() * PI;
+    fill += moon_view(frame_up()) * moon_shown() * PI;
   }
   return fill;
 }
@@ -70,14 +70,14 @@ fn air_along(dir: vec3f) -> Air {
   if (atmos_moon_light() > 0.0) {
     air.light += moon_view(dir) * moon_shown();
   }
-  let mu = dot(dir, atmos_up());
+  let mu = dot(dir, frame_up());
   air.ground = meets_land(r, mu);
-  air.normal = atmos_up();
+  air.normal = frame_up();
   if (air.ground) {
     let d = to_land(r, mu);
     air.ground_km = d;
     air.end = transmittance_along(r, mu, d, true);
-    air.normal = normalize(atmos_up() * r + dir * d);
+    air.normal = normalize(frame_up() * r + dir * d);
   } else {
     air.end = transmittance_to_top(r, mu);
   }

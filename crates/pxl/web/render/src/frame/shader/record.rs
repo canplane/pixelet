@@ -127,8 +127,8 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_AO_UPSAMPLE => wgsl!("frame", "globe", "ao_view", "ao_upsample"),
         SHADER_ATMOS_TRANSMITTANCE => wgsl!("atmos_medium", "atmos_pass", "atmos_transmittance"),
         SHADER_ATMOS_MULTISCATTER => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_multiscatter"),
-        SHADER_ATMOS_SKY_VIEW => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_skyview"),
-        SHADER_ATMOS_EXPOSURE => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_sky", "atmos_pass", "atmos_exposure"),
+        SHADER_ATMOS_SKY_VIEW => wgsl!("frame", "globe", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_skyview"),
+        SHADER_ATMOS_EXPOSURE => wgsl!("frame", "globe", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_sky", "atmos_pass", "atmos_exposure"),
         SHADER_STARS => wgsl!("frame", "globe", "grade", "stars"),
         SHADER_CLOUD_FIELD => wgsl!("noise", "cloud_tile", "atmos_pass", "cloud_bake"),
         SHADER_CLOUDS => wgsl!(
@@ -549,9 +549,9 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         PIPELINE_ATMOS_SKY_VIEW => record(
             screen(SHADER_ATMOS_SKY_VIEW),
             &[],
-            &[group(&[AIR[0], AIR[1], AIR[3], [12, FRAGMENT, TEXTURE], [14, FRAGMENT, UNIFORM]])],
+            &[group(&[[0, FRAGMENT, UNIFORM], AIR[0], AIR[1], AIR[3], [12, FRAGMENT, TEXTURE], [14, FRAGMENT, UNIFORM]])],
         ),
-        PIPELINE_ATMOS_EXPOSURE => record(screen(SHADER_ATMOS_EXPOSURE), &[], &[group(&[AIR[0], AIR[1], AIR[2], AIR[3]])]),
+        PIPELINE_ATMOS_EXPOSURE => record(screen(SHADER_ATMOS_EXPOSURE), &[], &[group(&[[0, FRAGMENT, UNIFORM], AIR[0], AIR[1], AIR[2], AIR[3]])]),
         PIPELINE_STARS => record(
             Head {
                 topology: STRIP,

@@ -55,7 +55,7 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
   // Near crossing from above, the way out from below.
   let r0 = camera_r();
   let shell = atmos_bottom_radius() + atmos_cloud_altitude_km();
-  let mu = dot(dir, atmos_up());
+  let mu = dot(dir, frame_up());
   let disc = r0 * r0 * (mu * mu - 1.0) + shell * shell;
   var t = -1.0;
   if (disc >= 0.0) {
@@ -84,7 +84,7 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
   var sky = zenith_sky();
   if (atmos_moon_light() > 0.0) {
     light += lit_by(atmos_moon_dir(), dir, clouds_moon_at(), moon_shown());
-    sky += moon_view(atmos_up()) * moon_shown();
+    sky += moon_view(frame_up()) * moon_shown();
   }
   light *= self_shade;
   // The terrain's fill too, so a cloud is never darker than the ground under

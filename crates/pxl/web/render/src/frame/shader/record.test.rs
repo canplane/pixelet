@@ -147,7 +147,6 @@ fn the_skys_layouts_match_their_structs() {
             ("land", a::LAND),
             ("land_altitude_km", a::LAND_ALTITUDE),
             ("sun_seen", a::SUN_SEEN),
-            ("up", a::UP),
             ("cloud_base", a::CLOUD_BASE),
             ("cloud_frac", a::CLOUD_FRAC),
             ("cloud_time", a::CLOUD_TIME),

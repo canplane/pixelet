@@ -32,9 +32,7 @@ struct Atmosphere {
   // The same for every pixel, so the CPU computes it once.
   sun_seen: vec3f,
   _p1: f32,
-  // Away from the planet's center, which lies under the camera center, not the eye.
-  up: vec3f,
-  _p2: f32,
+  _p2: vec4f,
   cloud_base: vec2u,
   cloud_frac: vec2f,
   cloud_time: f32,
@@ -71,7 +69,6 @@ fn atmos_moon_light() -> f32 { return atmos_words[7].w; }
 fn atmos_land() -> vec3f { return atmos_words[8].xyz; }
 fn atmos_land_altitude_km() -> f32 { return atmos_words[8].w; }
 fn atmos_sun_seen() -> vec3f { return atmos_words[9].xyz; }
-fn atmos_up() -> vec3f { return atmos_words[10].xyz; }
 fn atmos_cloud_base() -> vec2u { return bitcast<vec2u>(atmos_words[11].xy); }
 fn atmos_cloud_frac() -> vec2f { return atmos_words[11].zw; }
 fn atmos_cloud_time() -> f32 { return atmos_words[12].x; }
