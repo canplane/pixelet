@@ -81,7 +81,7 @@ A page is built from two artifacts that change for different reasons
 
 - **surface** — ground and elevation, from the database. The expensive one,
   baked again only when the source data changes; resumable.
-- **lines** — decks, ramps and bores, each page solved from itself and the
+- **lines** — decks and bores, each page solved from itself and the
   eight pages around it (`geo-bake deck.rs`), as the dev server solves a page
   on demand. Made whole every time.
 - **assemble** — each leaf of the two, and the pyramid folded over the

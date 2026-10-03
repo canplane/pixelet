@@ -44,8 +44,6 @@ pub struct Piece {
     pub level: i64,
     pub width_m: f64,
     pub form: Form,
-    /// A surface way the structure is carried down on (approach.rs).
-    pub approach: bool,
     pub points: Vec<G3857>,
     /// What each end is, first and last; ends meet where these are equal.
     pub ends: [End; 2],
@@ -56,11 +54,13 @@ pub struct Piece {
 
 /// An end by identity, never by a computed point: a segment's own first or
 /// last vertex, which every segment at that connector carries bit for bit,
-/// or a cut at a fraction of one segment, which only its pieces share.
+/// a cut at a fraction of one segment, which only its pieces share, or
+/// where a box cut a piece, which joins nothing.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum End {
     Vertex(u64, u64),
     Cut(String, u64),
+    Clip(String, u64),
 }
 
 impl End {
@@ -140,7 +140,7 @@ impl Piece {
         let end_at = |p: G3857| match p {
             p if p == first => self.ends[0].clone(),
             p if p == last => self.ends[1].clone(),
-            p => End::Cut(format!("{}#clip", self.gers_id), (p[0] + 0.0).to_bits() ^ (p[1] + 0.0).to_bits().rotate_left(32)),
+            p => End::Clip(self.gers_id.clone(), (p[0] + 0.0).to_bits() ^ (p[1] + 0.0).to_bits().rotate_left(32)),
         };
         runs.into_iter()
             .map(|(offset, points)| Piece {
@@ -150,7 +150,6 @@ impl Piece {
                 level: self.level,
                 width_m: self.width_m,
                 form: self.form,
-                approach: self.approach,
                 ends: [end_at(points[0]), end_at(points[points.len() - 1])],
                 start: self.start + offset,
                 points,
@@ -167,8 +166,8 @@ impl Piece {
 pub fn pieces_of(row: &BridgeRow, form: Form) -> Vec<Piece> {
     let flags = row.flags.as_deref();
     let (on, less): (&[&str], Vec<&str>) = match form {
-        Form::Deck | Form::Ramp => (DECK_FLAGS, UNSEEN_FLAGS.to_vec()),
-        Form::Bore | Form::Cut => (BORE_FLAGS, UNSEEN_FLAGS.iter().copied().filter(|f| !BORE_FLAGS.contains(f)).collect()),
+        Form::Deck => (DECK_FLAGS, UNSEEN_FLAGS.to_vec()),
+        Form::Bore => (BORE_FLAGS, UNSEEN_FLAGS.iter().copied().filter(|f| !BORE_FLAGS.contains(f)).collect()),
     };
     let deck = without(&flag_ranges(flags, on), &flag_ranges(flags, &less));
     if deck.is_empty() {
@@ -193,7 +192,6 @@ pub fn pieces_of(row: &BridgeRow, form: Form) -> Vec<Piece> {
                 level: value_at(row.levels.as_deref(), mid).map_or(1, |v| v as i64),
                 width_m: width_m(&row.subtype, row.class.as_deref(), shape),
                 form,
-                approach: false,
                 ends: [End::of(&row.gers_id, whole, a), End::of(&row.gers_id, whole, b)],
                 start: a * length,
                 points: g.points,

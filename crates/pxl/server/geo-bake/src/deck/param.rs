@@ -24,6 +24,3 @@ pub const PREFERRED_SLOPE: f64 = 0.08;
 pub const STEP_M: f64 = 5.0; // a solve's sample: a kilometre is two hundred points
 pub const AT_END_M: f64 = 1.0; // a crossing this near a piece's end is its joint
 pub const SIDE_GAP_M: f64 = 2.0; // Arnis's: parallel decks this near are one structure
-
-/// A way turning off more is no approach.
-pub const APPROACH_TURN_COS: f64 = 0.5; // 60°

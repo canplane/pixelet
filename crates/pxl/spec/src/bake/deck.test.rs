@@ -138,9 +138,7 @@ fn each_form_is_drawn_from_its_surface() {
     // Two cells a metre: a 2 m slab is 4 cells, a road's 4.5 m clear height 9.
     let cpm = 2.0;
     assert_eq!(over(Form::Deck, 30.0).occupies(10, cpm), Occupies::Above { slab: [26, 30], pier: None });
-    assert_eq!(over(Form::Ramp, 30.0).occupies(10, cpm), Occupies::Above { slab: [10, 30], pier: None });
     assert_eq!(over(Form::Bore, 10.0).occupies(40, cpm), Occupies::Through { air: [10, 19] });
-    assert_eq!(over(Form::Cut, 10.0).occupies(14, cpm), Occupies::Through { air: [10, 14] });
     assert_eq!(over(Form::Deck, 10.0).occupies(10, cpm), Occupies::Grade);
     assert_eq!(over(Form::Bore, 10.0).occupies(10, cpm), Occupies::Grade);
 }

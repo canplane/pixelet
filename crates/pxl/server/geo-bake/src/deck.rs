@@ -3,7 +3,6 @@
 //! Decks and bores, one solve in `q = sign · z` over a page and the eight
 //! around it, the page's lines what comes of it.
 
-pub mod approach;
 pub mod elevation;
 pub mod param;
 pub mod piece;
@@ -12,7 +11,7 @@ pub mod relate;
 pub mod source;
 pub mod structure;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use postgres::Client;
 use pxl_spec::bake::deck::{clearance_m, headroom_m, Form, BORE_COVER_M, DECK_THICKNESS_M};
@@ -87,8 +86,8 @@ pub fn calculate<E>(input: &Input, ground: impl FnOnce(&[[f64; 2]]) -> Result<Ve
             None => pieces,
         }
     };
-    let mut decks = clip(input.rows.iter().flat_map(|r| pieces_of(r, Form::Deck)).collect());
-    let mut bores = clip(input.rows.iter().flat_map(|r| pieces_of(r, Form::Bore)).collect());
+    let decks = clip(input.rows.iter().flat_map(|r| pieces_of(r, Form::Deck)).collect());
+    let bores = clip(input.rows.iter().flat_map(|r| pieces_of(r, Form::Bore)).collect());
     log(&format!("{} deck pieces, {} bore pieces", decks.len(), bores.len()));
     if decks.is_empty() && bores.is_empty() {
         return Ok(Vec::new());
@@ -98,16 +97,9 @@ pub fn calculate<E>(input: &Input, ground: impl FnOnce(&[[f64; 2]]) -> Result<Ve
     let staged: Vec<&Piece> = decks.iter().chain(&bores).collect();
     let lines: Vec<Polyline> = staged.iter().map(|p| Polyline::of(p.points.iter().map(|q| [q[0], q[1]]))).collect();
     let crossings = relate::decks_crossing(&staged, &lines);
-    let mut needs = needs_of(input, &decks, &lines[..n_decks]);
-    let portals = portals_of(input, &bores);
-    let ramps = clip(approach::approaches(input, &decks, &approach::free_ends(&decks), Form::Ramp));
-    let cuts = clip(approach::approaches(input, &bores, &portals, Form::Cut));
-    log(&format!("{} portals; {} ramps and {} cuttings graded with their structures", portals.len(), ramps.len(), cuts.len()));
-    let mut pinned: HashSet<End> = portals.iter().map(|&(i, last)| bores[i].end(last).clone()).collect();
-    pinned.extend(cuts.iter().map(|c| c.end(true).clone()));
-    decks.extend(ramps);
-    bores.extend(cuts);
-    needs.resize(decks.len(), Vec::new());
+    let needs = needs_of(input, &decks, &lines[..n_decks]);
+    let (deck_pins, bore_pins) = (grounded(input, &decks), grounded(input, &bores));
+    log(&format!("{} deck ends and {} portals meet the ground", deck_pins.len(), bore_pins.len()));
 
     let (mut over_decks, mut over_bores, mut tied) = (Vec::new(), Vec::new(), 0);
     for c in crossings {
@@ -156,24 +148,22 @@ pub fn calculate<E>(input: &Input, ground: impl FnOnce(&[[f64; 2]]) -> Result<Ve
         points
     ));
 
-    let (deck_tops, forced) = deck_side.solve(1.0, &deck_ground, |_| DECK_THICKNESS_M, &needs, &over_decks, |_| true);
+    let (deck_tops, forced) = deck_side.solve(1.0, &deck_ground, |_| DECK_THICKNESS_M, &needs, &over_decks, &deck_pins);
     log(&format!("deck: {forced} points steeper than the preferred grade"));
     let bore_shell = |p: &Piece| headroom_m(kind_of(p)) + BORE_COVER_M;
-    let (bore_tops, forced) = bore_side.solve(-1.0, &bore_ground, bore_shell, &[], &over_bores, |end| pinned.contains(end));
+    let (bore_tops, forced) = bore_side.solve(-1.0, &bore_ground, bore_shell, &[], &over_bores, &bore_pins);
     log(&format!("bore: {forced} points steeper than the preferred grade"));
 
-    let mut out = deck_side.out(&deck_ground, &deck_tops, 1.0);
-    out.extend(bore_side.out(&bore_ground, &bore_tops, -1.0));
+    let mut out = deck_side.out(&deck_tops, 1.0);
+    out.extend(bore_side.out(&bore_tops, -1.0));
     let unpinned = bore_tops.iter().filter(|t| t.is_none()).count();
     let count = |f: Form| out.iter().filter(|d| d.form == f.byte()).count();
     log(&format!(
-        "{} lines in {} structures ({} deck, {} ramp, {} bore, {} cut); {unpinned} bore structures with no portal left out",
+        "{} lines in {} structures ({} deck, {} bore); {unpinned} bore structures with no portal left out",
         out.len(),
         deck_side.structures.len() + bore_side.structures.len(),
         count(Form::Deck),
-        count(Form::Ramp),
-        count(Form::Bore),
-        count(Form::Cut)
+        count(Form::Bore)
     ));
     Ok(out)
 }
@@ -218,11 +208,10 @@ impl<'a> Side<'a> {
         Side { pieces, structures, graphs, place }
     }
 
-    /// Surfaces in `q`, `None` with no pinned end, and the forced count.
+    /// Surfaces in `q`, a bore's `None` with no portal, and the forced count.
     /// Twice: crossings read the first pass's surfaces.
-    fn solve(&self, sign: f64, ground: &[Vec<f64>], shell: impl Fn(&Piece) -> f64, needs: &[Vec<Need>], crossings: &[Crossing], pinned: impl Fn(&End) -> bool) -> (Vec<Option<Vec<f64>>>, usize) {
+    fn solve(&self, sign: f64, ground: &[Vec<f64>], shell: impl Fn(&Piece) -> f64, needs: &[Vec<Need>], crossings: &[Crossing], pins: &HashSet<End>) -> (Vec<Option<Vec<f64>>>, usize) {
         let q_ground: Vec<Vec<f64>> = ground.iter().map(|g| g.iter().map(|v| sign * v).collect()).collect();
-        let carried: Vec<Vec<bool>> = self.structures.iter().zip(&self.graphs).map(|(m, g)| carried_of(self.pieces, m, g)).collect();
         let mut tops: Vec<Option<Vec<f64>>> = q_ground.iter().map(|g| Some(g.clone())).collect();
         let mut forced = 0;
         for pass in 0..2 {
@@ -230,21 +219,22 @@ impl<'a> Side<'a> {
             let mut next = Vec::with_capacity(self.structures.len());
             for (s, members) in self.structures.iter().enumerate() {
                 let (g, qg) = (&self.graphs[s], &q_ground[s]);
-                if sign < 0.0 && !g.free_ends.iter().any(|(_, end)| pinned(end)) {
+                let pins: Vec<u32> = g.free_ends.iter().filter(|(_, end)| pins.contains(end)).map(|&(node, _)| node).collect();
+                if sign < 0.0 && pins.is_empty() {
                     next.push(None);
                     continue;
                 }
                 let mut need = qg.clone();
+                let mut hard = vec![false; need.len()];
                 for (k, &m) in members.iter().enumerate() {
                     let piece = &self.pieces[m];
-                    if !piece.approach {
-                        for &(node, _) in &g.along[k] {
-                            need[node as usize] = need[node as usize].max(qg[node as usize] + shell(piece));
-                        }
+                    for &(node, _) in &g.along[k] {
+                        need[node as usize] = need[node as usize].max(qg[node as usize] + shell(piece));
                     }
                     for n in needs.get(m).into_iter().flatten() {
                         for node in nodes_within(g, k, n.from, n.to) {
                             need[node] = need[node].max(qg[node] + n.under.headroom(n.to - n.from) + shell(piece));
+                            hard[node] = true;
                         }
                     }
                 }
@@ -255,14 +245,21 @@ impl<'a> Side<'a> {
                         let near = top_along(&self.graphs[ns], near_tops, nk, c.near_at);
                         if let Some(node) = g.nearest(self.place[c.far].1, c.far_at) {
                             need[node as usize] = need[node as usize].max(near + c.gap);
+                            hard[node as usize] = true;
                         }
                     }
+                }
+                let mut pinned = vec![false; need.len()];
+                for &node in &pins {
+                    pinned[node as usize] = true;
+                    need[node as usize] = qg[node as usize];
                 }
                 let profile = solve_profile(&Problem {
                     adj: &g.adj,
                     need: &need,
                     ground: qg,
-                    carried: &carried[s],
+                    hard: &hard,
+                    pinned: &pinned,
                     halo: halo_m(g.at[0][1]),
                 });
                 forced += profile.forced.iter().filter(|&&f| f).count();
@@ -273,13 +270,13 @@ impl<'a> Side<'a> {
         (tops, forced)
     }
 
-    /// In z; an approach only while off the ground.
-    fn out(&self, ground: &[Vec<f64>], tops: &[Option<Vec<f64>>], sign: f64) -> Vec<DeckRow> {
+    /// In z.
+    fn out(&self, tops: &[Option<Vec<f64>>], sign: f64) -> Vec<DeckRow> {
         let mut out = Vec::new();
         for (m, piece) in self.pieces.iter().enumerate() {
             let (s, k) = self.place[m];
             let (Some(top), g) = (&tops[s], &self.graphs[s]) else { continue };
-            let nodes = on_structure(piece, &g.along[k], |n| top[n] > sign * ground[s][n]);
+            let nodes = &g.along[k];
             if nodes.len() >= 2 {
                 out.push(DeckRow {
                     gers_id: piece.gers_id.clone(),
@@ -295,41 +292,33 @@ impl<'a> Side<'a> {
     }
 }
 
-/// Tunnel ends whose way carries on at the surface; a subway's do not.
-fn portals_of(input: &Input, tunnels: &[Piece]) -> Vec<(usize, bool)> {
-    let ends = approach::free_ends(tunnels);
-    let asked: Vec<([f64; 2], &str)> = ends.iter().map(|&(i, last)| (end_of(&tunnels[i], last).0, tunnels[i].gers_id.as_str())).collect();
-    let mut portal = vec![false; ends.len()];
+/// Ends only one piece reaches, a box's cut aside.
+fn free_ends(pieces: &[Piece]) -> Vec<(usize, bool)> {
+    let mut count: HashMap<&End, usize> = HashMap::new();
+    for end in pieces.iter().flat_map(|p| &p.ends) {
+        *count.entry(end).or_default() += 1;
+    }
+    let free = |&(i, last): &(usize, bool)| count[pieces[i].end(last)] == 1 && !matches!(pieces[i].end(last), End::Clip(..));
+    (0..pieces.len()).flat_map(|i| [(i, false), (i, true)]).filter(free).collect()
+}
+
+/// Free ends whose way carries on on the ground, where a structure comes
+/// down to it, as Arnis anchors a deck's end at the terrain; a subway's do not.
+fn grounded(input: &Input, pieces: &[Piece]) -> HashSet<End> {
+    let ends = free_ends(pieces);
+    let asked: Vec<([f64; 2], &str)> = ends.iter().map(|&(i, last)| (end_of(&pieces[i], last).0, pieces[i].gers_id.as_str())).collect();
+    let mut out = HashSet::new();
     for (point, own_at, way) in relate::connected(&asked, &input.ways) {
         let row = &way.row;
         let step = SIDE_STEP / way.line.length().max(SIDE_STEP);
-        let at_surface = |at: f64| (0.0..=1.0).contains(&at) && !flag_at(row.flags.as_deref(), UNSEEN_FLAGS, at) && value_at(row.levels.as_deref(), at).unwrap_or(0.0) >= 0.0;
-        if at_surface(own_at - step) || at_surface(own_at + step) {
-            portal[point] = true;
+        let off = |at: f64| flag_at(row.flags.as_deref(), UNSEEN_FLAGS, at) || flag_at(row.flags.as_deref(), DECK_FLAGS, at);
+        let on_ground = |at: f64| (0.0..=1.0).contains(&at) && !off(at) && value_at(row.levels.as_deref(), at).unwrap_or(0.0) == 0.0;
+        if on_ground(own_at - step) || on_ground(own_at + step) {
+            let (i, last) = ends[point];
+            out.insert(pieces[i].end(last).clone());
         }
     }
-    ends.into_iter().zip(portal).filter(|&(_, p)| p).map(|(e, _)| e).collect()
-}
-
-/// The structure's own points; a joint is one.
-fn carried_of(pieces: &[Piece], members: &[usize], g: &Graph) -> Vec<bool> {
-    let mut carried = vec![false; g.at.len()];
-    for (k, &m) in members.iter().enumerate() {
-        if !pieces[m].approach {
-            for &(n, _) in &g.along[k] {
-                carried[n as usize] = true;
-            }
-        }
-    }
-    carried
-}
-
-fn on_structure<'a>(piece: &Piece, along: &'a [(u32, f64)], off_ground: impl Fn(usize) -> bool) -> &'a [(u32, f64)] {
-    if !piece.approach {
-        return along;
-    }
-    let down = along.iter().position(|&(n, _)| !off_ground(n as usize)).map_or(along.len(), |i| i + 1);
-    &along[..down]
+    out
 }
 
 /// Ways and water under each deck; staged bores come after the decks.

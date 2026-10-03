@@ -63,19 +63,17 @@ fn by_kind(kind: u8, [road, path, rail]: [f64; 3]) -> f64 {
     }
 }
 
-/// Above the ground or below it, as the structure or as its approach; the byte is the wire's.
+/// Above the ground or below it; the byte is the wire's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Form {
     Deck = 0, // a bridge: a slab under its surface
     Bore = 1, // a tunnel: its clear height and shell over its surface
-    Ramp = 2, // a deck's approach: built up from the ground to its surface
-    Cut = 3,  // a bore's approach: dug down from the ground to its surface
 }
 
 impl Form {
     pub fn of(byte: u8) -> Form {
-        [Form::Deck, Form::Bore, Form::Ramp, Form::Cut].get(usize::from(byte)).copied().unwrap_or(Form::Deck)
+        [Form::Deck, Form::Bore].get(usize::from(byte)).copied().unwrap_or(Form::Deck)
     }
 
     pub fn byte(self) -> u8 {
@@ -84,7 +82,7 @@ impl Form {
 
     /// Below the ground.
     pub fn cuts(self) -> bool {
-        matches!(self, Form::Bore | Form::Cut)
+        self == Form::Bore
     }
 }
 
@@ -160,7 +158,7 @@ pub struct Over {
 pub enum Occupies {
     /// The way on the ground; the column's top cell is its surface.
     Grade,
-    /// A slab under the surface, or a ramp's fill from the ground, and a pier
+    /// A slab under the surface, and a pier
     /// from the ground to the slab where its section covers the column.
     Above { slab: [i32; 2], pier: Option<[i32; 2]> },
     /// Air from the surface up; the cell under it is the way's.
@@ -180,11 +178,9 @@ impl Over {
                     pier: (self.pier && lo > ground).then_some([ground, lo]),
                 }
             }
-            Form::Ramp if top > ground => Occupies::Above { slab: [ground, top], pier: None },
             Form::Bore if top < ground => Occupies::Through {
                 air: [top, (top + cells(headroom_m(self.kind))).min(ground)],
             },
-            Form::Cut if top < ground => Occupies::Through { air: [top, ground] },
             _ => Occupies::Grade,
         }
     }

@@ -3,7 +3,10 @@
 //! A structure's road surface in `q`: a deck's height, a bore's depth. Each
 //! point stands at its need, or under another's within `halo` coming down at
 //! `PREFERRED_SLOPE`, steeper only where that would not reach its own need
-//! within `halo`; so nothing past `halo` moves a point.
+//! within `halo`. A pin stands at its need and caps what is within half the
+//! halo of it at the grade the hard needs there ask, at least
+//! `PREFERRED_SLOPE`; a shell gives way to it, down to the ground and no
+//! further. So nothing past `halo` moves a point.
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
@@ -14,7 +17,10 @@ pub struct Problem<'a> {
     pub adj: &'a [Vec<(u32, f64)>],
     pub need: &'a [f64],
     pub ground: &'a [f64],
-    pub carried: &'a [bool],
+    /// A clearance, not only the structure's own shell.
+    pub hard: &'a [bool],
+    /// Where the surface meets the ground; its need is the ground.
+    pub pinned: &'a [bool],
     /// How far, in metres, a need reaches.
     pub halo: f64,
 }
@@ -26,12 +32,10 @@ pub struct Profile {
 
 pub fn solve(p: &Problem) -> Profile {
     let n = p.need.len();
-    let adj = carried_adj(p);
-    // an approach is its ground: the joint comes down to its next point
-    let mut top: Vec<f64> = (0..n).map(|v| if p.carried[v] { p.need[v] } else { p.ground[v] }).collect();
+    let mut top = p.need.to_vec();
     let mut near = Near::new(n);
-    for u in (0..n).filter(|&u| p.carried[u]) {
-        near.from(&adj, u as u32, p.halo);
+    for u in 0..n {
+        near.from(p.adj, u as u32, p.halo);
         for &v in &near.reached {
             let (v, d) = (v as usize, near.dist[v as usize]);
             // steeper only to land on v's own need by the halo, so no step there
@@ -39,14 +43,17 @@ pub fn solve(p: &Problem) -> Profile {
             top[v] = top[v].max(p.need[u] - slope * d);
         }
     }
-    let forced = (0..n).map(|v| adj[v].iter().any(|&(w, d)| d > 0.0 && (top[v] - top[w as usize]).abs() / d > PREFERRED_SLOPE + 1e-9)).collect();
+    for q in (0..n).filter(|&q| p.pinned[q]) {
+        near.from(p.adj, q as u32, p.halo / 2.0);
+        let away = || near.reached.iter().map(|&u| (u as usize, near.dist[u as usize])).filter(|&(_, d)| d > 0.0);
+        let grade = away().filter(|&(u, _)| p.hard[u]).map(|(u, d)| (p.need[u] - p.need[q]) / d).fold(PREFERRED_SLOPE, f64::max);
+        for (v, d) in away() {
+            top[v] = top[v].min(p.need[q] + grade * d).max(p.ground[v]);
+        }
+        top[q] = p.need[q];
+    }
+    let forced = (0..n).map(|v| p.adj[v].iter().any(|&(w, d)| d > 0.0 && (top[v] - top[w as usize]).abs() / d > PREFERRED_SLOPE + 1e-9)).collect();
     Profile { top, forced }
-}
-
-fn carried_adj(p: &Problem) -> Vec<Vec<(u32, f64)>> {
-    (0..p.need.len())
-        .map(|v| if p.carried[v] { p.adj[v].iter().copied().filter(|&(w, _)| p.carried[w as usize]).collect() } else { Vec::new() })
-        .collect()
 }
 
 /// Distances from a point within a reach; resets only what it reached.
