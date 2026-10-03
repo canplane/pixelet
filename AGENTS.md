@@ -78,6 +78,16 @@ shell, the UI, whose end of that channel is `shell.ts`, `snapshot.ts` and
 one of them (`cmd.json`). The device app runs the same TypeScript, and adds
 only what a device does behind `@platform/`.
 
+**The kernel tells facts; the shell decides how they are shown.** The
+snapshot carries facts the shell needs whose authoritative owner is the
+kernel — the world's state, the camera's and the devices', a physical
+quantity like the meters a pixel spans. A length rounded for a scale bar,
+how deep a place is named, when a toast speaks, which modal is open, are the
+shell's, derived where they are read; a constant both sides need is
+generated from `spec/`, never sent at runtime. A field kept for one
+presentation (a page number sent so a toast would not repeat) is the
+boundary in the wrong place.
+
 **A tool that makes a file is Rust; one that talks to a service is
 TypeScript.** What writes or reads a format the Rust side owns, or processes
 a binary — the asset ingest, the stars, the Moon, the brand, the code
