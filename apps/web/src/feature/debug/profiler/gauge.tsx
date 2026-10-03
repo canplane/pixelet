@@ -60,15 +60,8 @@ const lv = (level: number) => (Number.isNaN(level) ? "-" : `z${16 - level}`);
 
 const phase = (f: FrameSummary, name: string): Spread => f.phases.find((p) => p.name === name)?.spread ?? { p50: 0, p95: 0, max: 0 };
 
-export function ProfilerGauge({ g }: { g: Gauge | null }) {
-  if (g === null) return <Note>no window open</Note>;
-
-  const { rec, frames: f, view: v } = g;
-  const atlasPct = round((g.atlas.used_px / (g.atlas.size * g.atlas.size)) * 100);
-  const [kept, possible] = [g.counters.faces_kept, g.counters.faces_possible];
-  const heaviest = <T,>(rows: T[], by: (r: T) => number, n: number) => [...rows].sort((a, b) => by(b) - by(a)).slice(0, n).filter((r) => by(r) > 0);
-  const worstLong = g.longs.reduce<LongFrame | null>((w, l) => (!w || l.durationMs > w.durationMs ? l : w), null);
-
+/** Live: where the camera and the pointer are now, not over the window. */
+export function ProfilerView({ v }: { v: Gauge["view"] }) {
   return (
     <>
       <Head>view</Head>
@@ -81,14 +74,32 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
       <Row k="hover lat/lon °" v={geo(v.hover_lat, v.hover_lon)} />
       <Row k="hover alt m" v={or(v.hover_alt)} />
       <Row k="chunk/tier/page level" v={`${lv(v.chunk_level)} / ${lv(v.tier_level)} / ${lv(v.read_from)}`} warn={v.read_from > v.chunk_level} />
+    </>
+  );
+}
 
-      <Head>recording</Head>
-      <Row
-        k={rec.recording ? "REC" : "stopped"}
-        v={`${(rec.elapsed_ms / 1000).toFixed(1)}s ${rec.frames}f/${rec.tasks}t${rec.truncated ? " TRUNC" : ""}`}
-        warn={rec.recording || rec.truncated}
-      />
+/** Whether the window is recording, beside the buttons that start and stop it. */
+export function ProfilerRec({ rec }: { rec: Gauge["rec"] }) {
+  return (
+    <Row
+      k={rec.recording ? "REC" : "stopped"}
+      v={`${(rec.elapsed_ms / 1000).toFixed(1)}s ${rec.frames}f/${rec.tasks}t${rec.truncated ? " TRUNC" : ""}`}
+      warn={rec.recording || rec.truncated}
+    />
+  );
+}
 
+export function ProfilerGauge({ g }: { g: Gauge | null }) {
+  if (g === null) return <Note>no window open</Note>;
+
+  const f = g.frames;
+  const atlasPct = round((g.atlas.used_px / (g.atlas.size * g.atlas.size)) * 100);
+  const [kept, possible] = [g.counters.faces_kept, g.counters.faces_possible];
+  const heaviest = <T,>(rows: T[], by: (r: T) => number, n: number) => [...rows].sort((a, b) => by(b) - by(a)).slice(0, n).filter((r) => by(r) > 0);
+  const worstLong = g.longs.reduce<LongFrame | null>((w, l) => (!w || l.durationMs > w.durationMs ? l : w), null);
+
+  return (
+    <>
       {f === null && <Note>no frames sampled yet</Note>}
       {f !== null && (
         <>

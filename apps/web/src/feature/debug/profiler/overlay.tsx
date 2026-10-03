@@ -12,7 +12,7 @@ import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { alpha, color, disabledContent } from "@/shared/ui/theme.ts";
-import { gauge, Head, ProfilerGauge } from "./gauge.tsx";
+import { gauge, Head, ProfilerGauge, ProfilerRec, ProfilerView } from "./gauge.tsx";
 import { profilerLog } from "./log.ts";
 import { profilerReportCopy, profilerReportText } from "./report.ts";
 import { type Gauge, profilerGaugeRead, profilerReportRead } from "./view.ts";
@@ -99,8 +99,9 @@ export function ProfilerOverlay() {
   const [open, setOpen] = useState(true);
 
   useEffect(() => {
-    if (!show || !open) return;
-    const read = () => setG(profilerGaugeRead(LIVE_WINDOW_MS));
+    if (!show) return;
+    // Folded, only the view is shown, so the window is left unfolded.
+    const read = () => setG(profilerGaugeRead(open ? LIVE_WINDOW_MS : 0));
     read();
     const id = setInterval(read, POLL_MS);
     return () => clearInterval(id);
@@ -137,6 +138,9 @@ export function ProfilerOverlay() {
 
   return (
     <View style={styles.panel}>
+      {g !== null && <ProfilerView v={g.view} />}
+
+      <Head>recording</Head>
       <View style={styles.buttons}>
         {
           /* Both, not a toggle: a window opened at boot would read "stop"
@@ -170,6 +174,7 @@ export function ProfilerOverlay() {
                   button away. */
       }
       {(said ?? hint) !== null && <Text style={[gauge.text, styles.hint]}>{said ?? hint}</Text>}
+      {g !== null && <ProfilerRec rec={g.rec} />}
 
       <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" aria-expanded={open}>
         <Head end={open ? <CaretUp size={12} color={HINT_INK} /> : <CaretDown size={12} color={HINT_INK} />}>last 10s</Head>
