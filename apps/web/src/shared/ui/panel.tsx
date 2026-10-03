@@ -13,10 +13,12 @@ import { useSafeArea } from "@platform/safe-area.ts";
 export const PANEL_CONTROL = chrome.target;
 /** iOS 26 Maps' sheet inset, for the top row's controls and the content's sides. */
 export const PANEL_EDGE = 16;
+/** Above the top row: the band the sheet's handle stands in. */
+export const PANEL_TOP = 20;
 
 export const PANEL_SECTION_GAP = 24;
-export const PANEL_HEAD_HEIGHT = PANEL_EDGE + PANEL_CONTROL + PANEL_EDGE;
-export const PANEL_CONTENT_TOP = PANEL_EDGE + PANEL_CONTROL + PANEL_SECTION_GAP;
+export const PANEL_HEAD_HEIGHT = PANEL_TOP + PANEL_CONTROL + PANEL_EDGE;
+export const PANEL_CONTENT_TOP = PANEL_TOP + PANEL_CONTROL + PANEL_SECTION_GAP;
 
 /** Concentric with the round controls in the top row. */
 export const SHEET_RADIUS = PANEL_EDGE + PANEL_CONTROL / 2;
@@ -69,7 +71,7 @@ export function PanelScroll({ children }: { children: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  bar: { marginTop: PANEL_EDGE, height: PANEL_CONTROL, paddingHorizontal: PANEL_EDGE, flexDirection: "row", alignItems: "center", gap: chrome.controlGap },
+  bar: { marginTop: PANEL_TOP, height: PANEL_CONTROL, paddingHorizontal: PANEL_EDGE, flexDirection: "row", alignItems: "center", gap: chrome.controlGap },
   barMain: { flex: 1, height: PANEL_CONTROL, justifyContent: "center" },
   body: { flex: 1 },
   head: { position: "absolute", top: 0, left: 0, right: 0, height: PANEL_HEAD_HEIGHT },
