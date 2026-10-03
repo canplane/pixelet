@@ -52,46 +52,48 @@ fn bucket(v: f64, to: u32) -> u32 {
     (v / to as f64).ceil() as u32 * to
 }
 
-/// Every entry's place on a sheet of `size`, planned on scratch shelves so a
-/// failed plan changes nothing.
-struct Plan {
-    xs: Vec<u32>,
-    ys: Vec<u32>,
-    shelf_y: Vec<u32>,
-    shelf_h: Vec<u32>,
-    shelf_cursor: Vec<u32>,
+/// Every entry in a shelf takes the shelf's height.
+#[derive(Default)]
+struct Shelves {
+    y: Vec<u32>,
+    h: Vec<u32>,
+    cursor: Vec<u32>,
     next_y: u32,
 }
 
-fn pack(size: u32, ws: &[u32], hs: &[u32]) -> Option<Plan> {
-    let mut plan = Plan {
-        xs: vec![0; ws.len()],
-        ys: vec![0; ws.len()],
-        shelf_y: Vec::new(),
-        shelf_h: Vec::new(),
-        shelf_cursor: Vec::new(),
-        next_y: 0,
-    };
-    for i in 0..ws.len() {
-        let (w, h) = (ws[i], hs[i]);
-        let shelf = match (0..plan.shelf_h.len()).find(|&s| plan.shelf_h[s] == h && plan.shelf_cursor[s] + w <= size) {
+impl Shelves {
+    /// The first shelf of height `h` with room, else a new one; none past `size`.
+    fn fit(&mut self, w: u32, h: u32, size: u32) -> Option<(u32, u32)> {
+        let shelf = match (0..self.h.len()).find(|&s| self.h[s] == h && self.cursor[s] + w <= size) {
             Some(s) => s,
             None => {
-                if plan.next_y + h > size || w > size {
+                if self.next_y + h > size || w > size {
                     return None;
                 }
-                plan.shelf_y.push(plan.next_y);
-                plan.shelf_h.push(h);
-                plan.shelf_cursor.push(0);
-                plan.next_y += h;
-                plan.shelf_h.len() - 1
+                self.y.push(self.next_y);
+                self.h.push(h);
+                self.cursor.push(0);
+                self.next_y += h;
+                self.h.len() - 1
             }
         };
-        plan.xs[i] = plan.shelf_cursor[shelf];
-        plan.ys[i] = plan.shelf_y[shelf];
-        plan.shelf_cursor[shelf] += w;
+        let at = (self.cursor[shelf], self.y[shelf]);
+        self.cursor[shelf] += w;
+        Some(at)
     }
-    Some(plan)
+}
+
+/// Every entry's place on a sheet of `size`, planned on scratch shelves so a
+/// failed plan changes nothing.
+struct Plan {
+    at: Vec<(u32, u32)>,
+    shelves: Shelves,
+}
+
+fn pack(size: u32, ws: &[u32], hs: &[u32]) -> Option<Plan> {
+    let mut shelves = Shelves::default();
+    let at = (0..ws.len()).map(|i| shelves.fit(ws[i], hs[i], size)).collect::<Option<_>>()?;
+    Some(Plan { at, shelves })
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -105,11 +107,7 @@ pub struct Flush {
 pub struct BillboardAtlas {
     size: u32,
 
-    /// Every entry in a shelf takes the shelf's height.
-    shelf_y: Vec<u32>,
-    shelf_h: Vec<u32>,
-    shelf_cursor: Vec<u32>,
-    next_y: u32,
+    shelves: Shelves,
 
     /// `w`/`h` is the bucketed slot; `cw`/`ch` is what was drawn, the only part a
     /// UV may cover.
@@ -244,7 +242,7 @@ impl BillboardAtlas {
         AtlasStats {
             size: self.size,
             entries: self.live,
-            shelves: self.shelf_h.len() as u32,
+            shelves: self.shelves.h.len() as u32,
             used_px: self.used_px,
             repacks: self.repacks,
             uploads: self.uploads,
@@ -278,25 +276,9 @@ impl BillboardAtlas {
     }
 
     fn place(&mut self, w: u32, h: u32) -> i32 {
-        let shelf = match (0..self.shelf_h.len()).find(|&s| self.shelf_h[s] == h && self.shelf_cursor[s] + w <= self.size) {
-            Some(s) => s,
-            None => {
-                if self.next_y + h > self.size {
-                    return NO_SLOT;
-                }
-                self.shelf_y.push(self.next_y);
-                self.shelf_h.push(h);
-                self.shelf_cursor.push(0);
-                self.next_y += h;
-                self.shelf_h.len() - 1
-            }
-        };
+        let Some((x, y)) = self.shelves.fit(w, h, self.size) else { return NO_SLOT };
         let slot = self.unused_slot();
-        self.x[slot] = self.shelf_cursor[shelf];
-        self.y[slot] = self.shelf_y[shelf];
-        self.w[slot] = w;
-        self.h[slot] = h;
-        self.shelf_cursor[shelf] += w;
+        (self.x[slot], self.y[slot], self.w[slot], self.h[slot]) = (x, y, w, h);
         self.used_px += w * h;
         slot as i32
     }
@@ -343,10 +325,7 @@ impl BillboardAtlas {
 
     fn rebuild(&mut self, size: u32, slots: &[usize], plan: Plan) {
         self.size = size;
-        self.shelf_y = plan.shelf_y;
-        self.shelf_h = plan.shelf_h;
-        self.shelf_cursor = plan.shelf_cursor;
-        self.next_y = plan.next_y;
+        self.shelves = plan.shelves;
         for st in self.state.iter_mut() {
             if *st == FREE {
                 *st = UNUSED;
@@ -356,8 +335,7 @@ impl BillboardAtlas {
         self.repacks += 1;
         self.generation += 1;
         for (i, &s) in slots.iter().enumerate() {
-            self.x[s] = plan.xs[i];
-            self.y[s] = plan.ys[i];
+            (self.x[s], self.y[s]) = plan.at[i];
             self.used_px += self.w[s] * self.h[s];
         }
         for &slot in &self.dirty {
