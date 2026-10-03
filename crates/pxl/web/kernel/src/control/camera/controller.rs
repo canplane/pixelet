@@ -13,7 +13,7 @@ use crate::control::camera::config::camera_cfg::projection::FOV;
 use crate::control::camera::config::camera_cfg::view::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR};
 use crate::control::camera::orbit::orbit;
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
-use crate::control::navigation::walk::{is_unknown, unknown_z, walk};
+use crate::control::navigation::walk::{is_unknown, pan_to, unknown_z};
 use crate::global::Global;
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::{settings_store, CameraMode};
@@ -141,7 +141,7 @@ fn target_center() -> Option<Pvf3> {
     }
 }
 
-/// First person walks as third person does at `DEFAULT_DIST`, since it has
+/// First person pans as third person does at `DEFAULT_DIST`, since it has
 /// no zoom distance of its own.
 pub fn pan(dx: f64, dy: f64) {
     let Some(from) = target_center() else { return };
@@ -150,7 +150,7 @@ pub fn pan(dx: f64, dy: f64) {
         Active::Free | Active::Tracked => DEFAULT_DIST,
     };
     let (yaw, upp) = (camera().yaw, units_per_px_at(across));
-    let to = walk(&from, dx, dy, upp, yaw);
+    let to = pan_to(&from, dx, dy, upp, yaw);
     let to = match active() {
         Active::Orbit => crate::control::camera::orbit::gate_pan(&to),
         Active::Free | Active::Tracked => to,
