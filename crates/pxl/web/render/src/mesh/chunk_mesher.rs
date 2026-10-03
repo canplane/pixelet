@@ -10,7 +10,7 @@ use pxl_spec::space::v3::V3;
 use xpute_core::math::scalar::round;
 
 use crate::mesh::paint::palette::shader_meta::layer_mean;
-use crate::mesh::volume::{pack_sub_cell_fraction, unpack_sub_cell_fraction, unpack_sub_cell_size, MaterialClasses, NO_LAYER, SUB_CELL_NONE};
+use crate::mesh::volume::{pack_sub_cell_fraction, taps_of, unpack_sub_cell_fraction, unpack_sub_cell_size, MaterialClasses, NO_LAYER, SUB_CELL_NONE};
 use crate::mesh::voxel_scan::{OwnedRunSet, RunSet, COL_SPAN};
 use crate::mesh::{grow, Refused};
 use xpute_core::status::bug::OrBug;
@@ -789,7 +789,7 @@ impl BakeContext {
             // A sparse cell is inset by the cube root of its fill on every axis.
             let inset = (linear < 1.0).then(|| pack_inset(linear));
             let rgb = acc.color();
-            let taps = packed_taps(0, 0);
+            let taps = taps_of(NO_LAYER as u8);
             // A shrunk ground box leaves gaps that read as holes from above, so a ground
             // cell lays its full bottom face as a floor. The lowest box also hangs a skirt
             // a cell down, or a step between neighbors' floors showed daylight.
@@ -854,7 +854,7 @@ const LONE_BOX_FACES: u32 = ALL_FACES | ALL_CREASES;
 pub fn write_lone_box(m: &mut [u32], size: f64, rgb: [u8; 3], layer: u8) -> Heights {
     xpute_core::ensure!(m.len() == FINE_BOX_WORDS as usize, ENOTRECOVERABLE);
     let heights = Heights { floor: 0.0, step: size / Z_STEPS };
-    write_box(m, [0.0; 3], [size; 3], rgb, layer as u32 * 0x0101_0101, LONE_BOX_FACES, size, heights);
+    write_box(m, [0.0; 3], [size; 3], rgb, taps_of(layer), LONE_BOX_FACES, size, heights);
     heights
 }
 
@@ -1175,17 +1175,6 @@ fn srgb_of(rgb: [f64; 3]) -> [u8; 3] {
         let s = if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * libm::pow(c, 1.0 / 2.4) - 0.055 };
         to_u8(s * 255.0) as u8
     })
-}
-
-fn packed_taps(taps: u32, tap_cnt: u32) -> u32 {
-    if tap_cnt == 0 {
-        return NO_LAYER * 0x0101_0101;
-    }
-    let mut packed = 0;
-    for i in 0..4 {
-        packed |= ((taps >> ((i % tap_cnt) * 8)) & 255) << (i * 8);
-    }
-    packed
 }
 
 fn to_u8(v: f64) -> u32 {

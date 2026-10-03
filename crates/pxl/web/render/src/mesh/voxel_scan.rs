@@ -4,9 +4,9 @@
 //! length patched in when it ends, so walk and packing are one pass. The direct
 //! path (`begin_direct`) writes runs one call each from a layer's own source.
 
-use pxl_spec::bake::constant::BAND_CELLS;
+use pxl_spec::bake::constant::{band_cell_z, BAND_CELLS};
 
-use crate::mesh::volume::{unpack_material, MaterialClasses, BAND_VOXELS, SUB_CELL_NONE};
+use crate::mesh::volume::{band_col, taps_of, unpack_material, MaterialClasses, BAND_VOXELS, SUB_CELL_NONE};
 use crate::mesh::{grow, try_push, Refused};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
@@ -291,7 +291,7 @@ fn push(runs: &mut Vec<Run>, run: Run) -> Result<usize, Refused> {
 }
 
 fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) -> Result<(), Refused> {
-    let col = (cy * BAND_CELLS + cx) as usize;
+    let col = band_col(cx, cy) as usize;
     let mut open: Option<usize> = None;
     let mut previous_band_z: Option<i32> = None;
     for band in bands {
@@ -310,7 +310,7 @@ fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) -> Res
                 open = None;
                 continue;
             }
-            let z = band.band_z * BAND_CELLS as i32 + local_z as i32;
+            let z = band_cell_z(band.band_z) as i32 + local_z as i32;
             let (material_class, [r, g, b]) = unpack_material(packed);
             let layer_idx = band.layer_idx[idx];
             let sub = band.sub_cell.map(|s| &s[idx * 4..idx * 4 + 4]);
@@ -385,10 +385,6 @@ fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) -> Res
         }
     }
     Ok(())
-}
-
-fn taps_of(layer_idx: u8) -> u32 {
-    layer_idx as u32 * 0x0101_0101
 }
 
 fn extra_range(cols: &[u32], col: u32) -> (usize, usize) {
