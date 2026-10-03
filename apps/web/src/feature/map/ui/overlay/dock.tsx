@@ -30,8 +30,6 @@ const SEND_FROM_SCALE = 0.5;
 
 const ITEM = 24;
 const ITEM_GLYPH = 16;
-const FIELD_PX = 384;
-const MESSAGE_OPEN_PX = chrome.control + FIELD_PX + 16;
 
 const FLYOUT_LIFT_PX = 20;
 const FLYOUT_GAP_PX = 8;
@@ -296,9 +294,9 @@ export function Dock() {
   const pillColor = slot === Slot.Send ? color.send : STRIP.ground;
 
   const room = Math.max(chrome.control, barWidth - (PANES.length - 1) * (chrome.control + chrome.controlGap));
-  const messageOpen = Math.min(MESSAGE_OPEN_PX, room);
-  const opened: Record<Pane, f64> = { [Pane.Message]: messageOpen, [Pane.Palette]: Math.min(stripWidth, room) };
-  const widths = PANES.map((pane) => (pane === open ? opened[pane] : chrome.control));
+  // Every pane opens as wide as the palette's tools.
+  const opened = Math.min(stripWidth, room);
+  const widths = PANES.map((pane) => (pane === open ? opened : chrome.control));
   const xs: f64[] = [];
   // Whole pixels, where a page's pill cuts its shadow cleanly.
   let x = (barWidth - widths.reduce((sum, w) => sum + w, 0) - (PANES.length - 1) * chrome.controlGap) / 2;
@@ -334,7 +332,7 @@ export function Dock() {
               from={{ opacity: 0, translateX: -10 }}
               exit={{ opacity: 0, translateX: -10 }}
               transition={SNAP}
-              style={[styles.messageField, { width: messageOpen - chrome.control - 8 }]}
+              style={[styles.messageField, { width: opened - chrome.control - 8 }]}
             >
               <Motion to={{ opacity: isSending ? 0 : 1 }} transition={FADE} style={styles.fieldFill}>
                 <TextField
