@@ -61,12 +61,20 @@ export function useTurnedBack(rotation: i32): boolean {
   return turnedBack;
 }
 
+interface SwipeHooks {
+  /** At the touch's start, before anything claims it. */
+  press?: () => void;
+  drag?: (on: boolean) => void;
+}
+
 /**
  * A swipe's callbacks: up turns the front card back, down brings the back one
  * forward. It turns once, when the swipe crosses the line; the card does not
  * follow the finger, which would set a pose every move on the kernel's thread.
  */
-export function deckSwipe(turn: (delta: i32) => void, drag?: (on: boolean) => void): PanResponderCallbacks {
+export function deckSwipe(turn: (delta: i32) => void, { press, drag }: SwipeHooks = {}): PanResponderCallbacks {
+  // From where the touch began: a grant after the first moves restarts the gesture's own dy.
+  let from: f64 = 0;
   let turned = false;
   const read = (dy: f64) => {
     if (turned || Math.abs(dy) <= SWIPE_PX) return;
@@ -78,13 +86,18 @@ export function deckSwipe(turn: (delta: i32) => void, drag?: (on: boolean) => vo
     drag?.(false);
   };
   return {
+    onStartShouldSetPanResponderCapture: (e) => {
+      from = e.nativeEvent.pageY;
+      press?.();
+      return false;
+    },
     onPanResponderGrant: () => {
       turned = false;
       drag?.(true);
     },
     // A flick can cross the line in the release event alone.
-    onPanResponderMove: (_e, g) => read(g.dy),
-    onPanResponderRelease: (_e, g) => end(g.dy),
-    onPanResponderTerminate: (_e, g) => end(g.dy),
+    onPanResponderMove: (e) => read(e.nativeEvent.pageY - from),
+    onPanResponderRelease: (e) => end(e.nativeEvent.pageY - from),
+    onPanResponderTerminate: (e) => end(e.nativeEvent.pageY - from),
   };
 }

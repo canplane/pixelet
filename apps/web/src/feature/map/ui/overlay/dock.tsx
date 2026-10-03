@@ -247,9 +247,8 @@ export function Dock() {
   // hold, so the two never compete.
   const swipe = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponderCapture: keepKeyboard,
       onMoveShouldSetPanResponderCapture: (_e, s) => Math.abs(s.dy) > DRAG_PX && Math.abs(s.dy) > Math.abs(s.dx),
-      ...deckSwipe((delta) => setRotation((r) => r + delta)),
+      ...deckSwipe((delta) => setRotation((r) => r + delta), { press: keepKeyboard }),
     }),
   ).current;
   const activeTool = useKernel((s) => s.holding.tool);

@@ -41,7 +41,7 @@ export function Toaster() {
     swipe.current = PanResponder.create({
       // On press: by the first move, a swipe down has left the pointer to the dock.
       onStartShouldSetPanResponder: () => useToastStore.getState().entries.length > 1,
-      ...deckSwipe(toastRotate, setToastDragging),
+      ...deckSwipe(toastRotate, { drag: setToastDragging }),
     });
   }
 
