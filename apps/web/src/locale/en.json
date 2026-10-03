@@ -265,7 +265,7 @@
       "message_placeholder": "Type a message…",
       "message_tooltip": "Message",
       "send": "Send",
-      "catalog_tooltip": "Open Full Catalog",
+      "drawer_tooltip": "Open Drawer",
       "object_size": "Size {{n}}"
     },
     "controls": {

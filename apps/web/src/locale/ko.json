@@ -265,7 +265,7 @@
       "message_placeholder": "메시지 입력…",
       "message_tooltip": "메시지",
       "send": "전송",
-      "catalog_tooltip": "전체 카탈로그 열기",
+      "drawer_tooltip": "서랍 열기",
       "object_size": "크기 {{n}}"
     },
     "controls": {

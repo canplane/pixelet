@@ -380,7 +380,7 @@ export function ModeBar() {
               <View style={styles.divider} />
 
               <View style={styles.group}>
-                <ToolButton label={t("map.mode_bar.catalog_tooltip")} glyph="square.grid.2x2" onPress={() => openModal("drawer")} />
+                <ToolButton label={t("map.mode_bar.drawer_tooltip")} glyph="square.grid.2x2" onPress={() => openModal("drawer")} />
               </View>
             </Motion>
 
