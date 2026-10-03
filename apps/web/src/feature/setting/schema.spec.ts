@@ -93,7 +93,7 @@ export const SETTINGS = {
     key: 5 as number,
     kind: "toggle",
     default: true,
-    section: "camera",
+    section: "navigation",
     dev: true,
   },
   /** What the camera does when the controls would put it underground; CAMERA_COLLISION_MODES says each. */

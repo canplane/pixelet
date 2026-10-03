@@ -20,7 +20,7 @@
     "builds the chunks again."
   ],
   "SETTING_SECTIONS": {
-    "$value": ["display", "camera", "lighting", "quality", "debug", "character", "map"],
+    "$value": ["display", "navigation", "camera", "lighting", "quality", "debug", "character", "map"],
     "$doc": [
       "The sheet's sections, in the order they are shown. `character` is not a",
       "section of the sheet at all — its two settings are picked from the",
@@ -162,7 +162,7 @@
       "$doc": ["The map center stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck."],
       "kind": "toggle",
       "default": true,
-      "section": "camera",
+      "section": "navigation",
       "dev": true
     },
     "camera_collision": {

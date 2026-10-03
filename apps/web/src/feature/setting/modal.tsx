@@ -61,6 +61,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               <Text style={settingText.faint}>{t("settings.cost_legend")}</Text>
               <Separator />
               <SettingsSection section="display" />
+              <SettingsSection section="navigation" />
               <SettingsSection section="camera" />
               <SettingsSection section="lighting" />
               <SettingsSection section="quality" />

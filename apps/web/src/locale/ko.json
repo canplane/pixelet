@@ -5,7 +5,7 @@
     "trigger_aria_label": "설정",
     "close": "닫기",
     "tabs": {
-      "effects": "효과",
+      "effects": "설정",
       "info": "정보"
     },
     "language": {
@@ -123,6 +123,10 @@
         "label": "장소",
         "description": "주변 장소(카페, 상점, 랜드마크 등) 뱃지를 표시합니다."
       }
+    },
+    "navigation": {
+      "section_title": "내비게이션",
+      "section_caption": "지도 중심이 세계와 맞닿는 방식을 설정합니다"
     }
   },
   "cubes": {

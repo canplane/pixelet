@@ -5,7 +5,7 @@
     "trigger_aria_label": "Settings",
     "close": "Close",
     "tabs": {
-      "effects": "Effects",
+      "effects": "Settings",
       "info": "Info"
     },
     "language": {
@@ -123,6 +123,10 @@
         "label": "Places",
         "description": "Shows nearby place badges (cafes, stores, landmarks, ...) on the map."
       }
+    },
+    "navigation": {
+      "section_title": "Navigation",
+      "section_caption": "How the map center meets the world"
     }
   },
   "cubes": {

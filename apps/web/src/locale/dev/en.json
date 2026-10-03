@@ -2,29 +2,32 @@
   "settings": {
     "camera": {
       "camera_collision": {
-        "label": "Terrain Collision",
+        "label": "Third-person camera collision",
         "through": {
           "label": "Pass through",
-          "description": "The camera goes wherever the controls put it. Underground there are no inward-facing faces, so the scene reads inside out."
+          "description": "Passes through terrain and objects."
         },
         "stop": {
           "label": "Stop",
-          "description": "Zoom, rotate and tilt go as far as they asked or as far as they can. Nothing moves on its own."
+          "description": "Stops the camera control just short of the collision."
         },
         "climb": {
           "label": "Climb over",
-          "description": "Zoom always takes effect and the view pitches up to clear the ground instead. Every zoom level stays reachable, at the cost of an angle you did not set."
-        }
-      },
-      "center_support": {
-        "label": "Center support",
-        "description": "The map center stands on what supports it, and a pan takes the lowest way over what is in it. Off, it keeps its height and passes through anything."
+          "description": "Rises over what blocks it; stops where the way up is blocked too."
+        },
+        "description": "What the third-person camera does when terrain or an object blocks it. First person has none."
       }
     },
     "lighting": {
       "shadows": {
         "label": "Shadows",
         "description": "The sun casts shadows from the terrain, objects and characters onto the ground."
+      }
+    },
+    "navigation": {
+      "center_support": {
+        "label": "Center support",
+        "description": "The map center moves along what supports it. Off, it keeps its height and passes through terrain and objects."
       }
     }
   },

@@ -13,6 +13,7 @@ import { kernel_command, useKernel } from "@/kernel/shell.ts";
 
 const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {
   display: "eye",
+  navigation: "location",
   camera: "move.3d",
   lighting: "sun.max",
   quality: "gauge.medium",
