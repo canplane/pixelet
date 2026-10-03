@@ -63,6 +63,7 @@ const LIGHT_VIEW_PROJ: usize = FRAME_AT[13];
 const OTHER: usize = FRAME_AT[14];
 pub(crate) const PLANET: usize = FRAME_AT[15];
 pub(crate) const GLOBE: usize = FRAME_AT[16];
+const UP: usize = FRAME_AT[17];
 
 /// The ray, the celestial pole, and whether the Moon's face has arrived.
 pub(crate) const SKY_FLOATS: usize = 16;
@@ -639,10 +640,10 @@ impl Renderer {
         let sky_buffer = object();
         g.buffer(sky_buffer, word_bytes(SKY_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let shadow = Shadow::new(g, handheld);
-        let ao = ScreenAo::new(g, &mut pipelines, device.align);
+        let ao = ScreenAo::new(g, &mut pipelines, device.align, frame_buffer);
         let atmosphere = Atmosphere::new(g, &mut pipelines);
         let air = atmosphere.entries();
-        let stars = StarPass::new(g, &mut pipelines);
+        let stars = StarPass::new(g, &mut pipelines, frame_buffer);
         let clouds = CloudPass::new(g, &mut pipelines, frame_buffer, air);
         let mips = Mips::new(g, &mut pipelines, format::RGBA8_SRGB);
         let layers = Layers::new(g);
@@ -783,12 +784,13 @@ impl Renderer {
         norm3(sub3(&eye, &planet_center, &mut [0.0; 3]), &mut up);
         self.clouds.lay_out(g, &m, &eye, env, &up);
         self.atmosphere.set_clouds(&clouds::field(origin, [eye_local[0], eye_local[1]], env));
-        self.stars.lay_out(g, &m, env, width, height, &up);
+        self.stars.lay_out(g, &m, env, width);
         put_ray(&mut self.sky, 0, &m, &eye);
         self.sky[SKY_POLE..SKY_POLE + 3].copy_from_slice(&env[ENV_STARS + 8..ENV_STARS + 11]);
         self.sky[SKY_MAPPED] = if self.moon.loaded { 1.0 } else { 0.0 };
         for i in 0..3 {
             u[CAMERA_POS + i] = eye[i] as f32;
+            u[UP + i] = up[i] as f32;
         }
         u[EDGE_STRENGTH] = s[STAGE_AT::EDGE_STRENGTH] as f32;
         u[ENV..ENV + 24].copy_from_slice(&env[0..24]);
@@ -803,7 +805,7 @@ impl Renderer {
         self.screen_ao = s[STAGE_AT::SCREEN_AO] != 0.0;
         u[SCREEN_AO] = if self.screen_ao { 1.0 } else { 0.0 };
         if self.screen_ao {
-            self.ao.lay_out(g, &proj, width, height, env[ENV_FOG_NEAR], env[ENV_FOG_FAR]);
+            self.ao.lay_out(g, &proj, width, height);
         }
         let globe = [
             center[0] as f32,

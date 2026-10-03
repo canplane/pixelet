@@ -5,7 +5,6 @@
 //! once here rather than per corner per frame. Nothing is drawn in daylight.
 
 use pxl_spec::space::mat4::Mat4;
-use pxl_spec::space::v3::V3;
 
 use crate::frame::shader::record::PIPELINE_STARS;
 use crate::frame::stage::{stage_lane, STAGE_AT};
@@ -21,25 +20,24 @@ const STAR_BYTES: usize = 8;
 /// Direction and flux, then color and padding.
 const STAR_FLOATS: usize = 8;
 
-pub(crate) const STARS_FLOATS: usize = 16 + 16 + 4 + 4 + 4;
+pub(crate) const STARS_FLOATS: usize = 16 + 16 + 4 + 4;
 pub(crate) const SKY: usize = 16;
-pub(crate) const VIEWPORT: usize = 32;
-pub(crate) const INTENSITY: usize = 34;
-pub(crate) const DEPTH: usize = 36;
-pub(crate) const DENSITY: usize = 39;
-pub(crate) const UP: usize = 40;
+pub(crate) const DEPTH: usize = 32;
+pub(crate) const DENSITY: usize = 35;
+pub(crate) const INTENSITY: usize = 36;
 
 const SHOWN: f32 = 0.001;
 
 pub struct StarPass {
     built: Built,
+    frame_group: u32,
     uniform: u32,
     group: u32,
     words: [f32; STARS_FLOATS],
 }
 
 impl StarPass {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> StarPass {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> StarPass {
         let built = pipelines.build(g, PIPELINE_STARS, format::CANVAS);
         let uniform = object();
         g.buffer(uniform, word_bytes(STARS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
@@ -47,13 +45,16 @@ impl StarPass {
         let catalog = object();
         g.buffer(catalog, word_bytes(stars.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
         g.write_buffer(catalog, 0, bytes(&stars));
+        let frame_group = object();
+        g.bind_group(frame_group, built.layouts[0], &buffer_entry(0, frame_buffer));
         let group = object();
         let mut e = [0u32; 10];
         e[..5].copy_from_slice(&buffer_entry(0, uniform));
         e[5..].copy_from_slice(&buffer_entry(1, catalog));
-        g.bind_group(group, built.layouts[0], &e);
+        g.bind_group(group, built.layouts[1], &e);
         StarPass {
             built,
+            frame_group,
             uniform,
             group,
             words: [0.0; STARS_FLOATS],
@@ -61,7 +62,7 @@ impl StarPass {
     }
 
     /// Nothing is written while the stars are faded out.
-    pub fn lay_out(&mut self, g: &Gpu, view_proj: &Mat4, env: &[f32], width: u32, height: u32, up: &V3) {
+    pub fn lay_out(&mut self, g: &Gpu, view_proj: &Mat4, env: &[f32], width: u32) {
         let u = &mut self.words;
         u[INTENSITY] = env[ENV_SKY];
         if u[INTENSITY] <= SHOWN {
@@ -70,13 +71,8 @@ impl StarPass {
         put_mat(u, 0, view_proj);
         u[SKY..SKY + 12].copy_from_slice(&env[ENV_STARS..ENV_STARS + 12]);
         u[SKY + 12..SKY + 16].copy_from_slice(&[0.0, 0.0, 0.0, 1.0]);
-        u[VIEWPORT] = width as f32;
-        u[VIEWPORT + 1] = height as f32;
         let css = stage_lane()[STAGE_AT::VIEWPORT];
         u[DENSITY] = if css > 0.0 { (width as f64 / css) as f32 } else { 1.0 };
-        for (w, v) in u[UP..UP + 3].iter_mut().zip(up) {
-            *w = *v as f32;
-        }
         // From orbit a star crosses none of the air.
         let t = transmittance(env[ENV_AIR] as f64, 1.0);
         for k in 0..3 {
@@ -90,7 +86,8 @@ impl StarPass {
             return;
         }
         g.set_pipeline(pass, self.built.pipeline);
-        g.set_bind_group(pass, 0, self.group, &[]);
+        g.set_bind_group(pass, 0, self.frame_group, &[]);
+        g.set_bind_group(pass, 1, self.group, &[]);
         g.draw(pass, 4, (CATALOG.len() / STAR_BYTES) as u32, 0, 0);
     }
 }

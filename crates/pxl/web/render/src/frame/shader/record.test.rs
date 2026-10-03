@@ -165,11 +165,9 @@ fn the_skys_layouts_match_their_structs() {
         &[
             ("view_proj", 0),
             ("sky", s::SKY),
-            ("viewport", s::VIEWPORT),
-            ("intensity", s::INTENSITY),
             ("depth", s::DEPTH),
             ("density", s::DENSITY),
-            ("up", s::UP),
+            ("intensity", s::INTENSITY),
         ],
     );
     for (name, k) in [("TRANSMITTANCE_SIZE", a::TRANSMITTANCE), ("MULTISCATTER_SIZE", a::MULTISCATTER), ("SKY_VIEW_SIZE", a::SKY_VIEW)] {

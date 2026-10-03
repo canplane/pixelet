@@ -4,7 +4,7 @@
 @group(0) @binding(1) var scene_depth: texture_depth_2d;
 
 fn depth_at(p: vec2i) -> f32 {
-  return textureLoad(scene_depth, clamp(p, vec2i(0), vec2i(ao_full()) - 1), 0);
+  return textureLoad(scene_depth, clamp(p, vec2i(0), vec2i(frame_viewport()) - 1), 0);
 }
 
 @fragment
@@ -24,6 +24,6 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
       break;
     }
   }
-  let uv = (vec2f(at[chosen]) + 0.5) / ao_full();
-  return vec4f(d[chosen], view_normal(at[chosen], ao_full(), uv));
+  let uv = (vec2f(at[chosen]) + 0.5) / frame_viewport();
+  return vec4f(d[chosen], view_normal(at[chosen], frame_viewport(), uv));
 }

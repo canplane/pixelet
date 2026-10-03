@@ -13,12 +13,9 @@ use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, re
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::put_mat;
 
-/// proj, inv_proj, full, half, fog_near, fog_far, padding.
-const AO_FLOATS: usize = 40;
-const FULL: usize = 32;
-const HALF: usize = 34;
-const FOG_NEAR: usize = 36;
-const FOG_FAR: usize = 37;
+/// proj, inv_proj, half, padding.
+const AO_FLOATS: usize = 36;
+const HALF: usize = 32;
 
 /// N8AO's blue noise; its four channels are the hemisphere spin, the ray push
 /// and the two denoise spins.
@@ -31,6 +28,7 @@ pub struct ScreenAo {
     noise_view: u32,
     uniform: u32,
     uniform_words: [f32; AO_FLOATS],
+    frame_buffer: u32,
     run: u32,
     stride: u32,
     sampler: u32,
@@ -53,7 +51,7 @@ pub struct ScreenAo {
 }
 
 impl ScreenAo {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> ScreenAo {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32, frame_buffer: u32) -> ScreenAo {
         let blank = object();
         g.texture(blank, 1, 1, 1, format::R8, 1, texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST);
         g.write_texture(blank, 0, 1, 1, &[255]);
@@ -78,6 +76,7 @@ impl ScreenAo {
             noise_view,
             uniform,
             uniform_words: [0.0; AO_FLOATS],
+            frame_buffer,
             run,
             stride,
             sampler,
@@ -107,18 +106,14 @@ impl ScreenAo {
         [binding, resource::VIEW, self.blank_view, 0, 0]
     }
 
-    pub fn lay_out(&mut self, g: &Gpu, proj: &Mat4, width: u32, height: u32, fog_near: f32, fog_far: f32) {
+    pub fn lay_out(&mut self, g: &Gpu, proj: &Mat4, width: u32, height: u32) {
         let u = &mut self.uniform_words;
         let mut inv = [0.0; 16];
         mat4_invert(&mut inv, proj);
         put_mat(u, 0, proj);
         put_mat(u, 16, &inv);
-        u[FULL] = width as f32;
-        u[FULL + 1] = height as f32;
         u[HALF] = (width / 2) as f32;
         u[HALF + 1] = (height / 2) as f32;
-        u[FOG_NEAR] = fog_near;
-        u[FOG_FAR] = fog_far;
         g.write_buffer(self.uniform, 0, bytes(u));
     }
 
@@ -153,31 +148,19 @@ impl ScreenAo {
 
         let view = |binding: u32, id: u32| [binding, resource::VIEW, id, 0, 0];
         let sampler = [4, resource::SAMPLER, self.sampler, 0, 0];
-        let uniform = buffer_entry(0, self.uniform);
         let run = [5, resource::BUFFER, self.run, 0, self.stride];
-        let mut e = [0u32; 30];
-        let g0 = object();
-        e[..5].copy_from_slice(&uniform);
-        e[5..10].copy_from_slice(&view(1, self.depth_view));
-        g.bind_group(g0, self.downsample.layouts[0], &e[..10]);
-        let g1 = object();
-        e[5..10].copy_from_slice(&view(1, self.half_view));
-        e[10..15].copy_from_slice(&view(2, self.noise_view));
-        g.bind_group(g1, self.sample.layouts[0], &e[..15]);
-        let mut blur = [0u32; 2];
-        for (id, &src) in blur.iter_mut().zip(&self.ping_view) {
-            *id = object();
-            e[15..20].copy_from_slice(&view(3, src));
-            e[20..25].copy_from_slice(&sampler);
-            e[25..30].copy_from_slice(&run);
-            g.bind_group(*id, self.blur.layouts[0], &e[..30]);
-        }
-        let g4 = object();
-        e[5..10].copy_from_slice(&view(1, self.depth_view));
-        e[10..15].copy_from_slice(&view(2, self.half_view));
-        e[15..20].copy_from_slice(&view(3, self.ping_view[0]));
-        e[20..25].copy_from_slice(&sampler);
-        g.bind_group(g4, self.upsample.layouts[0], &e[..25]);
+        // The AO's uniform at 6; the frame's at 0 where a pass reads the screen's size or the fog.
+        let group = |layout: u32, frame: bool, between: &[[u32; 5]]| {
+            let id = object();
+            let frame = frame.then(|| buffer_entry(0, self.frame_buffer));
+            let e: Vec<u32> = frame.iter().chain(between).chain(&[buffer_entry(6, self.uniform)]).flatten().copied().collect();
+            g.bind_group(id, layout, &e);
+            id
+        };
+        let g0 = group(self.downsample.layouts[0], true, &[view(1, self.depth_view)]);
+        let g1 = group(self.sample.layouts[0], false, &[view(1, self.half_view), view(2, self.noise_view)]);
+        let blur = self.ping_view.map(|src| group(self.blur.layouts[0], false, &[view(1, self.half_view), view(2, self.noise_view), view(3, src), sampler, run]));
+        let g4 = group(self.upsample.layouts[0], true, &[view(1, self.depth_view), view(2, self.half_view), view(3, self.ping_view[0]), sampler]);
         self.groups = [g0, g1, blur[0], blur[1], g4];
         true
     }

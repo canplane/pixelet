@@ -121,15 +121,15 @@ pub fn source(kind: u32) -> &'static str {
             "impostor"
         ),
         SHADER_IMPOSTOR_BAKE => wgsl!("impostor_bake"),
-        SHADER_AO_DOWNSAMPLE => wgsl!("ao_view", "ao_downsample"),
+        SHADER_AO_DOWNSAMPLE => wgsl!("frame", "globe", "ao_view", "ao_downsample"),
         SHADER_AO_SAMPLE => wgsl!("ao_view", "ao_sample"),
         SHADER_AO_BLUR => wgsl!("ao_view", "ao_blur"),
-        SHADER_AO_UPSAMPLE => wgsl!("ao_view", "ao_upsample"),
+        SHADER_AO_UPSAMPLE => wgsl!("frame", "globe", "ao_view", "ao_upsample"),
         SHADER_ATMOS_TRANSMITTANCE => wgsl!("atmos_medium", "atmos_pass", "atmos_transmittance"),
         SHADER_ATMOS_MULTISCATTER => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_multiscatter"),
         SHADER_ATMOS_SKY_VIEW => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_skyview"),
         SHADER_ATMOS_EXPOSURE => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_sky", "atmos_pass", "atmos_exposure"),
-        SHADER_STARS => wgsl!("grade", "stars"),
+        SHADER_STARS => wgsl!("frame", "globe", "grade", "stars"),
         SHADER_CLOUD_FIELD => wgsl!("noise", "cloud_tile", "atmos_pass", "cloud_bake"),
         SHADER_CLOUDS => wgsl!(
             "frame",
@@ -150,11 +150,11 @@ pub fn source(kind: u32) -> &'static str {
     }
 }
 
-pub const FRAME_FLOATS: usize = 84;
+pub const FRAME_FLOATS: usize = 88;
 /// Frame uniform field offsets in floats, in frame.wgsl's order; a test holds it to the struct.
-pub const FRAME_AT: [usize; 17] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68, 76, 80];
+pub const FRAME_AT: [usize; 18] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68, 76, 80, 84];
 #[cfg(test)]
-const FRAME_FIELDS: [&str; 17] = [
+const FRAME_FIELDS: [&str; 18] = [
     "view_proj",
     "camera_pos",
     "edge_strength",
@@ -172,6 +172,7 @@ const FRAME_FIELDS: [&str; 17] = [
     "other_dir",
     "planet",
     "globe",
+    "up",
 ];
 
 /// Pipelines past draw.rs's, which a frame runs on its own.
@@ -513,22 +514,22 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             &[],
             &[group(&[[0, VERTEX, UNIFORM], [1, BOTH, STORAGE]]), group(&[[0, FRAGMENT, TEXTURE_ARRAY], [1, FRAGMENT, SAMPLER]])],
         ),
-        PIPELINE_AO_DOWNSAMPLE => record(screen(SHADER_AO_DOWNSAMPLE), &[], &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, DEPTH]])]),
+        PIPELINE_AO_DOWNSAMPLE => record(screen(SHADER_AO_DOWNSAMPLE), &[], &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, DEPTH], [6, FRAGMENT, UNIFORM]])]),
         PIPELINE_AO_SAMPLE => record(
             screen(SHADER_AO_SAMPLE),
             &[],
-            &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, TEXTURE_UNFILTERED], [2, FRAGMENT, TEXTURE]])],
+            &[group(&[[1, FRAGMENT, TEXTURE_UNFILTERED], [2, FRAGMENT, TEXTURE], [6, FRAGMENT, UNIFORM]])],
         ),
         PIPELINE_AO_BLUR => record(
             screen(SHADER_AO_BLUR),
             &[],
             &[group(&[
-                [0, FRAGMENT, UNIFORM],
                 [1, FRAGMENT, TEXTURE_UNFILTERED],
                 [2, FRAGMENT, TEXTURE],
                 [3, FRAGMENT, TEXTURE],
                 [4, FRAGMENT, SAMPLER],
                 [5, FRAGMENT, UNIFORM_DYNAMIC],
+                [6, FRAGMENT, UNIFORM],
             ])],
         ),
         PIPELINE_AO_UPSAMPLE => record(
@@ -540,6 +541,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 [2, FRAGMENT, TEXTURE_UNFILTERED],
                 [3, FRAGMENT, TEXTURE],
                 [4, FRAGMENT, SAMPLER],
+                [6, FRAGMENT, UNIFORM],
             ])],
         ),
         PIPELINE_ATMOS_TRANSMITTANCE => record(screen(SHADER_ATMOS_TRANSMITTANCE), &[], &[group(&[AIR[0]])]),
@@ -558,7 +560,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..blended(SHADER_STARS, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE]])],
+            &[frame(VERTEX), group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE]])],
         ),
         // From under the layer only where the world left the far plane; from over it everywhere.
         PIPELINE_CLOUDS => record(
