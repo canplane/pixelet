@@ -118,7 +118,6 @@ struct Slot {
     in_frustum: bool,
     /// Mounted and not yet rechecked; its first recheck ignores the frame budget.
     fresh: bool,
-    settling: bool,
     /// Since when it has wanted a build; none while it wants none.
     pending_since: Option<f64>,
     /// Slots a tier needs, for (generation, cube), found when a bake did not
@@ -199,6 +198,11 @@ impl Slot {
 
     fn pending(&self) -> bool {
         self.pending_since.is_some()
+    }
+
+    /// Pending with a layout up.
+    fn settling(&self) -> bool {
+        self.pending() && self.layout.is_some()
     }
 
     fn tier(&self, cube: Cube, generation: u32) -> Option<&Tier> {
@@ -526,7 +530,6 @@ impl Scheduler {
             order: Order::LAST,
             in_frustum: false,
             fresh: true,
-            settling: false,
             pending_since: None,
             need: None,
             recube: false,
@@ -786,7 +789,7 @@ impl Scheduler {
         // A recheck touches only its own chunk, so order does not matter.
         let full_recheck = self.view_dirty;
         sc.eligible.clear();
-        sc.eligible.extend((0..self.slots.len()).filter(|&i| full_recheck || (self.slots[i].fresh || self.slots[i].settling)));
+        sc.eligible.extend((0..self.slots.len()).filter(|&i| full_recheck || (self.slots[i].fresh || self.slots[i].settling())));
         for k in 0..sc.eligible.len() {
             let i = sc.eligible[k];
             self.recheck(world, i, t0);
@@ -829,7 +832,7 @@ impl Scheduler {
             if s.in_frustum {
                 c.in_frustum += 1;
             }
-            if s.settling {
+            if s.settling() {
                 c.settling += 1;
             }
             if s.pending() {
@@ -938,7 +941,7 @@ impl Scheduler {
 
     /// Sets the desired cube and whether the chunk is pending. A drawn piece
     /// wanting another cube waits for the frontier (`materialize`); a building
-    /// chunk drops a tier no longer wanted. `settling` is pending with a layout up.
+    /// chunk drops a tier no longer wanted.
     fn recheck(&mut self, world: &mut World, i: usize, now: f64) {
         self.slots[i].fresh = false;
         let Some(d) = domain::current() else { return };
@@ -958,8 +961,6 @@ impl Scheduler {
         let pending = s.layout != Some((s.target(), current));
         self.set_pending(i, pending, now);
         let s = &mut self.slots[i];
-        let settling = s.pending() && s.layout.is_some();
-        s.settling = settling;
         if !s.pending() {
             self.stop_work(world, i);
         }
