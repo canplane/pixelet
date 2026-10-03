@@ -224,7 +224,7 @@ fn post_shell(s: &mut State) {
         }
     });
     // Collected first: stopping a read settles it, which must not happen inside
-    // the ledger's own walk.
+    // the I/O scheduler's own walk.
     let mut stops = Vec::new();
     take_stops(|key| stops.push(key));
     for key in stops {

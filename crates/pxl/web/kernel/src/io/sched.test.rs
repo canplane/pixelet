@@ -1,6 +1,6 @@
 // pxl-kernel/io/sched.test.rs
 //
-// What the ledger keeps whatever its policy. The policy here orders by why
+// What the I/O scheduler keeps whatever its policy. The policy here orders by why
 // then distance and waits 2 s after a failure.
 
 use super::*;
@@ -29,8 +29,8 @@ impl Serve for ByWhy {
     }
 }
 
-fn ledger() -> Ledger<ByWhy> {
-    let mut l = Ledger::new(ByWhy);
+fn scheduler() -> IoScheduler<ByWhy> {
+    let mut l = IoScheduler::new(ByWhy);
     l.set_credits(2);
     l
 }
@@ -42,23 +42,23 @@ fn ask(why: Why, near: f64) -> Ask {
     }
 }
 
-fn started<S: Serve>(l: &mut Ledger<S>) -> Vec<u64> {
+fn started<S: Serve>(l: &mut IoScheduler<S>) -> Vec<u64> {
     let mut out = Vec::new();
     l.take_started(|key, _, _| out.push(key));
     out
 }
 
-fn stopped<S: Serve>(l: &mut Ledger<S>) -> Vec<u64> {
+fn stopped<S: Serve>(l: &mut IoScheduler<S>) -> Vec<u64> {
     let mut out = Vec::new();
     l.take_stops(|key| out.push(key));
     out
 }
 
-fn ok<S: Serve>(l: &mut Ledger<S>, key: u64, at: f64) {
+fn ok<S: Serve>(l: &mut IoScheduler<S>, key: u64, at: f64) {
     l.settle(key, Outcome::ok, None, Failure::default(), at);
 }
 
-fn failed<S: Serve>(l: &mut Ledger<S>, key: u64, at: f64) {
+fn failed<S: Serve>(l: &mut IoScheduler<S>, key: u64, at: f64) {
     let fail = Failure {
         errno: Errno::ENETUNREACH as i32,
         ..Failure::default()
@@ -68,7 +68,7 @@ fn failed<S: Serve>(l: &mut Ledger<S>, key: u64, at: f64) {
 
 #[test]
 fn saying_the_same_set_again_changes_nothing() {
-    let mut l = ledger();
+    let mut l = scheduler();
     let want = [(1u64, ask(Why::Fault, 0.0))];
     l.declare(Category::terrain, &want, 0.0);
     l.pump(0.0);
@@ -82,7 +82,7 @@ fn saying_the_same_set_again_changes_nothing() {
 
 #[test]
 fn an_answer_is_asked_once() {
-    let mut l = ledger();
+    let mut l = scheduler();
     l.declare(Category::terrain, &[(1, ask(Why::Fault, 0.0))], 0.0);
     l.pump(0.0);
     let key = started(&mut l)[0];
@@ -98,7 +98,7 @@ fn an_answer_is_asked_once() {
 
 #[test]
 fn a_failure_waits_rather_than_asking_straight_back() {
-    let mut l = ledger();
+    let mut l = scheduler();
     l.declare(Category::terrain, &[(1, ask(Why::Fault, 0.0))], 0.0);
     l.pump(0.0);
     let key = started(&mut l)[0];
@@ -116,7 +116,7 @@ fn a_failure_waits_rather_than_asking_straight_back() {
 
 #[test]
 fn a_current_demand_is_said_whatever_old_work_is_draining() {
-    let mut l = ledger();
+    let mut l = scheduler();
     l.declare(Category::terrain, &[(1, ask(Why::Hint, 0.0)), (2, ask(Why::Hint, 1.0))], 0.0);
     l.pump(0.0);
     let out = started(&mut l);
@@ -134,7 +134,7 @@ fn a_current_demand_is_said_whatever_old_work_is_draining() {
 
 #[test]
 fn a_running_attempt_is_never_stopped_for_a_better_want() {
-    let mut l = ledger();
+    let mut l = scheduler();
     l.set_credits(1);
     l.declare(Category::terrain, &[(1, ask(Why::Hint, 5.0))], 0.0);
     l.pump(0.0);
@@ -167,7 +167,7 @@ impl Serve for Restless {
 
 #[test]
 fn every_want_is_served_at_rest() {
-    let mut l = Ledger::new(Restless);
+    let mut l = IoScheduler::new(Restless);
     l.set_credits(2);
     let mut wanted: Vec<(u64, Ask)> = (0..12).map(|k| (k, ask(Why::Fault, (k * 7 % 12) as f64))).collect();
     let mut out: Vec<u64> = Vec::new();
@@ -193,7 +193,7 @@ fn every_want_is_served_at_rest() {
 
 #[test]
 fn an_asset_shares_the_credits_and_is_never_withdrawn() {
-    let mut l = ledger();
+    let mut l = scheduler();
     l.set_credits(1);
     l.declare(Category::terrain, &[(1, ask(Why::Fault, 0.0))], 0.0);
     l.declare(Category::asset, &[(7, Ask::PLAIN)], 0.0);

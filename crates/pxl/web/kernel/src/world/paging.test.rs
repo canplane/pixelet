@@ -12,7 +12,7 @@ use pxl_spec::bake::poi_page::{Place, PoiPage, POI_LATTICE};
 use super::*;
 use crate::io::demand::Category;
 use crate::io::policy::Policy;
-use crate::io::sched::{Ledger, Rank, Serve};
+use crate::io::sched::{IoScheduler, Rank, Serve};
 use crate::layer::environment::fog::reach_at;
 use crate::sched::profiler::record::{Failure, Outcome};
 use crate::world::prefetch::{Prefetch, Reach};
@@ -102,8 +102,8 @@ fn converge<S: Serve>(serve: S, prefetch: &impl Prefetch, allowance: u32) -> Pyr
 }
 
 fn converge_on<S: Serve>(pyramid: &mut Pyramid<PoiPage>, observation: fn() -> Observation, serve: S, prefetch: &impl Prefetch, allowance: u32) {
-    let mut ledger = Ledger::new(serve);
-    ledger.set_credits(4);
+    let mut sched = IoScheduler::new(serve);
+    sched.set_credits(4);
     let mut out: Vec<u64> = Vec::new();
     let mut resident: HashSet<LevelPage> = HashSet::new();
     let floor = floor_of(&observation());
@@ -123,19 +123,19 @@ fn converge_on<S: Serve>(pyramid: &mut Pyramid<PoiPage>, observation: fn() -> Ob
             assert!(floor.iter().all(|&p| pyramid.paging().resident(p)), "the floor is held");
             return;
         }
-        ledger.declare(Category::poi, pyramid.wants(), at);
-        ledger.pump(at);
+        sched.declare(Category::poi, pyramid.wants(), at);
+        sched.pump(at);
         let mut stops = Vec::new();
-        ledger.take_stops(|key| stops.push(key));
+        sched.take_stops(|key| stops.push(key));
         out.retain(|key| !stops.contains(key));
-        ledger.take_started(|key, _, _| out.push(key));
+        sched.take_started(|key, _, _| out.push(key));
         assert!(out.len() <= 4, "no more out than the credits");
         let answered = out.len().div_ceil(2);
         for key in out.split_off(out.len() - answered).into_iter().rev() {
-            let (_, subject) = ledger.attempt_of(key).expect("an attempt out");
+            let (_, subject) = sched.attempt_of(key).expect("an attempt out");
             let p = LevelPage::of_subject(subject);
             pyramid.admit(p, |_| Ok(crowded(p))).expect("a page is made");
-            ledger.settle(key, Outcome::ok, None, Failure::default(), at);
+            sched.settle(key, Outcome::ok, None, Failure::default(), at);
         }
         assert!(pyramid.paging().frames_used() <= FRAMES, "turn {turn}: past the frames");
         resident.extend(pyramid.paging().held().map(|(p, _)| p));

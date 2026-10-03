@@ -154,7 +154,7 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
         Got::Read(block) => block,
         _ => None,
     };
-    // A key the ledger does not hold is one a reset forgot.
+    // A key the I/O scheduler does not hold is one a reset forgot.
     let Some((category, subject)) = attempt_of(key) else {
         release(block);
         return;
