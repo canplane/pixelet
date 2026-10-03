@@ -312,8 +312,8 @@ impl BillboardAtlas {
         (0..self.state.len() as u32).filter(|&s| self.state[s as usize] == LIVE).collect()
     }
 
-    /// Halves the sheet while every live entry still fits. Without it a sheet grown
-    /// to 4096 stayed there, 128 MB of canvas and texture holding 12 entries.
+    /// Halves the sheet while every live entry still fits. Without it a sheet one
+    /// dense view grew stays that large, canvas and texture, for a dozen entries.
     pub fn compact(&mut self) -> bool {
         let mut changed = false;
         while self.size > INITIAL_SIZE {

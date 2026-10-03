@@ -65,15 +65,22 @@ fn badges() -> &'static mut HashMap<Label, Badge> {
 }
 
 pub fn retain(labels: &HashSet<Label>) {
+    let mut dropped = false;
     badges().retain(|label, b| {
         if labels.contains(label) {
             return true;
         }
         if b.slot != NO_SLOT {
             billboard_sheet().release(b.slot as u32);
+            dropped = true;
         }
         false
     });
+    // The moment the sheet's live set shrinks, so the moment it may stop being
+    // as large as the densest view made it.
+    if dropped {
+        billboard_sheet().compact();
+    }
 }
 
 /// None until its label is laid out, which a later turn has.
