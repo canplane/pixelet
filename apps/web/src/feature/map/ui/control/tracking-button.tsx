@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 
 import { type GlyphName, Spinner } from "@platform/icon.tsx";
 import { LABEL } from "@platform/palette.ts";
+import { Motion } from "@platform/motion.tsx";
+import { SETTLE } from "@/shared/ui/motion/transition.ts";
 import { chrome } from "@/shared/ui/theme.ts";
 
 import { DevicePoseStatus, Tracking } from "@/kernel/abi/cmd.spec.ts";
@@ -38,9 +40,12 @@ export function TrackingButton() {
       label={t(label)}
     >
       {status === DevicePoseStatus.Loading ? <Spinner size={chrome.glyph} color={LABEL.primary} /> : (
-        // Held still, as iPhone Maps holds it: the map is what turns with the
-        // heading.
-        <Glyph glyph={glyph} size={chrome.glyph} color={LABEL.primary} />
+        // Held still, as iPhone Maps holds it, the map being what turns with
+        // the heading; it turns once into place as following starts, so the
+        // change of mode is seen.
+        <Motion to={{ rotate: 0 }} from={{ rotate: -90 }} replay={following ? "follow" : null} transition={SETTLE}>
+          <Glyph glyph={glyph} size={chrome.glyph} color={LABEL.primary} />
+        </Motion>
       )}
     </CircularButton>
   );
