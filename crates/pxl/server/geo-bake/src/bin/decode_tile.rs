@@ -13,13 +13,14 @@
 //!   decode_tile --all --version v7
 
 use std::collections::BTreeMap;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use flate2::write::ZlibEncoder;
 use flate2::{Compression, Crc};
 use pxl_geo_bake::cli::Flags;
+use pxl_geo_bake::util::{encoding_of, unpack};
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::bake::deck::{Decks, Form};
 use pxl_spec::bake::format::decode_terrain;
@@ -36,19 +37,13 @@ use xpute_core::wire::xtp::{HDR_SZ, WORD_SZ};
 
 const MAGENTA: u32 = 0xff00ff;
 
-/// zstd, gzip in older sets, or identity from a deployment; told apart by
-/// their first bytes.
+/// Packed as a bake stores it, or identity from a deployment.
 fn read_page(path: &Path) -> Result<Vec<u8>, String> {
     let raw = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    if raw.starts_with(&[0x28, 0xb5, 0x2f, 0xfd]) {
-        return zstd::decode_all(raw.as_slice()).map_err(|e| format!("zstd: {e}"));
+    match encoding_of(&raw) {
+        Some(_) => unpack(&raw).map_err(|e| e.to_string()),
+        None => Ok(raw),
     }
-    if raw.starts_with(&[0x1f, 0x8b]) {
-        let mut out = Vec::new();
-        flate2::read::GzDecoder::new(raw.as_slice()).read_to_end(&mut out).map_err(|e| format!("gzip: {e}"))?;
-        return Ok(out);
-    }
-    Ok(raw)
 }
 
 struct Page {

@@ -4,14 +4,14 @@ use super::*;
 use crate::deck::piece::End;
 use pxl_spec::bake::deck::Form;
 
-fn row(id: &str, points: &[[f64; 2]]) -> BridgeRow {
+fn row(id: &str, points: &[[f64; 2]]) -> Segment {
     let mut wkb = vec![1u8, 2, 0, 0, 0];
     wkb.extend((points.len() as u32).to_le_bytes());
     for p in points {
         wkb.extend(p[0].to_le_bytes());
         wkb.extend(p[1].to_le_bytes());
     }
-    BridgeRow {
+    Segment {
         gers_id: id.into(),
         subtype: "road".into(),
         class: None,

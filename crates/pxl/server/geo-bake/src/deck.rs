@@ -20,8 +20,7 @@ use std::path::Path;
 use postgres::Client;
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::deck::{clearance_m, headroom_m, Form, BORE_COVER_M, DECK_THICKNESS_M};
-use pxl_spec::bake::format::DeckRow;
-use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m};
+use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m, G3857};
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pyramid::PAGE_CELLS;
 
@@ -29,13 +28,15 @@ use crate::terrain::pipeline::overture::between::flag_ranges;
 use crate::terrain::pipeline::overture::policy::{segment_type, DECK_FLAGS, UNSEEN_FLAGS};
 use crate::terrain::pipeline::overture::width::{width_m, WayShape};
 use crate::terrain::repository::{TerrainRepository, DRAWN_REACH_U};
-use approach::{branches, Free};
+use approach::branches;
 use memo::{Profile, Run};
 use param::{AT_END_M, RIVER_M, RIVER_MOST_M, RIVER_PER_M, STREAM_M};
-use piece::{pieces_of, BridgeRow, End, Piece};
+use piece::{pieces_of, End, Piece};
 use profile::{solve as solve_profile, Problem};
 use relate::{Polyline, Water, Way};
 use source::Store;
+
+use crate::segment::Segment;
 use structure::{group, Graph};
 
 /// What passes under a deck.
@@ -77,8 +78,26 @@ struct Need {
 /// leaves the ground's paint exactly where its line begins.
 #[derive(Default)]
 pub struct Solved {
-    pub rows: Vec<DeckRow>,
+    pub lines: Vec<Line>,
     pub drawn: Vec<Drawn>,
+}
+
+/// A line as the solve left it, its Z the road surface in metres.
+pub struct Line {
+    pub subtype: String,
+    pub class: Option<String>,
+    pub width_m: f64,
+    pub form: Form,
+    pub points: Vec<G3857>,
+}
+
+/// A structure's end with nothing of its form past it: its surface, and how
+/// far that stands off the ground.
+struct Free {
+    piece: Piece,
+    last: bool,
+    top: f64,
+    sep: f64,
 }
 
 /// A range of a way, as fractions of it, that a line draws.
@@ -101,61 +120,65 @@ pub struct Reader<'a, S: Store> {
 /// the ways their ends go on along there.
 pub fn solve_page(r: &mut Reader<impl Store>, page: IVec) -> Result<Solved, String> {
     let ring = source::read_pages(r.client, r.repo, &source::ring(page), r.store)?;
-    let Some((bounds, surfaces)) = &ring.window else { unreachable!("pages are read bounded") };
     let mut out = Solved::default();
-    let mut ends: Vec<(Piece, bool, f64, f64)> = Vec::new();
+    let mut free: Vec<Free> = Vec::new();
     for form in [Form::Deck, Form::Bore] {
-        let seeds: Vec<Piece> = ring.rows.iter().flat_map(|row| pieces_of(row, form)).filter(|p| p.touches(*bounds)).collect();
+        let seeds: Vec<Piece> = ring.rows.iter().flat_map(|row| pieces_of(row, form)).filter(|p| p.touches(ring.bounds)).collect();
         for members in whole(r.client, seeds, form)? {
             let profile = solve_structure(r, &members, true)?;
             for (p, run) in members.iter().zip(&profile.runs) {
                 let (first, last) = (run.points[0], run.points[run.points.len() - 1]);
                 let (a, b) = (p.on_way(first[0]), p.on_way(last[0]));
                 out.drawn.push(Drawn { gers_id: p.gers_id.clone(), range: [a.min(b), a.max(b)] });
-                out.rows.push(DeckRow {
-                    gers_id: p.gers_id.clone(),
+                out.lines.push(Line {
                     subtype: p.subtype.clone(),
                     class: p.class.clone(),
                     width_m: p.width_m,
-                    form: form.byte(),
+                    form,
                     points: run.points.iter().map(|q| [q[1], q[2], q[3]]).collect(),
                 });
             }
             for (i, last) in free_ends(&members) {
                 let run = &profile.runs[i];
-                let top = if last { run.points[run.points.len() - 1][3] } else { run.points[0][3] };
-                ends.push((members[i].clone(), last, top, top - run.ground[usize::from(last)]));
+                let top = run.points[if last { run.points.len() - 1 } else { 0 }][3];
+                free.push(Free { piece: members[i].clone(), last, top, sep: top - run.ground[usize::from(last)] });
             }
         }
     }
 
     // each free end's ground stretches, sampled where the ring's ground is held
-    let asked: Vec<Free> = ends.iter().map(|(p, last, ..)| free(p, *last)).collect();
-    let inside = |p: [f64; 2]| (0..2).all(|k| p[k] >= bounds[0][k] && p[k] <= bounds[1][k]);
-    let stretches = branches(&ring.ways, &asked, inside);
+    let asked: Vec<approach::Free> = free.iter().map(|f| approach_of(&f.piece, f.last)).collect();
+    let inside = |p: [f64; 2]| (0..2).all(|k| p[k] >= ring.bounds[0][k] && p[k] < ring.bounds[1][k]);
     // where a road meets the ground, once a point, so two ending on one share it
     let mut meeting: HashMap<(usize, u64), [f64; 3]> = HashMap::new();
-    for b in &stretches {
-        let ground = elevation::sample(surfaces, &b.at.iter().map(|&(_, p)| p).collect::<Vec<_>>(), elevation::page_of);
-        let (_, _, top, sep) = ends[b.end];
-        let to = approach::meets(b, sep, b.across.map(|o| ends[o].3));
-        let mut points = approach::profile(b, top, &ground, to);
+    for b in &branches(&ring.ways, &asked, inside) {
+        let ground = elevation::sample(&ring.ground, &b.at.iter().map(|&(_, p)| p).collect::<Vec<_>>())?;
+        let end = &free[b.end];
+        let to = approach::meets(b, end.sep, b.across.map(|o| free[o].sep));
+        let mut points = approach::profile(b, end.top, &ground, to);
         if points.is_empty() {
             continue;
         }
+        // past the ring the road is no page's around this one, and its ground is not held
         let way = &ring.ways[b.way];
-        points.push(*meeting.entry((b.way, to.to_bits())).or_insert_with(|| {
-            let p = way.line.at(to * way.line.length());
-            [p[0], p[1], elevation::sample(surfaces, &[p], elevation::page_of)[0]]
-        }));
-        let row = &ring.ways[b.way].row;
+        let at = way.line.at(to * way.line.length());
+        if inside(at) {
+            let meet = match meeting.get(&(b.way, to.to_bits())) {
+                Some(&p) => p,
+                None => *meeting.entry((b.way, to.to_bits())).or_insert([at[0], at[1], elevation::sample(&ring.ground, &[at])?[0]]),
+            };
+            points.push(meet);
+        }
+        if points.len() < 2 {
+            continue;
+        }
+        let row = &way.row;
         out.drawn.push(Drawn { gers_id: row.gers_id.clone(), range: [b.from.min(to), b.from.max(to)] });
-        out.rows.push(DeckRow {
-            gers_id: row.gers_id.clone(),
+        out.lines.push(Line {
             subtype: row.subtype.clone(),
             class: row.class.clone(),
             width_m: width_m(&row.subtype, row.class.as_deref(), WayShape::at(row.columns(), (b.from + to) / 2.0)),
-            form: Form::Grade.byte(),
+            form: Form::Grade,
             points,
         });
     }
@@ -163,13 +186,13 @@ pub fn solve_page(r: &mut Reader<impl Store>, page: IVec) -> Result<Solved, Stri
 }
 
 /// A free end as the approach asks it.
-fn free(p: &Piece, last: bool) -> Free<'_> {
+fn approach_of(p: &Piece, last: bool) -> approach::Free<'_> {
     let end = p.end(last);
     let at = match end {
         End::Vertex(..) => f64::from(u8::from(last)),
         End::Cut(_, bits) => f64::from_bits(*bits),
     };
-    Free { end, gers_id: &p.gers_id, at, onward: last }
+    approach::Free { end, gers_id: &p.gers_id, at, onward: last }
 }
 
 /// The whole structures `seeds` are in: each free end at a segment's end asked
@@ -200,7 +223,7 @@ fn whole(client: &mut Client, mut pieces: Vec<Piece>, form: Form) -> Result<Vec<
         .into_iter()
         .map(|m| {
             let mut members: Vec<Piece> = m.into_iter().map(|i| pieces[i].clone()).collect();
-            members.sort_by(|a, b| (a.gers_id.as_str(), a.start).partial_cmp(&(b.gers_id.as_str(), b.start)).expect("a start is a number"));
+            members.sort_by(|a, b| a.id().cmp(&b.id()));
             members
         })
         .collect();
@@ -220,8 +243,7 @@ pub fn solve_structure(r: &mut Reader<impl Store>, members: &[Piece], held: bool
     let g = Graph::build(members, &all);
     let pages: Vec<IVec> = g.at.iter().map(|&p| elevation::page_of(p)).collect::<BTreeSet<_>>().into_iter().collect();
     let input = source::read_pages(r.client, r.repo, &pages, r.store)?;
-    let Some((_, surfaces)) = &input.window else { unreachable!("pages are read bounded") };
-    let z = elevation::sample(surfaces, &g.at, elevation::page_of);
+    let z = elevation::sample(&input.ground, &g.at)?;
     let lines: Vec<Polyline> = members.iter().map(|p| Polyline::of(p.points.iter().map(|q| [q[0], q[1]]))).collect();
 
     let (mut floor, mut ceiling) = (vec![f64::NEG_INFINITY; z.len()], vec![f64::INFINITY; z.len()]);
@@ -263,7 +285,7 @@ pub fn solve_structure(r: &mut Reader<impl Store>, members: &[Piece], held: bool
     for (node, _) in &g.free_ends {
         ends[*node as usize] = true;
     }
-    let solved = solve_profile(&Problem {
+    let top = solve_profile(&Problem {
         adj: &g.adj,
         ground: &z,
         floor: &floor,
@@ -278,7 +300,7 @@ pub fn solve_structure(r: &mut Reader<impl Store>, members: &[Piece], held: bool
         .map(|(p, along)| Run {
             gers_id: p.gers_id.clone(),
             start: p.start.to_bits(),
-            points: along.iter().map(|&(n, d)| [d, g.at[n as usize][0], g.at[n as usize][1], solved.top[n as usize]]).collect(),
+            points: along.iter().map(|&(n, d)| [d, g.at[n as usize][0], g.at[n as usize][1], top[n as usize]]).collect(),
             ground: [z[along[0].0 as usize], z[along[along.len() - 1].0 as usize]],
         })
         .collect();
@@ -298,14 +320,15 @@ struct Crossing {
 /// Where the structure's members cross a piece of its form that `relate`
 /// orders under it (a deck) or over it (a bore), with that piece's surface
 /// there as its own structure solves it free of crossings.
-fn crossings(r: &mut Reader<impl Store>, members: &[Piece], lines: &[Polyline], rows: &[BridgeRow]) -> Result<Vec<Crossing>, String> {
+fn crossings(r: &mut Reader<impl Store>, members: &[Piece], lines: &[Polyline], rows: &[Segment]) -> Result<Vec<Crossing>, String> {
     let form = members[0].form;
-    let own: HashSet<(&str, u64)> = members.iter().map(|p| (p.gers_id.as_str(), p.start.to_bits())).collect();
-    let others: Vec<Piece> = rows.iter().flat_map(|row| pieces_of(row, form)).filter(|p| !own.contains(&(p.gers_id.as_str(), p.start.to_bits()))).collect();
+    let own: HashSet<(&str, u64)> = members.iter().map(Piece::id).collect();
+    let others: Vec<Piece> = rows.iter().flat_map(|row| pieces_of(row, form)).filter(|p| !own.contains(&p.id())).collect();
     let pieces: Vec<&Piece> = members.iter().chain(&others).collect();
     let all_lines: Vec<Polyline> = lines.iter().map(|l| Polyline::of(l.points.iter().copied())).chain(others.iter().map(|p| Polyline::of(p.points.iter().map(|q| [q[0], q[1]])))).collect();
     let mut out = Vec::new();
-    let mut solved: HashMap<(String, u64), (Vec<Piece>, Profile)> = HashMap::new();
+    // each structure crossed, as solved free of crossings
+    let mut solved: Vec<(Vec<Piece>, Profile)> = Vec::new();
     for c in relate::decks_crossing(&pieces, &all_lines) {
         // a deck over what it crosses, a bore under it
         let (far, far_at, near, near_at) = match form {
@@ -316,16 +339,17 @@ fn crossings(r: &mut Reader<impl Store>, members: &[Piece], lines: &[Polyline], 
             continue;
         }
         let near_piece = pieces[near];
-        let key = (near_piece.gers_id.clone(), near_piece.start.to_bits());
-        if !solved.contains_key(&key) {
-            let structure = whole(r.client, vec![near_piece.clone()], form)?.into_iter().next().expect("a piece is in a structure");
-            let profile = solve_structure(r, &structure, false)?;
-            for p in &structure {
-                solved.insert((p.gers_id.clone(), p.start.to_bits()), (structure.clone(), profile.clone()));
+        let at = match solved.iter().position(|(s, _)| s.iter().any(|p| p.id() == near_piece.id())) {
+            Some(at) => at,
+            None => {
+                let structure = whole(r.client, vec![near_piece.clone()], form)?.into_iter().next().expect("a piece is in a structure");
+                let profile = solve_structure(r, &structure, false)?;
+                solved.push((structure, profile));
+                solved.len() - 1
             }
-        }
-        let (structure, profile) = &solved[&key];
-        let k = structure.iter().position(|p| (p.gers_id.as_str(), p.start.to_bits()) == (key.0.as_str(), key.1)).expect("the piece is its structure's");
+        };
+        let (structure, profile) = &solved[at];
+        let k = structure.iter().position(|p| p.id() == near_piece.id()).expect("the piece is its structure's");
         let gap = match form {
             Form::Deck => clearance_m(kind_of(near_piece)) + DECK_THICKNESS_M,
             _ => -(headroom_m(kind_of(pieces[far])) + BORE_COVER_M),
@@ -340,8 +364,8 @@ fn crossings(r: &mut Reader<impl Store>, members: &[Piece], lines: &[Polyline], 
     Ok(out)
 }
 
-/// How far a bound reaches along a structure: half a page's side less what is
-/// drawn past one.
+/// How far a bound's bend reaches along a structure: half a page's side less
+/// what is drawn past one.
 fn halo_m(y_db: f64) -> f64 {
     (f64::from(PAGE_CELLS) * U_PER_CELL - DRAWN_REACH_U) / 2.0 / u_per_m(from_db(y_db))
 }

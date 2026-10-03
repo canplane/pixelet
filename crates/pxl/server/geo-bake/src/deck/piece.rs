@@ -5,38 +5,11 @@
 use pxl_spec::bake::deck::Form;
 use pxl_spec::space::adapter::epsg3857::{from_db, scale_at, G3857};
 
+use crate::segment::Segment;
 use crate::terrain::pipeline::overture::between::{cell_of, flag_ranges, length_of, split_ranged, value_at, without, Line};
 use crate::terrain::pipeline::overture::policy::{BORE_FLAGS, DECK_FLAGS, UNSEEN_FLAGS};
-use crate::terrain::pipeline::overture::width::{width_m, WayColumns, WayShape};
+use crate::terrain::pipeline::overture::width::{width_m, WayShape};
 use crate::wkb::wkb_to_geometries;
-
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
-pub struct BridgeRow {
-    pub gers_id: String,
-    pub subtype: String,
-    pub class: Option<String>,
-    pub flags: Option<String>,
-    pub levels: Option<String>,
-    pub widths: Option<String>,
-    pub access: Option<String>,
-    pub subclass: Option<String>,
-    pub subclasses: Option<String>,
-    /// The source's `connectors`: where along it it joins other segments.
-    pub connectors: Option<String>,
-    pub geom_wkb: Box<[u8]>,
-}
-
-impl BridgeRow {
-    pub fn columns(&self) -> WayColumns<'_> {
-        WayColumns {
-            flags: self.flags.as_deref(),
-            widths: self.widths.as_deref(),
-            access: self.access.as_deref(),
-            subclass: self.subclass.as_deref(),
-            subclasses: self.subclasses.as_deref(),
-        }
-    }
-}
 
 #[derive(Clone)]
 pub struct Piece {
@@ -82,6 +55,11 @@ impl End {
 }
 
 impl Piece {
+    /// Its way and where on it it starts: a piece in no other place.
+    pub fn id(&self) -> (&str, u64) {
+        (&self.gers_id, self.start.to_bits())
+    }
+
     pub fn end(&self, last: bool) -> &End {
         &self.ends[usize::from(last)]
     }
@@ -108,7 +86,7 @@ impl Piece {
     }
 }
 
-pub fn pieces_of(row: &BridgeRow, form: Form) -> Vec<Piece> {
+pub fn pieces_of(row: &Segment, form: Form) -> Vec<Piece> {
     let flags = row.flags.as_deref();
     let (on, less): (&[&str], Vec<&str>) = match form {
         Form::Deck => (DECK_FLAGS, UNSEEN_FLAGS.to_vec()),

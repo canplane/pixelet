@@ -47,10 +47,6 @@ pub fn flag_ranges(flags: Option<&str>, wanted: &[&str], cell: f64) -> Vec<Range
     )
 }
 
-pub fn value_ranges(column: Option<&str>, keep: impl Fn(f64) -> bool) -> Vec<Range> {
-    merged(rules(column).iter().filter(|r| r["value"].as_f64().is_some_and(&keep)).filter_map(range_of).collect(), 0.0)
-}
-
 pub fn merged(mut ranges: Vec<Range>, gap: f64) -> Vec<Range> {
     ranges.sort_by(|x, y| x[0].total_cmp(&y[0]));
     let mut merged: Vec<Range> = Vec::with_capacity(ranges.len());
@@ -125,10 +121,6 @@ pub fn split_ranged<const N: usize>(g: WkbGeometry, sets: [&[Range]; N]) -> Vec<
             (marks, [w[0], w[1]], geometry)
         })
         .collect()
-}
-
-pub fn split<const N: usize>(g: WkbGeometry, sets: [&[Range]; N]) -> Vec<([bool; N], WkbGeometry)> {
-    split_ranged(g, sets).into_iter().map(|(marks, _, g)| (marks, g)).collect()
 }
 
 pub struct Line<'a> {

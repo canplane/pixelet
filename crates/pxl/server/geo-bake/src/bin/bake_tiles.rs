@@ -1,9 +1,8 @@
 // pxl-geo-bake/bin/bake_tiles.rs
 
-//! The terrain bake, in two stages: `leaf` (each page's deck solve from it and
-//! the eight around it, as on demand, and from that one result its lines and
-//! its surface, which paints a way only where the solve leaves it on the
-//! ground; resumable) and `assemble` (leaves and the levels above, no DB).
+//! The terrain bake, in two stages: `leaf` (each page as the dev server bakes
+//! it on demand, terrain/leaf.rs `bake_leaf`; resumable) and `assemble` (the
+//! leaves and the levels folded above them, no DB).
 //!
 //!   cargo run --profile server -p pxl-geo-bake --bin bake_tiles -- [flags]
 //!
@@ -12,7 +11,7 @@
 //!   --build <dir>        the stages' artifacts (default ./out/build/terrain)
 //!   --concurrency <n>    parallel pages, one connection each (default 8)
 //!   --limit <n>          stop after n land pages (smoke test)
-//!   --force              bake leaves that already exist on disk again
+//!   --force              bake leaves that already exist on disk again, and solve every structure again
 //!   --reclassify         classify again though land_pages.json is current
 
 use std::fs;
@@ -25,7 +24,6 @@ use std::time::Instant;
 use postgres::Client;
 use pxl_spec::bake::format::{encode_terrain, Terrain};
 use pxl_spec::bake::published::PUBLISHED_VERSION;
-use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::LevelPage;
 
@@ -33,13 +31,9 @@ use pxl_geo_bake::cli::Flags;
 use pxl_geo_bake::coverage::{self, Coverage, Overture};
 use pxl_geo_bake::elevation::Raster;
 use pxl_geo_bake::pyramid::{build, write_manifest, Layer, PageSet};
-use pxl_geo_bake::terrain::artifact::{assemble, decode_lines, encode_lines, Surface};
-use pxl_geo_bake::terrain::leaf::{self, bake_ocean, has_ground, land_pages, ocean_samples, write_land_pages, OCEAN_KEY};
-use pxl_geo_bake::terrain::repository::TerrainRepository;
 use pxl_geo_bake::deck;
-use pxl_geo_bake::terrain::source::{fetch_surface, SourceStats};
-use pxl_geo_bake::terrain::pipeline::deck::bake_decks;
-
+use pxl_geo_bake::terrain::leaf::{self, bake_leaf, bake_ocean, has_ground, land_pages, ocean_samples, write_land_pages, OCEAN_KEY};
+use pxl_geo_bake::terrain::repository::TerrainRepository;
 use pxl_geo_bake::util::{fmt_bytes, fmt_dur, git_sha, pack, refuse_mixed, unpack, Level};
 
 const CLASSIFY_BATCH: usize = 2000;
@@ -140,7 +134,7 @@ struct Totals {
     flat_ele: u64,
 }
 
-fn over_pages<W>(what: &str, pages: &[IVec], workers: usize, open: impl Fn() -> Result<W, String> + Sync, each: impl Fn(&mut W, IVec, &mut Totals) -> Result<Option<u64>, String> + Sync) -> Totals {
+fn over_pages<W>(what: &str, pages: &[IVec], workers: usize, open: impl Fn() -> Result<W, String> + Sync, each: impl Fn(&mut W, IVec) -> Result<Option<u64>, String> + Sync) -> Totals {
     let next = AtomicUsize::new(0);
     let totals = Mutex::new(Totals::default());
     let started = Instant::now();
@@ -154,10 +148,8 @@ fn over_pages<W>(what: &str, pages: &[IVec], workers: usize, open: impl Fn() -> 
                 loop {
                     let i = next.fetch_add(1, Ordering::Relaxed);
                     let Some(&page) = pages.get(i) else { break };
-                    let mut local = Totals::default();
-                    let result = each(&mut w, page, &mut local);
+                    let result = each(&mut w, page);
                     let mut t = totals.lock().expect("totals");
-                    t.flat_ele += local.flat_ele;
                     match result {
                         Ok(Some(bytes)) => {
                             t.done += 1;
@@ -232,8 +224,7 @@ fn read_json(path: &Path) -> serde_json::Value {
 
 fn run() -> Result<(), String> {
     let args = parse_args()?;
-    let surfaces = PageSet::new(args.build.join("surface"));
-    let lines = PageSet::new(args.build.join("lines"));
+    let leaves = PageSet::new(args.build.join("leaf"));
     let coverage = Coverage::of_source()?;
     let land_cache = args.out.parent().unwrap_or(Path::new(".")).join("land_pages.json");
     let (source, mut checked) = match args.stages.iter().any(|&s| s != Stage::Assemble) {
@@ -282,10 +273,9 @@ fn run() -> Result<(), String> {
                 _ => {}
             }
         }
-        fs::create_dir_all(surfaces.level_dir(0)).map_err(|e| e.to_string())?;
-        fs::create_dir_all(lines.level_dir(0)).map_err(|e| e.to_string())?;
+        fs::create_dir_all(leaves.level_dir(0)).map_err(|e| e.to_string())?;
         if !args.force {
-            refuse_mixed(&surfaces.level_dir(0))?;
+            refuse_mixed(&leaves.level_dir(0))?;
         }
         // Each worker walks its own band of rows, zigzag, so a page's eight
         // around it were mostly read for the page before.
@@ -297,7 +287,7 @@ fn run() -> Result<(), String> {
         std::thread::scope(|scope| {
             let all = rows.len();
             for walk in &walks {
-                let (totals, surfaces, lines, raster, structures) = (&totals, &surfaces, &lines, &raster, &structures);
+                let (totals, leaves, raster, structures) = (&totals, &leaves, &raster, &structures);
                 scope.spawn(move || {
                     let mut db = match connect(source, raster) {
                         Ok(db) => db,
@@ -308,22 +298,14 @@ fn run() -> Result<(), String> {
                         held.keep_around(page);
                         let at = LevelPage::new(0, page);
                         let mut flat = false;
-                        // the surface last, so one on disk has its lines beside it
                         let baked = (|| -> Result<Option<u64>, String> {
-                            if !args.force && surfaces.path(at).exists() {
+                            if !args.force && leaves.path(at).exists() {
                                 return Ok(None);
                             }
-                            let solved = deck::solve_page(&mut deck::Reader { client: &mut db.client, repo: &db.repo, store: &mut held, memo: &structures }, page)?;
-                            let decks = bake_decks(&solved.rows, epsg3857::get_page_bbox(page)[0]).ok_or("a page's decks overflow a record")?;
-                            match decks.is_empty() {
-                                true => lines.remove(at)?,
-                                false => lines.write(at, &pack(&encode_lines(&decks).map_err(|e| format!("{e:?}"))?, Level::Stored).map_err(|e| e.to_string())?)?,
-                            }
-                            let mut stats = SourceStats::default();
-                            let surface = fetch_surface(&db.repo, &mut db.client, page, &solved.drawn, &mut stats).map_err(|e| format!("{e:?}"))?;
-                            flat = stats.flat_ele > 0;
-                            let packed = pack(&surface.encode().map_err(|e| format!("{e:?}"))?, Level::Stored).map_err(|e| e.to_string())?;
-                            surfaces.write(at, &packed)?;
+                            let (terrain, off_raster) = bake_leaf(&mut deck::Reader { client: &mut db.client, repo: &db.repo, store: &mut held, memo: structures }, page)?;
+                            flat = off_raster;
+                            let packed = pack(&encode_terrain(&terrain).map_err(|e| format!("{e:?}"))?, Level::Stored).map_err(|e| e.to_string())?;
+                            leaves.write(at, &packed)?;
                             Ok(Some(packed.len() as u64))
                         })();
                         let mut t = totals.lock().expect("totals");
@@ -382,29 +364,15 @@ fn run() -> Result<(), String> {
         fs::write(tiles.root.join(OCEAN_KEY), &ocean_packed).map_err(|e| e.to_string())?;
         println!("[bake/ocean] wrote {OCEAN_KEY}: {} (page-independent: verified)", fmt_bytes(ocean_packed.len() as f64));
 
-        let read = |set: &PageSet, page: IVec| -> Result<Option<Vec<u8>>, String> {
-            let path = set.path(LevelPage::new(0, page));
-            if !path.exists() {
-                return Ok(None);
-            }
-            unpack(&fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?).map(Some).map_err(|e| e.to_string())
-        };
         let t = over_pages(
             "assemble",
             targets,
             args.concurrency,
             || Ok(()),
-            |_, page, _| {
-                let surface = read(&surfaces, page)?.ok_or("no surface: run --stage surface")?;
-                let surface = Surface::decode(&surface).map_err(|e| format!("{e:?}"))?;
-                let decks = match read(&lines, page)? {
-                    Some(raw) => decode_lines(&raw).map_err(|e| format!("{e:?}"))?,
-                    None => Default::default(),
-                };
-                let raw = encode_terrain(&assemble(surface, decks)).map_err(|e| format!("{e:?}"))?;
-                let packed = pack(&raw, Level::Stored).map_err(|e| e.to_string())?;
-                tiles.write(LevelPage::new(0, page), &packed)?;
-                Ok(Some(packed.len() as u64))
+            |_, page| {
+                let (from, to) = (leaves.path(LevelPage::new(0, page)), tiles.path(LevelPage::new(0, page)));
+                fs::hard_link(&from, &to).map_err(|e| format!("{}: {e}: run --stage leaf", from.display()))?;
+                Ok(Some(fs::metadata(&to).map_err(|e| e.to_string())?.len()))
             },
         );
         if t.failed > 0 {

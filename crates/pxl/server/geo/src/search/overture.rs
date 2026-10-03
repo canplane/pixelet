@@ -17,25 +17,28 @@ const DIVISION_LIMIT: i64 = 5;
 
 /// ILIKE is the filter the trigram index accelerates; `%` alone rejects short
 /// Korean queries like "강남", so `similarity()` only ranks.
-const SEARCH_SQL: &str = "SELECT gers_id, name, properties,
+macro_rules! places_matching {
+    () => {
+        "SELECT gers_id, name, properties,
   ST_X(geom) AS x3857, ST_Y(geom) AS y3857,
   ST_X(ST_Transform(geom, 4326)) AS lon, ST_Y(ST_Transform(geom, 4326)) AS lat
 FROM overture_places
 WHERE name <> '' AND name ILIKE '%' || $1 || '%'
-ORDER BY similarity(name, $1) DESC, name
-LIMIT $2";
+"
+    };
+}
+
+const SEARCH_SQL: &str = concat!(places_matching!(), "ORDER BY similarity(name, $1) DESC, name\nLIMIT $2");
 
 /// Ranked against `near`. Similarity is rounded to two decimals so distance
 /// decides among near-equal names; on the raw score, one trigram outranked a
 /// thousand kilometres.
-const SEARCH_NEAR_SQL: &str = "SELECT gers_id, name, properties,
-  ST_X(geom) AS x3857, ST_Y(geom) AS y3857,
-  ST_X(ST_Transform(geom, 4326)) AS lon, ST_Y(ST_Transform(geom, 4326)) AS lat
-FROM overture_places
-WHERE name <> '' AND name ILIKE '%' || $1 || '%'
-ORDER BY round(similarity(name, $1)::numeric, 2) DESC,
+const SEARCH_NEAR_SQL: &str = concat!(
+    places_matching!(),
+    "ORDER BY round(similarity(name, $1)::numeric, 2) DESC,
   geom <-> ST_Transform(ST_SetSRID(ST_MakePoint($3, $4), 4326), 3857) ASC
-LIMIT $2";
+LIMIT $2"
+);
 
 /// Area rows before point rows; the caller keeps the first of each name.
 /// UNION's ORDER BY cannot call `similarity()`, so each branch computes `sim`.

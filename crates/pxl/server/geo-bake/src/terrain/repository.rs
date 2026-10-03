@@ -4,33 +4,33 @@ use std::sync::Arc;
 
 use postgres::types::ToSql;
 use postgres::{Client, Statement};
-use pxl_spec::bake::format::{BaseRow, BuildingRow, CoastRow, SegmentRow};
 use pxl_spec::bake::constant::U_PER_CELL;
-use pxl_spec::space::adapter::epsg3857::to_db;
 use pxl_spec::bake::deck::WIDEST;
-use pxl_spec::space::adapter::epsg3857::BBox3857;
-
-use crate::terrain::pipeline::corridor::GAP;
+use pxl_spec::space::adapter::epsg3857::{to_db, BBox3857};
 
 use crate::elevation::Raster;
+use crate::segment::Segment;
+use crate::terrain::pipeline::corridor::GAP;
 
 // Buildings and roads are not clipped: a naive bbox clip broke ring closure.
 // Water and coast are clipped, since their rows reach hundreds of thousands of points.
 const OVERTURE_BUILDINGS_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
-SELECT gers_id, subtype, class, height, num_floors, ST_AsBinary(geom) AS geom_wkb
+SELECT class, subtype, ST_AsBinary(geom) AS geom_wkb
 FROM overture_buildings, env
 WHERE geom && env.e";
 
-const OVERTURE_TRANSPORTATION_SQL: &str = "WITH env AS (
+const OVERTURE_TRANSPORTATION_SQL: &str = concat!(
+    "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
-SELECT gers_id, subtype, class, COALESCE(road_flags, rail_flags)::text AS flags,
-  width_rules::text AS widths, access_restrictions::text AS access,
-  subclass, subclass_rules::text AS subclasses, ST_AsBinary(geom) AS geom_wkb
-FROM overture_transportation, env
-WHERE geom && env.e";
+SELECT ",
+    crate::segment_columns!(),
+    "
+FROM overture_transportation t, env
+WHERE t.geom && env.e"
+);
 
 /// How far past a page what is drawn on it can come from: a way at its
 /// widest, and a corridor's gap past another (pipeline/corridor.rs).
@@ -47,18 +47,18 @@ pub fn drawn_from([min, max]: BBox3857) -> BBox3857 {
 const OVERTURE_BASE_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
-SELECT gers_id, 'land_use' AS source, subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_land_use, env WHERE geom && env.e
+SELECT 'land_use' AS source, subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_land_use, env WHERE geom && env.e
 UNION ALL
 -- Some water rows are country-scale (up to 444,626 points); clip to the page envelope first. ST_IsEmpty guards && 's bbox-only false positives.
-SELECT gers_id, 'water' AS source, subtype, class, ST_AsBinary(clipped) AS geom_wkb FROM (
-  SELECT gers_id, subtype, class, ST_Intersection(geom, env.e) AS clipped
+SELECT 'water' AS source, subtype, class, ST_AsBinary(clipped) AS geom_wkb FROM (
+  SELECT subtype, class, ST_Intersection(geom, env.e) AS clipped
   FROM overture_base_water, env
   WHERE geom && env.e
 ) w WHERE NOT ST_IsEmpty(clipped)
 UNION ALL
-SELECT gers_id, 'land' AS source, subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_land, env WHERE geom && env.e
+SELECT 'land' AS source, subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_land, env WHERE geom && env.e
 UNION ALL
-SELECT gers_id, 'infrastructure' AS source, subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_infrastructure, env WHERE geom && env.e AND class IN ('parking', 'helipad')";
+SELECT 'infrastructure' AS source, subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_infrastructure, env WHERE geom && env.e AND class IN ('parking', 'helipad')";
 
 /// Overture's ocean polygons inverted into a land polygon for the page: empty
 /// means pure ocean, the whole envelope means all land, both dropped.
@@ -75,7 +75,6 @@ land AS (
   FROM env LEFT JOIN ocean_union ON true
 )
 SELECT
-  'overture_ocean' AS id,
   ST_AsBinary(g) AS geom_wkb,
   ST_Covers(g, e) AS covers_page
 FROM land
@@ -85,10 +84,29 @@ WHERE NOT ST_IsEmpty(g)";
 /// the catalog check (`coverage.rs` `Overture`) sees each table they read.
 pub const READS: [&str; 4] = [OVERTURE_BUILDINGS_SQL, OVERTURE_TRANSPORTATION_SQL, OVERTURE_BASE_SQL, OVERTURE_COAST_SQL];
 
+pub struct BuildingRow {
+    pub subtype: Option<String>,
+    pub class: Option<String>,
+    pub geom_wkb: Box<[u8]>,
+}
+
+pub struct BaseRow {
+    /// Which table: "land_use", "water", "land" or "infrastructure".
+    pub source: String,
+    pub subtype: Option<String>,
+    pub class: Option<String>,
+    pub geom_wkb: Box<[u8]>,
+}
+
+pub struct CoastRow {
+    pub geom_wkb: Box<[u8]>,
+    pub covers_page: bool,
+}
+
 pub struct PageSource {
     pub ele: Option<Vec<i16>>,
     pub building_rows: Vec<BuildingRow>,
-    pub segment_rows: Vec<SegmentRow>,
+    pub segment_rows: Vec<Segment>,
     pub base_rows: Vec<BaseRow>,
     pub coast_rows: Vec<CoastRow>,
 }
@@ -118,70 +136,37 @@ impl TerrainRepository {
     pub fn fetch_page_source(&self, client: &mut Client, page_bbox: BBox3857) -> Result<PageSource, postgres::Error> {
         let [[minx, miny, _], [maxx, maxy, _]] = drawn_from(page_bbox);
         let bbox: [&(dyn ToSql + Sync); 4] = [&minx, &miny, &maxx, &maxy];
-
-        let ele = self.raster.page_grid(client, page_bbox)?;
-
-        let building_rows = client
-            .query(&self.buildings, &bbox)?
-            .iter()
-            .map(|row| BuildingRow {
-                gers_id: row.get("gers_id"),
-                subtype: row.get("subtype"),
-                class: row.get("class"),
-                height: row.get("height"),
-                num_floors: row.get::<_, Option<i32>>("num_floors").map(f64::from),
-                geom_wkb: wkb(row),
-            })
-            .collect();
-
-        let segment_rows = client
-            .query(&self.segments, &bbox)?
-            .iter()
-            .map(|row| SegmentRow {
-                gers_id: row.get("gers_id"),
-                subtype: row.get("subtype"),
-                class: row.get("class"),
-                flags: row.get("flags"),
-                widths: row.get("widths"),
-                access: row.get("access"),
-                subclass: row.get("subclass"),
-                subclasses: row.get("subclasses"),
-                geom_wkb: wkb(row),
-            })
-            .collect();
-
-        let base_rows = client
-            .query(&self.base, &bbox)?
-            .iter()
-            .map(|row| BaseRow {
-                gers_id: row.get("gers_id"),
-                source: row.get("source"),
-                subtype: row.get("subtype"),
-                class: row.get("class"),
-                geom_wkb: wkb(row),
-            })
-            .collect();
-
-        let coast_rows = client
-            .query(&self.coast, &bbox)?
-            .iter()
-            .map(|row| CoastRow {
-                id: row.get("id"),
-                geom_wkb: wkb(row),
-                covers_page: row.get("covers_page"),
-            })
-            .collect();
-
+        let wkb = |row: &postgres::Row| -> Box<[u8]> { row.get::<_, &[u8]>("geom_wkb").into() };
         Ok(PageSource {
-            ele,
-            building_rows,
-            segment_rows,
-            base_rows,
-            coast_rows,
+            ele: self.raster.page_grid(client, page_bbox)?,
+            building_rows: client
+                .query(&self.buildings, &bbox)?
+                .iter()
+                .map(|row| BuildingRow {
+                    subtype: row.get("subtype"),
+                    class: row.get("class"),
+                    geom_wkb: wkb(row),
+                })
+                .collect(),
+            segment_rows: client.query(&self.segments, &bbox)?.iter().map(Segment::of).collect(),
+            base_rows: client
+                .query(&self.base, &bbox)?
+                .iter()
+                .map(|row| BaseRow {
+                    source: row.get("source"),
+                    subtype: row.get("subtype"),
+                    class: row.get("class"),
+                    geom_wkb: wkb(row),
+                })
+                .collect(),
+            coast_rows: client
+                .query(&self.coast, &bbox)?
+                .iter()
+                .map(|row| CoastRow {
+                    geom_wkb: wkb(row),
+                    covers_page: row.get("covers_page"),
+                })
+                .collect(),
         })
     }
-}
-
-fn wkb(row: &postgres::Row) -> Box<[u8]> {
-    row.get::<_, &[u8]>("geom_wkb").into()
 }

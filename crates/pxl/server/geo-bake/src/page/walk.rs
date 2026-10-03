@@ -86,11 +86,6 @@ pub struct Tally {
     pub bytes: u64,
 }
 
-pub struct Walked {
-    pub tally: Tally,
-    pub elapsed_ms: f64,
-}
-
 pub fn walk<T>(
     args: &Args,
     tag: &str,
@@ -99,7 +94,7 @@ pub fn walk<T>(
     targets: &[Target],
     connect: impl Fn() -> Result<T, String> + Sync,
     one: impl Fn(&mut T, &Target) -> Result<Page, String> + Sync,
-) -> Result<Walked, String> {
+) -> Result<Tally, String> {
     let next = AtomicUsize::new(0);
     let totals = Mutex::new(Tally::default());
     let started = Instant::now();
@@ -185,5 +180,5 @@ pub fn walk<T>(
         tally.failed
     );
 
-    Ok(Walked { tally, elapsed_ms })
+    Ok(tally)
 }

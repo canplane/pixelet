@@ -8,7 +8,8 @@ use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::adapter::epsg3857::to_db;
 use pxl_spec::space::pyramid::PAGE_CELLS;
 
-use crate::deck::piece::{BridgeRow, Piece};
+use crate::deck::piece::Piece;
+use crate::segment::Segment;
 use crate::terrain::pipeline::overture::between::cell_of;
 use crate::wkb::wkb_to_geometries;
 
@@ -65,12 +66,12 @@ impl Polyline {
 
 /// A way as read: its row and its line.
 pub struct Way {
-    pub row: BridgeRow,
+    pub row: Segment,
     pub line: Polyline,
 }
 
 impl Way {
-    pub fn of(row: BridgeRow) -> Option<Way> {
+    pub fn of(row: Segment) -> Option<Way> {
         let g = wkb_to_geometries(&row.geom_wkb).into_iter().next()?;
         (g.points.len() >= 2).then(|| Way {
             line: Polyline::of(g.points.iter().map(|p| [p[0], p[1]])),
@@ -251,7 +252,6 @@ pub struct DeckCrossing {
     pub upper_at: f64,
     pub lower: usize,
     pub lower_at: f64,
-    pub tied: bool,
 }
 
 pub fn decks_crossing(pieces: &[&Piece], lines: &[Polyline]) -> Vec<DeckCrossing> {
@@ -275,7 +275,6 @@ pub fn decks_crossing(pieces: &[&Piece], lines: &[Polyline]) -> Vec<DeckCrossing
                     upper_at: line.along[s] + t * (line.along[s + 1] - line.along[s]),
                     lower: j,
                     lower_at: other.along[js] + u * (other.along[js + 1] - other.along[js]),
-                    tied: pieces[i].level == pieces[j].level,
                 });
             }
         }

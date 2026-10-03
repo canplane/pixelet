@@ -5,8 +5,8 @@ use crate::coverage::Coverage;
 use crate::terrain::leaf::{bake_ocean, ocean_samples};
 use pxl_spec::space::pyramid::LevelPage;
 
-/// Each page's rows the deck solve read, kept for its neighbours while the
-/// server runs.
+/// Each page's rows the deck solve read and each structure it solved, kept
+/// for the pages around while the server runs.
 pub(super) const SOURCE: &str = ".source";
 
 pub(super) struct Source {
@@ -22,8 +22,8 @@ impl Source {
 }
 
 pub(super) fn execute(p: LevelPage, cache: &std::path::Path, out: &std::path::Path, seconds: u64) -> Result<(), String> {
-    use crate::terrain::{leaf, repository::TerrainRepository, source::SourceStats};
-    use crate::util::{unpack, Level};
+    use crate::terrain::{leaf, repository::TerrainRepository};
+    use crate::util::unpack;
     use pxl_spec::bake::format::{decode_terrain, Terrain};
     super::pyramid::execute::<Terrain>(
         p,
@@ -35,9 +35,10 @@ pub(super) fn execute(p: LevelPage, cache: &std::path::Path, out: &std::path::Pa
                 return Ok(None);
             }
             let raster = std::sync::Arc::new(crate::elevation::Raster::open(&mut client).map_err(|e| e.to_string())?);
-            let repository = TerrainRepository::prepare(&mut client, raster).map_err(|e| e.to_string())?;
-            let packed = leaf::bake_leaf(&repository, &mut client, &cache.join(SOURCE), p.page, &mut SourceStats::default(), Level::Live)?.1;
-            decode_terrain(&unpack(&packed).map_err(|e| e.to_string())?).map(Some).map_err(|e| format!("{e:?}"))
+            let repo = TerrainRepository::prepare(&mut client, raster).map_err(|e| e.to_string())?;
+            let memo = cache.join(SOURCE);
+            let reader = &mut crate::deck::Reader { client: &mut client, repo: &repo, store: &mut crate::deck::source::Disk(&memo), memo: &memo.join("structure") };
+            Ok(Some(leaf::bake_leaf(reader, p.page)?.0))
         },
         || decode_terrain(&unpack(&std::fs::read(cache.join(leaf::OCEAN_KEY)).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?).map_err(|e| format!("{e:?}")),
     )

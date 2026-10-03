@@ -10,65 +10,40 @@ use postgres::types::ToSql;
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 
-use crate::deck::piece::BridgeRow;
 use crate::deck::relate::{Water, Way};
-use crate::terrain::artifact::Surface;
+use crate::segment::Segment;
+use crate::terrain::bake::Surface;
 use crate::terrain::repository::TerrainRepository;
-use crate::terrain::source::{fetch_surface, SourceStats};
+use crate::terrain::source::fetch_surface;
 use crate::util::{pack, unpack, write_atomic, Level};
 
 /// The tables the solve's queries name, for the catalog.
 pub const READS: [&str; 2] = ["FROM overture_transportation", "FROM overture_base_water"];
 
-const FLAGGED: &str = "COALESCE(t.road_flags, t.rail_flags)::text ~ 'is_bridge|is_tunnel'";
+const SEGMENTS_SQL: &str = concat!("SELECT ", crate::segment_columns!(), " FROM overture_transportation t WHERE t.geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)");
 
-const ROW: &str = "t.gers_id, t.subtype, t.class, COALESCE(t.road_flags, t.rail_flags)::text AS flags, t.level_rules::text AS levels,
-    t.width_rules::text AS widths, t.access_restrictions::text AS access,
-    t.subclass, t.subclass_rules::text AS subclasses, (t.properties->'connectors')::text AS connectors, ST_AsBinary(t.geom) AS geom_wkb";
-
-fn bridge_row(r: &postgres::Row) -> BridgeRow {
-    BridgeRow {
-        gers_id: r.get("gers_id"),
-        subtype: r.get("subtype"),
-        class: r.get("class"),
-        flags: r.get("flags"),
-        levels: r.get("levels"),
-        widths: r.get("widths"),
-        access: r.get("access"),
-        subclass: r.get("subclass"),
-        subclasses: r.get("subclasses"),
-        connectors: r.get("connectors"),
-        geom_wkb: r.get::<_, &[u8]>("geom_wkb").into(),
-    }
-}
-
-/// Everything a solve reads: the bridge and tunnel rows, every way touching
-/// them, and the water under them.
+/// Everything a solve reads of some pages: the bridge and tunnel rows, every
+/// way, the water, and the ground, as the client draws it, inside `bounds`.
 pub struct Input {
-    pub rows: Vec<BridgeRow>,
+    pub rows: Vec<Segment>,
     pub ways: Vec<Way>,
     pub water: Vec<Water>,
-    pub window: Option<Window>,
+    pub bounds: [[f64; 2]; 2],
+    pub ground: HashMap<IVec, Surface>,
 }
-
-/// What a page's solve is bounded to: its pages' box, and their ground.
-pub type Window = ([[f64; 2]; 2], HashMap<IVec, Surface>);
 
 /// One page's rows, as a page's other rows are read: whatever overlaps it.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct PageRows {
-    rows: Vec<BridgeRow>,
-    ways: Vec<BridgeRow>,
+    ways: Vec<Segment>,
     water: Vec<(String, Option<String>, Vec<u8>)>,
     /// Its ground as the client draws it: the elevation and the cells whose shift goes on it.
     ele: Vec<i16>,
     cells: Vec<u16>,
-    /// Off the elevation raster, so baked flat.
-    pub flat: bool,
 }
 
 impl PageRows {
-    pub fn surface(&self) -> Surface {
+    fn surface(&self) -> Surface {
         Surface {
             ele: self.ele.clone(),
             ground: pxl_spec::bake::format::Ground { cells: self.cells.clone().into() },
@@ -80,19 +55,15 @@ fn page_rows(client: &mut Client, repo: &TerrainRepository, page: IVec) -> Resul
     let [min, max] = epsg3857::get_page_bbox(page);
     let env: [&(dyn ToSql + Sync); 4] = [&min[0], &min[1], &max[0], &max[1]];
     let read = |client: &mut Client, sql: &str| client.query(sql, &env).map_err(|e| e.to_string());
-    let rows = read(client, &format!("SELECT {ROW} FROM overture_transportation t WHERE {FLAGGED} AND t.geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)"))?;
-    let ways = read(client, &format!("SELECT {ROW} FROM overture_transportation t WHERE t.geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)"))?;
+    let ways = read(client, SEGMENTS_SQL)?;
     let water = read(client, "SELECT subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_water WHERE subtype <> 'ocean' AND geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)")?;
-    let mut stats = SourceStats::default();
     // the paint of its ways is no matter to the ground's height, so none is drawn
-    let surface = fetch_surface(repo, client, page, &[], &mut stats).map_err(|e| format!("{e:?}"))?;
+    let (surface, _) = fetch_surface(repo, client, page, &[])?;
     Ok(PageRows {
-        rows: rows.iter().map(bridge_row).collect(),
-        ways: ways.iter().map(bridge_row).collect(),
+        ways: ways.iter().map(Segment::of).collect(),
         water: water.iter().map(|r| (r.get("subtype"), r.get("class"), r.get::<_, &[u8]>("geom_wkb").to_vec())).collect(),
         ele: surface.ele,
         cells: surface.ground.cells.to_vec(),
-        flat: stats.flat_ele > 0,
     })
 }
 
@@ -151,7 +122,7 @@ fn memo_rows(client: &mut Client, repo: &TerrainRepository, page: IVec, memo: &P
 
 /// What pages hold, each read once into `store`.
 pub fn read_pages(client: &mut Client, repo: &TerrainRepository, pages: &[IVec], store: &mut impl Store) -> Result<Input, String> {
-    let (mut rows, mut ways, mut water, mut grids) = (BTreeMap::new(), BTreeMap::new(), BTreeMap::new(), HashMap::new());
+    let (mut ways, mut water, mut ground) = (BTreeMap::new(), BTreeMap::new(), HashMap::new());
     let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
     for &at in pages {
         for corner in epsg3857::get_page_bbox(at) {
@@ -160,16 +131,17 @@ pub fn read_pages(client: &mut Client, repo: &TerrainRepository, pages: &[IVec],
             }
         }
         let p = store.page(client, repo, at)?;
-        grids.insert(at, p.surface());
-        rows.extend(p.rows.into_iter().map(|r| (r.gers_id.clone(), r)));
+        ground.insert(at, p.surface());
         ways.extend(p.ways.into_iter().map(|r| (r.gers_id.clone(), r)));
         water.extend(p.water.into_iter().map(|w| (w.2.clone(), w)));
     }
+    let ways: Vec<Segment> = ways.into_values().collect();
     Ok(Input {
-        rows: rows.into_values().collect(),
-        ways: ways.into_values().filter_map(Way::of).collect(),
+        rows: ways.iter().filter(|w| w.flagged()).cloned().collect(),
+        ways: ways.into_iter().filter_map(Way::of).collect(),
         water: water.into_values().map(|(s, c, wkb)| Water::of(s, c, &wkb)).collect(),
-        window: Some(([lo, hi], grids)),
+        bounds: [lo, hi],
+        ground,
     })
 }
 
@@ -180,11 +152,10 @@ pub fn ring(page: IVec) -> Vec<IVec> {
 }
 
 /// The bridge and tunnel rows touching a point, wherever it is.
-pub fn flagged_at(client: &mut Client, [x, y]: [f64; 2]) -> Result<Vec<BridgeRow>, String> {
+pub fn flagged_at(client: &mut Client, [x, y]: [f64; 2]) -> Result<Vec<Segment>, String> {
     let e = TOUCH;
     let env: [&(dyn ToSql + Sync); 4] = [&(x - e), &(y - e), &(x + e), &(y + e)];
-    let sql = format!("SELECT {ROW} FROM overture_transportation t WHERE {FLAGGED} AND t.geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)");
-    Ok(client.query(&sql, &env).map_err(|e| e.to_string())?.iter().map(bridge_row).collect())
+    Ok(client.query(SEGMENTS_SQL, &env).map_err(|e| e.to_string())?.iter().map(Segment::of).filter(Segment::flagged).collect())
 }
 
 /// How near a row's line must come to a point to be asked of it, in DB

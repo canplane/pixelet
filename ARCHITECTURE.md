@@ -125,16 +125,15 @@ The map center is only the handle the camera is moved by, and plays no part in a
 The bake is `pxl-geo-bake`, and it writes the same formats the client reads — XTP, xpute's tree, read where it lands rather than parsed — so nothing is translated on arrival.
 
 ```text
-Overture PostGIS rows
-  → XTP decode
-  → overture/adapter, coast/adapter (row → feature)
-  → normalizer (classify, rank, tag — the rules live in overture/policy, coast/policy)
-  → ground (rasterize geometry into ground channels)
-  → encode_terrain (elevation + ground → XTP)
-  → compressed HTTP page response
+Overture rows and the elevation raster, from PostGIS
+  → deck solve (every bridge and tunnel reaching the page, solved whole: its lines, and the ranges of ways they draw)
+  → overture/policy (row → feature: its shape, the cell it paints, its rank)
+  → corridor (the gap between two ways that are one strip of road, paved)
+  → ground (features rasterized into the ground channels, the coast's land over the sea)
+  → encode_terrain (elevation + ground + lines → XTP)
 ```
 
-Rasterizing is the bulk of it: polygons are filled even-odd with holes, lines are drawn with a thickness kernel, and the scratch geometry for both comes from one arena per page. Elevation is stored as signed 16-bit cell units under one Mercator Z scale per page, which is what makes the bake, the terrain and the objects agree on what a unit of height is.
+Rasterizing is the bulk of it: polygons are filled even-odd with holes, and lines are drawn with a thickness kernel. Elevation is stored as signed 16-bit cell units under one Mercator Z scale per page, which is what makes the bake, the terrain and the objects agree on what a unit of height is.
 
 Every land page is baked once into a versioned prefix. Open ocean is one shared page, since every one of them would be identical.
 

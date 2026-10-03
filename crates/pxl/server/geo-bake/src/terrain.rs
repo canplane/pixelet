@@ -1,6 +1,5 @@
 // pxl-geo-bake/terrain.rs
 
-pub mod artifact;
 pub mod bake;
 pub mod leaf;
 pub mod pipeline;

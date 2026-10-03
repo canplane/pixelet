@@ -76,17 +76,16 @@ ingested data.
 
 ## Terrain
 
-A page is built from two artifacts made together from one deck solve
-(`geo-bake terrain/artifact.rs`), and assembled from them:
+A page is baked in two stages:
 
-- **leaf** — each page's deck solve (`geo-bake deck.rs`), as the dev server
-  solves a page on demand: every structure reaching the page or the eight
-  around it, solved whole wherever it runs, and from that one result both of
-  the page's artifacts: its lines (decks, bores and the grades at their ends)
-  and its surface (ground and elevation), which paints a way only where no
-  line draws it. Resumable.
-- **assemble** — each leaf of the two, and the pyramid folded over the
-  leaves, with no database. Whole every time.
+- **leaf** — each page exactly as the dev server bakes it on demand
+  (`geo-bake terrain/leaf.rs` `bake_leaf`): its deck solve (`deck.rs`) —
+  every structure reaching the page or the eight around it, solved whole
+  wherever it runs — and from that one result its lines (decks, bores and
+  the grades at their ends) and its surface (ground and elevation), which
+  paints a way only where no line draws it. Resumable.
+- **assemble** — the leaves linked into the version, and the pyramid folded
+  over them, with no database. Whole every time.
 
 A first bake, or one after an ingest:
 
@@ -118,14 +117,14 @@ It runs long enough to want a log file rather than a terminal:
 grep '^\[bake\] ' /tmp/bake.log | tail -2
 ```
 
-Under `--build` beside `surface/` and `lines/`, `structure/` keeps each
+Under `--build` beside `leaf/`, `structure/` keeps each
 solved structure so the pages it crosses solve it once: a cache nothing
 reads as a fact, deleted by `--force` and safe to delete any time. A run
 resumed after a change to the solve must be `--force`d, or it reuses
 structures the old solve made.
 
-What it produces, beside `surface/` and `lines/` under `--build` with a
-`leaf.json` of what built them:
+What it produces, beside `leaf/` under `--build` with a `leaf.json` of what
+built it:
 
 - `0/`, one packed object per page anything is drawn in — land, or a way,
   building, deck or bore — the leaves

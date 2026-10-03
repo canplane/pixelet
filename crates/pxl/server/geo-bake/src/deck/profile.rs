@@ -28,20 +28,14 @@ pub struct Problem<'a> {
     pub halo: &'a [f64],
 }
 
-pub struct Profile {
-    pub top: Vec<f64>,
-    pub forced: Vec<bool>,
-}
-
-pub fn solve(p: &Problem) -> Profile {
+/// The surface at each point.
+pub fn solve(p: &Problem) -> Vec<f64> {
     let n = p.ground.len();
     let neg = |v: &[f64]| v.iter().map(|x| -x).collect::<Vec<f64>>();
     let line = line(p);
     let lower = envelope(p, p.floor, p.ceiling, 1.0, &line);
     let upper = neg(&envelope(p, &neg(p.ceiling), &neg(p.floor), -1.0, &line));
-    let top: Vec<f64> = (0..n).map(|v| lower[v].max(upper[v].min(line[v]))).collect();
-    let forced = (0..n).map(|v| p.adj[v].iter().any(|&(w, d)| d > 0.0 && (top[v] - top[w as usize]).abs() / d > PREFERRED_SLOPE + 1e-9)).collect();
-    Profile { top, forced }
+    (0..n).map(|v| lower[v].max(upper[v].min(line[v]))).collect()
 }
 
 /// Between a structure's ends by inverse distance along it: on a chain, the

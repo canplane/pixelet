@@ -24,8 +24,3 @@ pub fn category_named(primary: Option<&str>) -> &str {
 pub fn name_of(properties: &serde_json::Value) -> &str {
     properties.get("names").and_then(|n| n.get("primary")).and_then(|p| p.as_str()).unwrap_or("")
 }
-
-/// A conflation-quality score, the closest Overture has to a rank.
-pub fn confidence(properties: &serde_json::Value) -> f64 {
-    properties.get("confidence").and_then(|c| c.as_f64()).unwrap_or(0.0)
-}

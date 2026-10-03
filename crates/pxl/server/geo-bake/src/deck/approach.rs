@@ -1,13 +1,9 @@
 // pxl-geo-bake/deck/approach.rs
 
 //! Where a structure's end goes on at the ground: its own way past the flag,
-//! or the ways the source's connector at a segment's end joins, each stretch
-//! only to the next flag or its segment's end. Along one, the road's distance
-//! from the ground falls from what the end holds to none, at `PREFERRED_SLOPE`
-//! or steeper where the stretch is shorter, so the road follows the ground.
-//! Where another structure's end is across the stretch, each takes what it
-//! needs, and where the two need more than it holds, both steepen to meet the
-//! ground at one point, each taking it in the share of the change it makes.
+//! or the ways the source's connector at a segment's end joins, each only to
+//! the next flag or its segment's end. Along one, the road's distance from the
+//! ground falls to none at `PREFERRED_SLOPE`, steeper where it must.
 
 use std::collections::HashMap;
 

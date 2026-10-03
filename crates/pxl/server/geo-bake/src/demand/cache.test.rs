@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn cache() -> Arc<Cache> {
     static SERIAL: AtomicUsize = AtomicUsize::new(0);
-    Arc::new(Cache::new(std::env::temp_dir().join(format!("pxl-demand-{}-{}", std::process::id(), SERIAL.fetch_add(1, Ordering::Relaxed)))).unwrap())
+    Arc::new(Cache::new(std::env::temp_dir().join(format!("pxl-demand-{}-{}", std::process::id(), SERIAL.fetch_add(1, Ordering::Relaxed))), Arc::new(Semaphore::new(32)), std::time::Duration::from_secs(30)).unwrap())
 }
 
 #[tokio::test]
@@ -59,7 +59,7 @@ async fn disconnected_request_does_not_cancel_publication_and_a_purged_generatio
     entered.notified().await;
     task.abort();
     old.purge().unwrap();
-    let new = Cache::with_admission(old.root.clone(), old.admission.clone(), old.deadline).unwrap();
+    let new = Cache::new(old.root.clone(), old.admission.clone(), old.deadline).unwrap();
     new.publish("page", Some(b"new")).unwrap();
     release.notify_one();
     old.once("page".into(), |_deadline| async { panic!("must join existing job") }).await.unwrap();
@@ -71,7 +71,7 @@ async fn disconnected_request_does_not_cancel_publication_and_a_purged_generatio
 #[tokio::test]
 async fn kinds_and_generations_share_admission_but_hits_and_joiners_need_no_new_slot() {
     let a = cache();
-    let b = Cache::with_admission(a.root.with_extension("other"), a.admission.clone(), a.deadline).unwrap();
+    let b = Cache::new(a.root.with_extension("other"), a.admission.clone(), a.deadline).unwrap();
     let producer = a.clone();
     a.once("cached".into(), move |_deadline| async move { producer.publish("cached", Some(b"packet")).map_err(Failure::from) })
         .await
@@ -85,7 +85,7 @@ async fn kinds_and_generations_share_admission_but_hits_and_joiners_need_no_new_
 
 #[tokio::test]
 async fn expired_work_stays_joinable_and_admitted_until_its_cleanup_finishes() {
-    let c = Arc::new(Cache::with_admission(cache().root.with_extension("cleanup"), Arc::new(Semaphore::new(1)), std::time::Duration::from_millis(20)).unwrap());
+    let c = Arc::new(Cache::new(cache().root.with_extension("cleanup"), Arc::new(Semaphore::new(1)), std::time::Duration::from_millis(20)).unwrap());
     let cleaning = Arc::new(Notify::new());
     let release = Arc::new(Notify::new());
     let first = {

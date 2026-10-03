@@ -1,14 +1,13 @@
 // pxl-geo-bake/page/bake.rs
 
-use pxl_spec::bake::quadkey::PAGE_KEY_DEPTH;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use std::path::Path;
+use pxl_spec::bake::quadkey::PAGE_KEY_DEPTH;
 
 use crate::coverage::{Coverage, Overture};
 use crate::page::walk::{self, Args, Page, Target};
 use crate::terrain::leaf::land_pages;
-use crate::util::{fmt_bytes, git_sha, measure_output, now_iso8601, refuse_mixed, CONTENT_ENCODING};
+use crate::util::{fmt_bytes, measure_output, refuse_mixed, write_manifest};
 
 pub struct Bake<'a> {
     pub kind: &'a str,
@@ -52,34 +51,21 @@ pub fn bake<T>(
         targets.truncate(n);
     }
 
-    let walked = walk::walk(&args, b.kind, PAGE_KEY_DEPTH - b.group_shamt, b.every, &targets, connect, one)?;
-    let t = &walked.tally;
+    let t = &walk::walk(&args, b.kind, PAGE_KEY_DEPTH - b.group_shamt, b.every, &targets, connect, one)?;
     println!("[bake/{}] {} items across {} non-empty pages, {}", b.kind, t.items, t.baked, fmt_bytes(t.bytes as f64));
 
     let (objects, bytes) = measure_output(&args.out).map_err(|e| e.to_string())?;
-    let mut manifest = serde_json::json!({
-        "version": args.out.file_name().map(|n| n.to_string_lossy().to_string()),
-        "updated_at": now_iso8601(),
-        "git_sha": git_sha(),
+    let mut fields = serde_json::json!({
         "land_pages": land.len(),
-
         "objects": objects,
         "bytes": bytes,
-
         // This invocation only, so a resumed run's zero means "nothing to do".
         "run": { "baked": t.baked, "empty": t.empty, "skipped": t.skipped, "failed": t.failed, "items": t.items, "bytes": t.bytes },
-
         "content_type": b.content_type,
-        "content_encoding": CONTENT_ENCODING,
-
         "source": b.source.manifest(),
     });
     if let Some(format) = b.format {
-        manifest["format"] = serde_json::Value::String(format.to_string());
+        fields["format"] = serde_json::Value::String(format.to_string());
     }
-
-    let path = args.out.join("../manifest.json");
-    std::fs::write(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
-    println!("[bake/{}] manifest -> {}", b.kind, path.display());
-    Ok(())
+    write_manifest(&args.out, fields)
 }

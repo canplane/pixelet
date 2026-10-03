@@ -9,7 +9,7 @@ fn painted(cut: [bool; 2]) -> Vec<i64> {
         cells: &mut cells,
         key: GroundChannelKey::TRANSPORT,
     };
-    render_linear_feat(&[[10.5, 10.0, 0.0], [10.5, 20.0, 0.0]], 1, &mut target, 3.0, cut, Mask::None);
+    render_linear_feat(&[[10.5, 10.0], [10.5, 20.0]], 1, &mut target, 3.0, cut, Mask::None);
     (0..SPAN).filter(|&y| channel_of(cells[cell_idx(10, y)], GroundChannelKey::TRANSPORT) == 1).collect()
 }
 

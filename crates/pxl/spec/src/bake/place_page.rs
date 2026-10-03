@@ -34,6 +34,7 @@ pub fn leaf_slot(x: i64, y: i64) -> usize {
     ((y & mask) << GROUP_SHAMT | (x & mask)) as usize
 }
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Named {
     pub rank: PlaceRank,

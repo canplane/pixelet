@@ -1,7 +1,6 @@
 // pxl-spec/bake/format.rs
 
 //! A baked terrain page and its wire: `[ele, cells, extent, occupancy, decks]`.
-//! The raw wire from the DB is `[ele, buildings, segments, base, coasts, decks]`.
 
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
@@ -14,7 +13,6 @@ use super::deck::{self, Decks};
 use super::ground::SHIFT_RANGE;
 use super::pack::{channel_of, GroundCell};
 use super::surface::extent_of;
-use crate::space::adapter::epsg3857::G3857;
 use crate::space::pyramid::{EXTENT, PAGE_CELLS};
 
 /// A page's lane lengths; a page is these and no other size.
@@ -22,51 +20,6 @@ pub const GROUND_LANE: usize = (PAGE_CELLS * PAGE_CELLS) as usize;
 pub const ELE_LANE: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
 pub const EXTENT_LANE: usize = (EXTENT.page_cells() * EXTENT.page_cells()) as usize;
 pub const BLOCK_LANE: usize = EXTENT.page_blocks() as usize;
-
-pub struct BuildingRow {
-    pub gers_id: String,
-    pub subtype: Option<String>,
-    pub class: Option<String>,
-    pub height: Option<f64>,
-    pub num_floors: Option<f64>,
-    pub geom_wkb: Box<[u8]>,
-}
-
-pub struct SegmentRow {
-    pub gers_id: String,
-    pub subtype: String,
-    pub class: Option<String>,
-    pub flags: Option<String>,
-    pub widths: Option<String>,
-    pub access: Option<String>,
-    pub subclass: Option<String>,
-    pub subclasses: Option<String>,
-    pub geom_wkb: Box<[u8]>,
-}
-
-pub struct BaseRow {
-    pub gers_id: String,
-    pub source: String, // "land_use" | "water" | "land" | "infrastructure"
-    pub subtype: Option<String>,
-    pub class: Option<String>,
-    pub geom_wkb: Box<[u8]>,
-}
-
-/// A line as the offline solve left it, its Z the road surface in metres.
-pub struct DeckRow {
-    pub gers_id: String,
-    pub subtype: String,
-    pub class: Option<String>,
-    pub width_m: f64,
-    pub form: u8,
-    pub points: Vec<G3857>, // z: the road surface
-}
-
-pub struct CoastRow {
-    pub id: String,
-    pub geom_wkb: Box<[u8]>,
-    pub covers_page: bool,
-}
 
 pub use crate::cell::cube_type::GroundChannelKey;
 
@@ -116,12 +69,6 @@ impl Ground {
     pub fn is_empty(&self) -> bool {
         self.cells.is_empty()
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct CellConfig {
-    pub cell_type: u8,
-    pub ch_key: GroundChannelKey,
 }
 
 /// Which of a page and its four children are real pages rather than the zero

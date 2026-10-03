@@ -1,16 +1,16 @@
 // pxl-geo-bake/terrain/pipeline/ground.rs
 
-//! Rasterizes normalized features into the page's packed ground cells, rows
+//! Rasterizes features into the page's packed ground cells, rows
 //! south to north. Bounds are `i64` so a negative one skips a loop rather
 //! than wrapping in `u32`.
 
 use pxl_spec::bake::format::{Ground, GroundChannelKey};
-use pxl_spec::bake::model::feature::Feature;
 use pxl_spec::bake::pack::{channel_of, with_channel, GroundCell};
 use pxl_spec::bake::way;
 use pxl_spec::cell::cube::cube_types;
 use pxl_spec::space::pyramid::{GROUND, PAGE_CELLS};
-use pxl_spec::space::v3::V3;
+
+use crate::terrain::pipeline::feature::{Feature, P};
 
 const PAGE_AREA: usize = (PAGE_CELLS * PAGE_CELLS) as usize;
 const SPAN: i64 = PAGE_CELLS as i64;
@@ -43,58 +43,48 @@ struct Target<'a> {
     key: GroundChannelKey,
 }
 
-pub fn bake_ground(elements: &[Feature], has_coast_row: bool) -> Ground {
-    let mut cells = vec![0 as GroundCell; PAGE_AREA];
-    let fill_land = |cells: &mut Vec<GroundCell>, t: u8| cells.fill(with_channel(0, GroundChannelKey::LAND, t));
+/// A page's land against the sea: none of it, all of it, or the land
+/// polygons of a shore, each its outer ring and holes.
+pub enum Coast {
+    Sea,
+    Land,
+    Shore(Vec<(Vec<P>, Vec<Vec<P>>)>),
+}
 
-    let sea_feats: Vec<&Feature> = elements.iter().filter(|f| f.extra.is_ocean).collect();
-    let mut other_feats: Vec<&Feature> = elements.iter().filter(|f| !f.extra.is_ocean).collect();
-    // Stable: equal ranks keep row order, which decides what paints over what.
-    other_feats.sort_by_key(|f| f.extra.rank);
-    let has_sea = !sea_feats.is_empty();
-
-    if has_sea {
-        fill_land(&mut cells, cube_types::land::sea);
-        let mut land = Target {
-            cells: &mut cells,
-            key: GroundChannelKey::LAND,
-        };
-        for f in &sea_feats {
-            if f.shape.is_closed {
-                render_polygon(&f.shape.points, cube_types::land::bare, &mut land, f.shape.holes.as_deref(), Mask::None);
+pub fn bake_ground(features: &[Feature], coast: &Coast) -> Ground {
+    let mut cells = vec![with_channel(0, GroundChannelKey::LAND, cube_types::land::sea); PAGE_AREA];
+    match coast {
+        Coast::Sea => {}
+        Coast::Land => cells.fill(with_channel(0, GroundChannelKey::LAND, cube_types::land::bare)),
+        Coast::Shore(land) => {
+            let mut target = Target {
+                cells: &mut cells,
+                key: GroundChannelKey::LAND,
+            };
+            for (points, holes) in land {
+                render_polygon(points, cube_types::land::bare, &mut target, holes, Mask::None);
             }
         }
-    } else if has_coast_row {
-        // A coast row covered the whole page: it is all land, no carve needed.
-        fill_land(&mut cells, cube_types::land::bare);
-    } else {
-        // No coast row at all: open ocean. Falling through to bare once baked every
-        // ocean page as dry land.
-        fill_land(&mut cells, cube_types::land::sea);
     }
+    let shore = matches!(coast, Coast::Shore(_));
 
-    for feat in &other_feats {
-        if feat.extra.is_unseen || feat.extra.is_deck {
-            continue;
-        }
-        let Some(cfg) = feat.cell_cfg else { continue };
-
-        let mask = match cfg.ch_key {
-            GroundChannelKey::LAND | GroundChannelKey::WATER if has_sea => Mask::Sea,
+    // Stable: equal ranks keep row order, which decides what paints over what.
+    let mut ordered: Vec<&Feature> = features.iter().collect();
+    ordered.sort_by_key(|f| f.rank);
+    for f in ordered {
+        let mask = match f.cell.key {
+            GroundChannelKey::LAND | GroundChannelKey::WATER if shore => Mask::Sea,
             _ => Mask::None,
         };
-        paint(feat, cfg.cell_type, &mut Target { cells: &mut cells, key: cfg.ch_key }, mask);
+        let target = &mut Target { cells: &mut cells, key: f.cell.key };
+        if f.closed {
+            render_polygon(&f.points, f.cell.value, target, &f.holes, mask);
+        } else {
+            render_linear_feat(&f.points, f.cell.value, target, f.width, f.cut, mask);
+        }
     }
 
     Ground { cells: cells.into() }
-}
-
-fn paint(feat: &Feature, value: u8, target: &mut Target, mask: Mask) {
-    if feat.shape.is_closed {
-        render_polygon(&feat.shape.points, value, target, feat.shape.holes.as_deref(), mask);
-    } else {
-        render_linear_feat(&feat.shape.points, value, target, feat.computed.width, feat.extra.cut, mask);
-    }
 }
 
 #[inline]
@@ -105,13 +95,10 @@ fn put(target: &mut Target, mask: Mask, at: usize, value: u8) {
     target.cells[at] = with_channel(target.cells[at], target.key, value);
 }
 
-fn render_polygon(points: &[V3], value: u8, target: &mut Target, holes: Option<&[Vec<V3>]>, mask: Mask) {
+fn render_polygon(points: &[P], value: u8, target: &mut Target, holes: &[Vec<P>], mask: Mask) {
     if points.len() < 3 {
         return;
     }
-
-    const NO_HOLES: &[Vec<V3>] = &[];
-    let inner_list: &[Vec<V3>] = holes.unwrap_or(NO_HOLES);
 
     let (min_y, max_y) = points.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| (lo.min(p[1]), hi.max(p[1])));
     let start_row = (min_y - PX_CENTER).ceil().max(0.0);
@@ -129,7 +116,7 @@ fn render_polygon(points: &[V3], value: u8, target: &mut Target, holes: Option<&
         let yc = y as f64 + PX_CENTER;
         xs.clear();
         find_intersections(points, yc, &mut xs);
-        for hole in inner_list {
+        for hole in holes {
             find_intersections(hole, yc, &mut xs);
         }
         xs.sort_by(f64::total_cmp);
@@ -153,7 +140,7 @@ fn render_polygon(points: &[V3], value: u8, target: &mut Target, holes: Option<&
 
 /// Every cell whose center lies within the way's half width of a segment;
 /// segment distance rounds the ends, so bends need no cap.
-fn render_linear_feat(points: &[V3], value: u8, target: &mut Target, width_cell: f64, cut: [bool; 2], mask: Mask) {
+fn render_linear_feat(points: &[P], value: u8, target: &mut Target, width_cell: f64, cut: [bool; 2], mask: Mask) {
     let reach = way::reach(width_cell);
     let last = points.len().saturating_sub(2);
     for (s, w) in points.windows(2).enumerate() {
@@ -194,7 +181,7 @@ fn distance_to_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
     libm::hypot(p[0] - a[0] - (b[0] - a[0]) * t, p[1] - a[1] - (b[1] - a[1]) * t)
 }
 
-fn find_intersections(nodes: &[V3], ys: f64, out: &mut Vec<f64>) {
+fn find_intersections(nodes: &[P], ys: f64, out: &mut Vec<f64>) {
     if nodes.is_empty() {
         return;
     }

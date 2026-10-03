@@ -9,11 +9,11 @@ use std::fs;
 use std::sync::Arc;
 
 use pxl_geo_bake::coverage::{Coverage, Overture};
+use pxl_geo_bake::deck::{self, source::Disk};
 use pxl_geo_bake::elevation::Raster;
 use pxl_geo_bake::terrain::leaf::{self, bake_leaf};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
-use pxl_geo_bake::terrain::source::SourceStats;
-use pxl_geo_bake::util::{unpack, Level};
+use pxl_spec::bake::format::encode_terrain;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -23,17 +23,20 @@ fn main() {
     let (_, mut client) = Overture::reading(&leaf::READS).expect("geo DB");
     let raster = Arc::new(Raster::open(&mut client).expect("raster"));
     let repo = TerrainRepository::prepare(&mut client, raster).expect("prepare");
-    let mut stats = SourceStats::default();
+    let memo = std::env::temp_dir().join("pxl-source");
+    let mut flat = 0;
 
     for page in pages {
         let idx = page.parse().expect("page_idx");
         assert!(coverage.contains(idx), "{page} is not a page of the coverage");
-        let (_, packed) = bake_leaf(&repo, &mut client, &std::env::temp_dir().join("pxl-source"), idx, &mut stats, Level::Stored).expect("bake");
-        let tile = unpack(&packed).expect("unpack");
+        let reader = &mut deck::Reader { client: &mut client, repo: &repo, store: &mut Disk(&memo), memo: &memo.join("structure") };
+        let (terrain, off_raster) = bake_leaf(reader, idx).expect("bake");
+        let tile = encode_terrain(&terrain).expect("encode");
         fs::write(format!("{dir}/{page}.db.tile"), &tile).expect("write");
+        flat += usize::from(off_raster);
         println!("{page}\t{}", tile.len());
     }
-    if stats.flat_ele > 0 {
-        eprintln!("[bake] no elevation on {} page(s)", stats.flat_ele);
+    if flat > 0 {
+        eprintln!("[bake] no elevation on {flat} page(s)");
     }
 }

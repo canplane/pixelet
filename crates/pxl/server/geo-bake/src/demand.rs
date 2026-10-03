@@ -88,7 +88,7 @@ impl Dataset {
     /// written by the folds, concurrent atomic writes raced on one staging path.
     fn open(base: &std::path::Path, kind: Kind, runner: &Runner) -> Result<Self, String> {
         let data = Self {
-            cache: Cache::with_admission(base.join(kind.name()), runner.admission.clone(), std::time::Duration::from_secs(runner.limits.seconds))?,
+            cache: Cache::new(base.join(kind.name()), runner.admission.clone(), std::time::Duration::from_secs(runner.limits.seconds))?,
             source: match kind {
                 Kind::Terrain => Source::Terrain(terrain::Source::new()?),
                 Kind::Poi => Source::Poi(crate::coverage::Coverage::of_source()?),

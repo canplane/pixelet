@@ -4,24 +4,22 @@
 //! source covers it and land touches it; the offline bake and the dev server
 //! ask the same question, so both produce the same objects.
 
-use postgres::types::ToSql;
-use postgres::Client;
-use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::bake::format::{decode_terrain, encode_terrain, Occupancy};
-use pxl_spec::space::adapter::epsg3857;
-use pxl_spec::space::indexer::L3;
-use pxl_spec::space::pvf3::ivec::{self, IVec};
 use std::path::Path;
 
+use postgres::types::ToSql;
+use postgres::Client;
+use pxl_spec::bake::format::{decode_terrain, encode_terrain, Occupancy, Terrain, ELE_LANE};
+use pxl_spec::space::adapter::epsg3857::{self, to_db};
+use pxl_spec::space::indexer::L3;
+use pxl_spec::space::pvf3::ivec::{self, IVec};
+
 use crate::coverage::Coverage;
-use crate::terrain::artifact::assemble;
-use crate::terrain::bake::bake_surface;
-use crate::terrain::repository::{self, PageSource, TerrainRepository, DRAWN_REACH_U};
-use pxl_spec::space::adapter::epsg3857::to_db;
-use crate::deck;
+use crate::deck::{self, source::Store};
+use crate::terrain::bake::{assemble, bake_surface};
 use crate::terrain::pipeline::deck::bake_decks;
-use crate::terrain::source::{fetch_surface, SourceStats};
-use crate::util::{fnv1a, pack, Level};
+use crate::terrain::repository::{self, PageSource, DRAWN_REACH_U};
+use crate::terrain::source::fetch_surface;
+use crate::util::fnv1a;
 
 pub use pxl_spec::bake::format::OCEAN_KEY;
 
@@ -69,16 +67,13 @@ pub fn has_ground(client: &mut Client, pages: &[IVec]) -> Result<Vec<bool>, post
     Ok(out)
 }
 
-/// `memo` keeps each page's rows the deck solve read, and under `structure`
-/// each structure it solved.
-pub fn bake_leaf(repo: &TerrainRepository, client: &mut Client, memo: &Path, page: IVec, stats: &mut SourceStats, level: Level) -> Result<(usize, Vec<u8>), String> {
-    let (structures, mut store) = (memo.join("structure"), deck::source::Disk(memo));
-    let solved = deck::solve_page(&mut deck::Reader { client: &mut *client, repo, store: &mut store, memo: &structures }, page)?;
-    let surface = fetch_surface(repo, client, page, &solved.drawn, stats).map_err(|e| format!("{e:?}"))?;
-    let lines = bake_decks(&solved.rows, epsg3857::get_page_bbox(page)[0]).ok_or("a page's decks overflow a record")?;
-    let raw = encode_terrain(&assemble(surface, lines)).map_err(|e| format!("{e:?}"))?;
-    let packed = pack(raw.as_slice(), level).map_err(|e| e.to_string())?;
-    Ok((raw.len(), packed))
+/// A leaf: its decks solved, its surface painted around their lines, the two
+/// one page; and whether it lies off the elevation raster, so flat.
+pub fn bake_leaf(r: &mut deck::Reader<impl Store>, page: IVec) -> Result<(Terrain, bool), String> {
+    let solved = deck::solve_page(r, page)?;
+    let (surface, flat) = fetch_surface(r.repo, r.client, page, &solved.drawn)?;
+    let lines = bake_decks(&solved.lines, epsg3857::get_page_bbox(page)[0]).ok_or("a page's decks overflow a record")?;
+    Ok((assemble(surface, lines), flat))
 }
 
 /// Synthesized rather than read, so the ocean page does not depend on which
@@ -99,7 +94,7 @@ pub fn bake_ocean(samples: &[IVec]) -> Result<Vec<u8>, String> {
     let src = empty_source();
     let baked: Vec<Vec<u8>> = samples
         .iter()
-        .map(|p| encode_terrain(&assemble(bake_surface(*p, vec![0; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize], &src, &[]), Default::default())).expect("ocean bake"))
+        .map(|p| encode_terrain(&assemble(bake_surface(*p, vec![0; ELE_LANE], &src, &[]), Default::default())).expect("ocean bake"))
         .collect();
     for (i, page) in baked.iter().enumerate().skip(1) {
         if page != &baked[0] {
