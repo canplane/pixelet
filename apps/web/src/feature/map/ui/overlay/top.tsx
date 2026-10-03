@@ -80,8 +80,8 @@ export function TopOverlays() {
       </BusyDim>
 
       <BusyDim style={[styles.right, { top }]}>
-        <TrackingButton />
         <PersonButton />
+        <TrackingButton />
         <MapCompass />
       </BusyDim>
     </>
