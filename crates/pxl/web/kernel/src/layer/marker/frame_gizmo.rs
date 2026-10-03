@@ -1,26 +1,28 @@
 // pxl-kernel/layer/marker/frame_gizmo.rs
 
-//! The debug gizmos (the `gizmos` setting): the map center and its cell, and
-//! the view's and the world's frames about it, as debug lines. The view's forward, its up and the world's north are told
-//! apart by color; nothing is labeled.
+//! The debug gizmos (the `gizmos` setting), as debug lines: the map center and
+//! its cell, and about it a level ring, an upright ring facing the screen and
+//! one through north. The view's forward, its up and north are told apart by
+//! color; nothing is labeled.
 
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::v3::{floor3n, len3, V3};
+use pxl_spec::space::v3::{floor3n, V3};
 
+use crate::control::camera::controller::{azimuth, dist};
 use crate::global::Global;
 use crate::kernel::kernel;
 use crate::world::access::Access;
 use crate::world::change::request_world_tick;
-use crate::world::frame::coord::canonical_to_local;
+use crate::world::frame::coord::{canonical_to_local, local_height};
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 
-const COLOR: V3 = [0.0, 0.0, 0.0];
-const FORWARD: V3 = [1.0, 0.0, 0.0];
-const NORTH: V3 = [0.0, 1.0, 0.0];
-const UP: V3 = [0.0, 0.0, 1.0];
+const BLACK: V3 = [0.0, 0.0, 0.0];
+const RED: V3 = [1.0, 0.0, 0.0];
+const GREEN: V3 = [0.0, 1.0, 0.0];
+const BLUE: V3 = [0.0, 0.0, 1.0];
 /// Half the cross a point is drawn as.
 const POINT_HALF: f64 = 0.15;
 const RING_RADIUS: f64 = 4.0;
@@ -46,77 +48,52 @@ impl Sketch {
         }
     }
 
-    fn r#box(&mut self, base: V3, span: f64) {
-        let c = |x: f64, y: f64, z: f64| -> V3 { [base[0] + x * span, base[1] + y * span, base[2] + z * span] };
-        let corners = [
-            c(0.0, 0.0, 0.0),
-            c(1.0, 0.0, 0.0),
-            c(1.0, 1.0, 0.0),
-            c(0.0, 1.0, 0.0),
-            c(0.0, 0.0, 1.0),
-            c(1.0, 0.0, 1.0),
-            c(1.0, 1.0, 1.0),
-            c(0.0, 1.0, 1.0),
-        ];
-        for (a, b) in [(0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), (6, 7), (7, 4), (0, 4), (1, 5), (2, 6), (3, 7)] {
-            self.line(corners[a], corners[b], COLOR);
-        }
-    }
-
-    /// A dashed ring of `radius` about `center` in the plane of `a` and `b`.
-    fn ring(&mut self, center: V3, radius: f64, a: V3, b: V3, color: V3) {
-        let mut prev: Option<V3> = None;
-        for i in 0..=RING_SEGMENTS {
-            let t = (i as f64 / RING_SEGMENTS as f64) * core::f64::consts::PI * 2.0;
-            let (c, sn) = (libm::cos(t) * radius, libm::sin(t) * radius);
-            let at = [center[0] + a[0] * c + b[0] * sn, center[1] + a[1] * c + b[1] * sn, center[2] + a[2] * c + b[2] * sn];
-            if let Some(p) = prev.filter(|_| i % 2 == 1) {
-                self.line(p, at, color);
+    /// Its twelve edges: those between corners one bit of the index apart.
+    fn cube(&mut self, base: V3, side: f64) {
+        let corner = |i: usize| -> V3 { core::array::from_fn(|k| base[k] + ((i >> k) & 1) as f64 * side) };
+        for i in 0..8 {
+            for k in 0..3 {
+                if i & (1 << k) == 0 {
+                    self.line(corner(i), corner(i | 1 << k), BLACK);
+                }
             }
-            prev = Some(at);
         }
     }
 
-    /// The upright ring through `vertex`, in the frame `to_local` maps into the root frame.
-    fn upright(&mut self, to_local: &dyn Fn(V3) -> V3, vertex: V3, color: V3) {
-        let center = to_local([0.0, 0.0, 0.0]);
-        let axis = |v: V3| {
-            let p = to_local(v);
-            [p[0] - center[0], p[1] - center[1], p[2] - center[2]]
+    /// Dashed, of `RING_RADIUS` about `center` in the plane of the unit axes `a` and `b`.
+    fn ring(&mut self, center: V3, a: V3, b: V3, color: V3) {
+        let at = |i: u32| -> V3 {
+            let (s, c) = libm::sincos(i as f64 / RING_SEGMENTS as f64 * core::f64::consts::TAU);
+            core::array::from_fn(|k| center[k] + (a[k] * c + b[k] * s) * RING_RADIUS)
         };
-        let radius = len3(&vertex);
-        self.ring(center, radius, axis(vertex.map(|v| v / radius)), axis([0.0, 0.0, 1.0]), color);
+        for i in (0..RING_SEGMENTS).step_by(2) {
+            self.line(at(i), at(i + 1), color);
+        }
     }
 }
 
-/// About the map center: one level ring, which both frames share; the view's
-/// frame turns with the azimuth, its upright ring through the right so it
-/// faces the screen; the world's never turns, its upright ring through north.
-fn sketch_frames(s: &mut Sketch) {
-    if crate::control::camera::controller::dist() == 0.0 {
-        return;
-    }
-    let Some(center) = crate::control::camera::controller::center_local() else { return };
-    let (sin, cos) = libm::sincos(-crate::control::camera::controller::azimuth());
-    let view_frame = move |p: V3| [center[0] + p[0] * cos - p[1] * sin, center[1] + p[0] * sin + p[1] * cos, center[2] + p[2]];
-    s.ring(center, RING_RADIUS, [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], COLOR);
-    s.upright(&view_frame, [RING_RADIUS, 0.0, 0.0], FORWARD);
-    s.point(view_frame([0.0, RING_RADIUS, 0.0]), FORWARD);
-    s.point(view_frame([0.0, 0.0, RING_RADIUS]), UP);
-    let world_frame = move |p: V3| [center[0] + p[0], center[1] + p[1], center[2] + p[2]];
-    s.upright(&world_frame, [0.0, RING_RADIUS, 0.0], NORTH);
-    s.point(world_frame([0.0, RING_RADIUS, 0.0]), NORTH);
-}
-
-/// The map center and its cell.
-fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
+fn sketch(map_center: &Pvf3, map_origin: IVec) -> Sketch {
     let mut s = Sketch::default();
-    let center_v = canonical_to_local(map_center, map_origin);
-    let ground = Access::now().floor_under(map_center).value().map(|top| crate::world::frame::coord::local_height(top, map_origin));
-    let mut cell_v = [0.0; 3];
-    floor3n(&[center_v[0], center_v[1], ground.unwrap_or(0.0)], U_PER_CELL, &mut cell_v);
-    s.r#box(cell_v, U_PER_CELL);
-    s.point(center_v, COLOR);
+    let center = canonical_to_local(map_center, map_origin);
+    let ground = Access::now().floor_under(map_center).value().map(|top| local_height(top, map_origin));
+    let mut cell = [0.0; 3];
+    floor3n(&[center[0], center[1], ground.unwrap_or(0.0)], U_PER_CELL, &mut cell);
+    s.cube(cell, U_PER_CELL);
+    s.point(center, BLACK);
+    // First person the eye is the map center, and nothing about it is seen.
+    if dist() == 0.0 {
+        return s;
+    }
+    let (sin, cos) = libm::sincos(azimuth());
+    let (east, north, up) = ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]);
+    let (right, forward) = ([cos, -sin, 0.0], [sin, cos, 0.0]);
+    let tip = |d: V3| -> V3 { core::array::from_fn(|k| center[k] + d[k] * RING_RADIUS) };
+    s.ring(center, east, north, BLACK);
+    s.ring(center, right, up, RED);
+    s.ring(center, north, up, GREEN);
+    s.point(tip(forward), RED);
+    s.point(tip(north), GREEN);
+    s.point(tip(up), BLUE);
     s
 }
 
@@ -131,20 +108,18 @@ fn set_lines(at: V3, vertices: &[f32]) {
 }
 
 pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>, map_origin: IVec) {
-    let built_for = GIZMOS.get(|| None);
+    let drawn = GIZMOS.get(|| None);
     let Some(center) = map_center.filter(|_| show) else {
-        if built_for.take().is_some() {
+        if drawn.take().is_some() {
             set_lines([0.0; 3], &[]);
         }
         return;
     };
-    let key = (center, map_origin, Terrain::pyramid().paging().revision(), crate::control::camera::controller::azimuth());
-    if *built_for == Some(key) {
+    let key = (center, map_origin, Terrain::pyramid().paging().revision(), azimuth());
+    if *drawn == Some(key) {
         return;
     }
-    *built_for = Some(key);
-    let mut s = sketch_map(&center, map_origin);
-    sketch_frames(&mut s);
-    set_lines(ivec::to_v3(map_origin), &s.0);
+    *drawn = Some(key);
+    set_lines(ivec::to_v3(map_origin), &sketch(&center, map_origin).0);
     request_world_tick();
 }

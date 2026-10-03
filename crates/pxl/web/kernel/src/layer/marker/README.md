@@ -18,6 +18,6 @@ this tier specifically (`ACTION`, `ERASE`), not a general color constant
 file.
 
 `frame_gizmo.rs` lives here too but is a debug visualization behind the
-`gizmos` setting (frame axes, rings and labels, as the kernel's
-line segments and the shell's labels), not a real one-off indicator in the
-same sense — adjacent by folder convenience, not by tier.
+`gizmos` setting (the map center's cell and the frames' rings, as debug
+lines), not a real one-off indicator in the same sense — adjacent by folder
+convenience, not by tier.
