@@ -146,7 +146,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
             .filter(|_| edits.hide_in.1)
             .map(DecorHide::Placed)
             .or(crate::layer::decor::cell::scattered_hide().map(DecorHide::Scattered));
-        crate::layer::decor::cell::step(&crate::layer::decor::kind::KINDS, &k.objects, &mut k.sched, hide, frame.eye);
+        crate::layer::decor::cell::step(&crate::layer::decor::kind::KINDS, &k.objects, &mut k.sched, hide, frame.eye, &ctx.budget);
     }
     crate::layer::poi::placement::step(ctx);
     let sched = &mut kernel().sched;

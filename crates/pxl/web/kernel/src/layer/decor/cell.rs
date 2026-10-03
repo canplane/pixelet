@@ -17,6 +17,7 @@ use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
 use pxl_spec::space::v3::{len3, V3};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::alloc;
+use xpute_runtime::sched::tick::FrameBudget;
 
 use crate::control::camera::controller::units_per_px_at;
 use crate::global::Global;
@@ -104,8 +105,6 @@ fn cells() -> &'static mut Cells {
 
 /// One a mounted chunk.
 pub const BLOCKS_MAX: usize = OCCUPANCY;
-
-const BUILDS_PER_FRAME: u32 = 4;
 
 /// What a chunk is admitted by before its block says what it holds.
 fn largest_possible(kinds: &[&Kind]) -> f64 {
@@ -226,9 +225,10 @@ fn release(block: Block, draw: &mut DrawList) {
     unsafe { free((block.at as usize, block.bytes)) };
 }
 
-/// Builds the decor of the chunks the terrain has mounted, a few a frame, and
-/// lets go of what an unmounted chunk held.
-pub fn step(kinds: &[&Kind], store: &Store, sched: &mut Scheduler, hide: Option<DecorHide>, frame_eye: V3) {
+/// Builds the decor of the chunks the terrain has mounted, within what is
+/// left of the turn as the chunks' builds are, and lets go of what an
+/// unmounted chunk held.
+pub fn step(kinds: &[&Kind], store: &Store, sched: &mut Scheduler, hide: Option<DecorHide>, frame_eye: V3, budget: &FrameBudget) {
     let c = cells();
     let mut mounted = core::mem::take(&mut c.mounted);
     sched.mounted(&mut mounted);
@@ -242,25 +242,25 @@ pub fn step(kinds: &[&Kind], store: &Store, sched: &mut Scheduler, hide: Option<
             release(b, &mut sched.draw);
         }
     }
-    let mut built = 0;
-    for &(chunk, _, _) in &mounted {
-        if built >= BUILDS_PER_FRAME {
-            break;
-        }
-        if !may_show(chunk, largest) {
-            continue;
-        }
-        let Some(sources) = sources_of(chunk, store, &mut c.cols, hide) else { continue };
-        if c.blocks.get(&chunk).is_some_and(|b| b.sources == sources) {
-            continue;
-        }
-        if let Some(b) = build(c, chunk, kinds, store, &mut sched.draw, sources) {
-            if let Some(old) = c.blocks.insert(chunk, b) {
-                release(old, &mut sched.draw);
+    let draw = &mut sched.draw;
+    budget.run(
+        mounted.iter().map(|m| m.0),
+        |chunk| {
+            if !may_show(chunk, largest) {
+                return false;
             }
-            built += 1;
-        }
-    }
+            let Some(sources) = sources_of(chunk, store, &mut c.cols, hide) else { return false };
+            if c.blocks.get(&chunk).is_some_and(|b| b.sources == sources) {
+                return false;
+            }
+            let Some(b) = build(c, chunk, kinds, store, draw, sources) else { return false };
+            if let Some(old) = c.blocks.insert(chunk, b) {
+                release(old, draw);
+            }
+            true
+        },
+        None,
+    );
     for &(chunk, drawn, seen) in &mounted {
         if let Some(b) = c.blocks.get_mut(&chunk) {
             b.drawn = drawn && seen;
