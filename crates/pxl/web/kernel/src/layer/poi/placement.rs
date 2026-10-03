@@ -35,6 +35,9 @@ struct Placement {
     hits: Vec<([f64; 4], Label, Pvf3)>,
     /// Kept so a settled turn asks the heap for nothing.
     found: Vec<(Cell, Label, Cell, f64)>,
+    /// The cover, the pages and the heights `found` was read from: an eye move
+    /// that changes none of them casts no ray.
+    found_for: Option<(u32, u32, (u32, u32))>,
     labeled: Vec<(Label, Pvf3)>,
     instances: Vec<f32>,
 }
@@ -71,9 +74,16 @@ pub fn step(ctx: &mut TickContext) {
     if crate::world::pyramid::domain::current().is_none() {
         return;
     }
+    let (cover, covers) = crate::world::pyramid::cover::cover::<PoiPage>();
+    let key = Some((covers, pages.paging().revision(), crate::world::observation::heights_revision()));
+    let stale = p.found_for != key;
+    p.found_for = key;
     let mut found = core::mem::take(&mut p.found);
-    found.clear();
-    for &chunk in &crate::world::pyramid::cover::cover::<PoiPage>().0.drawn {
+    if stale {
+        found.clear();
+    }
+    let read: &[Chunk] = if stale { &cover.drawn } else { &[] };
+    for &chunk in read {
         // None coarser than COARSEST, only the most prominent up to POI_ALL_LEVEL.
         if chunk.level() > PoiPage::COARSEST {
             continue;
