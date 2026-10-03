@@ -71,7 +71,7 @@ function DecorGridButton({ kind, onPick }: { kind: u8; onPick: (kind: u8) => voi
   const name = decorName(kind);
 
   return (
-    <GridButton label={t(`decors.${name}`)} active={active} onPress={() => onPick(kind)}>
+    <GridButton label={t(`decor.${name}`)} active={active} onPress={() => onPick(kind)}>
       <View style={[styles.decor, active ? [styles.markOn, styles.decorOn] : styles.markOff]}>
         <Glyph glyph={DECOR_GLYPH[name]} size={chrome.glyph} color={LABEL.primary} />
       </View>
@@ -139,7 +139,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
 
           {tab === DrawerTab.Decor && (
             <View style={styles.section}>
-              <SectionHead held={activeTool === ActiveTool.Decor ? t(`decors.${decorName(heldDecor)}`) : null} />
+              <SectionHead held={activeTool === ActiveTool.Decor ? t(`decor.${decorName(heldDecor)}`) : null} />
               <View style={styles.grid}>
                 {decorKinds.map((kind) => <DecorGridButton key={kind} kind={kind} onPick={pickDecor} />)}
               </View>

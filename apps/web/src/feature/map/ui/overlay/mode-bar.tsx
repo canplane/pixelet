@@ -202,7 +202,7 @@ function DecorIconButton({ kind }: { kind: u8 }) {
   const active = useInHand({ tool: ActiveTool.Decor, kind });
 
   return (
-    <Pressable onPress={() => selectDecor(kind)} accessibilityRole="button" accessibilityLabel={t(`decors.${name}`)} style={styles.slot}>
+    <Pressable onPress={() => selectDecor(kind)} accessibilityRole="button" accessibilityLabel={t(`decor.${name}`)} style={styles.slot}>
       <Motion to={{ scale: active ? 1.1 : 1 }} transition={SNAP}>
         <View style={[styles.decorDisc, active ? styles.swatchSelected : styles.swatchIdle]}>
           <Glyph glyph={DECOR_GLYPH[name]} size={ITEM_GLYPH} color={active ? STRIP.glyphOn : STRIP.glyph} />

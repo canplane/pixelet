@@ -11,7 +11,7 @@
     "language": {
       "section_title": "Language"
     },
-    "cost_legend": "LOW / MED / HIGH is how much each costs. If frames stutter, turn HIGH items off first.",
+    "cost_legend": "LOW / MED / HIGH indicate performance cost. If frames stutter, turn HIGH items off first.",
     "display": {
       "section_title": "Display",
       "section_caption": "What the world draws, and at what resolution",
@@ -118,7 +118,7 @@
       "tagline": "Turn the real world into a canvas and build with blocks."
     },
     "navigation": {
-      "section_title": "Map moves",
+      "section_title": "Map movement",
       "section_caption": "How the map moves when you drag it"
     }
   },
@@ -181,7 +181,7 @@
       "taxiway": "Taxiway"
     }
   },
-  "decors": {
+  "decor": {
     "tree": "Tree"
   },
   "drawer_modal": {
