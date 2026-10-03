@@ -19,15 +19,7 @@ export function deckDepth(i: u32, rotation: i32, count: u32): u32 {
   return count > 0 ? ((i - rotation) % count + count) % count : 0;
 }
 
-/** The cards front first, as the deck shows them turned by `rotation`. */
-export function frontFirst<T>(cards: readonly T[], rotation: i32): T[] {
-  return cards
-    .map((card, i) => ({ card, depth: deckDepth(i, rotation, cards.length) }))
-    .sort((a, b) => a.depth - b.depth)
-    .map((x) => x.card);
-}
-
-export interface CardPose {
+interface CardPose {
   rest: { translateY: f64; scale: f64 };
   above: { translateY: f64 };
   /** 0 past the cards drawn. */

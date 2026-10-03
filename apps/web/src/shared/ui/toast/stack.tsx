@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { PanResponder, PixelRatio, StyleSheet, View } from "react-native";
 
 import { Motion } from "@platform/motion.tsx";
-import { cardPose, deckSwipe, frontFirst, peekBelow, useTurnedBack } from "@/shared/ui/deck.ts";
+import { cardPose, deckSwipe, peekBelow, useTurnedBack } from "@/shared/ui/deck.ts";
 import { type Key, usePresent } from "@/shared/ui/motion/presence.tsx";
 import { after, LEAVE, SETTLE } from "@/shared/ui/motion/transition.ts";
 import { setToastDragging, toastRotate, useToastStore } from "./store.ts";
@@ -17,7 +17,7 @@ const MAKE_ROOM = after(SETTLE, SETTLE.durationMs / 2);
 
 export function Toaster() {
   const entries = useToastStore((s) => s.entries);
-  const rotation = useToastStore((s) => s.rotation);
+  const turns = useToastStore((s) => s.turns);
   const { list, gone } = usePresent(entries, (e) => e.id);
   // On a whole pixel: half an odd width is not one.
   const [center, setCenter] = useState(0);
@@ -25,8 +25,8 @@ export function Toaster() {
   // A leaving card keeps its place until it has faded, so the cards behind
   // move up only once it is gone.
   const lastOrder = useRef<Key[]>([]);
-  const turnedBack = useTurnedBack(rotation);
-  const order: Key[] = frontFirst(entries, rotation).map((e) => e.id);
+  const turnedBack = useTurnedBack(turns);
+  const order: Key[] = entries.map((e) => e.id);
   const arrivals = new Set<Key>(order.filter((key) => !lastOrder.current.includes(key)));
   const arrived = arrivals.size;
   for (const key of list.filter((c) => !c.present).map((c) => c.key).sort((a, b) => lastOrder.current.indexOf(a) - lastOrder.current.indexOf(b))) {
@@ -47,7 +47,10 @@ export function Toaster() {
 
   return (
     <View style={styles.anchor} onLayout={(e) => setCenter(PixelRatio.roundToNearestPixel(e.nativeEvent.layout.width / 2))}>
-      {list.map(({ item, key, present }) => {
+      {
+        // In a fixed order, stacked by zIndex alone: a card React moves in the tree drops its running animation.
+      }
+      {list.toSorted((a, b) => (a.key as number) - (b.key as number)).map(({ item, key, present }) => {
         const depth = order.indexOf(key);
         const pose = cardPose(depth, PEEK_PX);
         const front = present && depth === 0;
@@ -58,7 +61,7 @@ export function Toaster() {
           <Motion
             key={key}
             from={fromAbove ? pose.above : pose.rest}
-            replay={fromAbove ? rotation : null}
+            replay={fromAbove ? turns : null}
             to={present ? pose.rest : { scale: 0.9 }}
             transition={transition}
             onSettled={present ? undefined : () => gone(key)}
