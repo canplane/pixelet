@@ -426,11 +426,10 @@ export function read_companion_state(b: BranchCursor): CompanionState {
 
 export interface OrientationState {
   status: DevicePoseStatus;
-  heading: f64 | null;
 }
 
 export function read_orientation_state(b: BranchCursor): OrientationState {
-  return { status: b.at(0).get<DevicePoseStatus>(), heading: b.at(1).get<f64 | null>() };
+  return { status: b.at(0).get<DevicePoseStatus>() };
 }
 
 /** One rung of the place, in every language the provider had rather than one resolved

@@ -797,16 +797,14 @@ impl CompanionState {
 
 pub struct OrientationState {
     pub status: DevicePoseStatus,
-    pub heading: Option<f64>,
 }
 
 impl OrientationState {
     /// The children it is written as.
-    pub const FIELDS: u32 = 2;
+    pub const FIELDS: u32 = 1;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.status as u32));
-        w.f64(self.heading);
     }
 }
 

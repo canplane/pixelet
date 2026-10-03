@@ -82,7 +82,6 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         },
         orientation: OrientationState {
             status: orientation.status,
-            heading: orientation.orientation.and_then(|o| o.heading),
         },
         azimuth: camera.intent.azimuth,
         is_follow_mode: camera.is_follow_mode,
