@@ -21,9 +21,9 @@ use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 
 const COLOR: V3 = [0.0, 0.0, 0.0];
-const FORWARD: V3 = [0.9, 0.15, 0.1];
-const UP: V3 = [0.1, 0.35, 0.95];
-const NORTH: V3 = [0.1, 0.7, 0.2];
+const FORWARD: V3 = [1.0, 0.0, 0.0];
+const NORTH: V3 = [0.0, 1.0, 0.0];
+const UP: V3 = [0.0, 0.0, 1.0];
 const DASH: f64 = 0.3;
 const GAP: f64 = 0.2;
 /// Past this a line's dashes lengthen rather than multiply: a line to the
