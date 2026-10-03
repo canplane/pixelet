@@ -5,7 +5,7 @@
 //! lines with billboard labels.
 
 use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
-use pxl_render::gpu::pass::badges::LABEL_FONT;
+use pxl_render::gpu::pass::badges::{LABEL_FONT, LABEL_H};
 use pxl_render::gpu::surface::DPR_MAX;
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::indexer::{L3_BASE, L3_CENTER};
@@ -25,8 +25,6 @@ use crate::world::frame::coord::canonical_to_local;
 use crate::world::change::request_world_tick;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
 
 const COLOR: V3 = [0.0, 0.0, 0.0];
 const DASH: f64 = 0.3;
@@ -39,8 +37,6 @@ const DASHES: f64 = 256.0;
 const POINT_HALF: f64 = 0.15;
 const RING_RADIUS: f64 = 4.0;
 const RING_SEGMENTS: u32 = 64;
-/// As gpu/pass/badges.rs paints it.
-const LABEL_H: f64 = 12.0;
 const LABEL_PAD_X: f64 = 2.0;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -109,27 +105,9 @@ impl Sketch {
         for (a, b) in [(0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), (6, 7), (7, 4), (0, 4), (1, 5), (2, 6), (3, 7)] {
             self.line(corners[a], corners[b]);
         }
-        self.labels.push(Label {
-            at: c(0.5, 0.0, 0.0),
-            text: format!("{span}"),
-        });
         if let Some(label) = label {
             self.labels.push(Label {
                 at: c(0.5, 0.5, 0.5),
-                text: label.to_string(),
-            });
-        }
-    }
-
-    pub fn labeled_line(&mut self, from: V3, to: V3, label: Option<&str>, dashed: bool) {
-        if dashed {
-            self.dashed(from, to);
-        } else {
-            self.line(from, to);
-        }
-        if let Some(label) = label {
-            self.labels.push(Label {
-                at: [(from[0] + to[0]) / 2.0, (from[1] + to[1]) / 2.0, (from[2] + to[2]) / 2.0],
                 text: label.to_string(),
             });
         }
@@ -150,7 +128,7 @@ impl Sketch {
     }
 
     /// In the frame `to_local` maps into the root frame.
-    pub fn gyro(&mut self, to_local: &dyn Fn(V3) -> V3, vertex: V3, label: &str, show_radius: bool) {
+    pub fn gyro(&mut self, to_local: &dyn Fn(V3) -> V3, vertex: V3, label: &str) {
         let horiz = (vertex[0] * vertex[0] + vertex[1] * vertex[1]).sqrt();
         let dir = if horiz > 1e-9 { [vertex[0] / horiz, vertex[1] / horiz, 0.0] } else { [1.0, 0.0, 0.0] };
         let radius = len3(&vertex);
@@ -161,9 +139,6 @@ impl Sketch {
         };
         self.ring(center, radius, axis([1.0, 0.0, 0.0]), axis([0.0, 1.0, 0.0]));
         self.ring(center, radius, axis(dir), axis([0.0, 0.0, 1.0]));
-        if show_radius {
-            self.labeled_line(center, to_local(vertex), Some(&format!("{radius}")), true);
-        }
         self.point(to_local(vertex), Some(label));
     }
 }
@@ -176,10 +151,10 @@ fn sketch_frames(s: &mut Sketch) {
     let Some(pivot) = crate::control::camera::controller::center_local() else { return };
     let (sin, cos) = libm::sincos(-crate::control::camera::controller::heading());
     let heading_frame = move |p: V3| [pivot[0] + p[0] * cos - p[1] * sin, pivot[1] + p[0] * sin + p[1] * cos, pivot[2] + p[2]];
-    s.gyro(&heading_frame, [4.0, 0.0, 0.0], "heading (4,0,0)", false);
-    s.point(heading_frame([0.0, 0.0, 4.0]), Some("heading (0,0,4)"));
+    s.gyro(&heading_frame, [RING_RADIUS, 0.0, 0.0], "heading");
+    s.point(heading_frame([0.0, 0.0, RING_RADIUS]), Some("up"));
     let world_frame = move |p: V3| [pivot[0] + p[0], pivot[1] + p[1], pivot[2] + p[2]];
-    s.gyro(&world_frame, [0.0, RING_RADIUS, 0.0], "north (world)", true);
+    s.gyro(&world_frame, [0.0, RING_RADIUS, 0.0], "north");
 }
 
 fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
@@ -191,17 +166,16 @@ fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
     let mut quant_v = [0.0; 3];
     floor3n(&gnd_v, U_PER_CELL, &mut quant_v);
 
-    let mut anchor_base_gnd_v = [0.0; 3];
-    anchor_base_gnd_v[2] = ground(&Pvf3 { i: map_origin, f: 0 }).unwrap_or(0.0);
-    let mut anchor_base_quant_v = [0.0; 3];
-    floor3n(&anchor_base_gnd_v, U_PER_CELL, &mut anchor_base_quant_v);
+    // The origin, on the ground under it.
+    let mut origin_v = [0.0; 3];
+    floor3n(&[0.0, 0.0, ground(&Pvf3 { i: map_origin, f: 0 }).unwrap_or(0.0)], U_PER_CELL, &mut origin_v);
 
-    s.r#box(quant_v, U_PER_CELL, Some("floor(map_center)"));
-    s.point(anchor_base_quant_v, Some("anchor_base (map_origin)"));
-    s.labeled_line(quant_v, raw_v, None, false);
-    s.labeled_line(quant_v, anchor_base_quant_v, Some("floor(map_center) <-> anchor_base (map_origin)"), true);
+    s.r#box(quant_v, U_PER_CELL, Some("map center's cell"));
+    s.point(origin_v, Some("origin"));
+    s.line(quant_v, raw_v);
+    s.dashed(quant_v, origin_v);
 
-    for (corner, label) in [(TO_XY(L3_BASE(map_center.i)), "page_base"), (TO_XY(L3_CENTER(map_center.i)), "page_center")] {
+    for (corner, label) in [(TO_XY(L3_BASE(map_center.i)), "page base"), (TO_XY(L3_CENTER(map_center.i)), "page center")] {
         let at = Pvf3 { i: corner, f: 0 };
         if let Some(top) = ground(&at) {
             let mut grounded = at;
@@ -209,7 +183,7 @@ fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
             s.r#box(canonical_to_local(&grounded, map_origin), 1.0, Some(label));
         }
     }
-    s.point(raw_v, Some("map_center"));
+    s.point(raw_v, Some("map center"));
     s
 }
 
@@ -218,9 +192,11 @@ struct Gizmos {
     built_for: Option<(Pvf3, IVec, u32, f64)>,
     drawn: Sketch,
     shown: bool,
-    /// A label the sheet had no room for has NO_SLOT.
     set: Option<u32>,
-    slots: Vec<(i32, f64)>,
+    /// Each label's text, its sheet slot and width, in the labels' order. A
+    /// slot is kept while its text is, since a new one shows nothing until its
+    /// text is drawn, and a label the sheet had no room for has NO_SLOT.
+    slots: Vec<(String, i32, f64)>,
     /// A repack moves every rectangle, so instances are rewritten per generation.
     written: Option<u32>,
 }
@@ -242,7 +218,7 @@ fn drop_labels(g: &mut Gizmos) {
     if let Some(set) = g.set.take() {
         remove_billboard_set(set);
     }
-    for (slot, _) in g.slots.drain(..) {
+    for (_, slot, _) in g.slots.drain(..) {
         if slot != NO_SLOT {
             billboard_sheet().release(slot as u32);
         }
@@ -252,24 +228,30 @@ fn drop_labels(g: &mut Gizmos) {
 
 /// Where a label is not laid out yet, the sketch is rebuilt on a later frame.
 fn make_labels(g: &mut Gizmos, origin: V3) {
-    drop_labels(g);
-    if g.drawn.labels.is_empty() {
-        return;
-    }
-    let widths: Vec<Option<f64>> = g.drawn.labels.iter().map(|l| text_width(LABEL_FONT, &l.text)).collect();
-    if widths.contains(&None) {
-        g.built_for = None;
-        return;
-    }
     let sheet = billboard_sheet();
-    for (label, width) in g.drawn.labels.iter().zip(widths) {
-        let logical_w = width.or_bug(Errno::ENOTRECOVERABLE).ceil() + LABEL_PAD_X * 2.0;
-        let slot = sheet.add(logical_w * DPR_MAX, LABEL_H * DPR_MAX, DrawSpec::Text { text: label.text.clone(), logical_w });
-        g.slots.push((slot, logical_w));
+    let mut held = core::mem::take(&mut g.slots);
+    for label in &g.drawn.labels {
+        if let Some(k) = held.iter().position(|h| h.0 == label.text && h.1 != NO_SLOT) {
+            g.slots.push(held.swap_remove(k));
+            continue;
+        }
+        let Some(width) = text_width(LABEL_FONT, &label.text) else {
+            g.built_for = None;
+            g.slots.push((label.text.clone(), NO_SLOT, 0.0));
+            continue;
+        };
+        let logical_w = width.ceil() + LABEL_PAD_X * 2.0;
+        let slot = sheet.add(logical_w * DPR_MAX, f64::from(LABEL_H) * DPR_MAX, DrawSpec::Text { text: label.text.clone(), logical_w });
+        g.slots.push((label.text.clone(), slot, logical_w));
     }
-    let set = new_billboard_set(BillboardOrder::Debug);
+    for (_, slot, _) in held {
+        if slot != NO_SLOT {
+            sheet.release(slot as u32);
+        }
+    }
+    let set = *g.set.get_or_insert_with(|| new_billboard_set(BillboardOrder::Debug));
     place_billboard_set(set, origin);
-    g.set = Some(set);
+    g.written = None;
 }
 
 fn write_labels(g: &mut Gizmos) {
@@ -281,11 +263,11 @@ fn write_labels(g: &mut Gizmos) {
     }
     g.written = Some(generation);
     let mut lane: Vec<f32> = Vec::with_capacity(g.slots.len() * BILLBOARD_FLOATS);
-    for (label, &(slot, logical_w)) in g.drawn.labels.iter().zip(&g.slots) {
-        if slot == NO_SLOT {
+    for (label, (_, slot, logical_w)) in g.drawn.labels.iter().zip(&g.slots) {
+        if *slot == NO_SLOT {
             continue;
         }
-        lane.extend_from_slice(&billboard_instance(label.at, [logical_w, LABEL_H], slot as u32, 0.5));
+        lane.extend_from_slice(&billboard_instance(label.at, [*logical_w, f64::from(LABEL_H)], *slot as u32, 0.5));
     }
     write_billboard_set(set, &lane);
 }

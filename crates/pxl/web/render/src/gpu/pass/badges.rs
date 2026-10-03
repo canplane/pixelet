@@ -75,7 +75,7 @@ fn cluster(p: &mut Sketch, label: &str, logical_w: f32) {
 }
 
 pub const LABEL_FONT: Font = Font { weight: REGULAR, px: 10.0 };
-const LABEL_H: f32 = 12.0;
+pub const LABEL_H: f32 = 12.0;
 
 fn label(p: &mut Sketch, text: &str, logical_w: f32) {
     p.text(LABEL_FONT, BLACK, text, logical_w / 2.0, LABEL_H / 2.0, Align::Center);

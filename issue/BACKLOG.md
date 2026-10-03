@@ -29,7 +29,9 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   and `98e4f790` moved them onto the chunks the terrain draws; checked by
   the tests and the build only. Zoom and pan on the dev stack: decor and
   badges change with the ground under them, and no tree is lost or doubled
-  at a chunk's top or edge.
+  at a chunk's top or edge. `e7893bdb` moved the badges' globe and viewport
+  onto the frame's uniform: they stand, size and bend over the planet as
+  before. The gizmos' labels no longer blink while the camera moves.
 
 ## P3
 
