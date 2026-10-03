@@ -31,12 +31,13 @@ pub const WIDEST: f64 = u8::MAX as f64 / POINT_SCALE;
 
 // ---- clear height and shell, in ground metres: where the source gives none ----
 
-pub const ROAD_CLEARANCE_M: f64 = 4.5; // over a road and inside a road's bore
-pub const PATH_CLEARANCE_M: f64 = 2.5; // over a footway, path or cycleway
-pub const RAIL_CLEARANCE_M: f64 = 8.0; // Arnis's: a railway's overhead wire
+pub const ROAD_CLEARANCE_M: f64 = 4.5; // over a road and in its bore: UNECE AGR Annex II III.4
+// Arnis's deck height over a path or a track, less the slab under it
+pub const PATH_CLEARANCE_M: f64 = 5.0 - DECK_THICKNESS_M; // a footway, path or cycleway
+pub const RAIL_CLEARANCE_M: f64 = 8.0 - DECK_THICKNESS_M; // a railway: its catenary, 6 over the bed
 
-pub const DECK_THICKNESS_M: f64 = 2.0; // a deck's slab, under its surface
-pub const BORE_COVER_M: f64 = 3.0; // a bore's shell over its clear height
+pub const DECK_THICKNESS_M: f64 = 2.0; // a deck's slab under its surface: Arnis's structure depth
+pub const BORE_COVER_M: f64 = 3.0; // a bore's shell over its clear height: pixelet's, no source found
 
 /// What a way of transport type `kind` needs clear over its surface.
 pub fn clearance_m(kind: u8) -> f64 {

@@ -2,16 +2,21 @@
 
 //! The solve's knobs; clearances and shells are pxl-spec's `bake/deck.rs`.
 
-// ---- clear height over water, in ground metres: Arnis's ----
+use pxl_spec::bake::deck::DECK_THICKNESS_M;
 
-pub const RIVER_M: f64 = 4.0; // over a river's, canal's or lake's water
+// ---- clear height over water, in ground metres ----
+
+// Arnis's deck height over the water, less the slab under it
+pub const RIVER_M: f64 = 4.0 - DECK_THICKNESS_M; // a river, canal or lake
+pub const STREAM_M: f64 = 2.0 - DECK_THICKNESS_M; // a stream, ditch or drain
+// pixelet's, no source found
 pub const RIVER_PER_M: f64 = 0.01; // more a metre of water spanned: a kilometre's river is crossed high
 pub const RIVER_MOST_M: f64 = 15.0; // what that rise stops at
-pub const STREAM_M: f64 = 2.0; // over a stream, ditch or drain
 
 // ---- grade ----
 
-/// A city ramp's 6 to 8 %; a need takes what grade it must.
+/// UNECE AGR Annex II III.2.1's steepest road grade (60 km/h); a need takes
+/// what grade it must. One grade for every way: a fallback, not a rule of each.
 pub const PREFERRED_SLOPE: f64 = 0.08;
 
 // ---- along a line, in ground metres ----
