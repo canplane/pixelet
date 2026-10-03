@@ -250,29 +250,22 @@ fn each_cell_entry(ix: i64, iy: i64, iz: i64, visit: &mut dyn FnMut(&EntryCursor
     }
 }
 
-fn occupants(ix: i64, iy: i64, iz: i64, out: &mut Vec<OccupiedEntry>) {
-    each_cell_entry(ix, iy, iz, &mut |entry| {
-        if !object_value_is_air(entry.state) {
-            out.push(entry.object());
-        }
-    });
-}
-
-pub fn get_objects_in_cell(ix: i64, iy: i64, iz: i64) -> Vec<OccupiedEntry> {
-    let mut out = Vec::new();
-    occupants(ix, iy, iz, &mut out);
-    out
-}
-
 /// Whether any leaf, air included, is written in the cell `at` lies in.
 pub fn holds_entry(at: &Pvf3) -> bool {
     let [ix, iy, iz] = CELL.index_of(at);
     cell_run(ix, iy, iz).is_some()
 }
 
+/// What stands in the cell `at` lies in, air left out.
 pub fn objects_at(at: &Pvf3) -> Vec<OccupiedEntry> {
     let [ix, iy, iz] = CELL.index_of(at);
-    get_objects_in_cell(ix, iy, iz)
+    let mut out = Vec::new();
+    each_cell_entry(ix, iy, iz, &mut |entry| {
+        if !object_value_is_air(entry.state) {
+            out.push(entry.object());
+        }
+    });
+    out
 }
 
 /// Two cubes share space exactly when one's node lies under the other's,
