@@ -170,7 +170,7 @@ fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
     let mut origin_v = [0.0; 3];
     floor3n(&[0.0, 0.0, ground(&Pvf3 { i: map_origin, f: 0 }).unwrap_or(0.0)], U_PER_CELL, &mut origin_v);
 
-    s.r#box(quant_v, U_PER_CELL, Some("map center's cell"));
+    s.r#box(quant_v, U_PER_CELL, Some("center cell"));
     s.point(origin_v, Some("origin"));
     s.line(quant_v, raw_v);
     s.dashed(quant_v, origin_v);
