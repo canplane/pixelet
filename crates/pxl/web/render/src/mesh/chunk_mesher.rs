@@ -117,7 +117,7 @@ impl Default for Heights {
 }
 
 impl Heights {
-    fn of(set: &RunSet, z_scale: f64) -> Heights {
+    fn of(set: &RunSet) -> Heights {
         let (mut lo, mut hi) = (i32::MAX, i32::MIN);
         for i in 0..set.count as usize {
             lo = lo.min(set.z0[i]);
@@ -126,9 +126,9 @@ impl Heights {
         if lo > hi {
             return Heights::default();
         }
-        let span = (hi - lo) as f64 * z_scale;
+        let span = (hi - lo) as f64;
         Heights {
-            floor: lo as f64 * z_scale,
+            floor: lo as f64,
             step: (span / Z_STEPS).max(f64::MIN_POSITIVE),
         }
     }
@@ -226,7 +226,6 @@ struct FineBake {
     /// A coarse tier's columns are `lod_step` wide, a level-k chunk's 2^k; a run's
     /// cell is a unit tall at every level.
     xy_scale: u32,
-    z_scale: u32,
     phase: u8,
     row: u32,
     emit_at: usize,
@@ -314,7 +313,7 @@ impl BakeContext {
         let (count, span, apron, heights) = {
             let cut = self.clipped.as_ref().map(OwnedRunSet::view);
             let set = cut.as_ref().unwrap_or(set);
-            (set.count, set.span, set.apron, if lod_step == 1 { Heights::of(set, 1.0) } else { Heights::default() })
+            (set.count, set.span, set.apron, if lod_step == 1 { Heights::of(set) } else { Heights::default() })
         };
         self.textured = textured;
         xpute_core::ensure!(span as usize <= MAX_BAKE_SPAN, ENOSPC, span, MAX_BAKE_SPAN);
@@ -327,7 +326,7 @@ impl BakeContext {
         self.heights = heights;
         self.box_words = box_words(lod_step);
         self.open = Some(if lod_step == 1 {
-            Open::Fine(self.begin_fine(span, apron, scale, 1))
+            Open::Fine(self.begin_fine(span, apron, scale))
         } else {
             let inner = span - 2 * apron;
             xpute_core::ensure!(lod_step.is_power_of_two() && inner.is_multiple_of(lod_step), EINVAL, lod_step, inner);
@@ -397,7 +396,7 @@ impl BakeContext {
     /// otherwise untouched until the block is full, or `finish` or `abort`.
     pub unsafe fn provide_mesh(&mut self, ptr: *mut u32, words: u32) {
         xpute_core::ensure!(self.mesh_words > 0 && (self.mesh.is_none() || self.full()), ENOTRECOVERABLE);
-        let left = self.mesh_words - self.box_cnt * self.box_words;
+        let left = self.left_words();
         xpute_core::ensure!(words >= self.box_words.min(left) && words <= left, ENOTRECOVERABLE, words, left);
         let words = words - words % self.box_words;
         self.mesh = Some(MeshTarget {
@@ -428,13 +427,12 @@ impl BakeContext {
         self.buckets.clear();
     }
 
-    fn begin_fine(&mut self, span: u32, apron: u32, xy_scale: u32, z_scale: u32) -> FineBake {
+    fn begin_fine(&mut self, span: u32, apron: u32, xy_scale: u32) -> FineBake {
         self.merge_run[..(span * span) as usize].fill(None);
         FineBake {
             span,
             apron,
             xy_scale,
-            z_scale,
             phase: 0,
             row: apron,
             emit_at: 0,
@@ -575,7 +573,7 @@ impl BakeContext {
         }
 
         let unit = b.xy_scale as f64 * U_PER_CELL;
-        let z_unit = b.z_scale as f64 * U_PER_CELL;
+        let z_unit = U_PER_CELL;
         let apron = b.apron as f64;
         let emit_end = self.surviving.len().min(b.emit_at + BAKE_BOXES_PER_STEP * 6);
         let mut s_i = b.emit_at;
@@ -708,8 +706,8 @@ impl BakeContext {
                 return false;
             }
             self.coarse.start.push(self.coarse.z0.len() as u32);
-            self.heights = Heights::of(&self.coarse.view(), 1.0);
-            b.fine = Some(self.begin_fine(res, 0, lod_step * scale, 1));
+            self.heights = Heights::of(&self.coarse.view());
+            b.fine = Some(self.begin_fine(res, 0, lod_step * scale));
             b.phase = 2;
             return false;
         }
@@ -851,7 +849,7 @@ impl BakeContext {
 }
 
 /// Every lateral edge a crease, so each shades as a silhouette.
-pub const LONE_BOX_FACES: u32 = 0b11_1111 | (0b1111 << 18);
+const LONE_BOX_FACES: u32 = ALL_FACES | ALL_CREASES;
 /// The hover ghost's box, written as a bake writes one so it is lit as a placed cube is.
 pub fn write_lone_box(m: &mut [u32], size: f64, rgb: [u8; 3], layer: u8) -> Heights {
     xpute_core::ensure!(m.len() == FINE_BOX_WORDS as usize, ENOTRECOVERABLE);

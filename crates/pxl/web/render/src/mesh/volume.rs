@@ -214,7 +214,6 @@ pub const BAND_WORDS: usize = 10;
 pub struct VolumeStat {
     pub allocated: u32,
     pub reused: u32,
-    pub refused: u32,
 }
 
 pub struct Volumes {
@@ -273,11 +272,9 @@ impl Volumes {
             return Some(s);
         }
         let Some(material) = Guard::alloc(MATERIAL_BYTES) else {
-            self.stat.refused += 1;
             return None;
         };
         let Some((layer_idx, _)) = alloc(LAYER_BYTES) else {
-            self.stat.refused += 1;
             return None;
         };
         let (material, _) = material.keep();
@@ -300,7 +297,6 @@ impl Volumes {
                 free((material, MATERIAL_BYTES));
                 free((layer_idx, LAYER_BYTES));
             }
-            self.stat.refused += 1;
             return None;
         }
         Some(self.stores.len() - 1)
