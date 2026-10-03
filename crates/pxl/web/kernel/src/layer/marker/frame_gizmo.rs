@@ -33,6 +33,9 @@ const DASHES: f64 = 256.0;
 /// Half the cross a point is drawn as.
 const POINT_HALF: f64 = 0.15;
 const RING_RADIUS: f64 = 4.0;
+/// The view's rings inside the world's, which they would lie on wherever an
+/// axis of one meets an axis of the other.
+const VIEW_RING_RADIUS: f64 = 3.0;
 const RING_SEGMENTS: u32 = 64;
 
 /// Segments as pairs of vertices: position, then color.
@@ -131,8 +134,8 @@ fn sketch_frames(s: &mut Sketch) {
     let Some(center) = crate::control::camera::controller::center_local() else { return };
     let (sin, cos) = libm::sincos(-crate::control::camera::controller::azimuth());
     let view_frame = move |p: V3| [center[0] + p[0] * cos - p[1] * sin, center[1] + p[0] * sin + p[1] * cos, center[2] + p[2]];
-    s.gyro(&view_frame, [0.0, RING_RADIUS, 0.0], FORWARD);
-    s.point(view_frame([0.0, 0.0, RING_RADIUS]), UP);
+    s.gyro(&view_frame, [0.0, VIEW_RING_RADIUS, 0.0], FORWARD);
+    s.point(view_frame([0.0, 0.0, VIEW_RING_RADIUS]), UP);
     let world_frame = move |p: V3| [center[0] + p[0], center[1] + p[1], center[2] + p[2]];
     s.gyro(&world_frame, [0.0, RING_RADIUS, 0.0], NORTH);
 }
