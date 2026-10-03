@@ -17,10 +17,11 @@ function measure(): SafeArea {
 
 export function useSafeArea(): SafeArea {
   const [area, setArea] = useState(measure);
+  // After layout, as the window's size is read (viewport.ts); a rotation moves the insets.
   useEffect(() => {
-    const update = () => setArea(measure());
-    globalThis.addEventListener("resize", update);
-    return () => globalThis.removeEventListener("resize", update);
+    const observer = new ResizeObserver(() => setArea(measure()));
+    observer.observe(document.documentElement);
+    return () => observer.disconnect();
   }, []);
   return area;
 }

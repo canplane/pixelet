@@ -25,10 +25,23 @@ function dpr(): f64 {
   return globalThis.devicePixelRatio || 1;
 }
 
+/** Calls `then` when the device pixel ratio changes: a page zoom, or a move to another screen. */
+function onRatioChange(then: () => void): () => void {
+  let query = matchMedia(`(resolution: ${dpr()}dppx)`);
+  const fire = () => {
+    query.removeEventListener("change", fire);
+    query = matchMedia(`(resolution: ${dpr()}dppx)`);
+    query.addEventListener("change", fire);
+    then();
+  };
+  query.addEventListener("change", fire);
+  return () => query.removeEventListener("change", fire);
+}
+
 /**
  * Follows the layout box, not the bounding rect, which includes transforms a
  * sliding drawer passes through. Safari reports no device pixels, so the CSS
- * box times the ratio stands in and a zoom is caught by the window's resize.
+ * box times the ratio stands in, and a change of ratio alone is watched for.
  */
 function openSurface(canvas: HTMLCanvasElement, role: u32): { handle: u32; close: () => void } {
   const handle = surface_open(role);
@@ -42,16 +55,17 @@ function openSurface(canvas: HTMLCanvasElement, role: u32): { handle: u32; close
     if (exact) send(exact.inlineSize, exact.blockSize);
     else sendBox();
   });
+  let stopRatio = () => {};
   try {
     observer.observe(canvas, { box: "device-pixel-content-box" });
   } catch {
     observer.observe(canvas);
+    stopRatio = onRatioChange(sendBox);
   }
-  globalThis.addEventListener("resize", sendBox);
   return {
     handle,
     close: () => {
-      globalThis.removeEventListener("resize", sendBox);
+      stopRatio();
       observer.disconnect();
       surface_close(handle);
       unbindSurface(handle);
@@ -94,7 +108,6 @@ function drive(canvas: HTMLCanvasElement): () => void {
   canvas.addEventListener("pointerleave", onLeave);
   canvas.addEventListener("contextmenu", onContextMenu);
   canvas.addEventListener("wheel", onWheel, { passive: false });
-  globalThis.addEventListener("resize", onResize);
   globalThis.addEventListener("scroll", onResize, true);
   globalThis.addEventListener("pointerup", onUp);
   globalThis.addEventListener("pointercancel", onUp);
@@ -114,7 +127,6 @@ function drive(canvas: HTMLCanvasElement): () => void {
     globalThis.removeEventListener("pointercancel", onUp);
     globalThis.removeEventListener("pointerup", onUp);
     globalThis.removeEventListener("scroll", onResize, true);
-    globalThis.removeEventListener("resize", onResize);
     canvas.removeEventListener("wheel", onWheel);
     canvas.removeEventListener("contextmenu", onContextMenu);
     canvas.removeEventListener("pointerleave", onLeave);
