@@ -106,7 +106,6 @@ pub enum InputMinor {
     WHEEL = 0x03,
     TRACKING = 0x04,
     VIEW = 0x05,
-    RESET_DIST = 0x06,
     COMPASS_RESET = 0x07,
     GO_TO = 0x08,
     POSE = 0x09,
@@ -114,13 +113,12 @@ pub enum InputMinor {
 }
 
 impl InputMinor {
-    pub const ALL: [InputMinor; 10] = [
+    pub const ALL: [InputMinor; 9] = [
         InputMinor::RECT,
         InputMinor::POINTER,
         InputMinor::WHEEL,
         InputMinor::TRACKING,
         InputMinor::VIEW,
-        InputMinor::RESET_DIST,
         InputMinor::COMPASS_RESET,
         InputMinor::GO_TO,
         InputMinor::POSE,
@@ -225,11 +223,10 @@ impl SurfaceMinor {
 #[repr(u32)]
 pub enum SettingMinor {
     SET = 0x01,
-    TOGGLE = 0x02,
 }
 
 impl SettingMinor {
-    pub const ALL: [SettingMinor; 2] = [SettingMinor::SET, SettingMinor::TOGGLE];
+    pub const ALL: [SettingMinor; 1] = [SettingMinor::SET];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<SettingMinor> {
@@ -493,11 +490,6 @@ impl DevicePoseStatus {
 pub enum Message {
     None = 0x0000,
 
-    // ---- 0x01 the world's own state ----
-    MapLoading = 0x0101,
-    CompanionLoading = 0x0103,
-    WorldReady = 0x0104,
-
     // ---- 0x02 where the device says it is ----
     LocationChecking = 0x0201,
     LocationWeakSignal = 0x0202,
@@ -514,11 +506,8 @@ pub enum Message {
 }
 
 impl Message {
-    pub const ALL: [Message; 14] = [
+    pub const ALL: [Message; 11] = [
         Message::None,
-        Message::MapLoading,
-        Message::CompanionLoading,
-        Message::WorldReady,
         Message::LocationChecking,
         Message::LocationWeakSignal,
         Message::GeolocationUnsupported,
@@ -601,8 +590,6 @@ pub enum Command {
     PREVIEW_CLOSE = 0x1802,
     /// A setting set from the sheet or the character picker.
     SETTING_SET = 0x1601,
-    /// A toggle's switch.
-    SETTING_TOGGLE = 0x1602,
     /// A line the player said, shown over the character.
     CHAT_SEND = 0x1701,
     /// The tracking button's press, as the button showed it.
@@ -610,8 +597,6 @@ pub enum Command {
     /// Where the camera stands, set outright rather than driven: what the kernel's own
     /// test puts a view at, and what an A/B reads two builds at the same view with.
     INPUT_VIEW = 0x1105,
-    /// The scale bar's press: the default zoom.
-    INPUT_RESET_DIST = 0x1106,
     /// The compass's press: north up.
     INPUT_COMPASS_RESET = 0x1107,
     /// A search result: the map center moved there.
@@ -648,7 +633,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 41] = [
+    pub const ALL: [Command; 39] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
         Command::IMAGE_DECODED,
@@ -672,11 +657,9 @@ impl Command {
         Command::PREVIEW_OPEN,
         Command::PREVIEW_CLOSE,
         Command::SETTING_SET,
-        Command::SETTING_TOGGLE,
         Command::CHAT_SEND,
         Command::INPUT_TRACKING,
         Command::INPUT_VIEW,
-        Command::INPUT_RESET_DIST,
         Command::INPUT_COMPASS_RESET,
         Command::INPUT_GO_TO,
         Command::INPUT_POSE,
@@ -1328,21 +1311,6 @@ impl SettingSet {
         Ok(SettingSet {
             key: crate::shell::setting::schema_spec::SettingKey::of(f.at(0)?.get_number()? as u32).ok_or_else(|| unknown())?,
             value: f.at(1)?.get_number()? as u32,
-        })
-    }
-}
-
-/// Command::SETTING_TOGGLE's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct SettingToggle {
-    pub key: crate::shell::setting::schema_spec::SettingKey,
-}
-
-impl SettingToggle {
-    pub fn read(pkt: &[u8]) -> Result<SettingToggle, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(SettingToggle {
-            key: crate::shell::setting::schema_spec::SettingKey::of(f.at(0)?.get_number()? as u32).ok_or_else(|| unknown())?,
         })
     }
 }

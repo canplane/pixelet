@@ -162,10 +162,6 @@
           "value": 5
         },
         {
-          "name": "RESET_DIST",
-          "value": 6
-        },
-        {
           "name": "COMPASS_RESET",
           "value": 7
         },
@@ -293,10 +289,6 @@
         {
           "name": "SET",
           "value": 1
-        },
-        {
-          "name": "TOGGLE",
-          "value": 2
         }
       ]
     },
@@ -608,21 +600,6 @@
         {
           "name": "None",
           "value": 0
-        },
-        {
-          "section": "0x01 the world's own state"
-        },
-        {
-          "name": "MapLoading",
-          "value": 257
-        },
-        {
-          "name": "CompanionLoading",
-          "value": 259
-        },
-        {
-          "name": "WorldReady",
-          "value": 260
         },
         {
           "section": "0x02 where the device says it is"
@@ -1210,19 +1187,6 @@
           ]
         },
         {
-          "name": "SETTING_TOGGLE",
-          "value": 5634,
-          "doc": [
-            "A toggle's switch."
-          ],
-          "packet": [
-            {
-              "name": "key",
-              "type": "SettingKey"
-            }
-          ]
-        },
-        {
           "name": "CHAT_SEND",
           "value": 5889,
           "doc": [
@@ -1266,13 +1230,6 @@
               "type": "f64",
               "optional": true
             }
-          ]
-        },
-        {
-          "name": "INPUT_RESET_DIST",
-          "value": 4358,
-          "doc": [
-            "The scale bar's press: the default zoom."
           ]
         },
         {

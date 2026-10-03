@@ -9,13 +9,6 @@ export function messageKey(message: Message): string | null {
     case Message.None:
       return null;
 
-    case Message.MapLoading:
-      return "toast.map_loading";
-    case Message.CompanionLoading:
-      return "toast.companion_loading";
-    case Message.WorldReady:
-      return "toast.world_ready";
-
     case Message.LocationChecking:
       return "toast.location_checking";
     case Message.LocationWeakSignal:

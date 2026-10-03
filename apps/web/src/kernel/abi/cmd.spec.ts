@@ -61,7 +61,6 @@ export const enum InputMinor {
   WHEEL = 0x03,
   TRACKING = 0x04,
   VIEW = 0x05,
-  RESET_DIST = 0x06,
   COMPASS_RESET = 0x07,
   GO_TO = 0x08,
   POSE = 0x09,
@@ -103,7 +102,6 @@ export const enum SurfaceMinor {
 /** A setting's verbs. */
 export const enum SettingMinor {
   SET = 0x01,
-  TOGGLE = 0x02,
 }
 
 /** The chat's verbs. */
@@ -214,12 +212,6 @@ export const enum DevicePoseStatus {
 export const enum Message {
   None = 0x0000,
 
-  // ---- 0x01 the world's own state ----
-
-  MapLoading = 0x0101,
-  CompanionLoading = 0x0103,
-  WorldReady = 0x0104,
-
   // ---- 0x02 where the device says it is ----
 
   LocationChecking = 0x0201,
@@ -303,8 +295,6 @@ export const enum Command {
   PREVIEW_CLOSE = 0x1802,
   /** A setting set from the sheet or the character picker. */
   SETTING_SET = 0x1601,
-  /** A toggle's switch. */
-  SETTING_TOGGLE = 0x1602,
   /** A line the player said, shown over the character. */
   CHAT_SEND = 0x1701,
   /** The tracking button's press, as the button showed it. */
@@ -312,8 +302,6 @@ export const enum Command {
   /** Where the camera stands, set outright rather than driven: what the kernel's own
    * test puts a view at, and what an A/B reads two builds at the same view with. */
   INPUT_VIEW = 0x1105,
-  /** The scale bar's press: the default zoom. */
-  INPUT_RESET_DIST = 0x1106,
   /** The compass's press: north up. */
   INPUT_COMPASS_RESET = 0x1107,
   /** A search result: the map center moved there. */
@@ -733,15 +721,6 @@ export interface SettingSet {
 
 export function encode_setting_set(p: SettingSet): U8Array {
   return packet((b) => b.u32(p.key).u32(p.value));
-}
-
-/** Command.SETTING_TOGGLE's packet. */
-export interface SettingToggle {
-  key: u32;
-}
-
-export function encode_setting_toggle(p: SettingToggle): U8Array {
-  return packet((b) => b.u32(p.key));
 }
 
 /** Command.CHAT_SEND's packet. */

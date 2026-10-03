@@ -13,7 +13,6 @@ import {
   Command,
   encode_gpu_ready,
   encode_setting_set,
-  encode_setting_toggle,
   encode_world_boot,
   encode_world_frame,
   encode_world_source,
@@ -107,7 +106,7 @@ await turn();
 Deno.test("kernel - the settings commands reach the snapshot", async () => {
   const tilt = SETTINGS.tilt_lock.key;
   const before = (await turn()).settings[tilt];
-  command(Command.SETTING_TOGGLE, encode_setting_toggle({ key: tilt }));
+  command(Command.SETTING_SET, encode_setting_set({ key: tilt, value: 1 - before }));
   assertEquals((await turn()).settings[tilt], 1 - before);
   command(Command.SETTING_SET, encode_setting_set({ key: tilt, value: before }));
   assertEquals((await turn()).settings[tilt], before);

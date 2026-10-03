@@ -73,12 +73,6 @@ impl Settings {
         out.push('}');
         out
     }
-
-    pub fn toggle_setting(&mut self, key: SettingKey) {
-        if key.kind() == SettingKind::Toggle {
-            self.set_setting(key, 1 - self.get(key));
-        }
-    }
 }
 
 static SETTINGS_STORE: Global<Settings> = Global::new();

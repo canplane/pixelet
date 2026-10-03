@@ -133,10 +133,6 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             ui::set_view(p.dist, p.polar);
             applied(s)
         }
-        Command::INPUT_RESET_DIST => {
-            crate::control::camera::controller::reset_dist();
-            applied(s)
-        }
         Command::INPUT_COMPASS_RESET => {
             crate::shell::ui::compass::compass_reset();
             applied(s)
@@ -245,10 +241,6 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         Command::SETTING_SET => {
             let p = abi::SettingSet::read(packet(pkt)?)?;
             settings_store().set_setting(p.key, p.value);
-            applied(s)
-        }
-        Command::SETTING_TOGGLE => {
-            settings_store().toggle_setting(abi::SettingToggle::read(packet(pkt)?)?.key);
             applied(s)
         }
         Command::CHAT_SEND => {
