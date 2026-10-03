@@ -93,7 +93,6 @@ export interface FrameSummary {
   chunks: Spread;
   phases: { name: string; spread: Spread }[];
   gpu_spans: { name: string; spread: Spread }[];
-  work: [f64, f64];
   perS: [f64, f64];
   backlog_s: f64;
   backlogPerS: [f64, f64];
@@ -138,7 +137,6 @@ export interface ProfilerReport {
   sections: Record<"counters" | "atlas" | "held" | "fetch" | "quality" | "view", Record<string, f64>>;
   steps: { phase: string; name: string; ms: f64; count: f64; max_ms: f64 }[];
   peak: Record<string, f64> | null;
-  taskN: u32;
   tasks: TaskSummary[];
   recent: TaskRecord[];
   worst: { sample: Frame; prev: Frame | null }[];
@@ -166,7 +164,6 @@ function frameSummary(s: F64Array): FrameSummary | null {
     chunks: spreadAt(s, a + F.chunks),
     phases: PHASE_NAMES.map((name, k) => ({ name, spread: spreadAt(s, a + F.phases + k * SPREAD.WORDS) })),
     gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({ name, spread: spreadAt(s, a + F.gpu_spans + k * SPREAD.WORDS) })),
-    work: [s[a + F.work_scans], s[a + F.work_bakes]],
     perS: [s[a + F.per_s_scans], s[a + F.per_s_bakes]],
     backlog_s: s[a + F.backlog_s],
     backlogPerS: [s[a + F.backlog_per_s_scans], s[a + F.backlog_per_s_bakes]],
@@ -234,27 +231,30 @@ export interface Gauge {
   frames: FrameSummary | null;
   tasks: TaskSummary[];
   counters: Record<string, f64>;
-  atlas: { size: u32; entries: u32; shelves: u32; used_px: u32 };
+  atlas: { size: u32; entries: u32; shelves: u32; used_px: u32; initial: u32 };
   quality: Record<string, f64>;
   view: Record<string, f64>;
   longs: LongFrame[];
 }
 
-function recOf(s: F64Array): Gauge["rec"] {
-  const r = section(s, SUMMARY.rec);
-  return { recording: r.recording !== 0, elapsed_ms: r.elapsed_ms, tasks: r.tasks, frames: r.frames, truncated: r.truncated !== 0 };
+/** The worst frames the kernel kept, each with the one before it where there was one. */
+function worstAt([at, count]: [u32, u32]): ProfilerReport["worst"] {
+  const w = words(at, count * WORST.WORDS);
+  return Array.from({ length: count }, (_, i) => {
+    const o = i * WORST.WORDS;
+    return { sample: frameAt(w, o + WORST.sample), prev: w[o + WORST.has_prev] === 0 ? null : frameAt(w, o + WORST.prev) };
+  });
 }
-
-const atlasOf = (s: F64Array) => section(s, SUMMARY.atlas) as Gauge["atlas"];
 
 export function profilerGaugeRead(windowMs: f64): Gauge {
   const { summary: s } = read(windowMs);
+  const r = section(s, SUMMARY.rec);
   return {
-    rec: recOf(s),
+    rec: { recording: r.recording !== 0, elapsed_ms: r.elapsed_ms, tasks: r.tasks, frames: r.frames, truncated: r.truncated !== 0 },
     frames: frameSummary(s),
     tasks: taskSummaries(s),
     counters: section(s, SUMMARY.counters),
-    atlas: atlasOf(s),
+    atlas: section(s, SUMMARY.atlas) as Gauge["atlas"],
     quality: section(s, SUMMARY.quality),
     view: section(s, SUMMARY.view),
     longs: longFramesSince(performance.now() - windowMs),
@@ -276,8 +276,6 @@ export function profilerReportRead(): ProfilerReport {
     };
   });
   const recentFrom = Math.max(0, tasks[1] - RECENT_TASKS);
-  const worstWords = words(worst[0], worst[1] * WORST.WORDS);
-  const taskSummary = taskSummaries(s);
   return {
     t: performance.now(),
     build: { number: BUILD_NUMBER, id: BUILD_ID, time: BUILD_TIME },
@@ -292,28 +290,16 @@ export function profilerReportRead(): ProfilerReport {
     },
     steps,
     peak: peak.present === 0 ? null : Object.fromEntries(Object.entries(peak).filter(([k]) => k !== "present")),
-    taskN: taskSummary.reduce((n, t) => n + t.n, 0),
-    tasks: taskSummary,
+    tasks: taskSummaries(s),
     recent: tasksAt(tasks[0] + recentFrom * TASK.WORDS * WORD, tasks[1] - recentFrom),
-    worst: Array.from({ length: worst[1] }, (_, i) => {
-      const o = i * WORST.WORDS;
-      return { sample: frameAt(worstWords, o + WORST.sample), prev: worstWords[o + WORST.has_prev] === 0 ? null : frameAt(worstWords, o + WORST.prev) };
-    }),
+    worst: worstAt(worst),
     longs: longFramesSince(-Infinity),
   };
 }
 
 export function profilerRingsRead(): { frames: Frame[]; tasks: TaskRecord[]; worst: ProfilerReport["worst"] } {
   const { tasks, frames, worst } = read(0);
-  const worstWords = words(worst[0], worst[1] * WORST.WORDS);
-  return {
-    frames: framesAt(frames[0], frames[1]),
-    tasks: tasksAt(tasks[0], tasks[1]),
-    worst: Array.from({ length: worst[1] }, (_, i) => {
-      const o = i * WORST.WORDS;
-      return { sample: frameAt(worstWords, o + WORST.sample), prev: worstWords[o + WORST.has_prev] === 0 ? null : frameAt(worstWords, o + WORST.prev) };
-    }),
-  };
+  return { frames: framesAt(frames[0], frames[1]), tasks: tasksAt(tasks[0], tasks[1]), worst: worstAt(worst) };
 }
 
 export function profilerLogTake(): { tasks: TaskRecord[]; frames: Frame[] } {

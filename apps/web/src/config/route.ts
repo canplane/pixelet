@@ -5,8 +5,6 @@ import { type BakeKind, PUBLISHED_VERSION } from "./published.spec.ts";
 
 import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX, TILE_ROOT } from "./route.spec.ts";
 
-export { PUBLISHED_VERSION };
-export { API_PREFIX, API_ROOT, ASSET_PREFIX, ASSET_ROOT, GEO_PREFIX, GEO_ROOT, SEARCH_URL, TILE_PREFIX, TILE_ROOT } from "./route.spec.ts";
 
 /** `<tile>/<kind>[/<version>]/<name>`: the kernel names the object, the
  * version is a deployment fact (a dev server bakes on demand, unversioned). */

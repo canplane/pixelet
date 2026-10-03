@@ -33,7 +33,7 @@ pub struct AtlasStats {
 const WIDTH_BUCKET: u32 = 16;
 const HEIGHT_BUCKET: u32 = 16;
 
-const INITIAL_SIZE: u32 = 1024;
+pub const INITIAL_SIZE: u32 = 1024;
 
 /// 2048 px RGBA is 16 MiB plus mips. A screen holds a few dozen badges (one per
 /// POI cell); past the limit an entry waits unshown (`NO_SLOT`).

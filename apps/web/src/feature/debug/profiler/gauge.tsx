@@ -26,7 +26,6 @@ const LONG_FRAME_MS = 50;
 /** The unbudgeted interaction phase is meant to be O(1). */
 const INTERACTION_WARN_MS = 2;
 
-const ATLAS_INITIAL = 1024;
 const ATLAS_SPARSE_PCT = 25;
 
 function Row(props: { k: string; v: string; warn?: boolean }) {
@@ -103,7 +102,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
   if (g === null) return <Note>no window open</Note>;
 
   const f = g.frames;
-  const atlasPct = round((g.atlas.used_px / (g.atlas.size * g.atlas.size)) * 100);
+  const atlasPct = pct(g.atlas.used_px, g.atlas.size * g.atlas.size);
   const [kept, possible] = [g.counters.faces_kept, g.counters.faces_possible];
   const heaviest = <T,>(rows: T[], by: (r: T) => number, n: number) => [...rows].sort((a, b) => by(b) - by(a)).slice(0, n).filter((r) => by(r) > 0);
   const worstLong = g.longs.reduce<LongFrame | null>((w, l) => (!w || l.durationMs > w.durationMs ? l : w), null);
@@ -171,9 +170,9 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           <Row k="draws/triangles" v={`${f.last.draw_calls}/${tris(f.last.triangles)}`} />
           {f.census.slice(0, CENSUS_ROWS).map((r) => <Row key={r.tag} k={`  ${r.tag} draws/tris`} v={`${round(r.draws)}/${tris(r.tris)}`} />)}
           {heaviest(f.zoom_tris.map((t, k) => ({ k, t })), (r) => r.t, LEVEL_ROWS).map((r) => <Row key={r.k} k={`  ${zoomName(r.k)} triangles`} v={tris(r.t)} />)}
-          <Row k="fill Mpx" v={(f.last.px / 1e6).toFixed(1)} warn={f.last.px / 1e6 > 12} />
+          <Row k="fill" v={valueText("px", f.last.px)} warn={f.last.px > 12e6} />
           <Row k="bakes/scans per s" v={`${round(f.backlogPerS[1])}/${round(f.backlogPerS[0])}`} />
-          <Row k="faces kept" v={`${possible > 0 ? round((kept / possible) * 100) : 0}%`} />
+          <Row k="faces kept" v={`${pct(kept, possible)}%`} />
         </>
       )}
 
@@ -183,7 +182,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
       {g.tasks.length === 0 && <Note>none in the window</Note>}
       {g.tasks.map((t) => (
         <View key={t.category}>
-          <Row k={`${t.category}${BOUND[t.category] ? ` (${BOUND[t.category].bound})` : ""} p50/p95`} v={`${n1(t.lat.p50)}/${n1(t.lat.p95)} ms`} />
+          <Row k={`${t.category}${BOUND[t.category] ? ` (${BOUND[t.category]})` : ""} p50/p95`} v={`${n1(t.lat.p50)}/${n1(t.lat.p95)} ms`} />
           <Row k="  ok/aborted/failed" v={`${t.ok}/${t.aborted}/${t.error}`} warn={t.error > 0} />
           {t.reasons.length > 0 && <Row k="  top failure" v={`${failText(t.reasons[0].fail, t.reasons[0].detail)} ×${t.reasons[0].n}`} warn />}
         </View>
@@ -215,7 +214,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           <Row k="kernel memory" v={`${round(kernel_memory().byteLength / 1048576)} MB`} />
           <Row k="buffers/arena" v={`${f.last.buffers} ${valueText("_mb", f.last.buffer_mb)}/${valueText("_mb", f.last.arena_mb)}`} />
           <Row k="depth/shadow/layers" v={`${f.last.tex_depth_mb}/${f.last.tex_shadow_mb}/${f.last.tex_layers_mb} MB`} />
-          {g.atlas.entries > 0 && <Row k="atlas" v={`${g.atlas.size}px ${g.atlas.entries} ${atlasPct}%`} warn={g.atlas.size > ATLAS_INITIAL && atlasPct < ATLAS_SPARSE_PCT} />}
+          {g.atlas.entries > 0 && <Row k="atlas" v={`${g.atlas.size}px ${g.atlas.entries} ${atlasPct}%`} warn={g.atlas.size > g.atlas.initial && atlasPct < ATLAS_SPARSE_PCT} />}
         </>
       )}
     </>

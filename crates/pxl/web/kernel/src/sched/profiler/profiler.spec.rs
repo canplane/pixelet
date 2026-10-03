@@ -494,12 +494,12 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "recording", "elapsed_ms", "tasks", "frames", "truncated", "WORDS"];
     }
     pub mod frames {
+        pub const AT: u32 = 5;
         pub const present: u32 = 0;
         pub const n: u32 = 1;
         pub const seconds: u32 = 2;
         pub const moving: u32 = 3;
         pub const missed: u32 = 4;
-        pub const AT: u32 = 5;
         pub const overran: u32 = 5;
         pub const dt: u32 = 6;
         pub const task: u32 = 9;
@@ -509,28 +509,26 @@ pub mod SUMMARY {
         pub const chunks: u32 = 21;
         pub const phases: u32 = 24;
         pub const gpu_spans: u32 = 39;
-        pub const work_scans: u32 = 60;
-        pub const work_bakes: u32 = 61;
-        pub const per_s_scans: u32 = 62;
-        pub const per_s_bakes: u32 = 63;
-        pub const backlog_s: u32 = 64;
-        pub const backlog_per_s_scans: u32 = 65;
-        pub const backlog_per_s_bakes: u32 = 66;
-        pub const chunks_per_bake: u32 = 67;
-        pub const mounts_added: u32 = 68;
-        pub const mounts_removed: u32 = 69;
-        pub const used_delta_mb: u32 = 70;
-        pub const census: u32 = 71;
-        pub const zoom_tris: u32 = 91;
-        pub const last: u32 = 115;
-        pub const WORDS: u32 = 259;
+        pub const per_s_scans: u32 = 60;
+        pub const per_s_bakes: u32 = 61;
+        pub const backlog_s: u32 = 62;
+        pub const backlog_per_s_scans: u32 = 63;
+        pub const backlog_per_s_bakes: u32 = 64;
+        pub const chunks_per_bake: u32 = 65;
+        pub const mounts_added: u32 = 66;
+        pub const mounts_removed: u32 = 67;
+        pub const used_delta_mb: u32 = 68;
+        pub const census: u32 = 69;
+        pub const zoom_tris: u32 = 89;
+        pub const last: u32 = 113;
+        pub const WORDS: u32 = 257;
         pub const KEYS: &[&str] = &[
+            "AT",
             "present",
             "n",
             "seconds",
             "moving",
             "missed",
-            "AT",
             "overran",
             "dt",
             "task",
@@ -540,8 +538,6 @@ pub mod SUMMARY {
             "chunks",
             "phases",
             "gpu_spans",
-            "work_scans",
-            "work_bakes",
             "per_s_scans",
             "per_s_bakes",
             "backlog_s",
@@ -558,13 +554,13 @@ pub mod SUMMARY {
         ];
     }
     pub mod tasks {
-        pub const AT: u32 = 264;
+        pub const AT: u32 = 262;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 150;
         pub const KEYS: &[&str] = &["AT", "slots", "WORDS"];
     }
     pub mod counters {
-        pub const AT: u32 = 414;
+        pub const AT: u32 = 412;
         pub const faces_kept: u32 = 0;
         pub const faces_possible: u32 = 1;
         pub const runs_culled: u32 = 2;
@@ -600,16 +596,17 @@ pub mod SUMMARY {
         ];
     }
     pub mod atlas {
-        pub const AT: u32 = 428;
+        pub const AT: u32 = 426;
         pub const size: u32 = 0;
         pub const entries: u32 = 1;
         pub const shelves: u32 = 2;
         pub const used_px: u32 = 3;
-        pub const WORDS: u32 = 4;
-        pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "WORDS"];
+        pub const initial: u32 = 4;
+        pub const WORDS: u32 = 5;
+        pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "initial", "WORDS"];
     }
     pub mod held {
-        pub const AT: u32 = 432;
+        pub const AT: u32 = 431;
         pub const run_sets: u32 = 0;
         pub const run_set_mb: u32 = 1;
         pub const tiers: u32 = 2;
@@ -620,7 +617,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "run_sets", "run_set_mb", "tiers", "decor_blocks", "decor_instances", "decor_bytes", "WORDS"];
     }
     pub mod fetch {
-        pub const AT: u32 = 438;
+        pub const AT: u32 = 437;
         pub const queued: u32 = 0;
         pub const running: u32 = 1;
         pub const credits: u32 = 2;
@@ -628,7 +625,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "queued", "running", "credits", "WORDS"];
     }
     pub mod peak {
-        pub const AT: u32 = 441;
+        pub const AT: u32 = 440;
         pub const present: u32 = 0;
         pub const dt_ms: u32 = 1;
         pub const sched_ms: u32 = 2;
@@ -672,14 +669,14 @@ pub mod SUMMARY {
         ];
     }
     pub mod steps {
-        pub const AT: u32 = 459;
+        pub const AT: u32 = 458;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
     pub mod quality {
-        pub const AT: u32 = 620;
+        pub const AT: u32 = 619;
         pub const step: u32 = 0;
         pub const star: u32 = 1;
         pub const frames_held: u32 = 2;
@@ -693,7 +690,7 @@ pub mod SUMMARY {
     }
     /// The heap as the read finds it, recording or not: `used_mb` its top, `requests` the pages it has ever asked for.
     pub mod heap {
-        pub const AT: u32 = 628;
+        pub const AT: u32 = 627;
         pub const used_mb: u32 = 0;
         pub const requests: u32 = 1;
         pub const WORDS: u32 = 2;
@@ -701,7 +698,7 @@ pub mod SUMMARY {
     }
     /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the page it is read from.
     pub mod view {
-        pub const AT: u32 = 630;
+        pub const AT: u32 = 629;
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
@@ -740,7 +737,7 @@ pub mod SUMMARY {
             "WORDS",
         ];
     }
-    pub const WORDS: u32 = 646;
+    pub const WORDS: u32 = 645;
     pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "held", "fetch", "peak", "steps", "quality", "heap", "view", "WORDS"];
 }
 

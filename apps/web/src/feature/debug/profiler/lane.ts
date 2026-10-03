@@ -60,6 +60,14 @@ export const GROUPS = Object.keys(FRAME_GROUPS).filter((g) => !g.startsWith("$")
 
 export const n1 = (n: number) => (n ?? 0).toFixed(1);
 
+/** The frame's time outside the kernel's turn. */
+export const offthreadMs = (f: Frame) => Math.max(0, f.dt_ms - f.task_ms);
+
+const UNIT = /_(ms|mb|bytes|px)$/;
+
+/** A task phase's mean or total: bytes are counted, the rest are ms. */
+export const phaseText = ([k, v]: [string, f64]) => `${k.replace(UNIT, "")} ${k === "bytes" ? round(v) : n1(v)}`;
+
 export const pct = (part: number, whole: number) => (whole > 0 ? round((part / whole) * 100) : 0);
 
 export const tris = (t: number) => (t >= 1000 ? `${round(t / 1000)}k` : String(round(t)));
@@ -85,7 +93,7 @@ export function valueText(name: string, v: f64): string {
 
 export function label(group: string, name: string): string {
   const bare = name.startsWith(`${group}_`) ? name.slice(group.length + 1) : name;
-  return bare.replace(/_(ms|mb|bytes|px)$/, "") || name;
+  return bare.replace(UNIT, "") || name;
 }
 
 function listText(lane: ListLane, f: Frame): string {
@@ -106,4 +114,4 @@ export function groupText(group: FrameGroup, f: Frame): string {
   }).join("  ");
 }
 
-export const fieldText = (name: string, v: f64) => `${name.replace(/_(ms|mb|bytes)$/, "")} ${valueText(name, v)}`;
+export const fieldText = (name: string, v: f64) => `${name.replace(UNIT, "")} ${valueText(name, v)}`;

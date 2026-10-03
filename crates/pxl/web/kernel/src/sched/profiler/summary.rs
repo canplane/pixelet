@@ -127,8 +127,6 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
         phases: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.phases[k]))),
         // A span the frame did not run reads 0 and is left out.
         gpu_spans: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0))),
-        work_scans: scans,
-        work_bakes: bakes,
         per_s_scans: scans / seconds,
         per_s_bakes: bakes / seconds,
         backlog_s,
@@ -210,6 +208,7 @@ fn side(out: &mut [f64]) {
             entries: atlas.entries as f64,
             shelves: atlas.shelves as f64,
             used_px: atlas.used_px as f64,
+            initial: pxl_render::asset::atlas::INITIAL_SIZE as f64,
         },
     );
 

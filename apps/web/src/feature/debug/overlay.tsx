@@ -22,7 +22,7 @@ import { Command, encode_input_view } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, useKernel } from "@/kernel/shell.ts";
 import { SETTINGS } from "@/feature/setting/schema.ts";
 
-export const enum Tint {
+const enum Tint {
   Plain = 0,
   Go = 1,
   Halt = 2,

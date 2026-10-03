@@ -7,7 +7,7 @@ import { Prose, Section, settingText } from "@/feature/setting/row.tsx";
 import { BrandSymbol } from "@/shared/ui/brand-symbol.tsx";
 import { textStyle } from "@/shared/ui/theme.ts";
 import { APP_ENV, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/config/deploy.ts";
-import { PUBLISHED_VERSION } from "@/config/route.ts";
+import { PUBLISHED_VERSION } from "@/config/published.spec.ts";
 import { storage, STORAGE_KEYS } from "@/kernel/abi/host.spec.ts";
 import { LABEL } from "@platform/palette.ts";
 

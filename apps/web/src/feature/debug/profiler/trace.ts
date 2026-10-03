@@ -12,7 +12,7 @@ import { round } from "@xpute/core/math/scalar.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
 import { saveFile } from "@platform/save.ts";
 
-import { type Frame, isList, LANES, LIST_NAMES } from "./lane.ts";
+import { type Frame, isList, LANES, LIST_NAMES, offthreadMs } from "./lane.ts";
 import { failText } from "./report.ts";
 import { profilerRingsRead } from "./view.ts";
 import { longFramesSince } from "./long-frame.ts";
@@ -57,7 +57,7 @@ function frameArgs(f: Frame): Args {
     else f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixed(v, 2)));
   }
   // Vsync wait, compositor, GPU, GC, the shell's glue.
-  args.offthread_ms = fixed(Math.max(0, f.dt_ms - f.task_ms), 2);
+  args.offthread_ms = fixed(offthreadMs(f), 2);
   return args;
 }
 

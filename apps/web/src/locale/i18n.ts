@@ -51,7 +51,7 @@ const languageDetector: LanguageDetectorModule = {
 let booted = false;
 
 /**
- * Called from bootstrapApp(), inside main.tsx's error handling. Catalogs are
+ * Called before the first render (main.tsx, bootstrapApp). Catalogs are
  * bundled, so `t()` is correct from the first render; fetching them flashed
  * raw keys on a cold load.
  */

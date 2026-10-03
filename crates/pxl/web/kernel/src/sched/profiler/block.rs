@@ -58,8 +58,6 @@ pub struct FramesBlock {
     pub chunks: Spread,
     pub phases: [Spread; PHASE_NAMES.len()],
     pub gpu_spans: [Spread; GPU_SPANS],
-    pub work_scans: f64,
-    pub work_bakes: f64,
     pub per_s_scans: f64,
     pub per_s_bakes: f64,
     pub backlog_s: f64,
@@ -81,8 +79,7 @@ words!(FramesBlock, SUMMARY::frames::WORDS,
     moving => SUMMARY::frames::moving, missed => SUMMARY::frames::missed, overran => SUMMARY::frames::overran,
     dt => SUMMARY::frames::dt, task => SUMMARY::frames::task, offthread => SUMMARY::frames::offthread,
     gpu => SUMMARY::frames::gpu, sched => SUMMARY::frames::sched, chunks => SUMMARY::frames::chunks,
-    phases => SUMMARY::frames::phases, gpu_spans => SUMMARY::frames::gpu_spans,
-    work_scans => SUMMARY::frames::work_scans, work_bakes => SUMMARY::frames::work_bakes,
+    phases => SUMMARY::frames::phases, gpu_spans => SUMMARY::frames::gpu_spans, 
     per_s_scans => SUMMARY::frames::per_s_scans, per_s_bakes => SUMMARY::frames::per_s_bakes,
     backlog_s => SUMMARY::frames::backlog_s, backlog_per_s_scans => SUMMARY::frames::backlog_per_s_scans,
     backlog_per_s_bakes => SUMMARY::frames::backlog_per_s_bakes, chunks_per_bake => SUMMARY::frames::chunks_per_bake,
@@ -177,11 +174,12 @@ pub struct AtlasBlock {
     pub entries: f64,
     pub shelves: f64,
     pub used_px: f64,
+    pub initial: f64,
 }
 
 words!(AtlasBlock, SUMMARY::atlas::WORDS,
     size => SUMMARY::atlas::size, entries => SUMMARY::atlas::entries,
-    shelves => SUMMARY::atlas::shelves, used_px => SUMMARY::atlas::used_px,
+    shelves => SUMMARY::atlas::shelves, used_px => SUMMARY::atlas::used_px, initial => SUMMARY::atlas::initial,
 );
 
 #[repr(C)]
