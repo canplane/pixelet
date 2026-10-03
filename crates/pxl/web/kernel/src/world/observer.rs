@@ -171,10 +171,10 @@ impl Footprint {
         let xy: [[f64; 2]; 4] = points.map(|(p, _)| [p[0], p[1]]);
         let z = points.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), (p, _)| (lo.min(p[2]), hi.max(p[2])));
         let near = points.iter().map(|&(_, t)| t).fold(f64::INFINITY, f64::min);
-        let reach = xy.iter().fold((eye[0], eye[1], eye[0], eye[1]), |b, p| (b.0.min(p[0]), b.1.min(p[1]), b.2.max(p[0]), b.3.max(p[1])));
         let bounds = xy.iter().fold((f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY), |b, p| {
             (b.0.min(p[0]), b.1.min(p[1]), b.2.max(p[0]), b.3.max(p[1]))
         });
+        let reach = (bounds.0.min(eye[0]), bounds.1.min(eye[1]), bounds.2.max(eye[0]), bounds.3.max(eye[1]));
         let (hull, sides) = hull(xy);
         Footprint { hull, sides, bounds, z, near, reach }
     }
