@@ -15,9 +15,8 @@ import { CurrentAddress } from "./current-address.tsx";
 import { useReverseGeocode } from "./use-reverse-geocode.ts";
 import { SensorStatus } from "./sensor-status.tsx";
 import { DummyChatText } from "./dummy-chat-text.tsx";
-import { MapCompass } from "../control/compass.tsx";
 import { MapScaleBar } from "../control/scale-bar.tsx";
-import { TrackingButton } from "@/feature/map/ui/control/tracking-button.tsx";
+import { LocationButtons } from "@/feature/map/ui/control/location-buttons.tsx";
 import { ViewButtons } from "@/feature/map/ui/control/view-buttons.tsx";
 import { BusyDim } from "@/feature/map/ui/busy-dim.tsx";
 import { SettingsTriggerButton } from "@/feature/setting/trigger-button.tsx";
@@ -81,8 +80,7 @@ export function TopOverlays() {
 
       <BusyDim style={[styles.right, { top }]}>
         <ViewButtons />
-        <TrackingButton />
-        <MapCompass />
+        <LocationButtons />
       </BusyDim>
     </>
   );
