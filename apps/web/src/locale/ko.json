@@ -258,7 +258,7 @@
     "scale_bar": {
       "reset_zoom": "줌 초기화"
     },
-    "mode_bar": {
+    "dock": {
       "palette_tooltip": "팔레트",
       "pointer": "포인터",
       "eraser": "지우개",

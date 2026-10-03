@@ -258,7 +258,7 @@
     "scale_bar": {
       "reset_zoom": "Reset Zoom"
     },
-    "mode_bar": {
+    "dock": {
       "palette_tooltip": "Palette",
       "pointer": "Pointer",
       "eraser": "Eraser",

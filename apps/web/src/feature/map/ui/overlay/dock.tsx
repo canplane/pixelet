@@ -1,4 +1,4 @@
-// @pxl/web/feature/map/ui/overlay/mode-bar.tsx
+// @pxl/web/feature/map/ui/overlay/dock.tsx
 
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -91,7 +91,7 @@ function SizeFlyout({ hover }: { hover: u32 | null }) {
       {TIERS.map((tier) => {
         const mark = sizeMark(tier);
         return (
-          <View key={tier} accessibilityLabel={t("map.mode_bar.object_size", { n: OBJECT_TIERS - tier })} style={styles.flyoutItem}>
+          <View key={tier} accessibilityLabel={t("map.dock.object_size", { n: OBJECT_TIERS - tier })} style={styles.flyoutItem}>
             <Motion to={{ scale: hover === tier ? 1.25 : 1 }} transition={SNAP}>
               <View
                 style={[
@@ -225,7 +225,7 @@ function ToolButton({ label, glyph, active, onPress }: { label: string; glyph: G
   );
 }
 
-export function ModeBar() {
+export function Dock() {
   const { t } = useTranslation();
   const [messageExpanded, setMessageExpanded] = useState(false);
   // A downward drag on the bar puts the keyboard away; swatches only open
@@ -314,7 +314,7 @@ export function ModeBar() {
             <Pressable
               onPress={() => setMessageExpanded(true)}
               accessibilityRole="button"
-              accessibilityLabel={t("map.mode_bar.message_tooltip")}
+              accessibilityLabel={t("map.dock.message_tooltip")}
               style={styles.messageIcon}
             >
               <Glyph glyph="bubble.left" size={chrome.glyph} color={LABEL.primary} />
@@ -332,7 +332,7 @@ export function ModeBar() {
                   value={messageText}
                   onChangeText={setMessageText}
                   onSubmit={sendMessage}
-                  placeholder={t("map.mode_bar.message_placeholder")}
+                  placeholder={t("map.dock.message_placeholder")}
                   placeholderTextColor={LABEL.placeholder}
                   autoFocus
                   style={styles.messageInput}
@@ -359,8 +359,8 @@ export function ModeBar() {
               style={[styles.strip, { maxWidth: room }, paletteExpanded ? styles.pass : styles.block]}
             >
               <View style={styles.group}>
-                <ToolButton label={t("map.mode_bar.pointer")} glyph="hand.point.up.left" active={activeTool === ActiveTool.Pointer} onPress={() => setActiveTool(ActiveTool.Pointer)} />
-                <ToolButton label={t("map.mode_bar.eraser")} glyph="eraser" active={activeTool === ActiveTool.Eraser} onPress={() => setActiveTool(ActiveTool.Eraser)} />
+                <ToolButton label={t("map.dock.pointer")} glyph="hand.point.up.left" active={activeTool === ActiveTool.Pointer} onPress={() => setActiveTool(ActiveTool.Pointer)} />
+                <ToolButton label={t("map.dock.eraser")} glyph="eraser" active={activeTool === ActiveTool.Eraser} onPress={() => setActiveTool(ActiveTool.Eraser)} />
               </View>
 
               <View style={styles.divider} />
@@ -380,7 +380,7 @@ export function ModeBar() {
               <View style={styles.divider} />
 
               <View style={styles.group}>
-                <ToolButton label={t("map.mode_bar.drawer_tooltip")} glyph="square.grid.2x2" onPress={() => openModal("drawer")} />
+                <ToolButton label={t("map.dock.drawer_tooltip")} glyph="square.grid.2x2" onPress={() => openModal("drawer")} />
               </View>
             </Motion>
 
@@ -398,7 +398,7 @@ export function ModeBar() {
                     onPress={sendMessage}
                     disabled={isSending}
                     accessibilityRole="button"
-                    accessibilityLabel={t("map.mode_bar.send")}
+                    accessibilityLabel={t("map.dock.send")}
                     style={({ pressed }) => [styles.slotButton, pressed && styles.sendPressed]}
                   >
                     <Glyph glyph="arrow.up" size={chrome.glyph} weight="bold" color={color.white} />
@@ -410,7 +410,7 @@ export function ModeBar() {
                     // device instead of animating.
                     onPress={() => setMessageExpanded(false)}
                     accessibilityRole="button"
-                    accessibilityLabel={t("map.mode_bar.palette_tooltip")}
+                    accessibilityLabel={t("map.dock.palette_tooltip")}
                     style={styles.slotButton}
                   >
                     <Glyph glyph="paintpalette" size={chrome.glyph} color={STRIP.glyph} />
