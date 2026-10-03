@@ -4,7 +4,7 @@ import { createContext, type ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { Backing } from "@platform/backing.tsx";
-import { BackingPlace } from "@/shared/ui/backing-place.ts";
+import { BackingPlace } from "@/shared/ui/backing.ts";
 import { CircularButton } from "@/shared/ui/circular-button.tsx";
 import { chrome, color, material, textStyle } from "@/shared/ui/theme.ts";
 import { LABEL } from "@platform/palette.ts";

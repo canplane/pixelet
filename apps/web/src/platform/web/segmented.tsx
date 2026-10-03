@@ -3,15 +3,12 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { PANEL_CONTROL } from "@/shared/ui/panel.tsx";
+import type { SegmentedProps } from "@/shared/ui/segmented.ts";
 import { chrome, color, textStyle, weight } from "@/shared/ui/theme.ts";
 import { LABEL } from "@platform/palette.ts";
 
-export interface Segment<T extends string | number> {
-  value: T;
-  label: string;
-}
 
-export function Segmented<T extends string | number>({ segments, value, onChange }: { segments: readonly Segment<T>[]; value: T; onChange: (value: T) => void }) {
+export function Segmented<T extends string | number>({ segments, value, onChange }: SegmentedProps<T>) {
   return (
     <View accessibilityRole="tablist" style={styles.track}>
       {segments.map((s) => {

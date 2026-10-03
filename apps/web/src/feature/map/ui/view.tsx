@@ -21,8 +21,9 @@ const PANEL_GAP_PX = 12;
 
 /** The room a panel may fill between the settings button and the mode bar. */
 function BetweenChrome({ children }: { children: ReactNode }) {
-  const top = chrome.inset + useViewportTop() + chrome.control + PANEL_GAP_PX;
-  const bottom = bottomRest(useSafeArea(), chrome.inset) + chrome.control + PANEL_GAP_PX;
+  const area = useSafeArea();
+  const top = chrome.inset + area.top + useViewportTop() + chrome.control + PANEL_GAP_PX;
+  const bottom = bottomRest(area, chrome.inset) + chrome.control + PANEL_GAP_PX;
   return <View style={[styles.between, { top, bottom }]}>{children}</View>;
 }
 

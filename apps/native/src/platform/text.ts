@@ -1,6 +1,6 @@
 // @pxl/native/platform/text.ts
 
-/** Text through CoreText, called synchronously on the JS thread. */
+/** Text through the system (Text.swift, Text.kt), called synchronously on the JS thread. */
 
 import type { f32, u32 } from "@xpute/core/abi/word.ts";
 import { PLATFORM } from "./module.ts";

@@ -2,12 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-export interface SafeArea {
-  top: number;
-  bottom: number;
-  /** The part of `bottom` that takes a touch; none on a page. */
-  tappable: number;
-}
+import type { SafeArea } from "@/shared/ui/bottom-rest.ts";
 
 /** `env(safe-area-inset-*)` is only given to a style, so it is read back off an element. */
 function measure(): SafeArea {

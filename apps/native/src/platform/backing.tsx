@@ -9,30 +9,16 @@
 
 import { requireNativeView } from "expo";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
-import { type ComponentType, type ReactNode, useEffect, useState } from "react";
-import { type ColorValue, type StyleProp, StyleSheet, View, type ViewProps, type ViewStyle } from "react-native";
+import { type ComponentType, useEffect, useState } from "react";
+import { StyleSheet, View, type ViewProps } from "react-native";
 
 import type { f64 } from "@xpute/core/abi/word.ts";
 import { Motion } from "@platform/motion.tsx";
-import { SNAP, type Transition } from "@/shared/ui/motion/transition.ts";
+import { SNAP } from "@/shared/ui/motion/transition.ts";
 import { useVeil } from "@/shared/ui/motion/veil.ts";
-import { BackingPlace } from "@/shared/ui/backing-place.ts";
-import { alpha, type Material } from "@/shared/ui/theme.ts";
-
-export interface BackingProps {
-  /** With a material, a `#rrggbb` the material sets the opacity of. */
-  fill: ColorValue;
-  material?: Material;
-  tint?: ColorValue;
-  interactive?: boolean;
-  place: BackingPlace;
-  fade?: f64;
-  fadeFrom?: f64;
-  transition?: Transition;
-  /** No transform: that is the fade's. */
-  style?: StyleProp<ViewStyle>;
-  children?: ReactNode;
-}
+import { BackingPlace, type BackingProps } from "@/shared/ui/backing.ts";
+import { alpha } from "@/shared/ui/theme.ts";
+import { Backing as PageBacking } from "../../../web/src/platform/web/backing.tsx";
 
 export const SYSTEM_BACKING = isLiquidGlassAvailable();
 
@@ -48,8 +34,7 @@ function effectAt(level: f64, place: BackingPlace): Effect {
 }
 
 export function Backing({ fill, material, tint, interactive, place, fade = 1, fadeFrom, transition = SNAP, style, children }: BackingProps) {
-  const veil = useVeil(fade, transition);
-  const from = fadeFrom === undefined ? undefined : { opacity: fadeFrom };
+  const veil = useVeil(fade, transition, fadeFrom);
 
   const target = effectAt(veil.level, place);
   const [shown, setShown] = useState<Effect>(fadeFrom === undefined ? target : effectAt(fadeFrom, place));
@@ -58,7 +43,7 @@ export function Backing({ fill, material, tint, interactive, place, fade = 1, fa
   const [laidOut, setLaidOut] = useState(false);
   useEffect(() => {
     if (!laidOut || shown === target) return;
-    const delay = veil.transition.delayMs ?? 0;
+    const delay = veil.motion.transition.delayMs ?? 0;
     if (delay === 0) return setShown(target);
     const timer = setTimeout(() => setShown(target), delay);
     return () => clearTimeout(timer);
@@ -71,7 +56,7 @@ export function Backing({ fill, material, tint, interactive, place, fade = 1, fa
     const { borderRadius } = StyleSheet.flatten(style) ?? {};
     const round = { borderRadius, overflow: "hidden" as const };
     return (
-      <Motion from={from} to={{ opacity: veil.level }} transition={veil.transition} style={style}>
+      <Motion {...veil.motion} style={style}>
         <Blur style={[StyleSheet.absoluteFill, round]} />
         <View style={[StyleSheet.absoluteFill, round, { backgroundColor: alpha(fill as string, material.system) }]} />
         {children}
@@ -79,27 +64,19 @@ export function Backing({ fill, material, tint, interactive, place, fade = 1, fa
     );
   }
 
-  if (!SYSTEM_BACKING) {
-    return (
-      <Motion from={from} to={{ opacity: veil.level }} transition={veil.transition} style={[style, { backgroundColor: fill }]}>
-        {children}
-      </Motion>
-    );
-  }
+  if (!SYSTEM_BACKING) return <PageBacking fill={fill} place={place} fade={fade} fadeFrom={fadeFrom} transition={transition} style={style}>{children}</PageBacking>;
 
   const { boxShadow: _shadow, borderWidth: _width, borderColor: _color, flexDirection, alignItems, justifyContent, gap, rowGap, columnGap, ...ground } = StyleSheet.flatten(style) ?? {};
   return (
     <GlassView
       onLayout={laidOut ? undefined : () => setLaidOut(true)}
       style={ground}
-      glassEffectStyle={{ style: shown, animate: true, animationDuration: veil.transition.durationMs / 1000 }}
+      glassEffectStyle={{ style: shown, animate: true, animationDuration: veil.motion.transition.durationMs / 1000 }}
       tintColor={tint}
       isInteractive={interactive}
     >
       <Motion
-        from={from}
-        to={{ opacity: veil.level }}
-        transition={veil.transition}
+        {...veil.motion}
         style={[styles.layout, { flexDirection, alignItems, justifyContent, gap, rowGap, columnGap }]}
       >
         {children}

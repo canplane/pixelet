@@ -8,7 +8,7 @@ import type { f64 } from "@xpute/core/abi/word.ts";
 import { Backing, SYSTEM_BACKING } from "@platform/backing.tsx";
 import type { GlyphName } from "@platform/icon.tsx";
 import { LABEL } from "@platform/palette.ts";
-import { BackingPlace } from "@/shared/ui/backing-place.ts";
+import { BackingPlace } from "@/shared/ui/backing.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
 import { Motion } from "@platform/motion.tsx";
 import { SNAP } from "@/shared/ui/motion/transition.ts";

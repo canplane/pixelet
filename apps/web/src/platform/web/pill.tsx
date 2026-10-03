@@ -17,10 +17,10 @@ import { useVeil } from "@/shared/ui/motion/veil.ts";
 import { type PillProps, touchReach } from "@/shared/ui/pill.ts";
 
 const SHADOW_ROOM = 32;
-// `tint`, `place` and `interactive` only apply on a device.
+// `tint`, `place` and `interactive` only apply on an iPhone.
 export function Pill({ x, width, height, span, fill, border, shadow, fade = 1, fadeFrom, fadeTransition = SNAP, touch, children, onContentWidth }: PillProps) {
   const transition = SNAP;
-  const veil = useVeil(fade, fadeTransition);
+  const veil = useVeil(fade, fadeTransition, fadeFrom);
   const r = height / 2;
   const slide = width - span;
   const edge: ViewStyle = { borderRadius: r, ...(border && { borderWidth: border.width, borderColor: border.color }) };
@@ -32,9 +32,7 @@ export function Pill({ x, width, height, span, fill, border, shadow, fade = 1, f
   return (
     <Motion to={{ translateX: x }} transition={transition} style={styles.at}>
       <Motion
-        from={fadeFrom === undefined ? undefined : { opacity: fadeFrom }}
-        to={{ opacity: veil.level }}
-        transition={veil.transition}
+        {...veil.motion}
         style={[styles.fade, { width: span + 2 * SHADOW_ROOM, height: height + 2 * SHADOW_ROOM }]}
       >
         <View style={styles.corner}>

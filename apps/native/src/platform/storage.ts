@@ -1,6 +1,6 @@
 // @pxl/native/platform/storage.ts
 
-/** UserDefaults, read and written synchronously as localStorage is. */
+/** UserDefaults or SharedPreferences, read and written synchronously as localStorage is. */
 
 import { PLATFORM } from "./module.ts";
 

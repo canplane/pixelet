@@ -65,7 +65,7 @@ const PHOSPHOR = {
 
 export type GlyphName = keyof typeof PHOSPHOR;
 
-export type GlyphWeight = "regular" | "semibold" | "bold" | "heavy" | "black";
+type GlyphWeight = "regular" | "semibold" | "bold" | "heavy" | "black";
 
 /** Phosphor has two stroked weights; SF's heavier ones take its bold. */
 const WEIGHT: Record<GlyphWeight, IconWeight> = { regular: "regular", semibold: "bold", bold: "bold", heavy: "bold", black: "bold" };
@@ -75,11 +75,6 @@ export interface IconProps {
   size: f64;
   color: string;
   weight?: GlyphWeight;
-}
-
-/** The stroke on a 24-unit box: Phosphor's 16 and 24 on its 256. */
-export function strokeOf(weight: GlyphWeight = "regular"): f64 {
-  return WEIGHT[weight] === "regular" ? 1.5 : 2.25;
 }
 
 export function Icon({ glyph, size, color, weight = "regular" }: IconProps) {

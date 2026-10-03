@@ -9,7 +9,7 @@ import { Motion } from "@platform/motion.tsx";
 import { LABEL, STATUS } from "@platform/palette.ts";
 import { Pill } from "@platform/pill.tsx";
 import { useWindowSize } from "@platform/viewport.ts";
-import { BackingPlace } from "@/shared/ui/backing-place.ts";
+import { BackingPlace } from "@/shared/ui/backing.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
 import { Swap } from "@/shared/ui/motion/presence.tsx";
 import { FADE, SNAP, spring, type Transition } from "@/shared/ui/motion/transition.ts";

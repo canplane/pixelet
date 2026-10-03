@@ -9,17 +9,28 @@
 import { createContext, useContext, useEffect, useRef } from "react";
 
 import type { f64 } from "@xpute/core/abi/word.ts";
+import type { Pose } from "./pose.ts";
 import { DIM, type Transition } from "./transition.ts";
 
 export const Dim = createContext<f64>(1);
 
+export interface Veil {
+  level: f64;
+  /** A Motion's props for it. */
+  motion: { from?: Pose; to: Pose; transition: Transition };
+}
+
 /** A change of dim moves as the dim does; anything else as the surface's own fade. */
-export function useVeil(fade: f64, transition: Transition): { level: f64; transition: Transition } {
+export function useVeil(fade: f64, transition: Transition, fadeFrom?: f64): Veil {
   const dim = useContext(Dim);
   const last = useRef(dim);
   const dimming = dim !== last.current;
   useEffect(() => {
     last.current = dim;
   });
-  return { level: fade * dim, transition: dimming ? DIM : transition };
+  const level = fade * dim;
+  return {
+    level,
+    motion: { from: fadeFrom === undefined ? undefined : { opacity: fadeFrom }, to: { opacity: level }, transition: dimming ? DIM : transition },
+  };
 }

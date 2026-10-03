@@ -6,20 +6,12 @@
  * Material's older one.
  */
 
-import type { ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import type { StyleProp, ViewStyle } from "react-native";
 
 import { Motion } from "@platform/motion.tsx";
 import { SNAP } from "@/shared/ui/motion/transition.ts";
 import { color } from "@/shared/ui/theme.ts";
-
-export interface ToggleRowProps {
-  value: boolean;
-  onValueChange: (value: boolean) => void;
-  style?: StyleProp<ViewStyle>;
-  children: ReactNode;
-}
+import type { ToggleRowProps } from "@/shared/ui/toggle-row.ts";
 
 /** 63 × 28 track, capsule thumb 2 in from its ends. */
 const TRACK = { width: 63, height: 28 };

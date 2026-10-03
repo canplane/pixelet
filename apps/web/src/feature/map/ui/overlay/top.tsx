@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Defs, LinearGradient, Mask, Rect, Stop, Svg } from "react-native-svg";
 
+import { useSafeArea } from "@platform/safe-area.ts";
 import { useViewportTop, useWindowSize } from "@platform/viewport.ts";
 import { openModal } from "@/app/modal.tsx";
 import { useKernel } from "@/kernel/shell.ts";
@@ -23,7 +24,7 @@ import { BusyDim } from "@/feature/map/ui/busy-dim.tsx";
 import { SettingsTriggerButton } from "@/feature/setting/trigger-button.tsx";
 
 export function TopOverlays() {
-  const top = chrome.inset + useViewportTop();
+  const top = chrome.inset + useSafeArea().top + useViewportTop();
 
   const { width } = useWindowSize();
   const scrimDepth = top + chrome.control + SCRIM_TAIL;
@@ -74,7 +75,7 @@ function SearchStrip() {
   const zooming = useKernel((s) => s.zooming);
   const veil = useVeil(1, SNAP);
   return (
-    <Motion to={{ opacity: veil.level }} transition={veil.transition} style={styles.fill}>
+    <Motion {...veil.motion} style={styles.fill}>
       <Pressable onPress={() => openModal("search")} accessibilityRole="button" accessibilityLabel={t("map.search.trigger_aria_label")} style={styles.strip}>
         <Presence show={!zooming} from={{ opacity: 0 }} exit={{ opacity: 0 }} transition={SETTLE} exitTransition={LEAVE} style={styles.place}>
           <View style={styles.title}>

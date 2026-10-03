@@ -4,10 +4,9 @@ import { SymbolView, type SymbolViewProps } from "expo-symbols";
 import { ActivityIndicator, View } from "react-native";
 
 import type { f64 } from "@xpute/core/abi/word.ts";
-import type { GlyphName, GlyphWeight, IconProps } from "../../../web/src/platform/web/icon.tsx";
+import type { GlyphName, IconProps } from "../../../web/src/platform/web/icon.tsx";
 
-export type { GlyphName, GlyphWeight, IconProps };
-export { strokeOf } from "../../../web/src/platform/web/icon.tsx";
+export type { GlyphName, IconProps };
 
 /** A name that is not an SF Symbol fails to type-check here. */
 const symbol = (glyph: GlyphName): SymbolViewProps["name"] => glyph;

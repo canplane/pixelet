@@ -1,15 +1,7 @@
 // @pxl/web/platform/web/above-keyboard.tsx
 
-import type { ReactNode } from "react";
-
 import { useSafeArea } from "@platform/safe-area.ts";
-import { bottomRest } from "@/shared/ui/bottom-rest.ts";
-
-interface AboveKeyboardProps {
-  inset: number;
-  lift?: number;
-  children: ReactNode;
-}
+import { type AboveKeyboardProps, bottomRest } from "@/shared/ui/bottom-rest.ts";
 
 /**
  * A bottom layer standing `inset` above the keyboard via `--vv-bottom`, a CSS

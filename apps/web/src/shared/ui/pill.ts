@@ -1,7 +1,7 @@
 // @pxl/web/shared/ui/pill.ts
 
 /**
- * A pill whose place and width move, drawn per platform: a device relays it
+ * A pill whose place and width move, drawn per platform: an iPhone relays it
  * out and the system animates, a page uses transforms, since a width tween
  * ghosts over the canvas on iOS WebKit.
  */
@@ -11,7 +11,7 @@ import type { ColorValue, GestureResponderHandlers } from "react-native";
 
 import type { f64 } from "@xpute/core/abi/word.ts";
 import type { Transition } from "@/shared/ui/motion/transition.ts";
-import type { BackingPlace } from "@/shared/ui/backing-place.ts";
+import type { BackingPlace } from "@/shared/ui/backing.ts";
 import { chrome } from "@/shared/ui/theme.ts";
 
 /** A box around it, not `hitSlop`, which react-native-web does not honor. */

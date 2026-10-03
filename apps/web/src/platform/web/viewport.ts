@@ -6,7 +6,7 @@ import type { f64 } from "@xpute/core/abi/word.ts";
 
 const SETTLE_MS = 250;
 
-export interface WindowSize {
+interface WindowSize {
   width: f64;
   height: f64;
 }

@@ -96,6 +96,5 @@
 
     // internationalization
     "react-i18next": "npm:react-i18next@^17.0.14",
-    "i18next-browser-languagedetector": "npm:i18next-browser-languagedetector@^8.2.1"
   }
 }

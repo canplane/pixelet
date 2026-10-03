@@ -1,6 +1,6 @@
 // @pxl/native/platform/module.ts
 
-/** The app's one native module (modules/platform/ios/PlatformModule.swift). */
+/** The app's one native module (PlatformModule.swift, PlatformModule.kt under modules/platform/). */
 
 import type { f32, f64, u32 } from "@xpute/core/abi/word.ts";
 import { requireNativeModule } from "expo";
