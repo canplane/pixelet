@@ -8,8 +8,7 @@
  * - One ABI, arm64-v8a: the kernel is built for aarch64-linux-android alone
  *   (script/build-native.ts), and an ABI packed without it is an app that
  *   dies loading its library on the phones that take that ABI.
- * - API 29 and later: the Vulkan floor this build takes for wgpu, a build
- *   setting and no promise of what runs.
+ * - The SDK floor: the Vulkan this build takes for wgpu.
  * - The debug builds of both flavors, a phone's and a Quest's (the `mobile`
  *   and `quest` expo-horizon-core adds), load their JavaScript from Metro.
  *   React Native takes a variant for a debug build only by its whole name,

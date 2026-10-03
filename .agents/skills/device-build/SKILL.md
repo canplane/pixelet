@@ -166,8 +166,8 @@ not run it yet.
 
 `plugin/android-build.js` writes what the build is for into
 `gradle.properties`: arm64-v8a alone, since the kernel is built for no other
-ABI and an APK carrying one without it dies on those phones, and API 29 and
-later, the Vulkan floor this build takes for wgpu.
+ABI and an APK carrying one without it dies on those phones, and the SDK
+floor of the Vulkan this build takes for wgpu.
 
 expo-horizon-core's plugin splits the app into two flavors, `mobile` for a
 phone and `quest` for a Meta Quest, so every variant is named for both:

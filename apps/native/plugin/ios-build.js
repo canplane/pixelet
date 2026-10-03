@@ -3,8 +3,7 @@
 /**
  * The iOS a build targets, written into what `expo prebuild` generates
  * (ios/ is its, and not kept), the pods and the app alike: the highest floor
- * of what it links — Expo's modules, @expo/ui, expo-glass-effect and
- * expo-symbols, at 16.4. Liquid Glass is asked for at run time.
+ * of what it links. Liquid Glass is asked for at run time.
  */
 
 const { withPodfileProperties, withXcodeProject } = require("expo/config-plugins");
