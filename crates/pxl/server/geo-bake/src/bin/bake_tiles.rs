@@ -37,8 +37,9 @@ use pxl_geo_bake::terrain::artifact::{assemble, decode_lines, encode_lines, Surf
 use pxl_geo_bake::terrain::leaf::{self, bake_ocean, has_ground, land_pages, ocean_samples, write_land_pages, OCEAN_KEY};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
 use pxl_geo_bake::deck;
-use pxl_geo_bake::terrain::pipeline::deck::bake_decks;
 use pxl_geo_bake::terrain::source::{fetch_surface, SourceStats};
+use pxl_geo_bake::terrain::pipeline::deck::bake_decks;
+
 use pxl_geo_bake::util::{fmt_bytes, fmt_dur, git_sha, pack, refuse_mixed, unpack, Level};
 
 const CLASSIFY_BATCH: usize = 2000;
@@ -273,6 +274,14 @@ fn run() -> Result<(), String> {
             }
         };
         let targets = &land[..args.limit.map_or(land.len(), |n| n.min(land.len()))];
+        // solved structures, kept for the pages they cross; what a forced bake solves again
+        let structures = args.build.join("structure");
+        if args.force {
+            match fs::remove_dir_all(&structures) {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
+                _ => {}
+            }
+        }
         fs::create_dir_all(surfaces.level_dir(0)).map_err(|e| e.to_string())?;
         fs::create_dir_all(lines.level_dir(0)).map_err(|e| e.to_string())?;
         if !args.force {
@@ -288,7 +297,7 @@ fn run() -> Result<(), String> {
         std::thread::scope(|scope| {
             let all = rows.len();
             for walk in &walks {
-                let (totals, surfaces, lines, raster) = (&totals, &surfaces, &lines, &raster);
+                let (totals, surfaces, lines, raster, structures) = (&totals, &surfaces, &lines, &raster, &structures);
                 scope.spawn(move || {
                     let mut db = match connect(source, raster) {
                         Ok(db) => db,
@@ -298,25 +307,27 @@ fn run() -> Result<(), String> {
                     for &page in walk {
                         held.keep_around(page);
                         let at = LevelPage::new(0, page);
-                        let mut stats = SourceStats::default();
+                        let mut flat = false;
                         // the surface last, so one on disk has its lines beside it
                         let baked = (|| -> Result<Option<u64>, String> {
                             if !args.force && surfaces.path(at).exists() {
                                 return Ok(None);
                             }
-                            let solved = deck::solve_page(&mut db.client, page, &mut held)?;
+                            let solved = deck::solve_page(&mut deck::Reader { client: &mut db.client, repo: &db.repo, store: &mut held, memo: &structures }, page)?;
                             let decks = bake_decks(&solved.rows, epsg3857::get_page_bbox(page)[0]).ok_or("a page's decks overflow a record")?;
                             match decks.is_empty() {
                                 true => lines.remove(at)?,
                                 false => lines.write(at, &pack(&encode_lines(&decks).map_err(|e| format!("{e:?}"))?, Level::Stored).map_err(|e| e.to_string())?)?,
                             }
-                            let surface = fetch_surface(&db.repo, &mut db.client, page, &solved.carried, &mut stats).map_err(|e| e.to_string())?;
+                            let mut stats = SourceStats::default();
+                            let surface = fetch_surface(&db.repo, &mut db.client, page, &solved.drawn, &mut stats).map_err(|e| format!("{e:?}"))?;
+                            flat = stats.flat_ele > 0;
                             let packed = pack(&surface.encode().map_err(|e| format!("{e:?}"))?, Level::Stored).map_err(|e| e.to_string())?;
                             surfaces.write(at, &packed)?;
                             Ok(Some(packed.len() as u64))
                         })();
                         let mut t = totals.lock().expect("totals");
-                        t.flat_ele += stats.flat_ele;
+                        t.flat_ele += u64::from(flat);
                         match baked {
                             Ok(Some(bytes)) => (t.done, t.bytes) = (t.done + 1, t.bytes + bytes),
                             Ok(None) => t.skipped += 1,

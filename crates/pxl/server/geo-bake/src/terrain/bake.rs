@@ -7,7 +7,7 @@ use pxl_spec::bake::model::feature::Feature;
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
 
-use crate::deck::Carried;
+use crate::deck::Drawn;
 use crate::terrain::artifact::Surface;
 use crate::terrain::pipeline::coast::adapter::from_coast_row;
 use crate::terrain::pipeline::coast::policy::CoastPolicy;
@@ -18,15 +18,15 @@ use crate::terrain::pipeline::overture::adapter::{from_base_row, from_building_r
 use crate::terrain::pipeline::overture::policy::OverturePolicy;
 use crate::terrain::repository::PageSource;
 
-/// `carried`: where the deck solve carries the page's ways off the ground.
-pub fn bake_surface(page_idx: IVec, ele: Vec<i16>, source: &PageSource, carried: &[Carried]) -> Surface {
+/// `drawn`: the ranges of the page's ways its lines draw.
+pub fn bake_surface(page_idx: IVec, ele: Vec<i16>, source: &PageSource, drawn: &[Drawn]) -> Surface {
     let page_min = epsg3857::get_page_bbox(page_idx)[0];
     let mut feats: Vec<Feature> = Vec::new();
     for row in &source.building_rows {
         feats.extend(from_building_row(row).iter().filter_map(|raw| normalize(raw, page_min, &OverturePolicy)));
     }
     for row in &source.segment_rows {
-        feats.extend(from_segment_row(row, carried).iter().filter_map(|raw| normalize(raw, page_min, &OverturePolicy)));
+        feats.extend(from_segment_row(row, drawn).iter().filter_map(|raw| normalize(raw, page_min, &OverturePolicy)));
     }
     for row in &source.base_rows {
         feats.extend(from_base_row(row).iter().filter_map(|raw| normalize(raw, page_min, &OverturePolicy)));

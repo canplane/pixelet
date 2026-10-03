@@ -21,6 +21,8 @@ pub struct BridgeRow {
     pub access: Option<String>,
     pub subclass: Option<String>,
     pub subclasses: Option<String>,
+    /// The source's `connectors`: where along it it joins other segments.
+    pub connectors: Option<String>,
     pub geom_wkb: Box<[u8]>,
 }
 
@@ -36,6 +38,7 @@ impl BridgeRow {
     }
 }
 
+#[derive(Clone)]
 pub struct Piece {
     pub gers_id: String,
     pub subtype: String,
@@ -44,8 +47,6 @@ pub struct Piece {
     pub level: i64,
     pub width_m: f64,
     pub form: Form,
-    /// The way it carries on along at the surface (approach.rs).
-    pub approach: bool,
     pub points: Vec<G3857>,
     /// What each end is, first and last; ends meet where these are equal.
     pub ends: [End; 2],
@@ -58,13 +59,11 @@ pub struct Piece {
 
 /// An end by identity, never by a computed point: a segment's own first or
 /// last vertex, which every segment at that connector carries bit for bit,
-/// a cut at a fraction of one segment, which only its pieces share, or
-/// where a box cut a piece, which joins nothing.
+/// or a cut at a fraction of one segment, which only its pieces share.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum End {
     Vertex(u64, u64),
     Cut(String, u64),
-    Clip(String, u64),
 }
 
 impl End {
@@ -87,80 +86,15 @@ impl Piece {
         &self.ends[usize::from(last)]
     }
 
-    /// The runs of it inside `[lo, hi]`; a run's end the box made is a fresh
-    /// end, so it joins nothing.
-    pub fn clip(self, [lo, hi]: [[f64; 2]; 2]) -> Vec<Piece> {
-        let inside = |p: &G3857| (0..2).all(|k| p[k] >= lo[k] && p[k] <= hi[k]);
-        if self.points.iter().all(inside) {
-            return vec![self];
-        }
-        let mut runs: Vec<(f64, Vec<G3857>)> = Vec::new();
-        let mut run: Vec<G3857> = Vec::new();
-        let (mut done, mut run_start) = (0.0, 0.0);
-        for w in self.points.windows(2) {
-            let (a, b) = (w[0], w[1]);
-            let d = [b[0] - a[0], b[1] - a[1]];
-            let seg = libm::hypot(d[0], d[1]);
-            let (mut t0, mut t1) = (0.0f64, 1.0f64);
+    /// Whether any of it lies in `[lo, hi]`.
+    pub fn touches(&self, [lo, hi]: [[f64; 2]; 2]) -> bool {
+        let (mut a, mut b) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
+        for p in &self.points {
             for k in 0..2 {
-                for (p, q) in [(-d[k], a[k] - lo[k]), (d[k], hi[k] - a[k])] {
-                    if p == 0.0 {
-                        if q < 0.0 {
-                            t0 = 2.0;
-                        }
-                    } else if p < 0.0 {
-                        t0 = t0.max(q / p);
-                    } else {
-                        t1 = t1.min(q / p);
-                    }
-                }
+                (a[k], b[k]) = (a[k].min(p[k]), b[k].max(p[k]));
             }
-            if t0 >= t1 {
-                if run.len() >= 2 {
-                    runs.push((run_start, std::mem::take(&mut run)));
-                }
-                run.clear();
-                done += seg;
-                continue;
-            }
-            let at = |t: f64| [a[0] + d[0] * t, a[1] + d[1] * t, a[2] + (b[2] - a[2]) * t];
-            if run.is_empty() || t0 > 0.0 {
-                if run.len() >= 2 {
-                    runs.push((run_start, std::mem::take(&mut run)));
-                }
-                run = vec![at(t0)];
-                run_start = done + t0 * seg;
-            }
-            run.push(at(t1));
-            if t1 < 1.0 {
-                runs.push((run_start, std::mem::take(&mut run)));
-            }
-            done += seg;
         }
-        if run.len() >= 2 {
-            runs.push((run_start, run));
-        }
-        let (first, last) = (self.points[0], self.points[self.points.len() - 1]);
-        let end_at = |p: G3857| match p {
-            p if p == first => self.ends[0].clone(),
-            p if p == last => self.ends[1].clone(),
-            p => End::Clip(self.gers_id.clone(), (p[0] + 0.0).to_bits() ^ (p[1] + 0.0).to_bits().rotate_left(32)),
-        };
-        runs.into_iter()
-            .map(|(offset, points)| Piece {
-                gers_id: self.gers_id.clone(),
-                subtype: self.subtype.clone(),
-                class: self.class.clone(),
-                level: self.level,
-                width_m: self.width_m,
-                form: self.form,
-                approach: self.approach,
-                ends: [end_at(points[0]), end_at(points[points.len() - 1])],
-                start: self.start + offset,
-                way_length: self.way_length,
-                points,
-            })
-            .collect()
+        (0..2).all(|k| a[k] <= hi[k] && b[k] >= lo[k])
     }
 
     /// A length along the piece in DB coordinates, in ground metres.
@@ -179,6 +113,7 @@ pub fn pieces_of(row: &BridgeRow, form: Form) -> Vec<Piece> {
     let (on, less): (&[&str], Vec<&str>) = match form {
         Form::Deck => (DECK_FLAGS, UNSEEN_FLAGS.to_vec()),
         Form::Bore => (BORE_FLAGS, UNSEEN_FLAGS.iter().copied().filter(|f| !BORE_FLAGS.contains(f)).collect()),
+        Form::Grade => return Vec::new(), // no flag makes one
     };
     let cell = cell_of(length_of(&row.geom_wkb));
     let deck = without(&flag_ranges(flags, on, cell), &flag_ranges(flags, &less, cell));
@@ -204,7 +139,6 @@ pub fn pieces_of(row: &BridgeRow, form: Form) -> Vec<Piece> {
                 level: value_at(row.levels.as_deref(), mid).map_or(1, |v| v as i64),
                 width_m: width_m(&row.subtype, row.class.as_deref(), shape),
                 form,
-                approach: false,
                 ends: [End::of(&row.gers_id, whole, a), End::of(&row.gers_id, whole, b)],
                 start: a * length,
                 way_length: length,
@@ -214,7 +148,3 @@ pub fn pieces_of(row: &BridgeRow, form: Form) -> Vec<Piece> {
         .filter(|p| p.points.len() >= 2)
         .collect()
 }
-
-#[cfg(test)]
-#[path = "piece.test.rs"]
-mod test;

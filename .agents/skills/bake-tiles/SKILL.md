@@ -79,11 +79,12 @@ ingested data.
 A page is built from two artifacts made together from one deck solve
 (`geo-bake terrain/artifact.rs`), and assembled from them:
 
-- **leaf** — each page's deck solve, from itself and the eight pages around
-  it (`geo-bake deck.rs`), as the dev server solves a page on demand, and from
-  that one result both of the page's artifacts: its lines (decks and bores)
-  and its surface (ground and elevation), which paints a way only where the
-  solve leaves it on the ground. Resumable.
+- **leaf** — each page's deck solve (`geo-bake deck.rs`), as the dev server
+  solves a page on demand: every structure reaching the page or the eight
+  around it, solved whole wherever it runs, and from that one result both of
+  the page's artifacts: its lines (decks, bores and the grades at their ends)
+  and its surface (ground and elevation), which paints a way only where no
+  line draws it. Resumable.
 - **assemble** — each leaf of the two, and the pyramid folded over the
   leaves, with no database. Whole every time.
 
@@ -107,7 +108,7 @@ deno task bake:tiles --out ./out/terrain/<version> --force
 | `--build <dir>`     | the artifacts (default `./out/build/terrain`)                        |
 | `--concurrency <n>` | parallel pages — match `DB_POOL_SIZE`, the DB is the bottleneck      |
 | `--limit <n>`       | stop after n pages (smoke test)                                      |
-| `--force`           | bake leaves already on disk again                                    |
+| `--force`           | bake leaves already on disk again, and solve every structure again   |
 | `--reclassify`      | ignore the cached land/ocean scan and redo it                        |
 
 It runs long enough to want a log file rather than a terminal:
@@ -116,6 +117,12 @@ It runs long enough to want a log file rather than a terminal:
 ... > /tmp/bake.log 2>&1 &
 grep '^\[bake\] ' /tmp/bake.log | tail -2
 ```
+
+Under `--build` beside `surface/` and `lines/`, `structure/` keeps each
+solved structure so the pages it crosses solve it once: a cache nothing
+reads as a fact, deleted by `--force` and safe to delete any time. A run
+resumed after a change to the solve must be `--force`d, or it reuses
+structures the old solve made.
 
 What it produces, beside `surface/` and `lines/` under `--build` with a
 `leaf.json` of what built them:

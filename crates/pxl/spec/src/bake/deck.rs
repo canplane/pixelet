@@ -64,16 +64,17 @@ fn by_kind(kind: u8, [road, path, rail]: [f64; 3]) -> f64 {
     }
 }
 
-/// Above the ground or below it; the byte is the wire's.
+/// What a line is, from the source's flags alone; the byte is the wire's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Form {
-    Deck = 0, // a bridge: a slab under its surface
-    Bore = 1, // a tunnel: its clear height and shell over its surface
+    Deck = 0,  // a bridge: a slab under its surface
+    Bore = 1,  // a tunnel: its clear height and shell over its surface
+    Grade = 2, // a way on the ground taking a structure's end to it: a cutting or an embankment
 }
 
 impl Form {
-    const ALL: [Form; 2] = [Form::Deck, Form::Bore];
+    const ALL: [Form; 3] = [Form::Deck, Form::Bore, Form::Grade];
 
     /// A byte `read_branch` let through.
     pub fn of(byte: u8) -> Form {
@@ -84,9 +85,14 @@ impl Form {
         self as u8
     }
 
-    /// Below the ground.
-    pub fn cuts(self) -> bool {
-        self == Form::Bore
+    /// Can stand below the ground.
+    pub fn sinks(self) -> bool {
+        self != Form::Deck
+    }
+
+    /// Can stand above the ground.
+    pub fn rises(self) -> bool {
+        self != Form::Bore
     }
 }
 
@@ -167,6 +173,9 @@ pub enum Occupies {
     Above { slab: [i32; 2], pier: Option<[i32; 2]> },
     /// Air from the surface up; the cell under it is the way's.
     Through { air: [i32; 2] },
+    /// An embankment: the column's own ground raised over `body`, and the way's
+    /// cell on it, its top the surface.
+    Fill { body: [i32; 2] },
 }
 
 impl Over {
@@ -174,18 +183,22 @@ impl Over {
     pub fn occupies(&self, ground: i32, cell_per_m: f64) -> Occupies {
         let top = round(self.top) as i32;
         let cells = |m: f64| (round(m * cell_per_m) as i32).max(1);
+        // a deck or a bore is one whatever its height: the solve holds it off the ground
         match self.form {
-            Form::Deck if top > ground => {
-                let lo = (top - cells(DECK_THICKNESS_M)).max(ground);
+            Form::Deck => {
+                let lo = top - cells(DECK_THICKNESS_M);
                 Occupies::Above {
                     slab: [lo, top],
                     pier: (self.pier && lo > ground).then_some([ground, lo]),
                 }
             }
-            Form::Bore if top < ground => Occupies::Through {
-                air: [top, (top + cells(headroom_m(self.kind))).min(ground)],
+            Form::Bore => Occupies::Through {
+                air: [top, top + cells(headroom_m(self.kind))],
             },
-            _ => Occupies::Grade,
+            // a cutting is open to the sky, an embankment solid to the ground
+            Form::Grade if top < ground => Occupies::Through { air: [top, ground] },
+            Form::Grade if top > ground => Occupies::Fill { body: [ground, top - 1] },
+            Form::Grade => Occupies::Grade,
         }
     }
 }
@@ -248,10 +261,10 @@ impl Decks {
         })
     }
 
-    /// The lowest bore floor inside the box, conservatively.
+    /// The lowest surface of a line that can sink inside the box, conservatively.
     pub fn lowest_in(&self, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> Option<i16> {
         let mut low = None;
-        for bore in self.iter().filter(|d| d.form.cuts()) {
+        for bore in self.iter().filter(|d| d.form.sinks()) {
             let half = bore.footprint();
             for s in 0..bore.points.len().saturating_sub(1) {
                 let (a, b) = (bore.point(s), bore.point(s + 1));
@@ -265,11 +278,11 @@ impl Decks {
         low
     }
 
-    /// The highest deck top inside the box, conservatively: a deck's highest
-    /// point counts wherever its footprint reaches the box.
+    /// The highest surface of a line that can rise inside the box,
+    /// conservatively: its highest point counts wherever its footprint reaches the box.
     pub fn highest_in(&self, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> Option<i16> {
         let mut top = None;
-        for deck in self.iter().filter(|d| !d.form.cuts()) {
+        for deck in self.iter().filter(|d| d.form.rises()) {
             let half = deck.footprint();
             for s in 0..deck.points.len().saturating_sub(1) {
                 let (a, b) = (deck.point(s), deck.point(s + 1));
@@ -319,7 +332,13 @@ impl Deck<'_> {
         let (a, b) = (self.point(s), self.point(s + 1));
         let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
         let len2 = dx * dx + dy * dy;
-        let t = if len2 > 0.0 { (((at[0] - a[0]) * dx + (at[1] - a[1]) * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
+        let t = if len2 > 0.0 { ((at[0] - a[0]) * dx + (at[1] - a[1]) * dy) / len2 } else { 0.0 };
+        // a line ends square where it begins and ends, as the ground cuts a way, so the
+        // next line and the paint start where it stops; its joints stay round
+        if (s == 0 && t < 0.0) || (s + 2 == self.points.len() && t > 1.0) {
+            return None;
+        }
+        let t = t.clamp(0.0, 1.0);
         let near = [a[0] + dx * t, a[1] + dy * t];
         if !way::covers(self.width_cells(), libm::hypot(at[0] - near[0], at[1] - near[1])) {
             return None;

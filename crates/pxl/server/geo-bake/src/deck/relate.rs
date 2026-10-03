@@ -12,12 +12,6 @@ use crate::deck::piece::{BridgeRow, Piece};
 use crate::terrain::pipeline::overture::between::cell_of;
 use crate::wkb::wkb_to_geometries;
 
-/// A way within this of a point, in DB coordinates, passes through or ends there.
-pub const TOUCH_REACH: f64 = 0.5;
-
-/// A step along a way from a point, in DB coordinates.
-pub const SIDE_STEP: f64 = 0.5;
-
 type P = [f64; 2];
 
 /// A polyline with its length so far at each point.
@@ -38,6 +32,15 @@ impl Polyline {
 
     pub fn length(&self) -> f64 {
         self.along.last().copied().unwrap_or(0.0)
+    }
+
+    /// The point `d` along it, in DB coordinates.
+    pub fn at(&self, d: f64) -> P {
+        let i = self.along.partition_point(|&x| x < d).clamp(1, self.points.len() - 1);
+        let (a, b) = (self.points[i - 1], self.points[i]);
+        let seg = self.along[i] - self.along[i - 1];
+        let t = if seg > 0.0 { (d - self.along[i - 1]) / seg } else { 0.0 };
+        [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
     }
 
     fn segments(&self) -> impl Iterator<Item = (usize, P, P)> + '_ {
@@ -226,7 +229,7 @@ pub fn water_under(pieces: &[Polyline], water: &[Water]) -> Vec<WaterUnder> {
             at.sort_by(f64::total_cmp);
             at.dedup();
             for w in at.windows(2) {
-                if water[k].holds(point_at(piece, (w[0] + w[1]) / 2.0)) {
+                if water[k].holds(piece.at((w[0] + w[1]) / 2.0)) {
                     out.push(WaterUnder {
                         piece: i,
                         from: w[0],
@@ -239,14 +242,6 @@ pub fn water_under(pieces: &[Polyline], water: &[Water]) -> Vec<WaterUnder> {
         }
     }
     out
-}
-
-fn point_at(line: &Polyline, d: f64) -> P {
-    let i = line.along.partition_point(|&x| x < d).clamp(1, line.points.len() - 1);
-    let (a, b) = (line.points[i - 1], line.points[i]);
-    let seg = line.along[i] - line.along[i - 1];
-    let t = if seg > 0.0 { (d - line.along[i - 1]) / seg } else { 0.0 };
-    [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
 }
 
 /// Two pieces crossing through each other, not meeting at an end: `upper`
@@ -282,27 +277,6 @@ pub fn decks_crossing(pieces: &[&Piece], lines: &[Polyline]) -> Vec<DeckCrossing
                     lower_at: other.along[js] + u * (other.along[js + 1] - other.along[js]),
                     tied: pieces[i].level == pieces[j].level,
                 });
-            }
-        }
-    }
-    out
-}
-
-/// Ways connected at each point (ending there, or the point's own way), not
-/// ones passing over or under, and where along each the point is.
-pub fn connected<'a>(points: &[(P, &str)], ways: &'a [Way]) -> Vec<(usize, f64, &'a Way)> {
-    let grid = Grid::of(ways.iter().map(|w| &w.line));
-    let mut out = Vec::new();
-    for (k, &(p, own)) in points.iter().enumerate() {
-        let mut seen: Vec<usize> = grid.near(p, p, TOUCH_REACH).into_iter().map(|(w, _)| w).collect();
-        seen.dedup();
-        for w in seen {
-            let way = &ways[w];
-            let (d, along) = way.line.nearest(p);
-            let ends = [way.line.points[0], way.line.points[way.line.points.len() - 1]];
-            let at_end = ends.iter().any(|e| libm::hypot(e[0] - p[0], e[1] - p[1]) <= TOUCH_REACH);
-            if d <= TOUCH_REACH && (way.row.gers_id == own || at_end) {
-                out.push((k, along / way.line.length().max(f64::EPSILON), way));
             }
         }
     }

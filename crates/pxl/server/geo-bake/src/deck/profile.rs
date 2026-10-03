@@ -1,13 +1,10 @@
 // pxl-geo-bake/deck/profile.rs
 
-//! A road's surface along a structure and the ways it carries on along, in
-//! z. A deck's points have a floor, a bore's a ceiling, and where a way ends
-//! on the ground both are the ground. Each bound reaches `halo`, coming away
-//! at `PREFERRED_SLOPE`, steeper only to land on a point's own by `halo` or to
-//! pass every bound the other way within `halo`. The surface stands on what
-//! the floors push up and under what the ceilings push down, at the ground
-//! between: so a structure keeps its form to its end, the road leaves it on
-//! the way it carries on along, and nothing past twice `halo` moves a point.
+//! A structure's surface in z. A deck's points have a floor, a bore's a
+//! ceiling. It runs on the line between its ends, held at their bounds, and
+//! bends only where that line breaks a bound, the bend coming away at
+//! `PREFERRED_SLOPE`, steeper only to land on a point's own by `halo` or to
+//! pass every bound the other way within `halo`.
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
@@ -21,6 +18,11 @@ pub struct Problem<'a> {
     pub floor: &'a [f64],
     /// +∞ where none.
     pub ceiling: &'a [f64],
+    /// The form's own bound at each point, before what passes under or over
+    /// it: what a bend comes away from, and the surface of a structure with no end.
+    pub base: &'a [f64],
+    /// A structure's end, at its bound there.
+    pub ends: &'a [bool],
     /// How far, in metres, a point's bound reaches: its own latitude's, so no
     /// window's choice of points moves it.
     pub halo: &'a [f64],
@@ -34,16 +36,37 @@ pub struct Profile {
 pub fn solve(p: &Problem) -> Profile {
     let n = p.ground.len();
     let neg = |v: &[f64]| v.iter().map(|x| -x).collect::<Vec<f64>>();
-    let lower = envelope(p, p.floor, p.ceiling, 1.0);
-    let upper = neg(&envelope(p, &neg(p.ceiling), &neg(p.floor), -1.0));
-    let top: Vec<f64> = (0..n).map(|v| lower[v].max(upper[v].min(p.ground[v]))).collect();
+    let line = line(p);
+    let lower = envelope(p, p.floor, p.ceiling, 1.0, &line);
+    let upper = neg(&envelope(p, &neg(p.ceiling), &neg(p.floor), -1.0, &line));
+    let top: Vec<f64> = (0..n).map(|v| lower[v].max(upper[v].min(line[v]))).collect();
     let forced = (0..n).map(|v| p.adj[v].iter().any(|&(w, d)| d > 0.0 && (top[v] - top[w as usize]).abs() / d > PREFERRED_SLOPE + 1e-9)).collect();
     Profile { top, forced }
 }
 
+/// Between a structure's ends by inverse distance along it: on a chain, the
+/// straight line between its two, each at its bound; with none, a ring, the
+/// form's own bound.
+fn line(p: &Problem) -> Vec<f64> {
+    let n = p.ground.len();
+    let (mut sum, mut weight) = (vec![0.0; n], vec![0.0; n]);
+    let mut at_end: Vec<Option<f64>> = vec![None; n];
+    let mut near = Near::new(n);
+    for e in (0..n).filter(|&e| p.ends[e]) {
+        let z = if p.floor[e].is_finite() { p.floor[e] } else { p.ceiling[e] };
+        at_end[e] = Some(z);
+        near.from(p.adj, e as u32, f64::INFINITY);
+        for &v in near.reached.iter().filter(|&&v| near.dist[v as usize] > 0.0) {
+            let w = 1.0 / near.dist[v as usize];
+            (sum[v as usize], weight[v as usize]) = (sum[v as usize] + z * w, weight[v as usize] + w);
+        }
+    }
+    (0..n).map(|v| at_end[v].unwrap_or(if weight[v] > 0.0 { sum[v] / weight[v] } else { p.base[v] })).collect()
+}
+
 /// In `q = sign · z`: what the bounds `least` hold up, each coming away no
 /// steeper than it must to pass the bounds `most`.
-fn envelope(p: &Problem, least: &[f64], most: &[f64], sign: f64) -> Vec<f64> {
+fn envelope(p: &Problem, least: &[f64], most: &[f64], sign: f64, line: &[f64]) -> Vec<f64> {
     let n = least.len();
     let own = |v: usize| if least[v].is_finite() { least[v] } else { sign * p.ground[v] };
     let mut env = least.to_vec();
@@ -55,7 +78,8 @@ fn envelope(p: &Problem, least: &[f64], most: &[f64], sign: f64) -> Vec<f64> {
         for (v, d) in reached() {
             // steeper only to land on v's own by the halo, so no step there
             let slope = pass.max((least[u] - own(v)) / p.halo[u]);
-            env[v] = env[v].max(least[u] - slope * d);
+            // a structure bends from the line between its ends by that grade
+            env[v] = env[v].max(sign * (line[v] - line[u]) + least[u] - slope * d);
         }
     }
     env

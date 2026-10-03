@@ -69,10 +69,12 @@ pub fn has_ground(client: &mut Client, pages: &[IVec]) -> Result<Vec<bool>, post
     Ok(out)
 }
 
-/// Its decks solved from what it reaches, not read from a whole solve.
+/// `memo` keeps each page's rows the deck solve read, and under `structure`
+/// each structure it solved.
 pub fn bake_leaf(repo: &TerrainRepository, client: &mut Client, memo: &Path, page: IVec, stats: &mut SourceStats, level: Level) -> Result<(usize, Vec<u8>), String> {
-    let solved = deck::solve_page(client, page, &mut deck::source::Disk(memo))?;
-    let surface = fetch_surface(repo, client, page, &solved.carried, stats).map_err(|e| e.to_string())?;
+    let (structures, mut store) = (memo.join("structure"), deck::source::Disk(memo));
+    let solved = deck::solve_page(&mut deck::Reader { client: &mut *client, repo, store: &mut store, memo: &structures }, page)?;
+    let surface = fetch_surface(repo, client, page, &solved.drawn, stats).map_err(|e| format!("{e:?}"))?;
     let lines = bake_decks(&solved.rows, epsg3857::get_page_bbox(page)[0]).ok_or("a page's decks overflow a record")?;
     let raw = encode_terrain(&assemble(surface, lines)).map_err(|e| format!("{e:?}"))?;
     let packed = pack(raw.as_slice(), level).map_err(|e| e.to_string())?;

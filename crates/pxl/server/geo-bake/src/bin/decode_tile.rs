@@ -21,7 +21,7 @@ use flate2::write::ZlibEncoder;
 use flate2::{Compression, Crc};
 use pxl_geo_bake::cli::Flags;
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::bake::deck::Decks;
+use pxl_spec::bake::deck::{Decks, Form};
 use pxl_spec::bake::format::decode_terrain;
 use pxl_spec::bake::format::{GroundChannelKey, Occupancy};
 use pxl_spec::bake::pack::GroundCell;
@@ -149,7 +149,7 @@ fn print_summary(name: &str, s: &Summary) {
 }
 
 fn print_bores(page: &Page) {
-    let bores: Vec<_> = page.decks.iter().filter(|d| d.form.cuts()).collect();
+    let bores: Vec<_> = page.decks.iter().filter(|d| d.form == Form::Bore).collect();
     if bores.is_empty() {
         return;
     }

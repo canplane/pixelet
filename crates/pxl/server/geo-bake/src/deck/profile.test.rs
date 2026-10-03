@@ -17,7 +17,7 @@ const NONE: f64 = f64::INFINITY;
 fn deck(floor: &[f64], halo: f64) -> Profile {
     let adj = chain(floor.len(), 5.0);
     let floor: Vec<f64> = floor.iter().map(|&f| if f > 0.0 { f } else { -NONE }).collect();
-    solve(&Problem { adj: &adj, ground: &vec![0.0; floor.len()], floor: &floor, ceiling: &vec![NONE; floor.len()], halo: &vec![halo; floor.len()] })
+    solve(&Problem { adj: &adj, ground: &vec![0.0; floor.len()], floor: &floor, ceiling: &vec![NONE; floor.len()], base: &vec![2.0; floor.len()], ends: &vec![false; floor.len()], halo: &vec![halo; floor.len()] })
 }
 
 #[test]
@@ -54,45 +54,16 @@ fn a_need_too_high_for_the_grade_lands_on_the_ground_by_the_halo_without_a_step(
 }
 
 #[test]
-fn a_structure_keeps_its_form_to_its_end_and_its_way_meets_the_ground_at_the_grade() {
-    // a 2 m floor over 20..=30, the way carrying on either side
-    let floor: Vec<f64> = (0..51).map(|i| if (20..=30).contains(&i) { 2.0 } else { 0.0 }).collect();
-    let p = deck(&floor, 1000.0);
-    assert!((20..=30).all(|i| p.top[i] == 2.0));
-    assert!((p.top[31] - (2.0 - PREFERRED_SLOPE * 5.0)).abs() < 1e-9);
-    assert_eq!((p.top[35], p.top[15]), (0.0, 0.0));
-    assert!(p.forced.iter().all(|f| !f));
-}
-
-#[test]
-fn a_way_ending_first_meets_the_ground_there_as_steep_as_it_must() {
-    // a 6 m floor over 0..=10, a way of four steps ending on the ground
-    let adj = chain(15, 5.0);
-    let mut floor: Vec<f64> = (0..15).map(|i| if i <= 10 { 6.0 } else { -NONE }).collect();
-    let mut ceiling = vec![NONE; 15];
-    (floor[14], ceiling[14]) = (0.0, 0.0);
-    let p = solve(&Problem { adj: &adj, ground: &[0.0; 15], floor: &floor, ceiling: &ceiling, halo: &vec![1000.0; adj.len()] });
-    assert_eq!((p.top[10], p.top[14]), (6.0, 0.0));
-    assert!((11..14).all(|i| (p.top[i] - 6.0 * (14 - i) as f64 / 4.0).abs() < 1e-9));
-}
-
-#[test]
-fn a_deck_and_a_bore_a_short_way_apart_are_one_road_between_them() {
-    // a deck's 6 m floor over 0..=5, a bore's −6 m ceiling over 10..=15
-    let adj = chain(16, 5.0);
-    let floor: Vec<f64> = (0..16).map(|i| if i <= 5 { 6.0 } else { -NONE }).collect();
-    let ceiling: Vec<f64> = (0..16).map(|i| if i >= 10 { -6.0 } else { NONE }).collect();
-    let p = solve(&Problem { adj: &adj, ground: &[0.0; 16], floor: &floor, ceiling: &ceiling, halo: &vec![1000.0; adj.len()] });
-    assert_eq!((p.top[5], p.top[10]), (6.0, -6.0));
-    assert!((5..=10).all(|i| (p.top[i] - (6.0 - 12.0 * (i - 5) as f64 / 5.0)).abs() < 1e-9));
-}
-
-#[test]
-fn a_bore_keeps_its_cover_to_its_portal_and_its_way_climbs_out_at_the_grade() {
-    let adj = chain(51, 5.0);
-    let ceiling: Vec<f64> = (0..51).map(|i| if (20..=30).contains(&i) { -7.5 } else { NONE }).collect();
-    let p = solve(&Problem { adj: &adj, ground: &vec![0.0; 51], floor: &vec![-NONE; 51], ceiling: &ceiling, halo: &vec![1000.0; adj.len()] });
-    assert!((20..=30).all(|i| p.top[i] == -7.5));
-    assert!((p.top[31] - (-7.5 + PREFERRED_SLOPE * 5.0)).abs() < 1e-9);
-    assert_eq!(p.top[50], 0.0);
+fn a_structure_runs_straight_between_its_ends_and_bends_only_for_a_need() {
+    // ends held 4 m and 2 m over flat ground, a 6 m need at 10
+    let adj = chain(21, 5.0);
+    let mut floor = vec![1.0; 21];
+    (floor[0], floor[20], floor[10]) = (4.0, 2.0, 6.0);
+    let mut ends = vec![false; 21];
+    (ends[0], ends[20]) = (true, true);
+    let p = solve(&Problem { adj: &adj, ground: &[0.0; 21], floor: &floor, ceiling: &[NONE; 21], base: &[1.0; 21], ends: &ends, halo: &[1000.0; 21] });
+    assert_eq!((p.top[0], p.top[20], p.top[10]), (4.0, 2.0, 6.0));
+    // past the need's reach the line between the ends holds
+    let chord = |i: usize| 4.0 - 2.0 * i as f64 / 20.0;
+    assert!((p.top[2] - chord(2)).abs() < 1e-9 && (p.top[18] - chord(18)).abs() < 1e-9);
 }

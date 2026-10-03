@@ -21,6 +21,7 @@ fn row(id: &str, points: &[[f64; 2]]) -> BridgeRow {
         access: None,
         subclass: None,
         subclasses: None,
+        connectors: None,
         geom_wkb: wkb.into(),
     }
 }
@@ -39,7 +40,6 @@ fn piece(id: &str, level: i64, points: &[[f64; 2]]) -> Piece {
         level,
         width_m: 4.0,
         form: Form::Deck,
-        approach: false,
         ends: [End::of(id, whole, 0.0), End::of(id, whole, 1.0)],
         start: 0.0,
         way_length: 1.0,
@@ -87,16 +87,4 @@ fn decks_cross_through_each_other_not_where_one_ends_on_the_other() {
     let c = decks_crossing(&refs, &lines);
     assert_eq!(c.len(), 1, "c only touches a");
     assert_eq!((c[0].upper, c[0].lower, c[0].upper_at, c[0].lower_at), (1, 0, 5.0, 5.0));
-}
-
-#[test]
-fn a_way_ending_at_a_point_is_connected_and_one_passing_is_not_unless_it_is_its_own() {
-    let ways = [
-        Way::of(row("ends", &[[0.0, 0.0], [10.0, 0.0]])).unwrap(),
-        Way::of(row("passes", &[[0.0, -5.0], [0.0, 5.0]])).unwrap(),
-        Way::of(row("own", &[[-5.0, 0.0], [5.0, 0.0]])).unwrap(),
-    ];
-    let mut found: Vec<&str> = connected(&[([0.0, 0.0], "own")], &ways).into_iter().map(|(_, _, w)| w.row.gers_id.as_str()).collect();
-    found.sort_unstable();
-    assert_eq!(found, ["ends", "own"]);
 }
