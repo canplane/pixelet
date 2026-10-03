@@ -135,7 +135,7 @@ export interface ProfilerReport {
   t: f64;
   build: { number: string; id: string; time: string };
   frames: FrameSummary | null;
-  sections: Record<"counters" | "atlas" | "held" | "fetch" | "quality", Record<string, f64>>;
+  sections: Record<"counters" | "atlas" | "held" | "fetch" | "quality" | "view", Record<string, f64>>;
   steps: { phase: string; name: string; ms: f64; count: f64; max_ms: f64 }[];
   peak: Record<string, f64> | null;
   taskN: u32;
@@ -236,6 +236,7 @@ export interface Gauge {
   counters: Record<string, f64>;
   atlas: { size: u32; entries: u32; shelves: u32; used_px: u32 };
   quality: Record<string, f64>;
+  view: Record<string, f64>;
   longs: LongFrame[];
 }
 
@@ -255,6 +256,7 @@ export function profilerGaugeRead(windowMs: f64): Gauge {
     counters: section(s, SUMMARY.counters),
     atlas: atlasOf(s),
     quality: section(s, SUMMARY.quality),
+    view: section(s, SUMMARY.view),
     longs: longFramesSince(performance.now() - windowMs),
   };
 }
@@ -286,6 +288,7 @@ export function profilerReportRead(): ProfilerReport {
       held: section(s, SUMMARY.held),
       fetch: section(s, SUMMARY.fetch),
       quality: section(s, SUMMARY.quality),
+      view: section(s, SUMMARY.view),
     },
     steps,
     peak: peak.present === 0 ? null : Object.fromEntries(Object.entries(peak).filter(([k]) => k !== "present")),

@@ -482,7 +482,28 @@
       "requests": 1,
       "WORDS": 2
     },
-    "WORDS": 591
+    "view": {
+      "$doc": ["Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_level` is the drawn chunk under the pointer, `tier_level` the level its tier is drawn at and `read_from` the level of the page it is read from."],
+      "AT": 591,
+      "dist": 0,
+      "polar": 1,
+      "azimuth": 2,
+      "tau": 3,
+      "center_lon": 4,
+      "center_lat": 5,
+      "center_z": 6,
+      "hover_x": 7,
+      "hover_y": 8,
+      "hover_z": 9,
+      "hover_lon": 10,
+      "hover_lat": 11,
+      "hover_alt": 12,
+      "chunk_level": 13,
+      "tier_level": 14,
+      "read_from": 15,
+      "WORDS": 16
+    },
+    "WORDS": 607
   },
   "READ": {
     "$type": "u32",

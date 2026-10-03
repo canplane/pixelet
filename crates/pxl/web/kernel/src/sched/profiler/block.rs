@@ -235,6 +235,35 @@ pub struct HeapBlock {
 
 words!(HeapBlock, SUMMARY::heap::WORDS, used_mb => SUMMARY::heap::used_mb, requests => SUMMARY::heap::requests);
 
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ViewBlock {
+    pub dist: f64,
+    pub polar: f64,
+    pub azimuth: f64,
+    pub tau: f64,
+    pub center_lon: f64,
+    pub center_lat: f64,
+    pub center_z: f64,
+    pub hover_x: f64,
+    pub hover_y: f64,
+    pub hover_z: f64,
+    pub hover_lon: f64,
+    pub hover_lat: f64,
+    pub hover_alt: f64,
+    pub chunk_level: f64,
+    pub tier_level: f64,
+    pub read_from: f64,
+}
+
+words!(ViewBlock, SUMMARY::view::WORDS,
+    dist => SUMMARY::view::dist, polar => SUMMARY::view::polar, azimuth => SUMMARY::view::azimuth, tau => SUMMARY::view::tau,
+    center_lon => SUMMARY::view::center_lon, center_lat => SUMMARY::view::center_lat, center_z => SUMMARY::view::center_z,
+    hover_x => SUMMARY::view::hover_x, hover_y => SUMMARY::view::hover_y, hover_z => SUMMARY::view::hover_z,
+    hover_lon => SUMMARY::view::hover_lon, hover_lat => SUMMARY::view::hover_lat, hover_alt => SUMMARY::view::hover_alt,
+    chunk_level => SUMMARY::view::chunk_level, tier_level => SUMMARY::view::tier_level, read_from => SUMMARY::view::read_from,
+);
+
 words!(QualityBlock, SUMMARY::quality::WORDS,
     step => SUMMARY::quality::step, star => SUMMARY::quality::star, frames_held => SUMMARY::quality::frames_held,
     admitted => SUMMARY::quality::admitted, evicted => SUMMARY::quality::evicted,

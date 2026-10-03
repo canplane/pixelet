@@ -97,6 +97,11 @@ pub fn azimuth() -> f64 {
     camera().azimuth
 }
 
+/// Radians from straight down.
+pub fn polar() -> f64 {
+    camera().polar
+}
+
 pub fn center_local() -> Option<V3> {
     camera().eye?;
     if active() == Active::Tracked {

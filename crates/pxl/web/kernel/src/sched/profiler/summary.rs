@@ -6,10 +6,11 @@
 
 use xpute_runtime::global::Global;
 use xpute_runtime::clock::now;
+use crate::control::camera::controller;
 use crate::io::sched::{counts, credits};
 use crate::kernel::{kernel, with_world};
 use crate::layer::billboard::sheet::billboard_sheet;
-use crate::sched::profiler::block::{AtlasBlock, FetchBlock, FramesBlock, HeapBlock, HeldBlock, QualityBlock, RecBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock};
+use crate::sched::profiler::block::{AtlasBlock, FetchBlock, FramesBlock, HeapBlock, HeldBlock, QualityBlock, RecBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
 use crate::sched::profiler::log::window_counters;
 use crate::sched::profiler::record::{fixed_lane, profiler_frame_peak, profiler_frames_since, profiler_recording_state, profiler_tasks_since, put, FrameSample, Lane, Outcome, TaskRow, SPREAD_LIMIT};
 use crate::sched::profiler::block::TASK_PHASES;
@@ -17,6 +18,8 @@ use crate::sched::profiler::spec::{LIMITS, SUMMARY};
 use crate::sched::tick::{tick_step_stats, HARD_SLACK_MS};
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
+use pxl_spec::space::adapter::epsg4326;
+use pxl_spec::space::pvf3::projection;
 
 const MISSED_INTERVALS: f64 = 1.5;
 
@@ -257,6 +260,35 @@ fn side(out: &mut [f64]) {
 
     let h = crate::host::heap_stat();
     put(out, SUMMARY::heap::AT, &HeapBlock { used_mb: h.used as f64 / (1 << 20) as f64, requests: h.requests as f64 });
+
+    let hover = crate::control::interaction::hover().coord;
+    let [hover_x, hover_y, hover_z] = hover.map_or([f64::NAN; 3], |p| projection::unproject(p.i, p.f));
+    let [hover_lon, hover_lat, hover_alt] = hover.map_or([f64::NAN; 3], |p| epsg4326::unproject(p.i, p.f));
+    let [center_lon, center_lat, center_z] = controller::map_center().map_or([f64::NAN; 3], |p| epsg4326::unproject(p.i, p.f));
+    let (chunk_level, tier_level, read_from) = hover.and_then(|p| with_world(|_, sched| sched.drawn_at(&p)).flatten()).map_or((None, None, None), |(c, t, r)| (Some(c), t, r));
+    let level = |l: Option<f64>| l.unwrap_or(f64::NAN);
+    put(
+        out,
+        SUMMARY::view::AT,
+        &ViewBlock {
+            dist: controller::dist(),
+            polar: controller::polar(),
+            azimuth: controller::azimuth(),
+            tau: crate::world::pyramid::domain::current().map_or(f64::NAN, |d| d.tau().scale()),
+            center_lon,
+            center_lat,
+            center_z,
+            hover_x,
+            hover_y,
+            hover_z,
+            hover_lon,
+            hover_lat,
+            hover_alt,
+            chunk_level: level(chunk_level.map(f64::from)),
+            tier_level: level(tier_level.map(f64::from)),
+            read_from: level(read_from.map(f64::from)),
+        },
+    );
 
     // Per step: a cooperative scheduler is only as cooperative as its longest step.
     let mut steps = StepsBlock::default();

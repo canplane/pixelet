@@ -339,7 +339,28 @@ export const SUMMARY = {
     requests: 1 as number,
     WORDS: 2 as number,
   },
-  WORDS: 591 as number,
+  /** Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_level` is the drawn chunk under the pointer, `tier_level` the level its tier is drawn at and `read_from` the level of the page it is read from. */
+  view: {
+    AT: 591 as number,
+    dist: 0 as number,
+    polar: 1 as number,
+    azimuth: 2 as number,
+    tau: 3 as number,
+    center_lon: 4 as number,
+    center_lat: 5 as number,
+    center_z: 6 as number,
+    hover_x: 7 as number,
+    hover_y: 8 as number,
+    hover_z: 9 as number,
+    hover_lon: 10 as number,
+    hover_lat: 11 as number,
+    hover_alt: 12 as number,
+    chunk_level: 13 as number,
+    tier_level: 14 as number,
+    read_from: 15 as number,
+    WORDS: 16 as number,
+  },
+  WORDS: 607 as number,
 } as const;
 
 /** What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count. */

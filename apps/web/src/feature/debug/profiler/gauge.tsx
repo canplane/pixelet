@@ -53,12 +53,16 @@ export const Head = ({ children, end }: { children: string; end?: ReactNode }) =
   </View>
 );
 
+const deg = (rad: number) => (rad * 180) / Math.PI;
+const geo = (lat: number, lon: number) => (Number.isNaN(lat) ? "-" : `${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+const lv = (level: number) => (Number.isNaN(level) ? "-" : String(level));
+
 const phase = (f: FrameSummary, name: string): Spread => f.phases.find((p) => p.name === name)?.spread ?? { p50: 0, p95: 0, max: 0 };
 
 export function ProfilerGauge({ g }: { g: Gauge | null }) {
   if (g === null) return <Note>no window open</Note>;
 
-  const { rec, frames: f } = g;
+  const { rec, frames: f, view: v } = g;
   const atlasPct = round((g.atlas.used_px / (g.atlas.size * g.atlas.size)) * 100);
   const [kept, possible] = [g.counters.faces_kept, g.counters.faces_possible];
   const heaviest = <T,>(rows: T[], by: (r: T) => number, n: number) => [...rows].sort((a, b) => by(b) - by(a)).slice(0, n).filter((r) => by(r) > 0);
@@ -71,6 +75,13 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
         v={`${(rec.elapsed_ms / 1000).toFixed(1)}s ${rec.frames}f/${rec.tasks}t${rec.truncated ? " TRUNC" : ""}`}
         warn={rec.recording || rec.truncated}
       />
+
+      <Head>view</Head>
+      <Row k="dist/polar/az" v={`${n1(v.dist)}u ${n1(deg(v.polar))}° ${n1(deg(v.azimuth))}°`} />
+      <Row k="center" v={`${geo(v.center_lat, v.center_lon)} ${n1(v.center_z)}m τ${n1(v.tau)}`} />
+      <Row k="hover" v={Number.isNaN(v.hover_x) ? "-" : `${n1(v.hover_x)} ${n1(v.hover_y)} ${n1(v.hover_z)}u`} />
+      <Row k="hover geo" v={Number.isNaN(v.hover_lat) ? "-" : `${geo(v.hover_lat, v.hover_lon)} ${n1(v.hover_alt)}m`} />
+      <Row k="chunk/tier/from" v={`L${lv(v.chunk_level)}/L${lv(v.tier_level)}/L${lv(v.read_from)}`} warn={v.read_from > v.chunk_level} />
 
       {f === null && <Note>no frames sampled yet</Note>}
       {f !== null && (

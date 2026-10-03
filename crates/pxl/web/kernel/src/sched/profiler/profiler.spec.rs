@@ -699,8 +699,49 @@ pub mod SUMMARY {
         pub const WORDS: u32 = 2;
         pub const KEYS: &[&str] = &["AT", "used_mb", "requests", "WORDS"];
     }
-    pub const WORDS: u32 = 591;
-    pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "held", "fetch", "peak", "steps", "quality", "heap", "WORDS"];
+    /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_level` is the drawn chunk under the pointer, `tier_level` the level its tier is drawn at and `read_from` the level of the page it is read from.
+    pub mod view {
+        pub const AT: u32 = 591;
+        pub const dist: u32 = 0;
+        pub const polar: u32 = 1;
+        pub const azimuth: u32 = 2;
+        pub const tau: u32 = 3;
+        pub const center_lon: u32 = 4;
+        pub const center_lat: u32 = 5;
+        pub const center_z: u32 = 6;
+        pub const hover_x: u32 = 7;
+        pub const hover_y: u32 = 8;
+        pub const hover_z: u32 = 9;
+        pub const hover_lon: u32 = 10;
+        pub const hover_lat: u32 = 11;
+        pub const hover_alt: u32 = 12;
+        pub const chunk_level: u32 = 13;
+        pub const tier_level: u32 = 14;
+        pub const read_from: u32 = 15;
+        pub const WORDS: u32 = 16;
+        pub const KEYS: &[&str] = &[
+            "AT",
+            "dist",
+            "polar",
+            "azimuth",
+            "tau",
+            "center_lon",
+            "center_lat",
+            "center_z",
+            "hover_x",
+            "hover_y",
+            "hover_z",
+            "hover_lon",
+            "hover_lat",
+            "hover_alt",
+            "chunk_level",
+            "tier_level",
+            "read_from",
+            "WORDS",
+        ];
+    }
+    pub const WORDS: u32 = 607;
+    pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "held", "fetch", "peak", "steps", "quality", "heap", "view", "WORDS"];
 }
 
 /// What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count.

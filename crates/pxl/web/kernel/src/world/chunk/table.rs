@@ -15,6 +15,7 @@ use pxl_render::mesh::voxel_scan::APRON;
 use pxl_spec::space::observation::Bounds as _;
 use pxl_spec::space::pyramid::{chunk_scale, GROUND};
 use pxl_spec::space::observation::Frustum;
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::{dot3, len3, Aabb, V3};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::section::span_of;
@@ -556,6 +557,13 @@ impl Scheduler {
     pub fn mounted(&self, out: &mut Vec<(Chunk, bool, bool)>) {
         out.clear();
         out.extend(self.slots.iter().map(|s| (s.chunk, s.role == Role::Drawn, s.in_frustum)));
+    }
+
+    /// The finest drawn chunk holding `p`: its level, the level its tier is
+    /// drawn at, and the level of the page it is read from.
+    pub fn drawn_at(&self, p: &Pvf3) -> Option<(u32, Option<i32>, Option<u32>)> {
+        let s = (0..LEVELS).find_map(|level| self.slots.iter().find(|s| s.role == Role::Drawn && s.chunk == Chunk::of(level, p)))?;
+        Some((s.level(), s.layout.map(|(scale, _)| scale.above(GROUND.scale(0))), s.sources.read_from))
     }
 
     pub fn drawn_revision(&self) -> u32 {
