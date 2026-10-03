@@ -4,8 +4,8 @@
 //! place by the panel and the report so both agree. Sections go only through
 //! `put`; indexing lanes by hand let sections drift out of order (2026-09-23).
 
-use crate::global::Global;
-use crate::host::now;
+use xpute_runtime::global::Global;
+use xpute_runtime::clock::now;
 use crate::io::sched::{counts, credits};
 use crate::kernel::{kernel, with_world};
 use crate::layer::billboard::sheet::billboard_sheet;

@@ -4,13 +4,11 @@
 //! settle time, declared quantum and step table.
 
 use xpute_runtime::sched::quantum::QuantumPolicy;
-pub use xpute_runtime::sched::frame_budget::FrameBudget;
-pub use xpute_runtime::sched::tick::{Phase, StepStats, TickReport, CONTENT, COSMETIC, INTERACTION, PHASES, REPORT, VISIBLE};
-use xpute_runtime::sched::tick::{Tick, TickPolicy};
+use xpute_runtime::sched::tick::{Phase, StepStats, Tick, TickPolicy, TickReport};
 
-use crate::global::Global;
 use crate::param;
 pub use crate::sched::profiler::spec::StepName;
+use xpute_runtime::global::Global;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct TickState {

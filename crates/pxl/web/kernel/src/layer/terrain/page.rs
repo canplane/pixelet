@@ -15,14 +15,14 @@ use xpute_runtime::mem::base::ptr_at;
 
 use crate::sched::profiler::record::Failure;
 
-use crate::global::Global;
-use crate::host::now;
 use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::io::sched::pending_count;
 use crate::layer::terrain::fixed::{blocks_off, deck_off, ele_off, extent_off, ground_off, BLOCK_LANE_BYTES, DECK_LANE_BYTES, ELE_LANE_BYTES, EXTENT_LANE_BYTES, GROUND_LANE_BYTES};
 use crate::mem::fixed::{at, Range};
 use crate::shell::map_store::{map_store, MapStatus};
 use crate::world::pyramid::{Absent, Layer, Pyramid};
+use xpute_runtime::clock::now;
+use xpute_runtime::global::Global;
 
 pub use pxl_spec::bake::format::OCEAN_KEY;
 

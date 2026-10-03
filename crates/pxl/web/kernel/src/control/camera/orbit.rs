@@ -21,11 +21,11 @@ use crate::control::camera::controller::{camera, center_local, look_dir, look_do
 use crate::control::camera::gesture::{spread, Anchor};
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
 use crate::control::navigation::support::target;
-use crate::global::Global;
 use crate::shell::setting::store::{settings_store, OrbitObstacleMode};
 use crate::world::frame::view::{view, view_compose};
 use crate::world::observation::heights_revision;
 use terrain_gate::{allowed_view, climb_polar, ViewTriple};
+use xpute_runtime::global::Global;
 
 pub struct OrbitState {
     pub dist: f64,

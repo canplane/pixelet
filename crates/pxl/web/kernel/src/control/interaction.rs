@@ -15,14 +15,14 @@ use pxl_spec::space::v3::V3;
 pub use crate::abi::cmd::ActiveTool;
 use crate::control::interaction::pick::{ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner};
 use crate::control::navigation::support::stand;
-use crate::global::Global;
 use crate::layer::decor::hit::{raycast_decor, DecorStruck, Scattered};
 use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
 use crate::layer::object::geometry::{anchor_center, object_aabb};
 use crate::layer::object::size::{DECOR_SIZE, DEFAULT_OBJECT_SIZE};
-use crate::layer::object::store::{get_placed_object, place, place_air, place_decor, remove, EntryAt, Entry};
+use crate::layer::object::store::{get_placed_object, place, place_air, place_decor, remove, Entry, EntryAt};
 use crate::world::access::Hit;
 use crate::world::frame::view::{view, view_ray_local};
+use xpute_runtime::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Holding {

@@ -7,8 +7,8 @@
 use xpute_runtime::ipc::file::Files;
 use xpute_runtime::ipc::sys::Fd;
 
-use crate::global::Global;
 use crate::host::sys;
+use xpute_runtime::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Owner {

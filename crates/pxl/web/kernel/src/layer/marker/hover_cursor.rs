@@ -17,7 +17,6 @@ use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 
 use crate::control::interaction::{holding, hover, ActiveTool};
-use crate::global::Global;
 use crate::kernel::with_world;
 use crate::layer::decor::asset_store::decor_assets_for;
 use crate::layer::decor::build::user_decor_pick;
@@ -31,6 +30,7 @@ use crate::world::access::{Access, FINEST};
 use crate::world::change::request_world_tick;
 use crate::world::chunk::build::World;
 use crate::world::chunk::source::chunk_sources_changed;
+use xpute_runtime::global::Global;
 
 enum Ghost {
     None,

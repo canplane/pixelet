@@ -21,7 +21,7 @@ use xpute_runtime::mem::section::span_of;
 use xpute_runtime::sched::edge::Notify;
 use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats};
 
-use crate::global::Global;
+use xpute_runtime::global::Global;
 use crate::layer::billboard::field::Billboards;
 use crate::layer::environment::state::EnvironmentDraw;
 use crate::layer::marker::debug_lines::DebugLines;
@@ -603,7 +603,7 @@ impl Scheduler {
         self.place[id as usize] = Nth::of(self.slots.len());
         self.slots.push(slot);
         let i = self.slots.len() - 1;
-        self.recheck(world, i, crate::host::now());
+        self.recheck(world, i, xpute_runtime::clock::now());
         self.view_dirty = true;
     }
 
@@ -670,7 +670,7 @@ impl Scheduler {
     pub fn build_step(&mut self, world: &mut World, budget_ms: f64) -> bool {
         let (slots, place, meshes, landed) = (&mut self.slots, &*self.place, &mut self.meshes, &mut self.landed);
         landed.clear();
-        let worked = self.builder.tick(world, &self.builds, budget_ms, &crate::host::now, &mut |e| match e {
+        let worked = self.builder.tick(world, &self.builds, budget_ms, &xpute_runtime::clock::now, &mut |e| match e {
             BuildEvent::Reserve { .. } => reserve(slots, place, meshes, e),
             BuildEvent::Part { .. } => {
                 part(slots, place, meshes, e);
@@ -751,7 +751,7 @@ impl Scheduler {
         sc.drawn.sort_unstable();
         sc.building.sort_unstable_by_key(|&(c, _)| c);
         let now = Now {
-            ms: crate::host::now(),
+            ms: xpute_runtime::clock::now(),
             goal: d.pieces(),
             drawn: &sc.drawn,
             building: &sc.building,
@@ -782,7 +782,7 @@ impl Scheduler {
             }
             self.view_dirty = true;
         }
-        let now = crate::host::now();
+        let now = xpute_runtime::clock::now();
         for &k in &plan.start {
             xpute_core::ensure!(self.find(&k).is_none(), ENOTRECOVERABLE);
             self.add(world, k);

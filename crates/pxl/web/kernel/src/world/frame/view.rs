@@ -13,12 +13,12 @@ use pxl_spec::space::v3::{add3, V3};
 
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::controller::{pose, rebase};
-use crate::global::Global;
 use crate::layer::environment::config::render_cfg;
 use crate::layer::environment::fog::{far_clip_at, height_at, near_clip_at};
 use crate::world::frame::coord::{local_world_to_canonical, origin_for};
 use pxl_spec::space::lod;
 use pxl_spec::space::pyramid::TOP_LEVEL;
+use xpute_runtime::global::Global;
 
 /// `rotation` turns the world's axes to the camera's (right, up, back), rotation alone.
 #[derive(Clone, Copy, Debug, PartialEq)]

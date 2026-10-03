@@ -9,7 +9,6 @@ mod executor;
 pub mod layout;
 
 use crate::abi::cmd::{Command, Sensor, SensorStartSignal, WorldSnapshotSignal};
-use crate::global::Global;
 use crate::host::HeapStat;
 use crate::kernel::kernel;
 use crate::mem::fixed::Range;
@@ -18,6 +17,7 @@ use layout::DOOR_LAYOUT;
 use pxl_render::mesh::volume::Volumes;
 use xpute_core::status::errno::Errno;
 use xpute_core::wire::xtp::PacketWriter;
+use xpute_runtime::global::Global;
 use xpute_runtime::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
 use xpute_runtime::ipc::doorbell::Door;
 use xpute_runtime::ipc::ring::Ring;
@@ -89,7 +89,7 @@ fn host_attached(s: &mut State) {
 
 /// First turn: lays out memory and writes the directory at DIRECTORY_AT.
 fn boot(b: &Bracket) {
-    crate::host::set_clock(b.clock);
+    xpute_runtime::clock::set_clock(b.clock);
     crate::host::set_heap_stat(b.heap_stat);
     crate::host::set_last_words(b.last_words);
     executor::install();

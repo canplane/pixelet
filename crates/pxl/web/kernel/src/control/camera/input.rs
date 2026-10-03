@@ -17,12 +17,12 @@ use crate::control::camera::gesture::{linear, Anchor};
 use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
 use crate::control::interaction::{clear_hover, clear_hover_coord, hold, hover_at, tap, Holding};
 use crate::control::navigation::destination::cancel as cancel_destination;
-use crate::global::Global;
 use crate::shell::setting::store::settings_store;
 use crate::world::change::request_world_tick;
 use crate::world::frame::view::view;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
+use xpute_runtime::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DragMode {

@@ -14,8 +14,6 @@ use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free, Block};
 use xpute_runtime::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 
-use crate::global::Global;
-use crate::host::now;
 use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::io::file::{self, Owner};
 use crate::io::sched::{attempt_of, settle};
@@ -29,6 +27,8 @@ use pxl_spec::bake::place_page::{group_name, DICT_OBJECT};
 use pxl_spec::bake::poi_page::PoiPage;
 use pxl_spec::bake::quadkey::page_name;
 use pxl_spec::space::pyramid::LevelPage;
+use xpute_runtime::clock::now;
+use xpute_runtime::global::Global;
 
 pub struct DemandName(pub Category, pub u64);
 

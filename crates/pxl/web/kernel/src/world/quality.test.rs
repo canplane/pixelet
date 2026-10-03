@@ -102,7 +102,7 @@ fn asking_about_the_step_in_force_moves_as_the_whole_ladder_does() {
 /// twice as wide; finer is held at `SPLIT`.
 #[test]
 fn the_target_is_the_screens_cell_and_never_finer_than_the_criterion() {
-    let _g = crate::global::serial();
+    let _g = crate::serial();
     let v = view();
     let kept = (v.height, v.fov);
     v.fov = 50.0;

@@ -15,7 +15,6 @@ use pxl_spec::asset::ingested::Asset;
 use xpute_runtime::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 
 use crate::abi::host::{op, root};
-use crate::global::Global;
 use crate::host::host_record;
 use crate::io::demand::Ask;
 use crate::io::file::{self, Owner};
@@ -26,6 +25,7 @@ use crate::world::change::{request_world_tick, world_edge};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::abi::handle::Slots;
+use xpute_runtime::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LoadKind {

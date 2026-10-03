@@ -15,13 +15,13 @@ use xpute_core::status::error::MarshalError;
 use xpute_runtime::mem::base::off_of_slice;
 use xpute_runtime::mem::section::span_of;
 
-use crate::global::Global;
-use crate::host::now;
 use crate::io::demand::{DemandKey, Phases};
 use crate::mem::fixed::{lane, range, Range};
 use crate::sched::profiler::log::PENDING;
 use crate::sched::profiler::spec::{FRAME, GPU_SPAN_NAMES, LIMITS, PHASE_NAMES, SUMMARY, TASK, WORST};
-use crate::sched::tick::PHASES;
+use xpute_runtime::clock::now;
+use xpute_runtime::global::Global;
+use xpute_runtime::sched::tick::PHASES;
 
 pub use crate::sched::profiler::spec::OutcomeName as Outcome;
 pub use crate::sched::profiler::spec::CENSUS_TAGS;

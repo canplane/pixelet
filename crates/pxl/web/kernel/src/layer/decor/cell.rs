@@ -20,7 +20,6 @@ use xpute_runtime::mem::heap::alloc;
 use xpute_runtime::sched::frame_budget::FrameBudget;
 
 use crate::control::camera::controller::units_per_px_at;
-use crate::global::Global;
 use crate::layer::decor::build::{decor_gone_px, decor_sprite_px, variant_extent, DecorBuild, DecorHide, Ground, Placed};
 use crate::layer::decor::instance::{decor_groups, DecorScratch, GroupLanes};
 use crate::layer::decor::kind::{Kind, KINDS};
@@ -35,6 +34,7 @@ use crate::world::observation::{eye, observation};
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer;
 use pxl_spec::bake::format::Terrain;
+use xpute_runtime::global::Global;
 use xpute_runtime::mem::heap::free;
 
 struct Block {

@@ -4,13 +4,11 @@
 //! and runs the table's pass; in the report phase it hands the frame's
 //! numbers to the profiler.
 
-use pxl_spec::space::v3::sub3;
 use pxl_spec::space::pvf3::ivec;
+use pxl_spec::space::v3::sub3;
 use xpute_core::math::scalar::round;
 use xpute_runtime::sched::edge::{notified, yield_if_spent};
 
-use crate::global::Global;
-use crate::host::now;
 use crate::io::sched::pending_count;
 use crate::kernel::{kernel, with_world};
 use crate::layer::decor::build::DecorHide;
@@ -26,6 +24,8 @@ use crate::world::frame::view::{globe_anchor_local, view, view_resize};
 use crate::world::pyramid::Layer;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_page::PoiPage;
+use xpute_runtime::clock::now;
+use xpute_runtime::global::Global;
 
 const BOX_TRIANGLES: f64 = 12.0;
 

@@ -1,7 +1,7 @@
 // pxl-kernel/shell/map_store.rs
 
 pub use crate::abi::cmd::MapStatus;
-use crate::global::Global;
+use xpute_runtime::global::Global;
 
 #[derive(Default)]
 pub struct MapStore {

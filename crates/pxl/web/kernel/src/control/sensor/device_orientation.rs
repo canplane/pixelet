@@ -7,9 +7,9 @@
 use crate::abi::cmd::Message;
 
 use crate::control::sensor::store::{device_orientation_store, PermissionAnswer, Pose};
-use crate::global::Global;
-use crate::host::now;
 use crate::world::change::wake_at;
+use xpute_runtime::clock::now;
+use xpute_runtime::global::Global;
 
 /// Orientation has no Permissions API, so revocation cannot be pushed; a long
 /// gap while tracking is taken as loss. Only valid where the sensor talks

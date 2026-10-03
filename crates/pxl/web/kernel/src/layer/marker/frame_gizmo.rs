@@ -11,13 +11,13 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::{floor3n, V3};
 
 use crate::control::camera::controller::{azimuth, dist};
-use crate::global::Global;
 use crate::kernel::kernel;
 use crate::world::access::Access;
 use crate::world::change::request_world_tick;
 use crate::world::frame::coord::{canonical_to_local, local_height};
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
+use xpute_runtime::global::Global;
 
 const BLACK: V3 = [0.0, 0.0, 0.0];
 const RED: V3 = [1.0, 0.0, 0.0];

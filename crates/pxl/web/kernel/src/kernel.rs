@@ -3,10 +3,10 @@
 use pxl_render::mesh::paint::object::adapter::Painter;
 use pxl_render::mesh::volume::Volumes;
 
-use crate::global::Global;
 use crate::layer::object::store::Store;
 use crate::world::change::Revisions;
 use crate::world::chunk::table::Scheduler;
+use xpute_runtime::global::Global;
 
 pub struct Kernel {
     pub volumes: Option<Volumes>,

@@ -148,7 +148,7 @@ fn converge_on<S: Serve>(pyramid: &mut Pyramid<PoiPage>, observation: fn() -> Ob
 
 #[test]
 fn the_view_converges_exact_with_the_reach_prefetched_under_every_order() {
-    let _serial = crate::global::serial();
+    let _serial = crate::serial();
     let reach = Reach { slack: 1.0, margin: 0.0 };
     for allowance in [0, 16, u32::MAX] {
         converge(Policy::standard(), &reach, allowance);

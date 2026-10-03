@@ -23,12 +23,12 @@ use pxl_spec::space::pvf3::REACH;
 use pxl_spec::space::pyramid::{chunk_span_of, LevelPage};
 use pxl_spec::space::v3::Aabb;
 
-use crate::global::Global;
 use crate::world::access::Access;
 use crate::world::chunk::mesh_slot::POOLS;
 use crate::world::observation::{heights_revision, observation, Known, Order};
 use crate::world::observer::{cell_angle, EdgeRays, Footprint, Lens, Sight};
 use pxl_spec::space::observation::Requirement;
+use xpute_runtime::global::Global;
 
 use super::chunk::Chunk;
 use super::Layer as _;

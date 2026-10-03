@@ -9,11 +9,11 @@ pub mod placement;
 use pxl_spec::bake::poi_badge::KIND_CATEGORIES;
 use pxl_spec::bake::poi_page::{self, PoiPage};
 
-use crate::global::Global;
 use crate::io::demand::{Category, Phases};
 use crate::sched::profiler::record::Failure;
 use crate::shell::setting::store::settings_store;
 use crate::world::pyramid::{Layer, Pyramid};
+use xpute_runtime::global::Global;
 
 static POI: Global<Pyramid<PoiPage>> = Global::new();
 

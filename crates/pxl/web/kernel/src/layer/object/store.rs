@@ -36,8 +36,7 @@ use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, T
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
 use crate::abi::host::{root, storage, STORAGE_KEYS};
-use crate::global::Global;
-use crate::host::{now, turn};
+use crate::host::turn;
 use crate::io::file::{self, Owner};
 use crate::kernel::kernel;
 use crate::layer::decor::build::{scatters_at, Draw};
@@ -46,6 +45,8 @@ use crate::world::change::{bump_world, wake_at, world_changes, world_edge, OBJEC
 use crate::world::chunk::source::{band_written, chunk_sources_changed};
 use crate::world::frame::coord::local_world_to_canonical;
 use xpute_core::status::bug::OrBug;
+use xpute_runtime::clock::now;
+use xpute_runtime::global::Global;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum EntryKind {

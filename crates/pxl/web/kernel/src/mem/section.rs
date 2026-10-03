@@ -12,7 +12,7 @@
 
 use xpute_runtime::mem::section::{align_up, Section};
 
-use crate::global::Global;
+use xpute_runtime::global::Global;
 
 // Shared with the shell and the linker through mem.json.
 pub use crate::mem::spec::{DESKTOP_BYTES, GLOBAL_BASE, MIN_HEAP_BYTES, PAGE_BYTES, PHONE_BYTES, REGION_BYTES};

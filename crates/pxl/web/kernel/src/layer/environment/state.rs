@@ -12,8 +12,7 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::{len3, V3};
 
 use crate::control::navigation::bootstrap::FALLBACK_G4326;
-use crate::global::Global;
-use crate::host::{now, wall_now};
+use crate::host::wall_now;
 use crate::kernel::kernel;
 use crate::layer::environment::celestial_position::{equatorial_to_local, j2000_days, moon_position, sun_position};
 use crate::layer::environment::config::light_cfg;
@@ -23,6 +22,8 @@ use crate::layer::environment::theme_clock::theme_key;
 use crate::world::change::{request_world_tick, wake_at};
 use crate::world::chunk::table::Frame;
 use crate::world::frame::view::globe_anchor;
+use xpute_runtime::clock::now;
+use xpute_runtime::global::Global;
 
 // The sky moves with the wall clock and nothing else asks for a frame while
 // the view is still, so the clock asks for one this often.

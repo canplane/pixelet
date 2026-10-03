@@ -1,6 +1,6 @@
 // pxl-kernel/layer/character/store.rs
 
-use crate::global::Global;
+use xpute_runtime::global::Global;
 
 /// Whether the companion's models have loaded: a live, unpersisted signal
 /// for the map toast. A fresh figure always starts unloaded.

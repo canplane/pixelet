@@ -5,12 +5,12 @@ use std::collections::{HashMap, HashSet};
 use pxl_spec::bake::poi_page::{kind_color, kind_icon, Place, PoiPage};
 use pxl_spec::space::pyramid::LevelPage;
 
-use crate::global::Global;
 use crate::layer::billboard::sheet::billboard_sheet;
 use crate::text::text_width;
 use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::pass::badges::{badge_width, BADGE_FONT};
 use pxl_render::gpu::surface::DPR_MAX;
+use xpute_runtime::global::Global;
 
 use crate::world::pyramid::Layer;
 use xpute_core::status::bug::OrBug;

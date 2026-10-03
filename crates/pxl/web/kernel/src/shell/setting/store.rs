@@ -5,16 +5,15 @@
 //! stored default would be a decision nobody made, and changing it in source
 //! would then reach only people with empty storage.
 
-
 use xpute_core::codec::json::{read_json, JsonKind};
 
 use crate::abi::host::{root, storage, STORAGE_KEYS};
-use crate::global::Global;
 use crate::host::development;
 use crate::io::file;
 use crate::sched::profiler::log::profiler_follow;
-pub use crate::shell::setting::schema_spec::{AoMode, OrbitObstacleMode, CameraMode, ResolutionMode, SettingKey, SettingKind, Settings};
+pub use crate::shell::setting::schema_spec::{AoMode, CameraMode, OrbitObstacleMode, ResolutionMode, SettingKey, SettingKind, Settings};
 use crate::world::chunk::source::chunk_sources_changed;
+use xpute_runtime::global::Global;
 
 /// A dev-only setting outside a development build is not offered: storage
 /// outlives the build, and a value with no row left to turn it off would stay

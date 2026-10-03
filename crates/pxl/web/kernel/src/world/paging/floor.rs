@@ -11,7 +11,7 @@
 use pxl_spec::space::lod::{fault_radius, pages_within, FAULT_PAGES};
 use pxl_spec::space::pyramid::{LevelPage, TOP_LEVEL};
 
-use crate::global::Global;
+use xpute_runtime::global::Global;
 
 static DECLARED: Global<Option<u32>> = Global::new();
 

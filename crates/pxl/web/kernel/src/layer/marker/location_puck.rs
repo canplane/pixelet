@@ -12,7 +12,6 @@ use pxl_spec::space::v3::{add3, center3n, floor3n, V3};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 
-use crate::global::Global;
 use crate::kernel::{kernel, with_world};
 use crate::layer::environment::fog::view_reach;
 use crate::layer::environment::theme::Theme;
@@ -21,6 +20,7 @@ use crate::world::access::Access;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::table::Frame;
 use crate::world::observation::heights_revision;
+use xpute_runtime::global::Global;
 
 // A world-space footprint (4u), independent of U_PER_CELL; the .707 is a
 // one-cell diagonal correction.

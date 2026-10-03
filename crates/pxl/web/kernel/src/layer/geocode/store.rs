@@ -15,7 +15,7 @@ use xpute_core::status::error::MarshalError;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{free, Block};
 
-use crate::global::Global;
+use xpute_runtime::global::Global;
 
 /// The block goes back when the packet drops, since the `'static` view cannot
 /// keep its own lifetime.

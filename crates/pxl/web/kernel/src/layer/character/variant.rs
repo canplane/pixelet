@@ -4,9 +4,9 @@
 
 use pxl_spec::asset::ingested::Asset;
 
-use crate::global::Global;
 use crate::io::load::{load_gltf, Load};
 use crate::layer::model::asset::{register_model, ModelHandle};
+use xpute_runtime::global::Global;
 
 use crate::layer::character::variant_spec::groups::{person, pet};
 pub use crate::layer::character::variant_spec::Group;

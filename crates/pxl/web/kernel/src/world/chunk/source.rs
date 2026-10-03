@@ -11,10 +11,10 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, TOP_LEVEL};
 
-use crate::global::Global;
 use crate::kernel::with_world;
 use crate::world::change::{bump_world, world_changes, TIERS_CHUNK};
 use crate::world::pyramid::chunk::Chunk as PyramidChunk;
+use xpute_runtime::global::Global;
 
 static SOURCES_CHANGED: Global<bool> = Global::new();
 

@@ -12,7 +12,6 @@ use crate::control::camera::approach::damp_alpha;
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::store::{camera_store, CameraStatus};
 use crate::control::navigation::support::over;
-use crate::global::Global;
 use crate::io::load::{load_image, Load};
 use crate::kernel::{kernel, with_world};
 use crate::layer::character::chat_bubble::chat_bubble_step;
@@ -27,6 +26,7 @@ use crate::shell::setting::store::settings_store;
 use crate::world::access::Access;
 use crate::world::change::wake_at;
 use crate::world::frame::coord::{local_height, local_world_to_canonical};
+use xpute_runtime::global::Global;
 
 pub const ACTORS_MAX: usize = Group::ALL.len();
 
@@ -137,7 +137,7 @@ impl Figure {
         }
         // Wall seconds: the tick's elapsed is clamped per delta, which stretches
         // these spans across a gap where the world did not tick.
-        let now = crate::host::now() / 1000.0;
+        let now = xpute_runtime::clock::now() / 1000.0;
         let dragging = camera_store().camera_status == CameraStatus::Drag;
         let released = self.was_dragging && !dragging;
         let gap = |a: [f64; 2], b: [f64; 2]| libm::hypot(a[0] - b[0], a[1] - b[1]);

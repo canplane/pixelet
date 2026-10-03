@@ -6,11 +6,12 @@
 
 use pxl_spec::space::adapter::epsg4326::{self};
 
-use crate::global::Global;
-use crate::host::{local_time, now};
+use crate::host::local_time;
 use crate::kernel::kernel;
 use crate::layer::environment::theme::{get_theme_key, Theme};
 use crate::world::change::wake_at;
+use xpute_runtime::clock::now;
+use xpute_runtime::global::Global;
 
 const THEME_CHECK_INTERVAL_MS: f64 = 60_000.0;
 

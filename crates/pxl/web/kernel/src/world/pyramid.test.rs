@@ -75,7 +75,7 @@ fn crowded(p: LevelPage) -> PoiPage {
 /// ground; nothing held or settled is. Nothing of how the view is drawn is an input.
 #[test]
 fn the_demand_is_the_estimators_and_every_fault_in_it_is_asked_for() {
-    let _serial = crate::global::serial();
+    let _serial = crate::serial();
     let o = the_observation();
     let mut pyramid = Pyramid::<PoiPage>::default();
     hold(&mut pyramid, named(&o).into_iter().filter(|p| p.level >= 3 || ivec::X(p.page) % 2 == 0).map(|p| (p, crowded(p))));
@@ -100,7 +100,7 @@ fn the_demand_is_the_estimators_and_every_fault_in_it_is_asked_for() {
 
 #[test]
 fn ground_a_page_settles_is_never_asked_for() {
-    let _serial = crate::global::serial();
+    let _serial = crate::serial();
     let o = the_observation();
     let mut pyramid = Pyramid::<PoiPage>::default();
     let mut top: Vec<LevelPage> = named(&o).into_iter().map(|p| (p.level..TOP_LEVEL).fold(p, |q, _| q.parent())).collect();
@@ -118,7 +118,7 @@ fn ground_a_page_settles_is_never_asked_for() {
 /// through the eye, within the sphere the frustum is tested with.
 #[test]
 fn ground_outside_the_frustum_is_not_demanded() {
-    let _serial = crate::global::serial();
+    let _serial = crate::serial();
     let [x, y, z] = [123_456.7, -98_765.4, 400.0];
     // One plane, x ≥ the eye's, and five that pass everything.
     let mut planes = [0.0; 24];
@@ -139,7 +139,7 @@ fn ground_outside_the_frustum_is_not_demanded() {
 
 #[test]
 fn observing_a_moving_eye_allocates_nothing_once_it_has_held_the_most() {
-    let _serial = crate::global::serial();
+    let _serial = crate::serial();
     let mut pyramid = Pyramid::<PoiPage>::default();
     let path = |k: u32| at([30_000.0 + 97.0 * k as f64, -17_000.0 + 41.0 * k as f64, HEIGHT + (k % 7) as f64 * 150.0], None);
     let walk = |pyramid: &mut Pyramid<PoiPage>| {

@@ -19,13 +19,13 @@ use pxl_render::look::globe::MERCATOR_RADIUS_U;
 use pxl_spec::bake::published::PUBLISHED_TOP_LEVEL;
 use pxl_spec::space::lod::{Tau, SPLIT};
 
-use crate::global::Global;
 use crate::kernel::kernel;
 use crate::param;
 use crate::world::chunk::frontier::{Need, Slots, HEADROOM};
 use crate::world::chunk::mesh_slot::{Pool, ARENA, POOLS};
 use crate::world::frame::view::view;
 use crate::world::pyramid::domain::{self, cover_pieces};
+use xpute_runtime::global::Global;
 
 const _: () = assert!(param::QUALITY_WAIT_MS > 0.0, "a policy asked twice at one instant would step finer twice");
 const _: () = assert!(param::TAU_STEP > 1.0, "a step that is not coarser");
@@ -155,7 +155,7 @@ pub fn step(stop: &dyn Fn() -> bool) {
         d.need(k).is_some_and(|n| fits(n, ARENA, HEADROOM, if roomy { spare } else { [0; POOLS] }))
     });
     q.star = star;
-    let at = q.smooth.follow(star, roomy, param::QUALITY_WAIT_MS, crate::host::now());
+    let at = q.smooth.follow(star, roomy, param::QUALITY_WAIT_MS, xpute_runtime::clock::now());
     domain::put(at);
 }
 

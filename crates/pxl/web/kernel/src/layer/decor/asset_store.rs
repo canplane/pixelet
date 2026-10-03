@@ -7,12 +7,12 @@
 use pxl_spec::asset::ingested::Asset;
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
-use crate::global::Global;
 use crate::host::heap_stat;
 use crate::io::load::{load_failed, load_gltf, load_image, Load};
 use crate::layer::decor::kind::{Kind, KINDS};
 use crate::layer::model::asset::register_model;
 use crate::world::change::{request_world_tick, world_edge};
+use xpute_runtime::global::Global;
 
 #[derive(Clone)]
 pub struct KindAssets {

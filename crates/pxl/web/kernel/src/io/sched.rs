@@ -14,8 +14,6 @@
 
 use core::cmp::Ordering;
 
-use crate::global::Global;
-use crate::host::now;
 use crate::io::demand::{Ask, Category, DemandKey, Phases};
 use crate::io::load::LOADS;
 use crate::io::policy::Policy;
@@ -23,6 +21,8 @@ use crate::sched::profiler::record::{profiler_record, Failure, Outcome, TaskReco
 use crate::world::paging::FRAMES;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
+use xpute_runtime::clock::now;
+use xpute_runtime::global::Global;
 
 use crate::param::MAX_CREDITS;
 

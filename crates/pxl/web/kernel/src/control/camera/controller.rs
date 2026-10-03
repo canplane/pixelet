@@ -14,13 +14,13 @@ use crate::control::camera::config::camera_cfg::view::{DEFAULT_AZIMUTH, DEFAULT_
 use crate::control::camera::orbit::orbit;
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
 use crate::control::navigation::support::{is_unknown, pan_to, unknown_z};
-use crate::global::Global;
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::{settings_store, CameraMode};
 use crate::world::change::request_world_tick;
 use crate::world::frame::coord::{local_world_to_canonical, local_world_to_canonical_nearest};
 use crate::world::frame::view::{view, view_compose, ObserverPose};
 use xpute_core::math::scalar::wrap;
+use xpute_runtime::global::Global;
 
 // A look in spherical coordinates about the world's Z, θ = polar and
 // φ = azimuth: θ from straight down, clamped to [0, π]; φ from north toward

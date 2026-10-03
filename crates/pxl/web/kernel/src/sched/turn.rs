@@ -12,8 +12,6 @@ use crate::control::navigation::follow_mode::follow_mode_step;
 use crate::control::navigation::store::{map_navigation, map_navigation_step};
 use crate::control::sensor::device_orientation::{orientation_watchdog_step, OrientationPlatform};
 use crate::control::sensor::geolocation::geolocation_step;
-use crate::global::Global;
-use crate::host::now;
 use crate::io::sched::{pump, set_credits};
 use crate::layer::character::companion::{companion_step, CompanionProps};
 use crate::layer::decor::asset_store::decor_assets_wanted;
@@ -25,13 +23,16 @@ use crate::layer::marker::hover_cursor::hover_cursor_step;
 use crate::layer::marker::location_puck::location_puck_step;
 use crate::layer::terrain::page::terrain_step;
 use crate::sched::profiler::spec::EffectName;
-use crate::sched::tick::{on_tick, run_tick, StepName, TickContext, TickReport, TickState, COSMETIC, INTERACTION, REPORT, VISIBLE};
+use crate::sched::tick::{on_tick, run_tick, StepName, TickContext, TickState};
 use crate::shell::setting::store::settings_store;
 use crate::text::text_rise;
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::source::chunk_sources_step;
 use crate::world::chunk::stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms, set_turn_timing, take_draw};
 use crate::world::frame::view::view;
+use xpute_runtime::clock::now;
+use xpute_runtime::global::Global;
+use xpute_runtime::sched::tick::{TickReport, COSMETIC, INTERACTION, REPORT, VISIBLE};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Platform {

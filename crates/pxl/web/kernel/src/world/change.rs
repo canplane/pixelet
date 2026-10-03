@@ -11,8 +11,8 @@ use fnv::FnvBuildHasher;
 
 use xpute_runtime::sched::edge::Edge;
 
-use crate::global::Global;
 use crate::kernel::kernel;
+use xpute_runtime::global::Global;
 
 pub const OBJECT_COLUMN: WorldTopic = 0;
 /// Moved by a write to any column the chunk draws, so a chunk reads one

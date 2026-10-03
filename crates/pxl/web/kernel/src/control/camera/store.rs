@@ -4,8 +4,8 @@ use xpute_core::math::scalar::clamp;
 
 use crate::control::camera::config::camera_cfg::view::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR, MAX_DIST, MIN_DIST};
 use crate::control::camera::controller::look_domain;
-use crate::global::Global;
 use crate::world::change::request_world_tick;
+use xpute_runtime::global::Global;
 
 fn norm_dist(dist: f64) -> f64 {
     clamp(dist, MIN_DIST, MAX_DIST)

@@ -4,7 +4,6 @@
 //! drawn chunk, read from the page that settles that ground,
 //! standing at a z16 cell's center on the surface a ray down meets first.
 
-use crate::global::Global;
 use crate::layer::billboard::batch::BillboardBatch;
 use crate::layer::billboard::field::billboard_instance;
 use crate::layer::billboard::selection::select_visible_billboards;
@@ -18,6 +17,7 @@ use crate::world::frame::view::{ndc_to_px, view};
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer;
 use pxl_render::asset::atlas::NO_SLOT;
+use xpute_runtime::global::Global;
 
 use pxl_spec::bake::poi_page::{PoiPage, POI_LATTICE};
 use pxl_spec::space::pvf3::pvf3::Pvf3;

@@ -13,8 +13,8 @@ use pxl_spec::space::pyramid::{Folds, PAGE_CELLS};
 use xpute_core::math::rng::SplitMix64;
 
 use super::*;
-use crate::global::serial;
 use crate::layer::object::store::{At, Write};
+use crate::serial;
 use crate::world::paging::{Candidate, Victim};
 
 const PADDED: usize = ELE_PADDED_SPAN as usize;

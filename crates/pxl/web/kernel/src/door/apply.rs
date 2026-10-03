@@ -311,7 +311,7 @@ fn profiler_read(window_ms: f64) -> u32 {
     use crate::sched::profiler::record::{profiler_frames, profiler_tasks, profiler_worst};
     use crate::sched::profiler::spec::READ;
     // On the heap, not a static: a native build's statics are outside the shell-readable memory.
-    static WORDS: crate::global::Global<Box<[u32; READ::WORDS as usize]>> = crate::global::Global::new();
+    static WORDS: xpute_runtime::global::Global<Box<[u32; READ::WORDS as usize]>> = xpute_runtime::global::Global::new();
     let summary = crate::sched::profiler::summary::profiler_summarize(window_ms);
     let (frames, tasks, worst) = (profiler_frames(), profiler_tasks(), profiler_worst());
     let w = WORDS.get(|| Box::new([0; READ::WORDS as usize]));
@@ -331,7 +331,7 @@ fn profiler_read(window_ms: f64) -> u32 {
 fn profiler_take(s: &mut State) -> u32 {
     use crate::sched::profiler::spec::LOG;
     // On the heap, as READ's words are.
-    static WORDS: crate::global::Global<Box<[u32; LOG::WORDS as usize]>> = crate::global::Global::new();
+    static WORDS: xpute_runtime::global::Global<Box<[u32; LOG::WORDS as usize]>> = xpute_runtime::global::Global::new();
     let (tasks, frames) = crate::sched::profiler::log::profiler_log_rows();
     let w = WORDS.get(|| Box::new([0; LOG::WORDS as usize]));
     w[LOG::tasks_at as usize] = off_of_slice(&raw const *tasks) as u32;
