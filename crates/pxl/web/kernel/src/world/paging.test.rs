@@ -12,7 +12,7 @@ use pxl_spec::bake::poi_page::{Place, PoiPage, POI_LATTICE};
 use super::*;
 use crate::io::demand::Category;
 use crate::io::policy::Policy;
-use crate::io::sched::{IoScheduler, Rank, Serve};
+use crate::io::sched::{RequestScheduler, Rank, Serve};
 use crate::layer::environment::fog::reach_at;
 use crate::sched::profiler::record::{Failure, Outcome};
 use crate::world::prefetch::{Prefetch, Reach};
@@ -102,7 +102,7 @@ fn converge<S: Serve>(serve: S, prefetch: &impl Prefetch, allowance: u32) -> Pyr
 }
 
 fn converge_on<S: Serve>(pyramid: &mut Pyramid<PoiPage>, observation: fn() -> Observation, serve: S, prefetch: &impl Prefetch, allowance: u32) {
-    let mut sched = IoScheduler::new(serve);
+    let mut sched = RequestScheduler::new(serve);
     sched.set_credits(4);
     let mut out: Vec<u64> = Vec::new();
     let mut resident: HashSet<LevelPage> = HashSet::new();

@@ -1,6 +1,6 @@
 // pxl-kernel/io/sched.rs
 
-//! The kernel's I/O scheduler: what is wanted (`desired`, replaced whole per
+//! The kernel's request scheduler: what is wanted (`desired`, replaced whole per
 //! category each turn) and what is out (`attempt`). Ordering, intake and
 //! retry waits are the `Serve` policy's.
 //!
@@ -98,7 +98,7 @@ impl Placed {
     }
 }
 
-pub struct IoScheduler<S> {
+pub struct RequestScheduler<S> {
     serve: S,
     desired: Box<[Option<Wanted>]>,
     /// A slot's index and generation are the key the host holds; a key is valid
@@ -115,9 +115,9 @@ const fn key_of(slot: usize, generation: u32) -> u64 {
     (slot as u64) << 32 | generation as u64
 }
 
-impl<S: Serve> IoScheduler<S> {
-    pub fn new(serve: S) -> IoScheduler<S> {
-        IoScheduler {
+impl<S: Serve> RequestScheduler<S> {
+    pub fn new(serve: S) -> RequestScheduler<S> {
+        RequestScheduler {
             serve,
             desired: vec![None; DESIRED].into_boxed_slice(),
             attempt: [None; MAX_CREDITS as usize],
@@ -320,10 +320,10 @@ fn record(a: &Attempt, at: f64, outcome: Outcome, phases: Option<Phases>, fail: 
     });
 }
 
-static SCHED: Global<IoScheduler<Policy>> = Global::new();
+static SCHED: Global<RequestScheduler<Policy>> = Global::new();
 
-fn sched() -> &'static mut IoScheduler<Policy> {
-    SCHED.get(|| IoScheduler::new(Policy::standard()))
+fn sched() -> &'static mut RequestScheduler<Policy> {
+    SCHED.get(|| RequestScheduler::new(Policy::standard()))
 }
 
 pub fn declare(category: Category, wanted: &[(u64, Ask)]) {

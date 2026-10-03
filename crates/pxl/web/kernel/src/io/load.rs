@@ -1,7 +1,7 @@
 // pxl-kernel/io/load.rs
 
 //! Shared loading of models and images, so each asset is fetched and parsed
-//! at most once. An asset is a want in the I/O scheduler like a page, sharing
+//! at most once. An asset is a want in the request scheduler like a page, sharing
 //! its credits, and stays wanted until it arrives.
 //!
 //! A read that did not arrive is retried; bytes that do not parse are final,
@@ -246,7 +246,7 @@ pub async fn gltf_task() {
     }
 }
 
-/// The transport failed, not the asset: it is wanted again, and the I/O scheduler
+/// The transport failed, not the asset: it is wanted again, and the request scheduler
 /// decides the wait.
 pub fn load_rejected(key: u64) {
     let Some((kind, load)) = ended(key, Outcome::error) else { return };

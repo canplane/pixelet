@@ -1,6 +1,6 @@
 // pxl-kernel/io/sched.test.rs
 //
-// What the I/O scheduler keeps whatever its policy. The policy here orders by why
+// What the request scheduler keeps whatever its policy. The policy here orders by why
 // then distance and waits 2 s after a failure.
 
 use super::*;
@@ -29,8 +29,8 @@ impl Serve for ByWhy {
     }
 }
 
-fn scheduler() -> IoScheduler<ByWhy> {
-    let mut l = IoScheduler::new(ByWhy);
+fn scheduler() -> RequestScheduler<ByWhy> {
+    let mut l = RequestScheduler::new(ByWhy);
     l.set_credits(2);
     l
 }
@@ -42,23 +42,23 @@ fn ask(why: Why, near: f64) -> Ask {
     }
 }
 
-fn started<S: Serve>(l: &mut IoScheduler<S>) -> Vec<u64> {
+fn started<S: Serve>(l: &mut RequestScheduler<S>) -> Vec<u64> {
     let mut out = Vec::new();
     l.take_started(|key, _, _| out.push(key));
     out
 }
 
-fn stopped<S: Serve>(l: &mut IoScheduler<S>) -> Vec<u64> {
+fn stopped<S: Serve>(l: &mut RequestScheduler<S>) -> Vec<u64> {
     let mut out = Vec::new();
     l.take_stops(|key| out.push(key));
     out
 }
 
-fn ok<S: Serve>(l: &mut IoScheduler<S>, key: u64, at: f64) {
+fn ok<S: Serve>(l: &mut RequestScheduler<S>, key: u64, at: f64) {
     l.settle(key, Outcome::ok, None, Failure::default(), at);
 }
 
-fn failed<S: Serve>(l: &mut IoScheduler<S>, key: u64, at: f64) {
+fn failed<S: Serve>(l: &mut RequestScheduler<S>, key: u64, at: f64) {
     let fail = Failure {
         errno: Errno::ENETUNREACH as i32,
         ..Failure::default()
@@ -167,7 +167,7 @@ impl Serve for Restless {
 
 #[test]
 fn every_want_is_served_at_rest() {
-    let mut l = IoScheduler::new(Restless);
+    let mut l = RequestScheduler::new(Restless);
     l.set_credits(2);
     let mut wanted: Vec<(u64, Ask)> = (0..12).map(|k| (k, ask(Why::Fault, (k * 7 % 12) as f64))).collect();
     let mut out: Vec<u64> = Vec::new();

@@ -138,7 +138,7 @@ The rules below keep it one thing. They come from finding it several.
   hierarchy, bounds, window, schedule or residency of its own: which pages
   are wanted is the observation's demand (`world/pyramid.rs` `observe`),
   which are held is residency's (`world/paging.rs`), when they are fetched
-  is the I/O scheduler's (`io/sched.rs`), and a page is folded only by the bake's
+  is the request scheduler's (`io/sched.rs`), and a page is folded only by the bake's
   `build` (`pxl-geo-bake pyramid.rs`). Layers share mechanics, not data —
   terrain folds by majority and average, POI by sum.
 - **The view is 3D; storage is not.** A chunk is a cube, addressed by its

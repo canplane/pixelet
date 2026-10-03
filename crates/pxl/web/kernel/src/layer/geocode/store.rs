@@ -7,7 +7,7 @@
 //!
 //! A 404 is an answer: the bake wrote no object, so no page under it is in
 //! any place, and only moving to another group asks again. A failed fetch is
-//! not one; its want waits out the I/O scheduler's retry.
+//! not one; its want waits out the request scheduler's retry.
 
 use pxl_spec::bake::place_page::{open_place_dict, open_place_group, PlaceGroupView, PlacesView};
 use pxl_spec::space::pvf3::ivec::IVec;

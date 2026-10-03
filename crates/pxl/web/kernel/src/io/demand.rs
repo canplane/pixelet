@@ -1,6 +1,6 @@
 // pxl-kernel/io/demand.rs
 
-//! One unit of deferrable I/O for the I/O scheduler (io/sched.rs). The scheduler
+//! One deferrable read for the request scheduler (io/sched.rs). The scheduler
 //! orders and cancels; the shell does the transport.
 
 use pxl_spec::bake::published::BakeKind;
