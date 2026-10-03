@@ -12,6 +12,7 @@ import { alpha, chrome, color, hairline, sectionTitle, textScale, textStyle, wei
 import { LABEL } from "@platform/palette.ts";
 
 const INSET = 12;
+const GROUP_BORDER = 1;
 
 const COST_COLOR: Record<SettingCost, string> = {
   low: color.costLow,
@@ -79,9 +80,11 @@ export function SettingGroup(props: SettingGroupProps) {
   const { label, description, cost, dev, children } = props;
   return (
     <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[styles.group, styles.bleed]}>
-      <View style={styles.legend}>
-        <Text maxFontSizeMultiplier={textScale.chrome} style={styles.legendText}>{label}</Text>
-        <Badges cost={cost} dev={dev} />
+      <View style={styles.legendLine}>
+        <View style={styles.legend}>
+          <Text maxFontSizeMultiplier={textScale.chrome} style={styles.legendText}>{label}</Text>
+          <Badges cost={cost} dev={dev} />
+        </View>
       </View>
       {description && <Text style={[settingText.small, styles.groupDescription]}>{description}</Text>}
       <View style={styles.answers}>{children}</View>
@@ -161,17 +164,10 @@ const styles = StyleSheet.create({
   badge: { height: 16, justifyContent: "center", borderRadius: 8, paddingHorizontal: 4 },
   badgeText: { ...textStyle.caption2, fontSize: 9, lineHeight: 10, letterSpacing: 0.4 },
 
-  group: { marginTop: 16, marginBottom: 12, borderWidth: 1, borderColor: hairline, borderRadius: 12, padding: 4, paddingTop: 12 },
-  legend: {
-    position: "absolute",
-    top: 1 - textStyle.caption.lineHeight / 2,
-    left: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 8,
-    backgroundColor: color.ground,
-  },
+  group: { marginTop: 16, marginBottom: 12, borderWidth: GROUP_BORDER, borderColor: hairline, borderRadius: 12, padding: 4, paddingTop: 12 },
+  // The border's own line, so the legend centers on it at any text size.
+  legendLine: { position: "absolute", top: -GROUP_BORDER, left: 8, height: GROUP_BORDER, flexDirection: "row", alignItems: "center" },
+  legend: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 8, backgroundColor: color.ground },
   legendText: { ...textStyle.caption, fontWeight: weight.medium, color: LABEL.primary },
   groupDescription: { paddingHorizontal: INSET, paddingTop: 4, paddingBottom: 4 },
   answers: { gap: 4 },

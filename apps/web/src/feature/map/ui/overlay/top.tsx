@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: chrome.inset + chrome.control + chrome.controlGap,
-    height: chrome.control,
+    minHeight: chrome.control,
     zIndex: 50,
     alignItems: "center",
     justifyContent: "center",

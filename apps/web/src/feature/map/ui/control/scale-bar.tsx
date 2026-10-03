@@ -1,6 +1,6 @@
 // @pxl/web/feature/map/ui/control/scale-bar.tsx
 
-import { StyleSheet } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { G, Path, Svg } from "react-native-svg";
 
 import type { f64 } from "@xpute/core/abi/word.ts";
@@ -43,8 +43,6 @@ export function MapScaleBar({ show }: { show: boolean }) {
   const tick = (f: f64, px: f64) => `M${at(f)} ${PAD_PX}V${PAD_PX + px}`;
   const d = `M${left} ${PAD_PX + TICK_PX}V${PAD_PX}H${right}V${PAD_PX + TICK_PX}` + tick(0.5, TICK_PX) + tick(0.25, QUARTER_TICK_PX) + tick(0.75, QUARTER_TICK_PX);
   const svgHeight = PAD_PX + TICK_PX + PAD_PX;
-  const line = halo.reach + styles.label.lineHeight + LABEL_GAP_PX;
-  const height = line + TICK_PX + PAD_PX;
 
   return (
     <Presence
@@ -53,10 +51,12 @@ export function MapScaleBar({ show }: { show: boolean }) {
       exit={{ opacity: 0 }}
       transition={SETTLE}
       exitTransition={LEAVE}
-      style={[styles.root, { paddingBottom: 2 * line - height }]}
+      style={styles.root}
     >
-      <HaloText style={styles.label}>{label}</HaloText>
-      <Svg width={width} height={svgHeight} viewBox={`0 0 ${width} ${svgHeight}`} style={styles.bar}>
+      <View style={styles.above}>
+        <HaloText style={styles.label}>{label}</HaloText>
+      </View>
+      <Svg width={width} height={svgHeight} viewBox={`0 0 ${width} ${svgHeight}`}>
         {haloRings.map((px) => (
           <G key={px} opacity={halo.ring}>
             <Path d={d} stroke={color.black} strokeWidth={LINE_PX + 2 * px} fill="none" strokeLinecap="square" />
@@ -69,7 +69,8 @@ export function MapScaleBar({ show }: { show: boolean }) {
 }
 
 const styles = StyleSheet.create({
-  root: { alignItems: "center" },
+  // As tall below the line as above it, so the line is the strip's middle.
+  root: { alignItems: "center", paddingTop: TICK_PX },
+  above: { position: "absolute", left: 0, right: 0, bottom: PAD_PX + TICK_PX + LABEL_GAP_PX - halo.reach, alignItems: "center" },
   label: { ...textStyle.caption2, fontWeight: weight.semibold, letterSpacing: 0.8, fontVariant: ["tabular-nums"], color: color.white },
-  bar: { marginTop: LABEL_GAP_PX - halo.reach - PAD_PX },
 });

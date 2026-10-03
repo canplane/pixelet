@@ -27,7 +27,9 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
           /* Sized to the label's heavier weight, so a pick never rewraps the row. */
         }
         <Text aria-hidden maxFontSizeMultiplier={textScale.chrome} style={[styles.chipText, styles.chipTextOn, styles.sizer]}>{label}</Text>
-        <Text maxFontSizeMultiplier={textScale.chrome} style={[styles.chipText, styles.label, active && styles.chipTextOn]}>{label}</Text>
+        <View style={styles.label}>
+          <Text maxFontSizeMultiplier={textScale.chrome} style={[styles.chipText, styles.centered, active && styles.chipTextOn]}>{label}</Text>
+        </View>
       </View>
     </Pressable>
   );
@@ -119,5 +121,6 @@ const styles = StyleSheet.create({
   chipText: { ...textStyle.footnote, fontWeight: weight.medium, color: LABEL.primary },
   chipTextOn: { fontWeight: weight.semibold, color: color.ground },
   sizer: { opacity: 0 },
-  label: { position: "absolute", left: 0, right: 0, top: (CHIP_HEIGHT - textStyle.footnote.lineHeight) / 2, textAlign: "center" },
+  label: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, justifyContent: "center" },
+  centered: { textAlign: "center" },
 });
