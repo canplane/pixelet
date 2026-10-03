@@ -38,8 +38,7 @@ pub struct FeatureExtra {
     pub is_unseen: bool,
     /// Carried above the ground: drawn by the decks, not the ground.
     pub is_deck: bool,
-    /// First and last end where a flag cuts the way, so it stops square
-    /// there instead of rounding past into a bridge or a tunnel.
+    /// Ends a flag cuts: square, not rounded into a bridge or tunnel.
     pub cut: [bool; 2],
     /// The way beside it that it shares one paved strip with; the gap is paved too.
     pub joins: Option<Joins>,

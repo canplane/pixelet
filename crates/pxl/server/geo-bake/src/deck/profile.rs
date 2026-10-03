@@ -1,12 +1,7 @@
 // pxl-geo-bake/deck/profile.rs
 
-//! A structure's road surface on the graph of its points, in `q`: a deck's
-//! height, a bore's depth. Each point's need is hard: where `PREFERRED_SLOPE`
-//! cannot reach it from the ends, the line between ends and held points is
-//! laid as gently as the needs allow; elsewhere a need is raised at
-//! `PREFERRED_SLOPE`. An approach then runs straight from its joint to where
-//! it first meets the ground, the ground only a bound on it. A step steeper
-//! than `PREFERRED_SLOPE` is marked forced.
+//! A structure's road surface in `q`: a deck's height, a bore's depth.
+//! Needs are hard, `PREFERRED_SLOPE` is a preference.
 
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BinaryHeap};
@@ -19,7 +14,7 @@ pub struct Problem<'a> {
     pub ends: &'a [(u32, f64)],
     pub ground: &'a [f64],
     pub carried: &'a [bool],
-    /// Each approach's points from its joint outward, with their distance along it.
+    /// Joint first, distance along.
     pub approaches: &'a [&'a [(u32, f64)]],
 }
 
@@ -31,16 +26,11 @@ pub struct Profile {
 pub fn solve(p: &Problem) -> Profile {
     let n = p.need.len();
     let adj = carried_adj(p);
-    // The highest each point can be and still come down to every end.
+    // highest that still comes down to every end
     let cap = spread(&adj, ends_of(p), |v, d| v + PREFERRED_SLOPE * d, Ordering::Less);
     let held = (0..n).filter(|&v| p.carried[v]).map(|v| (v as u32, p.need[v].min(cap[v])));
     let raised = spread(&adj, held, |v, d| v - PREFERRED_SLOPE * d, Ordering::Greater);
-    // Points the grade cannot reach are held where they are vertices of the
-    // upper hull over the needs, so the line is a taut string over them, not
-    // a staircase along them: a stretch that is a path between two set points
-    // holds all its hull's at once; any other the one furthest under its line,
-    // which over a chord is such a vertex. Stretches are apart, so each round
-    // holds in all of them.
+    // hold the worst short point per stretch: a hull vertex, so no staircase
     let mut unreached: Vec<(u32, f64)> = Vec::new();
     loop {
         let (line, slope, set) = between_ends(p, &adj, unreached.iter().copied());
@@ -61,19 +51,14 @@ pub fn solve(p: &Problem) -> Profile {
             }
             return Profile { top, forced };
         }
-        for (id, w) in worst {
-            let hull = path_between(&adj, &set, &stretch, id, w).map(|path| upper_hull(&path, &line, p.need)).unwrap_or_default();
-            let hold: Vec<usize> = hull.into_iter().filter(|&v| under(v) > 1e-9).collect();
-            for v in if hold.is_empty() { vec![w] } else { hold } {
-                assert!(!unreached.iter().any(|&(u, _)| u as usize == v), "a held point under its need: a structure's form is broken");
-                unreached.push((v as u32, p.need[v]));
-            }
+        for v in worst.into_values() {
+            assert!(!unreached.iter().any(|&(u, _)| u as usize == v), "a held point under its need: a structure's form is broken");
+            unreached.push((v as u32, p.need[v]));
         }
     }
 }
 
-/// Each point's stretch: carried points joined without passing a set point;
-/// a set point is a stretch of its own.
+/// Carried points joined without a set point between; a set point alone.
 fn stretches(p: &Problem, adj: &[Vec<(u32, f64)>], set: &[bool]) -> Vec<usize> {
     let n = p.need.len();
     let mut id = vec![usize::MAX; n];
@@ -99,62 +84,8 @@ fn stretches(p: &Problem, adj: &[Vec<(u32, f64)>], set: &[bool]) -> Vec<usize> {
     id
 }
 
-/// The stretch holding `from`, when it is a path between two set points: the
-/// set point, its points and the other set point, each with its distance along.
-fn path_between(adj: &[Vec<(u32, f64)>], set: &[bool], stretch: &[usize], id: usize, from: usize) -> Option<Vec<(usize, f64)>> {
-    let inside = |v: usize| !set[v] && stretch[v] == id;
-    // Out from `from` both ways to a set point; a fork or a loop is no path.
-    let mut halves = Vec::new();
-    for &(first, d0) in &adj[from] {
-        let (mut prev, mut cur, mut d) = (from, first as usize, d0);
-        let mut half = Vec::new();
-        while inside(cur) {
-            if adj[cur].len() > 2 || cur == from {
-                return None;
-            }
-            half.push((cur, d));
-            let &(next, step) = adj[cur].iter().find(|&&(w, _)| w as usize != prev)?;
-            (prev, cur, d) = (cur, next as usize, d + step);
-        }
-        half.push((cur, d));
-        halves.push(half);
-    }
-    if adj[from].len() > 2 || halves.len() != 2 {
-        return None;
-    }
-    let (back, ahead) = (&halves[0], &halves[1]);
-    let total = back.last()?.1;
-    let mut path: Vec<(usize, f64)> = back.iter().rev().map(|&(v, d)| (v, total - d)).collect();
-    path.push((from, total));
-    path.extend(ahead.iter().map(|&(v, d)| (v, total + d)));
-    Some(path)
-}
-
-/// The points of `path` on the upper hull of its needs between its two set
-/// points, which stand at their line.
-fn upper_hull(path: &[(usize, f64)], line: &[f64], need: &[f64]) -> Vec<usize> {
-    let last = path.len() - 1;
-    let at = |i: usize| (path[i].1, if i == 0 || i == last { line[path[i].0] } else { need[path[i].0] });
-    let mut hull: Vec<usize> = Vec::new();
-    for i in 0..=last {
-        let (x, y) = at(i);
-        while let [.., a, b] = hull[..] {
-            let ((ax, ay), (bx, by)) = (at(a), at(b));
-            if (bx - ax) * (y - ay) - (by - ay) * (x - ax) >= 0.0 {
-                hull.pop();
-            } else {
-                break;
-            }
-        }
-        hull.push(i);
-    }
-    hull.into_iter().filter(|&i| i != 0 && i != last).map(|i| path[i].0).collect()
-}
-
-/// An approach from its joint at the structure's surface: straight to the
-/// first point it reaches at `PREFERRED_SLOPE`, or, where none is, to the one
-/// it reaches most gently. Either way no point before it is under the line,
-/// which would have been reached first.
+/// Straight from the joint to the first ground in grade, else the gentlest:
+/// nothing before it is under the line.
 fn approach(top: &mut [f64], forced: &mut [bool], ground: &[f64], chain: &[(u32, f64)]) {
     let (joint, d0) = chain[0];
     let from = top[joint as usize];
@@ -169,15 +100,13 @@ fn approach(top: &mut [f64], forced: &mut [bool], ground: &[f64], chain: &[(u32,
     }
 }
 
-/// The structure's own edges: an approach is laid after it, from its joint.
 fn carried_adj(p: &Problem) -> Vec<Vec<(u32, f64)>> {
     (0..p.need.len())
         .map(|v| if p.carried[v] { p.adj[v].iter().copied().filter(|&(w, _)| p.carried[w as usize]).collect() } else { Vec::new() })
         .collect()
 }
 
-/// The structure's set points: its own free ends, and each joint at its need,
-/// where an approach takes over.
+/// Free ends, and joints at their need.
 fn ends_of<'a>(p: &'a Problem) -> impl Iterator<Item = (u32, f64)> + 'a {
     let joints = (0..p.need.len()).filter(|&v| p.carried[v] && p.adj[v].iter().any(|&(w, _)| !p.carried[w as usize])).map(|v| (v as u32, p.need[v]));
     p.ends.iter().copied().filter(|&(e, _)| p.carried[e as usize]).chain(joints)
@@ -186,7 +115,7 @@ fn ends_of<'a>(p: &'a Problem) -> impl Iterator<Item = (u32, f64)> + 'a {
 fn between_ends(p: &Problem, adj: &[Vec<(u32, f64)>], held: impl Iterator<Item = (u32, f64)>) -> (Vec<f64>, Vec<f64>, Vec<bool>) {
     let n = p.need.len();
     let mut ends: Vec<(u32, f64)> = ends_of(p).collect();
-    // A held point wins over an end or a joint on the same point.
+    // held wins over an end on its point
     for (v, h) in held {
         ends.retain(|&(e, _)| e != v);
         ends.push((v, h));
@@ -199,10 +128,8 @@ fn between_ends(p: &Problem, adj: &[Vec<(u32, f64)>], held: impl Iterator<Item =
     (line, slope, set)
 }
 
-/// The absolutely minimizing Lipschitz extension through `ends`, by the
-/// steepest-path algorithm (Lazarus et al., as Kyng, Rao, Sachdeva and
-/// Spielman put it to graphs): the steepest path between set points is laid
-/// straight, repeatedly. Also returns each point's slope.
+/// Absolutely minimizing Lipschitz extension through `ends`: steepest path
+/// first (Kyng, Rao, Sachdeva, Spielman). Also each point's slope.
 fn line(adj: &[Vec<(u32, f64)>], ends: &[(u32, f64)]) -> (Vec<f64>, Vec<f64>) {
     let n = adj.len();
     let mut height: Vec<Option<f64>> = vec![None; n];
@@ -210,8 +137,7 @@ fn line(adj: &[Vec<(u32, f64)>], ends: &[(u32, f64)]) -> (Vec<f64>, Vec<f64>) {
     for &(e, h) in ends {
         height[e as usize] = Some(h);
     }
-    // A path is laid through unset points only, so each run of them between
-    // set points is laid on its own, in the order the whole graph would take.
+    // runs between set points are independent
     let mut search = Search::new(n);
     for run in runs(adj, &height) {
         loop {
@@ -255,7 +181,7 @@ fn line(adj: &[Vec<(u32, f64)>], ends: &[(u32, f64)]) -> (Vec<f64>, Vec<f64>) {
             }
         }
     }
-    // What is left touches one set point at most: it takes that point's height.
+    // the rest touches one set point: its height
     let mut queue: Vec<u32> = (0..n as u32).filter(|&v| height[v as usize].is_some()).collect();
     while let Some(v) = queue.pop() {
         for &(w, _) in &adj[v as usize] {
@@ -268,7 +194,6 @@ fn line(adj: &[Vec<(u32, f64)>], ends: &[(u32, f64)]) -> (Vec<f64>, Vec<f64>) {
     (height.into_iter().map(|h| h.unwrap_or(f64::NEG_INFINITY)).collect(), slope)
 }
 
-/// The unset points in runs joined without passing a set point.
 fn runs(adj: &[Vec<(u32, f64)>], height: &[Option<f64>]) -> Vec<Vec<u32>> {
     let mut seen = vec![false; adj.len()];
     let mut out = Vec::new();
@@ -293,8 +218,7 @@ fn runs(adj: &[Vec<(u32, f64)>], height: &[Option<f64>]) -> Vec<Vec<u32>> {
     out
 }
 
-/// Shortest distances from a set point through unset points, reusing its
-/// arrays: only what a search reached is reset before the next.
+/// Distances through unset points; resets only what it reached.
 struct Search {
     dist: Vec<f64>,
     from: Vec<u32>,

@@ -1,12 +1,7 @@
 // pxl-geo-bake/deck.rs
 
-//! Deck heights and tunnel bores, solved offline over the whole network into
-//! `overture_deck`. A deck's height depends on ground kilometres away, so no
-//! page or client can solve it. Structure by structure, as Arnis does.
-//!
-//! Decks and bores are one solve in `q = sign · z`: a deck stands its shell
-//! and clearances above what it passes over, a bore its clear height and cover
-//! below the ground, and an approach grades either back to the ground.
+//! Decks and bores, one solve in `q = sign · z` over the whole network into
+//! `overture_deck`: a height depends on ground kilometres away.
 
 pub mod approach;
 pub mod elevation;
@@ -48,7 +43,7 @@ impl Under {
         }
     }
 
-    /// None for the sea, whose height the ground already is, and a name-only feature.
+    /// None for the sea and a name-only feature.
     fn of_water(subtype: &str, class: Option<&str>) -> Option<Under> {
         match (subtype, class.unwrap_or("")) {
             ("ocean", _) | ("physical", _) => None,
@@ -66,7 +61,7 @@ struct Need {
 }
 
 pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<(), postgres::Error> {
-    // One solve at a time: two would drop each other's staging tables.
+    // two would drop each other's staging tables
     client.execute("SELECT pg_advisory_lock(hashtext('pxl-geo-bake deck solve'))", &[])?;
     let rows = source::flagged_rows(client, "is_bridge")?;
     let mut decks: Vec<Piece> = rows.iter().flat_map(|r| pieces_of(r, Form::Deck)).collect();
@@ -163,8 +158,7 @@ fn kind_of(p: &Piece) -> u8 {
     segment_type(&p.subtype, p.class.as_deref())
 }
 
-/// `far` must stand `gap` past `near` where they cross, away from the ground:
-/// an upper deck over a lower, a lower bore under an upper.
+/// `far` stands `gap` past `near`, away from the ground.
 struct Crossing {
     far: usize,
     far_at: f64,
@@ -194,11 +188,8 @@ impl<'a> Side<'a> {
         Side { pieces, structures, graphs, place }
     }
 
-    /// Each structure's road surface in `q = sign · z`, `None` where no end
-    /// is pinned, and how many points are steeper than `PREFERRED_SLOPE`. A structure's own point needs `shell` off the ground, an
-    /// approach's only the ground; a deck's needs and a crossing add to it.
-    /// Two passes: the second with the near structures' surfaces the first
-    /// found, so a ramp over its own interchange clears it.
+    /// Surfaces in `q`, `None` with no pinned end, and the forced count.
+    /// Twice: crossings read the first pass's surfaces.
     fn solve(&self, sign: f64, ground: &[Vec<f64>], shell: impl Fn(&Piece) -> f64, needs: &[Vec<Need>], crossings: &[Crossing], pinned: impl Fn(&End) -> bool) -> (Vec<Option<Vec<f64>>>, usize) {
         let q_ground: Vec<Vec<f64>> = ground.iter().map(|g| g.iter().map(|v| sign * v).collect()).collect();
         let carried: Vec<Vec<bool>> = self.structures.iter().zip(&self.graphs).map(|(m, g)| carried_of(self.pieces, m, g)).collect();
@@ -255,7 +246,7 @@ impl<'a> Side<'a> {
         (tops, forced)
     }
 
-    /// Each piece's points in z, an approach's only while off the ground.
+    /// In z; an approach only while off the ground.
     fn out(&self, ground: &[Vec<f64>], tops: &[Option<Vec<f64>>], sign: f64) -> Vec<DeckOut<'a>> {
         let mut out = Vec::new();
         for (m, piece) in self.pieces.iter().enumerate() {
@@ -273,8 +264,7 @@ impl<'a> Side<'a> {
     }
 }
 
-/// Tunnel ends where the way carries on at the surface at level 0 or over;
-/// a subway's tunnel ends at underground platforms, which are not portals.
+/// Tunnel ends whose way carries on at the surface; a subway's do not.
 fn portals_of(url: &str, tunnels: &[Piece]) -> Result<Vec<(usize, bool)>, postgres::Error> {
     let ends = approach::free_ends(tunnels);
     let asked: Vec<([f64; 2], &str)> = ends.iter().map(|&(i, last)| (end_of(&tunnels[i], last).0, tunnels[i].gers_id.as_str())).collect();
@@ -290,8 +280,7 @@ fn portals_of(url: &str, tunnels: &[Piece]) -> Result<Vec<(usize, bool)>, postgr
     Ok(ends.into_iter().zip(portal).filter(|&(_, p)| p).map(|(e, _)| e).collect())
 }
 
-/// Whether each point is the structure's own rather than an approach; a joint
-/// is both, and carried.
+/// The structure's own points; a joint is one.
 fn carried_of(pieces: &[Piece], members: &[usize], g: &Graph) -> Vec<bool> {
     let mut carried = vec![false; g.at.len()];
     for (k, &m) in members.iter().enumerate() {
@@ -312,8 +301,7 @@ fn on_structure<'a>(piece: &Piece, along: &'a [(u32, f64)], off_ground: impl Fn(
     &along[..down]
 }
 
-/// What passes under each deck: ways on the ground there (a deck below is
-/// cleared as a deck), and water. Staged bores come after the decks.
+/// Ways and water under each deck; staged bores come after the decks.
 fn needs_of(client: &mut Client, url: &str, pieces: &[Piece]) -> Result<Vec<Vec<Need>>, postgres::Error> {
     let mut needs: Vec<Vec<Need>> = vec![Vec::new(); pieces.len()];
     let length = |m: usize| {
@@ -343,8 +331,7 @@ fn needs_of(client: &mut Client, url: &str, pieces: &[Piece]) -> Result<Vec<Vec<
             });
         }
     }
-    // A water body is many pieces once subdivided; join the touching ones so the
-    // span is the whole stretch's.
+    // one water body's subdivided pieces are one span
     for (m, mut spans) in water.into_iter().enumerate() {
         spans.sort_by(|a, b| a.from.total_cmp(&b.from).then(a.to.total_cmp(&b.to)));
         for n in spans {

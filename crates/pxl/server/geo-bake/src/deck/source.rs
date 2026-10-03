@@ -43,8 +43,7 @@ fn share(k: usize, n: usize) -> (i32, i32) {
     (n as i32, k as i32)
 }
 
-/// By id: a piece's number breaks every tie the solve meets, so it is not the
-/// order rows happen to come back in.
+/// By id: piece numbers break the solve's ties.
 pub fn flagged_rows(client: &mut Client, flag: &str) -> Result<Vec<BridgeRow>, postgres::Error> {
     let rows = client.query(
         "SELECT gers_id, subtype, class, COALESCE(road_flags, rail_flags)::text AS flags, level_rules::text AS levels,

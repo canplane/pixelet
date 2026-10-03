@@ -100,9 +100,7 @@ pub fn scatter_at(tag: u64, density: f64, cell: [i64; 2]) -> Option<Candidate> {
 
 // ---- piers ----
 
-/// A pier stands where a centreline crosses a world line every `PIER_STEP_M`
-/// on its main axis: a span inside Arnis's (19 m and up) and OSM2World's (50 m
-/// at most). The lines are a z6 row's, whose scale is one.
+/// Within Arnis's 19 m and OSM2World's 50 m; one lattice a z6 row.
 pub const PIER_STEP_M: f64 = 32.0;
 
 pub const PIER_ACROSS: f64 = 0.7; // of the deck's width: OSM2World's `BridgeModule`

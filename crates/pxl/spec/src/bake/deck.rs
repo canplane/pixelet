@@ -323,11 +323,8 @@ pub fn footprint(width: f64) -> f64 {
     width / 2.0 + LINE_PAST
 }
 
-/// A page's decks one level up: children's decks in the parent's cells, kept
-/// while at least half a parent cell wide, each simplified to half a cell
-/// across and in height. A deck two children carry is carried twice. What
-/// overflows a record is admitted widest first, ties in the children's order,
-/// so a coarse page keeps what it shows largest.
+/// Decks one level up: half a cell wide or more, simplified to half a cell,
+/// widest first within a record.
 pub fn fold_decks(children: [&Decks; 4], level: u32) -> Decks {
     let n = f64::from(PAGE_CELLS);
     // The parent's half cell of height, in z16 cells.

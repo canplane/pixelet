@@ -1,8 +1,6 @@
 // pxl-geo-bake/deck/approach.rs
 
-//! A structure's approaches: the joined way's stretch at the surface, at any
-//! `layer`, graded with the structure until it meets the ground — a bridge's
-//! as an embankment, a tunnel's as a cutting. `layer` orders crossings only.
+//! A structure's approaches: the way it joins at the surface, any `layer`.
 
 use std::collections::HashMap;
 
@@ -26,9 +24,7 @@ pub fn free_ends(pieces: &[Piece]) -> Vec<(usize, bool)> {
     (0..pieces.len()).flat_map(|i| [(i, false), (i, true)]).filter(|&(i, last)| count[pieces[i].end(last)] == 1).collect()
 }
 
-/// Each end's approach, of `form`: the joined way at the surface that carries
-/// on most nearly straight, ties to the lower id and then outward along it, so
-/// the rows' order decides nothing.
+/// The straightest joined way; ties by id, then outward.
 pub fn approaches(url: &str, pieces: &[Piece], ends: &[(usize, bool)], form: Form) -> Result<Vec<Piece>, postgres::Error> {
     let asked: Vec<([f64; 2], &str)> = ends.iter().map(|&(i, last)| (end_of(&pieces[i], last).0, pieces[i].gers_id.as_str())).collect();
 
