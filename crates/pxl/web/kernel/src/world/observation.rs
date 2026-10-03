@@ -33,12 +33,7 @@ pub fn eye() -> Option<[f64; 3]> {
 
 pub fn frustum_of_view() -> Frustum {
     let v = view();
-    let o = [ivec::to_real(ivec::X(v.origin)), ivec::to_real(ivec::Y(v.origin)), ivec::to_real(ivec::Z(v.origin))];
-    let mut planes = v.planes;
-    for p in planes.as_chunks_mut::<4>().0 {
-        p[3] -= p[0] * o[0] + p[1] * o[1] + p[2] * o[2];
-    }
-    Frustum { planes }
+    v.frustum.about(ivec::to_v3(v.origin).map(|c| -c))
 }
 
 /// Out to where the air ends the ground or the source's top ends, whichever

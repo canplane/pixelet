@@ -93,8 +93,7 @@ pub struct PickResult {
 
 /// In the root frame, from the eye.
 pub fn ray_pick(origin: V3, direction: V3) -> Option<PickResult> {
-    let map_origin = local_world_origin();
-    let frame: V3 = [ivec::to_real(ivec::X(map_origin)), ivec::to_real(ivec::Y(map_origin)), ivec::to_real(ivec::Z(map_origin))];
+    let frame = ivec::to_v3(local_world_origin());
     let ray = Ray {
         origin: std::array::from_fn(|k| origin[k] + frame[k]),
         direction,

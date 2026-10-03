@@ -103,6 +103,9 @@ pub fn mod3n<'a>(v: &V3, k: f64, out: &'a mut V3) -> &'a mut V3 {
 pub fn dot3(v: &V3, w: &V3) -> f64 {
     v[0] * w[0] + v[1] * w[1] + v[2] * w[2]
 }
+pub fn len3(v: &V3) -> f64 {
+    dot3(v, v).sqrt()
+}
 pub fn cross3<'a>(v: &V3, w: &V3, out: &'a mut V3) -> &'a mut V3 {
     out[0] = v[1] * w[2] - v[2] * w[1];
     out[1] = v[2] * w[0] - v[0] * w[2];
@@ -110,8 +113,10 @@ pub fn cross3<'a>(v: &V3, w: &V3, out: &'a mut V3) -> &'a mut V3 {
     out
 }
 pub fn norm3<'a>(v: &V3, out: &'a mut V3) -> &'a mut V3 {
-    let hypot = libm::hypot(libm::hypot(v[0], v[1]), v[2]);
-    let len = if hypot == 0.0 { 1.0 } else { hypot };
+    let len = match len3(v) {
+        0.0 => 1.0,
+        l => l,
+    };
     out[0] = v[0] / len;
     out[1] = v[1] / len;
     out[2] = v[2] / len;
@@ -223,6 +228,11 @@ impl Aabb {
 
     pub fn center(self) -> V3 {
         std::array::from_fn(|k| (self.min[k] + self.max[k]) / 2.0)
+    }
+
+    /// The bounding sphere's, about `center`.
+    pub fn radius(self) -> f64 {
+        len3(&self.extent()) / 2.0
     }
 
     /// The slab test: where the ray enters and leaves, unclipped, and the axis

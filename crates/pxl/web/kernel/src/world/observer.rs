@@ -12,7 +12,7 @@
 
 use pxl_spec::space::lod::{Tau, SPLIT};
 use pxl_spec::space::observation::{Observation, Requirement};
-use pxl_spec::space::v3::{Aabb, V3};
+use pxl_spec::space::v3::{dot3, len3, Aabb, V3};
 
 use crate::param;
 use crate::world::access::{Access, Detail, Ray};
@@ -43,7 +43,7 @@ impl Lens {
         let forward = unit(n(4))?;
         let right = unit(sub(n(0), n(1)))?;
         let up = unit(sub(n(2), n(3)))?;
-        let tan = [dot(n(0), forward) / dot(n(0), right), dot(n(2), forward) / dot(n(2), up)];
+        let tan = [dot3(&n(0), &forward) / dot3(&n(0), &right), dot3(&n(2), &forward) / dot3(&n(2), &up)];
         tan.iter().all(|t| t.is_finite() && *t > 0.0).then_some(Lens { eye: o.eye, forward, right, up, tan })
     }
 
@@ -55,14 +55,14 @@ impl Lens {
     /// allows, `r` less its diagonal. Unbounded where the box reaches the eye.
     pub fn error(&self, at: V3, error: V3) -> [f64; 2] {
         let d = sub(at, self.eye);
-        let r = dot(d, d).sqrt();
-        let depth = r - dot(error, error).sqrt();
+        let r = len3(&d);
+        let depth = r - len3(&error);
         if depth < INSIDE {
             return [f64::INFINITY; 2];
         }
-        let f = dot(d, self.forward);
+        let f = dot3(&d, &self.forward);
         let on = |axis: V3, k: usize| {
-            let t = dot(d, axis);
+            let t = dot3(&d, &axis);
             let t = if f > INSIDE { t / f } else { t.signum() * f64::INFINITY };
             if t.is_nan() {
                 0.0
@@ -73,7 +73,7 @@ impl Lens {
         let (tx, ty) = (on(self.right, 0), on(self.up, 1));
         let d = unit(std::array::from_fn(|k| self.forward[k] + tx * self.right[k] + ty * self.up[k])).unwrap_or(self.forward);
         [self.right, self.up].map(|a| {
-            let square = sub(a, d.map(|c| c * dot(a, d)));
+            let square = sub(a, d.map(|c| c * dot3(&a, &d)));
             let Some(a) = unit(square) else { return f64::INFINITY };
             (0..3).map(|k| error[k] * a[k].abs()).sum::<f64>() / depth
         })
@@ -302,7 +302,7 @@ impl Sight {
             || self.cast.is_none_or(|(was, across, far)| {
                 let turned = [(was.forward, lens.forward), (was.right, lens.right), (was.up, lens.up)]
                     .iter()
-                    .map(|&(a, b)| libm::acos(dot(a, b).clamp(-1.0, 1.0)))
+                    .map(|&(a, b)| libm::acos(dot3(&a, &b).clamp(-1.0, 1.0)))
                     .fold(0.0, f64::max);
                 let reshaped = (0..2).any(|k| (was.tan[k] - lens.tan[k]).abs() > 1e-9 * lens.tan[k]);
                 across != grid.across() || reshaped || turned > shift || (o.far - far).abs() > shift * far
@@ -318,7 +318,7 @@ impl Sight {
         }
         // A tile that met nothing is measured against the far edge.
         let stale = |k: usize| {
-            let moved_eye = dot(sub(lens.eye, self.eyes[k]), sub(lens.eye, self.eyes[k])).sqrt();
+            let moved_eye = len3(&sub(lens.eye, self.eyes[k]));
             whole
                 || match &self.tiles[k] {
                     Some(f) => {
@@ -355,16 +355,12 @@ impl Sight {
     }
 }
 
-fn dot(a: V3, b: V3) -> f64 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
-
 fn sub(a: V3, b: V3) -> V3 {
     std::array::from_fn(|k| a[k] - b[k])
 }
 
 fn unit(v: V3) -> Option<V3> {
-    let l = dot(v, v).sqrt();
+    let l = len3(&v);
     (l > 1e-12 && l.is_finite()).then(|| v.map(|c| c / l))
 }
 

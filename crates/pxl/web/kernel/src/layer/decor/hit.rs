@@ -7,7 +7,7 @@
 use pxl_spec::bake::constant::CELL;
 use pxl_spec::space::indexer::L2_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::v3::{Aabb, V3};
+use pxl_spec::space::v3::{cross3, dot3, Aabb, V3};
 use xpute_runtime::mem::base::ptr_at;
 
 use crate::kernel::kernel;
@@ -176,8 +176,8 @@ fn ray_meets_square(o: &V3, d: &[f64; 3], x0: f64, y0: f64, x1: f64, y1: f64, li
 
 /// `p` is relative to the sphere's center.
 fn ray_meets_sphere(p: &V3, d: &[f64; 3], r: f64, limit: f64) -> bool {
-    let b = p[0] * d[0] + p[1] * d[1] + p[2] * d[2];
-    let c = p[0] * p[0] + p[1] * p[1] + p[2] * p[2] - r * r;
+    let b = dot3(p, d);
+    let c = dot3(p, p) - r * r;
     if c <= 0.0 {
         return true;
     }
@@ -193,23 +193,23 @@ fn ray_meets_sphere(p: &V3, d: &[f64; 3], r: f64, limit: f64) -> bool {
 fn ray_triangle(o: &[f64; 3], d: &[f64; 3], a: &[f32], b: &[f32], c: &[f32]) -> Option<f64> {
     let e1 = [b[0] as f64 - a[0] as f64, b[1] as f64 - a[1] as f64, b[2] as f64 - a[2] as f64];
     let e2 = [c[0] as f64 - a[0] as f64, c[1] as f64 - a[1] as f64, c[2] as f64 - a[2] as f64];
-    let p = [d[1] * e2[2] - d[2] * e2[1], d[2] * e2[0] - d[0] * e2[2], d[0] * e2[1] - d[1] * e2[0]];
-    let det = e1[0] * p[0] + e1[1] * p[1] + e1[2] * p[2];
+    let p = *cross3(d, &e2, &mut [0.0; 3]);
+    let det = dot3(&e1, &p);
     if det.abs() < 1e-12 {
         return None;
     }
     let inv = 1.0 / det;
     let s = [o[0] - a[0] as f64, o[1] - a[1] as f64, o[2] - a[2] as f64];
-    let u = (s[0] * p[0] + s[1] * p[1] + s[2] * p[2]) * inv;
+    let u = dot3(&s, &p) * inv;
     if !(0.0..=1.0).contains(&u) {
         return None;
     }
-    let q = [s[1] * e1[2] - s[2] * e1[1], s[2] * e1[0] - s[0] * e1[2], s[0] * e1[1] - s[1] * e1[0]];
-    let v = (d[0] * q[0] + d[1] * q[1] + d[2] * q[2]) * inv;
+    let q = *cross3(&s, &e1, &mut [0.0; 3]);
+    let v = dot3(d, &q) * inv;
     if v < 0.0 || u + v > 1.0 {
         return None;
     }
-    let t = (e2[0] * q[0] + e2[1] * q[1] + e2[2] * q[2]) * inv;
+    let t = dot3(&e2, &q) * inv;
     (t > 0.0).then_some(t)
 }
 

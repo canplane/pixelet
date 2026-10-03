@@ -118,24 +118,20 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     view_resize(ctx.state.width, ctx.state.height);
     let v = view();
 
-    let origin = [ivec::to_real(ivec::X(v.origin)), ivec::to_real(ivec::Y(v.origin)), ivec::to_real(ivec::Z(v.origin))];
+    let origin = ivec::to_v3(v.origin);
 
     let anchor = globe_anchor_local();
-    let mut planes = v.planes;
-    for p in planes.as_chunks_mut::<4>().0 {
-        p[3] += p[0] * anchor[0] + p[1] * anchor[1] + p[2] * anchor[2];
-    }
     let e = v.pose.eye;
     let frame = Frame {
         anchor,
         origin,
         eye: v.eye_at(),
-        planes,
+        frustum: v.frustum.about(anchor),
         camera: [e[0] - anchor[0], e[1] - anchor[1], e[2] - anchor[2]],
         delta_s: ctx.delta,
         remaining_ms: ctx.budget.remaining(),
         hard_slack_ms: HARD_SLACK_MS,
-        center_z: ivec::to_real(ivec::Z(v.origin)) + anchor[2],
+        center_z: origin[2] + anchor[2],
         globe: Some(globe()),
     };
 

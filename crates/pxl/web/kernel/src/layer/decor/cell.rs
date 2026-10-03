@@ -16,7 +16,7 @@ use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::lod::fault_radius;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::{chunk_span_of, LevelPage, CHUNK_CELLS, GROUND, TOP_LEVEL};
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::v3::{len3, V3};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::alloc;
 
@@ -172,7 +172,7 @@ fn nearest(cell: DecorCell, eye: V3, ground: f64) -> f64 {
     let (x0, y0, side) = cell.rect();
     let dx = (x0 - eye[0]).max(eye[0] - (x0 + side)).max(0.0);
     let dy = (y0 - eye[1]).max(eye[1] - (y0 + side)).max(0.0);
-    libm::hypot(libm::hypot(dx, dy), eye[2] - ground)
+    len3(&[dx, dy, eye[2] - ground])
 }
 
 /// Kept within the view's reach, in the frustum, and where its largest
@@ -417,8 +417,8 @@ fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
         let [zlo, zhi] = block.heights.map(f64::from);
         let gap = |lo: f64, hi: f64, v: f64| (lo - v).max(v - hi).max(0.0);
         let reach = |lo: f64, hi: f64, v: f64| (v - lo).abs().max((hi - v).abs());
-        let nearest = libm::hypot(libm::hypot(gap(x0, x0 + side, eye[0]), gap(y0, y0 + side, eye[1])), gap(zlo, zhi, eye[2])).max(1e-3);
-        let farthest = libm::hypot(libm::hypot(reach(x0, x0 + side, eye[0]), reach(y0, y0 + side, eye[1])), reach(zlo, zhi, eye[2])).max(1e-3);
+        let nearest = len3(&[gap(x0, x0 + side, eye[0]), gap(y0, y0 + side, eye[1]), gap(zlo, zhi, eye[2])]).max(1e-3);
+        let farthest = len3(&[reach(x0, x0 + side, eye[0]), reach(y0, y0 + side, eye[1]), reach(zlo, zhi, eye[2])]).max(1e-3);
         // SAFETY: the cell's block, `bytes` long, its own to write past `index`.
         let words: &mut [u32] = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block.at as usize), block.bytes as usize / 4) };
         let (lanes_of, list) = words.split_at_mut(block.index as usize / 4);
@@ -444,7 +444,7 @@ fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
                     continue;
                 }
                 let f = |l: usize| f32::from_bits(lanes_of[lane.f32_at(l, i)]) as f64;
-                let d = libm::hypot(libm::hypot(x0 + f(0) - eye[0], y0 + f(1) - eye[1]), f(2) - eye[2]).max(1e-3);
+                let d = len3(&[x0 + f(0) - eye[0], y0 + f(1) - eye[1], f(2) - eye[2]]).max(1e-3);
                 let px = extent * f(4) / units_per_px_at(d);
                 if px >= model_px {
                     changed |= list[at] != i as u32;

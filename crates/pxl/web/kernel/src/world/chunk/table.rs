@@ -14,7 +14,8 @@ use pxl_render::mesh::voxel_scan::APRON;
 
 use pxl_spec::space::observation::Bounds as _;
 use pxl_spec::space::pyramid::{chunk_scale, GROUND};
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::observation::Frustum;
+use pxl_spec::space::v3::{dot3, len3, Aabb, V3};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::section::span_of;
 use xpute_runtime::sched::edge::Notify;
@@ -68,8 +69,8 @@ pub struct Frame {
     pub origin: V3,
     /// Draw translations are taken relative to the eye.
     pub eye: V3,
-    /// Six frustum planes (nx, ny, nz, d) about the anchor.
-    pub planes: [f64; 24],
+    /// About the anchor.
+    pub frustum: Frustum,
     pub camera: V3,
     pub delta_s: f64,
     /// What is left of the turn's quota, not the quota itself.
@@ -85,17 +86,11 @@ impl Frame {
     }
 }
 
-#[derive(Clone, Copy, Default)]
-struct Bounds {
-    min: [f32; 3],
-    max: [f32; 3],
-}
-
 #[derive(Clone, Copy)]
 struct Tier {
     cube: Cube,
     generation: u32,
-    bounds: Option<Bounds>,
+    bounds: Option<Aabb>,
     /// First slot of the chain the tier's boxes fill (`Meshes::next`).
     slot: MeshSlot,
     box_cnt: u32,
@@ -196,7 +191,7 @@ impl Slot {
         let b = Known.contents(self.chunk.level(), region).within(region).unwrap_or(region);
         let c = b.center();
         self.bc = [c[0] - region.min[0], c[1] - region.min[1], c[2]];
-        self.radius = half_diagonal(b.extent());
+        self.radius = b.radius();
     }
 
     fn slots_for(&self, cube: Cube, generation: u32) -> u32 {
@@ -1016,10 +1011,7 @@ impl Scheduler {
         s.layout_generation = generation;
         s.layout_ready = true;
         match s.tier(primary, generation).and_then(|t| t.bounds) {
-            Some(b) => {
-                s.bc = [0, 1, 2].map(|k| (b.min[k] + b.max[k]) as f64 * 0.5);
-                s.radius = half_diagonal([0, 1, 2].map(|k| (b.max[k] - b.min[k]) as f64));
-            }
+            Some(b) => (s.bc, s.radius) = (b.center(), b.radius()),
             None => s.unmeasured(),
         }
     }
@@ -1055,12 +1047,8 @@ impl Scheduler {
     }
 }
 
-fn half_diagonal(e: V3) -> f64 {
-    (e[0] * e[0] + e[1] * e[1] + e[2] * e[2]).sqrt() * 0.5
-}
-
 fn same_view(a: &Frame, b: &Frame) -> bool {
-    a.anchor == b.anchor && a.origin == b.origin && a.planes == b.planes && a.camera == b.camera
+    a.anchor == b.anchor && a.origin == b.origin && a.frustum == b.frustum && a.camera == b.camera
 }
 
 #[derive(Clone, Copy)]
@@ -1087,24 +1075,16 @@ fn visible(frame: &Frame, s: &Slot) -> bool {
     };
     let c = frame.camera;
     // A chunk whose sphere contains the camera is always visible.
-    let mut visible = libm::hypot(libm::hypot(c[0] - x, c[1] - y), c[2] - z) <= s.radius;
+    let mut visible = len3(&[c[0] - x, c[1] - y, c[2] - z]) <= s.radius;
     if !visible {
-        visible = true;
-        for p in frame.planes.as_chunks::<4>().0 {
-            if p[0] * x + p[1] * y + p[2] * z + p[3] < -s.radius {
-                visible = false;
-                break;
-            }
-        }
+        visible = frame.frustum.sees([x, y, z], s.radius);
         // Horizon cull (Cozzi & Ring): a point is above the eye's horizon while
         // E·P >= r², from the planet's center, widened by the chunk's radius.
         if visible {
             if let Some(globe) = frame.globe {
                 let r = globe.radius_u();
                 let (e, p) = ([c[0], c[1], c[2] + r], [x, y, z + r]);
-                let along = e[0] * p[0] + e[1] * p[1] + e[2] * p[2];
-                let eye = (e[0] * e[0] + e[1] * e[1] + e[2] * e[2]).sqrt();
-                visible = along + s.radius * eye >= r * r
+                visible = dot3(&e, &p) + s.radius * len3(&e) >= r * r
             }
         }
     }
@@ -1224,7 +1204,7 @@ struct Landing {
     slots: u32,
     /// Slots of the tier it is rebuilt over, which it writes over.
     over: u32,
-    bounds: Option<Bounds>,
+    bounds: Option<Aabb>,
 }
 
 /// Holds every slot a tier of `boxes` fills at once, or records the need and
@@ -1333,15 +1313,8 @@ fn part(slots: &[Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
     let mut bounds = meshes.landing.as_ref().and_then(|l| l.bounds);
     for r in words.chunks_exact(box_words as usize) {
         let (min, size) = box_bounds(r, unit, heights);
-        let b = bounds.get_or_insert(Bounds {
-            min: [f32::INFINITY; 3],
-            max: [f32::NEG_INFINITY; 3],
-        });
-        for a in 0..3 {
-            let (lo, size) = (min[a] as f32, size[a] as f32);
-            b.min[a] = b.min[a].min(lo);
-            b.max[a] = b.max[a].max(lo + size);
-        }
+        let b = Aabb { min, max: std::array::from_fn(|a| min[a] + size[a]) };
+        bounds = Some(bounds.map_or(b, |a| a.join(b)));
     }
     if box_cnt > 0 {
         let before = arena_epoch();

@@ -11,7 +11,7 @@ use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::indexer::{L3_BASE, L3_CENTER};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::v3::{floor3n, V3};
+use pxl_spec::space::v3::{floor3n, len3, V3};
 use pxl_spec::space::xy::TO_XY;
 
 use crate::global::Global;
@@ -55,10 +55,6 @@ pub struct Sketch {
     pub labels: Vec<Label>,
 }
 
-fn hypot3(v: V3) -> f64 {
-    (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt()
-}
-
 impl Sketch {
     pub fn line(&mut self, from: V3, to: V3) {
         for p in [from, to] {
@@ -67,7 +63,7 @@ impl Sketch {
     }
 
     pub fn dashed(&mut self, from: V3, to: V3) {
-        let len = hypot3([to[0] - from[0], to[1] - from[1], to[2] - from[2]]);
+        let len = len3(&[to[0] - from[0], to[1] - from[1], to[2] - from[2]]);
         if len == 0.0 {
             return;
         }
@@ -156,7 +152,7 @@ impl Sketch {
     pub fn gyro(&mut self, to_local: &dyn Fn(V3) -> V3, vertex: V3, label: &str, show_radius: bool) {
         let horiz = (vertex[0] * vertex[0] + vertex[1] * vertex[1]).sqrt();
         let dir = if horiz > 1e-9 { [vertex[0] / horiz, vertex[1] / horiz, 0.0] } else { [1.0, 0.0, 0.0] };
-        let radius = hypot3(vertex);
+        let radius = len3(&vertex);
         let center = to_local([0.0, 0.0, 0.0]);
         let axis = |v: V3| {
             let p = to_local(v);
@@ -322,7 +318,7 @@ pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>, map_origin: IVec)
     g.built_for = Some(key);
     let mut s = sketch_map(&center, map_origin);
     sketch_frames(&mut s);
-    let origin = [ivec::to_real(ivec::X(map_origin)), ivec::to_real(ivec::Y(map_origin)), ivec::to_real(ivec::Z(map_origin))];
+    let origin = ivec::to_v3(map_origin);
     set_lines(origin, &s.vertices);
     g.drawn = s;
     g.shown = true;

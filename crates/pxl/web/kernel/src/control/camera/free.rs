@@ -21,8 +21,7 @@ use crate::world::frame::view::{view, view_compose};
 
 /// The first resident thing it meets, else the sea, else `fallback` along it.
 pub fn look_point(eye: V3, forward: V3, fallback: f64) -> V3 {
-    let o = view().origin;
-    let frame = [ivec::to_real(ivec::X(o)), ivec::to_real(ivec::Y(o)), ivec::to_real(ivec::Z(o))];
+    let frame = ivec::to_v3(view().origin);
     let ray = Ray {
         origin: std::array::from_fn(|k| eye[k] + frame[k]),
         direction: forward,

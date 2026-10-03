@@ -81,7 +81,8 @@ pub fn preview_step(ctx: &mut TickContext) {
     // Under the map origin: the case reads the actor's place from an f32
     // uniform, which cannot resolve a unit-tall model millions of units out.
     let origin = local_world_origin();
-    let at = [ivec::to_real(ivec::X(origin)), ivec::to_real(ivec::Y(origin)), ivec::to_real(ivec::Z(origin)) - CASE_DEPTH_U];
+    let mut at = ivec::to_v3(origin);
+    at[2] -= CASE_DEPTH_U;
     for case in &mut c.cases {
         if case.model.is_none() {
             case.model = model_of(case.variant.model, 1.0);

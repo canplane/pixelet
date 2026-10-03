@@ -67,7 +67,7 @@ pub fn step(ctx: &mut TickContext) {
         return;
     }
     let origin = local_world_origin();
-    let base = [ivec::to_real(ivec::X(origin)), ivec::to_real(ivec::Y(origin)), ivec::to_real(ivec::Z(origin))];
+    let base = ivec::to_v3(origin);
     let pages = PoiPage::pyramid();
     if crate::world::pyramid::domain::current().is_none() {
         return;

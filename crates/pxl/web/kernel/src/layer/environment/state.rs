@@ -9,7 +9,7 @@ use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS, NIGHT,
 use pxl_render::look::globe::Globe;
 use pxl_spec::space::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::v3::{len3, V3};
 
 use crate::control::navigation::bootstrap::FALLBACK_G4326;
 use crate::global::Global;
@@ -231,7 +231,7 @@ impl EnvironmentDraw {
         // and the planet falls away under a camera standing off it.
         let km_per_u = km_per_u();
         let r = globe().radius_u();
-        let over = libm::hypot(libm::hypot(frame.camera[0], frame.camera[1]), frame.camera[2] + r) - r;
+        let over = len3(&[frame.camera[0], frame.camera[1], frame.camera[2] + r]) - r;
         let height = eye_height();
         // The ground pyramid's last observation, read rather than remade per frame.
         let drawn = crate::world::pyramid::domain::current().map(|d| d.observation().far);
