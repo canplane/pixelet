@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// Cells a way three cells wide paints in its column, ending at y = 20 on a cell's edge.
+/// Column 10 of a way 3 cells wide ending on a cell edge at y 20.
 fn painted(cut: [bool; 2]) -> Vec<i64> {
     let mut cells = vec![0 as GroundCell; PAGE_AREA];
     let mut target = Target {

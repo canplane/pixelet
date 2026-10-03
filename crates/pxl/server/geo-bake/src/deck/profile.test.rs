@@ -71,8 +71,7 @@ fn a_clearance_too_near_an_end_is_met_by_a_steeper_grade() {
     assert!((top[2] - 50.0 * 2.0 / 3.0).abs() < 1e-9, "on the line from the held point to the end: {top:?}");
 }
 
-/// A structure over `deck` on a chain 5 m a step, standing `shell` over its
-/// ground, with an approach out of each end to the chain's ends.
+/// `shell` over `deck`, an approach out of each end; 5 m a step.
 fn with_approaches(ground: &[f64], deck: std::ops::RangeInclusive<usize>, shell: f64) -> Profile {
     let n = ground.len();
     let adj = chain(n, 5.0);
@@ -90,8 +89,7 @@ fn with_approaches(ground: &[f64], deck: std::ops::RangeInclusive<usize>, shell:
     })
 }
 
-/// The approach out of the deck's right end: on or over its ground, never
-/// rising away from the deck before it meets it, and on it from there.
+/// Right approach: over its ground, falling, then on it.
 fn assert_meets_its_ground(p: &Profile, ground: &[f64], from: usize) {
     let contact = (from + 1..ground.len()).find(|&i| p.top[i] == ground[i]).expect("the approach meets its ground");
     for (i, (&top, &g)) in p.top.iter().zip(ground).enumerate().skip(from + 1) {
@@ -106,7 +104,7 @@ fn assert_meets_its_ground(p: &Profile, ground: &[f64], from: usize) {
 
 #[test]
 fn an_approach_meets_its_ground_at_the_grade_and_follows_it_from_there() {
-    // A dip past where the grade comes down: the road lies on it, not over it.
+    // a dip past the contact
     let ground: Vec<f64> = (0..60).map(|i| if (40..45).contains(&i) { -6.0 } else { 0.0 }).collect();
     let p = with_approaches(&ground, 20..=30, 2.0);
     assert_meets_its_ground(&p, &ground, 30);
@@ -116,8 +114,7 @@ fn an_approach_meets_its_ground_at_the_grade_and_follows_it_from_there() {
 
 #[test]
 fn an_approach_down_a_slope_steeper_than_the_grade_is_no_higher_than_its_joint() {
-    // The ground falls 20 % away from the deck: no grade meets it sooner, so
-    // the approach meets it where it ends, as gently as it can, never a wall.
+    // ground falling 20 %
     let ground: Vec<f64> = (0..60).map(|i| if i <= 30 { 0.0 } else { -(i - 30) as f64 }).collect();
     let p = with_approaches(&ground, 20..=30, 2.0);
     assert_meets_its_ground(&p, &ground, 30);
@@ -128,8 +125,7 @@ fn an_approach_down_a_slope_steeper_than_the_grade_is_no_higher_than_its_joint()
 
 #[test]
 fn a_cutting_past_a_hollow_by_its_portal_does_not_dip_and_climb() {
-    // In q a bore is a deck: 7.5 m under its ground. Its cutting passes a
-    // hollow two steps out (the ground nearer the road there) and climbs on.
+    // a bore 7.5 m deep, a hollow by its portal
     let mut ground: Vec<f64> = (0..80).map(|i| if i <= 30 { 0.0 } else { -3.2 }).collect();
     ground[31] = 5.7;
     ground[32] = 5.7;
