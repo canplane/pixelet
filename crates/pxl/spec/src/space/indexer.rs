@@ -25,7 +25,6 @@ pub const L2_SPAN_IN_L3: u64 = L2.count_in(L3) as u64;
 pub const L2_SPAN_IN_L4: u64 = L2.count_in(L4) as u64;
 pub const L3_SPAN_IN_L4: u64 = L3.count_in(L4) as u64;
 /// `ivec::fill` is not const, so each is the word it evaluates to, pinned by a test against `fill`.
-/// by a test against `fill`.
 pub const L2_MASK: IVec = fill_const(field_mask64(L2.shamt() as u32, 0));
 pub const L3_MASK: IVec = fill_const(field_mask64(L3.shamt() as u32, 0));
 pub const L4_MASK: IVec = fill_const(field_mask64(L4.shamt() as u32, 0));

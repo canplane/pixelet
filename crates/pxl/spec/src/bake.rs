@@ -2,6 +2,9 @@
 
 //! Baked page formats shared by the bake and the kernel, so the two cannot drift.
 
+use xpute_core::status::errno::Errno;
+use xpute_core::status::error::MarshalError;
+
 pub mod constant;
 pub mod deck;
 pub mod fold;
@@ -20,3 +23,9 @@ pub mod published;
 pub mod quadkey;
 pub mod surface;
 pub mod way;
+
+/// A packet no bake writes, as every page reader refuses it.
+#[track_caller]
+pub(crate) fn malformed() -> MarshalError {
+    MarshalError::new(Errno::EBADMSG)
+}

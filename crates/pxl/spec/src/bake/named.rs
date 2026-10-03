@@ -3,8 +3,9 @@
 //! A place's names as every bake stores them, whatever the source: its own
 //! name, and `(tag, name)` pairs in the languages it gives. Three leaves.
 
-use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
+
+use crate::bake::malformed;
 use xpute_core::wire::xtp::{BranchCursor, BranchViewImpl, NodeView, Strs};
 
 pub struct NameLanes<'a> {
@@ -50,7 +51,7 @@ impl<'a> NamesView<'a> {
         let pairs = view.langs.len() as usize;
         let ordered = view.starts.first() == Some(&0) && view.starts.windows(2).all(|w| w[0] <= w[1]);
         if view.starts.len() != len + 1 || view.names.len() as usize != len || !ordered || !pairs.is_multiple_of(2) || view.starts[len] as usize != pairs / 2 {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(malformed());
         }
         Ok(view)
     }

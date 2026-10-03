@@ -17,6 +17,12 @@ fn sample_at(t: f64) -> f64 {
     t / CELL_STEP + ELE_PAD as f64 - 0.5
 }
 
+/// Catmull-Rom's four weights at `t` past the second sample.
+fn catmull_rom(t: f64) -> [f64; 4] {
+    let (t2, t3) = (t * t, t * t * t);
+    [-0.5 * t3 + t2 - 0.5 * t, 1.5 * t3 - 2.5 * t2 + 1.0, -1.5 * t3 + 2.0 * t2 + 0.5 * t, 0.5 * t3 - 0.5 * t2]
+}
+
 /// Catmull-Rom over the 4 × 4 padded samples about a texel point, in cells.
 pub fn bicubic(page_ele: &[i16], tx: f64, ty: f64) -> i16 {
     let sx = sample_at(tx);
@@ -25,16 +31,8 @@ pub fn bicubic(page_ele: &[i16], tx: f64, ty: f64) -> i16 {
     let sx0 = sx.floor() as i32;
     let sy0 = sy.floor() as i32;
 
-    let fdx = sx - sx0 as f64;
-    let fdy = sy - sy0 as f64;
-
-    let x2 = fdx * fdx;
-    let x3 = x2 * fdx;
-    let wx = [-0.5 * x3 + x2 - 0.5 * fdx, 1.5 * x3 - 2.5 * x2 + 1.0, -1.5 * x3 + 2.0 * x2 + 0.5 * fdx, 0.5 * x3 - 0.5 * x2];
-
-    let y2 = fdy * fdy;
-    let y3 = y2 * fdy;
-    let wy = [-0.5 * y3 + y2 - 0.5 * fdy, 1.5 * y3 - 2.5 * y2 + 1.0, -1.5 * y3 + 2.0 * y2 + 0.5 * fdy, 0.5 * y3 - 0.5 * y2];
+    let wx = catmull_rom(sx - sx0 as f64);
+    let wy = catmull_rom(sy - sy0 as f64);
 
     let span = ELE_PADDED_SPAN as i32;
     let e = |idx: usize| page_ele[idx] as f64;

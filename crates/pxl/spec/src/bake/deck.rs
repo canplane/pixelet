@@ -7,11 +7,10 @@
 
 use std::borrow::Cow;
 
-use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{BranchCursor, BranchViewImpl, NodeView};
 
-use super::way;
+use super::{malformed, way};
 use crate::procedural::{pier_covers, Frame};
 use crate::space::hierarchy::child_of;
 use crate::space::pyramid::{GROUND, PAGE_CELLS};
@@ -49,12 +48,12 @@ pub const BORE_COVER_M: f64 = 3.0; // a bore's shell over its headroom: pixelet'
 /// clearance holds across the road on any of them.
 pub const MAX_GRADE: f64 = 0.30;
 
-/// Whole cells clear for `m` metres across a road, `cell_per_m` cells a metre:
-/// up to `MAX_GRADE` the clear height stands higher by the grade's secant, a
-/// least rounds up, and one cell more gives back what a voxel staircase's
-/// step takes out of the clear height at its edge.
-pub fn clear_cells(m: f64, cell_per_m: f64) -> i32 {
-    libm::ceil(m * libm::hypot(1.0, MAX_GRADE) * cell_per_m) as i32 + 1
+/// Whole cells clear for `m` metres across a road, `cell_per_m` cells a metre,
+/// where it steps `step` cells to the next column: up to `MAX_GRADE` the clear
+/// height stands higher by the grade's secant, a least rounds up, and a
+/// staircase's step, a cell at least, is taken out of it at the step's edge.
+pub fn clear_cells(m: f64, cell_per_m: f64, step: i32) -> i32 {
+    libm::ceil(m * libm::hypot(1.0, MAX_GRADE) * cell_per_m) as i32 + step.max(1)
 }
 
 /// What a way of transport type `kind` needs clear under a deck over it.
@@ -164,11 +163,13 @@ pub struct Deck<'a> {
     pub form: Form,
 }
 
-/// A line over one column: its road surface in z16 cells, and whether its
-/// pier's section covers the column.
+/// A line over one column: its road surface in z16 cells, how far that
+/// changes across one of its page's cells, and whether its pier's section
+/// covers the column.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Over {
     pub top: f64,
+    pub rise: f64,
     pub kind: u8,
     pub form: Form,
     pub pier: bool,
@@ -191,8 +192,11 @@ impl Over {
     /// `cell_per_m`: z16 cells a ground metre on the column's page.
     pub fn occupies(&self, ground: i32, cell_per_m: f64) -> Occupies {
         let top = round(self.top) as i32;
+        // a slab overlaps the next column's by a cell however far the surface steps
+        let step = libm::ceil(self.rise.abs()) as i32;
+        let thick = (round(DECK_THICKNESS_M * cell_per_m) as i32).max(step + 1);
         let slab = |floor: i32| {
-            let lo = (top - (round(DECK_THICKNESS_M * cell_per_m) as i32).max(1)).max(floor);
+            let lo = (top - thick).max(floor);
             Occupies::Above {
                 slab: [lo, top],
                 pier: (self.pier && lo > ground).then_some([ground, lo]),
@@ -202,7 +206,7 @@ impl Over {
         match self.form {
             Form::Deck => slab(i32::MIN),
             Form::Bore => Occupies::Through {
-                air: [top, top + clear_cells(headroom_m(self.kind), cell_per_m)],
+                air: [top, top + clear_cells(headroom_m(self.kind), cell_per_m, step)],
             },
             // a road off the ground past a structure stands on piers as a deck does, and is
             // open to the sky where it is cut in
@@ -272,38 +276,28 @@ impl Decks {
     }
 
     /// The lowest surface of a line that can sink inside the box, conservatively.
-    pub fn lowest_in(&self, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> Option<i16> {
-        let mut low = None;
-        for bore in self.iter().filter(|d| d.form.sinks()) {
-            let half = bore.footprint();
-            for s in 0..bore.points.len().saturating_sub(1) {
-                let (a, b) = (bore.point(s), bore.point(s + 1));
-                if a[0].max(b[0]) + half < x0 || a[0].min(b[0]) - half > x1 || a[1].max(b[1]) + half < y0 || a[1].min(b[1]) - half > y1 {
-                    continue;
-                }
-                let floor = bore.tops[s].min(bore.tops[s + 1]);
-                low = Some(low.map_or(floor, |v: i16| v.min(floor)));
-            }
-        }
-        low
+    pub fn lowest_in(&self, x: [f64; 2], y: [f64; 2]) -> Option<i16> {
+        self.segments_in(Form::sinks, x, y).map(|[lo, _]| lo).min()
     }
 
     /// The highest surface of a line that can rise inside the box,
     /// conservatively: its highest point counts wherever its footprint reaches the box.
-    pub fn highest_in(&self, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> Option<i16> {
-        let mut top = None;
-        for deck in self.iter().filter(|d| d.form.rises()) {
+    pub fn highest_in(&self, x: [f64; 2], y: [f64; 2]) -> Option<i16> {
+        self.segments_in(Form::rises, x, y).map(|[_, hi]| hi).max()
+    }
+
+    /// The lower and higher end of each segment whose footprint reaches the
+    /// box, of the lines whose form `keeps`.
+    fn segments_in(&self, keeps: fn(Form) -> bool, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> impl Iterator<Item = [i16; 2]> + '_ {
+        self.iter().filter(move |d| keeps(d.form)).flat_map(move |deck| {
             let half = deck.footprint();
-            for s in 0..deck.points.len().saturating_sub(1) {
+            (0..deck.points.len().saturating_sub(1)).filter_map(move |s| {
                 let (a, b) = (deck.point(s), deck.point(s + 1));
-                if a[0].max(b[0]) + half < x0 || a[0].min(b[0]) - half > x1 || a[1].max(b[1]) + half < y0 || a[1].min(b[1]) - half > y1 {
-                    continue;
-                }
-                let t = deck.tops[s].max(deck.tops[s + 1]);
-                top = Some(top.map_or(t, |v: i16| v.max(t)));
-            }
-        }
-        top
+                let apart = a[0].max(b[0]) + half < x0 || a[0].min(b[0]) - half > x1 || a[1].max(b[1]) + half < y0 || a[1].min(b[1]) - half > y1;
+                let (ta, tb) = (deck.tops[s], deck.tops[s + 1]);
+                (!apart).then_some([ta.min(tb), ta.max(tb)])
+            })
+        })
     }
 }
 
@@ -342,7 +336,7 @@ impl Deck<'_> {
         let (a, b) = (self.point(s), self.point(s + 1));
         let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
         let len2 = dx * dx + dy * dy;
-        let t = if len2 > 0.0 { ((at[0] - a[0]) * dx + (at[1] - a[1]) * dy) / len2 } else { 0.0 };
+        let t = along(a, [dx, dy], at);
         // a line ends square where it begins and ends, as the ground cuts a way, so the
         // next line and the paint start where it stops; its joints stay round
         if (s == 0 && t < 0.0) || (s + 2 == self.points.len() && t > 1.0) {
@@ -353,13 +347,22 @@ impl Deck<'_> {
         if !way::covers(self.width_cells(), libm::hypot(at[0] - near[0], at[1] - near[1])) {
             return None;
         }
+        let rise = f64::from(self.tops[s + 1]) - f64::from(self.tops[s]);
         Some(Over {
-            top: f64::from(self.tops[s]) + (f64::from(self.tops[s + 1]) - f64::from(self.tops[s])) * t,
+            top: f64::from(self.tops[s]) + rise * t,
+            rise: if len2 > 0.0 { rise / libm::sqrt(len2) } else { 0.0 },
             kind: self.kind,
             form: self.form,
             pier: self.form != Form::Bore && frame.is_some_and(|f| pier_covers(f, self.width_cells(), a, [dx, dy], near, at)),
         })
     }
+}
+
+/// Where the nearest point of the line from `a` along `d` to `p` lies, as a
+/// share of `d`; 0 when `d` is none.
+fn along(a: [f64; 2], d: [f64; 2], p: [f64; 2]) -> f64 {
+    let len2 = d[0] * d[0] + d[1] * d[1];
+    if len2 > 0.0 { ((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / len2 } else { 0.0 }
 }
 
 pub fn footprint(width: f64) -> f64 {
@@ -419,11 +422,10 @@ fn simplify(points: &[[f64; 2]], tops: &[i16], across: f64, height: f64) -> Vec<
         }
         let (pa, pb) = (points[a], points[b]);
         let (dx, dy) = (pb[0] - pa[0], pb[1] - pa[1]);
-        let len2 = dx * dx + dy * dy;
         let mut worst = (0.0, a);
         for i in a + 1..b {
             let p = points[i];
-            let t = if len2 > 0.0 { (((p[0] - pa[0]) * dx + (p[1] - pa[1]) * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
+            let t = along(pa, [dx, dy], p).clamp(0.0, 1.0);
             let off = libm::hypot(p[0] - pa[0] - dx * t, p[1] - pa[1] - dy * t) / across;
             let rise = (f64::from(tops[i]) - (f64::from(tops[a]) + (f64::from(tops[b]) - f64::from(tops[a])) * t)).abs() / height;
             let e = off.max(rise);
@@ -513,11 +515,10 @@ pub struct Lanes<'a> {
 
 /// Refused unless the lanes are one page's decks, consistently sized and within a record's room.
 pub fn read_branch(d: BranchCursor<'_>) -> Result<Lanes<'_>, MarshalError> {
-    let bad = || MarshalError::new(Errno::EBADMSG);
     let starts = d.at(0)?.get_array::<u32>()?;
     let points = match d.at(1)?.get_array::<i16>()?.as_chunks::<2>() {
         (points, []) => points,
-        _ => return Err(bad()),
+        _ => return Err(malformed()),
     };
     let lanes = Lanes {
         starts,
@@ -538,7 +539,7 @@ pub fn read_branch(d: BranchCursor<'_>) -> Result<Lanes<'_>, MarshalError> {
         && starts.last() == Some(&(points.len() as u32))
         && starts.windows(2).all(|w| w[0] <= w[1])
         && lanes.form.iter().all(|&f| usize::from(f) < Form::ALL.len());
-    shaped.then_some(lanes).ok_or_else(bad)
+    shaped.then_some(lanes).ok_or_else(malformed)
 }
 
 impl Lanes<'_> {

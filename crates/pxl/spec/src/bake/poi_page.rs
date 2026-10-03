@@ -14,10 +14,10 @@ use std::collections::HashMap;
 use crate::bake::poi_badge::{DEFAULT_COLOR, DEFAULT_ICON, KIND_CATEGORIES, KIND_COLORS, KIND_ICONS};
 use crate::space::pvf3::pvf3::Pvf3;
 use crate::space::pyramid::{Folds, Lattice, LevelPage, GROUND, TOP_LEVEL};
-use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
+use crate::bake::malformed;
 use crate::bake::named::{NameLanes, NamesView};
 
 /// Places are counted in cells 2^6 ground cells wide, so no two cells'
@@ -345,16 +345,16 @@ pub fn decode(bytes: &[u8]) -> Result<PoiPage, MarshalError> {
     let (n, places) = (cells.len(), kinds.len() as usize);
     let runs_fit = starts.len() == n + 1 && starts[0] == 0 && starts.windows(2).all(|w| w[0] <= w[1]) && starts[n] as usize == shown.len();
     if n > CELLS as usize || counts.len() != n || partial.len() != n || !runs_fit || at.len() != 2 * shown.len() || shown.len() > n * KINDS_MAX || ids.len() as usize != places {
-        return Err(bad());
+        return Err(malformed());
     }
     let names = NamesView::read(&root, 8, places)?;
     let mut pooled = Places::default();
     for i in 0..places as u32 {
-        let name = names.name(i).ok_or_else(bad)?;
+        let name = names.name(i).ok_or_else(malformed)?;
         if name.is_empty() || name.chars().nth(NAME_CHARS).is_some() {
-            return Err(bad());
+            return Err(malformed());
         }
-        pooled.push(name, names.languages(i), kind_of(kinds.get(i).ok_or_else(bad)?), ids.get(i).ok_or_else(bad)?);
+        pooled.push(name, names.languages(i), kind_of(kinds.get(i).ok_or_else(malformed)?), ids.get(i).ok_or_else(malformed)?);
     }
     let page = PoiPage {
         cells: (0..n)
@@ -371,7 +371,7 @@ pub fn decode(bytes: &[u8]) -> Result<PoiPage, MarshalError> {
     };
     let cells_fit = page.cells.iter().all(|c| c.cell < CELLS && c.count > 0) && page.cells.windows(2).all(|w| w[0].cell < w[1].cell);
     if !cells_fit || page.shown.iter().any(|s| s.place >= page.places.len()) {
-        return Err(bad());
+        return Err(malformed());
     }
     Ok(page)
 }
@@ -381,34 +381,30 @@ pub fn decode(bytes: &[u8]) -> Result<PoiPage, MarshalError> {
 /// in the badge table; names whole within `NAME_CHARS`.
 fn validate(page: &PoiPage) -> Result<(), MarshalError> {
     if page.cells.iter().any(|c| c.cell >= CELLS || c.count == 0) || page.cells.windows(2).any(|w| w[0].cell >= w[1].cell) {
-        return Err(bad());
+        return Err(malformed());
     }
     let mut next = 0;
     for c in &page.cells {
         if c.first != next || (c.first + c.len) as usize > page.shown.len() {
-            return Err(bad());
+            return Err(malformed());
         }
         next = c.first + c.len;
         let run = &page.shown[c.first as usize..next as usize];
         if run.iter().any(|s| s.place >= page.places.len() || s.at.iter().any(|&l| l > 0xffff)) {
-            return Err(bad());
+            return Err(malformed());
         }
         if run.windows(2).any(|w| page.places.get(w[0].place).kind >= page.places.get(w[1].place).kind) {
-            return Err(bad());
+            return Err(malformed());
         }
     }
     let places = &page.places;
     let bad_place = |i: u32| places.kinds[i as usize] as usize > KIND_CATEGORIES.len() || places.names.get(i).is_empty() || places.names.get(i).chars().nth(NAME_CHARS).is_some();
     if next as usize != page.shown.len() || (0..places.len()).any(bad_place) {
-        return Err(bad());
+        return Err(malformed());
     }
     Ok(())
 }
 
-#[track_caller]
-fn bad() -> MarshalError {
-    MarshalError::new(Errno::EBADMSG)
-}
 
 #[cfg(test)]
 #[path = "poi_page.test.rs"]

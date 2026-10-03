@@ -22,7 +22,6 @@ use crate::bake::constant::{CELL, DECK_CELL, EXTENT_CELL};
 /// page-constant vertical scale is already 12% off.
 pub const TOP_LEVEL: u32 = 10;
 
-
 // A lattice is a scale against the unit: its level-k cell is k levels above
 // its first. Pages and chunks are fixed in units (L3, L2).
 
@@ -97,11 +96,14 @@ impl Lattice {
         self.cell_index(x as u32, y as u32)
     }
 
-    /// The child slot and first of the 2×2 cells a parent cell folds from: `parent_cell`'s inverse.
-    pub fn child_block(self, index: u32) -> (usize, u32) {
+    /// The child slot and the 2×2 cells, in `slot_of`'s order, a parent cell
+    /// folds from: `parent_cell`'s inverse.
+    pub fn child_block(self, index: u32) -> (usize, [u32; 4]) {
         let n = self.page_cells() as i64;
         let [x, y] = child_of(self.in_page(index).map(i64::from), 0);
-        (slot_of([x / n, y / n]), self.cell_index((x % n) as u32, (y % n) as u32))
+        let [x0, y0] = [(x % n) as u32, (y % n) as u32];
+        let cells = std::array::from_fn(|q| self.cell_index(x0 + (q & 1) as u32, y0 + (q >> 1) as u32));
+        (slot_of([x / n, y / n]), cells)
     }
 
     /// The cells of this lattice under `outer`'s cell `index` of the same page, row by row.
@@ -153,8 +155,6 @@ pub const PAGE_CELLS: u32 = GROUND.page_cells();
 pub const CHUNK_CELLS: u32 = GROUND.chunk_cells();
 
 pub const PAGE_CHUNKS: u32 = PAGE_CELLS / CHUNK_CELLS;
-
-
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct LevelPage {

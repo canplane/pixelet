@@ -95,10 +95,10 @@ fn a_parent_cell_and_its_child_block_are_one_relation() {
             for (tx, ty) in [(0, 0), (1, 0), (n - 1, n - 1), (n / 2, 3), (7, n - 2)] {
                 let child = lattice.cell_index(tx, ty);
                 let parent = lattice.parent_cell(q, child);
-                let (slot, first) = lattice.child_block(parent);
+                let (slot, block) = lattice.child_block(parent);
                 assert_eq!(slot, q, "the block lies in the child page the cell does");
-                let block = [first, first + 1, first + n, first + n + 1];
-                assert!(block.contains(&child), "{child} folds from the block at {first}");
+                assert_eq!(block, [block[0], block[0] + 1, block[0] + n, block[0] + n + 1], "a 2×2 block, row by row");
+                assert!(block.contains(&child), "{child} folds from the block at {}", block[0]);
             }
         }
     }

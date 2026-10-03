@@ -40,9 +40,8 @@ pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], level: i32) -> T {
 pub fn fold_ground(children: [&Ground; 4], level: u32) -> Ground {
     let out = (0..PAGE_CELLS * PAGE_CELLS)
         .map(|index| {
-            let (q, first) = GROUND.child_block(index);
-            let ([x, y], c) = (GROUND.in_page(first), &children[q].cells);
-            let four = [[x, y], [x + 1, y], [x, y + 1], [x + 1, y + 1]].map(|[x, y]| c[GROUND.cell_index(x, y) as usize]);
+            let (q, block) = GROUND.child_block(index);
+            let four = block.map(|i| children[q].cells[i as usize]);
             let mut cell = 0 as GroundCell;
             for key in GROUND_CH_KEYS {
                 cell = with_channel(cell, key, majority(four.map(|f| channel_of(f, key)), level as i32));
@@ -94,9 +93,8 @@ pub fn fold_index(children: [&Index; 4], own: Vec<[i16; 2]>) -> Index {
         .into_iter()
         .enumerate()
         .map(|(index, [lo, hi])| {
-            let (q, first) = EXTENT.child_block(index as u32);
-            let [x, y] = EXTENT.in_page(first);
-            let four = [[x, y], [x + 1, y], [x, y + 1], [x + 1, y + 1]].map(|[x, y]| children[q].extent()[EXTENT.cell_index(x, y) as usize]);
+            let (q, block) = EXTENT.child_block(index as u32);
+            let four = block.map(|i| children[q].extent()[i as usize]);
             four.iter().fold([lo, hi], |[lo, hi], &[clo, chi]| [lo.min(clo), hi.max(chi)])
         })
         .collect::<Vec<_>>();

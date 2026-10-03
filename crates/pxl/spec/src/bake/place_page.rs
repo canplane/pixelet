@@ -11,6 +11,7 @@ use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, BranchViewImpl, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 use xpute_core::wire::xtp::BranchCursor;
 
+use crate::bake::malformed;
 use crate::bake::named::{NameLanes, NamesView};
 
 use crate::bake::quadkey::{quadkey_of, Quadkey, PAGE_KEY_DEPTH};
@@ -175,10 +176,10 @@ pub fn open_place_group(pkt: &[u8]) -> Result<PlaceGroupView<'_>, MarshalError> 
         locals: read_places(&root, 3)?,
     };
     if view.pages.len() != GROUP_PAGES {
-        return Err(bad());
+        return Err(malformed());
     }
     if view.starts.is_empty() || view.starts.windows(2).any(|w| w[0] > w[1]) || *view.starts.last().or_bug(Errno::ENOTRECOVERABLE) as usize > view.flat.len() {
-        return Err(bad());
+        return Err(malformed());
     }
     Ok(view)
 }
@@ -205,10 +206,6 @@ impl<'a> PlaceGroupView<'a> {
     }
 }
 
-#[track_caller]
-fn bad() -> MarshalError {
-    MarshalError::new(Errno::EBADMSG)
-}
 
 #[cfg(test)]
 #[path = "place_page.test.rs"]

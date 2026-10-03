@@ -2,13 +2,13 @@
 
 //! A baked terrain page and its wire: `[ele, cells, extent, occupancy, decks]`.
 
-use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
 use std::borrow::Cow;
 
 use super::constant::ELE_PADDED_SPAN;
+use super::malformed;
 use super::deck::{self, Decks};
 use super::ground::SHIFT_RANGE;
 use super::pack::{channel_of, GroundCell};
@@ -54,7 +54,7 @@ const _: () = {
 /// from the bake through the wire to the client.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Ground {
-    pub cells: std::borrow::Cow<'static, [GroundCell]>,
+    pub cells: Cow<'static, [GroundCell]>,
 }
 
 impl Ground {
@@ -211,7 +211,7 @@ fn blocks_of(lane: &[[i16; 2]], blocks: &mut [Block]) {
 pub struct Terrain {
     pub ground: Ground,                        // a class a cell: the source rasterized
     pub decks: Decks,                          // ways off the ground: source lines, tops solved offline
-    pub ele: std::borrow::Cow<'static, [i16]>, // padded height samples, in z16 cells: from the raster
+    pub ele: Cow<'static, [i16]>,              // padded height samples, in z16 cells: from the raster
     pub index: Index,                          // bounds over the page and all under it: no one page holds them
 }
 
@@ -226,11 +226,6 @@ impl Terrain {
             index: Index::new(extent, Occupancy::LEAF),
         }
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct Tile {
-    pub terrain: Terrain,
 }
 
 // Cells go out packed, as the client holds them, so decoding is a length check and a copy.
@@ -272,7 +267,7 @@ fn read_page(pkt: &[u8]) -> Result<Lanes<'_>, MarshalError> {
     let occupancy = occupancy_of(root.at(3)?.get_number()?)?;
     let decks = deck::read_branch(root.at_branch(4)?)?;
     if ele.len() != ELE_LANE || cells.len() != GROUND_LANE || extent.len() != EXTENT_LANE {
-        return Err(MarshalError::new(Errno::EBADMSG));
+        return Err(malformed());
     }
     Ok(Lanes { ele, cells, extent, occupancy, decks })
 }
@@ -282,7 +277,7 @@ fn read_page(pkt: &[u8]) -> Result<Lanes<'_>, MarshalError> {
 pub fn decode_terrain_into(pkt: &[u8], room: PageRoom) -> Result<Terrain, MarshalError> {
     let Lanes { ele, cells, extent, occupancy, decks } = read_page(pkt)?;
     if room.ele.len() != ELE_LANE || room.cells.len() != GROUND_LANE || room.extent.len() != EXTENT_LANE {
-        return Err(MarshalError::new(Errno::EBADMSG));
+        return Err(malformed());
     }
     room.ele.copy_from_slice(ele);
     room.cells.copy_from_slice(cells);
@@ -321,12 +316,12 @@ pub fn decode_terrain(pkt: &[u8]) -> Result<Terrain, MarshalError> {
 fn pairs(flat: &[i16]) -> Result<&[[i16; 2]], MarshalError> {
     match flat.as_chunks::<2>() {
         (pairs, []) => Ok(pairs),
-        _ => Err(MarshalError::new(Errno::EBADMSG)),
+        _ => Err(malformed()),
     }
 }
 
 fn occupancy_of(number: f64) -> Result<Occupancy, MarshalError> {
-    u8::try_from(number as i64).ok().and_then(Occupancy::of_bits).ok_or(MarshalError::new(Errno::EBADMSG))
+    u8::try_from(number as i64).ok().and_then(Occupancy::of_bits).ok_or_else(malformed)
 }
 
 #[cfg(test)]

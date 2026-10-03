@@ -34,21 +34,25 @@ pub fn shown_ground(read: impl Fn(GroundChannelKey) -> u32) -> ShownGround {
     shown
 }
 
+/// Each channel's `shift` column, by the channel's number.
+const SHIFT_COLUMNS: [&[(u8, i16)]; 4] = {
+    let mut columns: [&[(u8, i16)]; 4] = [&[]; 4];
+    columns[GroundChannelKey::LAND as usize] = cube_types::land::SHIFT;
+    columns[GroundChannelKey::WATER as usize] = cube_types::water::SHIFT;
+    columns[GroundChannelKey::STRUCTURE as usize] = cube_types::structure::SHIFT;
+    columns[GroundChannelKey::TRANSPORT as usize] = cube_types::transport::SHIFT;
+    columns
+};
+
 /// A raise or a sink that sets one layer's cells apart from the ground
 /// around them, up positive: the catalog's `shift` column, by type.
 pub fn shift(shown: ShownGround) -> i16 {
-    let column = match shown.channel {
-        GroundChannelKey::LAND => cube_types::land::SHIFT,
-        GroundChannelKey::WATER => cube_types::water::SHIFT,
-        GroundChannelKey::STRUCTURE => cube_types::structure::SHIFT,
-        GroundChannelKey::TRANSPORT => cube_types::transport::SHIFT,
-    };
-    column.iter().find(|(t, _)| *t as u32 == shown.type_id).map_or(0, |&(_, r)| r)
+    SHIFT_COLUMNS[shown.channel as usize].iter().find(|(t, _)| *t as u32 == shown.type_id).map_or(0, |&(_, r)| r)
 }
 
 /// In cells.
 pub const SHIFT_RANGE: [i16; 2] = {
-    let columns = [cube_types::land::SHIFT, cube_types::water::SHIFT, cube_types::structure::SHIFT, cube_types::transport::SHIFT];
+    let columns = SHIFT_COLUMNS;
     let (mut lo, mut hi) = (0, 0);
     let mut c = 0;
     while c < columns.len() {
