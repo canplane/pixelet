@@ -256,9 +256,6 @@
     "companion_loading": "동행을 준비하고 있습니다."
   },
   "map": {
-    "scale_bar": {
-      "reset_zoom": "줌 초기화"
-    },
     "dock": {
       "palette_tooltip": "팔레트",
       "pointer": "포인터",

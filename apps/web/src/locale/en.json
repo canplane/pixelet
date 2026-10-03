@@ -256,9 +256,6 @@
     "companion_loading": "Preparing your companion…"
   },
   "map": {
-    "scale_bar": {
-      "reset_zoom": "Reset Zoom"
-    },
     "dock": {
       "palette_tooltip": "Palette",
       "pointer": "Pointer",
