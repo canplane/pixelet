@@ -66,7 +66,7 @@ pub struct WayColumns<'a> {
 impl WayShape {
     pub fn at(c: WayColumns, at: f64) -> WayShape {
         let role = match Role::at(c.subclass, c.subclasses, at) {
-            Role::Way if flag_at(c.flags, LINK_FLAGS, at) => Role::Link,
+            Role::Way if flag_at(c.flags, LINK_FLAGS, 0.0, at) => Role::Link,
             role => role,
         };
         WayShape {

@@ -5,7 +5,7 @@
 use pxl_spec::bake::deck::Form;
 use pxl_spec::space::adapter::epsg3857::{from_db, scale_at, G3857};
 
-use crate::terrain::pipeline::overture::between::{flag_ranges, split_ranged, value_at, without, Line};
+use crate::terrain::pipeline::overture::between::{cell_of, flag_ranges, length_of, split_ranged, value_at, without, Line};
 use crate::terrain::pipeline::overture::policy::{BORE_FLAGS, DECK_FLAGS, UNSEEN_FLAGS};
 use crate::terrain::pipeline::overture::width::{width_m, WayColumns, WayShape};
 use crate::wkb::wkb_to_geometries;
@@ -169,7 +169,8 @@ pub fn pieces_of(row: &BridgeRow, form: Form) -> Vec<Piece> {
         Form::Deck => (DECK_FLAGS, UNSEEN_FLAGS.to_vec()),
         Form::Bore => (BORE_FLAGS, UNSEEN_FLAGS.iter().copied().filter(|f| !BORE_FLAGS.contains(f)).collect()),
     };
-    let deck = without(&flag_ranges(flags, on), &flag_ranges(flags, &less));
+    let cell = cell_of(length_of(&row.geom_wkb));
+    let deck = without(&flag_ranges(flags, on, cell), &flag_ranges(flags, &less, cell));
     if deck.is_empty() {
         return Vec::new();
     }

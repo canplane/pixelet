@@ -14,8 +14,8 @@ pub mod structure;
 use std::collections::{HashMap, HashSet};
 
 use postgres::Client;
-use pxl_spec::bake::deck::{clearance_m, headroom_m, Form, BORE_COVER_M, DECK_THICKNESS_M};
 use pxl_spec::bake::constant::U_PER_CELL;
+use pxl_spec::bake::deck::{clearance_m, headroom_m, Form, BORE_COVER_M, DECK_THICKNESS_M};
 use pxl_spec::bake::format::DeckRow;
 use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m};
 use pxl_spec::space::pyramid::PAGE_CELLS;
@@ -23,7 +23,7 @@ use pxl_spec::space::pyramid::PAGE_CELLS;
 use crate::terrain::repository::DRAWN_REACH_U;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 
-use crate::terrain::pipeline::overture::between::{flag_at, flag_ranges, value_at};
+use crate::terrain::pipeline::overture::between::{cell_of, flag_at, flag_ranges, value_at};
 use crate::terrain::pipeline::overture::policy::{segment_type, DECK_FLAGS, UNSEEN_FLAGS};
 use param::{AT_END_M, RIVER_M, RIVER_MOST_M, RIVER_PER_M, STREAM_M};
 use piece::{pieces_of, End, Piece};
@@ -311,7 +311,8 @@ fn grounded(input: &Input, pieces: &[Piece]) -> HashSet<End> {
     for (point, own_at, way) in relate::connected(&asked, &input.ways) {
         let row = &way.row;
         let step = SIDE_STEP / way.line.length().max(SIDE_STEP);
-        let off = |at: f64| flag_at(row.flags.as_deref(), UNSEEN_FLAGS, at) || flag_at(row.flags.as_deref(), DECK_FLAGS, at);
+        let cell = cell_of(way.line.length());
+        let off = |at: f64| flag_at(row.flags.as_deref(), UNSEEN_FLAGS, cell, at) || flag_at(row.flags.as_deref(), DECK_FLAGS, cell, at);
         let on_ground = |at: f64| (0.0..=1.0).contains(&at) && !off(at) && value_at(row.levels.as_deref(), at).unwrap_or(0.0) == 0.0;
         if on_ground(own_at - step) || on_ground(own_at + step) {
             let (i, last) = ends[point];
@@ -327,9 +328,9 @@ fn needs_of(input: &Input, pieces: &[Piece], lines: &[Polyline]) -> Vec<Vec<Need
     let inside = |at: f64, m: usize| at > AT_END_M && at < pieces[m].to_m(lines[m].length()) - AT_END_M;
     for mut c in relate::ways_crossing(lines, &input.ways).into_iter().filter(|c| pieces[c.piece].gers_id != c.gers_id) {
         c.at = pieces[c.piece].to_m(c.at);
-        let off_ground = flag_ranges(c.flags.as_deref(), UNSEEN_FLAGS)
+        let off_ground = flag_ranges(c.flags.as_deref(), UNSEEN_FLAGS, c.cell)
             .iter()
-            .chain(&flag_ranges(c.flags.as_deref(), DECK_FLAGS))
+            .chain(&flag_ranges(c.flags.as_deref(), DECK_FLAGS, c.cell))
             .any(|&[a, b]| (a..=b).contains(&c.own_at));
         if off_ground || !inside(c.at, c.piece) {
             continue;

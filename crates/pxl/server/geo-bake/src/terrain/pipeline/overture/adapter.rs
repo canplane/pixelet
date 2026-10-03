@@ -6,7 +6,7 @@
 use pxl_spec::bake::format::{BaseRow, BuildingRow, SegmentRow};
 use pxl_spec::space::adapter::epsg3857::G3857;
 
-use crate::terrain::pipeline::overture::between::{flag_ranges, split_ranged};
+use crate::terrain::pipeline::overture::between::{cell_of, flag_ranges, length_of, split_ranged};
 use crate::terrain::pipeline::overture::policy::{DECK_FLAGS, UNSEEN_FLAGS};
 use crate::terrain::pipeline::overture::width::{WayColumns, WayShape};
 use crate::wkb::{wkb_to_geometries, WkbGeometry};
@@ -110,7 +110,8 @@ impl Columns for SegmentRow {
 /// is cut where an unseen flag or its bridge starts or stops.
 pub fn from_segment_row(row: &SegmentRow) -> Vec<OvertureRawFeature> {
     let flags = row.flags.as_deref();
-    let (unseen, deck) = (flag_ranges(flags, UNSEEN_FLAGS), flag_ranges(flags, DECK_FLAGS));
+    let cell = cell_of(length_of(&row.geom_wkb));
+    let (unseen, deck) = (flag_ranges(flags, UNSEEN_FLAGS, cell), flag_ranges(flags, DECK_FLAGS, cell));
     wkb_to_geometries(&row.geom_wkb)
         .into_iter()
         .flat_map(|g| split_ranged(g, [&unseen, &deck]))

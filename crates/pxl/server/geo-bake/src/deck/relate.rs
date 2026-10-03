@@ -9,6 +9,7 @@ use pxl_spec::space::adapter::epsg3857::to_db;
 use pxl_spec::space::pyramid::PAGE_CELLS;
 
 use crate::deck::piece::{BridgeRow, Piece};
+use crate::terrain::pipeline::overture::between::cell_of;
 use crate::wkb::wkb_to_geometries;
 
 /// A way within this of a point, in DB coordinates, passes through or ends there.
@@ -68,7 +69,10 @@ pub struct Way {
 impl Way {
     pub fn of(row: BridgeRow) -> Option<Way> {
         let g = wkb_to_geometries(&row.geom_wkb).into_iter().next()?;
-        (g.points.len() >= 2).then(|| Way { line: Polyline::of(g.points.iter().map(|p| [p[0], p[1]])), row })
+        (g.points.len() >= 2).then(|| Way {
+            line: Polyline::of(g.points.iter().map(|p| [p[0], p[1]])),
+            row,
+        })
     }
 }
 
@@ -160,6 +164,8 @@ pub struct WayCrossing {
     pub class: Option<String>,
     pub flags: Option<String>,
     pub own_at: f64,
+    /// A ground cell, as a fraction of the way.
+    pub cell: f64,
 }
 
 /// Every way meeting a piece: where along the piece, and where along the way.
@@ -179,6 +185,7 @@ pub fn ways_crossing(pieces: &[Polyline], ways: &[Way]) -> Vec<WayCrossing> {
                     subtype: way.row.subtype.clone(),
                     class: way.row.class.clone(),
                     flags: way.row.flags.clone(),
+                    cell: cell_of(way.line.length()),
                     own_at: (way.line.along[ws] + u * (way.line.along[ws + 1] - way.line.along[ws])) / way.line.length().max(f64::EPSILON),
                 });
             }
@@ -220,7 +227,13 @@ pub fn water_under(pieces: &[Polyline], water: &[Water]) -> Vec<WaterUnder> {
             at.dedup();
             for w in at.windows(2) {
                 if water[k].holds(point_at(piece, (w[0] + w[1]) / 2.0)) {
-                    out.push(WaterUnder { piece: i, from: w[0], to: w[1], subtype: water[k].subtype.clone(), class: water[k].class.clone() });
+                    out.push(WaterUnder {
+                        piece: i,
+                        from: w[0],
+                        to: w[1],
+                        subtype: water[k].subtype.clone(),
+                        class: water[k].class.clone(),
+                    });
                 }
             }
         }
