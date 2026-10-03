@@ -77,9 +77,7 @@ fn resident(held: &[(LevelPage, Terrain)]) -> Paging<Terrain> {
 }
 
 fn point(x: f64, y: f64) -> Pvf3 {
-    let mut at = Pvf3::default();
-    projection::project(&mut at, x, y, 0.0);
-    at
+    projection::project(x, y, 0.0)
 }
 
 fn down(at: [f64; 2]) -> Ray {
@@ -91,8 +89,7 @@ fn down(at: [f64; 2]) -> Ray {
 }
 
 fn write(store: &mut Store, corner: V3, side: Scale, state: u32) {
-    let mut at = Pvf3::default();
-    projection::project(&mut at, corner[0], corner[1], corner[2]);
+    let at = projection::project(corner[0], corner[1], corner[2]);
     let a = At::of_cube(&at, side);
     store.write([Write {
         col_idx: a.col_idx,
@@ -133,7 +130,13 @@ fn a_level_s_ray_meets_the_objects_in_the_cells_the_level_draws_from() {
     assert_eq!(fine.point[2], bz + 1.0, "{fine:?}");
     let hit = access.first_hit(&down(at), Detail::Level(level)).value().flatten().unwrap();
     assert!(matches!(hit.struck, Struck::Objects), "{hit:?}");
-    assert_eq!(hit.cube, Aabb { min: [bx, by, bz], max: [bx + cell, by + cell, bz + cell] });
+    assert_eq!(
+        hit.cube,
+        Aabb {
+            min: [bx, by, bz],
+            max: [bx + cell, by + cell, bz + cell]
+        }
+    );
     assert_eq!(hit.point[2], bz + cell);
 
     let alone = [lx + 0.5, ly + 0.5];

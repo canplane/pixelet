@@ -8,7 +8,6 @@ use core::f64::consts::TAU;
 use crate::space::indexer::{FROM_L3_IDX, L3_RANGE};
 use crate::space::pvf3::core::{FRAC_W, IVEC_X_W, IVEC_Y_W};
 use crate::space::pvf3::{projection, FVec, IVec, Pvf3};
-use crate::space::v3::V3;
 
 use super::epsg4326::EARTH_RADIUS_M;
 
@@ -47,25 +46,21 @@ fn wrap_x(x_u: f64) -> f64 {
     (((x_u + half) % U_TOTAL_X) + U_TOTAL_X) % U_TOTAL_X - half
 }
 
-pub fn project(out: &mut Pvf3, x: f64, y: f64, z: f64) -> &mut Pvf3 {
+pub fn project(x: f64, y: f64, z: f64) -> Pvf3 {
     let y = Y_MIN_U.max(Y_MAX_U.min(from_db(y)));
-    projection::project(out, wrap_x(from_db(x)), y, z * u_per_m(y));
-    out
+    projection::project(wrap_x(from_db(x)), y, z * u_per_m(y))
 }
 
-pub fn unproject(out: &mut G3857, i: IVec, f: FVec) -> &mut G3857 {
-    let mut reg: V3 = [0.0; 3];
-    projection::unproject(&mut reg, i, f);
-    *out = [to_db(wrap_x(reg[0])), to_db(reg[1]), reg[2] / u_per_m(reg[1])];
-    out
+pub fn unproject(i: IVec, f: FVec) -> G3857 {
+    let [x, y, z] = projection::unproject(i, f);
+    [to_db(wrap_x(x)), to_db(y), z / u_per_m(y)]
 }
 
 pub type BBox3857 = [G3857; 2];
 
 /// The maximum is built in u: the exclusive +2^23u edge is not an IVec.
 pub fn get_page_bbox(page_idx: IVec) -> BBox3857 {
-    let mut min: V3 = [0.0; 3];
-    projection::unproject(&mut min, FROM_L3_IDX(page_idx), 0);
+    let min = projection::unproject(FROM_L3_IDX(page_idx), 0);
     let span = L3_RANGE as f64;
     [[to_db(min[0]), to_db(min[1]), 0.0], [to_db(min[0] + span), to_db(min[1] + span), 0.0]]
 }

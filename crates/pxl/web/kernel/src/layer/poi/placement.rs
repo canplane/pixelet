@@ -46,8 +46,7 @@ static PLACEMENT: Global<Placement> = Global::new();
 
 /// None where nothing over it is known.
 fn top_at(at: &Pvf3, level: u32) -> Option<f64> {
-    let mut xy = [0.0; 3];
-    projection::unproject(&mut xy, at.i, at.f);
+    let xy = projection::unproject(at.i, at.f);
     let (high, low) = (REACH.max[2], REACH.min[2]);
     let ray = Ray {
         origin: [xy[0], xy[1], high],

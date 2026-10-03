@@ -17,11 +17,8 @@ fn assert_almost(a: f64, b: f64, tol: f64) {
 }
 
 fn round_trip(x: f64, y: f64, z: f64) -> [f64; 3] {
-    let mut p = Pvf3::default();
-    project(&mut p, x, y, z);
-    let mut out: G3857 = [0.0; 3];
-    unproject(&mut out, p.i, p.f);
-    out
+    let p = project(x, y, z);
+    unproject(p.i, p.f)
 }
 
 #[test]
@@ -50,35 +47,29 @@ fn epsg3857_project_unproject_round_trips_a_nonzero_altitude_mercator_corrected_
 
 #[test]
 fn epsg3857_project_wraps_x_across_the_antimeridian_instead_of_growing_unbounded() {
-    let mut p = Pvf3::default();
-    project(&mut p, to_db(U_TOTAL_X) * 1.5 + 1000.0, 0.0, 0.0);
-    let mut out: G3857 = [0.0; 3];
-    unproject(&mut out, p.i, p.f);
+    let p = project(to_db(U_TOTAL_X) * 1.5 + 1000.0, 0.0, 0.0);
+    let out = unproject(p.i, p.f);
     // 1.5 world widths east wraps to -0.5.
     assert_almost(out[0], -half_world() + 1000.0, ROUND_TRIP_TOL);
 }
 
 #[test]
 fn epsg3857_project_keeps_the_clamped_north_edge_below_the_signed_y_seam() {
-    let mut coord = Pvf3::default();
-    project(&mut coord, 0.0, half_world(), 0.0);
+    let coord = project(0.0, half_world(), 0.0);
 
     assert_eq!(ivec::Y(coord.i), (1 << 23) - 1);
     assert_eq!(fvec::Y(coord.f), (1 << FRAC_W) - 1);
 
-    let mut out: G3857 = [0.0; 3];
-    unproject(&mut out, coord.i, coord.f);
+    let out = unproject(coord.i, coord.f);
     assert!(out[1] > 0.0);
     assert_almost(out[1], half_world(), 0.01);
 }
 
 #[test]
 fn epsg3857_project_pvf3_x_subtraction_takes_the_short_antimeridian_path() {
-    let (mut east, mut west, mut delta) = (Pvf3::default(), Pvf3::default(), Pvf3::default());
-
-    project(&mut east, half_world() - 1.0, 0.0, 0.0);
-    project(&mut west, -half_world() + 1.0, 0.0, 0.0);
-    pvf3::sub(&mut delta, &west, &east);
+    let east = project(half_world() - 1.0, 0.0, 0.0);
+    let west = project(-half_world() + 1.0, 0.0, 0.0);
+    let delta = pvf3::sub(&west, &east);
 
     assert_almost(to_db(pvf3::to_real(pvf3::X(&delta))), 2.0, 0.01);
 }

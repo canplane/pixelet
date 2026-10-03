@@ -21,9 +21,7 @@ fn domain(o: Observation, world: &World) -> Domain {
 }
 
 fn point(p: V3) -> Pvf3 {
-    let mut at = Pvf3::default();
-    projection::project(&mut at, p[0], p[1], p[2]);
-    at
+    projection::project(p[0], p[1], p[2])
 }
 
 fn pieces_at(pieces: &[Chunk], p: V3) -> Vec<Chunk> {

@@ -99,8 +99,7 @@ pub fn globe_anchor_local() -> V3 {
 /// None before the camera stands somewhere.
 pub fn globe_anchor() -> Option<Pvf3> {
     crate::control::camera::controller::camera().eye?;
-    let mut out = Pvf3::default();
-    local_world_to_canonical(&mut out, &globe_anchor_local(), view().origin);
+    let out = local_world_to_canonical(&globe_anchor_local(), view().origin);
     Some(out)
 }
 
@@ -123,8 +122,7 @@ pub fn view_compose() {
     // The lattice only reaches so high: an eye above it is written against the
     // highest cell, the eye itself being doubles.
     let e = v.eye_at();
-    let mut at = Pvf3::default();
-    projection::project(&mut at, e[0], e[1], e[2].clamp(REACH.min[2], REACH.max[2] - 1.0));
+    let at = projection::project(e[0], e[1], e[2].clamp(REACH.min[2], REACH.max[2] - 1.0));
     let level = lod::level(height_at(v.eye_at())).clamp(0, TOP_LEVEL as i32) as u32;
     let want = origin_for(at.i, level);
     if want != v.origin {
@@ -164,4 +162,3 @@ pub fn ndc_to_px([x, y]: [f64; 2]) -> [f64; 2] {
     let v = view();
     [(x * 0.5 + 0.5) * v.width, (-y * 0.5 + 0.5) * v.height]
 }
-

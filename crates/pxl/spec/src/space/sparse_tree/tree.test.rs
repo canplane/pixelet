@@ -11,8 +11,8 @@ const LAYOUT: SparseTreeLayout = SparseTreeLayout {
 };
 
 fn at(x: f64, y: f64, z: f64) -> Pvf3 {
-    let mut out = Pvf3::default();
-    *pvf3::gather(&mut out, pvf3::from_real(x), pvf3::from_real(y), pvf3::from_real(z))
+    let _out = Pvf3::default();
+    pvf3::gather(pvf3::from_real(x), pvf3::from_real(y), pvf3::from_real(z))
 }
 
 #[test]

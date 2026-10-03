@@ -71,9 +71,7 @@ impl Scale {
     /// `index_of`'s inverse.
     pub fn base_of(self, index: [i64; 3]) -> Pvf3 {
         let shift = FRAC_W as i32 + self.0;
-        let mut out = Pvf3::default();
-        pvf3::gather(&mut out, index[0] << shift, index[1] << shift, index[2] << shift);
-        out
+        pvf3::gather(index[0] << shift, index[1] << shift, index[2] << shift)
     }
 
     pub fn cube(self, index: [i64; 3]) -> Aabb {

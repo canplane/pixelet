@@ -15,9 +15,8 @@ fn a_cells_center_is_its_middle_and_half_its_side_above_the_ground() {
         assert_eq!(GROUND.cell_of(level, &cell.base()), cell, "a cell is found from its own corner");
         assert_eq!(cell.up(2), GROUND.cell_of(level + 2, &point), "a block is the cell over it");
         let side = cell.side();
-        let mut at = [0.0; 3];
         let c = cell.center(10.0);
-        projection::unproject(&mut at, c.i, c.f);
+        let at = projection::unproject(c.i, c.f);
         let base = cell.base();
         assert_eq!(at[2], 10.0 + side / 2.0);
         assert_eq!(at[0], pvf3::to_real(pvf3::X(&base)) + side / 2.0);

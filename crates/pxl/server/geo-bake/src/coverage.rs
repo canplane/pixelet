@@ -13,7 +13,6 @@ use pxl_spec::space::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::hierarchy::ancestor_of;
 use pxl_spec::space::indexer::{L3_IDX, L3_RANGE};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::Pvf3;
 
 use crate::elevation::page_reads;
 use crate::terrain::repository::DRAWN_REACH_U;
@@ -44,9 +43,7 @@ pub struct Coverage {
 static SOURCE: LazyLock<Result<Coverage, String>> = LazyLock::new(Coverage::derive);
 
 fn project_page(lng: f64, lat: f64) -> IVec {
-    let mut p = Pvf3 { i: 0, f: 0 };
-    epsg4326::project(&mut p, &[lng, lat, 0.0]);
-    L3_IDX(p.i)
+    L3_IDX(epsg4326::project(&[lng, lat, 0.0]).i)
 }
 
 impl Coverage {
@@ -60,9 +57,8 @@ impl Coverage {
         let (p0, p1) = (project_page(sw[0], sw[1]), project_page(ne[0], ne[1]));
         let padded = |px: i64, py: i64| {
             let [x0, y0, x1, y1] = page_reads(epsg3857::get_page_bbox(ivec::gather(px, py, 0)));
-            let (mut a, mut b) = ([0.0; 3], [0.0; 3]);
-            epsg4326::from_mercator(&mut a, &[x0, y0, 0.0]);
-            epsg4326::from_mercator(&mut b, &[x1, y1, 0.0]);
+            let a = epsg4326::from_mercator(&[x0, y0, 0.0]);
+            let b = epsg4326::from_mercator(&[x1, y1, 0.0]);
             [a[0], a[1], b[0], b[1]]
         };
         let whole = |a: i64, b: i64, inside: &dyn Fn(i64) -> bool| {
@@ -123,9 +119,8 @@ impl Coverage {
         let m = self.margin_pages();
         let [a, _] = epsg3857::get_page_bbox(ivec::gather(self.x.0 - m, self.y.0 - m, 0));
         let [_, b] = epsg3857::get_page_bbox(ivec::gather(self.x.1 + m, self.y.1 + m, 0));
-        let (mut sw, mut ne) = ([0.0; 3], [0.0; 3]);
-        epsg4326::from_mercator(&mut sw, &[a[0].min(b[0]), a[1].min(b[1]), 0.0]);
-        epsg4326::from_mercator(&mut ne, &[a[0].max(b[0]), a[1].max(b[1]), 0.0]);
+        let sw = epsg4326::from_mercator(&[a[0].min(b[0]), a[1].min(b[1]), 0.0]);
+        let ne = epsg4326::from_mercator(&[a[0].max(b[0]), a[1].max(b[1]), 0.0]);
         [sw[0], sw[1], ne[0], ne[1]]
     }
 }

@@ -109,8 +109,7 @@ pub fn center_local() -> Option<V3> {
 
 pub fn map_center() -> Option<Pvf3> {
     let at = center_local()?;
-    let mut c = Pvf3::default();
-    local_world_to_canonical(&mut c, &at, view().origin);
+    let c = local_world_to_canonical(&at, view().origin);
     Some(c)
 }
 
@@ -320,8 +319,7 @@ fn take_mode(want: CameraMode) -> bool {
     // character away. A height not yet known stays unknown.
     let unknown = target_center().is_some_and(|t| is_unknown(&t));
     let center = center_local().map(|local| {
-        let mut c = Pvf3::default();
-        local_world_to_canonical_nearest(&mut c, &local, view().origin);
+        let c = local_world_to_canonical_nearest(&local, view().origin);
         if unknown {
             unknown_z(&c)
         } else {

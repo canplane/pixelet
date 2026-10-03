@@ -56,12 +56,13 @@ pub fn L4_CENTER(addr: IVec) -> IVec {
 
 /// The center of the `1 << shamt` cell holding `addr`, on all three axes.
 /// PVF3 because at shamt 0 the half is fractional.
-pub fn SPAN_CENTER(out: &mut Pvf3, addr: IVec, shamt: u32) -> &mut Pvf3 {
-    out.i = if shamt == 0 { addr } else { addr & !fill(field_mask64(shamt, 0) as i64) };
-    out.f = 0;
+pub fn SPAN_CENTER(addr: IVec, shamt: u32) -> Pvf3 {
+    let base = Pvf3 {
+        i: if shamt == 0 { addr } else { addr & !fill(field_mask64(shamt, 0) as i64) },
+        f: 0,
+    };
     let half = pvf3::from_real(bit64(shamt) as f64 / 2.0);
-    let (x, y, z) = (pvf3::X(out) + half, pvf3::Y(out) + half, pvf3::Z(out) + half);
-    pvf3::gather(out, x, y, z)
+    pvf3::gather(pvf3::X(&base) + half, pvf3::Y(&base) + half, pvf3::Z(&base) + half)
 }
 
 pub fn L2_LIMIT(addr: IVec) -> IVec {

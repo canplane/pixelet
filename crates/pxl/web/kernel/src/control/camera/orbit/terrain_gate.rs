@@ -3,8 +3,8 @@
 //! How far the orbit gets toward what the controls ask before terrain is in
 //! the way. The controls keep what was asked; the drawn orbit stops short.
 
-use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::bake::constant::CELL;
+use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::{add3, V3};
 use xpute_core::math::scalar::wrap;
@@ -58,8 +58,7 @@ fn required_rise(at: &ViewPose) -> Option<f64> {
 /// Rise to the ground `passage` reaches under the eye; none where blocked.
 fn climb_rise(at: &ViewPose) -> Option<f64> {
     let (local, eye) = eye(at);
-    let mut center = Pvf3::default();
-    local_world_to_canonical(&mut center, &at.target, at.origin);
+    let center = local_world_to_canonical(&at.target, at.origin);
     let access = Access::now();
     let ground = match passage(&center, [local[0] - at.target[0], local[1] - at.target[1]], CELL.index_of(&eye)[2]) {
         Passage::Open(cz) => access.floor_under(&in_cell(&eye, cz)),
@@ -82,8 +81,7 @@ fn penetration(at: &ViewPose) -> Option<f64> {
 fn eye(at: &ViewPose) -> (V3, Pvf3) {
     let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
     let local: V3 = add3(&at.target, &offset);
-    let mut eye = Pvf3::default();
-    local_world_to_canonical(&mut eye, &local, at.origin);
+    let eye = local_world_to_canonical(&local, at.origin);
     (local, eye)
 }
 

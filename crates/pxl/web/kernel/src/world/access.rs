@@ -32,7 +32,7 @@ use pxl_spec::space::xy::TO_XY;
 
 use crate::io::demand::Category;
 use crate::kernel::kernel;
-use crate::layer::object::store::{EntryAt, Entry, Store};
+use crate::layer::object::store::{Entry, EntryAt, Store};
 use crate::world::paging::Paging;
 use crate::world::pyramid::{Layer as _, Pyramid};
 use xpute_core::math::scalar::round;
@@ -583,7 +583,10 @@ impl<'a> Access<'a> {
     fn with_decks(&self, ray: &Ray, boxes: &[[f64; 2]], (corner, side): ([f64; 2], f64), (t0, t1): (f64, f64), ground: Option<Hit>) -> Option<Hit> {
         let mut best = ground;
         for &[lo, hi] in boxes {
-            let cube = Aabb { min: [corner[0], corner[1], lo], max: [corner[0] + side, corner[1] + side, hi] };
+            let cube = Aabb {
+                min: [corner[0], corner[1], lo],
+                max: [corner[0] + side, corner[1] + side, hi],
+            };
             let Some((t, normal)) = ray_box(ray, cube) else { continue };
             if t < t0 || t > t1 || best.is_some_and(|b| b.t <= t) {
                 continue;
@@ -800,9 +803,7 @@ fn lack(page: LevelPage) -> Lack {
 
 /// A point's place on the ground lattice, its height dropped.
 fn on_ground(p: &V3) -> Pvf3 {
-    let mut at = Pvf3::default();
-    projection::project(&mut at, p[0], p[1], 0.0);
-    at
+    projection::project(p[0], p[1], 0.0)
 }
 
 /// The corner of `scale`'s cell under `at`, in units.

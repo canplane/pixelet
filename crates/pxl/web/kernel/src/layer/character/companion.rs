@@ -7,7 +7,6 @@
 //! Assets: Kenney's "Mini Characters" and "Cube Pets", CC0.
 
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::Pvf3;
 
 use crate::control::camera::approach::damp_alpha;
 use crate::control::camera::config::camera_cfg;
@@ -318,6 +317,6 @@ pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
 /// None inside where a wall holds it; None outside where no page is resident.
 fn step_from(map_origin: IVec, [x, y]: [f64; 2], stands: f64) -> Option<Option<f64>> {
     let o = ivec::to_v3(map_origin);
-    let at = *local_world_to_canonical(&mut Pvf3::default(), &[x - o[0], y - o[1], local_height(over(stands), map_origin)], map_origin);
+    let at = local_world_to_canonical(&[x - o[0], y - o[1], local_height(over(stands), map_origin)], map_origin);
     Access::now().support(&at, COMPANION_STEP_CELLS).value()
 }

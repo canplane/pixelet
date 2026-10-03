@@ -118,9 +118,7 @@ impl Pages {
 }
 
 fn point(x: f64, y: f64) -> Pvf3 {
-    let mut at = Pvf3::default();
-    pxl_spec::space::pvf3::projection::project(&mut at, x, y, 0.0);
-    at
+    pxl_spec::space::pvf3::projection::project(x, y, 0.0)
 }
 
 /// The rays of a view through `eye`, one every `STRIDE_PT` points.
@@ -222,8 +220,7 @@ fn main() {
         _ => (126.9882, 37.5512),
     };
     let server = args.get(2).cloned().unwrap_or_else(|| "http://localhost:3001".into());
-    let mut at = Pvf3::default();
-    epsg4326::project(&mut at, &[lon, lat, 0.0]);
+    let at = epsg4326::project(&[lon, lat, 0.0]);
     let (x, y) = (pvf3::to_real(pvf3::X(&at)), pvf3::to_real(pvf3::Y(&at)));
 
     let store = Store::default();

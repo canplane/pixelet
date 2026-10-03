@@ -99,9 +99,7 @@ impl At {
 
     pub fn corner(self) -> Pvf3 {
         let [x0, y0, _] = column_cell(self.col_idx);
-        let mut out = Pvf3::default();
-        pvf3::add(&mut out, &CELL.base_of([x0, y0, band_cell_z(self.band)]), &OBJECT_FINEST.base_of(self.step.map(i64::from)));
-        out
+        pvf3::add(&CELL.base_of([x0, y0, band_cell_z(self.band)]), &OBJECT_FINEST.base_of(self.step.map(i64::from)))
     }
 
     /// Exact, since a step is a binary fraction of a unit.
@@ -271,10 +269,7 @@ struct StoreState {
 static STORE: Global<StoreState> = Global::new();
 
 fn store_state() -> &'static mut StoreState {
-    STORE.get(|| StoreState {
-        save_due_ms: None,
-        loading: None,
-    })
+    STORE.get(|| StoreState { save_due_ms: None, loading: None })
 }
 
 /// The never-written AIR entry the eraser's preview injects into the drawn
@@ -380,8 +375,7 @@ fn decode_objects(blob: &str) -> Result<(), MarshalError> {
             let (size, value) = (page.at(4)?.get_array::<f32>()?, page.at(5)?.get_array::<u32>()?);
             for r in 0..value.len() {
                 let local = [x[r] as f64, y[r] as f64, z[r] as f64];
-                let mut corner = Pvf3::default();
-                local_world_to_canonical(&mut corner, &local, page_base);
+                let corner = local_world_to_canonical(&local, page_base);
                 writes.push(write_of(&corner, size[r] as f64, value[r]));
             }
         }
@@ -541,11 +535,7 @@ fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube) -> bool {
 
 /// A redundant re-paint of a carve writes VOID, as remove() does.
 pub fn place(at: &Pvf3, size: f64, cube: PlaceableCube) {
-    let val = if place_value_is_redundant(at, size, cube) {
-        VOID
-    } else {
-        placeable_cube_num_id(cube)
-    };
+    let val = if place_value_is_redundant(at, size, cube) { VOID } else { placeable_cube_num_id(cube) };
     write_object_value(at, size, val);
 }
 

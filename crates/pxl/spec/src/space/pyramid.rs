@@ -328,9 +328,7 @@ impl Cell {
     pub fn mid(self) -> Pvf3 {
         let base = self.base();
         let half = 1i64 << (FRAC_W as i32 + self.scale().shamt() - 1);
-        let mut out = Pvf3::default();
-        pvf3::gather(&mut out, pvf3::X(&base) + half, pvf3::Y(&base) + half, 0);
-        out
+        pvf3::gather(pvf3::X(&base) + half, pvf3::Y(&base) + half, 0)
     }
 
     pub fn side(self) -> f64 {
@@ -362,8 +360,7 @@ impl Cell {
     pub fn inner_at(self, lattice: Lattice, level: u32, offset: [u32; 2]) -> Cell {
         let base = self.base();
         let shift = FRAC_W as i32 + lattice.scale(level).shamt();
-        let mut at = Pvf3::default();
-        pvf3::gather(&mut at, pvf3::X(&base) + ((offset[0] as i64) << shift), pvf3::Y(&base) + ((offset[1] as i64) << shift), 0);
+        let at = pvf3::gather(pvf3::X(&base) + ((offset[0] as i64) << shift), pvf3::Y(&base) + ((offset[1] as i64) << shift), 0);
         lattice.cell_of(level, &at)
     }
 
@@ -371,11 +368,8 @@ impl Cell {
     /// `ground`, since a level's cells are as tall as they are wide.
     pub fn center(self, ground: f64) -> Pvf3 {
         let flat = self.mid();
-        let mut at = [0.0; 3];
-        projection::unproject(&mut at, flat.i, flat.f);
-        let mut out = Pvf3::default();
-        projection::project(&mut out, at[0], at[1], ground + self.side() / 2.0);
-        out
+        let at = projection::unproject(flat.i, flat.f);
+        projection::project(at[0], at[1], ground + self.side() / 2.0)
     }
 }
 

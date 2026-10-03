@@ -16,9 +16,7 @@ use crate::global::Global;
 pub const FALLBACK_G4326: G4326 = [126.978, 37.5665, 0.0];
 
 fn fallback_seed() -> Pvf3 {
-    let mut out = Pvf3::default();
-    epsg4326::project(&mut out, &FALLBACK_G4326);
-    out
+    epsg4326::project(&FALLBACK_G4326)
 }
 
 /// Within a cell: the map center comes back through the camera's floats, not

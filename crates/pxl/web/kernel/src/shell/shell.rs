@@ -45,7 +45,11 @@ fn place_parts(page: Option<IVec>, each: &mut dyn FnMut(&PlacePart<'_>)) {
                 each(&PlaceName { lang: &lang, name: &name });
             }
         };
-        each(&PlacePart { rank: part.rank as u8, name: &part.name, names: &names });
+        each(&PlacePart {
+            rank: part.rank as u8,
+            name: &part.name,
+            names: &names,
+        });
     }
 }
 
@@ -60,8 +64,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     let at = crate::control::camera::controller::map_center();
     let page = at.map(|c| L3_IDX(c.i));
     let center = at.map(|c| {
-        let mut g = [0.0; 3];
-        epsg4326::unproject(&mut g, c.i, c.f);
+        let g = epsg4326::unproject(c.i, c.f);
         LonLat { lon: g[0], lat: g[1] }
     });
     let values = SettingKey::ALL.map(|key| settings.get(key));
@@ -80,9 +83,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
             person_ready: companion.person_ready,
             pet_ready: companion.pet_ready,
         },
-        orientation: OrientationState {
-            status: orientation.pose.status(),
-        },
+        orientation: OrientationState { status: orientation.pose.status() },
         azimuth: camera.intent.azimuth,
         is_follow_mode: camera.is_follow_mode,
         camera_busy: camera.camera_status != CameraStatus::Idle,
@@ -140,8 +141,7 @@ pub fn go_into(target: Pvf3) {
 
 pub fn go_to_degrees(lon: f64, lat: f64) {
     camera_store().is_follow_mode = false;
-    let mut target = Pvf3::default();
-    epsg4326::project(&mut target, &[lon, lat, 0.0]);
+    let target = epsg4326::project(&[lon, lat, 0.0]);
     go_to_ground(target, Motion::Snap);
 }
 

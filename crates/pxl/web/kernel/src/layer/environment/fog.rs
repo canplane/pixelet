@@ -7,7 +7,6 @@
 
 use pxl_spec::space::lod::split_distance;
 use pxl_spec::space::pvf3::projection;
-use pxl_spec::space::pvf3::pvf3::Pvf3;
 
 use crate::control::camera::config::camera_cfg;
 use crate::layer::environment::config::render_cfg;
@@ -36,8 +35,7 @@ pub fn reach_at(height: f64) -> f64 {
 /// From the point's own height, so a cave's floor counts in a cave; the
 /// datum where nothing is held.
 fn ground_under(at: [f64; 3]) -> f64 {
-    let mut point = Pvf3::default();
-    projection::project(&mut point, at[0], at[1], at[2]);
+    let point = projection::project(at[0], at[1], at[2]);
     Access::now().floor_under(&point).value().unwrap_or(0.0)
 }
 

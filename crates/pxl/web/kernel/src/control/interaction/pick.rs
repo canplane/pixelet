@@ -53,9 +53,7 @@ pub fn world_adjacent_corner(hit: &Hit, new_size: f64, map_origin: IVec, precise
         };
     }
 
-    let mut p = Pvf3::default();
-    local_world_to_canonical(&mut p, &out, map_origin);
-    p
+    local_world_to_canonical(&out, map_origin)
 }
 
 /// The `size` voxel `hit` struck, for the eraser's terrain dig: as
@@ -73,9 +71,7 @@ pub fn world_struck_corner(hit: &Hit, size: f64, map_origin: IVec) -> Pvf3 {
             grid_floor(hit.point[axis], size)
         };
     }
-    let mut p = Pvf3::default();
-    local_world_to_canonical(&mut p, &out, map_origin);
-    p
+    local_world_to_canonical(&out, map_origin)
 }
 
 /// Decor is never resolved here; it paints no voxel and has its own hit test.

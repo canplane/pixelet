@@ -92,8 +92,7 @@ pub fn map_environment_step() {
     if center != e.observed_center {
         e.observed_center = center;
         if let Some(c) = center {
-            let mut g = [0.0; 3];
-            epsg4326::unproject(&mut g, c.i, c.f);
+            let g = epsg4326::unproject(c.i, c.f);
             e.observed_lon = g[0];
             e.observed_lat = g[1];
         }

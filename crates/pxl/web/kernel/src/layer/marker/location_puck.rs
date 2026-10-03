@@ -94,8 +94,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
         return clear(p);
     };
 
-    let mut pos = [0.0; 3];
-    projection::unproject(&mut pos, device.i, device.f);
+    let pos = projection::unproject(device.i, device.f);
     // The fix names a place and not how high.
     if let Some(z) = Access::now().surface_support(&device).value() {
         p.last_known_center_z = Some(z);
@@ -112,8 +111,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
         let mut lane: Vec<f32> = Vec::with_capacity(p.samples.len() * ZONE_INSTANCE_FLOATS);
         for s in &p.samples {
             let v = add3(&center_pos, &s.off);
-            let mut coord = Pvf3::default();
-            projection::project(&mut coord, v[0], v[1], v[2]);
+            let coord = projection::project(v[0], v[1], v[2]);
             // An unloaded neighbor page falls back to the center's height; 0 would sink
             // or launch that instance.
             let delta_ele = Access::now().surface_support(&coord).value().unwrap_or(center_pos[2]) - center_pos[2];

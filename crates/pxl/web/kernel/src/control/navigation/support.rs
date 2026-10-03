@@ -21,9 +21,7 @@ use crate::world::frame::view::view;
 const UNKNOWN_Z: i64 = -(1 << (IVEC_Z_W - 1)) << FRAC_W;
 
 fn with_z(at: &Pvf3, z: i64) -> Pvf3 {
-    let mut out = Pvf3::default();
-    pvf3::gather(&mut out, pvf3::X(at), pvf3::Y(at), z);
-    out
+    pvf3::gather(pvf3::X(at), pvf3::Y(at), z)
 }
 
 pub fn unknown_z(at: &Pvf3) -> Pvf3 {
@@ -97,7 +95,7 @@ pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, azimuth: f64) ->
     let origin = view().origin;
     let l = canonical_to_local(from, origin);
     let way = [lx * c + ly * s, -lx * s + ly * c];
-    let to = *local_world_to_canonical(&mut Pvf3::default(), &[l[0] + way[0], l[1] + way[1], l[2]], origin);
+    let to = local_world_to_canonical(&[l[0] + way[0], l[1] + way[1], l[2]], origin);
     if is_unknown(from) {
         return unknown_z(&to);
     }
@@ -155,8 +153,7 @@ pub fn passage(from: &Pvf3, way: [f64; 2], start: i64) -> Passage {
             Answer::Exact(None) => return Passage::Open(cz),
             Answer::Exact(Some(hit)) => {
                 let p = ray.at(hit.t + side / 2.0);
-                let mut cell = Pvf3::default();
-                pvf3::gather(&mut cell, pvf3::from_real(p[0]), pvf3::from_real(p[1]), pvf3::from_real(p[2]));
+                let cell = pvf3::gather(pvf3::from_real(p[0]), pvf3::from_real(p[1]), pvf3::from_real(p[2]));
                 match access.open_from(&cell).exact() {
                     Some(open) if open > cz => (cz, t) = (open, 0.0),
                     Some(_) => t += hit.t + side,

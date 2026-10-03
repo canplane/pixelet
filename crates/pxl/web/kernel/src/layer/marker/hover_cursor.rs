@@ -28,9 +28,9 @@ use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::{carve_entry, get_placed_object, restores_scattered, EntryAt, EntryKind};
 use crate::shell::setting::store::settings_store;
 use crate::world::access::{Access, FINEST};
-use crate::world::chunk::source::chunk_sources_changed;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::build::World;
+use crate::world::chunk::source::chunk_sources_changed;
 
 enum Ghost {
     None,
@@ -184,7 +184,7 @@ pub fn hover_cursor_step() {
     let ghost = match (scattered_ghost, hovered, blocked) {
         (Some(g), _, _) => g,
         (None, Some(h), false) => {
-            let [x, y, z] = *projection::unproject(&mut [0.0; 3], h.i, h.f);
+            let [x, y, z] = projection::unproject(h.i, h.f);
             match (decor_kind, decor_pick) {
                 (Some(kind), Some((variant, rotation, scale))) if is_decor_ghost => Ghost::Decor {
                     at: [x + preview_size / 2.0, y + preview_size / 2.0, z],

@@ -11,9 +11,7 @@ use crate::layer::object::store::Entry;
 /// tap recenters, which is where the ghost box is drawn.
 pub fn anchor_center(anchor: &Pvf3) -> Pvf3 {
     let half = pvf3::from_real(U_PER_CELL / 2.0);
-    let mut out = Pvf3::default();
-    pvf3::gather(&mut out, pvf3::X(anchor) + half, pvf3::Y(anchor) + half, pvf3::Z(anchor) + half);
-    out
+    pvf3::gather(pvf3::X(anchor) + half, pvf3::Y(anchor) + half, pvf3::Z(anchor) + half)
 }
 
 /// Relative to `map_origin`, the space the pick works in.
