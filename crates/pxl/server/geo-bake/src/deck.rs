@@ -15,7 +15,7 @@ pub mod structure;
 use std::collections::HashSet;
 
 use postgres::Client;
-use pxl_spec::bake::deck::{clearance_m, Form, BORE_COVER_M, DECK_THICKNESS_M};
+use pxl_spec::bake::deck::{clearance_m, headroom_m, Form, BORE_COVER_M, DECK_THICKNESS_M};
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::format::DeckRow;
 use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m};
@@ -137,7 +137,7 @@ pub fn calculate<E>(input: &Input, ground: impl FnOnce(&[[f64; 2]]) -> Result<Ve
                     far_at: bores[lower].to_m(c.lower_at),
                     near: upper,
                     near_at: bores[upper].to_m(c.upper_at),
-                    gap: clearance_m(kind_of(&bores[lower])) + BORE_COVER_M,
+                    gap: headroom_m(kind_of(&bores[lower])) + BORE_COVER_M,
                 });
             }
             _ => continue,
@@ -169,7 +169,7 @@ pub fn calculate<E>(input: &Input, ground: impl FnOnce(&[[f64; 2]]) -> Result<Ve
 
     let (deck_tops, forced) = deck_side.solve(1.0, &deck_ground, |_| DECK_THICKNESS_M, &needs, &over_decks, |_| true);
     log(&format!("deck: {forced} points steeper than the preferred grade"));
-    let bore_shell = |p: &Piece| clearance_m(kind_of(p)) + BORE_COVER_M;
+    let bore_shell = |p: &Piece| headroom_m(kind_of(p)) + BORE_COVER_M;
     let (bore_tops, forced) = bore_side.solve(-1.0, &bore_ground, bore_shell, &[], &over_bores, |end| pinned.contains(end));
     log(&format!("bore: {forced} points steeper than the preferred grade"));
 

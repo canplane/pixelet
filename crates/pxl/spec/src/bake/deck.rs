@@ -29,23 +29,37 @@ pub const LINE_PAST: f64 = 1.0;
 /// bridge, and how far past a page anything drawn on it can come from is bounded.
 pub const WIDEST: f64 = u8::MAX as f64 / POINT_SCALE;
 
-// ---- clear height and shell, in ground metres: where the source gives none ----
+// ---- in ground metres, where the source gives none ----
 
-pub const ROAD_CLEARANCE_M: f64 = 4.5; // over a road and in its bore: UNECE AGR Annex II III.4
+// clear under a deck
+pub const ROAD_CLEARANCE_M: f64 = 4.5; // over a road: UNECE AGR Annex II III.4
 // Arnis's deck height over a path or a track, less the slab under it
 pub const PATH_CLEARANCE_M: f64 = 5.0 - DECK_THICKNESS_M; // a footway, path or cycleway
 pub const RAIL_CLEARANCE_M: f64 = 8.0 - DECK_THICKNESS_M; // a railway: its catenary, 6 over the bed
-
 pub const DECK_THICKNESS_M: f64 = 2.0; // a deck's slab under its surface: Arnis's structure depth
-pub const BORE_COVER_M: f64 = 3.0; // a bore's shell over its clear height: pixelet's, no source found
 
-/// What a way of transport type `kind` needs clear over its surface.
+// clear inside a bore
+pub const ROAD_HEADROOM_M: f64 = ROAD_CLEARANCE_M; // AGR's overhead clearance holds in a tunnel too
+pub const PATH_HEADROOM_M: f64 = 2.5; // pixelet's, no source found
+pub const RAIL_HEADROOM_M: f64 = 8.0; // pixelet's, no source found
+pub const BORE_COVER_M: f64 = 3.0; // a bore's shell over its headroom: pixelet's, no source found
+
+/// What a way of transport type `kind` needs clear under a deck over it.
 pub fn clearance_m(kind: u8) -> f64 {
+    by_kind(kind, [ROAD_CLEARANCE_M, PATH_CLEARANCE_M, RAIL_CLEARANCE_M])
+}
+
+/// What a way of transport type `kind` needs clear over it in its bore.
+pub fn headroom_m(kind: u8) -> f64 {
+    by_kind(kind, [ROAD_HEADROOM_M, PATH_HEADROOM_M, RAIL_HEADROOM_M])
+}
+
+fn by_kind(kind: u8, [road, path, rail]: [f64; 3]) -> f64 {
     use crate::cell::cube::cube_types::transport as t;
     match kind {
-        k if k == t::rail_main || k == t::rail_subway => RAIL_CLEARANCE_M,
-        k if k == t::pedestrian => PATH_CLEARANCE_M,
-        _ => ROAD_CLEARANCE_M,
+        k if k == t::rail_main || k == t::rail_subway => rail,
+        k if k == t::pedestrian => path,
+        _ => road,
     }
 }
 
@@ -168,7 +182,7 @@ impl Over {
             }
             Form::Ramp if top > ground => Occupies::Above { slab: [ground, top], pier: None },
             Form::Bore if top < ground => Occupies::Through {
-                air: [top, (top + cells(clearance_m(self.kind))).min(ground)],
+                air: [top, (top + cells(headroom_m(self.kind))).min(ground)],
             },
             Form::Cut if top < ground => Occupies::Through { air: [top, ground] },
             _ => Occupies::Grade,
