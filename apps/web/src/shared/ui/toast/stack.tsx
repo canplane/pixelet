@@ -10,6 +10,8 @@ import { after, LEAVE, SETTLE } from "@/shared/ui/motion/transition.ts";
 import { setToastDragging, toastRotate, useToastStore } from "./store.ts";
 import { Toast, TOAST_SIDE } from "./item.tsx";
 
+const PEEK_PX = 8;
+
 /** Pushed-back cards wait half the arrival, so the deck's front never drops before the new card is visible. */
 const MAKE_ROOM = after(SETTLE, SETTLE.durationMs / 2);
 
@@ -47,7 +49,7 @@ export function Toaster() {
     <View style={styles.anchor} onLayout={(e) => setCenter(PixelRatio.roundToNearestPixel(e.nativeEvent.layout.width / 2))}>
       {list.map(({ item, key, present }) => {
         const depth = order.indexOf(key);
-        const pose = cardPose(depth, TOAST_SIDE);
+        const pose = cardPose(depth, PEEK_PX);
         const front = present && depth === 0;
         const fromAbove = front && turnedBack && lastOrder.current.indexOf(key) !== 0;
         const transition = !present ? LEAVE : arrivals.has(key) ? SETTLE : arrived > 0 ? MAKE_ROOM : SETTLE;

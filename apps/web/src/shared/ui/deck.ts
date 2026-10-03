@@ -8,9 +8,8 @@ import type { PanResponderCallbacks } from "react-native";
 import type { f64, i32, u32 } from "@xpute/core/abi/word.ts";
 
 const DEPTH = 2;
-/** Of a card's height: how far each card behind peeks out, and where one turned back to the front starts. */
-const PEEK = 1 / 4;
-const FROM_ABOVE = -3 / 4;
+/** In peeks: where a card turned back to the front starts. */
+const FROM_ABOVE = -3;
 const OPACITY = [1, 0.6, 0.3];
 const SCALE = [1, 0.94, 0.88];
 const SWIPE_PX = 24;
@@ -36,11 +35,12 @@ export interface CardPose {
   zIndex: u32;
 }
 
-export function cardPose(depth: u32, side: f64): CardPose {
+/** `peek` is how far each card behind shows past the one in front of it. */
+export function cardPose(depth: u32, peek: f64): CardPose {
   const shown = Math.min(depth, DEPTH);
   return {
-    rest: { translateY: depth * side * PEEK, scale: SCALE[shown] },
-    above: { translateY: side * FROM_ABOVE },
+    rest: { translateY: depth * peek, scale: SCALE[shown] },
+    above: { translateY: peek * FROM_ABOVE },
     fade: depth <= DEPTH ? OPACITY[depth] : 0,
     zIndex: DEPTH + 1 - Math.min(depth, DEPTH + 1),
   };

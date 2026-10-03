@@ -29,6 +29,7 @@ import { OBJECT_TIERS } from "@/config/object.spec.ts";
 import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/catalog/cell/swatch.tsx";
 
 const SEND_FROM_SCALE = 0.5;
+const PEEK_PX = 10;
 
 const ITEM = 24;
 const ITEM_GLYPH = 16;
@@ -289,7 +290,7 @@ export function Dock() {
 
   const card = (pane: Pane, fill: string, tint: string | undefined, content: React.ReactNode, onContentWidth?: (w: f64) => void) => {
     const depth = deckDepth(pane, rotation, PANES.length);
-    const pose = cardPose(depth, chrome.control);
+    const pose = cardPose(depth, PEEK_PX);
     const fromAbove = depth === 0 && turnedBack;
     return (
       <Motion
