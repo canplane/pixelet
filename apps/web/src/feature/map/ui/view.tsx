@@ -19,7 +19,7 @@ const TOAST_LIFT_PX = chrome.inset + 20;
 
 const PANEL_GAP_PX = 12;
 
-/** The room a panel may fill between the settings button and the mode bar. */
+/** The room a panel may fill between the settings button and the dock. */
 function BetweenChrome({ children }: { children: ReactNode }) {
   const area = useSafeArea();
   const top = chrome.inset + area.top + useViewportTop() + chrome.control + PANEL_GAP_PX;

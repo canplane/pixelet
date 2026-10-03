@@ -4,18 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { PanResponder, PixelRatio, StyleSheet, View } from "react-native";
 
 import { Motion } from "@platform/motion.tsx";
+import { cardPose, deckSwipe, FROM_ABOVE_PX, frontFirst, useTurnedBack } from "@/shared/ui/deck.ts";
 import { type Key, usePresent } from "@/shared/ui/motion/presence.tsx";
 import { after, LEAVE, SETTLE } from "@/shared/ui/motion/transition.ts";
-import { frontFirst, setToastDragging, toastRotate, useToastStore } from "./store.ts";
+import { setToastDragging, toastRotate, useToastStore } from "./store.ts";
 import { Toast, TOAST_SIDE } from "./item.tsx";
-
-const MAX_STACK_DEPTH = 2;
-const STACK_PEEK_PX = 8;
-const STACK_OPACITY = [1, 0.6, 0.3];
-const STACK_SCALE = [1, 0.94, 0.88];
-
-const SWIPE_PX = 24;
-const FROM_ABOVE_PX = -24;
 
 /** Pushed-back cards wait half the arrival, so the deck's front never drops before the new card is visible. */
 const MAKE_ROOM = after(SETTLE, SETTLE.durationMs / 2);
@@ -30,8 +23,7 @@ export function Toaster() {
   // A leaving card keeps its place until it has faded, so the cards behind
   // move up only once it is gone.
   const lastOrder = useRef<Key[]>([]);
-  const lastRotation = useRef(rotation);
-  const turnedBack = rotation < lastRotation.current;
+  const turnedBack = useTurnedBack(rotation);
   const order: Key[] = frontFirst(entries, rotation).map((e) => e.id);
   const arrivals = new Set<Key>(order.filter((key) => !lastOrder.current.includes(key)));
   const arrived = arrivals.size;
@@ -40,34 +32,14 @@ export function Toaster() {
   }
   useEffect(() => {
     lastOrder.current = order;
-    lastRotation.current = rotation;
   });
 
   const swipe = useRef<ReturnType<typeof PanResponder.create> | null>(null);
   if (!swipe.current) {
-    // Turns once, when the swipe crosses the line; the card does not follow
-    // the finger, which would set a pose every move on the kernel's thread.
-    let turned = false;
-    const read = (dy: number) => {
-      if (turned || Math.abs(dy) <= SWIPE_PX) return;
-      turned = true;
-      toastRotate(dy < 0 ? 1 : -1);
-    };
-    const end = (dy: number) => {
-      read(dy);
-      setToastDragging(false);
-    };
     swipe.current = PanResponder.create({
-      // On press: by the first move, a swipe down has left the pointer to the mode bar.
+      // On press: by the first move, a swipe down has left the pointer to the dock.
       onStartShouldSetPanResponder: () => useToastStore.getState().entries.length > 1,
-      onPanResponderGrant: () => {
-        turned = false;
-        setToastDragging(true);
-      },
-      // A flick can cross the line in the release event alone.
-      onPanResponderMove: (_e, g) => read(g.dy),
-      onPanResponderRelease: (_e, g) => end(g.dy),
-      onPanResponderTerminate: (_e, g) => end(g.dy),
+      ...deckSwipe(toastRotate, setToastDragging),
     });
   }
 
@@ -75,26 +47,25 @@ export function Toaster() {
     <View style={styles.anchor} onLayout={(e) => setCenter(PixelRatio.roundToNearestPixel(e.nativeEvent.layout.width / 2))}>
       {list.map(({ item, key, present }) => {
         const depth = order.indexOf(key);
-        const drawn = present && depth <= MAX_STACK_DEPTH;
+        const pose = cardPose(depth);
         const front = present && depth === 0;
         const fromAbove = front && turnedBack && lastOrder.current.indexOf(key) !== 0;
-        const rest = { translateY: depth * STACK_PEEK_PX, scale: STACK_SCALE[Math.min(depth, MAX_STACK_DEPTH)] };
         const transition = !present ? LEAVE : arrivals.has(key) ? SETTLE : arrived > 0 ? MAKE_ROOM : SETTLE;
         // No opacity here: it would hide a device's glass wrongly.
         return (
           <Motion
             key={key}
-            from={fromAbove ? { translateY: FROM_ABOVE_PX } : rest}
+            from={fromAbove ? { translateY: FROM_ABOVE_PX } : pose.rest}
             replay={fromAbove ? rotation : null}
-            to={present ? rest : { scale: 0.9 }}
+            to={present ? pose.rest : { scale: 0.9 }}
             transition={transition}
             onSettled={present ? undefined : () => gone(key)}
-            style={[styles.card, { left: center, zIndex: MAX_STACK_DEPTH + 1 - Math.min(depth, MAX_STACK_DEPTH + 1), pointerEvents: front ? "auto" : "none" }]}
+            style={[styles.card, { left: center, zIndex: pose.zIndex, pointerEvents: front ? "auto" : "none" }]}
           >
             <Toast
               message={item.message}
               tone={item.tone}
-              fade={drawn ? STACK_OPACITY[depth] : 0}
+              fade={present ? pose.fade : 0}
               fadeTransition={transition}
               touch={front ? swipe.current!.panHandlers : undefined}
             />

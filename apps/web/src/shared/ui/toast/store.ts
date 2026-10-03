@@ -3,6 +3,8 @@
 import type { i32, u32 } from "@xpute/core/abi/word.ts";
 import { create } from "zustand";
 
+import { frontFirst } from "@/shared/ui/deck.ts";
+
 export const enum ToastTone {
   Loading = 0,
   Error = 1,
@@ -31,18 +33,6 @@ export const useToastStore = create<ToastState>(() => ({ entries: [], rotation: 
 
 const set = useToastStore.setState;
 const get = useToastStore.getState;
-
-export function toastDepth(i: number, rotation: i32, count: number): number {
-  return count > 0 ? ((i - rotation) % count + count) % count : 0;
-}
-
-/** The entries front card first, as the stack shows them turned by `rotation`. */
-export function frontFirst<T>(entries: readonly T[], rotation: i32): T[] {
-  return entries
-    .map((e, i) => ({ e, depth: toastDepth(i, rotation, entries.length) }))
-    .sort((a, b) => a.depth - b.depth)
-    .map((x) => x.e);
-}
 
 // Before inserting at index 0 while turned, or the new entry lands behind the front card.
 function unturned(): Entry[] {
