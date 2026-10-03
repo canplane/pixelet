@@ -88,7 +88,7 @@ pub fn source(kind: u32) -> &'static str {
         ),
         SHADER_PUCK_ZONE => wgsl!("frame", "globe", "grade", "finish", "puck", "puck_zone"),
         SHADER_PUCK_BEACON => wgsl!("frame", "globe", "grade", "finish", "place", "puck", "puck_beacon"),
-        SHADER_BADGE => wgsl!("globe", "grade", "depth", "badge_depth", "badge"),
+        SHADER_BADGE => wgsl!("frame", "globe", "grade", "depth", "badge_depth", "badge"),
         SHADER_SKY => wgsl!(
             "frame",
             "globe",
@@ -440,7 +440,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..blended(SHADER_BADGE, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&[[0, BOTH, UNIFORM], [1, VERTEX, STORAGE], [2, VERTEX, DEPTH]]), group(&SKIN)],
+            &[frame(BOTH), group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE], [2, VERTEX, DEPTH]]), group(&SKIN)],
         ),
         PIPELINE_DEBUG => record(
             Head {

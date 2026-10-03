@@ -15,7 +15,7 @@ use crate::gpu::renderer::{Blocks, Draws};
 use crate::gpu::sheet::{Align, SheetPainter, Sketch};
 use crate::gpu::text::{Font, TextOf};
 
-const BADGE_FLOATS: usize = 52;
+const BADGE_FLOATS: usize = 40;
 const SETS: usize = 32;
 
 // Regular and semibold, not canvas's "bold" (700); the system faces carry a real
@@ -133,21 +133,25 @@ pub struct BadgePass {
     sets: [Set; SETS],
     dirty: Vec<u32>,
     uniform: [f32; BADGE_FLOATS],
+    frame_group: u32,
     pub view: [f32; 16],
     pub proj: [f32; 16],
     pub px_k: f32,
     pub near: f32,
     pub far: f32,
     pub cell: f32,
-    pub globe: [f32; 8],
 }
 
 impl BadgePass {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> BadgePass {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> BadgePass {
         let sampler = object();
         g.sampler(sampler, filter::NEAREST, filter::LINEAR, filter::LINEAR, address::CLAMP, compare::NONE, 1);
+        let built = pipelines.build(g, PIPELINE_BADGE, format::CANVAS);
+        let frame_group = object();
+        g.bind_group(frame_group, built.layouts[0], &buffer_entry(0, frame_buffer));
         BadgePass {
-            built: pipelines.build(g, PIPELINE_BADGE, format::CANVAS),
+            built,
+            frame_group,
             painter: SheetPainter::new(g, pipelines),
             sampler,
             sheet: 0,
@@ -164,7 +168,6 @@ impl BadgePass {
             near: 0.1,
             far: 1000.0,
             cell: 0.01,
-            globe: [0.0; 8],
         }
     }
 
@@ -196,7 +199,7 @@ impl BadgePass {
             self.sheet_group = object();
             g.bind_group(
                 self.sheet_group,
-                self.built.layouts[1],
+                self.built.layouts[2],
                 &[0, resource::VIEW, self.sheet_view, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0],
             );
             live = atlas.live();
@@ -238,7 +241,7 @@ impl BadgePass {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn draw(&mut self, g: &Gpu, encoder: u32, color: u32, depth: u32, viewport: [u32; 2], draws: &Draws, uniforms: &[f32], blocks: &Blocks, stamp: &mut Stamp) {
+    pub fn draw(&mut self, g: &Gpu, encoder: u32, color: u32, depth: u32, draws: &Draws, uniforms: &[f32], blocks: &Blocks, stamp: &mut Stamp) {
         if self.sheet_group == 0 {
             return;
         }
@@ -261,8 +264,7 @@ impl BadgePass {
             s[..16].copy_from_slice(&self.view);
             s[16..32].copy_from_slice(&self.proj);
             s[32..35].copy_from_slice(&uniform_of(uniforms, d)[..3]);
-            s[35..44].copy_from_slice(&[self.px_k, self.near, self.far, self.cell, 1.0, viewport[0] as f32, viewport[1] as f32, 0.0, 0.0]);
-            s[44..52].copy_from_slice(&self.globe);
+            s[35..40].copy_from_slice(&[self.px_k, self.near, self.far, self.cell, 0.0]);
             g.write_buffer(set.uniform, 0, bytes(s));
             if set.block != block || set.depth != depth || set.group == 0 {
                 release(set.group);
@@ -271,7 +273,7 @@ impl BadgePass {
                 e[..5].copy_from_slice(&buffer_entry(0, set.uniform));
                 e[5..10].copy_from_slice(&buffer_entry(1, block));
                 e[10..].copy_from_slice(&[2, resource::VIEW, depth, 0, 0]);
-                g.bind_group(set.group, self.built.layouts[0], &e);
+                g.bind_group(set.group, self.built.layouts[1], &e);
                 set.block = block;
                 set.depth = depth;
             }
@@ -279,9 +281,10 @@ impl BadgePass {
                 pass = object();
                 g.pass(pass, encoder, &pass_desc(color, load::LOAD, depth, load::READ_ONLY, 0.0, stamp.pass()));
                 g.set_pipeline(pass, self.built.pipeline);
-                g.set_bind_group(pass, 1, self.sheet_group, &[]);
+                g.set_bind_group(pass, 0, self.frame_group, &[]);
+                g.set_bind_group(pass, 2, self.sheet_group, &[]);
             }
-            g.set_bind_group(pass, 0, set.group, &[]);
+            g.set_bind_group(pass, 1, set.group, &[]);
             g.draw(pass, 4, d[1], 0, 0);
         }
         if pass != 0 {

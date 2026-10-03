@@ -689,7 +689,7 @@ impl Renderer {
             impostor: ImpostorPass::new(g, &mut pipelines, device.align),
             skinned: SkinnedPass::new(g, &mut pipelines, device.align),
             puck: PuckPass::new(g, &mut pipelines, frame_buffer),
-            badges: BadgePass::new(g, &mut pipelines),
+            badges: BadgePass::new(g, &mut pipelines, frame_buffer),
             debug: DebugPass::new(g, &mut pipelines, frame_buffer),
             pipelines,
             frame_buffer,
@@ -816,7 +816,6 @@ impl Renderer {
             MERCATOR_RADIUS_U as f32,
         ];
         put_globe(u, &globe);
-        self.badges.globe = globe;
         self.shadows = s[STAGE_AT::SHADOWS] != 0.0;
         u[SHADOW_STRENGTH] = if self.shadows { 1.0 } else { 0.0 };
         u[SHADOW_TEXEL] = self.shadow.texel as f32;
@@ -953,7 +952,7 @@ impl Renderer {
         g.end(pass);
         release(pass);
         self.badges
-            .draw(g, encoder, canvas_view, world.depth_view, [world.width, world.height], &draws, uniforms, b, &mut stamps[SPAN_BADGES]);
+            .draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, b, &mut stamps[SPAN_BADGES]);
         self.draw_cases(g, encoder, &draws, uniforms, input.cases, &mut stamps[SPAN_CASES]);
         if q != 0 {
             let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);
