@@ -8,13 +8,12 @@ import type { PanResponderCallbacks } from "react-native";
 import type { f64, i32, u32 } from "@xpute/core/abi/word.ts";
 
 const DEPTH = 2;
-const PEEK_PX = 8;
+/** Of a card's height: how far each card behind peeks out, and where one turned back to the front starts. */
+const PEEK = 1 / 4;
+const FROM_ABOVE = -3 / 4;
 const OPACITY = [1, 0.6, 0.3];
 const SCALE = [1, 0.94, 0.88];
 const SWIPE_PX = 24;
-
-/** Where a card turned back to the front starts. */
-export const FROM_ABOVE_PX = -24;
 
 /** The depth of the card at index `i`, front 0, with the deck turned by `rotation`. */
 export function deckDepth(i: u32, rotation: i32, count: u32): u32 {
@@ -31,15 +30,17 @@ export function frontFirst<T>(cards: readonly T[], rotation: i32): T[] {
 
 export interface CardPose {
   rest: { translateY: f64; scale: f64 };
+  above: { translateY: f64 };
   /** 0 past the cards drawn. */
   fade: f64;
   zIndex: u32;
 }
 
-export function cardPose(depth: u32): CardPose {
+export function cardPose(depth: u32, side: f64): CardPose {
   const shown = Math.min(depth, DEPTH);
   return {
-    rest: { translateY: depth * PEEK_PX, scale: SCALE[shown] },
+    rest: { translateY: depth * side * PEEK, scale: SCALE[shown] },
+    above: { translateY: side * FROM_ABOVE },
     fade: depth <= DEPTH ? OPACITY[depth] : 0,
     zIndex: DEPTH + 1 - Math.min(depth, DEPTH + 1),
   };

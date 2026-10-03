@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { PanResponder, PixelRatio, StyleSheet, View } from "react-native";
 
 import { Motion } from "@platform/motion.tsx";
-import { cardPose, deckSwipe, FROM_ABOVE_PX, frontFirst, useTurnedBack } from "@/shared/ui/deck.ts";
+import { cardPose, deckSwipe, frontFirst, useTurnedBack } from "@/shared/ui/deck.ts";
 import { type Key, usePresent } from "@/shared/ui/motion/presence.tsx";
 import { after, LEAVE, SETTLE } from "@/shared/ui/motion/transition.ts";
 import { setToastDragging, toastRotate, useToastStore } from "./store.ts";
@@ -47,7 +47,7 @@ export function Toaster() {
     <View style={styles.anchor} onLayout={(e) => setCenter(PixelRatio.roundToNearestPixel(e.nativeEvent.layout.width / 2))}>
       {list.map(({ item, key, present }) => {
         const depth = order.indexOf(key);
-        const pose = cardPose(depth);
+        const pose = cardPose(depth, TOAST_SIDE);
         const front = present && depth === 0;
         const fromAbove = front && turnedBack && lastOrder.current.indexOf(key) !== 0;
         const transition = !present ? LEAVE : arrivals.has(key) ? SETTLE : arrived > 0 ? MAKE_ROOM : SETTLE;
@@ -55,7 +55,7 @@ export function Toaster() {
         return (
           <Motion
             key={key}
-            from={fromAbove ? { translateY: FROM_ABOVE_PX } : pose.rest}
+            from={fromAbove ? pose.above : pose.rest}
             replay={fromAbove ? rotation : null}
             to={present ? pose.rest : { scale: 0.9 }}
             transition={transition}

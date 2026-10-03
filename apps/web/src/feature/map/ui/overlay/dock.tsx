@@ -14,7 +14,7 @@ import { Glyph } from "@/shared/ui/glyph.tsx";
 import { Motion } from "@platform/motion.tsx";
 import { LABEL } from "@platform/palette.ts";
 import { Pill } from "@platform/pill.tsx";
-import { cardPose, deckDepth, deckSwipe, FROM_ABOVE_PX, useTurnedBack } from "@/shared/ui/deck.ts";
+import { cardPose, deckDepth, deckSwipe, useTurnedBack } from "@/shared/ui/deck.ts";
 import { Presence } from "@/shared/ui/motion/presence.tsx";
 import { FADE, SETTLE, SNAP } from "@/shared/ui/motion/transition.ts";
 import { keepKeyboard } from "@/shared/ui/keyboard.tsx";
@@ -289,12 +289,12 @@ export function Dock() {
 
   const card = (pane: Pane, fill: string, tint: string | undefined, content: React.ReactNode, onContentWidth?: (w: f64) => void) => {
     const depth = deckDepth(pane, rotation, PANES.length);
-    const pose = cardPose(depth);
+    const pose = cardPose(depth, chrome.control);
     const fromAbove = depth === 0 && turnedBack;
     return (
       <Motion
         key={pane}
-        from={fromAbove ? { translateY: FROM_ABOVE_PX } : pose.rest}
+        from={fromAbove ? pose.above : pose.rest}
         replay={fromAbove ? rotation : null}
         to={pose.rest}
         transition={SETTLE}
