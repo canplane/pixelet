@@ -54,8 +54,9 @@ export const Head = ({ children, end }: { children: string; end?: ReactNode }) =
 );
 
 const deg = (rad: number) => (rad * 180) / Math.PI;
-const geo = (lat: number, lon: number) => (Number.isNaN(lat) ? "-" : `${lat.toFixed(5)}, ${lon.toFixed(5)}`);
-const lv = (level: number) => (Number.isNaN(level) ? "-" : String(level));
+const or = (x: number) => (Number.isNaN(x) ? "-" : n1(x));
+const geo = (lat: number, lon: number) => (Number.isNaN(lat) ? "-" : `${lat.toFixed(5)} / ${lon.toFixed(5)}`);
+const lv = (level: number) => (Number.isNaN(level) ? "-" : `z${16 - level}`);
 
 const phase = (f: FrameSummary, name: string): Spread => f.phases.find((p) => p.name === name)?.spread ?? { p50: 0, p95: 0, max: 0 };
 
@@ -77,11 +78,15 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
       />
 
       <Head>view</Head>
-      <Row k="dist/polar/az" v={`${n1(v.dist)}u ${n1(deg(v.polar))}° ${n1(deg(v.azimuth))}°`} />
-      <Row k="center" v={`${geo(v.center_lat, v.center_lon)} ${n1(v.center_z)}m τ${n1(v.tau)}`} />
-      <Row k="hover" v={Number.isNaN(v.hover_x) ? "-" : `${n1(v.hover_x)} ${n1(v.hover_y)} ${n1(v.hover_z)}u`} />
-      <Row k="hover geo" v={Number.isNaN(v.hover_lat) ? "-" : `${geo(v.hover_lat, v.hover_lon)} ${n1(v.hover_alt)}m`} />
-      <Row k="chunk/tier/from" v={`L${lv(v.chunk_level)}/L${lv(v.tier_level)}/L${lv(v.read_from)}`} warn={v.read_from > v.chunk_level} />
+      <Row k="dist z16 cells" v={n1(v.dist)} />
+      <Row k="polar/azimuth °" v={`${n1(deg(v.polar))} / ${n1(deg(v.azimuth))}`} />
+      <Row k="τ" v={or(v.tau)} />
+      <Row k="center lat/lon °" v={geo(v.center_lat, v.center_lon)} />
+      <Row k="center alt m" v={or(v.center_z)} />
+      <Row k="hover x/y/z z16 cells" v={Number.isNaN(v.hover_x) ? "-" : `${n1(v.hover_x)} / ${n1(v.hover_y)} / ${n1(v.hover_z)}`} />
+      <Row k="hover lat/lon °" v={geo(v.hover_lat, v.hover_lon)} />
+      <Row k="hover alt m" v={or(v.hover_alt)} />
+      <Row k="chunk/tier/page level" v={`${lv(v.chunk_level)} / ${lv(v.tier_level)} / ${lv(v.read_from)}`} warn={v.read_from > v.chunk_level} />
 
       {f === null && <Note>no frames sampled yet</Note>}
       {f !== null && (

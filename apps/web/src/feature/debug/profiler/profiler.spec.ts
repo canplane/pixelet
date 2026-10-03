@@ -339,7 +339,7 @@ export const SUMMARY = {
     requests: 1 as number,
     WORDS: 2 as number,
   },
-  /** Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_level` is the drawn chunk under the pointer, `tier_level` the level its tier is drawn at and `read_from` the level of the page it is read from. */
+  /** Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in z16 cells, `center_z` and `hover_alt` in metres, and NaN where there is none. levels count up from z16; `chunk_level` is the drawn chunk under the pointer, `tier_level` the level its tier is drawn at and `read_from` the level of the page it is read from. */
   view: {
     AT: 591 as number,
     dist: 0 as number,
