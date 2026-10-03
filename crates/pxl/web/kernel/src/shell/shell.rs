@@ -72,16 +72,16 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
             center,
         },
         location: LocationState {
-            status: location.status,
+            status: location.pose.status(),
             has_location: location.location.is_some(),
-            error: location.error,
+            error: location.pose.error(),
         },
         companion: CompanionState {
             person_ready: companion.person_ready,
             pet_ready: companion.pet_ready,
         },
         orientation: OrientationState {
-            status: orientation.status,
+            status: orientation.pose.status(),
         },
         azimuth: camera.intent.azimuth,
         is_follow_mode: camera.is_follow_mode,

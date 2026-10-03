@@ -5,7 +5,7 @@
 
 pub use crate::abi::cmd::GeolocationErrorCode;
 use crate::abi::cmd::Message;
-use crate::control::sensor::store::{device_location_store, DevicePoseStatus};
+use crate::control::sensor::store::{device_location_store, Pose};
 use crate::global::Global;
 use crate::host::now;
 use crate::world::change::wake_at;
@@ -49,10 +49,10 @@ pub fn start_watching(supported: bool) {
     }
     let store = device_location_store();
     if !supported {
-        store.set_error(Message::GeolocationUnsupported);
+        store.pose = Pose::Failed(Message::GeolocationUnsupported);
         return;
     }
-    store.status = DevicePoseStatus::Loading;
+    store.pose = Pose::Loading;
     store.set_is_tracking_location(true);
     g.watching = true;
     g.commands.push(GeolocationCommand::Start);
@@ -76,7 +76,7 @@ pub fn geolocation_open(supported: bool) {
 pub fn geolocation_close() {
     geolocation().open = false;
     stop_watching();
-    device_location_store().status = DevicePoseStatus::Idle;
+    device_location_store().pose = Pose::Idle;
 }
 
 pub fn geolocation_visibility(visible: bool, supported: bool) {
@@ -105,7 +105,7 @@ pub fn geolocation_error(code: GeolocationErrorCode) {
     g.watching = false;
     let store = device_location_store();
     store.set_is_tracking_location(false);
-    store.set_error(match code {
+    store.pose = Pose::Failed(match code {
         GeolocationErrorCode::PermissionDenied => Message::GeolocationPermissionDenied,
         GeolocationErrorCode::PositionUnavailable => Message::GeolocationPositionUnavailable,
         GeolocationErrorCode::Timeout => Message::GeolocationTimeout,

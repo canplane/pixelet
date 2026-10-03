@@ -6,7 +6,7 @@
 
 use crate::abi::cmd::Message;
 
-use crate::control::sensor::store::{device_orientation_store, DevicePoseStatus, PermissionAnswer};
+use crate::control::sensor::store::{device_orientation_store, PermissionAnswer, Pose};
 use crate::global::Global;
 use crate::host::now;
 use crate::world::change::wake_at;
@@ -59,7 +59,7 @@ pub fn orientation_event(webkit_compass_heading: Option<f64>, alpha: Option<f64>
         o.commands.push(OrientationCommand::Remove);
         let store = device_orientation_store();
         store.set_is_tracking_orientation(false);
-        store.status = DevicePoseStatus::Unavailable;
+        store.pose = Pose::Unavailable;
         return;
     }
     orientation().last_event_at = Some(now());
@@ -74,14 +74,14 @@ pub fn request_orientation(platform: OrientationPlatform) -> bool {
     if store.is_tracking_orientation {
         return true;
     }
-    if !platform.supported || store.status == DevicePoseStatus::Unavailable {
-        store.status = DevicePoseStatus::Unavailable;
+    if !platform.supported || store.pose == Pose::Unavailable {
+        store.pose = Pose::Unavailable;
         return false;
     }
     if platform.needs_permission {
         return false;
     }
-    store.status = DevicePoseStatus::Loading;
+    store.pose = Pose::Loading;
     let o = orientation();
     o.commands.push(OrientationCommand::Listen);
     o.last_event_at = Some(now());
@@ -96,7 +96,7 @@ pub fn orientation_permission(answer: PermissionAnswer, platform: OrientationPla
     match answer {
         PermissionAnswer::Asking => {
             if !store.is_tracking_orientation {
-                store.status = DevicePoseStatus::Loading;
+                store.pose = Pose::Loading;
             }
         }
         PermissionAnswer::Granted if platform.needs_permission => {
@@ -108,11 +108,11 @@ pub fn orientation_permission(answer: PermissionAnswer, platform: OrientationPla
         }
         PermissionAnswer::Denied => {
             store.set_is_tracking_orientation(false);
-            store.set_error(Message::OrientationPermissionDenied);
+            store.pose = Pose::Failed(Message::OrientationPermissionDenied);
         }
         PermissionAnswer::Failed => {
             store.set_is_tracking_orientation(false);
-            store.set_error(Message::OrientationPermissionError);
+            store.pose = Pose::Failed(Message::OrientationPermissionError);
         }
     }
 }
@@ -121,14 +121,14 @@ pub fn orientation_lost() {
     orientation().last_event_at = None;
     let store = device_orientation_store();
     store.set_is_tracking_orientation(false);
-    store.set_error(Message::OrientationSignalLost);
+    store.pose = Pose::Failed(Message::OrientationSignalLost);
 }
 
 pub fn orientation_close() {
     orientation().commands.push(OrientationCommand::Remove);
     let store = device_orientation_store();
     store.set_is_tracking_orientation(false);
-    store.status = DevicePoseStatus::Idle;
+    store.pose = Pose::Idle;
 }
 
 /// Background tabs stop dispatching, so judging the gap on return would read
