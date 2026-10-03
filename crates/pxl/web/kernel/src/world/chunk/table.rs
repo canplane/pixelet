@@ -168,11 +168,11 @@ impl Sources {
             objects_revision: objects_revision_of(k),
             hide: edits.hide.filter(|at| edits.hide_in.0 && drawn(at)),
             carve: edits.carve.filter(drawn),
-            read_from: Terrain::pyramid().drawn_from(k.page()).map(|p| p.level),
+            read_from: Terrain::pyramid().paging().drawn_from(k.page()).map(|p| p.level),
             beside_from: {
                 let mut from = [None; 8];
                 for ([qx, qy], p) in k.pages_beside(APRON) {
-                    from[beside_index(qx, qy)] = Terrain::pyramid().drawn_from(p).map(|p| p.level);
+                    from[beside_index(qx, qy)] = Terrain::pyramid().paging().drawn_from(p).map(|p| p.level);
                 }
                 from
             },
@@ -455,7 +455,7 @@ impl Env for Pieces<'_> {
     }
 
     fn buildable(&self, c: Chunk) -> bool {
-        Terrain::pyramid().drawn_from(c.page()).is_some()
+        Terrain::pyramid().paging().drawn_from(c.page()).is_some()
     }
 
     fn order(&self, c: Chunk) -> Order {

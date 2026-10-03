@@ -10,11 +10,11 @@ use std::collections::HashMap;
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, PageSource};
+use pxl_spec::procedural::Frame;
 use pxl_spec::space::hierarchy::{child_of, parent_of};
 use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::lod::fault_radius;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::procedural::Frame;
 use pxl_spec::space::pyramid::{chunk_span_of, LevelPage, CHUNK_CELLS, GROUND, TOP_LEVEL};
 use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::base::ptr_at;
@@ -239,7 +239,7 @@ fn sources_of(cell: DecorCell, store: &Store, cols: &mut Vec<IVec>, hide: Option
 
 fn build(c: &mut Cells, cell: DecorCell, kinds: &[Kind], store: &Store, draw: &mut DrawList, sources: Sources) -> Option<Block> {
     let pages = Terrain::pyramid();
-    let page = pages.get(cell.page())?;
+    let page = pages.paging().get(cell.page())?;
     let level = cell.level;
     let (x0, y0, _) = cell.rect();
     let (x0, y0) = (x0 as i64, y0 as i64);
@@ -359,7 +359,7 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Dec
     }
 
     let wanted = |cell: &DecorCell| frontier.binary_search(cell).is_ok();
-    let ready = |cell: DecorCell, blocks: &HashMap<DecorCell, Block>| blocks.contains_key(&cell) || pages.settled(cell.page());
+    let ready = |cell: DecorCell, blocks: &HashMap<DecorCell, Block>| blocks.contains_key(&cell) || pages.paging().settled(cell.page());
     c.under.clear();
     for &cell in &frontier {
         let r = ready(cell, &c.blocks);

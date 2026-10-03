@@ -134,8 +134,8 @@ impl Source {
     /// Found by key, so a page that is gone never yields another page's bytes.
     fn of(p: LevelPage) -> Option<Source> {
         let pyramid = Terrain::pyramid();
-        let src = pyramid.drawn_from(p)?;
-        let page = pyramid.get(src)?;
+        let src = pyramid.paging().drawn_from(p)?;
+        let page = pyramid.paging().get(src)?;
         let corner = GROUND.cell_at(p, GROUND.cell_index(0, 0));
         Some(Source {
             page,

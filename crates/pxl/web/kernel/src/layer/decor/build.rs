@@ -11,10 +11,10 @@ use pxl_render::mesh::voxel_scan::apron_col;
 use pxl_spec::bake::constant::{unpack_pos, U_PER_CELL};
 use pxl_spec::cell::object::decor_num_id;
 use pxl_spec::cell::DecorId;
+use pxl_spec::procedural::{scatter, scatter_at, Candidate, MASTER_SEED};
 use pxl_spec::space::lod::target_cell_px;
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
-use pxl_spec::procedural::{scatter, scatter_at, Candidate, MASTER_SEED};
 use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
 use std::collections::{HashMap, TryReserveError};
@@ -250,7 +250,7 @@ pub fn draw(kind: &Kind, candidate: Candidate, cells: &[GroundCell], lines: &Dec
 pub fn scatters_at(value: u32, at: &Pvf3) -> Option<Draw> {
     let kind = kinds().iter().find(|k| k.decor_value == Some(value))?;
     let z16 = GROUND.cell_of(0, at);
-    let page = Terrain::pyramid().get(z16.page())?;
+    let page = Terrain::pyramid().paging().get(z16.page())?;
     let ground = Access::now().at(at, FINEST).exact()?;
     let [ix, iy, iz] = CELL.index_of(at);
     let candidate = scatter_at(kind.tag, kind.density, [ix, iy])?;
@@ -421,4 +421,3 @@ impl<'s> DecorBuild<'s> {
         }
     }
 }
-

@@ -211,7 +211,7 @@ impl DemandEstimator for ByFootprints<'_> {
 
 /// Moves whenever a terrain page comes or goes or an object is written.
 pub fn heights_revision() -> (u32, u32) {
-    (Terrain::pyramid().revision(), objects_revision())
+    (Terrain::pyramid().paging().revision(), objects_revision())
 }
 
 /// Seen before unseen, then nearer first. Every layer's work is taken in

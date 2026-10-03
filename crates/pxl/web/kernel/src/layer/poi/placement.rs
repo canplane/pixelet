@@ -79,8 +79,8 @@ pub fn step(ctx: &mut TickContext) {
             continue;
         }
         let major_only = chunk.level() > POI_ALL_LEVEL;
-        let Some(src) = pages.source(chunk.page()) else { continue };
-        let Some(poi) = pages.get(src) else { continue };
+        let Some(src) = pages.paging().source(chunk.page()) else { continue };
+        let Some(poi) = pages.paging().get(src) else { continue };
         // Where the source cell is wider than the chunk, its place counts only if it
         // stands on the chunk's ground.
         let (side, cell) = (chunk.column().0, POI_LATTICE.scale(src.level));

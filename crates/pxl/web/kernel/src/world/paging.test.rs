@@ -91,7 +91,7 @@ impl Serve for Hostile {
 }
 
 fn exact(pyramid: &Pyramid<PoiPage>) -> bool {
-    pyramid.demand().iter().all(|&p| pyramid.source(p).is_some())
+    pyramid.demand().iter().all(|&p| pyramid.paging().source(p).is_some())
 }
 
 /// Holds the invariants every turn until the view is exact and nothing is asked for.

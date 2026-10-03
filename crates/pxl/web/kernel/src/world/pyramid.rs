@@ -116,14 +116,6 @@ impl<L: Layer> Default for Pyramid<L> {
 }
 
 impl<L: Layer> Pyramid<L> {
-    pub fn get(&self, p: LevelPage) -> Option<&L> {
-        self.paging.get(p)
-    }
-
-    pub fn settled(&self, p: LevelPage) -> bool {
-        self.paging.settled(p)
-    }
-
     pub fn paging(&self) -> &Paging<L> {
         &self.paging
     }
@@ -132,24 +124,8 @@ impl<L: Layer> Pyramid<L> {
         self.paging.set(p, page);
     }
 
-    pub fn revision(&self) -> u32 {
-        self.paging.revision()
-    }
-
     pub fn answer_above(&mut self, p: LevelPage) {
         self.paging.answer_above(p);
-    }
-
-    pub fn source(&self, p: LevelPage) -> Option<LevelPage> {
-        self.paging.source(p)
-    }
-
-    pub fn drawn_from(&self, p: LevelPage) -> Option<LevelPage> {
-        self.paging.drawn_from(p)
-    }
-
-    pub fn asked(&self, p: LevelPage) -> bool {
-        self.paging.asked(p).is_some()
     }
 
     pub fn take_refusals(&mut self) -> u32 {
@@ -367,11 +343,21 @@ impl<L: Layer> Pyramid<L> {
         if self.last != Some(seen) || readers_moved {
             let line = destination.into_iter().flat_map(|p| std::iter::successors(Some(p), move |q| (q.level < top).then(|| q.parent())));
             let readers = core::mem::take(&mut self.readers);
-            self.observe(o.as_ref(), live.as_ref(), line, &readers, &Known, &ByFootprints {
+            self.observe(
+                o.as_ref(),
+                live.as_ref(),
+                line,
+                &readers,
+                &Known,
+                &ByFootprints {
                     tau,
                     footprints: published.map_or(&[], |d| d.footprints()),
                     lacks: published.map_or(&[], |d| d.lacks()),
-                }, &PREFETCH, tau, param::HINT_ALLOWANCE);
+                },
+                &PREFETCH,
+                tau,
+                param::HINT_ALLOWANCE,
+            );
             self.readers = readers;
             // Observing can let pages go, moving the revision: record the state after it.
             self.last = Some((o, floor_now, destination, self.paging.revision(), heights_revision(), tau, domain::revision()));

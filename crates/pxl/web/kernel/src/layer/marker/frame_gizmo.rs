@@ -330,7 +330,7 @@ pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>, map_origin: IVec)
         }
         return;
     };
-    let key = (center, map_origin, Terrain::pyramid().revision(), crate::control::camera::controller::heading());
+    let key = (center, map_origin, Terrain::pyramid().paging().revision(), crate::control::camera::controller::heading());
     if g.built_for == Some(key) {
         write_labels(g);
         return;

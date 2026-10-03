@@ -84,7 +84,7 @@ fn the_demand_is_the_estimators_and_every_fault_in_it_is_asked_for() {
     let asked: HashSet<u64> = pyramid.wants().iter().map(|(s, _)| *s).collect();
     let mut faults = 0;
     for &p in pyramid.demand() {
-        if pyramid.source(p).is_some() {
+        if pyramid.paging().source(p).is_some() {
             continue;
         }
         faults += 1;
@@ -109,7 +109,7 @@ fn ground_a_page_settles_is_never_asked_for() {
     hold(&mut pyramid, top.into_iter().map(|p| (p, PoiPage::default())));
     pyramid.observe(Some(&o), None, core::iter::empty(), &[], &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
     for &p in pyramid.demand() {
-        assert!(pyramid.source(p).is_some_and(|s| s.level == TOP_LEVEL), "{p:?} is said by the page at the top");
+        assert!(pyramid.paging().source(p).is_some_and(|s| s.level == TOP_LEVEL), "{p:?} is said by the page at the top");
     }
     assert!(pyramid.wants().is_empty(), "{} pages asked for", pyramid.wants().len());
 }

@@ -33,7 +33,7 @@ pub enum Label {
 impl Label {
     /// Nameless once that page has gone.
     fn place(page: LevelPage, place: u32) -> Place<'static> {
-        PoiPage::pyramid().get(page).map_or(Place { name: "", kind: 0, id: 0 }, |p| p.places.get(place))
+        PoiPage::pyramid().paging().get(page).map_or(Place { name: "", kind: 0, id: 0 }, |p| p.places.get(place))
     }
 
     pub fn text(self) -> String {

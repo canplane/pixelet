@@ -12,13 +12,13 @@
 use pxl_render::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
 use pxl_spec::bake::constant::{CellZ, CELL, CELL_STEPS, OBJECT_FINEST, U_PER_CELL};
 use pxl_spec::bake::deck::Occupies;
-use pxl_spec::procedural::{pier_stands, Frame};
-use pxl_spec::space::adapter::epsg3857::u_per_m;
-use pxl_spec::bake::ground::shown_ground;
 use pxl_spec::bake::fold::majority;
 use pxl_spec::bake::format::{drawn, Terrain};
+use pxl_spec::bake::ground::shown_ground;
 use pxl_spec::bake::pack::{channel_of, GroundCell};
 use pxl_spec::cell::object::{object_value_is_air, object_value_is_decor, object_value_is_voxel};
+use pxl_spec::procedural::{pier_stands, Frame};
+use pxl_spec::space::adapter::epsg3857::u_per_m;
 use pxl_spec::space::hierarchy::{ancestor_of, child_of, first_descendant_of, offset_in, Scale};
 use pxl_spec::space::indexer::{L2, L2_IDX, L3};
 use pxl_spec::space::lod::Tau;
@@ -211,7 +211,7 @@ struct Region {
 }
 
 pub fn support_revision() -> [u32; 2] {
-    [Terrain::pyramid().revision(), objects_revision()]
+    [Terrain::pyramid().paging().revision(), objects_revision()]
 }
 
 /// Folds sub-cell fill to the cell by majority, a level at a time, with the
