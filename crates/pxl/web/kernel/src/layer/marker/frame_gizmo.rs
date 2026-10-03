@@ -1,22 +1,19 @@
 // pxl-kernel/layer/marker/frame_gizmo.rs
 
-//! The debug gizmos (the `gizmos` setting): the map center and its cell, the
-//! page it stands in, the floating origin and the square it holds over, and
-//! the view's and the world's frames, as debug lines. The view's forward, its up and the world's north are told
+//! The debug gizmos (the `gizmos` setting): the map center and its cell, and
+//! the view's and the world's frames about it, as debug lines. The view's forward, its up and the world's north are told
 //! apart by color; nothing is labeled.
 
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::{floor3n, len3, V3};
-use pxl_spec::space::pyramid::{anchor_span_of, LevelPage};
 
 use crate::global::Global;
 use crate::kernel::kernel;
 use crate::world::access::Access;
 use crate::world::change::request_world_tick;
 use crate::world::frame::coord::canonical_to_local;
-use crate::world::frame::view::{origin_level, view};
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 
@@ -24,12 +21,6 @@ const COLOR: V3 = [0.0, 0.0, 0.0];
 const FORWARD: V3 = [1.0, 0.0, 0.0];
 const NORTH: V3 = [0.0, 1.0, 0.0];
 const UP: V3 = [0.0, 0.0, 1.0];
-const DASH: f64 = 0.3;
-const GAP: f64 = 0.2;
-/// Past this a line's dashes lengthen rather than multiply: a line to the
-/// floating origin can span hundreds of thousands of units, and a fixed dash
-/// made millions a frame, a block the heap refused.
-const DASHES: f64 = 256.0;
 /// Half the cross a point is drawn as.
 const POINT_HALF: f64 = 0.15;
 const RING_RADIUS: f64 = 4.0;
@@ -43,26 +34,6 @@ impl Sketch {
     fn line(&mut self, from: V3, to: V3, color: V3) {
         for p in [from, to] {
             self.0.extend([p[0], p[1], p[2], color[0], color[1], color[2]].map(|v| v as f32));
-        }
-    }
-
-    fn dashed(&mut self, from: V3, to: V3) {
-        let len = len3(&[to[0] - from[0], to[1] - from[1], to[2] - from[2]]);
-        if len == 0.0 {
-            return;
-        }
-        let d = [(to[0] - from[0]) / len, (to[1] - from[1]) / len, (to[2] - from[2]) / len];
-        let period = (DASH + GAP).max(len / DASHES);
-        let dash = period * DASH / (DASH + GAP);
-        let mut s = 0.0;
-        while s < len {
-            let e = len.min(s + dash);
-            self.line(
-                [from[0] + d[0] * s, from[1] + d[1] * s, from[2] + d[2] * s],
-                [from[0] + d[0] * e, from[1] + d[1] * e, from[2] + d[2] * e],
-                COLOR,
-            );
-            s += period;
         }
     }
 
@@ -89,19 +60,6 @@ impl Sketch {
         ];
         for (a, b) in [(0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), (6, 7), (7, 4), (0, 4), (1, 5), (2, 6), (3, 7)] {
             self.line(corners[a], corners[b], COLOR);
-        }
-    }
-
-    /// The square from `base` `side` across, level.
-    fn square(&mut self, base: V3, side: f64, dashed: bool) {
-        let c = [[0.0, 0.0], [side, 0.0], [side, side], [0.0, side]].map(|[x, y]| [base[0] + x, base[1] + y, base[2]]);
-        for k in 0..4 {
-            let (a, b) = (c[k], c[(k + 1) % 4]);
-            if dashed {
-                self.dashed(a, b);
-            } else {
-                self.line(a, b, COLOR);
-            }
         }
     }
 
@@ -150,40 +108,20 @@ fn sketch_frames(s: &mut Sketch) {
     s.point(world_frame([0.0, RING_RADIUS, 0.0]), NORTH);
 }
 
-/// The map center and its cell; at the level the origin is floored at, the
-/// page the map center stands in, outlined, and the origin with the square
-/// the eye stays in before it moves, dashed, eight pages a side. Both squares
-/// are bounds of coordinates, drawn level at the map center, and a line in
-/// each one's style leads from the map center to its corner, which is often
-/// off the screen.
+/// The map center and its cell.
 fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
     let mut s = Sketch::default();
-    let origin = ivec::to_v3(map_origin);
     let center_v = canonical_to_local(map_center, map_origin);
     let ground = Access::now().floor_under(map_center).value().map(|top| crate::world::frame::coord::local_height(top, map_origin));
     let mut cell_v = [0.0; 3];
     floor3n(&[center_v[0], center_v[1], ground.unwrap_or(0.0)], U_PER_CELL, &mut cell_v);
     s.r#box(cell_v, U_PER_CELL);
     s.point(center_v, COLOR);
-
-    let z = center_v[2];
-    let level = origin_level(view().eye_at());
-    let (x0, y0, side) = LevelPage::over(level, map_center.i).rect();
-    let page_v = [x0 - origin[0], y0 - origin[1], z];
-    s.square(page_v, side, false);
-    s.line(center_v, page_v, COLOR);
-    s.point(page_v, COLOR);
-
-    let span = anchor_span_of(level) as f64;
-    let origin_v = [0.0, 0.0, z];
-    s.square(origin_v, span, true);
-    s.dashed(center_v, origin_v);
-    s.point(origin_v, COLOR);
     s
 }
 
-/// Map center, origin, its level, tiles' revision, and the azimuth the lines were drawn for.
-type Drawn = (Pvf3, IVec, u32, u32, f64);
+/// Map center, origin, tiles' revision, and the azimuth the lines were drawn for.
+type Drawn = (Pvf3, IVec, u32, f64);
 
 static GIZMOS: Global<Option<Drawn>> = Global::new();
 
@@ -200,7 +138,7 @@ pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>, map_origin: IVec)
         }
         return;
     };
-    let key = (center, map_origin, origin_level(view().eye_at()), Terrain::pyramid().paging().revision(), crate::control::camera::controller::azimuth());
+    let key = (center, map_origin, Terrain::pyramid().paging().revision(), crate::control::camera::controller::azimuth());
     if *built_for == Some(key) {
         return;
     }

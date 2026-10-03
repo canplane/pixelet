@@ -125,7 +125,8 @@ pub fn view_compose() {
     let e = v.eye_at();
     let mut at = Pvf3::default();
     projection::project(&mut at, e[0], e[1], e[2].clamp(REACH.min[2], REACH.max[2] - 1.0));
-    let want = origin_for(at.i, origin_level(v.eye_at()));
+    let level = lod::level(height_at(v.eye_at())).clamp(0, TOP_LEVEL as i32) as u32;
+    let want = origin_for(at.i, level);
     if want != v.origin {
         rebase(crate::world::frame::coord::offset(want, v.origin));
         v.origin = want;
@@ -156,11 +157,6 @@ pub fn view_ray_local(ndc_x: f64, ndc_y: f64, origin: &mut V3, direction: &mut V
     let mut far = [0.0; 3];
     mat4_transform_point(&mut far, &v.inv_local_view_proj, ndc_x, ndc_y, 1.0);
     mat4_transform_direction(direction, &mat4(), far[0] - origin[0], far[1] - origin[1], far[2] - origin[2]);
-}
-
-/// The level the origin is floored at, by the eye's height (`origin_for`).
-pub fn origin_level(eye: V3) -> u32 {
-    lod::level(height_at(eye)).clamp(0, TOP_LEVEL as i32) as u32
 }
 
 /// `ndc` in [−1, 1], y up, as logical pixels from the view's top left.
