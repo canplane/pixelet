@@ -552,7 +552,8 @@ impl DebugPass {
         g.set_bind_group(pass, 0, self.frame_group, &[]);
         g.set_bind_group(pass, 1, self.draw_group, &[]);
         g.set_vertex_buffer(pass, 0, block, 0, count * 24);
-        g.draw(pass, count, 1, 0, 0);
+        // A segment an instance: its two vertices, read as one.
+        g.draw(pass, 6, count / 2, 0, 0);
     }
 }
 

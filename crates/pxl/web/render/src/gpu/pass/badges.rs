@@ -74,13 +74,6 @@ fn cluster(p: &mut Sketch, label: &str, logical_w: f32) {
     anchor_dot(p, logical_w);
 }
 
-pub const LABEL_FONT: Font = Font { weight: REGULAR, px: 10.0 };
-pub const LABEL_H: f32 = 12.0;
-
-fn label(p: &mut Sketch, text: &str, logical_w: f32) {
-    p.text(LABEL_FONT, BLACK, text, logical_w / 2.0, LABEL_H / 2.0, Align::Center);
-}
-
 pub const BUBBLE_FONT: Font = Font { weight: SEMIBOLD, px: 14.0 };
 const PADDING_Y: f32 = 8.0;
 const LINE_H: f32 = 17.0;
@@ -221,7 +214,6 @@ impl BadgePass {
                 DrawSpec::Cluster { label, logical_w } => cluster(&mut p, label, *logical_w as f32),
                 DrawSpec::Place { name, icon, color, logical_w } => place(&mut p, name, icon, *color, *logical_w as f32),
                 DrawSpec::Bubble { lines, box_w, box_h } => bubble(&mut p, lines, *box_w as f32, *box_h as f32),
-                DrawSpec::Text { text: line, logical_w } => label(&mut p, line, *logical_w as f32),
             }
             if self.painter.paint(g, encoder, self.sheet, atlas.slot_rect(slot), &p, text, &mut made) {
                 drawn = true;

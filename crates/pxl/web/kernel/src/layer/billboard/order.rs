@@ -7,8 +7,7 @@
 pub enum BillboardOrder {
     Poi = 0,
     Chat = 1,
-    Debug = 2,
 }
 
 /// One set per order, each owner letting its set go before making another.
-pub const SETS_MAX: usize = 3;
+pub const SETS_MAX: usize = 2;

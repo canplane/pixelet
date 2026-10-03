@@ -445,12 +445,11 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         ),
         PIPELINE_DEBUG => record(
             Head {
-                topology: LINES,
                 depth_compare: ALWAYS,
                 blend: OPAQUE,
                 ..blended(SHADER_DEBUG, CULL_NONE, 0, 0.0)
             },
-            &[vec![24, PER_VERTEX, 2, 0, 0, F32X3, 1, 12, F32X3]],
+            &[vec![48, PER_INSTANCE, 3, 0, 0, F32X3, 1, 12, F32X3, 2, 24, F32X3]],
             &[frame(VERTEX), group(&[[0, VERTEX, UNIFORM]])],
         ),
         PIPELINE_CHUNK_DEPTH => record(depth_only(SHADER_CHUNK), &chunk_lanes(true), &chunk_groups()),
