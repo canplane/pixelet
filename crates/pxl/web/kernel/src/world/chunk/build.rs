@@ -21,7 +21,7 @@ use std::collections::{HashMap, TryReserveError};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free, Block};
 
-use crate::layer::object::store::{object_col_revision, Store};
+use crate::layer::object::store::{object_col_revision, render_edits, Store};
 use crate::mem::fixed::{at, Range};
 use crate::shell::setting::store::settings_store;
 use pxl_spec::bake::constant::BAND_CELLS;
@@ -311,8 +311,6 @@ pub struct Builder {
     scan_job: Option<ScanJob>,
     bake_job: Option<BakeJob>,
     sample: ChunkSample,
-    hide: Option<EntryAt>,
-    carve: Option<EntryAt>,
     run_holds: [Option<RunHold>; RUN_SETS],
     bands: Vec<BandView<'static>>,
     claimed: Claims,
@@ -341,8 +339,6 @@ impl Builder {
             scan_job: None,
             bake_job: None,
             sample: ChunkSample::default(),
-            hide: None,
-            carve: None,
             run_holds: [const { None }; RUN_SETS],
             bands: Vec::new(),
             claimed: Claims::new(),
@@ -408,11 +404,6 @@ impl Builder {
             self.abort_scan_of(world, id);
             self.leave_runs(id);
         }
-    }
-
-    pub fn set_edits(&mut self, hide: Option<EntryAt>, carve: Option<EntryAt>) {
-        self.hide = hide;
-        self.carve = carve;
     }
 
     /// The column's runs are shared by every chunk over it, so all of them rebuild.
@@ -609,8 +600,8 @@ impl Builder {
                 next: 0,
                 folded,
                 revision: object_col_revision(col_idx),
-                hide: self.hide,
-                carve: self.carve.filter(|c| c.col_idx == col_idx),
+                hide: render_edits().hide,
+                carve: render_edits().carve.filter(|c| c.col_idx == col_idx),
             };
             self.scan_job = Some(ScanJob { id, volume, fold, paint: Some(paint) });
             return Progress::Busy;
@@ -664,7 +655,7 @@ impl Builder {
     }
 
     fn has_objects(&self, world: &World, col_idx: IVec) -> bool {
-        world.store.entries(col_idx).is_some() || self.carve.is_some_and(|c| c.col_idx == col_idx)
+        world.store.entries(col_idx).is_some() || render_edits().carve.is_some_and(|c| c.col_idx == col_idx)
     }
 
     pub fn page_view(page: &Terrain) -> PageView<'_> {
@@ -693,7 +684,7 @@ impl Builder {
         pos.clear();
         state.clear();
         let mut refused = Ok(());
-        world.store.fold_entries(col_idx, scale, self.hide, &mut |b, [x, y, z], s, v| {
+        world.store.fold_entries(col_idx, scale, render_edits().hide, &mut |b, [x, y, z], s, v| {
             if refused.is_ok() {
                 refused = (|| {
                     band.try_reserve(1)?;
@@ -791,7 +782,7 @@ impl Builder {
         let (x0, y0) = (ivec::X(base), ivec::Y(base));
         // One cell of apron, which a fold reads (`folds_into`).
         let (cx, cy, span) = (target.index(x0), target.index(y0), CHUNK_CELLS as i64);
-        if world.store.fold_at(target, [cx - 1, cy - 1], [cx + span + 1, cy + span + 1], self.hide, &mut self.folded).is_err() {
+        if world.store.fold_at(target, [cx - 1, cy - 1], [cx + span + 1, cy + span + 1], render_edits().hide, &mut self.folded).is_err() {
             self.refuse(world, id);
             return Progress::Blocked;
         }

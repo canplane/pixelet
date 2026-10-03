@@ -303,7 +303,7 @@ pub fn set_virtual_hide(at: Option<EntryAt>) {
     st.virtual_hide = at;
     let kind = at.and_then(get_placed_object).map(|o| o.kind());
     st.hide_in = (!matches!(kind, Some(EntryKind::Decor { .. })), !matches!(kind, Some(EntryKind::Solid { .. })));
-    send_render_edits();
+    chunk_sources_changed();
 }
 
 /// Injects one never-written AIR entry into the drawn build, where the
@@ -323,12 +323,12 @@ pub fn set_virtual_carve_preview(at: &Pvf3, size: f64) {
         pos: pack_pos(x, y, z, Scale::of_side(size)),
     };
     st.virtual_carve_preview = Some(CarvePreview { cell, at });
-    send_render_edits();
+    chunk_sources_changed();
 }
 
 pub fn clear_virtual_carve_preview() {
     if store_state().virtual_carve_preview.take().is_some() {
-        send_render_edits();
+        chunk_sources_changed();
     }
 }
 
@@ -348,12 +348,6 @@ pub fn render_edits() -> RenderEdits {
         hide_in: st.hide_in,
         carve: st.virtual_carve_preview.map(|c| c.at),
     }
-}
-
-fn send_render_edits() {
-    let st = store_state();
-    kernel().sched.builder.set_edits(st.virtual_hide, st.virtual_carve_preview.map(|c| c.at));
-    chunk_sources_changed();
 }
 
 /// Moves on every write to what the column stores, and on nothing else.
