@@ -14,14 +14,14 @@ use crate::control::camera::config::camera_cfg;
 use crate::control::camera::store::{camera_store, CameraStatus};
 use crate::control::navigation::walk::over;
 use crate::global::Global;
-use crate::io::load::{load_gltf, load_image, Load};
+use crate::io::load::{load_image, Load};
 use crate::kernel::{kernel, with_world};
 use crate::layer::character::chat_bubble::chat_bubble_step;
 use crate::layer::character::path::{init_settle_tracker, sample_walk_plan, update_settle_tracker, SettleTracker, Vec2, WalkPlan, WalkSample};
 use crate::layer::character::store::companion_load_store;
-use crate::layer::character::variant::{character_variant, CharacterVariant, Group};
+use crate::layer::character::variant::{character_variant, model_of, CharacterVariant, Group};
 use crate::layer::character::variant_spec::IDLE_CLIP;
-use crate::layer::model::asset::{register_model, ModelHandle};
+use crate::layer::model::asset::ModelHandle;
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::settings_store;
 use crate::world::access::Access;
@@ -29,26 +29,7 @@ use crate::world::change::wake_at;
 use crate::world::frame::coord::{local_height, local_world_to_canonical};
 use crate::world::frame::view::view;
 
-/// By asset and height; None inside while registration failed.
-type ModelHandles = Vec<(Load, u64, Option<ModelHandle>)>;
-
-pub const MODELS_MAX: usize = crate::layer::character::variant::CHARACTER_VARIANTS;
-
 pub const ACTORS_MAX: usize = Group::ALL.len();
-
-static MODEL_HANDLES: Global<ModelHandles> = Global::new();
-
-fn model_for(variant: &CharacterVariant) -> Option<ModelHandle> {
-    let handles = MODEL_HANDLES.get(Vec::new);
-    let (load, height) = (Load::Asset(variant.model), variant.height_u.to_bits());
-    if let Some((_, _, entry)) = handles.iter().find(|(l, h, _)| *l == load && *h == height) {
-        return entry.clone();
-    }
-    let gltf = load_gltf(load)?;
-    let handle = register_model(&gltf, Some(variant.height_u));
-    handles.push((load, height, handle.clone()));
-    handle
-}
 
 // Arbitrary, so the pet does not share the person's footprint.
 const PET_OFFSET: Vec2 = Vec2 { x: -0.6, y: -0.6 };
@@ -132,7 +113,7 @@ impl Walker {
         if self.held.is_some() {
             return;
         }
-        let (Some(model), Some(skin)) = (model_for(variant), load_image(Load::Asset(variant.skin))) else {
+        let (Some(model), Some(skin)) = (model_of(variant.model, variant.height_u), load_image(Load::Asset(variant.skin))) else {
             return;
         };
         let Some(Some(actor)) = with_world(|_, sched| sched.models.new_actor(&mut sched.draw, model.model)) else {

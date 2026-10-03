@@ -57,7 +57,7 @@ impl Range {
 }
 
 /// None is let go.
-pub const MODELS_MAX: usize = crate::layer::character::companion::MODELS_MAX + crate::layer::character::preview::MODELS_MAX + crate::layer::decor::asset_store::MODELS_MAX;
+pub const MODELS_MAX: usize = crate::layer::character::variant::MODELS_MAX + crate::layer::decor::asset_store::MODELS_MAX;
 
 pub const ACTORS_MAX: usize = crate::layer::character::companion::ACTORS_MAX + crate::layer::character::preview::CASES_MAX;
 
