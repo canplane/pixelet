@@ -16,7 +16,8 @@ pub const VISIBLE: Phase = 1;
 pub const CONTENT: Phase = 2;
 pub const COSMETIC: Phase = 3;
 pub const REPORT: Phase = 4;
-pub const PHASES: [&str; 5] = ["interaction", "visible", "content", "cosmetic", "report"];
+pub const PHASES: [&str; PHASE_COUNT] = ["interaction", "visible", "content", "cosmetic", "report"];
+const PHASE_COUNT: usize = REPORT + 1;
 
 /// Steps unregistered from inside one step.
 const OFFS_MAX: usize = 8;
@@ -33,7 +34,7 @@ pub struct TickContext<'a, S> {
     pub state: &'a mut S,
     pub delta: f64,
     pub budget: FrameBudget,
-    pub phase_ms: [f64; 5],
+    pub phase_ms: [f64; PHASE_COUNT],
     invalidated: bool,
     offs: [u32; OFFS_MAX],
     off_len: usize,
@@ -67,7 +68,7 @@ pub struct StepStats {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TickReport {
     pub budget_ms: f64,
-    pub phase_ms: [f64; 5],
+    pub phase_ms: [f64; PHASE_COUNT],
     pub total_ms: f64,
     pub invalidated: bool,
 }
@@ -202,7 +203,7 @@ impl<S, const N: usize> Tick<S, N> {
             state,
             delta,
             budget: FrameBudget::new(quota_ms, t0, self.policy.hard_slack_ms),
-            phase_ms: [0.0; 5],
+            phase_ms: [0.0; PHASE_COUNT],
             invalidated: false,
             offs: [0; OFFS_MAX],
             off_len: 0,

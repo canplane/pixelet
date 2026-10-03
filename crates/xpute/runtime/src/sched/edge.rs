@@ -99,23 +99,20 @@ impl<const N: usize> Default for Edge<N> {
     }
 }
 
-/// `edge` is a fn so no borrow is held across the await.
 pub fn yield_if_spent<const N: usize>(edge: fn() -> &'static mut Edge<N>) -> impl Future<Output = ()> {
-    let mut parked = false;
-    poll_fn(move |cx| {
-        if parked || !edge().spent() {
-            return Poll::Ready(());
-        }
-        parked = true;
-        edge().park(cx.waker());
-        Poll::Pending
-    })
+    park_if(edge, Edge::spent)
 }
 
 pub fn next_turn<const N: usize>(edge: fn() -> &'static mut Edge<N>) -> impl Future<Output = ()> {
+    park_if(edge, |_| true)
+}
+
+/// Parked until the next rise when `wait` says so. `edge` is a fn so no
+/// borrow is held across the await.
+fn park_if<const N: usize>(edge: fn() -> &'static mut Edge<N>, wait: fn(&Edge<N>) -> bool) -> impl Future<Output = ()> {
     let mut parked = false;
     poll_fn(move |cx| {
-        if parked {
+        if parked || !wait(edge()) {
             return Poll::Ready(());
         }
         parked = true;
