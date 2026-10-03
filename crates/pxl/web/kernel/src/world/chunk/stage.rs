@@ -178,7 +178,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     // No chunks this frame: a search jump empties the stage for a moment.
     let Some(chunks_ms) = c.visible_pass else { return };
     let frame_t0 = ctx.budget.t0;
-    let census = kernel().sched.census;
+    let census = kernel().sched.census(profiler_recording(), frame_t0);
     // Taken whether or not recording, so a recording starts from now.
     let counts = kernel().sched.take_counts();
     let rings = profiler_take_rings();

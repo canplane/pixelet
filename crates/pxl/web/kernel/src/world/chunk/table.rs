@@ -381,7 +381,8 @@ pub struct Scheduler {
     /// An input changed that no recheck has seen; the next tick rechecks every
     /// chunk. Frames are requested until then, or the world stops at the last frame.
     view_dirty: bool,
-    pub census: Census,
+    /// Pending chunks the last commit pass did not reach.
+    commit_left: u32,
     counts: ChunkCounts,
     builds: Vec<u32>,
     landed: Vec<u32>,
@@ -491,7 +492,7 @@ impl Scheduler {
             domain_seen: u32::MAX,
             frame: None,
             view_dirty: true,
-            census: Census::default(),
+            commit_left: 0,
             counts: ChunkCounts::default(),
             scratch: Scratch::default(),
             builds: Vec::new(),
@@ -512,6 +513,43 @@ impl Scheduler {
 
     pub fn pace(&self) -> [u32; 3] {
         [self.refined, self.retiered, self.changes_peak]
+    }
+
+    /// The chunks counted for the profiler at `t0`, the slots' waits taken
+    /// whether or not they are: a recording starts from now.
+    pub fn census(&mut self, counted: bool, t0: f64) -> Census {
+        let mut c = Census {
+            chunks: self.slots.len() as u32,
+            commit_left: self.commit_left,
+            refused: self.moves.0,
+            waiting: self.moves.1,
+            level_boxes: self.level_boxes,
+            slot_waits: core::mem::take(&mut self.meshes.waits),
+            wait_levels: core::mem::take(&mut self.meshes.wait_levels),
+            chained: core::mem::take(&mut self.meshes.chained),
+            fine_peak: core::mem::take(&mut self.meshes.fine_peak),
+            coarse_peak: core::mem::take(&mut self.meshes.coarse_peak),
+            ..Census::default()
+        };
+        if !counted {
+            return c;
+        }
+        for s in &self.slots {
+            c.in_frustum += u32::from(s.in_frustum);
+            c.settling += u32::from(s.settling());
+            c.pending += u32::from(s.pending());
+            c.ready_waiting += u32::from(s.role == Role::Building && s.layout.is_some());
+            if let Some(since) = s.pending_since {
+                let waited = t0 - since;
+                if s.in_frustum {
+                    c.oldest_visible_ms = c.oldest_visible_ms.max(waited);
+                } else {
+                    c.offscreen_pending += 1;
+                    c.oldest_offscreen_ms = c.oldest_offscreen_ms.max(waited);
+                }
+            }
+        }
+        c
     }
 
     /// Each mounted chunk, whether it is drawn, and whether it is in the frustum.
@@ -839,44 +877,8 @@ impl Scheduler {
         let animating = self.models.tick(&mut self.draw, frame.delta_s as f32) | self.markers.tick(&frame) | self.environment.tick(&frame);
         self.draw_frame(&frame);
 
-        let mut c = Census {
-            chunks: self.slots.len() as u32,
-            commit_left,
-            refused: self.moves.0,
-            waiting: self.moves.1,
-            ..Census::default()
-        };
-        for s in &self.slots {
-            if s.in_frustum {
-                c.in_frustum += 1;
-            }
-            if s.settling() {
-                c.settling += 1;
-            }
-            if s.pending() {
-                c.pending += 1;
-            }
-            if s.role == Role::Building && s.layout.is_some() {
-                c.ready_waiting += 1;
-            }
-            if let Some(since) = s.pending_since {
-                let waited = t0 - since;
-                if s.in_frustum {
-                    c.oldest_visible_ms = c.oldest_visible_ms.max(waited);
-                } else {
-                    c.offscreen_pending += 1;
-                    c.oldest_offscreen_ms = c.oldest_offscreen_ms.max(waited);
-                }
-            }
-        }
-        c.level_boxes = self.level_boxes;
-        c.slot_waits = core::mem::take(&mut self.meshes.waits);
-        c.wait_levels = core::mem::take(&mut self.meshes.wait_levels);
-        c.chained = core::mem::take(&mut self.meshes.chained);
-        c.fine_peak = core::mem::take(&mut self.meshes.fine_peak);
-        c.coarse_peak = core::mem::take(&mut self.meshes.coarse_peak);
-        let moving = c.waiting > 0 || c.ready_waiting > 0;
-        self.census = c;
+        self.commit_left = commit_left;
+        let moving = self.moves.1 > 0 || self.slots.iter().any(|s| s.role == Role::Building && s.layout.is_some());
         committed > 0 || pending_total > committed || moving || self.view_dirty || animating
     }
 
