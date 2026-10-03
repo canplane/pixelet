@@ -211,7 +211,7 @@ fn side(out: &mut [f64]) {
     );
 
     let held = with_world(|_, sched| sched.held()).unwrap_or_default();
-    let (decor_cells, decor_instances) = crate::layer::decor::cell::counts();
+    let (decor_blocks, decor_instances) = crate::layer::decor::cell::counts();
     put(
         out,
         SUMMARY::held::AT,
@@ -219,7 +219,7 @@ fn side(out: &mut [f64]) {
             run_sets: held.run_sets as f64,
             run_set_mb: held.run_set_mb as f64,
             tiers: held.tiers as f64,
-            decor_cells: decor_cells as f64,
+            decor_blocks: decor_blocks as f64,
             decor_instances: decor_instances as f64,
             decor_bytes: crate::layer::decor::cell::bytes() as f64,
         },

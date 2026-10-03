@@ -280,7 +280,7 @@ export const SUMMARY = {
     run_sets: 0 as number,
     run_set_mb: 1 as number,
     tiers: 2 as number,
-    decor_cells: 3 as number,
+    decor_blocks: 3 as number,
     decor_instances: 4 as number,
     decor_bytes: 5 as number,
     WORDS: 6 as number,

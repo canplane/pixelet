@@ -423,7 +423,7 @@
       "run_sets": 0,
       "run_set_mb": 1,
       "tiers": 2,
-      "decor_cells": 3,
+      "decor_blocks": 3,
       "decor_instances": 4,
       "decor_bytes": 5,
       "WORDS": 6

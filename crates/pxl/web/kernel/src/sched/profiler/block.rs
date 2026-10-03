@@ -190,14 +190,14 @@ pub struct HeldBlock {
     pub run_sets: f64,
     pub run_set_mb: f64,
     pub tiers: f64,
-    pub decor_cells: f64,
+    pub decor_blocks: f64,
     pub decor_instances: f64,
     pub decor_bytes: f64,
 }
 
 words!(HeldBlock, SUMMARY::held::WORDS,
     run_sets => SUMMARY::held::run_sets, run_set_mb => SUMMARY::held::run_set_mb,
-    tiers => SUMMARY::held::tiers, decor_cells => SUMMARY::held::decor_cells,
+    tiers => SUMMARY::held::tiers, decor_blocks => SUMMARY::held::decor_blocks,
     decor_instances => SUMMARY::held::decor_instances, decor_bytes => SUMMARY::held::decor_bytes,
 );
 

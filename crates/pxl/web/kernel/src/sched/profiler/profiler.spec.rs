@@ -613,11 +613,11 @@ pub mod SUMMARY {
         pub const run_sets: u32 = 0;
         pub const run_set_mb: u32 = 1;
         pub const tiers: u32 = 2;
-        pub const decor_cells: u32 = 3;
+        pub const decor_blocks: u32 = 3;
         pub const decor_instances: u32 = 4;
         pub const decor_bytes: u32 = 5;
         pub const WORDS: u32 = 6;
-        pub const KEYS: &[&str] = &["AT", "run_sets", "run_set_mb", "tiers", "decor_cells", "decor_instances", "decor_bytes", "WORDS"];
+        pub const KEYS: &[&str] = &["AT", "run_sets", "run_set_mb", "tiers", "decor_blocks", "decor_instances", "decor_bytes", "WORDS"];
     }
     pub mod fetch {
         pub const AT: u32 = 399;
