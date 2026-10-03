@@ -220,7 +220,8 @@ pub mod LIMITS {
     pub const REASONS: u32 = 4;
     pub const STEP_SLOTS: u32 = 32;
     pub const LEVELS: u32 = 11;
-    pub const KEYS: &[&str] = &["PHASES_MAX", "REASONS", "STEP_SLOTS", "LEVELS"];
+    pub const TERRAIN_ATOM_Z: u32 = 16;
+    pub const KEYS: &[&str] = &["PHASES_MAX", "REASONS", "STEP_SLOTS", "LEVELS", "TERRAIN_ATOM_Z"];
 }
 
 /// One rendered frame (sched/profiler/record.rs FrameSample). `settled` is 0 or 1; `phases` is a lane of PHASE_NAMES' length, `gpu_spans` of GPU_SPAN_NAMES', `census` pairs of draws and triangles in CENSUS_TAGS' order, and `level_tris` and `pages_by_level` a word a level of the pyramid, LIMITS.LEVELS of them. A lane's name says its unit: `_ms`, `_mb`, and `_levels` for a set of levels as bits.

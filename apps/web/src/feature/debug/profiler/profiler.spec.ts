@@ -46,6 +46,7 @@ export const LIMITS = {
   REASONS: 4 as number,
   STEP_SLOTS: 32 as number,
   LEVELS: 11 as number,
+  TERRAIN_ATOM_Z: 16 as number,
 } as const;
 
 /** One rendered frame (sched/profiler/record.rs FrameSample). `settled` is 0 or 1; `phases` is a lane of PHASE_NAMES' length, `gpu_spans` of GPU_SPAN_NAMES', `census` pairs of draws and triangles in CENSUS_TAGS' order, and `level_tris` and `pages_by_level` a word a level of the pyramid, LIMITS.LEVELS of them. A lane's name says its unit: `_ms`, `_mb`, and `_levels` for a set of levels as bits. */

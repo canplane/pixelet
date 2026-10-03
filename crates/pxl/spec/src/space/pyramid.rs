@@ -18,13 +18,13 @@ use super::v3::Aabb;
 use super::xy::TO_XY;
 use crate::bake::constant::{CELL, DECK_CELL, EXTENT_CELL};
 
-/// The coarsest folded level. At level 10 (zoom 5) a page spans about 9° of
-/// latitude and the page-constant vertical scale is already 12% off.
+/// The coarsest folded level. At z6 a page spans about 9° of latitude and the
+/// page-constant vertical scale is already 12% off.
 pub const TOP_LEVEL: u32 = 10;
 
-/// The zoom the finest pages are named at, as 512-pixel tiles; level k's
-/// cells are z(16 − k) pixels and its pages are named at `PAGE_ZOOM − k`.
-pub const PAGE_ZOOM: u32 = IVEC_X_W - L3.shamt() as u32;
+/// Where the terrain's cell sits on the zoom axis (256-pixel tiles): the X
+/// lane is one world of 2^IVEC_X_W cells. No level or page is counted from it.
+pub const TERRAIN_ATOM_Z: u32 = IVEC_X_W - 8;
 
 // A lattice is a scale against the unit: its level-k cell is k levels above
 // its first. Pages and chunks are fixed in units (L3, L2).
@@ -157,16 +157,7 @@ pub const CHUNK_CELLS: u32 = GROUND.chunk_cells();
 
 pub const PAGE_CHUNKS: u32 = PAGE_CELLS / CHUNK_CELLS;
 
-pub const fn zoom_of_level(level: u32) -> u32 {
-    PAGE_ZOOM - level
-}
-
-// These must agree with the web map's 512-pixel tiling; nothing derives one from the others.
-const _: () = {
-    assert!(L1.count_in(L3) == 512, "a page is one 512-pixel tile");
-    assert!(PAGE_ZOOM == 15, "z16 pages are zoom 15 at 512 pixels");
-    assert!(TOP_LEVEL <= PAGE_ZOOM, "no level coarser than one page across the world");
-};
+const _: () = assert!(TERRAIN_ATOM_Z == 16, "a cell is a z16 pixel");
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct LevelPage {

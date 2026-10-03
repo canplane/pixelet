@@ -11,10 +11,9 @@ use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, BranchViewImpl, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 use xpute_core::wire::xtp::{BranchCursor, Strs};
 
-use crate::bake::quadkey::{quadkey_of, Quadkey};
+use crate::bake::quadkey::{quadkey_of, Quadkey, PAGE_KEY_DEPTH};
 use crate::place::PlaceRank;
 use crate::space::pvf3::ivec::IVec;
-use crate::space::pyramid::PAGE_ZOOM;
 use xpute_core::status::bug::OrBug;
 
 pub const DICT_OBJECT: &str = "_dict";
@@ -22,10 +21,10 @@ pub const DICT_OBJECT: &str = "_dict";
 /// 16 pages on a side.
 pub const GROUP_SHAMT: u32 = 4;
 
-pub const GROUP_ZOOM: u32 = PAGE_ZOOM - GROUP_SHAMT;
+pub const GROUP_KEY_DEPTH: u32 = PAGE_KEY_DEPTH - GROUP_SHAMT;
 
 pub fn group_name(group_idx: IVec) -> Quadkey {
-    quadkey_of(GROUP_ZOOM, group_idx)
+    quadkey_of(GROUP_KEY_DEPTH, group_idx)
 }
 pub const GROUP_PAGES: usize = 1 << (2 * GROUP_SHAMT);
 

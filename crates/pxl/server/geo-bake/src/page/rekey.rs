@@ -2,7 +2,7 @@
 
 //! An object's quadkey name given its old one (pxl-spec bake/quadkey.rs).
 
-use pxl_spec::bake::place_page::{DICT_OBJECT, GROUP_ZOOM};
+use pxl_spec::bake::place_page::{DICT_OBJECT, GROUP_KEY_DEPTH};
 use pxl_spec::bake::quadkey::{page_name, quadkey_of};
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pyramid::{LevelPage, TOP_LEVEL};
@@ -18,7 +18,7 @@ impl Bake {
     pub fn of(prefix: &str) -> Result<Self, String> {
         match prefix.split('/').next().unwrap_or_default() {
             "terrain" | "poi" => Ok(Bake::Pyramid),
-            "geocode" => Ok(Bake::Flat(GROUP_ZOOM)),
+            "geocode" => Ok(Bake::Flat(GROUP_KEY_DEPTH)),
             other => Err(format!("{other}: not a bake this renames")),
         }
     }
@@ -29,8 +29,8 @@ impl Bake {
         if SHARED.contains(&rest) {
             return Ok(rest.to_string());
         }
-        let (zoom, raw) = match self {
-            Bake::Flat(zoom) => (*zoom, rest),
+        let (depth, raw) = match self {
+            Bake::Flat(depth) => (*depth, rest),
             Bake::Pyramid => {
                 let (level, page) = rest.split_once('/').ok_or("a pyramid page is a level and a page")?;
                 let level = level.parse::<u32>().map_err(|e| format!("{level}: {e}"))?;
@@ -42,7 +42,7 @@ impl Bake {
             }
         };
         let page = raw.parse::<IVec>().map_err(|e| format!("{raw}: {e}"))?;
-        Ok(quadkey_of(zoom, page).to_string())
+        Ok(quadkey_of(depth, page).to_string())
     }
 }
 

@@ -63,10 +63,10 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
 /**
  * Object keys this Worker is willing to ask R2 for.
  *
- * A baked page is named by its **quadkey**: the Web Mercator tile key at the
- * zoom the page is held at, one base-4 digit a zoom, coarsest first
- * (pxl-spec bake/quadkey.rs). Nothing else is written — the number of digits
- * is the level, and the digits are the index — so the three bakes differ only
+ * A baked page is named by its **quadkey**: its place in its level's page
+ * grid, one base-4 digit a halving, coarsest first (pxl-spec
+ * bake/quadkey.rs). Nothing else is written — the number of digits says the
+ * level, and the digits are the index — so the three bakes differ only
  * in how long a name they have and which shared object they keep beside it:
  *
  * - `terrain/<version>/<quadkey>`, 5 to 15 digits, a page at every level of

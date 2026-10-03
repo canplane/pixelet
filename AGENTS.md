@@ -108,8 +108,10 @@ Which technology draws each `@platform/` piece is
 
 Everything placed on the map sits in one hierarchy, the **pyramid**: level k
 is z(16 − k), cells 2^k units wide, from z16 — terrain's atom, a 1u cell —
-to z6, a page 512 cells a side at every level and named by the Web Mercator
-tile it stands on. Say z16, not "level 0": no level is special.
+to z6, a page 512 cells a side at every level and named by its place in that
+level's page grid. A zoom names only a cell's scale (256-pixel tiles):
+terrain's cell is z16, objects' go to z19. A page's size, its key or its
+grid never defines a zoom. Say z16, not "level 0": no level is special.
 The rules below keep it one thing. They come from finding it several.
 
 - **The view keeps only what an observer can tell apart.** The world is

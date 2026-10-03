@@ -6,7 +6,7 @@ use crate::geocode::provider::overture::{GeocodeProvider, READS};
 use crate::geocode::PlaceDict;
 use crate::util::{pack, Level};
 use pxl_spec::bake::place_page::{encode_place_group, Named, GROUP_PAGES};
-use pxl_spec::bake::place_page::{DICT_OBJECT, GROUP_SHAMT, GROUP_ZOOM};
+use pxl_spec::bake::place_page::{DICT_OBJECT, GROUP_SHAMT, GROUP_KEY_DEPTH};
 use pxl_spec::bake::quadkey::index_of;
 use pxl_spec::place::PlaceRank;
 use pxl_spec::space::pvf3::ivec;
@@ -17,7 +17,7 @@ pub(super) async fn resolve(data: Arc<Dataset>, runner: Arc<Runner>, name: &str)
     let group = if name == DICT_OBJECT {
         None
     } else {
-        Some(index_of(name).filter(|(z, _)| *z == GROUP_ZOOM).ok_or(Failure::BadName)?.1)
+        Some(index_of(name).filter(|(depth, _)| *depth == GROUP_KEY_DEPTH).ok_or(Failure::BadName)?.1)
     };
     let d = data.clone();
     let r = runner.clone();

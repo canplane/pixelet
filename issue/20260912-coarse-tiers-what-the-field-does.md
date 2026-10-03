@@ -1,5 +1,7 @@
 # Coarse tiers: what the field does, and why the block was the wrong cut
 
+> **Superseded in its words (2026-10-04).** "Level 0" is z16; a zoom names only a cell's scale. Current terms: AGENTS.md "One spatial model".
+
 Written after a day spent building a "block" — a unit of 4×4 chunks scanned
 and baked as one — and finding on measurement that it reduced draw calls and
 nothing else. This records what three established systems do for the same

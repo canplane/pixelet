@@ -11,6 +11,7 @@ use crate::sched::profiler::record::{words, FrameSample, Words, CENSUS_LEN, GPU_
 use crate::sched::profiler::spec::{FRAME, LIMITS, PHASE_NAMES, SPREAD, STEP, SUMMARY, TASK_PHASE_NAMES, TASK_SUMMARY};
 
 const REASONS: usize = LIMITS::REASONS as usize;
+const _: () = assert!(LIMITS::TERRAIN_ATOM_Z == pxl_spec::space::pyramid::TERRAIN_ATOM_Z, "the shell names a level by its cell's zoom");
 const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
 pub const TASK_PHASES: usize = TASK_PHASE_NAMES.len();
 const CATEGORIES: usize = crate::sched::profiler::spec::CATEGORY_NAMES.len();

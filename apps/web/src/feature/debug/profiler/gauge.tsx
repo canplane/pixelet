@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { EFFECT_NAMES } from "./profiler.spec.ts";
-import { n1, pct, tris, valueText } from "./lane.ts";
+import { levelsText, n1, pct, STARVED_MS, tris, valueText, zoomName } from "./lane.ts";
 import { BOUND, failText } from "./report.ts";
 import type { FrameSummary, Gauge, Spread } from "./view.ts";
 import { loafSupported, type LongFrame } from "./long-frame.ts";
@@ -25,9 +25,6 @@ const MISSED_WARN_SHARE = 0.1;
 const LONG_FRAME_MS = 50;
 /** The unbudgeted interaction phase is meant to be O(1). */
 const INTERACTION_WARN_MS = 2;
-/** Above a full zoom-out's drain (~7 s) and below the 16 s wait aging
- * exists to prevent. */
-const STARVED_MS = 10_000;
 
 const ATLAS_INITIAL = 1024;
 const ATLAS_SPARSE_PCT = 25;
@@ -63,13 +60,6 @@ const deg = (rad: number) => (rad * 180) / Math.PI;
 const or = (x: number) => (Number.isNaN(x) ? "-" : n1(x));
 const geo = (lat: number, lon: number) => (Number.isNaN(lat) ? "-" : `${lat.toFixed(5)}°, ${lon.toFixed(5)}°`);
 const metres = (m: number) => (Number.isNaN(m) ? "-" : `${n1(m)} m`);
-/** A set of levels as bits, by zoom. */
-const zoomsText = (bits: number) => {
-  const zs: string[] = [];
-  for (let k = 0; k < 32; k++) if (bits & (1 << k)) zs.push(`z${16 - k}`);
-  return zs.join(",");
-};
-const lv = (level: number) => (Number.isNaN(level) ? "-" : `z${16 - level}`);
 
 const phase = (f: FrameSummary, name: string): Spread => f.phases.find((p) => p.name === name)?.spread ?? { p50: 0, p95: 0, max: 0 };
 
@@ -88,7 +78,7 @@ export function ProfilerView({ v }: { v: Gauge["view"] }) {
       <Row k="hover cell (z16)" v={hovering ? `${Math.floor(v.hover_x)}, ${Math.floor(v.hover_y)}, ${Math.floor(v.hover_z)}` : "-"} />
       <Row k="hover" v={geo(v.hover_lat, v.hover_lon)} />
       <Row k="hover altitude" v={metres(v.hover_alt)} />
-      <Row k="chunk/tier/page" v={hovering ? `${lv(v.chunk_level)}/${lv(v.tier_level)}/${lv(v.read_from)}` : "-"} warn={v.read_from > v.chunk_level} />
+      <Row k="chunk/tier/page" v={hovering ? `${zoomName(v.chunk_level)}/${zoomName(v.tier_level)}/${zoomName(v.read_from)}` : "-"} warn={v.read_from > v.chunk_level} />
     </>
   );
 }
@@ -166,7 +156,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           />
           <Row
             k="slots waiting/chained"
-            v={`${round(f.last.slot_waits)}/${round(f.last.slot_chained)} ${zoomsText(f.last.slot_wait_levels)}`}
+            v={`${round(f.last.slot_waits)}/${round(f.last.slot_chained)} ${levelsText(f.last.slot_wait_levels)}`}
             warn={f.last.slot_waits > 0}
           />
           {
@@ -180,7 +170,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           />
           <Row k="draws/triangles" v={`${f.last.draw_calls}/${tris(f.last.triangles)}`} />
           {f.census.slice(0, CENSUS_ROWS).map((r) => <Row key={r.tag} k={`  ${r.tag} draws/tris`} v={`${round(r.draws)}/${tris(r.tris)}`} />)}
-          {heaviest(f.level_tris.map((t, k) => ({ k, t })), (r) => r.t, LEVEL_ROWS).map((r) => <Row key={r.k} k={`  z${16 - r.k} triangles`} v={tris(r.t)} />)}
+          {heaviest(f.level_tris.map((t, k) => ({ k, t })), (r) => r.t, LEVEL_ROWS).map((r) => <Row key={r.k} k={`  ${zoomName(r.k)} triangles`} v={tris(r.t)} />)}
           <Row k="fill Mpx" v={(f.last.px / 1e6).toFixed(1)} warn={f.last.px / 1e6 > 12} />
           <Row k="bakes/scans per s" v={`${round(f.backlogPerS[1])}/${round(f.backlogPerS[0])}`} />
           <Row k="faces kept" v={`${possible > 0 ? round((kept / possible) * 100) : 0}%`} />
@@ -220,7 +210,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           <Row k="refused/largest free" v={`${f.last.heap_refusals}/${n1(f.last.heap_largest_free_mb)} MB`} warn={f.last.heap_refusals > 0} />
           <Row
             k="pages"
-            v={`${f.last.pages_total}${f.last.pages_total > 0 ? ` z${16 - f.last.pages_by_level.findIndex((n) => n > 0)}..z${16 - f.last.pages_by_level.findLastIndex((n) => n > 0)}` : ""}`}
+            v={`${f.last.pages_total}${f.last.pages_total > 0 ? ` ${zoomName(f.last.pages_by_level.findIndex((n) => n > 0))}..${zoomName(f.last.pages_by_level.findLastIndex((n) => n > 0))}` : ""}`}
           />
           <Row k="kernel memory" v={`${round(kernel_memory().byteLength / 1048576)} MB`} />
           <Row k="buffers/arena" v={`${f.last.buffers} ${valueText("_mb", f.last.buffer_mb)}/${valueText("_mb", f.last.arena_mb)}`} />

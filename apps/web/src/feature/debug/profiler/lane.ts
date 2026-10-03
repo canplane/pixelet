@@ -21,7 +21,13 @@ export type Frame =
   & { [K in ScalarLane]: f64 }
   & { phases: f64[]; gpu_spans: f64[]; census: [f64, f64][]; level_tris: f64[]; pages_by_level: f64[] };
 
-const LEVEL_NAMES = Array.from({ length: LIMITS.LEVELS }, (_, k) => `L${k}`);
+/** A lane's level k, a cell 2^k terrain cells wide, as its zoom; a finer tier is z17 and on. */
+export const zoomName = (k: number) => (Number.isNaN(k) ? "-" : `z${LIMITS.TERRAIN_ATOM_Z - k}`);
+
+/** A wait this old says a demand was starved, well before aging's 16 s. */
+export const STARVED_MS = 2000;
+
+const LEVEL_NAMES = Array.from({ length: LIMITS.LEVELS }, (_, k) => zoomName(k));
 export const LIST_NAMES: Record<ListLane, readonly string[]> = {
   phases: PHASE_NAMES,
   gpu_spans: GPU_SPAN_NAMES,
@@ -59,8 +65,8 @@ export const pct = (part: number, whole: number) => (whole > 0 ? round((part / w
 export const tris = (t: number) => (t >= 1000 ? `${round(t / 1000)}k` : String(round(t)));
 
 export function levelsText(bits: f64): string {
-  const out: u32[] = [];
-  for (let k = 0; k < 32; k++) if (bits & (1 << k)) out.push(k);
+  const out: string[] = [];
+  for (let k = 0; k < 32; k++) if (bits & (1 << k)) out.push(zoomName(k));
   return out.length > 0 ? out.join(",") : "-";
 }
 

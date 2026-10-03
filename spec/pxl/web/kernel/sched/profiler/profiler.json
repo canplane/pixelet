@@ -90,7 +90,9 @@
     "PHASES_MAX": 6,
     "REASONS": 4,
     "STEP_SLOTS": 32,
-    "LEVELS": 11
+    "LEVELS": 11,
+    "$TERRAIN_ATOM_Z": "Where the terrain's cell sits on the zoom axis (pxl-spec space/pyramid.rs TERRAIN_ATOM_Z); a lane's level k is a cell 2^k terrain cells wide, so z(TERRAIN_ATOM_Z − k).",
+    "TERRAIN_ATOM_Z": 16
   },
   "FRAME": {
     "$type": "u32",
