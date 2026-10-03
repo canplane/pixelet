@@ -9,16 +9,9 @@ use pxl_spec::space::pyramid::LevelPage;
 /// for the pages around while the server runs.
 pub(super) const SOURCE: &str = ".source";
 
-pub(super) struct Source {
-    pub(super) coverage: Coverage,
-    pub(super) raw_ocean: Vec<u8>,
-}
-impl Source {
-    pub fn new() -> Result<Self, String> {
-        let coverage = Coverage::of_source()?;
-        let raw_ocean = bake_ocean(&ocean_samples(&coverage))?;
-        Ok(Self { coverage, raw_ocean })
-    }
+/// The page every absent terrain page is.
+pub(super) fn ocean() -> Result<Vec<u8>, String> {
+    bake_ocean(&ocean_samples(&Coverage::of_source()?))
 }
 
 pub(super) fn execute(p: LevelPage, cache: &std::path::Path, out: &std::path::Path, seconds: u64) -> Result<(), String> {

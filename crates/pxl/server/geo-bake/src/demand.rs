@@ -7,7 +7,12 @@ mod pyramid;
 mod terrain;
 
 use cache::Cache;
+use pxl_spec::bake::format::{Terrain, OCEAN_KEY};
+use pxl_spec::bake::poi_page::PoiPage;
+use pxl_spec::space::pyramid::{Folds, LevelPage};
 use std::path::PathBuf;
+
+use crate::coverage::Coverage;
 use std::sync::{Arc, Mutex};
 
 pub mod job;
@@ -54,32 +59,36 @@ struct Dataset {
     cache: Cache,
     source: Source,
 }
+/// What a kind's pages come from: a pyramid layer's coverage, the pages a
+/// fold reads, and the one object every absent page is, if it has one; or
+/// geocode's groups, which no coverage gates.
 enum Source {
-    Terrain(terrain::Source),
-    Poi(crate::coverage::Coverage),
+    Pyramid {
+        coverage: crate::coverage::Coverage,
+        sources: fn(LevelPage) -> Vec<LevelPage>,
+        shared: Option<(&'static str, Vec<u8>)>,
+    },
     Geocode,
 }
 impl Source {
     fn shared(&self) -> Option<(&'static str, &[u8])> {
         match self {
-            Source::Terrain(s) => Some((crate::terrain::leaf::OCEAN_KEY, &s.raw_ocean)),
+            Source::Pyramid { shared: Some((name, bytes)), .. } => Some((name, bytes)),
             _ => None,
         }
     }
 
-    fn holds(&self, p: pxl_spec::space::pyramid::LevelPage) -> bool {
+    fn holds(&self, p: LevelPage) -> bool {
         match self {
-            Source::Terrain(s) => s.coverage.meets(p.level, p.page),
-            Source::Poi(coverage) => coverage.meets(p.level, p.page),
+            Source::Pyramid { coverage, .. } => coverage.meets(p.level, p.page),
             Source::Geocode => true,
         }
     }
 
-    fn sources(&self, p: pxl_spec::space::pyramid::LevelPage) -> Vec<pxl_spec::space::pyramid::LevelPage> {
-        use pxl_spec::space::pyramid::Folds;
+    fn sources(&self, p: LevelPage) -> Vec<LevelPage> {
         match self {
-            Source::Terrain(_) => pxl_spec::bake::format::Terrain::sources(p),
-            _ => pxl_spec::bake::poi_page::PoiPage::sources(p),
+            Source::Pyramid { sources, .. } => sources(p),
+            Source::Geocode => unreachable!("geocode is no pyramid"),
         }
     }
 }
@@ -90,8 +99,16 @@ impl Dataset {
         let data = Self {
             cache: Cache::new(base.join(kind.name()), runner.admission.clone(), std::time::Duration::from_secs(runner.limits.seconds))?,
             source: match kind {
-                Kind::Terrain => Source::Terrain(terrain::Source::new()?),
-                Kind::Poi => Source::Poi(crate::coverage::Coverage::of_source()?),
+                Kind::Terrain => Source::Pyramid {
+                    coverage: Coverage::of_source()?,
+                    sources: Terrain::sources,
+                    shared: Some((OCEAN_KEY, terrain::ocean()?)),
+                },
+                Kind::Poi => Source::Pyramid {
+                    coverage: Coverage::of_source()?,
+                    sources: PoiPage::sources,
+                    shared: None,
+                },
                 Kind::Geocode => Source::Geocode,
             },
         };
