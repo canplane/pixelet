@@ -18,7 +18,9 @@ use crate::terrain::artifact::assemble;
 use crate::terrain::bake::bake_surface;
 use crate::terrain::repository::{self, PageSource, TerrainRepository, DRAWN_REACH_U};
 use pxl_spec::space::adapter::epsg3857::to_db;
-use crate::terrain::source::{fetch_lines, fetch_surface, SourceStats};
+use crate::deck;
+use crate::terrain::pipeline::deck::bake_decks;
+use crate::terrain::source::{fetch_surface, SourceStats};
 use crate::util::{fnv1a, pack, Level};
 
 pub use pxl_spec::bake::format::OCEAN_KEY;
@@ -41,7 +43,7 @@ const HAS_GROUND_SQL: &str = "
 
 /// What classifying reads; with a page's reads, all a terrain bake reads.
 pub const GROUND_READS: [&str; 1] = [HAS_GROUND_SQL];
-pub const READS: [&[&str]; 2] = [&GROUND_READS, &repository::READS];
+pub const READS: [&[&str]; 3] = [&GROUND_READS, &repository::READS, &deck::source::READS];
 
 /// The rule a land list was classified by: a list from another is stale.
 const GROUND: u64 = fnv1a(HAS_GROUND_SQL.as_bytes()) ^ DRAWN_REACH_U.to_bits();
@@ -68,9 +70,11 @@ pub fn has_ground(client: &mut Client, pages: &[IVec]) -> Result<Vec<bool>, post
     Ok(out)
 }
 
-pub fn bake_leaf(repo: &TerrainRepository, client: &mut Client, page: IVec, stats: &mut SourceStats, level: Level) -> Result<(usize, Vec<u8>), String> {
+/// Its decks solved from what it reaches, not read from a whole solve.
+pub fn bake_leaf(repo: &TerrainRepository, client: &mut Client, memo: &Path, page: IVec, stats: &mut SourceStats, level: Level) -> Result<(usize, Vec<u8>), String> {
     let surface = fetch_surface(repo, client, page, stats).map_err(|e| e.to_string())?;
-    let lines = fetch_lines(repo, client, page).map_err(|e| e.to_string())?;
+    let rows = deck::solve_page(client, page, memo)?;
+    let lines = bake_decks(&rows, epsg3857::get_page_bbox(page)[0]).ok_or("a page's decks overflow a record")?;
     let raw = encode_terrain(&assemble(surface, lines)).map_err(|e| format!("{e:?}"))?;
     let packed = pack(raw.as_slice(), level).map_err(|e| e.to_string())?;
     Ok((raw.len(), packed))

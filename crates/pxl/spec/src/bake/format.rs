@@ -14,6 +14,7 @@ use super::deck::{self, Decks};
 use super::ground::SHIFT_RANGE;
 use super::pack::{channel_of, GroundCell};
 use super::surface::extent_of;
+use crate::space::adapter::epsg3857::G3857;
 use crate::space::pyramid::{EXTENT, PAGE_CELLS};
 
 /// A page's lane lengths; a page is these and no other size.
@@ -58,7 +59,7 @@ pub struct DeckRow {
     pub class: Option<String>,
     pub width_m: f64,
     pub form: u8,
-    pub geom_wkb: Box<[u8]>, // LineString Z
+    pub points: Vec<G3857>, // z: the road surface
 }
 
 pub struct CoastRow {

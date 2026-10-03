@@ -1,13 +1,14 @@
 // pxl-geo-bake/deck.rs
 
-//! Decks and bores, one solve in `q = sign · z` over the whole network into
-//! `overture_deck`: a height depends on ground kilometres away.
+//! Decks and bores, one solve in `q = sign · z`: over everything for a
+//! published bake, over what a page reaches when it is baked on demand.
 
 pub mod approach;
 pub mod elevation;
 pub mod param;
 pub mod piece;
 pub mod profile;
+pub mod relate;
 pub mod source;
 pub mod structure;
 
@@ -15,16 +16,19 @@ use std::collections::HashSet;
 
 use postgres::Client;
 use pxl_spec::bake::deck::{clearance_m, Form, BORE_COVER_M, DECK_THICKNESS_M};
+use pxl_spec::bake::format::DeckRow;
+use std::path::Path;
 
-use crate::terrain::pipeline::overture::between::{flag_at, flag_ranges, value_at, Line};
+use pxl_spec::space::pvf3::ivec::{self, IVec};
+
+use crate::terrain::pipeline::overture::between::{flag_at, flag_ranges, value_at};
 use crate::terrain::pipeline::overture::policy::{segment_type, DECK_FLAGS, UNSEEN_FLAGS};
 use param::{AT_END_M, RIVER_M, RIVER_MOST_M, RIVER_PER_M, STREAM_M};
 use piece::{pieces_of, End, Piece};
 use profile::{solve as solve_profile, Problem};
-use source::DeckOut;
+use relate::{Polyline, SIDE_STEP};
+use source::Input;
 use structure::{end_of, group, side_by_side, Graph};
-
-use crate::wkb::wkb_to_geometries;
 
 /// What passes under a deck.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -60,23 +64,50 @@ struct Need {
     under: Under,
 }
 
+/// Every bridge and tunnel into `overture_deck`, for a published bake.
 pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<(), postgres::Error> {
-    // two would drop each other's staging tables
-    client.execute("SELECT pg_advisory_lock(hashtext('pxl-geo-bake deck solve'))", &[])?;
-    let rows = source::flagged_rows(client, "is_bridge")?;
-    let mut decks: Vec<Piece> = rows.iter().flat_map(|r| pieces_of(r, Form::Deck)).collect();
-    drop(rows);
-    let rows = source::flagged_rows(client, "is_tunnel")?;
-    let mut bores: Vec<Piece> = rows.iter().flat_map(|r| pieces_of(r, Form::Bore)).collect();
-    drop(rows);
+    let input = source::read_all(client)?;
+    let out = calculate(&input, |at| elevation::surface(client, url, at), &log)?;
+    source::write(client, &out)?;
+    log(&format!("{} lines: overture_deck", out.len()));
+    Ok(())
+}
+
+/// A page's lines, from what lies in it and the eight pages around it.
+pub fn solve_page(client: &mut Client, page: IVec, memo: &Path) -> Result<Vec<DeckRow>, String> {
+    let input = source::read_ring(client, page, memo)?;
+    let Some((_, grids)) = &input.window else { unreachable!("a ring is read bounded") };
+    let (px, py) = (ivec::X(page), ivec::Y(page));
+    let within = |p| {
+        let at = elevation::page_of(p);
+        ivec::gather(ivec::X(at).clamp(px - 1, px + 1), ivec::Y(at).clamp(py - 1, py + 1), 0)
+    };
+    calculate(&input, |at| Ok::<_, String>(elevation::sample(grids, at, within)), |_| {})
+}
+
+/// The lines of what was read, the ground's height at points asked of `ground`.
+pub fn calculate<E>(input: &Input, ground: impl FnOnce(&[[f64; 2]]) -> Result<Vec<f64>, E>, log: impl Fn(&str)) -> Result<Vec<DeckRow>, E> {
+    let clip = |pieces: Vec<Piece>| -> Vec<Piece> {
+        match &input.window {
+            Some((bounds, _)) => pieces.into_iter().flat_map(|p| p.clip(*bounds)).collect(),
+            None => pieces,
+        }
+    };
+    let mut decks = clip(input.rows.iter().flat_map(|r| pieces_of(r, Form::Deck)).collect());
+    let mut bores = clip(input.rows.iter().flat_map(|r| pieces_of(r, Form::Bore)).collect());
     log(&format!("{} deck pieces, {} bore pieces", decks.len(), bores.len()));
+    if decks.is_empty() && bores.is_empty() {
+        return Ok(Vec::new());
+    }
 
     let n_decks = decks.len();
-    source::stage(client, &decks.iter().chain(&bores).collect::<Vec<_>>())?;
-    let mut needs = needs_of(client, url, &decks)?;
-    let portals = portals_of(url, &bores)?;
-    let ramps = approach::approaches(url, &decks, &approach::free_ends(&decks), Form::Ramp)?;
-    let cuts = approach::approaches(url, &bores, &portals, Form::Cut)?;
+    let staged: Vec<&Piece> = decks.iter().chain(&bores).collect();
+    let lines: Vec<Polyline> = staged.iter().map(|p| Polyline::of(p.points.iter().map(|q| [q[0], q[1]]))).collect();
+    let crossings = relate::decks_crossing(&staged, &lines);
+    let mut needs = needs_of(input, &decks, &lines[..n_decks]);
+    let portals = portals_of(input, &bores);
+    let ramps = clip(approach::approaches(input, &decks, &approach::free_ends(&decks), Form::Ramp));
+    let cuts = clip(approach::approaches(input, &bores, &portals, Form::Cut));
     log(&format!("{} portals; {} ramps and {} cuttings graded with their structures", portals.len(), ramps.len(), cuts.len()));
     let mut pinned: HashSet<End> = portals.iter().map(|&(i, last)| bores[i].end(last).clone()).collect();
     pinned.extend(cuts.iter().map(|c| c.end(true).clone()));
@@ -85,7 +116,7 @@ pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<(), p
     needs.resize(decks.len(), Vec::new());
 
     let (mut over_decks, mut over_bores, mut tied) = (Vec::new(), Vec::new(), 0);
-    for c in source::decks_crossing(url)? {
+    for c in crossings {
         match (c.upper < n_decks, c.lower < n_decks) {
             (true, true) => over_decks.push(Crossing {
                 far: c.upper,
@@ -120,7 +151,7 @@ pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<(), p
     let deck_side = Side::of(&decks, &beside);
     let bore_side = Side::of(&bores, &[]);
     let all: Vec<[f64; 2]> = deck_side.graphs.iter().chain(&bore_side.graphs).flat_map(|g| g.at.iter().copied()).collect();
-    let mut flat = elevation::surface(client, url, &all)?.into_iter();
+    let mut flat = ground(&all)?.into_iter();
     let mut ground_of = |side: &Side| -> Vec<Vec<f64>> { side.graphs.iter().map(|g| flat.by_ref().take(g.at.len()).collect()).collect() };
     let (deck_ground, bore_ground) = (ground_of(&deck_side), ground_of(&bore_side));
     let points = deck_side.graphs.iter().chain(&bore_side.graphs).map(|g| g.at.len()).sum::<usize>();
@@ -139,11 +170,10 @@ pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<(), p
 
     let mut out = deck_side.out(&deck_ground, &deck_tops, 1.0);
     out.extend(bore_side.out(&bore_ground, &bore_tops, -1.0));
-    source::write(client, &out)?;
     let unpinned = bore_tops.iter().filter(|t| t.is_none()).count();
-    let count = |f: Form| out.iter().filter(|d| d.piece.form == f).count();
+    let count = |f: Form| out.iter().filter(|d| d.form == f.byte()).count();
     log(&format!(
-        "{} lines in {} structures: overture_deck ({} deck, {} ramp, {} bore, {} cut); {unpinned} bore structures with no portal left out",
+        "{} lines in {} structures ({} deck, {} ramp, {} bore, {} cut); {unpinned} bore structures with no portal left out",
         out.len(),
         deck_side.structures.len() + bore_side.structures.len(),
         count(Form::Deck),
@@ -151,7 +181,7 @@ pub fn solve(client: &mut Client, url: &str, log: impl Fn(&str)) -> Result<(), p
         count(Form::Bore),
         count(Form::Cut)
     ));
-    Ok(())
+    Ok(out)
 }
 
 fn kind_of(p: &Piece) -> u8 {
@@ -247,15 +277,19 @@ impl<'a> Side<'a> {
     }
 
     /// In z; an approach only while off the ground.
-    fn out(&self, ground: &[Vec<f64>], tops: &[Option<Vec<f64>>], sign: f64) -> Vec<DeckOut<'a>> {
+    fn out(&self, ground: &[Vec<f64>], tops: &[Option<Vec<f64>>], sign: f64) -> Vec<DeckRow> {
         let mut out = Vec::new();
         for (m, piece) in self.pieces.iter().enumerate() {
             let (s, k) = self.place[m];
             let (Some(top), g) = (&tops[s], &self.graphs[s]) else { continue };
             let nodes = on_structure(piece, &g.along[k], |n| top[n] > sign * ground[s][n]);
             if nodes.len() >= 2 {
-                out.push(DeckOut {
-                    piece,
+                out.push(DeckRow {
+                    gers_id: piece.gers_id.clone(),
+                    subtype: piece.subtype.clone(),
+                    class: piece.class.clone(),
+                    width_m: piece.width_m,
+                    form: piece.form.byte(),
                     points: nodes.iter().map(|&(n, _)| [g.at[n as usize][0], g.at[n as usize][1], sign * top[n as usize]]).collect(),
                 });
             }
@@ -265,19 +299,19 @@ impl<'a> Side<'a> {
 }
 
 /// Tunnel ends whose way carries on at the surface; a subway's do not.
-fn portals_of(url: &str, tunnels: &[Piece]) -> Result<Vec<(usize, bool)>, postgres::Error> {
+fn portals_of(input: &Input, tunnels: &[Piece]) -> Vec<(usize, bool)> {
     let ends = approach::free_ends(tunnels);
     let asked: Vec<([f64; 2], &str)> = ends.iter().map(|&(i, last)| (end_of(&tunnels[i], last).0, tunnels[i].gers_id.as_str())).collect();
     let mut portal = vec![false; ends.len()];
-    for (point, own_at, row) in source::connected_rows(url, &asked)? {
-        let Some(len) = wkb_to_geometries(&row.geom_wkb).into_iter().next().and_then(|g| Line::of(&g.points).map(|l| l.length())) else { continue };
-        let step = source::SIDE_STEP / len.max(source::SIDE_STEP);
+    for (point, own_at, way) in relate::connected(&asked, &input.ways) {
+        let row = &way.row;
+        let step = SIDE_STEP / way.line.length().max(SIDE_STEP);
         let at_surface = |at: f64| (0.0..=1.0).contains(&at) && !flag_at(row.flags.as_deref(), UNSEEN_FLAGS, at) && value_at(row.levels.as_deref(), at).unwrap_or(0.0) >= 0.0;
         if at_surface(own_at - step) || at_surface(own_at + step) {
             portal[point] = true;
         }
     }
-    Ok(ends.into_iter().zip(portal).filter(|&(_, p)| p).map(|(e, _)| e).collect())
+    ends.into_iter().zip(portal).filter(|&(_, p)| p).map(|(e, _)| e).collect()
 }
 
 /// The structure's own points; a joint is one.
@@ -302,14 +336,10 @@ fn on_structure<'a>(piece: &Piece, along: &'a [(u32, f64)], off_ground: impl Fn(
 }
 
 /// Ways and water under each deck; staged bores come after the decks.
-fn needs_of(client: &mut Client, url: &str, pieces: &[Piece]) -> Result<Vec<Vec<Need>>, postgres::Error> {
+fn needs_of(input: &Input, pieces: &[Piece], lines: &[Polyline]) -> Vec<Vec<Need>> {
     let mut needs: Vec<Vec<Need>> = vec![Vec::new(); pieces.len()];
-    let length = |m: usize| {
-        let p = &pieces[m].points;
-        pieces[m].to_m(p.windows(2).map(|w| libm::hypot(w[1][0] - w[0][0], w[1][1] - w[0][1])).sum::<f64>())
-    };
-    let inside = |at: f64, m: usize| at > AT_END_M && at < length(m) - AT_END_M;
-    for mut c in source::ways_crossing(url)?.into_iter().filter(|c| c.piece < pieces.len()) {
+    let inside = |at: f64, m: usize| at > AT_END_M && at < pieces[m].to_m(lines[m].length()) - AT_END_M;
+    for mut c in relate::ways_crossing(lines, &input.ways).into_iter().filter(|c| pieces[c.piece].gers_id != c.gers_id) {
         c.at = pieces[c.piece].to_m(c.at);
         let off_ground = flag_ranges(c.flags.as_deref(), UNSEEN_FLAGS)
             .iter()
@@ -322,7 +352,7 @@ fn needs_of(client: &mut Client, url: &str, pieces: &[Piece]) -> Result<Vec<Vec<
         needs[c.piece].push(Need { from: c.at, to: c.at, under });
     }
     let mut water: Vec<Vec<Need>> = vec![Vec::new(); pieces.len()];
-    for w in source::water_under(client, url)?.into_iter().filter(|w| w.piece < pieces.len()) {
+    for w in relate::water_under(lines, &input.water) {
         if let Some(under) = Under::of_water(&w.subtype, w.class.as_deref()) {
             water[w.piece].push(Need {
                 from: pieces[w.piece].to_m(w.from),
@@ -331,7 +361,7 @@ fn needs_of(client: &mut Client, url: &str, pieces: &[Piece]) -> Result<Vec<Vec<
             });
         }
     }
-    // one water body's subdivided pieces are one span
+    // touching spans of one kind are one
     for (m, mut spans) in water.into_iter().enumerate() {
         spans.sort_by(|a, b| a.from.total_cmp(&b.from).then(a.to.total_cmp(&b.to)));
         for n in spans {
@@ -341,7 +371,7 @@ fn needs_of(client: &mut Client, url: &str, pieces: &[Piece]) -> Result<Vec<Vec<
             }
         }
     }
-    Ok(needs)
+    needs
 }
 
 fn nodes_within(g: &Graph, k: usize, from: f64, to: f64) -> Vec<usize> {

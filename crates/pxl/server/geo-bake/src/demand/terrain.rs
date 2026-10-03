@@ -5,6 +5,10 @@ use crate::coverage::Coverage;
 use crate::terrain::leaf::{bake_ocean, ocean_samples};
 use pxl_spec::space::pyramid::LevelPage;
 
+/// Each page's rows the deck solve read, kept for its neighbours while the
+/// server runs.
+pub(super) const SOURCE: &str = ".source";
+
 pub(super) struct Source {
     pub(super) coverage: Coverage,
     pub(super) raw_ocean: Vec<u8>,
@@ -26,13 +30,13 @@ pub(super) fn execute(p: LevelPage, cache: &std::path::Path, out: &std::path::Pa
         cache,
         out,
         || {
-            let mut client = job::connect(&leaf::READS, seconds)?;
+            let (_, mut client) = job::connect(&leaf::READS, seconds)?;
             if !leaf::has_ground(&mut client, &[p.page]).map_err(|e| e.to_string())?[0] {
                 return Ok(None);
             }
             let raster = std::sync::Arc::new(crate::elevation::Raster::open(&mut client).map_err(|e| e.to_string())?);
             let repository = TerrainRepository::prepare(&mut client, raster).map_err(|e| e.to_string())?;
-            let packed = leaf::bake_leaf(&repository, &mut client, p.page, &mut SourceStats::default(), Level::Live)?.1;
+            let packed = leaf::bake_leaf(&repository, &mut client, &cache.join(SOURCE), p.page, &mut SourceStats::default(), Level::Live)?.1;
             decode_terrain(&unpack(&packed).map_err(|e| e.to_string())?).map(Some).map_err(|e| format!("{e:?}"))
         },
         || decode_terrain(&unpack(&std::fs::read(cache.join(leaf::OCEAN_KEY)).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?).map_err(|e| format!("{e:?}")),

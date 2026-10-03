@@ -12,7 +12,6 @@ use pxl_spec::space::adapter::epsg3857::G3857;
 use pxl_spec::space::pyramid::PAGE_CELLS;
 
 use crate::terrain::pipeline::overture::policy::segment_type;
-use crate::wkb::wkb_to_geometries;
 use xpute_core::math::scalar::round;
 
 /// None where they do not fit a record: refused rather than cut, since a
@@ -25,18 +24,16 @@ pub fn bake_decks(rows: &[DeckRow], page_min: G3857) -> Option<Decks> {
         let width = row.width_m * cell_per_m;
         let width_code = round(width * POINT_SCALE).clamp(1.0, f64::from(u8::MAX)) as u8;
         let form = Form::of(row.form);
-        for g in wkb_to_geometries(&row.geom_wkb) {
-            let local: Vec<([f64; 2], i16)> = g
-                .points
-                .iter()
-                .map(|p| {
-                    let at = [from_db(p[0] - page_min[0]) / U_PER_CELL, from_db(p[1] - page_min[1]) / U_PER_CELL];
-                    (at, round(p[2] * cell_per_m) as i16)
-                })
-                .collect();
-            for [a, b] in runs_within(&local, deck::footprint(width)) {
-                decks.push(local[a..=b].iter().copied(), width_code, kind, form);
-            }
+        let local: Vec<([f64; 2], i16)> = row
+            .points
+            .iter()
+            .map(|p| {
+                let at = [from_db(p[0] - page_min[0]) / U_PER_CELL, from_db(p[1] - page_min[1]) / U_PER_CELL];
+                (at, round(p[2] * cell_per_m) as i16)
+            })
+            .collect();
+        for [a, b] in runs_within(&local, deck::footprint(width)) {
+            decks.push(local[a..=b].iter().copied(), width_code, kind, form);
         }
     }
     decks.fits().then(|| decks.finish())

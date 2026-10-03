@@ -10,6 +10,7 @@ use crate::terrain::pipeline::overture::policy::{BORE_FLAGS, DECK_FLAGS, UNSEEN_
 use crate::terrain::pipeline::overture::width::{width_m, WayColumns, WayShape};
 use crate::wkb::wkb_to_geometries;
 
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct BridgeRow {
     pub gers_id: String,
     pub subtype: String,
@@ -77,6 +78,75 @@ impl End {
 impl Piece {
     pub fn end(&self, last: bool) -> &End {
         &self.ends[usize::from(last)]
+    }
+
+    /// The runs of it inside `[lo, hi]`; a run's end the box made is a fresh
+    /// end, so it joins nothing.
+    pub fn clip(self, [lo, hi]: [[f64; 2]; 2]) -> Vec<Piece> {
+        let inside = |p: &G3857| (0..2).all(|k| p[k] >= lo[k] && p[k] <= hi[k]);
+        if self.points.iter().all(inside) {
+            return vec![self];
+        }
+        let mut runs: Vec<Vec<G3857>> = Vec::new();
+        let mut run: Vec<G3857> = Vec::new();
+        for w in self.points.windows(2) {
+            let (a, b) = (w[0], w[1]);
+            let d = [b[0] - a[0], b[1] - a[1]];
+            let (mut t0, mut t1) = (0.0f64, 1.0f64);
+            for k in 0..2 {
+                for (p, q) in [(-d[k], a[k] - lo[k]), (d[k], hi[k] - a[k])] {
+                    if p == 0.0 {
+                        if q < 0.0 {
+                            t0 = 2.0;
+                        }
+                    } else if p < 0.0 {
+                        t0 = t0.max(q / p);
+                    } else {
+                        t1 = t1.min(q / p);
+                    }
+                }
+            }
+            if t0 > t1 {
+                if run.len() >= 2 {
+                    runs.push(std::mem::take(&mut run));
+                }
+                run.clear();
+                continue;
+            }
+            let at = |t: f64| [a[0] + d[0] * t, a[1] + d[1] * t, a[2] + (b[2] - a[2]) * t];
+            if run.is_empty() || t0 > 0.0 {
+                if run.len() >= 2 {
+                    runs.push(std::mem::take(&mut run));
+                }
+                run = vec![at(t0)];
+            }
+            run.push(at(t1));
+            if t1 < 1.0 {
+                runs.push(std::mem::take(&mut run));
+            }
+        }
+        if run.len() >= 2 {
+            runs.push(run);
+        }
+        let (first, last) = (self.points[0], self.points[self.points.len() - 1]);
+        let end_at = |p: G3857| match p {
+            p if p == first => self.ends[0].clone(),
+            p if p == last => self.ends[1].clone(),
+            p => End::Cut(format!("{}#clip", self.gers_id), (p[0] + 0.0).to_bits() ^ (p[1] + 0.0).to_bits().rotate_left(32)),
+        };
+        runs.into_iter()
+            .map(|points| Piece {
+                gers_id: self.gers_id.clone(),
+                subtype: self.subtype.clone(),
+                class: self.class.clone(),
+                level: self.level,
+                width_m: self.width_m,
+                form: self.form,
+                approach: self.approach,
+                ends: [end_at(points[0]), end_at(points[points.len() - 1])],
+                points,
+            })
+            .collect()
     }
 
     /// A length along the piece in DB coordinates, in ground metres.

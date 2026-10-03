@@ -156,6 +156,10 @@ fn prune(root: &std::path::Path) -> Result<(), String> {
             std::fs::remove_dir_all(entry.path()).map_err(|e| e.to_string())?;
         }
     }
+    match std::fs::remove_dir_all(root.join(terrain::SOURCE)) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
+        _ => {}
+    }
     match std::fs::remove_dir_all(cache::purged(root)) {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
         _ => Ok(()),

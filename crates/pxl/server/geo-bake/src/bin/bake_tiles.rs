@@ -222,7 +222,7 @@ fn run() -> Result<(), String> {
     let coverage = Coverage::of_source()?;
     let land_cache = args.out.parent().unwrap_or(Path::new(".")).join("land_pages.json");
     let (source, mut checked) = match args.stages.iter().any(|&s| s != Stage::Assemble) {
-        true => Overture::reading(&leaf::READS).map(|(s, c)| (Some(s), Some(c)))?,
+        true => Overture::reading(&[&leaf::GROUND_READS, &pxl_geo_bake::terrain::repository::READS, &pxl_geo_bake::terrain::repository::DECK_READS]).map(|(s, c)| (Some(s), Some(c)))?,
         false => (None, None),
     };
 

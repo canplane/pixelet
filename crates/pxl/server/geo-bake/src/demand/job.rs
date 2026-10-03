@@ -130,10 +130,10 @@ async fn supervise(mut command: Command, deadline: tokio::time::Instant) -> Resu
 
 /// Each job opens the DB for what it reads, so a re-ingest while the server
 /// runs is checked by the next job.
-pub fn connect(reads: &[&[&str]], seconds: u64) -> Result<Client, String> {
-    let (_, mut client) = crate::coverage::Overture::reading(reads)?;
+pub fn connect(reads: &[&[&str]], seconds: u64) -> Result<(crate::coverage::Overture, Client), String> {
+    let (source, mut client) = crate::coverage::Overture::reading(reads)?;
     client.batch_execute(&format!("SET statement_timeout = {}", seconds.saturating_mul(1000))).map_err(|e| e.to_string())?;
-    Ok(client)
+    Ok((source, client))
 }
 
 pub fn execute(job: Job, out: &Path, seconds: u64) -> Result<(), String> {

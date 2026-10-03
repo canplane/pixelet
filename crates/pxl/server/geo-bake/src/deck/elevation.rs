@@ -17,37 +17,44 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use crate::deck::source::fan;
 use crate::elevation::Raster;
 
+/// Heights at points from page grids, as the client interpolates them; a
+/// point's page is `page_of`'s, a page with no grid flat at sea level.
+pub fn sample(grids: &HashMap<IVec, Vec<i16>>, points: &[[f64; 2]], page_of: impl Fn([f64; 2]) -> IVec) -> Vec<f64> {
+    let span = ELE_PADDED_SPAN as usize;
+    let flat = vec![0; span * span];
+    points
+        .iter()
+        .map(|&[x, y]| {
+            let page = page_of([x, y]);
+            let [min, _] = epsg3857::get_page_bbox(page);
+            let grid = grids.get(&page).unwrap_or(&flat);
+            let cell_per_m = u_per_m(from_db(min[1])) / U_PER_CELL;
+            let (tx, ty) = (from_db(x - min[0]) / U_PER_CELL, from_db(y - min[1]) / U_PER_CELL);
+            f64::from(bicubic(grid, tx, ty)) / cell_per_m
+        })
+        .collect()
+}
+
+pub fn page_of([x, y]: [f64; 2]) -> IVec {
+    let mut at = Pvf3::default();
+    epsg3857::project(&mut at, x, y, 0.0);
+    L3_IDX(at.i)
+}
+
+/// Every point's height, its pages' grids read over several connections.
 pub fn surface(client: &mut Client, url: &str, points: &[[f64; 2]]) -> Result<Vec<f64>, postgres::Error> {
     let raster = Raster::open(client)?;
-    let mut by_page: HashMap<IVec, Vec<usize>> = HashMap::new();
-    for (i, p) in points.iter().enumerate() {
-        let mut at = Pvf3::default();
-        epsg3857::project(&mut at, p[0], p[1], 0.0);
-        by_page.entry(L3_IDX(at.i)).or_default().push(i);
-    }
-    // Pages in rows, so a raster tile is read about once.
-    let mut pages: Vec<(&IVec, &Vec<usize>)> = by_page.iter().collect();
-    pages.sort_by_key(|(&p, _)| (ivec::Y(p), ivec::X(p)));
-    let span = ELE_PADDED_SPAN as usize;
-    let heights = fan(url, |client, k, n| {
+    let mut pages: Vec<IVec> = points.iter().map(|&p| page_of(p)).collect();
+    pages.sort_by_key(|&p| (ivec::Y(p), ivec::X(p)));
+    pages.dedup();
+    let grids = fan(url, |client, k, n| {
         let mut out = Vec::new();
-        for &(&page, at) in pages.iter().skip(k).step_by(n) {
-            let bbox = epsg3857::get_page_bbox(page);
-            let [min, _] = bbox;
-            // Drawn flat at sea level, as the bake draws it.
-            let grid = raster.page_grid(client, bbox)?.unwrap_or_else(|| vec![0; span * span]);
-            let cell_per_m = u_per_m(from_db(min[1])) / U_PER_CELL;
-            out.extend(at.iter().map(|&i| {
-                let [x, y] = points[i];
-                let (tx, ty) = (from_db(x - min[0]) / U_PER_CELL, from_db(y - min[1]) / U_PER_CELL);
-                (i, f64::from(bicubic(&grid, tx, ty)) / cell_per_m)
-            }));
+        for &page in pages.iter().skip(k).step_by(n) {
+            if let Some(grid) = raster.page_grid(client, epsg3857::get_page_bbox(page))? {
+                out.push((page, grid));
+            }
         }
         Ok(out)
     })?;
-    let mut out = vec![0.0; points.len()];
-    for (i, h) in heights {
-        out[i] = h;
-    }
-    Ok(out)
+    Ok(sample(&grids.into_iter().collect(), points, page_of))
 }

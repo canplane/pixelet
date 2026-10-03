@@ -8,7 +8,8 @@ use pxl_spec::bake::deck::Form;
 
 use crate::deck::param::APPROACH_TURN_COS;
 use crate::deck::piece::{End, Piece};
-use crate::deck::source;
+use crate::deck::relate::{self, SIDE_STEP};
+use crate::deck::source::Input;
 use crate::deck::structure::end_of;
 use crate::terrain::pipeline::overture::between::{flag_ranges, without, Line};
 use crate::terrain::pipeline::overture::policy::{DECK_FLAGS, UNSEEN_FLAGS};
@@ -25,11 +26,12 @@ pub fn free_ends(pieces: &[Piece]) -> Vec<(usize, bool)> {
 }
 
 /// The straightest joined way; ties by id, then outward.
-pub fn approaches(url: &str, pieces: &[Piece], ends: &[(usize, bool)], form: Form) -> Result<Vec<Piece>, postgres::Error> {
+pub fn approaches(input: &Input, pieces: &[Piece], ends: &[(usize, bool)], form: Form) -> Vec<Piece> {
     let asked: Vec<([f64; 2], &str)> = ends.iter().map(|&(i, last)| (end_of(&pieces[i], last).0, pieces[i].gers_id.as_str())).collect();
 
     let mut best: HashMap<usize, ((f64, String, bool), Piece)> = HashMap::new();
-    for (e, own_at, row) in source::connected_rows(url, &asked)? {
+    for (e, own_at, way) in relate::connected(&asked, &input.ways) {
+        let row = &way.row;
         let (i, last) = ends[e];
         let structure = &pieces[i];
         let (at, inward) = end_of(structure, last);
@@ -37,7 +39,7 @@ pub fn approaches(url: &str, pieces: &[Piece], ends: &[(usize, bool)], form: For
         let Some(line) = Line::of(&g.points) else { continue };
         let whole = [g.points[0], g.points[g.points.len() - 1]];
         let len = line.length();
-        let step = (source::SIDE_STEP / len).min(0.5);
+        let step = (SIDE_STEP / len).min(0.5);
         let off = flag_ranges(row.flags.as_deref(), &[UNSEEN_FLAGS, DECK_FLAGS].concat());
         let stretches = without(&[[0.0, 1.0]], &off);
         for outward in [1.0, -1.0] {
@@ -77,5 +79,5 @@ pub fn approaches(url: &str, pieces: &[Piece], ends: &[(usize, bool)], form: For
     }
     let mut out: Vec<(usize, Piece)> = best.into_iter().map(|(e, (_, p))| (e, p)).collect();
     out.sort_unstable_by_key(|&(e, _)| e);
-    Ok(out.into_iter().map(|(_, p)| p).collect())
+    out.into_iter().map(|(_, p)| p).collect()
 }

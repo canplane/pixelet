@@ -28,7 +28,7 @@ fn main() {
     for page in pages {
         let idx = page.parse().expect("page_idx");
         assert!(coverage.contains(idx), "{page} is not a page of the coverage");
-        let (_, packed) = bake_leaf(&repo, &mut client, idx, &mut stats, Level::Stored).expect("bake");
+        let (_, packed) = bake_leaf(&repo, &mut client, &std::env::temp_dir().join("pxl-source"), idx, &mut stats, Level::Stored).expect("bake");
         let tile = unpack(&packed).expect("unpack");
         fs::write(format!("{dir}/{page}.db.tile"), &tile).expect("write");
         println!("{page}\t{}", tile.len());
