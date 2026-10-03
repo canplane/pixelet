@@ -13,7 +13,7 @@ use pxl_render::mesh::paint::level::{write_level_runs, Stands};
 use pxl_render::mesh::paint::object::adapter::{Claims, Entries, Painted, Painter};
 use pxl_render::mesh::paint::terrain::adapter::{beside_index, Around, ChunkSample, PageSource, PageView};
 use pxl_render::mesh::volume::Volumes;
-use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
+use pxl_render::mesh::voxel_scan::{BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
 use pxl_spec::bake::constant::{pack_pos, BandZ, EntryAt, CELL, OBJECT_FINEST};
 use pxl_spec::space::indexer::L2_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -613,13 +613,7 @@ impl Builder {
             return Progress::Blocked;
         }
         // The apron comes from the sample; the bands hold only the chunk's own cells.
-        let apron = Apron {
-            ele: &self.sample.ele,
-            material: &self.sample.material,
-            layer_idx: &self.sample.layer_idx,
-            floor: self.sample.floor,
-        };
-        match self.scan.step(&self.bands, &apron) {
+        match self.scan.step(&self.bands, &self.sample) {
             ScanStep::Working => Progress::Busy,
             ScanStep::Done => xpute_core::bug!(ENOTRECOVERABLE),
             ScanStep::Refused => {

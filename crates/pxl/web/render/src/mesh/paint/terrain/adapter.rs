@@ -102,14 +102,19 @@ impl Materials {
     }
 }
 
-fn collect_decks(over: &mut Vec<(usize, usize, Over)>, s: &PageSource, first: [i64; 2]) -> Result<(), Refused> {
+/// The decks over the columns `s` is read for, the apron's too: a column the
+/// apron reads without its deck stands at another height than the chunk beside
+/// draws it, and the faces either side are shaded for a step that is not there.
+/// `s` is the page at `quadrant` beside the chunk's own and is read for the
+/// columns `reads` says; `corner` is the apron's first column in the own page's cells.
+fn collect_decks(over: &mut Vec<(usize, usize, Over)>, s: &PageSource, corner: [i64; 2], quadrant: [i64; 2], reads: impl Fn([i64; 2]) -> bool) -> Result<(), Refused> {
     let n = f64::from(s.n);
-    let origin = [0, 1].map(|k| (s.origin[k] + first[k]) as f64 / n);
-    let side = CHUNK_CELLS as i64;
+    let origin = [0, 1].map(|k| (s.origin[k] + corner[k] - quadrant[k] * PAGE_CELLS as i64) as f64 / n);
+    let side = COL_SPAN as i64;
     let mut grown = Ok(());
     s.page.decks.over_grid(Some(s.frame), origin, 1.0 / n, [side, side], |cx, cy, d, o| {
-        if grown.is_ok() {
-            grown = try_push(over, (apron_col(cx as u32, cy as u32) as usize, d, o));
+        if grown.is_ok() && reads(ancestor_of([corner[0] + cx, corner[1] + cy], GROUND.page_cell_shamt())) {
+            grown = try_push(over, ((cy * side + cx) as usize, d, o));
         }
     });
     grown
@@ -257,17 +262,29 @@ impl ChunkSample {
                 }
             }
         }
-        self.read_decks(&around.own, first)?;
+        self.read_decks(around, first)?;
         let bored = self.bore.iter().filter(|b| b.air[0] < b.air[1]).map(|b| b.air[0] - 1).min().unwrap_or(i32::MAX);
         self.floor = (min_ele.min(bored) - TERRAIN_Z_MARGIN).div_euclid(BAND_CELLS as i32) * BAND_CELLS as i32;
         Ok(())
     }
 
-    fn read_decks(&mut self, own: &PageSource, first: [i64; 2]) -> Result<(), Refused> {
+    /// Each column's decks from the page its height is read from (`read`).
+    fn read_decks(&mut self, around: &Around, first: [i64; 2]) -> Result<(), Refused> {
         let mut over = core::mem::take(&mut self.over);
         over.clear();
-        let cell_per_m = u_per_m(own.frame.corner[1]) / U_PER_CELL;
-        let built = collect_decks(&mut over, own, first).and_then(|()| self.spans_of(&mut over, cell_per_m));
+        let cell_per_m = u_per_m(around.own.frame.corner[1]) / U_PER_CELL;
+        let corner = first.map(|v| v - APRON as i64);
+        // A column with no page beside is read from the chunk's own, as its height is.
+        let beside = |[qx, qy]: [i64; 2]| if (qx, qy) == (0, 0) { None } else { around.beside[beside_index(qx, qy)].as_ref() };
+        let mut built = collect_decks(&mut over, &around.own, corner, [0, 0], |q| beside(q).is_none());
+        for qy in -1..=1 {
+            for qx in -1..=1 {
+                if let (Some(s), true) = (beside([qx, qy]), built.is_ok()) {
+                    built = collect_decks(&mut over, s, corner, [qx, qy], |q| q == [qx, qy]);
+                }
+            }
+        }
+        let built = built.and_then(|()| self.spans_of(&mut over, cell_per_m));
         self.over = over;
         built
     }

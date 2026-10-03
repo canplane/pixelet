@@ -6,6 +6,7 @@
 
 use pxl_spec::bake::constant::{band_cell_z, BAND_CELLS};
 
+use crate::mesh::paint::terrain::adapter::ChunkSample;
 use crate::mesh::volume::{band_col, taps_of, unpack_material, MaterialClasses, BAND_VOXELS, SUB_CELL_NONE};
 use crate::mesh::{grow, try_push, Refused};
 use xpute_core::status::bug::OrBug;
@@ -22,14 +23,6 @@ pub fn apron_col(cx: u32, cy: u32) -> u32 {
     (cy + APRON) * COL_SPAN + cx + APRON
 }
 
-/// Interior entries are never read; those columns come from the bands.
-pub struct Apron<'a> {
-    /// A column's top is one below.
-    pub ele: &'a [i16],
-    pub material: &'a [u32],
-    pub layer_idx: &'a [u8],
-    pub floor: i32,
-}
 const SCAN_ROWS_PER_STEP: u32 = 8;
 
 pub struct ExtraView<'a> {
@@ -167,7 +160,8 @@ impl ScanContext {
     }
 
     /// The rows are the padded ones, so every column is written in prefix-array order.
-    pub fn step(&mut self, bands: &[BandView], apron: &Apron) -> ScanStep {
+    /// The apron's columns are the sample's, as a chunk with no bands reads them.
+    pub fn step(&mut self, bands: &[BandView], apron: &ChunkSample) -> ScanStep {
         xpute_core::ensure!(self.open, ENOTRECOVERABLE);
         if self.packed {
             return ScanStep::Done;
@@ -202,12 +196,9 @@ impl ScanContext {
         }
     }
 
-    /// Floor to its ground, or where the ground is below the floor, its top cell,
-    /// which the chunk's edge wall reaches down to. Never painted or emitted.
-    fn apron_run(&mut self, apron: &Apron, col: usize) -> Result<(), Refused> {
-        let top = apron.ele[col] as i32 - 1;
-        let z0 = if top < apron.floor { top } else { apron.floor };
-        try_push(&mut self.runs, run_of(z0, top, apron.material[col], apron.layer_idx[col]))
+    fn apron_run(&mut self, apron: &ChunkSample, col: usize) -> Result<(), Refused> {
+        let runs = &mut self.runs;
+        apron.column_runs(col, |lo, hi, material, layer| try_push(runs, run_of(lo, hi, material, layer)))
     }
 
     fn set_bytes(&self) -> u32 {
