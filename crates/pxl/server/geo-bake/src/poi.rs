@@ -37,7 +37,7 @@ pub fn leaves(client: &mut Client, coverage: &Coverage, within: Option<IVec>) ->
         None => client.query(&select, &[]),
     }
     .map_err(|e| e.to_string())?;
-    let mut places: BTreeMap<IVec, Vec<(Pvf3, String, u8, u64)>> = BTreeMap::new();
+    let mut places: BTreeMap<IVec, Vec<(Pvf3, String, u8, String)>> = BTreeMap::new();
     for row in rows {
         let at = epsg3857::project(row.get(0), row.get(1), 0.0);
         let leaf = POI_LATTICE.cell_of(0, &at).page();
@@ -45,15 +45,11 @@ pub fn leaves(client: &mut Client, coverage: &Coverage, within: Option<IVec>) ->
             continue;
         }
         let kind = kind_of(category_named(row.get::<_, Option<&str>>(3)));
-        places.entry(leaf.page).or_default().push((at, row.get(2), kind, id_of(row.get(4))));
+        places.entry(leaf.page).or_default().push((at, row.get(2), kind, row.get(4)));
     }
     Ok(places
         .into_iter()
-        .map(|(page, p)| (page, PoiPage::of_places(0, p.iter().map(|(at, name, kind, id)| (*at, Place { name, kind: *kind, id: *id })), true)))
+        .map(|(page, p)| (page, PoiPage::of_places(0, p.iter().map(|(at, name, kind, id)| (*at, Place { name, kind: *kind, id, names: &[] })), true)))
         .collect())
 }
 
-/// FNV-1a 64 of the source's id, so the page carries no provider id format.
-fn id_of(source_id: &str) -> u64 {
-    crate::util::fnv1a(source_id.as_bytes())
-}

@@ -17,11 +17,11 @@ Read it before changing a pipeline's shape; this file is the procedure only.
 
 ## The three bakes
 
-| Kind    | Tool                     | Reads                                           | Output                                   | Empty page      |
-| ------- | ------------------------ | ----------------------------------------------- | ---------------------------------------- | --------------- |
-| terrain | `deno task bake:tiles`   | Overture buildings/transportation/base, GEDTM30 | packed XTP, one per land page            | shared `_ocean` |
-| poi     | `deno task bake:poi`     | Overture places                                 | packed PXP5 counts, where a crowd splits | no object       |
-| geocode | `deno task bake:geocode` | Overture divisions, terrain's `land_pages.json` | packed JSON, one per page with a label   | no object       |
+| Kind    | Tool                     | Reads                                           | Output                                 | Empty page      |
+| ------- | ------------------------ | ----------------------------------------------- | -------------------------------------- | --------------- |
+| terrain | `deno task bake:tiles`   | Overture buildings/transportation/base, GEDTM30 | packed XTP, one per land page          | shared `_ocean` |
+| poi     | `deno task bake:poi`     | Overture places                                 | XTP counts, where a crowd splits       | no object       |
+| geocode | `deno task bake:geocode` | Overture divisions, terrain's `land_pages.json` | packed JSON, one per page with a label | no object       |
 
 Every tool writes to `./out/<kind>/<version>`, where the version defaults to
 `PUBLISHED_VERSION.<kind>` in `spec/pxl/spec/bake/published.json`
@@ -100,15 +100,15 @@ surface paints around what the solve carries:
 deno task bake:tiles --out ./out/terrain/<version> --force
 ```
 
-| Flag                | Meaning                                                              |
-| ------------------- | -------------------------------------------------------------------- |
-| `--stage <s>`       | `leaf` or `assemble`, repeatable; both when omitted                  |
-| `--out <dir>`       | published pages; its last path segment is the version                |
-| `--build <dir>`     | the artifacts (default `./out/build/terrain`)                        |
-| `--concurrency <n>` | parallel pages — match `DB_POOL_SIZE`, the DB is the bottleneck      |
-| `--limit <n>`       | stop after n pages (smoke test)                                      |
-| `--force`           | bake leaves already on disk again, and solve every structure again   |
-| `--reclassify`      | ignore the cached land/ocean scan and redo it                        |
+| Flag                | Meaning                                                            |
+| ------------------- | ------------------------------------------------------------------ |
+| `--stage <s>`       | `leaf` or `assemble`, repeatable; both when omitted                |
+| `--out <dir>`       | published pages; its last path segment is the version              |
+| `--build <dir>`     | the artifacts (default `./out/build/terrain`)                      |
+| `--concurrency <n>` | parallel pages — match `DB_POOL_SIZE`, the DB is the bottleneck    |
+| `--limit <n>`       | stop after n pages (smoke test)                                    |
+| `--force`           | bake leaves already on disk again, and solve every structure again |
+| `--reclassify`      | ignore the cached land/ocean scan and redo it                      |
 
 It runs long enough to want a log file rather than a terminal:
 
@@ -225,12 +225,12 @@ the set back in to see the bake.
 ## POI
 
 POI is a second layer of terrain's pyramid: the same pages, levels and names,
-holding a count of places per cell (`pxl-spec bake/poi_page.rs`, magic
-`PXP5`), the z16 ground cell its places' centroid falls in, and the one
-place a cell holds alone — its name, held to 32 code points, and its kind,
-from a pool of places held once a page. A kind is the place's category as the search list names it
-(`pxl-geo-spec overture/properties.rs`), numbered by
-`spec/pxl/spec/bake/poi_badge.json`. The leaves are counted from `overture_places`, the levels above are
+holding, per cell (`pxl-spec bake/poi_page.rs`, one XTP tree), a count of
+places and, of each kind, the place of least id with the z16 ground cell it
+stands in — its names, held to 32 code points, the source's own id and its
+kind by name, from a pool of places held once a page. A kind is the place's
+category as the search list names it (`pxl-geo-spec overture/properties.rs`),
+one of `spec/pxl/spec/bake/poi_badge.json`'s. The leaves are counted from `overture_places`, the levels above are
 folded by adding, with the same fold driver terrain uses
 (`geo-bake/src/pyramid.rs`), and then every page its parent settles is let go
 (`prune`): where no cell over a page holds two places, the page over it says
@@ -242,7 +242,7 @@ deno task bake:poi --out ./out/poi/<version> --concurrency 8
 
 It is not resumable: a run clears the version directory and bakes it whole,
 which takes the one pass over the table the leaves need. Verify that the
-manifest's `levels` reach level 10 and that a leaf decompresses to `PXP5`.
+manifest's `levels` reach level 10 and that a leaf decodes (`poi_page::decode`).
 The client shows it only outside production, behind `poi` in the
 development settings, until a nationwide version is published.
 

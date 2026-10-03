@@ -105,11 +105,11 @@ fn a_group_that_is_not_the_pages_under_one_is_refused() {
 
 /// A group's lanes written directly, since `encode_place_group` cannot make an inconsistent one.
 fn group_pkt(starts: &[u32], flat: &[u32], pages: &[u16], locals: &[Named]) -> Vec<u8> {
-    let lanes = place_lanes(locals);
+    let (ranks, names) = place_lanes(locals);
     let mut t: TreeView<'_> = TreeView::new();
     t.branch(Some(&mut |b| {
         b.u32_array(Some(starts)).u32_array(Some(flat)).u16_array(Some(pages));
-        write_places(b, &lanes);
+        write_places(b, &ranks, &names);
     }));
     encoder().encode(&t, TreeEncoderOptions::default()).expect("encodes")
 }
@@ -126,15 +126,11 @@ fn a_label_running_past_the_numbers_is_refused() {
 
 #[test]
 fn a_run_of_places_whose_lanes_disagree_is_refused() {
-    // A starts lane longer than the names would read a rank with no name.
-    let lanes = PlaceLanes {
-        ranks: vec![PlaceRank::Region as u8],
-        starts: vec![0, 1, 1],
-        names: vec!["경기도"],
-        langs: vec!["en", "Gyeonggi-do"],
-    };
+    // A rank with no name.
+    let named = [named(PlaceRank::Region, "경기도", "Gyeonggi-do")];
+    let (_, names) = place_lanes(&named);
     let mut t: TreeView<'_> = TreeView::new();
-    t.branch(Some(&mut |b| write_places(b, &lanes)));
+    t.branch(Some(&mut |b| write_places(b, &[PlaceRank::Region as u8, PlaceRank::County as u8], &names)));
     let pkt = encoder().encode(&t, TreeEncoderOptions::default()).expect("encodes");
     assert!(open_place_dict(&pkt).is_err());
 }

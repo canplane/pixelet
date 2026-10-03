@@ -66,7 +66,7 @@ fn crowded(p: LevelPage) -> PoiPage {
         p.level,
         p.children()
             .into_iter()
-            .flat_map(|k| [(at(k), Place { name: "a", kind: 0, id: 1 }), (at(k), Place { name: "b", kind: 0, id: 1 })]),
+            .flat_map(|k| [(at(k), Place { name: "a", id: "1", ..Place::default() }), (at(k), Place { name: "b", id: "1", ..Place::default() })]),
         true,
     )
 }

@@ -7,6 +7,7 @@ pub mod deck;
 pub mod fold;
 pub mod format;
 pub mod ground;
+pub mod named;
 #[path = "bake/object.spec.rs"]
 pub mod object;
 pub mod pack;
