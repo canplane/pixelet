@@ -43,6 +43,8 @@ fn share(k: usize, n: usize) -> (i32, i32) {
     (n as i32, k as i32)
 }
 
+/// By id: a piece's number breaks every tie the solve meets, so it is not the
+/// order rows happen to come back in.
 pub fn flagged_rows(client: &mut Client, flag: &str) -> Result<Vec<BridgeRow>, postgres::Error> {
     let rows = client.query(
         "SELECT gers_id, subtype, class, COALESCE(road_flags, rail_flags)::text AS flags, level_rules::text AS levels,
@@ -52,7 +54,7 @@ pub fn flagged_rows(client: &mut Client, flag: &str) -> Result<Vec<BridgeRow>, p
          WHERE COALESCE(road_flags, rail_flags)::text LIKE '%' || $1 || '%'",
         &[&flag],
     )?;
-    Ok(rows
+    let mut out: Vec<BridgeRow> = rows
         .iter()
         .map(|r| BridgeRow {
             gers_id: r.get("gers_id"),
@@ -66,7 +68,9 @@ pub fn flagged_rows(client: &mut Client, flag: &str) -> Result<Vec<BridgeRow>, p
             subclasses: r.get("subclasses"),
             geom_wkb: r.get::<_, &[u8]>("geom_wkb").into(),
         })
-        .collect())
+        .collect();
+    out.sort_unstable_by(|a, b| a.gers_id.cmp(&b.gers_id));
+    Ok(out)
 }
 
 fn wkt(points: impl Iterator<Item = String>, z: bool) -> String {

@@ -238,12 +238,14 @@ impl<'a> Side<'a> {
                         }
                     }
                 }
+                let approaches: Vec<&[(u32, f64)]> = members.iter().enumerate().filter(|&(_, &m)| self.pieces[m].approach).map(|(k, _)| &g.along[k][..]).collect();
                 let profile = solve_profile(&Problem {
                     adj: &g.adj,
                     need: &need,
                     ends: &ends,
                     ground: qg,
                     carried: &carried[s],
+                    approaches: &approaches,
                 });
                 forced += profile.forced.iter().filter(|&&f| f).count();
                 next.push(Some(profile.top));
@@ -316,7 +318,7 @@ fn needs_of(client: &mut Client, url: &str, pieces: &[Piece]) -> Result<Vec<Vec<
     let mut needs: Vec<Vec<Need>> = vec![Vec::new(); pieces.len()];
     let length = |m: usize| {
         let p = &pieces[m].points;
-        pieces[m].to_m(p.windows(2).map(|w| (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1])).sum::<f64>())
+        pieces[m].to_m(p.windows(2).map(|w| libm::hypot(w[1][0] - w[0][0], w[1][1] - w[0][1])).sum::<f64>())
     };
     let inside = |at: f64, m: usize| at > AT_END_M && at < length(m) - AT_END_M;
     for mut c in source::ways_crossing(url)?.into_iter().filter(|c| c.piece < pieces.len()) {
@@ -344,7 +346,7 @@ fn needs_of(client: &mut Client, url: &str, pieces: &[Piece]) -> Result<Vec<Vec<
     // A water body is many pieces once subdivided; join the touching ones so the
     // span is the whole stretch's.
     for (m, mut spans) in water.into_iter().enumerate() {
-        spans.sort_by(|a, b| a.from.total_cmp(&b.from));
+        spans.sort_by(|a, b| a.from.total_cmp(&b.from).then(a.to.total_cmp(&b.to)));
         for n in spans {
             match needs[m].last_mut() {
                 Some(last) if last.under == n.under && n.from <= last.to + AT_END_M => last.to = last.to.max(n.to),

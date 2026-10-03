@@ -40,7 +40,10 @@ fn a_pier_stands_at_each_world_station_and_its_column_keeps_it_unless_blocked() 
     let station = PIER_STEP_M * u_per_m(0.0) / 2.0;
     let d = one(&[[1.0, 3.0], [41.0, 3.0]], &[20, 20], 4.0);
     let piers: Vec<f64> = (0..42).map(|x| f64::from(x) + 0.5).filter(|&x| d.over_point(frame, [x, 3.0]).any(|o| o.pier)).collect();
-    let expected: Vec<f64> = (0..42).map(|x| f64::from(x) + 0.5).filter(|&x| x > 1.0 && (x - round(x / station) * station).abs() <= PIER_ALONG * 4.0 / 2.0).collect();
+    let expected: Vec<f64> = (0..42)
+        .map(|x| f64::from(x) + 0.5)
+        .filter(|&x| x > 1.0 && (x - round(x / station) * station).abs() <= PIER_ALONG * 4.0 / 2.0)
+        .collect();
     assert!(!expected.is_empty());
     assert_eq!(piers, expected);
     let at = [expected[0], 3.0];

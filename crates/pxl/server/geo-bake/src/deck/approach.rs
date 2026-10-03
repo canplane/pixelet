@@ -26,11 +26,13 @@ pub fn free_ends(pieces: &[Piece]) -> Vec<(usize, bool)> {
     (0..pieces.len()).flat_map(|i| [(i, false), (i, true)]).filter(|&(i, last)| count[pieces[i].end(last)] == 1).collect()
 }
 
-/// Each end's approach, of `form`: the joined way at the surface that carries on most nearly straight.
+/// Each end's approach, of `form`: the joined way at the surface that carries
+/// on most nearly straight, ties to the lower id and then outward along it, so
+/// the rows' order decides nothing.
 pub fn approaches(url: &str, pieces: &[Piece], ends: &[(usize, bool)], form: Form) -> Result<Vec<Piece>, postgres::Error> {
     let asked: Vec<([f64; 2], &str)> = ends.iter().map(|&(i, last)| (end_of(&pieces[i], last).0, pieces[i].gers_id.as_str())).collect();
 
-    let mut best: HashMap<usize, (f64, Piece)> = HashMap::new();
+    let mut best: HashMap<usize, ((f64, String, bool), Piece)> = HashMap::new();
     for (e, own_at, row) in source::connected_rows(url, &asked)? {
         let (i, last) = ends[e];
         let structure = &pieces[i];
@@ -56,8 +58,10 @@ pub fn approaches(url: &str, pieces: &[Piece], ends: &[(usize, bool)], form: For
             points[0] = [at[0], at[1], 0.0];
             let far = End::of(&row.gers_id, whole, if outward > 0.0 { b } else { a });
             let (dx, dy) = (points[1][0] - points[0][0], points[1][1] - points[0][1]);
-            let straight = -(dx * inward[0] + dy * inward[1]) / dx.hypot(dy).max(f64::EPSILON);
-            if straight < APPROACH_TURN_COS || best.get(&e).is_some_and(|(s, _)| *s >= straight) {
+            let straight = -(dx * inward[0] + dy * inward[1]) / libm::hypot(dx, dy).max(f64::EPSILON);
+            let key = (straight, row.gers_id.clone(), outward > 0.0);
+            let beats = |old: &(f64, String, bool)| key.0.total_cmp(&old.0).then_with(|| old.1.cmp(&key.1)).then(key.2.cmp(&old.2)).is_gt();
+            if straight < APPROACH_TURN_COS || best.get(&e).is_some_and(|(old, _)| !beats(old)) {
                 continue;
             }
             let shape = WayShape::at(row.columns(), (a + b) / 2.0);
@@ -72,8 +76,10 @@ pub fn approaches(url: &str, pieces: &[Piece], ends: &[(usize, bool)], form: For
                 ends: [structure.end(last).clone(), far],
                 points,
             };
-            best.insert(e, (straight, piece));
+            best.insert(e, (key, piece));
         }
     }
-    Ok(best.into_values().map(|(_, p)| p).collect())
+    let mut out: Vec<(usize, Piece)> = best.into_iter().map(|(e, (_, p))| (e, p)).collect();
+    out.sort_unstable_by_key(|&(e, _)| e);
+    Ok(out.into_iter().map(|(_, p)| p).collect())
 }

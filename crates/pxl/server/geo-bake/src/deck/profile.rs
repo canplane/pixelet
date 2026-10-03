@@ -4,10 +4,12 @@
 //! height, a bore's depth. Each point's need is hard: where `PREFERRED_SLOPE`
 //! cannot reach it from the ends, the line between ends and held points is
 //! laid as gently as the needs allow; elsewhere a need is raised at
-//! `PREFERRED_SLOPE`. A step steeper than `PREFERRED_SLOPE` is marked forced.
+//! `PREFERRED_SLOPE`. An approach then runs straight from its joint to where
+//! it first meets the ground, the ground only a bound on it. A step steeper
+//! than `PREFERRED_SLOPE` is marked forced.
 
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::{BTreeMap, BinaryHeap};
 
 use crate::deck::param::PREFERRED_SLOPE;
 
@@ -17,6 +19,8 @@ pub struct Problem<'a> {
     pub ends: &'a [(u32, f64)],
     pub ground: &'a [f64],
     pub carried: &'a [bool],
+    /// Each approach's points from its joint outward, with their distance along it.
+    pub approaches: &'a [&'a [(u32, f64)]],
 }
 
 pub struct Profile {
@@ -26,21 +30,24 @@ pub struct Profile {
 
 pub fn solve(p: &Problem) -> Profile {
     let n = p.need.len();
+    let adj = carried_adj(p);
     // The highest each point can be and still come down to every end.
-    let cap = spread(p.adj, p.ends.iter().copied(), |v, d| v + PREFERRED_SLOPE * d, Ordering::Less);
+    let cap = spread(&adj, ends_of(p), |v, d| v + PREFERRED_SLOPE * d, Ordering::Less);
     let held = (0..n).filter(|&v| p.carried[v]).map(|v| (v as u32, p.need[v].min(cap[v])));
-    let raised = spread(p.adj, held, |v, d| v - PREFERRED_SLOPE * d, Ordering::Greater);
-    // Points the grade cannot reach are held, in each stretch between set
-    // points the one furthest under its line: over a chord that is a vertex of
-    // the upper hull, so the line is a taut string over the needs, not a
-    // staircase along them. Stretches are apart, so each round holds one in each.
+    let raised = spread(&adj, held, |v, d| v - PREFERRED_SLOPE * d, Ordering::Greater);
+    // Points the grade cannot reach are held where they are vertices of the
+    // upper hull over the needs, so the line is a taut string over them, not
+    // a staircase along them: a stretch that is a path between two set points
+    // holds all its hull's at once; any other the one furthest under its line,
+    // which over a chord is such a vertex. Stretches are apart, so each round
+    // holds in all of them.
     let mut unreached: Vec<(u32, f64)> = Vec::new();
     loop {
-        let (line, slope, set) = between_ends(p, unreached.iter().copied());
-        let top: Vec<f64> = (0..n).map(|v| if p.carried[v] { line[v].max(raised[v]) } else { p.need[v].max(raised[v]) }).collect();
+        let (line, slope, set) = between_ends(p, &adj, unreached.iter().copied());
+        let mut top: Vec<f64> = (0..n).map(|v| if p.carried[v] { line[v].max(raised[v]) } else { p.ground[v] }).collect();
         let under = |v: usize| p.need[v] - top[v];
-        let stretch = stretches(p, &set);
-        let mut worst: HashMap<usize, usize> = HashMap::new();
+        let stretch = stretches(p, &adj, &set);
+        let mut worst: BTreeMap<usize, usize> = BTreeMap::new();
         for v in (0..n).filter(|&v| p.carried[v] && under(v) > 1e-9) {
             let w = worst.entry(stretch[v]).or_insert(v);
             if under(v) > under(*w) {
@@ -48,19 +55,26 @@ pub fn solve(p: &Problem) -> Profile {
             }
         }
         if worst.is_empty() {
-            let forced = slope.iter().map(|&s| s > PREFERRED_SLOPE + 1e-9).collect();
+            let mut forced: Vec<bool> = slope.iter().map(|&s| s > PREFERRED_SLOPE + 1e-9).collect();
+            for chain in p.approaches.iter().filter(|c| c.len() >= 2 && p.carried[c[0].0 as usize]) {
+                approach(&mut top, &mut forced, p.ground, chain);
+            }
             return Profile { top, forced };
         }
-        for v in worst.into_values() {
-            assert!(!unreached.iter().any(|&(u, _)| u as usize == v), "a held point under its need: a structure's form is broken");
-            unreached.push((v as u32, p.need[v]));
+        for (id, w) in worst {
+            let hull = path_between(&adj, &set, &stretch, id, w).map(|path| upper_hull(&path, &line, p.need)).unwrap_or_default();
+            let hold: Vec<usize> = hull.into_iter().filter(|&v| under(v) > 1e-9).collect();
+            for v in if hold.is_empty() { vec![w] } else { hold } {
+                assert!(!unreached.iter().any(|&(u, _)| u as usize == v), "a held point under its need: a structure's form is broken");
+                unreached.push((v as u32, p.need[v]));
+            }
         }
     }
 }
 
 /// Each point's stretch: carried points joined without passing a set point;
 /// a set point is a stretch of its own.
-fn stretches(p: &Problem, set: &[bool]) -> Vec<usize> {
+fn stretches(p: &Problem, adj: &[Vec<(u32, f64)>], set: &[bool]) -> Vec<usize> {
     let n = p.need.len();
     let mut id = vec![usize::MAX; n];
     for s in 0..n {
@@ -73,9 +87,9 @@ fn stretches(p: &Problem, set: &[bool]) -> Vec<usize> {
         }
         let mut stack = vec![s];
         while let Some(v) = stack.pop() {
-            for &(w, _) in &p.adj[v] {
+            for &(w, _) in &adj[v] {
                 let w = w as usize;
-                if id[w] == usize::MAX && p.carried[w] && !set[w] {
+                if id[w] == usize::MAX && !set[w] {
                     id[w] = s;
                     stack.push(w);
                 }
@@ -85,21 +99,93 @@ fn stretches(p: &Problem, set: &[bool]) -> Vec<usize> {
     id
 }
 
-fn between_ends(p: &Problem, held: impl Iterator<Item = (u32, f64)>) -> (Vec<f64>, Vec<f64>, Vec<bool>) {
-    let n = p.need.len();
-    let carried: Vec<Vec<(u32, f64)>> = (0..n)
-        .map(|v| {
-            if p.carried[v] {
-                p.adj[v].iter().copied().filter(|&(w, _)| p.carried[w as usize]).collect()
-            } else {
-                Vec::new()
+/// The stretch holding `from`, when it is a path between two set points: the
+/// set point, its points and the other set point, each with its distance along.
+fn path_between(adj: &[Vec<(u32, f64)>], set: &[bool], stretch: &[usize], id: usize, from: usize) -> Option<Vec<(usize, f64)>> {
+    let inside = |v: usize| !set[v] && stretch[v] == id;
+    // Out from `from` both ways to a set point; a fork or a loop is no path.
+    let mut halves = Vec::new();
+    for &(first, d0) in &adj[from] {
+        let (mut prev, mut cur, mut d) = (from, first as usize, d0);
+        let mut half = Vec::new();
+        while inside(cur) {
+            if adj[cur].len() > 2 || cur == from {
+                return None;
             }
-        })
-        .collect();
-    let joints = (0..n)
-        .filter(|&v| p.carried[v] && p.adj[v].iter().any(|&(w, _)| !p.carried[w as usize]))
-        .map(|v| (v as u32, p.ground[v]));
-    let mut ends: Vec<(u32, f64)> = p.ends.iter().copied().filter(|&(e, _)| p.carried[e as usize]).chain(joints).collect();
+            half.push((cur, d));
+            let &(next, step) = adj[cur].iter().find(|&&(w, _)| w as usize != prev)?;
+            (prev, cur, d) = (cur, next as usize, d + step);
+        }
+        half.push((cur, d));
+        halves.push(half);
+    }
+    if adj[from].len() > 2 || halves.len() != 2 {
+        return None;
+    }
+    let (back, ahead) = (&halves[0], &halves[1]);
+    let total = back.last()?.1;
+    let mut path: Vec<(usize, f64)> = back.iter().rev().map(|&(v, d)| (v, total - d)).collect();
+    path.push((from, total));
+    path.extend(ahead.iter().map(|&(v, d)| (v, total + d)));
+    Some(path)
+}
+
+/// The points of `path` on the upper hull of its needs between its two set
+/// points, which stand at their line.
+fn upper_hull(path: &[(usize, f64)], line: &[f64], need: &[f64]) -> Vec<usize> {
+    let last = path.len() - 1;
+    let at = |i: usize| (path[i].1, if i == 0 || i == last { line[path[i].0] } else { need[path[i].0] });
+    let mut hull: Vec<usize> = Vec::new();
+    for i in 0..=last {
+        let (x, y) = at(i);
+        while let [.., a, b] = hull[..] {
+            let ((ax, ay), (bx, by)) = (at(a), at(b));
+            if (bx - ax) * (y - ay) - (by - ay) * (x - ax) >= 0.0 {
+                hull.pop();
+            } else {
+                break;
+            }
+        }
+        hull.push(i);
+    }
+    hull.into_iter().filter(|&i| i != 0 && i != last).map(|i| path[i].0).collect()
+}
+
+/// An approach from its joint at the structure's surface: straight to the
+/// first point it reaches at `PREFERRED_SLOPE`, or, where none is, to the one
+/// it reaches most gently. Either way no point before it is under the line,
+/// which would have been reached first.
+fn approach(top: &mut [f64], forced: &mut [bool], ground: &[f64], chain: &[(u32, f64)]) {
+    let (joint, d0) = chain[0];
+    let from = top[joint as usize];
+    let rest = &chain[1..];
+    let grade = |i: usize| (from - ground[rest[i].0 as usize]) / (rest[i].1 - d0);
+    let gentlest = || (0..rest.len()).min_by(|&a, &b| grade(a).total_cmp(&grade(b)));
+    let Some(contact) = (0..rest.len()).find(|&i| grade(i) <= PREFERRED_SLOPE).or_else(gentlest) else { return };
+    let m = grade(contact);
+    for &(v, d) in &rest[..contact] {
+        top[v as usize] = top[v as usize].max(from - m * (d - d0));
+        forced[v as usize] |= m > PREFERRED_SLOPE + 1e-9;
+    }
+}
+
+/// The structure's own edges: an approach is laid after it, from its joint.
+fn carried_adj(p: &Problem) -> Vec<Vec<(u32, f64)>> {
+    (0..p.need.len())
+        .map(|v| if p.carried[v] { p.adj[v].iter().copied().filter(|&(w, _)| p.carried[w as usize]).collect() } else { Vec::new() })
+        .collect()
+}
+
+/// The structure's set points: its own free ends, and each joint at its need,
+/// where an approach takes over.
+fn ends_of<'a>(p: &'a Problem) -> impl Iterator<Item = (u32, f64)> + 'a {
+    let joints = (0..p.need.len()).filter(|&v| p.carried[v] && p.adj[v].iter().any(|&(w, _)| !p.carried[w as usize])).map(|v| (v as u32, p.need[v]));
+    p.ends.iter().copied().filter(|&(e, _)| p.carried[e as usize]).chain(joints)
+}
+
+fn between_ends(p: &Problem, adj: &[Vec<(u32, f64)>], held: impl Iterator<Item = (u32, f64)>) -> (Vec<f64>, Vec<f64>, Vec<bool>) {
+    let n = p.need.len();
+    let mut ends: Vec<(u32, f64)> = ends_of(p).collect();
     // A held point wins over an end or a joint on the same point.
     for (v, h) in held {
         ends.retain(|&(e, _)| e != v);
@@ -109,7 +195,7 @@ fn between_ends(p: &Problem, held: impl Iterator<Item = (u32, f64)>) -> (Vec<f64
     for &(e, _) in &ends {
         set[e as usize] = true;
     }
-    let (line, slope) = line(&carried, &ends);
+    let (line, slope) = line(adj, &ends);
     (line, slope, set)
 }
 
@@ -124,42 +210,49 @@ fn line(adj: &[Vec<(u32, f64)>], ends: &[(u32, f64)]) -> (Vec<f64>, Vec<f64>) {
     for &(e, h) in ends {
         height[e as usize] = Some(h);
     }
-    loop {
-        let mut best: Option<(f64, Vec<u32>)> = None;
-        for a in 0..n {
-            let Some(ha) = height[a] else { continue };
-            if !adj[a].iter().any(|&(w, _)| height[w as usize].is_none()) {
-                continue;
-            }
-            let (dist, from) = through_unset(adj, &height, a as u32);
-            for b in 0..n {
-                let (Some(hb), Some(d)) = (height[b], dist[b]) else { continue };
-                if b == a || from[b] == a as u32 || d <= 0.0 {
-                    continue;
-                }
-                let s = (ha - hb).abs() / d;
-                if best.as_ref().is_none_or(|(bs, _)| s > *bs) {
-                    let mut path = vec![b as u32];
-                    while *path.last().unwrap() != a as u32 {
-                        path.push(from[*path.last().unwrap() as usize]);
+    // A path is laid through unset points only, so each run of them between
+    // set points is laid on its own, in the order the whole graph would take.
+    let mut search = Search::new(n);
+    for run in runs(adj, &height) {
+        loop {
+            let mut from_set: Vec<u32> = run.iter().filter(|&&v| height[v as usize].is_none()).flat_map(|&v| adj[v as usize].iter().map(|&(w, _)| w)).filter(|&w| height[w as usize].is_some()).collect();
+            from_set.sort_unstable();
+            from_set.dedup();
+            let mut best: Option<(f64, Vec<u32>)> = None;
+            for &a in &from_set {
+                let ha = height[a as usize].unwrap();
+                search.run(adj, &height, a);
+                let mut reached = search.reached.clone();
+                reached.sort_unstable();
+                for b in reached {
+                    let (Some(hb), d) = (height[b as usize], search.dist[b as usize]) else { continue };
+                    if b == a || search.from[b as usize] == a || d <= 0.0 {
+                        continue;
                     }
-                    best = Some((s, path));
+                    let s = (ha - hb).abs() / d;
+                    if best.as_ref().is_none_or(|(bs, _)| s > *bs) {
+                        let mut path = vec![b];
+                        while *path.last().unwrap() != a {
+                            path.push(search.from[*path.last().unwrap() as usize]);
+                        }
+                        best = Some((s, path));
+                    }
                 }
             }
-        }
-        let Some((s, path)) = best else { break };
-        let (hb, ha) = (height[path[0] as usize].unwrap(), height[*path.last().unwrap() as usize].unwrap());
-        let along: Vec<f64> = path
-            .windows(2)
-            .scan(0.0, |d, w| {
-                *d += adj[w[0] as usize].iter().filter(|&&(x, _)| x == w[1]).map(|&(_, l)| l).fold(f64::INFINITY, f64::min);
-                Some(*d)
-            })
-            .collect();
-        let total = *along.last().unwrap();
-        for (i, &v) in path.iter().enumerate().skip(1).take(path.len() - 2) {
-            height[v as usize] = Some(hb + (ha - hb) * along[i - 1] / total);
-            slope[v as usize] = s;
+            let Some((s, path)) = best else { break };
+            let (hb, ha) = (height[path[0] as usize].unwrap(), height[*path.last().unwrap() as usize].unwrap());
+            let along: Vec<f64> = path
+                .windows(2)
+                .scan(0.0, |d, w| {
+                    *d += adj[w[0] as usize].iter().filter(|&&(x, _)| x == w[1]).map(|&(_, l)| l).fold(f64::INFINITY, f64::min);
+                    Some(*d)
+                })
+                .collect();
+            let total = *along.last().unwrap();
+            for (i, &v) in path.iter().enumerate().skip(1).take(path.len() - 2) {
+                height[v as usize] = Some(hb + (ha - hb) * along[i - 1] / total);
+                slope[v as usize] = s;
+            }
         }
     }
     // What is left touches one set point at most: it takes that point's height.
@@ -175,35 +268,75 @@ fn line(adj: &[Vec<(u32, f64)>], ends: &[(u32, f64)]) -> (Vec<f64>, Vec<f64>) {
     (height.into_iter().map(|h| h.unwrap_or(f64::NEG_INFINITY)).collect(), slope)
 }
 
-fn through_unset(adj: &[Vec<(u32, f64)>], height: &[Option<f64>], a: u32) -> (Vec<Option<f64>>, Vec<u32>) {
-    let n = adj.len();
-    let mut dist = vec![None; n];
-    let mut from = vec![u32::MAX; n];
-    let mut heap = BinaryHeap::new();
-    dist[a as usize] = Some(0.0);
-    heap.push(Entry {
-        value: 0.0,
-        node: a,
-        best: Ordering::Less,
-    });
-    while let Some(Entry { value, node, .. }) = heap.pop() {
-        if dist[node as usize] != Some(value) || (node != a && height[node as usize].is_some()) {
+/// The unset points in runs joined without passing a set point.
+fn runs(adj: &[Vec<(u32, f64)>], height: &[Option<f64>]) -> Vec<Vec<u32>> {
+    let mut seen = vec![false; adj.len()];
+    let mut out = Vec::new();
+    for s in 0..adj.len() {
+        if seen[s] || height[s].is_some() {
             continue;
         }
-        for &(next, d) in &adj[node as usize] {
-            let y = value + d;
-            if dist[next as usize].is_none_or(|x| y < x) {
-                dist[next as usize] = Some(y);
-                from[next as usize] = node;
-                heap.push(Entry {
-                    value: y,
-                    node: next,
-                    best: Ordering::Less,
-                });
+        seen[s] = true;
+        let (mut run, mut stack) = (vec![s as u32], vec![s]);
+        while let Some(v) = stack.pop() {
+            for &(w, _) in &adj[v] {
+                let w = w as usize;
+                if !seen[w] && height[w].is_none() {
+                    seen[w] = true;
+                    run.push(w as u32);
+                    stack.push(w);
+                }
+            }
+        }
+        out.push(run);
+    }
+    out
+}
+
+/// Shortest distances from a set point through unset points, reusing its
+/// arrays: only what a search reached is reset before the next.
+struct Search {
+    dist: Vec<f64>,
+    from: Vec<u32>,
+    reached: Vec<u32>,
+}
+
+impl Search {
+    fn new(n: usize) -> Search {
+        Search {
+            dist: vec![f64::INFINITY; n],
+            from: vec![u32::MAX; n],
+            reached: Vec::new(),
+        }
+    }
+
+    fn run(&mut self, adj: &[Vec<(u32, f64)>], height: &[Option<f64>], a: u32) {
+        for &v in &self.reached {
+            self.dist[v as usize] = f64::INFINITY;
+            self.from[v as usize] = u32::MAX;
+        }
+        self.reached.clear();
+        let mut heap = BinaryHeap::new();
+        self.dist[a as usize] = 0.0;
+        self.reached.push(a);
+        heap.push(Entry { value: 0.0, node: a, best: Ordering::Less });
+        while let Some(Entry { value, node, .. }) = heap.pop() {
+            if self.dist[node as usize] != value || (node != a && height[node as usize].is_some()) {
+                continue;
+            }
+            for &(next, d) in &adj[node as usize] {
+                let y = value + d;
+                if y < self.dist[next as usize] {
+                    if self.dist[next as usize] == f64::INFINITY {
+                        self.reached.push(next);
+                    }
+                    self.dist[next as usize] = y;
+                    self.from[next as usize] = node;
+                    heap.push(Entry { value: y, node: next, best: Ordering::Less });
+                }
             }
         }
     }
-    (dist, from)
 }
 
 fn spread(adj: &[Vec<(u32, f64)>], sources: impl IntoIterator<Item = (u32, f64)>, along: impl Fn(f64, f64) -> f64, best: Ordering) -> Vec<f64> {
