@@ -12,7 +12,7 @@ use crate::sched::profiler::spec::{FRAME, LIMITS, PHASE_NAMES, SPREAD, STEP, SUM
 
 const REASONS: usize = LIMITS::REASONS as usize;
 const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
-const TASK_PHASES: usize = TASK_PHASE_NAMES.len();
+pub const TASK_PHASES: usize = TASK_PHASE_NAMES.len();
 const CATEGORIES: usize = crate::sched::profiler::spec::CATEGORY_NAMES.len();
 
 #[repr(C)]

@@ -16,12 +16,11 @@ use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
 use std::collections::{HashMap, TryReserveError};
 
-use pxl_spec::cell::cube_types;
 
 use crate::layer::decor::instance::{DecorScratch, GroupLanes, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
 use crate::layer::decor::kind::{Kind, KINDS};
 use crate::layer::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
-use crate::layer::object::store::{At, EntryAt, Store};
+use crate::layer::object::store::{At, EntryAt, Store, AIR};
 use crate::world::access::{Access, FINEST};
 use crate::world::pyramid::Layer as _;
 use pxl_spec::asset::ingested::Asset;
@@ -32,7 +31,6 @@ use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_core::math::scalar::round;
 
-const AIR: u32 = cube_types::common::air as u32;
 
 /// A kind is drawn as a model while it covers at least two of a tier's cells
 /// on screen (twelve pixels at the reference viewport, by eye, where Google's
