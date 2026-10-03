@@ -217,9 +217,9 @@ fn where_the_objects_in_a_box_are_is_never_missed_and_never_past_it() {
             let given = store.bound_in(&query);
             met += truth.is_some() as u32;
             match (truth, given) {
-                (Some(t), Some(g)) => assert!(within(&t, &g) && within(&g, &query), "step {step}: {t:?} in {g:?} in {query:?}"),
+                (Some(t), Some(g)) => assert!(g.contains(t) && query.contains(g), "step {step}: {t:?} in {g:?} in {query:?}"),
                 (Some(t), None) => panic!("step {step}: {t:?} in {query:?} missed"),
-                (None, Some(g)) => assert!(within(&g, &query), "step {step}: {g:?} past {query:?}"),
+                (None, Some(g)) => assert!(query.contains(g), "step {step}: {g:?} past {query:?}"),
                 (None, None) => {}
             }
         }

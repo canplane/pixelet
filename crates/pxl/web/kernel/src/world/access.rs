@@ -168,18 +168,16 @@ pub struct Hit {
     pub t: f64,
     pub point: V3,
     pub normal: V3,
-    pub box_min: V3,
-    pub box_max: V3,
+    /// The box struck.
+    pub cube: Aabb,
     pub struck: Struck,
 }
 
 impl Hit {
     pub fn moved(self, by: V3) -> Hit {
-        let add = |v: V3| std::array::from_fn(|k| v[k] + by[k]);
         Hit {
-            point: add(self.point),
-            box_min: add(self.box_min),
-            box_max: add(self.box_max),
+            point: std::array::from_fn(|k| self.point[k] + by[k]),
+            cube: self.cube.moved(by),
             ..self
         }
     }
@@ -585,12 +583,12 @@ impl<'a> Access<'a> {
     fn with_decks(&self, ray: &Ray, boxes: &[[f64; 2]], (corner, side): ([f64; 2], f64), (t0, t1): (f64, f64), ground: Option<Hit>) -> Option<Hit> {
         let mut best = ground;
         for &[lo, hi] in boxes {
-            let (min, max) = ([corner[0], corner[1], lo], [corner[0] + side, corner[1] + side, hi]);
-            let Some((t, normal)) = ray_box(ray, &min, &max) else { continue };
+            let cube = Aabb { min: [corner[0], corner[1], lo], max: [corner[0] + side, corner[1] + side, hi] };
+            let Some((t, normal)) = ray_box(ray, cube) else { continue };
             if t < t0 || t > t1 || best.is_some_and(|b| b.t <= t) {
                 continue;
             }
-            best = Some(hit(ray, t, normal, (min, max), Struck::Ground));
+            best = Some(hit(ray, t, normal, cube, Struck::Ground));
         }
         best
     }
@@ -636,7 +634,7 @@ impl<'a> Access<'a> {
                     [0.0, 0.0, if dz > 0.0 { -1.0 } else { 1.0 }]
                 };
                 let min = [ix as f64 * side, iy as f64 * side, cz as f64 * side];
-                return Some(hit(ray, from, normal, (min, min.map(|v| v + side)), Struck::Ground));
+                return Some(hit(ray, from, normal, Aabb { min, max: min.map(|v| v + side) }, Struck::Ground));
             }
             if leave >= t1 {
                 return None;
@@ -669,7 +667,7 @@ impl<'a> Access<'a> {
         };
         let cz = ((ray.at(t)[2] - normal[2] * NUDGE) / side).floor();
         let min = [ix as f64 * side, iy as f64 * side, cz * side];
-        Some(hit(ray, t, normal, (min, min.map(|v| v + side)), Struck::Ground))
+        Some(hit(ray, t, normal, Aabb { min, max: min.map(|v| v + side) }, Struck::Ground))
     }
 
     /// First object the ray meets, nearest first (`Store::along_ray`). At z16
@@ -757,18 +755,18 @@ fn object_hit(ray: &Ray, entries: impl Iterator<Item = EntryCursor>, [x0, y0]: [
     let mut best: Option<Hit> = None;
     for e in entries.filter(|e| !object_value_is_air(e.state)) {
         let min = [x0 + e.lx, y0 + e.ly, e.lz];
-        let max = min.map(|v| v + e.size);
-        let Some((t, normal)) = ray_box(ray, &min, &max) else { continue };
+        let cube = Aabb { min, max: min.map(|v| v + e.size) };
+        let Some((t, normal)) = ray_box(ray, cube) else { continue };
         if best.is_some_and(|b| b.t <= t) {
             continue;
         }
-        best = Some(hit(ray, t, normal, (min, max), Struck::Object(e.at())));
+        best = Some(hit(ray, t, normal, cube, Struck::Object(e.at())));
     }
     best
 }
 
-fn ray_box(ray: &Ray, min: &V3, max: &V3) -> Option<(f64, V3)> {
-    let (enter, _, k) = Aabb { min: *min, max: *max }.span_along(ray.origin, ray.direction)?;
+fn ray_box(ray: &Ray, cube: Aabb) -> Option<(f64, V3)> {
+    let (enter, _, k) = cube.span_along(ray.origin, ray.direction)?;
     let mut normal = [0.0; 3];
     normal[k] = if ray.direction[k] > 0.0 { -1.0 } else { 1.0 };
     (enter >= 0.0 && enter <= ray.reach).then_some((enter, normal))
@@ -777,26 +775,20 @@ fn ray_box(ray: &Ray, min: &V3, max: &V3) -> Option<(f64, V3)> {
 /// Where the ray meets the whole cell; if already inside at `from`, there,
 /// through the nearest side. None if it starts inside.
 fn cell_hit(ray: &Ray, cell: [i64; 3], scale: Scale, from: f64) -> Option<Hit> {
-    let Aabb { min, max } = scale.cube(cell);
-    let side = scale.side();
-    let (t, normal) = match ray_box(ray, &min, &max) {
+    let cube = scale.cube(cell);
+    let (t, normal) = match ray_box(ray, cube) {
         Some((t, normal)) if t >= from => (t, normal),
-        _ => {
-            let p = ray.at(from);
-            let inside = (0..3).all(|k| p[k] >= min[k] && p[k] <= max[k]);
-            (inside && from > 0.0).then(|| (from, wall_normal(ray, from, side)))?
-        }
+        _ => (cube.holds(ray.at(from)) && from > 0.0).then(|| (from, wall_normal(ray, from, scale.side())))?,
     };
-    Some(hit(ray, t, normal, (min, max), Struck::Objects))
+    Some(hit(ray, t, normal, cube, Struck::Objects))
 }
 
-fn hit(ray: &Ray, t: f64, normal: V3, (box_min, box_max): (V3, V3), struck: Struck) -> Hit {
+fn hit(ray: &Ray, t: f64, normal: V3, cube: Aabb, struck: Struck) -> Hit {
     Hit {
         t,
         point: ray.at(t),
         normal,
-        box_min,
-        box_max,
+        cube,
         struck,
     }
 }

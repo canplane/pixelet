@@ -34,13 +34,12 @@ fn grid_floor(v: f64, size: f64) -> f64 {
 
 /// The corner a new `new_size` cube takes flush against what `hit` struck,
 /// one rule per axis by the sign of that axis's normal: n > 0 starts at
-/// grid_ceil(box_max), n < 0 ends at grid_floor(box_min), n = 0 takes the
+/// grid_ceil(max), n < 0 ends at grid_floor(min), n = 0 takes the
 /// cell the hit point falls in. `precise_box` overrides the hit's box (a
 /// decor met in front of it).
 #[allow(clippy::needless_range_loop)]
 pub fn world_adjacent_corner(hit: &Hit, new_size: f64, map_origin: IVec, precise_box: Option<&Aabb>) -> Pvf3 {
-    let box_min = precise_box.map_or(hit.box_min, |b| b.min);
-    let box_max = precise_box.map_or(hit.box_max, |b| b.max);
+    let Aabb { min: box_min, max: box_max } = precise_box.copied().unwrap_or(hit.cube);
     let mut out: V3 = [0.0; 3];
 
     for axis in 0..3 {
@@ -67,9 +66,9 @@ pub fn world_struck_corner(hit: &Hit, size: f64, map_origin: IVec) -> Pvf3 {
     for axis in 0..3 {
         let n = hit.normal[axis];
         out[axis] = if n > 0.0 {
-            grid_ceil(hit.box_max[axis], size) - size
+            grid_ceil(hit.cube.max[axis], size) - size
         } else if n < 0.0 {
-            grid_floor(hit.box_min[axis], size)
+            grid_floor(hit.cube.min[axis], size)
         } else {
             grid_floor(hit.point[axis], size)
         };

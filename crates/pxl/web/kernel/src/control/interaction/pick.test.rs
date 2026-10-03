@@ -16,8 +16,7 @@ fn struck(normal: V3, point: V3) -> Hit {
         t: 1.0,
         point,
         normal,
-        box_min: [3.0, 5.0, 2.0],
-        box_max: [4.0, 6.0, 3.0],
+        cube: Aabb { min: [3.0, 5.0, 2.0], max: [4.0, 6.0, 3.0] },
         struck: Struck::Ground,
     }
 }

@@ -786,10 +786,6 @@ const INDEX_TOP: Scale = {
     s
 };
 
-fn within(inner: &Aabb, outer: &Aabb) -> bool {
-    (0..3).all(|k| inner.min[k] >= outer.min[k] && inner.max[k] <= outer.max[k])
-}
-
 /// Rebuilds the chain over one cube up to `top`; a cube reducing to nothing
 /// is removed.
 fn propagate_up<V: Copy>(map: &mut HashMap<(Scale, [i64; 3]), V>, (mut scale, mut at): (Scale, [i64; 3]), top: Scale, first: Option<V>, reduce: impl Fn(Scale, [Option<V>; 8]) -> Option<V>) {
@@ -816,13 +812,6 @@ fn band_node(col_idx: IVec, band_idx: BandZ) -> [i64; 3] {
 fn leaf_cell(band: [i64; 3], step: [i64; 3], scale: Scale) -> [i64; 3] {
     let (cells, per) = (scale.count_in(BAND) as i64, OBJECT_FINEST.count_in(scale) as i64);
     core::array::from_fn(|k| band[k] * cells + step[k] / per)
-}
-
-fn grown(b: &Aabb, side: f64) -> Aabb {
-    Aabb {
-        min: b.min.map(|v| (v / side).floor() * side),
-        max: b.max.map(|v| (v / side).ceil() * side),
-    }
 }
 
 fn slab((o, d): (V3, V3), b: &Aabb, (t0, t1): (f64, f64)) -> Option<(f64, f64)> {
@@ -871,7 +860,7 @@ impl Store {
     pub fn bound_in(&self, query: &Aabb) -> Option<Aabb> {
         let mut out: Option<Aabb> = None;
         self.descend(query, BAND, &mut |scale, at, bound| {
-            let whole = within(&scale.cube(at), query) || scale == BAND;
+            let whole = query.contains(scale.cube(at)) || scale == BAND;
             if let Some(b) = bound.meet(*query).filter(|_| whole) {
                 out = Some(out.map_or(b, |o| o.join(b)));
             }
@@ -947,7 +936,7 @@ impl Store {
 
     fn along_ray_from(&self, ray: (V3, V3), span: (f64, f64), scale: Scale, node: Scale, at: [i64; 3], each: &mut dyn FnMut([i64; 3]) -> bool) -> bool {
         let Some(bound) = self.bounds.get(&(node, at)) else { return false };
-        let Some(span) = slab(ray, &grown(bound, scale.side()), span) else { return false };
+        let Some(span) = slab(ray, &bound.snapped_out(scale.side()), span) else { return false };
         if node == scale {
             return each(at);
         }
@@ -959,7 +948,7 @@ impl Store {
         for k in 0..8 {
             let child = child_of(at, k);
             let Some(b) = self.bounds.get(&(node.down(1), child)) else { continue };
-            if let Some(s) = slab(ray, &grown(b, scale.side()), span) {
+            if let Some(s) = slab(ray, &b.snapped_out(scale.side()), span) {
                 kids[n] = (s.0, child, s);
                 n += 1;
             }

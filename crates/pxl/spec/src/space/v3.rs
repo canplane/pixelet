@@ -257,6 +257,30 @@ impl Aabb {
         (enter <= leave).then_some((enter, leave, axis))
     }
 
+    /// Closed.
+    pub fn holds(self, p: V3) -> bool {
+        (0..3).all(|k| self.min[k] <= p[k] && p[k] <= self.max[k])
+    }
+
+    pub fn contains(self, inner: Aabb) -> bool {
+        self.holds(inner.min) && self.holds(inner.max)
+    }
+
+    pub fn moved(self, by: V3) -> Aabb {
+        Aabb {
+            min: std::array::from_fn(|k| self.min[k] + by[k]),
+            max: std::array::from_fn(|k| self.max[k] + by[k]),
+        }
+    }
+
+    /// Grown outward to whole cells of `side`.
+    pub fn snapped_out(self, side: f64) -> Aabb {
+        Aabb {
+            min: *floor3n(&self.min, side, &mut [0.0; 3]),
+            max: *ceil3n(&self.max, side, &mut [0.0; 3]),
+        }
+    }
+
     pub fn nearest(self, p: V3) -> V3 {
         std::array::from_fn(|k| p[k].clamp(self.min[k], self.max[k]))
     }
