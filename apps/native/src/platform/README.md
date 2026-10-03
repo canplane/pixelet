@@ -16,7 +16,7 @@ shows in one place, as the colors that part do in `theme.ts`.
 | `toggle-row`      | UIKit switch (React Native's Switch)       | the page's             | the row is the switch |
 | `backing`, `pill` | UIKit glass (expo-glass-effect)            | the page's fill        | fill                  |
 | `backdrop`        | UIKit's blur (`Blur.swift`) under the fill | none                   | CSS backdrop blur     |
-| `icon`            | SF Symbols (expo-symbols)                  | the page's lucide      | lucide                |
+| `icon`            | SF Symbols (expo-symbols)                  | the page's Phosphor    | Phosphor              |
 | `palette`         | system colors                              | the page's             | iOS's light values    |
 | `above-keyboard`  | `KeyboardDock.swift`                       | `KeyboardDock.kt`      | visual viewport       |
 | `surface`         | `SurfaceView.swift`                        | `KernelSurfaceView.kt` | canvas                |

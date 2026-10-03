@@ -1,68 +1,74 @@
 // @pxl/web/platform/web/icon.tsx
 
 import {
+  ArrowCircleUp,
   ArrowUp,
   Bug,
+  ChatCircle,
   Check,
-  CircleArrowUp,
+  Cube,
   Eraser,
   Eye,
   Gauge,
+  GearSix,
   Globe,
-  LayoutGrid,
-  Loader,
+  HandPointing,
+  type Icon as PhosphorIcon,
+  type IconWeight,
+  MagnifyingGlass,
   MapPin,
-  type LucideIcon,
-  MessageSquare,
-  Move3d,
-  Navigation,
-  Navigation2,
+  NavigationArrow,
   Palette,
-  PersonStanding,
-  Pointer,
-  Search,
-  Settings,
+  Person,
+  Spinner as SpinnerGlyph,
+  SquaresFour,
   Sun,
-  TreeDeciduous,
+  Tree,
   X,
-} from "lucide-react-native";
+} from "phosphor-react-native";
 
 import type { f64 } from "@xpute/core/abi/word.ts";
 import { Spin } from "@platform/motion.tsx";
 
-/** SF Symbol names, drawn as the nearest lucide glyph: Apple licenses the symbols to its own platforms only. */
-const LUCIDE = {
-  "arrow.up": [ArrowUp, false],
-  "bubble.left": [MessageSquare, false],
-  "checkmark": [Check, false],
-  "hand.point.up.left": [Pointer, false],
-  "eraser": [Eraser, false],
-  "eye": [Eye, false],
-  "figure.stand": [PersonStanding, false],
-  "gauge.medium": [Gauge, false],
-  "gearshape": [Settings, false],
-  "globe": [Globe, false],
-  "ladybug": [Bug, false],
-  "location": [Navigation, false],
-  "location.fill": [Navigation, true],
-  "location.north.circle": [CircleArrowUp, false],
-  "location.north.line.fill": [Navigation2, true],
-  "magnifyingglass": [Search, false],
-  "mappin.circle": [MapPin, false],
-  "mappin.circle.fill": [MapPin, true],
-  "move.3d": [Move3d, false],
-  "paintpalette": [Palette, false],
-  "square.grid.2x2": [LayoutGrid, false],
-  "sun.max": [Sun, false],
-  "tree": [TreeDeciduous, false],
-  "xmark": [X, false],
-} as const satisfies Record<string, readonly [LucideIcon, boolean]>;
+/**
+ * SF Symbol names, drawn as the nearest Phosphor glyph: Apple licenses the
+ * symbols to its own platforms only. A `.fill` name is Phosphor's fill
+ * weight; `turn` is degrees clockwise, Phosphor's navigation arrow pointing
+ * up-left where SF's points up-right.
+ */
+const PHOSPHOR = {
+  "arrow.up": [ArrowUp, false, 0],
+  "bubble.left": [ChatCircle, false, 0],
+  "checkmark": [Check, false, 0],
+  "hand.point.up.left": [HandPointing, false, 0],
+  "eraser": [Eraser, false, 0],
+  "eye": [Eye, false, 0],
+  "figure.stand": [Person, false, 0],
+  "gauge.medium": [Gauge, false, 0],
+  "gearshape": [GearSix, false, 0],
+  "globe": [Globe, false, 0],
+  "ladybug": [Bug, false, 0],
+  "location": [NavigationArrow, false, 90],
+  "location.fill": [NavigationArrow, true, 90],
+  "location.north.circle": [ArrowCircleUp, false, 0],
+  "location.north.line.fill": [NavigationArrow, true, 45],
+  "magnifyingglass": [MagnifyingGlass, false, 0],
+  "mappin.circle": [MapPin, false, 0],
+  "mappin.circle.fill": [MapPin, true, 0],
+  "move.3d": [Cube, false, 0],
+  "paintpalette": [Palette, false, 0],
+  "square.grid.2x2": [SquaresFour, false, 0],
+  "sun.max": [Sun, false, 0],
+  "tree": [Tree, false, 0],
+  "xmark": [X, false, 0],
+} as const satisfies Record<string, readonly [PhosphorIcon, boolean, f64]>;
 
-export type GlyphName = keyof typeof LUCIDE;
+export type GlyphName = keyof typeof PHOSPHOR;
 
 export type GlyphWeight = "regular" | "semibold" | "bold" | "heavy" | "black";
 
-const STROKE: Record<GlyphWeight, f64> = { regular: 2, semibold: 2.5, bold: 2.75, heavy: 3, black: 3.5 };
+/** Phosphor has two stroked weights; SF's heavier ones take its bold. */
+const WEIGHT: Record<GlyphWeight, IconWeight> = { regular: "regular", semibold: "bold", bold: "bold", heavy: "bold", black: "bold" };
 
 export interface IconProps {
   glyph: GlyphName;
@@ -71,19 +77,20 @@ export interface IconProps {
   weight?: GlyphWeight;
 }
 
+/** The stroke on a 24-unit box: Phosphor's 16 and 24 on its 256. */
 export function strokeOf(weight: GlyphWeight = "regular"): f64 {
-  return STROKE[weight];
+  return WEIGHT[weight] === "regular" ? 1.5 : 2.25;
 }
 
 export function Icon({ glyph, size, color, weight = "regular" }: IconProps) {
-  const [Drawn, filled] = LUCIDE[glyph];
-  return <Drawn size={size} color={color} strokeWidth={STROKE[weight]} fill={filled ? color : "none"} />;
+  const [Drawn, filled, turn] = PHOSPHOR[glyph];
+  return <Drawn size={size} color={color} weight={filled ? "fill" : WEIGHT[weight]} style={turn ? { transform: [{ rotate: `${turn}deg` }] } : undefined} />;
 }
 
 export function Spinner({ size, color }: { size: f64; color: string }) {
   return (
     <Spin periodMs={1000}>
-      <Loader size={size} color={color} strokeWidth={STROKE.semibold} />
+      <SpinnerGlyph size={size} color={color} weight="bold" />
     </Spin>
   );
 }

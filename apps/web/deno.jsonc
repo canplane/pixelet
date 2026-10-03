@@ -92,7 +92,7 @@
     "zustand": "npm:zustand@^5.0.15",
 
     // icons
-    "lucide-react-native": "npm:lucide-react-native@^1.48.0",
+    "phosphor-react-native": "npm:phosphor-react-native@^3.0.6",
     "react-native-svg": "npm:react-native-svg@15.15.4",
 
     // internationalization

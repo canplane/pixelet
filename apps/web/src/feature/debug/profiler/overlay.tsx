@@ -7,7 +7,7 @@
  * `__pxl_view` and `__pxl_gauge` on `window` for A/B runs.
  */
 
-import { ChevronDown, ChevronUp } from "lucide-react-native";
+import { CaretDown, CaretUp } from "phosphor-react-native";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
@@ -172,7 +172,7 @@ export function ProfilerOverlay() {
       {(said ?? hint) !== null && <Text style={[gauge.text, styles.hint]}>{said ?? hint}</Text>}
 
       <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" aria-expanded={open}>
-        <Head end={open ? <ChevronUp size={12} color={HINT_INK} /> : <ChevronDown size={12} color={HINT_INK} />}>last 10s</Head>
+        <Head end={open ? <CaretUp size={12} color={HINT_INK} /> : <CaretDown size={12} color={HINT_INK} />}>last 10s</Head>
       </Pressable>
       {open && (
         <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
