@@ -10,7 +10,7 @@ import type { f64, i32, u32 } from "@xpute/core/abi/word.ts";
 import type { U8Array } from "@xpute/core/abi/array.ts";
 import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { type BranchCursor, type BranchView, encoder, TreeReader, TreeView } from "@xpute/core/wire/xtp/mod.ts";
-import { FrameFlag } from "./frame.ts";
+import * as frame from "./frame.ts";
 import { Ring } from "./ring.ts";
 import { InvariantError } from "@xpute/core/status/error.ts";
 
@@ -59,7 +59,7 @@ export class Doorbell {
     let out: { value: T } | null = null;
     this.waiting.set(tag, (result, f) => out = { value: take(result, f) });
     try {
-      this.submit(tag, cmd, pkt, FrameFlag.ACKREQ);
+      this.submit(tag, cmd, pkt, frame.ACKREQ);
       while (out === null) {
         const pending = this.sq.len;
         this.ring(0);
@@ -80,7 +80,7 @@ export class Doorbell {
         const cmd = cq.cmd(at);
         const pkt = cq.packet(at);
         const f: BranchCursor | null = pkt ? new TreeReader(pkt).read_branch() : null;
-        if (cq.flags(at) & FrameFlag.RES) {
+        if (cq.flags(at) & frame.RES) {
           const waiting = this.waiting.get(tag);
           if (waiting !== undefined) {
             waiting(cq.result(at), f);

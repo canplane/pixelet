@@ -16,7 +16,7 @@ import { Command } from "@xpute/runtime/abi/cmd.spec.ts";
 import { handle_slot } from "@xpute/runtime/abi/handle.ts";
 import { Directory } from "@xpute/runtime/ipc/directory.ts";
 import { key as directory_key } from "@xpute/runtime/ipc/directory.spec.ts";
-import { FrameFlag } from "@xpute/runtime/ipc/frame.ts";
+import * as frame from "@xpute/runtime/ipc/frame.ts";
 import { Ring } from "@xpute/runtime/ipc/ring.ts";
 import { each_record } from "@xpute/runtime/ipc/stream.ts";
 import { cmd, key, MEMORY_BYTES } from "./guest.spec.ts";
@@ -127,7 +127,7 @@ class Host {
 
   submit(tag: number, command: number, ack: boolean, args: number[]): void {
     const packet = args.length === 0 ? null : encoder.encode(new TreeView().branch((b) => args.forEach((a) => b.u32(a))));
-    assertEquals(this.sq.push(tag, command, ack ? FrameFlag.ACKREQ : 0, packet), Errno.OK);
+    assertEquals(this.sq.push(tag, command, ack ? frame.ACKREQ : 0, packet), Errno.OK);
   }
 
   ring(quota_ms: number): Turn {
@@ -136,7 +136,7 @@ class Host {
     each_record(this.guest.memory, this.stream_at, 1, (op) => stream.push(op));
     const completions: Completion[] = [];
     for (let at = this.cq.peek(); at >= 0; at = this.cq.peek()) {
-      completions.push({ tag: this.cq.tag(at), cmd: this.cq.cmd(at), reply: (this.cq.flags(at) & FrameFlag.RES) !== 0, result: this.cq.result(at) });
+      completions.push({ tag: this.cq.tag(at), cmd: this.cq.cmd(at), reply: (this.cq.flags(at) & frame.RES) !== 0, result: this.cq.result(at) });
       this.cq.advance();
     }
     return { completions, stream, wake };

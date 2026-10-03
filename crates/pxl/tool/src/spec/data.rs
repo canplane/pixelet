@@ -23,7 +23,7 @@ struct DataSpec {
     cpp: Option<(&'static str, &'static str)>,
 }
 
-const DATA_SPECS: [DataSpec; 11] = [
+const DATA_SPECS: [DataSpec; 13] = [
     DataSpec {
         json: "spec/pxl/spec/place.json",
         ts: Some("apps/web/src/feature/map/geocode/place.spec.ts"),
@@ -50,6 +50,24 @@ const DATA_SPECS: [DataSpec; 11] = [
         enums: Enums::None,
         ts_names: None,
         cpp: Some(("cpp/xpute/runtime/ipc/directory.spec.hpp", "xpute::directory")),
+    },
+    DataSpec {
+        json: "spec/xpute/ipc/frame.json",
+        ts: Some("packages/xpute/runtime/src/ipc/frame.spec.ts"),
+        rs: Some("crates/xpute/runtime/src/ipc/frame.spec.rs"),
+        module: Some("spec"),
+        enums: Enums::None,
+        ts_names: None,
+        cpp: Some(("cpp/xpute/runtime/ipc/frame.spec.hpp", "xpute::frame")),
+    },
+    DataSpec {
+        json: "spec/xpute/ipc/ring.json",
+        ts: Some("packages/xpute/runtime/src/ipc/ring.spec.ts"),
+        rs: Some("crates/xpute/runtime/src/ipc/ring.spec.rs"),
+        module: Some("spec"),
+        enums: Enums::None,
+        ts_names: None,
+        cpp: Some(("cpp/xpute/runtime/ipc/ring.spec.hpp", "xpute::ring")),
     },
     DataSpec {
         json: "spec/xpute/ipc/sys.json",
@@ -392,11 +410,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             .iter()
             .find_map(|(dir, name)| rs_path.strip_prefix(dir).map(|rest| (*name, rest)))
             .ok_or(format!("{rs_path}: not under pxl-kernel, pxl-render, pxl-spec, xpute-runtime or xpute-conformance"))?;
-            let mut rs = vec![
-                format!("// {crate_name}/{under_src}"),
-                "//".into(),
-                super::generated(d.json, base),
-            ];
+            let mut rs = vec![format!("// {crate_name}/{under_src}"), "//".into(), super::generated(d.json, base)];
             if let Some(doc) = &head_doc {
                 rs.push("//".into());
                 rs.extend(line_comments(doc, ""));

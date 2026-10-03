@@ -1,9 +1,6 @@
 // cpp/xpute/runtime/ipc/ring.hpp
 
-// A single-producer, single-consumer ring of frames in shared memory, named by
-// its offset so it means the same to either side. Words: capacity, head, tail,
-// slot bytes, slot base, three zeros, then four words per frame. Message n takes
-// slot n modulo capacity; positions only grow, so tail - head is how many wait.
+// A ring of frames, laid out by spec/xpute/ipc/ring.json.
 
 #pragma once
 
@@ -15,14 +12,13 @@
 #include "../../core/status/error.hpp"
 #include "../mem/memory.hpp"
 #include "frame.hpp"
+#include "ring.spec.hpp"
 
 namespace xpute {
 
 class Ring {
   public:
-    static constexpr std::uint32_t HEADER_WORDS = 8;
-
-    static constexpr std::uint32_t bytes(std::uint32_t capacity) noexcept { return (HEADER_WORDS + capacity * frame::WORDS) * 4; }
+    static constexpr std::uint32_t bytes(std::uint32_t capacity) noexcept { return (ring::HEADER_WORDS + capacity * frame::WORDS) * 4; }
 
     static constexpr std::uint32_t slots_bytes(std::uint32_t capacity, std::uint32_t slot_bytes) noexcept { return capacity * slot_bytes; }
 
@@ -31,10 +27,10 @@ class Ring {
 
     static Ring init(Memory mem, std::uint32_t at, std::uint32_t capacity, std::uint32_t slot_base, std::uint32_t slot_bytes) noexcept;
 
-    std::uint32_t capacity() const noexcept { return header(CAPACITY); }
-    std::uint32_t slot_bytes() const noexcept { return header(SLOT_BYTES); }
-    std::uint32_t head() const noexcept { return header(HEAD); }
-    std::uint32_t tail() const noexcept { return header(TAIL); }
+    std::uint32_t capacity() const noexcept { return header(ring::CAPACITY); }
+    std::uint32_t slot_bytes() const noexcept { return header(ring::SLOT_BYTES); }
+    std::uint32_t head() const noexcept { return header(ring::HEAD); }
+    std::uint32_t tail() const noexcept { return header(ring::TAIL); }
     std::uint32_t len() const noexcept { return tail() - head(); }
     bool empty() const noexcept { return len() == 0; }
 
@@ -72,10 +68,8 @@ class Ring {
     void advance() const noexcept;
 
   private:
-    enum Header : std::uint32_t { CAPACITY, HEAD, TAIL, SLOT_BYTES, SLOT_BASE };
-
-    std::uint32_t header(Header h) const noexcept { return mem_.word(at_ + 4 * h); }
-    void set_header(Header h, std::uint32_t w) const noexcept { mem_.set_word(at_ + 4 * h, w); }
+    std::uint32_t header(std::uint32_t word) const noexcept { return mem_.word(at_ + 4 * word); }
+    void set_header(std::uint32_t word, std::uint32_t w) const noexcept { mem_.set_word(at_ + 4 * word, w); }
     std::uint32_t frame_at(std::uint32_t position) const noexcept;
     std::uint32_t slot_at(std::uint32_t position) const noexcept;
     void pad(std::uint32_t slot, std::uint32_t n) const noexcept;

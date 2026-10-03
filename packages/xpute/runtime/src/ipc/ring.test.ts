@@ -5,7 +5,7 @@ import { assert, assertEquals, assertThrows } from "@std/assert";
 import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { encoder, TreeReader, TreeView } from "@xpute/core/wire/xtp/mod.ts";
 import { Ring, ring_bytes, slots_bytes } from "./ring.ts";
-import { FrameFlag } from "./frame.ts";
+import * as frame from "./frame.ts";
 import { MarshalError } from "@xpute/core/status/error.ts";
 
 function ring(capacity: number, slot: number): Ring {
@@ -16,12 +16,12 @@ function ring(capacity: number, slot: number): Ring {
 Deno.test("ring - messages come out in order across the wrap, and a full ring refuses", () => {
   const r = ring(4, 64);
   for (let round = 0; round < 3; round++) {
-    for (let k = 0; k < 4; k++) assertEquals(r.push(round * 4 + k, 7, FrameFlag.ACKREQ, null, -(round * 4 + k)), Errno.OK);
+    for (let k = 0; k < 4; k++) assertEquals(r.push(round * 4 + k, 7, frame.ACKREQ, null, -(round * 4 + k)), Errno.OK);
     assertEquals(r.push(99, 0), Errno.EAGAIN, "a full ring refuses");
     for (let k = 0; k < 4; k++) {
       const at = r.peek();
       assert(at >= 0);
-      assertEquals([r.tag(at), r.cmd(at), r.flags(at), r.result(at), r.packet(at)], [round * 4 + k, 7, FrameFlag.ACKREQ, -(round * 4 + k), null]);
+      assertEquals([r.tag(at), r.cmd(at), r.flags(at), r.result(at), r.packet(at)], [round * 4 + k, 7, frame.ACKREQ, -(round * 4 + k), null]);
       r.advance();
     }
     assertEquals(r.peek(), -1);

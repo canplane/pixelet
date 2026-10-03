@@ -36,7 +36,7 @@ fn door() -> (Door, Box<[u8]>) {
 fn door_a_turn_applies_while_a_command_s_signals_and_reply_fit_and_leaves_the_rest_for_the_next_in_order() {
     let (d, _buf) = door();
     for k in 0..SQ {
-        assert_eq!(d.submission().push(k, 1, FrameFlag::ACKREQ as u32, None, 0), Errno::OK);
+        assert_eq!(d.submission().push(k, 1, frame::ACKREQ, None, 0), Errno::OK);
     }
     let mut answered = 0;
     let mut turns = 0;
@@ -51,10 +51,10 @@ fn door_a_turn_applies_while_a_command_s_signals_and_reply_fit_and_leaves_the_re
         let cq = d.completion();
         while cq.peek() >= 0 {
             let at = cq.peek() as u32;
-            if cq.flags(at) & FrameFlag::RES as u32 != 0 {
+            if cq.flags(at) & frame::RES != 0 {
                 assert_eq!((cq.tag(at), cq.result(at)), (answered, 7), "replies come in the order sent");
             }
-            answered += u32::from(cq.flags(at) & FrameFlag::RES as u32 != 0);
+            answered += u32::from(cq.flags(at) & frame::RES != 0);
             cq.advance();
         }
         if !d.pending() {
@@ -72,7 +72,7 @@ fn door_a_command_is_not_started_with_room_for_its_signals_but_not_its_reply() {
     for _ in 0..CQ - MOST_SIGNALS {
         d.post(0, 2, 0, 0, None);
     }
-    assert_eq!(d.submission().push(0, 1, FrameFlag::ACKREQ as u32, None, 0), Errno::OK);
+    assert_eq!(d.submission().push(0, 1, frame::ACKREQ, None, 0), Errno::OK);
     d.drain(|_, _| {
         for _ in 0..MOST_SIGNALS {
             d.post(0, 2, 0, 0, None);
