@@ -8,7 +8,7 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
-use crate::deck::param::PREFERRED_SLOPE;
+use crate::deck::param::{PREFERRED_SLOPE, STEEPEST_SLOPE};
 
 pub struct Problem<'a> {
     pub adj: &'a [Vec<(u32, f64)>],
@@ -48,14 +48,16 @@ pub fn solve(p: &Problem) -> Profile {
 }
 
 /// Straight from the joint to the first ground in grade within `halo`, else
-/// the gentlest there: nothing before it is under the line.
+/// the first at `STEEPEST_SLOPE`, else the gentlest: nothing before it is
+/// under the line, and down a slope it does not stand off it as a wall.
 fn approach(top: &mut [f64], forced: &mut [bool], ground: &[f64], chain: &[(u32, f64)], halo: f64) {
     let (joint, d0) = chain[0];
     let from = top[joint as usize];
     let rest: Vec<(u32, f64)> = chain[1..].iter().copied().take_while(|&(_, d)| d - d0 <= halo).collect();
     let grade = |i: usize| (from - ground[rest[i].0 as usize]) / (rest[i].1 - d0);
     let gentlest = || (0..rest.len()).min_by(|&a, &b| grade(a).total_cmp(&grade(b)));
-    let Some(contact) = (0..rest.len()).find(|&i| grade(i) <= PREFERRED_SLOPE).or_else(gentlest) else { return };
+    let first_within = |slope: f64| (0..rest.len()).find(|&i| grade(i) <= slope);
+    let Some(contact) = first_within(PREFERRED_SLOPE).or_else(|| first_within(STEEPEST_SLOPE)).or_else(gentlest) else { return };
     let m = grade(contact);
     for &(v, d) in &rest[..contact] {
         top[v as usize] = top[v as usize].max(from - m * (d - d0));

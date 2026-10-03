@@ -19,6 +19,9 @@ pub const RIVER_MOST_M: f64 = 15.0; // what that rise stops at
 /// what grade it must. One grade for every way: a fallback, not a rule of each.
 pub const PREFERRED_SLOPE: f64 = 0.08;
 
+/// Arnis's `MAX_CLEARANCE_SLOPE`: the steepest a deck's end comes down.
+pub const STEEPEST_SLOPE: f64 = 1.0;
+
 // ---- along a line, in ground metres ----
 
 pub const STEP_M: f64 = 5.0; // a solve's sample: a kilometre is two hundred points

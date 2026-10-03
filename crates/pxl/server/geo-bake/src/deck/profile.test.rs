@@ -92,14 +92,12 @@ fn an_approach_meets_its_ground_at_the_grade_and_follows_it_from_there() {
 }
 
 #[test]
-fn an_approach_down_a_slope_steeper_than_the_grade_is_no_higher_than_its_joint() {
-    // ground falling 20 %
+fn an_approach_down_a_slope_steeper_than_the_grade_meets_it_soon_not_as_a_wall() {
+    // ground falling 20 %: no contact in grade, so the first within the steepest
     let ground: Vec<f64> = (0..60).map(|i| if i <= 30 { 0.0 } else { -(i - 30) as f64 }).collect();
     let p = with_approaches(&ground, 20..=30, 2.0);
     assert_meets_its_ground(&p, &ground, 30);
-    for (i, (&top, &g)) in p.top.iter().zip(&ground).enumerate().skip(31) {
-        assert!(top - g <= 2.0 + 1e-9, "{i} stands higher than the deck's own shell");
-    }
+    assert_eq!(p.top[31], ground[31], "met on the first step");
 }
 
 #[test]
