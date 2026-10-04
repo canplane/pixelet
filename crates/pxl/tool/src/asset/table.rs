@@ -1,19 +1,11 @@
 // pxl-tool/asset/table.rs
 
-//! The ingested-asset table as source, rendered into both languages from the
-//! same rows so the two cannot drift.
-//!
-//! The shell's copy is keyed by an asset's path and carries its bucket key,
-//! because the shell is what fetches. The kernel's is keyed by a member of
-//! `Asset` and carries no text at all: it holds no strings, and what it needs
-//! from a row is a size and an extent.
+//! The ingested-asset table, rendered into TypeScript and Rust from the same rows.
 
 use std::fmt::Write;
 
 use crate::asset::pack::Slot;
 
-/// One ingested file: its path under `asset/`, its bucket key, its size and,
-/// for a model, its extent.
 pub struct Row {
     pub path: String,
     pub key: String,
@@ -21,21 +13,41 @@ pub struct Row {
     pub extent: Option<[f64; 3]>,
 }
 
-/// The texture pack as one image.
 pub struct Sheet {
     pub key: String,
     pub bytes: u64,
     pub cell: u32,
     pub columns: u32,
-    /// The asset path of each tile, in the order they are laid out.
     pub tiles: Vec<String>,
-    /// Each tile's own mean color (sheet.rs).
     pub means: Vec<[u8; 3]>,
-    /// Every cube face a tile is, in tile order.
     pub faces: Vec<TileFace>,
 }
 
-/// One cube face and the tile it wears.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Face {
+    Top,
+    Side,
+    Bottom,
+}
+
+impl Face {
+    fn member(self) -> &'static str {
+        match self {
+            Face::Top => "Top",
+            Face::Side => "Side",
+            Face::Bottom => "Bottom",
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Face::Top => "top",
+            Face::Side => "side",
+            Face::Bottom => "bottom",
+        }
+    }
+}
+
 pub struct TileFace {
     pub channel: String,
     pub ty: String,
@@ -43,11 +55,8 @@ pub struct TileFace {
     pub tile: u32,
 }
 
-/// The cube faces each tile is, from the manifest's slot for it: a top is
-/// its channel's type, a side the type of that name in every channel that
-/// has one. A slot that names no type in the catalog is an error rather than
-/// a tile no face wears, which is how a renamed type once left its blocks
-/// untextured with nothing said.
+/// A slot naming no catalog type is an error: a renamed type once left its
+/// blocks untextured silently.
 pub fn faces(slots: &[Slot], channels: &[(String, Vec<String>)]) -> Result<Vec<TileFace>, String> {
     let mut out = Vec::new();
     for (n, slot) in slots.iter().enumerate() {
@@ -73,8 +82,7 @@ pub fn faces(slots: &[Slot], channels: &[(String, Vec<String>)]) -> Result<Vec<T
     Ok(out)
 }
 
-/// A double as a Rust literal. An integral double has no point in its shortest
-/// form, and Rust reads that as an integer.
+/// An integral double needs a `.0`, or Rust reads it as an integer.
 fn f64_literal(x: f64) -> String {
     let text = format!("{x}");
     if text.contains(['.', 'e', 'E']) {
@@ -84,7 +92,6 @@ fn f64_literal(x: f64) -> String {
     }
 }
 
-/// An asset path as the name of its member in `Asset`.
 pub fn ident(path: &str) -> String {
     path.chars().map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' }).collect()
 }
@@ -143,9 +150,6 @@ export const SHEET = {
     out
 }
 
-/// The same table for the kernel, which holds no text: every asset a member of
-/// `Asset`, its size and extent a row at that member's number, and the sheet's
-/// tiles the cube faces they are. The bucket keys are the shell's.
 pub fn render_rs(rows: &[Row], sheet: &Sheet) -> String {
     let mut out = String::with_capacity(rows.len() * 160);
     out.push_str(

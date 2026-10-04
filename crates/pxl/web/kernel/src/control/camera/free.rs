@@ -1,10 +1,8 @@
 // pxl-kernel/control/camera/free.rs
 
-//! The free camera. It turns the camera (controller.rs `Camera`) about its
-//! eye, which is the map center, and walks it over the ground (`pan`), at one
-//! speed wherever it stands, eased as the orbit's drag is. The eye's height
-//! is no control: it is the ground's where it stands, and `EYE_HEIGHT_U` over
-//! it (`stand`). It keeps no state of its own.
+//! The free camera turns about its eye, which is the map center. Its height
+//! is no control: the target stands where the pan's walk stands it, and the
+//! drawn eye eases to it, so a step comes as every other move does.
 
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
@@ -24,76 +22,49 @@ use crate::world::change::request_world_tick;
 use crate::world::frame::coord::local_height;
 use crate::world::frame::view::{view, view_compose};
 
-/// What a look from `eye` along `forward` falls on, in the root frame: the
-/// first thing it meets that is resident, else the sea, else `fallback`
-/// along it.
+/// The first resident thing it meets, else the sea, else `fallback` along it.
 pub fn look_point(eye: V3, forward: V3, fallback: f64) -> V3 {
     let o = view().origin;
     let frame = [ivec::to_real(ivec::X(o)), ivec::to_real(ivec::Y(o)), ivec::to_real(ivec::Z(o))];
     let ray = Ray {
         origin: std::array::from_fn(|k| eye[k] + frame[k]),
         direction: forward,
-        // As far as the view reaches: past it nothing is drawn to look at.
         reach: view().far,
     };
-    // Far along it the ground is read as coarse as it is drawn there.
     let t = match Access::now().first_hit(&ray, Detail::Distance(Tau::FINEST)).value().flatten() {
         Some(hit) => hit.t,
-        // The sea is z = 0 in the world's units.
+        // The sea is z = 0.
         None if forward[2] < -1e-9 && ray.origin[2] > 0.0 => -ray.origin[2] / forward[2],
         None => fallback,
     };
     std::array::from_fn(|k| eye[k] + forward[k] * t)
 }
 
-/// A drag walks the eye over the ground: `dx`, `dy` in pixels, over the
-/// turns to come (controller.rs `spend_travel`). One speed wherever it stands
-/// and whichever way it goes, and the orbit's at the distance it starts at
-/// (`DEFAULT_DIST`): a drag carries the ground as far under either.
-pub fn pan(dx: f64, dy: f64) {
-    if eye_local().is_none() {
-        return;
-    }
-    let units_per_px = units_per_px_at(DEFAULT_DIST);
-    let (lx, ly) = (-dx * units_per_px, dy * units_per_px);
-    let (s, c) = camera().yaw.sin_cos();
-    let travel = &mut camera_store().travel;
-    travel[0] += lx * c + ly * s;
-    travel[1] += -lx * s + ly * c;
-    request_world_tick();
+/// Canonical, so a rebase leaves it where it is. None until first put.
+static TO: Global<Option<Pvf3>> = Global::new();
+
+fn to() -> &'static mut Option<Pvf3> {
+    TO.get(|| None)
 }
 
-/// The eye stood where it was put: a place put outright is where it stands,
-/// `EYE_HEIGHT_U` over the ground there.
-pub fn hold() {
-    let Some(at) = eye_local() else { return };
-    let mut to = at;
-    stand(&mut to);
-    if to != at {
-        set_eye_local(&to);
+// Sub-pixel at any distance.
+const EYE_EPS: f64 = 0.001;
+const LOOK_EPS: f64 = 0.0001;
+
+/// First person, the eye's target is the map center.
+pub(crate) fn target_center() -> Option<Pvf3> {
+    to().or_else(map_center)
+}
+
+pub(crate) fn put(at: Pvf3, snap: bool) {
+    let eye = at;
+    *to() = Some(eye);
+    if snap {
+        set_eye_local(&canonical_to_local(&eye, view().origin));
     }
 }
 
-/// Where an eye over `eye`'s X and Y stands: within the lattice's rows
-/// north and south, and `EYE_HEIGHT_U` over the ground there. Its Z is the ground's and nothing the hand moves; where the ground
-/// there is not known yet, it keeps the Z it has, and the ground arriving
-/// later moves nothing — only a step or a place put reads the ground again.
-fn stand(eye: &mut V3) {
-    let o = view().origin;
-    let base = [ivec::to_real(ivec::X(o)), ivec::to_real(ivec::Y(o))];
-    let y = (eye[1] + base[1]).clamp(REACH.min[1], REACH.max[1] - 1.0);
-    eye[1] = y - base[1];
-    let mut under = Pvf3::default();
-    projection::project(&mut under, eye[0] + base[0], y, 0.0);
-    if let Some(ground) = Access::now().at(&under, FINEST).value() {
-        eye[2] = local_height(ground.top, o) + EYE_HEIGHT_U;
-    }
-}
-
-/// The free camera's turn over `delta` seconds: its look eased toward the
-/// controls' heading and tilt, and its eye walked by this turn's share of the
-/// hand's move, standing on the ground it walks to. Whether it is still
-/// moving.
+/// Whether still moving.
 pub(crate) fn turn(delta: f64) -> bool {
     let walked = spend_travel(delta).is_some_and(|share| {
         let Some(from) = eye_local() else { return false };

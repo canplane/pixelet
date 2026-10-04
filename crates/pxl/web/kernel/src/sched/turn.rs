@@ -1,17 +1,8 @@
 // pxl-kernel/sched/turn.rs
 
-//! The world as the kernel runs it: every layer's turn, in one place.
-//!
-//! Coordinate model: every layer places what it has in the root frame
-//! (world/frame/view.rs), the map's azimuth and the floating origin's
-//! translation, which the view's damping steps write.
-//!
-//! The kernel's work is tasks on whichever executor the module installed
-//! (`world_tasks`). The frame is one of them: the effects — the fetchers, the
-//! stores' followers, the markers — each comparing what it last saw
-//! (`world_turn`), then the tick's steps (sched/tick.rs) by phase under one
-//! budget, then the draw. The rest wait on what they work on: arrivals, the
-//! chunk builds, the decor models, the save.
+//! Every layer's turn, in one place. The frame is one task: the effects,
+//! then the tick's phases under one budget, then the draw. The other tasks
+//! wait on what they work on.
 
 use xpute_runtime::sched::edge::{notified, Notify};
 
@@ -42,17 +33,13 @@ use crate::world::chunk::source::chunk_sources_step;
 use crate::world::chunk::stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms, set_turn_timing, take_draw};
 use crate::world::frame::coord::local_world_origin;
 
-/// What the platform offers the sensors, as the shell found it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Platform {
     pub geolocation: bool,
     pub orientation: OrientationPlatform,
 }
 
-/// The companion's place, from map_center in the local floating-origin frame —
-/// wherever the camera actually is, not the origin's cell's center. Only
-/// where the camera stands off it: where the eye is the map center, the
-/// character is the one looking.
+/// None while the eye is the map center: then the character is the one looking.
 fn companion_props() -> Option<CompanionProps> {
     if crate::control::camera::controller::radius() == 0.0 {
         return None;
@@ -64,7 +51,8 @@ fn companion_props() -> Option<CompanionProps> {
         map_origin,
         center_x: local[0],
         center_y: local[1],
-        center_z: local[2],
+        // The map center stands half a cell over the floor; the character's feet are on it.
+        center_z: local[2] - pxl_spec::bake::constant::CELL.side() / 2.0 + pxl_spec::space::pvf3::ivec::to_real(pxl_spec::space::pvf3::ivec::Z(map_origin)),
     })
 }
 
@@ -86,15 +74,13 @@ fn environment_tick(_: &mut TickContext) {
     map_environment_step();
 }
 
-/// The kernel's boot, once, from the module's: the tick's steps registered,
-/// and the tasks spawned. Nothing runs until the first poll; the frame task waits for the
-/// first frame the host asks, so the boot has to come from outside a frame.
+/// Registers the tick's steps and spawns the tasks. Called from outside a
+/// frame, since the frame task waits for the host's first frame.
 pub fn boot() {
     on_tick(INTERACTION, crate::control::camera::controller::controller_step, StepName::controller);
     on_tick(INTERACTION, camera_input_tick, StepName::input);
     on_tick(INTERACTION, crate::control::camera::controller::camera_step, StepName::camera);
-    // After the view has moved: the environment observes the camera center
-    // the view eased to this tick.
+    // After the view has moved, so the environment sees this tick's camera.
     on_tick(INTERACTION, environment_tick, StepName::environment);
     on_tick(INTERACTION, companion_tick, StepName::companion);
     on_tick(INTERACTION, crate::layer::character::preview::preview_step, StepName::preview);
@@ -104,8 +90,7 @@ pub fn boot() {
     world_tasks();
 }
 
-/// How soon each of the kernel's tasks wants polling, lower sooner. The
-/// installed executor may not order by it; nothing here rests on its order.
+/// The executor may ignore this order; nothing relies on it.
 #[repr(u8)]
 #[derive(Clone, Copy)]
 enum TaskPriority {
@@ -115,9 +100,7 @@ enum TaskPriority {
     Background,
 }
 
-/// Spawns the kernel's tasks on whichever executor the module installed —
-/// no more than change.rs's TASKS. One refused is a module whose executor
-/// holds fewer, which aborts.
+/// No more than change.rs's TASKS; a refusal means the executor holds fewer, and aborts.
 fn world_tasks() {
     use xpute_runtime::sched::task::spawn;
     use TaskPriority::*;
@@ -132,21 +115,17 @@ fn world_tasks() {
     }
 }
 
-/// The longest effect of the last turn, and which it was: a turn is only as
-/// cooperative as its longest step, and a total does not say where to look.
-/// Its index in EFFECT_NAMES (sched/profiler/profiler.json); none where no effect
-/// took measurable time.
+/// Longest effect of the last turn and its EFFECT_NAMES index: a turn is only
+/// as cooperative as its longest step.
 static WORST_EFFECT: Global<(f64, Option<u32>)> = Global::new();
 
 pub fn worst_effect() -> (f64, Option<u32>) {
     *WORST_EFFECT.get(|| (0.0, None))
 }
 
-/// One effect, timed. The effects are where the turn decides what is wanted,
-/// and they are not budgeted — nothing here may be work. What kept that
-/// honest was nothing at all until a fold running here took seventy
-/// milliseconds of a turn whose tick was one and a half, and no number in
-/// the profiler named the region it was in (2026-09-23).
+/// Effects are not budgeted, so nothing in them may be real work. They were
+/// untimed until a fold here took 70 ms of a turn whose tick was 1.5 ms
+/// (2026-09-23).
 macro_rules! effect {
     ($worst:ident, $name:ident, $step:expr) => {{
         let at = now();
@@ -158,7 +137,7 @@ macro_rules! effect {
     }};
 }
 
-/// The effects' turn, before the tick. How long it took.
+/// Returns how long it took.
 pub fn world_turn() -> f64 {
     let at = now();
     let platform = world_platform();
@@ -169,8 +148,7 @@ pub fn world_turn() -> f64 {
     effect!(worst, orientation, orientation_watchdog_step(platform.orientation));
     effect!(worst, follow, follow_mode_step());
     effect!(worst, destination, crate::control::navigation::destination::destination_step());
-    // After every writer of the map center this turn has, before anything
-    // observes the view.
+    // After every writer of the map center, before anything observes the view.
     effect!(worst, view, crate::world::frame::view::view_compose());
     effect!(worst, tiles, terrain_step());
     effect!(worst, poi, crate::layer::poi::poi_step());
@@ -179,12 +157,10 @@ pub fn world_turn() -> f64 {
     effect!(worst, decor, decor_assets_wanted());
     effect!(worst, chunk_sources, chunk_sources_step());
     effect!(worst, hover, hover_cursor_step());
-    // device_coord is deliberately not gated the way map_center is — the puck
-    // holds its own last-known coordinate across a transient none.
+    // device_coord is not gated like map_center: the puck keeps its last coordinate across a transient none.
     effect!(worst, puck, location_puck_step(map_navigation().device_coord));
     effect!(worst, objects, crate::layer::object::store::flush_save_if_due());
-    // After every producer has spoken, including whatever asked for an
-    // asset while the turn ran.
+    // After every producer has spoken, including assets asked for during the turn.
     effect!(worst, assets, crate::io::sched::declare(crate::io::demand::Category::asset, crate::io::load::load_wants()));
     effect!(worst, pump, pump());
     *WORST_EFFECT.get(|| (0.0, None)) = worst;
@@ -193,23 +169,17 @@ pub fn world_turn() -> f64 {
 
 static TICK_STATE: Global<TickState> = Global::new();
 
-/// Whether the host ran the last turn as interactive — the view is being
-/// moved rather than looked at. Read by a turn's own steps, which run before
-/// the tick sets it, so it is the turn before's answer; what reads it is
-/// deciding whether to act now or wait for the view to settle, and one turn
-/// of lag there is nothing.
+/// Whether the last turn was interactive. Read by steps that run before the
+/// tick sets it, so it lags a turn, which is fine for deciding whether to wait.
 pub fn interactive() -> bool {
     TICK_STATE.get(TickState::default).interactive
 }
 static PLATFORM: Global<Option<Platform>> = Global::new();
 
-/// Tells the kernel the platform, once, at boot: what a device offers does not
-/// change while the page runs.
 pub fn set_world_platform(platform: Platform) {
     *PLATFORM.get(|| None) = Some(platform);
 }
 
-/// The platform as the boot told it.
 pub fn world_platform() -> Platform {
     PLATFORM.get(|| None).unwrap_or(Platform {
         geolocation: false,
@@ -221,13 +191,10 @@ pub fn world_platform() -> Platform {
     })
 }
 
-/// How long a gap may still be stepped over as motion. Past it the turn is a
-/// pause — a hidden tab, a stalled main thread — and the world holds still
-/// rather than leaping across it.
+/// Longest gap still stepped as motion; past it (a hidden tab, a stall) the
+/// world holds still rather than leaping.
 const MAX_STEP_S: f64 = 0.1;
 
-/// What the host tells a frame: the viewport, the gap since the last, and how
-/// it sees the turn.
 pub struct HostFrame {
     pub width: f64,
     pub height: f64,
@@ -235,7 +202,6 @@ pub struct HostFrame {
     pub delta: f64,
     pub frame_ms: f64,
     pub interactive: bool,
-    /// The fetches the kernel may have in flight.
     pub credits: u32,
 }
 
@@ -247,29 +213,22 @@ fn frames() -> &'static mut Notify {
     FRAMES.get(Notify::new)
 }
 
-/// The host asked for a frame: kept for the frame task, the latest winning.
 pub fn world_frame_asked(host: HostFrame) {
     *FRAME.get(|| None) = Some(host);
     frames().notify();
 }
 
-/// Whether the host asked for a frame not yet drawn: a turn that carries one
-/// polls the tasks, whatever its quota — a quota overrun to nothing still
-/// draws.
+/// A turn carrying a frame polls the tasks whatever its quota, so an overrun quota still draws.
 pub fn world_frame_waiting() -> bool {
     FRAME.get(|| None).is_some()
 }
 
-/// Whether a frame was drawn since the last take: what the module reports
-/// back to the shell after the turn.
 pub fn take_world_drawn() -> bool {
     core::mem::take(DRAWN.get(|| false))
 }
 
-/// The frame task: a frame the host asked for, whole. What a frame does has an
-/// order within the turn — the effects, the tick's phases, the fetch pump,
-/// the draw — so it is one task, and the executor's order among tasks is
-/// never relied on.
+/// One task, because the frame's parts have an order and the executor's
+/// order among tasks is never relied on.
 async fn frame_task() {
     loop {
         notified(frames).await;
@@ -280,11 +239,6 @@ async fn frame_task() {
     }
 }
 
-/// The frame of the turn the central scheduler strobed at `edge_at` with
-/// `quota_ms`: the effects, then the tick's phases on what is left of the
-/// quota, the fetches they asked for within the credits, and the draw. A pass
-/// that asked for a turn after this one, or left something new to draw, asks
-/// for the next edge.
 fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     let HostFrame {
         width,
@@ -303,12 +257,9 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     state.width = width;
     state.height = height;
     state.dpr = dpr;
-    // What the host measured is how long the tab was away as much as how long
-    // a frame took, and a step taken over a pause jumps: a character crosses a
-    // wall, a damped camera overshoots. So the world is stepped by at most
-    // MAX_STEP_S while the gap itself goes on the state, because a record that
-    // cannot say a frame was worse than the clamp cannot say the frames worth
-    // saying — and every bad frame lands exactly on it.
+    // Step by at most MAX_STEP_S, or a pause makes a character cross a wall or
+    // a damped camera overshoot. The raw gap is still recorded, or every bad
+    // frame would read as exactly the clamp.
     let step = delta.min(MAX_STEP_S);
     state.gap_s = delta;
     state.elapsed_s += step;

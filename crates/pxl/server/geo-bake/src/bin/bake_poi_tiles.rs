@@ -1,8 +1,6 @@
 // pxl-geo-bake/bin/bake_poi_tiles.rs
 
-//! The POI pyramid: every leaf page Overture's places fill, then the levels
-//! above folded by counting (pxl-geo-bake pyramid.rs), into
-//! `out/poi/<version>` as the bucket holds it once renamed.
+//! The POI pyramid into `out/poi/<version>`.
 //!
 //!   --out <dir>          where the version goes (default out/poi/<published>)
 //!   --concurrency <n>    parallel folds (default 8)

@@ -1,10 +1,7 @@
 // pxl-kernel/layer/poi.rs
 
-//! Places as a layer of the pyramid (world/pyramid.rs): a page counts the
-//! places in each of its cells (pxl-spec bake/poi_page.rs), and a count is
-//! drawn as a badge at the center of the block of cells the ground under it
-//! is drawn at (placement.rs). Which pages are held and fetched is the
-//! pyramid's, for the same view as the ground's.
+//! Places as a layer of the pyramid: a page counts the places in each of
+//! its cells, drawn as badges (placement.rs).
 
 pub mod badge;
 pub mod placement;
@@ -27,14 +24,12 @@ impl Layer for PoiPage {
         POI.get(Pyramid::default)
     }
 
-    /// A page is small and held on the heap; its record is only its room in
-    /// the count the pyramid bounds.
+    /// Small, so held on the heap; the record is only a count slot.
     fn receive(_record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<PoiPage, Failure> {
         Ok(poi_page::decode(pkt)?)
     }
 
-    /// A page the bake has no object for: at the top, one holding no places;
-    /// under it, one the page over it settles, whose ground that page says.
+    /// At the top, a page with no places; under it, one the page above settles.
     fn absent(p: LevelPage) {
         if p.level < TOP_LEVEL {
             PoiPage::pyramid().answer_above(p);
@@ -48,8 +43,34 @@ pub fn enabled() -> bool {
     settings_store().poi
 }
 
-/// The layer's turn: its pyramid's while places are shown, and nothing asked
-/// for while they are not.
+/// Lower is more prominent. The reader's choice, so a change needs no bake:
+/// OpenMapTiles' `poi_class_rank` (layers/poi/class.sql) for the class its
+/// poi.yaml files the category under; unranked is 1000.
+pub fn rank_of(kind: u8) -> u16 {
+    let category = kind.checked_sub(1).and_then(|k| KIND_CATEGORIES.get(k as usize)).copied().unwrap_or("");
+    match category {
+        "hospital" | "clinic" => 20,
+        "subway" | "station" => 40,
+        "bus_station" => 50,
+        "attraction" => 70,
+        "university" | "college" => 80,
+        "school" | "kindergarten" => 85,
+        "townhall" => 100,
+        "park" => 120,
+        "library" => 130,
+        "police" => 135,
+        "post_office" => 140,
+        "mall" | "convenience" => 400,
+        "supermarket" | "department_store" => 500,
+        "fast_food" => 600,
+        "clothes" => 700,
+        "bar" => 800,
+        _ => 1000,
+    }
+}
+
+/// Fetches out to where the ground is drawn coarser than POI_MAJOR_LEVEL,
+/// and nothing while places are hidden.
 pub fn poi_step() {
     if enabled() {
         PoiPage::pyramid().step(None);

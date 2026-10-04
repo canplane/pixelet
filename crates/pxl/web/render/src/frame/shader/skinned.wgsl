@@ -1,9 +1,5 @@
-// Actors: the module's skinned draws (model.rs) against each model's mesh
-// block and each actor's joint palette, both as the module wrote them. A
-// vertex is skinned by its four joints and weights out of the palette,
-// scaled to the model's height, turned from glTF's Y-up to this world's
-// Z-up and by the actor's heading about Z, and placed; the fragment is
-// decor's recipe.
+// Actors: four-joint skinning from the palette, then glTF Y-up to Z-up, the
+// heading, and placement; the fragment is decor's.
 
 struct Draw {
   translation: vec3f,
@@ -14,11 +10,8 @@ struct Draw {
   _p1: f32,
 };
 
-// Held as vec4 words, each field read from its own by `draw_<field>()`:
-// what the host and a shader share has no room inside it for a driver to
-// lay out its own way (issue/20260927-a-matrix-the-driver-reads-its-own-way.md),
-// and nothing builds the struct back, with which Safari's WebGPU lost its
-// GPU process.
+// Read field by field from vec4 words, never as a struct: a struct here lost
+// Safari's WebGPU its GPU process.
 @group(1) @binding(0) var<uniform> draw_words: array<vec4f, 2>;
 
 fn draw_translation() -> vec3f { return draw_words[0].xyz; }
@@ -28,10 +21,8 @@ fn draw_scale() -> f32 { return draw_words[1].y; }
 
 @group(2) @binding(0) var skin: texture_2d<f32>;
 @group(2) @binding(1) var skin_sampler: sampler;
-// The palette is mat4s, one a joint, read as the four vec4 columns each is: a
-// Galaxy S23's Vulkan read an `array<mat4x4f>` in storage as some other
-// layout, and a vec4 has no layout to read two ways
-// (issue/20260927-a-matrix-the-driver-reads-its-own-way.md).
+// The palette is read as vec4 columns: a Galaxy S23's Vulkan misread
+// `array<mat4x4f>` in storage.
 @group(3) @binding(0) var<storage, read> palette: array<vec4f>;
 
 fn joint(j: u32) -> mat4x4f {
@@ -51,12 +42,21 @@ struct VertexOut {
   @location(0) uv: vec2f,
   @location(1) normal: vec3f,
   @location(2) world_pos: vec3f,
-  // The air in front of the vertex (atmos_view.wgsl's Seen).
   @location(3) through: vec3f,
   @location(4) scattered: vec3f,
   @location(5) past: vec3f,
   @location(6) fill: vec3f,
 };
+
+fn skin_of(v: VertexIn) -> mat4x4f {
+  return joint(v.joints.x) * v.weights.x + joint(v.joints.y) * v.weights.y + joint(v.joints.z) * v.weights.z + joint(v.joints.w) * v.weights.w;
+}
+
+// One function, so the depth passes place a vertex where the lit pass does.
+fn skinned_world(v: VertexIn, m: mat4x4f) -> vec3f {
+  let p = (m * vec4f(v.position, 1.0)).xyz * draw_scale();
+  return on_globe(place_up(p, draw_rotation()) + draw_translation());
+}
 
 @vertex
 fn vs(v: VertexIn) -> VertexOut {
@@ -75,6 +75,11 @@ fn vs(v: VertexIn) -> VertexOut {
   o.past = seen.past;
   o.fill = seen.fill;
   return o;
+}
+
+@vertex
+fn vs_depth(v: VertexIn) -> @builtin(position) vec4f {
+  return frame_view_proj() * vec4f(skinned_world(v, skin_of(v)), 1.0);
 }
 
 @fragment

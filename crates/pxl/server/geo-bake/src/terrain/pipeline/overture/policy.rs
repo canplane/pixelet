@@ -1,16 +1,8 @@
 // pxl-geo-bake/terrain/pipeline/overture/policy.rs
 
-//! Policy for interpreting Overture Buildings/Transportation/Base rows into
-//! categories, metrics, flags and terrain cell configuration — the
-//! counterpart to coast/policy.rs (coastline only).
-//!
-//! Mapped value by value against each theme's own subtype/class vocabulary.
-//! The Segments/Land_use/Water/Land class and subtype values below are the
-//! ones a real Gangnam-area sample actually produced (100% populated for all
-//! four); Buildings' class enum is not sample-confirmed the same way (only
-//! ~14% of Korean buildings carry `class`/`subtype` at all) — mapped against
-//! Overture's published buildings schema instead, and it barely matters
-//! either way since only the coarse structure category is ever baked.
+//! Overture Buildings/Transportation/Base rows to categories, metrics and cell
+//! config. Segment and base values come from a Gangnam sample; building
+//! classes from the published schema (only ~14% of Korean buildings have one).
 
 use pxl_spec::bake::format::{CellConfig, GroundChannelKey};
 use pxl_spec::bake::model::feature::{FeatureComputed, FeatureExtra};
@@ -20,30 +12,38 @@ use pxl_spec::space::adapter::epsg3857::G3857;
 use crate::terrain::pipeline::normalizer::{NormalizePolicy, RawFeature};
 use crate::terrain::pipeline::overture::adapter::{BaseSource, OvertureRawFeature};
 
-// ============ Domain knowledge constants ============
-
-/// Overture Transportation `class` -> default width in meters, absent
-/// structured `road` lane data.
-fn road_width_by_class(class: &str) -> Option<f64> {
-    Some(match class {
-        "motorway" => 14.0,
-        "trunk" | "primary" => 10.5,
-        "secondary" | "tertiary" => 7.0,
-        "residential" | "service" | "unclassified" | "living_street" => 3.5,
-        "path" | "footway" | "steps" | "cycleway" | "pedestrian" => 1.75,
-        "standard_gauge" | "light_rail" | "subway" => 3.5,
-        _ => return None,
-    })
+/// One type per OpenMapTiles transportation class (MapTiler's schema).
+pub fn segment_type(subtype: &str, class: Option<&str>) -> u8 {
+    use cube_types::transport as t;
+    let c = class.unwrap_or("");
+    if subtype == "rail" {
+        return match c {
+            "subway" | "light_rail" | "tram" | "monorail" => t::rail_subway,
+            _ => t::rail_main,
+        };
+    }
+    match c {
+        "motorway" => t::road_motorway,
+        "trunk" => t::road_trunk,
+        "primary" => t::road_primary,
+        "secondary" => t::road_secondary,
+        "tertiary" => t::road_tertiary,
+        "service" => t::road_service,
+        "track" => t::track,
+        _ if PEDESTRIAN_CLASSES.contains(&c) => t::pedestrian,
+        _ => t::road_default,
+    }
 }
 
-const PEDESTRIAN_CLASSES: [&str; 6] = ["footway", "path", "steps", "cycleway", "pedestrian", "living_street"];
-const MOTOR_CLASSES: [&str; 2] = ["motorway", "trunk"];
-const SECONDARY_CLASSES: [&str; 2] = ["secondary", "tertiary"];
+/// One-way ways of these classes are carriageways, not one-way streets.
+const THROUGH_CLASSES: [&str; 5] = ["motorway", "trunk", "primary", "secondary", "tertiary"];
+
+/// OpenMapTiles' path class.
+const PEDESTRIAN_CLASSES: [&str; 6] = ["footway", "path", "steps", "cycleway", "pedestrian", "bridleway"];
 
 const FLOWING_WATER_SUBTYPES: [&str; 3] = ["river", "stream", "canal"];
 const TREE_COVER_LAND_SUBTYPES: [&str; 4] = ["tree", "forest", "tree_row", "wood"];
 
-/// Land_use `class` -> land cell, using the values the sample turned up.
 fn land_use_class_map(class: &str) -> Option<u8> {
     Some(match class {
         "residential" => cube_types::land::residential,
@@ -57,15 +57,20 @@ fn land_use_class_map(class: &str) -> Option<u8> {
     })
 }
 
-/// Buildings `class`/`subtype` treated as institutional (against Overture's
-/// published schema, not sample-confirmed — see this file's top comment).
 const INSTITUTIONAL_BUILDING_CLASSES: [&str; 5] = ["education", "medical_care", "civic", "government_service", "religious"];
 const SPORTS_CLASSES: [&str; 2] = ["pitch", "playground"];
 
-// ============ Policy logic ============
+/// Nothing of a way under these shows from above. Not `is_disused` (the rails
+/// remain) nor `is_covered` (the buildings paint over it).
+pub const UNSEEN_FLAGS: &[&str] = &["is_tunnel", "is_indoor", "is_under_construction", "is_abandoned"];
 
-/// `feat.class ?? feat.subtype ?? ""`, the building's own type as the policy
-/// reads it.
+pub const BORE_FLAGS: &[&str] = &["is_tunnel"];
+
+pub const LINK_FLAGS: &[&str] = &["is_link"];
+
+/// Drawn by the page's decks, not the ground.
+pub const DECK_FLAGS: &[&str] = &["is_bridge"];
+
 fn building_type(feat: &OvertureRawFeature) -> &str {
     match feat {
         OvertureRawFeature::Building(b) => b.class.as_deref().or(b.subtype.as_deref()).unwrap_or(""),
@@ -73,11 +78,23 @@ fn building_type(feat: &OvertureRawFeature) -> &str {
     }
 }
 
-fn land_use_class(feat: &OvertureRawFeature) -> &str {
-    match feat {
-        OvertureRawFeature::Base(b) if b.source == BaseSource::LandUse => b.class.as_deref().unwrap_or(""),
-        _ => "",
-    }
+pub fn buildings(row: &BuildingRow, page_min: G3857) -> Vec<Feature> {
+    use cube_types::structure as s;
+    let kind = row.class.as_deref().or(row.subtype.as_deref()).unwrap_or("");
+    let institutional = INSTITUTIONAL_BUILDING_CLASSES.contains(&kind);
+    let value = match kind {
+        "transportation" => s::building_station,
+        "medical_care" => s::building_medical,
+        "education" => s::building_education,
+        _ if institutional => s::building_public,
+        _ => s::building,
+    };
+    let cell = Cell {
+        key: GroundChannelKey::STRUCTURE,
+        value,
+    };
+    let rank = BUILDING_RANK + if institutional { INSTITUTIONAL_RANK } else { 0 };
+    wkb_to_geometries(&row.geom_wkb).iter().filter_map(|g| Feature::of(g, page_min, cell, rank)).collect()
 }
 
 fn segment_class(feat: &OvertureRawFeature) -> &str {
@@ -112,37 +129,68 @@ fn determine_category(feat: &OvertureRawFeature) -> String {
     }
 }
 
-fn compute_metrics(feat: &OvertureRawFeature, _category: &str) -> FeatureComputed {
-    let mut height = 0.0;
-    let mut width = 0.0;
-
-    match feat {
-        OvertureRawFeature::Building(b) => {
-            // Real height/num_floors when Overture has them; missing both
-            // falls back to a single-level default.
-            height = match (b.height, b.num_floors) {
-                (Some(h), _) => h,
-                (None, Some(n)) => n * 3.5,
-                (None, None) => 3.5,
-            };
-        }
-        OvertureRawFeature::Segment(_) => {
-            width = road_width_by_class(segment_class(feat)).unwrap_or(3.5);
-        }
-        OvertureRawFeature::Base(_) => {}
-    }
-
-    FeatureComputed {
-        height: height.max(0.0),
-        width: width.max(0.0),
-        // No bridge/tunnel vertical-stacking signal is ingested for Overture yet.
-        layer: 0,
-    }
+/// Water but a strait's label line, land under trees, parking and helipads,
+/// and every land use.
+pub fn bases(row: &BaseRow, page_min: G3857) -> Vec<Feature> {
+    use cube_types::{land as l, transport as t, water as w};
+    let (subtype, class) = (row.subtype.as_deref().unwrap_or(""), row.class.as_deref().unwrap_or(""));
+    let (key, value, rank) = match row.source.as_str() {
+        "water" if class == "strait" => return Vec::new(),
+        "water" => (GroundChannelKey::WATER, if FLOWING_WATER_SUBTYPES.contains(&subtype) { w::river } else { w::lake }, WATER_RANK),
+        "land" if TREE_COVER_LAND_SUBTYPES.contains(&subtype) => (GroundChannelKey::LAND, l::green_deep, AREA_RANK),
+        "land" => return Vec::new(),
+        "infrastructure" if class == "parking" => (GroundChannelKey::TRANSPORT, t::parking, AREA_RANK),
+        "infrastructure" if class == "helipad" => (GroundChannelKey::LAND, l::helipad, AREA_RANK),
+        "infrastructure" => return Vec::new(),
+        _ => (
+            GroundChannelKey::LAND,
+            land_use_cell(class),
+            AREA_RANK + if matches!(class, "school" | "hospital") { INSTITUTIONAL_RANK } else { 0 },
+        ),
+    };
+    wkb_to_geometries(&row.geom_wkb).iter().filter_map(|g| Feature::of(g, page_min, Cell { key, value }, rank)).collect()
 }
 
-fn is_institutional(feat: &OvertureRawFeature) -> bool {
-    let land_use = land_use_class(feat);
-    INSTITUTIONAL_BUILDING_CLASSES.contains(&building_type(feat)) || land_use == "school" || land_use == "hospital"
+/// Later keeps the cell. OpenStreetMap Carto's `z` from `roads_info`
+/// (openstreetmap-carto-flex.lua, CC0); other transport features rank under all.
+fn paint_order(subtype: &str, class: Option<&str>, role: Role) -> u32 {
+    let c = class.unwrap_or("");
+    if subtype == "rail" {
+        return match c {
+            "standard_gauge" => 440,
+            "tram" => 410,
+            _ => 420,
+        };
+    }
+    if role == Role::Link {
+        return match c {
+            "motorway" => 240,
+            "trunk" => 230,
+            "primary" => 220,
+            "secondary" => 210,
+            _ => 200,
+        };
+    }
+    if role == Role::Sidewalk {
+        return 100;
+    }
+    if role == Role::Lane {
+        return 150;
+    }
+    match c {
+        "motorway" => 380,
+        "trunk" => 370,
+        "primary" => 360,
+        "secondary" => 350,
+        "tertiary" => 340,
+        "living_street" => 320,
+        "pedestrian" => 310,
+        "service" => 150,
+        "track" => 110,
+        "path" | "footway" | "bridleway" | "cycleway" => 100,
+        "steps" => 90,
+        _ => 330,
+    }
 }
 
 fn calculate_rank(feat: &OvertureRawFeature, category: &str, is_institutional: bool) -> u32 {
@@ -177,7 +225,6 @@ fn compute_extra(feat: &OvertureRawFeature, category: &str) -> FeatureExtra {
     let institutional = is_institutional(feat);
     FeatureExtra {
         rank: calculate_rank(feat, category, institutional),
-        // Sea fill is coast/policy.rs's job, never this policy's.
         is_ocean: false,
         is_parking: category == "parking",
         is_institutional: institutional,
@@ -312,8 +359,6 @@ impl NormalizePolicy<OvertureRawFeature> for OverturePolicy {
         determine_cell_cfg(raw, category, extra)
     }
 
-    /// Every theme but segments is WKB polygon geometry already
-    /// (`is_polygon_source` covers closure), so there is nothing left to force.
     fn should_force_closed(&self, _raw: &OvertureRawFeature) -> bool {
         false
     }

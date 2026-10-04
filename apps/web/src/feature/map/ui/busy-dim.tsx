@@ -10,14 +10,9 @@ import { Dim } from "@/shared/ui/motion/veil.ts";
 import { DIM } from "@/shared/ui/motion/transition.ts";
 
 /**
- * Map chrome while the map is dragged (`camera_busy`), on a desktop: dimmed
- * and taking no clicks, since a mouse that lets go of a drag over a control
- * clicks it. On a handheld the finger dragging the map is the map's and
- * reaches no control, and a second finger on one means to press it, so the
- * chrome stays as it is, as a phone's maps keep theirs. The one treatment
- * for the top overlays and the bottom alike. The dim is said to what stands
- * under it (shared/ui/motion/veil.ts) rather than laid over it, which a
- * device's glass could not be seen through.
+ * On a desktop, the chrome dims and takes no clicks while the map is dragged:
+ * releasing a drag over a control clicks it. A handheld's finger cannot do
+ * that, so it is left alone.
  */
 export function BusyDim({ style, children }: { style?: StyleProp<ViewStyle>; children: ReactNode }) {
   const busy = useKernel((s) => s.camera_busy) && !HANDHELD;
@@ -31,9 +26,7 @@ export function BusyDim({ style, children }: { style?: StyleProp<ViewStyle>; chi
 }
 
 const styles = StyleSheet.create({
-  // From a style sheet, not inline: react-native-web draws a sheet's
-  // `box-none` as a class that gives the children back their touches, and an
-  // inline one as a plain `none` that every control under it inherits.
+  // From a sheet: RN-web draws an inline `box-none` as `none`, which every control under it inherits.
   pass: { pointerEvents: "box-none" },
   block: { pointerEvents: "none" },
 });

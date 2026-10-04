@@ -1,17 +1,13 @@
 // pxl-tool/fmt.rs
 
-//! A generated file as the tree's formatters leave it. `deno fmt --check` and
-//! `cargo fmt --check` are both gates, so a generator that wrote its output
-//! unformatted would make the next unrelated run of either fail, and one
-//! whose output a formatter then changed would be stale by its own check.
+//! Generated files are written as the formatters leave them, since `deno fmt
+//! --check` and `cargo fmt --check` are gates.
 
 use std::io::Write;
 use std::process::{Command, Stdio};
 
 use crate::root;
 
-/// `text` as rustfmt leaves it for a `.rs` path and as deno fmt does for a
-/// `.ts` one; any other path's text as it is.
 pub fn formatted(path: &str, text: String) -> Result<String, String> {
     let mut cmd = if path.ends_with(".rs") {
         let mut c = Command::new("rustfmt");

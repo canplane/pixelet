@@ -1,15 +1,8 @@
 // @pxl/web/feature/character/variant.ts
 
 /**
- * The characters a player can be, as variant.json lists them: a group's keys
- * row for row with its models, the colormap the group's pack shares, how tall
- * it stands and which clip is its walk. Each model and skin is fetched by the
- * content key the asset ingest gave it.
- *
- * Split by gender (not one flat PERSON_VARIANTS) so the settings UI can
- * show two separate rows instead of one row a user has to scan by label
- * text to tell apart — display names live in locale files
- * (palette_modal.character.persons.<key>), keyed off `key` below.
+ * The playable characters from variant.json; models and skins are fetched by
+ * their ingest content keys. Persons are split by gender for the picker.
  */
 
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
@@ -19,18 +12,15 @@ import { assetUrl } from "@/config/route.ts";
 import { DEFAULT_PERSON_VARIANT_KEY as PERSON_KEY, DEFAULT_PET_VARIANT_KEY as PET_KEY, Group, groups, PERSON_GENDER_PREFIXES } from "./variant.spec.ts";
 
 export interface CharacterVariant {
-  /** Its group's number (variant.json's `groups`). */
   group: u32;
-  /** Its number in its group: what the kernel holds it as. */
+  /** What the kernel holds it as. */
   number: u32;
-  /** The key its name is read under (locale). */
   key: string;
   modelUrl: string;
   skinUrl: string;
   height_u: f64;
 }
 
-/** Where a shipped asset is fetched from, by its path under asset/. */
 function shippedAssetUrl(path: string): string {
   const row = INGESTED[path];
   if (!row) throw new Error(`${path} is not in the asset table — run the asset ingest`);
@@ -44,10 +34,7 @@ interface GroupSpec {
   readonly skin: string;
 }
 
-// Rendering is natively in [u] throughout (U_PER_CELL = 1, terrain/objects
-// are all built directly in this unit) — height_u is exactly the on-screen
-// height the model is scaled to, and it is the group's `size`: one full cell
-// tall for the person, a quarter cell for the pet.
+// height_u is the on-screen height in world units: the group's `size`.
 function variantsOf(groupNumber: u32, group: GroupSpec): CharacterVariant[] {
   const skinUrl = shippedAssetUrl(group.skin);
   return Object.entries(group.keys).map(([key, number], i) => ({ group: groupNumber, number, key, modelUrl: shippedAssetUrl(group.models[i]), skinUrl, height_u: group.size }));
@@ -55,22 +42,17 @@ function variantsOf(groupNumber: u32, group: GroupSpec): CharacterVariant[] {
 
 const PERSON_VARIANTS = variantsOf(Group.person, groups.person);
 
-/** A person's gender: what the persons' keys are prefixed with
- * (variant.json), and what the picker browses them by. */
 export type Gender = keyof typeof PERSON_GENDER_PREFIXES;
 export const GENDERS = Object.keys(PERSON_GENDER_PREFIXES) as Gender[];
 
-/** The persons of a gender. */
 export function personVariantsOf(gender: Gender): readonly CharacterVariant[] {
   return PERSON_VARIANTS.filter((v) => v.key.startsWith(PERSON_GENDER_PREFIXES[gender]));
 }
 
-/** The gender a person's key belongs to; the first where it names none. */
 export function genderOf(key: string): Gender {
   return GENDERS.find((g) => key.startsWith(PERSON_GENDER_PREFIXES[g])) ?? GENDERS[0];
 }
 
-/** The person numbered `number` in the settings; none where no person is. */
 export function personVariantNumbered(number: number): CharacterVariant | undefined {
   return PERSON_VARIANTS.find((v) => v.number === number);
 }

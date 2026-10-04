@@ -1,29 +1,17 @@
 // xpute-runtime/mem/heap.rs
 
-//! Blocks out of the heap: bytes asked for and given back.
-//!
-//! The allocator is not this module's. Which one serves is the module's own
-//! choice — `#[global_allocator]`, and xpute-core's `alloc/` has two that fit
-//! — and the span it serves from is one of the map's sections (section.rs).
-//! What is here is the door, and the shape a block travels in.
+//! Heap blocks named by offset, from whatever `#[global_allocator]` the
+//! module installs.
 
 use crate::mem::base::{off_of, ptr_at};
 
-/// A block of the heap: where it lies in the memory, as an offset from its
-/// base (base.rs), and its bytes.
-///
-/// Two numbers rather than a `Vec` or a slice, because what holds a block
-/// names it by number — a list that uploads it, a table of a chunk's
-/// tiers, a host that writes into the memory at an offset — and the size
-/// travels with the address, since giving a block back needs both.
+/// An offset from the base and a size: freeing needs both.
 pub type Block = (usize, u32);
 
-/// Every lane element a block is cut into — bytes up to `f64`, `u64` and
-/// records of them — aligns within this.
+/// The widest lane element, `f64` or `u64`.
 const BLOCK_ALIGN: usize = 8;
 
-/// A block of `bytes` from the module's allocator. None when it has no room,
-/// and for zero bytes, which an allocator is never asked for.
+/// None when there is no room, and for zero bytes.
 pub fn alloc(bytes: u32) -> Option<Block> {
     if bytes == 0 {
         return None;
@@ -34,8 +22,6 @@ pub fn alloc(bytes: u32) -> Option<Block> {
     (!at.is_null()).then_some((off_of(at), bytes))
 }
 
-/// Gives a block back.
-///
 /// # Safety
 /// `block` came from `alloc` and has not been given back.
 pub unsafe fn free((at, bytes): Block) {
@@ -43,8 +29,7 @@ pub unsafe fn free((at, bytes): Block) {
     unsafe { std::alloc::dealloc(ptr_at(at), std::alloc::Layout::from_size_align_unchecked(bytes as usize, BLOCK_ALIGN)) }
 }
 
-/// A block freed when it goes out of scope, as `ArenaGuard` rewinds an arena:
-/// for work that can still fail after taking it. `keep` hands the block on.
+/// Freed on drop unless `keep` hands it on.
 pub struct Guard(Block);
 
 impl Guard {

@@ -1,13 +1,8 @@
 // @pxl/web/platform/web/surface.tsx
 
 /**
- * What the kernel draws into, on the web: a canvas handed over once, which it
- * draws through the page's WebGPU (webgpu.ts). A device puts its own view
- * here, which the kernel draws into directly.
- *
- * The world's canvas is also the page's driver (kernel/control/input.ts): its
- * box is the frame's viewport, its pointer events and the wheel over it are
- * the kernel's input, and the tab's visibility is the app's.
+ * The canvas the kernel draws into on the web, and the page's input driver:
+ * its box, pointer, wheel and the tab's visibility.
  */
 
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
@@ -21,8 +16,7 @@ import { surface_close, surface_open, surface_size } from "@/kernel/render/surfa
 import { request_frame } from "@/kernel/sched.ts";
 import { bindSurface, unbindSurface } from "@/platform/web/webgpu.ts";
 
-/** A wheel's line in CSS pixels, for a browser that turns it in lines: the
- * line height a page's default text has. */
+/** A wheel line in CSS pixels: a page's default line height. */
 const LINE_PX = 16;
 
 const FILL = { position: "absolute", inset: 0, width: "100%", height: "100%" } as const;
@@ -32,16 +26,9 @@ function dpr(): f64 {
 }
 
 /**
- * Hands `canvas` to the kernel to draw `role` into, and follows its layout
- * box in device pixels: the handle, 0 when the kernel has no surface left and
- * nothing is drawn in it, and what lets it go.
- *
- * The box is the layout's, not the bounding rectangle: a rectangle includes
- * transforms, so a canvas mounted inside a drawer that is sliding or scaling in
- * would report a size it only passes through, and no resize follows a
- * transform. Where the observer reports device pixels they are exact; where it
- * does not (Safari), the CSS box times the pixel ratio stands in, and a zoom —
- * which changes the ratio and not the box — is caught by the window's resize.
+ * Follows the layout box, not the bounding rect, which includes transforms a
+ * sliding drawer passes through. Safari reports no device pixels, so the CSS
+ * box times the ratio stands in and a zoom is caught by the window's resize.
  */
 function openSurface(canvas: HTMLCanvasElement, role: u32): { handle: u32; close: () => void } {
   const handle = surface_open(role);
@@ -76,8 +63,6 @@ function pointerKind(e: PointerEvent): PointerKind {
   return e.pointerType === "touch" ? PointerKind.Touch : e.pointerType === "pen" ? PointerKind.Pen : PointerKind.Mouse;
 }
 
-/** Drives the kernel from `canvas`: its box, the pointer over it, the wheel,
- * the tab's visibility. What it returns lets all of it go. */
 function drive(canvas: HTMLCanvasElement): () => void {
   const sendRect = () => {
     const r = canvas.getBoundingClientRect();
@@ -93,8 +78,6 @@ function drive(canvas: HTMLCanvasElement): () => void {
   };
   const onWheel = (e: WheelEvent) => {
     if (e.ctrlKey) e.preventDefault();
-    // A turn may come in lines or pages rather than the pixels the kernel
-    // takes it in.
     const per = e.deltaMode === WheelEvent.DOM_DELTA_LINE ? LINE_PX : e.deltaMode === WheelEvent.DOM_DELTA_PAGE ? globalThis.innerHeight : 1;
     kernel_wheel(e.deltaY * per);
   };
@@ -140,7 +123,6 @@ function drive(canvas: HTMLCanvasElement): () => void {
   };
 }
 
-/** The world: the map's surface, and the page driven from it. */
 export function WorldSurface() {
   const ref = useRef<HTMLCanvasElement>(null);
 
@@ -158,9 +140,6 @@ export function WorldSurface() {
   return <canvas ref={ref} style={{ ...FILL, touchAction: "none" }} />;
 }
 
-/** A display case: a surface the kernel draws one thing into. `onOpen` is
- * handed the surface once it is the kernel's, and what it returns is run
- * before the surface is let go; it opens again whenever `openKey` changes. */
 export function CaseSurface({ onOpen, openKey }: { onOpen: (surface: u32) => () => void; openKey: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const open = useRef(onOpen);

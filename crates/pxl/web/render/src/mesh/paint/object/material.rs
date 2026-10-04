@@ -1,7 +1,6 @@
 // pxl-render/mesh/paint/object/material.rs
 
-//! A placed cube's material — what the painter paints its state as
-//! (adapter.rs `Painter`): a function of the catalog and the palette.
+//! A placed cube's material, from the catalog and the palette.
 
 use crate::mesh::paint::palette::shader_meta::{ground_color_lookup, ground_layer_index_lookup, rgb255};
 use crate::mesh::paint::palette::tex_array::OBJECT_LAYER_IDX;
@@ -10,14 +9,9 @@ use pxl_spec::cell::object::{placeable_cube_rgb, terrain_style_cube_source, Plac
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
-/// A placed "solid" cube's own real color/layer_idx — either a flat color or,
-/// for a terrain-styled pick, the exact same color/layer_idx
-/// real baked terrain of that type gets, read straight from
-/// palette/shader_meta.rs's lookup tables. material_class stays OBJECT either way — the mesher's own
-/// open-bottom/occlusion-exemption/run-merge behavior for OBJECT-classed runs
-/// has nothing to do with which texture a cube samples, and reusing a terrain
-/// class here would stop a solid object shielding whatever is beneath it from
-/// occlusion culling, for a distinction layer-tap blending never needs: it only cares whether layer_idx is real.
+/// A terrain-styled pick takes the exact color and layer its terrain type gets.
+/// The class stays OBJECT: a terrain class would stop the cube shielding what
+/// is beneath it from occlusion culling.
 pub fn solid_material(cube: PlaceableCube) -> VoxelMaterial {
     if let Some(source) = terrain_style_cube_source(cube) {
         let t = source.terrain_num_id as usize;
@@ -37,8 +31,7 @@ pub fn solid_material(cube: PlaceableCube) -> VoxelMaterial {
         r: r as u32,
         g: g as u32,
         b: b as u32,
-        // The layer array is built by walking the blocks (gpu/layers.rs),
-        // so the index into it is that walk's.
+        // The layer array is built by walking the blocks, so the index is that walk's.
         layer_idx: match cube {
             PlaceableCube::Block(block) => OBJECT_LAYER_IDX(block).unwrap_or(NO_LAYER),
             _ => NO_LAYER,

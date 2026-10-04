@@ -1,26 +1,15 @@
 // xpute-runtime/abi/handle.rs
 
-//! Handles to what another side keeps: the number is the table's, the thing it
-//! names is the holder's — the way an OS hands out a descriptor and keeps the
-//! file. A handle packs a slot and that slot's generation, so a handle kept
-//! past its release does not name whatever took the slot after it.
-//!
-//! The table is fixed at N slots and never grows: past them `acquire` refuses.
-//! Slot 0 is never handed out, so 0 is never a handle.
-//!
-//! `Slots` is the same handle over values this side keeps: it grows, and a
-//! removed value's handle names nothing whatever takes its slot next.
+//! Generational handles: a slot and its generation, so a handle kept past its
+//! release names nothing that takes the slot after. 0 is never a handle.
+//! `HandleTable` is fixed at N slots for what another side keeps; `Slots`
+//! grows and holds values this side keeps.
 
-/// Bits of a handle that are its slot; the rest are the slot's generation.
-/// Half of the u32 each way, and the generation lane is `u16` to match: the
-/// two are one number written twice, not a parameter. The host reads slots
-/// with the same 16 (`@xpute/runtime/abi/handle.ts`).
+/// The rest is the generation, hence its `u16` lane. The host uses the same 16.
 pub const SLOT_BITS: u32 = 16;
 const SLOT_MASK: u32 = (1 << SLOT_BITS) - 1;
-/// No slot: the end of the free list.
 const NONE: u32 = u32::MAX;
 
-/// The slot a handle names.
 pub fn handle_slot(handle: u32) -> u32 {
     handle & SLOT_MASK
 }
@@ -28,7 +17,6 @@ pub fn handle_slot(handle: u32) -> u32 {
 pub struct HandleTable<const N: usize> {
     generation: [u16; N],
     live: [bool; N],
-    /// The free list's links, by slot.
     next: [u32; N],
     free: u32,
     /// Slots never handed out start here.
@@ -55,7 +43,6 @@ impl<const N: usize> HandleTable<N> {
         }
     }
 
-    /// A handle to a slot of its own, or none when every slot is taken.
     pub fn acquire(&mut self) -> Option<u32> {
         let slot = if self.free != NONE {
             let slot = self.free;
@@ -74,7 +61,6 @@ impl<const N: usize> HandleTable<N> {
         Some(slot | ((self.generation[s] as u32) << SLOT_BITS))
     }
 
-    /// Gives the handle's slot back. False for a handle that is not live.
     pub fn release(&mut self, handle: u32) -> bool {
         if !self.live(handle) {
             return false;
@@ -87,26 +73,19 @@ impl<const N: usize> HandleTable<N> {
         true
     }
 
-    /// Whether the handle names its slot now.
     pub fn live(&self, handle: u32) -> bool {
         let s = handle_slot(handle) as usize;
         s != 0 && s < N && self.live[s] && self.generation[s] as u32 == handle >> SLOT_BITS
     }
 
-    /// Handles live now.
     pub fn count(&self) -> u32 {
         self.count
     }
 }
 
-/// Values held by handle: what a table of `Vec<Option<T>>` indexed by position
-/// would be, except that a handle kept past its value's removal names nothing
-/// rather than whatever was put in its slot after. The handle is the table's
-/// above: a slot and that slot's generation, 0 never one. It grows as values
-/// are put in and never shrinks; a slot given back is the next one taken.
+/// Grows, never shrinks; a slot given back is the next one taken.
 pub struct Slots<T> {
-    /// By slot: its generation, and its value while one is in it. Slot 0 is
-    /// held empty so no handle is 0.
+    /// Slot 0 is held empty so no handle is 0.
     entries: Vec<(u16, Option<T>)>,
     free: Vec<u32>,
 }
@@ -125,7 +104,6 @@ impl<T> Slots<T> {
         }
     }
 
-    /// Puts `value` in a slot of its own: its handle.
     pub fn insert(&mut self, value: T) -> u32 {
         if self.entries.is_empty() {
             self.entries.push((0, None));
@@ -147,7 +125,6 @@ impl<T> Slots<T> {
             .filter(|(generation, value)| value.is_some() && *generation as u32 == handle >> SLOT_BITS)
     }
 
-    /// The value the handle names, or none once it was removed.
     pub fn get(&self, handle: u32) -> Option<&T> {
         self.entry(handle)?.1.as_ref()
     }
@@ -157,8 +134,6 @@ impl<T> Slots<T> {
         self.entries[handle_slot(handle) as usize].1.as_mut()
     }
 
-    /// Takes the value out and gives its slot back; none for a handle that
-    /// names nothing.
     pub fn remove(&mut self, handle: u32) -> Option<T> {
         self.entry(handle)?;
         let slot = handle_slot(handle);
@@ -166,7 +141,6 @@ impl<T> Slots<T> {
         self.entries[slot as usize].1.take()
     }
 
-    /// Every value held, with its handle.
     pub fn iter(&self) -> impl Iterator<Item = (u32, &T)> {
         self.entries
             .iter()

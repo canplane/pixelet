@@ -1,31 +1,36 @@
 // pxl-render/gpu/pass/model.rs
 
-//! What the passes that draw a model a draw share on the device: group 0
-//! over the frame and over the light, a dynamic uniform slot a draw written
-//! in one write before the pass, and a model's mesh block bound as its
-//! vertex lanes and its indices. Which draws are a pass's own, what its
-//! uniform says and what it binds beside them — a joint palette, an instance
-//! block, a skin — stay the pass's (skinned.rs, decor.rs).
+//! What the model passes (decor, impostors, actors) share: group 0, per-draw
+//! uniform slots written once before the pass, and the draw loop.
 
 use crate::frame::draw::MODEL_VERTEX_WORDS;
 use crate::gpu::api::{buffer_usage, object, release, Gpu};
 use crate::gpu::api_spec::resource;
 use crate::gpu::atmosphere::AIR_WORDS;
-use crate::gpu::pipeline::Built;
-use crate::gpu::renderer::{frame_group, Scratch};
+use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::renderer::{frame_group, put_f32, put_u32, Scratch};
 
-/// Group 0 as the eye draws with it and as the light does; the light's is
-/// none for a pass that never draws into a shadow map.
+#[derive(Clone, Copy)]
+pub enum Stage {
+    Lit,
+    Depth,
+    Prepass,
+}
+
+/// A layout is shared by its words, so one group 0 serves every model pipeline.
+pub fn frame_layout(g: &Gpu, pipelines: &mut Pipelines) -> u32 {
+    pipelines.build(g, PIPELINE_SKINNED, format::CANVAS).layouts[0]
+}
+
+/// The light's is none where nothing is drawn into a shadow map.
 pub struct FrameGroups {
     pub frame: u32,
     pub light: u32,
-    /// The air's entries, which the groups are made with again on a rebind.
+    layout: u32,
     air: [u32; AIR_WORDS],
 }
 
 impl FrameGroups {
-    /// Over `frame_buffer` and a shadow map's entries, and over the light's
-    /// frame and its entries where there is one; `ao` the occlusion map's entry.
     pub fn new(g: &Gpu, layout: u32, frame_buffer: u32, shadow: [u32; 10], light: Option<(u32, [u32; 10])>, ao: [u32; 5], air: [u32; AIR_WORDS]) -> FrameGroups {
         FrameGroups {
             frame: frame_group(g, layout, frame_buffer, shadow, ao, air),
@@ -34,8 +39,7 @@ impl FrameGroups {
         }
     }
 
-    /// Both again over a new occlusion map's entry `ao`.
-    pub fn rebind(&mut self, g: &Gpu, layout: u32, frame_buffer: u32, shadow: [u32; 10], light: Option<(u32, [u32; 10])>, ao: [u32; 5]) {
+    pub fn rebind(&mut self, g: &Gpu, frame_buffer: u32, shadow: [u32; 10], light: Option<(u32, [u32; 10])>, ao: [u32; 5]) {
         self.release();
         *self = FrameGroups::new(g, layout, frame_buffer, shadow, light, ao, self.air);
     }
@@ -46,17 +50,26 @@ impl FrameGroups {
     }
 }
 
-/// One uniform slot a draw, `stride` apart, in one buffer the pass binds at
-/// each draw's offset.
 pub struct DrawUniforms {
-    /// What one draw's uniform is, and the slot it takes: the size rounded up
-    /// to the device's offset alignment.
+    /// Rounded up to the device's offset alignment.
     bytes: u32,
     stride: u32,
     buffer: u32,
     capacity: u32,
     group: u32,
     scratch: Scratch,
+}
+
+#[derive(Clone, Copy)]
+pub struct Slots {
+    group: u32,
+    stride: u32,
+}
+
+impl Slots {
+    pub fn at(&self, k: u32) -> (u32, u32) {
+        (self.group, k * self.stride)
+    }
 }
 
 impl DrawUniforms {
@@ -71,11 +84,8 @@ impl DrawUniforms {
         }
     }
 
-    /// A slot for each of `count` draws, the k-th of `draws` laid out by
-    /// `put(slot, draw)`, in one write: a later write to the same buffer
-    /// before the submit would stand for every draw. The buffer grows to the
-    /// next power of two, eight at least, so a count that wanders does not
-    /// make it again every frame.
+    /// One write: a later write to the same buffer before the submit would stand
+    /// for every draw. Grows to the next power of two, eight at least.
     pub fn write<T>(&mut self, g: &Gpu, layout: u32, count: u32, draws: impl Iterator<Item = T>, mut put: impl FnMut(&mut [u8], T)) {
         if count == 0 {
             return;
@@ -98,9 +108,11 @@ impl DrawUniforms {
         g.write_buffer(self.buffer, 0, buf);
     }
 
-    /// The group and slot `k`'s offset in it; none before the first write.
-    pub fn at(&self, k: u32) -> Option<(u32, u32)> {
-        (self.group != 0).then_some((self.group, k * self.stride))
+    pub fn slots(&self) -> Option<Slots> {
+        (self.group != 0).then_some(Slots {
+            group: self.group,
+            stride: self.stride,
+        })
     }
 
     pub fn release(&mut self) {
@@ -110,14 +122,81 @@ impl DrawUniforms {
     }
 }
 
-/// Binds `mesh`, a model block of `vertex_cnt` vertices in `lit`'s lanes and
-/// then `index_cnt` indices, and draws `instances` of it.
-pub fn draw_model(g: &Gpu, pass: u32, lit: &Built, mesh: u32, vertex_cnt: u32, index_cnt: u32, instances: u32) {
-    let mut at = 0;
-    for lane in 0..lit.lanes {
-        let size = vertex_cnt * lit.strides[lane];
-        g.set_vertex_buffer(pass, lane as u32, mesh, at, size);
-        at += size;
+pub fn uniform_of<'a>(uniforms: &'a [f32], d: &[u32; DRAW_WORDS]) -> &'a [f32] {
+    &uniforms[d[3] as usize * UNIFORM_FLOATS..][..UNIFORM_FLOATS]
+}
+
+/// `third` is decor's padding or the impostor's sprite layer.
+pub fn put_instances(buf: &mut [u8], u: &[f32], third: u32) {
+    put_f32(buf, 0, u[0]);
+    put_f32(buf, 4, u[1]);
+    put_f32(buf, 8, u[2]);
+    put_u32(buf, 12, u[3] as u32);
+    put_u32(buf, 16, u[5] as u32);
+    put_f32(buf, 20, u[4]);
+    put_u32(buf, 24, third);
+    put_u32(buf, 28, u[6] as u32);
+}
+
+pub struct ModelDraw {
+    pub groups: [u32; 2],
+    /// None for a strip of four corners an instance.
+    pub mesh: Option<(u32, u32, u32)>,
+    pub instances: u32,
+}
+
+/// A group or a mesh the previous draw bound is not bound again.
+#[allow(clippy::too_many_arguments)]
+pub fn draw_models<'a>(
+    g: &Gpu,
+    pass: u32,
+    lit: &Built,
+    pipeline: u32,
+    (frame, bound): (u32, &mut u32),
+    slots: Slots,
+    first: u32,
+    draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
+    mut resolve: impl FnMut(&[u32; DRAW_WORDS]) -> Option<ModelDraw>,
+) {
+    let mut started = false;
+    let mut groups = [0u32; 2];
+    let mut mesh_bound = 0;
+    for (k, d) in draws.enumerate() {
+        let Some(m) = resolve(d) else { continue };
+        if !started {
+            started = true;
+            g.set_pipeline(pass, pipeline);
+            if *bound != frame {
+                g.set_bind_group(pass, 0, frame, &[]);
+                *bound = frame;
+            }
+        }
+        let (group, offset) = slots.at(first + k as u32);
+        g.set_bind_group(pass, 1, group, &[offset]);
+        for (i, (held, id)) in groups.iter_mut().zip(m.groups).enumerate() {
+            if *held != id {
+                g.set_bind_group(pass, 2 + i as u32, id, &[]);
+                *held = id;
+            }
+        }
+        match m.mesh {
+            Some((mesh, vertex_cnt, index_cnt)) => draw_model(g, pass, lit, &mut mesh_bound, mesh, vertex_cnt, index_cnt, m.instances),
+            None => g.draw(pass, 4, m.instances, 0, 0),
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn draw_model(g: &Gpu, pass: u32, lit: &Built, bound: &mut u32, mesh: u32, vertex_cnt: u32, index_cnt: u32, instances: u32) {
+    if *bound != mesh {
+        let mut at = 0;
+        for lane in 0..lit.lanes {
+            let size = vertex_cnt * lit.strides[lane];
+            g.set_vertex_buffer(pass, lane as u32, mesh, at, size);
+            at += size;
+        }
+        g.set_index_buffer(pass, mesh, vertex_cnt * MODEL_VERTEX_WORDS * 4, index_cnt * 4);
+        *bound = mesh;
     }
     g.set_index_buffer(pass, mesh, vertex_cnt * MODEL_VERTEX_WORDS * 4, index_cnt * 4);
     g.draw_indexed(pass, index_cnt, instances, 0, 0);

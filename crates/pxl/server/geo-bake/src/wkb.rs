@@ -1,10 +1,7 @@
 // pxl-geo-bake/wkb.rs
 
-//! Minimal WKB decoder shared by every source adapter that reads
-//! `ST_AsBinary(geom)` rows (terrain/pipeline/coast/adapter.rs,
-//! terrain/pipeline/overture/adapter.rs). Supports Point, LineString, Polygon
-//! and MultiPolygon. Accepts EWKB flags (Z/SRID) and ignores SRID and Z
-//! because the pipeline assumes 3857.
+//! Minimal WKB decoder: Point, LineString, Polygon, MultiPolygon; EWKB flags
+//! and ISO dimensions. SRID is ignored (3857 assumed); Z is kept as a deck's top.
 
 use pxl_spec::space::adapter::epsg3857::G3857;
 
@@ -14,9 +11,7 @@ pub struct WkbGeometry {
     pub is_polygon_source: bool,
 }
 
-/// A cursor over the bytes. Every read is bounds-checked and a short buffer
-/// ends the decode rather than panicking: a malformed row is no geometry,
-/// which is what `None` becomes.
+/// A short buffer ends the decode rather than panicking.
 struct Reader<'a> {
     b: &'a [u8],
     at: usize,
@@ -68,12 +63,7 @@ fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
 
     match base {
         1 => {
-            // Point
-            let x = r.f64(le)?;
-            let y = r.f64(le)?;
-            if has_z {
-                r.skip(8)?;
-            }
+            let p = read_point(r, le, dims)?;
             Some(vec![WkbGeometry {
                 points: vec![[x, y, 0.0]],
                 holes: Vec::new(),
@@ -81,8 +71,7 @@ fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
             }])
         }
         2 => {
-            // LineString
-            let pts = read_ring(r, le, has_z)?;
+            let pts = read_ring(r, le, dims)?;
             Some(vec![WkbGeometry {
                 points: pts,
                 holes: Vec::new(),
@@ -90,7 +79,7 @@ fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
             }])
         }
         3 => {
-            // Polygon: ring 0 is the outer, the rest are holes.
+            // Ring 0 is the outer, the rest are holes.
             let nr = r.u32(le)?;
             if nr == 0 {
                 return Some(vec![WkbGeometry {
@@ -111,28 +100,38 @@ fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
             }])
         }
         6 => {
-            // MultiPolygon
             let np = r.u32(le)?;
             let mut out: Vec<WkbGeometry> = Vec::new();
             for _ in 0..np {
                 for mut g in read_any(r)? {
-                    // Each element is a Polygon; force polygon semantics.
                     g.is_polygon_source = true;
                     out.push(g);
                 }
             }
             Some(out)
         }
-        // unsupported => empty
         _ => Some(Vec::new()),
     }
 }
 
-fn read_ring(r: &mut Reader, le: bool, has_z: bool) -> Option<Vec<G3857>> {
+#[derive(Clone, Copy)]
+struct Dims {
+    z: bool,
+    m: bool,
+}
+
+fn read_point(r: &mut Reader, le: bool, dims: Dims) -> Option<G3857> {
+    let (x, y) = (r.f64(le)?, r.f64(le)?);
+    let z = if dims.z { r.f64(le)? } else { 0.0 };
+    if dims.m {
+        r.skip(8)?;
+    }
+    Some([x, y, z])
+}
+
+fn read_ring(r: &mut Reader, le: bool, dims: Dims) -> Option<Vec<G3857>> {
     let n = r.u32(le)? as usize;
-    // A length word off the wire sizes an allocation, so it is not trusted:
-    // each point is at least 16 bytes, and a ring claiming more than the
-    // buffer could hold is a malformed row rather than a reservation.
+    // An untrusted length must not size an allocation: each point is at least 16 bytes.
     if n.saturating_mul(16) > r.b.len() - r.at.min(r.b.len()) {
         return None;
     }

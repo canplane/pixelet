@@ -4,13 +4,8 @@ use super::*;
 use crate::space::adapter::epsg4326;
 use crate::space::pvf3::{fvec, ivec, pvf3};
 
-// project()/unproject() round-trip through a fixed-point PVF3 lattice (see
-// pvf3/projection.rs), so exact equality isn't expected — only that the
-// error stays within one lattice cell's worth of meters. 1u ≈ 2.389m (see
-// M_PER_U in 3857.rs) and the fractional lane resolves well below that, so a
-// tolerance far looser than a full unit (0.5m) confirms the round-trip isn't
-// silently degenerating, without being so tight it starts asserting on the
-// lattice's own intentional quantization.
+// The round trip goes through the fixed-point lattice; 0.5 m is far looser
+// than the fraction lane and far tighter than a unit (about 2.389 m).
 const ROUND_TRIP_TOL_M: f64 = 0.5;
 const WORLD_WIDTH_M: f64 = 40075016.68557849;
 const HALF_WORLD_M: f64 = WORLD_WIDTH_M / 2.0;
@@ -37,7 +32,7 @@ fn epsg3857_project_unproject_round_trips_the_origin() {
 
 #[test]
 fn epsg3857_project_unproject_round_trips_a_real_world_scale_coordinate_roughly_seoul() {
-    // EPSG:3857 meters for lon/lat ~ (127.03, 37.50).
+    // About (127.03, 37.50).
     let x_m = 14139274.0;
     let y_m = 4508140.0;
     let [x, y, _] = round_trip(x_m, y_m, 0.0);
@@ -57,8 +52,7 @@ fn epsg3857_project_wraps_x_across_the_antimeridian_instead_of_growing_unbounded
     project(&mut p, WORLD_WIDTH_M * 1.5, 0.0, 0.0);
     let mut out: G3857 = [0.0; 3];
     unproject(&mut out, p.i, p.f);
-    // 1.5 world-widths east wraps back to -0.5 world-widths (i.e. the
-    // antimeridian's other side), not 1.5 world-widths.
+    // 1.5 world widths east wraps to -0.5.
     assert_almost(out[0], -HALF_WORLD_M, ROUND_TRIP_TOL_M);
 }
 
@@ -95,8 +89,7 @@ fn epsg3857_project_pvf3_x_subtraction_takes_the_short_antimeridian_path() {
 
 #[test]
 fn epsg3857_page_bbox_preserves_the_exclusive_positive_world_boundary() {
-    // The last page before X's positive edge: the lane is one world, so its
-    // positive half is 2^23 units, and a page is L3_RANGE of them.
+    // The last page before X's positive edge at 2^23 units.
     let last = (1i64 << 23) / crate::space::indexer::L3_RANGE as i64 - 1;
     let page_idx = ivec::gather(last, last, 0);
     let [_, max] = get_page_bbox(page_idx);
@@ -116,7 +109,7 @@ fn epsg3857_z_scale_is_1_at_the_equator_no_mercator_distortion() {
 #[test]
 fn epsg3857_z_scale_grows_away_from_the_equator_mercator_s_characteristic_distortion() {
     let at_equator = Z_SCALE(0.0);
-    // ~37.5N in EPSG:3857 meters.
+    // About 37.5N.
     let at_high_lat = Z_SCALE(4508140.0);
     assert!(at_high_lat > at_equator);
 }

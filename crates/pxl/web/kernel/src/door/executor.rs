@@ -1,19 +1,8 @@
 // pxl-kernel/door/executor.rs
 
-//! The executor the door installs for the kernel's tasks at boot: embassy's raw
-//! executor behind xpute_runtime::sched::task's `Executor`. The rest of the
-//! kernel spawns and polls through that interface and never names this.
-//!
-//! A task reaches here type-erased and is run by the one task type below,
-//! pooled as many times as the kernel declares it spawns (TASKS).
-//!
-//! The executor tells its owner it has work through the pender, a function it
-//! links to by name. Here that only records the fact: poll is never called
-//! from it, which the executor forbids, and `pending` is how the kernel's
-//! falling edge learns a task still waits.
-//!
-//! One thread, and no turn re-enters another, so the critical section the
-//! executor takes has nothing to exclude.
+//! embassy's raw executor behind xpute's `Executor`, installed at boot. The
+//! pender only records that work is queued: poll is never called from it,
+//! which the executor forbids, and `pending` tells the falling edge.
 
 use crate::global::Global;
 use crate::world::change::TASKS;
@@ -33,7 +22,6 @@ unsafe impl critical_section::Impl for OneThread {
 
 static RAW: Global<Raw> = Global::new();
 
-/// Set by the pender: a task was queued since the last poll began.
 static PENDED: Global<bool> = Global::new();
 
 #[unsafe(export_name = "__pender")]
@@ -53,8 +41,8 @@ async fn run(task: Task) {
 struct Embassy;
 
 impl Executor for Embassy {
-    /// The priority is not kept: embassy's own queue has no order the kernel
-    /// relies on, and its priority scheduler is a feature this build leaves off.
+    /// The priority is dropped: nothing relies on embassy's queue order, and
+    /// its priority scheduler is left off.
     fn spawn(&self, task: Task, _: Priority) -> bool {
         match run(task) {
             Ok(token) => {
@@ -67,8 +55,8 @@ impl Executor for Embassy {
 
     fn poll(&self) {
         PENDED.set(false);
-        // SAFETY: called from the doorbell alone, which no turn re-enters,
-        // and never from the pender.
+        // SAFETY: called from the doorbell alone, which no turn re-enters, and
+        // never from the pender.
         unsafe { raw().poll() };
     }
 
@@ -79,7 +67,7 @@ impl Executor for Embassy {
 
 static EMBASSY: Embassy = Embassy;
 
-/// Installs the executor, before the kernel spawns anything.
+/// Before the kernel spawns anything.
 pub fn install() {
     set_executor(&EMBASSY);
 }

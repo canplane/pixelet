@@ -1,8 +1,4 @@
-// The puck's zone: a unit box a cell, instanced from the zone block, drawn
-// unlit and half transparent with a border on the edges the ring's rim runs
-// along, as the three.js puck's shader drew it (b9e31004),
-// deliberately unlit so the zone reads as an indicator rather than a
-// surface.
+// Unlit and half transparent, so the zone reads as an indicator rather than a surface.
 
 const ZONE_FILL_OPACITY: f32 = 0.4;
 const ZONE_BORDER_WIDTH: f32 = 0.04;

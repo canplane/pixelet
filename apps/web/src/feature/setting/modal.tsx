@@ -18,7 +18,6 @@ import { DisclaimerSection } from "./section/disclaimer.tsx";
 import { AboutSection } from "./section/about.tsx";
 import { AttributionSection } from "./section/attribution.tsx";
 
-/** The sheet's two tabs. */
 export const enum SettingsTab {
   Effects = 0,
   Info = 1,
@@ -28,10 +27,7 @@ function Separator() {
   return <View style={styles.separator} />;
 }
 
-// Each tab scrolls on its own, and only the tab shown is mounted. One
-// scroller around both kept its offset across a switch, so a long scroll
-// down the effects list opened the info tab already scrolled past its top;
-// a scroller mounted fresh starts at zero every time.
+// One scroller per tab, mounted fresh: a shared one kept its offset across a switch.
 function TabScroll({ children }: { children: React.ReactNode }) {
   const { bottom } = useSafeArea();
   return (
@@ -41,8 +37,6 @@ function TabScroll({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** The settings, beside the map they change: the map stays in reach, so an
- * effect can be switched and looked at without closing anything. */
 export function SettingsModal(props: BaseModalProps) {
   const { onClose } = props;
   const { t } = useTranslation();

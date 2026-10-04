@@ -24,82 +24,52 @@ import { decorName, type PlaceableCube, placeableCubeId } from "@/catalog/cell/m
 import { useKernel } from "@/kernel/shell.ts";
 import { cubeLabel, CubeSwatch, DECOR_GLYPH, heldRing } from "./cube-swatch.tsx";
 
-/** How small the send starts as it grows into its circle. */
 const SEND_FROM_SCALE = 0.5;
 
-// The height of both pills, a round control's side — the map view
-// (view.tsx) stands the toasts clear of it.
 export const MODE_BAR_HEIGHT_PX = chrome.control;
-/** A tool or swatch's pitch in the strip. A tap target is as wide as the
- * pitch and no wider — past it, it overlaps a neighbor and the later
- * one in the tree takes the tap — so a swatch smaller than the pitch is a
- * transparent box at full pitch with its shape centered. */
+/** A tap target is as wide as the pitch and no wider: past it, the later
+ * neighbor in the tree takes the tap. */
 const PITCH = chrome.target;
-/** A pick in the strip, a cube's swatch or a decor's disc: a round item, a
- * step over a tool's glyph, since it is a thing and not an action. */
 const ITEM = 24;
-/** A decor's glyph on its disc. */
 const ITEM_GLYPH = 16;
-/** The capsule a tool in hand is lit on, centered in its slot. */
 const HELD_PX = chrome.selection;
 const PILL_GAP = chrome.controlGap;
-/** The message field's width where the bar leaves it room. */
 const FIELD_PX = 384;
-/** The message pill open: its glyph's slot, the field, and room after it. */
 const MESSAGE_OPEN_PX = MODE_BAR_HEIGHT_PX + FIELD_PX + 16;
 
-/** How far above the swatch it was opened from the size flyout's bottom
- * stands. */
 const FLYOUT_LIFT_PX = 20;
-/** A size's slot, which a finger picks: the least target. */
 const FLYOUT_ITEM_PX = chrome.target;
 const FLYOUT_GAP_PX = 8;
 const FLYOUT_PAD_Y = 8;
 const FLYOUT_WIDTH = FLYOUT_ITEM_PX + 12;
-/** The flyout's foot over the bar's bottom: FLYOUT_LIFT_PX over the swatch,
- * which is centered in the bar. */
 const FLYOUT_FOOT = (MODE_BAR_HEIGHT_PX + ITEM) / 2 + FLYOUT_LIFT_PX;
-/** A press held this long on a swatch opens its sizes. */
 const FLYOUT_HOLD_MS = 150;
-/** A finger that moves this far first decides the gesture: up opens the
- * sizes, sideways leaves the strip to scroll. */
+/** The first move this far decides: up opens the sizes, sideways scrolls the strip. */
 const FLYOUT_AXIS_PX = 12;
 
-/** Where a finger on a swatch is: not yet decided, holding the size flyout
- * open, or given to the strip to scroll. */
 const enum Gesture {
   Pending = 0,
   Flyout = 1,
   Scroll = 2,
 }
 
-/** What the palette pill's slot holds while the message pill is open: the
- * way back to the palette, or the send button; nothing while the strip is
- * open over it. */
 const enum Slot {
   Empty = 0,
   Palette = 1,
   Send = 2,
 }
 
-/** A size tier's mark in the flyout, a dot: a scale of sizes in general,
- * not a picture of the block. Its area halves with the tier, so each step
- * reads as one and the finest stays large enough to see, where halving the
- * width left the finest a speck: 28, 20, 14, 10. */
+/** A dot whose area halves per tier, so the finest stays visible: 28, 20, 14, 10. */
 const MARK_COARSEST = 28;
 function sizeMark(tier: u32): f64 {
   return Math.round(MARK_COARSEST / Math.SQRT2 ** tier);
 }
 
-/** The tiers top to bottom: finest first, so the coarsest stands at the
- * flyout's foot, nearest the swatch. */
+/** Finest first, so the coarsest stands nearest the swatch. */
 function sizeTiers(count: u32): u32[] {
   return Array.from({ length: count }, (_, i) => count - 1 - i);
 }
 
-/** The size flyout while it is open: its center over the swatch, in the
- * bar's frame and in the window's, its foot in the window's, and the tier the
- * finger is over. */
 interface Flyout {
   left: f64;
   centerX: f64;
@@ -107,9 +77,6 @@ interface Flyout {
   hover: u32 | null;
 }
 
-/** The tier under a point in the window, or null: the flyout's items are a
- * fixed pitch above the swatch, so this is arithmetic on the point, and
- * nothing is measured while the finger moves. */
 function tierAt(at: Flyout, count: u32, x: f64, y: f64): u32 | null {
   if (Math.abs(x - at.centerX) > FLYOUT_WIDTH / 2) return null;
   const top = at.foot - (2 * FLYOUT_PAD_Y + count * FLYOUT_ITEM_PX + (count - 1) * FLYOUT_GAP_PX);
@@ -120,10 +87,7 @@ function tierAt(at: Flyout, count: u32, x: f64, y: f64): u32 | null {
   return sizeTiers(count)[row];
 }
 
-/** The size flyout over the swatch it was opened from: the tier the finger
- * is over is marked, and the one it lifts on is the size placed from then
- * on. Drawn from the bar rather than from the swatch, which sits in a
- * horizontally scrolling strip that clips what stands outside it. */
+/** Drawn from the bar, not the swatch, whose scrolling strip would clip it. */
 function SizeFlyout({ hover }: { hover: u32 | null }) {
   const objectTier = useUiStore((s) => s.objectTier);
   const sizes = useKernel((s) => s.object_sizes);
@@ -150,25 +114,14 @@ function SizeFlyout({ hover }: { hover: u32 | null }) {
 }
 
 interface SizeGesture {
-  /** The swatch was pressed and let go in place. */
   tap: () => void;
-  /** Held, or dragged up: the sizes open over this swatch. */
   open: (swatch: View) => void;
-  /** The finger over the open sizes, in the window. */
   move: (x: f64, y: f64) => void;
-  /** Lifted over the open sizes, in the window. */
   lift: (x: f64, y: f64) => void;
-  /** The sizes close without a pick. */
   close: () => void;
 }
 
-/**
- * A swatch's one gesture: a tap takes the cube; a hold, or a drag up, opens
- * the sizes over it, the finger slides to one and lifts to take it. A drag
- * sideways is the strip's to scroll, which takes the touch over from this.
- * The script hears the finger only to decide and to pick — the flyout's
- * arrival and the mark's growth are poses the compositor plays.
- */
+/** A tap takes the cube; a hold or a drag up opens the sizes; a drag sideways is the strip's. */
 function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
   const handlers = useRef(g);
   handlers.current = g;
@@ -217,16 +170,12 @@ function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
         if (state === Gesture.Flyout) handlers.current.close();
         state = Gesture.Pending;
       },
-      // Once the sizes are open the finger is theirs; before that, a strip
-      // that starts to scroll may have it.
       onPanResponderTerminationRequest: () => state !== Gesture.Flyout,
     });
   }
   return responder.current.panHandlers;
 }
 
-/** A cube in the strip: a tap takes it in hand, a hold or a drag up opens the
- * size flyout over it. */
 function ColorSwatchButton({ cube, sizes }: { cube: PlaceableCube; sizes: Omit<SizeGesture, "tap"> }) {
   const { t } = useTranslation();
   const selectCube = useUiStore.getState().selectCube;
@@ -253,9 +202,6 @@ function ColorSwatchButton({ cube, sizes }: { cube: PlaceableCube; sizes: Omit<S
   );
 }
 
-/** A decor kind in the strip, on a disc as a cube's swatch is: a plain tap,
- * since a decor has one size (DECOR_SIZE, pxl-kernel layer/object/size.rs)
- * and so no flyout. */
 function DecorIconButton({ kind }: { kind: u8 }) {
   const { t } = useTranslation();
   const selectDecor = useUiStore.getState().selectDecor;
@@ -273,37 +219,24 @@ function DecorIconButton({ kind }: { kind: u8 }) {
   );
 }
 
-/** A round slot in the strip, lit while its tool is the one in hand. */
 function ToolButton({ label, active, onPress, children }: { label: string; active?: boolean; onPress: () => void; children: React.ReactNode }) {
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={styles.slot}>
       {
-        /* A view from the start, though unlit it draws nothing: a view with
-        nothing to draw is left out of the native tree, and Android, making
-        it once it is lit, drew its ground without its corners. */
+        /* Always mounted: Android, creating it once lit, drew its ground without
+                its corners. */
       }
       <View collapsable={false} style={[styles.held, active && styles.toolActive]}>{children}</View>
     </Pressable>
   );
 }
 
-/**
- * The bar: a message pill and a palette pill side by side, one open and the
- * other a circle, centered together. The bar works out where each stands and
- * how wide it shows for the mode, and a change of mode moves them there the
- * way each platform moves a pill (shared/ui/pill.ts).
- */
 export function ModeBar() {
   const { t } = useTranslation();
   const { ui } = useAppContext();
-  // The message pill open, or the palette strip: the two share the bar.
   const [messageExpanded, setMessageExpanded] = useState(false);
-  // The bar is where a message is typed and sent: a touch that starts on its
-  // pills leaves the keyboard up (shared/ui/keyboard.tsx). A finger drawn
-  // down it puts the keyboard away, as one drawn down a chat's messages does;
-  // it decides on the distance a swatch's gesture does, and only downward,
-  // where a swatch's opens its sizes upward, so the two never want the same
-  // finger.
+  // A downward drag on the bar puts the keyboard away; swatches only open
+  // upward, so the two gestures never compete.
   const putAway = useRef(
     PanResponder.create({
       onStartShouldSetPanResponderCapture: keepKeyboard,
@@ -360,26 +293,16 @@ export function ModeBar() {
 
   const paletteExpanded = !messageExpanded;
   const openFlyout = paletteExpanded ? flyout : null;
-  // Reuses the palette pill's own idle collapsed-icon slot as the send
-  // button rather than adding a separate one inside the message pill — the
-  // same idle-slot-reuse pattern as the size flyout anchoring per-swatch
-  // instead of to one shared control. Reviewed and kept on purpose: a
-  // rework does not drop it without raising it.
+  // The send button reuses the palette pill's slot on purpose.
   const showSendInPaletteSlot = messageExpanded && messageText.trim() !== "";
-  // The pill is the strip's black, or the send's coral while it is the send
-  // button: the tint on the glass, and without glass the fill.
   const pillColor = showSendInPaletteSlot ? color.send : STRIP.ground;
   const slot = paletteExpanded ? Slot.Empty : showSendInPaletteSlot ? Slot.Send : Slot.Palette;
 
-  // Where each pill stands and how wide it shows. The open pill takes what
-  // the other's circle and the gap leave, up to its own width; the pair is
-  // centered on the bar.
   const room = Math.max(MODE_BAR_HEIGHT_PX, barWidth - MODE_BAR_HEIGHT_PX - PILL_GAP);
   const messageOpen = Math.min(MESSAGE_OPEN_PX, room);
   const messageWidth = messageExpanded ? messageOpen : MODE_BAR_HEIGHT_PX;
   const paletteWidth = paletteExpanded ? Math.min(stripWidth, room) : MODE_BAR_HEIGHT_PX;
-  // On whole pixels, where a page's pill cuts its shadow cleanly
-  // (platform/web/pill.tsx).
+  // Whole pixels, where a page's pill cuts its shadow cleanly.
   const messageX = PixelRatio.roundToNearestPixel((barWidth - (messageWidth + PILL_GAP + paletteWidth)) / 2);
   const paletteX = PixelRatio.roundToNearestPixel(messageX + messageWidth + PILL_GAP);
 
@@ -471,11 +394,6 @@ export function ModeBar() {
 
               <View style={styles.divider} />
 
-              {
-                // The whole catalog, as Minecraft's inventory is to its
-                // hotbar; outside the scrolling picks, so it is always in
-                // reach.
-              }
               <View style={styles.group}>
                 <ToolButton label={t("map.mode_bar.catalog_tooltip")} onPress={ui.openDrawerModal}>
                   <Glyph glyph="square.grid.2x2" size={chrome.glyph} color={STRIP.glyph} />
@@ -483,12 +401,6 @@ export function ModeBar() {
               </View>
             </Motion>
 
-            {
-              /* The send arrives as a message app's does, growing into its
-                circle on a spring the moment there is something to send;
-                whatever leaves the slot, and the palette coming back, only
-                fade. */
-            }
             <Swap
               id={slot}
               from={slot === Slot.Send ? { opacity: 0, scale: SEND_FROM_SCALE } : { opacity: 0 }}
@@ -511,9 +423,8 @@ export function ModeBar() {
                 )
                 : (
                   <Pressable
-                    // The field is not blurred here: it lets go of focus, and the keyboard
-                    // goes, when it has slid out and unmounts. Blurred on this press, the
-                    // pills snapped to the palette on a device instead of moving there.
+                    // Not blurred here: blurring on press snapped the pills to the palette on a
+                    // device instead of animating.
                     onPress={() => setMessageExpanded(false)}
                     accessibilityRole="button"
                     accessibilityLabel={t("map.mode_bar.palette_tooltip")}
@@ -526,9 +437,6 @@ export function ModeBar() {
           </Pill>
 
           {
-            // At once, both ways, as a key's alternatives pop up over it: a
-            // finger already on its way must find the sizes where they stand,
-            // and a pick lifted is done.
             openFlyout && (
               <View style={[styles.flyoutAt, { left: openFlyout.left - FLYOUT_WIDTH / 2 }]}>
                 <SizeFlyout hover={openFlyout.hover} />
@@ -543,30 +451,17 @@ export function ModeBar() {
 
 const PILL = { height: MODE_BAR_HEIGHT_PX, borderRadius: MODE_BAR_HEIGHT_PX / 2 };
 
-/**
- * What the strip and the size flyout draw in: a black pill with white
- * glyphs on every platform, the tool in hand on a lighter capsule. The strip
- * is a tool rather than the map's chrome, drawn as the send button that takes
- * its slot is — a filled color, the send's coral or the strip's black: the
- * system's glass tinted with it on an iPhone, the color itself as a fill
- * elsewhere. `mark` is the glyph color as a hex, for what is drawn at an
- * opacity of it.
- */
 const STRIP = {
   glyph: alpha(color.white, 0.6),
   glyphOn: color.white,
   mark: color.white,
   held: alpha(color.white, 0.2),
   line: alpha(color.white, 0.15),
-  // Brighter than a divider's line: a black or dark grey swatch is its ring
-  // and nothing else on the black strip.
   swatchLine: alpha(color.white, 0.3),
   ground: color.band,
 };
 
 const styles = StyleSheet.create({
-  // As tall as the pills and as wide as the row: the pills stand on it by
-  // their poses, not in its flow.
   bar: { height: MODE_BAR_HEIGHT_PX, width: "100%", minWidth: 0, pointerEvents: "box-none" },
 
   messageIcon: { width: MODE_BAR_HEIGHT_PX, height: MODE_BAR_HEIGHT_PX, alignItems: "center", justifyContent: "center" },
@@ -578,8 +473,7 @@ const styles = StyleSheet.create({
   sendPressed: { opacity: 0.7 },
 
   strip: { ...PILL, flexDirection: "row", alignItems: "center" },
-  // From the sheet: an inline `box-none` is drawn as a `none` the strip's
-  // tools inherit (feature/map/ui/busy-dim.tsx).
+  // An inline `box-none` is drawn as a `none` the strip's tools inherit.
   pass: { pointerEvents: "box-none" },
   block: { pointerEvents: "none" },
   group: { flexDirection: "row", alignItems: "center", padding: (MODE_BAR_HEIGHT_PX - PITCH) / 2, flexShrink: 0 },
@@ -595,9 +489,7 @@ const styles = StyleSheet.create({
   swatchIdle: { boxShadow: `0 0 0 1px ${STRIP.swatchLine}` },
   swatchSelected: { boxShadow: heldRing(STRIP.ground, STRIP.mark, 1) },
 
-  // It takes the pointer as a whole, so the map
-  // under it hears no move of the finger picking a size and draws no hover
-  // there; the finger is still the swatch's, which holds it until it lifts.
+  // Takes the pointer whole, so the map under it draws no hover.
   flyoutAt: {
     position: "absolute",
     bottom: FLYOUT_FOOT,

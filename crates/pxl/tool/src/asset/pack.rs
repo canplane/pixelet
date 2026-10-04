@@ -1,27 +1,18 @@
 // pxl-tool/asset/pack.rs
 
-//! The texture pack's manifest, and what one entry becomes on disk.
-//!
-//! `asset/cube/manifest.json` names a source URL per cube type. The originals
-//! it fetches are kept at their native resolution under `asset/cube/original/`
-//! and are the resize source on every later run, so a re-run never re-fetches
-//! merely to re-normalize — which also means the network is only touched when
-//! the manifest names a URL that has not been fetched before.
+//! The texture pack's manifest. Originals are cached under
+//! `asset/cube/original/` and re-fetched only when an entry's URL changes.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-/// The tile edge in pixels. One shared array texture, one size for every
-/// layer, so a tile that is not this cannot be a layer of it.
+/// One size for every layer of the shared array texture.
 pub const TILE_SIZE: u32 = 256;
 
-/// "cute-painted-fantasy-v1" sources are hand-painted well above 256² and need
-/// a real smoothing resample or they re-pixelate on the way down; "legacy"
-/// sources are the original pixel-art set and keep nearest-neighbor. Absent
-/// means legacy — the conservative choice, since nearest never blurs a source
-/// that genuinely was pixel-perfect already.
+/// Painted sources are far above 256² and need a smoothing resample; legacy
+/// pixel art keeps nearest-neighbor, the default.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 pub enum Style {
     #[serde(rename = "cute-painted-fantasy-v1")]
@@ -58,20 +49,15 @@ struct Manifest {
     objects: Objects,
 }
 
-/// Which cube face an entry is the image of, by the manifest's own keys: the
-/// top of a channel's type, or the side of a type in every channel that has
-/// one of that name. A placed block is the `block` channel's top. The file's
-/// name says nothing here — a pack names its files as it likes.
+/// Which cube face an entry is, by the manifest's keys; a placed block is the
+/// `block` channel's top.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Slot {
     Top { channel: String, ty: String },
     Side { ty: String },
 }
 
-/// One entry as the tool works it: where it comes from, where its original is
-/// cached, and where the normalized tile goes.
 pub struct Item {
-    /// For logging only, e.g. `terrain.top.land.bare`.
     pub label: String,
     pub slot: Slot,
     pub url: String,
@@ -113,6 +99,11 @@ pub fn load(cube_dir: &Path) -> Result<Vec<Item>, String> {
             );
         }
     }
+    // A side and a bottom come together (Minecraft's grass block): a side alone
+    // leaves the cells below the surface nothing right to wear.
+    if let Some(ty) = manifest.terrain.side.keys().find(|ty| !manifest.terrain.bottom.contains_key(*ty)) {
+        return Err(format!("manifest.json: terrain.side.{ty} has no terrain.bottom.{ty}"));
+    }
     for (ty, entry) in &manifest.terrain.side {
         push(format!("terrain.side.{ty}"), Slot::Side { ty: ty.clone() }, entry);
     }
@@ -129,9 +120,8 @@ pub fn load(cube_dir: &Path) -> Result<Vec<Item>, String> {
     Ok(items)
 }
 
-/// A manifest edit that repoints an existing `file` at a *different* URL has
-/// to force a re-fetch of the original: the bytes on disk alone cannot reveal
-/// that the manifest moved on.
+/// The URL each original was fetched from: a manifest that repoints an entry
+/// must force a re-fetch, which the bytes on disk cannot reveal.
 pub type State = BTreeMap<String, String>;
 
 pub fn read_state(cube_dir: &Path) -> State {
@@ -147,16 +137,11 @@ pub fn write_state(cube_dir: &Path, state: &State) -> Result<(), String> {
     std::fs::write(cube_dir.join(".download_state.json"), text).map_err(|e| e.to_string())
 }
 
-/// A single tile source should be square. Anything else is either a
-/// multi-frame sheet or a bad crop, and neither is something to stretch into a
-/// tile silently.
+/// A non-square source is a sprite sheet or a bad crop; never stretch it.
 pub fn looks_like_sprite_sheet(w: u32, h: u32) -> bool {
     w != h && w.max(h) as f64 / w.min(h) as f64 >= 1.2
 }
 
-/// Nearest-neighbor, for the pixel-art sources: their clusters have to stay
-/// crisp rather than blur into a smear. Only ever called on a square source,
-/// so it never distorts an aspect ratio.
 pub fn nearest_resize(src: &[u8], sw: u32, sh: u32, dw: u32, dh: u32) -> Vec<u8> {
     let mut dst = vec![0u8; (dw * dh * 4) as usize];
     for y in 0..dh {
@@ -181,11 +166,8 @@ fn hex_to_rgb(hex: &str) -> Option<[u8; 3]> {
     Some([u8::from_str_radix(&h[0..2], 16).ok()?, u8::from_str_radix(&h[2..4], 16).ok()?, u8::from_str_radix(&h[4..6], 16).ok()?])
 }
 
-/// No unintended transparent pixel afterward: every alpha becomes 255.
-///
-/// The manifest's own `paletteHex` is the flatten background where it is given
-/// — the color that type is already known to read as — falling back to the
-/// image's own opaque-pixel average for the one entry without one.
+/// Makes every alpha 255, flattening over the manifest's `paletteHex`, or the
+/// opaque-pixel average where none is given.
 pub fn flatten_alpha(data: &mut [u8], palette_hex: Option<&str>) {
     let bg = palette_hex.and_then(hex_to_rgb).unwrap_or_else(|| {
         let (mut r, mut g, mut b, mut n) = (0u64, 0u64, 0u64, 0u64);

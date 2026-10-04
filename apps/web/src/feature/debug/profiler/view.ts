@@ -1,16 +1,9 @@
 // @pxl/web/feature/debug/profiler/view.ts
 
 /**
- * The kernel's profiler, read where it lies. PROFILER_READ answers with the
- * address of a few words — the summary block over a window, and the frame,
- * task and worst-frame rings — and PROFILER_TAKE with the rows the live stream
- * kept; everything is laid out as profiler.json says and read here through
- * views over the module's memory, into the shapes report.ts formats.
- *
- * Only the address crosses the ring and nothing is built in the kernel for a
- * read, so looking at the instrument allocates nothing from the heap it
- * measures. The views are good until the kernel's next turn, which is why
- * each read here copies what it keeps into plain objects before returning.
+ * The kernel's profiler read in place through views over module memory, so
+ * reading allocates nothing from the heap it measures. The views are valid
+ * only until the next turn, so each read copies into plain objects.
  */
 
 import type { F64Array } from "@xpute/core/abi/array.ts";
@@ -41,13 +34,11 @@ import { type Frame, frameAt } from "./lane.ts";
 import { type LongFrame, longFramesSince } from "./long-frame.ts";
 
 const WORD = 8;
-/** The tail of the task ring the report carries whole, newest last. */
 const RECENT_TASKS = 20;
 
 const words = (at: u32, n: u32) => new Float64Array(CORE.buffer, at, n);
 const u32s = (at: u32, n: u32) => new Uint32Array(CORE.buffer, at, n);
-/** Where the kernel made a failure: a file name in its memory and a line. */
-const site = (file: u32, bytes: u32, line: u32) => file === 0 ? null : `${new TextDecoder().decode(new Uint8Array(CORE.buffer, file, bytes))}:${line}`;
+const site = (file: u32, bytes: u32, line: u32) => file === 0 ? null : `${td.decode(new Uint8Array(CORE.buffer, file, bytes))}:${line}`;
 
 function framesAt(at: u32, count: u32): Frame[] {
   const w = words(at, count * FRAME.WORDS);
@@ -81,8 +72,6 @@ function tasksAt(at: u32, count: u32): TaskRecord[] {
   });
 }
 
-// ---- what the profiler holds, as it is read ----
-
 export interface Spread {
   p50: f64;
   p95: f64;
@@ -102,7 +91,6 @@ export interface FrameSummary {
   sched: Spread;
   chunks: Spread;
   phases: { name: string; spread: Spread }[];
-  /** A span's time over the frames that ran it. */
   gpu_spans: { name: string; spread: Spread }[];
   work: [f64, f64];
   perS: [f64, f64];
@@ -112,14 +100,12 @@ export interface FrameSummary {
   mounts: [f64, f64];
   used_delta_mb: f64;
   census: { tag: string; draws: f64; tris: f64 }[];
-  /** The terrain's triangles a frame, by level. */
   level_tris: f64[];
   last: Frame;
 }
 
 export interface TaskRecord {
   category: string;
-  /** A u64, as its decimal digits. */
   subject: string;
   priority: f64;
   enqueue_ms: f64;
@@ -128,7 +114,7 @@ export interface TaskRecord {
   outcome: string;
   fail: u32;
   detail: u32;
-  /** `file:line`, where the kernel made the failure; null for the host's. */
+  /** null for the host's failures. */
   at: string | null;
   phases: [string, f64][];
 }
@@ -148,8 +134,7 @@ export interface ProfilerReport {
   t: f64;
   build: { number: string; id: string; time: string };
   frames: FrameSummary | null;
-  /** The summary's side sections, a field a number, as profiler.json names them. */
-  sections: Record<"counters" | "atlas" | "retain" | "fetch" | "quality", Record<string, f64>>;
+  sections: Record<"counters" | "atlas" | "held" | "fetch" | "quality", Record<string, f64>>;
   steps: { phase: string; name: string; ms: f64; count: f64; max_ms: f64 }[];
   peak: Record<string, f64> | null;
   taskN: u32;
@@ -220,8 +205,6 @@ function taskSummaries(s: F64Array): TaskSummary[] {
   return out;
 }
 
-/** A section of the block as named numbers, in the order profiler.json lists
- * its fields. */
 function section(s: F64Array, sec: Record<string, u32>): Record<string, f64> {
   const out: Record<string, f64> = {};
   for (const [k, v] of Object.entries(sec)) if (k !== "AT" && k !== "WORDS") out[k] = s[sec.AT + v];
@@ -262,7 +245,6 @@ function recOf(s: F64Array): Gauge["rec"] {
 
 const atlasOf = (s: F64Array) => section(s, SUMMARY.atlas) as Gauge["atlas"];
 
-/** What the panel draws: the summary over the last `windowMs`. */
 export function profilerGaugeRead(windowMs: f64): Gauge {
   const { summary: s } = read(windowMs);
   return {
@@ -276,7 +258,6 @@ export function profilerGaugeRead(windowMs: f64): Gauge {
   };
 }
 
-/** The whole recording, as the report prints it. */
 export function profilerReportRead(): ProfilerReport {
   const { summary: s, tasks, worst } = read(Infinity);
   const peak = section(s, SUMMARY.peak);
@@ -318,7 +299,6 @@ export function profilerReportRead(): ProfilerReport {
   };
 }
 
-/** The whole recording's rings, for the trace. */
 export function profilerRingsRead(): { frames: Frame[]; tasks: TaskRecord[]; worst: ProfilerReport["worst"] } {
   const { tasks, frames, worst } = read(0);
   const worstWords = words(worst[0], worst[1] * WORST.WORDS);
@@ -332,7 +312,6 @@ export function profilerRingsRead(): { frames: Frame[]; tasks: TaskRecord[]; wor
   };
 }
 
-/** What the live stream kept since the last take, cleared by taking. */
 export function profilerLogTake(): { tasks: TaskRecord[]; frames: Frame[] } {
   const l = u32s(CORE_DOORBELL.call(Command.PROFILER_TAKE, null, (at) => at >>> 0), LOG.WORDS);
   return { tasks: tasksAt(l[LOG.tasks_at], l[LOG.tasks_count]), frames: framesAt(l[LOG.frames_at], l[LOG.frames_count]) };

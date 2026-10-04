@@ -20,11 +20,9 @@
 
 #ifdef __wasm__
 extern "C" {
-// Where the linker stopped placing the module's stack and data. wasm-ld
-// defines it.
+// Defined by wasm-ld: where the linker stopped placing stack and data.
 extern const std::uint8_t __heap_base;
 
-// The host's clock, the module's one import besides its memory.
 __attribute__((import_module("env"), import_name("now"))) double xpute_conformance_host_now(void);
 }
 #endif
@@ -38,10 +36,8 @@ constexpr std::uint32_t page_up(std::uint32_t bytes) {
     return (bytes + PAGE - 1) / PAGE * PAGE;
 }
 
-// Where this guest's ranges lie, from the start of its range. Not where
-// another guest puts them: the stream after the directory and the completion
-// ring before the submission ring, so a host that finds them at all has found
-// them through the directory.
+// Deliberately not where another guest puts them, so a host that finds them
+// at all has found them through the directory.
 constexpr std::uint32_t DIRECTORY_AT = 0;
 constexpr std::uint32_t STREAM_AT = PAGE;
 constexpr std::uint32_t COMPLETION_DESC_AT = STREAM_AT + page_up(STREAM_WORDS * 4);
@@ -50,17 +46,21 @@ constexpr std::uint32_t COMPLETION_SLOT_AT = SUBMISSION_DESC_AT + page_up(Ring::
 constexpr std::uint32_t SUBMISSION_SLOT_AT = COMPLETION_SLOT_AT + COMPLETION_CAPACITY * SLOT_BYTES;
 constexpr std::uint32_t STATE_AT = SUBMISSION_SLOT_AT + SUBMISSION_CAPACITY * SLOT_BYTES;
 
-// What the guest keeps, made in its own memory.
 struct State {
     Door door;
     Stream stream;
+    Sys sys;
+    // Each for the owner its packet named.
+    Files<std::uint32_t> files;
     HandleTable<HANDLES> handles;
     xpute_conformance_now now;
-    // The clock at the last MARK.
     double mark = 0;
 };
 
-static_assert(STATE_AT + sizeof(State) <= MEMORY_BYTES, "the ranges run past the memory");
+// The memory never grows, so a module's allocator sits over a fixed range.
+constexpr std::uint32_t HEAP_AT = page_up(STATE_AT + sizeof(State));
+
+static_assert(HEAP_AT + HEAP_BYTES <= MEMORY_BYTES, "the ranges run past the memory");
 static_assert(STATE_AT % alignof(State) == 0, "the state lies on its own alignment");
 static_assert(DIRECTORY_AT + directory_words(3) * 4 <= STREAM_AT, "the directory runs into the stream");
 
@@ -68,7 +68,6 @@ State &state_of(Memory m, std::uint32_t range) {
     return *std::launder(reinterpret_cast<State *>(m.at(range + STATE_AT)));
 }
 
-// The u32 a command's packet carries as its root branch's first child.
 std::optional<std::uint32_t> first_u32(std::span<const std::uint8_t> packet) {
     Result<xtp::TreeReader> reader = xtp::TreeReader::make(packet);
     if (!reader) return std::nullopt;
@@ -82,8 +81,7 @@ std::optional<std::uint32_t> first_u32(std::span<const std::uint8_t> packet) {
 }
 
 Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> packet) {
-    // The commands that take a number read it first; one without a packet,
-    // or with one that does not read, fails as a bad message.
+    // A command that takes a number fails with EBADMSG when its packet does not read.
     std::uint32_t arg = 0;
     if (cmd == cmd::RAISE || cmd == cmd::RECORD || cmd == cmd::RELEASE || cmd == cmd::USE) {
         std::optional<std::uint32_t> n = first_u32(packet);
@@ -123,11 +121,8 @@ Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> packet)
     }
 }
 
-// Lays the guest out in the range that begins at `range`, and answers where
-// its directory is. Every offset written anywhere is the memory's, so the
-// range's start is added to each.
+// Every offset written is the memory's, so the range's start is added to each.
 std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now) {
-    // A command leaves at most its signals and its reply.
     Door door(Ring::init(m, range + SUBMISSION_DESC_AT, SUBMISSION_CAPACITY, range + SUBMISSION_SLOT_AT, SLOT_BYTES),
               Ring::init(m, range + COMPLETION_DESC_AT, COMPLETION_CAPACITY, range + COMPLETION_SLOT_AT, SLOT_BYTES), MOST_RAISE + 1);
     new (m.at(range + STATE_AT)) State{.door = door, .stream = Stream(m, range + STREAM_AT, STREAM_WORDS), .handles = {}, .now = now};
@@ -149,9 +144,8 @@ double interrupt(Memory m, std::uint32_t range) {
 
 #ifdef __wasm__
 
-// The module's memory, from address 0: the linker's stack and data first,
-// and the range from the first page past where the linker stopped, so how
-// large the stack or the data is decides nothing a host reads.
+// The range starts past where the linker stopped, so how large the stack or
+// data is decides nothing a host reads.
 std::uint32_t range_at() {
     return page_up(static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(&__heap_base)));
 }
@@ -170,10 +164,50 @@ using namespace xpute::conformance;
 
 #ifdef __wasm__
 
+// The library's allocator is never linked: it grows a memory that never grows,
+// and its failure path prints through WASI.
+struct HeapRange {
+    static constexpr std::size_t MIN_LOG2 = 12;
+    static constexpr std::size_t MAX_LOG2 = std::countr_zero(HEAP_BYTES);
+    static std::uintptr_t base() noexcept { return range_at() + HEAP_AT; }
+    static std::uintptr_t end() noexcept { return base() + HEAP_BYTES; }
+};
+
+SlabMalloc<HeapRange> heap;
+
+void *operator new(std::size_t n) {
+    void *p = heap.alloc(n, alignof(std::max_align_t));
+    if (p == nullptr) bug(Errno::enomem, n);
+    return p;
+}
+void *operator new(std::size_t n, std::align_val_t a) {
+    void *p = heap.alloc(n, static_cast<std::size_t>(a));
+    if (p == nullptr) bug(Errno::enomem, n);
+    return p;
+}
+void *operator new(std::size_t n, const std::nothrow_t &) noexcept {
+    return heap.alloc(n, alignof(std::max_align_t));
+}
+void *operator new(std::size_t n, std::align_val_t a, const std::nothrow_t &) noexcept {
+    return heap.alloc(n, static_cast<std::size_t>(a));
+}
+void operator delete(void *p, std::size_t n) noexcept {
+    if (p != nullptr) heap.dealloc(p, n, alignof(std::max_align_t));
+}
+void operator delete(void *p, std::size_t n, std::align_val_t a) noexcept {
+    if (p != nullptr) heap.dealloc(p, n, static_cast<std::size_t>(a));
+}
+// Without its size a block cannot be given back to a slab.
+void operator delete(void *p) noexcept {
+    if (p != nullptr) bug(Errno::enotrecoverable);
+}
+void operator delete(void *p, std::align_val_t) noexcept {
+    if (p != nullptr) bug(Errno::enotrecoverable);
+}
+
 extern "C" std::uint32_t xpute_conformance_boot(void) {
     std::uint32_t range = range_at();
-    // The host sized the memory; a range past its end is a host that sized
-    // it for another guest.
+    // A range past the memory's end is a host that sized it for another guest.
     ensure(std::uint64_t{range} + MEMORY_BYTES <= std::uint64_t{__builtin_wasm_memory_size(0)} * 65536, Errno::enomem, range);
     return boot(Memory(0), range, now);
 }

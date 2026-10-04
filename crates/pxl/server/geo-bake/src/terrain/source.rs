@@ -1,12 +1,7 @@
 // pxl-geo-bake/terrain/source.rs
 
-//! One page's raw database source, packed into the tree the bake step reads.
-//!
-//! This sits between the repository and the bake rather than inside either,
-//! because the offline tool and the live endpoint have to produce *byte
-//! identical* tiles — the published copy and the served copy are meant to be
-//! interchangeable, so they cannot be allowed to drift by way of two
-//! independent assembly paths.
+//! One page's raw source packed for the bake; the offline tool and the dev
+//! server share this so their tiles are byte-identical.
 
 use postgres::Client;
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
@@ -16,18 +11,15 @@ use pxl_spec::space::pvf3::ivec::IVec;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, BranchView, BranchViewImpl, NodeView, TreeEncoderOptions, TreeView};
 
-use crate::terrain::bake::bake_terrain;
-use crate::terrain::repository::{PageSource, TerrainRepository};
+use crate::deck::Drawn;
+use crate::terrain::bake::bake_surface;
+use crate::terrain::bake::Surface;
+use crate::terrain::repository::TerrainRepository;
 
 const ELE_PADDED_SPAN2: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
 
-/// Degradations that are survivable per page but matter in bulk.
-///
-/// `invalid_ele_shape` in particular: a page whose elevation query comes back
-/// the wrong length silently gets a zero-filled grid and bakes perfectly flat.
-/// One such page is a warning line nobody reads; several hundred is a visible
-/// property of the dataset, and a bake over tens of thousands of pages has no
-/// other way to notice.
+/// Survivable per page, visible only in bulk: a page off the elevation raster
+/// bakes flat (`flat_ele`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SourceStats {
     pub invalid_ele_shape: u64,
@@ -76,9 +68,6 @@ fn coast_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a CoastRow) {
     }));
 }
 
-/// Packs what the database gave into `[ele, buildings, segments, base, coasts]`,
-/// each row a tuple in the order of its row type's fields (pxl-spec
-/// bake/format.rs).
 pub fn pack_source(source: &PageSource, stats: &mut SourceStats) -> Result<Vec<u8>, MarshalError> {
     let ele = match &source.ele {
         Some(v) if v.len() == ELE_PADDED_SPAN2 => v.clone(),
@@ -121,17 +110,21 @@ pub fn pack_source(source: &PageSource, stats: &mut SourceStats) -> Result<Vec<u
     encoder().encode(&root, TreeEncoderOptions::default())
 }
 
-/// The page's source, assembled straight out of the database.
 pub fn fetch_terrain_source(repo: &TerrainRepository, client: &mut Client, page_idx: IVec, stats: &mut SourceStats) -> Result<Vec<u8>, BakeError> {
     let page_bbox = epsg3857::get_page_bbox(page_idx);
     let source = repo.fetch_page_source(client, page_bbox)?;
     Ok(pack_source(&source, stats)?)
 }
 
-/// Raw Overture and elevation source, baked into client-ready ground channels.
-pub fn fetch_tile(repo: &TerrainRepository, client: &mut Client, page_idx: IVec, stats: &mut SourceStats) -> Result<Vec<u8>, BakeError> {
+pub fn fetch_surface(repo: &TerrainRepository, client: &mut Client, page_idx: IVec, stats: &mut SourceStats) -> Result<Surface, BakeError> {
     let raw = fetch_terrain_source(repo, client, page_idx, stats)?;
-    Ok(encode_terrain(&bake_terrain(page_idx, &raw)?)?)
+    Ok(bake_surface(page_idx, &raw)?)
+}
+
+pub fn fetch_lines(repo: &TerrainRepository, client: &mut Client, page_idx: IVec) -> Result<Decks, BakeError> {
+    let page_bbox = epsg3857::get_page_bbox(page_idx);
+    let rows = repo.fetch_deck_rows(client, page_bbox)?;
+    bake_decks(&rows, page_bbox[0]).ok_or(BakeError::Marshal(MarshalError::new(Errno::ENOSPC)))
 }
 
 #[derive(Debug)]

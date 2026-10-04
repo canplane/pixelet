@@ -1,23 +1,8 @@
 // pxl-render/asset/gltf.rs
 
-//! A glTF 2.0 parser for what the shipped models use: a GLB container or a
-//! JSON document with its buffers already in hand; nodes with TRS or a matrix;
-//! meshes of triangle primitives with positions, normals, texture coordinates,
-//! joints and weights; skins with inverse bind matrices; and animations of
-//! translation, rotation and scale with linear, step or cubic spline keys.
-//! Images and materials are read only far enough to say which texture a
-//! primitive paints with, since every model here is skinned from a swatch the
-//! palette names rather than the file's own image.
-//!
-//! Nothing here is Y-up or Z-up: the vertices, poses and keys come out as the
-//! file holds them, in the file's own frame, and whoever registers the model
-//! (crates/pxl/web/kernel/src/layer/model/asset.rs) decides how it stands.
-//!
-//! The parse is a future that awaits `pause` between its units — an
-//! accessor's elements a slice at a time, a node, a skin, a channel — so a
-//! file's size, which is its author's, never decides how long one poll of it
-//! runs. What `pause` waits for is the caller's: a turn's quota, or nothing.
-//! One JSON lookup is not cut; it reads the document's text once.
+//! A glTF 2.0 parser for what the shipped models use, output in the file's own
+//! frame. It awaits `pause` between units (an accessor slice, a node, a skin, a
+//! channel), so a file's size never bounds how long one poll runs.
 
 use core::future::Future;
 
@@ -46,7 +31,6 @@ pub struct GltfNode {
     pub children: Vec<u32>,
     pub mesh: i32,
     pub skin: i32,
-    /// The node's own transform, column-major.
     pub local: Mat4,
     pub translation: [f64; 3],
     pub rotation: [f64; 4],
@@ -71,16 +55,13 @@ pub enum GltfPath {
 pub struct GltfChannel {
     pub node: u32,
     pub path: GltfPath,
-    /// LINEAR or CUBICSPLINE keys interpolate; STEP holds.
     pub step: bool,
     pub times: Vec<f32>,
-    /// `times.len()` keys of 3 or 4 floats; a cubic spline's tangents are
-    /// already dropped, leaving the values.
+    /// A cubic spline's tangents are dropped.
     pub values: Vec<f32>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-/// An animation, by its place in the file's `animations`.
 pub struct GltfAnimation {
     pub duration: f64,
     pub channels: Vec<GltfChannel>,
@@ -92,7 +73,6 @@ pub struct Gltf {
     pub meshes: Vec<Vec<GltfPrimitive>>,
     pub skins: Vec<GltfSkin>,
     pub animations: Vec<GltfAnimation>,
-    /// The default scene's root nodes.
     pub roots: Vec<u32>,
 }
 
@@ -124,13 +104,9 @@ fn u32_le(b: &[u8], at: usize) -> u32 {
     u32::from_le_bytes([b[at], b[at + 1], b[at + 2], b[at + 3]])
 }
 
-/// An accessor's elements converted between two pauses. An element is at
-/// most sixteen components of a fixed conversion each, so a slice is bounded
-/// by this and not by the accessor's count.
+/// Bounds one accessor slice between pauses.
 const ELEMENTS_PER_PAUSE: usize = 1 << 12;
 
-/// Parses a `.glb`, or a `.gltf` document whose buffers are `external_buffers`,
-/// awaiting `pause` between its units.
 pub async fn parse_gltf<P: Future<Output = ()>>(bytes: &[u8], external_buffers: &[&[u8]], pause: impl Fn() -> P) -> Result<Gltf, MarshalError> {
     if bytes.len() >= 12 && u32_le(bytes, 0) == GLB_MAGIC {
         let length = (u32_le(bytes, 8) as usize).min(bytes.len());
@@ -165,13 +141,10 @@ fn num(v: Option<JsonValue>) -> Option<f64> {
     v?.as_f64()
 }
 
-/// An array's items; nothing for none or for any other value.
 fn arr<'a>(v: Option<JsonValue<'a>>) -> impl Iterator<Item = JsonValue<'a>> {
     v.into_iter().flat_map(|v| v.items())
 }
 
-/// A keyword the spec names — a type, a path, an interpolation — which no
-/// escape can make one.
 fn plain<'a>(v: Option<JsonValue<'a>>) -> Option<&'a str> {
     v?.as_str()?.as_plain()
 }
@@ -187,9 +160,6 @@ fn floats<const N: usize>(v: Option<JsonValue>, default: [f64; N]) -> [f64; N] {
     out
 }
 
-/// Accessors read straight into the lanes the parsed document keeps. Each use
-/// reads its own: the document owns its lanes, so a cache of what was read
-/// would only hold a second copy of every accessor while the parse runs.
 struct Reader<'a, F> {
     json: JsonValue<'a>,
     buffers: &'a [&'a [u8]],
@@ -197,7 +167,6 @@ struct Reader<'a, F> {
 }
 
 impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
-    /// An accessor's elements, tightly packed, each as `convert` makes it.
     async fn read<T: Copy + Default>(&self, index: usize, convert: fn(f64) -> T) -> Result<Vec<T>, MarshalError> {
         (self.pause)().await;
         let a = self.json.get("accessors").and_then(|x| x.at(index)).ok_or_else(|| MarshalError::new(Errno::ENOENT))?;
@@ -259,8 +228,7 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
                 }
             }
         }
-        // Sparse accessors are not in the shipped models; a sparse one reads as
-        // its dense base, which the spec allows to be all zero.
+        // Sparse accessors read as their dense base; the shipped models have none.
         Ok(out)
     }
 
@@ -276,7 +244,6 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
         self.read(index, |v| v as u16).await
     }
 
-    /// An attribute's accessor read when the primitive names one.
     async fn f32s_of(&self, index: Option<usize>) -> Result<Option<Vec<f32>>, MarshalError> {
         match index {
             Some(i) => self.f32s(i).await.map(Some),
@@ -387,17 +354,14 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(json: JsonValue<'_>
             let width = if path == GltfPath::Rotation { 4 } else { 3 };
             let interpolation = plain(sampler.get("interpolation")).unwrap_or("LINEAR");
             if interpolation == "CUBICSPLINE" {
-                // In-tangent, value, out-tangent per key: the value.
+                // In-tangent, value, out-tangent: keep the value.
                 values = (0..times.len())
                     .filter_map(|t| values.get(t * width * 3 + width..t * width * 3 + width * 2))
                     .flatten()
                     .copied()
                     .collect();
             }
-            // The draw reads a channel's keys as `keys * width` floats by
-            // pointer, so a file whose output is shorter than its input claims
-            // is read for the keys it actually carries rather than past the end
-            // of them.
+            // An output shorter than its input is read for the keys it has, not past them.
             let keys = times.len().min(values.len() / width);
             times.truncate(keys);
             values.truncate(keys * width);

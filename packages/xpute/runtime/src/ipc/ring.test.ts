@@ -8,8 +8,6 @@ import { Ring, ring_bytes, slots_bytes } from "./ring.ts";
 import { FrameFlag } from "./frame.ts";
 import { MarshalError } from "@xpute/core/status/error.ts";
 
-/** A ring of `capacity` slots of `slot` bytes, its descriptors at 8 and its
- * payloads past them, in a buffer of its own. */
 function ring(capacity: number, slot: number): Ring {
   const slot_base = 8 + ring_bytes(capacity);
   return Ring.init(new ArrayBuffer(slot_base + slots_bytes(capacity, slot)), 8, capacity, slot_base, slot);

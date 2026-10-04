@@ -1,44 +1,22 @@
 # pxl-geo's image — the world's data server.
 #
-# Build context is the repo ROOT (docker build -f crates/pxl/server/geo/Dockerfile .),
-# not this directory — its dependencies are path dependencies inside the same
-# Cargo workspace, so the whole `crates/` tree has to be present for Cargo to
-# resolve the workspace at all. .dockerignore strips node_modules/.git/out/dist
-# before any of this reaches the build.
+# Build context is the repo root: docker build -f crates/pxl/server/geo/Dockerfile .
 
-# The version is rust-toolchain.toml's, written again because a base image tag
-# is chosen before anything in the build context can be read — and the context
-# is `crates/` alone, so rustup in here would not find that file even if it
-# looked. Copying it in would be worse than this: a tag that had drifted would
-# quietly download the right toolchain mid-build instead of failing. The two
-# are held equal by script/check-toolchain.ts, which the gate runs.
+# Must equal rust-toolchain.toml; script/check-toolchain.ts checks it.
 FROM rust:1.98.1-slim-trixie AS build
 WORKDIR /src
 
-# Only `crates/` is copied: pxl-geo reads nothing outside it, and the generated
-# files it does read are committed rather than produced at build time.
 COPY crates ./crates
 
-# The server profile, not release: a profile belongs to the workspace root and
-# release is the module's, which aborts on panic. Off the browser that is
-# wrong — a panicking request should take the request down and not the process.
-# See crates/Cargo.toml.
-# `sharing=locked` on the registry: the two images build in parallel and mount
-# the same cache, while cargo's own package lock lives at
-# $CARGO_HOME/.package-cache — outside the mount, so each container has its own
-# and neither excludes the other. Two cargos unpacking one crate into one
-# directory is what that costs: `failed to unpack libm v0.2.11 ... .cargo-ok:
-# File exists` (2026-09-19). The target mount needs no such flag; cargo's build
-# lock lives inside it and is therefore shared.
+# The server profile, not release: release aborts on panic.
+# `sharing=locked`: both images share the registry cache, and cargo's package
+# lock is outside the mount (`failed to unpack libm ... File exists`).
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/src/crates/target \
     cargo build --manifest-path crates/Cargo.toml --profile server -p pxl-geo \
  && cp crates/target/server/pxl-geo /usr/local/bin/pxl-geo
 
-# glibc and nothing else. No shell, no package manager, and no CA bundle: the
-# only thing this connects to is db-geo, over the compose file's own internal
-# network and without TLS, so there is no certificate to verify and nothing for
-# a shell in the image to be useful for.
+# No CA bundle or shell: the only connection is db-geo on the internal network, without TLS.
 FROM gcr.io/distroless/cc-debian12
 COPY --from=build /usr/local/bin/pxl-geo /usr/local/bin/pxl-geo
 

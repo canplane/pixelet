@@ -1,17 +1,10 @@
-// The color grade over everything, called by each pass on its linear
-// color before the sRGB encode: a brightness and contrast step in sRGB,
-// then a saturation step in linear light, the formulas of the post stack
-// three ran (postprocessing's BrightnessContrastEffect, whose input color
-// space is sRGB, and HueSaturationEffect, whose is linear —
-// b9e31004). The contrast step in linear light
-// would put its zero at linear 0.05 and crush every night color below it
-// to black. The numbers are cosmetic dials.
+// Brightness and contrast in sRGB, then saturation in linear light, as
+// postprocessing's effects ran. Contrast in linear light would crush night colors to black.
 
 const GRADE_BRIGHTNESS: f32 = -0.01;
 const GRADE_CONTRAST: f32 = 0.08;
 const GRADE_SATURATION: f32 = 0.18;
-// postprocessing's VignetteEffect, its default technique: the darkness and
-// the offset three's stack ran at.
+// postprocessing's VignetteEffect defaults.
 const VIGNETTE_DARKNESS: f32 = 0.45;
 const VIGNETTE_OFFSET: f32 = 0.3;
 
@@ -46,8 +39,6 @@ fn from_srgb(c: vec3f) -> vec3f {
   return select(hi, lo, x <= vec3f(0.04045));
 }
 
-// How much of a pixel at `frag` the vignette leaves, over a `viewport` of
-// pixels; `amount` 1 darkens the corners, 0 leaves them.
 fn vignette_of(frag: vec2f, viewport: vec2f, amount: f32) -> f32 {
   let d = distance(frag / viewport, vec2f(0.5));
   let dark = smoothstep(0.8, VIGNETTE_OFFSET * 0.799, d * (VIGNETTE_DARKNESS + VIGNETTE_OFFSET));

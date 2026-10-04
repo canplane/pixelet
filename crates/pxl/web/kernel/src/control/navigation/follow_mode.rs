@@ -11,17 +11,12 @@ use crate::global::Global;
 use crate::host::now;
 use crate::world::change::wake_at;
 
-/// EMA factor applied per heading sample (not per frame — device orientation
-/// events don't arrive frame-locked). Compass heading is inherently noisy
-/// (magnetometer jitter, worse indoors/near metal), and the dead-zone filter in
-/// the pose store only screens out sub-1.5° noise — this smooths what gets
-/// through before it ever reaches azimuth, on top of (not instead of) the view
-/// frame's per-frame ROT_DAMP easing.
+/// Per heading sample, not per frame: compass jitter (worse indoors) passes
+/// the store's 1.5° dead zone, and this smooths it before it reaches azimuth.
 const HEADING_SMOOTH_ALPHA: f64 = 0.25;
 
-/// How long either sensor may be away from READY before follow mode gives up.
-/// Longer than the geolocation retry delay, so a recoverable gap gets its retry
-/// before this fires.
+/// Longer than the geolocation retry delay, so a recoverable gap gets its
+/// retry first.
 const SENSOR_GRACE_MS: f64 = 12000.0;
 
 struct Follow {
@@ -29,16 +24,13 @@ struct Follow {
     was_following: bool,
     last_device: Option<Pvf3>,
     last_heading: Option<f64>,
-    /// When follow mode gives up, while a sensor is away from READY, and the
-    /// pair of statuses that deadline was set for.
+    /// The give-up deadline, and the pair of statuses it was set for.
     grace_due: Option<f64>,
     grace_for: Option<(DevicePoseStatus, DevicePoseStatus)>,
 }
 
 static FOLLOW: Global<Follow> = Global::new();
 
-/// While follow mode is active, syncs the user's live position and heading
-/// onto the map: follow mode's turn.
 pub fn follow_mode_step() {
     let f = FOLLOW.get(|| Follow {
         smoothed_azimuth: None,
@@ -53,22 +45,14 @@ pub fn follow_mode_step() {
     let heading = device_orientation_store().orientation.and_then(|o| o.heading);
     let device_coord = map_navigation().device_coord;
 
-    // Follow mode needs both sensors to mean anything: it's position (GPS)
-    // fused with heading (compass). The tracking button only lets the user
-    // enter follow mode once both are READY, and this re-checks it after
-    // entry. Not immediately: either sensor can leave READY for a moment — a
-    // GPS fix that misses its window indoors, an orientation gap — and dropping
-    // follow mode on the first blip read as the mode switching itself off at
-    // random. The exit still has to happen eventually: without it, follow mode
-    // stays on with dead sensors, the camera freezes, and the disabled button
-    // cannot be used to back out.
+    // Follow needs both sensors READY. A blip must not drop it (it read as the
+    // mode switching itself off), but dead sensors must eventually, or the camera
+    // freezes behind a disabled button.
     let status = (device_location_store().status, device_orientation_store().status);
     let ready = status == (DevicePoseStatus::Ready, DevicePoseStatus::Ready);
     if is_follow_mode && !ready {
-        // The grace starts over whenever either status moves, not only when it
-        // first leaves READY: a sensor that goes from LOADING to ERROR is a
-        // fresh gap with its own retry ahead of it, and the deadline inherited
-        // from the gap before would fire in the middle of it.
+        // Restarted whenever a status moves: LOADING to ERROR is a fresh gap with its
+        // own retry ahead.
         if f.grace_for != Some(status) {
             f.grace_for = Some(status);
             f.grace_due = Some(now() + SENSOR_GRACE_MS);
@@ -87,9 +71,8 @@ pub fn follow_mode_step() {
         f.grace_for = None;
     }
 
-    // dropping the smoothing anchor on exit means re-entering follow mode snaps
-    // straight to the current heading instead of easing all the way from
-    // wherever it was left off, possibly a while ago.
+    // Dropped on exit, so re-entering snaps to the heading rather than easing
+    // from a stale one.
     let entered = is_follow_mode && !f.was_following;
     if !is_follow_mode {
         f.smoothed_azimuth = None;
@@ -99,22 +82,18 @@ pub fn follow_mode_step() {
         return;
     }
 
-    // 1. [Position sync] only when the GPS coordinate changes. No EMA here: the
-    // companion's catch-up glide is the single smoothing stage. On the ground
-    // there, as the recenter button puts it: device_coord's Z is the fix's
-    // altitude, not the map's height.
+    // No EMA here: the smooth move is the one smoothing stage. On the ground, since
+    // the fix's Z is altitude.
     if let Some(device) = device_coord.filter(|d| entered || Some(*d) != f.last_device) {
         go_to_ground(device);
     }
     f.last_device = device_coord;
 
-    // 2. [Heading sync] only when the compass angle changes
     if let Some(heading) = heading.filter(|h| entered || Some(*h) != f.last_heading) {
         let raw_azimuth = heading * (core::f64::consts::PI / 180.0);
         let smoothed = match f.smoothed_azimuth {
             None => raw_azimuth,
-            // shortest signed distance across the wrap (e.g. 359°→1° is a small
-            // +2° step, not -358°), eased by HEADING_SMOOTH_ALPHA per sample.
+            // The short way across the wrap.
             Some(s) => s + wrap(raw_azimuth - s, -core::f64::consts::PI, core::f64::consts::PI) * HEADING_SMOOTH_ALPHA,
         };
         f.smoothed_azimuth = Some(smoothed);

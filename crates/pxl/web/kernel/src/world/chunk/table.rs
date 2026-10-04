@@ -1,30 +1,9 @@
 // pxl-kernel/world/chunk/table.rs
 
-//! The chunks' table: materialization as it runs (world/chunk/frontier.rs
-//! is its law). Which chunks are mounted, what role each has in the
-//! frontier, which tier each shows, what to build and in what order, and
-//! what to give back.
-//!
-//! A mounted chunk is one of three things to the frontier: a piece drawn,
-//! a chunk built for a move under way — not drawn until the move is whole —
-//! or a piece a move replaced, drawn on the other half of the pattern while
-//! what replaced it comes in. Every one holds a slot of the arena or has one
-//! held for it (`free`), so the table is never larger than the arena.
-//!
-//! A tick measures every chunk against the frame, asks each for the tier the
-//! rule wants it drawn in at the effective quality (`recheck`), takes the
-//! frontier's step (`materialize`), and applies what has landed
-//! (`commit`); the builds are the build task's (`build_step`), in the one
-//! order.
-//!
-//! A chunk has one owner, its slot here: the tiers built for it, its decor
-//! blocks — a block's memory and its handle let go together — and what its
-//! tiers and decor were made from, against which `sources_step` finds a
-//! change. A chunk keeps only the tiers it draws and the one it is building:
-//! every other is made again from the records if it is wanted, so a slot is
-//! never held by what is not on the screen. The builder (build.rs) makes the
-//! tiers; the chunk stage (stage.rs) composes the frame — the camera, the
-//! anchor root's matrix, the frustum — and calls the tick.
+//! The chunks' table: which chunks are mounted, the role each has in the
+//! frontier (frontier.rs), which tier each shows, and what to build next.
+//! Every mounted chunk holds a mesh slot or has one held for it, so the table
+//! is never larger than the arena.
 
 use pxl_spec::space::indexer::FROM_L2_IDX;
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
@@ -38,36 +17,42 @@ use pxl_render::mesh::chunk_mesher::{box_bounds, box_z, Heights};
 use pxl_render::mesh::paint::terrain::adapter::{beside_index, Around, ChunkSample, PageSource};
 use pxl_render::mesh::voxel_scan::APRON;
 
+use crate::sched::profiler::record::ZOOMS;
+use pxl_spec::space::adapter::epsg3857::zoom_of;
 use pxl_spec::space::observation::Bounds as _;
-use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::Pvf3;
-use pxl_spec::space::pyramid::TOP_LEVEL;
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::observation::Frustum;
+use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::pyramid::{chunk_scale, GROUND};
+use pxl_spec::space::v3::{dot3, len3, Aabb, V3};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::alloc;
 use xpute_runtime::sched::edge::Notify;
 use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats};
 
-use crate::global::Global;
 use crate::layer::billboard::field::Billboards;
 use crate::layer::decor::build::{decor_density, DecorBuild, Ground, Kind as DecorKind, Placed};
 use crate::layer::decor::instance::{decor_groups, DecorScratch};
 use crate::layer::environment::state::EnvironmentDraw;
 use crate::layer::marker::debug_lines::DebugLines;
 use crate::layer::marker::hover_cursor::GhostDraw;
+use crate::layer::marker::hover_cursor::{render_edits, RenderEdits};
 use crate::layer::marker::location_puck::Markers;
 use crate::layer::model::store::Models;
-use crate::layer::object::store::{render_edits, EntryAt, RenderEdits};
+use crate::layer::object::store::EntryAt;
 use crate::mem::fixed::{lane, range, Range};
 use crate::param;
-use crate::shell::setting::store::{hidden_ground, settings_store};
-use crate::world::chunk::build::{mesh_step, release_block, BuildEvent, Builder, Cube, World};
-use crate::world::chunk::frontier::{self, cube_of, drawn_cube, pool_of, wanted_cube, Env, Frontier, Now, Slots};
-use crate::world::chunk::mesh_slot::{capacity, group_box_words, group_bytes, group_is_fine, slot_at, surface_of, MeshSlot, Pool, ARENA, COVER_SLOTS, FINE_BOXES, OCCUPANCY};
-use crate::world::chunk::source::{decor_draws, decor_revision_of, draws_band, objects_revision_of, tiers_draw};
+use crate::sched::profiler::record::MB;
+use crate::shell::setting::store::settings_store;
+use crate::world::chunk::build::{mesh_step, BuildEvent, Builder, World};
+use crate::world::chunk::frontier::{pool_of, scale_of, Env, Frontier, Now, Slots};
+use crate::world::chunk::mesh_slot::{capacity, group_box_words, group_bytes, group_is_fine, slot_at, MeshSlot, Pool, ARENA, COVER_SLOTS, FINE_BOXES, OCCUPANCY};
+use crate::world::chunk::source::{draws_band, objects_revision_of, tiers_draw};
+use crate::world::paging::LEVELS;
+use pxl_spec::space::hierarchy::Scale;
 use xpute_core::math::scalar::round;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
+use xpute_runtime::global::Global;
 
 use crate::world::observation::{Known, Order};
 use crate::world::pyramid::chunk::Chunk;
@@ -76,65 +61,32 @@ use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::indexer::L2_IDX;
 
-/// Whether the heap is live past `param::HEAP_PRESSURE`.
-fn heap_pressed() -> bool {
-    let h = crate::host::heap_stat();
-    h.live as f64 > h.range as f64 * param::HEAP_PRESSURE
-}
-
-pub const IN_FRUSTUM: u16 = 1;
-pub const PENDING: u16 = 4;
-pub const SETTLING: u16 = 32;
-/// Mounted and not yet rechecked: it has no layout, so it wants one, and its
-/// first recheck is taken whatever the frame's budget (`tick`).
-pub const FRESH: u16 = 128;
-
-/// What a mounted chunk is to the frontier (world/chunk/frontier.rs).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Role {
-    /// A piece of the frontier: drawn, and what the ground under it is
-    /// drawn by until a move replaces it.
     Drawn,
-    /// Built for a move under way, and not drawn until every chunk of that
-    /// move is ready and the move is made.
+    /// Not drawn until every chunk of its move is ready.
     Building,
 }
 
-/// What the chunk stage composes before a tick.
 #[derive(Clone, Copy, Default)]
 pub struct Frame {
-    /// The globe's anchor in the root frame (world/frame/view.rs
-    /// `globe_anchor`): what the chunks are measured about, since the map is
-    /// laid back on the planet about it.
+    /// The globe's anchor in the root frame; chunks are measured about it.
     pub anchor: V3,
-    /// The map origin, in units.
     pub origin: V3,
-    /// The eye, in units: what a draw's translation is taken from, so every
-    /// point the GPU holds is relative to it (pxl-render frame/draw.rs
-    /// `DrawList::translation`).
+    /// Draw translations are taken relative to the eye.
     pub eye: V3,
-    /// The frustum as six planes of (nx, ny, nz, constant), and the eye,
-    /// about the anchor in the world's axes.
+    /// Six frustum planes (nx, ny, nz, d) about the anchor.
     pub planes: [f64; 24],
     pub camera: V3,
     pub delta_s: f64,
-    /// What is left of the turn's quota when the pass begins, which is not
-    /// the quota itself (`FrameSample::budget_ms`).
+    /// What is left of the turn's quota, not the quota itself.
     pub remaining_ms: f64,
     pub hard_slack_ms: f64,
-    pub retain_budget_bytes: f64,
-    /// The globe's anchor's height, in units: what the camera's height over
-    /// the sea is measured up from.
     pub center_z: f64,
-    /// The map center's latitude's values, which the renderer lays the map
-    /// back on the planet about (pxl-render's look/globe.rs); none for a flat
-    /// world.
     pub globe: Option<Globe>,
 }
 
 impl Frame {
-    /// Where `at`, in the map's units, is about the anchor: against the
-    /// origin, then less the anchor.
     pub fn world_of(&self, at: V3) -> V3 {
         [0, 1, 2].map(|k| at[k] - self.origin[k] - self.anchor[k])
     }
@@ -149,20 +101,14 @@ struct Bounds {
 #[derive(Clone, Copy)]
 struct Tier {
     cube: Cube,
-    /// The telling of the chunk's sources it was built from (the builder's).
     generation: u32,
     bounds: Option<Bounds>,
-    /// Where its boxes lie on the device, and how many: the first of the
-    /// slots it fills, the rest chained after it (`Meshes::next`), a slot's
-    /// worth each but the last.
+    /// First slot of the chain the tier's boxes fill (`Meshes::next`).
     slot: MeshSlot,
     box_cnt: u32,
-    /// What its boxes' heights are held in (pxl-render chunk_mesher.rs).
     heights: Heights,
 }
 
-/// Chunks that appeared, disappeared and were laid out since the last frame
-/// sample: dev-only counters.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ChunkCounts {
     pub added: u32,
@@ -170,13 +116,10 @@ pub struct ChunkCounts {
     pub layouts: u32,
 }
 
-/// What the chunks hold, for the profiler.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct ChunkRetention {
-    /// Chunks holding a run set, and what those sets cost in the heap.
+pub struct ChunkHeld {
     pub run_sets: u32,
     pub run_set_mb: u32,
-    /// Built tiers held across every chunk.
     pub tiers: u32,
     /// Decor: per-tier blocks.
     pub decor_steps: u32,
@@ -216,74 +159,45 @@ impl Decor {
 
 #[derive(Clone)]
 struct Slot {
-    /// Its mount (`Scheduler::place`).
     id: u32,
-    /// The chunk it draws.
     chunk: Chunk,
     role: Role,
-    /// The bounding sphere in the chunk's own space.
+    /// Bounding sphere in the chunk's own space.
     bc: V3,
     radius: f64,
-    /// Its place in the order every layer's work is taken in (world/observation.rs
-    /// `Order`).
     order: Order,
     flags: u16,
     pending_since: f64,
-    /// How many slots a tier of this chunk fills, of the sources generation
-    /// and the cube it was found for: found where a bake had more boxes than
-    /// the slots free could hold (build.rs `BuildEvent::Reserve`), counted
-    /// by the frontier and the quality policy from then on, and not asked
-    /// for again until that many are free. A new generation finds it again.
+    /// Slots a tier needs, for (generation, cube), found when a bake did not
+    /// fit (`BuildEvent::Reserve`); not asked for again until that many are free.
     need: Option<(u32, Cube, u32)>,
-    /// A drawn piece the frontier has let build a tier other than the one it
-    /// shows: a slot is held for it (frontier.rs `Plan::recube`).
+    /// A drawn piece the frontier let build another cube; a slot is held for it.
     recube: bool,
-    /// The tiers built for it: those its layout draws, and the last to land
-    /// of what it builds. A source changed leaves the layout's where they
-    /// are: a cube's tier of the new generation joins the old one's, and the
-    /// old go when a layout of the new is applied.
+    /// The layout's tiers plus the last one landed. A source change keeps the
+    /// old generation's tiers drawn until a layout of the new one is applied.
     tiers: Held<Tier>,
     /// Its decor blocks, by cube and generation alike: its layout's, and
     /// while a commit applies a new one, that one's.
     decor: Held<Decor>,
     layout_primary: Cube,
-    /// The generation the layout's tiers and decor are drawn from.
     layout_generation: u32,
     layout_ready: bool,
-    /// Whether the layout's decor is built: the reclaim gives an off-screen
-    /// chunk's back, and it is built again once the chunk is on screen.
-    decor_whole: bool,
-    /// The cube the rule wants it drawn in now.
     desired: Cube,
-    /// The heap's release count when its decor was last refused a
-    /// block: not committed again until a block is given back.
-    refused: Option<u32>,
-    /// What the builder was last told the chunk is made of, and what its
-    /// decor was last built from: a change of either is a rebuild of the
-    /// one it names (`sources_step`).
     sources: Sources,
     decor_sources: DecorSources,
 }
 
-/// What a chunk's tiers are made of, past its page: the settings it paints
-/// with, the revision of the objects folded into it, and the eraser's edits
-/// that fall on them (object/store.rs `render_edits`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct Sources {
     structures: bool,
-    /// The texture setting the tiers were baked under. A leaf's box carries
-    /// its layer and the shader samples or does not, but a tier over it
-    /// carries one color and no layer, so which color that is was decided
-    /// when it was baked (mesh/chunk_mesher.rs).
+    /// A tier above a leaf bakes one color with no texture layer, so the setting
+    /// is part of what the tier was built from.
     textured: bool,
     objects_revision: u32,
     hide: Option<EntryAt>,
     carve: Option<EntryAt>,
-    /// The level of the page the chunk is read from: its own, or the nearest
-    /// resident page over it (world/pyramid.rs `drawn_from`), so its own
-    /// page arriving builds it again from its own ground; and the same of
-    /// each page beside it its apron reads (build.rs `Read`), so the edge it
-    /// shares with a chunk there is made again when that chunk's ground is.
+    /// Level of the page the chunk and each apron neighbour are read from, so a
+    /// finer page arriving rebuilds the chunk and its shared edges.
     read_from: Option<u32>,
     beside_from: [Option<u32>; 8],
 }
@@ -333,29 +247,18 @@ impl DecorSources {
 }
 
 impl Slot {
-    /// The level it is drawn from.
     fn level(&self) -> u32 {
         self.chunk.level()
     }
 
-    /// Its corner, in units.
-    fn base_x(&self) -> f64 {
-        self.chunk.rect().0
+    fn base(&self) -> (f64, f64) {
+        let (x, y, _) = self.chunk.rect();
+        (x, y)
     }
 
-    fn base_y(&self) -> f64 {
-        self.chunk.rect().1
-    }
-
-    /// The sphere the chunk is culled by until its mesh has measured it: the
-    /// box the view measured it by (domain.rs `Domain::occupied`), where in
-    /// it anything stands as far as what is known says, and the chunk whole
-    /// where nothing is known. A chunk
-    /// culled until it is built is never built, so it is never measured and
-    /// stays culled: a sphere at a corner missed every view that missed the
-    /// corner, and one at sea level missed every chunk of a mountain, whose
-    /// ground stood hundreds of units over it, and left the middle of the
-    /// view empty with nothing left to fetch.
+    /// Culling sphere before the mesh measures it: the known contents, or the
+    /// whole chunk. A sphere at a corner or at sea level culled chunks that were
+    /// then never built, leaving holes with nothing left to fetch.
     fn unmeasured(&mut self) {
         let region = self.chunk.region();
         let b = Known.contents(self.chunk.level(), region).within(region).unwrap_or(region);
@@ -364,8 +267,6 @@ impl Slot {
         self.radius = (e[0] * e[0] + e[1] * e[1] + e[2] * e[2]).sqrt() * 0.5;
     }
 
-    /// How many slots its tier of `cube` fills, of the sources as of
-    /// `generation`: what is known (`need`), else one.
     fn slots_for(&self, cube: Cube, generation: u32) -> u32 {
         self.need.filter(|&(g, c, _)| g == generation && c == cube).map_or(1, |(_, _, k)| k)
     }
@@ -392,30 +293,20 @@ impl Slot {
         self.tiers.iter().find(|t| t.cube == cube && t.generation == generation)
     }
 
-    fn decor_of(&self, cube: Cube, generation: u32) -> Option<&Decor> {
-        self.decor.iter().find(|d| d.cube == cube && d.generation == generation)
-    }
-
-    /// The pool its desired tier takes.
     fn desired_pool(&self) -> Pool {
         Pool::of(self.level(), mesh_step(self.desired, self.level()))
     }
 
-    /// The slots of its pool its desired tier fills, of the sources as of
-    /// `generation`.
     fn desired_slots(&self, generation: u32) -> (Pool, u32) {
         (self.desired_pool(), self.slots_for(self.desired, generation))
     }
 
-    /// Whether it draws a cube other than the one it wants.
     fn recubes(&self) -> bool {
         self.layout_ready && self.layout_primary != self.desired
     }
 
-    /// The cube it builds now: the one it wants, but for a drawn piece the
-    /// frontier has not yet let change cube, the one it shows — rebuilt in
-    /// its own slot when its sources change, so an edit shows whatever the
-    /// arena's room.
+    /// The cube it builds now: the desired one, except a drawn piece the frontier
+    /// has not let recube rebuilds its shown cube in place, so an edit still shows.
     fn target(&self) -> Cube {
         if self.role == Role::Drawn && self.recubes() && !self.recube {
             self.layout_primary
@@ -424,188 +315,186 @@ impl Slot {
         }
     }
 
-    /// The pool slots are held in for it and not yet taken, and how many:
-    /// what it builds has not landed, and it has no tier of that cube to
-    /// build into.
+    /// Slots held for it and not yet taken: none while it has a tier of the target cube.
     fn reserves(&self, generation: u32) -> Option<(Pool, u32)> {
         let cube = self.target();
         (!self.tiers.iter().any(|t| t.cube == cube)).then(|| (Pool::of(self.level(), mesh_step(cube, self.level())), self.slots_for(cube, generation)))
     }
 }
 
-/// The census the profiler reads.
 #[derive(Clone, Copy, Default)]
 pub struct Census {
-    /// Chunks the table holds, which the arena bounds.
     pub chunks: u32,
     pub in_frustum: u32,
     pub settling: u32,
-    /// Chunks still pending once the frame is done. Not what the frame began
-    /// with less what it committed, which would also count the chunks a build
-    /// landed on this frame, pending or not when it began.
+    /// Pending after the frame, counted directly: "start minus committed" would
+    /// miss chunks whose build landed this frame.
     pub pending: u32,
     pub offscreen_pending: u32,
     pub oldest_visible_ms: f64,
     pub oldest_offscreen_ms: f64,
-    pub retained_on: f64,
-    pub retained_off: f64,
-    /// Chunks built for a move and ready, waiting on the rest of it.
     pub ready_waiting: u32,
-    /// Meshes thrown away since the last census because their pool had no
-    /// free slot, and the levels of the chunks they were for, as bits.
     pub slot_waits: u32,
     pub wait_levels: u32,
-    /// Tiers landed across more than one slot since the last census: they
-    /// had more boxes than one slot holds (mesh_slot.rs `capacity`).
     pub chained: u32,
-    /// The largest mesh handed over since the last census, in boxes, of a
-    /// fine slot and of a coarse one.
     pub fine_peak: u32,
     pub coarse_peak: u32,
-    /// Moves of the frontier the arena had no room for this frame, and moves
-    /// under way and not all ready (frontier.rs `Plan`).
     pub refused: u32,
     pub waiting: u32,
-    /// The boxes the last draw listed, by the level of the chunk they are of.
-    pub level_boxes: [u32; LEVELS],
-    /// Chunks wanting a layout that the commit pass did not reach: whether
-    /// the frame's cap is what holds the screen back.
+    pub level_boxes: [u32; LEVELS as usize],
+    /// Chunks wanting a layout the commit pass did not reach: whether the frame's cap is the bottleneck.
     pub commit_left: u32,
 }
 
-/// The pyramid's levels, a chunk's being one of them.
-pub const LEVELS: usize = TOP_LEVEL as usize + 1;
+/// An index in a `.fixed.mounts` lane, stored plus one so a zeroed lane reads as none.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[repr(transparent)]
+struct Nth(u32);
 
-/// Who holds each mesh slot (mesh_slot.rs), by mount, none for a free one;
-/// the slot each is chained to; the tier landing now; and the arena epoch
-/// the tiers were written under.
+impl Nth {
+    const NONE: Nth = Nth(0);
+
+    fn of(n: usize) -> Nth {
+        Nth(n as u32 + 1)
+    }
+
+    fn get(self) -> Option<usize> {
+        self.0.checked_sub(1).map(|n| n as usize)
+    }
+
+    fn is_none(self) -> bool {
+        self == Nth::NONE
+    }
+
+    fn take(&mut self) -> Option<usize> {
+        core::mem::take(self).get()
+    }
+}
+
+struct Free {
+    lane: &'static mut [u32],
+    len: usize,
+}
+
+impl Free {
+    fn pop(&mut self) -> Option<u32> {
+        self.len = self.len.checked_sub(1)?;
+        Some(self.lane[self.len])
+    }
+
+    fn push(&mut self, id: u32) {
+        self.lane[self.len] = id;
+        self.len += 1;
+    }
+}
+
+struct Index {
+    lane: &'static mut [(Chunk, u32)],
+    len: usize,
+}
+
+impl Index {
+    fn insert(&mut self, n: usize, entry: (Chunk, u32)) {
+        self.lane.copy_within(n..self.len, n + 1);
+        self.lane[n] = entry;
+        self.len += 1;
+    }
+
+    fn remove(&mut self, n: usize) -> (Chunk, u32) {
+        let entry = self.lane[n];
+        self.lane.copy_within(n + 1..self.len, n);
+        self.len -= 1;
+        entry
+    }
+}
+
+impl core::ops::Deref for Index {
+    type Target = [(Chunk, u32)];
+
+    fn deref(&self) -> &[(Chunk, u32)] {
+        &self.lane[..self.len]
+    }
+}
+
+/// `.fixed.mounts` lanes: slot holder, slot next, mount place, free mounts, index.
+const MOUNT_LANES: [u32; 5] = [
+    (OCCUPANCY * size_of::<Nth>()) as u32,
+    (OCCUPANCY * size_of::<Nth>()) as u32,
+    (OCCUPANCY * size_of::<Nth>()) as u32,
+    (OCCUPANCY * size_of::<u32>()) as u32,
+    (OCCUPANCY * size_of::<(Chunk, u32)>()) as u32,
+];
+const MOUNT_ALIGN: u32 = 8;
+
+pub const MOUNTS_BYTES: u32 = span_of(&MOUNT_LANES, MOUNT_ALIGN);
+
+/// # Safety
+/// Each lane is taken once, by the table alone; zero is valid for every entry.
+unsafe fn mount_lane<T>(k: usize) -> &'static mut [T] {
+    unsafe { lane(range(Range::Mounts).nth(&MOUNT_LANES, MOUNT_ALIGN, k), 0, OCCUPANCY) }
+}
+
 pub struct Meshes {
-    holder: Vec<Option<u32>>,
-    /// The slot after each in the tier that fills it, by index: a tier past
-    /// one slot's boxes goes on in any free slot of its pool, contiguous or
-    /// not. Fixed at the slots' count, so it holds no more than they do.
-    next: Vec<Option<usize>>,
-    /// The tier the one bake open is landing: every slot it fills was held
-    /// for it at once when its size was known (`reserve`), and its blocks
-    /// are written as they come (`part`).
+    holder: &'static mut [Nth],
+    /// Next slot in a tier's chain; a tier past one slot continues in any free slot of its pool.
+    next: &'static mut [Nth],
+    /// The tier the open bake is landing; all its slots are held at once in `reserve`.
     landing: Option<Landing>,
     epoch: u32,
-    /// Tiers landed across more than one slot, until a census takes them.
     pub chained: u32,
-    /// Which telling of the slots tiers need this is: it moves whenever a
-    /// chunk finds a tier fills more than was held for it, which the quality
-    /// policy counts.
+    /// Bumped whenever a tier needs more slots than were held; the quality policy watches it.
     needs: u32,
-    /// The largest mesh handed to a slot of each kind, until a census takes
-    /// them: what a slot's size is read against.
     fine_peak: u32,
     coarse_peak: u32,
-    /// Meshes thrown away for want of a free slot, since the census, and the
-    /// levels of the chunks they were for as bits.
     waits: u32,
     wait_levels: u32,
 }
 
 pub struct Scheduler {
     pub meshes: Meshes,
-    /// The boxes the last draw listed by level (`Census::level_boxes`).
-    level_boxes: [u32; LEVELS],
+    level_boxes: [u32; LEVELS as usize],
     pub builder: Builder,
-    /// What the renderer uploads, frees and draws (draw.rs).
     pub draw: DrawList,
-    /// The hover ghost (marker/hover_cursor.rs).
     pub ghost: GhostDraw,
-    /// Models and the actors that play them (layer/model/store.rs).
     pub models: Models,
-    /// The location puck (marker/location_puck.rs).
     pub markers: Markers,
-    /// The billboards (billboard/field.rs).
     pub billboards: Billboards,
-    /// The model each decor group is drawn with, by group, once the decor assets
-    /// registered it: what a hit test reads the triangles of.
-    pub decor_models: Vec<Option<u32>>,
-    /// The sun, the moon, the light and the sky (layer/environment/state.rs).
     pub environment: EnvironmentDraw,
-    /// The debug gizmos' segments (marker/debug_lines.rs).
     pub debug: DebugLines,
     slots: Vec<Slot>,
-    /// Where each mount's slot is in `slots`, by mount. A mount is the
-    /// number a chunk holds while it is mounted (`Slot::id`), and every part
-    /// of it names it by that: its build, the mesh slots it holds, the tier
-    /// it is landing. Nothing that names a mount outlives it (`remove`), so
-    /// a number given back is given again at once, and nothing can take the
-    /// chunk mounted under it for the one before.
-    place: Vec<Option<usize>>,
-    /// The mounts free, the last given back first.
-    mounts: Vec<u32>,
-    /// The mounted chunks in chunk order, with their mounts: how a chunk is
-    /// found, and a column of them (`surface_at`).
-    index: Vec<(Chunk, u32)>,
-    /// The domain's pieces the last recheck saw (world/pyramid/domain.rs
-    /// `revision`): what a chunk should show is read off it, and it is made
-    /// again when the eye, the resident pages, the heights or the quality
-    /// move.
+    /// Index into `slots` by mount. Nothing naming a mount outlives it (`remove`),
+    /// so a freed mount can be reused at once.
+    place: &'static mut [Nth],
+    mounts: Free,
+    index: Index,
     domain_seen: u32,
     frame: Option<Frame>,
-    /// Something changed that a recheck has not seen: the view moved, a
-    /// chunk came or went, a source was told. The next tick rechecks every
-    /// chunk, so what each should be showing is never older than the frame
-    /// that changed it. The canvas is asked for frames until that recheck
-    /// has run, or the world stops at whatever the last frame left —
-    /// nothing else asks for a frame.
+    /// An input changed that no recheck has seen; the next tick rechecks every
+    /// chunk. Frames are requested until then, or the world stops at the last frame.
     view_dirty: bool,
     retained_on: f64,
     retained_off: f64,
     pub census: Census,
     counts: ChunkCounts,
-    /// The decor kinds, in the order decor/build.rs taught them — the order of
-    /// the groups in every decor block.
-    decor_kinds: Vec<DecorKind>,
-    /// A decor build's sample of its chunk's ground, its chunk's columns and
-    /// what is placed in them, and its chunk's objects folded to its level,
-    /// kept for their capacity.
-    decor_sample: ChunkSample,
-    decor_cols: Vec<IVec>,
-    decor_placed: Vec<Placed>,
-    decor_folded: HashMap<[i64; 3], u32>,
-    /// Where a decor build gathers its instances, made at the first build:
-    /// the scheduler is made before the sections are.
-    decor_scratch: Option<DecorScratch>,
-    /// The builder's refusals as of the last reclaim, so a refusal since
-    /// is pressure now.
-    refused_seen: u32,
-    /// The chunks the build task advances, in the one order, as the last
-    /// tick left them.
     builds: Vec<u32>,
     landed: Vec<u32>,
-    /// Chunks the build task committed since the last census.
     build_committed: u32,
-    /// What the frontier's last step left: moves refused for room, and
-    /// moves under way or held — each asks for the next turn.
     moves: (u32, u32),
-    /// What a recut's pace is read by, for the profiler: refinements made
-    /// and drawn pieces changed to another cube since load, the changes to
-    /// what is drawn since the frontier's last step — moves of every kind and
-    /// changes of cube — and the most of those between two steps.
+    /// Recut pace for the profiler.
     refined: u32,
     recubed: u32,
     changes: u32,
     changes_peak: u32,
-    /// The tick's lists, kept for their capacity: a tick over a thousand
-    /// chunks fills several of them.
     scratch: Scratch,
 }
 
-/// Empty by default: the tick takes it out with `mem::take` and puts it back,
-/// so what `Default` makes is thrown away each tick, and allocating there
-/// would allocate every tick.
+/// Empty by default: the tick `mem::take`s it every frame, so `Default` must not allocate.
 #[derive(Default)]
 struct Scratch {
     order: Vec<usize>,
     keys: Vec<Priority>,
     pending: Vec<usize>,
     eligible: Vec<usize>,
-    /// What the frontier reads of the table (`Now`), and its step.
     drawn: Vec<Chunk>,
     building: Vec<(Chunk, bool)>,
     recube: Vec<(Chunk, (Pool, u32))>,
@@ -620,16 +509,12 @@ impl Default for Scheduler {
 
 static BUILDS: Global<Notify> = Global::new();
 
-/// What the build task waits on while no tick has given it chunks to build.
 pub fn builds() -> &'static mut Notify {
     BUILDS.get(Notify::new)
 }
 
-/// xpute's pass over `items` against the tick's absolute deadlines: the first
-/// item always, then until `cap` items did something or the budget is spent,
-/// and never past the hard deadline once one was tried. How many did
-/// something, and how many were reached at all — the second is what says
-/// whether a ceiling is what stopped it.
+/// Runs `step` over `items`: the first always, then until `cap` did work or
+/// the budget is spent, never past `hard`. Returns (ran, visited).
 fn under_budget<T: Copy>(items: &[T], cap: u32, deadline: f64, hard: f64, now: &impl Fn() -> f64, step: impl FnMut(T) -> bool) -> PassStats {
     let at = now();
     let opts = BudgetOpts {
@@ -640,9 +525,6 @@ fn under_budget<T: Copy>(items: &[T], cap: u32, deadline: f64, hard: f64, now: &
     run_under_budget(items.iter().copied(), step, opts)
 }
 
-/// What the frontier reads of the chunks the table has not drawn: the pool
-/// each takes, whether its ground is resident, and where it stands in the
-/// view's order.
 struct Pieces<'a> {
     d: &'a Domain,
     table: &'a Scheduler,
@@ -666,14 +548,11 @@ impl Env for Pieces<'_> {
 impl Scheduler {
     pub fn new() -> Scheduler {
         arena_configure(&group_bytes());
-        // What is sized by the mesh slots — who holds each and what each is
-        // chained to, where each mount's slot is, the mounts free, the chunk
-        // index, and the builder's state by mount — is allocated here once
-        // and never grows or goes back, so a view moving and chunks coming
-        // and going allocate nothing for it. Its size is fixed, which is what
-        // `.fixed` holds (mem/fixed.rs), but it stays in the heap: a native
-        // test lays out no `.fixed`, and these are what the table's tests
-        // run on.
+        // SAFETY: the five lanes, each taken once here and the table's alone.
+        let (holder, next, place, free, index) = unsafe { (mount_lane(0), mount_lane(1), mount_lane(2), mount_lane::<u32>(3), mount_lane(4)) };
+        for (k, id) in free.iter_mut().enumerate() {
+            *id = (OCCUPANCY - 1 - k) as u32;
+        }
         Scheduler {
             level_boxes: [0; LEVELS],
             meshes: Meshes {
@@ -727,51 +606,78 @@ impl Scheduler {
         }
     }
 
-    /// Teaches a decor kind.
-    pub fn decor_kind(&mut self, kind: DecorKind) {
-        self.decor_kinds.push(kind);
-    }
-
-    /// Forgets every kind taught, so they can be taught again.
-    pub fn decor_forget(&mut self) {
-        self.decor_kinds.clear();
-    }
-
-    fn account(&mut self, i: usize, before: f64) {
-        let delta = self.slots[i].retained() - before;
-        if self.slots[i].has(IN_FRUSTUM) {
-            self.retained_on += delta;
-        } else {
-            self.retained_off += delta;
-        }
-    }
-
-    /// How many slots chunk `c`'s tier of `cube` fills, as far as is known
-    /// of its current sources: what the frontier and the quality policy
-    /// count it by (frontier.rs `need`).
     pub fn slots_of(&self, c: Chunk, cube: Cube) -> u32 {
         self.find(&c).map_or(1, |i| self.slots[i].slots_for(cube, self.generation(i)))
     }
 
-    /// Which telling of the slots tiers need this is (`slots_of`).
-    /// Refinements and changes of cube since load, and the most changes to
-    /// what is drawn between two of the frontier's steps.
     pub fn pace(&self) -> [u32; 3] {
-        [self.refined, self.recubed, self.changes_peak]
+        [self.refined, self.retiered, self.changes_peak]
+    }
+
+    /// The chunks counted for the profiler at `t0`, the slots' waits taken
+    /// whether or not they are: a recording starts from now.
+    pub fn census(&mut self, counted: bool, t0: f64) -> Census {
+        let mut c = Census {
+            chunks: self.slots.len() as u32,
+            commit_left: self.commit_left,
+            refused: self.moves.0,
+            waiting: self.moves.1,
+            zoom_boxes: self.zoom_boxes,
+            slot_waits: core::mem::take(&mut self.meshes.waits),
+            wait_zooms: core::mem::take(&mut self.meshes.wait_zooms),
+            chained: core::mem::take(&mut self.meshes.chained),
+            fine_peak: core::mem::take(&mut self.meshes.fine_peak),
+            coarse_peak: core::mem::take(&mut self.meshes.coarse_peak),
+            ..Census::default()
+        };
+        if !counted {
+            return c;
+        }
+        for s in &self.slots {
+            c.in_frustum += u32::from(s.in_frustum);
+            c.settling += u32::from(s.settling());
+            c.pending += u32::from(s.pending());
+            c.ready_waiting += u32::from(s.role == Role::Building && s.layout.is_some());
+            if let Some(since) = s.pending_since {
+                let waited = t0 - since;
+                if s.in_frustum {
+                    c.oldest_visible_ms = c.oldest_visible_ms.max(waited);
+                } else {
+                    c.offscreen_pending += 1;
+                    c.oldest_offscreen_ms = c.oldest_offscreen_ms.max(waited);
+                }
+            }
+        }
+        c
+    }
+
+    /// Each mounted chunk, whether it is drawn, and whether it is in the frustum.
+    pub fn mounted(&self, out: &mut Vec<(Chunk, bool, bool)>) {
+        out.clear();
+        out.extend(self.slots.iter().map(|s| (s.chunk, s.role == Role::Drawn, s.in_frustum)));
+    }
+
+    /// The finest drawn chunk holding `p`, as zooms: its cells', its tier's,
+    /// and those of the page it is read from.
+    pub fn drawn_at(&self, p: &Pvf3) -> Option<(i32, Option<i32>, Option<i32>)> {
+        let s = (0..LEVELS).find_map(|level| self.slots.iter().find(|s| s.role == Role::Drawn && s.chunk == Chunk::of(level, p)))?;
+        Some((
+            zoom_of(GROUND.scale(s.level())),
+            s.layout.map(|(scale, _)| zoom_of(scale)),
+            s.sources.read_from.map(|l| zoom_of(GROUND.scale(l))),
+        ))
+    }
+
+    pub fn drawn_revision(&self) -> u32 {
+        self.drawn_revision
     }
 
     pub fn needs_revision(&self) -> u32 {
         self.meshes.needs
     }
 
-    // ---- commands ----
-
-    /// Chunk `k`, mounted for a move of the frontier, its tier the one the
-    /// rule wants for it now.
     fn add(&mut self, world: &mut World, k: Chunk) {
-        // Every chunk mounted holds a slot of the arena or has one held for
-        // it (`Slot::reserves`), and the frontier starts none it has no room
-        // for: more than the arena's slots is a bug in that accounting.
+        // The frontier starts no move without room, so running out of mounts is a bug.
         let id = self.mounts.pop().or_bug(Errno::ENOSPC);
         let level = k.level();
         let edits = render_edits();
@@ -840,8 +746,7 @@ impl Scheduler {
         if i < self.slots.len() {
             self.place[self.slots[i].id as usize] = Some(i);
         }
-        self.place[id as usize] = None;
-        // The mount is given again at once: nothing may still name it.
+        self.place[id as usize] = Nth::NONE;
         debug_assert!(
             self.builder.generation_of(id).is_none() && self.meshes.landing.as_ref().is_none_or(|l| l.id != id) && self.meshes.holder.iter().all(|&h| h != Some(id)),
             "mount {id} outlived by what names it"
@@ -849,23 +754,17 @@ impl Scheduler {
         self.mounts.push(id);
     }
 
-    /// Where chunk `k`'s slot is, if it is mounted.
     fn find(&self, k: &Chunk) -> Option<usize> {
         let n = self.index.binary_search_by_key(k, |&(c, _)| c).ok()?;
         self.place[self.index[n].1 as usize]
     }
 
-    /// The builder's generation for slot `i`: the telling of its sources a
-    /// tier must be built from to count.
     fn generation(&self, i: usize) -> u32 {
         self.builder.generation_of(self.slots[i].id).unwrap_or(0)
     }
 
-    /// The chunk's sources changed. What it shows stays up: the tiers and the
-    /// decor it holds are an older generation now, drawn until a layout of
-    /// the new one is whole and then let go at once, so a change is never a
-    /// hole and never half of one. A tier of the new generation is built
-    /// into the slot of the old one's cube, so a rebuild takes no slot.
+    /// Sources changed: the old tiers stay drawn until a layout of the new
+    /// generation is whole, and the rebuild goes into the old tier's slot.
     fn source(&mut self, world: &mut World, i: usize) {
         self.view_dirty = true;
         let (id, structures) = (self.slots[i].id, self.slots[i].sources.structures);
@@ -877,12 +776,8 @@ impl Scheduler {
         s.set(FRESH, true);
     }
 
-    /// Every chunk's sources against what it was built from: a chunk whose
-    /// tiers' sources moved is told again, and one whose decor's did has its
-    /// decor rebuilt, the tiers untouched. The terrain page is not a source
-    /// that changes: a bake is the same whenever it is fetched. A page that
-    /// goes is no change either: a build of its chunk finds no page by its
-    /// key and waits (build.rs), and what is drawn stays drawn.
+    /// A page that goes is not a change: a build finds no page and waits, and
+    /// what is drawn stays drawn.
     pub fn sources_step(&mut self, world: &mut World) {
         let edits = render_edits();
         for i in 0..self.slots.len() {
@@ -900,12 +795,7 @@ impl Scheduler {
         }
     }
 
-    /// The build task's step: the chunks the last tick ordered, holders of the
-    /// scan and the bake slot first, advanced for what is left of the turn's
-    /// quota and at least one step, and the chunks a tier landed on
-    /// committed. Whether any did work; none did when all are built, blocked,
-    /// or a block was refused — the heap is the same until the next tick
-    /// reclaims.
+    /// The build task's step. Returns whether any build did work.
     pub fn build_step(&mut self, world: &mut World, budget_ms: f64) -> bool {
         let (slots, place, meshes, landed) = (&mut self.slots, &self.place, &mut self.meshes, &mut self.landed);
         landed.clear();
@@ -934,174 +824,11 @@ impl Scheduler {
         worked
     }
 
-    /// Only the chunk's decor changed (an entry placed or hidden, the
-    /// setting): the decor it holds is stale and let go; the layout's decor is
-    /// rebuilt now and the layout applied again, the tiers untouched. Unless a
-    /// block was refused, when the ground stays drawn without it and it
-    /// lands on a later tick.
-    fn decor_now(&mut self, world: &mut World, i: usize) {
-        let before = self.slots[i].retained();
-        for d in self.slots[i].decor.take().iter() {
-            d.release(&mut self.draw);
-        }
-        self.account(i, before);
-        self.slots[i].decor_whole = false;
-        if !self.slots[i].layout_ready {
-            return;
-        }
-        let (p, g) = (self.slots[i].layout_primary, self.slots[i].layout_generation);
-        if self.ensure_decor(world, i, p, g) {
-            self.apply_layout(i, p, g);
-            self.slots[i].decor_whole = true;
-        } else {
-            self.slots[i].set(FRESH, true);
-            self.view_dirty = true;
-        }
-    }
-
-    /// Whether the chunk holds the decor of its tier `cube` of
-    /// `generation`, building it where it lacks it: false when the
-    /// heap refused a block. A chunk with no page has no decor to build.
-    fn ensure_decor(&mut self, world: &mut World, i: usize, cube: Cube, generation: u32) -> bool {
-        let (id, level, corner) = (self.slots[i].id, self.slots[i].level(), self.slots[i].chunk.corner());
-        let (x0, y0) = (ivec::X(corner), ivec::Y(corner));
-        // Whether it scatters is one of what its decor is made of, as told.
-        let decor = self.slots[i].decor_sources.shown;
-        if self.decor_scratch.is_none() {
-            self.decor_scratch = DecorScratch::new();
-        }
-        if self.slots[i].decor_of(cube, generation).is_some() {
-            return true;
-        }
-        // A chunk scatters from its own page at its own level, at the
-        // world step its cube is. A kind is drawn, scattered or placed,
-        // only at a step where it covers the pixels it is drawn at, so a
-        // step no kind is drawn at has no block. The setting is the
-        // scatter's alone: what the user placed is drawn whatever it says.
-        let world_step = GROUND.scale(0).count_in(cube.max(GROUND.scale(0)));
-        // Every column whose corner lies in the chunk: its own, at z16.
-        self.decor_cols.clear();
-        world.store.cols_under(self.slots[i].chunk.column(), &mut self.decor_cols);
-        let drawn = |k: &&DecorKind| decor_density(k.extent, world_step) > 0.0;
-        let scatters = decor && self.decor_kinds.iter().filter(drawn).any(|k| k.density > 0.0);
-        let places = !self.decor_cols.is_empty() && self.decor_kinds.iter().filter(drawn).any(|k| k.decor_value.is_some());
-        if !scatters && !places {
-            return true;
-        }
-        let source = self.builder.ground_of(id);
-        let view = source.map(|(_, _, page, _)| Builder::page_view(page));
-        if let (Some((tx0, ty0, _, show)), Some(view)) = (source, view.as_ref()) {
-            if scatters {
-                let around = Around {
-                    own: PageSource { page: *view, origin: [0, 0], n: 1 },
-                    beside: [None; 8],
-                };
-                self.decor_sample.read(&around, [tx0 as i64, ty0 as i64], hidden_ground(show));
-            }
-        }
-        self.decor_placed.clear();
-        self.decor_placed.extend(self.decor_cols.iter().map(|&col_idx| {
-            let o = FROM_L2_IDX(col_idx);
-            Placed {
-                col_idx,
-                ox: (ivec::X(o) - x0) as f64,
-                oy: (ivec::Y(o) - y0) as f64,
-                hittable: level == 0,
-            }
-        }));
-        // Above z16 the objects are drawn folded to the level's cell, the
-        // fold the chunk's runs are made with (build.rs `level_runs`): what
-        // keeps a candidate off a cell is that fold, as a z16 chunk's is
-        // the store's own cell.
-        let target = GROUND.scale(level);
-        let (cx, cy, span) = (target.index(x0), target.index(y0), CHUNK_CELLS as i64);
-        match level > 0 && scatters {
-            true => world.store.fold_at(target, [cx, cy], [cx + span, cy + span], self.builder.hide(), &mut self.decor_folded),
-            false => self.decor_folded.clear(),
-        }
-        // The surface the tier is drawn with, which an instance stands
-        // on: its tier is built before its decor (`commit`).
-        let surface = self.slots[i].tier(cube, generation).map(|t| Drawn {
-            level,
-            base: ivec::gather(x0, y0, 0),
-            step: mesh_step(cube, level),
-            tops: surface(t.slot.index, mesh_step(cube, level)),
-            heights: t.heights,
-        });
-        let ground = source.zip(view.as_ref()).map(|((tx0, ty0, _, _), view)| Ground {
-            page: view,
-            sample: &self.decor_sample,
-            level,
-            x0,
-            y0,
-            tx0,
-            ty0,
-            col_idx: (level == 0).then(|| L2_IDX(ivec::gather(x0, y0, 0))),
-            surface: surface.as_ref(),
-            folded: (level > 0).then_some(&self.decor_folded),
-        });
-        let Some(scratch) = self.decor_scratch.as_mut() else { return false };
-        let heights = self.slots[i].chunk.z_range();
-        let built = DecorBuild::build(
-            scratch,
-            &self.decor_kinds,
-            ground.as_ref(),
-            &self.decor_placed,
-            self.builder.hide(),
-            world.store,
-            world_step,
-            decor,
-            heights,
-        );
-        let bytes = built.bytes();
-        let Some((at, bytes)) = alloc(bytes) else {
-            self.builder.stat.starved += 1;
-            self.slots[i].refused = Some(crate::host::heap_stat().releases);
-            return false;
-        };
-        // SAFETY: a block of the bytes the build asked for, the slot's from
-        // here until its decor is let go.
-        unsafe { built.write(ptr_at::<u8>(at)) };
-        let before = self.slots[i].retained();
-        let handle = self.draw.upload(at as u32, bytes, 0, 0);
-        self.slots[i].decor.push(Decor {
-            cube,
-            generation,
-            at: at as u32,
-            bytes,
-            handle,
-        });
-        self.account(i, before);
-        true
-    }
-
-    /// The model decor group `group` is drawn with.
-    pub fn decor_model(&mut self, group: u32, model: u32) {
-        let g = group as usize;
-        if self.decor_models.len() <= g {
-            self.decor_models.resize(g + 1, None);
-        }
-        self.decor_models[g] = Some(model);
-    }
-
-    /// Every drawn piece's decor on screen as shown this frame — the block
-    /// of the tier its layout mostly shows — with the chunk and its base, in
-    /// units: what a hit test walks.
-    pub fn shown_decor(&self) -> impl Iterator<Item = (Chunk, f64, f64, &Decor)> {
-        self.slots
-            .iter()
-            .filter(|s| s.role == Role::Drawn && s.has(IN_FRUSTUM) && s.layout_ready)
-            .filter_map(|s| s.decor_of(s.layout_primary, s.layout_generation).map(|d| (s.chunk, s.base_x(), s.base_y(), d)))
-    }
-
-    /// The counts since the last frame sample, taken.
     pub fn take_counts(&mut self) -> ChunkCounts {
         core::mem::take(&mut self.counts)
     }
 
-    /// What the chunks hold, with the run sets `.fixed.runs` has lent as the
-    /// builder counts them (`Builder::run_sets`).
-    pub fn retention(&self) -> ChunkRetention {
+    pub fn held(&self) -> ChunkHeld {
         let (run_sets, run_bytes) = self.builder.run_sets();
         let mut out = ChunkRetention {
             run_sets,
@@ -1116,14 +843,7 @@ impl Scheduler {
         out
     }
 
-    /// Decor instances the build's lanes had no room for, since the kernel
-    /// started: the profiler's, so a chunk short of its decor says so.
-    pub fn decor_dropped(&self) -> u32 {
-        self.decor_scratch.as_ref().map_or(0, |s| s.dropped)
-    }
-
-    /// Slots each pool has that no tier holds and no chunk mounted will
-    /// take: what the frontier may start moves in.
+    /// Free slots per pool after what mounted chunks will take.
     fn free(&self) -> Slots {
         let mut free = ARENA;
         for (at, h) in self.meshes.holder.iter().enumerate() {
@@ -1140,9 +860,6 @@ impl Scheduler {
         free
     }
 
-    /// The frontier's step (world/chunk/frontier.rs): the drawn pieces moved
-    /// toward the view's pieces at the effective quality, as far as what is
-    /// ready and the arena's room let them.
     fn materialize(&mut self, world: &mut World, sc: &mut Scratch) {
         let Some(d) = domain::current() else { return };
         sc.drawn.clear();
@@ -1195,8 +912,6 @@ impl Scheduler {
         }
         let now = crate::host::now();
         for &k in &plan.start {
-            // What a move starts is neither drawn nor building: what was is
-            // let go or cancelled above, or entered no move.
             xpute_core::ensure!(self.find(&k).is_none(), ENOTRECOVERABLE);
             self.add(world, k);
             self.counts.added += 1;
@@ -1207,9 +922,7 @@ impl Scheduler {
                 self.recheck(world, i, now);
             }
         }
-        // The cover's pool holds what it is sized to hold (mesh_slot.rs
-        // `COVER_SLOTS`): every slot of it held is a current root's, and no
-        // root holds two.
+        // Every cover slot held belongs to a current root, and no root holds two.
         let roots = d.roots();
         let mut owned = [false; COVER_SLOTS as usize];
         for at in Pool::Cover.range() {
@@ -1220,13 +933,8 @@ impl Scheduler {
         }
     }
 
-    /// The device's meshes are gone — the arena was made anew, the device with
-    /// it — so every tier is forgotten and built again from the records.
-    ///
-    /// A layout is what a chunk shows, and it showed those tiers: kept ready
-    /// over tiers that are gone, the recheck finds nothing to ask for and the
-    /// chunk draws its decor over no ground until its cube happens to change.
-    /// With its layout gone it is a hole, which the recheck asks for first.
+    /// The arena was recreated with the device: forget every tier. A layout kept
+    /// ready over lost tiers would draw nothing until its cube changed.
     fn lose_meshes(&mut self) {
         let epoch = arena_epoch();
         if epoch == self.meshes.epoch {
@@ -1241,11 +949,7 @@ impl Scheduler {
         self.view_dirty = true;
     }
 
-    // ---- the tick ----
-
-    /// One frame: measure every chunk, recheck, move the frontier, commit and
-    /// reclaim under the frame's budget, and set what the build task takes.
-    /// Whether the canvas has something new to draw.
+    /// One frame. Returns whether the canvas has something new to draw.
     pub fn tick(&mut self, world: &mut World, frame: Frame, now: &impl Fn() -> f64) -> bool {
         let t0 = now();
         let deadline = t0 + frame.remaining_ms;
@@ -1254,11 +958,6 @@ impl Scheduler {
             self.view_dirty = true;
         }
         self.frame = Some(frame);
-        // What every chunk should be showing is read off the frame, the
-        // domain and what the chunk was told, so a change to any of them is
-        // answered now: `view_dirty` is that question outstanding — set by a
-        // frame that differs from the last, a domain made again, and every
-        // other input where it changes. Nothing is left to a timer to catch.
         let domains = domain::revision();
         if domains != self.domain_seen {
             self.domain_seen = domains;
@@ -1270,20 +969,9 @@ impl Scheduler {
         self.refresh(&frame);
         self.order(&mut sc.order, &mut sc.keys);
 
-        // What each chunk should be showing, for every chunk that could have
-        // changed: freshly mounted or settling — and all of them
-        // when an input they all read moved.
-        //
-        // Not under the budget, and that is the point. This decides what is
-        // *wanted*; the budget is for the work that follows, and a pass that
-        // states a demand cannot be cut without some chunks' demand going
-        // unstated. Cut, it stopped at the order's head, and a chunk drawing
-        // a coarse tier sorts behind every one drawing nothing, so it was
-        // never reached: never told it wanted a finer tier, so never pending,
-        // so never built.
-        //
-        // It costs a distance and a few flags a chunk, the arena's slots of
-        // them at the worst, and only when an input moved.
+        // Not under the budget: this states demand, and cutting it left chunks
+        // drawing a coarse tier, which sort behind empty ones, never told to refine.
+        // A recheck touches only its own chunk, so order does not matter.
         let full_recheck = self.view_dirty;
         sc.eligible.clear();
         sc.eligible.extend(sc.order.iter().copied().filter(|&i| full_recheck || self.slots[i].flags & (FRESH | SETTLING) != 0));
@@ -1296,31 +984,16 @@ impl Scheduler {
         }
 
         self.materialize(world, &mut sc);
-        // Mounting and letting go move chunks in the table.
         self.order(&mut sc.order, &mut sc.keys);
 
-        // The pending chunks, in the one order, on screen or not: a piece
-        // off the screen is the frontier's as much as one on it, and is what
-        // a turn finds drawn.
         sc.pending.clear();
         sc.pending.extend(sc.order.iter().copied().filter(|&i| self.slots[i].has(PENDING)));
         let pending_total = sc.pending.len() as u32;
 
-        // A commit may build decor, and a block refused ends the commits this
-        // tick as it ends the builds (Builder::tick): the heap is the same
-        // until reclaim, and the decor is scattered before its block is
-        // asked for.
-        let starved = self.builder.stat.starved;
-        let commits = under_budget(&sc.pending, param::COMMITS_PER_FRAME, deadline, hard, now, |i| {
-            self.builder.stat.starved == starved && self.commit(world, i)
-        });
-        // What the pass never looked at, which is what a cap on how many may
-        // land costs when there are more of them than it lets through.
+        let commits = under_budget(&sc.pending, param::COMMITS_PER_FRAME, deadline, hard, now, |i| self.commit(world, i));
         let commit_left = sc.pending.len() as u32 - commits.visited;
         let mut committed = commits.ran;
 
-        // The builds are the build task's (`build_step`), on the turn's quota:
-        // the pending, in the one order.
         let slots = &self.slots;
         self.builds.clear();
         self.builds.extend(sc.pending.iter().filter(|&&i| slots[i].has(PENDING)).map(|&i| slots[i].id));
@@ -1377,11 +1050,8 @@ impl Scheduler {
         committed > 0 || pending_total > committed || moving || self.view_dirty || animating
     }
 
-    /// This frame's draws: every piece drawn that is on screen with a
-    /// layout, its tier placed where the chunk is in the frame the camera is
-    /// written in. A chunk built for
-    /// a move is not drawn until the move is made: the piece it replaces is
-    /// what covers its ground until then.
+    /// Chunks built for a move are not drawn until the move is made; the piece
+    /// they replace covers their ground until then.
     fn draw_frame(&mut self, frame: &Frame) {
         self.draw.begin_frame();
         self.level_boxes = [0; LEVELS];
@@ -1404,23 +1074,15 @@ impl Scheduler {
                 }
             }
             let Some(t) = s.tier(cube, s.layout_generation) else { continue };
-            // A chunk draws only from a slot it holds. The slot is room
-            // and not an address (world/chunk/mesh_slot.rs), so it is
-            // handed from one chunk to another while the kernel runs —
-            // and a long-lived thing holding a recyclable address is how
-            // one chunk comes to draw another's ground. It cannot here:
-            // the only reference to a slot is the `Tier` inside the chunk
-            // that took it, a slot is free only once that tier is gone,
-            // and this looks the tier up again every frame. The assert is
-            // what says so out loud, at an array index a draw.
-            xpute_core::ensure!(holder[t.slot.index] == Some(s.id), ENOTRECOVERABLE);
+            // Slots are recycled between chunks, so a chunk must draw only from a slot
+            // it holds; otherwise it can draw another chunk's ground.
+            xpute_core::ensure!(holder[t.slot.index] == Nth::of(s.id as usize), ENOTRECOVERABLE);
             if t.box_cnt == 0 {
                 continue;
             }
-            // A mesh's heights are steps from its own floor, so the
-            // floor rides in the translation with the chunk's corner.
+            // Mesh heights are steps from the tier's floor, so the floor goes in the translation.
             let at = [translation[0], translation[1], translation[2] + t.heights.floor as f32];
-            // A slot's worth a draw, down the tier's chain.
+            let (unit, z_step) = ((mesh_step(cube, s.level()) << s.level()) as f32, t.heights.step as f32);
             let (mut left, mut slot) = (t.box_cnt, Some(t.slot.index));
             while let (Some(at_slot), true) = (slot, left > 0) {
                 let m = slot_at(at_slot);
@@ -1441,53 +1103,6 @@ impl Scheduler {
         }
     }
 
-    /// Piece `s` as it is drawn now, as the block of the pyramid's cells it
-    /// draws; a chunk that is not a drawn piece, or has no layout, draws
-    /// nothing a layer could stand on.
-    fn drawn_of<'a>(&'a self, s: &'a Slot) -> Option<Drawn<'a>> {
-        if s.role != Role::Drawn || !s.layout_ready {
-            return None;
-        }
-        let cube = s.layout_primary;
-        let t = s.tier(cube, s.layout_generation)?;
-        Some(Drawn {
-            level: s.level(),
-            base: s.chunk.corner(),
-            step: mesh_step(cube, s.level()),
-            tops: surface(t.slot.index, mesh_step(cube, s.level())),
-            heights: t.heights,
-        })
-    }
-
-    /// The ground drawn now at `addr`: the level of the cells it is drawn in
-    /// there, and the top of that cell's surface in units. Read from the
-    /// piece `drawn_of` gives for that ground, so it is the surface on the
-    /// screen — a coarser piece while what replaces it builds — and none
-    /// where nothing drawn stands there.
-    ///
-    /// A column is drawn by every chunk over it that holds something, each
-    /// cut to its own heights (world/pyramid/chunk.rs), so a chunk under the
-    /// surface tops out where it is cut. The highest one drawn there is the
-    /// one whose top is the surface's.
-    pub fn surface_at(&self, at: &Pvf3) -> Option<(u32, f64)> {
-        (0..=TOP_LEVEL).find_map(|level| {
-            let column = Chunk::column_of(level, at);
-            let (from, to) = (self.index.partition_point(|(c, _)| c < column.start()), self.index.partition_point(|(c, _)| c <= column.end()));
-            self.index[from..to].iter().rev().find_map(|&(_, id)| {
-                let d = self.drawn_of(&self.slots[self.place[id as usize]?])?;
-                // The chunk lies in one page at every level over its own, so
-                // the point's cell and the chunk's first are of one page.
-                let [cx, cy] = GROUND.cell_of(d.cell_level(), at).in_page();
-                let [fx, fy] = GROUND.cell_of(d.cell_level(), &Pvf3 { i: d.base, ..Default::default() }).in_page();
-                Some((d.cell_level(), d.top(cx - fx, cy - fy)?))
-            })
-        })
-    }
-
-    /// Where every chunk is and whether it is on screen, measured against the
-    /// frame. A slot that crosses the frustum's edge moves its retained bytes
-    /// between the on-screen and off-screen totals, which is what the
-    /// retention budget is spent from.
     fn refresh(&mut self, frame: &Frame) {
         let domain = domain::current();
         for i in 0..self.slots.len() {
@@ -1511,8 +1126,6 @@ impl Scheduler {
         }
     }
 
-    /// Every slot's index in priority order (`priority`) into `idx`, each
-    /// slot's key read once into `keys` rather than in the comparator.
     fn order(&self, idx: &mut Vec<usize>, keys: &mut Vec<Priority>) {
         let holders = self.builder.holders();
         keys.clear();
@@ -1522,8 +1135,7 @@ impl Scheduler {
         }));
         idx.clear();
         idx.extend(0..self.slots.len());
-        // Ties broken by the slot, which is the order a stable sort keeps: the
-        // same order, with no merge buffer taken each tick.
+        // Ties broken by index, which matches a stable sort without its merge buffer.
         idx.sort_unstable_by(|&a, &b| priority(&keys[a], &keys[b]).then(a.cmp(&b)));
     }
 
@@ -1543,17 +1155,9 @@ impl Scheduler {
         settle(&mut self.meshes, &self.builder);
     }
 
-    /// The tier this chunk should be showing, and whether that makes it
-    /// pending: the cube the rule wants at its nearest distance at the
-    /// effective quality (frontier.rs `wanted_cube`), whatever the slots its
-    /// mesh fills. Pending while what it shows is not what it builds
-    /// (`Slot::target`), of its sources as they are now, with its decor on
-    /// screen: a drawn piece wanting another cube is the frontier's to let
-    /// (`materialize`), and is not pending until it is. A chunk built for a
-    /// move drops a tier the rule no longer wants rather than hold two, as
-    /// nothing of it is drawn yet. SETTLING is pending with a layout already
-    /// up, so a frame can tell a chunk that is changing tier from one that
-    /// has nothing to show yet.
+    /// Sets the desired cube and whether the chunk is pending. A drawn piece
+    /// wanting another cube waits for the frontier (`materialize`); a building
+    /// chunk drops a tier no longer wanted. SETTLING is pending with a layout up.
     fn recheck(&mut self, world: &mut World, i: usize, now: f64) {
         self.slots[i].set(FRESH, false);
         let Some(d) = domain::current() else { return };
@@ -1581,8 +1185,6 @@ impl Scheduler {
         }
     }
 
-    /// Lets go of chunk `i`'s tiers and decor but those `keep` names, and of
-    /// the slots only they held; its layout too where its primary goes.
     fn release_tiers(&mut self, i: usize, keep: impl Fn(Cube, u32) -> bool) {
         let before = self.slots[i].retained();
         let s = &mut self.slots[i];
@@ -1602,12 +1204,8 @@ impl Scheduler {
         self.account(i, before);
     }
 
-    /// Whether the chunk holds the tier `primary` of the current generation.
-    /// When not, the builder is asked for it.
-    ///
-    /// A tier known to fill more slots than its pool has free is not asked
-    /// for until it does: its bake would only be thrown away again
-    /// (`reserve`). It is looked at again while it waits.
+    /// Whether the chunk holds `primary` of the current generation; asks the
+    /// builder otherwise, unless the tier is known not to fit the free slots.
     fn ask(&mut self, world: &mut World, i: usize, primary: Cube) -> bool {
         let generation = self.generation(i);
         let s = &self.slots[i];
@@ -1621,9 +1219,6 @@ impl Scheduler {
         !lacks
     }
 
-    /// Shows `primary` of `generation`. What it no longer draws —
-    /// an older generation's tiers and decor among it, so what is drawn
-    /// changes whole — is `trim`'s to let go, after.
     fn apply_layout(&mut self, i: usize, primary: Cube, generation: u32) {
         self.counts.layouts += 1;
         let s = &mut self.slots[i];
@@ -1640,20 +1235,12 @@ impl Scheduler {
         }
     }
 
-    /// Lets go of every tier the layout does not draw, and its decor: a slot
-    /// is held only by what is on the screen or about to be.
     fn trim(&mut self, i: usize) {
         let s = &self.slots[i];
         let (p, g) = (s.layout_primary, s.layout_generation);
         self.release_tiers(i, move |cube, generation| generation == g && cube == p);
     }
 
-    /// Applies what `recheck` asked for, if it can: the desired tier once it
-    /// is built, with its decor. A drawn piece changes cube only once the
-    /// frontier has let it hold a slot for it (`Slot::recube`). A request that
-    /// was refused for want of a block is not retried until the heap has
-    /// released something, so a full heap costs one attempt rather than one
-    /// per frame.
     fn commit(&mut self, world: &mut World, i: usize) -> bool {
         let s = &self.slots[i];
         if !s.has(PENDING) {
@@ -1718,59 +1305,34 @@ impl Scheduler {
     }
 }
 
-/// Whether two frames look at the world the same way: what a recheck's
-/// answer depends on, not the budget or the elapsed time.
 fn same_view(a: &Frame, b: &Frame) -> bool {
     a.anchor == b.anchor && a.origin == b.origin && a.planes == b.planes && a.camera == b.camera
 }
 
-/// What a chunk's place in the order is decided by.
 #[derive(Clone, Copy)]
 struct Priority {
     holds: bool,
     order: Order,
 }
 
-/// The order work is taken in: the slots' holders, which the rest wait on;
-/// then the view's own order (world/observation.rs `Order`) — what it sees,
-/// nearest the eye first, then what it does not, nearest first too, since
-/// that is the frontier a turn finds — the one order every layer's work is
-/// taken in.
-///
-/// Only the distance, and no class over it. The view fills out from the
-/// eye, and each piece it reaches replaces what was drawn there, coarser:
-/// what is in front of the eye answers the camera first, and nothing further
-/// out is worth its wait. Classes over it — a chunk showing nothing before
-/// one showing an older generation, before one asking to be sharper — and a
-/// wait that halved the key every four seconds sent the builds to ground at
-/// the edge of the view while the middle stood coarse, which is the response
-/// the view is judged by (2026-09-26).
-///
-/// A plain distance and not one in the chunk's own sides. That was "the
-/// biggest on the screen first", and it is the same thing for every level:
-/// the rule puts a chunk where its own cells are the right size, so a
-/// coarse one at the horizon subtends about what a fine one under the camera
-/// does, and they came out equal. The screen then filled everywhere at once
-/// rather than from the middle — and everywhere at once means the middle
-/// waits for all of it.
+/// Slot holders first, then distance from the eye (`Order`). Any class over
+/// the distance, or sizing by screen extent, sent builds to the edge of the
+/// view while the middle stayed coarse (2026-09-26).
 fn priority(a: &Priority, b: &Priority) -> core::cmp::Ordering {
     b.holds.cmp(&a.holds).then(a.order.cmp(&b.order))
 }
 
-/// Where a slot is from a frame: on screen, and its world center.
 fn measure(frame: &Frame, s: &Slot) -> (bool, V3) {
-    let [x, y, z] = frame.world_of([s.base_x() + s.bc[0], s.base_y() + s.bc[1], s.bc[2]]);
-    // Where the renderer draws it: laid back on the planet about the
-    // anchor, the origin here. A far chunk culled where the flat world has
-    // it would leave a hole at the horizon.
+    let (x0, y0) = s.base();
+    let [x, y, z] = frame.world_of([x0 + s.bc[0], y0 + s.bc[1], s.bc[2]]);
+    // Cull where the renderer draws it, on the globe; a flat-world cull leaves
+    // holes at the horizon.
     let [x, y, z] = match frame.globe {
         Some(globe) => globe.place([x, y, z]),
         None => [x, y, z],
     };
     let c = frame.camera;
-    // A chunk the camera stands in is seen whatever the planes say of its
-    // center: in its sphere, not over its footprint, since the chunks over
-    // a column above and below the camera are not around it.
+    // A chunk whose sphere contains the camera is always visible.
     let mut visible = (c[0] - x).hypot(c[1] - y).hypot(c[2] - z) <= s.radius;
     if !visible {
         visible = true;
@@ -1780,12 +1342,8 @@ fn measure(frame: &Frame, s: &Slot) -> (bool, V3) {
                 break;
             }
         }
-        // Past the horizon the planet itself is in the way, and nothing draws
-        // it: ground there would come up under the horizon line with no
-        // occluder to hide it. A point of a sphere of radius `r` is over the
-        // eye's horizon while `E·P >= r²`, the eye and the point taken from
-        // the planet's center — the virtual globe's own cull (Cozzi & Ring),
-        // widened by the chunk's radius so a chunk half over it stays.
+        // Horizon cull (Cozzi & Ring): a point is above the eye's horizon while
+        // E·P >= r², from the planet's center, widened by the chunk's radius.
         if visible {
             if let Some(globe) = frame.globe {
                 let r = globe.radius_u();
@@ -1799,22 +1357,16 @@ fn measure(frame: &Frame, s: &Slot) -> (bool, V3) {
     (visible, [x, y, z])
 }
 
-/// Whether slot `at` is free: no tier holds it. Never one a drawn tier
-/// holds — a slot a piece on the screen draws from is that ground's only
-/// cover.
 fn free_at(meshes: &Meshes, at: usize) -> bool {
     meshes.holder[at].is_none()
 }
 
-/// How many slots of `pool` are free.
 fn claimable(meshes: &Meshes, pool: Pool) -> u32 {
     pool.range().filter(|&at| free_at(meshes, at)).count() as u32
 }
 
-/// `k` free slots of `pool`, all of them or none: held for mount `holder`
-/// and chained in the order they are written, the first
-/// returned. Taking some and waiting for the rest would let two tiers each
-/// hold part of what the other needs.
+/// `k` free slots of `pool`, all or none, chained in order. Taking some and
+/// waiting for the rest would let two tiers deadlock on each other's slots.
 fn claim(meshes: &mut Meshes, pool: Pool, k: u32, holder: u32) -> Option<usize> {
     if (pool.range().filter(|&at| free_at(meshes, at)).take(k as usize).count() as u32) < k {
         return None;
@@ -1840,7 +1392,6 @@ fn claim(meshes: &mut Meshes, pool: Pool, k: u32, holder: u32) -> Option<usize> 
     first
 }
 
-/// Lets go of the chain from slot `at`, where mount `id` holds it.
 fn let_go(meshes: &mut Meshes, at: usize, id: u32) {
     let mut slot = Some(at);
     while let Some(at) = slot {
@@ -1851,9 +1402,7 @@ fn let_go(meshes: &mut Meshes, at: usize, id: u32) {
     }
 }
 
-/// Lets go of the tiers of `s` that `keep` does not name, and of each one's
-/// slots unless a tier kept, or a tier landing at `landing`, draws from
-/// them.
+/// Drops the tiers `keep` rejects, and their slots unless a kept or landing tier shares them.
 fn prune(s: &mut Slot, meshes: &mut Meshes, keep: impl Fn(&Tier) -> bool, landing: Option<usize>) {
     for t in s.tiers.iter().filter(|t| !keep(t)) {
         if landing != Some(t.slot.index) && !s.tiers.iter().any(|k| keep(k) && k.slot.index == t.slot.index) {
@@ -1863,16 +1412,9 @@ fn prune(s: &mut Slot, meshes: &mut Meshes, keep: impl Fn(&Tier) -> bool, landin
     s.tiers.retain(keep);
 }
 
-/// What a slot's layout draws at once: one tier.
-const LAYOUT_WIDTH: usize = 1;
+/// A slot holds at most the drawn tier and the one just built.
+const HELD: usize = 2;
 
-/// The most a slot holds of its tiers, or of its decor blocks: its layout's,
-/// and one more — the tier it has just built (`land`), or the decor of the
-/// layout a commit is applying (`commit`), which then lets go of the rest.
-const HELD: usize = LAYOUT_WIDTH + 1;
-
-/// A slot's few of something, in the order they came. One more than `HELD`
-/// is a slot holding what nothing draws or builds, which is a bug.
 #[derive(Clone, Copy)]
 struct Held<T: Copy> {
     items: [Option<T>; HELD],
@@ -1921,35 +1463,27 @@ impl<T: Copy> Held<T> {
     }
 }
 
-/// The slot `n` down the chain from `at`.
 fn chained(meshes: &Meshes, at: usize, n: u32) -> Option<usize> {
     (0..n).try_fold(at, |at, _| meshes.next[at])
 }
 
-/// A tier the open bake is landing: whose it is, the first of the slots it
-/// fills, how many, and what is known of it as its blocks come.
 struct Landing {
     id: u32,
     generation: u32,
     cube: Cube,
     first: usize,
     slots: u32,
-    /// The slots of the tier it is rebuilt over, where it is, which it
-    /// writes over rather than holding more.
+    /// Slots of the tier it is rebuilt over, which it writes over.
     over: u32,
     bounds: Option<Bounds>,
 }
 
-/// Holds every slot a tier of `boxes` boxes fills, at once, or says there is
-/// not the room (build.rs `BuildEvent::Reserve`). A tier rebuilt over one of
-/// the same cube writes over its slots and takes only what it needs past
-/// them. Where the room is not there, how many it needs is kept: the
-/// frontier and the quality policy count it so from then on, and it is not
-/// asked for again until the slots are free (`Scheduler::ask`).
-fn reserve(slots: &mut [Slot], place: &[Option<usize>], meshes: &mut Meshes, e: BuildEvent) -> bool {
+/// Holds every slot a tier of `boxes` fills at once, or records the need and
+/// refuses; a rebuild reuses the old tier's slots and claims only the extra.
+fn reserve(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) -> bool {
     let BuildEvent::Reserve { id, generation, cube, boxes } = e else { return false };
-    // One bake is open at a time: a landing still here is of one that closed
-    // within this tick without landing, and is let go as `settle` would.
+    // One bake is open at a time: a leftover landing is from one that closed
+    // without landing.
     if let Some(l) = meshes.landing.take() {
         release(meshes, l);
     }
@@ -1989,12 +1523,8 @@ fn reserve(slots: &mut [Slot], place: &[Option<usize>], meshes: &mut Meshes, e: 
     true
 }
 
-/// Lets go of what the landing tier holds as soon as the bake it is from is
-/// no longer open — thrown away, its chunk let go or asked for another cube —
-/// so the slots a bake held are the bake's until it lands and free the
-/// moment it does not: the slots it took, and past a tier it was rebuilt
-/// over only those taken past that tier's own. Asked after every call that
-/// can close a bake.
+/// Releases the landing once its bake is no longer open. Called after every
+/// call that can close a bake.
 fn settle(meshes: &mut Meshes, builder: &Builder) {
     let open = builder.baking();
     if let Some(l) = meshes.landing.take_if(|l| open != Some((l.id, l.cube, l.generation))) {
@@ -2002,8 +1532,6 @@ fn settle(meshes: &mut Meshes, builder: &Builder) {
     }
 }
 
-/// Lets go of what a tier that did not land held: the slots it took, and
-/// past a tier it was rebuilt over only those taken past that tier's own.
 fn release(meshes: &mut Meshes, l: Landing) {
     if l.over == 0 {
         let_go(meshes, l.first, l.id);
@@ -2014,8 +1542,6 @@ fn release(meshes: &mut Meshes, l: Landing) {
     }
 }
 
-/// A tier found to fill `k` slots where they were not free: kept, and
-/// counted from then on.
 fn refuse(slots: &mut [Slot], i: usize, meshes: &mut Meshes, generation: u32, cube: Cube, k: u32, level: u32) -> bool {
     slots[i].need = Some((generation, cube, k));
     slots[i].set(FRESH, true);
@@ -2025,10 +1551,7 @@ fn refuse(slots: &mut [Slot], i: usize, meshes: &mut Meshes, generation: u32, cu
     false
 }
 
-/// Writes a block of the landing tier's boxes to the slot it fills
-/// (build.rs `BuildEvent::Part`), and gathers what the tier's bounds and
-/// surface are.
-fn part(slots: &[Slot], place: &[Option<usize>], meshes: &mut Meshes, e: BuildEvent) {
+fn part(slots: &[Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
     let BuildEvent::Part {
         id,
         generation,
@@ -2054,36 +1577,29 @@ fn part(slots: &[Slot], place: &[Option<usize>], meshes: &mut Meshes, e: BuildEv
     let box_words = group_box_words(slot.group);
     let asked = if slot.capacity == FINE_BOXES { &mut meshes.fine_peak } else { &mut meshes.coarse_peak };
     *asked = (*asked).max(first + box_cnt);
-    // SAFETY: the block's boxes, a least corner and a size in the first six
-    // floats of each, in `.fixed.bake` where the bake just wrote them. The
-    // format is the group's, not the mesh's: a slot is a stride into its
-    // group's arena (mesh_slot.rs).
+    // SAFETY: the block's boxes in `.fixed.bake`, just written by the bake, in
+    // the slot group's format.
     let words = unsafe { core::slice::from_raw_parts(ptr_at::<u32>(at as usize), (box_cnt * box_words) as usize) };
     let unit = (step << level) as f64;
     let mut bounds = meshes.landing.as_ref().and_then(|l| l.bounds);
     for r in words.chunks_exact(box_words as usize) {
         let (min, size) = box_bounds(r, unit, heights);
-        let b = bounds.get_or_insert(Bounds {
-            min: [f32::INFINITY; 3],
-            max: [f32::NEG_INFINITY; 3],
-        });
-        for a in 0..3 {
-            let (lo, size) = (min[a] as f32, size[a] as f32);
-            b.min[a] = b.min[a].min(lo);
-            b.max[a] = b.max[a].max(lo + size);
-        }
+        let b = Aabb {
+            min,
+            max: std::array::from_fn(|a| min[a] + size[a]),
+        };
+        bounds = Some(bounds.map_or(b, |a| a.join(b)));
     }
     if box_cnt > 0 {
         let before = arena_epoch();
         // SAFETY: the same words, as bytes.
         let bytes = unsafe { core::slice::from_raw_parts(words.as_ptr().cast::<u8>(), words.len() * 4) };
-        // No device to write to: the tier is asked for again once there is
-        // one (`land` finds its landing gone).
+        // No device: the tier is asked for again once there is one.
         if !arena_write(slot.group as usize, slot.first_box * box_words * 4, bytes) {
             meshes.landing = None;
             return;
         }
-        // The write that made the arena lost nothing written before it.
+        // The write that recreated the arena lost nothing written before it.
         if arena_epoch() != before && before == meshes.epoch {
             meshes.epoch = arena_epoch();
         }
@@ -2095,10 +1611,7 @@ fn part(slots: &[Slot], place: &[Option<usize>], meshes: &mut Meshes, e: BuildEv
     }
 }
 
-/// Lands the tier every block of which is written (build.rs
-/// `BuildEvent::Tier`): recorded on its chunk, over the slots held for it,
-/// and what the tier it was rebuilt over held past what it fills let go.
-fn land(slots: &mut [Slot], place: &[Option<usize>], meshes: &mut Meshes, e: BuildEvent) {
+fn land(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
     let BuildEvent::Tier {
         id,
         generation,
@@ -2111,8 +1624,6 @@ fn land(slots: &mut [Slot], place: &[Option<usize>], meshes: &mut Meshes, e: Bui
     };
     let Some(i) = place[id as usize] else { return };
     let s = &slots[i];
-    // Only what the chunk builds now lands: a drawn piece a new cube only
-    // once a slot is held for it.
     if s.tier(cube, generation).is_some() || cube != s.target() {
         return;
     }
@@ -2121,8 +1632,7 @@ fn land(slots: &mut [Slot], place: &[Option<usize>], meshes: &mut Meshes, e: Bui
         Some(l) if (l.id, l.generation, l.cube) == (id, generation, cube) => l,
         other => {
             meshes.landing = other;
-            // A mesh of nothing asked for no slot: it takes one, over the
-            // tier of its cube where there is one.
+            // An empty mesh reserved nothing; it takes one slot here.
             if box_cnt > 0 {
                 return;
             }
@@ -2147,7 +1657,6 @@ fn land(slots: &mut [Slot], place: &[Option<usize>], meshes: &mut Meshes, e: Bui
             }
         }
     };
-    // What the tier it is rebuilt over held past what this one fills.
     if landing.over > landing.slots {
         if let Some(last) = chained(meshes, landing.first, landing.slots - 1) {
             if let Some(tail) = meshes.next[last].take() {
@@ -2160,14 +1669,9 @@ fn land(slots: &mut [Slot], place: &[Option<usize>], meshes: &mut Meshes, e: Bui
     }
     let slot = slot_at(landing.first);
     let s = &mut slots[i];
-    // A slot holds what its layout draws and what it has just built, and
-    // nothing else (`HELD`): a tier that is neither — this cube's of an older
-    // generation, built over, or a cube it no longer builds — goes now, and
-    // its slots with it unless what stays draws from them.
     let (p, g) = (s.layout_primary, s.layout_generation);
     prune(s, meshes, |t| t.generation == g && t.cube == p, Some(slot.index));
-    // A tier of an older generation over the same slots shows these boxes
-    // now: they were written over its own.
+    // An older-generation tier on the same slots now shows these boxes.
     for t in s.tiers.iter_mut().filter(|t| t.slot.index == slot.index) {
         t.box_cnt = box_cnt;
         t.bounds = landing.bounds;

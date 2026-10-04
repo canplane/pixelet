@@ -1,20 +1,8 @@
 // cpp/xpute/core/wire/tlv.hpp
 
-// TLV: a self-delimiting stream of tagged values, ended by END — the format
-// xpute-core's wire/tlv.rs and @xpute/core wire/tlv.ts write, and
-// golden/wire/tlv.tsv holds all three to, byte for byte.
-//
-//   [tag | payload] … [END]
-//
-// A scalar's payload is its little-endian bytes; STR and BYTES are a u32
-// length and that many bytes. END ends the stream, and bytes after it are not
-// read; a stream may also end exactly at the buffer's end. An unknown tag, or
-// a payload cut short, is EBADMSG.
-//
-// The writer appends to a byte container the caller owns — any with the
-// vector's `push_back` and `insert`, so one over the guest's heap — and a
-// value read back names the width it was written at. A string or bytes read
-// back is a view into the buffer, which outlives it.
+// TLV, a forward-only typed value sequence: [tag, payload] … [END]. A reader
+// keeps nothing it has passed. Reading stops closed (END), unclosed (input
+// ran out at a boundary), or EBADMSG (inside an element or an unknown tag).
 
 #pragma once
 
@@ -49,6 +37,7 @@ enum class Tag : std::uint8_t {
     bytes = 0x20,
 };
 
+// Invalid UTF-8 decodes to U+FFFD, as the host decodes it.
 struct Str {
     std::string_view text;
     bool operator==(const Str &) const = default;
@@ -59,7 +48,12 @@ struct Bytes {
     bool operator==(const Bytes &o) const { return std::equal(data.begin(), data.end(), o.data.begin(), o.data.end()); }
 };
 
-// One variant per tag, in the tags' order.
+enum class End : std::uint8_t {
+    closed,
+    unclosed,
+};
+
+// In the tags' order.
 using Value = std::variant<bool, std::uint8_t, std::int8_t, std::uint16_t, std::int16_t, std::uint32_t, std::int32_t, std::uint64_t, std::int64_t, float, double, Str, Bytes>;
 
 template <class Buf> class Writer {
@@ -68,7 +62,7 @@ template <class Buf> class Writer {
 
     const Buf &data() const noexcept { return buf_; }
 
-    // Seals the stream with END, once. The writer is not written to after.
+    // The writer is not written to after.
     const Buf &finish() {
         if (!sealed_) {
             buf_.push_back(static_cast<std::uint8_t>(Tag::end));
@@ -83,7 +77,6 @@ template <class Buf> class Writer {
         return {};
     }
 
-    // Writes every value in turn; the first refusal stops it.
     Result<void> write_all(std::span<const Value> vals) {
         for (const Value &v : vals) {
             if (Result<void> r = write(v); !r) return r;
@@ -133,10 +126,12 @@ class Reader {
   public:
     explicit Reader(std::span<const std::uint8_t> buf) noexcept : buf_(buf) {}
 
-    // The next value, or none at END or at the buffer's end.
+    // None at END or at the input's end, which `end` tells apart.
     Result<std::optional<Value>> next() noexcept;
 
-    // Every value until END, appended to `out`.
+    // None while values remain, and none after a fault.
+    std::optional<End> end() const noexcept { return end_; }
+
     template <class Vec> Result<void> read_all(Vec &out) {
         for (;;) {
             Result<std::optional<Value>> v = next();
@@ -147,8 +142,7 @@ class Reader {
     }
 
   private:
-    // Whether `n` more bytes are there, in 64 bits: a length read off the wire
-    // past 2^32 would otherwise wrap under the end rather than pass it.
+    // In 64 bits: a length past 2^32 off the wire would otherwise wrap.
     bool has(std::uint64_t n) const noexcept { return off_ + n <= buf_.size(); }
 
     template <class T> T le() noexcept {

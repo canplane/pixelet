@@ -1,17 +1,11 @@
-// The debug gizmos: the module's line segments (frame/draw.rs) drawn as one line
-// list over everything, with no depth test — a gizmo marks a place whether
-// or not the ground is in front of it. A pixel wide, which is what a line
-// list is; the labels are the glue's DOM.
+// Debug gizmos as one line list with no depth test, so a gizmo shows through the ground.
 
 struct Draw {
   translation: vec3f,
   _p: f32,
 };
-// Held as vec4 words, each field read from its own by `draw_<field>()`:
-// what the host and a shader share has no room inside it for a driver to
-// lay out its own way (issue/20260927-a-matrix-the-driver-reads-its-own-way.md),
-// and nothing builds the struct back, with which Safari's WebGPU lost its
-// GPU process.
+// Read field by field from vec4 words, never as a struct: a struct here lost
+// Safari's WebGPU its GPU process.
 @group(1) @binding(0) var<uniform> draw_words: array<vec4f, 1>;
 
 fn draw_translation() -> vec3f { return draw_words[0].xyz; }

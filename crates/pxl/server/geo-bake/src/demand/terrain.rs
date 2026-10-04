@@ -16,8 +16,6 @@ impl Source {
     }
 }
 
-/// A terrain page: a leaf baked from the database where it has land, a page
-/// above folded with the ocean page for open water.
 pub(super) fn execute(p: LevelPage, cache: &std::path::Path, out: &std::path::Path, seconds: u64) -> Result<(), String> {
     use crate::terrain::{leaf, repository::TerrainRepository, source::SourceStats};
     use crate::util::{unpack, Level};
@@ -31,9 +29,16 @@ pub(super) fn execute(p: LevelPage, cache: &std::path::Path, out: &std::path::Pa
             if !leaf::has_land(&mut client, &[p.page]).map_err(|e| e.to_string())?[0] {
                 return Ok(None);
             }
-            let repository = TerrainRepository::prepare(&mut client).map_err(|e| e.to_string())?;
-            let packed = leaf::bake_leaf(&repository, &mut client, p.page, &mut SourceStats::default(), Level::Live)?.1;
-            decode_terrain(&unpack(&packed).map_err(|e| e.to_string())?).map(Some).map_err(|e| format!("{e:?}"))
+            let raster = std::sync::Arc::new(crate::elevation::Raster::open(&mut client).map_err(|e| e.to_string())?);
+            let repo = TerrainRepository::prepare(&mut client, raster).map_err(|e| e.to_string())?;
+            let memo = cache.join(SOURCE);
+            let reader = &mut crate::deck::Reader {
+                client: &mut client,
+                repo: &repo,
+                store: &mut crate::deck::source::Disk(&memo),
+                memo: &memo.join("structure"),
+            };
+            Ok(Some(leaf::bake_leaf(reader, p.page)?.0))
         },
         || decode_terrain(&unpack(&std::fs::read(cache.join(leaf::OCEAN_KEY)).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?).map_err(|e| format!("{e:?}")),
     )

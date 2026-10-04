@@ -1,10 +1,7 @@
 // pxl-kernel/control/camera/orbit/terrain_gate.rs
 
 //! How far the orbit gets toward what the controls ask before terrain is in
-//! the way: a pure function of the pose, from where the orbit is drawn to
-//! where the controls would have it (orbit.rs `target`). The controls keep
-//! what was asked; the drawn orbit stops short, and what reads the zoom reads
-//! the drawn radius, which stands still with the view.
+//! the way. The controls keep what was asked; the drawn orbit stops short.
 
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
@@ -24,14 +21,8 @@ pub struct ViewTriple {
     pub azimuth: f64,
 }
 
-/// Everything that decides where the eye is: the point it looks at, and the
-/// orbit around it.
-///
-/// The target belongs here because the eye is `target + orbit offset` and a
-/// gate that reads only the second term can be walked through by moving the
-/// first — which is what panning does. It is carried in the local render frame
-/// (real u against `origin`), the frame the orbit offset and the
-/// heightfield lookup already share, and the one a step can be interpolated in.
+/// The target is part of the pose: the eye is `target + offset`, and a gate
+/// that read only the offset could be walked through by panning.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewPose {
     /// The floating origin `target` is expressed against.
@@ -42,12 +33,8 @@ pub struct ViewPose {
     pub azimuth: f64,
 }
 
-/// The pose these controls describe while looking at `center`, or None before
-/// the first fix, when there is no frame to express it in.
-///
-/// Both ends of a step have to be built against one origin or the walk
-/// between them crosses frames; the store's current center supplies it for
-/// every caller, and a candidate target is expressed against that same one.
+/// Both ends of a step must share one origin, or the walk between them
+/// crosses frames.
 pub fn pose(view: ViewTriple, center: Option<&Pvf3>) -> Option<ViewPose> {
     let map_center = crate::control::camera::controller::map_center()?;
     let at = center.copied().unwrap_or(map_center);
@@ -61,9 +48,8 @@ pub fn pose(view: ViewTriple, center: Option<&Pvf3>) -> Option<ViewPose> {
     })
 }
 
-/// How far above the target the eye must sit to clear the ground drawn
-/// beneath it, or None where no page over it is resident — an unarrived
-/// sample says nothing.
+/// None where no page is resident. Asked from the eye's own cell, so a cave's
+/// floor counts where the eye is in the cave.
 fn required_rise(at: &ViewPose) -> Option<f64> {
     let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
     let mut below = Pvf3::default();
@@ -72,32 +58,52 @@ fn required_rise(at: &ViewPose) -> Option<f64> {
     Some(ground + EYE_CLEARANCE_U - at.target[2])
 }
 
-/// How far below its clearance the eye sits: positive inside the terrain,
-/// None where the ground is not known yet.
+/// Rise to the ground `passage` reaches under the eye; none where blocked.
+fn climb_rise(at: &ViewPose) -> Option<f64> {
+    let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
+    let (mut center, mut eye) = (Pvf3::default(), Pvf3::default());
+    local_world_to_canonical(&mut center, &at.target, at.origin);
+    local_world_to_canonical(&mut eye, &std::array::from_fn(|k| at.target[k] + offset[k]), at.origin);
+    let access = Access::now();
+    let ground = match passage(&center, [offset[0], offset[1]], CELL.index_of(&eye)[2]) {
+        Passage::Open(cz) => {
+            let mut over = Pvf3::default();
+            pvf3::gather(&mut over, pvf3::X(&eye), pvf3::Y(&eye), pvf3::from_real((cz as f64 + 0.5) * CELL.side()));
+            access.floor_under(&over)
+        }
+        Passage::Unknown => access.floor_under(&eye),
+        Passage::Blocked => return None,
+    };
+    let ground = match ground {
+        Answer::Exact(top) | Answer::Coarser(top, _) => top,
+        Answer::Nothing(_) => return None,
+    };
+    Some(local_height(ground, at.origin) + EYE_CLEARANCE_U - at.target[2])
+}
+
+/// Positive inside the terrain.
 fn penetration(at: &ViewPose) -> Option<f64> {
     Some(required_rise(at)? - orbit_eye_offset(at.dist, at.polar, at.azimuth)[2])
 }
 
-/// Testing only where a step lands lets the camera tunnel: the orbit's step
-/// (orbit.rs `turn`) damps toward the new state and visits everything
-/// between. The straight
-/// line in pose space is the path it takes.
+/// Testing only where a step lands lets the camera tunnel, since the orbit's
+/// step damps through everything between.
 const STEP_SAMPLES: u32 = 16;
 
-/// As far along `from` -> `to` as terrain allows, in `stop` mode.
-///
-/// The rule is that a step may not end up deeper in the ground than it
-/// started. Outside terrain that is the plain "refuse to enter"; inside it,
-/// every escape is still granted and the bar tightens on its own as one
-/// succeeds. A blanket exemption for an already-blocked start opened the gate
-/// completely and left it open, since nothing that followed could ever close
-/// it again.
+/// A step may not end deeper in the ground than it started. A blanket
+/// exemption for an already-blocked start once opened the gate for good.
 pub fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
-    // Checked first so the setting skips the heightfield walk, not its result.
-    // `climb` grants every control too — it answers terrain by pitching the
-    // view, not by holding a control back.
-    if settings_store().camera_collision != CameraCollisionMode::stop {
-        return *to;
+    // Checked first so the setting skips the floor's walk.
+    match settings_store().camera_collision {
+        CameraCollisionMode::through => return *to,
+        // A climb that would pass through something solid (a tunnel's roof to the
+        // surface over it) is held as `stop` holds it.
+        CameraCollisionMode::climb => {
+            if path_clear(from, &climbed(*to)) {
+                return *to;
+            }
+        }
+        CameraCollisionMode::stop => {}
     }
 
     let limit = penetration(from).map_or(0.0, |start| start.max(0.0));
@@ -106,31 +112,44 @@ pub fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
     let turn = wrap(to.azimuth - from.azimuth, -core::f64::consts::PI, core::f64::consts::PI);
     let mut last = *from;
     for i in 1..=STEP_SAMPLES {
-        let t = i as f64 / STEP_SAMPLES as f64;
-        let at = ViewPose {
-            origin: from.origin,
-            target: [
-                from.target[0] + (to.target[0] - from.target[0]) * t,
-                from.target[1] + (to.target[1] - from.target[1]) * t,
-                from.target[2] + (to.target[2] - from.target[2]) * t,
-            ],
-            dist: from.dist + (to.dist - from.dist) * t,
-            polar: from.polar + (to.polar - from.polar) * t,
-            azimuth: from.azimuth + turn * t,
-        };
-        // The last clear sample, not the crossing point: landing on the boundary
-        // leaves the next frame's rounding to decide which side the eye is on.
+        let at = between(from, to, i as f64 / STEP_SAMPLES as f64);
+        // The last clear sample, not the crossing: on the boundary, the next frame's
+        // rounding would decide which side the eye is on.
         if penetration(&at).is_some_and(|deep| deep > limit) {
             return last;
         }
         last = at;
     }
-    // `to` itself rather than the t=1 sample, so an unobstructed step is the
-    // exact values the control asked for.
+    // So an unobstructed step is exactly what the control asked for.
     *to
 }
 
-/// The orbit half, where the target holds still.
+/// The azimuth goes the short way round, as the step damps it.
+fn between(from: &ViewPose, to: &ViewPose, t: f64) -> ViewPose {
+    let turn = wrap(to.azimuth - from.azimuth, -core::f64::consts::PI, core::f64::consts::PI);
+    ViewPose {
+        origin: from.origin,
+        target: std::array::from_fn(|k| from.target[k] + (to.target[k] - from.target[k]) * t),
+        dist: from.dist + (to.dist - from.dist) * t,
+        polar: from.polar + (to.polar - from.polar) * t,
+        azimuth: from.azimuth + turn * t,
+    }
+}
+
+fn in_solid(at: &ViewPose) -> bool {
+    let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
+    let eye: V3 = std::array::from_fn(|k| at.target[k] + offset[k]);
+    let mut point = Pvf3::default();
+    local_world_to_canonical(&mut point, &eye, at.origin);
+    Access::now().floor_under(&point).value().is_some_and(|top| local_height(top, at.origin) > eye[2])
+}
+
+/// What lies between the eye and the map center is not asked: that hides the
+/// center but is not the eye running into anything.
+fn path_clear(from: &ViewPose, to: &ViewPose) -> bool {
+    (1..=STEP_SAMPLES).all(|i| !in_solid(&between(from, to, i as f64 / STEP_SAMPLES as f64)))
+}
+
 pub fn allowed_view(to: ViewTriple, from: ViewTriple) -> ViewTriple {
     let (Some(from_pose), Some(to_pose)) = (pose(from, None), pose(to, None)) else { return to };
     let reached = allowed_step(&to_pose, &from_pose);
@@ -141,12 +160,8 @@ pub fn allowed_view(to: ViewTriple, from: ViewTriple) -> ViewTriple {
     }
 }
 
-/// The pan half: the target moves and takes the eye with it.
-///
-/// Panning is the one continuous control that is not in the view triple, so
-/// it went through no gate at all and walking into a hill sideways simply
-/// worked. Jumps do not come through here — a search result or a GPS recenter
-/// is a destination the user named, not a path they dragged.
+/// Panning once went through no gate, so walking into a hill sideways worked.
+/// Jumps (search, recenter) do not come through here.
 pub fn allowed_pan(view: ViewTriple, to_center: &Pvf3) -> Pvf3 {
     let (Some(from_pose), Some(to_pose)) = (pose(view, None), pose(view, Some(to_center))) else {
         return *to_center;
@@ -161,30 +176,22 @@ pub fn allowed_pan(view: ViewTriple, to_center: &Pvf3) -> Pvf3 {
     out
 }
 
-/// Steepening the pitch moves the eye, which changes the ground under it, so
-/// the answer is implicit. Two passes settle it: the eye travels less and less
-/// as the pitch approaches vertical, and the remainder is smaller than the cell
-/// the height was read from.
+/// Steepening moves the eye and so the ground under it; two passes settle it,
+/// the remainder being smaller than a cell.
 const CLIMB_PASSES: u32 = 2;
 
-/// The shallowest pitch that clears terrain, between `polar` and straight
-/// down, or straight down if nothing does.
-///
-/// Solved rather than searched. The eye sits `dist * cos(polar)` above the
-/// target, so clearing a required rise `h` needs `acos(h / dist)` — smooth in
-/// `h`, which matters more than it sounds: a scan returns one of a fixed set of
-/// angles, so its output steps even where the terrain does not, and the camera
-/// judders on flat ground it is merely passing over.
-///
-/// There is nearly always an answer. Straight down the eye is directly above
-/// the target and only terrain higher than `target + dist` could block it.
+/// The shallowest pitch that clears terrain, solved as `acos(h / dist)`
+/// rather than scanned: a scan's fixed angles made the camera judder on flat
+/// ground.
 pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
-    let Some(mut at) = pose(ViewTriple { dist, polar, azimuth }, None) else { return polar };
+    pose(ViewTriple { dist, polar, azimuth }, None).map_or(polar, |at| climbed(at).polar)
+}
+
+fn climbed(mut at: ViewPose) -> ViewPose {
     for _ in 0..CLIMB_PASSES {
         let Some(rise) = required_rise(&at).filter(|r| *r > 0.0) else { break };
-        // Only ever steepens: an eye already high enough is left where the
-        // controls put it.
-        let solved = (rise / dist).min(1.0).acos();
+        // Only ever steepens.
+        let solved = (rise / at.dist).min(1.0).acos();
         at.polar = at.polar.min(solved);
     }
     at.polar

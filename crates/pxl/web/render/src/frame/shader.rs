@@ -1,7 +1,6 @@
 // pxl-render/frame/shader.rs
 
-//! The shaders and the pipelines that run them, from the one source both are
-//! written from — so a binding a shader reads and a layout the pipeline
-//! declares cannot disagree.
+//! Shaders and pipeline records from one source, so a shader's bindings and its
+//! pipeline layout cannot disagree.
 
 pub mod record;

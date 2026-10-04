@@ -4,9 +4,7 @@ use std::path::{Path, PathBuf};
 
 use pxl_spec::asset::ingested::INGESTED;
 
-/// The asset tree as the ingest walks it: every `.glb` and `.png` under
-/// `asset/`, sorted by path, less `cube/original/` — the source the tiles are
-/// resized from, which the client never fetches by key.
+/// Every `.glb` and `.png` under `asset/`, sorted, less `cube/original/`.
 fn walked(root: &Path) -> Vec<(String, PathBuf)> {
     fn walk(dir: &Path, root: &Path, out: &mut Vec<(String, PathBuf)>) {
         let Ok(entries) = std::fs::read_dir(dir) else { return };
@@ -28,19 +26,10 @@ fn walked(root: &Path) -> Vec<(String, PathBuf)> {
     out
 }
 
-/// Every shipped model, measured from the file and held against the table the
-/// ingest wrote.
-///
-/// The table is what a catalog reads a model's size from, so a measurement
-/// that drifts from it is a model drawn at the wrong size. It is committed,
-/// which makes it a fixture this can be checked against without re-running the
-/// ingest — and the walk above has to agree with the ingest's own ordering for
-/// the indices to line up, so the row count is asserted first.
+/// Every model measured against the committed table. The walk must order as
+/// the ingest does for the indices to line up.
 #[test]
 fn every_shipped_model_measures_what_the_table_says() {
-    // `cargo test` runs from the script's own directory rather than the
-    // repository root the tools are otherwise invoked from, so the tree is
-    // addressed from this file rather than from the working directory.
     let root = crate::root().join("asset");
     let files = walked(&root);
     assert_eq!(files.len(), INGESTED.len(), "the walk found what the table holds");
@@ -57,7 +46,5 @@ fn every_shipped_model_measures_what_the_table_says() {
         assert_eq!(got, want, "{rel}");
         models += 1;
     }
-    // Not an arbitrary floor: every row the table gives an extent to is a
-    // model, so measuring exactly that many is what says none was skipped.
     assert_eq!(models, INGESTED.iter().filter(|r| r.extent.is_some()).count(), "every model with a row was measured");
 }

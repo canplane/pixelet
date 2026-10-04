@@ -1,21 +1,8 @@
 // @xpute/core/golden.ts
 
 /**
- * The reader of the golden records, as xpute-core/golden.rs is: lines of
- * `path<TAB>value`, the path the keys and indices down to the value joined by
- * dots. A split per line and no parser, so reading is not itself a thing to
- * verify.
- *
- * Which records this side may read is the rule in golden.rs: a record of a
- * value that never leaves the language it was computed in is that language's,
- * and this has no business asserting it. What this is for are the records that
- * cross — the wire's, where both sides have to produce the same bytes from the
- * same input and the record is the only thing that says so.
- *
- * The files live under spec/xpute/, which every language reads and none owns:
- * the records under golden/, the contract's traces under conformance/. There
- * is one copy, not one per language, because a second copy is how the
- * languages come to disagree without anything failing.
+ * Reads the golden records under spec/xpute/ (lines of `path<TAB>value`), as
+ * xpute-core/golden.rs does. Only records that cross languages belong here.
  */
 
 import type { U8Array } from "./abi/array.ts";
@@ -74,7 +61,6 @@ export class Golden {
     throw new InvariantError(Errno.EINVAL);
   }
 
-  /** Bytes written as hex. */
   bytes(key: string): U8Array {
     const text = this.s(key);
     const out = new Uint8Array(text.length / 2);
@@ -101,7 +87,6 @@ export class Golden {
     if (k === 0) throw new InvariantError(Errno.ENOENT);
   }
 
-  /** How many entries `base` has. */
   len(base: string): u32 {
     let n = 0;
     this.each(base, () => n++);

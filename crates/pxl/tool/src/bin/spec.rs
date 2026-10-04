@@ -14,8 +14,6 @@ use pxl_tool::spec::{outputs, Output};
 
 fn run() -> Result<(), String> {
     let write = std::env::args().any(|a| a == "--write");
-    // Each output through its formatter at once: a formatter is a process
-    // each, and one after another is most of the run.
     let outputs = thread::scope(|scope| {
         let handles: Vec<_> = outputs()?
             .into_iter()
@@ -32,9 +30,7 @@ fn run() -> Result<(), String> {
         .filter(|o| std::fs::read_to_string(root.join(&o.path)).ok().as_deref() != Some(o.text.as_str()))
         .collect();
     if write {
-        // Only what differs: a file rewritten with its own text still moves
-        // its mtime, and cargo and Vite take that as a change — every crate
-        // over pxl-spec rebuilt and the dev servers with it.
+        // Only what differs: a rewrite moves the mtime, and cargo and Vite rebuild.
         for o in &stale {
             let at = root.join(&o.path);
             std::fs::create_dir_all(at.parent().ok_or("a path with no parent")?).map_err(|e| e.to_string())?;

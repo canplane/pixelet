@@ -1,10 +1,7 @@
 // cpp/xpute/runtime/ipc/frame.hpp
 
-// A frame: one message, four words — who asked (the tag), what is asked (a
-// command in the low half of word 1, its flags in the high half), what came
-// back (a value, or a negative errno), and where its packet is (an offset
-// into the memory, 0 for none). The contract's rule 3 in ARCHITECTURE.xpute.md
-// says what the flags mean.
+// A message is four words: tag, command (low half) and flags (high half),
+// result (a value or a negative errno), and packet offset (0 for none).
 
 #pragma once
 
@@ -18,15 +15,12 @@ inline constexpr std::uint32_t RESULT = 2;
 inline constexpr std::uint32_t PACKET = 3;
 inline constexpr std::uint32_t WORDS = 4;
 
-// Where the flags start in word 1.
 inline constexpr std::uint32_t FLAG_SHIFT = 16;
 
-// A reply: set by whoever sends it, so a completion without it is one the
-// guest raised on its own.
+// Set by the sender, so a completion without it was raised by the guest.
 inline constexpr std::uint32_t RES = 1;
 
-// Exactly one reply is sent; without it, one is sent only when the message
-// failed.
+// Without it, a reply is sent only on failure.
 inline constexpr std::uint32_t ACKREQ = 2;
 
 constexpr std::uint32_t cmd_word(std::uint32_t cmd, std::uint32_t flags) noexcept {

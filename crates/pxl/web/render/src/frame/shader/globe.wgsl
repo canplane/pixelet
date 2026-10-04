@@ -1,14 +1,6 @@
-// The flat map laid back on the planet, for every pass that places a point
-// of the world: frame.wgsl's `on_globe` with the frame's own values, and a
-// pass with a uniform of its own (badge.wgsl) with the same values carried
-// in it. `planet` is the camera center — the map center as the view has
-// eased to it — in the root frame, the planet's radius in its units (0 for
-// none) and the center's height; `globe` the center's
-// Mercator exponential, its latitude's sine and cosine, and Mercator's radius
-// in units (look/globe.rs).
+// The flat map laid back on the planet.
 
-// e^x − 1 without the cancellation near zero, which WGSL has no builtin for:
-// a Mercator ordinate a unit from the center's is a millionth of a radian.
+// WGSL has no expm1; a Mercator ordinate a unit from the center is a millionth of a radian.
 fn expm1(x: f32) -> f32 {
   if (abs(x) < 0.1) {
     return x * (1.0 + x * (0.5 + x * (1.0 / 6.0 + x / 24.0)));
@@ -16,13 +8,9 @@ fn expm1(x: f32) -> f32 {
   return exp(x) - 1.0;
 }
 
-// sin and atan for the small angles the placement lives on, as their series.
-// WGSL holds its builtins to an absolute error of 2^-11 and no better, so a
-// GPU is free to answer sin(1e-7) with anything within half a thousandth —
-// and times the planet's radius in units, that is meters or hundreds of
-// them: a thing a unit from the map center torn apart along it. The series
-// keeps its relative precision down to zero and, to the seventh power, to a
-// part in a hundred million across the half radian the window can reach.
+// WGSL allows its sin and atan an absolute error of 2^-11, which times the
+// planet's radius tears apart things a unit from the center. The series keeps
+// relative precision to 1e-8 over the half radian the window reaches.
 fn sin_small(x: f32) -> f32 {
   if (abs(x) > 1.0) {
     return sin(x);
@@ -39,12 +27,7 @@ fn atan_small(x: f32) -> f32 {
   return x * (1.0 - x2 * (1.0 / 3.0 - x2 * (1.0 / 5.0 - x2 * (1.0 / 7.0 - x2 / 9.0))));
 }
 
-// A point of the flat map where the planet has it: look/globe.rs's
-// `Globe::place` in f32, taking each point back to its latitude and longitude
-// and setting it on the sphere in the map center's east-north-up frame. The
-// identity at the center, so what is near the camera does not move; further
-// out, Mercator's stretch north is undone and the ground falls away, so the
-// ground meets the horizon the sky is drawn with.
+// Identity at the center, so what is near the camera does not move.
 fn on_globe_of(p: vec3f, planet: vec4f, globe: vec4f) -> vec3f {
   let r = planet.z;
   if (r <= 0.0) {
@@ -67,13 +50,7 @@ fn on_globe_of(p: vec3f, planet: vec4f, globe: vec4f) -> vec3f {
   return vec3f(planet.x + east, planet.y + north, planet.w + h - 2.0 * rr * haversine);
 }
 
-// Where on the flat map a point of the planet is: east and north of the map
-// center in map units — look/globe.rs's `Globe::unplace` in f32, the inverse
-// of `on_globe_of` but for the height, which it does not keep. Its latitude
-// and longitude are read off the sphere and taken to Mercator's ordinates;
-// atan2 is held to its ulps rather than to 2^-11, and what reads this — the
-// clouds' lattice, thousands of units across — is not a place a unit is
-// seen.
+// Drops the height. atan2 is held to its ulps, not 2^-11.
 fn off_globe_of(p: vec3f, planet: vec4f, globe: vec4f) -> vec2f {
   let r = planet.z;
   if (r <= 0.0) {

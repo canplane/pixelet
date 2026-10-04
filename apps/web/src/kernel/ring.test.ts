@@ -13,21 +13,16 @@ import { CORE, load_core } from "@/kernel/mem.ts";
 import { directory } from "@/kernel/module.ts";
 import { COMPLETION_CAPACITY, SUBMISSION_CAPACITY } from "@/kernel/mem/mem.spec.ts";
 
-// The module the test reads, loaded before it runs.
 await load_core();
 
-/** A command crates/pxl/web/kernel/src/door/apply.rs does not number. */
 const UNNUMBERED = 0x0fff;
 
-/** `n` NOPs asking for a reply, tagged from `from`, each carrying its tag
- * three times over for the reply to echo. */
 function push_nops(sq: Ring, from: number, n: number): void {
   for (let k = from; k < from + n; k++) {
     assertEquals(sq.push(k, Command.NOP, FrameFlag.ACKREQ, encoder.encode(new TreeView().branch((b) => b.u32(k * 3)))), Errno.OK);
   }
 }
 
-/** Reads the completion ring dry, checking each reply is the next NOP's. */
 function read_nops(cq: Ring, from: number): number {
   let k = from;
   for (let at = cq.peek(); at >= 0; at = cq.peek()) {
@@ -51,12 +46,8 @@ Deno.test("rings - one turn answers every submission in order, and the kernel ho
   p.interrupt(0);
   assertEquals([sq.len, cq.len], [0, sq.capacity], "one turn applies everything sent");
 
-  // A host that rings again without reading breaks the contract's rule 5;
-  // the kernel still overruns nothing. The completion ring has room for
-  // fewer than another ring's worth, so the turn applies what it can answer
-  // and leaves the rest, in order, asking for the next turn. What a turn
-  // does when its own output fills the ring is xpute-runtime's
-  // ipc/doorbell.test.rs.
+  // Ringing again without reading breaks the contract's rule 5; the kernel
+  // still overruns nothing, answering what fits and leaving the rest in order.
   push_nops(sq, sq.capacity, sq.capacity);
   const wake = p.interrupt(0);
   assert(sq.len > 0, "what could not be answered is not applied");

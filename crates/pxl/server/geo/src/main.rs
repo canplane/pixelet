@@ -1,17 +1,7 @@
 // pxl-geo/main.rs
 
-//! The live half of the geo data: forward search over Overture's Places and
-//! Divisions. It is the one world feature that cannot be baked ahead of time
-//! — terrain, POI and reverse geocode are each keyed to a finite L3 page and
-//! are served as static objects out of the bucket, while a free-text query
-//! has no such key and has to reach Postgres at request time.
-//!
-//! It answers under `/geo/`, one of the four roots spec/pxl/spec/route.json reserves:
-//! the world's data. The application's is `/api/`, which pxl-api answers, and
-//! the baked pages and the assets have their own. Each root is one prefix a relay reads and never a
-//! route it enumerates (issue/20260910-one-server-root.md), and the two servers
-//! are separate processes because they read separate databases — see
-//! issue/20260918-the-server-in-rust-and-the-line-already-drawn.md.
+//! Live forward search over Overture's Places and Divisions under `/geo/`;
+//! a free-text query has no page key, so it cannot be baked.
 
 mod geocode;
 mod search;

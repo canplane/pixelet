@@ -1,10 +1,6 @@
 // @xpute/core/wire/tlv.test.ts
 
-/**
- * The half of xpute-core/wire/tlv.test.rs that runs here. TLV's bytes cross,
- * so the record is a claim about both languages and each side has to be held
- * to it: the Rust alone would only prove the Rust has not drifted.
- */
+/** Holds the TypeScript side to golden/wire/tlv.tsv, which every language's TLV must match. */
 
 import { assertEquals } from "@std/assert";
 
@@ -14,7 +10,6 @@ import { FaultError } from "@xpute/core/status/error.ts";
 import { bytes_to_hex, hex_to_bytes } from "@xpute/core/codec/encoding.ts";
 import { TlvReader, type TlvValue, TlvWriter } from "@xpute/core/wire/tlv.ts";
 
-/** A read value as the record prints it: `typeof`, a colon, the value. */
 function show(v: TlvValue): string {
   if (v instanceof Uint8Array) return `bytes:${bytes_to_hex(v)}`;
   return `${typeof v}:${v}`;

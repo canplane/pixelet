@@ -19,25 +19,23 @@ use xpute_core::status::errno::Errno;
 pub const HEIGHT: f64 = 37.0;
 pub const ANCHOR: f64 = 34.0;
 
-/// What a badge says, by what it is rather than by its text: a count, or the
-/// one place a cell holds, by its index in the pool of the page it was read
-/// from. The place is read only to measure the badge and to draw it (`text`,
-/// `slot`), and a badge is found again by these numbers.
+/// A count, or the one place a cell holds by its index in its page's pool.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Label {
-    Count(u32),
-    Place { page: LevelPage, place: u32 },
+    /// Count, and whether it is a floor.
+    Count(u32, bool),
+    Place {
+        page: LevelPage,
+        place: u32,
+    },
 }
 
 impl Label {
-    /// The place a badge names, from the page it was read from; nameless and
-    /// of no kind once that page has gone.
+    /// Nameless once that page has gone.
     fn place(page: LevelPage, place: u32) -> Place<'static> {
         PoiPage::pyramid().get(page).map_or(Place { name: "", kind: 0 }, |p| p.places.get(place))
     }
 
-    /// What the badge shows: the count, or the name cut where a badge would
-    /// run past the rest.
     pub fn text(self) -> String {
         match self {
             Label::Count(n) => n.to_string(),
@@ -53,11 +51,8 @@ impl Label {
     }
 }
 
-/// How much of a name a badge shows, the rest behind an ellipsis. A product
-/// choice and not a derivation: the length a one-line badge still reads as a
-/// name at. Counted in code points, so a character outside the BMP is one
-/// and is never cut in half, as a UTF-16 count would; a cluster of several,
-/// a flag or a joined emoji, can still be cut, and is rare in a place's name.
+/// A product choice: the length a one-line badge still reads as a name at.
+/// Code points, so a non-BMP character is never cut in half.
 const SHOWN_CHARS: usize = 12;
 
 struct Badge {
@@ -69,7 +64,6 @@ fn badges() -> &'static mut HashMap<Label, Badge> {
     BADGES.get(HashMap::new)
 }
 
-/// Keeps the badges of `labels` and lets the rest's sheet slots go.
 pub fn retain(labels: &HashSet<Label>) {
     badges().retain(|label, b| {
         if labels.contains(label) {
@@ -82,8 +76,7 @@ pub fn retain(labels: &HashSet<Label>) {
     });
 }
 
-/// A badge's width, measured once; none until its label is laid out, which
-/// a later turn has.
+/// None until its label is laid out, which a later turn has.
 pub fn width(label: Label) -> Option<f64> {
     if let Some(b) = badges().get(&label) {
         return Some(b.width);
@@ -93,7 +86,7 @@ pub fn width(label: Label) -> Option<f64> {
     Some(width)
 }
 
-/// A badge on the sheet, drawn once. Its label was measured first.
+/// Its label was measured first.
 pub fn slot(label: Label) -> i32 {
     let b = badges().get_mut(&label).or_bug(Errno::ENOTRECOVERABLE);
     if b.slot == NO_SLOT {

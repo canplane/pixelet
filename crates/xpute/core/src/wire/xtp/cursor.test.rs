@@ -8,9 +8,7 @@ use crate::wire::xtp::view::{NodeView, TreeView};
 
 const GOLDEN: &str = include_str!("../../../../../../spec/xpute/golden/wire/xtp/cursor.tsv");
 
-/// A read value as the generator prints it, which means as JavaScript would:
-/// every width the reader can hand back that a `number` carried prints
-/// `number:`, and the two a `bigint` carried print `bigint:`.
+/// As JavaScript prints it: 64-bit integers as `bigint:`, the rest `number:`.
 fn show<T>(v: &NodeValue<T>) -> String {
     match v {
         NodeValue::Extra(_) => "branch".to_string(),
@@ -49,9 +47,7 @@ fn show<T>(v: &NodeValue<T>) -> String {
     }
 }
 
-/// A packet at a word-aligned address, which is what `TreeReader` asks of one
-/// so its f64 lanes can be viewed in place. A `Vec<u8>` is aligned to a byte,
-/// so the bytes are laid past the first aligned index of a larger one.
+/// Word-aligned, as `TreeReader` requires; a `Vec<u8>` is only byte-aligned.
 struct Packet {
     buf: Vec<u8>,
     at: usize,

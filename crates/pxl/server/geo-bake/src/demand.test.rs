@@ -2,9 +2,6 @@
 
 use super::*;
 
-/// A restart keeps every page a stopped server baked and clears only what
-/// it was killed in the middle of; a running server's cache is not taken
-/// from it.
 #[test]
 fn a_restart_keeps_the_pages_and_clears_what_was_cut_short() {
     let base = std::env::temp_dir().join(format!("pxl-demand-claim-{}", std::process::id()));
@@ -36,8 +33,6 @@ fn a_terrain_generation_holds_the_ocean_page_before_any_fold_reads_it() {
     let data = Dataset::open(&base, Kind::Terrain, &runner).unwrap();
     let ocean = std::fs::read(data.cache.root.join(OCEAN_KEY)).expect("the ocean page is published as the generation opens");
 
-    // One child stands on disk and the other fifteen pages the parent reads
-    // are absent, so the fold reads the ocean page for them and nothing else.
     let child = LevelPage::new(0, ocean_samples(&Coverage::of_source())[1]);
     PageSet::new(&data.cache.root).write(child, &ocean).unwrap();
     let out = base.join("out");

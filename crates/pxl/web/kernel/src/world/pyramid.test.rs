@@ -10,7 +10,6 @@ use pxl_spec::space::observation::{ByBounds, Contents, Frustum, Unknown};
 use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::v3::Aabb;
 
-/// How high the eye stands over flat ground.
 const HEIGHT: f64 = 1000.0;
 
 fn at(eye: [f64; 3], frustum: Option<Frustum>) -> Observation {
@@ -28,7 +27,6 @@ fn the_observation() -> Observation {
     at([30_000.0, -17_000.0, HEIGHT], None)
 }
 
-/// The pages the estimator names for `o`, knowing nothing.
 fn named(o: &Observation) -> Vec<LevelPage> {
     let mut out = Vec::new();
     ByBounds { tau: Tau::FINEST }.requirements(o, &Unknown, &mut |r| PoiPage::pages(&r, &mut |p| out.push(p)));
@@ -37,7 +35,6 @@ fn named(o: &Observation) -> Vec<LevelPage> {
     out
 }
 
-/// Flat ground at zero, known everywhere.
 struct Flat;
 
 impl Bounds for Flat {
@@ -50,8 +47,7 @@ impl Bounds for Flat {
     }
 }
 
-/// Holds each of `pages` as a page arriving is: asked for first, since
-/// residency keeps a page of no object only while something asks for it.
+/// Asked for first: residency keeps an empty page only while something asks.
 fn hold(pyramid: &mut Pyramid<PoiPage>, pages: impl IntoIterator<Item = (LevelPage, PoiPage)>) {
     let pages: Vec<(LevelPage, PoiPage)> = pages.into_iter().collect();
     let aside = Ask { why: Why::Fault, order: Order::LAST };
@@ -61,7 +57,6 @@ fn hold(pyramid: &mut Pyramid<PoiPage>, pages: impl IntoIterator<Item = (LevelPa
     }
 }
 
-/// A page with a crowd over each of its children, so it settles none of them.
 fn crowded(p: LevelPage) -> PoiPage {
     if p.level == 0 {
         return PoiPage::default();
@@ -69,15 +64,32 @@ fn crowded(p: LevelPage) -> PoiPage {
     let at = |k: LevelPage| POI_LATTICE.cell_base(k, 0, 0);
     PoiPage::of_places(
         p.level,
-        p.children().into_iter().flat_map(|k| [(at(k), Place { name: "a", kind: 0 }), (at(k), Place { name: "b", kind: 0 })]),
+        p.children().into_iter().flat_map(|k| {
+            [
+                (
+                    at(k),
+                    Place {
+                        name: "a",
+                        id: "1",
+                        ..Place::default()
+                    },
+                ),
+                (
+                    at(k),
+                    Place {
+                        name: "b",
+                        id: "1",
+                        ..Place::default()
+                    },
+                ),
+            ]
+        }),
+        true,
     )
 }
 
-/// The demand is what the estimator names and nothing else: every page it
-/// names not resident is asked for, at the page that says its ground, and
-/// nothing is asked for that is held or that a page over it says. No piece
-/// of how the view is drawn is an input, so the chunk's size moves none of
-/// it.
+/// Every named page not resident is asked for at the page that says its
+/// ground; nothing held or settled is. Nothing of how the view is drawn is an input.
 #[test]
 fn the_demand_is_the_estimators_and_every_fault_in_it_is_asked_for() {
     let _serial = crate::global::serial();
@@ -103,8 +115,6 @@ fn the_demand_is_the_estimators_and_every_fault_in_it_is_asked_for() {
     }
 }
 
-/// Where the pages of the top say all the ground under them, nothing under
-/// them is asked for: every page demanded is answered exactly from the top.
 #[test]
 fn ground_a_page_settles_is_never_asked_for() {
     let _serial = crate::global::serial();
@@ -121,9 +131,8 @@ fn ground_a_page_settles_is_never_asked_for() {
     assert!(pyramid.wants().is_empty(), "{} pages asked for", pyramid.wants().len());
 }
 
-/// Ground the frustum does not look at is not demanded: with the view
-/// looking east, every page demanded reaches east of a plane through the
-/// eye, as far as the sphere about it that the frustum is tested with.
+/// With the view looking east, every demanded page reaches east of a plane
+/// through the eye, within the sphere the frustum is tested with.
 #[test]
 fn ground_outside_the_frustum_is_not_demanded() {
     let _serial = crate::global::serial();
@@ -145,9 +154,6 @@ fn ground_outside_the_frustum_is_not_demanded() {
     }
 }
 
-/// Observing allocates nothing once it has held the most it asks for: an eye
-/// moving along a path the second time over asks and lets go
-/// without the heap, whatever the demand names each step.
 #[test]
 fn observing_a_moving_eye_allocates_nothing_once_it_has_held_the_most() {
     let _serial = crate::global::serial();

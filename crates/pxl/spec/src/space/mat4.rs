@@ -1,9 +1,7 @@
 // pxl-spec/space/mat4.rs
 
-//! 4x4 matrices as sixteen doubles, column-major — the layout GL, WebGPU and
-//! glTF share, so a matrix here uploads as it is. Every function writes into
-//! an `out` the caller owns; nothing allocates. The trigonometry and the
-//! lengths are `libm`'s, so the doubles are the same on every target.
+//! 4x4 matrices as sixteen doubles, column-major as GL, WebGPU and glTF
+//! upload them. Trigonometry is `libm`'s, so results match on every target.
 
 use super::v3::V3;
 
@@ -105,7 +103,6 @@ pub fn mat4_perspective(out: &mut Mat4, fov: f64, aspect: f64, near: f64, far: f
     out
 }
 
-/// `x || 1` on a length: 1 where the length is 0 or NaN, both falsy.
 fn or_one(l: f64) -> f64 {
     if l == 0.0 || l.is_nan() {
         1.0
@@ -154,7 +151,6 @@ pub fn mat4_look_at(out: &mut Mat4, eye: V3, target: V3, up: V3) -> &mut Mat4 {
     out
 }
 
-/// m × (x, y, z, 1), divided by w.
 pub fn mat4_transform_point<'a>(out: &'a mut V3, m: &Mat4, x: f64, y: f64, z: f64) -> &'a mut V3 {
     let w = or_one(m[3] * x + m[7] * y + m[11] * z + m[15]);
     out[0] = (m[0] * x + m[4] * y + m[8] * z + m[12]) / w;
@@ -163,7 +159,6 @@ pub fn mat4_transform_point<'a>(out: &'a mut V3, m: &Mat4, x: f64, y: f64, z: f6
     out
 }
 
-/// m × (x, y, z, 0), normalized.
 pub fn mat4_transform_direction<'a>(out: &'a mut V3, m: &Mat4, x: f64, y: f64, z: f64) -> &'a mut V3 {
     let ox = m[0] * x + m[4] * y + m[8] * z;
     let oy = m[1] * x + m[5] * y + m[9] * z;
@@ -180,9 +175,8 @@ pub fn mat4_clip_w(m: &Mat4, x: f64, y: f64, z: f64) -> f64 {
     m[3] * x + m[7] * y + m[11] * z + m[15]
 }
 
-/// The six planes of the frustum `view_proj` bounds, as (nx, ny, nz, d) with
-/// the normals pointing in, normalized: a point is inside when
-/// n · p + d ≥ 0 for every plane. Left, right, bottom, top, near, far.
+/// The frustum's six planes (nx, ny, nz, d), normals in, normalized: left,
+/// right, bottom, top, near, far.
 pub fn mat4_frustum_planes<'a>(out: &'a mut [f64; 24], m: &Mat4) -> &'a mut [f64; 24] {
     let rows = [[m[0], m[4], m[8], m[12]], [m[1], m[5], m[9], m[13]], [m[2], m[6], m[10], m[14]], [m[3], m[7], m[11], m[15]]];
     let w = rows[3];

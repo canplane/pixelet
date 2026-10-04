@@ -1,29 +1,10 @@
 // @pxl/web/shared/ui/text-field.tsx
 
 /**
- * A text input that carries the behaviors nobody remembers until they are
- * bitten by them.
- *
- * **iOS Safari zooms the page** when a focused input's font size is under
- * 16px, and there is no way to opt out of that which does not also disable
- * pinch-zoom for the whole document (`maximum-scale=1`, a real accessibility
- * loss, which is why index.html's viewport meta deliberately does not carry
- * it). The only remedy is to be 16px, so the size is applied *after* the
- * caller's style: a caller cannot reintroduce the bug by passing a smaller
- * one, which is the whole point.
- *
- * **An IME's Enter is not a submit.** Confirming a Korean candidate syllable
- * fires Enter; `onSubmitEditing` already leaves that one out on the web
- * (react-native-web reads the key event's composition), and a device's own
- * keyboard never sends it.
- *
- * **A submit keeps the field.** A single-line input blurs itself on submit by
- * default, which closes a phone's keyboard between two messages.
- *
- * **The caret is the app's coral**, as an iPhone tints a field's caret and
- * selection with its app's accent; left alone it is the system's blue, and
- * on Android Material's. A device reads `selectionColor` and `cursorColor`;
- * react-native-web reads neither and passes `caretColor` through as CSS.
+ * The font size is applied after the caller's style: iOS Safari zooms into a
+ * focused field under 16px, and `maximum-scale=1` would kill pinch-zoom. A
+ * submit keeps focus, so a phone's keyboard stays up between messages.
+ * RN-web reads `caretColor` as CSS; a device reads `selectionColor`.
  */
 
 import type { Ref } from "react";
@@ -42,8 +23,7 @@ export function TextField({ style, onSubmit, ...props }: TextFieldProps) {
     <TextInput
       {...props}
       onSubmitEditing={onSubmit && (() => onSubmit())}
-      // A device reads `submitBehavior`; react-native-web still reads only
-      // the older `blurOnSubmit`, so both say the same thing.
+      // RN-web still reads only the older `blurOnSubmit`.
       submitBehavior="submit"
       blurOnSubmit={false}
       selectionColor={color.chosen}
@@ -56,6 +36,5 @@ export function TextField({ style, onSubmit, ...props }: TextFieldProps) {
 const styles = StyleSheet.create({
   field: textStyle.input,
   size: { fontSize: textStyle.input.fontSize },
-  // React Native's style has no `caretColor`; the page's is CSS.
   caret: { caretColor: color.chosen } as TextStyle,
 });

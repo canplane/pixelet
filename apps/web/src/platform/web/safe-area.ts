@@ -5,16 +5,11 @@ import { useEffect, useState } from "react";
 export interface SafeArea {
   top: number;
   bottom: number;
-  /** The part of `bottom` that takes a touch — a system's buttons, which the
-   * chrome stands clear of (shared/ui/bottom-rest.ts). A page's is none: the
-   * browser keeps its bars off the viewport. */
+  /** The part of `bottom` that takes a touch; none on a page. */
   tappable: number;
 }
 
-/** What the notch and the home indicator take off the screen's edges, in
- * CSS pixels: the page's `env(safe-area-inset-*)`, which index.html's
- * `viewport-fit=cover` is what makes non-zero. CSS gives the values only to
- * a style, so one is read back off an element that carries them. */
+/** `env(safe-area-inset-*)` is only given to a style, so it is read back off an element. */
 function measure(): SafeArea {
   const probe = document.createElement("div");
   probe.style.cssText = "position:fixed;visibility:hidden;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)";
@@ -25,7 +20,6 @@ function measure(): SafeArea {
   return area;
 }
 
-/** The screen's safe area, following a rotation. */
 export function useSafeArea(): SafeArea {
   const [area, setArea] = useState(measure);
   useEffect(() => {

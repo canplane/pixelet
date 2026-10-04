@@ -1,20 +1,7 @@
 // xpute-core/codec/json.rs
 
-//! `JSON.stringify` and `JSON.parse` of a flat string map — the one JSON
-//! the records carry (a POI's tags, a placement's), written by either side
-//! and read by the other, so the text is the host's to the byte.
-//!
-//! What the host does that a naive port would not:
-//! - an object's own key order puts array-index keys ("0", "12") first in
-//!   ascending number, then the rest in insertion order, and both
-//!   stringify and parse follow it;
-//! - a key given twice keeps its first position and its last value;
-//! - an `undefined` value is left out of the text;
-//! - a string escapes `"`, `\`, the five short controls, and every other
-//!   code unit below U+0020 as `\u00xx` in lowercase hex, and nothing else.
-//!
-//! The one thing it cannot be: a lone surrogate, which a JavaScript string
-//! holds and a Rust one cannot; `\ud800` alone parses to U+FFFD.
+//! JSON without a heap: a text is checked once against JSON's grammar, then
+//! read in place; nothing is built. `Quoted` writes a JSON string.
 
 use crate::status::bug::OrBug;
 use crate::status::errno::Errno;
@@ -215,15 +202,7 @@ pub fn parse_str_map(text: &str) -> Result<StrMap, MarshalError> {
     Ok(ordered(&raw).into_iter().map(|(k, v)| (k.to_string(), v.map(str::to_string))).collect())
 }
 
-// ============ Reading in place ============
-//
-// `JSON.parse` for a module with no heap: the text is checked once, and what
-// is read of it is read where it lies — a value is the span of its bytes, an
-// array or an object is walked when asked, and a string is decoded character
-// by character as it is compared or written out. Nothing is built.
-
-/// How deep arrays and objects may nest before a text is refused: the check
-/// recurses, and a module's stack is fixed.
+/// The check recurses, and a module's stack is fixed.
 const MAX_DEPTH: u32 = 128;
 
 fn skip_ws(s: &[u8], mut at: usize) -> usize {
@@ -233,7 +212,6 @@ fn skip_ws(s: &[u8], mut at: usize) -> usize {
     at
 }
 
-/// Where the string opening at `at` ends, past its closing quote.
 fn skip_string(s: &[u8], mut at: usize) -> Option<usize> {
     at += 1;
     loop {
@@ -252,7 +230,6 @@ fn skip_string(s: &[u8], mut at: usize) -> Option<usize> {
     }
 }
 
-/// Where the value starting at `at` ends.
 fn skip_value(s: &[u8], at: usize, depth: u32) -> Option<usize> {
     if depth > MAX_DEPTH {
         return None;
@@ -298,17 +275,30 @@ fn skip_value(s: &[u8], at: usize, depth: u32) -> Option<usize> {
                 }
             }
         }
-        _ => {
-            let mut end = at;
-            while end < s.len() && matches!(s[end], b'-' | b'+' | b'.' | b'e' | b'E' | b'0'..=b'9') {
-                end += 1;
-            }
-            core::str::from_utf8(&s[at..end]).ok()?.parse::<f64>().ok().map(|_| end)
+        _ => skip_number(s, at),
+    }
+}
+
+/// JSON's grammar, not `f64`'s: `+1`, `.5`, `1.` and `01` are refused, as
+/// the host's `JSON.parse` refuses them.
+fn skip_number(s: &[u8], mut at: usize) -> Option<usize> {
+    let digits = |at: usize| s[at..].iter().take_while(|c| c.is_ascii_digit()).count();
+    if s.get(at) == Some(&b'-') {
+        at += 1;
+    }
+    match digits(at) {
+        0 => return None,
+        n if n > 1 && s[at] == b'0' => return None,
+        n => at += n,
+    }
+    if s.get(at) == Some(&b'.') {
+        match digits(at + 1) {
+            0 => return None,
+            n => at += 1 + n,
         }
     }
 }
 
-/// What a value is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum JsonKind {
     Null,
@@ -319,15 +309,11 @@ pub enum JsonKind {
     Object,
 }
 
-/// One JSON value where it lies in the text it was read from.
 #[derive(Clone, Copy)]
 pub struct JsonValue<'a> {
-    /// The value's own bytes, checked, from its first to its last.
     s: &'a str,
 }
 
-/// `JSON.parse(text)` in place: the one value the text holds, or none where
-/// it holds anything else.
 pub fn read_json(text: &str) -> Option<JsonValue<'_>> {
     let s = text.as_bytes();
     let start = skip_ws(s, 0);
@@ -367,7 +353,6 @@ impl<'a> JsonValue<'a> {
         (self.kind() == JsonKind::String).then(|| JsonStr { raw: &self.s[1..self.s.len() - 1] })
     }
 
-    /// An array's items in order; nothing for any other value.
     pub fn items(&self) -> JsonItems<'a> {
         let open = self.kind() == JsonKind::Array;
         JsonItems {
@@ -376,8 +361,7 @@ impl<'a> JsonValue<'a> {
         }
     }
 
-    /// An object's fields in order, a key given twice given twice; nothing
-    /// for any other value.
+    /// A key given twice is given twice.
     pub fn fields(&self) -> JsonFields<'a> {
         let open = self.kind() == JsonKind::Object;
         JsonFields {
@@ -386,13 +370,11 @@ impl<'a> JsonValue<'a> {
         }
     }
 
-    /// `value[key]` on an object: the last field of that name, as the host's
-    /// parse keeps.
+    /// The last field of that name, as the host's parse keeps.
     pub fn get(&self, key: &str) -> Option<JsonValue<'a>> {
         self.fields().filter(|(k, _)| k.eq_str(key)).last().map(|(_, v)| v)
     }
 
-    /// `value[index]` on an array.
     pub fn at(&self, index: usize) -> Option<JsonValue<'a>> {
         self.items().nth(index)
     }
@@ -454,15 +436,13 @@ impl<'a> Iterator for JsonFields<'a> {
     }
 }
 
-/// A JSON string where it lies: its characters between the quotes, escapes
-/// as written, decoded as they are read.
+/// Escapes are decoded as the characters are read.
 #[derive(Clone, Copy)]
 pub struct JsonStr<'a> {
     raw: &'a str,
 }
 
 impl<'a> JsonStr<'a> {
-    /// The string itself, where it holds no escape: most do.
     pub fn as_plain(&self) -> Option<&'a str> {
         (!self.raw.contains('\\')).then_some(self.raw)
     }
@@ -495,7 +475,7 @@ impl core::fmt::Debug for JsonStr<'_> {
     }
 }
 
-/// A JSON string's characters, escapes decoded; a lone surrogate reads as U+FFFD.
+/// A lone surrogate reads as U+FFFD.
 pub struct JsonChars<'a> {
     rest: &'a str,
 }
@@ -542,11 +522,7 @@ impl Iterator for JsonChars<'_> {
     }
 }
 
-// ============ Writing in place ============
-
-/// What `T` displays as, written as a JSON string: quoted, with a quote, a
-/// backslash and every control character escaped — `JSON.stringify(String(v))`
-/// with the control characters other than \n, \r and \t as `\u00XX`.
+/// `JSON.stringify(String(v))`.
 #[derive(Clone, Copy, Debug)]
 pub struct Quoted<T>(pub T);
 

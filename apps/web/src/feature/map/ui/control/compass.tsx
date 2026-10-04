@@ -15,24 +15,11 @@ import { LEAVE, SETTLE } from "@/shared/ui/motion/transition.ts";
 import { chrome } from "@/shared/ui/theme.ts";
 import type { f64 } from "@xpute/core/abi/word.ts";
 
-/** The face the needle is drawn on: the button's. */
 const DIAL = chrome.control;
-/** A lozenge, widest at the pivot and pointed at both ends, each half cut
- * into a lit face and a shaded one along its ridge, as a machined needle
- * catches the light. Its colors are the system's, as a system compass's are:
- * north its red, south the glyph color every other round control draws in. */
 const NEEDLE_HALF = 20;
 const NEEDLE_WIDTH = 10;
-/** The lit face of each half is its shaded face's color let through this
- * much: one step lighter, the same hue. */
 const LIT = 0.75;
-/** How far back along the ridge from each point the needle's end turns
- * round. */
 const NEEDLE_ROUND = 2;
-/** Printed on the face: a hairline at every eighth of the turn, the four
- * quarters heavier and a step stronger than the eighths between them, both
- * weaker than the needle they stand behind. Each runs out to 3 inside the
- * button's rim. */
 const TICK_TO = DIAL / 2 - 3;
 const TICK_FROM = TICK_TO - 2.5;
 const QUARTER_STROKE = 1.5;
@@ -46,12 +33,7 @@ const [QUARTERS, EIGHTHS] = [0, 1].map((odd) =>
 );
 const BOX = `${-DIAL / 2} ${-DIAL / 2} ${DIAL} ${DIAL}`;
 
-/** One face of the needle: from the pivot out to its corner at `side`, along
- * the edge towards the point at `end`, then round on a curve that meets the
- * ridge square, and back down the ridge. Its mirror face meets it there with
- * the same tangent, so the two curves make one smooth rounded end. The curve
- * leaves the edge where it is as far from the corner of the turn as the ridge
- * is, so it bends evenly. */
+/** One face of the needle; its mirror meets it with the same tangent, making one rounded end. */
 function face(end: f64, side: f64): string {
   const ridge = end - Math.sign(end) * NEEDLE_ROUND;
   const turn = (side * NEEDLE_ROUND) / Math.abs(end);
@@ -60,15 +42,9 @@ function face(end: f64, side: f64): string {
   return `M0 0L${side} 0L${x} ${y}Q${turn} ${ridge} 0 ${ridge}Z`;
 }
 
-/** How long the kernel's word on the compass must stand before the button
- * follows it, in and out alike: a map turned past the threshold for a moment
- * does not flash the button, nor a map settling back on north take it away
- * mid-glance. As long as the button takes to arrive, which is how the chrome
- * over the map comes and goes (the address and the scale by SETTLE and
- * LEAVE, as this). */
+/** So a momentary turn past the threshold does not flash the button. */
 const HOLD_MS = SETTLE.durationMs;
 
-/** `value` once it has stood `ms` unchanged. */
 function useHeld(value: boolean, ms: f64): boolean {
   const [held, setHeld] = useState(value);
   useEffect(() => {
@@ -84,28 +60,19 @@ export function MapCompass() {
   const azimuth = useKernel((s) => s.azimuth);
   const compass = useKernel((s) => s.compass);
   const shown = useHeld(compass !== CompassState.Hidden, HOLD_MS);
-  // Clockwise on the screen, as the view turns.
   const turn = -azimuth;
   const w = NEEDLE_WIDTH / 2;
 
   return (
     <Presence
       show={shown}
-      // It turns in and grows from next to nothing, and turns on and shrinks
-      // away. Its glass is never faded: the glass steps through a darker style
-      // on its way in and out, which read as the button darkening. Not from
-      // zero, whose transform has no inverse for UIKit to hit-test and draw
-      // an effect view through.
+      // Never faded: the glass's style steps read as darkening. Not scale 0,
+      // which UIKit cannot invert to hit-test.
       from={{ scale: 0.01, rotate: -45, translateY: 10 }}
       exit={{ scale: 0.01, rotate: 45 }}
       transition={SETTLE}
       exitTransition={LEAVE}
     >
-      {
-        // Following the heading, it shows where north is, dimmed and taking
-        // no press: north up is the tracking button's to ask then, and the
-        // kernel turns no reset down its way (shell/ui/compass.rs).
-      }
       <CircularButton
         onPress={() => kernel_command(Command.INPUT_COMPASS_RESET)}
         label={t("map.controls.reset_orientation")}
@@ -117,9 +84,7 @@ export function MapCompass() {
             <Path d={EIGHTHS} stroke={LABEL.tertiary} strokeWidth={EIGHTH_STROKE} strokeLinecap="round" />
           </Svg>
           {
-            // Turned by the view around it, in React Native's own transform:
-            // a CSS string on the SVG is the page's, and a device's SVG
-            // refuses it.
+            // RN's transform: a device's SVG refuses a CSS string.
           }
           <View style={[StyleSheet.absoluteFill, { transform: [{ rotate: `${turn}rad` }] }]}>
             <Svg width={DIAL} height={DIAL} viewBox={BOX}>

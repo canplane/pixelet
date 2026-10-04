@@ -1,16 +1,9 @@
 // @xpute/runtime/ipc/sys.ts
 
 /**
- * The host's end of a guest's system calls (crates/xpute/runtime/src/ipc/
- * sys.rs, sys.spec.ts): the records a turn left in the stream the directory
- * names under SYS, run once the turn has returned and before the next begins,
- * so whatever one names in the guest's memory is written by the time the
- * guest reads it.
- *
- * Every program's calls are run here: a body read out of what the host holds
- * for the guest, a file written, a broken invariant reported. Where the bytes
- * go when written, and how a report is said, is the program's host to answer;
- * a call numbered with the PROGRAM bit is handed to it whole.
+ * The host's end of a guest's system calls (crates/xpute/runtime/src/ipc/sys.rs):
+ * the records a turn left, run after it returns and before the next begins, so
+ * whatever they name in guest memory is written before the guest reads it.
  */
 
 import type { U32Array, U8Array } from "@xpute/core/abi/array.ts";
@@ -42,8 +35,7 @@ export class Bodies {
   }
 }
 
-/** A broken invariant the guest reported before it stopped. */
-export interface Abort {
+interface Abort {
   errno: number;
   file: string;
   line: u32;
@@ -52,22 +44,80 @@ export interface Abort {
   b: bigint;
 }
 
-/** What only the program's host can answer. */
 export interface SysHost {
-  /** `bytes` written whole to the program's file `file`. */
-  write(file: u32, bytes: U8Array): void;
-  /** What stopped the guest. */
+  /** The file at `path` below `root`, whole, or a FileError; `signal` is
+   * aborted when the guest closes it first. */
+  open(root: u32, path: string, signal: AbortSignal): U8Array | Promise<U8Array>;
+  commit(root: u32, path: string, bytes: U8Array): void;
+  opened(fd: u32, res: i32, detail: u32): void;
   abort(report: Abort): void;
   /** A call of the program's own: its number, the record's words, and where
    * its arguments begin in them. */
   program(code: u32, w: U32Array, a: u32): void;
 }
 
-const utf8 = new TextDecoder();
+interface File {
+  root: u32;
+  path: string;
+  controller: AbortController;
+  bytes: U8Array | null;
+  written: U8Array[] | null;
+}
 
-/** Runs the calls the turn just returned left in the stream at `at`. */
-export function run_sys(memory: ArrayBuffer, at: u32, bodies: Bodies, host: SysHost): void {
-  each_record(memory, at, HEAD, (code, w, a) => {
+/** No name empty, `.` or `..`, so a path never leaves its root. */
+function walks_down(path: string): boolean {
+  return path.split("/").every((name) => name !== "" && name !== "." && name !== "..");
+}
+
+function open_file(files: Sys, host: SysHost, fd: u32, root: u32, flags: u32, path: string): void {
+  const file: File = { root, path, controller: new AbortController(), bytes: null, written: null };
+  files.open.set(fd, file);
+  // An answer is a submission, and a full ring rings a turn that would
+  // overwrite the records this run is still reading, so answers wait until it ends.
+  const answer = (res: i32, detail: u32) => {
+    if (files.open.get(fd) !== file) return;
+    if (res < 0) files.open.delete(fd);
+    host.opened(fd, res, detail);
+  };
+  const failed = (err: unknown) => {
+    if (!(err instanceof FileError)) console.warn(`[xpute/sys] open ${root}/${path}: ${err instanceof Error ? err.message : String(err)}`);
+    const [errno, detail] = err instanceof FileError ? [err.errno, err.detail] : [Errno.EIO, 0];
+    answer(errno, detail);
+  };
+  const read = (bytes: U8Array) => {
+    if (files.open.get(fd) !== file) return;
+    file.bytes = bytes;
+    answer(bytes.byteLength, 0);
+  };
+  if (!walks_down(path)) return queueMicrotask(() => failed(new FileError(Errno.EACCES)));
+  if (flags === flag.O_WRONLY) {
+    file.written = [];
+    return queueMicrotask(() => answer(0, 0));
+  }
+  let got: U8Array | Promise<U8Array>;
+  try {
+    got = host.open(root, path, file.controller.signal);
+  } catch (err) {
+    return queueMicrotask(() => failed(err));
+  }
+  Promise.resolve(got).then(read, failed);
+}
+
+export class Sys {
+  readonly open = new Map<u32, File>();
+
+  constructor(private readonly host: SysHost) {}
+
+  /** For a program call to consume in place rather than READ into the guest. */
+  bytes(fd: u32): U8Array | null {
+    return this.open.get(fd)?.bytes ?? null;
+  }
+
+  run(memory: ArrayBuffer, at: u32): void {
+    each_record(memory, at, HEAD, this.record);
+  }
+
+  private readonly record = (code: u32, w: U32Array, a: u32): void => {
     switch (code) {
       case op.READ: {
         const [body, dst, len] = [w[a], w[a + 1], w[a + 2]];

@@ -1,14 +1,9 @@
 // pxl-geo-bake/examples/bake_from_db.rs
 
-//! Bakes pages straight out of the geo database, the whole path the offline
-//! tool walks — five queries, the packet, the rasterize — and writes each
-//! tile beside the last. One page at a time, without the walk's threads,
-//! resume or manifest, which is what makes it useful for looking at a single
-//! page that came out wrong.
+//! Bakes single pages straight from the geo DB, without the walk's threads,
+//! resume or manifest, for inspecting one page.
 //!
 //!   cargo run -p pxl-geo-bake --example bake_from_db -- <dir> <page>...
-//!
-//! Reads DB_GEO_URL from the environment.
 
 use std::fs;
 
@@ -27,7 +22,15 @@ fn main() {
 
     for page in pages {
         let idx = page.parse().expect("page_idx");
-        let tile = fetch_tile(&repo, &mut client, idx, &mut stats).expect("bake");
+        assert!(coverage.contains(idx), "{page} is not a page of the coverage");
+        let reader = &mut deck::Reader {
+            client: &mut client,
+            repo: &repo,
+            store: &mut Disk(&memo),
+            memo: &memo.join("structure"),
+        };
+        let (terrain, off_raster) = bake_leaf(reader, idx).expect("bake");
+        let tile = encode_terrain(&terrain).expect("encode");
         fs::write(format!("{dir}/{page}.db.tile"), &tile).expect("write");
         println!("{page}\t{}", tile.len());
     }

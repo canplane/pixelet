@@ -1,16 +1,7 @@
 #!/usr/bin/env -S deno run -A
 // Every cube and decor the catalogs give out has a name in every locale, and
-// every name in a locale is one the catalogs still give out.
-//
-// The rest of the chain from a stored number to what a person reads is held
-// by something already: pxl-tool/spec/cell.rs writes the numbering from cube_type.json,
-// the color table it writes from color.json does not compile against a type
-// no channel has, and a
-// texture the pack lacks falls back to the cube's own color. The last link
-// is the only silent one — i18next renders a missing key as the key itself,
-// so a catalog entry nobody translated reads as `cubes.land.bare` on screen
-// and a translation whose type was renamed or dropped simply stops being
-// reached. This is that link.
+// every name is still given out. i18next renders a missing key as the key
+// itself, so this link is otherwise silent.
 
 import { dirname, join } from "@std/path";
 
@@ -23,14 +14,11 @@ type Catalog = { [key: string]: string | Catalog };
 
 const problems: string[] = [];
 
-/** Every leaf of a branch as a dotted path, or none where the branch is
- * missing entirely — which the caller reports as every key missing. */
 function leaves(node: Catalog[string] | undefined, prefix = ""): string[] {
   if (typeof node !== "object" || node === null) return prefix === "" ? [] : [prefix];
   return Object.entries(node).flatMap(([key, value]) => leaves(value, prefix === "" ? key : `${prefix}.${key}`));
 }
 
-/** What a branch holds against what the catalog gives out. */
 function branch(locale: string, doc: Catalog, name: string, want: string[]): void {
   const have = new Set(leaves(doc[name]));
   for (const key of want) {
@@ -48,7 +36,6 @@ for (const locale of LOCALES) {
   const doc: Catalog = JSON.parse(await Deno.readTextFile(join(web, `src/locale/${locale}.json`)));
   branch(locale, doc, "cubes", cubeIds);
   branch(locale, doc, "decors", decorKinds.map(decorName));
-  // The drawer groups the catalog by channel, one heading each.
   const sections = doc["drawer_modal"];
   branch(locale, typeof sections === "object" ? sections : {}, "sections", channels);
 }

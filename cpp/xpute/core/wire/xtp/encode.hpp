@@ -1,22 +1,9 @@
 // cpp/xpute/core/wire/xtp/encode.hpp
 
-// The write end: a packet written in place, into bytes the caller holds — a
-// ring slot's payload, or a buffer sized for it — with no tree built first
-// and nothing allocated. The other two build a tree of nodes and encode it
-// after (Rust's TreeView and TreeEncoder, TypeScript's the same); Rust adds
-// a writer like this one for the root branch of a ring's packet. Here that
-// writer is the only one: it writes any root, every node type and a graft,
-// and gives the bytes the tree encoder gives for the same tree.
-//
-// A packet is one root node. A branch declares its child count up front,
-// since its table precedes its children, and then writes them as the packet
-// writes its root; declaring one count and writing another is the caller's
-// bug. What does not fit spoils the packet, and `finish` says why.
-//
-// The room is the buffer. What it refuses is what the encoder refuses at the
-// same cap, including a string judged by its UTF-16 units, four bytes each,
-// before its bytes — the rule the TypeScript measures by, which makes which
-// strings a cap refuses part of what a packet is.
+// Writes a packet in place into bytes the caller holds, with no tree and no
+// allocation; the bytes match the tree encoder's for the same tree. A string
+// is judged against the cap by its UTF-16 units first, four bytes each, as the
+// TypeScript measures, so the same strings are refused on every side.
 
 #pragma once
 
@@ -32,14 +19,12 @@ namespace xpute::xtp {
 
 class PacketWriter {
   public:
-    // A writer over `buf`, whose length is the cap: none past MAX_PKT_SZ,
-    // and one shorter than a header refuses the packet.
+    // The buffer's length is the cap, at most MAX_PKT_SZ.
     explicit PacketWriter(std::span<std::uint8_t> buf) noexcept;
 
-    // An untyped null.
     PacketWriter &nil() noexcept { return entry(std::nullopt, type_of(SpecialType::nil)); }
 
-    // A leaf of its type, or none for a null of that type.
+    // None writes a null of that type.
     PacketWriter &u8(std::optional<std::uint8_t> v) noexcept { return scalar(ScalarType::u8, v); }
     PacketWriter &i8(std::optional<std::int8_t> v) noexcept { return scalar(ScalarType::i8, v); }
     PacketWriter &u16(std::optional<std::uint16_t> v) noexcept { return scalar(ScalarType::u16, v); }
@@ -65,8 +50,6 @@ class PacketWriter {
     PacketWriter &f32_array(std::optional<std::span<const float>> a) noexcept { return array(a); }
     PacketWriter &f64_array(std::optional<std::span<const double>> a) noexcept { return array(a); }
 
-    // An array of `len` elements, element `i` being `value(i)`: for numbers
-    // that lie in no array to copy from.
     template <class T, class F> PacketWriter &array_with(std::uint32_t len, F &&value) noexcept {
         std::optional<std::uint32_t> at = seq(len, std::uint64_t{len} * sizeof(T));
         if (at) {
@@ -75,15 +58,17 @@ class PacketWriter {
         return entry(at, type_of(ARRAY_OF<T>));
     }
 
-    // Bits given a byte each, nonzero for set, packed low bit first.
+    // Packed low bit first.
     PacketWriter &bitset(std::optional<std::span<const std::uint8_t>> bits) noexcept;
 
-    // UTF-8, with the NUL the wire carries after it and its length leaves out.
+    // Followed by a NUL that the length leaves out.
     PacketWriter &str(std::optional<std::string_view> s) noexcept;
 
-    // A string written in place by `write`, which is given the room after
-    // the length slot and answers how many bytes it wrote, or none when they
-    // did not fit: for text that lies in no string to copy from.
+    // len + 1 offsets into the UTF-8 after them.
+    PacketWriter &strs(std::optional<std::span<const std::string_view>> items) noexcept;
+
+    // `write` gets the room after the length slot and answers the bytes written,
+    // or none when they did not fit.
     template <class F> PacketWriter &str_with(F &&write) noexcept {
         std::optional<std::uint32_t> at;
         if (std::optional<std::uint32_t> room = str_room()) {
@@ -94,7 +79,7 @@ class PacketWriter {
         return entry(at, type_of(SequenceType::str));
     }
 
-    // A branch of `count` children, which `fill` writes with this writer.
+    // Writing a different number of children than `count` is a bug.
     template <class F> PacketWriter &branch(std::uint32_t count, F &&fill) noexcept {
         std::optional<std::uint32_t> at = branch_open(count);
         Frame outer = frame_;
@@ -105,20 +90,16 @@ class PacketWriter {
         return entry(branch_close(at), type_of(SpecialType::branch));
     }
 
-    // A branch that is not there, its type kept.
     PacketWriter &no_branch() noexcept { return entry(std::nullopt, type_of(SpecialType::branch)); }
 
-    // A packet already written, spliced in as this node: its root's payload
-    // copied, placed as its root's type places it.
+    // Its root's payload copied, placed as its root's type places it.
     PacketWriter &graft(std::span<const std::uint8_t> packet) noexcept;
 
-    // The packet's length, header included and to the word, once its root
-    // is written; or why it was refused.
+    // The length, header included and to the word, or why it was refused.
     Result<std::uint32_t> finish() noexcept;
 
   private:
-    // The branch being written, or the root, which is a branch of one whose
-    // entry is the header.
+    // The root is a branch of one whose entry is the header.
     struct Frame {
         std::uint32_t base;
         std::uint32_t count;
@@ -155,11 +136,9 @@ class PacketWriter {
 
     std::span<std::uint8_t> buf_;
     Frame frame_{.base = 0, .count = 1, .written = 0, .root = true};
-    // The root's type, for the header.
     NodeType root_type_ = type_of(SpecialType::nil);
-    // The end of what is written, from the packet's start.
     std::uint32_t lim_ = HDR_SZ;
-    // Why the packet was spoiled, the first time it was.
+    // The first reason only.
     std::optional<Error> error_;
 };
 

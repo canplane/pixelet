@@ -13,10 +13,7 @@ interface CurrentAddressProps {
   label: string | null;
 }
 
-/** The place under the map's center; a new place fades in over the room a
- * changed width has already set for it. Where the center is in no place —
- * over the sea, or before the place has arrived — its coordinates stand in,
- * as a map titles a spot with no name. */
+/** Coordinates stand in where the center is in no place (sea, or not yet arrived). */
 export function CurrentAddress(props: CurrentAddressProps) {
   const { label } = props;
   const center = useKernel((s) => s.map.center);
@@ -31,7 +28,7 @@ export function CurrentAddress(props: CurrentAddressProps) {
   );
 }
 
-/** Four places: about eleven meters. */
+/** Four decimals: about eleven meters. */
 function coordinates({ lat, lon }: LonLat): string {
   return `${Math.abs(lat).toFixed(4)}° ${lat < 0 ? "S" : "N"}, ${Math.abs(lon).toFixed(4)}° ${lon < 0 ? "W" : "E"}`;
 }

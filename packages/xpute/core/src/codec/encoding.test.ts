@@ -1,12 +1,6 @@
 // @xpute/core/codec/encoding.test.ts
 
-/**
- * The hex here is what the wire tests read a record through, so a fault in it
- * would let the three of them pass on the wrong bytes. That is the reason
- * these exist and the reason they check the refusals as closely as the
- * round trips: a decoder that quietly took what it could not read would turn
- * a mismatch into a match.
- */
+/** The wire tests read records through this hex, so a decoder that silently accepts bad input would hide a mismatch. */
 
 import { assertEquals, assertThrows } from "@std/assert";
 
@@ -64,8 +58,6 @@ Deno.test("a uuid is 16 bytes, 22 characters, and its own", () => {
 Deno.test("ct_eq answers on the bytes and not on where they first differ", () => {
   assertEquals(ct_eq(bytes(1, 2, 3), bytes(1, 2, 3)), true);
   assertEquals(ct_eq(bytes(1, 2, 3), bytes(1, 2, 4)), false);
-  // A difference in the first byte and in the last are the same answer; what
-  // this guards is that they take the same path to it.
   assertEquals(ct_eq(bytes(9, 2, 3), bytes(1, 2, 3)), false);
   assertEquals(ct_eq(bytes(1, 2), bytes(1, 2, 3)), false, "a prefix compared equal");
   assertEquals(ct_eq(bytes(), bytes()), true);

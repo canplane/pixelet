@@ -27,10 +27,6 @@ fn every_shader_compiles() {
     }
 }
 
-/// The shader's face bits are the mesher's: each named constant in
-/// faces.wgsl equals the mesher's, and the lateral groups sit at
-/// consecutive bits from their base in the order the shader multiplies
-/// by.
 #[test]
 fn the_face_bits_are_the_meshers() {
     use crate::mesh::chunk_mesher as m;
@@ -84,14 +80,11 @@ fn frame_layout_matches_the_struct() {
     for (name, at) in FRAME_FIELDS.iter().zip(FRAME_AT) {
         assert_eq!(offsets[name], at, "FRAME_AT for {name}");
     }
-    // The environment's run is contiguous from sun_dir, as look/environment.rs
-    // writes it: 24 floats to the end of its padding.
+    // The environment's run is contiguous from sun_dir: 24 floats to its padding's end.
     assert_eq!(offsets["_p5"], offsets["sun_dir"] + 20);
     assert_eq!(offsets["other_color"], offsets["other_dir"] + 4);
 }
 
-/// A struct's span and its members' offsets, in floats, as `kind`'s shader
-/// lays it out.
 fn layout(kind: u32, name: &str) -> (usize, BTreeMap<String, usize>) {
     let (module, _) = compile(kind);
     let ty = module.types.iter().find(|(_, t)| t.name.as_deref() == Some(name)).unwrap_or_else(|| panic!("{name}")).1;
@@ -99,8 +92,6 @@ fn layout(kind: u32, name: &str) -> (usize, BTreeMap<String, usize>) {
     (*span as usize / 4, members.iter().map(|m| (m.name.clone().unwrap(), m.offset as usize / 4)).collect())
 }
 
-/// Each named field of `name` in `kind`'s shader sits where the Rust that
-/// writes it puts it, and the struct is as long as the Rust's words.
 fn holds(kind: u32, name: &str, floats: usize, fields: &[(&str, usize)]) {
     let (span, offsets) = layout(kind, name);
     assert_eq!(span, floats, "{name}'s length");
@@ -109,7 +100,6 @@ fn holds(kind: u32, name: &str, floats: usize, fields: &[(&str, usize)]) {
     }
 }
 
-/// A module constant's value, as the literals it is built from.
 fn constant(kind: u32, name: &str) -> Vec<f64> {
     let (module, _) = compile(kind);
     let (_, c) = module.constants.iter().find(|(_, c)| c.name.as_deref() == Some(name)).unwrap_or_else(|| panic!("{name}"));
@@ -124,8 +114,6 @@ fn constant(kind: u32, name: &str) -> Vec<f64> {
     }
 }
 
-/// The uniforms the sky's passes are laid out into, and the tables they
-/// read, are where the Rust that writes them puts them.
 #[test]
 fn the_skys_layouts_match_their_structs() {
     use crate::gpu::{atmosphere as a, clouds as c, renderer as r, stars as s};
@@ -174,15 +162,7 @@ fn the_skys_layouts_match_their_structs() {
         SHADER_STARS,
         "Stars",
         s::STARS_FLOATS,
-        &[
-            ("view_proj", 0),
-            ("sky", s::SKY),
-            ("viewport", s::VIEWPORT),
-            ("intensity", s::INTENSITY),
-            ("depth", s::DEPTH),
-            ("density", s::DENSITY),
-            ("up", s::UP),
-        ],
+        &[("view_proj", 0), ("sky", s::SKY), ("depth", s::DEPTH), ("density", s::DENSITY), ("intensity", s::INTENSITY)],
     );
     for (name, k) in [("TRANSMITTANCE_SIZE", a::TRANSMITTANCE), ("MULTISCATTER_SIZE", a::MULTISCATTER), ("SKY_VIEW_SIZE", a::SKY_VIEW)] {
         let (w, h) = a::SIZES[k];
@@ -192,9 +172,7 @@ fn the_skys_layouts_match_their_structs() {
     for (name, v) in [("CLOUD_TILE_UNITS", c::TILE_UNITS), ("CLOUD_TILE_TEXELS", c::TILE_TEXELS)] {
         assert_eq!(constant(SHADER_CLOUDS, name), [v as f64], "the clouds' tile, which the texture is made to");
     }
-    // The glare's halo, Spencer's photopic point-spread function without its
-    // core, over the sphere: the share of the light it carries, which the
-    // shader scales to a lens's.
+    // Spencer's photopic PSF without its core: the share of light the halo carries.
     let halo = |t: f64| 0.478 * 20.91 / (t + 0.02).powi(3) + 0.138 * 72.37 / (t + 0.02).powi(2);
     let (n, lo, hi) = (200_000, 1e-5f64, 180.0f64);
     let share: f64 = (0..n)
@@ -208,7 +186,6 @@ fn the_skys_layouts_match_their_structs() {
     assert_eq!(constant(SHADER_SKY, "LUMA").iter().map(|&v| v as f32).collect::<Vec<_>>(), luma, "the luminance weights");
 }
 
-/// The vertex format a location's argument type asks for.
 fn format_of(module: &Module, ty: naga::Handle<naga::Type>) -> u32 {
     match &module.types[ty].inner {
         TypeInner::Scalar(s) if s.kind == ScalarKind::Float => F32,
@@ -222,7 +199,6 @@ fn format_of(module: &Module, ty: naga::Handle<naga::Type>) -> u32 {
     }
 }
 
-/// The vertex shader's inputs by location, and their formats.
 fn vertex_inputs(module: &Module, entry: u32) -> BTreeMap<u32, u32> {
     let name = VERTEX_ENTRY[entry as usize];
     let vs = module.entry_points.iter().find(|e| e.stage == ShaderStage::Vertex && e.name == name).unwrap();
@@ -248,9 +224,6 @@ fn vertex_inputs(module: &Module, entry: u32) -> BTreeMap<u32, u32> {
     out
 }
 
-/// The module's resource bindings: (group, binding) to (the stages
-/// that use it, its kind, whether a depth texture is multisampled — which
-/// none may be).
 fn bindings(module: &Module, info: &naga::valid::ModuleInfo) -> BTreeMap<(u32, u32), (u32, u32, bool)> {
     let mut out = BTreeMap::new();
     for (handle, var) in module.global_variables.iter() {
@@ -288,9 +261,6 @@ fn every_pipeline_matches_its_shader() {
         let shader = r.shader;
         {
             let (module, info) = compile(shader);
-            // Every input the vertex shader declares is fed by exactly
-            // one attribute of the same format, and no attribute feeds
-            // an input that is not there.
             let inputs = vertex_inputs(&module, r.vertex);
             let mut fed = BTreeMap::new();
             for (stride, _, attrs) in &r.buffers {
@@ -300,16 +270,12 @@ fn every_pipeline_matches_its_shader() {
                 }
             }
             assert_eq!(fed, inputs, "pipeline {id}: the attributes are shader {shader}'s inputs");
-            // Every binding the shader declares has a layout entry of
-            // its kind, visible to every stage that reads it; and no
-            // entry stands for a binding the shader does not have.
             let declared = bindings(&module, &info);
             let mut laid = BTreeMap::new();
             for (group, entries) in r.groups.iter().enumerate() {
                 for (binding, visibility, kind) in entries {
-                    // A dynamic offset is the bind group's business, and
-                    // whether a float texture is filterable is its
-                    // format's, not the shader's.
+                    // A dynamic offset is the bind group's business, and a float texture's
+                    // filterability is its format's.
                     let (kind, multi) = match *kind {
                         UNIFORM_DYNAMIC => (UNIFORM, false),
                         TEXTURE_UNFILTERED => (TEXTURE, false),
@@ -331,9 +297,6 @@ fn every_pipeline_matches_its_shader() {
                 assert_eq!((*kind, *multi), (declared_kind, declared_multi), "pipeline {id}: the kind at {slot:?}");
                 assert_eq!(*visibility, used, "pipeline {id}: the visibility at {slot:?} is the stages that read it");
             }
-            // A pipeline without a fragment stage draws depth only,
-            // writing it, unblended: the shadow map's
-            // plain depth, or the frame's reversed one from the eye.
             if !r.fragment {
                 assert!(
                     r.depth_write && (r.depth_compare == LESS || r.depth_compare == GREATER) && r.blend == OPAQUE,
@@ -344,7 +307,6 @@ fn every_pipeline_matches_its_shader() {
     }
 }
 
-/// Whether `f` calls a function named `name`, or calls one that does.
 fn reaches(module: &Module, f: &naga::Function, name: &str) -> bool {
     fn block(module: &Module, b: &naga::Block, name: &str) -> bool {
         b.iter().any(|st| match st {
@@ -362,10 +324,8 @@ fn reaches(module: &Module, f: &naga::Function, name: &str) -> bool {
     block(module, &f.body, name)
 }
 
-/// The shaders that place a point of the world, each of which lays it on the
-/// planet as the ground is (globe.wgsl's `on_globe_of`) before it projects
-/// it: what is drawn over the map and not laid on it floats off the ground
-/// as the planet falls away. The rest draw the sky or work on the screen.
+/// Shaders that place a world point must lay it on the globe before projecting,
+/// or it floats off the ground as the planet falls away.
 const WORLD_SHADERS: [u32; 7] = [SHADER_CHUNK, SHADER_DECOR, SHADER_SKINNED, SHADER_PUCK_ZONE, SHADER_PUCK_BEACON, SHADER_BADGE, SHADER_DEBUG];
 
 #[test]
@@ -381,13 +341,8 @@ fn every_shader_that_places_the_world_lays_it_on_the_planet() {
     }
 }
 
-/// Whether a type the host shares with a shader has no room inside it: its
-/// words run end to end, so no layout rule has a gap to place differently.
-/// A four-byte scalar, a four-lane vector of them, an array of those whose
-/// stride is its element, or a struct of those whose members follow one
-/// another with nothing between. A `vec3`, a matrix and a padded struct are
-/// where a Galaxy S23's Vulkan read what the WGSL did not say
-/// (issue/20260927-a-matrix-the-driver-reads-its-own-way.md).
+/// No gaps a layout rule could place differently: a vec3, a matrix or a padded
+/// struct is where a Galaxy S23's Vulkan read what the WGSL did not say.
 fn has_no_room(module: &Module, ty: naga::Handle<naga::Type>) -> bool {
     let ctx = module.to_ctx();
     match &module.types[ty].inner {
@@ -421,13 +376,9 @@ fn what_a_shader_shares_with_the_host_has_no_room_inside_it() {
     }
 }
 
-/// The floats of the words global an expression reads, in order: a load of a
-/// word or of a lane, and what a swizzle, a lane, a bitcast or a constructor
-/// makes of those.
 fn floats_read(f: &naga::Function, e: naga::Handle<naga::Expression>) -> Vec<u32> {
     use naga::Expression as E;
-    // A pointer into the words: how deep it is (0 the array, 1 a word, 2 a
-    // lane) and the float it starts at.
+    // Depth (0 the array, 1 a word, 2 a lane) and the float it starts at.
     fn place(f: &naga::Function, e: naga::Handle<naga::Expression>) -> Option<(u32, u32)> {
         let index = |i: naga::Handle<naga::Expression>| match f.expressions[i] {
             E::Literal(naga::Literal::U32(v)) => v,
@@ -467,8 +418,6 @@ fn floats_read(f: &naga::Function, e: naga::Handle<naga::Expression>) -> Vec<u32
     }
 }
 
-/// The floats a value of `ty` at byte `offset` lies on, as WGSL lays it out:
-/// a matrix's columns each start on their alignment.
 fn floats_of(module: &Module, ty: naga::Handle<naga::Type>, offset: u32) -> Vec<u32> {
     let at = offset / 4;
     match module.types[ty].inner {
@@ -482,13 +431,8 @@ fn floats_of(module: &Module, ty: naga::Handle<naga::Type>, offset: u32) -> Vec<
     }
 }
 
-/// Each shared block read field by field (`frame_camera_pos()` for the
-/// `Frame` its words hold): every field's function reads the word and the
-/// lane WGSL lays that field at, so the struct the Rust's offsets are held
-/// against by the tests above is the struct the shader reads; padding (`_`)
-/// has no function. Nothing builds the struct back — no value, variable,
-/// argument or result of its type — with which Safari's WebGPU lost its GPU
-/// process (issue/20260927-a-matrix-the-driver-reads-its-own-way.md).
+/// Each field's accessor reads the word and lane WGSL lays that field at, and
+/// nothing builds the struct back: that lost Safari's WebGPU its GPU process.
 #[test]
 fn every_block_reads_each_field_from_where_it_lies() {
     let blocks = [

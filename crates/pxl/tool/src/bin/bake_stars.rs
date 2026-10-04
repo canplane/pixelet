@@ -1,25 +1,10 @@
 // pxl-tool/bin/bake_stars.rs
 
-//! The night sky's stars, baked from the Yale Bright Star Catalog into the
-//! eight bytes a star the renderer reads (pxl-render's gpu/stars.rs).
+//! The night sky's stars from the Yale Bright Star Catalog (V/50, CDS), into
+//! the 8-byte records pxl-render's gpu/stars.rs reads, brightest first.
 //!
 //!   deno task bake:stars                  # fetch the catalog from CDS
 //!   deno task bake:stars catalog.gz       # or read one already here
-//!
-//! The catalog is Hoffleit and Warren's fifth revised edition (1991), every
-//! star to about magnitude 6.5, which is what an eye sees on a dark night:
-//! CDS publishes it as V/50, a fixed-width table whose ReadMe gives the
-//! columns read below. It is a public catalog, credited here and where it is
-//! drawn rather than in THIRD_PARTY_NOTICES.md, which covers copied source.
-//!
-//! A star is two little-endian words: its right ascension as a u16 of a turn
-//! and its declination as an i16 of a quarter turn, then its visual magnitude
-//! and its B−V color as i16 thousandths. The quantization is 20″ in right
-//! ascension and 10″ in declination, under a pixel at any field of view the
-//! camera has. The few entries with no position — novae and objects the
-//! catalog has retired — are left out; a star with no color index takes
-//! the Sun's. Brightest first, so a prefix of the file is the sky to a
-//! magnitude.
 
 use std::io::Read;
 use std::process::ExitCode;
@@ -30,7 +15,6 @@ use pxl_tool::root;
 
 const SOURCE: &str = "https://cdsarc.cds.unistra.fr/ftp/V/50/catalog.gz";
 const OUT: &str = "crates/pxl/web/render/src/frame/shader/bright-stars.bin";
-/// The Sun's B−V, for a star the catalog gives no color.
 const SOLAR_BV: f64 = 0.65;
 
 struct Star {
@@ -54,8 +38,7 @@ fn catalog(path: Option<&str>) -> Result<String, String> {
     Ok(text)
 }
 
-/// A line's star, by the ReadMe's byte columns (1-based, inclusive); none
-/// where it has no position or no magnitude.
+/// Byte columns per the catalog's ReadMe (1-based, inclusive).
 fn star(line: &str) -> Result<Option<Star>, String> {
     let at = |from: usize, to: usize| line.get(from - 1..to.min(line.len())).unwrap_or("").trim();
     let num = |s: &str| s.parse::<f64>().map_err(|e| format!("{s:?} in {line:?}: {e}"));
@@ -71,9 +54,8 @@ fn star(line: &str) -> Result<Option<Star>, String> {
     Ok(Some(Star { ra, dec, vmag: num(vmag)?, bv }))
 }
 
-/// Half up. `f64::round` takes a half away from zero, which would move a
-/// negative declination or magnitude that lands on one a step from where the
-/// committed catalog has it.
+/// Half up; `f64::round` rounds away from zero and would move negative values
+/// off the committed catalog.
 fn round(x: f64) -> f64 {
     (x + 0.5).floor()
 }

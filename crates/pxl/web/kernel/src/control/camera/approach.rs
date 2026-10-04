@@ -1,0 +1,43 @@
+// pxl-kernel/control/camera/approach.rs
+
+//! One exponential approach for every channel a camera eases. Within `eps`
+//! it takes the target whole, so it ends rather than asking for frames
+//! forever on a remainder no screen shows.
+
+use xpute_core::math::scalar::wrap;
+
+/// `1 - e^(-k·delta)`: the same curve at any frame rate.
+pub fn damp_alpha(k: f64, delta: f64) -> f64 {
+    1.0 - libm::exp(-k * delta)
+}
+
+/// Whether it is still on its way.
+pub fn approach_scalar(current: f64, target: f64, k: f64, delta: f64, eps: f64) -> (f64, bool) {
+    let next = current + (target - current) * damp_alpha(k, delta);
+    if (target - next).abs() < eps {
+        (target, false)
+    } else {
+        (next, true)
+    }
+}
+
+/// The short way round, in [-π, π).
+pub fn approach_angle(current: f64, target: f64, k: f64, delta: f64, eps: f64) -> (f64, bool) {
+    let pi = core::f64::consts::PI;
+    let left = wrap(target - current, -pi, pi);
+    let (moved, moving) = approach_scalar(0.0, left, k, delta, eps);
+    (wrap(current + moved, -pi, pi), moving)
+}
+
+/// Every axis by the same share, so the path is straight; done within `eps`
+/// in any direction.
+pub fn approach_vec<const N: usize>(current: [f64; N], target: [f64; N], k: f64, delta: f64, eps: f64) -> ([f64; N], bool) {
+    let a = damp_alpha(k, delta);
+    let next: [f64; N] = std::array::from_fn(|i| current[i] + (target[i] - current[i]) * a);
+    let left = (0..N).map(|i| (target[i] - next[i]).powi(2)).sum::<f64>().sqrt();
+    if left < eps {
+        (target, false)
+    } else {
+        (next, true)
+    }
+}

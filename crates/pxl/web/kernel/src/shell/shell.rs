@@ -1,10 +1,7 @@
 // pxl-kernel/shell/shell.rs
 
-//! What the page's UI reads of the kernel and what it asks of it. The UI is an
-//! interrupt source and a display: it renders one snapshot of the state it
-//! shows — a Snapshot packet (cmd.json) the kernel writes after each turn and
-//! hands over only when it changed — and every control it has is a command
-//! of its own, applied here to the stores.
+//! What the page's UI reads of the kernel (a Snapshot packet, handed over
+//! only when changed) and the commands it applies to the stores.
 
 use pxl_spec::bake::place_page::leaf_slot;
 use pxl_spec::place::PlaceRank;
@@ -18,11 +15,13 @@ pub use crate::abi::cmd::Tracking;
 use crate::abi::cmd::{CompanionState, LocationState, LonLat, MapState, OrientationState, PlaceName, PlacePart, ScaleBar, Snapshot};
 use crate::control::camera::controller::radius;
 use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
-use crate::control::navigation::destination::{self, go_to_ground};
+use crate::control::interaction::holding;
+use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::device_orientation::{orientation_close, orientation_open, request_orientation};
 use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
 use crate::control::sensor::store::{device_location_store, device_orientation_store};
+use crate::layer::character::preview::{preview_rows, CASES_MAX};
 use crate::layer::character::store::companion_load_store;
 use crate::layer::geocode::fetcher::center_group;
 use crate::layer::geocode::store as geocode_store;
@@ -33,13 +32,8 @@ use crate::shell::ui::compass::compass_state;
 use crate::shell::ui::scale_bar::{mercator_zoom, scale_bar};
 use crate::world::frame::view::view;
 
-/// The place the center page is in, broad to narrow, cut at the rung this
-/// zoom asks for, each part handed to `each`; none where the page is in none
-/// or the packets it is read out of are not here yet.
-///
-/// Every language the provider had, rather than one resolved name. The
-/// reader's language is the page's — i18next holds it — and switching it
-/// re-reads a label already sent instead of asking for another.
+/// The center page's place, broad to narrow, cut at the zoom's rung. Every
+/// language is sent, so switching language re-reads rather than refetches.
 fn place_parts(page: Option<IVec>, zoom: f64, each: &mut dyn FnMut(&PlacePart<'_>)) {
     let deepest = PlaceRank::at_zoom(zoom);
     let parts = page
@@ -62,8 +56,7 @@ fn place_parts(page: Option<IVec>, zoom: f64, each: &mut dyn FnMut(&PlacePart<'_
     }
 }
 
-/// The state the UI shows, as a Snapshot packet written into `out`; none
-/// where it does not fit.
+/// None where it does not fit.
 pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     let map = map_store();
     let location = device_location_store();
@@ -79,8 +72,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         LonLat { lon: g[0], lat: g[1] }
     });
     let values = SettingKey::ALL.map(|key| settings.get(key));
-    // The label's depth is the zoom's, which there is only where the camera
-    // stands off the map center; standing at it, it is told all of it.
+    // Only an orbiting camera has a zoom; standing at the center, all parts are told.
     let zoom = if radius() > 0.0 { mercator_zoom(view().height.max(1.0)) } else { f64::INFINITY };
     let snapshot = Snapshot {
         map: MapState {
@@ -120,21 +112,19 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     w.finish()
 }
 
-/// The tracking button's press. Which of the three it is was decided by the
-/// shell from the state it drew the button in: the press means what the user
-/// saw, and entering follow mode is also what the shell's compass prompt has
-/// to be raised for.
+/// The shell decides which of the three from the state it drew the button
+/// in, so the press means what the user saw.
 pub fn tracking_action(tracking: Tracking) {
     let camera = camera_store();
     match tracking {
         Tracking::Recenter => {
-            // The device names a place on the map by its X and Y alone: its
-            // Z is the fix's altitude, absent on most and never the ground's
-            // height on the map, so the recenter stands on the ground there.
+            // A fix's Z is altitude, absent on most and never the map's ground height.
             if let Some(device) = map_navigation().device_coord {
                 go_to_ground(device);
             }
             camera.is_follow_mode = false;
+            // A view far out comes back in; one brought nearer stays, as map apps do.
+            crate::control::camera::controller::come_in_to_default();
         }
         Tracking::Follow => {
             if request_orientation(world_platform().orientation) {
@@ -148,16 +138,13 @@ pub fn tracking_action(tracking: Tracking) {
     }
 }
 
-/// The camera put so the map center is at `target`, a place named with its
-/// height.
+/// A badge's height is its level's, coarser than where a walker stands, so
+/// the center goes on the surface once it is known exactly.
 pub fn go_to(target: Pvf3) {
-    // The user drove the camera: GPS stops overriding it.
     camera_store().is_follow_mode = false;
     destination::go_to(target);
 }
 
-/// A search result: the center moved to degrees, on the ground there once
-/// it is known.
 pub fn go_to_degrees(lon: f64, lat: f64) {
     camera_store().is_follow_mode = false;
     let mut target = Pvf3::default();
@@ -165,27 +152,22 @@ pub fn go_to_degrees(lon: f64, lat: f64) {
     go_to_ground(target);
 }
 
-/// Where the camera stands, set outright rather than driven: what the
-/// kernel's own test puts a view at (apps/web/src/kernel/kernel.test.ts), and
-/// what an A/B reads two builds at the same view with.
+/// Set outright, for kernel tests and A/B comparisons at the same view.
 pub fn set_view(dist: Option<f64>, polar: Option<f64>) {
     crate::control::camera::controller::set_intent(IntentPatch { dist, azimuth: None, polar });
 }
 
-/// The location card: the location alone, the compass being asked for where
-/// it is used (`tracking_action`).
+/// The compass is asked for where it is used (`tracking_action`).
 pub fn location_enable() {
     start_watching(world_platform().geolocation);
 }
 
-/// The map is on screen and wants the sensors.
 pub fn sensors_open() {
     let platform = world_platform();
     geolocation_open(platform.geolocation);
     orientation_open(platform.orientation);
 }
 
-/// The map is gone, and the sensors are let go.
 pub fn sensors_close() {
     geolocation_close();
     orientation_close();

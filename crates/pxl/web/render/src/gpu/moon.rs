@@ -1,25 +1,13 @@
 // pxl-render/gpu/moon.rs
 
-//! The Moon's face on the device: the near side's reflectance
-//! (asset/sky/moon.png, cut from the CGI Moon Kit of NASA's Scientific
-//! Visualization Studio by pxl-tool/bin/download_moon.rs), copied once into
-//! a texture with its mip chain for the sky pass to read
-//! (frame/shader/sky.wgsl's moon_disc).
-//!
-//! The chain is what the texture is for: the disc is some thirty pixels
-//! across on a phone, and a 512-texel face read at that without it would
-//! sparkle as the camera moves.
-//! Until the image has arrived, and if it never does, the sky draws the
-//! face at its mean.
-//!
-//! What it costs: 1.4 MB on the device, a 512 × 512 level and its chain.
+//! The Moon's face (from NASA SVS's CGI Moon Kit) in a texture with its mip
+//! chain: without it a 512-texel face read at thirty pixels sparkles as the
+//! camera moves. Until it arrives the sky draws the face at its mean.
 
 use crate::gpu::api::{object, release, texture_usage, Gpu};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format};
 use crate::gpu::layers::{mip_levels, Mips};
 
-/// The face's side in texels, the map's: the shipped image's (asset/sky/
-/// moon.png), which is copied in whole.
 const MOON_TEX_SZ: u32 = 512;
 
 pub struct MoonMap {
@@ -27,7 +15,6 @@ pub struct MoonMap {
     pub view: u32,
     pub sampler: u32,
     levels: u32,
-    /// The face copied in.
     pub loaded: bool,
 }
 
@@ -50,8 +37,6 @@ impl MoonMap {
         }
     }
 
-    /// Copies the face in once it has arrived: `image` asks for it, until it
-    /// has been copied.
     pub fn step(&mut self, g: &Gpu, mips: &Mips, image: fn() -> Option<u32>) {
         if self.loaded {
             return;

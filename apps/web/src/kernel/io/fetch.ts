@@ -1,28 +1,10 @@
 // @pxl/web/kernel/io/fetch.ts
 
 /**
- * The bus under the kernel's reads (crates/pxl/web/kernel/src/io/fetch.rs).
- *
- * The kernel names an object — which bake it belongs to, and its name inside
- * that bake — and never an address. Turning that into a URL, running HTTP,
- * and reading what the protocol says are all this side's: a kernel names what
- * it wants and a driver knows the bus.
- *
- * The other thing only this side can see is a body the transport did not
- * decode. A page is served in the encoding it was stored in, and a browser
- * that does not know that encoding is handed the bytes undecoded rather than
- * told anything — so what says the browser cannot read this deployment is the
- * first two bytes of a body that should already be a packet. The Worker cannot
- * say it: Cloudflare rewrites `accept-encoding` on the request a Worker is
- * handed and negotiates with the real client itself, so a refusal written
- * there refuses everyone (2026-09-24).
- *
- * Four outcomes go back, and only four. **404 is not one of them**: it is how
- * HTTP spells "there is no such object", so it is translated here into the
- * outcome that says so, and the kernel decides what an absent object means
- * for its category without ever learning the number. The body is held where
- * the kernel reads it in its own turn, and a stop is the scheduler's own
- * doing — it carries no reason, where everything else does.
+ * The bus under the kernel's reads: the kernel names an object, this side
+ * makes it a URL. 404 is ENOENT, not a failure. A body still packed means
+ * the browser cannot decode the stored encoding; the Worker cannot refuse it
+ * there, since Cloudflare rewrites `accept-encoding` before the Worker sees it.
  */
 
 import type { U8Array } from "@xpute/core/abi/array.ts";
@@ -60,29 +42,13 @@ export function begin_read(key: u64, stopped: () => void): { signal: AbortSignal
   return { signal: controller.signal, own: () => running.delete(key) };
 }
 
-/** Whether a body is still in the encoding it was stored in — which, on this
- * side of the wire, means the transport did not decode it. The same judgment
- * the bake makes on the other side (pxl-geo-bake util.rs's `encoding_of`). */
 function packed(body: U8Array): boolean {
   return (body[0] === 0x28 && body[1] === 0xb5) || (body[0] === 0x1f && body[1] === 0x8b);
 }
 
-/** Tells the kernel what became of the read it started under `key`. */
-function settle(key: u64, outcome: FetchOutcome, body: u32, body_bytes: u32, fail: FetchFail, detail: u32, net_ms: f64): void {
-  CORE_DOORBELL.send(0, XputeCommand.FETCH_DONE, encode_fetch_done({ key, outcome, body, body_bytes, fail, detail, net_ms }));
-  request_frame();
-}
-
-/** Reads one object the kernel named: its bytes written into the room the
- * kernel gives them, and what became of the read reported back. */
-export async function run_fetch(key: u64, bake: number, name: string): Promise<void> {
-  const { signal, own } = begin_read(key, () => settle(key, FetchOutcome.Aborted, 0, 0, FetchFail.None, 0, 0));
-  let outcome: FetchOutcome = FetchOutcome.Read;
-  let held = 0;
-  let bytes = 0;
-  let fail: FetchFail = FetchFail.None;
-  let detail = 0;
-  let net_ms = 0;
+export async function read_object(bake: u32, name: string, signal: AbortSignal): Promise<U8Array> {
+  let res: Response;
+  let body: U8Array;
   try {
     const t0 = performance.now();
     const res = await originGet(tileUrl(BAKE_KINDS[bake], name, PUBLISHED_TILES), signal);
@@ -109,21 +75,16 @@ export async function run_fetch(key: u64, bake: number, name: string): Promise<v
       bytes = body.byteLength;
     }
   } catch (err) {
-    // A stop was reported when it was made, and carries no reason.
-    if (!own()) return;
-    // Everything else is the transport's: a browser raises TypeError for
-    // offline, DNS, CORS and a refused connection alike, and its words for
-    // them are this side's to log — what the kernel needs is which of these
-    // happened.
-    outcome = FetchOutcome.Error;
-    fail = err instanceof Error && err.name === "TypeError" ? FetchFail.Network : FetchFail.Shell;
-    console.warn(`[fetch] ${key}: ${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}`);
+    // TypeError covers offline, DNS, CORS and refused alike; the words are only logged.
+    if (!signal.aborted) console.warn(`[fetch] ${name}: ${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}`);
+    throw new FileError(err instanceof Error && err.name === "TypeError" ? Errno.ENETUNREACH : Errno.EIO);
   }
-  settle(key, outcome, held, bytes, fail, detail, net_ms);
-}
-
-/** Stops the read the kernel started under `key`, whichever kind it is, if it
- * is still running. */
-export function abort_fetch(key: u64): void {
-  running.get(key)?.();
+  if (res.status === 404) throw new FileError(Errno.ENOENT);
+  if (!res.ok) throw new FileError(Errno.EACCES, res.status);
+  if (body.byteLength > 0 && packed(body)) {
+    // Fail here: handing it on would fail in the kernel's decoder, far from the cause.
+    console.warn(`[fetch] ${name}: the body arrived still packed, with no encoding to undo it`);
+    throw new FileError(Errno.EBADMSG);
+  }
+  return body;
 }

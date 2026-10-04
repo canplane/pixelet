@@ -11,45 +11,10 @@ function Link({ href, children }: { href: string; children: ReactNode }) {
 }
 
 /**
- * Source notices. Hardcoded rather than run through t(): these are license
- * text, required in the same form regardless of the UI language.
- *
- * What each line is doing, and which part of it is actually compulsory —
- * because the previous version of this file had it backward, carrying an
- * academic courtesy in full while omitting a notice whose wording a license
- * prescribes.
- *
- * **Map data.** Overture's Base/Buildings/Transportation/Divisions are ODbL
- * and substantially OSM-sourced, so the obligation runs to OSM's
- * contributors; Places is CDLA-Permissive-2.0, which asks only that the
- * license text travel with the data. The OSMF Attribution Guidelines require
- * the credit to make clear the data is under ODbL, so the license is named
- * outright and the word links to openstreetmap.org/copyright — the same form
- * Overture displays for its own ODbL themes.
- *
- * Overture Maps Foundation itself is deliberately not credited. Its
- * attribution page offers a citation a user "may choose to add"; nothing in
- * either license compels it, and a notice section earns its length by being
- * only what is owed.
- *
- * **Elevation.** GEDTM30 is CC BY 4.0, which asks for the creator, the title,
- * a link to the license, and an indication that changes were made — the
- * pipeline crops and reprojects, so it changed. That is the whole of it. An
- * author list and journal reference would be an academic courtesy, not part
- * of what the license asks, and long enough to crowd out the line below,
- * which is not optional. The link is the DOI of the
- * distribution this pipeline actually consumes
- * (tool/elevation/metadata.json), so the notice, the README and the ingest
- * script all name one source instead of three mirrors of it.
- *
- * **Copernicus.** This one is compulsory and its wording is dictated. GEDTM30
- * is a fusion whose inputs include Copernicus WorldDEM, and the Copernicus
- * DEM license binds anyone communicating adapted data to the "produced using"
- * form of its notice, reproduced verbatim below.
- *
- * GEDTM30 also fuses JAXA's ALOS World 3D-30m. JAXA's own terms page was not
- * readable at the time of writing, so no claim is made about its exact
- * required wording rather than inventing one — worth closing.
+ * License notices, not run through t(): their wording is prescribed. OSM's
+ * guidelines require naming ODbL; CC BY 4.0 asks for creator, title, license
+ * link and a note of changes; the Copernicus "produced using" line is
+ * verbatim and compulsory. JAXA's required wording is still unconfirmed.
  */
 export function AttributionSection() {
   const { t } = useTranslation();

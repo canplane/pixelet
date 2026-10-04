@@ -1,22 +1,14 @@
 // pxl-tool/spec/cell.rs
 
-//! The cell catalogs: the cube types each channel gives out, the color of
-//! each, and the decor kinds beside them.
-
 use regex::Regex;
 
 use super::{align_star, casing_note, file, js_num, json_str, packed, pascal, pretty, read, rgb_literal, rs_doc, rs_ident, ts_doc, Node, Output};
 
-/// The ground channels, numbered by their place here: that number is
-/// `GroundChannelKey`'s, which is a channel's identity in what the object
-/// store holds, and the field a packed cell holds it in. Appending one is
-/// free; moving one renumbers stored placements.
+/// Numbered by position: the number is stored in placements, so append only.
 const GROUND_CHANNELS: [&str; 4] = ["land", "water", "structure", "transport"];
 
 const CUBE_TYPE_JSON: &str = "spec/pxl/spec/cell/cube_type.json";
 
-/// A channel of cube_type.json: its name, its note, and its entries, each a
-/// type or a section heading.
 struct Channel<'a> {
     name: &'a str,
     note: Vec<String>,
@@ -42,8 +34,6 @@ fn channels(spec: &Node) -> Result<Vec<Channel<'_>>, String> {
         .collect()
 }
 
-/// Every channel's type names, in the JSON's order: the catalog as a tool
-/// that reads it at run time sees it, rather than as pxl-spec compiles it.
 pub fn catalog() -> Result<Vec<(String, Vec<String>)>, String> {
     let spec = read(CUBE_TYPE_JSON)?;
     Ok(channels(&spec)?
@@ -58,8 +48,6 @@ fn type_value(e: &Node) -> Result<u32, String> {
         .map(|v| v as u32)
         .ok_or(format!("{CUBE_TYPE_JSON}: {:?} has no value", e.str_at("name")))
 }
-
-// ---- color.json ----
 
 pub fn color_outputs() -> Result<Vec<Output>, String> {
     let spec = read("spec/pxl/spec/cell/color.json")?;
@@ -79,8 +67,6 @@ pub fn color_outputs() -> Result<Vec<Output>, String> {
     .map(String::from)
     .to_vec();
 
-    // The shell's copy is the JSON itself, each entry with its color packed
-    // beside the hex it is written in.
     let mut with_rgb = Vec::new();
     for (ch, entries) in spec.entries() {
         if ch == "_meta" {
@@ -112,11 +98,8 @@ pub fn color_outputs() -> Result<Vec<Output>, String> {
     ts.extend(head.iter().cloned());
     ts.extend([String::new(), format!("export default {json};")]);
 
-    // What the Rust holds is each channel's color as a function of its type's
-    // number, matched on the catalog's own constants, so nothing there finds
-    // a channel or a type by its name. A ground channel falls back to
-    // `common`'s, which is what a sentinel a baked cell can hold (VOID,
-    // UNKNOWN) shows as.
+    // A ground channel falls back to `common`'s color, which is what VOID and
+    // UNKNOWN show as.
     let types = read(CUBE_TYPE_JSON)?;
     let catalog = channels(&types)?;
     let mut rs = vec!["// pxl-spec/cell/color.spec.rs".to_string()];
@@ -165,24 +148,14 @@ pub fn color_outputs() -> Result<Vec<Output>, String> {
     ])
 }
 
-// ---- cube_type.json ----
-
-/// A ground cell's four channels packed into one word, for Rust alone: the
-/// client and the bake both compile it, and the shell never decodes a page.
-///
-/// A channel's field is a dense index into its own table, not the catalog's
-/// number, because the catalog numbers an identity rather than a sequence —
-/// `land::sea` is 129 — and a placed cube already names one of them where a
-/// browser can see it. The table is what turns one back into the other, and
-/// the field's width comes out of the table's length, so a new type widens
-/// its own field and shifts the ones above it with nothing edited by hand
-/// (issue/20260923-a-ground-cell-is-fourteen-bits.md).
+/// A ground cell's four channels in one word. A field is a dense index into
+/// its channel's table, not the catalog number (`land::sea` is 129), so its
+/// width follows the table's length.
 fn ground_pack(catalog: &[Channel]) -> Result<(Vec<String>, Vec<String>), String> {
     let mut tables: Vec<(&str, Vec<String>)> = Vec::new();
     for name in GROUND_CHANNELS {
         let ch = catalog.iter().find(|c| c.name == name).ok_or(format!("cube_type.json has no {name} channel"))?;
-        // VOID first, so a cell of nothing is a word of zero, and UNKNOWN
-        // last, so it is where a byte the channel does not give out is sent.
+        // VOID first so an empty cell is zero; UNKNOWN last, where an out-of-range byte goes.
         let mut values = vec!["common::void".to_string()];
         values.extend(ch.types().filter_map(|e| e.str_at("name")).map(|n| format!("{name}::{n}")));
         values.push("common::unknown".into());
@@ -411,7 +384,6 @@ pub fn cube_type_outputs() -> Result<Vec<Output>, String> {
         rs.extend([String::new(), "        pub const ENTRIES: &[(&str, u8)] = &[".to_string()]);
         rs.extend(names.iter().map(|n| format!("            ({}, {n}),", json_str(n))));
         rs.push("        ];".into());
-        // Rust alone: the recess is a height, and heights are the kernel's.
         rs.extend([
             String::new(),
             "        /// How far below its sampled height a cell showing the type sits, in".into(),
@@ -422,10 +394,6 @@ pub fn cube_type_outputs() -> Result<Vec<Output>, String> {
             ),
             "    }".into(),
         ]);
-        // The same channel as one type, for Rust, which names a member of a
-        // closed set with an enum rather than with the text the JSON spells it
-        // out under. TypeScript already has this: `cube_types.land` IS the
-        // closed set there, its keys checked by `keyof typeof`.
         let e = pascal(ch.name);
         enums.push(String::new());
         enums.extend(note("    "));
@@ -484,8 +452,6 @@ pub fn cube_type_outputs() -> Result<Vec<Output>, String> {
     ])
 }
 
-// ---- decor.json ----
-
 pub fn decor_outputs() -> Result<Vec<Output>, String> {
     let spec = read("spec/pxl/spec/cell/decor.json")?;
     let doc = spec.lines_at("doc").unwrap_or_default();
@@ -518,8 +484,6 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
     rs.extend(["#[allow(non_upper_case_globals, non_camel_case_types)]", "pub mod decor_types {"].map(String::from));
     rs.extend(entries.iter().map(|(k, v)| format!("    pub const {k}: u8 = {v};")));
     rs.push(String::new());
-    // The catalog as one type, as cube_type.json's channels are: the kernel
-    // holds a decor kind as this, and its name is the shell's.
     rs.extend(["    #[derive(Clone, Copy, Debug, PartialEq, Eq)]", "    #[repr(u8)]", "    pub enum Decor {"].map(String::from));
     rs.extend(entries.iter().map(|(k, v)| format!("        {k} = {v},")));
     rs.extend(["    }".to_string(), String::new()]);

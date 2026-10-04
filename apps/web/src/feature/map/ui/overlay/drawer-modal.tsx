@@ -20,11 +20,6 @@ import { CharacterPicker } from "@/feature/character/picker.tsx";
 import { cubeLabel, CubeSwatch, DECOR_GLYPH, heldRing } from "./cube-swatch.tsx";
 import { LABEL } from "@platform/palette.ts";
 
-/** The catalog's cubes in sections, one per cube channel, where the strip's
- * few are one flat row: too many to read without headers. Blocks first, the
- * most used, then the ground channels coarse to fine, as a place reads: what
- * the ground is, then what is on it. The order is the drawer's, a decision
- * about this list. */
 const SECTION_ORDER: readonly ChannelName[] = ["block", "land", "water", "structure", "transport"];
 
 const SECTIONS = new Map<ChannelName, PlaceableCube[]>();
@@ -33,22 +28,16 @@ for (const cube of placeableCubes) {
   SECTIONS.set(section, [...(SECTIONS.get(section) ?? []), cube]);
 }
 
-// A catalog entry's three sizes (issue/20260928-three-sizes-of-a-control.md):
-// a press lands on its 44 cell; the tile one sees is a block's top as a
-// rounded square, where a circle cut its texture away; a decor's glyph is 20.
+// A press lands on 44 (issue/20260928-three-sizes-of-a-control.md); a circle cut a block's texture away, so a rounded square.
 const CELL = chrome.target;
 const GRID_GAP = 4;
-/** In hand, a tile grows and is ringed: 1 of the ground, then the ink. */
 const LIT_SCALE = 1.05;
 const LIT_INK = 2;
-/** As large as a tile can be while, lit, it reaches no further than halfway
- * into the gap to the next cell: 40. */
+/** Lit, a tile reaches no further than halfway into the gap: 40. */
 const TILE = (CELL + GRID_GAP - 2 * (1 + LIT_INK)) / LIT_SCALE;
 const TILE_RADIUS = 12;
 
-/** A catalog entry: its picture alone, lit while it is in hand. Its name is
- * read out, and shown by its section once it is the one in hand; a grid of
- * names under every tile read as a list, where the tiles tell most apart. */
+/** Pictures only: names under every tile read as a list. */
 function GridButton({ label, active, onPress, children }: { label: string; active: boolean; onPress: () => void; children: React.ReactNode }) {
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} aria-selected={active} style={styles.cell}>
@@ -57,8 +46,6 @@ function GridButton({ label, active, onPress, children }: { label: string; activ
   );
 }
 
-/** A section's title, and the name of what is in hand when it is one of its
- * own; nothing, with neither, rather than an empty line over the grid. */
 function SectionHead({ title, held }: { title?: string; held: string | null }) {
   if (title === undefined && held === null) return null;
   return (
@@ -94,18 +81,13 @@ function DecorGridButton({ kind, onPick }: { kind: u8; onPick: (kind: u8) => voi
   );
 }
 
-/** The catalog's three tabs. */
 const enum DrawerTab {
   Cube = 0,
   Decor = 1,
   Character = 2,
 }
 
-/** The whole catalog, as Minecraft's inventory is to the strip's hotbar. A
- * cube or decor picked here is taken in hand as a strip pick is, and the
- * sheet closes. The character tab dresses the companion rather than placing
- * anything, so its picks apply at once and leave the sheet open
- * (CharacterPicker). */
+/** Cube and decor picks close the sheet; character picks apply at once and leave it open. */
 export function DrawerModal(props: BaseModalProps) {
   const { onClose } = props;
   const { t } = useTranslation();

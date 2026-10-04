@@ -1,12 +1,7 @@
 // pxl-kernel/world/chunk/build.rs
 
-//! A chunk's build: the builder that makes its tiers from what it is made
-//! of (source.rs).
-//!
-//! Every decision about a chunk, and everything it holds — its tiers, its
-//! decor blocks, the sources they were made from — is the scheduler's
-//! (crates/pxl/web/kernel/src/world/chunk/table.rs). What is here acts on
-//! what it asks.
+//! A chunk's build: makes its tiers from its sources (source.rs). Every
+//! decision about a chunk is the table's (table.rs); this acts on what it asks.
 
 use pxl_spec::space::pyramid::{LevelPage, CHUNK_CELLS, GROUND};
 
@@ -38,91 +33,42 @@ use pxl_spec::space::hierarchy::Scale;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
-/// A tier: the cube a chunk is drawn in, its side as a scale of the unit.
-/// The shared rule chooses it by the chunk's distance from the eye
-/// (chunk/table.rs `wanted_cube`), and each layer draws its own detail at it:
-/// terrain its level's cells, averaged to the cube where the cube is
-/// coarser and as they are where it is finer, since there is nothing under
-/// them; objects folded to it, down to their finest tier.
+/// The cube a chunk is drawn in. Terrain averages to it where it is coarser
+/// than the level's cell; objects fold to it down to their finest tier.
 pub type Cube = Scale;
 
-/// How many of a level's cells a cube spans along an axis: the mesher's
-/// step, one where the cube is no coarser than the level's cell.
+/// How many of a level's cells a cube spans along an axis (the mesher's step).
 pub fn mesh_step(cube: Cube, level: u32) -> u32 {
     let own = GROUND.scale(level);
     own.count_in(cube.max(own))
 }
 
-/// The scale a chunk's objects are folded to for a cube: the cube, no finer
-/// than an object's finest tier and no coarser than a cell, past which the
-/// mesher's step averages them with the ground they stand on.
+/// Objects fold to the cube, clamped between their finest tier and a cell;
+/// past a cell the mesher averages them with the ground.
 pub fn object_fold(cube: Cube) -> Scale {
     cube.clamp(OBJECT_FINEST, CELL)
 }
 
-/// Hands a block back to the heap. Every view into it is dead
-/// afterward.
-pub fn release_block(at: usize, bytes: u32) {
-    // SAFETY: a block this chunk took and has not given back.
-    unsafe { free((at, bytes)) };
-}
+// A chunk's runs live in a heap block exactly as large as its column needs,
+// held until all its tiers are baked. Not a `.fixed` range: a column's runs
+// are unbounded, and a range too small would leave a chunk undrawn; the heap
+// refuses only when memory is out, and then the build is `Blocked`.
 
-/// How much built work chunks may keep in the heap *while off screen*: their
-/// decor, the one part of a chunk still there — its runs are a set of
-/// `.fixed.runs` and its tiers are on the device. The scheduler reclaims
-/// only past this, farthest first; the share is param.rs's `RETAIN_SHARE`.
-#[allow(non_snake_case)]
-pub fn RETAIN_BUDGET_BYTES() -> f64 {
-    crate::mem::section::map().map_or(0.0, |m| m.heap.bytes as f64 * crate::param::RETAIN_SHARE)
-}
-
-// ---- the build as the kernel runs it ----
-//
-// A chunk's build, from its sources to its meshes, a chunk at a time under
-// the frame's budget.
-//
-// The scheduler says which chunks exist, what each is made of (its terrain
-// page's lanes and the settings that change what they paint), and which
-// tiers it still lacks; each tick it hands over the order to take them in
-// and a budget. A chunk's runs come the direct way — one run a column
-// from the terrain, when no object stands in its column — or by painting
-// the terrain and the objects into a volume and scanning it. Its tiers are
-// baked from those runs, one bake and one scan open in the whole world at a
-// time. What comes out is events: a tier's mesh, handed over whole, and what
-// the chunk's runs hold.
-//
-// A chunk's runs are one of `.fixed.runs`'s two sets, held from the moment
-// they are made until every tier of the chunk is baked from them: the tiers
-// are what lasts, on the device, so a set is not kept for a tier asked later
-// but the chunk's tiers are all baked while it is there. Two, so that one is
-// filled while the other is baked from. A chunk that finds both held waits.
-
-/// The workspace: `.fixed.bake`, where the one bake open writes its mesh a
-/// slot's worth at a time, each block handed to its slot before the next
-/// is written (world/chunk/mesh_slot.rs). As large as any one slot, and no
-/// larger, whatever the mesh. It keeps nothing across frames; what is kept
-/// is the slots.
+/// `.fixed.bake`: the open bake writes its mesh here one slot's worth at a
+/// time, so it is sized to the largest slot.
 pub const BAKE_BYTES: u32 = {
     let (fine, coarse) = (FINE_BOXES * FINE_BOX_WORDS, COARSE_BOXES * COARSE_BOX_WORDS);
     4 * if fine > coarse { fine } else { coarse }
 };
 
-/// Run sets `.fixed.runs` holds.
 pub const RUN_SETS: usize = 2;
 
-/// What a build hands the scheduler.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BuildEvent {
-    /// Tier `cube` of chunk `id`, of its sources as of `generation`, is
-    /// `boxes` boxes: the slots for all of it are asked for at once, before
-    /// any is written. The answer is whether they are held for it; where
-    /// not, the bake is thrown away, and what the tier needs is known the
-    /// next time it is counted (world/chunk/table.rs `Slot::need`).
+    /// All slots for a tier are asked for at once, before any is written. If
+    /// refused, the bake is thrown away and the need recorded (`Slot::need`).
     Reserve { id: u32, generation: u32, cube: Cube, boxes: u32 },
-    /// A block of that tier's boxes: `box_cnt` of them from the mesh's box
-    /// `first`, at `at` in `.fixed.bake` until they are sent to their slot
-    /// on the device, their heights held in `heights` (pxl-render
-    /// mesh/chunk_mesher.rs). A slot's worth, but for the mesh's last.
+    /// One slot's worth of boxes (less for the last) at `at` in `.fixed.bake`.
     Part {
         id: u32,
         generation: u32,
@@ -132,14 +78,28 @@ pub enum BuildEvent {
         box_cnt: u32,
         heights: Heights,
     },
-    /// Tier `cube` of chunk `id`, built from its sources as of `generation`,
-    /// all of its `box_cnt` boxes handed: it lands.
     Tier { id: u32, generation: u32, cube: Cube, box_cnt: u32, heights: Heights },
 }
 
-/// A chunk's runs: which of `.fixed.runs`'s sets, and what is in it — and
-/// the scale its objects were folded to where it painted any
-/// (`object_fold`), which only the cubes that fold to it are baked from.
+/// A column split across cube boundaries is several chunks; its runs are
+/// made once and each chunk bakes its cut of them.
+struct RunHold {
+    column: (Scale, [i64; 2]),
+    users: Vec<u32>,
+    runs: Option<Runs>,
+}
+
+impl Drop for RunHold {
+    fn drop(&mut self) {
+        if let Some(r) = self.runs.take() {
+            // SAFETY: the hold's own block; every bake from it ends before the hold does.
+            unsafe { free(r.block) };
+        }
+    }
+}
+
+/// `fold`: the scale objects were folded to, if any; only cubes that fold to
+/// it may bake from these runs.
 #[derive(Clone, Copy)]
 struct Runs {
     set: usize,
@@ -148,11 +108,8 @@ struct Runs {
     fold: Option<Scale>,
 }
 
-/// What a page's ground is read from: the page drawn in its place, the
-/// page's first cell as its own cells from that page's corner, and how many
-/// of them a side a source cell stands for — 1 on its own page, more on the
-/// nearest page over it held while its own has not come (world/pyramid.rs
-/// `drawn_from`).
+/// Where a page's ground is read from: itself (`n` = 1) or the nearest
+/// resident page over it (`drawn_from`).
 #[derive(Clone, Copy)]
 struct Source {
     page: &'static Terrain,
@@ -161,9 +118,7 @@ struct Source {
 }
 
 impl Source {
-    /// What `p` is drawn from now. A page is found by its key, so one gone,
-    /// or whose record another page now holds, is none and never another
-    /// page's bytes.
+    /// Found by key, so a page that is gone never yields another page's bytes.
     fn of(p: LevelPage) -> Option<Source> {
         let pyramid = Terrain::pyramid();
         let src = pyramid.drawn_from(p)?;
@@ -185,11 +140,8 @@ impl Source {
     }
 }
 
-/// What a chunk's ground is read from: its own page's source, and the
-/// sources of the pages beside it its apron reaches into, so the edge it
-/// shares with a chunk there is read from what that chunk is drawn from —
-/// both sides of it one surface, whichever of them is borrowed; and the
-/// chunk's first cell in its page.
+/// The apron reads each neighbour's page from what that neighbour is drawn
+/// from, so a shared edge is one surface.
 #[derive(Clone, Copy)]
 struct Read {
     own: Source,
@@ -213,40 +165,28 @@ impl Read {
 
 #[derive(Clone, Copy)]
 struct Chunk {
-    /// The chunk being built: its level, corner, column and page all come
-    /// from it.
     at: PyramidChunk,
     structures: bool,
     generation: u32,
-    /// The tiers the node lacks, in the order it wants them.
     want: [Option<Cube>; 2],
-    runs: Option<Runs>,
-    /// The heap's release count when it last refused this chunk a
-    /// block: until a block is given back, the same request meets the
-    /// same heap, and the chunk is not tried.
+    /// Heap release count at the last refusal: until something is freed the same
+    /// request would fail, so the chunk is skipped.
     refused: Option<u32>,
 }
 
 impl Chunk {
-    /// The level of the page it is drawn from: its cells are 2^level units.
     fn level(&self) -> u32 {
         self.at.level()
     }
 
-    /// The corner of the chunk's column, as an L1 coordinate at no height:
-    /// what its objects are read by.
     fn base(&self) -> IVec {
         self.at.corner()
     }
 
-    /// The column it stands in, as the object store keys it: a chunk is one
-    /// L2 span.
     fn col_idx(&self) -> IVec {
         L2_IDX(self.base())
     }
 
-    /// What the chunk is drawn from now: its own page, or the nearest
-    /// resident page over it, and what the pages its apron reaches into are.
     fn read(&self) -> Option<Read> {
         let mut beside = [None; 8];
         for ([qx, qy], p) in self.at.pages_beside(APRON) {
@@ -273,32 +213,22 @@ impl Chunk {
 struct ScanJob {
     id: u32,
     volume: u32,
-    /// The scale its objects are painted at (`object_fold`).
     fold: Scale,
-    /// The objects' paint into the volume, until it is finished and the scan
-    /// begins.
     paint: Option<PaintJob>,
 }
 
-/// A chunk's objects painted a step at a time: the entry the next step
-/// starts at; the column's revisions it began on, since a store written
-/// between steps has moved the entries under it and the paint begins again;
-/// and the drawn build's edits as they were then, as a source change for
-/// new ones drops the job anyway.
+/// A step-wise object paint. A store write between steps moves the entries,
+/// so the paint restarts when the column revision changes.
 #[derive(Clone, Copy)]
 struct PaintJob {
     next: usize,
-    /// Whether it paints the builder's folded entries rather than the
-    /// store's own: its fold is coarser than an object's finest tier.
     folded: bool,
     revision: u32,
     hide: Option<EntryAt>,
     carve: Option<EntryAt>,
 }
 
-/// The voxels a step of a paint sets before it stops: a band's cells, which
-/// is also the most one entry sets, so a step sets at most twice this
-/// whatever the column holds.
+/// A band's cells, also the most one entry sets, so a step sets at most twice this.
 const PAINT_VOXELS: usize = (BAND_CELLS * BAND_CELLS) as usize;
 
 struct BakeJob {
@@ -306,32 +236,24 @@ struct BakeJob {
     cube: Cube,
     generation: u32,
     mesh: Option<Block>,
-    /// The mesh's boxes handed so far, block by block.
     handed: u32,
 }
 
-/// Where a chunk got to in one advance.
 #[derive(PartialEq, Eq)]
 enum Progress {
-    /// Work was done and more remains.
     Busy,
-    /// Nothing more to do for it now.
     Done,
-    /// Waiting on something outside it: the slot another chunk holds, a
-    /// block the heap refused, a page not yet arrived.
+    /// Waiting on another chunk's slot, a refused heap block, or a page.
     Blocked,
 }
 
-/// Everything a build reads and writes that is not its own.
 pub struct World<'a> {
     pub volumes: &'a mut Volumes,
     pub store: &'a Store,
     pub painter: &'a mut Painter,
 }
 
-/// What the builder holds of each chunk mounted, by its mount (world/chunk/
-/// table.rs `Scheduler::place`): room for every mount the table can give,
-/// made once.
+/// Per-mount state, sized once for every mount the table can give.
 struct ByMount<T>(Vec<Option<T>>);
 
 impl<T> ByMount<T> {
@@ -364,7 +286,6 @@ impl<T> core::ops::Index<&u32> for ByMount<T> {
     }
 }
 
-/// The build counters the profiler reads.
 #[derive(Clone, Copy, Default)]
 pub struct BuildStat {
     pub direct: u32,
@@ -381,24 +302,14 @@ pub struct Builder {
     scan_job: Option<ScanJob>,
     bake_job: Option<BakeJob>,
     sample: ChunkSample,
-    /// The drawn build's two edits: the hidden entry, and the carve
-    /// preview where the store would file it.
     hide: Option<EntryAt>,
     carve: Option<EntryAt>,
-    /// The chunk holding each run set, whether it is being filled or baked
-    /// from.
-    run_holders: [Option<u32>; RUN_SETS],
-    /// The scan job's bands, kept between the scan's steps.
+    run_holds: [Option<RunHold>; RUN_SETS],
     bands: Vec<BandView<'static>>,
-    /// The scan job's paint's claimed voxels, kept between its steps.
     claimed: Claims,
-    /// Objects folded, a level chunk's or a z16 chunk's to its cube, as the
-    /// store keeps them (layer/object/store.rs `Store::fold_at`), and those
-    /// cells in order, kept for their capacity.
     folded: HashMap<[i64; 3], u32>,
-    fold_cells: Vec<([i64; 3], u32)>,
-    /// A z16 chunk's objects folded to its cube, as entries: what its paint
-    /// reads where the cube is coarser than an object's finest tier.
+    stands: Vec<(u32, Stands)>,
+    /// A z16 chunk's objects folded to its cube, for cubes coarser than an object's finest tier.
     fold_band: Vec<BandZ>,
     fold_pos: Vec<u32>,
     fold_state: Vec<u32>,
@@ -451,12 +362,6 @@ impl Builder {
         self.chunks.get(&id).map(|c| c.generation)
     }
 
-    /// The entry the drawn build leaves out.
-    pub fn hide(&self) -> Option<EntryAt> {
-        self.hide
-    }
-
-    /// The chunks holding the scan slot and the bake slot.
     pub fn holders(&self) -> [Option<u32>; 2] {
         [self.scan_job.as_ref().map(|j| j.id), self.bake_job.as_ref().map(|j| j.id)]
     }
@@ -464,8 +369,6 @@ impl Builder {
     pub fn bake_context(&self) -> &BakeContext {
         &self.bake
     }
-
-    // ---- commands ----
 
     pub fn add(&mut self, id: u32, at: PyramidChunk) {
         self.chunks.insert(
@@ -486,8 +389,6 @@ impl Builder {
         self.chunks.remove(&id);
     }
 
-    /// The chunk's sources changed: what it was built from is gone, and a
-    /// tier built before now is stale.
     pub fn source(&mut self, world: &mut World, id: u32, structures: bool) {
         self.drop_work(world, id);
         if let Some(c) = self.chunks.get_mut(&id) {
@@ -496,14 +397,11 @@ impl Builder {
         }
     }
 
-    /// The tiers the chunk still lacks. A bake of a tier not wanted
-    /// gives the slot back now.
-    /// The chunk the one bake open is for, and the cube and generation it
-    /// bakes; none while no bake is open.
     pub fn baking(&self) -> Option<(u32, Cube, u32)> {
         self.bake_job.as_ref().map(|j| (j.id, j.cube, j.generation))
     }
 
+    /// A bake of a tier no longer wanted gives its slot back now.
     pub fn want(&mut self, world: &mut World, id: u32, want: [Option<Cube>; 2]) {
         let Some(c) = self.chunks.get_mut(&id) else { return };
         c.want = want;
@@ -522,7 +420,13 @@ impl Builder {
         self.carve = carve;
     }
 
+    /// The column's runs are shared by every chunk over it, so all of them rebuild.
     fn drop_work(&mut self, world: &mut World, id: u32) {
+        self.abort_work_of(world, id);
+        self.drop_runs(id);
+    }
+
+    fn abort_work_of(&mut self, world: &mut World, id: u32) {
         self.abort_scan_of(world, id);
         if matches!(&self.bake_job, Some(j) if j.id == id) {
             self.abort_bake();
@@ -538,34 +442,46 @@ impl Builder {
         }
     }
 
-    /// A run set for chunk `id`: the one it holds, or a free one it now
-    /// does. None while both are held by others.
+    fn hold_of(&self, id: u32) -> Option<usize> {
+        let column = self.chunks.get(&id)?.at.column();
+        self.run_holds.iter().position(|h| h.as_ref().is_some_and(|h| h.column == column))
+    }
+
+    fn runs_of(&self, id: u32) -> Option<Runs> {
+        self.run_holds[self.hold_of(id)?].as_ref()?.runs
+    }
+
     fn run_set_for(&mut self, id: u32) -> Option<usize> {
         let set = self.run_holders.iter().position(|&h| h == Some(id)).or_else(|| self.run_holders.iter().position(|h| h.is_none()))?;
         self.run_holders[set] = Some(id);
         Some(set)
     }
 
-    /// Gives back the run set chunk `id` holds, if any.
-    fn let_runs_go(&mut self, id: u32) {
-        for h in self.run_holders.iter_mut().filter(|h| **h == Some(id)) {
-            *h = None;
-        }
-        if let Some(c) = self.chunks.get_mut(&id) {
-            c.runs = None;
+    fn leave_runs(&mut self, id: u32) {
+        for slot in self.run_holds.iter_mut() {
+            if let Some(h) = slot {
+                h.users.retain(|&u| u != id);
+                if h.users.is_empty() {
+                    *slot = None;
+                }
+            }
         }
     }
 
-    /// The run sets lent now, and the bytes their runs fill.
+    fn drop_runs(&mut self, id: u32) {
+        if let Some(set) = self.hold_of(id) {
+            self.run_holds[set] = None;
+        }
+    }
+
     pub fn run_sets(&self) -> (u32, u32) {
         let held = self.run_holders.iter().flatten();
         let bytes = held.clone().filter_map(|id| self.chunks.get(id)?.runs.map(|r| r.bytes)).sum();
         (held.count() as u32, bytes)
     }
 
-    /// The heap refused chunk `id` a block: the slots it held are given up —
-    /// held, each is every other chunk's wait, and the chunk cannot use them
-    /// until the heap changes — and the chunk waits for a release.
+    /// Heap refused a block: give up every slot held, since each is another
+    /// chunk's wait, and skip the chunk until a release.
     fn refuse(&mut self, world: &mut World, id: u32) {
         self.stat.starved += 1;
         self.abort_scan_of(world, id);
@@ -579,28 +495,31 @@ impl Builder {
         }
     }
 
+    fn unwant(&mut self, id: u32, cube: Cube) {
+        let Some(c) = self.chunks.get_mut(&id) else { return };
+        for w in c.want.iter_mut().filter(|w| **w == Some(cube)) {
+            *w = None;
+        }
+        if c.wanted().next().is_none() {
+            self.leave_runs(id);
+        }
+    }
+
     fn abort_bake(&mut self) {
         if self.bake_job.take().is_some() {
             self.bake.abort();
         }
     }
 
-    // ---- the tick ----
-
-    /// Advances the chunks in `order` under `budget_ms` of `now`, the
-    /// holders of the scan and the bake slot first: a slot held is every
-    /// other chunk's wait. At least one step is taken, whatever the budget.
-    /// A block refused ends the tick: the heap does not change until the
-    /// scheduler reclaims after, so every later request would meet the same
-    /// heap, and a refusal is not free — the direct runs are written whole
-    /// before their block is asked for. Whether any chunk did work.
+    /// Advances chunks under the budget, slot holders first. At least one step
+    /// is taken. A heap refusal ends the tick: the heap will not change within
+    /// it, and a refusal is not free (direct runs are written before their
+    /// block is asked for).
     pub fn tick(&mut self, world: &mut World, order: &[u32], budget_ms: f64, now: &impl Fn() -> f64, emit: &mut impl FnMut(BuildEvent) -> bool) -> bool {
         let t0 = now();
         let starved = self.stat.starved;
         let mut stepped = false;
         let mut worked = false;
-        // The chunks holding the scan, the bake or a run set go first, each
-        // once: held, a slot is every other chunk's wait.
         let mut first = [None; 2 + RUN_SETS];
         for (n, id) in self.holders().into_iter().chain(self.run_holders).enumerate() {
             if !first[..n].contains(&id) {
@@ -637,8 +556,7 @@ impl Builder {
         if c.refused.is_some_and(|r| r == crate::host::heap_stat().releases) {
             return Progress::Blocked;
         }
-        // Runs whose objects were folded for another cube than the next one
-        // wanted draw that cube's objects, not this one's: made again.
+        // Runs folded for another cube draw the wrong objects: remake them.
         let next = c.wanted().next().or_bug(Errno::ENOTRECOVERABLE);
         if c.runs.is_some_and(|r| r.fold.is_some_and(|f| f != object_fold(next))) && !matches!(&self.bake_job, Some(j) if j.id == id) {
             self.let_runs_go(id);
@@ -646,14 +564,15 @@ impl Builder {
         if self.chunks[&id].runs.is_none() {
             return self.advance_runs(world, id);
         }
+        // Another chunk of the column made the runs; this one bakes its cut too.
+        self.run_set_for(id);
         self.advance_bake(world, id, emit)
     }
 
     fn advance_runs(&mut self, world: &mut World, id: u32) -> Progress {
         let c = &self.chunks[&id];
-        // A page gone under a scan: the scan is given up and the slot with
-        // it, since held, it is every other chunk's wait, and the page may
-        // not come back before the chunk goes.
+        // Page gone under a scan: give up the scan slot, as the page may not return
+        // before the chunk goes.
         let Some(read) = c.read() else {
             self.abort_scan_of(world, id);
             return Progress::Blocked;
@@ -662,13 +581,9 @@ impl Builder {
             return self.level_runs(world, id, read);
         }
         let holding = matches!(&self.scan_job, Some(j) if j.id == id);
-        // A column with nothing placed is one run of terrain, floor to top,
-        // whichever way it is made: the direct runs and the scan bake the
-        // same mesh at every tier, and the scan's
-        // exactness — a cube carving the terrain, a sub-cell object — is
-        // only ever about what is placed, so the direct path serves every
-        // tier: a zoom-in would otherwise scan every chunk in view, most of
-        // them empty of objects.
+        // A column with nothing placed is one terrain run per column, the same mesh
+        // the scan would give at every tier; scanning would make a zoom-in scan
+        // every mostly-empty chunk in view.
         if !holding && !self.has_objects(world, c.col_idx()) {
             return self.direct_runs(world, id, read);
         }
@@ -702,10 +617,11 @@ impl Builder {
             return self.advance_paint(world, id, volume, paint);
         }
         // SAFETY: the scan job's volume, held until the scan finishes.
-        unsafe { world.volumes.band_views(volume, &mut self.bands) };
-        // The apron's columns are the sample's, which paint_terrain read
-        // before the volume was painted: the bands hold the chunk's own
-        // cells and nothing beyond them.
+        if !unsafe { world.volumes.band_views(volume, &mut self.bands) } {
+            self.refuse(world, id);
+            return Progress::Blocked;
+        }
+        // The apron comes from the sample; the bands hold only the chunk's own cells.
         let apron = Apron {
             ele: &self.sample.ele,
             material: &self.sample.material,
@@ -736,7 +652,6 @@ impl Builder {
         world.store.entries(col_idx).is_some() || self.carve.is_some_and(|c| c.col_idx == col_idx)
     }
 
-    /// A page's lanes as the paint reads them.
     pub fn page_view(page: &Terrain) -> PageView<'_> {
         PageView {
             cells: &page.ground.cells,
@@ -744,8 +659,6 @@ impl Builder {
         }
     }
 
-    /// A new volume with the chunk's terrain painted in, open; none when a
-    /// paint was refused.
     fn paint_terrain(&mut self, world: &mut World, id: u32, read: Read) -> Option<u32> {
         let show = self.chunks[&id].structures;
         self.sample.read(&read.around(), read.first, hidden_ground(show));
@@ -757,39 +670,30 @@ impl Builder {
         Some(volume)
     }
 
-    /// A column's voxel entries folded to `scale` by the fold every level
-    /// shares, as the store keeps it (layer/object/store.rs `fold_cell`), as
-    /// entries of that scale in the builder's fold lanes: what a z16 chunk
-    /// paints for a cube coarser than an object's finest tier. The hidden
-    /// entry is left out, as the paint would leave it out.
-    fn fold_objects(&mut self, world: &mut World, col_idx: IVec, scale: Scale) {
-        let o = FROM_L2_IDX(col_idx);
-        let (x0, y0) = (ivec::X(o), ivec::Y(o));
-        let cells = scale.count_in(L2) as i64;
-        let at = [ivec::X(col_idx) * cells, ivec::Y(col_idx) * cells];
-        world.store.fold_at(scale, at, [at[0] + cells, at[1] + cells], self.hide, &mut self.folded);
-        // A cell's corner in finest steps: absolute, then from the column's
-        // corner and its band's floor.
-        let n = OBJECT_FINEST.count_in(scale) as i64;
-        let band_steps = OBJECT_FINEST.count_in(BAND) as i64;
-        let (fx, fy) = (OBJECT_FINEST.index(x0), OBJECT_FINEST.index(y0));
-        self.fold_cells.clear();
-        self.fold_cells.extend(self.folded.iter().map(|(&c, &state)| (c, state)));
-        self.fold_cells.sort_unstable();
-        self.fold_band.clear();
-        self.fold_pos.clear();
-        self.fold_state.clear();
-        for &([cx, cy, cz], state) in &self.fold_cells {
-            let z = cz * n;
-            self.fold_band.push(z.div_euclid(band_steps) as BandZ);
-            self.fold_pos.push(pack_pos((cx * n - fx) as u32, (cy * n - fy) as u32, z.rem_euclid(band_steps) as u32, scale));
-            self.fold_state.push(state);
-        }
+    /// Fills the fold lanes with a column's entries at `scale` (`Store::fold_entries`),
+    /// leaving out the hidden entry. Errors where the heap refused room.
+    fn fold_objects(&mut self, world: &mut World, col_idx: IVec, scale: Scale) -> Result<(), TryReserveError> {
+        let (band, pos, state) = (&mut self.fold_band, &mut self.fold_pos, &mut self.fold_state);
+        band.clear();
+        pos.clear();
+        state.clear();
+        let mut refused = Ok(());
+        world.store.fold_entries(col_idx, scale, self.hide, &mut |b, [x, y, z], s, v| {
+            if refused.is_ok() {
+                refused = (|| {
+                    band.try_reserve(1)?;
+                    pos.try_reserve(1)?;
+                    state.try_reserve(1)?;
+                    band.push(b);
+                    pos.push(pack_pos(x, y, z, s));
+                    state.push(v);
+                    Ok(())
+                })();
+            }
+        });
+        refused
     }
 
-    /// A step of the scan job's paint of the chunk's objects. Once every
-    /// entry and the carve are painted, the volume is sealed and the scan
-    /// begins on it.
     fn advance_paint(&mut self, world: &mut World, id: u32, volume: u32, mut paint: PaintJob) -> Progress {
         let col_idx = self.chunks[&id].col_idx();
         if object_col_revision(col_idx) != paint.revision {
@@ -824,10 +728,11 @@ impl Builder {
             self.refuse(world, id);
             return Progress::Blocked;
         }
-        world.volumes.seal(volume);
-        // SAFETY: the volume was just sealed and is held by the scan job
-        // until the scan finishes.
-        unsafe { world.volumes.band_views(volume, &mut self.bands) };
+        // SAFETY: the sealed volume is held by the scan job until the scan finishes.
+        if !world.volumes.seal(volume) || !unsafe { world.volumes.band_views(volume, &mut self.bands) } {
+            self.refuse(world, id);
+            return Progress::Blocked;
+        }
         xpute_core::ensure!(self.scan.begin(&self.bands), ENOTRECOVERABLE);
         self.scan_job.as_mut().unwrap().paint = None;
         Progress::Busy
@@ -840,9 +745,7 @@ impl Builder {
         let show = self.chunks[&id].structures;
         self.sample.read(&read.around(), read.first, hidden_ground(show));
         xpute_core::ensure!(self.direct.begin_direct(), ENOTRECOVERABLE);
-        let floor = self.sample.floor;
-        // Every column of the set, the chunk's own and the apron's: the
-        // sample holds both, and the writer wants them in one order.
+        // The chunk's columns and the apron's, in the writer's one order.
         for i in 0..(COL_SPAN * COL_SPAN) as usize {
             self.direct.direct_column(i as u32);
             let top = self.sample.ele[i] as i32 - 1;
@@ -864,9 +767,8 @@ impl Builder {
         Progress::Busy
     }
 
-    /// A level chunk's runs, written the direct way: its level page's ground
-    /// and the object layer folded to its level (pxl-render mesh/paint/level.rs),
-    /// in the level's cells. Cheap to make again, like a leaf's direct runs.
+    /// A level chunk's runs, written directly from its page's ground and the
+    /// objects folded to its level (mesh/paint/level.rs).
     fn level_runs(&mut self, world: &mut World, id: u32, read: Read) -> Progress {
         if self.run_set_for(id).is_none() {
             return Progress::Blocked;
@@ -876,10 +778,16 @@ impl Builder {
         self.sample.read(&read.around(), read.first, hidden_ground(show));
         let target = GROUND.scale(level);
         let (x0, y0) = (ivec::X(base), ivec::Y(base));
-        // Its own cells and the apron of one a fold reads, which reaches into
-        // the chunks beside it (world/chunk/source.rs `folds_into`).
+        // One cell of apron, which a fold reads (`folds_into`).
         let (cx, cy, span) = (target.index(x0), target.index(y0), CHUNK_CELLS as i64);
-        world.store.fold_at(target, [cx - 1, cy - 1], [cx + span + 1, cy + span + 1], self.hide, &mut self.folded);
+        if world
+            .store
+            .fold_at(target, [cx - 1, cy - 1], [cx + span + 1, cy + span + 1], render_edits().hide, &mut self.folded)
+            .is_err()
+        {
+            self.refuse(world, id);
+            return Progress::Blocked;
+        }
         xpute_core::ensure!(self.direct.begin_direct(), ENOTRECOVERABLE);
         write_level_runs(
             &mut self.direct,
@@ -889,6 +797,15 @@ impl Builder {
             (target.index(x0), target.index(y0)),
             GROUND.scale(0).count_in(target),
         );
+        if written.is_err() {
+            self.direct.abort();
+            self.refuse(world, id);
+            return Progress::Blocked;
+        }
+        self.close_direct(world, id)
+    }
+
+    fn close_direct(&mut self, world: &mut World, id: u32) -> Progress {
         let bytes = self.direct.close_direct();
         let Some((set, at)) = self.set_of(id, bytes) else {
             self.direct.abort();
@@ -903,21 +820,21 @@ impl Builder {
         Progress::Busy
     }
 
-    /// The run set chunk `id` holds and where it lies, when `bytes` fit it.
-    /// A set past it is refused, and the set given back.
-    fn set_of(&mut self, id: u32, bytes: u32) -> Option<(usize, usize)> {
-        let set = self.run_set_for(id)?;
-        match at(Range::Run(set), 0, bytes) {
-            Some(at) => Some((set, at as usize)),
-            None => {
-                self.let_runs_go(id);
-                None
-            }
+    fn set_of(&mut self, id: u32, bytes: u32) -> Option<(usize, u32)> {
+        self.run_set_for(id)?;
+        let block = alloc(bytes);
+        if block.is_none() {
+            self.leave_runs(id);
         }
     }
 
     fn keep_runs(&mut self, id: u32, runs: Runs) {
-        self.chunks.get_mut(&id).unwrap().runs = Some(runs);
+        let set = self.hold_of(id).or_bug(Errno::ENOTRECOVERABLE);
+        let hold = self.run_holds[set].as_mut().or_bug(Errno::ENOTRECOVERABLE);
+        if let Some(old) = hold.runs.replace(runs) {
+            // SAFETY: the earlier runs' block, which nothing bakes from once replaced.
+            unsafe { free(old.block) };
+        }
     }
 
     fn run_set(runs: &Runs) -> RunSet<'static> {
@@ -936,12 +853,17 @@ impl Builder {
                 return Progress::Blocked;
             }
             let cube = c.wanted().next().unwrap();
-            // The runs are the column's, through every chunk over it; this
-            // chunk draws what lies in its own heights (world/pyramid/
-            // chunk.rs).
+            // Runs span the whole column; this chunk bakes only its own heights.
             let (z0, z1) = c.at.z_range();
             let clip = Some((z0 as i32, z1 as i32));
-            xpute_core::ensure!(self.bake.begin(&set, mesh_step(cube, c.level()), 1 << c.level(), settings_store().textures, clip), ENOTRECOVERABLE);
+            if self
+                .bake
+                .begin(&set, mesh_step(scale, c.level()), GROUND.finest_in(c.level()), settings_store().textures, clip)
+                .is_err()
+            {
+                self.refuse(world, id);
+                return Progress::Blocked;
+            }
             self.bake_job = Some(BakeJob {
                 id,
                 cube,
@@ -953,10 +875,8 @@ impl Builder {
         match self.bake.step(&set) {
             Step::Working => Progress::Busy,
             Step::NeedMesh(words) => {
-                // Every slot the mesh fills is held for it at once, or none
-                // is and the bake is thrown away: a mesh is never cut, never
-                // baked coarser than asked, and never waits holding the one
-                // bake open (mesh_slot.rs).
+                // All slots are held at once or the bake is thrown away: a mesh is never
+                // cut, never baked coarser, and never waits while holding the one bake.
                 let job = self.bake_job.as_ref().unwrap();
                 let step = mesh_step(job.cube, c.level());
                 let (words_a_box, room_a_slot) = (box_words(step), capacity(c.level(), step));
@@ -979,23 +899,18 @@ impl Builder {
                     }
                     return Progress::Busy;
                 }
-                // The one bake open writes a slot's worth at a time into
-                // `.fixed.bake`, which holds any slot's (mesh_slot.rs).
                 let block = boxes.min(room_a_slot) * words_a_box;
                 let Some(mesh_at) = at(Range::Bake, 0, block * 4) else {
                     self.abort_bake();
                     self.refuse(world, id);
                     return Progress::Blocked;
                 };
-                // SAFETY: `.fixed.bake`, the open bake's alone until it is
-                // finished and handed over, or aborted.
+                // SAFETY: `.fixed.bake` is the open bake's alone until finished or aborted.
                 unsafe { self.bake.provide_mesh(ptr_at::<u32>(mesh_at as usize), block) };
                 self.bake_job.as_mut().unwrap().mesh = Some((mesh_at as usize, block * 4));
                 Progress::Busy
             }
             Step::Full => {
-                // A slot's worth written: handed over, and the block handed
-                // back for the rest.
                 let job = self.bake_job.as_ref().unwrap();
                 let (at, bytes) = job.mesh.unwrap();
                 if gpu().is_some() && device_ready() && !room(bytes) {
@@ -1023,15 +938,11 @@ impl Builder {
             }
             Step::Done => {
                 let job = self.bake_job.as_ref().unwrap();
-                // A mesh of nothing never asked for a block, and is handed
-                // over as none: zero bytes at zero.
+                // An empty mesh asked for no block and is handed over as zero bytes.
                 debug_assert!(job.mesh.is_some() || mesh_words(0, FINE_BOX_WORDS) == 0);
                 let (at, bytes) = job.mesh.unwrap_or((0, 0));
-                // Handed over, the mesh goes to the device in this turn's
-                // stream; with no room there it stays where it is, finished,
-                // and is handed over from the next turn's. With no device
-                // there is no stream to fill, and the hand-over goes on as
-                // before one arrives.
+                // No room in this turn's upload stream: wait for the next turn. With no
+                // device there is no stream, and the hand-over goes on.
                 if gpu().is_some() && device_ready() && !room(bytes) {
                     return Progress::Blocked;
                 }

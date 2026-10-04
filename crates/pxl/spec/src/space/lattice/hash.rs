@@ -1,11 +1,7 @@
 // pxl-spec/space/lattice/hash.rs
 
-//! One hash for an integer lattice address, shared by every structure that
-//! buckets cells: the spatial hash's broadphase and the billboard lattice's
-//! nodes. Teschner's three large primes decorrelate the axes before the xor,
-//! so a lattice of points does not collapse onto a few buckets; a fourth
-//! folds in a tier, for a table that holds several tiers of one lattice at
-//! once, where a parent's address would otherwise collide with its child's.
+//! The lattice address hash: Teschner's large primes decorrelate the axes;
+//! a fourth folds in a tier so a parent cannot collide with its child.
 
 const P1: i32 = 73856093;
 const P2: i32 = 19349663;

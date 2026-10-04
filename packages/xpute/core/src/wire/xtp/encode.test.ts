@@ -1,11 +1,6 @@
 // @xpute/core/wire/xtp/encode.test.ts
 
-/**
- * The half of xpute-core/wire/xtp/encode.test.rs that runs here: the same
- * shapes encoded, held to the same bytes. What one side writes the other
- * reads, so a packet's bytes are the contract and the record is what says the
- * two still agree on them.
- */
+/** The TypeScript half of xpute-core/wire/xtp/encode.test.rs, held to the same bytes. */
 
 import { assertEquals } from "@std/assert";
 
@@ -14,7 +9,6 @@ import type { U8Array } from "@xpute/core/abi/array.ts";
 import { bytes_to_hex } from "@xpute/core/codec/encoding.ts";
 import { TreeEncoder, TreeView } from "@xpute/core/wire/xtp/mod.ts";
 
-/** The vector the record keeps under `name`. */
 function expected(v: Golden, name: string): string {
   for (let k = 0;; k++) {
     if (!v.has(`${k}.name`)) throw new Error(`no vector ${name}`);

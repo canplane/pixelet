@@ -5,7 +5,6 @@ use crate::global::Global;
 
 #[derive(Default)]
 pub struct MapStore {
-    // ---- Lifecycle & Status ----
     pub map_status: MapStatus,
 }
 

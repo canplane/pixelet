@@ -7,7 +7,7 @@ publish.workspace = true
 [lib]
 crate-type = ["cdylib"]
 path = "src/lib.rs"
-# The module links against an imported memory and the glue's imports; it has
+# The module links against an imported memory and the shell's imports; it has
 # no native test binary. The core's tests are pxl-kernel's and xpute-core's.
 test = false
 doctest = false

@@ -16,8 +16,10 @@
 // A choice's `options` names one of the lists below, and the option crosses
 // and is held as its index there; only storage keeps it by name. A setting
 // is numbered by its place in SETTINGS (the kernel's SettingKey), which is
-// what crosses for it. `sources_chunks` marks one a chunk's build reads, so
-// that changing it builds the chunks again.
+// what crosses for it. An `index` is a place in a list kept elsewhere — the
+// person and the pet are by theirs in variant.json — and crosses as itself.
+// `sources_chunks` marks one a chunk's build reads, so that changing it
+// builds the chunks again.
 
 export const SETTINGS = {
   /** Ground color from the art pack (four taps of the layer array per
@@ -187,13 +189,13 @@ export const SETTINGS = {
   },
   person: {
     key: 16 as number,
-    kind: "number",
+    kind: "index",
     default: 1 as number,
     section: "character",
   },
   pet: {
     key: 17 as number,
-    kind: "number",
+    kind: "index",
     default: 5 as number,
     section: "character",
   },
@@ -326,13 +328,13 @@ export const SETTINGS_SHIPPED = {
   },
   person: {
     key: 16 as number,
-    kind: "number",
+    kind: "index",
     default: 1 as number,
     section: "character",
   },
   pet: {
     key: 17 as number,
-    kind: "number",
+    kind: "index",
     default: 5 as number,
     section: "character",
   },

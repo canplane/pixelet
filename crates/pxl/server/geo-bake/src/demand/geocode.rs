@@ -4,8 +4,8 @@ use super::job::{self, Job, Publication, Runner};
 use super::{Dataset, Failure};
 use crate::geocode::{provider::overture::GeocodeProvider, PlaceDict};
 use crate::util::{pack, Level};
-use pxl_spec::bake::place_page::{encode_place_group, Division, GROUP_PAGES};
-use pxl_spec::bake::place_page::{DICT_OBJECT, GROUP_SHAMT, GROUP_ZOOM};
+use pxl_spec::bake::place_page::{encode_place_group, Named, GROUP_PAGES};
+use pxl_spec::bake::place_page::{DICT_OBJECT, GROUP_KEY_DEPTH, GROUP_SHAMT};
 use pxl_spec::bake::quadkey::index_of;
 use pxl_spec::place::PlaceRank;
 use pxl_spec::space::pvf3::ivec;
@@ -78,7 +78,11 @@ pub(super) fn execute(group: u64, dictionary: &Path, out: &Path, seconds: u64) -
     let provider = GeocodeProvider::prepare(&mut client).map_err(|e| e.to_string())?;
     let base = ivec::sh(group, GROUP_SHAMT as i32);
     let side = 1i64 << GROUP_SHAMT;
-    let leaves: Vec<_> = (0..GROUP_PAGES as i64).map(|k| ivec::add(base, ivec::gather(k % side, k / side, 0))).collect();
+    let coverage = crate::coverage::Coverage::of_source()?;
+    let leaves: Vec<_> = (0..GROUP_PAGES as i64)
+        .map(|k| ivec::add(base, ivec::gather(k % side, k / side, 0)))
+        .filter(|&l| coverage.contains(l))
+        .collect();
     let packet = provider
         .group(&mut client, &dict, &leaves)?
         .map(|g| {

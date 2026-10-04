@@ -1,12 +1,8 @@
 // pxl-tool/spec/route.rs
 
-//! The address space. One JSON for every root and branch, written into the
-//! three places that build a URL or read one — the client's shell, its
-//! kernel, and the Worker — and checked against the two that can only carry
-//! literals: wrangler's own `run_worker_first`, and the deploy guard's
-//! sentinels. Five copies of one decision was what this replaced, and the
-//! split that made them five was exactly the shape
-//! issue/20260910-one-server-root.md was written about.
+//! The address space from one JSON, written into the shell, the kernel and the
+//! Worker, and checked against wrangler's `run_worker_first` and the deploy
+//! guard's sentinels, which can only carry literals.
 
 use regex::Regex;
 
@@ -15,8 +11,6 @@ use crate::root;
 
 const JSON: &str = "spec/pxl/spec/route.json";
 
-/// The quoted strings of the first `[…]` that follows `pattern` in a file,
-/// sorted.
 fn listed(path: &str, pattern: &str, what: &str) -> Result<Vec<String>, String> {
     let text = std::fs::read_to_string(root().join(path)).map_err(|e| format!("{path}: {e}"))?;
     let re = Regex::new(pattern).map_err(|e| e.to_string())?;
@@ -49,11 +43,8 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     let path = |name: &str| paths.iter().find(|(n, _)| n == name).map(|(_, p)| p.clone()).unwrap_or_default();
     let doc = |name: &str| roots.iter().chain(branches.iter()).find(|(n, _)| *n == name).and_then(|(_, r)| r.lines_at("$doc"));
 
-    // Every root is one entry in the edge's own list, which is what keeps a
-    // relay reading a prefix rather than a route.
     let worker_first: Vec<String> = roots.iter().map(|(n, _)| format!("{}/*", path(n))).collect();
 
-    // ---- what only carries literals, checked rather than written ----
     let declared = listed("apps/web/wrangler.jsonc", r#""run_worker_first"\s*:\s*\[([^\]]*)\]"#, "run_worker_first")?;
     let mut claimed = worker_first.clone();
     claimed.sort();
@@ -65,14 +56,9 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         ));
     }
 
-    // A root the client only requests under never reaches an artifact as its
-    // own literal — a branch is folded into one constant here, so the client
-    // carries `/geo/search` and nothing spelling `/geo` alone — and a guard
-    // that looked for one would fail every build. What it can look for is the
-    // roots and branches the client requests whole, which is what `bundle`
-    // marks, in the artifact `bundle` names. Both lists are checked, because a
-    // path that moves between the two looks exactly like a path that has gone
-    // missing (2026-09-23).
+    // Only roots the client requests whole appear as literals in a bundle. Both
+    // sentinel lists are checked: a path moving between them looks like a
+    // missing one.
     for (list, where_) in [("SENTINELS", "shell"), ("KERNEL_ROUTE_SENTINELS", "kernel")] {
         let found = listed("apps/web/script/check-bundle.ts", &format!(r"const {list} = \[([^\]]*)\]"), list)?;
         let mut want: Vec<String> = roots.iter().chain(branches.iter()).filter(|(_, r)| r.str_at("bundle") == Some(where_)).map(|(n, _)| path(n)).collect();
@@ -89,9 +75,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     let mut all: Vec<(String, String)> = Vec::new();
     all.extend(roots.iter().map(|(n, _)| (n.to_string(), path(n))));
     all.extend(branches.iter().map(|(n, _)| (n.to_string(), path(n))));
-    // The edge and the dev proxy match on a prefix, which is the root or
-    // branch with its separator — never a bare root, which would also match a
-    // sibling whose name merely starts with it.
+    // A prefix keeps its separator; a bare root would match a sibling starting with it.
     all.extend(roots.iter().map(|(n, _)| (format!("{}_PREFIX", n.strip_suffix("_ROOT").unwrap_or(n)), format!("{}/", path(n)))));
 
     let spec_doc = spec.lines_at("$doc").unwrap_or_default();

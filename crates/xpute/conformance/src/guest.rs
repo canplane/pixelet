@@ -1,22 +1,10 @@
 // xpute-conformance/guest.rs
 
-//! The Rust conformance guest: xpute-runtime's door and a stream over a
-//! memory the host reserves, and guest.json's commands applied through them.
-//! Where its ranges lie is its own choice, and `boot` answers where its
-//! directory is — the one offset a host learns outside the memory (the
-//! contract's rule 0).
-//!
-//! Its two calls are C's, the same two the C++ guest exports
-//! (cpp/xpute/conformance/guest.hpp), so one host drives every guest, in two
-//! forms by where the guest runs. Built as a native library, a guest is its
-//! memory: the host hands it a region and a clock, and a call names the
-//! region, so two guests never share a thing. Built as a WebAssembly module,
-//! the memory is the one the module imports, begun at address 0, the clock is
-//! its `env.now` import, and the range begins past what the linker placed.
-//!
-//! Every pointer here is made from an address, never by offsetting one: on
-//! WebAssembly the memory's base is address 0, a null pointer, and `ptr::add`
-//! from it is undefined (xpute-runtime mem/base.rs says what that cost once).
+//! The Rust conformance guest. It exports the same two C calls as the C++
+//! guest, so one host drives both; `boot` answers the directory's offset.
+//! Natively the host hands it a region and a clock; as wasm it imports its
+//! memory and `env.now`, and its range starts past what the linker placed.
+//! Pointers are made from addresses: `ptr::add` from wasm's base 0 is UB.
 
 use xpute_core::math::scalar::round;
 use xpute_core::status::errno::Errno;
@@ -37,9 +25,6 @@ const fn page_up(bytes: u32) -> u32 {
     bytes.div_ceil(PAGE) * PAGE
 }
 
-// Where this guest's ranges lie, from the start of its range: the
-// directory's page first, then each ring's descriptors, then their payloads,
-// then the stream, then what the guest keeps.
 const DIRECTORY_AT: u32 = 0;
 const SUBMISSION_DESC_AT: u32 = PAGE;
 const COMPLETION_DESC_AT: u32 = SUBMISSION_DESC_AT + page_up(ring_bytes(spec::SUBMISSION_CAPACITY));
@@ -48,32 +33,31 @@ const COMPLETION_SLOT_AT: u32 = SUBMISSION_SLOT_AT + slots_bytes(spec::SUBMISSIO
 const STREAM_AT: u32 = COMPLETION_SLOT_AT + slots_bytes(spec::COMPLETION_CAPACITY, spec::SLOT_BYTES);
 const STATE_AT: u32 = page_up(STREAM_AT + spec::STREAM_WORDS * 4);
 
-const _: () = assert!(STATE_AT as usize + core::mem::size_of::<Guest>() <= spec::MEMORY_BYTES as usize, "the ranges run past the memory");
+/// Used only as wasm; a native build allocates from the process.
+const HEAP_AT: u32 = page_up(STATE_AT + core::mem::size_of::<Guest>() as u32);
+
+const _: () = assert!(HEAP_AT as usize + spec::HEAP_BYTES as usize <= spec::MEMORY_BYTES as usize, "the ranges run past the memory");
 const _: () = assert!((STATE_AT as usize).is_multiple_of(core::mem::align_of::<Guest>()), "the state lies on its own alignment");
 const _: () = assert!(directory_words(3) as u32 * 4 <= PAGE, "the directory outgrows its page");
 
-/// The host's clock, as the host hands it over.
 pub type Now = extern "C" fn() -> f64;
 
-/// What the guest keeps, made in its own memory.
 struct Guest {
     door: Door,
     stream: Stream,
+    sys: Sys,
+    files: Files<u32>,
     handles: HandleTable<{ spec::HANDLES as usize }>,
     now: Now,
     /// The clock at the last MARK.
     mark: f64,
 }
 
-/// A pointer `off` bytes into the memory whose base is `mem`, made from the
-/// address.
 fn at<T>(mem: *mut u8, off: u32) -> *mut T {
     core::ptr::with_exposed_provenance_mut(mem.expose_provenance() + off as usize)
 }
 
-/// Lays the guest out in the range that begins `range` bytes into the memory
-/// at `mem`, and answers where its directory is. Every offset written
-/// anywhere is the memory's, so the range's start is added to each.
+/// Every offset written is the memory's, so `range` is added to each.
 ///
 /// # Safety
 /// The range is `spec::MEMORY_BYTES` inside the memory, which outlives the
@@ -121,9 +105,6 @@ unsafe fn boot(mem: *mut u8, range: u32, now: Now) -> u32 {
     range + DIRECTORY_AT
 }
 
-/// A turn over the guest `boot` laid out at `range`, and when it wants the
-/// next: 0 while a submission waits, and none otherwise.
-///
 /// # Safety
 /// `boot` laid a guest out there.
 unsafe fn interrupt(mem: *mut u8, range: u32) -> f64 {
@@ -138,13 +119,9 @@ unsafe fn interrupt(mem: *mut u8, range: u32) -> f64 {
     }
 }
 
-/// Lays the guest out over `mem`, `spec::MEMORY_BYTES` of it and 8-aligned,
-/// and writes its directory: what a guest's first turn does, here before it.
-/// `now` is the host's clock. Answers the directory's offset.
-///
 /// # Safety
-/// `mem` is that memory, outlives the guest, and nothing else writes it
-/// while a call runs.
+/// `mem` is `spec::MEMORY_BYTES`, 8-aligned, outlives the guest, and nothing
+/// else writes it while a call runs.
 #[cfg(not(target_arch = "wasm32"))]
 #[no_mangle]
 pub unsafe extern "C" fn xpute_conformance_boot(mem: *mut u8, now: Now) -> u32 {
@@ -152,8 +129,6 @@ pub unsafe extern "C" fn xpute_conformance_boot(mem: *mut u8, now: Now) -> u32 {
     unsafe { boot(mem, 0, now) }
 }
 
-/// A turn of `quota_ms`, and when the guest wants the next.
-///
 /// # Safety
 /// `mem` is a memory `xpute_conformance_boot` laid a guest out over.
 #[cfg(not(target_arch = "wasm32"))]
@@ -166,10 +141,32 @@ pub unsafe extern "C" fn xpute_conformance_interrupt(mem: *mut u8, _quota_ms: f6
 #[cfg(target_arch = "wasm32")]
 mod module {
     use super::*;
+    use xpute_core::alloc::buddy_tree::Range;
+    use xpute_core::alloc::slab::SlabMalloc;
+
+    struct Heap;
+
+    const HEAP_LOG2: usize = spec::HEAP_BYTES.trailing_zeros() as usize;
+    const SPLIT_BYTES: usize = (1 << (HEAP_LOG2 - 12)) / 8;
+
+    impl Range for Heap {
+        const MIN_LOG2: usize = 12;
+        const MAX_LOG2: usize = HEAP_LOG2;
+        type Split = [u8; SPLIT_BYTES];
+        const SPLIT_INIT: Self::Split = [0; SPLIT_BYTES];
+        fn base() -> usize {
+            (range_at() + HEAP_AT) as usize
+        }
+        fn end() -> usize {
+            Self::base() + spec::HEAP_BYTES as usize
+        }
+    }
+
+    #[global_allocator]
+    static ALLOC: SlabMalloc<Heap> = SlabMalloc::new();
 
     extern "C" {
-        /// Where the linker stopped placing the module's stack and data.
-        /// wasm-ld defines it.
+        /// Defined by wasm-ld: the end of the stack and data.
         #[allow(non_upper_case_globals)]
         static __heap_base: u8;
     }
@@ -185,27 +182,21 @@ mod module {
         unsafe { host_now() }
     }
 
-    /// The range, from the first page past what the linker placed, so how
-    /// large the stack or the data is decides nothing a host reads.
     fn range_at() -> u32 {
         page_up(core::ptr::addr_of!(__heap_base) as u32)
     }
 
-    /// Lays the guest out past the module's own stack and data and writes
-    /// its directory; answers the directory's offset.
     #[no_mangle]
     pub extern "C" fn xpute_conformance_boot() -> u32 {
         let range = range_at();
         let given = core::arch::wasm32::memory_size(0) as u64 * (1 << 16);
-        // The host sized the memory; a range past its end is a host that
-        // sized it for another guest.
+        // A host that sized the memory for another guest.
         xpute_core::ensure!(range as u64 + spec::MEMORY_BYTES as u64 <= given, ENOMEM, range);
         // SAFETY: the module's memory, from address 0, and the range inside
         // it past what the linker placed.
         unsafe { boot(core::ptr::null_mut(), range, now) }
     }
 
-    /// A turn of `quota_ms`, and when the guest wants the next.
     #[no_mangle]
     pub extern "C" fn xpute_conformance_interrupt(_quota_ms: f64) -> f64 {
         // SAFETY: the module's memory, booted.
@@ -244,7 +235,6 @@ fn apply(door: &Door, stream: &mut Stream, handles: &mut HandleTable<{ spec::HAN
     }
 }
 
-/// The number a command's packet carries.
 fn arg(pkt: &Option<&[u8]>) -> Result<u32, MarshalError> {
     let bytes = pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?;
     Ok(TreeReader::new(bytes)?.read_branch()?.at(0)?.get_number()? as u32)

@@ -1,17 +1,8 @@
 // pxl-spec/space/pvf3/projection.rs
 
-//! Doubles in and out of PVF3. The scalar space is normalized: 1.0 is one
-//! lattice unit, and whatever a unit is in meters is the caller's scaling
-//! outside this module.
-//!
-//! A projection is a basis transpose,
-//!
-//!   axis-paired  [[x_i, x_f], [y_i, y_f], [z_i, z_f]]
-//!   lane-packed  [[x_i, y_i, z_i], [x_f, y_f, z_f]] == { i, f }
-//!
-//! factoring each scalar into its integer lattice index and its fractional
-//! remainder by `floor`, so the lattice stays continuous through zero:
-//! -0.2 is cell -1 at 0.8. The six parts are gathered on the stack.
+//! Doubles in and out of PVF3, where 1.0 is one lattice unit. Each scalar is
+//! split by `floor`, so the lattice stays continuous through zero: -0.2 is
+//! cell -1 at 0.8.
 
 use super::fvec;
 use super::fvec::FVec;
@@ -20,27 +11,11 @@ use super::ivec::IVec;
 use super::pvf3::Pvf3;
 use crate::space::v3::V3;
 
-/// Scalar projection.
-///
-/// Decomposes one normalized scalar into:
-/// - i : integer lattice lane
-/// - f : fractional residue lane
-///
-/// Notes:
-/// - Uses floor() to preserve continuity across negative domains.
-///   Example: -0.2 => i = -1, f = 0.8
 fn project_comp(reg: &mut [i64; 6], axis: usize, comp: f64) {
-    // i_comp: integer lattice position (stable across negative domain)
     reg[2 * axis] = ivec::from_real(comp);
-    // f_comp: map fractional remainder into fixed-point lane resolution
     reg[2 * axis + 1] = fvec::from_real(comp);
 }
 
-/// Vectorized projection.
-///
-/// Converts (x,y,z) in normalized lattice units into PVF3:
-/// - i : packed integer lanes
-/// - f : packed fractional residue lanes
 pub fn project(out: &mut Pvf3, x: f64, y: f64, z: f64) -> &mut Pvf3 {
     // [x_i, x_f, y_i, y_f, z_i, z_f]
     let mut reg = [0i64; 6];
@@ -52,17 +27,10 @@ pub fn project(out: &mut Pvf3, x: f64, y: f64, z: f64) -> &mut Pvf3 {
     out
 }
 
-/// Reconstructs a normalized scalar from:
-/// - i_comp : integer lattice index
-/// - f_comp : fractional remainder (fixed-point lane)
-///
-/// Returns the normalized coordinate in "lattice units".
 fn unproject_comp(i_comp: i64, f_comp: i64) -> f64 {
     ivec::to_real(i_comp) + fvec::to_real(f_comp)
 }
 
-/// Vectorized unprojection: the reconstructed normalized (x, y, z) into
-/// `out`.
 pub fn unproject(out: &mut V3, i: IVec, f: FVec) -> &mut V3 {
     out[0] = unproject_comp(ivec::X(i), fvec::X(f));
     out[1] = unproject_comp(ivec::Y(i), fvec::Y(f));

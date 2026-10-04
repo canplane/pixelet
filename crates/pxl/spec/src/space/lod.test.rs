@@ -2,8 +2,7 @@
 
 use super::*;
 
-/// Feet across a page at every level, on its corners, its edges and inside
-/// it, and on either side of the origin.
+/// Feet on a page's corners, edges and inside, either side of the origin.
 fn feet(level: u32) -> Vec<[f64; 2]> {
     let span = span_of(level);
     let fractions = [0.0, 1e-9, 0.25, 0.5, 0.75, 1.0 - 1e-9];
@@ -44,10 +43,7 @@ fn the_parents_of_a_levels_pages_lie_in_the_next_levels() {
     }
 }
 
-/// Wherever an observation hits, from wherever it is made, the page it asks
-/// for — the one holding the hit, at the level its distance chooses — is one
-/// of that level's fault pages. Ground nearer than z16's split distance is
-/// asked at z16, terrain's finest; ground past the top's is not drawn.
+/// Wherever an observation hits, the page it asks for is one of that level's fault pages.
 #[test]
 fn a_hit_asks_for_a_page_inside_the_fault_bound() {
     for level in 0..=TOP_LEVEL {
@@ -71,9 +67,7 @@ fn a_hit_asks_for_a_page_inside_the_fault_bound() {
     }
 }
 
-/// The fault bound is the distance rule's and nothing else's: its radius is
-/// exactly where a level stops being asked for, so no chunk, tile or other
-/// piece of how the answer is drawn widens it.
+/// The fault radius is exactly where a level stops being asked for.
 #[test]
 fn the_fault_bound_is_where_a_level_ends_and_holds_no_chunk() {
     for l in 0..=TOP_LEVEL {

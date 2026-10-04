@@ -1,15 +1,9 @@
 // pxl-kernel/control/camera/input.rs
 
-//! The pointer's gestures: pan, rotate, pinch/twist/tilt, wheel dolly, hover
-//! and tap. The shell forwards the raw pointer and wheel events it receives on
-//! the canvas; everything they mean is decided here, and the store writes they
-//! make are coalesced to once a frame (`camera_input_step`).
-//!
-//! What the pointer holds — the tool, and for placing, what and how big —
-//! comes with each pointer event, as a modifier key does: the pick is the
-//! shell's, and the kernel keeps only the last event's. When the pick changes
-//! under a pointer that has not moved, the shell sends that pointer's move
-//! again, as a browser synthesizes a mouse move to re-resolve hover.
+//! The pointer's gestures: pan, rotate, pinch/twist/tilt, wheel, hover and
+//! tap. Store writes are coalesced to once a frame (`camera_input_step`).
+//! What the pointer holds comes with each event; when it changes under a
+//! still pointer, the shell resends the move to re-resolve hover.
 
 use std::collections::BTreeMap;
 
@@ -51,8 +45,6 @@ enum DragMode {
     Pinch,
 }
 
-/// Which single axis a rotate-drag has committed to — see
-/// AXIS_LOCK_THRESHOLD_PX's doc comment in config.rs for why this exists.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RotateAxisLock {
     None,
@@ -60,7 +52,6 @@ enum RotateAxisLock {
     Rotate,
 }
 
-/// What the pointer holds, as INPUT_POINTER carries it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Holding {
     pub active_tool: ActiveTool,
@@ -82,7 +73,6 @@ impl Default for Holding {
     }
 }
 
-/// The canvas's client rect, as the shell measured it.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Rect {
     pub left: f64,
@@ -98,7 +88,6 @@ struct PointerPos {
 }
 
 struct Input {
-    /// What the last pointer event held.
     holding: Holding,
     drag_mode: DragMode,
     did_drag: bool,
@@ -107,34 +96,24 @@ struct Input {
     rect: Option<Rect>,
     last_x: f64,
     last_y: f64,
-    // The pointerdown position for the current gesture — total displacement
-    // from here, not the per-event dx/dy, decides a tap from a drag.
+    // Total displacement from pointerdown, not per-event deltas, decides tap vs drag.
     tap_start_x: f64,
     tap_start_y: f64,
     hover_pending: bool,
 
-    // ---- drag-continuation coalescing ----
-    // Raw pointermove fires far more often than the render loop, and every pan,
-    // rotate and pinch writes a store whose readers fan out. Profiled: without
-    // this, pointer moves dominated a whole trace's CPU time during a drag. The
-    // tap-vs-drag threshold still updates on every raw event; only the store
-    // writes wait for the frame, coalescing however many events arrived.
+    // Pointer moves fire far more often than frames; uncoalesced store writes
+    // dominated a drag's CPU time in profiling.
     drag_pending: bool,
     pending_pan_dx: f64,
     pending_pan_dy: f64,
     pending_client_x: f64,
     pending_client_y: f64,
-    // Wheel/trackpad-pinch zoom — the more likely culprit for LOD-storm lag,
-    // since a distance change can cross every visible chunk's threshold at once.
-    // Summing deltaY before one exp() is exact: exp(a)*exp(b) == exp(a+b).
+    // Summed before one exp(), which is exact.
     pending_wheel_delta_y: Option<f64>,
 
     // ---- rotate-drag ----
-    /// The heading against the cursor's angle about screen center, once a
-    /// sample far enough from it to read has anchored it.
     rotate_turn: Option<Anchor>,
-    /// The tilt against the cursor's height: a tilt is the drag's vertical
-    /// travel from there, as a pinch's is from its fingers' midpoint.
+    /// A tilt is the drag's vertical travel from this anchor.
     rotate_tilt: Anchor,
     rotate_drag_start_x: f64,
     rotate_drag_start_y: f64,
@@ -143,10 +122,8 @@ struct Input {
     // ---- multi-touch ----
     active_pointers: BTreeMap<i32, PointerPos>,
     pinch_start_dist: f64,
-    /// The tilt against the fingers' midpoint.
     pinch_tilt: Anchor,
-    /// The heading against the fingers' angle, once they are far enough
-    /// apart to read it.
+    /// Anchored once the fingers are far enough apart to read the angle.
     pinch_twist: Option<Anchor>,
 }
 
@@ -183,10 +160,26 @@ fn input() -> &'static mut Input {
     })
 }
 
-/// Which entry `hit` actually struck, decor included — the placed decor's mesh
-/// hit first, bounded by hit.t: decor sitting on solid ground can only be the
-/// right answer when it's genuinely closer along the ray than whatever the
-/// pick met, falling back to the object the pick met.
+enum Struck {
+    Object(OccupiedEntry),
+    Scattered(Scattered),
+}
+
+/// The decor mesh hit wins only if closer than `hit.t`.
+fn resolve_struck(hit: &Hit, origin: V3, direction: V3, map_origin: IVec) -> Option<Struck> {
+    match raycast_decor(origin, direction, map_origin, hit.t) {
+        Some(DecorStruck::Placed(at)) => {
+            if let Some(o) = get_placed_object(at) {
+                return Some(Struck::Object(o));
+            }
+        }
+        Some(DecorStruck::Scattered(s)) => return Some(Struck::Scattered(s)),
+        None => {}
+    }
+    resolve_hit_object(hit).map(Struck::Object)
+}
+
+/// A scattered instance is not an entry, so a placement lands as on the ground.
 fn resolve_hit_target(hit: &Hit, origin: V3, direction: V3, map_origin: IVec) -> Option<OccupiedEntry> {
     if let Some(decor) = raycast_decor(origin, direction, map_origin, hit.t).and_then(get_placed_object) {
         return Some(decor);
@@ -194,50 +187,30 @@ fn resolve_hit_target(hit: &Hit, origin: V3, direction: V3, map_origin: IVec) ->
     resolve_hit_object(hit)
 }
 
-/// What a non-drag tap on the terrain means — recenter the map (pointer tool),
-/// place a cube (object tool), or remove/dig with the eraser tool (an existing
-/// placed object if there's one under the cursor, the terrain's own real surface
-/// otherwise).
 fn handle_tap(hovered: Pvf3) {
     let ui = input().holding;
     let object_size = ui.object_size;
 
     match ui.active_tool {
         ActiveTool::Pointer => {
-            // Recenter on the center of the cube the tap names: an object's own
-            // center, or the center of the cube standing on the struck ground,
-            // pivoted by the ground's own rule — what every pan, the bootstrap
-            // and follow mode set too, so a pan after a terrain tap changes
-            // nothing.
-            let hovered_object = camera_store().hovered_object_at.and_then(get_placed_object);
-            let target = match hovered_object {
-                Some(o) => object_center(&o, local_world_origin()),
-                None => ground_or_raw(&anchor_center(&hovered)),
-            };
-            crate::control::navigation::destination::go_to(target);
+            // Recenter where a walker would stand across the struck face, by the
+            // ground's own rule, so a pan after a tap changes nothing.
+            let Some(approach) = camera_store().hovered_approach else { return };
+            let target = ground_or_raw(&anchor_center(&approach));
+            crate::control::navigation::destination::go_to(target, crate::control::camera::controller::Motion::Smooth);
         }
         ActiveTool::Eraser => {
-            // Targets the object the raycast actually struck, not a grid-key
-            // lookup — correct for any size, any face.
-            match camera_store().hovered_object_at {
-                Some(at) => remove(at),
-                // Nothing placed here — dig into the terrain's own real surface,
-                // once the user has opted into that. AIR, not VOID: real terrain
-                // has no object-layer leaf of its own to delete, so an explicit
-                // "nothing here on purpose" leaf is the only way to override it.
-                //
-                // A cell, never the size tier. A zero material is a voxel the
-                // scan emits nothing for whatever its sub-cell bytes say
-                // (pxl-render mesh/voxel_scan.rs), so a smaller leaf would still
-                // take the cell whole while recording a bite nobody took — and
-                // the store is saved, so that number outlives the session.
-                None if settings_store().terrain_carving => place_air(&hovered, U_PER_CELL),
-                None => {}
+            match (camera_store().hovered_object_at, camera_store().hovered_scattered) {
+                (Some(at), _) => remove(at),
+                (None, Some(s)) => place_air(&CELL.base_of(s.cell), U_PER_CELL),
+                // AIR, not VOID: terrain has no leaf to delete. A whole cell, never the
+                // size tier: the scan emits nothing for a zero material whatever its
+                // sub-cell bytes, so a smaller leaf would save a bite nobody took.
+                (None, None) => place_air(&hovered, U_PER_CELL),
             }
         }
         ActiveTool::Decor | ActiveTool::Object => {
-            // Still guard against the candidate slot being occupied since the
-            // last hover update.
+            // The slot may have filled since the last hover update.
             if ui.active_tool == ActiveTool::Decor {
                 if !is_placement_blocked(PlacementTool::Decor, &hovered, object_size) {
                     place_decor(&hovered, DECOR_SIZE, ui.decor_id);
@@ -249,15 +222,11 @@ fn handle_tap(hovered: Pvf3) {
     }
 }
 
-/// Radians of pitch per pixel of vertical drag. Negative because dy grows
-/// downward and dragging up is the natural "tilt toward the horizon".
+/// Negative because dragging up tilts toward the horizon.
 fn tilt_gain() -> f64 {
-    // The whole tilt range is the look's θ, straight down to straight up
-    // (orbit.rs `look_domain`).
     -core::f64::consts::PI / (TILT_SWEEP_FRACTION * view().height)
 }
 
-/// The canvas's rect moved (a resize, a scroll).
 pub fn camera_input_rect(rect: Rect) {
     input().rect = Some(rect);
 }
@@ -268,9 +237,7 @@ fn update_pointer(s: &mut Input, client_x: f64, client_y: f64) {
     s.pointer_y = -((client_y - rect.top) / rect.height) * 2.0 + 1.0;
 }
 
-/// Shared pan implementation — driven by either a mouse left-drag or a single
-/// touch: the active controller's own. A pan puts the map center by hand, so
-/// a destination still waiting for its ground goes.
+/// A pan puts the map center by hand, so a pending destination is canceled.
 fn do_pan(dx: f64, dy: f64) {
     match active() {
         Active::Orbit => {
@@ -285,18 +252,10 @@ fn do_pan(dx: f64, dy: f64) {
     }
 }
 
-/// Azimuth tracks the cursor's angle around screen center since drag-start
-/// (arcball-style), not a fixed px/degree rate — screen center is the fixed
-/// pivot since the camera always looks at map_center. The heading turns
-/// against the cursor's angle delta. Polar (tilt) is a fixed rate, likewise
-/// from the drag's start rather than stepped from the store's last value, so
-/// the drag's whole travel is the tilt and the view comes back where it began
-/// when the hand does. The azimuth
-/// anchor is captured lazily, once the cursor clears MIN_ROTATE_RADIUS_PX from
-/// center, since atan2 is degenerate at the pivot. The gesture commits to
-/// whichever axis dominates past AXIS_LOCK_THRESHOLD_PX and keeps it: an
-/// off-center "straight down" drag still sweeps some angle around center,
-/// which read as an unrelated spin once polar saturated.
+/// Azimuth follows the cursor's angle about screen center (arcball), tilt a
+/// fixed rate from the drag's start. The drag locks to whichever axis
+/// dominates past AXIS_LOCK_THRESHOLD_PX: an off-center vertical drag still
+/// sweeps an angle, which read as a spin once tilt saturated.
 fn do_rotate(s: &mut Input, client_x: f64, client_y: f64) {
     if s.rotate_axis_lock == RotateAxisLock::None {
         let total_dx = client_x - s.rotate_drag_start_x;
@@ -308,8 +267,7 @@ fn do_rotate(s: &mut Input, client_x: f64, client_y: f64) {
     }
 
     if s.rotate_axis_lock == RotateAxisLock::Tilt {
-        // tilt_lock only gates this write — an experiment toggle for a
-        // fixed-tilt UX, not yet a decided product change.
+        // tilt_lock is an experiment toggle, not a decided product change.
         if !settings_store().tilt_lock {
             let polar = s.rotate_tilt.ask(client_y, linear(tilt_gain()));
             let took = crate::control::camera::controller::set_intent(IntentPatch {
@@ -324,9 +282,7 @@ fn do_rotate(s: &mut Input, client_x: f64, client_y: f64) {
     let Some(rect) = s.rect else { return };
     let dx = client_x - (rect.left + rect.width / 2.0);
     let dyc = client_y - (rect.top + rect.height / 2.0);
-    // atan2's angle is numerically unstable close to the pivot: freeze
-    // azimuth and drop the anchor below that radius, re-anchoring from the
-    // next reliable sample.
+    // atan2 is unstable near the pivot: drop the anchor and re-anchor later.
     if dx.hypot(dyc) < MIN_ROTATE_RADIUS_PX {
         s.rotate_turn = None;
         return;
@@ -346,24 +302,19 @@ fn pointer_pair(s: &Input) -> Option<(PointerPos, PointerPos)> {
     Some((*it.next()?, *it.next()?))
 }
 
-/// (Re)captures the two-finger baseline: on the 2nd finger touching down, and
-/// again when a 3rd+ finger lifts back to exactly 2, so the gesture never jumps.
+/// On the second finger down, and again when a third lifts, so the gesture never jumps.
 fn begin_pinch(s: &mut Input) {
     let Some((p0, p1)) = pointer_pair(s) else { return };
     s.pinch_start_dist = (p1.x - p0.x).hypot(p1.y - p0.y);
     crate::control::camera::controller::pinch_begin(s.pinch_start_dist);
     let camera = camera_store();
     s.pinch_tilt = Anchor::new(camera.intent.polar, (p0.y + p1.y) / 2.0);
-    // The twist angle is anchored lazily once the fingers are far enough
-    // apart for it to be reliable.
     s.pinch_twist = None;
     s.drag_mode = DragMode::Pinch;
     s.did_drag = true;
     camera.hovered_coord = None;
 }
 
-/// Pinch (zoom), twist (azimuth), and two-finger vertical drag (tilt) — the
-/// standard mobile map gesture set.
 fn update_pinch(s: &mut Input) {
     let Some((p0, p1)) = pointer_pair(s) else { return };
     if s.pinch_start_dist < 1.0 {
@@ -371,13 +322,10 @@ fn update_pinch(s: &mut Input) {
     }
     let dist = (p1.x - p0.x).hypot(p1.y - p0.y);
     let midpoint_y = (p0.y + p1.y) / 2.0;
-    // The fingers' spread is the active controller's zoom; their midpoint
-    // and their turn are the look's.
     crate::control::camera::controller::pinch(dist);
 
     let intent = camera_store().intent;
-    // A control the fingers did not move is not asked: a pinch that only
-    // zooms writes no tilt, which the ground could hold to where it is.
+    // An unmoved control is not asked, so a zoom-only pinch writes no tilt.
     let polar = s.pinch_tilt.ask(midpoint_y, linear(tilt_gain()));
     let polar = (!settings_store().tilt_lock && polar != intent.polar).then_some(polar);
     let angle = (p1.y - p0.y).atan2(p1.x - p0.x);
@@ -398,7 +346,6 @@ fn update_pinch(s: &mut Input) {
     }
 }
 
-/// A pointer went down on the canvas.
 pub fn camera_pointer_down(kind: PointerKind, pointer_id: i32, button: i32, client_x: f64, client_y: f64, holding: Holding) {
     let s = input();
     s.holding = holding;
@@ -418,7 +365,6 @@ pub fn camera_pointer_down(kind: PointerKind, pointer_id: i32, button: i32, clie
                 update_pointer(s, client_x, client_y);
             }
             2 => begin_pinch(s),
-            // 3rd+ finger: keep the current 2-finger gesture as-is.
             _ => {}
         }
         return;
@@ -435,9 +381,7 @@ pub fn camera_pointer_down(kind: PointerKind, pointer_id: i32, button: i32, clie
     s.tap_start_x = client_x;
     s.tap_start_y = client_y;
     if s.drag_mode == DragMode::Rotate {
-        // The turn's anchor is captured lazily by do_rotate on the first
-        // reliable sample — the down position may be within
-        // MIN_ROTATE_RADIUS_PX.
+        // Anchored by do_rotate: the down position may be within MIN_ROTATE_RADIUS_PX.
         s.rotate_turn = None;
         s.rotate_axis_lock = RotateAxisLock::None;
         s.rotate_drag_start_x = client_x;
@@ -449,7 +393,6 @@ pub fn camera_pointer_down(kind: PointerKind, pointer_id: i32, button: i32, clie
     camera.is_follow_mode = false;
 }
 
-/// A pointer moved.
 pub fn camera_pointer_move(kind: PointerKind, pointer_id: i32, client_x: f64, client_y: f64, holding: Holding) {
     let s = input();
     s.holding = holding;
@@ -476,8 +419,6 @@ pub fn camera_pointer_move(kind: PointerKind, pointer_id: i32, client_x: f64, cl
 
     update_pointer(s, client_x, client_y);
     if s.drag_mode == DragMode::None {
-        // Raycasting is expensive and a raw pointermove can fire far more often
-        // than the render loop: once a frame.
         s.hover_pending = true;
         return;
     }
@@ -513,8 +454,6 @@ fn update_hover(s: &Input) {
 
     let ui = s.holding;
     let map_origin = local_world_origin();
-    // One pick — terrain (top or a wall) and any placed object all come back
-    // as the same Hit.
     let Some(pick) = ray_pick(origin, direction) else {
         return clear_hovered_once();
     };
@@ -522,42 +461,40 @@ fn update_hover(s: &Input) {
     let camera = camera_store();
 
     if matches!(ui.active_tool, ActiveTool::Object | ActiveTool::Decor) {
-        // The one tool group that wants an ADJACENT empty slot. Decor always
-        // places at its own fixed DECOR_SIZE.
         camera.hovered_object_at = None;
         let placement_size = if ui.active_tool == ActiveTool::Decor { DECOR_SIZE } else { ui.object_size };
-        // The box of the entry the hit resolves to: a decor met in front of
-        // what the pick struck is what the new cube goes flush against.
+        // A decor met in front of the pick is what the new cube goes flush against.
         let precise_box = resolve_hit_target(&hit, origin, direction, map_origin).map(|o| object_aabb(&o, map_origin));
         camera.hovered_coord = Some(world_adjacent_corner(&hit, placement_size, map_origin, precise_box.as_ref()));
         return;
     }
 
-    // Pointer (recenter on it) and eraser (remove/dig it) both target the struck
-    // thing itself.
-    let struck = resolve_hit_target(&hit, origin, direction, map_origin);
-    camera.hovered_object_at = struck.as_ref().map(|o| o.at);
-    if let Some(o) = struck {
-        camera.hovered_coord = Some(Pvf3 { i: o.i, f: o.f });
-    } else if ui.active_tool == ActiveTool::Eraser && settings_store().terrain_carving {
-        // Bare terrain under the eraser wants the struck voxel's OWN corner
-        // (real, possibly dug-into height included), not the baked-elevation
-        // "flush on top" slot. On the cell's grid and not the tier's, because
-        // that is the size the carve is written at.
-        camera.hovered_coord = Some(world_struck_corner(&hit, U_PER_CELL, map_origin));
-    } else {
-        match world_hover_pvf3(&hit, map_origin) {
-            Some(grounded) => camera.hovered_coord = Some(grounded),
-            None => clear_hovered_once(),
-        }
-    }
+    let struck = resolve_struck(&hit, origin, direction, map_origin);
+    camera.hovered_object_at = match &struck {
+        Some(Struck::Object(o)) => Some(o.at),
+        _ => None,
+    };
+    camera.hovered_scattered = match struck {
+        Some(Struck::Scattered(s)) => Some(s),
+        _ => None,
+    };
+    // Where a walker sent here starts from; a scattered decor is passed through.
+    camera.hovered_approach = Some(match &struck {
+        Some(Struck::Object(o)) => world_adjacent_corner(&hit, U_PER_CELL, map_origin, Some(&object_aabb(o, map_origin))),
+        Some(Struck::Scattered(s)) => CELL.base_of(s.cell),
+        None => world_adjacent_corner(&hit, U_PER_CELL, map_origin, None),
+    });
+    camera.hovered_coord = Some(match struck {
+        Some(Struck::Object(o)) => Pvf3 { i: o.i, f: o.f },
+        Some(Struck::Scattered(s)) => CELL.base_of(s.cell),
+        // On the cell's grid, not the tier's: that is the size a carve is written at.
+        None => world_struck_corner(&hit, U_PER_CELL, map_origin),
+    });
 }
 
 fn tap_if_still(s: &Input, mode: DragMode) {
     if !s.did_drag && mode == DragMode::Pan {
-        // A badge floats over the ground it marks, so it takes the tap before
-        // the ground under it does — with the pointer only: with a cube or the
-        // eraser in hand, a tap is meant for the ground and the objects on it.
+        // A badge takes the tap before the ground under it, with the pointer tool only.
         if s.holding.active_tool == ActiveTool::Pointer && crate::layer::poi::placement::tap(s.pointer_x, s.pointer_y) {
             return;
         }
@@ -586,15 +523,13 @@ pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32, holding: Holding) {
                 }
             }
             1 => {
-                // Dropped from 2 fingers to 1 — resume single-finger pan
-                // seamlessly; already mid-gesture, so the lift is no tap.
+                // Already mid-gesture, so the lift is no tap.
                 let remaining = *s.active_pointers.values().next().or_bug(Errno::ENOTRECOVERABLE);
                 s.drag_mode = DragMode::Pan;
                 s.last_x = remaining.x;
                 s.last_y = remaining.y;
                 s.did_drag = true;
             }
-            // Dropped from 3+ fingers to exactly 2 — recalibrate the baseline.
             _ => begin_pinch(s),
         }
         return;
@@ -605,29 +540,25 @@ pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32, holding: Holding) {
     let mode = s.drag_mode;
     s.drag_mode = DragMode::None;
     camera.camera_status = CameraStatus::Idle;
-    // The turn the companion reads the release in (layer/character/companion.rs):
-    // a pan moves nothing on its own once the pointer is up, so without this
-    // the release would not be seen until something else asked for a turn.
+    // A pan moves nothing once the pointer is up, so the companion would not see
+    // the release until something else asked for a turn.
     request_world_tick();
     tap_if_still(s, mode);
 }
 
-/// The pointer left the canvas.
 pub fn camera_pointer_out() {
     clear_hovered_once();
 }
 
-/// A wheel event's turn in CSS pixels.
+/// In CSS pixels.
 pub fn camera_wheel(delta_y: f64) {
     *input().pending_wheel_delta_y.get_or_insert(0.0) += delta_y;
 }
 
-/// The input's turn, once a frame: the coalesced hover, drag and wheel.
 pub fn camera_input_step() {
     let s = input();
     if s.hover_pending {
         s.hover_pending = false;
-        // The pointer may have started dragging since the move.
         if s.drag_mode == DragMode::None {
             update_hover(s);
         }
@@ -651,17 +582,15 @@ pub fn camera_input_step() {
     }
 }
 
-/// Two fingers are on the canvas, zooming, tilting or twisting it.
 pub fn pinching() -> bool {
     input().drag_mode == DragMode::Pinch
 }
 
-/// A finger or a button is on the canvas, moving the map in any way.
 pub fn dragging() -> bool {
     input().drag_mode != DragMode::None
 }
 
-/// What the last pointer event held: what the hover cursor previews.
+/// What the hover cursor previews.
 pub fn holding() -> Holding {
     input().holding
 }

@@ -1,31 +1,10 @@
 // pxl-kernel/sched/profiler/log.rs
 
-//! The profiler's live stream — what the gauge panel cannot do: records as they
-//! land, so a stutter can be watched happening and correlated against whatever
-//! else is logging, rather than read off a panel that only shows the settled
-//! aggregate.
-//!
-//! What is streamed is what was measured. The lines a person reads are the
-//! shell's (apps/web/src/feature/debug/profiler/report.ts), the same
-//! formatters the report already uses, so a streamed task and a reported one
-//! read alike without this side knowing a word of it.
-//!
-//! It does not go out on the ring. The ring is the control path — ordered,
-//! back-pressured, and full is fatal: `Door::post` asserts when the
-//! completion ring is full, so a debug line could take
-//! the module down, and the moment logging is turned on is exactly the moment
-//! instrumentation would be competing for ring slots with the fetch burst it
-//! was turned on to watch. This is what every operating system separates —
-//! ftrace and perf mmap their own per-CPU buffers, printk keeps `log_buf` and
-//! is read through /dev/kmsg, eBPF has its own ring — so the stream is two
-//! lanes of the profiler's own records the consumer reads in place at its own
-//! pace, through `PROFILER_TAKE`, and clears when it has read them.
-//!
-//! A dev instrument that never feeds back into scheduling. The stream
-//! thresholds frames deliberately: an unfiltered per-frame record would bury
-//! everything else within seconds, so only frames that missed a vsync while
-//! moving, or overran the budget, are kept — summary.rs's `missed` and
-//! `overran`, the same tests the report counts.
+//! The profiler's live stream: task rows and slow frames, kept in the
+//! profiler's own lanes for the shell to take (`PROFILER_TAKE`). Not on the
+//! ring: `Door::post` asserts on a full completion ring, so logging could
+//! take the module down during the very fetch burst it was turned on to
+//! watch. Only frames that missed a vsync while moving or overran are kept.
 
 use crate::global::Global;
 use crate::kernel::kernel;
@@ -35,7 +14,6 @@ use crate::sched::profiler::record::{drop_front, fixed_lane, profiler_recording_
 use crate::sched::profiler::summary::{missed, overran};
 use crate::sched::tick::{set_step_timing, tick_step_stats_reset};
 
-/// The side counters printed beside the rings, cumulative from load.
 fn counters() -> CountersBlock {
     let k = kernel();
     let st = k.sched.builder.stat;
@@ -61,10 +39,7 @@ fn counters() -> CountersBlock {
     }
 }
 
-/// What the stream holds for the shell to come and get. A consumer that stops
-/// reading must not grow the heap the thing being measured allocates from, so
-/// each lane is capped and the oldest goes — printk's ring loses the oldest
-/// line too, rather than the producer waiting on the reader.
+/// Capped, oldest dropped, so a reader that stops cannot grow the heap being measured.
 pub(super) const PENDING: usize = 512;
 
 struct Log {
@@ -89,16 +64,12 @@ fn log() -> &'static mut Log {
     })
 }
 
-/// The side counters since the window began.
 pub fn window_counters() -> CountersBlock {
     counters().minus(&log().baseline)
 }
 
-/// The profiler follows its setting, `profiler`: it records while the
-/// setting is on and not at all while it is off. The store calls this with
-/// what storage kept at WORLD_BOOT, before the first turn, so a profiler
-/// left on has the boot in its window — the first turns and the first fetches,
-/// which a start sent once the shell had drawn its panel came too late for.
+/// Called at WORLD_BOOT with the stored setting, before the first turn, so
+/// a profiler left on has the boot in its window.
 pub fn profiler_follow(on: bool) {
     if on {
         profiler_window_start();
@@ -108,11 +79,8 @@ pub fn profiler_follow(on: bool) {
     }
 }
 
-/// Clears the profiler and opens a fresh window, side counters included.
-///
-/// Timing the steps one by one starts here rather than at boot, for the same
-/// reason recording does: it is a clock read on either side of every step of
-/// every phase of every tick, and only the report reads the result.
+/// Step timing starts here, not at boot: it is a clock read around every
+/// step of every tick, and only the report reads it.
 pub fn profiler_window_start() {
     profiler_recording_start();
     tick_step_stats_reset();
@@ -120,14 +88,11 @@ pub fn profiler_window_start() {
     log().baseline = counters();
 }
 
-/// Freezes the window, so an export taken afterward sees exactly this data,
-/// and stops paying for the timing that fills it.
 pub fn profiler_window_stop() {
     profiler_recording_stop();
     set_step_timing(false);
 }
 
-/// `one` onto a lane, the oldest dropped when it is full.
 fn keep<T: Copy>(lane: &mut [T], len: &mut usize, one: T) {
     if lane.is_empty() {
         return;
@@ -151,8 +116,6 @@ fn log_frame(s: &FrameSample) {
     }
 }
 
-/// Turns the live console stream on/off by installing (or clearing) the
-/// profiler's single sink.
 pub fn profiler_set_logging(on: bool) {
     let l = log();
     if on == l.logging {
@@ -169,14 +132,11 @@ pub fn profiler_set_logging(on: bool) {
     }));
 }
 
-/// The rows the stream kept since the last clear, oldest first: tasks, then
-/// frames.
 pub fn profiler_log_rows() -> (&'static [TaskRow], &'static [FrameSample]) {
     let l = log();
     (&l.tasks[..l.tasks_len], &l.frames[..l.frames_len])
 }
 
-/// Forgets what the stream kept, once the shell has read it.
 pub fn profiler_log_clear() {
     let l = log();
     (l.tasks_len, l.frames_len) = (0, 0);

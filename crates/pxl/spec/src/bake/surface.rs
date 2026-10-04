@@ -1,9 +1,7 @@
 // pxl-spec/bake/surface.rs
 
-//! The surface a page's elevation draws, and how high it can stand over any
-//! piece of the page. The interpolant is here rather than beside the mesh
-//! because the bound is a claim about it: a page's index lane (bake/format.rs
-//! `Index`) says no ray passes under or over what is drawn, and that is true
+//! The surface a page's elevation draws and its bound over any piece of the
+//! page. The interpolant lives here because the index lane's bound is true
 //! only of the function that draws it.
 
 use xpute_core::math::scalar::round;
@@ -13,24 +11,14 @@ use super::ground::cell_recess;
 use super::pack::GroundCell;
 use crate::space::pyramid::{EXTENT, GROUND, PAGE_CELLS};
 
-/// Cells a sample stands for along an axis.
 const CELL_STEP: f64 = PAGE_CELLS as f64 / PAGE_ELE_SPAN as f64;
 
-/// The sample a texel coordinate falls at, continuous: a cell's center is its
-/// index and a half, and a sample's is its own (bake/constant.rs's sampling
-/// contract).
+/// The continuous sample a texel coordinate falls at: a cell's center is its index plus a half.
 fn sample_at(t: f64) -> f64 {
     t / CELL_STEP + ELE_PAD as f64 - 0.5
 }
 
-/// The elevation at a point in texels, continuous, in cells: the Catmull-Rom
-/// interpolation of the 4 × 4 samples about it in the padded raster. Signed,
-/// because the raster reaches `ELE_PAD` samples past the page's own span.
-///
-/// Notes:
-/// - keeps the hot path allocation-free
-/// - uses an unclamped fast path for the common interior case
-/// - falls back to clamped sampling near the raster's edge
+/// Catmull-Rom over the 4 × 4 padded samples about a texel point, in cells.
 pub fn bicubic(page_ele: &[i16], tx: f64, ty: f64) -> i16 {
     let sx = sample_at(tx);
     let sy = sample_at(ty);
@@ -41,7 +29,6 @@ pub fn bicubic(page_ele: &[i16], tx: f64, ty: f64) -> i16 {
     let fdx = sx - sx0 as f64;
     let fdy = sy - sy0 as f64;
 
-    // precompute cubic interpolation weights.
     let x2 = fdx * fdx;
     let x3 = x2 * fdx;
     let wx = [-0.5 * x3 + x2 - 0.5 * fdx, 1.5 * x3 - 2.5 * x2 + 1.0, -1.5 * x3 + 2.0 * x2 + 0.5 * fdx, 0.5 * x3 - 0.5 * x2];
@@ -53,7 +40,6 @@ pub fn bicubic(page_ele: &[i16], tx: f64, ty: f64) -> i16 {
     let span = ELE_PADDED_SPAN as i32;
     let e = |idx: i32| page_ele[idx as usize] as f64;
 
-    // fast interior path with no clamp overhead.
     if sx0 >= 1 && sx0 <= span - 3 && sy0 >= 1 && sy0 <= span - 3 {
         let row = |y: i32| {
             let idx = y * span + sx0;
@@ -62,7 +48,6 @@ pub fn bicubic(page_ele: &[i16], tx: f64, ty: f64) -> i16 {
         return round(row(sy0 - 1) * wy[0] + row(sy0) * wy[1] + row(sy0 + 1) * wy[2] + row(sy0 + 2) * wy[3]) as i16;
     }
 
-    // slow boundary path with clamped coordinates.
     let mut out = 0.0;
     for (j, wyj) in wy.iter().enumerate() {
         let py = (sy0 - 1 + j as i32).clamp(0, span - 1);
@@ -76,15 +61,9 @@ pub fn bicubic(page_ele: &[i16], tx: f64, ty: f64) -> i16 {
     round(out) as i16
 }
 
-/// The lowest and highest `bicubic` gives anywhere in the box of texels
-/// `[x0, x1] × [y0, y1]`, both ends included, in cells.
-///
-/// Every point is interpolated from one 4 × 4 window, and the weights of a
-/// window are negative by at most an eighth along an axis; the positive part
-/// of the two axes' products then sums to at most (9/8)² + (1/8)² = 41/32, so
-/// an interpolated height lies within 9/32 of the window's span past either
-/// end of it. Taken window by window, so a hill in one corner of the box
-/// widens only the windows that read it.
+/// The lowest and highest `bicubic` gives in the texel box, ends included.
+/// Catmull-Rom weights dip below zero by at most 1/8 an axis, so the
+/// interpolant overshoots a 4 × 4 window's range by at most 9/32 of it.
 pub fn bound(page_ele: &[i16], [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> [i32; 2] {
     let span = ELE_PADDED_SPAN as i32;
     let starts = |t0: f64, t1: f64| sample_at(t0).floor() as i32..=sample_at(t1).floor() as i32;
@@ -98,8 +77,7 @@ pub fn bound(page_ele: &[i16], [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> [i32; 
                     (wlo, whi) = (wlo.min(e), whi.max(e));
                 }
             }
-            // Taken up to a whole number, which a rounded height cannot
-            // pass on its way out from the true bound.
+            // Rounded up, which a rounded height cannot pass.
             let past = ((9 * (whi - wlo)) as u32).div_ceil(32) as i32;
             (lo, hi) = (lo.min(wlo - past), hi.max(whi + past));
         }
@@ -107,13 +85,9 @@ pub fn bound(page_ele: &[i16], [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> [i32; 
     [lo, hi]
 }
 
-/// A page's own surface's extent: for each of the index lattice's cells
-/// (`EXTENT`), the lowest and highest the ground drawn anywhere in it stands,
-/// in cells — the interpolation's overshoot and the cells' recess included,
-/// so a point anywhere over the cell, a cell's center or a finer cell read
-/// from this page, lies inside it. Saturated at an i16's range, which is some
-/// 78 km at the equator and is never met.
-pub fn extent_of(page_ele: &[i16], cells: &[GroundCell]) -> Vec<[i16; 2]> {
+/// Per `EXTENT` cell, the lowest and highest of the surface (overshoot
+/// included), any deck top and any bore floor. Saturates at i16, about 78 km.
+pub fn extent_of(page_ele: &[i16], decks: &Decks) -> Vec<[i16; 2]> {
     let n = GROUND.scale(0).count_in(EXTENT.scale(0)) as f64;
     let side = EXTENT.page_cells();
     (0..side * side)

@@ -1,10 +1,6 @@
 // cpp/xpute/core/collection/deque.hpp
 
-// A ring over a buffer the caller owns: `buf` is the capacity, `head` is
-// where the front sits, and `len` counts live elements forward from there.
-// The three are public because they are the caller's — this allocates
-// nothing, grows never, and holds no state of its own. `head` and `len` alone
-// say which slots are live.
+// A ring over a buffer the caller owns; it allocates nothing and never grows.
 
 #pragma once
 
@@ -29,7 +25,7 @@ template <class T> struct Deque {
     const T *front() const noexcept { return len == 0 ? nullptr : &buf[head]; }
     const T *back() const noexcept { return len == 0 ? nullptr : &buf[(head + len - 1) % cap()]; }
 
-    // A push onto a full deque would overwrite the front: the caller's bug.
+    // A full deque is the caller's bug.
     void push_back(T v) noexcept {
         ensure(!is_full(), Errno::enospc, len);
         buf[(head + len) % cap()] = std::move(v);

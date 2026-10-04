@@ -1,10 +1,7 @@
 // pxl-kernel/world/observation.rs
 
-//! The kernel's side of an observation (pxl-spec space/observation.rs): the
-//! eye as the view draws it, what it looks at, and what the kernel knows of
-//! what a box of the world holds — the bounds an estimator of demand and the
-//! view's domain are handed. Nothing here knows how what is observed is
-//! drawn.
+//! The kernel's side of an observation: the eye, what it looks at, and what
+//! is known of what a box of the world holds.
 
 use std::cmp::Ordering;
 
@@ -29,22 +26,17 @@ use crate::world::observer::Sight;
 use crate::world::paging::floor;
 use crate::world::pyramid::Layer as _;
 
-/// Where the eye is as the view draws it, in units, once the camera stands
-/// somewhere.
 pub fn eye() -> Option<[f64; 3]> {
     crate::control::camera::controller::camera().eye?;
     Some(view().eye_at())
 }
 
-/// The level the ground under the eye wants, z16 at the finest: what the
-/// floating origin is floored to (world/frame/coord.rs `origin_for`), so a
-/// rebase is as far on screen at every height.
+/// The level the ground under the eye wants: what the floating origin is
+/// floored to, so a rebase moves the same on screen at every height.
 pub fn ground_level() -> u32 {
     eye().map_or(0, |_| lod::level(eye_height()).clamp(0, TOP_LEVEL as i32) as u32)
 }
 
-/// The view's frustum in world units: its planes in the root frame, which
-/// is the world's axes against the origin, moved to the world's.
 pub fn frustum_of_view() -> Frustum {
     let v = view();
     let o = [ivec::to_real(ivec::X(v.origin)), ivec::to_real(ivec::Y(v.origin)), ivec::to_real(ivec::Z(v.origin))];
@@ -55,11 +47,8 @@ pub fn frustum_of_view() -> Frustum {
     Frustum { planes }
 }
 
-/// The eye's observation as the view makes it: what the frustum looks at,
-/// out to where the air ends the ground or the end of the coarsest level the
-/// tile source supplies whole, whichever is nearer. None before the source
-/// has declared that level (world/paging/floor.rs): nothing is observed of a
-/// source whose floor is not known.
+/// Out to where the air ends the ground or the source's top ends, whichever
+/// is nearer. None before the source declares its top.
 pub fn observation() -> Option<Observation> {
     let eye = eye()?;
     let top = floor::level()?;
@@ -74,19 +63,10 @@ pub fn observation() -> Option<Observation> {
     })
 }
 
-/// What the kernel knows of the world: the terrain's index lanes, from each
-/// page or the nearest resident page over it (world/access.rs
-/// `Access::relief`), and the objects, which are all resident. The ground is
-/// stored flat and read by the node of its heightfield under a box; the
-/// objects are asked their 3D bound in each node's box
-/// (layer/object/store.rs `Store::bound_in`), so what asks sees only the
-/// box's answer on every axis. Unknown where no terrain page over some of
-/// the box is held.
-///
-/// A piece of ground drawn in a level's cells is off from what it stands for
-/// by a cell across and as far as it rises over one up; an object folded
-/// away is off by all of itself, which a far pole is and what a sheer face
-/// is taken to be.
+/// What the kernel knows of the world: terrain index bounds (from the page
+/// or the nearest resident one over it) and the objects' 3D bounds. Unknown
+/// where no terrain page over part of the box is held. The error is a cell
+/// across and the rise over a cell up; a folded-away object counts whole.
 pub struct Known;
 
 impl Bounds for Known {
@@ -133,18 +113,13 @@ impl Bounds for Known {
     }
 }
 
-/// What the ground's store says of a node of its own: its bound and its
-/// steepest rise over a run.
 #[derive(Clone, Copy)]
 struct Node {
     ground: (f64, f64),
     slope: f64,
 }
 
-/// What is known of `node` at `level`: none where no terrain page over it is
-/// resident. Read afresh each time from the block of the index lane the node
-/// spans (pxl-spec bake/format.rs `Index`), made as its page arrived and gone
-/// with it.
+/// None where no terrain page over the node is resident.
 fn read(level: u32, node: (Scale, [i64; 2])) -> Option<Node> {
     let page = L3.up(level as i32);
     let [x, y] = ancestor_of(node.1, page.above(node.0) as u32);
@@ -156,9 +131,8 @@ fn read(level: u32, node: (Scale, [i64; 2])) -> Option<Node> {
     })
 }
 
-/// Each node of the stores' flat lattice at `level` under `region`, with the
-/// square of it the region covers: the region's own square where it is one
-/// node — a chunk's column up to a page — and its columns otherwise.
+/// Each flat-lattice node at `level` under `region`: the region itself where
+/// it is exactly one node, else its columns.
 fn under(level: u32, region: Aabb, each: &mut dyn FnMut((Scale, [i64; 2]), Aabb)) {
     let column = L2.up(level as i32);
     let side = region.max[0] - region.min[0];
@@ -183,25 +157,11 @@ fn under(level: u32, region: Aabb, each: &mut dyn FnMut((Scale, [i64; 2]), Aabb)
     }
 }
 
-/// The estimator from what the screen's tiles saw (world/observer.rs
-/// `Sight`), at a quality `tau`: the ground their footprints touch, at each
-/// level whose band some of it lies in, and what their rays lacked. Ground
-/// no tile's rays reach — behind what they met, or behind the eye — is
-/// required of no level; the floor answers it (world/paging/floor.rs).
-///
-/// A footprint is what the resident records say a tile meets. Where they
-/// said it coarser than asked, or not at all, the ray lacked the ground at
-/// the level it asked, and that lack is required; when it comes, the tiles
-/// over it are cast again (`Sight::observe`), so the requirements grow
-/// toward what the exact records would make them and never rest short of
-/// it. What is required is the ground and the level — the lack as a
-/// region, never as a page, which each layer's storage names for itself.
-///
-/// The bands are every estimator's (pxl-spec space/observation.rs `band`),
-/// so nothing is required nearer than its level allows or past the band's
-/// end, the fault bound holds as it does of `ByBounds`, and a lack asked at
-/// a finer quality than `tau` is required at the level `tau` puts its
-/// ground at, never finer than what is drawn.
+/// The estimator from what the tiles saw: the ground their footprints touch
+/// at each level whose band holds it, plus what their rays lacked. Ground no
+/// ray reaches is left to the floor. A lack is recast when it arrives, so
+/// requirements grow toward what exact records would give and never rest
+/// short of it.
 pub struct ByFootprints<'a> {
     pub tau: Tau,
     pub sight: &'a Sight,
@@ -230,7 +190,6 @@ impl DemandEstimator for ByFootprints<'_> {
             let b = f.aabb();
             for level in 0..=o.top {
                 let Some((_, to)) = band(o, self.tau, level) else { break };
-                // Only what lies within the band's end along the ground.
                 let reach = to.min(o.far);
                 let lo = [b.min[0].max(o.eye[0] - reach), b.min[1].max(o.eye[1] - reach)];
                 let hi = [b.max[0].min(o.eye[0] + reach), b.max[1].min(o.eye[1] + reach)];
@@ -255,45 +214,34 @@ impl DemandEstimator for ByFootprints<'_> {
     }
 }
 
-/// Moves whenever what the kernel knows of the heights does — a terrain
-/// page came or went, and its lanes with it, or an object was written — so
-/// whatever was measured against them before is known to be stale.
+/// Moves whenever a terrain page comes or goes or an object is written.
 pub fn heights_revision() -> (u32, u32) {
     (Terrain::pyramid().revision(), objects_revision())
 }
 
-/// Where a piece of what is observed falls in its one order: what the view
-/// sees before what it does not, and within each the nearer the eye first.
-/// Every layer's work is taken in it: a page fetched, a chunk mounted and
-/// built, and, the other way round, a record or a slot given up.
+/// Seen before unseen, then nearer first. Every layer's work is taken in
+/// this order, and eviction in reverse.
 #[derive(Clone, Copy, Debug)]
 pub struct Order {
     pub seen: bool,
-    /// How near the eye its box comes, in units.
     pub near: f64,
 }
 
 impl Order {
-    /// Nothing is ordered after this: what no view measured.
     pub const LAST: Order = Order { seen: false, near: f64::INFINITY };
 
-    /// Nothing is ordered before this: where the eye is about to be.
     pub const FIRST: Order = Order { seen: true, near: 0.0 };
 
-    /// Where box `b` falls for `o`.
     pub fn of(o: &Observation, b: &Aabb) -> Order {
         let m = o.measure(b);
         Order { seen: m.seen, near: m.near }
     }
 
-    /// Where `region` falls for `o`, by what `bounds` say it holds at
-    /// `level`: all of it where nothing is known.
+    /// All of `region` where nothing is known.
     pub fn of_region<B: Bounds + ?Sized>(o: &Observation, bounds: &B, level: u32, region: Aabb) -> Order {
         Order::of(o, &bounds.contents(level, region).within(region).unwrap_or(region))
     }
 
-    /// Where page `p` falls for `o`, by what is known of what stands over
-    /// it.
     pub fn of_page(o: &Observation, p: LevelPage) -> Order {
         Order::of_region(o, &Known, p.level, p.region())
     }
@@ -318,7 +266,3 @@ impl PartialEq for Order {
 }
 
 impl Eq for Order {}
-
-#[cfg(test)]
-#[path = "observation.test.rs"]
-mod test;

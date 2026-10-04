@@ -1,26 +1,11 @@
 // pxl-spec/bake/poi_page.rs
 
-//! The POI layer's page. A place is 2.5D: it belongs to the cell of the POI
-//! lattice it stands in (`POI_LATTICE`). A cell stands where its places stand
-//! on average — their centroid, as the z16 ground cell it falls in — so a
-//! cell holding one place stands on that place's own, at every level, and a
-//! cell of two or more stands among them rather than on the lattice's grid.
-//! A page holds, for each occupied cell, how many places stand in it, where
-//! they stand on average, and where that is one, which place it is.
-//!
-//! Folding is counting. A parent cell holds what its 2×2 children hold, which
-//! needs no ring and loses nothing: every level counts exactly the places
-//! under it, so a count read at any level agrees with the leaves. A centroid
-//! folds the same way, as its children's weighted by their counts, rounded to
-//! a z16 cell at each level. A place is not a representative chosen for a
-//! cell: it is there only where the cell holds one, so it is that place, and a
-//! parent holding one place holds what its one child held.
-//!
-//! Which place a cell holds is its name and its kind (bake/poi_badge.json),
-//! held once a page in a pool the cells index: both are the one place's and
-//! nothing else's, so they fold together. A cell is four words whatever its
-//! place, and a place that stands in many cells — a chain's branch, a
-//! station's exits — is carried once.
+//! The POI layer's page: per occupied `POI_LATTICE` cell, how many places
+//! stand in it and, of each kind, the named place of least id with the z16
+//! ground cell it stands in. Least id is stable across levels and says nothing
+//! of prominence; which to show is the reader's choice. Folding sums counts
+//! and keeps the least id per kind, so a count agrees with the leaves at any
+//! level. Names and kinds are pooled once a page.
 
 use std::collections::HashMap;
 
@@ -32,60 +17,130 @@ use xpute_core::status::error::MarshalError;
 
 const MAGIC: &[u8; 4] = b"PXP5";
 
-/// The lattice places are counted in: a cell sixteen times the ground's on a
-/// side — four levels over it, so a POI page's cells at z16 are z12's —
-/// sharing the ground's pages, levels and names. A badge stands for its
-/// cell, and a cell the ground's size is a few pixels on the screen at every
-/// distance (pxl-render look/lod.rs), far under a badge. Sixteen times is a
-/// product choice, not a derivation: the scale places merge at, the layer's
-/// own detail at a level the shared rule chooses.
-pub const POI_LATTICE: Lattice = Lattice::new(GROUND.scale(4));
+/// Places are counted in cells 2^6 ground cells wide, so no two cells'
+/// badges overlap: a level draws its ground cell at three pixels or more,
+/// and the widest badge is under 192 pixels, which s = 6 covers and s = 5
+/// does not.
+pub const POI_LATTICE: Lattice = Lattice::new(GROUND.scale(6));
 
 const CELLS: u32 = POI_LATTICE.page_cells() * POI_LATTICE.page_cells();
 
-/// A cell on the wire: its index, count, position and place, a word each.
+/// index, count, first, len: a word each.
 const CELL_BYTES: usize = 16;
 
-/// A cell with no place: it holds more than one, or its one place has no
-/// name.
-pub const NO_PLACE: u32 = u32::MAX;
+/// pool index, then position: a word each.
+const SHOWN_BYTES: usize = 8;
 
-/// The longest name a page holds, in code points; a longer one is cut to end
-/// in an ellipsis inside it. A product number, and a bound: at 32, 99% of the
-/// places Overture names in Korea are whole (the 99th percentile of their
-/// names' lengths, measured 2026-09-25, 1 in 107 longer), and what a page
-/// can hold is bounded by its cells, whatever the data.
-pub const NAME_CHARS: usize = 32;
+/// The longest name a page holds, in code points: what a badge shows. A
+/// longer one is cut to end in an ellipsis.
+pub const NAME_CHARS: usize = 12;
 
-// A position is an offset in z16 ground cells inside a POI cell, a lane
-// a half-word: the widest cell, at the top level, has to fit.
+// A position is an offset in z16 cells inside a POI cell, a half-word a lane.
 const _: () = assert!(
     POI_LATTICE.scale(TOP_LEVEL).above(GROUND.scale(0)) <= 16,
     "a POI cell's z16 ground cells no longer fit a half-word a lane"
 );
 
-/// An occupied cell: its index in the page, how many places stand in it, the
-/// z16 ground cell their centroid falls in, as that cell's offset in this one
-/// (pxl-spec space/pyramid.rs `Cell::offset_of`), and where `count` is 1, the
-/// pool index of its one place (NO_PLACE where it has no name).
+/// An occupied cell. `partial` marks a count that is a floor: a source that
+/// answers a few at a time gave only the first of a crowd. Its places are a
+/// run of the page's `shown`, one of each kind, by kind.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PoiCell {
     pub cell: u32,
     pub count: u32,
+    pub partial: bool,
+    pub first: u32,
+    pub len: u32,
+}
+
+/// Set in a wire count that is a floor.
+const PARTIAL: u32 = 1 << 31;
+
+/// A shown place: its pool index and the z16 ground cell it stands in, as an
+/// offset in its POI cell.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Shown {
     pub place: u32,
     pub at: [u32; 2],
 }
 
-/// A place as a cell names it: what it is called, and its kind — its number
-/// in the badge table, 0 for none (`kind_of`).
+/// A place: its name, its badge-table kind (0 for none) and its source id
+/// hashed to a word.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Place<'a> {
     pub name: &'a str,
     pub kind: u8,
 }
 
-/// A page's places, each once: place i's name is `bytes[ends[i - 1]..ends[i]]`,
-/// one run of UTF-8, and its kind `kinds[i]`.
+/// Strings end to end in one buffer, read by index.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Strings {
+    bytes: String,
+    ends: Vec<u32>,
+}
+
+impl Strings {
+    pub fn of<'s>(items: impl IntoIterator<Item = &'s str>) -> Strings {
+        let mut s = Strings::default();
+        items.into_iter().for_each(|item| s.push(item));
+        s
+    }
+
+    fn push(&mut self, s: &str) {
+        self.bytes.push_str(s);
+        self.ends.push(self.bytes.len() as u32);
+    }
+
+    pub fn get(&self, i: u32) -> &str {
+        let Some(&end) = self.ends.get(i as usize) else { return "" };
+        let start = if i == 0 { 0 } else { self.ends[i as usize - 1] };
+        &self.bytes[start as usize..end as usize]
+    }
+
+    fn len(&self) -> u32 {
+        self.ends.len() as u32
+    }
+}
+
+/// A place's names by language: pairs `from..to` of a pool of (tag, name).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Langs<'a> {
+    pool: Option<&'a Strings>,
+    from: u32,
+    to: u32,
+}
+
+impl<'a> Langs<'a> {
+    /// Every pair of `pool`, tag then name.
+    pub fn all(pool: &'a Strings) -> Langs<'a> {
+        Langs {
+            pool: Some(pool),
+            from: 0,
+            to: pool.len() / 2,
+        }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&'a str, &'a str)> + 'a {
+        let pool = self.pool;
+        (self.from..self.to).filter_map(move |p| pool.map(|s| (s.get(2 * p), s.get(2 * p + 1))))
+    }
+}
+
+impl PartialEq for Langs<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.iter().eq(other.iter())
+    }
+}
+
+impl Eq for Langs<'_> {}
+
+impl std::hash::Hash for Langs<'_> {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.iter().for_each(|pair| pair.hash(h));
+    }
+}
+
+/// A page's places, each once, in a few buffers a page.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Places {
     bytes: Vec<u8>,
@@ -94,19 +149,23 @@ pub struct Places {
 }
 
 impl Places {
-    /// Place `i`; nameless and of no kind where there is none.
     pub fn get(&self, i: u32) -> Place<'_> {
         Place {
-            name: self.name(i),
-            kind: self.kinds.get(i as usize).copied().unwrap_or(0),
+            name: self.names.get(i),
+            langs: Langs {
+                pool: Some(&self.langs),
+                from: span(i),
+                to: span(i + 1),
+            },
+            kind: self.kinds[i as usize],
+            id: self.ids.get(i),
         }
     }
 
     fn name(&self, i: u32) -> &str {
         let Some(&end) = self.ends.get(i as usize) else { return "" };
         let start = if i == 0 { 0 } else { self.ends[i as usize - 1] };
-        // Checked to be UTF-8 name by name on the way in (`decode`), or built
-        // from `&str`.
+        // Checked as UTF-8 name by name in `decode`.
         std::str::from_utf8(&self.bytes[start as usize..end as usize]).unwrap_or("")
     }
 
@@ -115,7 +174,6 @@ impl Places {
     }
 }
 
-/// A pool being filled, each place once.
 #[derive(Default)]
 struct Pool<'a> {
     places: Places,
@@ -137,33 +195,32 @@ impl<'a> Pool<'a> {
     }
 }
 
-/// A kind's number, by its category; 0 where the table has none.
+/// 0 where the table has none.
 pub fn kind_of(key: &str) -> u8 {
     KIND_CATEGORIES.iter().position(|k| *k == key).map_or(0, |i| i as u8 + 1)
 }
 
-/// Kind `kind`'s badge icon, or the default for none.
 pub fn kind_icon(kind: u8) -> &'static str {
     kind.checked_sub(1).and_then(|i| KIND_ICONS.get(i as usize)).copied().unwrap_or(DEFAULT_ICON)
 }
 
-/// Kind `kind`'s badge color, or the default for none.
 pub fn kind_color(kind: u8) -> u32 {
     kind.checked_sub(1).and_then(|i| KIND_COLORS.get(i as usize)).copied().unwrap_or(DEFAULT_COLOR)
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PoiPage {
-    /// Occupied cells by the pyramid's cell index, ascending.
+    /// Ascending by cell index.
     pub cells: Vec<PoiCell>,
+    /// A cell's places in one run, by kind.
+    pub shown: Vec<Shown>,
     pub places: Places,
 }
 
 impl PoiPage {
-    /// A level-`level` page from where each place stands and which it is, in
-    /// any order, its name cut to `NAME_CHARS`. Every place has to stand in
-    /// the one page.
-    pub fn of_places<'a>(level: u32, places: impl IntoIterator<Item = (Pvf3, Place<'a>)>) -> PoiPage {
+    /// A level-`level` page from places all in that page, names cut to
+    /// `NAME_CHARS`; `complete` is false where the source gave only some.
+    pub fn of_places<'a>(level: u32, places: impl IntoIterator<Item = (Pvf3, Place<'a>)>, complete: bool) -> PoiPage {
         let cut: Vec<_> = places
             .into_iter()
             .map(|(point, place)| {
@@ -174,18 +231,14 @@ impl PoiPage {
         gathered(cut.iter().map(|(cell, at, name, kind)| (*cell, 1, *at, Place { name, kind: *kind })).collect())
     }
 
-    /// The one place `c` holds; none where it holds more, or its one place
-    /// has no name.
-    pub fn place(&self, c: &PoiCell) -> Option<Place<'_>> {
-        (c.count == 1 && c.place != NO_PLACE).then(|| self.places.get(c.place))
+    pub fn shown(&self, c: &PoiCell) -> impl Iterator<Item = (u32, Place<'_>, [u32; 2])> + '_ {
+        self.shown[c.first as usize..(c.first + c.len) as usize].iter().map(|s| (s.place, self.places.get(s.place), s.at))
     }
 }
 
 impl Folds for PoiPage {
-    /// A child is settled where no cell over it holds two places: a cell of
-    /// one says where that place stands to the z16 cell and which it is, and
-    /// a cell of none says there is nothing, so the child's cells would say it
-    /// again. Only a crowd comes apart a level down.
+    /// A child is settled where every cell over it holds at most one place
+    /// and its count is not a floor: only a crowd comes apart a level down.
     fn settles(&self, p: LevelPage, child: LevelPage) -> bool {
         self.cells
             .iter()
@@ -198,19 +251,18 @@ impl Folds for PoiPage {
             let child = held(k)?;
             cells.extend(child.cells.iter().map(|c| {
                 let parent = POI_LATTICE.parent_cell(q, c.cell);
-                // The child's centroid, found again from the child's cell and
-                // read from the parent's.
-                let ground = POI_LATTICE.cell_at(k, c.cell).inner_at(GROUND, 0, c.at);
-                let at = POI_LATTICE.cell_at(p, parent).offset_of(ground);
-                (parent, c.count, at, child.place(c).unwrap_or(NAMELESS))
+                let places = child.shown(c).map(move |(_, place, at)| {
+                    let ground = POI_LATTICE.cell_at(k, c.cell).inner_at(GROUND, 0, at);
+                    (POI_LATTICE.cell_at(p, parent).offset_of(ground), place)
+                });
+                (parent, c.count, c.partial, places)
             }));
         }
         Some(gathered(cells))
     }
 }
 
-/// `name`, or where it runs past `NAME_CHARS`, its first code points and an
-/// ellipsis, `NAME_CHARS` in all.
+/// `name` cut to `NAME_CHARS` code points, ending in an ellipsis.
 fn cut_name(name: &str) -> std::borrow::Cow<'_, str> {
     match name.char_indices().nth(NAME_CHARS) {
         None => name.into(),
@@ -221,14 +273,18 @@ fn cut_name(name: &str) -> std::borrow::Cow<'_, str> {
     }
 }
 
-/// A place with no name, which the pool does not hold.
-const NAMELESS: Place = Place { name: "", kind: 0 };
-
-/// Cells ascending, each once, holding the sum of the counts it was given,
-/// their centroids' mean weighted by those counts, and a place where the sum
-/// is one.
-fn gathered(mut cells: Vec<(u32, u32, [u32; 2], Place)>) -> PoiPage {
-    cells.sort_unstable_by_key(|c| c.0);
+/// Cells ascending, each once: counts summed, partial if any part is, and per
+/// kind the named place of least id.
+fn gathered<'a, P: Iterator<Item = ([u32; 2], Place<'a>)>>(cells: impl Iterator<Item = (u32, u32, bool, P)>) -> PoiPage {
+    let mut counts: Vec<(u32, u32, bool)> = Vec::new();
+    let mut places: Vec<(u32, u8, u64, &'a str, [u32; 2])> = Vec::new();
+    for (cell, count, partial, of) in cells {
+        counts.push((cell, count, partial));
+        places.extend(of.filter(|(_, p)| !p.name.is_empty()).map(|(at, p)| (cell, p.kind, p.id, p.name, at)));
+    }
+    counts.sort_unstable_by_key(|c| c.0);
+    places.sort_unstable();
+    places.dedup_by(|b, a| (a.0, a.1) == (b.0, b.1));
     let mut pool = Pool::default();
     let cells = cells
         .chunk_by(|a, b| a.0 == b.0)
@@ -249,9 +305,9 @@ fn gathered(mut cells: Vec<(u32, u32, [u32; 2], Place)>) -> PoiPage {
     PoiPage { cells, places: pool.places }
 }
 
-/// The magic; how many cells, places and bytes of names; the cells, four
-/// words each (the position's two lanes a half-word each); each place's
-/// name's end; each place's kind, a byte; the names.
+/// Magic; counts of cells, shown, places and name bytes; cells (4 words);
+/// shown (2 words, the position's lanes a half-word each); ids (2 words);
+/// name ends; kinds (a byte); names.
 pub fn encode(page: &PoiPage) -> Result<Vec<u8>, MarshalError> {
     validate(page)?;
     let places = &page.places;
@@ -274,13 +330,24 @@ pub fn encode(page: &PoiPage) -> Result<Vec<u8>, MarshalError> {
 }
 
 pub fn decode(bytes: &[u8]) -> Result<PoiPage, MarshalError> {
-    if bytes.len() < 16 || &bytes[..4] != MAGIC {
-        return Err(bad());
+    let root = TreeReader::new(bytes)?.read_branch()?;
+    let (cells, counts, partial, starts) = (
+        root.at(0)?.get_array::<u32>()?,
+        root.at(1)?.get_array::<u32>()?,
+        root.at(2)?.get_array::<u8>()?,
+        root.at(3)?.get_array::<u32>()?,
+    );
+    let (shown, at, kinds, ids) = (root.at(4)?.get_array::<u32>()?, root.at(5)?.get_array::<u16>()?, root.at(6)?.get_strs()?, root.at(7)?.get_strs()?);
+    let (n, places) = (cells.len(), kinds.len() as usize);
+    let runs_fit = starts.len() == n + 1 && starts[0] == 0 && starts.windows(2).all(|w| w[0] <= w[1]) && starts[n] as usize == shown.len();
+    if n > CELLS as usize || counts.len() != n || partial.len() != n || !runs_fit || at.len() != 2 * shown.len() || shown.len() > n * KINDS_MAX || ids.len() as usize != places {
+        return Err(malformed());
     }
     let word = |at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap());
-    let (n, places, pool) = (word(4) as usize, word(8) as usize, word(12) as usize);
-    // Checked against the page's own bound before anything is allocated.
-    if n > CELLS as usize || places > n || bytes.len() != 16 + n * CELL_BYTES + places * 5 + pool {
+    let (n, shown, places, pool) = (word(4) as usize, word(8) as usize, word(12) as usize, word(16) as usize);
+        // Bounds are checked before anything is allocated.
+    let kinds = KIND_CATEGORIES.len() + 1;
+    if n > CELLS as usize || shown > n * kinds || places > shown || bytes.len() != 20 + n * CELL_BYTES + shown * SHOWN_BYTES + places * 13 + pool {
         return Err(bad());
     }
     let cells = (0..n)
@@ -301,8 +368,7 @@ pub fn decode(bytes: &[u8]) -> Result<PoiPage, MarshalError> {
     if ends.windows(2).any(|w| w[0] > w[1]) || ends.last().map_or(0, |&e| e as usize) != text.len() {
         return Err(bad());
     }
-    // Name by name: a pool that is UTF-8 whole could still split a character
-    // between two names.
+    // Name by name: a pool valid as a whole could still split a character between names.
     let mut start = 0;
     for &end in &ends {
         let name = std::str::from_utf8(&text[start..end as usize]).map_err(|_| bad())?;
@@ -319,9 +385,8 @@ pub fn decode(bytes: &[u8]) -> Result<PoiPage, MarshalError> {
     Ok(page)
 }
 
-/// A page is its cells ascending, each inside the page and holding a place,
-/// its position a half-word a lane, and a place only where a cell holds one,
-/// the place from the pool and of a kind the badge table has.
+/// Cells ascending and in the page; runs contiguous; shown places one per kind,
+/// ascending; positions a half-word a lane; kinds in the badge table.
 fn validate(page: &PoiPage) -> Result<(), MarshalError> {
     if page.cells.iter().any(|c| c.cell >= CELLS || c.count == 0) || page.cells.windows(2).any(|w| w[0].cell >= w[1].cell) {
         return Err(bad());
@@ -336,11 +401,6 @@ fn validate(page: &PoiPage) -> Result<(), MarshalError> {
         return Err(bad());
     }
     Ok(())
-}
-
-#[track_caller]
-fn bad() -> MarshalError {
-    MarshalError::new(Errno::EBADMSG)
 }
 
 #[cfg(test)]

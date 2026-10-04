@@ -1,11 +1,8 @@
 // pxl-kernel/control/sensor/device_orientation.rs
 
-//! The device's compass sensor, as decisions: the heading an event means, when
-//! to start listening, and when a silent sensor counts as lost. The listener is
-//! the shell's — it takes `take_orientation_commands` and reports events back.
-//! So is iOS's permission: a prompt belongs to the gesture that raised it, the
-//! way a page's handler calls `requestPermission` and the browser answers, and
-//! the kernel hears only the answer (`orientation_permission`).
+//! The compass sensor's decisions: the heading an event means, when to
+//! listen, and when silence counts as lost. The listener and iOS's permission
+//! prompt are the shell's; the kernel hears only the answer.
 
 use crate::abi::cmd::Message;
 
@@ -14,35 +11,26 @@ use crate::global::Global;
 use crate::host::now;
 use crate::world::change::wake_at;
 
-/// There's no Permissions-API equivalent for orientation (iOS Safari doesn't
-/// expose one at all — permission there is only ever regrantable via a fresh
-/// user gesture, by design), so a permission revoked mid-session can't be pushed
-/// to us like geolocation's `change` event. Track the last real event instead
-/// and treat a long gap while nominally tracking as the signal having been lost.
-/// That holds only where the sensor talks while the device is still, which a
-/// browser's does and a device's does not (`silence_is_loss`).
+/// Orientation has no Permissions API, so revocation cannot be pushed; a long
+/// gap while tracking is taken as loss. Only valid where the sensor talks
+/// while still (`silence_is_loss`).
 const WATCHDOG_TIMEOUT_MS: f64 = 8000.0;
 const WATCHDOG_INTERVAL_MS: f64 = 3000.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OrientationCommand {
-    /// Listen: `absolute` for deviceorientationabsolute where the browser has it.
+    /// Uses deviceorientationabsolute where the browser has it.
     Listen,
     Remove,
 }
 
-/// What the platform offers, as the shell found it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OrientationPlatform {
     pub supported: bool,
-    /// iOS 13+'s permission gate: requestPermission exists and must run inside
-    /// a direct user gesture.
+    /// iOS 13+: requestPermission must run inside a user gesture.
     pub needs_permission: bool,
-    /// Whether a silent sensor has been lost. A browser's dispatches events
-    /// while the device lies still and cannot report that it stopped; a
-    /// device's (Core Location) speaks only when the heading turns, so its
-    /// silence is a heading that holds, and it reports a failure itself
-    /// (`orientation_lost`).
+    /// A browser's sensor talks while still; a device's (Core Location) speaks
+    /// only on change and reports failure itself.
     pub silence_is_loss: bool,
 }
 
@@ -62,11 +50,9 @@ fn orientation() -> &'static mut Orientation {
     })
 }
 
-/// An orientation event: iOS's own compass heading preferred, the alpha-derived
-/// one otherwise.
+/// iOS's compass heading preferred, the alpha-derived one otherwise.
 pub fn orientation_event(webkit_compass_heading: Option<f64>, alpha: Option<f64>, beta: Option<f64>, gamma: Option<f64>) {
-    // A browser that has the API but no sensor answers the listener once,
-    // with nothing in it, and then never again: the device has no compass.
+    // An API with no sensor answers once, empty, and never again.
     if webkit_compass_heading.is_none() && alpha.is_none() && beta.is_none() && gamma.is_none() {
         let o = orientation();
         o.last_event_at = None;
@@ -81,10 +67,8 @@ pub fn orientation_event(webkit_compass_heading: Option<f64>, alpha: Option<f64>
     device_orientation_store().set_orientation(heading, beta, gamma);
 }
 
-/// Requests the sensor, guarded against duplicate activation: true when it is
-/// tracking or listening has been asked for. Where the platform gates it behind
-/// a permission, only the shell's prompt can start it, so this is false until
-/// that answer has arrived.
+/// True when tracking or asked for. Behind a permission only the shell's
+/// prompt can start it.
 pub fn request_orientation(platform: OrientationPlatform) -> bool {
     let store = device_orientation_store();
     if store.is_tracking_orientation {
@@ -105,10 +89,8 @@ pub fn request_orientation(platform: OrientationPlatform) -> bool {
     true
 }
 
-/// Where the permission stands. Where a prompt gates the sensor, a granted
-/// prompt has already started the shell's listener; where none does, a grant
-/// came from outside the app — a device's settings — and starts it here. A
-/// refusal leaves no listener: the shell let go of whatever it had begun.
+/// Without a prompt gate, a grant came from outside the app (device
+/// settings) and starts the listener here.
 pub fn orientation_permission(answer: PermissionAnswer, platform: OrientationPlatform) {
     let store = device_orientation_store();
     match answer {
@@ -135,9 +117,6 @@ pub fn orientation_permission(answer: PermissionAnswer, platform: OrientationPla
     }
 }
 
-/// The sensor was lost, the listener gone with it: the shell's report where
-/// the platform makes one, the watchdog's verdict where silence is all there
-/// is. Back through a control that asks for the compass, or the watchdog.
 pub fn orientation_lost() {
     orientation().last_event_at = None;
     let store = device_orientation_store();
@@ -145,12 +124,10 @@ pub fn orientation_lost() {
     store.set_error(Message::OrientationSignalLost);
 }
 
-/// The map opened: started where the platform allows it without a prompt.
 pub fn orientation_open(platform: OrientationPlatform) {
     request_orientation(platform);
 }
 
-/// The map closed: the listener is removed.
 pub fn orientation_close() {
     orientation().commands.push(OrientationCommand::Remove);
     let store = device_orientation_store();
@@ -158,10 +135,8 @@ pub fn orientation_close() {
     store.status = DevicePoseStatus::Idle;
 }
 
-/// Browsers throttle or stop dispatching deviceorientation for backgrounded
-/// tabs, so the last event goes stale the whole time we're hidden; judging the
-/// gap right as the tab becomes visible would misread "was backgrounded" as
-/// "signal lost". A fresh baseline instead.
+/// Background tabs stop dispatching, so judging the gap on return would read
+/// "was hidden" as "lost": take a fresh baseline instead.
 pub fn orientation_visible() {
     let o = orientation();
     if o.last_event_at.is_some() {
@@ -169,12 +144,8 @@ pub fn orientation_visible() {
     }
 }
 
-/// The watchdog's turn, while the tab is visible: polls for a stalled signal
-/// while nominally tracking, and doubles as this sensor's only path back once
-/// marked lost — request_orientation no-ops while already tracking, so retrying
-/// is safe to repeat. iOS's request must run inside a user gesture, so recovery
-/// there stays manual (the compass button). Where silence is no loss, there is
-/// nothing to watch.
+/// Also the only path back once lost; iOS recovery stays manual (the compass
+/// button), since its request needs a user gesture.
 pub fn orientation_watchdog_step(platform: OrientationPlatform) {
     if !platform.silence_is_loss {
         return;
@@ -201,7 +172,6 @@ pub fn orientation_watchdog_step(platform: OrientationPlatform) {
     }
 }
 
-/// What the shell's listener should do, in order.
 pub fn take_orientation_commands() -> Vec<OrientationCommand> {
     core::mem::take(&mut orientation().commands)
 }

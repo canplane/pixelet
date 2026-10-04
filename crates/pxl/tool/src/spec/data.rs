@@ -1,26 +1,11 @@
 // pxl-tool/spec/data.rs
 
-//! Data specs. A data spec is a JSON file of named values, written as a Rust
-//! module of nested `pub mod`s of constants, and — where the shell still
-//! reads the same values — as a TypeScript module of `as const` objects. Most
-//! of these are the kernel's alone, so they name no `ts` at all.
-//!
-//! A leaf is a number, a string, a boolean or an array of one kind of them; a
-//! number is an f64 unless a `$type` above it says otherwise ("u8".."u64",
-//! "i32", "f32"), and a u64 is written as a hex string.
-//!
-//! A closed set of names — a list of them, an object of entries, or names an
-//! integer `$type` numbers — is also an enum, as cube_type.json's channels
-//! are. A string whose `$type` names an enum (a path, or a name this spec
-//! declares) is that enum's member; `"rgb"` is its packed color and `"hash"`
-//! its FNV-1a. Any other string is a `&str`. A value that carries its reason
-//! is `{ "$value": …, "$doc": [lines] }`; an object's own reason is its
-//! `$doc` key. The file's `$doc` heads the module.
+//! Data specs: JSON of named values written as Rust constants and, where the
+//! shell reads them, TypeScript `as const`. A number is f64 unless a `$type`
+//! says otherwise; a u64 is a hex string. `{ "$value", "$doc" }` carries a reason.
 
 use super::{align_star, casing_note, enum_name, file, js_num, json_str, line_comments, read, rgb_literal, rs_doc, rs_ident, ts_doc, Node, Output};
 
-/// Whether a data spec's closed sets are written as Rust enums: all of them,
-/// the top-level lists named, or none.
 pub enum Enums {
     None,
     All,
@@ -31,17 +16,10 @@ struct DataSpec {
     json: &'static str,
     ts: Option<&'static str>,
     rs: Option<&'static str>,
-    /// The Rust module the router declares for the file, where it is not the
-    /// file's stem.
     module: Option<&'static str>,
     enums: Enums,
-    /// The top-level names the TypeScript reads; the rest of the table is the
-    /// Rust's alone and is not written into the shell. Absent where the
-    /// TypeScript reads all of it.
+    /// Absent where the TypeScript reads all of it.
     ts_names: Option<&'static [&'static str]>,
-    /// The C++ header written from it, and the namespace its names are
-    /// declared in: `key.SUBMISSION` of directory.json is
-    /// `xpute::directory::key::SUBMISSION`.
     cpp: Option<(&'static str, &'static str)>,
 }
 
@@ -138,7 +116,6 @@ const DATA_SPECS: [DataSpec; 10] = [
     },
 ];
 
-/// A value's `$type`, where it names one.
 fn type_of<'a>(n: &'a Node, or: &'a str) -> &'a str {
     n.str_at("$type").unwrap_or(or)
 }
@@ -148,7 +125,6 @@ fn is_ts_ident(k: &str) -> bool {
     c.next().is_some_and(|f| f.is_ascii_alphabetic() || f == '_' || f == '$') && c.all(|x| x.is_ascii_alphanumeric() || x == '_' || x == '$')
 }
 
-/// A value as TypeScript writes it, under the `$type` it is given.
 pub fn ts_literal(n: &Node, ty: &str, indent: &str) -> Result<String, String> {
     if n.is_wrapper() {
         return ts_literal(n.value(), type_of(n, ty), indent);
@@ -178,8 +154,6 @@ pub fn ts_literal(n: &Node, ty: &str, indent: &str) -> Result<String, String> {
     })
 }
 
-/// Where the Rust of a data spec reads a name the JSON types a string with:
-/// the module the spec is written as, and the top-level names it declares.
 struct Scope {
     module: String,
     top: Vec<String>,
@@ -187,7 +161,7 @@ struct Scope {
     enum_names: Vec<String>,
 }
 
-/// FNV-1a over UTF-8, 64 bits: xpute_core::kit::hash::fnv1a64_bytes.
+/// Must match xpute_core::kit::hash::fnv1a64_bytes.
 fn fnv1a64(text: &str) -> String {
     let mut h: u64 = 0xcbf29ce484222325;
     for b in text.bytes() {
@@ -201,7 +175,6 @@ fn is_primitive(ty: &str) -> bool {
     matches!(ty, "u8" | "u16" | "u32" | "u64" | "i8" | "i16" | "i32" | "i64" | "f32" | "f64" | "rgb" | "hash" | "str")
 }
 
-/// Whether a `$type` names an enum: a path, or a name this spec declares.
 fn enum_path(ty: &str, scope: &Scope) -> Option<String> {
     if is_primitive(ty) {
         return None;
@@ -214,8 +187,6 @@ fn enum_path(ty: &str, scope: &Scope) -> Option<String> {
     declared.then(|| format!("{}::{ty}", scope.module))
 }
 
-/// A leaf as the Rust holds it: a string is the enum member or the hash its
-/// `$type` names, and otherwise the string.
 fn rs_scalar(n: &Node, ty: &str, scope: &Scope) -> Result<(String, String), String> {
     Ok(match n {
         Node::Bool(b) => ("bool".to_string(), b.to_string()),
@@ -234,10 +205,6 @@ fn rs_scalar(n: &Node, ty: &str, scope: &Scope) -> Result<(String, String), Stri
     })
 }
 
-/// A closed set of names as the Rust names it, the way cube_type.json's
-/// channels are: an enum whose members are the JSON's names, numbered as the
-/// JSON numbers them — its own numbers where it gives them, its order where
-/// it lists them.
 fn rs_enum(name: &str, variants: &[(String, String)], indent: &str, out: &mut Vec<String>) {
     let e = enum_name(name);
     out.extend([
@@ -275,10 +242,6 @@ fn rs_items(name: &str, n: &Node, ty: &str, indent: &str, out: &mut Vec<String>,
     } else {
         let t = type_of(n, ty);
         let keys: Vec<(&str, &Node)> = n.named().collect();
-        // A catalog: names numbered as decor.json numbers its types — its
-        // numbers stay constants, as cube_type.spec.rs keeps both, and are one
-        // enum beside them where no two names share one — or a set of entries
-        // each an object of its own, numbered in order.
         let numbers: Vec<Option<f64>> = keys.iter().map(|(_, v)| v.num()).collect();
         let numbered = scope.enums && !keys.is_empty() && matches!(t, "u8" | "u16" | "u32") && numbers.iter().all(|v| v.is_some_and(|v| v < 256.0));
         let distinct = numbers.iter().enumerate().all(|(i, a)| numbers[..i].iter().all(|b| b != a));
@@ -291,9 +254,7 @@ fn rs_items(name: &str, n: &Node, ty: &str, indent: &str, out: &mut Vec<String>,
             );
             lines.push(String::new());
         } else if scope.enums && !keys.is_empty() && keys.iter().all(|(_, v)| v.is_obj() && v.get("$number").and_then(Node::num).is_some()) {
-            // A set of entries, each naming its own number as decor.json
-            // numbers its kinds; an object whose entries carry none is a
-            // structure, not a set.
+            // An object whose entries carry no `$number` is a structure, not a set.
             let variants: Vec<(String, String)> = keys.iter().map(|(k, v)| (k.to_string(), js_num(v.get("$number").and_then(Node::num).unwrap_or_default()))).collect();
             rs_enum(name, &variants, indent, &mut lines);
             lines.push(String::new());
@@ -303,8 +264,6 @@ fn rs_items(name: &str, n: &Node, ty: &str, indent: &str, out: &mut Vec<String>,
         for (k, v) in &keys {
             rs_items(k, v, t, &inner, &mut body, scope)?;
         }
-        // Each object's keys are also listed as its `KEYS`, where its closed
-        // sets are not enums.
         if !scope.enums {
             body.push(format!(
                 "{indent}    pub const KEYS: &[&str] = &[{}];",
@@ -341,7 +300,6 @@ fn rs_leaf(name: &str, v: &Node, ty: &str, indent: &str, out: &mut Vec<String>, 
                 rs_ident(name),
                 a.iter().map(|e| e.str().map(json_str).unwrap_or_default()).collect::<Vec<_>>().join(", ")
             ));
-            // A list of names is a closed set, and an enum beside it.
             if (scope.enums || scope.enum_names.iter().any(|n| n == name)) && a.iter().all(|e| e.str().is_some_and(is_name)) {
                 let variants: Vec<(String, String)> = a.iter().enumerate().map(|(i, e)| (e.str().unwrap_or_default().to_string(), i.to_string())).collect();
                 rs_enum(name, &variants, indent, out);
@@ -410,9 +368,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                     body.push(format!("export const {name}{} = {};", annot.map(|a| format!(": {a}")).unwrap_or_default(), ts_literal(n, t, "")?));
                 } else {
                     body.push(format!("export const {name} = {} as const;", ts_literal(n, "f64", "")?));
-                    // A set numbered by its entries' `$number`, as the Rust
-                    // enum is: its members' numbers, the way decor.spec.ts
-                    // lists decor_types.
                     let entries: Vec<(&str, &Node)> = if n.is_obj() { n.named().collect() } else { Vec::new() };
                     if matches!(d.enums, Enums::All) && !entries.is_empty() && entries.iter().all(|(_, v)| v.is_obj() && v.get("$number").and_then(Node::num).is_some()) {
                         body.extend([String::new(), format!("export const {} = {{", enum_name(name))]);
@@ -512,9 +467,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     Ok(outputs)
 }
 
-/// A name's C++ constants: a number each, an object's entries in a
-/// namespace of its name. What is not a number — a string, an array — is
-/// refused, since nothing a C++ header carries is one yet.
+/// Non-numbers are refused: no C++ header carries one yet.
 fn cpp_items(name: &str, n: &Node, ty: &str, out: &mut Vec<String>) -> Result<(), String> {
     let doc = if n.is_obj() { n.lines_at("$doc") } else { None };
     out.push(String::new());

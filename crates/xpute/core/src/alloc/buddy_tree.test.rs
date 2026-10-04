@@ -1,5 +1,4 @@
 // xpute-core/alloc/buddy_tree.test.rs
-// (no pair: TypeScript has no allocator — JavaScript has no heap to hand out)
 
 use super::*;
 use std::alloc::Layout;
@@ -9,10 +8,8 @@ const MIN: usize = 12;
 const MAX: usize = 20;
 const SPLIT_BYTES: usize = (1 << (MAX - MIN)) / 8;
 
-/// A range over memory the test owns, so a block handed out can be written
-/// through and read back — which is how an overlap shows itself. `Range`
-/// answers with no argument and no receiver, so the buffer is one value made
-/// once and never given back: the allocator over a range outlives it.
+/// Made once and never freed: `Range` has no receiver, and the allocator
+/// over it outlives any one test.
 fn arena(cell: &'static OnceLock<usize>) -> usize {
     *cell.get_or_init(|| {
         let layout = Layout::from_size_align(1 << MAX, 1 << MAX).unwrap();
@@ -47,11 +44,6 @@ range!(Buddies, BUDDIES_AT);
 range!(Full, FULL_AT);
 range!(Reused, REUSED_AT);
 
-/// The one thing an allocator must never do, and the one test that catches it
-/// whatever the cause: every live block is written through with a byte of its
-/// own, and every one still reads back after the blocks around it have come
-/// and gone. An overlap, a bad coalesce, or a header written into a caller's
-/// bytes all show up here and nowhere else.
 #[test]
 fn what_was_written_in_a_block_is_still_there_after_its_neighbors_come_and_go() {
     let heap: BuddyMalloc<Spread> = BuddyMalloc::new();
@@ -73,8 +65,6 @@ fn what_was_written_in_a_block_is_still_there_after_its_neighbors_come_and_go() 
     }
     assert!(live.len() > 8, "the range served only {} of 24 requests", live.len());
 
-    // Half of them go back, which is what lets the tree join and split around
-    // the ones that stayed.
     for (p, size, _) in live.iter().step_by(2) {
         // SAFETY: from this allocator, not yet given back.
         unsafe { heap.free(*p, *size) };
@@ -97,8 +87,6 @@ fn what_was_written_in_a_block_is_still_there_after_its_neighbors_come_and_go() 
     }
 }
 
-/// The buddy's own move: two halves of one block, both given back, are the
-/// block again — so a request for the pair fits where neither half would.
 #[test]
 fn two_buddies_freed_are_the_block_they_came_from() {
     let heap: BuddyMalloc<Buddies> = BuddyMalloc::new();
@@ -115,8 +103,6 @@ fn two_buddies_freed_are_the_block_they_came_from() {
     assert_eq!(both, low, "the pair did not join: {both:?} is not the lower half {low:?}");
 }
 
-/// Past the range there is nothing to hand out, and saying so is all that may
-/// happen — what is already live is untouched.
 #[test]
 fn a_request_past_the_range_is_refused_and_leaves_what_is_live_alone() {
     let heap: BuddyMalloc<Full> = BuddyMalloc::new();
@@ -138,9 +124,6 @@ fn a_request_past_the_range_is_refused_and_leaves_what_is_live_alone() {
     assert!(bytes.iter().all(|b| *b == 0x5a), "a refusal wrote over a live block");
 }
 
-/// What is given back is handed out again rather than the range being walked
-/// further: `used` is what the allocator has ever reached into, so a free and
-/// an identical request must leave it where it was.
 #[test]
 fn what_is_freed_is_handed_out_again_rather_than_more_of_the_range() {
     let heap: BuddyMalloc<Reused> = BuddyMalloc::new();

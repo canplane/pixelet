@@ -143,6 +143,30 @@ and reused unless `--reclassify` is passed.
    first ask above level 3 takes seconds to a minute. A mismatch means the two
    paths have drifted — investigate before publishing.
 
+### Looking at a bake before it is published
+
+The dev tile server serves a page from its cache when the page's file is
+there and bakes it only when it is not, and its cache is laid out as a
+baked set is: `<cache>/terrain/<level>/<page_idx>` and `_ocean`, zstd as the
+bake writes them (`demand.rs`, `--cache`, `./out/dev` by default). So a
+finished bake is looked at in the app, with nothing uploaded, by putting it
+where the cache is:
+
+```bash
+# with the dev tile server stopped
+mv out/dev/terrain out/dev/terrain.on-demand   # or remove it
+cp -al out/terrain/<version> out/dev/terrain
+deno task dev:local
+```
+
+`cp -al` links the files rather than copying them, so it takes no space,
+and the cache's purge (`POST …/world/terrain/cache/invalidate`) unlinks the
+links and leaves the bake under `out/terrain/<version>` as it was. A page
+the bake has no object for — open water past the coverage, a level above
+the pyramid's top — is still baked on demand into the cache beside the
+linked ones. After a purge the server bakes everything on demand again; link
+the set back in to see the bake.
+
 ## POI
 
 POI is a second layer of terrain's pyramid: the same pages, levels and names,

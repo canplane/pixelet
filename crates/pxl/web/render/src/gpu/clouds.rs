@@ -1,10 +1,7 @@
 // pxl-render/gpu/clouds.rs
 
-//! The clouds: a layer over the planet drawn after the opaque world
-//! (frame/shader/clouds.wgsl), one full-screen pass reading the frame, the
-//! air, and where the camera stands on the ground. What it costs is a
-//! fragment a pixel where a ray meets the layer — eight octaves of value noise
-//! and the air's lookups — and nothing where one does not.
+//! The cloud layer: one full-screen pass after the opaque world, reading a
+//! tile baked once per device.
 
 use pxl_spec::space::mat4::Mat4;
 use pxl_spec::space::pvf3::core::{IVEC_X_W, IVEC_Y_W};
@@ -21,61 +18,35 @@ use crate::gpu::renderer::put_ray;
 use crate::look::atmosphere::light_at;
 use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_SKY, ENV_SUN};
 
-/// Floats the Clouds uniform (clouds.wgsl's Clouds) holds: the ray, and the
-/// sun's and the moon's light at the layer. Where the layer is and what
-/// shapes it is the air's uniform's (`field`), beside the height of the
-/// camera it is shown from.
+/// The ray, and the sun's and moon's light at the layer.
 pub(crate) const CLOUDS_FLOATS: usize = 12 + 8;
 pub(crate) const SUN_AT: usize = 12;
 pub(crate) const MOON_AT: usize = 16;
-/// Where the layer is and what shapes it, as the air's uniform carries it
-/// (atmos_medium.wgsl's `cloud_*`, frame/shader/cloud_field.wgsl).
 pub struct CloudField {
-    /// The lattice index the root frame's origin lies in, and the fraction
-    /// of a unit past it.
     pub base: [u32; 2],
     pub frac: [f32; 2],
-    /// The sky's clock, in seconds: the wind carries the layer by it.
     pub time: f32,
-    /// The lattice's count across the world, where it wraps.
     pub count: u32,
-    /// The layer's height, and the camera's height past which it is gone.
     pub altitude_km: f32,
     pub gone_km: f32,
 }
-/// The layer's height: a fair-weather cumulus base.
+/// A fair-weather cumulus base.
 const ALTITUDE_KM: f64 = 1.5;
-/// The camera's height past which the layer is not drawn, faded out from
-/// the layer up: seen from above, flat noise over the ground reads as blots
-/// on it. Four times the layer's own height.
+/// Seen from above, flat noise over the ground reads as blots.
 const GONE_KM: f64 = 4.0 * ALTITUDE_KM;
-/// The tile the layer's shape is baked into once for a device
-/// (frame/shader/cloud_tile.wgsl): its lattice units across, and its texels.
-/// One fetch a pixel, and its mip chain is what a pixel too small for the
-/// finest octave reads, in place of the eight octaves of hashes the shape
-/// takes to make.
+/// One fetch a pixel and a mip chain, in place of eight octaves of hashes.
 pub(crate) const TILE_UNITS: u32 = 32;
 pub(crate) const TILE_TEXELS: u32 = 1024;
-// A unit is a whole number of texels, so a lattice unit's fraction is a texel
-// coordinate exactly and the tile meets itself without a seam.
-/// The cells a unit of the clouds' lattice spans, as a shift
-/// (clouds.wgsl's CLOUD_LATTICE_CELLS).
+/// A unit is a whole number of texels, so a unit's fraction is a texel
+/// coordinate exactly and the tile meets itself without a seam.
 pub(crate) const LATTICE_SHAMT: u32 = 12;
-/// The lattice's count across the world, where it wraps: the world is the
-/// X lane's width in cells (space/adapter/3857.rs).
 const LATTICE_COUNT: u32 = 1 << (IVEC_X_W - LATTICE_SHAMT);
-// Y's lane is as wide, so one count wraps both axes.
 const _: () = assert!(IVEC_X_W == IVEC_Y_W, "one lattice count for both axes");
-// The tile meets itself where the lattice wraps as well as where the tile
-// does, so the world is a whole number of tiles across.
 const _: () = assert!(LATTICE_COUNT.is_multiple_of(TILE_UNITS), "the world is whole tiles");
 
 pub struct CloudPass {
-    /// From under the layer, drawn only where the world left the far plane;
-    /// from over it, over everything (frame/shader/clouds.wgsl).
     below: Built,
     above: Built,
-    /// The camera over the layer this frame, and past where it is gone.
     over: bool,
     gone: bool,
     uniform: u32,
@@ -100,9 +71,7 @@ impl CloudPass {
         );
         let tile_view = object();
         g.view(tile_view, tile, dimension::D2, 0, tile_levels, 0, 1);
-        // Repeated, since the tile meets itself, and filtered between its
-        // levels as well as within one: a pixel reads the level its
-        // footprint asks for.
+        // Repeated, since the tile meets itself.
         let tile_sampler = object();
         g.sampler(tile_sampler, filter::LINEAR, filter::LINEAR, filter::LINEAR, address::REPEAT, compare::NONE, 1);
         let uniform = object();
@@ -114,7 +83,6 @@ impl CloudPass {
         e[10..15].copy_from_slice(&[2, resource::VIEW, tile_view, 0, 0]);
         e[15..20].copy_from_slice(&[3, resource::SAMPLER, tile_sampler, 0, 0]);
         e[20..].copy_from_slice(&air);
-        // One layout serves both pipelines: their groups are the same.
         g.bind_group(group, below.layouts[0], &e);
         bake(g, pipelines, tile, tile_levels);
         CloudPass {
@@ -128,11 +96,6 @@ impl CloudPass {
         }
     }
 
-    /// The frame's clouds: `view_proj`, the root frame to WebGPU clip, and
-    /// the eye in it; the environment's lane `env`, for the sun's and the
-    /// moon's directions, whose light reaches the layer through the air; and
-    /// straight up where the eye stands, which their heights are measured
-    /// from.
     pub fn lay_out(&mut self, g: &Gpu, view_proj: &Mat4, eye: &V3, env: &[f32], up: &V3) {
         put_ray(&mut self.words, 0, view_proj, eye);
         self.over = env[ENV_AIR] as f64 > ALTITUDE_KM;
@@ -146,7 +109,6 @@ impl CloudPass {
         g.write_buffer(self.uniform, 0, bytes(&self.words));
     }
 
-    /// The layer into the open pass, over what is drawn opaque.
     pub fn draw(&self, g: &Gpu, pass: u32) {
         if self.gone {
             return;
@@ -157,22 +119,9 @@ impl CloudPass {
     }
 }
 
-/// Where the layer is and what shapes it, for the air's uniform
-/// (gpu/atmosphere.rs's CLOUD_BASE on): the lattice index the eye's
-/// frame's origin — the root frame's `origin`, the cell it is on the map,
-/// as the integer lanes of its PVF3, and the eye `past` it east and north
-/// in units — lies in and the fraction of a unit past it; the sky's clock,
-/// from the environment's lane `env`; the lattice's count across the world;
-/// the layer's height; and the camera's height past which it is gone.
-///
-/// The origin is split on the lattice here, in its own lanes, so the
-/// shader never holds a coordinate the size of the world: it gets the
-/// lattice index, the lane shifted down, and the fraction of a unit past
-/// it, the lane's low bits with the eye's offset in doubles, and adds only
-/// the few thousand cells between the eye and the layer. A shift and a
-/// mask on two's complement lanes are a floor and a remainder, so a cell
-/// west of the origin's zero lands in the lattice unit it is in, and the
-/// index masked to the count is the same unit wherever the lane wrapped.
+/// The origin is split on the lattice in integer lanes, so the shader never
+/// holds a world-sized coordinate. Shift and mask on two's complement are a
+/// floor and a remainder, so cells west of zero land in the right unit.
 pub fn field(origin: IVec, past: [f64; 2], env: &[f32]) -> CloudField {
     let unit = ivec::sh(origin, -(LATTICE_SHAMT as i32));
     let within = ivec::and(origin, ivec::fill((1 << LATTICE_SHAMT) - 1));
@@ -193,10 +142,6 @@ pub fn field(origin: IVec, past: [f64; 2], env: &[f32]) -> CloudField {
     }
 }
 
-/// Draws the tile the shape is read from, with its mip chain: one field over
-/// the whole map, so it is made once for the device
-/// (frame/shader/cloud_bake.wgsl) and a pixel reads a texel of it in place of
-/// the eight octaves of hashes it takes to make.
 fn bake(g: &Gpu, pipelines: &mut Pipelines, tile: u32, levels: u32) {
     let built = pipelines.build(g, PIPELINE_CLOUD_FIELD, format::R8);
     let encoder = object();

@@ -1,17 +1,12 @@
 // xpute-runtime/sched/tick.test.rs
-//
-// A step is a plain fn, so what a step sees goes in the state it runs over.
 
 use core::cell::Cell;
 
 use super::*;
 use crate::clock::set_clock;
 
-// A clock the test moves, as edge.test.rs has. It used to be the wall's,
-// and a step that said it cost 0.3ms cost whatever the machine gave it —
-// so "the phase stayed inside its budget plus one step" held or failed on
-// how busy the machine was, and said nothing either way. Here a step costs
-// what it says.
+// A clock the test moves: on the wall clock these assertions depended on how
+// busy the machine was.
 thread_local! {
     static CLOCK_MS: Cell<f64> = const { Cell::new(0.0) };
 }
@@ -20,7 +15,6 @@ fn clock() -> f64 {
     CLOCK_MS.with(|c| c.get())
 }
 
-/// A step that costs `ms`.
 fn burn(ms: f64) {
     CLOCK_MS.with(|c| c.set(c.get() + ms));
 }
@@ -89,7 +83,6 @@ fn tick_the_visible_phase_cannot_take_the_content_share_and_content_sees_it() {
         VISIBLE,
         |c| {
             c.state.a = c.budget.remaining();
-            // Runs the budget it was shown to the floor.
             c.budget.run(
                 0..1000,
                 |_| {

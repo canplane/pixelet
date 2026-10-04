@@ -1,25 +1,9 @@
 // @xpute/core/collection/map.ts
 
 /**
- * A dense array of keys with an index into it: insert appends, delete moves
- * the last entry into the hole, and a walk over every entry is a walk over
- * contiguous memory.
- *
- * Laid out as lanes. The keys are one typed array in position order, and the
- * index from key to position is an open-addressing table of positions —
- * linear probing, deletion by backward shift, so no tombstones pile up. There
- * is no object per entry, and both halves follow the data into linear memory.
- *
- * Values are not stored. A position is the value: `insert` returns it,
- * `find` looks it up, and `remove_at` says which entry moved into a freed
- * position — a caller keeps what it stores per entry in its own lanes at the
- * same position and moves them along.
- *
- * Keys are integers of one width, chosen by KeyTraits: I64_KEYS for 64-bit
- * keys (a packed IVec, say), U32_KEYS for 32-bit ones. The two cannot share
- * one lane type — typed arrays split into a number family and a BigInt family
- * (abi/array.ts) — so the traits carry the lane, the hash and the canonical
- * form, the same way sparse_tree takes its key operations as PVecTraits.
+ * A dense key array with an open-addressing index into it (linear probing,
+ * backward-shift deletion). A position is the value: callers keep per-entry
+ * data in their own lanes and move it when `remove_at` moves an entry.
  */
 
 import type { i32, i64, numeric, u32, u64 } from "../abi/word.ts";
@@ -30,7 +14,6 @@ type KeyLane = I64Array | U32Array;
 
 export interface KeyTraits<K extends numeric> {
   readonly ctor: BigInt64ArrayConstructor | Uint32ArrayConstructor;
-  /** The form a key is stored and compared in. */
   norm(key: K): K;
   /** A 32-bit mix whose high bits are well spread; the table takes a slot
    * from the top bits. */
@@ -75,12 +58,10 @@ export class IndexedMap<K extends numeric> {
     return this._size;
   }
 
-  /** The key at a position, in its stored form. */
   key_at(pos: u32): K {
     return this.keys[pos] as K;
   }
 
-  /** The key's position, or -1. */
   find(key: K): i32 {
     const k = this.traits.norm(key);
     let s = this.home(k);
@@ -92,7 +73,6 @@ export class IndexedMap<K extends numeric> {
     }
   }
 
-  /** The key's position, appending it at the end if it is new. */
   insert(key: K): u32 {
     const found = this.find(key);
     if (found >= 0) return found;
@@ -126,12 +106,7 @@ export class IndexedMap<K extends numeric> {
     this._size = 0;
   }
 
-  /**
-   * Every position once, in an order fixed by `seed`, in O(1) memory: a
-   * start and a step coprime to the size walk the positions as a cycle. For
-   * spreading work or routing without favoring insertion order. Mutating
-   * during the walk is undefined.
-   */
+  /** Every position once, in an order fixed by `seed`; mutating during the walk is undefined. */
   *positions_seeded(seed: u64): IterableIterator<u32> {
     const n = this._size;
     if (n === 0) return;

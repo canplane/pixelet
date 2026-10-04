@@ -8,52 +8,28 @@ publish.workspace = true
 path = "src/lib.rs"
 
 [features]
-# What `serve_tiles` needs. Off by default, and the binary declares it as
-# required, so `cargo build` without it builds the three bake tools and skips
-# the server entirely.
+# `serve_tiles` only; off by default so the bake tools skip axum.
 serve = ["dep:axum", "dep:tokio"]
 
 [dependencies]
 pxl-geo-spec = { path = "../geo-spec" }
 pxl-spec = { path = "../../spec", features = ["serde"] }
 xpute-core = { path = "../../../xpute/core" }
-# The blocking client rather than tokio-postgres, which pxl-geo takes. A page
-# is five queries, a pack and a rasterize, and the pack and the rasterize are
-# `Rc`-backed throughout (issue/20260918-the-server-in-rust-and-the-line-already-drawn.md):
-# on a synchronous client the whole page is one call that nothing has to be
-# `Send` across, and the concurrency is a thread per worker with a connection
-# of its own. It is tokio-postgres underneath either way.
+# Blocking: the pack and rasterize are `Rc`-backed, so a page is one non-`Send`
+# call, and each worker is a thread with its own connection.
 postgres = { version = "0.19", features = ["with-serde_json-1"] }
-# The objects are stored zstd-compressed and served with that
-# Content-Encoding, so whatever fetches them — a browser, an app's HTTP stack
-# — decodes them transparently and the bucket never has to
-# (issue/20260913-compression-by-traffic.md). libzstd is the encoder with the
-# high levels, and a bake is native, so its C is no cost here.
 zstd = "0.13"
 # The reader for tile sets baked before zstd, which are gzip.
 flate2 = "1"
-# The manifest only; nothing on the wire to the client is JSON.
 serde = { version = "1", features = ["derive"] }
-# `raw_value` so that a field can be carried as the source's own bytes: jsonb
-# keeps a number as `numeric`, so re-rendering a parsed double changes the
-# value stored (overture/ingest.rs's `Cell::Json`).
-#
-# `float_roundtrip` because the default parser is not correctly rounded. It
-# reads a place's longitude 127.02105069516375 as the double above the one
-# `strtod` gives, and the projected point then lands an ULP east of where
-# Postgres itself would put it — measured against the TypeScript this is
-# ported from, over 227 of 10,979 places.
+# `raw_value`: jsonb keeps numbers as `numeric`, so re-rendering a parsed double
+# changes the stored value. `float_roundtrip`: the default parser misrounded
+# 227 of 10,979 longitudes by an ULP.
 serde_json = { version = "1", features = ["float_roundtrip", "raw_value"] }
-# The dev tile server alone, and optional so that a build of the bake tools
-# does not compile them: axum's own subtree is 51 of this crate's 101 packages,
-# and `bake_tiles` links none of it — the linker already leaves it out, so what
-# a feature saves here is compile time rather than bytes.
 axum = { version = "0.8", optional = true }
 tokio = { version = "1", features = ["fs", "macros", "net", "rt-multi-thread", "sync", "process", "time"], optional = true }
 
-# Cargo finds the other three in src/bin/. This one is declared because a
-# feature gates it: the dev tile server is 51 of this crate's 101 packages, and
-# a build of the bakes should not compile them.
+# Declared because a feature gates it; the other bins are found in src/bin/.
 [[bin]]
 name = "serve_tiles"
 required-features = ["serve"]

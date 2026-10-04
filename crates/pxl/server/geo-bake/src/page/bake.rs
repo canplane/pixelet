@@ -1,8 +1,5 @@
 // pxl-geo-bake/page/bake.rs
 
-//! The reverse-geocode bake apart from its provider: the walk over the land
-//! pages, then the manifest beside the version directory.
-
 use pxl_spec::space::pyramid::PAGE_ZOOM;
 use std::path::PathBuf;
 
@@ -12,25 +9,18 @@ use crate::page::catalog;
 use crate::page::walk::{self, Args, Page, Target};
 use crate::util::{fmt_bytes, git_sha, measure_output, now_iso8601, refuse_mixed, CONTENT_ENCODING};
 
-/// What a page bake is, apart from the pages it writes: where they go, how
-/// they are served, and which tables they were read from.
 pub struct Bake<'a> {
     pub kind: &'a str,
     pub out: PathBuf,
-    /// How often the walk reports progress, in pages.
     pub every: u64,
-    /// How many levels above a page one object of this bake covers. Zero is
-    /// one object a page.
+    /// Levels above a page one object covers; zero is one object a page.
     pub group_shamt: u32,
     pub content_type: &'a str,
     pub format: Option<&'a str>,
-    /// The `overture_catalog` rows this bake read from, named rather than
-    /// taken whole: the catalog holds terrain's tables too.
+    /// Named, not taken whole: the catalog holds terrain's tables too.
     pub sources: &'a [&'a str],
 }
 
-/// Walks the land pages, writes the objects, then writes the manifest beside
-/// the version directory.
 pub fn bake<T>(
     b: &Bake,
     prelude: impl FnOnce(&Path) -> Result<(), String>,
@@ -77,8 +67,7 @@ pub fn bake<T>(
         "objects": objects,
         "bytes": bytes,
 
-        // This invocation only — a resumed run reports what it re-did, so a
-        // zero here means "nothing to do" rather than "nothing wrong".
+        // This invocation only, so a resumed run's zero means "nothing to do".
         "run": { "baked": t.baked, "empty": t.empty, "skipped": t.skipped, "failed": t.failed, "items": t.items, "bytes": t.bytes },
 
         "content_type": b.content_type,

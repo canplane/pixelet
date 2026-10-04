@@ -1,12 +1,7 @@
 // pxl-kernel/layer/character/chat_bubble.rs
 
 //! A billboarded speech bubble over the companion's head, showing the most
-//! recent line from the (currently dev-only) map chat. World-anchored-billboard
-//! tier (see issue/20260907-world-rendering-tiers.md); the render is a
-//! billboard set standing on the companion's actor, drawn from the sheet POI
-//! badges share. What this owns is only what's chat-bubble-specific: reading
-//! the chat lines, the show/expire timer, and laying out the notched
-//! speech-bubble shape the shell paints.
+//! recent line of the (dev-only) map chat for a while.
 
 use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::pass::badges::BUBBLE_FONT;
@@ -17,27 +12,21 @@ use crate::host::now;
 use crate::layer::billboard::sheet::{billboard_sheet, follow_billboard_set, new_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::text::text_lines;
 
-// ts (the host's clock at append) lets the bubble derive its own remaining
-// show time from when the line was said, not from when it happened to start
-// showing — without
-// it, a character swap resets its state and it has no way to tell an old,
-// already-dismissed line apart from a brand new one.
+// `ts` lets the bubble time itself from when the line was said, so a
+// character swap cannot make a dismissed line look new.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChatLine {
     pub text: String,
     pub ts: f64,
 }
 
-/// The last line the shell sent; the chat log itself is the shell's.
 static CHAT_LINE: Global<Option<ChatLine>> = Global::new();
 
-/// A line the shell's chat appended.
 pub fn append_chat_line(text: &str) {
     *CHAT_LINE.get(|| None) = Some(ChatLine { text: text.to_string(), ts: now() });
 }
 
-// A new chat line shows for this long, then the bubble disappears — chat itself
-// has no such expiry, so this is tracked here, not in the shell's chat log.
+// Chat has no expiry of its own; the bubble's is tracked here.
 const SHOW_DURATION_MS: f64 = 8000.0;
 
 const PADDING_X: f64 = 11.0;
@@ -45,16 +34,11 @@ const PADDING_Y: f64 = 8.0;
 const LINE_H: f64 = 17.0;
 const TAIL_H: f64 = 10.0;
 
-// A long message wraps onto more lines instead of growing the bubble
-// arbitrarily wide.
 const MAX_TEXT_WIDTH_PX: f64 = 220.0;
 
-// Air gap between the character model's own top and the bubble's tail tip: a
-// fixed clearance added on top of wherever the model's bounding box actually
-// ends, rather than an arbitrary multiplier of its height.
+// A fixed clearance over the model's bounding box, not a multiplier of its height.
 const HEAD_CLEARANCE_U: f64 = 0.22;
 
-/// A message laid out: its wrapped lines and the bubble's logical size.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BubbleLayout {
     pub lines: Vec<String>,
@@ -63,8 +47,7 @@ pub struct BubbleLayout {
     pub logical_h: f64,
 }
 
-/// None until `text` is laid out, which a later turn has. A line broken at
-/// a space loses the space.
+/// None until `text` is laid out, which a later turn has.
 pub fn layout_bubble(text: &str) -> Option<BubbleLayout> {
     let laid = text_lines(BUBBLE_FONT, MAX_TEXT_WIDTH_PX, text)?;
     let text_w = laid.iter().map(|&(_, w)| w).fold(f64::NEG_INFINITY, f64::max).ceil();
@@ -86,7 +69,7 @@ struct Held {
 }
 
 struct Bubble {
-    /// What the bubble is set up for: the actor and the text.
+    /// The actor and the text.
     shown: Option<(u32, String)>,
     held: Option<Held>,
     /// What was last written into the set, so an unchanged frame writes nothing.
@@ -95,9 +78,6 @@ struct Bubble {
 
 static BUBBLE: Global<Bubble> = Global::new();
 
-/// The bubble's turn, for the character with `actor` whose model's top is at
-/// `anchor_z`: which line is showing, the set that shows it, and the instance
-/// written again when the sheet is replaced, which moves its rectangle.
 pub fn chat_bubble_step(actor: Option<u32>, anchor_z: f64) {
     let b = BUBBLE.get(|| Bubble {
         shown: None,
@@ -105,11 +85,8 @@ pub fn chat_bubble_step(actor: Option<u32>, anchor_z: f64) {
         written: None,
     });
 
-    // Driven by the line's own time, so this stays correct across a character
-    // swap, which would otherwise make an old, already-dismissed line look
-    // brand new again. The host's clock rather than the wall clock: the wall
-    // clock comes with a frame, and a line said after a still spell would be
-    // stamped with the last frame's time and read as long gone.
+    // The host's clock, not the frame's wall clock: a line said after a still
+    // spell would be stamped with the last frame's time and read as long gone.
     let visible = CHAT_LINE.get(|| None).as_ref().filter(|l| l.ts + SHOW_DURATION_MS - now() > 0.0).map(|l| l.text.clone());
     let want = actor.zip(visible);
 
@@ -121,7 +98,6 @@ pub fn chat_bubble_step(actor: Option<u32>, anchor_z: f64) {
         b.written = None;
         b.shown = want.clone();
         if let Some((_, text)) = want {
-            // Laid out on a later frame, once the platform has laid it out.
             let Some(layout) = layout_bubble(&text) else {
                 b.shown = None;
                 return;
@@ -146,7 +122,6 @@ pub fn chat_bubble_step(actor: Option<u32>, anchor_z: f64) {
     }
 
     let (Some(held), Some(actor)) = (&b.held, actor) else { return };
-    // The tail tip is the anchor, at the model's top plus the clearance.
     let tip_z = anchor_z + HEAD_CLEARANCE_U;
     let sheet = billboard_sheet();
     let stamp = (actor, tip_z, sheet.sheet_generation());
@@ -155,7 +130,6 @@ pub fn chat_bubble_step(actor: Option<u32>, anchor_z: f64) {
     }
     b.written = Some(stamp);
     let s = held.slot;
-    // The tail tip is the anchor, at the bottom of the sprite.
     let lane = [
         0.0,
         0.0,

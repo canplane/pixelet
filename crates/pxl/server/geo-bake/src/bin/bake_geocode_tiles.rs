@@ -1,22 +1,11 @@
 // pxl-geo-bake/bin/bake_geocode_tiles.rs
 
-//! Offline pre-bake pass for reverse geocoding: which places contain each
-//! land page, as a dictionary of every place a polygon names and one packed
-//! object per **group** of pages saying which of them each page is in
-//! (`pxl-spec` bake/place_page.rs).
+//! Reverse-geocode pages: a dictionary of places, then one object per group
+//! of pages. The dictionary is written first from one ordered read, so a
+//! resumed run numbers places the same way.
 //!
-//! The dictionary is written first, from one ordered read of the divisions
-//! table, because a label is a number into it: a resumed run has to number
-//! the same places the same way, and a group written by an earlier run is
-//! read against the dictionary a later one wrote.
-//!
-//! A group no page of which is in any place writes an `.empty` marker
-//! instead — open water, or outside Overture's Divisions coverage.
-//!
-//! Usage (from the repo root):
 //!   cargo run --profile server -p pxl-geo-bake --bin bake_geocode_tiles -- [flags]
 //!
-//! Flags:
 //!   --out <dir>          output directory (default ./out/geocode/<published version>)
 //!   --land-cache <path>  terrain's own land_pages.json (default ./out/terrain/land_pages.json)
 //!   --concurrency <n>    parallel fetches, one connection each (default 8)

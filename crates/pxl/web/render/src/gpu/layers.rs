@@ -1,21 +1,10 @@
 // pxl-render/gpu/layers.rs
 
-//! The texture pack as one 2D array texture on the device, and the table a
-//! layer's two faces are found in it through.
-//!
-//! A slot of the array is a distinct tile of the pack, not a layer: a side
-//! with no tile of its own wears the top's and shares its slot, and a layer
-//! the pack ships nothing for takes none at all — it reads as the box's own
-//! color, which the shader already has. The table turns the layer index the
-//! mesher bakes into a box's taps (mesh/paint/palette/shader_meta.rs) into
-//! the slot its top and its side are in. Two arrays of a layer each, one the
-//! copy of the other for most of them, was half again the memory and twice
-//! the samples a fragment took.
-//!
-//! The array keeps its mip chain: a tile a cell minifies to a few texels at
-//! the far tiers, and without the chain every camera movement resamples a
-//! different texel and the ground crawls. WebGPU has no generateMipmap, so the
-//! chain is drawn on the device, a level from the one above (Mips).
+//! The texture pack as one 2D array texture with its mip chain, and the table
+//! mapping a layer's top, side and bottom to array slots. A slot is a distinct
+//! tile: a face with no tile of its own shares the top's slot, and a layer the
+//! pack ships nothing for takes none and reads as the box's color.
+//! Without the mip chain the far ground crawls as the camera moves.
 
 use pxl_spec::asset::texture::{shipped_texture_tile, CubeFace, TileOrigin, SHIPPED_SHEET};
 use pxl_spec::cell::object::{block_cubes, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
@@ -27,11 +16,8 @@ use crate::gpu::pipeline::Pipelines;
 use crate::mesh::paint::palette::shader_meta::GROUND_LAYER_META;
 use crate::mesh::paint::palette::tex_array::OBJECT_LAYER_IDX;
 
-/// A layer's edge in texels: a tile of the shipped sheet, copied into its
-/// layer texel for texel.
 pub const LAYER_TEX_SZ: u32 = SHIPPED_SHEET.cell;
 
-/// Levels a texture of `width` by `height` has, down to one texel.
 pub fn mip_levels(width: u32, height: u32) -> u32 {
     32 - width.max(height).max(1).leading_zeros()
 }
@@ -43,8 +29,7 @@ pub struct Mips {
 }
 
 impl Mips {
-    /// The builder for textures of `format`: a pipeline draws into the
-    /// format it was built for, so a chain of another needs its own.
+    /// A pipeline draws into the format it was built for, so each format needs its own.
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, format: u32) -> Mips {
         let built = pipelines.build(g, PIPELINE_MIPS, format);
         let sampler = object();
@@ -56,8 +41,6 @@ impl Mips {
         }
     }
 
-    /// Draws every level of `texture` below the first, for `layers` array
-    /// layers from `first_layer`, each box-filtered from the one above.
     pub fn build(&self, g: &Gpu, texture: u32, levels: u32, first_layer: u32, layers: u32) {
         let encoder = object();
         g.encoder(encoder);
@@ -75,20 +58,22 @@ impl Mips {
                 g.set_bind_group(pass, 0, group, &[]);
                 g.draw(pass, 3, 1, 0, 0);
                 g.end(pass);
-                // The encoder keeps what it recorded: a view, a group or a pass
-                // let go now is gone from the table, not from the commands.
+                // The encoder keeps what it recorded; letting these go now only frees the handles.
                 for id in [pass, group, target, above] {
                     crate::gpu::api::release(id);
                 }
             }
         }
         g.submit(encoder);
-        crate::gpu::api::release(encoder);
+        release(encoder);
+    }
+
+    pub fn release(self) {
+        release(self.sampler);
     }
 }
 
-/// Every layer: the cube it is, where one stands for it, its index, and its
-/// color. A ground type no cube stands in for (common's) has no tile.
+/// A ground type no cube stands for has no tile.
 fn each_layer(mut f: impl FnMut(Option<PlaceableCube>, u32, u32)) {
     for m in GROUND_LAYER_META.iter() {
         f(terrain_style_cube_for(m.ch_key, m.type_id as u32), m.layer_index, m.rgb);
@@ -101,19 +86,16 @@ fn each_layer(mut f: impl FnMut(Option<PlaceableCube>, u32, u32)) {
     }
 }
 
-/// A face with no tile of its own in the pack: the box's own color is what
-/// it reads as, and no slot of the array is spent waiting for one.
-const NO_SLOT: u32 = 0xffff;
+/// Ten bits, past any array WebGPU gives (maxTextureArrayLayers is 256).
+const NO_SLOT: u32 = 0x3ff;
+const SLOT_BITS: u32 = 10;
 
-/// Where a layer's two faces are drawn in the array, packed as the shader
-/// reads them: the top in the low half, the side in the high.
-fn slot_word(top: u32, side: u32) -> u32 {
-    top | (side << 16)
+const fn slot_word(top: u32, side: u32, bottom: u32) -> u32 {
+    top | (side << SLOT_BITS) | (bottom << (2 * SLOT_BITS))
 }
 
-/// The array the pack needs, and the table that finds a face in it: one slot
-/// a distinct tile, so a side that wears the top's shares its slot and a
-/// layer the pack ships nothing for takes none at all.
+const NO_SLOTS: u32 = slot_word(NO_SLOT, NO_SLOT, NO_SLOT);
+
 fn plan() -> (Vec<TileOrigin>, Vec<u32>) {
     fn slot_of(slots: &mut Vec<TileOrigin>, tile: Option<TileOrigin>) -> u32 {
         let Some(tile) = tile else { return NO_SLOT };
@@ -129,8 +111,8 @@ fn plan() -> (Vec<TileOrigin>, Vec<u32>) {
     let mut table: Vec<u32> = Vec::new();
     each_layer(|cube, layer, _| {
         let top = cube.and_then(|cube| shipped_texture_tile(cube, CubeFace::Top));
-        // A side with no tile of its own wears the top's, which is the same
-        // tile and so the same slot.
+        // No side of its own means one image on every face, as Minecraft's cube_all.
+        // The pack has no side without a bottom.
         let side = cube.and_then(|cube| shipped_texture_tile(cube, CubeFace::Side)).or(top);
         let word = slot_word(slot_of(&mut slots, top), slot_of(&mut slots, side));
         if table.len() <= layer as usize {
@@ -144,23 +126,17 @@ fn plan() -> (Vec<TileOrigin>, Vec<u32>) {
 pub struct Layers {
     tex: u32,
     pub view: u32,
-    /// Where each layer's faces are in the array, as the shader reads it.
     pub table: u32,
     pub sampler: u32,
     pub bytes: u32,
     slots: u32,
     levels: u32,
-    /// The pack's sheet drawn into the array.
     loaded: bool,
 }
 
 impl Layers {
-    /// The array the pack's tiles go in, and the table that finds them.
-    ///
-    /// Nothing is drawn into either until the sheet arrives: a layer's flat
-    /// color is the box's own color, which the shader already has, so a
-    /// slot filled with it would be a mip chain built to say what the vertex
-    /// says. Until then the table sends every face to NO_SLOT.
+    /// Nothing is drawn until the sheet arrives: a flat color is the box's own,
+    /// which the shader already has. Until then every face reads NO_SLOT.
     pub fn new(g: &Gpu) -> Layers {
         let (tiles, _) = plan();
         let slots = tiles.len() as u32;
@@ -170,16 +146,15 @@ impl Layers {
         g.texture(tex, LAYER_TEX_SZ, LAYER_TEX_SZ, slots, format::RGBA8_SRGB, levels, usage);
         let view = object();
         g.view(view, tex, dimension::D2_ARRAY, 0, levels, 0, slots);
-        // Anisotropic at the four three's arrays were filtered at: the ground
-        // is mostly seen at a grazing angle, where an isotropic mip blurs the
-        // tile along the view.
+        // Anisotropic 4x: the ground is mostly seen at a grazing angle, where an
+        // isotropic mip blurs the tile along the view.
         let sampler = object();
         g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::LINEAR, address::REPEAT, compare::NONE, 4);
         let table = object();
         let blank: Vec<u32> = vec![slot_word(NO_SLOT, NO_SLOT); table_len()];
         g.buffer(table, (blank.len() * 4) as u32, buffer_usage::STORAGE | buffer_usage::COPY_DST);
         g.write_buffer(table, 0, bytes(&blank));
-        // A chain is the sum of its levels' texels: under four thirds of the first.
+        // A chain is under four thirds of its first level.
         let bytes = (0..levels).map(|level| (LAYER_TEX_SZ >> level).pow(2) * 4 * slots).sum();
         Layers {
             tex,
@@ -193,8 +168,6 @@ impl Layers {
         }
     }
 
-    /// Draws the pack's sheet into the array once it has arrived, and opens
-    /// the table onto it: `sheet` asks for its image, until it is drawn.
     pub fn step(&mut self, g: &Gpu, mips: &Mips, sheet: fn() -> Option<u32>) {
         if self.loaded {
             return;
@@ -217,7 +190,6 @@ impl Layers {
     }
 }
 
-/// Layers the table holds a word for: every one a tap can name.
 fn table_len() -> usize {
     GROUND_LAYER_META.len() + block_cubes().len()
 }

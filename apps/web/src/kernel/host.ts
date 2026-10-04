@@ -1,13 +1,9 @@
 // @pxl/web/kernel/host.ts
 
 /**
- * The kernel's system calls as its host answers them (crates/pxl/web/kernel/
- * src/host.rs): xpute's, run by xpute (@xpute/runtime/ipc/sys.ts), with a file
- * written to the platform's storage and a broken invariant said on the
- * console; and the kernel's own (abi/host.json), a text laid out or drawn
- * (crates/pxl/web/kernel/src/text.rs). All of them run once the turn has
- * returned and before the next can begin, so whatever one names in the
- * kernel's memory is written by the time the kernel reads it.
+ * The kernel's system calls as its host answers them: xpute's, plus text
+ * layout and image decode. All run between turns, so what they write is in
+ * place by the time the kernel reads it.
  */
 
 import type { U32Array } from "@xpute/core/abi/array.ts";
@@ -25,20 +21,14 @@ const utf8 = new TextDecoder();
 
 const word = new DataView(new ArrayBuffer(4));
 
-/** A word's bits as a float. */
 function float(bits: u32): number {
   word.setUint32(0, bits, true);
   return word.getFloat32(0, true);
 }
 
-const utf8_out = new TextEncoder();
-
-/** Where `text` breaks into lines no wider than `max_width` (0 for one
- * line), measured by `width`: each line's end, a UTF-16 index, the last the
- * text's end. Greedy by words; a line still too wide on its own — one long
- * word, or a message typed without spaces, as Korean often is — breaks
- * between characters. A break at a space leaves the space at the head of the
- * next line, for the kernel to trim. */
+/** Greedy by words; a word too wide alone (Korean typed without spaces)
+ * breaks between characters. A space stays at the next line's head for the
+ * kernel to trim. */
 function line_ends(text: string, max_width: number, width: (s: string) => number): number[] {
   const words = [...text.matchAll(/\S+/g)].map((m) => [m.index, m.index + m[0].length]);
   if (max_width <= 0 || words.length === 0) return [text.length];
@@ -71,14 +61,19 @@ function line_ends(text: string, max_width: number, width: (s: string) => number
   return ends;
 }
 
-/** What storage keeps under `storage`'s key (host.json), or none. */
-export function stored(storage: u32): string | null {
-  return storageGet(STORAGE_KEYS[storage]);
-}
-
-/** The kernel's own calls: a text laid out, or drawn. */
-function program(memory: ArrayBuffer, code: u32, w: U32Array, a: u32): void {
+function program(code: u32, w: U32Array, a: u32): void {
   switch (code) {
+    case op.IMAGE_DECODE: {
+      // Taken now: the kernel may close the file in this turn.
+      const [fd, image] = [w[a], w[a + 1]];
+      const bytes = SYS.bytes(fd);
+      void (async () => {
+        await Promise.resolve();
+        const decoded = bytes !== null && (await decodeImage(image, bytes));
+        send_next(Command.IMAGE_DECODED, encode_image_decoded({ image, res: decoded ? 0 : Errno.EBADMSG }));
+      })();
+      break;
+    }
     case op.TEXT_LAYOUT: {
       const [weight, px, max_width, at, lines] = [w[a], float(w[a + 1]), float(w[a + 2]), w[a + 3], w[a + 4]];
       const text = utf8.decode(bytes_of(w, a + 5));
@@ -104,7 +99,35 @@ function program(memory: ArrayBuffer, code: u32, w: U32Array, a: u32): void {
   }
 }
 
-/** Runs the calls the turn just returned left in the stream at `at`. */
+type Open = (path: string, signal: AbortSignal) => U8Array | Promise<U8Array>;
+
+const ROOTS = new Map<u32, Open>([[root.STORAGE, (path) => {
+  const value = storageGet(path);
+  if (value === null) throw new FileError(Errno.ENOENT);
+  return te.encode(value);
+}]]);
+
+export function bind_root(r: u32, open: Open): void {
+  ROOTS.set(r, open);
+}
+
+function open(r: u32, path: string, signal: AbortSignal) {
+  const bound = ROOTS.get(r);
+  if (bound === undefined) throw new FileError(Errno.ENOENT);
+  return bound(path, signal);
+}
+
+const SYS = new Sys({
+  open,
+  commit: (r, path, bytes) => {
+    if (r !== root.STORAGE) throw new FileError(Errno.EROFS);
+    storageSet(path, td.decode(bytes));
+  },
+  opened: (fd, res, detail) => send_next(XputeCommand.SYS_OPENED, encode_sys_opened({ fd, res, detail })),
+  abort: ({ errno, file, line, column, a, b }) => console.error(`[pxl] ${strerror(errno)} at ${file.replace(/^\.+/, "")}:${line}:${column} (${a}, ${b})`),
+  program,
+});
+
 export function run_host_stream(memory: ArrayBuffer, at: u32): void {
   const host: SysHost = {
     write: (file, bytes) => storageSet(STORAGE_KEYS[file], utf8.decode(bytes)),

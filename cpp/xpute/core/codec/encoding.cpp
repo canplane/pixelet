@@ -11,7 +11,6 @@ namespace {
 constexpr char HEX[] = "0123456789abcdef";
 constexpr char B64URL[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
-// A hex digit's value, or -1.
 int hex_value(char c) noexcept {
     if (c >= '0' && c <= '9') return c - '0';
     if (c >= 'a' && c <= 'f') return c - 'a' + 10;
@@ -19,7 +18,6 @@ int hex_value(char c) noexcept {
     return -1;
 }
 
-// A base64url character's six bits, or -1.
 int b64url_value(char c) noexcept {
     if (c >= 'A' && c <= 'Z') return c - 'A';
     if (c >= 'a' && c <= 'z') return c - 'a' + 26;

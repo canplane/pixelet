@@ -1,11 +1,8 @@
 // pxl-kernel/layer/decor/hit.rs
 
-//! Which user-placed decor entry the pointer's ray strikes: the ray against
-//! the triangles of every placed instance the on-screen chunks show, from the
-//! same blocks the renderer draws. A decor paints no voxel, so the access's
-//! ray (world/access.rs `first_hit`) passes through it; this is its own hit,
-//! against what is drawn. What comes back is the address the object store
-//! files the entry under.
+//! Which decor the pointer's ray strikes, against the drawn triangles of the
+//! z16 decor cells: decor paints no voxel, so the access's ray passes through
+//! it. A placed instance resolves to its entry; a scattered one to its cell.
 
 use pxl_spec::space::indexer::L2_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -22,38 +19,54 @@ use crate::world::pyramid::chunk::Chunk;
 /// A chunk's side, in units.
 const CHUNK_W: f64 = chunk_span_of(0);
 
-// A decor mesh sitting on the ground it also intersects (any tree's own
-// trunk-base, by construction) has its own hit distance land almost exactly AT
-// max_dist, not comfortably inside it — the two distances come from two
-// independent algorithms (a triangle test against the model here, the
-// access's walk for max_dist), so they only ever agree up to float noise. A
-// strict reject flipped on essentially every frame right at that boundary as a
-// real mouse's sub-pixel jitter walked the disagreement across zero, which read
-// as the hover ghost flickering while the cursor sat still. 1e-3
-// units is small enough never to let a decor mesh that is genuinely occluded by
-// terrain win, and larger than the round-off.
+// A tree's trunk base meets the ground at almost exactly `max_dist`, from two
+// independent algorithms; a strict reject made the hover ghost flicker under
+// sub-pixel jitter. Small enough never to let occluded decor win.
 const SAME_SURFACE_EPS: f64 = 1e-3;
 
-/// Where the placed decor entry the ray strikes within `max_dist` is filed, or
-/// None. Procedural instances are passed over, so a hit on one falls through
-/// to whatever is next along the ray. The ray is in the root frame, relative
-/// to `map_origin`.
-pub fn raycast_decor(origin: V3, direction: V3, map_origin: IVec, max_dist: f64) -> Option<EntryAt> {
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum DecorStruck {
+    Placed(EntryAt),
+    Scattered(Scattered),
+}
+
+/// The cell it stands in, which a leaf written there overrides, and how it
+/// is drawn, for a preview.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Scattered {
+    pub cell: [i64; 3],
+    pub group: u32,
+    pub at: [f64; 3],
+    pub rotation: f64,
+    pub scale: f64,
+}
+
+/// The ray is in the root frame, relative to `map_origin`.
+pub fn raycast_decor(origin: V3, direction: V3, map_origin: IVec, max_dist: f64) -> Option<DecorStruck> {
     let (_, sched) = kernel().world()?;
     let frame = [ivec::to_real(ivec::X(map_origin)), ivec::to_real(ivec::Y(map_origin))];
     let hit = hit_decor(sched, frame, origin, direction, max_dist + SAME_SURFACE_EPS)?;
-    // The lane holds the band's own i32 as a word (layer/decor/build.rs),
-    // NO_ENTRY apart, which the hit has already passed over.
-    Some(EntryAt {
-        col_idx: L2_IDX(hit.chunk.corner()),
+    if hit.band == NO_ENTRY {
+        return Some(DecorStruck::Scattered(Scattered {
+            cell: hit.at.map(|v| (v / CELL.side()).floor() as i64),
+            group: hit.group,
+            at: hit.at,
+            rotation: hit.rotation,
+            scale: hit.scale,
+        }));
+    }
+    // The lane holds the band's i32 as a word.
+    Some(DecorStruck::Placed(EntryAt {
+        col_idx: {
+            let (x0, y0, _) = hit.cell.rect();
+            L2_IDX(ivec::gather(x0 as i64, y0 as i64, 0))
+        },
         band_idx: hit.band as i32,
         pos: hit.pos,
     })
 }
 
-/// What a ray struck among the decor shown: the chunk it stands in, a z16
-/// one since only those name their entries, the entry's band and packed
-/// position in that chunk's column, and how far along.
+/// `band` is NO_ENTRY for a scattered instance.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct DecorHit {
     pub chunk: Chunk,
@@ -62,20 +75,33 @@ struct DecorHit {
     pub t: f64,
 }
 
-/// How far past a chunk's own square an instance standing in it can
-/// reach, in units: a generous bound on the models' size, only for
-/// skipping chunks the ray never comes near.
-const DECOR_REACH: f64 = 16.0;
+/// None while it loads.
+fn group_models() -> impl Iterator<Item = Option<u32>> {
+    decor_bundle_assets().iter().flat_map(|e| e.models.iter().copied())
+}
 
-/// The nearest placed decor instance the ray strikes within `max_dist`,
-/// over the decor every on-screen chunk shows, model triangle by triangle
-/// after a bounding sphere. Procedural instances — the ones with no entry —
-/// are passed over, as the eraser has nothing to remove there; hidden
-/// ones are tested, since the hidden one is what the eraser is over.
+/// The largest model's bounding radius at the largest decor size; only for
+/// skipping cells the ray never comes near.
+fn decor_reach(sched: &Scheduler) -> f64 {
+    let radius = group_models()
+        .flatten()
+        .filter_map(|m| sched.models.mesh(m))
+        .map(|m| m.radius as f64 * m.scale as f64)
+        .fold(0.0, f64::max);
+    radius * DECOR_SIZE
+}
+
+/// Hidden instances are tested too: the hidden one is what the eraser is over.
 fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: f64) -> Option<DecorHit> {
     let mut best: Option<DecorHit> = None;
     let mut limit = max_dist;
-    for (chunk, base_x, base_y, decor) in sched.shown_decor() {
+    let reach = decor_reach(sched);
+    for (cell, base_x, base_y, words) in crate::layer::decor::cell::shown() {
+        // Only z16 cells name their placed entries; edits are made close by.
+        if cell.level != 0 {
+            continue;
+        }
+        let side = cell.rect().2;
         let tx = base_x - origin[0];
         let ty = base_y - origin[1];
         if !ray_meets_square(&o, &d, tx - DECOR_REACH, ty - DECOR_REACH, tx + CHUNK_W + DECOR_REACH, ty + CHUNK_W + DECOR_REACH, limit) {
@@ -92,8 +118,7 @@ fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: 
                 count: count as usize,
             };
             let lane = |k: usize, i: usize| f32::from_bits(words[lanes.f32_at(k, i)]) as f64;
-            // SAFETY: the model's block, positions first and the indices
-            // past the vertex words.
+            // SAFETY: the model's block, positions first, indices past the vertex words.
             let (positions, indices) = unsafe {
                 (
                     core::slice::from_raw_parts(ptr_at::<f32>(mesh.at), mesh.vertex_cnt as usize * 3),
@@ -116,8 +141,7 @@ fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: 
                 if !ray_meets_sphere(&p, &d, r, limit) {
                     continue;
                 }
-                // Into the model's own frame: the spin undone, then the
-                // quarter turn about X that stood it up, then the scale.
+                // Into the model's frame: spin undone, the stand-up quarter turn about X, scale.
                 let (sn, cs) = (-spin).sin_cos();
                 let unturn = |v: [f64; 3]| [v[0] * cs - v[1] * sn, v[0] * sn + v[1] * cs, v[2]];
                 let to_model = |v: [f64; 3]| {
@@ -147,8 +171,6 @@ fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: 
     best
 }
 
-/// Whether the ray crosses the square [x0, x1] × [y0, y1] at any height
-/// within `limit`.
 fn ray_meets_square(o: &V3, d: &[f64; 3], x0: f64, y0: f64, x1: f64, y1: f64, limit: f64) -> bool {
     let square = Aabb {
         min: [x0, y0, f64::NEG_INFINITY],
@@ -157,8 +179,7 @@ fn ray_meets_square(o: &V3, d: &[f64; 3], x0: f64, y0: f64, x1: f64, y1: f64, li
     square.span_along(*o, *d).is_some_and(|(enter, leave, _)| enter.max(0.0) <= leave.min(limit))
 }
 
-/// Whether the ray from `p` (relative to the sphere's center) comes within
-/// `r` of it before `limit`.
+/// `p` is relative to the sphere's center.
 fn ray_meets_sphere(p: &V3, d: &[f64; 3], r: f64, limit: f64) -> bool {
     let b = p[0] * d[0] + p[1] * d[1] + p[2] * d[2];
     let c = p[0] * p[0] + p[1] * p[1] + p[2] * p[2] - r * r;
@@ -173,7 +194,7 @@ fn ray_meets_sphere(p: &V3, d: &[f64; 3], r: f64, limit: f64) -> bool {
     t >= 0.0 && t <= limit
 }
 
-/// Möller–Trumbore, both sides: the distance along `d` to the triangle.
+/// Möller–Trumbore, both sides.
 fn ray_triangle(o: &[f64; 3], d: &[f64; 3], a: &[f32], b: &[f32], c: &[f32]) -> Option<f64> {
     let e1 = [b[0] as f64 - a[0] as f64, b[1] as f64 - a[1] as f64, b[2] as f64 - a[2] as f64];
     let e2 = [c[0] as f64 - a[0] as f64, c[1] as f64 - a[1] as f64, c[2] as f64 - a[2] as f64];
@@ -205,7 +226,6 @@ mod test {
     fn a_ray_down_the_z_axis_meets_the_triangle_under_it_at_its_height() {
         let t = ray_triangle(&[0.2, 0.2, 5.0], &[0.0, 0.0, -1.0], &[0.0, 0.0, 1.0], &[1.0, 0.0, 1.0], &[0.0, 1.0, 1.0]);
         assert!(t.is_some_and(|t| (t - 4.0).abs() < 1e-12), "{t:?}");
-        // From the other side too, and not beside it.
         assert!(ray_triangle(&[0.2, 0.2, -5.0], &[0.0, 0.0, 1.0], &[0.0, 0.0, 1.0], &[1.0, 0.0, 1.0], &[0.0, 1.0, 1.0]).is_some());
         assert!(ray_triangle(&[0.8, 0.8, 5.0], &[0.0, 0.0, -1.0], &[0.0, 0.0, 1.0], &[1.0, 0.0, 1.0], &[0.0, 1.0, 1.0]).is_none());
     }

@@ -1,7 +1,6 @@
 // pxl-render/look/color.rs
 
-/// A packed `0xRRGGBB` in linear light, which is what every color the shaders
-/// light and blend with is in.
+/// Linear light, which every shader lights and blends in.
 pub fn linear_rgb(n: u32) -> [f64; 3] {
     let c = |v: u32| {
         let s = v as f64 / 255.0;

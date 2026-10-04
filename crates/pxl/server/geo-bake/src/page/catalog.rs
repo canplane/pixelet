@@ -1,13 +1,6 @@
 // pxl-geo-bake/page/catalog.rs
 
-//! What a published set was baked from, read out of `overture_catalog`.
-//!
-//! A version directory's name says nothing about when the data under it is
-//! from; this is what answers that, and the manifest carries it.
-
-/// The named tables' catalog rows, one key each — `null` where the table has
-/// no row, which says "filled by something that did not record it" rather than
-/// saying nothing at all.
+/// `null` where a table has no catalog row.
 pub fn sources(client: &mut postgres::Client, tables: &[&str]) -> serde_json::Value {
     let mut out = serde_json::Map::new();
     for &table in tables {

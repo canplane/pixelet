@@ -8,15 +8,12 @@ use crate::global::Global;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct MapNavigation {
-    /// Device coordinate in canonical world space.
     pub device_coord: Option<Pvf3>,
-    /// Whether the current center is off from device location.
     pub is_off_center: bool,
 }
 
 static OFF_CENTER: Global<bool> = Global::new();
 
-/// The device's location in canonical world space.
 fn device_coord() -> Option<Pvf3> {
     device_location_store().location.map(|location| {
         let mut out = Pvf3::default();
@@ -25,8 +22,7 @@ fn device_coord() -> Option<Pvf3> {
     })
 }
 
-/// Device location projected into canonical PVF3 world space, and whether
-/// the map center has wandered off it as of this turn.
+/// Whether the map center has wandered off the device, as of this turn.
 pub fn map_navigation() -> MapNavigation {
     MapNavigation {
         device_coord: device_coord(),
@@ -37,19 +33,12 @@ pub fn map_navigation() -> MapNavigation {
 /// Whether the map center is off the device, decided once a turn.
 pub fn map_navigation_step() {
     let off = OFF_CENTER.get(|| false);
-    // Off-center hysteresis over horizontal (X/Y only) distance, not full 3D.
-    // device_coord's Z is raw GPS altitude while map_center's Z is baked
-    // terrain elevation from a different source (see ground_or_raw) — a real
-    // altitude/elevation mismatch of tens of meters could otherwise hold the
-    // distance above threshold indefinitely, even sitting exactly on the
-    // recentered X/Y spot. Navigation here is inherently horizontal (a top-down
-    // map), so only X/Y should decide "did the user wander away".
+    // Horizontal only: the fix's Z is GPS altitude and the center's is terrain
+    // from another source, and their mismatch could hold it off-center forever.
     match (crate::control::camera::controller::map_center(), device_coord()) {
         (Some(center), Some(device)) => {
-            // X occupies one complete signed lane/world period, so PVF3
-            // subtraction gives the short delta across the antimeridian instead
-            // of a nearly world-wide raw difference. Y remains ordinary/clamped
-            // Mercator space.
+            // PVF3 X wraps a full world period, so the difference is short across the
+            // antimeridian.
             let mut delta = Pvf3::default();
             pvf3::sub(&mut delta, &device, &center);
             let dx = pvf3::to_real(pvf3::X(&delta));

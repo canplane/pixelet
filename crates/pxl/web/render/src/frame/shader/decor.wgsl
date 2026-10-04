@@ -1,10 +1,5 @@
-// Decor: instanced draws of each variant's model, the instances read
-// straight out of the decor block the module built (decor.rs's layout) as
-// it lies on the GPU — the block is the instance buffer, the chunk's
-// translation is its uniform. The model's lanes are model.rs's; the skin is
-// the glue's. An instance is its position, its spin about Z after the glTF
-// Y-up to Z-up turn, and its scale; a hidden one is sent outside the clip
-// volume.
+// Decor: instanced variant models, reading the decor block as the instance
+// buffer; the n-th instance drawn is the one the index list's n-th word names.
 
 struct Draw {
   translation: vec3f,
@@ -14,11 +9,8 @@ struct Draw {
   _p: vec2u,
 };
 
-// Held as vec4 words, each field read from its own by `draw_<field>()`:
-// what the host and a shader share has no room inside it for a driver to
-// lay out its own way (issue/20260927-a-matrix-the-driver-reads-its-own-way.md),
-// and nothing builds the struct back, with which Safari's WebGPU lost its
-// GPU process.
+// Read field by field from vec4 words, never as a struct: a struct here lost
+// Safari's WebGPU its GPU process.
 @group(1) @binding(0) var<uniform> draw_words: array<vec4f, 2>;
 
 fn draw_translation() -> vec3f { return draw_words[0].xyz; }
@@ -42,7 +34,6 @@ struct VertexOut {
   @location(0) uv: vec2f,
   @location(1) normal: vec3f,
   @location(2) world_pos: vec3f,
-  // The air in front of the vertex (atmos_view.wgsl's Seen).
   @location(3) through: vec3f,
   @location(4) scattered: vec3f,
   @location(5) past: vec3f,
@@ -50,7 +41,23 @@ struct VertexOut {
 };
 
 fn lane(k: u32, i: u32) -> f32 {
-  return bitcast<f32>(block[draw_offset() + k * draw_count() + i]);
+  return bitcast<f32>(block[draw_offset() + k * draw_stride() + i]);
+}
+
+// One function, so the depth passes place a vertex where the lit pass does.
+struct Placed {
+  world: vec3f,
+  spin: f32,
+};
+
+fn placed(v: VertexIn) -> Placed {
+  let i = block[draw_index() + v.i];
+  let at = vec3f(lane(0u, i), lane(1u, i), lane(2u, i));
+  var p: Placed;
+  p.spin = lane(3u, i);
+  let scale = lane(4u, i);
+  p.world = on_globe(place_up(v.position * scale, p.spin) + at + draw_translation());
+  return p;
 }
 
 @vertex
@@ -76,6 +83,11 @@ fn vs(v: VertexIn) -> VertexOut {
   o.past = seen.past;
   o.fill = seen.fill;
   return o;
+}
+
+@vertex
+fn vs_depth(v: VertexIn) -> @builtin(position) vec4f {
+  return frame_view_proj() * vec4f(placed(v).world, 1.0);
 }
 
 @fragment

@@ -10,23 +10,11 @@ import ko from "./ko.json" with { type: "json" };
 import enDev from "./dev/en.json" with { type: "json" };
 import koDev from "./dev/ko.json" with { type: "json" };
 
-/**
- * Copy for development-only surfaces lives in its own catalog, folded in
- * only when __IS_DEV__ is true. Gating the *components* is not enough: their
- * strings would still ride along inside the bundled catalog, so a
- * production build shipped the debug section's labels — every toggle it
- * offers, named — even with the section itself eliminated. Behind a
- * compile-time constant the merge and both dev imports drop out entirely.
- */
 interface Catalog {
   [key: string]: string | Catalog;
 }
 
-/**
- * Merges every level, not just the top one — a shallow merge silently drops
- * a nested dev-only branch instead of erroring, so a gated component would
- * render its raw key instead of its label.
- */
+/** Deep, since a shallow merge silently drops nested dev-only branches. */
 function deepMerge(base: Catalog, extra: Catalog): Catalog {
   const out: Catalog = { ...base };
   for (const [key, value] of Object.entries(extra)) {
@@ -36,38 +24,16 @@ function deepMerge(base: Catalog, extra: Catalog): Catalog {
   return out;
 }
 
-/**
- * The branch is written out here, at the top level, rather than inside a
- * helper taking the dev catalog as an argument. A helper reads better and
- * is the wrong shape: whether the argument survives is then the bundler's
- * parameter-level analysis, which Rollup did and Rolldown does not, and a
- * production build carried all forty-seven dev strings the day Vite changed
- * under it. A condition on a constant that folds to `false` is dead code to
- * every bundler there is, and what is left holds no reference to the dev
- * modules at all.
- */
+/** Dev catalogs only behind a constant at top level, not via a helper:
+ * Rolldown did not drop a helper's argument and shipped 47 dev strings. */
 const catalog = __IS_DEV__ ? { en: deepMerge(en, enDev) as typeof en, ko: deepMerge(ko, koDev) as typeof ko } : { en, ko };
 
 let booted = false;
 
 /**
- * Initializes i18next for the app. Called from bootstrapApp() rather
- * than running as a side effect of importing a module, so that every
- * one-time global setup happens in one place, in a defined order, inside
- * main.tsx's error handling — a side-effect import runs at module-eval time,
- * which is outside that try/catch and ordered by import hoisting rather than
- * by intent.
- *
- * Catalogs are bundled rather than fetched, which makes this synchronous:
- * `init()` has its resources in hand and `t()` is correct from the first
- * render. Fetching them meant every string rendered before the request landed
- * showed its raw key — visible on a cold load as a flash of `settings.title`
- * and friends, and unfixable from the call sites, since the gap is in
- * initialization rather than in any one component.
- *
- * The cost is 10.5 kB of JSON in a 1.97 MB bundle, and re-deploying to change
- * a string — accepted because the app ships as a built bundle anyway, so a
- * copy change is always a deploy regardless of where the catalog lives.
+ * Called from bootstrapApp(), inside main.tsx's error handling. Catalogs are
+ * bundled, so `t()` is correct from the first render; fetching them flashed
+ * raw keys on a cold load.
  */
 export function bootstrapI18n(): void {
   if (booted) return;
@@ -86,8 +52,7 @@ export function bootstrapI18n(): void {
         ko: { translation: catalog.ko },
       },
       interpolation: {
-        // React already escapes interpolated values when rendering — i18next's
-        // own escaping on top of that would double-escape entities like &.
+        // React already escapes; i18next's would double-escape.
         escapeValue: false,
       },
       react: {
@@ -95,8 +60,6 @@ export function bootstrapI18n(): void {
       },
     });
 
-  // Detection is synchronous (see above), so this is correct from the first
-  // paint.
   showLanguage(i18next.language);
   i18next.on("languageChanged", showLanguage);
 }

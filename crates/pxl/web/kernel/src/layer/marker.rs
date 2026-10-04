@@ -1,8 +1,6 @@
 // pxl-kernel/layer/marker.rs
 
-//! What is drawn to say where something is rather than to be part of the
-//! world: the device's location puck, the ghost under the pointer, and the
-//! debug gizmos a setting turns on.
+//! What marks where something is: the location puck, the hover ghost, debug gizmos.
 
 pub mod debug_lines;
 pub mod frame_gizmo;

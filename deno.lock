@@ -23,7 +23,7 @@
     "npm:expo@57.0.25": "57.0.25_react@19.2.3_react-dom@19.2.3__react@19.2.3_react-native@0.86.3_react-native-web@0.21.2",
     "npm:i18next-browser-languagedetector@^8.2.1": "8.2.1",
     "npm:i18next@^26.4.2": "26.4.2",
-    "npm:lucide-react-native@^1.48.0": "1.48.0_react@19.2.3_react-native@0.87.1_react-native-svg@15.15.4",
+    "npm:lucide-react-native@^1.48.0": "1.48.0_react@19.2.3_react-native@0.86.3_react-native-svg@15.15.4",
     "npm:pngjs@7": "7.0.0",
     "npm:react-dom@19.2.3": "19.2.3_react@19.2.3",
     "npm:react-i18next@^17.0.14": "17.0.14_i18next@26.4.2_react@19.2.3",
@@ -2130,8 +2130,8 @@
         "svg-parser"
       ]
     },
-    "@types/estree@1.0.8": {
-      "integrity": "sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w=="
+    "@types/estree@1.0.9": {
+      "integrity": "sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg=="
     },
     "@types/istanbul-lib-coverage@2.0.6": {
       "integrity": "sha512-2QF/t/auWm0lsy8XtKVPG19v3sSOQlJe/YHZgfjb/KBBHOGSV+J2q/S671rcq9uTBrLAXmZpqJiaQbMT+zNU1w=="
@@ -2321,7 +2321,7 @@
         "@babel/plugin-syntax-flow"
       ]
     },
-    "babel-preset-expo@57.0.13_@babel+runtime@7.29.7_expo@57.0.25__@expo+dom-webview@57.0.1__@expo+metro-runtime@57.0.16__react@19.2.3__react-dom@19.2.3___react@19.2.3__react-native@0.86.3__react-native-web@0.21.2_react-refresh@0.14.2_@expo+dom-webview@57.0.1_@expo+metro-runtime@57.0.16_react@19.2.3_react-dom@19.2.3__react@19.2.3_react-native@0.86.3_react-native-web@0.21.2": {
+    "babel-preset-expo@57.0.13_@babel+runtime@7.29.7_expo@57.0.25__react@19.2.3__react-dom@19.2.3___react@19.2.3__react-native@0.86.3__react-native-web@0.21.2_react-refresh@0.14.2_@expo+dom-webview@57.0.1_@expo+metro-runtime@57.0.16_react@19.2.3_react-dom@19.2.3__react@19.2.3_react-native@0.86.3_react-native-web@0.21.2": {
       "integrity": "sha512-OOl3lqNQ4IagJfsNgtxuna0wpTWt1BswdyktGTOJ5EJCgdQUk/B2vaj/jsl03+kMyuIvpxKioVtbTzxh3mdvvQ==",
       "dependencies": [
         "@babel/generator",
@@ -2367,12 +2367,12 @@
         "babel-plugin-syntax-hermes-parser@0.36.1",
         "babel-plugin-transform-flow-enums",
         "debug@4.4.3",
-        "expo@57.0.25_@expo+dom-webview@57.0.1_@expo+metro-runtime@57.0.16_react@19.2.3_react-dom@19.2.3__react@19.2.3_react-native@0.86.3_react-native-web@0.21.2",
+        "expo@57.0.25_react@19.2.3_react-dom@19.2.3__react@19.2.3_react-native@0.86.3_react-native-web@0.21.2",
         "react-refresh"
       ],
       "optionalPeers": [
         "@babel/runtime",
-        "expo@57.0.25_@expo+dom-webview@57.0.1_@expo+metro-runtime@57.0.16_react@19.2.3_react-dom@19.2.3__react@19.2.3_react-native@0.86.3_react-native-web@0.21.2"
+        "expo@57.0.25_react@19.2.3_react-dom@19.2.3__react@19.2.3_react-native@0.86.3_react-native-web@0.21.2"
       ]
     },
     "balanced-match@4.0.4": {
@@ -3429,11 +3429,11 @@
         "yallist"
       ]
     },
-    "lucide-react-native@1.48.0_react@19.2.3_react-native@0.87.1_react-native-svg@15.15.4": {
+    "lucide-react-native@1.48.0_react@19.2.3_react-native@0.86.3_react-native-svg@15.15.4": {
       "integrity": "sha512-/URnAnnF+Nshnu1OXSvSuT+boZ7pjr+zYLjQtW4GL72IxzcecIT5mC7X5i35mWBz4bHrnIDGitIR8Wt9clN9Hw==",
       "dependencies": [
         "react",
-        "react-native@0.87.1_@types+react@19.2.14_react@19.2.3",
+        "react-native@0.86.3_@types+react@19.2.14_react@19.2.3_@babel+core@7.29.7",
         "react-native-svg"
       ]
     },

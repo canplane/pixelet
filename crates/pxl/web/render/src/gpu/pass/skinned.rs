@@ -1,13 +1,8 @@
 // pxl-render/gpu/pass/skinned.rs
 
-//! Actors on the device: the scheduler's skinned draws (crates/pxl/web/kernel/src/layer/model/store.rs)
-//! executed against each model's mesh block and each actor's joint palette,
-//! both as the scheduler wrote them, under shader/skinned.wgsl. A model's skin
-//! is the image its asset loaded, by model id.
-//!
-//! The world's pass lights them under the sun's shadow; a case of the variant
-//! picker draws its one actor through a pass of its own, at one sample, with a
-//! blank map where the shadow would be.
+//! Actors: each model's mesh block skinned by each actor's joint palette. A
+//! case of the variant picker draws one actor in a pass of its own, with a
+//! blank shadow map.
 
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED, UNIFORM_FLOATS};
 use crate::frame::shader::record::{PIPELINE_SKINNED_DEPTH, PIPELINE_SKINNED_PREPASS};
@@ -18,8 +13,7 @@ use crate::gpu::pass::model::{draw_model, DrawUniforms, FrameGroups};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{put_f32, skin_group, Blocks};
 
-/// shader/skinned.wgsl's Draw: translation, the turn about Z, the opacity, the
-/// scale, padding.
+/// Translation, turn about Z, opacity, scale, padding.
 const DRAW_UNIFORM_BYTES: u32 = 32;
 const SKINS: usize = 16;
 
@@ -27,10 +21,7 @@ const SKINS: usize = 16;
 struct Skin {
     model: u32,
     image: u32,
-    /// Texture, view, group.
     ids: [u32; 3],
-    /// When the slot was last asked for, so the one longest unasked is the one
-    /// a new model takes.
     seq: u32,
 }
 
@@ -42,7 +33,6 @@ pub struct SkinnedPass {
     sampler: u32,
     uniforms: DrawUniforms,
     skins: [Skin; SKINS],
-    /// Counts `set_skin` calls, to stamp the slot each one lands in.
     seq: u32,
 }
 
@@ -67,24 +57,16 @@ impl SkinnedPass {
         }
     }
 
-    /// Group 0 again over a new occlusion map's entry `ao`.
-    pub fn rebind(&mut self, g: &Gpu, frame_buffer: u32, shadow: [u32; 10], light: Option<(u32, [u32; 10])>, ao: [u32; 5]) {
-        self.groups.rebind(g, self.lit.layouts[0], frame_buffer, shadow, light, ao);
-    }
-
-    /// Model `model`'s skin; the same image again changes nothing, and one not
-    /// yet arrived is asked for again next frame.
+    /// One not yet arrived is asked for again next frame.
     pub fn set_skin(&mut self, g: &Gpu, model: u32, image: u32) {
         let at = self
             .skins
             .iter()
             .position(|s| s.model == model && s.ids[2] != 0)
             .or_else(|| self.skins.iter().position(|s| s.ids[2] == 0))
-            // Nothing tells the pass a model is gone, so a slot is never freed
-            // on its own: with the table full a new model would go untextured
-            // for good. The character preview walks every shipped variant,
-            // more of them than there are slots. The slot asked for longest
-            // ago is the one not drawn.
+            // Nothing says a model is gone, so a full table would leave new models
+            // untextured for good (the character preview walks more variants than slots).
+            // The least recently asked slot is taken.
             .unwrap_or_else(|| self.skins.iter().enumerate().min_by_key(|(_, s)| s.seq).map_or(0, |(i, _)| i));
         self.seq += 1;
         let seq = self.seq;
@@ -104,56 +86,33 @@ impl SkinnedPass {
         self.skins.iter().find(|s| s.model == model && s.ids[2] != 0).map(|s| s.ids[2])
     }
 
-    /// Writes every skinned draw's uniforms in one write.
-    pub fn prepare(&mut self, g: &Gpu, draws: &[u32], uniforms: &[f32]) {
-        let mine = || draws.as_chunks::<DRAW_WORDS>().0.iter().filter(|d| d[4] == PIPELINE_SKINNED);
-        self.uniforms.write(g, self.lit.layouts[1], mine().count() as u32, mine(), |buf, d| {
-            let u = d[3] as usize * UNIFORM_FLOATS;
-            for i in 0..8 {
-                put_f32(buf, i * 4, if i < 6 { uniforms[u + i] } else { 0.0 });
-            }
+    pub fn prepare<'a>(&mut self, g: &Gpu, draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]>, uniforms: &[f32]) {
+        self.uniforms.write(g, self.lit.layouts[1], draws.len() as u32, draws, |buf, d| {
+            let u = uniform_of(uniforms, d);
+            buf[..24].copy_from_slice(bytes(&u[..6]));
+            buf[24..32].fill(0);
         });
     }
 
-    pub fn draw(&mut self, g: &Gpu, pass: u32, draws: &[u32], blocks: &mut Blocks) -> u32 {
-        self.draw_pipeline(g, pass, draws, blocks, self.lit.pipeline, self.groups.frame)
+    pub fn draw<'a>(&self, g: &Gpu, pass: u32, draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>, blocks: &mut Blocks, stage: Stage, frame: (u32, &mut u32)) {
+        let Some(slots) = self.uniforms.slots() else { return };
+        let pipeline = match stage {
+            Stage::Lit => self.lit.pipeline,
+            Stage::Depth => self.depth.pipeline,
+            Stage::Prepass => self.prepass.pipeline,
+        };
+        let palette_layout = self.lit.layouts[3];
+        draw_models(g, pass, &self.lit, pipeline, frame, slots, 0, draws, |d| {
+            let (mesh, vertex_cnt, index_cnt) = blocks.get(d[0])?;
+            let skin = self.skin_of(d[2])?;
+            Some(ModelDraw {
+                groups: [skin, blocks.group(g, d[1], palette_layout)?],
+                mesh: Some((mesh, vertex_cnt, index_cnt)),
+                instances: 1,
+            })
+        });
     }
 
-    /// The actors' depth from the light; nothing for a pass with no light.
-    pub fn draw_depth(&mut self, g: &Gpu, pass: u32, draws: &[u32], blocks: &mut Blocks) -> u32 {
-        if self.groups.light == 0 {
-            return 0;
-        }
-        self.draw_pipeline(g, pass, draws, blocks, self.depth.pipeline, self.groups.light)
-    }
-
-    /// The actors' depth from the eye, for the screen-space occlusion.
-    pub fn draw_prepass(&mut self, g: &Gpu, pass: u32, draws: &[u32], blocks: &mut Blocks) -> u32 {
-        self.draw_pipeline(g, pass, draws, blocks, self.prepass.pipeline, self.groups.frame)
-    }
-
-    fn draw_pipeline(&mut self, g: &Gpu, pass: u32, draws: &[u32], blocks: &mut Blocks, pipeline: u32, group0: u32) -> u32 {
-        let mut drawn = 0;
-        for (k, d) in draws.as_chunks::<DRAW_WORDS>().0.iter().filter(|d| d[4] == PIPELINE_SKINNED).enumerate() {
-            let Some((group, offset)) = self.uniforms.at(k as u32) else { break };
-            let (Some((mesh, vertex_cnt, index_cnt)), Some(skin)) = (blocks.get(d[0]), self.skin_of(d[2])) else {
-                continue;
-            };
-            let Some(palette) = blocks.group(g, d[1], self.lit.layouts[3]) else { continue };
-            if drawn == 0 {
-                g.set_pipeline(pass, pipeline);
-                g.set_bind_group(pass, 0, group0, &[]);
-            }
-            g.set_bind_group(pass, 1, group, &[offset]);
-            g.set_bind_group(pass, 2, skin, &[]);
-            g.set_bind_group(pass, 3, palette, &[]);
-            draw_model(g, pass, &self.lit, mesh, vertex_cnt, index_cnt, 1);
-            drawn += 1;
-        }
-        drawn
-    }
-
-    /// Lets go of what the pass made on the device.
     pub fn release(mut self) {
         for s in self.skins {
             for id in s.ids.into_iter().rev() {

@@ -1,12 +1,6 @@
 // @xpute/core/codec/json.test.ts
 
-/**
- * The host's end of golden/codec/json.tsv. There is no json.ts: the host's
- * JSON is the platform's own, and xpute-core's codec/json.rs is the port of
- * it for the records' tags. This holds the platform to the same bytes the
- * port is held to, so the record is a claim about both ends and not about
- * the port alone.
- */
+/** golden/codec/json.tsv as `JSON.parse` judges it; the guests' readers are held to the same record. */
 
 import { assertEquals } from "@std/assert";
 

@@ -1,24 +1,8 @@
 // pxl-tool/bin/ingest_asset.rs
 
-//! Every shipped asset into the form the bucket holds and the catalogs name:
-//! one object per file, named by its own path with a hash of its bytes in the
-//! stem, with a model's bounds measured here rather than typed in.
-//!
-//! The hash is what makes the name immutable, and it is the whole reason an
-//! asset is not named by its path alone: an asset goes out under a year's
-//! `max-age`, so a changed file that kept its name would be served stale by
-//! every edge and every browser for that year, with no purge to call. A
-//! changed file is a new name instead. The path is there because a bucket
-//! nobody can read is one nobody can check, and because the type stays in the
-//! extension where the upload can see it.
-//!
-//! Two outputs. `./out/asset/` is a copy of every file under its key, the tree
-//! mirroring the bucket's exactly. And the two generated tables, written from
-//! the same rows so that the shell's and the kernel's cannot drift.
-//!
-//! The texture pack is also ingested as one object: every image under
-//! `asset/cube/{terrain,block}` composed into a sheet and encoded once
-//! (sheet.rs).
+//! Every shipped asset into the bucket's form, named by its path with a hash
+//! of its bytes in the stem: assets are served with a year's `max-age` and no
+//! purge, so a changed file must get a new name.
 //!
 //!   deno task ingest:asset
 
@@ -32,24 +16,14 @@ use pxl_tool::asset::{glb, pack, sheet, table};
 use pxl_tool::fmt::formatted;
 use pxl_tool::root;
 
-/// What the bucket prefix for an asset is; a key is this over the asset's own
-/// path. Mirrored by the Worker's `KEY_RE` and by the shell's `asset_url`.
+/// Mirrored by the Worker's `KEY_RE` and the shell's `asset_url`.
 const KEY_PREFIX: &str = "asset/";
 
-/// Hex digits of the SHA-256 kept in a name. Twelve is 48 bits, which is the
-/// entropy Vite gives a bundle chunk for the same job, and short enough that
-/// the name is still the file's. A collision between two assets is not
-/// possible whatever this is — their paths differ, and the path is in the name
-/// — so what it buys is only that one file's next version cannot land on the
-/// name its last one had.
+/// 48 bits, as Vite gives a chunk; the path is in the name, so this only has
+/// to tell one file's versions apart.
 const KEY_HEX: usize = 12;
 
-/// The asset tree as the table walks it: every `.glb` and `.png`, sorted by
-/// path.
-///
-/// `cube/original/` is the native-resolution source the tiles are resized
-/// from, not something the client ever fetches by key, so it becomes no
-/// object.
+/// `cube/original/` is the resize source, never fetched by the client, so it is skipped.
 fn walk(dir: &Path, base: &Path, out: &mut Vec<(String, PathBuf)>) -> Result<(), String> {
     let entries = std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     for entry in entries.flatten() {
@@ -72,8 +46,6 @@ fn hex(bytes: &[u8]) -> String {
     h.finalize().iter().map(|b| format!("{b:02x}")).collect::<String>()[..KEY_HEX].to_string()
 }
 
-/// A file's name in the bucket: its own path with the hash in the stem, the
-/// way a bundler names a chunk (`beaver-20f91809e69c.glb`).
 fn named(rel: &str, hex: &str) -> String {
     match rel.rsplit_once('.') {
         Some((stem, ext)) => format!("{stem}-{hex}.{ext}"),
@@ -126,15 +98,11 @@ fn run() -> Result<(), String> {
         });
     }
 
-    // The pack's tiles, in the same path order the rows are in — which is what
-    // the table records as the sheet's layout.
     let tiles: Vec<String> = rows
         .iter()
         .filter(|r| r.path.ends_with(".png") && (r.path.starts_with("cube/terrain/") || r.path.starts_with("cube/block/")))
         .map(|r| r.path.clone())
         .collect();
-    // Which cube face each tile is, from the pack's manifest; a tile with no
-    // entry there, or an entry with no tile, is a pack out of step with itself.
     let slots = pack::load(&asset_dir.join("cube"))?;
     let tile_slots = tiles
         .iter()
@@ -151,8 +119,6 @@ fn run() -> Result<(), String> {
     }
     let faces = table::faces(&tile_slots, &pxl_tool::spec::cell::catalog()?)?;
     let composed = sheet::compose(&asset_dir, &tiles)?;
-    // The one object with no source file of its own: it is composed from every
-    // tile under `cube/`, so it is named there.
     let sheet_name = named("cube/pack.webp", &hex(&composed.bytes));
     let at = out_dir.join(&sheet_name);
     std::fs::create_dir_all(at.parent().ok_or("the pack has a parent")?).map_err(|e| e.to_string())?;

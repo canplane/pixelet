@@ -1,6 +1,4 @@
-/* What the page is before any view is laid on it. Everything drawn is a
-   React Native style (shared/ui/theme.ts); what is here is the document the
-   views are put into, which no view can style. */
+/* The document the views are put into, which no view can style. */
 
 html,
 body,
@@ -11,21 +9,12 @@ body,
   padding: 0;
   overflow: hidden;
 
-  /* The platform's own face, as a device app has it: nothing is downloaded,
-     and each system falls back through its own scripts. The Apple keywords
-     come first because Safari has long named its system face by them. */
   font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
-/* The window a device's root fills: react-native-web lays its root view
-   out as a flex child, and `flex: 1` under a block has nothing to fill.
-
-   Fixed to the viewport's edges, and black: Safari extends the
-   color of a fixed element that meets an edge into the bars over it, and
-   where none meets it, treats the page as a document scrolling under the
-   bars and lays a soft blur along the top. react-native-web positions
-   nothing fixed, so the map stood under that blur, where the page before it
-   had its map in a fixed black box and none. */
+/* Flex, since RN-web lays its root out as a flex child. Fixed and black:
+   without a fixed element meeting the edges, Safari blurs the top bar over
+   the map. */
 #root {
   display: flex;
   position: fixed;
@@ -34,37 +23,24 @@ body,
 }
 
 body {
-  /* SF Pro reads best slightly tightened */
   letter-spacing: -0.01em;
   background-color: #000;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* This is an app surface, not a document. A long press here is aiming at
-     a control — the size flyout, the tracking button, a swatch — and the
-     browser answers the same gesture with its own affordances: the iOS
-     callout menu, a text selection, a drag ghost. None of them have
-     anything to offer over a map, and all of them interrupt the gesture
-     that was actually intended.
-
-     Set once at the root rather than per control, because it is a property
-     of the whole surface and the alternative is remembering it on every
-     new button. */
+  /* A long press aims at a control (the size flyout); the iOS callout,
+     selection and drag ghost would interrupt it. */
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
 }
 
-/* -webkit-user-drag does not inherit, so it has to be stated broadly. Safe
-   here only because nothing in this app uses native drag and drop — no
-   dragstart handlers, no dataTransfer, nothing draggable on purpose. */
+/* Does not inherit. Safe only because nothing uses native drag and drop. */
 * {
   -webkit-user-drag: none;
 }
 
-/* Wherever a caret goes, selection has to work again. Safari will not
-   select inside a field whose ancestor is user-select:none, so this is
-   load-bearing rather than defensive. */
+/* Safari will not select inside a field under a user-select:none ancestor. */
 input,
 textarea,
 [contenteditable] {
@@ -72,16 +48,12 @@ textarea,
   user-select: text;
 }
 
-/* A text field's caret is its focus, as on a device, where a field has no
-   ring. React Native's style has no `outline-style: none` to say it in,
-   and Chrome draws `outline: auto` at any width. */
+/* No focus ring, as on a device; RN styles cannot say it. */
 input:focus,
 textarea:focus {
   outline: none;
 }
 
-/* A scroll's bar as a phone's is, thin, where a desktop draws its system's
-   full gutter inside a sheet. Safari keeps its own overlay bar either way. */
 * {
   scrollbar-width: thin;
 }

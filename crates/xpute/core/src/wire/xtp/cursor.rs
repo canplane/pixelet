@@ -1,17 +1,8 @@
 // xpute-core/wire/xtp/cursor.rs
 
-//! The read end: lazy cursors over a packet. A read hands back a `Cursor`,
-//! which is one of three — a leaf's `NodeCursor`, a `NullCursor` for a node
-//! that is physically absent but keeps its type, or a `BranchCursor` over a
-//! child table — since a child can be any of them. Nothing is decoded until
-//! a `get`.
+//! The read end: lazy cursors over a packet. Nothing is decoded until a `get`.
 
-// Uppercase throughout, as the notation these operations are written in: one
-// that holds no state and closes over nothing is named the way a C header
-// names its macros. Rust's own answer to a macro like that is a `const fn`,
-// which it cases snake, so the notation and the language disagree here and
-// the file keeps the notation — suspended once for the file, which is the
-// level the choice is made at rather than item by item.
+// Stateless helpers are uppercase, as the C header's macros they mirror.
 #![allow(non_snake_case)]
 
 use crate::abi::word::field_get32;
@@ -22,11 +13,8 @@ use super::spec::{
     AlignUnit, Array, NodeType, NodeValue, ScalarType, SequenceType, SpecialType, ALIGN_SZ, DESC_TYPE_MASK, DESC_TYPE_SHAMT, GET_WORD, HDR_SZ, MAGIC, NONE, TYPE_IS_LEAF, TYPE_IS_SEQ, WORD_SZ,
 };
 
-/// A shallow read's value: a leaf's value, null, or a branch's cursor.
 pub type ShallowNodeValue<'a> = NodeValue<'a, BranchCursor<'a>>;
 
-/// Scratchpad for 64-bit word operations to avoid allocation.
-/// [lo32, hi32]
 const WORD_REG: [u32; 2] = [NONE, NONE];
 
 fn CURSOR(pkt: &[u8], base: u32, type_: NodeType) -> Result<Cursor<'_>, MarshalError> {
@@ -47,7 +35,7 @@ fn ENTRY_OFF(base: u32, idx: u32) -> u32 {
     (base + WORD_SZ) + idx * WORD_SZ
 }
 
-/// What a read hands back: a leaf cursor, a null cursor or a branch cursor.
+/// `Null` is a physically absent node that keeps its type.
 #[derive(Clone, Debug)]
 pub enum Cursor<'a> {
     Node(NodeCursor<'a>),
@@ -68,8 +56,6 @@ impl<'a> Cursor<'a> {
         matches!(self, Cursor::Branch(_))
     }
 
-    /// Reinterpret current node as a branch cursor.
-    /// Fails if the current node is not a branch.
     pub fn as_branch(self) -> Result<BranchCursor<'a>, MarshalError> {
         match self {
             Cursor::Branch(b) => Ok(b),
@@ -78,7 +64,6 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// Optional chaining helper: `None` for a physically absent node.
     pub fn opt(self) -> Option<Cursor<'a>> {
         match self {
             Cursor::Null(_) => None,
@@ -86,7 +71,6 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// Reads the current node at shallow depth.
     pub fn get(&self) -> Result<ShallowNodeValue<'a>, MarshalError> {
         match self {
             Cursor::Node(c) => c.get(),
@@ -95,16 +79,14 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// A typed-array leaf's elements, as the type the caller names. A read
-    /// of any other node is EBADMSG rather than a wrong slice.
-    pub fn get_array<T: Copy>(&self) -> Result<&'a [T], MarshalError> {
+    /// An array of another element type is EBADMSG, never reinterpreted.
+    pub fn get_array<T: ArrayElem>(&self) -> Result<&'a [T], MarshalError> {
         match self {
-            Cursor::Node(c) if TYPE_IS_SEQ(c.type_) && c.type_ != SequenceType::BITSET as u8 && c.type_ != SequenceType::STR as u8 => c._array::<T>(),
+            Cursor::Node(c) if TYPE_IS_SEQ(c.type_) && c.type_ != SequenceType::BITSET as u8 && c.type_ != SequenceType::STR as u8 => c.array::<T>(),
             _ => Err(MarshalError::new(Errno::EBADMSG)),
         }
     }
 
-    /// `get<u64>()`, checked as `get_array` is.
     pub fn get_u64(&self) -> Result<u64, MarshalError> {
         match self.get()? {
             NodeValue::U64(x) => Ok(x),
@@ -112,7 +94,6 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// `get<i64>()`, checked as `get_array` is.
     pub fn get_i64(&self) -> Result<i64, MarshalError> {
         match self.get()? {
             NodeValue::I64(x) => Ok(x),
@@ -120,7 +101,6 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// `get<boolean>()`, checked as `get_array` is.
     pub fn get_bool(&self) -> Result<bool, MarshalError> {
         match self.get()? {
             NodeValue::Bool(b) => Ok(b),
@@ -128,7 +108,6 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// `get<string>()`, checked as `get_array` is.
     pub fn get_str(&self) -> Result<String, MarshalError> {
         match self.get()? {
             NodeValue::Str(s) => Ok(s),
@@ -136,21 +115,22 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// `get<string>()` read where it lies: the packet's own bytes, with
-    /// nothing decoded into a string of its own — it outlives the cursor and
-    /// lives as long as the packet does. A string that is not UTF-8 is
-    /// EBADMSG, where the host's decode would have replaced what does not
-    /// read.
-    pub fn get_str_ref(&self) -> Result<&'a str, MarshalError> {
+    pub fn get_strs(&self) -> Result<Strs<'a>, MarshalError> {
         match self {
-            Cursor::Node(c) if c.type_ == SequenceType::STR as u8 => c._str_ref(),
+            Cursor::Node(c) if c.type_ == SequenceType::STRS as u8 => c.strs(),
             _ => Err(MarshalError::new(Errno::EBADMSG)),
         }
     }
 
-    /// A scalar leaf of any width up to 32 bits, or a float, as a double —
-    /// every one of those is exact in an f64. A 64-bit integer is not, and is
-    /// not here: `get_u64`/`get_i64`.
+    /// Invalid UTF-8 is EBADMSG here, where `get_str` replaces it.
+    pub fn get_str_ref(&self) -> Result<&'a str, MarshalError> {
+        match self {
+            Cursor::Node(c) if c.type_ == SequenceType::STR as u8 => c.str_ref(),
+            _ => Err(MarshalError::new(Errno::EBADMSG)),
+        }
+    }
+
+    /// Only types exact in an f64; 64-bit integers are refused.
     pub fn get_number(&self) -> Result<f64, MarshalError> {
         Ok(match self.get()? {
             NodeValue::U8(v) => v as f64,
@@ -165,7 +145,6 @@ impl<'a> Cursor<'a> {
         })
     }
 
-    /// Reads the current node at full depth.
     pub fn get_deep(&self) -> Result<NodeValue<'a>, MarshalError> {
         match self {
             Cursor::Node(c) => Ok(deepen(c.get()?)),
@@ -175,7 +154,6 @@ impl<'a> Cursor<'a> {
     }
 }
 
-/// A leaf's or null's shallow value holds no cursor, so it is its deep value.
 fn deepen(v: ShallowNodeValue<'_>) -> NodeValue<'_> {
     match v {
         NodeValue::Extra(_) => crate::bug!(ENOTRECOVERABLE),
@@ -197,15 +175,7 @@ fn deepen(v: ShallowNodeValue<'_>) -> NodeValue<'_> {
     }
 }
 
-// ============ Reader ============
-
-/// Packet reader and root cursor entry point.
-///
-/// Contract:
-/// - requires packet base offset to be WORD_SZ-aligned
-/// - validates the fixed packet header
-/// - returns a root cursor on success
-/// - errs on malformed packet
+/// The packet must start WORD_SZ-aligned.
 pub struct TreeReader<'a> {
     pub pkt: &'a [u8],
 
@@ -224,14 +194,13 @@ impl<'a> TreeReader<'a> {
         }
         let hdr_view = &pkt[..HDR_SZ as usize];
 
-        // packet header
         let mut reg = WORD_REG;
-        let [magic, _] = GET_WORD(hdr_view, 0, &mut reg); // word0
+        let [magic, _] = GET_WORD(hdr_view, 0, &mut reg);
         if magic != MAGIC {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
 
-        // word1: the root header stores payload byte size, not a relative offset
+        // The root's word holds the payload size, not a relative offset.
         let [payload_sz, desc] = GET_WORD(hdr_view, WORD_SZ, &mut reg);
         if payload_sz > pkt.len() as u32 - HDR_SZ {
             return Err(MarshalError::new(Errno::EBADMSG));
@@ -246,7 +215,6 @@ impl<'a> TreeReader<'a> {
         Ok(TreeReader { pkt, root })
     }
 
-    /// Returns the root cursor after constructor-time packet validation.
     pub fn read(&self) -> Cursor<'a> {
         self.root.clone()
     }
@@ -255,8 +223,6 @@ impl<'a> TreeReader<'a> {
         self.root.clone().as_branch()
     }
 }
-
-// ============ Cursors ============
 
 #[derive(Clone, Debug)]
 pub struct NodeCursor<'a> {
@@ -267,8 +233,6 @@ pub struct NodeCursor<'a> {
 }
 
 impl<'a> NodeCursor<'a> {
-    /// - `pkt`: source packet bytes
-    /// - `base`: logical node base offset
     pub fn new(pkt: &'a [u8], base: u32, type_: NodeType) -> NodeCursor<'a> {
         NodeCursor { pkt, base, type_ }
     }
@@ -277,8 +241,6 @@ impl<'a> NodeCursor<'a> {
         self.type_ == SpecialType::BRANCH as u8
     }
 
-    /// Reinterpret current node as a branch cursor.
-    /// Fails if the current node is not a branch.
     pub fn as_branch(self) -> Result<BranchCursor<'a>, MarshalError> {
         if self.type_ != SpecialType::BRANCH as u8 {
             return Err(MarshalError::new(Errno::EBADMSG));
@@ -286,91 +248,74 @@ impl<'a> NodeCursor<'a> {
         BranchCursor::new(self.pkt, self.base)
     }
 
-    // ---- Optional Guard ----
-
-    /// Optional chaining helper.
-    /// Returns `this` for a present node.
-    /// NullCursor's returns `None`.
     pub fn opt(self) -> Option<NodeCursor<'a>> {
         Some(self)
     }
 
-    // ---- Shallow Getter ----
-
-    /// Reads the current node at shallow depth.
-    ///
-    /// Shallow contract:
-    /// - leaf cursor  -> materialized leaf value
-    /// - null cursor  -> null
-    /// - branch cursor is handled by BranchCursor's
     pub fn get(&self) -> Result<ShallowNodeValue<'a>, MarshalError> {
         let t = self.type_;
         Ok(match t {
-            // -- Scalars --
-            t if t == ScalarType::U8 as u8 => NodeValue::U8(self._u8()?),
-            t if t == ScalarType::I8 as u8 => NodeValue::I8(self._i8()?),
-            t if t == ScalarType::U16 as u8 => NodeValue::U16(self._u16()?),
-            t if t == ScalarType::I16 as u8 => NodeValue::I16(self._i16()?),
-            t if t == ScalarType::U32 as u8 => NodeValue::U32(self._u32()?),
-            t if t == ScalarType::I32 as u8 => NodeValue::I32(self._i32()?),
-            t if t == ScalarType::U64 as u8 => NodeValue::U64(self._u64()?),
-            t if t == ScalarType::I64 as u8 => NodeValue::I64(self._i64()?),
-            t if t == ScalarType::F32 as u8 => NodeValue::F32(self._f32()?),
-            t if t == ScalarType::F64 as u8 => NodeValue::F64(self._f64()?),
-            t if t == ScalarType::BOOL as u8 => NodeValue::Bool(self._bool()?),
+            t if t == ScalarType::U8 as u8 => NodeValue::U8(self.u8_of()?),
+            t if t == ScalarType::I8 as u8 => NodeValue::I8(self.i8_of()?),
+            t if t == ScalarType::U16 as u8 => NodeValue::U16(self.u16_of()?),
+            t if t == ScalarType::I16 as u8 => NodeValue::I16(self.i16_of()?),
+            t if t == ScalarType::U32 as u8 => NodeValue::U32(self.u32_of()?),
+            t if t == ScalarType::I32 as u8 => NodeValue::I32(self.i32_of()?),
+            t if t == ScalarType::U64 as u8 => NodeValue::U64(self.u64_of()?),
+            t if t == ScalarType::I64 as u8 => NodeValue::I64(self.i64_of()?),
+            t if t == ScalarType::F32 as u8 => NodeValue::F32(self.f32_of()?),
+            t if t == ScalarType::F64 as u8 => NodeValue::F64(self.f64_of()?),
+            t if t == ScalarType::BOOL as u8 => NodeValue::Bool(self.bool_of()?),
 
-            // -- Sequences --
             t if t == SequenceType::U8_ARRAY as u8 => NodeValue::Array(Array {
                 type_: SequenceType::U8_ARRAY,
-                bytes: bytes_of(self._u8_array()?).into(),
+                bytes: bytes_of(self.u8_array()?).into(),
             }),
             t if t == SequenceType::I8_ARRAY as u8 => NodeValue::Array(Array {
                 type_: SequenceType::I8_ARRAY,
-                bytes: bytes_of(self._i8_array()?).into(),
+                bytes: bytes_of(self.i8_array()?).into(),
             }),
             t if t == SequenceType::U16_ARRAY as u8 => NodeValue::Array(Array {
                 type_: SequenceType::U16_ARRAY,
-                bytes: bytes_of(self._u16_array()?).into(),
+                bytes: bytes_of(self.u16_array()?).into(),
             }),
             t if t == SequenceType::I16_ARRAY as u8 => NodeValue::Array(Array {
                 type_: SequenceType::I16_ARRAY,
-                bytes: bytes_of(self._i16_array()?).into(),
+                bytes: bytes_of(self.i16_array()?).into(),
             }),
             t if t == SequenceType::U32_ARRAY as u8 => NodeValue::Array(Array {
                 type_: SequenceType::U32_ARRAY,
-                bytes: bytes_of(self._u32_array()?).into(),
+                bytes: bytes_of(self.u32_array()?).into(),
             }),
             t if t == SequenceType::I32_ARRAY as u8 => NodeValue::Array(Array {
                 type_: SequenceType::I32_ARRAY,
-                bytes: bytes_of(self._i32_array()?).into(),
+                bytes: bytes_of(self.i32_array()?).into(),
             }),
             t if t == SequenceType::U64_ARRAY as u8 => NodeValue::Array(Array {
                 type_: SequenceType::U64_ARRAY,
-                bytes: bytes_of(self._u64_array()?).into(),
+                bytes: bytes_of(self.u64_array()?).into(),
             }),
             t if t == SequenceType::I64_ARRAY as u8 => NodeValue::Array(Array {
                 type_: SequenceType::I64_ARRAY,
-                bytes: bytes_of(self._i64_array()?).into(),
+                bytes: bytes_of(self.i64_array()?).into(),
             }),
             t if t == SequenceType::F32_ARRAY as u8 => NodeValue::Array(Array {
                 type_: SequenceType::F32_ARRAY,
-                bytes: bytes_of(self._f32_array()?).into(),
+                bytes: bytes_of(self.f32_array()?).into(),
             }),
             t if t == SequenceType::F64_ARRAY as u8 => NodeValue::Array(Array {
                 type_: SequenceType::F64_ARRAY,
-                bytes: bytes_of(self._f64_array()?).into(),
+                bytes: bytes_of(self.f64_array()?).into(),
             }),
             t if t == SequenceType::BITSET as u8 => NodeValue::Array(Array {
                 type_: SequenceType::BITSET,
-                bytes: self._bitset()?.into(),
+                bytes: self.bitset()?.into(),
             }),
-            t if t == SequenceType::STR as u8 => NodeValue::Str(self._str()?),
+            t if t == SequenceType::STR as u8 => NodeValue::Str(self.str_of()?),
 
             _ => return Err(MarshalError::new(Errno::EBADMSG)),
         })
     }
-
-    // ---- Internal Leaf Readers ----
 
     fn scalar<const N: usize>(&self) -> Result<[u8; N], MarshalError> {
         if self.base as usize + N > self.pkt.len() {
@@ -379,49 +324,42 @@ impl<'a> NodeCursor<'a> {
         Ok(self.pkt[self.base as usize..self.base as usize + N].try_into().unwrap())
     }
 
-    fn _u8(&self) -> Result<u8, MarshalError> {
+    fn u8_of(&self) -> Result<u8, MarshalError> {
         Ok(u8::from_le_bytes(self.scalar()?))
     }
-    fn _i8(&self) -> Result<i8, MarshalError> {
+    fn i8_of(&self) -> Result<i8, MarshalError> {
         Ok(i8::from_le_bytes(self.scalar()?))
     }
-    fn _u16(&self) -> Result<u16, MarshalError> {
+    fn u16_of(&self) -> Result<u16, MarshalError> {
         Ok(u16::from_le_bytes(self.scalar()?))
     }
-    fn _i16(&self) -> Result<i16, MarshalError> {
+    fn i16_of(&self) -> Result<i16, MarshalError> {
         Ok(i16::from_le_bytes(self.scalar()?))
     }
-    fn _u32(&self) -> Result<u32, MarshalError> {
+    fn u32_of(&self) -> Result<u32, MarshalError> {
         Ok(u32::from_le_bytes(self.scalar()?))
     }
-    fn _i32(&self) -> Result<i32, MarshalError> {
+    fn i32_of(&self) -> Result<i32, MarshalError> {
         Ok(i32::from_le_bytes(self.scalar()?))
     }
-    fn _u64(&self) -> Result<u64, MarshalError> {
+    fn u64_of(&self) -> Result<u64, MarshalError> {
         Ok(u64::from_le_bytes(self.scalar()?))
     }
-    fn _i64(&self) -> Result<i64, MarshalError> {
+    fn i64_of(&self) -> Result<i64, MarshalError> {
         Ok(i64::from_le_bytes(self.scalar()?))
     }
-    fn _f32(&self) -> Result<f32, MarshalError> {
+    fn f32_of(&self) -> Result<f32, MarshalError> {
         Ok(f32::from_le_bytes(self.scalar()?))
     }
-    fn _f64(&self) -> Result<f64, MarshalError> {
+    fn f64_of(&self) -> Result<f64, MarshalError> {
         Ok(f64::from_le_bytes(self.scalar()?))
     }
-    fn _bool(&self) -> Result<bool, MarshalError> {
+    fn bool_of(&self) -> Result<bool, MarshalError> {
         Ok(u8::from_le_bytes(self.scalar()?) != 0)
     }
 
-    /// Reads a typed-array sequence leaf as a zero-copy view over the packet buffer.
-    ///
-    /// Contract:
-    /// - checks only len/payload overflow against packet bounds
-    /// - assumes packet base alignment was validated by TreeReader
-    /// - sequence payload starts immediately after the len slot: base + WORD_SZ
-    /// - because sequence node bases are WORD_SZ-aligned, payload_start is also
-    ///   naturally aligned for all supported typed-array element sizes (<= 8)
-    fn _array<T: Copy>(&self) -> Result<&'a [T], MarshalError> {
+    /// Zero-copy; relies on `TreeReader` having checked the packet's alignment.
+    fn array<T: Copy>(&self) -> Result<&'a [T], MarshalError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
@@ -444,45 +382,43 @@ impl<'a> NodeCursor<'a> {
         }
 
         let at = payload_start as usize;
-        // SAFETY: a sequence node's base is WORD_SZ-aligned and the packet's
-        // own base was checked, so the payload is aligned for every element
-        // the format carries (8 bytes at most); the bounds above hold it
-        // inside the packet.
+        // SAFETY: the payload is WORD_SZ-aligned, enough for every element
+        // type (8 bytes at most), and the bounds above keep it in the packet.
         Ok(unsafe { core::slice::from_raw_parts(self.pkt[at..].as_ptr() as *const T, len as usize) })
     }
 
-    fn _u8_array(&self) -> Result<&'a [u8], MarshalError> {
-        self._array()
+    fn u8_array(&self) -> Result<&'a [u8], MarshalError> {
+        self.array()
     }
-    fn _i8_array(&self) -> Result<&'a [i8], MarshalError> {
-        self._array()
+    fn i8_array(&self) -> Result<&'a [i8], MarshalError> {
+        self.array()
     }
-    fn _u16_array(&self) -> Result<&'a [u16], MarshalError> {
-        self._array()
+    fn u16_array(&self) -> Result<&'a [u16], MarshalError> {
+        self.array()
     }
-    fn _i16_array(&self) -> Result<&'a [i16], MarshalError> {
-        self._array()
+    fn i16_array(&self) -> Result<&'a [i16], MarshalError> {
+        self.array()
     }
-    fn _u32_array(&self) -> Result<&'a [u32], MarshalError> {
-        self._array()
+    fn u32_array(&self) -> Result<&'a [u32], MarshalError> {
+        self.array()
     }
-    fn _i32_array(&self) -> Result<&'a [i32], MarshalError> {
-        self._array()
+    fn i32_array(&self) -> Result<&'a [i32], MarshalError> {
+        self.array()
     }
-    fn _u64_array(&self) -> Result<&'a [u64], MarshalError> {
-        self._array()
+    fn u64_array(&self) -> Result<&'a [u64], MarshalError> {
+        self.array()
     }
-    fn _i64_array(&self) -> Result<&'a [i64], MarshalError> {
-        self._array()
+    fn i64_array(&self) -> Result<&'a [i64], MarshalError> {
+        self.array()
     }
-    fn _f32_array(&self) -> Result<&'a [f32], MarshalError> {
-        self._array()
+    fn f32_array(&self) -> Result<&'a [f32], MarshalError> {
+        self.array()
     }
-    fn _f64_array(&self) -> Result<&'a [f64], MarshalError> {
-        self._array()
+    fn f64_array(&self) -> Result<&'a [f64], MarshalError> {
+        self.array()
     }
 
-    fn _bitset(&self) -> Result<Vec<u8>, MarshalError> {
+    fn bitset(&self) -> Result<Vec<u8>, MarshalError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
@@ -507,8 +443,7 @@ impl<'a> NodeCursor<'a> {
         Ok(arr)
     }
 
-    /// The string's own bytes where they lie, checked as `_str` checks them.
-    fn _str_ref(&self) -> Result<&'a str, MarshalError> {
+    fn str_ref(&self) -> Result<&'a str, MarshalError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
@@ -525,8 +460,41 @@ impl<'a> NodeCursor<'a> {
         core::str::from_utf8(&bytes[payload_start as usize..(payload_start + nbyte) as usize]).map_err(|_| MarshalError::new(Errno::EBADMSG))
     }
 
-    // STR stores UTF-8 bytes with a trailing NUL on wire, while len excludes that terminator.
-    fn _str(&self) -> Result<String, MarshalError> {
+    /// `len` + 1 non-decreasing offsets into the UTF-8 after them; every
+    /// string is checked before any is given.
+    fn strs(&self) -> Result<Strs<'a>, MarshalError> {
+        let bad = || MarshalError::new(Errno::EBADMSG);
+        if self.base + WORD_SZ > self.pkt.len() as u32 {
+            return Err(bad());
+        }
+        let mut reg = WORD_REG;
+        let [n, _] = GET_WORD(self.pkt, self.base, &mut reg);
+        let start = (self.base + WORD_SZ) as usize;
+        let pkt: &'a [u8] = self.pkt;
+        // In u64: a count a packet cannot hold must read as one, not wrap.
+        let lane = 4 * (n as u64 + 1);
+        if start as u64 + lane > pkt.len() as u64 {
+            return Err(bad());
+        }
+        let offs = &pkt[start..start + lane as usize];
+        let strs = Strs { offs, blob: &[], len: n };
+        let blob = start + offs.len();
+        let total = strs.off(n as usize);
+        let strs = Strs {
+            blob: pkt.get(blob..blob.checked_add(total).ok_or_else(bad)?).ok_or_else(bad)?,
+            ..strs
+        };
+        for i in 0..n as usize {
+            let (a, b) = (strs.off(i), strs.off(i + 1));
+            if a > b || b > total || core::str::from_utf8(&strs.blob[a..b]).is_err() {
+                return Err(bad());
+            }
+        }
+        Ok(strs)
+    }
+
+    // On the wire a STR has a trailing NUL that `len` excludes.
+    fn str_of(&self) -> Result<String, MarshalError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
@@ -552,36 +520,23 @@ impl<'a> NodeCursor<'a> {
 pub struct NullCursor<'a>(pub NodeCursor<'a>);
 
 impl<'a> NullCursor<'a> {
-    /// - `pkt`: source packet bytes
     pub fn new(pkt: &'a [u8], type_: NodeType) -> NullCursor<'a> {
         NullCursor(NodeCursor::new(pkt, NONE, type_))
     }
 
-    // NullCursor preserves original node type metadata,
-    // but is never considered a usable structural cursor.
     pub fn is_branch(&self) -> bool {
         false
     }
 
-    /// Reinterpret current node as a branch cursor.
-    /// Fails if the current node is not a branch.
     pub fn as_branch(self) -> Result<BranchCursor<'a>, MarshalError> {
         Err(MarshalError::new(Errno::EFAULT))
     }
 
-    // ---- Nullable Guard ----
-
-    /// Optional chaining helper.
-    /// Returns `None` for a physically absent node and `this` otherwise.
     pub fn opt(self) -> Option<NullCursor<'a>> {
         None
     }
 
-    // ---- Shallow Getter ----
-
-    /// Shallow read of a physically absent node reconstructs generic null.
     pub fn get(&self) -> ShallowNodeValue<'a> {
-        // generic optional reconstruction
         NodeValue::Null
     }
 }
@@ -636,15 +591,7 @@ impl<'a> BranchCursor<'a> {
         Some(self)
     }
 
-    // ---- Shallow / Deep Getter ----
-
-    /// Shallow branch read.
-    ///
-    /// Contract:
-    /// - get()      -> array of direct children
-    /// - leaf child -> materialized leaf value
-    /// - branch child -> its cursor (not recursive)
-    /// - null child -> null
+    /// A child branch comes back as its cursor, not recursed into.
     pub fn get(&self) -> Result<ShallowNodeValue<'a>, MarshalError> {
         let mut arr = Vec::with_capacity(self.len as usize);
         for i in 0..self.len {
@@ -657,15 +604,10 @@ impl<'a> BranchCursor<'a> {
         Ok(NodeValue::List(arr))
     }
 
-    /// get(idx): the direct child at idx, shallow-materialized at that
-    /// child boundary.
     pub fn get_at(&self, idx: u32) -> Result<ShallowNodeValue<'a>, MarshalError> {
         self.at(idx)?.get()
     }
 
-    /// Deep branch read.
-    ///
-    /// Recursively materializes the entire child subtree.
     pub fn get_deep(&self) -> Result<NodeValue<'a>, MarshalError> {
         let mut arr = Vec::with_capacity(self.len as usize);
         for i in 0..self.len {
@@ -675,12 +617,7 @@ impl<'a> BranchCursor<'a> {
         Ok(NodeValue::List(arr))
     }
 
-    /// Returns the child cursor at `idx`.
-    ///
-    /// Contract:
-    /// - preserves child type metadata even when physically absent
-    /// - returns NullCursor when child_rel_off == 0
-    /// - validates child offset bounds against the enclosing branch table
+    /// A zero offset is an absent child, which keeps its type.
     pub fn at(&self, idx: u32) -> Result<Cursor<'a>, MarshalError> {
         if idx >= self.len {
             return Err(MarshalError::new(Errno::EFAULT));
@@ -708,24 +645,20 @@ impl<'a> BranchCursor<'a> {
         self.at(idx)?.as_branch()
     }
 
-    /// Returns all direct child cursors without materializing them.
     pub fn children(&self) -> Result<Vec<Cursor<'a>>, MarshalError> {
         (0..self.len).map(|i| self.at(i)).collect()
     }
 
-    /// The children in order.
     pub fn iter(&self) -> impl Iterator<Item = Result<Cursor<'a>, MarshalError>> + '_ {
         (0..self.len).map(move |i| self.at(i))
     }
 }
 
-/// A leaf's elements as the bytes they lie in.
 fn bytes_of<T: Copy>(a: &[T]) -> &[u8] {
     // SAFETY: the elements are the packet's own bytes, read back as bytes.
     unsafe { core::slice::from_raw_parts(a.as_ptr() as *const u8, core::mem::size_of_val(a)) }
 }
 
-/// A sequence leaf's bytes read as the element the caller names.
 pub fn elements<'b, T: Copy>(a: &'b Array<'_>) -> &'b [T] {
     let n = a.bytes.len() / core::mem::size_of::<T>();
     // SAFETY: a leaf's bytes are its elements, as the packet laid them out.
@@ -735,3 +668,52 @@ pub fn elements<'b, T: Copy>(a: &'b Array<'_>) -> &'b [T] {
 #[cfg(test)]
 #[path = "cursor.test.rs"]
 mod test;
+
+/// Validated as UTF-8 when the sequence was read.
+#[derive(Clone, Copy, Debug)]
+pub struct Strs<'a> {
+    offs: &'a [u8],
+    blob: &'a [u8],
+    len: u32,
+}
+
+impl<'a> Strs<'a> {
+    fn off(&self, i: usize) -> usize {
+        u32::from_le_bytes([self.offs[4 * i], self.offs[4 * i + 1], self.offs[4 * i + 2], self.offs[4 * i + 3]]) as usize
+    }
+
+    pub fn len(&self) -> u32 {
+        self.len
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    pub fn get(&self, i: u32) -> Option<&'a str> {
+        (i < self.len).then(|| {
+            let blob: &'a [u8] = self.blob;
+            // SAFETY: every span was checked as UTF-8 when the sequence was read.
+            unsafe { core::str::from_utf8_unchecked(&blob[self.off(i as usize)..self.off(i as usize + 1)]) }
+        })
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &'a str> + 'a {
+        let s = *self;
+        (0..s.len).filter_map(move |i| s.get(i))
+    }
+}
+
+pub trait ArrayElem: Copy {
+    const TYPE: SequenceType;
+}
+
+macro_rules! array_elem {
+    ($($t:ty => $seq:ident),* $(,)?) => {
+        $(impl ArrayElem for $t {
+            const TYPE: SequenceType = SequenceType::$seq;
+        })*
+    };
+}
+
+array_elem!(u8 => U8_ARRAY, i8 => I8_ARRAY, u16 => U16_ARRAY, i16 => I16_ARRAY, u32 => U32_ARRAY, i32 => I32_ARRAY, u64 => U64_ARRAY, i64 => I64_ARRAY, f32 => F32_ARRAY, f64 => F64_ARRAY);

@@ -9,20 +9,10 @@ import { Glyph } from "@/shared/ui/glyph.tsx";
 import { color as theme, halo, haloRings } from "@/shared/ui/theme.ts";
 
 /**
- * What floats over the map, in the halo it stands in (theme.ts `halo`):
- * `draw` drawn in black at points around a circle as wide as each ring, and
- * over those as itself. Copies rather than a stroke, because nothing it
- * draws has one to widen on every platform — a device's text has none, and
- * an iPhone's symbol is an image — and copies take a word, a lucide glyph and
- * an SF Symbol alike: eight points a pixel out, more as the circle grows, so
- * no gap opens between two. Each ring is faded as a whole, so where the
- * copies overlap it is no darker: a page and an iPhone fade a view as one
- * layer, and Android does when told to composite it offscreen.
- *
- * Its box is what it draws, rings and all: `halo.reach` of room on every
- * side of what it holds, which a caller counts in its gaps (`haloGap`).
- * Android cuts a layer at its view's bounds, so a ring drawn past its box,
- * whether the rings' own layer or an ancestor faded whole, was cut square.
+ * A dark halo from black copies of `draw` around circles, not a stroke: a
+ * device's text and an iPhone's symbol have none to widen. Each ring fades as
+ * one layer so overlaps are no darker. The box includes the rings, since
+ * Android cuts a layer at its view's bounds.
  */
 function Halo({ style, draw }: { style: StyleProp<ViewStyle>; draw: (ink?: string) => ReactNode }) {
   return (
@@ -37,29 +27,22 @@ function Halo({ style, draw }: { style: StyleProp<ViewStyle>; draw: (ink?: strin
         </View>
       ))}
       {
-        // In a view of its own: on a page, a positioned box paints over an
-        // unpositioned one whatever their order, and a bare glyph is an SVG
-        // with no position, so the rings would lie over it and grey it.
+        // Its own view: a positioned box paints over an unpositioned SVG, which the
+        // rings would grey.
       }
       <View>{draw()}</View>
     </View>
   );
 }
 
-/** The gap to lay out between two haloed things for `gap` between what they
- * draw: each box holds its halo's room. */
 export function haloGap(gap: f64): f64 {
   return gap - 2 * halo.reach;
 }
 
-/** A glyph over the map in the halo its text has; crossed out, the strike is
- * haloed with it, which parts it from the strokes it crosses. */
 export function HaloIcon({ struck, ...icon }: IconProps & { struck?: boolean }) {
   return <Halo style={{ width: icon.size + 2 * halo.reach, height: icon.size + 2 * halo.reach }} draw={(ink) => <Glyph {...icon} color={ink ?? icon.color} struck={struck} />} />;
 }
 
-/** One line of text over the map in the halo. Every copy is cut short where
- * the line is. */
 export function HaloText({ style, children }: { style: StyleProp<TextStyle>; children: ReactNode }) {
   return (
     <Halo
@@ -73,7 +56,6 @@ export function HaloText({ style, children }: { style: StyleProp<TextStyle>; chi
   );
 }
 
-/** Points on a circle of radius `px`, one a pixel apart along it. */
 function around(px: f64): [f64, f64][] {
   const n = 8 * Math.ceil(px);
   return Array.from({ length: n }, (_, i) => {

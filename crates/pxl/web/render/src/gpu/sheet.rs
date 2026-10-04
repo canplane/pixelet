@@ -1,13 +1,8 @@
 // pxl-render/gpu/sheet.rs
 
-//! An entry of the billboard sheet drawn on the device: a sketch of shapes
-//! and lines of text, drawn by one pass into a texture of the entry's size
-//! and copied into its rectangle (frame/shader/sheet.wgsl). The shapes are
-//! signed distances, so nothing here fills a path; the lines are the
-//! platform's pixels (gpu/text.rs), one layer of an array each.
-//!
-//! A sketch is said in the entry's logical pixels and drawn at the sheet's
-//! scale, past the entry's padding, as the atlas lays the entry out.
+//! A billboard sheet entry drawn on the device into a texture of its size and
+//! copied into its rectangle. Sketches are in logical pixels, drawn at the
+//! sheet's scale.
 
 use crate::asset::atlas::PAD;
 use crate::frame::shader::record::PIPELINE_SHEET;
@@ -17,7 +12,6 @@ use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::surface::DPR_MAX;
 use crate::gpu::text::{Font, Raster, TextOf};
 
-/// Floats an instance holds (sheet.wgsl's Shape).
 const SHAPE_FLOATS: usize = 20;
 
 const FILL: u32 = 0;
@@ -25,7 +19,6 @@ const STROKE: u32 = 1;
 const TRIANGLE: u32 = 2;
 const TEXT: u32 = 3;
 
-/// Where a line of text stands on its x.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Align {
     Left,
@@ -40,20 +33,17 @@ struct Line {
     align: Align,
 }
 
-/// What an entry is drawn from, in its logical pixels.
 #[derive(Default)]
 pub struct Sketch {
     shapes: Vec<[f32; SHAPE_FLOATS]>,
     lines: Vec<Line>,
 }
 
-/// An entry's logical pixel in its texture's pixels.
 fn px(v: f32) -> f32 {
     PAD as f32 + v * DPR_MAX as f32
 }
 
-/// 0xRRGGBBAA as linear RGB and alpha: the texture is sRGB, and what a
-/// shader writes into it is linear.
+/// The texture is sRGB, and what a shader writes into it is linear.
 fn linear(rgba: u32) -> [f32; 4] {
     let channel = |shift: u32| {
         let c = ((rgba >> shift) & 0xff) as f32 / 255.0;
@@ -77,7 +67,6 @@ fn shape(kind: u32, rect: [f32; 4], color: u32, p: [f32; 4], q: [f32; 2]) -> [f3
 }
 
 impl Sketch {
-    /// A rectangle from (x, y), `w` by `h`, its corners rounded by `r`.
     pub fn round_rect(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, color: u32) {
         let rect = [px(x), px(y), px(x + w), px(y + h)];
         self.shapes.push(shape(FILL, rect, color, [r * DPR_MAX as f32, 0.0, 0.0, 0.0], [0.0; 2]));
@@ -87,12 +76,10 @@ impl Sketch {
         self.round_rect(x, y, w, h, 0.0, color);
     }
 
-    /// A disc about (cx, cy).
     pub fn circle(&mut self, cx: f32, cy: f32, r: f32, color: u32) {
         self.round_rect(cx - r, cy - r, 2.0 * r, 2.0 * r, r, color);
     }
 
-    /// A circle about (cx, cy) stroked `width` wide, the stroke centered on it.
     pub fn ring(&mut self, cx: f32, cy: f32, r: f32, width: f32, color: u32) {
         let rect = [px(cx - r), px(cy - r), px(cx + r), px(cy + r)];
         let scale = DPR_MAX as f32;
@@ -105,8 +92,6 @@ impl Sketch {
         self.shapes.push(shape(TRIANGLE, rect, color, [a[0], a[1], b[0], b[1]], c));
     }
 
-    /// A line of text with the middle of its em box on `y`, starting at `x`
-    /// or centered on it.
     pub fn text(&mut self, font: Font, color: u32, text: &str, x: f32, y: f32, align: Align) {
         self.lines.push(Line {
             font,
@@ -118,7 +103,6 @@ impl Sketch {
     }
 }
 
-/// The pipeline every entry is drawn with, and what it samples its text by.
 pub struct SheetPainter {
     built: Built,
     sampler: u32,
@@ -134,10 +118,7 @@ impl SheetPainter {
         }
     }
 
-    /// Records `sketch` drawn into `sheet` at `rect` (x, y, w, h), in
-    /// `encoder`, and adds what it made for it to `made`, to be let go once
-    /// the encoder is submitted. False, and nothing recorded, while a line
-    /// of its text is not drawn yet: `text` has asked for it.
+    /// False, and nothing recorded, while a line of its text is not drawn yet.
     #[allow(clippy::too_many_arguments)]
     pub fn paint(&self, g: &Gpu, encoder: u32, sheet: u32, rect: [u32; 4], sketch: &Sketch, text: TextOf, made: &mut Vec<u32>) -> bool {
         let mut rasters: Vec<Raster<'static>> = Vec::with_capacity(sketch.lines.len());
@@ -147,7 +128,6 @@ impl SheetPainter {
         }
         let [x, y, w, h] = rect;
 
-        // The lines, a layer each, in an array as large as the largest.
         let layer_w = rasters.iter().map(|r| r.width).max().unwrap_or(1).max(1);
         let layer_h = rasters.iter().map(|r| r.height).max().unwrap_or(1).max(1);
         let layers = (rasters.len() as u32).max(1);

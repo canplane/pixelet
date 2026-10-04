@@ -1,5 +1,4 @@
 // xpute-core/math/rng.test.rs
-// (no pair: rng.ts has no test file)
 
 use super::*;
 use crate::golden::Golden;

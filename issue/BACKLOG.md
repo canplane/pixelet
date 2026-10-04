@@ -10,51 +10,13 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P0
 
-- **What is drawn is what the screen covers: to main.** Built 2026-09-28
-  on `observation-paging`
-  ([20260928-what-is-drawn-is-what-the-screen-covers.md](./20260928-what-is-drawn-is-what-the-screen-covers.md);
-  ARCHITECTURE.md "The view"). The client asks for terrain v7, so main
-  waits for its publish: terrain v7 baked and published after
-  `deno task usage` (about 227,000 Class A) — once, not per revision of the
-  format, and not by demand, since a page's index bounds its whole subtree
-  and a coarse page cannot be made before everything under it — then
-  merged with `--no-ff` and deployed. What is left of the model is one
-  reader of the mesh's surface from outside the chunk it is built into:
-  places count a place only where the ground over it is drawn
-  (layer/poi/placement.rs, `Scheduler::surface_at`), which leaks the
-  build's state into a count, and goes with how places are drawn.
-- **The atmosphere in the observation's test, an optimization held.** A
-  difference is observed where its projected angle leaks past a cell _and_
-  the contrast it makes is still distinguishable after the air (`T(d)`,
-  layer/environment/fog.rs). Transmittance weakens contrast, not geometry,
-  so the two are tested side by side, not multiplied into one cell. With no
-  bound on the contrast a region's representation can be off by, the
-  contrast test is only today's far edge — the visual range, where `T`
-  falls to the threshold — which is correct as it stands. What it would
-  save inside the far edge needs a conservative bound on the difference a
-  representation's error can make in the final image, and that is not a
-  record's variance: it turns on material, light, shadow, emission and what
-  stands behind a silhouette. No lane is added to a page until such a
-  quantity is defined. The planet's horizon stays a separate, geometric
-  limit.
-- **How the samples are drawn.** Raster against casting into the records,
-  on the iPhone 13 mini, with today's box format (36 unindexed vertices)
-  against faces alone; seams where levels that are not neighbours meet, and
-  a blend on arrival; decor as its own solver — instances at the asset's
-  level of detail, an impostor far away, its lifetime off the chunk slot,
-  and its hit with them: the pointer's ray scans the chunks shown, each
-  grown by a reach derived from nothing (layer/decor/hit.rs `DECOR_REACH`),
-  where the ground and the objects are each walked along the ray.
-- **One order out from the eye, the rest.** Every scheduler takes work in
-  one order out from the eye, a chunk is a cube of its level holding
-  something, and a placed object lives in the cube its band is in
-  ([20260926-the-view-is-cubes-about-the-eye.md](./20260926-the-view-is-cubes-about-the-eye.md)).
-  Hidden ground is no longer asked for: demand is what the screen's tiles
-  meet (world/observation.rs `ByFootprints`), and ground behind what they
-  meet is required of no level. Left: a column crossing a cube's floor or ceiling is two chunks — 1.5 a column
-  near Gangnam and 1.7 on Bukhansan, 2026-09-26 — each scanning the whole
-  column's runs again, where the runs could be the column's once and each
-  chunk a cut of them.
+- **How the samples are drawn.** On the iPhone 13 mini, four shapes over the
+  same pages and views: today's boxes, the same as masked faces, a ray a
+  pixel, and a bounded observation a cell — what the rule asks for, a cell
+  being an angular footprint and not a sample point. The steps a cast pays
+  are measured already, and where on the screen they lie
+  ([20260928-what-is-drawn-is-what-the-screen-covers.md](./20260928-what-is-drawn-is-what-the-screen-covers.md),
+  "the steps, measured").
 
 ## P1
 
@@ -86,16 +48,14 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   what would draw them further for two triangles each. Not a phone fix —
   build it when a wider decor range is wanted.
 
+- **Decor and the badges on the drawn chunks, seen running.** `4da038fc`
+  and `98e4f790` moved them onto the chunks the terrain draws; checked by
+  the tests and the build only. Zoom and pan on the dev stack: decor and
+  badges change with the ground under them, and no tree is lost or doubled
+  at a chunk's top or edge.
+
 ## P3
 
-- **A staging file named by what it stages.** `pxl-geo-bake util.rs`
-  `write_atomic` stages every write through `<name>.part`, so it is atomic
-  only while one writer at a time writes a name. The dev tile server's
-  cache and the offline bake keep that today — the shared ocean page is
-  written once when a generation opens, since two folds re-publishing it
-  raced on the rename and left pages a 500 for the generation (2026-09-29)
-  — but the next writer outside the cache's `once` would race again. A
-  staging name unique to its writer takes the assumption away.
 - **The address label by the zoom.** Asked 2026-09-23, not now: it wants a
   rebake. The label is one baked answer a leaf page
   (`use-reverse-geocode.ts`, `geo-bake/geocode/provider/overture.rs`) — region,
@@ -134,90 +94,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   - The themes' remaining fill — ambient, hemisphere, the floor — from the
     sky's irradiance, the way the sunlight now comes from the air. The floor
     is there for a phone's night and would resist it.
-
-- **A changelog, when `xpute` is published and not before.** Asked 2026-09-19
-  and answered no: a changelog's reader is someone deciding whether to move
-  between versions, and its load-bearing lines are the ones that change what
-  that reader must do — removed, changed, deprecated, upgrade now. Continuous
-  deployment has no such reader, since nobody chooses a build. What was wanted
-  instead — which commits a build number carries — is a build log, and
-  `check-and-deploy.yml`'s `record` job appends one line per published build to
-  `_meta/build-log.jsonl`, subjects and all, which `./script/build-log.ts`
-  reads back. Subjects rather than tags or ids because main's history is
-  rewritten here routinely, and a name for a commit outlives the commit only if
-  it is not a reference to one. The trigger that
-  would make a real changelog earn its place is
-  [the spin-out](./20260708-vision-and-scope-pivot.md): the day `@xpute/core`
-  and `xpute-core` ship as packages, their consumers have neither this git log
-  nor `issue/`, and the changelog belongs inside the package with its semver —
-  generated from the commits at that point, not accumulated by hand until
-  then. An installable build through Capacitor
-  ([20260810-mobile-and-perf-targets.md](./20260810-mobile-and-perf-targets.md))
-  is the same trigger from the other side, since a store submission wants
-  release notes per version. Until one of those, `issue/` is the history and it
-  records why, which a changelog never does.
-
-- **The TypeScript's private marker, ported as a leading underscore.** 74
-  places outside the tests: 53 functions and 21 fields, concentrated in
-  `wire/xtp/cursor.rs` (25), `wire/tlv.rs` (23), `collection/arena.rs`
-  (8) and `wire/xtp/encode.rs` (6), with a few each in
-  `ipc/change.rs` and `wire/xtp/view.rs`,
-  `pxl-spec`'s `sparse_tree/mem.rs` and its three `cell/` files. Rust has one
-  meaning for a leading underscore and it is not privacy — privacy is the
-  absence of `pub` — it silences the unused warning, which `rustc` confirms
-  for items as well as bindings: `fn _never_called()` draws nothing where
-  `fn never_called()` draws `never used`. So the marker turns the dead-code
-  lint off for exactly the functions most likely to go dead. Two kinds:
-  - Forced, where a private helper shares a name with the public method that
-    calls it — `tlv.rs`'s `_u8`/`_i64`/`_f64`, `cursor.rs`'s
-    `_bool`/`_f32_array`, about twenty in all. These need some
-    disambiguator; `heap.rs`'s `build_of` is the suffix precedent.
-  - Free, where nothing collides: `_grow`, `_need`, `_put`, `_take`,
-    `_check_unsealed`, `_prune`, `_walk`, and every field — `_cap`, `_len`,
-    `_size`, `_head`, `_buf`, `_off`, `_sealed`, `_factory`, `_mark`.
-    `pxl-spec`'s `cell/type.rs` carries `pub _meta`, which says both at once
-    and wants reading before it is renamed. `collection/heap.rs`'s `build_of` is the
-    precedent for the forced kind, and the free kind just loses the underscore.
-
-- **The TypeScript's numeric model, still named in the Rust.** `Number` and
-  `BigInt` are the only numeric types TypeScript has, and nothing here was
-  ever meant to correspond to them: the port is not allowed to carry the
-  other language's constraints across. What is left is
-  `crates/pxl/web/kernel/src/shell/setting/`'s `SettingKind::Number` and
-  `SettingValue::Number` — code rather than prose, so read first whether
-  the schema's value kinds are JSON's or JavaScript's. `ArrayBuffer` in
-  `mem.spec.rs` stays, since the module's `memory.buffer` really is one on
-  the host's side; `codec/json.rs`'s `JsonKind::Number` stays, JSON's own
-  name.
-
-- **The run set's per-axis inset has no writer.** `sub_sx`/`sub_sy` are
-  always a copy of `sub_sz` (the scan, the coarse pack and the object
-  adapter all set the three equal), so the per-axis design column_run.ts
-  documents — a pillar narrow in XY and full in Z — costs two bytes a run
-  for nothing today. Either the coarse bake learns to fit XY and Z
-  separately, or the lanes go; decided with the Rust mesher, since the
-  format is its input.
-- **The const enum pass, once.** Asked 2026-09-27, not now. Vite
-  (`apps/web/vite.config.ts` `const_enum`) and Metro
-  (`apps/native/babel.config.js` `inline_enums`) each read every
-  `export const enum` into a table of their own, a near copy, and already
-  drift: one holds values as source text, the other as values. The reading
-  goes to one file under `apps/web/script/`, plain JavaScript, since Metro
-  `require`s the Babel config under Deno — whether CommonJS there can
-  `require` an ES module is to be tried first. Vite's replacement is text:
-  a member that prefixes another (`SENSOR_ENABLE` under a table read before
-  it became `SENSOR_ENABLE_LOCATION`) left `7444_LOCATION` for the parser
-  until the match was held to whole names. Replacing on the syntax tree, as
-  Babel does, takes strings, comments and prefixes out of it as a class, for
-  a parse per module on Vite's path.
-- **Native tests lay out `.fixed` as a host does.** A native test lays out
-  no `.fixed`, so `range` answers none there and what lives in it answers
-  empty or no room under a test (the surface, a page's lanes, the decor
-  lanes, the profiler's rings) — a second memory model for the tests. Laid
-  out over a buffer of its own, the tests run on the ranges the module does.
-  Only then is it worth asking whether what is sized once and kept in the
-  heap for the tests' sake (world/chunk/table.rs `Scheduler::new`) moves
-  there; it need not.
 
 ## Parked, with the reason on file
 

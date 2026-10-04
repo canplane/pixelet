@@ -7,8 +7,6 @@ const SQ: u32 = 8;
 const CQ: u32 = 256;
 const SLOT: u32 = 64;
 
-/// A door over a buffer of its own: the submission ring's descriptors at 8,
-/// the completion ring's past them, then both rings' payloads.
 fn door() -> (Door, Box<[u8]>) {
     let sq_desc = 8;
     let cq_desc = sq_desc + ring_bytes(SQ);
@@ -43,8 +41,6 @@ fn door_a_turn_applies_while_a_command_s_signals_and_reply_fit_and_leaves_the_re
     let mut answered = 0;
     let mut turns = 0;
     loop {
-        // Every command raises as much as one may, then asks for its reply:
-        // a turn that starts one never runs out of room for it.
         d.drain(|_, _| {
             for _ in 0..MOST_SIGNALS {
                 d.post(0, 2, 0, 0, None);
@@ -52,7 +48,6 @@ fn door_a_turn_applies_while_a_command_s_signals_and_reply_fit_and_leaves_the_re
             Ok(Some(7))
         });
         turns += 1;
-        // The host reads what the turn left, dry, before the next.
         let cq = d.completion();
         while cq.peek() >= 0 {
             let at = cq.peek() as u32;
@@ -74,8 +69,6 @@ fn door_a_turn_applies_while_a_command_s_signals_and_reply_fit_and_leaves_the_re
 #[test]
 fn door_a_command_is_not_started_with_room_for_its_signals_but_not_its_reply() {
     let (d, _buf) = door();
-    // What the turn raised before it drained leaves room for a command's
-    // signals and not for its reply as well.
     for _ in 0..CQ - MOST_SIGNALS {
         d.post(0, 2, 0, 0, None);
     }

@@ -5,11 +5,8 @@ use crate::wire::xtp::cursor::{Cursor, TreeReader};
 use crate::wire::xtp::spec::{Array, NodeValue, SequenceType};
 use crate::wire::xtp::view::{NodeView, TreeView, ViewValue};
 
-/// What the TypeScript computed, recorded: the generator that wrote it
-/// is gone and the vector stands as it is (xpute-core/golden.rs).
 const GOLDEN: &str = include_str!("../../../../../../spec/xpute/golden/wire/xtp/encode.tsv");
 
-/// A typed array as a value, written at the width its type names.
 fn u16_arr<'a>(v: &[u16]) -> Array<'a> {
     Array {
         type_: SequenceType::U16_ARRAY,
@@ -30,9 +27,7 @@ fn expected(name: &str) -> String {
     v.get(format!("{k}.packet").as_str()).unwrap_or_else(|| panic!("no vector {name}")).to_string()
 }
 
-/// The lifetime is the caller's: a view borrows the arrays and strings it is
-/// given, so leaving it to be inferred per call would make the closure answer
-/// for any lifetime at all, including one outliving what it borrows.
+/// `'a` is named so the closure is not asked to work for every lifetime.
 fn encode<'a>(build: impl FnOnce(&mut TreeView<'a>)) -> Vec<u8> {
     let mut t = TreeView::new();
     build(&mut t);
@@ -252,10 +247,8 @@ fn a_packet_reads_back_what_was_written() {
             NodeValue::Array(i32_arr(&[7, 8])),
         ])
     );
-    // A shallow read keeps the inner branch as a cursor.
     let NodeValue::List(shallow) = root.get().unwrap() else { panic!() };
     assert!(matches!(shallow[4], NodeValue::Extra(_)));
-    // A null child preserves its type and reads as null.
     let pkt = encode(|t| {
         t.branch(Some(&mut |b| {
             b.u32(None);

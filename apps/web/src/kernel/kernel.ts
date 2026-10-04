@@ -1,13 +1,8 @@
 // @pxl/web/kernel/kernel.ts
 
 /**
- * The completion ring's signals, and the boot that starts everything.
- *
- * A turn leaves on the completion ring what the kernel asks of the host — the
- * sensors' watches, the fetches to start and cancel, the loads — and the
- * shell's snapshot when it changed, which the host hands on; this is where
- * each is handed to whoever runs it. Nothing is decided here: every branch is one line to the module that
- * does the work.
+ * Hands the completion ring's signals to whoever runs them, and boots
+ * everything. Nothing is decided here.
  */
 
 import type { u32 } from "@xpute/core/abi/word.ts";
@@ -41,9 +36,7 @@ import { keepSettings, storedSettings } from "@/feature/setting/store.ts";
 function on_signal(_tag: u32, cmd: Command | XputeCommand, f: BranchCursor | null): void {
   switch (cmd) {
     case Command.WORLD_SNAPSHOT: {
-      // The packet is far past a ring frame, so the kernel names the block
-      // it holds it in. It is the kernel's and stays valid until it writes
-      // the next one, which is a turn away.
+      // Too large for a ring frame; valid until the kernel writes the next, a turn away.
       const { at, len } = read_world_snapshot(f!);
       set_snapshot(bytes_at(CORE.buffer, at, len));
       return;
@@ -75,20 +68,11 @@ function on_signal(_tag: u32, cmd: Command | XputeCommand, f: BranchCursor | nul
   console.warn(`[kernel] signal 0x${cmd.toString(16)} with no one to hear it`);
 }
 
-/** The objects storage kept, held as a body for the kernel to copy in. */
-function objects_body(): { objects: u32; objects_bytes: u32 } {
-  const raw = stored(storage.OBJECTS);
-  if (raw === null) return { objects: 0, objects_bytes: 0 };
-  const bytes = new TextEncoder().encode(raw);
-  return { objects: BODIES.hold(bytes), objects_bytes: bytes.byteLength };
-}
-
-/** Starts the kernel: the module, the turns it is given and who hears what
- * a turn leaves, then a device to draw with and the world it draws. Called
- * once by the app's boot (app/bootstrap.ts), so that what boots is ordered
- * rather than whichever module happened to be imported first. */
+/** Called once from app/bootstrap.ts, so boot order is explicit, not import order. */
 export async function boot_kernel(): Promise<void> {
   await load_core();
+  BAKE_KINDS.forEach((_, bake) => bind_root(bake, (name, signal) => read_object(bake, name, signal)));
+  bind_root(root.ASSET, (path, signal) => read_asset(Number(path), signal));
   start_sched();
   CORE_DOORBELL.signal = on_signal;
   gpuBoot();
@@ -101,13 +85,11 @@ export async function boot_kernel(): Promise<void> {
       orientation: orientationSupported(),
       orientation_permission: orientationNeedsPermission(),
       orientation_silence_is_loss: orientationSilenceIsLoss(),
-      settings: storedSettings(),
-      ...objects_body(),
+      settings: storageGet(STORAGE_KEYS[storage.SETTINGS]) ?? "",
     }),
     (result) => result,
   );
-  // Not awaited: a dev tile server may answer late, and the kernel observes
-  // nothing until it has, which the boot does not wait on.
+  // Not awaited: a dev tile server may answer late.
   void declare_source();
   // What the kernel holds from now on is what storage keeps: the snapshot
   // after WORLD_BOOT is the first to say it.

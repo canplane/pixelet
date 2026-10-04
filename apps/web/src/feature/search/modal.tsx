@@ -25,8 +25,6 @@ import { resolvePoiBadge } from "@/feature/search/poi-badge.ts";
 import { assembleLabel } from "@/feature/map/geocode/label.ts";
 import { fetchSearch, type SearchResult } from "@/feature/search/repository.ts";
 
-// Shorter than use-reverse-geocode.ts's: that one waits for a pan to settle
-// on a new page, this for typing to pause.
 const DEBOUNCE_MS = 300;
 
 interface LonLat {
@@ -37,15 +35,8 @@ interface LonLat {
 const EARTH_RADIUS_M = 6378137;
 const DEG_TO_RAD = Math.PI / 180;
 
-/**
- * Great-circle meters between two WGS84 points.
- *
- * Not the world-unit distance scaled by epsg3857's own M_PER_U, which would
- * be cheaper and is already at hand: world units are a Mercator plane, where
- * a meter is stretched by 1/cos(latitude) — 1.26x at Seoul's — and that is
- * not a rounding error on a label whose whole job is to say how far away
- * something is.
- */
+/** Great-circle meters, not world units scaled: Mercator stretches a meter
+ * by 1/cos(latitude), 1.26x at Seoul. */
 function groundDistanceM(a: LonLat, b: LonLat): f64 {
   const lat1 = a.lat * DEG_TO_RAD, lat2 = b.lat * DEG_TO_RAD;
   const dlat = lat2 - lat1;
@@ -54,28 +45,19 @@ function groundDistanceM(a: LonLat, b: LonLat): f64 {
   return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
-/** Whole meters under a kilometer, then one decimal, then whole kilometers —
- * the precision a reader can actually act on at each scale. */
 function formatDistance(m: f64): string {
   if (m < 1000) return `${round(m)}m`;
   if (m < 10000) return `${(m / 1000).toFixed(1)}km`;
   return `${round(m / 1000).toLocaleString()}km`;
 }
 
-/** A result's name in the reader's language where it has one, as label.ts
- * picks a place part's. */
 function displayName(result: SearchResult, lang: string): string {
   return result.common?.[lang] ?? result.name;
 }
 
-/** One result: its name, and under it where it is on the left and how far
- * away on the right. Where it is comes from its coordinates, never from a
- * source's own address text, which came in a different shape from every
- * contributor and could name another city than the point. A place has a
- * badge of its kind; an area has none, the section already says what it is. */
+/** Where a result is comes from its coordinates, never a source's address text, which could name another city. */
 function ResultRow({ result, lang, distance, onPress }: { result: SearchResult; lang: string; distance: string | null; onPress: () => void }) {
   const where = result.context.length > 0 ? assembleLabel(result.context, lang) : "";
-  // poi-badge.ts says why an emoji beats a glyph at this size.
   const badge = result.kind === "poi" ? resolvePoiBadge(result.category) : null;
   return (
     <Pressable onPress={onPress} accessibilityRole="button" style={styles.row}>
@@ -113,17 +95,10 @@ function poseColor(status: DevicePoseStatus): string {
   }
 }
 
-/** The hand-drawn clear's circle, where the field has none of its own. */
 const CLEAR = 16;
 const LOCATE_HEIGHT = chrome.target;
-/** The card's gap from the keyboard or the bottom, and from the last result:
- * the sheet's own edge. */
 const LOCATE_INSET = PANEL_EDGE;
 
-/** Turns the location on, floating over the results while it is off: the
- * search is where "near me" is asked, and a place's distance is measured
- * from it. The compass is not asked for here — nothing reads it without the
- * location, and it is asked for where it is used, entering follow mode. */
 function LocateCard() {
   const { t } = useTranslation();
   const { location } = useSensors();
@@ -141,23 +116,15 @@ function LocateCard() {
   );
 }
 
-/** What a query found, and where its distances are measured from: frozen at
- * the moment it ran, the point the API ranked against, so the numbers agree
- * with the order and a camera drifting behind the panel cannot renumber the
- * list being read. */
+/** Distances are measured from the point the query ran at, so they agree
+ * with the API's order while the camera drifts. */
 interface Found {
   query: string;
   results: SearchResult[];
   origin: LonLat | null;
 }
 
-/**
- * Forward search, which always asks the live API: nothing is baked for it
- * (repository.ts). Opened from the address title (top-overlays.tsx), since
- * where one is and where one wants to go are the same slot on a map. It
- * mounts fresh each time, so a search starts empty rather than on the last
- * place's list.
- */
+/** Forward search, always live: nothing is baked for it. */
 export function SearchModal(props: BaseModalProps) {
   const { onClose } = props;
   const { t, i18n } = useTranslation();
@@ -166,16 +133,13 @@ export function SearchModal(props: BaseModalProps) {
   const [query, setQuery] = useState("");
   const [found, setFound] = useState<Found>({ query: "", results: [], origin: null });
   const q = query.trim();
-  // The last list stands while the next is on its way.
   const results = q === "" ? [] : found.results;
   const loading = q !== "" && found.query !== q;
 
   useEffect(() => {
     if (q === "") return;
-    // Latest wins: the next keystroke's query aborts this one.
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      // The kernel's map center, in degrees.
       const near = kernel_snapshot().map.center ?? undefined;
       fetchSearch(q, { near, signal: controller.signal })
         .then((results) => controller.signal.aborted || setFound({ query: q, results, origin: near ?? null }))
@@ -188,9 +152,6 @@ export function SearchModal(props: BaseModalProps) {
   }, [q]);
 
   function select(result: SearchResult) {
-    // The kernel's map center: it grounds the jump the way a pan is, stops
-    // follow mode (the user drove the camera), and grounds it again once the
-    // target page's tile arrives, while the map is still on that page.
     kernel_command(Command.INPUT_GO_TO, encode_input_go_to({ lon: result.lon, lat: result.lat }));
     onClose();
   }
@@ -204,17 +165,7 @@ export function SearchModal(props: BaseModalProps) {
       <PanelBody
         header={
           <>
-            {
-              /* The field and its clear: a touch there leaves the keyboard up;
-                one on a result, the list or anywhere else is done typing. */
-            }
             <View {...KEEPS_KEYBOARD} style={styles.headerRow}>
-              {
-                /* The field with its magnifier and clear, then the panel's
-                  close: the clear a small filled circle inside the field, the
-                  close a round button of its own, so the two X's are not
-                  confused. */
-              }
               <Backing fill={color.faint} place={BackingPlace.OnSheet} style={styles.well}>
                 <Glyph glyph="magnifyingglass" size={chrome.glyph} color={LABEL.secondary} />
                 <TextField
@@ -225,11 +176,6 @@ export function SearchModal(props: BaseModalProps) {
                   clearButtonMode={SYSTEM_CLEAR ? "while-editing" : undefined}
                   style={styles.field}
                 />
-                {
-                  // Where the field has no clear of its own: a filled circle
-                  // with an X in the ground's color, as a system search
-                  // field's is.
-                }
                 {!SYSTEM_CLEAR && query.length > 0 && (
                   <Pressable
                     onPress={() => setQuery("")}
@@ -251,12 +197,6 @@ export function SearchModal(props: BaseModalProps) {
         <ScrollView style={styles.results} contentContainerStyle={styles.resultsRoom} keyboardShouldPersistTaps="handled">
           {q !== "" && results.length === 0 && <Text style={styles.empty}>{loading ? t("map.search.loading") : t("map.search.no_results")}</Text>}
 
-          {
-            // Areas first, as the backend orders them: a name matching an
-            // area is rare enough to lead whatever places contain it
-            // (pxl-geo search/overture.rs). Each group has a header,
-            // so the change from areas to places reads.
-          }
           {SECTIONS.map(({ kind, label }) => {
             const rows = results.filter((r) => r.kind === kind);
             if (rows.length === 0) return null;
@@ -277,15 +217,11 @@ export function SearchModal(props: BaseModalProps) {
 
 const styles = StyleSheet.create({
   locateCard: { borderRadius: LOCATE_HEIGHT / 2, pointerEvents: "auto", boxShadow: "0 6px 20px rgba(0, 0, 0, 0.12)" },
-  // The glyph concentric with the card's round end, as the field's are.
   locateRow: { height: LOCATE_HEIGHT, flexDirection: "row", alignItems: "center", gap: 12, paddingLeft: (LOCATE_HEIGHT - chrome.glyph) / 2, paddingRight: PANEL_EDGE },
   locateLabel: { flex: 1, ...textStyle.body, color: LABEL.primary },
   locateAction: { ...textStyle.body, fontWeight: weight.semibold, color: color.action },
-  // Room under the last result for the card that floats over it.
   resultsRoom: { paddingTop: PANEL_CONTENT_TOP, paddingBottom: LOCATE_HEIGHT + 2 * LOCATE_INSET, gap: PANEL_SECTION_GAP },
   headerRow: { ...PANEL_HEADER, gap: chrome.controlGap },
-  // The magnifier and the clear each centered on the round end it stands in,
-  // concentric with the field's capsule.
   well: {
     flex: 1,
     minWidth: 0,
@@ -298,8 +234,6 @@ const styles = StyleSheet.create({
     borderRadius: PANEL_CONTROL / 2,
   },
   field: { flex: 1, minWidth: 0, color: LABEL.primary },
-  // A press lands on the least target around the circle, laid out over the
-  // field's end and the well's round end by as much as it reaches.
   clearReach: {
     width: chrome.target,
     height: chrome.target,

@@ -1,25 +1,9 @@
 #!/usr/bin/env -S deno run -A
-// What each published build carried, and what it was built from.
+// What each published build carried. Records commit subjects, since main's
+// history is rewritten and a sha may stop resolving. Kept in R2 beside the
+// counter; R2 has no append, so the workflow's `build-log` concurrency group
+// keeps two writes from losing a line.
 //
-// The counter says how many builds there have been; this says what they were.
-// It exists because nothing else could answer "what went out in b18": the
-// number is taken in CI and lives in the bucket, and the commit it named was
-// nowhere in the repository.
-//
-// It records the commit subjects and not a commit id, which is the whole
-// point. main's history is rewritten here as a matter of course, so a tag, a
-// stored sha and `BUILD_ID`'s own hash all name something that
-// may not exist by the time anyone looks. Text written while the history is
-// still that history survives every rewrite after it. The sha is kept beside
-// it anyway — it resolves right up until it doesn't, and a record that says
-// what it was built from is worth more than one that does not.
-//
-// Beside the counter and for the counter's reason: no squash, rebase or fresh
-// clone can touch what is not in git (script/build-counter.ts). R2 has no
-// append, so a write is read-add-write, and what keeps two of them from
-// losing a line is the workflow's `build-log` concurrency group.
-//
-// Usage (from the repo root):
 //   ./script/build-log.ts                      every build, newest first
 //   ./script/build-log.ts --record 18 --web --server --smoke success     append one (CI)
 
@@ -27,13 +11,8 @@ import type { u32 } from "@xpute/core/abi/word.ts";
 
 const BUCKET = "pixelet-tiles";
 const KEY = "_meta/build-log.jsonl";
-/** What a build with no number of its own reads to say `#<n>-<id>`
- * (apps/web/vite.config.ts). */
 const CACHE = new URL("../apps/web/.build_number", import.meta.url);
 
-/** One published build. `from` is the build this one's commits are counted
- * since, null when there was no previous record to count from. */
-/** What the public smoke said about the build once both halves settled. */
 type Smoke = "pass" | "fail";
 
 interface Entry {
@@ -42,17 +21,12 @@ interface Entry {
   at: string;
   web: boolean;
   server: boolean;
-  /** Absent on a line written before the smoke was recorded; `null` where it
-   * did not run — a half failed, or the run was stopped — so a build that went
-   * out and was never checked reads differently from one that was checked and
-   * failed. A build is recorded either way: what went out went out, and the
-   * one whose smoke failed is the line most worth finding again. */
+  /** Absent on old lines; `null` where the smoke did not run. */
   smoke?: Smoke | null;
   from: string | null;
   commits: string[];
 }
 
-/** A job's result as GitHub Actions spells it, in the log's words. */
 function smokeOf(result: string | undefined): Smoke | null {
   if (result === "success") return "pass";
   if (result === "failure") return "fail";
@@ -76,9 +50,7 @@ function die(message: string): never {
   Deno.exit(1);
 }
 
-/** The log as it stands. A missing object is refused rather than treated as an
- * empty log: the two are indistinguishable from here, and taking a failed read
- * for an empty one would write a single line over every line there was. */
+/** A missing object is refused: treating it as empty would overwrite the log. */
 async function read(): Promise<{ raw: string; entries: Entry[] }> {
   const got = await run(wrangler("r2", "object", "get", `${BUCKET}/${KEY}`, "--remote", "--pipe"));
   if (!got.ok) {
@@ -98,11 +70,7 @@ async function read(): Promise<{ raw: string; entries: Entry[] }> {
       die(`${KEY} holds a line that is not a record: ${JSON.stringify(line.slice(0, 60))}`);
     }
   }
-  // Every read is a chance to bring this checkout's cache of the last number
-  // it saw published up to date — otherwise only `deno task deploy` writes
-  // it, and a checkout that deploys through CI alone shows `#<n>-<id>` against a
-  // number that stopped moving. The count itself is the bucket's; this is
-  // only the cache, and gitignored.
+  // Refreshes the gitignored cache of the last published number.
   if (entries.length > 0) await Deno.writeTextFile(CACHE, `${entries[entries.length - 1].n}\n`);
   return { raw, entries };
 }
@@ -110,18 +78,13 @@ async function read(): Promise<{ raw: string; entries: Entry[] }> {
 async function record(n: u32, web: boolean, server: boolean, smoke: Smoke | null): Promise<void> {
   const sha = git(["rev-parse", "HEAD"]) ?? die("not a git checkout; nothing to record");
   const { raw, entries } = await read();
-  // A re-run of a job that wrote its line and then failed for some other
-  // reason finds its own record already there. That is the record, so say so
-  // and stop rather than appending a second one or reporting a failure.
+  // A re-run finds its own record already there.
   if (entries.some((e) => e.n === n)) {
     console.log(`#${n} is already recorded`);
     return;
   }
 
-  // The commits since the last build that was recorded, which is the range a
-  // reader means by "what went out in this one". A previous sha that no longer
-  // resolves — the history it was on has been rewritten since — leaves this
-  // build's own tip as the only honest answer.
+  // A previous sha that no longer resolves leaves only this build's tip.
   const previous = entries.length > 0 ? entries[entries.length - 1].sha : null;
   const reachable = previous !== null && git(["cat-file", "-e", `${previous}^{commit}`]) !== null;
   const range = reachable ? `${previous}..HEAD` : "-1";

@@ -1,16 +1,8 @@
 // pxl-tool/spec/setting.rs
 
-//! The settings. A setting is numbered by its place in SETTINGS, and that
-//! number is what crosses and what the kernel holds; its name is storage's
-//! and the sheet's. The kernel gets the settings as one struct of typed
-//! fields, with the number's reading and writing beside it, so nothing past
-//! the store names a setting by text. A `dev` setting's name, and its
-//! options' names, are under the kernel's `dev` feature: a module built
-//! without it holds the setting at its default and carries none of its
-//! words. The shell gets the rows the sheet draws, and the same rows without
-//! the `dev` ones for a production bundle to carry in their place: a filter
-//! on the whole table at run time leaves every name in the artifact, and a
-//! literal the build does not read is one the bundler drops.
+//! The settings, numbered by position in SETTINGS. A `dev` setting's names are
+//! behind the kernel's `dev` feature, and the shell gets a separate production
+//! table so the bundler drops them.
 
 use super::data::ts_literal;
 use super::{casing_note, enum_name, file, js_num, line_comments, pascal, read, rs_doc, rs_ident, Node, Output};
@@ -37,7 +29,6 @@ impl Setting<'_> {
     }
 }
 
-/// A list the settings name, such as a choice's options.
 struct List<'a> {
     name: &'a str,
     values: Vec<String>,
@@ -69,7 +60,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         }
     }
 
-    // ---- Rust ----
     let mut rs = vec![
         "// pxl-kernel/shell/setting/schema.spec.rs".to_string(),
         "//".into(),
@@ -111,7 +101,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             "pub enum SettingKind {",
             "    Toggle,",
             "    Choice,",
-            "    Number,",
+            "    Index,",
             "}",
         ]
         .map(String::from),
@@ -165,6 +155,34 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         format!("        {}", keys_where(&|s| s.flag("dev"))),
         "    }".into(),
         String::new(),
+        "    /// A choice's option a development build only offers.".into(),
+        "    pub fn dev_option(self, value: u32) -> bool {".into(),
+        "        match self {".into(),
+    ]);
+    for s in settings.iter().filter(|s| s.spec.get("dev_options").is_some()) {
+        let names = options_of(s)?;
+        let dev: Vec<String> = s
+            .spec
+            .get("dev_options")
+            .and_then(Node::arr)
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|n| n.str())
+            .map(|n| {
+                names
+                    .iter()
+                    .position(|o| o == n)
+                    .map(|i| i.to_string())
+                    .ok_or(format!("{JSON}: {}'s dev option {n} is not one of its options", s.key))
+            })
+            .collect::<Result<_, _>>()?;
+        rs.push(format!("            SettingKey::{} => matches!(value, {}),", s.key, dev.join(" | ")));
+    }
+    rs.extend([
+        "            _ => false,".to_string(),
+        "        }".into(),
+        "    }".into(),
+        String::new(),
         "    /// Read by a chunk's build, so a change builds the chunks again.".into(),
         "    pub fn sources_chunks(self) -> bool {".into(),
         format!("        {}", keys_where(&|s| s.flag("sources_chunks"))),
@@ -175,13 +193,14 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         match s.kind() {
             "toggle" => Ok("bool".to_string()),
             "choice" => Ok(enum_name(s.options().unwrap_or_default())),
-            _ => {
+            "index" => {
                 let d = s.spec.get("default").ok_or(format!("{JSON}: {} has no default", s.key))?;
                 match d.is_wrapper().then(|| d.str_at("$type")).flatten() {
                     Some(t @ ("u8" | "u16" | "u32")) => Ok(t.to_string()),
-                    _ => Err(format!("{JSON}: {} is a number with no width", s.key)),
+                    _ => Err(format!("{JSON}: {} is an index with no width", s.key)),
                 }
             }
+            kind => Err(format!("{JSON}: {} is a setting of no kind there is: {kind}", s.key)),
         }
     };
     let default_lit = |s: &Setting| -> Result<String, String> {
@@ -229,7 +248,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     rs.extend(
         [
             "    /// A setting's value as it crosses: a toggle's 0 or 1, a choice's option",
-            "    /// by its index, a number.",
+            "    /// by its place in its list, an index as itself.",
             "    pub fn get(&self, key: SettingKey) -> u32 {",
             "        match key {",
         ]
@@ -264,7 +283,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     }
     rs.extend(["            _ => return false,", "        }", "        true", "    }", "}"].map(String::from));
 
-    // ---- TypeScript ----
     let row = |s: &Setting, i: usize| -> Result<Node, String> {
         let mut out: Vec<(String, Node)> = vec![(
             "key".to_string(),

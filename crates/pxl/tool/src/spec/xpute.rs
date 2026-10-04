@@ -1,20 +1,10 @@
 // pxl-tool/spec/xpute.rs
 
-//! xpute's two closed vocabularies: the kit's errno, and the runtime's fetch
-//! failures. The numbers cross the ring, so both sides have to agree on every
-//! one.
+//! xpute's errno. The numbers cross the ring, so every side must agree.
 
 use serde::Deserialize;
 
 use super::{file, read_as, rs_doc, ts_doc, Output};
-
-// ---- the kit's errno ----
-//
-// They were two hand-kept tables and nothing checked them against each
-// other. The name stays out of this: it is the identifier, and
-// `errname()`-shaped output derives it from the symbol rather than from a
-// table (status/error.rs's own `stringify!`), so there is nothing here for a
-// reader to drift from.
 
 #[derive(Deserialize)]
 struct ErrnoMember {
@@ -47,8 +37,6 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
     let mut rs = vec!["// xpute-core/status/errno.spec.rs".to_string()];
     rs.extend(head.iter().cloned());
     rs.extend(["", "#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]", "#[repr(i32)]", "pub enum Errno {"].map(String::from));
-    // Rust lines up its trailing comments per section, as rustfmt leaves
-    // them; TypeScript does not, as deno fmt leaves them.
     let mut run: Vec<&ErrnoMember> = Vec::new();
     let flush = |run: &mut Vec<&ErrnoMember>, rs: &mut Vec<String>| {
         let width = run.iter().map(|e| format!("{} = {},", e.name, e.value).len()).max().unwrap_or(0);
@@ -121,10 +109,7 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
         }
     }
     ts.push("};".into());
-    // C++ names them in lower case, as std::errc names its own: EINVAL and
-    // its kind are the C library's macros, and a C++ header that includes
-    // <array> or <span> may have brought <cerrno> in, where an enumerator of
-    // that name no longer reads as one. The numbers are what cross.
+    // Lower case, as std::errc: EINVAL may be a <cerrno> macro already included.
     let mut cpp = vec!["// cpp/xpute/core/status/errno.spec.hpp".to_string()];
     cpp.extend(head.iter().cloned());
     cpp.extend(["", "#pragma once", "", "#include <cstdint>", "", "namespace xpute {", "", "enum class Errno : std::int32_t {"].map(String::from));

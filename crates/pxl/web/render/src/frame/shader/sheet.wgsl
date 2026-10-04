@@ -1,16 +1,9 @@
-// An entry of the billboard sheet, drawn into a texture of its own size
-// (gpu/sheet.rs): one draw of instances, each a shape or a line of text, in
-// the entry's pixels. A shape's edge is its signed distance's, so it is
-// smooth at any size without a path to fill; a line of text is the
-// platform's pixels, one layer of the text array each.
-//
-// Every instance comes out straight-alpha and is laid over what is under it,
-// so the texture holds its colors premultiplied (badge.wgsl divides them out).
+// One billboard sheet entry: shapes by signed distance, text as the platform's
+// pixels. Stored premultiplied; badge.wgsl divides it out.
 
-// kind: 0 a rounded rectangle filled, 1 one stroked, 2 a triangle, 3 a line
-// of text. `rect` bounds it, in pixels. `p`: a rectangle's radius and stroke;
-// a triangle's first two points; a text's layer and how much of the layer it
-// covers. `q`: a triangle's third point.
+// kind: 0 filled rounded rect, 1 stroked, 2 triangle, 3 text. `p`: radius and
+// stroke, a triangle's first two points, or text layer and coverage. `q`: a
+// triangle's third point.
 struct Shape {
   rect: vec4f,
   color: vec4f,
@@ -33,7 +26,6 @@ struct VertexOut {
 @vertex
 fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VertexOut {
   let s = shapes[ii];
-  // A pixel past the bounds, for the edge's half of a pixel of coverage.
   let lo = s.rect.xy - vec2f(1.0);
   let hi = s.rect.zw + vec2f(1.0);
   let corner = vec2f(f32(vi & 1u), f32(vi >> 1u));
@@ -45,14 +37,11 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Verte
   return o;
 }
 
-// The signed distance to a box of half-size `half` about the origin, its
-// corners rounded by `r`.
 fn round_box(p: vec2f, half: vec2f, r: f32) -> f32 {
   let q = abs(p) - half + vec2f(r);
   return length(max(q, vec2f(0.0))) + min(max(q.x, q.y), 0.0) - r;
 }
 
-// The signed distance to the triangle a, b, c.
 fn triangle(p: vec2f, a: vec2f, b: vec2f, c: vec2f) -> f32 {
   let e0 = b - a;
   let e1 = c - b;

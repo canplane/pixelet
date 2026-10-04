@@ -1,15 +1,9 @@
 // @pxl/native/platform/motion.tsx
 
 /**
- * A view that moves to the pose it is given, on a device: React Native's
- * native driver, which runs the animation on the UI thread. The script's part
- * is one call per new pose, which hands the whole curve over; no frame of it
- * runs on the JavaScript thread, whose frame the kernel's turn spends.
- *
- * A move goes over as a timing whose easing is its solved curve
- * (shared/ui/motion/transition.ts), the same curve the page plays, so the two
- * move alike and settle together. A pose that arrives mid-flight starts from
- * the value the UI thread has, so a turn back never jumps.
+ * A view moved by RN's native driver: one call hands the whole curve to the
+ * UI thread, since the kernel spends the JS thread's frame. A pose arriving
+ * mid-flight starts from the UI thread's value.
  */
 
 import { useEffect, useReducer, useRef } from "react";
@@ -43,7 +37,6 @@ export function Motion({ to, from, replay = null, transition, onSettled, style, 
 
   const [, commit] = useReducer((n: number) => n + 1, 0);
 
-  /** The pose last handed over; null before the first. */
   const stood = useRef<Required<Pose> | null>(null);
   const replayed = useRef(replay);
   const settled = useRef(onSettled);
@@ -67,36 +60,25 @@ export function Motion({ to, from, replay = null, transition, onSettled, style, 
       settled.current?.();
       return;
     }
-    // Not stopped together: a later pose that moves one channel takes that
-    // channel over and leaves the others running to where they were going.
+    // A later pose moving one channel leaves the others running.
     Animated.parallel(moves, { stopTogether: false }).start(({ finished }) => {
       if (!finished) return;
-      // What the UI thread reached, committed as the view's own props too. A
-      // native animation moves the view and not its props, so anything that
-      // lays the view out again from its props — a layout animation, as a
-      // pill opening runs — put back where the animation had started: a
-      // toast faded in stood faint, or blank, once its pill opened.
+      // Committed as props too: a layout animation re-lays the view from its
+      // props, which left a faded-in toast faint or blank once its pill opened.
       for (const c of moving) v[c].setValue(target[c]);
       commit();
       settled.current?.();
     });
-    // `transition` and `from` are read when a pose arrives, not watched: a
-    // new transition alone moves nothing.
   }, [target.opacity, target.translateX, target.translateY, target.scale, target.rotate, replay]);
 
-  // Unmounted — or, under StrictMode, taken down to be put straight back:
-  // what runs stops, and a view put back arrives again from `from` as a new
-  // one does, rather than standing where it was going with nothing played.
+  // Under StrictMode a view put back arrives again from `from`.
   useEffect(() => () => {
     for (const c of CHANNELS) v[c].stopAnimation();
     stood.current = null;
   }, []);
 
-  // Faded as one layer, as the page and an iPhone fade a view: Android fades
-  // each thing in it apart unless told otherwise, and where two overlap the
-  // one under shows through. Android cuts that layer at the view's bounds,
-  // so a view that fades holds what it draws; the layer is there only while
-  // it is not opaque.
+  // One layer while not opaque: Android otherwise fades each child apart, and
+  // overlapping ones show through.
   return (
     <Animated.View
       onLayout={onLayout}
@@ -119,9 +101,6 @@ export function Motion({ to, from, replay = null, transition, onSettled, style, 
   );
 }
 
-/** A view turning round and round, once a period, at an even rate: a load
- * that has not said how far along it is. A loop the UI thread runs, for as
- * long as it is mounted. */
 export function Spin({ periodMs, children }: SpinProps) {
   const turn = useRef(new Animated.Value(0)).current;
   useEffect(() => {

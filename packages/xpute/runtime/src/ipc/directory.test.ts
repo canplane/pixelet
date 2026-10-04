@@ -6,7 +6,6 @@ import { MarshalError } from "@xpute/core/status/error.ts";
 import { Directory } from "./directory.ts";
 import { HEAD, key, MAGIC, VERSION } from "./directory.spec.ts";
 
-/** A directory of `entries` at 8, its head as `head` says. */
 function written(entries: [number, number][], head: [number, number] = [MAGIC, VERSION]): ArrayBuffer {
   const mem = new ArrayBuffer(8 + 4 * (HEAD + 2 * entries.length));
   new Uint32Array(mem, 8).set([head[0], head[1], entries.length, 0, ...entries.flat()]);

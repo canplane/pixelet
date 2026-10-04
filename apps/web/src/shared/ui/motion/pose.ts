@@ -1,11 +1,8 @@
 // @pxl/web/shared/ui/motion/pose.ts
 
 /**
- * What a moving view is told: where to stand, not how to get there. Only
- * what a compositor moves without laying anything out — opacity and a
- * transform — so a pose never reflows the page or a device's view tree, and
- * iOS's WebKit, which ghosted a width tween over the canvas, has nothing to
- * ghost.
+ * Where a moving view stands: opacity and transform only, so a pose never
+ * reflows and iOS WebKit has nothing to ghost.
  */
 
 import type { ReactNode } from "react";
@@ -20,7 +17,6 @@ export interface Pose {
   translateX?: f64;
   translateY?: f64;
   scale?: f64;
-  /** Degrees. */
   rotate?: f64;
 }
 
@@ -31,14 +27,11 @@ export function resolve(p: Pose): Required<Pose> {
 }
 
 export interface MotionProps {
-  /** Where it stands; a new pose is moved to from wherever it stands now. */
   to: Pose;
-  /** Where it starts when it mounts, and again on each `replay`. */
   from?: Pose;
-  /** A new value other than null starts it over from `from`. */
+  /** A new non-null value starts it over from `from`. */
   replay?: string | number | null;
   transition: Transition;
-  /** The pose last given has been reached, or was already where it stood. */
   onSettled?: () => void;
   style?: StyleProp<ViewStyle>;
   onLayout?: (e: LayoutChangeEvent) => void;
@@ -46,7 +39,6 @@ export interface MotionProps {
 }
 
 export interface SpinProps {
-  /** One turn, in milliseconds. */
   periodMs: f64;
   children: ReactNode;
 }

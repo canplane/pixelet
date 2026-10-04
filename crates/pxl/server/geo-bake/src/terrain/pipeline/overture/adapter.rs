@@ -1,15 +1,7 @@
 // pxl-geo-bake/terrain/pipeline/overture/adapter.rs
 
-//! Overture ingress adapter for WKB-based terrain source rows — the
-//! Buildings/Transportation/Base counterpart to
-//! terrain/pipeline/coast/adapter.rs. Reuses wkb.rs's decoder as is. Overture
-//! rows carry structured columns straight from Postgres instead of hstore, so
-//! there is no tag-parsing step to mirror.
-//!
-//! Deliberately its own raw-feature shape per theme rather than one shared
-//! shape — Overture's subtype/class enums vary per theme, so
-//! terrain/pipeline/overture/policy.rs reads these shapes directly instead of
-//! through a translation layer.
+//! Overture Buildings, Transportation and Base rows from WKB, one raw shape
+//! per theme because their subtype/class vocabularies differ.
 
 use pxl_spec::bake::format::{BaseRow, BuildingRow, SegmentRow};
 use pxl_spec::space::adapter::epsg3857::G3857;
@@ -26,17 +18,18 @@ pub struct OvertureBuildingRawFeature {
     pub center: G3857,
 }
 
+/// A part of a segment over which its unseen flags and bridge each hold or not.
 pub struct OvertureSegmentRawFeature {
     pub gers_id: String,
     pub subtype: String,
     pub class: Option<String>,
+    pub is_unseen: bool,
+    pub is_deck: bool,
+    pub shape: WayShape,
     pub geometry: WkbGeometry,
     pub center: G3857,
 }
 
-/// land_use / water / land / infrastructure — one row shape, four tables with
-/// different subtype/class vocabularies; `source` tells overture/policy.rs
-/// which one a given row came from.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum BaseSource {
     LandUse,
@@ -46,8 +39,7 @@ pub enum BaseSource {
 }
 
 impl BaseSource {
-    /// The wire values are exactly these strings — see the table set
-    /// ingest_base.rs writes. Anything else is read as land_use.
+    /// Anything unknown is read as land_use.
     fn from_wire(s: &str) -> BaseSource {
         match s {
             "water" => BaseSource::Water,
@@ -73,8 +65,6 @@ pub enum OvertureRawFeature {
     Base(OvertureBaseRawFeature),
 }
 
-/// The center a row's geometry gives, or the origin when it gives none —
-/// `g.points[0] ?? [0, 0, 0]`.
 fn center_of(g: &WkbGeometry) -> G3857 {
     g.points.first().copied().unwrap_or([0.0, 0.0, 0.0])
 }
@@ -96,10 +86,24 @@ pub fn from_building_row(row: &BuildingRow) -> Vec<OvertureRawFeature> {
         .collect()
 }
 
-/// Transportation's segments only — a connector is routing topology and is
-/// skipped. The row's `road` JSONB is not read: the policy's one use for it
-/// would be a tunnel flag whose field path is not sample-confirmed, so it is
-/// parsed by nobody and carried by nothing here.
+trait Columns {
+    fn columns(&self) -> WayColumns<'_>;
+}
+
+impl Columns for SegmentRow {
+    fn columns(&self) -> WayColumns<'_> {
+        WayColumns {
+            flags: self.flags.as_deref(),
+            widths: self.widths.as_deref(),
+            access: self.access.as_deref(),
+            subclass: self.subclass.as_deref(),
+            subclasses: self.subclasses.as_deref(),
+        }
+    }
+}
+
+/// Connectors are skipped. Overture flags a range of a segment, so a segment
+/// is cut where an unseen flag or its bridge starts or stops.
 pub fn from_segment_row(row: &SegmentRow) -> Vec<OvertureRawFeature> {
     wkb_to_geometries(&row.geom_wkb)
         .into_iter()

@@ -1,26 +1,9 @@
 // pxl-render/gpu/pass/badges.rs
 
-//! The billboards on the device — the POI badges and the chat bubble: one
-//! instanced quad over the scheduler's billboard sets (crates/pxl/web/kernel/src/layer/billboard/field.rs), one
-//! draw a set, in a pass of their own after the world with the world's depth
-//! attached read-only and bound as a texture at once (shader/badge.wgsl asks
-//! both of its depth questions of this frame's depth).
-//!
-//! The sheet is the billboard atlas (asset/atlas.rs),
-//! drawn into a texture an entry at a time and whole when the atlas replaced
-//! the sheet, with its mip chain rebuilt after. An entry is sketched as the
-//! atlas's draw spec says and drawn on the device into its rectangle
-//! (gpu/sheet.rs), its text in the platform's lines (gpu/text.rs). The sheet
-//! holds its colors premultiplied, which a mip chain filters without the dark
-//! fringe a straight alpha gets. Magnification is nearest, for the
-//! pixel read up close; minification is mipmapped linear, because a badge held
-//! at a constant screen size is still slightly minified against the sheet's
-//! supersampled resolution, and without a mip chain every camera
-//! micro-movement samples a different single texel and the text visibly crawls.
-//!
-//! Uploads are rectangles, not the sheet: re-uploading the whole sheet whenever
-//! a badge was drawn cost 64 MB at 4096 px once for every frame a badge was
-//! drawn in, and a phone paid it as a hundred-millisecond task each time.
+//! Billboards in a pass after the world, with the world's depth attached
+//! read-only and bound as a texture. The sheet is premultiplied so its mips
+//! filter without a dark fringe; without mips a badge minified slightly against
+//! the supersampled sheet crawls with every camera micro-movement.
 
 use crate::asset::atlas::{BillboardAtlas, DrawSpec};
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_BADGE, UNIFORM_FLOATS};
@@ -32,23 +15,17 @@ use crate::gpu::renderer::Blocks;
 use crate::gpu::sheet::{Align, SheetPainter, Sketch};
 use crate::gpu::text::{Font, TextOf};
 
-/// Floats the badge uniform holds (shader/badge.wgsl's Badge).
 const BADGE_FLOATS: usize = 52;
-/// Sets drawn in one frame at most.
 const SETS: usize = 32;
 
-// The fonts are the kernel's too, which measures what is painted in them.
-// The weights are the chrome's regular and semibold rather than canvas's
-// "bold", which resolves to 700; the system faces carry a real semibold,
-// so neither is a synthetic bold.
+// Regular and semibold, not canvas's "bold" (700); the system faces carry a real
+// semibold, so neither is synthetic.
 
 const REGULAR: u32 = 400;
 const SEMIBOLD: u32 = 600;
 
 const BLACK: u32 = 0x000000ff;
 const WHITE: u32 = 0xffffffff;
-
-// ---- a place and a cluster (crates/pxl/web/kernel/src/layer/poi/badge.rs) ----
 
 pub const BADGE_FONT: Font = Font { weight: REGULAR, px: 12.0 };
 const ICON_FONT: Font = Font { weight: REGULAR, px: 13.0 };
@@ -62,23 +39,18 @@ const DOT_BORDER: f32 = 1.0;
 const PILL_H: f32 = ICON_SIZE + PAD_Y;
 const PILL_R: f32 = PILL_H / 2.0;
 const DOT_CY: f32 = PILL_H + DOT_GAP + DOT_DIAM / 2.0;
-/// Where a place's name starts: past the icon, which is concentric with the
-/// pill's left cap.
+/// Past the icon, which is concentric with the pill's left cap.
 const TEXT_X: f32 = PILL_R + ICON_SIZE / 2.0 + GAP;
 
-/// The pill every badge stands on: fully-rounded ends.
 fn pill(p: &mut Sketch, logical_w: f32) {
     p.round_rect(0.0, 0.0, logical_w, PILL_H, PILL_R, 0x14141ab8);
 }
 
-/// The anchor dot, centered under the pill, marking the ground point it floats above.
 fn anchor_dot(p: &mut Sketch, logical_w: f32) {
     p.circle(logical_w / 2.0, DOT_CY, DOT_DIAM / 2.0, 0xffffff99);
     p.ring(logical_w / 2.0, DOT_CY, DOT_DIAM / 2.0, DOT_BORDER, 0xffffff40);
 }
 
-/// A badge's width around a line of `text_w`: a count's centered on the pill,
-/// never narrower than the pill's two caps, and a place's after its icon.
 pub fn badge_width(text_w: f64, icon: bool) -> f64 {
     if icon {
         (TEXT_X + PAD_X) as f64 + text_w
@@ -102,16 +74,12 @@ fn cluster(p: &mut Sketch, label: &str, logical_w: f32) {
     anchor_dot(p, logical_w);
 }
 
-// ---- a label (crates/pxl/web/kernel/src/layer/marker/frame_gizmo.rs) ----
-
 pub const LABEL_FONT: Font = Font { weight: REGULAR, px: 10.0 };
 const LABEL_H: f32 = 12.0;
 
 fn label(p: &mut Sketch, text: &str, logical_w: f32) {
     p.text(LABEL_FONT, BLACK, text, logical_w / 2.0, LABEL_H / 2.0, Align::Center);
 }
-
-// ---- a speech bubble (crates/pxl/web/kernel/src/layer/character/chat_bubble.rs) ----
 
 pub const BUBBLE_FONT: Font = Font { weight: SEMIBOLD, px: 14.0 };
 const PADDING_Y: f32 = 8.0;
@@ -121,9 +89,8 @@ const NOTCH: f32 = 3.0;
 const TAIL_W: f32 = 14.0;
 const TAIL_H: f32 = 10.0;
 
-/// A plus-shaped union of two overlapping rectangles: the corners left
-/// uncovered read as a chunky, pixel-art rounded corner without a real arc,
-/// which would anti-alias against nearest sampling.
+/// The uncovered corners read as a pixel-art rounded corner; a real arc would
+/// anti-alias against nearest sampling.
 #[allow(clippy::too_many_arguments)]
 fn notched_rect(p: &mut Sketch, x: f32, y: f32, w: f32, h: f32, notch: f32, fill: u32) {
     p.rect(x + notch, y, (w - notch * 2.0).max(0.0), h, fill);
@@ -164,11 +131,8 @@ pub struct BadgePass {
     levels: u32,
     generation: u32,
     sets: [Set; SETS],
+    dirty: Vec<u32>,
     uniform: [f32; BADGE_FLOATS],
-    /// The frame's inputs: the view in the anchor root's frame and the
-    /// projection into WebGPU's clip space, the projection's pixels per unit at
-    /// one unit of depth, the fade's range, the camera's near and far, and the
-    /// rule's cell per distance.
     pub view: [f32; 16],
     pub proj: [f32; 16],
     pub px_k: f32,
@@ -177,9 +141,6 @@ pub struct BadgePass {
     pub near: f32,
     pub far: f32,
     pub cell: f32,
-    /// The planet the frame lays the map on, as the frame's uniform has it
-    /// (frame.wgsl's `planet` and `globe`, which globe.wgsl's `on_globe_of` reads): a badge is placed on it as the
-    /// ground under it is.
     pub globe: [f32; 8],
 }
 
@@ -210,9 +171,7 @@ impl BadgePass {
         }
     }
 
-    /// Draws what `atlas` changed since the texture last looked, and
-    /// rebuilds its mip chain when anything moved. An entry whose text is not
-    /// drawn yet is left for a later frame.
+    /// An entry whose text is not drawn yet is left for a later frame.
     pub fn sync_sheet(&mut self, g: &Gpu, mips: &Mips, atlas: &mut BillboardAtlas, text: TextOf) {
         let flush = atlas.flush(self.generation);
         self.generation = flush.generation;
@@ -270,8 +229,7 @@ impl BadgePass {
         }
         g.submit(encoder);
         release(encoder);
-        // After the submit: a texture let go before it would be gone from the
-        // commands that read it.
+        // After the submit: a texture let go before it would be gone from the commands that read it.
         for id in made {
             release(id);
         }
@@ -280,9 +238,6 @@ impl BadgePass {
         }
     }
 
-    /// Every billboard set's draw, in the order listed, in one pass of their
-    /// own over `color` reading `depth`, timed under `stamp`; how many
-    /// instances it drew.
     #[allow(clippy::too_many_arguments)]
     pub fn draw(&mut self, g: &Gpu, encoder: u32, color: u32, depth: u32, viewport: [u32; 2], draws: &[u32], uniforms: &[f32], blocks: &Blocks, stamp: &mut Stamp) -> u32 {
         if self.sheet_group == 0 {
@@ -296,8 +251,8 @@ impl BadgePass {
             if n == SETS {
                 break;
             }
-            // A uniform buffer a set: writes to one buffer all land before the
-            // pass runs, so a shared one would place every set where the last is.
+            // A uniform buffer a set: every write to one buffer lands before the pass, so
+            // a shared one would place every set where the last is.
             let set = &mut self.sets[n];
             n += 1;
             if set.uniform == 0 {
@@ -309,7 +264,7 @@ impl BadgePass {
             s[..16].copy_from_slice(&self.view);
             s[16..32].copy_from_slice(&self.proj);
             s[32..35].copy_from_slice(&uniforms[at..at + 3]);
-            s[35..44].copy_from_slice(&[self.px_k, self.fade_start, self.fade_end, self.near, self.far, self.cell, 1.0, viewport[0] as f32, viewport[1] as f32]);
+            s[35..44].copy_from_slice(&[self.px_k, self.near, self.far, self.cell, 1.0, viewport[0] as f32, viewport[1] as f32, 0.0, 0.0]);
             s[44..52].copy_from_slice(&self.globe);
             g.write_buffer(set.uniform, 0, bytes(s));
             if set.block != block || set.depth != depth || set.group == 0 {

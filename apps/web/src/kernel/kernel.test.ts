@@ -1,11 +1,8 @@
 // @pxl/web/kernel/kernel.test.ts
 
 /**
- * The kernel driven the way kernel/kernel.ts drives it, without a page: the
- * boot, a map center, the world's turns rung, the fetches it starts
- * answered from fixtures through the bodies the host holds, and what
- * comes back — what was drawn, the map's status, the UI's snapshot and its
- * commands.
+ * The kernel driven as kernel.ts drives it, without a page and with no bake
+ * bound, so every object is absent and the ground is open water.
  */
 
 import type { U8Array } from "@xpute/core/abi/array.ts";
@@ -44,7 +41,6 @@ import { key as entry } from "@/kernel/abi/directory.spec.ts";
 import { BODIES, bytes_at, directory } from "@/kernel/module.ts";
 import { acquireDevice } from "@/platform/web/webgpu.ts";
 
-// The module the tests drive, loaded before any of them reads it.
 await load_core();
 
 function rng(seed: u32): () => u32 {
@@ -88,58 +84,14 @@ CORE_DOORBELL.signal = (_tag, cmd, f) => {
   } else if (cmd === Command.LOAD_START) loads.push(read_load_start(f!).key);
 };
 
-/** A page's body as the bake encodes it: a rolling elevation raster and
- * ground that is mostly land, with water, structures and roads sprinkled. */
-function terrain_body(seed: u32): U8Array {
-  const next = rng(seed);
-  const cells = PAGE_CELLS * PAGE_CELLS;
-  const ele = new Int16Array(ELE_PADDED_SPAN * ELE_PADDED_SPAN);
-  for (let i = 0; i < ele.length; i++) ele[i] = 10 + (next() % 30);
-  const packed = new Uint16Array(cells);
-  for (let i = 0; i < cells; i++) {
-    const r = next() % 50;
-    packed[i] = pack_ground_cell({
-      land: next() % 3 === 0 ? cube_types.land.bare : cube_types.land.green_light,
-      water: r === 0 ? cube_types.water.river : cube_types.common.void,
-      structure: r === 1 ? cube_types.structure.building : cube_types.common.void,
-      transport: r === 2 ? cube_types.transport.road_motorway : cube_types.common.void,
-    });
-  }
-  return encode_terrain(ele, packed);
-}
-
-/** The heap's row (crates/pxl/web/kernel/src/door.rs, written at every turn's
- * fall): range, used, live, run, slot, largest free, releases, refusals,
- * requests. `used` is the top the heap has reached. */
+/** Index of `used` in the heap's row. */
 const HEAP_TOP = 1;
 const HEAP_REQUESTS = 8;
 const heap_row = new Uint32Array(CORE.buffer, directory(CORE.buffer).get(entry.HEAP_ROW), 9);
 let strobe_requests = 0;
 const answer_requests: Record<string, number> = {};
 
-/** A response as the driver reports one: the body held for the kernel. */
-function answer(f: Fetched, outcome: FetchOutcome, body: U8Array | null): void {
-  const requests = heap_row[HEAP_REQUESTS];
-  try {
-    const bytes = body?.byteLength ?? 0;
-    const held = body !== null && bytes > 0 ? BODIES.hold(body) : 0;
-    CORE_DOORBELL.send(0, XputeCommand.FETCH_DONE, encode_fetch_done({ key: f.key, outcome, body: held, body_bytes: bytes, fail: FetchFail.None, detail: 0, net_ms: 0 }));
-    CORE_DOORBELL.ring(0);
-  } finally {
-    answer_requests[f.category] = (answer_requests[f.category] ?? 0) + heap_row[HEAP_REQUESTS] - requests;
-  }
-}
-
-function fail(f: Fetched): void {
-  CORE_DOORBELL.send(0, XputeCommand.FETCH_DONE, encode_fetch_done({ key: f.key, outcome: FetchOutcome.Error, body: 0, body_bytes: 0, fail: FetchFail.Network, detail: 0, net_ms: 0 }));
-  CORE_DOORBELL.ring(0);
-}
-
-/** One frame as the driver runs it, with every fetch answered at once. */
-function turn(delta = 1 / 60): Turn {
-  fetched = [];
-  loads = [];
-  const requests = heap_row[HEAP_REQUESTS];
+async function turn(delta = 1 / 60): Promise<Snapshot> {
   CORE_DOORBELL.send(
     0,
     Command.WORLD_FRAME,
@@ -159,7 +111,6 @@ function turn(delta = 1 / 60): Turn {
   return { snapshot, fetched: started, draws };
 }
 
-/** One of the UI's commands, rung at once as the shell rings it. */
 function command(cmd: Command, pkt?: U8Array): void {
   CORE_DOORBELL.send(0, cmd, pkt);
   CORE_DOORBELL.ring(0);
@@ -180,22 +131,16 @@ CORE_DOORBELL.call(
   }),
   (r) => r,
 );
-// What the shell hands over for a published source, read from the bundle.
 CORE_DOORBELL.send(0, Command.WORLD_SOURCE, encode_world_source({ top_level: PUBLISHED_SOURCE.top_level }));
 console.log(`heap: boot and world create ${heap_row[HEAP_REQUESTS]} requests, top ${heap_row[HEAP_TOP]}`);
 
-/** A device that takes every call and holds nothing: whatever is asked of
- * it, or of what it hands back, is another of the same. A chunk is drawn from
- * meshes on the device, so without one the world lists nothing to draw; the
- * shell reaches it through acquireDevice, and so does this. */
+/** A device that accepts every call: without one the world lists nothing to draw. */
 function inert(): unknown {
   return new Proxy(() => {}, {
     get: (_, key) => {
       if (key === "then") return undefined;
       if (key === "lost") return new Promise(() => {});
-      // `then` is undefined above so that awaiting one of these does not hang,
-      // which also makes every proxy unawaitable — and an error scope is the
-      // one call whose result the renderer awaits (gpu.ts op.BUFFER).
+      // `then` is undefined so awaiting a proxy does not hang; the error scope is the one awaited result.
       if (key === "popErrorScope") return () => Promise.resolve(null);
       if (key === "limits") return { minUniformBufferOffsetAlignment: 256 };
       return inert();

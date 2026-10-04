@@ -7,18 +7,12 @@ use crate::control::camera::input::dragging;
 use crate::control::camera::store::{camera_store, CameraStatus};
 use crate::global::Global;
 
-/// Whether the compass was shown at the last reading, which the snapshot
-/// takes once a turn.
 static SHOWN: Global<bool> = Global::new();
 
-/// Following while the map follows the device's heading, where north is what
-/// one most wants to see and turning north up is not the compass's to do.
-/// Otherwise shown once the map is turned past a threshold that narrows as
-/// the camera pulls back, and kept while the map is in hand — dragged,
-/// pinched, wheeled, or still moving from any of them or from a reset — so it
-/// never goes from under a finger turning the map back through north. A map
-/// in hand but never turned does not show it. How long a change must stand
-/// before the button follows is the UI's (feature/map/ui/control/compass.tsx).
+/// Following while the map follows the heading. Otherwise shown once turned
+/// past a threshold that narrows as the camera pulls back, and kept while the
+/// map is in hand, so it never vanishes from under a finger turning it back
+/// through north.
 pub fn compass_state() -> CompassState {
     let camera = camera_store();
     if camera.is_follow_mode {
@@ -37,9 +31,7 @@ pub fn compass_state() -> CompassState {
     }
 }
 
-/// North up. Nothing while the map follows the heading, which turns it
-/// straight back: north up is the tracking button's to ask then, and the
-/// compass is shown dimmed.
+/// Nothing while following the heading, which would turn it straight back.
 pub fn compass_reset() {
     if camera_store().is_follow_mode {
         return;

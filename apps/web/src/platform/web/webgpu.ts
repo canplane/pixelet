@@ -1,16 +1,9 @@
 // @pxl/web/platform/web/webgpu.ts
 
 /**
- * The host's WebGPU: the device, and the calls the kernel's renderer made
- * in a turn (crates/pxl/web/render/src/gpu/api.rs), run from its stream once
- * the turn has returned. Every object is named by the handle the kernel gave
- * it and kept here at that handle's slot. Nothing is decided here — what is
- * made, from what, and drawn when, is the renderer's; each record is
- * translated into WebGPU's call and made. It exists because a WebAssembly
+ * The host's WebGPU: runs the calls the kernel's renderer recorded in a turn,
+ * each object kept at the slot of the handle the kernel gave it. A wasm
  * module reaches WebGPU no other way.
- *
- * A canvas handed to the kernel is a surface: transferred to an
- * OffscreenCanvas once, and drawn by the kernel alone from then on.
  */
 
 import type { U32Array } from "@xpute/core/abi/array.ts";
@@ -52,43 +45,27 @@ interface DeviceInfo {
   align: u32;
   timestamps: boolean;
 }
-/** What this browser lacks to run the app at all: no WebGPU, WebGPU withheld
- * from a page not served securely, or no graphics adapter answering. Each is
- * put right in a different place — a newer browser, the page's https://
- * address, the machine's own graphics — so each has its own sentence
- * (unsupported.tsx), named as its value. */
 export const enum Missing {
   WebGpu = "webgpu",
   Insecure = "insecure",
   Gpu = "gpu",
 }
 
-/** What the browser is missing, asked once before anything is started: a
- * property of the browser, which is why nothing after boot asks it again. A
- * device lost later is a moment, and is asked for again (gpu.ts).
- *
- * `navigator.gpu` is exposed to a secure context and nowhere else, so the
- * same browser on the same machine has WebGPU at localhost and none at the
- * dev server's LAN address over http. */
+/** `navigator.gpu` exists only in a secure context, so the LAN address over
+ * http has none where localhost has it. */
 export async function whatIsMissing(): Promise<Missing | null> {
   if (!("gpu" in navigator)) return isSecureContext ? Missing.WebGpu : Missing.Insecure;
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
   return adapter ? null : Missing.Gpu;
 }
 
-/** The device, once the browser answers, or null while no adapter does.
- * `lost` hears it go. */
 export async function acquireDevice(lost: () => void): Promise<DeviceInfo | null> {
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
   if (!adapter) return null;
   const timestamps = adapter.features.has("timestamp-query");
   const d = await adapter.requestDevice({ requiredFeatures: timestamps ? ["timestamp-query"] : [] });
-  // What the adapter says it can do, on a device nobody can attach a debugger
-  // to. The terrain's vertex stage reads its boxes out of a storage buffer
-  // (pxl-render frame/shader/chunk.wgsl), which is the one thing here a device
-  // is allowed to refuse outright: OpenGL ES 3.1 hardware may offer none in
-  // that stage at all, and a WebGPU running in compatibility mode says so in
-  // these numbers rather than in an error.
+  // A compatibility-mode WebGPU (GLES 3.1 hardware) may offer no storage
+  // buffers in the vertex stage, which the terrain needs; it shows here only.
   if (DEV_BUNDLE) {
     const l = d.limits as unknown as Record<string, number>;
     const of = (k: string) => `${k}=${l[k] ?? "-"}`;
@@ -107,8 +84,7 @@ export async function acquireDevice(lost: () => void): Promise<DeviceInfo | null
     );
   }
   d.lost.then((info) => {
-    // Said whatever the reason: nothing here destroys the device, so a
-    // "destroyed" is the browser taking it back, and is worth reading too.
+    // Nothing here destroys the device, so a loss is always the browser's.
     console.warn(`[gpu] device lost (${info.reason}): ${info.message}`);
     if (device !== d) return;
     device = null;
@@ -122,7 +98,6 @@ export async function acquireDevice(lost: () => void): Promise<DeviceInfo | null
   return { align: d.limits.minUniformBufferOffsetAlignment, timestamps };
 }
 
-/** A canvas as the kernel's surface `handle`. */
 export function bindSurface(handle: u32, canvas: HTMLCanvasElement): void {
   let offscreen = transferred.get(canvas);
   if (!offscreen) {
@@ -136,7 +111,6 @@ export function unbindSurface(handle: u32): void {
   surfaces[handle_slot(handle)] = undefined;
 }
 
-/** An image a load decoded, by the handle the kernel names it by. */
 export function registerImage(handle: u32, image: ImageBitmap): void {
   images.set(handle, image);
 }
@@ -148,23 +122,19 @@ const STEP: GPUVertexStepMode[] = ["vertex", "instance"];
 const VERTEX_FORMAT: GPUVertexFormat[] = ["float32", "float32x2", "float32x3", "float32x4", "uint32x4", "uint32", "uint32x2"];
 const NONE = 0xffffffff;
 
-/** Straight alpha over what is drawn. */
 const ALPHA_BLEND: GPUBlendState = {
   color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },
   alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
 };
-/** Light added to what is drawn: the stars over the sky. */
 const ADD_BLEND: GPUBlendState = {
   color: { srcFactor: "one", dstFactor: "one", operation: "add" },
   alpha: { srcFactor: "zero", dstFactor: "one", operation: "add" },
 };
-/** A record's blend code's state; none over what is opaque. */
 const BLEND: Record<number, GPUBlendState | undefined> = { [record.OPAQUE]: undefined, [record.ALPHA]: ALPHA_BLEND, [record.ADD]: ADD_BLEND };
 
 const wordF32 = new Float32Array(1);
 const wordU32 = new Uint32Array(wordF32.buffer);
 
-/** A word's bits as a float. */
 function float(word: u32): f32 {
   wordU32[0] = word;
   return wordF32[0];
@@ -221,10 +191,8 @@ function layoutEntries(words: U32Array): GPUBindGroupLayoutEntry[] {
   return out;
 }
 
-/** The vertex entry points a pipeline record can name, by record.VS and kin. */
-const VERTEX_ENTRY = ["vs", "vs_coarse"];
+const VERTEX_ENTRY = ["vs", "vs_coarse", "vs_depth", "vs_coarse_depth"];
 
-/** A pipeline record's words (crates/pxl/web/render/src/frame/shader.rs) as WebGPU's descriptor. */
 function pipelineDescriptor(words: U32Array, layouts: GPUBindGroupLayout[], module: GPUShaderModule, target: GPUTextureFormat): GPURenderPipelineDescriptor {
   let at = record.HEAD;
   const next = () => words[at++];
@@ -280,17 +248,11 @@ function beginPass(encoder: GPUCommandEncoder, w: U32Array): GPURenderPassEncode
   return encoder.beginRenderPass(descriptor);
 }
 
-// ---- timestamps ----
-
 let stamps: { count: u32; resolve: GPUBuffer; read: GPUBuffer[]; pending: Set<GPUBuffer> } | null = null;
-/** Where the last frame read goes: the stream's head, from GPU_MS — each
- * span's time, then the frame's whole — where the kernel reads it in a turn. */
 let gpuMsAt: { memory: ArrayBuffer; at: u32 } | null = null;
 
-/** Resolves the timestamps an encoder's passes wrote into `set`, a begin and
- * an end a span, and reads them once the GPU has them, a few frames behind.
- * `written` says which spans' pairs this frame wrote: a query no pass wrote
- * keeps what an earlier frame left in it, so the rest are not read. */
+/** A query no pass wrote this frame keeps an old value, so only `written`
+ * spans are read. */
 function readTimestamps(encoder: GPUCommandEncoder, set: GPUQuerySet, written: u32): void {
   const d = gpu();
   const count = set.count;
@@ -309,8 +271,7 @@ function readTimestamps(encoder: GPUCommandEncoder, set: GPUQuerySet, written: u
   encoder.resolveQuerySet(set, 0, count, s.resolve, 0);
   encoder.copyBufferToBuffer(s.resolve, 0, read, 0, count * 8);
   s.pending.add(read);
-  // Mapped once the stream has submitted the encoder: the microtask runs
-  // only after the whole stream has.
+  // The microtask runs only after the whole stream has submitted.
   queueMicrotask(() =>
     read.mapAsync(GPUMapMode.READ).then(() => {
       const t = new BigUint64Array(read.getMappedRange());
@@ -332,44 +293,32 @@ function readTimestamps(encoder: GPUCommandEncoder, set: GPUQuerySet, written: u
   );
 }
 
-/** Runs the records the turn just returned left in the stream at `at`. With
- * no device they are dropped whole: the kernel hears the device went and
- * makes everything again on the next one. */
+/** With no device the records are dropped: the kernel remakes everything on the next one. */
 export function runGpuStream(memory: ArrayBuffer, at: u32): void {
   gpuMsAt ??= { memory, at: at + stream.GPU_MS * 4 };
   if (device === null) return;
-  const d = device;
-  each_record(memory, at, stream.HEAD, (code, w, a, n) => {
-    const k = a + n;
-    switch (code) {
-      case op.RESET:
-        for (const o of objects) (o as { destroy?: () => void } | undefined)?.destroy?.();
-        objects.length = 0;
-        break;
-      case op.BUFFER: {
-        const [id, size, usage] = [w[a], w[a + 1], w[a + 2]];
-        // Wrapped in an out-of-memory scope because a refused buffer is not
-        // an exception: WebGPU hands back an object that is invalid, and
-        // nothing says so until something uses it — by which point the kernel
-        // has long since recorded the id as live. The mesh arena asks for six
-        // buffers of 36–40 MiB the moment the first mesh is written, and a
-        // device that refuses one draws no terrain at all while every gauge
-        // reads normal, since `arena_bytes` counts a group by its id and the
-        // draw that finds no bind group is skipped without a word (pxl-render
-        // gpu/arena.rs, gpu/renderer.rs).
-        //
-        // Guarded on what comes back rather than on what is there, because a
-        // check stands in its own device here and answers the calls a kernel
-        // makes, not the ones an instrument does.
-        d.pushErrorScope?.("out-of-memory");
-        put(id, d.createBuffer({ size, usage }));
-        const scope = d.popErrorScope?.() as Promise<GPUError | null> | undefined;
-        if (typeof scope?.then === "function") {
-          scope.then((e) => {
-            if (e) console.error(`[gpu] buffer ${id} of ${(size / 1048576).toFixed(1)}MB refused: ${e.message}`);
-          }).catch(() => {});
-        }
-        break;
+  each_record(memory, at, stream.HEAD, runGpuRecord);
+}
+
+function runGpuRecord(code: u32, w: U32Array, a: u32, n: u32): void {
+  const d = device!;
+  const k = a + n;
+  switch (code) {
+    case op.RESET:
+      for (const o of objects) (o as { destroy?: () => void } | undefined)?.destroy?.();
+      objects.length = 0;
+      break;
+    case op.BUFFER: {
+      const [id, size, usage] = [w[a], w[a + 1], w[a + 2]];
+      // A refused buffer is not an exception but an invalid object, so a device
+      // refusing the mesh arena drew no terrain while every gauge read normal.
+      d.pushErrorScope?.("out-of-memory");
+      put(id, d.createBuffer({ size, usage }));
+      const scope = d.popErrorScope?.() as Promise<GPUError | null> | undefined;
+      if (typeof scope?.then === "function") {
+        scope.then((e) => {
+          if (e) console.error(`[gpu] buffer ${id} of ${(size / 1048576).toFixed(1)}MB refused: ${e.message}`);
+        }).catch(() => {});
       }
       case op.TEXTURE:
         put(
@@ -519,5 +468,150 @@ export function runGpuStream(memory: ArrayBuffer, at: u32): void {
       default:
         throw new Error(`[gpu] record ${code}`);
     }
-  });
+    case op.TEXTURE:
+      put(
+        w[a],
+        d.createTexture({ size: { width: w[a + 1], height: w[a + 2], depthOrArrayLayers: w[a + 3] }, format: textureFormat(w[a + 4]), mipLevelCount: w[a + 5], usage: w[a + 6] }),
+      );
+      break;
+    case op.IMAGE_TEXTURE: {
+      const bitmap = images.get(w[a + 1])!;
+      const texture = d.createTexture({
+        size: [bitmap.width, bitmap.height],
+        format: "rgba8unorm-srgb",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+      d.queue.copyExternalImageToTexture({ source: bitmap }, { texture }, [bitmap.width, bitmap.height]);
+      put(w[a], texture);
+      break;
+    }
+    case op.VIEW:
+      put(
+        w[a],
+        get<GPUTexture>(w[a + 1]).createView({
+          dimension: w[a + 2] === dimension.D2_ARRAY ? "2d-array" : "2d",
+          baseMipLevel: w[a + 3],
+          mipLevelCount: w[a + 4],
+          baseArrayLayer: w[a + 5],
+          arrayLayerCount: w[a + 6],
+        }),
+      );
+      break;
+    case op.SAMPLER: {
+      const filtered = (code: u32): GPUFilterMode => code === filter.LINEAR ? "linear" : "nearest";
+      const mode: GPUAddressMode = w[a + 4] === address.REPEAT ? "repeat" : "clamp-to-edge";
+      put(
+        w[a],
+        d.createSampler({
+          magFilter: filtered(w[a + 1]),
+          minFilter: filtered(w[a + 2]),
+          mipmapFilter: filtered(w[a + 3]),
+          addressModeU: mode,
+          addressModeV: mode,
+          compare: w[a + 5] === compare.LESS_EQUAL ? "less-equal" : undefined,
+          maxAnisotropy: w[a + 6],
+        }),
+      );
+      break;
+    }
+    case op.SHADER:
+      put(w[a], d.createShaderModule({ code: text_of(w, a + 1) }));
+      break;
+    case op.LAYOUT:
+      put(w[a], d.createBindGroupLayout({ entries: layoutEntries(w.subarray(a + 1, k)) }));
+      break;
+    case op.PIPELINE: {
+      const [id, module, fmt, len] = [w[a], w[a + 1], w[a + 2], w[a + 3]];
+      const layouts = Array.from(w.subarray(a + 4 + len, k), (l) => get<GPUBindGroupLayout>(l));
+      put(id, d.createRenderPipeline(pipelineDescriptor(w.subarray(a + 4, a + 4 + len), layouts, get<GPUShaderModule>(module), textureFormat(fmt))));
+      break;
+    }
+    case op.BIND_GROUP:
+      put(w[a], d.createBindGroup({ layout: get<GPUBindGroupLayout>(w[a + 1]), entries: groupEntries(w.subarray(a + 2, k)) }));
+      break;
+    case op.DESTROY: {
+      const slot = handle_slot(w[a]);
+      (objects[slot] as { destroy?: () => void } | undefined)?.destroy?.();
+      objects[slot] = undefined;
+      break;
+    }
+    case op.WRITE_BUFFER:
+      d.queue.writeBuffer(get<GPUBuffer>(w[a]), w[a + 1], w.buffer, w.byteOffset + 4 * (a + 3), w[a + 2]);
+      break;
+    case op.WRITE_TEXTURE:
+      d.queue.writeTexture({ texture: get<GPUTexture>(w[a]), origin: [0, 0, w[a + 1]] }, bytes_of(w, a + 4), { bytesPerRow: w[a + 2] * 4 }, [w[a + 2], w[a + 3], 1]);
+      break;
+    case op.ENCODER:
+      put(w[a], d.createCommandEncoder());
+      break;
+    case op.COPY_TEXTURE:
+      get<GPUCommandEncoder>(w[a]).copyTextureToTexture(
+        { texture: get<GPUTexture>(w[a + 1]), origin: [w[a + 2], w[a + 3], 0] },
+        { texture: get<GPUTexture>(w[a + 4]), origin: [w[a + 5], w[a + 6], w[a + 7]] },
+        [w[a + 8], w[a + 9], 1],
+      );
+      break;
+    case op.PASS:
+      put(w[a], beginPass(get<GPUCommandEncoder>(w[a + 1]), w.subarray(a + 2, k)));
+      break;
+    case op.SET_PIPELINE:
+      get<GPURenderPassEncoder>(w[a]).setPipeline(get<GPURenderPipeline>(w[a + 1]));
+      break;
+    // Hundreds of calls a frame: the offsets overload avoids an array per call.
+    case op.SET_BIND_GROUP:
+      if (n === 3) get<GPURenderPassEncoder>(w[a]).setBindGroup(w[a + 1], get<GPUBindGroup>(w[a + 2]));
+      else get<GPURenderPassEncoder>(w[a]).setBindGroup(w[a + 1], get<GPUBindGroup>(w[a + 2]), w, a + 3, n - 3);
+      break;
+    case op.SET_VERTEX_BUFFER: {
+      const p = get<GPURenderPassEncoder>(w[a]);
+      if (w[a + 4] === 0) p.setVertexBuffer(w[a + 1], get<GPUBuffer>(w[a + 2]), w[a + 3]);
+      else p.setVertexBuffer(w[a + 1], get<GPUBuffer>(w[a + 2]), w[a + 3], w[a + 4]);
+      break;
+    }
+    case op.SET_INDEX_BUFFER: {
+      const p = get<GPURenderPassEncoder>(w[a]);
+      if (w[a + 3] === 0) p.setIndexBuffer(get<GPUBuffer>(w[a + 1]), "uint32", w[a + 2]);
+      else p.setIndexBuffer(get<GPUBuffer>(w[a + 1]), "uint32", w[a + 2], w[a + 3]);
+      break;
+    }
+    case op.DRAW:
+      get<GPURenderPassEncoder>(w[a]).draw(w[a + 1], w[a + 2], w[a + 3], w[a + 4]);
+      break;
+    case op.DRAW_INDEXED:
+      get<GPURenderPassEncoder>(w[a]).drawIndexed(w[a + 1], w[a + 2], w[a + 3], 0, w[a + 4]);
+      break;
+    case op.END:
+      get<GPURenderPassEncoder>(w[a]).end();
+      break;
+    case op.SUBMIT:
+      d.queue.submit([get<GPUCommandEncoder>(w[a]).finish()]);
+      break;
+    case op.CONFIGURE: {
+      const s = surfaces[handle_slot(w[a])];
+      if (!s) break;
+      s.context ??= s.canvas.getContext("webgpu");
+      s.context?.configure({ device: d, format: canvasFormat, alphaMode: "premultiplied" });
+      break;
+    }
+    case op.RESIZE: {
+      const s = surfaces[handle_slot(w[a])];
+      if (!s) break;
+      s.canvas.width = w[a + 1];
+      s.canvas.height = w[a + 2];
+      break;
+    }
+    case op.CURRENT: {
+      const context = surfaces[handle_slot(w[a])]?.context;
+      if (context) put(w[a + 1], context.getCurrentTexture().createView());
+      break;
+    }
+    case op.QUERY_SET:
+      put(w[a], d.createQuerySet({ type: "timestamp", count: w[a + 1] }));
+      break;
+    case op.TIMESTAMPS:
+      readTimestamps(get<GPUCommandEncoder>(w[a]), get<GPUQuerySet>(w[a + 1]), w[a + 2]);
+      break;
+    default:
+      throw new Error(`[gpu] record ${code}`);
+  }
 }

@@ -1,44 +1,13 @@
 // pxl-kernel/world/access.rs
 
-//! The access: one query of what is resident, in two forms — a layer's value
-//! at a point at a level (`at`), and the first thing a ray meets with how far
-//! along (`first_hit`) — and the conservative bound a descent is decided by
-//! (`relief`). Every reader of the ground and the objects asks here: the
-//! pointer's pick, the camera's clearance, the map center's footing, the
-//! puck, the fog, the view's measure of how near ground is
-//! (world/pyramid/domain.rs), and what the eye's cells see
-//! (world/observer.rs).
+//! Queries over what is resident: a layer's value at a point (`at`), the
+//! first thing a ray meets (`first_hit`), and a conservative bound for descent
+//! (`relief`). A query never fetches or holds anything; it returns an exact
+//! answer, a coarser one with the page it lacked, or nothing and that page.
 //!
-//! **A query answers and says what it lacked; it does nothing else.** It
-//! reads what residency says is resident (world/paging.rs `drawn_from`,
-//! `source`) and the object store, which is resident whole, and returns an
-//! exact answer, a coarser one with the page it would have needed, or
-//! nothing and that page. It never fetches, asks, prefetches or holds,
-//! and keeps nothing between calls: it borrows residency shared, so it cannot
-//! change it. Turning a lack into a request is demand's, at the caller, and
-//! only where the caller relies on the page coming.
-//!
-//! **Two surfaces, kept apart.** What a query answers with is the surface
-//! the records draw at the level asked — a level's cell, its height the
-//! page's interpolant at the cell's center less its recess, read from the
-//! page the chunk there is painted from, by the paint's own function
-//! (pxl-render mesh/paint/terrain/elevation.rs `ground_ele_at`) — so a pick,
-//! a snap and a marker stand on what is on the screen. Whether to go down
-//! into a piece of ground at all is decided on the page's index lane
-//! (pxl-spec bake/format.rs `Index`), which holds the lowest and highest
-//! anything under it stands at every level: a ray that passes over it passes
-//! over everything finer there. The drawn surface averages, and a peak under
-//! a coarse page can stand above it, so it never decides that a ray missed:
-//! a coarse page whose bound the ray enters is a lack.
-//!
-//! Objects are the store's own records at their own tiers, sub-cell ones
-//! included, as the paint lays them: a cell holding a voxel entry is that
-//! entry's, the ground's voxel there replaced, and air takes it out. A placed
-//! decor paints no voxel and is hit as it is drawn (layer/decor/hit.rs).
-//! Placing and editing act on the records the leaf says, and a leaf that is
-//! not resident is a lack they see (`Answer::exact`); a consumer that cannot
-//! take a coarser answer is the one that would hold a page hard, and none
-//! does yet (world/paging.rs `HARD_PAGES`).
+//! Answers come from the drawn surface (`ground_ele_at`), so picks stand on
+//! what is on screen. Whether a ray may skip ground is decided from the index
+//! lane's bounds instead, since a coarse drawn surface can sit below a peak.
 
 use pxl_render::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
 use pxl_spec::bake::constant::{CellZ, CELL, U_PER_CELL};
@@ -61,34 +30,22 @@ use crate::layer::object::store::{EntryAt, EntryCursor, Store};
 use crate::world::paging::Paging;
 use crate::world::pyramid::{Layer as _, Pyramid};
 
-/// Terrain's finest level, z16: what a point observer — the pick, the map
-/// center, the puck, the camera's clearance — asks the ground at, since
-/// within their reach of the eye it is the level the ground is drawn at, and
-/// all of them then stand on the one height.
+/// Terrain's finest level, z16, where every point observer stands.
 pub const FINEST: u32 = 0;
 
-/// How far past a boundary a ray is probed to say which piece of ground it
-/// has entered, in units: far under the lattice's finest step (a 256th) and
-/// far over a double's error at the coordinates the world spans.
+/// Probe distance past a boundary, in units: far below the lattice's finest
+/// step and far above f64 error at world coordinates.
 const NUDGE: f64 = 1e-6;
 
-/// The level a ray reads the ground at, along it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Detail {
-    /// One level all along: a point observer's, which stands on what is
-    /// drawn about it.
     Level(u32),
-    /// The level the criterion wants at each distance from the ray's origin,
-    /// at a quality (pxl-spec space/lod.rs `Tau::level`): a sample of the
-    /// eye's, whose origin is the eye, sees far ground as coarse as it is
-    /// drawn, in the cells it is drawn in, so a ray's walk takes about as
-    /// many steps a level whatever the level.
+    /// The level the LOD rule wants at each distance from the origin, so a
+    /// ray's walk takes about as many steps per level whatever the level.
     Distance(Tau),
 }
 
 impl Detail {
-    /// The level at `t` along the ray, and how far along it holds: to where
-    /// the next level's band begins.
     fn at(self, t: f64) -> (u32, f64) {
         match self {
             Detail::Level(level) => (level, f64::INFINITY),
@@ -101,28 +58,21 @@ impl Detail {
     }
 }
 
-/// What a query needed and was not resident: the layer's page at the level
-/// asked — enough for demand to make it a request.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Lack {
     pub layer: Category,
     pub page: LevelPage,
 }
 
-/// What a query answers. A coarser answer carries what it lacked, so none
-/// can be taken for exact without saying so.
+/// A coarser answer carries what it lacked, so none passes for exact.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Answer<T> {
-    /// From the page at the level asked, or the page that says its ground.
     Exact(T),
-    /// From a page over it, drawn coarser, and the page it lacked.
     Coarser(T, Lack),
-    /// Nothing resident answers it.
     Nothing(Lack),
 }
 
 impl<T> Answer<T> {
-    /// What it answers with, exact or coarser: what is drawn there.
     pub fn value(self) -> Option<T> {
         match self {
             Answer::Exact(v) | Answer::Coarser(v, _) => Some(v),
@@ -130,7 +80,6 @@ impl<T> Answer<T> {
         }
     }
 
-    /// Only an exact answer: for a consumer that cannot act on a coarser one.
     pub fn exact(self) -> Option<T> {
         match self {
             Answer::Exact(v) => Some(v),
@@ -138,41 +87,54 @@ impl<T> Answer<T> {
         }
     }
 
-    /// What it lacked, if anything.
     pub fn lack(&self) -> Option<Lack> {
         match self {
             Answer::Exact(_) => None,
             Answer::Coarser(_, l) | Answer::Nothing(l) => Some(*l),
         }
     }
+
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Answer<U> {
+        match self {
+            Answer::Exact(v) => Answer::Exact(f(v)),
+            Answer::Coarser(v, l) => Answer::Coarser(f(v), l),
+            Answer::Nothing(l) => Answer::Nothing(l),
+        }
+    }
 }
 
-/// What a node says of the ground over it (`Access::relief`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Relief {
-    /// The lowest and highest the ground stands, in units. A page over the
-    /// node holds the bound of everything under it, so read from one this
-    /// is wider, never narrower, than the page's own will be.
+    /// Lowest and highest ground, in units; read from a coarser page this is
+    /// wider, never narrower.
     pub extent: (f64, f64),
-    /// The steepest it can be, as a rise over a run along the ground: the
-    /// largest span of any one index cell under the node over the cell's
-    /// side. The surface is interpolated from elevation samples an index
-    /// cell apart (pxl-spec bake/constant.rs `EXTENT_SPAN`), and an index
-    /// cell's span bounds the window its interpolation reads, so no point of
-    /// it rises faster than about that between two samples.
+    /// Steepest rise over run: the largest span of an index cell over its side,
+    /// which bounds the interpolated surface between samples.
     pub slope: f64,
 }
 
-/// The ground a cell draws: the top of its column in units, and the ground
-/// cell whose types it shows.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Ground {
     pub top: f64,
     pub cell: GroundCell,
 }
 
-/// A ray, in units: where it starts, a unit direction, and how far along it
-/// is asked.
+#[derive(Default)]
+struct Lines {
+    boxes: Vec<[f64; 2]>,
+    air: Option<[f64; 2]>,
+}
+
+/// A z16 column as composed for both rays and footing, so ground, bores and
+/// decks are combined in one place.
+struct Composed {
+    cell: [i64; 2],
+    top: f64,
+    lines: Lines,
+    col_idx: IVec,
+    local: [i64; 2],
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Ray {
     pub origin: V3,
@@ -186,21 +148,14 @@ impl Ray {
     }
 }
 
-/// What a ray met.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Struck {
     Ground,
-    /// A placed object, by where the store files it.
     Object(EntryAt),
-    /// The objects under a cell of a level over z16, met at the cell they
-    /// fold to there: a coarse level draws them folded, so none of them in
-    /// particular is met.
+    /// Objects folded into a cell above z16; no single object is met.
     Objects,
 }
 
-/// Where a ray met something, in the ray's own frame: how far along, the
-/// point, the face's outward normal, and the box struck — a ground voxel, or
-/// the object's own box, exact.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Hit {
     pub t: f64,
@@ -212,7 +167,6 @@ pub struct Hit {
 }
 
 impl Hit {
-    /// The hit with every point moved by `by`: into another frame.
     pub fn moved(self, by: V3) -> Hit {
         let add = |v: V3| std::array::from_fn(|k| v[k] + by[k]);
         Hit {
@@ -224,15 +178,14 @@ impl Hit {
     }
 }
 
-/// What the queries read: terrain's residency and the object store, shared.
 #[derive(Clone, Copy)]
 pub struct Access<'a> {
     terrain: &'a Paging<Terrain>,
     objects: &'a Store,
+    visits: Option<&'a std::cell::Cell<u64>>,
 }
 
 impl Access<'static> {
-    /// What is resident now.
     pub fn now() -> Access<'static> {
         let pyramid: &'static Pyramid<Terrain> = Terrain::pyramid();
         let objects: &'static Store = &kernel().objects;
@@ -240,36 +193,176 @@ impl Access<'static> {
     }
 }
 
-/// A piece of ground a ray is decided over at once: the square no page or
-/// index cell it is read from changes across, and what the terrain there is
-/// drawn from.
+/// A square across which neither the page nor the index cell changes.
 struct Region {
-    /// The square's corner and side, in units.
     base: [f64; 2],
     side: f64,
-    /// The page at the level asked.
     page: LevelPage,
-    /// The index lane's lowest and highest over it, and whether it is read
-    /// from the page asked; none where nothing over it is resident.
+    /// Index bounds and whether read from the page asked; none if nothing is resident.
     terrain: Option<((f64, f64), bool)>,
+}
+
+pub fn support_revision() -> [u32; 2] {
+    [Terrain::pyramid().revision(), objects_revision()]
+}
+
+/// Folds sub-cell fill to the cell by majority, a level at a time, with the
+/// objects' tie rule (`majority`).
+fn filled_cell(filled: impl Fn([i64; 3]) -> bool) -> bool {
+    const N: usize = CELL_STEPS as usize;
+    let mut v = [false; N * N * N];
+    for (k, f) in v.iter_mut().enumerate() {
+        *f = filled([k % N, k / N % N, k / (N * N)].map(|c| c as i64));
+    }
+    let (mut m, mut scale) = (N, OBJECT_FINEST);
+    while scale < CELL {
+        scale = scale.up(1);
+        let h = m / 2;
+        for k in 0..h * h * h {
+            let [x, y, z] = [k % h, k / h % h, k / (h * h)].map(|c| c * 2);
+            let eight: [bool; 8] = core::array::from_fn(|c| v[((z + (c >> 2)) * m + y + (c >> 1 & 1)) * m + x + (c & 1)]);
+            v[k] = majority(eight, scale.above(CELL));
+        }
+        m = h;
+    }
+    v[0]
 }
 
 impl<'a> Access<'a> {
     pub fn new(terrain: &'a Paging<Terrain>, objects: &'a Store) -> Access<'a> {
-        Access { terrain, objects }
+        Access { terrain, objects, visits: None }
     }
 
-    /// The ground `at` stands on, drawn at `level`: the level's cell it lies
-    /// in, as the chunk there paints it (`Ground`).
+    pub fn counting(self, visits: &'a std::cell::Cell<u64>) -> Access<'a> {
+        Access { visits: Some(visits), ..self }
+    }
+
+    fn visit(&self) {
+        if let Some(v) = self.visits {
+            v.set(v.get() + 1);
+        }
+    }
+
     pub fn at(&self, at: &Pvf3, level: u32) -> Answer<Ground> {
         self.ground(GROUND.cell_of(level, at))
     }
 
-    /// The ground a cell draws, from its page or the nearest resident page
-    /// over it: the height at the cell's center in that page's texels, as
-    /// pxl-render mesh/paint/terrain/adapter.rs `ChunkSample::read` samples a
-    /// chunk read from a page over it, and the type of the page cell it lies
-    /// in.
+    /// Down to the first solid's top, or up at most `rise` cells; taller gives none.
+    pub fn support(&self, at: &Pvf3, rise: i64) -> Answer<Option<f64>> {
+        let [ix, iy, iz] = CELL.index_of(at);
+        self.stand([ix, iy], Some(iz))
+    }
+
+    /// `support` from the drawn surface, ignoring `at`'s height (a fix, a search result).
+    pub fn surface_support(&self, at: &Pvf3) -> Answer<f64> {
+        let [ix, iy, _] = CELL.index_of(at);
+        // From the surface there is no wall, so it is never none.
+        self.stand([ix, iy], None).map(Option::unwrap_or_default)
+    }
+
+    /// `support` rising any height.
+    pub fn floor_under(&self, at: &Pvf3) -> Answer<f64> {
+        let [ix, iy, iz] = CELL.index_of(at);
+        // Climbing the whole reach meets no wall, so it is never none.
+        self.stand_climbing([ix, iy], Some(iz), true).map(Option::unwrap_or_default)
+    }
+
+    /// First solid cell over `at`; none under open sky.
+    pub fn ceiling_over(&self, at: &Pvf3) -> Answer<Option<i64>> {
+        let [ix, iy, iz] = CELL.index_of(at);
+        self.cells([ix, iy], |_, ceiling, solid| (iz + 1..ceiling).find(|&cz| solid(cz)))
+    }
+
+    /// First open cell at or over `at`.
+    pub fn open_from(&self, at: &Pvf3) -> Answer<i64> {
+        let [ix, iy, iz] = CELL.index_of(at);
+        self.cells([ix, iy], |_, ceiling, solid| (iz..ceiling).find(|&cz| !solid(cz)).unwrap_or(iz.max(ceiling)))
+    }
+
+    fn stand_climbing(&self, [ix, iy]: [i64; 2], from: Option<i64>, rise: Option<i64>) -> Answer<Option<f64>> {
+        self.cells([ix, iy], |top, ceiling, solid| {
+            let side = CELL.side();
+            let [lo, hi] = [REACH.min[2] / side, REACH.max[2] / side].map(|z| z as i64);
+            let start = from.unwrap_or(top);
+            let climb = rise.unwrap_or(hi - start);
+            let stand = if start < ceiling && solid(start) {
+                let over = (start + 1..=start + climb).find(|&cz| !solid(cz));
+                if rise.is_none() {
+                    over.or(Some(start))
+                } else {
+                    over
+                }
+            } else {
+                Some((lo..start.min(ceiling)).rev().find(|&cz| solid(cz)).map_or(start, |cz| cz + 1))
+            };
+            stand.map(|cz| cz as f64 * side)
+        })
+    }
+
+    /// Ground top, ceiling and solidity of a column, in cells; sub-cells fold by majority.
+    fn cells<R>(&self, [ix, iy]: [i64; 2], f: impl FnOnce(i64, i64, &dyn Fn(i64) -> bool) -> R) -> Answer<R> {
+        self.composed([ix, iy]).map(|c| {
+            let side = CELL.side();
+            let top = (c.top / side).round() as i64;
+            let made = |z: f64| {
+                let inside = |[lo, hi]: [f64; 2]| z >= lo && z < hi;
+                (z < top as f64 * side && !c.lines.air.is_some_and(inside)) || c.lines.boxes.iter().any(|&b| inside(b))
+            };
+            let n = CELL_STEPS as i64;
+            let fine = OBJECT_FINEST.side();
+            let solid = |cz: i64| {
+                if !self.objects.may_hold([ix, iy, cz]) {
+                    return made((cz as f64 + 0.5) * side);
+                }
+                filled_cell(|[x, y, z]| {
+                    let v = u32::from(self.objects.folded_value(OBJECT_FINEST, [ix * n + x, iy * n + y, cz * n + z]));
+                    match object_value_is_voxel(v) {
+                        true => !object_value_is_air(v),
+                        false => made(((cz * n + z) as f64 + 0.5) * fine),
+                    }
+                })
+            };
+            let lines_top = c.lines.boxes.iter().map(|b| (b[1] / side).ceil() as i64).max().unwrap_or(i64::MIN);
+            let ceiling = top.max(lines_top).max(self.objects.ceiling([ix, iy]).unwrap_or(i64::MIN));
+            let stand = if start < ceiling && solid(start) {
+                let over = (start + 1..=start + climb).find(|&cz| !solid(cz));
+                if any_height {
+                    over.or(Some(start))
+                } else {
+                    over
+                }
+            } else {
+                Some((lo..start.min(ceiling)).rev().find(|&cz| solid(cz)).map_or(start, |cz| cz + 1))
+            };
+            stand.map(|cz| cz as f64 * side)
+        })
+    }
+
+    fn composed(&self, cell: [i64; 2]) -> Answer<Composed> {
+        let [ix, iy] = cell;
+        let base = CELL.base_of([ix, iy, 0]);
+        let ground = self.ground(GROUND.cell_of(0, &base));
+        let [kx, ky, _] = L2.index_of(&base);
+        let col_idx = L2_IDX(TO_XY(base.i));
+        let local = [ix - kx * cells_across(), iy - ky * cells_across()];
+        ground.map(|g| Composed {
+            cell,
+            top: g.top,
+            lines: self.lines_over(GROUND.cell_of(0, &base), g.top),
+            col_idx,
+            local,
+        })
+    }
+
+    /// Whether ground is there where it reaches: not bore air, and not taken by
+    /// an object's voxel entry (air entries included).
+    fn holds(&self, c: &Composed, cz: i64) -> bool {
+        let z = cz as f64 * CELL.side();
+        !c.lines.air.is_some_and(|[lo, hi]| z >= lo && z < hi) && !self.taken(c.col_idx, c.local, cz)
+    }
+
+    /// Height at the cell's center in the drawn-from page, sampled as
+    /// `ChunkSample::read` samples a chunk drawn from a coarser page.
     fn ground(&self, cell: Cell) -> Answer<Ground> {
         let page = cell.page();
         let lack = Lack { layer: Category::terrain, page };
@@ -282,15 +375,21 @@ impl<'a> Access<'a> {
         self.answer(page, Ground { top, cell })
     }
 
-    /// The resident page `page`'s ground is drawn from, and its body.
+    /// The level the ground under `at` is known at; a step there is bounded by
+    /// that level's cell.
+    pub fn known_level(&self, at: &Pvf3) -> Option<u32> {
+        let page = GROUND.cell_of(FINEST, at).page();
+        match self.terrain.source(page) {
+            Some(_) => Some(FINEST),
+            None => self.drawn_from(page).map(|(src, _)| src.level),
+        }
+    }
+
     fn drawn_from(&self, page: LevelPage) -> Option<(LevelPage, &'a Terrain)> {
         let src = self.terrain.drawn_from(page)?;
         Some((src, self.terrain.get(src)?))
     }
 
-    /// `v`, read from what `page` is drawn from: exact where that says
-    /// `page`'s ground (`Paging::source`), and lacking `page` where it is a
-    /// page over it.
     fn answer<T>(&self, page: LevelPage, v: T) -> Answer<T> {
         match self.terrain.source(page) {
             Some(_) => Answer::Exact(v),
@@ -298,12 +397,9 @@ impl<'a> Access<'a> {
         }
     }
 
-    /// What the ground over a node of `page`'s level can be, at that level
-    /// and every level under it, from the index lane of the page it is drawn
-    /// from over the node's footprint: one block of it (pxl-spec
-    /// bake/format.rs `Index::over`), whatever the node's size. For deciding
-    /// what a piece of the view holds, how near it comes and how far it can
-    /// be from the ground it stands for, never for what is drawn.
+    /// Bound on the ground over a node of `page`'s level and every level under
+    /// it, from one block of the index lane. For deciding descent, never for
+    /// what is drawn.
     pub fn relief(&self, page: LevelPage, (side, at): (Scale, [i64; 2])) -> Answer<Relief> {
         let Some((src, body)) = self.drawn_from(page) else {
             return Answer::Nothing(Lack { layer: Category::terrain, page });
@@ -321,40 +417,15 @@ impl<'a> Access<'a> {
         )
     }
 
-    /// The first thing `ray` meets within its reach, at the level `detail`
-    /// says along it: the ground and the objects, each by a walk of its own
-    /// shape, the nearer met. The objects are resident whole and their
-    /// cells are found down their index along the ray (`objects`); the
-    /// ground is paged, and is walked only as far as the objects' nearest,
-    /// since what lies past that is behind it. So the lack is the ground's
-    /// nearest one before what is met: an object is never answered exactly
-    /// over ground not known to lie behind it. What the ray starts inside is
-    /// not met: the object or the cell it is in, and the ground of the
-    /// column it is in, whose ground it meets again only in the next column
-    /// it enters, so an eye under the ground is not stopped where it stands.
+    /// The first thing `ray` meets within its reach. Objects (resident whole)
+    /// are found first; ground is walked only up to them, so an object is never
+    /// exact over ground not known to lie behind it. What the ray starts inside
+    /// is not met, so an eye under the ground is not stopped where it stands.
     ///
-    /// The ground is walked region by region: a region is passed over whole
-    /// where the ray stays above everything its index lane says can stand
-    /// there, and walked cell column by cell column of its level where it
-    /// does not. A region read from a page coarser than asked, whose bound
-    /// the ray enters, is the lack — the nearest one, since what is under it
-    /// could be met before anything past it — and a region nothing over is
-    /// resident for is one too, whatever the ray's height, since nothing
-    /// bounds it.
-    ///
-    /// The level is one along each band of distance, and a region ends where
-    /// the band does, so a walk is in the cells of the level at its start,
-    /// which is the finest over it.
-    ///
-    /// Before a region of the level asked is read, the pages over it that are
-    /// resident are asked, coarsest first, whether the ray passes over all
-    /// they hold (`clear`): an index cell of a page `k` levels up is `2^k`
-    /// of the level's across, so ground far under the ray is passed in as
-    /// many tests as there are levels over it, not a region at a time. A
-    /// page over it that is not resident proves nothing and is passed by; it
-    /// never lets the ray pass over what it would have held. What a ray
-    /// costs is the regions and cells it visits, which is fewest far over
-    /// the ground and most along a slope it grazes.
+    /// Ground is walked region by region: skipped where the ray stays above the
+    /// index bound, walked cell by cell otherwise. A coarse or missing region
+    /// the ray may enter is the lack. Resident coarser pages are tried first
+    /// (`clear`) so far-off ground is skipped in one test per level.
     pub fn first_hit(&self, ray: &Ray, detail: Detail) -> Answer<Option<Hit>> {
         let mut lack: Option<Lack> = None;
         let mut answered = false;
@@ -364,7 +435,6 @@ impl<'a> Access<'a> {
             let end = until.min(ray.reach);
             let objects = self.objects(ray, (t, end), level);
             let limit = objects.map_or(end, |o| o.t);
-            // The ground where it is met no farther than the objects' nearest.
             let ground = self.ground_first(ray, (t, limit), level, &mut lack, &mut answered).filter(|g| g.t <= limit);
             if let Some(hit) = ground.or(objects) {
                 return match lack {
@@ -381,8 +451,6 @@ impl<'a> Access<'a> {
         }
     }
 
-    /// The first of the ground the ray meets between `t0` and `t1` at
-    /// `level`, noting the nearest lack and whether any of it was answered.
     fn ground_first(&self, ray: &Ray, (t0, t1): (f64, f64), level: u32, lack: &mut Option<Lack>, answered: &mut bool) -> Option<Hit> {
         let mut t = t0;
         while t < t1 {
@@ -422,13 +490,8 @@ impl<'a> Access<'a> {
         None
     }
 
-    /// Where the ray, at `t` and asking at `level` until `until`, is proved
-    /// to pass over all the ground under an index cell of a resident page
-    /// over `level`: the far edge of the largest such cell, or none. The
-    /// ground is solid under its surface, so it is passed over only above
-    /// its highest. An index cell bounds what is drawn at its page's level
-    /// and every level under it, and the ray asks at `level` up to `until`
-    /// only, so no cell carries it past there.
+    /// Far edge of the largest resident index cell above `level` the ray passes
+    /// over entirely, or none. Never past `until`, where another level applies.
     fn clear(&self, ray: &Ray, t: f64, level: u32, until: f64) -> Option<f64> {
         let p = ray.at(t + NUDGE);
         let mut at = Pvf3::default();
@@ -447,7 +510,6 @@ impl<'a> Access<'a> {
         })
     }
 
-    /// The region a point lies in, for a ray asking at `level`.
     fn region(&self, p: &V3, level: u32) -> Region {
         let mut at = Pvf3::default();
         projection::project(&mut at, p[0], p[1], 0.0);
@@ -455,9 +517,8 @@ impl<'a> Access<'a> {
         let page_scale = L3.up(level as i32);
         let (scale, terrain) = match self.drawn_from(page) {
             Some((src, body)) => {
-                // The index cell of the page it is drawn from, or the page
-                // asked where that is the smaller: either way one bound and
-                // one page across it.
+                // The drawn-from page's index cell, or the asked page if smaller: one bound
+                // and one page across it.
                 let e = EXTENT.cell_of(src.level, &at);
                 let [lo, hi] = body.index.extent()[e.index() as usize];
                 let exact = self.terrain.source(page).is_some();
@@ -476,14 +537,9 @@ impl<'a> Access<'a> {
         }
     }
 
-    /// The first of the ground met between `t0` and `t1` along the ray
-    /// inside region `r`, cell column by cell column of `level` in the order
-    /// the ray crosses them (Amanatides–Woo). The walk stops at the region's edge by
-    /// the cells it holds and not by `t1`: a step's distance and the edge's
-    /// are summed two ways, and a column past the edge taken for inside would
-    /// be read as the region's, exact or not. A region is at least a cell of
-    /// its level across: its index cell is the page's it is read from, at
-    /// that level or over it.
+    /// Walks cell columns of `level` inside `r` (Amanatides–Woo). Stops on the
+    /// region's cells, not on `t1`: the two distances round differently, and a
+    /// column past the edge would be read as this region's.
     fn walk(&self, ray: &Ray, r: &Region, t0: f64, t1: f64, level: u32) -> Option<Hit> {
         let side = GROUND.scale(level).side();
         let across = (r.side / side) as i64;
@@ -520,13 +576,55 @@ impl<'a> Access<'a> {
         None
     }
 
-    /// Where the ray first meets the ground in z16 cell column `cell` while
-    /// it is over it, between `t0` and `t1`: a cell under the column's drawn
-    /// top that no voxel entry takes, since a cell holding one is its
-    /// objects' and not the ground's — air as much as a solid. The ray is
-    /// stepped a cell of height at a time only once it is under the top.
-    /// What the ray starts inside is not met.
+    /// Decks and bore air over a cell, as the chunk paints them (`Over::occupies`).
+    fn lines_over(&self, cell: Cell, ground_top: f64) -> Lines {
+        let mut lines = Lines::default();
+        let Some((src, body)) = self.drawn_from(cell.page()) else { return lines };
+        let n = GROUND.scale(cell.level()).count_in(GROUND.scale(src.level)) as f64;
+        let [ox, oy] = cell.in_page_above(src.level - cell.level());
+        let ground = (ground_top / U_PER_CELL).round() as i32;
+        let units = |[lo, hi]: [i32; 2]| [f64::from(lo) * U_PER_CELL, f64::from(hi) * U_PER_CELL];
+        for o in body.decks.over_point([(ox as f64 + 0.5) / n, (oy as f64 + 0.5) / n]) {
+            match o.occupies(ground) {
+                Occupies::Grade => {}
+                Occupies::Above { slab, pier } => lines.boxes.extend([Some(slab), pier].into_iter().flatten().map(units)),
+                Occupies::Through { air } => lines.air = Some(units(air)),
+            }
+        }
+        lines
+    }
+
+    fn with_decks(&self, ray: &Ray, boxes: &[[f64; 2]], (corner, side): ([f64; 2], f64), (t0, t1): (f64, f64), ground: Option<Hit>) -> Option<Hit> {
+        let mut best = ground;
+        for &[lo, hi] in boxes {
+            let (min, max) = ([corner[0], corner[1], lo], [corner[0] + side, corner[1] + side, hi]);
+            let Some((t, normal)) = ray_box(ray, &min, &max) else { continue };
+            if t < t0 || t > t1 || best.is_some_and(|b| b.t <= t) {
+                continue;
+            }
+            best = Some(Hit {
+                t,
+                point: ray.at(t),
+                normal,
+                box_min: min,
+                box_max: max,
+                struck: Struck::Ground,
+            });
+        }
+        best
+    }
+
     fn column(&self, ray: &Ray, [ix, iy]: [i64; 2], t0: f64, t1: f64) -> Option<Hit> {
+        let side = CELL.side();
+        let c = self.composed([ix, iy]).value()?;
+        let ground = self.ground_column(ray, &c, t0, t1);
+        self.with_decks(ray, &c.lines.boxes, ([ix as f64 * side, iy as f64 * side], side), (t0, t1), ground)
+    }
+
+    /// Ground hit in a z16 column: a cell under the top not taken by a voxel
+    /// entry and not in bore air. Steps by cell only once under the top.
+    fn ground_column(&self, ray: &Ray, c: &Composed, t0: f64, t1: f64) -> Option<Hit> {
+        let ([ix, iy], top) = (c.cell, c.top);
         let side = CELL.side();
         let base = CELL.base_of([ix, iy, 0]);
         let top = self.ground(GROUND.cell_of(0, &base)).value()?.top;
@@ -544,8 +642,7 @@ impl<'a> Access<'a> {
         let col_idx = L2_IDX(TO_XY(base.i));
         let (cx, cy) = (ix - kx * cells_across(), iy - ky * cells_across());
         let mut cz = (ray.at(from)[2] / side).floor() as i64;
-        if from <= 0.0 && !self.taken(col_idx, [cx, cy], cz) {
-            // It starts inside the ground.
+        if from <= 0.0 && self.holds(c, cz) {
             return None;
         }
         loop {
@@ -555,10 +652,8 @@ impl<'a> Access<'a> {
                 let face = if dz > 0.0 { (cz + 1) as f64 * side } else { cz as f64 * side };
                 at_z(face).min(t1)
             };
-            if (cz as f64) * side < top && from > 0.0 && !self.taken(col_idx, [cx, cy], cz) {
-                // In through the column's side where this is the cell the ray
-                // came into the column at, and through the cell's floor or
-                // ceiling past it.
+            if (cz as f64) * side < top && from > 0.0 && self.holds(c, cz) {
+                // Through the column's side on the entry cell, else through floor or ceiling.
                 let normal = if from == t0 {
                     wall_normal(ray, from, side)
                 } else {
@@ -582,11 +677,17 @@ impl<'a> Access<'a> {
         }
     }
 
-    /// Where the ray first meets the ground in cell column `cell` of
-    /// `level`, over z16, while it is over it, between `t0` and `t1`: the
-    /// column's cells under the top the level draws. What the ray starts
-    /// inside is not met.
     fn folded(&self, ray: &Ray, [ix, iy]: [i64; 2], t0: f64, t1: f64, level: u32) -> Option<Hit> {
+        let scale = GROUND.scale(level);
+        let side = scale.side();
+        let cell = GROUND.cell_of(level, &scale.base_of([ix, iy, 0]));
+        let top = self.ground(cell).value()?.top;
+        let ground = self.folded_ground(ray, [ix, iy], top, t0, t1, level);
+        let lines = self.lines_over(cell, top);
+        self.with_decks(ray, &lines.boxes, ([ix as f64 * side, iy as f64 * side], side), (t0, t1), ground)
+    }
+
+    fn folded_ground(&self, ray: &Ray, [ix, iy]: [i64; 2], top: f64, t0: f64, t1: f64, level: u32) -> Option<Hit> {
         let scale = GROUND.scale(level);
         let side = scale.side();
         let base = scale.base_of([ix, iy, 0]);
@@ -612,18 +713,9 @@ impl<'a> Access<'a> {
         })
     }
 
-    /// The first of the objects the ray meets between `t0` and `t1` at
-    /// `level`, from the cells their index says the ray passes, nearest
-    /// first (layer/object/store.rs `Store::along_ray`). At z16 a cell's voxel
-    /// entries are met at their own boxes, sub-cell ones included, air
-    /// meeting nothing. Over z16 the level draws its objects folded into its
-    /// own cells, as the store keeps them (`fold_cell`), so a cell that
-    /// paints a material is met at its own box — the ground's cells and the
-    /// objects' at one resolution, the one the mesher then merges 2 × 2 × 2
-    /// by what each bucket covers, whichever layer it came from. A cell the
-    /// ray is already in where the band of its level begins is met there,
-    /// through the side it is nearest, as the ground's is; what the ray
-    /// starts inside is not met.
+    /// First object the ray meets, nearest first (`Store::along_ray`). At z16
+    /// voxel entries are hit at their own boxes; above z16 the folded cell is
+    /// hit whole, matching what that level draws.
     fn objects(&self, ray: &Ray, (t0, t1): (f64, f64), level: u32) -> Option<Hit> {
         let scale = GROUND.scale(level);
         let side = scale.side();
@@ -644,20 +736,19 @@ impl<'a> Access<'a> {
         met
     }
 
-    /// Whether z16 cell `cz` of column-local (cx, cy) holds a voxel entry,
-    /// which takes the cell from the ground.
     fn taken(&self, col_idx: IVec, [cx, cy]: [i64; 2], cz: i64) -> bool {
         let Some(run) = self.objects.cell(col_idx, cx as u32, cy as u32, cz as CellZ) else { return false };
         let Some(e) = self.objects.entries(col_idx) else { return false };
         (run.start as usize..(run.start + run.count) as usize).any(|k| !object_value_is_decor(e.state[k]))
     }
 
-    /// The voxel entries of the cell at column-local (cx, cy) and height
-    /// `cz`: each placed thing that paints a voxel, with where it is filed.
-    /// A decor paints none, so a cell of decor alone is the ground's.
-    fn cell_entries(&self, col_idx: IVec, [cx, cy]: [i64; 2], cz: i64) -> Vec<EntryCursor> {
-        let Some(run) = self.objects.cell(col_idx, cx as u32, cy as u32, cz as CellZ) else {
-            return Vec::new();
+    /// Decor paints no voxel, so a cell of decor alone is the ground's.
+    fn cell_entries(&self, col_idx: IVec, [cx, cy]: [i64; 2], cz: i64) -> impl Iterator<Item = EntryCursor> + '_ {
+        let run = self.objects.cell(col_idx, cx as u32, cy as u32, cz as CellZ);
+        let e = run.and(self.objects.entries(col_idx));
+        let ks = match (run, e) {
+            (Some(run), Some(_)) => run.start as usize..(run.start + run.count) as usize,
+            _ => 0..0,
         };
         let Some(e) = self.objects.entries(col_idx) else { return Vec::new() };
         (run.start as usize..(run.start + run.count) as usize)
@@ -672,12 +763,10 @@ impl<'a> Access<'a> {
     }
 }
 
-/// Cells along a column's side.
 fn cells_across() -> i64 {
     CELL.count_in(L2) as i64
 }
 
-/// Where along the ray it leaves the square at `base` of `side`, in XY.
 fn exit(ray: &Ray, base: [f64; 2], side: f64) -> f64 {
     (0..2)
         .map(|k| {
@@ -693,8 +782,6 @@ fn exit(ray: &Ray, base: [f64; 2], side: f64) -> f64 {
         .fold(f64::INFINITY, f64::min)
 }
 
-/// The face a ray entering a cell column `side` wide at `t` came through:
-/// the side it lies nearest to, facing back along the ray.
 fn wall_normal(ray: &Ray, t: f64, side: f64) -> V3 {
     let p = ray.at(t);
     let off = |v: f64| {
@@ -707,10 +794,7 @@ fn wall_normal(ray: &Ray, t: f64, side: f64) -> V3 {
     n
 }
 
-/// The nearest solid of a cell's voxel entries the ray enters, or none: air
-/// is nothing to meet, and the cell is empty past what is placed in it.
-/// `corner` is the column's, in units, which the entries' corners are from.
-fn object_hit(ray: &Ray, entries: &[EntryCursor], [x0, y0]: [f64; 2]) -> Option<Hit> {
+fn object_hit(ray: &Ray, entries: impl Iterator<Item = EntryCursor>, [x0, y0]: [f64; 2]) -> Option<Hit> {
     let mut best: Option<Hit> = None;
     for e in entries.iter().filter(|e| !object_value_is_air(e.state)) {
         let min = [x0 + e.lx, y0 + e.ly, e.lz];
@@ -731,8 +815,6 @@ fn object_hit(ray: &Ray, entries: &[EntryCursor], [x0, y0]: [f64; 2]) -> Option<
     best
 }
 
-/// Where the ray enters a box and through which face; none where it misses
-/// the box, leaves it before its reach begins or starts inside it.
 fn ray_box(ray: &Ray, min: &V3, max: &V3) -> Option<(f64, V3)> {
     let (enter, _, k) = Aabb { min: *min, max: *max }.span_along(ray.origin, ray.direction)?;
     let mut normal = [0.0; 3];
@@ -740,10 +822,8 @@ fn ray_box(ray: &Ray, min: &V3, max: &V3) -> Option<(f64, V3)> {
     (enter >= 0.0 && enter <= ray.reach).then_some((enter, normal))
 }
 
-/// Where the ray meets the cell of `scale` at `cell`, whole, and through
-/// which face: where it enters it, or `from` where it is inside it there,
-/// through the side it is nearest; none where it misses it, or starts
-/// inside it.
+/// Where the ray meets the whole cell; if already inside at `from`, there,
+/// through the nearest side. None if it starts inside.
 fn cell_hit(ray: &Ray, cell: [i64; 3], scale: Scale, from: f64) -> Option<Hit> {
     let Aabb { min, max } = scale.cube(cell);
     let side = scale.side();

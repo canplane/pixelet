@@ -2,9 +2,7 @@
 
 use super::*;
 
-/// The page `script/smoke.ts` names, and the group four levels above it: the
-/// group's name is the page's first eleven digits, which is the property the
-/// rename exists for.
+/// The group four levels above is named by the page's first eleven digits.
 const PAGE: &str = "12720250262323200";
 const PAGE_QUADKEY: &str = "132110320312001";
 const GROUP: &str = "794946921889792";
@@ -15,7 +13,6 @@ fn a_leaf_and_a_level_above_it_land_on_their_tiles() {
     for prefix in ["terrain/v6", "poi/v8"] {
         let pyramid = Bake::of(prefix).expect(prefix);
         assert_eq!(pyramid.rename(&format!("0/{PAGE}")), Ok(PAGE_QUADKEY.to_string()));
-        // The same ground four levels up is the leaf's name, four digits shorter.
         assert_eq!(pyramid.rename(&format!("4/{GROUP}")), Ok(GROUP_QUADKEY.to_string()));
     }
     assert!(PAGE_QUADKEY.starts_with(GROUP_QUADKEY));
@@ -32,8 +29,6 @@ fn what_is_named_rather_than_keyed_is_carried_across() {
     assert_eq!(Bake::of("geocode/v3").expect("geocode").rename("_dict"), Ok("_dict".to_string()));
 }
 
-/// A skipped object is one the new prefix does not have, and nothing
-/// downstream would say so — so nothing is skipped.
 #[test]
 fn what_cannot_be_read_is_an_error_rather_than_a_skip() {
     let terrain = Bake::of("terrain/v5").expect("terrain");

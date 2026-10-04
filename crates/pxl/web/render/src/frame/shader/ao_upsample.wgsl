@@ -1,9 +1,5 @@
-// The occlusion at the frame's resolution, one byte a pixel, for the lit
-// passes to read: the 3x3 of half-resolution pixels around each, weighed
-// by distance off the pixel's own tangent plane and by normal, the
-// full-resolution depth giving the plane, so a half-resolution edge lands
-// on the full-resolution one; the plain bilinear read where no tap
-// agrees. Then N8AO's intensity as a power, and the fog's lift.
+// AO at full resolution: a 3x3 of half-resolution taps weighed by the full-
+// resolution plane and normal, bilinear where no tap agrees.
 
 @group(0) @binding(1) var scene_depth: texture_depth_2d;
 @group(0) @binding(2) var half_depth: texture_2d<f32>;
@@ -30,7 +26,6 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   for (var y = -1; y <= 1; y++) {
     for (var x = -1; x <= 1; x++) {
       let p = clamp(fp / 2 + vec2i(x, y), vec2i(0), half_max);
-      // The tap's corner, as the compositer placed it.
       let p_uv = vec2f(p) / ao_half();
       let tap_depth = textureLoad(half_depth, p, 0).r;
       let tap = textureLoad(blurred, p, 0);

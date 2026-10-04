@@ -9,8 +9,6 @@ use crate::global::Global;
 use crate::layer::object::store::EntryAt;
 use crate::world::change::request_world_tick;
 
-/// The controls held to what they range over: the distance to its bounds,
-/// the look to its domain (orbit.rs `look_domain`).
 fn norm_dist(dist: f64) -> f64 {
     clamp(dist, MIN_DIST, MAX_DIST)
 }
@@ -30,20 +28,16 @@ pub enum CameraStatus {
     Drag,
 }
 
-/// What the controls ask of the camera: the look it is to turn to and the
-/// orbit's distance it is to come to. Not the camera — that is the eye and
-/// the look as drawn (controller.rs `Camera`), which eases toward this.
+/// What the controls ask; the drawn camera (controller.rs `Camera`) eases toward it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Intent {
-    /// The orbit's distance, its radius.
     pub dist: f64,
-    /// The look's heading about Z in radians, normalized to [-PI, PI].
+    /// Heading about Z in radians, in [-PI, PI].
     pub azimuth: f64,
-    /// The look's angle down from vertical in radians.
+    /// Angle down from vertical in radians.
     pub polar: f64,
 }
 
-/// A partial intent: what a setter was handed.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct IntentPatch {
     pub dist: Option<f64>,
@@ -54,21 +48,12 @@ pub struct IntentPatch {
 pub struct CameraStore {
     pub camera_status: CameraStatus,
     pub hovered_coord: Option<Pvf3>,
-    /// Where the placed object currently under the cursor is filed, if there
-    /// is one — see camera/ray.rs's PickResult.
     pub hovered_object_at: Option<EntryAt>,
-    /// What the controls ask of the camera (`Intent`).
+    /// A scattered decor has no entry.
+    pub hovered_scattered: Option<Scattered>,
+    /// Where a walker sent there starts from.
+    pub hovered_approach: Option<Pvf3>,
     pub intent: Intent,
-    /// What the hand has moved the map center by over the ground and the
-    /// eye has not yet taken, east and north in world units: a residual of
-    /// control, spent into the eye a share a turn (controller.rs
-    /// `spend_travel`) and read by nothing else. Over the ground only, since
-    /// both controllers take the height from the ground they reach. A
-    /// difference and not a place, so a rebase leaves it as it is; a step the
-    /// terrain refuses is spent all the same, so nothing refused is kept to
-    /// be paid back before a move the other way.
-    pub travel: [f64; 2],
-    /// Follow mode flag.
     pub is_follow_mode: bool,
 }
 
@@ -88,9 +73,7 @@ impl CameraStore {
         }
     }
 
-    /// `partial` over the intent as it stands, each held to what it ranges
-    /// over: what a control asks, before the active controller has its say
-    /// (controller.rs `set_intent`).
+    /// Before the active controller has its say (controller.rs `set_intent`).
     pub fn merged(&self, partial: IntentPatch) -> Intent {
         let from = self.intent;
         Intent {
@@ -100,8 +83,7 @@ impl CameraStore {
         }
     }
 
-    /// A view state change wakes the damping loop, which only runs when a
-    /// frame is asked for.
+    /// Wakes the damping loop, which runs only when a frame is asked for.
     pub(crate) fn commit_intent(&mut self, next: Intent) {
         if self.intent == next {
             return;

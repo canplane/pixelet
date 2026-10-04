@@ -1,16 +1,6 @@
 // pxl-geo-bake/pyramid.rs
 
-//! A layer's pyramid on disk, and the fold that builds it. A version is a
-//! directory a level and an object a page named by its key, as the bucket
-//! holds it; the levels above the leaves are folded from the level under them
-//! by the layer's one-level function (pxl-spec space/pyramid.rs), the one the
-//! client runs, so the bake and the client compose the same function. The
-//! offline bake writes a version whole; the dev tile server fills one a page
-//! at a time as pages are wanted.
-//!
-//! A layer supplies its payload's codec, and the page a page it left as no
-//! object reads as — open water for terrain, no places for POI. Everything
-//! else here is the pyramid's.
+//! A layer's pyramid on disk, folded by the same one-level function the client runs.
 
 use std::collections::HashMap;
 use std::fs;
@@ -21,8 +11,6 @@ use pxl_spec::space::pyramid::{Folds, LevelPage, TOP_LEVEL};
 
 use crate::util::{git_sha, measure_output, now_iso8601, pack, unpack, write_atomic, Level, CONTENT_ENCODING};
 
-/// A layer the bake holds as a pyramid: its page, folded by `Folds`, and the
-/// bytes a page is stored as.
 pub trait Layer: Folds + PartialEq + Send + Sync {
     fn encode(&self) -> Result<Vec<u8>, String>;
     fn decode(raw: &[u8]) -> Result<Self, String>;
@@ -45,14 +33,12 @@ impl PageSet {
         self.level_dir(p.level).join(p.page.to_string())
     }
 
-    /// Stores a page's packed object.
     pub fn write(&self, p: LevelPage, packed: &[u8]) -> Result<(), String> {
         let path = self.path(p);
         fs::create_dir_all(self.level_dir(p.level)).map_err(|e| e.to_string())?;
         write_atomic(&path, packed).map_err(|e| format!("{}: {e}", path.display()))
     }
 
-    /// A stored page, decoded, or none where the page does not exist.
     pub fn read<L: Layer>(&self, p: LevelPage) -> Result<Option<L>, String> {
         let path = self.path(p);
         if !path.exists() {
@@ -63,7 +49,6 @@ impl PageSet {
         L::decode(&raw).map(Some).map_err(|e| format!("{}: {e}", path.display()))
     }
 
-    /// The pages a level holds on disk, in key order.
     pub fn pages(&self, level: u32) -> Result<Vec<LevelPage>, String> {
         let dir = self.level_dir(level);
         if !dir.exists() {
@@ -81,7 +66,6 @@ impl PageSet {
     }
 }
 
-/// Every parent a level has: one for each child that exists, in key order.
 pub fn parents(children: &[LevelPage]) -> Vec<LevelPage> {
     let mut out: Vec<LevelPage> = children.iter().map(|c| c.parent()).collect();
     out.sort_unstable();
@@ -89,10 +73,7 @@ pub fn parents(children: &[LevelPage]) -> Vec<LevelPage> {
     out
 }
 
-/// A parent folded from the level under it, or none where it has no child: a
-/// parent exists exactly where one of its four children does, which is the
-/// rule `parents` walks by and the dev server faults by. `read` answers for
-/// a page of the level below; one it has no page for reads as `absent`.
+/// None where it has no child: a parent exists exactly where a child does.
 pub fn fold_parent<'a, L: Layer>(parent: LevelPage, read: impl Fn(LevelPage) -> Option<&'a L>, absent: &'a L) -> Option<L> {
     if parent.children().iter().all(|&k| read(k).is_none()) {
         return None;
@@ -100,7 +81,6 @@ pub fn fold_parent<'a, L: Layer>(parent: LevelPage, read: impl Fn(LevelPage) -> 
     L::fold_page(parent, |p| Some(read(p).unwrap_or(absent)))
 }
 
-/// A parent folded from the level under it as a page set holds it.
 pub fn fold_stored<L: Layer>(set: &PageSet, parent: LevelPage, absent: &L) -> Result<Option<L>, String> {
     let mut read = HashMap::new();
     for p in L::sources(parent) {
@@ -111,12 +91,8 @@ pub fn fold_stored<L: Layer>(set: &PageSet, parent: LevelPage, absent: &L) -> Re
     Ok(fold_parent(parent, |p| read.get(&p), absent))
 }
 
-/// Every level above the leaves folded, the finest first, up to `TOP_LEVEL`
-/// or the first level with nothing under it; a level this run did not reach
-/// is not part of the set. The top level folded.
-///
-/// Every level reads the one absent page for what it left as no object,
-/// which holds only if a parent of four absent pages is the absent page.
+/// Folds every level up to `TOP_LEVEL` or the first empty one. Correct only if
+/// a parent of four absent pages is the absent page.
 pub fn build<L: Layer>(set: &PageSet, absent: &L, workers: usize) -> Result<u32, String> {
     let fixed = L::fold_page(LevelPage::new(1, 0), |_| Some(absent)).ok_or("no parent over four absent children")?;
     if fixed != *absent {
@@ -139,11 +115,8 @@ pub fn build<L: Layer>(set: &PageSet, absent: &L, workers: usize) -> Result<u32,
     Ok(top)
 }
 
-/// Lets go of every page its parent settles (pxl-spec space/pyramid.rs
-/// `Folds::settles`): the tree stops where a page says all of the ground
-/// under it, and the client, which reads that ground from the page over it,
-/// never asks for one. Decided over the whole set before any page goes, so
-/// each is judged by the parent it was folded into. How many went.
+/// Drops every page its parent settles (`Folds::settles`), judged over the
+/// whole set before any is removed. Returns how many.
 pub fn prune<L: Layer>(set: &PageSet, top: u32) -> Result<usize, String> {
     let mut gone = Vec::new();
     for level in 0..top {
@@ -164,11 +137,8 @@ pub fn prune<L: Layer>(set: &PageSet, top: u32) -> Result<usize, String> {
     Ok(gone.len())
 }
 
-/// Writes the manifest beside a version: what the set holds, level by level,
-/// how its objects are served, and what the layer says it was made from.
-///
-/// Measured from disk rather than counted by the run: a bake resumes, and a
-/// re-run that skips everything would otherwise describe an empty set.
+/// Measured from disk, not the run: a resumed run that skipped everything
+/// would describe an empty set.
 pub fn write_manifest(set: &PageSet, top: u32, layer: serde_json::Value) -> Result<(), String> {
     let (mut objects, mut bytes) = measure_output(&set.root).map_err(|e| e.to_string())?;
     let mut levels = Vec::new();
@@ -181,15 +151,10 @@ pub fn write_manifest(set: &PageSet, top: u32, layer: serde_json::Value) -> Resu
     let mut manifest = serde_json::json!({
         "version": set.root.file_name().map(|n| n.to_string_lossy().to_string()),
         "updated_at": now_iso8601(),
-        // The layer's source says which *data* this was baked from; this says
-        // which *code* did the baking.
         "git_sha": git_sha(),
         "objects": objects,
         "bytes": bytes,
         "levels": levels,
-        // Every object is stored packed: upload with this content-type and
-        // this content-encoding, so whatever fetches it decodes it
-        // transparently. The upload takes them from here, not from memory.
         "content_type": "application/octet-stream",
         "content_encoding": CONTENT_ENCODING,
     });
@@ -202,16 +167,10 @@ pub fn write_manifest(set: &PageSet, top: u32, layer: serde_json::Value) -> Resu
     Ok(())
 }
 
-/// Folds `level` from `children` and returns how many pages it wrote.
-///
-/// A parent reads the 4×4 pages around its children, so its row reads four
-/// rows of the level below and the next row shares three of them. Each worker
-/// folds a band of consecutive parent rows and keeps only the four child rows
-/// its current parent row reads, so a page is decoded about once and what is
-/// held is four rows, whatever the layer's page weighs.
+/// A parent reads the 4×4 children around it, so each worker keeps only the
+/// four child rows its current parent row reads.
 fn fold_level<L: Layer>(set: &PageSet, level: u32, children: &[LevelPage], absent: &L, workers: usize) -> Result<usize, String> {
     let here = set.level_dir(level);
-    // A parent that no longer has a child must not outlive it.
     if here.exists() {
         fs::remove_dir_all(&here).map_err(|e| format!("{}: {e}", here.display()))?;
     }

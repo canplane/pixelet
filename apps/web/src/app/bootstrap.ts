@@ -5,9 +5,6 @@ import { useSyncExternalStore } from "react";
 import { boot_kernel } from "@/kernel/kernel.ts";
 import { bootstrapI18n } from "@/locale/i18n.ts";
 
-/** Whether the kernel has come up: the map is drawn only once it has, since
- * everything on it speaks to the kernel, and a boot that fails leaves it
- * undrawn. */
 let booted = false;
 const listeners = new Set<() => void>();
 
@@ -17,8 +14,7 @@ function settle(): void {
 }
 
 export function bootstrapApp(): void {
-  // The locale first, because what the host may have to say about the
-  // device is said in it.
+  // The locale first: the host's boot messages are in it.
   bootstrapI18n();
   boot_kernel().then(
     settle,

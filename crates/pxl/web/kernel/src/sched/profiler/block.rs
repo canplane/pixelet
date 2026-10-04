@@ -1,23 +1,9 @@
 // pxl-kernel/sched/profiler/block.rs
 
-//! Every section of the summary as one record, laid out as profiler.json lays
-//! the section out and held to it by `words!` (record.rs).
-//!
-//! The summary used to be written word by word — `out[at(a, F::field)] = v`
-//! for a scalar and a hand-ordered slice for a whole section — and the block
-//! was then the only place the wiring existed, in a form nothing could check.
-//! Three faults followed from that one shape, and an audit rather than the
-//! compiler is what found them (2026-09-23): a section whose slice put two
-//! values in the middle of lanes the JSON had appended to the end, so fifteen
-//! of its twenty lanes carried a neighbor's number; a lane fed from a
-//! structure that mirrored the one it was about; and fields computed for the
-//! profiler that no lane read.
-//!
-//! A record closes all three. A lane with no field is a size mismatch, a
-//! field at the wrong word is an offset mismatch, and a field nobody fills is
-//! a struct literal that does not compile — so none of them is a thing to go
-//! and check. What a field is filled *from* is still a judgment, but it is
-//! one line beside the field's own name, in one place.
+//! Every summary section as a record held to profiler.json by `words!`.
+//! Written word by word, sections had shifted lanes, mirrored structures and
+//! unread fields that only an audit found (2026-09-23); a record makes each
+//! of those a compile error.
 
 use core::mem::{offset_of, size_of};
 
@@ -29,7 +15,6 @@ const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
 const TASK_PHASES: usize = TASK_PHASE_NAMES.len();
 const CATEGORIES: usize = crate::sched::profiler::spec::CATEGORY_NAMES.len();
 
-/// What a set of values was, at the two points worth naming and at its worst.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Spread {
@@ -40,7 +25,6 @@ pub struct Spread {
 
 words!(Spread, SPREAD::WORDS, p50 => SPREAD::p50, p95 => SPREAD::p95, max => SPREAD::max);
 
-/// Whether the profiler is recording, and how much it holds.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct RecBlock {
@@ -56,12 +40,10 @@ words!(RecBlock, SUMMARY::rec::WORDS,
     tasks => SUMMARY::rec::tasks, frames => SUMMARY::rec::frames, truncated => SUMMARY::rec::truncated,
 );
 
-/// The window's frames: how many and over how long, the timings as spreads,
-/// the work rates, and the last frame whole.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FramesBlock {
-    /// 0 for a window with no frames in it, where every other word is 0 too.
+    /// 0 for a window with no frames, where every other word is 0 too.
     pub present: f64,
     pub n: f64,
     pub seconds: f64,
@@ -100,7 +82,6 @@ words!(FramesBlock, SUMMARY::frames::WORDS,
     dt => SUMMARY::frames::dt, task => SUMMARY::frames::task, offthread => SUMMARY::frames::offthread,
     gpu => SUMMARY::frames::gpu, sched => SUMMARY::frames::sched, chunks => SUMMARY::frames::chunks,
     phases => SUMMARY::frames::phases, gpu_spans => SUMMARY::frames::gpu_spans,
-    work_scans => SUMMARY::frames::work_scans, work_bakes => SUMMARY::frames::work_bakes,
     per_s_scans => SUMMARY::frames::per_s_scans, per_s_bakes => SUMMARY::frames::per_s_bakes,
     backlog_s => SUMMARY::frames::backlog_s, backlog_per_s_scans => SUMMARY::frames::backlog_per_s_scans,
     backlog_per_s_bakes => SUMMARY::frames::backlog_per_s_bakes, chunks_per_bake => SUMMARY::frames::chunks_per_bake,
@@ -109,7 +90,6 @@ words!(FramesBlock, SUMMARY::frames::WORDS,
     level_tris => SUMMARY::frames::level_tris, last => SUMMARY::frames::last,
 );
 
-/// One category of task over the window.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TaskBlock {
@@ -118,9 +98,8 @@ pub struct TaskBlock {
     pub aborted: f64,
     pub error: f64,
     pub lat: Spread,
-    /// How many of the reason slots are filled, commonest first.
     pub reason_count: f64,
-    /// (reason, status, count) each.
+    /// (reason, status, count) each, commonest first.
     pub reasons: [[f64; 3]; REASONS],
     pub phase_n: f64,
     /// NaN for a phase no run in the window reported.
@@ -133,7 +112,6 @@ words!(TaskBlock, TASK_SUMMARY::WORDS,
     phase_n => TASK_SUMMARY::phase_n, phase_mean => TASK_SUMMARY::phase_mean,
 );
 
-/// Every category's, as the block holds them.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TasksBlock {
@@ -142,7 +120,6 @@ pub struct TasksBlock {
 
 words!(TasksBlock, SUMMARY::tasks::WORDS, slots => SUMMARY::tasks::slots);
 
-/// The counters the log keeps over the window (profiler/log.rs).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CountersBlock {
@@ -150,8 +127,7 @@ pub struct CountersBlock {
     pub faces_possible: f64,
     pub runs_culled: f64,
     pub runs_total: f64,
-    /// Boxes a coarse tier's mesher made — a count, and not the peak a slot
-    /// is sized against (`FramesBlock::last.work.coarse_peak`).
+    /// A count, not the peak a slot is sized against.
     pub coarse_boxes: f64,
     pub coarse_low_fill: f64,
     pub bands_reused: f64,
@@ -166,9 +142,7 @@ pub struct CountersBlock {
 }
 
 impl CountersBlock {
-    /// Each counter less `b`'s: the window's share of what accrued since
-    /// load. Word by word, as the block is laid out, so a counter added to
-    /// the block is subtracted without being named here.
+    /// Word by word, so a counter added to the block is subtracted without being named here.
     pub fn minus(mut self, b: &CountersBlock) -> CountersBlock {
         let n = size_of::<CountersBlock>() / 8;
         // SAFETY: `words!` below holds the block to plain f64s end to end.
@@ -196,7 +170,6 @@ words!(CountersBlock, SUMMARY::counters::WORDS,
     atlas_uploads => SUMMARY::counters::atlas_uploads,
 );
 
-/// The badge sheet.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct AtlasBlock {
@@ -211,7 +184,6 @@ words!(AtlasBlock, SUMMARY::atlas::WORDS,
     shelves => SUMMARY::atlas::shelves, used_px => SUMMARY::atlas::used_px,
 );
 
-/// What the chunks keep, against the budget they keep it under.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct RetainBlock {
@@ -232,7 +204,6 @@ words!(RetainBlock, SUMMARY::retain::WORDS,
     off_bytes => SUMMARY::retain::off_bytes, budget_bytes => SUMMARY::retain::budget_bytes,
 );
 
-/// The fetch scheduler's queue, as it stands.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FetchBlock {
@@ -245,12 +216,6 @@ words!(FetchBlock, SUMMARY::fetch::WORDS,
     queued => SUMMARY::fetch::queued, running => SUMMARY::fetch::running, credits => SUMMARY::fetch::credits,
 );
 
-/// The quality policy, the ground's residency and the frontier's pace, as
-/// they stand: the step of the ladder in force and the feasible one, the
-/// frames held, the pages taken in and given up since load, and the
-/// refinements and changes of cube since load and the most changes to what
-/// is drawn in one step — what a view's turnover is told apart by, a
-/// quality's step from pages let go from a recut.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct QualityBlock {
@@ -270,11 +235,10 @@ words!(QualityBlock, SUMMARY::quality::WORDS,
     refined => SUMMARY::quality::refined, recubed => SUMMARY::quality::recubed, changes_peak => SUMMARY::quality::changes_peak,
 );
 
-/// One step of the tick, as the window saw it.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct StepBlock {
-    /// An index into PHASE_NAMES, and one into STEP_NAMES.
+    /// Indices into PHASE_NAMES and STEP_NAMES.
     pub phase: f64,
     pub name: f64,
     pub ms: f64,
@@ -286,7 +250,6 @@ words!(StepBlock, STEP::WORDS,
     phase => STEP::phase, name => STEP::name, ms => STEP::ms, count => STEP::count, max_ms => STEP::max_ms,
 );
 
-/// The steps that ran, and how many of the slots they filled.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct StepsBlock {

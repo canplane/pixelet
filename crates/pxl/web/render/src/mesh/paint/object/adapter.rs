@@ -1,8 +1,6 @@
 // pxl-render/mesh/paint/object/adapter.rs
 
-//! The paint that turns the object store's records into voxels of a chunk
-//! volume: what each state paints as, the eraser's carve preview, and a
-//! column's entries painted band by band.
+//! Object store records painted into a chunk volume, with the eraser's carve preview.
 
 use std::collections::BTreeSet;
 
@@ -17,9 +15,6 @@ use crate::mesh::volume::{pack_material, pack_sub_cell_fraction, Cell, Volumes, 
 
 const AIR: u32 = cube_types::common::air as u32;
 
-/// A column's entries as the object store lays them out, one lane a field:
-/// each entry's band, its packed position in the band, and its state, and
-/// the column they are filed under.
 #[derive(Clone, Copy)]
 pub struct Entries<'a> {
     pub col_idx: IVec,
@@ -29,7 +24,6 @@ pub struct Entries<'a> {
 }
 
 impl Entries<'_> {
-    /// Where entry `k` is filed.
     pub fn at(&self, k: usize) -> EntryAt {
         EntryAt {
             col_idx: self.col_idx,
@@ -39,8 +33,7 @@ impl Entries<'_> {
     }
 }
 
-/// What a state paints as: nothing (decor renders as instanced geometry,
-/// not a voxel), air, or a solid with a material.
+/// Decor renders as instanced geometry, not a voxel.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
     Untaught = 0,
@@ -49,23 +42,19 @@ enum Kind {
     Decor = 3,
 }
 
-/// What a paint made: whether any voxel was set, and whether one was refused.
 #[derive(Clone, Copy)]
 pub struct Paint {
     pub any: bool,
     pub refused: bool,
 }
 
-/// Where a step of a paint got to.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Painted {
-    /// The entry the next step starts at.
     More(usize),
     Done,
     Refused,
 }
 
-/// A column's entries painted as voxels of a chunk volume.
 pub struct Painter {
     kinds: Vec<Kind>,
     materials: Vec<u32>,
@@ -73,10 +62,9 @@ pub struct Painter {
     claimed: Claims,
 }
 
-/// The voxels a paint has claimed, so a second sub-cell object landing on a
-/// claimed one is filed as overflow rather than overwriting it: by the cell
-/// the volume addresses it by, cleared per paint.
-pub type Claims = BTreeSet<Cell>;
+/// So a second sub-cell object on a claimed voxel is filed as overflow rather
+/// than overwriting it. A set so it can be asked for room before it grows.
+pub type Claims = HashSet<Cell>;
 
 impl Default for Painter {
     fn default() -> Self {
@@ -85,9 +73,6 @@ impl Default for Painter {
 }
 
 impl Painter {
-    /// A painter of every state the catalog can put in a leaf: each
-    /// placeable cube as its material (material.rs), AIR, and the decor
-    /// kinds, which paint nothing.
     pub fn new() -> Painter {
         let mut p = Painter {
             kinds: Vec::new(),
@@ -106,9 +91,8 @@ impl Painter {
         p
     }
 
-    /// What `state` paints as. A state is what a leaf's palette index
-    /// resolves to, so a state past a leaf's width is a bug in the catalog
-    /// and not set, rather than sizing the tables to it.
+    /// A state past a leaf's width is a catalog bug and is not set, rather than
+    /// sizing the tables to it.
     fn set(&mut self, state: u32, kind: Kind, material: u32, layer: u8) {
         if state >= u16::MAX as u32 {
             return;
@@ -124,8 +108,7 @@ impl Painter {
         self.layers[i] = layer;
     }
 
-    /// What `state` paints as: its packed material and layer, or none when
-    /// it paints nothing (untaught, air, decor).
+    /// None for untaught, air and decor.
     pub fn material_of(&self, state: u32) -> Option<(u32, u8)> {
         match self.kind(state) {
             Kind::Solid => Some((self.materials[state as usize], self.layers[state as usize])),
@@ -133,9 +116,6 @@ impl Painter {
         }
     }
 
-    /// Whether `state` is a voxel — a solid or air — rather than an instance
-    /// or nothing: the catalog's to say (pxl-spec cell/object.rs
-    /// `object_value_is_voxel`), which the painter's own kinds agree with.
     pub fn is_voxel(&self, state: u32) -> bool {
         object_value_is_voxel(state)
     }
@@ -144,12 +124,7 @@ impl Painter {
         self.kinds.get(state as usize).copied().unwrap_or(Kind::Untaught)
     }
 
-    /// Paints a column's `entries` into `volume`: every one but the one
-    /// hidden, then the carve preview — the one entry that is not stored,
-    /// where the store would file it.
-    /// Whether any voxel was painted, and whether a paint was refused — after
-    /// which the rest is not painted, as the volume is not the composite that
-    /// was asked for anyway.
+    /// Once a paint is refused the rest is not painted.
     pub fn paint(&mut self, entries: Option<Entries>, volumes: &mut Volumes, volume: u32, hide: Option<EntryAt>, carve: Option<EntryAt>) -> Paint {
         let mut claimed = core::mem::take(&mut self.claimed);
         claimed.clear();
@@ -162,11 +137,7 @@ impl Painter {
         Paint { any, refused }
     }
 
-    /// Paints a column's `entries` from the `from`th, until the voxels set
-    /// pass `voxels`, with the claims of the paint they continue: a paint
-    /// cut into steps, each bounded by `voxels` and one entry past it — an
-    /// entry sets one voxel. The carve preview is not an entry;
-    /// `paint_carve` ends the paint.
+    /// Bounded per step by `voxels`, each entry setting one voxel. `paint_carve` ends the paint.
     #[allow(clippy::too_many_arguments)]
     pub fn paint_entries(&self, entries: Option<Entries>, volumes: &mut Volumes, volume: u32, hide: Option<EntryAt>, from: usize, voxels: usize, claimed: &mut Claims, any: &mut bool) -> Painted {
         let Some(e) = entries else { return Painted::Done };
@@ -187,7 +158,6 @@ impl Painter {
         Painted::Done
     }
 
-    /// The carve preview painted as air, last. False when a paint was refused.
     pub fn paint_carve(&self, volumes: &mut Volumes, volume: u32, carve: Option<EntryAt>, claimed: &mut Claims, any: &mut bool) -> bool {
         match carve {
             Some(c) => self.paint_entry(volumes, volume, c.band_idx, c.pos, AIR, claimed, any).is_some(),
@@ -195,10 +165,7 @@ impl Painter {
         }
     }
 
-    /// One entry: the voxel it set, or none when a paint was refused. An
-    /// entry is at most a cell (the store splits a larger leaf), so it is one
-    /// voxel, and what is finer than a cell rides in the voxel's sub-cell
-    /// fraction.
+    /// An entry is at most a cell (the store splits larger ones), so it is one voxel.
     #[allow(clippy::too_many_arguments)]
     fn paint_entry(&self, volumes: &mut Volumes, volume: u32, band: BandZ, pos: u32, state: u32, claimed: &mut Claims, any: &mut bool) -> Option<usize> {
         let kind = self.kind(state);

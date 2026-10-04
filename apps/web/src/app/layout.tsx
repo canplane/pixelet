@@ -10,12 +10,10 @@ import { useUiController } from "./hook/use-ui-controller.ts";
 import { ModalManager } from "./provider/modal-manager.tsx";
 import { KeyboardAway } from "@/shared/ui/keyboard.tsx";
 
-/** AppLayout props */
 interface AppLayoutProps {
   children: ReactNode;
 }
 
-/** Root layout component */
 export function AppLayout(props: AppLayoutProps) {
   const { children } = props;
 
@@ -28,7 +26,6 @@ export function AppLayout(props: AppLayoutProps) {
       <KeyboardAway>
         <View style={styles.page}>{booted && children}</View>
 
-        {/* Global modal host */}
         <ModalManager mergeUiController={mergeUiController} />
       </KeyboardAway>
     </AppContext.Provider>

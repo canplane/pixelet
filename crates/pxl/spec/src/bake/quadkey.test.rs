@@ -3,12 +3,8 @@
 use super::*;
 use crate::space::pyramid::{zoom_of_level, TOP_LEVEL};
 
-/// The page `script/smoke.ts` names and `space/xy.rs` measured in Bundang: its
-/// lanes are (11569, 3671), which is 127.10°E 37.35°N, and the zoom-15 tile
-/// there is (27953, 12712). Written out rather than derived, because a
-/// derivation here would only repeat the arithmetic under test — and the
-/// northward flip is the one thing in this file that can be wrong without
-/// anything else noticing.
+/// A Bundang page, (11569, 3671), whose zoom-15 tile is (27953, 12712); written
+/// out because the northward flip is what can be silently wrong.
 const BUNDANG: IVec = 12720250262323200;
 const BUNDANG_QUADKEY: &str = "132110320312001";
 
@@ -19,8 +15,7 @@ fn the_known_page_is_the_tile_it_stands_on() {
     assert_eq!(tile_of(BUNDANG, PAGE_ZOOM), (27953, 12712));
 }
 
-/// The property the name has this shape for: one prefix is one region at every
-/// level it is held at.
+/// One prefix is one region at every level.
 #[test]
 fn a_coarser_page_is_named_by_a_prefix_of_the_leaf_over_it() {
     let leaf = quadkey_of(PAGE_ZOOM, BUNDANG).to_string();
@@ -47,8 +42,7 @@ fn every_page_survives_the_round_trip_at_every_zoom() {
     }
 }
 
-/// The X lane's two ends meet, so an index past the seam names the tile it
-/// actually stands on rather than none at all.
+/// An index past the seam names the tile it stands on.
 #[test]
 fn the_seam_wraps_rather_than_falling_outside() {
     let n = 1i64 << PAGE_ZOOM;
@@ -66,8 +60,7 @@ fn what_is_not_a_name_is_refused() {
     assert!(index_of(&"0".repeat(PAGE_ZOOM as usize)).is_some(), "a leaf is");
 }
 
-/// A pyramid page's name reads back as the page at every level the pyramid
-/// holds, and a name no level holds is no page.
+/// A name round-trips at every pyramid level, and a name no level holds is no page.
 #[test]
 fn a_page_s_name_reads_back_as_the_page_and_only_a_held_level_is_one() {
     for level in 0..=TOP_LEVEL {

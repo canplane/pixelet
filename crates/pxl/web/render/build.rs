@@ -1,17 +1,6 @@
 // pxl-render/build.rs
 
-// The WGSL the module ships is the shader files with their prose taken off.
-//
-// WebGPU compiles a shader from its source text — there is no bytecode form
-// of a shader the way SPIR-V is one — so the text is in the published module
-// either way (frame/shader/record.rs hands it to the host). What the GPU does
-// not need is the commentary around it, which is written for whoever edits
-// the shader and reads out of a published module as a description of how the
-// renderer works.
-//
-// Only comments and indentation go. Nothing is renamed: an entry point and a
-// binding are named by the pipeline records beside the shaders, and the test
-// that holds a record against its shader reads whatever is written here.
+// The shipped WGSL is the shader files with comments and indentation stripped; nothing is renamed.
 
 use std::path::Path;
 
@@ -31,13 +20,8 @@ fn main() {
     println!("cargo:rerun-if-changed=src/frame/shader");
 }
 
-/// `text` with its line comments and its indentation off.
-///
-/// WGSL has no string literal for a `//` to hide inside, so one starts a
-/// comment wherever it appears. A line is kept only if anything is left of
-/// it, and it is kept as its own line: nothing is joined, so no two tokens
-/// can run together. A block comment is left alone — these files carry none,
-/// and one that arrives later stays valid WGSL rather than being cut wrong.
+/// WGSL has no string literals, so `//` always starts a comment. Lines are never
+/// joined, so tokens cannot run together; block comments are left alone.
 fn stripped(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for line in text.lines() {

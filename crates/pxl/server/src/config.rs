@@ -11,22 +11,13 @@ pub struct Config {
     pub db_pool_size: usize,
 }
 
-/// What a server calls its own, where the two differ.
-///
-/// Each reads its own root's names — `GEO_*` for pxl-geo, `API_*` for pxl-api
-/// — so that running both locally cannot collide on one port by default. In a
-/// deployment each has a container to itself and both listen on 3000.
+/// A server's own variable names; distinct prefixes keep two local servers off one port.
 pub struct Env<'a> {
-    /// `GEO` or `API`, prefixed onto `_HOST` and `_PORT`.
     pub prefix: &'a str,
     pub default_port: u16,
-    /// The whole variable, not a prefix: `DB_GEO_URL` and `DB_MAIN_URL` do not
-    /// follow the same shape as the two above.
     pub db_url_key: &'a str,
 }
 
-/// `env:KEY:what was wrong`, so a startup failure names the variable rather
-/// than only the shape of the value.
 fn err(key: &str, what: &str) -> String {
     format!("env:{key}:{what}")
 }
@@ -70,9 +61,7 @@ impl Config {
             host: get(&format!("{}_HOST", env.prefix))?.filter(|v| !v.is_empty()).unwrap_or_else(|| "0.0.0.0".to_string()),
             port: must_int(&format!("{}_PORT", env.prefix), env.default_port as u64, 1, 65535)? as u16,
             max_body_sz: (max_body_sz_mb as usize) << 20,
-            // Gates each server's own `internal/*`, and is required even where
-            // nothing is mounted there — see either main.rs on why the gate
-            // covers the prefix rather than a list of routes.
+            // Required even with nothing mounted under `internal/`.
             admin_token: must("ADMIN_TOKEN")?,
             db_url: must(env.db_url_key)?,
             db_pool_size: must_int("DB_POOL_SIZE", 8, 1, 1024)? as usize,

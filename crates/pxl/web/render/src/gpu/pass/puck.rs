@@ -1,9 +1,6 @@
 // pxl-render/gpu/pass/puck.rs
 
-//! The location puck on the device: the scheduler's zone and beacon draws
-//! (crates/pxl/web/kernel/src/layer/marker/location_puck.rs) — the zone a unit box a cell instanced from the zone
-//! block, the beacon a small octahedron — under shader/puck_zone.wgsl and
-//! puck_beacon.wgsl. The geometry is built here, once.
+//! The location puck: an instanced zone of unit boxes and an octahedron beacon.
 
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, UNIFORM_FLOATS};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, Gpu};
@@ -15,8 +12,6 @@ use crate::look::style::marker_colors;
 
 const BEACON_RADIUS: f32 = 0.3;
 
-/// A unit box centered on the origin, a face at a time with its own 0..1 UVs:
-/// positions, UVs and indices.
 fn box_lanes() -> ([f32; 72], [f32; 48], [u32; 36]) {
     let faces: [[[f32; 3]; 3]; 6] = [
         [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
@@ -43,8 +38,6 @@ fn box_lanes() -> ([f32; 72], [f32; 48], [u32; 36]) {
     (position, uv, index)
 }
 
-/// An octahedron of BEACON_RADIUS, a face at a time with its flat normal:
-/// positions and normals.
 fn octahedron_lanes() -> ([f32; 72], [f32; 72]) {
     let r = BEACON_RADIUS;
     let (mut position, mut normal) = ([0.0; 72], [0.0; 72]);
@@ -82,7 +75,7 @@ pub struct PuckPass {
     box_index: u32,
     oct_position: u32,
     oct_normal: u32,
-    /// The zone's color, the UI's action color, in linear light.
+    /// The UI's action color, in linear light.
     color: [f32; 3],
 }
 
@@ -133,9 +126,8 @@ impl PuckPass {
         g.write_buffer(buffer, 0, bytes(&[uniforms[at], uniforms[at + 1], uniforms[at + 2], uniforms[at + 3], c[0], c[1], c[2], night]));
     }
 
-    /// The beacon, opaque; before anything blended.
-    pub fn draw_beacon(&self, g: &Gpu, pass: u32, draws: &[u32], uniforms: &[f32]) {
-        for d in draws.as_chunks::<DRAW_WORDS>().0.iter().filter(|d| d[4] == PIPELINE_PUCK_BEACON) {
+    pub fn draw_beacon(&self, g: &Gpu, pass: u32, draws: &Draws, uniforms: &[f32]) {
+        for d in draws.of(PIPELINE_PUCK_BEACON) {
             self.write_uniform(g, self.beacon_uniform, uniforms, d[3] as usize * UNIFORM_FLOATS, d[1] as f32);
             g.set_pipeline(pass, self.beacon.pipeline);
             g.set_bind_group(pass, 0, self.frame_group, &[]);
@@ -146,9 +138,8 @@ impl PuckPass {
         }
     }
 
-    /// The zone, blended; with the rest of what is blended.
-    pub fn draw_zone(&self, g: &Gpu, pass: u32, draws: &[u32], uniforms: &[f32], blocks: &mut Blocks) {
-        for d in draws.as_chunks::<DRAW_WORDS>().0.iter().filter(|d| d[4] == PIPELINE_PUCK_ZONE && d[1] > 0) {
+    pub fn draw_zone(&self, g: &Gpu, pass: u32, draws: &Draws, uniforms: &[f32], blocks: &mut Blocks) {
+        for d in draws.of(PIPELINE_PUCK_ZONE).filter(|d| d[1] > 0) {
             let Some(group) = blocks.group(g, d[0], self.zone.layouts[2]) else { continue };
             self.write_uniform(g, self.zone_uniform, uniforms, d[3] as usize * UNIFORM_FLOATS, 0.0);
             g.set_pipeline(pass, self.zone.pipeline);

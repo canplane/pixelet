@@ -1,27 +1,10 @@
 // pxl-tool/bin/render_brand.rs
 
-//! The app's icons and link-preview image, from the sources in
-//! `apps/web/brand` into `apps/web/public`, which the deploy ships as static
-//! assets, and the logo the shell draws into its own source.
-//!
-//! - `symbol.png` — the cube on a transparent field, for every place that
-//!   draws the icon's own shape: the favicon and the manifest's `any` icons.
-//! - `icon.png` — the cube's face, edge to edge and opaque, for every place
-//!   that cuts the icon to a frame of its own: iOS's rounded square and
-//!   Android's maskable shapes. It has no subject to keep inside a safe zone,
-//!   so a platform's crop loses nothing and it is drawn with no inset; and it
-//!   has no alpha, which both platforms would otherwise paint black.
-//! - `og-image.png` — the link preview, 1200×630. Kept as PNG: it was delivered as a
-//!   10-bit AVIF under a `.png` name, which not every decoder reads.
-//! - `symbol-mono.svg` — the symbol as one shape, its square the cube's
-//!   height, for where the shell draws the brand beside text. Its outline and
-//!   its square are written into `apps/web/src/shared/ui/symbol-path.ts`,
-//!   which `shared/ui/brand-symbol.tsx` fills in the colour it is given: a module both of
-//!   the shell's bundlers read as it is, where the SVG itself would need a
-//!   plugin in each, and one that turns it into a different thing in each.
-//!
-//! Re-runnable; the outputs are committed, so a changed source is followed by
-//! running this and committing what it wrote.
+//! The app's icons and link preview from `apps/web/brand` into
+//! `apps/web/public`, and the symbol's outline into
+//! `apps/web/src/shared/ui/symbol-path.ts`. `icon.png` is opaque because both
+//! platforms paint alpha black; `og-image.png` stays PNG because the source
+//! was a 10-bit AVIF not every decoder reads.
 //!
 //!   deno task render:brand
 
@@ -56,26 +39,18 @@ fn png_bytes(img: &RgbaImage) -> Result<Vec<u8>, String> {
     Ok(out.into_inner())
 }
 
-/// Without the alpha channel an opaque icon carries for nothing: the maskable
-/// icon is a fifth smaller written as RGB.
 fn opaque_png_bytes(img: &RgbaImage) -> Result<Vec<u8>, String> {
     let mut out = Cursor::new(Vec::new());
     DynamicImage::ImageRgba8(img.clone()).to_rgb8().write_to(&mut out, ImageFormat::Png).map_err(|e| e.to_string())?;
     Ok(out.into_inner())
 }
 
-/// Lanczos3, because the sources are painted well above the sizes they are
-/// drawn at and a box filter would alias the detail they were chosen for.
 fn resize(img: &RgbaImage, w: u32, h: u32) -> RgbaImage {
     image::imageops::resize(img, w, h, FilterType::Lanczos3)
 }
 
-/// The bounding box of everything that differs from the corner pixel by more
-/// than `threshold`, per channel.
-///
-/// The symbol's margin is not the same on every side, and it carries a soft
-/// glow in its alpha. Keeping the margin makes a size mean the image rather
-/// than the cube, and a 16-pixel favicon then drew a 12-pixel cube.
+/// The bounding box of what differs from the corner pixel by more than
+/// `threshold`; untrimmed, a 16-pixel favicon drew a 12-pixel cube.
 fn trim(img: &RgbaImage, threshold: u8) -> RgbaImage {
     let bg = *img.get_pixel(0, 0);
     let differs = |p: &Rgba<u8>| p.0.iter().zip(bg.0.iter()).any(|(a, b)| a.abs_diff(*b) > threshold);
@@ -95,19 +70,19 @@ fn trim(img: &RgbaImage, threshold: u8) -> RgbaImage {
     image::imageops::crop_imm(img, x0, y0, x1 - x0 + 1, y1 - y0 + 1).to_image()
 }
 
-/// The trimmed symbol fitted inside `size` less its inset, centred on a clear
-/// square. One rounding, not two: fitting to the inset and centring on the
-/// full square in one step, where two centrings land a pixel off.
+/// One rounding: centring twice lands a pixel off.
 fn symbol_icon(symbol: &RgbaImage, size: u32, pad: f64) -> RgbaImage {
     let inner = size as f64 * (1.0 - pad);
     let scale = (inner / symbol.width() as f64).min(inner / symbol.height() as f64);
-    let (w, h) = (((symbol.width() as f64 * scale).round() as u32).max(1), ((symbol.height() as f64 * scale).round() as u32).max(1));
+    let (w, h) = (
+        ((symbol.width() as f64 * scale).round_ties_even() as u32).max(1),
+        ((symbol.height() as f64 * scale).round_ties_even() as u32).max(1),
+    );
     let mut out = RgbaImage::from_pixel(size, size, CLEAR);
     image::imageops::overlay(&mut out, &resize(symbol, w, h), ((size - w) / 2) as i64, ((size - h) / 2) as i64);
     out
 }
 
-/// The value of `name="…"`, the first in `svg`.
 fn attribute<'a>(svg: &'a str, name: &str) -> Result<&'a str, String> {
     let key = format!(" {name}=\"");
     let at = svg.find(&key).ok_or(format!("symbol-mono.svg: no {name}"))? + key.len();
@@ -115,9 +90,7 @@ fn attribute<'a>(svg: &'a str, name: &str) -> Result<&'a str, String> {
     Ok(&svg[at..at + len])
 }
 
-/// The symbol's square and outline as the shell's module, formatted as
-/// `deno fmt` leaves it. One path filled even-odd is all `BrandSymbol` draws, so a
-/// source that is more than that is refused rather than drawn wrong.
+/// One even-odd path is all `BrandSymbol` draws; a source that is more is refused.
 fn symbol_module() -> Result<String, String> {
     let svg = std::fs::read_to_string(brand().join("symbol-mono.svg")).map_err(|e| format!("symbol-mono.svg: {e}"))?;
     if svg.matches("<path").count() != 1 || attribute(&svg, "fill-rule")? != "evenodd" {
@@ -151,8 +124,6 @@ fn run() -> Result<(), String> {
     write(&out.join("favicon/web-app-manifest-192x192.png"), &png_bytes(&symbol_icon(&symbol, 192, 0.06))?)?;
     write(&out.join("favicon/web-app-manifest-512x512.png"), &png_bytes(&symbol_icon(&symbol, 512, 0.06))?)?;
 
-    // One PNG entry per size, which every browser since Vista reads. No inset:
-    // at 16 pixels every one of them is the cube's.
     let frames = [16, 32, 48]
         .iter()
         .map(|&s| IcoFrame::as_png(symbol_icon(&symbol, s, 0.0).as_raw(), s, s, ExtendedColorType::Rgba8).map_err(|e| e.to_string()))

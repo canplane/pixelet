@@ -11,16 +11,8 @@ import { PUBLISHED_VERSION } from "@/config/route.ts";
 import { storage, STORAGE_KEYS } from "@/kernel/abi/host.spec.ts";
 import { LABEL } from "@platform/palette.ts";
 
-/** The environments worth abbreviating; anything else is shown as it is set. */
 const ENV_SHORT: Record<string, string> = { development: "dev", staging: "stg" };
 
-/** What the map is made of, in the order it is built: the ground and what
- * stands on it, then what the places on it are called. Each reads as
- * `<what>/<version>` — for a bake that is the prefix it is served from, a
- * path anyone can put in a URL, and the object store's version is written
- * the same way so the line has one form rather than two. Where the tiles are
- * a live API instead, that is a property of the deployment rather than of
- * any one kind, so it is said once. */
 function dataLabel(): string {
   const object = STORAGE_KEYS[storage.OBJECTS].split(":").slice(1).join("/");
   if (!PUBLISHED_TILES) return `live tiles · ${object}`;
@@ -28,10 +20,7 @@ function dataLabel(): string {
   return `terrain/${terrain} · ${object} · poi/${poi} · geocode/${geocode}`;
 }
 
-/** The build time in ISO 8601's basic format, UTC: one build reads as one
- * string wherever it is read, which a stamp meant to be quoted back has to.
- * It was the viewer's own timezone before, and a stamp with no zone in it
- * said different things on two phones. */
+/** UTC: a stamp in the viewer's zone said different things on two phones. */
 function buildLabel(): string {
   const d = new Date(BUILD_TIME);
   if (Number.isNaN(d.getTime())) return BUILD_TIME;

@@ -1,5 +1,4 @@
 // xpute-core/alloc/slab.test.rs
-// (no pair: TypeScript has no allocator)
 
 use super::*;
 use crate::alloc::buddy_tree::Range;
@@ -11,8 +10,7 @@ const MAX: usize = 20;
 const SPLIT_BYTES: usize = (1 << (MAX - MIN)) / 8;
 const PAGE: usize = 1 << MIN;
 
-/// A range over memory the test owns; see buddy_tree.test.rs for why it is
-/// made once and never given back.
+/// Made once and never freed: `Range` has no receiver.
 fn arena(cell: &'static OnceLock<usize>) -> usize {
     *cell.get_or_init(|| {
         let layout = Layout::from_size_align(1 << MAX, 1 << MAX).unwrap();
@@ -51,11 +49,6 @@ fn small() -> Layout {
     Layout::from_size_align(24, 8).unwrap()
 }
 
-/// The same thing buddy_tree.test.rs asks of the level below, asked of this
-/// one: many small slots, each written through with a byte of its own, all
-/// still holding it after the rest have come and gone. A slot that overlaps
-/// another, or a run's own bookkeeping written into a caller's bytes, shows up
-/// here and nowhere else.
 #[test]
 fn what_was_written_in_a_slot_is_still_there_after_its_neighbors_come_and_go() {
     let heap: SlabMalloc<Slots> = SlabMalloc::new();
@@ -98,10 +91,6 @@ fn what_was_written_in_a_slot_is_still_there_after_its_neighbors_come_and_go() {
     }
 }
 
-/// What makes the pair one allocator rather than two beside each other: a run
-/// is borrowed from the level below for a class that has no free slot, and it
-/// goes back when its last slot does — so what one class gives back is a page
-/// every other class can have.
 #[test]
 fn a_run_goes_back_to_the_pages_when_its_last_slot_does() {
     let heap: SlabMalloc<Returned> = SlabMalloc::new();
@@ -117,8 +106,7 @@ fn a_run_goes_back_to_the_pages_when_its_last_slot_does() {
         assert!(!p.is_null(), "the range ran out before one run was full");
         live.push(p);
     }
-    // The one that made a second run is put back first, so what is left is
-    // exactly the first run's slots.
+    // Free the second run's slot first, leaving exactly the first run's.
     let spilled = live.pop().unwrap();
     unsafe { heap.dealloc(spilled, small()) };
     assert_eq!(heap.pages().live(), one_run, "the second run did not go back");
@@ -129,7 +117,6 @@ fn a_run_goes_back_to_the_pages_when_its_last_slot_does() {
     assert_eq!(heap.pages().live(), 0, "the last slot of a run did not give the run back");
 }
 
-/// A page or more is not carved at all — it is the level below's answer, whole.
 #[test]
 fn a_request_of_a_page_or_more_is_the_page_allocator_s_own() {
     let heap: SlabMalloc<Whole> = SlabMalloc::new();
@@ -147,11 +134,6 @@ fn a_request_of_a_page_or_more_is_the_page_allocator_s_own() {
     }
 }
 
-/// What the two holdings say about each other, whatever the traffic: a slot
-/// is inside a run, a run is borrowed from the pages, and both come back to
-/// nothing. The numbers are the only reading of how much of the heap anything
-/// actually holds — the page level counts a carved run whole — so what is
-/// checked is the relation and not a value.
 #[test]
 fn what_is_out_in_slots_is_inside_the_runs_it_is_carved_from() {
     let heap: SlabMalloc<Held> = SlabMalloc::new();
@@ -172,8 +154,7 @@ fn what_is_out_in_slots_is_inside_the_runs_it_is_carved_from() {
             assert!(!p.is_null(), "the range ran out at {size} on round {round}");
             live.push((p, layout));
             check(&heap);
-            // Every other one back at once, so runs are partly full rather
-            // than filled and emptied in step.
+            // Every other one, so runs are left partly full.
             if k % 2 == 1 {
                 let (q, l) = live.remove(0);
                 unsafe { heap.dealloc(q, l) };
@@ -191,8 +172,6 @@ fn what_is_out_in_slots_is_inside_the_runs_it_is_carved_from() {
     assert_eq!(heap.pages().live(), 0, "the pages were left holding something");
 }
 
-/// A request of a page or more is never carved, so it moves what the pages
-/// have handed out and neither of the slab's own holdings.
 #[test]
 fn a_whole_page_request_is_no_run_and_no_slot() {
     let heap: SlabMalloc<Whole> = SlabMalloc::new();

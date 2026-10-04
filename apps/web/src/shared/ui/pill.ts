@@ -1,13 +1,9 @@
 // @pxl/web/shared/ui/pill.ts
 
 /**
- * A pill that moves and changes width as a control does — a circle opening
- * into a pill and back — drawn by each platform its own way
- * (platform/web/pill.tsx and the device app's platform/pill.tsx): a device lays the one pill out anew and the system
- * animates its frame, so the platform's glass is redrawn whole at every
- * width; a page moves it by transforms alone, since a width tween over the
- * canvas ghosts on iOS's WebKit. Its caller says where it stands and how wide
- * it shows, and never how it gets there.
+ * A pill whose place and width move, drawn per platform: a device relays it
+ * out and the system animates, a page uses transforms, since a width tween
+ * ghosts over the canvas on iOS WebKit.
  */
 
 import type { ReactNode } from "react";
@@ -18,42 +14,26 @@ import type { Transition } from "@/shared/ui/motion/transition.ts";
 import type { BackingPlace } from "@/shared/ui/backing-place.ts";
 import { chrome } from "@/shared/ui/theme.ts";
 
-/** How far past its edge a touch lands on a pill `height` tall: out to the
- * least target. Laid out as a box that large around it, not a `hitSlop`,
- * which a page's views do not honor (react-native-web keeps it to the old
- * Touchable). */
+/** A box around it, not `hitSlop`, which react-native-web does not honor. */
 export function touchReach(height: f64): f64 {
   return Math.max(0, (chrome.target - height) / 2);
 }
 
 export interface PillProps {
-  /** Where its left end stands, in its container. */
   x: f64;
-  /** The width it shows from its left end; at its height, a circle. */
   width: f64;
   height: f64;
-  /** The widest it is ever asked to show. */
   span: f64;
   fill: ColorValue;
-  /** The tint of a backing the system draws (@platform backing). */
   tint?: ColorValue;
-  /** Where it stands (shared/ui/backing-place.ts). */
   place: BackingPlace;
-  /** Whether a backing the system draws answers a touch: a pill that is one
-   * button, not one that holds several, whose own buttons answer. */
   interactive?: boolean;
   border?: { width: f64; color: ColorValue };
   shadow?: string;
-  /** How present it is, from 1 to 0 (gone), what it mounts at, and how a
-   * change is moved through (shared/ui/motion/veil.ts). */
   fade?: f64;
   fadeFrom?: f64;
   fadeTransition?: Transition;
-  /** What a finger on it does. */
   touch?: GestureResponderHandlers;
-  /** Laid out from its left end at its own width, and shown as far as the
-   * pill reaches. */
   children?: ReactNode;
-  /** The content's own width, whenever it is laid out. */
   onContentWidth?: (width: f64) => void;
 }

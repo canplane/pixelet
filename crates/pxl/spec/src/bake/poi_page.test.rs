@@ -3,46 +3,55 @@
 use super::*;
 use crate::space::pvf3::ivec;
 
-/// The z16 page every place below stands in.
 fn leaf() -> LevelPage {
     LevelPage::new(0, ivec::gather(3, -2, 0))
 }
 
-/// A point in `leaf()`: the corner of its POI cell (tx, ty), then `dx`, `dy`
-/// z16 ground cells in.
+/// The corner of POI cell (tx, ty), then `dx`, `dy` z16 cells in.
 fn point(tx: u32, ty: u32, dx: u32, dy: u32) -> Pvf3 {
     let base = POI_LATTICE.cell_base(leaf(), tx, ty);
     POI_LATTICE.cell_of(0, &base).inner_at(GROUND, 0, [dx, dy]).mid()
 }
 
-/// A place of no kind, called `name`.
-fn called(name: &str) -> Place<'_> {
-    Place { name, kind: 0 }
+fn called(name: &str, id: u64) -> Place<'_> {
+    Place { name, kind: 0, id }
 }
 
-/// A page survives the wire whole, its places and positions with it.
+/// Each cell's count and its places as (name, where it stands).
+fn cells(page: &PoiPage) -> Vec<(u32, Vec<(&str, [u32; 2])>)> {
+    page.cells.iter().map(|c| (c.count, page.shown(c).map(|(_, p, at)| (p.name, at)).collect())).collect()
+}
+
 #[test]
 fn a_page_and_its_places_come_back_as_they_went() {
     let station = Place {
         name: "Seoul Station",
         kind: kind_of("subway"),
+        id: "7",
+        ..Place::default()
     };
     let page = PoiPage::of_places(
         0,
         [
-            (point(7, 0, 1, 2), station),
-            (point(9, 0, 0, 0), called("서울역")),
-            (point(9, 0, 3, 3), called("남대문")),
-            (point(12, 0, 2, 0), called("")),
-            (point(20, 1, 0, 3), station),
-            (point(22, 1, 0, 0), called("Seoul Station")),
+            (point(1, 0, 1, 2), station),
+            (point(2, 0, 0, 0), called("서울역", "3")),
+            (point(2, 0, 3, 3), called("남대문", "9")),
+            (point(3, 0, 2, 0), called("", "4")),
+            (point(5, 1, 0, 3), station),
+            (
+                point(6, 1, 0, 0),
+                Place {
+                    name: "Seoul Station",
+                    kind: 0,
+                    id: "8",
+                    ..Place::default()
+                },
+            ),
         ],
     );
     assert_eq!(decode(&encode(&page).unwrap()).unwrap(), page);
-    // A place standing in two cells is held once, the same name of another
-    // kind is another place, and a cell of two places holds none and stands
-    // between them.
-    assert_eq!(page.places.len(), 2);
+    // Held once across cells; least id per kind; nameless counted not held; names cut.
+    assert_eq!(page.places.len(), 3);
     assert_eq!(
         page.cells.iter().map(|c| page.place(c)).collect::<Vec<_>>(),
         [Some(station), None, None, Some(station), Some(called("Seoul Station"))]
@@ -50,10 +59,7 @@ fn a_page_and_its_places_come_back_as_they_went() {
     assert_eq!(page.cells.iter().map(|c| c.at).collect::<Vec<_>>(), [[1, 2], [2, 2], [2, 0], [0, 3], [0, 0]]);
 }
 
-/// A place and a position are a cell's only while it holds one, at every
-/// level: a parent with one place under it has that place, its kind with it,
-/// and stands it on the same z16 ground cell its leaf did, and a parent with
-/// two has a count and nothing else.
+/// A lone place stays its cell's at every level, on the same z16 cell.
 #[test]
 fn a_lone_place_folds_up_with_its_kind_and_its_ground_cell() {
     let at = point(21, 17, 3, 1);
@@ -62,8 +68,10 @@ fn a_lone_place_folds_up_with_its_kind_and_its_ground_cell() {
     let tower = Place {
         name: "Namsan Tower",
         kind: kind_of("attraction"),
+        id: "11",
+        ..Place::default()
     };
-    let mut below = (leaf(), PoiPage::of_places(0, [(at, tower)]));
+    let mut below = (leaf(), PoiPage::of_places(0, [(at, tower)], true));
     for level in 1..=TOP_LEVEL {
         let p = LevelPage::over(level, below.0.page);
         let up = PoiPage::fold_page(p, |k| Some(if k == below.0 { &below.1 } else { &empty })).unwrap();
@@ -80,9 +88,7 @@ fn a_lone_place_folds_up_with_its_kind_and_its_ground_cell() {
     assert_eq!(pair_up.place(&pair_up.cells[0]), None);
 }
 
-/// A page settles a child where no cell over it holds a crowd: a lone place
-/// and an empty stretch are said whole a level up, and only a crowd comes
-/// apart under it.
+/// Only a crowd comes apart a level down.
 #[test]
 fn a_page_settles_every_child_but_one_under_a_crowd() {
     let p = LevelPage::over(1, leaf().page);
@@ -99,48 +105,120 @@ fn a_page_settles_every_child_but_one_under_a_crowd() {
     assert!(page.settles(p, empty));
 }
 
-/// A crowd stands at its places' centroid, and a parent's is its children's
-/// weighted by their counts: folded from the leaves, it is where the places
-/// under it stand on average, as a page made at that level from the places
-/// themselves has it.
+/// Folded from the leaves, a crowd matches a page built at that level.
 #[test]
-fn a_centroid_folds_as_the_places_under_it_average() {
-    let places = [(point(0, 0, 0, 0), called("A")), (point(0, 0, 2, 0), called("B")), (point(1, 0, 0, 0), called("C"))];
-    let leaf_page = PoiPage::of_places(0, places);
-    assert_eq!(leaf_page.cells.iter().map(|c| (c.count, c.at)).collect::<Vec<_>>(), [(2, [1, 0]), (1, [0, 0])]);
+fn a_crowd_holds_one_place_of_each_kind() {
+    let station = Place {
+        name: "Gangnam",
+        kind: kind_of("subway"),
+        id: "50",
+        ..Place::default()
+    };
+    let cafe = Place {
+        name: "Cafe",
+        kind: kind_of("cafe"),
+        id: "20",
+        ..Place::default()
+    };
+    let places = [(point(0, 0, 0, 0), cafe), (point(0, 0, 2, 0), Place { id: "10", ..cafe }), (point(1, 0, 5, 0), station)];
+    let leaf_page = PoiPage::of_places(0, places, true);
+    assert_eq!(cells(&leaf_page), [(2, vec![("Cafe", [2, 0])]), (1, vec![("Gangnam", [5, 0])])]);
     let p = LevelPage::over(1, leaf().page);
     let empty = PoiPage::default();
     let folded = PoiPage::fold_page(p, |k| Some(if k == leaf() { &leaf_page } else { &empty })).unwrap();
-    assert_eq!(folded, PoiPage::of_places(1, places));
-    // Two thirds of the way from C's column to A and B's: (0 + 2 + 16) / 3.
-    assert_eq!((folded.cells[0].count, folded.cells[0].at), (3, [6, 0]));
+    assert_eq!(folded, PoiPage::of_places(1, places, true));
+    let mut held: Vec<_> = folded.shown(&folded.cells[0]).map(|(_, p, at)| (p.kind, p.id, at)).collect();
+    held.sort_unstable();
+    assert_eq!(folded.cells[0].count, 3);
+    assert_eq!(held, {
+        let mut want = vec![(kind_of("cafe"), 10, [2, 0]), (kind_of("subway"), 50, [69, 0])];
+        want.sort_unstable();
+        want
+    });
 }
 
-/// What the wire cannot hold is refused: a place in a cell of two, a name
-/// split across a character or past `NAME_CHARS`, a kind past the theme.
+/// What the wire cannot hold is refused.
 #[test]
-fn a_page_that_names_a_crowd_or_splits_a_character_is_refused() {
-    let crowd = PoiPage::of_places(0, [(point(3, 0, 0, 0), called("A")), (point(3, 0, 1, 1), called("B")), (point(5, 0, 0, 0), called("C"))]);
-    let mut named = crowd;
-    named.cells[0].place = 0;
-    assert!(encode(&named).is_err());
-    let good = encode(&PoiPage::of_places(0, [(point(1, 0, 0, 0), called("역")), (point(2, 0, 0, 0), called("a"))])).unwrap();
-    let mut split = good.clone();
-    // The first name's end moved into the middle of its one character.
-    let at = 16 + 2 * CELL_BYTES;
-    split[at..at + 4].copy_from_slice(&1u32.to_le_bytes());
-    assert!(decode(&split).is_err());
-    let mut unknown = good;
-    // The first place's kind, past the theme's last.
-    unknown[at + 2 * 4] = KIND_CATEGORIES.len() as u8 + 1;
-    assert!(decode(&unknown).is_err());
-    let mut bytes = encode(&PoiPage::of_places(0, [(point(1, 0, 0, 0), called("a"))])).unwrap();
-    // One code point past the bound, written in over the pool's one name.
-    let name = "a".repeat(NAME_CHARS + 1);
-    bytes.truncate(bytes.len() - 1);
-    bytes.extend_from_slice(name.as_bytes());
-    bytes[12..16].copy_from_slice(&(name.len() as u32).to_le_bytes());
-    let ends = 16 + CELL_BYTES;
-    bytes[ends..ends + 4].copy_from_slice(&(name.len() as u32).to_le_bytes());
-    assert!(decode(&bytes).is_err());
+fn a_page_that_names_no_place_or_splits_a_character_is_refused() {
+    let page = PoiPage::of_places(
+        0,
+        [
+            (
+                point(3, 0, 0, 0),
+                Place {
+                    name: "A",
+                    kind: kind_of("cafe"),
+                    id: "1",
+                    ..Place::default()
+                },
+            ),
+            (
+                point(3, 0, 1, 1),
+                Place {
+                    name: "B",
+                    kind: kind_of("subway"),
+                    id: "2",
+                    ..Place::default()
+                },
+            ),
+        ],
+        true,
+    );
+    let mut past = page.clone();
+    past.shown[0].place = 9;
+    assert!(encode(&past).is_err());
+    let mut swapped = page.clone();
+    swapped.shown.swap(0, 1);
+    assert!(encode(&swapped).is_err());
+    // A name past the bound, and a place run past its cell, are refused on read.
+    let long = "a".repeat(NAME_CHARS + 1);
+    assert!(decode(&lanes(&[1], &[1], &[0, 1], &[0], &[""], &[&long])).is_err());
+    assert!(decode(&lanes(&[1], &[1], &[0, 2], &[0], &[""], &["a"])).is_err());
+}
+
+/// A page as the wire lays it, written lane by lane past `encode`'s checks.
+fn lanes(cells: &[u32], counts: &[u32], starts: &[u32], shown: &[u32], kinds: &[&str], names: &[&str]) -> Vec<u8> {
+    let (partial, at) = (vec![0u8; cells.len()], vec![0u16; 2 * shown.len()]);
+    let ids: Vec<&str> = names.iter().map(|_| "x").collect();
+    let named = NameLanes::of(names.iter().map(|&n| (n, [])));
+    let mut t: TreeView<'_> = TreeView::new();
+    t.branch(Some(&mut |b| {
+        b.u32_array(Some(cells)).u32_array(Some(counts)).u8_array(Some(&partial)).u32_array(Some(starts));
+        b.u32_array(Some(shown)).u16_array(Some(&at)).strs(Some(kinds)).strs(Some(&ids));
+        named.write(b);
+    }));
+    encoder().encode(&t, TreeEncoderOptions::default()).unwrap()
+}
+
+/// A source's id, a kind this table does not know and names by language
+/// come back as the source gave them; the unknown kind reads as none.
+#[test]
+fn what_any_source_gives_comes_back() {
+    let langs = Strings::of(["en", "Seoul Station", "ja", "ソウル駅"]);
+    let station = Place {
+        name: "서울역",
+        langs: Langs::all(&langs),
+        kind: kind_of("subway"),
+        id: "ChIJ3S-JXmauEmsRUcIaWtf4MzE",
+    };
+    let page = PoiPage::of_places(0, [(point(1, 0, 0, 0), station)], true);
+    let back = decode(&encode(&page).unwrap()).unwrap();
+    assert_eq!(back, page);
+    assert_eq!(back.places.get(0), station);
+    assert_eq!(decode(&lanes(&[1], &[1], &[0, 1], &[0], &["a kind of tomorrow"], &["a"])).unwrap().places.get(0).kind, 0);
+}
+
+/// A partial count stays a floor at every level over it.
+#[test]
+fn a_floor_stays_a_floor_as_it_folds() {
+    let some = PoiPage::of_places(0, [(point(0, 0, 0, 0), called("A", 1))], false);
+    let all = PoiPage::of_places(0, [(point(0, 0, 0, 0), called("A", 1))], true);
+    assert_eq!(decode(&encode(&some).unwrap()).unwrap(), some);
+    let p = LevelPage::over(1, leaf().page);
+    let empty = PoiPage::default();
+    for (leaf_page, partial) in [(&some, true), (&all, false)] {
+        let up = PoiPage::fold_page(p, |k| Some(if k == leaf() { leaf_page } else { &empty })).unwrap();
+        assert_eq!(up.cells[0].partial, partial);
+        assert_eq!(up.settles(p, leaf()), !partial);
+    }
 }

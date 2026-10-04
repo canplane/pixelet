@@ -1,10 +1,7 @@
 // @xpute/core/collection/arena.ts
 
-/**
- * Arena / Vector scratch allocators (bump + mark/rewind)
- * - Arena: reusable object slots
- * - Vector: reusable typed-array scratch
- */
+// Bump allocators with mark/rewind: Arena reuses preconstructed objects, which
+// alloc() hands out uninitialized; Vector is typed-array scratch.
 
 import type { u32 } from "../abi/word.ts";
 import type { AnyElementOf, AnyTypedArray, AnyTypedArrayCtor } from "../abi/array.ts";
@@ -12,24 +9,10 @@ import { InvariantError, MarshalError } from "@xpute/core/status/error.ts";
 import { Errno } from "@xpute/core/status/errno.spec.ts";
 
 export interface ArenaOptions {
-  init_cap?: u32; // soft initial size hint
-  max_cap?: u32; // hard size limit
+  init_cap?: u32;
+  max_cap?: u32;
 }
 
-// ============ Arena ============
-
-/**
- * Arena allocator with bump allocation and mark/rewind reset.
- *
- * Intended for transient objects to reduce GC churn.
- * - alloc: bump cursor (O(1))
- * - truncate: rewind by mark/scope (bulk reset)
- *
- * Notes:
- * - objects are preconstructed and reused
- * - alloc() does not initialize object fields
- * - caller owns object reinitialization before use
- */
 export class Arena<T extends object> {
   readonly mem: T[] = [];
 
@@ -60,26 +43,18 @@ export class Arena<T extends object> {
     return this.mem[idx];
   }
 
-  /** Allocate one object from the arena. */
   alloc(): T {
     if (this._len >= this._cap) this._grow(Math.max(this._cap * 2, 1));
 
     return this.mem[this._len++];
   }
 
-  /** Ensure space for cnt additional allocations without growing. */
   reserve(cnt: u32): void {
     const req = this._len + cnt;
     if (req > this._cap) this._grow(Math.max(this._cap * 2, req));
   }
 
-  /**
-   * Rewind the bump cursor to a previous position.
-   *
-   * Kernel rule:
-   * - new_len validity is caller-owned
-   * - a new_len past the current len is a broken invariant, not a clamp
-   */
+  /** A `new_len` past the current length is a broken invariant, not a clamp. */
   truncate(new_len: u32): void {
     if (new_len > this._len) {
       throw new InvariantError(Errno.EINVAL);
@@ -91,18 +66,16 @@ export class Arena<T extends object> {
     if (new_cap <= this._cap) return;
     if (new_cap > this.max_cap) throw new MarshalError(Errno.EOVERFLOW);
 
-    this.mem.length = new_cap; // V8 Array pre-allocation hint
+    this.mem.length = new_cap;
     for (let i = this._cap; i < new_cap; i++) this.mem[i] = this._factory();
     this._cap = new_cap;
   }
 
-  /** Scope guard that rewinds to the current mark on dispose. */
   get scope(): ArenaGuard<T> {
     return new ArenaGuard(this);
   }
 }
 
-/** Scope guard that rewinds an arena to its saved mark on dispose. */
 class ArenaGuard<T extends object> implements Disposable {
   private readonly _mark: u32;
 
@@ -115,21 +88,6 @@ class ArenaGuard<T extends object> implements Disposable {
   }
 }
 
-// ============ Vector ============
-
-/**
- * Contiguous typed scratch store with bump write and mark/rewind control.
- *
- * Intended for transient primitive data to reduce GC churn.
- * - push: append one element (amortized O(1))
- * - set : random write with auto-grow and len extension
- * - truncate: rewind by mark/scope (bulk reset)
- *
- * Notes:
- * - this is a scratch allocator, not a general container
- * - reserve(cnt) means additional capacity from the current len
- * - logical length is tracked separately from typed-array capacity
- */
 export class Vector<T extends AnyTypedArray> {
   mem: T;
 
@@ -157,13 +115,6 @@ export class Vector<T extends AnyTypedArray> {
     return this.mem[idx] as AnyElementOf<T>;
   }
 
-  /**
-   * Random write at idx.
-   *
-   * Semantics:
-   * - grows capacity if needed
-   * - extends len to idx + 1 if idx is beyond the current logical end
-   */
   set(idx: u32, v: AnyElementOf<T>): void {
     if (idx >= this._cap) this._grow(Math.max(this._cap * 2, idx + 1));
 
@@ -171,7 +122,6 @@ export class Vector<T extends AnyTypedArray> {
     if (idx >= this._len) this._len = idx + 1;
   }
 
-  /** Push one primitive value into scratch. Returns the written index. */
   push(v: AnyElementOf<T>): u32 {
     if (this._len >= this._cap) this._grow(Math.max(this._cap * 2, 1));
 
@@ -180,19 +130,11 @@ export class Vector<T extends AnyTypedArray> {
     return i;
   }
 
-  /** Ensure space for cnt additional pushes without growing. */
   reserve(cnt: u32): void {
     const req = this._len + cnt;
     if (req > this._cap) this._grow(Math.max(this._cap * 2, req));
   }
 
-  /**
-   * Rewind the bump cursor to a previous position.
-   *
-   * Kernel rule:
-   * - new_len validity is caller-owned
-   * - if new_len exceeds the current len, the request is ignored with a warning
-   */
   truncate(new_len: u32): void {
     if (new_len > this._len) {
       console.warn(`[vector] truncate ignored: new_len=${new_len} > len=${this._len}`);
@@ -201,22 +143,13 @@ export class Vector<T extends AnyTypedArray> {
     this._len = new_len;
   }
 
-  /**
-   * Grow the backing store and copy existing contents.
-   *
-   * Note:
-   * - this is the only allocation path after construction
-   * - if this triggers frequently, increase init_cap
-   */
   private _grow(new_cap: u32): void {
     if (new_cap <= this._cap) return;
     if (new_cap > this.max_cap) throw new MarshalError(Errno.EOVERFLOW);
 
     const new_mem: T = new this.ctor(new_cap);
-    // AnyTypedArray spans both the number and bigint families — TS can't
-    // express ".set() accepts this same generic T" across that split
-    // (it would need ArrayLike<number> & ArrayLike<bigint>, which nothing
-    // satisfies); this.mem and new_mem are always the same concrete family.
+    // `set` cannot be typed across the number and bigint array families;
+    // both arrays are always the same one.
     // deno-lint-ignore no-explicit-any
     new_mem.set(this.mem as any);
 
@@ -224,7 +157,6 @@ export class Vector<T extends AnyTypedArray> {
     this._cap = new_cap;
   }
 
-  /** Scope guard that rewinds to the current mark on dispose. */
   get scope(): VectorGuard<T> {
     return new VectorGuard(this);
   }

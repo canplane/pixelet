@@ -1,10 +1,8 @@
 // pxl-kernel/world/chunk/stage.rs
 
-//! The world's turn of the tick. In the visible phase it composes the frame
-//! the scheduler reads — the view, the frustum, the budget — and runs the
-//! scheduler's pass once; the view's renderer (pxl-render's
-//! gpu/renderer.rs) then draws the scheduler's lists. In the report phase it
-//! hands the frame's numbers to the profiler.
+//! The world's part of the tick: in the visible phase it composes the frame
+//! and runs the table's pass; in the report phase it hands the frame's
+//! numbers to the profiler.
 
 use pxl_spec::space::pvf3::ivec;
 use xpute_core::math::scalar::round;
@@ -14,6 +12,7 @@ use crate::global::Global;
 use crate::host::now;
 use crate::io::sched::pending_count;
 use crate::kernel::{kernel, with_world};
+use crate::layer::decor::build::DecorHide;
 use crate::layer::environment::state::globe;
 use crate::sched::profiler::record::{
     profiler_record_frame, profiler_take_rings, CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample, TurnSample, WorkSample,
@@ -31,14 +30,9 @@ use pxl_spec::space::pyramid::TOP_LEVEL;
 
 const MB: f64 = 1_048_576.0;
 
-/// A box drawn is a cube, twelve triangles, whatever its faces show (the
-/// renderer's census counts them the same way).
 const BOX_TRIANGLES: f64 = 12.0;
 const _: () = assert!(LEVELS == crate::world::chunk::table::LEVELS, "a lane a level for every level the census counts");
 
-/// What the turn measured of the frame outside the tick: the renderer's
-/// numbers and the turn's own time. The terrain's triangles by level are the
-/// kernel's, from what it listed, and left for the report step.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct HostFrameStat {
     pub task_ms: f64,
@@ -47,11 +41,9 @@ pub struct HostFrameStat {
 }
 
 struct CoreTick {
-    /// How long the visible phase took, handed to the report phase.
     visible_pass: Option<f64>,
     last_work: (u32, u32),
     host: HostFrameStat,
-    /// Whether the scheduler's pass left something new to draw.
     draw: bool,
 }
 
@@ -66,28 +58,22 @@ fn core_tick() -> &'static mut CoreTick {
     })
 }
 
-/// The shell's numbers for the frame just drawn.
-pub fn set_host_frame_stat(stat: HostFrameStat) {
-    let task_ms = core_tick().host.task_ms;
-    core_tick().host = HostFrameStat { task_ms, ..stat };
+pub fn set_host_frame_stat(gpu: GpuSample, device: DeviceSample) {
+    let host = &mut core_tick().host;
+    (host.gpu, host.device) = (gpu, device);
 }
 
-/// The whole turn just run: the strobe in, the tick, the draw and submit.
 pub fn set_host_task_ms(task_ms: f64) {
     core_tick().host.task_ms = task_ms;
-    // The turn's own task time is only known once the turn is over, by which
-    // point its frame is recorded; without this the number would be read as
-    // the next frame's and every frame would carry the one before it.
+    // Known only after the turn, when its frame is already recorded; written
+    // back there, or every frame would carry the one before's.
     if let Some(frame) = crate::sched::profiler::record::profiler_last_frame() {
         frame.task_ms = task_ms;
     }
 }
 
-/// The turn's parts, once the turn is over: what the effects took and what
-/// the stage took, written onto the frame already recorded the way
-/// `set_host_task_ms` is. With the tick's own numbers beside them,
-/// `task_ms` is accounted for — and what none of the three explains is the
-/// difference, where a region nobody measured would have to show itself.
+/// Written onto the recorded frame like `set_host_task_ms`, so the parts of
+/// `task_ms` add up and unmeasured time shows as the difference.
 pub fn set_turn_timing(effects_ms: f64, stage_ms: f64) {
     let Some(frame) = crate::sched::profiler::record::profiler_last_frame() else { return };
     let (step_ms, step_name) = crate::sched::turn::worst_effect();
@@ -99,13 +85,10 @@ pub fn set_turn_timing(effects_ms: f64, stage_ms: f64) {
     };
 }
 
-/// Whether the last pass left something new to draw; reading clears it.
 pub fn take_draw() -> bool {
     core::mem::take(&mut core_tick().draw)
 }
 
-/// The scheduler's builds since the last sample: scans (the direct path counted
-/// with them) and bakes.
 fn work_sample(c: &mut CoreTick, census: &Census) -> WorkSample {
     let st = kernel().sched.builder.stat;
     let scans = st.scans + st.direct;
@@ -119,12 +102,9 @@ fn work_sample(c: &mut CoreTick, census: &Census) -> WorkSample {
     sample
 }
 
-/// The heap as the allocator's seam reads it (host.rs), in MiB. `used` is a
-/// high-water mark (`max_ptr - base_ptr`) while `live` is what is out on loan,
-/// so the two are not each other's complement; a request is served or it is
-/// refused, and `refusals` counts the second. `run` and `slot` are not
-/// rounded, because what the carving costs is their difference and it is
-/// smaller than what rounding would hide.
+/// `used` is a high-water mark and `live` what is on loan, so they are not
+/// complements. `run` and `slot` are unrounded because their difference is
+/// smaller than rounding would hide.
 fn heap_sample() -> HeapSample {
     let h = crate::host::heap_stat();
     HeapSample {
@@ -138,8 +118,6 @@ fn heap_sample() -> HeapSample {
     }
 }
 
-/// The visible phase's step: the frame, and the scheduler's pass over every
-/// chunk.
 pub fn core_tick_visible_step(ctx: &mut TickContext) {
     let c = core_tick();
     c.visible_pass = None;
@@ -170,6 +148,17 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
 
     let t0 = now();
     let draw = with_world(|world, sched| sched.tick(world, frame, &now)).unwrap_or(false);
+    // Decor lists after the chunks have listed theirs.
+    {
+        let k = kernel();
+        let edits = crate::layer::object::store::render_edits();
+        let hide = edits
+            .hide
+            .filter(|_| edits.hide_in.1)
+            .map(DecorHide::Placed)
+            .or(crate::layer::decor::cell::scattered_hide().map(DecorHide::Scattered));
+        crate::layer::decor::cell::step(crate::layer::decor::build::kinds(), &k.objects, &mut k.sched.draw, hide, frame.eye);
+    }
     crate::layer::poi::placement::step(ctx);
     let sched = &mut kernel().sched;
     sched.billboards.draw(&mut sched.draw, &sched.models, frame.eye);
@@ -180,10 +169,8 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     c.visible_pass = Some(now() - t0);
 }
 
-/// The build task: the chunks each tick orders, advanced on what the turn's
-/// quota leaves after the tick, one step a turn at least. It waits while no
-/// tick has given it anything, and a turn whose builds did nothing — all
-/// built, blocked, or a block refused — waits for the next tick's order.
+/// Advances the builds on what the quota leaves after the tick, at least one
+/// step a turn, and waits for the next tick once a step does nothing.
 pub async fn build_task() {
     loop {
         notified(builds).await;
@@ -199,15 +186,21 @@ pub async fn build_task() {
     }
 }
 
-/// The report phase's step: the frame's numbers, after every other phase has
-/// run, so `sched_ms` covers every phase.
+/// Runs after every other phase, so `sched_ms` covers them all.
 pub fn core_tick_report_step(ctx: &mut TickContext) {
     let c = core_tick();
-    // No chunks this frame — a search jump empties the stage for a moment.
+    // No chunks this frame: a search jump empties the stage for a moment.
     let Some(chunks_ms) = c.visible_pass else { return };
     let frame_t0 = ctx.budget.t0;
     let census = kernel().sched.census;
+    // Taken whether or not recording, so a recording starts from now.
     let counts = kernel().sched.take_counts();
+    let rings = profiler_take_rings();
+    let work = work_sample(c, &census);
+    let record_refused = Terrain::pyramid().take_refusals() as f64;
+    if !profiler_recording() {
+        return;
+    }
     let host = c.host.clone();
     let mut pages = PageSample::default();
     for (level, n) in pages.by_level.iter_mut().enumerate() {
@@ -262,8 +255,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         turn: TurnSample::default(),
         cover: {
             let (cover, _) = crate::world::pyramid::cover::cover::<Terrain>();
-            // The target's cut is made for this where the quality in force
-            // is coarser, which only a view past its arena pays for.
+            // Cutting the target here costs something only when the view is past its arena.
             let rule = crate::world::pyramid::domain::cut_at(0).map_or(0.0, |(_, cut)| cut.pieces().len() as f64);
             let domain = crate::world::pyramid::domain::current();
             CoverSample {

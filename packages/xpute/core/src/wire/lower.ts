@@ -1,16 +1,10 @@
 // @xpute/core/wire/lower.ts
 
-/**
- * A record to a tuple and back, in the order a schema names its keys: how
- * object-shaped data goes into a format that has no keyed value. XTP lowers
- * arrays, not objects, so the order is the schema's to own rather than the
- * format's to infer (wire/xtp/README.md).
- */
+// A record to a tuple and back in a schema's key order, since XTP lowers arrays, not objects.
 
 import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { MarshalError } from "@xpute/core/status/error.ts";
 
-/** The record's values in `keys`' order; a key the record lacks is EINVAL. */
 export function to_tuple<T extends Record<PropertyKey, unknown>>(
   obj: T,
   keys: readonly (keyof T)[],
@@ -26,8 +20,6 @@ export function to_tuple<T extends Record<PropertyKey, unknown>>(
   return out;
 }
 
-/** The record `keys` name, from values in their order; a count that differs
- * is EINVAL. */
 export function from_tuple<T extends Record<PropertyKey, unknown>>(
   vals: readonly unknown[],
   keys: readonly (keyof T)[],

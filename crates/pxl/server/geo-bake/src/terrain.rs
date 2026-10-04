@@ -8,8 +8,7 @@ pub mod source;
 
 use pxl_spec::bake::format::{decode_terrain, encode_terrain, Terrain};
 
-/// Terrain as the pyramid holds it: ground and elevation, folded by pxl-spec
-/// bake/fold.rs. A page it left as no object is open water, the ocean page.
+/// A page left as no object is open water, the ocean page.
 impl crate::pyramid::Layer for Terrain {
     fn encode(&self) -> Result<Vec<u8>, String> {
         encode_terrain(self).map_err(|e| format!("{e:?}"))

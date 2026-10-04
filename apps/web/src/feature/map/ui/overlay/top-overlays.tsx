@@ -30,9 +30,6 @@ export function TopOverlays() {
   const zooming = useKernel((s) => s.zooming);
   const { width } = useWindowSize();
   const scrimDepth = top + chrome.control + SCRIM_TAIL;
-  // The fade across runs from `from` to the plateau's edge and back on the
-  // other side. On a phone the plateau is the whole width, and the fades lie
-  // off the screen.
   const from = (width - Math.min(width, SCRIM_WIDTH)) / 2 - SCRIM_FADE;
   const ramp = SCRIM_FADE / (width - 2 * from);
 
@@ -63,17 +60,17 @@ export function TopOverlays() {
       </BusyDim>
 
       <BusyDim style={[styles.center, { top }]}>
-        <Presence show={!zooming} from={{ opacity: 0 }} exit={{ opacity: 0 }} transition={SETTLE} exitTransition={LEAVE} style={styles.place}>
-          {
-            /* Opens forward search — the current-address label and "where
-            do I want to go" share the same mental slot on a map, so the
-            whole title, the sensors under it with it, is the one trigger
-            for both rather than a separate always-visible search bar. */
-          }
-          <Pressable onPress={ui.openSearchModal} accessibilityRole="button" accessibilityLabel={t("map.search.trigger_aria_label")} style={styles.title}>
-            <View style={styles.search}>
-              <HaloIcon glyph="magnifyingglass" size={12} weight="semibold" color={color.white} />
-              <CurrentAddress label={addressLabel} />
+        {
+          // The whole strip, scale shown or not.
+        }
+        <Pressable onPress={() => openModal("search")} accessibilityRole="button" accessibilityLabel={t("map.search.trigger_aria_label")} style={styles.strip}>
+          <Presence show={!zooming} from={{ opacity: 0 }} exit={{ opacity: 0 }} transition={SETTLE} exitTransition={LEAVE} style={styles.place}>
+            <View style={styles.title}>
+              <View style={styles.search}>
+                <HaloIcon glyph="magnifyingglass" size={12} weight="semibold" color={color.white} />
+                <CurrentAddress label={addressLabel} />
+              </View>
+              <SensorStatus />
             </View>
             <SensorStatus />
           </Pressable>
@@ -91,19 +88,12 @@ export function TopOverlays() {
   );
 }
 
-/** The dark behind the top controls, so white text and glyphs read over a
- * bright ground without a blur or an edge across the map. It fades down from
- * the screen's top edge to past the controls, and across it is flat over at
- * most SCRIM_WIDTH about the center and fades out beyond: on a phone that is
- * the whole width, status bar included, as a system's top protection is; on
- * a wide screen it stays near the title instead of darkening empty map.
- * Every fade follows smoothstep, sampled into stops, since a straight fade's
- * end reads as an edge. */
+/** A scrim so white reads over a bright map without a blur: flat over
+ * SCRIM_WIDTH, then smoothstep fades, since a straight fade's end reads as an edge. */
 const SCRIM_OPACITY = 0.45;
 const SCRIM_WIDTH = 560;
 const SCRIM_FADE = 240;
 const SCRIM_TAIL = 32;
-/** [position, smoothstep(position)] from 0 to 1. */
 const SCRIM_EASE = Array.from({ length: 9 }, (_, i) => {
   const t = i / 8;
   return [t, t * t * (3 - 2 * t)] as const;
@@ -111,8 +101,6 @@ const SCRIM_EASE = Array.from({ length: 9 }, (_, i) => {
 
 const styles = StyleSheet.create({
   scrim: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 49, pointerEvents: "none" },
-  // A layer takes no touches itself, only what stands on it (BusyDim): the
-  // map between the controls is still the map.
   left: { position: "absolute", left: chrome.inset, zIndex: 50, alignItems: "flex-start", gap: 12 },
   center: {
     position: "absolute",
@@ -127,11 +115,7 @@ const styles = StyleSheet.create({
   right: { position: "absolute", right: chrome.inset, zIndex: 50, alignItems: "center", gap: chrome.controlGap },
   place: { maxWidth: "100%" },
   title: { alignItems: "center", gap: haloGap(8) },
-  // Held to the title's width: centered in a column, a page lays a row out
-  // at its content's width however wide, and a line that will not wrap is
-  // all content — the address ran over the buttons either side rather than
-  // ending in an ellipsis, where a device's layout held it.
+  // Bounded: a page lays a no-wrap row at content width, and the address overran the buttons.
   search: { flexDirection: "row", alignItems: "center", gap: haloGap(8), minWidth: 0, maxWidth: "100%", flexShrink: 1 },
-  // Where the address stood: the scale takes its place while the zoom moves.
   scale: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, alignItems: "center", justifyContent: "center", pointerEvents: "box-none" },
 });

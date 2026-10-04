@@ -2,10 +2,8 @@
 
 use super::*;
 
-/// Seoul's day of 2024-06-20 (local midnight 2024-06-19T15:00:00Z): sunrise
-/// at 05:16, sunset at 19:52. The tolerance is 0.002 hours, about seven
-/// seconds — the five-minute sampling interpolates, so what is pinned is the
-/// crossing, not the sample it fell between.
+/// Seoul, 2024-06-20: sunrise 05:16, sunset 19:52, to 0.002 h (~7 s), since
+/// the sampling interpolates the crossing.
 #[test]
 fn seoul_at_the_solstice_has_its_longest_day() {
     let mut env = EnvironmentDraw::default();

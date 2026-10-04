@@ -1,11 +1,5 @@
-// The sky as seen from the camera's altitude (Hillaire's sky-view table):
-// for each direction a texel stands for (atmos_medium.wgsl's sky_view_uv,
-// inverted), the light the air scatters toward the eye between it and the
-// ground or the top, marched with the light's at each step and the
-// multiple scattering table's addition. Drawn twice, into two tables — lit
-// by the sun and lit by the moon, `light`'s first word saying which, each
-// relative to its own light's azimuth — and each only when its light's
-// height or the camera's altitude has moved (gpu/atmosphere.rs).
+// Hillaire's sky-view table, drawn once for the sun and once for the moon,
+// each relative to its light's azimuth.
 
 @group(0) @binding(12) var multiscatter_lut: texture_2d<f32>;
 @group(0) @binding(14) var<uniform> light: vec4f;
@@ -46,8 +40,7 @@ fn fs(v: TableOut) -> @location(0) vec4f {
   let phase_m = mie_phase(c);
 
   let d = select(to_top(r, mu), to_ground(r, mu), meets_ground(r, mu));
-  // From above the atmosphere the march starts where the ray enters it,
-  // and a ray that passes it by has no air at all.
+  // From above the atmosphere a ray starts where it enters the air, if it does.
   var start = 0.0;
   if (r > atmos_top_radius()) {
     let disc = r * r * (mu * mu - 1.0) + atmos_top_radius() * atmos_top_radius();
@@ -60,8 +53,7 @@ fn fs(v: TableOut) -> @location(0) vec4f {
   let span = d - start;
   var through = vec3f(1.0);
   var light = vec3f(0.0);
-  // Steps squared toward the far end, a sample 0.3 of the way into each:
-  // the air is densest, and the view changes most, close to the eye.
+  // Squared steps: the air is densest and the view changes most near the eye.
   for (var i = 0; i < SKY_VIEW_STEPS; i++) {
     let t0 = f32(i) / f32(SKY_VIEW_STEPS);
     let t1 = f32(i + 1) / f32(SKY_VIEW_STEPS);

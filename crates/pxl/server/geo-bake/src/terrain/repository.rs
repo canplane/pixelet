@@ -1,8 +1,6 @@
 // pxl-geo-bake/terrain/repository.rs
 
-//! One page's raw source, out of the geo database: the elevation raster
-//! resampled onto the page's grid, and the Overture Buildings, Transportation,
-//! Base and coastline rows its envelope touches.
+use std::sync::Arc;
 
 use postgres::types::ToSql;
 use postgres::{Client, Statement};
@@ -86,13 +84,8 @@ FROM dumped,
     )
 }
 
-// Buildings and roads are not clipped to the page envelope, so a polygon
-// grazing a page costs it the whole geometry. Clipping them broke ring
-// closure; an attempt has to keep rings closed — clip-and-reclose,
-// Weiler–Atherton, Sutherland–Hodgman with holes — never a naive bbox clip.
-// The water branch of OVERTURE_BASE_SQL and OVERTURE_COAST_SQL do clip
-// (ST_Intersection guarded by ST_IsEmpty): those rows run to hundreds of
-// thousands of points.
+// Buildings and roads are not clipped: a naive bbox clip broke ring closure.
+// Water and coast are clipped, since their rows reach hundreds of thousands of points.
 const OVERTURE_BUILDINGS_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
@@ -107,9 +100,14 @@ SELECT gers_id, subtype, class, road::text AS road, ST_AsBinary(geom) AS geom_wk
 FROM overture_transportation, env
 WHERE geom && env.e";
 
-/// Base is fragmented across four tables but shares one row shape — a literal
-/// `source` column per branch tells the adapter which table's own
-/// subtype/class vocabulary a row came from.
+const OVERTURE_DECK_SQL: &str = "WITH env AS (
+  SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
+)
+SELECT gers_id, subtype, class, width_m, form, portal, ST_AsBinary(geom) AS geom_wkb
+FROM overture_deck, env
+WHERE geom && env.e";
+
+/// Four tables, one row shape; `source` says whose vocabulary a row uses.
 const OVERTURE_BASE_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
@@ -126,14 +124,8 @@ SELECT gers_id, 'land' AS source, subtype, class, ST_AsBinary(geom) AS geom_wkb 
 UNION ALL
 SELECT gers_id, 'infrastructure' AS source, subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_infrastructure, env WHERE geom && env.e";
 
-/// Overture's Base `water` theme's `ocean` subtype, QA'd from OpenStreetMap
-/// coastline data. Its geometry is ocean-shaped, not land-shaped — so this
-/// query inverts it: union whatever ocean touches the page, then take the page
-/// envelope's own difference against that union, giving a LAND polygon in the
-/// shape `from_coast_row` expects. An empty result means the row is dropped
-/// and the page is pure ocean; a result covering the whole envelope is dropped
-/// as "nothing to carve, already all land"; anything else is the real partial
-/// coastline geometry to carve bare out of a sea-filled base.
+/// Overture's ocean polygons inverted into a land polygon for the page: empty
+/// means pure ocean, the whole envelope means all land, both dropped.
 const OVERTURE_COAST_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 ),
@@ -154,7 +146,6 @@ FROM land
 WHERE NOT ST_IsEmpty(g)";
 
 pub struct PageSource {
-    /// Row-major, or none when the page has no elevation coverage.
     pub ele: Option<Vec<i16>>,
     pub building_rows: Vec<BuildingRow>,
     pub segment_rows: Vec<SegmentRow>,
@@ -162,11 +153,8 @@ pub struct PageSource {
     pub coast_rows: Vec<CoastRow>,
 }
 
-/// The five statements, prepared once against one connection.
-///
-/// An ordinary parameterized query re-planned every call spends ~34 ms of a
-/// ~44 ms bbox lookup against `overture_buildings` in planning; prepared once
-/// per physical connection, the lookup is ~2–3 ms.
+/// Prepared once per connection: re-planning spent ~34 ms of a ~44 ms
+/// buildings lookup, prepared it is ~2–3 ms.
 pub struct TerrainRepository {
     ele: Statement,
     buildings: Statement,
@@ -186,9 +174,6 @@ impl TerrainRepository {
         })
     }
 
-    /// All five per-page queries on the one connection, in order. A page only
-    /// ever holds one connection, so page-level concurrency and the worker
-    /// count mean the same thing.
     pub fn fetch_page_source(&self, client: &mut Client, page_bbox: BBox3857) -> Result<PageSource, postgres::Error> {
         let (minx, miny, maxx, maxy) = (page_bbox[0][0], page_bbox[0][1], page_bbox[1][0], page_bbox[1][1]);
         let bbox: [&(dyn ToSql + Sync); 4] = [&minx, &miny, &maxx, &maxy];
@@ -207,8 +192,6 @@ impl TerrainRepository {
                 subtype: row.get("subtype"),
                 class: row.get("class"),
                 height: row.get("height"),
-                // `num_floors` is an `integer` column; the row model carries
-                // every number as f64, as the packet does.
                 num_floors: row.get::<_, Option<i32>>("num_floors").map(f64::from),
                 geom_wkb: wkb(row),
             })
@@ -255,6 +238,23 @@ impl TerrainRepository {
             base_rows,
             coast_rows,
         })
+    }
+
+    pub fn fetch_deck_rows(&self, client: &mut Client, page_bbox: BBox3857) -> Result<Vec<DeckRow>, postgres::Error> {
+        let (minx, miny, maxx, maxy) = (page_bbox[0][0], page_bbox[0][1], page_bbox[1][0], page_bbox[1][1]);
+        Ok(client
+            .query(&self.deck, &[&minx, &miny, &maxx, &maxy])?
+            .iter()
+            .map(|row| DeckRow {
+                gers_id: row.get("gers_id"),
+                subtype: row.get("subtype"),
+                class: row.get("class"),
+                width_m: row.get::<_, f32>("width_m").into(),
+                form: row.get::<_, i16>("form") as u8,
+                portal_m: row.get::<_, &[u8]>("portal").into(),
+                geom_wkb: wkb(row),
+            })
+            .collect())
     }
 }
 

@@ -29,22 +29,15 @@ async fn get(uri: &str, token: Option<&str>) -> StatusCode {
     shell(&cfg(), INTERNAL, Router::new()).oneshot(req.body(Body::empty()).unwrap()).await.unwrap().status()
 }
 
-/// The claim the gate is registered on: it covers the prefix rather than a
-/// list of routes, so a path nobody has mounted is still behind the token.
-/// Nothing is mounted under it today, which is exactly when this is easy to
-/// get wrong and impossible to notice.
 #[tokio::test]
 async fn the_internal_prefix_is_gated_even_where_nothing_is_mounted() {
     assert_eq!(get("/root/internal/anything", None).await, StatusCode::UNAUTHORIZED);
     assert_eq!(get("/root/internal/anything", Some("wrong")).await, StatusCode::UNAUTHORIZED);
 
-    // Past the gate there is genuinely nothing there, and saying so is the
-    // right answer — a 404 here means the token was accepted.
+    // 404 past the gate means the token was accepted.
     assert_eq!(get("/root/internal/anything", Some(TOKEN)).await, StatusCode::NOT_FOUND);
 }
 
-/// Nothing else is mounted, so everything outside the gated prefix is a plain
-/// 404 — not a 401, which would say the gate reaches further than it does.
 #[tokio::test]
 async fn the_gate_does_not_reach_past_its_own_prefix() {
     assert_eq!(get("/root/anything", None).await, StatusCode::NOT_FOUND);

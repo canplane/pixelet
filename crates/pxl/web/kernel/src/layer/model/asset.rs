@@ -1,29 +1,11 @@
 // pxl-kernel/layer/model/asset.rs
 
-//! A parsed glTF (crates/pxl/web/render/src/asset/gltf.rs) handed to the scheduler's models as a
-//! model (crates/pxl/web/kernel/src/layer/model/store.rs): the one place a parsed asset
-//! becomes the kernel's lanes, so a companion, a decor kind or an asset a player
-//! brings all enter the world the same way.
-//!
-//! A skinned model's joints are its skins' joint nodes, every primitive merged
-//! onto that one list: its vertices are in the skin's space, as the spec has
-//! them, and a joint's palette entry is its global transform times its inverse
-//! bind matrix. A model with no skin is animated by its nodes instead, so every
-//! node in the scene is a joint with an identity inverse bind, and a mesh's
-//! vertices ride the joint of the node that holds it — which is what plays a
-//! pet's walk, where each part is a node of its own. A root joint whose parent
-//! is not a joint carries that parent's transform above it. Each clip's
-//! channels on joints go over by node.
-//!
-//! A model nothing animates — no skin and no clip — is a still scene: its
-//! vertices are placed by their nodes here, once, and its joints are left at
-//! identity. The decor pass draws a model from its lanes alone, with no joint
-//! palette (frame/shader/decor.wgsl), so a node's transform has to be in the
-//! vertices for a wheel to sit beside its car rather than at the model's
-//! origin; the skinned pass, reading identity joints, draws the same thing.
-//!
-//! The height the model is scaled to is measured over its vertices at rest,
-//! through their nodes, as the box three drew around the scene.
+//! A parsed glTF registered as a model, the one way any model enters the
+//! world. A skinned model's joints are its skins' joints; an unskinned one
+//! animates by nodes, every node a joint with identity inverse bind (a pet's
+//! parts walk this way). A still model (no skin, no clip) has its node
+//! transforms baked into the vertices, since the decor pass reads no joint
+//! palette and a wheel would otherwise sit at the model's origin.
 
 use std::collections::HashMap;
 
@@ -36,24 +18,21 @@ use crate::kernel::with_world;
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModelHandle {
     pub model: u32,
-    /// Clips registered, one per animation in the file's order, so a clip's
-    /// number is its animation's index.
+    /// One per animation in file order, so a clip's number is its animation's index.
     pub clip_count: u32,
-    /// Triangles, for the profiler.
     pub triangles: u32,
 }
 
 const IDENTITY: [f32; 16] = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
 
-/// Registers `gltf` as a model standing `height_u` tall, or at its own size
-/// when None; None when it has no mesh or the heap refused its block.
+/// At its own size when `height_u` is None; None when it has no mesh or the
+/// heap refused.
 pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
     let order = scene_nodes(gltf);
     let worlds = world_matrices(gltf);
     let skinned = !gltf.skins.is_empty() && order.iter().any(|&n| gltf.nodes[n as usize].skin >= 0 && gltf.nodes[n as usize].mesh >= 0);
     let still = !skinned && gltf.animations.is_empty();
 
-    // The joints: the skins' joint nodes in first-seen order, or every node.
     let mut joint_nodes: Vec<u32> = Vec::new();
     let mut joint_of: HashMap<u32, u32> = HashMap::new();
     let mut add_joint = |node: u32| {
@@ -78,8 +57,6 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
     }
     let joint_cnt = joint_nodes.len().max(1) as u32;
 
-    // The meshes: every primitive of every node that holds one, skinned or not
-    // as the model is.
     let mut parts: Vec<(u32, usize, usize)> = Vec::new();
     let (mut vertex_cnt, mut index_cnt) = (0u32, 0u32);
     for &n in &order {
@@ -100,8 +77,7 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
     with_world(|_, sched| {
         let (model, block) = sched.models.new_model(vertex_cnt, index_cnt, joint_cnt)?;
         let n = (vertex_cnt * 16 + index_cnt) as usize;
-        // SAFETY: the model's block is `n` words in the volumes' memory, ours
-        // until the model is sealed.
+        // SAFETY: the model's block, `n` words, ours until sealed.
         let words = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block), n) };
         let lane = |k: usize| k * vertex_cnt as usize;
         let put_f = |words: &mut [u32], at: usize, v: f32| words[at] = v.to_bits();
@@ -113,9 +89,8 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
             let node = &gltf.nodes[node_index as usize];
             let prim = &gltf.meshes[mesh][prim_index];
             let count = prim.position.len() / 3;
-            // A skinned vertex is in the skin's space already, and its joints
-            // are the skin's; an unskinned one is the node's, whose joint
-            // places it.
+            // A skinned vertex is already in the skin's space; an unskinned one is
+            // placed by its node's joint.
             let remap: Option<Vec<u32>> = (skinned && node.skin >= 0).then(|| gltf.skins[node.skin as usize].joints.iter().map(|j| *joint_of.get(j).unwrap_or(&0)).collect());
             let own_joint = *joint_of.get(&node_index).unwrap_or(&0);
             let world_m = &worlds[node_index as usize];
@@ -151,7 +126,6 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
                         }
                     }
                 }
-                // The height, measured where the vertex stands at rest.
                 let at_y = if remap.is_some() || still {
                     y as f64
                 } else {
@@ -167,7 +141,6 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
             i0 += prim.index.len();
         }
 
-        // Joints: parent, rest pose, what stands above a root, inverse bind.
         let mut inverse_bind_of: HashMap<u32, [f32; 16]> = HashMap::new();
         if skinned {
             for skin in &gltf.skins {
@@ -194,8 +167,7 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
             let r = node.rotation;
             let s = node.scale;
             let rest = [t[0], t[1], t[2], r[0], r[1], r[2], r[3], s[0], s[1], s[2]].map(|v| v as f32);
-            // A root joint under a node that is not one carries that node's
-            // world transform; a scene root carries nothing.
+            // A root joint under a non-joint node carries that node's world transform.
             let root_pre = if parent < 0 && parent_node >= 0 {
                 worlds[parent_node as usize].map(|v| v as f32)
             } else {
@@ -204,7 +176,6 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
             sched.models.joint(model, j, parent, rest, root_pre, *inverse_bind_of.get(&n).unwrap_or(&IDENTITY));
         }
 
-        // Clips: the channels on joints.
         for anim in &gltf.animations {
             let c = sched.models.clip(model, anim.duration as f32);
             for channel in &anim.channels {

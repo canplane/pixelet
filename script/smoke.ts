@@ -1,66 +1,35 @@
 #!/usr/bin/env -S deno run -A
-// What a deployment must answer, checked against a running one.
+// What a deployment must answer, checked against a running one. Addresses
+// come from the generated route constants, so a moved root cannot leave this
+// checking a dead URL. `--origin` skips the bucket's branches, which only the
+// edge serves.
 //
 //   deno run -A script/smoke.ts https://plei.me
 //   deno run -A script/smoke.ts https://api.plei.me --origin
-//
-// The addresses come from the same generated constants the client and the
-// Worker read (spec/pxl/spec/route.json), the versions from published.json and the
-// asset key from the ingest's own table, so a version bump or a moved root
-// cannot leave this checking a URL nobody serves any more. That is the whole
-// reason it is a Deno script and not a list of curls: a hand-kept list of
-// paths is exactly what the address space stopped being.
-//
-// `--origin` is the stack behind the edge — Caddy and the two servers, reached
-// directly. The bucket's own branches are left out there, because the origin
-// has never served them: a deployment answers a tile out of R2 at the edge,
-// and the origin 404s it correctly.
-//
-// A check names what it expects and why, so a failure reads as a sentence
-// rather than as a status code. The old addresses are checked too: they must
-// be gone, and a 200 from one means a relay is still carrying the pre-09-18
-// shape.
 
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { PUBLISHED_VERSION } from "../apps/web/src/config/published.spec.ts";
 import { INGESTED } from "../apps/web/src/catalog/asset/ingested.spec.ts";
 
-// The generated constants directly: route.spec.ts imports nothing itself, and
-// the root has no mapping into apps/web because nothing else here reaches in.
 import { API_INTERNAL, API_ROOT, GEO_INTERNAL, GEO_ROOT, SEARCH_URL, TILE_ROOT } from "../apps/web/src/config/route.spec.ts";
 
-/** A land page in Bundang — the one infra/README's own procedure names, so a
- * check here and a check by hand are looking at the same object. A baked page
- * is named by its quadkey, so this is the zoom-15 tile the page stands on
- * (pxl-spec bake/quadkey.rs). */
+/** A land page in Bundang, the one infra/README's procedure names: the zoom-15 quadkey. */
 const PAGE = "132110320312001";
 
-/** The reverse-geocode group PAGE falls in: the same ground four levels up
- * (pxl-spec bake/place_page.rs's `GROUP_SHAMT`), since a geocode object covers
- * 16 pages a side rather than one page — so its name is PAGE's first eleven
- * digits, which is the whole point of naming a page this way.
- *
- * Both are written out rather than computed. Computing either means the
- * packed-lane arithmetic in TypeScript that pxl-spec exists to be the only
- * copy of. */
+/** PAGE's geocode group, four levels up: its first eleven digits. Written
+ * out, since computing it would copy pxl-spec's arithmetic into TypeScript. */
 const GEOCODE_GROUP = "13211032031";
 
-/** Any content-addressed asset: the table's first entry, whatever it is. The
- * point is that the bucket answers the asset root, not which model does. */
 const ASSET_KEY = Object.values(INGESTED)[0].key;
 
 interface Check {
   path: string;
   want: u32;
   why: string;
-  /** What this check offers to accept, where that is the point of it. The
-   * default is a browser's list; Deno's own fetch offers no zstd, and a
-   * deployment serves a stored object in its own encoding or not at all. */
+  /** Deno's fetch offers no zstd, and a stored object is served only in its own encoding. */
   encoding?: string;
 }
 
-/** What every current browser sends, which is what the bucket branches are
- * checked as. */
 const BROWSER_ENCODINGS = "gzip, deflate, br, zstd";
 
 function edgeChecks(): Check[] {
@@ -75,23 +44,13 @@ function edgeChecks(): Check[] {
     { path: `${TILE_ROOT}/geocode/${PUBLISHED_VERSION.geocode}/_dict`, want: 200, why: "the dictionary every group's numbers are read against" },
     { path: `/${ASSET_KEY}`, want: 200, why: "a content-addressed asset, its own root" },
     ...commonChecks(),
-    // The pre-09-18 shape. A 200 from any of these means a relay somewhere is
-    // still claiming the old root.
     { path: `${API_ROOT}/tiles/terrain/${PUBLISHED_VERSION.terrain}/${PAGE}`, want: 404, why: "the old tile address, which must be gone" },
-    // The shape before 2026-09-24, when a page was a level and a decimal
-    // index. A 200 here means the bucket still holds a set in the old layout
-    // under a version the client asks for.
     { path: `${TILE_ROOT}/terrain/${PUBLISHED_VERSION.terrain}/0/12720250262323200`, want: 404, why: "the old page name, which must be gone" },
-    // The shape before the tile root was its own, when the bake's pages were a
-    // branch of the geo root. A 200 here means the edge still sends it to the
-    // bucket.
     { path: `${GEO_ROOT}/tiles/terrain/${PUBLISHED_VERSION.terrain}/${PAGE}`, want: 404, why: "the old tile address under the geo root, which must be gone" },
     { path: `${API_ROOT}/search?q=x`, want: 404, why: "the old search address, which must be gone" },
   ];
 }
 
-/** The gates and the fallbacks, which the edge and the origin answer alike —
- * both are in front of the same two servers. */
 function commonChecks(): Check[] {
   return [
     { path: `${GEO_INTERNAL}/x`, want: 401, why: "pxl-geo's internal prefix, gated by the admin token" },
@@ -121,9 +80,7 @@ console.log(`[smoke] ${base}${originOnly ? " (origin, behind the edge)" : ""} �
 
 let failed = 0;
 for (const { path, want, why, encoding } of checks) {
-  // A query string of its own on every request: Cloudflare caches what it is
-  // told to, and a check that read a cached answer would pass for a
-  // deployment that is no longer there.
+  // A unique query string, so a cached answer cannot pass for a dead deployment.
   const url = `${base}${path}${path.includes("?") ? "&" : "?"}_smoke=${crypto.randomUUID()}`;
   let got: u32 | string;
   let size = 0;

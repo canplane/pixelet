@@ -20,24 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// evanw/buddy-malloc, line for line, over a range that is given rather than
-// asked for — the page allocator, with slab.hpp over it for everything
-// smaller than a page. The same two changes from the C that xpute-core's
-// alloc/buddy_tree.rs makes, and for the same reasons:
-//
-// Where the memory comes from. The C calls `brk`; here `update_max_ptr` asks
-// the `Range`, and fails in exactly the same place, which leaves everything
-// built on it — the tree that starts small and doubles, `bucket_limit`, the
-// order the free lists are filled in — as it was.
-//
-// The 8-byte header is gone. It exists in the C because `free(void *)` is told
-// an address and nothing else; every caller here is handed the size back, so
-// `free` takes it and a block is nothing but its bytes.
-//
-// Everything else is the original: the linearized tree whose index says both
-// where a node is and how large, one bit a node pair holding the exclusive-or
-// of its children's UNUSED flags, and circular doubly-linked free lists
-// threaded through the free blocks themselves.
+// evanw/buddy-malloc, line for line, with two changes: memory comes from a
+// given `Range` instead of `brk`, and `free` is told the size, so there is no
+// 8-byte header.
 
 #pragma once
 
@@ -48,11 +33,8 @@
 
 namespace xpute {
 
-// The range an allocator spans and the two exponents that shape its tree.
-// `base()`/`end()` are asked at the first request and every one after, so how
-// far the range reaches is the range's answer. `MIN_LOG2` is the smallest
-// block; `MAX_LOG2` the largest the tree can describe, a statement about the
-// address space and not about any memory.
+// `MAX_LOG2` is the largest block the tree can describe, a bound on the
+// address space and not on any memory.
 template <class R>
 concept Range = requires {
     { R::MIN_LOG2 } -> std::convertible_to<std::size_t>;
@@ -64,8 +46,6 @@ concept Range = requires {
 template <Range R> class BuddyMalloc {
     static constexpr std::size_t BUCKET_COUNT = R::MAX_LOG2 - R::MIN_LOG2 + 1;
 
-    // Free lists are circular doubly-linked lists, one a bucket, threaded
-    // through the free blocks of that size.
     struct List {
         List *prev;
         List *next;
@@ -79,20 +59,17 @@ template <Range R> class BuddyMalloc {
     BuddyMalloc(const BuddyMalloc &) = delete;
     BuddyMalloc &operator=(const BuddyMalloc &) = delete;
 
-    // Bytes of the range that have ever been used: what the allocator has
-    // reached into, not what is live in it.
+    // The high-water mark, not what is live.
     std::size_t used() const noexcept { return max_ptr_ - base_ptr_; }
-    // Bytes handed out and not yet given back, each at its bucket's size.
     std::size_t live() const noexcept { return live_; }
-    // The bytes of the range the allocator was given.
     std::size_t range_bytes() const noexcept { return end_ptr_ - base_ptr_; }
-    // Blocks given back. A request refused before might be served once this
-    // has moved, and not before.
+    // A refused request can only be served once this has moved.
     std::uint32_t releases() const noexcept { return releases_; }
-    // Requests served since the first call.
+    // Base, max, end, live, then releases and allocs as half-words, read in
+    // place by a host.
+    const std::uintptr_t *stat() const noexcept { return &base_ptr_; }
     std::size_t allocs() const noexcept { return allocs_; }
 
-    // The largest block on a free list, or 0 when every list is empty.
     std::size_t largest_free() const noexcept {
         if (base_ptr_ == 0) return 0;
         for (std::size_t b = bucket_limit_; b < BUCKET_COUNT; b++) {
@@ -101,9 +78,7 @@ template <Range R> class BuddyMalloc {
         return 0;
     }
 
-    // The address a request of `request` bytes was given, or null. The block
-    // is a power of two of at least the smallest block, at an offset from the
-    // range's base that is a multiple of its own size.
+    // The block is a power of two, aligned to its own size from the base.
     void *malloc(std::size_t request) noexcept {
         // Initialize on the first call: the tree starts as a single node of
         // the smallest size, and more of the range is taken as needed.
@@ -119,8 +94,6 @@ template <Range R> class BuddyMalloc {
 
         if (request > std::size_t{1} << R::MAX_LOG2) return nullptr;
 
-        // The smallest bucket that fits; whether there is room is not checked
-        // yet.
         std::size_t original_bucket = bucket_for_request(request);
         std::size_t bucket = original_bucket;
 
@@ -176,7 +149,6 @@ template <Range R> class BuddyMalloc {
         }
     }
 
-    // Gives back what `malloc` returned, told the same size it asked for.
     void free(void *at, std::size_t request) noexcept {
         if (at == nullptr) return;
         List *ptr = static_cast<List *>(at);
@@ -204,8 +176,7 @@ template <Range R> class BuddyMalloc {
     }
 
   private:
-    // Make sure every address before `new_value` may be used: the C asks the
-    // kernel with `brk`, and here the range says. False where it cannot.
+    // The C asks `brk`; here the range says.
     bool update_max_ptr(std::uintptr_t new_value) noexcept {
         if (new_value > max_ptr_) {
             if (new_value > end_ptr_) return false;
@@ -220,7 +191,6 @@ template <Range R> class BuddyMalloc {
         return reinterpret_cast<List *>(base_ptr_ + ((index + 1 - (std::size_t{1} << bucket)) << (R::MAX_LOG2 - bucket)));
     }
 
-    // The node an address stands for, the bucket making it one of many.
     std::size_t node_for_ptr(List *ptr, std::size_t bucket) const noexcept {
         return ((reinterpret_cast<std::uintptr_t>(ptr) - base_ptr_) >> (R::MAX_LOG2 - bucket)) + (std::size_t{1} << bucket) - 1;
     }
@@ -235,7 +205,6 @@ template <Range R> class BuddyMalloc {
         node_is_split_[index / 8] ^= static_cast<std::uint8_t>(1 << (index % 8));
     }
 
-    // The smallest bucket that fits `request`.
     std::size_t bucket_for_request(std::size_t request) const noexcept {
         std::size_t bucket = BUCKET_COUNT - 1;
         std::size_t size = std::size_t{1} << R::MIN_LOG2;
@@ -251,7 +220,6 @@ template <Range R> class BuddyMalloc {
         buckets_[bucket].next = &buckets_[bucket];
     }
 
-    // Appends a free block that is in no list, overwriting its links.
     void list_push(std::size_t bucket, List *entry) noexcept {
         List *list = &buckets_[bucket];
         List *prev = list->prev;
@@ -261,15 +229,11 @@ template <Range R> class BuddyMalloc {
         list->prev = entry;
     }
 
-    // Removes an entry from whichever list it is in: the lists being
-    // circular, a head's own links are updated when its first or last goes.
     static void list_remove(List *entry) noexcept {
         entry->prev->next = entry->next;
         entry->next->prev = entry->prev;
     }
 
-    // The last entry, removed, or null for an empty list — which a circular
-    // list says by pointing at itself.
     List *list_pop(std::size_t bucket) noexcept {
         List *list = &buckets_[bucket];
         List *back = list->prev;

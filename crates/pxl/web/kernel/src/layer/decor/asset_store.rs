@@ -1,17 +1,8 @@
 // pxl-kernel/layer/decor/asset_store.rs
 
-//! Every decor kind's loaded models and skins, as a plain module store.
-//!
-//! Whoever draws the decor reads the store itself each tick, so an arrival
-//! needs no record of its own: each model or skin that lands asks for the
-//! frame that draws it.
-//!
-//! A model is registered with the scheduler's models as it arrives
-//! (layer/model/asset.rs), so the kernel holds its triangles for the
-//! eraser's hit test (layer/decor/hit.rs) and the renderer
-//! draws its instances from the same lanes; the group it is drawn as is its
-//! variant's place across every kind, in registry order. The registering is
-//! `decor_asset_task`'s, a variant at a time on a turn's quota.
+//! Every decor kind's loaded models and skins. A model is registered with
+//! the scheduler as it arrives, so the eraser's hit test and the renderer
+//! read the same lanes.
 
 use pxl_spec::asset::ingested::Asset;
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
@@ -25,34 +16,32 @@ use crate::layer::decor::registry::DECOR_BUNDLES;
 use crate::layer::model::asset::register_model;
 use crate::world::change::{request_world_tick, world_edge};
 
-/// Variants a kind has room for; kind.rs's largest kind has nine.
+/// kind.rs's largest kind has nine.
 const VARIANTS: usize = 16;
 
 #[derive(Clone)]
 pub struct DecorBundleAssets {
     pub bundle: &'static DecorKindBundle,
-    /// The scheduler's model a variant is, None while it loads.
+    /// None while it loads.
     pub models: Vec<Option<u32>>,
-    /// The shell's image handle a variant is skinned with, None while it loads.
+    /// The shell's image handle; None while it loads.
     pub skins: Vec<Option<u32>>,
 }
 
 struct Store {
-    /// One entry per kind, in registry order, written in place as its
-    /// variants' assets arrive: the snapshot is the store itself.
+    /// In registry order, written in place as assets arrive.
     entries: [DecorBundleAssets; 4],
-    /// The heap's release count when it last refused a model: until a block
-    /// is given back, the same model meets the same heap, and it is not tried.
+    /// The heap's release count when it last refused a model: not retried until
+    /// a block is given back.
     refused: Option<u32>,
 }
 
 static STORE: Global<Store> = Global::new();
 
-/// Writes what arrived for `asset` into every variant naming it, across every
-/// kind: two kinds may name the same model or the same skin, and both should
-/// reach one object. A model is told to the scheduler as the group each
-/// variant naming it is drawn as — its place across every kind — for its hit
-/// test; and the frame that draws what arrived is asked for.
+/// One per asset, since an arrival settles every variant naming it.
+pub const MODELS_MAX: usize = pxl_spec::asset::ingested::Asset::ALL.len();
+
+/// Two kinds may name the same model or skin; both reach one object.
 fn settle(entries: &mut [DecorBundleAssets], asset: Asset, value: u32, skin: bool) {
     let mut group = 0u32;
     for entry in entries {
@@ -96,13 +85,10 @@ fn wanted() -> &'static mut Notify {
     WANTED.get(Notify::new)
 }
 
-/// A model or a skin arrived or failed: the task looks at once.
 pub fn decor_assets_arrived() {
     wanted().notify();
 }
 
-/// The frame's check: a model the heap refused is tried again once the heap
-/// has given a block back.
 pub fn decor_assets_wanted() {
     let s = store();
     if s.refused.is_some_and(|r| r != heap_stat().releases) {
@@ -111,10 +97,7 @@ pub fn decor_assets_wanted() {
     }
 }
 
-/// The store's task: asks for every variant's model and skin, and registers
-/// whatever arrived, a variant at a time on a turn's quota — at once, which
-/// asks for them all, and again whenever something arrives or the heap has
-/// room for a model it refused.
+/// Registers whatever arrived, a variant at a time on the turn quota.
 pub async fn decor_asset_task() {
     loop {
         let mut refused = None;
@@ -146,13 +129,11 @@ pub async fn decor_asset_task() {
     }
 }
 
-/// What is loaded right now, one entry per decor kind. A variant still in
-/// flight reads as None, which is how a consumer knows to leave it out.
+/// A variant still in flight reads as None.
 pub fn decor_bundle_assets() -> &'static [DecorBundleAssets] {
     &store().entries
 }
 
-/// One kind's assets, or None while nothing of it has loaded yet.
 pub fn decor_assets_for(bundle: Option<&DecorKindBundle>, assets: &'static [DecorBundleAssets]) -> Option<&'static DecorBundleAssets> {
     let bundle = bundle?;
     assets.iter().find(|entry| core::ptr::eq(entry.bundle, bundle))

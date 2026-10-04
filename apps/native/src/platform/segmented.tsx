@@ -1,13 +1,6 @@
 // @pxl/native/platform/segmented.tsx
 
-/**
- * One of a few views of the same panel, on an iPhone: the system's segmented
- * control, so the pick has the press and the slide the system gives it. It
- * is UIKit's (modules/platform/ios/SegmentedControl.swift), as every control
- * that takes a touch here is (README.md beside this file). A segment holds
- * its words alone, as the system's does: UIKit's segment is a title or an
- * image, never both.
- */
+/** UIKit's segmented control, as every touched control here is; a segment is a title or an image, never both. */
 
 import { requireNativeView } from "expo";
 import type { ComponentType } from "react";

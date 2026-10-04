@@ -1,12 +1,6 @@
 // @xpute/core/abi/cmd.ts
 
-/**
- * A command's number: a major that names what it is about, and a minor that
- * names what is done to it — `major << 8 | minor` in the 16 bits a message
- * carries (ipc/frame's word 1). Numbers, never strings: a table is an index,
- * and a string was the part certain to change. What the majors and minors
- * are is the program's, not this kit's.
- */
+/** `major << 8 | minor` in the 16 bits ipc/frame's word 1 carries. */
 
 import type { u32 } from "@xpute/core/abi/word.ts";
 

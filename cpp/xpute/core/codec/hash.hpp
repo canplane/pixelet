@@ -1,9 +1,6 @@
 // cpp/xpute/core/codec/hash.hpp
 
-// FNV-1a, 64 bits, as one word: the same word the TypeScript
-// (@xpute/core codec/hash.ts), the Rust (the `fnv` crate) and the spec
-// generator compute, so an id hashed anywhere is one number. Over bytes, and
-// over a string's bytes as they are — a string here is already UTF-8.
+// FNV-1a, 64 bits, the same word every language and the spec generator compute.
 
 #pragma once
 

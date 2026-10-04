@@ -4,20 +4,14 @@ import type { u64 } from "../abi/word.ts";
 import type { Bytes } from "../abi/array.ts";
 import { bytes_to_hex, te } from "./encoding.ts";
 
-// ============ FNV-1a 64-bit, as one word ============
-
 const FNV64_OFFSET = 0xcbf29ce484222325n;
 const FNV64_PRIME = 0x100000001b3n;
 
-/** FNV-1a over a string's UTF-8 bytes, 64 bits wide — the same word the
- * Rust side and the spec generator compute, so an id hashed anywhere is one
- * number. */
+/** FNV-1a 64 over UTF-8, the same word the Rust side and the spec generator compute. */
 export function fnv1a64_str(s: string): u64 {
   return fnv1a64_bytes(te.encode(s));
 }
 
-/** The same word over a byte string, for an id built from numbers rather
- * than spelled out as text. */
 export function fnv1a64_bytes(bytes: Bytes): u64 {
   let h = FNV64_OFFSET;
   for (let i = 0; i < bytes.length; i++) {
@@ -26,10 +20,6 @@ export function fnv1a64_bytes(bytes: Bytes): u64 {
   }
   return h;
 }
-
-// ============ SHA-256 ============
-// Converts string data to a fixed-length hash via SHA-256.
-// Mainly used to derive cache keys for large query strings.
 
 export async function sha256(bytes: Bytes): Promise<Bytes> {
   return new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));

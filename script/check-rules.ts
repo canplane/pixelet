@@ -1,37 +1,8 @@
 #!/usr/bin/env -S deno run -A
-// Holds the tree to the rules in AGENTS.md that a machine can decide, so that
-// what drifts without anyone deciding it is caught where it drifts.
-//
-// Five of them, each a rule that went wrong by accident more than once and
-// none a judgment about design:
-//
-// - A source file opens with its own logical path. The comment is how a file
-//   is named in every other comment, so a wrong one sends readers elsewhere.
-// - A source path a comment or a document names exists. A file renamed or
-//   deleted leaves its citations behind; eleven still named the terrain
-//   level module weeks after the pyramid window replaced it.
-// - The lattice's arithmetic is the space model's. A level's cells, chunks
-//   and pages are 2^level of the leaf's, and every size is a `Scale` stepped
-//   and counted in `pxl-spec space/`; a shift by a tier or by a scale's own
-//   exponent written in a layer is a second owner of the lattice, and every
-//   one found had drifted or duplicated a constant. So is a cell's place in
-//   its page worked out by hand: the lattice numbers a page's cells, and
-//   that number is the index into every lane a page has (`cell_index`,
-//   `in_page`), where seven layers had each spelled it out again.
-// - The kernel's memory is reached through its base. An address the kernel
-//   names is an offset, and one cast straight to a pointer reads the right
-//   memory only where the base is 0 — a module's — so it passed every test
-//   and faulted on a device, twice. Every other pointer cast is spelled by
-//   what it is (clippy, crates/Cargo.toml), so `as *const` and `as *mut` are
-//   left meaning only that, and are refused.
-// - On an iPhone, SwiftUI draws the sheet and nothing a touch lands on inside
-//   React Native: a SwiftUI control there missed quick taps where UIKit's
-//   took them (apps/native/src/platform/README.md). `@expo/ui` is imported
-//   by the sheet alone.
-//
-// `issue/` is exempt from the second: a decision record names the files of
-// its day.
-//
+// Holds the tree to the AGENTS.md rules a machine can decide: the header
+// path, cited paths and names existing, the lattice's arithmetic only in
+// `space/`, no raw pointer casts in offset crates, `@expo/ui` only in the
+// sheet. `issue/` is exempt from cited paths.
 //   deno run -A script/check-rules.ts
 
 import { dirname, fromFileUrl, join, normalize } from "@std/path";
@@ -51,7 +22,6 @@ function read(f: string): string | null {
   }
 }
 
-/** Each crate's directory by its package name, as Cargo.toml spells it. */
 const crates = new Map<string, string>();
 for (const f of files.filter((f) => f.endsWith("Cargo.toml"))) {
   const name = read(f)?.match(/^\[package\][^[]*?^name\s*=\s*"([^"]+)"/ms)?.[1];
@@ -60,9 +30,6 @@ for (const f of files.filter((f) => f.endsWith("Cargo.toml"))) {
 
 const problems: string[] = [];
 
-// ---- the header ----
-
-/** The path a file's first line names, or null where the rule has none. */
 function header(f: string): string | null {
   if (f.endsWith(".rs")) {
     for (let dir = dirname(f); dir !== "."; dir = dirname(dir)) {
@@ -73,11 +40,8 @@ function header(f: string): string | null {
     }
     return null;
   }
-  // C++ has no package to be named by, so a file of cpp/ is named by its
-  // path, which is the same in the xpute repository.
   if (/^cpp\/.*\.(cpp|hpp)$/.test(f)) return f;
   if (!/\.tsx?$/.test(f)) return null;
-  // An app's file by the app's name: under its src/, or at its root.
   const app = f.match(/^apps\/([\w-]+)\/(?:src\/)?(.*)$/);
   if (app) return `@pxl/${app[1]}/${app[2]}`;
   const pkg = f.match(/^packages\/xpute\/(\w+)\/src\/(.*)$/);
@@ -87,12 +51,10 @@ function header(f: string): string | null {
 for (const f of files) {
   const want = header(f);
   const text = want && read(f);
-  if (!text || text.startsWith("#!")) continue; // an executable script opens on its interpreter
+  if (!text || text.startsWith("#!")) continue;
   const first = text.slice(0, text.indexOf("\n"));
   if (first !== `// ${want}`) problems.push(`${f}:1: opens with "${first}", not "// ${want}"`);
 }
-
-// ---- the paths a comment names ----
 
 const suffixes = new Set<string>();
 for (const f of files) {
@@ -100,16 +62,13 @@ for (const f of files) {
   for (let i = 0; i < parts.length; i++) suffixes.add(parts.slice(i).join("/"));
 }
 
-/** Whether `path`, as `from` cites it, names a file of the tree. */
 function exists(path: string, from: string): boolean {
-  // Relative to the citing file, or, in a document or a config, to the root.
   if (path.startsWith("../")) return suffixes.has(normalize(join(dirname(from), path)));
   if (path.startsWith("./")) return suffixes.has(normalize(join(dirname(from), path))) || suffixes.has(path.slice(2));
   if (suffixes.has(path)) return true;
   const [head, ...rest] = path.split("/");
   const tail = rest.join("/");
   if (head === "@pxl") {
-    // `@pxl/<app>/…`: under the app's src/, or at its root.
     const [app, ...within] = rest;
     return suffixes.has(`apps/${app}/src/${within.join("/")}`) || suffixes.has(`apps/${app}/${within.join("/")}`);
   }
@@ -117,9 +76,7 @@ function exists(path: string, from: string): boolean {
   if (head === "@xpute") return suffixes.has(`packages/xpute/${rest[0]}/src/${rest.slice(1).join("/")}`);
   const dir = crates.get(head);
   if (dir && (suffixes.has(`${dir}src/${tail}`) || suffixes.has(`${dir}${tail}`))) return true;
-  // What a build writes and git ignores, such as the ABI's symbol table: named
-  // by what git ignores rather than by what is on disk, since a fresh checkout
-  // — the gate's, in CI — runs this before any build has written it.
+  // By what git ignores, not disk: CI runs this before any build.
   return [join(dirname(from), path), path, `apps/web/src/${path}`].some((p) => {
     try {
       if (Deno.statSync(join(root, p)).isFile) return true;
@@ -129,6 +86,25 @@ function exists(path: string, from: string): boolean {
 }
 
 const CITED = /(?<![\w/.:@-])((?:\.{1,2}\/)*@?(?:[\w.@-]+\/)*[\w-]+(?:\.[\w-]+)*\.(?:rs|ts|tsx|wgsl))(?![\w/])/g;
+
+function resolve(path: string, from: string): string[] {
+  const tails = new Set<string>();
+  if (path.startsWith("./") || path.startsWith("../")) tails.add(normalize(join(dirname(from), path)));
+  tails.add(path.replace(/^\.\//, ""));
+  const [head, ...rest] = path.split("/");
+  const tail = rest.join("/");
+  if (head === "@pxl") {
+    const [app, ...within] = rest;
+    tails.add(`apps/${app}/src/${within.join("/")}`).add(`apps/${app}/${within.join("/")}`);
+  }
+  if (head === "@") tails.add(`apps/web/src/${tail}`);
+  if (head === "@xpute") tails.add(`packages/xpute/${rest[0]}/src/${rest.slice(1).join("/")}`);
+  const dir = crates.get(head);
+  if (dir) tails.add(`${dir}src/${tail}`).add(`${dir}${tail}`);
+  return files.filter((f) => [...tails].some((t) => f === t || f.endsWith(`/${t}`)));
+}
+
+const NAMED = /^`?\s+`([A-Za-z_][\w]*(?:::[A-Za-z_][\w]*)*)`/;
 const PROSE = /\.(rs|tsx?|wgsl|md|jsonc?)$/;
 
 for (const f of files) {
@@ -139,20 +115,23 @@ for (const f of files) {
   text.split("\n").forEach((line, n) => {
     if (!doc && !/^\s*(\/\/|\/?\*)/.test(line)) return;
     if (line.includes("://")) return;
-    for (const [, path] of line.matchAll(CITED)) {
-      if (!exists(path, f)) problems.push(`${f}:${n + 1}: names ${path}, which is no file here`);
+    for (const m of line.matchAll(CITED)) {
+      const path = m[1];
+      if (!exists(path, f)) {
+        problems.push(`${f}:${n + 1}: names ${path}, which is no file here`);
+        continue;
+      }
+      const name = line.slice(m.index! + path.length).match(NAMED)?.[1]?.split("::").pop();
+      const within = name ? resolve(path, f) : [];
+      if (name && within.length > 0 && !within.some((w) => new RegExp(`\\b${name}\\b`).test(read(w) ?? ""))) {
+        problems.push(`${f}:${n + 1}: names ${name} in ${path}, which has no ${name}`);
+      }
     }
   });
 }
 
-// ---- the lattice ----
-
-/** Where a level's shift of the hierarchy is written: the space model, and
- * the elevation format's sampling, which is derived from a page's span. */
 const LATTICE_OWNERS = ["crates/pxl/spec/src/space/", "crates/pxl/spec/src/bake/constant.rs"];
 const SHIFT = /(\b(L[1-4]|L[2-4]_RANGE|PAGE_CELLS|CHUNK_CELLS)\b|\.shamt\(\))[^;]*(<<|>>)|(<<|>>)[^;]*(\bL[1-4]\b|\.shamt\(\))/;
-/** A page's cell index split into its column and row, or put together from
- * them, by the page's width. */
 const IN_PAGE = /[%/]\s*PAGE_CELLS\b|(rem|div)_euclid\(\s*PAGE_CELLS\b|\*\s*PAGE_CELLS\b(\s+as\s+\w+)?\s*\+/;
 
 for (const f of files) {
@@ -164,11 +143,6 @@ for (const f of files) {
   });
 }
 
-// ---- the memory's offsets ----
-
-/** The crates that name the kernel's memory by offsets from its base
- * (xpute-runtime mem/base.rs), where clippy makes every harmless pointer
- * cast say what it is (crates/Cargo.toml's workspace lints). */
 const OFFSET_CRATES = ["crates/xpute/runtime/src/", "crates/pxl/web/kernel/src/", "crates/pxl/web/render/src/", "crates/pxl/web/wasm/src/", "crates/pxl/web/native/src/"];
 const CAST_TO_POINTER = /\bas\s+\*(const|mut)\b/;
 
@@ -179,8 +153,6 @@ for (const f of files) {
     if (CAST_TO_POINTER.test(line)) problems.push(`${f}:${n + 1}: casts to a pointer where an offset goes through mem::base::ptr_at: ${line.trim()}`);
   });
 }
-
-// ---- SwiftUI's place ----
 
 const SWIFTUI_OWNERS = ["apps/native/src/platform/panel.tsx"];
 

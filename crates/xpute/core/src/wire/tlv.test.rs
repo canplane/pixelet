@@ -5,7 +5,7 @@ use crate::golden::Golden;
 
 const GOLDEN: &str = include_str!("../../../../../spec/xpute/golden/wire/tlv.tsv");
 
-/// A read value as the TypeScript prints it: `typeof`, a colon, the value.
+/// As the TypeScript prints it: `typeof`, a colon, the value.
 fn show(v: &TlvValue) -> String {
     match v {
         TlvValue::Bool(b) => format!("boolean:{b}"),
@@ -51,6 +51,20 @@ fn tlv_computes_what_the_typescript_computes() {
     let read: Vec<String> = TlvReader::new(packet).read_all().unwrap().iter().map(show).collect();
     let want: Vec<&str> = (0..v.len("read")).map(|j| v.s(&format!("read.{j}"))).collect();
     assert_eq!(read, want);
+
+    v.each("end", |k| {
+        let pkt = hex::decode(v.s(&format!("{k}.packet"))).unwrap();
+        let mut r = TlvReader::new(&pkt);
+        let mut n = 0;
+        let stop = loop {
+            match r.next_value() {
+                Ok(Some(_)) => n += 1,
+                Ok(None) => break if r.end() == Some(TlvEnd::Closed) { "closed".to_string() } else { "unclosed".to_string() },
+                Err(e) => break format!("errno:{}", e.errno as i32),
+            }
+        };
+        assert_eq!(format!("{n}:{stop}"), v.s(&format!("{k}.read")), "{k}");
+    });
 
     let huge_pkt = hex::decode(v.s("huge.packet")).unwrap();
     let huge = TlvReader::new(&huge_pkt).read_all();

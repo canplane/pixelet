@@ -1,28 +1,14 @@
-// The sky: one triangle over the screen at the far plane, behind everything
-// and drawn after it, where nothing opaque stands (gpu/renderer.rs), each
-// pixel the light along its own ray (atmos_view.wgsl's beyond, over
-// the tables gpu/atmosphere.rs draws) — the air's, and the ground's past
-// the terrain's drawn edge. Over it the sun's disc and the moon's, each
-// seen through the air. The stars and the clouds are passes of their own over this
-// one (gpu/stars.rs, gpu/clouds.rs). The output is graded, vignetted and
-// encoded to sRGB as every pass's is — the frame uniform is bound for the
-// vignette.
+// The sky: one triangle at the far plane, drawn after the opaque world, with
+// the sun's and moon's discs through the air.
 
 struct Sky {
-  // A pixel's ray in the root frame, affine in its NDC (gpu/renderer.rs's
-  // put_ray): the frame the air's sun and moon are in.
   ray: mat3x3f,
-  // The celestial pole in the same frame, which the Moon's north is turned
-  // toward, and whether its face has arrived (gpu/moon.rs).
   pole: vec3f,
   mapped: f32,
 };
 
-// Held as vec4 words, each field read from its own by `sky_<field>()`:
-// what the host and a shader share has no room inside it for a driver to
-// lay out its own way (issue/20260927-a-matrix-the-driver-reads-its-own-way.md),
-// and nothing builds the struct back, with which Safari's WebGPU lost its
-// GPU process.
+// Read field by field from vec4 words, never as a struct: a struct here lost
+// Safari's WebGPU its GPU process.
 @group(0) @binding(1) var<uniform> sky_words: array<vec4f, 4>;
 
 fn sky_ray() -> mat3x3f { return mat3x3f(sky_words[0].xyz, sky_words[1].xyz, sky_words[2].xyz); }
@@ -32,40 +18,22 @@ fn sky_mapped() -> f32 { return sky_words[3].w; }
 @group(0) @binding(2) var moon_map: texture_2d_array<f32>;
 @group(0) @binding(3) var moon_sampler: sampler;
 
-// The sun's disc before the exposure: far past white once exposed, so it
-// is the air in front of it that colors it, as it reddens a low sun.
+// Far past white once exposed, so the air in front colors it.
 const SUN_DISC: f32 = 4.0;
-// Limb darkening: the disc's edge is the sun's cooler outer layer, seen
-// through more of it.
 const SUN_LIMB: f32 = 0.6;
-// How much larger than they stand the Sun's and the Moon's discs are drawn.
-// At their true size each is eight pixels on a phone, smaller than the Sun
-// and the Moon anyone remembers seeing: the eye enlarges them — the moon
-// illusion near the horizon, the glare round a bright one. Four, a whole
-// multiple of the truth, taken by look between it and the dome shader's
-// eight-odd, which had no derivation. Only their size is not theirs; their
-// light, their faces and the Moon's phase are.
+// At true size each disc is eight pixels on a phone, smaller than anyone
+// remembers; four is chosen by look. Only size is exaggerated, not light or phase.
 const DISC_SCALE: f32 = 4.0;
-// The Moon's mean semi-diameter as seen from the Earth, and what its surface
-// sends back on average of the sunlight falling square on it.
 const MOON_ANGULAR_RADIUS: f32 = 0.004522;
 const MOON_ALBEDO: f32 = 0.12;
-// The face's map (gpu/moon.rs): texels across a radius, and its mean over the
-// disc as the Earth sees it, which pxl-tool/bin/download_moon.rs prints — the
-// map is relative, and this is what scales it to MOON_ALBEDO.
+// The map's mean over the disc (printed by download_moon) scales it to MOON_ALBEDO.
 const MOON_MAP_RADIUS_TEXELS: f32 = 256.0;
 const MOON_MAP_MEAN: f32 = 0.2459;
-// How bright a full Moon's face is shown at most, on average: the eye looking
-// at the Moon adapts to it, and sees its seas and its highlands where the
-// sky's exposure would drown the disc white. By day the sky's exposure is
-// the lower, and the face shows at it, a pale disc about as bright as the
-// blue around it.
+// The eye adapts to the Moon, so its seas show where the sky's exposure would
+// drown the disc white.
 const MOON_FACE_SHOWN: f32 = 0.6;
-// Earthshine: the Earth's sunlit face lighting the Moon's dark side, the
-// ashen light of a crescent. What it has is a ten-thousandth of the
-// sunlit side's, which no eight-bit screen holds beside it; what it is shown
-// at is how a crescent's dark side reads to the eye at night, and it goes as
-// the Earth's phase from the Moon, full when the Moon is new.
+// Earthshine is ~1e-4 of the sunlit side, which no 8-bit screen holds; this is
+// how it reads at night, going with the Earth's phase.
 const EARTHSHINE_SHOWN: f32 = 0.03;
 
 struct VertexOut {
@@ -82,10 +50,6 @@ fn vs(@builtin(vertex_index) i: u32) -> VertexOut {
   return o;
 }
 
-// The Sun's disc along `dir` from radius `r`, `a` the ray's offset from its
-// center in disc radii and `w` how far `a` moves across a pixel: limb-
-// darkened, through the air in front of it, its edge a pixel soft. Nothing
-// where the planet stands in the way.
 fn sun_disc(dir: vec3f, r: f32, a: f32, w: f32) -> vec3f {
   let mu = dot(dir, atmos_up());
   if (meets_ground(r, mu) || dot(dir, atmos_sun_dir()) <= 0.0 || a >= 1.0 + w) {
@@ -97,16 +61,7 @@ fn sun_disc(dir: vec3f, r: f32, a: f32, w: f32) -> vec3f {
   return transmittance_to_top(r, mu) * shown() * SUN_DISC * limb * edge;
 }
 
-// The Moon's face along `dir` from radius `r`: `across` is the ray's offset
-// from the disc's center in disc radii and `a` its length, and `w` how far
-// `a` moves across a pixel, taken where every pixel of the pass takes it.
-// Each point of the face is the map's, the near side turned with its north
-// toward the celestial pole; it sends back the sunlight by the
-// Lommel–Seeliger law — which is why a full Moon is as bright at its limb as
-// at its center, where a Lambertian ball would dim — so its phase is where
-// the Sun lights it, pixel by pixel. It is seen through the air as the Sun
-// is. Its limb is a pixel's soft edge. Nothing where the planet stands in
-// the way.
+// Lommel-Seeliger, so a full Moon is as bright at its limb as at its center.
 fn moon_disc(dir: vec3f, r: f32, across: vec3f, a: f32, w: f32) -> vec3f {
   let axis = atmos_moon_dir();
   let mu = dot(dir, atmos_up());
@@ -117,8 +72,7 @@ fn moon_disc(dir: vec3f, r: f32, across: vec3f, a: f32, w: f32) -> vec3f {
   let on = across / max(a, 1.0);
   let normal = on - axis * sqrt(max(1.0 - dot(on, on), 0.0));
 
-  // Selenographic: north toward the pole, east to the right as the Earth
-  // sees it, and the near side's center toward the Earth.
+  // Selenographic: north toward the pole, east to the right as seen from Earth.
   let north = normalize(sky_pole() - dot(sky_pole(), axis) * axis);
   let east = cross(axis, north);
   let lon = atan2(dot(normal, east), -dot(normal, axis));
@@ -148,8 +102,7 @@ fn moon_disc(dir: vec3f, r: f32, across: vec3f, a: f32, w: f32) -> vec3f {
 fn fs(v: VertexOut) -> @location(0) vec4f {
   let dir = normalize(sky_ray() * vec3f(v.ndc, 1.0));
   let r = camera_r();
-  // The ray's place on each disc, in its radii, and how far that moves
-  // across a pixel: a derivative, so taken here, where every pixel takes it.
+  // Derivatives, so taken where every pixel takes them.
   let sun_a = length(cross(dir, atmos_sun_dir())) / (atmos_sun_angular_radius() * DISC_SCALE);
   let sun_w = max(fwidth(sun_a), 1e-4);
   let across = (dir - dot(dir, atmos_moon_dir()) * atmos_moon_dir()) / (MOON_ANGULAR_RADIUS * DISC_SCALE);

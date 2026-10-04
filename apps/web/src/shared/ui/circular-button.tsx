@@ -15,36 +15,25 @@ import { SNAP } from "@/shared/ui/motion/transition.ts";
 import { chrome, color, disabledContent, surface } from "@/shared/ui/theme.ts";
 
 interface CircularButtonProps {
-  /** The glyph it holds, drawn in the label color at every control's glyph
-   * size; or what it holds instead, a face of its own (the compass) or a
-   * glyph that moves. */
+  /** Or `children` instead: a face of its own (the compass), or a glyph that moves. */
   glyph?: GlyphName;
   children?: ReactNode;
-  /** Its side: a map control's by default. */
   size?: f64;
-  /** Where it stands, which is what its backing is: over the map by default,
-   * or on a sheet, where the glass is clear and the fill faint. */
   place?: BackingPlace;
   onPress: () => void;
-  /** What assistive technology reads it as. */
   label: string;
   isActive?: boolean;
   disabled?: boolean;
 }
 
-/** A round control: a disc of the platform's glass, or its fill where it has
- * none, holding one glyph. Switched on, the disc takes the chosen coral, as a
- * tint on the glass or as the fill, ringed in it. A press shrinks the disc where there is
- * no glass; the glass answers a press itself. */
 export function CircularButton(
   { glyph, children, size = chrome.control, place = BackingPlace.OverMap, onPress, label, isActive, disabled }: CircularButtonProps,
 ) {
   const round = { width: size, height: size, borderRadius: size / 2 };
   return (
     <Pressable
-      // Disabled, it still takes a touch and does nothing with it: a
-      // Pressable told it is disabled lets the touch through to the map under
-      // it, where a tap on the dimmed compass left the heading's follow.
+      // Disabled still takes the touch: a disabled Pressable let a tap on the
+      // dimmed compass through to the map.
       onPress={disabled ? undefined : onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
@@ -52,7 +41,6 @@ export function CircularButton(
       style={round}
     >
       {({ pressed }) => (
-        // The ring stands on what a press shrinks, so the two shrink as one.
         <Motion
           to={{ scale: pressed && !disabled && !SYSTEM_BACKING ? 0.95 : 1 }}
           transition={SNAP}

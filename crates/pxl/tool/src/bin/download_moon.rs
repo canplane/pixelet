@@ -1,24 +1,9 @@
 // pxl-tool/bin/download_moon.rs
 
-//! The moon's face, as the sky draws it (frame/shader/sky.wgsl's moon_disc).
-//!
-//! NASA SVS's CGI Moon Kit color map at 1K (LRO's LROC WAC mosaic, an
-//! equirectangular map with longitude 0 at its center and east to the right)
-//! cut to the near side, longitude −90° to 90°, since the Moon keeps that face
-//! to the Earth; each pixel's color taken to its luminance in linear light
-//! and written back as an eight-bit sRGB gray, 512 × 512, to
-//! `asset/sky/moon.png`. The ingest ships it from there.
-//!
-//! It prints the face's mean reflectance as the map holds it, over the disc
-//! as the Earth sees it — each pixel weighted by its projected area,
-//! cos(latitude)·cos(longitude) — which sky.wgsl's MOON_MAP_MEAN has to
-//! equal: the map is relative, and the shader scales it to the Moon's albedo
-//! by that mean.
-//!
-//! Credit: NASA's Scientific Visualization Studio, which asks for it — here
-//! and where the face is drawn (gpu/moon.rs), as the star catalog is
-//! credited, rather than in THIRD_PARTY_NOTICES.md, which covers copied
-//! source.
+//! The moon's face for sky.wgsl: NASA SVS's CGI Moon Kit map cut to the near
+//! side, as linear-light luminance in 8-bit sRGB, to `asset/sky/moon.png`.
+//! The printed mean reflectance must equal sky.wgsl's MOON_MAP_MEAN.
+//! Credit: NASA's Scientific Visualization Studio.
 //!
 //!   deno task download:moon
 
@@ -50,7 +35,6 @@ fn run() -> Result<(), String> {
     ureq::get(SOURCE).call().map_err(|e| e.to_string())?.into_reader().read_to_end(&mut body).map_err(|e| e.to_string())?;
     let map = image::load_from_memory_with_format(&body, ImageFormat::Jpeg).map_err(|e| e.to_string())?.to_rgb8();
     let (w, h) = map.dimensions();
-    // The near side: the middle half of the longitudes.
     let (x0, side) = (w / 4, w / 2);
     let mut face = GrayImage::new(side, h);
     let (mut sum, mut weight) = (0.0, 0.0);

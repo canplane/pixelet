@@ -1,10 +1,7 @@
 // pxl-kernel/layer/marker/location_puck.rs
 
-//! The device's location puck: a zone of cells about where the device is, each
-//! at the ground under it, and a beacon above. The first half decides where
-//! the device is, which cells the zone covers at what height and where the
-//! beacon should stand; the second holds the zone, eases, spins and bobs the
-//! beacon, and draws both.
+//! The device's location puck: a zone of cells about the fix, each on the
+//! ground under it, and a beacon above that eases, spins and bobs.
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
 use pxl_render::gpu::api::word_bytes;
@@ -26,14 +23,12 @@ use crate::world::chunk::table::Frame;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 
-// The numerator (4) is a world-space distance, not a cell count — it fixes the
-// zone's footprint size independent of U_PER_CELL. The .707 shave is a fixed
-// one-cell diagonal correction in cell units, so it does not scale either.
+// A world-space footprint (4u), independent of U_PER_CELL; the .707 is a
+// one-cell diagonal correction.
 const ZONE_RADIUS_CELL: f64 = 4.0 / U_PER_CELL - 0.707;
 const ZONE_RADIUS2_CELL: f64 = ZONE_RADIUS_CELL * ZONE_RADIUS_CELL;
 
-/// A zone cell: its offset from the center, and which of its sides (top,
-/// bottom, right, left) lie on the zone's border.
+/// Which of its sides (top, bottom, right, left) lie on the zone's border.
 struct ZoneSample {
     off: V3,
     borders: [f64; 4],
@@ -70,25 +65,20 @@ fn zone_samples() -> Vec<ZoneSample> {
 
 struct Puck {
     samples: Vec<ZoneSample>,
-    /// Holds the last known device position across a transient GPS dropout.
-    /// Without this, a blip tore down and rebuilt the zone — that, not the
-    /// position math, was the source of a "stacked/cube" rendering glitch after
-    /// tab-away-and-back.
+    /// Holds across a GPS dropout: rebuilding the zone on a blip caused a
+    /// stacked-cube glitch after tab-away-and-back.
     last_known_device_coord: Option<Pvf3>,
-    /// Not yet grounded gates drawing, instead of drawing the marker at a
-    /// guessed height while the device's own page isn't loaded yet.
+    /// None until grounded, rather than drawing at a guessed height.
     last_known_center_z: Option<f64>,
-    /// The zone as last written: its center, and the tiles it was grounded
-    /// against. A zone sample can reach a page not yet loaded; a page arriving
-    /// grounds it again.
-    zone_for: Option<(V3, u32)>,
+    /// The zone's center and the `support_revision` it was grounded against: a
+    /// page arriving or an edit grounds it again.
+    zone_for: Option<(V3, [u32; 2])>,
     beacon_for: Option<([f64; 2], bool)>,
     shown: bool,
 }
 
 static PUCK: Global<Puck> = Global::new();
 
-/// The puck's turn, for the device's coordinate as it stands.
 pub fn location_puck_step(device_coord: Option<Pvf3>) {
     let p = PUCK.get(|| Puck {
         samples: zone_samples(),
@@ -107,8 +97,9 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
 
     let mut pos = [0.0; 3];
     projection::unproject(&mut pos, device.i, device.f);
-    if let Some(ground) = Access::now().at(&device, FINEST).value() {
-        p.last_known_center_z = Some(ground.top);
+    // The fix names a place and not how high.
+    if let Some(z) = Access::now().surface_support(&device).value() {
+        p.last_known_center_z = Some(z);
     }
     let Some(center_z) = p.last_known_center_z else {
         return clear(p);
@@ -126,10 +117,9 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
             add3(&center_pos, &s.off, &mut v);
             let mut coord = Pvf3::default();
             projection::project(&mut coord, v[0], v[1], v[2]);
-            // Falls back to flat (center height) rather than 0 when a sample
-            // lands on an unloaded neighboring page — absolute 0 would sink or
-            // launch that instance away from the rest of the zone.
-            let delta_ele = Access::now().at(&coord, FINEST).value().map_or(center_pos[2], |g| g.top) - center_pos[2];
+            // An unloaded neighbor page falls back to the center's height; 0 would sink
+            // or launch that instance.
+            let delta_ele = Access::now().surface_support(&coord).value().unwrap_or(center_pos[2]) - center_pos[2];
             let lifted = [s.off[0], s.off[1], s.off[2] + delta_ele];
             center3n(&lifted, U_PER_CELL, &mut v);
             lane.extend([
@@ -147,10 +137,8 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
         request_world_tick();
     }
 
-    // center_pos floors to the cell grid to line up with the zone's cell-sized
-    // boxes; the beacon has no such constraint, so this adds the remainder back
-    // — otherwise it would quantize to whole-cell jumps instead of moving
-    // smoothly.
+    // The beacon adds back what the zone's cell flooring dropped, so it moves
+    // smoothly rather than in whole-cell jumps.
     let beacon = ([pos[0] - center_pos[0], pos[1] - center_pos[1]], theme_key() == Theme::Night);
     if p.beacon_for != Some(beacon) {
         p.beacon_for = Some(beacon);
@@ -168,20 +156,8 @@ fn clear(p: &mut Puck) {
     request_world_tick();
 }
 
-// ---- the puck as the kernel holds it ----
-//
-// The zone as a ring of cell boxes laid over the ground, and a beacon above
-// it that eases toward the fix, spins and bobs. Where the device is and which
-// cells the zone covers at what height are decided above; this holds them,
-// animates the beacon each tick, and lists their draws.
-
-/// Floats a zone instance takes: the box's center relative to the zone's
-/// (3), and which of its top, bottom, right and left edges border the ring
-/// (4).
+/// The box's center relative to the zone's (3), and its border flags (4).
 pub const ZONE_INSTANCE_FLOATS: usize = 7;
-/// The beacon's height above the ground, how fast it eases toward the fix,
-/// past what distance it jumps instead, and how far away it stops being
-/// drawn.
 const BEACON_Z_BIAS: f64 = 0.5;
 const BEACON_SMOOTH_RATE: f64 = 6.0;
 
@@ -190,9 +166,8 @@ pub struct PuckDraw {
     bytes: u32,
     handle: u32,
     count: u32,
-    /// The zone's center, in units.
     center: V3,
-    /// Where the beacon should stand and where it stands, relative to the center.
+    /// Relative to the center.
     target: [f64; 2],
     shown: Option<[f64; 2]>,
     snap_dist2: f64,
@@ -207,8 +182,7 @@ pub struct Markers {
 }
 
 impl Markers {
-    /// The zone: the instances in `lane`, ZONE_INSTANCE_FLOATS floats each,
-    /// about a center at `center` in units. Replaces what was there.
+    /// `lane` holds ZONE_INSTANCE_FLOATS floats an instance. Replaces what was there.
     pub fn set_zone(&mut self, draw: &mut DrawList, center: V3, lane: &[f32], snap_dist: f64) {
         let count = (lane.len() / ZONE_INSTANCE_FLOATS) as u32;
         let bytes = word_bytes(lane.len()).max(4);
@@ -231,8 +205,7 @@ impl Markers {
             });
         }
         let p = self.puck.as_mut().unwrap();
-        // The beacon's shown offset follows the center, so a center that moves
-        // a whole cell does not play as a slide back.
+        // Follows the center, so a whole-cell move does not play as a slide back.
         if let Some(s) = p.shown.as_mut() {
             s[0] -= center[0] - p.center[0];
             s[1] -= center[1] - p.center[1];
@@ -248,8 +221,6 @@ impl Markers {
         }
     }
 
-    /// Where the beacon should stand relative to the zone's center, and
-    /// whether it wears the night color.
     pub fn set_beacon(&mut self, target: [f64; 2], night: bool) {
         if let Some(p) = self.puck.as_mut() {
             p.target = target;
@@ -265,7 +236,7 @@ impl Markers {
         }
     }
 
-    /// Advances the beacon; whether anything is animating and wants frames.
+    /// Whether anything is animating and wants frames.
     pub fn tick(&mut self, frame: &Frame) -> bool {
         let Some(p) = self.puck.as_mut() else { return false };
         let dt = frame.delta_s;
@@ -279,8 +250,7 @@ impl Markers {
             shown[0] += gap[0] * a;
             shown[1] += gap[1] * a;
         }
-        // Drawn within the fog's far edge of the camera, as the three puck
-        // hid itself past it: the beacon's place through the anchor root.
+        // Hidden past the fog's far edge, as three's puck was.
         let [x, y, z] = frame.world_of([p.center[0] + shown[0], p.center[1] + shown[1], p.center[2] + BEACON_Z_BIAS]);
         let c = frame.camera;
         p.visible = (x - c[0]).powi(2) + (y - c[1]).powi(2) + (z - c[2]).powi(2) < view_reach().powi(2);

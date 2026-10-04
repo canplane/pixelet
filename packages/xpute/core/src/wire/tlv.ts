@@ -1,77 +1,13 @@
 // @xpute/core/wire/tlv.ts
 
-/**
- * TLV: self-delimiting binary field stream.
- *
- * Scope
- * -----
- * - This module encodes and decodes a generic sequential TLV stream.
- * - It is intentionally schema-light: meaning is assigned by higher layers.
- * - The stream is self-delimiting via END tag.
- * - This format is sequential and stream-oriented, not a relocatable object layout.
- *
- * Wire Layout
- * -----------
- * Repeated sequence of:
- *   [tag | payload]
- * terminated by:
- *   [END]
- *
- * Tag domain:
- * - u8 tag values
- * - tag space is format-owned
- * - END is a control tag, not a value payload kind
- *
- * Payload Layout
- * --------------
- * - BOOL  = [u8]
- * - U8    = [u8]
- * - I8    = [i8]
- * - U16   = [u16]
- * - I16   = [i16]
- * - U32   = [u32]
- * - I32   = [i32]
- * - U64   = [u64]
- * - I64   = [i64]
- * - F32   = [f32]
- * - F64   = [f64]
- * - STR   = [u32 len][utf8 bytes]
- * - BYTES = [u32 len][raw bytes]
- *
- * Endianness
- * ----------
- * - All scalar payloads use little-endian encoding via scalar.ts.
- *
- * Stream Semantics
- * ----------------
- * - END terminates the logical stream.
- * - Bytes after END are ignored by iteration semantics.
- * - Missing END is tolerated only if the buffer ends exactly after the last full element;
- *   truncation during element decode is an error.
- * - Elements are interpreted strictly in forward stream order.
- *
- * Reader / Writer Contract
- * ------------------------
- * - TlvWriter is append-only until finish(); write-after-finish is invalid.
- * - finish() appends END exactly once.
- * - TlvReader iterates elements sequentially from the start of the buffer.
- * - Unknown tag values are rejected with EBADMSG.
- * - Truncated payloads are rejected with EBADMSG.
- *
- * Value Model
- * -----------
- * - TLV is a stream format, not a random-access object layout.
- * - Repeated values are allowed.
- * - Field names, uniqueness, ordering requirements, and semantic constraints
- *   are entirely owned by higher layers.
- *
- * Non-Goals
- * ---------
- * - No schema, field table, or offset index.
- * - No nested container protocol in this base format.
- * - No checksum/hash/compression/encryption inside this format.
- * - No canonical integer width normalization beyond the explicit tag written.
- */
+// A forward-only sequence of [u8 tag | payload] closed by END, read once in
+// order with no table or offsets (XTP is the retained form). Little-endian; a
+// scalar's tag is its length, so an unknown tag cannot be skipped.
+//
+// The reader reports how a sequence ended (`end`): closed by END, unclosed at an
+// element boundary, or cut inside one (EBADMSG, the values before it stand).
+// Equal values are equal bytes only under a schema that fixes each type: 1 may
+// be written as a U8, a U32 or an F64.
 
 import type { f32, f64, i16, i32, i64, i8, primitive, u16, u32, u64, u8 } from "@xpute/core/abi/word.ts";
 import { I32_MAX, I32_MIN, I64_MAX, I64_MIN, U16_SZ, U32_SZ, U64_SZ, U8_SZ } from "@xpute/core/abi/word.ts";
@@ -82,15 +18,10 @@ import * as scalar from "@xpute/core/wire/scalar.ts";
 import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { MarshalError } from "@xpute/core/status/error.ts";
 
-// ============ ABI ============
-
-// ---- Elements ----
-
-// TLV tag domain includes both value tags and control tags (e.g. END)
 const enum Tag {
-  END = 0x00, // END is a stream terminator control tag, not a payload element kind.
+  END = 0x00,
 
-  BOOL = 0x01, // [u8 0|1]
+  BOOL = 0x01,
 
   U8 = 0x02,
   I8 = 0x03,
@@ -105,20 +36,13 @@ const enum Tag {
 
   STR = 0x10, // [u32 len][utf8 bytes]
 
-  BYTES = 0x20, // [u32 len][raw bytes], opaque binary blob (nonce/token/key/u8 payload)
+  BYTES = 0x20,
 }
 
 export type TlvValue = primitive | Bytes;
 
-// ============ Tag I/O ============
-
-// tag I/O is TLV-specific (not general scalar)
 const put_tag = (s: Stream, tag: Tag): void => scalar.putu8(s, tag);
 const get_tag = (s: Stream): Tag => scalar.getu8(s);
-
-// ============ Writer ============
-
-// ---- Writer core ----
 
 export class TlvWriter {
   private _buf: Bytes;
@@ -137,10 +61,9 @@ export class TlvWriter {
       new_buf.set(this._buf);
       this._buf = new_buf;
 
-      // IMPORTANT: stream must be rebound to the new backing buffer.
+      // The stream holds the buffer, so it must be rebound to the new one.
       this._stream.buf = this._buf;
       this._stream.view = new DataView(this._buf.buffer, this._buf.byteOffset, this._buf.byteLength);
-      // offset stays valid (same numeric off)
     }
   }
 
@@ -163,8 +86,6 @@ export class TlvWriter {
       throw new MarshalError(Errno.EBADMSG);
     }
   }
-
-  // ---- Primitive writers ----
 
   u8(x: u8): this {
     this._check_unsealed();
@@ -245,8 +166,6 @@ export class TlvWriter {
     return this;
   }
 
-  // ---- Ref writers ----
-
   str(s: string): this {
     this._check_unsealed();
     const data: Bytes = encoding.te.encode(s);
@@ -270,12 +189,6 @@ export class TlvWriter {
     return this;
   }
 
-  // ---- Convenience writers ----
-
-  // Auto-dispatch helper:
-  // - string -> STR
-  // - Uint8Array -> BYTES
-  // - bigint/number -> explicit integer/float tags by runtime shape/range
   write_all(vals: TlvValue[]): this {
     for (const v of vals) {
       if (typeof v === "boolean") {
@@ -285,7 +198,6 @@ export class TlvWriter {
           if (v >= I32_MIN && v <= I32_MAX) this.i32(v);
           else this.i64(BigInt(v));
         } else {
-          // float path (includes NaN/Inf)
           this.f64(v);
         }
       } else if (typeof v === "bigint") {
@@ -303,9 +215,9 @@ export class TlvWriter {
   }
 }
 
-// ============ Reader ============
-
-// ---- Reader core ----
+/** Where a sequence stopped without a fault: END read, or the input run out
+ * at an element's boundary. */
+export type TlvEnd = "closed" | "unclosed";
 
 export class TlvReader implements Iterable<TlvValue> {
   private _stream: Stream;
@@ -316,7 +228,12 @@ export class TlvReader implements Iterable<TlvValue> {
     this._end = _buf.byteLength;
   }
 
-  /** Materialize the remaining stream into an array (until END). */
+  /** How the sequence ended, once reading has reached its end: null while
+   * values remain, and after a fault. */
+  end(): TlvEnd | null {
+    return this._ended;
+  }
+
   read_all(): TlvValue[] {
     const out: TlvValue[] = [];
     for (const v of this) out.push(v);
@@ -374,13 +291,9 @@ export class TlvReader implements Iterable<TlvValue> {
     }
   }
 
-  // ---- Reader bounds ----
-
   private _need(n: u32): void {
     if (this._stream.off + n > this._end) throw new MarshalError(Errno.EBADMSG);
   }
-
-  // ---- Primitive readers ----
 
   private _u8(): u8 {
     this._need(U8_SZ);
@@ -427,8 +340,6 @@ export class TlvReader implements Iterable<TlvValue> {
     this._need(U8_SZ);
     return scalar.getu8(this._stream) !== 0;
   }
-
-  // ---- Ref readers ----
 
   private _str(): string {
     const len = this._u32();

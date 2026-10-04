@@ -32,28 +32,18 @@ import {
 } from "./spec.ts";
 import type { NodeView } from "./view.ts";
 
-/**
- * Scratchpad for 64-bit word operations to avoid allocation.
- * [lo32, hi32]
- */
 const WORD_REG: [u32, u32] = [NONE, NONE];
 
-// ============ Encoder ============
-
 export interface TreeEncoderOptions {
-  init_cap?: u32; // soft initial buffer size hint
+  init_cap?: u32;
   max_cap?: u32; // hard packet size limit
 }
 
-// The encoder assumes the normal construction path went through the view layer.
-// It still enforces minimal packet-boundary invariants such as cap/offset/type fallback.
 export class TreeEncoder {
   max_cap!: u32;
 
   buf!: U8Array;
   buf_view!: DataView<ArrayBuffer>;
-
-  // ---- Buffer ----
 
   private _ensure(new_cap: u32): u32 {
     const cap: u32 = this.buf.byteLength;
@@ -72,8 +62,6 @@ export class TreeEncoder {
     return this.buf.byteLength;
   }
 
-  // ---- Entry ----
-
   encode(view: NodeView, opts: TreeEncoderOptions = {}): U8Array {
     const { node } = view;
 
@@ -85,61 +73,46 @@ export class TreeEncoder {
     this.buf = new Uint8Array(init_cap);
     this.buf_view = new DataView(this.buf.buffer, this.buf.byteOffset, this.buf.byteLength);
 
-    SET_WORD(this.buf_view, 0, MAGIC, RESERVED); // word0
+    SET_WORD(this.buf_view, 0, MAGIC, RESERVED);
 
-    // packet payload
     const st: EncodingState = { base: HDR_SZ, lim: HDR_SZ, type: node.type };
     this._node(node, st);
 
-    // root node kind is preserved even when payload_sz == 0; a grafted root
-    // is its packet's root, so the type is the one the graft read
+    // A grafted root takes the type its packet's header carries.
     const payload_sz: u32 = st.lim - HDR_SZ;
     const desc: u32 = FIELD_SET(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, st.type);
-    SET_WORD(this.buf_view, WORD_SZ, payload_sz, desc); // word1
+    SET_WORD(this.buf_view, WORD_SZ, payload_sz, desc);
 
     const pkt_nbyte: u32 = ALIGN(HDR_SZ + payload_sz, WORD_SZ);
     this._ensure(pkt_nbyte);
     return this.buf.subarray(0, pkt_nbyte);
   }
 
-  // ---- Node Dispatch ----
-
   private _node(node: Node, st: EncodingState): void {
-    // leaf
     if (NODE_IS_LEAF(node)) {
       if (NODE_IS_SEQ(node)) return this._seq(node, st);
       return this._scalar(node, st);
     }
 
-    // special
     if (NODE_IS_BRANCH(node)) return this._branch(node, st);
     if (NODE_IS_GRAFT(node)) return this._graft(node, st);
     if (NODE_IS_NIL(node)) return;
     throw new MarshalError(Errno.EBADMSG);
   }
 
-  // graft semantics:
-  // - `pkt` is a complete tree packet
-  // - the outer packet header is stripped
-  // - only the grafted root payload region is copied into the current packet
-  // - packet header word1 stores [root_payload_sz 32 | type 8 | reserved 24]
-  // - placement alignment follows the grafted root node type
-  // - because root_payload_sz excludes the fixed packet header, graft preserves
-  //   the same root payload layout as inline encoding
-  // - base-offset alignment is expected to be enforced by the view construction path
+// Only the grafted packet's root payload is copied, so it lays out as the inline subtree would.
   private _graft(node: GraftNode, st: EncodingState): void {
     const { val: pkt } = node;
 
     if (pkt.byteLength < HDR_SZ) throw new MarshalError(Errno.EBADMSG);
     const hdr_view = new DataView(pkt.buffer, pkt.byteOffset, HDR_SZ);
 
-    // packet header fallback
-    const [magic] = GET_WORD(hdr_view, 0, WORD_REG); // word0
+    const [magic] = GET_WORD(hdr_view, 0, WORD_REG);
     if (magic !== MAGIC) throw new MarshalError(Errno.EBADMSG);
 
-    const [payload_sz, desc] = GET_WORD(hdr_view, WORD_SZ, WORD_REG); // word1
+    const [payload_sz, desc] = GET_WORD(hdr_view, WORD_SZ, WORD_REG);
     if (payload_sz > pkt.byteLength - HDR_SZ) throw new MarshalError(Errno.EBADMSG);
-    st.type = FIELD_GET(desc, DESC_TYPE_SHAMT, DESC_TYPE_MASK) as NodeType; // hi
+    st.type = FIELD_GET(desc, DESC_TYPE_SHAMT, DESC_TYPE_MASK) as NodeType;
 
     if (payload_sz === 0) return;
 
@@ -153,20 +126,6 @@ export class TreeEncoder {
     this.buf.set(pkt.subarray(HDR_SZ, HDR_SZ + payload_sz), st.base);
   }
 
-  // ---- Branch Encoding ----
-
-  // branch layout:
-  // [len_lo32 | reserved_hi32]
-  // [rel_off_lo32 | desc_hi32]...
-  //
-  // desc_hi32:
-  //   bits 0..7   : node type
-  //   bits 8..31  : reserved
-  //
-  // - len and offsets occupy 8-byte slots
-  // - only the low 32 bits of len/off are currently interpreted
-  // - each child offset is relative to the enclosing branch node base
-  // - branch alignment is WORD_SZ
   private _branch(node: BranchNode, st: EncodingState): void {
     const { val: children } = node;
     if (children === null) return;
@@ -175,10 +134,9 @@ export class TreeEncoder {
     const table_start: u32 = st.base + WORD_SZ;
 
     const len: u32 = children.length;
-    // empty branch (len = 0) is valid — analogous to [] or {} in JSON
     if (len > (this.max_cap >>> 3)) throw new MarshalError(Errno.EOVERFLOW);
 
-    this._ensure(st.lim = table_start + len * WORD_SZ); // [len | child entries...]
+    this._ensure(st.lim = table_start + len * WORD_SZ);
 
     SET_WORD(this.buf_view, st.base, len, RESERVED);
 
@@ -191,7 +149,6 @@ export class TreeEncoder {
       this._node(child, child_st);
       const rel_off = child_st.base === child_st.lim ? 0 : child_st.base - st.base;
 
-      // child node kind is preserved even when rel_off == 0
       SET_WORD(this.buf_view, table_off, rel_off, FIELD_SET(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, child_st.type));
 
       table_off += WORD_SZ;
@@ -199,18 +156,12 @@ export class TreeEncoder {
     this._ensure(st.lim = ALIGN(child_st.lim, WORD_SZ));
   }
 
-  // ---- Leaf Dispatch ----
-
-  // scalar layout:
-  // [payload]
-  // - scalar nodes have no header
-  // - scalar alignment is equal to the element size
   private _scalar(node: ScalarNode, st: EncodingState): void {
     const { type, val } = node;
     if (val === null) return;
 
     let elem_sz: AlignUnit;
-    let set_payload: (off: u32) => void; // payload offset; for scalar nodes this is the node base itself
+    let set_payload: (off: u32) => void;
 
     switch (type) {
       case ScalarType.U8:
@@ -269,13 +220,6 @@ export class TreeEncoder {
     set_payload(st.base);
   }
 
-  // sequence layout:
-  // [len 32 | reserved 32][payload...]
-  // - len is stored in an 8-byte slot
-  // - only the low 32 bits of len are currently interpreted
-  // - payload begins immediately after the len slot: base + WORD_SZ
-  // - sequence node base is WORD_SZ-aligned
-  // - STR stores a trailing NUL on wire, but len excludes that terminator
   private _seq(node: SequenceNode, st: EncodingState): void {
     const { type, val } = node;
     if (val === null) return;
@@ -283,10 +227,10 @@ export class TreeEncoder {
     st.base = ALIGN(st.base, WORD_SZ);
     const payload_start: u32 = st.base + WORD_SZ;
 
-    let later: boolean = false; // true when payload size is finalized only after payload write (e.g. STR)
+    let later: boolean = false;
 
-    let len: u32 = 0; // type-specific length
-    let payload_sz: u32 = 0; // byte length
+    let len: u32 = 0;
+    let payload_sz: u32 = 0;
     let set_payload: () => void;
 
     switch (type) {
@@ -326,15 +270,11 @@ export class TreeEncoder {
         break;
       }
 
-      // optimistic UTF-8 encode:
-      // - first try encodeInto() into the currently available tail
-      // - if it does not fit, reserve the worst-case bound (s.length * 4)
-      //   and retry once
-      // - avoids an intermediate encode() allocation while keeping retry bounded
+      // encodeInto() the free tail first, and on overflow reserve the worst case (4 bytes a UTF-16 unit) and retry once.
       case SequenceType.STR: {
         const s = val as string;
 
-        later = true; // true when payload size is known only after UTF-8 encoding
+        later = true;
         set_payload = (): void => {
           const min_needed: u32 = s.length;
 
@@ -358,7 +298,7 @@ export class TreeEncoder {
             res = encoding.te.encodeInto(s, view);
           }
 
-          len = res.written; // UTF-8 byte length, excluding trailing NUL
+          len = res.written;
           payload_sz = len + 1; // wire payload includes trailing NUL for C-friendly reads
 
           this._ensure(payload_start + payload_sz);
@@ -371,12 +311,7 @@ export class TreeEncoder {
         throw new MarshalError(Errno.EBADMSG);
     }
 
-    // computed after payload size is known; in later mode this is finalized only after payload write
-
-    // [len, ...payload]
-    // NOTE: set_payload may call _ensure internally (e.g. STR UTF-8 overflow),
-    // which reallocates buf and updates buf_view.
-    // SET_WORD must always come AFTER set_payload in later mode to see the fresh buf_view.
+    // set_payload may grow and replace buf_view, so the len word is written after it.
     if (later) {
       set_payload();
       this._ensure(st.lim = payload_start + ALIGN(payload_sz, WORD_SZ));

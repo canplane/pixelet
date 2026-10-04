@@ -9,17 +9,10 @@ import { CircularButton } from "@/shared/ui/circular-button.tsx";
 import { chrome, color, material, textStyle } from "@/shared/ui/theme.ts";
 import { LABEL } from "@platform/palette.ts";
 
-/** Height of the controls on a sheet (close button, search field, segmented
- * control): the least target, a step under a map control's 48. */
 export const PANEL_CONTROL = chrome.target;
-/** Distance of the top row's controls from the sheet's side and top edges,
- * and the side inset of a panel's content: iOS 26's, as its Maps' sheet
- * stands its search field and close. The drag handle, 4 from the top and 4
- * tall, leaves 8 above the controls. */
+/** iOS 26 Maps' sheet inset, for the top row's controls and the content's sides. */
 export const PANEL_EDGE = 16;
 
-/** A sheet's top row: its controls' height, as tall as an iOS navigation
- * bar. */
 export const PANEL_HEADER = {
   marginTop: PANEL_EDGE,
   height: PANEL_CONTROL,
@@ -28,56 +21,27 @@ export const PANEL_HEADER = {
   alignItems: "center",
 } as const;
 
-/** Gap between the top row's controls and the floating tabs under them: the
- * one between any two controls. */
 const STACK_GAP = chrome.controlGap;
-/** Gap between two sections of a panel's content, a step over the gap inside
- * one, so where one ends and the next begins reads, as iOS's grouped lists
- * part theirs. */
 export const PANEL_SECTION_GAP = 24;
-/** Gap between what stands last over a panel's content (its header's
- * controls, or its tabs) and the content's first row: a section's gap, as if
- * the controls were the section before. */
 const CONTENT_GAP = PANEL_SECTION_GAP;
-/** Height of the header: PANEL_EDGE above and below the round controls. A
- * sheet is dragged by it, and its content scrolls under it. */
 export const PANEL_HEAD_HEIGHT = PANEL_EDGE + PANEL_CONTROL + PANEL_EDGE;
-/** Top of the floating tabs, measured from the sheet's top: STACK_GAP under
- * the top row's controls, so they straddle the header's bottom edge. */
 const TABS_TOP = PANEL_EDGE + PANEL_CONTROL + STACK_GAP;
-/** Top padding of a panel's scroll content, which starts at the sheet's top
- * under the header: CONTENT_GAP under the header's controls. */
 export const PANEL_CONTENT_TOP = PANEL_EDGE + PANEL_CONTROL + CONTENT_GAP;
-/** The same with tabs floating over the content: CONTENT_GAP under the tabs
- * instead, which stand STACK_GAP under the header's controls. */
 export const PANEL_TABS_ROOM = PANEL_CONTENT_TOP + STACK_GAP + PANEL_CONTROL;
 
-/** Corner radius of a sheet's top corners: PANEL_EDGE plus the controls' radius,
- * so the corners are concentric with the round controls in the top row. */
+/** Concentric with the round controls in the top row. */
 export const SHEET_RADIUS = PANEL_EDGE + PANEL_CONTROL / 2;
 
-/** Props of a panel, a bottom sheet over the map (platform/web/panel.tsx,
- * and the device app's platform/panel.tsx). */
 export interface PanelProps {
-  /** What assistive technology announces it as. */
   label: string;
   onClose: () => void;
-  /** Open at half height instead of full height. Used by panels opened
-   * from the bottom of the screen; panels opened from the top open full. */
   half?: boolean;
   children: ReactNode;
 }
 
-/**
- * Whether the panel's host still shows it, and what to call once it has slid
- * away: a host drops a panel only after that (shared/ui/motion/presence.tsx),
- * and the host is the one place that knows, so it says so here rather than
- * through every panel's props.
- */
+/** A host drops a panel only after `gone`, once it has slid away. */
 export const PanelPresence = createContext<{ open: boolean; gone: () => void }>({ open: true, gone: () => {} });
 
-/** A panel's title row: centered title, close button at the end. No
- * safe-area padding, since a sheet never reaches the notch. */
 export function PanelHeader({ title, closeLabel, onClose }: { title: string; closeLabel: string; onClose: () => void }) {
   return (
     <View style={styles.headerRow}>
@@ -87,13 +51,6 @@ export function PanelHeader({ title, closeLabel, onClose }: { title: string; clo
   );
 }
 
-/** A panel's body: the scroll area (`children`), the whole sheet's height,
- * and floating over it the header (`header`, PANEL_HEAD_HEIGHT tall) and the
- * tabs, as iOS's bars stand over a list that scrolls under them. The header
- * is a see-through bar (theme.ts `material.bar`): at rest it stands on the
- * sheet's own ground and shows nothing, and content scrolled under it shows
- * through it blurred, or not at all where nothing blurs. Scroll content pads
- * its top by PANEL_CONTENT_TOP, or PANEL_TABS_ROOM under tabs. */
 export function PanelBody({ header, tabs, children }: { header: ReactNode; tabs?: ReactNode; children: ReactNode }) {
   return (
     <View style={styles.body}>
@@ -110,16 +67,13 @@ export function PanelBody({ header, tabs, children }: { header: ReactNode; tabs?
   );
 }
 
-/** A panel's close button: a round glass button with an X, as on iOS 26
- * sheets, a sheet control's size. */
 export function PanelClose({ label, onClose }: { label: string; onClose: () => void }) {
   return <CircularButton glyph="xmark" size={PANEL_CONTROL} place={BackingPlace.OnSheet} onPress={onClose} label={label} />;
 }
 
 const styles = StyleSheet.create({
   headerRow: { ...PANEL_HEADER, justifyContent: "flex-end" },
-  // Spans the whole row so the title is centered on the sheet, not on the
-  // space left of the close button.
+  // Spans the row so the title centers on the sheet, not beside the close button.
   title: { position: "absolute", left: 0, right: 0, textAlign: "center", pointerEvents: "none", ...textStyle.title, color: LABEL.primary },
   body: { flex: 1 },
   head: { position: "absolute", top: 0, left: 0, right: 0, height: PANEL_HEAD_HEIGHT },

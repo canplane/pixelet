@@ -1,20 +1,9 @@
 // @pxl/web/kernel/io/source.ts
 
 /**
- * What the tile source declares of itself, handed to the kernel once
- * (WORLD_SOURCE): the coarsest level of the pyramid it supplies whole, where
- * the kernel holds its floor (crates/pxl/web/kernel/src/world/paging/floor.rs).
- *
- * A published bake's declaration is published.json's `SOURCE`, in the bundle.
- * A dev tile server bakes on demand to its own `--top-level` and answers the
- * same object at `TILE_SOURCE_ROUTE`. Which of the two is read turns on the
- * one fact `tileUrl` already turns on, whether tiles come from a published
- * bake, and the kernel never learns which it was.
- *
- * Until the declaration arrives the kernel observes nothing — a cold start,
- * and never a floor taken at a level the source may not supply — so a dev
- * server not answering yet (it may still be compiling) is asked again rather
- * than guessed at.
+ * The tile source's declaration (its coarsest whole level), handed to the
+ * kernel once: published.json's `SOURCE` in a published build, else asked of
+ * the dev server until it answers. The kernel observes nothing until then.
  */
 
 import { Command, encode_world_source } from "@/kernel/abi/cmd.spec.ts";
@@ -25,12 +14,8 @@ import { originGet } from "@platform/origin.ts";
 import { CORE_DOORBELL } from "@/kernel/mem.ts";
 import { request_frame } from "@/kernel/sched.ts";
 
-/** How long a source that did not answer waits before it is asked again, in
- * milliseconds: a dev server compiling or restarting answers within seconds,
- * and nothing is drawn meanwhile either way. */
 const ASK_AGAIN_MS = 2_000;
 
-/** The dev server's declaration, or null where it did not give one. */
 async function asked(): Promise<TileSource | null> {
   try {
     const res = await originGet(TILE_SOURCE_ROUTE);
@@ -43,8 +28,6 @@ async function asked(): Promise<TileSource | null> {
   }
 }
 
-/** Reads the source's declaration, asking until it answers, and hands it to
- * the kernel. */
 export async function declare_source(): Promise<void> {
   let source = PUBLISHED_TILES ? PUBLISHED_SOURCE : await asked();
   while (source === null) {

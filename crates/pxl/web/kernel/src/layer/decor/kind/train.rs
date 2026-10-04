@@ -1,12 +1,7 @@
 // pxl-kernel/layer/decor/kind/train.rs
 
-//! A decor kind: its seed, its rules and its models, as the registry
-//! (decor/registry.rs) binds them.
-//!
-//! Occasional trains on rail lines. rail_main only (not RAIL_SUBWAY —
-//! that's underground, wrong context for a surface-scattered prop). Same
-//! "align_transport" reasoning as car applies: a train lying across the rail
-//! sideways would read as derailed. Only the transport channel matters.
+//! Trains on rail lines the ground shows (a tunnel's is not painted), aligned
+//! to the rail, since one lying across it reads as derailed.
 
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::bake::format::GroundChannelKey;
@@ -16,8 +11,6 @@ use crate::layer::decor::build::DecorVariantAsset;
 use crate::layer::decor::kind::DecorKindDef;
 use crate::layer::decor::scatter::{DecorKindSeed, DecorOrientationMode, DecorRules};
 
-/// The kind's variants, each a model by its path under asset/ and the skin
-/// it is drawn with, in the order the scatter picks among them.
 const VARIANTS: [DecorVariantAsset; 4] = [
     DecorVariantAsset {
         model: Asset::decor_kenney_train_kit_train_locomotive_a_glb,
@@ -40,8 +33,7 @@ const VARIANTS: [DecorVariantAsset; 4] = [
 pub const DEF: DecorKindDef = DecorKindDef {
     seed: DecorKindSeed {
         tag: 0x7ba15eed0004dec0,
-        // Very sparse, deliberately — trains are meant to read as occasional, not
-        // as a train sitting on every visible stretch of track.
+        // Very sparse: trains should read as occasional.
         density: 0.004,
         orientation: DecorOrientationMode::AlignTransport,
     },

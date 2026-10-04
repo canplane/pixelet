@@ -18,8 +18,6 @@ export function BottomOverlays() {
 }
 
 const styles = StyleSheet.create({
-  // ModeBar's own width chain needs a real ancestor width to resolve
-  // against — without it, a growing child has nothing to grow into. The
-  // row itself takes no touches, only the bar on it (BusyDim).
+  // ModeBar's width chain needs a real ancestor width to grow into.
   row: { width: "100%", minWidth: 0, alignItems: "center" },
 });

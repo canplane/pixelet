@@ -3,34 +3,22 @@
 import type { ReactNode } from "react";
 import { Keyboard, StyleSheet, View, type ViewProps } from "react-native";
 
-/** Whether the touch being dispatched began in a kept view. */
 let kept = false;
 
 /**
- * What to spread on a view a touch may start in and leave the keyboard up: a
- * field and what stands beside it to act on what is typed — a send, a clear.
- * A touch's start is offered to every view above the one touched, outermost
- * first, before any takes it; a kept view marks it as it passes and takes
- * nothing, so the view touched does what it does. Where a view lies is never
- * asked: a kept view may stand on the keyboard, lifted while the keys move by
- * a transform no measure sees (KeyboardDock).
+ * Spread on a view a touch may start in and leave the keyboard up. A kept
+ * view marks the touch during capture and takes nothing; position is never
+ * asked, since a view may be lifted by a transform no measure sees.
  */
 export const KEEPS_KEYBOARD: ViewProps = { onStartShouldSetResponderCapture: () => keepKeyboard() };
 
-/** Marks the touch being dispatched as one that leaves the keyboard up, and
- * takes nothing: for a view whose own capture handler is already another's
- * (a PanResponder's), to call from it. */
+/** For a view whose capture handler is already a PanResponder's. */
 export function keepKeyboard(): false {
   kept = true;
   return false;
 }
 
-/**
- * The app's root for the keyboard: a touch that starts anywhere but in a kept
- * view is done typing, and puts the keyboard away — the map, a panel, a
- * button, all alike. It is offered the touch first, so it decides once the
- * offer has passed every view the touch began in.
- */
+/** A touch starting anywhere but a kept view puts the keyboard away. */
 export function KeyboardAway({ children }: { children: ReactNode }) {
   const onTouch = () => {
     kept = false;

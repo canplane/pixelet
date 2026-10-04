@@ -1,21 +1,9 @@
 // cpp/xpute/core/alloc/slab.hpp
 
-// Size classes over buddy_tree.hpp: the level that lets a buddy whose smallest
-// block is a page answer a twenty-four-byte request. As xpute-core's
-// alloc/slab.rs, and for its reasons:
-//
-// One range, two levels. A request under a page takes a free slot of its class
-// here; a class with no free slot borrows a run below, carves it into slots,
-// and gives the run back when the last slot in it is freed — so what one class
-// gives back becomes available to every other class through the level below.
-// A request of a page or more goes straight down.
-//
-// The bookkeeping lives in the run, as SLUB keeps it: a free slot's first word
-// holds the next free slot, and what a run needs besides — the head of that
-// list, how many slots are out, its links in its class's partial list — sits
-// in the run's leading slots. A slot finds its run by masking its offset from
-// the range's base, which the buddy's placement of a block at a multiple of
-// its own size makes true.
+// Size classes over buddy_tree.hpp, as SLUB: a class with no free slot borrows
+// a run from the buddy and returns it when its last slot is freed. A slot finds
+// its run by masking its offset, which holds because the buddy aligns a block
+// to its own size.
 
 #pragma once
 
@@ -30,13 +18,10 @@
 namespace xpute {
 
 template <Range R> class SlabMalloc {
-    // The smallest class: below it a class costs more in run headers and
-    // rounding than it saves, and a free slot has to hold one pointer.
+    // Below 16 bytes a class costs more in run headers than it saves.
     static constexpr std::size_t MIN_CLASS_LOG2 = 4;
-    // The fewest slots a run is cut into, so its header is at most a
-    // sixteenth of it.
+    // So a run's header is at most a sixteenth of it.
     static constexpr std::size_t MIN_SLOTS_LOG2 = 4;
-    // Everything from the smallest class up to the one below a page.
     static constexpr std::size_t CLASS_COUNT = R::MIN_LOG2 - MIN_CLASS_LOG2;
 
     struct Run {
@@ -52,10 +37,8 @@ template <Range R> class SlabMalloc {
 
     static constexpr std::size_t run_log2(std::size_t c) noexcept { return std::max(class_log2(c) + MIN_SLOTS_LOG2, std::size_t{R::MIN_LOG2}); }
 
-    // The leading slots a run of class `c` spends on its own header.
     static constexpr std::size_t head_slots(std::size_t c) noexcept { return (sizeof(Run) + (std::size_t{1} << class_log2(c)) - 1) >> class_log2(c); }
 
-    // The slots a run of class `c` is cut into, its header's included.
     static constexpr std::size_t slots(std::size_t c) noexcept { return std::size_t{1} << (run_log2(c) - class_log2(c)); }
 
     static constexpr bool every_run_has_a_slot() noexcept {
@@ -71,26 +54,20 @@ template <Range R> class SlabMalloc {
     SlabMalloc(const SlabMalloc &) = delete;
     SlabMalloc &operator=(const SlabMalloc &) = delete;
 
-    // The page allocator underneath, for a caller that wants whole pages.
     BuddyMalloc<R> &pages() noexcept { return buddy_; }
     const BuddyMalloc<R> &pages() const noexcept { return buddy_; }
+    const std::uintptr_t *stat() const noexcept { return buddy_.stat(); }
 
     std::size_t used() const noexcept { return buddy_.used(); }
-    // Borrowed from the range and not given back, runs at their whole size.
     std::size_t live() const noexcept { return buddy_.live(); }
     std::size_t range_bytes() const noexcept { return buddy_.range_bytes(); }
     std::uint32_t releases() const noexcept { return buddy_.releases(); }
     std::size_t largest_free() const noexcept { return buddy_.largest_free(); }
-    // Requests served since the first call, slots and pages alike.
     std::size_t allocs() const noexcept { return allocs_; }
-    // Requests refused: the one way the heap is full.
     std::uint32_t refusals() const noexcept { return refusals_; }
-    // Bytes borrowed as runs, and of those the bytes out in slots; the
-    // difference is what the carving costs.
     std::size_t run_live() const noexcept { return run_live_; }
     std::size_t slot_live() const noexcept { return slot_live_; }
 
-    // A block of `bytes` at `align`, or null.
     void *alloc(std::size_t bytes, std::size_t align) noexcept {
         std::size_t c;
         if (!class_for(bytes, align, c)) {
@@ -118,7 +95,6 @@ template <Range R> class SlabMalloc {
         return slot;
     }
 
-    // Gives back what `alloc` returned, told the same size and alignment.
     void dealloc(void *at, std::size_t bytes, std::size_t align) noexcept {
         std::size_t c;
         if (!class_for(bytes, align, c)) {
@@ -145,7 +121,6 @@ template <Range R> class SlabMalloc {
         }
     }
 
-    // `alloc` and `dealloc` at the word alignment every block is read at.
     void *malloc(std::size_t bytes) noexcept { return alloc(bytes, 8); }
     void free(void *at, std::size_t bytes) noexcept { dealloc(at, bytes, 8); }
 
@@ -161,12 +136,9 @@ template <Range R> class SlabMalloc {
         return true;
     }
 
-    // A free slot's first word, read and written as the address it holds.
     static std::uint8_t *next_of(std::uint8_t *slot) noexcept { return *reinterpret_cast<std::uint8_t **>(slot); }
     static void set_next(std::uint8_t *slot, std::uint8_t *next) noexcept { *reinterpret_cast<std::uint8_t **>(slot) = next; }
 
-    // Borrows a run for class `c`, threads its free list through its slots,
-    // and puts it at the head of the class's partial list.
     Run *open_run(std::size_t c) noexcept {
         std::size_t run_bytes = std::size_t{1} << run_log2(c);
         auto *at = static_cast<std::uint8_t *>(buddy_.malloc(run_bytes));

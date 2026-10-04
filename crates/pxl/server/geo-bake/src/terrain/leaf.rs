@@ -1,13 +1,8 @@
 // pxl-geo-bake/terrain/leaf.rs
 
-//! The leaves: which z16 pages exist, and each one's bytes.
-//!
-//! A leaf exists where the elevation source covers it and land touches it.
-//! Anything else is open water, which the bake leaves as no object and every
-//! reader resolves to the one shared ocean page. The offline bake asks this of
-//! every page in the coverage at once; the dev tile server asks it of one page
-//! when a page is first wanted. It is the same question and the same answer, so
-//! the two produce the same set of objects, byte for byte.
+//! Which z16 leaves exist and their bytes. A leaf exists where the elevation
+//! source covers it and land touches it; the offline bake and the dev server
+//! ask the same question, so both produce the same objects.
 
 use postgres::types::ToSql;
 use postgres::Client;
@@ -25,12 +20,10 @@ use crate::terrain::repository::TerrainRepository;
 use crate::terrain::source::{fetch_tile, SourceStats};
 use crate::util::{pack, Level};
 
-/// Current `elevation_raster` coverage bbox — confirmed with
-/// `SELECT ST_Extent(ST_Transform(rast::geometry, 4326)) FROM elevation_raster`.
+/// From `SELECT ST_Extent(ST_Transform(rast::geometry, 4326)) FROM elevation_raster`.
 pub const SW: [f64; 2] = [123.9998611, 33.000244913560735];
 pub const NE: [f64; 2] = [131.9997935265517, 39.000138899999996];
 
-/// Object key of the single fallback page every open-water page resolves to.
 pub const OCEAN_KEY: &str = "_ocean";
 
 const HAS_LAND_SQL: &str = "
@@ -43,7 +36,6 @@ const HAS_LAND_SQL: &str = "
     AS t(ord, minx, miny, maxx, maxy)
 ";
 
-/// The leaves the elevation source covers, as an inclusive page range.
 #[derive(Clone, Copy, Debug)]
 pub struct Coverage {
     pub x: (i64, i64),
@@ -71,15 +63,11 @@ impl Coverage {
         (self.x.0..=self.x.1).contains(&ivec::X(page)) && (self.y.0..=self.y.1).contains(&ivec::Y(page))
     }
 
-    /// Whether a level-`level` page's footprint — the 2^level leaves a side it
-    /// covers — meets the range. A page that does not can have no leaf under
-    /// it, so it does not exist whatever else is asked.
     pub fn meets(&self, level: u32, page: IVec) -> bool {
         let ([x0, y0], [x1, y1]) = (ancestor_of([self.x.0, self.y.0], level), ancestor_of([self.x.1, self.y.1], level));
         (x0..=x1).contains(&ivec::X(page)) && (y0..=y1).contains(&ivec::Y(page))
     }
 
-    /// Every page in the range, X-major.
     pub fn pages(&self) -> Vec<IVec> {
         let mut out = Vec::new();
         for x in self.x.0..=self.x.1 {
@@ -91,9 +79,7 @@ impl Coverage {
     }
 }
 
-/// Which of `pages` land touches, in their order. A page with no land row is
-/// open water, whatever the coastline carve would later make of it: this is
-/// the cheap existence check, not the bake.
+/// A page with no land row is open water; a cheap check, not the carve.
 pub fn has_land(client: &mut Client, pages: &[IVec]) -> Result<Vec<bool>, postgres::Error> {
     let bbox: Vec<[f64; 4]> = pages
         .iter()
@@ -114,17 +100,14 @@ pub fn has_land(client: &mut Client, pages: &[IVec]) -> Result<Vec<bool>, postgr
     Ok(out)
 }
 
-/// A leaf's object, packed as it is stored and served, and its raw size.
 pub fn bake_leaf(repo: &TerrainRepository, client: &mut Client, page: IVec, stats: &mut SourceStats, level: Level) -> Result<(usize, Vec<u8>), String> {
     let raw = fetch_tile(repo, client, page, stats).map_err(|e| e.to_string())?;
     let packed = pack(raw.as_slice(), level).map_err(|e| e.to_string())?;
     Ok((raw.len(), packed))
 }
 
-/// The source packet an open-ocean page would produce: a flat zero elevation
-/// grid, no terrain features, no coastline rows. Synthesized rather than read
-/// from the DB so the fallback page is exactly "nothing here but water",
-/// independent of whichever far-offshore page happened to get sampled.
+/// Synthesized rather than read, so the ocean page does not depend on which
+/// offshore page was sampled.
 fn empty_source() -> Vec<u8> {
     let ele = vec![0i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
     let mut empty: TreeView<'_> = TreeView::new();
@@ -141,10 +124,8 @@ fn empty_source() -> Vec<u8> {
     encoder().encode(&root, TreeEncoderOptions::default()).expect("empty source packet")
 }
 
-/// The ocean page, raw, checked to be page-independent: a reader keeps one
-/// decoded copy for every ocean page, which is only sound if baking the same
-/// empty source at different pages (different bbox, different `Z_SCALE` by
-/// latitude) yields identical bytes.
+/// Checked to be page-independent: readers keep one decoded copy, which is
+/// sound only if the empty source bakes to identical bytes at any latitude.
 pub fn bake_ocean(samples: &[IVec]) -> Result<Vec<u8>, String> {
     let src = empty_source();
     let baked: Vec<Vec<u8>> = samples.iter().map(|p| bake_terrain(*p, &src).and_then(|t| encode_terrain(&t)).expect("ocean bake")).collect();
@@ -160,15 +141,11 @@ pub fn bake_ocean(samples: &[IVec]) -> Result<Vec<u8>, String> {
             ));
         }
     }
-    // Baked as a leaf, but it is the page every page with no object reads:
-    // the zero page, which is no page of its own (pxl-spec bake/format.rs
-    // `Occupancy`), and which a parent over it says so of.
     let mut ocean = decode_terrain(&baked[0]).map_err(|e| format!("{e:?}"))?;
     ocean.index.occupancy = Occupancy::ZERO;
     encode_terrain(&ocean).map_err(|e| format!("{e:?}"))
 }
 
-/// Three pages far apart in latitude, which is what the ocean check compares.
 pub fn ocean_samples(coverage: &Coverage) -> [IVec; 3] {
     let mid = (coverage.x.0 + coverage.x.1) / 2;
     [
@@ -176,4 +153,40 @@ pub fn ocean_samples(coverage: &Coverage) -> [IVec; 3] {
         ivec::gather(mid, (coverage.y.0 + coverage.y.1) / 2, 0),
         ivec::gather(coverage.x.1, coverage.y.1, 0),
     ]
+}
+
+/// The pages `has_ground` found, kept for the geocode bake and later stages;
+/// refused unless made at this page size, coverage, rule and release.
+pub fn land_pages(path: &Path, coverage: &Coverage, release: Option<&str>) -> Result<Vec<IVec>, String> {
+    let reclassify = "run bake_tiles, which writes it as a side effect of its own classification (`--limit 0` does the classification and bakes nothing)";
+    let raw = std::fs::read_to_string(path).map_err(|_| format!("{} not found — {reclassify}.", path.display()))?;
+    let v: serde_json::Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+    let want = land_key(coverage, release.unwrap_or_default());
+    for (k, want) in want.as_object().into_iter().flatten() {
+        if (k != "release" || release.is_some()) && v.get(k) != Some(want) {
+            return Err(format!(
+                "{} was classified with {k} {}, and it is now {want} — {reclassify}.",
+                path.display(),
+                v.get(k).unwrap_or(&serde_json::Value::Null)
+            ));
+        }
+    }
+    let list = v.get("pages").and_then(|p| p.as_array()).ok_or_else(|| format!("{} has no page list", path.display()))?;
+    list.iter().map(|s| s.as_str().ok_or("a page is not a string")?.parse::<IVec>().map_err(|e| e.to_string())).collect()
+}
+
+pub fn write_land_pages(path: &Path, coverage: &Coverage, release: &str, land: &[IVec]) -> Result<(), String> {
+    let mut v = land_key(coverage, release);
+    v["pages"] = land.iter().map(|p| p.to_string()).collect();
+    std::fs::write(path, serde_json::to_string(&v).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
+}
+
+fn land_key(coverage: &Coverage, release: &str) -> serde_json::Value {
+    serde_json::json!({
+        "l3_shamt": L3.shamt(),
+        "x": [coverage.x.0, coverage.x.1],
+        "y": [coverage.y.0, coverage.y.1],
+        "ground": format!("{GROUND:016x}"),
+        "release": release,
+    })
 }

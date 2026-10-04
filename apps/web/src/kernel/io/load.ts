@@ -1,21 +1,9 @@
 // @pxl/web/kernel/io/load.ts
 
-/**
- * The models and images the scheduler starts a read for
- * (crates/pxl/web/kernel/src/io/load.rs): the kernel says a number, the shell
- * knows which asset that is and where it lives.
- *
- * A read of an asset is a read like any other — it carries the key the
- * scheduler handed out, it can be stopped by that key, and it spends one of
- * the same credits the pages do. What is different is what comes back: a
- * model is far past a ring frame, so the host holds its bytes and the kernel
- * reads them in its turn, and an image is decoded where the device is instead
- * (platform/web/image.ts on the web), because what the renderer uploads is
- * the file's own pixels.
- */
-
-import type { u32, u64 } from "@xpute/core/abi/word.ts";
-import { Command, encode_load_done, encode_load_failed, encode_load_image } from "@/kernel/abi/cmd.spec.ts";
+import type { U8Array } from "@xpute/core/abi/array.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
+import { FileError } from "@xpute/runtime/ipc/sys.ts";
 import { loadKey } from "@/catalog/asset/load.ts";
 import { originGet } from "@platform/origin.ts";
 import { assetUrl } from "@/config/route.ts";
@@ -25,8 +13,7 @@ import { BODIES } from "@/kernel/module.ts";
 import { holdImage } from "@platform/image.ts";
 import { request_frame } from "@/kernel/sched.ts";
 
-/** The bytes a load names: the kernel says a number, the shell knows the URL. */
-async function fetch_load(load: u32, signal: AbortSignal): Promise<Response> {
+export async function read_asset(load: u32, signal: AbortSignal): Promise<U8Array> {
   const key = loadKey(load);
   if (key === null) throw new Error(`load ${load} names no asset`);
   const res = await originGet(assetUrl(key), signal);
