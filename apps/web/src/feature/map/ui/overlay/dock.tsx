@@ -25,7 +25,7 @@ import { openModal } from "@/app/modal.tsx";
 import { holdTier, holdTool, useInHand, useUiStore } from "@/app/store/ui.ts";
 import { useKernel } from "@/kernel/shell.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
-import { type PlaceableCube, placeableCubeId } from "@/catalog/cell/mod.ts";
+import { type PlaceableCube, placeableCubeId, sameCube } from "@/catalog/cell/mod.ts";
 import { OBJECT_TIERS } from "@/config/object.spec.ts";
 import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/catalog/cell/swatch.tsx";
 
@@ -80,6 +80,9 @@ const enum Sizes {
 /** The seed of the sizes, at their foot. */
 const SEED = 10;
 
+/** How long a key leaves the seed or the sizes up, long enough to read the one held. */
+const CUE_MS = 900;
+
 /** In the bar's frame, whose top is the card's; `bar` is where the bar is on the page. */
 interface Flyout {
   centerX: f64;
@@ -128,6 +131,8 @@ function SizeFlyout({ hover }: { hover: u32 | null }) {
 interface SizeGesture {
   tap: () => void;
   press: (swatch: View) => void;
+  /** A key picked the cube or stepped its size: the seed or the sizes over the swatch a moment, as a press shows them. */
+  cue: (swatch: View, open: boolean) => void;
   open: () => void;
   move: (x: f64, y: f64) => void;
   lift: (x: f64, y: f64) => void;
@@ -189,6 +194,10 @@ function SwatchButton({ cube, sizes }: { cube: PlaceableCube; sizes: Omit<SizeGe
   const selectCube = useUiStore.getState().selectCube;
   const selected = useInHand({ tool: ActiveTool.Object, cube });
   const ref = useRef<View | null>(null);
+  const swatchCue = useUiStore((s) => s.swatchCue);
+  useEffect(() => {
+    if (swatchCue.cube && sameCube(swatchCue.cube, cube) && ref.current) sizes.cue(ref.current, swatchCue.open);
+  }, [swatchCue]);
 
   const handlers = useSizeGesture(ref, {
     ...sizes,
@@ -260,6 +269,7 @@ export function Dock() {
   const [flyout, setFlyout] = useState<Flyout | null>(null);
   // A release can come before the swatch's place is measured.
   const pressing = useRef(false);
+  const cueTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const inputRef = useRef<TextInput | null>(null);
   const bar = useRef<View | null>(null);
 
@@ -291,6 +301,13 @@ export function Dock() {
           setFlyout({ centerX: sx + sw / 2 - bx, bar: [bx, by], hover: null, sizes: Sizes.Seed });
         });
       });
+    },
+    cue: (swatch, open) => {
+      clearTimeout(cueTimer.current);
+      swatch.measureInWindow((sx, _sy, sw) => {
+        bar.current?.measureInWindow((bx, by) => setFlyout({ centerX: sx + sw / 2 - bx, bar: [bx, by], hover: null, sizes: open ? Sizes.Open : Sizes.Seed }));
+      });
+      cueTimer.current = setTimeout(() => setFlyout(null), CUE_MS);
     },
     open: () => setFlyout((f) => f && { ...f, sizes: Sizes.Open }),
     move: (x, y) => {

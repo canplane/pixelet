@@ -2,8 +2,8 @@
 
 /**
  * The keys the shell answers, each sent to whatever owns what it does: the
- * movement keys' direction to the kernel; a digit, a tool, the dock's turn and
- * the drawer to the shell's own stores. A key has no place on the screen to
+ * movement keys' direction to the kernel; a digit, a tool, a size, the dock's
+ * turn and the drawer to the shell's own stores. A key has no place on the screen to
  * route it as a pointer's has, so this is that routing: a sheet in front takes
  * every key but Escape, which closes it, and a field takes every key but Tab.
  * Keys are named by `code`, the key's place, so any layout works the same.
@@ -13,18 +13,21 @@ import type { i32 } from "@xpute/core/abi/word.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_keys } from "@/kernel/shell.ts";
 import { closeModal, modalOpen, openModal } from "@/app/modal.tsx";
-import { holdTool, useUiStore } from "@/app/store/ui.ts";
+import { holdTool, RECENT_PICKS, useUiStore } from "@/app/store/ui.ts";
 
 const MOVE: Record<string, [i32, i32]> = { KeyW: [0, -1], KeyS: [0, 1], KeyA: [-1, 0], KeyD: [1, 0] };
 
-/** Digit1 to Digit8, the palette's slots in order. */
-const SLOT = /^Digit([1-8])$/;
+/** Digit1 on, the hotbar's slots in order. */
+const SLOT = /^Digit([1-9])$/;
 
 /** Figma's and Photoshop's letters for the move tool and the eraser. */
 const TOOL: Record<string, ActiveTool> = { KeyV: ActiveTool.Pointer, KeyE: ActiveTool.Eraser };
 
 /** A game's inventory key, and Figma's for its resources (Shift+I); Escape closes it as any sheet. */
 const DRAWER = "KeyI";
+
+/** Photoshop's brush size: `]` a coarser block, `[` a finer, a tier being finer as it counts up. */
+const SIZE: Record<string, i32> = { BracketRight: -1, BracketLeft: 1 };
 
 const held = new Set<string>();
 let sent: [i32, i32] = [0, 0];
@@ -41,11 +44,11 @@ function sendMove(): void {
 }
 
 function pickSlot(slot: number): void {
-  const { recentPicks, selectCube, selectDecor } = useUiStore.getState();
+  const { recentPicks, selectCube, selectDecor, cueSwatch } = useUiStore.getState();
   const pick = recentPicks[slot];
-  if (!pick) return;
-  if (pick.tool === ActiveTool.Object) selectCube(pick.cube);
-  else selectDecor(pick.kind);
+  if (pick.tool === ActiveTool.Decor) return selectDecor(pick.kind);
+  selectCube(pick.cube);
+  cueSwatch(pick.cube, false);
 }
 
 /** Whether the key is one the shell answers, so a driver can leave the rest alone. */
@@ -69,14 +72,18 @@ export function keyDown(code: string, { shift, inField }: { shift: boolean; inFi
     openModal("drawer");
     return true;
   }
+  if (code in SIZE) {
+    useUiStore.getState().stepSize(SIZE[code]);
+    return true;
+  }
   if (code in MOVE) {
     held.add(code);
     sendMove();
     return true;
   }
-  const slot = SLOT.exec(code);
-  if (slot) {
-    pickSlot(Number(slot[1]) - 1);
+  const slot = Number(SLOT.exec(code)?.[1] ?? 0);
+  if (slot >= 1 && slot <= RECENT_PICKS) {
+    pickSlot(slot - 1);
     return true;
   }
   return false;

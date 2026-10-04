@@ -9,6 +9,7 @@ import { decorKinds, type PlaceableCube, placeableCubes, sameCube } from "@/cata
 import { ActiveTool, Command, encode_chat_send } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, kernel_hold, kernel_snapshot, useKernel } from "@/kernel/shell.ts";
 import { storageGet, storageSet } from "@platform/storage.ts";
+import { OBJECT_TIERS } from "@/config/object.spec.ts";
 
 interface ChatLine {
   id: number;
@@ -20,8 +21,6 @@ let nextChatLineId = 0;
 
 // The hotbar's MRU list, across cube and decor; the tool says which catalog a pick's number is in.
 type RecentPick = { tool: ActiveTool.Object; cube: PlaceableCube } | { tool: ActiveTool.Decor; kind: u8 };
-
-const MAX_RECENT_PICKS = 8;
 
 function isSamePick(a: RecentPick, b: RecentPick): boolean {
   if (a.tool === ActiveTool.Object) return b.tool === ActiveTool.Object && sameCube(a.cube, b.cube);
@@ -37,7 +36,7 @@ function isKnownPick(pick: RecentPick): boolean {
 // Only a new pick joins, at the front: slots reshuffling under the finger disorient.
 function touchRecent(recentPicks: readonly RecentPick[], pick: RecentPick): RecentPick[] {
   if (recentPicks.some((p) => isSamePick(p, pick))) return recentPicks as RecentPick[];
-  return [pick, ...recentPicks].slice(0, MAX_RECENT_PICKS);
+  return [pick, ...recentPicks].slice(0, RECENT_PICKS);
 }
 
 /** What the pointer holds is the kernel's; the shell says what changes and reads it back. */
@@ -53,9 +52,21 @@ interface UiState {
   /** How far the dock's deck has turned, by a swipe or a key; the dock says which card that is. */
   dockTurn: i32;
   turnDock: (delta: i32) => void;
+
+  /** A key's pick or size step, which the dock shows over the cube's swatch as a press would: its seed, or the sizes open. */
+  swatchCue: SwatchCue;
+  cueSwatch: (cube: PlaceableCube, open: boolean) => void;
+  stepSize: (delta: i32) => void;
 }
 
-// One per placeable genre, so a fresh hotbar hints at everything placeable, padded to MAX_RECENT_PICKS.
+interface SwatchCue {
+  /** Counts the cues, so the same one twice still shows. */
+  n: u32;
+  cube: PlaceableCube | null;
+  open: boolean;
+}
+
+// One per placeable genre, so a fresh hotbar hints at everything placeable; as many as the hotbar holds.
 const SEED: readonly RecentPick[] = [
   { tool: ActiveTool.Object, cube: { channel: null, type: cube_types.block.white } },
   { tool: ActiveTool.Object, cube: { channel: GroundChannelKey.LAND, type: cube_types.land.bare } },
@@ -66,6 +77,9 @@ const SEED: readonly RecentPick[] = [
   { tool: ActiveTool.Object, cube: { channel: null, type: cube_types.block.blue } },
   { tool: ActiveTool.Decor, kind: decorKinds[0] },
 ];
+
+/** The hotbar's slots, always full: the seed fills it, and a new pick pushes the last out. */
+export const RECENT_PICKS = SEED.length;
 
 // Chat lines are not stored, nor what is held: a load starts at the pointer tool.
 const STORAGE_KEY = "pxl:ui_hotbar";
@@ -79,10 +93,10 @@ function load(): Stored {
   try {
     stored = JSON.parse(storageGet(STORAGE_KEY) ?? "null");
   } catch { /* nothing stored that reads */ }
-  const picks = Array.isArray(stored?.picks) ? stored.picks.filter((p) => typeof p === "object" && p !== null && isKnownPick(p)) : [];
+  const picks = Array.isArray(stored?.picks) ? stored.picks.filter((p) => typeof p === "object" && p !== null && isKnownPick(p)).slice(0, RECENT_PICKS) : [];
   // Padded from the seed: an empty tail reads as broken.
   for (const seed of SEED) {
-    if (picks.length >= MAX_RECENT_PICKS) break;
+    if (picks.length >= RECENT_PICKS) break;
     if (!picks.some((pick) => isSamePick(pick, seed))) picks.push(seed);
   }
   return { picks };
@@ -121,6 +135,15 @@ export const useUiStore = create<UiState>()((set) => ({
 
   dockTurn: 0,
   turnDock: (delta) => set((state) => ({ dockTurn: state.dockTurn + delta })),
+
+  swatchCue: { n: 0, cube: null, open: false },
+  cueSwatch: (cube, open) => set((state) => ({ swatchCue: { n: state.swatchCue.n + 1, cube, open } })),
+  stepSize: (delta) => {
+    const h = kernel_snapshot().holding;
+    if (h.tool !== ActiveTool.Object) return;
+    holdTier(Math.min(OBJECT_TIERS - 1, Math.max(0, h.tier + delta)));
+    useUiStore.getState().cueSwatch(heldCube(h), true);
+  },
 
   chatLines: [],
   appendChatLine: (text) => {

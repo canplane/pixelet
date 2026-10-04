@@ -38,6 +38,12 @@ export class Doorbell {
     this.cq = new Ring(mem, cq_at);
   }
 
+  /** Whether a command carrying `pkt` can be sent at all; one that cannot is
+   * the caller's input to refuse, at the boundary it came through. */
+  fits(pkt: U8Array): boolean {
+    return this.sq.fits(pkt);
+  }
+
   send(tag: u32, cmd: u32, pkt: U8Array | null = null): void {
     this.submit(tag, cmd, pkt, 0);
   }
