@@ -500,7 +500,6 @@ fn run() -> Result<(), String> {
             &serde_json::json!({
                 "git_sha": built,
                 "land_pages": land.len(),
-                "flat_elevation_pages": t.flat_ele,
                 "release": source.release,
                 "regions": args.regions.iter().map(|&r| page_name(r).to_string()).collect::<Vec<_>>(),
                 "source": read_source_catalogs(&mut client, source),
@@ -556,7 +555,6 @@ fn run() -> Result<(), String> {
                 "land_pages": land.len(),
                 "ocean_key": OCEAN_KEY,
                 "release": release,
-                "flat_elevation_pages": leaf["flat_elevation_pages"],
                 "source": leaf["source"],
                 "built": { "leaf_git_sha": leaf["git_sha"] },
             }),

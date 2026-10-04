@@ -197,9 +197,9 @@ that, worked back from how far each thing draws:
    successes). `assemble` refuses to finish with a page missing.
 2. **Check the flat-elevation warning.** A page the elevation raster does not
    reach is written successfully with a zero-filled grid — it bakes perfectly
-   flat and never appears in `failed`. The `surface` stage prints a
-   `WARNING: N pages ... baked FLAT` line when this happens, and
-   `manifest.json` records it under `flat_elevation_pages`. A page whose
+   flat and never appears in `failed`. The `leaf` stage prints a
+   `WARNING: N pages ... baked FLAT` line for the pages that run baked, and
+   nothing records it: a resumed run counts only its own. A page whose
    padded window only partly leaves the raster is not flat: its grid has the
    ground where there is any. A large number means the coverage and the
    raster disagree.
