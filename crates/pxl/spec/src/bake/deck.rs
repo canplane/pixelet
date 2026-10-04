@@ -48,12 +48,12 @@ pub const BORE_COVER_M: f64 = 3.0; // a bore's shell over its headroom: pixelet'
 /// clearance holds across the road on any of them.
 pub const MAX_GRADE: f64 = 0.30;
 
-/// Whole cells clear for `m` metres across a road, `cell_per_m` cells a metre,
-/// where it steps `step` cells to the next column: up to `MAX_GRADE` the clear
-/// height stands higher by the grade's secant, a least rounds up, and a
-/// staircase's step, a cell at least, is taken out of it at the step's edge.
-pub fn clear_cells(m: f64, cell_per_m: f64, step: i32) -> i32 {
-    libm::ceil(m * libm::hypot(1.0, MAX_GRADE) * cell_per_m) as i32 + step.max(1)
+/// Whole cells clear for `m` metres across a road, `cell_per_m` cells a metre:
+/// up to `MAX_GRADE` the clear height stands higher by the grade's secant, a
+/// least rounds up, and one cell more gives back what a voxel staircase's
+/// step takes out of the clear height at its edge.
+pub fn clear_cells(m: f64, cell_per_m: f64) -> i32 {
+    libm::ceil(m * libm::hypot(1.0, MAX_GRADE) * cell_per_m) as i32 + 1
 }
 
 /// What a way of transport type `kind` needs clear under a deck over it.
@@ -163,13 +163,11 @@ pub struct Deck<'a> {
     pub form: Form,
 }
 
-/// A line over one column: its road surface in z16 cells, how far that
-/// changes across one of its page's cells, and whether its pier's section
-/// covers the column.
+/// A line over one column: its road surface in z16 cells, and whether its
+/// pier's section covers the column.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Over {
     pub top: f64,
-    pub rise: f64,
     pub kind: u8,
     pub form: Form,
     pub pier: bool,
@@ -192,11 +190,8 @@ impl Over {
     /// `cell_per_m`: z16 cells a ground metre on the column's page.
     pub fn occupies(&self, ground: i32, cell_per_m: f64) -> Occupies {
         let top = round(self.top) as i32;
-        // a slab overlaps the next column's by a cell however far the surface steps
-        let step = libm::ceil(self.rise.abs()) as i32;
-        let thick = (round(DECK_THICKNESS_M * cell_per_m) as i32).max(step + 1);
         let slab = |floor: i32| {
-            let lo = (top - thick).max(floor);
+            let lo = (top - (round(DECK_THICKNESS_M * cell_per_m) as i32).max(1)).max(floor);
             Occupies::Above {
                 slab: [lo, top],
                 pier: (self.pier && lo > ground).then_some([ground, lo]),
@@ -206,7 +201,7 @@ impl Over {
         match self.form {
             Form::Deck => slab(i32::MIN),
             Form::Bore => Occupies::Through {
-                air: [top, top + clear_cells(headroom_m(self.kind), cell_per_m, step)],
+                air: [top, top + clear_cells(headroom_m(self.kind), cell_per_m)],
             },
             // a road off the ground past a structure stands on piers as a deck does, and is
             // open to the sky where it is cut in
@@ -335,7 +330,6 @@ impl Deck<'_> {
     fn over_segment(&self, frame: Option<Frame>, s: usize, at: [f64; 2]) -> Option<Over> {
         let (a, b) = (self.point(s), self.point(s + 1));
         let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
-        let len2 = dx * dx + dy * dy;
         let t = along(a, [dx, dy], at);
         // a line ends square where it begins and ends, as the ground cuts a way, so the
         // next line and the paint start where it stops; its joints stay round
@@ -347,10 +341,8 @@ impl Deck<'_> {
         if !way::covers(self.width_cells(), libm::hypot(at[0] - near[0], at[1] - near[1])) {
             return None;
         }
-        let rise = f64::from(self.tops[s + 1]) - f64::from(self.tops[s]);
         Some(Over {
-            top: f64::from(self.tops[s]) + rise * t,
-            rise: if len2 > 0.0 { rise / libm::sqrt(len2) } else { 0.0 },
+            top: f64::from(self.tops[s]) + (f64::from(self.tops[s + 1]) - f64::from(self.tops[s])) * t,
             kind: self.kind,
             form: self.form,
             pier: self.form != Form::Bore && frame.is_some_and(|f| pier_covers(f, self.width_cells(), a, [dx, dy], near, at)),

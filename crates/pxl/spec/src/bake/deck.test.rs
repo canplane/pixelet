@@ -131,7 +131,6 @@ fn each_form_is_drawn_from_its_surface() {
     use crate::cell::cube::cube_types::transport as t;
     let over = |form: Form, top: f64| Over {
         top,
-        rise: 0.0,
         kind: t::road_primary,
         form,
         pier: false,
@@ -146,12 +145,6 @@ fn each_form_is_drawn_from_its_surface() {
     assert_eq!(over(Form::Grade, 20.0).occupies(10, cpm), Occupies::Above { slab: [16, 20], pier: None });
     assert_eq!(over(Form::Grade, 10.0).occupies(14, cpm), Occupies::Through { air: [10, 14] });
     assert_eq!(over(Form::Grade, 10.0).occupies(10, cpm), Occupies::Grade);
-    // a slab falling 6.5 cells a cell reaches 8 down, a cell into the next column's
-    let steep = Over { rise: -6.5, ..over(Form::Deck, 30.0) };
-    assert_eq!(steep.occupies(10, cpm), Occupies::Above { slab: [22, 30], pier: None });
-    // and a bore's air keeps its clearance across the same step: 11 cells, 6 more
-    let steep = Over { rise: -6.5, ..over(Form::Bore, 10.0) };
-    assert_eq!(steep.occupies(40, cpm), Occupies::Through { air: [10, 27] });
 }
 
 /// Every segment tried, in order: what the boxes must answer.
