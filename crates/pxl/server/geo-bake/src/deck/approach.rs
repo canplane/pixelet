@@ -1,71 +1,82 @@
 // pxl-geo-bake/deck/approach.rs
 
-//! A bridge's approaches. Arnis takes a joined way as a ramp where it is an
-//! embankment or at `layer` 1 or over; Overture has no embankment, so a ramp
-//! is the joined stretch at level 1 or over.
+//! Where a structure's end goes on at the ground: its own way past the flag,
+//! or the ways the source's connector at a segment's end joins, each only to
+//! the next flag or its segment's end. Along one, the road's distance from the
+//! ground falls to none at `PREFERRED_SLOPE`, steeper where it must.
 
 use std::collections::HashMap;
 
-use pxl_spec::bake::deck::Form;
+use pxl_spec::space::adapter::epsg3857::{from_db, scale_at};
 
-use crate::deck::piece::Piece;
-use crate::deck::source;
-use crate::deck::structure::{end_of, key_of};
-use crate::terrain::pipeline::overture::between::{flag_ranges, value_ranges, without, Line};
+use crate::deck::param::{PREFERRED_SLOPE, STEP_M};
+use crate::deck::piece::End;
+use crate::deck::relate::Way;
+use crate::terrain::pipeline::overture::between::{cell_of, flag_ranges, without};
 use crate::terrain::pipeline::overture::policy::{DECK_FLAGS, UNSEEN_FLAGS};
-use crate::terrain::pipeline::overture::width::{width_m, WayShape};
-use crate::wkb::wkb_to_geometries;
 
-/// A slip road leaving at an angle is another way.
-const APPROACH_TURN_COS: f64 = 0.5; // 60°
-
-/// Ends only one piece reaches.
-pub fn free_ends(pieces: &[Piece]) -> Vec<(usize, bool)> {
-    let mut count: HashMap<(i64, i64), usize> = HashMap::new();
-    for p in pieces {
-        for last in [false, true] {
-            *count.entry(key_of(if last { *p.points.last().unwrap() } else { p.points[0] })).or_default() += 1;
-        }
-    }
-    (0..pieces.len())
-        .flat_map(|i| [(i, false), (i, true)])
-        .filter(|&(i, last)| {
-            let p = &pieces[i];
-            count[&key_of(if last { *p.points.last().unwrap() } else { p.points[0] })] == 1
-        })
-        .collect()
+/// A structure's end with nothing of its own form past it.
+pub struct Free<'a> {
+    pub end: &'a End,
+    pub gers_id: &'a str,
+    /// Where on its way, and whether its way goes on past it the way it runs.
+    pub at: f64,
+    pub onward: bool,
 }
 
-/// Each end's ramp: the joined way at the surface that carries on most nearly straight.
-pub fn approaches(url: &str, pieces: &[Piece], ends: &[(usize, bool)]) -> Result<Vec<Piece>, postgres::Error> {
-    let asked: Vec<([f64; 2], &str)> = ends.iter().map(|&(i, last)| (end_of(&pieces[i], last).0, pieces[i].gers_id.as_str())).collect();
+/// A stretch of ground way leaving an end: the way, where it leaves and where
+/// it ends as fractions of it, its length, the free end across it if one is,
+/// and its samples in metres from the end.
+pub struct Branch {
+    pub end: usize,
+    pub way: usize,
+    pub from: f64,
+    pub to: f64,
+    pub length_m: f64,
+    pub across: Option<usize>,
+    pub at: Vec<(f64, [f64; 2])>,
+}
 
-    let mut best: HashMap<usize, (f64, Piece)> = HashMap::new();
-    for (e, own_at, row) in source::connected_rows(url, &asked)? {
-        let (i, last) = ends[e];
-        let structure = &pieces[i];
-        let (at, inward) = end_of(structure, last);
-        let Some(g) = wkb_to_geometries(&row.geom_wkb).into_iter().next() else { continue };
-        let Some(line) = Line::of(&g.points) else { continue };
-        let len = line.length();
-        let step = (0.5 / len).min(0.5);
-        let off = flag_ranges(row.flags.as_deref(), &[UNSEEN_FLAGS, DECK_FLAGS].concat());
-        let stretches = without(&value_ranges(row.levels.as_deref(), |v| v >= 1.0), &off);
-        for outward in [1.0, -1.0] {
-            let next = own_at + outward * step;
-            let Some(&[from, to]) = stretches.iter().find(|r| (r[0]..=r[1]).contains(&next)) else { continue };
-            let (a, b) = if outward > 0.0 { (own_at, to) } else { (from, own_at) };
-            if (b - a) * len < 1.0 {
-                continue;
+#[derive(serde::Deserialize)]
+struct Connector {
+    at: f64,
+    connector_id: String,
+}
+
+fn connectors(way: &Way) -> Vec<Connector> {
+    way.row.connectors.as_deref().and_then(|c| serde_json::from_str(c).ok()).unwrap_or_default()
+}
+
+/// Bit-identical fractions: a connector at a segment's end is at 0 or 1 exactly.
+const SAME_AT: f64 = 1e-9;
+
+/// The stretches leaving each free end, sampled where `inside` holds.
+pub fn branches(ways: &[Way], free: &[Free], inside: impl Fn([f64; 2]) -> bool) -> Vec<Branch> {
+    let by_id = |id: &str| ways.binary_search_by(|w| w.row.gers_id.as_str().cmp(id)).ok();
+    let mut joined: HashMap<String, Vec<(usize, f64)>> = HashMap::new();
+    for (w, way) in ways.iter().enumerate() {
+        for c in connectors(way) {
+            joined.entry(c.connector_id).or_default().push((w, c.at));
+        }
+    }
+    let ends: HashMap<&End, usize> = free.iter().enumerate().map(|(e, f)| (f.end, e)).collect();
+
+    let mut out = Vec::new();
+    for (e, f) in free.iter().enumerate() {
+        let Some(own) = by_id(f.gers_id) else { continue };
+        // where the end leaves onto ground, and the way it goes
+        let mut leaves: Vec<(usize, f64, f64)> = vec![(own, f.at, if f.onward { 1.0 } else { -1.0 })];
+        if matches!(f.end, End::Vertex(..)) {
+            let at_end = connectors(&ways[own]).into_iter().filter(|c| (c.at - f.at).abs() < SAME_AT);
+            for (w, at) in at_end.flat_map(|c| joined.get(&c.connector_id).cloned().unwrap_or_default()).filter(|&(w, _)| w != own) {
+                leaves.extend([(w, at, 1.0), (w, at, -1.0)]);
             }
         }
         for (w, from, dir) in leaves {
             let way = &ways[w];
             let (len, flags) = (way.line.length(), way.row.flags.as_deref());
             let ground = without(&[[0.0, 1.0]], &flag_ranges(flags, &[DECK_FLAGS, UNSEEN_FLAGS].concat(), cell_of(len)));
-            let Some(&[lo, hi]) = ground.iter().find(|r| (r[0]..=r[1]).contains(&(from + dir * SAME_AT))) else {
-                continue;
-            };
+            let Some(&[lo, hi]) = ground.iter().find(|r| (r[0]..=r[1]).contains(&(from + dir * SAME_AT))) else { continue };
             let to = if dir > 0.0 { hi } else { lo };
             let far = match to {
                 t if t > 0.0 && t < 1.0 => End::Cut(way.row.gers_id.clone(), bits(t)),
@@ -91,19 +102,11 @@ pub fn approaches(url: &str, pieces: &[Piece], ends: &[(usize, bool)]) -> Result
                 d = (d + STEP_M).min(length_m);
             }
             if at.len() >= 2 {
-                out.push(Branch {
-                    end: e,
-                    way: w,
-                    from,
-                    to,
-                    length_m,
-                    across: ends.get(&far).copied(),
-                    at,
-                });
+                out.push(Branch { end: e, way: w, from, to, length_m, across: ends.get(&far).copied(), at });
             }
         }
     }
-    Ok(best.into_values().map(|(_, p)| p).collect())
+    out
 }
 
 fn bits(v: f64) -> u64 {
@@ -136,11 +139,7 @@ pub fn profile(b: &Branch, top: f64, ground: &[f64], to: f64) -> Vec<[f64; 3]> {
         return Vec::new();
     }
     let slope = sep.abs() / reach;
-    b.at.iter()
-        .zip(ground)
-        .take_while(|((d, _), _)| *d < reach)
-        .map(|(&(d, p), &z)| [p[0], p[1], z + sep.signum() * (sep.abs() - slope * d)])
-        .collect()
+    b.at.iter().zip(ground).take_while(|((d, _), _)| *d < reach).map(|(&(d, p), &z)| [p[0], p[1], z + sep.signum() * (sep.abs() - slope * d)]).collect()
 }
 
 #[cfg(test)]

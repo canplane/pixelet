@@ -1,40 +1,27 @@
 // pxl-geo-bake/terrain/bake.rs
 
-//! One page's raw source packet `[ele, buildings, segments, base, coasts]`
-//! baked into its surface. Rows are tuples read by position (pxl-spec bake/format.rs).
+//! One page's source rows baked into its surface, which with its lines is the page.
 
-use pxl_spec::bake::format::{BaseRow, BuildingRow, CoastRow, DeckRow, Ground, SegmentRow, Terrain};
-use pxl_spec::bake::model::feature::Feature;
+use pxl_spec::bake::deck::Decks;
+use pxl_spec::bake::format::{Ground, Terrain};
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
-use xpute_core::status::errno::Errno;
-use xpute_core::status::error::MarshalError;
-use xpute_core::wire::xtp::{BranchCursor, SequenceType, TreeReader};
 
-use crate::terrain::pipeline::coast::adapter::from_coast_row;
-use crate::terrain::pipeline::coast::policy::CoastPolicy;
-use crate::terrain::pipeline::deck::bake_decks;
-use crate::terrain::pipeline::ground::bake_ground;
-use crate::terrain::pipeline::normalizer::normalize;
-use crate::terrain::pipeline::overture::adapter::{from_base_row, from_building_row, from_segment_row};
-use crate::terrain::pipeline::overture::policy::OverturePolicy;
+use crate::deck::Drawn;
+use crate::terrain::pipeline::corridor::corridor_fills;
+use crate::terrain::pipeline::feature::{local, Feature};
+use crate::terrain::pipeline::ground::{bake_ground, Coast};
+use crate::terrain::pipeline::overture::policy::{bases, buildings, ways};
+use crate::terrain::repository::PageSource;
+use crate::wkb::wkb_to_geometries;
 
-fn opt_str(row: &BranchCursor, at: u32) -> Result<Option<String>, MarshalError> {
-    match row.at(at)?.opt() {
-        Some(c) => Ok(Some(c.get_str()?)),
-        None => Ok(None),
-    }
+pub struct Surface {
+    pub ele: Vec<i16>,
+    pub ground: Ground,
 }
 
-/// `overture_buildings.height` arrives as a string (the Deno driver decodes
-/// doubles as text) and `num_floors` as a number; both forms are read.
-fn opt_num(row: &BranchCursor, at: u32) -> Result<Option<f64>, MarshalError> {
-    let Some(c) = row.at(at)?.opt() else { return Ok(None) };
-    if c.type_() == SequenceType::STR as u8 {
-        // An unparseable string is NaN, which the caller clamps away.
-        return Ok(Some(c.get_str()?.trim().parse::<f64>().unwrap_or(f64::NAN)));
-    }
-    Ok(Some(c.get_number()?))
+pub fn assemble(surface: Surface, lines: Decks) -> Terrain {
+    Terrain::leaf(surface.ele, surface.ground, lines)
 }
 
 /// `drawn`: the ranges of the page's ways its lines draw.
@@ -47,92 +34,19 @@ pub fn bake_surface(page_idx: IVec, ele: Vec<i16>, source: &PageSource, drawn: &
     let fills = corridor_fills(&features);
     features.extend(fills);
 
-fn segment_row(row: &BranchCursor<'_>) -> Result<SegmentRow, MarshalError> {
-    Ok(SegmentRow {
-        gers_id: row.at(0)?.get_str()?,
-        subtype: row.at(1)?.get_str()?,
-        class: opt_str(row, 2)?,
-        flags: opt_str(row, 3)?,
-        geom_wkb: row.at(4)?.get_array::<u8>()?.into(),
-    })
-}
-
-fn deck_row(row: &BranchCursor<'_>) -> Result<DeckRow, MarshalError> {
-    Ok(DeckRow {
-        gers_id: row.at(0)?.get_str()?,
-        subtype: row.at(1)?.get_str()?,
-        class: opt_str(row, 2)?,
-        piers: row.at(3)?.get_array::<u8>()?.into(),
-        geom_wkb: row.at(4)?.get_array::<u8>()?.into(),
-    })
-}
-
-fn base_row(row: &BranchCursor<'_>) -> Result<BaseRow, MarshalError> {
-    Ok(BaseRow {
-        gers_id: row.at(0)?.get_str()?,
-        source: row.at(1)?.get_str()?,
-        subtype: opt_str(row, 2)?,
-        class: opt_str(row, 3)?,
-        geom_wkb: row.at(4)?.get_array::<u8>()?.into(),
-    })
-}
-
-fn coast_row(row: &BranchCursor<'_>) -> Result<CoastRow, MarshalError> {
-    Ok(CoastRow {
-        id: row.at(0)?.get_str()?,
-        geom_wkb: row.at(1)?.get_array::<u8>()?.into(),
-        covers_page: row.at(2)?.get_bool()?,
-    })
-}
-
-pub fn bake_terrain(page_idx: IVec, pkt: &[u8]) -> Result<Terrain, MarshalError> {
-    let page_bbox = epsg3857::get_page_bbox(page_idx);
-    let page_min = page_bbox[0];
-
-    let root = TreeReader::new(pkt)?.read_branch()?;
-
-    let ele: &[i16] = root.at(0)?.get_array::<i16>()?;
-    let buildings = root.at(1)?.as_branch()?;
-    let segments = root.at(2)?.as_branch()?;
-    let base = root.at(3)?.as_branch()?;
-    let coasts = root.at(4)?.as_branch()?;
-    let deck_rows = root.at(5)?.as_branch()?;
-
-    let mut feats: Vec<Feature> = Vec::new();
-
-    for i in 0..buildings.len {
-        for raw in from_building_row(&building_row(&buildings.at_branch(i)?)?) {
-            feats.extend(normalize(&raw, page_min, &OverturePolicy));
-        }
-    }
-    for i in 0..segments.len {
-        for raw in from_segment_row(&segment_row(&segments.at_branch(i)?)?) {
-            feats.extend(normalize(&raw, page_min, &OverturePolicy));
-        }
-    }
-    for i in 0..base.len {
-        for raw in from_base_row(&base_row(&base.at_branch(i)?)?) {
-            feats.extend(normalize(&raw, page_min, &OverturePolicy));
-        }
-    }
-    for i in 0..coasts.len {
-        for raw in from_coast_row(&coast_row(&coasts.at_branch(i)?)?) {
-            feats.extend(normalize(&raw, page_min, &CoastPolicy));
-        }
-    }
-
-    // Whether *any* coastline row touched this page's envelope at all, even if
-    // from_coast_row dropped it (covers_page => full land). bake_ground needs
-    // this to tell "no land data at all (open ocean)" apart from "land data
-    // present but not worth rasterizing (full land)".
-    let has_coast_row = coasts.len > 0;
-
-    let fills = corridor_fills(&feats);
-    feats.extend(fills);
-    let ground: Ground = bake_ground(&feats, has_coast_row);
-
-    let rows = (0..deck_rows.len).map(|i| deck_row(&deck_rows.at_branch(i)?)).collect::<Result<Vec<_>, _>>()?;
-    let decks = bake_decks(&rows, page_min).ok_or(MarshalError::new(Errno::ENOSPC))?;
-
-    Ok(Terrain::leaf(ele.to_vec(), ground, decks))
+    // no coast row is open sea; one whose land covers the page is dropped, all land
+    let shore: Vec<_> = source
+        .coast_rows
+        .iter()
+        .filter(|row| !row.covers_page)
+        .flat_map(|row| wkb_to_geometries(&row.geom_wkb))
+        .filter(|g| !g.points.is_empty())
+        .map(|g| (g.points.iter().map(|&p| local(p, page_min)).collect(), g.holes.iter().map(|ring| ring.iter().map(|&p| local(p, page_min)).collect()).collect()))
+        .collect();
+    let coast = match (source.coast_rows.is_empty(), shore.is_empty()) {
+        (true, _) => Coast::Sea,
+        (false, true) => Coast::Land,
+        (false, false) => Coast::Shore(shore),
+    };
+    Surface { ele, ground: bake_ground(&features, &coast) }
 }

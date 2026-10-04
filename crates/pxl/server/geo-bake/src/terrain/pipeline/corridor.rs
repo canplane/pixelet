@@ -1,17 +1,29 @@
 // pxl-geo-bake/terrain/pipeline/corridor.rs
 
-//! Paves the gap between two ways that are one strip of road (a sidewalk drawn
-//! apart from its road, two carriageways). A gap a cell or wider stays land,
-//! as osm2streets keeps a buffer; a narrower one would rasterize as a broken
-//! thread of land that folds into a broken road, so it is paved.
+//! The gap between two ways that are one strip of road on the ground: a
+//! sidewalk drawn apart from its road, the two carriageways of a road drawn
+//! as two (pxl-spec bake/model/feature.rs `Joins`).
+//!
+//! A gap a cell wide or wider is land the page can draw, and it stays the
+//! land it is: osm2streets, which builds street geometry from OSM, zips a
+//! sidewalk into its road with a buffer lane between them — the physical
+//! separation that made a mapper draw it apart, a planted buffer or a verge
+//! of a typical 2 m (osm2lanes `typical_lane_widths`). A gap narrower than a
+//! cell is a sliver the page cannot draw as what it is: left unpainted it
+//! comes out, cell centre by cell centre, as a broken thread of land between
+//! two ways, which folds a level up into a broken road. So it is paved as the
+//! way that joins across it — a collapse of what the raster cannot resolve,
+//! not a claim about the street.
 
-use pxl_spec::bake::format::{CellConfig, GroundChannelKey};
-use pxl_spec::bake::model::feature::{Feature, FeatureShape, Joins};
-use pxl_spec::bake::way;
-use pxl_spec::cell::cube::cube_types;
 use std::collections::HashMap;
 
-const GAP: f64 = 1.0;
+use pxl_spec::bake::format::GroundChannelKey;
+use pxl_spec::bake::way;
+use pxl_spec::cell::cube::cube_types;
+
+use crate::terrain::pipeline::feature::{Feature, Joins};
+
+pub(crate) const GAP: f64 = 1.0;
 
 /// As Arnis takes a dual carriageway's.
 const SIDE_HEADING_COS: f64 = 0.939_692_620_785_908_4; // cos 20°
@@ -25,14 +37,14 @@ struct Seg {
 }
 
 pub fn corridor_fills(feats: &[Feature]) -> Vec<Feature> {
-    let line = |f: &Feature| !f.shape.is_closed && !f.extra.is_unseen && !f.extra.is_deck && f.cell_cfg.is_some_and(|c| c.ch_key == GroundChannelKey::TRANSPORT);
+    let line = |f: &Feature| !f.closed && f.cell.key == GroundChannelKey::TRANSPORT;
     let gap = GAP;
     let mut buckets: HashMap<(i64, i64), Vec<Seg>> = HashMap::new();
     let mut widest = 0.0f64;
     for (i, f) in feats.iter().enumerate().filter(|(_, f)| line(f)) {
-        widest = widest.max(way::reach(f.computed.width));
-        for w in f.shape.points.windows(2) {
-            let (a, b) = ([w[0][0], w[0][1]], [w[1][0], w[1][1]]);
+        widest = widest.max(way::reach(f.width));
+        for w in f.points.windows(2) {
+            let (a, b) = (w[0], w[1]);
             let key = (((a[0] + b[0]) / 2.0 / BUCKET).floor() as i64, ((a[1] + b[1]) / 2.0 / BUCKET).floor() as i64);
             buckets.entry(key).or_default().push(Seg { feat: i, a, b });
         }
@@ -40,24 +52,23 @@ pub fn corridor_fills(feats: &[Feature]) -> Vec<Feature> {
 
     let mut out = Vec::new();
     for (i, f) in feats.iter().enumerate().filter(|(_, f)| line(f)) {
-        let Some(joins) = f.extra.joins else { continue };
-        let cfg = f.cell_cfg.unwrap();
+        let Some(joins) = f.joins else { continue };
         let partner = |g: &Feature| match joins {
-            Joins::Road => g.extra.joins != Some(Joins::Road) && g.cell_cfg.is_some_and(|c| c.cell_type != cube_types::transport::pedestrian),
-            Joins::Carriageway => g.extra.joins == Some(Joins::Carriageway) && g.cell_cfg == f.cell_cfg,
+            Joins::Road => g.joins != Some(Joins::Road) && g.cell.value != cube_types::transport::pedestrian,
+            Joins::Carriageway => g.joins == Some(Joins::Carriageway) && g.cell == f.cell,
         };
-        let reach = way::reach(f.computed.width);
+        let reach = way::reach(f.width);
         let mut strip: Vec<([f64; 2], [f64; 2])> = Vec::new();
         let flush = |strip: &mut Vec<([f64; 2], [f64; 2])>, out: &mut Vec<Feature>| {
             for pair in strip.windows(2) {
                 let ((p0, q0), (p1, q1)) = (pair[0], pair[1]);
-                out.push(fill(f, cfg, [p0, p1, q1, q0]));
+                out.push(fill(f, [p0, p1, q1, q0]));
             }
             strip.clear();
         };
-        for w in f.shape.points.windows(2) {
-            let (a, b) = ([w[0][0], w[0][1]], [w[1][0], w[1][1]]);
-            let len = (b[0] - a[0]).hypot(b[1] - a[1]);
+        for w in f.points.windows(2) {
+            let (a, b) = (w[0], w[1]);
+            let len = libm::hypot(b[0] - a[0], b[1] - a[1]);
             if len == 0.0 {
                 continue;
             }
@@ -84,8 +95,8 @@ pub fn corridor_fills(feats: &[Feature]) -> Vec<Feature> {
                             }
                             let u = (((p[0] - s.a[0]) * dx + (p[1] - s.a[1]) * dy) / (slen * slen)).clamp(0.0, 1.0);
                             let q = [s.a[0] + dx * u, s.a[1] + dy * u];
-                            let d = (p[0] - q[0]).hypot(p[1] - q[1]);
-                            let between = d - reach - way::reach(g.computed.width);
+                            let d = libm::hypot(p[0] - q[0], p[1] - q[1]);
+                            let between = d - reach - way::reach(g.width);
                             if between > 0.0 && between < gap && best.is_none_or(|(bd, _)| d < bd) {
                                 best = Some((d, q));
                             }
@@ -103,21 +114,15 @@ pub fn corridor_fills(feats: &[Feature]) -> Vec<Feature> {
     out
 }
 
-fn fill(f: &Feature, cfg: CellConfig, quad: [[f64; 2]; 4]) -> Feature {
-    let mut extra = f.extra;
-    extra.joins = None;
-    extra.rank = f.extra.rank.saturating_sub(1);
+fn fill(f: &Feature, quad: [[f64; 2]; 4]) -> Feature {
     Feature {
-        id: f.id.clone(),
-        center: [quad[0][0], quad[0][1], 0.0],
-        shape: FeatureShape {
-            points: quad.iter().map(|p| [p[0], p[1], 0.0]).collect(),
-            is_closed: true,
-            holes: None,
-        },
-        computed: f.computed,
-        category: f.category.clone(),
-        extra,
-        cell_cfg: Some(cfg),
+        points: quad.to_vec(),
+        holes: Vec::new(),
+        closed: true,
+        width: f.width,
+        cut: f.cut,
+        cell: f.cell,
+        rank: f.rank.saturating_sub(1),
+        joins: None,
     }
 }

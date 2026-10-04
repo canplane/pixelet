@@ -1,8 +1,5 @@
 // pxl-geo-bake/demand.rs
 
-//! Local demand bakes share jobs, disk publication and generation ownership.
-//! Each producer supplies only its dependency and bake rules.
-
 mod cache;
 mod geocode;
 mod poi;
@@ -10,7 +7,12 @@ mod pyramid;
 mod terrain;
 
 use cache::Cache;
+use pxl_spec::bake::format::{Terrain, OCEAN_KEY};
+use pxl_spec::bake::poi_page::PoiPage;
+use pxl_spec::space::pyramid::{Folds, LevelPage};
 use std::path::PathBuf;
+
+use crate::coverage::Coverage;
 use std::sync::{Arc, Mutex};
 
 pub mod job;
@@ -31,7 +33,7 @@ impl Kind {
             _ => None,
         }
     }
-    fn name(self) -> &'static str {
+    pub fn name(self) -> &'static str {
         match self {
             Self::Terrain => "terrain",
             Self::Poi => "poi",
@@ -57,55 +59,56 @@ struct Dataset {
     cache: Cache,
     source: Source,
 }
+/// What a kind's pages come from: a pyramid layer's coverage, the pages a
+/// fold reads, and the one object every absent page is, if it has one; or
+/// geocode's groups, which no coverage gates.
 enum Source {
-    Terrain(terrain::Source),
-    Poi,
+    Pyramid {
+        coverage: crate::coverage::Coverage,
+        sources: fn(LevelPage) -> Vec<LevelPage>,
+        shared: Option<(&'static str, Vec<u8>)>,
+    },
     Geocode,
 }
-/// What a layer's source says about its pyramid that the pyramid cannot:
-/// where it has nothing, and the one page terrain's open water reads as.
 impl Source {
-    /// The object a name addresses rather than a page, which is also what a
-    /// fold reads for a page the source left as no object where that is not
-    /// simply an empty page: terrain's open water.
     fn shared(&self) -> Option<(&'static str, &[u8])> {
         match self {
-            Source::Terrain(s) => Some((crate::terrain::leaf::OCEAN_KEY, &s.raw_ocean)),
+            Source::Pyramid { shared: Some((name, bytes)), .. } => Some((name, bytes)),
             _ => None,
         }
     }
 
-    /// Whether the source can have anything under a page.
-    fn holds(&self, p: pxl_spec::space::pyramid::LevelPage) -> bool {
+    fn holds(&self, p: LevelPage) -> bool {
         match self {
-            Source::Terrain(s) => s.coverage.meets(p.level, p.page),
-            _ => true,
+            Source::Pyramid { coverage, .. } => coverage.meets(p.level, p.page),
+            Source::Geocode => true,
         }
     }
 
-    /// The pages of the level below a page is folded from, as its layer
-    /// reads them (pxl-spec space/pyramid.rs `Folds::sources`).
-    fn sources(&self, p: pxl_spec::space::pyramid::LevelPage) -> Vec<pxl_spec::space::pyramid::LevelPage> {
-        use pxl_spec::space::pyramid::Folds;
+    fn sources(&self, p: LevelPage) -> Vec<LevelPage> {
         match self {
-            Source::Terrain(_) => pxl_spec::bake::format::Terrain::sources(p),
-            _ => pxl_spec::bake::poi_page::PoiPage::sources(p),
+            Source::Pyramid { sources, .. } => sources(p),
+            Source::Geocode => unreachable!("geocode is no pyramid"),
         }
     }
 }
 impl Dataset {
-    /// The shared object is the same for the generation's whole life, so it
-    /// is published here, before the generation can be asked for anything,
-    /// and every fold only reads it. Written by the folds that read it, it
-    /// would have a writer for every fold in flight, and those race on the one
-    /// staging path an atomic write goes through: the loser's rename finds
-    /// nothing, and its page fails for the rest of the generation.
+    /// The shared object is published before the generation answers anything:
+    /// written by the folds, concurrent atomic writes raced on one staging path.
     fn open(base: &std::path::Path, kind: Kind, runner: &Runner) -> Result<Self, String> {
         let data = Self {
-            cache: Cache::with_admission(base.join(kind.name()), runner.admission.clone(), std::time::Duration::from_secs(runner.limits.seconds))?,
+            cache: Cache::new(base.join(kind.name()), runner.admission.clone(), std::time::Duration::from_secs(runner.limits.seconds))?,
             source: match kind {
-                Kind::Terrain => Source::Terrain(terrain::Source::new()?),
-                Kind::Poi => Source::Poi,
+                Kind::Terrain => Source::Pyramid {
+                    coverage: Coverage::of_source()?,
+                    sources: Terrain::sources,
+                    shared: Some((OCEAN_KEY, terrain::ocean()?)),
+                },
+                Kind::Poi => Source::Pyramid {
+                    coverage: Coverage::of_source()?,
+                    sources: PoiPage::sources,
+                    shared: None,
+                },
                 Kind::Geocode => Source::Geocode,
             },
         };
@@ -117,8 +120,6 @@ impl Dataset {
 }
 
 pub struct Server {
-    // Held for the process's life: the operating system releases it however
-    // the process ends, which no cleanup of our own can promise.
     _owner: std::fs::File,
     runner: Arc<Runner>,
     base: PathBuf,
@@ -126,9 +127,9 @@ pub struct Server {
     top_level: u32,
 }
 impl Server {
-    pub fn open(url: &str, workers: usize, base: PathBuf, top_level: u32, limits: Limits) -> Result<Self, String> {
+    pub fn open(workers: usize, base: PathBuf, top_level: u32, limits: Limits) -> Result<Self, String> {
         let owner = claim(&base)?;
-        let runner = Arc::new(Runner::new(url.to_owned(), workers, limits)?);
+        let runner = Arc::new(Runner::new(workers, limits)?);
         let current = [Kind::Terrain, Kind::Poi, Kind::Geocode]
             .into_iter()
             .map(|k| {
@@ -164,16 +165,17 @@ impl Server {
     }
 }
 
-/// What a stopped server left in a kind's cache that is not a page: the
-/// staging its jobs were killed in (job.rs `Staging`), and a purge it was
-/// killed in the middle of. The pages themselves stay — a page is cached
-/// while its file is there, and a change to what a page would be is a purge
-/// (`Server::invalidate`), not a restart.
+/// Clears what a killed server left that is not a page: staging and a
+/// half-done purge.
 fn prune(root: &std::path::Path) -> Result<(), String> {
     for entry in std::fs::read_dir(root).into_iter().flatten().flatten() {
         if entry.file_name().to_string_lossy().starts_with(".work-") {
             std::fs::remove_dir_all(entry.path()).map_err(|e| e.to_string())?;
         }
+    }
+    match std::fs::remove_dir_all(root.join(terrain::SOURCE)) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
+        _ => {}
     }
     match std::fs::remove_dir_all(cache::purged(root)) {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
@@ -181,8 +183,7 @@ fn prune(root: &std::path::Path) -> Result<(), String> {
     }
 }
 
-/// Takes the cache directory for this process: one server writes it at a
-/// time, and the lock keeps a second from pruning under a running one.
+/// The lock keeps a second server from pruning under a running one.
 fn claim(base: &std::path::Path) -> Result<std::fs::File, String> {
     std::fs::create_dir_all(base).map_err(|e| e.to_string())?;
     let owner = std::fs::File::options().create(true).truncate(false).write(true).open(base.join(".lock")).map_err(|e| e.to_string())?;

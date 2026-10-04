@@ -66,22 +66,48 @@ Terrain needs `overture_buildings`, `overture_transportation`,
 POI needs `overture_places`; geocode needs `overture_divisions` and
 `overture_division_points`. If a table is missing, that is an ingestion
 job, not a bake job — [infra/geo/README.md](../../../infra/geo/README.md).
+Every bake reaches the DB only through `geo-bake coverage.rs` `Overture`,
+which takes the `overture_*` tables from the statements the bake runs and
+refuses unless each has an `overture_catalog` row of one release over
+exactly the bbox `cargo run -q --manifest-path crates/Cargo.toml --bin
+ingest_bbox` prints; the error names the `--bbox` to ingest with.
 Never `down -v` to "reset" the database; the volume is several gigabytes of
 ingested data.
 
 ## Terrain
 
+A page is baked in two stages:
+
+- **leaf** — each page exactly as the dev server bakes it on demand
+  (`geo-bake terrain/leaf.rs` `bake_leaf`): its deck solve (`deck.rs`) —
+  every structure reaching the page or the eight around it, solved whole
+  wherever it runs — and from that one result its lines (decks, bores and
+  the grades at their ends) and its surface (ground and elevation), which
+  paints a way only where no line draws it. Resumable.
+- **assemble** — the leaves linked into the version, and the pyramid folded
+  over them, with no database. Whole every time.
+
+A first bake, or one after an ingest:
+
 ```bash
 deno task bake:tiles --out ./out/terrain/<version> --concurrency 8
 ```
 
-| Flag                | Meaning                                                         |
-| ------------------- | --------------------------------------------------------------- |
-| `--out <dir>`       | output directory; its last path segment is the version          |
-| `--concurrency <n>` | parallel bakes — match `DB_POOL_SIZE`, the DB is the bottleneck |
-| `--limit <n>`       | stop after n tiles (smoke test)                                 |
-| `--force`           | re-bake tiles already on disk                                   |
-| `--reclassify`      | ignore the cached land/ocean scan and redo it                   |
+After a change to how decks or bores are solved, nothing else:
+
+```bash
+deno task bake:tiles --out ./out/terrain/<version> --stage lines --stage assemble
+```
+
+| Flag                | Meaning                                                              |
+| ------------------- | -------------------------------------------------------------------- |
+| `--stage <s>`       | `surface`, `lines` or `assemble`, repeatable; all three when omitted |
+| `--out <dir>`       | published pages; its last path segment is the version                |
+| `--build <dir>`     | the artifacts (default `./out/build/terrain`)                        |
+| `--concurrency <n>` | parallel pages — match `DB_POOL_SIZE`, the DB is the bottleneck      |
+| `--limit <n>`       | stop after n pages (smoke test)                                      |
+| `--force`           | bake leaves already on disk again, and solve every structure again   |
+| `--reclassify`      | ignore the cached land/ocean scan and redo it                        |
 
 It runs long enough to want a log file rather than a terminal:
 
@@ -90,9 +116,17 @@ It runs long enough to want a log file rather than a terminal:
 grep '^\[bake\] ' /tmp/bake.log | tail -2
 ```
 
-What it produces:
+Under `--build` beside `leaf/`, `structure/` keeps each
+solved structure so the pages it crosses solve it once: a cache nothing
+reads as a fact, deleted by `--force` and safe to delete any time. A run
+resumed after a change to the solve must be `--force`d, or it reuses
+structures the old solve made.
 
-- `0/`, one packed object per land-or-coastal page — the leaves
+What it produces, beside `leaf/` under `--build` with a `leaf.json` of what
+built it:
+
+- `0/`, one packed object per page anything is drawn in — land, or a way,
+  building, deck or bore — the leaves
 - `1/`, `2/`, … each level folded from the one below it until a level is a
   single page, refolded whole on every run (they are a function of the leaves,
   so a resumed run never leaves a stale pyramid over them)
@@ -103,22 +137,42 @@ What it produces:
 
 Open-ocean pages are deliberately not baked. Roughly two thirds of the
 coverage bbox is open sea, and the client turns a 404 into the shared
-`_ocean` tile. The land/ocean classification is cached in `land_pages.json`
-and reused unless `--reclassify` is passed.
+`_ocean` tile. A page counts as open ocean only when nothing is drawn in it:
+a bridge or an undersea tunnel over open water makes its pages leaves. The
+classification is cached in `land_pages.json`, keyed by the page size, the
+coverage, the release and the rule that classified it (`terrain/leaf.rs`
+`land_pages`); a list made under any other is refused and made again.
+
+**A page is baked from more than its own bbox, and cropped to it.** What is
+drawn in a page can come from past its edge, so every read reaches as far as
+that, worked back from how far each thing draws:
+
+- **Rows** (ways, buildings, decks, bores, water) are read from the page's
+  bbox grown by `DRAWN_REACH_U` (terrain/repository.rs `drawn_from`): a way
+  drawn its widest, `WIDEST` cells (the width a deck's byte holds, and the
+  ground draws no wider), plus the corridor gap one way paves to another.
+  The page keeps only its own cells, and its lines' runs within their
+  footprint (pxl-spec bake/deck.rs `footprint`).
+- **Elevation** is sampled `ELE_PAD` samples past the page, what a bicubic
+  window at the page's edge reads. Past the raster a sample is no data, so
+  the published coverage is cropped to pages whose padded grid lies inside
+  the raster (coverage.rs `Coverage::of_source`, from
+  `infra/geo/elevation/metadata.json`); the source must reach
+  that far past the area to be published, never end at it.
 
 ### Verifying
 
-1. **Zero failures.** The final line reports `failed=`. Anything above zero
-   means tiles are missing from the set; repeat the run (it skips the
-   successes).
-2. **Check the flat-elevation warning.** A tile whose elevation query returns
-   the wrong shape is written successfully with a zero-filled grid — it bakes
-   perfectly flat and never appears in `failed`. The summary prints a
-   `WARNING: N of M tiles ... baked FLAT` line when this happens, and
-   `manifest.json` records it under `run.flat_elevation_tiles`. A few hundred
-   at the outer edge of the DEM coverage is expected (the padded sampling
-   window falls outside the source raster there). A large number, or any away
-   from the boundary, means something else is wrong.
+1. **Zero failures.** Each stage's line reports `failed=`. Anything above
+   zero in `surface` means pages are missing; repeat the stage (it skips the
+   successes). `assemble` refuses to finish with a page missing.
+2. **Check the flat-elevation warning.** A page the elevation raster does not
+   reach is written successfully with a zero-filled grid — it bakes perfectly
+   flat and never appears in `failed`. The `surface` stage prints a
+   `WARNING: N pages ... baked FLAT` line when this happens, and
+   `manifest.json` records it under `flat_elevation_pages`. A page whose
+   padded window only partly leaves the raster is not flat: its grid has the
+   ground where there is any. A large number means the coverage and the
+   raster disagree.
 3. **The ocean tile stayed page-independent.** The tool bakes an empty source
    at three different pages and aborts if the bytes differ. If it ever does,
    the single-fallback design no longer holds — stop and re-read the

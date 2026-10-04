@@ -31,6 +31,7 @@ pub const DECOR_GROUPS: usize = 64;
 /// refuses, the cell is not built.
 pub struct DecorScratch {
     pub(crate) instances: Vec<Instance>,
+    pub(crate) candidates: Vec<pxl_spec::procedural::Candidate>,
     pub(crate) groups: Vec<u16>,
     pub(crate) counts: [u32; DECOR_GROUPS],
     pub(crate) group_count: usize,
@@ -44,6 +45,7 @@ impl Default for DecorScratch {
     fn default() -> DecorScratch {
         DecorScratch {
             instances: Vec::new(),
+            candidates: Vec::new(),
             groups: Vec::new(),
             counts: [0; DECOR_GROUPS],
             group_count: 0,

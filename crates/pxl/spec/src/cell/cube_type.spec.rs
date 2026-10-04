@@ -70,9 +70,9 @@ pub mod cube_types {
 
         pub const ENTRIES: &[(&str, u8)] = &[("void", void), ("air", air), ("unknown", unknown)];
 
-        /// How far below its sampled height a cell showing the type sits, in
-        /// units; a type not listed sits at it.
-        pub const RECESS: &[(u8, i16)] = &[];
+        /// How far off its sampled height a cell showing the type stands, in
+        /// units, up positive; a type not listed stands at it.
+        pub const SHIFT: &[(u8, i16)] = &[];
     }
 
     pub mod land {
@@ -131,9 +131,9 @@ pub mod cube_types {
             ("helipad", helipad),
         ];
 
-        /// How far below its sampled height a cell showing the type sits, in
-        /// units; a type not listed sits at it.
-        pub const RECESS: &[(u8, i16)] = &[(sea, 1)];
+        /// How far off its sampled height a cell showing the type stands, in
+        /// units, up positive; a type not listed stands at it.
+        pub const SHIFT: &[(u8, i16)] = &[(sea, -1)];
     }
 
     pub mod water {
@@ -146,9 +146,9 @@ pub mod cube_types {
 
         pub const ENTRIES: &[(&str, u8)] = &[("river", river), ("lake", lake), ("wetland", wetland)];
 
-        /// How far below its sampled height a cell showing the type sits, in
-        /// units; a type not listed sits at it.
-        pub const RECESS: &[(u8, i16)] = &[(river, 1), (lake, 1), (wetland, 1)];
+        /// How far off its sampled height a cell showing the type stands, in
+        /// units, up positive; a type not listed stands at it.
+        pub const SHIFT: &[(u8, i16)] = &[(river, -1), (lake, -1), (wetland, -1)];
     }
 
     pub mod structure {
@@ -173,9 +173,9 @@ pub mod cube_types {
             ("building_public", building_public),
         ];
 
-        /// How far below its sampled height a cell showing the type sits, in
-        /// units; a type not listed sits at it.
-        pub const RECESS: &[(u8, i16)] = &[(building, -1), (building_station, -1), (building_education, -1), (building_medical, -1), (building_public, -1)];
+        /// How far off its sampled height a cell showing the type stands, in
+        /// units, up positive; a type not listed stands at it.
+        pub const SHIFT: &[(u8, i16)] = &[(building, -1), (building_station, -1), (building_education, -1), (building_medical, -1), (building_public, -1)];
     }
 
     pub mod transport {
@@ -233,9 +233,9 @@ pub mod cube_types {
             ("taxiway", taxiway),
         ];
 
-        /// How far below its sampled height a cell showing the type sits, in
-        /// units; a type not listed sits at it.
-        pub const RECESS: &[(u8, i16)] = &[];
+        /// How far off its sampled height a cell showing the type stands, in
+        /// units, up positive; a type not listed stands at it.
+        pub const SHIFT: &[(u8, i16)] = &[];
     }
 
     // Flat user-painted colors only — no sentinels of its own.
@@ -277,9 +277,9 @@ pub mod cube_types {
             ("pink", pink),
         ];
 
-        /// How far below its sampled height a cell showing the type sits, in
-        /// units; a type not listed sits at it.
-        pub const RECESS: &[(u8, i16)] = &[];
+        /// How far off its sampled height a cell showing the type stands, in
+        /// units, up positive; a type not listed stands at it.
+        pub const SHIFT: &[(u8, i16)] = &[];
     }
 
     pub const CHANNELS: &super::Channels = &[

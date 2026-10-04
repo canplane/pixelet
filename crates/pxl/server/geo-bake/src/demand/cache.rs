@@ -25,12 +25,7 @@ pub struct Cache {
 }
 
 impl Cache {
-    #[cfg(test)]
-    pub fn new(root: PathBuf) -> Result<Self, String> {
-        Self::with_admission(root, Arc::new(Semaphore::new(32)), std::time::Duration::from_secs(30))
-    }
-
-    pub fn with_admission(root: PathBuf, admission: Arc<Semaphore>, deadline: std::time::Duration) -> Result<Self, String> {
+    pub fn new(root: PathBuf, admission: Arc<Semaphore>, deadline: std::time::Duration) -> Result<Self, String> {
         std::fs::create_dir_all(&root).map_err(|e| e.to_string())?;
         Ok(Self {
             root,
@@ -95,14 +90,10 @@ impl Cache {
 
     pub fn publish(&self, name: &str, raw: Option<&[u8]>) -> Result<(), String> {
         let packed = raw.map(|r| pack(r, Level::Live).map_err(|e| e.to_string())).transpose()?;
-        self.publish_stored(name, packed.as_deref())
-    }
-
-    pub fn publish_stored(&self, name: &str, bytes: Option<&[u8]>) -> Result<(), String> {
         self.commit(|| {
             let path = self.root.join(name);
             std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
-            match bytes {
+            match packed.as_deref() {
                 Some(bytes) => write_atomic(&path, bytes),
                 None => write_atomic(&path.with_extension("empty"), b""),
             }

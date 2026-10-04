@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::{Folds, LevelPage, TOP_LEVEL};
 
-use crate::util::{git_sha, measure_output, now_iso8601, pack, unpack, write_atomic, Level, CONTENT_ENCODING};
+use crate::util::{measure_output, pack, unpack, write_atomic, Level};
 
 pub trait Layer: Folds + PartialEq + Send + Sync {
     fn encode(&self) -> Result<Vec<u8>, String>;
@@ -139,7 +139,7 @@ pub fn prune<L: Layer>(set: &PageSet, top: u32) -> Result<usize, String> {
 
 /// Measured from disk, not the run: a resumed run that skipped everything
 /// would describe an empty set.
-pub fn write_manifest(set: &PageSet, top: u32, layer: serde_json::Value) -> Result<(), String> {
+pub fn write_manifest(set: &PageSet, top: u32, built: Option<&str>, layer: serde_json::Value) -> Result<(), String> {
     let (mut objects, mut bytes) = measure_output(&set.root).map_err(|e| e.to_string())?;
     let mut levels = Vec::new();
     for l in 0..=top {
@@ -148,23 +148,11 @@ pub fn write_manifest(set: &PageSet, top: u32, layer: serde_json::Value) -> Resu
         objects += n;
         bytes += b;
     }
-    let mut manifest = serde_json::json!({
-        "version": set.root.file_name().map(|n| n.to_string_lossy().to_string()),
-        "updated_at": now_iso8601(),
-        "git_sha": git_sha(),
-        "objects": objects,
-        "bytes": bytes,
-        "levels": levels,
-        "content_type": "application/octet-stream",
-        "content_encoding": CONTENT_ENCODING,
-    });
-    if let (Some(out), serde_json::Value::Object(extra)) = (manifest.as_object_mut(), layer) {
-        out.extend(extra);
+    let mut fields = serde_json::json!({ "objects": objects, "bytes": bytes, "levels": levels, "content_type": "application/octet-stream" });
+    if let (Some(out), serde_json::Value::Object(layer)) = (fields.as_object_mut(), layer) {
+        out.extend(layer);
     }
-    let path = set.root.join("../manifest.json");
-    fs::write(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
-    println!("[bake/pyramid] manifest -> {}", path.display());
-    Ok(())
+    crate::util::write_manifest(&set.root, built, fields)
 }
 
 /// A parent reads the 4×4 children around it, so each worker keeps only the

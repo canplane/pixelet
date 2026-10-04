@@ -112,7 +112,6 @@ deno task dev:local
 | `deno task build:web`                | Build the client                                                      |
 | `deno task build:wasm`               | Build the kernel module into `apps/web/src/kernel/kernel.wasm`        |
 | `deno task dev:native`               | Metro, for the device app                                             |
-| `deno task solve:decks`              | The decks' heights over the whole coverage, into db-geo               |
 | `deno task bake:{tiles,poi,geocode}` | db-geo into `./out/<kind>/<version>`                                  |
 | `deno task ingest:asset`             | Hash `asset/` into `./out/asset`, regenerate the asset tables         |
 | `deno task download:{pack,moon}`     | Normalize the texture pack's sources, or cut the Moon's near side     |

@@ -4,6 +4,7 @@ use pxl_spec::space::lod::Tau;
 use pxl_spec::space::observation::Observation;
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::pyramid::TOP_LEVEL;
 use pxl_spec::space::v3::V3;
 
 use super::*;

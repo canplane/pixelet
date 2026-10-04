@@ -180,4 +180,3 @@ fn the_zero_page_folds_to_itself() {
     let zero = zero_page();
     assert_eq!(Terrain::fold_page(LevelPage::new(1, 0), |_| Some(&zero)).as_ref(), Some(&zero));
 }
-

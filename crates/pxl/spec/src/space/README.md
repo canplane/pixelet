@@ -85,9 +85,9 @@ distance.
 
 Meaning enters at an **adapter**, and only there:
 
-- `adapter/3857.rs` — EPSG:3857 planar meters. `U_PER_M` and `M_PER_U` are
-  the whole of the conversion, and in this adapter `m` always means a planar
-  meter, which is latitude-dependent against a real one.
+- `adapter/3857.rs` — the DB's EPSG:3857 coordinates. Lengths are the
+  plane's, in u, or the ground's, in metres; `scale_at` relates them, and
+  `to_db`/`from_db` are the only way to or from the DB's coordinates.
 - `adapter/4326.rs` — lon/lat, and the projection to and from 3857.
 - `adapter/yup.rs` — a Y-up basis, for a boundary that meets one. Nothing
   imports it, which the file says is the expected state.

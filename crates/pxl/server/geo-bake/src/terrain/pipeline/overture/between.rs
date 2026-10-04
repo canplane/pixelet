@@ -7,10 +7,11 @@
 //! bridge, along the surface and into a tunnel. The bake and the deck solve
 //! (deck/) cut a segment the same way, here.
 
-use pxl_spec::space::adapter::epsg3857::G3857;
+use pxl_spec::bake::constant::U_PER_CELL;
+use pxl_spec::space::adapter::epsg3857::{to_db, G3857};
 use serde_json::Value;
 
-use crate::wkb::WkbGeometry;
+use crate::wkb::{wkb_to_geometries, WkbGeometry};
 
 /// A range of a segment's length, as fractions of it.
 pub type Range = [f64; 2];
@@ -32,19 +33,34 @@ fn range_of(rule: &Value) -> Option<Range> {
     (a < b).then_some([a, b])
 }
 
-/// The ranges over which any of `wanted` holds among a flags column's rules,
-/// sorted and merged.
-pub fn flag_ranges(flags: Option<&str>, wanted: &[&str]) -> Vec<Range> {
-    let mut ranges: Vec<Range> = rules(flags)
-        .iter()
-        .filter(|r| r["values"].as_array().is_some_and(|v| v.iter().any(|v| v.as_str().is_some_and(|v| wanted.contains(&v)))))
-        .filter_map(range_of)
-        .collect();
+/// A way's length in DB coordinates, as its line runs.
+pub fn length_of(geom_wkb: &[u8]) -> f64 {
+    wkb_to_geometries(geom_wkb).into_iter().next().and_then(|g| Line::of(&g.points).map(|l| l.length())).unwrap_or(0.0)
+}
+
+/// What a ground cell spans of a way `length` long in DB coordinates: a gap
+/// in a flag shorter than that shows on no cell, so the ranges either side are one.
+pub fn cell_of(length: f64) -> f64 {
+    to_db(U_PER_CELL) / length.max(f64::EPSILON)
+}
+
+pub fn flag_ranges(flags: Option<&str>, wanted: &[&str], cell: f64) -> Vec<Range> {
+    merged(
+        rules(flags)
+            .iter()
+            .filter(|r| r["values"].as_array().is_some_and(|v| v.iter().any(|v| v.as_str().is_some_and(|v| wanted.contains(&v)))))
+            .filter_map(range_of)
+            .collect(),
+        cell,
+    )
+}
+
+pub fn merged(mut ranges: Vec<Range>, gap: f64) -> Vec<Range> {
     ranges.sort_by(|x, y| x[0].total_cmp(&y[0]));
     let mut merged: Vec<Range> = Vec::with_capacity(ranges.len());
     for r in ranges {
         match merged.last_mut() {
-            Some(last) if r[0] <= last[1] => last[1] = last[1].max(r[1]),
+            Some(last) if r[0] <= last[1] || r[0] - last[1] < gap => last[1] = last[1].max(r[1]),
             _ => merged.push(r),
         }
     }
@@ -72,10 +88,23 @@ pub fn without(ranges: &[Range], less: &[Range]) -> Vec<Range> {
     out
 }
 
-/// The value of the rule of a values column (`level_rules`) that holds at
-/// fraction `at`, the first that does.
-pub fn value_at(column: Option<&str>, at: f64) -> Option<i64> {
-    rules(column).iter().find(|r| range_of(r).is_some_and(|[a, b]| (a..=b).contains(&at))).and_then(|r| r["value"].as_i64())
+/// The value of the rule of a values column (`level_rules`, `width_rules`)
+/// that holds at fraction `at`, the first that does.
+pub fn value_at(column: Option<&str>, at: f64) -> Option<f64> {
+    rules(column).iter().find(|r| range_of(r).is_some_and(|[a, b]| (a..=b).contains(&at))).and_then(|r| r["value"].as_f64())
+}
+
+/// The text value of the rule of a values column (`subclass_rules`) that
+/// holds at fraction `at`.
+pub fn text_at(column: Option<&str>, at: f64) -> Option<String> {
+    rules(column)
+        .iter()
+        .find(|r| range_of(r).is_some_and(|[a, b]| (a..=b).contains(&at)))
+        .and_then(|r| r["value"].as_str().map(str::to_string))
+}
+
+pub fn flag_at(flags: Option<&str>, wanted: &[&str], cell: f64, at: f64) -> bool {
+    flag_ranges(flags, wanted, cell).iter().any(|&[a, b]| (a..=b).contains(&at))
 }
 
 /// A line cut wherever a range of any of `sets` starts or ends, each piece
@@ -109,12 +138,6 @@ pub fn split_ranged<const N: usize>(g: WkbGeometry, sets: [&[Range]; N]) -> Vec<
         .collect()
 }
 
-/// `split_ranged` without the ranges.
-pub fn split<const N: usize>(g: WkbGeometry, sets: [&[Range]; N]) -> Vec<([bool; N], WkbGeometry)> {
-    split_ranged(g, sets).into_iter().map(|(marks, _, g)| (marks, g)).collect()
-}
-
-/// A polyline with the distance along it at each of its points.
 pub struct Line<'a> {
     points: &'a [G3857],
     cum: Vec<f64>,

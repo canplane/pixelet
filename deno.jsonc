@@ -3,8 +3,7 @@
 
   "workspace": [
     "apps/web",
-    // The same shell on a device, through Expo: a package.json member, since
-    // Expo and Metro find their packages the way npm lays them out.
+    // A package.json member: Expo and Metro find packages the npm way.
     "apps/native",
 
     "packages/xpute/core",
@@ -13,133 +12,78 @@
   ],
   "nodeModulesDir": "auto",
 
-  // Keeps Deno's config-tree walker (LSP + CLI) from wandering into build
-  // caches that carry their own package.json — Vite's deps optimizer cache
-  // in particular gets misread as a rogue workspace member ("Config file
-  // must be a member of the workspace") since it's nested under apps/web.
-  //
-  // `out/` is the bake's, and nothing in it is this repository's source: a
-  // bare `deno check` walked as far as a JavaScript file pip had vendored
-  // inside the Overture ingest's Python virtual environment. .gitignore
-  // already says the tree is output, but that is git's list and not this
-  // one, and the two have to be told separately.
+  // Vite's deps cache and the Python venv under `out/` would be read as this workspace's.
   "exclude": ["**/.vite/", "**/dist/", "**/node_modules/", "out/"],
 
   "tasks": {
-    // ── Run it locally ──
-    // The `server` profile, not a debug build: the rasterizer under one is
-    // slow enough to be felt on every page.
-    // The client alone, every route answered by the published deployment: no
-    // Docker, no database, no server process. Not usable for bake work — a
-    // published tile prefix is frozen.
+    // Every route is the published deployment's, so not for bake work: its tile prefix is frozen.
     "dev": { "command": "deno task --cwd apps/web dev", "dependencies": ["sync:build-number"] },
-    // The whole stack on this machine instead.
     "dev:local": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles) & (deno task dev:web) & wait\"",
+    // The `server` profile: a debug build's rasterizer is felt on every page.
     "dev:geo": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-geo -- \"$@\"' --",
     "dev:api": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-api -- \"$@\"' --",
     "dev:tiles": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --features serve --bin serve_tiles -- \"$@\"' --",
     "dev:web": { "command": "deno task --cwd apps/web dev:local", "dependencies": ["sync:build-number"] },
-    // The device app's bundler, Metro, every route from the published
-    // deployment as `dev`'s are; the app itself is built from Xcode against it.
+    "dev:baked": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles --baked ./out) & (deno task dev:web) & wait\"",
     "dev:native": "deno task --cwd apps/native start",
-    // The number a dev build labels itself after is the last published one
-    // this checkout has seen, cached in apps/web/.build_number — and
-    // vite.config.ts reads it once, as it starts. Nothing else writes it but
-    // a hand deploy, so a checkout that ships through CI alone drifts behind
-    // by however many builds went out. Reading the log writes the cache
-    // (script/build-log.ts), so the read goes before the server starts.
-    // It is a bucket read: it needs the network and wrangler's credentials,
-    // and where it cannot have them the server still starts on the cached
-    // number and says so.
+    // Only a hand deploy writes apps/web/.build_number, so it is refreshed before vite reads it.
     "sync:build-number": "sh -c './script/build-log.ts >/dev/null || echo \"[build-number] not synced: this build is labeled from the cached number\" >&2'",
-    // The production bundle at localhost:4173 on the same data: what to
-    // measure the client against, since the dev server's unbundled modules
-    // and hooks are not in it.
+    // Measure the client here: the dev server's unbundled modules are not what ships.
     "preview": "deno task --cwd apps/web preview",
+    "preview:local": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles) & (deno task preview:web) & wait\"",
+    "preview:baked": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles --baked ./out) & (deno task preview:web) & wait\"",
+    "preview:web": "deno task --cwd apps/web preview:local",
 
-    // ── Fill the bucket ──
-    // Terrain and geocode resume; POI writes one immutable summary snapshot.
+    // Terrain and geocode resume; POI writes one immutable snapshot.
     "bake:tiles": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_tiles -- \"$@\"' --",
     "bake:poi": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_poi_tiles -- \"$@\"' --",
     "bake:geocode": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_geocode_tiles -- \"$@\"' --",
 
-    // ── Make what the tree ships ──
-    // pxl-tool's binaries, each writing files that are committed or uploaded.
-    // After any change under asset/: out/asset for the bucket, and both tables.
+    // After any change under asset/.
     "ingest:asset": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin ingest_asset",
-    // By hand, when a source outside the repository or under apps/web/brand
-    // changes.
+    // By hand, when a source outside the repository or under apps/web/brand changes.
     "download:pack": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin download_texture_pack",
     "download:moon": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin download_moon",
     "bake:stars": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin bake_stars --",
     "render:brand": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin render_brand",
 
-    // ── Ship it ──
     "build:wasm": "deno task --cwd apps/web build:wasm",
     "build:web": "deno task --cwd apps/web build",
     // Does not upload what the bucket holds.
     "deploy": "deno task --cwd apps/web deploy",
     // Against a running deployment, not a checkout.
     "smoke": "./script/smoke.ts",
-    // What the Worker, the bucket and the box have used against their free
-    // allowances. Reads with wrangler's login and hcloud's context.
+    // Reads with wrangler's login and hcloud's context.
     "usage": "./script/usage.ts",
 
-    // ── The gate ──
     "check": "deno task check:fmt && deno task check:toolchain && deno task check:rules && deno task check:web && deno task check:native && deno task check:xpute && deno task check:rust && deno task check:cpp && deno task check:spec",
-    // The same checks, each only where what changed against HEAD can break it.
     "check:diff": "./script/check-diff.ts",
-    // What check:rust's own `cargo fmt --check` does for the Rust: everything
-    // Deno formats — TypeScript, JSON, JSONC, Markdown — held to one shape.
-    // Without it the two languages were gated unevenly, and the half nothing
-    // ran was where a config broke and sat broken.
     "check:fmt": "deno fmt --check",
     "check:web": "deno task --cwd apps/web check",
-    // The device's own files, which check:web never reaches: the shell is
-    // checked with `@platform/` as the web's, so this checks the device's
-    // modules against their own imports and, through platform/conform.ts,
-    // against the shape the web's export.
+    // check:web never reaches the device's own modules.
     "check:native": "deno check apps/native/src",
     "check:xpute": "deno check packages/xpute/core/src/**/*.ts && deno check packages/xpute/runtime/src/**/*.ts && deno check packages/xpute/conformance/src/**/*.ts",
-    // xpute's C++, every file compiled with its warnings as errors, by the
-    // platform's compiler rather than through Cargo (script/cpp.ts).
     "check:cpp": "./script/cpp.ts check",
-    // The wasm32 pass builds libraries only, so a broken `.test.rs` still
-    // passes it; the host pass is what compiles those. geo-bake runs twice
-    // because `serve` gates the dev tile server, and pxl-wasm twice because
-    // the published module is built without `dev` (build-wasm.ts). pxl-native
-    // is checked for the iPhone, the one target its Metal backend has, and for
-    // Android, whose JNI and Vulkan are its alone.
+    // The wasm32 pass builds no `.test.rs`; the host pass does.
     "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target aarch64-apple-ios -p pxl-native -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target aarch64-linux-android -p pxl-native --no-default-features -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p xpute-runtime -p xpute-conformance -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p xpute-runtime -p xpute-conformance -p pxl-spec -p pxl-render -p pxl-kernel -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-wasm --no-default-features -- -D warnings",
-    // Before anything compiles: a Rust version written twice is a binary
-    // built on a compiler the gate never ran.
+    // A Rust version written twice is a binary built on a compiler the gate never ran.
     "check:toolchain": "./script/check-toolchain.ts",
-    // The rules of AGENTS.md a machine can decide: file headers, the paths a
-    // comment names, and who shifts the lattice.
     "check:rules": "./script/check-rules.ts",
     "check:spec": "cargo run -q --manifest-path crates/Cargo.toml -p pxl-tool --bin spec",
-    // The write half of it: the same generator, allowed to touch the tree.
     "spec": "cargo run -q --manifest-path crates/Cargo.toml -p pxl-tool --bin spec -- --write",
 
     "test": "deno task test:web && deno task test:xpute && deno task test:rust && deno task test:cpp",
     "test:web": "deno task --cwd apps/web test",
-    // The traces last, run by the TypeScript host against every guest, each
-    // built as the library the host opens and as the WebAssembly module it
-    // instantiates (the C++ one with the WASI SDK, script/cpp.ts).
     "test:xpute": "deno test -A packages/xpute/core/src && deno test -A packages/xpute/runtime/src && cargo build --manifest-path crates/Cargo.toml -p xpute-conformance && cargo build --manifest-path crates/Cargo.toml -p xpute-conformance --target wasm32-unknown-unknown && ./script/cpp.ts guest && ./script/cpp.ts wasm && deno test -A packages/xpute/conformance/src",
     "test:cpp": "./script/cpp.ts test",
-    // pxl-tool's measures every shipped model from its file and holds it
-    // against the table the ingest wrote. The table is committed, and it has
-    // been wrong by hand before.
+    // pxl-tool holds every model to the committed table, which has been wrong by hand before.
     "test:rust": "cargo test --manifest-path crates/Cargo.toml -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool && cargo test --manifest-path crates/Cargo.toml -p pxl-kernel --no-default-features && cargo test --manifest-path crates/Cargo.toml -p pxl-geo-bake --features serve",
 
     "lint": "deno lint",
 
-    // xpute is developed here and copied out whole; see script/export-xpute.ts.
     "export:xpute": "./script/export-xpute.ts",
     "fmt": "deno fmt",
 
-    // ── Start over ──
     // Named paths only; nothing is found by name and deleted.
     "reset": "rm -rf node_modules apps/web/node_modules apps/web/dist && deno task check"
   },
@@ -159,18 +103,14 @@
     "@xpute/runtime/": "./packages/xpute/runtime/src/",
     "@xpute/conformance/": "./packages/xpute/conformance/src/",
 
-    // testing
     "@std/assert": "jsr:@std/assert@^1",
 
-    // script/, apps/web/script/
     "@std/path": "jsr:@std/path@^1",
     "@std/jsonc": "jsr:@std/jsonc@^1",
 
-    // build tools
     "vite": "npm:vite@^8.3.0",
     "@deno/vite-plugin": "npm:@deno/vite-plugin@^2.0.3",
 
-    // internationalization
     "i18next": "npm:i18next@^26.4.2"
   },
 
@@ -178,8 +118,7 @@
     "lineWidth": 200,
     "proseWrap": "preserve",
 
-    // The golden records are committed as they were written and read byte
-    // for byte by the tests; formatting them would break that.
+    // The tests read the golden records byte for byte.
     "exclude": ["node_modules/", "dist/", "crates/**/golden/", "spec/xpute/golden/"]
   },
 

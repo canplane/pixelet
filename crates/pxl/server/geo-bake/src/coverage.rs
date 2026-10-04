@@ -164,19 +164,15 @@ pub fn tables_of<'a>(reads: &[&[&'a str]]) -> Vec<&'a str> {
 /// (the place dictionary, a deck's structure).
 pub struct Overture {
     url: String,
-    q: [f64; 4],
     pub release: String,
     /// Each table read, with its row count.
-    pub tables: Vec<(String, i64)>,
+    tables: Vec<(String, i64)>,
 }
 
 impl Overture {
     /// For a bake whose statements are `reads`.
     pub fn reading(reads: &[&[&str]]) -> Result<(Overture, Client), String> {
-        Overture::open(&tables_of(reads))
-    }
-
-    pub fn open(tables: &[&str]) -> Result<(Overture, Client), String> {
+        let tables = tables_of(reads);
         let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
         let q = Coverage::of_source()?.ingest_bbox();
         let ingest = format!("ingest with --bbox {} (bin ingest_bbox)", bbox_arg(q));
@@ -189,7 +185,7 @@ impl Overture {
             .map_err(|e| format!("{CATALOG}: {e}: {ingest}"))?;
         let mut release: Option<(String, String)> = None;
         let mut out = Vec::with_capacity(tables.len());
-        for &table in tables {
+        for &table in &tables {
             let row = rows.iter().find(|r| r.get::<_, &str>(0) == table).ok_or_else(|| format!("{table} has no catalog row: {ingest}"))?;
             let (region, date): (&str, String) = (row.get(1), row.get(2));
             let have: Option<Vec<f64>> = region.split(',').map(|v| v.trim().parse::<f64>().ok()).collect();
@@ -204,36 +200,11 @@ impl Overture {
             out.push((table.to_string(), row.get::<_, i64>(3)));
         }
         let (_, release) = release.ok_or("a bake that reads no Overture table")?;
-        Ok((Overture { url, q, release, tables: out }, client))
-    }
-
-    pub fn url(&self) -> &str {
-        &self.url
+        Ok((Overture { url, release, tables: out }, client))
     }
 
     pub fn connect(&self) -> Result<Client, String> {
         Client::connect(&self.url, NoTls).map_err(|e| e.to_string())
-    }
-
-    /// No bake opens `table` until [`Overture::stamp`]: a solve stopped partway leaves it unread.
-    pub fn forget(&self, client: &mut Client, table: &str) -> Result<(), String> {
-        client.execute(&format!("DELETE FROM {CATALOG} WHERE file_name = $1"), &[&table]).map(drop).map_err(|e| e.to_string())
-    }
-
-    /// Records `table` as the release and bbox it was made from.
-    pub fn stamp(&self, client: &mut Client, table: &str) -> Result<(), String> {
-        let count: i64 = client.query_one(&format!("SELECT count(*) FROM {table}"), &[]).map_err(|e| e.to_string())?.get(0);
-        client
-            .execute(
-                &format!(
-                    "INSERT INTO {CATALOG} (file_name, region_code, data_date, total_count) VALUES ($1, $2, $3, $4)
-                     ON CONFLICT (file_name) DO UPDATE SET region_code = excluded.region_code, data_date = excluded.data_date,
-                       imported_at = now(), status = 'COMPLETED', total_count = excluded.total_count"
-                ),
-                &[&table, &bbox_arg(self.q), &self.release, &count],
-            )
-            .map(drop)
-            .map_err(|e| e.to_string())
     }
 
     /// What a manifest records of the source.

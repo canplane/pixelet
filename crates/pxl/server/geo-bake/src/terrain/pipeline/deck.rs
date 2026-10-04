@@ -7,54 +7,46 @@
 //! it.
 //!
 //! A deck's row is its whole line, and a page keeps the runs of it whose
-//! segments come within reach of the page — whole segments, so every point
-//! a page keeps is one the solve placed and two pages that share a deck agree
-//! on it point for point. A segment is within reach where it comes within
-//! half the deck's width of the page, past which nothing of it can be drawn
-//! there.
+//! segments come within its footprint of the page — whole segments, so every
+//! point a page keeps is one the solve placed and two pages that share a deck
+//! agree on it point for point. The footprint is the farthest the client may
+//! draw a line (pxl-spec bake/deck.rs `footprint`), past which nothing of it
+//! can be drawn there.
 
-use pxl_spec::bake::constant::{XY_CELL_PER_M, Z_CELL_PER_M};
-use pxl_spec::bake::deck::{Builder, Decks, POINT_SCALE};
-use pxl_spec::bake::format::DeckRow;
-use pxl_spec::space::adapter::epsg3857::G3857;
+use pxl_spec::bake::constant::U_PER_CELL;
+use pxl_spec::bake::deck::{self, Builder, Decks, POINT_SCALE};
+use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m, G3857};
 use pxl_spec::space::pyramid::PAGE_CELLS;
+use xpute_core::math::scalar::round;
 
-use crate::terrain::pipeline::overture::policy::{segment_type, segment_width_m};
-use crate::wkb::wkb_to_geometries;
+use crate::deck::Line;
+use crate::terrain::pipeline::overture::policy::segment_type;
 
-/// The page's decks, or none where they do not fit a record — which the
-/// bake refuses rather than cuts, since a deck left out is a gap in a road.
-pub fn bake_decks(rows: &[DeckRow], page_min: G3857) -> Option<Decks> {
-    let z_cell_per_m = Z_CELL_PER_M(page_min[1]);
+/// None where they do not fit a record: refused rather than cut, since a
+/// missing deck is a gap in a road.
+pub fn bake_decks(lines: &[Line], page_min: G3857) -> Option<Decks> {
+    let cell_per_m = u_per_m(from_db(page_min[1])) / U_PER_CELL;
     let mut decks = Builder::default();
-    for row in rows {
+    for row in lines {
         let kind = segment_type(&row.subtype, row.class.as_deref());
-        let width = segment_width_m(row.class.as_deref().unwrap_or("")) * XY_CELL_PER_M;
-        let width_code = (width * POINT_SCALE).round().clamp(1.0, f64::from(u8::MAX)) as u8;
-        for g in wkb_to_geometries(&row.geom_wkb) {
-            if g.points.len() != row.piers.len() {
-                continue;
-            }
-            let local: Vec<([f64; 2], i16, u8)> = g
-                .points
-                .iter()
-                .zip(row.piers.iter())
-                .map(|(p, &pier)| {
-                    let at = [(p[0] - page_min[0]) * XY_CELL_PER_M, (p[1] - page_min[1]) * XY_CELL_PER_M];
-                    (at, (p[2] * z_cell_per_m).round() as i16, pier)
-                })
-                .collect();
-            for run in runs_within(&local, width / 2.0) {
-                decks.push(run.iter().copied(), width_code, kind);
-            }
+        let width = row.width_m * cell_per_m;
+        let width_code = round(width * POINT_SCALE).clamp(1.0, f64::from(u8::MAX)) as u8;
+        let local: Vec<([f64; 2], i16)> = row
+            .points
+            .iter()
+            .map(|p| {
+                let at = [from_db(p[0] - page_min[0]) / U_PER_CELL, from_db(p[1] - page_min[1]) / U_PER_CELL];
+                (at, round(p[2] * cell_per_m) as i16)
+            })
+            .collect();
+        for [a, b] in runs_within(&local, deck::footprint(width)) {
+            decks.push(local[a..=b].iter().copied(), width_code, kind, row.form);
         }
     }
     decks.fits().then(|| decks.finish())
 }
 
-/// The runs of consecutive segments of a line that come within `reach`
-/// cells of the page.
-fn runs_within(points: &[([f64; 2], i16, u8)], reach: f64) -> Vec<&[([f64; 2], i16, u8)]> {
+fn runs_within(points: &[([f64; 2], i16)], reach: f64) -> Vec<[usize; 2]> {
     let (lo, hi) = (-reach, f64::from(PAGE_CELLS) + reach);
     let near = |a: [f64; 2], b: [f64; 2]| (0..2).all(|k| a[k].max(b[k]) >= lo && a[k].min(b[k]) <= hi);
     let mut runs = Vec::new();
@@ -63,14 +55,14 @@ fn runs_within(points: &[([f64; 2], i16, u8)], reach: f64) -> Vec<&[([f64; 2], i
         match (near(points[s].0, points[s + 1].0), start) {
             (true, None) => start = Some(s),
             (false, Some(a)) => {
-                runs.push(&points[a..=s]);
+                runs.push([a, s]);
                 start = None;
             }
             _ => {}
         }
     }
     if let Some(a) = start {
-        runs.push(&points[a..]);
+        runs.push([a, points.len() - 1]);
     }
     runs
 }

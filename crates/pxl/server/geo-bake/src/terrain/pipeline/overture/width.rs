@@ -66,6 +66,29 @@ pub struct WayShape {
     pub role: Role,
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct WayColumns<'a> {
+    pub flags: Option<&'a str>,
+    pub widths: Option<&'a str>,
+    pub access: Option<&'a str>,
+    pub subclass: Option<&'a str>,
+    pub subclasses: Option<&'a str>,
+}
+
+impl WayShape {
+    pub fn at(c: WayColumns, at: f64) -> WayShape {
+        let role = match Role::at(c.subclass, c.subclasses, at) {
+            Role::Way if flag_at(c.flags, LINK_FLAGS, 0.0, at) => Role::Link,
+            role => role,
+        };
+        WayShape {
+            measured: value_at(c.widths, at),
+            oneway: is_oneway(c.access),
+            role,
+        }
+    }
+}
+
 pub fn width_m(subtype: &str, class: Option<&str>, shape: WayShape) -> f64 {
     if let Some(w) = shape.measured.filter(|w| w.is_finite() && *w > 0.0) {
         return w;

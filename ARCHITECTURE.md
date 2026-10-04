@@ -80,9 +80,9 @@ Terrain arrives as L3 pages: four rasters of ground type, and one of elevation, 
 
 The rows are in the one order the channels have (`GROUND_CH_KEYS`, `pxl-spec bake/format.rs`): the order a page stores them in and the order a cell is painted in, a later channel's non-void type winning, so a building that overlaps a road keeps its cells.
 
-Sea is a `LAND` value (`sea = 129`, `spec/pxl/spec/cell/cube_type.json`). A page stores each channel as a dense index into that channel's few types rather than the catalog's number, so all four pack into one 16-bit cell (`pxl-spec bake/pack.rs`). The channels are rasterized from Overture's Buildings, Transportation and Base themes, the coastline from Base's `water`. A cell is painted by what covers its center, and only what is seen from above: a tunnel, an indoor passage, a way not built or gone and a ferry's route are left off it. A type may stand a step off its height — water one below, a building one above (the catalog's `recess`).
+Sea is a `LAND` value (`sea = 129`, `spec/pxl/spec/cell/cube_type.json`). A page stores each channel as a dense index into that channel's few types rather than the catalog's number, so all four pack into one 16-bit cell (`pxl-spec bake/pack.rs`). The channels are rasterized from Overture's Buildings, Transportation and Base themes, the coastline from Base's `water`. A cell is painted by what covers its center, and only what is seen from above: a tunnel, an indoor passage, a way not built or gone and a ferry's route are left off it. A type may stand a step off its height — water and a building one below (the catalog's `shift`).
 
-A deck is a way carried over the surface — a bridge, a viaduct, a ramp — kept as a line with a top along it, a width and the type its surface shows (`pxl-spec bake/deck.rs`): sparse, stacked where an interchange stacks, and nothing on a page that has none. A chunk draws the decks over its columns as runs above its ground — a slab under each top, a pier down to the ground where one stands — and the index lane and the query count them as they count the ground. Their heights are solved offline over the whole network, structure by structure, from where each comes down to the ground and what it has to clear (`pxl-geo-bake deck.rs`), since a page cannot see a viaduct's ends; why decks are lines in the terrain page and not a lane or objects is [ways off the ground](./issue/20261001-ways-off-the-ground.md).
+A deck is a way carried over the surface — a bridge, a viaduct — kept as a line with a top along it, a width and the type its surface shows (`pxl-spec bake/deck.rs`): sparse, stacked where an interchange stacks, and nothing on a page that has none. A chunk draws the decks over its columns as runs above its ground — a slab under each top, a pier down to the ground where one stands — and the index lane and the query count them as they count the ground. Their heights are solved from a page and the eight around it, structure by structure, from where each comes down to the ground and what it has to clear (`pxl-geo-bake deck.rs`); why decks are lines in the terrain page and not a lane or objects is [ways off the ground](./issue/20261001-ways-off-the-ground.md).
 
 ## The view
 
@@ -125,16 +125,15 @@ The map center is only the handle the camera is moved by, and plays no part in a
 The bake is `pxl-geo-bake`, and it writes the same formats the client reads — XTP, xpute's tree, read where it lands rather than parsed — so nothing is translated on arrival.
 
 ```text
-Overture PostGIS rows
-  → XTP decode
-  → overture/adapter, coast/adapter (row → feature)
-  → normalizer (classify, rank, tag — the rules live in overture/policy, coast/policy)
-  → ground (rasterize geometry into ground channels)
-  → encode_terrain (elevation + ground → XTP)
-  → compressed HTTP page response
+Overture rows and the elevation raster, from PostGIS
+  → deck solve (every bridge and tunnel reaching the page, solved whole: its lines, and the ranges of ways they draw)
+  → overture/policy (row → feature: its shape, the cell it paints, its rank)
+  → corridor (the gap between two ways that are one strip of road, paved)
+  → ground (features rasterized into the ground channels, the coast's land over the sea)
+  → encode_terrain (elevation + ground + lines → XTP)
 ```
 
-Rasterizing is the bulk of it: polygons are filled even-odd with holes, lines are drawn with a thickness kernel, and the scratch geometry for both comes from one arena per page. Elevation is stored as signed 16-bit cell units under one Mercator Z scale per page, which is what makes the bake, the terrain and the objects agree on what a unit of height is.
+Rasterizing is the bulk of it: polygons are filled even-odd with holes, and lines are drawn with a thickness kernel. Elevation is stored as signed 16-bit cell units under one Mercator Z scale per page, which is what makes the bake, the terrain and the objects agree on what a unit of height is.
 
 Every land page is baked once into a versioned prefix. Open ocean is one shared page, since every one of them would be identical.
 
@@ -292,14 +291,14 @@ address        bytes                    range                  placed by
 2 MiB          8 MiB + 16 MiB           .ring.slot             build.rs
 32 MiB         ~0.7 MiB                 .rodata .data .bss     wasm-ld (--global-base)
                ↑ D: __data_end, rounded up to 4 KiB (PAGE_BYTES), about 32.7 MiB
-D              RECORDS terrain records  .fixed.terrain         the kernel (mem/fixed.rs)
-               one mesh bake            .fixed.bake            the kernel (mem/fixed.rs)
-               the chunk table          .fixed.mounts          the kernel (mem/fixed.rs)
-               MAX_LIVE_BLOCKS          .fixed.blocks          the kernel (mem/fixed.rs)
-               the GPU stream           .fixed.gpu             the kernel (mem/fixed.rs)
-               the host stream          .fixed.host            the kernel (mem/fixed.rs)
-               the profiler's rings     .fixed.profiler        the kernel (mem/fixed.rs)
-D + BYTES      the rest                 .heap                  the allocator
+D              66.74 MiB                .fixed.terrain         the kernel (mem/fixed.rs)
+D + 66.74 MiB  96 KiB                   .fixed.bake            the kernel (mem/fixed.rs)
+D + 66.84 MiB  259 KiB                  .fixed.mounts          the kernel (mem/fixed.rs)
+D + 67.09 MiB  448 KiB                  .fixed.blocks          the kernel (mem/fixed.rs)
+D + 67.53 MiB  4 MiB                    .fixed.gpu             the kernel (mem/fixed.rs)
+D + 71.53 MiB  64 KiB                   .fixed.host            the kernel (mem/fixed.rs)
+D + 71.59 MiB  4.62 MiB                 .fixed.profiler        the kernel (mem/fixed.rs)
+D + 76.21 MiB  the rest                 .heap                  the allocator
 512 MiB / 1 GiB                         end
 ──────────────────────────────────────────────────────────────────────────────────────
 ```

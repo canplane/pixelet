@@ -1,10 +1,7 @@
 // pxl-geo-bake/bin/serve_tiles.rs
 
-//! Local demand bakes. Each tile kind uses the same generation, job and
-//! response path; the deployment still serves immutable bucket objects.
-//! --cache is the parent of the terrain/poi/geocode directories: a page is
-//! cached while its file is there, across restarts, until its kind is
-//! invalidated (demand.rs `prune`).
+//! Local demand bakes. --cache holds the terrain/poi/geocode directories;
+//! a page stays cached across restarts until its kind is invalidated.
 
 use axum::body::Bytes;
 use axum::extract::{Path, State};
@@ -17,16 +14,23 @@ use pxl_geo_bake::demand::{
     job::{self, Limits},
     Failure, Kind, Server,
 };
+use pxl_geo_bake::pyramid::PageSet;
+use pxl_geo_bake::terrain::leaf::OCEAN_KEY;
 use pxl_geo_bake::util::CONTENT_ENCODING;
+use pxl_spec::bake::published::{PUBLISHED_TOP_LEVEL, PUBLISHED_VERSION};
+use pxl_spec::bake::quadkey::page_of_name;
 use pxl_spec::route::{ASSET_ROOT, GEO_INTERNAL, TILE_ROOT};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 
+enum Pages {
+    Demand(Server),
+    Baked(PathBuf),
+}
+
 struct App {
-    demand: Server,
-    /// The coarsest level served whole, `--top-level`: what the client's floor
-    /// is leased at.
+    pages: Pages,
     top_level: u32,
     asset_dir: PathBuf,
     admin_token: Option<String>,
@@ -34,7 +38,11 @@ struct App {
 
 async fn tile(State(app): State<Arc<App>>, Path((kind, name)): Path<(String, String)>) -> Response {
     let Some(kind) = Kind::parse(&kind) else { return StatusCode::NOT_FOUND.into_response() };
-    match app.demand.get(kind, &name).await {
+    let demand = match &app.pages {
+        Pages::Demand(demand) => demand,
+        Pages::Baked(dir) => return baked(dir, kind, published_version(kind), &name).await,
+    };
+    match demand.get(kind, &name).await {
         Ok(Some(bytes)) => (
             [
                 (header::CONTENT_TYPE, "application/octet-stream"),
@@ -55,10 +63,49 @@ async fn tile(State(app): State<Arc<App>>, Path((kind, name)): Path<(String, Str
     }
 }
 
-/// What this source declares of itself, in the form a published bake's
-/// `SOURCE` has (spec/pxl/spec/bake/published.json), so the client reads
-/// either the same way and learns its floor from the source rather than from
-/// what fails (pxl-kernel world/paging/floor.rs).
+fn published_version(kind: Kind) -> &'static str {
+    match kind {
+        Kind::Terrain => PUBLISHED_VERSION.terrain,
+        Kind::Poi => PUBLISHED_VERSION.poi,
+        Kind::Geocode => PUBLISHED_VERSION.geocode,
+    }
+}
+
+/// The bucket's address, `<kind>/<version>/<name>`, as a production build asks for it.
+async fn tile_versioned(State(app): State<Arc<App>>, Path((kind, version, name)): Path<(String, String, String)>) -> Response {
+    let (Pages::Baked(dir), Some(kind)) = (&app.pages, Kind::parse(&kind)) else { return StatusCode::NOT_FOUND.into_response() };
+    if !version.strip_prefix('v').is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())) {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    baked(dir, kind, &version, &name).await
+}
+
+async fn baked(dir: &std::path::Path, kind: Kind, version: &str, name: &str) -> Response {
+    let root = dir.join(kind.name()).join(version);
+    // A pyramid's pages are on disk as `<level>/<page index>` until the publish renames them.
+    let path = match kind {
+        Kind::Terrain if name == OCEAN_KEY => root.join(name),
+        Kind::Terrain | Kind::Poi => match page_of_name(name) {
+            Some(p) => PageSet::new(root).path(p),
+            None => return StatusCode::NOT_FOUND.into_response(),
+        },
+        Kind::Geocode if name != "." && name != ".." => root.join(name),
+        Kind::Geocode => return StatusCode::NOT_FOUND.into_response(),
+    };
+    match tokio::fs::read(path).await {
+        Ok(bytes) => (
+            [
+                (header::CONTENT_TYPE, "application/octet-stream"),
+                (header::CONTENT_ENCODING, CONTENT_ENCODING),
+                (header::CACHE_CONTROL, "no-store"),
+            ],
+            Bytes::from(bytes),
+        )
+            .into_response(),
+        Err(_) => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
 async fn source(State(app): State<Arc<App>>) -> Response {
     (
         [(header::CONTENT_TYPE, "application/json"), (header::CACHE_CONTROL, "no-store")],
@@ -74,24 +121,22 @@ async fn invalidate(State(app): State<Arc<App>>, headers: HeaderMap, Path(kind):
         }
     }
     let Some(kind) = Kind::parse(&kind) else { return StatusCode::NOT_FOUND.into_response() };
+    let Pages::Demand(demand) = &app.pages else {
+        return (StatusCode::CONFLICT, "a finished bake is served as it is: nothing to invalidate").into_response();
+    };
     if !body.trim().is_empty() {
         return (StatusCode::BAD_REQUEST, "invalidate the whole dataset: send no body").into_response();
     }
-    match app.demand.invalidate(kind) {
+    match demand.invalidate(kind) {
         Ok(()) => (StatusCode::OK, "invalidated all").into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e).into_response(),
     }
 }
 
-/// A key is the sha256 of the object's bytes; the ingest writes each under its
-/// type, so the content type is known without an extension.
-/// What an asset's extension says it is. The bucket stores the type with the
-/// object; here it is read off the name, which is the same fact either way.
 const ASSET_TYPES: [(&str, &str); 3] = [("glb", "model/gltf-binary"), ("png", "image/png"), ("webp", "image/webp")];
 
 async fn asset(State(app): State<Arc<App>>, Path(name): Path<String>) -> Response {
-    // An asset's name is its own path, so a request could otherwise ask for a
-    // path out of the ingest's tree.
+    // Refuse a path out of the ingest's tree.
     if name.split('/').any(|seg| seg.is_empty() || seg == "." || seg == "..") {
         return (StatusCode::NOT_FOUND, "not found").into_response();
     }
@@ -126,6 +171,7 @@ fn run() -> Result<(), String> {
     let mut workers: usize = 4;
     let mut cache = PathBuf::from("./out/dev");
     let mut top_level: u32 = 3;
+    let mut baked: Option<PathBuf> = None;
 
     let mut flags = Flags::of(argv);
     while let Some(flag) = flags.arg() {
@@ -138,25 +184,26 @@ fn run() -> Result<(), String> {
             "--workers" => workers = flags.parse()?,
             "--cache" => cache = PathBuf::from(flags.value()?),
             "--top-level" => top_level = flags.parse()?,
+            "--baked" => baked = Some(PathBuf::from(flags.value()?)),
             other => return Err(format!("unknown flag: {other}")),
         }
     }
 
-    let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
+    let (pages, top_level) = match baked {
+        Some(dir) => (Pages::Baked(dir), PUBLISHED_TOP_LEVEL),
+        None => (Pages::Demand(Server::open(workers, cache, top_level, limits)?), top_level),
+    };
     let app = Arc::new(App {
-        demand: Server::open(&url, workers, cache, top_level, limits)?,
+        pages,
         top_level,
         asset_dir,
         admin_token: std::env::var("ADMIN_TOKEN").ok().filter(|t| !t.is_empty()),
     });
 
-    // The roots and branches are spec/pxl/spec/route.json's, as the client's and the
-    // relays' are; what each one carries past them is this server's.
     let router = Router::new()
         .route(&format!("{TILE_ROOT}/source"), get(source))
         .route(&format!("{TILE_ROOT}/{{kind}}/{{name}}"), get(tile))
-        // Its own root: an asset is neither server's, and its URL is its bucket
-        // key with a leading slash.
+        .route(&format!("{TILE_ROOT}/{{kind}}/{{version}}/{{name}}"), get(tile_versioned))
         .route(&format!("{ASSET_ROOT}/{{*name}}"), get(asset))
         .route(&format!("{GEO_INTERNAL}/world/{{kind}}/cache/invalidate"), post(invalidate))
         .with_state(app.clone());

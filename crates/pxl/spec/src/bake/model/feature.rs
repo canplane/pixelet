@@ -35,12 +35,16 @@ pub struct FeatureExtra {
     pub is_parking: bool,
     pub is_institutional: bool,
     pub is_sports: bool,
-    /// Nothing of it shows from above (underground, inside, unbuilt, or a
-    /// route), so the ground does not paint it.
+    /// True where nothing of the feature shows from above — it runs under the
+    /// ground or inside a building, is not built yet or is no longer there,
+    /// or is a route rather than a way — so the ground does not paint it.
     pub is_unseen: bool,
-    /// True where the feature is carried above the ground: the page's decks
-    /// draw it (bake/deck.rs), and the ground does not.
+    /// Carried above the ground: drawn by the decks, not the ground.
     pub is_deck: bool,
+    /// Ends a flag cuts: square, not rounded into a bridge or tunnel.
+    pub cut: [bool; 2],
+    /// The way beside it that it shares one paved strip with; the gap is paved too.
+    pub joins: Option<Joins>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

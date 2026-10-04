@@ -1,214 +1,163 @@
 // pxl-geo-bake/deck/source.rs
 
-//! What the solve reads from the geo DB and the table it writes.
-//!
-//! The geometry questions — what crosses a deck, where along it, over which
-//! water — are PostGIS's, asked of the pieces staged in a temporary table so
-//! that every one is a join on an index; what the answers mean is the
-//! solve's (deck.rs).
+//! What a page's solve reads.
 
 use postgres::Client;
+use std::collections::{BTreeMap, HashMap};
+use std::path::Path;
 
-use crate::deck::piece::{BridgeRow, Piece};
+use postgres::types::ToSql;
+use pxl_spec::space::adapter::epsg3857;
+use pxl_spec::space::pvf3::ivec::{self, IVec};
 
-/// Rows a batched insert or sample sends at once.
-const BATCH: usize = 20_000;
+use crate::deck::relate::{Water, Way};
+use crate::segment::Segment;
+use crate::terrain::bake::Surface;
+use crate::terrain::repository::TerrainRepository;
+use crate::terrain::source::fetch_surface;
+use crate::util::{pack, unpack, write_atomic, Level};
 
-/// Every segment a bridge flag is on.
-pub fn bridge_rows(client: &mut Client) -> Result<Vec<BridgeRow>, postgres::Error> {
-    let rows = client.query(
-        "SELECT gers_id, subtype, class, COALESCE(road_flags, rail_flags)::text AS flags, level_rules::text AS levels, ST_AsBinary(geom) AS geom_wkb
-         FROM overture_transportation
-         WHERE COALESCE(road_flags, rail_flags)::text LIKE '%is_bridge%'",
-        &[],
-    )?;
-    Ok(rows
-        .iter()
-        .map(|r| BridgeRow {
-            gers_id: r.get("gers_id"),
-            subtype: r.get("subtype"),
-            class: r.get("class"),
-            flags: r.get("flags"),
-            levels: r.get("levels"),
-            geom_wkb: r.get::<_, &[u8]>("geom_wkb").into(),
-        })
-        .collect())
+/// The tables the solve's queries name, for the catalog.
+pub const READS: [&str; 2] = ["FROM overture_transportation", "FROM overture_base_water"];
+
+const SEGMENTS_SQL: &str = concat!("SELECT ", crate::segment_columns!(), " FROM overture_transportation t WHERE t.geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)");
+
+/// Everything a solve reads of some pages: the bridge and tunnel rows, every
+/// way, the water, and the ground, as the client draws it, inside `bounds`.
+pub struct Input {
+    pub rows: Vec<Segment>,
+    pub ways: Vec<Way>,
+    pub water: Vec<Water>,
+    pub bounds: [[f64; 2]; 2],
+    pub ground: HashMap<IVec, Surface>,
 }
 
-fn wkt(points: impl Iterator<Item = String>, z: bool) -> String {
-    format!("LINESTRING{} ({})", if z { " Z" } else { "" }, points.collect::<Vec<_>>().join(","))
+/// One page's rows, as a page's other rows are read: whatever overlaps it.
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct PageRows {
+    ways: Vec<Segment>,
+    water: Vec<(String, Option<String>, Vec<u8>)>,
+    /// Its ground as the client draws it: the elevation and the cells whose shift goes on it.
+    ele: Vec<i16>,
+    cells: Vec<u16>,
 }
 
-/// The pieces as `deck_piece`, a temporary table indexed for the joins below.
-pub fn stage(client: &mut Client, pieces: &[Piece]) -> Result<(), postgres::Error> {
-    client.batch_execute(
-        "DROP TABLE IF EXISTS deck_piece;
-         CREATE TEMP TABLE deck_piece (id INT PRIMARY KEY, gers_id TEXT NOT NULL, level INT NOT NULL, geom GEOMETRY(LineString, 3857) NOT NULL);",
-    )?;
-    for (b, batch) in pieces.chunks(BATCH).enumerate() {
-        let ids: Vec<i32> = (0..batch.len()).map(|i| (b * BATCH + i) as i32).collect();
-        let gers: Vec<&str> = batch.iter().map(|p| p.gers_id.as_str()).collect();
-        let levels: Vec<i32> = batch.iter().map(|p| p.level as i32).collect();
-        let lines: Vec<String> = batch.iter().map(|p| wkt(p.points.iter().map(|q| format!("{} {}", q[0], q[1])), false)).collect();
-        client.execute(
-            "INSERT INTO deck_piece SELECT id, g, l, ST_GeomFromText(w, 3857) FROM unnest($1::int[], $2::text[], $3::int[], $4::text[]) AS t(id, g, l, w)",
-            &[&ids, &gers, &levels, &lines],
-        )?;
-    }
-    client.batch_execute("CREATE INDEX ON deck_piece USING GIST (geom); ANALYZE deck_piece;")
-}
-
-/// A way that crosses a piece: where along the piece, in metres, what it is,
-/// and where along itself, as a fraction, so its own flags can say whether
-/// it is under the deck there or a tunnel or a deck of its own.
-pub struct WayCrossing {
-    pub piece: usize,
-    pub at: f64,
-    pub subtype: String,
-    pub class: Option<String>,
-    pub flags: Option<String>,
-    pub own_at: f64,
-}
-
-pub fn ways_crossing(client: &mut Client) -> Result<Vec<WayCrossing>, postgres::Error> {
-    let rows = client.query(
-        "SELECT p.id, ST_LineLocatePoint(p.geom, d.geom) * ST_Length(p.geom) AS at,
-                t.subtype, t.class, COALESCE(t.road_flags, t.rail_flags)::text AS flags,
-                ST_LineLocatePoint(t.geom, d.geom) AS own_at
-         FROM deck_piece p
-         JOIN overture_transportation t ON t.geom && p.geom AND t.gers_id <> p.gers_id AND ST_Intersects(t.geom, p.geom)
-         CROSS JOIN LATERAL ST_Dump(ST_Intersection(t.geom, p.geom)) d
-         WHERE GeometryType(d.geom) = 'POINT'",
-        &[],
-    )?;
-    Ok(rows
-        .iter()
-        .map(|r| WayCrossing {
-            piece: r.get::<_, i32>("id") as usize,
-            at: r.get("at"),
-            subtype: r.get("subtype"),
-            class: r.get("class"),
-            flags: r.get("flags"),
-            own_at: r.get("own_at"),
-        })
-        .collect())
-}
-
-/// Water under a piece: from and to, in metres along it — the same where a
-/// line of water crosses it — and the water's subtype and class.
-pub struct WaterUnder {
-    pub piece: usize,
-    pub from: f64,
-    pub to: f64,
-    pub subtype: String,
-    pub class: Option<String>,
-}
-
-pub fn water_under(client: &mut Client) -> Result<Vec<WaterUnder>, postgres::Error> {
-    let rows = client.query(
-        "SELECT p.id,
-                ST_LineLocatePoint(p.geom, ST_StartPoint(d.geom)) * ST_Length(p.geom) AS a,
-                ST_LineLocatePoint(p.geom, ST_EndPoint(d.geom)) * ST_Length(p.geom) AS b,
-                w.subtype, w.class
-         FROM deck_piece p
-         JOIN overture_base_water w ON w.geom && p.geom AND w.subtype <> 'ocean' AND ST_Intersects(w.geom, p.geom)
-         CROSS JOIN LATERAL ST_Dump(ST_Intersection(p.geom, w.geom)) d
-         WHERE GeometryType(d.geom) IN ('POINT', 'LINESTRING')",
-        &[],
-    )?;
-    Ok(rows
-        .iter()
-        .map(|r| {
-            let (a, b): (f64, f64) = (r.get("a"), r.get("b"));
-            WaterUnder {
-                piece: r.get::<_, i32>("id") as usize,
-                from: a.min(b),
-                to: a.max(b),
-                subtype: r.get("subtype"),
-                class: r.get("class"),
-            }
-        })
-        .collect())
-}
-
-/// Where a piece crosses one of a lower level: the upper's piece and how far
-/// along it, the lower's and how far along it, in metres.
-pub struct DeckCrossing {
-    pub upper: usize,
-    pub upper_at: f64,
-    pub lower: usize,
-    pub lower_at: f64,
-}
-
-pub fn decks_crossing(client: &mut Client) -> Result<Vec<DeckCrossing>, postgres::Error> {
-    let rows = client.query(
-        "SELECT u.id AS upper, ST_LineLocatePoint(u.geom, d.geom) * ST_Length(u.geom) AS upper_at,
-                l.id AS lower, ST_LineLocatePoint(l.geom, d.geom) * ST_Length(l.geom) AS lower_at
-         FROM deck_piece u
-         JOIN deck_piece l ON l.geom && u.geom AND l.level < u.level AND ST_Intersects(l.geom, u.geom)
-         CROSS JOIN LATERAL ST_Dump(ST_Intersection(u.geom, l.geom)) d
-         WHERE GeometryType(d.geom) = 'POINT'",
-        &[],
-    )?;
-    Ok(rows
-        .iter()
-        .map(|r| DeckCrossing {
-            upper: r.get::<_, i32>("upper") as usize,
-            upper_at: r.get("upper_at"),
-            lower: r.get::<_, i32>("lower") as usize,
-            lower_at: r.get("lower_at"),
-        })
-        .collect())
-}
-
-/// The ground at each point, in metres, sampled from the elevation raster
-/// the pages' own is resampled from: zero where it has none, which is the
-/// sea's.
-pub fn ground(client: &mut Client, points: &[[f64; 2]]) -> Result<Vec<f64>, postgres::Error> {
-    let mut out = vec![0.0; points.len()];
-    for (b, batch) in points.chunks(BATCH).enumerate() {
-        let xs: Vec<f64> = batch.iter().map(|p| p[0]).collect();
-        let ys: Vec<f64> = batch.iter().map(|p| p[1]).collect();
-        let rows = client.query(
-            "SELECT DISTINCT ON (u.i) u.i, ST_Value(r.rast, 1, u.p, true, 'bilinear') AS z
-             FROM (SELECT i, ST_SetSRID(ST_MakePoint(x, y), 3857) AS p FROM unnest($1::float8[], $2::float8[]) WITH ORDINALITY AS t(x, y, i)) u
-             JOIN elevation_raster r ON ST_Intersects(r.rast, u.p)
-             ORDER BY u.i",
-            &[&xs, &ys],
-        )?;
-        for r in rows {
-            let i = r.get::<_, i64>("i") as usize - 1;
-            out[b * BATCH + i] = r.get::<_, Option<f64>>("z").unwrap_or(0.0);
+impl PageRows {
+    fn surface(&self) -> Surface {
+        Surface {
+            ele: self.ele.clone(),
+            ground: pxl_spec::bake::format::Ground { cells: self.cells.clone().into() },
         }
     }
-    Ok(out)
 }
 
-/// A solved deck, as `overture_deck` holds it.
-pub struct DeckOut<'a> {
-    pub piece: &'a Piece,
-    /// Each point, its top in metres as Z.
-    pub points: Vec<[f64; 3]>,
-    pub piers: Vec<u8>,
+fn page_rows(client: &mut Client, repo: &TerrainRepository, page: IVec) -> Result<PageRows, String> {
+    let [min, max] = epsg3857::get_page_bbox(page);
+    let env: [&(dyn ToSql + Sync); 4] = [&min[0], &min[1], &max[0], &max[1]];
+    let read = |client: &mut Client, sql: &str| client.query(sql, &env).map_err(|e| e.to_string());
+    let ways = read(client, SEGMENTS_SQL)?;
+    let water = read(client, "SELECT subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_water WHERE subtype <> 'ocean' AND geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)")?;
+    // the paint of its ways is no matter to the ground's height, so none is drawn
+    let (surface, _) = fetch_surface(repo, client, page, &[])?;
+    Ok(PageRows {
+        ways: ways.iter().map(Segment::of).collect(),
+        water: water.iter().map(|r| (r.get("subtype"), r.get("class"), r.get::<_, &[u8]>("geom_wkb").to_vec())).collect(),
+        ele: surface.ele,
+        cells: surface.ground.cells.to_vec(),
+    })
 }
 
-/// `overture_deck`, made again whole: the bake reads it a page at a time
-/// (terrain/repository.rs).
-pub fn write(client: &mut Client, decks: &[DeckOut]) -> Result<(), postgres::Error> {
-    client.batch_execute(
-        "DROP TABLE IF EXISTS overture_deck;
-         CREATE TABLE overture_deck (gers_id TEXT NOT NULL, subtype TEXT NOT NULL, class TEXT, piers BYTEA NOT NULL, geom GEOMETRY(LineStringZ, 3857) NOT NULL);",
-    )?;
-    for batch in decks.chunks(BATCH) {
-        let gers: Vec<&str> = batch.iter().map(|d| d.piece.gers_id.as_str()).collect();
-        let subtypes: Vec<&str> = batch.iter().map(|d| d.piece.subtype.as_str()).collect();
-        let classes: Vec<Option<&str>> = batch.iter().map(|d| d.piece.class.as_deref()).collect();
-        let piers: Vec<&[u8]> = batch.iter().map(|d| d.piers.as_slice()).collect();
-        let lines: Vec<String> = batch.iter().map(|d| wkt(d.points.iter().map(|q| format!("{} {} {:.2}", q[0], q[1], q[2])), true)).collect();
-        client.execute(
-            "INSERT INTO overture_deck SELECT g, s, c, p, ST_GeomFromText(w, 3857) FROM unnest($1::text[], $2::text[], $3::text[], $4::bytea[], $5::text[]) AS t(g, s, c, p, w)",
-            &[&gers, &subtypes, &classes, &piers, &lines],
-        )?;
+/// Where a page's rows are kept for its neighbours.
+pub trait Store {
+    fn page(&mut self, client: &mut Client, repo: &TerrainRepository, page: IVec) -> Result<PageRows, String>;
+}
+
+/// On disk, shared by the processes that bake pages on demand.
+pub struct Disk<'a>(pub &'a Path);
+
+impl Store for Disk<'_> {
+    fn page(&mut self, client: &mut Client, repo: &TerrainRepository, page: IVec) -> Result<PageRows, String> {
+        memo_rows(client, repo, page, self.0)
     }
-    client.batch_execute("CREATE INDEX ON overture_deck USING GIST (geom); ANALYZE overture_deck;")
 }
+
+/// In memory, for a walk from page to neighbouring page: holds a page's
+/// eight around it and no more.
+#[derive(Default)]
+pub struct Walk {
+    held: HashMap<IVec, PageRows>,
+}
+
+impl Walk {
+    /// Drops what is not in `page`'s 3×3.
+    pub fn keep_around(&mut self, page: IVec) {
+        let near = |p: IVec| (ivec::X(p) - ivec::X(page)).abs() <= 1 && (ivec::Y(p) - ivec::Y(page)).abs() <= 1;
+        self.held.retain(|&p, _| near(p));
+    }
+}
+
+impl Store for Walk {
+    fn page(&mut self, client: &mut Client, repo: &TerrainRepository, page: IVec) -> Result<PageRows, String> {
+        if let Some(rows) = self.held.get(&page) {
+            return Ok(rows.clone());
+        }
+        let rows = page_rows(client, repo, page)?;
+        self.held.insert(page, rows.clone());
+        Ok(rows)
+    }
+}
+
+/// A page's rows from `memo` when read before, else from the DB into it.
+fn memo_rows(client: &mut Client, repo: &TerrainRepository, page: IVec, memo: &Path) -> Result<PageRows, String> {
+    let file = memo.join(page.to_string());
+    if let Some(rows) = std::fs::read(&file).ok().and_then(|b| unpack(&b).ok()).and_then(|b| serde_json::from_slice(&b).ok()) {
+        return Ok(rows);
+    }
+    let rows = page_rows(client, repo, page)?;
+    let packed = pack(&serde_json::to_vec(&rows).map_err(|e| e.to_string())?, Level::Live).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(memo).map_err(|e| e.to_string())?;
+    write_atomic(&file, &packed).map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
+/// What pages hold, each read once into `store`.
+pub fn read_pages(client: &mut Client, repo: &TerrainRepository, pages: &[IVec], store: &mut impl Store) -> Result<Input, String> {
+    let (mut ways, mut water, mut ground) = (BTreeMap::new(), BTreeMap::new(), HashMap::new());
+    let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
+    for &at in pages {
+        for corner in epsg3857::get_page_bbox(at) {
+            for k in 0..2 {
+                (lo[k], hi[k]) = (lo[k].min(corner[k]), hi[k].max(corner[k]));
+            }
+        }
+        let p = store.page(client, repo, at)?;
+        ground.insert(at, p.surface());
+        ways.extend(p.ways.into_iter().map(|r| (r.gers_id.clone(), r)));
+        water.extend(p.water.into_iter().map(|w| (w.2.clone(), w)));
+    }
+    let ways: Vec<Segment> = ways.into_values().collect();
+    Ok(Input {
+        rows: ways.iter().filter(|w| w.flagged()).cloned().collect(),
+        ways: ways.into_iter().filter_map(Way::of).collect(),
+        water: water.into_values().map(|(s, c, wkb)| Water::of(s, c, &wkb)).collect(),
+        bounds: [lo, hi],
+        ground,
+    })
+}
+
+/// A page and the eight around it.
+pub fn ring(page: IVec) -> Vec<IVec> {
+    let (px, py) = (ivec::X(page), ivec::Y(page));
+    (-1..=1).flat_map(|dy| (-1..=1).map(move |dx| ivec::gather(px + dx, py + dy, 0))).collect()
+}
+
+/// The bridge and tunnel rows touching a point, wherever it is.
+pub fn flagged_at(client: &mut Client, [x, y]: [f64; 2]) -> Result<Vec<Segment>, String> {
+    let e = TOUCH;
+    let env: [&(dyn ToSql + Sync); 4] = [&(x - e), &(y - e), &(x + e), &(y + e)];
+    Ok(client.query(SEGMENTS_SQL, &env).map_err(|e| e.to_string())?.iter().map(Segment::of).filter(Segment::flagged).collect())
+}
+
+/// How near a row's line must come to a point to be asked of it, in DB
+/// coordinates; whether it joins is the ends' identity, not this.
+const TOUCH: f64 = 0.01;

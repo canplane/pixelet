@@ -89,14 +89,14 @@ pub const ARENA_COARSE_GROUPS: u32 = 5;
 /// coarser cube; the coarsest fills one (asserted in mesh_slot.rs).
 pub const COARSE_BOXES: u32 = 4551;
 
-/// Bytes a run set holds (`.fixed.runs`, world/chunk/build.rs): a leaf
-/// chunk's columns at eleven runs each, where the terrain is one and what is
-/// placed on it rarely a handful more. A set past it is refused rather than
-/// cut, since a run left out is a hole.
-pub const RUN_SET_BYTES: u32 = 1 << 20;
+// ---- decor's tiers ----
 
-/// Smallest size, in tier cells on screen, a decor kind is still drawn at as
-/// sprites. Set by eye: below half a cell an instance is pixel noise.
+/// How small, in the tier's cells on the screen, a decor kind may get and
+/// still be drawn, as its variants' sprites (layer/decor/build.rs
+/// `decor_tier`): past the model's floor of two cells, down to half of one.
+/// A knob set by eye and derived from nothing: a sprite costs two triangles
+/// an instance, so how far decor reaches is what this buys, and below half a
+/// cell an instance is a pixel or two that reads as noise.
 pub const IMPOSTOR_GONE_CELLS: f64 = 0.5;
 
 // ---- per-frame work caps (world/chunk/table.rs, io/policy.rs) ----

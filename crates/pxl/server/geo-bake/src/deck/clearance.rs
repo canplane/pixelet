@@ -21,26 +21,17 @@ pub const STREAM: f64 = 2.0;
 /// … over a lower deck it crosses, from that deck's top.
 pub const STACKED: f64 = 6.0;
 
-/// The steepest a deck climbs, rise over run, to clear what is under it
-/// from where it meets the ground. Arnis allows one to one, since a bridge
-/// way in OSM ends where its embankment begins and a clearance has to be
-/// reached within it. Half that keeps the climb readable as a ramp at a
-/// cell of about two metres and still clears a road under a forty-metre
-/// overpass.
-pub const MAX_SLOPE: f64 = 0.5;
+/// The steepest a deck climbs, or a bore descends, rise over run, from where
+/// it meets the ground. Pixelet's, not a precedent's: a city's ramps run
+/// about 6 to 8 percent, and with the approach graded with the bridge
+/// (approach.rs) the climb has the length a real one has. Arnis, which grades
+/// the bridge way alone, has to allow one to one.
+pub const MAX_SLOPE: f64 = 0.08;
 
 /// How far apart the solve samples a deck, in metres: about two cells, so
 /// a deck's line bends where its ground and what it clears change, and a
 /// kilometre of deck is two hundred points.
 pub const STEP: f64 = 5.0;
-
-/// Piers stand this far apart along a deck, a short span's length.
-pub const PIER_STEP: f64 = 30.0;
-/// A pier stands only under a deck this far over the ground, room for one
-/// under its slab.
-pub const PIER_MIN_RISE: f64 = 4.0;
-/// … and no nearer than this to a road or a railway that passes under.
-pub const PIER_OFF_WAY: f64 = 8.0;
 
 /// What passes under a deck, by how much it asks the deck to clear.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -62,12 +53,6 @@ impl Under {
             Under::River => RIVER,
             Under::Stream => STREAM,
         }
-    }
-
-    /// Whether a pier keeps off it: a way is driven or walked through, and
-    /// water is where a river bridge's piers stand.
-    pub fn keeps_piers_off(self) -> bool {
-        matches!(self, Under::Road | Under::Path | Under::Rail)
     }
 
     /// A transportation segment's, by its subtype and class.

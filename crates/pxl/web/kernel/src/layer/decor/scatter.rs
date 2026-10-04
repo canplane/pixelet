@@ -67,7 +67,8 @@ pub enum DecorOrientationMode {
 pub struct DecorKindSeed {
     /// Changing it reshuffles every placement of the kind.
     pub tag: u64,
-    /// Probability per eligible cell.
+    /// Mean candidates per level cell: the intensity of the Poisson process
+    /// that scatters it (`pxl-spec procedural.rs`).
     pub density: f64,
     pub orientation: DecorOrientationMode,
 }

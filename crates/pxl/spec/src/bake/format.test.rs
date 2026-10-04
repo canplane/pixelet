@@ -29,8 +29,8 @@ fn page(seed: u64) -> Terrain {
         .collect();
     let mut decks = deck::Builder::default();
     for _ in 0..3 {
-        let points: Vec<([f64; 2], i16, u8)> = (0..4).map(|_| ([(rng.next() % 600) as f64, (rng.next() % 600) as f64], rng.next() as i16, (rng.next() % 2) as u8)).collect();
-        decks.push(points, 1 + (rng.next() % 200) as u8, rng.next() as u8);
+        let points: Vec<([f64; 2], i16)> = (0..4).map(|_| ([(rng.next() % 600) as f64, (rng.next() % 600) as f64], rng.next() as i16)).collect();
+        decks.push(points, 1 + (rng.next() % 200) as u8, rng.next() as u8, deck::Form::of((rng.next() % 3) as u8));
     }
     Terrain {
         ele: ele.into(),
@@ -40,7 +40,6 @@ fn page(seed: u64) -> Terrain {
     }
 }
 
-/// A record's room, as the kernel's fixed range would give it.
 fn room() -> PageRoom {
     PageRoom {
         cells: vec![0; GROUND_LANE].leak(),
@@ -51,15 +50,15 @@ fn room() -> PageRoom {
             starts: vec![0; deck::MAX_DECKS + 1].leak(),
             points: vec![[0; 2]; deck::MAX_POINTS].leak(),
             tops: vec![0; deck::MAX_POINTS].leak(),
-            piers: vec![0; deck::MAX_POINTS].leak(),
             width: vec![0; deck::MAX_DECKS].leak(),
             kind: vec![0; deck::MAX_DECKS].leak(),
+            form: vec![0; deck::MAX_DECKS].leak(),
+            boxes: vec![[0; 4]; deck::MAX_BOXES].leak(),
         },
     }
 }
 
-/// FNV-1a over 64 bits: what the golden holds of a page's bytes, which are
-/// a megabyte.
+/// FNV-1a 64 of a page's bytes, for the golden.
 fn fnv(bytes: &[u8]) -> u64 {
     let mut h = fnv::FnvHasher::default();
     std::hash::Hasher::write(&mut h, bytes);
@@ -99,8 +98,8 @@ fn a_block_says_what_its_cells_say() {
                 for x in (0..n).step_by(side as usize) {
                     let lane = index.extent();
                     let cells = (y..y + side).flat_map(|cy| (x..x + side).map(move |cx| lane[EXTENT.cell_index(cx, cy) as usize]));
-                    let lo = cells.clone().map(|[l, _]| l).min().unwrap();
-                    let hi = cells.clone().map(|[_, h]| h).max().unwrap();
+                    let lo = cells.clone().map(|c| drawn(c)[0]).min().unwrap();
+                    let hi = cells.clone().map(|c| drawn(c)[1]).max().unwrap();
                     let span = cells.map(|[l, h]| (i32::from(h) - i32::from(l)) as u16).max().unwrap();
                     assert_eq!(index.over([x, y], side), Block { lo, hi, span }, "{side} from ({x}, {y})");
                 }

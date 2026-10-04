@@ -13,9 +13,10 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::{add3, V3};
 use xpute_core::math::scalar::clamp;
 
+use crate::control::camera::approach::{approach_angle, approach_scalar, approach_vec};
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::config::camera_cfg::input::DOLLY_GAIN;
-use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, ROT_DAMP};
+use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, POS_DAMP, ROT_DAMP};
 use crate::control::camera::config::camera_cfg::view::{MAX_DIST, MIN_DIST};
 use crate::control::camera::controller::{camera, center_local, damp_alpha, look_dir, look_domain, map_center, set_eye_local, spend_travel, units_per_px_at};
 use crate::control::camera::gesture::{spread, Anchor};

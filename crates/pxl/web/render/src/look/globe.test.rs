@@ -23,12 +23,12 @@ fn the_map_center_is_left_where_it_is() {
 fn a_point_due_north_is_where_its_latitude_is() {
     let globe = Globe::at(SEOUL);
     let north = SEOUL + 2f64.to_radians();
-    let dy = MERCATOR_RADIUS_U * ((core::f64::consts::FRAC_PI_4 + north / 2.0).tan().ln() - (core::f64::consts::FRAC_PI_4 + SEOUL / 2.0).tan().ln());
+    let dy = MERCATOR_RADIUS_U * (libm::log(libm::tan(core::f64::consts::FRAC_PI_4 + north / 2.0)) - libm::log(libm::tan(core::f64::consts::FRAC_PI_4 + SEOUL / 2.0)));
     let p = globe.place([0.0, dy, 0.0]);
     let r = globe.radius_u();
     let arc = 2f64.to_radians();
-    assert!((p[1] - r * arc.sin()).abs() < 1e-3, "{} vs {}", p[1], r * arc.sin());
-    assert!((p[2] + r * (1.0 - arc.cos())).abs() < 1e-3, "{} vs {}", p[2], -r * (1.0 - arc.cos()));
+    assert!((p[1] - r * libm::sin(arc)).abs() < 1e-3, "{} vs {}", p[1], r * libm::sin(arc));
+    assert!((p[2] + r * (1.0 - libm::cos(arc))).abs() < 1e-3, "{} vs {}", p[2], -r * (1.0 - libm::cos(arc)));
     assert!(p[0].abs() < 1e-9);
     // The secant between the two latitudes: about 1.4% at 2°.
     assert!(dy > p[1] * 1.01, "the flat map stretched it: {dy} against {}", p[1]);
@@ -41,8 +41,8 @@ fn every_point_lies_on_the_sphere_at_its_height() {
     for d in [[1e5, 3e4, 0.0], [-2e5, -1e5, 0.0], [5e4, -3e5, 400.0]] {
         let p = globe.place(d);
         let from_center = (p[0] * p[0] + p[1] * p[1] + (p[2] + r) * (p[2] + r)).sqrt();
-        let lat = 2.0 * (globe.e0 * (d[1] / MERCATOR_RADIUS_U).exp()).atan() - core::f64::consts::FRAC_PI_2;
-        let want = r + d[2] * lat.cos() / globe.cos_lat;
+        let lat = 2.0 * libm::atan(globe.e0 * libm::exp(d[1] / MERCATOR_RADIUS_U)) - core::f64::consts::FRAC_PI_2;
+        let want = r + d[2] * libm::cos(lat) / globe.cos_lat;
         assert!((from_center - want).abs() < 1e-3, "{d:?}: {from_center} vs {want}");
     }
 }
@@ -61,14 +61,14 @@ fn unplace_takes_a_placed_point_back_to_the_map() {
 #[test]
 fn the_sphere_is_one_whichever_point_it_is_laid_about() {
     let a = Globe::at(SEOUL);
-    let meters_a = a.cos_lat / epsg3857::U_PER_M;
+    let meters_a = a.cos_lat / epsg3857::u_per_m(0.0);
     let mut rng = SplitMix64::new(0x2545_f491_4f6c_dd1d);
     let mut unit = move || u32_to_unit(rng.next_u32()) - 0.5;
     for _ in 0..200 {
         let off = [unit() * 1.0e5, unit() * 1.0e5];
-        let e = a.e0 * (off[1] / MERCATOR_RADIUS_U).exp();
-        let b = Globe::at(2.0 * e.atan() - core::f64::consts::FRAC_PI_2);
-        let meters_b = b.cos_lat / epsg3857::U_PER_M;
+        let e = a.e0 * libm::exp(off[1] / MERCATOR_RADIUS_U);
+        let b = Globe::at(2.0 * libm::atan(e) - core::f64::consts::FRAC_PI_2);
+        let meters_b = b.cos_lat / epsg3857::u_per_m(0.0);
         for _ in 0..8 {
             let span = 3.0e5;
             let pts: [V3; 4] = core::array::from_fn(|_| [unit() * span, unit() * span, (unit() + 0.5) * 2.0e3]);

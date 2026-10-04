@@ -34,6 +34,16 @@ pub fn shown_ground(read: impl Fn(GroundChannelKey) -> u32) -> ShownGround {
     shown
 }
 
+/// Each channel's `shift` column, by the channel's number.
+const SHIFT_COLUMNS: [&[(u8, i16)]; 4] = {
+    let mut columns: [&[(u8, i16)]; 4] = [&[]; 4];
+    columns[GroundChannelKey::LAND as usize] = cube_types::land::SHIFT;
+    columns[GroundChannelKey::WATER as usize] = cube_types::water::SHIFT;
+    columns[GroundChannelKey::STRUCTURE as usize] = cube_types::structure::SHIFT;
+    columns[GroundChannelKey::TRANSPORT as usize] = cube_types::transport::SHIFT;
+    columns
+};
+
 /// A raise or a sink that sets one layer's cells apart from the ground
 /// around them, up positive: the catalog's `shift` column, by type.
 pub fn shift(shown: ShownGround) -> i16 {

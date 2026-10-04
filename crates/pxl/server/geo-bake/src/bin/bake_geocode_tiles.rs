@@ -15,16 +15,17 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use postgres::{Client, NoTls};
+use postgres::Client;
 use pxl_spec::bake::place_page::{encode_place_group, DICT_OBJECT, GROUP_SHAMT};
 use pxl_spec::bake::published::PUBLISHED_VERSION;
 
-use pxl_geo_bake::geocode::provider::overture::GeocodeProvider;
+use pxl_geo_bake::coverage::Overture;
+use pxl_geo_bake::geocode::provider::overture::{self, GeocodeProvider};
 use pxl_geo_bake::geocode::PlaceDict;
 use pxl_geo_bake::page::bake::{self, Bake};
 use pxl_geo_bake::page::walk::Page;
+use pxl_geo_bake::terrain::leaf;
 use pxl_geo_bake::util::{pack, write_atomic, Level};
-use pxl_geo_spec::table;
 
 struct Worker {
     client: Client,
@@ -32,9 +33,8 @@ struct Worker {
 }
 
 fn run() -> Result<(), String> {
-    let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
+    let (source, mut client) = Overture::reading(&[&overture::READS, &leaf::GROUND_READS])?;
 
-    let mut client = Client::connect(&url, NoTls).map_err(|e| e.to_string())?;
     let provider = GeocodeProvider::prepare(&mut client).map_err(|e| e.to_string())?;
     let dict = PlaceDict::of(provider.divisions(&mut client).map_err(|e| e.to_string())?);
     println!("[bake/geocode] {} divisions in the dictionary", dict.divisions.len());
@@ -49,11 +49,11 @@ fn run() -> Result<(), String> {
             every: 200,
             content_type: "application/octet-stream",
             format: Some("xtp place dictionary and groups (encode_place_dict, encode_place_group)"),
-            sources: &[table::DIVISIONS, table::DIVISION_POINTS],
+            source: &source,
         },
         |out| write_atomic(&out.join(DICT_OBJECT), &packed_dict).map_err(|e| e.to_string()),
         || {
-            let mut client = Client::connect(&url, NoTls).map_err(|e| e.to_string())?;
+            let mut client = source.connect()?;
             let provider = GeocodeProvider::prepare(&mut client).map_err(|e| e.to_string())?;
             Ok(Worker { client, provider })
         },

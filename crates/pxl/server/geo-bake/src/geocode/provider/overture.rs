@@ -18,9 +18,19 @@ use crate::geocode::{names_of, PartSource, PlaceDict};
 const FINE_POINT_RADIUS_M: f64 = 2000.0;
 
 /// A stable order: a resumed bake must number places the same way.
-const ALL_DIVISIONS_SQL: &str = "SELECT gers_id, subtype, name, names_common
+const ALL_DIVISIONS_SQL: &str = concat!(
+    "SELECT gers_id, subtype, name, ",
+    pxl_geo_spec::division_names!("overture_divisions"),
+    " AS names_common
 FROM overture_divisions
-ORDER BY gers_id";
+WHERE name IS NOT NULL AND subtype IN ",
+    pxl_geo_spec::division_areas!(),
+    "
+ORDER BY gers_id"
+);
+
+/// Every statement the provider runs, for the catalog check.
+pub const READS: [&str; 3] = [CONTAINING_SQL, NEAREST_POINT_SQL, ALL_DIVISIONS_SQL];
 
 const CONTAINING_DIVISIONS_SQL: &str = "SELECT gers_id, subtype, name
 FROM overture_divisions
@@ -71,16 +81,40 @@ impl GeocodeProvider {
         Ok(client
             .query(ALL_DIVISIONS_SQL, &[])?
             .iter()
-            .filter_map(|r: &Row| {
-                let rank = rank_of(r.get("subtype"))?;
-                Some((
-                    r.get("gers_id"),
-                    Division {
-                        rank,
-                        name: r.get("name"),
-                        names: names_of(&r.get("names_common")).into_iter().collect(),
-                    },
-                ))
+            .map(|r: &Row| Division::new(r.get("gers_id"), r.get("subtype"), r.get("name"), r.get("names_common")))
+            .filter(|d| rank_of(&d.subtype).is_some())
+            .map(|d| (d.gers_id.clone(), named(&d)))
+            .collect())
+    }
+
+    /// An area is a dictionary place; a point names a place near the page, an
+    /// approximation, and points are too many for the dictionary.
+    fn reverse(&self, client: &mut Client, leaves: &[IVec]) -> Result<Vec<Vec<PartSource>>, postgres::Error> {
+        let (xs, ys): (Vec<f64>, Vec<f64>) = leaves
+            .iter()
+            .map(|&leaf| {
+                let bb = epsg3857::get_page_bbox(leaf);
+                ((bb[0][0] + bb[1][0]) / 2.0, (bb[0][1] + bb[1][1]) / 2.0)
+            })
+            .unzip();
+        let areas = division::by_point(leaves.len(), client.query(&self.containing, &[&xs, &ys])?.iter().map(division_of));
+        let within: Vec<Option<String>> = areas.iter().map(|a| division::within(a)).collect();
+        let reach: Vec<f64> = ys.iter().map(|&y| division::reach_at(y)).collect();
+        let points = division::by_point(leaves.len(), client.query(&self.nearest, &[&xs, &ys, &within, &reach])?.iter().map(division_of));
+        Ok(areas
+            .iter()
+            .zip(&points)
+            .map(|(areas, point)| {
+                division::label(areas, point.first())
+                    .into_iter()
+                    .map(|(d, approx)| {
+                        if approx {
+                            PartSource::Local { place: named(d), approx }
+                        } else {
+                            PartSource::Shared(d.gers_id.clone())
+                        }
+                    })
+                    .collect()
             })
             .collect())
     }

@@ -60,14 +60,14 @@ impl Observation {
         let e = self.eye;
         let gap = |b: &Aabb, k: usize| (b.min[k] - e[k]).max(e[k] - b.max[k]).max(0.0);
         let reach = |b: &Aabb, k: usize| (e[k] - b.min[k]).abs().max((b.max[k] - e[k]).abs());
-        let (along, reach_along) = (gap(b, 0).hypot(gap(b, 1)), reach(b, 0).hypot(reach(b, 1)));
+        let (along, reach_along) = (libm::hypot(gap(b, 0), gap(b, 1)), libm::hypot(reach(b, 0), reach(b, 1)));
         let mut drawn = *b;
         drawn.min[2] -= reach_along * reach_along / (2.0 * self.planet);
         let seen = !drawn.bounded() || self.frustum.is_none_or(|f| f.sees(drawn.center(), drawn.radius()));
         Measure {
             seen,
-            near: along.hypot(gap(&drawn, 2)),
-            far: reach_along.hypot(reach(&drawn, 2)),
+            near: libm::hypot(along, gap(&drawn, 2)),
+            far: libm::hypot(reach_along, reach(&drawn, 2)),
         }
     }
 
@@ -95,7 +95,10 @@ pub enum Contents {
     Empty,
     /// Everything is inside `bound`, drawn off by up to `error` per axis.
     /// Conservative, not tight.
-    Holds { bound: Aabb, error: V3 },
+    Holds {
+        bound: Aabb,
+        error: V3,
+    },
 }
 
 impl Contents {

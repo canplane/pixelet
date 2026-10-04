@@ -6,19 +6,25 @@
 //!   cargo run -p pxl-geo-bake --example bake_from_db -- <dir> <page>...
 
 use std::fs;
+use std::sync::Arc;
 
-use postgres::{Client, NoTls};
+use pxl_geo_bake::coverage::{Coverage, Overture};
+use pxl_geo_bake::deck::{self, source::Disk};
+use pxl_geo_bake::elevation::Raster;
+use pxl_geo_bake::terrain::leaf::{self, bake_leaf};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
-use pxl_geo_bake::terrain::source::{fetch_tile, SourceStats};
+use pxl_spec::bake::format::encode_terrain;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let (dir, pages) = args.split_first().expect("usage: <dir> <page>...");
 
-    let url = std::env::var("DB_GEO_URL").expect("DB_GEO_URL");
-    let mut client = Client::connect(&url, NoTls).expect("connect");
-    let repo = TerrainRepository::prepare(&mut client).expect("prepare");
-    let mut stats = SourceStats::default();
+    let coverage = Coverage::of_source().expect("coverage");
+    let (_, mut client) = Overture::reading(&leaf::READS).expect("geo DB");
+    let raster = Arc::new(Raster::open(&mut client).expect("raster"));
+    let repo = TerrainRepository::prepare(&mut client, raster).expect("prepare");
+    let memo = std::env::temp_dir().join("pxl-source");
+    let mut flat = 0;
 
     for page in pages {
         let idx = page.parse().expect("page_idx");
@@ -32,9 +38,10 @@ fn main() {
         let (terrain, off_raster) = bake_leaf(reader, idx).expect("bake");
         let tile = encode_terrain(&terrain).expect("encode");
         fs::write(format!("{dir}/{page}.db.tile"), &tile).expect("write");
+        flat += usize::from(off_raster);
         println!("{page}\t{}", tile.len());
     }
-    if stats.invalid_ele_shape > 0 {
-        eprintln!("[bake] invalid ele shape on {} page(s)", stats.invalid_ele_shape);
+    if flat > 0 {
+        eprintln!("[bake] no elevation on {flat} page(s)");
     }
 }

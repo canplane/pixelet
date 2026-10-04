@@ -1,47 +1,11 @@
 // pxl-spec/bake/fold.rs
 
-//! One level up: a parent page from the pages under it. The bake runs it to
-//! build the pyramid, and the client runs it to stand a coarse page up from
-//! fine ones it already holds, so it lives here, once. Both sides compose the
-//! same one-level function the same number of times, which is why any rule
-//! that is deterministic agrees between them — the rule does not also have to
-//! be a homomorphism (issue/20260921-level-step-and-zoom-are-one-number.md).
-//!
-//! A parent covers 2×2 children at half the resolution: a parent cell is the
-//! 2×2 child cells under it. Ground takes the type that fills at least half of
-//! them, so a feature narrower than half a cell of the level below rounds away
-//! and the channel under it shows. Nothing here knows which channel it is
-//! folding: what disappears at a distance is a matter of size, not a policy
-//! per layer.
-//!
-//! Half of the level below, not of the leaves. A mode is holistic — no
-//! summary of fixed size gives the mode of the union — so a mode of modes is
-//! not the mode of the block: a line one leaf wide can win a tie at level 1,
-//! be a whole cell there, and win the tie again at level 2 at a quarter of
-//! its cell; a type filling 27 of 64 leaves in three quarters of three
-//! quarters wins at level 3. Earth Engine's `MODE` pyramiding policy makes the
-//! same trade — each level the mode of 2×2 of the level below, the upper-left
-//! pixel when there is none — and for the same reason: a level that is a
-//! function of the one under it is what lets the client fold what it holds.
-//! Exact would mean per-type counts through every level, 32 lanes a cell,
-//! which the resident records cannot carry. Where this differs from Earth
-//! Engine is the tie's corner (`majority`).
-//!
-//! Elevation is the box average, and that is forced rather than chosen. A
-//! column's volume is linear in its height, so the mean is what preserves it,
-//! and the fraction the mean leaves is what a coarse cell's inset is cut from.
-//! The value stays in units at every level: in the level's own cells the
-//! rounding would eat that fraction.
-//!
-//! Decks are lines, and fold as lines (bake/deck.rs `fold_decks`): each
-//! child's in the parent's cells, simplified to its cell, and one narrower
-//! than half of it left out — the size rule the majority keeps for ground.
-//!
-//! The index lane is the one fold that is not a summary of the level below
-//! alone. A mean lies inside what it averages but says nothing of how far
-//! what it averages reaches, so a parent's extent is carried up from its
-//! children's, which already hold everything under them, and widened by its
-//! own surface, which the interpolation can lift past theirs.
+//! One level up: a parent page from the pages under it, run by both the bake
+//! and the client so a deterministic rule agrees between them. Ground takes
+//! the 2×2 majority of the level below (as Earth Engine's `MODE` pyramiding),
+//! so a feature narrower than half a cell rounds away. Elevation is the box
+//! average, which preserves a column's volume. The index lane is carried up
+//! from the children's extents and widened by the parent's own surface.
 
 use crate::space::pyramid::PAGE_CELLS;
 use xpute_core::math::scalar::round;
@@ -80,8 +44,7 @@ pub fn fold_ground(children: [&Ground; 4], level: u32) -> Ground {
             let four = block.map(|i| children[q].cells[i as usize]);
             let mut cell = 0 as GroundCell;
             for key in GROUND_CH_KEYS {
-                let v = four.map(|f| channel_of(f, key));
-                cell = with_channel(cell, key, majority(v, level as i32));
+                cell = with_channel(cell, key, majority(four.map(|f| channel_of(f, key)), level as i32));
             }
             cell
         })
@@ -159,8 +122,13 @@ fn fold_terrain(around: [Option<&Terrain>; 16], level: u32) -> Option<Terrain> {
     let mut ele = vec![0i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
     fold_ele(around.map(|t| t.map(|t| &*t.ele)), &mut ele);
     let decks = fold_decks(children.map(|t| &t.decks), level);
-    let index = fold_index(children.map(|t| &t.index), extent_of(&ele, &ground.cells, &decks));
-    Some(Terrain { ground, decks, ele: ele.into(), index })
+    let index = fold_index(children.map(|t| &t.index), extent_of(&ele, &decks));
+    Some(Terrain {
+        ground,
+        decks,
+        ele: ele.into(),
+        index,
+    })
 }
 
 #[cfg(test)]

@@ -1,6 +1,13 @@
 // pxl-geo-spec/overture/division.rs
 
-use pxl_spec::place::PlaceRank;
+//! Reverse geocoding over Overture Divisions, for the live search and the
+//! bake alike: the caller runs the two statements with its own client and
+//! hands the rows back here to be read into a name.
+
+use std::collections::BTreeMap;
+
+use pxl_spec::place::{PlacePart, PlaceRank};
+use pxl_spec::space::adapter::epsg3857::{from_db, to_db, u_per_m};
 
 /// The three sub-city subtypes share a rung because Overture does not
 /// guarantee they nest.
@@ -29,6 +36,42 @@ macro_rules! division_names {
             $t,
             ".properties->'names'->'common') WHEN 'array' THEN ",
             $t,
+            ".properties->'names'->'common' END) e WHERE jsonb_typeof(e->0) = 'string' AND jsonb_typeof(e->1) = 'string' AND e->>0 IN ('en', 'ko') AND e->>1 <> '')"
+        )
+    };
+}
+
+/// The area subtypes a name is built from; `country` is above the label.
+#[macro_export]
+macro_rules! division_areas {
+    () => {
+        "('region', 'county', 'locality', 'neighborhood', 'microhood', 'macrohood')"
+    };
+}
+
+/// The point subtypes: a province or a city always has its polygon.
+#[macro_export]
+macro_rules! division_points {
+    () => {
+        "('locality', 'neighborhood', 'microhood', 'macrohood')"
+    };
+}
+
+/// How far [`NEAREST_POINT_SQL`] looks where no polygon covers a point.
+pub const NEAREST_REACH_M: f64 = 2048.0;
+
+/// [`NEAREST_REACH_M`] at the DB's `y`, in the DB's coordinates.
+pub fn reach_at(y: f64) -> f64 {
+    to_db(NEAREST_REACH_M * u_per_m(from_db(y)))
+}
+
+/// `names.common` in the UI's languages as a JSON object, NULL where none, of
+/// the row the given table or alias names.
+#[macro_export]
+macro_rules! division_names {
+    ($t:literal) => {
+        concat!(
+            "(SELECT jsonb_object_agg(e->>0, e->>1) FROM jsonb_array_elements(CASE jsonb_typeof(", $t, ".properties->'names'->'common') WHEN 'array' THEN ", $t,
             ".properties->'names'->'common' END) e WHERE jsonb_typeof(e->0) = 'string' AND jsonb_typeof(e->1) = 'string' AND e->>0 IN ('en', 'ko') AND e->>1 <> '')"
         )
     };

@@ -82,29 +82,13 @@ pub async fn resolve_point_context_batch(pool: &Pool, xs: &[f64], ys: &[f64]) ->
     }
 
     let client = pool.get().await?;
-    let rows = client.query(CONTAINING_DIVISIONS_BATCH_SQL, &[&xs, &ys]).await?;
-
-    let mut by_point: HashMap<usize, Vec<Part>> = HashMap::new();
-    for row in &rows {
-        let idx: i64 = row.get("idx");
-        by_point.entry((idx - 1) as usize).or_default().push(Part::from_row(row));
-    }
-
-    for (i, list) in by_point {
-        // The fine subtypes are alternatives, not a chain: the most specific wins.
-        let fine = FINE_SUBTYPE_PRIORITY
-            .iter()
-            .find_map(|subtype| list.iter().position(|p| p.subtype == *subtype))
-            .and_then(|at| rank_of(&list[at].subtype).map(|rank| PlacePart::new(rank, list[at].name.clone(), names_of(&list[at].common))));
-
-        let mut parts = order_broad(list);
-        if let Some(fine) = fine {
-            if !parts.iter().any(|p| p.name == fine.name) {
-                parts.push(fine);
-            }
-        }
-        out[i] = parts;
-    }
-
-    Ok(out)
+    let areas = division::by_point(xs.len(), client.query(CONTAINING_SQL, &[&xs, &ys]).await?.iter().map(division_of));
+    let within: Vec<Option<String>> = areas.iter().map(|a| division::within(a)).collect();
+    let reach: Vec<f64> = ys.iter().map(|&y| division::reach_at(y)).collect();
+    let points = division::by_point(xs.len(), client.query(NEAREST_POINT_SQL, &[&xs, &ys, &within, &reach]).await?.iter().map(division_of));
+    Ok(areas
+        .iter()
+        .zip(&points)
+        .map(|(areas, point)| division::label(areas, point.first()).into_iter().map(|(d, approx)| d.part(approx)).collect())
+        .collect())
 }

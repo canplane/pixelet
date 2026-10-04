@@ -35,40 +35,37 @@
 //! The picture is for the eye; the summary is the check.
 
 use std::collections::BTreeMap;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use flate2::write::ZlibEncoder;
 use flate2::{Compression, Crc};
 use pxl_geo_bake::cli::Flags;
+use pxl_geo_bake::util::{encoding_of, unpack};
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::bake::deck::Decks;
+use pxl_spec::bake::deck::{Decks, Form};
 use pxl_spec::bake::format::decode_terrain;
 use pxl_spec::bake::format::{GroundChannelKey, Occupancy};
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::bake::published::PUBLISHED_VERSION;
+use pxl_spec::bake::surface::bicubic;
 use pxl_spec::bake::surface::extent_of;
 use pxl_spec::cell::cube::ground_pack;
 use pxl_spec::cell::{color, cube_types};
 use pxl_spec::space::pyramid::PAGE_CELLS;
+use xpute_core::math::scalar::round;
 use xpute_core::wire::xtp::{HDR_SZ, WORD_SZ};
 
 const MAGENTA: u32 = 0xff00ff;
 
-/// zstd, gzip in older sets, or identity from a deployment; told apart by
-/// their first bytes.
+/// Packed as a bake stores it, or identity from a deployment.
 fn read_page(path: &Path) -> Result<Vec<u8>, String> {
     let raw = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    if raw.starts_with(&[0x28, 0xb5, 0x2f, 0xfd]) {
-        return zstd::decode_all(raw.as_slice()).map_err(|e| format!("zstd: {e}"));
+    match encoding_of(&raw) {
+        Some(_) => unpack(&raw).map_err(|e| e.to_string()),
+        None => Ok(raw),
     }
-    if raw.starts_with(&[0x1f, 0x8b]) {
-        let mut out = Vec::new();
-        flate2::read::GzDecoder::new(raw.as_slice()).read_to_end(&mut out).map_err(|e| format!("gzip: {e}"))?;
-        return Ok(out);
-    }
-    Ok(raw)
 }
 
 struct Page {
@@ -144,7 +141,7 @@ fn summarize(page: &Page) -> Summary {
     if high > 0 {
         faults.push(format!("{high} cell(s) with bits set past the pack's {} bits", ground_pack::CELL_BITS));
     }
-    let short = extent_of(&page.ele, &page.cells, &page.decks).iter().zip(&page.extent).filter(|([lo, hi], [ilo, ihi])| ilo > lo || ihi < hi).count();
+    let short = extent_of(&page.ele, &page.decks).iter().zip(&page.extent).filter(|([lo, hi], [ilo, ihi])| ilo > lo || ihi < hi).count();
     if short > 0 {
         faults.push(format!("{short} index cell(s) narrower than the page's own surface"));
     }
@@ -170,12 +167,31 @@ fn print_summary(name: &str, s: &Summary) {
     }
 }
 
+/// The bores, and how deep each point's floor lies under the surface the
+/// page draws there: a bore cuts only where it is under.
+fn print_bores(page: &Page) {
+    let bores: Vec<_> = page.decks.iter().filter(|d| d.form == Form::Bore).collect();
+    if bores.is_empty() {
+        return;
+    }
+    let (mut under, mut points) = (0, 0);
+    for d in &bores {
+        for i in 0..d.points.len() {
+            let [x, y] = d.point(i);
+            points += 1;
+            if i32::from(d.tops[i]) < i32::from(bicubic(&page.ele, x, y)) {
+                under += 1;
+            }
+        }
+    }
+    println!("  bores     {}, {points} points, {under} under the surface", bores.len());
+}
+
 fn print_decks(decks: &Decks) {
     let tops = decks.tops.iter().fold([i16::MAX, i16::MIN], |[lo, hi], &t| [lo.min(t), hi.max(t)]);
-    let piers = decks.piers.iter().filter(|&&p| p != 0).count();
     match decks.len() {
         0 => println!("  decks     none"),
-        n => println!("  decks     {n}, {} points, {piers} piers, tops {}..{}", decks.points.len(), tops[0], tops[1]),
+        n => println!("  decks     {n}, {} points, tops {}..{}", decks.points.len(), tops[0], tops[1]),
     }
 }
 
@@ -214,7 +230,7 @@ fn heights_png(page: &Page, s: &Summary) -> Vec<u8> {
     let gray: Vec<u8> = page
         .ele
         .iter()
-        .map(|&h| if span == 0.0 { 128 } else { ((h as f64 - s.min as f64) / span * 255.0).round() as u8 })
+        .map(|&h| if span == 0.0 { 128 } else { round((h as f64 - s.min as f64) / span * 255.0) as u8 })
         .collect();
     png(ELE_PADDED_SPAN, ELE_PADDED_SPAN, 1, &gray)
 }
@@ -243,13 +259,13 @@ fn decks_png(page: &Page) -> Vec<u8> {
     let n = PAGE_CELLS as i64;
     let mut top = vec![f64::NEG_INFINITY; (n * n) as usize];
     let mut px = vec![0u8; (n * n * 3) as usize];
-    page.decks.over_cells([0, n], [0, n], |x, y, _, over| {
+    page.decks.over_grid(None, [0.0, 0.0], 1.0, [n, n], |x, y, _, over| {
         let i = (y * n + x) as usize;
         if over.top < top[i] {
             return;
         }
         top[i] = over.top;
-        let v = if over.pier { 0xffffff } else { color::ground(GroundChannelKey::TRANSPORT, over.kind).map_or(MAGENTA, |s| s.rgb) };
+        let v = color::ground(GroundChannelKey::TRANSPORT, over.kind).map_or(MAGENTA, |s| s.rgb);
         px[i * 3..i * 3 + 3].copy_from_slice(&[(v >> 16) as u8, (v >> 8) as u8, v as u8]);
     });
     png(PAGE_CELLS, PAGE_CELLS, 3, &px)
@@ -312,6 +328,7 @@ fn one(path: &Path, out: Option<PathBuf>) -> Result<bool, String> {
     let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
     print_summary(&name, &s);
     print_decks(&page.decks);
+    print_bores(&page);
     for line in &s.faults {
         eprintln!("[decode_tile] {line}");
     }

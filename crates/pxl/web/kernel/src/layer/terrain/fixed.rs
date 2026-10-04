@@ -1,12 +1,39 @@
 // pxl-kernel/layer/terrain/fixed.rs
 
 //! `.fixed.terrain`: the room every resident terrain page lies in, and where
-//! a record's bytes are. Planes in order: ground, seven deck lanes,
-//! elevation, index lane, index blocks. The elevation is its own plane
-//! because its 2,592-byte record is 32 past a cache line; held with the
-//! ground it would misalign every second page's lanes.
+//! a record's bytes are.
+//!
+//! The first and much the largest of the kernel's `.fixed` ranges
+//! (mem/fixed.rs), which is what the name says — placed once when the
+//! module boots, never freed, and of a size settled at compile time.
+//!
+//! How many records there are, and which page is in which, are residency's
+//! (world/paging.rs `RECORDS`), the same for every layer, and so
+//! is the first, `ABSENT`, which every page the bake left as no object reads
+//! — the open ocean; what is terrain's is that a record is a room of fixed
+//! bytes here.
+//!
+//! The routing turns a record into an address, and it is the only thing here
+//! that knows how the bytes are ordered. A page's ground is one lane of words,
+//! the four channels packed into each (pxl-spec bake/pack.rs), and the lane is
+//! a whole number of cache lines, so every record's starts aligned and every
+//! row of it with them. The elevation is a plane of its own past them, because
+//! its record is 2,592 bytes — 32 past a cache line, and a grid whose rows are
+//! 72 bytes is not aligned at any offset anyway. Held with the ground it would
+//! carry that 32 into every second page's lanes; held apart it costs nothing.
+//! The index lane (pxl-spec bake/format.rs `Index`) is a third plane past the
+//! elevation, a (lowest, highest) pair of i16 a cell of its lattice, and its
+//! blocks a fourth: made from the lane as the page is written into its
+//! record, and so held exactly as long as the lane is.
+//!
+//! A page's decks (pxl-spec bake/deck.rs) are seven planes between the ground
+//! and the elevation, one a lane of theirs, each lane as long as a record
+//! holds and a whole number of cache lines: placed past the ground, whose
+//! plane ends on a line, every record's deck lanes start on one. A record
+//! holds the decks of its page from the front of each lane.
 
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
+use pxl_spec::bake::deck::{MAX_BOXES, MAX_DECKS, MAX_POINTS};
 use pxl_spec::bake::format::{Block, BLOCK_LANE};
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::pyramid::{EXTENT, PAGE_CELLS};
@@ -23,7 +50,7 @@ const fn deck_lane(count: usize, size: usize) -> u32 {
     ((count * size).div_ceil(64) * 64) as u32
 }
 
-/// Plane order: deck starts, points, tops, width, kind, form, distance from a portal.
+/// Plane order: deck starts, points, tops, width, kind, form, boxes.
 pub const DECK_LANE_BYTES: [u32; 7] = [
     deck_lane(MAX_DECKS + 1, 4),
     deck_lane(MAX_POINTS, 4),
@@ -31,9 +58,10 @@ pub const DECK_LANE_BYTES: [u32; 7] = [
     deck_lane(MAX_DECKS, 1),
     deck_lane(MAX_DECKS, 1),
     deck_lane(MAX_DECKS, 1),
-    deck_lane(MAX_POINTS, 2),
+    deck_lane(MAX_BOXES, 8),
 ];
 
+/// The deck planes across every record.
 pub const DECK_BYTES: u32 = RECORDS * {
     let mut sum = 0;
     let mut k = 0;

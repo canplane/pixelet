@@ -17,8 +17,10 @@ fn called(name: &str, id: u64) -> Place<'_> {
     Place { name, kind: 0, id }
 }
 
-/// Each cell's count and its places as (name, where it stands).
-fn cells(page: &PoiPage) -> Vec<(u32, Vec<(&str, [u32; 2])>)> {
+/// A cell's count and its places as (name, where it stands).
+type Cell<'a> = (u32, Vec<(&'a str, [u32; 2])>);
+
+fn cells(page: &PoiPage) -> Vec<Cell<'_>> {
     page.cells.iter().map(|c| (c.count, page.shown(c).map(|(_, p, at)| (p.name, at)).collect())).collect()
 }
 

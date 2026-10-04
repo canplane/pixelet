@@ -3,6 +3,7 @@
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_core::math::scalar::wrap;
 
+use crate::control::camera::controller::Motion;
 use crate::control::camera::store::{camera_store, IntentPatch};
 use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::store::map_navigation;

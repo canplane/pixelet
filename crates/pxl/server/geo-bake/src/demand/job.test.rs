@@ -29,7 +29,7 @@ async fn success_and_failure_are_not_reported_as_empty_or_timeout() {
 #[test]
 fn complete_artifacts_are_moved_from_staging_and_abandoned_work_is_not_published() {
     let base = std::env::temp_dir().join(format!("pxl-demand-publication-{}", std::process::id()));
-    let runner = Runner::new(String::new(), 1, Limits::default()).unwrap();
+    let runner = Runner::new(1, Limits::default()).unwrap();
     let data = Dataset::open(&base, super::super::Kind::Poi, &runner).unwrap();
     let stage = Staging(data.cache.root.join("stage"));
     std::fs::create_dir(&stage.0).unwrap();

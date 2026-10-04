@@ -4,7 +4,7 @@
 //! d loop delta, t texel, s padded source sample.
 
 use pxl_spec::bake::format::{Ground, GroundChannelKey};
-use pxl_spec::bake::ground::cell_recess;
+use pxl_spec::bake::ground::cell_shift;
 use pxl_spec::bake::pack::{channel_of, GroundCell};
 use pxl_spec::bake::surface::bicubic;
 use pxl_spec::space::pyramid::GROUND;
@@ -48,7 +48,7 @@ pub fn ground_ele(page_ele: &[i16], ground: Option<GroundLanes>, tx: i32, ty: i3
 /// At a point in texels, with the shift of the page cell it lies in.
 pub fn ground_ele_at(page_ele: &[i16], ground: Option<GroundLanes>, tx: f64, ty: f64) -> i16 {
     let ele = bicubic(page_ele, tx, ty);
-    ground.map_or(ele, |g| ele - g.recess(GROUND.cell_index(tx.floor() as u32, ty.floor() as u32) as usize))
+    ground.map_or(ele, |g| ele + g.shift(GROUND.cell_index(tx.floor() as u32, ty.floor() as u32) as usize))
 }
 
 #[cfg(test)]

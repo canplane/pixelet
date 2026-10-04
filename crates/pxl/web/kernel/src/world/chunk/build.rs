@@ -8,6 +8,7 @@
 //! (crates/pxl/web/kernel/src/world/chunk/table.rs). What is here acts on
 //! what it asks.
 
+use pxl_spec::procedural::Frame;
 use pxl_spec::space::pyramid::{LevelPage, CHUNK_CELLS, GROUND};
 
 use pxl_render::gpu::api::{gpu, room};
@@ -121,6 +122,7 @@ struct Runs {
 #[derive(Clone, Copy)]
 struct Source {
     page: &'static Terrain,
+    frame: Frame,
     origin: [i64; 2],
     n: u32,
 }
@@ -134,6 +136,7 @@ impl Source {
         let corner = GROUND.cell_at(p, GROUND.cell_index(0, 0));
         Some(Source {
             page,
+            frame: Frame::of(src),
             origin: corner.in_page_above(src.level - p.level),
             n: GROUND.scale(p.level).count_in(GROUND.scale(src.level)),
         })
@@ -142,6 +145,7 @@ impl Source {
     fn view(&self) -> PageSource<'static> {
         PageSource {
             page: Builder::page_view(self.page),
+            frame: self.frame,
             origin: self.origin,
             n: self.n,
         }
@@ -661,7 +665,15 @@ impl Builder {
                 let job = self.scan_job.take().unwrap();
                 world.volumes.release(job.volume);
                 self.stat.scans += 1;
-                self.keep_runs(id, Runs { set, bytes, count, fold: Some(fold) });
+                self.keep_runs(
+                    id,
+                    Runs {
+                        block,
+                        bytes,
+                        count,
+                        fold: Some(fold),
+                    },
+                );
                 Progress::Busy
             }
         }

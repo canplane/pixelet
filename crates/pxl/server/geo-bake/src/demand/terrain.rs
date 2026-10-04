@@ -1,32 +1,30 @@
 // pxl-geo-bake/demand/terrain.rs
 
 use super::job;
-use crate::terrain::leaf::{bake_ocean, ocean_samples, Coverage};
+use crate::coverage::Coverage;
+use crate::terrain::leaf::{bake_ocean, ocean_samples};
 use pxl_spec::space::pyramid::LevelPage;
 
-pub(super) struct Source {
-    pub(super) coverage: Coverage,
-    pub(super) raw_ocean: Vec<u8>,
-}
-impl Source {
-    pub fn new() -> Result<Self, String> {
-        let coverage = Coverage::of_source();
-        let raw_ocean = bake_ocean(&ocean_samples(&coverage))?;
-        Ok(Self { coverage, raw_ocean })
-    }
+/// Each page's rows the deck solve read and each structure it solved, kept
+/// for the pages around while the server runs.
+pub(super) const SOURCE: &str = ".source";
+
+/// The page every absent terrain page is.
+pub(super) fn ocean() -> Result<Vec<u8>, String> {
+    bake_ocean(&ocean_samples(&Coverage::of_source()?))
 }
 
 pub(super) fn execute(p: LevelPage, cache: &std::path::Path, out: &std::path::Path, seconds: u64) -> Result<(), String> {
-    use crate::terrain::{leaf, repository::TerrainRepository, source::SourceStats};
-    use crate::util::{unpack, Level};
+    use crate::terrain::{leaf, repository::TerrainRepository};
+    use crate::util::unpack;
     use pxl_spec::bake::format::{decode_terrain, Terrain};
     super::pyramid::execute::<Terrain>(
         p,
         cache,
         out,
         || {
-            let mut client = job::connect(seconds)?;
-            if !leaf::has_land(&mut client, &[p.page]).map_err(|e| e.to_string())?[0] {
+            let (_, mut client) = job::connect(&leaf::READS, seconds)?;
+            if !leaf::has_ground(&mut client, &[p.page]).map_err(|e| e.to_string())?[0] {
                 return Ok(None);
             }
             let raster = std::sync::Arc::new(crate::elevation::Raster::open(&mut client).map_err(|e| e.to_string())?);

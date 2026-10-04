@@ -352,7 +352,7 @@ pub fn cube_type_outputs() -> Result<Vec<Output>, String> {
         rs.extend(note("    "));
         rs.push(format!("    pub mod {} {{", ch.name));
         let mut names: Vec<&str> = Vec::new();
-        let mut recessed: Vec<(&str, String)> = Vec::new();
+        let mut shifted: Vec<(&str, String)> = Vec::new();
         let mut types: Vec<(&str, String, Option<Vec<String>>)> = Vec::new();
         for (ei, e) in ch.entries.iter().enumerate() {
             if let Some(section) = e.str_at("section") {
@@ -375,8 +375,8 @@ pub fn cube_type_outputs() -> Result<Vec<Output>, String> {
             ts.push(format!("    {name}: {lit},"));
             rs.push(format!("        pub const {name}: u8 = {lit};"));
             names.push(name);
-            if let Some(r) = e.get("recess").and_then(Node::num) {
-                recessed.push((name, js_num(r)));
+            if let Some(r) = e.get("shift").and_then(Node::num) {
+                shifted.push((name, js_num(r)));
             }
             types.push((name, lit, doc));
         }
@@ -386,11 +386,11 @@ pub fn cube_type_outputs() -> Result<Vec<Output>, String> {
         rs.push("        ];".into());
         rs.extend([
             String::new(),
-            "        /// How far below its sampled height a cell showing the type sits, in".into(),
-            "        /// units; a type not listed sits at it.".into(),
+            "        /// How far off its sampled height a cell showing the type stands, in".into(),
+            "        /// units, up positive; a type not listed stands at it.".into(),
             format!(
-                "        pub const RECESS: &[(u8, i16)] = &[{}];",
-                recessed.iter().map(|(n, r)| format!("({n}, {r})")).collect::<Vec<_>>().join(", ")
+                "        pub const SHIFT: &[(u8, i16)] = &[{}];",
+                shifted.iter().map(|(n, r)| format!("({n}, {r})")).collect::<Vec<_>>().join(", ")
             ),
             "    }".into(),
         ]);
