@@ -1,6 +1,20 @@
 // The sky: one triangle at the far plane, drawn after the opaque world, with
 // the sun's and moon's discs through the air.
 
+struct Sky {
+  ray: mat3x3f,
+  pole: vec3f,
+  mapped: f32,
+};
+
+// Read field by field from vec4 words, never as a struct: a struct here lost
+// Safari's WebGPU its GPU process.
+@group(0) @binding(1) var<uniform> sky_words: array<vec4f, 4>;
+
+fn sky_ray() -> mat3x3f { return mat3x3f(sky_words[0].xyz, sky_words[1].xyz, sky_words[2].xyz); }
+fn sky_pole() -> vec3f { return sky_words[3].xyz; }
+fn sky_mapped() -> f32 { return sky_words[3].w; }
+
 @group(0) @binding(2) var moon_map: texture_2d_array<f32>;
 @group(0) @binding(3) var moon_sampler: sampler;
 

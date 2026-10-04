@@ -108,7 +108,7 @@ pub struct Atmosphere {
 }
 
 impl Atmosphere {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, sky_buffer: u32) -> Atmosphere {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> Atmosphere {
         let uniform = object();
         g.buffer(uniform, word_bytes(ATMOS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let white = model::white();
@@ -217,7 +217,6 @@ impl Atmosphere {
         // The exposure pass reads the air but what it writes.
         let mut e = vec![];
         e.extend(buffer_entry(0, frame_buffer));
-        e.extend(buffer_entry(1, sky_buffer));
         e.extend(atmosphere.entries().as_chunks::<5>().0.iter().filter(|c| c[0] != 13).flatten());
         atmosphere.groups[EXPOSURE_TEXEL] = object();
         g.bind_group(atmosphere.groups[EXPOSURE_TEXEL], atmosphere.passes[EXPOSURE_TEXEL].layouts[0], &e);
