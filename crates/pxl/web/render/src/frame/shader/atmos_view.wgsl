@@ -215,7 +215,6 @@ fn aerial(color: vec3f, world_pos: vec3f) -> vec3f {
 struct Seen {
   through: f32,
   scattered: vec3f,
-  past: vec3f,
   light: Light,
 };
 
@@ -229,7 +228,6 @@ fn seen_from_eye(world_pos: vec3f) -> Seen {
   // picture, a cloud — keep the air's color.
   s.through = dot(v.through, LUMA);
   s.scattered = v.scattered;
-  s.past = beyond(air_along(normalize(world_pos - frame_camera_pos())));
   s.light = light;
   return s;
 }
