@@ -75,6 +75,16 @@ fn handoff() -> &'static Mutex<Handoff> {
     })
 }
 
+/// Runs `f` on this thread while the kernel's runs nothing: the handoff is held,
+/// so no call is on the kernel's thread, and `f` is the only one touching the
+/// kernel. For what must happen on a given thread — on an iPhone a layer's
+/// properties are the main thread's.
+#[cfg(target_vendor = "apple")]
+pub fn while_kernel_idle<R>(f: impl FnOnce() -> R) -> R {
+    let _h = handoff().lock().or_bug(Errno::ENOTRECOVERABLE);
+    f()
+}
+
 /// Runs `f` on the kernel's thread, started on the first call, and returns
 /// what it returns once it has.
 pub fn on_kernel<R: Send>(f: impl FnOnce() -> R + Send) -> R {
