@@ -538,7 +538,8 @@
     {
       "name": "MapStatus",
       "doc": [
-        "The map's loading lifecycle."
+        "Whether the view shows any ground: Loading while the screen has none,",
+        "on a first load or after a jump, Idle before there is a view."
       ],
       "format": "dec",
       "default": "Idle",

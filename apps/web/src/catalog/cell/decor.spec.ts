@@ -10,6 +10,9 @@
 // alone still hints at which catalog it came from during debugging.
 export const decor_types = {
   tree: 228,
+  boat: 229,
+  car: 230,
+  train: 231,
 } as const satisfies Record<string, number>;
 
 export type DecorId = keyof typeof decor_types;

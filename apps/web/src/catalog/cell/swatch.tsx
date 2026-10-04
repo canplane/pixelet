@@ -37,6 +37,9 @@ export function CubeSwatch({ cube, size, radius, style }: CubeSwatchProps) {
 
 const DECOR_GLYPH: Record<DecorId, GlyphName> = {
   tree: "tree",
+  boat: "sailboat",
+  car: "car",
+  train: "train.side.front.car",
 };
 
 export function decorGlyph(kind: u8): GlyphName {

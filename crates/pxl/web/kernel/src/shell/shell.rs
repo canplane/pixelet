@@ -12,7 +12,7 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_core::wire::xtp::PacketWriter;
 
 pub use crate::abi::cmd::Tracking;
-use crate::abi::cmd::{CompanionState, HoldingState, LocationState, LonLat, MapState, OrientationState, PlaceName, PlacePart, Snapshot};
+use crate::abi::cmd::{CompanionState, HoldingState, LocationState, LonLat, MapState, MapStatus, OrientationState, PlaceName, PlacePart, Snapshot};
 use crate::control::camera::controller::Motion;
 use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
 use crate::control::interaction::holding;
@@ -26,7 +26,6 @@ use crate::layer::character::store::companion_load_store;
 use crate::layer::geocode::fetcher::center_group;
 use crate::layer::geocode::store as geocode_store;
 use crate::sched::turn::world_platform;
-use crate::shell::map_store::map_store;
 use crate::shell::setting::store::{settings_store, SettingKey};
 use crate::shell::ui::scale::m_per_px;
 
@@ -58,7 +57,6 @@ fn place_parts(page: Option<IVec>, each: &mut dyn FnMut(&PlacePart<'_>)) {
 
 /// None where it does not fit.
 pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
-    let map = map_store();
     let location = device_location_store();
     let orientation = device_orientation_store();
     let camera = camera_store();
@@ -81,7 +79,11 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     }
     let snapshot = Snapshot {
         map: MapState {
-            status: map.map_status,
+            status: match (crate::world::observation::eye(), crate::kernel::kernel().sched.shows_ground()) {
+                (None, _) => MapStatus::Idle,
+                (_, false) => MapStatus::Loading,
+                (_, true) => MapStatus::Success,
+            },
             is_off_center: map_navigation().is_off_center,
             center,
         },

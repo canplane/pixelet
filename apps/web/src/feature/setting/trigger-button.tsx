@@ -8,5 +8,5 @@ import { CircularButton } from "@/shared/ui/circular-button.tsx";
 export function SettingsTriggerButton() {
   const { t } = useTranslation();
 
-  return <CircularButton glyph="gearshape" onPress={() => openModal("settings")} label={t("settings.trigger_aria_label")} />;
+  return <CircularButton glyph="line.3.horizontal" onPress={() => openModal("settings")} label={t("settings.trigger_aria_label")} />;
 }

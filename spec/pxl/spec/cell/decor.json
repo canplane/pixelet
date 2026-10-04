@@ -5,5 +5,5 @@
     "value from exactly one of the two catalogs) — just so a raw byte's value",
     "alone still hints at which catalog it came from during debugging."
   ],
-  "decor_types": { "tree": 228 }
+  "decor_types": { "tree": 228, "boat": 229, "car": 230, "train": 231 }
 }

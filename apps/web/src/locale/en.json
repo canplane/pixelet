@@ -185,7 +185,10 @@
     }
   },
   "decor": {
-    "tree": "Tree"
+    "tree": "Tree",
+    "boat": "Boat",
+    "car": "Car",
+    "train": "Train"
   },
   "drawer": {
     "title": "Drawer",
@@ -200,6 +203,10 @@
       "water": "Water",
       "structure": "Buildings",
       "transport": "Transport"
+    },
+    "decor_sections": {
+      "nature": "Nature",
+      "vehicle": "Vehicles"
     },
     "character": {
       "person_label": "Character",

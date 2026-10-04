@@ -410,7 +410,7 @@ export function Dock() {
               <View style={styles.divider} />
 
               <View style={styles.group}>
-                <ToolButton label={t("map.dock.drawer_tooltip")} glyph="square.grid.2x2" onPress={() => openModal("drawer")} />
+                <ToolButton label={t("map.dock.drawer_tooltip")} glyph="archivebox" onPress={() => openModal("drawer")} />
               </View>
             </View>,
             { tint: STRIP.ground, onContentWidth: setStripWidth },

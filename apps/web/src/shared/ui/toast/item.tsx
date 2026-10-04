@@ -13,7 +13,7 @@ import { BackingPlace } from "@/shared/ui/backing.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
 import { Swap } from "@/shared/ui/motion/presence.tsx";
 import { FADE, SNAP, spring, type Transition } from "@/shared/ui/motion/transition.ts";
-import { alpha, chrome, color, shadow, surface, SYSTEM, textScale, textStyle, weight } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color, shadow, surface, SYSTEM, textScale, textStyle } from "@/shared/ui/theme.ts";
 import { type ToastSpec, ToastTone } from "./store.ts";
 
 export const TOAST_SIDE = 32;
@@ -108,6 +108,6 @@ const styles = StyleSheet.create({
   slot: { width: TOAST_SIDE, height: TOAST_SIDE, alignItems: "center", justifyContent: "center" },
   glyph: { position: "absolute" },
   disc: { width: chrome.glyph, height: chrome.glyph, borderRadius: chrome.glyph / 2, alignItems: "center", justifyContent: "center" },
-  message: { ...textStyle.footnote, fontWeight: weight.semibold, letterSpacing: -0.3, color: LABEL.primary, paddingHorizontal: MESSAGE_PAD },
+  message: { ...textStyle.notice, color: LABEL.primary, paddingHorizontal: MESSAGE_PAD },
   dot: { width: 8, height: 8, borderRadius: 4 },
 });

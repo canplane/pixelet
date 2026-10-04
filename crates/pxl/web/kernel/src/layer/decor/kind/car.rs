@@ -7,6 +7,7 @@
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::bake::format::GroundChannelKey;
 use pxl_spec::cell::cube_types::Transport;
+use pxl_spec::cell::decor_types::Decor;
 
 use crate::layer::decor::build::DecorVariantAsset;
 use crate::layer::decor::kind::Kind;
@@ -53,5 +54,5 @@ pub const DEF: Kind = Kind {
         ],
     ),
     variants: &VARIANTS,
-    decor_id: None,
+    decor_id: Some(Decor::car),
 };

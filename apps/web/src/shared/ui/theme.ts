@@ -121,6 +121,8 @@ export const textStyle = {
   /** 16, not 15: iOS Safari zooms into a focused field set smaller. */
   input: { fontFamily: FAMILY, fontSize: 16, fontWeight: weight.regular },
   footnote: { fontFamily: FAMILY, fontSize: 13, lineHeight: 18, fontWeight: weight.regular },
+  /** A notice's words: a toast, an item's name. */
+  notice: { fontFamily: FAMILY, fontSize: 13, lineHeight: 18, fontWeight: weight.semibold, letterSpacing: -0.3 },
   caption: { fontFamily: FAMILY, fontSize: 12, lineHeight: 16, fontWeight: weight.regular },
   /** 11 is iOS's floor. */
   caption2: { fontFamily: FAMILY, fontSize: 11, lineHeight: 13, fontWeight: weight.medium },

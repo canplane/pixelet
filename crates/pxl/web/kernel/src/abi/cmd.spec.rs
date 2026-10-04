@@ -431,7 +431,8 @@ impl PermissionAnswer {
     }
 }
 
-/// The map's loading lifecycle.
+/// Whether the view shows any ground: Loading while the screen has none,
+/// on a first load or after a jump, Idle before there is a view.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[repr(u32)]
 pub enum MapStatus {
