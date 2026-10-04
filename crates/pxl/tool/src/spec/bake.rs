@@ -9,6 +9,23 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
         .get("PUBLISHED_VERSION")
         .map(|p| p.entries().iter().map(|(k, v)| (k.as_str(), v.str().unwrap_or_default())).collect())
         .unwrap_or_default();
+    let format = spec.get("FORMAT").ok_or("published.json: no FORMAT")?;
+    let format_doc = format.lines_at("$doc").unwrap_or_default();
+    let mut formats: Vec<(&str, u32)> = Vec::new();
+    for (k, _) in &kinds {
+        let n = format.get(k).and_then(|n| n.num()).ok_or(format!("published.json: FORMAT has no {k}"))?;
+        if n < 1.0 || n.fract() != 0.0 {
+            return Err(format!("published.json: FORMAT.{k} {n} is not a format number"));
+        }
+        formats.push((k, n as u32));
+    }
+    // `v<format>.<release>`, or a name the client would request and no bake writes.
+    for (k, v) in &kinds {
+        let named = v.strip_prefix('v').and_then(|r| r.split_once('.')).is_some_and(|(n, release)| n.parse::<u32>().is_ok() && !release.is_empty());
+        if !named {
+            return Err(format!("published.json: PUBLISHED_VERSION.{k} {v:?} is not v<format>.<release>"));
+        }
+    }
     let source = spec.get("SOURCE").ok_or("published.json: no SOURCE")?;
     let source_doc = source.lines_at("$doc").unwrap_or_default();
     let top_level = source.get("top_level").and_then(|n| n.num()).ok_or("published.json: SOURCE has no top_level")?;
@@ -53,6 +70,23 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
     rs.extend(["}".to_string(), String::new(), "pub const PUBLISHED_VERSION: PublishedVersion = PublishedVersion {".into()]);
     rs.extend(kinds.iter().map(|(k, v)| format!("    {k}: {},", json_str(v))));
     rs.extend(["};".to_string(), String::new()]);
+    rs.extend(rs_doc(&format_doc, "", "///"));
+    rs.push("pub struct Format {".into());
+    rs.extend(kinds.iter().map(|(k, _)| format!("    pub {k}: u32,")));
+    rs.extend(["}".to_string(), String::new(), "pub const FORMAT: Format = Format {".into()]);
+    rs.extend(formats.iter().map(|(k, n)| format!("    {k}: {n},")));
+    rs.extend(
+        [
+            "};",
+            "",
+            "/// A bake's folder and published name: its format and the release it was baked from.",
+            "pub fn version_name(format: u32, release: &str) -> String {",
+            "    format!(\"v{format}.{release}\")",
+            "}",
+            "",
+        ]
+        .map(String::from),
+    );
     rs.extend(
         [
             "/// The kinds a version is published for: the fields of `PUBLISHED_VERSION`,",

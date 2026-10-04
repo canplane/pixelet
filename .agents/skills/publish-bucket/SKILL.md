@@ -19,7 +19,7 @@ how it gets there and how you know it arrived.
 | ----------------------- | --------------------------- | ---------------------- | ------------------------------------------------------------- |
 | `terrain/<version>/`    | packed XTP page, `_ocean`   | quadkey, 5–15          | immutable; a re-bake is a new version                         |
 | `poi/<version>/`        | XTP count page              | quadkey, 5–15          | immutable; a re-bake is a new version                         |
-| `geocode/<version>/`    | packed JSON page, `_dict`   | quadkey, 11            | version = format; monthly in-place refresh                    |
+| `geocode/<version>/`    | XTP group page, `_dict`     | quadkey, 11            | immutable; a re-bake is a new version                         |
 | `asset/`                | glb, png, webp — not packed | its path, hash in stem | immutable by construction; unreferenced keys deleted whenever |
 | `_meta/land_pages.json` | terrain's land/ocean list   | fixed name             | mutable; rewritten with a terrain re-bake                     |
 | `_meta/build-counter`   | the official build count    | fixed name             | mutable; taken and written by CI's gate, never by hand        |
@@ -118,10 +118,10 @@ aws s3 cp ./out/terrain/land_pages.json s3://pixelet-tiles/_meta/land_pages.json
   --profile r2 --endpoint-url $R2 --content-type application/json
 ```
 
-**Never overwrite an existing terrain version in place** — publish a new
+**Never overwrite an existing version in place**, of any kind — publish a new
 prefix and point the app at it. The second command matters when the
-land/ocean classification was rebuilt: the monthly workflow bakes geocode
-against this object, not against a local terrain bake.
+land/ocean classification was rebuilt: a geocode bake on a machine with no
+terrain bake reads this object.
 
 **Objects are stored already packed, so the upload must set the
 `Content-Encoding` they were packed in** — the manifest's `content_encoding`,
@@ -164,11 +164,10 @@ aws s3 sync ./out/geocode/<version> s3://pixelet-tiles/geocode/<version> \
   --profile r2 --endpoint-url $R2 --exclude "*.empty" --exclude "*.part" \
   --content-type "$(jq -r .content_type out/geocode/manifest.json)" \
   --content-encoding "$(jq -r .content_encoding out/geocode/manifest.json)" \
-  --cache-control "public, max-age=86400" --delete
+  --cache-control "public, max-age=31536000, immutable"
 ```
 
-Empty markers are local. Deletion removes pages absent from the refreshed
-set. The monthly workflow runs this refresh; it does not publish POI.
+Empty markers are local.
 
 ### Assets
 
@@ -214,7 +213,7 @@ aws s3api head-object --bucket pixelet-tiles --key asset/<sha256> --profile r2 -
 
 ## Deploy
 
-Bump `PUBLISHED_VERSION` if a version changed, then:
+Set `PUBLISHED_VERSION` to the folder a new bake was uploaded as, then:
 
 ```bash
 deno task deploy
@@ -258,10 +257,9 @@ client would try to decode the HTML as terrain. An asset answers
 ## Purging the edge cache
 
 The Worker caches every tile it serves in `caches.default`, the zone's edge
-cache, and by design never needs to purge: terrain, POI and asset URLs never
-change meaning, and a geocode entry expires within its one-day
-`max-age`. Purge only to see an in-place refresh immediately, or after
-fixing a serving bug whose wrong bytes are already cached.
+cache, and by design never needs to purge: a bake's or an asset's URL never
+changes meaning. Purge only after fixing a serving bug whose wrong bytes are
+already cached.
 
 ```bash
 # everything on the zone (the app's static assets are content-hashed, so this costs one cold fetch each)

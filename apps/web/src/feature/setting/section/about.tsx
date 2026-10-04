@@ -19,10 +19,20 @@ function envLabel(): string {
   return DEV_SOURCE === "remote" ? env : `${env}:${DEV_SOURCE}`;
 }
 
-function dataLabel(): string {
-  const object = STORAGE_KEYS[storage.OBJECTS].split(":").slice(1).join("/");
-  const { terrain, poi, geocode } = PUBLISHED_VERSION;
-  return `terrain/${terrain} · poi/${poi} · geocode/${geocode} · ${object}`;
+/** The bakes by the Overture release each came from, one release said once: `v7.2026-09-23.1` is format 7 of that release. */
+function bakeLabel(): string {
+  const byRelease = new Map<string, string[]>();
+  for (const [kind, name] of Object.entries(PUBLISHED_VERSION)) {
+    const at = name.indexOf(".");
+    const release = name.slice(at + 1);
+    byRelease.set(release, [...(byRelease.get(release) ?? []), `${kind}/${name.slice(0, at)}`]);
+  }
+  return [...byRelease].map(([release, kinds]) => `${kinds.join(" · ")} (Overture ${release})`).join(" · ");
+}
+
+/** The objects one has placed, kept on the device: their store's format. */
+function objectLabel(): string {
+  return STORAGE_KEYS[storage.OBJECTS].split(":").slice(1).join("/");
 }
 
 /** UTC: a stamp in the viewer's zone said different things on two phones. */
@@ -53,7 +63,8 @@ export function AboutSection() {
             {APP_ENV !== "production" && ` (${envLabel()})`}
             {` · ${buildLabel()}`}
           </Text>
-          <Text style={settingText.faint}>{dataLabel()}</Text>
+          <Text style={settingText.faint}>{bakeLabel()}</Text>
+          <Text style={settingText.faint}>{objectLabel()}</Text>
         </View>
       </Prose>
     </Section>
