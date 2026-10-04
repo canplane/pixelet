@@ -137,6 +137,11 @@ same bbox reads it instead of downloading it again — so a change to what a
 table keeps of a theme is a re-run, not a re-download. Keep the extracts;
 deleting one is what forces a fresh pull.
 
+Production keeps its own copy of the three tables search reads, and a
+re-ingest reaches it only when they are copied over: one that changes a
+table's shape is copied before the servers that read it are deployed
+([infra/README.md](../README.md) §3, Data migration).
+
 ## 5. Verify
 
 ```sql

@@ -194,7 +194,7 @@ app           │ apps/web  *.spec.ts │◀────────────
 | `pxl-geo-bake`  | The three offline bakes — terrain, POI, geocode — and, behind a feature, the dev tile server.                                                                                                                                                         |
 | `pxl-tool`      | Hashes `asset/` into the bucket's shape and writes the asset tables `pxl-spec` and the shell carry; bakes the stars, the Moon, the brand.                                                                                                             |
 
-The servers, the bakes and the asset ingest all compile the model, so they are crates. The Overture and elevation ingests move a provider's columns into Postgres columns and touch no model, so they are scripts under `infra/geo/`. The host and the shell are TypeScript because neither decides anything about the world; what it needs of the model — catalogs, ABI enums, routes — is generated into `apps/web/src/**/*.spec.ts` from the same JSON the Rust is generated from.
+The servers, the bakes and the asset ingest all compile the model, so they are crates. The Overture and elevation ingests put a provider's data into Postgres as the provider wrote it and touch no model, so they are scripts under `infra/geo/`. The host and the shell are TypeScript because neither decides anything about the world; what it needs of the model — catalogs, ABI enums, routes — is generated into `apps/web/src/**/*.spec.ts` from the same JSON the Rust is generated from.
 
 Three rules hold the graph in that shape:
 

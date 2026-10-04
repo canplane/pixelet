@@ -69,7 +69,7 @@ erode by accident:
 
 **What shares `pxl-spec` is Rust, and what does not is free.** The kernel, the
 servers and the bakes compile the model, so they are crates; an ingest that
-moves a provider's columns into Postgres shares nothing, so it is a script;
+puts a provider's data into Postgres shares nothing, so it is a script;
 `apps/web` is the TypeScript around the kernel, and stays TypeScript. It is
 two things to the kernel, which is the process: its host, which holds the
 memory, the turns, the devices and the I/O (most of `src/kernel/`), and its

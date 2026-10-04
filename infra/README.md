@@ -50,8 +50,9 @@ on `/geo/*`, `app` is pxl-api on `/api/*`, and Caddy is what sends each root to
 its own container. Neither server has a published host port; only Caddy does.
 
 Production's db-geo holds **only** `overture_places`, `overture_divisions`
-and `overture_division_points`. Terrain's ingestion tables and the
-elevation raster are several GB, baked offline, and never queried here.
+and `overture_division_points`, and their rows of `overture_catalog`.
+Terrain's ingestion tables and the elevation raster are several GB, baked
+offline, and never queried here.
 The `tiger`/`topology` schemas that ship with the `postgis/postgis` image
 are unrelated to this project.
 
@@ -102,27 +103,52 @@ are unrelated to this project.
 
 ### Data migration
 
-Only the three Places/Divisions tables, and through the **local db-geo
-container's** own `pg_dump` — a host-installed `pg_dump` several major
-versions ahead writes a custom-format dump that production's
-`postgis/postgis:16-3.4` cannot restore.
+Production's db-geo is a copy, and a deploy does not carry it. `deploy-server`
+rebuilds the servers from the commit (§5); the three tables stay as they were
+last copied. So a re-ingest reaches production only by this copy, and an
+ingest that changes a table's shape must be copied **before** the deploy that
+ships a server reading the new shape — the order §5 keeps for the servers and
+the client, one step further back. On 2026-10-04 the servers went out reading
+`properties` from tables still in the old per-type shape, and search answered
+500 until the copy below was made.
+
+The dump comes from the **local db-geo container's** own `pg_dump`: a
+host-installed one several major versions ahead writes a custom-format dump
+that production's `postgis/postgis:16-3.4` cannot restore. It takes the
+catalog too, so production keeps the release and the time each table was
+ingested (infra/geo/README.md §4):
 
 ```sh
+set -a; . ./.env; set +a
 docker exec pixelet-db-geo pg_dump --format=custom --no-owner \
   -U "$DB_GEO_USER" -d "$DB_GEO_NAME" \
   -t overture_places -t overture_divisions -t overture_division_points \
-  > overture.dump
+  -t overture_catalog > overture.dump
 
-# a table-only dump carries no CREATE EXTENSION
-ssh user@<vm-ip> 'docker exec pixelet-db-geo psql -U <DB_GEO_USER> -d <DB_GEO_NAME> \
-  -c "CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS pg_trgm;"'
-
-scp overture.dump user@<vm-ip>:~/
-ssh user@<vm-ip> 'docker exec -i pixelet-db-geo pg_restore --no-owner --no-privileges \
-  -U <DB_GEO_USER> -d <DB_GEO_NAME> --clean --if-exists < ~/overture.dump'
+scp overture.dump root@$(hcloud server ip pixelet-prod):
+ssh root@$(hcloud server ip pixelet-prod)
 ```
 
-`--clean --if-exists` makes this safe to re-run.
+Then, in the VM's shell rather than piped into `ssh`, since the first
+`docker exec -i` would read the rest of a piped script as its input:
+
+```sh
+sql() { docker exec -i pixelet-db-geo sh -c 'exec "$@" -U "$POSTGRES_USER" -d "$POSTGRES_DB"' sh "$@"; }
+
+# a table-only dump carries no CREATE EXTENSION
+sql psql -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS pg_trgm;'
+# one transaction: the old tables stay unless every new one is in
+sql pg_restore --no-owner --no-privileges --clean --if-exists --single-transaction < ~/overture.dump
+# the catalog keeps the rows of the tables that came with it, and the planner its statistics
+sql psql -v ON_ERROR_STOP=1 -c "DELETE FROM overture_catalog WHERE file_name NOT IN ('overture_places', 'overture_divisions', 'overture_division_points'); ANALYZE overture_places; ANALYZE overture_divisions; ANALYZE overture_division_points;"
+rm ~/overture.dump
+```
+
+Without `--single-transaction` pg_restore goes on past an error and can leave
+the tables half replaced; with it, a failure leaves them as they were, and the
+whole thing can be run again. Restore writes no planner statistics, hence the
+`ANALYZE` ([pg_restore](https://www.postgresql.org/docs/16/app-pgrestore.html)).
+`deno task smoke https://api.plei.me --origin` checks the result.
 
 ### Updating
 
