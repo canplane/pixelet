@@ -21,6 +21,10 @@ declare global {
   /** Whether tiles come from a published bake rather than a live API — the
    * one thing about them the build knows and the source cannot. */
   const __PUBLISHED_TILES__: boolean;
+
+  /** Where a dev server's routes go: `remote`, or the servers of `dev:local`
+   * or `dev:baked`, named as the task is. */
+  const __DEV_SOURCE__: string;
 }
 
 /** What a build is, from vite.config.ts#buildStamp on a page and the device

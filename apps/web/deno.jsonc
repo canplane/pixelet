@@ -25,6 +25,7 @@
     "dev": { "command": "deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm"] },
     // The same client against the servers on this machine.
     "dev:local": { "command": "VITE_DEV_SOURCE=local deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm"] },
+    "dev:baked": { "command": "VITE_DEV_SOURCE=baked deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm"] },
 
     "build": { "command": "deno run -A --node-modules-dir=auto npm:vite build", "dependencies": ["build:wasm:published"] },
     "preview": { "command": "deno run -A --node-modules-dir=auto npm:vite preview", "dependencies": ["build"] },

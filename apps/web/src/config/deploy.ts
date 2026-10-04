@@ -22,3 +22,5 @@ export const BUILD_NUMBER: string = buildNumber;
 
 /** Also decides whether a 404 means never baked (ocean, empty page) or a failure. */
 export const PUBLISHED_TILES: boolean = __PUBLISHED_TILES__;
+
+export const DEV_SOURCE: string = __DEV_SOURCE__;

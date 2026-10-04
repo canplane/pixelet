@@ -6,16 +6,21 @@ import { StyleSheet, Text, View } from "react-native";
 import { Prose, Section, settingText } from "@/feature/setting/row.tsx";
 import { BrandSymbol } from "@/shared/ui/brand-symbol.tsx";
 import { textStyle } from "@/shared/ui/theme.ts";
-import { APP_ENV, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/config/deploy.ts";
+import { APP_ENV, BUILD_NUMBER, BUILD_TIME, DEV_SOURCE } from "@/config/deploy.ts";
 import { PUBLISHED_VERSION } from "@/config/published.spec.ts";
 import { storage, STORAGE_KEYS } from "@/kernel/abi/host.spec.ts";
 import { LABEL } from "@platform/palette.ts";
 
 const ENV_SHORT: Record<string, string> = { development: "dev", staging: "stg" };
 
+/** `dev`, or the task that served it: `dev:local`, `dev:baked`. */
+function envLabel(): string {
+  const env = ENV_SHORT[APP_ENV] ?? APP_ENV;
+  return DEV_SOURCE === "remote" ? env : `${env}:${DEV_SOURCE}`;
+}
+
 function dataLabel(): string {
   const object = STORAGE_KEYS[storage.OBJECTS].split(":").slice(1).join("/");
-  if (!PUBLISHED_TILES) return `live tiles · ${object}`;
   const { terrain, poi, geocode } = PUBLISHED_VERSION;
   return `terrain/${terrain} · poi/${poi} · geocode/${geocode} · ${object}`;
 }
@@ -45,7 +50,7 @@ export function AboutSection() {
         <View>
           <Text style={settingText.faint}>
             {BUILD_NUMBER}
-            {APP_ENV !== "production" && ` (${ENV_SHORT[APP_ENV] ?? APP_ENV})`}
+            {APP_ENV !== "production" && ` (${envLabel()})`}
             {` · ${buildLabel()}`}
           </Text>
           <Text style={settingText.faint}>{dataLabel()}</Text>

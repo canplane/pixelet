@@ -391,7 +391,10 @@ export default defineConfig(({ mode }) => {
   //                        database or Docker. `deno task dev`.
   //   local             — the servers above, baking on demand.
   //                        `deno task dev:local`.
-  const remote = env.VITE_DEV_SOURCE !== "local";
+  //   baked             — the same, the tiles from finished bakes.
+  //                        `deno task dev:baked`.
+  const devSource = env.VITE_DEV_SOURCE || "remote";
+  const remote = devSource === "remote";
 
   // Injected as __PUBLISHED_TILES__: route.ts builds every tile path from
   // it, config/deploy.ts reads it for what a 404 means.
@@ -525,6 +528,7 @@ export default defineConfig(({ mode }) => {
       __DEV_BUNDLE__: JSON.stringify(mode !== "production"),
 
       __PUBLISHED_TILES__: JSON.stringify(published),
+      __DEV_SOURCE__: JSON.stringify(devSource),
 
       // react-native-web's Animated reads React Native's `global`, which a
       // browser calls `globalThis`.
