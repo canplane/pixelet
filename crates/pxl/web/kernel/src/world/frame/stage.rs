@@ -44,7 +44,7 @@ use crate::world::frame::view::{globe_anchor_local, view};
 /// How far the view has gone over to the Earth's picture: none while the map
 /// center's pixel is finer than the coarsest level's cell a zoom up, all once
 /// it is as coarse as that cell, the data's coarsest (z6 for a top of 10).
-fn earth_share() -> f64 {
+pub(crate) fn earth_share() -> f64 {
     let Some(top) = floor::level() else { return 0.0 };
     let zoom = f64::from(zoom_of(GROUND.scale(0))) - libm::log2(units_per_px_at(dist()));
     let top_zoom = f64::from(zoom_of(GROUND.scale(top)));
@@ -97,7 +97,7 @@ pub fn stage_render() {
     let variants = kind_assets().iter().flat_map(|entry| {
         (0..entry.models.len()).map(move |v| {
             let extent = entry.kind.variants.get(v).and_then(|a| a.model.ingested().extent).unwrap_or([0.0; 3]);
-            (entry.models[v], entry.skins.get(v).copied().flatten(), extent.map(|e| e as f32))
+            (entry.models[v], entry.skin(v), extent.map(|e| e as f32))
         })
     });
     for (slot, (model, image, extent)) in decor.iter_mut().zip(variants) {
