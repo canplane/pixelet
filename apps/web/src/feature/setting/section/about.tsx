@@ -19,9 +19,9 @@ function envLabel(): string {
   return DEV_SOURCE === "remote" ? env : `${env}:${DEV_SOURCE}`;
 }
 
-/** Each bake by the name it is published as, since each is baked on its own. */
-function bakeLabel(): string {
-  return Object.entries(PUBLISHED_VERSION).map(([kind, name]) => `${kind}/${name}`).join(" · ");
+/** Each bake by the name it is published as, a line each, since each is baked on its own. */
+function bakeLines(): string[] {
+  return Object.entries(PUBLISHED_VERSION).map(([kind, name]) => `${kind}/${name}`);
 }
 
 /** The objects one has placed, kept on the device: their store's format. */
@@ -57,7 +57,7 @@ export function AboutSection() {
             {APP_ENV !== "production" && ` (${envLabel()})`}
             {` · ${buildLabel()}`}
           </Text>
-          <Text style={settingText.faint}>{bakeLabel()}</Text>
+          {bakeLines().map((line) => <Text key={line} style={settingText.faint}>{line}</Text>)}
           <Text style={settingText.faint}>{objectLabel()}</Text>
         </View>
       </Prose>
