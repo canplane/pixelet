@@ -1,30 +1,18 @@
 // The air as the frame shows it: sky, ground past the terrain, and aerial perspective.
 
-@group(0) @binding(13) var exposure_texel: texture_2d<f32>;
 @group(0) @binding(15) var moon_view_lut: texture_2d<f32>;
 @group(0) @binding(16) var earth_map: texture_2d_array<f32>;
 @group(0) @binding(17) var earth_pages: texture_2d_array<f32>;
-
-fn exposure() -> f32 {
-  return textureLoad(exposure_texel, vec2i(0, 0), 0).r;
-}
 
 fn shown() -> vec3f {
   return atmos_white() * exposure();
 }
 
-// One texel from the exposure pass rather than a table read per fragment.
-fn zenith_sky() -> vec3f {
-  let t = textureLoad(exposure_texel, vec2i(0, 0), 0);
-  return t.gba * atmos_white() * t.r;
-}
-
+// What lights the land under the eye, from the sun's and moon's skies.
 fn sky_fill() -> vec3f {
-  var fill = (textureLoad(exposure_texel, vec2i(1, 0), 0).rgb * atmos_white() + atmos_night_sky()) * exposure();
-  if (atmos_moon_light() > 0.0) {
-    fill += moon_view(frame_up()) * moon_shown() * PI;
-  }
-  return fill;
+  let r = land_radius();
+  let sky = sky_irradiance(r, dot(atmos_sun_dir(), frame_up())) + sky_irradiance(r, dot(atmos_moon_dir(), frame_up())) * atmos_moon_light();
+  return (sky * atmos_white() + atmos_night_sky()) * exposure();
 }
 
 // What the ground below gives a down-facing face: what lights an up-facing one,

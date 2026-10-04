@@ -187,10 +187,11 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
   let cirrus_footprint = footprint_at(dir, cirrus_t);
 
   var light = lit_by(atmos_sun_dir(), dir, clouds_sun_at(), shown());
-  var sky = zenith_sky();
+  // The sky over the layer, as bright as its own height sees it.
+  var sky = sky_irradiance(base, dot(atmos_sun_dir(), frame_up())) * shown() / PI;
   if (atmos_moon_light() > 0.0) {
     light += lit_by(atmos_moon_dir(), dir, clouds_moon_at(), moon_shown());
-    sky += moon_view(frame_up()) * moon_shown();
+    sky += sky_irradiance(base, dot(atmos_moon_dir(), frame_up())) * moon_shown() / PI;
   }
   // The terrain's fill too, so a cloud is never darker than the ground under
   // it: without it night clouds were black blots.
