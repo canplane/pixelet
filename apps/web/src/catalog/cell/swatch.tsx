@@ -1,9 +1,10 @@
-// @pxl/web/feature/map/ui/overlay/cube-swatch.tsx
+// @pxl/web/catalog/cell/swatch.tsx
 
 import { Image, type StyleProp, View, type ViewStyle } from "react-native";
 
+import type { u8 } from "@xpute/core/abi/word.ts";
 import type { DecorId } from "@/catalog/cell/decor.spec.ts";
-import { type PlaceableCube, placeableCubeChannel, placeableCubeHex, placeableCubeId, placeableCubeType } from "@/catalog/cell/mod.ts";
+import { decorName, type PlaceableCube, placeableCubeChannel, placeableCubeHex, placeableCubeId, placeableCubeType } from "@/catalog/cell/mod.ts";
 import { shippedTopTextureKey } from "@/catalog/asset/texture.ts";
 import type { GlyphName } from "@platform/icon.tsx";
 import { ORIGIN } from "@platform/origin.ts";
@@ -34,12 +35,20 @@ export function CubeSwatch({ cube, size, radius, style }: CubeSwatchProps) {
   return <View style={[box, { backgroundColor: placeableCubeHex(cube) ?? undefined }, style]} />;
 }
 
-export const DECOR_GLYPH: Record<DecorId, GlyphName> = {
+const DECOR_GLYPH: Record<DecorId, GlyphName> = {
   tree: "tree",
 };
 
+export function decorGlyph(kind: u8): GlyphName {
+  return DECOR_GLYPH[decorName(kind)];
+}
+
 export function cubeLabel(t: (key: string) => string, cube: PlaceableCube): string {
   return t(`cubes.${placeableCubeId(cube)}`);
+}
+
+export function decorLabel(t: (key: string) => string, kind: u8): string {
+  return t(`decor.${decorName(kind)}`);
 }
 
 export function heldRing(ground: string, ink: string, width: number): string {

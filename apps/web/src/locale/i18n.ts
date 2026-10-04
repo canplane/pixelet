@@ -30,6 +30,13 @@ function deepMerge(base: Catalog, extra: Catalog): Catalog {
  * Rolldown did not drop a helper's argument and shipped 47 dev strings. */
 const catalog = __IS_DEV__ ? { en: deepMerge(en, enDev) as typeof en, ko: deepMerge(ko, koDev) as typeof ko } : { en, ko };
 
+export type Language = keyof typeof catalog;
+
+/** Each language by its own name. */
+export const LANGUAGE_NAMES: Record<Language, string> = { en: "English", ko: "한국어" };
+
+const LANGUAGES = Object.keys(catalog) as Language[];
+
 const LANG_KEY = STORAGE_KEYS[storage.LANG];
 
 /** The language chosen, else the first supported of the system's preferences, else en. */
@@ -57,13 +64,10 @@ export function bootstrapI18n(): void {
     .use(initReactI18next)
     .init({
       fallbackLng: "en",
-      supportedLngs: ["en", "ko"],
+      supportedLngs: LANGUAGES,
       ns: ["translation"],
       defaultNS: "translation",
-      resources: {
-        en: { translation: catalog.en },
-        ko: { translation: catalog.ko },
-      },
+      resources: Object.fromEntries(LANGUAGES.map((lng) => [lng, { translation: catalog[lng] }])),
       interpolation: {
         // React already escapes; i18next's would double-escape.
         escapeValue: false,

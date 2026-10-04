@@ -13,10 +13,10 @@ import { BackingPlace } from "@/shared/ui/backing.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
 import { Swap } from "@/shared/ui/motion/presence.tsx";
 import { FADE, SNAP, spring, type Transition } from "@/shared/ui/motion/transition.ts";
-import { alpha, chrome, color, shadow, surface, SYSTEM, textStyle, weight } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color, shadow, surface, SYSTEM, textScale, textStyle, weight } from "@/shared/ui/theme.ts";
 import { type ToastSpec, ToastTone } from "./store.ts";
 
-const SIDE = 32;
+export const TOAST_SIDE = 32;
 const MESSAGE_PAD = 4;
 const EDGE = 4;
 
@@ -46,26 +46,27 @@ interface ToastProps extends ToastSpec {
   fade: f64;
   fadeTransition: Transition;
   touch?: GestureResponderHandlers;
+  touchBelow?: f64;
 }
 
-export function Toast({ message, tone, fade, fadeTransition, touch }: ToastProps) {
+export function Toast({ message, tone, fade, fadeTransition, touch, touchBelow }: ToastProps) {
   const error = tone === ToastTone.Error;
   const span = useWindowSize().width;
   const [open, setOpen] = useState(false);
-  const [content, setContent] = useState<f64>(SIDE);
+  const [content, setContent] = useState<f64>(TOAST_SIDE);
 
   useEffect(() => {
     const timer = setTimeout(() => setOpen(true), OPEN_AFTER_MS);
     return () => clearTimeout(timer);
   }, []);
 
-  const width = open ? Math.max(SIDE, content) : SIDE;
+  const width = open ? Math.max(TOAST_SIDE, content) : TOAST_SIDE;
 
   return (
     <Pill
       x={PixelRatio.roundToNearestPixel(-width / 2)}
       width={width}
-      height={SIDE}
+      height={TOAST_SIDE}
       span={span}
       fill={error ? surface.alarm.fill : color.ground}
       tint={error ? surface.alarm.glass : undefined}
@@ -76,6 +77,7 @@ export function Toast({ message, tone, fade, fadeTransition, touch }: ToastProps
       fadeFrom={0}
       fadeTransition={fadeTransition}
       touch={touch}
+      touchBelow={touchBelow}
       onContentWidth={setContent}
     >
       <View style={styles.slot}>
@@ -91,7 +93,7 @@ export function Toast({ message, tone, fade, fadeTransition, touch }: ToastProps
         </Swap>
       </View>
       <Motion to={open ? {} : { opacity: 0, translateX: -10 }} transition={SNAP}>
-        <Text numberOfLines={1} style={[styles.message, { maxWidth: span - 2 * SIDE - 2 * MESSAGE_PAD - 2 * EDGE }]}>{message}</Text>
+        <Text numberOfLines={1} maxFontSizeMultiplier={textScale.chrome} style={[styles.message, { maxWidth: span - 2 * TOAST_SIDE - 2 * MESSAGE_PAD - 2 * EDGE }]}>{message}</Text>
       </Motion>
       <View style={styles.slot}>
         <Motion to={open ? {} : { opacity: 0, scale: 0 }} transition={SNAP}>
@@ -103,7 +105,7 @@ export function Toast({ message, tone, fade, fadeTransition, touch }: ToastProps
 }
 
 const styles = StyleSheet.create({
-  slot: { width: SIDE, height: SIDE, alignItems: "center", justifyContent: "center" },
+  slot: { width: TOAST_SIDE, height: TOAST_SIDE, alignItems: "center", justifyContent: "center" },
   glyph: { position: "absolute" },
   disc: { width: chrome.glyph, height: chrome.glyph, borderRadius: chrome.glyph / 2, alignItems: "center", justifyContent: "center" },
   message: { ...textStyle.footnote, fontWeight: weight.semibold, letterSpacing: -0.3, color: LABEL.primary, paddingHorizontal: MESSAGE_PAD },

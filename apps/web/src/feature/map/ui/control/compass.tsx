@@ -27,7 +27,7 @@ const [QUARTERS, EIGHTHS] = [0, 1].map((odd) =>
     return `M${TICK_FROM * x} ${TICK_FROM * y}L${TICK_TO * x} ${TICK_TO * y}`;
   }).join("")
 );
-const BOX = `${-DIAL / 2} ${-DIAL / 2} ${DIAL} ${DIAL}`;
+const BOX = `${-chrome.control / 2} ${-chrome.control / 2} ${chrome.control} ${chrome.control}`;
 
 /** One face of the needle; its mirror meets it with the same tangent, making one rounded end. */
 function face(end: f64, side: f64, seam: f64): string {
@@ -43,8 +43,8 @@ export function CompassFace() {
   const turn = -useKernel((s) => s.azimuth);
   const w = NEEDLE_WIDTH / 2;
   return (
-    <View style={{ width: DIAL, height: DIAL }}>
-      <Svg width={DIAL} height={DIAL} viewBox={BOX} style={StyleSheet.absoluteFill}>
+    <View style={{ width: chrome.control, height: chrome.control }}>
+      <Svg width={chrome.control} height={chrome.control} viewBox={BOX} style={StyleSheet.absoluteFill}>
         <Path d={QUARTERS} stroke={LABEL.secondary} strokeWidth={QUARTER_STROKE} strokeLinecap="round" />
         <Path d={EIGHTHS} stroke={LABEL.tertiary} strokeWidth={EIGHTH_STROKE} strokeLinecap="round" />
       </Svg>
@@ -52,7 +52,7 @@ export function CompassFace() {
         // RN's transform: a device's SVG refuses a CSS string.
       }
       <View style={[StyleSheet.absoluteFill, { transform: [{ rotate: `${turn}rad` }] }]}>
-        <Svg width={DIAL} height={DIAL} viewBox={BOX}>
+        <Svg width={chrome.control} height={chrome.control} viewBox={BOX}>
           <Path d={face(-NEEDLE_HALF, -w, SEAM_BEND)} fill={NORTH} fillOpacity={LIT} />
           <Path d={face(-NEEDLE_HALF, w, SEAM_BEND)} fill={NORTH} />
           <Path d={face(NEEDLE_HALF, -w, SEAM_BEND)} fill={LABEL.primary} fillOpacity={LIT} />

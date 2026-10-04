@@ -6,6 +6,7 @@ import type { NativeSyntheticEvent, ViewProps } from "react-native";
 
 import { useSafeArea } from "@platform/safe-area.ts";
 import { type AboveKeyboardProps, bottomRest } from "@/shared/ui/bottom-rest.ts";
+import { layer } from "@/shared/ui/theme.ts";
 
 interface KeyboardDockProps extends ViewProps {
   clearance: number;
@@ -36,7 +37,7 @@ export function AboveKeyboard({ inset, lift = 0, children }: AboveKeyboardProps)
         left: inset,
         right: inset,
         bottom: rest + lift + applied,
-        zIndex: 40,
+        zIndex: layer.bottom,
         pointerEvents: "box-none",
       }}
     >

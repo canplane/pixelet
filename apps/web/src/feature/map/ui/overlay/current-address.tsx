@@ -3,20 +3,15 @@
 import { StyleSheet } from "react-native";
 
 import { Motion } from "@platform/motion.tsx";
-import type { LonLat } from "@/kernel/abi/cmd.spec.ts";
-import { useKernel } from "@/kernel/shell.ts";
+import { useCenterCoordinates, usePlaceLabel } from "@/feature/map/geocode/center.ts";
 import { FADE } from "@/shared/ui/motion/transition.ts";
 import { HaloText } from "@/shared/ui/halo.tsx";
 import { color, textStyle, weight } from "@/shared/ui/theme.ts";
 
-interface CurrentAddressProps {
-  label: string | null;
-}
-
 /** Coordinates stand in where the center is in no place (sea, or not yet arrived). */
-export function CurrentAddress(props: CurrentAddressProps) {
-  const { label } = props;
-  const position = useKernel((s) => s.map.center && coordinates(s.map.center));
+export function CurrentAddress() {
+  const label = usePlaceLabel();
+  const position = useCenterCoordinates();
 
   const text = label ?? position;
   if (!text) return null;
@@ -26,11 +21,6 @@ export function CurrentAddress(props: CurrentAddressProps) {
       <HaloText style={[styles.label, !label && styles.numbers]}>{text}</HaloText>
     </Motion>
   );
-}
-
-/** Four decimals: about eleven meters. */
-function coordinates({ lat, lon }: LonLat): string {
-  return `${Math.abs(lat).toFixed(4)}° ${lat < 0 ? "S" : "N"}, ${Math.abs(lon).toFixed(4)}° ${lon < 0 ? "W" : "E"}`;
 }
 
 const styles = StyleSheet.create({

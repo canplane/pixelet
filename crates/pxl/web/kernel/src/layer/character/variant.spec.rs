@@ -249,15 +249,9 @@ pub mod groups {
 /// The clip a character stands in, "idle", by its index in both packs' animations.
 pub const IDLE_CLIP: u32 = 1;
 
-/// Split by gender (not one flat list) so the settings UI can show two
-/// separate rows instead of one row a user has to scan by label text to tell
-/// apart — display names live in locale files
-/// (palette_modal.character.persons.<key>).
+/// Split by gender, so the picker shows two rows; a person is shown by
+/// its place in its row.
 pub mod PERSON_GENDER_PREFIXES {
     pub const female: &str = "female-";
     pub const male: &str = "male-";
 }
-
-pub const DEFAULT_PERSON_VARIANT_KEY: crate::layer::character::variant_spec::groups::person::Key = crate::layer::character::variant_spec::groups::person::Key::female_2;
-
-pub const DEFAULT_PET_VARIANT_KEY: crate::layer::character::variant_spec::groups::pet::Key = crate::layer::character::variant_spec::groups::pet::Key::chick;

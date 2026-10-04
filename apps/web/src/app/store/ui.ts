@@ -20,7 +20,7 @@ const MAX_CHAT_LINES = 10;
 let nextChatLineId = 0;
 
 // The hotbar's MRU list, across cube and decor; the tool says which catalog a pick's number is in.
-export type RecentPick = { tool: ActiveTool.Object; cube: PlaceableCube } | { tool: ActiveTool.Decor; kind: u8 };
+type RecentPick = { tool: ActiveTool.Object; cube: PlaceableCube } | { tool: ActiveTool.Decor; kind: u8 };
 
 const MAX_RECENT_PICKS = 8;
 

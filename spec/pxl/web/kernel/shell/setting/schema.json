@@ -20,7 +20,7 @@
     "builds the chunks again."
   ],
   "SETTING_SECTIONS": {
-    "$value": ["display", "camera", "lighting", "quality", "debug", "character", "map"],
+    "$value": ["display", "navigation", "camera", "lighting", "debug", "character", "map"],
     "$doc": [
       "The sheet's sections, in the order they are shown. `character` is not a",
       "section of the sheet at all — its two settings are picked from the",
@@ -109,14 +109,6 @@
       "cost": "low",
       "sources_chunks": true
     },
-    "structures": {
-      "$doc": ["Whether the STRUCTURE ground channel is painted. The bake writes it", "either way (pxl-geo-bake terrain/pipeline/overture/policy.rs); this is a render decision."],
-      "kind": "toggle",
-      "default": true,
-      "section": "display",
-      "sources_chunks": true,
-      "dev": true
-    },
     "decor": {
       "$doc": [
         "Procedurally scattered decor only; what the player placed stays.",
@@ -166,12 +158,20 @@
       "options": "CAMERA_MODES",
       "section": "map"
     },
-    "center_support": {
+    "surface_follow": {
       "$doc": ["The map center stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck."],
       "kind": "toggle",
       "default": true,
       "section": "navigation",
       "dev": true
+    },
+    "orbit_obstacle": {
+      "$doc": ["What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each."],
+      "kind": "choice",
+      "default": "climb",
+      "options": "ORBIT_OBSTACLE_MODES",
+      "section": "camera",
+      "dev_options": ["through"]
     },
     "edge_shade": {
       "$doc": [
@@ -222,7 +222,7 @@
       "kind": "choice",
       "default": "auto",
       "options": "RESOLUTION_MODES",
-      "section": "quality"
+      "section": "display"
     },
     "debug_overlay": {
       "$doc": ["The debug overlay: where the camera and the pointer are, and the profiler's panel, with the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`)."],

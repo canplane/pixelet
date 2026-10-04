@@ -5,7 +5,8 @@ import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useUiStore } from "@/app/store/ui.ts";
-import { alpha, color, textEdge, textStyle, weight } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color, textStyle, weight } from "@/shared/ui/theme.ts";
+import { textEdge } from "@platform/typeface.ts";
 import { useWindowSize } from "@platform/viewport.ts";
 
 export function DummyChatText() {
@@ -17,7 +18,7 @@ export function DummyChatText() {
   if (chatLines.length === 0) return null;
 
   return (
-    <Pressable onHoverIn={() => setHovered(true)} onHoverOut={() => setHovered(false)} style={[styles.lines, { maxWidth: Math.min(320, width - 32) }]}>
+    <Pressable onHoverIn={() => setHovered(true)} onHoverOut={() => setHovered(false)} style={[styles.lines, { maxWidth: Math.min(320, width - 2 * chrome.inset) }]}>
       {chatLines.map((line, i) => (
         <View key={line.id} style={[styles.line, { opacity: hovered ? 0.95 : 0.23 + 0.47 * ((i + 1) / chatLines.length) }]}>
           <Text style={[styles.text, styles.self]}>{t("map.chat.self_label")}</Text>

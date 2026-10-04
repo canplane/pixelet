@@ -14,8 +14,9 @@ import { Motion } from "@platform/motion.tsx";
 import { useSafeArea } from "@platform/safe-area.ts";
 import { useWindowSize } from "@platform/viewport.ts";
 import { ease, SLIDE, SLIDE_AWAY } from "@/shared/ui/motion/transition.ts";
-import { PANEL_HEAD_HEIGHT, PanelPresence, type PanelProps, SHEET_RADIUS } from "@/shared/ui/panel.tsx";
-import { alpha, chrome, color } from "@/shared/ui/theme.ts";
+import { PANEL_HEAD_HEIGHT, PANEL_TOP, PanelPresence, type PanelProps, SHEET_RADIUS } from "@/shared/ui/panel.tsx";
+import { alpha, chrome, color, layer } from "@/shared/ui/theme.ts";
+import { touches } from "@/shared/ui/touch.ts";
 import { LABEL } from "@platform/palette.ts";
 
 const MAX_WIDTH = 540;
@@ -23,7 +24,8 @@ const WHOLE_GAP = 12;
 /** Points per millisecond. */
 const FLING = 0.5;
 const FOLLOW = ease(0, [0, 0, 1, 1]);
-const HANDLE = { width: 36, height: 4 };
+/** An iPhone sheet's grabber. */
+const HANDLE = { width: 36, height: 5 };
 const TAP_SLOP = 8;
 
 export function Panel({ label, onClose, half, children }: PanelProps) {
@@ -50,8 +52,9 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
     { height: fullHeight, settle: () => detent(true) },
   ];
 
-  const live = useRef({ top: window.height - shown, center: window.width / 2, shown, full, half, stops });
-  live.current = { top: window.height - shown, center: window.width / 2, shown, full, half, stops };
+  const now = { top: window.height - shown, center: window.width / 2, shown, full, half, stops };
+  const live = useRef(now);
+  live.current = now;
 
   const responder = useRef(
     PanResponder.create({
@@ -86,7 +89,7 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
   const away = { translateY: fullHeight + 16 };
 
   return (
-    <View style={[styles.layer, open ? styles.pass : styles.block]}>
+    <View style={[styles.layer, open ? touches.pass : touches.block]}>
       <Motion from={{ opacity: 0 }} to={{ opacity: open ? 1 : 0 }} transition={open ? SLIDE : SLIDE_AWAY} style={StyleSheet.absoluteFill}>
         <Pressable accessible={false} onPress={onClose} style={styles.dim} />
       </Motion>
@@ -99,7 +102,7 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
       >
         <View {...responder.panHandlers} accessibilityViewIsModal accessibilityLabel={label} style={[styles.body, { height: bodyFull ? fullHeight : halfHeight }]}>
           {children}
-          {half && <View style={styles.handle} />}
+          <View style={styles.handle} />
         </View>
       </Motion>
     </View>
@@ -107,11 +110,8 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
 }
 
 const styles = StyleSheet.create({
-  layer: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, zIndex: 70 },
+  layer: { ...StyleSheet.absoluteFill, zIndex: layer.sheet },
   body: { width: "100%" },
-  // From the sheet, not inline: RN-web draws an inline `box-none` as `none`.
-  pass: { pointerEvents: "box-none" },
-  block: { pointerEvents: "none" },
   dim: { flex: 1, backgroundColor: alpha(color.black, 0.2) },
   sheet: {
     position: "absolute",
@@ -122,5 +122,14 @@ const styles = StyleSheet.create({
     backgroundColor: color.ground,
     boxShadow: "0 -4px 20px rgba(0, 0, 0, 0.12)",
   },
-  handle: { position: "absolute", top: 4, left: "50%", marginLeft: -HANDLE.width / 2, ...HANDLE, borderRadius: HANDLE.height / 2, pointerEvents: "none", backgroundColor: LABEL.tertiary },
+  handle: {
+    position: "absolute",
+    top: (PANEL_TOP - HANDLE.height) / 2,
+    left: "50%",
+    marginLeft: -HANDLE.width / 2,
+    ...HANDLE,
+    borderRadius: HANDLE.height / 2,
+    pointerEvents: "none",
+    backgroundColor: LABEL.tertiary,
+  },
 });

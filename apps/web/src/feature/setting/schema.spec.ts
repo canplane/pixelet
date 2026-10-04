@@ -42,15 +42,6 @@ export const SETTINGS = {
     dev: true,
     cost: "low",
   },
-  /** Whether the STRUCTURE ground channel is painted. The bake writes it
-   * either way (pxl-geo-bake terrain/pipeline/overture/policy.rs); this is a render decision. */
-  structures: {
-    key: 1 as number,
-    kind: "toggle",
-    default: true,
-    section: "display",
-    dev: true,
-  },
   /** Procedurally scattered decor only; what the player placed stays.
    *
    * Med because it is models rather than a shading term: a chunk builds its
@@ -98,7 +89,7 @@ export const SETTINGS = {
     section: "map",
   },
   /** The map center stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck. */
-  center_support: {
+  surface_follow: {
     key: 5 as number,
     kind: "toggle",
     default: true,
@@ -112,20 +103,12 @@ export const SETTINGS = {
     default: "climb",
     options: ["through", "stop", "climb"],
     section: "camera",
-    dev: true,
-  },
-  /** Panning re-samples the terrain height under the map center each step. */
-  ground_snap: {
-    key: 7 as number,
-    kind: "toggle",
-    default: true,
-    section: "camera",
-    dev: true,
+    dev_options: ["through"],
   },
   /** Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
   edge_shade: {
-    key: 8 as number,
+    key: 7 as number,
     kind: "toggle",
     default: true,
     section: "lighting",
@@ -133,7 +116,7 @@ export const SETTINGS = {
   },
   /** A uniform on an already-compiled shader term; not a pass. */
   rim_light: {
-    key: 9 as number,
+    key: 8 as number,
     kind: "toggle",
     default: true,
     section: "lighting",
@@ -143,7 +126,7 @@ export const SETTINGS = {
    * screen-space pass; screen, N8AO's screen-space pass, the costliest of
    * the three. AO_MODES says each. */
   ao: {
-    key: 10 as number,
+    key: 9 as number,
     kind: "choice",
     default: "corner",
     options: ["off", "corner", "screen"],
@@ -154,7 +137,7 @@ export const SETTINGS = {
    * from the sun each frame, depth only, and a 3x3 compare per fragment;
    * 16 MB of map on a desktop, 4 on a phone. */
   shadows: {
-    key: 11 as number,
+    key: 10 as number,
     kind: "toggle",
     default: false,
     section: "lighting",
@@ -164,11 +147,11 @@ export const SETTINGS = {
   /** The pixels the world is filled at, the GPU's largest cost: two to a
    * CSS pixel is four times the fragments of one. RESOLUTION_MODES says each. */
   resolution: {
-    key: 12 as number,
+    key: 11 as number,
     kind: "choice",
     default: "auto",
     options: ["auto", "fixed", "low"],
-    section: "quality",
+    section: "display",
   },
   /** The debug overlay: where the camera and the pointer are, and the profiler's panel, with the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`). */
   debug_overlay: {
@@ -179,19 +162,19 @@ export const SETTINGS = {
   },
   /** Markers for the map center and the cell it floors to, and rings in the level, the view's upright and the north–south planes (layer/marker/frame_gizmo.rs). */
   gizmos: {
-    key: 14 as number,
+    key: 13 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   person: {
-    key: 15 as number,
+    key: 14 as number,
     kind: "index",
     default: 1 as number,
     section: "character",
   },
   pet: {
-    key: 16 as number,
+    key: 15 as number,
     kind: "index",
     default: 5 as number,
     section: "character",
@@ -200,42 +183,6 @@ export const SETTINGS = {
 
 /** SETTINGS without its `dev` entries: what a production bundle carries in its place. */
 export const SETTINGS_SHIPPED = {
-  /** Ground color from the art pack (four taps of the layer array per
-   * fragment) instead of the flat per-instance average. The chunk shader's
-   * `frame.low_spec` is this, inverted.
-   *
-   * Low because the four taps are all of it: fill rate, which scales with
-   * the screen and not with the world, and nothing else — no geometry, no
-   * pass of its own, and no work off the GPU past an atlas the client
-   * already holds.
-   *
-   * It sources the chunks: the shader samples a leaf's layer or does not,
-   * but a tier over it carries one color and no layer to sample, so which
-   * color that is was baked in (mesh/chunk_mesher.rs). */
-  textures: {
-    key: 0 as number,
-    kind: "toggle",
-    default: true,
-    section: "display",
-    cost: "low",
-  },
-  /** Procedurally scattered decor only; what the player placed stays.
-   *
-   * Med because it is models rather than a shading term: a chunk builds its
-   * decor and the frame draws it, so what it costs follows what is in view.
-   * It has been the frame's own bottleneck — 20260912-what-to-render-when.md
-   * reads GPU p95 24.1 ms with 2.26 M decor triangles and 15% of moving
-   * frames missing a vsync — and the projected-size criterion holds it to
-   * the nearest tier without making far decor cheap, the impostor tier that
-   * would being decided and not built. The badge is an ordering, and this is
-   * the one to reach for before any shading term. */
-  decor: {
-    key: 2 as number,
-    kind: "toggle",
-    default: true,
-    section: "display",
-    cost: "med",
-  },
   /** The places' badges over the map, from the published POI pages. */
   poi: {
     key: 2 as number,
@@ -276,7 +223,7 @@ export const SETTINGS_SHIPPED = {
   /** Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
   edge_shade: {
-    key: 8 as number,
+    key: 7 as number,
     kind: "toggle",
     default: true,
     section: "lighting",
@@ -284,7 +231,7 @@ export const SETTINGS_SHIPPED = {
   },
   /** A uniform on an already-compiled shader term; not a pass. */
   rim_light: {
-    key: 9 as number,
+    key: 8 as number,
     kind: "toggle",
     default: true,
     section: "lighting",
@@ -294,7 +241,7 @@ export const SETTINGS_SHIPPED = {
    * screen-space pass; screen, N8AO's screen-space pass, the costliest of
    * the three. AO_MODES says each. */
   ao: {
-    key: 10 as number,
+    key: 9 as number,
     kind: "choice",
     default: "corner",
     options: ["off", "corner", "screen"],
@@ -304,11 +251,11 @@ export const SETTINGS_SHIPPED = {
   /** The pixels the world is filled at, the GPU's largest cost: two to a
    * CSS pixel is four times the fragments of one. RESOLUTION_MODES says each. */
   resolution: {
-    key: 12 as number,
+    key: 11 as number,
     kind: "choice",
     default: "auto",
     options: ["auto", "fixed", "low"],
-    section: "quality",
+    section: "display",
   },
   /** The debug overlay: where the camera and the pointer are, and the profiler's panel, with the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`). */
   debug_overlay: {
@@ -319,19 +266,19 @@ export const SETTINGS_SHIPPED = {
   },
   /** Markers for the map center and the cell it floors to, and rings in the level, the view's upright and the north–south planes (layer/marker/frame_gizmo.rs). */
   gizmos: {
-    key: 14 as number,
+    key: 13 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   person: {
-    key: 15 as number,
+    key: 14 as number,
     kind: "index",
     default: 1 as number,
     section: "character",
   },
   pet: {
-    key: 16 as number,
+    key: 15 as number,
     kind: "index",
     default: 5 as number,
     section: "character",

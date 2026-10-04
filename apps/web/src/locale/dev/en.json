@@ -5,6 +5,12 @@
         "label": "Shadows",
         "description": "The sun casts shadows from the terrain, objects and characters onto the ground."
       }
+    },
+    "navigation": {
+      "surface_follow": {
+        "label": "Follow surfaces",
+        "description": "Dragging moves the map center along terrain and object surfaces. Turn it off to keep the current height and pass through obstacles."
+      }
     }
   },
   "map": {

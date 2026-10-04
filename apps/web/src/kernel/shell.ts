@@ -2,27 +2,26 @@
 
 import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { u32 } from "@xpute/core/abi/word.ts";
-import { Command, encode_input_tracking, Tracking } from "@/kernel/abi/cmd.spec.ts";
+import { Command, encode_input_tracking, encode_setting_set, Tracking } from "@/kernel/abi/cmd.spec.ts";
 import { CORE, CORE_DOORBELL } from "@/kernel/mem.ts";
 import { ring_now, send_input } from "@/kernel/sched.ts";
 import { orientationPermit } from "@platform/sensor.ts";
 
 export { kernel_snapshot, useKernel } from "@/kernel/snapshot.ts";
 export { kernel_hold } from "@/kernel/control/input.ts";
-/** Sends one of the UI's commands, rung at once. */
 export { ring_now as kernel_command } from "@/kernel/sched.ts";
 
-/** The tracking button. Following needs the compass, so where a platform
- * gates it behind a prompt (iOS Safari), the prompt runs here, inside the
- * press, and the kernel hears the answer before the press — the way a
- * page's handler awaits `requestPermission` and the browser only reports the
- * outcome. */
+/** iOS Safari's compass prompt runs here, inside the press. */
 export async function kernel_tracking(tracking: Tracking): Promise<void> {
   if (tracking === Tracking.Follow && !(await orientationPermit())) {
     console.error("[orientation] could not start the sensor.");
     return;
   }
   send_input(Command.INPUT_TRACKING, encode_input_tracking({ tracking }));
+}
+
+export function kernel_setting(key: u32, value: u32): void {
+  ring_now(Command.SETTING_SET, encode_setting_set({ key, value }));
 }
 
 export function kernel_enable_location(): void {

@@ -6,7 +6,7 @@
  * their hue, so two uses sharing a value can change apart.
  */
 
-import { FAMILY, MONO, textEdge } from "@platform/typeface.ts";
+import { FAMILY, MONO } from "@platform/typeface.ts";
 import { round } from "@xpute/core/math/scalar.ts";
 
 export function alpha(hex: string, a: number): string {
@@ -126,9 +126,14 @@ export const textStyle = {
   caption2: { fontFamily: FAMILY, fontSize: 11, lineHeight: 13, fontWeight: weight.medium },
 } as const;
 
+/** How far a text follows the system's text size: a control's to 1.2×, a mark
+ * not at all, since its size is its shape; running text follows it whole. */
+export const textScale = { chrome: 1.2, mark: 1 } as const;
+
 export const sectionTitle = { ...textStyle.caption, fontWeight: weight.medium, letterSpacing: 0.6, textTransform: "uppercase" } as const;
 
-export { textEdge };
+/** The map screen's layers, back to front: the dock and toasts, the scrim, the top chrome, a sheet. */
+export const layer = { bottom: 40, scrim: 49, chrome: 50, sheet: 70 } as const;
 
 export const chrome = {
   inset: 16,

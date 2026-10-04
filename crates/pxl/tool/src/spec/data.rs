@@ -23,7 +23,7 @@ struct DataSpec {
     cpp: Option<(&'static str, &'static str)>,
 }
 
-const DATA_SPECS: [DataSpec; 11] = [
+const DATA_SPECS: [DataSpec; 13] = [
     DataSpec {
         json: "spec/pxl/spec/place.json",
         ts: Some("apps/web/src/feature/map/geocode/place.spec.ts"),
@@ -102,7 +102,7 @@ const DATA_SPECS: [DataSpec; 11] = [
         rs: Some("crates/pxl/web/kernel/src/layer/character/variant.spec.rs"),
         module: Some("variant_spec"),
         enums: Enums::All,
-        ts_names: Some(&["groups", "DEFAULT_PERSON_VARIANT_KEY", "DEFAULT_PET_VARIANT_KEY", "PERSON_GENDER_PREFIXES"]),
+        ts_names: Some(&["groups", "PERSON_GENDER_PREFIXES"]),
         cpp: None,
     },
     DataSpec {
@@ -410,11 +410,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             .iter()
             .find_map(|(dir, name)| rs_path.strip_prefix(dir).map(|rest| (*name, rest)))
             .ok_or(format!("{rs_path}: not under pxl-kernel, pxl-render, pxl-spec, xpute-runtime or xpute-conformance"))?;
-            let mut rs = vec![
-                format!("// {crate_name}/{under_src}"),
-                "//".into(),
-                super::generated(d.json, base),
-            ];
+            let mut rs = vec![format!("// {crate_name}/{under_src}"), "//".into(), super::generated(d.json, base)];
             if let Some(doc) = &head_doc {
                 rs.push("//".into());
                 rs.extend(line_comments(doc, ""));

@@ -20,7 +20,7 @@ const MOVE: LayoutAnimationConfig = {
   update: { type: "spring", springDamping: 1 },
 };
 
-export function Pill({ x, width, height, fill, tint, place, interactive, border, shadow, fade = 1, fadeFrom, fadeTransition = SNAP, touch, children, onContentWidth }: PillProps) {
+export function Pill({ x, width, height, fill, tint, place, interactive, border, shadow, fade = 1, fadeFrom, fadeTransition = SNAP, touch, touchBelow = 0, children, onContentWidth }: PillProps) {
   // In render: a layout animation applies to the next commit.
   const last = useRef<[f64, f64] | null>(null);
   if (last.current !== null && (last.current[0] !== x || last.current[1] !== width)) LayoutAnimation.configureNext(MOVE);
@@ -31,7 +31,10 @@ export function Pill({ x, width, height, fill, tint, place, interactive, border,
   // Content stands inside the glass: interactive glass answers only touches
   // given through what it contains.
   return (
-    <View {...touch} style={[touch ? styles.reach : styles.at, { left: x - reach, top: -reach, width: width + 2 * reach, height: height + 2 * reach, padding: reach }]}>
+    <View
+      {...touch}
+      style={[touch ? styles.reach : styles.at, { left: x - reach, top: -reach, width: width + 2 * reach, height: height + 2 * reach + touchBelow, padding: reach, paddingBottom: reach + touchBelow }]}
+    >
       <Backing
         fill={fill}
         tint={tint}

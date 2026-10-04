@@ -6,7 +6,7 @@ import { type StyleProp, StyleSheet, Text, type TextStyle, View, type ViewStyle 
 import type { f64 } from "@xpute/core/abi/word.ts";
 import type { IconProps } from "@platform/icon.tsx";
 import { Glyph } from "@/shared/ui/glyph.tsx";
-import { color as theme, halo, haloRings } from "@/shared/ui/theme.ts";
+import { color as theme, halo, haloRings, textScale } from "@/shared/ui/theme.ts";
 
 /**
  * A dark halo from black copies of `draw` around circles, not a stroke: a
@@ -48,7 +48,7 @@ export function HaloText({ style, children }: { style: StyleProp<TextStyle>; chi
     <Halo
       style={styles.shrink}
       draw={(ink) => (
-        <Text numberOfLines={1} style={[style, ink !== undefined && { color: ink }]}>
+        <Text numberOfLines={1} maxFontSizeMultiplier={textScale.chrome} style={[style, ink !== undefined && { color: ink }]}>
           {children}
         </Text>
       )}

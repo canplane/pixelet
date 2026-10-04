@@ -1,33 +1,24 @@
 // @pxl/web/shared/ui/panel.tsx
 
 import { createContext, type ReactNode } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
+import { ScrollView, StyleSheet, View, type ViewProps } from "react-native";
 
 import { Backing } from "@platform/backing.tsx";
 import { BackingPlace } from "@/shared/ui/backing.ts";
 import { CircularButton } from "@/shared/ui/circular-button.tsx";
-import { chrome, color, material, textStyle } from "@/shared/ui/theme.ts";
-import { LABEL } from "@platform/palette.ts";
+import { chrome, color, material } from "@/shared/ui/theme.ts";
+import { useSafeArea } from "@platform/safe-area.ts";
 
 export const PANEL_CONTROL = chrome.target;
 /** iOS 26 Maps' sheet inset, for the top row's controls and the content's sides. */
 export const PANEL_EDGE = 16;
+/** Above the top row: the band the sheet's handle stands in. */
+export const PANEL_TOP = 20;
 
-export const PANEL_HEADER = {
-  marginTop: PANEL_EDGE,
-  height: PANEL_CONTROL,
-  paddingHorizontal: PANEL_EDGE,
-  flexDirection: "row",
-  alignItems: "center",
-} as const;
-
-const STACK_GAP = chrome.controlGap;
 export const PANEL_SECTION_GAP = 24;
-const CONTENT_GAP = PANEL_SECTION_GAP;
-export const PANEL_HEAD_HEIGHT = PANEL_EDGE + PANEL_CONTROL + PANEL_EDGE;
-const TABS_TOP = PANEL_EDGE + PANEL_CONTROL + STACK_GAP;
-export const PANEL_CONTENT_TOP = PANEL_EDGE + PANEL_CONTROL + CONTENT_GAP;
-export const PANEL_TABS_ROOM = PANEL_CONTENT_TOP + STACK_GAP + PANEL_CONTROL;
+export const PANEL_HEAD_HEIGHT = PANEL_TOP + PANEL_CONTROL + PANEL_EDGE;
+export const PANEL_CONTENT_TOP = PANEL_TOP + PANEL_CONTROL + PANEL_SECTION_GAP;
 
 /** Concentric with the round controls in the top row. */
 export const SHEET_RADIUS = PANEL_EDGE + PANEL_CONTROL / 2;
@@ -42,50 +33,49 @@ export interface PanelProps {
 /** A host drops a panel only after `gone`, once it has slid away. */
 export const PanelPresence = createContext<{ open: boolean; gone: () => void }>({ open: true, gone: () => {} });
 
-export function PanelHeader({ title, closeLabel, onClose }: { title: string; closeLabel: string; onClose: () => void }) {
+/** The top row: the sheet's own control where a title would stand — its tabs or
+ * its search field — and close. The panel's `label` names the sheet. */
+export function PanelBar({ onClose, children, ...rest }: ViewProps & { onClose: () => void; children: ReactNode }) {
   return (
-    <View style={styles.headerRow}>
-      <Text accessibilityRole="header" style={styles.title}>{title}</Text>
-      <PanelClose label={closeLabel} onClose={onClose} />
+    <View {...rest} style={styles.bar}>
+      <View style={styles.barMain}>{children}</View>
+      <PanelClose onClose={onClose} />
     </View>
   );
 }
 
-export function PanelBody({ header, tabs, children }: { header: ReactNode; tabs?: ReactNode; children: ReactNode }) {
+export function PanelBody({ bar, children }: { bar: ReactNode; children: ReactNode }) {
   return (
     <View style={styles.body}>
       <View style={styles.scroll}>{children}</View>
       <Backing fill={color.ground} material={material.bar} place={BackingPlace.OverContent} style={styles.head}>
-        {header}
+        {bar}
       </Backing>
-      {tabs && (
-        <Backing fill={color.ground} place={BackingPlace.OverContent} style={styles.tabs}>
-          {tabs}
-        </Backing>
-      )}
     </View>
   );
 }
 
-export function PanelClose({ label, onClose }: { label: string; onClose: () => void }) {
-  return <CircularButton glyph="xmark" size={PANEL_CONTROL} place={BackingPlace.OnSheet} onPress={onClose} label={label} />;
+function PanelClose({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
+  return <CircularButton glyph="xmark" size={PANEL_CONTROL} place={BackingPlace.OnSheet} onPress={onClose} label={t("close")} />;
+}
+
+/** A tab's scroller under the tabs; keyed per tab, since a shared one kept its offset across a switch. */
+export function PanelScroll({ children }: { children: ReactNode }) {
+  const { bottom } = useSafeArea();
+  return (
+    <ScrollView style={styles.tabScroll} contentContainerStyle={[styles.tabContent, { paddingBottom: bottom + PANEL_EDGE }]}>
+      {children}
+    </ScrollView>
+  );
 }
 
 const styles = StyleSheet.create({
-  headerRow: { ...PANEL_HEADER, justifyContent: "flex-end" },
-  // Spans the row so the title centers on the sheet, not beside the close button.
-  title: { position: "absolute", left: 0, right: 0, textAlign: "center", pointerEvents: "none", ...textStyle.title, color: LABEL.primary },
+  bar: { marginTop: PANEL_TOP, height: PANEL_CONTROL, paddingHorizontal: PANEL_EDGE, flexDirection: "row", alignItems: "center", gap: chrome.controlGap },
+  barMain: { flex: 1, height: PANEL_CONTROL, justifyContent: "center" },
   body: { flex: 1 },
   head: { position: "absolute", top: 0, left: 0, right: 0, height: PANEL_HEAD_HEIGHT },
+  tabScroll: { flex: 1 },
+  tabContent: { paddingHorizontal: PANEL_EDGE, paddingTop: PANEL_CONTENT_TOP, gap: PANEL_SECTION_GAP },
   scroll: { flex: 1, overflow: "hidden" },
-  tabs: {
-    position: "absolute",
-    top: TABS_TOP,
-    left: PANEL_EDGE,
-    right: PANEL_EDGE,
-    height: PANEL_CONTROL,
-    borderRadius: PANEL_CONTROL / 2,
-    justifyContent: "center",
-    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
-  },
 });

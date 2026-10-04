@@ -20,37 +20,24 @@ interface Entry extends ToastSpec {
 }
 
 interface ToastState {
+  /** Front card first. */
   entries: Entry[];
-  /** The entry at raw index `rotation` (mod count) is in front. */
-  rotation: i32;
+  /** Turns so far, up positive: which way the cards last moved. */
+  turns: i32;
   dragging: boolean;
   pending: u32 | null;
 }
 
-export const useToastStore = create<ToastState>(() => ({ entries: [], rotation: 0, dragging: false, pending: null }));
+export const useToastStore = create<ToastState>(() => ({ entries: [], turns: 0, dragging: false, pending: null }));
 
 const set = useToastStore.setState;
 const get = useToastStore.getState;
 
-export function toastDepth(i: number, rotation: i32, count: number): number {
-  return count > 0 ? ((i - rotation) % count + count) % count : 0;
-}
-
-// Before inserting at index 0 while turned, or the new entry lands behind the front card.
-function unturned(): Entry[] {
-  const { entries, rotation } = get();
-  if (rotation === 0 || entries.length <= 1) return entries;
-  return entries
-    .map((e, i) => ({ e, depth: toastDepth(i, rotation, entries.length) }))
-    .sort((a, b) => a.depth - b.depth)
-    .map((x) => x.e);
-}
-
 function toFront(id: u32): void {
-  const entries = unturned();
+  const { entries } = get();
   const at = entries.findIndex((e) => e.id === id);
   if (at < 0) return;
-  set({ entries: [entries[at], ...entries.slice(0, at), ...entries.slice(at + 1)], rotation: 0 });
+  set({ entries: [entries[at], ...entries.slice(0, at), ...entries.slice(at + 1)] });
 }
 
 export function toastShow(id: u32, spec: ToastSpec): void {
@@ -62,16 +49,19 @@ export function toastShow(id: u32, spec: ToastSpec): void {
     else toFront(id);
     return;
   }
-  set({ entries: [{ id, ...spec }, ...unturned()], rotation: 0 });
+  set({ entries: [{ id, ...spec }, ...entries] });
 }
 
 export function toastDismiss(id: u32): void {
-  const entries = unturned().filter((e) => e.id !== id);
-  set({ entries, rotation: 0, pending: get().pending === id ? null : get().pending });
+  const { entries, pending } = get();
+  set({ entries: entries.filter((e) => e.id !== id), pending: pending === id ? null : pending });
 }
 
+/** Up (1) sends the front card to the back; down (-1) brings the back one forward. */
 export function toastRotate(delta: i32): void {
-  set({ rotation: get().rotation + delta });
+  const { entries, turns } = get();
+  const k = ((delta % entries.length) + entries.length) % entries.length;
+  set({ entries: [...entries.slice(k), ...entries.slice(0, k)], turns: turns + delta });
 }
 
 export function setToastDragging(dragging: boolean): void {

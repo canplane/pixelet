@@ -1,15 +1,19 @@
 // @pxl/web/feature/setting/row.tsx
 
 import type { ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { GlyphName } from "@platform/icon.tsx";
 import { ToggleRow } from "@platform/toggle-row.tsx";
 
 import type { SettingCost } from "@/feature/setting/schema.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
-import { alpha, chrome, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color, hairline, textScale, textStyle, weight } from "@/shared/ui/theme.ts";
+import { SectionTitle } from "@/shared/ui/section-title.tsx";
 import { LABEL } from "@platform/palette.ts";
+
+const INSET = 12;
+const GROUP_BORDER = 1;
 
 const COST_COLOR: Record<SettingCost, string> = {
   low: color.costLow,
@@ -20,7 +24,7 @@ const COST_COLOR: Record<SettingCost, string> = {
 function Badge({ text, tint }: { text: string; tint: string }) {
   return (
     <View style={[styles.badge, { backgroundColor: alpha(tint, 0.15) }]}>
-      <Text style={[styles.badgeText, { color: tint }]}>{text}</Text>
+      <Text maxFontSizeMultiplier={textScale.mark} style={[styles.badgeText, { color: tint }]}>{text}</Text>
     </View>
   );
 }
@@ -67,19 +71,23 @@ export function SettingRow(props: SettingRowProps) {
 
 interface SettingGroupProps {
   label: string;
+  description?: string;
   cost?: SettingCost;
   dev?: boolean;
   children: ReactNode;
 }
 
 export function SettingGroup(props: SettingGroupProps) {
-  const { label, cost, dev, children } = props;
+  const { label, description, cost, dev, children } = props;
   return (
     <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[styles.group, styles.bleed]}>
-      <View style={styles.legend}>
-        <Text style={styles.legendText}>{label}</Text>
-        <Badges cost={cost} dev={dev} />
+      <View style={styles.legendLine}>
+        <View style={styles.legend}>
+          <Text maxFontSizeMultiplier={textScale.chrome} style={styles.legendText}>{label}</Text>
+          <Badges cost={cost} dev={dev} />
+        </View>
       </View>
+      {description && <Text style={[settingText.small, styles.groupDescription]}>{description}</Text>}
       <View style={styles.answers}>{children}</View>
     </View>
   );
@@ -105,34 +113,51 @@ export function SettingChoiceRow(props: SettingChoiceRowProps) {
   );
 }
 
-interface SectionTitleProps {
-  children: string;
-  icon?: GlyphName;
-  caption?: string;
+/** Choice rows standing out of any group, flush with the section's text. */
+export function SettingChoices({ children }: { children: ReactNode }) {
+  return <View style={styles.bleed}>{children}</View>;
 }
 
-export function SectionTitle(props: SectionTitleProps) {
-  const { children, icon, caption } = props;
+interface SectionProps {
+  title: string;
+  icon?: GlyphName;
+  caption?: string;
+  children: ReactNode;
+}
+
+export function Section(props: SectionProps) {
+  const { title, icon, caption, children } = props;
   return (
-    <View style={styles.titleBlock}>
-      <View style={styles.titleLine}>
-        {icon && <Glyph glyph={icon} size={16} color={LABEL.secondary} />}
-        <Text accessibilityRole="header" style={styles.title}>{children}</Text>
+    <View style={styles.section}>
+      <View style={styles.titleBlock}>
+        <View style={styles.titleLine}>
+          {icon && <Glyph glyph={icon} size={16} color={LABEL.secondary} />}
+          <SectionTitle>{title}</SectionTitle>
+        </View>
+        {caption && <Text style={settingText.faint}>{caption}</Text>}
       </View>
-      {caption && <Text style={settingText.faint}>{caption}</Text>}
+      {children}
     </View>
   );
+}
+
+/** A section's running text. */
+export function Prose({ children }: { children: ReactNode }) {
+  return <View style={styles.prose}>{children}</View>;
+}
+
+export function Link({ href, children }: { href: string; children?: ReactNode }) {
+  return <Text style={styles.link} onPress={() => Linking.openURL(href)}>{children}</Text>;
 }
 
 export const settingText = StyleSheet.create({
   small: { ...textStyle.caption, color: LABEL.secondary },
   faint: { ...textStyle.caption2, fontWeight: weight.regular, color: LABEL.secondary },
-  link: { textDecorationLine: "underline" },
 });
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 12, paddingVertical: 12, borderRadius: 8 },
-  bleed: { marginHorizontal: -12 },
+  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: INSET, paddingVertical: 12, borderRadius: 8 },
+  bleed: { marginHorizontal: -INSET },
   described: { flexShrink: 1, minWidth: 0, gap: 4 },
   nameLine: { flexDirection: "row", alignItems: "center", gap: 8 },
   name: { ...textStyle.body, color: LABEL.primary },
@@ -140,23 +165,19 @@ const styles = StyleSheet.create({
   badge: { height: 16, justifyContent: "center", borderRadius: 8, paddingHorizontal: 4 },
   badgeText: { ...textStyle.caption2, fontSize: 9, lineHeight: 10, letterSpacing: 0.4 },
 
-  group: { marginTop: 16, marginBottom: 12, borderWidth: 1, borderColor: hairline, borderRadius: 12, padding: 4, paddingTop: 12 },
-  legend: {
-    position: "absolute",
-    top: 1 - textStyle.caption.lineHeight / 2,
-    left: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 8,
-    backgroundColor: color.ground,
-  },
+  group: { marginTop: 16, marginBottom: 12, borderWidth: GROUP_BORDER, borderColor: hairline, borderRadius: 12, padding: 4, paddingTop: 12 },
+  // The border's own line, so the legend centers on it at any text size.
+  legendLine: { position: "absolute", top: -GROUP_BORDER, left: 8, height: GROUP_BORDER, flexDirection: "row", alignItems: "center" },
+  legend: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 8, backgroundColor: color.ground },
   legendText: { ...textStyle.caption, fontWeight: weight.medium, color: LABEL.primary },
+  groupDescription: { paddingHorizontal: INSET, paddingTop: 4, paddingBottom: 4 },
   answers: { gap: 4 },
 
   check: { width: chrome.glyph, height: chrome.glyph, flexShrink: 0 },
 
+  section: { gap: 4 },
+  prose: { gap: 8, paddingVertical: 4 },
+  link: { textDecorationLine: "underline" },
   titleBlock: { gap: 4, marginBottom: 4 },
   titleLine: { flexDirection: "row", alignItems: "center", gap: 8 },
-  title: { ...sectionTitle, color: LABEL.secondary },
 });

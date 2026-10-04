@@ -1,16 +1,15 @@
 // @pxl/web/feature/character/picker.tsx
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { alpha, chrome, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color, hairline, textScale, textStyle, weight } from "@/shared/ui/theme.ts";
+import { SectionTitle } from "@/shared/ui/section-title.tsx";
 import { CharacterPreview } from "@/feature/character/preview.tsx";
-import type { u32 } from "@xpute/core/abi/word.ts";
-import { Command, encode_setting_set } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_command, useKernel } from "@/kernel/shell.ts";
+import { kernel_setting, useKernel } from "@/kernel/shell.ts";
 import { SETTINGS } from "@/feature/setting/schema.ts";
-import { findPersonVariant, findPetVariant, type Gender, genderOf, GENDERS, personVariantNumbered, personVariantsOf, PET_VARIANTS } from "@/feature/character/variant.ts";
+import { type CharacterVariant, type Gender, genderOf, GENDERS, personVariant, personVariantsOf, PET_VARIANTS, petVariant } from "@/feature/character/variant.ts";
 import { LABEL } from "@platform/palette.ts";
 import { PANEL_EDGE, PANEL_SECTION_GAP } from "@/shared/ui/panel.tsx";
 
@@ -28,86 +27,84 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
         {
           /* Sized to the label's heavier weight, so a pick never rewraps the row. */
         }
-        <Text aria-hidden style={[styles.chipText, styles.chipTextOn, styles.sizer]}>{label}</Text>
-        <Text style={[styles.chipText, styles.label, active && styles.chipTextOn]}>{label}</Text>
+        <Text aria-hidden maxFontSizeMultiplier={textScale.chrome} style={[styles.chipText, styles.chipTextOn, styles.sizer]}>{label}</Text>
+        <View style={styles.label}>
+          <Text maxFontSizeMultiplier={textScale.chrome} style={[styles.chipText, styles.centered, active && styles.chipTextOn]}>{label}</Text>
+        </View>
       </View>
     </Pressable>
+  );
+}
+
+/** A preview of the one picked beside the chips that pick it. */
+function PickerCard({ label, selected, children }: { label: string; selected: CharacterVariant; children: ReactNode }) {
+  return (
+    <View style={styles.picker}>
+      <SectionTitle>{label}</SectionTitle>
+      <View style={styles.pickerRow}>
+        <CharacterPreview variant={selected} style={styles.preview} />
+        <View style={styles.chipColumn}>{children}</View>
+      </View>
+    </View>
   );
 }
 
 interface PersonPickerProps {
   gender: Gender;
   onGenderChange: (gender: Gender) => void;
-  selectedKey: string;
-  onSelect: (key: string) => void;
+  selected: CharacterVariant;
+  onSelect: (variant: CharacterVariant) => void;
 }
 
 /** The preview tracks the equipped variant; browsing genders changes nothing until a variant is picked. */
 function PersonPicker(props: PersonPickerProps) {
-  const { gender, onGenderChange, selectedKey, onSelect } = props;
+  const { gender, onGenderChange, selected, onSelect } = props;
   const { t } = useTranslation();
-  const selected = findPersonVariant(selectedKey);
   const variants = personVariantsOf(gender);
 
   return (
-    <View style={styles.picker}>
-      <Text style={styles.pickerLabel}>{t("drawer_modal.character.person_label")}</Text>
-      <View style={styles.pickerRow}>
-        <CharacterPreview variant={selected} style={styles.preview} />
-        <View style={styles.chipColumn}>
-          <View style={styles.chips}>
-            {GENDERS.map((g) => <Chip key={g} label={t(`drawer_modal.character.${g}_label`)} active={gender === g} onPress={() => onGenderChange(g)} />)}
-          </View>
-          <View style={styles.rule} />
-          <View style={styles.chips}>
-            {variants.map((v) => <Chip key={v.key} label={t(`drawer_modal.character.persons.${v.key}`)} active={v.key === selectedKey} onPress={() => onSelect(v.key)} />)}
-          </View>
-        </View>
+    <PickerCard label={t("drawer.character.person_label")} selected={selected}>
+      <View style={styles.chips}>
+        {GENDERS.map((g) => <Chip key={g} label={t(`drawer.character.${g}_label`)} active={gender === g} onPress={() => onGenderChange(g)} />)}
       </View>
-    </View>
+      <View style={styles.rule} />
+      <View style={styles.chips}>
+        {variants.map((v, i) => <Chip key={v.key} label={`${i + 1}`} active={v.number === selected.number} onPress={() => onSelect(v)} />)}
+      </View>
+    </PickerCard>
   );
 }
 
 interface PetPickerProps {
-  selectedKey: string;
-  onSelect: (key: string) => void;
+  selected: CharacterVariant;
+  onSelect: (variant: CharacterVariant) => void;
 }
 
 function PetPicker(props: PetPickerProps) {
-  const { selectedKey, onSelect } = props;
+  const { selected, onSelect } = props;
   const { t } = useTranslation();
-  const selected = findPetVariant(selectedKey);
 
   return (
-    <View style={styles.picker}>
-      <Text style={styles.pickerLabel}>{t("drawer_modal.character.pet_label")}</Text>
-      <View style={styles.pickerRow}>
-        <CharacterPreview variant={selected} style={styles.preview} />
-        <View style={styles.chipColumn}>
-          <View style={styles.chips}>
-            {PET_VARIANTS.map((v) => <Chip key={v.key} label={t(`drawer_modal.character.pets.${v.key}`)} active={v.key === selectedKey} onPress={() => onSelect(v.key)} />)}
-          </View>
-        </View>
+    <PickerCard label={t("drawer.character.pet_label")} selected={selected}>
+      <View style={styles.chips}>
+        {PET_VARIANTS.map((v) => <Chip key={v.key} label={t(`drawer.character.pets.${v.key}`)} active={v.number === selected.number} onPress={() => onSelect(v)} />)}
       </View>
-    </View>
+    </PickerCard>
   );
 }
 
 /** Picks take effect at once and the sheet stays open, for comparing variants. */
 export function CharacterPicker() {
-  const personVariant = useKernel((s) => s.settings[SETTINGS.person.key] ?? -1);
-  const petVariant = useKernel((s) => s.settings[SETTINGS.pet.key] ?? -1);
-  const personVariantKey = personVariantNumbered(personVariant)?.key ?? "";
-  const petVariantKey = PET_VARIANTS.find((v) => v.number === petVariant)?.key ?? "";
-  const setSetting = (key: u32, value: u32) => kernel_command(Command.SETTING_SET, encode_setting_set({ key, value }));
+  const person = personVariant(useKernel((s) => s.settings[SETTINGS.person.key] ?? -1));
+  const pet = petVariant(useKernel((s) => s.settings[SETTINGS.pet.key] ?? -1));
 
   // Opens on the selection's gender, so a pick does not look reset on reopen.
-  const [gender, setGender] = useState<Gender>(genderOf(personVariantKey));
+  const [gender, setGender] = useState<Gender>(genderOf(person));
 
   return (
     <View style={styles.pickers}>
-      <PersonPicker gender={gender} onGenderChange={setGender} selectedKey={personVariantKey} onSelect={(key) => setSetting(SETTINGS.person.key, findPersonVariant(key).number)} />
-      <PetPicker selectedKey={petVariantKey} onSelect={(key) => setSetting(SETTINGS.pet.key, findPetVariant(key).number)} />
+      <PersonPicker gender={gender} onGenderChange={setGender} selected={person} onSelect={(v) => kernel_setting(SETTINGS.person.key, v.number)} />
+      <PetPicker selected={pet} onSelect={(v) => kernel_setting(SETTINGS.pet.key, v.number)} />
     </View>
   );
 }
@@ -115,7 +112,6 @@ export function CharacterPicker() {
 const styles = StyleSheet.create({
   pickers: { gap: PANEL_SECTION_GAP },
   picker: { gap: 8 },
-  pickerLabel: { ...sectionTitle, color: LABEL.secondary },
   pickerRow: { flexDirection: "row", alignItems: "flex-start", gap: PANEL_EDGE },
   preview: { width: PREVIEW, height: PREVIEW, flexShrink: 0, borderRadius: 12, overflow: "hidden", backgroundColor: alpha(color.fill, 0.4) },
   chipColumn: { flexShrink: 1, minWidth: 0, gap: CHIP_GAP_Y / 2, marginHorizontal: -CHIP_GAP_X / 2, marginVertical: -CHIP_GAP_Y / 2 },
@@ -126,5 +122,6 @@ const styles = StyleSheet.create({
   chipText: { ...textStyle.footnote, fontWeight: weight.medium, color: LABEL.primary },
   chipTextOn: { fontWeight: weight.semibold, color: color.ground },
   sizer: { opacity: 0 },
-  label: { position: "absolute", left: 0, right: 0, top: (CHIP_HEIGHT - textStyle.footnote.lineHeight) / 2, textAlign: "center" },
+  label: { ...StyleSheet.absoluteFill, justifyContent: "center" },
+  centered: { textAlign: "center" },
 });

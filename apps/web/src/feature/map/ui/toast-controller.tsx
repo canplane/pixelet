@@ -3,13 +3,12 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
-import { messageKey as locationMessageKey } from "@/locale/message-key.ts";
+import { messageKey } from "@/locale/message-key.ts";
 import { DevicePoseStatus, MapStatus } from "@/kernel/abi/cmd.spec.ts";
 import { useKernel } from "@/kernel/shell.ts";
 
 import { toastDismiss, toastShow, ToastTone } from "@/shared/ui/toast/store.ts";
 
-/** The reports the map keeps up, each one toast that replaces itself. */
 const enum Report {
   Location = 0,
   World = 1,
@@ -47,8 +46,7 @@ export function ToastController() {
     }
   }, [orientationError]);
 
-  // Only the first world is announced: after it, the map streams in as one
-  // moves, and a load per area is no news.
+  // The first world only.
   const mapStatus = useKernel((s) => s.map.status);
   const companionLoading = useKernel((s) => !s.companion.person_ready || !s.companion.pet_ready);
   const announced = useRef(false);
@@ -61,7 +59,7 @@ export function ToastController() {
     } else if (mapStatus === MapStatus.Success) {
       announced.current = true;
       toastShow(Report.World, { message: tRef.current("toast.world_ready"), tone: ToastTone.Ready });
-      // Not the effect's cleanup, which the next status would run before it fires.
+      // Not the effect's cleanup: the next status would run it first.
       setTimeout(() => toastDismiss(Report.World), READY_MS);
     }
   }, [mapStatus, companionLoading]);

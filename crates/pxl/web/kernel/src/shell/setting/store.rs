@@ -5,14 +5,13 @@
 //! stored default would be a decision nobody made, and changing it in source
 //! would then reach only people with empty storage.
 
-
 use xpute_core::codec::json::{read_json, JsonKind};
 
 use crate::abi::host::{root, storage, STORAGE_KEYS};
 use crate::host::development;
 use crate::io::file;
 use crate::sched::profiler::log::profiler_follow;
-pub use crate::shell::setting::schema_spec::{AoMode, OrbitObstacleMode, CameraMode, ResolutionMode, SettingKey, SettingKind, Settings};
+pub use crate::shell::setting::schema_spec::{AoMode, CameraMode, OrbitObstacleMode, ResolutionMode, SettingKey, SettingKind, Settings};
 use crate::world::chunk::source::chunk_sources_changed;
 use xpute_runtime::global::Global;
 
@@ -39,13 +38,10 @@ impl Settings {
         self.keep();
     }
 
-    /// Writes what differs from the defaults, by name, to storage.
     fn keep(&self) {
         file::write_whole(root::STORAGE, settings_path(), self.kept().into_bytes());
     }
 
-    /// What storage keeps of the settings: what differs from the defaults
-    /// and this build offers, by name, as `settings_load` reads it.
     fn kept(&self) -> String {
         let mut out = String::from("{");
         for key in SettingKey::ALL {
@@ -74,16 +70,12 @@ fn settings_path() -> &'static str {
     STORAGE_KEYS[storage::SETTINGS as usize]
 }
 
-/// The settings from what storage kept, as WORLD_BOOT hands it over. What
-/// this build does not offer, a name the schema does not have, or a value
-/// its setting cannot hold is left at the default; unreadable storage is
-/// none.
+/// What is not offered, unknown or invalid stays at the default.
 pub fn settings_load(kept: &str) {
     SETTINGS_STORE.set(read_kept(kept));
     profiler_follow(settings_store().debug_overlay);
 }
 
-/// The settings `kept` holds over the defaults (`settings_load`).
 fn read_kept(kept: &str) -> Settings {
     let mut s = Settings::DEFAULT;
     if let Some(kept) = read_json(kept).filter(|v| v.kind() == JsonKind::Object) {

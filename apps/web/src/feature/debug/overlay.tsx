@@ -29,10 +29,22 @@ const enum Tint {
   Off = 3,
 }
 
-const TINT: Record<Tint, { border: string; ground: string; ink: string; lit: string; litInk: string }> = {
+interface TintLook {
+  border: string;
+  ground: string;
+  ink: string;
+  lit: string;
+  litInk: string;
+}
+
+function hued(hue: string): TintLook {
+  return { border: alpha(hue, 0.4), ground: alpha(hue, 0.1), ink: hue, lit: alpha(hue, 0.2), litInk: hue };
+}
+
+const TINT: Record<Tint, TintLook> = {
   [Tint.Plain]: { border: alpha(color.white, 0.15), ground: alpha(color.white, 0.05), ink: alpha(color.white, 0.6), lit: alpha(color.white, 0.1), litInk: alpha(color.white, 0.9) },
-  [Tint.Go]: { border: alpha(color.profilerGo, 0.4), ground: alpha(color.profilerGo, 0.1), ink: color.profilerGo, lit: alpha(color.profilerGo, 0.2), litInk: color.profilerGo },
-  [Tint.Halt]: { border: alpha(color.profilerHalt, 0.4), ground: alpha(color.profilerHalt, 0.1), ink: color.profilerHalt, lit: alpha(color.profilerHalt, 0.2), litInk: color.profilerHalt },
+  [Tint.Go]: hued(color.profilerGo),
+  [Tint.Halt]: hued(color.profilerHalt),
   [Tint.Off]: { border: alpha(color.white, 0.1), ground: alpha(color.white, 0.05), ink: alpha(color.white, 0.25), lit: alpha(color.white, 0.05), litInk: alpha(color.white, 0.25) },
 };
 
@@ -145,7 +157,16 @@ export function DebugOverlay() {
       {viewOpen && g !== null && <ProfilerView v={g.view} />}
 
       <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" aria-expanded={open}>
-        <Head end={open ? <CaretUp size={12} color={HINT_INK} /> : <CaretDown size={12} color={HINT_INK} />}>last 10s</Head>
+        <Title
+          end={
+            <View style={styles.titleEnd}>
+              <Text style={[gauge.text, gauge.key]}>last {LIVE_WINDOW_MS / 1000} s</Text>
+              <Caret open={open} />
+            </View>
+          }
+        >
+          performance
+        </Title>
       </Pressable>
       {open && (
         <>

@@ -47,7 +47,7 @@ export const Title = ({ children, end, first }: { children: string; end?: ReactN
   </View>
 );
 
-export const Head = ({ children, end }: { children: string; end?: ReactNode }) => (
+const Head = ({ children, end }: { children: string; end?: ReactNode }) => (
   <View style={gauge.head}>
     <Text style={[gauge.text, gauge.headText]}>{children}</Text>
     <View style={gauge.headLine} />

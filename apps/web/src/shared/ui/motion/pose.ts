@@ -20,7 +20,7 @@ export interface Pose {
   rotate?: f64;
 }
 
-export const REST: Required<Pose> = { opacity: 1, translateX: 0, translateY: 0, scale: 1, rotate: 0 };
+const REST: Required<Pose> = { opacity: 1, translateX: 0, translateY: 0, scale: 1, rotate: 0 };
 
 export function resolve(p: Pose): Required<Pose> {
   return { ...REST, ...p };

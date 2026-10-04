@@ -13,15 +13,13 @@ type Spec = typeof EVERY;
  * production artifact rather than hidden. */
 export const SETTINGS = (__IS_DEV__ ? EVERY : SHIPPED) as Spec;
 
-export type SettingCost = "low" | "med" | "high";
-
-export type SettingSection = "display" | "camera" | "lighting" | "quality" | "debug" | "character" | "map";
-
 export type SettingName = keyof Spec;
 
-export type Setting =
-  & { key: number; section: SettingSection; cost?: SettingCost; dev?: boolean }
-  & ({ kind: "toggle" } | { kind: "choice"; options: readonly string[]; costs?: readonly (SettingCost | "")[] } | { kind: "index" });
+export type Setting = Spec[SettingName];
+
+export type SettingSection = Setting["section"];
+
+export type SettingCost = Extract<Setting, { cost: unknown }>["cost"];
 
 const SETTING_NAMES = Object.keys(SETTINGS) as SettingName[];
 

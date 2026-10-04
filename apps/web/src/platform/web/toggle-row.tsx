@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
     backgroundColor: color.track,
     pointerEvents: "none",
   },
-  on: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, borderRadius: TRACK.height / 2, backgroundColor: color.chosen },
+  on: { ...StyleSheet.absoluteFill, borderRadius: TRACK.height / 2, backgroundColor: color.chosen },
   thumb: {
     position: "absolute",
     top: INSET,
