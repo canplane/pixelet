@@ -74,6 +74,11 @@ impl View {
         add3(&o, &e)
     }
 
+    /// The level the origin's cell is sized for (`origin_for`).
+    pub fn anchor_level(&self) -> u32 {
+        lod::level(height_at(self.eye_at())).clamp(0, TOP_LEVEL as i32) as u32
+    }
+
     /// Eye-relative matrices, as the GPU's points are (`DrawList::translation`):
     /// no eye position in either, so nothing large cancels in floats.
     pub fn eye_frame(&self) -> (Mat4, Mat4) {
@@ -123,8 +128,7 @@ pub fn view_compose() {
     // highest cell, the eye itself being doubles.
     let e = v.eye_at();
     let at = projection::project(e[0], e[1], e[2].clamp(REACH.min[2], REACH.max[2] - 1.0));
-    let level = lod::level(height_at(v.eye_at())).clamp(0, TOP_LEVEL as i32) as u32;
-    let want = origin_for(at.i, level);
+    let want = origin_for(at.i, v.anchor_level());
     if want != v.origin {
         rebase(crate::world::frame::coord::offset(want, v.origin));
         v.origin = want;

@@ -26,6 +26,7 @@ use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats
 
 use crate::layer::billboard::field::Billboards;
 use crate::layer::environment::state::EnvironmentDraw;
+use crate::layer::marker::coverage_gizmo::CoverageGizmo;
 use crate::layer::marker::debug_lines::DebugLines;
 use crate::layer::marker::hover_cursor::GhostDraw;
 use crate::layer::marker::hover_cursor::{render_edits, RenderEdits};
@@ -373,6 +374,7 @@ pub struct Scheduler {
     pub billboards: Billboards,
     pub environment: EnvironmentDraw,
     pub debug: DebugLines,
+    coverage: CoverageGizmo,
     slots: Vec<Slot>,
     /// Index into `slots` by mount. Nothing naming a mount outlives it (`remove`),
     /// so a freed mount can be reused at once.
@@ -488,6 +490,7 @@ impl Scheduler {
             billboards: Billboards::default(),
             environment: EnvironmentDraw::default(),
             debug: DebugLines::default(),
+            coverage: CoverageGizmo::default(),
             slots: Vec::new(),
             place,
             mounts: Free { lane: free, len: OCCUPANCY },
@@ -774,6 +777,8 @@ impl Scheduler {
             free: self.free(),
         };
         let plan = sc.frontier.plan(&now, &Pieces { d, table: self });
+        let seen = (self.drawn_revision, domain::revision(), Terrain::pyramid().paging().revision());
+        self.coverage.step(&mut self.draw, settings_store().gizmos, seen, d.pieces(), &sc.drawn);
         self.moves = (plan.refused, plan.waiting + plan.held);
         self.refined = self.refined.wrapping_add(plan.refined);
         self.changes_peak = self.changes_peak.max(self.changes);
@@ -905,6 +910,7 @@ impl Scheduler {
         self.models.draw(&mut self.draw, frame.eye);
         self.markers.draw(&mut self.draw, frame.eye);
         self.debug.draw(&mut self.draw, frame.eye);
+        self.coverage.draw(&mut self.draw, frame.eye);
         let holder = &self.meshes.holder;
         for s in &self.slots {
             let Some((scale, generation)) = s.layout else { continue };

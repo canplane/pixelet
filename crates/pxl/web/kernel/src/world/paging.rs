@@ -58,7 +58,10 @@ pub const ASKS: u32 = HARD_PAGES + DEMAND_PAGES + FRAMES;
 const ENTRIES: u32 = FRAMES + ASKS;
 
 const _: () = assert!(FRAMES >= HARD_PAGES + WORKSPACE, "safety: no frame for a page nothing holds hard to land in");
-const _: () = assert!(FRAMES >= HARD_PAGES - ANCESTOR_PAGES + DEMAND_PAGES, "convergence: a page the view reads could have to give up another the view reads");
+const _: () = assert!(
+    FRAMES >= HARD_PAGES - ANCESTOR_PAGES + DEMAND_PAGES,
+    "convergence: a page the view reads could have to give up another the view reads"
+);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Hold {

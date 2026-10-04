@@ -515,44 +515,49 @@ pub fn surface_closed(s: Surface) {
     }
 }
 
+/// Each set of lines takes its own translation, so a buffer and a group a set,
+/// grown to the most sets a frame has drawn.
 struct DebugPass {
     built: Built,
-    draw_buffer: u32,
     frame_group: u32,
-    draw_group: u32,
+    sets: Vec<(u32, u32)>,
 }
 
 impl DebugPass {
     fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> DebugPass {
         let built = pipelines.build(g, PIPELINE_DEBUG, format::CANVAS);
-        let draw_buffer = object();
-        g.buffer(draw_buffer, 16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let frame_group = object();
         g.bind_group(frame_group, built.layouts[0], &buffer_entry(0, frame_buffer));
-        let draw_group = object();
-        g.bind_group(draw_group, built.layouts[1], &buffer_entry(0, draw_buffer));
-        DebugPass {
-            built,
-            draw_buffer,
-            frame_group,
-            draw_group,
-        }
+        DebugPass { built, frame_group, sets: Vec::new() }
     }
 
-    fn draw(&self, g: &Gpu, pass: u32, draws: &Draws, uniforms: &[f32], blocks: &Blocks) {
-        let Some(d) = draws.of(PIPELINE_DEBUG).next() else { return };
-        let (Some((block, _, _)), count) = (blocks.get(d[0]), d[1]) else { return };
-        if count == 0 {
-            return;
+    fn draw(&mut self, g: &Gpu, pass: u32, draws: &Draws, uniforms: &[f32], blocks: &Blocks) {
+        let mut bound = false;
+        for (k, d) in draws.of(PIPELINE_DEBUG).enumerate() {
+            let (Some((block, _, _)), count) = (blocks.get(d[0]), d[1]) else { continue };
+            if count == 0 {
+                continue;
+            }
+            while self.sets.len() <= k {
+                let buffer = object();
+                g.buffer(buffer, 16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+                let group = object();
+                g.bind_group(group, self.built.layouts[1], &buffer_entry(0, buffer));
+                self.sets.push((buffer, group));
+            }
+            let (buffer, group) = self.sets[k];
+            let u = uniform_of(uniforms, d);
+            g.write_buffer(buffer, 0, bytes(&[u[0], u[1], u[2], 0.0]));
+            if !bound {
+                g.set_pipeline(pass, self.built.pipeline);
+                g.set_bind_group(pass, 0, self.frame_group, &[]);
+                bound = true;
+            }
+            g.set_bind_group(pass, 1, group, &[]);
+            g.set_vertex_buffer(pass, 0, block, 0, count * 28);
+            // A segment an instance: its two vertices, read as one.
+            g.draw(pass, 6, count / 2, 0, 0);
         }
-        let u = uniform_of(uniforms, d);
-        g.write_buffer(self.draw_buffer, 0, bytes(&[u[0], u[1], u[2], 0.0]));
-        g.set_pipeline(pass, self.built.pipeline);
-        g.set_bind_group(pass, 0, self.frame_group, &[]);
-        g.set_bind_group(pass, 1, self.draw_group, &[]);
-        g.set_vertex_buffer(pass, 0, block, 0, count * 24);
-        // A segment an instance: its two vertices, read as one.
-        g.draw(pass, 6, count / 2, 0, 0);
     }
 }
 

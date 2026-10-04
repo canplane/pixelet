@@ -194,7 +194,14 @@ impl<L: Layer> Pyramid<L> {
                     if asks.get(&q).is_some_and(|a| a.why <= Why::Ancestor) {
                         break;
                     }
-                    ask(&mut asks, q, Ask { why: Why::Ancestor, order: order(o, q) });
+                    ask(
+                        &mut asks,
+                        q,
+                        Ask {
+                            why: Why::Ancestor,
+                            order: order(o, q),
+                        },
+                    );
                 }
             }
             // More demanded than the structure's bound means the capacity is broken too:
