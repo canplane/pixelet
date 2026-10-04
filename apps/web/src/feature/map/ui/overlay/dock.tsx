@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Keyboard, PanResponder, PixelRatio, Pressable, ScrollView, StyleSheet, type TextInput, View } from "react-native";
 import { PAN_X } from "@platform/gesture.ts";
 
-import type { f64, i32, u32, u8 } from "@xpute/core/abi/word.ts";
+import type { f64, u32, u8 } from "@xpute/core/abi/word.ts";
 import { round } from "@xpute/core/math/scalar.ts";
 import { Backing } from "@platform/backing.tsx";
 import type { GlyphName } from "@platform/icon.tsx";
@@ -240,14 +240,14 @@ function ToolButton({ label, glyph, active, onPress }: { label: string; glyph: G
 
 export function Dock() {
   const { t } = useTranslation();
-  const [rotation, setRotation] = useState<i32>(Pane.Palette);
+  const rotation = Pane.Palette + useUiStore((s) => s.dockTurn);
   const turnedBack = useTurnedBack(rotation);
   // A vertical drag on the bar turns the deck; swatches open their sizes on a
   // hold, so the two never compete.
   const swipe = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponderCapture: (_e, s) => Math.abs(s.dy) > DRAG_PX && Math.abs(s.dy) > Math.abs(s.dx),
-      ...deckSwipe((delta) => setRotation((r) => r + delta), { press: keepKeyboard }),
+      ...deckSwipe(useUiStore.getState().turnDock, { press: keepKeyboard }),
     }),
   ).current;
   const activeTool = useKernel((s) => s.holding.tool);

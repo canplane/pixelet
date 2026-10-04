@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 
-import type { u32, u8 } from "@xpute/core/abi/word.ts";
+import type { i32, u32, u8 } from "@xpute/core/abi/word.ts";
 import type { HoldingState } from "@/kernel/abi/cmd.spec.ts";
 import { cube_types, GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
 import { decorKinds, type PlaceableCube, placeableCubes, sameCube } from "@/catalog/cell/mod.ts";
@@ -50,6 +50,10 @@ interface UiState {
 
   chatLines: ChatLine[];
   appendChatLine: (text: string) => void;
+
+  /** How far the dock's deck has turned, by a swipe or a key; the dock says which card that is. */
+  dockTurn: i32;
+  turnDock: (delta: i32) => void;
 }
 
 // One per placeable genre, so a fresh hotbar hints at everything placeable, padded to MAX_RECENT_PICKS.
@@ -115,6 +119,9 @@ export const useUiStore = create<UiState>()((set) => ({
     kernel_hold(ActiveTool.Decor, null, kind, kernel_snapshot().holding.tier);
     set((state) => ({ recentPicks: touchRecent(state.recentPicks, { tool: ActiveTool.Decor, kind }) }));
   },
+
+  dockTurn: 0,
+  turnDock: (delta) => set((state) => ({ dockTurn: state.dockTurn + delta })),
 
   chatLines: [],
   appendChatLine: (text) => {

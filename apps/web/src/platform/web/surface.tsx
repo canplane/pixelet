@@ -74,11 +74,10 @@ function openSurface(canvas: HTMLCanvasElement, role: u32): { handle: u32; close
   };
 }
 
-/** A key typed into a field, or one a shortcut holds, is not the shell's. */
-function forShell(e: KeyboardEvent): boolean {
-  if (e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return false;
+/** A field's own keys, which the shell routes apart. */
+function inField(e: KeyboardEvent): boolean {
   const target = e.target;
-  return !(target instanceof HTMLElement && (target.isContentEditable || target.closest("input, textarea, select")));
+  return target instanceof HTMLElement && (target.isContentEditable || target.closest("input, textarea, select") !== null);
 }
 
 function pointerKind(e: PointerEvent): PointerKind {
@@ -109,8 +108,10 @@ function drive(canvas: HTMLCanvasElement): () => void {
     sendRect();
     request_frame();
   };
+  // A composed or shortcut key is the IME's or the browser's.
   const onKeyDown = (e: KeyboardEvent) => {
-    if (!e.repeat && forShell(e)) keyDown(e.code);
+    if (e.repeat || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (keyDown(e.code, { shift: e.shiftKey, inField: inField(e) })) e.preventDefault();
   };
   const onKeyUp = (e: KeyboardEvent) => keyUp(e.code);
   const onVisibility = () => {

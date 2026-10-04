@@ -2,20 +2,26 @@
 
 /**
  * The keys the shell answers, each sent to whatever owns what it does: the
- * movement keys' direction to the kernel, a digit to the palette. A key has no
- * place on the screen to route it as a pointer's has, so this is that routing.
- * Keys are named by `code`, the key's place, so any layout works the same.
+ * movement keys' direction to the kernel; a digit, a tool and the dock's turn
+ * to the shell's own stores. A key has no place on the screen to route it as a
+ * pointer's has, so this is that routing: a sheet in front takes every key but
+ * Escape, which closes it, and a field takes every key but Tab. Keys are named
+ * by `code`, the key's place, so any layout works the same.
  */
 
 import type { i32 } from "@xpute/core/abi/word.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_keys } from "@/kernel/shell.ts";
-import { useUiStore } from "@/app/store/ui.ts";
+import { closeModal, modalOpen } from "@/app/modal.tsx";
+import { holdTool, useUiStore } from "@/app/store/ui.ts";
 
 const MOVE: Record<string, [i32, i32]> = { KeyW: [0, -1], KeyS: [0, 1], KeyA: [-1, 0], KeyD: [1, 0] };
 
 /** Digit1 to Digit8, the palette's slots in order. */
 const SLOT = /^Digit([1-8])$/;
+
+/** Figma's and Photoshop's letters for the move tool and the eraser. */
+const TOOL: Record<string, ActiveTool> = { KeyV: ActiveTool.Pointer, KeyE: ActiveTool.Eraser };
 
 const held = new Set<string>();
 let sent: [i32, i32] = [0, 0];
@@ -40,7 +46,22 @@ function pickSlot(slot: number): void {
 }
 
 /** Whether the key is one the shell answers, so a driver can leave the rest alone. */
-export function keyDown(code: string): boolean {
+export function keyDown(code: string, { shift, inField }: { shift: boolean; inField: boolean }): boolean {
+  if (code === "Escape") {
+    if (!modalOpen()) return false;
+    closeModal();
+    return true;
+  }
+  if (modalOpen()) return false;
+  if (code === "Tab") {
+    useUiStore.getState().turnDock(shift ? -1 : 1);
+    return true;
+  }
+  if (inField) return false;
+  if (code in TOOL) {
+    holdTool(TOOL[code]);
+    return true;
+  }
   if (code in MOVE) {
     held.add(code);
     sendMove();

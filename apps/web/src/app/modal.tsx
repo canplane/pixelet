@@ -17,6 +17,14 @@ export function openModal(modal: Modal): void {
   useAsked.setState({ asked: modal });
 }
 
+export function closeModal(): void {
+  useAsked.setState({ asked: null });
+}
+
+export function modalOpen(): boolean {
+  return useAsked.getState().asked !== null;
+}
+
 export function Modals() {
   const asked = useAsked((s) => s.asked);
   // Drawn until it has slid away.
@@ -24,7 +32,7 @@ export function Modals() {
   if (asked !== null && asked !== shown) setShown(asked);
   if (shown === null) return null;
 
-  const onClose = () => useAsked.setState({ asked: null });
+  const onClose = closeModal;
   return (
     <PanelPresence.Provider value={{ open: asked !== null, gone: () => setShown(null) }}>
       {shown === "settings" && <SettingsModal onClose={onClose} />}
