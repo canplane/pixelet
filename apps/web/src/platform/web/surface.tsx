@@ -2,7 +2,7 @@
 
 /**
  * The canvas the kernel draws into on the web, and the page's input driver:
- * its box, pointer, wheel and the tab's visibility.
+ * its box, pointer, wheel, keys and the tab's visibility.
  */
 
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
@@ -11,6 +11,7 @@ import { useEffect, useRef } from "react";
 
 import { PointerKind, PointerPhase } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_open, kernel_pointer, kernel_rect, kernel_visible, kernel_wheel } from "@/kernel/control/input.ts";
+import { keyDown, keyUp, releaseKeys } from "@/app/store/keyboard.ts";
 import { surface_role } from "@/kernel/render/gpu/api.spec.ts";
 import { surface_close, surface_open, surface_size } from "@/kernel/render/surface.ts";
 import { request_frame } from "@/kernel/sched.ts";
@@ -73,6 +74,13 @@ function openSurface(canvas: HTMLCanvasElement, role: u32): { handle: u32; close
   };
 }
 
+/** A key typed into a field, or one a shortcut holds, is not the shell's. */
+function forShell(e: KeyboardEvent): boolean {
+  if (e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return false;
+  const target = e.target;
+  return !(target instanceof HTMLElement && (target.isContentEditable || target.closest("input, textarea, select")));
+}
+
 function pointerKind(e: PointerEvent): PointerKind {
   return e.pointerType === "touch" ? PointerKind.Touch : e.pointerType === "pen" ? PointerKind.Pen : PointerKind.Mouse;
 }
@@ -101,7 +109,14 @@ function drive(canvas: HTMLCanvasElement): () => void {
     sendRect();
     request_frame();
   };
-  const onVisibility = () => kernel_visible(document.visibilityState === "visible");
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (!e.repeat && forShell(e)) keyDown(e.code);
+  };
+  const onKeyUp = (e: KeyboardEvent) => keyUp(e.code);
+  const onVisibility = () => {
+    if (document.visibilityState !== "visible") releaseKeys();
+    kernel_visible(document.visibilityState === "visible");
+  };
   const onPageHide = () => kernel_visible(false);
 
   canvas.addEventListener("pointerdown", onDown);
@@ -114,6 +129,9 @@ function drive(canvas: HTMLCanvasElement): () => void {
   globalThis.addEventListener("pointercancel", onUp);
   document.addEventListener("visibilitychange", onVisibility);
   globalThis.addEventListener("pagehide", onPageHide);
+  globalThis.addEventListener("keydown", onKeyDown);
+  globalThis.addEventListener("keyup", onKeyUp);
+  globalThis.addEventListener("blur", releaseKeys);
   const observer = new ResizeObserver(onResize);
   observer.observe(canvas);
 
@@ -123,6 +141,9 @@ function drive(canvas: HTMLCanvasElement): () => void {
   return () => {
     close();
     observer.disconnect();
+    globalThis.removeEventListener("blur", releaseKeys);
+    globalThis.removeEventListener("keyup", onKeyUp);
+    globalThis.removeEventListener("keydown", onKeyDown);
     globalThis.removeEventListener("pagehide", onPageHide);
     document.removeEventListener("visibilitychange", onVisibility);
     globalThis.removeEventListener("pointercancel", onUp);

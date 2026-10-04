@@ -104,6 +104,7 @@ pub enum InputMinor {
     RECT = 0x01,
     POINTER = 0x02,
     WHEEL = 0x03,
+    KEYS = 0x06,
     TRACKING = 0x04,
     VIEW = 0x05,
     COMPASS_RESET = 0x07,
@@ -114,10 +115,11 @@ pub enum InputMinor {
 }
 
 impl InputMinor {
-    pub const ALL: [InputMinor; 10] = [
+    pub const ALL: [InputMinor; 11] = [
         InputMinor::RECT,
         InputMinor::POINTER,
         InputMinor::WHEEL,
+        InputMinor::KEYS,
         InputMinor::TRACKING,
         InputMinor::VIEW,
         InputMinor::COMPASS_RESET,
@@ -568,6 +570,8 @@ pub enum Command {
     /// What the pointer holds, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer.
     INPUT_HOLD = 0x110b,
     INPUT_WHEEL = 0x1103,
+    /// The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down.
+    INPUT_KEYS = 0x1106,
     /// A device answered; the kernel's renderer is made on it (crates/pxl/web/render/src/gpu/renderer.rs).
     GPU_READY = 0x1401,
     /// The device went away, and every object on it.
@@ -628,7 +632,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 40] = [
+    pub const ALL: [Command; 41] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
         Command::IMAGE_DECODED,
@@ -645,6 +649,7 @@ impl Command {
         Command::INPUT_POINTER,
         Command::INPUT_HOLD,
         Command::INPUT_WHEEL,
+        Command::INPUT_KEYS,
         Command::GPU_READY,
         Command::GPU_LOST,
         Command::SURFACE_OPEN,
@@ -1210,6 +1215,23 @@ impl InputWheel {
     pub fn read(pkt: &[u8]) -> Result<InputWheel, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(InputWheel { delta_y: f.at(0)?.get_number()? })
+    }
+}
+
+/// Command::INPUT_KEYS's packet.
+#[derive(Clone, Copy, Debug)]
+pub struct InputKeys {
+    pub x: i32,
+    pub y: i32,
+}
+
+impl InputKeys {
+    pub fn read(pkt: &[u8]) -> Result<InputKeys, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(InputKeys {
+            x: f.at(0)?.get_number()? as i32,
+            y: f.at(1)?.get_number()? as i32,
+        })
     }
 }
 

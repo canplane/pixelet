@@ -43,6 +43,9 @@ pub mod camera_cfg {
         /// Real pointers jitter a pixel or two on a still click; gating taps on any
         /// movement swallowed them.
         pub const TAP_DRAG_THRESHOLD_PX: f64 = 4.0;
+        /// A held movement key pans as a drag this fast would, in CSS pixels:
+        /// a wide screen crossed in about two seconds at any zoom.
+        pub const KEY_PAN_PX_PER_S: f64 = 600.0;
     }
     pub mod smooth {
         pub const ROT_DAMP: f64 = 10.0;

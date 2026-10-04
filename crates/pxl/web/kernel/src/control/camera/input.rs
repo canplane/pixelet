@@ -8,7 +8,7 @@
 
 use std::collections::BTreeMap;
 
-use camera_cfg::input::{AXIS_LOCK_THRESHOLD_PX, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION};
+use camera_cfg::input::{AXIS_LOCK_THRESHOLD_PX, KEY_PAN_PX_PER_S, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION};
 
 pub use crate::abi::cmd::PointerKind;
 use crate::control::camera::config::camera_cfg;
@@ -22,6 +22,7 @@ use crate::world::change::request_world_tick;
 use crate::world::frame::view::view;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
+use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -78,6 +79,12 @@ struct Input {
     // Summed before one exp(), which is exact.
     pending_wheel_delta_y: Option<f64>,
 
+    // ---- movement keys ----
+    /// The held keys' screen direction, unit length or zero.
+    keys: [f64; 2],
+    /// When the keys last panned, in ms.
+    keys_at: f64,
+
     // ---- rotate-drag ----
     rotate_turn: Option<Anchor>,
     /// A tilt is the drag's vertical travel from this anchor.
@@ -115,6 +122,8 @@ fn input() -> &'static mut Input {
         pending_client_x: 0.0,
         pending_client_y: 0.0,
         pending_wheel_delta_y: None,
+        keys: [0.0; 2],
+        keys_at: 0.0,
         rotate_turn: None,
         rotate_tilt: Anchor::new(0.0, 0.0),
         rotate_drag_start_x: 0.0,
@@ -399,8 +408,28 @@ pub fn camera_wheel(delta_y: f64) {
     *input().pending_wheel_delta_y.get_or_insert(0.0) += delta_y;
 }
 
+/// Each axis -1, 0 or 1, x to the right and y down.
+pub fn camera_keys(x: i32, y: i32) {
+    let s = input();
+    let len = libm::hypot(x as f64, y as f64);
+    let keys = if len > 0.0 { [x as f64 / len, y as f64 / len] } else { [0.0; 2] };
+    if s.keys == [0.0; 2] {
+        s.keys_at = now();
+    }
+    s.keys = keys;
+    request_world_tick();
+}
+
 pub fn camera_input_step() {
     let s = input();
+    if s.keys != [0.0; 2] {
+        let at = now();
+        let px = KEY_PAN_PX_PER_S * (at - s.keys_at) / 1000.0;
+        s.keys_at = at;
+        // A key moves the view the way it points, as dragging the ground the other way does.
+        do_pan(-s.keys[0] * px, -s.keys[1] * px);
+        request_world_tick();
+    }
     if s.hover_pending {
         s.hover_pending = false;
         if s.drag_mode == DragMode::None {
@@ -432,4 +461,9 @@ pub fn pinching() -> bool {
 
 pub fn dragging() -> bool {
     input().drag_mode != DragMode::None
+}
+
+/// Movement keys are held: the view is being walked, not dragged.
+pub fn steering() -> bool {
+    input().keys != [0.0; 2]
 }

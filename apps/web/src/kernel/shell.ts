@@ -8,7 +8,7 @@ import { ring_now, send_input } from "@/kernel/sched.ts";
 import { orientationPermit } from "@platform/sensor.ts";
 
 export { kernel_snapshot, useKernel } from "@/kernel/snapshot.ts";
-export { kernel_hold } from "@/kernel/control/input.ts";
+export { kernel_hold, kernel_keys } from "@/kernel/control/input.ts";
 export { ring_now as kernel_command } from "@/kernel/sched.ts";
 
 /** iOS Safari's compass prompt runs here, inside the press. */

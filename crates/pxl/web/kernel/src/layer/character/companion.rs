@@ -10,12 +10,13 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 
 use crate::control::camera::approach::damp_alpha;
 use crate::control::camera::config::camera_cfg;
+use crate::control::camera::input::steering;
 use crate::control::camera::store::{camera_store, CameraStatus};
 use crate::control::navigation::support::over;
 use crate::io::load::{load_image, Load};
 use crate::kernel::{kernel, with_world};
 use crate::layer::character::chat_bubble::chat_bubble_step;
-use crate::layer::character::path::{SettleTracker, WalkPlan};
+use crate::layer::character::path::{heading_to, SettleTracker, WalkPlan};
 use crate::layer::character::store::companion_load_store;
 use crate::layer::character::variant::{character_variant, model_of, CharacterVariant, Group};
 use crate::layer::character::variant_spec::IDLE_CLIP;
@@ -129,7 +130,9 @@ impl Figure {
         self.set_ready(false);
     }
 
-    fn step(&mut self, ctx: &TickContext, map_origin: IVec, target: [f64; 2], arrive_z: f64, is_follow_mode: bool) {
+    /// `follows`: the target is followed as it moves, by a fix or by the keys,
+    /// rather than walked to once it settles; a steered one faces its way.
+    fn step(&mut self, ctx: &TickContext, map_origin: IVec, target: [f64; 2], arrive_z: f64, follows: bool, steered: bool) {
         let variant = self.variant;
         self.acquire(target);
         if self.held.is_none() {
@@ -143,14 +146,18 @@ impl Figure {
         let gap = |a: [f64; 2], b: [f64; 2]| libm::hypot(a[0] - b[0], a[1] - b[1]);
         let (mut at, is_walking);
 
-        if is_follow_mode {
+        if follows {
             at = if self.was_follow_mode {
                 let a = damp_alpha(FOLLOW_LERP_K, ctx.delta);
                 std::array::from_fn(|k| self.at[k] + (target[k] - self.at[k]) * a)
             } else {
                 target
             };
-            self.heading = back_to_camera();
+            if !steered {
+                self.heading = back_to_camera();
+            } else if gap(target, self.at) > WALK_EPS {
+                self.heading = heading_to(self.at, target) + core::f64::consts::PI / 2.0;
+            }
             if gap(target, at) > WALK_EPS {
                 self.follow_walk_until = now + FOLLOW_WALK_LINGER_S;
             }
@@ -209,7 +216,7 @@ impl Figure {
             }
         }
 
-        self.was_follow_mode = is_follow_mode;
+        self.was_follow_mode = follows;
         self.was_dragging = dragging;
 
         // A wall holds it walking in place until the walk ends; following a fix
@@ -222,7 +229,7 @@ impl Figure {
         } else if moved {
             match step_from(map_origin, at, *stands) {
                 Some(Some(z)) => *stands = z,
-                Some(None) if is_follow_mode => {
+                Some(None) if follows => {
                     at = target;
                     *stands = arrive_z;
                 }
@@ -294,18 +301,19 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
         return;
     };
     let (person_variant, pet_variant) = (&person_variant, &pet_variant);
-    let is_follow_mode = camera_store().is_follow_mode;
+    let steered = steering();
+    let follows = camera_store().is_follow_mode || steered;
 
     let person_target = p.center;
     let person = figure_for(&mut c.person, person_variant, person_target);
-    person.step(ctx, p.map_origin, person_target, p.floor, is_follow_mode);
+    person.step(ctx, p.map_origin, person_target, p.floor, follows, steered);
     chat_bubble_step(person.held.as_ref().map(|h| h.actor), person_variant.height_u);
 
     let pet_target = [p.center[0] + PET_OFFSET[0], p.center[1] + PET_OFFSET[1]];
     let pet = figure_for(&mut c.pet, pet_variant, pet_target);
     // Its own floor beside the person, stepped to from the person's height.
     let pet_z = step_from(p.map_origin, pet_target, p.floor).flatten().unwrap_or(p.floor);
-    pet.step(ctx, p.map_origin, pet_target, pet_z, is_follow_mode);
+    pet.step(ctx, p.map_origin, pet_target, pet_z, follows, steered);
 }
 
 /// (model, image handle) for the shell's skinned pass.
