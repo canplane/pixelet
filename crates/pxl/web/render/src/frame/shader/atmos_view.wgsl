@@ -183,11 +183,7 @@ fn air_to(world_pos: vec3f) -> Veil {
   let r = camera_r();
   let mu = dot(to / du, frame_up());
   let d = du * atmos_km_per_u();
-  let through = transmittance_along(r, mu, d, meets_ground(r, mu));
-  // The palette is no reflectance: dimmed by wavelength, a light sea's blue went
-  // and its green stayed. The air's own light keeps its color, and the Earth's
-  // picture, which is reflectance, is dimmed as it is past the terrain.
-  v.through = mix(vec3f(dot(through, LUMA)), through, frame_earth_share());
+  v.through = transmittance_along(r, mu, d, meets_ground(r, mu));
   v.scattered = aerial_at(world_pos, r, mu, d) * exposure();
   return v;
 }
@@ -217,7 +213,7 @@ fn aerial(color: vec3f, world_pos: vec3f) -> vec3f {
 // Computed per vertex: every term varies slowly across a face, and it saves
 // the table reads per fragment.
 struct Seen {
-  through: vec3f,
+  through: f32,
   scattered: vec3f,
   past: vec3f,
   light: Light,
@@ -227,7 +223,11 @@ fn seen_from_eye(world_pos: vec3f) -> Seen {
   let light = light_of(world_pos);
   let v = air_to(world_pos);
   var s: Seen;
-  s.through = v.through;
+  // A lit pass's color is authored, not reflectance, so the air dims it alike
+  // at every wavelength: dimmed by wavelength, a light sea's blue went and its
+  // green stayed. The air's own light, and what is reflectance — the Earth's
+  // picture, a cloud — keep the air's color.
+  s.through = dot(v.through, LUMA);
   s.scattered = v.scattered;
   s.past = beyond(air_along(normalize(world_pos - frame_camera_pos())));
   s.light = light;

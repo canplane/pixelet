@@ -106,7 +106,7 @@ struct VertexOut {
   @location(6) world_pos: vec3f,
   @location(7) @interpolate(flat) faces: u32,
   @location(8) @interpolate(flat) opacity: f32,
-  @location(9) through: vec3f,
+  @location(9) through: f32,
   @location(10) scattered: vec3f,
   @location(11) past: vec3f,
   @location(12) @interpolate(flat) fill: vec3f,
