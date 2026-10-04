@@ -296,6 +296,9 @@ fn a_coarsening_is_always_started_with_only_the_reserve_free() {
     assert!(Frontier::default().plan(&fill, &Widest).start.is_empty(), "a fill took the reserve");
 }
 
+/// A step over a frontier no larger than one already planned allocates
+/// nothing: moving through goals it has moved through before, the frontier
+/// works in what it held from then.
 #[test]
 fn planning_a_frontier_it_has_held_allocates_nothing() {
     let mut t = Table::new([300, 200, 0]);
@@ -314,12 +317,51 @@ fn planning_a_frontier_it_has_held_allocates_nothing() {
     assert_eq!(pass(&mut t), 0, "a pass through goals already planned allocated");
 }
 
+// ---- the goal an eye observes ----
+
+/// The height of the fixture world's ground.
 const LAND: f64 = 10.5;
 const EYE: V3 = [1_000.5, 2_000.25, LAND + 2.0];
 const FAR: f64 = 20_000.0;
 
 impl Table {}
 
+/// Points of the ground all around the eye, within the reach.
+fn probes() -> Vec<V3> {
+    let mut out = Vec::new();
+    for ring in 1..=10 {
+        let r = FAR * 0.9 * ring as f64 / 10.0;
+        for k in 0..36 {
+            let a = k as f64 / 36.0 * std::f64::consts::TAU;
+            out.push([EYE[0] + r * a.cos(), EYE[1] + r * a.sin(), LAND]);
+        }
+    }
+    // And near the eye, where the goal is finest.
+    for k in 0..200 {
+        let (a, r) = (k as f64 * 2.399, 3.0 * k as f64);
+        out.push([EYE[0] + r * a.cos(), EYE[1] + r * a.sin(), LAND]);
+    }
+    out
+}
+
+impl Table {
+    /// How many drawn pieces each probe lies in: one each where the frontier
+    /// has no gap.
+    fn over(&self, probes: &[V3]) -> Vec<usize> {
+        probes
+            .iter()
+            .map(|p| {
+                let mut at = Pvf3::default();
+                projection::project(&mut at, p[0], p[1], p[2]);
+                (0..=TOP_LEVEL).filter(|&l| self.drawn.contains(&Chunk::of(l, &at))).count()
+            })
+            .collect()
+    }
+}
+
+// ---- the count ----
+
+/// A world with some relief, known as tightly or loosely as `slack`.
 fn relief(slack: f64) -> World {
     let mut w = World::flat(LAND);
     for k in 0..8 {
@@ -371,3 +413,4 @@ fn the_count_is_never_less_at_a_finer_quality_nor_less_than_the_cut() {
         }
     }
 }
+

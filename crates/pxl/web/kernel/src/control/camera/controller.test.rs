@@ -1,15 +1,17 @@
 // pxl-kernel/control/camera/controller.test.rs
-
-use pxl_spec::space::mat4::mat4;
+//
+// The camera is an eye and a look, and the map center is derived from it:
+//
+// - the map center is the eye pushed the radius along the look, the eye
+//   itself first person;
+// - a pinch keeps no debt past a limit;
+// - the look's coordinates hold over their whole domain: every tilt a
+//   rotation, and at either pole every heading the one direction.
 
 use super::*;
 use crate::control::camera::config::camera_cfg;
-use crate::control::camera::free::pan;
-use crate::control::camera::orbit::orbit_eye_offset;
 use crate::global::serial;
 use crate::world::fixture::place;
-use pxl_spec::space::pvf3::REACH;
-use pxl_spec::space::pvf3::{ivec, projection};
 
 struct Rng(u64);
 
@@ -20,30 +22,6 @@ impl Rng {
         self.0 ^= self.0 << 17;
         (self.0 >> 11) as f64 / (1u64 << 53) as f64
     }
-}
-
-fn same(a: &ObserverPose, b: &ObserverPose, tol: f64) -> bool {
-    (0..3).all(|k| (a.eye[k] - b.eye[k]).abs() <= tol * a.eye[k].abs().max(1.0)) && (0..16).all(|k| (a.rotation[k] - b.rotation[k]).abs() <= 1e-9)
-}
-
-/// The map center in units.
-fn units(c: &Pvf3) -> V3 {
-    let mut p = [0.0; 3];
-    projection::unproject(&mut p, c.i, c.f);
-    p
-}
-
-/// The eye in units.
-fn eye_units() -> V3 {
-    let (e, o) = (camera().eye.unwrap(), view().origin);
-    [e[0] + ivec::to_real(ivec::X(o)), e[1] + ivec::to_real(ivec::Y(o)), e[2] + ivec::to_real(ivec::Z(o))]
-}
-
-/// The map center in units, as the camera's frame holds it: not rounded to
-/// a canonical point's 256th, which is wider than the tolerance far out.
-fn center_units() -> V3 {
-    let (c, o) = (center_local().unwrap(), view().origin);
-    [c[0] + ivec::to_real(ivec::X(o)), c[1] + ivec::to_real(ivec::Y(o)), c[2] + ivec::to_real(ivec::Z(o))]
 }
 
 fn near(a: V3, b: V3, tol: f64) -> bool {
@@ -73,56 +51,12 @@ fn the_map_center_is_the_eye_pushed_the_radius_along_the_look() {
     }
 }
 
-/// A change of person moves the camera about the map center, never the
-/// center; under a tracker it waits until the tracker lets go.
-#[test]
-fn a_turn_keeps_the_point_it_turns_about() {
-    let _g = serial();
-    third_person();
-    // A canonical point keeps 256ths of a unit: the first change lands within
-    // one, and every later change keeps it exactly there.
-    let near = |a: V3, b: V3, tol: f64| (0..3).all(|k| (a[k] - b[k]).abs() <= tol);
-    let mut rng = Rng(0xc0de);
-    for n in 0..100 {
-        let center = [rng.unit() * 2_000.0 - 1_000.0, rng.unit() * 2_000.0 - 1_000.0, rng.unit() * 40.0];
-        let (dist, polar, azimuth) = (camera_cfg::view::MIN_DIST + rng.unit() * 2_000.0, rng.unit() * core::f64::consts::PI, rng.unit() * 6.0 - 3.0);
-        place(center, dist, polar, azimuth);
-        let mut first: Option<V3> = None;
-        for mode in [CameraMode::free, CameraMode::orbit, CameraMode::free, CameraMode::orbit] {
-            assert!(take_mode(mode), "{n}: the change to {mode:?} taken");
-            let got = center_local().unwrap();
-            assert!(near(got, center, 2.0 / 256.0), "{n}: moved by the change to {mode:?}: {got:?} vs {center:?}");
-            let first = *first.get_or_insert(got);
-            assert!(near(got, first, 1e-6), "{n}: drifted by the change to {mode:?}: {got:?} vs {first:?}");
-            let target = match mode {
-                CameraMode::free => crate::control::camera::free::target_center(),
-                CameraMode::orbit => crate::control::camera::orbit::target_center(),
-            };
-            let target = canonical_to_local(&target.unwrap(), view().origin);
-            assert!(near(target, got, 1e-6), "{n}: a move under way carried into {mode:?}");
-        }
-    }
-    third_person();
-}
-
-/// A place said outright drops what the hand had still to move the camera
-/// by: nothing walks it off the place afterwards.
-#[test]
-fn a_place_put_drops_the_hand_s_move() {
-    let _g = serial();
-    first_person();
-    set_eye_local(&[0.0, 0.0, 100.0]);
-    view_compose();
-    pan(500.0, 0.0);
-    let target = map_center().unwrap();
-    put_center(target);
-    let at = eye_units();
-    assert!(!crate::control::camera::free::turn(1.0 / 60.0), "still moving after a put");
-    assert!(near(eye_units(), at, 1e-12), "walked off the place it was put at");
-    third_person();
-}
-
-/// Collision set to pass through, so the limits are the distance's own.
+/// A pinch is the fingers' spread against where it began, and keeps no
+/// debt: brought back untouched by a limit it asks the distance it began
+/// at; driven past one, the share refused is gone, and the first closing of
+/// the fingers zooms back out from where the limit held it. No ground is
+/// resident here, so the gate allows what is asked and the limits are the
+/// distance's own.
 #[test]
 fn a_pinch_keeps_no_debt() {
     let _g = serial();

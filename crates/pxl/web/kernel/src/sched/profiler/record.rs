@@ -468,9 +468,11 @@ const LANE_ALIGN: u32 = 64;
 
 pub const PROFILER_BYTES: u32 = span_of(&LANES, LANE_ALIGN);
 
+/// `lane`, as `cap` records, zeroed.
 pub(super) fn fixed_lane<T: Copy>(which: Lane, cap: usize) -> &'static mut [T] {
-    // SAFETY: the lane's own bytes, held only by its ring, zeroed when laid;
-    // zero is a valid record.
+    // SAFETY: the lane's own bytes, which only its ring holds, zeroed as the
+    // range was laid; a zeroed record is a valid one for the plain numbers
+    // the rings hold.
     unsafe { lane(range(Range::Profiler).nth(&LANES, LANE_ALIGN, which as usize), 0, cap) }
 }
 

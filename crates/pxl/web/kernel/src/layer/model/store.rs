@@ -203,6 +203,7 @@ fn blend(a: &[f32; 10], b: &[f32; 10], w: f32) -> [f32; 10] {
 impl Models {
     /// None when the heap refused.
     pub fn new_model(&mut self, vertex_cnt: u32, index_cnt: u32, joint_cnt: u32) -> Option<(u32, usize)> {
+        xpute_core::ensure!(self.models.len() < crate::mem::fixed::MODELS_MAX, ENOTRECOVERABLE, self.models.len());
         let bytes = (vertex_cnt * MODEL_VERTEX_WORDS + index_cnt) * 4;
         let (at, bytes) = alloc(bytes)?;
         let j = joint_cnt as usize;
@@ -300,6 +301,7 @@ impl Models {
     }
 
     pub fn new_actor(&mut self, draw: &mut DrawList, model: u32) -> Option<u32> {
+        xpute_core::ensure!(self.actors.iter().count() < crate::mem::fixed::ACTORS_MAX, ENOTRECOVERABLE);
         let joints = self.models.get(model as usize)?.parent.len();
         let palette_bytes = word_bytes(joints.max(1) * 16);
         let (palette_at, palette_bytes) = alloc(palette_bytes)?;

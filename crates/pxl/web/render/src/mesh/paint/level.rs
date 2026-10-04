@@ -5,17 +5,26 @@
 //! level cell would have to be drawn as something inside the cell, and in flat
 //! places the whole level turned to cubes standing apart.
 
+use crate::mesh::{grow, Refused};
 use std::collections::HashMap;
 
 use crate::mesh::paint::object::adapter::Painter;
 use crate::mesh::paint::terrain::adapter::ChunkSample;
 use crate::mesh::voxel_scan::{ScanContext, APRON, COL_SPAN};
 
-/// Bottom to top exclusive, in z16 cells: a folded object, air, or a deck's span.
+/// What stands in a column, from its bottom to its top exclusive, in z16
+/// cells: an object folded to a level cell, air where its material is none,
+/// or a deck's span.
 pub type Stands = (i32, i32, Option<(u32, u8)>);
 
-/// Every column of the padded grid, apron included. `step` is z16 cells a
-/// level cell spans; heights are z16 cells.
+/// Writes a level chunk's runs into `direct`, an open direct writer: every
+/// column of the padded grid, the chunk's own and the apron's. `sample` is the
+/// chunk read from its level page; `cells` what the object layer folds to at
+/// the level, by level coordinate; `(cx0, cy0)` the chunk's own first column
+/// at that coordinate; `step` how many z16 cells a level cell spans.
+/// Heights are z16 cells. What stands in each column is gathered into
+/// `stands`, the caller's to keep, as one list ordered by column and height;
+/// an error where the heap refused it or the runs room.
 pub fn write_level_runs(
     direct: &mut ScanContext,
     sample: &ChunkSample,
@@ -28,28 +37,48 @@ pub fn write_level_runs(
     let span = COL_SPAN as i64;
     let apron = APRON as i64;
     let s = step as i32;
-    let mut by_column: Vec<Vec<(i32, u32)>> = vec![Vec::new(); (COL_SPAN * COL_SPAN) as usize];
+    let columns = (COL_SPAN * COL_SPAN) as usize;
+    stands.clear();
+    grow(stands, cells.len() + sample.span_at[columns] as usize)?;
     for (&[x, y, z], &state) in cells {
         let (px, py) = (x - cx0 + apron, y - cy0 + apron);
         if (0..span).contains(&px) && (0..span).contains(&py) {
-            by_column[(py * span + px) as usize].push((z as i32 * s, state));
+            stands.push(((py * span + px) as u32, (z as i32 * s, z as i32 * s + s, painter.material_of(state))));
         }
     }
-    for (i, objects) in by_column.iter_mut().enumerate() {
-        objects.sort_unstable_by_key(|&(z, _)| z);
+    for i in 0..columns {
+        for d in &sample.spans[sample.span_at[i] as usize..sample.span_at[i + 1] as usize] {
+            stands.push((i as u32, (d.lo, d.hi, Some((d.material, d.layer)))));
+        }
+    }
+    stands.sort_unstable_by_key(|&(col, (z, _, _))| (col, z));
+    let mut next = 0;
+    for i in 0..columns {
         direct.direct_column(i as u32);
-        let ground = |direct: &mut ScanContext, from: i32, to: i32| sample.ground_runs(i, from, to, |lo, hi, m, l| direct.direct_run(lo, hi, m, l));
+        let (material, layer) = (sample.material[i], sample.layer_idx[i]);
+        let height = sample.ele[i] as i32;
+        // The ground from `from` up to `to`, both exclusive at the top.
+        let ground = |direct: &mut ScanContext, from: i32, to: i32| {
+            let top = height.min(to) - 1;
+            if from <= top {
+                direct.direct_run(from, top, material, layer)?;
+            }
+            Ok::<(), Refused>(())
+        };
         let mut z = sample.floor;
-        for &(oz, state) in objects.iter() {
-            if oz < z {
+        while next < stands.len() && stands[next].0 == i as u32 {
+            let (lo, hi, stand) = stands[next].1;
+            next += 1;
+            if lo < z {
                 continue;
             }
-            ground(direct, z, oz);
-            if let Some((m, l)) = painter.material_of(state) {
-                direct.direct_run(oz, oz + s - 1, m, l);
+            ground(direct, z, lo)?;
+            if let Some((m, l)) = stand {
+                direct.direct_run(lo, hi - 1, m, l)?;
             }
             z = oz + s;
         }
-        ground(direct, z, i32::MAX);
+        ground(direct, z, i32::MAX)?;
     }
+    Ok(())
 }

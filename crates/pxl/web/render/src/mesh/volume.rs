@@ -5,8 +5,7 @@
 //! POOLED_BANDS band stores keep their lanes for reuse, since building them
 //! fresh was the heap's worst churn.
 
-/// A run whose material is a placed object: exempt from hiding its
-/// neighbors' faces, and drawn with its bottom face.
+use crate::mesh::{grow, try_push, Refused};
 use pxl_spec::bake::constant::{band_of, BAND_CELLS};
 use xpute_core::math::scalar::round;
 use xpute_core::status::bug::OrBug;
@@ -108,7 +107,9 @@ impl Extras {
         self.col.len()
     }
 
-    /// Lanes are grown before any is written, so a refusal leaves them all as they were.
+    /// One more entry; an error, and every lane as it was, where the heap
+    /// refused room — the lanes are grown before any is written, so they
+    /// never stand at different lengths.
     fn push(&mut self, col: u32, z: i32, material: u32, layer_idx: u8, sub: u32) -> Result<(), Refused> {
         grow(&mut self.col, 1)?;
         grow(&mut self.z, 1)?;
@@ -120,6 +121,7 @@ impl Extras {
         self.material.push(material);
         self.layer_idx.push(layer_idx);
         self.sub.push(sub);
+        Ok(())
     }
 
     /// A later layer replacing the voxel takes its overflow with it.
@@ -143,8 +145,11 @@ impl Extras {
         self.sub.truncate(w);
     }
 
-    /// Stable, so a column's entries keep the order the scan reads them in. The
-    /// lanes are permuted in place, a cycle at a time.
+    /// By column, every lane together, stably: a column's own entries stay in
+    /// the order they were appended, which is the order the scan reads them
+    /// back in. `order` is the caller's to keep, so a seal asks the heap for
+    /// nothing once it has held a band's worth; the lanes are permuted where
+    /// they lie, a cycle at a time.
     fn sort_by_column(&mut self, order: &mut Vec<u32>) -> Result<(), Refused> {
         let n = self.len();
         order.clear();
@@ -172,7 +177,7 @@ impl Extras {
     }
 }
 
-/// Chunk-local x and y, absolute z.
+/// A cell of the chunk: chunk-local x and y, absolute z.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Cell {
     pub cx: u32,
@@ -219,7 +224,9 @@ pub struct VolumeStat {
 
 pub struct Volumes {
     stores: Vec<Store>,
+    /// Where a seal sorts a band's extras, kept from seal to seal.
     order: Vec<u32>,
+    /// Stores with their lanes, waiting for a band.
     free_stores: Vec<usize>,
     empty_stores: Vec<usize>,
     volumes: Slots<Volume>,
@@ -237,6 +244,7 @@ impl Volumes {
     pub fn new() -> Volumes {
         Volumes {
             stores: Vec::new(),
+            order: Vec::new(),
             free_stores: Vec::new(),
             empty_stores: Vec::new(),
             volumes: Slots::new(),
@@ -287,12 +295,21 @@ impl Volumes {
             store.layer_idx = layer_idx;
             return Some(s);
         }
-        self.stores.push(Store {
+        let store = Store {
             material,
             layer_idx,
             sub_cell: None,
             extra: Extras::default(),
-        });
+        };
+        if try_push(&mut self.stores, store).is_err() {
+            // SAFETY: the lanes just taken, which nothing has seen.
+            unsafe {
+                free((material, MATERIAL_BYTES));
+                free((layer_idx, LAYER_BYTES));
+            }
+            self.stat.refused += 1;
+            return None;
+        }
         Some(self.stores.len() - 1)
     }
 
@@ -303,6 +320,7 @@ impl Volumes {
         if insert_at < bands.len() && bands[insert_at].band_z == band_z {
             return Some(insert_at);
         }
+        grow(&mut self.volume(id).bands, 1).ok()?;
         let store = self.take_store()?;
         // A store keeps whatever its last borrower wrote.
         // SAFETY: the store's lanes are this module's blocks of BAND_VOXELS.
@@ -385,8 +403,7 @@ impl Volumes {
         let Some(b) = self.get_or_create_band(id, band_z) else { return false };
         let store = self.volume(id).bands[b].store;
         let col = (cy & BAND_MASK) * BAND_CELLS + (cx & BAND_MASK);
-        self.stores[store].extra.push(col, z, material, layer_idx, sub);
-        true
+        self.stores[store].extra.push(col, z, material, layer_idx, sub).is_ok()
     }
 
     pub fn fill_column(&mut self, id: u32, column: (u32, u32), z0: i32, z1: i32, v: Voxel) -> bool {
@@ -419,8 +436,9 @@ impl Volumes {
         true
     }
 
-    /// Orders every band's extras by column so the scan can find a column's own.
-    /// False where the heap refused the sort room.
+    /// Closes the volume to painting and orders every band's extras by
+    /// column, which is what lets a column find its own during the scan.
+    /// False where the heap refused the sort its room.
     pub fn seal(&mut self, id: u32) -> bool {
         self.volume(id).sealed = true;
         let mut order = core::mem::take(&mut self.order);
@@ -432,6 +450,8 @@ impl Volumes {
                 break;
             }
         }
+        self.order = order;
+        sealed
     }
 
     pub fn release(&mut self, id: u32) {
@@ -480,11 +500,17 @@ impl Volumes {
     ///
     /// # Safety
     /// As `band_view`: valid until the volume is painted again or released.
+    /// False, and `out` empty, where the heap refused it room.
     pub unsafe fn band_views(&mut self, id: u32, out: &mut Vec<BandView<'static>>) -> bool {
         out.clear();
-        for i in 0..self.band_count(id) {
+        let n = self.band_count(id);
+        if grow(out, n).is_err() {
+            return false;
+        }
+        for i in 0..n {
             out.push(self.band_view(id, i));
         }
+        true
     }
 
     pub fn band_count(&self, id: u32) -> usize {

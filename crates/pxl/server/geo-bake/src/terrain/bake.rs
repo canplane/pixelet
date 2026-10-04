@@ -12,6 +12,8 @@ use xpute_core::wire::xtp::{BranchCursor, SequenceType, TreeReader};
 
 use crate::terrain::pipeline::coast::adapter::from_coast_row;
 use crate::terrain::pipeline::coast::policy::CoastPolicy;
+use crate::terrain::pipeline::corridor::corridor_fills;
+use crate::terrain::pipeline::deck::bake_decks;
 use crate::terrain::pipeline::ground::bake_ground;
 use crate::terrain::pipeline::normalizer::normalize;
 use crate::terrain::pipeline::overture::adapter::{from_base_row, from_building_row, from_segment_row};
@@ -68,4 +70,34 @@ pub fn bake_surface(page_idx: IVec, ele: Vec<i16>, source: &PageSource, drawn: &
         ele,
         ground: bake_ground(&features, &coast),
     }
+    for i in 0..segments.len {
+        for raw in from_segment_row(&segment_row(&segments.at_branch(i)?)?) {
+            feats.extend(normalize(&raw, page_min, &OverturePolicy));
+        }
+    }
+    for i in 0..base.len {
+        for raw in from_base_row(&base_row(&base.at_branch(i)?)?) {
+            feats.extend(normalize(&raw, page_min, &OverturePolicy));
+        }
+    }
+    for i in 0..coasts.len {
+        for raw in from_coast_row(&coast_row(&coasts.at_branch(i)?)?) {
+            feats.extend(normalize(&raw, page_min, &CoastPolicy));
+        }
+    }
+
+    // Whether *any* coastline row touched this page's envelope at all, even if
+    // from_coast_row dropped it (covers_page => full land). bake_ground needs
+    // this to tell "no land data at all (open ocean)" apart from "land data
+    // present but not worth rasterizing (full land)".
+    let has_coast_row = coasts.len > 0;
+
+    let fills = corridor_fills(&feats);
+    feats.extend(fills);
+    let ground: Ground = bake_ground(&feats, has_coast_row);
+
+    let rows = (0..deck_rows.len).map(|i| deck_row(&deck_rows.at_branch(i)?)).collect::<Result<Vec<_>, _>>()?;
+    let decks = bake_decks(&rows, page_min).ok_or(MarshalError::new(Errno::ENOSPC))?;
+
+    Ok(Terrain::leaf(ele.to_vec(), ground, decks))
 }

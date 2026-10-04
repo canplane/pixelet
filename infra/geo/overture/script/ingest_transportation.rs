@@ -19,10 +19,16 @@ serde_json = { version = "1", features = ["float_roundtrip", "raw_value"] }
 //! Confirmed live against a real Gangnam-area sample: unlike Buildings,
 //! `subtype`/`class` are 100% populated here (subtype: road/rail; class:
 //! residential/service/footway/primary/secondary/steps/tertiary/path/subway/
-//! cycleway/standard_gauge/...). `road` — structured lane and width data,
-//! when present — is kept as JSONB rather than flattened, because
-//! `overture_policy` decides how much of it to use and a raw passthrough here
-//! means that mapping can change without a re-ingest.
+//! cycleway/standard_gauge/...). The ranged columns — `road_flags` or
+//! `rail_flags` (`is_tunnel`, `is_bridge`, ...), `level_rules` (OSM's
+//! `layer`) and `width_rules` (a width in metres, on about one segment in a
+//! hundred), each a list of values over a `between` range of the segment's
+//! length — `access_restrictions`, which says a way is one-way, and
+//! `subclass` with `subclass_rules`, which say what a way is to the road
+//! beside it (`sidewalk`, `crosswalk`, `link`, `driveway`, ...), are kept
+//! as the source's JSONB rather than flattened or split here, because the
+//! bake's policy decides how much of them to use and a raw passthrough means
+//! that mapping can change without a re-ingest.
 //!
 //!   ./infra/geo/overture/script/ingest_transportation.rs [--bbox ...] [--out dir]
 
@@ -39,7 +45,13 @@ CREATE TABLE overture_transportation (
   gers_id TEXT PRIMARY KEY,
   subtype TEXT NOT NULL,
   class TEXT,
-  road JSONB,
+  road_flags JSONB,
+  rail_flags JSONB,
+  level_rules JSONB,
+  width_rules JSONB,
+  access_restrictions JSONB,
+  subclass TEXT,
+  subclass_rules JSONB,
   geom GEOMETRY(LineString, 3857) NOT NULL
 );
 CREATE INDEX idx_overture_transportation_geom ON overture_transportation USING GIST (geom);
@@ -57,7 +69,7 @@ fn run(args: &Args) -> Result<(), String> {
     let mut client = args.connect()?;
     let table = Table {
         name: "overture_transportation",
-        columns: &["gers_id", "subtype", "class", "road"],
+        columns: &["gers_id", "subtype", "class", "road_flags", "rail_flags", "level_rules", "width_rules", "access_restrictions", "subclass", "subclass_rules"],
         geom: Geom::GeoJson,
         schema: SCHEMA.to_string(),
         batch: 300,
@@ -69,7 +81,13 @@ fn run(args: &Args) -> Result<(), String> {
                 Cell::Text(Some(f.id()?.to_string())),
                 overture::cell_text(f.prop_str("subtype")),
                 overture::cell_text(f.prop_str("class")),
-                Cell::Json(f.prop_raw("road")),
+                json(f, "road_flags"),
+                json(f, "rail_flags"),
+                json(f, "level_rules"),
+                json(f, "width_rules"),
+                json(f, "access_restrictions"),
+                overture::cell_text(f.prop_str("subclass")),
+                json(f, "subclass_rules"),
             ],
             geom: GeomValue::GeoJson(f.geometry()?.to_string()),
         })

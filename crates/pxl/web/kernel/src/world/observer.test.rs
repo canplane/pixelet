@@ -135,3 +135,38 @@ fn a_footprint_touches_what_meets_its_outline_and_heights() {
     assert!(!f.touches(&cube([40.0, -1.0], 2.0, (3.0, 9.0))), "a box over its heights");
     assert!(!f.touches(&cube([0.0, -1.0], 2.0, (0.0, 1.0))), "a box before it");
 }
+
+/// Gives up no frame: the fixture holds fewer pages than there are.
+struct Keep;
+
+impl Victim for Keep {
+    fn victim(&self, _: &[Candidate]) -> Option<usize> {
+        None
+    }
+}
+
+/// The open ocean, as the bake makes it.
+fn ocean() -> Terrain {
+    let span = PAGE_CELLS as usize;
+    let padded = ELE_PADDED_SPAN as usize;
+    let cells = vec![with_channel(0, GroundChannelKey::LAND, cube_types::land::sea); span * span];
+    Terrain::leaf(vec![0; padded * padded], Ground { cells: cells.into() })
+}
+
+/// Four pages of open ocean, resident.
+fn resident() -> (Paging<Terrain>, Vec<LevelPage>) {
+    let pages: Vec<LevelPage> = (0..2).flat_map(|x| (0..2).map(move |y| LevelPage::new(0, ivec::gather(40 + x, -20 + y, 0)))).collect();
+    let mut paging: Paging<Terrain> = Paging::default();
+    for &p in &pages {
+        paging.admit(p, &Keep, |_| Ok::<_, ()>(ocean())).unwrap();
+    }
+    (paging, pages)
+}
+
+/// Looking down over `pages`, the eye moved by `by`.
+fn over(pages: &[LevelPage], by: V3) -> Observation {
+    let (x0, y0, side) = pages[0].rect();
+    let eye = [x0 + side + by[0], y0 + side + by[1], 60.0 + by[2]];
+    viewed(eye, [x0 + side * 1.5 + by[0], y0 + side * 1.3 + by[1], 0.0], 50.0, 16.0 / 9.0)
+}
+

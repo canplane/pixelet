@@ -2,7 +2,7 @@
 
 //! Object store records painted into a chunk volume, with the eraser's carve preview.
 
-use std::collections::BTreeSet;
+use std::collections::HashSet;
 
 use pxl_spec::bake::constant::{band_cell_z, in_cell, unpack_pos, BandZ, CellZ, EntryAt, CELL, CELL_STEPS};
 use pxl_spec::cell::cube_types;
@@ -62,8 +62,11 @@ pub struct Painter {
     claimed: Claims,
 }
 
-/// So a second sub-cell object on a claimed voxel is filed as overflow rather
-/// than overwriting it. A set so it can be asked for room before it grows.
+/// The voxels a paint has claimed, so a second sub-cell object landing on a
+/// claimed one is filed as overflow rather than overwriting it: by the cell
+/// the volume addresses it by, cleared per paint. A set and not a tree, so
+/// it can be asked for room before it grows: how many a paint claims is
+/// how many objects stand in the chunk.
 pub type Claims = HashSet<Cell>;
 
 impl Default for Painter {
@@ -78,7 +81,7 @@ impl Painter {
             kinds: Vec::new(),
             materials: Vec::new(),
             layers: Vec::new(),
-            claimed: BTreeSet::new(),
+            claimed: HashSet::new(),
         };
         for &cube in placeable_cubes.iter() {
             let m = solid_material(cube);
@@ -196,6 +199,9 @@ impl Painter {
         let ok = if claimed.contains(&at) && !is_air {
             volumes.append_sub_voxel(volume, at, v)
         } else {
+            if claimed.len() == claimed.capacity() && claimed.try_reserve(claimed.len().max(64)).is_err() {
+                return None;
+            }
             claimed.insert(at);
             volumes.set_voxel(volume, at, v)
         };

@@ -379,8 +379,6 @@ art where one exists (Minecraft's chunk model for grid content, Cesium's
   derivation beats a synchronization. "Optimize it once it measures" is no
   reason to keep avoidable work: profiling ranks the trades, it is not a
   license for waste (2026-10-01, the audit after decor left the chunks).
-  The costs are server spend and end-user device load; implementation size,
-  turns spent and lines written are not among them.
 - **What a piece of memory being full means decides how it is sized.**
   Three kinds, and each says which it is:
   - **Must-fit state** — the resident terrain, the mesh slots' tables, the
@@ -400,6 +398,12 @@ art where one exists (Minecraft's chunk model for grid content, Cesium's
   is shown, drops what someone placed or ends the module (2026-10-01, the
   `.fixed` audit, where a run set too small drew no chunk and a decor
   workspace too small left placed decor out).
+- **Diff size is not a goal.** A five-hundred-line rewrite that leaves a
+  smaller state space beats a twenty-line patch that does not. Do not keep
+  an API, a type, a test or a module to hold churn down, and when a change
+  makes old machinery unnecessary, delete the machinery and its shims in the
+  same breath. A correct larger rewrite beats rounds of patching a wrong
+  structure (2026-09-03, the terrain/decor pipeline desync).
 - **Split the assumptions before editing.** For any bug or slowness worth a
   change, name the symptom, the mechanism producing it, the assumptions that
   make that mechanism necessary, which of those are the product's and which

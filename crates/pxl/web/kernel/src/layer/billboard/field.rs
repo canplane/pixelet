@@ -37,7 +37,8 @@ pub struct Billboards {
 
 impl Billboards {
     pub fn new_set(&mut self, order: u32) -> u32 {
-        // One set per order (order.rs `SETS_MAX`).
+        // One set an order (order.rs `SETS_MAX`): an owner making a second
+        // before letting its first go is the bound broken.
         xpute_core::ensure!(self.sets.iter().all(|(_, s)| s.order != order), ENOTRECOVERABLE, order);
         let set = Set {
             order,

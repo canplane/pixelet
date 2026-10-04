@@ -16,6 +16,7 @@ use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, PAGE_CELLS};
 use crate::mesh::paint::palette::shader_meta::{ground_color_lookup, ground_layer_index_lookup};
 use crate::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
 use crate::mesh::volume::{MaterialClasses, Volumes, Voxel, NO_LAYER};
+use crate::mesh::{try_push, Refused};
 use crate::mesh::voxel_scan::{apron_col, APRON, COL_SPAN};
 use std::sync::LazyLock;
 
@@ -99,6 +100,8 @@ impl Materials {
     }
 }
 
+/// The decks over a chunk's own columns, from the page they are drawn from:
+/// a column, a deck and what it is there.
 fn collect_decks(over: &mut Vec<(usize, usize, Over)>, own: Option<&PageSource>, first: [i64; 2]) -> Result<(), Refused> {
     let Some(s) = own else { return Ok(()) };
     let n = f64::from(s.n);
@@ -113,6 +116,7 @@ fn collect_decks(over: &mut Vec<(usize, usize, Over)>, own: Option<&PageSource>,
     grown
 }
 
+/// A voxel material: the class over the color.
 fn pack(class: u8, rgb: [u8; 3]) -> u32 {
     ((class as u32) << 24) | ((rgb[0] as u32) << 16) | ((rgb[1] as u32) << 8) | rgb[2] as u32
 }
@@ -160,8 +164,8 @@ pub struct ChunkSample {
     /// none overlapping; the apron's have none.
     pub span_at: Vec<u32>,
     pub spans: Vec<Span>,
-    /// `[lo, hi)`, empty where none does.
-    pub bore: Vec<Bore>,
+    /// The decks over each column as they are read, kept between reads: a
+    /// column, a deck and what it is there.
     over: Vec<(usize, usize, Over)>,
 }
 
@@ -188,13 +192,22 @@ impl Default for ChunkSample {
             layer_idx: vec![0; COL_SPAN2],
             ele: vec![0; COL_SPAN2],
             floor: 0,
+            span_at: vec![0; COL_SPAN2 + 1],
+            spans: Vec::new(),
+            over: Vec::new(),
         }
     }
 }
 
 impl ChunkSample {
-    /// Each cell takes the material of the source cell it lies in and the source
-    /// surface's height at its own center, so a coarser page invents nothing.
+    /// Samples the chunk whose first cell is `first` of its page's cells,
+    /// each cell from what the page it lies in is drawn from (`Around`).
+    /// Each cell takes the material of the source cell it lies in and the
+    /// height of the source's surface at its own center, so a cell read from
+    /// a coarser page is that page's ground at the chunk's step and nothing
+    /// invented. A channel in `hidden` is stepped over, as `shown_ground`
+    /// steps over it. Refused where the decks over it need more room than
+    /// the heap grants.
     pub fn read(&mut self, around: &Around, first: [i64; 2], hidden: ChannelMask) -> Result<(), Refused> {
         let tables = &*MATERIALS;
         let skip = GROUND_CH_KEYS.map(|k| hidden & channel_bit(k) != 0);
@@ -255,12 +268,11 @@ impl ChunkSample {
             }
         }
         let shown = !skip[ch_index(GroundChannelKey::TRANSPORT)];
-        self.read_decks(if shown { Some(&around.own) } else { None }, first)?;
-        let bored = self.bore.iter().filter(|b| b.air[0] < b.air[1]).map(|b| b.air[0] - 1).min().unwrap_or(i32::MAX);
-        self.floor = (min_ele.min(bored) - TERRAIN_Z_MARGIN).div_euclid(BAND_CELLS as i32) * BAND_CELLS as i32;
-        Ok(())
+        self.read_decks(if shown { Some(&around.own) } else { None }, first)
     }
 
+    /// The decks over the chunk's own columns, from the page they are drawn
+    /// from: each column's highest top of each deck, as its slab and pier.
     fn read_decks(&mut self, own: Option<&PageSource>, first: [i64; 2]) -> Result<(), Refused> {
         let mut over = core::mem::take(&mut self.over);
         over.clear();
@@ -269,6 +281,7 @@ impl ChunkSample {
         built
     }
 
+    /// Each column's spans off the ground from the decks over it.
     fn spans_of(&mut self, over: &mut Vec<(usize, usize, Over)>) -> Result<(), Refused> {
         let tables = &*MATERIALS;
         // A deck's highest over a column, where two of its segments meet.
@@ -302,7 +315,7 @@ impl ChunkSample {
                     }
                     Occupies::Above { slab, pier } => (slab, pier),
                 };
-                let [lo, hi] = slab_at;
+                let [lo, hi] = occupied.slab;
                 try_push(
                     &mut self.spans,
                     Span {
@@ -312,7 +325,7 @@ impl ChunkSample {
                         layer: slab_layer,
                     },
                 )?;
-                if let (Some([lo, hi]), Some((pier, pier_layer))) = (pier_at, tables.of(PIER.0, PIER.1)) {
+                if let (Some([lo, hi]), Some((pier, pier_layer))) = (occupied.pier, tables.of(PIER.0, PIER.1)) {
                     try_push(
                         &mut self.spans,
                         Span {
@@ -344,15 +357,12 @@ impl ChunkSample {
         Ok(())
     }
 
-    /// Through a bore: the ground under its floor, the way on the floor's cell,
-    /// and the ground standing over its air.
-    pub fn ground_runs<E>(&self, i: usize, from: i32, to: i32, mut run: impl FnMut(i32, i32, u32, u8) -> Result<(), E>) -> Result<(), E> {
-        let top = (self.ele[i] as i32).min(to);
-        let (m, l) = (self.material[i], self.layer_idx[i]);
-        let mut part = |lo: i32, hi: i32, m: u32, l: u8| if lo.max(from) < hi { run(lo.max(from), hi - 1, m, l) } else { Ok(()) };
-        let b = self.bore[i];
-        if b.air[0] >= b.air[1] {
-            return part(from, top, m, l);
+    /// Column `i`'s runs, lowest first: its ground from `floor`, then what
+    /// stands off it, as `run(lo, hi, material, layer)`, both ends inside.
+    pub fn column_runs<E>(&self, i: usize, mut run: impl FnMut(i32, i32, u32, u8) -> Result<(), E>) -> Result<(), E> {
+        let top = self.ele[i] as i32 - 1;
+        if top >= self.floor {
+            run(self.floor, top, self.material[i], self.layer_idx[i])?;
         }
         let floor = b.air[0];
         part(from, (floor - 1).min(top), m, l)?;
@@ -372,13 +382,11 @@ impl ChunkSample {
     pub fn paint(&self, volumes: &mut Volumes, volume: u32) -> bool {
         for cy in 0..CHUNK_CELLS {
             for cx in 0..CHUNK_CELLS {
-                let i = apron_col(cx, cy) as usize;
-                let v = Voxel {
-                    material: self.material[i],
-                    layer_idx: self.layer_idx[i],
-                    sub: 0,
-                };
-                if !volumes.fill_column(volume, (cx, cy), self.floor, self.ele[i] as i32 - 1, v) {
+                let _ = self.column_runs(apron_col(cx, cy) as usize, |lo, hi, material, layer_idx| {
+                    painted &= volumes.fill_column(volume, (cx, cy), lo, hi, Voxel { material, layer_idx, sub: 0 });
+                    Ok::<(), ()>(())
+                });
+                if !painted {
                     return false;
                 }
             }

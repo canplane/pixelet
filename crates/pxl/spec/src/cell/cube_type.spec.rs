@@ -175,21 +175,29 @@ pub mod cube_types {
 
         /// How far below its sampled height a cell showing the type sits, in
         /// units; a type not listed sits at it.
-        pub const RECESS: &[(u8, i16)] = &[];
+        pub const RECESS: &[(u8, i16)] = &[(building, -1), (building_station, -1), (building_education, -1), (building_medical, -1), (building_public, -1)];
     }
 
     pub mod transport {
         // ---- roads ----
 
-        /// default road
+        /// minor road: residential, unclassified, living street (OpenMapTiles minor)
         pub const road_default: u8 = 1;
         /// motorway
         pub const road_motorway: u8 = 2;
+        /// trunk road
+        pub const road_trunk: u8 = 7;
         /// primary road
         pub const road_primary: u8 = 3;
         /// secondary road
         pub const road_secondary: u8 = 4;
-        /// pedestrian path
+        /// tertiary road
+        pub const road_tertiary: u8 = 8;
+        /// service road: a driveway, a parking aisle, an alley
+        pub const road_service: u8 = 9;
+        /// track: an agricultural or forest way
+        pub const track: u8 = 12;
+        /// path: footway, cycleway, steps, path, pedestrian street (OpenMapTiles path)
         pub const pedestrian: u8 = 5;
         /// parking area
         pub const parking: u8 = 6;
@@ -198,7 +206,7 @@ pub mod cube_types {
 
         /// main rail
         pub const rail_main: u8 = 10;
-        /// subway rail
+        /// transit rail: subway, light rail, tram, monorail (OpenMapTiles transit)
         pub const rail_subway: u8 = 11;
 
         // ---- aeroway lines ----
@@ -211,8 +219,12 @@ pub mod cube_types {
         pub const ENTRIES: &[(&str, u8)] = &[
             ("road_default", road_default),
             ("road_motorway", road_motorway),
+            ("road_trunk", road_trunk),
             ("road_primary", road_primary),
             ("road_secondary", road_secondary),
+            ("road_tertiary", road_tertiary),
+            ("road_service", road_service),
+            ("track", track),
             ("pedestrian", pedestrian),
             ("parking", parking),
             ("rail_main", rail_main),
@@ -432,21 +444,29 @@ pub mod cube_types {
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     #[repr(u8)]
     pub enum Transport {
-        /// default road
+        /// minor road: residential, unclassified, living street (OpenMapTiles minor)
         road_default = 1,
         /// motorway
         road_motorway = 2,
+        /// trunk road
+        road_trunk = 7,
         /// primary road
         road_primary = 3,
         /// secondary road
         road_secondary = 4,
-        /// pedestrian path
+        /// tertiary road
+        road_tertiary = 8,
+        /// service road: a driveway, a parking aisle, an alley
+        road_service = 9,
+        /// track: an agricultural or forest way
+        track = 12,
+        /// path: footway, cycleway, steps, path, pedestrian street (OpenMapTiles path)
         pedestrian = 5,
         /// parking area
         parking = 6,
         /// main rail
         rail_main = 10,
-        /// subway rail
+        /// transit rail: subway, light rail, tram, monorail (OpenMapTiles transit)
         rail_subway = 11,
         /// runway
         runway = 20,
@@ -456,11 +476,15 @@ pub mod cube_types {
 
     impl Transport {
         /// Every type the channel gives out, in the JSON's own order.
-        pub const ALL: [Transport; 10] = [
+        pub const ALL: [Transport; 14] = [
             Transport::road_default,
             Transport::road_motorway,
+            Transport::road_trunk,
             Transport::road_primary,
             Transport::road_secondary,
+            Transport::road_tertiary,
+            Transport::road_service,
+            Transport::track,
             Transport::pedestrian,
             Transport::parking,
             Transport::rail_main,
@@ -578,8 +602,12 @@ pub mod ground_pack {
             common::void,
             transport::road_default,
             transport::road_motorway,
+            transport::road_trunk,
             transport::road_primary,
             transport::road_secondary,
+            transport::road_tertiary,
+            transport::road_service,
+            transport::track,
             transport::pedestrian,
             transport::parking,
             transport::rail_main,
@@ -617,12 +645,12 @@ pub mod ground_pack {
             6, 6, 6, 6, 6, 6, 6, 6,
         ],
         [
-            0, 1, 2, 3, 4, 5, 6, 11, 11, 11, 7, 8, 11, 11, 11, 11, 11, 11, 11, 11, 9, 10, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11,
-            11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11,
-            11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11,
-            11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11,
-            11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11,
-            11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11,
+            0, 1, 2, 4, 5, 9, 10, 3, 6, 7, 11, 12, 8, 15, 15, 15, 15, 15, 15, 15, 13, 14, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15,
+            15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15,
+            15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15,
+            15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15,
+            15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15,
+            15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15,
         ],
     ];
 

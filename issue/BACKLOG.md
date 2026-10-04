@@ -36,12 +36,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P3
 
-- **Strings out of the kernel's records.** Read 2026-10-01 and left on the
-  heap: a chat line is one string set when it arrives, and a badge's text is
-  built when the badge is, so neither touches the heap on a settled turn. A
-  section would need a bound on a chat line's length, which is a product
-  number not yet said; with one, the line and its laid-out lines fit the
-  string-sequence leaf's shape (XTP's STRS).
 - **The address label by the zoom.** Asked 2026-09-23, not now: it wants a
   rebake. The label is one baked answer a leaf page
   (`use-reverse-geocode.ts`, `geo-bake/geocode/provider/overture.rs`) — region,
@@ -102,6 +96,47 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   is the same trigger from the other side, since a store submission wants
   release notes per version. Until one of those, `issue/` is the history and it
   records why, which a changelog never does.
+
+- **The TypeScript's private marker, ported as a leading underscore.** 74
+  places outside the tests: 53 functions and 21 fields, concentrated in
+  `wire/xtp/cursor.rs` (25), `wire/tlv.rs` (23), `collection/arena.rs`
+  (8) and `wire/xtp/encode.rs` (6), with a few each in
+  `ipc/change.rs` and `wire/xtp/view.rs`,
+  `pxl-spec`'s `sparse_tree/mem.rs` and its three `cell/` files. Rust has one
+  meaning for a leading underscore and it is not privacy — privacy is the
+  absence of `pub` — it silences the unused warning, which `rustc` confirms
+  for items as well as bindings: `fn _never_called()` draws nothing where
+  `fn never_called()` draws `never used`. So the marker turns the dead-code
+  lint off for exactly the functions most likely to go dead. Two kinds:
+  - Forced, where a private helper shares a name with the public method that
+    calls it — `tlv.rs`'s `_u8`/`_i64`/`_f64`, `cursor.rs`'s
+    `_bool`/`_f32_array`, about twenty in all. These need some
+    disambiguator; `heap.rs`'s `build_of` is the suffix precedent.
+  - Free, where nothing collides: `_grow`, `_need`, `_put`, `_take`,
+    `_check_unsealed`, `_prune`, `_walk`, and every field — `_cap`, `_len`,
+    `_size`, `_head`, `_buf`, `_off`, `_sealed`, `_factory`, `_mark`.
+    `pxl-spec`'s `cell/type.rs` carries `pub _meta`, which says both at once
+    and wants reading before it is renamed. `collection/heap.rs`'s `build_of` is the
+    precedent for the forced kind, and the free kind just loses the underscore.
+
+- **The TypeScript's numeric model, still named in the Rust.** `Number` and
+  `BigInt` are the only numeric types TypeScript has, and nothing here was
+  ever meant to correspond to them: the port is not allowed to carry the
+  other language's constraints across. What is left is
+  `crates/pxl/web/kernel/src/shell/setting/`'s `SettingKind::Number` and
+  `SettingValue::Number` — code rather than prose, so read first whether
+  the schema's value kinds are JSON's or JavaScript's. `ArrayBuffer` in
+  `mem.spec.rs` stays, since the module's `memory.buffer` really is one on
+  the host's side; `codec/json.rs`'s `JsonKind::Number` stays, JSON's own
+  name.
+
+- **The run set's per-axis inset has no writer.** `sub_sx`/`sub_sy` are
+  always a copy of `sub_sz` (the scan, the coarse pack and the object
+  adapter all set the three equal), so the per-axis design column_run.ts
+  documents — a pillar narrow in XY and full in Z — costs two bytes a run
+  for nothing today. Either the coarse bake learns to fit XY and Z
+  separately, or the lanes go; decided with the Rust mesher, since the
+  format is its input.
 
 ## Parked, with the reason on file
 

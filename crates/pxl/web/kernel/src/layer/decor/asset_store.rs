@@ -38,10 +38,14 @@ struct Store {
 
 static STORE: Global<Store> = Global::new();
 
-/// One per asset, since an arrival settles every variant naming it.
+/// Models decor registers at most: one an asset, since an arrival is
+/// settled into every variant naming it (`settle`) and a variant with its
+/// model asks for none.
 pub const MODELS_MAX: usize = pxl_spec::asset::ingested::Asset::ALL.len();
 
-/// Two kinds may name the same model or skin; both reach one object.
+/// Writes what arrived for `asset` into every variant naming it, across every
+/// kind: two kinds may name the same model or the same skin, and both should
+/// reach one object; and the frame that draws what arrived is asked for.
 fn settle(entries: &mut [DecorBundleAssets], asset: Asset, value: u32, skin: bool) {
     let mut group = 0u32;
     for entry in entries {

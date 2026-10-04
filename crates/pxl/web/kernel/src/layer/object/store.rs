@@ -5,7 +5,7 @@
 //! lanes in which a cell's entries are one contiguous run. Every mutation
 //! touches one column and every query is scoped to a cell, column or box.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, TryReserveError};
 
 use base64::Engine;
 use pxl_render::mesh::paint::object::adapter::Entries;
@@ -934,7 +934,9 @@ impl Store {
         }
     }
 
-    /// The columns under a node, sorted and deduplicated.
+    /// The columns holding objects under a node, a column's or coarser, at
+    /// every height, added to `out`, sorted: found down the index, so the
+    /// cost is what is under the node and not what the store holds.
     pub fn cols_under(&self, (side, at): (Scale, [i64; 2]), out: &mut Vec<IVec>) -> Result<(), TryReserveError> {
         let first = out.len();
         let s = side.side();
@@ -942,7 +944,13 @@ impl Store {
             min: [at[0] as f64 * s, at[1] as f64 * s, REACH.min[2]],
             max: [(at[0] + 1) as f64 * s, (at[1] + 1) as f64 * s, REACH.max[2]],
         };
-        self.visit_in(&query, BAND, &mut |[x, y, _], _| out.push(ivec::gather(x, y, 0)));
+        let mut refused = Ok(());
+        self.visit_in(&query, BAND, &mut |[x, y, _], _| {
+            if refused.is_ok() {
+                refused = try_push(out, ivec::gather(x, y, 0));
+            }
+        });
+        refused?;
         out[first..].sort_unstable();
         let mut n = first;
         for k in first..out.len() {
@@ -952,6 +960,7 @@ impl Store {
             }
         }
         out.truncate(n);
+        Ok(())
     }
 
     /// Every cell of `scale` that may hold objects along the ray, in ray
@@ -1037,10 +1046,16 @@ impl Store {
         changed
     }
 
-    /// What the objects fold to in the ground cells `from..to` of `target`,
-    /// at every height, with `hide` left out.
+    /// The objects under the cells `from` to `to` of `target` on the ground,
+    /// at every height, as the objects' fold makes them (`fold_cell`): each
+    /// cell there and what it folds to, none that folds to nothing, into
+    /// `out`. Read at the cell from what
+    /// the store keeps folded, so what it costs is the cells there and not
+    /// what lies under them. `hide`, the one entry the eraser shows gone, is
+    /// left out as the fold leaves it out.
     pub fn fold_at(&self, target: Scale, from: [i64; 2], to: [i64; 2], hide: Option<EntryAt>, out: &mut HashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
         out.clear();
+        let mut refused = Ok(());
         let inside = |x: i64, y: i64| (from[0]..to[0]).contains(&x) && (from[1]..to[1]).contains(&y);
         if target >= BAND {
             let side = target.side();
@@ -1050,7 +1065,9 @@ impl Store {
             };
             self.visit_in(&query, target, &mut |at, _| {
                 if let Some(&v) = self.folds.get(&(target, at)).filter(|_| inside(at[0], at[1])) {
-                    out.insert(at, u32::from(v));
+                    if refused.is_ok() {
+                        refused = try_insert(out, at, u32::from(v));
+                    }
                 }
             });
         } else {
@@ -1074,8 +1091,8 @@ impl Store {
                                     for dy in 0..n {
                                         for dx in 0..n {
                                             let cell = [corner[0] + at[0] + dx, corner[1] + at[1] + dy, corner[2] + at[2] + dz];
-                                            if inside(cell[0], cell[1]) {
-                                                out.insert(cell, u32::from(v));
+                                            if inside(cell[0], cell[1]) && refused.is_ok() {
+                                                refused = try_insert(out, cell, u32::from(v));
                                             }
                                         }
                                     }
@@ -1087,12 +1104,15 @@ impl Store {
                 }
             }
         }
+        refused?;
         if let Some((cell, v)) = hide.and_then(|h| self.hidden(h, target)) {
             if inside(cell[0], cell[1]) {
                 match v {
-                    0 => out.remove(&cell),
-                    v => out.insert(cell, u32::from(v)),
-                };
+                    0 => {
+                        out.remove(&cell);
+                    }
+                    v => try_insert(out, cell, u32::from(v))?,
+                }
             }
         }
         Ok(())
@@ -1256,7 +1276,8 @@ impl Store {
     }
 }
 
-/// Grows by doubling, asking the heap only when full.
+/// `v` pushed where the heap has room for it: the vector grows by doubling,
+/// asked for only when full.
 fn try_push<T>(out: &mut Vec<T>, v: T) -> Result<(), TryReserveError> {
     if out.len() == out.capacity() {
         out.try_reserve(out.len().max(16))?;
@@ -1265,6 +1286,8 @@ fn try_push<T>(out: &mut Vec<T>, v: T) -> Result<(), TryReserveError> {
     Ok(())
 }
 
+/// `v` put at `k` where the heap has room for it, growing the map as
+/// `try_push` grows a vector.
 fn try_insert(out: &mut HashMap<[i64; 3], u32>, k: [i64; 3], v: u32) -> Result<(), TryReserveError> {
     if out.len() == out.capacity() {
         out.try_reserve(out.len().max(16))?;

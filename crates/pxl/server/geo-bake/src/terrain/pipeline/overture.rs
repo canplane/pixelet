@@ -2,3 +2,5 @@
 
 pub mod adapter;
 pub mod policy;
+pub mod role;
+pub mod width;

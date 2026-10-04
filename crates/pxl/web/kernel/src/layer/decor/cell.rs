@@ -139,11 +139,23 @@ fn cells() -> &'static mut Cells {
     CELLS.get(Cells::default)
 }
 
-/// Upper bound on a frontier: the top's (2n + 1)² roots with
-/// n = ⌈fault_radius(top) / side⌉ + 1, plus, for each of `TOP_LEVEL` levels
-/// under it, the children of the parents a disc of `fault_radius(L)` meets
-/// (⌊2r / side⌋ + 2 a side, two children each). Split distance and chunk
-/// grow by the same factor a level, so that count is level-independent.
+/// The most cells a frontier holds, whatever the eye: a sum over the levels
+/// of how many cells the solve can reach at each (`solve`), the frustum and
+/// the sprite's floor, which only drop cells, left out.
+///
+/// At the source's top the solve starts from the square of cells within
+/// `fault_radius(top)` of the eye's cell, one more each way: `2n + 1` a side
+/// with `n = ⌈r / side⌉ + 1`. Under it a cell is a child of one refined,
+/// which is refined only where the rule wants a finer level at its nearest
+/// point — nearer than `split_distance(L + 1) / τ`, no further than
+/// `fault_radius(L)` since τ ≥ 1, measured in 3D and so no nearer than over
+/// the ground. The parents of level L's cells are squares of level L + 1
+/// meeting a disc of that radius: an interval of `2r` meets at most
+/// `⌊2r / side⌋ + 2` of them a side, and each has two children a side. A
+/// split distance and a chunk grow by the same factor a level, so the count
+/// is one number for every level under the top, and the top's is another;
+/// the bound is the top's and `TOP_LEVEL` of the other, the most levels a
+/// source has under its top.
 pub const FRONTIER_MAX: usize = {
     let side = chunk_span_of(TOP_LEVEL) as u64;
     let n = (fault_radius(TOP_LEVEL) as u64).div_ceil(side) + 1;
@@ -152,10 +164,16 @@ pub const FRONTIER_MAX: usize = {
     (top + TOP_LEVEL as u64 * across * across) as usize
 };
 
-/// A residency budget kept by admission: a frontier wanted plus a frontier
-/// drawn standing in for it.
+/// Blocks decor holds at once at most: the cells of the frontier wanted now,
+/// and those drawn the turn before that still stand in for some not ready
+/// (`step`) — the second no more than a frontier while the cover drawn is
+/// one frontier's. A wanted parent left unready while the eye moves on can
+/// keep an older cover under it beside a newer one elsewhere, and this
+/// bound is then not one the replacement rule proves.
 pub const BLOCKS_MAX: usize = 2 * FRONTIER_MAX;
 
+/// Blocks a frame builds at most: a cell's scatter walks its cells and a
+/// frame has other work; what is not built this frame is the next's.
 const BUILDS_PER_FRAME: u32 = 4;
 
 /// What a cell is admitted by before its block says what it holds.
@@ -186,6 +204,7 @@ fn solve(kinds: &[Kind], stack: &mut Vec<DecorCell>, out: &mut Vec<DecorCell>) {
     let largest = largest_possible(kinds);
     let floor_px = *pxl_render::look::lod::TARGET_CELL_PX * crate::param::IMPOSTOR_GONE_CELLS;
     let view_reach = crate::layer::environment::fog::view_reach();
+    // Nothing past the view's reach is drawn, so the roots reach no further.
     let reach = fault_radius(top).min(view_reach);
     let side = chunk_span_of(top);
     let (cx, cy) = ((eye[0] / side).floor() as i64, (eye[1] / side).floor() as i64);
@@ -214,8 +233,9 @@ fn solve(kinds: &[Kind], stack: &mut Vec<DecorCell>, out: &mut Vec<DecorCell>) {
     out.sort_unstable();
 }
 
-/// None where the heap refused room to list the columns.
-fn sources_of(cell: DecorCell, store: &Store, cols: &mut Vec<IVec>, hide: Option<DecorHide>) -> Option<Sources> {
+/// What cell `cell`'s population is made of now; none where the heap
+/// refused the room to list its columns, and the cell stays as it is.
+fn sources_of(cell: DecorCell, store: &Store, cols: &mut Vec<IVec>, hide: Option<EntryAt>) -> Option<Sources> {
     cols.clear();
     store.cols_under(cell.chunk().column(), cols).ok()?;
     let revision = cols.iter().fold(0u32, |r, &c| r.wrapping_mul(31).wrapping_add(object_col_revision(c)));
@@ -264,7 +284,7 @@ fn build(c: &mut Cells, cell: DecorCell, kinds: &[Kind], store: &Store, draw: &m
     let target = GROUND.scale(level);
     let (cx, cy, span) = (target.index(x0), target.index(y0), CHUNK_CELLS as i64);
     match level > 0 && sources.shown {
-        true => store.fold_at(target, [cx, cy], [cx + span, cy + span], sources.hide.and_then(DecorHide::placed), &mut c.folded).ok()?,
+        true => store.fold_at(target, [cx, cy], [cx + span, cy + span], sources.hide, &mut c.folded).ok()?,
         false => c.folded.clear(),
     }
     let ground = Ground {
@@ -303,13 +323,23 @@ fn release(block: Block, draw: &mut DrawList) {
     unsafe { free((block.at as usize, block.bytes)) };
 }
 
-/// Moves what is drawn toward the frontier one whole replacement at a time:
-/// a refining cell stays drawn until every wanted child is ready, coarsening
-/// cells until the parent is ready. No region is ever left empty or drawn twice.
-pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<DecorHide>, frame_eye: V3) {
+/// Moves decor toward the eye's frontier, a frame at a time.
+///
+/// The frontier is what is wanted; what is drawn is a cover of the ground
+/// in view that reaches it one whole replacement at a time, as the
+/// terrain's does. A cell refining into its children stays drawn until
+/// every wanted cell under it is ready, and they are drawn in the frame it
+/// goes; cells coarsening into their parent stay drawn until the parent
+/// is ready. Ready is a built block, or a page a coarser one settles,
+/// which has nothing to scatter. So a change of level never leaves a
+/// region with nothing drawn on it, and no region is drawn twice: a wanted
+/// cell waiting under one still drawn is held hidden, and a cell neither
+/// wanted nor drawn the turn before is let go.
+pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<EntryAt>, frame_eye: V3) {
     let c = cells();
     let mut frontier = core::mem::take(&mut c.frontier);
     solve(kinds, &mut c.stack, &mut frontier);
+    xpute_core::ensure!(frontier.len() <= FRONTIER_MAX, ENOTRECOVERABLE, frontier.len());
     let top = floor::level().unwrap_or(0);
     let ancestors = move |cell: DecorCell| core::iter::successors(Some(cell), move |a| (a.level < top).then(|| a.parent())).skip(1);
     let pages = Terrain::pyramid();
@@ -324,7 +354,7 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Dec
     let mut built = 0;
     let mut cols = core::mem::take(&mut c.cols);
     for &cell in &frontier {
-        let sources = sources_of(cell, store, &mut cols, hide);
+        let Some(sources) = sources_of(cell, store, &mut cols, hide) else { continue };
         if c.blocks.get(&cell).is_some_and(|b| b.sources == sources) {
             continue;
         }
@@ -354,8 +384,13 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Dec
         }
     }
     let under = &c.under;
+    // A cell is kept where it is wanted, or where it was drawn the turn
+    // before and still stands in for wanted cells not ready: as a cover over
+    // them, or under a wanted parent not ready. Nothing else is held — a
+    // cell built for a frontier the eye has since left, and never drawn, is
+    // let go rather than kept as history.
     let kept = |cell: DecorCell, blocks: &HashMap<DecorCell, Block>| {
-        wanted(&cell) || under.get(&cell) == Some(&false) || ancestors(cell).find(wanted).is_some_and(|a| !ready(a, blocks))
+        wanted(&cell) || blocks[&cell].drawn && (under.get(&cell) == Some(&false) || ancestors(cell).find(wanted).is_some_and(|a| !ready(a, blocks)))
     };
     c.cells.clear();
     c.cells.extend(c.blocks.keys().copied().filter(|&k| !kept(k, &c.blocks)));

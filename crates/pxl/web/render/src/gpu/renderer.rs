@@ -257,19 +257,25 @@ impl Scratch {
     }
 }
 
-const BLOCK_SLOTS: usize = 1 << 15;
-const BLOCK_MASK: usize = BLOCK_SLOTS - 1;
 const EMPTY: u32 = 0;
 
-/// A power of two so a position wraps by masking, at least twice `live` so
-/// open addressing never fills past half.
+/// The table's slots for at most `live` blocks at once: a power of two, so a
+/// position wraps by masking, and at least twice `live`, so open addressing
+/// never fills past half. How many blocks can be live is the module's, whose
+/// owners make them (pxl-kernel mem/fixed.rs `MAX_LIVE_BLOCKS`); the
+/// renderer knows only the table.
 pub const fn block_slots(live: usize) -> usize {
     (2 * live).next_power_of_two()
 }
 
-/// Blocks by the list's handle: open addressing in `.fixed.blocks`. The heap
-/// is the source and the device a copy, so a lost device is restored from the
-/// addresses.
+/// The blocks the draw list named, by the handle it gave each: where the block
+/// lies in the memory and its counts, and once a device has it the buffer and
+/// the one group made over it — the decor instances, a joint palette or the
+/// puck's zone, whichever the block is. The memory is the source and the
+/// device a copy: a block stays in the heap until its free is listed, so a
+/// device that went away, or lists taken while there was none, are made good
+/// from the addresses. Open addressing in `.fixed.blocks`'s lanes, since the
+/// handles are the list's and sparse.
 pub struct Blocks {
     handle: &'static mut [u32],
     at: &'static mut [u32],
@@ -295,13 +301,17 @@ fn memory(at: u32, n: u32) -> &'static [u8] {
 /// Handle, address, length, the two counts, buffer, group.
 const BLOCK_LANES: usize = 7;
 
+/// The table's lanes end to end for `slots` slots: `.fixed.blocks`, which the
+/// kernel lays out (pxl-kernel mem/fixed.rs) and installs with `set_blocks`.
 pub const fn blocks_bytes(slots: usize) -> u32 {
     (BLOCK_LANES * slots * 4) as u32
 }
 
+/// Installs a table of `slots` slots in the `blocks_bytes(slots)` at `at`.
+///
 /// # Safety
-/// `at` must address `blocks_bytes(slots)`, 4-aligned and zeroed, the
-/// renderer's alone for as long as the module runs.
+/// `at` must address that range, 4-aligned and zeroed, the renderer's alone
+/// for as long as the module runs.
 pub unsafe fn set_blocks(at: u32, slots: usize) {
     xpute_core::ensure!(slots.is_power_of_two(), EINVAL, slots);
     // SAFETY: the caller's range, one lane of `slots` words after another.
@@ -320,6 +330,7 @@ pub unsafe fn set_blocks(at: u32, slots: usize) {
     });
 }
 
+/// Where a handle's probe begins in a table of `slots` slots.
 fn home(handle: u32, slots: usize) -> usize {
     (handle.wrapping_mul(0x9e37_79b1) >> (32 - slots.trailing_zeros())) as usize
 }
@@ -336,7 +347,7 @@ impl Blocks {
         if self.missing == 0 {
             return;
         }
-        for i in 0..BLOCK_SLOTS {
+        for i in 0..self.handle.len() {
             if self.handle[i] != EMPTY && self.buffer[i] == 0 && !self.put(g, i) {
                 return;
             }
@@ -365,12 +376,12 @@ impl Blocks {
         if handle == EMPTY {
             return None;
         }
-        let mut i = home(handle);
+        let mut i = home(handle, self.handle.len());
         loop {
             match self.handle[i] {
                 EMPTY => return None,
                 h if h == handle => return Some(i),
-                _ => i = (i + 1) & BLOCK_MASK,
+                _ => i = (i + 1) & (self.handle.len() - 1),
             }
         }
     }
@@ -382,11 +393,12 @@ impl Blocks {
 
     fn insert(&mut self, g: Option<&Gpu>, handle: u32, at: u32, len: u32, vertex_cnt: u32, index_cnt: u32) {
         self.remove(handle);
-        // Slots are twice the most blocks the owners can hold, so this is that bound broken.
+        // The slots are twice the most blocks the module's owners can hold
+        // at once (`block_slots`), so this is that bound broken.
         xpute_core::ensure!((self.count as usize) < self.handle.len() / 2, ENOTRECOVERABLE, self.handle.len() / 2);
         let mut i = home(handle, self.handle.len());
         while self.handle[i] != EMPTY {
-            i = (i + 1) & BLOCK_MASK;
+            i = (i + 1) & (self.handle.len() - 1);
         }
         self.handle[i] = handle;
         self.at[i] = at;
@@ -434,12 +446,12 @@ impl Blocks {
         loop {
             let mut j = i;
             loop {
-                j = (j + 1) & BLOCK_MASK;
+                j = (j + 1) & (self.handle.len() - 1);
                 if self.handle[j] == EMPTY {
                     self.handle[i] = EMPTY;
                     return;
                 }
-                let k = home(self.handle[j]);
+                let k = home(self.handle[j], self.handle.len());
                 let stays = if i <= j { i < k && k <= j } else { i < k || k <= j };
                 if !stays {
                     self.handle[i] = self.handle[j];

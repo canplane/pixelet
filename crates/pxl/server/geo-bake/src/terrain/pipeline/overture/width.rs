@@ -1,13 +1,25 @@
 // pxl-geo-bake/terrain/pipeline/overture/width.rs
 
-//! A way's width in metres, the same on the ground and on a deck.
-//! `width_rules` (on ~1% of segments, often an import's classes) wins where
-//! given; otherwise lanes: 3.5 m a motor lane (osm2lanes' default), 2.5 m a
-//! footway, 2.0 m a cycleway, with class cross-sections close to Arnis's.
-//! A link or a service lane is one lane.
+//! A way's width in metres: the one width it is painted at on the ground and
+//! carried at on a deck (deck/), so a road is one width on and off a bridge.
+//!
+//! The source says it rarely. `width_rules` is on about one segment in a
+//! hundred, and much of it is categorical — an import's width classes, 5.0
+//! and 10.0 for whole bands of roads — but it is the source's own word and is
+//! taken where it is. Elsewhere a way is as wide as its lanes, a lane as wide
+//! as international practice has one: 3.5 m for a motor lane, the default
+//! osm2lanes (A/B Street) takes for a locale it has no figure for, the
+//! Netherlands' being 3.35 m and Britain's 3.0 m; 2.5 m a footway's and 2.0 m
+//! a cycleway's, the same source's. How many lanes a class carries each way
+//! and the margin past them — shoulders, kerbs — is the classes' usual
+//! cross-section, which Arnis (OSM to Minecraft) lands on too: eleven metres
+//! for a motorway's carriageway, nine for a secondary, seven for a tertiary.
+//!
+//! A one-way way is one carriageway of a road drawn as two, or a lane of its
+//! own, and carries its lanes one way; any other carries them both ways. A
+//! link — a slip road — is one lane, and so is a service road's own lane
+//! (role.rs), a little narrower than a through lane.
 
-use crate::terrain::pipeline::overture::between::{flag_at, value_at};
-use crate::terrain::pipeline::overture::policy::LINK_FLAGS;
 use crate::terrain::pipeline::overture::role::Role;
 
 const LANE: f64 = 3.5;
@@ -52,29 +64,6 @@ pub struct WayShape {
     pub measured: Option<f64>,
     pub oneway: bool,
     pub role: Role,
-}
-
-#[derive(Clone, Copy, Default)]
-pub struct WayColumns<'a> {
-    pub flags: Option<&'a str>,
-    pub widths: Option<&'a str>,
-    pub access: Option<&'a str>,
-    pub subclass: Option<&'a str>,
-    pub subclasses: Option<&'a str>,
-}
-
-impl WayShape {
-    pub fn at(c: WayColumns, at: f64) -> WayShape {
-        let role = match Role::at(c.subclass, c.subclasses, at) {
-            Role::Way if flag_at(c.flags, LINK_FLAGS, at) => Role::Link,
-            role => role,
-        };
-        WayShape {
-            measured: value_at(c.widths, at),
-            oneway: is_oneway(c.access),
-            role,
-        }
-    }
 }
 
 pub fn width_m(subtype: &str, class: Option<&str>, shape: WayShape) -> f64 {

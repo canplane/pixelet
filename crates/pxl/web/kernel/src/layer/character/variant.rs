@@ -22,6 +22,10 @@ pub struct CharacterVariant {
     pub move_clip: u32,
 }
 
+/// A variant by its group and number, or none for a number the group does not
+/// give out.
+/// Character variants there are, every group's: what each of the model's
+/// registrations by variant holds at most (companion.rs, preview.rs).
 pub const CHARACTER_VARIANTS: usize = person::Key::ALL.len() + pet::Key::ALL.len();
 
 pub fn character_variant(group: CharacterGroup, number: u8) -> Option<CharacterVariant> {

@@ -143,6 +143,8 @@ fn hidden_ground_keeps_its_depth() {
     }
 }
 
+/// With the source's top below the pyramid's, the cover is that level's
+/// chunks and nothing coarser is ever a piece or asked to split.
 #[test]
 fn the_cover_is_the_sources_top() {
     let top = 3;

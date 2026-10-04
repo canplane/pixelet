@@ -67,7 +67,9 @@ The Web Mercator adapter (EPSG:3857) gives the unit its meaning: `1u` is one L1 
 
 ## Terrain
 
-Terrain arrives as L3 pages: four rasters of ground type, and one of elevation, padded so that bicubic sampling can reach past a page's edge.
+Terrain is the baked, canonical geography — what the source says is there, changed only by a rebake — and objects are the world people author and change. That is the line between them, not dimension: terrain holds 3D things too, and an object may never move. Terrain is a **surface**, which is 2.5D, and the **decks** carried above it, which are not; the camera, the observation and the scheduler know neither, and read terrain through its chunks, its index and its query.
+
+Terrain arrives as L3 pages: four rasters of ground type, and one of elevation, padded so that bicubic sampling can reach past a page's edge — the surface — and the page's decks.
 
 | Channel     | Contents                                  |
 | ----------- | ----------------------------------------- |
@@ -78,7 +80,9 @@ Terrain arrives as L3 pages: four rasters of ground type, and one of elevation, 
 
 The rows are in the one order the channels have (`GROUND_CH_KEYS`, `pxl-spec bake/format.rs`): the order a page stores them in and the order a cell is painted in, a later channel's non-void type winning, so a building that overlaps a road keeps its cells.
 
-Sea is a `LAND` value (`sea = 129`, `spec/pxl/spec/cell/cube_type.json`). A page stores each channel as a dense index into that channel's few types rather than the catalog's number, so all four pack into one 16-bit cell (`pxl-spec bake/pack.rs`). The channels are rasterized from Overture's Buildings, Transportation and Base themes, the coastline from Base's `water`.
+Sea is a `LAND` value (`sea = 129`, `spec/pxl/spec/cell/cube_type.json`). A page stores each channel as a dense index into that channel's few types rather than the catalog's number, so all four pack into one 16-bit cell (`pxl-spec bake/pack.rs`). The channels are rasterized from Overture's Buildings, Transportation and Base themes, the coastline from Base's `water`. A cell is painted by what covers its center, and only what is seen from above: a tunnel, an indoor passage, a way not built or gone and a ferry's route are left off it. A type may stand a step off its height — water one below, a building one above (the catalog's `recess`).
+
+A deck is a way carried over the surface — a bridge, a viaduct, a ramp — kept as a line with a top along it, a width and the type its surface shows (`pxl-spec bake/deck.rs`): sparse, stacked where an interchange stacks, and nothing on a page that has none. A chunk draws the decks over its columns as runs above its ground — a slab under each top, a pier down to the ground where one stands — and the index lane and the query count them as they count the ground. Their heights are solved offline over the whole network, structure by structure, from where each comes down to the ground and what it has to clear (`pxl-geo-bake deck.rs`), since a page cannot see a viaduct's ends; why decks are lines in the terrain page and not a lane or objects is [ways off the ground](./issue/20261001-ways-off-the-ground.md).
 
 ## The view
 
@@ -285,24 +289,24 @@ address        bytes                    range                  placed by
 ──────────────────────────────────────────────────────────────────────────────────────
 0              1 MiB                    .stack                 rustc (-z stack-size, --stack-first)
 1 MiB          36 KiB × 3               .ring.desc             build.rs
-2 MiB          8 MiB × 3                .ring.slot             build.rs
+2 MiB          8 MiB + 16 MiB           .ring.slot             build.rs
 32 MiB         ~0.7 MiB                 .rodata .data .bss     wasm-ld (--global-base)
                ↑ D: __data_end, rounded up to 4 KiB (PAGE_BYTES), about 32.7 MiB
-D              66.62 MiB                .fixed.terrain         the kernel (mem/fixed.rs)
-D + 66.62 MiB  96 KiB                   .fixed.bake            the kernel (mem/fixed.rs)
-D + 66.72 MiB  259 KiB                  .fixed.mounts          the kernel (mem/fixed.rs)
-D + 66.97 MiB  448 KiB                  .fixed.blocks          the kernel (mem/fixed.rs)
-D + 67.41 MiB  4 MiB                    .fixed.gpu             the kernel (mem/fixed.rs)
-D + 71.41 MiB  64 KiB                   .fixed.host            the kernel (mem/fixed.rs)
-D + 71.47 MiB  4.62 MiB                 .fixed.profiler        the kernel (mem/fixed.rs)
-D + 76.09 MiB  the rest                 .heap                  the allocator
+D              RECORDS terrain records  .fixed.terrain         the kernel (mem/fixed.rs)
+               one mesh bake            .fixed.bake            the kernel (mem/fixed.rs)
+               the chunk table          .fixed.mounts          the kernel (mem/fixed.rs)
+               MAX_LIVE_BLOCKS          .fixed.blocks          the kernel (mem/fixed.rs)
+               the GPU stream           .fixed.gpu             the kernel (mem/fixed.rs)
+               the host stream          .fixed.host            the kernel (mem/fixed.rs)
+               the profiler's rings     .fixed.profiler        the kernel (mem/fixed.rs)
+D + BYTES      the rest                 .heap                  the allocator
 512 MiB / 1 GiB                         end
 ──────────────────────────────────────────────────────────────────────────────────────
 ```
 
 The map is `pxl-kernel mem/section.rs`'s, over xpute's sections. The stack is first so that an overflow wraps below zero and traps — there is no MMU, so the wraparound is the only guard — and the kernel asserts at boot that the linker's `__stack_high` is where `mem.json` says. The rings sit at fixed addresses and `build.rs` emits `--global-base` from the same numbers, so the linker cannot place `.data` over them.
 
-`.fixed` is what the kernel places once, sizes at compile time and never frees; the table above lists it, and a kernel test holds its rows to `mem/fixed.rs` (`the_architecture_s_memory_map_is_the_kernel_s`), printing the rows it expects where they differ. The heap is the rest of the reservation: about 403 MiB on a phone and 915 MiB on the desktop. The largest range is the resident terrain (`layer/terrain/fixed.rs`), one record a page, as many as residency's capacity (`world/paging.rs` `RECORDS`): a frame for everything held hard — the pyramid's top all around the eye — and for everything a view can read at once, 3 × 3 pages a level, so a page the view reads never has to give up another. Which page lies in which record is residency's, not a coordinate's. Every layer's records begin with `ABSENT`, which is no page's own and which every absent page shares — in the terrain's range, the open ocean. A page that arrives takes a free record or one nothing holds hard and the view does not read, the farthest first; speculation takes only one that speculation does not hold either. A thing belongs in `.fixed` when it is in the kernel's own format and its size is settled at compile time; the heap is left for what is asked for, refused and given back, and for what another format sizes — a glTF, a PNG — whose bound nothing here can predict. Every range is reached through `mem/fixed.rs`, which checks what is asked for against the range's end, so nothing written through one lands in the next.
+`.fixed` is what the kernel places once, sizes at compile time and never frees: the ranges in address order, each a page-rounded span, the sizes in the table being what each is derived from, never a number kept here (`mem/fixed.rs` `RANGES`, `BYTES`). The heap is the rest of the reservation, most of it on either. The largest range is the resident terrain (`layer/terrain/fixed.rs`), one record a page, as many as residency's capacity (`world/paging.rs` `RECORDS`): a frame for everything held hard — the pyramid's top all around the eye — and for everything a view can read at once, 3 × 3 pages a level, so a page the view reads never has to give up another. Which page lies in which record is residency's, not a coordinate's. Every layer's records begin with `ABSENT`, which is no page's own and which every absent page shares — in the terrain's range, the open ocean. A page that arrives takes a free record or one nothing holds hard and the view does not read, the farthest first; speculation takes only one that speculation does not hold either. A thing belongs in `.fixed` when it is in the kernel's own format and its size is settled at compile time; the heap is left for what is asked for, refused and given back, and for what another format sizes — a glTF, a PNG — whose bound nothing here can predict. Every range is reached through `mem/fixed.rs`, which checks what is asked for against the range's end, so nothing written through one lands in the next.
 
 `.heap` is everything else, under xpute's slab over buddy. A `String`, a band's voxels and a fetch body all come from here. A refused request is a wait, not a failure: the build keeps its place and asks again after a release.
 
@@ -348,7 +352,7 @@ Objects paint after terrain, so a placed value wins the voxel. A chunk records t
 
 **What to build next** is one priority. A chunk build runs in two stages, a scan and a mesh bake, one of each open at a time; the priority (`world/chunk/table.rs` `priority`) puts the two chunks holding those slots first, then what the view sees nearest the eye, then what it does not, so the view fills out from the eye. Builds run in the build task on what the tick left of the quota.
 
-**Memory is bounded before it is asked for.** The pages a view reads are bounded by its reach and live in records of `.fixed`, so they never ask the heap. Where the arena has no room for what the view asks, the quality is chosen coarser (`world/quality.rs`); a block the heap refuses leaves what asked for it unbuilt — a chunk's build and a model wait for the heap's next release (`world/chunk/build.rs` `refuse`), and a decor cell keeps its parent drawn. The client does not die.
+**Memory is bounded before it is asked for.** The pages a view reads are bounded by its reach and live in records of `.fixed`, so they never ask the heap. Where the arena has no room for what the view asks, the quality is chosen coarser (`world/quality.rs`); a block the heap refuses leaves what asked for it unbuilt — a decor cell keeps its parent drawn — and it is asked again on a later turn. The client does not die.
 
 ## Rendering
 

@@ -12,7 +12,13 @@ use pxl_spec::space::adapter::epsg3857::G3857;
 use crate::terrain::pipeline::normalizer::{NormalizePolicy, RawFeature};
 use crate::terrain::pipeline::overture::adapter::{BaseSource, OvertureRawFeature};
 
-/// One type per OpenMapTiles transportation class (MapTiler's schema).
+// ============ Domain knowledge constants ============
+
+/// The transport type a way shows, on the ground or on a deck: its class
+/// as OpenMapTiles' transportation layer classes it (MapTiler's schema) —
+/// motorway, trunk, primary, secondary, tertiary, minor, service, track and
+/// path, rail and transit — one type a class, as neither finer nor coarser
+/// than the maps the data is read on.
 pub fn segment_type(subtype: &str, class: Option<&str>) -> u8 {
     use cube_types::transport as t;
     let c = class.unwrap_or("");
@@ -38,7 +44,7 @@ pub fn segment_type(subtype: &str, class: Option<&str>) -> u8 {
 /// One-way ways of these classes are carriageways, not one-way streets.
 const THROUGH_CLASSES: [&str; 5] = ["motorway", "trunk", "primary", "secondary", "tertiary"];
 
-/// OpenMapTiles' path class.
+/// OpenMapTiles' path class: what is walked, cycled or ridden.
 const PEDESTRIAN_CLASSES: [&str; 6] = ["footway", "path", "steps", "cycleway", "pedestrian", "bridleway"];
 
 const FLOWING_WATER_SUBTYPES: [&str; 3] = ["river", "stream", "canal"];

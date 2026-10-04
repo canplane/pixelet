@@ -38,8 +38,12 @@ use pxl_spec::bake::format::Terrain;
 /// By asset and height; None inside while registration failed.
 type ModelHandles = Vec<(Load, u64, Option<ModelHandle>)>;
 
+/// Models the companion registers at most: one a variant, by its asset and
+/// height (`model_for`).
 pub const MODELS_MAX: usize = crate::layer::character::variant::CHARACTER_VARIANTS;
 
+/// Actors the companion holds at most: a walker a group, the person and the
+/// pet (`Companion`).
 pub const ACTORS_MAX: usize = crate::layer::character::variant_spec::Group::ALL.len();
 
 static MODEL_HANDLES: Global<ModelHandles> = Global::new();

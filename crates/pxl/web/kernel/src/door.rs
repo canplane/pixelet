@@ -17,7 +17,6 @@ use crate::mem::fixed::Range;
 use crate::mem::section;
 use layout::DOOR_LAYOUT;
 use pxl_render::mesh::volume::Volumes;
-use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_core::wire::xtp::PacketWriter;
 use xpute_runtime::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
@@ -149,20 +148,22 @@ fn boot(b: &Bracket) {
 }
 
 fn fixed_at(r: Range) -> u32 {
-    crate::mem::fixed::range(r).or_bug(Errno::ENOTRECOVERABLE).offset
+    crate::mem::fixed::range(r).offset
 }
 
 /// Lays the memory map and makes the volumes. Returns where GPU calls are
 /// recorded for the host, 0 where the kernel makes them itself.
 fn lay_out(b: &Bracket) -> u32 {
-    // The map first: the kernel's first use makes the chunk table, which lives in `.fixed`.
+    // The map first: the kernel's first use makes the chunk table, whose
+    // tables lie in `.fixed`.
     section::set_map(section::lay_out(b.given, b.data_end));
     kernel().volumes = Some(Volumes::new());
-    // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.blocks`, zeroed, each the
-    // renderer's or the host's alone.
+    // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.blocks`, each what it
+    // is installed as from a page, zeroed, the renderer's and the host's
+    // alone.
     unsafe {
         crate::host::set_host_stream(fixed_at(Range::Host));
-        pxl_render::gpu::renderer::set_blocks(fixed_at(Range::Blocks));
+        pxl_render::gpu::renderer::set_blocks(fixed_at(Range::Blocks), crate::mem::fixed::BLOCK_SLOTS);
         pxl_render::gpu::api::install(fixed_at(Range::Gpu))
     }
 }

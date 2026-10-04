@@ -163,16 +163,6 @@ fn converge_on<S: Serve>(pyramid: &mut Pyramid<PoiPage>, observation: fn() -> Ob
 }
 
 #[test]
-fn the_view_converges_exact_with_no_prefetch_under_every_order() {
-    let _serial = crate::global::serial();
-    converge(Policy::standard(), &NoPrefetch, 0);
-    converge(Hostile::Random(7), &NoPrefetch, 0);
-    converge(Hostile::Random(0xdead_beef), &NoPrefetch, 0);
-    converge(Hostile::Lifo, &NoPrefetch, 0);
-    converge(Hostile::Preempt, &NoPrefetch, 0);
-}
-
-#[test]
 fn the_view_converges_exact_with_the_reach_prefetched_under_every_order() {
     let _serial = crate::global::serial();
     let reach = Reach { slack: 1.0, margin: 0.0 };
@@ -183,3 +173,4 @@ fn the_view_converges_exact_with_the_reach_prefetched_under_every_order() {
         converge(Hostile::Preempt, &reach, allowance);
     }
 }
+

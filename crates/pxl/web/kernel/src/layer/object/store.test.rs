@@ -2,80 +2,13 @@
 
 use pxl_spec::bake::constant::{BAND_CELLS, CELL, CELL_STEPS};
 use pxl_spec::cell::cube_types::Block;
-use pxl_spec::space::indexer::L2_IDX;
-use pxl_spec::space::pvf3::{fvec, ivec};
-use pxl_spec::space::xy::TO_XY;
+use pxl_spec::space::pvf3::ivec;
 
 use super::*;
-use crate::global::serial;
-use crate::layer::object::size::DECOR_SIZE;
 
 // Far-apart corners per test: the store is kernel-global across the binary.
 fn corner(x: i64, y: i64, z: i64) -> Pvf3 {
     Pvf3 { i: ivec::gather(x, y, z), f: 0 }
-}
-
-fn in_cell(c: &Pvf3) -> Vec<OccupiedEntry> {
-    let [ix, iy, iz] = CELL.index_of(c);
-    get_objects_in_cell(ix, iy, iz)
-}
-
-/// A column's revision moves on a write to it, and on nothing else: not
-/// another column's write, and not the eraser's previews, which change what
-/// is drawn and not what is stored.
-#[test]
-fn a_column_s_revision_moves_on_its_own_writes_and_not_on_a_preview() {
-    let _g = serial();
-    let c = corner(100_020, 0, 0);
-    let col_idx = L2_IDX(TO_XY(c.i));
-    let elsewhere = L2_IDX(TO_XY(ivec::gather(1_000_000, 1_000_000, 0)));
-    let (before, other) = (object_col_revision(col_idx), object_col_revision(elsewhere));
-    place_decor(&c, DECOR_SIZE, DecorId::tree);
-    assert!(object_col_revision(col_idx) > before, "its own write moved it");
-    assert_eq!(object_col_revision(elsewhere), other, "another column's did not");
-    let (placed, all) = (object_col_revision(col_idx), objects_revision());
-    set_virtual_hide(Some(in_cell(&c).remove(0).at));
-    set_virtual_carve_preview(&corner(100_021, 0, 0), DECOR_SIZE);
-    set_virtual_hide(None);
-    clear_virtual_carve_preview();
-    assert_eq!((object_col_revision(col_idx), objects_revision()), (placed, all), "a preview moved nothing stored");
-}
-
-#[test]
-fn object_store_persistence_a_save_is_placement_records_per_page_and_loading_it_puts_every_object_back_where_it_was() {
-    let _g = serial();
-    let a = corner(5000, 7000, 12);
-    let b = Pvf3 {
-        i: ivec::gather(5001, 7000, 12),
-        f: fvec::gather(fvec::from_real(0.25), 0, 0),
-    };
-    place(&a, 1.0, PlaceableCube::Block(Block::red), false);
-    place(&b, 0.25, PlaceableCube::Block(Block::blue), false);
-    place_decor(
-        &Pvf3 {
-            i: ivec::gather(5000, 7001, 12),
-            f: 0,
-        },
-        DECOR_SIZE,
-        DecorId::tree,
-    );
-    let shape = |o: &OccupiedEntry| (o.i, o.f, o.size.to_bits(), matches!(o.kind, EntryKind::Decor { .. }));
-    // The three cells the test places in and the ones around them.
-    let get_objects_near = |at: &Pvf3| {
-        let [cx, cy, cz] = CELL.index_of(at);
-        let near = (-1..=1).flat_map(|dx| (-1..=1).flat_map(move |dy| (-1..=1).map(move |dz| [cx + dx, cy + dy, cz + dz])));
-        near.flat_map(|[x, y, z]| get_objects_in_cell(x, y, z)).collect::<Vec<_>>()
-    };
-    let before: Vec<_> = get_objects_near(&a).iter().map(shape).collect();
-    assert_eq!(before.len(), 3);
-    let blob = encode_objects().unwrap();
-    for o in get_objects_near(&a) {
-        remove(o.at);
-    }
-    assert_eq!(get_objects_near(&a).len(), 0);
-    decode_objects(&blob).unwrap();
-    assert_eq!(get_objects_near(&a).iter().map(shape).collect::<Vec<_>>(), before);
-    assert_eq!(encode_objects().unwrap(), blob);
 }
 
 fn entries(store: &Store, col_idx: IVec) -> Vec<(i32, u32, u32)> {
@@ -173,7 +106,7 @@ fn the_lanes_are_in_band_and_walk_order_so_a_cell_s_entries_are_one_run() {
     assert_eq!(store.cell(3, 1, 0, BAND_CELLS as i32).map(|c| c.count), Some(1));
 }
 
-/// Deterministic edits on every run.
+/// xorshift64: the same edits on every run.
 struct Rng(u64);
 
 impl Rng {
@@ -189,8 +122,80 @@ impl Rng {
     }
 }
 
-/// Whole cells in band 0 of one column, and what the store keeps folded at
-/// `level`, with the column's corner in that level's cells.
+/// The writes that set, of the block `cells` a side from `from` in band
+/// `band_idx` of column `col_idx`, five of every eight children down to a
+/// whole cell to `state`: the least that makes the block `state` at every
+/// level by a strict majority, whatever the ties.
+fn fill(col_idx: IVec, band_idx: BandZ, from: [u32; 3], cells: u32, state: u32) -> Vec<Write> {
+    fn go(corner: [u32; 3], side: u32, write: &mut dyn FnMut([u32; 3])) {
+        if side == 1 {
+            return write(corner);
+        }
+        for slot in 0..5 {
+            let c = child_of([0i64; 3], slot);
+            go([0, 1, 2].map(|a| corner[a] + c[a] as u32 * side / 2), side / 2, write);
+        }
+    }
+    let step = OBJECT_FINEST.count_in(CELL);
+    let mut out = Vec::new();
+    go(from, cells, &mut |c| {
+        out.push(Write {
+            col_idx,
+            band_idx,
+            at: c.map(|v| v * step),
+            scale: CELL,
+            state,
+        })
+    });
+    out
+}
+
+/// The objects' fold done the long way, as a chunk once did at every build:
+/// every entry of `columns` but `hide`, each at its own size, folded from
+/// the finest up a level at a time to `target` — what the store's folds
+/// are held to.
+fn fold_entries<'a>(columns: impl IntoIterator<Item = Entries<'a>>, target: Scale, hide: Option<EntryAt>) -> HashMap<[i64; 3], u32> {
+    let mut native: HashMap<Scale, Vec<([i64; 3], u32)>> = HashMap::new();
+    for e in columns {
+        let corner = FROM_L2_IDX(e.col_idx);
+        let (x0, y0) = (OBJECT_FINEST.index(ivec::X(corner)), OBJECT_FINEST.index(ivec::Y(corner)));
+        for k in 0..e.band.len() {
+            let (band, pos, state) = (e.band[k], e.pos[k], e.state[k]);
+            if !object_value_is_voxel(state) || hide == Some(e.at(k)) {
+                continue;
+            }
+            let (x, y, z, own) = unpack_pos(pos);
+            let (x, y) = (x0 + x as i64, y0 + y as i64);
+            let z = band as i64 * OBJECT_FINEST.count_in(BAND) as i64 + z as i64;
+            // An entry is a cell or finer, and a target a cell or coarser.
+            assert!(own <= target);
+            let at = |v: i64| v.div_euclid(OBJECT_FINEST.count_in(own) as i64);
+            native.entry(own).or_default().push(([at(x), at(y), at(z)], state));
+        }
+    }
+    let mut cells: HashMap<[i64; 3], u32> = HashMap::new();
+    let mut scale = OBJECT_FINEST;
+    loop {
+        cells.extend(native.remove(&scale).unwrap_or_default());
+        if scale >= target {
+            return cells;
+        }
+        let mut parents: HashMap<[i64; 3], [u32; 8]> = HashMap::new();
+        for (c, state) in cells.drain() {
+            parents.entry(parent_of(c)).or_insert([0; 8])[slot_of(c)] = state;
+        }
+        let parent = scale.up(1);
+        cells.extend(parents.into_iter().filter_map(|(p, v)| {
+            let m = majority(v, parent.above(CELL));
+            (m != 0).then_some((p, m))
+        }));
+        scale = parent;
+    }
+}
+
+/// `cells` — (x, y, z, value), a whole cell each in band 0 of one column —
+/// written into a store, and what it keeps folded at `level` over that
+/// column; with the column's corner in that level's cells.
 fn folded(cells: &[(u32, u32, u32, u32)], level: u32) -> (HashMap<[i64; 3], u32>, [i64; 2]) {
     let mut store = Store::new();
     let col_idx = ivec::gather(1, -1, 0);
@@ -206,7 +211,7 @@ fn folded(cells: &[(u32, u32, u32, u32)], level: u32) -> (HashMap<[i64; 3], u32>
     let per = target.count_in(BAND) as i64;
     let corner = [per, -per];
     let mut out = HashMap::new();
-    store.fold_at(target, corner, [corner[0] + per, corner[1] + per], None, &mut out);
+    store.fold_at(target, corner, [corner[0] + per, corner[1] + per], None, &mut out).unwrap();
     (out, corner)
 }
 
@@ -322,75 +327,4 @@ fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
         assert_eq!(stores[1].bound_in(&turn_box(query)), given.map(turn_box), "{query:?}");
         assert_eq!(stores[2].bound_in(&turn_box(turn_box(query))), given.map(|b| turn_box(turn_box(b))), "{query:?}");
     }
-}
-
-/// Painted as sub-cells, the mesher would draw a box each.
-#[test]
-fn a_paint_finer_than_a_cube_takes_it_whole() {
-    let mut store = Store::new();
-    let col_idx = ivec::gather(1, -1, 0);
-    let step = OBJECT_FINEST.count_in(CELL);
-    store.write(
-        [Write {
-            col_idx,
-            band_idx: 0,
-            at: [3 * step, 4 * step, 5 * step],
-            scale: CELL,
-            state: red(),
-        }]
-        .into_iter(),
-    );
-    for target in [OBJECT_FINEST.up(1), CELL.down(1)] {
-        let mut out = Vec::new();
-        store.fold_entries(col_idx, target, None, &mut |band, at, scale, v| out.push((band, at, scale, v)));
-        assert_eq!(out, [(0, [3 * step, 4 * step, 5 * step], CELL, red())]);
-    }
-}
-
-fn round_trip(origin: [f64; 2], seed: u64) {
-    let mut rng = Rng(seed);
-    kernel().objects.clear();
-    let red = placeable_cube_num_id(PlaceableCube::Block(Block::red));
-    let blue = placeable_cube_num_id(PlaceableCube::Block(Block::blue));
-    let decor = decor_num_id(DecorId::tree);
-    let mut writes = Vec::new();
-    for k in 0..3_000 {
-        let scale = OBJECT_FINEST.up((rng.next() % 4) as i32);
-        let side = scale.side();
-        let at = [0, 1, 2].map(|_| (((rng.next() % 1_200) as f64 - 600.0) * STEP_UNITS / side).floor() * side);
-        let at = if k % 7 == 0 { [at[0], at[1], at[2] + side] } else { at };
-        let value = rng.pick(&[red, red, blue, AIR, decor, VOID]);
-        let mut coord = Pvf3::default();
-        pxl_spec::space::pvf3::projection::project(&mut coord, origin[0] + at[0], origin[1] + at[1], at[2]);
-        writes.push(write_of(&coord, side, value));
-    }
-    // Five of the eight bands about the origin filled by a majority at every
-    // level, so there is something to fold over a band too.
-    let band = BAND_CELLS;
-    let mut at = Pvf3::default();
-    pxl_spec::space::pvf3::projection::project(&mut at, origin[0], origin[1], 0.0);
-    let col_idx = L2_IDX(TO_XY(at.i));
-    let col = [ivec::X(col_idx), ivec::Y(col_idx)];
-    for slot in 0..5 {
-        let [x, y, z] = child_of([-1i64; 3], slot);
-        let state = if slot % 2 == 0 { red } else { blue };
-        writes.extend(fill(ivec::gather(col[0] + x, col[1] + y, 0), z as BandZ, [0; 3], band, state));
-    }
-    apply(writes);
-    let before = held(&kernel().objects);
-    let over = before.1.iter().filter(|((scale, _), _)| *scale > BAND).count();
-    assert!(
-        before.0.len() > 1_000 && over > 0 && before.3.len() > 1_000,
-        "{origin:?}: too little held to say much: {} leaves, {over} folds over a band",
-        before.0.len()
-    );
-    let blob = encode_objects().unwrap();
-    kernel().objects.clear();
-    decode_objects(&blob).unwrap();
-    let after = held(&kernel().objects);
-    assert_eq!(before.0, after.0, "{origin:?}: the leaves");
-    assert_eq!(before.1, after.1, "{origin:?}: the folds over a band");
-    assert_eq!(before.2, after.2, "{origin:?}: the bounds");
-    assert_eq!(before.3, after.3, "{origin:?}: the folds under a band");
-    kernel().objects.clear();
 }

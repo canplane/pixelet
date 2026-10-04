@@ -125,6 +125,10 @@ export default {
       hex: "#E892A2",
       rgb: 15241890,
     },
+    road_trunk: {
+      hex: "#F9B29C",
+      rgb: 16364188,
+    },
     road_primary: {
       hex: "#FCD6A4",
       rgb: 16570020,
@@ -132,6 +136,18 @@ export default {
     road_secondary: {
       hex: "#F7FABF",
       rgb: 16251583,
+    },
+    road_tertiary: {
+      hex: "#FFFFFF",
+      rgb: 16777215,
+    },
+    road_service: {
+      hex: "#FFFFFF",
+      rgb: 16777215,
+    },
+    track: {
+      hex: "#996600",
+      rgb: 10053120,
     },
     pedestrian: {
       hex: "#DDDDE8",

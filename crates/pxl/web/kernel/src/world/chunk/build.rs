@@ -8,7 +8,7 @@ use pxl_spec::space::pyramid::{LevelPage, CHUNK_CELLS, GROUND};
 use pxl_render::gpu::api::{gpu, room};
 use pxl_render::gpu::renderer::device_ready;
 use pxl_render::mesh::chunk_mesher::{box_words, mesh_words, BakeContext, Heights, Step, COARSE_BOX_WORDS, FINE_BOX_WORDS};
-use pxl_render::mesh::paint::level::write_level_runs;
+use pxl_render::mesh::paint::level::{write_level_runs, Stands};
 use pxl_render::mesh::paint::object::adapter::{Claims, Entries, Painted, Painter};
 use pxl_render::mesh::paint::terrain::adapter::{beside_index, Around, ChunkSample, PageSource, PageView};
 use pxl_render::mesh::volume::Volumes;
@@ -16,7 +16,7 @@ use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanSte
 use pxl_spec::bake::constant::{pack_pos, BandZ, EntryAt, BAND, CELL, OBJECT_FINEST};
 use pxl_spec::space::indexer::{FROM_L2_IDX, L2, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use std::collections::HashMap;
+use std::collections::{HashMap, TryReserveError};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{free, Block};
 
@@ -308,8 +308,12 @@ pub struct Builder {
     bands: Vec<BandView<'static>>,
     claimed: Claims,
     folded: HashMap<[i64; 3], u32>,
+    fold_cells: Vec<([i64; 3], u32)>,
+    /// What stands in each column of a level chunk, by column and height
+    /// (pxl-render mesh/paint/level.rs `write_level_runs`).
     stands: Vec<(u32, Stands)>,
-    /// A z16 chunk's objects folded to its cube, for cubes coarser than an object's finest tier.
+    /// A z16 chunk's objects folded to its cube, as entries: what its paint
+    /// reads where the cube is coarser than an object's finest tier.
     fold_band: Vec<BandZ>,
     fold_pos: Vec<u32>,
     fold_state: Vec<u32>,
@@ -339,6 +343,7 @@ impl Builder {
             claimed: Claims::new(),
             folded: HashMap::new(),
             fold_cells: Vec::new(),
+            stands: Vec::new(),
             fold_band: Vec::new(),
             fold_pos: Vec::new(),
             fold_state: Vec::new(),
@@ -599,8 +604,10 @@ impl Builder {
             self.claimed.clear();
             let fold = object_fold(self.chunks[&id].wanted().next().or_bug(Errno::ENOTRECOVERABLE));
             let folded = fold > OBJECT_FINEST;
-            if folded {
-                self.fold_objects(world, col_idx, fold);
+            if folded && self.fold_objects(world, col_idx, fold).is_err() {
+                world.volumes.release(volume);
+                self.refuse(world, id);
+                return Progress::Blocked;
             }
             let paint = PaintJob {
                 next: 0,
@@ -621,7 +628,9 @@ impl Builder {
             self.refuse(world, id);
             return Progress::Blocked;
         }
-        // The apron comes from the sample; the bands hold only the chunk's own cells.
+        // The apron's columns are the sample's, which paint_terrain read
+        // before the volume was painted: the bands hold the chunk's own
+        // cells and nothing beyond them.
         let apron = Apron {
             ele: &self.sample.ele,
             material: &self.sample.material,
@@ -631,6 +640,10 @@ impl Builder {
         match self.scan.step(&self.bands, &apron) {
             ScanStep::Working => Progress::Busy,
             ScanStep::Done => xpute_core::bug!(ENOTRECOVERABLE),
+            ScanStep::Refused => {
+                self.refuse(world, id);
+                Progress::Blocked
+            }
             ScanStep::NeedSet(bytes) => {
                 let Some((set, at)) = self.set_of(id, bytes) else {
                     self.refuse(world, id);
@@ -659,9 +672,11 @@ impl Builder {
         }
     }
 
+    /// A new volume with the chunk's terrain painted in, open; none when the
+    /// sample or the paint was refused.
     fn paint_terrain(&mut self, world: &mut World, id: u32, read: Read) -> Option<u32> {
         let show = self.chunks[&id].structures;
-        self.sample.read(&read.around(), read.first, hidden_ground(show));
+        self.sample.read(&read.around(), read.first, hidden_ground(show)).ok()?;
         let volume = world.volumes.open();
         if !self.sample.paint(world.volumes, volume) {
             world.volumes.release(volume);
@@ -670,28 +685,41 @@ impl Builder {
         Some(volume)
     }
 
-    /// Fills the fold lanes with a column's entries at `scale` (`Store::fold_entries`),
-    /// leaving out the hidden entry. Errors where the heap refused room.
+    /// A column's voxel entries folded to `scale` by the fold every level
+    /// shares, as the store keeps it (layer/object/store.rs `fold_cell`), as
+    /// entries of that scale in the builder's fold lanes: what a z16 chunk
+    /// paints for a cube coarser than an object's finest tier. The hidden
+    /// entry is left out, as the paint would leave it out.
+    /// An error, and nothing folded, where the heap refused the fold room.
     fn fold_objects(&mut self, world: &mut World, col_idx: IVec, scale: Scale) -> Result<(), TryReserveError> {
-        let (band, pos, state) = (&mut self.fold_band, &mut self.fold_pos, &mut self.fold_state);
-        band.clear();
-        pos.clear();
-        state.clear();
-        let mut refused = Ok(());
-        world.store.fold_entries(col_idx, scale, self.hide, &mut |b, [x, y, z], s, v| {
-            if refused.is_ok() {
-                refused = (|| {
-                    band.try_reserve(1)?;
-                    pos.try_reserve(1)?;
-                    state.try_reserve(1)?;
-                    band.push(b);
-                    pos.push(pack_pos(x, y, z, s));
-                    state.push(v);
-                    Ok(())
-                })();
-            }
-        });
-        refused
+        let o = FROM_L2_IDX(col_idx);
+        let (x0, y0) = (ivec::X(o), ivec::Y(o));
+        let cells = scale.count_in(L2) as i64;
+        let at = [ivec::X(col_idx) * cells, ivec::Y(col_idx) * cells];
+        world.store.fold_at(scale, at, [at[0] + cells, at[1] + cells], self.hide, &mut self.folded)?;
+        // A cell's corner in finest steps: absolute, then from the column's
+        // corner and its band's floor.
+        let n = OBJECT_FINEST.count_in(scale) as i64;
+        let band_steps = OBJECT_FINEST.count_in(BAND) as i64;
+        let (fx, fy) = (OBJECT_FINEST.index(x0), OBJECT_FINEST.index(y0));
+        let n_folded = self.folded.len();
+        self.fold_cells.clear();
+        self.fold_band.clear();
+        self.fold_pos.clear();
+        self.fold_state.clear();
+        self.fold_cells.try_reserve(n_folded)?;
+        self.fold_band.try_reserve(n_folded)?;
+        self.fold_pos.try_reserve(n_folded)?;
+        self.fold_state.try_reserve(n_folded)?;
+        self.fold_cells.extend(self.folded.iter().map(|(&c, &state)| (c, state)));
+        self.fold_cells.sort_unstable();
+        for &([cx, cy, cz], state) in &self.fold_cells {
+            let z = cz * n;
+            self.fold_band.push(z.div_euclid(band_steps) as BandZ);
+            self.fold_pos.push(pack_pos((cx * n - fx) as u32, (cy * n - fy) as u32, z.rem_euclid(band_steps) as u32, scale));
+            self.fold_state.push(state);
+        }
+        Ok(())
     }
 
     fn advance_paint(&mut self, world: &mut World, id: u32, volume: u32, mut paint: PaintJob) -> Progress {
@@ -728,7 +756,8 @@ impl Builder {
             self.refuse(world, id);
             return Progress::Blocked;
         }
-        // SAFETY: the sealed volume is held by the scan job until the scan finishes.
+        // SAFETY: the volume, once sealed, is held by the scan job until the
+        // scan finishes.
         if !world.volumes.seal(volume) || !unsafe { world.volumes.band_views(volume, &mut self.bands) } {
             self.refuse(world, id);
             return Progress::Blocked;
@@ -743,14 +772,19 @@ impl Builder {
             return Progress::Blocked;
         }
         let show = self.chunks[&id].structures;
-        self.sample.read(&read.around(), read.first, hidden_ground(show));
+        if self.sample.read(&read.around(), read.first, hidden_ground(show)).is_err() {
+            self.refuse(world, id);
+            return Progress::Blocked;
+        }
         xpute_core::ensure!(self.direct.begin_direct(), ENOTRECOVERABLE);
         // The chunk's columns and the apron's, in the writer's one order.
         for i in 0..(COL_SPAN * COL_SPAN) as usize {
             self.direct.direct_column(i as u32);
-            let top = self.sample.ele[i] as i32 - 1;
-            if top >= floor {
-                self.direct.direct_run(floor, top, self.sample.material[i], self.sample.layer_idx[i]);
+            let direct = &mut self.direct;
+            if self.sample.column_runs(i, |lo, hi, material, layer| direct.direct_run(lo, hi, material, layer)).is_err() {
+                self.direct.abort();
+                self.refuse(world, id);
+                return Progress::Blocked;
             }
         }
         let bytes = self.direct.close_direct();
@@ -775,27 +809,27 @@ impl Builder {
         }
         let c = &self.chunks[&id];
         let (show, level, base) = (c.structures, c.level(), c.base());
-        self.sample.read(&read.around(), read.first, hidden_ground(show));
+        if self.sample.read(&read.around(), read.first, hidden_ground(show)).is_err() {
+            self.refuse(world, id);
+            return Progress::Blocked;
+        }
         let target = GROUND.scale(level);
         let (x0, y0) = (ivec::X(base), ivec::Y(base));
         // One cell of apron, which a fold reads (`folds_into`).
         let (cx, cy, span) = (target.index(x0), target.index(y0), CHUNK_CELLS as i64);
-        if world
-            .store
-            .fold_at(target, [cx - 1, cy - 1], [cx + span + 1, cy + span + 1], render_edits().hide, &mut self.folded)
-            .is_err()
-        {
+        if world.store.fold_at(target, [cx - 1, cy - 1], [cx + span + 1, cy + span + 1], self.hide, &mut self.folded).is_err() {
             self.refuse(world, id);
             return Progress::Blocked;
         }
         xpute_core::ensure!(self.direct.begin_direct(), ENOTRECOVERABLE);
-        write_level_runs(
+        let written = write_level_runs(
             &mut self.direct,
             &self.sample,
             world.painter,
             &self.folded,
             (target.index(x0), target.index(y0)),
             GROUND.scale(0).count_in(target),
+            &mut self.stands,
         );
         if written.is_err() {
             self.direct.abort();
@@ -856,11 +890,7 @@ impl Builder {
             // Runs span the whole column; this chunk bakes only its own heights.
             let (z0, z1) = c.at.z_range();
             let clip = Some((z0 as i32, z1 as i32));
-            if self
-                .bake
-                .begin(&set, mesh_step(scale, c.level()), GROUND.finest_in(c.level()), settings_store().textures, clip)
-                .is_err()
-            {
+            if self.bake.begin(&set, mesh_step(cube, c.level()), 1 << c.level(), settings_store().textures, clip).is_err() {
                 self.refuse(world, id);
                 return Progress::Blocked;
             }
@@ -874,6 +904,11 @@ impl Builder {
         }
         match self.bake.step(&set) {
             Step::Working => Progress::Busy,
+            Step::Refused => {
+                self.bake_job = None;
+                self.refuse(world, id);
+                Progress::Blocked
+            }
             Step::NeedMesh(words) => {
                 // All slots are held at once or the bake is thrown away: a mesh is never
                 // cut, never baked coarser, and never waits while holding the one bake.

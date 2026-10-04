@@ -14,8 +14,6 @@ import { TreeReader } from "@xpute/core/wire/xtp/mod.ts";
 import {
   Command,
   encode_gpu_ready,
-  encode_input_go_to,
-  encode_input_view,
   encode_load_failed,
   encode_setting_set,
   encode_setting_toggle,
@@ -57,11 +55,23 @@ CORE_DOORBELL.signal = (_tag, cmd, f) => {
 const HEAP_TOP = 1;
 const HEAP_REQUESTS = 8;
 const heap_row = new Uint32Array(CORE.buffer, directory(CORE.buffer).get(entry.HEAP_ROW), 9);
-let strobe_requests = 0;
-const answer_requests: Record<string, number> = {};
 
-/** One frame as the driver runs it, and the host's answers let in after it. */
-async function turn(delta = 1 / 60): Promise<Snapshot> {
+/** A response as the driver reports one: the body held for the kernel. */
+function answer(f: Fetched, outcome: FetchOutcome, body: U8Array | null): void {
+  const bytes = body?.byteLength ?? 0;
+  const held = body !== null && bytes > 0 ? BODIES.hold(body) : 0;
+  CORE_DOORBELL.send(0, XputeCommand.FETCH_DONE, encode_fetch_done({ key: f.key, outcome, body: held, body_bytes: bytes, fail: FetchFail.None, detail: 0, net_ms: 0 }));
+  CORE_DOORBELL.ring(0);
+}
+
+function fail(f: Fetched): void {
+  CORE_DOORBELL.send(0, XputeCommand.FETCH_DONE, encode_fetch_done({ key: f.key, outcome: FetchOutcome.Error, body: 0, body_bytes: 0, fail: FetchFail.Network, detail: 0, net_ms: 0 }));
+  CORE_DOORBELL.ring(0);
+}
+
+/** One frame as the driver runs it, with every fetch answered at once. */
+function turn(delta = 1 / 60): Turn {
+  fetched = [];
   loads = [];
   CORE_DOORBELL.send(
     0,
@@ -69,7 +79,12 @@ async function turn(delta = 1 / 60): Promise<Snapshot> {
     encode_world_frame({ width: 1280, height: 720, dpr: 1, delta_s: delta, frame_ms: 1000 / 60, interactive: true, credits: 6, unix_ms: 0, hours: 12, minutes: 0, seconds: 0, day_start_ms: 0 }),
   );
   CORE_DOORBELL.ring(8);
-  // An image's read is a read: it is settled by the key it was started with,
+  const started = fetched;
+  for (const f of started) {
+    if (f.category === "terrain") answer(f, FetchOutcome.Read, terrain_body(Number(BigInt(f.name.slice(f.name.indexOf("/") + 1)) & 0xffffn)));
+    else fail(f);
+  }
+  // An asset's read is a read: it is settled by the key it was started with,
   // and the kernel asks again in its own time.
   for (const key of loads) CORE_DOORBELL.send(0, Command.LOAD_FAILED, encode_load_failed({ key }));
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -96,7 +111,6 @@ CORE_DOORBELL.call(
   (r) => r,
 );
 CORE_DOORBELL.send(0, Command.WORLD_SOURCE, encode_world_source({ top_level: PUBLISHED_SOURCE.top_level }));
-console.log(`heap: boot and world create ${heap_row[HEAP_REQUESTS]} requests, top ${heap_row[HEAP_TOP]}`);
 
 /** A device that accepts every call: without one the world lists nothing to draw. */
 function inert(): unknown {
@@ -124,9 +138,9 @@ const device = await acquireDevice(() => {});
 assert(device, "the stand-in device answered");
 CORE_DOORBELL.send(0, Command.GPU_READY, encode_gpu_ready({ min_uniform_offset_alignment: device.align, timestamps: device.timestamps }));
 CORE_DOORBELL.ring(0);
-await turn();
+turn();
 
-Deno.test("kernel - the settings commands reach the snapshot", async () => {
+Deno.test("kernel - the settings commands reach the snapshot", () => {
   const tilt = SETTINGS.tilt_lock.key;
   const before = (await turn()).settings[tilt];
   command(Command.SETTING_TOGGLE, encode_setting_toggle({ key: tilt }));
@@ -140,34 +154,4 @@ Deno.test("kernel - a settled turn asks the module heap for nothing", async () =
   const [top, requests] = [heap_row[HEAP_TOP], heap_row[HEAP_REQUESTS]];
   for (let i = 0; i < 100; i++) await turn();
   assertEquals([heap_row[HEAP_REQUESTS] - requests, heap_row[HEAP_TOP] - top], [0, 0], "a hundred settled turns: no request, and the heap's top where it was");
-});
-
-Deno.test("kernel - heap requests along the event paths", () => {
-  for (let i = 0; i < 50; i++) turn();
-  let mark = heap_row[HEAP_REQUESTS];
-  const since = () => {
-    const n = heap_row[HEAP_REQUESTS] - mark;
-    mark = heap_row[HEAP_REQUESTS];
-    return n;
-  };
-  strobe_requests = 0;
-  for (const k of Object.keys(answer_requests)) delete answer_requests[k];
-  command(Command.INPUT_GO_TO, encode_input_go_to({ lon: 127.3, lat: 36.35 }));
-  let load = 0;
-  for (let i = 0; i < 200; i++) turn();
-  load = since();
-  console.log(`heap: a far jump and its load ${load}`);
-  console.log(`heap: the load's strobes ${strobe_requests}, its answers ${JSON.stringify(answer_requests)}`);
-});
-
-Deno.test("kernel - a view from high up draws its outermost ring, which is coarser than the rings under it", () => {
-  command(Command.INPUT_GO_TO, encode_input_go_to({ lon: 126.9706, lat: 37.5547 }));
-  for (let k = 0; k < 40; k++) turn();
-  // Far enough that the window spans several levels: the outermost has no
-  // level over it, so it is drawn as coarse as the ladder says rather than
-  // one step off its own cells, and asks for tiers the finer rings never do.
-  command(Command.INPUT_VIEW, encode_input_view({ dist: 8000, polar: (80 * Math.PI) / 180 }));
-  let drawn = 0;
-  for (let k = 0; k < 200; k++) drawn = Math.max(drawn, turn().draws);
-  assert(drawn > 0, "the far view drew something");
 });

@@ -8,7 +8,8 @@
 use pxl_spec::bake::format::{decode_terrain_into, Block, PageRoom, Terrain, BLOCK_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::pyramid::LevelPage;
-use xpute_runtime::abi::fetch::FetchFail;
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 use xpute_runtime::mem::base::ptr_at;
 
 use crate::sched::profiler::record::Failure;
@@ -43,7 +44,8 @@ impl Layer for Terrain {
     /// drawing.
     fn receive(record: u32, pkt: &[u8], phases: &mut Phases) -> Result<Terrain, Failure> {
         let t0 = now();
-        // SAFETY: the record is this page's, and nothing reads it until the page is set.
+        // SAFETY: the record is this page's from the pyramid, and nothing
+        // reads it until the page is set.
         let terrain = decode_terrain_into(pkt, unsafe { room_of(record) })?;
         phases.push(TaskPhaseName::decode_ms, now() - t0);
         Ok(terrain)
@@ -67,21 +69,24 @@ impl Layer for Terrain {
     }
 }
 
+/// A record's lanes, as the room a page is written into.
+///
 /// # Safety
 /// The record's lanes are the page's that is given them, and no other's,
 /// from now until another page takes the record.
 unsafe fn room_of(record: u32) -> PageRoom {
-    // Inside the range by the layout, so past its end is a bug.
+    // A record's lanes are inside the range by its layout (layer/terrain/
+    // fixed.rs), so one past its end is a bug.
     let lane = |off, bytes| at(Range::Terrain, off, bytes).or_bug(Errno::ENOTRECOVERABLE) as usize;
     let (cells, ele, extent, blocks) = (
-        lane(ground_off(record), GROUND_LANE_BYTES)?,
-        lane(ele_off(record), ELE_LANE_BYTES)?,
-        lane(extent_off(record), EXTENT_LANE_BYTES)?,
-        lane(blocks_off(record), BLOCK_LANE_BYTES)?,
+        lane(ground_off(record), GROUND_LANE_BYTES),
+        lane(ele_off(record), ELE_LANE_BYTES),
+        lane(extent_off(record), EXTENT_LANE_BYTES),
+        lane(blocks_off(record), BLOCK_LANE_BYTES),
     );
-    let deck_lane = |k: usize| lane(deck_off(record, k), DECK_LANE_BYTES[k]);
-    // SAFETY: each lane is kernel memory at its own size, never freed, and the
-    // caller's contract makes it this page's alone.
+    // SAFETY: each lane is a block of the kernel's memory at its own size,
+    // placed once and never freed, and the caller's contract makes it this
+    // page's alone.
     unsafe {
         PageRoom {
             cells: core::slice::from_raw_parts_mut(ptr_at::<GroundCell>(cells), GROUND_LANE),
@@ -89,7 +94,7 @@ unsafe fn room_of(record: u32) -> PageRoom {
             extent: core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(extent), EXTENT_LANE),
             blocks: core::slice::from_raw_parts_mut(ptr_at::<Block>(blocks), BLOCK_LANE),
         }
-    })
+    }
 }
 
 struct Ocean {
@@ -109,7 +114,7 @@ pub fn adopt_ocean(pkt: &[u8]) -> Result<(), Failure> {
         return Ok(());
     }
     // SAFETY: `ABSENT`, which no page takes and is written once.
-    let terrain = decode_terrain_into(pkt, unsafe { room_of(ABSENT)? })?;
+    let terrain = decode_terrain_into(pkt, unsafe { room_of(ABSENT) })?;
     let o = ocean();
     for p in o.waiting.drain(..) {
         Terrain::pyramid().set(p, terrain.clone());

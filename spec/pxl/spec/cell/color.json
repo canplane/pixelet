@@ -34,8 +34,12 @@
   "transport": {
     "road_default": { "hex": "#FFFFFF" },
     "road_motorway": { "hex": "#E892A2" },
+    "road_trunk": { "hex": "#F9B29C" },
     "road_primary": { "hex": "#FCD6A4" },
     "road_secondary": { "hex": "#F7FABF" },
+    "road_tertiary": { "hex": "#FFFFFF" },
+    "road_service": { "hex": "#FFFFFF" },
+    "track": { "hex": "#996600" },
     "pedestrian": { "hex": "#DDDDE8" },
     "parking": { "hex": "#EEEEEE" },
     "rail_main": { "hex": "#707070" },

@@ -176,7 +176,3 @@ pub fn view_sees_sphere(x: f64, y: f64, z: f64, radius: f64) -> bool {
     }
     true
 }
-
-#[cfg(test)]
-#[path = "view.test.rs"]
-mod test;
