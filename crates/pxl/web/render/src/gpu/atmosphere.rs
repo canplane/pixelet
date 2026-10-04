@@ -7,7 +7,7 @@
 //! perspective along the screen's rays and the exposure.
 
 use pxl_spec::bake::earth_page::{EARTH_LEVEL, EARTH_TEXELS};
-use pxl_spec::space::lod::{FAULT_ACROSS, FAULT_PAGES};
+use pxl_spec::space::lod::{fault_radius, FAULT_ACROSS, FAULT_PAGES};
 use pxl_spec::space::pyramid::pages_around;
 use pxl_spec::space::v3::V3;
 
@@ -60,6 +60,7 @@ pub(crate) const CLOUD_COUNT: usize = 45;
 pub(crate) const CLOUD_ALTITUDE: usize = 46;
 pub(crate) const CLOUD_GONE: usize = 47;
 pub(crate) const CITY_LIGHT: usize = 48;
+pub(crate) const EARTH_REACH: usize = 51;
 pub(crate) const EARTH_WINDOW: usize = 52;
 pub(crate) const EARTH_PAGES: usize = 56;
 
@@ -145,6 +146,7 @@ impl Atmosphere {
             words[at] = v as f32;
         }
         words[SUN_DIR + 2] = 1.0;
+        words[EARTH_REACH] = fault_radius(EARTH_LEVEL) as f32;
         words[EARTH_WINDOW + 2] = f32::from_bits(FAULT_ACROSS);
         words[EARTH_WINDOW + 3] = f32::from_bits(pages_around(EARTH_LEVEL) as u32);
 

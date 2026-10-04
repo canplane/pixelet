@@ -157,6 +157,7 @@ fn the_skys_layouts_match_their_structs() {
             ("cloud_altitude_km", a::CLOUD_ALTITUDE),
             ("cloud_gone_km", a::CLOUD_GONE),
             ("city_light", a::CITY_LIGHT),
+            ("earth_reach", a::EARTH_REACH),
             ("earth_window", a::EARTH_WINDOW),
             ("earth_pages", a::EARTH_PAGES),
         ],
