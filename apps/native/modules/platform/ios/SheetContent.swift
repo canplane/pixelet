@@ -10,11 +10,7 @@ import SwiftUI
 /// @expo/ui's registry (PlatformModule's OnCreate).
 struct ContentScrollsModifier: ViewModifier {
   func body(content: Content) -> some View {
-    if #available(iOS 16.4, *) {
-      content.presentationContentInteraction(.scrolls)
-    } else {
-      content
-    }
+    content.presentationContentInteraction(.scrolls)
   }
 }
 

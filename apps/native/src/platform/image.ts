@@ -2,6 +2,7 @@
 
 /** Decoded by the core off the JS thread. */
 
+import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { PLATFORM } from "./module.ts";
 

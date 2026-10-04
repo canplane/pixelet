@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Defs, LinearGradient, Mask, Rect, Stop, Svg } from "react-native-svg";
 
+import { useSafeArea } from "@platform/safe-area.ts";
 import { useViewportTop, useWindowSize } from "@platform/viewport.ts";
 import { useAppContext } from "@/app/provider/context.ts";
 import { useKernel } from "@/kernel/shell.ts";
@@ -22,9 +23,7 @@ import { BusyDim } from "@/feature/map/ui/busy-dim.tsx";
 import { SettingsTriggerButton } from "@/feature/setting/trigger-button.tsx";
 
 export function TopOverlays() {
-  const { ui } = useAppContext();
-  const { t } = useTranslation();
-  const top = chrome.inset + useViewportTop();
+  const top = chrome.inset + useSafeArea().top + useViewportTop();
 
   const addressLabel = useReverseGeocode();
   const zooming = useKernel((s) => s.zooming);
@@ -60,17 +59,30 @@ export function TopOverlays() {
       </BusyDim>
 
       <BusyDim style={[styles.center, { top }]}>
-        {
-          // The whole strip, scale shown or not.
-        }
-        <Pressable onPress={() => openModal("search")} accessibilityRole="button" accessibilityLabel={t("map.search.trigger_aria_label")} style={styles.strip}>
-          <Presence show={!zooming} from={{ opacity: 0 }} exit={{ opacity: 0 }} transition={SETTLE} exitTransition={LEAVE} style={styles.place}>
-            <View style={styles.title}>
-              <View style={styles.search}>
-                <HaloIcon glyph="magnifyingglass" size={12} weight="semibold" color={color.white} />
-                <CurrentAddress label={addressLabel} />
-              </View>
-              <SensorStatus />
+        <SearchStrip />
+      </BusyDim>
+
+      <BusyDim style={[styles.right, { top }]}>
+        <LocationButtons />
+        <ViewButtons />
+      </BusyDim>
+    </>
+  );
+}
+
+/** Inside the dim, so the address and the scale fade with the buttons. */
+function SearchStrip() {
+  const { t } = useTranslation();
+  const zooming = useKernel((s) => s.zooming);
+  const veil = useVeil(1, SNAP);
+  return (
+    <Motion {...veil.motion} style={styles.fill}>
+      <Pressable onPress={() => openModal("search")} accessibilityRole="button" accessibilityLabel={t("map.search.trigger_aria_label")} style={styles.strip}>
+        <Presence show={!zooming} from={{ opacity: 0 }} exit={{ opacity: 0 }} transition={SETTLE} exitTransition={LEAVE} style={styles.place}>
+          <View style={styles.title}>
+            <View style={styles.search}>
+              <HaloIcon glyph="magnifyingglass" size={12} weight="semibold" color={color.white} />
+              <CurrentAddress />
             </View>
             <SensorStatus />
           </Pressable>

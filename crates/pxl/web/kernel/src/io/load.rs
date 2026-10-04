@@ -4,28 +4,9 @@
 //! at most once. An asset is a want in the request scheduler like a page, sharing
 //! its credits, and stays wanted until it arrives.
 //!
-//! An asset asked for here for the first time becomes a want like any other
-//! (`load_wants`, `io/sched.rs`): it shares the credits with the pages, so a
-//! hundred and twenty-eight of them do not all go at once, and it waits its
-//! turn among them rather than beside them.
-//!
-//! It is never stale. A page is wanted while the view is where it is; an
-//! asset is wanted from the first time something needs it until it is there,
-//! so nothing withdraws one and `Pending` is the whole of the record that it
-//! is wanted.
-//!
-//! **Two failures, and only one of them is worth trying again.** A read that
-//! did not arrive is the transport's, and the asset goes back to being wanted
-//! — the scheduler holds it for a while first. Bytes that do not parse are
-//! the asset's own, and asking for them again brings back the same bytes, so
-//! that one is final.
-//!
-//! Where an asset lives is the host's. A model is a file below the assets'
-//! root (io/file.rs), opened, then read and parsed by `gltf_task` on the
-//! turns' quota; an image is decoded where the device is and comes back as
-//! the host's handle (LOAD_START, `image_arrived`) — the file's own pixels,
-//! top row first, no color conversion and no premultiplied alpha. A consumer
-//! polls: None while the read is out or the asset is broken.
+//! A read that did not arrive is retried; bytes that do not parse are final,
+//! since asking again returns the same bytes. Images are decoded by the host
+//! under a kernel-issued handle and never cross into the kernel.
 
 use std::rc::Rc;
 
@@ -46,15 +27,13 @@ use xpute_core::status::errno::Errno;
 use xpute_runtime::abi::handle::Slots;
 use xpute_runtime::global::Global;
 
-/// What an asset is read as.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LoadKind {
     Gltf = 0,
     Image = 1,
 }
 
-/// What a load names: a shipped asset, or the texture pack's sheet, which the
-/// ingest writes beside the table rather than as a row of it.
+/// The texture pack's sheet is written beside the asset table, not as a row of it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Load {
     Asset(Asset),
@@ -62,8 +41,6 @@ pub enum Load {
 }
 
 impl Load {
-    /// Its number, the path it is opened at below the assets' root: an
-    /// asset's own, the sheet one past the last.
     pub fn number(self) -> u32 {
         match self {
             Load::Asset(a) => a as u32,
@@ -85,8 +62,8 @@ impl Load {
 /// model was re-read 38 times, once a turn, for as long as its parse took.
 enum Entry<T> {
     Pending,
-    /// The file is open as this descriptor, this long, and nothing has read
-    /// or parsed it yet.
+    /// A model: open as this descriptor, this long, unparsed. An image: the
+    /// handle it is being decoded under.
     Arrived(u32, u32),
     Ready(T),
     Failed,
@@ -179,22 +156,53 @@ fn arrivals() -> &'static mut Notify {
     ARRIVALS.get(Notify::new)
 }
 
-/// Opens a model's file for the scheduler's attempt `key`.
-pub fn open_model(key: u64, load: Load) {
-    file::open(root::ASSET, &load.number().to_string(), Owner::Model { key });
+pub fn open_asset(key: u64, kind: LoadKind, load: Load) {
+    let owner = match kind {
+        LoadKind::Gltf => Owner::Model { key },
+        LoadKind::Image => Owner::Image { key },
+    };
+    file::open(root::ASSET, &load.number().to_string(), owner);
 }
 
-/// Stops a model's read, if one is open: the asset is wanted again, as after
-/// a read that did not arrive.
-pub fn cancel_model(key: u64) -> bool {
-    let Some(fd) = file::held_for(|o| *o == Owner::Model { key }) else { return false };
+pub fn cancel_asset(key: u64) -> bool {
+    let Some(fd) = file::held_for(|o| *o == Owner::Model { key } || *o == Owner::Image { key }) else {
+        return false;
+    };
     file::close(fd);
     load_rejected(key);
     true
 }
 
-/// The host's answer to a model's open: `gltf_task`'s to read and parse, or
-/// a read that did not arrive.
+static IMAGES: Global<Slots<()>> = Global::new();
+
+/// The file is closed in the same turn: the host takes its bytes when it runs the decode.
+pub fn image_opened(fd: u32, key: u64, res: i32) {
+    if res < 0 {
+        file::close(fd);
+        load_rejected(key);
+        return;
+    }
+    let Some((_, load)) = ended(key, Outcome::ok) else {
+        file::close(fd);
+        return;
+    };
+    let image = IMAGES.get(Slots::default).insert(());
+    host_record(op::IMAGE_DECODE, &[fd, image], &[]);
+    file::close(fd);
+    loader().image[load.number() as usize] = Some(Entry::Arrived(image, 0));
+}
+
+/// A file the device cannot decode is the asset's own failure, so it is final.
+pub fn image_decoded(image: u32, res: i32) {
+    let l = loader();
+    let Some(n) = (0..LOADS).find(|&n| matches!(l.image[n], Some(Entry::Arrived(h, _)) if h == image)) else {
+        return;
+    };
+    l.image[n] = Some(if res == 0 { Entry::Ready(image) } else { Entry::Failed });
+    decor_assets_arrived();
+    request_world_tick();
+}
+
 pub fn model_opened(fd: u32, key: u64, res: i32) {
     if res < 0 {
         file::close(fd);

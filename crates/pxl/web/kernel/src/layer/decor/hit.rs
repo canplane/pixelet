@@ -7,7 +7,7 @@
 use pxl_spec::bake::constant::CELL;
 use pxl_spec::space::indexer::L2_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::v3::{Aabb, V3};
+use pxl_spec::space::v3::{cross3, dot3, sub3, Aabb, V3};
 use xpute_runtime::mem::base::ptr_at;
 
 use crate::kernel::kernel;
@@ -17,19 +17,14 @@ use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::EntryAt;
 use crate::world::chunk::table::Scheduler;
 
-
-/// What decor a ray struck.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DecorStruck {
-    /// A placed instance: where its entry is filed.
     Placed(EntryAt),
-    /// A scattered instance.
     Scattered(Scattered),
 }
 
-/// A scattered instance a ray struck: the cell it stands in, which a leaf
-/// written there overrides, and how it is drawn — its group, where it
-/// stands, its turn and its size — for a preview drawn as it is.
+/// The cell it stands in, which a leaf written there overrides, and how it
+/// is drawn, for a preview.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Scattered {
     pub cell: [i64; 3],
@@ -39,12 +34,12 @@ pub struct Scattered {
     pub scale: f64,
 }
 
-/// The decor the ray strikes within `max_dist`, or None. The ray is in the
-/// root frame, relative to `map_origin`.
+/// The ray is in the root frame, relative to `map_origin`. A decor wins only
+/// strictly nearer than `max_dist`, the world's hit, as a depth test decides.
 pub fn raycast_decor(origin: V3, direction: V3, map_origin: IVec, max_dist: f64) -> Option<DecorStruck> {
     let (_, sched) = kernel().world()?;
     let frame = [ivec::to_real(ivec::X(map_origin)), ivec::to_real(ivec::Y(map_origin))];
-    let hit = hit_decor(sched, frame, origin, direction, max_dist + SAME_SURFACE_EPS)?;
+    let hit = hit_decor(sched, frame, origin, direction, max_dist)?;
     if hit.band == NO_ENTRY {
         return Some(DecorStruck::Scattered(Scattered {
             cell: hit.at.map(|v| (v / CELL.side()).floor() as i64),
@@ -54,7 +49,7 @@ pub fn raycast_decor(origin: V3, direction: V3, map_origin: IVec, max_dist: f64)
             scale: hit.scale,
         }));
     }
-    // The lane holds the band's own i32 as a word (layer/decor/build.rs).
+    // The lane holds the band's i32 as a word.
     Some(DecorStruck::Placed(EntryAt {
         col_idx: {
             let (x0, y0, _) = hit.cell.rect();
@@ -65,10 +60,7 @@ pub fn raycast_decor(origin: V3, direction: V3, map_origin: IVec, max_dist: f64)
     }))
 }
 
-/// What a ray struck among the decor shown: the decor cell it stands in, a
-/// z16 one, the entry's band and packed position in that cell's column —
-/// NO_ENTRY for a scattered instance — where the instance stands, and how
-/// far along.
+/// `band` is NO_ENTRY for a scattered instance.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct DecorHit {
     pub cell: crate::world::pyramid::chunk::Chunk,
@@ -81,25 +73,13 @@ struct DecorHit {
     pub t: f64,
 }
 
-/// The model each decor group is drawn with, in group order, none while it
-/// loads.
+/// None while it loads.
 fn group_models() -> impl Iterator<Item = Option<u32>> {
-    decor_bundle_assets().iter().flat_map(|e| e.models.iter().copied())
+    kind_assets().iter().flat_map(|e| e.models.iter().copied())
 }
 
-/// How far past a decor cell's own square a placed instance standing in it can
-/// reach, in units: the largest decor model's bounding radius at the largest
-/// size decor is placed at — what the models are, and nothing guessed — only
-/// for skipping chunks the ray never comes near.
-fn decor_reach(sched: &Scheduler) -> f64 {
-    let radius = sched.decor_models.iter().flatten().filter_map(|&m| sched.models.mesh(m)).map(|m| m.radius as f64 * m.scale as f64).fold(0.0, f64::max);
-    radius * DECOR_SIZE
-}
-
-/// How far past a chunk's own square a placed instance standing in it can
-/// reach, in units: the largest decor model's bounding radius at the largest
-/// size decor is placed at — what the models are, and nothing guessed — only
-/// for skipping chunks the ray never comes near.
+/// The largest model's bounding radius at the largest decor size; only for
+/// skipping cells the ray never comes near.
 fn decor_reach(sched: &Scheduler) -> f64 {
     let radius = group_models()
         .flatten()
@@ -109,10 +89,7 @@ fn decor_reach(sched: &Scheduler) -> f64 {
     radius * DECOR_SIZE
 }
 
-/// The nearest decor instance the ray strikes within `max_dist`, over the
-/// decor every shown z16 cell holds, model triangle by triangle after a
-/// bounding sphere. Hidden ones are tested, since the hidden one is what the
-/// eraser is over.
+/// Hidden instances are tested too: the hidden one is what the eraser is over.
 fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: f64) -> Option<DecorHit> {
     let mut best: Option<DecorHit> = None;
     let mut limit = max_dist;
@@ -156,7 +133,7 @@ fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: 
                     continue;
                 }
                 // Into the model's frame: spin undone, the stand-up quarter turn about X, scale.
-                let (sn, cs) = (-spin).sin_cos();
+                let (sn, cs) = libm::sincos(-spin);
                 let unturn = |v: [f64; 3]| [v[0] * cs - v[1] * sn, v[0] * sn + v[1] * cs, v[2]];
                 let to_model = |v: [f64; 3]| {
                     let u = unturn(v);

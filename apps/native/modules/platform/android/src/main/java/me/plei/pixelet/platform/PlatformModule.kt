@@ -49,7 +49,7 @@ class PlatformModule : Module() {
     /** Decodes a PNG or a WebP and holds it for the renderer: its handle, or 0
      * when it does not decode. Async, so it runs off the JavaScript thread: a
      * large image costs no turn. */
-    AsyncFunction("imageHold") { file: ByteArray -> PxlCore.imageHold(file) }
+    AsyncFunction("imageHold") { handle: Int, file: ByteArray -> PxlCore.imageHold(handle, file) }
 
     // ---- storage (platform/storage.ts) ----
     //
@@ -117,17 +117,13 @@ class PlatformModule : Module() {
       Events("onLift")
       // The shell's lengths are in density-independent pixels, the view's in
       // the screen's.
-      Prop("clearance") { view: KeyboardDock, clearance: Double ->
-        view.clearance = (clearance * view.resources.displayMetrics.density).toInt()
-      }
-      Prop("rest") { view: KeyboardDock, rest: Double ->
-        view.rest = (rest * view.resources.displayMetrics.density).toInt()
-      }
-      Prop("applied") { view: KeyboardDock, applied: Double ->
-        view.applied = (applied * view.resources.displayMetrics.density).toInt()
-      }
+      Prop("clearance") { view: KeyboardDock, clearance: Double -> view.clearance = view.px(clearance) }
+      Prop("rest") { view: KeyboardDock, rest: Double -> view.rest = view.px(rest) }
+      Prop("applied") { view: KeyboardDock, applied: Double -> view.applied = view.px(applied) }
     }
   }
 
   private fun preferences() = context.getSharedPreferences("pxl", Context.MODE_PRIVATE)
+
+  private fun android.view.View.px(dp: Double): Int = (dp * resources.displayMetrics.density).toInt()
 }

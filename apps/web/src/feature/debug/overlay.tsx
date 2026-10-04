@@ -7,7 +7,7 @@
  * `__pxl_view` and `__pxl_gauge` on `window` for A/B runs.
  */
 
-import { ChevronDown, ChevronUp } from "lucide-react-native";
+import { CaretDown, CaretUp } from "phosphor-react-native";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
@@ -145,16 +145,7 @@ export function DebugOverlay() {
       {viewOpen && g !== null && <ProfilerView v={g.view} />}
 
       <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" aria-expanded={open}>
-        <Title
-          end={
-            <View style={styles.titleEnd}>
-              <Text style={[gauge.text, gauge.key]}>last {LIVE_WINDOW_MS / 1000} s</Text>
-              <Caret open={open} />
-            </View>
-          }
-        >
-          performance
-        </Title>
+        <Head end={open ? <CaretUp size={12} color={HINT_INK} /> : <CaretDown size={12} color={HINT_INK} />}>last 10s</Head>
       </Pressable>
       {open && (
         <>

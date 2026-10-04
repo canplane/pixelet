@@ -4,66 +4,63 @@
 //! Segment and base values come from a Gangnam sample; building classes from
 //! the published schema (only ~14% of Korean buildings have one).
 
-use pxl_spec::bake::format::{CellConfig, GroundChannelKey};
-use pxl_spec::bake::model::feature::{FeatureComputed, FeatureExtra, Joins};
+use pxl_spec::bake::constant::U_PER_CELL;
+use pxl_spec::bake::deck::WIDEST;
+use pxl_spec::bake::format::GroundChannelKey;
 use pxl_spec::cell::cube::cube_types;
 use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m, G3857};
 
-use crate::terrain::pipeline::normalizer::{NormalizePolicy, RawFeature};
-use crate::terrain::pipeline::overture::adapter::{BaseSource, OvertureRawFeature};
+use crate::deck::Drawn;
+use crate::segment::Segment;
+use crate::terrain::pipeline::feature::{Cell, Feature, Joins};
+use crate::terrain::pipeline::overture::between::{cell_of, flag_ranges, length_of, merged, split_ranged};
 use crate::terrain::pipeline::overture::role::Role;
-use crate::terrain::pipeline::overture::width::width_m;
+use crate::terrain::pipeline::overture::width::{width_m, WayShape};
+use crate::terrain::repository::{BaseRow, BuildingRow};
+use crate::wkb::wkb_to_geometries;
 
-// ============ Domain knowledge constants ============
-
-/// The transport type a way shows, on the ground or on a deck.
+/// One type per OpenMapTiles transportation class (MapTiler's schema).
 pub fn segment_type(subtype: &str, class: Option<&str>) -> u8 {
+    use cube_types::transport as t;
     let c = class.unwrap_or("");
     if subtype == "rail" {
-        if c == "subway" || c == "light_rail" {
-            cube_types::transport::rail_subway
-        } else {
-            cube_types::transport::rail_main
-        }
-    } else if PEDESTRIAN_CLASSES.contains(&c) {
-        cube_types::transport::pedestrian
-    } else if MOTOR_CLASSES.contains(&c) {
-        cube_types::transport::road_motorway
-    } else if c == "primary" {
-        cube_types::transport::road_primary
-    } else if SECONDARY_CLASSES.contains(&c) {
-        cube_types::transport::road_secondary
-    } else {
-        cube_types::transport::road_default
+        return match c {
+            "subway" | "light_rail" | "tram" | "monorail" => t::rail_subway,
+            _ => t::rail_main,
+        };
+    }
+    match c {
+        "motorway" => t::road_motorway,
+        "trunk" => t::road_trunk,
+        "primary" => t::road_primary,
+        "secondary" => t::road_secondary,
+        "tertiary" => t::road_tertiary,
+        "service" => t::road_service,
+        "track" => t::track,
+        _ if PEDESTRIAN_CLASSES.contains(&c) => t::pedestrian,
+        _ => t::road_default,
     }
 }
 
-/// The classes whose one-way ways are a road's carriageways rather than a
-/// one-way street of their own.
+/// One-way ways of these classes are carriageways, not one-way streets.
 const THROUGH_CLASSES: [&str; 5] = ["motorway", "trunk", "primary", "secondary", "tertiary"];
 
-const PEDESTRIAN_CLASSES: [&str; 6] = ["footway", "path", "steps", "cycleway", "pedestrian", "living_street"];
-const MOTOR_CLASSES: [&str; 2] = ["motorway", "trunk"];
-const SECONDARY_CLASSES: [&str; 2] = ["secondary", "tertiary"];
+/// OpenMapTiles' path class.
+const PEDESTRIAN_CLASSES: [&str; 6] = ["footway", "path", "steps", "cycleway", "pedestrian", "bridleway"];
 
 const FLOWING_WATER_SUBTYPES: [&str; 3] = ["river", "stream", "canal"];
 const TREE_COVER_LAND_SUBTYPES: [&str; 4] = ["tree", "forest", "tree_row", "wood"];
 
 const INSTITUTIONAL_BUILDING_CLASSES: [&str; 5] = ["education", "medical_care", "civic", "government_service", "religious"];
 
-/// Segment flags under which nothing of a way shows from above: the ground
-/// is the surface, and a tunnel, an indoor passage, a line not built yet and
-/// one whose track is gone are not on it. `is_disused` is not here — its
-/// rails are still there — nor `is_covered`, which is under a roof that the
-/// buildings paint over where they have it.
+/// Nothing of a way under these shows from above. Not `is_disused` (the rails
+/// remain) nor `is_covered` (the buildings paint over it).
 pub const UNSEEN_FLAGS: &[&str] = &["is_tunnel", "is_indoor", "is_under_construction", "is_abandoned"];
 
-/// Segment flags under which a way is a link — a slip road, one lane.
+pub const BORE_FLAGS: &[&str] = &["is_tunnel"];
+
 pub const LINK_FLAGS: &[&str] = &["is_link"];
 
-/// Segment flags under which a way is carried above the ground: a deck,
-/// which the page's decks draw (terrain/pipeline/deck.rs) and the ground
-/// does not.
 pub const DECK_FLAGS: &[&str] = &["is_bridge"];
 
 /// What every row but a way ranks at; a building over it, water under it.
@@ -97,24 +94,37 @@ pub fn buildings(row: &BuildingRow, page_min: G3857) -> Vec<Feature> {
         _ if institutional => s::building_public,
         _ => s::building,
     };
-    let cell = Cell { key: GroundChannelKey::STRUCTURE, value };
+    let cell = Cell {
+        key: GroundChannelKey::STRUCTURE,
+        value,
+    };
     let rank = BUILDING_RANK + if institutional { INSTITUTIONAL_RANK } else { 0 };
     wkb_to_geometries(&row.geom_wkb).iter().filter_map(|g| Feature::of(g, page_min, cell, rank)).collect()
 }
 
-
-fn determine_category(feat: &OvertureRawFeature) -> String {
-    match feat {
-        OvertureRawFeature::Building(_) => "building".to_string(),
-        OvertureRawFeature::Segment(_) => "road".to_string(),
-        OvertureRawFeature::Base(b) => match b.source {
-            BaseSource::Water => "water".to_string(),
-            BaseSource::Land => {
-                if TREE_COVER_LAND_SUBTYPES.contains(&b.subtype.as_deref().unwrap_or("")) {
-                    "forest".to_string()
-                } else {
-                    "landuse".to_string()
-                }
+/// A segment's parts the ground shows: not where an unseen flag holds or a
+/// line draws it, cut square there, so the paint ends where the line begins;
+/// none of a `water` segment, a ferry route or a strait's label line, nor of a
+/// crossing, a line over a road the road already shows.
+pub fn ways(row: &Segment, drawn: &[Drawn], page_min: G3857) -> Vec<Feature> {
+    if row.subtype == "water" {
+        return Vec::new();
+    }
+    let unseen = flag_ranges(row.flags.as_deref(), UNSEEN_FLAGS, cell_of(length_of(&row.geom_wkb)));
+    let lined = merged(drawn.iter().filter(|c| c.gers_id == row.gers_id).map(|c| c.range).collect(), 0.0);
+    let cell = Cell {
+        key: GroundChannelKey::TRANSPORT,
+        value: segment_type(&row.subtype, row.class.as_deref()),
+    };
+    let cell_per_m = u_per_m(from_db(page_min[1])) / U_PER_CELL;
+    wkb_to_geometries(&row.geom_wkb)
+        .into_iter()
+        .flat_map(|g| split_ranged(g, [&unseen, &lined]))
+        .filter(|([unseen, lined], ..)| !unseen && !lined)
+        .filter_map(|(_, [a, b], g)| {
+            let shape = WayShape::at(row.columns(), (a + b) / 2.0);
+            if shape.role == Role::Crossing {
+                return None;
             }
             let mut f = Feature::of(&g, page_min, cell, paint_order(&row.subtype, row.class.as_deref(), shape.role))?;
             f.closed = false;
@@ -125,278 +135,7 @@ fn determine_category(feat: &OvertureRawFeature) -> String {
                 _ if shape.oneway && row.subtype == "road" && THROUGH_CLASSES.contains(&row.class.as_deref().unwrap_or("")) => Some(Joins::Carriageway),
                 _ => None,
             };
-        }
-        OvertureRawFeature::Segment(s) => {
-            width = width_m(&s.subtype, s.class.as_deref(), s.shape);
-        }
-        OvertureRawFeature::Base(_) => {}
-    }
-
-    FeatureComputed {
-        height: height.max(0.0),
-        width: width.max(0.0),
-        // `level_rules` is in the table, but nothing places a feature off the
-        // surface yet: what is seen from above is painted on the ground.
-        layer: 0,
-    }
-}
-
-/// Whether nothing of a feature shows from above. A `water` segment is a
-/// ferry's route and a strait's line is where its name is written: neither is
-/// a thing on the surface, and a route paints over the sea, which no mask
-/// stops a transport cell at.
-fn is_unseen(feat: &OvertureRawFeature) -> bool {
-    match feat {
-        OvertureRawFeature::Segment(s) => s.is_unseen || s.subtype == "water",
-        OvertureRawFeature::Base(b) => b.source == BaseSource::Water && b.class.as_deref() == Some("strait"),
-        OvertureRawFeature::Building(_) => false,
-    }
-}
-
-fn is_institutional(feat: &OvertureRawFeature) -> bool {
-    let land_use = land_use_class(feat);
-    INSTITUTIONAL_BUILDING_CLASSES.contains(&building_type(feat)) || land_use == "school" || land_use == "hospital"
-}
-
-/// Where a way paints among the transport channel's, lowest first: where
-/// two overlap — a junction, a road beside its sidewalk, a railway across a
-/// street — the later keeps the cell. Every other feature on the channel, a
-/// parking lot, ranks under all of them (`calculate_rank`'s base of ten).
-///
-/// The order is OpenStreetMap Carto's, the standard map's (`roads_info` in
-/// `openstreetmap-carto-flex.lua`, CC0), its `z` taken as is: a footway or a
-/// sidewalk under a service lane under every link, the links under every
-/// through road in their classes' order, the through roads in theirs, and a
-/// railway over them all, as a level crossing is drawn.
-fn paint_order(subtype: &str, class: Option<&str>, role: Role) -> u32 {
-    let c = class.unwrap_or("");
-    if subtype == "rail" {
-        return match c {
-            "standard_gauge" => 440,
-            "tram" => 410,
-            _ => 420,
-        };
-    }
-    if role == Role::Link {
-        return match c {
-            "motorway" => 240,
-            "trunk" => 230,
-            "primary" => 220,
-            "secondary" => 210,
-            _ => 200,
-        };
-    }
-    if role == Role::Sidewalk {
-        return 100;
-    }
-    if role == Role::Lane {
-        return 150;
-    }
-    match c {
-        "motorway" => 380,
-        "trunk" => 370,
-        "primary" => 360,
-        "secondary" => 350,
-        "tertiary" => 340,
-        "living_street" => 320,
-        "pedestrian" => 310,
-        "service" => 150,
-        "track" => 110,
-        "path" | "footway" | "bridleway" | "cycleway" => 100,
-        "steps" => 90,
-        _ => 330,
-    }
-}
-
-fn calculate_rank(feat: &OvertureRawFeature, category: &str, is_institutional: bool) -> u32 {
-    let mut score: u32 = 10;
-
-    if category == "water" {
-        score = 5;
-    }
-    if category == "building" {
-        score += 10;
-    }
-
-    if let OvertureRawFeature::Segment(s) = feat {
-        return paint_order(&s.subtype, s.class.as_deref(), s.shape.role);
-    }
-
-    if is_institutional {
-        score += 40;
-    }
-
-    score
-}
-
-fn compute_extra(feat: &OvertureRawFeature, category: &str) -> FeatureExtra {
-    let institutional = is_institutional(feat);
-    FeatureExtra {
-        rank: calculate_rank(feat, category, institutional),
-        // Sea fill is coast/policy.rs's job, never this policy's.
-        is_ocean: false,
-        is_parking: category == "parking",
-        is_institutional: institutional,
-        is_sports: SPORTS_CLASSES.contains(&building_type(feat)) || SPORTS_CLASSES.contains(&land_use_class(feat)),
-        is_unseen: is_unseen(feat),
-        is_deck: matches!(feat, OvertureRawFeature::Segment(s) if s.is_deck),
-        joins: match feat {
-            OvertureRawFeature::Segment(s) if s.shape.role == Role::Sidewalk => Some(Joins::Road),
-            OvertureRawFeature::Segment(s) if s.shape.oneway && s.subtype == "road" && THROUGH_CLASSES.contains(&s.class.as_deref().unwrap_or("")) => Some(Joins::Carriageway),
-            _ => None,
-        },
-    }
-}
-
-fn resolve_land(feat: &OvertureRawFeature, category: &str, extra: &FeatureExtra) -> Option<u8> {
-    if category == "forest" {
-        return Some(cube_types::land::green_deep);
-    }
-
-    if let OvertureRawFeature::Base(b) = feat {
-        if b.source == BaseSource::Infrastructure && b.class.as_deref() == Some("helipad") {
-            return Some(cube_types::land::helipad);
-        }
-        if b.source == BaseSource::LandUse {
-            if let Some(mapped) = land_use_class_map(b.class.as_deref().unwrap_or("")) {
-                return Some(mapped);
-            }
-            if extra.is_institutional {
-                return Some(cube_types::land::public);
-            }
-            if extra.is_sports {
-                return Some(cube_types::land::sports);
-            }
-            return Some(cube_types::land::bare);
-        }
-    }
-
-    None
-}
-
-fn determine_cell_cfg(feat: &OvertureRawFeature, category: &str, extra: &FeatureExtra) -> Option<CellConfig> {
-    if let OvertureRawFeature::Base(b) = feat {
-        if category == "water" {
-            let cell_type = if FLOWING_WATER_SUBTYPES.contains(&b.subtype.as_deref().unwrap_or("")) {
-                cube_types::water::river
-            } else {
-                cube_types::water::lake
-            };
-            return Some(CellConfig {
-                cell_type,
-                ch_key: GroundChannelKey::WATER,
-            });
-        }
-    }
-
-    if matches!(feat, OvertureRawFeature::Building(_)) && category == "building" {
-        let cell_type = match building_type(feat) {
-            "transportation" => cube_types::structure::building_station,
-            "medical_care" => cube_types::structure::building_medical,
-            "education" => cube_types::structure::building_education,
-            _ if extra.is_institutional => cube_types::structure::building_public,
-            _ => cube_types::structure::building,
-        };
-        return Some(CellConfig {
-            cell_type,
-            ch_key: GroundChannelKey::STRUCTURE,
-        });
-    }
-
-    if let OvertureRawFeature::Segment(s) = feat {
-        // A crossing is a line over a road the road already shows.
-        if s.shape.role == Role::Crossing {
-            return None;
-        }
-        if category == "road" {
-            return Some(CellConfig {
-                cell_type: segment_type(&s.subtype, s.class.as_deref()),
-                ch_key: GroundChannelKey::TRANSPORT,
-            });
-        }
-    }
-
-    if category == "parking" {
-        return Some(CellConfig {
-            cell_type: cube_types::transport::parking,
-            ch_key: GroundChannelKey::TRANSPORT,
-        });
-    }
-
-    resolve_land(feat, category, extra).map(|cell_type| CellConfig {
-        cell_type,
-        ch_key: GroundChannelKey::LAND,
-    })
-}
-
-pub struct OverturePolicy;
-
-impl NormalizePolicy<OvertureRawFeature> for OverturePolicy {
-    fn get_id(&self, raw: &OvertureRawFeature) -> String {
-        match raw {
-            OvertureRawFeature::Building(b) => b.gers_id.clone(),
-            OvertureRawFeature::Segment(s) => s.gers_id.clone(),
-            OvertureRawFeature::Base(b) => b.gers_id.clone(),
-        }
-    }
-
-    fn determine_category(&self, raw: &OvertureRawFeature) -> String {
-        determine_category(raw)
-    }
-
-    fn compute_metrics(&self, raw: &OvertureRawFeature, category: &str) -> FeatureComputed {
-        compute_metrics(raw, category)
-    }
-
-    fn compute_extra(&self, raw: &OvertureRawFeature, category: &str) -> FeatureExtra {
-        compute_extra(raw, category)
-    }
-
-    fn determine_cell_cfg(&self, raw: &OvertureRawFeature, category: &str, extra: &FeatureExtra) -> Option<CellConfig> {
-        determine_cell_cfg(raw, category, extra)
-    }
-
-    /// Every theme but segments is WKB polygon geometry already
-    /// (`is_polygon_source` covers closure), so there is nothing left to force.
-    fn should_force_closed(&self, _raw: &OvertureRawFeature) -> bool {
-        false
-    }
-
-    fn is_linear(&self, raw: &OvertureRawFeature) -> bool {
-        matches!(raw, OvertureRawFeature::Segment(_))
-    }
-}
-
-impl RawFeature for OvertureRawFeature {
-    fn points(&self) -> &[G3857] {
-        match self {
-            OvertureRawFeature::Building(b) => &b.geometry.points,
-            OvertureRawFeature::Segment(s) => &s.geometry.points,
-            OvertureRawFeature::Base(b) => &b.geometry.points,
-        }
-    }
-
-    fn holes(&self) -> &[Vec<G3857>] {
-        match self {
-            OvertureRawFeature::Building(b) => &b.geometry.holes,
-            OvertureRawFeature::Segment(s) => &s.geometry.holes,
-            OvertureRawFeature::Base(b) => &b.geometry.holes,
-        }
-    }
-
-    fn is_polygon_source(&self) -> bool {
-        match self {
-            OvertureRawFeature::Building(b) => b.geometry.is_polygon_source,
-            OvertureRawFeature::Segment(s) => s.geometry.is_polygon_source,
-            OvertureRawFeature::Base(b) => b.geometry.is_polygon_source,
-        }
-    }
-
-    fn center(&self) -> Option<G3857> {
-        Some(match self {
-            OvertureRawFeature::Building(b) => b.center,
-            OvertureRawFeature::Segment(s) => s.center,
-            OvertureRawFeature::Base(b) => b.center,
+            Some(f)
         })
         .collect()
 }
@@ -414,7 +153,11 @@ pub fn bases(row: &BaseRow, page_min: G3857) -> Vec<Feature> {
         "infrastructure" if class == "parking" => (GroundChannelKey::TRANSPORT, t::parking, AREA_RANK),
         "infrastructure" if class == "helipad" => (GroundChannelKey::LAND, l::helipad, AREA_RANK),
         "infrastructure" => return Vec::new(),
-        _ => (GroundChannelKey::LAND, land_use_cell(class), AREA_RANK + if matches!(class, "school" | "hospital") { INSTITUTIONAL_RANK } else { 0 }),
+        _ => (
+            GroundChannelKey::LAND,
+            land_use_cell(class),
+            AREA_RANK + if matches!(class, "school" | "hospital") { INSTITUTIONAL_RANK } else { 0 },
+        ),
     };
     wkb_to_geometries(&row.geom_wkb).iter().filter_map(|g| Feature::of(g, page_min, Cell { key, value }, rank)).collect()
 }

@@ -29,9 +29,9 @@ object PxlCore {
    * or null where the system has no GPU. */
   external fun gpuOpen(): IntArray?
 
-  /** Decodes a PNG or a WebP and holds it for the renderer: its handle, or 0
-   * when it does not decode. */
-  external fun imageHold(file: ByteArray): Int
+  /** Decodes a PNG or a WebP and holds it for the renderer as the kernel's
+   * `handle`: 1, or 0 when it does not decode. */
+  external fun imageHold(handle: Int, file: ByteArray): Int
 
   /** Binds the kernel's surface `handle` to `surface`, which the caller
    * keeps until it has unbound it: 0, -2 when no device is open, -3 when the

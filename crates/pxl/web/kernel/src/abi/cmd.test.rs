@@ -11,10 +11,7 @@ fn every_number_is_its_major_and_minor() {
     let parts = [
         (SENSOR_START, Major::SENSOR as u32, SensorMinor::START as u32),
         (SENSOR_STOP, Major::SENSOR as u32, SensorMinor::STOP as u32),
-        (LOAD_START, Major::LOAD as u32, LoadMinor::START as u32),
-        (LOAD_CANCEL, Major::LOAD as u32, LoadMinor::CANCEL as u32),
-        (LOAD_IMAGE, Major::LOAD as u32, LoadMinor::IMAGE as u32),
-        (LOAD_FAILED, Major::LOAD as u32, LoadMinor::FAILED as u32),
+        (IMAGE_DECODED, Major::IMAGE as u32, ImageMinor::DECODED as u32),
         (SENSOR_POSITION, Major::SENSOR as u32, SensorMinor::POSITION as u32),
         (SENSOR_ORIENTATION, Major::SENSOR as u32, SensorMinor::ORIENTATION as u32),
         (SENSOR_ERROR, Major::SENSOR as u32, SensorMinor::ERROR as u32),

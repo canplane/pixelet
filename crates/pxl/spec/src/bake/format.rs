@@ -1,36 +1,6 @@
 // pxl-spec/bake/format.rs
 
-//! Terrain format helpers for baked page payloads.
-//!
-//! The wire field order is defined here.
-//!
-//! Layer model:
-//! - L3 page = terrain transport / storage unit
-//! - terrain = static terrain layer carried by that page
-//! - ground  = categorical 2D terrain channels
-//! - ele     = elevation raster payload for that terrain layer
-//!
-//! In other words:
-//!   L3 page
-//!     -> terrain layer
-//!          -> ground
-//!          -> ele
-//!
-//! raw wire   = [ele, buildings, segments, base, coasts, decks]
-//!   buildings = [[gers_id, subtype, class, height, num_floors, geom_wkb], ...]
-//!   segments  = [[gers_id, subtype, class, flags, widths, access, subclass, subclasses, geom_wkb], ...]
-//!   base      = [[gers_id, source, subtype, class, geom_wkb], ...]  (source: land_use|water|land|infrastructure)
-//!   coasts    = [[id, geom_wkb, covers_page], ...]
-//!   decks     = [[gers_id, subtype, class, width_m, piers, geom_wkb], ...]  (LineStringZ, the top in m)
-//!
-//! baked wire = [ele, cells, extent, occupancy, decks]
-//!   cells     = one u16 a cell, the four ground channels packed into it
-//!               (bake/pack.rs), which is the shape the client holds too
-//!   extent    = the index lane's (lowest, highest) a cell, in `EXTENT`'s
-//!               cell order, flattened to i16 pairs (`Index`)
-//!   occupancy = one u8: which of the page and its four children are pages
-//!               (`Occupancy`)
-//!   decks     = the ways the page carries above its ground (bake/deck.rs)
+//! A baked terrain page and its wire: `[ele, cells, extent, occupancy, decks]`.
 
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
@@ -40,6 +10,7 @@ use std::borrow::Cow;
 use super::constant::ELE_PADDED_SPAN;
 use super::deck::{self, Decks};
 use super::ground::SHIFT_RANGE;
+use super::malformed;
 use super::pack::{channel_of, GroundCell};
 use super::surface::extent_of;
 use crate::space::pyramid::{EXTENT, PAGE_CELLS};
@@ -49,62 +20,6 @@ pub const GROUND_LANE: usize = (PAGE_CELLS * PAGE_CELLS) as usize;
 pub const ELE_LANE: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
 pub const EXTENT_LANE: usize = (EXTENT.page_cells() * EXTENT.page_cells()) as usize;
 pub const BLOCK_LANE: usize = EXTENT.page_blocks() as usize;
-
-// ---- DB ----
-
-pub struct BuildingRow {
-    pub gers_id: String,
-    pub subtype: Option<String>,
-    pub class: Option<String>,
-    pub height: Option<f64>,
-    pub num_floors: Option<f64>,
-    pub geom_wkb: Box<[u8]>, // WKB
-}
-
-pub struct SegmentRow {
-    pub gers_id: String,
-    pub subtype: String,
-    pub class: Option<String>,
-    /// Raw JSON text of the segment's `road_flags` or `rail_flags`, whichever
-    /// its subtype carries.
-    pub flags: Option<String>,
-    /// Raw JSON text of its `width_rules`.
-    pub widths: Option<String>,
-    /// Raw JSON text of its `access_restrictions`.
-    pub access: Option<String>,
-    /// Its `subclass`, and the raw JSON text of its `subclass_rules`.
-    pub subclass: Option<String>,
-    pub subclasses: Option<String>,
-    pub geom_wkb: Box<[u8]>, // WKB
-}
-
-pub struct BaseRow {
-    pub gers_id: String,
-    pub source: String, // "land_use" | "water" | "land" | "infrastructure"
-    pub subtype: Option<String>,
-    pub class: Option<String>,
-    pub geom_wkb: Box<[u8]>, // WKB
-}
-
-/// A deck as the offline solve left it (pxl-geo-bake deck/): its way's
-/// subtype, class and width in metres, its line with the deck's top in
-/// metres as Z, and a byte a point, 1 where a pier stands under it.
-pub struct DeckRow {
-    pub gers_id: String,
-    pub subtype: String,
-    pub class: Option<String>,
-    pub width_m: f64,
-    pub piers: Box<[u8]>,
-    pub geom_wkb: Box<[u8]>, // WKB, LineString Z
-}
-
-pub struct CoastRow {
-    pub id: String,
-    pub geom_wkb: Box<[u8]>, // WKB
-    pub covers_page: bool,
-}
-
-// ---- Ground ----
 
 pub use crate::cell::cube_type::GroundChannelKey;
 
@@ -211,29 +126,23 @@ pub struct Block {
     pub span: u16,
 }
 
-/// How far past what the lane holds the client draws over a cell, down and
-/// up, in cells. The lane holds the facts — the ground's surface and the
-/// lines' heights — and the client draws a cell a step off its surface
-/// (bake/ground.rs `shift`), and a bore's floor as deep as `BORE_DEPTH`
-/// under its ground with the way's cell under it (bake/deck.rs
-/// `Occupies::Through`). These are the client's to change, so the lane holds
-/// none of them and every read of it widens it by them.
+/// The object every page of open water resolves to.
+pub const OCEAN_KEY: &str = "_ocean";
+
+/// How far past the lane's facts the client draws a cell, down and up: the
+/// ground's shift and a bore's floor. Every read of the lane widens by it.
 pub const DRAWN_PAST: [i16; 2] = {
     let [lo, hi] = SHIFT_RANGE;
     // Ground shifted down, or the way's own cell under a bore's or a cutting's surface.
     [if lo < -1 { lo } else { -1 }, hi]
 };
 
-/// What is drawn over a lane's cell `[lo, hi]` stands within.
 pub fn drawn([lo, hi]: [i16; 2]) -> [i16; 2] {
     [lo.saturating_add(DRAWN_PAST[0]), hi.saturating_add(DRAWN_PAST[1])]
 }
 
 impl Block {
-    /// A lane's cell as a block of one: its bound as it is drawn
-    /// (`drawn`), and its span as the lane holds it, which is how far the
-    /// ground and the lines over the cell rise, and nothing of what the
-    /// client draws past them.
+    /// One cell as a block: its bound widened by `drawn`, its span as the lane holds it.
     pub fn of(cell: [i16; 2]) -> Block {
         let [lo, hi] = drawn(cell);
         Block {
@@ -300,15 +209,14 @@ fn blocks_of(lane: &[[i16; 2]], blocks: &mut [Block]) {
 /// a slab, a bore, a pier — is not here.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Terrain {
-    pub ground: Ground,                        // a class a cell: the source rasterized
-    pub decks: Decks,                          // ways off the ground: source lines, tops solved offline
-    pub ele: std::borrow::Cow<'static, [i16]>, // padded height samples, in z16 cells: from the raster
-    pub index: Index,                          // bounds over the page and all under it: no one page holds them
+    pub ground: Ground,           // a class a cell: the source rasterized
+    pub decks: Decks,             // ways off the ground: source lines, tops solved offline
+    pub ele: Cow<'static, [i16]>, // padded height samples, in z16 cells: from the raster
+    pub index: Index,             // bounds over the page and all under it: no one page holds them
 }
 
 impl Terrain {
-    /// A baked page of the finest level: its index is its own surface's,
-    /// its decks' tops included.
+    /// A finest-level page, its index taken from its own surface and decks.
     pub fn leaf(ele: Vec<i16>, ground: Ground, decks: Decks) -> Terrain {
         let extent = extent_of(&ele, &decks);
         Terrain {
@@ -394,11 +302,7 @@ pub fn decode_terrain_into(pkt: &[u8], room: PageRoom) -> Result<Terrain, Marsha
     })
 }
 
-// [ele, cells, extent, occupancy, decks] -> { ele, ground, index, decks }
-//
-// For whoever needs a page in hand rather than in a record: the bake's own
-// reads, the tests. Copied out, because a decoded page outlives the packet
-// it came from.
+// Copied out, for a page that outlives its packet.
 pub fn decode_terrain(pkt: &[u8]) -> Result<Terrain, MarshalError> {
     let Lanes { ele, cells, extent, occupancy, decks } = read_page(pkt)?;
     Ok(Terrain {

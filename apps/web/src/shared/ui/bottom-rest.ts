@@ -1,6 +1,19 @@
 // @pxl/web/shared/ui/bottom-rest.ts
 
-import type { SafeArea } from "@platform/safe-area.ts";
+import type { ReactNode } from "react";
+
+export interface SafeArea {
+  top: number;
+  bottom: number;
+  /** The part of `bottom` that takes a touch: Android's navigation buttons, never a gesture area. */
+  tappable: number;
+}
+
+export interface AboveKeyboardProps {
+  inset: number;
+  lift?: number;
+  children: ReactNode;
+}
 
 /**
  * How far above the screen's bottom the chrome rests with no keyboard:

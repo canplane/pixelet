@@ -4,7 +4,7 @@ import { StyleSheet, View } from "react-native";
 import { Line, Svg } from "react-native-svg";
 
 import type { f64 } from "@xpute/core/abi/word.ts";
-import { Icon, type IconProps, strokeOf } from "@platform/icon.tsx";
+import { Icon, type IconProps } from "@platform/icon.tsx";
 
 /**
  * A color at an opacity is drawn opaque and the glyph faded whole: an SVG
@@ -19,11 +19,16 @@ export function Glyph({ struck = false, ...icon }: IconProps & { struck?: boolea
       <Icon {...drawn} />
       {struck && (
         <Svg style={StyleSheet.absoluteFill} width={icon.size} height={icon.size} viewBox="0 0 24 24">
-          <Line x1={2} y1={2} x2={22} y2={22} stroke={color} strokeWidth={strokeOf(icon.weight)} strokeLinecap="round" />
+          <Line x1={2} y1={2} x2={22} y2={22} stroke={color} strokeWidth={stroke(icon.weight)} strokeLinecap="round" />
         </Svg>
       )}
     </View>
   );
+}
+
+/** The stroke on a 24-unit box: Phosphor's 16 and 24 on its 256. */
+function stroke(weight: IconProps["weight"] = "regular"): f64 {
+  return weight === "regular" ? 1.5 : 2.25;
 }
 
 function opaque(color: string): [string, f64] {

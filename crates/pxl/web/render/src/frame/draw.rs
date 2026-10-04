@@ -10,9 +10,7 @@ use xpute_runtime::mem::heap::{alloc, free};
 
 /// Upload record: handle, address, byte length, vertex count, index count.
 pub const UPLOAD_WORDS: usize = 5;
-/// Words a draw record holds: a block's handle or the arena group, two words
-/// its pipeline reads its own way (below), the index of its uniforms, and the
-/// pipeline.
+/// Draw record: handle or arena group, two pipeline-specific words, uniform index, pipeline.
 pub const DRAW_WORDS: usize = 5;
 /// Draw uniforms: eye-relative translation (3), a pipeline-specific float,
 /// opacity, padding to 32 bytes.
@@ -47,13 +45,9 @@ pub const PIPELINE_DEBUG: u32 = 9;
 /// The coarse four-word box format; its own pipeline because a pipeline's
 /// vertex stride is fixed.
 pub const PIPELINE_CHUNK_COARSE: u32 = 32;
-/// Decor drawn as its variants' sprites, where a variant is too small on the
-/// screen for its model: the decor block's instances, a quad each
-/// (gpu/pass/impostor.rs).
+/// Decor drawn as sprites where a variant is too small on screen for its model.
 pub const PIPELINE_IMPOSTOR: u32 = 34;
-/// Words a rewrite record holds: the handle, the block's address, and the
-/// byte offset into it and length of the bytes that replace the buffer's
-/// there.
+/// Rewrite record: handle, address, byte offset, length.
 pub const REWRITE_WORDS: usize = 4;
 
 #[derive(Default)]
@@ -112,9 +106,6 @@ impl DrawList {
         self.rewrite_part(handle, at, 0, bytes);
     }
 
-    /// `bytes` of the block behind `handle` changed, `from` bytes into it:
-    /// those go to the GPU again, at the same place in its buffer. A rewrite
-    /// of the same part already listed stands.
     pub fn rewrite_part(&mut self, handle: u32, at: u32, from: u32, bytes: u32) {
         if handle == 0 || self.rewrites.as_chunks::<REWRITE_WORDS>().0.iter().any(|r| r[0] == handle && r[2] == from) {
             return;
@@ -163,27 +154,17 @@ impl DrawList {
         self.draws.extend_from_slice(&[handle, vertex_cnt, index_cnt, uniform, pipeline]);
     }
 
-    /// Instances of decor group `group` in block `handle`, under `pipeline`
-    /// (the model, its ghost, or its sprite): `count` of them, each named by
-    /// a word of the index list at word `index` of the block, read from the
-    /// group's lanes at word `offset`, `stride` instances long
-    /// (crates/pxl/web/kernel/src/layer/decor/build.rs's layout). Words are
-    /// exact in a float to 2^24.
+    /// Words are exact in an f32 up to 2^24.
     #[allow(clippy::too_many_arguments)]
     pub fn draw_instances(&mut self, pipeline: u32, handle: u32, group: u32, count: u32, lanes: [u32; 3], translation: [f32; 3], opacity: f32) {
         let [offset, stride, index] = lanes;
         let uniform = (self.uniforms.len() / UNIFORM_FLOATS) as u32;
-        self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], offset as f32, opacity, stride as f32, index as f32, 0.0]);
+        self.uniforms
+            .extend_from_slice(&[translation[0], translation[1], translation[2], offset as f32, opacity, stride as f32, index as f32, 0.0]);
         self.draws.extend_from_slice(&[handle, group, count, uniform, pipeline]);
     }
 
-    /// The draws the last frame listed.
-    pub fn draw_count(&self) -> u32 {
-        (self.draws.len() / DRAW_WORDS) as u32
-    }
-
-    /// Hands the lists to the renderer. Uploads, rewrites and frees start
-    /// fresh; the draws stay until the next frame writes them.
+    /// Uploads, rewrites and frees start fresh; draws stay until the next frame.
     pub fn take(&mut self) -> Lists<'_> {
         let [uploads, rewrites, frees] = &mut self.taken;
         core::mem::swap(uploads, &mut self.uploads);

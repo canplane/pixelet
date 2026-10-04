@@ -76,7 +76,6 @@
 
     // build tools
     "@vitejs/plugin-react": "npm:@vitejs/plugin-react@^6.1.1",
-    "vite-plugin-svgr": "npm:vite-plugin-svgr@^5.2.0",
 
     // react core
     "react": "npm:react@19.2.3",
@@ -92,11 +91,10 @@
     "zustand": "npm:zustand@^5.0.15",
 
     // icons
-    "lucide-react-native": "npm:lucide-react-native@^1.48.0",
+    "phosphor-react-native": "npm:phosphor-react-native@^3.0.6",
     "react-native-svg": "npm:react-native-svg@15.15.4",
 
     // internationalization
     "react-i18next": "npm:react-i18next@^17.0.14",
-    "i18next-browser-languagedetector": "npm:i18next-browser-languagedetector@^8.2.1"
   }
 }

@@ -1,18 +1,11 @@
 // @pxl/native/platform/above-keyboard.tsx
 
 import { requireNativeView } from "expo";
-import { type ComponentType, type ReactNode, useState } from "react";
+import { type ComponentType, useState } from "react";
 import type { NativeSyntheticEvent, ViewProps } from "react-native";
 
-import { bottomRest } from "@/shared/ui/bottom-rest.ts";
-
-import { useSafeArea } from "./safe-area.ts";
-
-interface AboveKeyboardProps {
-  inset: number;
-  lift?: number;
-  children: ReactNode;
-}
+import { useSafeArea } from "@platform/safe-area.ts";
+import { type AboveKeyboardProps, bottomRest } from "@/shared/ui/bottom-rest.ts";
 
 interface KeyboardDockProps extends ViewProps {
   clearance: number;

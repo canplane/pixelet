@@ -6,25 +6,27 @@ import type { f64 } from "@xpute/core/abi/word.ts";
 
 const SETTLE_MS = 250;
 
-export interface WindowSize {
+interface WindowSize {
   width: f64;
   height: f64;
 }
 
 let size: WindowSize = measure();
+const sizeListeners = new Set<() => void>();
 
 function measure(): WindowSize {
   const root = document.documentElement;
   return { width: root.clientWidth, height: root.clientHeight };
 }
 
-// One listener: one each told only the first.
-globalThis.addEventListener("resize", () => {
+// Observed after layout: a page zoom's `resize` came before the root's new
+// size, and a sheet stayed centered on the old width.
+new ResizeObserver(() => {
   const next = measure();
   if (next.width === size.width && next.height === size.height) return;
   size = next;
   for (const l of sizeListeners) l();
-});
+}).observe(document.documentElement);
 
 /**
  * The layout viewport, which a keyboard or pinch leaves alone. RN-web's
@@ -34,14 +36,8 @@ globalThis.addEventListener("resize", () => {
 export function useWindowSize(): WindowSize {
   return useSyncExternalStore(
     (l) => {
-      const resize = () => {
-        const next = measure();
-        if (next.width === size.width && next.height === size.height) return;
-        size = next;
-        l();
-      };
-      globalThis.addEventListener("resize", resize);
-      return () => globalThis.removeEventListener("resize", resize);
+      sizeListeners.add(l);
+      return () => sizeListeners.delete(l);
     },
     () => size,
   );

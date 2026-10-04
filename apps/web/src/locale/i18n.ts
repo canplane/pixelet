@@ -1,9 +1,11 @@
 // @pxl/web/locale/i18n.ts
 
-import i18next from "i18next";
+import i18next, { type LanguageDetectorModule } from "i18next";
 import { initReactI18next } from "react-i18next";
 
-import { languageDetector, showLanguage } from "@platform/locale.ts";
+import { preferredLanguages, showLanguage } from "@platform/locale.ts";
+import { storageGet, storageSet } from "@platform/storage.ts";
+import { storage, STORAGE_KEYS } from "@/kernel/abi/host.spec.ts";
 
 import en from "./en.json" with { type: "json" };
 import ko from "./ko.json" with { type: "json" };
@@ -27,6 +29,17 @@ function deepMerge(base: Catalog, extra: Catalog): Catalog {
 /** Dev catalogs only behind a constant at top level, not via a helper:
  * Rolldown did not drop a helper's argument and shipped 47 dev strings. */
 const catalog = __IS_DEV__ ? { en: deepMerge(en, enDev) as typeof en, ko: deepMerge(ko, koDev) as typeof ko } : { en, ko };
+
+const LANG_KEY = STORAGE_KEYS[storage.LANG];
+
+/** The language chosen, else the first supported of the system's preferences, else en. */
+const languageDetector: LanguageDetectorModule = {
+  type: "languageDetector",
+  // By language alone: i18next takes a later exact match over an earlier
+  // region, so ["en-US", "ko"] read as Korean.
+  detect: () => storageGet(LANG_KEY) ?? preferredLanguages().map((code) => new Intl.Locale(code).language),
+  cacheUserLanguage: (lng) => storageSet(LANG_KEY, lng),
+};
 
 let booted = false;
 

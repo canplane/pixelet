@@ -18,7 +18,7 @@ Pod::Spec.new do |s|
   s.license = { type: 'UNLICENSED' }
   s.author = 'pixelet'
   s.source = { git: '' }
-  s.platforms = { ios: '15.1' }
+  s.platforms = { ios: '16.4' }
   s.static_framework = true
   s.swift_version = '5.9'
 

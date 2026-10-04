@@ -7,11 +7,8 @@ import type { ComponentType } from "react";
 import type { NativeSyntheticEvent, ViewProps } from "react-native";
 
 import { PANEL_CONTROL } from "@/shared/ui/panel.tsx";
+import type { SegmentedProps } from "@/shared/ui/segmented.ts";
 
-export interface Segment<T extends string | number> {
-  value: T;
-  label: string;
-}
 
 interface SegmentedControlProps extends ViewProps {
   labels: string[];
@@ -21,7 +18,7 @@ interface SegmentedControlProps extends ViewProps {
 
 const SegmentedControl: ComponentType<SegmentedControlProps> = requireNativeView("PxlPlatform", "SegmentedControl");
 
-export function Segmented<T extends string | number>({ segments, value, onChange }: { segments: readonly Segment<T>[]; value: T; onChange: (value: T) => void }) {
+export function Segmented<T extends string | number>({ segments, value, onChange }: SegmentedProps<T>) {
   return (
     <SegmentedControl
       labels={segments.map((s) => s.label)}

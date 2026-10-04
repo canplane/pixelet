@@ -6,17 +6,10 @@
  * taps in five.
  */
 
-import type { ReactNode } from "react";
 import { Switch, View } from "react-native";
-import type { StyleProp, ViewStyle } from "react-native";
-import { color } from "@/shared/ui/theme.ts";
 
-export interface ToggleRowProps {
-  value: boolean;
-  onValueChange: (value: boolean) => void;
-  style?: StyleProp<ViewStyle>;
-  children: ReactNode;
-}
+import { color } from "@/shared/ui/theme.ts";
+import type { ToggleRowProps } from "@/shared/ui/toggle-row.ts";
 
 export function ToggleRow({ value, onValueChange, style, children }: ToggleRowProps) {
   return (

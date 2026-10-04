@@ -10,7 +10,6 @@ pub mod layout;
 
 use crate::abi::cmd::{Command, Sensor, SensorStartSignal, WorldSnapshotSignal};
 use crate::host::HeapStat;
-use crate::io::load::LoadKind;
 use crate::kernel::kernel;
 use crate::mem::fixed::Range;
 use crate::mem::section;
@@ -57,7 +56,6 @@ fn raise(cmd: Command, count: u32, f: impl Fn(&mut PacketWriter)) {
     door().raise(cmd as u32, count, f);
 }
 
-/// Where a ring's words start in the memory.
 fn ring_address(ring: &Ring) -> u32 {
     off_of(ring.words().as_ptr()) as u32
 }
@@ -131,13 +129,11 @@ fn fixed_at(r: Range) -> u32 {
 /// Lays the memory map and makes the volumes. Returns where GPU calls are
 /// recorded for the host, 0 where the kernel makes them itself.
 fn lay_out(b: &Bracket) -> u32 {
-    // The map first: the kernel's first use makes the chunk table, whose
-    // tables lie in `.fixed`.
+    // The map first: the kernel's first use makes the chunk table, which lives in `.fixed`.
     section::set_map(section::lay_out(b.given, b.data_end));
     kernel().volumes = Some(Volumes::new());
-    // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.blocks`, each what it
-    // is installed as from a page, zeroed, the renderer's and the host's
-    // alone.
+    // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.blocks`, zeroed, each the
+    // renderer's or the host's alone.
     unsafe {
         crate::host::set_host_stream(fixed_at(Range::Host));
         pxl_render::gpu::renderer::set_blocks(fixed_at(Range::Blocks), crate::mem::fixed::BLOCK_SLOTS);
@@ -218,28 +214,22 @@ fn post_shell(s: &mut State) {
         };
         raise(Command::WORLD_SNAPSHOT, WorldSnapshotSignal::FIELDS, |w| signal.write(w));
     }
-    // The key crosses as the one word the queue orders by; the shell holds it
-    // as a handle and hands it back, and never reads into it.
-    // A bake's object and a model are files the kernel opens; an image is
-    // decoded where the device is, so it is asked for by command.
+    // The key is an opaque handle to the shell.
     take_started(|key, category, subject| match category.bake() {
         Some(_) => crate::io::fetch::start(key, category, subject),
-        None => match crate::io::load::of_subject(subject) {
-            Some((LoadKind::Gltf, load)) => crate::io::load::open_model(key, load),
-            Some((LoadKind::Image, load)) => {
-                let signal = LoadStartSignal { key, load: load.number() };
-                raise(Command::LOAD_START, LoadStartSignal::FIELDS, |w| signal.write(w));
+        None => {
+            if let Some((kind, load)) = crate::io::load::of_subject(subject) {
+                crate::io::load::open_asset(key, kind, load);
             }
-            None => {}
-        },
+        }
     });
     // Collected first: stopping a read settles it, which must not happen inside
     // the request scheduler's own walk.
     let mut stops = Vec::new();
     take_stops(|key| stops.push(key));
     for key in stops {
-        if !crate::io::fetch::cancel(key) && !crate::io::load::cancel_model(key) {
-            raise(Command::LOAD_CANCEL, LoadCancelSignal::FIELDS, |w| LoadCancelSignal { key }.write(w));
+        if !crate::io::fetch::cancel(key) {
+            crate::io::load::cancel_asset(key);
         }
     }
 }

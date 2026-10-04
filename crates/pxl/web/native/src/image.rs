@@ -5,14 +5,15 @@
 //! the page. The app calls this off the kernel's thread, so a large image
 //! costs no turn.
 
-/// Decodes the file of `bytes` bytes at `file` and holds it for the renderer:
-/// the handle the kernel names it by, or 0 for a file that does not decode.
+/// Decodes the file of `bytes` bytes at `file` and holds it for the renderer
+/// as `handle`, which the kernel issued: 1, or 0 for a file that does not
+/// decode.
 ///
 /// # Safety
 /// `file` points at `bytes` bytes the caller owns for the call.
 #[no_mangle]
-pub unsafe extern "C" fn pxl_image_hold(file: *const u8, bytes: u32) -> u32 {
+pub unsafe extern "C" fn pxl_image_hold(handle: u32, file: *const u8, bytes: u32) -> u32 {
     // SAFETY: the caller's bytes.
     let file = unsafe { core::slice::from_raw_parts(file, bytes as usize) };
-    pxl_render::gpu::api::hold_image(file).unwrap_or(0)
+    pxl_render::gpu::api::hold_image(handle, file) as u32
 }

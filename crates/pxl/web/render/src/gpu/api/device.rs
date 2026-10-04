@@ -547,7 +547,7 @@ impl Gpu {
     pub fn image_texture(&self, id: u32, image: u32) {
         let Some(d) = device() else { return };
         let images = IMAGES.lock().unwrap_or_else(|e| e.into_inner());
-        let Some(Some(image)) = images.get(image as usize) else { return };
+        let Some(image) = images.as_ref().and_then(|m| m.get(&image)) else { return };
         let size = wgpu::Extent3d {
             width: image.width,
             height: image.height,

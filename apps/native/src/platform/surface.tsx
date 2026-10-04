@@ -1,8 +1,8 @@
 // @pxl/native/platform/surface.tsx
 
 /**
- * The kernel's surface on a device: a native view backed by a Metal layer,
- * drawn by wgpu directly. The view says when its layer is bound, since the
+ * The kernel's surface on a device: a native view (SurfaceView.swift,
+ * KernelSurfaceView.kt) drawn by wgpu directly. The view says when its layer is bound, since the
  * layer arrives after mount. The world's view is also the app's input driver.
  */
 

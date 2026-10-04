@@ -309,7 +309,6 @@ export function runGpuStream(memory: ArrayBuffer, at: u32): void {
   each_record(memory, at, stream.HEAD, runGpuRecord);
 }
 
-/** One record of the stream, on the device runGpuStream found. */
 function runGpuRecord(code: u32, w: U32Array, a: u32, n: u32): void {
   const d = device!;
   const k = a + n;
@@ -320,19 +319,8 @@ function runGpuRecord(code: u32, w: U32Array, a: u32, n: u32): void {
       break;
     case op.BUFFER: {
       const [id, size, usage] = [w[a], w[a + 1], w[a + 2]];
-      // Wrapped in an out-of-memory scope because a refused buffer is not
-      // an exception: WebGPU hands back an object that is invalid, and
-      // nothing says so until something uses it — by which point the kernel
-      // has long since recorded the id as live. The mesh arena asks for six
-      // buffers of 36–40 MiB the moment the first mesh is written, and a
-      // device that refuses one draws no terrain at all while every gauge
-      // reads normal, since `arena_bytes` counts a group by its id and the
-      // draw that finds no bind group is skipped without a word (pxl-render
-      // gpu/arena.rs, gpu/renderer.rs).
-      //
-      // Guarded on what comes back rather than on what is there, because a
-      // check stands in its own device here and answers the calls a kernel
-      // makes, not the ones an instrument does.
+      // A refused buffer is not an exception but an invalid object, so a device
+      // refusing the mesh arena drew no terrain while every gauge read normal.
       d.pushErrorScope?.("out-of-memory");
       put(id, d.createBuffer({ size, usage }));
       const scope = d.popErrorScope?.() as Promise<GPUError | null> | undefined;
@@ -432,9 +420,7 @@ function runGpuRecord(code: u32, w: U32Array, a: u32, n: u32): void {
     case op.SET_PIPELINE:
       get<GPURenderPassEncoder>(w[a]).setPipeline(get<GPURenderPipeline>(w[a + 1]));
       break;
-    // setBindGroup runs a few hundred times a frame, once or more per draw,
-    // so a fresh array per call is garbage that grows with what is drawn:
-    // the (data, start, length) overload reads the offsets where they lie.
+    // Hundreds of calls a frame: the offsets overload avoids an array per call.
     case op.SET_BIND_GROUP:
       if (n === 3) get<GPURenderPassEncoder>(w[a]).setBindGroup(w[a + 1], get<GPUBindGroup>(w[a + 2]));
       else get<GPURenderPassEncoder>(w[a]).setBindGroup(w[a + 1], get<GPUBindGroup>(w[a + 2]), w, a + 3, n - 3);

@@ -1,14 +1,9 @@
 // @pxl/web/kernel/host.ts
 
 /**
- * The kernel's system calls as its host answers them (crates/pxl/web/kernel/
- * src/host.rs): xpute's, run by xpute (@xpute/runtime/ipc/sys.ts), with
- * storage bound here and the other roots bound by the boot (`bind_root`,
- * kernel.ts) — a bake to its origin, the assets to theirs — and a broken
- * invariant said on the console; and the kernel's own (abi/host.json), a text laid out
- * or drawn (crates/pxl/web/kernel/src/text.rs). All of them run once the turn
- * has returned and before the next can begin, so whatever one names in the
- * kernel's memory is written by the time the kernel reads it.
+ * The kernel's system calls as its host answers them: xpute's, plus text
+ * layout and image decode. All run between turns, so what they write is in
+ * place by the time the kernel reads it.
  */
 
 import type { U32Array, U8Array } from "@xpute/core/abi/array.ts";
@@ -23,6 +18,8 @@ import { op, root } from "@/kernel/abi/host.spec.ts";
 import { send_next } from "@/kernel/sched.ts";
 import { storageGet, storageSet } from "@platform/storage.ts";
 import { textRaster, textWidth } from "@platform/text.ts";
+import { decodeImage } from "@platform/image.ts";
+import { Command, encode_image_decoded } from "@/kernel/abi/cmd.spec.ts";
 
 const word = new DataView(new ArrayBuffer(4));
 
@@ -31,12 +28,9 @@ function float(bits: u32): number {
   return word.getFloat32(0, true);
 }
 
-/** Where `text` breaks into lines no wider than `max_width` (0 for one
- * line), measured by `width`: each line's end, a UTF-16 index, the last the
- * text's end. Greedy by words; a line still too wide on its own — one long
- * word, or a message typed without spaces, as Korean often is — breaks
- * between characters. A break at a space leaves the space at the head of the
- * next line, for the kernel to trim. */
+/** Greedy by words; a word too wide alone (Korean typed without spaces)
+ * breaks between characters. A space stays at the next line's head for the
+ * kernel to trim. */
 function line_ends(text: string, max_width: number, width: (s: string) => number): number[] {
   const words = [...text.matchAll(/\S+/g)].map((m) => [m.index, m.index + m[0].length]);
   if (max_width <= 0 || words.length === 0) return [text.length];
@@ -70,15 +64,12 @@ function line_ends(text: string, max_width: number, width: (s: string) => number
   return ends;
 }
 
-/** The kernel's own calls: a text laid out or drawn, an image decoded. */
 function program(code: u32, w: U32Array, a: u32): void {
   switch (code) {
     case op.IMAGE_DECODE: {
       // Taken now: the kernel may close the file in this turn.
       const [fd, image] = [w[a], w[a + 1]];
-      const bytes = FILES.bytes(fd);
-      // Answered after the record run, never inside it, as an open is
-      // (@xpute/runtime/ipc/sys.ts).
+      const bytes = SYS.bytes(fd);
       void (async () => {
         await Promise.resolve();
         const decoded = bytes !== null && (await decodeImage(image, bytes));
@@ -114,10 +105,6 @@ function program(code: u32, w: U32Array, a: u32): void {
   }
 }
 
-/** The kernel's open files. */
-const FILES = new Files();
-
-/** How a root's file is read whole. */
 type Open = (path: string, signal: AbortSignal) => U8Array | Promise<U8Array>;
 
 const ROOTS = new Map<u32, Open>([[root.STORAGE, (path) => {
@@ -126,20 +113,16 @@ const ROOTS = new Map<u32, Open>([[root.STORAGE, (path) => {
   return te.encode(value);
 }]]);
 
-/** Binds `r` to where its files are read from. A root bound to nothing has
- * no files. */
 export function bind_root(r: u32, open: Open): void {
   ROOTS.set(r, open);
 }
 
-/** A file below one of the kernel's roots, whole. */
 function open(r: u32, path: string, signal: AbortSignal) {
   const bound = ROOTS.get(r);
   if (bound === undefined) throw new FileError(Errno.ENOENT);
   return bound(path, signal);
 }
 
-/** The kernel's system calls and the files it holds open. */
 const SYS = new Sys({
   open,
   commit: (r, path, bytes) => {
@@ -151,7 +134,6 @@ const SYS = new Sys({
   program,
 });
 
-/** Runs the calls the turn just returned left in the stream at `at`. */
 export function run_host_stream(memory: ArrayBuffer, at: u32): void {
   SYS.run(memory, at);
 }

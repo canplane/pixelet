@@ -25,13 +25,7 @@ export function Motion({ to, from, replay = null, transition, onSettled, style, 
 
   const values = useRef<Record<Channel, Animated.Value> | null>(null);
   if (values.current === null) {
-    values.current = {
-      opacity: new Animated.Value(initial.opacity),
-      translateX: new Animated.Value(initial.translateX),
-      translateY: new Animated.Value(initial.translateY),
-      scale: new Animated.Value(initial.scale),
-      rotate: new Animated.Value(initial.rotate),
-    };
+    values.current = Object.fromEntries(CHANNELS.map((c) => [c, new Animated.Value(initial[c])])) as Record<Channel, Animated.Value>;
   }
   const v = values.current;
 

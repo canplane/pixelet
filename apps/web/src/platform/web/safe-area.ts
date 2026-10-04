@@ -2,12 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-export interface SafeArea {
-  top: number;
-  bottom: number;
-  /** The part of `bottom` that takes a touch; none on a page. */
-  tappable: number;
-}
+import type { SafeArea } from "@/shared/ui/bottom-rest.ts";
 
 /** `env(safe-area-inset-*)` is only given to a style, so it is read back off an element. */
 function measure(): SafeArea {
@@ -22,10 +17,11 @@ function measure(): SafeArea {
 
 export function useSafeArea(): SafeArea {
   const [area, setArea] = useState(measure);
+  // After layout, as the window's size is read (viewport.ts); a rotation moves the insets.
   useEffect(() => {
-    const update = () => setArea(measure());
-    globalThis.addEventListener("resize", update);
-    return () => globalThis.removeEventListener("resize", update);
+    const observer = new ResizeObserver(() => setArea(measure()));
+    observer.observe(document.documentElement);
+    return () => observer.disconnect();
   }, []);
   return area;
 }

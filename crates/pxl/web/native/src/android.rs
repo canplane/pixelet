@@ -76,13 +76,14 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlCore_gpuOpen(env:
     }
 }
 
-/// Decodes an image and holds it for the renderer: its handle, or 0 (image.rs
-/// `pxl_image_hold`). Off the kernel's thread, as on an iPhone.
+/// Decodes an image and holds it for the renderer as the kernel's `handle`:
+/// 1, or 0 (image.rs `pxl_image_hold`). Off the kernel's thread, as on an
+/// iPhone.
 ///
 /// # Safety
 /// Called by JNI.
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlCore_imageHold(env: *mut JNIEnv, _class: jclass, file: jbyteArray) -> jint {
+pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlCore_imageHold(env: *mut JNIEnv, _class: jclass, handle: jint, file: jbyteArray) -> jint {
     // SAFETY: the environment JNI called with.
     let table = unsafe { jni(env) };
     // SAFETY: `file` is the byte array the call was given, copied whole.
@@ -93,7 +94,7 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlCore_imageHold(en
         bytes
     };
     // SAFETY: our own bytes, for the call.
-    unsafe { crate::image::pxl_image_hold(bytes.as_ptr(), bytes.len() as u32) as jint }
+    unsafe { crate::image::pxl_image_hold(handle as u32, bytes.as_ptr(), bytes.len() as u32) as jint }
 }
 
 /// Binds the kernel's surface `handle` to a view's `surface`, through the
