@@ -106,14 +106,18 @@ function save(s: UiState): void {
   storageSet(STORAGE_KEY, JSON.stringify({ picks: s.recentPicks } satisfies Stored));
 }
 
-/** The tier stays as the tool changes. */
+/** What is held stays as the tool or the tier changes. */
+function hold(tool: ActiveTool, tier: u32): void {
+  const h = kernel_snapshot().holding;
+  kernel_hold(tool, h.channel, tool === ActiveTool.Decor ? h.decor : h.cube, tier);
+}
+
 export function holdTool(tool: ActiveTool): void {
-  kernel_hold(tool, null, 0, kernel_snapshot().holding.tier);
+  hold(tool, kernel_snapshot().holding.tier);
 }
 
 export function holdTier(tier: u32): void {
-  const h = kernel_snapshot().holding;
-  kernel_hold(h.tool, h.channel, h.tool === ActiveTool.Decor ? h.decor : h.cube, tier);
+  hold(kernel_snapshot().holding.tool, tier);
 }
 
 export function heldCube(h: HoldingState): PlaceableCube {
