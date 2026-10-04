@@ -219,14 +219,22 @@ jobs:
       # produced the same bytes. It does not any more: the build number is an
       # input, so a docs-only push would ship a bundle identical but for a
       # number, take a number for it, and make every edge cache fetch it again.
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version-file: .tool-versions
+
+      # Against what last went out, by the build log, not the push before: a
+      # run that failed published nothing, so the next push carries its
+      # changes too. No base to be had — an empty log, a sha a rewrite took,
+      # a log that cannot be read — deploys: a republish costs a cached build,
+      # a skip that should not have happened leaves plei.me behind deploy.
       - name: Decide whether the client changed
         id: scope
         env:
-          BASE: ${{ github.event.before }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          # No usable base — a first push, a force-push, workflow_dispatch —
-          # deploys: a republish costs a cached build, a skip that should not
-          # have happened leaves plei.me behind deploy.
+          BASE=$(./script/build-log.ts --last web) || BASE=
           if [ -n "${BASE:-}" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
             changed=$(git diff --name-only "$BASE" HEAD)
           else
@@ -244,11 +252,6 @@ jobs:
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "nothing the bundle is built from changed — #${{ needs.gate.outputs.build_number }} is counted but not published"
           fi
-
-      - uses: denoland/setup-deno@v2
-        if: steps.scope.outputs.run == 'true'
-        with:
-          deno-version-file: .tool-versions
 
       # As the gate does. This job builds the module and needs no linter, but
       # what it installs is the file's business now, and a component it does
@@ -323,15 +326,19 @@ jobs:
 
       # Everything the two images are built from, plus the compose file and the
       # Caddyfile that place them. A docs-only push does not reach the VM.
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version-file: .tool-versions
+
+      # Against what the VM last ran, by the build log, as the client's scope
+      # is; with no base to be had, deploying is the safe direction again.
       - name: Decide whether the VM needs this push
         id: scope
         env:
-          BASE: ${{ github.event.before }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          # A branch's first push, a force-push and workflow_dispatch all leave
-          # no usable base. Deploying then is the safe direction: a rebuild
-          # that changed nothing costs a cached build, a skipped one that
-          # should have run leaves production behind deploy.
+          BASE=$(./script/build-log.ts --last server) || BASE=
           if [ -n "${BASE:-}" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
             changed=$(git diff --name-only "$BASE" HEAD)
           else
@@ -397,11 +404,6 @@ jobs:
             docker image prune -f
             docker compose ps
           REMOTE
-
-      - uses: denoland/setup-deno@v2
-        if: steps.scope.outputs.run == 'true'
-        with:
-          deno-version-file: .tool-versions
 
       - name: Smoke-test the origin directly
         if: steps.scope.outputs.run == 'true'

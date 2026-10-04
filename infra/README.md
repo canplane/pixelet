@@ -269,7 +269,8 @@ The public smoke is still a job after both rather than a step inside either:
 answers 521 for an origin that is merely restarting, and the run would fail
 though nothing was wrong.
 
-Both deploys are filtered on what a push touched, for different reasons.
+Both deploys are filtered on what changed since that half last went out, for
+different reasons.
 Reaching into the production VM over SSH is neither idempotent nor reversible,
 so it runs only when an image's own tree changed. Publishing to the edge is
 both — but the build number is an input to the bundle, so a docs-only push
@@ -278,10 +279,17 @@ them, and make every edge cache fetch the lot again.
 
 Both filters are whitelists rather than lists of what to skip: the set that
 ships nothing is the one that keeps growing, and a root forgotten from a skip
-list is a deploy nobody asked for. Where a push has no usable base — a
-force-push, a `workflow_dispatch` — both deploy: a republish costs a cached
-build, and a skip that should not have happened leaves production behind
-`deploy`.
+list is a deploy nobody asked for.
+
+What "changed" is measured against is the commit that half last went out
+from, as the build log records it (`./script/build-log.ts --last web` or
+`--last server`), not the push before: a run that failed published nothing,
+and measured against its push the next one would see only its own change and
+skip what the failed run never shipped. That happened on 2026-10-04, when
+three failed runs left a fourth to see a workflow file alone. Where there is
+no base to be had — an empty log, a commit a rewrite of main took, a log that
+cannot be read — both deploy: a republish costs a cached build, and a skip
+that should not have happened leaves production behind `deploy`.
 
 Both halves of a build are the same commit. Every checkout pins
 `ref: github.sha`, and the VM resets to that commit rather than to whatever
