@@ -50,7 +50,7 @@ export function Toaster() {
       {
         // In a fixed order, stacked by zIndex alone: a card React moves in the tree drops its running animation.
       }
-      {list.toSorted((a, b) => (a.key as number) - (b.key as number)).map(({ item, key, present }) => {
+      {[...list].sort((a, b) => (a.key as number) - (b.key as number)).map(({ item, key, present }) => {
         const depth = order.indexOf(key);
         const pose = cardPose(depth, PEEK_PX);
         const front = present && depth === 0;

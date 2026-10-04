@@ -115,6 +115,8 @@ struct Surface {
     handle: u32,
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
+    /// `config` is not yet what the surface was configured with; it draws no frame until it is.
+    stale: bool,
 }
 
 struct Device {
@@ -135,9 +137,36 @@ struct Device {
     /// Submitted ahead of the next encoder so a write lands before what reads it.
     uploads: Option<wgpu::CommandEncoder>,
     in_flight: Arc<AtomicU32>,
+    configure_at: ConfigureAt,
 }
 
 static DEVICE: Global<Option<Device>> = Global::new();
+
+/// Where a stale surface is configured: configuring sets its layer's
+/// properties, which some systems allow on one thread alone. The host's
+/// `Elsewhere` calls `surfaces_configure` there.
+#[derive(Clone, Copy)]
+pub enum ConfigureAt {
+    Here,
+    Elsewhere(fn()),
+}
+
+/// Every stale surface configured as it is wanted. The caller is the only one
+/// touching the device while it runs.
+pub fn surfaces_configure() {
+    let Some(d) = device() else { return };
+    for s in d.surfaces.iter_mut().flatten().filter(|s| s.stale) {
+        s.surface.configure(&d.device, &s.config);
+        s.stale = false;
+    }
+}
+
+fn configure_wanted(at: ConfigureAt) {
+    match at {
+        ConfigureAt::Here => surfaces_configure(),
+        ConfigureAt::Elsewhere(host) => host(),
+    }
+}
 
 fn device() -> Option<&'static mut Device> {
     DEVICE.get(|| None).as_mut()
@@ -151,7 +180,7 @@ const SURFACE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
 /// Asks for the adapter's own limits: the simulator's Metal falls short of
 /// WebGPU's defaults and refuses a device that asks for them.
-pub fn open_device() -> Option<DeviceInfo> {
+pub fn open_device(configure_at: ConfigureAt) -> Option<DeviceInfo> {
     if device().is_none() {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::PRIMARY,
@@ -180,6 +209,7 @@ pub fn open_device() -> Option<DeviceInfo> {
             belt: wgpu::util::StagingBelt::new(device.clone(), BELT_CHUNK_BYTES),
             uploads: None,
             in_flight: Arc::new(AtomicU32::new(0)),
+            configure_at,
             device,
             queue,
         }));
@@ -219,12 +249,12 @@ pub unsafe fn surface_bind(handle: u32, target: wgpu::SurfaceTargetUnsafe) -> Re
     {
         config.alpha_mode = mode;
     }
-    surface.configure(&d.device, &config);
     let slot = handle_slot(handle) as usize;
     if d.surfaces.len() <= slot {
         d.surfaces.resize_with(slot + 1, || None);
     }
-    d.surfaces[slot] = Some(Surface { handle, surface, config });
+    d.surfaces[slot] = Some(Surface { handle, surface, config, stale: true });
+    configure_wanted(d.configure_at);
     Ok(())
 }
 
@@ -981,7 +1011,7 @@ impl Gpu {
         }
     }
 
-    /// A surface is configured when it is bound.
+    /// A surface is configured where the host says (`ConfigureAt`), once it is stale.
     pub fn configure(&self, _surface: u32) {}
 
     pub fn resize(&self, surface: u32, width: u32, height: u32) {
@@ -997,30 +1027,32 @@ impl Gpu {
             return;
         }
         [s.config.width, s.config.height] = size;
-        s.surface.configure(&d.device, &s.config);
+        s.stale = true;
+        configure_wanted(d.configure_at);
     }
 
     /// None when the surface has no texture to give; the frame's passes into it are not begun.
     pub fn current(&self, surface: u32, view: u32) {
         let Some(d) = device() else { return };
         let Some(Some(s)) = d.surfaces.get_mut(handle_slot(surface) as usize) else { return };
-        let frame = match s.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(frame) => frame,
-            wgpu::CurrentSurfaceTexture::Suboptimal(frame) => {
-                s.surface.configure(&d.device, &s.config);
-                frame
-            }
-            wgpu::CurrentSurfaceTexture::Outdated => {
-                s.surface.configure(&d.device, &s.config);
-                return;
-            }
-            _ => {
-                return;
-            }
+        if s.stale {
+            return;
+        }
+        let (frame, stale) = match s.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(frame) => (Some(frame), false),
+            wgpu::CurrentSurfaceTexture::Suboptimal(frame) => (Some(frame), true),
+            wgpu::CurrentSurfaceTexture::Outdated => (None, true),
+            _ => (None, false),
         };
-        let v = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
-        d.frames.push(frame);
-        d.put(view, Object::View(v));
+        s.stale = stale;
+        if let Some(frame) = frame {
+            let v = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+            d.frames.push(frame);
+            d.put(view, Object::View(v));
+        }
+        if stale {
+            configure_wanted(d.configure_at);
+        }
     }
 
     /// Timestamps are not asked for on a device (DeviceInfo).
