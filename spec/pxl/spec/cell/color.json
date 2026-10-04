@@ -1,28 +1,28 @@
 {
-  "_meta": { "source": "land/water/structure/transport: OpenStreetMap Carto; block: hand-picked" },
+  "_meta": { "source": "land/water: Blue Marble Next Generation's July 2004 surface reflectance, the median over a named place of each kind (forest Jirisan and Taebaek, paddy Gimje plain, urban Seoul and Tokyo cores, bare Gobi, sand Sahara, sea the open Pacific), sRGB-coded; structure/transport: OpenStreetMap Carto; block: hand-picked" },
   "common": {
     "unknown": { "hex": "#D9D0CC", "note": "A cell whose data is missing or invalid, a visible neutral gray so it reads as not known rather than as whatever drew last." }
   },
   "land": {
-    "bare": { "hex": "#EEE5DC" },
-    "sea": { "hex": "#AAD3DF" },
-    "green_deep": { "hex": "#ADD19E" },
-    "green_light": { "hex": "#C8FACC" },
-    "sand": { "hex": "#F5E9C6" },
-    "residential": { "hex": "#E0DFDF" },
-    "commercial": { "hex": "#F2DAD9" },
-    "industrial": { "hex": "#EBDBE8" },
-    "sports": { "hex": "#88E0BE" },
-    "education": { "hex": "#FFFFE5" },
-    "medical": { "hex": "#FFFFE5" },
-    "public": { "hex": "#FFFFE5" },
-    "apron": { "hex": "#DADAE0" },
-    "helipad": { "hex": "#BBBBCC" }
+    "bare": { "hex": "#6B6353" },
+    "sea": { "hex": "#071129" },
+    "green_deep": { "hex": "#303F20" },
+    "green_light": { "hex": "#434C32" },
+    "sand": { "hex": "#86705D" },
+    "residential": { "hex": "#565540" },
+    "commercial": { "hex": "#565540" },
+    "industrial": { "hex": "#565540" },
+    "sports": { "hex": "#434C32" },
+    "education": { "hex": "#565540" },
+    "medical": { "hex": "#565540" },
+    "public": { "hex": "#565540" },
+    "apron": { "hex": "#565540" },
+    "helipad": { "hex": "#565540" }
   },
   "water": {
-    "river": { "hex": "#AAD3DF" },
-    "lake": { "hex": "#AAD3DF" },
-    "wetland": { "hex": "#AAD3DF" }
+    "river": { "hex": "#071129" },
+    "lake": { "hex": "#071129" },
+    "wetland": { "hex": "#071129" }
   },
   "structure": {
     "building": { "hex": "#D9D0C9" },

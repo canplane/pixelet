@@ -32,37 +32,8 @@ const OBSERVERS: u32 = 1;
 
 pub const LEVEL_DEMAND_PAGES: u32 = FAULT_PAGES;
 
-pub const DEMAND_PAGES: u32 = OBSERVERS * LEVEL_DEMAND_PAGES * LEVELS;
-
 /// A destination's line from its z16 page to the top.
 pub const DESTINATION_PAGES: u32 = LEVELS;
-
-/// The lines over the faults, every level's but the finest.
-const ANCESTOR_PAGES: u32 = OBSERVERS * LEVEL_DEMAND_PAGES * (LEVELS - 1);
-
-/// Held hard apart from the view: the floor and a destination's line. A new
-/// consumer that cannot take a coarser answer would declare its pages here.
-const PINNED_PAGES: u32 = Floor::PAGES + DESTINATION_PAGES;
-
-/// What is held hard at most.
-const HARD_PAGES: u32 = PINNED_PAGES + ANCESTOR_PAGES;
-
-/// A frame for a page nothing holds hard to land in.
-const WORKSPACE: u32 = 1;
-
-/// Convergence: the faults and their lines share each level's ring, so a page
-/// the view reads never gives up another the view reads.
-pub const FRAMES: u32 = PINNED_PAGES + DEMAND_PAGES;
-
-pub const RECORDS: u32 = 1 + FRAMES;
-
-/// A fault's line is among the demand's asks.
-pub const ASKS: u32 = PINNED_PAGES + DEMAND_PAGES + FRAMES;
-
-/// Pages residency knows of at once: every framed page and every asked one.
-const ENTRIES: u32 = FRAMES + ASKS;
-
-const _: () = assert!(FRAMES >= HARD_PAGES + WORKSPACE, "safety: no frame for a page nothing holds hard to land in");
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Hold {
@@ -127,14 +98,51 @@ pub struct Paging<L: Layer> {
     evicted: u32,
 }
 
+/// What a layer's residency holds at once, from what it asks for. A layer
+/// that asks only for the floor (`Layer::DEMANDS` false) asks for no fault, no
+/// line over one, no destination and nothing speculative.
+impl<L: Layer> Paging<L> {
+    const DEMAND_PAGES: u32 = if L::DEMANDS { OBSERVERS * LEVEL_DEMAND_PAGES * LEVELS } else { 0 };
+
+    /// The lines over the faults, every level's but the finest.
+    const ANCESTOR_PAGES: u32 = if L::DEMANDS { OBSERVERS * LEVEL_DEMAND_PAGES * (LEVELS - 1) } else { 0 };
+
+    /// Held hard apart from the view: the floor and a destination's line. A new
+    /// consumer that cannot take a coarser answer would declare its pages here.
+    const PINNED_PAGES: u32 = Floor::PAGES + if L::DEMANDS { DESTINATION_PAGES } else { 0 };
+
+    /// What is held hard at most.
+    const HARD_PAGES: u32 = Self::PINNED_PAGES + Self::ANCESTOR_PAGES;
+
+    /// A frame for a page nothing holds hard to land in. The floor alone holds
+    /// every page it asks for hard, and asks for at most `Floor::PAGES`, so a
+    /// page it asks for finds a frame free or held only as cache.
+    const WORKSPACE: u32 = L::DEMANDS as u32;
+
+    /// Convergence: the faults and their lines share each level's ring, so a page
+    /// the view reads never gives up another the view reads.
+    pub const FRAMES: u32 = Self::PINNED_PAGES + Self::DEMAND_PAGES;
+
+    pub const RECORDS: u32 = 1 + Self::FRAMES;
+
+    /// A fault's line is among the demand's asks; speculation takes at most the frames.
+    pub const ASKS: u32 = Self::PINNED_PAGES + Self::DEMAND_PAGES + if L::DEMANDS { Self::FRAMES } else { 0 };
+
+    /// Pages residency knows of at once: every framed page and every asked one.
+    const ENTRIES: u32 = Self::FRAMES + Self::ASKS;
+
+    const SAFE: () = assert!(Self::FRAMES >= Self::HARD_PAGES + Self::WORKSPACE, "safety: no frame for a page nothing holds hard to land in");
+}
+
 impl<L: Layer> Default for Paging<L> {
     fn default() -> Self {
+        let () = Self::SAFE;
         Paging {
-            pages: HashMap::with_capacity(ENTRIES as usize),
+            pages: HashMap::with_capacity(Self::ENTRIES as usize),
             shared: None,
             // Lowest first, as the frames are taken.
-            free: (ABSENT + 1..RECORDS).rev().collect(),
-            going: Vec::with_capacity(ENTRIES as usize),
+            free: (ABSENT + 1..Self::RECORDS).rev().collect(),
+            going: Vec::with_capacity(Self::ENTRIES as usize),
             revision: 0,
             refused: 0,
             admitted: 0,
@@ -154,7 +162,7 @@ impl<L: Layer> Paging<L> {
 
     /// Past `ENTRIES` is a page kept for no reason the bound counts.
     fn entry_mut(&mut self, p: LevelPage) -> &mut Entry<L> {
-        let full = self.pages.len() >= ENTRIES as usize;
+        let full = self.pages.len() >= Self::ENTRIES as usize;
         self.pages.entry(p).or_insert_with(|| {
             xpute_core::ensure!(!full, ENOTRECOVERABLE, p.level);
             Entry::NONE
@@ -174,6 +182,11 @@ impl<L: Layer> Paging<L> {
         self.held_as(p).is_some_and(|h| h.record != ABSENT)
     }
 
+    /// The frame a held page is in; none for one that reads `ABSENT`.
+    pub fn frame(&self, p: LevelPage) -> Option<u32> {
+        self.held_as(p).map(|h| h.record).filter(|&r| r != ABSENT)
+    }
+
     pub fn get(&self, p: LevelPage) -> Option<&L> {
         self.held_as(p).map(|h| &h.body)
     }
@@ -183,7 +196,7 @@ impl<L: Layer> Paging<L> {
     }
 
     pub fn frames_used(&self) -> u32 {
-        FRAMES - self.free.len() as u32
+        Self::FRAMES - self.free.len() as u32
     }
 
     pub fn revision(&self) -> u32 {
@@ -231,7 +244,7 @@ impl<L: Layer> Paging<L> {
     /// they cost no frame, so nothing would ever evict them. Framed pages are
     /// left to normal turnover.
     pub fn ask(&mut self, asks: &HashMap<LevelPage, Ask>) {
-        xpute_core::ensure!(asks.len() <= ASKS as usize, ENOTRECOVERABLE, asks.len());
+        xpute_core::ensure!(asks.len() <= Self::ASKS as usize, ENOTRECOVERABLE, asks.len());
         let mut changed = false;
         for (p, e) in &mut self.pages {
             e.ask = asks.get(p).copied();

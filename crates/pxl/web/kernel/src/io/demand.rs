@@ -54,6 +54,7 @@ impl Category {
         match self {
             Category::terrain | Category::ocean => Some(BakeKind::terrain),
             Category::poi => Some(BakeKind::poi),
+            Category::earth => Some(BakeKind::earth),
             Category::geocode | Category::geocode_dict => Some(BakeKind::geocode),
             Category::asset => None,
         }

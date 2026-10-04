@@ -17,8 +17,11 @@ use core::cmp::Ordering;
 use crate::io::demand::{Ask, Category, DemandKey, Phases};
 use crate::io::load::LOADS;
 use crate::io::policy::Policy;
+use crate::layer::earth::Earth;
 use crate::sched::profiler::record::{profiler_record, Failure, Outcome, TaskRecord};
-use crate::world::paging::FRAMES;
+use crate::world::paging::Paging;
+use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::poi_page::PoiPage;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::clock::now;
@@ -46,7 +49,9 @@ pub trait Serve {
 /// hold. An asset: as a model and as an image. Streams of one: one.
 const fn bound(category: Category) -> usize {
     match category {
-        Category::terrain | Category::poi => FRAMES as usize,
+        Category::terrain => Paging::<Terrain>::FRAMES as usize,
+        Category::poi => Paging::<PoiPage>::FRAMES as usize,
+        Category::earth => Paging::<Earth>::FRAMES as usize,
         Category::asset => 2 * LOADS,
         Category::ocean | Category::geocode | Category::geocode_dict => 1,
     }

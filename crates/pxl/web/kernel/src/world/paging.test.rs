@@ -154,7 +154,7 @@ fn converge_on<S: Serve>(pyramid: &mut Pyramid<PoiPage>, observation: fn() -> Ob
             pyramid.admit(p, |_| Ok(crowded(p))).expect("a page is made");
             sched.settle(key, Outcome::ok, None, Failure::default(), at);
         }
-        assert!(pyramid.paging().frames_used() <= FRAMES, "turn {turn}: past the frames");
+        assert!(pyramid.paging().frames_used() <= Paging::<PoiPage>::FRAMES, "turn {turn}: past the frames");
         resident.extend(pyramid.paging().held().map(|(p, _)| p));
         for &p in floor.iter().filter(|p| resident.contains(p)) {
             assert!(pyramid.paging().resident(p), "turn {turn}: the floor's {p:?} given up");

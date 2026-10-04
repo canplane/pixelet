@@ -7,6 +7,7 @@ use xpute_core::status::error::MarshalError;
 
 pub mod constant;
 pub mod deck;
+pub mod earth_page;
 pub mod fold;
 pub mod format;
 pub mod ground;

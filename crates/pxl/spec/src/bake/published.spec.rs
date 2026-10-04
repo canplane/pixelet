@@ -15,12 +15,14 @@ pub struct PublishedVersion {
     pub terrain: &'static str,
     pub poi: &'static str,
     pub geocode: &'static str,
+    pub earth: &'static str,
 }
 
 pub const PUBLISHED_VERSION: PublishedVersion = PublishedVersion {
     terrain: "v7.2026-10-04.1",
     poi: "v9.2026-10-04.2",
     geocode: "v5.2026-10-04.1",
+    earth: "v1.2026-10-05.1",
 };
 
 /// The format each bake writes now, which a bake's folder is named by with
@@ -29,9 +31,15 @@ pub struct Format {
     pub terrain: u32,
     pub poi: u32,
     pub geocode: u32,
+    pub earth: u32,
 }
 
-pub const FORMAT: Format = Format { terrain: 7, poi: 9, geocode: 5 };
+pub const FORMAT: Format = Format {
+    terrain: 7,
+    poi: 9,
+    geocode: 5,
+    earth: 1,
+};
 
 /// A bake's folder and published name: its format, the day it was baked
 /// (`YYYY-MM-DD`, UTC) and that day's count of bakes of its kind, from 1.
@@ -48,10 +56,11 @@ pub enum BakeKind {
     terrain,
     poi,
     geocode,
+    earth,
 }
 
 impl BakeKind {
-    pub const ALL: [BakeKind; 3] = [BakeKind::terrain, BakeKind::poi, BakeKind::geocode];
+    pub const ALL: [BakeKind; 4] = [BakeKind::terrain, BakeKind::poi, BakeKind::geocode, BakeKind::earth];
 
     /// The kind a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<BakeKind> {
@@ -66,6 +75,7 @@ impl PublishedVersion {
             BakeKind::terrain => self.terrain,
             BakeKind::poi => self.poi,
             BakeKind::geocode => self.geocode,
+            BakeKind::earth => self.earth,
         }
     }
 }

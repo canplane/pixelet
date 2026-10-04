@@ -83,6 +83,7 @@ fn goal_tick(ctx: &mut TickContext) {
 fn demand_tick(_: &mut TickContext) {
     terrain_step();
     crate::layer::poi::poi_step();
+    crate::layer::earth::earth_step();
 }
 
 fn camera_input_tick(_: &mut TickContext) {

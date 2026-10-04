@@ -17,6 +17,7 @@ use xpute_runtime::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::io::file::{self, Owner};
 use crate::io::sched::{attempt_of, settle, Credit};
+use crate::layer::earth::{self, Earth};
 use crate::layer::geocode::store as geocode_store;
 use crate::layer::terrain::page::OCEAN_KEY;
 use crate::sched::profiler::record::{Failure, Outcome};
@@ -38,7 +39,7 @@ impl fmt::Display for DemandName {
         match key.0 {
             Category::terrain => write!(f, "{}", page_name(LevelPage::of_subject(key.1))),
             Category::ocean => f.write_str(OCEAN_KEY),
-            Category::poi => write!(f, "{}", page_name(LevelPage::of_subject(key.1))),
+            Category::poi | Category::earth => write!(f, "{}", page_name(LevelPage::of_subject(key.1))),
             Category::geocode => write!(f, "{}", group_name(key.1)),
             Category::geocode_dict => f.write_str(DICT_OBJECT),
             // Assets are opened below the assets' root (io/load.rs), never here.
@@ -185,6 +186,7 @@ fn absent(category: Category, subject: u64) -> Result<(), Errno> {
     match category {
         Category::terrain => Terrain::pyramid().absent(LevelPage::of_subject(subject)),
         Category::poi => PoiPage::pyramid().absent(LevelPage::of_subject(subject)),
+        Category::earth => Earth::pyramid().absent(LevelPage::of_subject(subject)),
         Category::geocode => geocode_store::absent_group(subject),
         // A bake with no dictionary names nothing: an answer, so not asked again.
         Category::geocode_dict => geocode_store::absent_dict(),
@@ -214,6 +216,8 @@ fn adopt(category: Category, subject: u64, block: Option<Block>, phases: &mut Ph
             release(block);
             result
         }
+        // The texels are kept until the GPU has them.
+        Category::earth => earth::adopt(LevelPage::of_subject(subject), b, phases),
         // SAFETY (both): the heap block given for this body alone; the store
         // keeps it, or frees it if it does not open.
         Category::geocode => unsafe { geocode_store::adopt_group(subject, b) }.map_err(Into::into),

@@ -13,7 +13,7 @@ export const CENSUS_TAGS = ["chunk", "decor", "ghost_box", "ghost_coplanar", "gh
 
 export const PHASE_NAMES = ["interaction", "visible", "content", "cosmetic", "report"] as const;
 
-export const CATEGORY_NAMES = ["terrain", "ocean", "poi", "geocode", "geocode_dict", "asset"] as const;
+export const CATEGORY_NAMES = ["terrain", "ocean", "poi", "geocode", "geocode_dict", "asset", "earth"] as const;
 
 export const OUTCOME_NAMES = ["ok", "aborted", "error"] as const;
 
@@ -247,10 +247,10 @@ export const SUMMARY = {
   tasks: {
     AT: 263 as number,
     slots: 0 as number,
-    WORDS: 150 as number,
+    WORDS: 175 as number,
   },
   counters: {
-    AT: 413 as number,
+    AT: 438 as number,
     faces_kept: 0 as number,
     faces_possible: 1 as number,
     runs_culled: 2 as number,
@@ -268,7 +268,7 @@ export const SUMMARY = {
     WORDS: 14 as number,
   },
   atlas: {
-    AT: 427 as number,
+    AT: 452 as number,
     size: 0 as number,
     entries: 1 as number,
     shelves: 2 as number,
@@ -277,7 +277,7 @@ export const SUMMARY = {
     WORDS: 5 as number,
   },
   held: {
-    AT: 432 as number,
+    AT: 457 as number,
     run_sets: 0 as number,
     run_set_mb: 1 as number,
     tiers: 2 as number,
@@ -287,14 +287,14 @@ export const SUMMARY = {
     WORDS: 6 as number,
   },
   fetch: {
-    AT: 438 as number,
+    AT: 463 as number,
     queued: 0 as number,
     running: 1 as number,
     credits: 2 as number,
     WORDS: 3 as number,
   },
   peak: {
-    AT: 441 as number,
+    AT: 466 as number,
     present: 0 as number,
     dt_ms: 1 as number,
     sched_ms: 2 as number,
@@ -316,13 +316,13 @@ export const SUMMARY = {
     WORDS: 18 as number,
   },
   steps: {
-    AT: 459 as number,
+    AT: 484 as number,
     count: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
   quality: {
-    AT: 620 as number,
+    AT: 645 as number,
     step: 0 as number,
     star: 1 as number,
     frames_held: 2 as number,
@@ -335,14 +335,14 @@ export const SUMMARY = {
   },
   /** The heap as the read finds it, recording or not: `used_mb` its top, `requests` the pages it has ever asked for. */
   heap: {
-    AT: 628 as number,
+    AT: 653 as number,
     used_mb: 0 as number,
     requests: 1 as number,
     WORDS: 2 as number,
   },
   /** Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the page it is read from. */
   view: {
-    AT: 630 as number,
+    AT: 655 as number,
     dist: 0 as number,
     polar: 1 as number,
     azimuth: 2 as number,
@@ -361,7 +361,7 @@ export const SUMMARY = {
     read_zoom: 15 as number,
     WORDS: 16 as number,
   },
-  WORDS: 646 as number,
+  WORDS: 671 as number,
 } as const;
 
 /** What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count. */

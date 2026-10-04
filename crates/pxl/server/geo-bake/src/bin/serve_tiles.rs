@@ -1,7 +1,9 @@
 // pxl-geo-bake/bin/serve_tiles.rs
 
 //! Local demand bakes. --cache holds the terrain/poi/geocode directories;
-//! a page stays cached across restarts until its kind is invalidated.
+//! a page stays cached across restarts until its kind is invalidated. The
+//! Earth's picture is baked offline by pxl-tool, so it is served from that
+//! bake (`--out`), under the names the bucket holds, whichever way the rest is.
 
 use axum::body::Bytes;
 use axum::extract::{Path, State};
@@ -34,24 +36,44 @@ struct App {
     pages: Pages,
     top_level: u32,
     asset_dir: PathBuf,
+    out: PathBuf,
+}
+
+const EARTH: &str = "earth";
+
+async fn earth(app: &App, version: &str, name: &str) -> Response {
+    if page_of_name(name).is_none() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    match tokio::fs::read(app.out.join(EARTH).join(version).join(name)).await {
+        Ok(bytes) => packed(bytes),
+        Err(_) => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+fn packed(bytes: Vec<u8>) -> Response {
+    (
+        [
+            (header::CONTENT_TYPE, "application/octet-stream"),
+            (header::CONTENT_ENCODING, CONTENT_ENCODING),
+            (header::CACHE_CONTROL, "no-store"),
+        ],
+        Bytes::from(bytes),
+    )
+        .into_response()
 }
 
 async fn tile(State(app): State<Arc<App>>, Path((kind, name)): Path<(String, String)>) -> Response {
+    if kind == EARTH {
+        return earth(&app, PUBLISHED_VERSION.earth, &name).await;
+    }
     let Some(kind) = Kind::parse(&kind) else { return StatusCode::NOT_FOUND.into_response() };
     let demand = match &app.pages {
         Pages::Demand(demand) => demand,
         Pages::Baked(dir) => return baked(dir, kind, published_version(kind), &name).await,
     };
     match demand.get(kind, &name).await {
-        Ok(Some(bytes)) => (
-            [
-                (header::CONTENT_TYPE, "application/octet-stream"),
-                (header::CONTENT_ENCODING, CONTENT_ENCODING),
-                (header::CACHE_CONTROL, "no-store"),
-            ],
-            Bytes::from(bytes),
-        )
-            .into_response(),
+        Ok(Some(bytes)) => packed(bytes),
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(Failure::BadName) => (StatusCode::BAD_REQUEST, "bad tile name").into_response(),
         Err(Failure::Unavailable) => (StatusCode::SERVICE_UNAVAILABLE, "past --top-level").into_response(),
@@ -73,9 +95,6 @@ fn published_version(kind: Kind) -> &'static str {
 
 /// The bucket's address, `<kind>/<version>/<name>`, as a production build asks for it.
 async fn tile_versioned(State(app): State<Arc<App>>, Path((kind, version, name)): Path<(String, String, String)>) -> Response {
-    let (Pages::Baked(dir), Some(kind)) = (&app.pages, Kind::parse(&kind)) else {
-        return StatusCode::NOT_FOUND.into_response();
-    };
     // `version_name`'s shape, v<format>.<day>.<n>: no other name reaches the disk
     if !version
         .strip_prefix('v')
@@ -83,6 +102,12 @@ async fn tile_versioned(State(app): State<Arc<App>>, Path((kind, version, name))
     {
         return StatusCode::NOT_FOUND.into_response();
     }
+    if kind == EARTH {
+        return earth(&app, &version, &name).await;
+    }
+    let (Pages::Baked(dir), Some(kind)) = (&app.pages, Kind::parse(&kind)) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
     baked(dir, kind, &version, &name).await
 }
 
@@ -99,15 +124,7 @@ async fn baked(dir: &std::path::Path, kind: Kind, version: &str, name: &str) -> 
         Kind::Geocode => return StatusCode::NOT_FOUND.into_response(),
     };
     match tokio::fs::read(path).await {
-        Ok(bytes) => (
-            [
-                (header::CONTENT_TYPE, "application/octet-stream"),
-                (header::CONTENT_ENCODING, CONTENT_ENCODING),
-                (header::CACHE_CONTROL, "no-store"),
-            ],
-            Bytes::from(bytes),
-        )
-            .into_response(),
+        Ok(bytes) => packed(bytes),
         Err(_) => StatusCode::NOT_FOUND.into_response(),
     }
 }
@@ -173,6 +190,7 @@ fn run() -> Result<(), String> {
     let mut cache = PathBuf::from("./out/dev");
     let mut top_level: u32 = 3;
     let mut baked: Option<PathBuf> = None;
+    let mut out = PathBuf::from("./out");
 
     let mut flags = Flags::of(argv);
     while let Some(flag) = flags.arg() {
@@ -186,6 +204,7 @@ fn run() -> Result<(), String> {
             "--cache" => cache = PathBuf::from(flags.value()?),
             "--top-level" => top_level = flags.parse()?,
             "--baked" => baked = Some(PathBuf::from(flags.value()?)),
+            "--out" => out = PathBuf::from(flags.value()?),
             other => return Err(format!("unknown flag: {other}")),
         }
     }
@@ -194,7 +213,7 @@ fn run() -> Result<(), String> {
         Some(dir) => (Pages::Baked(dir), PUBLISHED_TOP_LEVEL),
         None => (Pages::Demand(Server::open(workers, cache, top_level, limits)?), top_level),
     };
-    let app = Arc::new(App { pages, top_level, asset_dir });
+    let app = Arc::new(App { pages, top_level, asset_dir, out });
 
     // Without ADMIN_TOKEN, as in local dev, the internal route is open.
     let mut internal = Router::new().route(&format!("{GEO_INTERNAL}/world/{{kind}}/cache/invalidate"), post(invalidate));

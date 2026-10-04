@@ -53,14 +53,17 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     // other where their intensities cross at dusk; the brighter casts the shadow.
     let sun_dir = norm3(&light.sun);
     let w = white();
-    let sun_t = light_at(light.altitude_km, sun_dir[2]);
+    // The light the ground takes, as the ground sees it: from orbit the camera
+    // sees the sun over a lower horizon and through no air, which lit the
+    // ground white at dawn under the ground's low exposure.
+    let sun_t = light_at(light.ground_km, sun_dir[2]);
     let sun_color: [f64; 3] = core::array::from_fn(|k| sun_t[k] * w[k]);
     let moon_dir = norm3(&light.moon);
     // Night as the sky shows it, past which the stars are lost in the day.
     let night = 1.0 - smoothstep(-0.1, 0.0, sun_dir[2]);
     let elongation = libm::acos(dot3(&sun_dir, &moon_dir).clamp(-1.0, 1.0));
     let phase = moon_phase_light(core::f64::consts::PI - elongation);
-    let through = light_at(light.altitude_km, moon_dir[2]);
+    let through = light_at(light.ground_km, moon_dir[2]);
     // By day the sun leaves the Moon nothing, so its light and its sky are
     // not worked out at all.
     let moon_color: [f64; 3] = core::array::from_fn(|k| NIGHT_COLOR[k] * MOON_LIGHT * phase * night * through[k] * w[k]);

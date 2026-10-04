@@ -35,6 +35,8 @@ pub mod STAGE_AT {
     pub const ORIGIN: usize = 67;
     /// Device pixels per CSS pixel the world is drawn at this frame.
     pub const RESOLUTION: usize = 69;
+    /// How far the view has gone over to the Earth's picture, 0 to 1.
+    pub const EARTH_SHARE: usize = 70;
 }
 
 static STAGE: Global<[f64; STAGE_WORDS]> = Global::new();

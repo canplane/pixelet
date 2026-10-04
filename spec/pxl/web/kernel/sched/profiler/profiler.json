@@ -32,7 +32,8 @@
     "poi",
     "geocode",
     "geocode_dict",
-    "asset"
+    "asset",
+    "earth"
   ],
   "OUTCOME_NAMES": [
     "ok",
