@@ -737,7 +737,12 @@ impl BakeContext {
 
     #[allow(clippy::too_many_arguments)]
     fn accumulate_run(&mut self, start: u32, mut cnt: u32, bucket: i32, cell: u32, set: &RunSet, i: usize, col: u32) -> u32 {
-        let (run_z0, run_z1) = (set.z0[i], set.z1[i]);
+        let (mut run_z0, run_z1) = (set.z0[i], set.z1[i]);
+        // Ground is solid under its surface: the column stops at the chunk's floor
+        // only to save runs, and read from there a coarse sea cell was a thousandth full.
+        if i == set.start[col as usize] as usize && set.material_class[i] != MaterialClasses::OBJECT {
+            run_z0 = run_z0.div_euclid(bucket) * bucket;
+        }
         // With the pack drawn a far patch shows its layer's mean color; with it off,
         // the leaves show the swatch, so the summary does too.
         let swatch = [set.r[i], set.g[i], set.b[i]];
