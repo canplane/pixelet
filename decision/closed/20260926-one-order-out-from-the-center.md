@@ -7,7 +7,7 @@ mounted and built, decor, places.
 **Superseded in part** the same day by
 [the view is cubes about the eye](./20260926-the-view-is-cubes-about-the-eye.md):
 the order is taken from the eye and not from the center the camera turns
-about, and a node is a cube of its level, not a block one band high. The
+about, and a node is a cube of its zoom, not a block one band high. The
 rest stands, and what it lists as missing is built there but for occlusion.
 
 ## The rule
@@ -37,7 +37,7 @@ as it commits, so both ride the ground's order.
 A page's heightfield is how ground is stored, a compression of it. Nothing
 that decides what a view does is 2.5D: selection, order, budget, occlusion
 and drawing are 3D, over boxes in a sphere, for terrain, places and objects
-alike — the rule chose its levels and derived its budget that way from the
+alike — the rule chose its zooms and derived its budget that way from the
 start (the ball about the eye in
 [what a view costs is the eye's](./20260925-what-a-view-costs-is-the-eye-s.md)).
 A 2.5D path is an optimization, taken where it is known to behave exactly as
@@ -66,8 +66,8 @@ axes over the view would be almost all air and would not fit. The view is
 given a 3D address space instead, and a lookup that turns an address into
 where the thing addressed is stored.
 
-- **A node is an address.** A block of a level's cells in three axes —
-  `(level, x, y, band)`, 64 across and a band high — exists only as that
+- **A node is an address.** A block of a zoom's cells in three axes —
+  `(z, x, y, band)`, 64 across and a band high — exists only as that
   tuple. The domain's walk makes them as it splits and drops them after; no
   table holds one per block.
 - **A lookup points into storage.** Given an address, it returns where its
@@ -124,18 +124,18 @@ Found by reading, not yet measured or built.
 - **Fetches outlive their demand.** A fetch the view no longer wants is
   stopped only when something waits for its credit, and one at a time
   (io/sched.rs `preempt`). A zoom out and straight back in leaves the six
-  credits on pages of the level passed through, released one per host round
-  trip while the level wanted now waits. Everything outside this turn's
+  credits on pages of the zoom passed through, released one per host round
+  trip while the zoom wanted now waits. Everything outside this turn's
   demand should be stopped in the turn it leaves it.
 - **Steep ground starves.** In mountains a chunk's split is decided by its
   page's height range, which changes as each page lands — an ancestor's
   range, then its own. The decision can flip, the cover change, and chunks go
   stale and are mounted again before their builds finish, over and over. The
-  ledger's cover lanes and mount counts would show it. The prior art keeps a
-  level once drawn until what replaces it is ready (below).
+  ledger's cover lanes and mount counts would show it. The prior art keeps
+  what it drew until what replaces it is ready (below).
 - **Occlusion.** A chunk behind a ridge is split, fetched and built like one
   in view, and in the center's order it can come early. Refusing to split
-  what is occluded, and keeping it at the level it has, is where the saving
+  what is occluded, and keeping it at the zoom it has, is where the saving
   is in mountains.
 
 ## Prior art
@@ -155,7 +155,7 @@ view is scheduled over one.
   ([spec](https://github.com/CesiumGS/3d-tiles/tree/main/specification/ImplicitTiling)).
 - GigaVoxels keeps an N³-tree whose nodes point into a pool of bricks or
   mark themselves empty or constant, and streams bricks as rays ask for them
-  by level of detail and occlusion
+  by detail and occlusion
   ([paper](http://gigavoxels.inria.fr/Publications/2009/CNLE09/CNLE09.pdf)).
 - Minecraft cuts a column into 16 × 16 × 16 sections and does not store an
   empty one ([chunk format](https://minecraft.wiki/w/Chunk_format)).
@@ -171,7 +171,7 @@ view is scheduled over one.
   `(1 − dot(tileDirection, cameraDirection)) × distance`, keeps drawing what
   was drawn last frame until its replacement is renderable ("ancestor meets
   SSE", "kicking"), and caps the descendants a view waits on so it shows an
-  intermediate level rather than nothing
+  intermediate ancestor rather than nothing
   ([selection algorithm](https://cesium.com/learn/cesium-native/ref-doc/selection-algorithm-details.html)).
 - Cesium for Unreal refuses to refine a tile its GPU occlusion query finds
   hidden, and does not traverse past one whose result has not come: 17 to 31

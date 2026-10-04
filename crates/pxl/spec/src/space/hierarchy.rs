@@ -1,6 +1,6 @@
 // pxl-spec/space/hierarchy.rs
 
-//! What a level is to the one under it. Every extent is a power of two of the
+//! What a node is to the one it lies in. Every extent is a power of two of the
 //! unit, a `Scale`, so sizes from different bases cannot mix in one
 //! expression. In position, a parent is the coordinate halved and a child is
 //! told apart by each axis's low bit, in any number of axes.
@@ -24,13 +24,13 @@ impl Scale {
         self.0
     }
 
-    /// Negative `levels` steps down.
-    pub const fn up(self, levels: i32) -> Scale {
-        Scale(self.0 + levels)
+    /// Negative `steps` go down.
+    pub const fn up(self, steps: i32) -> Scale {
+        Scale(self.0 + steps)
     }
 
-    pub const fn down(self, levels: u32) -> Scale {
-        Scale(self.0 - levels as i32)
+    pub const fn down(self, steps: u32) -> Scale {
+        Scale(self.0 - steps as i32)
     }
 
     /// Negative where below.
@@ -105,19 +105,19 @@ pub fn child_of<const D: usize>(at: [i64; D], slot: usize) -> [i64; D] {
     std::array::from_fn(|i| 2 * at[i] + ((slot >> i) & 1) as i64)
 }
 
-pub fn ancestor_of<const D: usize>(at: [i64; D], levels: u32) -> [i64; D] {
-    at.map(|v| v >> levels)
+pub fn ancestor_of<const D: usize>(at: [i64; D], steps: u32) -> [i64; D] {
+    at.map(|v| v >> steps)
 }
 
-/// Where `at` lies in its ancestor `levels` up, from that ancestor's first
+/// Where `at` lies in its ancestor `steps` up, from that ancestor's first
 /// descendant.
-pub fn offset_in<const D: usize>(at: [i64; D], levels: u32) -> [i64; D] {
-    at.map(|v| v & ((1 << levels) - 1))
+pub fn offset_in<const D: usize>(at: [i64; D], steps: u32) -> [i64; D] {
+    at.map(|v| v & ((1 << steps) - 1))
 }
 
 /// Every slot 0: `ancestor_of`'s inverse.
-pub fn first_descendant_of<const D: usize>(at: [i64; D], levels: u32) -> [i64; D] {
-    at.map(|v| v << levels)
+pub fn first_descendant_of<const D: usize>(at: [i64; D], steps: u32) -> [i64; D] {
+    at.map(|v| v << steps)
 }
 
 /// Whether two nodes overlap; in one hierarchy they nest or are apart.
@@ -129,14 +129,14 @@ pub fn share<const D: usize>((a_side, a): (Scale, [i64; D]), (b_side, b): (Scale
     }
 }
 
-/// A node's position in a depth-first walk in slot order, coarsest level
+/// A node's position in a depth-first walk in slot order, coarsest step
 /// first; the leaves of one coarser node form one run.
-pub fn walk_order<const D: usize>(at: [u32; D], levels: u32) -> u64 {
-    (0..levels).rev().fold(0, |order, l| (order << D) | slot_of(at.map(|v| i64::from(v >> l))) as u64)
+pub fn walk_order<const D: usize>(at: [u32; D], steps: u32) -> u64 {
+    (0..steps).rev().fold(0, |order, l| (order << D) | slot_of(at.map(|v| i64::from(v >> l))) as u64)
 }
 
-pub fn at_walk_order<const D: usize>(order: u64, levels: u32) -> [u32; D] {
-    (0..levels).rev().fold([0; D], |at, l| {
+pub fn at_walk_order<const D: usize>(order: u64, steps: u32) -> [u32; D] {
+    (0..steps).rev().fold([0; D], |at, l| {
         let slot = ((order >> (l as usize * D)) & ((1 << D) - 1)) as usize;
         child_of(at.map(i64::from), slot).map(|v| v as u32)
     })

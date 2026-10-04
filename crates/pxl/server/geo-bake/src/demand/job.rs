@@ -139,7 +139,7 @@ pub fn connect(reads: &[&[&str]], seconds: u64) -> Result<(crate::coverage::Over
 pub fn execute(job: Job, out: &Path, seconds: u64) -> Result<(), String> {
     match job {
         Job::Page { kind, subject, cache } => {
-            let p = pxl_spec::space::pyramid::LevelPage::of_subject(subject);
+            let p = pxl_spec::space::pyramid::Page::of_subject(subject);
             match kind {
                 super::Kind::Terrain => super::terrain::execute(p, &cache, out, seconds),
                 super::Kind::Poi => super::poi::execute(p, &cache, out, seconds),

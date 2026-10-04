@@ -1,34 +1,34 @@
 // pxl-kernel/world/paging/floor.rs
 
-//! The floor: every observation has an answer at some level, because a
+//! The floor: every observation has an answer at some zoom, because a
 //! fallback's pages are held hard over every observed piece of ground. It is
 //! asked for with every observation, not only when one finds nothing, or
 //! every turn toward new ground would leave a hole for a round trip.
 //!
-//! Its level is the source's declared top (`declare`), never guessed from
+//! Its zoom is the source's declared top (`declare`), never guessed from
 //! what fails. Until declared, nothing is observed.
 
 use pxl_spec::space::lod::{fault_radius, pages_within, FAULT_PAGES};
 use pxl_spec::space::observation::Observation;
-use pxl_spec::space::pyramid::{LevelPage, TOP_LEVEL};
+use pxl_spec::space::pyramid::{Page, TOP_Z};
 
 use xpute_runtime::global::Global;
 
 static DECLARED: Global<Option<u32>> = Global::new();
 
-pub fn declare(top_level: u32) {
-    xpute_core::ensure!(top_level <= TOP_LEVEL, EINVAL, top_level);
-    *DECLARED.get(Default::default) = Some(top_level.min(TOP_LEVEL));
+pub fn declare(top_z: u32) {
+    xpute_core::ensure!(top_z >= TOP_Z, EINVAL, top_z);
+    *DECLARED.get(Default::default) = Some(top_z);
 }
 
-pub fn level() -> Option<u32> {
+pub fn top() -> Option<u32> {
     *DECLARED.get(Default::default)
 }
 
 pub trait Fallback {
     const PAGES: u32;
 
-    fn floor(o: &Observation, each: impl FnMut(LevelPage));
+    fn floor(o: &Observation, each: impl FnMut(Page));
 }
 
 /// The top's pages with ground within the far edge of the eye itself, which
@@ -42,7 +42,7 @@ impl Fallback for TopRing {
     /// the ground is no wider, so these are at most the pages a fault can name there.
     const PAGES: u32 = FAULT_PAGES;
 
-    fn floor(o: &Observation, each: impl FnMut(LevelPage)) {
+    fn floor(o: &Observation, each: impl FnMut(Page)) {
         let far = o.far.min(fault_radius(o.top));
         let over = (o.eye[2] - o.ground).max(0.0);
         if over < far {

@@ -12,17 +12,17 @@ replaced by bounding what is drawn by the screen.
 
 ## The invariant
 
-That document derived what a view may cost from its rule alone. A node of
-level L is split while its nearest 3D distance from the eye is under
-`r_L = (P / τ) · 2^L`. From that:
+That document derived what a view may cost from its rule alone. A node at
+z is split while its nearest 3D distance from the eye is under
+`r_z = (P / τ) · 2^(16 − z)`. From that:
 
-1. **Nodes a level are a constant.** Every selected level-L node lies in the
-   ball of radius `r_{L+1}` plus a diagonal around the eye, so a level holds
-   at most a fixed count — the same for every level, the way the flux
+1. **Nodes a zoom are a constant.** Every selected node at z lies in the
+   ball of radius `r_{z−1}` plus a diagonal around the eye, so a zoom holds
+   at most a fixed count — the same for every zoom, the way the flux
    through every shell around a charge is the same.
-2. **Levels are a fixed count**, the ball under the finest level the data
-   has counted as one level at the same cost.
-3. **The frustum takes a constant share** of each level, Ω / 4π.
+2. **Zooms are a fixed count**, the ball under the finest zoom the data
+   has counted as one zoom at the same cost.
+3. **The frustum takes a constant share** of each zoom, Ω / 4π.
 4. **These constants are the budget.** The records, `.fixed`, the chunk
    table and the arena are derived from them, not set.
 5. **Fitting is decided from the eye at once**, never fed back from a
@@ -31,19 +31,19 @@ level L is split while its nearest 3D distance from the eye is under
 ## What holds
 
 The rule is the invariant's. `Domain::split_at` splits by `D_min` against
-`split_distance(L)` from the eye alone, with no tilt and no floor at z16;
+`split_distance(z)` from the eye alone, with no tilt and no floor at z16;
 one `Order` ranks fetch, mount, build and the record given up; the pages
 wanted are the drawn chunks' and every ancestor to the top.
 
 A resident byte of the ground is bounded where it lies. A page is one
-record of `.fixed.terrain`, the same size at every level. A chunk's mesh is
+record of `.fixed.terrain`, the same size at every zoom. A chunk's mesh is
 one slot of its pool, and a mesh past the slot is baked a step coarser
 (`BuildEvent::Coarser`), so a slot's worst case does not depend on what the
 ground holds. The run sets, the bake, the surface lanes and the decor's
 gathering are `.fixed`.
 
-Over flat ground those two together give the invariant. A level's shell
-lies 3 to 6 of its own chunks from the eye at every level, so every shell
+Over flat ground those two together give the invariant. A zoom's shell
+lies 3 to 6 of its own chunks from the eye at every zoom, so every shell
 holds the same count of chunks, each one slot of the same size, and 12 to
 16 pages.
 
@@ -51,12 +51,12 @@ holds the same count of chunks, each one slot of the same size, and 12 to
 
 | Invariant                    | The tree                                                                                                                                                                                                                                              |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. a bound a level           | Only z16 is held to one (`LEVEL_CHUNKS`); every other level only to the sum (`VIEW_CHUNKS`), so one shell can take another's share.                                                                                                                   |
-| 4. derived, not set          | `MAX_CHUNKS` (4,096) and `VIEW_PAGES` (48) are set. 48 is under what the rule's levels can want — 12 to 16 pages over eleven levels, by domain.rs's own comment — so the view is fitted to it by search every frame the eye moves.                    |
+| 1. a bound a zoom            | Only z16 is held to one (its own chunk count); every other zoom only to the sum (`VIEW_CHUNKS`), so one shell can take another's share.                                                                                                                |
+| 4. derived, not set          | `MAX_CHUNKS` (4,096) and `VIEW_PAGES` (48) are set. 48 is under what the rule's zooms can want — 12 to 16 pages over eleven zooms, by domain.rs's own comment — so the view is fitted to it by search every frame the eye moves.                      |
 | 4. the chunk table           | `VIEW_CHUNKS` is a quarter of the table because a stand-in drew four for one; the stand-ins went on 2026-09-26, and the table needs the view and the one it replaces (`WIDEST_SELECTION`), twice.                                                     |
 | 4. decor                     | Outside the budget: heap blocks under `RETAIN_BUDGET_BYTES`, half the heap. A block's bound (`DECOR_BYTES`) and the chunks' count are both there to derive it from.                                                                                   |
 | 5. no feedback               | `pressure_step` moves the criterion on the heap's refusals. It exists because decor, the volumes and the models are in the heap.                                                                                                                      |
-| 2. the ball at the same cost | The count is the same, but a z16 chunk holds its own tier and the cube above (`Scheduler::ask`), 96 + 71 KiB against a level chunk's 71 — a cache the invariant does not ask for, where two tiers are needed only while one dissolves into the other. |
+| 2. the ball at the same cost | The count is the same, but a z16 chunk holds its own tier and the cube above (`Scheduler::ask`), 96 + 71 KiB against a coarse chunk's 71 — a cache the invariant does not ask for, where two tiers are needed only while one dissolves into the other. |
 | the search itself            | `domain_for` tries every step from the finest (`(0..MAX_STEP).find`), walks each to the end past the budget, and keeps every node it measured in `HashMap`s: unbounded in time and heap, and heaviest on the steps it throws away.                    |
 
 Besides the budget, three things are not the eye's at all: the geocode
@@ -80,22 +80,22 @@ Two ways were weighed:
 
 - **Loosen by shell.** A shell past its share loosens its own criterion.
   The invariant then holds per shell, but the criterion is no longer one
-  number for every level.
+  number for every zoom.
 - **A column's cubes are bounded, and past the bound the ground is drawn a
-  level coarser.** A level's column holds at most k cubes; where the ground
+  zoom coarser.** A zoom's column holds at most k cubes; where the ground
   under it would need more, its parent is not split there. It is the slot's
   rule one step up — a mesh past its slot is baked a step coarser, never cut
   and never searched for — and it keeps one criterion.
 
-**Decided: the second.** With it every count is a derivation — a level's
-chunks are k times its disc, the view's are the levels' sum, and the pages
+**Decided: the second.** With it every count is a derivation — a zoom's
+chunks are k times its disc, the view's are the zooms' sum, and the pages
 follow from the chunks — so the search, `VIEW_CHUNKS` and `VIEW_PAGES` as
-set numbers, and `LEVEL_CHUNKS` as z16's own special case go. What is paid
+set numbers, and z16's own chunk count as a special case go. What is paid
 is the ground past the bound, drawn over τ where it is steepest, as a mesh
 past its slot already is. k is a product number, to be said aloud.
 
-What the derivation has to face: taken all around the eye, a level is about
-330 chunks and 16 pages, so eleven levels are some 3,600 chunks and 176
+What the derivation has to face: taken all around the eye, a zoom is about
+330 chunks and 16 pages, so eleven zooms are some 3,600 chunks and 176
 records against the 1,024 and 48 set today. The frustum's share (invariant
 3) is what brings that down, and it depends on the screen's `P` and field
 of view, which are the device's, known at boot and not at compile time —

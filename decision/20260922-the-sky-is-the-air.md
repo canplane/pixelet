@@ -105,8 +105,8 @@ which is how an eight-bit screen says one white star outshines another.
 ## The globe
 
 The fog was 1,536 u, and at that the ground a street view saw ended in a grey
-band. The window can reach further: with its base at the leaves for
-decoration and five levels, its top is level 4, which draws step 2⁵, wanted
+band. The window can reach further: with its finest at the leaves for
+decoration and five zooms, its coarsest is z12, which draws step 2⁵, wanted
 out to 192 · 2⁵ = 6,144 u. That is `FOG_FAR` now. It costs no memory — the
 window's 125 records are placed at boot — only a ring of pages and a constant
 number of chunks for each octave added.

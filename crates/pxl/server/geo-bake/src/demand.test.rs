@@ -1,6 +1,7 @@
 // pxl-geo-bake/demand.test.rs
 
 use super::*;
+use pxl_spec::space::pyramid::GROUND_Z;
 
 #[test]
 fn a_restart_keeps_the_pages_and_clears_what_was_cut_short() {
@@ -27,14 +28,14 @@ fn a_terrain_generation_holds_the_ocean_page_before_any_fold_reads_it() {
     use crate::coverage::Coverage;
     use crate::pyramid::PageSet;
     use crate::terrain::leaf::{ocean_samples, OCEAN_KEY};
-    use pxl_spec::space::pyramid::LevelPage;
+    use pxl_spec::space::pyramid::Page;
 
     let base = std::env::temp_dir().join(format!("pxl-demand-ocean-{}", std::process::id()));
     let runner = Runner::new(1, Limits::default()).unwrap();
     let data = Dataset::open(&base, Kind::Terrain, &runner).unwrap();
     let ocean = std::fs::read(data.cache.root.join(OCEAN_KEY)).expect("the ocean page is published as the generation opens");
 
-    let child = LevelPage::new(0, ocean_samples(&Coverage::of_source().expect("coverage"))[1]);
+    let child = Page::new(GROUND_Z, ocean_samples(&Coverage::of_source().expect("coverage"))[1]);
     PageSet::new(&data.cache.root).write(child, &ocean).unwrap();
     let out = base.join("out");
     std::fs::create_dir_all(&out).unwrap();

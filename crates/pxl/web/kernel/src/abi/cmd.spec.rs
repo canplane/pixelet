@@ -581,8 +581,8 @@ pub enum Command {
     WORLD_VISIBILITY = 0x1003,
     /// What the tile source declares of itself, once the shell has it (published.json's
     /// SOURCE, or the dev tile server's answer in the same form). Until it comes nothing is
-    /// observed: the floor is held at the level it names, and no view is drawn from a
-    /// level the source does not supply whole.
+    /// observed: the floor is held at the zoom it names, and no view is drawn from a
+    /// zoom the source does not supply whole.
     WORLD_SOURCE = 0x1005,
     /// A permission as the shell's prompt or the browser's change reported it.
     SENSOR_PERMISSION = 0x1206,
@@ -1115,15 +1115,15 @@ impl WorldVisibility {
 /// Command::WORLD_SOURCE's packet.
 #[derive(Clone, Copy, Debug)]
 pub struct WorldSource {
-    /// The coarsest level of the pyramid the source supplies whole.
-    pub top_level: u32,
+    /// The coarsest zoom of the pyramid the source supplies whole.
+    pub top_z: u32,
 }
 
 impl WorldSource {
     pub fn read(pkt: &[u8]) -> Result<WorldSource, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(WorldSource {
-            top_level: integer::<u32>(f.at(0)?.get_number()?)?,
+            top_z: integer::<u32>(f.at(0)?.get_number()?)?,
         })
     }
 }

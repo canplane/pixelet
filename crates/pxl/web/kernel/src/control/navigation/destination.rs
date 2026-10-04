@@ -6,11 +6,10 @@
 //! with its height is put as it is (`go_to`).
 
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{LevelPage, GROUND};
+use pxl_spec::space::pyramid::{Page, GROUND, GROUND_Z};
 
 use crate::control::camera::controller::{put_center, Motion};
 use crate::control::navigation::support::{exact, unknown_z};
-use crate::world::access::FINEST;
 use xpute_runtime::global::Global;
 
 static DESTINATION: Global<Option<(Pvf3, Motion)>> = Global::new();
@@ -38,8 +37,8 @@ pub fn cancel() {
 }
 
 /// Whose ground the terrain is asked for.
-pub fn page() -> Option<LevelPage> {
-    destination().map(|(at, _)| GROUND.cell_of(FINEST, &at).page())
+pub fn page() -> Option<Page> {
+    destination().map(|(at, _)| GROUND.cell_of(GROUND_Z, &at).page())
 }
 
 /// Only the exact ground puts it; a coarser page over it is not its ground.

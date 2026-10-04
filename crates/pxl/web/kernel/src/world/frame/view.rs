@@ -17,7 +17,7 @@ use crate::layer::environment::config::render_cfg;
 use crate::layer::environment::fog::{far_clip_at, height_at, near_clip_at};
 use crate::world::frame::coord::{local_world_to_canonical, origin_for};
 use pxl_spec::space::lod;
-use pxl_spec::space::pyramid::TOP_LEVEL;
+use pxl_spec::space::pyramid::{GROUND_Z, TOP_Z};
 use xpute_runtime::global::Global;
 
 /// `rotation` turns the world's axes to the camera's (right, up, back), rotation alone.
@@ -74,9 +74,9 @@ impl View {
         add3(&o, &e)
     }
 
-    /// The level the origin's cell is sized for (`origin_for`).
-    pub fn anchor_level(&self) -> u32 {
-        lod::level(height_at(self.eye_at())).clamp(0, TOP_LEVEL as i32) as u32
+    /// The zoom the origin's cell is sized for (`origin_for`).
+    pub fn anchor_z(&self) -> u32 {
+        lod::z_at(height_at(self.eye_at())).clamp(TOP_Z as i32, GROUND_Z as i32) as u32
     }
 
     /// Eye-relative matrices, as the GPU's points are (`DrawList::translation`):
@@ -128,7 +128,7 @@ pub fn view_compose() {
     // highest cell, the eye itself being doubles.
     let e = v.eye_at();
     let at = projection::project(e[0], e[1], e[2].clamp(REACH.min[2], REACH.max[2] - 1.0));
-    let want = origin_for(at.i, v.anchor_level());
+    let want = origin_for(at.i, v.anchor_z());
     if want != v.origin {
         rebase(crate::world::frame::coord::offset(want, v.origin));
         v.origin = want;

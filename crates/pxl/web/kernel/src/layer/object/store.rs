@@ -19,13 +19,14 @@ use pxl_spec::cell::object::{
     decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, object_value_is_voxel, placeable_cube_num_id, placeable_cube_of, terrain_style_cube_source, PlaceableCube,
 };
 use pxl_spec::cell::{cube_types, DecorId};
+use pxl_spec::space::adapter::epsg3857::zoom_of;
 use pxl_spec::space::hierarchy::{ancestor_of, at_walk_order, child_of, first_descendant_of, offset_in, parent_of, walk_order, Scale};
-use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX, L3, L3_IDX};
+use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX, L3_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::pvf3::Ivec;
 use pxl_spec::space::pvf3::REACH;
-use pxl_spec::space::pyramid::{GROUND, TOP_LEVEL};
+use pxl_spec::space::pyramid::{span_of, GROUND, GROUND_Z, TOP_Z};
 use pxl_spec::space::sparse_tree::mem;
 use pxl_spec::space::sparse_tree::tree::{self as sparse_tree, SparseTree};
 use pxl_spec::space::v3::{Aabb, V3};
@@ -39,7 +40,7 @@ use crate::host::turn;
 use crate::io::file::{self, Kept, Owner};
 use crate::kernel::kernel;
 use crate::layer::decor::build::{scatters_at, Draw};
-use crate::world::access::{Access, FINEST};
+use crate::world::access::Access;
 use crate::world::change::{bump_world, wake_at, world_changes, world_edge, OBJECT_COLUMN};
 use crate::world::chunk::source::{band_written, chunk_sources_changed};
 use crate::world::frame::coord::local_world_to_canonical;
@@ -531,7 +532,7 @@ fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube) -> bool {
     }
     let Some(source) = terrain_style_cube_source(cube) else { return false };
     // Only the resident finest leaf can say; elsewhere the cube is written as asked.
-    let Some(ground) = Access::now().at(at, FINEST).exact() else { return false };
+    let Some(ground) = Access::now().at(at, GROUND_Z).exact() else { return false };
     let shown = shown_ground(|ch| channel_of(ground.cell, ch) as u32);
     if shown.channel != source.channel || shown.type_id != source.terrain_num_id {
         return false;
@@ -633,9 +634,9 @@ impl Column {
                     return;
                 }
                 // In walk order, so the lanes stay sorted.
-                let levels = scale.above(CELL) as u32;
+                let steps = scale.above(CELL) as u32;
                 for k in 0..u64::from(CELL.count_in(scale)).pow(3) {
-                    let cell = at_walk_order::<3>(k, levels).map(i64::from);
+                    let cell = at_walk_order::<3>(k, steps).map(i64::from);
                     let [dx, dy, dz] = first_descendant_of(cell, CELL.above(OBJECT_FINEST) as u32).map(|v| v as u32);
                     self.e_band.push(bz);
                     self.e_pos.push(pack_pos(x + dx, y + dy, z + dz, CELL));
@@ -672,8 +673,7 @@ pub struct Store {
     /// For every cube from a band's up to `INDEX_TOP` holding any entry, the
     /// box its entries fill; a cube's is the union of its children's.
     bounds: HashMap<(Scale, [i64; 3]), Aabb>,
-    /// What the objects fold to at every cell from a band's up to the top
-    /// level's; under a band, the band's tree keeps it (`set_folded`).
+    /// What the objects fold to at every cell from a band's up to the top's; under a band, the band's tree keeps it (`set_folded`).
     folds: HashMap<(Scale, [i64; 3]), u16>,
 }
 
@@ -682,16 +682,16 @@ pub struct Store {
 /// a wall keeps whole cells.
 fn fold_cell(children: &[u16], scale: Scale) -> u16 {
     let v: [u16; 8] = core::array::from_fn(|k| if object_value_is_voxel(u32::from(children[k])) { children[k] } else { VOID as u16 });
-    majority(v, scale.above(CELL))
+    majority(v, zoom_of(scale))
 }
 
-const TOP_CELL: Scale = GROUND.scale(TOP_LEVEL);
+const TOP_CELL: Scale = GROUND.side_at(TOP_Z);
 
 /// The coarsest cube the index keeps: as tall as `REACH` and as wide as the
 /// coarsest page, so any query box meets at most eight of them.
 const INDEX_TOP: Scale = {
     let tall = REACH.max[2] - REACH.min[2];
-    let wide = L3.up(TOP_LEVEL as i32).side();
+    let wide = span_of(TOP_Z);
     let mut s = BAND;
     while s.side() < tall || s.side() < wide {
         s = s.up(1);
@@ -997,10 +997,10 @@ impl Store {
 
     /// The cell over the highest band in the column of cell `[x, y]`.
     pub fn ceiling(&self, [x, y]: [i64; 2]) -> Option<i64> {
-        let levels = BAND.above(CELL) as u32;
-        let [cx, cy] = ancestor_of([x, y], levels);
+        let steps = BAND.above(CELL) as u32;
+        let [cx, cy] = ancestor_of([x, y], steps);
         let band = *self.columns.get(&ivec::gather(cx, cy, 0))?.bands.keys().next_back()?;
-        Some(first_descendant_of([i64::from(band) + 1], levels)[0])
+        Some(first_descendant_of([i64::from(band) + 1], steps)[0])
     }
 
     /// VOID where nothing; a non-voxel value is returned as is.
@@ -1008,12 +1008,12 @@ impl Store {
         if scale >= BAND {
             return self.folds.get(&(scale, at)).copied().unwrap_or(VOID as u16);
         }
-        let levels = BAND.above(scale) as u32;
-        let [x, y, band] = ancestor_of(at, levels);
+        let steps = BAND.above(scale) as u32;
+        let [x, y, band] = ancestor_of(at, steps);
         let Some(tree) = self.columns.get(&ivec::gather(x, y, 0)).and_then(|c| c.bands.get(&(band as BandZ))) else {
             return VOID as u16;
         };
-        let key = band_key(first_descendant_of(offset_in(at, levels), scale.above(OBJECT_FINEST) as u32).map(|c| c as u32));
+        let key = band_key(first_descendant_of(offset_in(at, steps), scale.above(OBJECT_FINEST) as u32).map(|c| c as u32));
         tree.mem.data[mem::resolve::<Ivec, u16>(&tree.mem, &tree.layout, key, scale, 0) as usize]
     }
 

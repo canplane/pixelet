@@ -4,9 +4,7 @@
 //! and runs the table's pass; in the report phase it hands the frame's
 //! numbers to the profiler.
 
-use pxl_spec::space::adapter::epsg3857::zoom_of;
 use pxl_spec::space::pvf3::ivec;
-use pxl_spec::space::pyramid::GROUND;
 use pxl_spec::space::v3::sub3;
 use xpute_core::math::scalar::round;
 use xpute_runtime::sched::edge::{notified, yield_if_spent};
@@ -193,7 +191,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     let host = c.host.clone();
     let mut pages = PageSample::default();
     for (p, _) in Terrain::pyramid().paging().held() {
-        pages.by_zoom[zoom_of(GROUND.scale(p.level)) as usize] += 1.0;
+        pages.by_zoom[p.z as usize] += 1.0;
     }
     pages.total = pages.by_zoom.iter().sum();
     pages.poi = PoiPage::pyramid().paging().held().count() as f64;

@@ -5,7 +5,7 @@ for objects alike: its size is the share of it that is not air, taken on
 every axis, and its color is what faces the air, weighted by how much of it
 does. It undoes one decision of 09-22 and replaces one of 09-09, and is
 written apart from
-[level, step and zoom](../20260921-level-step-and-zoom-are-one-number.md) so
+[the mesh step and the zoom](../20260921-the-mesh-step-and-the-zoom-are-one-number.md) so
 that the two can be read side by side before either is changed.
 
 ## What stands now
@@ -25,7 +25,7 @@ A coarse tier merges `step³` cells of the tier below into one box
   coarse cell's ground is one run from the lowest floor under it to the mean
   of its columns' tops, whole across the cell, its color the mean of those
   tops' (`pack_ground`). What objects add stacks above it by the 09-09 rule.
-  A level chunk's column became a run to the elevation in units rather than
+  A coarse chunk's column became a run to the elevation in units rather than
   a top cell inset by its fill. The coarse tier's mesh fell to a fifth.
 
 ## What is decided
@@ -49,7 +49,7 @@ A coarse tier merges `step³` cells of the tier below into one box
    assumed. A box has one color on every face.
 4. **Texture layers are ranked by the same weight**, the four heaviest kept,
    not the first four met.
-5. **Heights stay in units** at every level, as 09-22 made them: it is what
+5. **Heights stay in units** at every zoom, as 09-22 made them: it is what
    lets `f` be counted exactly where a column's top falls part way into a
    cell, and it does not favor an axis.
 
@@ -92,8 +92,8 @@ this rule and sized to it.
   to one, so it is never drawn under that and never over twice it. At
   `∛f = 1/4` the notch is one and a half to three pixels, a quarter of the
   detail the ladder had already spent choosing this tier, and the pixels
-  cancel — the threshold is a pure `f < 1/64` at every level, which is also
-  the fill `level.rs` once dropped at.
+  cancel — the threshold is a pure `f < 1/64` at every zoom, which is also
+  the fill the column paint once dropped at.
 
   **It does not pay.** Measured over a zoom out and back over Seoul, 150u to
   19,200u and back, reading the ledger's `work coarse_boxes` — the largest a
@@ -116,7 +116,7 @@ this rule and sized to it.
   that barely reach into their cell are ever caught. No threshold moves the
   3.4.
 
-- [Level, step and zoom](../20260921-level-step-and-zoom-are-one-number.md)'s
+- [The mesh step and the zoom](../20260921-the-mesh-step-and-the-zoom-are-one-number.md)'s
   paragraph on the elevation lane and its "one thing does not merge" in
   _Objects fold too_ describe the 09-22 height field, and are rewritten when
   this is built.

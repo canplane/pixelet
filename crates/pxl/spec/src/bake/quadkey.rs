@@ -1,6 +1,6 @@
 // pxl-spec/bake/quadkey.rs
 
-//! A baked page's object-store name: its place in its level's page grid as a
+//! A baked page's object-store name: its place in its zoom's page grid as a
 //! quadkey, coarsest digit first. A coarser page's name prefixes a finer one's
 //! over the same ground, and every well-formed name is a page.
 
@@ -9,13 +9,13 @@ use core::fmt;
 use crate::space::indexer::L3;
 use crate::space::pvf3::core::IVEC_X_W;
 use crate::space::pvf3::ivec::{self, IVec};
-use crate::space::pyramid::{LevelPage, TOP_LEVEL};
+use crate::space::pyramid::{pages_around, Page, GROUND_Z, TOP_Z};
 
 /// A z16 page's name length: the bits of its page grid, which is one world
 /// of pages. It follows the page's size, never the zoom.
 pub const PAGE_KEY_DEPTH: u32 = IVEC_X_W - L3.shamt() as u32;
 
-const _: () = assert!(TOP_LEVEL < PAGE_KEY_DEPTH, "every level's page has a name");
+const _: () = assert!(pages_around(TOP_Z) > 1, "every zoom's page has a name");
 
 /// x in the low bit, y in the high one.
 const DIGITS: &str = "0123";
@@ -69,15 +69,19 @@ pub fn index_of(key: &str) -> Option<(u32, IVec)> {
     Some((depth, ivec::gather(tx - n / 2, n / 2 - 1 - ty, 0)))
 }
 
-pub fn page_name(p: LevelPage) -> Quadkey {
-    quadkey_of(PAGE_KEY_DEPTH - p.level, p.page)
+/// The bits of the page grid at `z`, a name's length.
+fn depth_at(z: u32) -> u32 {
+    pages_around(z).trailing_zeros()
 }
 
-/// `page_name`'s inverse; `None` for a level the pyramid does not hold.
-pub fn page_of_name(name: &str) -> Option<LevelPage> {
+pub fn page_name(p: Page) -> Quadkey {
+    quadkey_of(depth_at(p.z), p.page)
+}
+
+/// `page_name`'s inverse; `None` for a zoom the pyramid does not hold.
+pub fn page_of_name(name: &str) -> Option<Page> {
     let (depth, page) = index_of(name)?;
-    let level = PAGE_KEY_DEPTH - depth;
-    (level <= TOP_LEVEL).then(|| LevelPage::new(level, page))
+    (TOP_Z..=GROUND_Z).find(|&z| depth_at(z) == depth).map(|z| Page::new(z, page))
 }
 
 #[cfg(test)]

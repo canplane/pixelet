@@ -9,7 +9,7 @@ mod terrain;
 use cache::Cache;
 use pxl_spec::bake::format::{Terrain, OCEAN_KEY};
 use pxl_spec::bake::poi_page::PoiPage;
-use pxl_spec::space::pyramid::{Folds, LevelPage};
+use pxl_spec::space::pyramid::{Folds, Page};
 use std::path::PathBuf;
 
 use crate::coverage::Coverage;
@@ -65,7 +65,7 @@ struct Dataset {
 enum Source {
     Pyramid {
         coverage: crate::coverage::Coverage,
-        sources: fn(LevelPage) -> Vec<LevelPage>,
+        sources: fn(Page) -> Vec<Page>,
         shared: Option<(&'static str, Vec<u8>)>,
     },
     Geocode,
@@ -78,14 +78,14 @@ impl Source {
         }
     }
 
-    fn holds(&self, p: LevelPage) -> bool {
+    fn holds(&self, p: Page) -> bool {
         match self {
-            Source::Pyramid { coverage, .. } => coverage.meets(p.level, p.page),
+            Source::Pyramid { coverage, .. } => coverage.meets(p.z, p.page),
             Source::Geocode => true,
         }
     }
 
-    fn sources(&self, p: LevelPage) -> Vec<LevelPage> {
+    fn sources(&self, p: Page) -> Vec<Page> {
         match self {
             Source::Pyramid { sources, .. } => sources(p),
             Source::Geocode => unreachable!("geocode is no pyramid"),
@@ -124,10 +124,10 @@ pub struct Server {
     runner: Arc<Runner>,
     base: PathBuf,
     current: Mutex<[Arc<Dataset>; 3]>,
-    top_level: u32,
+    top_z: u32,
 }
 impl Server {
-    pub fn open(workers: usize, base: PathBuf, top_level: u32, limits: Limits) -> Result<Self, String> {
+    pub fn open(workers: usize, base: PathBuf, top_z: u32, limits: Limits) -> Result<Self, String> {
         let owner = claim(&base)?;
         let runner = Arc::new(Runner::new(workers, limits)?);
         let current = [Kind::Terrain, Kind::Poi, Kind::Geocode]
@@ -142,7 +142,7 @@ impl Server {
             runner,
             base,
             current: Mutex::new(current.try_into().ok().unwrap()),
-            top_level,
+            top_z,
         })
     }
 
@@ -150,7 +150,7 @@ impl Server {
         let data = self.current.lock().expect("datasets")[kind as usize].clone();
         let runner = self.runner.clone();
         let path = match kind {
-            Kind::Terrain | Kind::Poi => pyramid::resolve(data.clone(), runner, kind, name, self.top_level).await?,
+            Kind::Terrain | Kind::Poi => pyramid::resolve(data.clone(), runner, kind, name, self.top_z).await?,
             Kind::Geocode => Some(geocode::resolve(data.clone(), runner, name).await?),
         };
         let Some(path) = path else { return Ok(None) };

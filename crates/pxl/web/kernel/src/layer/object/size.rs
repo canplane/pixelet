@@ -5,7 +5,7 @@
 
 use pxl_spec::bake::constant::{CELL, OBJECT_TIERS};
 
-/// Tier `i` is the cell `i` levels down, coarsest first.
+/// Tier `i` is the cell `i` steps finer, coarsest first.
 pub const OBJECT_SIZES: [f64; OBJECT_TIERS] = {
     let mut sizes = [0.0; OBJECT_TIERS];
     let mut i = 0;

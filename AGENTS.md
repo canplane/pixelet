@@ -106,13 +106,13 @@ Which technology draws each `@platform/` piece is
 
 ## One spatial model
 
-Everything placed on the map sits in one hierarchy, the **pyramid**: level k
-is z(16 − k), cells 2^k units wide, from z16 — terrain's atom, a 1u cell —
-to z6, a page 512 cells a side at every level and named by its place in that
-level's page grid. A zoom names only a cell's scale (256-pixel tiles):
-terrain's cell is z16, objects' go to z19. A page's size, its key or its
-grid never defines a zoom. Say z16, not "level 0": no level is special.
-The rules below keep it one thing. They come from finding it several.
+Everything placed on the map sits in one hierarchy, the **pyramid**, from
+z16 — terrain's atom, a 1u cell — to z6, each zoom's cells twice as wide as
+the next finer's; a page is 512 cells a side at every zoom and named by its
+place in that zoom's page grid. A zoom names only a cell's scale (256-pixel
+tiles): terrain's cell is z16, objects' go to z19. A page's size, its key or
+its grid never defines a zoom. The rules below keep it one thing. They come
+from finding it several.
 
 - **The view keeps only what an observer can tell apart.** The world is
   stored in each layer's own shape; what the view holds and does is bounded
@@ -129,14 +129,13 @@ The rules below keep it one thing. They come from finding it several.
   stepped from two roots — the tiers (`pxl-spec space/indexer.rs`) and the
   raster's cell (`bake/constant.rs` `CELL`), which is a resolution and
   derives from neither — and parent and children in any number of axes are
-  `space/hierarchy.rs`'s. Level and span, a cell's base and center, its
+  `space/hierarchy.rs`'s. Zoom and span, a cell's base and center, its
   place in its page — which is the index into every lane the page has —
   the 4 × 4 neighborhood a fold reads, and a page's name are
-  `space/pyramid.rs`'s; a level is a count from a lattice's cell, and the
-  lattice is what turns it into a size. A layer that shifts by a tier or a
+  `space/pyramid.rs`'s; a lattice turns a zoom into its cell's size. A layer that shifts by a tier or a
   scale's exponent itself, or numbers a page's cells by its width, is a
   second owner, and `check:rules` refuses it outside `space/`.
-- **A layer is a payload and a one-level fold, and nothing else.** No key,
+- **A layer is a payload and a one-zoom fold, and nothing else.** No key,
   hierarchy, bounds, window, schedule or residency of its own: which pages
   are wanted is the observation's demand (`world/pyramid.rs` `observe`),
   which are held is residency's (`world/paging.rs`), when they are fetched
@@ -144,7 +143,7 @@ The rules below keep it one thing. They come from finding it several.
   `build` (`pxl-geo-bake pyramid.rs`). Layers share mechanics, not data —
   terrain folds by majority and average, POI by sum.
 - **The view is 3D; storage is not.** A chunk is a cube, addressed by its
-  level and x, y and z (`world/pyramid/chunk.rs`), and a cube that holds
+  zoom and x, y and z (`world/pyramid/chunk.rs`), and a cube that holds
   nothing is no chunk. Terrain and POI are pages of the pyramid, a 2D
   heightfield and a 2D count; placed objects are resident in their store, by
   column and band. What a box of the world holds is asked of `Bounds`
@@ -167,15 +166,15 @@ The rules below keep it one thing. They come from finding it several.
   surface drawn there, never at a center derived from its data's bounds. A
   mark for one thing stands at the z16 cell that thing stands in, and a mark
   for many at its cell's middle (`pxl-kernel layer/poi/placement.rs`).
-- **One rule chooses the level; a layer chooses its detail.** The shared
-  rule chooses a level for a piece of ground by its distance from the eye
-  (`pxl-spec space/lod.rs` `Tau::level`, one factor τ on the split
+- **One rule chooses the zoom; a layer chooses its detail.** The shared
+  rule chooses a zoom for a piece of ground by its distance from the eye
+  (`pxl-spec space/lod.rs` `Tau::z_at`, one factor τ on the split
   distance), finer than z16 too — z17 to z19 near the eye — and refines it
   only where the screen observes it and its error crosses a cell. How much detail a layer
-  draws at that level is the layer's own — terrain its cells averaged
+  draws at that zoom is the layer's own — terrain its cells averaged
   2 × 2, places a lattice sixty-four times the ground's cell, objects their own
   cells — a tuning inside the perspective and never a second rule. Where
-  the rule asks for a level finer than a layer's data, the layer draws its
+  the rule asks for a zoom finer than a layer's data, the layer draws its
   finest: terrain z16, objects their sub-cell tiers down to z19.
 - **A number is derived or said aloud.** A capacity or a count that bounds
   what something else already bounds is a second limit derived from nothing
@@ -183,12 +182,12 @@ The rules below keep it one thing. They come from finding it several.
   number is raised in the conversation, not buried in a constant: a knob is
   named once in `pxl-kernel param.rs`, grouped by the policy it tunes, with
   its reason, and read by what uses it.
-- **Dev is guarded like terrain.** The tile server answers no page above
-  `--top-level`, and that is the whole guard for every pyramid layer; no
+- **Dev is guarded like terrain.** The tile server answers no page coarser
+  than `--top-z`, and that is the whole guard for every pyramid layer; no
   feature carries a dev exception of its own. A source declares the
-  coarsest level it supplies whole — the published version in its
+  coarsest zoom it supplies whole — the published version in its
   metadata, the tile server at `/tile/source` — and the floor is that
-  level, not the pyramid's top.
+  zoom, not the pyramid's top.
 - **Before calling it done, audit the symmetry of the whole tree**: terrain,
   POI and objects side by side, for anything one does its own way. An
   asymmetry is removed or explained.
@@ -437,8 +436,8 @@ art where one exists (Minecraft's chunk model for grid content, Cesium's
   change, name the symptom, the mechanism producing it, the assumptions that
   make that mechanism necessary, which of those are the product's and which
   are only the current code's, and whether dropping one of them kills the
-  whole class. A mesh slot was a chunk's coordinate, so a level's chunks were
-  addressable only inside that level's own ring — which silently decided what
+  whole class. A mesh slot was a chunk's coordinate, so a zoom's chunks were
+  addressable only inside that zoom's own ring — which silently decided what
   could be drawn at all, and none of it was a requirement (2026-09-23). Do
   not edit before that split is made.
 - **Put a consequential choice in the conversation first.** Where two designs

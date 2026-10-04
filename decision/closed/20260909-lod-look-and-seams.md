@@ -44,7 +44,7 @@ whether geometry existed, not mass.
 There is a real argument for XY-only decimation. Terrain is a surface, and a
 surface's volumetric density in a coarse cell goes to zero as the cell grows
 — area scales as L², volume as L³. So an isotropic occupancy rule _must_
-erode surfaces at every level. This is the same reason mipmapping an
+erode surfaces at every coarsening. This is the same reason mipmapping an
 occupancy grid thins geometry, and why voxel cone tracing stores directional
 opacity rather than one scalar. Decimating XY while keeping height exact is a
 heightfield mipmap: filter the coordinate, not the value.

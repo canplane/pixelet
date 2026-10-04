@@ -910,15 +910,15 @@
           "doc": [
             "What the tile source declares of itself, once the shell has it (published.json's",
             "SOURCE, or the dev tile server's answer in the same form). Until it comes nothing is",
-            "observed: the floor is held at the level it names, and no view is drawn from a",
-            "level the source does not supply whole."
+            "observed: the floor is held at the zoom it names, and no view is drawn from a",
+            "zoom the source does not supply whole."
           ],
           "packet": [
             {
-              "name": "top_level",
+              "name": "top_z",
               "type": "u32",
               "doc": [
-                "The coarsest level of the pyramid the source supplies whole."
+                "The coarsest zoom of the pyramid the source supplies whole."
               ]
             }
           ]
