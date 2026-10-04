@@ -48,6 +48,7 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_bind",
             "atmos_lut",
             "atmos_sky",
+            "atmos_eye",
             "atmos_view",
             "atmos_ground",
             "shade",
@@ -65,6 +66,7 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_bind",
             "atmos_lut",
             "atmos_sky",
+            "atmos_eye",
             "atmos_view",
             "atmos_ground",
             "shade",
@@ -82,6 +84,7 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_bind",
             "atmos_lut",
             "atmos_sky",
+            "atmos_eye",
             "atmos_view",
             "atmos_ground",
             "shade",
@@ -104,8 +107,10 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_bind",
             "atmos_lut",
             "atmos_sky",
+            "atmos_eye",
             "atmos_view",
             "atmos_ground",
+            "sky_words",
             "sky"
         ),
         SHADER_DEBUG => wgsl!("frame", "globe", "encode", "debug"),
@@ -119,6 +124,7 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_bind",
             "atmos_lut",
             "atmos_sky",
+            "atmos_eye",
             "atmos_view",
             "atmos_ground",
             "shade",
@@ -136,7 +142,21 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_ATMOS_MULTISCATTER => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_multiscatter"),
         SHADER_ATMOS_SKY_VIEW => wgsl!("frame", "globe", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_march", "atmos_skyview"),
         SHADER_ATMOS_IRRADIANCE => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_march", "atmos_irradiance"),
-        SHADER_ATMOS_EXPOSURE => wgsl!("frame", "globe", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_ground", "atmos_pass", "atmos_exposure"),
+        SHADER_ATMOS_EXPOSURE => wgsl!(
+            "frame",
+            "globe",
+            "encode",
+            "atmos_medium",
+            "atmos_bind",
+            "atmos_lut",
+            "atmos_sky",
+            "atmos_eye_unit",
+            "atmos_view",
+            "atmos_ground",
+            "sky_words",
+            "atmos_pass",
+            "atmos_exposure"
+        ),
         SHADER_STARS => wgsl!("frame", "globe", "encode", "stars"),
         SHADER_CLOUD_FIELD => wgsl!("noise", "cloud_tile", "atmos_pass", "cloud_bake"),
         SHADER_CLOUD_COMPOSITE => wgsl!("cloud_composite"),
@@ -150,6 +170,7 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_bind",
             "atmos_lut",
             "atmos_sky",
+            "atmos_eye",
             "atmos_view",
             "atmos_ground",
             "cloud_tile",
@@ -386,12 +407,10 @@ const fn air(stages: [u32; 9]) -> [[u32; 3]; 9] {
 }
 
 const AIR: [[u32; 3]; 9] = air([FRAGMENT; 9]);
-/// The irradiance laid out unread: the sky reads the land's through the exposure texel.
-const SKY_AIR: [[u32; 3]; 9] = air([FRAGMENT, FRAGMENT, FRAGMENT, FRAGMENT, FRAGMENT, FRAGMENT, FRAGMENT, FRAGMENT, NONE]);
 const LIT_FRAME: [[u32; 3]; 13] = {
     // Tables in the vertex stage too: a fragment reads the land's color for
     // the ground bounce and the exposure its lights are shown through.
-    let a = air([BOTH, VERTEX, VERTEX, VERTEX, BOTH, VERTEX, VERTEX, VERTEX, NONE]);
+    let a = air([BOTH, VERTEX, VERTEX, VERTEX, BOTH, VERTEX, VERTEX, VERTEX, VERTEX]);
     [
         [0, BOTH, UNIFORM],
         [1, FRAGMENT, DEPTH],
@@ -517,15 +536,15 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 [1, FRAGMENT, UNIFORM],
                 [2, FRAGMENT, TEXTURE_ARRAY],
                 [3, FRAGMENT, SAMPLER],
-                SKY_AIR[0],
-                SKY_AIR[1],
-                SKY_AIR[2],
-                SKY_AIR[3],
-                SKY_AIR[4],
-                SKY_AIR[5],
-                SKY_AIR[6],
-                SKY_AIR[7],
-                SKY_AIR[8],
+                AIR[0],
+                AIR[1],
+                AIR[2],
+                AIR[3],
+                AIR[4],
+                AIR[5],
+                AIR[6],
+                AIR[7],
+                AIR[8],
             ])],
         ),
         PIPELINE_MIPS => record(screen(SHADER_MIPS), &[], &[group(&SKIN)]),
@@ -598,7 +617,12 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             &[group(&[[0, FRAGMENT, UNIFORM], AIR[0], AIR[1], AIR[3], [12, FRAGMENT, TEXTURE], [14, FRAGMENT, UNIFORM]])],
         ),
         PIPELINE_ATMOS_IRRADIANCE => record(screen(SHADER_ATMOS_IRRADIANCE), &[], &[group(&[AIR[0], AIR[1], AIR[3], [12, FRAGMENT, TEXTURE]])]),
-        PIPELINE_ATMOS_EXPOSURE => record(screen(SHADER_ATMOS_EXPOSURE), &[], &[group(&[[0, FRAGMENT, UNIFORM], AIR[0], AIR[1], AIR[3], AIR[8]])]),
+        // The air but the exposure it writes.
+        PIPELINE_ATMOS_EXPOSURE => record(
+            screen(SHADER_ATMOS_EXPOSURE),
+            &[],
+            &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, UNIFORM], AIR[0], AIR[1], AIR[2], AIR[3], AIR[5], AIR[6], AIR[7], AIR[8]])],
+        ),
         PIPELINE_STARS => record(
             Head {
                 topology: STRIP,

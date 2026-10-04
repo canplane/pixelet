@@ -1,19 +1,23 @@
-// Eye adaptation, measured on the land under the eye wherever the eye is: an
-// orbit's own sky is black, and adapting to it blew the lit Earth out. Texel 0:
-// exposure from horizontal illuminance against a sun overhead at sea level (1
-// after white balance); texel 1: the sky's irradiance on the land, sun and moon.
+// Eye adaptation to what the view shows: the sky and the Earth past the
+// terrain, unexposed, on a grid over the screen, their mean luminance read as
+// the illuminance that lights the Earth's mean albedo to it, against a sun
+// overhead at sea level (1 after white balance). The mean, not the log mean:
+// a sunlit limb over a night Earth closes the eye as a camera's meter does.
+
+const METER_TAPS: i32 = 8;
 
 @fragment
 fn fs(v: TableOut) -> @location(0) vec4f {
-  let r = land_radius();
-  let mu_s = clamp(dot(atmos_sun_dir(), frame_up()), -1.0, 1.0);
-  let sky = sky_irradiance(r, mu_s);
-  if (v.clip.x >= 1.0) {
-    let moon = sky_irradiance(r, dot(atmos_moon_dir(), frame_up())) * atmos_moon_light();
-    return vec4f(sky + moon, 1.0);
+  let fill = sky_fill();
+  var sum = 0.0;
+  for (var i = 0; i < METER_TAPS; i++) {
+    for (var j = 0; j < METER_TAPS; j++) {
+      let ndc = (vec2f(f32(i), f32(j)) + 0.5) / f32(METER_TAPS) * 2.0 - 1.0;
+      let dir = normalize(sky_ray() * vec3f(ndc, 1.0));
+      sum += dot(beyond(air_along(dir), fill), LUMA);
+    }
   }
-  let direct = sun_transmittance(r, mu_s) * max(mu_s, 0.0);
-  let light = dot((sky + direct) * atmos_white(), LUMA);
+  let light = sum / f32(METER_TAPS * METER_TAPS) * PI / atmos_ground_albedo();
   let adapted = clamp(pow(1.0 / max(light, 1e-6), atmos_adaptation()), 1.0, atmos_max_adaptation());
   return vec4f(atmos_exposure() * adapted, 0.0, 0.0, 1.0);
 }

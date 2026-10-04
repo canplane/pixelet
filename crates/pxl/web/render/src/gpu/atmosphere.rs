@@ -3,8 +3,8 @@
 //! The atmosphere's uniform and its tables: transmittance, multiple scattering
 //! and the sky's irradiance once per device; the sun's and moon's sky views
 //! redrawn only when the light's height or the camera's altitude moves (the
-//! table is kept relative to the light's azimuth); and the exposure texel when a
-//! light's height or the land's altitude does.
+//! table is kept relative to the light's azimuth); and the exposure, metered on
+//! what the view shows, every frame.
 
 use pxl_spec::bake::earth_page::{EARTH_LEVEL, EARTH_TEXELS};
 use pxl_spec::space::lod::{FAULT_ACROSS, FAULT_PAGES};
@@ -76,7 +76,7 @@ const _: () = assert!(EARTH_LAYERS < 1 << PAGE_BITS && FAULT_PAGES <= 32 / PAGE_
 const EARTH_SIZE: (u32, u32) = (2048, 1024);
 
 /// Transmittance, multiple scattering, sky view, exposure, irradiance, moonlit sky.
-pub(crate) const SIZES: [(u32, u32); 6] = [(256, 64), (32, 32), (192, 108), (2, 1), (64, 16), (192, 108)];
+pub(crate) const SIZES: [(u32, u32); 6] = [(256, 64), (32, 32), (192, 108), (1, 1), (64, 16), (192, 108)];
 pub(crate) const TRANSMITTANCE: usize = 0;
 pub(crate) const MULTISCATTER: usize = 1;
 pub(crate) const SKY_VIEW: usize = 2;
@@ -101,7 +101,6 @@ pub struct Atmosphere {
     baked: bool,
     drawn_for: Option<(f32, f32)>,
     moon_drawn_for: Option<(f32, f32)>,
-    exposed_for: [Option<(f32, f32)>; 2],
     sun_mu: f32,
     moon_mu: f32,
     earth: ImageMap,
@@ -109,7 +108,7 @@ pub struct Atmosphere {
 }
 
 impl Atmosphere {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> Atmosphere {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, sky_buffer: u32) -> Atmosphere {
         let uniform = object();
         g.buffer(uniform, word_bytes(ATMOS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let white = model::white();
@@ -167,7 +166,6 @@ impl Atmosphere {
         let transmittance = [9, resource::VIEW, views[TRANSMITTANCE], 0, 0];
         let linear = [11, resource::SAMPLER, sampler, 0, 0];
         let multiscatter = [12, resource::VIEW, views[MULTISCATTER], 0, 0];
-        let irradiance = [18, resource::VIEW, views[IRRADIANCE], 0, 0];
         let mut groups = [0; 6];
         let mut e = [0u32; 30];
         e[..5].copy_from_slice(&air);
@@ -188,11 +186,7 @@ impl Atmosphere {
             groups[k] = object();
             g.bind_group(groups[k], passes[SKY_VIEW].layouts[0], &e);
         }
-        e[15..20].copy_from_slice(&irradiance);
-        e[20..25].copy_from_slice(&buffer_entry(0, frame_buffer));
-        groups[EXPOSURE_TEXEL] = object();
-        g.bind_group(groups[EXPOSURE_TEXEL], passes[EXPOSURE_TEXEL].layouts[0], &e[..25]);
-        Atmosphere {
+        let mut atmosphere = Atmosphere {
             uniform,
             words,
             sampler,
@@ -202,7 +196,6 @@ impl Atmosphere {
             baked: false,
             drawn_for: None,
             moon_drawn_for: None,
-            exposed_for: [None; 2],
             sun_mu: 1.0,
             moon_mu: 1.0,
             earth: ImageMap::new(g, EARTH_SIZE.0, EARTH_SIZE.1),
@@ -220,7 +213,15 @@ impl Atmosphere {
                 g.view(view, texture, dimension::D2_ARRAY, 0, 1, 0, EARTH_LAYERS);
                 (texture, view)
             },
-        }
+        };
+        // The exposure pass reads the air but what it writes.
+        let mut e = vec![];
+        e.extend(buffer_entry(0, frame_buffer));
+        e.extend(buffer_entry(1, sky_buffer));
+        e.extend(atmosphere.entries().as_chunks::<5>().0.iter().filter(|c| c[0] != 13).flatten());
+        atmosphere.groups[EXPOSURE_TEXEL] = object();
+        g.bind_group(atmosphere.groups[EXPOSURE_TEXEL], atmosphere.passes[EXPOSURE_TEXEL].layouts[0], &e);
+        atmosphere
     }
 
     pub fn entries(&self) -> [u32; AIR_WORDS] {
@@ -307,7 +308,6 @@ impl Atmosphere {
             self.baked = true;
             self.drawn_for = None;
             self.moon_drawn_for = None;
-            self.exposed_for = [None; 2];
         }
         let altitude = self.words[CAMERA_ALTITUDE];
         let now = (self.sun_mu, altitude);
@@ -315,17 +315,13 @@ impl Atmosphere {
             self.table(g, encoder, SKY_VIEW, stamp);
             self.drawn_for = Some(now);
         }
-        let land = self.words[LAND_ALTITUDE];
-        let lit = [(self.sun_mu, land), (self.moon_mu, land)];
-        if moved(self.exposed_for[0], lit[0]) || moved(self.exposed_for[1], lit[1]) {
-            self.table(g, encoder, EXPOSURE_TEXEL, stamp);
-            self.exposed_for = lit.map(Some);
-        }
         let moon = (self.moon_mu, altitude);
         if self.words[MOON_LIGHT] > 0.0 && moved(self.moon_drawn_for, moon) {
             self.table(g, encoder, MOON_VIEW, stamp);
             self.moon_drawn_for = Some(moon);
         }
+        // After the views it measures through, before the frame it shows.
+        self.table(g, encoder, EXPOSURE_TEXEL, stamp);
     }
 
     fn table(&self, g: &Gpu, encoder: u32, k: usize, stamp: &mut Stamp) {
