@@ -68,7 +68,7 @@ pub const AIR_WORDS: usize = 40;
 /// A layer for each page the Earth layer's floor holds at once: its residency's frames.
 pub const EARTH_LAYERS: u32 = FAULT_PAGES;
 /// A page's layer plus one in four bits, eight to a word.
-const PAGE_BITS: u32 = 4;
+pub(crate) const PAGE_BITS: u32 = 4;
 const _: () = assert!(EARTH_LAYERS < 1 << PAGE_BITS && FAULT_PAGES <= 32 / PAGE_BITS * 4, "the window's layers fit their word");
 
 /// The size bake_earth writes the Earth's global picture at.

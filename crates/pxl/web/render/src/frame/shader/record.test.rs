@@ -117,6 +117,8 @@ fn constant(kind: u32, name: &str) -> Vec<f64> {
 #[test]
 fn the_skys_layouts_match_their_structs() {
     use crate::gpu::{atmosphere as a, clouds as c, renderer as r, stars as s};
+    assert_eq!(constant(SHADER_SKY, "ATMOS_VEC4S"), [(a::ATMOS_FLOATS / 4) as f64], "the air's words, declared once");
+    assert_eq!(constant(SHADER_SKY, "EARTH_PAGE_BITS"), [a::PAGE_BITS as f64], "the Earth window's packing");
     holds(
         SHADER_SKY,
         "Atmosphere",
@@ -182,6 +184,8 @@ fn the_skys_layouts_match_their_structs() {
         assert_eq!(constant(SHADER_SKY, name), [w as f64, h as f64], "{name}");
     }
     assert_eq!(constant(SHADER_CLOUDS, "CLOUD_LATTICE_CELLS"), [(1u32 << c::LATTICE_SHAMT) as f64], "the clouds' lattice");
+    let [cell] = constant(SHADER_CLOUDS, "WEATHER_CELL")[..] else { panic!("one weather cell") };
+    assert!(c::LATTICE_COUNT.is_multiple_of(cell as u32), "the weather wraps with the map in whole cells");
     for (name, v) in [("CLOUD_TILE_UNITS", c::TILE_UNITS), ("CLOUD_TILE_TEXELS", c::TILE_TEXELS)] {
         assert_eq!(constant(SHADER_CLOUDS, name), [v as f64], "the clouds' tile, which the texture is made to");
     }

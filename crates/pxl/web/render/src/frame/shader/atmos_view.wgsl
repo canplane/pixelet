@@ -148,7 +148,8 @@ fn earth_face(n: vec3f) -> vec4f {
   let d = vec2i(((page.x - w.x) % w.w + w.w) % w.w, page.y - w.y);
   if (all(d >= vec2i(0)) && all(d < vec2i(w.z))) {
     let k = u32(d.y * w.z + d.x);
-    let layer = (atmos_earth_pages()[k / 8u] >> (4u * (k % 8u))) & 15u;
+    let per_word = 32u / EARTH_PAGE_BITS;
+    let layer = (atmos_earth_pages()[k / per_word] >> (EARTH_PAGE_BITS * (k % per_word))) & ((1u << EARTH_PAGE_BITS) - 1u);
     if (layer > 0u) {
       return textureSampleLevel(earth_pages, atmos_sampler, fract(at), i32(layer - 1u), 0.0);
     }

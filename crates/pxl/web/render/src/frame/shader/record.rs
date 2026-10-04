@@ -352,59 +352,68 @@ fn record(h: Head, lanes: &[Vec<u32>], groups: &[Vec<u32>]) -> Vec<u32> {
     out
 }
 
-const AIR: [[u32; 3]; 8] = [
-    [8, FRAGMENT, UNIFORM],
-    [9, FRAGMENT, TEXTURE],
-    [10, FRAGMENT, TEXTURE],
-    [11, FRAGMENT, SAMPLER],
-    [13, FRAGMENT, TEXTURE],
-    [15, FRAGMENT, TEXTURE],
-    [16, FRAGMENT, TEXTURE_ARRAY],
-    [17, FRAGMENT, TEXTURE_ARRAY],
+/// The air's bindings, numbered alike in every pass that reads it.
+const AIR_SLOTS: [[u32; 2]; 8] = [
+    [8, UNIFORM],
+    [9, TEXTURE],
+    [10, TEXTURE],
+    [11, SAMPLER],
+    [13, TEXTURE],
+    [15, TEXTURE],
+    [16, TEXTURE_ARRAY],
+    [17, TEXTURE_ARRAY],
 ];
-const AIR_AT_VERTICES: [[u32; 3]; 8] = [
-    [8, VERTEX, UNIFORM],
-    [9, VERTEX, TEXTURE],
-    [10, VERTEX, TEXTURE],
-    [11, VERTEX, SAMPLER],
-    [13, VERTEX, TEXTURE],
-    [15, VERTEX, TEXTURE],
-    [16, VERTEX, TEXTURE_ARRAY],
-    [17, VERTEX, TEXTURE_ARRAY],
-];
-const LIT_FRAME: [[u32; 3]; 12] = [
-    [0, BOTH, UNIFORM],
-    [1, FRAGMENT, DEPTH],
-    [2, FRAGMENT, SAMPLER_COMPARISON],
-    [7, FRAGMENT, TEXTURE],
+
+/// The air's bindings, each seen from the stage at its place in `AIR_SLOTS`.
+const fn air(stages: [u32; 8]) -> [[u32; 3]; 8] {
+    let mut out = [[0; 3]; 8];
+    let mut i = 0;
+    while i < out.len() {
+        out[i] = [AIR_SLOTS[i][0], stages[i], AIR_SLOTS[i][1]];
+        i += 1;
+    }
+    out
+}
+
+const AIR: [[u32; 3]; 8] = air([FRAGMENT; 8]);
+const LIT_FRAME: [[u32; 3]; 12] = {
     // Tables in the vertex stage too: a fragment reads the land's color for
     // the ground bounce and the exposure its lights are shown through.
-    [8, BOTH, UNIFORM],
-    AIR_AT_VERTICES[1],
-    AIR_AT_VERTICES[2],
-    AIR_AT_VERTICES[3],
-    [13, BOTH, TEXTURE],
-    AIR_AT_VERTICES[5],
-    AIR_AT_VERTICES[6],
-    AIR_AT_VERTICES[7],
-];
-/// The transmittance and sky-view tables are laid out unread because the shader declares them.
+    let a = air([BOTH, VERTEX, VERTEX, VERTEX, BOTH, VERTEX, VERTEX, VERTEX]);
+    [
+        [0, BOTH, UNIFORM],
+        [1, FRAGMENT, DEPTH],
+        [2, FRAGMENT, SAMPLER_COMPARISON],
+        [7, FRAGMENT, TEXTURE],
+        a[0],
+        a[1],
+        a[2],
+        a[3],
+        a[4],
+        a[5],
+        a[6],
+        a[7],
+    ]
+};
 const CLOUD_COMPOSITE_GROUP: [[u32; 3]; 2] = [[0, FRAGMENT, TEXTURE], [1, FRAGMENT, SAMPLER]];
-
-const CLOUD_GROUP: [[u32; 3]; 12] = [
-    [0, FRAGMENT, UNIFORM],
-    [1, FRAGMENT, UNIFORM],
-    [2, FRAGMENT, TEXTURE],
-    [3, FRAGMENT, SAMPLER],
-    AIR[0],
-    [9, NONE, TEXTURE],
-    [10, NONE, TEXTURE],
-    AIR[3],
-    AIR[4],
-    AIR[5],
-    [16, NONE, TEXTURE_ARRAY],
-    [17, NONE, TEXTURE_ARRAY],
-];
+/// The transmittance and sky-view tables are laid out unread because the shader declares them.
+const CLOUD_GROUP: [[u32; 3]; 12] = {
+    let a = air([FRAGMENT, NONE, NONE, FRAGMENT, FRAGMENT, FRAGMENT, NONE, NONE]);
+    [
+        [0, FRAGMENT, UNIFORM],
+        [1, FRAGMENT, UNIFORM],
+        [2, FRAGMENT, TEXTURE],
+        [3, FRAGMENT, SAMPLER],
+        a[0],
+        a[1],
+        a[2],
+        a[3],
+        a[4],
+        a[5],
+        a[6],
+        a[7],
+    ]
+};
 const SKIN: [[u32; 3]; 2] = [[0, FRAGMENT, TEXTURE], [1, FRAGMENT, SAMPLER]];
 
 /// The mesh is a per-instance vertex buffer, so a draw reaches its boxes by
