@@ -40,9 +40,6 @@ struct Atmosphere {
   cloud_count: u32,
   cloud_altitude_km: f32,
   cloud_gone_km: f32,
-  // Aerosol the tables do not carry, applied only in aerial perspective.
-  haze_extinction: f32,
-  haze_scale_height: f32,
   // A lit city's radiance where the Earth's picture holds all of it.
   city_light: vec3f,
   // The Earth layer's top-level pages about the eye: the south-west one, how
@@ -53,7 +50,7 @@ struct Atmosphere {
 };
 
 // The struct's size in vec4 words, which the shader test holds to the host's.
-const ATMOS_VEC4S: u32 = 16u;
+const ATMOS_VEC4S: u32 = 15u;
 // The bits a page's layer takes in `earth_pages` (gpu/atmosphere.rs PAGE_BITS).
 const EARTH_PAGE_BITS: u32 = 4u;
 
@@ -93,11 +90,9 @@ fn atmos_cloud_time() -> f32 { return atmos_words[11].x; }
 fn atmos_cloud_count() -> u32 { return bitcast<u32>(atmos_words[11].y); }
 fn atmos_cloud_altitude_km() -> f32 { return atmos_words[11].z; }
 fn atmos_cloud_gone_km() -> f32 { return atmos_words[11].w; }
-fn atmos_haze_extinction() -> f32 { return atmos_words[12].x; }
-fn atmos_haze_scale_height() -> f32 { return atmos_words[12].y; }
-fn atmos_city_light() -> vec3f { return atmos_words[13].xyz; }
-fn atmos_earth_window() -> vec4i { return bitcast<vec4i>(atmos_words[14]); }
-fn atmos_earth_pages() -> vec4u { return bitcast<vec4u>(atmos_words[15]); }
+fn atmos_city_light() -> vec3f { return atmos_words[12].xyz; }
+fn atmos_earth_window() -> vec4i { return bitcast<vec4i>(atmos_words[13]); }
+fn atmos_earth_pages() -> vec4u { return bitcast<vec4u>(atmos_words[14]); }
 
 // Can be above the atmosphere: the view from space.
 fn camera_r() -> f32 {
@@ -155,6 +150,11 @@ fn to_ground(r: f32, mu: f32) -> f32 {
   return to_sphere(r, mu, atmos_bottom_radius());
 }
 
+// How far a ray runs through the air before the ground or the top ends it.
+fn air_path(r: f32, mu: f32) -> f32 {
+  return select(to_top(r, mu), to_ground(r, mu), meets_ground(r, mu));
+}
+
 // Raised to the ground under the map center for drawing only; the tables keep
 // the radius they were baked at.
 fn land_radius() -> f32 {
@@ -182,6 +182,9 @@ const TRANSMITTANCE_SIZE: vec2f = vec2f(256.0, 64.0);
 const MULTISCATTER_SIZE: vec2f = vec2f(32.0, 32.0);
 const SKY_VIEW_SIZE: vec2f = vec2f(192.0, 108.0);
 const IRRADIANCE_SIZE: vec2f = vec2f(64.0, 16.0);
+// Hillaire's aerial perspective, 32 across, 32 up, 32 slices along each ray,
+// the slices side by side in one picture.
+const AERIAL_SIZE: vec3f = vec3f(32.0, 32.0, 32.0);
 
 // Bruneton's parameterization, which spends rows where transmittance changes.
 fn transmittance_uv(r_in: f32, mu: f32) -> vec2f {

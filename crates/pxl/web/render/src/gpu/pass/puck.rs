@@ -5,6 +5,7 @@
 use crate::frame::draw::{uniform_of, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, Gpu};
 use crate::gpu::api_spec::format;
+use crate::gpu::atmosphere::AIR_WORDS;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{buffer_size, Blocks, Draws};
 use crate::look::color::linear_rgb;
@@ -70,6 +71,7 @@ pub struct PuckPass {
     frame_group: u32,
     zone_draw_group: u32,
     beacon_draw_group: u32,
+    beacon_frame_group: u32,
     box_position: u32,
     box_uv: u32,
     box_index: u32,
@@ -87,7 +89,7 @@ fn put(g: &Gpu, data: &[u8], usage: u32) -> u32 {
 }
 
 impl PuckPass {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> PuckPass {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, air: [u32; AIR_WORDS]) -> PuckPass {
         let zone = pipelines.build(g, PIPELINE_PUCK_ZONE, format::CANVAS);
         let beacon = pipelines.build(g, PIPELINE_PUCK_BEACON, format::CANVAS);
         let uniform = || {
@@ -104,8 +106,14 @@ impl PuckPass {
         let (box_p, box_uv, box_i) = box_lanes();
         let (oct_p, oct_n) = octahedron_lanes();
         let [r, gr, b] = linear_rgb(marker_colors::ACTION);
+        // The beacon is lit through the air: the air's words, transmittance and sampler.
+        let mut lit = buffer_entry(0, frame_buffer).to_vec();
+        lit.extend(air.as_chunks::<5>().0.iter().filter(|c| [8, 9, 11].contains(&c[0])).flatten());
+        let beacon_frame_group = object();
+        g.bind_group(beacon_frame_group, beacon.layouts[0], &lit);
         PuckPass {
             frame_group: group(zone.layouts[0], frame_buffer),
+            beacon_frame_group,
             zone_draw_group: group(zone.layouts[1], zone_uniform),
             beacon_draw_group: group(beacon.layouts[1], beacon_uniform),
             zone,
@@ -130,7 +138,7 @@ impl PuckPass {
         for d in draws.of(PIPELINE_PUCK_BEACON) {
             self.write_uniform(g, self.beacon_uniform, uniform_of(uniforms, d), d[1] as f32);
             g.set_pipeline(pass, self.beacon.pipeline);
-            g.set_bind_group(pass, 0, self.frame_group, &[]);
+            g.set_bind_group(pass, 0, self.beacon_frame_group, &[]);
             g.set_bind_group(pass, 1, self.beacon_draw_group, &[]);
             g.set_vertex_buffer(pass, 0, self.oct_position, 0, 0);
             g.set_vertex_buffer(pass, 1, self.oct_normal, 0, 0);

@@ -3,24 +3,48 @@
 @group(0) @binding(15) var moon_view_lut: texture_2d<f32>;
 @group(0) @binding(16) var earth_map: texture_2d_array<f32>;
 @group(0) @binding(17) var earth_pages: texture_2d_array<f32>;
+@group(0) @binding(19) var aerial_lut: texture_2d<f32>;
 
 fn shown() -> vec3f {
   return atmos_white() * exposure();
 }
 
-// What lights the land under the eye, from the sun's and moon's skies.
-fn sky_fill() -> vec3f {
-  let r = land_radius();
-  let sky = sky_irradiance(r, dot(atmos_sun_dir(), frame_up())) + sky_irradiance(r, dot(atmos_moon_dir(), frame_up())) * atmos_moon_light();
-  return (sky * atmos_white() + atmos_night_sky()) * exposure();
+// The lights where a point stands, exposed: each through the air above it, and
+// the sky's on an up-facing face there. A fact of the point, wherever the eye is.
+struct Light {
+  sun: vec3f,
+  other: vec3f,
+  fill: vec3f,
+};
+
+fn light_at(r: f32, up: vec3f) -> Light {
+  let e = exposure();
+  var l: Light;
+  l.sun = frame_sun_color() * sun_transmittance(r, dot(up, frame_sun_dir())) * e;
+  l.other = frame_other_color() * sun_transmittance(r, dot(up, frame_other_dir())) * e;
+  let sky = sky_irradiance(r, dot(up, atmos_sun_dir())) + sky_irradiance(r, dot(up, atmos_moon_dir())) * atmos_moon_light();
+  l.fill = (sky * atmos_white() + atmos_night_sky()) * e;
+  return l;
+}
+
+fn planet_center() -> vec3f {
+  return vec3f(frame_planet().xy, frame_planet().w - frame_planet().z);
+}
+
+// A world point's radius, from the eye's: the frame's units are exact near it.
+fn radius_of(world_pos: vec3f) -> f32 {
+  let c = planet_center();
+  return max(camera_r() + (length(world_pos - c) - length(frame_camera_pos() - c)) * atmos_km_per_u(), atmos_bottom_radius());
+}
+
+fn light_of(world_pos: vec3f) -> Light {
+  return light_at(radius_of(world_pos), normalize(world_pos - planet_center()));
 }
 
 // What the ground below gives a down-facing face: what lights an up-facing one,
-// at the Earth's mean albedo, an irradiance as `fill` is. `e` is the sky's
-// exposure, read once by the caller, so the ground is seen by the sky's eye.
-fn ground_bounce(fill: vec3f, e: f32) -> vec3f {
-  let lit = (frame_sun_color() * max(frame_sun_dir().z, 0.0) + frame_other_color() * max(frame_other_dir().z, 0.0)) * e + fill;
-  return atmos_ground_albedo() * lit;
+// at the Earth's mean albedo.
+fn ground_bounce(l: Light) -> vec3f {
+  return atmos_ground_albedo() * (l.sun * max(frame_sun_dir().z, 0.0) + l.other * max(frame_other_dir().z, 0.0) + l.fill);
 }
 
 fn moon_shown() -> vec3f {
@@ -46,7 +70,6 @@ struct Air {
   light: vec3f,
   end: vec3f,
   ground: bool,
-  ground_km: f32,
   // The ground past the terrain is lit on its own slope of the sphere.
   normal: vec3f,
 };
@@ -63,57 +86,12 @@ fn air_along(dir: vec3f) -> Air {
   air.normal = frame_up();
   if (air.ground) {
     let d = to_land(r, mu);
-    air.ground_km = d;
     air.end = transmittance_along(r, mu, d, true);
     air.normal = normalize(frame_up() * r + dir * d);
   } else {
     air.end = transmittance_to_top(r, mu);
   }
   return air;
-}
-
-// Closed-form optical depth of an exponential layer along a flat segment;
-// a ratio of two table reads is noise at these lengths.
-fn layer_depth(h0: f32, h1: f32, d: f32, scale: f32) -> f32 {
-  let dh = h1 - h0;
-  if (abs(dh) < 1e-3) {
-    return d * exp(-(h0 + h1) * 0.5 / scale);
-  }
-  return d * scale * (exp(-h0 / scale) - exp(-h1 / scale)) / dh;
-}
-
-// The ground's haze, a near view's: it leaves as the view goes over to the
-// Earth's picture, which no veil seen from orbit covers.
-fn ground_haze() -> f32 {
-  return atmos_haze_extinction() * (1.0 - frame_earth_share());
-}
-
-fn haze_through(h0: f32, h1: f32, d: f32) -> f32 {
-  return exp(-ground_haze() * layer_depth(h0, h1, d, atmos_haze_scale_height()));
-}
-
-// Continental haze single-scattering albedo, near OPAC's continental types at
-// green (Hess, Koepke and Schult, 1998); nothing else fixes it.
-const HAZE_ALBEDO: f32 = 0.9;
-
-// Lit where the air is, not along the ray: a veil taken from the sky's ray
-// laid a bright line over the ground at the horizon toward a low sun.
-struct AirLight {
-  rayleigh: vec3f,
-  mie: vec3f,
-};
-
-fn air_light(dir: vec3f, fill: vec3f) -> AirLight {
-  let c_sun = dot(dir, frame_sun_dir());
-  let c_other = dot(dir, frame_other_dir());
-  let e = exposure();
-  let around = 0.5 * (fill + ground_bounce(fill, e)) / PI;
-  let sun = frame_sun_color() * e;
-  let other = frame_other_color() * e;
-  var l: AirLight;
-  l.rayleigh = sun * rayleigh_phase(c_sun) + other * rayleigh_phase(c_other) + around;
-  l.mie = sun * mie_phase(c_sun) + other * mie_phase(c_other) + around;
-  return l;
 }
 
 // The Earth's face where a ray meets the ground past the terrain, at the
@@ -163,29 +141,24 @@ const SHADOW_DEPTH: f32 = 0.5;
 
 // What a matte face of albedo one takes, over pi: shade.wgsl's for every lit
 // pass, and the Earth's past the terrain (`beyond`), so the two meet unseamed.
-fn surface_light(n: vec3f, lit: f32, fill: vec3f) -> vec3f {
-  let e = exposure();
-  let sun = frame_sun_color() * e;
-  let other = frame_other_color() * e;
+fn surface_light(n: vec3f, lit: f32, l: Light) -> vec3f {
   // A face turned from the sun reads no shadow map, and is not its own shade.
   let shaded = select(1.0, mix(1.0, lit, SHADOW_DEPTH), dot(n, frame_sun_dir()) > 0.0);
-  let up = sun * max(frame_sun_dir().z, 0.0) * shaded + other * max(frame_other_dir().z, 0.0) + fill;
+  let up = l.sun * max(frame_sun_dir().z, 0.0) * shaded + l.other * max(frame_other_dir().z, 0.0) + l.fill;
   // three's standard material at roughness 1, metalness 0: Lambert, albedo over pi.
-  let hemi = mix(ground_bounce(fill, e), fill, n.z * 0.5 + 0.5);
-  let directed = sun * max(dot(n, frame_sun_dir()), 0.0) * lit + other * max(dot(n, frame_other_dir()), 0.0) + hemi;
+  let hemi = mix(ground_bounce(l), l.fill, n.z * 0.5 + 0.5);
+  let directed = l.sun * max(dot(n, frame_sun_dir()), 0.0) * lit + l.other * max(dot(n, frame_other_dir()), 0.0) + hemi;
   return mix(up, directed, DIRECTED) / PI;
 }
 
 // Past the terrain the ground is lit by the terrain's own light, so the drawn
 // edge is no seam; no shadow map reaches it.
-fn beyond(air: Air, fill: vec3f) -> vec3f {
+fn beyond(air: Air) -> vec3f {
   var light = air.light;
   if (air.ground) {
     let n = air.normal;
     let face = earth_face(n);
-    light += air.end * (face.rgb * surface_light(n, 1.0, fill) + city_shown(face.a));
-    // Haze reads as the air's own light along the ray.
-    light = mix(air.light, light, haze_through(max(atmos_camera_altitude(), 0.0), 0.0, air.ground_km));
+    light += air.end * (face.rgb * surface_light(n, 1.0, light_at(land_radius(), n)) + city_shown(face.a));
   }
   return light;
 }
@@ -195,57 +168,69 @@ struct Veil {
   scattered: vec3f,
 };
 
-fn veil(world_pos: vec3f, fill: vec3f) -> Veil {
+// What the air between the eye and a point leaves of it and lays over it: the
+// tables' transmittance, as the Earth past the terrain is dimmed, and the light
+// the aerial perspective gathered to that distance along that ray.
+fn air_to(world_pos: vec3f) -> Veil {
   var v: Veil;
-  let du = length(world_pos - frame_camera_pos());
+  let to = world_pos - frame_camera_pos();
+  let du = length(to);
   if (du < 1e-4) {
     v.through = vec3f(1.0);
     v.scattered = vec3f(0.0);
     return v;
   }
+  let r = camera_r();
+  let mu = dot(to / du, frame_up());
   let d = du * atmos_km_per_u();
-  let h0 = clamp(atmos_camera_altitude(), 0.0, atmos_top_radius() - atmos_bottom_radius());
-  let planet = vec3f(frame_planet().xy, frame_planet().w - frame_planet().z);
-  let h1 = max(h0 + (length(world_pos - planet) - length(frame_camera_pos() - planet)) * atmos_km_per_u(), 0.0);
-  let rayleigh = atmos_rayleigh_scattering() * layer_depth(h0, h1, d, atmos_rayleigh_scale_height());
-  let mie = atmos_mie_extinction() * layer_depth(h0, h1, d, atmos_mie_scale_height());
-  let haze = ground_haze() * layer_depth(h0, h1, d, atmos_haze_scale_height());
-  // Single scattering over a segment lit uniformly, short enough for that.
-  let depth = rayleigh + vec3f(mie + haze);
-  let through = exp(-depth);
-  // The palette is no reflectance: dimmed by wavelength, a light sea's blue went
-  // and its green stayed. The air's own light keeps its color, and the Earth's
-  // picture, which is reflectance, is dimmed as it is past the terrain.
-  v.through = mix(vec3f(dot(through, LUMA)), through, frame_earth_share());
-  let lit = air_light((world_pos - frame_camera_pos()) / du, fill);
-  let turned = rayleigh * lit.rayleigh + (mie * atmos_mie_scattering() / atmos_mie_extinction() + haze * HAZE_ALBEDO) * lit.mie;
-  v.scattered = (vec3f(1.0) - through) * turned / max(depth, vec3f(1e-6));
+  v.through = transmittance_along(r, mu, d, meets_ground(r, mu));
+  v.scattered = aerial_at(world_pos, r, mu, d) * exposure();
   return v;
 }
 
-fn aerial(color: vec3f, world_pos: vec3f, fill: vec3f) -> vec3f {
-  let v = veil(world_pos, fill);
+// The aerial perspective where a point falls on the screen, between the two
+// slices about its distance; nearer than the first, a share of it.
+fn aerial_at(world_pos: vec3f, r: f32, mu: f32, d: f32) -> vec3f {
+  let clip = frame_view_proj() * vec4f(world_pos, 1.0);
+  let ndc = clamp(clip.xy / max(clip.w, 1e-6), vec2f(-1.0), vec2f(1.0));
+  let x = coord_of(ndc.x * 0.5 + 0.5, AERIAL_SIZE.x);
+  let y = coord_of(ndc.y * 0.5 + 0.5, AERIAL_SIZE.y);
+  let s = sqrt(clamp(d / max(air_path(r, mu), 1e-6), 0.0, 1.0)) * AERIAL_SIZE.z - 1.0;
+  let k = clamp(floor(s), 0.0, AERIAL_SIZE.z - 1.0);
+  let near = textureSampleLevel(aerial_lut, atmos_sampler, vec2f((k + x) / AERIAL_SIZE.z, y), 0.0).rgb;
+  if (s < 0.0) {
+    return near * (s + 1.0);
+  }
+  let far = textureSampleLevel(aerial_lut, atmos_sampler, vec2f((min(k + 1.0, AERIAL_SIZE.z - 1.0) + x) / AERIAL_SIZE.z, y), 0.0).rgb;
+  return mix(near, far, s - k);
+}
+
+fn aerial(color: vec3f, world_pos: vec3f) -> vec3f {
+  let v = air_to(world_pos);
   return color * v.through + v.scattered;
 }
 
 // Computed per vertex: every term varies slowly across a face, and it saves
 // the table reads per fragment.
 struct Seen {
-  through: vec3f,
+  through: f32,
   scattered: vec3f,
   past: vec3f,
-  fill: vec3f,
+  light: Light,
 };
 
 fn seen_from_eye(world_pos: vec3f) -> Seen {
-  let fill = sky_fill();
-  let air = air_along(normalize(world_pos - frame_camera_pos()));
-  let v = veil(world_pos, fill);
+  let light = light_of(world_pos);
+  let v = air_to(world_pos);
   var s: Seen;
-  s.through = v.through;
+  // A lit pass's color is authored, not reflectance, so the air dims it alike
+  // at every wavelength: dimmed by wavelength, a light sea's blue went and its
+  // green stayed. The air's own light, and what is reflectance — the Earth's
+  // picture, a cloud — keep the air's color.
+  s.through = dot(v.through, LUMA);
   s.scattered = v.scattered;
-  s.past = beyond(air, fill);
-  s.fill = fill;
+  s.past = beyond(air_along(normalize(world_pos - frame_camera_pos())));
+  s.light = light;
   return s;
 }
 

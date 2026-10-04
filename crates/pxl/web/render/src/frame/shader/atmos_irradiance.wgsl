@@ -24,7 +24,7 @@ fn fs(v: TableOut) -> @location(0) vec4f {
     let s = sqrt(max(1.0 - mu * mu, 0.0));
     for (var j = 0; j < IRRADIANCE_BEARINGS; j++) {
       let phi = TAU * (f32(j) + 0.5) / f32(IRRADIANCE_BEARINGS);
-      let l = sky_radiance(r, vec3f(s * cos(phi), s * sin(phi), mu), sun, IRRADIANCE_STEPS);
+      let l = sky_radiance(r, vec3f(s * cos(phi), s * sin(phi), mu), sun, air_path(r, mu), IRRADIANCE_STEPS);
       sky += l;
       seen += l / mu;
     }

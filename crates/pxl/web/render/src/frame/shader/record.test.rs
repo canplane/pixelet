@@ -156,15 +156,13 @@ fn the_skys_layouts_match_their_structs() {
             ("cloud_count", a::CLOUD_COUNT),
             ("cloud_altitude_km", a::CLOUD_ALTITUDE),
             ("cloud_gone_km", a::CLOUD_GONE),
-            ("haze_extinction", a::HAZE_EXTINCTION),
-            ("haze_scale_height", a::HAZE_SCALE_HEIGHT),
             ("city_light", a::CITY_LIGHT),
             ("earth_window", a::EARTH_WINDOW),
             ("earth_pages", a::EARTH_PAGES),
         ],
     );
     holds(SHADER_SKY, "Sky", r::SKY_FLOATS, &[("ray", 0), ("pole", r::SKY_POLE), ("mapped", r::SKY_MAPPED)]);
-    holds(SHADER_CLOUDS, "Clouds", c::CLOUDS_FLOATS, &[("ray", 0), ("sun_at", c::SUN_AT), ("moon_at", c::MOON_AT)]);
+    holds(SHADER_CLOUDS, "Clouds", c::CLOUDS_FLOATS, &[("ray", 0)]);
     holds(
         SHADER_STARS,
         "Stars",
@@ -183,6 +181,8 @@ fn the_skys_layouts_match_their_structs() {
         let (w, h) = a::SIZES[k];
         assert_eq!(constant(SHADER_SKY, name), [w as f64, h as f64], "{name}");
     }
+    let [across, up, slices] = constant(SHADER_SKY, "AERIAL_SIZE")[..] else { panic!("the aerial perspective's three axes") };
+    assert_eq!(a::SIZES[a::AERIAL], ((across * slices) as u32, up as u32), "the aerial perspective's slices side by side");
     assert_eq!(constant(SHADER_CLOUDS, "CLOUD_LATTICE_CELLS"), [(1u32 << c::LATTICE_SHAMT) as f64], "the clouds' lattice");
     let [cell] = constant(SHADER_CLOUDS, "WEATHER_CELL")[..] else { panic!("one weather cell") };
     assert!(c::LATTICE_COUNT.is_multiple_of(cell as u32), "the weather wraps with the map in whole cells");

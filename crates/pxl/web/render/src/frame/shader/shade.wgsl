@@ -14,7 +14,7 @@ fn rim(n: vec3f, world_pos: vec3f) -> f32 {
 // `open` scales all of the light, the sun's too: no shadow is drawn by default,
 // and over the sky's light alone a corner went unmarked in the sun.
 fn shade(albedo: vec3f, n: vec3f, world_pos: vec3f, lit: f32, open: vec3f, seen: Seen) -> vec3f {
-  var color = albedo * surface_light(n, lit, seen.fill) * open * (1.0 + rim(n, world_pos));
+  var color = albedo * surface_light(n, lit, seen.light) * open * (1.0 + rim(n, world_pos));
   color = color * seen.through + seen.scattered;
   // A smoothstep on distance from the eye, a sphere, so the band hides the
   // ground before its drawn edge toward the screen's corners as at its middle;
