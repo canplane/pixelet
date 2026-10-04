@@ -7,7 +7,7 @@
 //!   cargo run --profile server -p pxl-geo-bake --bin bake_tiles -- [flags]
 //!
 //!   --stage <s>          leaf or assemble; repeatable (default: both)
-//!   --out <dir>          published pages (default ./out/terrain/v<format>.<release the leaves were baked from>)
+//!   --out <dir>          published pages (default ./out/terrain/v<format>.<UTC day>.<n>, the day's next)
 //!   --build <dir>        the stages' artifacts (default ./out/build/terrain)
 //!   --concurrency <n>    parallel pages, one connection each (default 8)
 //!   --limit <n>          stop after n land pages (smoke test)
@@ -23,7 +23,7 @@ use std::time::Instant;
 
 use postgres::Client;
 use pxl_spec::bake::format::{encode_terrain, Terrain};
-use pxl_spec::bake::published::{version_name, FORMAT};
+use pxl_spec::bake::published::FORMAT;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::LevelPage;
 
@@ -34,7 +34,7 @@ use pxl_geo_bake::elevation::Raster;
 use pxl_geo_bake::pyramid::{build, write_manifest, Layer, PageSet};
 use pxl_geo_bake::terrain::leaf::{self, bake_leaf, bake_ocean, has_ground, land_pages, ocean_samples, write_land_pages, OCEAN_KEY};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
-use pxl_geo_bake::util::{fmt_bytes, fmt_dur, git_sha, pack, refuse_mixed, unpack, Level};
+use pxl_geo_bake::util::{fmt_bytes, fmt_dur, git_sha, next_version, pack, refuse_mixed, unpack, Level};
 
 const CLASSIFY_BATCH: usize = 2000;
 
@@ -367,10 +367,9 @@ fn run() -> Result<(), String> {
     let targets = &land[..args.limit.map_or(land.len(), |n| n.min(land.len()))];
 
     if args.stages.contains(&Stage::Assemble) {
-        // a version is named by the release its leaves were baked from
         let leaf = read_json(&args.build.join("leaf.json"));
         let release = leaf["release"].as_str().ok_or("leaf.json names no release: run --stage leaf")?.to_string();
-        let tiles = PageSet::new(args.out.clone().unwrap_or_else(|| PathBuf::from(format!("./out/terrain/{}", version_name(FORMAT.terrain, &release)))));
+        let tiles = PageSet::new(args.out.clone().unwrap_or_else(|| next_version("./out/terrain", FORMAT.terrain)));
         if tiles.root.exists() {
             fs::remove_dir_all(&tiles.root).map_err(|e| e.to_string())?;
         }
