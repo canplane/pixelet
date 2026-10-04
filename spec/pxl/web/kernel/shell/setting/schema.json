@@ -20,11 +20,12 @@
     "builds the chunks again."
   ],
   "SETTING_SECTIONS": {
-    "$value": ["display", "camera", "lighting", "quality", "debug", "character"],
+    "$value": ["display", "camera", "lighting", "quality", "debug", "character", "map"],
     "$doc": [
       "The sheet's sections, in the order they are shown. `character` is not a",
       "section of the sheet at all — its two settings are picked from the",
-      "drawer's Character tab (feature/character/picker.tsx)."
+      "drawer's Character tab (feature/character/picker.tsx), and `map`'s from the",
+      "buttons floating over the map (feature/map/ui/control/)."
     ]
   },
   "RESOLUTION_MODES": {
@@ -140,7 +141,7 @@
       "$doc": ["The places' badges over the map, from the published POI pages."],
       "kind": "toggle",
       "default": false,
-      "section": "display",
+      "section": "map",
       "cost": "low"
     },
     "tilt_lock": {
@@ -163,7 +164,7 @@
       "kind": "choice",
       "default": "orbit",
       "options": "CAMERA_MODES",
-      "section": "camera"
+      "section": "map"
     },
     "center_support": {
       "$doc": ["The map center stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck."],

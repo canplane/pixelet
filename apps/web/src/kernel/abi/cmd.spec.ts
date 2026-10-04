@@ -27,7 +27,7 @@
 
 import type { BranchCursor, NodeCursor } from "@xpute/core/wire/xtp/mod.ts";
 import type { U32Array, U8Array } from "@xpute/core/abi/array.ts";
-import type { f64, i32, u32, u64 } from "@xpute/core/abi/word.ts";
+import type { f64, i32, u32, u8 } from "@xpute/core/abi/word.ts";
 import { packet } from "@xpute/runtime/ipc/doorbell.ts";
 import type { GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
 
@@ -156,16 +156,6 @@ export const enum Tracking {
   Follow = 1,
   /** Follow mode off, north up again. */
   Unfollow = 2,
-}
-
-/** The compass over the map (shell/ui/compass.rs), as the kernel decides it. */
-export const enum CompassState {
-  /** The map is north up, near enough. */
-  Hidden = 0,
-  /** The map is turned; a press turns it north up again. */
-  Shown = 1,
-  /** The map follows the device's heading: shown for where north is, dimmed and taking no press, since north up is the tracking button's to ask. */
-  Following = 2,
 }
 
 /** The browser's PositionError codes. */
@@ -368,7 +358,6 @@ export interface Snapshot {
   camera_busy: boolean;
   /** A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is. */
   zooming: boolean;
-  compass: CompassState;
   /** Every setting's value by its SettingKey, as SETTING_SET carries one. */
   settings: u32[];
   /** The meters a logical pixel spans at the map center, at the camera's distance; 0 where the camera stands there. The scale bar and the place's depth are the shell's to make of it. */
@@ -376,6 +365,8 @@ export interface Snapshot {
   /** The place the map center is in, broad to narrow, every rung of it; empty where
    * the center is in none or the packets it is read out of have not arrived. */
   place: PlacePart[];
+  /** The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here. */
+  previews: u32[];
 }
 
 export function read_snapshot(b: BranchCursor): Snapshot {

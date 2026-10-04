@@ -21,6 +21,10 @@
         "label": "Decor",
         "description": "Shows trees, vehicles and other decor placed on the terrain automatically. Objects you place yourself are always shown."
       },
+      "structures": {
+        "label": "Buildings",
+        "description": "Shows or hides buildings on the terrain."
+      },
       "textures": {
         "label": "Textures",
         "description": "Applies detailed textures to blocks instead of flat colors."
@@ -29,17 +33,6 @@
     "camera": {
       "section_title": "Camera",
       "section_caption": "Adjust how the camera moves",
-      "camera_mode": {
-        "label": "Camera",
-        "orbit": {
-          "label": "Third person",
-          "description": "The camera circles the place it looks at, and dragging moves that place."
-        },
-        "free": {
-          "label": "First person",
-          "description": "You look around where you stand; dragging walks you over the ground, your eye at your height over it."
-        }
-      },
       "tilt_lock": {
         "label": "Lock Camera Tilt",
         "description": "Locks vertical camera rotation while leaving horizontal rotation free."
@@ -201,10 +194,6 @@
         "label": "Places",
         "description": "Shows nearby place badges (cafes, stores, landmarks, ...) on the map."
       }
-    },
-    "navigation": {
-      "section_title": "Navigation",
-      "section_caption": "How the map center meets the world"
     }
   },
   "cubes": {
@@ -348,16 +337,12 @@
   },
   "toast": {
     "location_checking": "Checking your location…",
-    "map_load_error": "Couldn’t load the area.",
     "world_ready": "Area loaded.",
     "map_loading": "Loading area…",
     "companion_loading": "Preparing your companion…"
   },
   "map": {
-    "scale_bar": {
-      "reset_zoom": "Reset Zoom"
-    },
-    "mode_bar": {
+    "dock": {
       "palette_tooltip": "Palette",
       "pointer": "Pointer",
       "eraser": "Eraser",
@@ -371,7 +356,11 @@
       "reset_orientation": "Face North",
       "move_to_location": "Go to My Location",
       "start_compass_mode": "Start Compass Mode",
-      "exit_compass_mode": "Exit Compass Mode"
+      "exit_compass_mode": "Exit Compass Mode",
+      "first_person": "First Person",
+      "third_person": "Third Person",
+      "show_places": "Show Places",
+      "hide_places": "Hide Places"
     },
     "sensors": {
       "label": "Use my location",

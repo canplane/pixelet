@@ -367,27 +367,6 @@ impl Tracking {
     }
 }
 
-/// The compass over the map (shell/ui/compass.rs), as the kernel decides it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum CompassState {
-    /// The map is north up, near enough.
-    Hidden = 0,
-    /// The map is turned; a press turns it north up again.
-    Shown = 1,
-    /// The map follows the device's heading: shown for where north is, dimmed and taking no press, since north up is the tracking button's to ask.
-    Following = 2,
-}
-
-impl CompassState {
-    pub const ALL: [CompassState; 3] = [CompassState::Hidden, CompassState::Shown, CompassState::Following];
-
-    /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<CompassState> {
-        CompassState::ALL.into_iter().find(|m| *m as u32 == number)
-    }
-}
-
 /// The browser's PositionError codes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
@@ -649,7 +628,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 41] = [
+    pub const ALL: [Command; 40] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
         Command::IMAGE_DECODED,
@@ -711,7 +690,6 @@ pub struct Snapshot<'a> {
     pub camera_busy: bool,
     /// A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is.
     pub zooming: bool,
-    pub compass: CompassState,
     /// Every setting's value by its SettingKey, as SETTING_SET carries one.
     pub settings: &'a [u32],
     /// The meters a logical pixel spans at the map center, at the camera's distance; 0 where the camera stands there. The scale bar and the place's depth are the shell's to make of it.
@@ -719,6 +697,8 @@ pub struct Snapshot<'a> {
     /// The place the map center is in, broad to narrow, every rung of it; empty where
     /// the center is in none or the packets it is read out of have not arrived.
     pub place: &'a dyn Fn(&mut dyn FnMut(&PlacePart<'_>)),
+    /// The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here.
+    pub previews: &'a [u32],
 }
 
 impl Snapshot<'_> {
@@ -735,7 +715,6 @@ impl Snapshot<'_> {
         w.bool(Some(self.is_follow_mode));
         w.bool(Some(self.camera_busy));
         w.bool(Some(self.zooming));
-        w.u32(Some(self.compass as u32));
         w.u32_array(Some(self.settings));
         w.f64(Some(self.m_per_px));
         let mut n = 0;
@@ -745,6 +724,7 @@ impl Snapshot<'_> {
                 w.branch(PlacePart::FIELDS, |w| item.write(w));
             })
         });
+        w.u32_array(Some(self.previews));
     }
 }
 

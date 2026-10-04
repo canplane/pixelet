@@ -458,36 +458,6 @@
       ]
     },
     {
-      "name": "CompassState",
-      "doc": [
-        "The compass over the map (shell/ui/compass.rs), as the kernel decides it."
-      ],
-      "format": "dec",
-      "entries": [
-        {
-          "name": "Hidden",
-          "value": 0,
-          "doc": [
-            "The map is north up, near enough."
-          ]
-        },
-        {
-          "name": "Shown",
-          "value": 1,
-          "doc": [
-            "The map is turned; a press turns it north up again."
-          ]
-        },
-        {
-          "name": "Following",
-          "value": 2,
-          "doc": [
-            "The map follows the device's heading: shown for where north is, dimmed and taking no press, since north up is the tracking button's to ask."
-          ]
-        }
-      ]
-    },
-    {
       "name": "GeolocationErrorCode",
       "doc": [
         "The browser's PositionError codes."
@@ -1474,10 +1444,6 @@
           ]
         },
         {
-          "name": "compass",
-          "type": "CompassState"
-        },
-        {
           "name": "settings",
           "type": "u32",
           "list": true,
@@ -1499,6 +1465,14 @@
           "doc": [
             "The place the map center is in, broad to narrow, every rung of it; empty where",
             "the center is in none or the packets it is read out of have not arrived."
+          ]
+        },
+        {
+          "name": "previews",
+          "type": "u32",
+          "list": true,
+          "doc": [
+            "The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here."
           ]
         }
       ]

@@ -16,9 +16,9 @@ import { CurrentAddress } from "./current-address.tsx";
 import { useReverseGeocode } from "./use-reverse-geocode.ts";
 import { SensorStatus } from "./sensor-status.tsx";
 import { DummyChatText } from "./dummy-chat-text.tsx";
-import { MapCompass } from "../control/compass.tsx";
 import { MapScaleBar } from "../control/scale-bar.tsx";
-import { TrackingButton } from "@/feature/map/ui/control/tracking-button.tsx";
+import { LocationButtons } from "@/feature/map/ui/control/location-buttons.tsx";
+import { ViewButtons } from "@/feature/map/ui/control/view-buttons.tsx";
 import { BusyDim } from "@/feature/map/ui/busy-dim.tsx";
 import { SettingsTriggerButton } from "@/feature/setting/trigger-button.tsx";
 
@@ -59,42 +59,29 @@ export function TopOverlays() {
       </BusyDim>
 
       <BusyDim style={[styles.center, { top }]}>
-        <SearchStrip />
+        {
+          // The whole strip between the buttons opens search, the scale shown
+          // in it or not: where one is and where one wants to go share a slot.
+        }
+        <Pressable onPress={ui.openSearchModal} accessibilityRole="button" accessibilityLabel={t("map.search.trigger_aria_label")} style={styles.strip}>
+          <Presence show={!zooming} from={{ opacity: 0 }} exit={{ opacity: 0 }} transition={SETTLE} exitTransition={LEAVE} style={styles.place}>
+            <View style={styles.title}>
+              <View style={styles.search}>
+                <HaloIcon glyph="magnifyingglass" size={12} weight="semibold" color={color.white} />
+                <CurrentAddress label={addressLabel} />
+              </View>
+              <SensorStatus />
+            </View>
+          </Presence>
+          <View style={styles.scale}>
+            <MapScaleBar show={zooming} />
+          </View>
+        </Pressable>
       </BusyDim>
 
       <BusyDim style={[styles.right, { top }]}>
         <LocationButtons />
         <ViewButtons />
-      </BusyDim>
-    </>
-  );
-}
-
-/** Inside the dim, so the address and the scale fade with the buttons. */
-function SearchStrip() {
-  const { t } = useTranslation();
-  const zooming = useKernel((s) => s.zooming);
-  const veil = useVeil(1, SNAP);
-  return (
-    <Motion {...veil.motion} style={styles.fill}>
-      <Pressable onPress={() => openModal("search")} accessibilityRole="button" accessibilityLabel={t("map.search.trigger_aria_label")} style={styles.strip}>
-        <Presence show={!zooming} from={{ opacity: 0 }} exit={{ opacity: 0 }} transition={SETTLE} exitTransition={LEAVE} style={styles.place}>
-          <View style={styles.title}>
-            <View style={styles.search}>
-              <HaloIcon glyph="magnifyingglass" size={12} weight="semibold" color={color.white} />
-              <CurrentAddress />
-            </View>
-            <SensorStatus />
-          </Pressable>
-        </Presence>
-        <View style={styles.scale}>
-          <MapScaleBar show={zooming} />
-        </View>
-      </BusyDim>
-
-      <BusyDim style={[styles.right, { top }]}>
-        <TrackingButton />
-        <MapCompass />
       </BusyDim>
     </>
   );
@@ -125,9 +112,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   right: { position: "absolute", right: chrome.inset, zIndex: 50, alignItems: "center", gap: chrome.controlGap },
+  strip: { alignSelf: "stretch", flex: 1, alignItems: "center", justifyContent: "center" },
   place: { maxWidth: "100%" },
   title: { alignItems: "center", gap: haloGap(8) },
   // Bounded: a page lays a no-wrap row at content width, and the address overran the buttons.
   search: { flexDirection: "row", alignItems: "center", gap: haloGap(8), minWidth: 0, maxWidth: "100%", flexShrink: 1 },
-  scale: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, alignItems: "center", justifyContent: "center", pointerEvents: "box-none" },
+  scale: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, alignItems: "center", justifyContent: "center", pointerEvents: "none" },
 });

@@ -14,6 +14,8 @@ const POI = SETTINGS.poi.key;
 
 const set = (key: number, value: number) => kernel_command(Command.SETTING_SET, encode_setting_set({ key, value }));
 
+/** How the map is seen: the person, which shows the mode it is in (an eye
+ * first person, a figure third), and the places' badges, filled and colored while on. */
 export function ViewButtons() {
   const { t } = useTranslation();
   const first = useKernel((s) => s.settings[MODE.key]) === FREE;

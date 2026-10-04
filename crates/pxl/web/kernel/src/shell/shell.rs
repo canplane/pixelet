@@ -15,12 +15,12 @@ pub use crate::abi::cmd::Tracking;
 use crate::abi::cmd::{CompanionState, HoldingState, LocationState, LonLat, MapState, OrientationState, PlaceName, PlacePart, Snapshot};
 use crate::control::camera::controller::Motion;
 use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
+use crate::control::interaction::holding;
 use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::device_orientation::{orientation_close, request_orientation};
 use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
 use crate::control::sensor::store::{device_location_store, device_orientation_store};
-use crate::control::interaction::holding;
 use crate::layer::character::preview::{preview_rows, CASES_MAX};
 use crate::layer::character::store::companion_load_store;
 use crate::layer::geocode::fetcher::center_group;
@@ -67,8 +67,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     let at = crate::control::camera::controller::map_center();
     let page = at.map(|c| L3_IDX(c.i));
     let center = at.map(|c| {
-        let mut g = [0.0; 3];
-        epsg4326::unproject(&mut g, c.i, c.f);
+        let g = epsg4326::unproject(c.i, c.f);
         LonLat { lon: g[0], lat: g[1] }
     });
     let values = SettingKey::ALL.map(|key| settings.get(key));
@@ -110,13 +109,10 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         is_follow_mode: camera.is_follow_mode,
         camera_busy: camera.camera_status != CameraStatus::Idle,
         zooming: crate::control::camera::controller::zooming(),
-        compass: compass_state(),
         settings: &values,
-        scale_bar: ScaleBar {
-            total_meters: bar.total_meters,
-            bar_width_px: bar.bar_width_px,
-        },
-        place: &|each| place_parts(page, zoom, each),
+        m_per_px: m_per_px(),
+        place: &|each| place_parts(page, each),
+        previews: &previews[..preview_cnt],
     };
     let mut w = PacketWriter::new(out, Snapshot::FIELDS);
     snapshot.write(&mut w);

@@ -74,7 +74,7 @@ export const SETTINGS = {
     key: 2 as number,
     kind: "toggle",
     default: false,
-    section: "display",
+    section: "map",
     cost: "low",
   },
   /** Rotate-drag and pinch stop writing polar; azimuth is unaffected.
@@ -95,7 +95,7 @@ export const SETTINGS = {
     kind: "choice",
     default: "orbit",
     options: ["orbit", "free"],
-    section: "camera",
+    section: "map",
   },
   /** The map center stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck. */
   center_support: {
@@ -241,7 +241,7 @@ export const SETTINGS_SHIPPED = {
     key: 2 as number,
     kind: "toggle",
     default: false,
-    section: "display",
+    section: "map",
     cost: "low",
   },
   /** Rotate-drag and pinch stop writing polar; azimuth is unaffected.
@@ -262,7 +262,7 @@ export const SETTINGS_SHIPPED = {
     kind: "choice",
     default: "orbit",
     options: ["orbit", "free"],
-    section: "camera",
+    section: "map",
   },
   /** What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. */
   orbit_obstacle: {

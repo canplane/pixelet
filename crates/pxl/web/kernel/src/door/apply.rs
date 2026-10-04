@@ -139,7 +139,10 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             applied(s)
         }
         Command::INPUT_COMPASS_RESET => {
-            crate::shell::ui::compass::compass_reset();
+            // Following the heading would turn it straight back.
+            if !crate::control::camera::store::camera_store().is_follow_mode {
+                crate::control::camera::controller::reset_azimuth();
+            }
             applied(s)
         }
         Command::INPUT_GO_TO => {
@@ -288,8 +291,6 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
     }
 }
 
-/// Every program's commands (xpute-runtime abi/cmd): the rings' own test, and
-/// an open the host answered.
 fn apply_xpute(cmd: xpute_cmd::Command, pkt: &Option<&[u8]>) -> Result<Option<i32>, MarshalError> {
     match cmd {
         xpute_cmd::Command::NOP => {

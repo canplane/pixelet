@@ -21,6 +21,10 @@
         "label": "데코",
         "description": "지형에 자동으로 배치된 나무와 차량 등의 데코를 표시합니다. 직접 놓은 오브젝트는 이 설정과 관계없이 표시됩니다."
       },
+      "structures": {
+        "label": "건물",
+        "description": "지형 위의 건물을 표시하거나 숨깁니다."
+      },
       "textures": {
         "label": "텍스처",
         "description": "블록 표면에 단색 대신 디테일한 텍스처를 적용합니다."
@@ -29,32 +33,9 @@
     "camera": {
       "section_title": "카메라",
       "section_caption": "카메라가 움직이는 방식을 설정합니다",
-      "camera_mode": {
-        "label": "카메라",
-        "orbit": {
-          "label": "3인칭",
-          "description": "카메라가 바라보는 곳을 중심으로 돌고, 드래그하면 그곳이 움직입니다."
-        },
-        "free": {
-          "label": "1인칭",
-          "description": "제자리에서 둘러봅니다. 드래그하면 땅 위를 걷고, 눈높이는 서 있는 땅을 따라갑니다."
-        }
-      },
-      "orbit_obstacle": {
-        "label": "장애물 대응",
-        "through": {
-          "label": "통과",
-          "description": "지형과 물체를 그대로 통과합니다."
-        },
-        "stop": {
-          "label": "멈춤",
-          "description": "충돌 직전에서 카메라 조작을 멈춥니다."
-        },
-        "climb": {
-          "label": "타고 넘기",
-          "description": "충돌하면 위쪽으로 넘어갑니다. 위쪽도 막혀 있으면 멈춥니다."
-        },
-        "description": "3인칭에서 카메라가 지형이나 물체에 막힐 때의 동작입니다. 1인칭에는 적용되지 않습니다."
+      "tilt_lock": {
+        "label": "카메라 기울기 고정",
+        "description": "카메라의 수직 회전을 고정하고 수평 회전만 허용합니다."
       }
     },
     "lighting": {
@@ -146,10 +127,6 @@
         "label": "장소",
         "description": "주변 장소(카페, 상점, 랜드마크 등) 뱃지를 표시합니다."
       }
-    },
-    "navigation": {
-      "section_title": "내비게이션",
-      "section_caption": "지도 중심이 세계와 맞닿는 방식을 설정합니다"
     }
   },
   "cubes": {
@@ -293,16 +270,12 @@
   },
   "toast": {
     "location_checking": "현재 위치를 확인하고 있습니다.",
-    "map_load_error": "공간을 불러올 수 없습니다.",
     "world_ready": "공간을 불러왔습니다.",
     "map_loading": "공간을 불러오고 있습니다.",
     "companion_loading": "동행을 준비하고 있습니다."
   },
   "map": {
-    "scale_bar": {
-      "reset_zoom": "줌 초기화"
-    },
-    "mode_bar": {
+    "dock": {
       "palette_tooltip": "팔레트",
       "pointer": "포인터",
       "eraser": "지우개",
@@ -316,7 +289,11 @@
       "reset_orientation": "북쪽으로 정렬",
       "move_to_location": "내 위치로 이동",
       "start_compass_mode": "나침반 모드 시작",
-      "exit_compass_mode": "나침반 모드 종료"
+      "exit_compass_mode": "나침반 모드 종료",
+      "first_person": "1인칭으로 보기",
+      "third_person": "3인칭으로 보기",
+      "show_places": "장소 보기",
+      "hide_places": "장소 숨기기"
     },
     "sensors": {
       "label": "내 위치 사용",
