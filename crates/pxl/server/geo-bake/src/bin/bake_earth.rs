@@ -252,8 +252,18 @@ fn run() -> Result<(), String> {
     let out = root.join(PUBLISHED_VERSION.earth);
     let day = decode(&source(DAY, &sources)?)?.to_rgb8();
     let (night, night_width, night_height) = night_mosaic(&sources)?;
-    let day_plate = Plate::<3> { width: day.width() as usize, height: day.height() as usize, bytes: day.as_raw(), decode: reflectance() };
-    let night_plate = Plate::<1> { width: night_width, height: night_height, bytes: &night, decode: shown() };
+    let day_plate = Plate::<3> {
+        width: day.width() as usize,
+        height: day.height() as usize,
+        bytes: day.as_raw(),
+        decode: reflectance(),
+    };
+    let night_plate = Plate::<1> {
+        width: night_width,
+        height: night_height,
+        bytes: &night,
+        decode: shown(),
+    };
     global(&day_plate, &night_plate, Path::new("asset/sky/earth/07.webp"))?;
     std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
     // Every page of the level: the Mercator square, one world across and as high.
