@@ -14,7 +14,9 @@ const CXX = Deno.env.get("CXX") ?? "c++";
 const WASI_CXX = join(Deno.env.get("WASI_SDK_PATH") ?? "/opt/wasi-sdk", "bin/clang++");
 // `-ffp-contract=off`: a fused multiply-add rounds once where Rust and JS
 // round twice; `lerp` fails golden/math/scalar.tsv with contraction on.
-const FLAGS = ["-std=c++20", "-fno-exceptions", "-fno-rtti", "-ffp-contract=off", "-Wall", "-Wextra", "-Werror", "-g"];
+// `-Wno-missing-field-initializers`: a designated initializer leaves the rest
+// at their defaults, which GCC's -Wextra calls missing and clang's does not.
+const FLAGS = ["-std=c++20", "-fno-exceptions", "-fno-rtti", "-ffp-contract=off", "-Wall", "-Wextra", "-Wno-missing-field-initializers", "-Werror", "-g"];
 // 1 MiB, the Rust build's number.
 const STACK_BYTES = 1 << 20;
 const WASM_LINK = [

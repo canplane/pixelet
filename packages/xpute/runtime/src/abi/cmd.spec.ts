@@ -13,7 +13,6 @@
  * raises on the completion ring.
  */
 
-import type { BranchCursor, NodeCursor } from "@xpute/core/wire/xtp/mod.ts";
 import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { i32, u32 } from "@xpute/core/abi/word.ts";
 import { packet } from "@xpute/runtime/ipc/doorbell.ts";
@@ -36,17 +35,6 @@ export const enum Command {
   /** An OPENAT answered: the file's size, or -errno — ENOENT where there is no such file.
    * Never sent for a descriptor already closed. */
   SYS_OPENED = 0x0101,
-}
-
-/** A branch of records, each read by `read`. */
-function list<T>(b: BranchCursor, read: (b: BranchCursor) => T): T[] {
-  return Array.from({ length: b.len }, (_, k) => read(b.at_branch(k)));
-}
-
-/** A record that may be absent. */
-function optional<T>(c: NodeCursor, read: (b: BranchCursor) => T): T | null {
-  const present = c.opt();
-  return present === undefined ? null : read(present.as_branch());
 }
 
 /** Command.NOP's packet. */

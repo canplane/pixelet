@@ -289,8 +289,34 @@ fn ts(spec: &Spec, t: &Target) -> Result<String, String> {
     }
     uses.arrays.sort();
     uses.words.sort();
+    // A helper, and a cursor type, only where a reader reads through it: an unread one fails lint.
+    let reads = |tail: &[String], call: &str| tail.iter().any(|l| l.contains(call));
+    let mut helpers: Vec<&str> = Vec::new();
+    if reads(&tail, "list(") {
+        helpers.extend([
+            "",
+            "/** A branch of records, each read by `read`. */",
+            "function list<T>(b: BranchCursor, read: (b: BranchCursor) => T): T[] {",
+            "  return Array.from({ length: b.len }, (_, k) => read(b.at_branch(k)));",
+            "}",
+        ]);
+    }
+    if reads(&tail, "optional(") {
+        helpers.extend([
+            "",
+            "/** A record that may be absent. */",
+            "function optional<T>(c: NodeCursor, read: (b: BranchCursor) => T): T | null {",
+            "  const present = c.opt();",
+            "  return present === undefined ? null : read(present.as_branch());",
+            "}",
+        ]);
+    }
+    tail.splice(0..0, helpers.iter().map(|l| l.to_string()));
+    let cursors: Vec<&str> = ["BranchCursor", "NodeCursor"].into_iter().filter(|c| reads(&tail, c)).collect();
     out.push(String::new());
-    out.push("import type { BranchCursor, NodeCursor } from \"@xpute/core/wire/xtp/mod.ts\";".into());
+    if !cursors.is_empty() {
+        out.push(format!("import type {{ {} }} from \"@xpute/core/wire/xtp/mod.ts\";", cursors.join(", ")));
+    }
     out.push(format!("import type {{ {} }} from \"@xpute/core/abi/array.ts\";", uses.arrays.join(", ")));
     out.push(format!("import type {{ {} }} from \"@xpute/core/abi/word.ts\";", uses.words.join(", ")));
     out.push("import { packet } from \"@xpute/runtime/ipc/doorbell.ts\";".into());
@@ -299,20 +325,6 @@ fn ts(spec: &Spec, t: &Target) -> Result<String, String> {
             out.push(format!("import type {{ {} }} from \"{ts}\";", x.name));
         }
     }
-    let helpers = [
-        "",
-        "/** A branch of records, each read by `read`. */",
-        "function list<T>(b: BranchCursor, read: (b: BranchCursor) => T): T[] {",
-        "  return Array.from({ length: b.len }, (_, k) => read(b.at_branch(k)));",
-        "}",
-        "",
-        "/** A record that may be absent. */",
-        "function optional<T>(c: NodeCursor, read: (b: BranchCursor) => T): T | null {",
-        "  const present = c.opt();",
-        "  return present === undefined ? null : read(present.as_branch());",
-        "}",
-    ];
-    tail.splice(0..0, helpers.iter().map(|l| l.to_string()));
     for e in &spec.enums {
         out.push(String::new());
         if let Some(doc) = &e.doc {
