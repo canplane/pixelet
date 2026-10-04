@@ -11,7 +11,7 @@ use crate::gpu::api::{bytes, object, release, Gpu};
 use crate::gpu::api_spec::{address, compare, filter, format};
 use crate::gpu::pass::model::{draw_models, DrawUniforms, ModelDraw, Stage};
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::{release_skin, skin_group, Blocks};
+use crate::gpu::renderer::{skin_group, Blocks};
 
 /// Translation, turn about Z, opacity, scale, padding.
 const DRAW_UNIFORM_BYTES: u32 = 32;
@@ -21,7 +21,7 @@ const SKINS: usize = 16;
 struct Skin {
     model: u32,
     image: u32,
-    ids: [u32; 3],
+    group: u32,
     seq: u32,
 }
 
@@ -55,8 +55,8 @@ impl SkinnedPass {
         let at = self
             .skins
             .iter()
-            .position(|s| s.model == model && s.ids[2] != 0)
-            .or_else(|| self.skins.iter().position(|s| s.ids[2] == 0))
+            .position(|s| s.model == model && s.group != 0)
+            .or_else(|| self.skins.iter().position(|s| s.group == 0))
             // Nothing says a model is gone, so a full table would leave new models
             // untextured for good (the character preview walks more variants than slots).
             // The least recently asked slot is taken.
@@ -64,17 +64,17 @@ impl SkinnedPass {
         self.seq += 1;
         let seq = self.seq;
         let s = &mut self.skins[at];
-        if s.model == model && s.image == image && s.ids[2] != 0 {
+        if s.model == model && s.image == image && s.group != 0 {
             s.seq = seq;
             return;
         }
-        release_skin(s.ids);
-        let ids = skin_group(g, self.lit.layouts[2], self.sampler, image);
-        *s = Skin { model, image, ids, seq };
+        release(s.group);
+        let group = skin_group(g, self.lit.layouts[2], self.sampler, image);
+        *s = Skin { model, image, group, seq };
     }
 
     fn skin_of(&self, model: u32) -> Option<u32> {
-        self.skins.iter().find(|s| s.model == model && s.ids[2] != 0).map(|s| s.ids[2])
+        self.skins.iter().find(|s| s.model == model && s.group != 0).map(|s| s.group)
     }
 
     /// Every palette group the draws will bind is made here, so drawing makes
@@ -111,7 +111,7 @@ impl SkinnedPass {
 
     pub fn release(mut self) {
         for s in self.skins {
-            release_skin(s.ids);
+            release(s.group);
         }
         self.uniforms.release();
         release(self.sampler);

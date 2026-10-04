@@ -252,6 +252,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::GPU_LOST => {
             pxl_render::gpu::renderer::gpu_lost();
+            crate::io::load::images_lost();
             Ok(Some(0))
         }
         Command::SURFACE_OPEN => {

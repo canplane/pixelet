@@ -5,7 +5,7 @@
 //! an object the device does not hold does nothing, as a WebGPU error does on the page.
 
 use std::num::NonZeroU64;
-use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use xpute_runtime::abi::handle::handle_slot;
@@ -390,11 +390,7 @@ fn texture_format(code: u32) -> wgpu::TextureFormat {
 }
 
 fn filter_mode(code: u32) -> wgpu::FilterMode {
-    if code == filter::LINEAR {
-        wgpu::FilterMode::Linear
-    } else {
-        wgpu::FilterMode::Nearest
-    }
+    if code == filter::LINEAR { wgpu::FilterMode::Linear } else { wgpu::FilterMode::Nearest }
 }
 
 fn mipmap_mode(code: u32) -> wgpu::MipmapFilterMode {
@@ -580,11 +576,13 @@ impl Gpu {
         d.put(id, Object::Texture(t));
     }
 
-    /// The image was held before the kernel heard of it, so one the kernel names is there.
+    /// The image was held before the kernel heard of it, so one the kernel names
+    /// is there; the texture takes it, and the decoded copy goes.
     pub fn image_texture(&self, id: u32, image: u32) {
         let Some(d) = device() else { return };
-        let images = IMAGES.lock().unwrap_or_else(|e| e.into_inner());
-        let Some(image) = images.as_ref().and_then(|m| m.get(&image)) else { return };
+        let Some(image) = IMAGES.lock().unwrap_or_else(|e| e.into_inner()).as_mut().and_then(|m| m.remove(&image)) else {
+            return;
+        };
         let size = wgpu::Extent3d {
             width: image.width,
             height: image.height,
@@ -610,7 +608,6 @@ impl Gpu {
             },
             size,
         );
-        drop(images);
         d.put(id, Object::Texture(t));
     }
 
