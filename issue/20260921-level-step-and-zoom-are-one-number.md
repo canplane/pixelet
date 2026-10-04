@@ -1,5 +1,7 @@
 # Level, step and zoom are one number
 
+> **Superseded in its words (2026-10-04).** A zoom names only a cell's scale; a page's key depth (15 for a 512-cell page) is no zoom, and the 512-pixel "zoom 15 − k" convention below is retired. "Level 0" is z16. Current terms: AGENTS.md "One spatial model", `pxl-spec space/README.md`.
+
 **2026-09-21** — a design conversation, built since; what the building
 changed is at the end, under "Where this stands". It starts from
 [the page pyramid](./20260921-the-page-pyramid.md), written the same morning,

@@ -8,8 +8,8 @@ use pxl_spec::bake::format::ELE_LANE;
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
 
-use crate::deck::Drawn;
-use crate::terrain::bake::Surface;
+use crate::deck::Carried;
+use crate::terrain::artifact::Surface;
 use crate::terrain::bake::bake_surface;
 use crate::terrain::repository::TerrainRepository;
 
@@ -22,114 +22,13 @@ pub fn fetch_surface(repo: &TerrainRepository, client: &mut Client, page_idx: IV
     Ok((bake_surface(page_idx, ele, &source, drawn), flat))
 }
 
-fn rows_branch<'a, F: FnMut(&mut BranchViewImpl<'a>)>(mut each: F) -> TreeView<'a> {
-    let mut view = TreeView::new();
-    view.branch(Some(&mut each));
-    view
-}
-
-fn building_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a BuildingRow) {
-    b.branch(Some(&mut |t| {
-        t.str(Some(&row.gers_id))
-            .str(row.subtype.as_deref())
-            .str(row.class.as_deref())
-            .f64(row.height)
-            .f64(row.num_floors)
-            .u8_array(Some(&row.geom_wkb));
-    }));
-}
-
-fn segment_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a SegmentRow) {
-    b.branch(Some(&mut |t| {
-        t.str(Some(&row.gers_id))
-            .str(Some(&row.subtype))
-            .str(row.class.as_deref())
-            .str(row.flags.as_deref())
-            .str(row.widths.as_deref())
-            .str(row.access.as_deref())
-            .str(row.subclass.as_deref())
-            .str(row.subclasses.as_deref())
-            .u8_array(Some(&row.geom_wkb));
-    }));
-}
-
-fn base_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a BaseRow) {
-    b.branch(Some(&mut |t| {
-        t.str(Some(&row.gers_id))
-            .str(Some(&row.source))
-            .str(row.subtype.as_deref())
-            .str(row.class.as_deref())
-            .u8_array(Some(&row.geom_wkb));
-    }));
-}
-
-fn deck_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a DeckRow) {
-    b.branch(Some(&mut |t| {
-        t.str(Some(&row.gers_id))
-            .str(Some(&row.subtype))
-            .str(row.class.as_deref())
-            .f64(Some(row.width_m))
-            .u8_array(Some(&row.piers))
-            .u8_array(Some(&row.geom_wkb));
-    }));
-}
-
-fn coast_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a CoastRow) {
-    b.branch(Some(&mut |t| {
-        t.str(Some(&row.id)).u8_array(Some(&row.geom_wkb)).bool(Some(row.covers_page));
-    }));
-}
-
-/// Packs what the database gave into `[ele, buildings, segments, base, coasts, decks]`,
-/// each row a tuple in the order of its row type's fields (pxl-spec
-/// bake/format.rs).
-pub fn pack_source(source: &PageSource, stats: &mut SourceStats) -> Result<Vec<u8>, MarshalError> {
-    let ele = match &source.ele {
-        Some(v) if v.len() == ELE_PADDED_SPAN2 => v.clone(),
-        _ => {
-            stats.invalid_ele_shape += 1;
-            vec![0i16; ELE_PADDED_SPAN2]
-        }
-    };
-
-    let buildings = rows_branch(|b| {
-        for row in &source.building_rows {
-            building_tuple(b, row);
-        }
+pub fn fetch_surface(repo: &TerrainRepository, client: &mut Client, page_idx: IVec, carried: &[Carried], stats: &mut SourceStats) -> Result<Surface, BakeError> {
+    let source = repo.fetch_page_source(client, epsg3857::get_page_bbox(page_idx))?;
+    let ele = source.ele.clone().unwrap_or_else(|| {
+        stats.flat_ele += 1;
+        vec![0i16; ELE_PADDED_SPAN2]
     });
-    let segments = rows_branch(|b| {
-        for row in &source.segment_rows {
-            segment_tuple(b, row);
-        }
-    });
-    let base = rows_branch(|b| {
-        for row in &source.base_rows {
-            base_tuple(b, row);
-        }
-    });
-    let coasts = rows_branch(|b| {
-        for row in &source.coast_rows {
-            coast_tuple(b, row);
-        }
-    });
-
-    let decks = rows_branch(|b| {
-        for row in &source.deck_rows {
-            deck_tuple(b, row);
-        }
-    });
-
-    let mut root = TreeView::new();
-    root.branch(Some(&mut |r| {
-        r.i16_array(Some(&ele));
-        r.subtree(&buildings);
-        r.subtree(&segments);
-        r.subtree(&base);
-        r.subtree(&coasts);
-        r.subtree(&decks);
-    }));
-
-    encoder().encode(&root, TreeEncoderOptions::default())
+    Ok(bake_surface(page_idx, ele, &source, carried))
 }
 
 /// The page's source, assembled straight out of the database.

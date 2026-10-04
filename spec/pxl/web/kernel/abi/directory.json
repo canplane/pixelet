@@ -11,28 +11,6 @@
     "GPU_STREAM": {
       "$value": 2147483650,
       "$doc": ["Where the renderer's stream is, run after every turn; 0 where the kernel draws itself."]
-    },
-    "HEAP_ROW": {
-      "$value": 2147483651,
-      "$doc": [
-        "Where the heap's row is: the bracket's reading (HeapStat) as words, written at",
-        "every turn's fall."
-      ]
     }
-  },
-
-  "heap_row": {
-    "$type": "u32",
-    "$doc": ["The heap row's words (pxl-kernel door.rs), each a HeapStat field, then its length."],
-    "RANGE": 0,
-    "USED": 1,
-    "LIVE": 2,
-    "RUN": 3,
-    "SLOT": 4,
-    "LARGEST_FREE": 5,
-    "RELEASES": 6,
-    "REFUSALS": 7,
-    "REQUESTS": 8,
-    "WORDS": 9
   }
 }

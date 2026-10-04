@@ -1,32 +1,13 @@
 // pxl-geo-bake/deck.rs
 
-//! The decks' heights, solved offline over the whole network and written to
-//! `overture_deck`, which the terrain bake reads a page at a time
-//! (terrain/pipeline/deck.rs).
-//!
-//! A deck's height depends on where its structure comes down to the ground,
-//! which may be kilometres and many pages away, and on what passes under
-//! it, which only the vectors say — so it is solved here, once, and never by
-//! a page or by the client (issue/20261001-ways-off-the-ground.md). The
-//! solve is Arnis's, reinterpreted: structure by structure, not the whole
-//! network as one system, which is the approach OSM2World found too fragile
-//! to turn on.
-//!
-//! - `piece`: a segment's bridge ranges, less what is not seen.
-//! - `structure`: the pieces that meet end to end or run side by side, and
-//!   the graph of points along them.
-//! - `clearance`: what a deck has to clear, and how steeply it may climb.
-//! - `profile`: a structure's tops, from its ends and its clearances.
-//! - `elevation`: the ground's height at the points, a raster tile at a time.
-//! - `source`: the geo DB, read and written.
-//!
-//! It runs in two passes. A deck that crosses a lower one clears that
-//! deck's top, which the first pass solves with nothing stacked; the second
-//! solves every structure again with those tops, lower decks included, so a
-//! ramp over its own interchange's mainline clears it too.
+//! Decks and bores. A structure is every piece of one form its ends join,
+//! wherever it runs, solved whole once; a page's lines are what of those
+//! profiles reaches it, and the ways their ends go on along at the ground.
 
-pub mod clearance;
+pub mod approach;
 pub mod elevation;
+pub mod memo;
+pub mod param;
 pub mod piece;
 pub mod profile;
 pub mod relate;
@@ -36,11 +17,12 @@ pub mod structure;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::Path;
 
-use clearance::{Under, PIER_MIN_RISE, PIER_OFF_WAY, PIER_STEP, STACKED};
-use piece::{pieces_of, Piece};
-use profile::{solve as solve_profile, Problem};
-use source::DeckOut;
-use structure::{group, side_by_side, Graph};
+use postgres::Client;
+use pxl_spec::bake::constant::U_PER_CELL;
+use pxl_spec::bake::deck::{clear_cells, clearance_m, headroom_m, Form, BORE_COVER_M, DECK_THICKNESS_M};
+use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m, G3857};
+use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::pyramid::PAGE_CELLS;
 
 use crate::terrain::pipeline::overture::between::flag_ranges;
 use crate::terrain::pipeline::overture::policy::{segment_type, DECK_FLAGS, UNSEEN_FLAGS};
@@ -84,7 +66,6 @@ impl Under {
     }
 }
 
-/// What passes under a piece, from and to metres along it.
 #[derive(Clone, Copy)]
 struct Need {
     from: f64,
@@ -92,103 +73,13 @@ struct Need {
     under: Under,
 }
 
-/// Solves every deck and writes `overture_deck`, whole.
-pub fn solve(client: &mut Client, log: impl Fn(&str)) -> Result<Solved, postgres::Error> {
-    let rows = source::bridge_rows(client)?;
-    let pieces: Vec<Piece> = rows.iter().flat_map(pieces_of).collect();
-    log(&format!("{} bridge segments, {} deck pieces", rows.len(), pieces.len()));
-    drop(rows);
-
-    source::stage(client, &pieces)?;
-    let needs = needs_of(client, &pieces)?;
-    let crossings = source::decks_crossing(client)?;
-    log(&format!("{} ways and waters under decks, {} decks over decks", needs.iter().map(Vec::len).sum::<usize>(), crossings.len()));
-
-    let beside = side_by_side(&pieces);
-    let structures = group(&pieces, &beside);
-    let graphs: Vec<Graph> = structures.iter().map(|m| Graph::build(&pieces, m, &beside)).collect();
-    // Which structure each piece is in, and its place among the members.
-    let mut place = vec![(0usize, 0usize); pieces.len()];
-    for (s, members) in structures.iter().enumerate() {
-        for (k, &m) in members.iter().enumerate() {
-            place[m] = (s, k);
-        }
-    }
-    let all: Vec<[f64; 2]> = graphs.iter().flat_map(|g| g.at.iter().copied()).collect();
-    let flat = elevation::ground(client, &all)?;
-    let mut grounds: Vec<Vec<f64>> = Vec::with_capacity(graphs.len());
-    let mut at = 0;
-    for g in &graphs {
-        grounds.push(flat[at..at + g.at.len()].to_vec());
-        at += g.at.len();
-    }
-    log(&format!("{} structures, {} pairs of decks side by side, {} points", structures.len(), beside.len(), all.len()));
-
-    let mut tops: Vec<Vec<f64>> = grounds.clone();
-    for pass in 0..2 {
-        let mut next = Vec::with_capacity(structures.len());
-        for (s, members) in structures.iter().enumerate() {
-            let (g, ground) = (&graphs[s], &grounds[s]);
-            let mut need = ground.clone();
-            for (k, &m) in members.iter().enumerate() {
-                for n in &needs[m] {
-                    for node in nodes_within(g, k, n.from, n.to) {
-                        need[node] = need[node].max(ground[node] + n.under.headroom(n.to - n.from));
-                    }
-                }
-            }
-            if pass == 1 {
-                for c in crossings.iter().filter(|c| place[c.upper].0 == s) {
-                    let (ls, lk) = place[c.lower];
-                    let lower_top = top_along(&graphs[ls], &tops[ls], lk, c.lower_at);
-                    if let Some(node) = g.nearest(place[c.upper].1, c.upper_at) {
-                        need[node as usize] = need[node as usize].max(lower_top + STACKED);
-                    }
-                }
-            }
-            let ends: Vec<(u32, f64)> = g.free_ends.iter().map(|&e| (e, ground[e as usize])).collect();
-            next.push(solve_profile(&Problem { adj: &g.adj, need: &need, ends: &ends }));
-        }
-        tops = next;
-    }
-
-    let mut out = Vec::with_capacity(pieces.len());
-    let mut piers = 0;
-    for (m, piece) in pieces.iter().enumerate() {
-        let (s, k) = place[m];
-        let (g, ground, top) = (&graphs[s], &grounds[s], &tops[s]);
-        let keep_off: Vec<&Need> = needs[m].iter().filter(|n| n.under.keeps_piers_off()).collect();
-        let mut since = 0.0;
-        let mut last_d = 0.0;
-        let mut deck = DeckOut {
-            piece,
-            points: Vec::with_capacity(g.along[k].len()),
-            piers: Vec::with_capacity(g.along[k].len()),
-        };
-        for &(node, d) in &g.along[k] {
-            let n = node as usize;
-            since += d - last_d;
-            last_d = d;
-            let clear = keep_off.iter().all(|w| d < w.from - PIER_OFF_WAY || d > w.to + PIER_OFF_WAY);
-            let pier = since >= PIER_STEP && top[n] - ground[n] >= PIER_MIN_RISE && clear;
-            if pier {
-                since = 0.0;
-                piers += 1;
-            }
-            deck.points.push([g.at[n][0], g.at[n][1], top[n]]);
-            deck.piers.push(u8::from(pier));
-        }
-        if deck.points.len() >= 2 {
-            out.push(deck);
-        }
-    }
-    source::write(client, &out)?;
-    Ok(Solved {
-        pieces: pieces.len(),
-        structures: structures.len(),
-        points: all.len(),
-        piers,
-    })
+/// What the solve leaves a page: its lines, and the ranges of ways they draw,
+/// which the ground leaves unpainted. One solve makes both, so the road
+/// leaves the ground's paint exactly where its line begins.
+#[derive(Default)]
+pub struct Solved {
+    pub lines: Vec<Line>,
+    pub drawn: Vec<Drawn>,
 }
 
 /// A line as the solve left it, its Z the road surface in metres.
@@ -238,7 +129,10 @@ pub fn solve_page(r: &mut Reader<impl Store>, page: IVec) -> Result<Solved, Stri
             for (p, run) in members.iter().zip(&profile.runs) {
                 let (first, last) = (run.points[0], run.points[run.points.len() - 1]);
                 let (a, b) = (p.on_way(first[0]), p.on_way(last[0]));
-                out.drawn.push(Drawn { gers_id: p.gers_id.clone(), range: [a.min(b), a.max(b)] });
+                out.drawn.push(Drawn {
+                    gers_id: p.gers_id.clone(),
+                    range: [a.min(b), a.max(b)],
+                });
                 out.lines.push(Line {
                     subtype: p.subtype.clone(),
                     class: p.class.clone(),
@@ -250,7 +144,12 @@ pub fn solve_page(r: &mut Reader<impl Store>, page: IVec) -> Result<Solved, Stri
             for (i, last) in free_ends(&members) {
                 let run = &profile.runs[i];
                 let top = run.points[if last { run.points.len() - 1 } else { 0 }][3];
-                free.push(Free { piece: members[i].clone(), last, top, sep: top - run.ground[usize::from(last)] });
+                free.push(Free {
+                    piece: members[i].clone(),
+                    last,
+                    top,
+                    sep: top - run.ground[usize::from(last)],
+                });
             }
         }
     }
@@ -282,7 +181,10 @@ pub fn solve_page(r: &mut Reader<impl Store>, page: IVec) -> Result<Solved, Stri
             continue;
         }
         let row = &way.row;
-        out.drawn.push(Drawn { gers_id: row.gers_id.clone(), range: [b.from.min(to), b.from.max(to)] });
+        out.drawn.push(Drawn {
+            gers_id: row.gers_id.clone(),
+            range: [b.from.min(to), b.from.max(to)],
+        });
         out.lines.push(Line {
             subtype: row.subtype.clone(),
             class: row.class.clone(),
@@ -301,7 +203,12 @@ fn approach_of(p: &Piece, last: bool) -> approach::Free<'_> {
         End::Vertex(..) => f64::from(u8::from(last)),
         End::Cut(_, bits) => f64::from_bits(*bits),
     };
-    approach::Free { end, gers_id: &p.gers_id, at, onward: last }
+    approach::Free {
+        end,
+        gers_id: &p.gers_id,
+        at,
+        onward: last,
+    }
 }
 
 /// The whole structures `seeds` are in: each free end at a segment's end asked
@@ -312,7 +219,11 @@ fn whole(client: &mut Client, mut pieces: Vec<Piece>, form: Form) -> Result<Vec<
     let mut have: HashSet<(String, u64)> = pieces.iter().map(id).collect();
     let mut asked: HashSet<End> = HashSet::new();
     loop {
-        let open: Vec<End> = free_ends(&pieces).into_iter().map(|(i, last)| pieces[i].end(last).clone()).filter(|e| matches!(e, End::Vertex(..)) && !asked.contains(e)).collect();
+        let open: Vec<End> = free_ends(&pieces)
+            .into_iter()
+            .map(|(i, last)| pieces[i].end(last).clone())
+            .filter(|e| matches!(e, End::Vertex(..)) && !asked.contains(e))
+            .collect();
         if open.is_empty() {
             break;
         }
@@ -434,7 +345,11 @@ fn crossings(r: &mut Reader<impl Store>, members: &[Piece], lines: &[Polyline], 
     let own: HashSet<(&str, u64)> = members.iter().map(Piece::id).collect();
     let others: Vec<Piece> = rows.iter().flat_map(|row| pieces_of(row, form)).filter(|p| !own.contains(&p.id())).collect();
     let pieces: Vec<&Piece> = members.iter().chain(&others).collect();
-    let all_lines: Vec<Polyline> = lines.iter().map(|l| Polyline::of(l.points.iter().copied())).chain(others.iter().map(|p| Polyline::of(p.points.iter().map(|q| [q[0], q[1]])))).collect();
+    let all_lines: Vec<Polyline> = lines
+        .iter()
+        .map(|l| Polyline::of(l.points.iter().copied()))
+        .chain(others.iter().map(|p| Polyline::of(p.points.iter().map(|q| [q[0], q[1]]))))
+        .collect();
     let mut out = Vec::new();
     // each structure crossed, as solved free of crossings
     let mut solved: Vec<(Vec<Piece>, Profile)> = Vec::new();
@@ -516,21 +431,13 @@ fn needs_of(ways: &[Way], water_rows: &[Water], pieces: &[Piece], lines: &[Polyl
         needs[c.piece].push(Need { from: c.at, to: c.at, under });
     }
     let mut water: Vec<Vec<Need>> = vec![Vec::new(); pieces.len()];
-    for w in source::water_under(client)? {
+    for w in relate::water_under(lines, water_rows) {
         if let Some(under) = Under::of_water(&w.subtype, w.class.as_deref()) {
-            water[w.piece].push(Need { from: w.from, to: w.to, under });
-        }
-    }
-    // One stretch of water is many pieces once its polygon is subdivided, and
-    // how much of it a deck spans is the stretch's: the pieces of one kind
-    // that touch are joined first.
-    for (m, mut spans) in water.into_iter().enumerate() {
-        spans.sort_by(|a, b| a.from.total_cmp(&b.from));
-        for n in spans {
-            match needs[m].last_mut() {
-                Some(last) if last.under == n.under && n.from <= last.to + AT_END => last.to = last.to.max(n.to),
-                _ => needs[m].push(n),
-            }
+            water[w.piece].push(Need {
+                from: pieces[w.piece].to_m(w.from),
+                to: pieces[w.piece].to_m(w.to),
+                under,
+            });
         }
     }
     // touching spans of one kind are one
@@ -546,8 +453,6 @@ fn needs_of(ways: &[Way], water_rows: &[Water], pieces: &[Piece], lines: &[Polyl
     needs
 }
 
-/// The points of member `k` from `from` to `to` metres along it, or the
-/// nearest one where the two are one point.
 fn nodes_within(g: &Graph, k: usize, from: f64, to: f64) -> Vec<usize> {
     let within: Vec<usize> = g.along[k].iter().filter(|&&(_, d)| d >= from && d <= to).map(|&(n, _)| n as usize).collect();
     if within.is_empty() {

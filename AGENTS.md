@@ -108,8 +108,10 @@ Which technology draws each `@platform/` piece is
 
 Everything placed on the map sits in one hierarchy, the **pyramid**: level k
 is z(16 − k), cells 2^k units wide, from z16 — terrain's atom, a 1u cell —
-to z6, a page 512 cells a side at every level and named by the Web Mercator
-tile it stands on. Say z16, not "level 0": no level is special.
+to z6, a page 512 cells a side at every level and named by its place in that
+level's page grid. A zoom names only a cell's scale (256-pixel tiles):
+terrain's cell is z16, objects' go to z19. A page's size, its key or its
+grid never defines a zoom. Say z16, not "level 0": no level is special.
 The rules below keep it one thing. They come from finding it several.
 
 - **The view keeps only what an observer can tell apart.** The world is
@@ -243,8 +245,7 @@ looks unfinished.
 
 **The bar is [.agents/reference/calab-loader/](./.agents/reference/calab-loader/).**
 Code and its comments are held to it, and a change is judged by it. A
-layout is one block derived top-down from a few roots (`common.c`'s
-`/* memory layout */`); each fact is said once, and a derived name exists
+layout is one block derived top-down from a few roots; each fact is said once, and a derived name exists
 only where more than one place reads it; a procedure is straight steps under
 short section comments; a comment is a few words at the line it explains. A
 change that leaves two names for one fact, one conversion in two places, or a
@@ -295,6 +296,10 @@ allocates does it through the guest's heap and never the system's
 index or address; `f64` for a millisecond or coordinate; `u64` for a key;
 `i32` for what can be −errno; a typed array that may sit in a
 `SharedArrayBuffer` keeps `Uint32Array`, one that cannot is `U32Array`.
+
+**A double is the same bits on every platform.** Rounding is xpute's `round`
+(half to even, as WGSL); a transcendental is the pinned `libm`'s, never the
+platform's, which `crates/pxl/clippy.toml` refuses.
 
 **`pxl` is for code, `pixelet` is for infrastructure.** Import paths and
 storage keys abbreviate (`@xpute/core`, `pxl:lang`); provisioned resources
@@ -398,6 +403,8 @@ art where one exists (Minecraft's chunk model for grid content, Cesium's
   derivation beats a synchronization. "Optimize it once it measures" is no
   reason to keep avoidable work: profiling ranks the trades, it is not a
   license for waste (2026-10-01, the audit after decor left the chunks).
+  The costs are server spend and end-user device load; implementation size,
+  turns spent and lines written are not among them.
 - **What a piece of memory being full means decides how it is sized.**
   Three kinds, and each says which it is:
   - **Must-fit state** — the resident terrain, the mesh slots' tables, the
@@ -417,12 +424,6 @@ art where one exists (Minecraft's chunk model for grid content, Cesium's
   is shown, drops what someone placed or ends the module (2026-10-01, the
   `.fixed` audit, where a run set too small drew no chunk and a decor
   workspace too small left placed decor out).
-- **Diff size is not a goal.** A five-hundred-line rewrite that leaves a
-  smaller state space beats a twenty-line patch that does not. Do not keep
-  an API, a type, a test or a module to hold churn down, and when a change
-  makes old machinery unnecessary, delete the machinery and its shims in the
-  same breath. A correct larger rewrite beats rounds of patching a wrong
-  structure (2026-09-03, the terrain/decor pipeline desync).
 - **Split the assumptions before editing.** For any bug or slowness worth a
   change, name the symptom, the mechanism producing it, the assumptions that
   make that mechanism necessary, which of those are the product's and which
@@ -490,6 +491,8 @@ size.
   A broken intermediate state is allowed; correctness is held at the
   checkpoints where the work is integrated — optimistic execution, conflict
   detection, deterministic serialization, resume.
-- **Design in the conversation, not in a planning artifact.** Plan documents,
-  approval gates and agent fan-outs are overhead here; skip them unless asked.
+  An agent commits its own paths and only those (`git commit -- <paths>`):
+  the index is shared, and a plain commit takes whatever another left
+  staged. A build that fails on the working tree is not yet anyone's
+  commit; say whose uncommitted file it is before calling main broken.
 - Code, comments and documentation stay in English.

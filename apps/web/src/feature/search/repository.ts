@@ -2,7 +2,7 @@
 
 import type { f64 } from "@xpute/core/abi/word.ts";
 import { originGet } from "@platform/origin.ts";
-import { SEARCH_URL } from "@/config/route.ts";
+import { SEARCH_URL } from "@/config/route.spec.ts";
 import type { PlacePart } from "@/feature/map/geocode/label.ts";
 
 export interface SearchResult {

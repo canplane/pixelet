@@ -76,7 +76,9 @@ pub fn branches(ways: &[Way], free: &[Free], inside: impl Fn([f64; 2]) -> bool) 
             let way = &ways[w];
             let (len, flags) = (way.line.length(), way.row.flags.as_deref());
             let ground = without(&[[0.0, 1.0]], &flag_ranges(flags, &[DECK_FLAGS, UNSEEN_FLAGS].concat(), cell_of(len)));
-            let Some(&[lo, hi]) = ground.iter().find(|r| (r[0]..=r[1]).contains(&(from + dir * SAME_AT))) else { continue };
+            let Some(&[lo, hi]) = ground.iter().find(|r| (r[0]..=r[1]).contains(&(from + dir * SAME_AT))) else {
+                continue;
+            };
             let to = if dir > 0.0 { hi } else { lo };
             let far = match to {
                 t if t > 0.0 && t < 1.0 => End::Cut(way.row.gers_id.clone(), bits(t)),
@@ -102,7 +104,15 @@ pub fn branches(ways: &[Way], free: &[Free], inside: impl Fn([f64; 2]) -> bool) 
                 d = (d + STEP_M).min(length_m);
             }
             if at.len() >= 2 {
-                out.push(Branch { end: e, way: w, from, to, length_m, across: ends.get(&far).copied(), at });
+                out.push(Branch {
+                    end: e,
+                    way: w,
+                    from,
+                    to,
+                    length_m,
+                    across: ends.get(&far).copied(),
+                    at,
+                });
             }
         }
     }
@@ -139,7 +149,11 @@ pub fn profile(b: &Branch, top: f64, ground: &[f64], to: f64) -> Vec<[f64; 3]> {
         return Vec::new();
     }
     let slope = sep.abs() / reach;
-    b.at.iter().zip(ground).take_while(|((d, _), _)| *d < reach).map(|(&(d, p), &z)| [p[0], p[1], z + sep.signum() * (sep.abs() - slope * d)]).collect()
+    b.at.iter()
+        .zip(ground)
+        .take_while(|((d, _), _)| *d < reach)
+        .map(|(&(d, p), &z)| [p[0], p[1], z + sep.signum() * (sep.abs() - slope * d)])
+        .collect()
 }
 
 #[cfg(test)]

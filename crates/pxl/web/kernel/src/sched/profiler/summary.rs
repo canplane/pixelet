@@ -4,15 +4,14 @@
 //! place by the panel and the report so both agree. Sections go only through
 //! `put`; indexing lanes by hand let sections drift out of order (2026-09-23).
 
-use xpute_runtime::global::Global;
-use xpute_runtime::clock::now;
+use crate::control::camera::controller;
 use crate::io::sched::{counts, credits};
 use crate::kernel::{kernel, with_world};
 use crate::layer::billboard::sheet::billboard_sheet;
-use crate::sched::profiler::block::{AtlasBlock, FetchBlock, FramesBlock, HeldBlock, QualityBlock, RecBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock};
+use crate::sched::profiler::block::TASK_PHASES;
+use crate::sched::profiler::block::{AtlasBlock, FetchBlock, FramesBlock, HeapBlock, HeldBlock, QualityBlock, RecBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
 use crate::sched::profiler::log::window_counters;
 use crate::sched::profiler::record::{fixed_lane, profiler_frame_peak, profiler_frames_since, profiler_recording_state, profiler_tasks_since, put, FrameSample, Lane, Outcome, TaskRow, SPREAD_LIMIT};
-use crate::sched::profiler::block::TASK_PHASES;
 use crate::sched::profiler::spec::{LIMITS, SUMMARY};
 use crate::sched::tick::{tick_step_stats, HARD_SLACK_MS};
 use crate::world::pyramid::Layer as _;
@@ -128,8 +127,6 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
         phases: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.phases[k]))),
         // A span the frame did not run reads 0 and is left out.
         gpu_spans: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0))),
-        work_scans: scans,
-        work_bakes: bakes,
         per_s_scans: scans / seconds,
         per_s_bakes: bakes / seconds,
         backlog_s,
@@ -140,7 +137,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
         mounts_removed: sum(&|f| f.mounts.removed),
         used_delta_mb: last.heap.used_mb - first.heap.used_mb,
         census: core::array::from_fn(|k| [sum(&|f| f.gpu.census[k][0]) / n, sum(&|f| f.gpu.census[k][1]) / n]),
-        level_tris: core::array::from_fn(|k| sum(&|f| f.gpu.level_tris[k]) / n),
+        zoom_tris: core::array::from_fn(|z| sum(&|f| f.gpu.zoom_tris[z]) / n),
         last: *last,
     }
 }
@@ -211,19 +208,20 @@ fn side(out: &mut [f64]) {
             entries: atlas.entries as f64,
             shelves: atlas.shelves as f64,
             used_px: atlas.used_px as f64,
+            initial: pxl_render::asset::atlas::INITIAL_SIZE as f64,
         },
     );
 
-    let retain = with_world(|_, sched| sched.retention()).unwrap_or_default();
-    let (decor_cells, decor_instances) = crate::layer::decor::cell::counts();
+    let held = with_world(|_, sched| sched.held()).unwrap_or_default();
+    let (decor_blocks, decor_instances) = crate::layer::decor::cell::counts();
     put(
         out,
-        SUMMARY::retain::AT,
-        &RetainBlock {
-            run_sets: retain.run_sets as f64,
-            run_set_mb: retain.run_set_mb as f64,
-            tiers: retain.tiers as f64,
-            decor_cells: decor_cells as f64,
+        SUMMARY::held::AT,
+        &HeldBlock {
+            run_sets: held.run_sets as f64,
+            run_set_mb: held.run_set_mb as f64,
+            tiers: held.tiers as f64,
+            decor_blocks: decor_blocks as f64,
             decor_instances: decor_instances as f64,
             decor_bytes: crate::layer::decor::cell::bytes() as f64,
         },

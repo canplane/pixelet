@@ -89,7 +89,7 @@ pub struct Tally {
 pub fn walk<T>(
     args: &Args,
     tag: &str,
-    zoom: u32,
+    depth: u32,
     every: u64,
     targets: &[Target],
     connect: impl Fn() -> Result<T, String> + Sync,
@@ -111,7 +111,7 @@ pub fn walk<T>(
                     let i = next.fetch_add(1, Ordering::Relaxed);
                     let Some(target) = targets.get(i) else { break };
                     let page_idx = target.idx;
-                    let name = quadkey_of(zoom, page_idx).to_string();
+                    let name = quadkey_of(depth, page_idx).to_string();
                     let path = args.out.join(&name);
                     let marker = args.out.join(format!("{name}{EMPTY_SUFFIX}"));
 

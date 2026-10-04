@@ -22,15 +22,15 @@ Deno.test("frameAt - reads each lane at its word", () => {
   const words = Float64Array.from({ length: FRAME.WORDS }, (_, k) => k);
   const f = frameAt(words, 0);
   assertEquals(f.gpu_ms, FRAME.gpu_ms);
-  assertEquals(f.pages_by_level[2], FRAME.pages_by_level + 2);
+  assertEquals(f.zoom_pages[2], FRAME.zoom_pages + 2);
   assertEquals(f.census[1], [FRAME.census + 2, FRAME.census + 3]);
 });
 
 Deno.test("label and valueText - a lane's name says its unit", () => {
   assertEquals(label("lod", "lod_oldest_release_ms"), "oldest_release");
   assertEquals(label("heap", "heap_used_mb"), "used");
-  assertEquals(label("slot", "slot_wait_levels"), "wait_levels");
+  assertEquals(label("slot", "slot_wait_zooms"), "wait_zooms");
   assertEquals(valueText("lod_oldest_release_ms", 12.34), "12.3ms");
-  assertEquals(valueText("slot_wait_levels", 0b1001), "0,3");
+  assertEquals(valueText("slot_wait_zooms", 0b1001), "z0,z3");
   assertEquals(valueText("triangles", 12_400), "12k");
 });

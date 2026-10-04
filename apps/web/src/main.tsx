@@ -8,7 +8,7 @@
 import { StrictMode } from "react";
 import { AppRegistry, type RootTag } from "react-native";
 
-import { App } from "@/app/root.tsx";
+import { AppRouter } from "@/app/router.tsx";
 import { bootstrapApp } from "@/app/bootstrap.ts";
 import { bootstrapI18n } from "@/locale/i18n.ts";
 import { Unsupported } from "@/platform/web/unsupported.tsx";
@@ -29,7 +29,7 @@ try {
   if (!container) throw new Error("web: missing root container: #root");
   AppRegistry.registerComponent("pixelet", () => () => (
     <StrictMode>
-      {missing ? <Unsupported reason={missing} /> : <App />}
+      {missing ? <Unsupported reason={missing} /> : <AppRouter />}
     </StrictMode>
   ));
   AppRegistry.runApplication("pixelet", { rootTag: container as unknown as RootTag, initialProps: {} });

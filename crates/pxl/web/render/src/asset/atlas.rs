@@ -1,45 +1,9 @@
 // pxl-render/asset/atlas.rs
 
-//! Every billboard's bitmap in one texture.
-//!
-//! What this replaces gave each badge its own texture. That is one GPU
-//! allocation and one material binding per badge, which is one draw call per
-//! badge, because two sprites with different textures cannot be batched.
-//! Holding them in one image is what makes a single instanced draw possible at
-//! all — the atlas is not the optimization, it is the precondition for it.
-//!
-//! It is worth being clear about what it does *not* buy: the same badges at the
-//! same resolution occupy the same pixels whether they live in one image or
-//! five hundred. Memory comes down by drawing smaller or keeping fewer, not by
-//! packing.
-//!
-//! **Shelf packing, because the height is nearly fixed.** Badges are a line of
-//! text: width varies with the name, height does not. Rows of a bucketed
-//! height, filled left to right, put the general rectangle-packing problem out
-//! of scope entirely — and bucketing the width as well makes a freed slot
-//! reusable by the next badge of roughly that size, which is what keeps a long
-//! session from fragmenting the sheet into unusable gaps.
-//!
-//! **Growth repacks rather than reserving.** Most views show a handful of
-//! badges, so this starts small and doubles. Each entry keeps what drew it, so
-//! a repack is a redraw.
-//!
-//! **What the sheet holds is bounded by the screen, not by the world.** An
-//! entry is a badge on the screen, and the places are counted in cells no
-//! narrower there than the widest badge (pxl-spec bake/poi_page.rs
-//! `POI_LATTICE`), one badge a cell, however many places a city has under
-//! them; `MAX_SIZE` is sized from that.
-//!
-//! ---
-//!
-//! **An entry is drawn from what drew it.** An entry is a rectangle and a
-//! DrawSpec — what to draw, as data — and the renderer draws it on the device
-//! (gpu/sheet.rs): the whole sheet when the generation moved (growth and
-//! compaction replace the sheet), else only the dirty entries, each into a
-//! texture its own size and copied into its rectangle. What is written is
-//! rectangles, never the sheet: re-uploading the whole sheet whenever a badge
-//! was drawn cost 64 MB at 4096 px once for every frame a badge was drawn in,
-//! and a phone paid it as a hundred-millisecond task each time.
+//! Every billboard's bitmap in one texture, so all badges draw in one instanced
+//! call. Shelf-packed with bucketed sizes so a freed slot is reusable; growth
+//! doubles the sheet and replays each entry's `DrawSpec`. Only dirty rectangles
+//! are uploaded: re-uploading the whole 4096 sheet cost a phone ~100 ms per frame.
 
 /// Slot rectangles are in canvas orientation (v0 top < v1 bottom) and move on a
 /// repack, so read them on every use; the slot index is what stays.
@@ -69,15 +33,10 @@ pub struct AtlasStats {
 const WIDTH_BUCKET: u32 = 16;
 const HEIGHT_BUCKET: u32 = 16;
 
-const INITIAL_SIZE: u32 = 1024;
+pub const INITIAL_SIZE: u32 = 1024;
 
-/// Where growth gives up, on every device: 2048 px, RGBA, 16 MiB and a third
-/// again for the mip chain on the GPU. What the sheet holds is what is on the
-/// screen — the places' badges, one a POI cell (pxl-spec bake/poi_page.rs
-/// `POI_LATTICE`), and a bubble or two — and a POI cell is no narrower on
-/// the screen than the widest badge, so a screen holds a few dozen of them;
-/// a 2048 sheet holds over a hundred of the widest. A sheet that is full is
-/// a bounded flow: what does not fit waits unshown for a slot (`NO_SLOT`).
+/// 2048 px RGBA is 16 MiB plus mips. A screen holds a few dozen badges (one per
+/// POI cell); past the limit an entry waits unshown (`NO_SLOT`).
 const MAX_SIZE: u32 = 2048;
 
 /// Transparent margin so a linear or mipmapped sample cannot reach a neighbor.
@@ -136,8 +95,6 @@ fn pack(size: u32, ws: &[u32], hs: &[u32]) -> Option<Plan> {
     Some(Plan { at, shelves })
 }
 
-/// What a mirror has to upload: the whole sheet when `whole`, else the dirty
-/// slots' rectangles, which `flush` hands over in the vector it is given.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Flush {
     pub whole: bool,
@@ -174,7 +131,6 @@ pub struct BillboardAtlas {
 }
 
 impl BillboardAtlas {
-    /// An empty sheet.
     pub fn new() -> BillboardAtlas {
         BillboardAtlas {
             size: INITIAL_SIZE,
@@ -246,10 +202,8 @@ impl BillboardAtlas {
         self.dirty.push(slot);
     }
 
-    /// What a mirror at `generation` has to take since it last looked: the
-    /// whole sheet when it was replaced, else the dirty entries' rectangles,
-    /// left in `dirty`. The atlas keeps the vector it is handed in their
-    /// place, so the two trade buffers rather than one being made a flush.
+    /// The whole sheet if it was replaced since `generation`, else the dirty slots,
+    /// swapped into `dirty` rather than allocated.
     pub fn flush(&mut self, generation: u32, dirty: &mut Vec<u32>) -> Flush {
         let whole = generation != self.generation;
         dirty.clear();

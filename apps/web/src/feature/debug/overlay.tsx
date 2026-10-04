@@ -1,9 +1,9 @@
-// @pxl/web/feature/debug/profiler/overlay.tsx
+// @pxl/web/feature/debug/overlay.tsx
 
 /**
- * The profiler overlay: recording controls and exports over the gauge panel.
- * Shown by the `profiler` setting in any build; the kernel records from boot
- * while it is on. Exposes `__pxl_profiler_trace`, `__pxl_profiler_log`,
+ * The debug overlay: where the camera and the pointer are, and the profiler's
+ * recording controls, exports and gauge. Shown by the `debug_overlay` setting
+ * in any build; the kernel records from boot while it is on. Exposes `__pxl_profiler_trace`, `__pxl_profiler_log`,
  * `__pxl_view` and `__pxl_gauge` on `window` for A/B runs.
  */
 
@@ -12,17 +12,17 @@ import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { alpha, color, disabledContent } from "@/shared/ui/theme.ts";
-import { gauge, Head, ProfilerGauge } from "./gauge.tsx";
-import { profilerLog } from "./log.ts";
-import { profilerReportCopy, profilerReportText } from "./report.ts";
-import { type Gauge, profilerGaugeRead, profilerReportRead } from "./view.ts";
-import { installLongFrameObservers, longFramesClear } from "./long-frame.ts";
-import { profilerTraceSave } from "./trace.ts";
+import { gauge, ProfilerGauge, ProfilerRec, ProfilerView, Title } from "./profiler/gauge.tsx";
+import { profilerLog } from "./profiler/log.ts";
+import { profilerReportCopy, profilerReportText } from "./profiler/report.ts";
+import { type Gauge, profilerGaugeRead, profilerReportRead } from "./profiler/view.ts";
+import { installLongFrameObservers, longFramesClear } from "./profiler/long-frame.ts";
+import { profilerTraceSave } from "./profiler/trace.ts";
 import { Command, encode_input_view } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, useKernel } from "@/kernel/shell.ts";
 import { SETTINGS } from "@/feature/setting/schema.ts";
 
-export const enum Tint {
+const enum Tint {
   Plain = 0,
   Go = 1,
   Halt = 2,
@@ -91,16 +91,18 @@ function restartWindow(): void {
   longFramesClear();
 }
 
-export function ProfilerOverlay() {
-  const show = useKernel((s) => s.settings[SETTINGS.profiler.key] === 1);
+export function DebugOverlay() {
+  const show = useKernel((s) => s.settings[SETTINGS.debug_overlay.key] === 1);
   const [hint, setHint] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   const [g, setG] = useState<Gauge | null>(null);
+  const [viewOpen, setViewOpen] = useState(true);
   const [open, setOpen] = useState(true);
 
   useEffect(() => {
-    if (!show || !open) return;
-    const read = () => setG(profilerGaugeRead(LIVE_WINDOW_MS));
+    if (!show) return;
+    // Folded, only the view is shown, so the window is left unfolded.
+    const read = () => setG(profilerGaugeRead(open ? LIVE_WINDOW_MS : 0));
     read();
     const id = setInterval(read, POLL_MS);
     return () => clearInterval(id);
@@ -137,47 +139,63 @@ export function ProfilerOverlay() {
 
   return (
     <View style={styles.panel}>
-      <View style={styles.buttons}>
-        {
-          /* Both, not a toggle: a window opened at boot would read "stop"
-                      until first stopped. */
-        }
-        <PanelButton
-          onHint={setHint}
-          label={recording ? "restart" : "start"}
-          hint="clear everything and begin a fresh window"
-          tint={recording ? Tint.Plain : Tint.Go}
-          onPress={restartWindow}
-        />
-        <PanelButton
-          onHint={setHint}
-          label="stop"
-          hint="freeze the window so exports are stable while you read them"
-          tint={recording ? Tint.Halt : Tint.Off}
-          disabled={!recording}
-          onPress={() => kernel_command(Command.PROFILER_STOP)}
-        />
-        <PanelButton
-          onHint={setHint}
-          label="report"
-          hint="copy the window's summary as text"
-          onPress={() => void profilerReportCopy(profilerReportText(profilerReportRead())).then(setSaid)}
-        />
-        <PanelButton onHint={setHint} label="trace" hint="save the window as a timeline for ui.perfetto.dev" onPress={() => void profilerTraceSave().then(setSaid)} />
-      </View>
-      {
-        /* Under the buttons: a two-line hint above them moved the hovered
-                  button away. */
-      }
-      {(said ?? hint) !== null && <Text style={[gauge.text, styles.hint]}>{said ?? hint}</Text>}
+      <Pressable onPress={() => setViewOpen(!viewOpen)} accessibilityRole="button" aria-expanded={viewOpen}>
+        <Title first end={<Caret open={viewOpen} />}>view</Title>
+      </Pressable>
+      {viewOpen && g !== null && <ProfilerView v={g.view} />}
 
       <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" aria-expanded={open}>
-        <Head end={open ? <ChevronUp size={12} color={HINT_INK} /> : <ChevronDown size={12} color={HINT_INK} />}>last 10s</Head>
+        <Title
+          end={
+            <View style={styles.titleEnd}>
+              <Text style={[gauge.text, gauge.key]}>last {LIVE_WINDOW_MS / 1000} s</Text>
+              <Caret open={open} />
+            </View>
+          }
+        >
+          performance
+        </Title>
       </Pressable>
       {open && (
-        <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
-          <ProfilerGauge g={g} />
-        </ScrollView>
+        <>
+          <View style={styles.buttons}>
+            {
+              /* Both, not a toggle: a window opened at boot would read "stop"
+                          until first stopped. */
+            }
+            <PanelButton
+              onHint={setHint}
+              label={recording ? "restart" : "start"}
+              hint="clear everything and begin a fresh window"
+              tint={recording ? Tint.Plain : Tint.Go}
+              onPress={restartWindow}
+            />
+            <PanelButton
+              onHint={setHint}
+              label="stop"
+              hint="freeze the window so exports are stable while you read them"
+              tint={recording ? Tint.Halt : Tint.Off}
+              disabled={!recording}
+              onPress={() => kernel_command(Command.PROFILER_STOP)}
+            />
+            <PanelButton
+              onHint={setHint}
+              label="report"
+              hint="copy the window's summary as text"
+              onPress={() => void profilerReportCopy(profilerReportText(profilerReportRead())).then(setSaid)}
+            />
+            <PanelButton onHint={setHint} label="trace" hint="save the window as a timeline for ui.perfetto.dev" onPress={() => void profilerTraceSave().then(setSaid)} />
+          </View>
+          {
+            /* Under the buttons: a two-line hint above them moved the hovered
+                      button away. */
+          }
+          {(said ?? hint) !== null && <Text style={[gauge.text, styles.hint]}>{said ?? hint}</Text>}
+          {g !== null && <ProfilerRec rec={g.rec} />}
+          <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
+            <ProfilerGauge g={g} />
+          </ScrollView>
+        </>
       )}
     </View>
   );
@@ -185,18 +203,21 @@ export function ProfilerOverlay() {
 
 const HINT_INK = alpha(color.white, 0.55);
 
+const Caret = ({ open }: { open: boolean }) => (open ? <CaretUp size={12} color={HINT_INK} /> : <CaretDown size={12} color={HINT_INK} />);
+
 const styles = StyleSheet.create({
   panel: {
     flexShrink: 1,
-    width: 228,
+    width: 300,
     overflow: "hidden",
     borderRadius: 8,
     padding: 10,
     backgroundColor: alpha(color.black, 0.72),
     pointerEvents: "box-none",
   },
+  titleEnd: { flexDirection: "row", alignItems: "center", gap: 6 },
   hint: { marginTop: 6, fontWeight: "600", letterSpacing: 0.25, color: HINT_INK },
   body: { flexShrink: 1 },
-  buttons: { flexDirection: "row", gap: 4, marginTop: 4 },
+  buttons: { flexDirection: "row", gap: 4, marginTop: 8 },
   button: { flex: 1, alignItems: "center", paddingVertical: 4, borderWidth: 1, borderRadius: 4 },
 });

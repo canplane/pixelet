@@ -40,16 +40,13 @@ pub struct Platform {
     pub orientation: OrientationPlatform,
 }
 
-/// The companion's place, from map_center in the local floating-origin frame —
-/// wherever the camera actually is, not the origin's cell's center. Only
-/// where the camera stands off it: where the eye is the map center, the
-/// character is the one looking.
+/// None while the eye is the map center: then the character is the one looking.
 fn companion_props() -> Option<CompanionProps> {
     if crate::control::camera::controller::dist() == 0.0 {
         return None;
     }
     let map_center = crate::control::camera::controller::map_center()?;
-    let map_origin = local_world_origin();
+    let map_origin = view().origin;
     let local = crate::world::frame::coord::canonical_to_local(&map_center, map_origin);
     let o = pxl_spec::space::pvf3::ivec::to_v3(map_origin);
     Some(CompanionProps {
@@ -69,15 +66,24 @@ fn debug_gizmos_tick(_: &mut TickContext) {
     debug_gizmos_step(show, map_center, view().origin);
 }
 
-/// Goal walk, quality, then each pyramid layer. An unfinished walk asks for another turn.
-fn view_tick(ctx: &mut TickContext) {
+/// The rays a new goal starts from.
+fn sight_tick(_: &mut TickContext) {
+    crate::world::quality::sight();
+}
+
+/// A slice of the goal walk, then quality. An unfinished walk asks for another turn.
+fn goal_tick(ctx: &mut TickContext) {
     let end = now() + ctx.budget.remaining() * crate::param::VIEW_SHARE;
     crate::world::quality::step(&|| now() >= end);
-    terrain_step();
-    crate::layer::poi::poi_step();
     if crate::world::pyramid::domain::walking() {
         ctx.invalidate();
     }
+}
+
+/// Each pyramid layer's pages, from the published goal.
+fn demand_tick(_: &mut TickContext) {
+    terrain_step();
+    crate::layer::poi::poi_step();
 }
 
 fn camera_input_tick(_: &mut TickContext) {
@@ -98,7 +104,9 @@ pub fn boot() {
     on_tick(INTERACTION, environment_tick, StepName::environment);
     on_tick(INTERACTION, companion_tick, StepName::companion);
     on_tick(INTERACTION, crate::layer::character::preview::preview_step, StepName::preview);
-    on_tick(VISIBLE, view_tick, StepName::view);
+    on_tick(VISIBLE, sight_tick, StepName::sight);
+    on_tick(VISIBLE, goal_tick, StepName::goal);
+    on_tick(VISIBLE, demand_tick, StepName::demand);
     on_tick(VISIBLE, core_tick_visible_step, StepName::chunks);
     on_tick(COSMETIC, debug_gizmos_tick, StepName::debug_gizmos);
     on_tick(REPORT, core_tick_report_step, StepName::profiler);

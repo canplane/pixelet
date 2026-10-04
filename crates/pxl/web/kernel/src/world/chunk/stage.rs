@@ -4,21 +4,20 @@
 //! and runs the table's pass; in the report phase it hands the frame's
 //! numbers to the profiler.
 
+use pxl_spec::space::adapter::epsg3857::zoom_of;
 use pxl_spec::space::pvf3::ivec;
+use pxl_spec::space::pyramid::GROUND;
 use pxl_spec::space::v3::sub3;
 use xpute_core::math::scalar::round;
 use xpute_runtime::sched::edge::{notified, yield_if_spent};
 
-use crate::layer::decor::build::DecorHide;
-use crate::global::Global;
-use crate::host::now;
 use crate::io::sched::pending_count;
 use crate::kernel::{kernel, with_world};
 use crate::layer::decor::build::DecorHide;
 use crate::layer::environment::state::globe;
 use crate::sched::profiler::record::{
     profiler_record_frame, profiler_recording, profiler_take_rings, CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample,
-    TurnSample, WorkSample, MB,
+    TurnSample, ViewSample, WorkSample, MB,
 };
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::world::change::{request_world_tick, world_edge};
@@ -57,7 +56,6 @@ fn core_tick() -> &'static mut CoreTick {
     })
 }
 
-/// The shell's numbers for the frame just drawn.
 pub fn set_host_frame_stat(gpu: GpuSample, device: DeviceSample) {
     let host = &mut core_tick().host;
     (host.gpu, host.device) = (gpu, device);
@@ -65,17 +63,16 @@ pub fn set_host_frame_stat(gpu: GpuSample, device: DeviceSample) {
 
 pub fn set_host_task_ms(task_ms: f64) {
     core_tick().host.task_ms = task_ms;
-    // Known only after the turn, when its frame is already recorded; written
-    // back there, or every frame would carry the one before's.
-    if let Some(frame) = crate::sched::profiler::record::profiler_last_frame() {
+    // Known only after the turn, when its frame is already recorded.
+    if let Some(frame) = crate::sched::profiler::record::profiler_open_frame() {
         frame.task_ms = task_ms;
     }
 }
 
-/// Written onto the recorded frame like `set_host_task_ms`, so the parts of
+/// Written onto the open frame like `set_host_task_ms`, so the parts of
 /// `task_ms` add up and unmeasured time shows as the difference.
 pub fn set_turn_timing(effects_ms: f64, stage_ms: f64) {
-    let Some(frame) = crate::sched::profiler::record::profiler_last_frame() else { return };
+    let Some(frame) = crate::sched::profiler::record::profiler_open_frame() else { return };
     let (step_ms, step_name) = crate::sched::turn::worst_effect();
     frame.turn = TurnSample {
         effects_ms,
@@ -137,14 +134,13 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
         delta_s: ctx.delta,
         remaining_ms: ctx.budget.remaining(),
         hard_slack_ms: HARD_SLACK_MS,
-        center_z: ivec::to_real(ivec::Z(v.origin)) + anchor[2],
+        center_z: origin[2] + anchor[2],
         globe: Some(globe()),
     };
 
     let t0 = now();
     let draw = with_world(|world, sched| sched.tick(world, frame, &now)).unwrap_or(false);
-    // Decor, its own layer: its frontier, its blocks and how each is drawn,
-    // after the chunks have listed theirs (layer/decor/cell.rs).
+    // Decor lists after the chunks have listed theirs.
     {
         let k = kernel();
         let edits = crate::layer::marker::hover_cursor::render_edits();
@@ -184,26 +180,25 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     // No chunks this frame: a search jump empties the stage for a moment.
     let Some(chunks_ms) = c.visible_pass else { return };
     let frame_t0 = ctx.budget.t0;
-    let census = kernel().sched.census;
-    // What is counted since the last sample is taken whether or not a
-    // recording keeps it, so a recording starts from now.
+    let census = kernel().sched.census(profiler_recording(), frame_t0);
+    // Taken whether or not recording, so a recording starts from now.
     let counts = kernel().sched.take_counts();
     let rings = profiler_take_rings();
     let work = work_sample(c, &census);
     let record_refused = Terrain::pyramid().take_refusals() as f64;
-    // The rest is measured only for a recording to keep.
+    let [rays, visits] = crate::world::pyramid::domain::take_work();
     if !profiler_recording() {
         return;
     }
     let host = c.host.clone();
     let mut pages = PageSample::default();
     for (p, _) in Terrain::pyramid().paging().held() {
-        pages.by_level[p.level as usize] += 1.0;
+        pages.by_zoom[zoom_of(GROUND.scale(p.level)) as usize] += 1.0;
     }
-    pages.total = pages.by_level.iter().sum();
+    pages.total = pages.by_zoom.iter().sum();
     pages.poi = PoiPage::pyramid().paging().held().count() as f64;
     let mut gpu = host.gpu;
-    for (tris, boxes) in gpu.level_tris.iter_mut().zip(census.level_boxes) {
+    for (tris, boxes) in gpu.zoom_tris.iter_mut().zip(census.zoom_boxes) {
         *tris = boxes as f64 * BOX_TRIANGLES;
     }
     profiler_record_frame(FrameSample {
@@ -241,22 +236,28 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         stale: StaleSample {
             hidden: census.ready_waiting as f64,
             slot_waits: census.slot_waits as f64,
-            wait_levels: census.wait_levels as f64,
+            wait_zooms: census.wait_zooms as f64,
             chained: census.chained as f64,
             uncovered: census.refused as f64,
             unready: census.waiting as f64,
         },
         turn: TurnSample::default(),
         cover: {
-            let (cover, _) = crate::world::pyramid::cover::cover::<Terrain>();
             let domain = crate::world::pyramid::domain::current();
             // NaN: step 0 is past the arena
             let rule = domain.map_or(0.0, |d| d.counted(0).map_or(f64::NAN, f64::from));
+            // The goal's pieces a resident page draws.
+            let paging = Terrain::pyramid().paging();
+            let drawn = domain.map_or(0, |d| d.pieces().iter().filter(|c| paging.drawn_from(c.page()).is_some()).count());
             CoverSample {
                 rule,
-                drawn: cover.drawn.len() as f64,
+                drawn: drawn as f64,
                 gaps: domain.map_or(0.0, |d| d.unanswered() as f64),
             }
+        },
+        view: ViewSample {
+            rays: rays as f64,
+            visits: visits as f64,
         },
         cap: CapSample {
             commit_left: census.commit_left as f64,

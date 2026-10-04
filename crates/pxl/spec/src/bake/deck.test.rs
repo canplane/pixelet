@@ -15,7 +15,7 @@ fn one(points: &[[f64; 2]], tops: &[i16], width_cells: f64) -> Decks {
 fn a_column_is_under_a_deck_within_its_reach() {
     // Four cells wide: two either side of the line.
     let d = one(&[[10.0, 10.0], [30.0, 10.0]], &[100, 120], 4.0);
-    let over: Vec<Over> = d.over_point([20.0, 12.0]).collect();
+    let over: Vec<Over> = d.over_point(None, [20.0, 12.0], 1.0).collect();
     assert_eq!(over.len(), 1);
     // rising a cell a cell, a column a cell wide sweeps half a cell either side of its middle
     assert_eq!((over[0].low, over[0].top), (109.5, 110.5));
@@ -26,7 +26,7 @@ fn a_column_is_under_a_deck_within_its_reach() {
 fn a_narrow_deck_along_a_diagonal_is_one_band() {
     let d = one(&[[0.0, 0.0], [40.0, 40.0]], &[10, 10], 0.5);
     let mut covered = std::collections::HashSet::new();
-    d.over_grid([0.0, 0.0], 1.0, [40, 40], |x, y, _, _| {
+    d.over_grid(None, [0.0, 0.0], 1.0, [40, 40], |x, y, _, _| {
         covered.insert((x, y));
     });
     for k in 0..39 {
@@ -35,9 +35,43 @@ fn a_narrow_deck_along_a_diagonal_is_one_band() {
 }
 
 #[test]
-fn a_deck_narrower_than_half_the_parent_cell_folds_away() {
-    let wide = one(&[[0.0, 0.0], [100.0, 0.0]], &[50, 50], 2.0);
-    let narrow = one(&[[0.0, 0.0], [100.0, 0.0]], &[50, 50], 0.5);
+fn a_pier_stands_at_each_world_station_and_its_column_keeps_it_unless_blocked() {
+    // Two u a cell; a pier is the cells within its half-length of a station.
+    let frame = Some(Frame { corner: [0.0, 0.0], cell: 2.0 });
+    let station = PIER_STEP_M * u_per_m(0.0) / 2.0;
+    let d = one(&[[1.0, 3.0], [41.0, 3.0]], &[20, 20], 4.0);
+    let piers: Vec<f64> = (0..42).map(|x| f64::from(x) + 0.5).filter(|&x| d.over_point(frame, [x, 3.0], 1.0).any(|o| o.pier)).collect();
+    let expected: Vec<f64> = (0..42)
+        .map(|x| f64::from(x) + 0.5)
+        .filter(|&x| x > 1.0 && (x - round(x / station) * station).abs() <= PIER_ALONG * 4.0 / 2.0)
+        .collect();
+    assert!(!expected.is_empty());
+    assert_eq!(piers, expected);
+    let at = [expected[0], 3.0];
+    let over = d.over_point(frame, at, 1.0).next().unwrap();
+    let Occupies::Above { pier: Some(pier), .. } = over.occupies(5, 0.5) else {
+        panic!("no pier over ground at 5")
+    };
+    assert_eq!(pier, [5, 19]);
+    let land = ShownGround {
+        channel: GroundChannelKey::LAND,
+        type_id: 1,
+    };
+    let road = ShownGround {
+        channel: GroundChannelKey::TRANSPORT,
+        type_id: 1,
+    };
+    assert_eq!(pier_stands(pier, land, d.over_point(frame, at, 1.0), 5, 0.5), Some(pier));
+    assert_eq!(pier_stands(pier, road, d.over_point(frame, at, 1.0), 5, 0.5), None);
+    let mut under = Builder::default();
+    under.push([([0.0, 3.0], 10), ([40.0, 3.0], 10)], 4 * POINT_SCALE as u8, 3, Form::Deck);
+    let under = under.finish();
+    let column = d.over_point(frame, at, 1.0).chain(under.over_point(frame, at, 1.0));
+    assert_eq!(pier_stands(pier, land, column, 5, 0.5), None);
+}
+
+#[test]
+fn a_deck_is_kept_up_the_pyramid_by_its_width_alone() {
     let empty = Decks::default();
     // Two cells wide: one cell a level up, kept at its own width.
     let wide = one(&[[0.0, 0.0], [100.0, 0.0]], &[50, 50], 2.0);

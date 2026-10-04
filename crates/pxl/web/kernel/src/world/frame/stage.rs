@@ -21,7 +21,7 @@ use crate::layer::billboard::sheet::billboard_sheet;
 use crate::layer::character::companion::companion_skins;
 use crate::layer::character::preview::preview_rows;
 use crate::layer::decor::asset_store::kind_assets;
-use crate::layer::environment::config::rim_cfg;
+use crate::layer::environment::config::{ao_cfg, edge_cfg, rim_cfg};
 use crate::sched::profiler::record::{DeviceSample, DrawCensus, GpuSample, CENSUS_LEN};
 use crate::shell::setting::store::{settings_store, AoMode};
 use crate::text::text_raster;
@@ -30,8 +30,6 @@ use crate::world::chunk::stage::set_host_frame_stat;
 use crate::world::frame::resolution::resolution_observe;
 use crate::world::frame::view::{globe_anchor_local, view};
 
-/// Writes the frame's uniforms from the view and the settings as they stand,
-/// the world drawn at `resolution` device pixels to a CSS pixel.
 pub fn stage_write(resolution: f64) {
     let v = view();
     let settings = settings_store();
@@ -50,11 +48,9 @@ pub fn stage_write(resolution: f64) {
     s[STAGE_AT::FOV] = v.fov;
     s[STAGE_AT::NEAR] = v.near;
     s[STAGE_AT::FAR] = v.far;
-    // The largest drawn cell per unit of distance: past a level's split
-    // distance its cells are drawn averaged 2 × 2, so a cell there is twice
-    // the level's over the distance, and half that just before the next
-    // split — at the quality the view is drawn at. For whoever has to
-    // tolerate a drawn cell's height — the badge occlusion test.
+    // Largest drawn cell per unit of distance, for the badge occlusion test:
+    // past a split distance cells are drawn 2 × 2, so twice the level's cell
+    // over the distance.
     s[STAGE_AT::LOD_CELL] = 2.0 / crate::world::quality::effective().tau().split_distance(0);
     s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { edge_cfg::STRENGTH } else { 0.0 };
     s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { ao_cfg::STRENGTH } else { 0.0 };
@@ -117,7 +113,7 @@ pub fn stage_render() {
             draw_calls: stat.draw_calls,
             triangles: stat.triangles,
             census,
-            level_tris: Default::default(),
+            zoom_tris: Default::default(),
             px: stat.px,
         },
         DeviceSample {

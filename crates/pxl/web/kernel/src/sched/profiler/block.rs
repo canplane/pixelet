@@ -7,7 +7,7 @@
 
 use core::mem::{offset_of, size_of};
 
-use crate::sched::profiler::record::{words, FrameSample, Words, CENSUS_LEN, GPU_SPANS, LEVELS};
+use crate::sched::profiler::record::{words, FrameSample, Words, CENSUS_LEN, GPU_SPANS, ZOOMS};
 use crate::sched::profiler::spec::{FRAME, LIMITS, PHASE_NAMES, SPREAD, STEP, SUMMARY, TASK_PHASE_NAMES, TASK_SUMMARY};
 
 const REASONS: usize = LIMITS::REASONS as usize;
@@ -58,8 +58,6 @@ pub struct FramesBlock {
     pub chunks: Spread,
     pub phases: [Spread; PHASE_NAMES.len()],
     pub gpu_spans: [Spread; GPU_SPANS],
-    pub work_scans: f64,
-    pub work_bakes: f64,
     pub per_s_scans: f64,
     pub per_s_bakes: f64,
     pub backlog_s: f64,
@@ -70,7 +68,7 @@ pub struct FramesBlock {
     pub mounts_removed: f64,
     pub used_delta_mb: f64,
     pub census: [[f64; 2]; CENSUS_LEN],
-    pub level_tris: [f64; LEVELS],
+    pub zoom_tris: [f64; ZOOMS],
     pub last: FrameSample,
 }
 
@@ -87,7 +85,7 @@ words!(FramesBlock, SUMMARY::frames::WORDS,
     backlog_per_s_bakes => SUMMARY::frames::backlog_per_s_bakes, chunks_per_bake => SUMMARY::frames::chunks_per_bake,
     mounts_added => SUMMARY::frames::mounts_added, mounts_removed => SUMMARY::frames::mounts_removed,
     used_delta_mb => SUMMARY::frames::used_delta_mb, census => SUMMARY::frames::census,
-    level_tris => SUMMARY::frames::level_tris, last => SUMMARY::frames::last,
+    zoom_tris => SUMMARY::frames::zoom_tris, last => SUMMARY::frames::last,
 );
 
 #[repr(C)]
@@ -176,11 +174,12 @@ pub struct AtlasBlock {
     pub entries: f64,
     pub shelves: f64,
     pub used_px: f64,
+    pub initial: f64,
 }
 
 words!(AtlasBlock, SUMMARY::atlas::WORDS,
     size => SUMMARY::atlas::size, entries => SUMMARY::atlas::entries,
-    shelves => SUMMARY::atlas::shelves, used_px => SUMMARY::atlas::used_px,
+    shelves => SUMMARY::atlas::shelves, used_px => SUMMARY::atlas::used_px, initial => SUMMARY::atlas::initial,
 );
 
 #[repr(C)]
@@ -189,15 +188,15 @@ pub struct HeldBlock {
     pub run_sets: f64,
     pub run_set_mb: f64,
     pub tiers: f64,
-    pub decor_cells: f64,
+    pub decor_blocks: f64,
     pub decor_instances: f64,
     pub decor_bytes: f64,
 }
 
-words!(RetainBlock, SUMMARY::retain::WORDS,
-    run_sets => SUMMARY::retain::run_sets, run_set_mb => SUMMARY::retain::run_set_mb,
-    tiers => SUMMARY::retain::tiers, decor_cells => SUMMARY::retain::decor_cells,
-    decor_instances => SUMMARY::retain::decor_instances, decor_bytes => SUMMARY::retain::decor_bytes,
+words!(HeldBlock, SUMMARY::held::WORDS,
+    run_sets => SUMMARY::held::run_sets, run_set_mb => SUMMARY::held::run_set_mb,
+    tiers => SUMMARY::held::tiers, decor_blocks => SUMMARY::held::decor_blocks,
+    decor_instances => SUMMARY::held::decor_instances, decor_bytes => SUMMARY::held::decor_bytes,
 );
 
 #[repr(C)]
@@ -224,6 +223,44 @@ pub struct QualityBlock {
     pub retiered: f64,
     pub changes_peak: f64,
 }
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct HeapBlock {
+    pub used_mb: f64,
+    pub requests: f64,
+}
+
+words!(HeapBlock, SUMMARY::heap::WORDS, used_mb => SUMMARY::heap::used_mb, requests => SUMMARY::heap::requests);
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ViewBlock {
+    pub dist: f64,
+    pub polar: f64,
+    pub azimuth: f64,
+    pub tau: f64,
+    pub center_lon: f64,
+    pub center_lat: f64,
+    pub center_z: f64,
+    pub hover_x: f64,
+    pub hover_y: f64,
+    pub hover_z: f64,
+    pub hover_lon: f64,
+    pub hover_lat: f64,
+    pub hover_alt: f64,
+    pub chunk_zoom: f64,
+    pub tier_zoom: f64,
+    pub read_zoom: f64,
+}
+
+words!(ViewBlock, SUMMARY::view::WORDS,
+    dist => SUMMARY::view::dist, polar => SUMMARY::view::polar, azimuth => SUMMARY::view::azimuth, tau => SUMMARY::view::tau,
+    center_lon => SUMMARY::view::center_lon, center_lat => SUMMARY::view::center_lat, center_z => SUMMARY::view::center_z,
+    hover_x => SUMMARY::view::hover_x, hover_y => SUMMARY::view::hover_y, hover_z => SUMMARY::view::hover_z,
+    hover_lon => SUMMARY::view::hover_lon, hover_lat => SUMMARY::view::hover_lat, hover_alt => SUMMARY::view::hover_alt,
+    chunk_zoom => SUMMARY::view::chunk_zoom, tier_zoom => SUMMARY::view::tier_zoom, read_zoom => SUMMARY::view::read_zoom,
+);
 
 words!(QualityBlock, SUMMARY::quality::WORDS,
     step => SUMMARY::quality::step, star => SUMMARY::quality::star, frames_held => SUMMARY::quality::frames_held,

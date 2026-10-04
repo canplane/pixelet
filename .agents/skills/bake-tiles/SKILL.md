@@ -62,8 +62,7 @@ docker compose -f infra/local/docker-compose.yml --env-file .env up -d
 ```
 
 Terrain needs `overture_buildings`, `overture_transportation`,
-`overture_base_{land,land_use,water,infrastructure}`, `elevation_raster`
-and `overture_deck`;
+`overture_base_{land,land_use,water,infrastructure}` and `elevation_raster`;
 POI needs `overture_places`; geocode needs `overture_divisions` and
 `overture_division_points`. If a table is missing, that is an ingestion
 job, not a bake job — [infra/geo/README.md](../../../infra/geo/README.md).
@@ -77,21 +76,28 @@ ingested data.
 
 ## Terrain
 
-The decks' heights come first. `overture_deck` is derived from
-`overture_transportation`, the water and the elevation, over the whole
-coverage at once, since a viaduct's height is decided by where it meets the
-ground pages away (`geo-bake deck.rs`). Solve it again after a
-transportation ingest or a change to the solve, then bake:
+A page is baked in two stages:
+
+- **leaf** — each page exactly as the dev server bakes it on demand
+  (`geo-bake terrain/leaf.rs` `bake_leaf`): its deck solve (`deck.rs`) —
+  every structure reaching the page or the eight around it, solved whole
+  wherever it runs — and from that one result its lines (decks, bores and
+  the grades at their ends) and its surface (ground and elevation), which
+  paints a way only where no line draws it. Resumable.
+- **assemble** — the leaves linked into the version, and the pyramid folded
+  over them, with no database. Whole every time.
+
+A first bake, or one after an ingest:
 
 ```bash
-deno task solve:decks
 deno task bake:tiles --out ./out/terrain/<version> --concurrency 8
 ```
 
-After a change to how decks or bores are solved, nothing else:
+After a change to how decks or bores are solved, the leaves again, since the
+surface paints around what the solve carries:
 
 ```bash
-deno task bake:tiles --out ./out/terrain/<version> --stage lines --stage assemble
+deno task bake:tiles --out ./out/terrain/<version> --force
 ```
 
 | Flag                | Meaning                                                            |

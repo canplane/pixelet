@@ -1,11 +1,7 @@
 // pxl-geo-bake/terrain/pipeline/overture/between.rs
 
-//! Overture's linear referencing: a rule on a segment holds over a `between`
-//! range of its length, as fractions of it, or over the whole of it where it
-//! has none. A flag (`road_flags`, `rail_flags`) and a level (`level_rules`)
-//! are both such rules, so one segment of a subway line can run over a
-//! bridge, along the surface and into a tunnel. The bake and the deck solve
-//! (deck/) cut a segment the same way, here.
+//! Overture's linear referencing: a rule holds over a `between` range of a
+//! segment, or the whole of it. The bake and the deck solve cut the same way.
 
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::adapter::epsg3857::{to_db, G3857};
@@ -13,17 +9,13 @@ use serde_json::Value;
 
 use crate::wkb::{wkb_to_geometries, WkbGeometry};
 
-/// A range of a segment's length, as fractions of it.
 pub type Range = [f64; 2];
 
-/// The rules in a JSON column, or none where it does not parse: a column
-/// that cannot be read says nothing, which paints the segment as it was
-/// painted before any were read.
+/// An unparseable column says nothing.
 fn rules(column: Option<&str>) -> Vec<Value> {
     column.and_then(|c| serde_json::from_str::<Value>(c).ok()).and_then(|v| v.as_array().cloned()).unwrap_or_default()
 }
 
-/// The range a rule holds over.
 fn range_of(rule: &Value) -> Option<Range> {
     let between = rule["between"].as_array().map(|b| (b.first().and_then(Value::as_f64), b.get(1).and_then(Value::as_f64)));
     let [a, b] = match between {
@@ -67,7 +59,6 @@ pub fn merged(mut ranges: Vec<Range>, gap: f64) -> Vec<Range> {
     merged
 }
 
-/// `ranges` with `less` taken out of them.
 pub fn without(ranges: &[Range], less: &[Range]) -> Vec<Range> {
     let mut out = Vec::new();
     for &[a, b] in ranges {
@@ -88,23 +79,24 @@ pub fn without(ranges: &[Range], less: &[Range]) -> Vec<Range> {
     out
 }
 
-/// The value of the rule of a values column (`level_rules`, `width_rules`)
-/// that holds at fraction `at`, the first that does.
+/// The first rule that holds at `at`.
 pub fn value_at(column: Option<&str>, at: f64) -> Option<f64> {
     rules(column).iter().find(|r| range_of(r).is_some_and(|[a, b]| (a..=b).contains(&at))).and_then(|r| r["value"].as_f64())
 }
 
-/// Whether any of `wanted` holds at fraction `at` among a flags column's
-/// rules.
-pub fn flag_at(flags: Option<&str>, wanted: &[&str], at: f64) -> bool {
-    flag_ranges(flags, wanted).iter().any(|&[a, b]| (a..=b).contains(&at))
+pub fn text_at(column: Option<&str>, at: f64) -> Option<String> {
+    rules(column)
+        .iter()
+        .find(|r| range_of(r).is_some_and(|[a, b]| (a..=b).contains(&at)))
+        .and_then(|r| r["value"].as_str().map(str::to_string))
 }
 
-/// A line cut wherever a range of any of `sets` starts or ends, each piece
-/// marked by which sets it lies inside, with the range of the line it is.
-/// A fraction is of the line's planar length in EPSG:3857, where Overture
-/// measures its own along the geodesic; over one segment the two differ by
-/// the change in Mercator's scale across it, far under a cell.
+pub fn flag_at(flags: Option<&str>, wanted: &[&str], cell: f64, at: f64) -> bool {
+    flag_ranges(flags, wanted, cell).iter().any(|&[a, b]| (a..=b).contains(&at))
+}
+
+/// Fractions are of the planar 3857 length where Overture's are geodesic;
+/// over one segment the difference is far under a cell.
 pub fn split_ranged<const N: usize>(g: WkbGeometry, sets: [&[Range]; N]) -> Vec<([bool; N], Range, WkbGeometry)> {
     let whole = [false; N];
     let line = Line::of(&g.points);
@@ -137,14 +129,13 @@ pub struct Line<'a> {
 }
 
 impl<'a> Line<'a> {
-    /// None for a line of no length, which has no fraction of it to cut at.
     pub fn of(points: &'a [G3857]) -> Option<Line<'a>> {
         let mut cum = Vec::with_capacity(points.len());
         let mut len = 0.0;
         for (i, p) in points.iter().enumerate() {
             if i > 0 {
                 let q = points[i - 1];
-                len += (p[0] - q[0]).hypot(p[1] - q[1]);
+                len += libm::hypot(p[0] - q[0], p[1] - q[1]);
             }
             cum.push(len);
         }
@@ -155,7 +146,6 @@ impl<'a> Line<'a> {
         *self.cum.last().unwrap()
     }
 
-    /// The point at distance `d` along it.
     pub fn at(&self, d: f64) -> G3857 {
         let i = self.cum.partition_point(|&c| c < d).clamp(1, self.points.len() - 1);
         let (p, q) = (self.points[i - 1], self.points[i]);
@@ -164,7 +154,6 @@ impl<'a> Line<'a> {
         [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t, p[2] + (q[2] - p[2]) * t]
     }
 
-    /// The part of it between two fractions of its length.
     pub fn between(&self, from: f64, to: f64) -> Vec<G3857> {
         let (from, to) = (from * self.length(), to * self.length());
         let mut out = vec![self.at(from)];

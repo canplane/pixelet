@@ -69,30 +69,8 @@ fn state() -> &'static mut State {
 }
 
 /// xpute's three (two rings and the quantum) count as five entries, plus the
-/// host's stream, the GPU stream and the heap row.
-const DIRECTORY_ENTRIES: usize = 8;
-
-/// The bracket's `HeapStat` as words, written past the directory every turn
-/// for the shell to read in place.
-const HEAP_ROW_AT: u32 = crate::mem::spec::DIRECTORY_AT + directory_words(DIRECTORY_ENTRIES) as u32 * 4;
-const HEAP_ROW_WORDS: usize = 9;
-
-fn write_heap_row() {
-    let h = crate::host::heap_stat();
-    // SAFETY: the directory's page past the directory, the row's alone.
-    let row = unsafe { &mut *ptr_at::<[u32; HEAP_ROW_WORDS]>(HEAP_ROW_AT as usize) };
-    *row = [
-        h.range as u32,
-        h.used as u32,
-        h.live as u32,
-        h.run as u32,
-        h.slot as u32,
-        h.largest_free as u32,
-        h.releases,
-        h.refusals,
-        h.requests,
-    ];
-}
+/// host's stream and the GPU stream.
+const DIRECTORY_ENTRIES: usize = 7;
 
 /// A shell has booted. On a device the kernel outlives a JS reload, and the
 /// old shell's reads, surfaces, sensor watches and text requests will never
@@ -139,10 +117,9 @@ fn boot(b: &Bracket) {
         settle,
         (key::SYS, fixed_at(Range::Host)),
         (crate::abi::directory::key::GPU_STREAM, gpu_stream),
-        (crate::abi::directory::key::HEAP_ROW, HEAP_ROW_AT),
     ];
     // SAFETY: the page at DIRECTORY_AT, kept clear of the rings and the
-    // bracket's data; the directory's and the heap row's alone.
+    // bracket's data; the directory's alone.
     let words = unsafe { &mut *ptr_at::<[u32; directory_words(DIRECTORY_ENTRIES)]>(crate::mem::spec::DIRECTORY_AT as usize) };
     write_directory(words, &entries);
 }
@@ -190,7 +167,6 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
         post_shell(s);
     }
     pxl_render::gpu::api::gpu_publish();
-    write_heap_row();
     crate::host::host_fall();
     let wake = crate::world::change::world_fall();
     // What the completion ring had no room for is still in the submission ring.

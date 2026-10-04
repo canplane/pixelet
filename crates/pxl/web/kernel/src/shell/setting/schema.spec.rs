@@ -202,13 +202,13 @@ pub enum SettingKey {
     shadows = 11,
     /// The pixels the world is filled at, the GPU's largest cost: two to a
     /// CSS pixel is four times the fragments of one. RESOLUTION_MODES says each.
-    resolution = 12,
-    /// The performance overlay: the profiler's panel, and the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`).
-    profiler = 13,
-    /// Markers for the map center and the cell it floors to, the floating origin, the page's corners and the two gyro rings (layer/marker/frame_gizmo.rs).
-    gizmos = 14,
-    person = 15,
-    pet = 16,
+    resolution = 11,
+    /// The debug overlay: where the camera and the pointer are, and the profiler's panel, with the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`).
+    debug_overlay = 12,
+    /// Markers for the map center and the cell it floors to, and rings in the level, the view's upright and the north–south planes (layer/marker/frame_gizmo.rs).
+    gizmos = 13,
+    person = 14,
+    pet = 15,
 }
 
 impl SettingKey {
@@ -225,7 +225,7 @@ impl SettingKey {
         SettingKey::ao,
         SettingKey::shadows,
         SettingKey::resolution,
-        SettingKey::profiler,
+        SettingKey::debug_overlay,
         SettingKey::gizmos,
         SettingKey::person,
         SettingKey::pet,
@@ -250,7 +250,7 @@ impl SettingKey {
             SettingKey::ao => SettingKind::Choice,
             SettingKey::shadows => SettingKind::Toggle,
             SettingKey::resolution => SettingKind::Choice,
-            SettingKey::profiler => SettingKind::Toggle,
+            SettingKey::debug_overlay => SettingKind::Toggle,
             SettingKey::gizmos => SettingKind::Toggle,
             SettingKey::person => SettingKind::Index,
             SettingKey::pet => SettingKind::Index,
@@ -272,7 +272,7 @@ impl SettingKey {
             SettingKey::ao => "ao",
             SettingKey::shadows => "shadows",
             SettingKey::resolution => "resolution",
-            SettingKey::profiler => "profiler",
+            SettingKey::debug_overlay => "debug_overlay",
             SettingKey::gizmos => "gizmos",
             SettingKey::person => "person",
             SettingKey::pet => "pet",
@@ -316,7 +316,7 @@ pub struct Settings {
     pub ao: AoMode,
     pub shadows: bool,
     pub resolution: ResolutionMode,
-    pub profiler: bool,
+    pub debug_overlay: bool,
     pub gizmos: bool,
     pub person: u8,
     pub pet: u8,
@@ -337,7 +337,7 @@ impl Settings {
         ao: AoMode::corner,
         shadows: false,
         resolution: ResolutionMode::auto,
-        profiler: false,
+        debug_overlay: false,
         gizmos: false,
         person: 1,
         pet: 5,
@@ -359,7 +359,7 @@ impl Settings {
             SettingKey::ao => self.ao as u32,
             SettingKey::shadows => self.shadows as u32,
             SettingKey::resolution => self.resolution as u32,
-            SettingKey::profiler => self.profiler as u32,
+            SettingKey::debug_overlay => self.debug_overlay as u32,
             SettingKey::gizmos => self.gizmos as u32,
             SettingKey::person => self.person as u32,
             SettingKey::pet => self.pet as u32,
@@ -395,7 +395,7 @@ impl Settings {
                 Some(o) => self.resolution = o,
                 None => return false,
             },
-            SettingKey::profiler if value <= 1 => self.profiler = value == 1,
+            SettingKey::debug_overlay if value <= 1 => self.debug_overlay = value == 1,
             SettingKey::gizmos if value <= 1 => self.gizmos = value == 1,
             SettingKey::person => match u8::try_from(value) {
                 Ok(n) => self.person = n,

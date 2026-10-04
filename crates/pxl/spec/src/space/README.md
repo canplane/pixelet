@@ -95,24 +95,22 @@ Meaning enters at an **adapter**, and only there:
 ### What the adapter makes the tiers, here
 
 The X lane is exactly one EPSG:3857 world. So the lattice is that world cut
-2^24 ways, and every tier lands on a web map's zoom — not by design of the
-ladder but because the lane width and the world are the same thing.
+2^24 ways, and a cell, the ground's atom, is a z16 pixel of the standard's
+256-pixel tiles exactly — not by design of the ladder but because the lane
+width and the world are the same thing.
 
-| tier          | extent | planar meters | tile |
-| ------------- | ------ | ------------- | ---- |
-| **L1** block  | 1u     | 2.39          | z24  |
-| **L2** chunk  | 64u    | 152.9         | z18  |
-| **L3** page   | 512u   | 1,223.0       | z15  |
-| **L4** anchor | 4096u  | 9,783.9       | z12  |
-| **L5** shard  | 65536u | 156,543.0     | z8   |
+| tier          | extent | planar meters |
+| ------------- | ------ | ------------- |
+| **L1** block  | 1u     | 2.39          |
+| **L2** chunk  | 64u    | 152.9         |
+| **L3** page   | 512u   | 1,223.0       |
+| **L4** anchor | 4096u  | 9,783.9       |
+| **L5** shard  | 65536u | 156,543.0     |
 
-An L3 page is one 512-pixel z15 tile, and its cells are z16 pixels exactly.
-That identity holds by three constants agreeing rather than one deriving the
-rest — the X lane is one world, a cell is one unit, a page is 512 cells —
-and one assert block in [`bake/constant.rs`](../bake/constant.rs) holds all
-three to it and the pyramid's top level besides. That file is outside `space/`,
-which is the split above doing its work: the lattice does not know it is a
-map.
+That identity holds by two constants agreeing — the X lane is one world, a
+cell is one unit — and any cell's zoom follows from its size alone
+([`adapter/3857.rs`](./adapter/3857.rs) `zoom_of`). A page is no part of it: a page only bundles cells into a
+file, and its name's length follows its size, never a zoom.
 
 ## The pyramid is not a tier
 
@@ -135,8 +133,8 @@ named by a level and a key together (`LevelPage`, `pxl-spec
 space/pyramid.rs`). `L3_IDX` always answers the leaf question: which
 512u square.
 
-The two ladders meet at one number. A level-k page is zoom `15 − k`, and the
-kernel's mesher measures its own step against the same scale, so the
+The two ladders meet at one number. A level-k page's cells are z(16 − k), and
+the kernel's mesher measures its own step against the same scale, so the
 mesher's step, the level a page is held at and a web map's zoom are one
 quantity (`issue/20260921-level-step-and-zoom-are-one-number.md`).
 

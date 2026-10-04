@@ -10,7 +10,6 @@
 //! the child is never asked for.
 
 pub mod chunk;
-pub mod cover;
 pub mod domain;
 
 use std::collections::HashMap;
@@ -107,19 +106,6 @@ impl<L: Layer> Default for Pyramid<L> {
 }
 
 impl<L: Layer> Pyramid<L> {
-    /// A resident page. None past the pyramid's top too, which is what a top
-    /// page's parent is.
-    pub fn get(&self, p: LevelPage) -> Option<&L> {
-        self.paging.get(p)
-    }
-
-    /// Whether `p` is no page because one over it says its ground
-    /// (`Paging::settled`).
-    pub fn settled(&self, p: LevelPage) -> bool {
-        self.paging.settled(p)
-    }
-
-    /// What is held, and how.
     pub fn paging(&self) -> &Paging<L> {
         &self.paging
     }
@@ -275,25 +261,27 @@ impl<L: Layer> Pyramid<L> {
     /// The layer's turn. Quality is decided first so asks match what is drawn.
     /// Observes again whenever anything in `Seen` changed.
     ///
-    /// The estimator is the one from what the tiles saw (world/observation.rs
-    /// `ByFootprints`), which the quality's turn has just cast: the ground
-    /// the screen reaches, and what it lacked, and not what is hidden.
-    ///
-    /// `destination` is the z16 page a destination stands in, whose ground
-    /// is wanted exactly: asked for with the line over it, up to the top the
-    /// source supplies, whether or not there is an observation yet — at the
-    /// first fix there is none, since the camera waits for that ground to be
-    /// put at all.
-    ///
-    /// `readers` are the pages another layer reads from this one, as
-    /// `observe` takes them.
-    ///
-    /// `far` is how far the layer is seen, its observation cut there: what
-    /// it draws past that is nothing, so it asks for nothing past it.
-    pub fn step(&mut self, destination: Option<LevelPage>, readers: &[LevelPage], far: f64) {
+    /// `destination` is asked for with its line even with no observation yet:
+    /// at the first fix the camera waits for that ground. `far` cuts the
+    /// observation where the layer stops being drawn.
+    pub fn step(&mut self, destination: Option<LevelPage>) {
         let Some(top) = floor::level() else { return };
-        let o = observation().map(|o| Observation { far: o.far.min(far), ..o });
-        if o.is_none() && destination.is_none() {
+        // demand follows the published goal
+        let published = domain::current();
+        let live = observation();
+        let seen_from = live.map(|live| published.map_or(live, |d| *d.observation()));
+        // the floor follows the live eye, so a jump asks for it at once
+        let mut floor_now = [None; Floor::PAGES as usize];
+        if let Some(l) = &live {
+            let mut n = 0;
+            Floor::floor(l.top, l.eye, l.far, |p| {
+                if n < floor_now.len() {
+                    floor_now[n] = Some(p);
+                }
+                n += 1;
+            });
+        }
+        if seen_from.is_none() && destination.is_none() {
             return;
         }
         let tau = match seen_from {

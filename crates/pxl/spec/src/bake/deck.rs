@@ -10,21 +10,17 @@ use std::borrow::Cow;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{BranchCursor, BranchViewImpl, NodeView};
 
-use super::way;
+use super::{malformed, way};
+use crate::procedural::{pier_covers, Frame};
 use crate::space::hierarchy::child_of;
 use crate::space::pyramid::{GROUND, PAGE_CELLS};
 use xpute_core::math::scalar::round;
 
-/// A point's coordinate in eighths of its page's cell, from the page's
-/// south-west corner: an `i16` reaches four thousand cells either way, far
-/// past a page's 512, so a deck's points outside its page are held as
-/// exactly as those inside it.
+/// Points are in eighths of the page's cell, which an `i16` holds far past the page's edge.
 pub const POINT_SCALE: f64 = 8.0;
 
 /// The farthest past half its width the client draws a line, in its page's
-/// cells: a contract the bake keeps a line's page and its extent by, so how
-/// the client covers cells with a line — its own (bake/way.rs) — can change
-/// within it and nothing is baked again.
+/// cells; the bake sizes a line's page and extent by it.
 pub const LINE_PAST: f64 = 1.0;
 
 /// The widest a way is drawn, in its page's cells: what a deck's width byte
@@ -157,7 +153,6 @@ impl Default for Decks {
     }
 }
 
-/// One deck of a page, read where it lies.
 #[derive(Clone, Copy, Debug)]
 pub struct Deck<'a> {
     pub points: &'a [[i16; 2]],
@@ -167,9 +162,8 @@ pub struct Deck<'a> {
     pub form: Form,
 }
 
-/// What a deck is over a column — one it covers as a way covers the ground
-/// (bake/way.rs): its top there, in z16 cells, its kind, and whether a pier
-/// carries it there.
+/// A line over one column: the lowest and highest its road surface runs
+/// across the column, in z16 cells, and whether its pier's section covers it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Over {
     pub low: f64,
@@ -179,30 +173,44 @@ pub struct Over {
     pub pier: bool,
 }
 
-/// What a deck occupies over one column, in z16 cells, each `[lo, hi)`: its
-/// slab under its top, and where a pier carries it, the pier from the
-/// ground to the slab. The one rule the paint draws a deck by and the query
-/// meets it by.
+/// What a line occupies of one column, in z16 cells, each `[lo, hi)`; the
+/// paint and the query both use it.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Occupied {
-    pub slab: [i32; 2],
-    pub pier: Option<[i32; 2]>,
+pub enum Occupies {
+    /// The way on the ground; the column's top cell is its surface.
+    Grade,
+    /// A slab under the surface, and a pier
+    /// from the ground to the slab where its section covers the column.
+    Above { slab: [i32; 2], pier: Option<[i32; 2]> },
+    /// Air from the surface up; the cell under it is the way's.
+    Through { air: [i32; 2] },
 }
 
 impl Over {
-    /// Over a column whose ground stands `ground` cells high; none where the
-    /// deck is at or under the ground there — where a bridge comes down to
-    /// its end, which is the way on the ground.
-    pub fn occupies(&self, ground: i32) -> Option<Occupied> {
-        let top = self.top.round() as i32;
-        if top <= ground {
-            return None;
+    /// `cell_per_m`: z16 cells a ground metre on the column's page.
+    pub fn occupies(&self, ground: i32, cell_per_m: f64) -> Occupies {
+        // all the surface sweeps across the column, so a slab or a bore steps down to the
+        // next column's without a gap however steep it runs
+        let (low, top) = (round(self.low) as i32, round(self.top) as i32);
+        let slab = |floor: i32| {
+            let lo = (low - (round(DECK_THICKNESS_M * cell_per_m) as i32).max(1)).max(floor);
+            Occupies::Above {
+                slab: [lo, top],
+                pier: (self.pier && lo > ground).then_some([ground, lo]),
+            }
+        };
+        // a deck or a bore is one whatever its height: the solve holds it off the ground
+        match self.form {
+            Form::Deck => slab(i32::MIN),
+            Form::Bore => Occupies::Through {
+                air: [low, top + clear_cells(headroom_m(self.kind), cell_per_m)],
+            },
+            // a road off the ground past a structure stands on piers as a deck does, and is
+            // open to the sky where it is cut in
+            Form::Grade if top > ground => slab(ground),
+            Form::Grade if top < ground => Occupies::Through { air: [low, ground] },
+            Form::Grade => Occupies::Grade,
         }
-        let lo = (top - THICKNESS).max(ground);
-        Some(Occupied {
-            slab: [lo, top],
-            pier: (self.pier && lo > ground).then_some([ground, lo]),
-        })
     }
 }
 
@@ -230,16 +238,13 @@ impl Decks {
         (0..self.len()).map(|d| self.deck(d))
     }
 
-    /// Every deck over each point of a grid laid on the page: `size` columns
-    /// by rows, point (i, j) at `origin + (i + ½, j + ½) · step` in the
-    /// page's cells — its own cells' centers at a step of one, and finer
-    /// than its cells where a chunk is drawn from a page over its own. Told
-    /// as `each(i, j, deck, over)`; a point under two of a deck's segments,
-    /// at a joint, is told of both, and the caller keeps the higher.
-    pub fn over_grid(&self, origin: [f64; 2], step: f64, size: [i64; 2], mut each: impl FnMut(i64, i64, usize, Over)) {
+    /// Every deck over each column of a grid: column (i, j) the square of side
+    /// `step` about `origin + (i + ½, j + ½) · step` in the page's cells. A
+    /// column at a joint is reported for both segments; the caller joins them.
+    pub fn over_grid(&self, frame: Option<Frame>, origin: [f64; 2], step: f64, size: [i64; 2], mut each: impl FnMut(i64, i64, usize, Over)) {
         let cell = |v: f64, k: usize| (v - origin[k]) / step - 0.5;
         for (d, deck) in self.iter().enumerate() {
-            let half = deck.half_width();
+            let half = deck.reach();
             for s in 0..deck.points.len().saturating_sub(1) {
                 let (a, b) = (deck.point(s), deck.point(s + 1));
                 let range = |k: usize| {
@@ -249,7 +254,7 @@ impl Decks {
                 for j in range(1) {
                     for i in range(0) {
                         let at = [origin[0] + (i as f64 + 0.5) * step, origin[1] + (j as f64 + 0.5) * step];
-                        if let Some(over) = deck.over_segment(s, at) {
+                        if let Some(over) = deck.over_segment(frame, s, at, step) {
                             each(i, j, d, over);
                         }
                     }
@@ -268,32 +273,23 @@ impl Decks {
         })
     }
 
-    /// The highest top any deck has inside the `[x0, x1) × [y0, y1)` cells,
-    /// conservatively: a deck's highest point counts wherever its line comes
-    /// within its reach of the box.
-    pub fn highest_in(&self, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> Option<i16> {
-        let mut top = None;
-        for deck in self.iter() {
-            let half = deck.reach();
-            for s in 0..deck.points.len().saturating_sub(1) {
-                let (a, b) = (deck.point(s), deck.point(s + 1));
-                if a[0].max(b[0]) + half < x0 || a[0].min(b[0]) - half > x1 || a[1].max(b[1]) + half < y0 || a[1].min(b[1]) - half > y1 {
-                    continue;
-                }
-                let floor = bore.tops[s].min(bore.tops[s + 1]);
-                low = Some(low.map_or(floor, |v: i16| v.min(floor)));
-            }
-        }
-        low
+    /// The lowest surface of a line that can sink inside the box, conservatively.
+    pub fn lowest_in(&self, x: [f64; 2], y: [f64; 2]) -> Option<i16> {
+        self.segments_in(Form::sinks, x, y).map(|[lo, _]| lo).min()
     }
 
     /// The highest surface of a line that can rise inside the box,
     /// conservatively: its highest point counts wherever its footprint reaches the box.
-    pub fn highest_in(&self, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> Option<i16> {
-        let mut top = None;
-        for deck in self.iter().filter(|d| d.form.rises()) {
+    pub fn highest_in(&self, x: [f64; 2], y: [f64; 2]) -> Option<i16> {
+        self.segments_in(Form::rises, x, y).map(|[_, hi]| hi).max()
+    }
+
+    /// The lower and higher end of each segment whose footprint reaches the
+    /// box, of the lines whose form `keeps`.
+    fn segments_in(&self, keeps: fn(Form) -> bool, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> impl Iterator<Item = [i16; 2]> + '_ {
+        self.iter().filter(move |d| keeps(d.form)).flat_map(move |deck| {
             let half = deck.footprint();
-            for s in 0..deck.points.len().saturating_sub(1) {
+            (0..deck.points.len().saturating_sub(1)).filter_map(move |s| {
                 let (a, b) = (deck.point(s), deck.point(s + 1));
                 let apart = a[0].max(b[0]) + half < x0 || a[0].min(b[0]) - half > x1 || a[1].max(b[1]) + half < y0 || a[1].min(b[1]) - half > y1;
                 let (ta, tb) = (deck.tops[s], deck.tops[s + 1]);
@@ -304,29 +300,22 @@ impl Decks {
 }
 
 impl Deck<'_> {
-    /// Point `i` in the page's cells.
     pub fn point(&self, i: usize) -> [f64; 2] {
         self.points[i].map(|v| f64::from(v) / POINT_SCALE)
     }
 
-    /// Its width in the page's cells.
     pub fn width_cells(&self) -> f64 {
         f64::from(self.width) / POINT_SCALE
     }
 
-    /// How far from its line it covers a cell's center, in the page's cells
-    /// (bake/way.rs).
     pub fn reach(&self) -> f64 {
         way::reach(self.width_cells())
     }
 
-    /// How far from its line the client may draw it, in the page's cells:
-    /// half its width and `LINE_PAST`.
     pub fn footprint(&self) -> f64 {
         footprint(self.width_cells())
     }
 
-    /// The corners of the box its line lies in, in the page's cells.
     pub fn bounds(&self) -> [[f64; 2]; 2] {
         let mut b = [[f64::INFINITY; 2], [f64::NEG_INFINITY; 2]];
         for i in 0..self.points.len() {
@@ -338,24 +327,29 @@ impl Deck<'_> {
         b
     }
 
-    /// What segment `s` is over `at`: the top at the nearest point of the
-    /// segment, if the deck covers `at`. A pier stands at a point and takes
-    /// the cell its point is in, at least, and half the deck's width across.
-    fn over_segment(&self, s: usize, at: [f64; 2]) -> Option<Over> {
+    /// What segment `s` is over the column of side `side` about `at`, if the
+    /// deck covers `at`: the surface it runs through across the column, and,
+    /// given where the page lies, whether `at` is inside the section of a pier
+    /// at a station of this segment.
+    fn over_segment(&self, frame: Option<Frame>, s: usize, at: [f64; 2], side: f64) -> Option<Over> {
         let (a, b) = (self.point(s), self.point(s + 1));
         let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
         let len2 = dx * dx + dy * dy;
-        let t = if len2 > 0.0 { (((at[0] - a[0]) * dx + (at[1] - a[1]) * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
-        let near = [a[0] + dx * t, a[1] + dy * t];
-        if !way::covers(self.width_cells(), (at[0] - near[0]).hypot(at[1] - near[1])) {
+        let t = along(a, [dx, dy], at);
+        // a line ends square where it begins and ends, as the ground cuts a way, so the
+        // next line and the paint start where it stops; its joints stay round
+        if (s == 0 && t < 0.0) || (s + 2 == self.points.len() && t > 1.0) {
             return None;
         }
-        let top = f64::from(self.tops[s]) + (f64::from(self.tops[s + 1]) - f64::from(self.tops[s])) * t;
-        let pier_radius = (self.width_cells() / 4.0).max(0.5);
-        let on = |i: usize| self.piers[i] != 0 && {
-            let p = self.point(i);
-            (at[0] - p[0]).abs() <= pier_radius && (at[1] - p[1]).abs() <= pier_radius
-        };
+        let t = t.clamp(0.0, 1.0);
+        let near = [a[0] + dx * t, a[1] + dy * t];
+        if !way::covers(self.width_cells(), libm::hypot(at[0] - near[0], at[1] - near[1])) {
+            return None;
+        }
+        // the column's square spans this much of the segment either side of `t`
+        let reach = if len2 > 0.0 { side / 2.0 * (dx.abs() + dy.abs()) / len2 } else { 0.0 };
+        let z = |t: f64| f64::from(self.tops[s]) + (f64::from(self.tops[s + 1]) - f64::from(self.tops[s])) * t.clamp(0.0, 1.0);
+        let (z0, z1) = (z(t - reach), z(t + reach));
         Some(Over {
             low: z0.min(z1),
             top: z0.max(z1),
@@ -366,7 +360,17 @@ impl Deck<'_> {
     }
 }
 
-/// How far from its line a line `width` cells wide may be drawn.
+/// Where the nearest point of the line from `a` along `d` to `p` lies, as a
+/// share of `d`; 0 when `d` is none.
+fn along(a: [f64; 2], d: [f64; 2], p: [f64; 2]) -> f64 {
+    let len2 = d[0] * d[0] + d[1] * d[1];
+    if len2 > 0.0 {
+        ((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / len2
+    } else {
+        0.0
+    }
+}
+
 pub fn footprint(width: f64) -> f64 {
     width / 2.0 + LINE_PAST
 }
@@ -444,7 +448,6 @@ fn simplify(points: &[[f64; 2]], tops: &[i16], across: f64, height: f64) -> Vec<
     keep
 }
 
-/// A page's decks, written one at a time.
 #[derive(Default)]
 pub struct Builder {
     starts: Vec<u32>,
@@ -475,7 +478,6 @@ impl Builder {
         self.form.push(form.byte());
     }
 
-    /// Whether the decks so far fit a record.
     pub fn fits(&self) -> bool {
         self.width.len() <= MAX_DECKS && self.points.len() <= MAX_POINTS
     }
@@ -508,7 +510,6 @@ pub fn write_branch<'a>(decks: &'a Decks, b: &mut BranchViewImpl<'a>) {
     }));
 }
 
-/// A packet's decks, where they lie.
 pub struct Lanes<'a> {
     starts: &'a [u32],
     points: &'a [[i16; 2]],
@@ -518,10 +519,7 @@ pub struct Lanes<'a> {
     form: &'a [u8],
 }
 
-/// The branch's lanes: refused unless they are one page's decks — as many
-/// widths, kinds and forms as decks, as many tops and portals as points, the starts
-/// rising from the first point to past the last, and no more than a record
-/// holds.
+/// Refused unless the lanes are one page's decks, consistently sized and within a record's room.
 pub fn read_branch(d: BranchCursor<'_>) -> Result<Lanes<'_>, MarshalError> {
     let starts = d.at(0)?.get_array::<u32>()?;
     let points = match d.at(1)?.get_array::<i16>()?.as_chunks::<2>() {
@@ -547,11 +545,10 @@ pub fn read_branch(d: BranchCursor<'_>) -> Result<Lanes<'_>, MarshalError> {
         && starts.last() == Some(&(points.len() as u32))
         && starts.windows(2).all(|w| w[0] <= w[1])
         && lanes.form.iter().all(|&f| usize::from(f) < Form::ALL.len());
-    shaped.then_some(lanes).ok_or_else(bad)
+    shaped.then_some(lanes).ok_or_else(malformed)
 }
 
 impl Lanes<'_> {
-    /// Copied out, for a page held in hand.
     pub fn to_decks(&self) -> Decks {
         let mut boxes = vec![EMPTY; boxes_for(self.points.len())];
         build_boxes(self.starts, self.points, self.width, &mut boxes);
@@ -566,7 +563,6 @@ impl Lanes<'_> {
         }
     }
 
-    /// Copied into a record's room, and read from there.
     pub fn into_room(&self, room: Room) -> Decks {
         fn put<T: Copy>(dst: &'static mut [T], src: &[T]) -> &'static [T] {
             let dst = &mut dst[..src.len()];

@@ -19,6 +19,9 @@ use crate::io::demand::{DemandKey, Phases};
 use crate::mem::fixed::{lane, range, Range};
 use crate::sched::profiler::log::PENDING;
 use crate::sched::profiler::spec::{FRAME, GPU_SPAN_NAMES, LIMITS, PHASE_NAMES, SUMMARY, TASK, WORST};
+use pxl_spec::bake::constant::OBJECT_FINEST;
+use pxl_spec::space::adapter::epsg3857::zoom_of;
+use pxl_spec::space::pyramid::{GROUND, TOP_LEVEL};
 use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
 use xpute_runtime::sched::tick::PHASES;
@@ -39,18 +42,11 @@ pub struct TaskRecord {
     pub fail: Failure,
 }
 
-/// Why a task failed: the errno it failed with — the host's, as an open's
-/// answer carries it, or the kernel's own — and whatever number the host
-/// refused with beside it. Two numbers, so a record is a row of plain values
-/// and the summary counts by them rather than by prose — the words for an
-/// errno are the shell's, as `strerror` is libc's. What `detail` means is
-/// the host's too: nothing here reads it, and it exists to be printed.
-///
-/// A failure the kernel made carries where it made it, which a decode fault
-/// needs: EBADMSG says a body was wrong and not which rule it broke.
+/// Why a task failed, as numbers the summary can count by. A kernel-made
+/// failure carries its source location: EBADMSG alone does not say which
+/// rule a body broke.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Failure {
-    /// 0 where nothing failed.
     pub errno: i32,
     pub detail: u16,
     pub at: Option<&'static Location<'static>>,
@@ -78,7 +74,6 @@ impl From<MarshalError> for Failure {
 }
 
 impl fmt::Display for Failure {
-    /// `errno -13 503`: the numbers, as the record holds them.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match (self.errno, self.detail) {
             (0, _) => Ok(()),
@@ -102,7 +97,6 @@ pub struct TaskRow {
     pub start_ms: f64,
     pub end_ms: f64,
     pub outcome: f64,
-    /// The errno, and the host's own number beside it.
     pub fail: f64,
     pub detail: f64,
     /// Failure location: file name address and length, and line. 0 when the host raised it.
@@ -164,7 +158,8 @@ pub struct GpuSample {
     pub draw_calls: f64,
     pub triangles: f64,
     pub census: DrawCensus,
-    pub level_tris: [f64; LEVELS],
+    /// Slot z: triangles of cells at zoom z.
+    pub zoom_tris: [f64; ZOOMS],
     pub px: f64,
 }
 
@@ -204,7 +199,7 @@ pub struct MountSample {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct PageSample {
     pub total: f64,
-    pub by_level: [f64; LEVELS],
+    pub by_zoom: [f64; ZOOMS],
     pub poi: f64,
 }
 
@@ -276,6 +271,15 @@ pub struct FrameSample {
     pub cap: CapSample,
     pub turn: TurnSample,
     pub cover: CoverSample,
+    pub view: ViewSample,
+}
+
+/// The goal's rays cast and nodes visited this turn.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ViewSample {
+    pub rays: f64,
+    pub visits: f64,
 }
 
 /// Chunks the goal would be at target quality, pieces at the effective one,
@@ -296,7 +300,7 @@ pub struct StaleSample {
     pub uncovered: f64,
     pub unready: f64,
     pub slot_waits: f64,
-    pub wait_levels: f64,
+    pub wait_zooms: f64,
     pub chained: f64,
 }
 
@@ -359,27 +363,28 @@ words!(FrameSample, FRAME::WORDS,
     t => FRAME::t, dt_ms => FRAME::dt_ms, frame_ms => FRAME::frame_ms, settled => FRAME::settled,
     sched_ms => FRAME::sched_ms, budget_ms => FRAME::budget_ms, phases => FRAME::phases, chunks_ms => FRAME::chunks_ms, task_ms => FRAME::task_ms,
     gpu.ms => FRAME::gpu_ms, gpu.spans => FRAME::gpu_spans, gpu.draw_calls => FRAME::draw_calls, gpu.triangles => FRAME::triangles,
-    gpu.census => FRAME::census, gpu.level_tris => FRAME::level_tris, gpu.px => FRAME::px,
+    gpu.census => FRAME::census, gpu.zoom_tris => FRAME::zoom_tris, gpu.px => FRAME::px,
     device.buffers => FRAME::buffers, device.buffer_mb => FRAME::buffer_mb, device.arena_mb => FRAME::arena_mb,
     device.depth_mb => FRAME::tex_depth_mb, device.shadow_mb => FRAME::tex_shadow_mb, device.layers_mb => FRAME::tex_layers_mb,
     lod.chunks => FRAME::lod_chunks, lod.in_frustum => FRAME::lod_in_frustum, lod.pending => FRAME::lod_pending, lod.settling => FRAME::lod_settling,
     lod.offscreen_pending => FRAME::lod_offscreen_pending,
     lod.oldest_release_ms => FRAME::lod_oldest_release_ms, lod.oldest_visible_ms => FRAME::lod_oldest_visible_ms,
     mounts.added => FRAME::mounts_added, mounts.removed => FRAME::mounts_removed, mounts.layouts => FRAME::mounts_layouts,
-    pages.total => FRAME::pages_total, pages.by_level => FRAME::pages_by_level, pages.poi => FRAME::pages_poi,
+    pages.total => FRAME::pages_total, pages.by_zoom => FRAME::zoom_pages, pages.poi => FRAME::pages_poi,
     heap.used_mb => FRAME::heap_used_mb, heap.live_mb => FRAME::heap_live_mb, heap.run_mb => FRAME::heap_run_mb,
     heap.slot_mb => FRAME::heap_slot_mb, heap.range_mb => FRAME::heap_range_mb,
     heap.refusals => FRAME::heap_refusals, heap.largest_free_mb => FRAME::heap_largest_free_mb,
     rings.cq_peak => FRAME::ring_cq_peak, rings.held_peak => FRAME::ring_held_peak,
     work.scans => FRAME::work_scans, work.bakes => FRAME::work_bakes, work.fine_peak => FRAME::work_fine_peak, work.coarse_peak => FRAME::work_coarse_peak, q_terrain => FRAME::q_terrain, q_poi => FRAME::q_poi,
     stale.hidden => FRAME::stale_hidden, stale.uncovered => FRAME::stale_uncovered, stale.unready => FRAME::stale_unready,
-    stale.slot_waits => FRAME::slot_waits, stale.wait_levels => FRAME::slot_wait_levels,
+    stale.slot_waits => FRAME::slot_waits, stale.wait_zooms => FRAME::slot_wait_zooms,
     stale.chained => FRAME::slot_chained,
     cap.commit_left => FRAME::cap_commit_left, cap.mount_left => FRAME::cap_mount_left,
     cap.mount_full => FRAME::cap_mount_full, cap.record_refused => FRAME::cap_record_refused,
     turn.effects_ms => FRAME::turn_effects_ms, turn.stage_ms => FRAME::turn_stage_ms,
     turn.step_ms => FRAME::turn_step_ms, turn.step_name => FRAME::turn_step_name,
     cover.rule => FRAME::cover_rule, cover.drawn => FRAME::cover_drawn, cover.gaps => FRAME::cover_gaps,
+    view.rays => FRAME::view_rays, view.visits => FRAME::view_visits,
 );
 
 words!(TaskRow, TASK::WORDS,
@@ -405,19 +410,22 @@ words!(FramePeak, SUMMARY::peak::WORDS,
 const _: () = assert!(PHASE_NAMES.len() == PHASES.len(), "profiler.json names the tick's phases");
 
 pub const GPU_SPANS: usize = GPU_SPAN_NAMES.len();
-pub const LEVELS: usize = LIMITS::LEVELS as usize;
+pub const ZOOMS: usize = LIMITS::ZOOMS as usize;
 
-/// A mebibyte, which the samples count memory in.
 pub const MB: f64 = 1_048_576.0;
 const _: () = assert!(GPU_SPANS == pxl_render::gpu::renderer::GPU_SPANS.len(), "profiler.json names the renderer's spans");
 
 #[cfg(test)]
 #[path = "record.test.rs"]
 mod test;
-const _: () = assert!(LEVELS == pxl_spec::space::pyramid::TOP_LEVEL as usize + 1, "a lane a level holds every level of the pyramid");
+const _: () = assert!(
+    zoom_of(OBJECT_FINEST) < ZOOMS as i32 && zoom_of(GROUND.scale(TOP_LEVEL)) >= 0,
+    "a zoom slot for every cell drawn, the finest object tier to the pyramid's top"
+);
 
 /// The rings keep the last minute. At 60 Hz that is 3,600 frames; a faster
-/// display or a heavy minute fills a lane early and sets `truncated`.
+/// display or a heavy minute fills a lane early, which drops its oldest and
+/// sets `truncated`.
 pub const WINDOW_MS: f64 = 60_000.0;
 pub const TASK_LIMIT: usize = 2_048;
 pub const FRAME_LIMIT: usize = 4_096;
@@ -438,16 +446,17 @@ fn trim<T>(ring: &[T], head: &mut usize, cutoff: f64, t: impl Fn(&T) -> f64) -> 
     }
 }
 
+/// Returns false where a full lane dropped its oldest quarter for `rec`: a
+/// shift a quarter of the lane apart rather than one a record.
 fn land_lane<T: Copy>(ring: &mut [T], len: &mut usize, head: &mut usize, rec: T) -> bool {
-    if *len == ring.len() && *head > 0 {
-        drop_front(ring, len, core::mem::take(head));
-    }
+    let full = *len == ring.len() && *head == 0;
     if *len == ring.len() {
-        return false;
+        let n = if full { ring.len() / 4 } else { core::mem::take(head) };
+        drop_front(ring, len, n);
     }
     ring[*len] = rec;
     *len += 1;
-    true
+    !full
 }
 
 pub(super) fn drop_front<T: Copy>(ring: &mut [T], len: &mut usize, n: usize) {
@@ -478,11 +487,9 @@ const LANE_ALIGN: u32 = 64;
 
 pub const PROFILER_BYTES: u32 = span_of(&LANES, LANE_ALIGN);
 
-/// `lane`, as `cap` records, zeroed.
 pub(super) fn fixed_lane<T: Copy>(which: Lane, cap: usize) -> &'static mut [T] {
-    // SAFETY: the lane's own bytes, which only its ring holds, zeroed as the
-    // range was laid; a zeroed record is a valid one for the plain numbers
-    // the rings hold.
+    // SAFETY: the lane's own bytes, held only by its ring, zeroed when laid;
+    // zero is a valid record.
     unsafe { lane(range(Range::Profiler).nth(&LANES, LANE_ALIGN, which as usize), 0, cap) }
 }
 
@@ -545,6 +552,8 @@ struct Profiler {
     worst: &'static mut [WorstFrame],
     worst_len: usize,
     rings: RingSample,
+    /// The frame whose task and the gap after it are not known yet.
+    open: Option<FrameSample>,
 }
 
 static PROFILER: Global<Profiler> = Global::new();
@@ -566,6 +575,7 @@ fn profiler() -> &'static mut Profiler {
         worst: &mut [],
         worst_len: 0,
         rings: RingSample::default(),
+        open: None,
     })
 }
 
@@ -573,8 +583,6 @@ pub fn profiler_set_sink(sink: Option<ProfilerSink>) {
     profiler().sink = sink.unwrap_or_default();
 }
 
-/// Whether a recording is open, which is the only time a frame sample is
-/// kept.
 pub fn profiler_recording() -> bool {
     profiler().recording
 }
@@ -595,6 +603,7 @@ pub fn profiler_recording_start() {
     (l.task_len, l.frame_len, l.worst_len) = (0, 0, 0);
     (l.task_head, l.frame_head) = (0, 0);
     l.frame_peak = FramePeak::default();
+    l.open = None;
     l.truncated = false;
     l.started_at = now();
     l.stopped_at = None;
@@ -643,11 +652,16 @@ pub fn profiler_take_rings() -> RingSample {
     core::mem::take(&mut profiler().rings)
 }
 
+/// Lands the open frame with the gap that ended at `s`, which its turn made,
+/// and opens `s`.
 pub fn profiler_record_frame(s: FrameSample) {
     let l = profiler();
     if !l.recording {
         return;
     }
+    let Some(mut f) = l.open.replace(s) else { return };
+    (f.dt_ms, f.settled) = (s.dt_ms, s.settled);
+    let s = f;
     if l.worst.is_empty() {
         l.worst = fixed_lane(Lane::Worst, WORST_CAP);
     }
@@ -697,16 +711,14 @@ pub fn profiler_record_frame(s: FrameSample) {
     }
 }
 
-/// The frame sample just recorded, so a late-arriving measurement (task_ms,
-/// which is only known once the turn is over) can be written into the frame it
-/// belongs to instead of being attributed to the next one. None once
-/// recording has stopped, since a stopped recording is frozen for export.
-pub fn profiler_last_frame() -> Option<&'static mut FrameSample> {
+/// The open frame, so `task_ms`, known only after the turn, lands in it.
+/// None once recording stopped.
+pub fn profiler_open_frame() -> Option<&'static mut FrameSample> {
     let l = profiler();
     if !l.recording {
         return None;
     }
-    l.frame_ring[..l.frame_len].last_mut()
+    l.open.as_mut()
 }
 
 fn first_at<T>(ring: &[T], t: f64, at: impl Fn(&T) -> f64) -> usize {

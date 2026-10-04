@@ -18,8 +18,8 @@ use super::v3::Aabb;
 use super::xy::TO_XY;
 use crate::bake::constant::{CELL, DECK_CELL, EXTENT_CELL};
 
-/// The coarsest folded level. At level 10 (zoom 5) a page spans about 9° of
-/// latitude and the page-constant vertical scale is already 12% off.
+/// The coarsest folded level. At z6 a page spans about 9° of latitude and the
+/// page-constant vertical scale is already 12% off.
 pub const TOP_LEVEL: u32 = 10;
 
 // A lattice is a scale against the unit: its level-k cell is k levels above
@@ -148,10 +148,8 @@ pub const GROUND: Lattice = Lattice::new(CELL);
 /// The index lane's lattice (bake/format.rs `Index`).
 pub const EXTENT: Lattice = Lattice::new(EXTENT_CELL);
 
-/// The deck lane's lattice (bake/deck.rs): the ground's cell twice over.
 pub const DECK: Lattice = Lattice::new(DECK_CELL);
 
-/// Cells on a page's side in the ground's lattice.
 pub const PAGE_CELLS: u32 = GROUND.page_cells();
 
 pub const CHUNK_CELLS: u32 = GROUND.chunk_cells();

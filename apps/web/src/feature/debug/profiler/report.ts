@@ -5,43 +5,24 @@ import { round } from "@xpute/core/math/scalar.ts";
 import { type Errno, strerror } from "@xpute/core/status/errno.spec.ts";
 import { copyText } from "@platform/save.ts";
 
-import { fieldText, type Frame, GROUPS, groupText, n1, pct, tris } from "./lane.ts";
+import { fieldText, type Frame, GROUPS, groupText, n1, offthreadMs, pct, phaseText, STARVED_MS, tris, zoomName } from "./lane.ts";
 import { loafSupported, type LongFrame } from "./long-frame.ts";
 import type { ProfilerReport, Spread, TaskRecord, TaskSummary } from "./view.ts";
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
 const spread = (s: Spread) => `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
 
-const STARVED_MS = 2000;
 const starved = (ms: number) => (ms >= STARVED_MS ? "  STARVED" : "");
 
-// ---- the words ----
-
-/** Why a task failed: its errno's name, and the number the host refused
- * with beside it where there is one, which tells one refusal from another;
- * what that number means is the host's, and nothing reads it. */
 export function failText(fail: u32, detail: u32): string {
   const name = strerror(fail as Errno).split(":")[0];
   return detail === 0 ? name : `${name} ${detail}`;
 }
 
 /** Set once from profiling, never fed back into scheduling. */
-export const BOUND: Record<string, { bound: string; note: string }> = {
-  terrain: {
-    bound: "network",
-    note: "Measured 2026-09-09: 4.2MB/page, mean net 322.5ms vs decode 0.6ms — decode_terrain is an XTP cursor read and is free. The demand is network-bound end to end.",
-  },
-  geocode: {
-    bound: "network",
-    note: "single-slot latest-wins; one small page lookup, pure RTT. Already debounced upstream, so the lever left is queue priority.",
-  },
-  search: {
-    bound: "network",
-    note: "the one feature with no static bake — always a live API round trip, and the user is watching. Runs ahead of every streaming category on purpose.",
-  },
-};
+export const BOUND: Record<string, string> = { terrain: "network", geocode: "network" };
 
-const phasesText = (p: [string, f64][]) => p.length === 0 ? "" : `  [${p.map(([k, v]) => `${k.replace(/_ms$/, "")} ${k === "bytes" ? v : n1(v)}`).join(" ")}]`;
+const phasesText = (p: [string, f64][]) => p.length === 0 ? "" : `  [${p.map(phaseText).join(" ")}]`;
 
 export function taskLine(r: TaskRecord): string {
   const total = r.end_ms - r.enqueue_ms;
@@ -53,7 +34,7 @@ export function taskLine(r: TaskRecord): string {
 /** Geometry, textures and heap only mean anything as deltas from `prev`. */
 export function frameLine(s: Frame, prev: Frame | null): string {
   const d = prev === null ? "" : `  Δbuf ${signed(s.buffers - prev.buffers)} Δbuf_mb ${signed(s.buffer_mb - prev.buffer_mb)} Δheap ${signed(s.heap_used_mb - prev.heap_used_mb)}MB`;
-  return `[${n1(s.t).padStart(9)}] dt ${n1(s.dt_ms)} = task ${n1(s.task_ms)} + offthread ${n1(s.dt_ms - s.task_ms)}  gpu ${n1(s.gpu_ms)}  sched ${n1(s.sched_ms)}/${n1(s.budget_ms)}${
+  return `[${n1(s.t).padStart(9)}] dt ${n1(s.dt_ms)} = task ${n1(s.task_ms)} + offthread ${n1(offthreadMs(s))}  gpu ${n1(s.gpu_ms)}  sched ${n1(s.sched_ms)}/${n1(s.budget_ms)}${
     s.settled ? " (still)" : ""
   } (chunks ${n1(s.chunks_ms)})  draws ${s.draw_calls} tris ${
     tris(s.triangles)
@@ -70,7 +51,7 @@ function windowSection(r: ProfilerReport): string[] {
   const c = r.sections.counters;
   const bands = c.bands_reused + c.bands_allocated;
   const spans = f.gpu_spans.filter((s) => s.spread.max > 0).map((s) => `${s.name} ${n1(s.spread.p95)}`).join("  ");
-  const levels = f.level_tris.map((t, k) => [k, t] as const).filter(([, t]) => t > 0).map(([k, t]) => `L${k} ${tris(t)}`).join("  ");
+  const levels = f.zoom_tris.map((t, z) => [z, t] as const).filter(([, t]) => t > 0).map(([z, t]) => `${zoomName(z)} ${tris(t)}`).join("  ");
   const steps = r.steps.length === 0 ? "none" : [...r.steps].sort((a, b) => b.ms / b.count - a.ms / a.count).map((s) => `${s.phase}/${s.name} ${n1(s.ms / s.count)}/${n1(s.max_ms)}`).join("  ");
 
   return [
@@ -120,17 +101,18 @@ function sideSection(r: ProfilerReport): string[] {
 
 const peakSection = (p: Record<string, f64>) => ["peak (window)", `  ${Object.entries(p).map(([k, v]) => fieldText(k, v)).join("  ")}`];
 
-function tasksSection(n: u32, tasks: TaskSummary[]): string[] {
+function tasksSection(tasks: TaskSummary[]): string[] {
+  const n = tasks.reduce((sum, t) => sum + t.n, 0);
   if (n === 0) return ["tasks n=0"];
   const lines = [`tasks n=${n}`];
   for (const t of tasks) {
-    const bound = BOUND[t.category]?.bound ?? "?";
+    const bound = BOUND[t.category] ?? "?";
     const reasons = t.reasons.length === 0 ? "" : ` (${t.reasons.map((x) => `${failText(x.fail, x.detail)} x${x.n}`).join(", ")})`;
     lines.push(
       `  ${t.category.padEnd(9)}${bound.padEnd(9)}n=${t.n}   p50 ${n1(t.lat.p50)}  p95 ${n1(t.lat.p95)} ms   ok ${t.ok}  ab ${t.aborted}  err ${t.error}${reasons}`,
     );
     if (t.phase_mean !== null) {
-      const means = t.phase_mean.map(([k, v]) => `${k.replace(/_ms$/, "")} ${k === "bytes" ? round(v) : n1(v)}`).join("  ");
+      const means = t.phase_mean.map(phaseText).join("  ");
       lines.push(`  ${"".padEnd(18)}mean ${means}`);
     }
   }
@@ -143,7 +125,7 @@ export function profilerReportText(r: ProfilerReport): string {
   if (r.frames !== null) out.push(...lastSection(r.frames.last));
   out.push(...sideSection(r));
   if (r.peak !== null) out.push(...peakSection(r.peak));
-  out.push(...tasksSection(r.taskN, r.tasks));
+  out.push(...tasksSection(r.tasks));
   out.push(`long frames n=${r.longs.length}${loafSupported() ? "" : " (LoAF unsupported; longtask only)"}`);
 
   if (r.recent.length > 0) {

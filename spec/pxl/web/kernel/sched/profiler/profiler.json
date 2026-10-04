@@ -51,7 +51,9 @@
     "environment",
     "companion",
     "preview",
-    "view",
+    "sight",
+    "goal",
+    "demand",
     "chunks",
     "debug_gizmos",
     "profiler"
@@ -88,12 +90,13 @@
     "PHASES_MAX": 6,
     "REASONS": 4,
     "STEP_SLOTS": 32,
-    "LEVELS": 11
+    "ZOOMS": 24,
+    "$ZOOMS": "A lane a zoom slot, by the zoom itself: slot z holds a cell of zoom z (pxl-spec adapter/3857.rs zoom_of)."
   },
   "FRAME": {
     "$type": "u32",
     "$doc": [
-      "One rendered frame (sched/profiler/record.rs FrameSample). `settled` is 0 or 1; `phases` is a lane of PHASE_NAMES' length, `gpu_spans` of GPU_SPAN_NAMES', `census` pairs of draws and triangles in CENSUS_TAGS' order, and `level_tris` and `pages_by_level` a word a level of the pyramid, LIMITS.LEVELS of them. A lane's name says its unit: `_ms`, `_mb`, and `_levels` for a set of levels as bits."
+      "One rendered frame (sched/profiler/record.rs FrameSample). `settled` is 0 or 1; `phases` is a lane of PHASE_NAMES' length, `gpu_spans` of GPU_SPAN_NAMES', `census` pairs of draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_pages` a word a zoom, LIMITS.ZOOMS of them, slot z for zoom z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z."
     ],
     "t": 0,
     "dt_ms": 1,
@@ -109,60 +112,62 @@
     "draw_calls": 21,
     "triangles": 22,
     "census": 23,
-    "level_tris": 43,
-    "px": 54,
-    "buffers": 55,
-    "buffer_mb": 56,
-    "arena_mb": 57,
-    "tex_depth_mb": 58,
-    "tex_shadow_mb": 59,
-    "tex_layers_mb": 60,
-    "lod_chunks": 61,
-    "lod_in_frustum": 62,
-    "lod_pending": 63,
-    "lod_settling": 64,
-    "lod_offscreen_pending": 65,
-    "lod_oldest_release_ms": 66,
-    "lod_oldest_visible_ms": 67,
-    "mounts_added": 68,
-    "mounts_removed": 69,
-    "mounts_layouts": 70,
-    "pages_total": 71,
-    "pages_by_level": 72,
-    "pages_poi": 83,
-    "heap_used_mb": 84,
-    "heap_live_mb": 85,
-    "heap_run_mb": 86,
-    "heap_slot_mb": 87,
-    "heap_range_mb": 88,
-    "heap_refusals": 89,
-    "heap_largest_free_mb": 90,
-    "ring_cq_peak": 91,
-    "ring_held_peak": 92,
-    "work_scans": 93,
-    "work_bakes": 94,
-    "work_fine_peak": 95,
-    "work_coarse_peak": 96,
-    "q_terrain": 97,
-    "q_poi": 98,
-    "stale_hidden": 99,
-    "stale_uncovered": 100,
-    "stale_unready": 101,
-    "slot_waits": 102,
-    "slot_wait_levels": 103,
-    "slot_chained": 104,
-    "cap_commit_left": 105,
-    "cap_mount_left": 106,
-    "cap_mount_full": 107,
-    "cap_record_refused": 108,
-    "turn_effects_ms": 109,
-    "turn_stage_ms": 110,
-    "turn_step_ms": 111,
-    "turn_step_name": 112,
-    "cover_rule": 113,
-    "cover_drawn": 114,
-    "cover_gaps": 115,
-    "WORDS": 116
+    "zoom_tris": 43,
+    "px": 67,
+    "buffers": 68,
+    "buffer_mb": 69,
+    "arena_mb": 70,
+    "tex_depth_mb": 71,
+    "tex_shadow_mb": 72,
+    "tex_layers_mb": 73,
+    "lod_chunks": 74,
+    "lod_in_frustum": 75,
+    "lod_pending": 76,
+    "lod_settling": 77,
+    "lod_offscreen_pending": 78,
+    "lod_oldest_release_ms": 79,
+    "lod_oldest_visible_ms": 80,
+    "mounts_added": 81,
+    "mounts_removed": 82,
+    "mounts_layouts": 83,
+    "pages_total": 84,
+    "zoom_pages": 85,
+    "pages_poi": 109,
+    "heap_used_mb": 110,
+    "heap_live_mb": 111,
+    "heap_run_mb": 112,
+    "heap_slot_mb": 113,
+    "heap_range_mb": 114,
+    "heap_refusals": 115,
+    "heap_largest_free_mb": 116,
+    "ring_cq_peak": 117,
+    "ring_held_peak": 118,
+    "work_scans": 119,
+    "work_bakes": 120,
+    "work_fine_peak": 121,
+    "work_coarse_peak": 122,
+    "q_terrain": 123,
+    "q_poi": 124,
+    "stale_hidden": 125,
+    "stale_uncovered": 126,
+    "stale_unready": 127,
+    "slot_waits": 128,
+    "slot_wait_zooms": 129,
+    "slot_chained": 130,
+    "cap_commit_left": 131,
+    "cap_mount_left": 132,
+    "cap_mount_full": 133,
+    "cap_record_refused": 134,
+    "turn_effects_ms": 135,
+    "turn_stage_ms": 136,
+    "turn_step_ms": 137,
+    "turn_step_name": 138,
+    "cover_rule": 139,
+    "cover_drawn": 140,
+    "cover_gaps": 141,
+    "view_rays": 142,
+    "view_visits": 143,
+    "WORDS": 144
   },
   "FRAME_GROUPS": {
     "$doc": [
@@ -191,7 +196,7 @@
       "draw_calls",
       "triangles",
       "census",
-      "level_tris",
+      "zoom_tris",
       "px"
     ],
     "lod": [
@@ -215,7 +220,7 @@
     ],
     "slot": [
       "slot_waits",
-      "slot_wait_levels",
+      "slot_wait_zooms",
       "slot_chained"
     ],
     "cap": [
@@ -236,13 +241,17 @@
     ],
     "pages": [
       "pages_total",
-      "pages_by_level",
+      "zoom_pages",
       "pages_poi"
     ],
     "cover": [
       "cover_rule",
       "cover_drawn",
       "cover_gaps"
+    ],
+    "view": [
+      "view_rays",
+      "view_visits"
     ],
     "device": [
       "buffers",
@@ -294,9 +303,9 @@
       "One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0."
     ],
     "sample": 0,
-    "has_prev": 116,
-    "prev": 117,
-    "WORDS": 233
+    "has_prev": 144,
+    "prev": 145,
+    "WORDS": 289
   },
   "SPREAD": {
     "$type": "u32",
@@ -348,12 +357,12 @@
       "WORDS": 5
     },
     "frames": {
+      "AT": 5,
       "present": 0,
       "n": 1,
       "seconds": 2,
       "moving": 3,
       "missed": 4,
-      "AT": 5,
       "overran": 5,
       "dt": 6,
       "task": 9,
@@ -363,29 +372,27 @@
       "chunks": 21,
       "phases": 24,
       "gpu_spans": 39,
-      "work_scans": 60,
-      "work_bakes": 61,
-      "per_s_scans": 62,
-      "per_s_bakes": 63,
-      "backlog_s": 64,
-      "backlog_per_s_scans": 65,
-      "backlog_per_s_bakes": 66,
-      "chunks_per_bake": 67,
-      "mounts_added": 68,
-      "mounts_removed": 69,
-      "used_delta_mb": 70,
-      "census": 71,
-      "level_tris": 91,
-      "last": 102,
-      "WORDS": 218
+      "per_s_scans": 60,
+      "per_s_bakes": 61,
+      "backlog_s": 62,
+      "backlog_per_s_scans": 63,
+      "backlog_per_s_bakes": 64,
+      "chunks_per_bake": 65,
+      "mounts_added": 66,
+      "mounts_removed": 67,
+      "used_delta_mb": 68,
+      "census": 69,
+      "zoom_tris": 89,
+      "last": 113,
+      "WORDS": 257
     },
     "tasks": {
-      "AT": 223,
+      "AT": 262,
       "slots": 0,
       "WORDS": 150
     },
     "counters": {
-      "AT": 373,
+      "AT": 412,
       "faces_kept": 0,
       "faces_possible": 1,
       "runs_culled": 2,
@@ -403,32 +410,33 @@
       "WORDS": 14
     },
     "atlas": {
-      "AT": 387,
+      "AT": 426,
       "size": 0,
       "entries": 1,
       "shelves": 2,
       "used_px": 3,
-      "WORDS": 4
+      "initial": 4,
+      "WORDS": 5
     },
     "held": {
-      "AT": 391,
+      "AT": 431,
       "run_sets": 0,
       "run_set_mb": 1,
       "tiers": 2,
-      "decor_cells": 3,
+      "decor_blocks": 3,
       "decor_instances": 4,
       "decor_bytes": 5,
       "WORDS": 6
     },
     "fetch": {
-      "AT": 397,
+      "AT": 437,
       "queued": 0,
       "running": 1,
       "credits": 2,
       "WORDS": 3
     },
     "peak": {
-      "AT": 400,
+      "AT": 440,
       "present": 0,
       "dt_ms": 1,
       "sched_ms": 2,
@@ -450,13 +458,13 @@
       "WORDS": 18
     },
     "steps": {
-      "AT": 418,
+      "AT": 458,
       "count": 0,
       "slots": 1,
       "WORDS": 161
     },
     "quality": {
-      "AT": 579,
+      "AT": 619,
       "step": 0,
       "star": 1,
       "frames_held": 2,
@@ -467,7 +475,39 @@
       "changes_peak": 7,
       "WORDS": 8
     },
-    "WORDS": 587
+    "heap": {
+      "$doc": [
+        "The heap as the read finds it, recording or not: `used_mb` its top, `requests` the pages it has ever asked for."
+      ],
+      "AT": 627,
+      "used_mb": 0,
+      "requests": 1,
+      "WORDS": 2
+    },
+    "view": {
+      "$doc": [
+        "Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the page it is read from."
+      ],
+      "AT": 629,
+      "dist": 0,
+      "polar": 1,
+      "azimuth": 2,
+      "tau": 3,
+      "center_lon": 4,
+      "center_lat": 5,
+      "center_z": 6,
+      "hover_x": 7,
+      "hover_y": 8,
+      "hover_z": 9,
+      "hover_lon": 10,
+      "hover_lat": 11,
+      "hover_alt": 12,
+      "chunk_zoom": 13,
+      "tier_zoom": 14,
+      "read_zoom": 15,
+      "WORDS": 16
+    },
+    "WORDS": 645
   },
   "READ": {
     "$type": "u32",

@@ -46,8 +46,8 @@ const _: () = assert!(
 /// span `2 · atan(n / 2 / that)`.
 pub fn target() -> Tau {
     let v = view();
-    let half = param::CENTER_CELL_LOGICAL_PX * (v.fov.to_radians() / 2.0).tan() / v.height;
-    Tau::of((2.0 * half.atan() * SPLIT).max(1.0))
+    let half = param::CENTER_CELL_LOGICAL_PX * libm::tan(v.fov.to_radians() / 2.0) / v.height;
+    Tau::of((2.0 * libm::atan(half) * SPLIT).max(1.0))
 }
 
 pub fn ladder() -> [Tau; param::TAU_STEPS + 1] {
@@ -148,7 +148,7 @@ pub fn step(stop: &dyn Fn() -> bool) {
         slots: |c, cube| sched.slots_of(c, cube),
         admit: true,
     };
-    domain::advance(&ladder, q.smooth.at(), &price, stop, sched.needs_revision());
+    domain::advance(q.smooth.at(), &price, stop);
     let Some(d) = domain::current() else { return };
     let spare = margin();
     let (star, roomy) = around(q.smooth.at(), param::TAU_STEPS + 1, |k, roomy| {
