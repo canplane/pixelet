@@ -1,8 +1,9 @@
 // pxl-geo-bake/bin/bake_earth.rs
 
 //! The Earth's picture, both its forms from one source: NASA's Blue Marble Next
-//! Generation, July 2004 (21600 × 10800, the sea a flat blue), as reflectance,
-//! and the Black Marble's lights of 2016 (3 km).
+//! Generation, July 2004 (21600 × 10800, 2 km, the sea a flat blue), as
+//! reflectance, and the Black Marble's lights of 2016 (86400 × 43200, 500 m, in
+//! eight tiles). Each is averaged in linear light over what a texel covers.
 //!  - The Earth layer's pages (pxl-spec bake/earth_page.rs) at its top level, a
 //!    z6 pixel a texel, to `./out/earth/<version>/<quadkey>`. A page that is one
 //!    color says nothing the global picture does not, and has no object.
@@ -17,8 +18,7 @@
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use image::imageops::{resize, FilterType};
-use image::{GrayImage, ImageFormat, Rgb32FImage, RgbImage};
+use image::ImageFormat;
 
 use pxl_geo_bake::util::{git_sha, pack, write_atomic, write_manifest, Level};
 use pxl_spec::bake::earth_page::{self, EARTH_LEVEL, EARTH_TEXELS};
@@ -29,7 +29,9 @@ use pxl_spec::space::pvf3::pvf3;
 use pxl_spec::space::pyramid::{page_at, pages_around, GROUND};
 
 const DAY: &str = "https://eoimages.gsfc.nasa.gov/images/imagerecords/74000/74393/world.topo.200407.3x21600x10800.jpg";
-const NIGHT: &str = "https://eoimages.gsfc.nasa.gov/images/imagerecords/144000/144897/BlackMarble_2016_3km_gray.jpg";
+const NIGHT: &str = "https://eoimages.gsfc.nasa.gov/images/imagerecords/144000/144897/BlackMarble_2016_";
+/// NASA's tiling: a column a quarter of the world from 180° W, row 1 the north.
+const NIGHT_TILES: [[&str; 4]; 2] = [["A1", "B1", "C1", "D1"], ["A2", "B2", "C2", "D2"]];
 const GLOBAL: (u32, u32) = (2048, 1024);
 /// libwebp's lossy quality: a map seen kilometers wide shows nothing finer.
 const QUALITY: f32 = 90.0;
@@ -121,29 +123,47 @@ fn source(url: &str, dir: &Path) -> Result<Vec<u8>, String> {
     Ok(body)
 }
 
-/// An equirectangular raster read in linear light at a longitude and latitude, in degrees, bilinearly.
+/// An equirectangular raster read in linear light.
 struct Plate<'a, const N: usize> {
-    width: u32,
-    height: u32,
+    width: usize,
+    height: usize,
     bytes: &'a [u8],
     decode: [f32; 256],
 }
 
 impl<const N: usize> Plate<'_, N> {
-    fn at(&self, lng: f64, lat: f64) -> [f32; N] {
-        let x = (lng + 180.0) / 360.0 * self.width as f64 - 0.5;
-        let y = (90.0 - lat) / 180.0 * self.height as f64 - 0.5;
-        let (x0, y0) = (x.floor(), y.floor());
-        let (fx, fy) = ((x - x0) as f32, (y - y0) as f32);
-        let texel = |dx: i64, dy: i64| -> [f32; N] {
-            let px = (x0 as i64 + dx).rem_euclid(self.width as i64) as usize;
-            let py = (y0 as i64 + dy).clamp(0, self.height as i64 - 1) as usize;
-            let at = (py * self.width as usize + px) * N;
-            core::array::from_fn(|k| self.decode[self.bytes[at + k] as usize])
+    /// The mean over a box of longitude and latitude, in degrees, each pixel
+    /// weighed by how much of it the box covers; a box narrower than a pixel is
+    /// widened to one, so a coarse source is read as a tent, not as blocks.
+    fn mean(&self, [lng0, lng1]: [f64; 2], [lat0, lat1]: [f64; 2]) -> [f32; N] {
+        let span = |a: f64, b: f64| {
+            let (mid, half) = ((a + b) / 2.0, ((b - a).abs() / 2.0).max(0.5));
+            (mid - half, mid + half)
         };
-        let (a, b, c, d) = (texel(0, 0), texel(1, 0), texel(0, 1), texel(1, 1));
-        core::array::from_fn(|k| (a[k] * (1.0 - fx) + b[k] * fx) * (1.0 - fy) + (c[k] * (1.0 - fx) + d[k] * fx) * fy)
+        let (x0, x1) = span((lng0 + 180.0) / 360.0 * self.width as f64, (lng1 + 180.0) / 360.0 * self.width as f64);
+        let (y0, y1) = span((90.0 - lat1) / 180.0 * self.height as f64, (90.0 - lat0) / 180.0 * self.height as f64);
+        let mut sum = [0f64; N];
+        let mut weight = 0.0;
+        for py in y0.floor() as i64..y1.ceil() as i64 {
+            let wy = (y1.min(py as f64 + 1.0) - y0.max(py as f64)).max(0.0);
+            let row = py.clamp(0, self.height as i64 - 1) as usize * self.width;
+            for px in x0.floor() as i64..x1.ceil() as i64 {
+                let w = wy * (x1.min(px as f64 + 1.0) - x0.max(px as f64)).max(0.0);
+                let at = (row + px.rem_euclid(self.width as i64) as usize) * N;
+                for (k, s) in sum.iter_mut().enumerate() {
+                    *s += w * f64::from(self.decode[self.bytes[at + k] as usize]);
+                }
+                weight += w;
+            }
+        }
+        sum.map(|s| (s / weight) as f32)
     }
+}
+
+/// Longitude and latitude, in degrees, of a point of the plane in units.
+fn lng_lat(x: f64, y: f64) -> [f64; 2] {
+    let [lng, lat, _] = epsg4326::from_mercator(&[epsg3857::to_db(x), epsg3857::to_db(y), 0.0]);
+    [lng, lat]
 }
 
 fn page_texels(px: i64, py: i64, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Option<Vec<u8>> {
@@ -152,32 +172,38 @@ fn page_texels(px: i64, py: i64, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Op
     for ty in 0..EARTH_TEXELS {
         for tx in 0..EARTH_TEXELS {
             let index = GROUND.cell_index(tx, ty);
-            let mid = GROUND.cell_at(page, index).mid();
-            let [lng, lat, _] = epsg4326::from_mercator(&[epsg3857::to_db(pvf3::to_real(pvf3::X(&mid))), epsg3857::to_db(pvf3::to_real(pvf3::Y(&mid))), 0.0]);
-            let [r, g, b] = day.at(lng, lat).map(to_srgb);
+            let cell = GROUND.cell_at(page, index);
+            let (base, side) = (cell.base(), cell.side());
+            let (x, y) = (pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base)));
+            let ([lng0, lat0], [lng1, lat1]) = (lng_lat(x, y), lng_lat(x + side, y + side));
+            let [r, g, b] = day.mean([lng0, lng1], [lat0, lat1]).map(to_srgb);
             let at = index as usize * 4;
-            rgba[at..at + 4].copy_from_slice(&[r, g, b, lights_byte(night.at(lng, lat)[0])]);
+            rgba[at..at + 4].copy_from_slice(&[r, g, b, lights_byte(night.mean([lng0, lng1], [lat0, lat1])[0])]);
         }
     }
     let first: [u8; 4] = rgba[..4].try_into().ok()?;
     (!rgba.as_chunks::<4>().0.iter().all(|t| *t == first)).then_some(rgba)
 }
 
-fn global(day: &RgbImage, night: &GrayImage, r: &[f32; 256], s: &[f32; 256], out: &Path) -> Result<(), String> {
-    // Averaged in linear light, so a coast or a town does not darken as it is taken down.
-    let linear_day = Rgb32FImage::from_fn(day.width(), day.height(), |x, y| image::Rgb(day.get_pixel(x, y).0.map(|c| r[c as usize])));
-    let small_day = resize(&linear_day, GLOBAL.0, GLOBAL.1, FilterType::Triangle);
-    drop(linear_day);
-    let linear_night = Rgb32FImage::from_fn(night.width(), night.height(), |x, y| {
-        let v = s[night.get_pixel(x, y).0[0] as usize];
-        image::Rgb([v, v, v])
+fn global(day: &Plate<'_, 3>, night: &Plate<'_, 1>, out: &Path) -> Result<(), String> {
+    let (w, h) = (GLOBAL.0 as usize, GLOBAL.1 as usize);
+    let mut bytes = vec![0u8; w * h * 4];
+    let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
+    std::thread::scope(|scope| {
+        for (t, rows) in bytes.chunks_mut(w * 4 * h.div_ceil(threads)).enumerate() {
+            scope.spawn(move || {
+                for (r, row) in rows.chunks_mut(w * 4).enumerate() {
+                    let j = t * h.div_ceil(threads) + r;
+                    let lat = [90.0 - (j + 1) as f64 * 180.0 / h as f64, 90.0 - j as f64 * 180.0 / h as f64];
+                    for (i, texel) in row.chunks_mut(4).enumerate() {
+                        let lng = [i as f64 * 360.0 / w as f64 - 180.0, (i + 1) as f64 * 360.0 / w as f64 - 180.0];
+                        let [r, g, b] = day.mean(lng, lat).map(to_srgb);
+                        texel.copy_from_slice(&[r, g, b, lights_byte(night.mean(lng, lat)[0])]);
+                    }
+                }
+            });
+        }
     });
-    let small_night = resize(&linear_night, GLOBAL.0, GLOBAL.1, FilterType::Triangle);
-    let bytes: Vec<u8> = small_day
-        .pixels()
-        .zip(small_night.pixels())
-        .flat_map(|(d, n)| [to_srgb(d.0[0]), to_srgb(d.0[1]), to_srgb(d.0[2]), lights_byte(n.0[0])])
-        .collect();
     let mut config = webp::WebPConfig::new().map_err(|()| "a WebP config")?;
     config.quality = QUALITY;
     config.alpha_compression = 1;
@@ -187,6 +213,30 @@ fn global(day: &RgbImage, night: &GrayImage, r: &[f32; 256], s: &[f32; 256], out
     write_atomic(out, &encoded).map_err(|e| e.to_string())?;
     println!("[earth] global -> {} ({} KiB)", out.display(), encoded.len() / 1024);
     Ok(())
+}
+
+/// The Black Marble's eight tiles as one raster.
+fn night_mosaic(sources: &Path) -> Result<(Vec<u8>, usize, usize), String> {
+    let mut mosaic = Vec::new();
+    let (mut tile, mut width) = (0, 0);
+    for (row, names) in NIGHT_TILES.iter().enumerate() {
+        for (col, name) in names.iter().enumerate() {
+            let t = decode(&source(&format!("{NIGHT}{name}_gray.jpg"), sources)?)?.to_luma8();
+            if mosaic.is_empty() {
+                tile = t.width() as usize;
+                width = tile * names.len();
+                mosaic = vec![0u8; width * tile * NIGHT_TILES.len()];
+            }
+            if t.width() as usize != tile || t.height() as usize != tile {
+                return Err(format!("{name}: {}×{}, not {tile}²", t.width(), t.height()));
+            }
+            for (y, line) in t.as_raw().chunks(tile).enumerate() {
+                let at = (row * tile + y) * width + col * tile;
+                mosaic[at..at + tile].copy_from_slice(line);
+            }
+        }
+    }
+    Ok((mosaic, width, tile * NIGHT_TILES.len()))
 }
 
 /// A source is larger than the decoder's default limit allows.
@@ -201,22 +251,10 @@ fn run() -> Result<(), String> {
     let sources = root.join("source");
     let out = root.join(PUBLISHED_VERSION.earth);
     let day = decode(&source(DAY, &sources)?)?.to_rgb8();
-    let night = decode(&source(NIGHT, &sources)?)?.to_luma8();
-    let (r, s) = (reflectance(), shown());
-    global(&day, &night, &r, &s, Path::new("asset/sky/earth/07.webp"))?;
-
-    let day_plate = Plate::<3> {
-        width: day.width(),
-        height: day.height(),
-        bytes: day.as_raw(),
-        decode: r,
-    };
-    let night_plate = Plate::<1> {
-        width: night.width(),
-        height: night.height(),
-        bytes: night.as_raw(),
-        decode: s,
-    };
+    let (night, night_width, night_height) = night_mosaic(&sources)?;
+    let day_plate = Plate::<3> { width: day.width() as usize, height: day.height() as usize, bytes: day.as_raw(), decode: reflectance() };
+    let night_plate = Plate::<1> { width: night_width, height: night_height, bytes: &night, decode: shown() };
+    global(&day_plate, &night_plate, Path::new("asset/sky/earth/07.webp"))?;
     std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
     // Every page of the level: the Mercator square, one world across and as high.
     let half = pages_around(EARTH_LEVEL) / 2;

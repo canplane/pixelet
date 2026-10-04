@@ -634,7 +634,7 @@ pub const INGESTED: [IngestedAsset; 140] = [
         extent: Some([1.78, 3.37, 1.5]),
     },
     IngestedAsset { bytes: 8814, extent: None },
-    IngestedAsset { bytes: 354182, extent: None },
+    IngestedAsset { bytes: 353374, extent: None },
     IngestedAsset { bytes: 165698, extent: None },
 ];
 
