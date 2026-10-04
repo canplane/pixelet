@@ -21,6 +21,9 @@ const MAX_BAKE_SPAN: usize = COL_SPAN as usize;
 
 const LOW_FILL_THRESHOLD: f64 = 0.25;
 
+/// A coarse cell's children one level finer.
+const CHILDREN: f64 = pxl_spec::space::hierarchy::children(3) as f64;
+
 const FULL_FACE_CNT: u32 = 6;
 const OPEN_BOTTOM_FACE_CNT: u32 = FULL_FACE_CNT - 1;
 
@@ -792,7 +795,14 @@ impl BakeContext {
             if fill < LOW_FILL_THRESHOLD {
                 self.counters.coarse_low_fill += 1;
             }
-            let linear = libm::cbrt(fill);
+            // Kept in its children's worth, rounded down, a heuristic: a trace too
+            // small to fill one child draws no box, where it floated up to a
+            // kilometer over a top-level cell's ground.
+            let kept = (fill * CHILDREN).floor() / CHILDREN;
+            if kept == 0.0 && !acc.ground {
+                continue;
+            }
+            let linear = libm::cbrt(kept);
             // A sparse cell is inset by the cube root of its fill on every axis.
             let inset = (linear < 1.0).then(|| pack_inset(linear));
             let rgb = acc.color();
@@ -826,6 +836,9 @@ impl BakeContext {
                 }
                 open = None;
                 last_top = z1;
+            }
+            if kept == 0.0 {
+                continue;
             }
             // A placed-things box hides none of its neighbors' faces and shows its underside.
             let class = if acc.ground { MaterialClasses::LAND } else { MaterialClasses::OBJECT };
