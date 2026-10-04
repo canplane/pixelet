@@ -7,6 +7,7 @@
 
 import type { u32 } from "@xpute/core/abi/word.ts";
 import type { BranchCursor } from "@xpute/core/wire/xtp/mod.ts";
+import { strerror } from "@xpute/core/status/errno.spec.ts";
 import { Command, encode_world_boot, read_sensor_start, read_sensor_stop, read_world_snapshot, Sensor } from "@/kernel/abi/cmd.spec.ts";
 import {
   geolocationStart,
@@ -72,7 +73,8 @@ export async function boot_kernel(): Promise<void> {
   // Storage is the user's to edit: kept settings too large to send are no
   // settings, and the kernel starts from the defaults.
   const kept = boot(read_storage(SETTINGS_PATH) ?? "");
-  CORE_DOORBELL.call(Command.WORLD_BOOT, CORE_DOORBELL.fits(kept) ? kept : boot(""), (result) => result);
+  const booted = CORE_DOORBELL.call(Command.WORLD_BOOT, CORE_DOORBELL.fits(kept) ? kept : boot(""), (result) => result);
+  if (booted < 0) throw new Error(`WORLD_BOOT refused: ${strerror(booted)}`);
   // Not awaited: a dev tile server may answer late.
   void declare_source();
 }

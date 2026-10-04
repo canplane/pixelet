@@ -148,10 +148,15 @@ impl ImpostorPass {
         g.write_buffer(self.fits, 0, bytes(self.fit.as_flattened()));
     }
 
-    pub fn prepare<'a>(&mut self, g: &Gpu, draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]>, uniforms: &[f32]) {
-        self.uniforms.write(g, self.draw.layouts[1], draws.len() as u32, draws, |buf, d| {
+    /// Every block group the draws will bind is made here, so drawing makes
+    /// nothing that outlives its frame.
+    pub fn prepare<'a>(&mut self, g: &Gpu, draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]> + Clone, uniforms: &[f32], blocks: &mut Blocks) {
+        self.uniforms.write(g, self.draw.layouts[1], draws.len() as u32, draws.clone(), |buf, d| {
             put_instances(buf, uniform_of(uniforms, d), d[1]);
         });
+        for d in draws {
+            blocks.group(g, d[0], self.draw.layouts[3]);
+        }
     }
 
     /// A group whose layer is not drawn yet is not drawn.

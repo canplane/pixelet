@@ -4,9 +4,10 @@
 //
 // The profiler's records and blocks as the kernel lays them out and the shell reads
 // them in place (sched/profiler/record.rs, apps/web/src/feature/debug/profiler/view.ts):
-// word offsets, eight bytes a word, and the names the numbers index. Nothing is
-// built for a read: the kernel writes numbers where they stay, and the words for
-// them are the shell's.
+// word offsets, eight bytes a word, and the names the numbers index. A packed table
+// gives each field's width and the generator lays the offsets out. Nothing is built
+// for a read: the kernel writes numbers where they stay, and the words for them are
+// the shell's.
 
 export const CENSUS_TAGS = ["chunk", "decor", "ghost_box", "ghost_coplanar", "ghost_decor", "skinned", "puck_zone", "puck_beacon", "badge", "debug"] as const;
 
@@ -48,7 +49,7 @@ export const LIMITS = {
   ZOOMS: 24 as number,
 } as const;
 
-/** One rendered frame (sched/profiler/record.rs FrameSample). `settled` is 0 or 1; `phases` is a lane of PHASE_NAMES' length, `gpu_spans` of GPU_SPAN_NAMES', `census` pairs of draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_pages` a word a zoom, LIMITS.ZOOMS of them, slot z for zoom z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z. */
+/** One rendered frame (sched/profiler/record.rs FrameSample). `settled` is 0 or 1; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_pages` hold zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z. */
 export const FRAME = {
   t: 0 as number,
   dt_ms: 1 as number,
@@ -66,67 +67,68 @@ export const FRAME = {
   census: 23 as number,
   zoom_tris: 43 as number,
   px: 67 as number,
-  buffers: 68 as number,
-  buffer_mb: 69 as number,
-  arena_mb: 70 as number,
-  tex_depth_mb: 71 as number,
-  tex_shadow_mb: 72 as number,
-  tex_layers_mb: 73 as number,
-  lod_chunks: 74 as number,
-  lod_in_frustum: 75 as number,
-  lod_pending: 76 as number,
-  lod_settling: 77 as number,
-  lod_offscreen_pending: 78 as number,
-  lod_oldest_release_ms: 79 as number,
-  lod_oldest_visible_ms: 80 as number,
-  mounts_added: 81 as number,
-  mounts_removed: 82 as number,
-  mounts_layouts: 83 as number,
-  pages_total: 84 as number,
-  zoom_pages: 85 as number,
-  pages_poi: 109 as number,
-  heap_used_mb: 110 as number,
-  heap_live_mb: 111 as number,
-  heap_run_mb: 112 as number,
-  heap_slot_mb: 113 as number,
-  heap_range_mb: 114 as number,
-  heap_refusals: 115 as number,
-  heap_largest_free_mb: 116 as number,
-  ring_cq_peak: 117 as number,
-  ring_held_peak: 118 as number,
-  work_scans: 119 as number,
-  work_bakes: 120 as number,
-  work_fine_peak: 121 as number,
-  work_coarse_peak: 122 as number,
-  q_terrain: 123 as number,
-  q_poi: 124 as number,
-  stale_hidden: 125 as number,
-  stale_uncovered: 126 as number,
-  stale_unready: 127 as number,
-  slot_waits: 128 as number,
-  slot_wait_zooms: 129 as number,
-  slot_chained: 130 as number,
-  cap_commit_left: 131 as number,
-  cap_mount_left: 132 as number,
-  cap_mount_full: 133 as number,
-  cap_record_refused: 134 as number,
-  turn_effects_ms: 135 as number,
-  turn_stage_ms: 136 as number,
-  turn_step_ms: 137 as number,
-  turn_step_name: 138 as number,
-  cover_rule: 139 as number,
-  cover_drawn: 140 as number,
-  cover_gaps: 141 as number,
-  view_rays: 142 as number,
-  view_visits: 143 as number,
-  WORDS: 144 as number,
+  gpu_skipped: 68 as number,
+  buffers: 69 as number,
+  buffer_mb: 70 as number,
+  arena_mb: 71 as number,
+  tex_depth_mb: 72 as number,
+  tex_shadow_mb: 73 as number,
+  tex_layers_mb: 74 as number,
+  lod_chunks: 75 as number,
+  lod_in_frustum: 76 as number,
+  lod_pending: 77 as number,
+  lod_settling: 78 as number,
+  lod_offscreen_pending: 79 as number,
+  lod_oldest_release_ms: 80 as number,
+  lod_oldest_visible_ms: 81 as number,
+  mounts_added: 82 as number,
+  mounts_removed: 83 as number,
+  mounts_layouts: 84 as number,
+  pages_total: 85 as number,
+  zoom_pages: 86 as number,
+  pages_poi: 110 as number,
+  heap_used_mb: 111 as number,
+  heap_live_mb: 112 as number,
+  heap_run_mb: 113 as number,
+  heap_slot_mb: 114 as number,
+  heap_range_mb: 115 as number,
+  heap_refusals: 116 as number,
+  heap_largest_free_mb: 117 as number,
+  ring_cq_peak: 118 as number,
+  ring_held_peak: 119 as number,
+  work_scans: 120 as number,
+  work_bakes: 121 as number,
+  work_fine_peak: 122 as number,
+  work_coarse_peak: 123 as number,
+  q_terrain: 124 as number,
+  q_poi: 125 as number,
+  stale_hidden: 126 as number,
+  stale_uncovered: 127 as number,
+  stale_unready: 128 as number,
+  slot_waits: 129 as number,
+  slot_wait_zooms: 130 as number,
+  slot_chained: 131 as number,
+  cap_commit_left: 132 as number,
+  cap_mount_left: 133 as number,
+  cap_mount_full: 134 as number,
+  cap_record_refused: 135 as number,
+  turn_effects_ms: 136 as number,
+  turn_stage_ms: 137 as number,
+  turn_step_ms: 138 as number,
+  turn_step_name: 139 as number,
+  cover_rule: 140 as number,
+  cover_drawn: 141 as number,
+  cover_gaps: 142 as number,
+  view_rays: 143 as number,
+  view_visits: 144 as number,
+  WORDS: 145 as number,
 } as const;
 
 /** What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what the chunk scheduler is doing, what it built and fetched, and what it all holds — and the report and the panel both follow it. */
 export const FRAME_GROUPS = {
   pace: ["t", "dt_ms", "frame_ms", "settled", "sched_ms", "budget_ms", "phases", "chunks_ms", "task_ms"],
   turn: ["turn_effects_ms", "turn_stage_ms", "turn_step_ms", "turn_step_name"],
-  gpu: ["gpu_ms", "gpu_spans", "draw_calls", "triangles", "census", "zoom_tris", "px"],
+  gpu: ["gpu_ms", "gpu_spans", "draw_calls", "triangles", "census", "zoom_tris", "px", "gpu_skipped"],
   lod: ["lod_chunks", "lod_in_frustum", "lod_pending", "lod_settling", "lod_offscreen_pending", "lod_oldest_release_ms", "lod_oldest_visible_ms"],
   mounts: ["mounts_added", "mounts_removed", "mounts_layouts"],
   stale: ["stale_hidden", "stale_uncovered", "stale_unready"],
@@ -165,9 +167,9 @@ export const TASK = {
 /** One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0. */
 export const WORST = {
   sample: 0 as number,
-  has_prev: 144 as number,
-  prev: 145 as number,
-  WORDS: 289 as number,
+  has_prev: 145 as number,
+  prev: 146 as number,
+  WORDS: 291 as number,
 } as const;
 
 export const SPREAD = {
@@ -201,7 +203,7 @@ export const STEP = {
   WORDS: 5 as number,
 } as const;
 
-/** The block PROFILER_READ computes: each section's words at its AT, the fields relative to it. Every word an f64. */
+/** The block PROFILER_READ computes: each section's words at its AT, the fields relative to it. Every word an f64. Packed: a section's AT is where the one before it ends, and the block's WORDS where the last ends, both laid out by the generator. */
 export const SUMMARY = {
   rec: {
     AT: 0 as number,
@@ -240,15 +242,15 @@ export const SUMMARY = {
     census: 69 as number,
     zoom_tris: 89 as number,
     last: 113 as number,
-    WORDS: 257 as number,
+    WORDS: 258 as number,
   },
   tasks: {
-    AT: 262 as number,
+    AT: 263 as number,
     slots: 0 as number,
     WORDS: 150 as number,
   },
   counters: {
-    AT: 412 as number,
+    AT: 413 as number,
     faces_kept: 0 as number,
     faces_possible: 1 as number,
     runs_culled: 2 as number,
@@ -266,7 +268,7 @@ export const SUMMARY = {
     WORDS: 14 as number,
   },
   atlas: {
-    AT: 426 as number,
+    AT: 427 as number,
     size: 0 as number,
     entries: 1 as number,
     shelves: 2 as number,
@@ -275,7 +277,7 @@ export const SUMMARY = {
     WORDS: 5 as number,
   },
   held: {
-    AT: 431 as number,
+    AT: 432 as number,
     run_sets: 0 as number,
     run_set_mb: 1 as number,
     tiers: 2 as number,
@@ -285,14 +287,14 @@ export const SUMMARY = {
     WORDS: 6 as number,
   },
   fetch: {
-    AT: 437 as number,
+    AT: 438 as number,
     queued: 0 as number,
     running: 1 as number,
     credits: 2 as number,
     WORDS: 3 as number,
   },
   peak: {
-    AT: 440 as number,
+    AT: 441 as number,
     present: 0 as number,
     dt_ms: 1 as number,
     sched_ms: 2 as number,
@@ -314,13 +316,13 @@ export const SUMMARY = {
     WORDS: 18 as number,
   },
   steps: {
-    AT: 458 as number,
+    AT: 459 as number,
     count: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
   quality: {
-    AT: 619 as number,
+    AT: 620 as number,
     step: 0 as number,
     star: 1 as number,
     frames_held: 2 as number,
@@ -333,14 +335,14 @@ export const SUMMARY = {
   },
   /** The heap as the read finds it, recording or not: `used_mb` its top, `requests` the pages it has ever asked for. */
   heap: {
-    AT: 627 as number,
+    AT: 628 as number,
     used_mb: 0 as number,
     requests: 1 as number,
     WORDS: 2 as number,
   },
   /** Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the page it is read from. */
   view: {
-    AT: 629 as number,
+    AT: 630 as number,
     dist: 0 as number,
     polar: 1 as number,
     azimuth: 2 as number,
@@ -359,7 +361,7 @@ export const SUMMARY = {
     read_zoom: 15 as number,
     WORDS: 16 as number,
   },
-  WORDS: 645 as number,
+  WORDS: 646 as number,
 } as const;
 
 /** What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count. */
@@ -372,7 +374,7 @@ export const READ = {
   tasks_count: 5 as number,
   worst_at: 6 as number,
   worst_count: 7 as number,
-  WORDS: 16 as number,
+  WORDS: 8 as number,
 } as const;
 
 /** What PROFILER_TAKE answers with the address of: u32 words, the frames and tasks the stream has kept since the last take. */
@@ -381,5 +383,5 @@ export const LOG = {
   frames_count: 1 as number,
   tasks_at: 2 as number,
   tasks_count: 3 as number,
-  WORDS: 12 as number,
+  WORDS: 4 as number,
 } as const;

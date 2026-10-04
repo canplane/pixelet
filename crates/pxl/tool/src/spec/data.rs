@@ -4,7 +4,7 @@
 //! shell reads them, TypeScript `as const`. A number is f64 unless a `$type`
 //! says otherwise; a u64 is a hex string. `{ "$value", "$doc" }` carries a reason.
 
-use super::{align_star, casing_note, enum_name, file, js_num, json_str, line_comments, read, rgb_literal, rs_doc, rs_ident, ts_doc, Node, Output};
+use super::{align_star, casing_note, enum_name, file, js_num, json_str, laid_out, line_comments, read, rgb_literal, rs_doc, rs_ident, ts_doc, Node, Output};
 
 pub enum Enums {
     None,
@@ -349,7 +349,7 @@ fn rs_leaf(name: &str, v: &Node, ty: &str, indent: &str, out: &mut Vec<String>, 
 pub fn outputs() -> Result<Vec<Output>, String> {
     let mut outputs = Vec::new();
     for d in &DATA_SPECS {
-        let spec = read(d.json)?;
+        let spec = laid_out(read(d.json)?)?;
         let base = d.json.rsplit('/').next().unwrap_or(d.json);
         let names: Vec<&str> = spec.named().map(|(k, _)| k).collect();
         let head_doc = spec.lines_at("$doc");

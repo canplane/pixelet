@@ -15,6 +15,8 @@ use crate::abi::host::{root, OBJECTS_PATH, SETTINGS_PATH};
 use crate::host::sys;
 use crate::io::load::LOADS;
 use crate::io::sched::Credit;
+use crate::mem::spec::MIN_HEAP_BYTES;
+use xpute_core::status::errno::Errno;
 use xpute_runtime::global::Global;
 
 /// A file the kernel keeps in storage. Storage is opened and written only by
@@ -102,9 +104,12 @@ pub fn write_kept(kept: Kept, bytes: Vec<u8>) {
     }
 }
 
-/// `res` is the file's size, or a negative errno.
+/// `res` is the file's size, or a negative errno. A file larger than the heap
+/// every device is given cannot be held anywhere: it is the host's answer
+/// refused, and the owner hears EFBIG.
 pub fn opened(fd: Fd, res: i32, detail: u32) {
     let Some(&owner) = files().owner(fd) else { return };
+    let res = if res > 0 && res as u32 > MIN_HEAP_BYTES { -(Errno::EFBIG as i32) } else { res };
     match owner {
         Owner::Fetch { key, at_ms } => crate::io::fetch::opened(fd, key, at_ms, res, detail),
         Owner::Model { key } => crate::io::load::model_opened(fd, key, res),

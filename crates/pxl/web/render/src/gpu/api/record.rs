@@ -44,6 +44,18 @@ pub fn gpu_publish() {
     }
 }
 
+/// A frame's records are one: past the range they are dropped whole.
+pub fn frame_begin() {
+    if let Some(s) = STREAM.get(|| None).as_mut() {
+        s.begin();
+    }
+}
+
+/// False where the frame did not fit and nothing of it was recorded.
+pub fn frame_commit() -> bool {
+    STREAM.get(|| None).as_mut().is_none_or(|s| s.commit())
+}
+
 /// The browser paces a page's frames to what the GPU finishes.
 pub fn frame_room() -> bool {
     true

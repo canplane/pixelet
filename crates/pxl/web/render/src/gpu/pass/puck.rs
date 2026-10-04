@@ -138,6 +138,14 @@ impl PuckPass {
         }
     }
 
+    /// Every block group the zone draws will bind is made here, so drawing makes
+    /// nothing that outlives its frame.
+    pub fn prepare_zone(&self, g: &Gpu, draws: &Draws, blocks: &mut Blocks) {
+        for d in draws.of(PIPELINE_PUCK_ZONE).filter(|d| d[1] > 0) {
+            blocks.group(g, d[0], self.zone.layouts[2]);
+        }
+    }
+
     pub fn draw_zone(&self, g: &Gpu, pass: u32, draws: &Draws, uniforms: &[f32], blocks: &mut Blocks) {
         for d in draws.of(PIPELINE_PUCK_ZONE).filter(|d| d[1] > 0) {
             let Some(group) = blocks.group(g, d[0], self.zone.layouts[2]) else { continue };

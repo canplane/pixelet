@@ -29,6 +29,28 @@ fn unknown() -> MarshalError {
     MarshalError::new(Errno::EINVAL)
 }
 
+/// A number the shell sends is checked here, so nothing past the door
+/// meets a NaN, an infinity or an integer cast into range.
+#[track_caller]
+fn finite(n: f64) -> Result<f64, MarshalError> {
+    if n.is_finite() {
+        Ok(n)
+    } else {
+        Err(unknown())
+    }
+}
+
+/// A whole number the type holds, never one cast into it.
+#[track_caller]
+fn integer<T: TryFrom<i64>>(n: f64) -> Result<T, MarshalError> {
+    let whole = finite(n)? == n.trunc() && n.abs() <= (1u64 << f64::MANTISSA_DIGITS) as f64;
+    if whole {
+        T::try_from(n as i64).map_err(|_| unknown())
+    } else {
+        Err(unknown())
+    }
+}
+
 /// What a command is about.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
@@ -91,7 +113,9 @@ pub struct Nop {
 impl Nop {
     pub fn read(pkt: &[u8]) -> Result<Nop, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(Nop { value: f.at(0)?.get_number()? as u32 })
+        Ok(Nop {
+            value: integer::<u32>(f.at(0)?.get_number()?)?,
+        })
     }
 }
 
@@ -108,9 +132,9 @@ impl SysOpened {
     pub fn read(pkt: &[u8]) -> Result<SysOpened, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SysOpened {
-            fd: f.at(0)?.get_number()? as u32,
-            res: f.at(1)?.get_number()? as i32,
-            detail: f.at(2)?.get_number()? as u32,
+            fd: integer::<u32>(f.at(0)?.get_number()?)?,
+            res: integer::<i32>(f.at(1)?.get_number()?)?,
+            detail: integer::<u32>(f.at(2)?.get_number()?)?,
         })
     }
 }

@@ -22,11 +22,17 @@ pub fn is_offered(key: SettingKey, value: u32) -> bool {
 }
 
 impl Settings {
-    /// Does nothing for a value the key may not hold, the current value, or a
-    /// setting not offered (see `is_offered`).
-    pub fn set_setting(&mut self, key: SettingKey, value: u32) {
-        if !is_offered(key, value) || self.get(key) == value || !self.set(key, value) {
-            return;
+    /// False for a value the key may not hold or a setting not offered (see
+    /// `is_offered`); the current value is taken and changes nothing.
+    pub fn set_setting(&mut self, key: SettingKey, value: u32) -> bool {
+        if !is_offered(key, value) {
+            return false;
+        }
+        if self.get(key) == value {
+            return true;
+        }
+        if !self.set(key, value) {
+            return false;
         }
         if key.sources_chunks() {
             chunk_sources_changed();
@@ -35,6 +41,7 @@ impl Settings {
             profiler_follow(value == 1);
         }
         *UNKEPT.get(|| false) = true;
+        true
     }
 
     fn kept(&self) -> String {

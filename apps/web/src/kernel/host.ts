@@ -144,7 +144,7 @@ const SYS = new Sys({
     storageSet(storage_key(path), td.decode(bytes));
   },
   opened: (fd, res, detail) => send_next(XputeCommand.SYS_OPENED, encode_sys_opened({ fd, res, detail })),
-  abort: ({ errno, file, line, column, a, b }) => console.error(`[pxl] ${strerror(errno)} at ${file.replace(/^\.+/, "")}:${line}:${column} (${a}, ${b})`),
+  abort: ({ errno, file, line, column, a, b }) => console.error(`[kernel] stopped: ${strerror(errno)} at ${file.replace(/^\.+/, "")}:${line}:${column} (${a}, ${b})`),
   program,
 });
 

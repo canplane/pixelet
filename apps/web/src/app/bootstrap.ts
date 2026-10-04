@@ -11,7 +11,10 @@ export function bootstrapApp(): void {
   // The locale first: the host's boot messages are in it.
   bootstrapI18n();
   boot_kernel().then(
-    () => useBoot.setState({ booted: true }),
+    () => {
+      console.info("[boot] the kernel started");
+      useBoot.setState({ booted: true });
+    },
     (err) => console.error("[boot] the kernel did not start:", err),
   );
 }

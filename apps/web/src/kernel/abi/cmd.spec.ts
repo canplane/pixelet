@@ -512,7 +512,7 @@ export interface SensorPosition {
   lon: f64;
   lat: f64;
   altitude: f64 | null;
-  accuracy: f64;
+  accuracy: f64 | null;
   course: f64 | null;
 }
 

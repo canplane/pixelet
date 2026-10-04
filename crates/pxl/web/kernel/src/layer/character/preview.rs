@@ -45,10 +45,8 @@ pub const CASES_MAX: usize = pxl_render::gpu::surface::SURFACES;
 
 /// Replaces a case already open under `id`. False where `id` names no
 /// surface or no variant.
+/// On a live surface; false for a variant there is none of.
 pub fn preview_open(id: u32, group: Group, number: u8) -> bool {
-    if pxl_render::gpu::surface::surface(id).is_none() {
-        return false;
-    }
     preview_close(id);
     let Some(variant) = character_variant(group, number) else { return false };
     cases().cases.push(Case {
@@ -63,13 +61,15 @@ pub fn preview_open(id: u32, group: Group, number: u8) -> bool {
     true
 }
 
-pub fn preview_close(id: u32) {
+/// Whether a case was open there.
+pub fn preview_close(id: u32) -> bool {
     let c = cases();
-    let Some(pos) = c.cases.iter().position(|case| case.id == id) else { return };
+    let Some(pos) = c.cases.iter().position(|case| case.id == id) else { return false };
     let case = c.cases.remove(pos);
     if let Some(actor) = case.actor {
         with_world(|_world, sched| sched.models.remove_actor(&mut sched.draw, actor));
     }
+    true
 }
 
 /// An open case is what asks the world's tick to run.

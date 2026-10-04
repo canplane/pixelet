@@ -77,12 +77,17 @@ impl SkinnedPass {
         self.skins.iter().find(|s| s.model == model && s.ids[2] != 0).map(|s| s.ids[2])
     }
 
-    pub fn prepare<'a>(&mut self, g: &Gpu, draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]>, uniforms: &[f32]) {
-        self.uniforms.write(g, self.lit.layouts[1], draws.len() as u32, draws, |buf, d| {
+    /// Every palette group the draws will bind is made here, so drawing makes
+    /// nothing that outlives its frame.
+    pub fn prepare<'a>(&mut self, g: &Gpu, draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]> + Clone, uniforms: &[f32], blocks: &mut Blocks) {
+        self.uniforms.write(g, self.lit.layouts[1], draws.len() as u32, draws.clone(), |buf, d| {
             let u = uniform_of(uniforms, d);
             buf[..24].copy_from_slice(bytes(&u[..6]));
             buf[24..32].fill(0);
         });
+        for d in draws {
+            blocks.group(g, d[1], self.lit.layouts[3]);
+        }
     }
 
     pub fn draw<'a>(&self, g: &Gpu, pass: u32, draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>, blocks: &mut Blocks, stage: Stage, frame: (u32, &mut u32)) {

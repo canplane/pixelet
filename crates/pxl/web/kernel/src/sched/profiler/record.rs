@@ -161,6 +161,8 @@ pub struct GpuSample {
     /// Slot z: triangles of cells at zoom z.
     pub zoom_tris: [f64; ZOOMS],
     pub px: f64,
+    /// 1 where the frame did not fit the GPU stream and was not drawn.
+    pub skipped: f64,
 }
 
 #[repr(C)]
@@ -363,7 +365,7 @@ words!(FrameSample, FRAME::WORDS,
     t => FRAME::t, dt_ms => FRAME::dt_ms, frame_ms => FRAME::frame_ms, settled => FRAME::settled,
     sched_ms => FRAME::sched_ms, budget_ms => FRAME::budget_ms, phases => FRAME::phases, chunks_ms => FRAME::chunks_ms, task_ms => FRAME::task_ms,
     gpu.ms => FRAME::gpu_ms, gpu.spans => FRAME::gpu_spans, gpu.draw_calls => FRAME::draw_calls, gpu.triangles => FRAME::triangles,
-    gpu.census => FRAME::census, gpu.zoom_tris => FRAME::zoom_tris, gpu.px => FRAME::px,
+    gpu.census => FRAME::census, gpu.zoom_tris => FRAME::zoom_tris, gpu.px => FRAME::px, gpu.skipped => FRAME::gpu_skipped,
     device.buffers => FRAME::buffers, device.buffer_mb => FRAME::buffer_mb, device.arena_mb => FRAME::arena_mb,
     device.depth_mb => FRAME::tex_depth_mb, device.shadow_mb => FRAME::tex_shadow_mb, device.layers_mb => FRAME::tex_layers_mb,
     lod.chunks => FRAME::lod_chunks, lod.in_frustum => FRAME::lod_in_frustum, lod.pending => FRAME::lod_pending, lod.settling => FRAME::lod_settling,

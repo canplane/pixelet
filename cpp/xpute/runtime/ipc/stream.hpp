@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <source_location>
 #include <span>
 
 #include "../mem/memory.hpp"
@@ -36,14 +37,30 @@ class Stream {
     }
 
     // Answers where the `n` words begin. Past the range is a bug: the guest asked
-    // more of a turn than it sized the range for.
-    std::uint32_t open(std::uint32_t op, std::uint32_t n) noexcept;
+    // more of a turn than it sized the range for, reported at the caller.
+    std::uint32_t open(std::uint32_t op, std::uint32_t n, std::source_location at = std::source_location::current()) noexcept;
 
     void record(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint32_t> tail = {},
-                std::optional<std::span<const std::uint8_t>> bytes = std::nullopt) noexcept;
+                std::optional<std::span<const std::uint8_t>> bytes = std::nullopt, std::source_location at = std::source_location::current()) noexcept;
 
     // The next turn writes from the start.
     void publish() noexcept;
+
+    // The records from here to `commit` are one: one that does not fit drops
+    // them all, and those after it, where outside a transaction it is a bug.
+    void begin() noexcept {
+        mark_ = len_;
+        spilled_ = false;
+    }
+
+    // False where the transaction did not fit: the stream is as at `begin`.
+    bool commit() noexcept {
+        bool fit = !spilled_;
+        if (mark_ && !fit) len_ = *mark_;
+        mark_.reset();
+        spilled_ = false;
+        return fit;
+    }
 
   private:
     Memory mem_;
@@ -51,6 +68,8 @@ class Stream {
     std::uint32_t words_;
     std::uint32_t head_;
     std::uint32_t len_ = 0;
+    std::optional<std::uint32_t> mark_;
+    bool spilled_ = false;
 };
 
 } // namespace xpute

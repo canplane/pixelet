@@ -20,7 +20,7 @@ use crate::frame::draw::{
 use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_COARSE_DEPTH, PIPELINE_CHUNK_COARSE_PREPASS, PIPELINE_CHUNK_DEPTH, PIPELINE_CHUNK_PREPASS, PIPELINE_SKY};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, forget_objects, frame_room, gpu, object, pass_desc, release, room, texture_usage, word_bytes, Gpu, Stamp};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, forget_objects, frame_begin, frame_commit, frame_room, gpu, object, pass_desc, release, room, texture_usage, word_bytes, Gpu, Stamp};
 use crate::gpu::api_spec::{dimension, format, load, resource, surface_role};
 use crate::gpu::arena::{arena_buffer, arena_bytes, arena_lose};
 use crate::gpu::atmosphere::{Atmosphere, AIR_WORDS};
@@ -124,6 +124,8 @@ pub struct FrameStat {
     pub census: [[f64; 2]; PIPELINES as usize],
     pub gpu_spans: [f64; GPU_SPANS.len()],
     pub arena_mb: f64,
+    /// 1 where the frame did not fit the GPU stream and was not drawn.
+    pub skipped: f64,
 }
 
 pub fn put_f32(buf: &mut [u8], at: usize, v: f32) {
@@ -489,6 +491,10 @@ static RENDERER: Global<Option<Renderer>> = Global::new();
 
 static REDRAW: Global<bool> = Global::new();
 
+/// WebGPU's default minUniformBufferOffsetAlignment: an adapter's limit is a
+/// power of two no larger, so a larger one is no device's.
+pub const UNIFORM_ALIGN_MAX: u32 = 256;
+
 pub fn gpu_created(align: u32, timestamps: bool) {
     DEVICE.set(Some(Device { align, timestamps }));
 }
@@ -534,19 +540,24 @@ impl DebugPass {
         DebugPass { built, frame_group, sets: Vec::new() }
     }
 
-    fn draw(&mut self, g: &Gpu, pass: u32, draws: &Draws, uniforms: &[f32], blocks: &Blocks) {
+    /// A set for each set of lines, made here so drawing makes nothing that
+    /// outlives its frame.
+    fn prepare(&mut self, g: &Gpu, draws: &Draws) {
+        while self.sets.len() < draws.of(PIPELINE_DEBUG).len() {
+            let buffer = object();
+            g.buffer(buffer, 16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+            let group = object();
+            g.bind_group(group, self.built.layouts[1], &buffer_entry(0, buffer));
+            self.sets.push((buffer, group));
+        }
+    }
+
+    fn draw(&self, g: &Gpu, pass: u32, draws: &Draws, uniforms: &[f32], blocks: &Blocks) {
         let mut bound = false;
         for (k, d) in draws.of(PIPELINE_DEBUG).enumerate() {
             let (Some((block, _, _)), count) = (blocks.get(d[0]), d[1]) else { continue };
             if count == 0 {
                 continue;
-            }
-            while self.sets.len() <= k {
-                let buffer = object();
-                g.buffer(buffer, 16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-                let group = object();
-                g.bind_group(group, self.built.layouts[1], &buffer_entry(0, buffer));
-                self.sets.push((buffer, group));
             }
             let (buffer, group) = self.sets[k];
             let u = uniform_of(uniforms, d);
@@ -911,18 +922,31 @@ impl Renderer {
         }
         let mut order = core::mem::take(&mut self.order);
         let draws = Draws::sort(records.as_chunks::<DRAW_WORDS>().0, &mut order);
-        self.decor.prepare(g, &draws, uniforms);
-        self.impostor.prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms);
-        self.skinned.prepare(g, draws.of(PIPELINE_SKINNED), uniforms);
-
         let b = blocks();
-        let encoder = object();
-        g.encoder(encoder);
+        self.decor.prepare(g, &draws, uniforms, b);
+        self.impostor.prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms, b);
+        self.skinned.prepare(g, draws.of(PIPELINE_SKINNED), uniforms, b);
+        self.puck.prepare_zone(g, &draws, b);
+        self.badges.prepare(g, world.depth_view, &draws, b);
+        self.debug.prepare(g, &draws);
+        self.prepare_cases(g, &draws, uniforms, input.cases);
         let q = self.query_set;
         // A query no pass wrote holds an earlier frame's value, so which were written is passed along.
         let mut stamps: [Stamp; GPU_SPANS.len()] = core::array::from_fn(|span| Stamp::of(q, span));
-        self.impostor.bake(g, encoder, &mut self.decor, b);
-        self.atmosphere.draw(g, encoder, &mut stamps[SPAN_AIR]);
+        // What outlives the frame is drawn and submitted ahead of it: from here on
+        // the frame only describes itself.
+        let ahead = object();
+        g.encoder(ahead);
+        self.impostor.bake(g, ahead, &mut self.decor, b);
+        self.atmosphere.draw(g, ahead, &mut stamps[SPAN_AIR]);
+        g.submit(ahead);
+        release(ahead);
+
+        // The frame proper changes nothing that outlives it, so one too large
+        // for the stream is dropped whole and the screen keeps the last.
+        frame_begin();
+        let encoder = object();
+        g.encoder(encoder);
         if self.shadows {
             let pass = self.shadow.begin(g, encoder, &mut stamps[SPAN_SHADOW]);
             let chunk = [self.chunk_depth.pipeline, self.chunk_coarse_depth.pipeline];
@@ -974,28 +998,45 @@ impl Renderer {
         g.submit(encoder);
         release(encoder);
         release(canvas_view);
-        let stat = self.stat(draws.records, world);
+        let skipped = !frame_commit();
+        if skipped {
+            REDRAW.set(true);
+        }
+        let stat = self.stat(draws.records, world, skipped);
         self.order = order;
         stat
     }
 
-    fn draw_cases(&mut self, g: &Gpu, encoder: u32, draws: &Draws, uniforms: &[f32], cases: &[(u32, u32, u32)], stamp: &mut Stamp) {
-        for &(id, model, image) in cases {
+    /// The cases drawn this frame: a surface still a case, and its actor's draw.
+    fn cases<'a, 'd>(draws: &'a Draws<'d>, cases: &'a [(u32, u32, u32)]) -> impl Iterator<Item = (u32, u32, u32, &'d [u32; DRAW_WORDS])> + 'a {
+        cases.iter().filter_map(move |&(id, model, image)| {
+            surface(id).filter(|s| s.role == surface_role::CASE)?;
+            let own = draws.of(PIPELINE_SKINNED).find(|d| d[2] == model)?;
+            Some((id, model, image, own))
+        })
+    }
+
+    /// Each case's targets, passes and skin, made here so drawing makes nothing
+    /// that outlives its frame.
+    fn prepare_cases(&mut self, g: &Gpu, draws: &Draws, uniforms: &[f32], cases: &[(u32, u32, u32)]) {
+        for (id, model, image, own) in Self::cases(draws, cases) {
             let Some(s) = surface(id) else { continue };
-            if s.role != surface_role::CASE {
-                continue;
-            }
-            let Some(own) = draws.of(PIPELINE_SKINNED).find(|d| d[2] == model) else {
-                continue;
-            };
             targets(g, s);
             let slot = handle_slot(id) as usize;
             if self.cases[slot].is_none() {
                 self.cases[slot] = Some(Case::new(g, &mut self.pipelines, &self.shadow, &self.ao, self.atmosphere.entries(), self.align));
             }
-            let world_frame = self.frame;
             let case = self.cases[slot].as_mut().or_bug(Errno::ENOTRECOVERABLE);
             case.skinned.set_skin(g, model, image);
+            case.skinned.prepare(g, core::iter::once(own), uniforms, blocks());
+        }
+    }
+
+    fn draw_cases(&mut self, g: &Gpu, encoder: u32, draws: &Draws, uniforms: &[f32], cases: &[(u32, u32, u32)], stamp: &mut Stamp) {
+        for (id, _, _, own) in Self::cases(draws, cases) {
+            let Some(s) = surface(id) else { continue };
+            let Some(case) = self.cases[handle_slot(id) as usize].as_mut() else { continue };
+            let world_frame = self.frame;
             let u = uniform_of(uniforms, own);
             let actor = [u[0] as f64, u[1] as f64, u[2] as f64];
             let u = &mut case.frame;
@@ -1022,7 +1063,6 @@ impl Renderer {
             // No planet: the case is a room of its own.
             u[PLANET + 2] = 0.0;
             g.write_buffer(case.frame_buffer, 0, bytes(&case.frame));
-            case.skinned.prepare(g, core::iter::once(own), uniforms);
             let view_id = object();
             g.current(s.handle, view_id);
             let pass = object();
@@ -1036,7 +1076,7 @@ impl Renderer {
 
     /// What the scheduler asked for: a draw passed over because its block, skin or
     /// sprite is not on the device yet is still counted.
-    fn stat(&self, draws: &[[u32; DRAW_WORDS]], world: &Surface) -> FrameStat {
+    fn stat(&self, draws: &[[u32; DRAW_WORDS]], world: &Surface, skipped: bool) -> FrameStat {
         let b = blocks();
         let mut triangles = 0u32;
         let mut census = [[0.0; 2]; PIPELINES as usize];
@@ -1071,6 +1111,7 @@ impl Renderer {
             census,
             gpu_spans: self.gpu_spans,
             arena_mb: round(arena_bytes() as f64 / MB),
+            skipped: f64::from(u8::from(skipped)),
         }
     }
 }

@@ -643,8 +643,8 @@ fn rs_read_one(spec: &Spec, f: &Field, c: &str) -> Result<String, String> {
         Kind::Number => {
             return Ok(match f.ty.as_str() {
                 "u64" => format!("{c}.get_u64()?"),
-                "f64" => format!("{c}.get_number()?"),
-                ty => format!("{c}.get_number()? as {ty}"),
+                "f64" => format!("finite({c}.get_number()?)?"),
+                ty => format!("integer::<{ty}>({c}.get_number()?)?"),
             })
         }
         Kind::Bool => return Ok(format!("{c}.get_bool()?")),
@@ -659,11 +659,10 @@ fn rs_read_one(spec: &Spec, f: &Field, c: &str) -> Result<String, String> {
         }
     };
     let path = rs_enum(spec, &f.ty);
-    let number = format!("{c}.get_number()? as u32");
     let member = if repr.as_deref() == Some("u8") {
-        format!("u8::try_from({number}).ok().and_then({path}::of)")
+        format!("{path}::of(integer::<u8>({c}.get_number()?)?)")
     } else {
-        format!("{path}::of({number})")
+        format!("{path}::of(integer::<u32>({c}.get_number()?)?)")
     };
     Ok(match unknown {
         Some(u) => format!("{member}.unwrap_or({path}::{u})"),
@@ -787,6 +786,20 @@ fn rs(spec: &Spec, t: &Target) -> Result<String, String> {
             "#[track_caller]",
             "fn unknown() -> MarshalError {",
             "    MarshalError::new(Errno::EINVAL)",
+            "}",
+            "",
+            "/// A number the shell sends is checked here, so nothing past the door",
+            "/// meets a NaN, an infinity or an integer cast into range.",
+            "#[track_caller]",
+            "fn finite(n: f64) -> Result<f64, MarshalError> {",
+            "    if n.is_finite() { Ok(n) } else { Err(unknown()) }",
+            "}",
+            "",
+            "/// A whole number the type holds, never one cast into it.",
+            "#[track_caller]",
+            "fn integer<T: TryFrom<i64>>(n: f64) -> Result<T, MarshalError> {",
+            "    let whole = finite(n)? == n.trunc() && n.abs() <= (1u64 << f64::MANTISSA_DIGITS) as f64;",
+            "    if whole { T::try_from(n as i64).map_err(|_| unknown()) } else { Err(unknown()) }",
             "}",
         ]
         .map(String::from),
