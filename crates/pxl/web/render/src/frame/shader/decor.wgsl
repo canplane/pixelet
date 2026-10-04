@@ -36,7 +36,7 @@ struct VertexOut {
   @location(0) uv: vec2f,
   @location(1) normal: vec3f,
   @location(2) world_pos: vec3f,
-  @location(3) through: vec3f,
+  @location(3) through: f32,
   @location(4) scattered: vec3f,
   @location(5) past: vec3f,
   @location(6) @interpolate(flat) fill: vec3f,
