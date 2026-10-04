@@ -1689,7 +1689,6 @@ dependencies = [
  "flate2",
  "image",
  "mozjpeg",
- "pxl-spec",
  "regex",
  "serde",
  "serde_json",

@@ -6,6 +6,7 @@
 //   ./script/usage.ts
 
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
+import { round } from "@xpute/core/math/scalar.ts";
 
 const WORKER = "pixelet";
 const BUCKET = "pixelet-tiles";
@@ -111,7 +112,7 @@ const QUERY = `query($account: String!, $worker: String!, $bucket: String!, $mon
 }`;
 
 const day = (d: Date) => d.toISOString().slice(0, 10);
-const count = (n: f64) => Math.round(n).toLocaleString("en-US");
+const count = (n: f64) => round(n).toLocaleString("en-US");
 const share = (n: f64, of: f64) => `${((100 * n) / of).toFixed(1)}%`;
 const gb = (bytes: f64) => `${(bytes / 1e9).toFixed(2)} GB`;
 

@@ -1,29 +1,33 @@
 // cpp/xpute/core/math/scalar.hpp
 
-// Functions of one double, each exact in IEEE arithmetic so the bits match
-// Rust's.
+// Functions of one float or double, each exact in IEEE arithmetic so the bits
+// match Rust's.
 
 #pragma once
 
-// Bit for bit with Rust, which never fuses a multiply and an add: held here,
-// not only in the build's flags.
+// Rust never fuses a multiply and an add; held here, not only in the flags.
 #pragma STDC FP_CONTRACT OFF
 
 #include <cmath>
 #include <limits>
+#include <type_traits>
 
 namespace xpute {
 
 inline constexpr double EPS = 1e-5;
 
+// What these functions take: double, and float where a value lives as one.
+template <class T>
+concept Float = std::is_floating_point_v<T>;
+
 // Absolute and relative tolerance, so the allowed error scales with magnitude.
-inline bool approx_eq(double a, double b, double eps = EPS) noexcept {
+template <Float T> inline bool approx_eq(T a, T b, T eps = static_cast<T>(EPS)) noexcept {
     if (a == b) return true;
-    double diff = std::fabs(a - b);
+    T diff = std::fabs(a - b);
     return diff < eps || diff < eps * std::fmax(std::fabs(a), std::fabs(b));
 }
 
-inline bool near(double a, double b, double tol) noexcept {
+template <Float T> inline bool near(T a, T b, T tol) noexcept {
     return std::fabs(a - b) < tol;
 }
 
@@ -31,32 +35,30 @@ inline bool near(double a, double b, double tol) noexcept {
 // a shader both round lands on one integer.
 
 // -2.5 is -2, as JavaScript's `Math.round`.
-inline double round_half_up(double x) noexcept {
-    return x - std::trunc(x) == -0.5 ? std::ceil(x) : std::round(x);
+template <Float T> inline T round_half_up(T x) noexcept {
+    return x - std::trunc(x) == T(-0.5) ? std::ceil(x) : std::round(x);
 }
 
 // -2.5 is -3, as C's `round`.
-inline double round_half_away(double x) noexcept {
+template <Float T> inline T round_half_away(T x) noexcept {
     return std::round(x);
 }
 
 // 2.5 is 2, -2.5 is -2.
-inline double round_half_even(double x) noexcept {
-    // x − floor(x) is exact for every double, and 0 past 2^52, where every
-    // double is whole: so the tie is told exactly, whatever the rounding mode.
-    double f = std::floor(x), d = x - f;
-    double r = d < 0.5 ? f : d > 0.5 ? f + 1 : std::fmod(f, 2.0) == 0 ? f : f + 1;
-    // A zero keeps the sign of what was rounded, as Rust's round_ties_even
-    // gives -0 for -0.5.
-    return r == 0 ? std::copysign(0.0, x) : r;
+template <Float T> inline T round_half_even(T x) noexcept {
+    // x - floor(x) is exact for every value, and 0 past the mantissa, so the
+    // tie is told exactly whatever the rounding mode.
+    T f = std::floor(x), d = x - f;
+    T r = d < T(0.5) ? f : d > T(0.5) ? f + 1 : std::fmod(f, T(2)) == 0 ? f : f + 1;
+    // -0.5 rounds to -0, as Rust's round_ties_even.
+    return r == 0 ? std::copysign(T(0), x) : r;
 }
 
-inline double round(double x) noexcept {
+template <Float T> inline T round(T x) noexcept {
     return round_half_even(x);
 }
 
-// `v` as an integer of type T, as Rust's `as` casts a float: toward zero,
-// held to T's range at either end, and NaN as 0 — where a plain cast is
+// As Rust's `as`: toward zero, saturating, NaN as 0, where a plain cast is
 // undefined past the range.
 template <class T> constexpr T saturate_as(double v) noexcept {
     if (v != v) return 0;
@@ -65,36 +67,36 @@ template <class T> constexpr T saturate_as(double v) noexcept {
     return static_cast<T>(v);
 }
 
-inline double lerp(double a, double b, double t) noexcept {
+template <Float T> inline T lerp(T a, T b, T t) noexcept {
     return a + (b - a) * t;
 }
 
-inline double inv_lerp(double x, double min, double max) noexcept {
+template <Float T> inline T inv_lerp(T x, T min, T max) noexcept {
     return (x - min) / (max - min);
 }
 
-inline double remap(double x, double in_min, double in_max, double out_min, double out_max) noexcept {
+template <Float T> inline T remap(T x, T in_min, T in_max, T out_min, T out_max) noexcept {
     return lerp(out_min, out_max, inv_lerp(x, in_min, in_max));
 }
 
-inline double clamp(double x, double min, double max) noexcept {
+template <Float T> inline T clamp(T x, T min, T max) noexcept {
     return x < min ? min : x > max ? max : x;
 }
 
-inline double wrap(double x, double min, double max) noexcept {
-    double range = max - min;
+template <Float T> inline T wrap(T x, T min, T max) noexcept {
+    T range = max - min;
     return std::fmod(std::fmod(x - min, range) + range, range) + min;
 }
 
-inline double floor_to_step(double x, double step) noexcept {
+template <Float T> inline T floor_to_step(T x, T step) noexcept {
     return std::floor(x / step) * step;
 }
 
-inline double round_to_step(double x, double step) noexcept {
+template <Float T> inline T round_to_step(T x, T step) noexcept {
     return round(x / step) * step;
 }
 
-inline double ceil_to_step(double x, double step) noexcept {
+template <Float T> inline T ceil_to_step(T x, T step) noexcept {
     return std::ceil(x / step) * step;
 }
 

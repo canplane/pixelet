@@ -8,6 +8,7 @@ use pxl_spec::space::v3::V3;
 
 use crate::world::frame::view::view;
 use pxl_spec::space::pyramid::anchor_span_of;
+use xpute_core::math::scalar::round;
 
 /// The center floored to the level's anchor span across and a leaf's anchor
 /// up (heights do not scale). Scaled with the level so a rebase is as far on
@@ -54,7 +55,7 @@ pub fn local_world_to_canonical<'a>(out: &'a mut Pvf3, local: &V3, map_origin: I
 /// came back a hair under would otherwise step down each round trip.
 pub fn local_world_to_canonical_nearest<'a>(out: &'a mut Pvf3, local: &V3, map_origin: IVec) -> &'a mut Pvf3 {
     let one = pxl_spec::space::pvf3::core::ONE as f64;
-    local_world_to_canonical(out, &local.map(|v| (v * one).round() / one), map_origin)
+    local_world_to_canonical(out, &local.map(|v| round(v * one) / one), map_origin)
 }
 
 #[cfg(test)]

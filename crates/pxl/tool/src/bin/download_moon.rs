@@ -20,14 +20,14 @@ fn to_linear(c: u8) -> f64 {
     if c <= 0.04045 {
         c / 12.92
     } else {
-        ((c + 0.055) / 1.055).powf(2.4)
+        libm::pow((c + 0.055) / 1.055, 2.4)
     }
 }
 
 fn to_srgb(v: f64) -> u8 {
     let v = v.clamp(0.0, 1.0);
-    let c = if v <= 0.0031308 { 12.92 * v } else { 1.055 * v.powf(1.0 / 2.4) - 0.055 };
-    (c * 255.0).round() as u8
+    let c = if v <= 0.0031308 { 12.92 * v } else { 1.055 * libm::pow(v, 1.0 / 2.4) - 0.055 };
+    (c * 255.0).round_ties_even() as u8
 }
 
 fn run() -> Result<(), String> {
@@ -44,7 +44,7 @@ fn run() -> Result<(), String> {
             let [r, g, b] = map.get_pixel(x0 + x, y).0;
             let l = 0.2126 * to_linear(r) + 0.7152 * to_linear(g) + 0.0722 * to_linear(b);
             let lon = ((x as f64 + 0.5) / side as f64 - 0.5) * core::f64::consts::PI;
-            let area = lat.cos() * lon.cos();
+            let area = libm::cos(lat) * libm::cos(lon);
             sum += l * area;
             weight += area;
             face.put_pixel(x, y, Luma([to_srgb(l)]));

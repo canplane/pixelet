@@ -9,6 +9,7 @@ use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::v3::V3;
 use xpute_core::math::scalar::round;
 
+use crate::look::color::linear;
 use crate::mesh::paint::palette::shader_meta::layer_mean;
 use crate::mesh::volume::{pack_sub_cell_fraction, unpack_sub_cell_fraction, unpack_sub_cell_size, MATERIAL_LAND, MATERIAL_OBJECT, NO_LAYER, SUB_CELL_NONE};
 use crate::mesh::voxel_scan::{OwnedRunSet, RunSet, COL_SPAN};
@@ -717,7 +718,8 @@ impl BakeContext {
         // the leaves show the swatch, so the summary does too.
         let swatch = [set.r[i], set.g[i], set.b[i]];
         let mean = if self.textured { layer_mean(set.layer_taps[i] & 255, swatch) } else { swatch };
-        let rgb = linear_of(mean[0], mean[1], mean[2]);
+        // A mean of colors belongs in linear light.
+        let rgb = mean.map(linear);
         if set.sub_s[i] != SUB_CELL_NONE {
             let frac = unpack_sub_cell_size(set.sub_s[i]);
             // A sub-cell thing: volume the fraction cubed, each face the fraction squared, none hidden.
@@ -1127,20 +1129,6 @@ fn covered_height(set: &RunSet, col: u32, lo: i32, hi: i32) -> i32 {
         covered += (set.z1[i].min(hi) - set.z0[i].max(lo) + 1).max(0);
     }
     covered
-}
-
-/// A mean of colors belongs in linear light.
-fn linear_of(r: u8, g: u8, b: u8) -> [f64; 3] {
-    [linear_channel(r), linear_channel(g), linear_channel(b)]
-}
-
-fn linear_channel(v: u8) -> f64 {
-    let c = v as f64 / 255.0;
-    if c <= 0.04045 {
-        c / 12.92
-    } else {
-        libm::pow((c + 0.055) / 1.055, 2.4)
-    }
 }
 
 fn srgb_of(rgb: [f64; 3]) -> [u8; 3] {
