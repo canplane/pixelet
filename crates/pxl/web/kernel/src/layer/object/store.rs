@@ -395,7 +395,13 @@ pub fn objects_opened(fd: u32, res: i32) {
         file::close(fd);
         return;
     }
-    let mut blob = vec![0; res as usize];
+    // A blob the heap cannot hold starts the world empty, as a missing one does.
+    let mut blob = Vec::new();
+    if blob.try_reserve_exact(res as usize).is_err() {
+        file::close(fd);
+        return;
+    }
+    blob.resize(res as usize, 0);
     file::read(fd, &mut blob);
     file::close(fd);
     store_state().loading = Some((blob, turn()));

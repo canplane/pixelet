@@ -41,6 +41,28 @@ fn unknown() -> MarshalError {
     MarshalError::new(Errno::EINVAL)
 }
 
+/// A number the shell sends is checked here, so nothing past the door
+/// meets a NaN, an infinity or an integer cast into range.
+#[track_caller]
+fn finite(n: f64) -> Result<f64, MarshalError> {
+    if n.is_finite() {
+        Ok(n)
+    } else {
+        Err(unknown())
+    }
+}
+
+/// A whole number the type holds, never one cast into it.
+#[track_caller]
+fn integer<T: TryFrom<i64>>(n: f64) -> Result<T, MarshalError> {
+    let whole = finite(n)? == n.trunc() && n.abs() <= (1u64 << f64::MANTISSA_DIGITS) as f64;
+    if whole {
+        T::try_from(n as i64).map_err(|_| unknown())
+    } else {
+        Err(unknown())
+    }
+}
+
 /// What a command is about.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
@@ -924,8 +946,8 @@ impl ImageDecoded {
     pub fn read(pkt: &[u8]) -> Result<ImageDecoded, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(ImageDecoded {
-            image: f.at(0)?.get_number()? as u32,
-            res: f.at(1)?.get_number()? as i32,
+            image: integer::<u32>(f.at(0)?.get_number()?)?,
+            res: integer::<i32>(f.at(1)?.get_number()?)?,
         })
     }
 }
@@ -936,7 +958,7 @@ pub struct SensorPosition {
     pub lon: f64,
     pub lat: f64,
     pub altitude: Option<f64>,
-    pub accuracy: f64,
+    pub accuracy: Option<f64>,
     pub course: Option<f64>,
 }
 
@@ -944,15 +966,18 @@ impl SensorPosition {
     pub fn read(pkt: &[u8]) -> Result<SensorPosition, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SensorPosition {
-            lon: f.at(0)?.get_number()?,
-            lat: f.at(1)?.get_number()?,
+            lon: finite(f.at(0)?.get_number()?)?,
+            lat: finite(f.at(1)?.get_number()?)?,
             altitude: match f.at(2)?.opt() {
-                Some(c) => Some(c.get_number()?),
+                Some(c) => Some(finite(c.get_number()?)?),
                 None => None,
             },
-            accuracy: f.at(3)?.get_number()?,
+            accuracy: match f.at(3)?.opt() {
+                Some(c) => Some(finite(c.get_number()?)?),
+                None => None,
+            },
             course: match f.at(4)?.opt() {
-                Some(c) => Some(c.get_number()?),
+                Some(c) => Some(finite(c.get_number()?)?),
                 None => None,
             },
         })
@@ -973,19 +998,19 @@ impl SensorOrientation {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SensorOrientation {
             webkit_compass_heading: match f.at(0)?.opt() {
-                Some(c) => Some(c.get_number()?),
+                Some(c) => Some(finite(c.get_number()?)?),
                 None => None,
             },
             alpha: match f.at(1)?.opt() {
-                Some(c) => Some(c.get_number()?),
+                Some(c) => Some(finite(c.get_number()?)?),
                 None => None,
             },
             beta: match f.at(2)?.opt() {
-                Some(c) => Some(c.get_number()?),
+                Some(c) => Some(finite(c.get_number()?)?),
                 None => None,
             },
             gamma: match f.at(3)?.opt() {
-                Some(c) => Some(c.get_number()?),
+                Some(c) => Some(finite(c.get_number()?)?),
                 None => None,
             },
         })
@@ -1002,7 +1027,7 @@ impl SensorError {
     pub fn read(pkt: &[u8]) -> Result<SensorError, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SensorError {
-            code: GeolocationErrorCode::of(f.at(0)?.get_number()? as u32).unwrap_or(GeolocationErrorCode::Other),
+            code: GeolocationErrorCode::of(integer::<u32>(f.at(0)?.get_number()?)?).unwrap_or(GeolocationErrorCode::Other),
         })
     }
 }
@@ -1062,14 +1087,14 @@ impl WorldFrame {
     pub fn read(pkt: &[u8]) -> Result<WorldFrame, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(WorldFrame {
-            width: f.at(0)?.get_number()?,
-            height: f.at(1)?.get_number()?,
-            dpr: f.at(2)?.get_number()?,
-            delta_s: f.at(3)?.get_number()?,
-            frame_ms: f.at(4)?.get_number()?,
+            width: finite(f.at(0)?.get_number()?)?,
+            height: finite(f.at(1)?.get_number()?)?,
+            dpr: finite(f.at(2)?.get_number()?)?,
+            delta_s: finite(f.at(3)?.get_number()?)?,
+            frame_ms: finite(f.at(4)?.get_number()?)?,
             interactive: f.at(5)?.get_bool()?,
-            credits: f.at(6)?.get_number()? as u32,
-            unix_ms: f.at(7)?.get_number()?,
+            credits: integer::<u32>(f.at(6)?.get_number()?)?,
+            unix_ms: finite(f.at(7)?.get_number()?)?,
         })
     }
 }
@@ -1098,7 +1123,7 @@ impl WorldSource {
     pub fn read(pkt: &[u8]) -> Result<WorldSource, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(WorldSource {
-            top_level: f.at(0)?.get_number()? as u32,
+            top_level: integer::<u32>(f.at(0)?.get_number()?)?,
         })
     }
 }
@@ -1114,8 +1139,8 @@ impl SensorPermission {
     pub fn read(pkt: &[u8]) -> Result<SensorPermission, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SensorPermission {
-            sensor: Sensor::of(f.at(0)?.get_number()? as u32).ok_or_else(|| unknown())?,
-            answer: PermissionAnswer::of(f.at(1)?.get_number()? as u32).ok_or_else(|| unknown())?,
+            sensor: Sensor::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
+            answer: PermissionAnswer::of(integer::<u32>(f.at(1)?.get_number()?)?).ok_or_else(|| unknown())?,
         })
     }
 }
@@ -1133,10 +1158,10 @@ impl InputRect {
     pub fn read(pkt: &[u8]) -> Result<InputRect, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(InputRect {
-            left: f.at(0)?.get_number()?,
-            top: f.at(1)?.get_number()?,
-            width: f.at(2)?.get_number()?,
-            height: f.at(3)?.get_number()?,
+            left: finite(f.at(0)?.get_number()?)?,
+            top: finite(f.at(1)?.get_number()?)?,
+            width: finite(f.at(2)?.get_number()?)?,
+            height: finite(f.at(3)?.get_number()?)?,
         })
     }
 }
@@ -1156,12 +1181,12 @@ impl InputPointer {
     pub fn read(pkt: &[u8]) -> Result<InputPointer, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(InputPointer {
-            phase: PointerPhase::of(f.at(0)?.get_number()? as u32).ok_or_else(|| unknown())?,
-            kind: PointerKind::of(f.at(1)?.get_number()? as u32).ok_or_else(|| unknown())?,
-            id: f.at(2)?.get_number()? as i32,
-            button: f.at(3)?.get_number()? as i32,
-            x: f.at(4)?.get_number()?,
-            y: f.at(5)?.get_number()?,
+            phase: PointerPhase::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
+            kind: PointerKind::of(integer::<u32>(f.at(1)?.get_number()?)?).ok_or_else(|| unknown())?,
+            id: integer::<i32>(f.at(2)?.get_number()?)?,
+            button: integer::<i32>(f.at(3)?.get_number()?)?,
+            x: finite(f.at(4)?.get_number()?)?,
+            y: finite(f.at(5)?.get_number()?)?,
         })
     }
 }
@@ -1182,18 +1207,13 @@ impl InputHold {
     pub fn read(pkt: &[u8]) -> Result<InputHold, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(InputHold {
-            tool: ActiveTool::of(f.at(0)?.get_number()? as u32).ok_or_else(|| unknown())?,
+            tool: ActiveTool::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
             channel: match f.at(1)?.opt() {
-                Some(c) => Some(
-                    u8::try_from(c.get_number()? as u32)
-                        .ok()
-                        .and_then(pxl_spec::bake::format::GroundChannelKey::of)
-                        .ok_or_else(|| unknown())?,
-                ),
+                Some(c) => Some(pxl_spec::bake::format::GroundChannelKey::of(integer::<u8>(c.get_number()?)?).ok_or_else(|| unknown())?),
                 None => None,
             },
-            value: f.at(2)?.get_number()? as u32,
-            tier: f.at(3)?.get_number()? as u32,
+            value: integer::<u32>(f.at(2)?.get_number()?)?,
+            tier: integer::<u32>(f.at(3)?.get_number()?)?,
         })
     }
 }
@@ -1207,7 +1227,9 @@ pub struct InputWheel {
 impl InputWheel {
     pub fn read(pkt: &[u8]) -> Result<InputWheel, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(InputWheel { delta_y: f.at(0)?.get_number()? })
+        Ok(InputWheel {
+            delta_y: finite(f.at(0)?.get_number()?)?,
+        })
     }
 }
 
@@ -1222,8 +1244,8 @@ impl InputKeys {
     pub fn read(pkt: &[u8]) -> Result<InputKeys, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(InputKeys {
-            x: f.at(0)?.get_number()? as i32,
-            y: f.at(1)?.get_number()? as i32,
+            x: integer::<i32>(f.at(0)?.get_number()?)?,
+            y: integer::<i32>(f.at(1)?.get_number()?)?,
         })
     }
 }
@@ -1239,7 +1261,7 @@ impl GpuReady {
     pub fn read(pkt: &[u8]) -> Result<GpuReady, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(GpuReady {
-            min_uniform_offset_alignment: f.at(0)?.get_number()? as u32,
+            min_uniform_offset_alignment: integer::<u32>(f.at(0)?.get_number()?)?,
             timestamps: f.at(1)?.get_bool()?,
         })
     }
@@ -1255,7 +1277,9 @@ pub struct SurfaceOpen {
 impl SurfaceOpen {
     pub fn read(pkt: &[u8]) -> Result<SurfaceOpen, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(SurfaceOpen { role: f.at(0)?.get_number()? as u32 })
+        Ok(SurfaceOpen {
+            role: integer::<u32>(f.at(0)?.get_number()?)?,
+        })
     }
 }
 
@@ -1272,10 +1296,10 @@ impl SurfaceResize {
     pub fn read(pkt: &[u8]) -> Result<SurfaceResize, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SurfaceResize {
-            surface: f.at(0)?.get_number()? as u32,
-            width: f.at(1)?.get_number()? as u32,
-            height: f.at(2)?.get_number()? as u32,
-            device_pixel_ratio: f.at(3)?.get_number()?,
+            surface: integer::<u32>(f.at(0)?.get_number()?)?,
+            width: integer::<u32>(f.at(1)?.get_number()?)?,
+            height: integer::<u32>(f.at(2)?.get_number()?)?,
+            device_pixel_ratio: finite(f.at(3)?.get_number()?)?,
         })
     }
 }
@@ -1290,7 +1314,7 @@ impl SurfaceClose {
     pub fn read(pkt: &[u8]) -> Result<SurfaceClose, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SurfaceClose {
-            surface: f.at(0)?.get_number()? as u32,
+            surface: integer::<u32>(f.at(0)?.get_number()?)?,
         })
     }
 }
@@ -1307,12 +1331,9 @@ impl PreviewOpen {
     pub fn read(pkt: &[u8]) -> Result<PreviewOpen, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(PreviewOpen {
-            surface: f.at(0)?.get_number()? as u32,
-            group: u8::try_from(f.at(1)?.get_number()? as u32)
-                .ok()
-                .and_then(crate::layer::character::variant_spec::Group::of)
-                .ok_or_else(|| unknown())?,
-            number: f.at(2)?.get_number()? as u32,
+            surface: integer::<u32>(f.at(0)?.get_number()?)?,
+            group: crate::layer::character::variant_spec::Group::of(integer::<u8>(f.at(1)?.get_number()?)?).ok_or_else(|| unknown())?,
+            number: integer::<u32>(f.at(2)?.get_number()?)?,
         })
     }
 }
@@ -1327,7 +1348,7 @@ impl PreviewClose {
     pub fn read(pkt: &[u8]) -> Result<PreviewClose, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(PreviewClose {
-            surface: f.at(0)?.get_number()? as u32,
+            surface: integer::<u32>(f.at(0)?.get_number()?)?,
         })
     }
 }
@@ -1344,8 +1365,8 @@ impl SettingSet {
     pub fn read(pkt: &[u8]) -> Result<SettingSet, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SettingSet {
-            key: crate::shell::setting::schema_spec::SettingKey::of(f.at(0)?.get_number()? as u32).ok_or_else(|| unknown())?,
-            value: f.at(1)?.get_number()? as u32,
+            key: crate::shell::setting::schema_spec::SettingKey::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
+            value: integer::<u32>(f.at(1)?.get_number()?)?,
         })
     }
 }
@@ -1373,7 +1394,7 @@ impl InputTracking {
     pub fn read(pkt: &[u8]) -> Result<InputTracking, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(InputTracking {
-            tracking: Tracking::of(f.at(0)?.get_number()? as u32).ok_or_else(|| unknown())?,
+            tracking: Tracking::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
         })
     }
 }
@@ -1390,11 +1411,11 @@ impl InputView {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(InputView {
             dist: match f.at(0)?.opt() {
-                Some(c) => Some(c.get_number()?),
+                Some(c) => Some(finite(c.get_number()?)?),
                 None => None,
             },
             polar: match f.at(1)?.opt() {
-                Some(c) => Some(c.get_number()?),
+                Some(c) => Some(finite(c.get_number()?)?),
                 None => None,
             },
         })
@@ -1412,8 +1433,8 @@ impl InputGoTo {
     pub fn read(pkt: &[u8]) -> Result<InputGoTo, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(InputGoTo {
-            lon: f.at(0)?.get_number()?,
-            lat: f.at(1)?.get_number()?,
+            lon: finite(f.at(0)?.get_number()?)?,
+            lat: finite(f.at(1)?.get_number()?)?,
         })
     }
 }
@@ -1434,13 +1455,13 @@ impl InputPose {
     pub fn read(pkt: &[u8]) -> Result<InputPose, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(InputPose {
-            x: f.at(0)?.get_number()?,
-            y: f.at(1)?.get_number()?,
-            z: f.at(2)?.get_number()?,
-            qx: f.at(3)?.get_number()?,
-            qy: f.at(4)?.get_number()?,
-            qz: f.at(5)?.get_number()?,
-            qw: f.at(6)?.get_number()?,
+            x: finite(f.at(0)?.get_number()?)?,
+            y: finite(f.at(1)?.get_number()?)?,
+            z: finite(f.at(2)?.get_number()?)?,
+            qx: finite(f.at(3)?.get_number()?)?,
+            qy: finite(f.at(4)?.get_number()?)?,
+            qz: finite(f.at(5)?.get_number()?)?,
+            qw: finite(f.at(6)?.get_number()?)?,
         })
     }
 }
@@ -1467,7 +1488,9 @@ pub struct ProfilerRead {
 impl ProfilerRead {
     pub fn read(pkt: &[u8]) -> Result<ProfilerRead, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(ProfilerRead { window_ms: f.at(0)?.get_number()? })
+        Ok(ProfilerRead {
+            window_ms: finite(f.at(0)?.get_number()?)?,
+        })
     }
 }
 

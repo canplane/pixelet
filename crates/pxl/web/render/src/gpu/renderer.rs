@@ -491,6 +491,10 @@ static RENDERER: Global<Option<Renderer>> = Global::new();
 
 static REDRAW: Global<bool> = Global::new();
 
+/// WebGPU's default minUniformBufferOffsetAlignment: an adapter's limit is a
+/// power of two no larger, so a larger one is no device's.
+pub const UNIFORM_ALIGN_MAX: u32 = 256;
+
 pub fn gpu_created(align: u32, timestamps: bool) {
     DEVICE.set(Some(Device { align, timestamps }));
 }

@@ -13,6 +13,16 @@ fn packet<'a>(pkt: &Option<&'a [u8]>) -> Result<&'a [u8], MarshalError> {
     pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))
 }
 
+/// What the decoder cannot see, a value out of the range the kernel takes, is
+/// refused here: past the door nothing checks it again.
+fn refuse_unless(valid: bool) -> Result<(), MarshalError> {
+    if valid {
+        Ok(())
+    } else {
+        Err(MarshalError::new(Errno::EINVAL))
+    }
+}
+
 /// A UI command: asks for a turn and raises what it asks of the host before
 /// returning, so a sensor close sent after the strobe stopped is still heard.
 fn applied(s: &mut State) -> Result<Option<i32>, MarshalError> {
@@ -40,6 +50,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
     match cmd {
         Command::WORLD_FRAME => {
             let p = abi::WorldFrame::read(packet(pkt)?)?;
+            refuse_unless(p.dpr > 0.0 && p.delta_s >= 0.0 && p.frame_ms >= 0.0)?;
             crate::sched::turn::world_frame_asked(crate::sched::turn::HostFrame {
                 width: p.width,
                 height: p.height,
@@ -70,7 +81,9 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             Ok(Some(0))
         }
         Command::WORLD_SOURCE => {
-            crate::world::paging::floor::declare(abi::WorldSource::read(packet(pkt)?)?.top_level);
+            let p = abi::WorldSource::read(packet(pkt)?)?;
+            refuse_unless(p.top_level <= pxl_spec::space::pyramid::TOP_LEVEL)?;
+            crate::world::paging::floor::declare(p.top_level);
             Ok(Some(0))
         }
         Command::INPUT_RECT => {
@@ -151,6 +164,8 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::INPUT_POSE => {
             let p = abi::InputPose::read(packet(pkt)?)?;
+            // A unit quaternion by the protocol; one of no length turns nothing.
+            refuse_unless(p.qx * p.qx + p.qy * p.qy + p.qz * p.qz + p.qw * p.qw > 0.0)?;
             crate::control::camera::controller::tracked_pose([p.x, p.y, p.z], [p.qx, p.qy, p.qz, p.qw]);
             applied(s)
         }
@@ -160,7 +175,8 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::SENSOR_POSITION => {
             let p = abi::SensorPosition::read(packet(pkt)?)?;
-            geolocation::geolocation_fix(p.lon, p.lat, p.altitude, p.accuracy, p.course);
+            // An accuracy the device does not give is no accuracy at all.
+            geolocation::geolocation_fix(p.lon, p.lat, p.altitude, p.accuracy.unwrap_or(f64::INFINITY), p.course);
             Ok(Some(0))
         }
         Command::SENSOR_ERROR => {
@@ -217,6 +233,8 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::GPU_READY => {
             let p = abi::GpuReady::read(packet(pkt)?)?;
+            let align = p.min_uniform_offset_alignment;
+            refuse_unless(align.is_power_of_two() && align <= pxl_render::gpu::renderer::UNIFORM_ALIGN_MAX)?;
             pxl_render::gpu::renderer::gpu_created(p.min_uniform_offset_alignment, p.timestamps);
             request_world_tick();
             Ok(Some(0))
@@ -343,3 +361,7 @@ fn profiler_take(s: &mut State) -> u32 {
     s.profiler_taken = true;
     off_of(w.as_ptr()) as u32
 }
+
+#[cfg(test)]
+#[path = "apply.test.rs"]
+mod test;

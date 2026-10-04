@@ -723,7 +723,8 @@
             },
             {
               "name": "accuracy",
-              "type": "f64"
+              "type": "f64",
+              "optional": true
             },
             {
               "name": "course",

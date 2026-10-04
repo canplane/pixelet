@@ -231,7 +231,13 @@ pub async fn gltf_task() {
         notified(arrivals).await;
         while let Some((n, fd, bytes)) = next_arrival() {
             yield_if_spent(world_edge).await;
-            let mut buf = vec![0u8; bytes as usize];
+            let mut buf = Vec::new();
+            if buf.try_reserve_exact(bytes as usize).is_err() {
+                file::close(fd);
+                loader().gltf[n] = Some(Entry::Failed);
+                continue;
+            }
+            buf.resize(bytes as usize, 0);
             file::read(fd, &mut buf);
             file::close(fd);
             // In once the host has run the turn's records.

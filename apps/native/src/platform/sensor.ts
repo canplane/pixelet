@@ -98,7 +98,7 @@ export function geolocationStart(): void {
       { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
       (pos) => {
         const { latitude, longitude, altitude, accuracy, heading } = pos.coords;
-        kernel_position({ lon: longitude, lat: latitude, altitude, accuracy: accuracy ?? Infinity, course: heading });
+        kernel_position({ lon: longitude, lat: latitude, altitude, accuracy, course: heading });
       },
       () => geolocationFail(watch, GeolocationErrorCode.PositionUnavailable),
     );
