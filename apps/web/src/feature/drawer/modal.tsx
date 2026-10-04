@@ -27,7 +27,7 @@ for (const cube of placeableCubes) {
   SECTIONS.set(section, [...(SECTIONS.get(section) ?? []), cube]);
 }
 
-// A press lands on 44 (issue/20260928-three-sizes-of-a-control.md); a circle cut a block's texture away, so a rounded square.
+// A press lands on 44 (decision/20260928-three-sizes-of-a-control.md); a circle cut a block's texture away, so a rounded square.
 const GRID_GAP = 4;
 const LIT_SCALE = 1.05;
 const LIT_INK = 2;

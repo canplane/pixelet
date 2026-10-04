@@ -128,7 +128,7 @@ terrain bake reads this object.
 which the bake writes beside the version: zstd from the bake after v4, gzip
 for terrain v4, POI v5 and geocode v2, which were baked before it. The
 browser decodes by that header, and the kernel and the shell never see the
-codec (issue/20260913-compression-by-traffic.md). A wrong label hands the
+codec (decision/20260913-compression-by-traffic.md). A wrong label hands the
 client compressed bytes it does not know to decode. This is the single
 easiest step to get wrong, and it fails as a decode error far from its
 cause. A bake refuses to add objects to a directory of the other encoding,

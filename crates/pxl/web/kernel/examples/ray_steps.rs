@@ -1,7 +1,7 @@
 // pxl-kernel/examples/ray_steps.rs
 
 //! How many steps a ray cast into the records takes, per pixel, from the
-//! views the drawing experiment fixes (issue/BACKLOG.md, "How the samples are
+//! views the drawing experiment fixes (BACKLOG.md, "How the samples are
 //! drawn"): straight down, at 45° and along the ground at street level.
 //!
 //! A cast's cost is pixels times steps. The pixels are the screen's; the

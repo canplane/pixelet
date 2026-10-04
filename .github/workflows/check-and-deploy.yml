@@ -183,7 +183,7 @@ jobs:
     # is the direction that breaks; an old client against a new one is not, so
     # long as the server still answers the old shape for a release. That order
     # is what the b15 deploy followed by hand
-    # (issue/20260918-the-server-in-rust-and-the-line-already-drawn.md) and
+    # (decision/20260918-the-server-in-rust-and-the-line-already-drawn.md) and
     # what running the two in parallel left to whichever finished first.
     #
     # A failed server deploy now keeps the client back too, which is the
@@ -212,7 +212,7 @@ jobs:
 
       # Everything the bundle is built from. A whitelist rather than a list of
       # what to skip, because the set that does not ship is the one that keeps
-      # growing — `issue/`, `infra/`, `asset/` and the rest — and a root
+      # growing — `decision/`, `infra/`, `asset/` and the rest — and a root
       # forgotten from a skip list is a republish nobody asked for.
       #
       # It used to run on every green push, which was right while a rebuild

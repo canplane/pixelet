@@ -136,7 +136,7 @@ space/pyramid.rs`). `L3_IDX` always answers the leaf question: which
 The two ladders meet at one number. A level-k page's cells are z(16 − k), and
 the kernel's mesher measures its own step against the same scale, so the
 mesher's step, the level a page is held at and a web map's zoom are one
-quantity (`issue/20260921-level-step-and-zoom-are-one-number.md`).
+quantity (`decision/20260921-level-step-and-zoom-are-one-number.md`).
 
 ## The trees share their geometry and nothing else
 

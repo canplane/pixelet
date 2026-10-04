@@ -24,7 +24,7 @@ and `geo/elevation/script/`'s bash and GDAL pipeline.
 
 db-main holds nothing. pxl-geo takes `DB_GEO_URL` alone; pxl-api owns db-main,
 connects to it and probes it at boot, and has no route that reads it yet
-([the server in Rust](../issue/20260918-the-server-in-rust-and-the-line-already-drawn.md)).
+([the server in Rust](../decision/20260918-the-server-in-rust-and-the-line-already-drawn.md)).
 
 - Local access: `localhost:5433`
 - Container access: `db-geo:5432`

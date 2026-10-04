@@ -214,7 +214,8 @@ Two formats were made here: **PVF3**, pixelet's packed fixed-point coordinate, a
 ├── script/                   # the spec generator, the tree's checks, the deployment smoke
 ├── infra/                    # local and production compose files, and what fills db-geo:
 │                             #   geo/overture/ and geo/elevation/, each with init/ and script/
-└── issue/                    # Decisions and why, the backlog, experiment/ for measurements
+└── decision/                 # Each decision and why, closed/ for those no longer cited,
+                              #   experiment/ for measurements
 ```
 
 A crate's root holds its modules, the directories sorted by kind and the one-file modules after them; `pxl-geo`, `pxl-api` and `pxl-geo-spec` are flat.
@@ -234,7 +235,7 @@ The casing in the tree is not mixed by accident. Rust, the xpute packages and th
 
 ## Learn More
 
-[AGENTS.md](./AGENTS.md) is how to work in the tree.
+[AGENTS.md](./AGENTS.md) is how to work in the tree, [BACKLOG.md](./BACKLOG.md) what is queued next, and [decision/](./decision/) why things went the way they did.
 
 Four files carry a `.xpute` infix: [README.xpute.md](./README.xpute.md) and [ARCHITECTURE.xpute.md](./ARCHITECTURE.xpute.md) — the system under the application, its memory, rings, turn, handles, contract and wire formats — with `LICENSE.xpute` and `THIRD_PARTY_NOTICES.xpute.md` beside them. They belong to the xpute repository and live here because xpute is developed here. None of them names pixelet, which is what lets `script/export-xpute.ts` drop the infix and send them out as they are.
 

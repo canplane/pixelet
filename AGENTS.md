@@ -15,8 +15,8 @@ repository's, and the export drops the infix and ships them unchanged. How all
 four are written and reviewed:
 [.agents/skills/write-documents](./.agents/skills/write-documents/SKILL.md) —
 read it before reworking one, not after. Why past decisions went the way they
-did: [issue/](./issue/). What is queued:
-[issue/BACKLOG.md](./issue/BACKLOG.md). Procedures — a bake, a publish — are
+did: [decision/](./decision/). What is queued:
+[BACKLOG.md](./BACKLOG.md). Procedures — a bake, a publish — are
 the skills in [.agents/skills/](./.agents/skills/).
 
 ---
@@ -209,7 +209,7 @@ a sample, not the whole coverage — before trusting a field: Overture's
 `road` column turned out empty, and much of `width_rules` is an import's
 width classes. What can be made when a chunk is drawn — a deck's slab, a
 tunnel's mouth — is the client's, and the bake carries only what the client
-cannot work out (issue/20261001-ways-off-the-ground.md).
+cannot work out (decision/20261001-ways-off-the-ground.md).
 
 ## Scope
 
@@ -222,7 +222,7 @@ product surface are at different stages, so check the code before
 characterizing any part of the surface.
 
 **The client is a Rust kernel drawing through WebGPU**: in WASM on a page
-([issue/20260912-why-the-destination-is-wasm.md](./issue/20260912-why-the-destination-is-wasm.md)),
+([decision/20260912-why-the-destination-is-wasm.md](./decision/20260912-why-the-destination-is-wasm.md)),
 and on a device linked into a React Native app and drawing through wgpu. The
 kernel decides and lists what to draw; the renderer executes and decides
 nothing. **Don't propose a WebGL path or pre-WebGPU support** — closed.
@@ -233,7 +233,7 @@ through the Worker, and Workers is on the free plan, which fails closed at
 100k requests/day. Three acts break it — a paid Workers plan, the `r2.dev`
 public URL, a custom domain on the **bucket** (the Worker is what `plei.me`
 is). Don't propose any without saying what it costs
-([issue/20260816-deployment-hosting.md](./issue/20260816-deployment-hosting.md)).
+([decision/20260816-deployment-hosting.md](./decision/20260816-deployment-hosting.md)).
 Writes are outside it: an upload is a Class A operation an object, and a
 publish is a pyramid's worth of them, so `deno task usage` comes before one.
 
@@ -310,7 +310,7 @@ wrong without it, and nothing else: the reproducible failure a branch
 prevents, where a number comes from, a non-obvious algorithm or invariant. One
 or two sentences, in English. Never restate what the code shows, never narrate
 a design, its alternatives or its history ("X → Y because…", "previously…"),
-and never write a reference list; that belongs in `issue/`, if anywhere.
+and never write a reference list; that belongs in `decision/`, if anywhere.
 Trivial or visual code gets none.
 
 **Comments are working notes, not a contract.** Never cite an in-repo comment
@@ -318,7 +318,7 @@ as evidence; verify against the code, its behavior or git history. When the
 author contradicts a comment — even one written this session — defer. Keep
 comments accurate; don't treat them as authority. A source path a comment or a
 document names must exist, and `check:rules` says where one does not; a
-decision record in `issue/` names the files of its day and is exempt.
+decision record in `decision/` names the files of its day and is exempt.
 
 ## Architecture first
 

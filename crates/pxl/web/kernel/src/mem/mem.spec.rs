@@ -31,7 +31,7 @@
 /// on. The host's own page size is deliberately ignored — 16 KiB on Apple
 /// silicon, 4 KiB on x86-64, 64 KiB for a WebAssembly page — since none of the
 /// three is visible here or acts on anything decided here
-/// (issue/20260916-the-page-table-the-pool-did-not-need.md).
+/// (decision/20260916-the-page-table-the-pool-did-not-need.md).
 pub const PAGE_BYTES: u32 = 4096;
 
 /// The stack, at the bottom of the memory. build.rs hands this number to wasm-ld
@@ -47,7 +47,7 @@ pub const PAGE_BYTES: u32 = 4096;
 pub const STACK_BYTES: u32 = 1048576;
 
 /// Messages the submission ring holds, and so payloads: one a slot
-/// (issue/20260917-the-ring-a-slot-and-its-payload.md). A power of two, which
+/// (decision/20260917-the-ring-a-slot-and-its-payload.md). A power of two, which
 /// the ring checks, since a position is taken modulo it by masking.
 pub const SUBMISSION_CAPACITY: u32 = 2048;
 
