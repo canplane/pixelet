@@ -7,10 +7,7 @@
 pub enum BillboardOrder {
     Poi = 0,
     Chat = 1,
-    Debug = 2,
 }
 
-/// Billboard sets live at once at most: one an order, since each order's
-/// owner — the badges, the companion's bubble, the gizmos' labels — holds one
-/// set and lets it go before it makes another (field.rs `new_set`).
-pub const SETS_MAX: usize = 3;
+/// One set per order, each owner letting its set go before making another.
+pub const SETS_MAX: usize = 2;

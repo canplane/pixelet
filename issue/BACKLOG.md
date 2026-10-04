@@ -35,6 +35,22 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P1
 
+- **The device's image binding, built once.** `a59f64e4` changed
+  `pxl_image_hold` to take the kernel's handle, and with it the Swift and
+  Kotlin bindings (`PlatformModule`, `PxlCore`); the Rust side is checked for
+  both targets, the bindings only by a device build, at the next one.
+
+- **Decor and the badges on the drawn chunks, seen running.** `4da038fc`
+  and `98e4f790` moved them onto the chunks the terrain draws; checked by
+  the tests and the build only. Zoom and pan on the dev stack: decor and
+  badges change with the ground under them, and no tree is lost or doubled
+  at a chunk's top or edge. `e7893bdb` moved the badges' globe and viewport
+  onto the frame's uniform: they stand, size and bend over the planet as
+  before. The gizmos carry no labels now, forward, up and north told apart by color, in lines three pixels wide. `01215a04`
+  and the commit after it moved the up, the viewport and the fog onto the
+  frame's uniform: the stars, the screen-space AO, the sky and the clouds
+  look as before.
+
 ## P3
 
 - **The address label by the zoom.** Asked 2026-09-23, not now: it wants a

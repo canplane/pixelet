@@ -74,13 +74,6 @@ fn cluster(p: &mut Sketch, label: &str, logical_w: f32) {
     anchor_dot(p, logical_w);
 }
 
-pub const LABEL_FONT: Font = Font { weight: REGULAR, px: 10.0 };
-const LABEL_H: f32 = 12.0;
-
-fn label(p: &mut Sketch, text: &str, logical_w: f32) {
-    p.text(LABEL_FONT, BLACK, text, logical_w / 2.0, LABEL_H / 2.0, Align::Center);
-}
-
 pub const BUBBLE_FONT: Font = Font { weight: SEMIBOLD, px: 14.0 };
 const PADDING_Y: f32 = 8.0;
 const LINE_H: f32 = 17.0;
@@ -131,14 +124,9 @@ pub struct BadgePass {
     levels: u32,
     generation: u32,
     sets: [Set; SETS],
-    /// The atlas's dirty entries as the last flush handed them over, kept to
-    /// be handed back to the next.
     dirty: Vec<u32>,
     uniform: [f32; BADGE_FLOATS],
-    /// The frame's inputs: the view in the anchor root's frame and the
-    /// projection into WebGPU's clip space, the projection's pixels per unit at
-    /// one unit of depth, the camera's near and far, and the rule's cell per
-    /// distance.
+    frame_group: u32,
     pub view: [f32; 16],
     pub proj: [f32; 16],
     pub px_k: f32,
@@ -226,7 +214,6 @@ impl BadgePass {
                 DrawSpec::Cluster { label, logical_w } => cluster(&mut p, label, *logical_w as f32),
                 DrawSpec::Place { name, icon, color, logical_w } => place(&mut p, name, icon, *color, *logical_w as f32),
                 DrawSpec::Bubble { lines, box_w, box_h } => bubble(&mut p, lines, *box_w as f32, *box_h as f32),
-                DrawSpec::Text { text: line, logical_w } => label(&mut p, line, *logical_w as f32),
             }
             if self.painter.paint(g, encoder, self.sheet, atlas.slot_rect(slot), &p, text, &mut made) {
                 drawn = true;
@@ -245,8 +232,6 @@ impl BadgePass {
         }
     }
 
-    /// Every billboard set's draw, in the order listed, in one pass of their
-    /// own over `color` reading `depth`, timed under `stamp`.
     #[allow(clippy::too_many_arguments)]
     pub fn draw(&mut self, g: &Gpu, encoder: u32, color: u32, depth: u32, draws: &Draws, uniforms: &[f32], blocks: &Blocks, stamp: &mut Stamp) {
         if self.sheet_group == 0 {
@@ -270,10 +255,8 @@ impl BadgePass {
             let s = &mut self.uniform;
             s[..16].copy_from_slice(&self.view);
             s[16..32].copy_from_slice(&self.proj);
-            s[32..35].copy_from_slice(&uniforms[at..at + 3]);
-            // The viewport's word holds it and nothing past it.
-            s[35..44].copy_from_slice(&[self.px_k, self.near, self.far, self.cell, 1.0, viewport[0] as f32, viewport[1] as f32, 0.0, 0.0]);
-            s[44..52].copy_from_slice(&self.globe);
+            s[32..35].copy_from_slice(&uniform_of(uniforms, d)[..3]);
+            s[35..40].copy_from_slice(&[self.px_k, self.near, self.far, self.cell, 0.0]);
             g.write_buffer(set.uniform, 0, bytes(s));
             if set.block != block || set.depth != depth || set.group == 0 {
                 release(set.group);

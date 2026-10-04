@@ -70,7 +70,6 @@ pub(crate) const SKY_FLOATS: usize = 16;
 pub(crate) const SKY_POLE: usize = 12;
 pub(crate) const SKY_MAPPED: usize = 15;
 const BOX_VERTICES: u32 = 36;
-/// Floats of the frame's draws storage made before the first frame needs more.
 const DRAWS_INITIAL: u32 = 256 * UNIFORM_FLOATS as u32;
 const MB: f64 = 1_048_576.0;
 
@@ -90,10 +89,8 @@ pub type Frame = [f32; FRAME_FLOATS];
 pub struct FrameInput<'a> {
     pub lists: Lists<'a>,
     pub environment: &'a [f32],
-    /// Each decor group's model block, by the list's handle (0 while it
-    /// loads), its skin's image and its extent, in group order.
-    pub decor: &'a [(u32, Option<u32>, crate::gpu::pass::impostor::Extent)],
-    /// The world's actors' models and the images they are skinned with.
+    /// 0 while it loads.
+    pub decor: &'a [(u32, Option<u32>, Extent)],
     pub skins: &'a [(u32, u32)],
     pub cases: &'a [(u32, u32, u32)],
     pub sheet: fn() -> Option<u32>,
@@ -166,8 +163,6 @@ pub(crate) fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4, eye: &V3) {
     }
 }
 
-/// A frame group: the frame uniform at 0, a shadow map's two entries, the
-/// occlusion map and the air's entries (gpu/atmosphere.rs).
 pub fn frame_group(g: &Gpu, layout: u32, frame: u32, shadow: [u32; 10], ao: [u32; 5], air: [u32; AIR_WORDS]) -> u32 {
     let id = object();
     let mut e = [0u32; 20 + AIR_WORDS];
@@ -190,28 +185,23 @@ pub fn skin_group(g: &Gpu, layout: u32, sampler: u32, image: u32) -> [u32; 3] {
     [texture, view, group]
 }
 
-/// What `skin_group` made, let go: the group, the view, the texture.
 pub fn release_skin(ids: [u32; 3]) {
     for id in ids.into_iter().rev() {
         release(id);
     }
 }
 
-/// The frame's draw records by pipeline: sorted once a frame on the
-/// pipeline word, a counting sort that keeps the list's order within each,
-/// so a pass walks its own records and no other. `order` is the renderer's,
-/// grown and never shrunk.
+/// Records sorted by pipeline with a stable counting sort, so a pass walks
+/// only its own records.
 pub struct Draws<'a> {
     records: &'a [[u32; DRAW_WORDS]],
     order: &'a [u32],
-    /// Where each pipeline's run starts in `order`, and the end past the last.
     starts: [u32; PIPELINES as usize + 1],
 }
 
 impl<'a> Draws<'a> {
     fn sort(records: &'a [[u32; DRAW_WORDS]], order: &'a mut Vec<u32>) -> Draws<'a> {
         let mut starts = [0u32; PIPELINES as usize + 1];
-        // A pipeline word no pipeline has names nothing a pass draws.
         for d in records {
             if let Some(n) = starts.get_mut(d[4] as usize + 1) {
                 *n += 1;
@@ -232,7 +222,6 @@ impl<'a> Draws<'a> {
         Draws { records, order, starts }
     }
 
-    /// Pipeline `pipeline`'s records, in the order listed.
     pub fn of(&self, pipeline: u32) -> impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]> + Clone + 'a {
         let p = (pipeline as usize).min(PIPELINES as usize);
         let end = if p < PIPELINES as usize { self.starts[p + 1] } else { self.starts[p] };
@@ -241,8 +230,7 @@ impl<'a> Draws<'a> {
     }
 }
 
-/// A heap block words are laid out in before they go to the
-/// device: grown to the next power of two when a frame needs more, never shrunk.
+/// Grown to the next power of two when a frame needs more, never shrunk.
 #[derive(Default)]
 pub struct Scratch {
     at: usize,
@@ -274,23 +262,15 @@ impl Scratch {
 
 const EMPTY: u32 = 0;
 
-/// The table's slots for at most `live` blocks at once: a power of two, so a
-/// position wraps by masking, and at least twice `live`, so open addressing
-/// never fills past half. How many blocks can be live is the module's, whose
-/// owners make them (pxl-kernel mem/fixed.rs `MAX_LIVE_BLOCKS`); the
-/// renderer knows only the table.
+/// A power of two so a position wraps by masking, at least twice `live` so
+/// open addressing never fills past half.
 pub const fn block_slots(live: usize) -> usize {
     (2 * live).next_power_of_two()
 }
 
-/// The blocks the draw list named, by the handle it gave each: where the block
-/// lies in the memory and its counts, and once a device has it the buffer and
-/// the one group made over it — the decor instances, a joint palette or the
-/// puck's zone, whichever the block is. The memory is the source and the
-/// device a copy: a block stays in the heap until its free is listed, so a
-/// device that went away, or lists taken while there was none, are made good
-/// from the addresses. Open addressing in `.fixed.blocks`'s lanes, since the
-/// handles are the list's and sparse.
+/// Blocks by the list's handle: open addressing in `.fixed.blocks`. The heap
+/// is the source and the device a copy, so a lost device is restored from the
+/// addresses.
 pub struct Blocks {
     handle: &'static mut [u32],
     at: &'static mut [u32],
@@ -316,17 +296,13 @@ fn memory(at: u32, n: u32) -> &'static [u8] {
 /// Handle, address, length, the two counts, buffer, group.
 const BLOCK_LANES: usize = 7;
 
-/// The table's lanes end to end for `slots` slots: `.fixed.blocks`, which the
-/// kernel lays out (pxl-kernel mem/fixed.rs) and installs with `set_blocks`.
 pub const fn blocks_bytes(slots: usize) -> u32 {
     (BLOCK_LANES * slots * 4) as u32
 }
 
-/// Installs a table of `slots` slots in the `blocks_bytes(slots)` at `at`.
-///
 /// # Safety
-/// `at` must address that range, 4-aligned and zeroed, the renderer's alone
-/// for as long as the module runs.
+/// `at` must address `blocks_bytes(slots)`, 4-aligned and zeroed, the
+/// renderer's alone for as long as the module runs.
 pub unsafe fn set_blocks(at: u32, slots: usize) {
     xpute_core::ensure!(slots.is_power_of_two(), EINVAL, slots);
     // SAFETY: the caller's range, one lane of `slots` words after another.
@@ -345,7 +321,6 @@ pub unsafe fn set_blocks(at: u32, slots: usize) {
     });
 }
 
-/// Where a handle's probe begins in a table of `slots` slots.
 fn home(handle: u32, slots: usize) -> usize {
     (handle.wrapping_mul(0x9e37_79b1) >> (32 - slots.trailing_zeros())) as usize
 }
@@ -408,8 +383,7 @@ impl Blocks {
 
     fn insert(&mut self, g: Option<&Gpu>, handle: u32, at: u32, len: u32, vertex_cnt: u32, index_cnt: u32) {
         self.remove(handle);
-        // The slots are twice the most blocks the module's owners can hold
-        // at once (`block_slots`), so this is that bound broken.
+        // Slots are twice the most blocks the owners can hold, so this is that bound broken.
         xpute_core::ensure!((self.count as usize) < self.handle.len() / 2, ENOTRECOVERABLE, self.handle.len() / 2);
         let mut i = home(handle, self.handle.len());
         while self.handle[i] != EMPTY {
@@ -430,10 +404,8 @@ impl Blocks {
         }
     }
 
-    /// The block at `at` changed `len` bytes from byte `from`: written into
-    /// its buffer when it has one, and read from there when it is next put
-    /// on a device. Where the turn's stream has no room for them, the buffer
-    /// goes and the block is missing, put again whole once there is.
+    /// Where the turn's stream has no room, the buffer goes and the block is put
+    /// again whole once there is.
     fn rewrite(&mut self, g: Option<&Gpu>, handle: u32, at: u32, from: u32, len: u32) {
         let Some(i) = self.find(handle) else { return };
         self.at[i] = at;
@@ -567,7 +539,6 @@ impl DebugPass {
         }
     }
 
-    /// The frame's segments into the open pass.
     fn draw(&self, g: &Gpu, pass: u32, draws: &Draws, uniforms: &[f32], blocks: &Blocks) {
         let Some(d) = draws.of(PIPELINE_DEBUG).next() else { return };
         let (Some((block, _, _)), count) = (blocks.get(d[0]), d[1]) else { return };
@@ -580,13 +551,12 @@ impl DebugPass {
         g.set_bind_group(pass, 0, self.frame_group, &[]);
         g.set_bind_group(pass, 1, self.draw_group, &[]);
         g.set_vertex_buffer(pass, 0, block, 0, count * 24);
-        g.draw(pass, count, 1, 0, 0);
+        // A segment an instance: its two vertices, read as one.
+        g.draw(pass, 6, count / 2, 0, 0);
     }
 }
 
-/// A case of the variant picker: its own frame and group 0 over it, and the
-/// skinned pass that draws its one actor into it at one sample, with no
-/// shadow.
+/// A variant picker case: its own frame, drawn at one sample with no shadow.
 struct Case {
     frame_buffer: u32,
     frame: Frame,
@@ -639,8 +609,6 @@ pub struct Renderer {
     draws_bytes: u32,
     bind_group: u32,
     light_group: u32,
-    /// Group 0 of decor, the impostors and the actors, which is one group
-    /// over one layout for the three (gpu/pass/model.rs's frame_layout).
     models: FrameGroups,
     shadow: Shadow,
     shadows: bool,
@@ -653,14 +621,12 @@ pub struct Renderer {
     layers: Layers,
     moon: MoonMap,
     decor: DecorPass,
-    impostor: crate::gpu::pass::impostor::ImpostorPass,
+    impostor: ImpostorPass,
     skinned: SkinnedPass,
     puck: PuckPass,
     badges: BadgePass,
     debug: DebugPass,
     cases: [Option<Case>; SURFACES],
-    /// The frame's draws sorted by pipeline (`Draws`), kept to be sorted into
-    /// again.
     order: Vec<u32>,
     gpu_ms: f64,
     gpu_spans: [f64; GPU_SPANS.len()],
@@ -720,18 +686,9 @@ impl Renderer {
             chunk_coarse_depth: pipelines.build(g, PIPELINE_CHUNK_COARSE_DEPTH, format::CANVAS),
             chunk_coarse_prepass: pipelines.build(g, PIPELINE_CHUNK_COARSE_PREPASS, format::CANVAS),
             ghost: [pipelines.build(g, PIPELINE_GHOST_BOX, format::CANVAS), pipelines.build(g, PIPELINE_GHOST_BOX_COPLANAR, format::CANVAS)],
-            decor: DecorPass::new(g, &mut pipelines, frame_buffer, &shadow, ao.blank_entry(7), air, device.align),
-            impostor: crate::gpu::pass::impostor::ImpostorPass::new(g, &mut pipelines, frame_buffer, &shadow, ao.blank_entry(7), air, device.align),
-            skinned: SkinnedPass::new(
-                g,
-                &mut pipelines,
-                frame_buffer,
-                shadow.entries(1),
-                Some((shadow.light_frame, shadow.blank_entries(1))),
-                ao.blank_entry(7),
-                air,
-                device.align,
-            ),
+            decor: DecorPass::new(g, &mut pipelines, device.align),
+            impostor: ImpostorPass::new(g, &mut pipelines, device.align),
+            skinned: SkinnedPass::new(g, &mut pipelines, device.align),
             puck: PuckPass::new(g, &mut pipelines, frame_buffer),
             badges: BadgePass::new(g, &mut pipelines, frame_buffer),
             debug: DebugPass::new(g, &mut pipelines, frame_buffer),
@@ -781,25 +738,11 @@ impl Renderer {
         id
     }
 
-    /// The chunk pass's groups over the eye's frame and the light's, made
-    /// again over what they hold now; what they held before let go.
     fn chunk_groups(&mut self, g: &Gpu) {
         release(self.bind_group);
         release(self.light_group);
         self.bind_group = self.chunk_group(g, self.frame_buffer, self.shadow.entries(1));
         self.light_group = self.chunk_group(g, self.shadow.light_frame, self.shadow.blank_entries(1));
-        let ao = self.ao.entry(7);
-        self.decor.rebind(g, self.frame_buffer, &self.shadow, ao);
-        self.impostor.rebind(g, self.frame_buffer, &self.shadow, ao);
-        self.skinned
-            .rebind(g, self.frame_buffer, self.shadow.entries(1), Some((self.shadow.light_frame, self.shadow.blank_entries(1))), ao);
-    }
-
-    /// Every lit pass's group 0 again: the occlusion map is a new object.
-    fn rebind(&mut self, g: &Gpu) {
-        self.chunk_groups(g);
-        let light = Some((self.shadow.light_frame, self.shadow.blank_entries(1)));
-        self.models.rebind(g, self.frame_buffer, self.shadow.entries(1), light, self.ao.entry(7));
     }
 
     /// The occlusion map is a new object, so every lit pass's group 0 is remade.
@@ -818,7 +761,7 @@ impl Renderer {
         let b = &mut self.badges;
         put_mat(&mut b.view, 0, s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].try_into().or_bug(Errno::ENOTRECOVERABLE));
         put_mat(&mut b.proj, 0, &proj);
-        b.px_k = (s[STAGE_AT::VIEWPORT + 1] / (2.0 * (s[STAGE_AT::FOV] * core::f64::consts::PI / 360.0).tan())) as f32;
+        b.px_k = (s[STAGE_AT::VIEWPORT + 1] / (2.0 * libm::tan(s[STAGE_AT::FOV] * core::f64::consts::PI / 360.0))) as f32;
         b.near = s[STAGE_AT::NEAR] as f32;
         b.far = s[STAGE_AT::FAR] as f32;
         b.cell = s[STAGE_AT::LOD_CELL] as f32;
@@ -885,20 +828,9 @@ impl Renderer {
         self.atmosphere.lay_out(g, env, &up);
     }
 
-    /// Every draw of chunk pipeline `which`; with `own`, that pipeline set before the first, under the chunk
-    /// group. A mesh is its boxes: a chunk's in its arena group, the hover
-    /// ghost's in a block of its own (gpu/arena.rs).
-    ///
-    /// A box is one instance and the thirty-six vertices of a cube share it,
-    /// so the mesh is bound as a vertex buffer from its start, and a draw's
-    /// own first box is its first instance: an instance-stepped attribute is
-    /// fetched at `first_instance + i`, a stride the pipeline's format fixes
-    /// apart (frame/shader/record.rs's chunk_lanes). Draws out of one buffer then bind
-    /// nothing between them. Both slots take the one buffer: the second reads
-    /// the two words a coarse box does not have, which its layout puts back
-    /// at offset zero so that one shader serves both formats. The draw
-    /// record's index goes on the first vertex, which no attribute steps by,
-    /// and the shader divides it back out (chunk.wgsl).
+    /// A box is one instance shared by 36 vertices; a draw's first box is its first
+    /// instance. Both vertex slots bind the same buffer so one shader serves both
+    /// formats; the record index rides on the first vertex.
     fn draw_meshes(&self, g: &Gpu, pass: u32, draws: &Draws, which: u32, own: Option<u32>) {
         let b = blocks();
         let mut bound = 0;
@@ -909,11 +841,8 @@ impl Renderer {
             } else {
                 b.get(handle).map(|(buffer, ..)| buffer)
             };
-            // A draw naming a buffer that is not there is a fault in the list
-            // and not a frame to get through. Skipping it drew nothing and
-            // said nothing, and the census counted it drawn either way — which
-            // is how a device came to draw no ground at all with every gauge
-            // reading normal.
+            // A missing buffer is a fault in the list. Skipping it silently once drew no
+            // ground at all with every gauge reading normal.
             let Some(buffer) = buffer else { xpute_core::bug!(ENOTRECOVERABLE, handle, which) };
             if let (Some(p), 0) = (own, bound) {
                 g.set_pipeline(pass, p);
@@ -926,23 +855,6 @@ impl Renderer {
             }
             g.draw(pass, BOX_VERTICES, box_cnt, uniform * BOX_VERTICES, first_box);
         }
-    }
-
-    /// One pass's opaque world: the chunks of both formats under `group` at
-    /// the pipelines `chunk`, then decor and the actors at `stage` under
-    /// `models`; the impostors are the lit pass's alone. `bound` comes back
-    /// as the group 0 the pass has.
-    #[allow(clippy::too_many_arguments)]
-    fn draw_opaque(&mut self, g: &Gpu, pass: u32, draws: &Draws, b: &mut Blocks, stage: Stage, chunk: [u32; 2], group: u32, models: u32) -> u32 {
-        g.set_pipeline(pass, chunk[0]);
-        g.set_bind_group(pass, 0, group, &[]);
-        self.draw_meshes(g, pass, draws, PIPELINE_CHUNK, None);
-        g.set_pipeline(pass, chunk[1]);
-        self.draw_meshes(g, pass, draws, PIPELINE_CHUNK_COARSE, None);
-        let mut bound = group;
-        self.decor.draw(g, pass, draws, b, stage, (models, &mut bound));
-        self.skinned.draw(g, pass, draws.of(PIPELINE_SKINNED), b, stage, (models, &mut bound));
-        bound
     }
 
     /// The impostors are the lit pass's alone. `bound` comes back as the group 0 the pass has.
@@ -960,8 +872,7 @@ impl Renderer {
     }
 
     fn frame(&mut self, g: &Gpu, world: &mut Surface, input: FrameInput) -> FrameStat {
-        let models: Vec<(u32, Option<u32>)> = input.decor.iter().map(|&(m, i, _)| (m, i)).collect();
-        self.decor.set_models(&models);
+        self.decor.set_models(input.decor);
         self.impostor.set_models(input.decor);
         for &(model, image) in input.skins {
             self.skinned.set_skin(g, model, image);
@@ -989,20 +900,18 @@ impl Renderer {
         if !uniforms.is_empty() {
             g.write_buffer(self.draws_buffer, 0, bytes(uniforms));
         }
-        self.decor.prepare(g, draws, uniforms);
-        self.impostor.prepare(g, draws, uniforms);
-        self.skinned.prepare(g, draws, uniforms);
+        let mut order = core::mem::take(&mut self.order);
+        let draws = Draws::sort(records.as_chunks::<DRAW_WORDS>().0, &mut order);
+        self.decor.prepare(g, &draws, uniforms);
+        self.impostor.prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms);
+        self.skinned.prepare(g, draws.of(PIPELINE_SKINNED), uniforms);
 
         let b = blocks();
         let encoder = object();
         g.encoder(encoder);
         let q = self.query_set;
-        // A span a pair of queries, each written only by the passes the frame
-        // ran: which were is told with the set, since a query no pass wrote
-        // holds whatever an earlier frame left in it.
+        // A query no pass wrote holds an earlier frame's value, so which were written is passed along.
         let mut stamps: [Stamp; GPU_SPANS.len()] = core::array::from_fn(|span| Stamp::of(q, span));
-        // A variant's sprite, where its model or skin came or changed, before
-        // the world's pass reads the atlas.
         self.impostor.bake(g, encoder, &mut self.decor, b);
         self.atmosphere.draw(g, encoder, &mut stamps[SPAN_AIR]);
         if self.shadows {
@@ -1024,17 +933,11 @@ impl Renderer {
         g.current(world.handle, canvas_view);
         let pass = object();
         g.pass(pass, encoder, &pass_desc(canvas_view, load::CLEAR, world.depth_view, load::CLEAR, 0.0, stamps[SPAN_WORLD].pass()));
-        g.set_pipeline(pass, self.chunk.pipeline);
-        g.set_bind_group(pass, 0, self.bind_group, &[]);
-        self.draw_meshes(g, pass, draws, PIPELINE_CHUNK, FINE_BOX_BYTES, None);
-        g.set_pipeline(pass, self.chunk_coarse.pipeline);
-        self.draw_meshes(g, pass, draws, PIPELINE_CHUNK_COARSE, COARSE_BOX_BYTES, None);
-        self.decor.draw(g, pass, draws, b);
-        self.impostor.draw(g, pass, draws, b);
-        self.skinned.draw(g, pass, draws, b);
-        // The sky and the stars after the opaque world, at the far plane, so
-        // only a pixel it left empty runs the sky's shader: looking down at the
-        // map, none does.
+        let chunk = [self.chunk.pipeline, self.chunk_coarse.pipeline];
+        let mut bound = self.draw_opaque(g, pass, &draws, b, Stage::Lit, chunk, self.bind_group, self.models.frame);
+        // Last among opaque pipelines: alpha-tested fragments they discard were already filled.
+        self.impostor.draw(g, pass, draws.of(PIPELINE_IMPOSTOR), b, (self.models.frame, &mut bound));
+        // At the far plane after the opaque world, so only empty pixels run the sky shader.
         g.set_pipeline(pass, self.sky_built.pipeline);
         g.set_bind_group(pass, 0, self.sky_group, &[]);
         g.draw(pass, 3, 1, 0, 0);
@@ -1042,18 +945,14 @@ impl Renderer {
         self.clouds.draw(g, pass);
         self.puck.draw_beacon(g, pass, &draws, uniforms);
         self.puck.draw_zone(g, pass, &draws, uniforms, b);
-        // What is blended goes last, over everything opaque.
         self.draw_meshes(g, pass, &draws, PIPELINE_GHOST_BOX, Some(self.ghost[0].pipeline));
         self.draw_meshes(g, pass, &draws, PIPELINE_GHOST_BOX_COPLANAR, Some(self.ghost[1].pipeline));
-        // The sky, the clouds, the puck and the ghost box have bound group 0
-        // their own way since the models drew.
         let mut bound = 0;
         self.decor.draw_ghosts(g, pass, &draws, b, (self.models.frame, &mut bound));
         self.debug.draw(g, pass, &draws, uniforms, b);
         g.end(pass);
         release(pass);
-        self.badges
-            .draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, b, &mut stamps[SPAN_BADGES]);
+        self.badges.draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, b, &mut stamps[SPAN_BADGES]);
         self.draw_cases(g, encoder, &draws, uniforms, input.cases, &mut stamps[SPAN_CASES]);
         if q != 0 {
             let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);
@@ -1077,8 +976,6 @@ impl Renderer {
             if s.role != surface_role::CASE {
                 continue;
             }
-            // The case's actor's draw, and where it stands; nothing drawn until
-            // the actor has one.
             let Some(own) = draws.of(PIPELINE_SKINNED).find(|d| d[2] == model) else {
                 continue;
             };
@@ -1128,11 +1025,8 @@ impl Renderer {
         }
     }
 
-    /// The frame's census, taken from the draw list: what the scheduler
-    /// asked for. A chunk's draw is issued or the module stops
-    /// (`draw_meshes`); a model, an impostor, a puck zone or a badge set whose
-    /// block, skin or sprite is not on the device yet is passed over and
-    /// still counted, as is a badge set past the frame's SETS.
+    /// What the scheduler asked for: a draw passed over because its block, skin or
+    /// sprite is not on the device yet is still counted.
     fn stat(&self, draws: &[[u32; DRAW_WORDS]], world: &Surface) -> FrameStat {
         let b = blocks();
         let mut triangles = 0u32;
@@ -1141,7 +1035,7 @@ impl Renderer {
             let tris = match d[4] {
                 PIPELINE_CHUNK | PIPELINE_CHUNK_COARSE | PIPELINE_GHOST_BOX | PIPELINE_GHOST_BOX_COPLANAR => d[1] * 12,
                 PIPELINE_DECOR | PIPELINE_GHOST_DECOR => self.decor.triangles_of(d[1], b) * d[2],
-                crate::frame::draw::PIPELINE_IMPOSTOR => 2 * d[2],
+                PIPELINE_IMPOSTOR => 2 * d[2],
                 PIPELINE_SKINNED => b.get(d[0]).map_or(0, |(_, _, index_cnt)| index_cnt / 3),
                 PIPELINE_PUCK_ZONE => 12 * d[1],
                 PIPELINE_PUCK_BEACON => 8,
@@ -1237,10 +1131,7 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
 /// Blocks listed with no device wait in the table for the next one.
 fn take_lists<'a>(g: Option<&Gpu>, lists: Lists<'a>) -> (&'a [u32], &'a [f32]) {
     let b = blocks();
-    // What goes, first: a block replaced in the same list is never there
-    // with its replacement, so the table holds no more than the owners do
-    // when the list is done. A handle freed in a list is never uploaded in
-    // it (draw.rs `DrawList::free` drops an upload not yet taken).
+    // Frees first, so the table never holds a block beside its replacement.
     for &handle in lists.frees {
         b.remove(handle);
     }

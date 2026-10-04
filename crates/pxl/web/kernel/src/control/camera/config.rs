@@ -11,9 +11,8 @@ pub mod camera_cfg {
         pub const NEAR: f64 = 0.1;
     }
     pub mod view {
-        /// How far over the floor under it (world/access.rs `floor_under`) the
-        /// orbit's eye stands at least, where the collision setting holds it:
-        /// one cell, so the eye is never in the cell its floor tops.
+        /// The orbit eye's least height over its floor: one cell, so the eye is never
+        /// in the cell its floor tops.
         pub const EYE_CLEARANCE_U: f64 = 1.0;
 
         pub const DEFAULT_DIST: f64 = 16.0;
@@ -34,7 +33,7 @@ pub mod camera_cfg {
         /// its settle after release read as the gesture still being held.
         pub const TILT_SWEEP_FRACTION: f64 = 0.5;
         pub const DOLLY_GAIN: f64 = 0.0022;
-        /// atan2 swings wildly near the pivot; below this, azimuth freezes.
+        /// atan2 swings wildly near the screen center; below this, azimuth freezes.
         pub const MIN_ROTATE_RADIUS_PX: f64 = 24.0;
         pub const MIN_TWIST_DIST_PX: f64 = 24.0;
         /// Past this displacement the dominant axis locks for the gesture, or an

@@ -51,7 +51,6 @@ pub enum DrawSpec {
     Cluster { label: String, logical_w: f64 },
     Place { name: String, icon: &'static str, color: u32, logical_w: f64 },
     Bubble { lines: Vec<String>, box_w: f64, box_h: f64 },
-    Text { text: String, logical_w: f64 },
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

@@ -30,9 +30,8 @@ use crate::control::camera::config::camera_cfg::projection::FOV;
 use crate::control::camera::config::camera_cfg::view::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR};
 use crate::control::camera::orbit::orbit;
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
-use crate::control::navigation::support::{is_unknown, pan_to, unknown_z};
-use crate::global::Global;
 use crate::control::navigation::walk::walk;
+use crate::global::Global;
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::{settings_store, CameraMode};
 use crate::world::change::request_world_tick;
@@ -114,9 +113,9 @@ pub fn dist() -> f64 {
     }
 }
 
-/// The drawn azimuth, radians from north toward east.
-pub fn azimuth() -> f64 {
-    camera().azimuth
+/// The drawn heading, radians about the vertical.
+pub fn heading() -> f64 {
+    camera().yaw
 }
 
 pub fn center_local() -> Option<V3> {

@@ -1,4 +1,10 @@
-// Debug gizmos as one line list with no depth test, so a gizmo shows through the ground.
+// pxl-render/frame/shader/debug.wgsl
+
+// Debug gizmos as segments with no depth test, so a gizmo shows through the
+// ground. A line primitive is one pixel wide on every device, so each segment
+// is a quad its width across on the screen.
+
+const WIDTH_PX: f32 = 3.0;
 
 struct Draw {
   translation: vec3f,
@@ -15,10 +21,22 @@ struct VertexOut {
   @location(0) color: vec3f,
 };
 
+// Two triangles: which end, and which side of the segment.
+const ENDS = array<u32, 6>(0u, 0u, 1u, 1u, 0u, 1u);
+const SIDES = array<f32, 6>(-1.0, 1.0, -1.0, -1.0, 1.0, 1.0);
+
 @vertex
-fn vs(@location(0) position: vec3f, @location(1) color: vec3f) -> VertexOut {
+fn vs(@builtin(vertex_index) vi: u32, @location(0) a: vec3f, @location(1) color: vec3f, @location(2) b: vec3f) -> VertexOut {
+  let ca = frame_view_proj() * vec4f(on_globe(a + draw_translation()), 1.0);
+  let cb = frame_view_proj() * vec4f(on_globe(b + draw_translation()), 1.0);
+  let viewport = frame_viewport();
+  let along = (cb.xy / max(cb.w, 1e-6) - ca.xy / max(ca.w, 1e-6)) * viewport;
+  let dir = select(vec2f(1.0, 0.0), normalize(along), dot(along, along) > 1e-12);
+  // Half the width each side, in clip units at w = 1.
+  let across = vec2f(-dir.y, dir.x) * WIDTH_PX / viewport;
+  let c = select(ca, cb, ENDS[vi] == 1u);
   var o: VertexOut;
-  o.clip = frame_view_proj() * vec4f(on_globe(position + draw_translation()), 1.0);
+  o.clip = vec4f(c.xy + across * SIDES[vi] * c.w, c.z, c.w);
   o.color = color;
   return o;
 }
