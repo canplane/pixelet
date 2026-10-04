@@ -58,7 +58,7 @@ impl Serve for Policy {
     fn rank(&self, category: Category, _subject: u64, ask: Ask, _enqueue_ms: f64) -> Rank {
         match category {
             Category::ocean => Rank { class: 0, distance: 0.0 },
-            Category::terrain | Category::poi => page(category, ask),
+            Category::terrain | Category::poi | Category::earth => page(category, ask),
             Category::asset => Rank { class: ASSET, distance: 0.0 },
             // Neither blocks the other: the label renders on the turn both are there.
             Category::geocode | Category::geocode_dict => Rank { class: ASIDE, distance: 0.0 },

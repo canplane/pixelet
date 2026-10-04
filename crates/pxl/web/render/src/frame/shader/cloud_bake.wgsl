@@ -1,18 +1,15 @@
 // Bakes the cloud tile once per device. A texel stores opacity, not shape, so
 // the mips average what a wide pixel needs: half a cloud is half opaque.
 
-// Optical depth of a full cloud: past a few its underside is self-shadowed.
-const CLOUD_COVER: f32 = 0.42;
-const CLOUD_DEPTH: f32 = 6.0;
+// The share of the sky a cloud covers: fair weather, a quarter.
+const CLOUD_COVER: f32 = 0.25;
 // A threshold near the summed noise's mean cut it where it is densest: a thin
 // veil everywhere and a full cloud nowhere.
 const CLOUD_FULL_SHARE: f32 = 0.25;
 // The octave sum is near normal: mean 0.46875 exactly, deviation 0.0963
-// measured over the tile. A threshold on its quantile is the covered share;
-// the logistic approximates the normal CDF to within 0.01.
+// measured over the tile. A threshold on its quantile is the covered share.
 const CLOUD_SHAPE_MEAN: f32 = 0.46875;
 const CLOUD_SHAPE_SIGMA: f32 = 0.0963;
-const LOGISTIC_SCALE: f32 = 1.702;
 
 @fragment
 fn fs(v: TableOut) -> @location(0) vec4f {

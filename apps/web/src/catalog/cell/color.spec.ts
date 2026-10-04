@@ -13,7 +13,8 @@
 
 export default {
   _meta: {
-    source: "land/water/structure/transport: OpenStreetMap Carto; block: hand-picked",
+    source:
+      "land/water: Blue Marble Next Generation's July 2004 surface reflectance, the median over a named place of each kind (forest Jirisan and Taebaek, paddy Gimje plain, urban Seoul and Tokyo cores, bare Gobi, sand Sahara, sea the open Pacific), sRGB-coded; structure/transport: OpenStreetMap Carto; block: hand-picked",
   },
   common: {
     unknown: {
@@ -24,74 +25,74 @@ export default {
   },
   land: {
     bare: {
-      hex: "#EEE5DC",
-      rgb: 15656412,
+      hex: "#6B6353",
+      rgb: 7037779,
     },
     sea: {
-      hex: "#AAD3DF",
-      rgb: 11195359,
+      hex: "#071129",
+      rgb: 463145,
     },
     green_deep: {
-      hex: "#ADD19E",
-      rgb: 11391390,
+      hex: "#303F20",
+      rgb: 3161888,
     },
     green_light: {
-      hex: "#C8FACC",
-      rgb: 13171404,
+      hex: "#434C32",
+      rgb: 4410418,
     },
     sand: {
-      hex: "#F5E9C6",
-      rgb: 16116166,
+      hex: "#86705D",
+      rgb: 8810589,
     },
     residential: {
-      hex: "#E0DFDF",
-      rgb: 14737375,
+      hex: "#565540",
+      rgb: 5657920,
     },
     commercial: {
-      hex: "#F2DAD9",
-      rgb: 15915737,
+      hex: "#565540",
+      rgb: 5657920,
     },
     industrial: {
-      hex: "#EBDBE8",
-      rgb: 15457256,
+      hex: "#565540",
+      rgb: 5657920,
     },
     sports: {
-      hex: "#88E0BE",
-      rgb: 8970430,
+      hex: "#434C32",
+      rgb: 4410418,
     },
     education: {
-      hex: "#FFFFE5",
-      rgb: 16777189,
+      hex: "#565540",
+      rgb: 5657920,
     },
     medical: {
-      hex: "#FFFFE5",
-      rgb: 16777189,
+      hex: "#565540",
+      rgb: 5657920,
     },
     public: {
-      hex: "#FFFFE5",
-      rgb: 16777189,
+      hex: "#565540",
+      rgb: 5657920,
     },
     apron: {
-      hex: "#DADAE0",
-      rgb: 14342880,
+      hex: "#565540",
+      rgb: 5657920,
     },
     helipad: {
-      hex: "#BBBBCC",
-      rgb: 12303308,
+      hex: "#565540",
+      rgb: 5657920,
     },
   },
   water: {
     river: {
-      hex: "#AAD3DF",
-      rgb: 11195359,
+      hex: "#071129",
+      rgb: 463145,
     },
     lake: {
-      hex: "#AAD3DF",
-      rgb: 11195359,
+      hex: "#071129",
+      rgb: 463145,
     },
     wetland: {
-      hex: "#AAD3DF",
-      rgb: 11195359,
+      hex: "#071129",
+      rgb: 463145,
     },
   },
   structure: {

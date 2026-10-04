@@ -264,9 +264,14 @@ pub const fn neighbor_index(qx: i64, qy: i64) -> usize {
     ((qx + 1) + 4 * (qy + 1)) as usize
 }
 
+/// How many level-`level` pages stand around the world, and as many from its south edge to its north.
+pub const fn pages_around(level: u32) -> i64 {
+    1i64 << (IVEC_X_W - L3.shamt() as u32 - level)
+}
+
 /// The level-`level` page at (x, y), X wrapped around the world.
 pub fn page_at(level: u32, [x, y]: [i64; 2]) -> LevelPage {
-    let across = 1i64 << (IVEC_X_W - L3.shamt() as u32 - level);
+    let across = pages_around(level);
     let wrap = |x: i64| (x + across / 2).rem_euclid(across) - across / 2;
     LevelPage::new(level, ivec::gather(wrap(x), y, 0))
 }

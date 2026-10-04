@@ -113,7 +113,7 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
 const VERSION = String.raw`v\d{1,3}(?:\.\d{4}-\d{2}-\d{2}\.\d+)?`;
 const KEY_RE = new RegExp(
   String
-    .raw`^(?:terrain\/${VERSION}\/(?:_ocean|[0-3]{5,15})|poi\/${VERSION}\/[0-3]{5,15}|geocode\/${VERSION}\/(?:_dict|[0-3]{11})|asset\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9._-]+-[0-9a-f]{12}\.(?:glb|png|webp))$`,
+    .raw`^(?:terrain\/${VERSION}\/(?:_ocean|[0-3]{5,15})|poi\/${VERSION}\/[0-3]{5,15}|geocode\/${VERSION}\/(?:_dict|[0-3]{11})|earth\/${VERSION}\/[0-3]{5}|asset\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9._-]+-[0-9a-f]{12}\.(?:glb|png|webp))$`,
 );
 
 /** Where a stored entry keeps the encoding its bytes are in. A header the

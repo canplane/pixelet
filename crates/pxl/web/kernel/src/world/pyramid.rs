@@ -14,7 +14,7 @@ pub mod domain;
 
 use std::collections::HashMap;
 
-use pxl_spec::space::lod::Tau;
+use pxl_spec::space::lod::{fault_radius, Tau};
 use pxl_spec::space::observation::{Bounds, DemandEstimator, Observation, Paged, Requirement, Storage as _};
 use pxl_spec::space::pyramid::{Folds, LevelPage, TOP_LEVEL};
 
@@ -24,7 +24,7 @@ use crate::param;
 use crate::sched::profiler::record::Failure;
 use crate::world::observation::{heights_revision, observation, ByFootprints, Known, Order};
 use crate::world::paging::floor::{self, Fallback, Floor};
-use crate::world::paging::{Candidate, Paging, Victim, ABSENT, ASKS, DESTINATION_PAGES, FRAMES, LEVEL_DEMAND_PAGES};
+use crate::world::paging::{Candidate, Paging, Victim, ABSENT, DESTINATION_PAGES, LEVEL_DEMAND_PAGES};
 use crate::world::prefetch::{NoPrefetch, Prefetch};
 use crate::world::quality;
 
@@ -41,6 +41,16 @@ pub trait Layer: Folds + Clone + 'static {
     const CATEGORY: Category;
 
     const ON_ABSENT: Absent = Absent::Above;
+
+    /// False for a layer that holds only the floor: it asks for no fault, no
+    /// destination and nothing speculative, and its residency is sized so.
+    const DEMANDS: bool = true;
+
+    /// The coarsest level the layer's own source supplies whole, where one
+    /// differs from the ground's declared top (`floor::level`). Its floor is
+    /// then that level's whole fault ring about the eye: it is drawn past where
+    /// the ground stops.
+    const TOP: Option<u32> = None;
 
     /// How far from the eye the layer draws anything; past it nothing of it
     /// is asked for.
@@ -101,7 +111,7 @@ impl<L: Layer> Default for Pyramid<L> {
             demand: Vec::new(),
             wants: Vec::new(),
             last: None,
-            asks: HashMap::with_capacity(ASKS as usize),
+            asks: HashMap::with_capacity(Paging::<L>::ASKS as usize),
             hints: Vec::new(),
         }
     }
@@ -122,6 +132,10 @@ impl<L: Layer> Pyramid<L> {
 
     pub fn take_refusals(&mut self) -> u32 {
         self.paging.take_refusals()
+    }
+
+    pub fn observation(&self) -> Option<&Observation> {
+        self.observation.as_ref()
     }
 
     pub fn demand(&self) -> &[LevelPage] {
@@ -183,7 +197,9 @@ impl<L: Layer> Pyramid<L> {
         };
         let order = |o: &Observation, p: LevelPage| Order::of_region(o, bounds, p.level, p.region());
         if let Some(o) = o {
-            estimator.requirements(o, bounds, &mut |r| L::pages(&r, &mut |p| demand.push(p)));
+            if L::DEMANDS {
+                estimator.requirements(o, bounds, &mut |r| L::pages(&r, &mut |p| demand.push(p)));
+            }
             demand.sort_unstable();
             demand.dedup();
             for &p in &demand {
@@ -234,13 +250,13 @@ impl<L: Layer> Pyramid<L> {
                 },
             );
         }
-        xpute_core::ensure!(named <= DESTINATION_PAGES, ENOTRECOVERABLE, named);
+        xpute_core::ensure!(named <= if L::DEMANDS { DESTINATION_PAGES } else { 0 }, ENOTRECOVERABLE, named);
 
         let mut hints = core::mem::take(&mut self.hints);
         hints.clear();
-        if let Some(o) = o {
+        if let (Some(o), true) = (o, L::DEMANDS) {
             let needed = asks.keys().filter(|&&p| self.paging.takes_frame(p)).count() as u32;
-            let mut room = FRAMES.saturating_sub(needed).min(allowance);
+            let mut room = Paging::<L>::FRAMES.saturating_sub(needed).min(allowance);
             prefetch.speculate(o, tau, &mut |p| {
                 if !asks.contains_key(&p) {
                     hints.push((order(o, p), p));
@@ -249,7 +265,7 @@ impl<L: Layer> Pyramid<L> {
             hints.sort_unstable();
             hints.dedup_by_key(|h| h.1);
             // Settled or `ABSENT` pages take no frame but still count against `ASKS`.
-            let mut pages = ASKS.saturating_sub(asks.len() as u32);
+            let mut pages = Paging::<L>::ASKS.saturating_sub(asks.len() as u32);
             for &(order, p) in &hints {
                 let new = u32::from(self.paging.takes_frame(p));
                 if new > room || pages == 0 {
@@ -282,11 +298,15 @@ impl<L: Layer> Pyramid<L> {
     /// at the first fix the camera waits for that ground. `far` cuts the
     /// observation where the layer stops being drawn.
     pub fn step(&mut self, destination: Option<LevelPage>) {
-        let Some(top) = floor::level() else { return };
+        let Some(top) = L::TOP.or(floor::level()) else { return };
         // demand follows the published goal
         let published = domain::current();
-        let live = observation();
-        let seen_from = live.map(|live| published.map_or(live, |d| *d.observation()));
+        let own = |o: Observation| match L::TOP {
+            Some(top) => Observation { top, far: fault_radius(top), ..o },
+            None => o,
+        };
+        let live = observation().map(own);
+        let seen_from = live.map(|live| published.map_or(live, |d| own(*d.observation())));
         // the floor follows the live eye, so a jump asks for it at once
         let mut floor_now = [None; Floor::PAGES as usize];
         if let Some(l) = &live {

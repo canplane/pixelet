@@ -48,6 +48,12 @@ pub const MOON_LIGHT: f64 = 0.007;
 /// the full Moon's 0.25, taken as one stop rather than seven, so a moonless
 /// night is read by it and the Moon only brightens it.
 pub const NIGHT_SKY: f64 = MOON_LIGHT / 2.0;
+/// A city's core against the Sun, per steradian: VIIRS's day/night band reads
+/// about 100 nW/cm²/sr there, the Black Marble's white, of the Sun's 550 W/m²
+/// across that band, raised by the night eye as the Moon is.
+pub const CITY_LIGHT: f64 = 1e-3 / 550.0 * MOON_LIGHT * 400_000.0;
+/// The Black Marble's own lit city, #F9F0DA, linear.
+pub const CITY_COLOR: [f64; 3] = [0.9473, 0.8714, 0.7011];
 
 /// Allen's Astrophysical Quantities: 0.026·α + 4·10⁻⁹·α⁴ magnitudes (degrees).
 /// A half moon gives a tenth of a full one's light, not half.

@@ -30,20 +30,20 @@ pub const fn common(t: u8) -> Option<Swatch> {
 /// `land`'s color for a type, by its number.
 pub const fn land(t: u8) -> Option<Swatch> {
     match t {
-        cube_types::land::bare => Some(Swatch::new(0xeee5dc)),
-        cube_types::land::sea => Some(Swatch::new(0xaad3df)),
-        cube_types::land::green_deep => Some(Swatch::new(0xadd19e)),
-        cube_types::land::green_light => Some(Swatch::new(0xc8facc)),
-        cube_types::land::sand => Some(Swatch::new(0xf5e9c6)),
-        cube_types::land::residential => Some(Swatch::new(0xe0dfdf)),
-        cube_types::land::commercial => Some(Swatch::new(0xf2dad9)),
-        cube_types::land::industrial => Some(Swatch::new(0xebdbe8)),
-        cube_types::land::sports => Some(Swatch::new(0x88e0be)),
-        cube_types::land::education => Some(Swatch::new(0xffffe5)),
-        cube_types::land::medical => Some(Swatch::new(0xffffe5)),
-        cube_types::land::public => Some(Swatch::new(0xffffe5)),
-        cube_types::land::apron => Some(Swatch::new(0xdadae0)),
-        cube_types::land::helipad => Some(Swatch::new(0xbbbbcc)),
+        cube_types::land::bare => Some(Swatch::new(0x6b6353)),
+        cube_types::land::sea => Some(Swatch::new(0x071129)),
+        cube_types::land::green_deep => Some(Swatch::new(0x303f20)),
+        cube_types::land::green_light => Some(Swatch::new(0x434c32)),
+        cube_types::land::sand => Some(Swatch::new(0x86705d)),
+        cube_types::land::residential => Some(Swatch::new(0x565540)),
+        cube_types::land::commercial => Some(Swatch::new(0x565540)),
+        cube_types::land::industrial => Some(Swatch::new(0x565540)),
+        cube_types::land::sports => Some(Swatch::new(0x434c32)),
+        cube_types::land::education => Some(Swatch::new(0x565540)),
+        cube_types::land::medical => Some(Swatch::new(0x565540)),
+        cube_types::land::public => Some(Swatch::new(0x565540)),
+        cube_types::land::apron => Some(Swatch::new(0x565540)),
+        cube_types::land::helipad => Some(Swatch::new(0x565540)),
         _ => None,
     }
 }
@@ -51,9 +51,9 @@ pub const fn land(t: u8) -> Option<Swatch> {
 /// `water`'s color for a type, by its number.
 pub const fn water(t: u8) -> Option<Swatch> {
     match t {
-        cube_types::water::river => Some(Swatch::new(0xaad3df)),
-        cube_types::water::lake => Some(Swatch::new(0xaad3df)),
-        cube_types::water::wetland => Some(Swatch::new(0xaad3df)),
+        cube_types::water::river => Some(Swatch::new(0x071129)),
+        cube_types::water::lake => Some(Swatch::new(0x071129)),
+        cube_types::water::wetland => Some(Swatch::new(0x071129)),
         _ => None,
     }
 }

@@ -43,6 +43,13 @@ struct Atmosphere {
   // Aerosol the tables do not carry, applied only in aerial perspective.
   haze_extinction: f32,
   haze_scale_height: f32,
+  // A lit city's radiance where the Earth's picture holds all of it.
+  city_light: vec3f,
+  // The Earth layer's top-level pages about the eye: the south-west one, how
+  // many stand across the window and around the world; then per page, row by
+  // row, its layer plus one in four bits, zero where the global picture answers.
+  earth_window: vec4i,
+  earth_pages: vec4u,
 };
 
 fn atmos_rayleigh_scattering() -> vec3f { return atmos_words[0].xyz; }
@@ -79,6 +86,9 @@ fn atmos_cloud_altitude_km() -> f32 { return atmos_words[11].z; }
 fn atmos_cloud_gone_km() -> f32 { return atmos_words[11].w; }
 fn atmos_haze_extinction() -> f32 { return atmos_words[12].x; }
 fn atmos_haze_scale_height() -> f32 { return atmos_words[12].y; }
+fn atmos_city_light() -> vec3f { return atmos_words[13].xyz; }
+fn atmos_earth_window() -> vec4i { return bitcast<vec4i>(atmos_words[14]); }
+fn atmos_earth_pages() -> vec4u { return bitcast<vec4u>(atmos_words[15]); }
 
 // Can be above the atmosphere: the view from space.
 fn camera_r() -> f32 {

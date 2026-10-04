@@ -63,11 +63,11 @@ which `sky.wgsl`'s `MOON_MAP_MEAN` has to equal. Run the ingest afterward.
 ### After changing the Earth's maps
 
 ```sh
-deno task download:earth
+deno task bake:earth
 ```
 
-It fetches Blue Marble Next Generation's twelve months of 2004 (NASA's Earth
-Observatory, as the Scientific Visualization Studio serves them), takes each
-to 2048 × 1024 in linear light and writes `sky/earth/<month>.webp`; the floor
-every tile is drawn over wears the month the calendar is in. Run the ingest
-afterward.
+It fetches Blue Marble Next Generation's July of 2004 and the Black Marble's
+lights of 2016 (NASA's Earth Observatory) and makes both forms of the Earth's
+picture from them: `sky/earth/07.webp`, the global one at 2048 × 1024, and the
+Earth layer's pages under `out/earth/<version>/`, which publish as a bake does.
+Run the ingest afterward.

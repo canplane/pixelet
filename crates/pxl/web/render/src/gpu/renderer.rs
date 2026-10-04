@@ -59,11 +59,12 @@ const SHADOW_TEXEL: usize = FRAME_AT[9];
 const VIGNETTE: usize = FRAME_AT[10];
 const AO_STRENGTH: usize = FRAME_AT[11];
 const SCREEN_AO: usize = FRAME_AT[12];
-const LIGHT_VIEW_PROJ: usize = FRAME_AT[13];
-const OTHER: usize = FRAME_AT[14];
-pub(crate) const PLANET: usize = FRAME_AT[15];
-pub(crate) const GLOBE: usize = FRAME_AT[16];
-const UP: usize = FRAME_AT[17];
+const EARTH_SHARE: usize = FRAME_AT[13];
+const LIGHT_VIEW_PROJ: usize = FRAME_AT[14];
+const OTHER: usize = FRAME_AT[15];
+pub(crate) const PLANET: usize = FRAME_AT[16];
+pub(crate) const GLOBE: usize = FRAME_AT[17];
+const UP: usize = FRAME_AT[18];
 
 /// The ray, the celestial pole, and whether the Moon's face has arrived.
 pub(crate) const SKY_FLOATS: usize = 16;
@@ -98,11 +99,24 @@ pub struct FrameInput<'a> {
     pub sheet: fn() -> Option<u32>,
     pub moon: fn() -> Option<u32>,
     pub earth: fn() -> Option<u32>,
+    pub earth_pages: EarthPages<'a>,
     pub atlas: &'a mut BillboardAtlas,
     pub text: TextOf,
     /// A phone gets a smaller shadow map.
     pub handheld: bool,
 }
+
+/// The Earth layer's pages as the GPU reads them: the floor's window, its
+/// south-west page first, and per page its layer plus one; `upload` hands each
+/// page that has come to the writer while the writer takes it.
+pub struct EarthPages<'a> {
+    pub window: [i32; 2],
+    pub layers: &'a [u32],
+    pub upload: &'a mut Upload,
+}
+
+/// Hands each waiting page's layer and texels to the writer while it takes them.
+pub type Upload = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool);
 
 pub struct FrameOutput {
     /// A surface waits on a size to settle, so another turn is wanted.
@@ -822,6 +836,7 @@ impl Renderer {
         u[AO_STRENGTH] = s[STAGE_AT::AO_STRENGTH] as f32;
         self.screen_ao = s[STAGE_AT::SCREEN_AO] != 0.0;
         u[SCREEN_AO] = if self.screen_ao { 1.0 } else { 0.0 };
+        u[EARTH_SHARE] = s[STAGE_AT::EARTH_SHARE] as f32;
         if self.screen_ao {
             self.ao.lay_out(g, &proj, width, height);
         }
@@ -899,6 +914,8 @@ impl Renderer {
         self.layers.step(g, &self.mips, input.sheet);
         self.moon.step(g, &self.mips, input.moon);
         self.atmosphere.earth_step(g, &self.mips, input.earth);
+        let pages = input.earth_pages;
+        self.atmosphere.set_earth_pages(g, pages.window, pages.layers, pages.upload);
         self.badges.sync_sheet(g, &self.mips, input.atlas, input.text);
         let (records, uniforms) = take_lists(Some(g), input.lists);
 
@@ -907,6 +924,7 @@ impl Renderer {
         if self.screen_ao && self.ao.ensure(g, world.width, world.height) {
             self.rebind(g);
         }
+        self.clouds.ensure(g, world.width, world.height);
         g.write_buffer(self.frame_buffer, 0, bytes(&self.frame));
         g.write_buffer(self.sky_buffer, 0, bytes(&self.sky));
         let uniform_bytes = word_bytes(uniforms.len());
@@ -954,6 +972,7 @@ impl Renderer {
             g.end(pass);
             release(pass);
         }
+        self.clouds.march(g, encoder);
         if self.screen_ao {
             let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);
             let chunk = [self.chunk_prepass.pipeline, self.chunk_coarse_prepass.pipeline];

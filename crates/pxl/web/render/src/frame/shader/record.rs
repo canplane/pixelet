@@ -28,7 +28,8 @@ pub const SHADER_CLOUD_FIELD: u32 = 19;
 pub const SHADER_SHEET: u32 = 20;
 pub const SHADER_IMPOSTOR: u32 = 21;
 pub const SHADER_IMPOSTOR_BAKE: u32 = 22;
-pub const SHADERS: u32 = 23;
+pub const SHADER_CLOUD_COMPOSITE: u32 = 23;
+pub const SHADERS: u32 = 24;
 
 /// The shader files with comments and indentation stripped by build.rs;
 /// constant.wgsl first.
@@ -131,6 +132,7 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_ATMOS_EXPOSURE => wgsl!("frame", "globe", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_sky", "atmos_pass", "atmos_exposure"),
         SHADER_STARS => wgsl!("frame", "globe", "encode", "stars"),
         SHADER_CLOUD_FIELD => wgsl!("noise", "cloud_tile", "atmos_pass", "cloud_bake"),
+        SHADER_CLOUD_COMPOSITE => wgsl!("cloud_composite"),
         SHADER_CLOUDS => wgsl!(
             "frame",
             "globe",
@@ -152,9 +154,9 @@ pub fn source(kind: u32) -> &'static str {
 
 pub const FRAME_FLOATS: usize = 88;
 /// Frame uniform field offsets in floats, in frame.wgsl's order; a test holds it to the struct.
-pub const FRAME_AT: [usize; 18] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68, 76, 80, 84];
+pub const FRAME_AT: [usize; 19] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 51, 52, 68, 76, 80, 84];
 #[cfg(test)]
-const FRAME_FIELDS: [&str; 18] = [
+const FRAME_FIELDS: [&str; 19] = [
     "view_proj",
     "camera_pos",
     "edge_strength",
@@ -168,6 +170,7 @@ const FRAME_FIELDS: [&str; 18] = [
     "vignette",
     "ao_strength",
     "screen_ao",
+    "earth_share",
     "light_view_proj",
     "other_dir",
     "planet",
@@ -200,7 +203,8 @@ pub const PIPELINE_CHUNK_COARSE_DEPTH: u32 = 30;
 pub const PIPELINE_CHUNK_COARSE_PREPASS: u32 = 31;
 pub const PIPELINE_SHEET: u32 = 33;
 pub const PIPELINE_IMPOSTOR_BAKE: u32 = 35;
-pub const PIPELINES: u32 = 36;
+pub const PIPELINE_CLOUD_MARCH: u32 = 36;
+pub const PIPELINES: u32 = 37;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -348,7 +352,7 @@ fn record(h: Head, lanes: &[Vec<u32>], groups: &[Vec<u32>]) -> Vec<u32> {
     out
 }
 
-const AIR: [[u32; 3]; 7] = [
+const AIR: [[u32; 3]; 8] = [
     [8, FRAGMENT, UNIFORM],
     [9, FRAGMENT, TEXTURE],
     [10, FRAGMENT, TEXTURE],
@@ -356,8 +360,9 @@ const AIR: [[u32; 3]; 7] = [
     [13, FRAGMENT, TEXTURE],
     [15, FRAGMENT, TEXTURE],
     [16, FRAGMENT, TEXTURE_ARRAY],
+    [17, FRAGMENT, TEXTURE_ARRAY],
 ];
-const AIR_AT_VERTICES: [[u32; 3]; 7] = [
+const AIR_AT_VERTICES: [[u32; 3]; 8] = [
     [8, VERTEX, UNIFORM],
     [9, VERTEX, TEXTURE],
     [10, VERTEX, TEXTURE],
@@ -365,8 +370,9 @@ const AIR_AT_VERTICES: [[u32; 3]; 7] = [
     [13, VERTEX, TEXTURE],
     [15, VERTEX, TEXTURE],
     [16, VERTEX, TEXTURE_ARRAY],
+    [17, VERTEX, TEXTURE_ARRAY],
 ];
-const LIT_FRAME: [[u32; 3]; 11] = [
+const LIT_FRAME: [[u32; 3]; 12] = [
     [0, BOTH, UNIFORM],
     [1, FRAGMENT, DEPTH],
     [2, FRAGMENT, SAMPLER_COMPARISON],
@@ -380,9 +386,12 @@ const LIT_FRAME: [[u32; 3]; 11] = [
     [13, BOTH, TEXTURE],
     AIR_AT_VERTICES[5],
     AIR_AT_VERTICES[6],
+    AIR_AT_VERTICES[7],
 ];
 /// The transmittance and sky-view tables are laid out unread because the shader declares them.
-const CLOUD_GROUP: [[u32; 3]; 11] = [
+const CLOUD_COMPOSITE_GROUP: [[u32; 3]; 2] = [[0, FRAGMENT, TEXTURE], [1, FRAGMENT, SAMPLER]];
+
+const CLOUD_GROUP: [[u32; 3]; 12] = [
     [0, FRAGMENT, UNIFORM],
     [1, FRAGMENT, UNIFORM],
     [2, FRAGMENT, TEXTURE],
@@ -394,6 +403,7 @@ const CLOUD_GROUP: [[u32; 3]; 11] = [
     AIR[4],
     AIR[5],
     [16, NONE, TEXTURE_ARRAY],
+    [17, NONE, TEXTURE_ARRAY],
 ];
 const SKIN: [[u32; 3]; 2] = [[0, FRAGMENT, TEXTURE], [1, FRAGMENT, SAMPLER]];
 
@@ -491,6 +501,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 AIR[4],
                 AIR[5],
                 AIR[6],
+                AIR[7],
             ])],
         ),
         PIPELINE_MIPS => record(screen(SHADER_MIPS), &[], &[group(&SKIN)]),
@@ -573,22 +584,23 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             &[],
             &[frame(VERTEX), group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE]])],
         ),
+        PIPELINE_CLOUD_MARCH => record(screen(SHADER_CLOUDS), &[], &[group(&CLOUD_GROUP)]),
         // From under the layer only where the world left the far plane; from over it everywhere.
         PIPELINE_CLOUDS => record(
             Head {
                 depth_compare: GREATER_EQUAL,
-                ..blended(SHADER_CLOUDS, CULL_NONE, 0, 0.0)
+                ..blended(SHADER_CLOUD_COMPOSITE, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&CLOUD_GROUP)],
+            &[group(&CLOUD_COMPOSITE_GROUP)],
         ),
         PIPELINE_CLOUDS_ABOVE => record(
             Head {
                 depth_compare: ALWAYS,
-                ..blended(SHADER_CLOUDS, CULL_NONE, 0, 0.0)
+                ..blended(SHADER_CLOUD_COMPOSITE, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&CLOUD_GROUP)],
+            &[group(&CLOUD_COMPOSITE_GROUP)],
         ),
         PIPELINE_CLOUD_FIELD => record(screen(SHADER_CLOUD_FIELD), &[], &[]),
         _ => Vec::new(),

@@ -152,24 +152,13 @@ pub enum Asset {
     decor_kenney_watercraft_pack_boat_sail_a_glb = 135,
     decor_kenney_watercraft_pack_boat_speed_a_glb = 136,
     decor_kenney_watercraft_pack_colormap_png = 137,
-    sky_earth_01_webp = 138,
-    sky_earth_02_webp = 139,
-    sky_earth_03_webp = 140,
-    sky_earth_04_webp = 141,
-    sky_earth_05_webp = 142,
-    sky_earth_06_webp = 143,
-    sky_earth_07_webp = 144,
-    sky_earth_08_webp = 145,
-    sky_earth_09_webp = 146,
-    sky_earth_10_webp = 147,
-    sky_earth_11_webp = 148,
-    sky_earth_12_webp = 149,
-    sky_moon_png = 150,
+    sky_earth_07_webp = 138,
+    sky_moon_png = 139,
 }
 
 impl Asset {
     /// Every asset, in the table's order.
-    pub const ALL: [Asset; 151] = [
+    pub const ALL: [Asset; 140] = [
         Asset::actor_kenney_cube_pets_beaver_glb,
         Asset::actor_kenney_cube_pets_bee_glb,
         Asset::actor_kenney_cube_pets_bunny_glb,
@@ -308,18 +297,7 @@ impl Asset {
         Asset::decor_kenney_watercraft_pack_boat_sail_a_glb,
         Asset::decor_kenney_watercraft_pack_boat_speed_a_glb,
         Asset::decor_kenney_watercraft_pack_colormap_png,
-        Asset::sky_earth_01_webp,
-        Asset::sky_earth_02_webp,
-        Asset::sky_earth_03_webp,
-        Asset::sky_earth_04_webp,
-        Asset::sky_earth_05_webp,
-        Asset::sky_earth_06_webp,
         Asset::sky_earth_07_webp,
-        Asset::sky_earth_08_webp,
-        Asset::sky_earth_09_webp,
-        Asset::sky_earth_10_webp,
-        Asset::sky_earth_11_webp,
-        Asset::sky_earth_12_webp,
         Asset::sky_moon_png,
     ];
 
@@ -343,7 +321,7 @@ pub struct IngestedAsset {
 }
 
 /// Each asset's row, at its member's number.
-pub const INGESTED: [IngestedAsset; 151] = [
+pub const INGESTED: [IngestedAsset; 140] = [
     IngestedAsset {
         bytes: 149728,
         extent: Some([1.25, 1.84, 1.5]),
@@ -656,18 +634,7 @@ pub const INGESTED: [IngestedAsset; 151] = [
         extent: Some([1.78, 3.37, 1.5]),
     },
     IngestedAsset { bytes: 8814, extent: None },
-    IngestedAsset { bytes: 210654, extent: None },
-    IngestedAsset { bytes: 208998, extent: None },
-    IngestedAsset { bytes: 204840, extent: None },
-    IngestedAsset { bytes: 198094, extent: None },
-    IngestedAsset { bytes: 193680, extent: None },
-    IngestedAsset { bytes: 186714, extent: None },
-    IngestedAsset { bytes: 176504, extent: None },
-    IngestedAsset { bytes: 176302, extent: None },
-    IngestedAsset { bytes: 189850, extent: None },
-    IngestedAsset { bytes: 196448, extent: None },
-    IngestedAsset { bytes: 206154, extent: None },
-    IngestedAsset { bytes: 208986, extent: None },
+    IngestedAsset { bytes: 354182, extent: None },
     IngestedAsset { bytes: 165698, extent: None },
 ];
 

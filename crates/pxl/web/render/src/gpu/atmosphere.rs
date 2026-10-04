@@ -5,20 +5,24 @@
 //! the light's height or the camera's altitude moves (the table is kept relative
 //! to the light's azimuth); and the exposure texel after them.
 
+use pxl_spec::bake::earth_page::{EARTH_LEVEL, EARTH_TEXELS};
+use pxl_spec::space::lod::{FAULT_ACROSS, FAULT_PAGES};
+use pxl_spec::space::pyramid::pages_around;
 use pxl_spec::space::v3::V3;
 
 use crate::frame::shader::record::{PIPELINE_ATMOS_EXPOSURE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, Gpu, Stamp};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, room, texture_usage, word_bytes, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::clouds::CloudField;
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::layers::Mips;
 use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::renderer::Upload;
 use crate::look::atmosphere as model;
 use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_SKY, ENV_SUN};
 
-/// Two past the last field: the device rounds the struct up to a 16-byte row.
-pub const ATMOS_FLOATS: usize = 52;
+/// One past the last field: the device rounds the struct up to a 16-byte row.
+pub const ATMOS_FLOATS: usize = 64;
 /// Offsets in floats; record.test.rs holds them to the struct.
 pub(crate) const RAYLEIGH_SCATTERING: usize = 0;
 pub(crate) const BOTTOM_RADIUS: usize = 3;
@@ -54,11 +58,20 @@ pub(crate) const CLOUD_ALTITUDE: usize = 46;
 pub(crate) const CLOUD_GONE: usize = 47;
 pub(crate) const HAZE_EXTINCTION: usize = 48;
 pub(crate) const HAZE_SCALE_HEIGHT: usize = 49;
+pub(crate) const CITY_LIGHT: usize = 52;
+pub(crate) const EARTH_WINDOW: usize = 56;
+pub(crate) const EARTH_PAGES: usize = 60;
 
-/// Bindings 8 through 16, seven entries of five words.
-pub const AIR_WORDS: usize = 35;
+/// Bindings 8 through 17, eight entries of five words.
+pub const AIR_WORDS: usize = 40;
 
-/// The size download_earth writes the Earth's face at.
+/// A layer for each page the Earth layer's floor holds at once: its residency's frames.
+pub const EARTH_LAYERS: u32 = FAULT_PAGES;
+/// A page's layer plus one in four bits, eight to a word.
+const PAGE_BITS: u32 = 4;
+const _: () = assert!(EARTH_LAYERS < 1 << PAGE_BITS && FAULT_PAGES <= 32 / PAGE_BITS * 4, "the window's layers fit their word");
+
+/// The size bake_earth writes the Earth's global picture at.
 const EARTH_SIZE: (u32, u32) = (2048, 1024);
 
 /// Transmittance, multiple scattering, sky view, exposure, moonlit sky.
@@ -88,6 +101,7 @@ pub struct Atmosphere {
     sun_mu: f32,
     moon_mu: f32,
     earth: ImageMap,
+    earth_pages: (u32, u32),
 }
 
 impl Atmosphere {
@@ -101,6 +115,7 @@ impl Atmosphere {
             (OZONE_ABSORPTION, model::OZONE_ABSORPTION),
             (WHITE, white),
             (NIGHT_SKY, core::array::from_fn(|k| model::NIGHT_COLOR[k] * model::NIGHT_SKY * white[k])),
+            (CITY_LIGHT, core::array::from_fn(|k| model::CITY_COLOR[k] * model::CITY_LIGHT * white[k])),
         ] {
             for (w, v) in words[at..at + 3].iter_mut().zip(rgb) {
                 *w = v as f32;
@@ -127,6 +142,8 @@ impl Atmosphere {
             words[at] = v as f32;
         }
         words[SUN_DIR + 2] = 1.0;
+        words[EARTH_WINDOW + 2] = f32::from_bits(FAULT_ACROSS);
+        words[EARTH_WINDOW + 3] = f32::from_bits(pages_around(EARTH_LEVEL) as u32);
 
         let sampler = object();
         g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::CLAMP, compare::NONE, 1);
@@ -183,6 +200,20 @@ impl Atmosphere {
             sun_mu: 1.0,
             moon_mu: 1.0,
             earth: ImageMap::new(g, EARTH_SIZE.0, EARTH_SIZE.1),
+            earth_pages: {
+                let (texture, view) = (object(), object());
+                g.texture(
+                    texture,
+                    EARTH_TEXELS,
+                    EARTH_TEXELS,
+                    EARTH_LAYERS,
+                    format::RGBA8_SRGB,
+                    1,
+                    texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST,
+                );
+                g.view(view, texture, dimension::D2_ARRAY, 0, 1, 0, EARTH_LAYERS);
+                (texture, view)
+            },
         }
     }
 
@@ -195,7 +226,33 @@ impl Atmosphere {
         e[20..25].copy_from_slice(&[13, resource::VIEW, self.views[EXPOSURE_TEXEL], 0, 0]);
         e[25..30].copy_from_slice(&[15, resource::VIEW, self.views[MOON_VIEW], 0, 0]);
         e[30..35].copy_from_slice(&[16, resource::VIEW, self.earth.view, 0, 0]);
+        e[35..40].copy_from_slice(&[17, resource::VIEW, self.earth_pages.1, 0, 0]);
         e
+    }
+
+    /// The Earth layer's pages: what has come goes into its layer as the
+    /// stream has room, and the window says which layer each page reads.
+    /// Written by `lay_out`, which the renderer calls after this.
+    pub fn set_earth_pages(&mut self, g: &Gpu, window: [i32; 2], layers: &[u32], upload: &mut Upload) {
+        let texture = self.earth_pages.0;
+        upload(&mut |layer, texels| {
+            if !room(texels.len() as u32) {
+                return false;
+            }
+            g.write_texture(texture, layer, EARTH_TEXELS, EARTH_TEXELS, texels);
+            true
+        });
+        let w = &mut self.words;
+        w[EARTH_WINDOW] = f32::from_bits(window[0] as u32);
+        w[EARTH_WINDOW + 1] = f32::from_bits(window[1] as u32);
+        let per_word = (32 / PAGE_BITS) as usize;
+        let mut packed = [0u32; 4];
+        for (k, &layer) in layers.iter().enumerate() {
+            packed[k / per_word] |= layer << (PAGE_BITS * (k % per_word) as u32);
+        }
+        for (w, p) in w[EARTH_PAGES..EARTH_PAGES + 4].iter_mut().zip(packed) {
+            *w = f32::from_bits(p);
+        }
     }
 
     /// This month's Earth: the kernel draws nothing before its image has come.

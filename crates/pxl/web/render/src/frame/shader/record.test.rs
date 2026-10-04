@@ -154,6 +154,11 @@ fn the_skys_layouts_match_their_structs() {
             ("cloud_count", a::CLOUD_COUNT),
             ("cloud_altitude_km", a::CLOUD_ALTITUDE),
             ("cloud_gone_km", a::CLOUD_GONE),
+            ("haze_extinction", a::HAZE_EXTINCTION),
+            ("haze_scale_height", a::HAZE_SCALE_HEIGHT),
+            ("city_light", a::CITY_LIGHT),
+            ("earth_window", a::EARTH_WINDOW),
+            ("earth_pages", a::EARTH_PAGES),
         ],
     );
     holds(SHADER_SKY, "Sky", r::SKY_FLOATS, &[("ray", 0), ("pole", r::SKY_POLE), ("mapped", r::SKY_MAPPED)]);

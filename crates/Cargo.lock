@@ -1595,6 +1595,7 @@ version = "0.0.0"
 dependencies = [
  "axum",
  "flate2",
+ "image",
  "libm",
  "postgres",
  "pxl-geo-spec",
@@ -1603,6 +1604,8 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "ureq",
+ "webp",
  "xpute-core",
  "zstd",
 ]

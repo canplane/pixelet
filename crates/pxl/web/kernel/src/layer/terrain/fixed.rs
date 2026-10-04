@@ -12,7 +12,10 @@ use pxl_spec::bake::format::{Block, BLOCK_LANE};
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::pyramid::{EXTENT, PAGE_CELLS};
 
-use crate::world::paging::RECORDS;
+use crate::world::paging::Paging;
+use pxl_spec::bake::format::Terrain;
+
+const RECORDS: u32 = Paging::<Terrain>::RECORDS;
 
 /// One page's ground: a `GroundCell` a cell, no stride and no padding.
 pub const GROUND_LANE_BYTES: u32 = PAGE_CELLS * PAGE_CELLS * core::mem::size_of::<GroundCell>() as u32;

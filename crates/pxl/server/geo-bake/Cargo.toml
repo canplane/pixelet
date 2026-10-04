@@ -20,6 +20,10 @@ xpute-core = { path = "../../../xpute/core" }
 # call, and each worker is a thread with its own connection.
 postgres = { version = "0.19", features = ["with-serde_json-1"] }
 zstd = "0.13"
+# The Earth's picture: its sources are JPEG, its global form WebP.
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
+webp = "0.3"
+ureq = "2"
 # The reader for tile sets baked before zstd, which are gzip.
 flate2 = "1"
 serde = { version = "1", features = ["derive"] }

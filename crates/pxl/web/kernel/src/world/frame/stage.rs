@@ -5,22 +5,27 @@
 //! nothing of the kernel on its own.
 
 use pxl_render::frame::stage::{stage_lane_mut, STAGE_AT};
+use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::pass::decor::GROUPS;
-use pxl_render::gpu::renderer::{render_frame, FrameInput};
+use pxl_render::gpu::renderer::{render_frame, EarthPages, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
 
 use crate::sched::profiler::record::MB;
 use pxl_spec::asset::ingested::Asset;
+use pxl_spec::space::adapter::epsg3857::zoom_of;
 use pxl_spec::space::pvf3::ivec;
+use pxl_spec::space::pyramid::GROUND;
 use xpute_core::math::scalar::round;
 
-use crate::host::{handheld, wall_now};
+use crate::control::camera::controller::{dist, units_per_px_at};
+use crate::host::handheld;
 use crate::io::load::{load_image, Load};
 use crate::kernel::kernel;
 use crate::layer::billboard::sheet::billboard_sheet;
 use crate::layer::character::companion::companion_skins;
 use crate::layer::character::preview::preview_rows;
 use crate::layer::decor::asset_store::kind_assets;
+use crate::layer::earth::{earth_upload, earth_window, EARTH_FRAMES};
 use crate::layer::environment::config::{ao_cfg, edge_cfg, rim_cfg};
 use crate::sched::profiler::record::{DeviceSample, DrawCensus, GpuSample, CENSUS_LEN};
 use crate::shell::setting::store::{settings_store, AoMode};
@@ -28,35 +33,25 @@ use crate::text::text_raster;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::stage::set_host_frame_stat;
 use crate::world::frame::resolution::resolution_observe;
+use crate::world::paging::floor;
 
-/// Blue Marble's months of 2004: the floor every tile is drawn over wears
-/// the one the calendar is in, as the sky follows the real one. Taken once,
-/// at the first frame that has it.
-const EARTH: [Asset; 12] = [
-    Asset::sky_earth_01_webp,
-    Asset::sky_earth_02_webp,
-    Asset::sky_earth_03_webp,
-    Asset::sky_earth_04_webp,
-    Asset::sky_earth_05_webp,
-    Asset::sky_earth_06_webp,
-    Asset::sky_earth_07_webp,
-    Asset::sky_earth_08_webp,
-    Asset::sky_earth_09_webp,
-    Asset::sky_earth_10_webp,
-    Asset::sky_earth_11_webp,
-    Asset::sky_earth_12_webp,
-];
+/// Blue Marble's July of 2004: one picture of the Earth at every hour and
+/// season, as Google Earth and Cesium keep one mosaic.
+const EARTH: Asset = Asset::sky_earth_07_webp;
 
-/// The month, 0 for January, of a Unix time in UTC (Hinnant's civil_from_days).
-fn month_of(unix_ms: f64) -> usize {
-    let z = libm::floor(unix_ms / 86_400_000.0) as i64 + 719_468;
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    (if mp < 10 { mp + 2 } else { mp - 10 }) as usize
-}
 use crate::world::frame::view::{globe_anchor_local, view};
+
+/// How far the view has gone over to the Earth's picture: none while the map
+/// center's pixel is finer than the coarsest level's cell a zoom up, all once
+/// it is as coarse as that cell, the data's coarsest (z6 for a top of 10).
+fn earth_share() -> f64 {
+    let Some(top) = floor::level() else { return 0.0 };
+    let zoom = f64::from(zoom_of(GROUND.scale(0))) - libm::log2(units_per_px_at(dist()));
+    let top_zoom = f64::from(zoom_of(GROUND.scale(top)));
+    (top_zoom + 1.0 - zoom).clamp(0.0, 1.0)
+}
+
+const _: () = assert!(EARTH_FRAMES == EARTH_LAYERS, "a GPU layer for each frame the Earth layer holds");
 
 pub fn stage_write(resolution: f64) {
     let v = view();
@@ -88,11 +83,12 @@ pub fn stage_write(resolution: f64) {
     s[STAGE_AT::RIM_INTENSITY] = if settings.rim_light { rim_cfg::INTENSITY } else { 0.0 };
     s[STAGE_AT::SHADOWS] = if settings.shadows { 1.0 } else { 0.0 };
     s[STAGE_AT::RESOLUTION] = resolution;
+    s[STAGE_AT::EARTH_SHARE] = earth_share();
 }
 
 pub fn stage_render() {
     // Nothing is drawn before the floor: its arrival asks for the next turn.
-    if load_image(Load::Asset(EARTH[month_of(wall_now())])).is_none() {
+    if load_image(Load::Asset(EARTH)).is_none() {
         return;
     }
     let lists = kernel().sched.draw.take();
@@ -119,6 +115,7 @@ pub fn stage_render() {
         *slot = row;
         case_cnt += 1;
     }
+    let (window, layers) = earth_window();
     let out = render_frame(FrameInput {
         lists,
         environment: &kernel().sched.environment.out,
@@ -127,7 +124,12 @@ pub fn stage_render() {
         cases: &cases[..case_cnt],
         sheet: || load_image(Load::Sheet),
         moon: || load_image(Load::Asset(Asset::sky_moon_png)),
-        earth: || load_image(Load::Asset(EARTH[month_of(wall_now())])),
+        earth: || load_image(Load::Asset(EARTH)),
+        earth_pages: EarthPages {
+            window,
+            layers: &layers,
+            upload: &mut earth_upload,
+        },
         text: text_raster,
         atlas: billboard_sheet(),
         handheld: handheld(),

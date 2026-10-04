@@ -1,14 +1,14 @@
 // pxl-render/gpu/clouds.rs
 
-//! The cloud layer: one full-screen pass after the opaque world, reading a
-//! tile baked once per device.
+//! The cloud slab: marched over a texture half the screen's size, then laid
+//! over the opaque world at its own, reading a tile baked once per device.
 
 use pxl_spec::space::mat4::Mat4;
 use pxl_spec::space::pvf3::core::{IVEC_X_W, IVEC_Y_W};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::v3::V3;
 
-use crate::frame::shader::record::{PIPELINE_CLOUDS, PIPELINE_CLOUDS_ABOVE, PIPELINE_CLOUD_FIELD};
+use crate::frame::shader::record::{PIPELINE_CLOUDS, PIPELINE_CLOUDS_ABOVE, PIPELINE_CLOUD_FIELD, PIPELINE_CLOUD_MARCH};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::atmosphere::AIR_WORDS;
@@ -32,8 +32,8 @@ pub struct CloudField {
 }
 /// A fair-weather cumulus base.
 const ALTITUDE_KM: f64 = 1.5;
-/// Seen from above, flat noise over the ground reads as blots.
-const GONE_KM: f64 = 4.0 * ALTITUDE_KM;
+/// Where the clouds are gone, faded from half of it: a product number.
+const GONE_KM: f64 = 64.0;
 /// One fetch a pixel and a mip chain, in place of eight octaves of hashes.
 pub(crate) const TILE_UNITS: u32 = 32;
 pub(crate) const TILE_TEXELS: u32 = 1024;
@@ -45,6 +45,7 @@ const _: () = assert!(IVEC_X_W == IVEC_Y_W, "one lattice count for both axes");
 const _: () = assert!(LATTICE_COUNT.is_multiple_of(TILE_UNITS), "the world is whole tiles");
 
 pub struct CloudPass {
+    march: Built,
     below: Built,
     above: Built,
     over: bool,
@@ -52,10 +53,22 @@ pub struct CloudPass {
     uniform: u32,
     group: u32,
     words: [f32; CLOUDS_FLOATS],
+    /// Eight steps a pixel through the slab cost a quarter as much at half the size.
+    half: Half,
+}
+
+#[derive(Default)]
+struct Half {
+    size: (u32, u32),
+    texture: u32,
+    view: u32,
+    group: u32,
+    sampler: u32,
 }
 
 impl CloudPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, air: [u32; AIR_WORDS]) -> CloudPass {
+        let march = pipelines.build(g, PIPELINE_CLOUD_MARCH, format::CANVAS);
         let below = pipelines.build(g, PIPELINE_CLOUDS, format::CANVAS);
         let above = pipelines.build(g, PIPELINE_CLOUDS_ABOVE, format::CANVAS);
         let tile = object();
@@ -83,9 +96,12 @@ impl CloudPass {
         e[10..15].copy_from_slice(&[2, resource::VIEW, tile_view, 0, 0]);
         e[15..20].copy_from_slice(&[3, resource::SAMPLER, tile_sampler, 0, 0]);
         e[20..].copy_from_slice(&air);
-        g.bind_group(group, below.layouts[0], &e);
+        g.bind_group(group, march.layouts[0], &e);
         bake(g, pipelines, tile, tile_levels);
+        let sampler = object();
+        g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::CLAMP, compare::NONE, 1);
         CloudPass {
+            march,
             below,
             above,
             over: false,
@@ -93,7 +109,44 @@ impl CloudPass {
             uniform,
             group,
             words: [0.0; CLOUDS_FLOATS],
+            half: Half { sampler, ..Half::default() },
         }
+    }
+
+    /// The half-size target for a `width` by `height` screen; before the frame,
+    /// since it outlives it.
+    pub fn ensure(&mut self, g: &Gpu, width: u32, height: u32) {
+        let size = (width.div_ceil(2), height.div_ceil(2));
+        let h = &mut self.half;
+        if h.size == size {
+            return;
+        }
+        for id in [h.group, h.view, h.texture] {
+            if id != 0 {
+                release(id);
+            }
+        }
+        h.size = size;
+        h.texture = object();
+        g.texture(h.texture, size.0, size.1, 1, format::CANVAS, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
+        h.view = object();
+        g.view(h.view, h.texture, dimension::D2, 0, 1, 0, 1);
+        h.group = object();
+        g.bind_group(h.group, self.below.layouts[0], &[0, resource::VIEW, h.view, 0, 0, 1, resource::SAMPLER, h.sampler, 0, 0]);
+    }
+
+    /// Marches the slab over the half-size target, ahead of the world's pass that lays it over.
+    pub fn march(&self, g: &Gpu, encoder: u32) {
+        if self.gone {
+            return;
+        }
+        let pass = object();
+        g.pass(pass, encoder, &pass_desc(self.half.view, load::CLEAR, 0, load::CLEAR, 0.0, Stamp::UNTIMED));
+        g.set_pipeline(pass, self.march.pipeline);
+        g.set_bind_group(pass, 0, self.group, &[]);
+        g.draw(pass, 3, 1, 0, 0);
+        g.end(pass);
+        release(pass);
     }
 
     pub fn lay_out(&mut self, g: &Gpu, view_proj: &Mat4, eye: &V3, env: &[f32], up: &V3) {
@@ -114,7 +167,7 @@ impl CloudPass {
             return;
         }
         g.set_pipeline(pass, if self.over { self.above.pipeline } else { self.below.pipeline });
-        g.set_bind_group(pass, 0, self.group, &[]);
+        g.set_bind_group(pass, 0, self.half.group, &[]);
         g.draw(pass, 3, 1, 0, 0);
     }
 }
