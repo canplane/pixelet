@@ -63,6 +63,7 @@ pub fn bake<T>(
         // This invocation only, so a resumed run's zero means "nothing to do".
         "run": { "baked": t.baked, "empty": t.empty, "skipped": t.skipped, "failed": t.failed, "items": t.items, "bytes": t.bytes },
         "content_type": b.content_type,
+        "release": b.source.release,
         "source": b.source.manifest(),
     });
     if let Some(format) = b.format {

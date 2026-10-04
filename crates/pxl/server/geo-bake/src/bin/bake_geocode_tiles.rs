@@ -6,7 +6,7 @@
 //!
 //!   cargo run --profile server -p pxl-geo-bake --bin bake_geocode_tiles -- [flags]
 //!
-//!   --out <dir>          output directory (default ./out/geocode/<published version>)
+//!   --out <dir>          output directory (default ./out/geocode/v<format>.<release>)
 //!   --land-cache <path>  terrain's own land_pages.json (default ./out/terrain/land_pages.json)
 //!   --concurrency <n>    parallel fetches, one connection each (default 8)
 //!   --limit <n>          stop after n groups (smoke test)
@@ -17,7 +17,7 @@ use std::process::ExitCode;
 
 use postgres::Client;
 use pxl_spec::bake::place_page::{encode_place_group, DICT_OBJECT, GROUP_SHAMT};
-use pxl_spec::bake::published::PUBLISHED_VERSION;
+use pxl_spec::bake::published::{version_name, FORMAT};
 
 use pxl_geo_bake::coverage::Overture;
 use pxl_geo_bake::geocode::provider::overture::{self, GeocodeProvider};
@@ -44,7 +44,7 @@ fn run() -> Result<(), String> {
     bake::bake(
         &Bake {
             kind: "geocode",
-            out: PathBuf::from(format!("./out/geocode/{}", PUBLISHED_VERSION.geocode)),
+            out: PathBuf::from(format!("./out/geocode/{}", version_name(FORMAT.geocode, &source.release))),
             group_shamt: GROUP_SHAMT,
             every: 200,
             content_type: "application/octet-stream",

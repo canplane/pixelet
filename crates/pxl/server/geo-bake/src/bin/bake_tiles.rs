@@ -7,7 +7,7 @@
 //!   cargo run --profile server -p pxl-geo-bake --bin bake_tiles -- [flags]
 //!
 //!   --stage <s>          leaf or assemble; repeatable (default: both)
-//!   --out <dir>          published pages (default ./out/terrain/<published version>)
+//!   --out <dir>          published pages (default ./out/terrain/v<format>.<release the leaves were baked from>)
 //!   --build <dir>        the stages' artifacts (default ./out/build/terrain)
 //!   --concurrency <n>    parallel pages, one connection each (default 8)
 //!   --limit <n>          stop after n land pages (smoke test)
@@ -23,7 +23,7 @@ use std::time::Instant;
 
 use postgres::Client;
 use pxl_spec::bake::format::{encode_terrain, Terrain};
-use pxl_spec::bake::published::PUBLISHED_VERSION;
+use pxl_spec::bake::published::{version_name, FORMAT};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::LevelPage;
 
@@ -46,7 +46,7 @@ enum Stage {
 
 struct Args {
     stages: Vec<Stage>,
-    out: PathBuf,
+    out: Option<PathBuf>,
     build: PathBuf,
     concurrency: usize,
     limit: Option<usize>,
@@ -57,7 +57,7 @@ struct Args {
 fn parse_args() -> Result<Args, String> {
     let mut args = Args {
         stages: Vec::new(),
-        out: PathBuf::from(format!("./out/terrain/{}", PUBLISHED_VERSION.terrain)),
+        out: None,
         build: PathBuf::from("./out/build/terrain"),
         concurrency: 8,
         limit: None,
@@ -73,7 +73,7 @@ fn parse_args() -> Result<Args, String> {
                 "assemble" => Stage::Assemble,
                 other => return Err(format!("unknown stage: {other}")),
             }),
-            "--out" => args.out = PathBuf::from(flags.value()?),
+            "--out" => args.out = Some(PathBuf::from(flags.value()?)),
             "--build" => args.build = PathBuf::from(flags.value()?),
             "--concurrency" => args.concurrency = flags.parse()?,
             "--limit" => args.limit = Some(flags.parse()?),
@@ -227,7 +227,7 @@ fn run() -> Result<(), String> {
     let args = parse_args()?;
     let leaves = PageSet::new(args.build.join("leaf"));
     let coverage = Coverage::of_source()?;
-    let land_cache = args.out.parent().unwrap_or(Path::new(".")).join("land_pages.json");
+    let land_cache = args.out.as_deref().and_then(Path::parent).unwrap_or(Path::new("./out/terrain")).join("land_pages.json");
     let (source, mut checked) = match args.stages.iter().any(|&s| s != Stage::Assemble) {
         true => Overture::reading(&leaf::READS).map(|(s, c)| (Some(s), Some(c)))?,
         false => (None, None),
@@ -357,6 +357,7 @@ fn run() -> Result<(), String> {
                 "git_sha": built,
                 "land_pages": land.len(),
                 "flat_elevation_pages": t.flat_ele,
+                "release": source.release,
                 "source": read_source_catalogs(&mut client, source),
             }),
         )?;
@@ -366,7 +367,10 @@ fn run() -> Result<(), String> {
     let targets = &land[..args.limit.map_or(land.len(), |n| n.min(land.len()))];
 
     if args.stages.contains(&Stage::Assemble) {
-        let tiles = PageSet::new(&args.out);
+        // a version is named by the release its leaves were baked from
+        let leaf = read_json(&args.build.join("leaf.json"));
+        let release = leaf["release"].as_str().ok_or("leaf.json names no release: run --stage leaf")?.to_string();
+        let tiles = PageSet::new(args.out.clone().unwrap_or_else(|| PathBuf::from(format!("./out/terrain/{}", version_name(FORMAT.terrain, &release)))));
         if tiles.root.exists() {
             fs::remove_dir_all(&tiles.root).map_err(|e| e.to_string())?;
         }
@@ -394,7 +398,6 @@ fn run() -> Result<(), String> {
 
         let ocean = Terrain::decode(&unpack(&ocean_packed).map_err(|e| e.to_string())?)?;
         let top = build(&tiles, &ocean, args.concurrency)?;
-        let leaf = read_json(&args.build.join("leaf.json"));
         write_manifest(
             &tiles,
             top,
@@ -405,6 +408,7 @@ fn run() -> Result<(), String> {
                 "candidate_pages": coverage.pages().len(),
                 "land_pages": land.len(),
                 "ocean_key": OCEAN_KEY,
+                "release": release,
                 "flat_elevation_pages": leaf["flat_elevation_pages"],
                 "source": leaf["source"],
                 "built": { "leaf_git_sha": leaf["git_sha"] },
