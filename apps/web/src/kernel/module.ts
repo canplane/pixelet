@@ -15,7 +15,7 @@ import { DIRECTORY_AT } from "@/kernel/mem/mem.spec.ts";
 export interface Core {
   buffer: ArrayBuffer;
   /** Returns when the kernel wants its next turn, in ms. A core that records
-     * GPU calls runs them here, before the turn is over. */
+   * GPU calls runs them here, before the turn is over. */
   interrupt(quota_ms: f64): f64;
 }
 

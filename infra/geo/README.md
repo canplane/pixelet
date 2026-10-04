@@ -31,11 +31,11 @@ infra/geo/
 
 ## 1. The tables
 
-| Source                                                                           | Tables                                                                                                                                                 | Catalog             | Fills them                                                  |
-| :------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------ | :---------------------------------------------------------- |
-| **Overture — Buildings, Transportation, Base**<br>terrain features and coastline | `overture_buildings`, `overture_transportation`, `overture_base_land`, `overture_base_land_use`, `overture_base_water`, `overture_base_infrastructure` | `overture_catalog`  | `overture/script/ingest.rs`                                 |
-| **Overture — Places, Divisions**<br>POI, reverse geocode, forward search         | `overture_places`, `overture_divisions`, `overture_division_points`                                                                                    | `overture_catalog`  | `overture/script/ingest.rs`                                 |
-| **GEDTM30**<br>ground elevation                                                  | `elevation_raster`                                                                                                                                     | `elevation_catalog` | `elevation/script/setup-elevation.sh`                       |
+| Source                                                                           | Tables                                                                                                                                                 | Catalog             | Fills them                            |
+| :------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------ | :------------------------------------ |
+| **Overture — Buildings, Transportation, Base**<br>terrain features and coastline | `overture_buildings`, `overture_transportation`, `overture_base_land`, `overture_base_land_use`, `overture_base_water`, `overture_base_infrastructure` | `overture_catalog`  | `overture/script/ingest.rs`           |
+| **Overture — Places, Divisions**<br>POI, reverse geocode, forward search         | `overture_places`, `overture_divisions`, `overture_division_points`                                                                                    | `overture_catalog`  | `overture/script/ingest.rs`           |
+| **GEDTM30**<br>ground elevation                                                  | `elevation_raster`                                                                                                                                     | `elevation_catalog` | `elevation/script/setup-elevation.sh` |
 
 Coastline is not a table of its own. `OVERTURE_COAST_SQL`
 (`crates/pxl/server/geo-bake/src/terrain/repository.rs`) carves it at bake time out of

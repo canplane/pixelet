@@ -95,6 +95,6 @@
     "react-native-svg": "npm:react-native-svg@15.15.4",
 
     // internationalization
-    "react-i18next": "npm:react-i18next@^17.0.14",
+    "react-i18next": "npm:react-i18next@^17.0.14"
   }
 }

@@ -100,7 +100,7 @@ export class TreeEncoder {
     throw new MarshalError(Errno.EBADMSG);
   }
 
-// Only the grafted packet's root payload is copied, so it lays out as the inline subtree would.
+  // Only the grafted packet's root payload is copied, so it lays out as the inline subtree would.
   private _graft(node: GraftNode, st: EncodingState): void {
     const { val: pkt } = node;
 
