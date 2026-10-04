@@ -61,7 +61,9 @@ function Grid({ head, children }: { head: React.ReactNode; children: (cell: f64)
 const TIP_POINT = 5;
 /** Room for the longest name, centered on the item. */
 const TIP_SPAN = 240;
-const TIP_FILL = "rgba(0, 0, 0, 0.72)";
+/** Drawn solid and faded as one layer: faded apart, the point and the pill overlapped in a darker line where a device's pixels rounded them together. */
+const TIP_FILL = color.black;
+const TIP_OPACITY = 0.72;
 const TIP_PAD_Y = 5;
 /** A pill: ends rounded by half its height. */
 const TIP_RADIUS = (textStyle.notice.lineHeight + 2 * TIP_PAD_Y) / 2;
@@ -102,8 +104,13 @@ function Item({ label, active, cell, onPress, children }: { label: string; activ
 function NameTip({ named, sheetHeight }: { named: Named; sheetHeight: f64 }) {
   return (
     <View pointerEvents="none" style={[styles.tipAnchor, { left: named.x - TIP_SPAN / 2, bottom: sheetHeight - named.y }]}>
-      <Text numberOfLines={1} style={styles.tip}>{named.label}</Text>
-      <View style={styles.tipPoint} />
+      <View style={styles.tipShape}>
+        <View needsOffscreenAlphaCompositing style={[StyleSheet.absoluteFill, styles.tipFill]}>
+          <View style={styles.tipPill} />
+          <View style={styles.tipPoint} />
+        </View>
+        <Text numberOfLines={1} style={styles.tip}>{named.label}</Text>
+      </View>
     </View>
   );
 }
@@ -147,11 +154,22 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
   const sheet = useRef<View>(null);
   const [sheetHeight, setSheetHeight] = useState(0);
   const [named, setNamed] = useState<Named | null>(null);
+  // In the window, not against the sheet: a device's measureLayout leaves the scroll out.
+  // A press counts, so a measure that answers after its release shows nothing.
+  const press = useRef(0);
   const naming = useMemo<Naming>(() => ({
     show: (label, item) => {
-      if (sheet.current) item.measureLayout(sheet.current, (x, y, w) => setNamed({ label, x: x + w / 2, y }));
+      const at = ++press.current;
+      sheet.current?.measureInWindow((sx, sy) =>
+        item.measureInWindow((x, y, w) => {
+          if (press.current === at) setNamed({ label, x: x - sx + w / 2, y: y - sy });
+        })
+      );
     },
-    hide: () => setNamed(null),
+    hide: () => {
+      press.current++;
+      setNamed(null);
+    },
   }), []);
 
   function pickCube(cube: PlaceableCube): void {
@@ -214,16 +232,18 @@ const styles = StyleSheet.create({
   cell: { alignItems: "center", justifyContent: "center" },
   sheet: { flex: 1 },
   tipAnchor: { position: "absolute", width: TIP_SPAN, alignItems: "center", paddingBottom: 2 },
+  tipShape: { alignItems: "center", paddingBottom: TIP_POINT },
+  tipFill: { opacity: TIP_OPACITY, alignItems: "center" },
+  tipPill: { alignSelf: "stretch", flex: 1, backgroundColor: TIP_FILL, borderRadius: TIP_RADIUS },
   tip: {
     ...textStyle.notice,
     color: color.white,
-    backgroundColor: TIP_FILL,
-    borderRadius: TIP_RADIUS,
     paddingHorizontal: 12,
     paddingVertical: TIP_PAD_Y,
-    overflow: "hidden",
   },
   tipPoint: {
+    // Into the pill a pixel, so no rounding opens a gap; under one opacity the overlap does not show.
+    marginTop: -1,
     width: 0,
     height: 0,
     borderLeftWidth: TIP_POINT,
