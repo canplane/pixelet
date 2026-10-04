@@ -12,7 +12,7 @@ mod record;
 #[cfg(not(target_arch = "wasm32"))]
 pub use device::{frame_begin, frame_commit, frame_room, gpu, gpu_publish, install, room, Gpu};
 #[cfg(not(target_arch = "wasm32"))]
-pub use device::{hold_image, open_device, surface_bind, surface_unbind, BindRefused, DeviceInfo};
+pub use device::{hold_image, open_device, surface_bind, surface_unbind, surfaces_configure, BindRefused, ConfigureAt, DeviceInfo};
 #[cfg(target_arch = "wasm32")]
 pub use record::{frame_begin, frame_commit, frame_room, gpu, gpu_publish, install, room, Gpu};
 

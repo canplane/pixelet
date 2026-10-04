@@ -64,3 +64,22 @@ The cost is a handoff per call, some microseconds, a few times a frame.
 Built with the device's images (crates/pxl/web/native/src/thread.rs): with
 the texture pack, the skins and the moon decoded and uploaded on the
 simulator, the turns that overflowed the JavaScript thread's stack run.
+
+## 2026-10-05: a layer is configured on the main thread
+
+iOS 27 logs every change to a view's layer made off the main thread as not
+allowed, and configuring a wgpu surface sets its `CAMetalLayer`'s size and
+format. The kernel's thread made every configure — at a bind, at a resize the
+kernel decided, and when a drawable came back suboptimal or outdated.
+
+What a layer is set to is now the main thread's, and the kernel's thread only
+takes drawables and shows them. A surface whose wanted configuration is not
+yet applied is stale and draws no frame. The host says at `open_device` where
+a stale one is configured (pxl-render `gpu/api/device.rs` `ConfigureAt`):
+
+- An iPhone sends it to the main queue, which configures it while the kernel
+  is idle, holding the handoff (pxl-native `surface.rs`, `thread.rs`).
+- Android, which has no such rule, configures it where it was found stale.
+
+The cost is a frame not drawn while a surface waits for the main thread.
+
