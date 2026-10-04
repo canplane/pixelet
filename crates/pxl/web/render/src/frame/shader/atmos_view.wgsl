@@ -14,17 +14,8 @@ fn shown() -> vec3f {
 }
 
 // One texel from the exposure pass rather than a table read per fragment.
-fn zenith_sky() -> vec3f {
-  let t = textureLoad(exposure_texel, vec2i(0, 0), 0);
-  return t.gba * atmos_white() * t.r;
-}
-
 fn sky_fill() -> vec3f {
-  var fill = (textureLoad(exposure_texel, vec2i(1, 0), 0).rgb * atmos_white() + atmos_night_sky()) * exposure();
-  if (atmos_moon_light() > 0.0) {
-    fill += moon_view(frame_up()) * moon_shown() * PI;
-  }
-  return fill;
+  return (textureLoad(exposure_texel, vec2i(1, 0), 0).rgb * atmos_white() + atmos_night_sky()) * exposure();
 }
 
 // What the ground below gives a down-facing face: what lights an up-facing one,

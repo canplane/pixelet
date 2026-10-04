@@ -1,29 +1,19 @@
-// Eye adaptation: exposure from horizontal illuminance against a sun overhead
-// at sea level (1 after white balance). Texel 0: exposure and zenith sky;
-// texel 1: the sky's irradiance on an up-facing face.
-
-const EXPOSURE_RINGS: i32 = 8;
-const EXPOSURE_BEARINGS: i32 = 16;
+// Eye adaptation, measured on the land under the eye wherever the eye is: an
+// orbit's own sky is black, and adapting to it blew the lit Earth out. Texel 0:
+// exposure from horizontal illuminance against a sun overhead at sea level (1
+// after white balance); texel 1: the sky's irradiance on the land, sun and moon.
 
 @fragment
 fn fs(v: TableOut) -> @location(0) vec4f {
+  let r = land_radius();
   let mu_s = clamp(dot(atmos_sun_dir(), frame_up()), -1.0, 1.0);
-  // Cosine-weighted rings, evenly spaced in sin² of the zenith angle, so the sum
-  // is pi times their mean.
-  var sky = vec3f(0.0);
-  for (var i = 0; i < EXPOSURE_RINGS; i++) {
-    let mu = sqrt(1.0 - (f32(i) + 0.5) / f32(EXPOSURE_RINGS));
-    for (var j = 0; j < EXPOSURE_BEARINGS; j++) {
-      let phi = TAU * (f32(j) + 0.5) / f32(EXPOSURE_BEARINGS);
-      sky += table_at(sky_view_lut, mu, cos(phi));
-    }
+  let sky = sky_irradiance(r, mu_s);
+  if (v.clip.x >= 1.0) {
+    let moon = sky_irradiance(r, dot(atmos_moon_dir(), frame_up())) * atmos_moon_light();
+    return vec4f(sky + moon, 1.0);
   }
-  sky *= PI / f32(EXPOSURE_RINGS * EXPOSURE_BEARINGS);
-  let direct = sun_transmittance(camera_r(), mu_s) * max(mu_s, 0.0);
+  let direct = sun_transmittance(r, mu_s) * max(mu_s, 0.0);
   let light = dot((sky + direct) * atmos_white(), LUMA);
   let adapted = clamp(pow(1.0 / max(light, 1e-6), atmos_adaptation()), 1.0, atmos_max_adaptation());
-  if (v.clip.x >= 1.0) {
-    return vec4f(sky, 1.0);
-  }
-  return vec4f(atmos_exposure() * adapted, table_at(sky_view_lut, 1.0, 1.0));
+  return vec4f(atmos_exposure() * adapted, 0.0, 0.0, 1.0);
 }

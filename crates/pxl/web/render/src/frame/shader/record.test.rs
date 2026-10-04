@@ -179,7 +179,7 @@ fn the_skys_layouts_match_their_structs() {
             ("moon", s::MOON),
         ],
     );
-    for (name, k) in [("TRANSMITTANCE_SIZE", a::TRANSMITTANCE), ("MULTISCATTER_SIZE", a::MULTISCATTER), ("SKY_VIEW_SIZE", a::SKY_VIEW)] {
+    for (name, k) in [("TRANSMITTANCE_SIZE", a::TRANSMITTANCE), ("MULTISCATTER_SIZE", a::MULTISCATTER), ("SKY_VIEW_SIZE", a::SKY_VIEW), ("IRRADIANCE_SIZE", a::IRRADIANCE)] {
         let (w, h) = a::SIZES[k];
         assert_eq!(constant(SHADER_SKY, name), [w as f64, h as f64], "{name}");
     }
