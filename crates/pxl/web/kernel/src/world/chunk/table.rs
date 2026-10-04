@@ -17,7 +17,7 @@ use pxl_spec::space::adapter::epsg3857::zoom_of;
 use pxl_spec::space::observation::Bounds as _;
 use pxl_spec::space::observation::Frustum;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{chunk_scale, GROUND};
+use pxl_spec::space::pyramid::{chunk_scale, GROUND, GROUND_Z, TOP_Z};
 use pxl_spec::space::v3::{dot3, len3, Aabb, V3};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::section::span_of;
@@ -41,7 +41,6 @@ use crate::world::chunk::build::{mesh_step, BuildEvent, Builder, World};
 use crate::world::chunk::frontier::{pool_of, scale_of, Env, Frontier, Now, Slots};
 use crate::world::chunk::mesh_slot::{capacity, group_box_words, group_bytes, group_is_fine, slot_at, MeshSlot, Pool, ARENA, COVER_SLOTS, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::source::{draws_band, objects_revision_of, tiers_draw};
-use crate::world::paging::LEVELS;
 use pxl_spec::space::hierarchy::Scale;
 use xpute_core::math::scalar::round;
 use xpute_core::status::bug::OrBug;
@@ -148,7 +147,7 @@ struct Sources {
     objects_revision: u32,
     hide: Option<EntryAt>,
     carve: Option<EntryAt>,
-    /// Level of the page the chunk and each apron neighbour are read from, so a
+    /// Zoom of the page the chunk and each apron neighbour are read from, so a
     /// finer page arriving rebuilds the chunk and its shared edges.
     read_from: Option<u32>,
     beside_from: [Option<u32>; 8],
@@ -157,18 +156,18 @@ struct Sources {
 impl Sources {
     fn of(k: Chunk, edits: RenderEdits) -> Sources {
         let settings = settings_store();
-        let (level, base) = (k.level(), k.corner());
-        let drawn = |at: &EntryAt| tiers_draw(level, base, at.col_idx) && draws_band(k, at.band_idx);
+        let (z, base) = (k.z(), k.corner());
+        let drawn = |at: &EntryAt| tiers_draw(z, base, at.col_idx) && draws_band(k, at.band_idx);
         Sources {
             textured: settings.textures,
             objects_revision: objects_revision_of(k),
             hide: edits.hide.filter(|at| edits.hide_in.0 && drawn(at)),
             carve: edits.carve.filter(drawn),
-            read_from: Terrain::pyramid().paging().drawn_from(k.page()).map(|p| p.level),
+            read_from: Terrain::pyramid().paging().drawn_from(k.page()).map(|p| p.z),
             beside_from: {
                 let mut from = [None; 8];
                 for ([qx, qy], p) in k.pages_beside(APRON) {
-                    from[beside_index(qx, qy)] = Terrain::pyramid().paging().drawn_from(p).map(|p| p.level);
+                    from[beside_index(qx, qy)] = Terrain::pyramid().paging().drawn_from(p).map(|p| p.z);
                 }
                 from
             },
@@ -177,8 +176,8 @@ impl Sources {
 }
 
 impl Slot {
-    fn level(&self) -> u32 {
-        self.chunk.level()
+    fn z(&self) -> u32 {
+        self.chunk.z()
     }
 
     fn base(&self) -> (f64, f64) {
@@ -191,7 +190,7 @@ impl Slot {
     /// then never built, leaving holes with nothing left to fetch.
     fn unmeasured(&mut self) {
         let region = self.chunk.region();
-        let b = Known.contents(self.chunk.level(), region).within(region).unwrap_or(region);
+        let b = Known.contents(self.chunk.z(), region).within(region).unwrap_or(region);
         let c = b.center();
         self.bc = [c[0] - region.min[0], c[1] - region.min[1], c[2]];
         self.radius = b.radius();
@@ -567,12 +566,8 @@ impl Scheduler {
     /// The finest drawn chunk holding `p`, as zooms: its cells', its tier's,
     /// and those of the page it is read from.
     pub fn drawn_at(&self, p: &Pvf3) -> Option<(i32, Option<i32>, Option<i32>)> {
-        let s = (0..LEVELS).find_map(|level| self.slots.iter().find(|s| s.role == Role::Drawn && s.chunk == Chunk::of(level, p)))?;
-        Some((
-            zoom_of(GROUND.scale(s.level())),
-            s.layout.map(|(scale, _)| zoom_of(scale)),
-            s.sources.read_from.map(|l| zoom_of(GROUND.scale(l))),
-        ))
+        let s = (TOP_Z..=GROUND_Z).rev().find_map(|z| self.slots.iter().find(|s| s.role == Role::Drawn && s.chunk == Chunk::of(z, p)))?;
+        Some((s.z() as i32, s.layout.map(|(scale, _)| zoom_of(scale)), s.sources.read_from.map(|z| z as i32)))
     }
 
     /// Whether the last frame drew any ground on screen.
@@ -591,7 +586,7 @@ impl Scheduler {
     fn add(&mut self, world: &mut World, k: Chunk) {
         // The frontier starts no move without room, so running out of mounts is a bug.
         let id = self.mounts.pop().or_bug(Errno::ENOSPC);
-        let level = k.level();
+        let z = k.z();
         let edits = render_edits();
         let sources = Sources::of(k, edits);
         self.builder.add(id, k);
@@ -610,7 +605,7 @@ impl Scheduler {
             retier: false,
             tiers: Held::EMPTY,
             layout: None,
-            desired: chunk_scale(level),
+            desired: chunk_scale(z),
             sources,
         };
         slot.unmeasured();
@@ -936,7 +931,7 @@ impl Scheduler {
             }
             // Mesh heights are steps from the tier's floor, so the floor goes in the translation.
             let at = [translation[0], translation[1], translation[2] + t.heights.floor as f32];
-            let (unit, z_step) = ((mesh_step(scale, s.level()) * GROUND.finest_in(s.level())) as f32, t.heights.step as f32);
+            let (unit, z_step) = ((mesh_step(scale, s.z()) * GROUND.finest_in(s.z())) as f32, t.heights.step as f32);
             let (mut left, mut slot) = (t.box_cnt, Some(t.slot.index));
             while let (Some(at_slot), true) = (slot, left > 0) {
                 let m = slot_at(at_slot);
@@ -994,8 +989,8 @@ impl Scheduler {
         self.slots[i].fresh = false;
         let Some(d) = domain::current() else { return };
         let s = &self.slots[i];
-        let (level, chunk) = (s.level(), s.chunk);
-        let objects = level == 0 && world.store.entries(L2_IDX(chunk.corner())).is_some();
+        let (z, chunk) = (s.z(), s.chunk);
+        let objects = z == GROUND_Z && world.store.entries(L2_IDX(chunk.corner())).is_some();
         let current = self.generation(i);
         let desired = scale_of(chunk, d.outermost(chunk), d.order_of(chunk).near, d.tau(), objects);
         if self.slots[i].role == Role::Building && self.slots[i].layout.is_some_and(|(p, _)| p != desired) {
@@ -1251,9 +1246,9 @@ fn reserve(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent
     if scale != s.target() {
         return false;
     }
-    let level = s.level();
+    let z = s.z();
     let pool = pool_of(s.chunk, scale);
-    let k = boxes.div_ceil(capacity(level, mesh_step(scale, level))).max(1);
+    let k = boxes.div_ceil(capacity(z, mesh_step(scale, z))).max(1);
     let over = s.tiers.iter().find(|t| t.scale == scale).map(|t| t.slot.index);
     let taken = match over {
         Some(first) => Some((first, (0..).take_while(|&n| chained(meshes, first, n).is_some()).count() as u32)),
@@ -1327,8 +1322,8 @@ fn part(slots: &[Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
         return;
     };
     let Some(i) = place[id as usize].get() else { return };
-    let level = slots[i].level();
-    let step = mesh_step(scale, level);
+    let z = slots[i].z();
+    let step = mesh_step(scale, z);
     let head = slot_at(l.first);
     let n = first / head.capacity;
     let Some(slot) = chained(meshes, l.first, n).map(slot_at) else { return };
@@ -1339,7 +1334,7 @@ fn part(slots: &[Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
     // SAFETY: the block's boxes in `.fixed.bake`, just written by the bake, in
     // the slot group's format.
     let words = unsafe { core::slice::from_raw_parts(ptr_at::<u32>(at as usize), (box_cnt * box_words) as usize) };
-    let unit = (step * GROUND.finest_in(level)) as f64;
+    let unit = (step * GROUND.finest_in(z)) as f64;
     let mut bounds = meshes.landing.as_ref().and_then(|l| l.bounds);
     for r in words.chunks_exact(box_words as usize) {
         let (min, size) = box_bounds(r, unit, heights);

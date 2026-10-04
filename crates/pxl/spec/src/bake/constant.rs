@@ -105,8 +105,8 @@ pub fn band_cell_z(band: BandZ) -> i64 {
 
 /// A band position in finest-tier steps as its band-local cell and the steps into it.
 pub fn in_cell(step: [u32; 3]) -> ([u32; 3], [u32; 3]) {
-    let levels = CELL.above(OBJECT_FINEST) as u32;
-    let cell = ancestor_of(step.map(i64::from), levels);
-    let base = first_descendant_of(cell, levels);
+    let steps = CELL.above(OBJECT_FINEST) as u32;
+    let cell = ancestor_of(step.map(i64::from), steps);
+    let base = first_descendant_of(cell, steps);
     (cell.map(|v| v as u32), std::array::from_fn(|i| (i64::from(step[i]) - base[i]) as u32))
 }

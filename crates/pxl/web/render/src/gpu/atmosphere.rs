@@ -6,14 +6,12 @@
 //! table is kept relative to the light's azimuth); and every frame the aerial
 //! perspective along the screen's rays and the exposure.
 
-use pxl_spec::bake::earth_page::{EARTH_LEVEL, EARTH_TEXELS};
+use pxl_spec::bake::earth_page::{EARTH_TEXELS, EARTH_Z};
 use pxl_spec::space::lod::{fault_radius, FAULT_ACROSS, FAULT_PAGES};
 use pxl_spec::space::pyramid::pages_around;
 use pxl_spec::space::v3::V3;
 
-use crate::frame::shader::record::{
-    PIPELINE_ATMOS_AERIAL, PIPELINE_ATMOS_EXPOSURE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE,
-};
+use crate::frame::shader::record::{PIPELINE_ATMOS_AERIAL, PIPELINE_ATMOS_EXPOSURE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, room, texture_usage, word_bytes, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::clouds::CloudField;
@@ -146,9 +144,9 @@ impl Atmosphere {
             words[at] = v as f32;
         }
         words[SUN_DIR + 2] = 1.0;
-        words[EARTH_REACH] = fault_radius(EARTH_LEVEL) as f32;
+        words[EARTH_REACH] = fault_radius(EARTH_Z) as f32;
         words[EARTH_WINDOW + 2] = f32::from_bits(FAULT_ACROSS);
-        words[EARTH_WINDOW + 3] = f32::from_bits(pages_around(EARTH_LEVEL) as u32);
+        words[EARTH_WINDOW + 3] = f32::from_bits(pages_around(EARTH_Z) as u32);
 
         let sampler = object();
         g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::CLAMP, compare::NONE, 1);

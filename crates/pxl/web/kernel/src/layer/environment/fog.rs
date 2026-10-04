@@ -1,12 +1,13 @@
 // pxl-kernel/layer/environment/fog.rs
 
 //! How far the view reaches, and the clip planes set from it. The nearer of
-//! two ends wins: the horizon, `√(2Rh + h²)`, and `VIEW_LEVELS` doublings past
-//! the ground under the eye, which bounds the levels drawn. The fog marks
+//! two ends wins: the horizon, `√(2Rh + h²)`, and `VIEW_DOUBLINGS` doublings
+//! past the ground under the eye, which bounds the zooms drawn. The fog marks
 //! where drawing stops, not the air.
 
 use pxl_spec::space::lod::split_distance;
 use pxl_spec::space::pvf3::projection;
+use pxl_spec::space::pyramid::GROUND_Z;
 
 use crate::control::camera::config::camera_cfg;
 use crate::layer::environment::config::render_cfg;
@@ -20,16 +21,16 @@ pub fn horizon_at(height: f64) -> f64 {
     (2.0 * r * height + height * height).sqrt()
 }
 
-/// The nearer of height and z16's split distance, doubled VIEW_LEVELS times.
-pub fn levels_reach_at(height: f64) -> f64 {
-    height.max(split_distance(0)) * f64::from(1u32 << param::VIEW_LEVELS)
+/// The nearer of height and z16's split distance, doubled VIEW_DOUBLINGS times.
+pub fn doublings_reach_at(height: f64) -> f64 {
+    height.max(split_distance(GROUND_Z as i32)) * f64::from(1u32 << param::VIEW_DOUBLINGS)
 }
 
 /// On the ground the geometric horizon is underfoot and the view would hold nothing.
 const NEAREST_REACH: f64 = 1024.0;
 
 pub fn reach_at(height: f64) -> f64 {
-    horizon_at(height).min(levels_reach_at(height)).max(NEAREST_REACH)
+    horizon_at(height).min(doublings_reach_at(height)).max(NEAREST_REACH)
 }
 
 /// From the point's own height, so a cave's floor counts in a cave; the

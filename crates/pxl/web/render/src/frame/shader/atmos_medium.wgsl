@@ -44,7 +44,7 @@ struct Atmosphere {
   city_light: vec3f,
   // How far from the eye the Earth layer's pages are held, in units.
   earth_reach: f32,
-  // The Earth layer's top-level pages about the eye: the south-west one, how
+  // The Earth layer's pages at the top about the eye: the south-west one, how
   // many stand across the window and around the world; then per page, row by
   // row, its layer plus one in four bits, zero where the global picture answers.
   earth_window: vec4i,

@@ -1,9 +1,9 @@
-// pxl-render/mesh/paint/level.rs
+// pxl-render/mesh/paint/column.rs
 
-//! A level-k chunk's runs, a level cell a column across with heights in z16
-//! cells. A column is a whole run from the floor to the ground: a part-filled
-//! level cell would have to be drawn as something inside the cell, and in flat
-//! places the whole level turned to cubes standing apart.
+//! The runs of a chunk coarser than z16, a cell a column across with heights
+//! in z16 cells. A column is a whole run from the floor to the ground: a
+//! part-filled coarse cell would have to be drawn as something inside the cell,
+//! and in flat places the whole zoom turned to cubes standing apart.
 
 use crate::mesh::{grow, Refused};
 use std::collections::HashMap;
@@ -16,8 +16,8 @@ use crate::mesh::voxel_scan::{ScanContext, APRON, COL_SPAN};
 pub type Stands = (i32, i32, Option<(u32, u8)>);
 
 /// Every column of the padded grid, apron included. `step` is z16 cells a
-/// level cell spans; heights are z16 cells.
-pub fn write_level_runs(
+/// cell spans; heights are z16 cells.
+pub fn write_column_runs(
     direct: &mut ScanContext,
     sample: &ChunkSample,
     painter: &Painter,

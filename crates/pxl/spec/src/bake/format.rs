@@ -107,11 +107,11 @@ impl Occupancy {
     }
 }
 
-/// What a ray and a fetch need before the pages under one are held. On every
-/// level, the leaf too, so a page has one contract.
+/// What a ray and a fetch need before the pages under one are held. At every
+/// zoom, the leaf too, so a page has one contract.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Index {
-    extent: Cow<'static, [[i16; 2]]>, // lo, hi for each `EXTENT` cell, over this level and all below: a ray above hi misses them
+    extent: Cow<'static, [[i16; 2]]>, // lo, hi for each `EXTENT` cell, over this zoom and all finer: a ray above hi misses them
     blocks: Cow<'static, [Block]>,    // `extent` joined over 2^j squares: rebuilt from it, never on the wire
     pub occupancy: Occupancy,         // which children are pages: none is asked for that is not
 }
@@ -221,7 +221,7 @@ pub struct Terrain {
 }
 
 impl Terrain {
-    /// A finest-level page, its index taken from its own surface and decks.
+    /// A z16 page, its index taken from its own surface and decks.
     pub fn leaf(ele: Vec<i16>, ground: Ground, decks: Decks) -> Terrain {
         let extent = extent_of(&ele, &decks);
         Terrain {

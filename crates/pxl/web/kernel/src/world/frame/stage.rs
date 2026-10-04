@@ -12,9 +12,8 @@ use pxl_render::gpu::surface::SURFACES;
 
 use crate::sched::profiler::record::MB;
 use pxl_spec::asset::ingested::Asset;
-use pxl_spec::space::adapter::epsg3857::zoom_of;
 use pxl_spec::space::pvf3::ivec;
-use pxl_spec::space::pyramid::GROUND;
+use pxl_spec::space::pyramid::GROUND_Z;
 use xpute_core::math::scalar::round;
 
 use crate::control::camera::controller::{dist, units_per_px_at};
@@ -42,13 +41,12 @@ const EARTH: Asset = Asset::sky_earth_07_webp;
 use crate::world::frame::view::{globe_anchor_local, view};
 
 /// How far the view has gone over to the Earth's picture: none while the map
-/// center's pixel is finer than the coarsest level's cell a zoom up, all once
-/// it is as coarse as that cell, the data's coarsest (z6 for a top of 10).
+/// center's pixel is finer than the top's cell a zoom finer, all once it is as
+/// coarse as the top's cell, the data's coarsest.
 pub(crate) fn earth_share() -> f64 {
-    let Some(top) = floor::level() else { return 0.0 };
-    let zoom = f64::from(zoom_of(GROUND.scale(0))) - libm::log2(units_per_px_at(dist()));
-    let top_zoom = f64::from(zoom_of(GROUND.scale(top)));
-    (top_zoom + 1.0 - zoom).clamp(0.0, 1.0)
+    let Some(top) = floor::top() else { return 0.0 };
+    let zoom = f64::from(GROUND_Z) - libm::log2(units_per_px_at(dist()));
+    (f64::from(top) + 1.0 - zoom).clamp(0.0, 1.0)
 }
 
 const _: () = assert!(EARTH_FRAMES == EARTH_LAYERS, "a GPU layer for each frame the Earth layer holds");
@@ -72,9 +70,9 @@ pub fn stage_write(resolution: f64) {
     s[STAGE_AT::NEAR] = v.near;
     s[STAGE_AT::FAR] = v.far;
     // Largest drawn cell per unit of distance, for the badge occlusion test:
-    // past a split distance cells are drawn 2 × 2, so twice the level's cell
+    // past a split distance cells are drawn 2 × 2, so twice the zoom's cell
     // over the distance.
-    s[STAGE_AT::LOD_CELL] = 2.0 / crate::world::quality::effective().tau().split_distance(0);
+    s[STAGE_AT::LOD_CELL] = 2.0 / crate::world::quality::effective().tau().split_distance(GROUND_Z as i32);
     s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { edge_cfg::STRENGTH } else { 0.0 };
     s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { ao_cfg::STRENGTH } else { 0.0 };
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };

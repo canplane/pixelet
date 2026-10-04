@@ -1,14 +1,15 @@
 // pxl-spec/space/lod.rs
 
-//! The level ground is drawn at from its distance, and the pages a level's
+//! The zoom ground is drawn at from its distance, and the pages a zoom's
 //! faults can name about a point. Both depend only on the lattice, so the
 //! resident bound is proved before anything of the world or screen is known.
 
+use super::adapter::epsg3857::side_at_zoom;
 use super::pvf3::REACH;
-use super::pyramid::{page_at, span_of, LevelPage, GROUND, TOP_LEVEL};
+use super::pyramid::{page_at, span_of, Page, GROUND_Z, TOP_Z};
 use super::v3::Aabb;
 
-/// The criterion as a distance per cell side: a level is drawn from `SPLIT`
+/// The criterion as a distance per cell side: a zoom is drawn from `SPLIT`
 /// of its cells away out to twice that. 192 hands the finest tier off at
 /// 192u at 1080 px and 50°.
 pub const SPLIT: f64 = 192.0;
@@ -23,25 +24,25 @@ pub fn px_per_unit(viewport_h: f64, fov_deg: f64) -> f64 {
     viewport_h / (2.0 * libm::tan((fov_deg * core::f64::consts::PI) / 360.0))
 }
 
-/// The pixels a cell spans at its level's split distance, at the reference
+/// The pixels a cell spans at its zoom's split distance, at the reference
 /// view: about six.
 pub fn target_cell_px() -> f64 {
     px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG) / SPLIT
 }
 
-/// Where ground stops being drawn at `level` at `Tau::FINEST`; any integer level.
-pub const fn split_distance(level: i32) -> f64 {
-    SPLIT * GROUND.scale(0).up(level).side()
+/// Where ground starts being drawn at `z` at `Tau::FINEST`, going out; any zoom.
+pub const fn split_distance(z: i32) -> f64 {
+    SPLIT * side_at_zoom(z).side()
 }
 
-/// The level whose cell a pixel covers at `r` from the eye. Distance only:
-/// with the surface angle in, the skyline would be drawn coarsest. Negative
-/// (finer than z16) near the eye.
-pub fn level(r: f64) -> i32 {
-    libm::log2(r / split_distance(0)).floor() as i32
+/// The zoom whose cell a pixel covers at `r` from the eye. Distance only:
+/// with the surface angle in, the skyline would be drawn coarsest. Past z16
+/// near the eye.
+pub fn z_at(r: f64) -> i32 {
+    libm::log2(split_distance(0) / r).ceil() as i32
 }
 
-/// The criterion's one scale factor, at least 1: every level's split
+/// The criterion's one scale factor, at least 1: every zoom's split
 /// distance is `split_distance` / τ. The fault bound is sized at 1, and a
 /// coarser τ only brings bands nearer, so none breaks it.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
@@ -60,40 +61,40 @@ impl Tau {
         self.0
     }
 
-    pub const fn split_distance(self, level: i32) -> f64 {
-        split_distance(level) / self.0
+    pub const fn split_distance(self, z: i32) -> f64 {
+        split_distance(z) / self.0
     }
 
-    pub fn level(self, r: f64) -> i32 {
-        level(r * self.0)
+    pub fn z_at(self, r: f64) -> i32 {
+        z_at(r * self.0)
     }
 
-    pub const fn fault_radius(self, level: u32) -> f64 {
-        self.split_distance(level as i32 + 1)
+    pub const fn fault_radius(self, z: u32) -> f64 {
+        self.split_distance(z as i32 - 1)
     }
 }
 
-/// How far from an observer's foot a fault at `level` can lie: the next
-/// level's split distance. Bounds the run along the ground too.
-pub const fn fault_radius(level: u32) -> f64 {
-    split_distance(level as i32 + 1)
+/// How far from an observer's foot a fault at `z` can lie: the next coarser
+/// zoom's split distance. Bounds the run along the ground too.
+pub const fn fault_radius(z: u32) -> f64 {
+    split_distance(z as i32 - 1)
 }
 
-/// The most pages a level's faults span along an axis: ⌊d / page⌋ + 2, the same at every level.
-pub const FAULT_ACROSS: u32 = (2.0 * fault_radius(0) / span_of(0)) as u32 + 2;
+/// The most pages a zoom's faults span along an axis: ⌊d / page⌋ + 2, the same at every zoom.
+pub const FAULT_ACROSS: u32 = (2.0 * fault_radius(GROUND_Z) / span_of(GROUND_Z)) as u32 + 2;
 
-/// The most pages a level's faults name about one observer.
+/// The most pages a zoom's faults name about one observer.
 pub const FAULT_PAGES: u32 = FAULT_ACROSS * FAULT_ACROSS;
 
-/// Every page of `level` with ground within `radius` of `at`.
-pub fn pages_within(level: u32, at: [f64; 2], radius: f64) -> impl Iterator<Item = LevelPage> {
-    squares_within(level, at, radius).map(move |xy| page_at(level, xy))
+/// Every page at `z` with ground within `radius` of `at`.
+pub fn pages_within(z: u32, at: [f64; 2], radius: f64) -> impl Iterator<Item = Page> {
+    squares_within(z, at, radius).map(move |xy| page_at(z, xy))
 }
 
 /// `pages_within` before X wraps.
-pub fn squares_within(level: u32, at: [f64; 2], radius: f64) -> impl Iterator<Item = [i64; 2]> {
-    xpute_core::ensure!(level <= TOP_LEVEL, EINVAL);
-    let span = span_of(level);
+pub fn squares_within(z: u32, at: [f64; 2], radius: f64) -> impl Iterator<Item = [i64; 2]> {
+    xpute_core::ensure!(z >= TOP_Z, EINVAL);
+    let span = span_of(z);
     let rows = |c: f64| ((c - radius) / span).floor() as i64..=((c + radius) / span).floor() as i64;
     let (xs, ys) = (rows(at[0]), rows(at[1]));
     let gap = move |c: f64, i: i64| (i as f64 * span - c).max(c - (i + 1) as f64 * span).max(0.0);

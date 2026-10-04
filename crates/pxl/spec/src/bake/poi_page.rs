@@ -2,18 +2,19 @@
 
 //! The POI layer's page: per occupied `POI_LATTICE` cell, how many places
 //! stand in it and, of each kind, the named place of least id with the z16
-//! ground cell it stands in. Least id is stable across levels and says nothing
+//! ground cell it stands in. Least id is stable across zooms and says nothing
 //! of prominence; which to show is the reader's choice. Folding sums counts
 //! and keeps the least id per kind, so a count agrees with the leaves at any
-//! level. A page holds what any source can give — a place's own id, its kind
+//! zoom. A page holds what any source can give — a place's own id, its kind
 //! by name, its names — so Overture, Naver or Google fill the same page; it
 //! is one XTP tree, as every other baked page is.
 
 use std::collections::HashMap;
 
+use crate::bake::constant::CELL;
 use crate::bake::poi_badge::{DEFAULT_COLOR, DEFAULT_ICON, KIND_CATEGORIES, KIND_COLORS, KIND_ICONS};
 use crate::space::pvf3::pvf3::Pvf3;
-use crate::space::pyramid::{Folds, Lattice, LevelPage, GROUND, TOP_LEVEL};
+use crate::space::pyramid::{Folds, Lattice, Page, GROUND, GROUND_Z, TOP_Z};
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
@@ -21,10 +22,10 @@ use crate::bake::malformed;
 use crate::bake::named::{NameLanes, NamesView};
 
 /// Places are counted in cells 2^6 ground cells wide, so no two cells'
-/// badges overlap: a level draws its ground cell at three pixels or more,
+/// badges overlap: a zoom draws its ground cell at three pixels or more,
 /// and the widest badge is under 192 pixels, which s = 6 covers and s = 5
 /// does not.
-pub const POI_LATTICE: Lattice = Lattice::new(GROUND.scale(6));
+pub const POI_LATTICE: Lattice = Lattice::new(CELL.up(6));
 
 const CELLS: u32 = POI_LATTICE.page_cells() * POI_LATTICE.page_cells();
 
@@ -39,7 +40,7 @@ const KINDS_MAX: usize = 256;
 
 // A position is an offset in z16 cells inside a POI cell, a half-word a lane.
 const _: () = assert!(
-    POI_LATTICE.scale(TOP_LEVEL).above(GROUND.scale(0)) <= 16,
+    POI_LATTICE.side_at(TOP_Z).above(GROUND.side_at(GROUND_Z)) <= 16,
     "a POI cell's z16 ground cells no longer fit a half-word a lane"
 );
 
@@ -226,14 +227,14 @@ pub struct PoiPage {
 }
 
 impl PoiPage {
-    /// A level-`level` page from places all in that page, names cut to
+    /// A page at `z` from places all in that page, names cut to
     /// `NAME_CHARS`; `complete` is false where the source gave only some.
-    pub fn of_places<'a>(level: u32, places: impl IntoIterator<Item = (Pvf3, Place<'a>)>, complete: bool) -> PoiPage {
+    pub fn of_places<'a>(z: u32, places: impl IntoIterator<Item = (Pvf3, Place<'a>)>, complete: bool) -> PoiPage {
         let cut: Vec<_> = places
             .into_iter()
             .map(|(point, place)| {
-                let cell = POI_LATTICE.cell_of(level, &point);
-                (cell.index(), cell.offset_of(GROUND.cell_of(0, &point)), cut_name(place.name), place)
+                let cell = POI_LATTICE.cell_of(z, &point);
+                (cell.index(), cell.offset_of(GROUND.cell_of(GROUND_Z, &point)), cut_name(place.name), place)
             })
             .collect();
         gathered(cut.iter().map(|(cell, at, name, place)| (*cell, 1, !complete, [(*at, Place { name, ..*place })].into_iter())))
@@ -246,14 +247,14 @@ impl PoiPage {
 
 impl Folds for PoiPage {
     /// A child is settled where every cell over it holds at most one place
-    /// and its count is not a floor: only a crowd comes apart a level down.
-    fn settles(&self, p: LevelPage, child: LevelPage) -> bool {
+    /// and its count is not a floor: only a crowd comes apart a zoom finer.
+    fn settles(&self, p: Page, child: Page) -> bool {
         self.cells
             .iter()
-            .all(|c| (c.count < 2 && !c.partial) || POI_LATTICE.cell_of(child.level, &POI_LATTICE.cell_at(p, c.cell).base()).page() != child)
+            .all(|c| (c.count < 2 && !c.partial) || POI_LATTICE.cell_of(child.z, &POI_LATTICE.cell_at(p, c.cell).base()).page() != child)
     }
 
-    fn fold_page<'a>(p: LevelPage, held: impl Fn(LevelPage) -> Option<&'a Self>) -> Option<Self> {
+    fn fold_page<'a>(p: Page, held: impl Fn(Page) -> Option<&'a Self>) -> Option<Self> {
         let mut cells = Vec::new();
         let mut children = Vec::with_capacity(4);
         for k in p.children() {
@@ -263,7 +264,7 @@ impl Folds for PoiPage {
             cells.extend(child.cells.iter().map(move |c| {
                 let parent = POI_LATTICE.parent_cell(q, c.cell);
                 let places = child.shown(c).map(move |(_, place, at)| {
-                    let ground = POI_LATTICE.cell_at(k, c.cell).inner_at(GROUND, 0, at);
+                    let ground = POI_LATTICE.cell_at(k, c.cell).inner_at(GROUND, GROUND_Z, at);
                     (POI_LATTICE.cell_at(p, parent).offset_of(ground), place)
                 });
                 (parent, c.count, c.partial, places)

@@ -264,8 +264,8 @@ export const enum Command {
   WORLD_VISIBILITY = 0x1003,
   /** What the tile source declares of itself, once the shell has it (published.json's
    * SOURCE, or the dev tile server's answer in the same form). Until it comes nothing is
-   * observed: the floor is held at the level it names, and no view is drawn from a
-   * level the source does not supply whole. */
+   * observed: the floor is held at the zoom it names, and no view is drawn from a
+   * zoom the source does not supply whole. */
   WORLD_SOURCE = 0x1005,
   /** A permission as the shell's prompt or the browser's change reported it. */
   SENSOR_PERMISSION = 0x1206,
@@ -594,12 +594,12 @@ export function encode_world_visibility(p: WorldVisibility): U8Array {
 
 /** Command.WORLD_SOURCE's packet. */
 export interface WorldSource {
-  /** The coarsest level of the pyramid the source supplies whole. */
-  top_level: u32;
+  /** The coarsest zoom of the pyramid the source supplies whole. */
+  top_z: u32;
 }
 
 export function encode_world_source(p: WorldSource): U8Array {
-  return packet((b) => b.u32(p.top_level));
+  return packet((b) => b.u32(p.top_z));
 }
 
 /** Command.SENSOR_PERMISSION's packet. */

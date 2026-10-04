@@ -13,7 +13,7 @@ use pxl_spec::space::lod::Tau;
 use pxl_spec::space::observation::{band, Bounds, Contents, DemandEstimator, Frustum, Observation, Requirement};
 use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pvf3::REACH;
-use pxl_spec::space::pyramid::{span_of, LevelPage, GROUND};
+use pxl_spec::space::pyramid::{chunk_scale, page_scale, span_of, Page, GROUND, GROUND_Z};
 use pxl_spec::space::v3::Aabb;
 
 use crate::kernel::kernel;
@@ -40,7 +40,7 @@ pub fn frustum_of_view() -> Frustum {
 /// is nearer. None before the source declares its top.
 pub fn observation() -> Option<Observation> {
     let eye = eye()?;
-    let top = floor::level()?;
+    let top = floor::top()?;
     let height = eye_height();
     Some(Observation {
         eye,
@@ -59,15 +59,15 @@ pub fn observation() -> Option<Observation> {
 pub struct Known;
 
 impl Bounds for Known {
-    fn contents(&self, level: u32, region: Aabb) -> Contents {
-        let (z0, z1) = (region.min[2], region.max[2]);
-        let cut = |(lo, hi): (f64, f64)| (lo <= z1 && hi >= z0).then(|| (lo.max(z0), hi.min(z1)));
-        let cell = GROUND.scale(level).side();
+    fn contents(&self, z: u32, region: Aabb) -> Contents {
+        let (h0, h1) = (region.min[2], region.max[2]);
+        let cut = |(lo, hi): (f64, f64)| (lo <= h1 && hi >= h0).then(|| (lo.max(h0), hi.min(h1)));
+        let cell = GROUND.side_at(z).side();
         let mut known = true;
         let mut bound: Option<Aabb> = None;
         let mut rise = 0.0f64;
-        under(level, region, &mut |node, square| {
-            let Some(n) = read(level, node) else {
+        under(z, region, &mut |node, square| {
+            let Some(n) = read(z, node) else {
                 known = false;
                 return;
             };
@@ -106,10 +106,9 @@ struct Node {
 }
 
 /// None where no terrain page over the node is resident.
-fn read(level: u32, node: (Scale, [i64; 2])) -> Option<Node> {
-    let page = L3.up(level as i32);
-    let [x, y] = ancestor_of(node.1, page.above(node.0) as u32);
-    let page = LevelPage::new(level, ivec::gather(x, y, 0));
+fn read(z: u32, node: (Scale, [i64; 2])) -> Option<Node> {
+    let [x, y] = ancestor_of(node.1, page_scale(z).above(node.0) as u32);
+    let page = Page::new(z, ivec::gather(x, y, 0));
     let relief = Access::now().relief(page, node).value()?;
     Some(Node {
         ground: relief.extent,
@@ -117,10 +116,10 @@ fn read(level: u32, node: (Scale, [i64; 2])) -> Option<Node> {
     })
 }
 
-/// Each flat-lattice node at `level` under `region`: the region itself where
+/// Each flat-lattice node at `z` under `region`: the region itself where
 /// it is exactly one node, else its columns.
-fn under(level: u32, region: Aabb, each: &mut dyn FnMut((Scale, [i64; 2]), Aabb)) {
-    let column = L2.up(level as i32);
+fn under(z: u32, region: Aabb, each: &mut dyn FnMut((Scale, [i64; 2]), Aabb)) {
+    let column = chunk_scale(z);
     let side = region.max[0] - region.min[0];
     let node = (0..=L3.above(L2)).map(|k| column.up(k)).find(|s| s.side() == side && region.max[1] - region.min[1] == side);
     let square = |s: Scale, [x, y]: [i64; 2]| {
@@ -144,7 +143,7 @@ fn under(level: u32, region: Aabb, each: &mut dyn FnMut((Scale, [i64; 2]), Aabb)
 }
 
 /// The estimator from what the tiles saw: the ground their footprints touch
-/// at each level whose band holds it, plus what their rays lacked. Ground no
+/// at each zoom whose band holds it, plus what their rays lacked. Ground no
 /// ray reaches is left to the floor. A lack is recast when it arrives, so
 /// requirements grow toward what exact records would give and never rest
 /// short of it.
@@ -160,37 +159,37 @@ impl DemandEstimator for ByFootprints<'_> {
             min: [x0, y0, REACH.min[2]],
             max: [x1, y1, REACH.max[2]],
         };
-        let required = |level: u32, region: Aabb| {
-            let (from, to) = band(o, self.tau, level)?;
-            let held = bounds.contents(level, region).within(region)?;
+        let required = |z: u32, region: Aabb| {
+            let (from, to) = band(o, self.tau, z)?;
+            let held = bounds.contents(z, region).within(region)?;
             let m = o.measure(&held);
-            (m.seen && m.near < to && m.near <= o.far && m.far >= from).then_some(Requirement { level, region })
+            (m.seen && m.near < to && m.near <= o.far && m.far >= from).then_some(Requirement { z, region })
         };
         for lack in self.lacks {
             let r = lack.region;
             let region = column(r.min[0], r.min[1], r.max[0], r.max[1]);
-            if let Some(r) = (lack.level..=o.top).find_map(|level| required(level, region)) {
+            if let Some(r) = (o.top..=lack.z).rev().find_map(|z| required(z, region)) {
                 each(r);
             }
         }
         for f in self.footprints {
             let b = f.aabb();
-            for level in 0..=o.top {
-                let Some((_, to)) = band(o, self.tau, level) else { break };
+            for z in (o.top..=GROUND_Z).rev() {
+                let Some((_, to)) = band(o, self.tau, z) else { break };
                 let reach = to.min(o.far);
                 let lo = [b.min[0].max(o.eye[0] - reach), b.min[1].max(o.eye[1] - reach)];
                 let hi = [b.max[0].min(o.eye[0] + reach), b.max[1].min(o.eye[1] + reach)];
                 if lo[0] > hi[0] || lo[1] > hi[1] {
                     continue;
                 }
-                let span = span_of(level);
+                let span = span_of(z);
                 let rows = |k: usize| (lo[k] / span).floor() as i64..=(hi[k] / span).floor() as i64;
                 for y in rows(1) {
                     for x in rows(0) {
                         let (x0, y0) = (x as f64 * span, y as f64 * span);
                         let square = column(x0, y0, x0 + span, y0 + span);
                         if f.touches(&square) {
-                            if let Some(r) = required(level, square) {
+                            if let Some(r) = required(z, square) {
                                 each(r);
                             }
                         }
@@ -225,12 +224,12 @@ impl Order {
     }
 
     /// All of `region` where nothing is known.
-    pub fn of_region<B: Bounds + ?Sized>(o: &Observation, bounds: &B, level: u32, region: Aabb) -> Order {
-        Order::of(o, &bounds.contents(level, region).within(region).unwrap_or(region))
+    pub fn of_region<B: Bounds + ?Sized>(o: &Observation, bounds: &B, z: u32, region: Aabb) -> Order {
+        Order::of(o, &bounds.contents(z, region).within(region).unwrap_or(region))
     }
 
-    pub fn of_page(o: &Observation, p: LevelPage) -> Order {
-        Order::of_region(o, &Known, p.level, p.region())
+    pub fn of_page(o: &Observation, p: Page) -> Order {
+        Order::of_region(o, &Known, p.z, p.region())
     }
 }
 

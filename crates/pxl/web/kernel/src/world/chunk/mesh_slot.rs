@@ -13,7 +13,7 @@
 
 use pxl_render::look::globe::MERCATOR_RADIUS_U;
 use pxl_render::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
-use pxl_spec::space::pyramid::{CHUNK_CELLS, TOP_LEVEL};
+use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND_Z, TOP_Z};
 
 use crate::param::{ARENA_COARSE_GROUPS, ARENA_GROUP_SLOTS};
 use crate::world::pyramid::domain::cover_pieces;
@@ -38,8 +38,8 @@ pub const COVER_BOXES: u32 = 2;
 /// The most cover pieces over any top. Exact: each root holds one slot at
 /// most, so a root the cover lacks always finds one free.
 pub const COVER_SLOTS: u32 = {
-    let (mut most, mut top) = (0, 0);
-    while top <= TOP_LEVEL {
+    let (mut most, mut top) = (0, TOP_Z);
+    while top <= GROUND_Z {
         let n = cover_pieces(top, MERCATOR_RADIUS_U);
         if n > most {
             most = n;
@@ -57,10 +57,10 @@ pub enum Pool {
 }
 
 impl Pool {
-    pub const fn of(level: u32, step: u32) -> Pool {
+    pub const fn of(z: u32, step: u32) -> Pool {
         if step == CHUNK_CELLS {
             Pool::Cover
-        } else if level == 0 && step == 1 {
+        } else if z == GROUND_Z && step == 1 {
             Pool::Fine
         } else {
             Pool::Coarse
@@ -108,8 +108,8 @@ impl Pool {
 
 pub const ARENA: [u32; POOLS] = [Pool::Fine.slots(), Pool::Coarse.slots(), Pool::Cover.slots()];
 
-pub const fn capacity(level: u32, step: u32) -> u32 {
-    Pool::of(level, step).boxes()
+pub const fn capacity(z: u32, step: u32) -> u32 {
+    Pool::of(z, step).boxes()
 }
 
 pub const GROUPS: u32 = COARSE_GROUPS + 2;

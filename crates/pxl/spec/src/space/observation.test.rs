@@ -24,7 +24,7 @@ struct World {
 }
 
 impl Bounds for World {
-    fn contents(&self, _level: u32, region: Aabb) -> Contents {
+    fn contents(&self, _z: u32, region: Aabb) -> Contents {
         let (lo, hi) = (region.min, region.max);
         let over = |t: &&Tower| t.x[0] <= hi[0] && t.x[1] >= lo[0] && t.y[0] <= hi[1] && t.y[1] >= lo[1];
         let top = self.towers.iter().filter(over).map(|t| t.h).fold(0.0, f64::max);
@@ -127,20 +127,20 @@ fn observation(look: Look, far: f64, planet: f64, frustum: bool) -> Observation 
         eye: look.eye,
         frustum: frustum.then(|| look.frustum(far)),
         far,
-        top: TOP_LEVEL,
+        top: TOP_Z,
         planet,
         ground: 0.0,
     }
 }
 
-fn demand(o: &Observation, bounds: &impl Bounds, tau: Tau) -> HashSet<LevelPage> {
+fn demand(o: &Observation, bounds: &impl Bounds, tau: Tau) -> HashSet<Page> {
     let mut out = HashSet::new();
     ByBounds { tau }.requirements(o, bounds, &mut |r| Paged.pages(&r, &mut |p| _ = out.insert(p)));
     out
 }
 
-/// The exact demand: each answered ray asks for the page of its first hit at its distance's level.
-fn exact(world: &World, look: Look, far: f64, tau: Tau) -> HashSet<LevelPage> {
+/// The exact demand: each answered ray asks for the page of its first hit at its distance's zoom.
+fn exact(world: &World, look: Look, far: f64, tau: Tau) -> HashSet<Page> {
     let mut out = HashSet::new();
     for v in look.rays(96) {
         let Some(r) = world.first_hit(look.eye, v) else { continue };
@@ -148,9 +148,9 @@ fn exact(world: &World, look: Look, far: f64, tau: Tau) -> HashSet<LevelPage> {
             continue;
         }
         let at = [look.eye[0] + r * v[0], look.eye[1] + r * v[1]];
-        let l = tau.level(r).clamp(0, TOP_LEVEL as i32) as u32;
-        let span = span_of(l);
-        out.insert(page_at(l, at.map(|c| (c / span).floor() as i64)));
+        let z = tau.z_at(r).clamp(TOP_Z as i32, GROUND_Z as i32) as u32;
+        let span = span_of(z);
+        out.insert(page_at(z, at.map(|c| (c / span).floor() as i64)));
     }
     out
 }
@@ -190,7 +190,7 @@ fn looks() -> Vec<Look> {
 fn ground_the_planet_draws_lower_is_named_where_it_is_drawn() {
     let world = World { towers: Vec::new(), planet: 60_000.0 };
     for look in looks() {
-        let far = fault_radius(TOP_LEVEL);
+        let far = fault_radius(TOP_Z);
         let o = observation(look, far, world.planet, true);
         let named = demand(&o, &world, Tau::FINEST);
         for p in exact(&world, look, far, Tau::FINEST) {
@@ -199,23 +199,23 @@ fn ground_the_planet_draws_lower_is_named_where_it_is_drawn() {
     }
 }
 
-/// Knowing less never names less, and no level names more than the fault bound.
+/// Knowing less never names less, and no zoom names more than the fault bound.
 #[test]
-fn a_level_names_no_more_than_the_fault_bound_and_less_known_names_more() {
+fn a_zoom_names_no_more_than_the_fault_bound_and_less_known_names_more() {
     for (k, look) in looks().into_iter().enumerate() {
         let world = World {
             towers: towers([look.eye[0], look.eye[1]], 100 + k as u64),
             planet: f64::INFINITY,
         };
         for frustum in [true, false] {
-            let o = observation(look, fault_radius(TOP_LEVEL), world.planet, frustum);
+            let o = observation(look, fault_radius(TOP_Z), world.planet, frustum);
             for tau in TAU_SCALES.map(Tau::of) {
                 let (known, unknown) = (demand(&o, &world, tau), demand(&o, &Unknown, tau));
                 assert!(known.is_subset(&unknown), "look {k}, {tau:?}: bounds named a page nothing known did not");
                 for named in [known, unknown] {
-                    for l in 0..=TOP_LEVEL {
-                        let n = named.iter().filter(|p| p.level == l).count() as u32;
-                        assert!(n <= FAULT_PAGES, "look {k}, {tau:?}, level {l}: {n} pages");
+                    for z in TOP_Z..=GROUND_Z {
+                        let n = named.iter().filter(|p| p.z == z).count() as u32;
+                        assert!(n <= FAULT_PAGES, "look {k}, {tau:?}, z{z}: {n} pages");
                     }
                 }
             }
@@ -225,8 +225,8 @@ fn a_level_names_no_more_than_the_fault_bound_and_less_known_names_more() {
 
 #[test]
 fn paged_storage_maps_a_square_to_its_page_and_ground_to_every_page_under_it() {
-    for level in [0, 3, TOP_LEVEL] {
-        let span = span_of(level);
+    for z in [GROUND_Z, 13, TOP_Z] {
+        let span = span_of(z);
         for [x, y] in [[0i64, 0], [-3, 5], [17, -11]] {
             let mut pages = Vec::new();
             let (x0, y0) = (x as f64 * span, y as f64 * span);
@@ -234,15 +234,15 @@ fn paged_storage_maps_a_square_to_its_page_and_ground_to_every_page_under_it() {
                 min: [x0, y0, -7.0],
                 max: [x0 + span, y0 + span, 900.0],
             };
-            Paged.pages(&Requirement { level, region: square }, &mut |p| pages.push(p));
-            assert_eq!(pages, vec![page_at(level, [x, y])]);
+            Paged.pages(&Requirement { z, region: square }, &mut |p| pages.push(p));
+            assert_eq!(pages, vec![page_at(z, [x, y])]);
             pages.clear();
             let wider = Aabb {
                 min: [x0 + 0.5 * span, y0, 0.0],
                 max: [x0 + 2.0 * span, y0 + 1.5 * span, 0.0],
             };
-            Paged.pages(&Requirement { level, region: wider }, &mut |p| pages.push(p));
-            assert_eq!(pages.len(), 4, "level {level}: {pages:?}");
+            Paged.pages(&Requirement { z, region: wider }, &mut |p| pages.push(p));
+            assert_eq!(pages.len(), 4, "z{z}: {pages:?}");
         }
     }
 }

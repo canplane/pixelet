@@ -1,8 +1,8 @@
 // pxl-spec/bake/fold.rs
 
-//! One level up: a parent page from the pages under it, run by both the bake
-//! and the client so a deterministic rule agrees between them. Ground takes
-//! the 2×2 majority of the level below (as Earth Engine's `MODE` pyramiding),
+//! One zoom coarser: a parent page from the pages under it, run by both the
+//! bake and the client so a deterministic rule agrees between them. Ground
+//! takes the 2×2 majority of the zoom below (as Earth Engine's `MODE` pyramiding),
 //! so a feature narrower than half a cell rounds away. Elevation is the box
 //! average, which preserves a column's volume. The index lane is carried up
 //! from the children's extents and widened by the parent's own surface.
@@ -15,13 +15,13 @@ use super::deck::fold_decks;
 use super::format::{Ground, Index, Occupancy, Terrain, GROUND_CH_KEYS};
 use super::pack::{channel_of, with_channel, GroundCell};
 use super::surface::extent_of;
-use crate::space::pyramid::{neighbor_index, neighborhood, Folds, LevelPage, CHILDREN, EXTENT, GROUND};
+use crate::space::pyramid::{neighbor_index, neighborhood, Folds, Page, CHILDREN, EXTENT, GROUND};
 
 /// The value filling more than half of a 2×2 (or 2×2×2) block, `v[dx + 2·dy +
-/// 4·dz]`; otherwise the tie child's. The tie corner alternates by `level`,
-/// since a fixed corner drifts the map half a coarse cell per level.
-pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], level: i32) -> T {
-    let tie = v[if level.rem_euclid(2) == 1 { 0 } else { N - 1 }];
+/// 4·dz]`; otherwise the tie child's. The tie corner alternates with the
+/// parent's zoom `z`, since a fixed corner drifts the map half a coarse cell a zoom.
+pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], z: i32) -> T {
+    let tie = v[if z.rem_euclid(2) == 1 { 0 } else { N - 1 }];
     let count = |x: T| v.iter().filter(|&&y| y == x).count();
     let mut half = None;
     for &x in &v {
@@ -37,14 +37,14 @@ pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], level: i32) -> T {
 
 /// Each ground channel folded on its own, so a road never takes the land's
 /// vote under it.
-pub fn fold_ground(children: [&Ground; 4], level: u32) -> Ground {
+pub fn fold_ground(children: [&Ground; 4], z: u32) -> Ground {
     let out = (0..PAGE_CELLS * PAGE_CELLS)
         .map(|index| {
             let (q, block) = GROUND.child_block(index);
             let four = block.map(|i| children[q].cells[i as usize]);
             let mut cell = 0 as GroundCell;
             for key in GROUND_CH_KEYS {
-                cell = with_channel(cell, key, majority(four.map(|f| channel_of(f, key)), level as i32));
+                cell = with_channel(cell, key, majority(four.map(|f| channel_of(f, key)), z as i32));
             }
             cell
         })
@@ -103,25 +103,25 @@ pub fn fold_index(children: [&Index; 4], own: Vec<[i16; 2]>) -> Index {
 
 /// Terrain also reads the ring around the four children, for its elevation padding.
 impl Folds for Terrain {
-    fn sources(p: LevelPage) -> Vec<LevelPage> {
+    fn sources(p: Page) -> Vec<Page> {
         neighborhood(p).to_vec()
     }
 
-    fn fold_page<'a>(p: LevelPage, held: impl Fn(LevelPage) -> Option<&'a Self>) -> Option<Self> {
-        fold_terrain(neighborhood(p).map(held), p.level)
+    fn fold_page<'a>(p: Page, held: impl Fn(Page) -> Option<&'a Self>) -> Option<Self> {
+        fold_terrain(neighborhood(p).map(held), p.z)
     }
 }
 
 /// A parent from the 4×4 pages around its children; None if any of its own
 /// four is missing. A missing ring page only degrades the padding, so a zoom
 /// out folds from what the client already holds.
-fn fold_terrain(around: [Option<&Terrain>; 16], level: u32) -> Option<Terrain> {
+fn fold_terrain(around: [Option<&Terrain>; 16], z: u32) -> Option<Terrain> {
     let child = |q: usize| around[CHILDREN[q]];
     let children = [child(0)?, child(1)?, child(2)?, child(3)?];
-    let ground = fold_ground(children.map(|t| &t.ground), level);
+    let ground = fold_ground(children.map(|t| &t.ground), z);
     let mut ele = vec![0i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
     fold_ele(around.map(|t| t.map(|t| &*t.ele)), &mut ele);
-    let decks = fold_decks(children.map(|t| &t.decks), level);
+    let decks = fold_decks(children.map(|t| &t.decks), z);
     let index = fold_index(children.map(|t| &t.index), extent_of(&ele, &decks));
     Some(Terrain {
         ground,

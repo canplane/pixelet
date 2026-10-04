@@ -9,11 +9,11 @@ use pxl_spec::space::v3::{add3, V3};
 use pxl_spec::space::pyramid::anchor_span_of;
 use xpute_core::math::scalar::round;
 
-/// The center floored to the level's anchor span across and a leaf's anchor
-/// up (heights do not scale). Scaled with the level so a rebase is as far on
+/// The center floored to the zoom's anchor span across and a leaf's anchor
+/// up (heights do not scale). Scaled with the zoom so a rebase is as far on
 /// screen at every zoom; a fixed 4096u rebased nearly every frame of a pan.
-pub fn origin_for(center: IVec, level: u32) -> IVec {
-    let across = anchor_span_of(level);
+pub fn origin_for(center: IVec, z: u32) -> IVec {
+    let across = anchor_span_of(z);
     let up = L4_RANGE as i64;
     let floor = |v: i64, s: i64| v.div_euclid(s) * s;
     ivec::gather(floor(ivec::X(center), across), floor(ivec::Y(center), across), floor(ivec::Z(center), up))

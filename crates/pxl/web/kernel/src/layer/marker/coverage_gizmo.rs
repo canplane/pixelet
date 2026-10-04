@@ -14,7 +14,7 @@ use pxl_render::frame::draw::DrawList;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::projection;
-use pxl_spec::space::pyramid::{anchor_span_of, LevelPage};
+use pxl_spec::space::pyramid::{anchor_span_of, Page, GROUND_Z};
 use pxl_spec::space::v3::V3;
 
 use crate::layer::marker::debug_lines::DebugLines;
@@ -95,9 +95,9 @@ impl CoverageGizmo {
         }
         self.seen = Some(seen);
         let paging = Terrain::pyramid().paging();
-        let top = floor::level().unwrap_or(0);
-        let lined: HashSet<LevelPage> = Terrain::pyramid().demand().iter().map(|&p| line_top(p, top)).collect();
-        let floor_only = |p: LevelPage| p.level >= top && !lined.contains(&p);
+        let top = floor::top().unwrap_or(GROUND_Z);
+        let lined: HashSet<Page> = Terrain::pyramid().demand().iter().map(|&p| line_top(p, top)).collect();
+        let floor_only = |p: Page| p.z <= top && !lined.contains(&p);
         let over: HashSet<Chunk> = drawn.iter().flat_map(|d| d.ancestors()).collect();
         let origin = ivec::to_v3(v.origin);
         let mut lines = Lines::default();
@@ -113,7 +113,7 @@ impl CoverageGizmo {
             };
             lines.square(g.rect(), mark);
         }
-        let mut pages: Vec<LevelPage> = Vec::with_capacity(drawn.len());
+        let mut pages: Vec<Page> = Vec::with_capacity(drawn.len());
         for &d in drawn {
             let from_floor = paging.source(d.page()).is_none() && paging.drawn_from(d.page()).is_some_and(floor_only);
             lines.square(d.rect(), if from_floor { Mark::DrawnFromFloor } else { Mark::Drawn });
@@ -124,7 +124,7 @@ impl CoverageGizmo {
         for p in pages {
             lines.square(p.rect(), Mark::Page);
         }
-        let side = ivec::to_real(anchor_span_of(v.anchor_level()));
+        let side = ivec::to_real(anchor_span_of(v.anchor_z()));
         lines.square((origin[0], origin[1], side), Mark::Anchor);
         self.lane.clear();
         lines.lay(&mut self.lane, origin, &Access::now());
@@ -136,8 +136,8 @@ impl CoverageGizmo {
     }
 }
 
-fn line_top(mut p: LevelPage, top: u32) -> LevelPage {
-    while p.level < top {
+fn line_top(mut p: Page, top: u32) -> Page {
+    while p.z > top {
         p = p.parent();
     }
     p

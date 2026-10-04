@@ -11,7 +11,7 @@ use pxl_spec::bake::constant::{unpack_pos, U_PER_CELL};
 use pxl_spec::procedural::{scatter, scatter_at, Candidate, MASTER_SEED};
 use pxl_spec::space::lod::target_cell_px;
 use pxl_spec::space::pvf3::ivec::IVec;
-use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
+use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, GROUND_Z};
 use pxl_spec::space::v3::Aabb;
 use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
@@ -21,7 +21,7 @@ use crate::layer::decor::instance::{DecorScratch, GroupLanes, Instance, DECOR_GR
 use crate::layer::decor::kind::{Kind, KINDS};
 use crate::layer::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
 use crate::layer::object::store::{At, EntryAt, Store, AIR};
-use crate::world::access::{Access, FINEST};
+use crate::world::access::Access;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::bake::constant::CELL;
@@ -93,7 +93,7 @@ pub struct DecorBuild<'s> {
 pub struct Ground<'a> {
     pub page: &'a PageView<'a>,
     pub sample: &'a ChunkSample,
-    pub level: u32,
+    pub z: u32,
     pub x0: i64,
     pub y0: i64,
     pub tx0: u32,
@@ -166,9 +166,9 @@ pub fn draw(kind: &Kind, candidate: Candidate, cells: &[GroundCell], lines: &Dec
 /// nothing written there. None where the page is not resident.
 pub fn scatters_at(value: u32, at: &Pvf3) -> Option<Draw> {
     let kind = KINDS.iter().find(|k| k.decor_value() == Some(value))?;
-    let z16 = GROUND.cell_of(0, at);
+    let z16 = GROUND.cell_of(GROUND_Z, at);
     let page = Terrain::pyramid().paging().get(z16.page())?;
-    let ground = Access::now().at(at, FINEST).exact()?;
+    let ground = Access::now().at(at, GROUND_Z).exact()?;
     let [ix, iy, iz] = CELL.index_of(at);
     let candidate = scatter_at(kind.seed.tag, kind.seed.density, [ix, iy])?;
     (iz == round(ground.top / CELL.side()) as i64).then(|| draw(kind, candidate, &page.ground.cells, &page.decks, z16.in_page()))?
@@ -257,17 +257,17 @@ impl<'s> DecorBuild<'s> {
     }
 
     /// Whether a kind may stand on a cell, and its transport alignment, are read
-    /// off the level's own cells: a tree above z16 stands on the grass the view
+    /// off the zoom's own cells: a tree coarser than z16 stands on the grass the view
     /// sees, not on z16 cells it cannot.
     fn scatter(scratch: &mut DecorScratch, kind: &Kind, first: usize, ground: &Ground, hide: Option<DecorHide>, store: &Store, chunk: Aabb) -> Result<(), TryReserveError> {
         let (cells, lines) = (ground.page.cells, ground.page.decks);
-        let (level, atom) = (GROUND.scale(ground.level), GROUND.scale(0));
-        let (lx0, ly0) = (level.index(ground.x0), level.index(ground.y0));
-        let per = i64::from(atom.count_in(level));
+        let (own, atom) = (GROUND.side_at(ground.z), GROUND.side_at(GROUND_Z));
+        let (lx0, ly0) = (own.index(ground.x0), own.index(ground.y0));
+        let per = i64::from(atom.count_in(own));
         let min = [atom.index(ground.x0), atom.index(ground.y0)];
         let span = i64::from(CHUNK_CELLS) * per;
         let has_entries = ground.col_idx.is_some_and(|c| store.entries(c).is_some());
-        scatter(kind.seed.tag, kind.seed.density, ground.level, [min, [min[0] + span, min[1] + span]], &mut scratch.candidates)?;
+        scatter(kind.seed.tag, kind.seed.density, ground.z, [min, [min[0] + span, min[1] + span]], &mut scratch.candidates)?;
         for i in 0..scratch.candidates.len() {
             let candidate = scratch.candidates[i];
             let (dx, dy) = ((candidate.cell[0] - min[0]).div_euclid(per) as u32, (candidate.cell[1] - min[1]).div_euclid(per) as u32);
@@ -284,12 +284,12 @@ impl<'s> DecorBuild<'s> {
             if has_entries && ground.col_idx.is_some_and(|c| store.cell(c, dx, dy, ele).is_some()) {
                 continue;
             }
-            let filled = |f: &HashMap<[i64; 3], u32>| f.get(&[lx0 + dx as i64, ly0 + dy as i64, level.index(ele as i64)]).is_some_and(|&s| s != AIR);
+            let filled = |f: &HashMap<[i64; 3], u32>| f.get(&[lx0 + dx as i64, ly0 + dy as i64, own.index(ele as i64)]).is_some_and(|&s| s != AIR);
             if ground.folded.is_some_and(filled) {
                 continue;
             }
             let [x, y, z] = [at[0] - chunk.min[0], at[1] - chunk.min[1], at[2]];
-            let hidden = ground.level == 0 && hide == Some(DecorHide::Scattered([gx, gy, i64::from(ele)]));
+            let hidden = ground.z == GROUND_Z && hide == Some(DecorHide::Scattered([gx, gy, i64::from(ele)]));
             scratch.push(
                 first + variant as usize,
                 Instance {

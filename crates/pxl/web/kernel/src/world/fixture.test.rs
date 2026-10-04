@@ -5,7 +5,7 @@
 
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::observation::{Bounds, Contents, Frustum, Observation};
-use pxl_spec::space::pyramid::{GROUND, TOP_LEVEL};
+use pxl_spec::space::pyramid::{GROUND, TOP_Z};
 use pxl_spec::space::v3::{add3, Aabb, V3};
 
 use crate::world::observer::{Footprint, Grid, Met, Observer, OnTile, Sight};
@@ -40,7 +40,7 @@ impl Bounds for World {
     /// The ground's lowest is its top cell's floor, as the index lane bounds
     /// it. Flat, it rises a cell's step over an index cell; a box is off by all
     /// of itself.
-    fn contents(&self, level: u32, region: Aabb) -> Contents {
+    fn contents(&self, z: u32, region: Aabb) -> Contents {
         if !self.answered {
             return Contents::Unknown;
         }
@@ -52,7 +52,7 @@ impl Bounds for World {
             }
             .meet(region)
         };
-        let cell = GROUND.scale(level).side();
+        let cell = GROUND.side_at(z).side();
         let (mut bound, mut rise): (Option<Aabb>, f64) = (None, 0.0);
         if let Some(g) = column(self.ground - 1.0 - self.slack, self.ground + self.slack) {
             bound = Some(g);
@@ -164,13 +164,13 @@ pub fn frustum(eye: V3, forward: V3, tan: [f64; 2], far: f64) -> Frustum {
 /// 50° up and down, 16:9.
 pub const REFERENCE: [f64; 2] = [0.466_307_658_154_998_6 * 16.0 / 9.0, 0.466_307_658_154_998_6];
 
-/// All around where `forward` is none; flat planet; every level supplied.
+/// All around where `forward` is none; flat planet; every zoom supplied.
 pub fn eye(eye: V3, forward: Option<V3>, far: f64, ground: f64) -> Observation {
     Observation {
         eye,
         frustum: forward.map(|f| frustum(eye, f, REFERENCE, far)),
         far,
-        top: TOP_LEVEL,
+        top: TOP_Z,
         planet: f64::INFINITY,
         ground,
     }

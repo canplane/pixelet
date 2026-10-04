@@ -28,15 +28,15 @@ export const BAKE_KINDS: readonly BakeKind[] = ["terrain", "poi", "geocode", "ea
 /** What a tile source declares of itself: SOURCE's shape, which the dev tile
  * server answers too. */
 export interface TileSource {
-  readonly top_level: number;
+  readonly top_z: number;
 }
 
 /**
- * What the published bake declares of itself to the client: `top_level`, the
- * coarsest level of the pyramid it supplies whole, terrain and POI alike. The
+ * What the published bake declares of itself to the client: `top_z`, the
+ * coarsest zoom of the pyramid it supplies whole, terrain and POI alike. The
  * client's floor is held there, all around the eye, and the far edge is where
- * that level ends (pxl-kernel world/paging/floor.rs). The dev tile server
- * answers the same object at the tile root's `source`, with its `--top-level`
+ * that zoom ends (pxl-kernel world/paging/floor.rs). The dev tile server
+ * answers the same object at the tile root's `source`, with its `--top-z`
  * (pxl-geo-bake bin/serve_tiles.rs); neither is guessed from what fails.
  */
-export const PUBLISHED_SOURCE: TileSource = { top_level: 10 };
+export const PUBLISHED_SOURCE: TileSource = { top_z: 6 };
