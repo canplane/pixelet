@@ -52,6 +52,15 @@ struct Atmosphere {
   earth_pages: vec4u,
 };
 
+// The struct's size in vec4 words, which the shader test holds to the host's.
+const ATMOS_VEC4S: u32 = 16u;
+// The bits a page's layer takes in `earth_pages` (gpu/atmosphere.rs PAGE_BITS).
+const EARTH_PAGE_BITS: u32 = 4u;
+
+// Read field by field from vec4 words, never as a struct: a struct here lost
+// Safari's WebGPU its GPU process.
+@group(0) @binding(8) var<uniform> atmos_words: array<vec4f, ATMOS_VEC4S>;
+
 fn atmos_rayleigh_scattering() -> vec3f { return atmos_words[0].xyz; }
 fn atmos_bottom_radius() -> f32 { return atmos_words[0].w; }
 fn atmos_ozone_absorption() -> vec3f { return atmos_words[1].xyz; }
