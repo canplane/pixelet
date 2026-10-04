@@ -717,11 +717,11 @@ export function encode_surface_close(p: SurfaceClose): U8Array {
 export interface PreviewOpen {
   surface: u32;
   group: u32;
-  number: u32;
+  number: u8;
 }
 
 export function encode_preview_open(p: PreviewOpen): U8Array {
-  return packet((b) => b.u32(p.surface).u32(p.group).u32(p.number));
+  return packet((b) => b.u32(p.surface).u32(p.group).u8(p.number));
 }
 
 /** Command.PREVIEW_CLOSE's packet. */

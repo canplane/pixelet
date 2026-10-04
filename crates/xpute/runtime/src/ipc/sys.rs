@@ -9,7 +9,7 @@ use core::panic::Location;
 
 use xpute_core::status::errno::Errno;
 
-use crate::ipc::stream::{record_words, Stream};
+use crate::ipc::stream::{record_bytes, Stream};
 use crate::mem::base::off_of_slice;
 
 #[path = "sys.spec.rs"]
@@ -27,7 +27,7 @@ pub const CLOSE_ARGS: usize = 1;
 /// open, a read or a write, and its close, twice where it is stopped.
 pub const fn descriptor_turn_bytes(path: usize) -> usize {
     let moved = if READ_ARGS > WRITE_ARGS { READ_ARGS } else { WRITE_ARGS };
-    4 * (record_words(OPENAT_ARGS, Some(path)) + record_words(moved, None) + 2 * record_words(CLOSE_ARGS, None))
+    record_bytes(OPENAT_ARGS, Some(path)) + record_bytes(moved, None) + 2 * record_bytes(CLOSE_ARGS, None)
 }
 
 pub struct Sys {

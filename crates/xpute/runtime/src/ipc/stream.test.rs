@@ -20,5 +20,5 @@ fn a_transaction_past_the_range_is_dropped_whole_and_the_next_one_records() {
     s.begin();
     s.record(5, &[1], &[], None);
     assert!(s.commit(), "a transaction that fits is kept");
-    assert_eq!(s.left(), before - record_words(1, None) * 4);
+    assert_eq!(s.left(), before - record_bytes(1, None));
 }

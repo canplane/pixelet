@@ -40,28 +40,29 @@ pub const DESTINATION_PAGES: u32 = LEVELS;
 /// The lines over the faults, every level's but the finest.
 const ANCESTOR_PAGES: u32 = OBSERVERS * LEVEL_DEMAND_PAGES * (LEVELS - 1);
 
-/// What is held hard at most. A new consumer that cannot take a coarser
-/// answer would declare its pages here like a destination.
-pub const HARD_PAGES: u32 = Floor::PAGES + DESTINATION_PAGES + ANCESTOR_PAGES;
+/// Held hard apart from the view: the floor and a destination's line. A new
+/// consumer that cannot take a coarser answer would declare its pages here.
+const PINNED_PAGES: u32 = Floor::PAGES + DESTINATION_PAGES;
+
+/// What is held hard at most.
+const HARD_PAGES: u32 = PINNED_PAGES + ANCESTOR_PAGES;
 
 /// A frame for a page nothing holds hard to land in.
 const WORKSPACE: u32 = 1;
 
-/// The faults and their lines share each level's ring, so the view takes `DEMAND_PAGES` in all.
-pub const FRAMES: u32 = Floor::PAGES + DESTINATION_PAGES + DEMAND_PAGES;
+/// Convergence: the faults and their lines share each level's ring, so a page
+/// the view reads never gives up another the view reads.
+pub const FRAMES: u32 = PINNED_PAGES + DEMAND_PAGES;
 
 pub const RECORDS: u32 = 1 + FRAMES;
 
-pub const ASKS: u32 = HARD_PAGES + DEMAND_PAGES + FRAMES;
+/// A fault's line is among the demand's asks.
+pub const ASKS: u32 = PINNED_PAGES + DEMAND_PAGES + FRAMES;
 
 /// Pages residency knows of at once: every framed page and every asked one.
 const ENTRIES: u32 = FRAMES + ASKS;
 
 const _: () = assert!(FRAMES >= HARD_PAGES + WORKSPACE, "safety: no frame for a page nothing holds hard to land in");
-const _: () = assert!(
-    FRAMES >= HARD_PAGES - ANCESTOR_PAGES + DEMAND_PAGES,
-    "convergence: a page the view reads could have to give up another the view reads"
-);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Hold {

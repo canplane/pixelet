@@ -7,7 +7,7 @@
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::global::Global;
-use xpute_runtime::ipc::stream::Stream;
+use xpute_runtime::ipc::stream::{Stream, WORD};
 use xpute_runtime::mem::base::ptr_at;
 
 use crate::gpu::api_spec::{op, stream};
@@ -25,7 +25,7 @@ static GPU: Gpu = Gpu(());
 /// as long as the module runs.
 pub unsafe fn install(at: u32) -> u32 {
     // SAFETY: the caller's range.
-    let words = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(at as usize), (stream::BYTES / 4) as usize) };
+    let words = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(at as usize), stream::BYTES as usize / WORD) };
     STREAM.set(Some(Stream::new(words, HEAD)));
     at
 }
@@ -61,10 +61,14 @@ pub fn frame_room() -> bool {
     true
 }
 
-/// Leaves `stream::RESERVE` for what cannot wait.
+// Each upload's arguments, which its record takes as an array of this length.
+const WRITE_BUFFER_ARGS: usize = 2;
+const WRITE_TEXTURE_ARGS: usize = 4;
+
+/// Whether an upload of `bytes` fits, leaving `stream::RESERVE` for what cannot wait.
 pub fn room(bytes: u32) -> bool {
-    // An upload's record carries at most six arguments.
-    STREAM.get(|| None).as_ref().is_some_and(|s| s.fits(6, Some(bytes as usize), stream::RESERVE as usize))
+    let args = if WRITE_BUFFER_ARGS > WRITE_TEXTURE_ARGS { WRITE_BUFFER_ARGS } else { WRITE_TEXTURE_ARGS };
+    STREAM.get(|| None).as_ref().is_some_and(|s| s.fits(args, Some(bytes as usize), stream::RESERVE as usize))
 }
 
 fn put(code: u32, args: &[u32]) {
@@ -121,11 +125,13 @@ impl Gpu {
     }
 
     pub fn write_buffer(&self, id: u32, offset: u32, bytes: &[u8]) {
-        stream().record(op::WRITE_BUFFER, &[id, offset], &[], Some(bytes));
+        let args: [u32; WRITE_BUFFER_ARGS] = [id, offset];
+        stream().record(op::WRITE_BUFFER, &args, &[], Some(bytes));
     }
 
     pub fn write_texture(&self, id: u32, layer: u32, width: u32, height: u32, bytes: &[u8]) {
-        stream().record(op::WRITE_TEXTURE, &[id, layer, width, height], &[], Some(bytes));
+        let args: [u32; WRITE_TEXTURE_ARGS] = [id, layer, width, height];
+        stream().record(op::WRITE_TEXTURE, &args, &[], Some(bytes));
     }
 
     pub fn encoder(&self, id: u32) {

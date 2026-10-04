@@ -10,13 +10,21 @@
 
 pub const END: usize = 0;
 
+/// A stream word's bytes.
+pub const WORD: usize = size_of::<u32>();
+
 /// A record's words: its op and count, `args`, and `bytes` as their count then words.
 pub const fn record_words(args: usize, bytes: Option<usize>) -> usize {
     2 + args
         + match bytes {
-            Some(b) => 1 + b.div_ceil(4),
+            Some(b) => 1 + b.div_ceil(WORD),
             None => 0,
         }
+}
+
+/// A record's size as a stream's room is counted.
+pub const fn record_bytes(args: usize, bytes: Option<usize>) -> usize {
+    record_words(args, bytes) * WORD
 }
 
 pub struct Stream {
@@ -46,7 +54,7 @@ impl Stream {
     }
 
     pub fn left(&self) -> usize {
-        (self.words.len() - self.head - self.len) * 4
+        (self.words.len() - self.head - self.len) * WORD
     }
 
     pub fn publish(&mut self) {
@@ -57,7 +65,7 @@ impl Stream {
     /// Whether a record of `args` words and `bytes` would fit whole with
     /// `reserve` bytes still left after it.
     pub fn fits(&self, args: usize, bytes: Option<usize>, reserve: usize) -> bool {
-        self.left() >= record_words(args, bytes) * 4 + reserve
+        self.left() >= record_bytes(args, bytes) + reserve
     }
 
     /// A bug past the range reports its caller, which names the stream and the record.

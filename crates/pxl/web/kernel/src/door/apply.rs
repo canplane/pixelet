@@ -10,17 +10,17 @@ use xpute_runtime::abi::cmd as xpute_cmd;
 use xpute_runtime::mem::base::{off_of, off_of_slice};
 
 fn packet<'a>(pkt: &Option<&'a [u8]>) -> Result<&'a [u8], MarshalError> {
-    pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))
+    or_refuse(*pkt, Errno::EBADMSG)
 }
 
 /// What the decoder cannot see, a value out of the range the kernel takes or a
 /// handle it does not hold, is refused here: past the door nothing checks it again.
+fn or_refuse<T>(v: Option<T>, errno: Errno) -> Result<T, MarshalError> {
+    v.ok_or_else(|| MarshalError::new(errno))
+}
+
 fn refuse_unless(valid: bool, errno: Errno) -> Result<(), MarshalError> {
-    if valid {
-        Ok(())
-    } else {
-        Err(MarshalError::new(errno))
-    }
+    or_refuse(valid.then_some(()), errno)
 }
 
 fn on_earth(lon: f64, lat: f64) -> bool {
@@ -126,10 +126,10 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             holding.object_tier = p.tier;
             match p.tool {
                 abi::ActiveTool::Object => {
-                    holding.object_cube = placeable_cube(p.channel, p.value).ok_or_else(|| MarshalError::new(Errno::EINVAL))?;
+                    holding.object_cube = or_refuse(placeable_cube(p.channel, p.value), Errno::EINVAL)?;
                 }
                 abi::ActiveTool::Decor => {
-                    holding.decor_id = u8::try_from(p.value).ok().and_then(DecorId::of).ok_or_else(|| MarshalError::new(Errno::EINVAL))?;
+                    holding.decor_id = or_refuse(u8::try_from(p.value).ok().and_then(DecorId::of), Errno::EINVAL)?;
                 }
                 abi::ActiveTool::Pointer | abi::ActiveTool::Eraser => {}
             }
@@ -286,8 +286,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         Command::PREVIEW_OPEN => {
             let p = abi::PreviewOpen::read(packet(pkt)?)?;
             refuse_unless(pxl_render::gpu::surface::surface(p.surface).is_some(), Errno::EBADF)?;
-            let number = u8::try_from(p.number).map_err(|_| MarshalError::new(Errno::EINVAL))?;
-            refuse_unless(crate::layer::character::preview::preview_open(p.surface, p.group, number), Errno::EINVAL)?;
+            refuse_unless(crate::layer::character::preview::preview_open(p.surface, p.group, p.number), Errno::EINVAL)?;
             applied(s)
         }
         Command::PREVIEW_CLOSE => {
