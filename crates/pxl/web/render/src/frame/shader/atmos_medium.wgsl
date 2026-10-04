@@ -22,17 +22,18 @@ struct Atmosphere {
   exposure: f32,
   max_adaptation: f32,
   adaptation: f32,
-  // 0 while the sun's sky is the one shown.
   moon_dir: vec3f,
   moon_light: f32,
-  // `land` is drawn at the elevation under the eye: a sea-level surface would
-  // leave the terrain floating, its chunk walls showing at the edge.
-  land: vec3f,
-  land_altitude_km: f32,
   // The same for every pixel, so the CPU computes it once.
   sun_seen: vec3f,
-  _p1: f32,
-  _p2: vec4f,
+  // The map center's longitude, radians; its latitude is the frame's globe's.
+  center_lon: f32,
+  // A moonless sky's irradiance on an up-facing face. It lights the ground and
+  // is not drawn: at the gain that lets the ground read, the sky drew pale blue.
+  night_sky: vec3f,
+  // The Earth's face is drawn at the elevation under the eye: a sea-level
+  // surface would leave the terrain floating, its chunk walls showing at the edge.
+  land_altitude_km: f32,
   cloud_base: vec2u,
   cloud_frac: vec2f,
   cloud_time: f32,
@@ -66,17 +67,18 @@ fn atmos_max_adaptation() -> f32 { return atmos_words[6].z; }
 fn atmos_adaptation() -> f32 { return atmos_words[6].w; }
 fn atmos_moon_dir() -> vec3f { return atmos_words[7].xyz; }
 fn atmos_moon_light() -> f32 { return atmos_words[7].w; }
-fn atmos_land() -> vec3f { return atmos_words[8].xyz; }
-fn atmos_land_altitude_km() -> f32 { return atmos_words[8].w; }
-fn atmos_sun_seen() -> vec3f { return atmos_words[9].xyz; }
-fn atmos_cloud_base() -> vec2u { return bitcast<vec2u>(atmos_words[11].xy); }
-fn atmos_cloud_frac() -> vec2f { return atmos_words[11].zw; }
-fn atmos_cloud_time() -> f32 { return atmos_words[12].x; }
-fn atmos_cloud_count() -> u32 { return bitcast<u32>(atmos_words[12].y); }
-fn atmos_cloud_altitude_km() -> f32 { return atmos_words[12].z; }
-fn atmos_cloud_gone_km() -> f32 { return atmos_words[12].w; }
-fn atmos_haze_extinction() -> f32 { return atmos_words[13].x; }
-fn atmos_haze_scale_height() -> f32 { return atmos_words[13].y; }
+fn atmos_sun_seen() -> vec3f { return atmos_words[8].xyz; }
+fn atmos_center_lon() -> f32 { return atmos_words[8].w; }
+fn atmos_night_sky() -> vec3f { return atmos_words[9].xyz; }
+fn atmos_land_altitude_km() -> f32 { return atmos_words[9].w; }
+fn atmos_cloud_base() -> vec2u { return bitcast<vec2u>(atmos_words[10].xy); }
+fn atmos_cloud_frac() -> vec2f { return atmos_words[10].zw; }
+fn atmos_cloud_time() -> f32 { return atmos_words[11].x; }
+fn atmos_cloud_count() -> u32 { return bitcast<u32>(atmos_words[11].y); }
+fn atmos_cloud_altitude_km() -> f32 { return atmos_words[11].z; }
+fn atmos_cloud_gone_km() -> f32 { return atmos_words[11].w; }
+fn atmos_haze_extinction() -> f32 { return atmos_words[12].x; }
+fn atmos_haze_scale_height() -> f32 { return atmos_words[12].y; }
 
 // Can be above the atmosphere: the view from space.
 fn camera_r() -> f32 {

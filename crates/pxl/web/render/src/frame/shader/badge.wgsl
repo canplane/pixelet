@@ -122,7 +122,7 @@ fn fs(i: VertexOut) -> FragOut {
   var o: FragOut;
   // The sheet is premultiplied so its mips filter without a dark fringe.
   let color = texel.rgb / max(texel.a, 1e-4);
-  o.color = vec4f(to_srgb(grade(color) * vignette_of(i.clip.xy, frame_viewport(), frame_vignette())), texel.a);
+  o.color = vec4f(to_srgb(color * vignette_of(i.clip.xy, frame_viewport(), frame_vignette())), texel.a);
   o.depth = i.upright_z;
   return o;
 }

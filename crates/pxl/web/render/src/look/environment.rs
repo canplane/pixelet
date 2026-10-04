@@ -1,21 +1,17 @@
 // pxl-render/look/environment.rs
 
-//! The lane the frame, sky and atmosphere uniforms are laid out from: a theme's
-//! eased floats, and sun and moon light taken through the air. Directions are
+//! The lane the frame, sky and atmosphere uniforms are laid out from: sun and
+//! moon light taken through the air. The light from everywhere else is the
+//! sky's own, which the shaders read from its tables. Directions are
 //! in the map's axes (X east, Y north, Z up), as is the sky.
 
 use pxl_spec::space::v3::{dot3, norm3, V3};
 
-use crate::look::atmosphere::{moon_phase_light, sun_light, white, MOONLIT_SKY};
+use crate::look::atmosphere::{light_at, moon_phase_light, white, MOON_LIGHT, NIGHT_COLOR};
 
-/// Ambient color and intensity (4), night (1).
-pub const THEME_FLOATS: usize = 5;
-
-const AMBIENT: usize = 0;
-pub const NIGHT: usize = 4;
-
-/// Lighting run (24), stars' fade and clock (4), air (4), second light (8),
-/// sun direction (4), stars' frame (12), moon direction and sky brightness (4).
+/// Lighting run (24), stars' fade, clock and the map center's longitude (4),
+/// air (4), second light (8), sun direction (4), stars' frame (12), moon
+/// direction and sky brightness (4).
 pub const ENV_FLOATS: usize = 60;
 pub const ENV_FOG_NEAR: usize = 7;
 pub const ENV_FOG_FAR: usize = 11;
@@ -26,24 +22,19 @@ pub const ENV_SUN: usize = 40;
 pub const ENV_STARS: usize = 44;
 pub const ENV_MOON: usize = 56;
 
-/// #9fb4d6, linear.
-const MOON_COLOR: [f32; 3] = [0.3467, 0.4564, 0.6724];
-
 #[derive(Clone, Copy)]
 pub struct Light {
-    pub theme: [f32; THEME_FLOATS],
     pub sun: V3,
     pub moon: V3,
-    pub moon_intensity: f64,
+    /// The stars' fade in from the first frame, 0 to 1.
     pub stars: f64,
     pub time: f64,
     pub fog_near: f64,
     pub fog_far: f64,
-    /// Keeps a phone's night from going black.
-    pub floor: f64,
     pub altitude_km: f64,
     pub km_per_u: f64,
     pub latitude: f64,
+    pub longitude: f64,
     /// Where the sky draws its own ground, so the terrain does not stand over it.
     pub ground_km: f64,
     /// The equatorial frame to the local one, as rows.
@@ -58,14 +49,22 @@ fn luminance(c: [f64; 3]) -> f64 {
 }
 
 pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
-    let c = &light.theme;
     // Both lights are summed so the light does not snap from one direction to the
     // other where their intensities cross at dusk; the brighter casts the shadow.
     let sun_dir = norm3(&light.sun);
-    let sun_color = sun_light(light.altitude_km, sun_dir[2], white());
-    let moon_color = MOON_COLOR.map(|v| v as f64 * light.moon_intensity);
-    let sun = (sun_dir, sun_color);
+    let w = white();
+    let sun_t = light_at(light.altitude_km, sun_dir[2]);
+    let sun_color: [f64; 3] = core::array::from_fn(|k| sun_t[k] * w[k]);
     let moon_dir = norm3(&light.moon);
+    // Night as the sky shows it, past which the stars are lost in the day.
+    let night = 1.0 - smoothstep(-0.1, 0.0, sun_dir[2]);
+    let elongation = libm::acos(dot3(&sun_dir, &moon_dir).clamp(-1.0, 1.0));
+    let phase = moon_phase_light(core::f64::consts::PI - elongation);
+    let through = light_at(light.altitude_km, moon_dir[2]);
+    // By day the sun leaves the Moon nothing, so its light and its sky are
+    // not worked out at all.
+    let moon_color: [f64; 3] = core::array::from_fn(|k| NIGHT_COLOR[k] * MOON_LIGHT * phase * night * through[k] * w[k]);
+    let sun = (sun_dir, sun_color);
     let moon = (moon_dir, moon_color);
     let (first, other) = if luminance(moon_color) > luminance(sun_color) { (moon, sun) } else { (sun, moon) };
     for (at, (d, color)) in [(0, first), (ENV_OTHER_LIGHT, other)] {
@@ -73,13 +72,11 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
         put3(o, at + 4, [color[0] as f32, color[1] as f32, color[2] as f32]);
     }
     o[ENV_FOG_NEAR] = light.fog_near as f32;
-    let ambient_i = c[AMBIENT + 3];
-    put3(o, 8, [c[AMBIENT] * ambient_i, c[AMBIENT + 1] * ambient_i, c[AMBIENT + 2] * ambient_i]);
     o[ENV_FOG_FAR] = light.fog_far as f32;
-    o[15] = light.floor as f32;
 
-    o[ENV_SKY] = light.stars as f32;
+    o[ENV_SKY] = (light.stars * night) as f32;
     o[ENV_SKY + 1] = light.time as f32;
+    o[ENV_SKY + 2] = light.longitude as f32;
 
     o[ENV_AIR] = light.altitude_km as f32;
     o[ENV_AIR + 1] = light.km_per_u as f32;
@@ -87,11 +84,8 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     o[ENV_AIR + 3] = light.ground_km as f32;
     put3(o, ENV_SUN, f32s(&sun_dir));
 
-    // Faded out as the sun reaches the horizon, past which the eye is day-adapted.
-    let elongation = libm::acos(dot3(&sun_dir, &moon_dir).clamp(-1.0, 1.0));
-    let night = 1.0 - smoothstep(-0.1, 0.0, sun_dir[2]);
     put3(o, ENV_MOON, f32s(&moon_dir));
-    o[ENV_MOON + 3] = (MOONLIT_SKY * moon_phase_light(core::f64::consts::PI - elongation) * night) as f32;
+    o[ENV_MOON + 3] = (MOON_LIGHT * phase * night) as f32;
 
     let columns: [V3; 3] = core::array::from_fn(|k| light.star_frame.map(|row| row[k]));
     for (k, column) in columns.iter().enumerate() {

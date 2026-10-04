@@ -11,12 +11,14 @@ use crate::frame::shader::record::{PIPELINE_ATMOS_EXPOSURE, PIPELINE_ATMOS_MULTI
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::clouds::CloudField;
+use crate::gpu::image_map::ImageMap;
+use crate::gpu::layers::Mips;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::look::atmosphere as model;
-use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_SUN};
+use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_SKY, ENV_SUN};
 
 /// Two past the last field: the device rounds the struct up to a 16-byte row.
-pub const ATMOS_FLOATS: usize = 56;
+pub const ATMOS_FLOATS: usize = 52;
 /// Offsets in floats; record.test.rs holds them to the struct.
 pub(crate) const RAYLEIGH_SCATTERING: usize = 0;
 pub(crate) const BOTTOM_RADIUS: usize = 3;
@@ -40,20 +42,24 @@ pub(crate) const MAX_ADAPTATION: usize = 26;
 pub(crate) const ADAPTATION: usize = 27;
 pub(crate) const MOON_DIR: usize = 28;
 pub(crate) const MOON_LIGHT: usize = 31;
-pub(crate) const LAND: usize = 32;
-pub(crate) const LAND_ALTITUDE: usize = 35;
-pub(crate) const SUN_SEEN: usize = 36;
-pub(crate) const CLOUD_BASE: usize = 44;
-pub(crate) const CLOUD_FRAC: usize = 46;
-pub(crate) const CLOUD_TIME: usize = 48;
-pub(crate) const CLOUD_COUNT: usize = 49;
-pub(crate) const CLOUD_ALTITUDE: usize = 50;
-pub(crate) const CLOUD_GONE: usize = 51;
-pub(crate) const HAZE_EXTINCTION: usize = 52;
-pub(crate) const HAZE_SCALE_HEIGHT: usize = 53;
+pub(crate) const SUN_SEEN: usize = 32;
+pub(crate) const CENTER_LON: usize = 35;
+pub(crate) const NIGHT_SKY: usize = 36;
+pub(crate) const LAND_ALTITUDE: usize = 39;
+pub(crate) const CLOUD_BASE: usize = 40;
+pub(crate) const CLOUD_FRAC: usize = 42;
+pub(crate) const CLOUD_TIME: usize = 44;
+pub(crate) const CLOUD_COUNT: usize = 45;
+pub(crate) const CLOUD_ALTITUDE: usize = 46;
+pub(crate) const CLOUD_GONE: usize = 47;
+pub(crate) const HAZE_EXTINCTION: usize = 48;
+pub(crate) const HAZE_SCALE_HEIGHT: usize = 49;
 
-/// Bindings 8 through 15, six entries of five words.
-pub const AIR_WORDS: usize = 30;
+/// Bindings 8 through 16, seven entries of five words.
+pub const AIR_WORDS: usize = 35;
+
+/// The size download_earth writes the Earth's face at.
+const EARTH_SIZE: (u32, u32) = (2048, 1024);
 
 /// Transmittance, multiple scattering, sky view, exposure, moonlit sky.
 pub(crate) const SIZES: [(u32, u32); 5] = [(256, 64), (32, 32), (192, 108), (2, 1), (192, 108)];
@@ -81,6 +87,7 @@ pub struct Atmosphere {
     moon_drawn_for: Option<(f32, f32)>,
     sun_mu: f32,
     moon_mu: f32,
+    earth: ImageMap,
 }
 
 impl Atmosphere {
@@ -93,7 +100,7 @@ impl Atmosphere {
             (RAYLEIGH_SCATTERING, model::RAYLEIGH_SCATTERING),
             (OZONE_ABSORPTION, model::OZONE_ABSORPTION),
             (WHITE, white),
-            (LAND, model::land()),
+            (NIGHT_SKY, core::array::from_fn(|k| model::NIGHT_COLOR[k] * model::NIGHT_SKY * white[k])),
         ] {
             for (w, v) in words[at..at + 3].iter_mut().zip(rgb) {
                 *w = v as f32;
@@ -175,6 +182,7 @@ impl Atmosphere {
             moon_drawn_for: None,
             sun_mu: 1.0,
             moon_mu: 1.0,
+            earth: ImageMap::new(g, EARTH_SIZE.0, EARTH_SIZE.1),
         }
     }
 
@@ -186,7 +194,13 @@ impl Atmosphere {
         e[15..20].copy_from_slice(&[11, resource::SAMPLER, self.sampler, 0, 0]);
         e[20..25].copy_from_slice(&[13, resource::VIEW, self.views[EXPOSURE_TEXEL], 0, 0]);
         e[25..30].copy_from_slice(&[15, resource::VIEW, self.views[MOON_VIEW], 0, 0]);
+        e[30..35].copy_from_slice(&[16, resource::VIEW, self.earth.view, 0, 0]);
         e
+    }
+
+    /// This month's Earth: the kernel draws nothing before its image has come.
+    pub fn earth_step(&mut self, g: &Gpu, mips: &Mips, image: fn() -> Option<u32>) {
+        self.earth.step(g, mips, image);
     }
 
     /// `up` is straight up where the eye stands, which every light and ray height is measured from.
@@ -199,6 +213,7 @@ impl Atmosphere {
         self.words[CAMERA_ALTITUDE] = altitude_km;
         self.words[KM_PER_U] = env[ENV_AIR + 1];
         self.words[LAND_ALTITUDE] = env[ENV_AIR + 3];
+        self.words[CENTER_LON] = env[ENV_SKY + 2];
         let height = |d: &[f32]| (d[0] as f64 * up[0] + d[1] as f64 * up[1] + d[2] as f64 * up[2]) as f32;
         (self.sun_mu, self.moon_mu) = (height(sun), height(moon));
         for (w, v) in self.words[SUN_SEEN..SUN_SEEN + 3].iter_mut().zip(model::light_at(altitude_km as f64, self.sun_mu as f64)) {

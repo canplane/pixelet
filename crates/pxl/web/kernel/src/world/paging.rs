@@ -37,14 +37,18 @@ pub const DEMAND_PAGES: u32 = OBSERVERS * LEVEL_DEMAND_PAGES * LEVELS;
 /// A destination's line from its z16 page to the top.
 pub const DESTINATION_PAGES: u32 = LEVELS;
 
+/// The lines over the faults, every level's but the finest.
+const ANCESTOR_PAGES: u32 = OBSERVERS * LEVEL_DEMAND_PAGES * (LEVELS - 1);
+
 /// What is held hard at most. A new consumer that cannot take a coarser
 /// answer would declare its pages here like a destination.
-pub const HARD_PAGES: u32 = Floor::PAGES + DESTINATION_PAGES;
+pub const HARD_PAGES: u32 = Floor::PAGES + DESTINATION_PAGES + ANCESTOR_PAGES;
 
 /// A frame for a page nothing holds hard to land in.
 const WORKSPACE: u32 = 1;
 
-pub const FRAMES: u32 = HARD_PAGES + DEMAND_PAGES;
+/// The faults and their lines share each level's ring, so the view takes `DEMAND_PAGES` in all.
+pub const FRAMES: u32 = Floor::PAGES + DESTINATION_PAGES + DEMAND_PAGES;
 
 pub const RECORDS: u32 = 1 + FRAMES;
 
@@ -54,7 +58,10 @@ pub const ASKS: u32 = HARD_PAGES + DEMAND_PAGES + FRAMES;
 const ENTRIES: u32 = FRAMES + ASKS;
 
 const _: () = assert!(FRAMES >= HARD_PAGES + WORKSPACE, "safety: no frame for a page nothing holds hard to land in");
-const _: () = assert!(FRAMES >= HARD_PAGES + DEMAND_PAGES, "convergence: a page the view reads could have to give up another the view reads");
+const _: () = assert!(
+    FRAMES >= HARD_PAGES - ANCESTOR_PAGES + DEMAND_PAGES,
+    "convergence: a page the view reads could have to give up another the view reads"
+);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Hold {
@@ -266,7 +273,7 @@ impl<L: Layer> Paging<L> {
     fn hold(&self, p: LevelPage) -> Hold {
         let Some(e) = self.entry(p) else { return Hold::Cache };
         match e.ask.map(|a| a.why) {
-            Some(Why::Floor | Why::Destination) => Hold::Hard,
+            Some(Why::Floor | Why::Destination | Why::Ancestor) => Hold::Hard,
             Some(Why::Fault) => Hold::Demand,
             Some(Why::Hint) | None => Hold::Cache,
         }

@@ -58,12 +58,7 @@ export function start_sched(): void {
     const { width: w, height: h, dpr } = driver();
     const width = Math.max(1, w);
     const height = Math.max(1, h);
-    const now = new Date();
-    const unix_ms = now.getTime();
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
-    const seconds = now.getSeconds();
-    now.setHours(0, 0, 0, 0);
+    const unix_ms = Date.now();
     CORE_DOORBELL.send(
       0,
       Command.WORLD_FRAME,
@@ -76,10 +71,6 @@ export function start_sched(): void {
         interactive: grant.interactive,
         credits: NET_CREDITS,
         unix_ms,
-        hours,
-        minutes,
-        seconds,
-        day_start_ms: now.getTime(),
       }),
     );
   }, (run) => requestAnimationFrame(run));

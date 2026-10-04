@@ -18,7 +18,7 @@ fn draw_translation() -> vec3f { return draw_words[0].xyz; }
 
 struct VertexOut {
   @builtin(position) clip: vec4f,
-  @location(0) color: vec3f,
+  @location(0) color: vec4f,
 };
 
 // Two triangles: which end, and which side of the segment.
@@ -26,7 +26,7 @@ const ENDS = array<u32, 6>(0u, 0u, 1u, 1u, 0u, 1u);
 const SIDES = array<f32, 6>(-1.0, 1.0, -1.0, -1.0, 1.0, 1.0);
 
 @vertex
-fn vs(@builtin(vertex_index) vi: u32, @location(0) a: vec3f, @location(1) color: vec3f, @location(2) b: vec3f) -> VertexOut {
+fn vs(@builtin(vertex_index) vi: u32, @location(0) a: vec3f, @location(1) color: vec4f, @location(2) b: vec3f) -> VertexOut {
   let ca = frame_view_proj() * vec4f(on_globe(a + draw_translation()), 1.0);
   let cb = frame_view_proj() * vec4f(on_globe(b + draw_translation()), 1.0);
   let viewport = frame_viewport();
@@ -43,5 +43,5 @@ fn vs(@builtin(vertex_index) vi: u32, @location(0) a: vec3f, @location(1) color:
 
 @fragment
 fn fs(i: VertexOut) -> @location(0) vec4f {
-  return vec4f(to_srgb(i.color), 1.0);
+  return vec4f(to_srgb(i.color.rgb), i.color.a);
 }

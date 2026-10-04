@@ -21,10 +21,6 @@ fn sky_mapped() -> f32 { return sky_words[3].w; }
 // Far past white once exposed, so the air in front colors it.
 const SUN_DISC: f32 = 4.0;
 const SUN_LIMB: f32 = 0.6;
-// At true size each disc is eight pixels on a phone, smaller than anyone
-// remembers; four is chosen by look. Only size is exaggerated, not light or phase.
-const DISC_SCALE: f32 = 4.0;
-const MOON_ANGULAR_RADIUS: f32 = 0.004522;
 const MOON_ALBEDO: f32 = 0.12;
 // The map's mean over the disc (printed by download_moon) scales it to MOON_ALBEDO.
 const MOON_MAP_RADIUS_TEXELS: f32 = 256.0;
@@ -109,7 +105,6 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   let moon_a = length(across);
   let moon_w = max(fwidth(moon_a), 1e-4);
   var color = beyond(air_along(dir), sky_fill()) + sun_disc(dir, r, sun_a, sun_w) + moon_disc(dir, r, across, moon_a, moon_w) + glare(dir);
-  color = shoulder(color);
-  color += (hash(v.clip.xy) - 0.5) * (1.0 / 255.0);
-  return vec4f(finish(color, v.clip.xy), 1.0);
+  // On the encoded value, where a step is one step at every brightness.
+  return vec4f(finish(color, v.clip.xy) + (hash(v.clip.xy) - 0.5) / 255.0, 1.0);
 }

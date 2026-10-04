@@ -169,3 +169,20 @@ fn observing_a_moving_eye_allocates_nothing_once_it_has_held_the_most() {
     let (again, ()) = crate::allocations::during(|| walk(&mut pyramid));
     assert_eq!(again, 0, "observing along the path again allocated");
 }
+
+/// What Cesium's preloadAncestors does, the demand does on its own: the line
+/// over every demanded page is asked for, with no room for speculation, so a
+/// page not yet come is drawn from the one just over it, never from the floor.
+#[test]
+fn the_line_over_every_demanded_page_is_asked_for() {
+    let _serial = crate::serial();
+    let o = the_observation();
+    let mut pyramid = Pyramid::<PoiPage>::default();
+    pyramid.observe(Some(&o), None, core::iter::empty(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
+    let asked: HashSet<LevelPage> = pyramid.asks.keys().copied().collect();
+    for &p in pyramid.demand() {
+        for q in std::iter::successors(Some(p), |q| (q.level < TOP_LEVEL).then(|| q.parent())).skip(1) {
+            assert!(asked.contains(&q), "{q:?} over {p:?} is asked for");
+        }
+    }
+}

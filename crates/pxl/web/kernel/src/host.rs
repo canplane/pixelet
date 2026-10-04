@@ -96,27 +96,14 @@ pub fn development() -> bool {
     *DEVELOPMENT.get(|| false)
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct LocalTime {
-    pub unix_ms: f64,
-    pub hours: f64,
-    pub minutes: f64,
-    pub seconds: f64,
-    pub day_start_ms: f64,
-}
+static WALL_MS: Global<f64> = Global::new();
 
-static LOCAL_TIME: Global<LocalTime> = Global::new();
-
-pub fn set_local_time(t: LocalTime) {
-    LOCAL_TIME.set(t);
-}
-
-pub fn local_time() -> LocalTime {
-    *LOCAL_TIME.get(LocalTime::default)
+pub fn set_wall_now(unix_ms: f64) {
+    WALL_MS.set(unix_ms);
 }
 
 pub fn wall_now() -> f64 {
-    local_time().unix_ms
+    *WALL_MS.get(|| 0.0)
 }
 
 /// One reading of the allocator, so compared fields are from one moment.

@@ -9,7 +9,7 @@ asset/
 ├── actor/      character and companion models (Kenney)
 ├── cube/       the texture pack: terrain/ and block/ at 256², original/ at source size
 ├── decor/      trees, boats, cars, trains (Kenney)
-└── sky/        the Moon's near side (NASA's Scientific Visualization Studio)
+└── sky/        the Moon's near side and the Earth's twelve months (NASA)
 ```
 
 ## What to run, and when
@@ -59,3 +59,15 @@ deno task download:moon
 It fetches the CGI Moon Kit's 1K color map, cuts the near side, takes it to
 gray reflectance and writes `sky/moon.png`, and prints the face's mean,
 which `sky.wgsl`'s `MOON_MAP_MEAN` has to equal. Run the ingest afterward.
+
+### After changing the Earth's maps
+
+```sh
+deno task download:earth
+```
+
+It fetches Blue Marble Next Generation's twelve months of 2004 (NASA's Earth
+Observatory, as the Scientific Visualization Studio serves them), takes each
+to 2048 × 1024 in linear light and writes `sky/earth/<month>.webp`; the floor
+every tile is drawn over wears the month the calendar is in. Run the ingest
+afterward.

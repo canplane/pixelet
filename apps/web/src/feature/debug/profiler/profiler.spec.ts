@@ -29,7 +29,6 @@ export const EFFECT_NAMES = [
   "destination",
   "view",
   "geocode",
-  "theme",
   "decor",
   "chunk_sources",
   "hover",

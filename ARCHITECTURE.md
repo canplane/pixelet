@@ -253,13 +253,13 @@ What the policy says: the frame is the 25th percentile of recent gaps between fr
 
 **The phases**, in the order that is their priority:
 
-| Phase         | What                                                                                                                                                                 |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `interaction` | input, camera damping, the environment (sun, moon, theme), the view's frame of reference, the companion (the player's character at the map center); O(1), unbudgeted |
-| `visible`     | the chunk scheduler's pass                                                                                                                                           |
-| `content`     | what is about to be on screen; guaranteed `content_share` of the budget                                                                                              |
-| `cosmetic`    | what only looks better for running (debug gizmos)                                                                                                                    |
-| `report`      | the profiler, last, so it sees everything                                                                                                                            |
+| Phase         | What                                                                                                                                                          |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `interaction` | input, camera damping, the environment (sun, moon), the view's frame of reference, the companion (the player's character at the map center); O(1), unbudgeted |
+| `visible`     | the chunk scheduler's pass                                                                                                                                    |
+| `content`     | what is about to be on screen; guaranteed `content_share` of the budget                                                                                       |
+| `cosmetic`    | what only looks better for running (debug gizmos)                                                                                                             |
+| `report`      | the profiler, last, so it sees everything                                                                                                                     |
 
 **The tasks** run on `embassy-executor`'s raw executor, which the module installs. The frame is a task rather than a function so that the order above is its own, and no task depends on the order the executor happens to poll them in.
 

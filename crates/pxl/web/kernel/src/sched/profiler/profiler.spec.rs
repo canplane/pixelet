@@ -155,7 +155,6 @@ pub const EFFECT_NAMES: &[&str] = &[
     "destination",
     "view",
     "geocode",
-    "theme",
     "decor",
     "chunk_sources",
     "hover",
@@ -175,19 +174,18 @@ pub enum EffectName {
     destination = 5,
     view = 6,
     geocode = 7,
-    theme = 8,
-    decor = 9,
-    chunk_sources = 10,
-    hover = 11,
-    puck = 12,
-    objects = 13,
-    assets = 14,
-    pump = 15,
+    decor = 8,
+    chunk_sources = 9,
+    hover = 10,
+    puck = 11,
+    objects = 12,
+    assets = 13,
+    pump = 14,
 }
 
 impl EffectName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [EffectName; 16] = [
+    pub const ALL: [EffectName; 15] = [
         EffectName::navigation,
         EffectName::bootstrap,
         EffectName::geolocation,
@@ -196,7 +194,6 @@ impl EffectName {
         EffectName::destination,
         EffectName::view,
         EffectName::geocode,
-        EffectName::theme,
         EffectName::decor,
         EffectName::chunk_sources,
         EffectName::hover,

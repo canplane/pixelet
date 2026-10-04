@@ -14,7 +14,7 @@ use pxl_spec::asset::ingested::Asset;
 use pxl_spec::space::pvf3::ivec;
 use xpute_core::math::scalar::round;
 
-use crate::host::handheld;
+use crate::host::{handheld, wall_now};
 use crate::io::load::{load_image, Load};
 use crate::kernel::kernel;
 use crate::layer::billboard::sheet::billboard_sheet;
@@ -28,6 +28,34 @@ use crate::text::text_raster;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::stage::set_host_frame_stat;
 use crate::world::frame::resolution::resolution_observe;
+
+/// Blue Marble's months of 2004: the floor every tile is drawn over wears
+/// the one the calendar is in, as the sky follows the real one. Taken once,
+/// at the first frame that has it.
+const EARTH: [Asset; 12] = [
+    Asset::sky_earth_01_webp,
+    Asset::sky_earth_02_webp,
+    Asset::sky_earth_03_webp,
+    Asset::sky_earth_04_webp,
+    Asset::sky_earth_05_webp,
+    Asset::sky_earth_06_webp,
+    Asset::sky_earth_07_webp,
+    Asset::sky_earth_08_webp,
+    Asset::sky_earth_09_webp,
+    Asset::sky_earth_10_webp,
+    Asset::sky_earth_11_webp,
+    Asset::sky_earth_12_webp,
+];
+
+/// The month, 0 for January, of a Unix time in UTC (Hinnant's civil_from_days).
+fn month_of(unix_ms: f64) -> usize {
+    let z = libm::floor(unix_ms / 86_400_000.0) as i64 + 719_468;
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    (if mp < 10 { mp + 2 } else { mp - 10 }) as usize
+}
 use crate::world::frame::view::{globe_anchor_local, view};
 
 pub fn stage_write(resolution: f64) {
@@ -63,6 +91,10 @@ pub fn stage_write(resolution: f64) {
 }
 
 pub fn stage_render() {
+    // Nothing is drawn before the floor: its arrival asks for the next turn.
+    if load_image(Load::Asset(EARTH[month_of(wall_now())])).is_none() {
+        return;
+    }
     let lists = kernel().sched.draw.take();
     let models = &kernel().sched.models;
     let mut decor = [(0u32, None, [0.0f32; 3]); GROUPS];
@@ -95,6 +127,7 @@ pub fn stage_render() {
         cases: &cases[..case_cnt],
         sheet: || load_image(Load::Sheet),
         moon: || load_image(Load::Asset(Asset::sky_moon_png)),
+        earth: || load_image(Load::Asset(EARTH[month_of(wall_now())])),
         text: text_raster,
         atlas: billboard_sheet(),
         handheld: handheld(),

@@ -33,7 +33,7 @@ fn walk(dir: &Path, base: &Path, out: &mut Vec<(String, PathBuf)>) -> Result<(),
             continue;
         }
         let rel = path.strip_prefix(base).map_err(|e| e.to_string())?.to_string_lossy().replace('\\', "/");
-        if (rel.ends_with(".glb") || rel.ends_with(".png")) && !rel.starts_with("cube/original/") {
+        if (rel.ends_with(".glb") || rel.ends_with(".png") || rel.ends_with(".webp")) && !rel.starts_with("cube/original/") {
             out.push((rel, path));
         }
     }

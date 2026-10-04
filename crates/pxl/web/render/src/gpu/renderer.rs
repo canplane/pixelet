@@ -25,8 +25,8 @@ use crate::gpu::api_spec::{dimension, format, load, resource, surface_role};
 use crate::gpu::arena::{arena_buffer, arena_bytes, arena_lose};
 use crate::gpu::atmosphere::{Atmosphere, AIR_WORDS};
 use crate::gpu::clouds::{self, CloudPass};
+use crate::gpu::image_map::ImageMap;
 use crate::gpu::layers::{Layers, Mips};
-use crate::gpu::moon::MoonMap;
 use crate::gpu::pass::badges::BadgePass;
 use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::impostor::{Extent, ImpostorPass};
@@ -72,6 +72,8 @@ pub(crate) const SKY_MAPPED: usize = 15;
 const BOX_VERTICES: u32 = 36;
 const DRAWS_INITIAL: u32 = 256 * UNIFORM_FLOATS as u32;
 const MB: f64 = 1_048_576.0;
+/// The Moon's near side as download_moon cuts it; sky.wgsl reads its half.
+const MOON_TEX_SZ: u32 = 512;
 
 /// In the order the frame encodes them; the profiler's GPU_SPAN_NAMES match.
 pub const GPU_SPANS: [&str; 7] = ["air", "shadow", "prepass", "ao", "world", "badges", "cases"];
@@ -95,6 +97,7 @@ pub struct FrameInput<'a> {
     pub cases: &'a [(u32, u32, u32)],
     pub sheet: fn() -> Option<u32>,
     pub moon: fn() -> Option<u32>,
+    pub earth: fn() -> Option<u32>,
     pub atlas: &'a mut BillboardAtlas,
     pub text: TextOf,
     /// A phone gets a smaller shadow map.
@@ -515,44 +518,49 @@ pub fn surface_closed(s: Surface) {
     }
 }
 
+/// Each set of lines takes its own translation, so a buffer and a group a set,
+/// grown to the most sets a frame has drawn.
 struct DebugPass {
     built: Built,
-    draw_buffer: u32,
     frame_group: u32,
-    draw_group: u32,
+    sets: Vec<(u32, u32)>,
 }
 
 impl DebugPass {
     fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> DebugPass {
         let built = pipelines.build(g, PIPELINE_DEBUG, format::CANVAS);
-        let draw_buffer = object();
-        g.buffer(draw_buffer, 16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let frame_group = object();
         g.bind_group(frame_group, built.layouts[0], &buffer_entry(0, frame_buffer));
-        let draw_group = object();
-        g.bind_group(draw_group, built.layouts[1], &buffer_entry(0, draw_buffer));
-        DebugPass {
-            built,
-            draw_buffer,
-            frame_group,
-            draw_group,
-        }
+        DebugPass { built, frame_group, sets: Vec::new() }
     }
 
-    fn draw(&self, g: &Gpu, pass: u32, draws: &Draws, uniforms: &[f32], blocks: &Blocks) {
-        let Some(d) = draws.of(PIPELINE_DEBUG).next() else { return };
-        let (Some((block, _, _)), count) = (blocks.get(d[0]), d[1]) else { return };
-        if count == 0 {
-            return;
+    fn draw(&mut self, g: &Gpu, pass: u32, draws: &Draws, uniforms: &[f32], blocks: &Blocks) {
+        let mut bound = false;
+        for (k, d) in draws.of(PIPELINE_DEBUG).enumerate() {
+            let (Some((block, _, _)), count) = (blocks.get(d[0]), d[1]) else { continue };
+            if count == 0 {
+                continue;
+            }
+            while self.sets.len() <= k {
+                let buffer = object();
+                g.buffer(buffer, 16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+                let group = object();
+                g.bind_group(group, self.built.layouts[1], &buffer_entry(0, buffer));
+                self.sets.push((buffer, group));
+            }
+            let (buffer, group) = self.sets[k];
+            let u = uniform_of(uniforms, d);
+            g.write_buffer(buffer, 0, bytes(&[u[0], u[1], u[2], 0.0]));
+            if !bound {
+                g.set_pipeline(pass, self.built.pipeline);
+                g.set_bind_group(pass, 0, self.frame_group, &[]);
+                bound = true;
+            }
+            g.set_bind_group(pass, 1, group, &[]);
+            g.set_vertex_buffer(pass, 0, block, 0, count * 28);
+            // A segment an instance: its two vertices, read as one.
+            g.draw(pass, 6, count / 2, 0, 0);
         }
-        let u = uniform_of(uniforms, d);
-        g.write_buffer(self.draw_buffer, 0, bytes(&[u[0], u[1], u[2], 0.0]));
-        g.set_pipeline(pass, self.built.pipeline);
-        g.set_bind_group(pass, 0, self.frame_group, &[]);
-        g.set_bind_group(pass, 1, self.draw_group, &[]);
-        g.set_vertex_buffer(pass, 0, block, 0, count * 24);
-        // A segment an instance: its two vertices, read as one.
-        g.draw(pass, 6, count / 2, 0, 0);
     }
 }
 
@@ -619,7 +627,7 @@ pub struct Renderer {
     clouds: CloudPass,
     mips: Mips,
     layers: Layers,
-    moon: MoonMap,
+    moon: ImageMap,
     decor: DecorPass,
     impostor: ImpostorPass,
     skinned: SkinnedPass,
@@ -650,7 +658,7 @@ impl Renderer {
         let chunk = pipelines.build(g, PIPELINE_CHUNK, format::CANVAS);
         let sky_built = pipelines.build(g, PIPELINE_SKY, format::CANVAS);
         let sky_group = object();
-        let moon = MoonMap::new(g);
+        let moon = ImageMap::new(g, MOON_TEX_SZ, MOON_TEX_SZ);
         let mut sky_entries = [0u32; 20 + AIR_WORDS];
         sky_entries[..5].copy_from_slice(&buffer_entry(0, frame_buffer));
         sky_entries[5..10].copy_from_slice(&buffer_entry(1, sky_buffer));
@@ -821,7 +829,7 @@ impl Renderer {
         u[SHADOW_STRENGTH] = if self.shadows { 1.0 } else { 0.0 };
         u[SHADOW_TEXEL] = self.shadow.texel as f32;
         if self.shadows {
-            self.shadow.aim(g, &env[0..3], center, globe);
+            self.shadow.aim(g, &env[0..3], center, eye_local.map(|v| -v), globe);
             put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.light_view_proj);
         }
 
@@ -879,6 +887,7 @@ impl Renderer {
         }
         self.layers.step(g, &self.mips, input.sheet);
         self.moon.step(g, &self.mips, input.moon);
+        self.atmosphere.earth_step(g, &self.mips, input.earth);
         self.badges.sync_sheet(g, &self.mips, input.atlas, input.text);
         let (records, uniforms) = take_lists(Some(g), input.lists);
 

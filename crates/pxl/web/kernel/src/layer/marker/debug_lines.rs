@@ -7,9 +7,9 @@ use pxl_render::frame::draw::{DrawList, Held, PIPELINE_DEBUG};
 use pxl_render::gpu::api::bytes;
 use pxl_spec::space::v3::V3;
 
-/// Position relative to the set's origin (3) and linear color (3); two
-/// vertices a segment.
-pub const DEBUG_VERTEX_FLOATS: usize = 6;
+/// Position relative to the set's origin (3), and linear color and its
+/// opacity (4); two vertices a segment.
+pub const DEBUG_VERTEX_FLOATS: usize = 7;
 
 #[derive(Default)]
 pub struct DebugLines {

@@ -16,7 +16,6 @@ use crate::io::sched::{pump, set_credits};
 use crate::layer::character::companion::{companion_step, CompanionProps};
 use crate::layer::decor::asset_store::decor_assets_wanted;
 use crate::layer::environment::state::map_environment_step;
-use crate::layer::environment::theme_clock::theme_clock_step;
 use crate::layer::geocode::fetcher::geocode_fetcher_step;
 use crate::layer::marker::frame_gizmo::debug_gizmos_step;
 use crate::layer::marker::hover_cursor::hover_cursor_step;
@@ -174,7 +173,6 @@ pub fn world_turn() -> f64 {
     // After every writer of the map center, before anything observes the view.
     effect!(worst, view, crate::world::frame::view::view_compose());
     effect!(worst, geocode, geocode_fetcher_step());
-    effect!(worst, theme, theme_clock_step());
     effect!(worst, decor, decor_assets_wanted());
     effect!(worst, chunk_sources, chunk_sources_step());
     effect!(worst, hover, hover_cursor_step());

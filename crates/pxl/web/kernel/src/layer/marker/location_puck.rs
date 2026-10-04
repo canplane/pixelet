@@ -14,8 +14,6 @@ use xpute_runtime::mem::heap::{alloc, free};
 
 use crate::kernel::{kernel, with_world};
 use crate::layer::environment::fog::view_reach;
-use crate::layer::environment::theme::Theme;
-use crate::layer::environment::theme_clock::theme_key;
 use crate::world::access::Access;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::table::Frame;
@@ -134,7 +132,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
 
     // The beacon adds back what the zone's cell flooring dropped, so it moves
     // smoothly rather than in whole-cell jumps.
-    let beacon = ([pos[0] - center_pos[0], pos[1] - center_pos[1]], theme_key() == Theme::Night);
+    let beacon = ([pos[0] - center_pos[0], pos[1] - center_pos[1]], kernel().sched.environment.night());
     if p.beacon_for != Some(beacon) {
         p.beacon_for = Some(beacon);
         kernel().sched.markers.set_beacon(beacon.0, beacon.1);

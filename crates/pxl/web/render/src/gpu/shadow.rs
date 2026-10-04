@@ -5,7 +5,7 @@
 //! the shadow reads as blocks. 16 MB at 2048, 4 MB at 1024 on a phone.
 
 use pxl_spec::space::mat4::{mat4, mat4_look_at, mat4_mul, Mat4};
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::v3::{dot3, norm3, V3};
 
 use crate::frame::shader::record::FRAME_FLOATS;
 use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, texture_usage, word_bytes, Gpu, Stamp};
@@ -45,6 +45,9 @@ pub struct Shadow {
     /// The normal offset a fragment takes.
     pub texel: f64,
     pub bytes: u32,
+    /// The sun the map is cast from, moved only when the real one has gone a
+    /// step from it.
+    cast_from: Option<V3>,
 }
 
 impl Shadow {
@@ -74,6 +77,7 @@ impl Shadow {
             light_view_proj: mat4(),
             texel: HALF_EXTENT * 2.0 / size as f64,
             bytes: size * size * 4,
+            cast_from: None,
         }
     }
 
@@ -86,17 +90,34 @@ impl Shadow {
     }
 
     /// The light's frame carries the globe, so a far caster shades the ground it
-    /// stands over on the planet.
-    pub fn aim(&mut self, g: &Gpu, sun_dir: &[f32], target: V3, globe: [f32; 8]) {
-        let eye = [
-            target[0] + sun_dir[0] as f64 * LIGHT_DISTANCE,
-            target[1] + sun_dir[1] as f64 * LIGHT_DISTANCE,
-            target[2] + sun_dir[2] as f64 * LIGHT_DISTANCE,
-        ];
+    /// stands over on the planet. `fixed` is a point that stays put in the world
+    /// as the eye moves, in the eye's frame.
+    pub fn aim(&mut self, g: &Gpu, sun_dir: &[f32], target: V3, fixed: V3, globe: [f32; 8]) {
+        // A step turns the map's edge by a texel, so a shadow ticks a texel on as
+        // the sun goes, on purpose: the sun read as moving. Turned on every
+        // frame instead, the grid below snapped another way each time and a
+        // wall's shadow flickered as fast as the frames came.
+        let sun = norm3(&[sun_dir[0] as f64, sun_dir[1] as f64, sun_dir[2] as f64]);
+        let step = self.texel / HALF_EXTENT;
+        let from = match self.cast_from {
+            Some(from) if dot3(&from, &sun) > libm::cos(step) => from,
+            _ => sun,
+        };
+        self.cast_from = Some(from);
+        let eye: V3 = core::array::from_fn(|k| target[k] + from[k] * LIGHT_DISTANCE);
         let (mut view, mut proj) = (mat4(), mat4());
         mat4_look_at(&mut view, eye, target, [0.0, 0.0, 1.0]);
         ortho(&mut proj, HALF_EXTENT, 0.1, LIGHT_FAR);
         mat4_mul(&mut self.light_view_proj, &proj, &view);
+        // The map follows the eye, so its texels are slid onto a grid fixed in the
+        // world: off it, every edge fell on other texels each frame as the view
+        // moved, and shimmered (stable shadow maps, texel snapping).
+        let m = &mut self.light_view_proj;
+        let step = self.texel / HALF_EXTENT;
+        for k in 0..2 {
+            let at = m[k] * fixed[0] + m[4 + k] * fixed[1] + m[8 + k] * fixed[2] + m[12 + k];
+            m[12 + k] -= at - (at / step).round_ties_even() * step;
+        }
         put_mat(&mut self.light, VIEW_PROJ, &self.light_view_proj);
         put_globe(&mut self.light, &globe);
         g.write_buffer(self.light_frame, 0, bytes(&self.light));

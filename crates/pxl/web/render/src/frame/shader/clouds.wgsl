@@ -90,10 +90,10 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
   // The terrain's fill too, so a cloud is never darker than the ground under
   // it: without it night clouds were black blots.
   let sky_light = sky_fill();
-  let fill = (frame_ambient() + sky_light) / PI + frame_floor();
+  let fill = sky_light / PI;
   var color = CLOUD_ALBEDO * (light + sky * 0.5 + fill);
 
   let world = frame_camera_pos() + dir * du;
   color = aerial(color, world, sky_light);
-  return vec4f(finish(shoulder(color), v.clip.xy), alpha);
+  return vec4f(finish(color, v.clip.xy), alpha);
 }

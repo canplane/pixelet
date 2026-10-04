@@ -35,7 +35,7 @@ struct Sketch(Vec<f32>);
 impl Sketch {
     fn line(&mut self, from: V3, to: V3, color: V3) {
         for p in [from, to] {
-            self.0.extend([p[0], p[1], p[2], color[0], color[1], color[2]].map(|v| v as f32));
+            self.0.extend([p[0], p[1], p[2], color[0], color[1], color[2], 1.0].map(|v| v as f32));
         }
     }
 

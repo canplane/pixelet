@@ -2,6 +2,7 @@
 
 @group(0) @binding(13) var exposure_texel: texture_2d<f32>;
 @group(0) @binding(15) var moon_view_lut: texture_2d<f32>;
+@group(0) @binding(16) var earth_map: texture_2d_array<f32>;
 
 fn exposure() -> f32 {
   return textureLoad(exposure_texel, vec2i(0, 0), 0).r;
@@ -17,26 +18,24 @@ fn zenith_sky() -> vec3f {
   return t.gba * atmos_white() * t.r;
 }
 
-// On the terrain's scale, before adaptation: the terrain's direct light does
-// not adapt, so a fill that did would wash the ground out at sunset.
 fn sky_fill() -> vec3f {
-  var fill = textureLoad(exposure_texel, vec2i(1, 0), 0).rgb * atmos_white() * atmos_exposure();
+  var fill = (textureLoad(exposure_texel, vec2i(1, 0), 0).rgb * atmos_white() + atmos_night_sky()) * exposure();
   if (atmos_moon_light() > 0.0) {
     fill += moon_view(frame_up()) * moon_shown() * PI;
   }
   return fill;
 }
 
-// The land's color under everything lighting an up-facing face, over pi.
-fn ground_bounce(fill: vec3f) -> vec3f {
-  let up = vec3f(0.0, 0.0, 1.0);
-  let lit = frame_sun_color() * max(frame_sun_dir().z, 0.0) + frame_other_color() * max(frame_other_dir().z, 0.0) + frame_ambient() + fill;
-  return atmos_land() * (lit / PI + frame_floor());
+// What the ground below gives a down-facing face: what lights an up-facing one,
+// at the Earth's mean albedo, an irradiance as `fill` is. `e` is the sky's
+// exposure, read once by the caller, so the ground is seen by the sky's eye.
+fn ground_bounce(fill: vec3f, e: f32) -> vec3f {
+  let lit = (frame_sun_color() * max(frame_sun_dir().z, 0.0) + frame_other_color() * max(frame_other_dir().z, 0.0)) * e + fill;
+  return atmos_ground_albedo() * lit;
 }
 
-// Set by the eye's night adaptation, not the moon's light.
 fn moon_shown() -> vec3f {
-  return atmos_white() * atmos_exposure() * atmos_moon_light();
+  return shown() * atmos_moon_light();
 }
 
 fn moon_view(dir: vec3f) -> vec3f {
@@ -112,11 +111,29 @@ struct AirLight {
 fn air_light(dir: vec3f, fill: vec3f) -> AirLight {
   let c_sun = dot(dir, frame_sun_dir());
   let c_other = dot(dir, frame_other_dir());
-  let around = 0.5 * ((fill + frame_ambient()) / PI + ground_bounce(fill));
+  let e = exposure();
+  let around = 0.5 * (fill + ground_bounce(fill, e)) / PI;
+  let sun = frame_sun_color() * e;
+  let other = frame_other_color() * e;
   var l: AirLight;
-  l.rayleigh = frame_sun_color() * rayleigh_phase(c_sun) + frame_other_color() * rayleigh_phase(c_other) + around;
-  l.mie = frame_sun_color() * mie_phase(c_sun) + frame_other_color() * mie_phase(c_other) + around;
+  l.rayleigh = sun * rayleigh_phase(c_sun) + other * rayleigh_phase(c_other) + around;
+  l.mie = sun * mie_phase(c_sun) + other * mie_phase(c_other) + around;
   return l;
+}
+
+// The Earth's face where a ray meets the ground past the terrain, at the
+// latitude and longitude of `n`, the ground's up there in the map center's
+// east, north and up.
+fn earth_albedo(n: vec3f) -> vec3f {
+  let sin_lat = frame_globe().y;
+  let cos_lat = frame_globe().z;
+  let lon = atmos_center_lon();
+  let east = vec3f(-sin(lon), cos(lon), 0.0);
+  let north = vec3f(-sin_lat * cos(lon), -sin_lat * sin(lon), cos_lat);
+  let up = vec3f(cos_lat * cos(lon), cos_lat * sin(lon), sin_lat);
+  let p = east * n.x + north * n.y + up * n.z;
+  let uv = vec2f(fract(atan2(p.y, p.x) / TAU + 0.5), 0.5 - asin(clamp(p.z, -1.0, 1.0)) / PI);
+  return textureSampleLevel(earth_map, atmos_sampler, uv, 0, 0.0).rgb;
 }
 
 // Past the terrain the ground is lit as shade.wgsl lights the terrain, so the
@@ -125,8 +142,8 @@ fn beyond(air: Air, fill: vec3f) -> vec3f {
   var light = air.light;
   if (air.ground) {
     let n = air.normal;
-    let lit = frame_sun_color() * max(dot(frame_sun_dir(), n), 0.0) + frame_other_color() * max(dot(frame_other_dir(), n), 0.0) + frame_ambient() + fill;
-    light += air.end * atmos_land() * (lit / PI + frame_floor());
+    let lit = (frame_sun_color() * max(dot(frame_sun_dir(), n), 0.0) + frame_other_color() * max(dot(frame_other_dir(), n), 0.0)) * exposure() + fill;
+    light += air.end * earth_albedo(n) * lit / PI;
     // Haze reads as the air's own light along the ray.
     light = mix(air.light, light, haze_through(max(atmos_camera_altitude(), 0.0), 0.0, air.ground_km));
   }
@@ -183,7 +200,7 @@ fn seen_from_eye(world_pos: vec3f) -> Seen {
   var s: Seen;
   s.through = v.through;
   s.scattered = v.scattered;
-  s.past = shoulder(beyond(air, fill));
+  s.past = beyond(air, fill);
   s.fill = fill;
   return s;
 }
@@ -198,10 +215,4 @@ fn glare(dir: vec3f) -> vec3f {
   let theta = degrees(atan2(length(cross(dir, s)), dot(dir, s))) + 0.02;
   let psf = 0.478 * 20.91 / (theta * theta * theta) + 0.138 * 72.37 / (theta * theta);
   return atmos_sun_seen() * shown() * psf * (GLARE_VEIL / GLARE_HALO_SHARE);
-}
-
-// Soft shoulder so the sun's glow and lit clouds do not clip flat.
-fn shoulder(c: vec3f) -> vec3f {
-  let k = 0.75;
-  return select(c, k + (1.0 - k) * (1.0 - exp(-(c - k) / (1.0 - k))), c > vec3f(k));
 }

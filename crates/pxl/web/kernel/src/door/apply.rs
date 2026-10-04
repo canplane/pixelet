@@ -49,13 +49,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                 interactive: p.interactive,
                 credits: p.credits,
             });
-            crate::host::set_local_time(crate::host::LocalTime {
-                unix_ms: p.unix_ms,
-                hours: p.hours,
-                minutes: p.minutes,
-                seconds: p.seconds,
-                day_start_ms: p.day_start_ms,
-            });
+            crate::host::set_wall_now(p.unix_ms);
             Ok(Some(0))
         }
         Command::WORLD_BOOT => {
