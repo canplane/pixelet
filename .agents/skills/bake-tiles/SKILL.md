@@ -139,6 +139,13 @@ change reaches**: a structure solved again that runs out of the region meets
 the base's solve of it at the edge. Choosing the region is the caller's job.
 The manifest records the base and the region's release, which may differ.
 
+The new version is complete on disk, and also a **partial snapshot**: its
+`_snapshot` lists the full version it overlays and the pages it writes or
+removes over it, so the bucket holds only those
+([20261004-a-snapshot-of-a-subtree.md](../../../decision/20261004-a-snapshot-of-a-subtree.md)).
+A region baked over a partial version lists its changes over that one's
+full base, earlier partial's included.
+
 Under `--build` beside `leaf/`, `structure/` keeps each
 solved structure so the pages it crosses solve it once: a cache nothing
 reads as a fact, deleted by `--force` and safe to delete any time. A run

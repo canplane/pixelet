@@ -89,8 +89,10 @@ deno task usage     # Class A this month against the million, and the rest
 ```
 
 and set the manifest's object count against what is left. A sync re-run
-after an interruption is cheap — it skips an object already there — but a
-new version is never partial. Deleting an old version is free.
+after an interruption is cheap — it skips an object already there — and a
+full version costs a pyramid's worth, where a partial one (below) costs only
+the pages it lists. Deleting an old version is free, unless a published
+partial version names it as its base.
 
 ### Terrain
 
@@ -117,6 +119,22 @@ aws s3 sync ./out/terrain/<version>.bucket s3://pixelet-tiles/terrain/<version> 
 aws s3 cp ./out/terrain/land_pages.json s3://pixelet-tiles/_meta/land_pages.json \
   --profile r2 --endpoint-url $R2 --content-type application/json
 ```
+
+A version a region bake made is partial: `rekey_tiles link` finds its
+`_snapshot` and links only the pages it lists as written, and the list. Its
+base must already be in the bucket; the Worker reads the list and answers
+every other page from the base
+([20261004-a-snapshot-of-a-subtree.md](../../../decision/20261004-a-snapshot-of-a-subtree.md)).
+The list goes up last, after the pages it names, as plain JSON:
+
+````bash
+aws s3 sync ./out/terrain/<version>.bucket s3://pixelet-tiles/terrain/<version> \
+  --exclude _snapshot  # … and the flags above
+aws s3 cp ./out/terrain/<version>.bucket/_snapshot s3://pixelet-tiles/terrain/<version>/_snapshot \
+  --profile r2 --endpoint-url $R2 --content-type application/json
+``` **A full version a published
+partial names as its base is never deleted**: every page the partial does not
+list is read from it.
 
 **Never overwrite an existing version in place**, of any kind — publish a new
 prefix and point the app at it. The second command matters when the
@@ -148,7 +166,7 @@ aws s3 sync ./out/poi/<version>.bucket s3://pixelet-tiles/poi/<version> \
   --content-type application/octet-stream \
   --content-encoding "$(jq -r .content_encoding out/poi/manifest.json)" \
   --cache-control "public, max-age=31536000, immutable"
-```
+````
 
 A page its parent settles is no object — the tree stops where no cell over a
 page holds two places — and the client reads its ground from the page over it,

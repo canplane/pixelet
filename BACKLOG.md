@@ -76,7 +76,3 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   would let an existing program in. Not without one to build it against;
   guests stay `wasm32-unknown-unknown` meanwhile —
   [20260930-wasi-and-the-boundary.md](./decision/20260930-wasi-and-the-boundary.md).
-- **A region baked and published alone.** A partial snapshot over one full
-  bake, owning the pages under its quadkey prefixes and their ancestors. Not
-  before a region needs it —
-  [20261004-a-snapshot-of-a-subtree.md](./decision/20261004-a-snapshot-of-a-subtree.md).

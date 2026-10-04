@@ -22,6 +22,7 @@
 type R2Object = {
   body: ReadableStream;
   arrayBuffer(): Promise<ArrayBuffer>;
+  text(): Promise<string>;
   httpEtag: string;
   writeHttpMetadata(headers: Headers): void;
 };
@@ -152,6 +153,45 @@ function serve(body: ArrayBuffer | ReadableStream | null, from: Headers): Respon
   return new Response(body, { headers, encodeBody: "manual" });
 }
 
+/**
+ * A partial version is its changes over one full version: `_snapshot` beside
+ * its pages names that version and the pages it writes or removes, and every
+ * other page is the full version's. The list in the bucket decides; one read
+ * is held, since a version never changes what it lists, but its absence is
+ * not, so a list uploaded after a version was first asked for still counts.
+ * A version with no list is full.
+ */
+interface Snapshot {
+  base: string;
+  written: Set<string>;
+  removed: Set<string>;
+}
+
+const SNAPSHOT_KEY = "_snapshot";
+const BAKE_KEY = /^(terrain|poi|geocode)\/([^/]+)\/(.+)$/;
+const snapshots = new Map<string, Snapshot>();
+
+async function snapshotOf(version: string, env: Env): Promise<Snapshot | null> {
+  const held = snapshots.get(version);
+  if (held) return held;
+  const object = await env.TILES.get(`${version}/${SNAPSHOT_KEY}`);
+  if (object === null) return null;
+  const listed = JSON.parse(await object.text()) as { base: string; written: string[]; removed: string[] };
+  const snapshot = { base: listed.base, written: new Set(listed.written), removed: new Set(listed.removed) };
+  snapshots.set(version, snapshot);
+  return snapshot;
+}
+
+/** The key a page is read from, or null for a page its version removes. */
+async function resolve(key: string, env: Env): Promise<string | null> {
+  const match = BAKE_KEY.exec(key);
+  if (!match) return key;
+  const [, kind, version, name] = match;
+  const snapshot = await snapshotOf(`${kind}/${version}`, env);
+  if (snapshot === null || snapshot.written.has(name)) return key;
+  return snapshot.removed.has(name) ? null : `${kind}/${snapshot.base}/${name}`;
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -191,8 +231,16 @@ export default {
     // A missing object is not an error here: open-ocean pages are never
     // baked, and the client turns this 404 into its shared `_ocean` tile.
     // See the kernel's layer/terrain/page.rs.
+    const cache = caches.default;
+    if (request.method === "GET") {
+      const cached = await cache.match(request);
+      if (cached) return serve(cached.body, cached.headers);
+    }
+    const stored = await resolve(key, env);
+    if (stored === null) return new Response(request.method === "HEAD" ? null : "not found", { status: 404 });
+
     if (request.method === "HEAD") {
-      const meta = await env.TILES.head(key);
+      const meta = await env.TILES.head(stored);
       if (meta === null) return new Response(null, { status: 404 });
       const headers = new Headers();
       meta.writeHttpMetadata(headers);
@@ -221,11 +269,7 @@ export default {
     // So the encoding is kept where the cache cannot read it. `STORED_ENCODING`
     // holds it while the entry is stored, the body goes in as the opaque
     // octets it is, and both paths out put it back on the way to the client.
-    const cache = caches.default;
-    const cached = await cache.match(request);
-    if (cached) return serve(cached.body, cached.headers);
-
-    const object = await env.TILES.get(key);
+    const object = await env.TILES.get(stored);
     if (object === null) return new Response("not found", { status: 404 });
 
     // writeHttpMetadata replays what was set at upload time — crucially the

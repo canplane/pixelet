@@ -24,6 +24,7 @@
 
 use std::collections::HashSet;
 use std::fs;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -31,7 +32,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use postgres::Client;
-use pxl_spec::bake::format::{encode_terrain, Terrain};
+use pxl_spec::bake::format::{encode_terrain, Terrain, SNAPSHOT_KEY};
 use pxl_spec::bake::published::{FORMAT, PUBLISHED_VERSION};
 use pxl_spec::bake::quadkey::{page_name, page_of_name};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -262,6 +263,27 @@ fn link_tree(from: &Path, to: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// What `tiles` writes and removes over the full version `full`, by quadkey:
+/// a page linked from it is the same file, and any other one is checked by content.
+fn snapshot_over(full: &PageSet, tiles: &PageSet) -> Result<(Vec<String>, Vec<String>), String> {
+    let (mut written, mut removed) = (Vec::new(), Vec::new());
+    for level in 0..=TOP_LEVEL {
+        let here: HashSet<LevelPage> = tiles.pages(level)?.into_iter().collect();
+        for &p in &here {
+            let (a, b) = (full.path(p), tiles.path(p));
+            let same = match (fs::metadata(&a), fs::metadata(&b)) {
+                (Ok(x), Ok(y)) => (x.dev(), x.ino()) == (y.dev(), y.ino()) || full.content(p)? == tiles.content(p)?,
+                _ => false,
+            };
+            if !same {
+                written.push(page_name(p).to_string());
+            }
+        }
+        removed.extend(full.pages(level)?.into_iter().filter(|p| !here.contains(p)).map(|p| page_name(p).to_string()));
+    }
+    Ok((written, removed))
+}
+
 /// A region over a base: the base linked whole, the region's leaves in its
 /// leaves' place where they differ, and what those reach folded again.
 fn assemble_region(args: &Args, leaves: &PageSet, land: &[IVec], leaf: &serde_json::Value, built: Option<&str>) -> Result<(), String> {
@@ -298,6 +320,25 @@ fn assemble_region(args: &Args, leaves: &PageSet, land: &[IVec], leaf: &serde_js
     let leaves_changed = changed.len();
     let folded = refold(&tiles, changed, &ocean)?;
     println!("[bake/region] {leaves_changed} leaves changed, {folded} pages above folded again -> {}", tiles.root.display());
+
+    // Uploaded, the version is its changes over one full version, never over
+    // another partial one: a base that is partial lends its own full base, and
+    // its changes come along as this version's.
+    let base_snapshot = read_json(&base.root.join(SNAPSHOT_KEY));
+    let full = PageSet::new(match base_snapshot["base"].as_str() {
+        Some(b) => base.root.parent().unwrap_or(Path::new(".")).join(b),
+        None => base.root.clone(),
+    });
+    if !full.root.is_dir() {
+        return Err(format!("{}: the full version under the base is not here", full.root.display()));
+    }
+    let (written, removed) = snapshot_over(&full, &tiles)?;
+    let snapshot = tiles.root.join(SNAPSHOT_KEY);
+    // Linked from a partial base: written anew, never through the link.
+    let _ = fs::remove_file(&snapshot);
+    let full_name = full.root.file_name().map(|n| n.to_string_lossy().to_string());
+    write_json(&snapshot, &serde_json::json!({ "base": full_name, "written": written, "removed": removed }))?;
+    println!("[bake/region] over {}: {} written, {} removed", full.root.display(), written.len(), removed.len());
 
     let top = (1..=TOP_LEVEL).take_while(|&l| tiles.level_dir(l).exists()).last().unwrap_or(0);
     let base_name = base.root.file_name().map(|n| n.to_string_lossy().to_string());
