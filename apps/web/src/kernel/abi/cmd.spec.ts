@@ -574,18 +574,12 @@ export interface WorldFrame {
   frame_ms: f64;
   interactive: boolean;
   credits: u32;
-  /** The local wall clock: `Date.now()`, the local hour, minute and second, and the local day's start. */
+  /** The wall clock, `Date.now()`. */
   unix_ms: f64;
-  hours: f64;
-  minutes: f64;
-  seconds: f64;
-  day_start_ms: f64;
 }
 
 export function encode_world_frame(p: WorldFrame): U8Array {
-  return packet((b) =>
-    b.f64(p.width).f64(p.height).f64(p.dpr).f64(p.delta_s).f64(p.frame_ms).bool(p.interactive).u32(p.credits).f64(p.unix_ms).f64(p.hours).f64(p.minutes).f64(p.seconds).f64(p.day_start_ms)
-  );
+  return packet((b) => b.f64(p.width).f64(p.height).f64(p.dpr).f64(p.delta_s).f64(p.frame_ms).bool(p.interactive).u32(p.credits).f64(p.unix_ms));
 }
 
 /** Command.WORLD_VISIBILITY's packet. */

@@ -13,19 +13,11 @@ pub mod render_cfg {
     pub const FOG_FAR: f64 = 6144.0;
 }
 
-/// One brightness floor for every lit surface, so terrain and objects cannot
-/// dim apart.
-pub mod light_cfg {
-    /// Judged on a phone: a floor dark enough to read as night on a monitor was
-    /// too dark on a phone. Raising it alone flattens the shading; it moves with
-    /// the moon's light.
-    pub const FLOOR: f64 = 0.6;
-}
-
 /// Fresnel rim highlight, applied to everything lit since one shader lights
 /// it all; the linear scale on the shader's falloff.
 pub mod rim_cfg {
-    pub const INTENSITY: f64 = 0.1;
+    /// The share of the sky's light a rim gives back.
+    pub const INTENSITY: f64 = 0.7;
 }
 
 /// Edge shading on a cube's silhouette: its darkening and its width as a share of a face.

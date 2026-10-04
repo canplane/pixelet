@@ -40,21 +40,25 @@ pub fn land() -> [f64; 3] {
 }
 pub const SUN_ANGULAR_RADIUS: f64 = 0.004675;
 
-/// The tables are for a sun of illuminance 1. Under the day theme a horizontal
-/// face takes about 1.24x its albedo and the air about 0.28x; this puts the
-/// air on the terrain's scale, past which the ground drowns white.
-pub const EXPOSURE: f64 = 4.0;
+/// The one eye the sky and the ground are seen by: the lights are for a sun of
+/// illuminance 1, and this shows a face under a high sun at about its albedo.
+pub const EXPOSURE: f64 = 3.0;
 /// A half, not one: the illuminance falls with the direct sun long before the
 /// sky dims, and following it fully washes a low sun's sky out white.
 pub const ADAPTATION: f64 = 0.5;
-/// Six stops, so a sunset's sky shows its color rather than dark.
-pub const MAX_ADAPTATION: f64 = 64.0;
-/// The directional intensity the daylight themes were tuned at.
-pub const SUN_LIGHT: f64 = 0.5;
+/// Seven stops: how far the eye opens once the sun is gone, which is how bright
+/// a night reads. The moon and the night sky do not close it.
+pub const MAX_ADAPTATION: f64 = 128.0;
 
-/// The moon's light is ~1/400,000 of the sun's and the eye adapts by rods where
-/// no screen can, so the moonlit sky is shown at how it reads, not what it is.
-pub const MOONLIT_SKY: f64 = 0.15;
+/// #9fb4d6, linear: light as the night eye reads it, bluer than it is.
+pub const NIGHT_COLOR: [f64; 3] = [0.3467, 0.4564, 0.6724];
+/// The full Moon against the Sun, as the night eye reads it rather than the
+/// 1/400,000 it is.
+pub const MOON_LIGHT: f64 = 0.007;
+/// A clear moonless sky's own glow, airglow and starlight: 0.002 lx against
+/// the full Moon's 0.25, taken as one stop rather than seven, so a moonless
+/// night is read by it and the Moon only brightens it.
+pub const NIGHT_SKY: f64 = MOON_LIGHT / 2.0;
 
 /// Allen's Astrophysical Quantities: 0.026·α + 4·10⁻⁹·α⁴ magnitudes (degrees).
 /// A half moon gives a tenth of a full one's light, not half.
@@ -112,9 +116,4 @@ pub fn light_at(altitude_km: f64, mu: f64) -> [f64; 3] {
         return [0.0; 3];
     }
     transmittance(altitude_km, mu.max(horizon + 1e-4)).map(|t| t * above)
-}
-
-pub fn sun_light(altitude_km: f64, sun_mu: f64, white: [f64; 3]) -> [f64; 3] {
-    let t = light_at(altitude_km, sun_mu);
-    core::array::from_fn(|k| SUN_LIGHT * t[k] * white[k])
 }

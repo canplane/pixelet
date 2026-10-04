@@ -821,7 +821,7 @@ impl Renderer {
         u[SHADOW_STRENGTH] = if self.shadows { 1.0 } else { 0.0 };
         u[SHADOW_TEXEL] = self.shadow.texel as f32;
         if self.shadows {
-            self.shadow.aim(g, &env[0..3], center, globe);
+            self.shadow.aim(g, &env[0..3], center, eye_local.map(|v| -v), globe);
             put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.light_view_proj);
         }
 

@@ -39,29 +39,21 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 - **Clearance by the road's own grade.** `clear_cells` holds a clearance
   across the road at `MAX_GRADE`'s secant for every way; the segment's own
   grade would give each what it needs.
+- **A straight-edged shadow nothing casts.** With shadows on, a dark
+  rectangle lies on near ground under no object (2026-10-04, Uman-dong at
+  noon); the shadow pass draws the camera's draw list, coarse chunks included
+  (`pxl-render gpu/renderer.rs`, `Stage::Depth`).
 - **Subway bores.** Every tunnel flag is a bore now, so a subway's lines are
   drawn underground and stretch each chunk's bounds down; whether that cost
   stays is not decided.
 
 ## P3
 
-- **What the sky left open.** Recorded 2026-09-22
-  ([the sky is the air](./decision/20260922-the-sky-is-the-air.md)), each small and
-  none blocking:
-  - The terrain stands at its elevation and the planet's ground past it at sea
-    level, so from high up a far piece of terrain floats over it with its
-    chunk walls showing. Setting the ground at the map center's height, or
-    skirting the coarse levels down to it, would close it.
-  - Clouds with a thickness: a slab a kilometer or two deep, sampled a few
-    times a pixel, for the volume a side view misses — as a quality setting,
-    since it is several times today's cost. Volumetric clouds proper are out
-    while the client draws at rest every two seconds.
-  - The Milky Way, which a naked-eye catalog does not make (a low-resolution
-    all-sky texture, whose licenses are attribution ones), and the bright
-    planets, which the sun's and the moon's low-precision formulas extend to.
-  - The themes' remaining fill — ambient, hemisphere, the floor — from the
-    sky's irradiance, the way the sunlight now comes from the air. The floor
-    is there for a phone's night and would resist it.
+- **Clouds with a thickness.** A slab a kilometer or two deep, sampled a few
+  times a pixel, for the volume a side view misses — as a quality setting,
+  since it is several times today's cost; volumetric clouds proper are out
+  while the client draws at rest every two seconds
+  ([the sky is the air](./decision/20260922-the-sky-is-the-air.md)).
 
 ## Parked, with the reason on file
 

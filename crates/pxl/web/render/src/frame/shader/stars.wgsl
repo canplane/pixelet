@@ -8,20 +8,25 @@ struct Stars {
   // Sized in CSS pixels so a dense screen does not shrink them.
   density: f32,
   intensity: f32,
-  _p0: f32,
+  // The cosine below which the land stands, as the sky draws it.
+  horizon: f32,
   _p1: f32,
   _p2: f32,
+  moon: vec3f,
+  _p3: f32,
 };
 
 // Read field by field from vec4 words, never as a struct: a struct here lost
 // Safari's WebGPU its GPU process. The viewport and the up are the frame's.
-@group(1) @binding(0) var<uniform> stars_words: array<vec4f, 10>;
+@group(1) @binding(0) var<uniform> stars_words: array<vec4f, 11>;
 
 fn stars_view_proj() -> mat4x4f { return mat4x4f(stars_words[0], stars_words[1], stars_words[2], stars_words[3]); }
 fn stars_sky() -> mat4x4f { return mat4x4f(stars_words[4], stars_words[5], stars_words[6], stars_words[7]); }
 fn stars_depth() -> vec3f { return stars_words[8].xyz; }
 fn stars_density() -> f32 { return stars_words[8].w; }
 fn stars_intensity() -> f32 { return stars_words[9].x; }
+fn stars_horizon() -> f32 { return stars_words[9].y; }
+fn stars_moon() -> vec3f { return stars_words[10].xyz; }
 
 @group(1) @binding(1) var<storage, read> catalog: array<vec4f>;
 
@@ -63,7 +68,8 @@ fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> StarOut
   let height = dot(dir, frame_up());
   let light = color * flux * STAR_GAIN * exp(-stars_depth() * airmass(height)) * stars_intensity();
   var clip = stars_view_proj() * vec4f(dir, 0.0);
-  if (height < -0.02 || clip.w <= 0.0 || max(light.r, max(light.g, light.b)) < STAR_FLOOR) {
+  let behind_moon = length(cross(dir, stars_moon())) < MOON_ANGULAR_RADIUS * DISC_SCALE && dot(dir, stars_moon()) > 0.0;
+  if (height < stars_horizon() || behind_moon || clip.w <= 0.0 || max(light.r, max(light.g, light.b)) < STAR_FLOOR) {
     o.clip = vec4f(0.0, 0.0, 2.0, 1.0);
     return o;
   }

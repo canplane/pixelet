@@ -1053,12 +1053,8 @@ pub struct WorldFrame {
     pub frame_ms: f64,
     pub interactive: bool,
     pub credits: u32,
-    /// The local wall clock: `Date.now()`, the local hour, minute and second, and the local day's start.
+    /// The wall clock, `Date.now()`.
     pub unix_ms: f64,
-    pub hours: f64,
-    pub minutes: f64,
-    pub seconds: f64,
-    pub day_start_ms: f64,
 }
 
 impl WorldFrame {
@@ -1073,10 +1069,6 @@ impl WorldFrame {
             interactive: f.at(5)?.get_bool()?,
             credits: f.at(6)?.get_number()? as u32,
             unix_ms: f.at(7)?.get_number()?,
-            hours: f.at(8)?.get_number()?,
-            minutes: f.at(9)?.get_number()?,
-            seconds: f.at(10)?.get_number()?,
-            day_start_ms: f.at(11)?.get_number()?,
         })
     }
 }

@@ -20,6 +20,6 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let color = select(BEACON_DAY, BEACON_NIGHT, draw_night() > 0.5);
   let glow = select(0.25, 1.0, draw_night() > 0.5);
   let n = normalize(i.normal);
-  let lit = color * (frame_sun_color() * max(dot(n, frame_sun_dir()), 0.0) + frame_other_color() * max(dot(n, frame_other_dir()), 0.0) + frame_ambient()) / PI * 0.2;
+  let lit = color * (frame_sun_color() * max(dot(n, frame_sun_dir()), 0.0) + frame_other_color() * max(dot(n, frame_other_dir()), 0.0)) / PI * 0.2;
   return vec4f(finish(lit + color * glow, i.clip.xy), 1.0);
 }

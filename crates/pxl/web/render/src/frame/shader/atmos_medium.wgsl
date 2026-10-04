@@ -22,7 +22,6 @@ struct Atmosphere {
   exposure: f32,
   max_adaptation: f32,
   adaptation: f32,
-  // 0 while the sun's sky is the one shown.
   moon_dir: vec3f,
   moon_light: f32,
   // `land` is drawn at the elevation under the eye: a sea-level surface would
@@ -32,7 +31,10 @@ struct Atmosphere {
   // The same for every pixel, so the CPU computes it once.
   sun_seen: vec3f,
   _p1: f32,
-  _p2: vec4f,
+  // A moonless sky's irradiance on an up-facing face. It lights the ground and
+  // is not drawn: at the gain that lets the ground read, the sky drew pale blue.
+  night_sky: vec3f,
+  _p2: f32,
   cloud_base: vec2u,
   cloud_frac: vec2f,
   cloud_time: f32,
@@ -66,6 +68,7 @@ fn atmos_max_adaptation() -> f32 { return atmos_words[6].z; }
 fn atmos_adaptation() -> f32 { return atmos_words[6].w; }
 fn atmos_moon_dir() -> vec3f { return atmos_words[7].xyz; }
 fn atmos_moon_light() -> f32 { return atmos_words[7].w; }
+fn atmos_night_sky() -> vec3f { return atmos_words[10].xyz; }
 fn atmos_land() -> vec3f { return atmos_words[8].xyz; }
 fn atmos_land_altitude_km() -> f32 { return atmos_words[8].w; }
 fn atmos_sun_seen() -> vec3f { return atmos_words[9].xyz; }

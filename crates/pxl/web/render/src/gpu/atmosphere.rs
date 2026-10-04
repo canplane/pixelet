@@ -43,6 +43,7 @@ pub(crate) const MOON_LIGHT: usize = 31;
 pub(crate) const LAND: usize = 32;
 pub(crate) const LAND_ALTITUDE: usize = 35;
 pub(crate) const SUN_SEEN: usize = 36;
+pub(crate) const NIGHT_SKY: usize = 40;
 pub(crate) const CLOUD_BASE: usize = 44;
 pub(crate) const CLOUD_FRAC: usize = 46;
 pub(crate) const CLOUD_TIME: usize = 48;
@@ -94,6 +95,7 @@ impl Atmosphere {
             (OZONE_ABSORPTION, model::OZONE_ABSORPTION),
             (WHITE, white),
             (LAND, model::land()),
+            (NIGHT_SKY, core::array::from_fn(|k| model::NIGHT_COLOR[k] * model::NIGHT_SKY * white[k])),
         ] {
             for (w, v) in words[at..at + 3].iter_mut().zip(rgb) {
                 *w = v as f32;

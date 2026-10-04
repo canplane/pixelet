@@ -41,7 +41,7 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_CHUNK => wgsl!(
             "frame",
             "globe",
-            "grade",
+            "encode",
             "atmos_medium",
             "atmos_bind",
             "atmos_lut",
@@ -57,7 +57,7 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_DECOR => wgsl!(
             "frame",
             "globe",
-            "grade",
+            "encode",
             "atmos_medium",
             "atmos_bind",
             "atmos_lut",
@@ -73,7 +73,7 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_SKINNED => wgsl!(
             "frame",
             "globe",
-            "grade",
+            "encode",
             "atmos_medium",
             "atmos_bind",
             "atmos_lut",
@@ -86,13 +86,13 @@ pub fn source(kind: u32) -> &'static str {
             "place",
             "skinned"
         ),
-        SHADER_PUCK_ZONE => wgsl!("frame", "globe", "grade", "finish", "puck", "puck_zone"),
-        SHADER_PUCK_BEACON => wgsl!("frame", "globe", "grade", "finish", "place", "puck", "puck_beacon"),
-        SHADER_BADGE => wgsl!("frame", "globe", "grade", "depth", "badge_depth", "badge"),
+        SHADER_PUCK_ZONE => wgsl!("frame", "globe", "encode", "finish", "puck", "puck_zone"),
+        SHADER_PUCK_BEACON => wgsl!("frame", "globe", "encode", "finish", "place", "puck", "puck_beacon"),
+        SHADER_BADGE => wgsl!("frame", "globe", "encode", "depth", "badge_depth", "badge"),
         SHADER_SKY => wgsl!(
             "frame",
             "globe",
-            "grade",
+            "encode",
             "finish",
             "dither",
             "atmos_medium",
@@ -102,13 +102,13 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_view",
             "sky"
         ),
-        SHADER_DEBUG => wgsl!("frame", "globe", "grade", "debug"),
+        SHADER_DEBUG => wgsl!("frame", "globe", "encode", "debug"),
         SHADER_MIPS => wgsl!("mips"),
         SHADER_SHEET => wgsl!("sheet"),
         SHADER_IMPOSTOR => wgsl!(
             "frame",
             "globe",
-            "grade",
+            "encode",
             "atmos_medium",
             "atmos_bind",
             "atmos_lut",
@@ -129,12 +129,12 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_ATMOS_MULTISCATTER => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_multiscatter"),
         SHADER_ATMOS_SKY_VIEW => wgsl!("frame", "globe", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_skyview"),
         SHADER_ATMOS_EXPOSURE => wgsl!("frame", "globe", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_sky", "atmos_pass", "atmos_exposure"),
-        SHADER_STARS => wgsl!("frame", "globe", "grade", "stars"),
+        SHADER_STARS => wgsl!("frame", "globe", "encode", "stars"),
         SHADER_CLOUD_FIELD => wgsl!("noise", "cloud_tile", "atmos_pass", "cloud_bake"),
         SHADER_CLOUDS => wgsl!(
             "frame",
             "globe",
-            "grade",
+            "encode",
             "finish",
             "noise",
             "atmos_medium",
@@ -273,7 +273,12 @@ const fn blended(shader: u32, cull: u32, bias: i32, slope: f32) -> Head {
     }
 }
 
+const SHADOW_SLOPE_BIAS: f32 = 2.0;
+
 /// Into the shadow map: plain less-than depth, no fragment stage, both sides.
+/// Pushed back by its slope to the sun, as a rasterizer's polygon offset: a face
+/// the sun grazes spans more depth in a texel than the map holds, and lit
+/// itself in diagonal stripes without it.
 const fn depth_only(shader: u32) -> Head {
     Head {
         shader,
@@ -283,7 +288,7 @@ const fn depth_only(shader: u32) -> Head {
         depth_write: true,
         depth_compare: LESS,
         depth_bias: 0,
-        depth_bias_slope: 0,
+        depth_bias_slope: f(SHADOW_SLOPE_BIAS),
         blend: OPAQUE,
         vertex: VS_DEPTH,
     }
@@ -294,6 +299,7 @@ const fn prepass(shader: u32, cull: u32) -> Head {
     Head {
         cull,
         depth_compare: GREATER,
+        depth_bias_slope: 0,
         ..depth_only(shader)
     }
 }
@@ -363,12 +369,13 @@ const LIT_FRAME: [[u32; 3]; 10] = [
     [1, FRAGMENT, DEPTH],
     [2, FRAGMENT, SAMPLER_COMPARISON],
     [7, FRAGMENT, TEXTURE],
-    // Tables in the vertex stage too: a fragment reads the land's color for the ground bounce.
+    // Tables in the vertex stage too: a fragment reads the land's color for
+    // the ground bounce and the exposure its lights are shown through.
     [8, BOTH, UNIFORM],
     AIR_AT_VERTICES[1],
     AIR_AT_VERTICES[2],
     AIR_AT_VERTICES[3],
-    AIR_AT_VERTICES[4],
+    [13, BOTH, TEXTURE],
     AIR_AT_VERTICES[5],
 ];
 /// The transmittance and sky-view tables are laid out unread because the shader declares them.

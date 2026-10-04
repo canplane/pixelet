@@ -3,6 +3,7 @@
 //! The Yale Bright Star Catalog (Hoffleit and Warren 1991, CDS V/50), drawn
 //! after the sky as one instanced strip. Direction, flux and color are computed
 //! once here rather than per corner per frame. Nothing is drawn in daylight.
+//! The catalog's stars are the whole night sky: no Milky Way and no planets.
 
 use pxl_spec::space::mat4::Mat4;
 
@@ -12,19 +13,21 @@ use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, word_bytes, Gpu
 use crate::gpu::api_spec::format;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::put_mat;
-use crate::look::atmosphere::transmittance;
-use crate::look::environment::{ENV_AIR, ENV_SKY, ENV_STARS};
+use crate::look::atmosphere::{transmittance, BOTTOM_RADIUS_KM};
+use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_SKY, ENV_STARS};
 
 const CATALOG: &[u8] = include_bytes!("../frame/shader/bright-stars.bin");
 const STAR_BYTES: usize = 8;
 /// Direction and flux, then color and padding.
 const STAR_FLOATS: usize = 8;
 
-pub(crate) const STARS_FLOATS: usize = 16 + 16 + 4 + 4;
+pub(crate) const STARS_FLOATS: usize = 16 + 16 + 4 + 4 + 4;
 pub(crate) const SKY: usize = 16;
 pub(crate) const DEPTH: usize = 32;
 pub(crate) const DENSITY: usize = 35;
 pub(crate) const INTENSITY: usize = 36;
+pub(crate) const HORIZON: usize = 37;
+pub(crate) const MOON: usize = 40;
 
 const SHOWN: f32 = 0.001;
 
@@ -78,6 +81,11 @@ impl StarPass {
         for k in 0..3 {
             u[DEPTH + k] = -libm::log(t[k].max(1e-6)) as f32;
         }
+        // atmos_medium.wgsl's meets_land: the eye's sphere against the land's.
+        let eye = BOTTOM_RADIUS_KM + (env[ENV_AIR] as f64).max(0.001);
+        let land = BOTTOM_RADIUS_KM + env[ENV_AIR + 3] as f64;
+        u[HORIZON] = -(1.0 - (land / eye).min(1.0).powi(2)).sqrt() as f32;
+        u[MOON..MOON + 3].copy_from_slice(&env[ENV_MOON..ENV_MOON + 3]);
         g.write_buffer(self.uniform, 0, bytes(u));
     }
 

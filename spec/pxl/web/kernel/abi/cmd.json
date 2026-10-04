@@ -883,24 +883,8 @@
               "name": "unix_ms",
               "type": "f64",
               "doc": [
-                "The local wall clock: `Date.now()`, the local hour, minute and second, and the local day's start."
+                "The wall clock, `Date.now()`."
               ]
-            },
-            {
-              "name": "hours",
-              "type": "f64"
-            },
-            {
-              "name": "minutes",
-              "type": "f64"
-            },
-            {
-              "name": "seconds",
-              "type": "f64"
-            },
-            {
-              "name": "day_start_ms",
-              "type": "f64"
             }
           ]
         },

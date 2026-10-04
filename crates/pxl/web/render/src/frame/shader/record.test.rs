@@ -147,6 +147,7 @@ fn the_skys_layouts_match_their_structs() {
             ("land", a::LAND),
             ("land_altitude_km", a::LAND_ALTITUDE),
             ("sun_seen", a::SUN_SEEN),
+            ("night_sky", a::NIGHT_SKY),
             ("cloud_base", a::CLOUD_BASE),
             ("cloud_frac", a::CLOUD_FRAC),
             ("cloud_time", a::CLOUD_TIME),
@@ -161,7 +162,15 @@ fn the_skys_layouts_match_their_structs() {
         SHADER_STARS,
         "Stars",
         s::STARS_FLOATS,
-        &[("view_proj", 0), ("sky", s::SKY), ("depth", s::DEPTH), ("density", s::DENSITY), ("intensity", s::INTENSITY)],
+        &[
+            ("view_proj", 0),
+            ("sky", s::SKY),
+            ("depth", s::DEPTH),
+            ("density", s::DENSITY),
+            ("intensity", s::INTENSITY),
+            ("horizon", s::HORIZON),
+            ("moon", s::MOON),
+        ],
     );
     for (name, k) in [("TRANSMITTANCE_SIZE", a::TRANSMITTANCE), ("MULTISCATTER_SIZE", a::MULTISCATTER), ("SKY_VIEW_SIZE", a::SKY_VIEW)] {
         let (w, h) = a::SIZES[k];
