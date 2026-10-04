@@ -135,12 +135,13 @@ pub struct BadgePass {
     /// be handed back to the next.
     dirty: Vec<u32>,
     uniform: [f32; BADGE_FLOATS],
-    frame_group: u32,
+    /// The frame's inputs: the view in the anchor root's frame and the
+    /// projection into WebGPU's clip space, the projection's pixels per unit at
+    /// one unit of depth, the camera's near and far, and the rule's cell per
+    /// distance.
     pub view: [f32; 16],
     pub proj: [f32; 16],
     pub px_k: f32,
-    pub fade_start: f32,
-    pub fade_end: f32,
     pub near: f32,
     pub far: f32,
     pub cell: f32,
@@ -169,8 +170,6 @@ impl BadgePass {
             view: [0.0; 16],
             proj: [0.0; 16],
             px_k: 1.0,
-            fade_start: 0.0,
-            fade_end: 1.0,
             near: 0.1,
             far: 1000.0,
             cell: 0.01,
@@ -271,8 +270,10 @@ impl BadgePass {
             let s = &mut self.uniform;
             s[..16].copy_from_slice(&self.view);
             s[16..32].copy_from_slice(&self.proj);
-            s[32..35].copy_from_slice(&uniform_of(uniforms, d)[..3]);
-            s[35..40].copy_from_slice(&[self.px_k, self.near, self.far, self.cell, 0.0]);
+            s[32..35].copy_from_slice(&uniforms[at..at + 3]);
+            // The viewport's word holds it and nothing past it.
+            s[35..44].copy_from_slice(&[self.px_k, self.near, self.far, self.cell, 1.0, viewport[0] as f32, viewport[1] as f32, 0.0, 0.0]);
+            s[44..52].copy_from_slice(&self.globe);
             g.write_buffer(set.uniform, 0, bytes(s));
             if set.block != block || set.depth != depth || set.group == 0 {
                 release(set.group);

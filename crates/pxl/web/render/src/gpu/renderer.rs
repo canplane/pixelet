@@ -819,8 +819,6 @@ impl Renderer {
         put_mat(&mut b.view, 0, s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].try_into().or_bug(Errno::ENOTRECOVERABLE));
         put_mat(&mut b.proj, 0, &proj);
         b.px_k = (s[STAGE_AT::VIEWPORT + 1] / (2.0 * (s[STAGE_AT::FOV] * core::f64::consts::PI / 360.0).tan())) as f32;
-        b.fade_start = s[STAGE_AT::FADE_START] as f32;
-        b.fade_end = s[STAGE_AT::FADE_END] as f32;
         b.near = s[STAGE_AT::NEAR] as f32;
         b.far = s[STAGE_AT::FAR] as f32;
         b.cell = s[STAGE_AT::LOD_CELL] as f32;

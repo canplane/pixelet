@@ -34,14 +34,14 @@ pub fn leaves(client: &mut Client, coverage: &Coverage, within: Option<IVec>) ->
         Some(p) => {
             let [[x0, y0, _], [x1, y1, _]] = epsg3857::get_page_bbox(p);
             client.query(
-                "SELECT ST_X(geom), ST_Y(geom), name, properties->'categories'->>'primary' FROM overture_places WHERE geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)",
+                "SELECT ST_X(geom), ST_Y(geom), name, properties->'categories'->>'primary', gers_id FROM overture_places WHERE geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)",
                 &[&x0, &y0, &x1, &y1],
             )
         }
-        None => client.query("SELECT ST_X(geom), ST_Y(geom), name, properties->'categories'->>'primary' FROM overture_places", &[]),
+        None => client.query("SELECT ST_X(geom), ST_Y(geom), name, properties->'categories'->>'primary', gers_id FROM overture_places", &[]),
     }
     .map_err(|e| e.to_string())?;
-    let mut places: BTreeMap<IVec, Vec<(Pvf3, String, u8)>> = BTreeMap::new();
+    let mut places: BTreeMap<IVec, Vec<(Pvf3, String, u8, String)>> = BTreeMap::new();
     for row in rows {
         let at = epsg3857::project(row.get(0), row.get(1), 0.0);
         let leaf = POI_LATTICE.cell_of(0, &at).page();
@@ -49,34 +49,11 @@ pub fn leaves(client: &mut Client, coverage: &Coverage, within: Option<IVec>) ->
             continue;
         }
         let kind = kind_of(category_named(row.get::<_, Option<&str>>(3)));
-        places.entry(leaf.page).or_default().push((at, row.get(2), kind));
+        places.entry(leaf.page).or_default().push((at, row.get(2), kind, row.get(4)));
     }
     Ok(places
         .into_iter()
-        .map(|(page, p)| {
-            (
-                page,
-                PoiPage::of_places(
-                    0,
-                    p.iter().map(|(at, name, kind, id)| {
-                        (
-                            *at,
-                            Place {
-                                name,
-                                kind: *kind,
-                                id,
-                                ..Place::default()
-                            },
-                        )
-                    }),
-                    true,
-                ),
-            )
-        })
+        .map(|(page, p)| (page, PoiPage::of_places(0, p.iter().map(|(at, name, kind, id)| (*at, Place { name, kind: *kind, id, ..Place::default() })), true)))
         .collect())
 }
 
-/// FNV-1a 64 of the source's id, so the page carries no provider id format.
-fn id_of(source_id: &str) -> u64 {
-    crate::util::fnv1a(source_id.as_bytes())
-}

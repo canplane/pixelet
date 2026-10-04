@@ -163,15 +163,15 @@ The rules below keep it one thing. They come from finding it several.
   the 3D rule would, never a model of its own.
 - **A mark stands at a cell's center** (`Cell::center`), at the height of the
   surface drawn there, never at a center derived from its data's bounds. A
-  mark for many things stands at the z16 cell their centroid falls in,
-  which folds by count as the things do (`pxl-spec bake/poi_page.rs`).
+  mark for one thing stands at the z16 cell that thing stands in, and a mark
+  for many at its cell's middle (`pxl-kernel layer/poi/placement.rs`).
 - **One rule chooses the level; a layer chooses its detail.** The shared
   rule chooses a level for a piece of ground by its distance from the eye
   (`pxl-spec space/lod.rs` `Tau::level`, one factor τ on the split
   distance), finer than z16 too — z17 to z19 near the eye — and refines it
   only where the screen observes it and its error crosses a cell. How much detail a layer
   draws at that level is the layer's own — terrain its cells averaged
-  2 × 2, places a lattice sixteen times the ground's cell, objects their own
+  2 × 2, places a lattice sixty-four times the ground's cell, objects their own
   cells — a tuning inside the perspective and never a second rule. Where
   the rule asks for a level finer than a layer's data, the layer draws its
   finest: terrain z16, objects their sub-cell tiers down to z19.

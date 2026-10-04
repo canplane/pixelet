@@ -18,7 +18,7 @@ how it gets there and how you know it arrived.
 | Prefix                  | Object                      | Named by               | Policy                                                        |
 | ----------------------- | --------------------------- | ---------------------- | ------------------------------------------------------------- |
 | `terrain/<version>/`    | packed XTP page, `_ocean`   | quadkey, 5–15          | immutable; a re-bake is a new version                         |
-| `poi/<version>/`        | packed PXP5 count page      | quadkey, 5–15          | immutable; a re-bake is a new version                         |
+| `poi/<version>/`        | XTP count page              | quadkey, 5–15          | immutable; a re-bake is a new version                         |
 | `geocode/<version>/`    | packed JSON page, `_dict`   | quadkey, 11            | version = format; monthly in-place refresh                    |
 | `asset/`                | glb, png, webp — not packed | its path, hash in stem | immutable by construction; unreferenced keys deleted whenever |
 | `_meta/land_pages.json` | terrain's land/ocean list   | fixed name             | mutable; rewritten with a terrain re-bake                     |

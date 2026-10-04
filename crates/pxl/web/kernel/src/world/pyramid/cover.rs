@@ -1,8 +1,8 @@
 // pxl-kernel/world/pyramid/cover.rs
 
 //! What a layer's resident pages draw of the view's pieces: each from the
-//! finest resident page at or over it, or a gap. Read by the place badges
-//! and, for terrain, by the profiler. Nothing is asked for because of it.
+//! finest resident page at or over it, or a gap. Read by the profiler.
+//! Nothing is asked for because of it.
 
 use std::collections::HashMap;
 

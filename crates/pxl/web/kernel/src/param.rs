@@ -186,20 +186,30 @@ pub const RESOLUTION_CHANGE_GAP_MS: f64 = 1000.0;
 
 // ---- the companion's figures ----
 
-/// Cells a figure is drawn stepping up as it walks to the map center, and the
-/// pet beside the person; taller holds it. Set by the product owner
-/// (2026-10-02), derived from nothing.
-pub const COMPANION_STEP_CELLS: i64 = 4;
+/// How many cells a walker steps up onto, from the cell it walks into. What
+/// fills more than this beside it is a wall, and the step is not taken.
+///
+/// Four, set by the product owner by choice (2026-10-02), derived from
+/// nothing: no precedent or measurement fixes it. It is not Minecraft's —
+/// a walk there steps 0.6 of a block, and a jump makes a whole one.
+pub const STEP_CELLS: i64 = 4;
 
-// ---- places' zooms ----
+// ---- places' zooms (layer/poi.rs, layer/poi/placement.rs) ----
 
-/// z14: OpenMapTiles' `poi` layer holds every point POI from z14
-/// (`etl_layer_points`), and Google and Naver hide businesses below about it.
+/// The coarsest level every place is shown at: z14 (level k is z(16 − k)).
+/// OpenMapTiles' `poi` layer holds every point POI from z14 and no general
+/// one under it (layers/poi/poi.yaml, `etl_layer_points`), and Google's and
+/// Naver's maps leave businesses off below about the same zoom.
 pub const POI_ALL_LEVEL: u32 = 2;
 
-/// z12, only for ranks up to `POI_MAJOR_RANK`: OpenMapTiles shows stations
-/// and ferry terminals at z12–13 and nothing under z12.
+/// The coarsest level a place is shown at at all, and only the most
+/// prominent — a rank no more than `POI_MAJOR_RANK`: z12. OpenMapTiles
+/// shows railway stations, halts and ferry terminals at z12 and z13 and
+/// nothing else of the layer; under z12 there is none, and nothing is asked
+/// for.
 pub const POI_MAJOR_LEVEL: u32 = 4;
 
-/// OpenMapTiles' `poi_class_rank` for a railway station.
+/// The rank a place needs to be shown between `POI_ALL_LEVEL` and
+/// `POI_MAJOR_LEVEL`: a railway station's, OpenMapTiles' `poi_class_rank` 40
+/// (layer/poi.rs `rank_of`).
 pub const POI_MAJOR_RANK: u16 = 40;

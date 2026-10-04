@@ -34,7 +34,7 @@ use pxl_render::mesh::voxel_scan::APRON;
 use crate::sched::profiler::record::ZOOMS;
 use pxl_spec::space::adapter::epsg3857::zoom_of;
 use pxl_spec::space::observation::Bounds as _;
-use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::TOP_LEVEL;
 use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::base::ptr_at;
@@ -477,7 +477,7 @@ pub struct Scheduler {
     /// The mounts free, the last given back first.
     mounts: Free,
     /// The mounted chunks in chunk order, with their mounts: how a chunk is
-    /// found, and a column of them (`surface_at`).
+    /// found.
     index: Index,
     /// The domain's pieces the last recheck saw (world/pyramid/domain.rs
     /// `revision`): what a chunk should show is read off it, and it is made
@@ -503,6 +503,8 @@ pub struct Scheduler {
     refined: u32,
     retiered: u32,
     changes: u32,
+    /// Moves whenever the set of drawn chunks does.
+    drawn_revision: u32,
     changes_peak: u32,
     scratch: Scratch,
 }
@@ -618,6 +620,7 @@ impl Scheduler {
             refined: 0,
             retiered: 0,
             changes: 0,
+            drawn_revision: 0,
             changes_peak: 0,
         }
     }
@@ -645,10 +648,14 @@ impl Scheduler {
         [self.refined, self.retiered, self.changes_peak]
     }
 
-    /// Each mounted chunk, and whether it is drawn and in the frustum now.
-    pub fn mounted(&self, out: &mut Vec<(Chunk, bool)>) {
+    /// Each mounted chunk, whether it is drawn, and whether it is in the frustum.
+    pub fn mounted(&self, out: &mut Vec<(Chunk, bool, bool)>) {
         out.clear();
-        out.extend(self.slots.iter().map(|s| (s.chunk, s.role == Role::Drawn && s.in_frustum)));
+        out.extend(self.slots.iter().map(|s| (s.chunk, s.role == Role::Drawn, s.in_frustum)));
+    }
+
+    pub fn drawn_revision(&self) -> u32 {
+        self.drawn_revision
     }
 
     pub fn needs_revision(&self) -> u32 {
@@ -880,6 +887,9 @@ impl Scheduler {
         self.refined = self.refined.wrapping_add(plan.refined);
         self.changes_peak = self.changes_peak.max(self.changes);
         self.changes = plan.swaps().count() as u32;
+        if self.changes > 0 || !plan.drop.is_empty() {
+            self.drawn_revision = self.drawn_revision.wrapping_add(1);
+        }
 
         for &k in plan.cancel.iter().chain(&plan.drop) {
             self.remove(world, k);
@@ -1096,49 +1106,6 @@ impl Scheduler {
             }
             self.level_boxes[s.level() as usize] += t.box_cnt;
         }
-    }
-
-    /// Piece `s` as it is drawn now, as the block of the pyramid's cells it
-    /// draws; a chunk that is not a drawn piece, or has no layout, draws
-    /// nothing a layer could stand on.
-    fn drawn_of<'a>(&'a self, s: &'a Slot) -> Option<Drawn<'a>> {
-        if s.role != Role::Drawn || !s.layout_ready {
-            return None;
-        }
-        let cube = s.layout_primary;
-        let t = s.tier(cube, s.layout_generation)?;
-        Some(Drawn {
-            level: s.level(),
-            base: s.chunk.corner(),
-            step: mesh_step(cube, s.level()),
-            tops: surface(t.slot.index, mesh_step(cube, s.level())),
-            heights: t.heights,
-        })
-    }
-
-    /// The ground drawn now at `addr`: the level of the cells it is drawn in
-    /// there, and the top of that cell's surface in units. Read from the
-    /// piece `drawn_of` gives for that ground, so it is the surface on the
-    /// screen — a coarser piece while what replaces it builds — and none
-    /// where nothing drawn stands there.
-    ///
-    /// A column is drawn by every chunk over it that holds something, each
-    /// cut to its own heights (world/pyramid/chunk.rs), so a chunk under the
-    /// surface tops out where it is cut. The highest one drawn there is the
-    /// one whose top is the surface's.
-    pub fn surface_at(&self, at: &Pvf3) -> Option<(u32, f64)> {
-        (0..=TOP_LEVEL).find_map(|level| {
-            let column = Chunk::column_of(level, at);
-            let (from, to) = (self.index.partition_point(|(c, _)| c < column.start()), self.index.partition_point(|(c, _)| c <= column.end()));
-            self.index[from..to].iter().rev().find_map(|&(_, id)| {
-                let d = self.drawn_of(&self.slots[self.place[id as usize].get()?])?;
-                // The chunk lies in one page at every level over its own, so
-                // the point's cell and the chunk's first are of one page.
-                let [cx, cy] = GROUND.cell_of(d.cell_level(), at).in_page();
-                let [fx, fy] = GROUND.cell_of(d.cell_level(), &Pvf3 { i: d.base, ..Default::default() }).in_page();
-                Some((d.cell_level(), d.top(cx - fx, cy - fy)?))
-            })
-        })
     }
 
     /// Where every chunk is and whether it is on screen, measured against the
@@ -1656,4 +1623,85 @@ fn land(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
         box_cnt,
         heights,
     });
+}
+
+/// Slot `index`'s surface as its tier of `step` holds it, a word a block:
+/// the lane's first (CHUNK_CELLS / step)² words.
+fn surface(index: usize, step: u32) -> &'static mut [u32] {
+    let (off, words) = surface_of(index);
+    let axis = CHUNK_CELLS / step;
+    xpute_core::ensure!(axis * axis <= words, ENOTRECOVERABLE, index, step);
+    // SAFETY: the slot's own lane in `.fixed.surface`, written only by the
+    // tier landing in the slot and read by what stands on it, both the chunk
+    // table's, on its one thread.
+    unsafe { lane(range(Range::Surface), off, (axis * axis) as usize) }
+}
+
+/// A cell-center height query needs no CPU copy of the mesh. Quantized tops
+/// use the mesh's own height scale, with zero reserved for an empty center.
+/// Written into the lane of the tier's first slot, which the slot's tier
+/// sizes (mesh_slot.rs `surface_of`), a block of boxes at a time: cleared
+/// with the first.
+fn surface_centers(index: usize, first: bool, words: &[u32], stride: usize, step: u32, level: u32, heights: Heights) {
+    let axis = (CHUNK_CELLS / step) as usize;
+    let unit = step as f64 * GROUND.scale(level).side();
+    let tops = surface(index, step);
+    if first {
+        tops.fill(0);
+    }
+    if tops.is_empty() {
+        return;
+    }
+    for r in words.chunks_exact(stride) {
+        let (min, size) = box_bounds(r, unit, heights);
+        let x0 = ((min[0] / unit - 0.5).ceil().max(0.0) as usize).min(axis);
+        let y0 = ((min[1] / unit - 0.5).ceil().max(0.0) as usize).min(axis);
+        let x1 = (((min[0] + size[0]) / unit - 0.5).ceil().max(0.0) as usize).min(axis);
+        let y1 = (((min[1] + size[1]) / unit - 0.5).ceil().max(0.0) as usize).min(axis);
+        let (lo, span) = box_z(r);
+        let top = lo + span + 1;
+        for y in y0..y1 {
+            for x in x0..x1 {
+                tops[y * axis + x] = tops[y * axis + x].max(top);
+            }
+        }
+    }
+}
+
+/// A chunk as it is drawn: its level, the unit address its first cell
+/// begins at, the step its drawn tier's cells are, and that tier's surface.
+/// What a decor build stands its things on.
+pub struct Drawn<'a> {
+    pub level: u32,
+    pub base: IVec,
+    step: u32,
+    tops: &'a [u32],
+    heights: Heights,
+}
+
+impl Drawn<'_> {
+    /// The level of the cells the chunk is drawn in: a block of 2^s cells of
+    /// the chunk's level is a cell s levels up (pxl-spec space/pyramid.rs
+    /// `Cell`). The rule's steps are powers of two, so there is no step
+    /// this does not name.
+    pub fn cell_level(&self) -> u32 {
+        debug_assert!(self.step.is_power_of_two(), "a ladder step is a power of two");
+        self.level + self.step.trailing_zeros()
+    }
+
+    /// The top of the drawn surface under a point `x`, `y` units from the
+    /// chunk's corner: the block's it lies in.
+    pub fn top_under(&self, x: f64, y: f64) -> Option<f64> {
+        let unit = self.step as f64 * GROUND.scale(self.level).side();
+        self.top((x / unit) as u32, (y / unit) as u32)
+    }
+
+    /// The top of the drawn surface at the center of the `step` block at
+    /// (bx, by), in units; none where that center is empty. Samples share the
+    /// GPU mesh slot's lifetime, including a leaving piece's.
+    pub fn top(&self, bx: u32, by: u32) -> Option<f64> {
+        let axis = CHUNK_CELLS / self.step;
+        let top = (*self.tops.get((by * axis + bx) as usize)?).checked_sub(1)?;
+        Some(self.heights.floor + top as f64 * self.heights.step)
+    }
 }

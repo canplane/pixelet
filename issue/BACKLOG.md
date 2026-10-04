@@ -10,6 +10,11 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P0
 
+- **Terrain v7, baked and published.** The client asks for terrain v7
+  (merged to main 2026-10-01), so a deploy waits for it: baked and
+  published after `deno task usage` (about 227,000 Class A) — once, not per
+  revision of the format, and not by demand, since a page's index bounds its
+  whole subtree and a coarse page cannot be made before everything under it.
 - **The atmosphere in the observation's test, an optimization held.** A
   difference is observed where its projected angle leaks past a cell _and_
   the contrast it makes is still distinguishable after the air (`T(d)`,

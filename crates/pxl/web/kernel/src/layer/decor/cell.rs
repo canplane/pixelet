@@ -79,16 +79,10 @@ struct Cells {
     cols: Vec<IVec>,
     placed: Vec<Placed>,
     folded: HashMap<[i64; 3], u32>,
-    /// What a turn works in, kept so a settled turn asks the heap for
-    /// nothing: the solve's stack, the replacement's state over each wanted
-    /// cell's ancestors, the cells it gives back or that cover others or are
-    /// held under others, and a group's sprites.
-    stack: Vec<DecorCell>,
-    under: HashMap<DecorCell, bool>,
-    cells: Vec<DecorCell>,
-    covers: Vec<DecorCell>,
-    /// Every ancestor of a cell held: where a build is a coarsening.
-    over: Vec<DecorCell>,
+    /// Kept so a settled turn asks the heap for nothing.
+    mounted: Vec<(Chunk, bool, bool)>,
+    gone: Vec<Chunk>,
+    pages: Vec<LevelPage>,
     sprites: Vec<u32>,
 }
 
@@ -233,53 +227,26 @@ pub fn step(kinds: &[&Kind], store: &Store, sched: &mut Scheduler, hide: Option<
     c.over.sort_unstable();
     c.over.dedup();
     let mut built = 0;
-    for coarsening in [true, false] {
-        for &cell in &frontier {
-            if built >= BUILDS_PER_FRAME {
-                break;
-            }
-            if c.over.binary_search(&cell).is_ok() != coarsening {
-                continue;
-            }
-            let Some(sources) = sources_of(cell, store, &mut c.cols, hide) else { continue };
-            let held = c.blocks.get(&cell);
-            if held.is_some_and(|b| b.sources == sources) {
-                continue;
-            }
-            if held.is_none() && !coarsening && c.blocks.len() >= BLOCKS_MAX {
-                continue;
-            }
-            if let Some(mut b) = build(c, cell, kinds, store, draw, sources) {
-                b.drawn = c.blocks.get(&cell).is_some_and(|old| old.drawn);
-                if let Some(old) = c.blocks.insert(cell, b) {
-                    release(old, draw);
-                }
-                built += 1;
+    for &(chunk, _, _) in &mounted {
+        if built >= BUILDS_PER_FRAME {
+            break;
+        }
+        if !may_show(chunk, largest) {
+            continue;
+        }
+        let Some(sources) = sources_of(chunk, store, &mut c.cols, hide) else { continue };
+        if c.blocks.get(&chunk).is_some_and(|b| b.sources == sources) {
+            continue;
+        }
+        if let Some(b) = build(c, chunk, kinds, store, &mut sched.draw, sources) {
+            if let Some(old) = c.blocks.insert(chunk, b) {
+                release(old, &mut sched.draw);
             }
         }
     }
-    let draw = &mut sched.draw;
-    budget.run(
-        mounted.iter().map(|m| m.0),
-        |chunk| {
-            if !may_show(chunk, largest) {
-                return false;
-            }
-            let Some(sources) = sources_of(chunk, store, &mut c.cols, hide) else { return false };
-            if c.blocks.get(&chunk).is_some_and(|b| b.sources == sources) {
-                return false;
-            }
-            let Some(b) = build(c, chunk, kinds, store, draw, sources) else { return false };
-            if let Some(old) = c.blocks.insert(chunk, b) {
-                release(old, draw);
-            }
-            true
-        },
-        None,
-    );
     for &(chunk, drawn, seen) in &mounted {
         if let Some(b) = c.blocks.get_mut(&chunk) {
-            b.drawn = drawn;
+            b.drawn = drawn && seen;
         }
     }
     let under = &c.under;

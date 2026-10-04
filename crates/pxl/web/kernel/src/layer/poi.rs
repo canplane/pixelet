@@ -6,6 +6,7 @@
 pub mod badge;
 pub mod placement;
 
+use pxl_spec::bake::poi_badge::KIND_CATEGORIES;
 use pxl_spec::bake::poi_page::{self, PoiPage};
 
 use crate::io::demand::{Category, Phases};
@@ -37,9 +38,13 @@ pub fn enabled() -> bool {
     settings_store().poi
 }
 
-/// Lower is more prominent. The reader's choice, so a change needs no bake:
-/// OpenMapTiles' `poi_class_rank` (layers/poi/class.sql) for the class its
-/// poi.yaml files the category under; unranked is 1000.
+/// How prominent a place of kind `kind` is, the more the lower: the
+/// reader's choice, never the page's (pxl-spec bake/poi_page.rs), so a change
+/// of it is no new bake. OpenMapTiles' `poi_class_rank` (layers/poi/class.sql)
+/// of the class its `poi` layer files the category under
+/// (layers/poi/poi.yaml): a clinic is a hospital, a subway a railway, a
+/// kindergarten a school, a mall or a convenience store a shop, a department
+/// store a grocery; what it does not rank, 1000.
 pub fn rank_of(kind: u8) -> u16 {
     let category = kind.checked_sub(1).and_then(|k| KIND_CATEGORIES.get(k as usize)).copied().unwrap_or("");
     match category {
@@ -63,12 +68,13 @@ pub fn rank_of(kind: u8) -> u16 {
     }
 }
 
-/// Fetches out to where the ground is drawn coarser than POI_MAJOR_LEVEL,
-/// and nothing while places are hidden.
+/// The layer's turn: its pyramid's while places are shown, out to where the
+/// ground is drawn coarser than the coarsest level a place is shown at
+/// (param.rs `POI_MAJOR_LEVEL`) and no farther, and nothing asked for while
+/// they are not.
 pub fn poi_step() {
     if enabled() {
-        PoiPage::pyramid().step(None, &[]);
-        crate::world::pyramid::cover::step::<PoiPage>();
+        PoiPage::pyramid().step(None);
     } else {
         PoiPage::pyramid().idle();
     }

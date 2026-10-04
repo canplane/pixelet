@@ -99,31 +99,38 @@ fn places() -> (Vec<IVec>, Vec<(LevelPage, PoiPage)>) {
                 .iter()
                 .map(|&a| Pvf3 { i: a, ..Default::default() })
                 .filter(|a| POI_LATTICE.cell_of(p.level, a).page() == p)
-                .map(|a| (a, Place { name: "", kind: 0 }));
-            (p, PoiPage::of_places(p.level, places))
+                .map(|a| (a, Place { name: "p", kind: 0, id: a.i }));
+            (p, PoiPage::of_places(p.level, places, true))
         })
         .collect();
     (at, pages)
 }
 
-/// None where only a non-settling page over the chunk is resident: it draws
-/// the ground but does not say what stands there.
+/// The places a drawn chunk counts: those of its source page — its own, or
+/// the one over it that settles it — whose cell stands on the chunk's ground;
+/// none where only a page over it that does not settle it is resident,
+/// which draws its ground and does not say what stands there.
 fn count(pyramid: &Pyramid<PoiPage>, c: Chunk) -> Option<u32> {
-    let src = pyramid.paging().source(c.page())?;
-    let page = pyramid.paging().get(src).expect("a source is resident");
+    let src = pyramid.source(c.page())?;
+    let page = pyramid.get(src).expect("a source is resident");
     page.cells
         .iter()
         .filter(|x| {
+            // A crowd's cell is the chunk's own column; a cell over a chunk
+            // holds one place, which stands where it does.
             let cell = POI_LATTICE.cell_at(src, x.cell);
             let at = page.shown(x).next().map_or(cell.mid(), |(_, _, at)| cell.inner_at(GROUND, 0, at).mid());
             Chunk::of(c.level(), &at) == c
         })
         .map(|x| x.count)
-        .sum()
+        .sum::<u32>()
+        .into()
 }
 
-/// Drawn pieces and gaps partition the domain, and every place is counted
-/// exactly once, whatever is resident.
+/// The cover is the domain's ground cut once: its drawn pieces and its gaps
+/// meet nowhere, together they are all of it, and every place on it is
+/// counted exactly once where a page says it, and nowhere else — whatever
+/// is resident, at whatever levels.
 #[test]
 fn the_cover_and_its_gaps_partition_the_domain_and_count_every_place_once() {
     let _serial = crate::global::serial();
@@ -146,9 +153,10 @@ fn the_cover_and_its_gaps_partition_the_domain_and_count_every_place_once() {
         assert!(disjoint(&pieces), "trial {trial}: two pieces meet");
         let total: f64 = pieces.iter().map(|&c| area(c)).sum();
         assert_eq!(total, whole, "trial {trial}: the pieces are the domain's ground");
-        let drawn: u32 = cover.drawn.iter().map(|&c| count(&pyramid, c)).sum();
-        let in_gaps = at.iter().filter(|&&a| cover.gaps.iter().any(|&g| inside(g, a))).count() as u32;
-        assert_eq!(drawn + in_gaps, at.len() as u32, "trial {trial}: every place once");
+        let drawn: u32 = cover.drawn.iter().filter_map(|&c| count(&pyramid, c)).sum();
+        let unsaid: Vec<Chunk> = cover.gaps.iter().copied().chain(cover.drawn.iter().copied().filter(|&c| count(&pyramid, c).is_none())).collect();
+        let elsewhere = at.iter().filter(|&&a| unsaid.iter().any(|&g| inside(g, a))).count() as u32;
+        assert_eq!(drawn + elsewhere, at.len() as u32, "trial {trial}: every place once");
     }
 }
 
@@ -180,7 +188,10 @@ fn crowded(p: LevelPage) -> PoiPage {
     let at = |k: LevelPage| POI_LATTICE.cell_base(k, 0, 0);
     PoiPage::of_places(
         p.level,
-        p.children().into_iter().flat_map(|k| [(at(k), Place { name: "a", kind: 0 }), (at(k), Place { name: "b", kind: 0 })]),
+        p.children()
+            .into_iter()
+            .flat_map(|k| [(at(k), Place { name: "a", kind: 0, id: 1 }), (at(k), Place { name: "b", kind: 0, id: 1 })]),
+        true,
     )
 }
 

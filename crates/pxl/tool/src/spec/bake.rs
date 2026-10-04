@@ -150,7 +150,7 @@ pub fn poi_badge_outputs() -> Result<Vec<Output>, String> {
     rs.extend([
         String::new(),
         "/// Each kind's category, kind k at `KIND_CATEGORIES[k - 1]`: what the bake".into(),
-        "/// numbers a place by. The kernel reads none of it.".into(),
+        "/// numbers a place by, and what the kernel ranks a kind by.".into(),
         format!("pub const KIND_CATEGORIES: [&str; {}] = [", kinds.len()),
     ]);
     rs.extend(kinds.iter().map(|(k, _, _)| format!("    {},", json_str(k))));

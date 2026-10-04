@@ -9,9 +9,8 @@ use pxl_spec::space::mat4::mat4_transform_point;
 use pxl_spec::space::v3::{add3, dot3, sub3};
 
 use crate::layer::billboard::batch::BillboardBatch;
-use crate::layer::billboard::distance_fade::distance_fade_far;
 use crate::layer::environment::state::globe;
-use crate::world::frame::view::{globe_anchor_local, ndc_to_px, view, view_sees_sphere};
+use crate::world::frame::view::{globe_anchor_local, ndc_to_px, view};
 
 /// A fraction of the distance, since the badge holds a constant screen size.
 /// Generous: one badge too many costs a sprite.
@@ -54,19 +53,12 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, out: &mut Vec<u32>)
     for k in 0..n {
         let i = batch.order[k] as usize;
 
-        let far = distance_fade_far(batch.d2[i].sqrt());
-        // Not `far <= 0`. The last stretch before the fade's end is ten pixels by
-        // three at a tenth opacity — invisible, and not worth a draw.
-        if far < MIN_LEGIBLE_FAR {
-            continue;
-        }
-
         mat4_transform_point(&mut ndc, &v.local_view_proj, batch.world_x[i], batch.world_y[i], batch.world_z[i]);
         let [sx, sy] = ndc_to_px([ndc[0], ndc[1]]);
 
         let w = batch.w_px[i] as f64;
         let x0 = sx - w / 2.0;
-        let y0 = sy - batch.anchor_px[i] as f64 * far;
+        let y0 = sy - batch.anchor_px[i] as f64;
         let (x1, y1) = (x0 + w, sy);
         if x1 < 0.0 || y1 < 0.0 || x0 > v.width || y0 > v.height {
             continue;

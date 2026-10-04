@@ -13,8 +13,8 @@ fn point(tx: u32, ty: u32, dx: u32, dy: u32) -> Pvf3 {
     POI_LATTICE.cell_of(0, &base).inner_at(GROUND, 0, [dx, dy]).mid()
 }
 
-fn called(name: &str, id: u64) -> Place<'_> {
-    Place { name, kind: 0, id }
+fn called<'a>(name: &'a str, id: &'a str) -> Place<'a> {
+    Place { name, id, ..Place::default() }
 }
 
 /// A cell's count and its places as (name, where it stands).
@@ -50,21 +50,27 @@ fn a_page_and_its_places_come_back_as_they_went() {
                 },
             ),
         ],
+        true,
     );
     assert_eq!(decode(&encode(&page).unwrap()).unwrap(), page);
-    // Held once across cells; least id per kind; nameless counted not held; names cut.
+    // Held once across cells; least id per kind; nameless counted not held.
     assert_eq!(page.places.len(), 3);
     assert_eq!(
-        page.cells.iter().map(|c| page.place(c)).collect::<Vec<_>>(),
-        [Some(station), None, None, Some(station), Some(called("Seoul Station"))]
+        cells(&page),
+        [
+            (1, vec![("Seoul Station", [1, 2])]),
+            (2, vec![("서울역", [0, 0])]),
+            (1, vec![]),
+            (1, vec![("Seoul Station", [0, 3])]),
+            (1, vec![("Seoul Station", [0, 0])]),
+        ]
     );
-    assert_eq!(page.cells.iter().map(|c| c.at).collect::<Vec<_>>(), [[1, 2], [2, 2], [2, 0], [0, 3], [0, 0]]);
 }
 
 /// A lone place stays its cell's at every level, on the same z16 cell.
 #[test]
 fn a_lone_place_folds_up_with_its_kind_and_its_ground_cell() {
-    let at = point(21, 17, 3, 1);
+    let at = point(5, 4, 3, 1);
     let ground = GROUND.cell_of(0, &at);
     let empty = PoiPage::default();
     let tower = Place {
@@ -79,15 +85,11 @@ fn a_lone_place_folds_up_with_its_kind_and_its_ground_cell() {
         let up = PoiPage::fold_page(p, |k| Some(if k == below.0 { &below.1 } else { &empty })).unwrap();
         assert_eq!(up.cells.len(), 1);
         let c = up.cells[0];
-        assert_eq!(up.place(&c), Some(tower));
-        assert_eq!(POI_LATTICE.cell_at(p, c.cell).inner_at(GROUND, 0, c.at), ground, "level {level}");
+        let (_, place, at) = up.shown(&c).next().unwrap();
+        assert_eq!(place, tower);
+        assert_eq!(POI_LATTICE.cell_at(p, c.cell).inner_at(GROUND, 0, at), ground, "level {level}");
         below = (p, up);
     }
-    let two = PoiPage::of_places(0, [(point(0, 0, 0, 0), called("A")), (point(1, 0, 0, 0), called("B"))]);
-    let p = LevelPage::over(1, leaf().page);
-    let pair_up = PoiPage::fold_page(p, |k| Some(if k == leaf() { &two } else { &empty })).unwrap();
-    assert_eq!(pair_up.cells[0].count, 2);
-    assert_eq!(pair_up.place(&pair_up.cells[0]), None);
 }
 
 /// Only a crowd comes apart a level down.
@@ -97,8 +99,8 @@ fn a_page_settles_every_child_but_one_under_a_crowd() {
     let [crowd, lone, empty, _] = p.children();
     let at = |k: LevelPage, dx: u32| POI_LATTICE.cell_of(0, &POI_LATTICE.cell_base(k, 0, 0)).inner_at(GROUND, 0, [dx, 0]).mid();
     let leaves = [
-        (crowd, PoiPage::of_places(0, [(at(crowd, 0), called("A")), (at(crowd, 1), called("B"))])),
-        (lone, PoiPage::of_places(0, [(at(lone, 0), called("C"))])),
+        (crowd, PoiPage::of_places(0, [(at(crowd, 0), called("A", "1")), (at(crowd, 1), called("B", "2"))], true)),
+        (lone, PoiPage::of_places(0, [(at(lone, 0), called("C", "3"))], true)),
     ];
     let none = PoiPage::default();
     let page = PoiPage::fold_page(p, |k| Some(leaves.iter().find(|(q, _)| *q == k).map_or(&none, |(_, page)| page))).unwrap();
@@ -133,7 +135,7 @@ fn a_crowd_holds_one_place_of_each_kind() {
     held.sort_unstable();
     assert_eq!(folded.cells[0].count, 3);
     assert_eq!(held, {
-        let mut want = vec![(kind_of("cafe"), 10, [2, 0]), (kind_of("subway"), 50, [69, 0])];
+        let mut want = vec![(kind_of("cafe"), "10", [2, 0]), (kind_of("subway"), "50", [69, 0])];
         want.sort_unstable();
         want
     });
@@ -213,8 +215,8 @@ fn what_any_source_gives_comes_back() {
 /// A partial count stays a floor at every level over it.
 #[test]
 fn a_floor_stays_a_floor_as_it_folds() {
-    let some = PoiPage::of_places(0, [(point(0, 0, 0, 0), called("A", 1))], false);
-    let all = PoiPage::of_places(0, [(point(0, 0, 0, 0), called("A", 1))], true);
+    let some = PoiPage::of_places(0, [(point(0, 0, 0, 0), called("A", "1"))], false);
+    let all = PoiPage::of_places(0, [(point(0, 0, 0, 0), called("A", "1"))], true);
     assert_eq!(decode(&encode(&some).unwrap()).unwrap(), some);
     let p = LevelPage::over(1, leaf().page);
     let empty = PoiPage::default();

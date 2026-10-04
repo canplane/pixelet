@@ -19,8 +19,8 @@ pub struct PublishedVersion {
 }
 
 pub const PUBLISHED_VERSION: PublishedVersion = PublishedVersion {
-    terrain: "v8",
-    poi: "v8",
+    terrain: "v7",
+    poi: "v9",
     geocode: "v5",
 };
 

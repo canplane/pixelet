@@ -1,8 +1,11 @@
 {
   "$doc": [
-    "A kind of place and its badge — an icon and a color — keyed by the category",
-    "pxl-geo-spec's overture/properties.rs `category_of()` gives a place, and",
-    "DEFAULT_BADGE for one this does not list, rather than a guessed mapping.",
+    "A kind of place and its badge — an icon and a color — keyed by its",
+    "category: this tree's own vocabulary, which every source of places maps its",
+    "own onto as it reads them (pxl-geo-spec's overture/properties.rs",
+    "`category_of()` for Overture's), as the place ladder is (pxl-spec",
+    "place.rs), so a page says the same whichever source made it. DEFAULT_BADGE",
+    "is for a place a source maps to none of these, rather than a guessed one.",
     "",
     "A kind crosses a POI page as its number: its place in CATEGORY_BADGE,",
     "counted from 1, and 0 for none (pxl-spec bake/poi_page.rs), which is its",

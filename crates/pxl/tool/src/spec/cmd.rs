@@ -251,13 +251,7 @@ fn ts_reader(spec: &Spec, name: &str, ty: &str, fields: &[Field]) -> Result<Vec<
 }
 
 fn ts(spec: &Spec, t: &Target) -> Result<String, String> {
-    let mut out = vec![
-        format!("// {}", t.ts_logical),
-        "//".into(),
-        super::generated(t.json, t.json),
-        "".into(),
-        "/**".into(),
-    ];
+    let mut out = vec![format!("// {}", t.ts_logical), "//".into(), super::generated(t.json, t.json), "".into(), "/**".into()];
     out.extend(spec.doc.iter().map(|l| if l.is_empty() { " *".to_string() } else { format!(" * {l}") }));
     out.push(" */".into());
     let mut tail: Vec<String> = Vec::new();
@@ -349,13 +343,6 @@ fn ts(spec: &Spec, t: &Target) -> Result<String, String> {
     Ok(file(&out))
 }
 
-// ---- C++ ----
-//
-// The guest's end in C++: the enums, each with its members for `member_of`
-// (core abi/cmd.hpp), what a guest reads off a packet, and what it writes
-// into a signal. Names are the spec's, as the Rust's are.
-
-/// A field as a C++ guest reads it, from a packet the host wrote.
 fn cpp_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
     let kind = spec.kind(&f.ty)?;
     if f.list && kind == Kind::Number {
@@ -384,8 +371,6 @@ fn cpp_number(ty: &str) -> &'static str {
     }
 }
 
-/// The statements that read one field out of the cursor `c` into `to`,
-/// returning the error where it does not read.
 fn cpp_read_one(spec: &Spec, f: &Field, c: &str, to: &str) -> Result<Vec<String>, String> {
     let kind = spec.kind(&f.ty)?;
     let (call, conv) = if f.list {
@@ -434,9 +419,8 @@ fn cpp_read(spec: &Spec, f: &Field, i: usize) -> Result<Vec<String>, String> {
     Ok(out)
 }
 
-/// A field as a C++ guest writes it. A list of records is a function that
-/// hands each item to the callback it is given — called twice, once to count
-/// them, since a branch's table precedes its children.
+/// A list of records is a callback called twice, once to count, since a
+/// branch's table precedes its children.
 fn cpp_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
     let kind = spec.kind(&f.ty)?;
     if f.list {
@@ -499,12 +483,7 @@ fn cpp_writer(spec: &Spec, out: &mut Vec<String>, name: &str, doc: Option<&[Stri
 }
 
 fn cpp(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<String, String> {
-    let mut out = vec![
-        format!("// {path}"),
-        "//".into(),
-        super::generated(t.json, t.json),
-        "//".into(),
-    ];
+    let mut out = vec![format!("// {path}"), "//".into(), super::generated(t.json, t.json), "//".into()];
     out.extend(super::line_comments(&spec.doc, ""));
     out.extend(
         [
@@ -603,8 +582,6 @@ fn cpp(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<String, S
     out.extend([String::new(), format!("}} // namespace {namespace}")]);
     Ok(file(&out))
 }
-
-// ---- Rust ----
 
 fn rs_borrows(spec: &Spec, fields: &[Field]) -> Result<bool, String> {
     for f in fields {
@@ -777,12 +754,7 @@ fn rs_writer(spec: &Spec, out: &mut Vec<String>, name: &str, doc: Option<&[Strin
 }
 
 fn rs(spec: &Spec, t: &Target) -> Result<String, String> {
-    let mut out = vec![
-        format!("// {}/cmd.spec.rs", t.rs_logical),
-        "//".into(),
-        super::generated(t.json, t.json),
-        "".into(),
-    ];
+    let mut out = vec![format!("// {}/cmd.spec.rs", t.rs_logical), "//".into(), super::generated(t.json, t.json), "".into()];
     out.extend(rs_doc(&spec.doc, "", "//!"));
     out.extend(
         [
@@ -909,11 +881,7 @@ fn test_rs(spec: &Spec, t: &Target) -> Result<String, String> {
             }
         }
     }
-    let mut out: Vec<String> = vec![
-        format!("// {}/cmd.test.rs", t.rs_logical),
-        "//".to_string(),
-        super::generated(t.json, t.json),
-    ];
+    let mut out: Vec<String> = vec![format!("// {}/cmd.test.rs", t.rs_logical), "//".to_string(), super::generated(t.json, t.json)];
     out.extend(
         [
             "",
@@ -968,7 +936,6 @@ struct Target {
     ts_logical: &'static str,
     rs_dir: &'static str,
     rs_logical: &'static str,
-    /// The C++ header written from it, and the namespace its names are in.
     cpp: Option<(&'static str, &'static str)>,
 }
 

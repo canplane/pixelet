@@ -13,7 +13,7 @@ use xpute_runtime::global::Global;
 static SHEET: Global<BillboardAtlas> = Global::new();
 
 pub fn billboard_sheet() -> &'static mut BillboardAtlas {
-    SHEET.get(|| BillboardAtlas::new(handheld()))
+    SHEET.get(BillboardAtlas::new)
 }
 
 pub fn new_billboard_set(order: BillboardOrder) -> u32 {

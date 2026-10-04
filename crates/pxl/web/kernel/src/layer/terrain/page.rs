@@ -107,7 +107,7 @@ pub fn terrain_step() {
     let o = ocean();
     let ocean_wants: &[(u64, Ask)] = if o.terrain.is_none() && !o.waiting.is_empty() { &[(0, Ask::PLAIN)] } else { &[] };
     declare(OCEAN_CATEGORY, ocean_wants);
-    terrain.step(crate::control::navigation::destination::page(), &crate::layer::decor::cell::pages());
+    terrain.step(crate::control::navigation::destination::page(), crate::layer::decor::cell::pages(), f64::INFINITY);
     crate::world::pyramid::cover::step::<Terrain>();
     // Derived from the scheduler so a superseded batch cannot leave a stale
     // Success. A failed fetch keeps its want and is retried, so it reads as Loading.
