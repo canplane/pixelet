@@ -102,7 +102,7 @@ no existing rung moves to make room.
 repeat. It means whole answers repeat, and they repeat _next to each other_:
 a district is hundreds of pages wide and every page of it reads the same.
 
-So the object is a **group** — the page four levels up, 16 leaves on a side,
+So the object is a **group** — the page at z12, 16 leaves on a side,
 256 of them — holding the answers its leaves take and one index a leaf.
 
 ```

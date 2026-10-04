@@ -11,7 +11,7 @@ The control plane is unified — a terrain page, an object band, a POI page and
 a mesh are all a handle with an identity, an owner, a lifetime, a revision and
 a residency. The data plane is not: a terrain page stays dense lanes, an
 object band a sparse tree, a POI page point records. What is unified is one
-level down, and it is two records. A **Placement** is one row for one placed
+layer down, and it is two records. A **Placement** is one row for one placed
 thing — id, position, size, heading, and a palette value — so that what
 differs between a tree and a cube is the value and not the row. A **Palette**
 is the table that value indexes, one row per kind of thing, pointing at a
@@ -55,10 +55,10 @@ Nothing about the world is stored server-side today; placed objects live in
 
 **The address.** Today each layer names its own: terrain by L3 page index,
 POI by the same, objects by the L2 column with Z dropped and a band Z beside
-it, decoration by nothing at all. One shape covers them — `(kind, level, key)`
-— and the level half of it is settled in
-[level, step and zoom](../20260921-level-step-and-zoom-are-one-number.md).
-`DemandKey` is `(category, subject)` and wants the level; the world change log
+it, decoration by nothing at all. One shape covers them — `(kind, z, key)`
+— and the zoom half of it is settled in
+[the mesh step and the zoom](../20260921-the-mesh-step-and-the-zoom-are-one-number.md).
+`DemandKey` is `(category, subject)` and wants the zoom; the world change log
 is already `(topic, key)` and wants it too.
 
 **The record.** The object store's lanes and the POI page's lanes reached the
