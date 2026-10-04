@@ -557,7 +557,7 @@ impl<'a> Access<'a> {
     fn lines_over(&self, cell: Cell, ground_top: f64) -> Lines {
         let mut lines = Lines::default();
         let Some((src, body)) = self.drawn_from(cell.page()) else { return lines };
-        let at = sample_in(cell, src);
+        let (at, side) = (sample_in(cell, src), 1.0 / GROUND.scale(cell.level()).count_in(GROUND.scale(src.level)) as f64);
         let ground = round(ground_top / U_PER_CELL) as i32;
         let units = |[lo, hi]: [i32; 2]| [f64::from(lo) * U_PER_CELL, f64::from(hi) * U_PER_CELL];
         let page = Frame::of(src);
@@ -565,12 +565,12 @@ impl<'a> Access<'a> {
         let cell_per_m = u_per_m(page.corner[1]) / U_PER_CELL;
         let [tx, ty] = at.map(|v| v as u32);
         let shown = shown_ground(|k| u32::from(channel_of(body.ground.cells[GROUND.cell_index(tx, ty) as usize], k)));
-        for o in body.decks.over_point(frame, at) {
+        for o in body.decks.over_point(frame, at, side) {
             match o.occupies(ground, cell_per_m) {
                 Occupies::Grade => {}
                 Occupies::Above { slab, pier } => {
                     lines.boxes.push(units(slab));
-                    if let Some(pier) = pier.and_then(|p| pier_stands(p, shown, body.decks.over_point(frame, at), ground, cell_per_m)) {
+                    if let Some(pier) = pier.and_then(|p| pier_stands(p, shown, body.decks.over_point(frame, at, side), ground, cell_per_m)) {
                         lines.boxes.push(units(pier));
                     }
                 }

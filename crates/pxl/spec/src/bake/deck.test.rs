@@ -15,10 +15,11 @@ fn one(points: &[[f64; 2]], tops: &[i16], width_cells: f64) -> Decks {
 fn a_column_is_under_a_deck_within_its_reach() {
     // Four cells wide: two either side of the line.
     let d = one(&[[10.0, 10.0], [30.0, 10.0]], &[100, 120], 4.0);
-    let over: Vec<Over> = d.over_point(None, [20.0, 12.0]).collect();
+    let over: Vec<Over> = d.over_point(None, [20.0, 12.0], 1.0).collect();
     assert_eq!(over.len(), 1);
-    assert_eq!(over[0].top, 110.0);
-    assert_eq!(d.over_point(None, [20.0, 12.5]).count(), 0);
+    // rising a cell a cell, a column a cell wide sweeps half a cell either side of its middle
+    assert_eq!((over[0].low, over[0].top), (109.5, 110.5));
+    assert_eq!(d.over_point(None, [20.0, 12.5], 1.0).count(), 0);
 }
 
 #[test]
@@ -39,7 +40,7 @@ fn a_pier_stands_at_each_world_station_and_its_column_keeps_it_unless_blocked() 
     let frame = Some(Frame { corner: [0.0, 0.0], cell: 2.0 });
     let station = PIER_STEP_M * u_per_m(0.0) / 2.0;
     let d = one(&[[1.0, 3.0], [41.0, 3.0]], &[20, 20], 4.0);
-    let piers: Vec<f64> = (0..42).map(|x| f64::from(x) + 0.5).filter(|&x| d.over_point(frame, [x, 3.0]).any(|o| o.pier)).collect();
+    let piers: Vec<f64> = (0..42).map(|x| f64::from(x) + 0.5).filter(|&x| d.over_point(frame, [x, 3.0], 1.0).any(|o| o.pier)).collect();
     let expected: Vec<f64> = (0..42)
         .map(|x| f64::from(x) + 0.5)
         .filter(|&x| x > 1.0 && (x - round(x / station) * station).abs() <= PIER_ALONG * 4.0 / 2.0)
@@ -47,7 +48,7 @@ fn a_pier_stands_at_each_world_station_and_its_column_keeps_it_unless_blocked() 
     assert!(!expected.is_empty());
     assert_eq!(piers, expected);
     let at = [expected[0], 3.0];
-    let over = d.over_point(frame, at).next().unwrap();
+    let over = d.over_point(frame, at, 1.0).next().unwrap();
     let Occupies::Above { pier: Some(pier), .. } = over.occupies(5, 0.5) else {
         panic!("no pier over ground at 5")
     };
@@ -60,12 +61,12 @@ fn a_pier_stands_at_each_world_station_and_its_column_keeps_it_unless_blocked() 
         channel: GroundChannelKey::TRANSPORT,
         type_id: 1,
     };
-    assert_eq!(pier_stands(pier, land, d.over_point(frame, at), 5, 0.5), Some(pier));
-    assert_eq!(pier_stands(pier, road, d.over_point(frame, at), 5, 0.5), None);
+    assert_eq!(pier_stands(pier, land, d.over_point(frame, at, 1.0), 5, 0.5), Some(pier));
+    assert_eq!(pier_stands(pier, road, d.over_point(frame, at, 1.0), 5, 0.5), None);
     let mut under = Builder::default();
     under.push([([0.0, 3.0], 10), ([40.0, 3.0], 10)], 4 * POINT_SCALE as u8, 3, Form::Deck);
     let under = under.finish();
-    let column = d.over_point(frame, at).chain(under.over_point(frame, at));
+    let column = d.over_point(frame, at, 1.0).chain(under.over_point(frame, at, 1.0));
     assert_eq!(pier_stands(pier, land, column, 5, 0.5), None);
 }
 
@@ -130,27 +131,33 @@ fn a_full_parent_keeps_its_widest_lines_within_both_bounds() {
 fn each_form_is_drawn_from_its_surface() {
     use crate::cell::cube::cube_types::transport as t;
     let over = |form: Form, top: f64| Over {
+        low: top,
         top,
         kind: t::road_primary,
         form,
         pier: false,
     };
     // Two cells a metre: a 2 m slab is 4 cells; a road's 4.5 m clear across a 30% grade
-    // is 9.4 cells straight up, so 10, and a staircase's step more.
+    // is 9.4 cells straight up, so 10.
     let cpm = 2.0;
     assert_eq!(over(Form::Deck, 30.0).occupies(10, cpm), Occupies::Above { slab: [26, 30], pier: None });
-    assert_eq!(over(Form::Bore, 10.0).occupies(40, cpm), Occupies::Through { air: [10, 21] });
+    assert_eq!(over(Form::Bore, 10.0).occupies(40, cpm), Occupies::Through { air: [10, 20] });
     // a road raised past a structure is a slab, down to the ground where it is thinner
     assert_eq!(over(Form::Grade, 14.0).occupies(10, cpm), Occupies::Above { slab: [10, 14], pier: None });
     assert_eq!(over(Form::Grade, 20.0).occupies(10, cpm), Occupies::Above { slab: [16, 20], pier: None });
     assert_eq!(over(Form::Grade, 10.0).occupies(14, cpm), Occupies::Through { air: [10, 14] });
     assert_eq!(over(Form::Grade, 10.0).occupies(10, cpm), Occupies::Grade);
+    // a surface falling 8 cells across a column is solid over all of it, and a bore clear over all of it
+    let steep = Over { low: 22.0, ..over(Form::Deck, 30.0) };
+    assert_eq!(steep.occupies(10, cpm), Occupies::Above { slab: [18, 30], pier: None });
+    let steep = Over { low: 10.0, ..over(Form::Bore, 18.0) };
+    assert_eq!(steep.occupies(40, cpm), Occupies::Through { air: [10, 28] });
 }
 
 /// Every segment tried, in order: what the boxes must answer.
 fn scan(d: &Decks, frame: Option<Frame>, at: [f64; 2]) -> Vec<Over> {
     d.iter()
-        .flat_map(|deck| (0..deck.points.len().saturating_sub(1)).filter_map(move |s| deck.over_segment(frame, s, at)))
+        .flat_map(|deck| (0..deck.points.len().saturating_sub(1)).filter_map(move |s| deck.over_segment(frame, s, at, 1.0)))
         .collect()
 }
 
@@ -189,7 +196,7 @@ fn the_boxes_answer_what_every_segment_does() {
             } else {
                 [rng() * 520.0 - 4.0, rng() * 520.0 - 4.0]
             };
-            assert_eq!(d.over_point(frame, at).collect::<Vec<_>>(), scan(&d, frame, at), "round {round} at {at:?}");
+            assert_eq!(d.over_point(frame, at, 1.0).collect::<Vec<_>>(), scan(&d, frame, at), "round {round} at {at:?}");
         }
     }
 }

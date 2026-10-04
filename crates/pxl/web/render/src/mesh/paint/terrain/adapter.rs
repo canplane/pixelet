@@ -291,11 +291,14 @@ impl ChunkSample {
 
     fn spans_of(&mut self, over: &mut Vec<(usize, usize, Over)>, cell_per_m: f64) -> Result<(), Refused> {
         let tables = &*MATERIALS;
-        // A deck's highest over a column; a station is one segment's, so the pier is either's.
-        over.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)).then(b.2.top.total_cmp(&a.2.top)));
+        // A line over a column is all its segments sweep there; a station is one segment's,
+        // so the pier is either's.
+        over.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
         over.dedup_by(|b, a| {
             let same = (a.0, a.1) == (b.0, b.1);
-            a.2.pier |= same && b.2.pier;
+            if same {
+                (a.2.low, a.2.top, a.2.pier) = (a.2.low.min(b.2.low), a.2.top.max(b.2.top), a.2.pier || b.2.pier);
+            }
             same
         });
         self.spans.clear();

@@ -49,11 +49,10 @@ pub const BORE_COVER_M: f64 = 3.0; // a bore's shell over its headroom: pixelet'
 pub const MAX_GRADE: f64 = 0.30;
 
 /// Whole cells clear for `m` metres across a road, `cell_per_m` cells a metre:
-/// up to `MAX_GRADE` the clear height stands higher by the grade's secant, a
-/// least rounds up, and one cell more gives back what a voxel staircase's
-/// step takes out of the clear height at its edge.
+/// up to `MAX_GRADE` the clear height stands higher by the grade's secant, and
+/// a least rounds up.
 pub fn clear_cells(m: f64, cell_per_m: f64) -> i32 {
-    libm::ceil(m * libm::hypot(1.0, MAX_GRADE) * cell_per_m) as i32 + 1
+    libm::ceil(m * libm::hypot(1.0, MAX_GRADE) * cell_per_m) as i32
 }
 
 /// What a way of transport type `kind` needs clear under a deck over it.
@@ -163,10 +162,11 @@ pub struct Deck<'a> {
     pub form: Form,
 }
 
-/// A line over one column: its road surface in z16 cells, and whether its
-/// pier's section covers the column.
+/// A line over one column: the lowest and highest its road surface runs
+/// across the column, in z16 cells, and whether its pier's section covers it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Over {
+    pub low: f64,
     pub top: f64,
     pub kind: u8,
     pub form: Form,
@@ -189,9 +189,11 @@ pub enum Occupies {
 impl Over {
     /// `cell_per_m`: z16 cells a ground metre on the column's page.
     pub fn occupies(&self, ground: i32, cell_per_m: f64) -> Occupies {
-        let top = round(self.top) as i32;
+        // all the surface sweeps across the column, so a slab or a bore steps down to the
+        // next column's without a gap however steep it runs
+        let (low, top) = (round(self.low) as i32, round(self.top) as i32);
         let slab = |floor: i32| {
-            let lo = (top - (round(DECK_THICKNESS_M * cell_per_m) as i32).max(1)).max(floor);
+            let lo = (low - (round(DECK_THICKNESS_M * cell_per_m) as i32).max(1)).max(floor);
             Occupies::Above {
                 slab: [lo, top],
                 pier: (self.pier && lo > ground).then_some([ground, lo]),
@@ -201,12 +203,12 @@ impl Over {
         match self.form {
             Form::Deck => slab(i32::MIN),
             Form::Bore => Occupies::Through {
-                air: [top, top + clear_cells(headroom_m(self.kind), cell_per_m)],
+                air: [low, top + clear_cells(headroom_m(self.kind), cell_per_m)],
             },
             // a road off the ground past a structure stands on piers as a deck does, and is
             // open to the sky where it is cut in
             Form::Grade if top > ground => slab(ground),
-            Form::Grade if top < ground => Occupies::Through { air: [top, ground] },
+            Form::Grade if top < ground => Occupies::Through { air: [low, ground] },
             Form::Grade => Occupies::Grade,
         }
     }
@@ -236,9 +238,9 @@ impl Decks {
         (0..self.len()).map(|d| self.deck(d))
     }
 
-    /// Every deck over each point of a grid: point (i, j) at
-    /// `origin + (i + ½, j + ½) · step` in the page's cells. A point at a
-    /// joint is reported for both segments; the caller keeps the higher.
+    /// Every deck over each column of a grid: column (i, j) the square of side
+    /// `step` about `origin + (i + ½, j + ½) · step` in the page's cells. A
+    /// column at a joint is reported for both segments; the caller joins them.
     pub fn over_grid(&self, frame: Option<Frame>, origin: [f64; 2], step: f64, size: [i64; 2], mut each: impl FnMut(i64, i64, usize, Over)) {
         let cell = |v: f64, k: usize| (v - origin[k]) / step - 0.5;
         for (d, deck) in self.iter().enumerate() {
@@ -252,7 +254,7 @@ impl Decks {
                 for j in range(1) {
                     for i in range(0) {
                         let at = [origin[0] + (i as f64 + 0.5) * step, origin[1] + (j as f64 + 0.5) * step];
-                        if let Some(over) = deck.over_segment(frame, s, at) {
+                        if let Some(over) = deck.over_segment(frame, s, at, step) {
                             each(i, j, d, over);
                         }
                     }
@@ -261,12 +263,13 @@ impl Decks {
         }
     }
 
-    pub fn over_point(&self, frame: Option<Frame>, at: [f64; 2]) -> impl Iterator<Item = Over> + '_ {
+    /// Every deck over the column of side `side` about `at`.
+    pub fn over_point(&self, frame: Option<Frame>, at: [f64; 2], side: f64) -> impl Iterator<Item = Over> + '_ {
         Near::new(&self.boxes, self.points.len(), at.map(|v| v * POINT_SCALE)).filter_map(move |i| {
             let d = self.starts.partition_point(|&s| s as usize <= i) - 1;
             let deck = self.deck(d);
             let s = i - self.starts[d] as usize;
-            (s + 1 < deck.points.len()).then(|| deck.over_segment(frame, s, at)).flatten()
+            (s + 1 < deck.points.len()).then(|| deck.over_segment(frame, s, at, side)).flatten()
         })
     }
 
@@ -324,12 +327,14 @@ impl Deck<'_> {
         b
     }
 
-    /// What segment `s` is over `at`: the top at its nearest point if the
-    /// deck covers `at`, and, given where the page lies, whether `at` is
-    /// inside the section of a pier at a station of this segment.
-    fn over_segment(&self, frame: Option<Frame>, s: usize, at: [f64; 2]) -> Option<Over> {
+    /// What segment `s` is over the column of side `side` about `at`, if the
+    /// deck covers `at`: the surface it runs through across the column, and,
+    /// given where the page lies, whether `at` is inside the section of a pier
+    /// at a station of this segment.
+    fn over_segment(&self, frame: Option<Frame>, s: usize, at: [f64; 2], side: f64) -> Option<Over> {
         let (a, b) = (self.point(s), self.point(s + 1));
         let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+        let len2 = dx * dx + dy * dy;
         let t = along(a, [dx, dy], at);
         // a line ends square where it begins and ends, as the ground cuts a way, so the
         // next line and the paint start where it stops; its joints stay round
@@ -341,8 +346,13 @@ impl Deck<'_> {
         if !way::covers(self.width_cells(), libm::hypot(at[0] - near[0], at[1] - near[1])) {
             return None;
         }
+        // the column's square spans this much of the segment either side of `t`
+        let reach = if len2 > 0.0 { side / 2.0 * (dx.abs() + dy.abs()) / len2 } else { 0.0 };
+        let z = |t: f64| f64::from(self.tops[s]) + (f64::from(self.tops[s + 1]) - f64::from(self.tops[s])) * t.clamp(0.0, 1.0);
+        let (z0, z1) = (z(t - reach), z(t + reach));
         Some(Over {
-            top: f64::from(self.tops[s]) + (f64::from(self.tops[s + 1]) - f64::from(self.tops[s])) * t,
+            low: z0.min(z1),
+            top: z0.max(z1),
             kind: self.kind,
             form: self.form,
             pier: self.form != Form::Bore && frame.is_some_and(|f| pier_covers(f, self.width_cells(), a, [dx, dy], near, at)),

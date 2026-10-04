@@ -157,7 +157,7 @@ pub fn draw(kind: &Kind, candidate: Candidate, cells: &[GroundCell], lines: &Dec
         rng.unit() * core::f64::consts::PI * 2.0
     };
     let scale = 1.0 + (rng.unit() * 2.0 - 1.0) * SCALE_JITTER;
-    if lines.over_point(None, [f64::from(cell_x) + 0.5, f64::from(cell_y) + 0.5]).next().is_some() {
+    if lines.over_point(None, [f64::from(cell_x) + 0.5, f64::from(cell_y) + 0.5], 1.0).next().is_some() {
         return None;
     }
     let [gx, gy] = candidate.cell;
