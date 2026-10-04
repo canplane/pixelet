@@ -9,8 +9,9 @@ use crate::layer::billboard::field::billboard_instance;
 use crate::layer::billboard::selection::select_visible_billboards;
 use crate::layer::billboard::sheet::{new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::layer::poi::badge::{self, Label};
-use crate::layer::poi::{enabled, rank_of};
-use crate::param::{POI_ALL_LEVEL, POI_MAJOR_RANK};
+use crate::control::camera::controller::units_per_px_at;
+use crate::layer::poi::{enabled, rank_of, units_at_zoom};
+use crate::param::{POI_ALL_ZOOM, POI_MAJOR_RANK, POI_MAJOR_ZOOM};
 use crate::sched::tick::TickContext;
 use crate::world::access::{Access, Detail, Ray};
 use crate::world::frame::view::{ndc_to_px, view};
@@ -23,6 +24,7 @@ use pxl_spec::bake::poi_page::{PoiPage, POI_LATTICE};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::{ivec, projection, REACH};
 use pxl_spec::space::pyramid::{Cell, GROUND};
+use pxl_spec::space::v3::len3;
 use std::collections::HashSet;
 
 #[derive(Default)]
@@ -33,8 +35,9 @@ struct Placement {
     drawn: Vec<u32>,
     /// Nearest the eye first: screen box, label, and where it stands.
     hits: Vec<([f64; 4], Label, Pvf3)>,
-    /// Kept so a settled turn asks the heap for nothing.
-    found: Vec<(Cell, Label, Cell, f64)>,
+    /// Kept so a settled turn asks the heap for nothing. Each with the scale
+    /// it shows at and where in its POI cell that scale is read.
+    found: Vec<(Cell, Label, Cell, f64, Shown, [f64; 3])>,
     /// The drawn chunks, the pages and the heights `found` was read from: an
     /// eye move that changes none of them casts no ray.
     found_for: Option<(u32, u32, (u32, u32))>,
@@ -43,6 +46,24 @@ struct Placement {
     instances: Vec<f32>,
 }
 static PLACEMENT: Global<Placement> = Global::new();
+
+/// Every place, or only the prominent: what a cell shows by the units a
+/// logical pixel spans there.
+#[derive(Clone, Copy, PartialEq)]
+enum Shown {
+    All,
+    Major,
+}
+
+fn shown_at(units_per_px: f64) -> Option<Shown> {
+    if units_per_px <= units_at_zoom(POI_ALL_ZOOM) {
+        Some(Shown::All)
+    } else if units_per_px <= units_at_zoom(POI_MAJOR_ZOOM) {
+        Some(Shown::Major)
+    } else {
+        None
+    }
+}
 
 /// None where nothing over it is known.
 fn top_at(at: &Pvf3, level: u32) -> Option<f64> {
@@ -85,11 +106,6 @@ pub fn step(ctx: &mut TickContext) {
     }
     let read: &[(Chunk, bool, bool)] = if stale { &p.mounted } else { &[] };
     for &(chunk, _, _) in read.iter().filter(|m| m.1) {
-        // None coarser than COARSEST, only the most prominent up to POI_ALL_LEVEL.
-        if chunk.level() > PoiPage::COARSEST {
-            continue;
-        }
-        let major_only = chunk.level() > POI_ALL_LEVEL;
         let Some(src) = pages.paging().source(chunk.page()) else { continue };
         let Some(poi) = pages.paging().get(src) else { continue };
         // Where the source cell is wider than the chunk, its place counts only if it
@@ -103,29 +119,31 @@ pub fn step(ctx: &mut TickContext) {
             let from = poi.cells.partition_point(|c| c.cell < lo);
             for c in poi.cells[from..].iter().take_while(|c| c.cell < hi) {
                 let cell = POI_LATTICE.cell_at(src, c.cell);
-                // From POI_ALL_LEVEL, a place or a count; coarser, only a prominent enough
-                // place. A count stands at its cell's middle.
-                let (label, ground) = if major_only {
-                    let Some((place, _, at)) = poi.shown(c).map(|(i, p, at)| (i, rank_of(p.kind), at)).filter(|s| s.1 <= POI_MAJOR_RANK).min_by_key(|s| s.1) else {
-                        continue;
-                    };
-                    (Label::Place { page: src, place }, cell.inner_at(GROUND, 0, at))
-                } else {
-                    match (c.count, poi.shown(c).next()) {
-                        (1, Some((place, _, at))) => (Label::Place { page: src, place }, cell.inner_at(GROUND, 0, at)),
-                        _ => (Label::Count(c.count, c.partial), GROUND.cell_of(0, &cell.mid())),
-                    }
+                // Near, a place or a count; farther, only a prominent enough place.
+                // A count stands at its cell's middle.
+                let all = match (c.count, poi.shown(c).next()) {
+                    (1, Some((place, _, at))) => (Label::Place { page: src, place }, cell.inner_at(GROUND, 0, at)),
+                    _ => (Label::Count(c.count, c.partial), GROUND.cell_of(0, &cell.mid())),
                 };
-                if m == 0 && Chunk::of(chunk.level(), &ground.mid()).column() != chunk.column() {
-                    continue;
+                let major = poi
+                    .shown(c)
+                    .map(|(i, p, at)| (i, rank_of(p.kind), at))
+                    .filter(|s| s.1 <= POI_MAJOR_RANK)
+                    .min_by_key(|s| s.1)
+                    .map(|(place, _, at)| (Label::Place { page: src, place }, cell.inner_at(GROUND, 0, at)));
+                let mid = projection::unproject(cell.mid().i, cell.mid().f);
+                for (shown, (label, ground)) in [(Shown::All, all)].into_iter().chain(major.map(|m| (Shown::Major, m))) {
+                    if m == 0 && Chunk::of(chunk.level(), &ground.mid()).column() != chunk.column() {
+                        continue;
+                    }
+                    // Counted only by the chunk the top of what stands there is in, so a
+                    // column's several chunks do not repeat it.
+                    let Some(top) = top_at(&ground.mid(), chunk.level()) else { continue };
+                    if top - 1.0 < z0 || top - 1.0 >= z1 {
+                        continue;
+                    }
+                    found.push((POI_LATTICE.cell_of(chunk.level(), &ground.mid()), label, ground, top, shown, [mid[0], mid[1], top]));
                 }
-                // Counted only by the chunk the top of what stands there is in, so a
-                // column's several chunks do not repeat it.
-                let Some(top) = top_at(&ground.mid(), chunk.level()) else { continue };
-                if top - 1.0 < z0 || top - 1.0 >= z1 {
-                    continue;
-                }
-                found.push((POI_LATTICE.cell_of(chunk.level(), &ground.mid()), label, ground, top));
             }
         }
     }
@@ -133,7 +151,12 @@ pub fn step(ctx: &mut TickContext) {
     p.batch.reset();
     let mut labeled = core::mem::take(&mut p.labeled);
     labeled.clear();
-    for &(_, label, stands, top) in &found {
+    let eye = crate::world::observation::eye().unwrap_or_default();
+    for &(_, label, stands, top, shown, at) in &found {
+        let d = len3(&[at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]]);
+        if shown_at(units_per_px_at(d)) != Some(shown) {
+            continue;
+        }
         let Some(width) = badge::width(label) else { continue };
         let center = stands.center(top);
         let local = crate::world::frame::coord::canonical_to_local(&center, origin);
