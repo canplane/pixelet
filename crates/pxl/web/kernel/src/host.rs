@@ -12,6 +12,8 @@ use xpute_runtime::ipc::sys::Sys;
 use xpute_runtime::mem::base::ptr_at;
 
 use crate::abi::host::stream;
+use crate::io::file::{KEPT_FILES, PATH_BYTES};
+use crate::param::MAX_CREDITS;
 use xpute_runtime::global::Global;
 
 static SYS: Global<Option<Sys>> = Global::new();
@@ -43,10 +45,32 @@ pub fn host_record(op: u32, args: &[u32], bytes: &[u8]) -> bool {
     true
 }
 
+/// A record's bytes in the stream: its op and count, its arguments, and its
+/// bytes as their count and then words.
+const fn record_bytes(args: usize, bytes: Option<usize>) -> usize {
+    4 * (2
+        + args
+        + match bytes {
+            Some(b) => 1 + b.div_ceil(4),
+            None => 0,
+        })
+}
+
+/// The most one file records in a turn: its open, then on its answer a read
+/// or a write, an image's decode and its close, and a stop's close.
+const FILE_TURN_BYTES: usize = record_bytes(3, Some(PATH_BYTES)) + record_bytes(3, None) + record_bytes(2, Some(0)) + 2 * record_bytes(1, None);
+
+/// What the calls that cannot wait may record in one turn, all of them files:
+/// each fetch credit's file answered and a new one opened on it, and the kept
+/// files. Requests that can wait take the stream only past it.
+pub const RESERVE: usize = FILE_TURN_BYTES * (2 * MAX_CREDITS as usize + KEPT_FILES);
+
+const _: () = assert!(RESERVE < stream::BYTES as usize, "the calls that cannot wait would not fit the host stream");
+
 /// A request that can wait a turn: None where there is no host, false where
-/// the turn's stream has no room for it past `stream::RESERVE`.
+/// the turn's stream has no room for it past `RESERVE`.
 pub fn host_offer(op: u32, args: &[u32], bytes: &[u8]) -> Option<bool> {
-    Some(sys()?.try_call(op, args, bytes, stream::RESERVE as usize))
+    Some(sys()?.try_call(op, args, bytes, RESERVE))
 }
 
 static TURN: Global<u64> = Global::new();

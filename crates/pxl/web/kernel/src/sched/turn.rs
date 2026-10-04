@@ -179,6 +179,7 @@ pub fn world_turn() -> f64 {
     // device_coord is not gated like map_center: the puck keeps its last coordinate across a transient none.
     effect!(worst, puck, location_puck_step(map_navigation().device_coord));
     effect!(worst, objects, crate::layer::object::store::flush_save_if_due());
+    effect!(worst, settings, crate::shell::setting::store::settings_keep_step());
     // After every producer has spoken, including assets asked for during the turn.
     effect!(worst, assets, crate::io::sched::declare(crate::io::demand::Category::asset, crate::io::load::load_wants()));
     effect!(worst, pump, pump());

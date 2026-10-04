@@ -35,11 +35,7 @@ impl Settings {
         if key == SettingKey::debug_overlay {
             profiler_follow(value == 1);
         }
-        self.keep();
-    }
-
-    fn keep(&self) {
-        file::write_whole(root::STORAGE, settings_path(), self.kept().into_bytes());
+        *UNKEPT.get(|| false) = true;
     }
 
     fn kept(&self) -> String {
@@ -65,6 +61,16 @@ impl Settings {
 }
 
 static SETTINGS_STORE: Global<Settings> = Global::new();
+
+/// The store differs from what storage holds. Written once a turn, so a turn
+/// of changes costs the host stream one file, whatever their number.
+static UNKEPT: Global<bool> = Global::new();
+
+pub fn settings_keep_step() {
+    if core::mem::take(UNKEPT.get(|| false)) {
+        file::write_whole(root::STORAGE, settings_path(), settings_store().kept().into_bytes());
+    }
+}
 
 fn settings_path() -> &'static str {
     SETTINGS_PATH

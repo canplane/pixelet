@@ -7,8 +7,39 @@
 use xpute_runtime::ipc::file::Files;
 use xpute_runtime::ipc::sys::Fd;
 
+use pxl_spec::bake::format::OCEAN_KEY;
+use pxl_spec::bake::place_page::DICT_OBJECT;
+use pxl_spec::bake::quadkey::PAGE_KEY_DEPTH;
+
+use crate::abi::host::{OBJECTS_PATH, SETTINGS_PATH};
 use crate::host::sys;
 use xpute_runtime::global::Global;
+
+/// The longest name the kernel opens: a page's quadkey, a shared object's
+/// name, an asset's number or a kept file's path. A longer one is a bug, so
+/// the host stream's reserve can count on it.
+pub const PATH_BYTES: usize = {
+    let names = [
+        PAGE_KEY_DEPTH as usize,
+        OCEAN_KEY.len(),
+        DICT_OBJECT.len(),
+        u32::MAX.ilog10() as usize + 1,
+        SETTINGS_PATH.len(),
+        OBJECTS_PATH.len(),
+    ];
+    let (mut most, mut i) = (0, 0);
+    while i < names.len() {
+        if names[i] > most {
+            most = names[i];
+        }
+        i += 1;
+    }
+    most
+};
+
+/// What the kernel keeps in storage and can write or open there in one
+/// turn: the settings written, the objects written, the objects read back.
+pub const KEPT_FILES: usize = 3;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Owner {
@@ -27,6 +58,7 @@ fn files() -> &'static mut Files<Owner> {
 
 /// None where there is no host.
 pub fn open(root: u32, path: &str, owner: Owner) -> Option<Fd> {
+    xpute_core::ensure!(path.len() <= PATH_BYTES, EMSGSIZE, path.len());
     Some(files().open(sys()?, root, path, owner))
 }
 
@@ -48,6 +80,7 @@ pub fn held_for(owner: impl Fn(&Owner) -> bool) -> Option<Fd> {
 }
 
 pub fn write_whole(root: u32, path: &str, bytes: Vec<u8>) {
+    xpute_core::ensure!(path.len() <= PATH_BYTES, EMSGSIZE, path.len());
     if let Some(sys) = sys() {
         files().write_whole(sys, root, path, bytes, Owner::Write);
     }
