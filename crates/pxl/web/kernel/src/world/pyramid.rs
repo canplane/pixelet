@@ -189,8 +189,16 @@ impl<L: Layer> Pyramid<L> {
             for &p in &demand {
                 let at = self.paging.source(p).unwrap_or(p);
                 ask(&mut asks, at, Ask { why: Why::Fault, order: order(o, p) });
+                // A line already asked is asked to the top.
+                for q in std::iter::successors(Some(at), |q| (q.level < o.top).then(|| q.parent())).skip(1) {
+                    if asks.get(&q).is_some_and(|a| a.why <= Why::Ancestor) {
+                        break;
+                    }
+                    ask(&mut asks, q, Ask { why: Why::Ancestor, order: order(o, q) });
+                }
             }
-            // More demanded than the structure's bound means the capacity is broken too.
+            // More demanded than the structure's bound means the capacity is broken too:
+            // a fault's line has ground within its fault radius, so it stays in each level's ring.
             let mut read = [0u32; TOP_LEVEL as usize + 1];
             for p in asks.keys() {
                 read[p.level as usize] += 1;
