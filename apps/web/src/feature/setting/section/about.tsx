@@ -17,7 +17,7 @@ function dataLabel(): string {
   const object = STORAGE_KEYS[storage.OBJECTS].split(":").slice(1).join("/");
   if (!PUBLISHED_TILES) return `live tiles · ${object}`;
   const { terrain, poi, geocode } = PUBLISHED_VERSION;
-  return `terrain/${terrain} · ${object} · poi/${poi} · geocode/${geocode}`;
+  return `terrain/${terrain} · poi/${poi} · geocode/${geocode} · ${object}`;
 }
 
 /** UTC: a stamp in the viewer's zone said different things on two phones. */
