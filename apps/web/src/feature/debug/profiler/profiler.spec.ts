@@ -4,9 +4,10 @@
 //
 // The profiler's records and blocks as the kernel lays them out and the shell reads
 // them in place (sched/profiler/record.rs, apps/web/src/feature/debug/profiler/view.ts):
-// word offsets, eight bytes a word, and the names the numbers index. Nothing is
-// built for a read: the kernel writes numbers where they stay, and the words for
-// them are the shell's.
+// word offsets, eight bytes a word, and the names the numbers index. A packed table
+// gives each field's width and the generator lays the offsets out. Nothing is built
+// for a read: the kernel writes numbers where they stay, and the words for them are
+// the shell's.
 
 export const CENSUS_TAGS = ["chunk", "decor", "ghost_box", "ghost_coplanar", "ghost_decor", "skinned", "puck_zone", "puck_beacon", "badge", "debug"] as const;
 
@@ -48,7 +49,7 @@ export const LIMITS = {
   ZOOMS: 24 as number,
 } as const;
 
-/** One rendered frame (sched/profiler/record.rs FrameSample). `settled` is 0 or 1; `phases` is a lane of PHASE_NAMES' length, `gpu_spans` of GPU_SPAN_NAMES', `census` pairs of draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_pages` a word a zoom, LIMITS.ZOOMS of them, slot z for zoom z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z. */
+/** One rendered frame (sched/profiler/record.rs FrameSample). `settled` is 0 or 1; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_pages` hold zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z. */
 export const FRAME = {
   t: 0 as number,
   dt_ms: 1 as number,
@@ -373,7 +374,7 @@ export const READ = {
   tasks_count: 5 as number,
   worst_at: 6 as number,
   worst_count: 7 as number,
-  WORDS: 16 as number,
+  WORDS: 8 as number,
 } as const;
 
 /** What PROFILER_TAKE answers with the address of: u32 words, the frames and tasks the stream has kept since the last take. */
@@ -382,5 +383,5 @@ export const LOG = {
   frames_count: 1 as number,
   tasks_at: 2 as number,
   tasks_count: 3 as number,
-  WORDS: 12 as number,
+  WORDS: 4 as number,
 } as const;

@@ -4,9 +4,10 @@
 //
 // The profiler's records and blocks as the kernel lays them out and the shell reads
 // them in place (sched/profiler/record.rs, apps/web/src/feature/debug/profiler/view.ts):
-// word offsets, eight bytes a word, and the names the numbers index. Nothing is
-// built for a read: the kernel writes numbers where they stay, and the words for
-// them are the shell's.
+// word offsets, eight bytes a word, and the names the numbers index. A packed table
+// gives each field's width and the generator lays the offsets out. Nothing is built
+// for a read: the kernel writes numbers where they stay, and the words for them are
+// the shell's.
 
 // Casing here is the spec's and not Rust's: a name is spelled as the JSON
 // spells it, so that one record is indexed by one name on both sides. To
@@ -223,7 +224,7 @@ pub mod LIMITS {
     pub const KEYS: &[&str] = &["PHASES_MAX", "REASONS", "STEP_SLOTS", "ZOOMS"];
 }
 
-/// One rendered frame (sched/profiler/record.rs FrameSample). `settled` is 0 or 1; `phases` is a lane of PHASE_NAMES' length, `gpu_spans` of GPU_SPAN_NAMES', `census` pairs of draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_pages` a word a zoom, LIMITS.ZOOMS of them, slot z for zoom z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z.
+/// One rendered frame (sched/profiler/record.rs FrameSample). `settled` is 0 or 1; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_pages` hold zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z.
 pub mod FRAME {
     pub const t: u32 = 0;
     pub const dt_ms: u32 = 1;
@@ -753,7 +754,7 @@ pub mod READ {
     pub const tasks_count: u32 = 5;
     pub const worst_at: u32 = 6;
     pub const worst_count: u32 = 7;
-    pub const WORDS: u32 = 16;
+    pub const WORDS: u32 = 8;
     pub const KEYS: &[&str] = &[
         "summary_at",
         "summary_words",
@@ -773,6 +774,6 @@ pub mod LOG {
     pub const frames_count: u32 = 1;
     pub const tasks_at: u32 = 2;
     pub const tasks_count: u32 = 3;
-    pub const WORDS: u32 = 12;
+    pub const WORDS: u32 = 4;
     pub const KEYS: &[&str] = &["frames_at", "frames_count", "tasks_at", "tasks_count", "WORDS"];
 }
