@@ -20,9 +20,9 @@ import { FADE, SETTLE, SNAP } from "@/shared/ui/motion/transition.ts";
 import { keepKeyboard } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
 import { touches } from "@/shared/ui/touch.ts";
-import { alpha, chrome, color, material, shadow } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color, disabledContent, material, shadow } from "@/shared/ui/theme.ts";
 import { openModal } from "@/app/modal.tsx";
-import { holdTier, holdTool, useInHand, useUiStore } from "@/app/store/ui.ts";
+import { chatFits, holdTier, holdTool, useInHand, useUiStore } from "@/app/store/ui.ts";
 import { useKernel } from "@/kernel/shell.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { type PlaceableCube, placeableCubeId, sameCube } from "@/catalog/cell/mod.ts";
@@ -282,7 +282,7 @@ export function Dock() {
 
   function sendMessage() {
     const text = messageText.trim();
-    if (text === "" || isSending) return;
+    if (!canSend || !fits || isSending) return;
     setIsSending(true);
     setTimeout(() => {
       appendChatLine(text);
@@ -330,6 +330,8 @@ export function Dock() {
   const width = Math.min(stripWidth, barWidth);
   const x = PixelRatio.roundToNearestPixel((barWidth - width) / 2);
   const canSend = messageText.trim() !== "";
+  // A line too long for the kernel is refused whole, never cut.
+  const fits = chatFits(messageText.trim());
 
   const card = (pane: Pane, fill: string, content: React.ReactNode, { tint, onContentWidth }: { tint?: string; onContentWidth?: (w: f64) => void } = {}) => {
     const depth = deckDepth(pane, rotation, PANES.length);
@@ -390,10 +392,10 @@ export function Dock() {
               <Presence show={canSend} from={{ opacity: 0, scale: 0.5 }} exit={{ opacity: 0 }} transition={SNAP} style={styles.slot}>
                 <Pressable
                   onPress={sendMessage}
-                  disabled={isSending}
+                  disabled={isSending || !fits}
                   accessibilityRole="button"
                   accessibilityLabel={t("map.dock.send")}
-                  style={({ pressed }) => [styles.send, pressed && styles.sendPressed]}
+                  style={({ pressed }) => [styles.send, pressed && styles.sendPressed, !fits && styles.sendRefused]}
                 >
                   <Glyph glyph="arrow.up" size={chrome.glyph} weight="bold" color={color.white} />
                 </Pressable>
@@ -467,6 +469,7 @@ const styles = StyleSheet.create({
   messageInput: { width: "100%", color: LABEL.primary },
   send: { width: chrome.selection, height: chrome.selection, borderRadius: chrome.selection / 2, alignItems: "center", justifyContent: "center", backgroundColor: color.send },
   sendPressed: { opacity: 0.7 },
+  sendRefused: { opacity: disabledContent },
 
   strip: { height: chrome.control, borderRadius: chrome.control / 2, flexDirection: "row", alignItems: "center" },
   group: { flexDirection: "row", alignItems: "center", padding: (chrome.control - chrome.target) / 2, flexShrink: 0 },

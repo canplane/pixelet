@@ -7,7 +7,7 @@ import type { HoldingState } from "@/kernel/abi/cmd.spec.ts";
 import { cube_types, GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
 import { decorKinds, type PlaceableCube, placeableCubes, sameCube } from "@/catalog/cell/mod.ts";
 import { ActiveTool, Command, encode_chat_send } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_command, kernel_hold, kernel_snapshot, useKernel } from "@/kernel/shell.ts";
+import { kernel_command, kernel_fits, kernel_hold, kernel_snapshot, useKernel } from "@/kernel/shell.ts";
 import { storageGet, storageSet } from "@platform/storage.ts";
 import { OBJECT_TIERS } from "@/config/object.spec.ts";
 
@@ -153,6 +153,11 @@ export const useUiStore = create<UiState>()((set) => ({
     kernel_command(Command.CHAT_SEND, encode_chat_send({ text }));
   },
 }));
+
+/** A line too long to send is refused whole, never cut. */
+export function chatFits(text: string): boolean {
+  return kernel_fits(encode_chat_send({ text }));
+}
 
 export function useInHand(pick: RecentPick): boolean {
   return useKernel(({ holding: h }) => pick.tool === ActiveTool.Object ? h.tool === ActiveTool.Object && sameCube(heldCube(h), pick.cube) : h.tool === ActiveTool.Decor && h.decor === pick.kind);
