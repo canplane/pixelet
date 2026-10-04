@@ -21,11 +21,10 @@ import {
 import { declare_source } from "@/kernel/io/source.ts";
 import { read_asset } from "@/kernel/io/load.ts";
 import { read_object } from "@/kernel/io/fetch.ts";
-import { bind_root } from "@/kernel/host.ts";
+import { bind_root, read_storage } from "@/kernel/host.ts";
 import { BAKE_KINDS } from "@/config/published.spec.ts";
 import { CORE, CORE_DOORBELL, load_core } from "@/kernel/mem.ts";
-import { root, storage, STORAGE_KEYS } from "@/kernel/abi/host.spec.ts";
-import { storageGet } from "@platform/storage.ts";
+import { root, SETTINGS_PATH } from "@/kernel/abi/host.spec.ts";
 import { bytes_at } from "@/kernel/module.ts";
 import { gpuBoot } from "@platform/gpu.ts";
 import { HANDHELD } from "@platform/core.ts";
@@ -69,7 +68,7 @@ export async function boot_kernel(): Promise<void> {
       orientation: orientationSupported(),
       orientation_permission: orientationNeedsPermission(),
       orientation_silence_is_loss: orientationSilenceIsLoss(),
-      settings: storageGet(STORAGE_KEYS[storage.SETTINGS]) ?? "",
+      settings: read_storage(SETTINGS_PATH) ?? "",
     }),
     (result) => result,
   );

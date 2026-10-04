@@ -4,6 +4,7 @@ use std::io::Read;
 use std::path::Path;
 use std::process::Command;
 
+use pxl_spec::bake::published::version_name;
 use xpute_core::math::scalar::round;
 
 /// The `Content-Encoding` every baked page is uploaded with, so the transport decodes it.
@@ -122,10 +123,23 @@ pub fn git_sha() -> Option<String> {
 
 pub fn now_iso8601() -> String {
     let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("after the epoch").as_secs();
-    let (days, rem) = (secs / 86_400, secs % 86_400);
+    let rem = secs % 86_400;
     let (h, m, s) = (rem / 3600, (rem % 3600) / 60, rem % 60);
+    format!("{}T{h:02}:{m:02}:{s:02}.000Z", day_of(secs / 86_400))
+}
 
-    // Civil date from a day count, Howard Hinnant's algorithm.
+/// A bake's next version under `dir`: today's UTC day, numbered past that
+/// day's folders of `format` already there.
+pub fn next_version(dir: &str, format: u32) -> std::path::PathBuf {
+    let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("after the epoch").as_secs();
+    let day = day_of(secs / 86_400);
+    let at = |n: u32| Path::new(dir).join(version_name(format, &day, n));
+    let n = (1..).find(|&n| !at(n).exists()).expect("a free number");
+    at(n)
+}
+
+/// The civil date of a day count from the epoch, Howard Hinnant's algorithm.
+fn day_of(days: u64) -> String {
     let z = days as i64 + 719_468;
     let era = z.div_euclid(146_097);
     let doe = z.rem_euclid(146_097);
@@ -136,7 +150,7 @@ pub fn now_iso8601() -> String {
     let mo = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = yoe + era * 400 + i64::from(mo <= 2);
 
-    format!("{y:04}-{mo:02}-{d:02}T{h:02}:{m:02}:{s:02}.000Z")
+    format!("{y:04}-{mo:02}-{d:02}")
 }
 
 /// A truncated file would otherwise count as finished on resume. The temp

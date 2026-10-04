@@ -7,7 +7,7 @@
 
 use xpute_core::codec::json::{read_json, JsonKind};
 
-use crate::abi::host::{root, storage, STORAGE_KEYS};
+use crate::abi::host::{root, SETTINGS_PATH};
 use crate::host::development;
 use crate::io::file;
 use crate::sched::profiler::log::profiler_follow;
@@ -67,7 +67,7 @@ impl Settings {
 static SETTINGS_STORE: Global<Settings> = Global::new();
 
 fn settings_path() -> &'static str {
-    STORAGE_KEYS[storage::SETTINGS as usize]
+    SETTINGS_PATH
 }
 
 /// What is not offered, unknown or invalid stays at the default.

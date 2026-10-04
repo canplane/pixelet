@@ -7,7 +7,6 @@ import type { HoldingState } from "@/kernel/abi/cmd.spec.ts";
 import { cube_types, GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
 import { decorKinds, type PlaceableCube, placeableCubes, sameCube } from "@/catalog/cell/mod.ts";
 import { ActiveTool, Command, encode_chat_send } from "@/kernel/abi/cmd.spec.ts";
-import { storage, STORAGE_KEYS } from "@/kernel/abi/host.spec.ts";
 import { kernel_command, kernel_hold, kernel_snapshot, useKernel } from "@/kernel/shell.ts";
 import { storageGet, storageSet } from "@platform/storage.ts";
 
@@ -69,7 +68,7 @@ const SEED: readonly RecentPick[] = [
 ];
 
 // Chat lines are not stored, nor what is held: a load starts at the pointer tool.
-const STORAGE_KEY = STORAGE_KEYS[storage.HOTBAR];
+const STORAGE_KEY = "pxl:ui_hotbar";
 
 interface Stored {
   picks: RecentPick[];

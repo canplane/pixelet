@@ -1,6 +1,7 @@
 // pxl-geo-bake/bin/rekey_tiles.rs
 
 //! A pyramid bake's objects linked under their quadkeys (page/rekey.rs).
+//! A partial version links only what its `_snapshot` lists, and the list.
 //!
 //!   rekey_tiles link --bake terrain --from ./out/terrain/v7 --to ./out/terrain/v7.bucket
 
@@ -9,6 +10,8 @@ use std::path::{Path, PathBuf};
 
 use pxl_geo_bake::cli::Flags;
 use pxl_geo_bake::page::rekey;
+use pxl_spec::bake::format::SNAPSHOT_KEY;
+use pxl_spec::bake::quadkey::page_of_name;
 
 const LOCAL_ONLY: [&str; 2] = [".part", ".empty"];
 
@@ -54,7 +57,20 @@ fn link(flags: &Named) -> Result<(), String> {
     std::fs::create_dir_all(&to).map_err(|e| format!("{}: {e}", to.display()))?;
 
     let mut found = Vec::new();
-    objects(&from, "", &mut found)?;
+    let snapshot = from.join(SNAPSHOT_KEY);
+    match std::fs::read_to_string(&snapshot) {
+        Ok(text) => {
+            let listed: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", snapshot.display()))?;
+            for key in listed["written"].as_array().ok_or("a snapshot lists what it writes")? {
+                let key = key.as_str().ok_or("a snapshot's page is a quadkey")?;
+                let p = page_of_name(key).ok_or_else(|| format!("{key}: not a page"))?;
+                found.push(format!("{}/{}", p.level, p.page));
+            }
+            std::fs::hard_link(&snapshot, to.join(SNAPSHOT_KEY)).map_err(|e| format!("{}: {e}", snapshot.display()))?;
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => objects(&from, "", &mut found)?,
+        Err(e) => return Err(format!("{}: {e}", snapshot.display())),
+    }
     for old in &found {
         let new = rekey::rename(old).map_err(|e| format!("{old}: {e}"))?;
         std::fs::hard_link(from.join(old), to.join(&new)).map_err(|e| format!("{old} -> {new}: {e}"))?;

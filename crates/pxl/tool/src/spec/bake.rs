@@ -9,6 +9,25 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
         .get("PUBLISHED_VERSION")
         .map(|p| p.entries().iter().map(|(k, v)| (k.as_str(), v.str().unwrap_or_default())).collect())
         .unwrap_or_default();
+    let format = spec.get("FORMAT").ok_or("published.json: no FORMAT")?;
+    let format_doc = format.lines_at("$doc").unwrap_or_default();
+    let mut formats: Vec<(&str, u32)> = Vec::new();
+    for (k, _) in &kinds {
+        let n = format.get(k).and_then(|n| n.num()).ok_or(format!("published.json: FORMAT has no {k}"))?;
+        if n < 1.0 || n.fract() != 0.0 {
+            return Err(format!("published.json: FORMAT.{k} {n} is not a format number"));
+        }
+        formats.push((k, n as u32));
+    }
+    // `v<format>.<YYYY-MM-DD>.<n>`, or a name the client would request and no bake writes.
+    for (k, v) in &kinds {
+        let parts: Vec<&str> = v.strip_prefix('v').map(|r| r.split('.').collect()).unwrap_or_default();
+        let day = |d: &str| d.len() == 10 && d.split('-').map(str::len).eq([4, 2, 2]) && d.split('-').all(|p| p.parse::<u32>().is_ok());
+        let named = matches!(parts.as_slice(), [format, d, n] if format.parse::<u32>().is_ok() && day(d) && n.parse::<u32>().is_ok_and(|n| n >= 1));
+        if !named {
+            return Err(format!("published.json: PUBLISHED_VERSION.{k} {v:?} is not v<format>.<YYYY-MM-DD>.<n>"));
+        }
+    }
     let source = spec.get("SOURCE").ok_or("published.json: no SOURCE")?;
     let source_doc = source.lines_at("$doc").unwrap_or_default();
     let top_level = source.get("top_level").and_then(|n| n.num()).ok_or("published.json: SOURCE has no top_level")?;
@@ -53,6 +72,24 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
     rs.extend(["}".to_string(), String::new(), "pub const PUBLISHED_VERSION: PublishedVersion = PublishedVersion {".into()]);
     rs.extend(kinds.iter().map(|(k, v)| format!("    {k}: {},", json_str(v))));
     rs.extend(["};".to_string(), String::new()]);
+    rs.extend(rs_doc(&format_doc, "", "///"));
+    rs.push("pub struct Format {".into());
+    rs.extend(kinds.iter().map(|(k, _)| format!("    pub {k}: u32,")));
+    rs.extend(["}".to_string(), String::new(), "pub const FORMAT: Format = Format {".into()]);
+    rs.extend(formats.iter().map(|(k, n)| format!("    {k}: {n},")));
+    rs.extend(
+        [
+            "};",
+            "",
+            "/// A bake's folder and published name: its format, the day it was baked",
+            "/// (`YYYY-MM-DD`, UTC) and that day's count of bakes of its kind, from 1.",
+            "pub fn version_name(format: u32, day: &str, n: u32) -> String {",
+            "    format!(\"v{format}.{day}.{n}\")",
+            "}",
+            "",
+        ]
+        .map(String::from),
+    );
     rs.extend(
         [
             "/// The kinds a version is published for: the fields of `PUBLISHED_VERSION`,",

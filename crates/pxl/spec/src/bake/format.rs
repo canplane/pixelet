@@ -129,6 +129,11 @@ pub struct Block {
 /// The object every page of open water resolves to.
 pub const OCEAN_KEY: &str = "_ocean";
 
+/// A partial version's list, beside its pages: the full version it overlays
+/// and the pages it writes or removes over it, by quadkey. A version without
+/// one is full.
+pub const SNAPSHOT_KEY: &str = "_snapshot";
+
 /// How far past the lane's facts the client draws a cell, down and up: the
 /// ground's shift and a bore's floor. Every read of the lane widens by it.
 pub const DRAWN_PAST: [i16; 2] = {

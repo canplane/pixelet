@@ -42,9 +42,11 @@ pub trait Layer: Folds + Clone + 'static {
 
     const ON_ABSENT: Absent = Absent::Above;
 
-    /// The coarsest level the layer has pages at; past where that level
-    /// hands off, nothing of it is asked for.
-    const COARSEST: u32 = TOP_LEVEL;
+    /// How far from the eye the layer draws anything; past it nothing of it
+    /// is asked for.
+    fn reach() -> f64 {
+        f64::INFINITY
+    }
 
     fn pyramid() -> &'static mut Pyramid<Self>;
 
@@ -288,13 +290,7 @@ impl<L: Layer> Pyramid<L> {
             Some(_) => quality::effective().tau(),
             None => Tau::FINEST,
         };
-        let o = seen_from.map(|o| match L::COARSEST {
-            TOP_LEVEL => o,
-            coarsest => Observation {
-                far: o.far.min(tau.split_distance(coarsest as i32 + 1)),
-                ..o
-            },
-        });
+        let o = seen_from.map(|o| Observation { far: o.far.min(L::reach()), ..o });
         let seen = (o, floor_now, destination, self.paging.revision(), heights_revision(), tau, domain::revision());
         if self.last != Some(seen) {
             let line = destination.into_iter().flat_map(|p| std::iter::successors(Some(p), move |q| (q.level < top).then(|| q.parent())));

@@ -21,6 +21,11 @@ pub const fn zoom_of(side: Scale) -> i32 {
     IVEC_X_W as i32 - 8 - side.shamt()
 }
 
+/// The cell side a web map's `zoom` names: `zoom_of`'s inverse.
+pub const fn side_at_zoom(zoom: i32) -> Scale {
+    Scale::of(IVEC_X_W as i32 - 8 - zoom)
+}
+
 /// One Mercator world on the 24-bit X lane: overflow crosses the antimeridian.
 pub const U_TOTAL_X: f64 = (1u64 << IVEC_X_W) as f64;
 

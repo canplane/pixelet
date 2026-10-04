@@ -6,9 +6,8 @@ geocode — is baked from these tables offline and published to a bucket; only
 forward search reads them at request time.
 
 This directory holds what fills them. Nothing here is deployed, and nothing
-here runs on a schedule except the monthly Overture refresh in CI. These are
-run by hand, a few times a year, against a database that is expensive to
-rebuild.
+here runs on a schedule. These are run by hand, a few times a year, against a
+database that is expensive to rebuild.
 
 > **Every ingest drops its tables before it writes.** This is the first thing
 > to know about running one. `--bbox` bounds what is fetched from the source,

@@ -8,7 +8,7 @@ import { BrandSymbol } from "@/shared/ui/brand-symbol.tsx";
 import { textStyle } from "@/shared/ui/theme.ts";
 import { APP_ENV, BUILD_NUMBER, BUILD_TIME, DEV_SOURCE } from "@/config/deploy.ts";
 import { PUBLISHED_VERSION } from "@/config/published.spec.ts";
-import { storage, STORAGE_KEYS } from "@/kernel/abi/host.spec.ts";
+import { OBJECTS_PATH } from "@/kernel/abi/host.spec.ts";
 import { LABEL } from "@platform/palette.ts";
 
 const ENV_SHORT: Record<string, string> = { development: "dev", staging: "stg" };
@@ -19,10 +19,14 @@ function envLabel(): string {
   return DEV_SOURCE === "remote" ? env : `${env}:${DEV_SOURCE}`;
 }
 
-function dataLabel(): string {
-  const object = STORAGE_KEYS[storage.OBJECTS].split(":").slice(1).join("/");
-  const { terrain, poi, geocode } = PUBLISHED_VERSION;
-  return `terrain/${terrain} · poi/${poi} · geocode/${geocode} · ${object}`;
+/** Each bake by the name it is published as, a line each, since each is baked on its own. */
+function bakeLines(): string[] {
+  return Object.entries(PUBLISHED_VERSION).map(([kind, name]) => `${kind}/${name}`);
+}
+
+/** The objects one has placed, kept on the device: their store's format. */
+function objectLabel(): string {
+  return OBJECTS_PATH;
 }
 
 /** UTC: a stamp in the viewer's zone said different things on two phones. */
@@ -53,7 +57,8 @@ export function AboutSection() {
             {APP_ENV !== "production" && ` (${envLabel()})`}
             {` · ${buildLabel()}`}
           </Text>
-          <Text style={settingText.faint}>{dataLabel()}</Text>
+          {bakeLines().map((line) => <Text key={line} style={settingText.faint}>{line}</Text>)}
+          <Text style={settingText.faint}>{objectLabel()}</Text>
         </View>
       </Prose>
     </Section>

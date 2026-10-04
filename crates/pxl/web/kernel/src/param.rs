@@ -166,13 +166,14 @@ pub const COMPANION_STEP_CELLS: i64 = 4;
 
 // ---- places' zooms ----
 
-/// z14: OpenMapTiles' `poi` layer holds every point POI from z14
+/// Every place where a logical pixel spans a z14 pixel or less, a zoom of
+/// 256-pixel tiles: OpenMapTiles' `poi` layer holds every point POI from z14
 /// (`etl_layer_points`), and Google and Naver hide businesses below about it.
-pub const POI_ALL_LEVEL: u32 = 2;
+pub const POI_ALL_ZOOM: i32 = 14;
 
-/// z12, only for ranks up to `POI_MAJOR_RANK`: OpenMapTiles shows stations
+/// From z12, only ranks up to `POI_MAJOR_RANK`: OpenMapTiles shows stations
 /// and ferry terminals at z12–13 and nothing under z12.
-pub const POI_MAJOR_LEVEL: u32 = 4;
+pub const POI_MAJOR_ZOOM: i32 = 12;
 
 /// OpenMapTiles' `poi_class_rank` for a railway station.
 pub const POI_MAJOR_RANK: u16 = 40;

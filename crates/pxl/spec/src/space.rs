@@ -4,6 +4,8 @@
 //! hierarchy, map projections and lattice structures.
 
 pub mod adapter;
+#[path = "space/earth.spec.rs"]
+pub mod earth;
 pub mod hierarchy;
 pub mod indexer;
 pub mod lattice;

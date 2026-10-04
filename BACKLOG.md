@@ -39,12 +39,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 - **Clearance by the road's own grade.** `clear_cells` holds a clearance
   across the road at `MAX_GRADE`'s secant for every way; the segment's own
   grade would give each what it needs.
-- **A resumed terrain bake's flat count.** `leaf.json`'s
-  `flat_elevation_pages` counts the last run's pages only; terrain
-  v7.2026-10-04.1 says 7 for 5,984 of its 167,110 leaves.
-- **The XTP POI and geocode pages, read back.** POI v9.2026-10-04.1 and geocode
-  v5.2026-10-04.1 were baked on the new wire and never fetched and decoded
-  through the dev server.
 - **Subway bores.** Every tunnel flag is a bore now, so a subway's lines are
   drawn underground and stretch each chunk's bounds down; whether that cost
   stays is not decided.
@@ -76,7 +70,3 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   would let an existing program in. Not without one to build it against;
   guests stay `wasm32-unknown-unknown` meanwhile —
   [20260930-wasi-and-the-boundary.md](./decision/20260930-wasi-and-the-boundary.md).
-- **A region baked and published alone.** A partial snapshot over one full
-  bake, owning the pages under its quadkey prefixes and their ancestors. Not
-  before a region needs it —
-  [20261004-a-snapshot-of-a-subtree.md](./decision/20261004-a-snapshot-of-a-subtree.md).

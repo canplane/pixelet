@@ -44,7 +44,7 @@ pub fn leaves(client: &mut Client, coverage: &Coverage, within: Option<IVec>) ->
         if within.is_some_and(|w| leaf.page != w) || !coverage.contains(leaf.page) {
             continue;
         }
-        let kind = kind_of(category_named(row.get::<_, Option<&str>>(3)));
+        let kind = kind_of(category_named(row.get::<_, Option<serde_json::Value>>(3).as_ref()));
         places.entry(leaf.page).or_default().push((at, row.get(2), kind, row.get(4)));
     }
     Ok(places

@@ -2,9 +2,10 @@
 
 import type { f64, u8 } from "@xpute/core/abi/word.ts";
 import { PLACE_RANK } from "./place.spec.ts";
+import { EARTH_RADIUS_M } from "@/config/earth.spec.ts";
 
 /** Web Mercator, 256-px tiles, equator, z0. */
-const M_PER_PX_AT_Z0 = (2 * Math.PI * 6378137) / 256;
+const M_PER_PX_AT_Z0 = (2 * Math.PI * EARTH_RADIUS_M) / 256;
 
 /** Nominatim's zoom table. */
 const LADDER: readonly [f64, u8][] = [

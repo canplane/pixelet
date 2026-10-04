@@ -73,10 +73,6 @@ export const CATEGORY_BADGE = {
     icon: "🎓",
     color: "#81c784",
   },
-  college: {
-    icon: "🎓",
-    color: "#81c784",
-  },
   kindergarten: {
     icon: "🧸",
     color: "#81c784",

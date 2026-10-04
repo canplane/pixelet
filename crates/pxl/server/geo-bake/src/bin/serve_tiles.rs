@@ -76,7 +76,11 @@ async fn tile_versioned(State(app): State<Arc<App>>, Path((kind, version, name))
     let (Pages::Baked(dir), Some(kind)) = (&app.pages, Kind::parse(&kind)) else {
         return StatusCode::NOT_FOUND.into_response();
     };
-    if !version.strip_prefix('v').is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())) {
+    // `version_name`'s shape, v<format>.<day>.<n>: no other name reaches the disk
+    if !version
+        .strip_prefix('v')
+        .is_some_and(|n| n.bytes().next().is_some_and(|b| b.is_ascii_digit()) && n.bytes().all(|b| b.is_ascii_digit() || b == b'.' || b == b'-'))
+    {
         return StatusCode::NOT_FOUND.into_response();
     }
     baked(dir, kind, &version, &name).await

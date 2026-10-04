@@ -46,24 +46,17 @@ pub mod op {
 /// bake, numbered by its kind (pxl-spec bake/published.spec.rs), and a path is an object's
 /// name in it.
 pub mod root {
-    /// The platform's storage; a path is a key (`STORAGE_KEYS`).
+    /// The platform's storage; a path is the kernel's name for a file it keeps (`SETTINGS_PATH`, `OBJECTS_PATH`).
     pub const STORAGE: u32 = 256;
     /// The shipped assets; a path is a load's number in decimal (io/load.rs).
     pub const ASSET: u32 = 257;
     pub const KEYS: &[&str] = &["STORAGE", "ASSET"];
 }
 
-/// What the platform's storage keeps, by `STORAGE_KEYS`' order: the kernel opens
-/// SETTINGS and OBJECTS below STORAGE, and the shell keeps LANG and HOTBAR itself.
-pub mod storage {
-    pub const SETTINGS: u32 = 0;
-    pub const OBJECTS: u32 = 1;
-    pub const LANG: u32 = 2;
-    pub const HOTBAR: u32 = 3;
-    pub const KEYS: &[&str] = &["SETTINGS", "OBJECTS", "LANG", "HOTBAR"];
-}
+/// The settings' file below STORAGE.
+pub const SETTINGS_PATH: &str = "settings";
 
-/// The keys, in `storage`'s order. The objects' carries the encoding's version: a blob
-/// of an older one is not read, so bump it whenever a change makes an older entry
-/// mean something other than it meant when it was written (layer/object/store.rs).
-pub const STORAGE_KEYS: &[&str] = &["pxl:settings", "pxl:object:v10", "pxl:lang", "pxl:ui_hotbar"];
+/// The placed objects' file below STORAGE. It carries the encoding's version: a blob of
+/// an older one is not read, so bump it whenever a change makes an older entry mean
+/// something other than it meant when it was written (layer/object/store.rs).
+pub const OBJECTS_PATH: &str = "object/v10";

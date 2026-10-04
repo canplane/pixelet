@@ -23,7 +23,16 @@ struct DataSpec {
     cpp: Option<(&'static str, &'static str)>,
 }
 
-const DATA_SPECS: [DataSpec; 13] = [
+const DATA_SPECS: [DataSpec; 14] = [
+    DataSpec {
+        json: "spec/pxl/spec/space/earth.json",
+        ts: Some("apps/web/src/config/earth.spec.ts"),
+        rs: Some("crates/pxl/spec/src/space/earth.spec.rs"),
+        module: Some("spec"),
+        enums: Enums::None,
+        ts_names: None,
+        cpp: None,
+    },
     DataSpec {
         json: "spec/pxl/spec/place.json",
         ts: Some("apps/web/src/feature/map/geocode/place.spec.ts"),
