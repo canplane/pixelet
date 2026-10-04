@@ -8,7 +8,7 @@ import { BrandSymbol } from "@/shared/ui/brand-symbol.tsx";
 import { textStyle } from "@/shared/ui/theme.ts";
 import { APP_ENV, BUILD_NUMBER, BUILD_TIME, DEV_SOURCE } from "@/config/deploy.ts";
 import { PUBLISHED_VERSION } from "@/config/published.spec.ts";
-import { storage, STORAGE_KEYS } from "@/kernel/abi/host.spec.ts";
+import { OBJECTS_PATH } from "@/kernel/abi/host.spec.ts";
 import { LABEL } from "@platform/palette.ts";
 
 const ENV_SHORT: Record<string, string> = { development: "dev", staging: "stg" };
@@ -26,7 +26,7 @@ function bakeLines(): string[] {
 
 /** The objects one has placed, kept on the device: their store's format. */
 function objectLabel(): string {
-  return STORAGE_KEYS[storage.OBJECTS].split(":").slice(1).join("/");
+  return OBJECTS_PATH;
 }
 
 /** UTC: a stamp in the viewer's zone said different things on two phones. */

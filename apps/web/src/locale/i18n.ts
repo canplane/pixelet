@@ -5,7 +5,6 @@ import { initReactI18next } from "react-i18next";
 
 import { preferredLanguages, showLanguage } from "@platform/locale.ts";
 import { storageGet, storageSet } from "@platform/storage.ts";
-import { storage, STORAGE_KEYS } from "@/kernel/abi/host.spec.ts";
 
 import en from "./en.json" with { type: "json" };
 import ko from "./ko.json" with { type: "json" };
@@ -37,7 +36,7 @@ export const LANGUAGE_NAMES: Record<Language, string> = { en: "English", ko: "í•
 
 const LANGUAGES = Object.keys(catalog) as Language[];
 
-const LANG_KEY = STORAGE_KEYS[storage.LANG];
+const LANG_KEY = "pxl:lang";
 
 /** The language chosen, else the first supported of the system's preferences, else en. */
 const languageDetector: LanguageDetectorModule = {

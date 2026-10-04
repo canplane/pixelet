@@ -14,7 +14,7 @@ import { text_of } from "@xpute/runtime/ipc/stream.ts";
 import { Command as XputeCommand, encode_sys_opened } from "@xpute/runtime/abi/cmd.spec.ts";
 import { FileError, Sys } from "@xpute/runtime/ipc/sys.ts";
 
-import { op, root } from "@/kernel/abi/host.spec.ts";
+import { OBJECTS_PATH, op, root, SETTINGS_PATH } from "@/kernel/abi/host.spec.ts";
 import { send_next } from "@/kernel/sched.ts";
 import { storageGet, storageSet } from "@platform/storage.ts";
 import { textRaster, textWidth } from "@platform/text.ts";
@@ -107,8 +107,22 @@ function program(code: u32, w: U32Array, a: u32): void {
 
 type Open = (path: string, signal: AbortSignal) => U8Array | Promise<U8Array>;
 
+/** Where STORAGE's files are kept: the keys they had before the kernel named them. */
+const STORAGE_KEYS: Record<string, string> = { [SETTINGS_PATH]: "pxl:settings", [OBJECTS_PATH]: "pxl:object:v10" };
+
+function storage_key(path: string): string {
+  const key = STORAGE_KEYS[path];
+  if (key === undefined) throw new FileError(Errno.ENOENT);
+  return key;
+}
+
+/** A STORAGE file's text, or null where none is kept. */
+export function read_storage(path: string): string | null {
+  return storageGet(storage_key(path));
+}
+
 const ROOTS = new Map<u32, Open>([[root.STORAGE, (path) => {
-  const value = storageGet(path);
+  const value = read_storage(path);
   if (value === null) throw new FileError(Errno.ENOENT);
   return te.encode(value);
 }]]);
@@ -127,7 +141,7 @@ const SYS = new Sys({
   open,
   commit: (r, path, bytes) => {
     if (r !== root.STORAGE) throw new FileError(Errno.EROFS);
-    storageSet(path, td.decode(bytes));
+    storageSet(storage_key(path), td.decode(bytes));
   },
   opened: (fd, res, detail) => send_next(XputeCommand.SYS_OPENED, encode_sys_opened({ fd, res, detail })),
   abort: ({ errno, file, line, column, a, b }) => console.error(`[pxl] ${strerror(errno)} at ${file.replace(/^\.+/, "")}:${line}:${column} (${a}, ${b})`),

@@ -55,30 +55,23 @@
     ],
     "STORAGE": {
       "$value": 256,
-      "$doc": ["The platform's storage; a path is a key (`STORAGE_KEYS`)."]
+      "$doc": ["The platform's storage; a path is the kernel's name for a file it keeps (`SETTINGS_PATH`, `OBJECTS_PATH`)."]
     },
     "ASSET": {
       "$value": 257,
       "$doc": ["The shipped assets; a path is a load's number in decimal (io/load.rs)."]
     }
   },
-  "storage": {
-    "$type": "u32",
-    "$doc": [
-      "What the platform's storage keeps, by `STORAGE_KEYS`' order: the kernel opens",
-      "SETTINGS and OBJECTS below STORAGE, and the shell keeps LANG and HOTBAR itself."
-    ],
-    "SETTINGS": 0,
-    "OBJECTS": 1,
-    "LANG": 2,
-    "HOTBAR": 3
+  "SETTINGS_PATH": {
+    "$doc": ["The settings' file below STORAGE."],
+    "$value": "settings"
   },
-  "STORAGE_KEYS": {
+  "OBJECTS_PATH": {
     "$doc": [
-      "The keys, in `storage`'s order. The objects' carries the encoding's version: a blob",
-      "of an older one is not read, so bump it whenever a change makes an older entry",
-      "mean something other than it meant when it was written (layer/object/store.rs)."
+      "The placed objects' file below STORAGE. It carries the encoding's version: a blob of",
+      "an older one is not read, so bump it whenever a change makes an older entry mean",
+      "something other than it meant when it was written (layer/object/store.rs)."
     ],
-    "$value": ["pxl:settings", "pxl:object:v10", "pxl:lang", "pxl:ui_hotbar"]
+    "$value": "object/v10"
   }
 }

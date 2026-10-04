@@ -36,22 +36,16 @@ export const op = {
  * bake, numbered by its kind (pxl-spec bake/published.spec.rs), and a path is an object's
  * name in it. */
 export const root = {
-  /** The platform's storage; a path is a key (`STORAGE_KEYS`). */
+  /** The platform's storage; a path is the kernel's name for a file it keeps (`SETTINGS_PATH`, `OBJECTS_PATH`). */
   STORAGE: 256 as number,
   /** The shipped assets; a path is a load's number in decimal (io/load.rs). */
   ASSET: 257 as number,
 } as const;
 
-/** What the platform's storage keeps, by `STORAGE_KEYS`' order: the kernel opens
- * SETTINGS and OBJECTS below STORAGE, and the shell keeps LANG and HOTBAR itself. */
-export const storage = {
-  SETTINGS: 0 as number,
-  OBJECTS: 1 as number,
-  LANG: 2 as number,
-  HOTBAR: 3 as number,
-} as const;
+/** The settings' file below STORAGE. */
+export const SETTINGS_PATH = "settings";
 
-/** The keys, in `storage`'s order. The objects' carries the encoding's version: a blob
- * of an older one is not read, so bump it whenever a change makes an older entry
- * mean something other than it meant when it was written (layer/object/store.rs). */
-export const STORAGE_KEYS = ["pxl:settings", "pxl:object:v10", "pxl:lang", "pxl:ui_hotbar"] as const;
+/** The placed objects' file below STORAGE. It carries the encoding's version: a blob of
+ * an older one is not read, so bump it whenever a change makes an older entry mean
+ * something other than it meant when it was written (layer/object/store.rs). */
+export const OBJECTS_PATH = "object/v10";
