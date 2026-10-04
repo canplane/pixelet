@@ -108,9 +108,9 @@ function drive(canvas: HTMLCanvasElement): () => void {
     sendRect();
     request_frame();
   };
-  // A composed or shortcut key is the IME's or the browser's.
+  // A composed or shortcut key is the IME's or the browser's; Tab turns the dock mid-word too.
   const onKeyDown = (e: KeyboardEvent) => {
-    if (e.repeat || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.repeat || (e.isComposing && e.code !== "Tab") || e.metaKey || e.ctrlKey || e.altKey) return;
     if (keyDown(e.code, { shift: e.shiftKey, inField: inField(e) })) e.preventDefault();
   };
   const onKeyUp = (e: KeyboardEvent) => keyUp(e.code);
@@ -130,8 +130,9 @@ function drive(canvas: HTMLCanvasElement): () => void {
   globalThis.addEventListener("pointercancel", onUp);
   document.addEventListener("visibilitychange", onVisibility);
   globalThis.addEventListener("pagehide", onPageHide);
-  globalThis.addEventListener("keydown", onKeyDown);
-  globalThis.addEventListener("keyup", onKeyUp);
+  // Captured: react-native-web's TextInput stops a key's propagation before it bubbles here.
+  globalThis.addEventListener("keydown", onKeyDown, true);
+  globalThis.addEventListener("keyup", onKeyUp, true);
   globalThis.addEventListener("blur", releaseKeys);
   const observer = new ResizeObserver(onResize);
   observer.observe(canvas);
@@ -143,8 +144,8 @@ function drive(canvas: HTMLCanvasElement): () => void {
     close();
     observer.disconnect();
     globalThis.removeEventListener("blur", releaseKeys);
-    globalThis.removeEventListener("keyup", onKeyUp);
-    globalThis.removeEventListener("keydown", onKeyDown);
+    globalThis.removeEventListener("keyup", onKeyUp, true);
+    globalThis.removeEventListener("keydown", onKeyDown, true);
     globalThis.removeEventListener("pagehide", onPageHide);
     document.removeEventListener("visibilitychange", onVisibility);
     globalThis.removeEventListener("pointercancel", onUp);
