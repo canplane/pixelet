@@ -25,8 +25,8 @@ use crate::gpu::api_spec::{dimension, format, load, resource, surface_role};
 use crate::gpu::arena::{arena_buffer, arena_bytes, arena_lose};
 use crate::gpu::atmosphere::{Atmosphere, AIR_WORDS};
 use crate::gpu::clouds::{self, CloudPass};
+use crate::gpu::image_map::ImageMap;
 use crate::gpu::layers::{Layers, Mips};
-use crate::gpu::moon::MoonMap;
 use crate::gpu::pass::badges::BadgePass;
 use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::impostor::{Extent, ImpostorPass};
@@ -72,6 +72,8 @@ pub(crate) const SKY_MAPPED: usize = 15;
 const BOX_VERTICES: u32 = 36;
 const DRAWS_INITIAL: u32 = 256 * UNIFORM_FLOATS as u32;
 const MB: f64 = 1_048_576.0;
+/// The Moon's near side as download_moon cuts it; sky.wgsl reads its half.
+const MOON_TEX_SZ: u32 = 512;
 
 /// In the order the frame encodes them; the profiler's GPU_SPAN_NAMES match.
 pub const GPU_SPANS: [&str; 7] = ["air", "shadow", "prepass", "ao", "world", "badges", "cases"];
@@ -95,6 +97,7 @@ pub struct FrameInput<'a> {
     pub cases: &'a [(u32, u32, u32)],
     pub sheet: fn() -> Option<u32>,
     pub moon: fn() -> Option<u32>,
+    pub earth: fn() -> Option<u32>,
     pub atlas: &'a mut BillboardAtlas,
     pub text: TextOf,
     /// A phone gets a smaller shadow map.
@@ -624,7 +627,7 @@ pub struct Renderer {
     clouds: CloudPass,
     mips: Mips,
     layers: Layers,
-    moon: MoonMap,
+    moon: ImageMap,
     decor: DecorPass,
     impostor: ImpostorPass,
     skinned: SkinnedPass,
@@ -655,7 +658,7 @@ impl Renderer {
         let chunk = pipelines.build(g, PIPELINE_CHUNK, format::CANVAS);
         let sky_built = pipelines.build(g, PIPELINE_SKY, format::CANVAS);
         let sky_group = object();
-        let moon = MoonMap::new(g);
+        let moon = ImageMap::new(g, MOON_TEX_SZ, MOON_TEX_SZ);
         let mut sky_entries = [0u32; 20 + AIR_WORDS];
         sky_entries[..5].copy_from_slice(&buffer_entry(0, frame_buffer));
         sky_entries[5..10].copy_from_slice(&buffer_entry(1, sky_buffer));
@@ -884,6 +887,7 @@ impl Renderer {
         }
         self.layers.step(g, &self.mips, input.sheet);
         self.moon.step(g, &self.mips, input.moon);
+        self.atmosphere.earth_step(g, &self.mips, input.earth);
         self.badges.sync_sheet(g, &self.mips, input.atlas, input.text);
         let (records, uniforms) = take_lists(Some(g), input.lists);
 

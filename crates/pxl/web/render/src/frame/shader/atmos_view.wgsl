@@ -2,6 +2,7 @@
 
 @group(0) @binding(13) var exposure_texel: texture_2d<f32>;
 @group(0) @binding(15) var moon_view_lut: texture_2d<f32>;
+@group(0) @binding(16) var earth_map: texture_2d_array<f32>;
 
 fn exposure() -> f32 {
   return textureLoad(exposure_texel, vec2i(0, 0), 0).r;
@@ -120,6 +121,21 @@ fn air_light(dir: vec3f, fill: vec3f) -> AirLight {
   return l;
 }
 
+// The Earth's face where a ray meets the ground past the terrain, at the
+// latitude and longitude of `n`, the ground's up there in the map center's
+// east, north and up.
+fn earth_albedo(n: vec3f) -> vec3f {
+  let sin_lat = frame_globe().y;
+  let cos_lat = frame_globe().z;
+  let lon = atmos_center_lon();
+  let east = vec3f(-sin(lon), cos(lon), 0.0);
+  let north = vec3f(-sin_lat * cos(lon), -sin_lat * sin(lon), cos_lat);
+  let up = vec3f(cos_lat * cos(lon), cos_lat * sin(lon), sin_lat);
+  let p = east * n.x + north * n.y + up * n.z;
+  let uv = vec2f(fract(atan2(p.y, p.x) / TAU + 0.5), 0.5 - asin(clamp(p.z, -1.0, 1.0)) / PI);
+  return textureSampleLevel(earth_map, atmos_sampler, uv, 0, 0.0).rgb;
+}
+
 // Past the terrain the ground is lit as shade.wgsl lights the terrain, so the
 // drawn edge is no seam.
 fn beyond(air: Air, fill: vec3f) -> vec3f {
@@ -127,7 +143,7 @@ fn beyond(air: Air, fill: vec3f) -> vec3f {
   if (air.ground) {
     let n = air.normal;
     let lit = (frame_sun_color() * max(dot(frame_sun_dir(), n), 0.0) + frame_other_color() * max(dot(frame_other_dir(), n), 0.0)) * exposure() + fill;
-    light += air.end * atmos_land() * lit / PI;
+    light += air.end * earth_albedo(n) * lit / PI;
     // Haze reads as the air's own light along the ray.
     light = mix(air.light, light, haze_through(max(atmos_camera_altitude(), 0.0), 0.0, air.ground_km));
   }

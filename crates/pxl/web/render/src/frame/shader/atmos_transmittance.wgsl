@@ -2,7 +2,7 @@
 
 // Read field by field from vec4 words, never as a struct: a struct here lost
 // Safari's WebGPU its GPU process.
-@group(0) @binding(8) var<uniform> atmos_words: array<vec4f, 14>;
+@group(0) @binding(8) var<uniform> atmos_words: array<vec4f, 13>;
 
 const TRANSMITTANCE_STEPS: i32 = 40;
 

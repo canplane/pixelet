@@ -348,23 +348,25 @@ fn record(h: Head, lanes: &[Vec<u32>], groups: &[Vec<u32>]) -> Vec<u32> {
     out
 }
 
-const AIR: [[u32; 3]; 6] = [
+const AIR: [[u32; 3]; 7] = [
     [8, FRAGMENT, UNIFORM],
     [9, FRAGMENT, TEXTURE],
     [10, FRAGMENT, TEXTURE],
     [11, FRAGMENT, SAMPLER],
     [13, FRAGMENT, TEXTURE],
     [15, FRAGMENT, TEXTURE],
+    [16, FRAGMENT, TEXTURE_ARRAY],
 ];
-const AIR_AT_VERTICES: [[u32; 3]; 6] = [
+const AIR_AT_VERTICES: [[u32; 3]; 7] = [
     [8, VERTEX, UNIFORM],
     [9, VERTEX, TEXTURE],
     [10, VERTEX, TEXTURE],
     [11, VERTEX, SAMPLER],
     [13, VERTEX, TEXTURE],
     [15, VERTEX, TEXTURE],
+    [16, VERTEX, TEXTURE_ARRAY],
 ];
-const LIT_FRAME: [[u32; 3]; 10] = [
+const LIT_FRAME: [[u32; 3]; 11] = [
     [0, BOTH, UNIFORM],
     [1, FRAGMENT, DEPTH],
     [2, FRAGMENT, SAMPLER_COMPARISON],
@@ -377,9 +379,10 @@ const LIT_FRAME: [[u32; 3]; 10] = [
     AIR_AT_VERTICES[3],
     [13, BOTH, TEXTURE],
     AIR_AT_VERTICES[5],
+    AIR_AT_VERTICES[6],
 ];
 /// The transmittance and sky-view tables are laid out unread because the shader declares them.
-const CLOUD_GROUP: [[u32; 3]; 10] = [
+const CLOUD_GROUP: [[u32; 3]; 11] = [
     [0, FRAGMENT, UNIFORM],
     [1, FRAGMENT, UNIFORM],
     [2, FRAGMENT, TEXTURE],
@@ -390,6 +393,7 @@ const CLOUD_GROUP: [[u32; 3]; 10] = [
     AIR[3],
     AIR[4],
     AIR[5],
+    [16, NONE, TEXTURE_ARRAY],
 ];
 const SKIN: [[u32; 3]; 2] = [[0, FRAGMENT, TEXTURE], [1, FRAGMENT, SAMPLER]];
 
@@ -486,6 +490,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 AIR[3],
                 AIR[4],
                 AIR[5],
+                AIR[6],
             ])],
         ),
         PIPELINE_MIPS => record(screen(SHADER_MIPS), &[], &[group(&SKIN)]),

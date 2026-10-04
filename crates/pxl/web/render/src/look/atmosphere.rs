@@ -5,9 +5,6 @@
 //! Bruneton and Hillaire (EGSR 2020) with Unreal's Earth parameters. Distances
 //! in km, coefficients per km.
 
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
-
 /// The map's sphere, so ground and horizon are one sphere; the literature's
 /// 6,360 km differs by 0.3%, which the scattering does not see.
 pub const BOTTOM_RADIUS_KM: f64 = crate::look::globe::MERCATOR_RADIUS_KM;
@@ -30,14 +27,6 @@ pub const OZONE_HALF_WIDTH_KM: f64 = 15.0;
 /// The Earth's mean albedo, for the light the ground bounces into the air.
 pub const GROUND_ALBEDO: f64 = 0.3;
 
-/// The palette's forest (land.green_deep), what covers most land a wide view
-/// takes in, so the terrain's edge runs into ground of its own color.
-pub fn land() -> [f64; 3] {
-    use pxl_spec::bake::format::GroundChannelKey;
-    use pxl_spec::cell::cube_types;
-    let swatch = pxl_spec::cell::color::ground(GroundChannelKey::LAND, cube_types::land::green_deep).or_bug(Errno::ENOTRECOVERABLE);
-    crate::look::color::linear_rgb(swatch.rgb)
-}
 pub const SUN_ANGULAR_RADIUS: f64 = 0.004675;
 
 /// The one eye the sky and the ground are seen by: the lights are for a sun of

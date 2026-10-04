@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use regex::Regex;
 
-/// Every `.glb` and `.png` under `asset/`, sorted, less `cube/original/`.
+/// Every `.glb`, `.png` and `.webp` under `asset/`, sorted, less `cube/original/`.
 fn walked(root: &Path) -> Vec<(String, PathBuf)> {
     fn walk(dir: &Path, root: &Path, out: &mut Vec<(String, PathBuf)>) {
         let Ok(entries) = std::fs::read_dir(dir) else { return };
@@ -14,7 +14,7 @@ fn walked(root: &Path) -> Vec<(String, PathBuf)> {
                 walk(&path, root, out);
             } else {
                 let rel = path.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
-                if (rel.ends_with(".glb") || rel.ends_with(".png")) && !rel.starts_with("cube/original/") {
+                if (rel.ends_with(".glb") || rel.ends_with(".png") || rel.ends_with(".webp")) && !rel.starts_with("cube/original/") {
                     out.push((rel, path));
                 }
             }

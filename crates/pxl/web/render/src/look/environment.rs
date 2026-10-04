@@ -9,8 +9,9 @@ use pxl_spec::space::v3::{dot3, norm3, V3};
 
 use crate::look::atmosphere::{light_at, moon_phase_light, white, MOON_LIGHT, NIGHT_COLOR};
 
-/// Lighting run (24), stars' fade and clock (4), air (4), second light (8),
-/// sun direction (4), stars' frame (12), moon direction and sky brightness (4).
+/// Lighting run (24), stars' fade, clock and the map center's longitude (4),
+/// air (4), second light (8), sun direction (4), stars' frame (12), moon
+/// direction and sky brightness (4).
 pub const ENV_FLOATS: usize = 60;
 pub const ENV_FOG_NEAR: usize = 7;
 pub const ENV_FOG_FAR: usize = 11;
@@ -33,6 +34,7 @@ pub struct Light {
     pub altitude_km: f64,
     pub km_per_u: f64,
     pub latitude: f64,
+    pub longitude: f64,
     /// Where the sky draws its own ground, so the terrain does not stand over it.
     pub ground_km: f64,
     /// The equatorial frame to the local one, as rows.
@@ -74,6 +76,7 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
 
     o[ENV_SKY] = (light.stars * night) as f32;
     o[ENV_SKY + 1] = light.time as f32;
+    o[ENV_SKY + 2] = light.longitude as f32;
 
     o[ENV_AIR] = light.altitude_km as f32;
     o[ENV_AIR + 1] = light.km_per_u as f32;

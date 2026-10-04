@@ -45,6 +45,7 @@
     // By hand, when a source outside the repository or under apps/web/brand changes.
     "download:pack": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin download_texture_pack",
     "download:moon": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin download_moon",
+    "download:earth": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin download_earth",
     "bake:stars": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin bake_stars --",
     "render:brand": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin render_brand",
 

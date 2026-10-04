@@ -165,6 +165,7 @@ impl EnvironmentDraw {
             ground_km: eye_ground() * km_per_u,
             km_per_u,
             latitude: lat.to_radians(),
+            longitude: lon.to_radians(),
             star_frame: equatorial_to_local(self.days, lat, lon),
         };
         write_environment(&mut self.out, &light);
