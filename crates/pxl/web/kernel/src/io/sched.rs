@@ -111,6 +111,18 @@ pub struct RequestScheduler<S> {
     ready: Vec<(Placed, usize)>,
 }
 
+/// A started attempt's right to open a file: only the scheduler makes one, so
+/// what is open at once is no more than its credits.
+pub struct Credit {
+    key: u64,
+}
+
+impl Credit {
+    pub fn key(&self) -> u64 {
+        self.key
+    }
+}
+
 const fn key_of(slot: usize, generation: u32) -> u64 {
     (slot as u64) << 32 | generation as u64
 }
@@ -263,9 +275,9 @@ impl<S: Serve> RequestScheduler<S> {
         record(&a, at, Outcome::aborted, None, Failure::default());
     }
 
-    pub fn take_started(&mut self, mut each: impl FnMut(u64, Category, u64)) {
+    pub fn take_started(&mut self, mut each: impl FnMut(Credit, Category, u64)) {
         for (key, category, subject) in self.started.drain(..) {
-            each(key, category, subject);
+            each(Credit { key }, category, subject);
         }
     }
 
@@ -350,7 +362,7 @@ pub fn pump() {
     sched().pump(now());
 }
 
-pub fn take_started(each: impl FnMut(u64, Category, u64)) {
+pub fn take_started(each: impl FnMut(Credit, Category, u64)) {
     sched().take_started(each);
 }
 

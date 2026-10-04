@@ -7,9 +7,8 @@
 
 use xpute_core::codec::json::{read_json, JsonKind};
 
-use crate::abi::host::{root, SETTINGS_PATH};
 use crate::host::development;
-use crate::io::file;
+use crate::io::file::{self, Kept};
 use crate::sched::profiler::log::profiler_follow;
 pub use crate::shell::setting::schema_spec::{AoMode, CameraMode, OrbitObstacleMode, ResolutionMode, SettingKey, SettingKind, Settings};
 use crate::world::chunk::source::chunk_sources_changed;
@@ -68,12 +67,8 @@ static UNKEPT: Global<bool> = Global::new();
 
 pub fn settings_keep_step() {
     if core::mem::take(UNKEPT.get(|| false)) {
-        file::write_whole(root::STORAGE, settings_path(), settings_store().kept().into_bytes());
+        file::write_kept(Kept::Settings, settings_store().kept().into_bytes());
     }
-}
-
-fn settings_path() -> &'static str {
-    SETTINGS_PATH
 }
 
 /// What is not offered, unknown or invalid stays at the default.

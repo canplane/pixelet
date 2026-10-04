@@ -14,11 +14,11 @@ use pxl_render::asset::gltf::{parse_gltf, Gltf};
 use pxl_spec::asset::ingested::Asset;
 use xpute_runtime::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 
-use crate::abi::host::{op, root};
-use crate::host::host_record;
+use crate::abi::host::root;
+use crate::host::decode_image;
 use crate::io::demand::Ask;
 use crate::io::file::{self, Owner};
-use crate::io::sched::{attempt_of, settle};
+use crate::io::sched::{attempt_of, settle, Credit};
 use crate::layer::decor::asset_store::decor_assets_arrived;
 use crate::sched::profiler::record::{Failure, Outcome};
 use crate::world::change::{request_world_tick, world_edge};
@@ -156,12 +156,13 @@ fn arrivals() -> &'static mut Notify {
     ARRIVALS.get(Notify::new)
 }
 
-pub fn open_asset(key: u64, kind: LoadKind, load: Load) {
+pub fn open_asset(credit: Credit, kind: LoadKind, load: Load) {
+    let key = credit.key();
     let owner = match kind {
         LoadKind::Gltf => Owner::Model { key },
         LoadKind::Image => Owner::Image { key },
     };
-    file::open(root::ASSET, &load.number().to_string(), owner);
+    file::open(credit, root::ASSET, &load.number().to_string(), owner);
 }
 
 pub fn cancel_asset(key: u64) -> bool {
@@ -187,7 +188,7 @@ pub fn image_opened(fd: u32, key: u64, res: i32) {
         return;
     };
     let image = IMAGES.get(Slots::default).insert(());
-    host_record(op::IMAGE_DECODE, &[fd, image], &[]);
+    decode_image(fd, image);
     file::close(fd);
     loader().image[load.number() as usize] = Some(Entry::Arrived(image, 0));
 }

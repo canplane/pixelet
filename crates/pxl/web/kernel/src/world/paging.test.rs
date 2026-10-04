@@ -145,7 +145,7 @@ fn converge_on<S: Serve>(pyramid: &mut Pyramid<PoiPage>, observation: fn() -> Ob
         let mut stops = Vec::new();
         sched.take_stops(|key| stops.push(key));
         out.retain(|key| !stops.contains(key));
-        sched.take_started(|key, _, _| out.push(key));
+        sched.take_started(|credit, _, _| out.push(credit.key()));
         assert!(out.len() <= 4, "no more out than the credits");
         let answered = out.len().div_ceil(2);
         for key in out.split_off(out.len() - answered).into_iter().rev() {

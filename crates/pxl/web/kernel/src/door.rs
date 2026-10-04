@@ -215,11 +215,11 @@ fn post_shell(s: &mut State) {
         raise(Command::WORLD_SNAPSHOT, WorldSnapshotSignal::FIELDS, |w| signal.write(w));
     }
     // The key is an opaque handle to the shell.
-    take_started(|key, category, subject| match category.bake() {
-        Some(_) => crate::io::fetch::start(key, category, subject),
+    take_started(|credit, category, subject| match category.bake() {
+        Some(_) => crate::io::fetch::start(credit, category, subject),
         None => {
             if let Some((kind, load)) = crate::io::load::of_subject(subject) {
-                crate::io::load::open_asset(key, kind, load);
+                crate::io::load::open_asset(credit, kind, load);
             }
         }
     });

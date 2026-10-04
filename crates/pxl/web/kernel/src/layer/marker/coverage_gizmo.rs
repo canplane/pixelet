@@ -146,7 +146,10 @@ fn line_top(mut p: LevelPage, top: u32) -> LevelPage {
 /// Edges by the line they lie on, its axis (0 along x, 1 along y) and where
 /// it crosses the other: each a stretch along it and its mark.
 #[derive(Default)]
-struct Lines(HashMap<(u8, u64), Vec<(f64, f64, Mark)>>);
+struct Lines(HashMap<(u8, u64), Vec<Stretch>>);
+
+/// From, to, and what the edge marks.
+type Stretch = (f64, f64, Mark);
 
 impl Lines {
     /// `rect` gives the south-west corner and the side.
