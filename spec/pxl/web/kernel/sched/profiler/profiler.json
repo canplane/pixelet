@@ -346,11 +346,11 @@
   },
   "SUMMARY": {
     "$type": "u32",
+    "$packed": true,
     "$doc": [
-      "The block PROFILER_READ computes: each section's words at its AT, the fields relative to it. Every word an f64."
+      "The block PROFILER_READ computes: each section's words at its AT, the fields relative to it. Every word an f64. Packed: a section's AT is where the one before it ends, and the block's WORDS where the last ends, both laid out by the generator."
     ],
     "rec": {
-      "AT": 0,
       "recording": 0,
       "elapsed_ms": 1,
       "tasks": 2,
@@ -359,7 +359,6 @@
       "WORDS": 5
     },
     "frames": {
-      "AT": 5,
       "present": 0,
       "n": 1,
       "seconds": 2,
@@ -389,12 +388,10 @@
       "WORDS": 258
     },
     "tasks": {
-      "AT": 263,
       "slots": 0,
       "WORDS": 150
     },
     "counters": {
-      "AT": 413,
       "faces_kept": 0,
       "faces_possible": 1,
       "runs_culled": 2,
@@ -412,7 +409,6 @@
       "WORDS": 14
     },
     "atlas": {
-      "AT": 427,
       "size": 0,
       "entries": 1,
       "shelves": 2,
@@ -421,7 +417,6 @@
       "WORDS": 5
     },
     "held": {
-      "AT": 432,
       "run_sets": 0,
       "run_set_mb": 1,
       "tiers": 2,
@@ -431,14 +426,12 @@
       "WORDS": 6
     },
     "fetch": {
-      "AT": 438,
       "queued": 0,
       "running": 1,
       "credits": 2,
       "WORDS": 3
     },
     "peak": {
-      "AT": 441,
       "present": 0,
       "dt_ms": 1,
       "sched_ms": 2,
@@ -460,13 +453,11 @@
       "WORDS": 18
     },
     "steps": {
-      "AT": 459,
       "count": 0,
       "slots": 1,
       "WORDS": 161
     },
     "quality": {
-      "AT": 620,
       "step": 0,
       "star": 1,
       "frames_held": 2,
@@ -481,7 +472,6 @@
       "$doc": [
         "The heap as the read finds it, recording or not: `used_mb` its top, `requests` the pages it has ever asked for."
       ],
-      "AT": 628,
       "used_mb": 0,
       "requests": 1,
       "WORDS": 2
@@ -490,7 +480,6 @@
       "$doc": [
         "Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the page it is read from."
       ],
-      "AT": 630,
       "dist": 0,
       "polar": 1,
       "azimuth": 2,
@@ -508,8 +497,7 @@
       "tier_zoom": 14,
       "read_zoom": 15,
       "WORDS": 16
-    },
-    "WORDS": 646
+    }
   },
   "READ": {
     "$type": "u32",

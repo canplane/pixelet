@@ -483,7 +483,7 @@ pub mod STEP {
     pub const KEYS: &[&str] = &["phase", "name", "ms", "count", "max_ms", "WORDS"];
 }
 
-/// The block PROFILER_READ computes: each section's words at its AT, the fields relative to it. Every word an f64.
+/// The block PROFILER_READ computes: each section's words at its AT, the fields relative to it. Every word an f64. Packed: a section's AT is where the one before it ends, and the block's WORDS where the last ends, both laid out by the generator.
 pub mod SUMMARY {
     pub mod rec {
         pub const AT: u32 = 0;

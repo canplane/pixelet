@@ -202,7 +202,7 @@ export const STEP = {
   WORDS: 5 as number,
 } as const;
 
-/** The block PROFILER_READ computes: each section's words at its AT, the fields relative to it. Every word an f64. */
+/** The block PROFILER_READ computes: each section's words at its AT, the fields relative to it. Every word an f64. Packed: a section's AT is where the one before it ends, and the block's WORDS where the last ends, both laid out by the generator. */
 export const SUMMARY = {
   rec: {
     AT: 0 as number,

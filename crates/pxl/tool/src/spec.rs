@@ -167,6 +167,45 @@ impl Node {
     }
 }
 
+/// A table with `"$packed": true` lays its sections end to end: a section with
+/// `WORDS` is given `AT`, where the one before it ends, and the table `WORDS`,
+/// where the last ends. Neither is written in the JSON, so a section grown
+/// moves every one after it.
+pub fn laid_out(node: Node) -> Result<Node, String> {
+    let Node::Obj(entries) = node else { return Ok(node) };
+    let packed = entries.iter().any(|(k, v)| k == "$packed" && *v == Node::Bool(true));
+    let mut at = 0.0;
+    let mut out = Vec::with_capacity(entries.len() + 1);
+    for (k, v) in entries {
+        let v = laid_out(v)?;
+        if !packed || k.starts_with('$') {
+            out.push((k, v));
+            continue;
+        }
+        if k == "WORDS" {
+            return Err(format!("{k}: a packed table's size is where its last section ends"));
+        }
+        let Node::Obj(mut section) = v else {
+            out.push((k, v));
+            continue;
+        };
+        let Some(words) = section.iter().find(|(f, _)| f == "WORDS").and_then(|(_, w)| w.num()) else {
+            return Err(format!("{k}: a packed section says its WORDS"));
+        };
+        if section.iter().any(|(f, _)| f == "AT") {
+            return Err(format!("{k}: a packed section's AT is where the one before it ends"));
+        }
+        let first = section.iter().take_while(|(f, _)| f.starts_with('$')).count();
+        section.insert(first, ("AT".into(), Node::Num(at)));
+        at += words;
+        out.push((k, Node::Obj(section)));
+    }
+    if packed {
+        out.push(("WORDS".into(), Node::Num(at)));
+    }
+    Ok(Node::Obj(out))
+}
+
 pub fn read(path: &str) -> Result<Node, String> {
     let text = std::fs::read_to_string(root().join(path)).map_err(|e| format!("{path}: {e}"))?;
     serde_json::from_str(&text).map_err(|e| format!("{path}: {e}"))
