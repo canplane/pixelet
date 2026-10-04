@@ -36,14 +36,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   drawn underground and stretch each chunk's bounds down; whether that cost
   stays is not decided.
 
-## P3
-
-- **Clouds with a thickness.** A slab a kilometer or two deep, sampled a few
-  times a pixel, for the volume a side view misses — as a quality setting,
-  since it is several times today's cost; volumetric clouds proper are out
-  while the client draws at rest every two seconds
-  ([the sky is the air](./decision/20260922-the-sky-is-the-air.md)).
-
 ## Parked, with the reason on file
 
 - **WASI, as a subsystem over the contract.** An adapter that offers a WASI
