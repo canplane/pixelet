@@ -39,6 +39,12 @@ void Sys::call(std::uint32_t op, std::span<const std::uint32_t> args, std::span<
     stream_.record(op, args, {}, bytes);
 }
 
+bool Sys::try_call(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes, std::uint32_t reserve) noexcept {
+    if (!stream_.fits(static_cast<std::uint32_t>(args.size()), static_cast<std::uint32_t>(bytes.size()), reserve)) return false;
+    call(op, args, bytes);
+    return true;
+}
+
 void Sys::abort(Errno code, const std::source_location &at, std::uint64_t a, std::uint64_t b) noexcept {
     stream_.publish();
     const std::array<std::uint32_t, 7> args{static_cast<std::uint32_t>(code), at.line(), at.column(), static_cast<std::uint32_t>(a),

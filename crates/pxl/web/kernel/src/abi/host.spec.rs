@@ -19,7 +19,12 @@ pub mod stream {
     /// The range's size. A record names what it moves rather than carrying it, so
     /// a turn's records are words, and a text's bytes the most of them.
     pub const BYTES: u32 = 65536;
-    pub const KEYS: &[&str] = &["BYTES"];
+    /// What a text's request leaves of the range: the records a turn cannot put
+    /// off — a file's open, write and close, an image's decode — are never refused,
+    /// so a request that can wait a turn is taken only while this much is left
+    /// after it. A product number, a quarter as the GPU stream keeps.
+    pub const RESERVE: u32 = 16384;
+    pub const KEYS: &[&str] = &["BYTES", "RESERVE"];
 }
 
 /// The kernel's calls, each with xpute's PROGRAM bit; a record's call, then its arguments.

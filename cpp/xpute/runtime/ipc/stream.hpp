@@ -24,6 +24,13 @@ class Stream {
 
     std::uint32_t left() const noexcept { return (words_ - head_ - len_) * 4; }
 
+    // Whether a record of `args` words and `bytes` would fit whole with
+    // `reserve` bytes still left after it.
+    bool fits(std::uint32_t args, std::optional<std::uint32_t> bytes, std::uint32_t reserve) const noexcept {
+        std::uint64_t words = 2 + std::uint64_t{args} + (bytes ? 1 + (std::uint64_t{*bytes} + 3) / 4 : 0);
+        return std::uint64_t{left()} >= words * 4 + reserve;
+    }
+
     // Answers where the `n` words begin. Past the range is a bug: the guest asked
     // more of a turn than it sized the range for.
     std::uint32_t open(std::uint32_t op, std::uint32_t n) noexcept;

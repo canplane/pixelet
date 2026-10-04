@@ -43,6 +43,12 @@ pub fn host_record(op: u32, args: &[u32], bytes: &[u8]) -> bool {
     true
 }
 
+/// A request that can wait a turn: None where there is no host, false where
+/// the turn's stream has no room for it past `stream::RESERVE`.
+pub fn host_offer(op: u32, args: &[u32], bytes: &[u8]) -> Option<bool> {
+    Some(sys()?.try_call(op, args, bytes, stream::RESERVE as usize))
+}
+
 static TURN: Global<u64> = Global::new();
 
 /// What a record asked for on turn `n` is done on any turn after it.

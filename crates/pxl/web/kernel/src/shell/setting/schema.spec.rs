@@ -287,7 +287,7 @@ impl SettingKey {
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(self, SettingKey::textures | SettingKey::decor | SettingKey::surface_follow | SettingKey::shadows)
+        matches!(self, SettingKey::textures | SettingKey::decor | SettingKey::surface_follow)
     }
 
     /// A choice's option a development build only offers.

@@ -65,6 +65,16 @@ impl Sys {
         self.stream.record(op, args, &[], Some(bytes));
     }
 
+    /// `call` where it fits with `reserve` bytes left after it; false, and
+    /// nothing recorded, where it does not, for the caller to ask again a later turn.
+    pub fn try_call(&mut self, op: u32, args: &[u32], bytes: &[u8], reserve: usize) -> bool {
+        if !self.stream.fits(args.len(), Some(bytes.len()), reserve) {
+            return false;
+        }
+        self.call(op, args, bytes);
+        true
+    }
+
     /// Drops the turn's other calls and publishes the report alone, at once.
     pub fn abort(&mut self, errno: Errno, at: &Location<'_>, a: u64, b: u64) {
         self.stream.publish();

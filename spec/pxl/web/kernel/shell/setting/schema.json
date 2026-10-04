@@ -213,7 +213,6 @@
       "kind": "toggle",
       "default": false,
       "section": "lighting",
-      "dev": true,
       "cost": "high"
     },
     "resolution": {

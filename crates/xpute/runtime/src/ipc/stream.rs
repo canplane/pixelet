@@ -35,6 +35,13 @@ impl Stream {
         self.len = 0;
     }
 
+    /// Whether a record of `args` words and `bytes` would fit whole with
+    /// `reserve` bytes still left after it.
+    pub fn fits(&self, args: usize, bytes: Option<usize>, reserve: usize) -> bool {
+        let words = 2 + args + bytes.map_or(0, |b| 1 + b.div_ceil(4));
+        self.left() >= words * 4 + reserve
+    }
+
     pub fn open(&mut self, op: u32, n: usize) -> &mut [u32] {
         let at = self.head + self.len;
         xpute_core::ensure!(at + 2 + n <= self.words.len(), ENOSPC, self.words.len() * 4);

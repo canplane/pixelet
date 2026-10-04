@@ -46,6 +46,10 @@ class Sys {
     // `op` carries the PROGRAM bit.
     void call(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes) noexcept;
 
+    // `call` where it fits with `reserve` bytes left after it; false, and nothing
+    // recorded, where it does not, for the caller to ask again a later turn.
+    bool try_call(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes, std::uint32_t reserve) noexcept;
+
     // The one call of the turn, published at once; what was recorded before it is
     // dropped.
     void abort(Errno code, const std::source_location &at, std::uint64_t a, std::uint64_t b) noexcept;
