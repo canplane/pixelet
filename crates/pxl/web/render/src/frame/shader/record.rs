@@ -414,8 +414,9 @@ const AIR: [[u32; 3]; 10] = air([FRAGMENT; 10]);
 const AIR_UNREAD: [[u32; 3]; 10] = air([NONE; 10]);
 const LIT_FRAME: [[u32; 3]; 14] = {
     // The air in the vertex stage, where each point's lights and veil are
-    // worked out; a fragment reads only its words.
-    let a = air([BOTH, VERTEX, VERTEX, VERTEX, VERTEX, VERTEX, VERTEX, VERTEX, VERTEX, VERTEX]);
+    // worked out; a fragment reads only its words. The sky's views and the
+    // Earth's picture are the sky pass's, laid out unread.
+    let a = air([BOTH, VERTEX, NONE, VERTEX, VERTEX, NONE, NONE, NONE, VERTEX, VERTEX]);
     [
         [0, BOTH, UNIFORM],
         [1, FRAGMENT, DEPTH],

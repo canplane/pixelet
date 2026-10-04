@@ -70,6 +70,7 @@ struct Air {
   light: vec3f,
   end: vec3f,
   ground: bool,
+  ground_km: f32,
   // The ground past the terrain is lit on its own slope of the sphere.
   normal: vec3f,
 };
@@ -86,6 +87,7 @@ fn air_along(dir: vec3f) -> Air {
   air.normal = frame_up();
   if (air.ground) {
     let d = to_land(r, mu);
+    air.ground_km = d;
     air.end = transmittance_along(r, mu, d, true);
     air.normal = normalize(frame_up() * r + dir * d);
   } else {
@@ -94,10 +96,11 @@ fn air_along(dir: vec3f) -> Air {
   return air;
 }
 
-// The Earth's face where a ray meets the ground past the terrain, at the
-// latitude and longitude of `n`, the ground's up there in the map center's
-// east, north and up: its reflectance, and in alpha its lights' square root.
-fn earth_face(n: vec3f) -> vec4f {
+// The Earth's face where a ray meets the ground past the terrain `km` from the
+// eye, at the latitude and longitude of `n`, the ground's up there in the map
+// center's east, north and up: its reflectance, and in alpha its lights' square
+// root.
+fn earth_face(n: vec3f, km: f32) -> vec4f {
   let sin_lat = frame_globe().y;
   let cos_lat = frame_globe().z;
   let center_lon = atmos_center_lon();
@@ -107,7 +110,17 @@ fn earth_face(n: vec3f) -> vec4f {
   let p = east * n.x + north * n.y + up * n.z;
   let lon = atan2(p.y, p.x);
   let lat = asin(clamp(p.z, -1.0, 1.0));
-  // The Earth layer's page there, where the window holds one: a z6 pixel a texel.
+  let uv = vec2f(fract(lon / TAU + 0.5), 0.5 - lat / PI);
+  let global = textureSampleLevel(earth_map, atmos_sampler, uv, 0, 0.0);
+  // The Earth layer's page there, a z6 pixel a texel, where the window holds
+  // one, taking over from the global picture, a z3 one, over the octave in
+  // which a pixel goes from covering a z5 cell, at the pages' reach, to a z6
+  // one. Distance alone decides it, as it decides what is held; a page not
+  // held yet leaves the global picture.
+  let share = clamp(log2(atmos_earth_reach() * atmos_km_per_u() / max(km, 1e-6)), 0.0, 1.0);
+  if (share <= 0.0) {
+    return global;
+  }
   let w = atmos_earth_window();
   let at = vec2f(lon, asinh(tan(lat))) / TAU * f32(w.w);
   let page = vec2i(floor(at));
@@ -117,11 +130,10 @@ fn earth_face(n: vec3f) -> vec4f {
     let per_word = 32u / EARTH_PAGE_BITS;
     let layer = (atmos_earth_pages()[k / per_word] >> (EARTH_PAGE_BITS * (k % per_word))) & ((1u << EARTH_PAGE_BITS) - 1u);
     if (layer > 0u) {
-      return textureSampleLevel(earth_pages, atmos_sampler, fract(at), i32(layer - 1u), 0.0);
+      return mix(global, textureSampleLevel(earth_pages, atmos_sampler, fract(at), i32(layer - 1u), 0.0), share);
     }
   }
-  let uv = vec2f(fract(lon / TAU + 0.5), 0.5 - lat / PI);
-  return textureSampleLevel(earth_map, atmos_sampler, uv, 0, 0.0);
+  return global;
 }
 
 // The lights come on as the eye opens: by day the night eye's gain on them
@@ -157,7 +169,7 @@ fn beyond(air: Air) -> vec3f {
   var light = air.light;
   if (air.ground) {
     let n = air.normal;
-    let face = earth_face(n);
+    let face = earth_face(n, air.ground_km);
     light += air.end * (face.rgb * surface_light(n, 1.0, light_at(land_radius(), n)) + city_shown(face.a));
   }
   return light;
@@ -215,7 +227,6 @@ fn aerial(color: vec3f, world_pos: vec3f) -> vec3f {
 struct Seen {
   through: f32,
   scattered: vec3f,
-  past: vec3f,
   light: Light,
 };
 
@@ -229,7 +240,6 @@ fn seen_from_eye(world_pos: vec3f) -> Seen {
   // picture, a cloud — keep the air's color.
   s.through = dot(v.through, LUMA);
   s.scattered = v.scattered;
-  s.past = beyond(air_along(normalize(world_pos - frame_camera_pos())));
   s.light = light;
   return s;
 }

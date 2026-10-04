@@ -41,7 +41,7 @@ fn observation_at([x, y]: [f64; 2]) -> Observation {
 
 fn floor_of(o: &Observation) -> Vec<LevelPage> {
     let mut out = Vec::new();
-    Floor::floor(o.top, o.eye, o.far, |p| out.push(p));
+    Floor::floor(o, |p| out.push(p));
     out
 }
 

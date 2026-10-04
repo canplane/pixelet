@@ -229,7 +229,7 @@ impl<L: Layer> Pyramid<L> {
             xpute_core::ensure!(read.iter().all(|&n| n <= LEVEL_DEMAND_PAGES), ENOTRECOVERABLE, *read.iter().max().unwrap_or(&0));
             let mut floor = 0u32;
             let f = floor_at.unwrap_or(o);
-            Floor::floor(f.top, f.eye, f.far, |p| {
+            Floor::floor(f, |p| {
                 floor += 1;
                 ask(&mut asks, p, Ask { why: Why::Floor, order: order(o, p) });
             });
@@ -311,7 +311,7 @@ impl<L: Layer> Pyramid<L> {
         let mut floor_now = [None; Floor::PAGES as usize];
         if let Some(l) = &live {
             let mut n = 0;
-            Floor::floor(l.top, l.eye, l.far, |p| {
+            Floor::floor(l, |p| {
                 if n < floor_now.len() {
                     floor_now[n] = Some(p);
                 }

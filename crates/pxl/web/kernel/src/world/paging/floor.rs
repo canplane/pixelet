@@ -9,6 +9,7 @@
 //! what fails. Until declared, nothing is observed.
 
 use pxl_spec::space::lod::{fault_radius, pages_within, FAULT_PAGES};
+use pxl_spec::space::observation::Observation;
 use pxl_spec::space::pyramid::{LevelPage, TOP_LEVEL};
 
 use xpute_runtime::global::Global;
@@ -27,19 +28,26 @@ pub fn level() -> Option<u32> {
 pub trait Fallback {
     const PAGES: u32;
 
-    fn floor(top: u32, eye: [f64; 3], far: f64, each: impl FnMut(LevelPage));
+    fn floor(o: &Observation, each: impl FnMut(LevelPage));
 }
 
-/// The top level's pages within the far edge, which hold every observed piece of ground.
+/// The top's pages with ground within the far edge of the eye itself, which
+/// hold every observed piece of ground. An eye higher than the edge holds none:
+/// a pixel there covers more than the top's cell, and the view has gone over to
+/// the Earth's picture.
 pub struct TopRing;
 
 impl Fallback for TopRing {
-    /// The far edge is at most the top's fault radius, so these are at most
-    /// the pages a fault can name there.
+    /// The far edge is at most the top's fault radius, and a sphere's cut by
+    /// the ground is no wider, so these are at most the pages a fault can name there.
     const PAGES: u32 = FAULT_PAGES;
 
-    fn floor(top: u32, eye: [f64; 3], far: f64, each: impl FnMut(LevelPage)) {
-        pages_within(top, [eye[0], eye[1]], far.min(fault_radius(top))).for_each(each);
+    fn floor(o: &Observation, each: impl FnMut(LevelPage)) {
+        let far = o.far.min(fault_radius(o.top));
+        let over = (o.eye[2] - o.ground).max(0.0);
+        if over < far {
+            pages_within(o.top, [o.eye[0], o.eye[1]], (far * far - over * over).sqrt()).for_each(each);
+        }
     }
 }
 
