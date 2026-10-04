@@ -4,15 +4,8 @@
 
 import { Message } from "@/kernel/abi/cmd.spec.ts";
 
-export function messageKey(message: Message): string | null {
+export function messageKey(message: Message): string {
   switch (message) {
-    case Message.None:
-      return null;
-
-    case Message.LocationChecking:
-      return "toast.location_checking";
-    case Message.LocationWeakSignal:
-      return "toast.location_weak_signal";
     case Message.GeolocationUnsupported:
       return "device.geolocation.unsupported";
     case Message.GeolocationPermissionDenied:

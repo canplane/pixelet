@@ -28,8 +28,7 @@ use crate::layer::decor::scatter::SCALE_JITTER;
 use crate::layer::decor::instance::{decor_groups, DecorScratch, GroupLanes};
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::{object_col_revision, Store};
-use crate::shell::setting::store::{hidden_ground, settings_store};
-use crate::world::change::request_world_tick;
+use crate::shell::setting::store::settings_store;
 use crate::world::chunk::build::Builder;
 use crate::world::observation::{eye, frustum_of_view};
 use crate::world::paging::floor;
@@ -94,22 +93,6 @@ struct Cells {
 }
 
 static CELLS: Global<Cells> = Global::new();
-
-/// The cell the scattered decor the eraser is over stands in, drawn hidden
-/// while it is: a preview, written nowhere (`DecorHide`).
-static SCATTERED_HIDE: Global<Option<[i64; 3]>> = Global::new();
-
-pub fn scattered_hide() -> Option<[i64; 3]> {
-    *SCATTERED_HIDE.get(|| None)
-}
-
-pub fn set_scattered_hide(cell: Option<[i64; 3]>) {
-    let held = SCATTERED_HIDE.get(|| None);
-    if *held != cell {
-        *held = cell;
-        request_world_tick();
-    }
-}
 
 fn cells() -> &'static mut Cells {
     CELLS.get(Cells::default)

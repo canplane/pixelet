@@ -112,12 +112,20 @@ export const SETTINGS = {
     default: "climb",
     options: ["through", "stop", "climb"],
     section: "camera",
-    dev_options: ["through"],
+    dev: true,
+  },
+  /** Panning re-samples the terrain height under the map center each step. */
+  ground_snap: {
+    key: 7 as number,
+    kind: "toggle",
+    default: true,
+    section: "camera",
+    dev: true,
   },
   /** Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
   edge_shade: {
-    key: 7 as number,
+    key: 8 as number,
     kind: "toggle",
     default: true,
     section: "lighting",
@@ -125,7 +133,7 @@ export const SETTINGS = {
   },
   /** A uniform on an already-compiled shader term; not a pass. */
   rim_light: {
-    key: 8 as number,
+    key: 9 as number,
     kind: "toggle",
     default: true,
     section: "lighting",
@@ -135,7 +143,7 @@ export const SETTINGS = {
    * screen-space pass; screen, N8AO's screen-space pass, the costliest of
    * the three. AO_MODES says each. */
   ao: {
-    key: 9 as number,
+    key: 10 as number,
     kind: "choice",
     default: "corner",
     options: ["off", "corner", "screen"],
@@ -146,7 +154,7 @@ export const SETTINGS = {
    * from the sun each frame, depth only, and a 3x3 compare per fragment;
    * 16 MB of map on a desktop, 4 on a phone. */
   shadows: {
-    key: 10 as number,
+    key: 11 as number,
     kind: "toggle",
     default: false,
     section: "lighting",
@@ -156,7 +164,7 @@ export const SETTINGS = {
   /** The pixels the world is filled at, the GPU's largest cost: two to a
    * CSS pixel is four times the fragments of one. RESOLUTION_MODES says each. */
   resolution: {
-    key: 11 as number,
+    key: 12 as number,
     kind: "choice",
     default: "auto",
     options: ["auto", "fixed", "low"],
@@ -164,26 +172,26 @@ export const SETTINGS = {
   },
   /** The performance overlay: the profiler's panel, and the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`). */
   profiler: {
-    key: 12 as number,
+    key: 13 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** Markers for the map center and the cell it floors to, the floating origin, the page's corners and the two gyro rings (layer/marker/frame_gizmo.rs). */
   gizmos: {
-    key: 13 as number,
+    key: 14 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   person: {
-    key: 14 as number,
+    key: 15 as number,
     kind: "index",
     default: 1 as number,
     section: "character",
   },
   pet: {
-    key: 15 as number,
+    key: 16 as number,
     kind: "index",
     default: 5 as number,
     section: "character",
@@ -268,7 +276,7 @@ export const SETTINGS_SHIPPED = {
   /** Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
   edge_shade: {
-    key: 7 as number,
+    key: 8 as number,
     kind: "toggle",
     default: true,
     section: "lighting",
@@ -276,7 +284,7 @@ export const SETTINGS_SHIPPED = {
   },
   /** A uniform on an already-compiled shader term; not a pass. */
   rim_light: {
-    key: 8 as number,
+    key: 9 as number,
     kind: "toggle",
     default: true,
     section: "lighting",
@@ -286,7 +294,7 @@ export const SETTINGS_SHIPPED = {
    * screen-space pass; screen, N8AO's screen-space pass, the costliest of
    * the three. AO_MODES says each. */
   ao: {
-    key: 9 as number,
+    key: 10 as number,
     kind: "choice",
     default: "corner",
     options: ["off", "corner", "screen"],
@@ -296,7 +304,7 @@ export const SETTINGS_SHIPPED = {
   /** The pixels the world is filled at, the GPU's largest cost: two to a
    * CSS pixel is four times the fragments of one. RESOLUTION_MODES says each. */
   resolution: {
-    key: 11 as number,
+    key: 12 as number,
     kind: "choice",
     default: "auto",
     options: ["auto", "fixed", "low"],
@@ -304,26 +312,26 @@ export const SETTINGS_SHIPPED = {
   },
   /** The performance overlay: the profiler's panel, and the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`). */
   profiler: {
-    key: 12 as number,
+    key: 13 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** Markers for the map center and the cell it floors to, the floating origin, the page's corners and the two gyro rings (layer/marker/frame_gizmo.rs). */
   gizmos: {
-    key: 13 as number,
+    key: 14 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   person: {
-    key: 14 as number,
+    key: 15 as number,
     kind: "index",
     default: 1 as number,
     section: "character",
   },
   pet: {
-    key: 15 as number,
+    key: 16 as number,
     kind: "index",
     default: 5 as number,
     section: "character",

@@ -18,11 +18,12 @@ import { FADE, LEAVE, SNAP } from "@/shared/ui/motion/transition.ts";
 import { keepKeyboard } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
 import { alpha, chrome, color, material, shadow } from "@/shared/ui/theme.ts";
-import { useAppContext } from "@/app/provider/context.ts";
-import { useInHand, useUiStore } from "@/app/store/ui.ts";
+import { openModal } from "@/app/modal.tsx";
+import { holdTier, holdTool, useInHand, useUiStore } from "@/app/store/ui.ts";
+import { useKernel } from "@/kernel/shell.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { decorName, type PlaceableCube, placeableCubeId } from "@/catalog/cell/mod.ts";
-import { useKernel } from "@/kernel/shell.ts";
+import { OBJECT_TIERS } from "@/config/object.spec.ts";
 import { cubeLabel, CubeSwatch, DECOR_GLYPH, heldRing } from "./cube-swatch.tsx";
 
 const SEND_FROM_SCALE = 0.5;
@@ -67,9 +68,7 @@ function sizeMark(tier: u32): f64 {
 }
 
 /** Finest first, so the coarsest stands nearest the swatch. */
-function sizeTiers(count: u32): u32[] {
-  return Array.from({ length: count }, (_, i) => count - 1 - i);
-}
+const TIERS: readonly u32[] = Array.from({ length: OBJECT_TIERS }, (_, i) => OBJECT_TIERS - 1 - i);
 
 interface Flyout {
   left: f64;
@@ -78,27 +77,27 @@ interface Flyout {
   hover: u32 | null;
 }
 
-function tierAt(at: Flyout, count: u32, x: f64, y: f64): u32 | null {
+function tierAt(at: Flyout, x: f64, y: f64): u32 | null {
   if (Math.abs(x - at.centerX) > FLYOUT_WIDTH / 2) return null;
-  const top = at.foot - (2 * FLYOUT_PAD_Y + count * FLYOUT_ITEM_PX + (count - 1) * FLYOUT_GAP_PX);
+  const top = at.foot - (2 * FLYOUT_PAD_Y + OBJECT_TIERS * chrome.target + (OBJECT_TIERS - 1) * FLYOUT_GAP_PX);
   const along = y - top - FLYOUT_PAD_Y;
   if (along < 0) return null;
-  const row = Math.floor(along / (FLYOUT_ITEM_PX + FLYOUT_GAP_PX));
-  if (row >= count || along - row * (FLYOUT_ITEM_PX + FLYOUT_GAP_PX) > FLYOUT_ITEM_PX) return null;
-  return sizeTiers(count)[row];
+  const row = Math.floor(along / (chrome.target + FLYOUT_GAP_PX));
+  if (row >= OBJECT_TIERS || along - row * (chrome.target + FLYOUT_GAP_PX) > chrome.target) return null;
+  return TIERS[row];
 }
 
 /** Drawn from the bar, not the swatch, whose scrolling strip would clip it. */
 function SizeFlyout({ hover }: { hover: u32 | null }) {
-  const objectTier = useUiStore((s) => s.objectTier);
-  const sizes = useKernel((s) => s.object_sizes);
+  const { t } = useTranslation();
+  const objectTier = useKernel((s) => s.holding.tier);
 
   return (
     <Backing fill={STRIP.ground} material={material.flyout} place={BackingPlace.OverMap} style={styles.flyout}>
-      {sizeTiers(sizes.length).map((tier) => {
+      {TIERS.map((tier) => {
         const mark = sizeMark(tier);
         return (
-          <View key={tier} accessibilityLabel={`${sizes[tier]}u`} style={styles.flyoutItem}>
+          <View key={tier} accessibilityLabel={t("map.mode_bar.object_size", { n: OBJECT_TIERS - tier })} style={styles.flyoutItem}>
             <Motion to={{ scale: hover === tier ? 1.25 : 1 }} transition={SNAP}>
               <View
                 style={[
@@ -245,17 +244,14 @@ export function ModeBar() {
       onPanResponderGrant: () => Keyboard.dismiss(),
     }),
   ).current;
-  const activeTool = useUiStore((s) => s.activeTool);
-  const setActiveTool = useUiStore.getState().setActiveTool;
+  const activeTool = useKernel((s) => s.holding.tool);
   const recentPicks = useUiStore((s) => s.recentPicks);
   const appendChatLine = useUiStore.getState().appendChatLine;
-  const setObjectTier = useUiStore.getState().setObjectTier;
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [barWidth, setBarWidth] = useState<f64>(0);
   const [stripWidth, setStripWidth] = useState<f64>(MODE_BAR_HEIGHT_PX);
   const [flyout, setFlyout] = useState<Flyout | null>(null);
-  const sizeCount = useKernel((s) => s.object_sizes.length);
   const inputRef = useRef<TextInput | null>(null);
   const bar = useRef<View | null>(null);
 
@@ -281,12 +277,12 @@ export function ModeBar() {
     },
     move: (x, y) => {
       if (flyout === null) return;
-      const hover = tierAt(flyout, sizeCount, x, y);
+      const hover = tierAt(flyout, x, y);
       if (hover !== flyout.hover) setFlyout({ ...flyout, hover });
     },
     lift: (x, y) => {
-      const tier = flyout === null ? null : tierAt(flyout, sizeCount, x, y);
-      if (tier !== null) setObjectTier(tier);
+      const tier = flyout === null ? null : tierAt(flyout, x, y);
+      if (tier !== null) holdTier(tier);
       setFlyout(null);
     },
     close: () => setFlyout(null),
@@ -369,12 +365,8 @@ export function ModeBar() {
               style={[styles.strip, { maxWidth: room }, paletteExpanded ? styles.pass : styles.block]}
             >
               <View style={styles.group}>
-                <ToolButton label={t("map.mode_bar.pointer")} active={activeTool === ActiveTool.Pointer} onPress={() => setActiveTool(ActiveTool.Pointer)}>
-                  <Glyph glyph="hand.point.up.left" size={chrome.glyph} color={activeTool === ActiveTool.Pointer ? STRIP.glyphOn : STRIP.glyph} />
-                </ToolButton>
-                <ToolButton label={t("map.mode_bar.eraser")} active={activeTool === ActiveTool.Eraser} onPress={() => setActiveTool(ActiveTool.Eraser)}>
-                  <Glyph glyph="eraser" size={chrome.glyph} color={activeTool === ActiveTool.Eraser ? STRIP.glyphOn : STRIP.glyph} />
-                </ToolButton>
+                <ToolButton label={t("map.dock.pointer")} glyph="hand.point.up.left" active={activeTool === ActiveTool.Pointer} onPress={() => holdTool(ActiveTool.Pointer)} />
+                <ToolButton label={t("map.dock.eraser")} glyph="eraser" active={activeTool === ActiveTool.Eraser} onPress={() => holdTool(ActiveTool.Eraser)} />
               </View>
 
               <View style={styles.divider} />

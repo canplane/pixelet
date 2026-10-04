@@ -1,4 +1,4 @@
-// pxl-kernel/control/camera/ray.test.rs
+// pxl-kernel/control/interaction/pick.test.rs
 
 // A carve writes a cell-sized AIR leaf, so its corner must be the cell's,
 // not the size tier's; the store is saved, so a wrong bite outlives the
@@ -16,7 +16,10 @@ fn struck(normal: V3, point: V3) -> Hit {
         t: 1.0,
         point,
         normal,
-        cube: Aabb { min: [3.0, 5.0, 2.0], max: [4.0, 6.0, 3.0] },
+        cube: Aabb {
+            min: [3.0, 5.0, 2.0],
+            max: [4.0, 6.0, 3.0],
+        },
         struck: Struck::Ground,
     }
 }

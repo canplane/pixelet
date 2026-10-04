@@ -20,7 +20,7 @@
     "builds the chunks again."
   ],
   "SETTING_SECTIONS": {
-    "$value": ["display", "navigation", "camera", "lighting", "quality", "debug", "character", "map"],
+    "$value": ["display", "camera", "lighting", "quality", "debug", "character"],
     "$doc": [
       "The sheet's sections, in the order they are shown. `character` is not a",
       "section of the sheet at all — its two settings are picked from the",
@@ -171,14 +171,6 @@
       "default": true,
       "section": "navigation",
       "dev": true
-    },
-    "orbit_obstacle": {
-      "$doc": ["What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each."],
-      "kind": "choice",
-      "default": "climb",
-      "options": "ORBIT_OBSTACLE_MODES",
-      "section": "camera",
-      "dev_options": ["through"]
     },
     "edge_shade": {
       "$doc": [

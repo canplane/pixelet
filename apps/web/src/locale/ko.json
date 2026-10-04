@@ -292,7 +292,6 @@
     }
   },
   "toast": {
-    "location_weak_signal": "위치 신호가 약합니다.",
     "location_checking": "현재 위치를 확인하고 있습니다.",
     "map_load_error": "공간을 불러올 수 없습니다.",
     "world_ready": "공간을 불러왔습니다.",
@@ -310,7 +309,8 @@
       "message_placeholder": "메시지 입력…",
       "message_tooltip": "메시지",
       "send": "전송",
-      "catalog_tooltip": "전체 카탈로그 열기"
+      "catalog_tooltip": "전체 카탈로그 열기",
+      "object_size": "크기 {{n}}"
     },
     "controls": {
       "reset_orientation": "북쪽으로 정렬",

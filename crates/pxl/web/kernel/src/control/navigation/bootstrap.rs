@@ -34,7 +34,7 @@ static BOOTSTRAP: Global<Bootstrap> = Global::new();
 
 pub fn map_bootstrap_step() {
     let device_coord = map_navigation().device_coord;
-    let location_status = device_location_store().status;
+    let location_status = device_location_store().pose.status();
     let b = BOOTSTRAP.get(|| Bootstrap { last: None });
     if b.last == Some((device_coord, location_status)) {
         return;

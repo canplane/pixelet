@@ -1,40 +1,27 @@
 // pxl-kernel/control/camera/input.rs
 
-//! The pointer's gestures: pan, rotate, pinch/twist/tilt, wheel, hover and
-//! tap. Store writes are coalesced to once a frame (`camera_input_step`).
+//! The pointer's gestures: pan, rotate, pinch/twist/tilt and wheel; hover
+//! and tap go to interaction.rs. Store writes are coalesced to once a frame
+//! (`camera_input_step`).
 //! What the pointer holds comes with each event; when it changes under a
 //! still pointer, the shell resends the move to re-resolve hover.
 
 use std::collections::BTreeMap;
 
 use camera_cfg::input::{AXIS_LOCK_THRESHOLD_PX, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION};
-use pxl_spec::bake::constant::{CELL, U_PER_CELL};
-use pxl_spec::cell::object::PlaceableCube;
-use pxl_spec::cell::{cube_types, DecorId};
-use pxl_spec::space::pvf3::ivec::IVec;
-use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::v3::V3;
 
-pub use crate::abi::cmd::{ActiveTool, PointerKind};
+pub use crate::abi::cmd::PointerKind;
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::controller::{active, Active};
 use crate::control::camera::gesture::{linear, Anchor};
-use crate::control::camera::ray::{ray_pick, resolve_hit_object, world_adjacent_corner, world_hover_pvf3, world_struck_corner};
 use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
-use crate::control::interaction::{clear_hover, clear_hover_coord, hold, hover_at, tap, Holding};
+use crate::control::interaction::{clear_hover, clear_hover_coord, hover_at, tap};
 use crate::control::navigation::destination::cancel as cancel_destination;
+use crate::control::interaction::{clear_hover, clear_hover_coord, hold, hover_at, tap, Holding};
 use crate::global::Global;
-use crate::layer::decor::hit::{raycast_decor, DecorStruck, Scattered};
-use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
-use crate::layer::object::geometry::{anchor_center, object_aabb, object_center};
-use crate::layer::object::size::{DECOR_SIZE, DEFAULT_OBJECT_SIZE};
-use crate::layer::object::store::{get_placed_object, place, place_air, place_decor, remove, OccupiedEntry};
-use crate::control::navigation::walk::stand_or_raw;
 use crate::shell::setting::store::settings_store;
-use crate::world::access::Hit;
 use crate::world::change::request_world_tick;
-use crate::world::frame::coord::local_world_origin;
-use crate::world::frame::view::{view, view_ray_local};
+use crate::world::frame::view::view;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::global::Global;
@@ -54,27 +41,6 @@ enum RotateAxisLock {
     Rotate,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Holding {
-    pub active_tool: ActiveTool,
-    /// The hotbar only ever sets this to a flat color, but the drawer picks
-    /// terrain-styled cubes too.
-    pub object_cube: PlaceableCube,
-    pub object_size: f64,
-    pub decor_id: DecorId,
-}
-
-impl Default for Holding {
-    fn default() -> Holding {
-        Holding {
-            active_tool: ActiveTool::Pointer,
-            object_cube: PlaceableCube::Block(cube_types::Block::red),
-            object_size: DEFAULT_OBJECT_SIZE,
-            decor_id: DecorId::tree,
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Rect {
     pub left: f64,
@@ -90,7 +56,6 @@ struct PointerPos {
 }
 
 struct Input {
-    holding: Holding,
     drag_mode: DragMode,
     did_drag: bool,
     pointer_x: f64,
@@ -101,6 +66,8 @@ struct Input {
     // Total displacement from pointerdown, not per-event deltas, decides tap vs drag.
     tap_start_x: f64,
     tap_start_y: f64,
+    /// A mouse over the canvas and not dragging, whose hover a new holding redoes.
+    hovering: bool,
     hover_pending: bool,
 
     // Pointer moves fire far more often than frames; uncoalesced store writes
@@ -133,7 +100,6 @@ static INPUT: Global<Input> = Global::new();
 
 fn input() -> &'static mut Input {
     INPUT.get(|| Input {
-        holding: Holding::default(),
         drag_mode: DragMode::None,
         did_drag: false,
         pointer_x: 0.0,
@@ -143,6 +109,7 @@ fn input() -> &'static mut Input {
         last_y: 0.0,
         tap_start_x: 0.0,
         tap_start_y: 0.0,
+        hovering: false,
         hover_pending: false,
         drag_pending: false,
         pending_pan_dx: 0.0,
@@ -160,89 +127,6 @@ fn input() -> &'static mut Input {
         pinch_tilt: Anchor::new(0.0, 0.0),
         pinch_twist: None,
     })
-}
-
-/// What `hit` actually struck, decor included.
-enum Struck {
-    /// A placed entry.
-    Object(OccupiedEntry),
-    /// A scattered decor instance.
-    Scattered(Scattered),
-}
-
-/// What `hit` actually struck — the decor's mesh hit first, bounded by
-/// hit.t: decor sitting on solid ground can only be the right answer when
-/// it's genuinely closer along the ray than whatever the pick met, falling
-/// back to the object the pick met.
-fn resolve_struck(hit: &Hit, origin: V3, direction: V3, map_origin: IVec) -> Option<Struck> {
-    match raycast_decor(origin, direction, map_origin, hit.t) {
-        Some(DecorStruck::Placed(at)) => {
-            if let Some(o) = get_placed_object(at) {
-                return Some(Struck::Object(o));
-            }
-        }
-        Some(DecorStruck::Scattered(s)) => return Some(Struck::Scattered(s)),
-        None => {}
-    }
-    resolve_hit_object(hit).map(Struck::Object)
-}
-
-/// The placed entry `hit` struck, a placed decor's mesh met first; what a
-/// placement goes flush against. A scattered instance is what is made
-/// there and not an entry, and a placement lands as it would on the ground.
-fn resolve_hit_target(hit: &Hit, origin: V3, direction: V3, map_origin: IVec) -> Option<OccupiedEntry> {
-    match resolve_struck(hit, origin, direction, map_origin) {
-        Some(Struck::Object(o)) => Some(o),
-        _ => resolve_hit_object(hit),
-    }
-}
-
-fn handle_tap(hovered: Pvf3) {
-    let ui = input().holding;
-    let object_size = ui.object_size;
-
-    match ui.active_tool {
-        ActiveTool::Pointer => {
-            // Recenter where a walker would stand across the struck face, by the
-            // ground's own rule, so a pan after a tap changes nothing.
-            let Some(approach) = camera_store().hovered_approach else { return };
-            let target = stand_or_raw(&anchor_center(&approach));
-            crate::control::navigation::destination::go_to(target, crate::control::camera::controller::Motion::Smooth);
-        }
-        ActiveTool::Eraser => {
-            // Targets the object the raycast actually struck, not a grid-key
-            // lookup — correct for any size, any face.
-            match (camera_store().hovered_object_at, camera_store().hovered_scattered) {
-                (Some(at), _) => remove(at),
-                // A scattered instance: air written over the cell it stands
-                // in, as over the ground, and with no setting asked, since it
-                // takes away nothing the ground is.
-                (None, Some(s)) => place_air(&CELL.base_of(s.cell), U_PER_CELL),
-                // Nothing placed here — dig into the terrain's own real surface,
-                // once the user has opted into that. AIR, not VOID: real terrain
-                // has no object-layer leaf of its own to delete, so an explicit
-                // "nothing here on purpose" leaf is the only way to override it.
-                //
-                // A cell, never the size tier. A zero material is a voxel the
-                // scan emits nothing for whatever its sub-cell bytes say
-                // (pxl-render mesh/voxel_scan.rs), so a smaller leaf would still
-                // take the cell whole while recording a bite nobody took — and
-                // the store is saved, so that number outlives the session.
-                (None, None) if settings_store().terrain_carving => place_air(&hovered, U_PER_CELL),
-                (None, None) => {}
-            }
-        }
-        ActiveTool::Decor | ActiveTool::Object => {
-            // The slot may have filled since the last hover update.
-            if ui.active_tool == ActiveTool::Decor {
-                if !is_placement_blocked(PlacementTool::Decor, &hovered, object_size) {
-                    place_decor(&hovered, DECOR_SIZE, ui.decor_id);
-                }
-            } else if !is_placement_blocked(PlacementTool::Object, &hovered, object_size) {
-                place(&hovered, object_size, ui.object_cube, settings_store().structures);
-            }
-        }
-    }
 }
 
 /// Negative because dragging up tilts toward the horizon.
@@ -328,7 +212,7 @@ fn begin_pinch(s: &mut Input) {
     s.pinch_twist = None;
     s.drag_mode = DragMode::Pinch;
     s.did_drag = true;
-    camera.hovered_coord = None;
+    clear_hover_coord();
 }
 
 fn update_pinch(s: &mut Input) {
@@ -362,11 +246,11 @@ fn update_pinch(s: &mut Input) {
     }
 }
 
-pub fn camera_pointer_down(kind: PointerKind, pointer_id: i32, button: i32, client_x: f64, client_y: f64, holding: Holding) {
+pub fn camera_pointer_down(kind: PointerKind, pointer_id: i32, button: i32, client_x: f64, client_y: f64) {
     let s = input();
-    s.holding = holding;
     let camera = camera_store();
     if kind == PointerKind::Touch {
+        s.hovering = false;
         s.active_pointers.insert(pointer_id, PointerPos { x: client_x, y: client_y });
         camera.camera_status = CameraStatus::Drag;
         camera.is_follow_mode = false;
@@ -409,9 +293,8 @@ pub fn camera_pointer_down(kind: PointerKind, pointer_id: i32, button: i32, clie
     camera.is_follow_mode = false;
 }
 
-pub fn camera_pointer_move(kind: PointerKind, pointer_id: i32, client_x: f64, client_y: f64, holding: Holding) {
+pub fn camera_pointer_move(kind: PointerKind, pointer_id: i32, client_x: f64, client_y: f64) {
     let s = input();
-    s.holding = holding;
     if kind == PointerKind::Touch {
         if let Some(pt) = s.active_pointers.get_mut(&pointer_id) {
             *pt = PointerPos { x: client_x, y: client_y };
@@ -435,6 +318,7 @@ pub fn camera_pointer_move(kind: PointerKind, pointer_id: i32, client_x: f64, cl
 
     update_pointer(s, client_x, client_y);
     if s.drag_mode == DragMode::None {
+        s.hovering = true;
         s.hover_pending = true;
         return;
     }
@@ -453,86 +337,15 @@ pub fn camera_pointer_move(kind: PointerKind, pointer_id: i32, client_x: f64, cl
     s.drag_pending = true;
 }
 
-fn clear_hovered_once() {
-    let camera = camera_store();
-    if camera.hovered_coord.is_some() {
-        camera.hovered_coord = None;
-    }
-    if camera.hovered_object_at.is_some() {
-        camera.hovered_object_at = None;
-    }
-    camera.hovered_scattered = None;
-}
-
-fn update_hover(s: &Input) {
-    let mut origin = [0.0; 3];
-    let mut direction = [0.0; 3];
-    view_ray_local(s.pointer_x, s.pointer_y, &mut origin, &mut direction);
-
-    let ui = s.holding;
-    let map_origin = local_world_origin();
-    let Some(pick) = ray_pick(origin, direction) else {
-        return clear_hovered_once();
-    };
-    let hit = pick.hit;
-    let camera = camera_store();
-
-    if matches!(ui.active_tool, ActiveTool::Object | ActiveTool::Decor) {
-        camera.hovered_object_at = None;
-        camera.hovered_scattered = None;
-        let placement_size = if ui.active_tool == ActiveTool::Decor { DECOR_SIZE } else { ui.object_size };
-        // A decor met in front of the pick is what the new cube goes flush against.
-        let precise_box = resolve_hit_target(&hit, origin, direction, map_origin).map(|o| object_aabb(&o, map_origin));
-        camera.hovered_coord = Some(world_adjacent_corner(&hit, placement_size, map_origin, precise_box.as_ref()));
-        return;
-    }
-
-    // Pointer (recenter on it) and eraser (remove/dig it) both target the struck
-    // thing itself.
-    let struck = resolve_struck(&hit, origin, direction, map_origin);
-    camera.hovered_object_at = match &struck {
-        Some(Struck::Object(o)) => Some(o.at),
-        _ => None,
-    };
-    camera.hovered_scattered = match struck {
-        Some(Struck::Scattered(s)) => Some(s),
-        _ => None,
-    };
-    if let Some(Struck::Object(o)) = struck {
-        camera.hovered_coord = Some(Pvf3 { i: o.i, f: o.f });
-    } else if let Some(s) = camera.hovered_scattered {
-        camera.hovered_coord = Some(CELL.base_of(s.cell));
-    } else if ui.active_tool == ActiveTool::Eraser && settings_store().terrain_carving {
-        // Bare terrain under the eraser wants the struck voxel's OWN corner
-        // (real, possibly dug-into height included), not the baked-elevation
-        // "flush on top" slot. On the cell's grid and not the tier's, because
-        // that is the size the carve is written at.
-        camera.hovered_coord = Some(world_struck_corner(&hit, U_PER_CELL, map_origin));
-    } else {
-        match world_hover_pvf3(&hit, map_origin) {
-            Some(grounded) => camera.hovered_coord = Some(grounded),
-            None => clear_hovered_once(),
-        }
-    }
-}
-
 fn tap_if_still(s: &Input, mode: DragMode) {
     if !s.did_drag && mode == DragMode::Pan {
-        // A badge takes the tap before the ground under it, with the pointer tool only.
-        if s.holding.active_tool == ActiveTool::Pointer && crate::layer::poi::placement::tap(s.pointer_x, s.pointer_y) {
-            return;
-        }
-        update_hover(s);
-        if let Some(hovered) = camera_store().hovered_coord {
-            handle_tap(hovered);
-        }
+        tap(s.pointer_x, s.pointer_y);
     }
 }
 
 /// A pointer went up, or was canceled.
-pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32, holding: Holding) {
+pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32) {
     let s = input();
-    s.holding = holding;
     let camera = camera_store();
     if kind == PointerKind::Touch {
         s.active_pointers.remove(&pointer_id);
@@ -571,7 +384,16 @@ pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32, holding: Holding) {
 }
 
 pub fn camera_pointer_out() {
-    clear_hovered_once();
+    input().hovering = false;
+    clear_hover();
+}
+
+/// What the pointer holds changed: a hovering pointer picks again where it stands.
+pub fn camera_rehover() {
+    let s = input();
+    if s.hovering {
+        s.hover_pending = true;
+    }
 }
 
 /// In CSS pixels.
@@ -584,7 +406,7 @@ pub fn camera_input_step() {
     if s.hover_pending {
         s.hover_pending = false;
         if s.drag_mode == DragMode::None {
-            update_hover(s);
+            hover_at(s.pointer_x, s.pointer_y);
         }
     }
     if s.drag_pending {
@@ -612,9 +434,4 @@ pub fn pinching() -> bool {
 
 pub fn dragging() -> bool {
     input().drag_mode != DragMode::None
-}
-
-/// What the hover cursor previews.
-pub fn holding() -> Holding {
-    input().holding
 }

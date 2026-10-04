@@ -56,12 +56,41 @@ fn is_heading_delta_over(a: Option<f64>, b: Option<f64>, eps: f64) -> bool {
     }
 }
 
+/// Where a sensor's reading is; a failure says what failed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Pose {
+    #[default]
+    Idle,
+    Loading,
+    Ready,
+    Failed(Message),
+    Unavailable,
+}
+
+impl Pose {
+    pub fn status(self) -> DevicePoseStatus {
+        match self {
+            Pose::Idle => DevicePoseStatus::Idle,
+            Pose::Loading => DevicePoseStatus::Loading,
+            Pose::Ready => DevicePoseStatus::Ready,
+            Pose::Failed(_) => DevicePoseStatus::Error,
+            Pose::Unavailable => DevicePoseStatus::Unavailable,
+        }
+    }
+
+    pub fn error(self) -> Option<Message> {
+        match self {
+            Pose::Failed(m) => Some(m),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct DeviceLocationStore {
     pub is_tracking_location: bool,
     pub location: Option<DeviceLocation>,
-    pub status: DevicePoseStatus,
-    pub error: Option<Message>,
+    pub pose: Pose,
 }
 
 impl DeviceLocationStore {
@@ -70,8 +99,7 @@ impl DeviceLocationStore {
         let timestamp = now();
         let Some(prev) = self.location else {
             self.location = Some(DeviceLocation { coords, accuracy, course, timestamp });
-            self.status = DevicePoseStatus::Ready;
-            self.error = None;
+            self.pose = Pose::Ready;
             return;
         };
 
@@ -98,8 +126,7 @@ impl DeviceLocationStore {
             course,
             timestamp,
         });
-        self.status = DevicePoseStatus::Ready;
-        self.error = None;
+        self.pose = Pose::Ready;
     }
 
     pub fn set_is_tracking_location(&mut self, enabled: bool) {
@@ -111,22 +138,13 @@ impl DeviceLocationStore {
             self.location = None;
         }
     }
-
-    pub fn set_error(&mut self, error: Message) {
-        if self.status == DevicePoseStatus::Error && self.error == Some(error) {
-            return;
-        }
-        self.status = DevicePoseStatus::Error;
-        self.error = Some(error);
-    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct DeviceOrientationStore {
     pub is_tracking_orientation: bool,
     pub orientation: Option<DeviceOrientation>,
-    pub status: DevicePoseStatus,
-    pub error: Option<Message>,
+    pub pose: Pose,
 }
 
 impl DeviceOrientationStore {
@@ -136,8 +154,7 @@ impl DeviceOrientationStore {
         let Some(prev) = self.orientation else {
             self.orientation = Some(DeviceOrientation { heading, beta, gamma, timestamp });
             // Orientation alone counts as usable.
-            self.status = DevicePoseStatus::Ready;
-            self.error = None;
+            self.pose = Pose::Ready;
             return;
         };
 
@@ -157,14 +174,6 @@ impl DeviceOrientationStore {
         if !enabled {
             self.orientation = None;
         }
-    }
-
-    pub fn set_error(&mut self, error: Message) {
-        if self.status == DevicePoseStatus::Error && self.error == Some(error) {
-            return;
-        }
-        self.status = DevicePoseStatus::Error;
-        self.error = Some(error);
     }
 }
 

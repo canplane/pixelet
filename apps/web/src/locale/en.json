@@ -347,7 +347,6 @@
     }
   },
   "toast": {
-    "location_weak_signal": "Location signal is weak.",
     "location_checking": "Checking your location…",
     "map_load_error": "Couldn’t load the area.",
     "world_ready": "Area loaded.",
@@ -365,7 +364,8 @@
       "message_placeholder": "Type a message…",
       "message_tooltip": "Message",
       "send": "Send",
-      "catalog_tooltip": "Open Full Catalog"
+      "catalog_tooltip": "Open Full Catalog",
+      "object_size": "Size {{n}}"
     },
     "controls": {
       "reset_orientation": "Face North",

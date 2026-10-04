@@ -1,4 +1,4 @@
-// pxl-kernel/control/camera/ray.rs
+// pxl-kernel/control/interaction/pick.rs
 
 //! The pointer's pick, asked of the access at terrain's finest level, which
 //! is what is on the screen about the eye; and what a hit means for a
@@ -100,5 +100,5 @@ pub fn ray_pick(origin: V3, direction: V3) -> Option<PickResult> {
 }
 
 #[cfg(test)]
-#[path = "ray.test.rs"]
+#[path = "pick.test.rs"]
 mod test;

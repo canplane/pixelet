@@ -5,7 +5,6 @@ use xpute_core::math::scalar::wrap;
 
 use crate::control::camera::controller::Motion;
 use crate::control::camera::store::{camera_store, IntentPatch};
-use crate::control::camera::controller::Motion;
 use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::store::{device_location_store, device_orientation_store, DevicePoseStatus};
@@ -51,7 +50,7 @@ pub fn follow_mode_step() {
     // is one, so a device without a compass still follows where it is. A blip
     // must not drop it (it read as the mode switching itself off), but a dead
     // location must eventually, or the camera freezes behind a disabled button.
-    let status = device_location_store().status;
+    let status = device_location_store().pose.status();
     let ready = status == DevicePoseStatus::Ready;
     if is_follow_mode && !ready {
         // Restarted whenever a status moves: LOADING to ERROR is a fresh gap with its
@@ -85,11 +84,8 @@ pub fn follow_mode_step() {
         return;
     }
 
-    // 1. [Position sync] only when the GPS coordinate changes. No EMA here:
-    // a fix followed is moved to as the hand's moves are (controller.rs
-    // `Motion::Smooth`), and that approach is the one smoothing stage. On the ground
-    // there, as the recenter button puts it: device_coord's Z is the fix's
-    // altitude, not the map's height.
+    // No EMA here: the smooth move is the one smoothing stage. On the ground, since
+    // the fix's Z is altitude.
     if let Some(device) = device_coord.filter(|d| entered || Some(*d) != f.last_device) {
         go_to_ground(device, Motion::Smooth);
     }

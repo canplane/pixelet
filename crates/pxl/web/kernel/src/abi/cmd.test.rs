@@ -26,6 +26,7 @@ fn every_number_is_its_major_and_minor() {
         (SENSOR_PERMISSION, Major::SENSOR as u32, SensorMinor::PERMISSION as u32),
         (INPUT_RECT, Major::INPUT as u32, InputMinor::RECT as u32),
         (INPUT_POINTER, Major::INPUT as u32, InputMinor::POINTER as u32),
+        (INPUT_HOLD, Major::INPUT as u32, InputMinor::HOLD as u32),
         (INPUT_WHEEL, Major::INPUT as u32, InputMinor::WHEEL as u32),
         (GPU_READY, Major::GPU as u32, GpuMinor::READY as u32),
         (GPU_LOST, Major::GPU as u32, GpuMinor::LOST as u32),

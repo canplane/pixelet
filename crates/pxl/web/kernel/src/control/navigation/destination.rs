@@ -10,28 +10,22 @@ use pxl_spec::space::pyramid::{LevelPage, GROUND};
 
 use crate::control::camera::controller::{put_center, Motion};
 use crate::control::navigation::support::{exact, unknown_z};
-use crate::global::Global;
 use crate::world::access::FINEST;
+use xpute_runtime::global::Global;
 
-/// The place named and not yet reached, its Z meaningless, and how it is to
-/// be reached.
 static DESTINATION: Global<Option<(Pvf3, Motion)>> = Global::new();
 
 fn destination() -> &'static mut Option<(Pvf3, Motion)> {
     DESTINATION.get(|| None)
 }
 
-/// The camera to stand over `at`'s X and Y, on the ground there, once that
-/// is known; its Z says nothing. A later destination or a `go_to` takes its
-/// place.
+/// A later destination or a `go_to` replaces it.
 pub fn go_to_ground(at: Pvf3, motion: Motion) {
     *destination() = Some((unknown_z(&at), motion));
     crate::world::change::request_world_tick();
 }
 
-/// The camera put at `at` as it is: a place named with its height. A
-/// destination still waiting is dropped, since this is where the camera was
-/// asked to be last.
+/// A pending destination is dropped: this was asked last.
 pub fn go_to(at: Pvf3, motion: Motion) {
     cancel();
     put_center(at, motion);

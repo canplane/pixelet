@@ -176,6 +176,10 @@
         {
           "name": "POSE_END",
           "value": 10
+        },
+        {
+          "name": "HOLD",
+          "value": 11
         }
       ]
     },
@@ -640,19 +644,7 @@
       "format": "hex4",
       "entries": [
         {
-          "name": "None",
-          "value": 0
-        },
-        {
           "section": "0x02 where the device says it is"
-        },
-        {
-          "name": "LocationChecking",
-          "value": 513
-        },
-        {
-          "name": "LocationWeakSignal",
-          "value": 514
         },
         {
           "name": "GeolocationUnsupported",
@@ -818,7 +810,7 @@
               "type": "f64"
             },
             {
-              "name": "heading",
+              "name": "course",
               "type": "f64",
               "optional": true
             }
@@ -1076,9 +1068,7 @@
           "name": "INPUT_POINTER",
           "value": 4354,
           "doc": [
-            "A pointer event on the canvas, in client pixels, with what the pointer holds; the",
-            "shell sends a move at the last position when the holding changes, as a browser",
-            "synthesizes a mouse move."
+            "A pointer event on the canvas, in client pixels."
           ],
           "packet": [
             {
@@ -1104,7 +1094,16 @@
             {
               "name": "y",
               "type": "f64"
-            },
+            }
+          ]
+        },
+        {
+          "name": "INPUT_HOLD",
+          "value": 4363,
+          "doc": [
+            "What the pointer holds, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer."
+          ],
+          "packet": [
             {
               "name": "tool",
               "type": "ActiveTool"
@@ -1128,7 +1127,7 @@
               "name": "tier",
               "type": "u32",
               "doc": [
-                "The object size, by its index in the snapshot's object_sizes."
+                "The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs)."
               ]
             }
           ]
@@ -1504,6 +1503,10 @@
           "type": "CompanionState"
         },
         {
+          "name": "holding",
+          "type": "HoldingState"
+        },
+        {
           "name": "orientation",
           "type": "OrientationState"
         },
@@ -1556,14 +1559,6 @@
             "The place the map center is in, broad to narrow, every rung of it; empty where",
             "the center is in none or the packets it is read out of have not arrived."
           ]
-        },
-        {
-          "name": "previews",
-          "type": "u32",
-          "list": true,
-          "doc": [
-            "The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here."
-          ]
         }
       ]
     },
@@ -1615,7 +1610,10 @@
         {
           "name": "error",
           "type": "Message",
-          "optional": true
+          "optional": true,
+          "doc": [
+            "Present exactly when status is Error: the failure the kernel chose."
+          ]
         }
       ]
     },
@@ -1633,6 +1631,41 @@
       ]
     },
     {
+      "name": "HoldingState",
+      "doc": [
+        "What the pointer holds, as INPUT_HOLD set it: the cube and the decor are each remembered whichever tool is held."
+      ],
+      "fields": [
+        {
+          "name": "tool",
+          "type": "ActiveTool"
+        },
+        {
+          "name": "channel",
+          "type": "GroundChannelKey",
+          "optional": true,
+          "doc": [
+            "The held cube's ground channel; absent for a flat color."
+          ]
+        },
+        {
+          "name": "cube",
+          "type": "u32",
+          "doc": [
+            "The held cube's type in its channel."
+          ]
+        },
+        {
+          "name": "decor",
+          "type": "u32"
+        },
+        {
+          "name": "tier",
+          "type": "u32"
+        }
+      ]
+    },
+    {
       "name": "OrientationState",
       "fields": [
         {
@@ -1640,9 +1673,12 @@
           "type": "DevicePoseStatus"
         },
         {
-          "name": "heading",
-          "type": "f64",
-          "optional": true
+          "name": "error",
+          "type": "Message",
+          "optional": true,
+          "doc": [
+            "Present exactly when status is Error: the failure the kernel chose."
+          ]
         }
       ]
     },

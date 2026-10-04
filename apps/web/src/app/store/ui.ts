@@ -3,11 +3,12 @@
 import { create } from "zustand";
 
 import type { u32, u8 } from "@xpute/core/abi/word.ts";
+import type { HoldingState } from "@/kernel/abi/cmd.spec.ts";
 import { cube_types, GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
 import { decorKinds, type PlaceableCube, placeableCubes, sameCube } from "@/catalog/cell/mod.ts";
 import { ActiveTool, Command, encode_chat_send } from "@/kernel/abi/cmd.spec.ts";
 import { storage, STORAGE_KEYS } from "@/kernel/abi/host.spec.ts";
-import { kernel_command, kernel_hold } from "@/kernel/shell.ts";
+import { kernel_command, kernel_hold, kernel_snapshot, useKernel } from "@/kernel/shell.ts";
 import { storageGet, storageSet } from "@platform/storage.ts";
 
 interface ChatLine {
@@ -40,17 +41,8 @@ function touchRecent(recentPicks: readonly RecentPick[], pick: RecentPick): Rece
   return [pick, ...recentPicks].slice(0, MAX_RECENT_PICKS);
 }
 
+/** What the pointer holds is the kernel's; the shell says what changes and reads it back. */
 interface UiState {
-  activeTool: ActiveTool;
-  setActiveTool: (activeTool: ActiveTool) => void;
-
-  cube: PlaceableCube;
-
-  objectTier: u32;
-  setObjectTier: (objectTier: u32) => void;
-
-  decor: u8;
-
   // Advanced only by selectCube/selectDecor, which also switch the tool.
   recentPicks: RecentPick[];
   selectCube: (cube: PlaceableCube) => void;
@@ -72,12 +64,10 @@ const SEED: readonly RecentPick[] = [
   { tool: ActiveTool.Decor, kind: decorKinds[0] },
 ];
 
-// The tool and chat lines are not stored: a load starts at the pointer tool.
+// Chat lines are not stored, nor what is held: a load starts at the pointer tool.
 const STORAGE_KEY = STORAGE_KEYS[storage.HOTBAR];
 
 interface Stored {
-  cube: PlaceableCube;
-  decor: u8;
   picks: RecentPick[];
 }
 
@@ -92,46 +82,38 @@ function load(): Stored {
     if (picks.length >= MAX_RECENT_PICKS) break;
     if (!picks.some((pick) => isSamePick(pick, seed))) picks.push(seed);
   }
-  const cube = placeableCubes.find((c) => stored?.cube !== undefined && sameCube(c, stored.cube)) ?? { channel: null, type: cube_types.block.red };
-  const decor = decorKinds.find((kind) => kind === stored?.decor) ?? decorKinds[0];
-  return { cube, decor, picks };
+  return { picks };
 }
 
 function save(s: UiState): void {
-  storageSet(STORAGE_KEY, JSON.stringify({ cube: s.cube, decor: s.decor, picks: s.recentPicks } satisfies Stored));
+  storageSet(STORAGE_KEY, JSON.stringify({ picks: s.recentPicks } satisfies Stored));
+}
+
+/** The tier stays as the tool changes. */
+export function holdTool(tool: ActiveTool): void {
+  kernel_hold(tool, null, 0, kernel_snapshot().holding.tier);
+}
+
+export function holdTier(tier: u32): void {
+  const h = kernel_snapshot().holding;
+  kernel_hold(h.tool, h.channel, h.tool === ActiveTool.Decor ? h.decor : h.cube, tier);
+}
+
+export function heldCube(h: HoldingState): PlaceableCube {
+  return { channel: h.channel, type: h.cube };
 }
 
 const stored = load();
 
 export const useUiStore = create<UiState>()((set) => ({
-  activeTool: ActiveTool.Pointer,
-  setActiveTool: (activeTool) => {
-    set({ activeTool });
-  },
-
-  cube: stored.cube,
-
-  objectTier: 0,
-  setObjectTier: (objectTier) => {
-    set({ objectTier });
-  },
-
-  decor: stored.decor,
-
   recentPicks: stored.picks,
   selectCube: (cube) => {
-    set((state) => ({
-      cube,
-      activeTool: ActiveTool.Object,
-      recentPicks: touchRecent(state.recentPicks, { tool: ActiveTool.Object, cube }),
-    }));
+    kernel_hold(ActiveTool.Object, cube.channel, cube.type, kernel_snapshot().holding.tier);
+    set((state) => ({ recentPicks: touchRecent(state.recentPicks, { tool: ActiveTool.Object, cube }) }));
   },
   selectDecor: (kind) => {
-    set((state) => ({
-      decor: kind,
-      activeTool: ActiveTool.Decor,
-      recentPicks: touchRecent(state.recentPicks, { tool: ActiveTool.Decor, kind }),
-    }));
+    kernel_hold(ActiveTool.Decor, null, kind, kernel_snapshot().holding.tier);
+    set((state) => ({ recentPicks: touchRecent(state.recentPicks, { tool: ActiveTool.Decor, kind }) }));
   },
 
   chatLines: [],
@@ -144,16 +126,9 @@ export const useUiStore = create<UiState>()((set) => ({
 }));
 
 export function useInHand(pick: RecentPick): boolean {
-  return useUiStore((s) => pick.tool === ActiveTool.Object ? s.activeTool === ActiveTool.Object && sameCube(s.cube, pick.cube) : s.activeTool === ActiveTool.Decor && s.decor === pick.kind);
+  return useKernel(({ holding: h }) => pick.tool === ActiveTool.Object ? h.tool === ActiveTool.Object && sameCube(heldCube(h), pick.cube) : h.tool === ActiveTool.Decor && h.decor === pick.kind);
 }
 
-function hold(s: UiState): void {
-  if (s.activeTool === ActiveTool.Object) kernel_hold(s.activeTool, s.cube.channel, s.cube.type, s.objectTier);
-  else kernel_hold(s.activeTool, null, s.activeTool === ActiveTool.Decor ? s.decor : 0, s.objectTier);
-}
-
-hold(useUiStore.getState());
 useUiStore.subscribe((s, prev) => {
-  if (s.activeTool !== prev.activeTool || s.cube !== prev.cube || s.decor !== prev.decor || s.objectTier !== prev.objectTier) hold(s);
-  if (s.cube !== prev.cube || s.decor !== prev.decor || s.recentPicks !== prev.recentPicks) save(s);
+  if (s.recentPicks !== prev.recentPicks) save(s);
 });

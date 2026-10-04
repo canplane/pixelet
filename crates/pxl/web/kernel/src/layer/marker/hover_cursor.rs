@@ -11,8 +11,7 @@ use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::ground::shown_ground;
 use pxl_spec::bake::pack::channel_of;
 use pxl_spec::cell::object::{placeable_cube_num_id, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
-use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pvf3::{fvec, ivec};
+use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
@@ -21,57 +20,64 @@ use crate::control::interaction::{holding, hover, ActiveTool};
 use crate::kernel::with_world;
 use crate::layer::decor::asset_store::decor_assets_for;
 use crate::layer::decor::build::user_decor_pick;
-use crate::layer::decor::cell::set_scattered_hide;
 use crate::layer::decor::instance::NO_ENTRY;
 use crate::layer::decor::kind::kind_for;
 use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
-use crate::layer::object::size::DECOR_SIZE;
-use crate::layer::object::store::{clear_virtual_carve_preview, get_placed_object, restores_scattered, set_virtual_carve_preview, set_virtual_hide, EntryAt, EntryKind};
-use crate::shell::setting::store::{hidden_ground, settings_store};
+use crate::layer::object::size::{object_size_of, DECOR_SIZE};
+use crate::layer::object::store::{carve_entry, get_placed_object, restores_scattered, EntryAt, EntryKind};
+use crate::shell::setting::store::settings_store;
 use crate::world::access::{Access, FINEST};
 use crate::world::change::request_world_tick;
 use crate::world::chunk::build::World;
 use crate::world::chunk::source::chunk_sources_changed;
 use xpute_runtime::global::Global;
 
-#[derive(Clone, Debug, PartialEq)]
 enum Ghost {
     None,
     Decor { at: V3, group: u32, rotation: f64, scale: f64 },
     Box { at: V3, size: f64, value: u32, rgb: u32, coplanar: bool },
 }
 
+/// What the eraser's preview changes in the drawn build only: the pick and
+/// the cell queries still see what it hides, or hover would clear, the hide
+/// lift and the pick hit it again, forever. No revision moves, so saves do
+/// not see the hover.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RenderEdits {
+    /// The placed object hidden, and whether it is drawn in tiers, decor, or
+    /// (already gone) either.
+    pub hide: Option<EntryAt>,
+    pub hide_in: (bool, bool),
+    /// An AIR entry over bare terrain, which has no leaf to hide.
+    pub carve: Option<EntryAt>,
+    /// The scattered decor hidden, by the cell it stands in.
+    pub scattered: Option<[i64; 3]>,
+}
+
+#[derive(Default)]
 struct Cursor {
-    /// The address alone, so re-deriving the same cell does not reset the hide
-    /// and force a chunk rebuild.
-    virtual_hide_target: Option<EntryAt>,
-    carve_preview: Option<(Pvf3, f64)>,
-    ghost: Ghost,
+    edits: RenderEdits,
+}
+
+/// Compared as part of a chunk's sources, so an unchanged one rebuilds nothing.
+pub fn render_edits() -> RenderEdits {
+    CURSOR.get(Cursor::default).edits
 }
 
 static CURSOR: Global<Cursor> = Global::new();
 
 pub fn hover_cursor_step() {
-    let c = CURSOR.get(|| Cursor {
-        virtual_hide_target: None,
-        carve_preview: None,
-        ghost: Ghost::None,
-    });
-    let camera = camera_store();
+    let c = CURSOR.get(Cursor::default);
+    let hover = hover();
     let ui = holding();
     let settings = settings_store();
-    let hovered = camera.hovered_coord;
+    let hovered = hover.coord;
     let active_tool = ui.active_tool;
-    let terrain_carving = settings.terrain_carving;
 
-    let hovered_object = camera.hovered_object_at.and_then(get_placed_object);
+    let hovered_object = hover.object_at.and_then(get_placed_object);
 
-    // Eraser's own "dig into the terrain itself" case (camera/input.rs's
-    // handle_tap/update_hover) — gated on the same settings flag those use, so
-    // this ghost never previews an edit the tap handler wouldn't commit.
-    let scattered = camera.hovered_scattered.is_some();
-    let digging_terrain = active_tool == ActiveTool::Eraser && hovered_object.is_none() && !scattered && terrain_carving;
-    let structures = settings.structures;
+    let scattered = hover.scattered.is_some();
+    let digging_terrain = active_tool == ActiveTool::Eraser && hovered_object.is_none() && !scattered;
     let textures = settings.textures;
 
     let use_object_style = matches!(active_tool, ActiveTool::Object | ActiveTool::Decor | ActiveTool::Eraser) || hovered_object.is_some();
@@ -82,7 +88,7 @@ pub fn hover_cursor_step() {
         (Some(o), ActiveTool::Eraser | ActiveTool::Pointer) => o.size(),
         (_, ActiveTool::Decor) => DECOR_SIZE,
         _ if digging_terrain || scattered => U_PER_CELL,
-        _ => ui.object_size,
+        _ => object_size_of(ui.object_tier),
     };
 
     let current_scale = if use_object_style { preview_size } else { U_PER_CELL };
@@ -91,37 +97,25 @@ pub fn hover_cursor_step() {
         (None, _) => false,
         (Some(h), ActiveTool::Object | ActiveTool::Decor) => {
             let tool = if active_tool == ActiveTool::Object { PlacementTool::Object } else { PlacementTool::Decor };
-            is_placement_blocked(tool, h, ui.object_size)
+            is_placement_blocked(tool, h, object_size_of(ui.object_tier))
         }
-        // Eraser hovering an existing object or a scattered decor is never
-        // blocked; bare terrain is blocked exactly when digging into it isn't
-        // enabled.
-        (Some(_), ActiveTool::Eraser) => hovered_object.is_none() && !scattered && !terrain_carving,
         _ => false,
     };
 
     // The real object's hide lands a tick or more after the ghost, accepted.
-    let virtual_hide_target = match (&hovered_object, active_tool) {
-        (Some(o), ActiveTool::Eraser) => Some(o.at()),
-        _ => None,
+    let hidden = hovered_object.filter(|_| active_tool == ActiveTool::Eraser);
+    let kind = hidden.map(|o| o.kind());
+    let edits = RenderEdits {
+        hide: hidden.map(|o| o.at()),
+        hide_in: (!matches!(kind, Some(EntryKind::Decor { .. })), !matches!(kind, Some(EntryKind::Solid { .. }))),
+        // What is one voxel below shows through the ghost.
+        carve: hovered.filter(|_| digging_terrain).map(|h| carve_entry(&h, preview_size)),
+        scattered: hover.scattered.filter(|_| active_tool == ActiveTool::Eraser).map(|s| s.cell),
     };
-    if c.virtual_hide_target != virtual_hide_target {
-        set_virtual_hide(virtual_hide_target);
-        c.virtual_hide_target = virtual_hide_target;
-    }
-    // A scattered decor has no entry to hide; it is hidden by the cell it
-    // stands in.
-    set_scattered_hide(camera.hovered_scattered.filter(|_| active_tool == ActiveTool::Eraser).map(|s| s.cell));
-
-    // Bare terrain has no leaf to hide, so the preview injects an AIR entry and
-    // what is one voxel below shows through the ghost.
-    let carve_preview = hovered.filter(|_| digging_terrain).map(|h| (h, preview_size));
-    if c.carve_preview != carve_preview {
-        match carve_preview {
-            Some((at, size)) => set_virtual_carve_preview(&at, size),
-            None => clear_virtual_carve_preview(),
-        }
-        c.carve_preview = carve_preview;
+    if c.edits != edits {
+        c.edits = edits;
+        chunk_sources_changed();
+        request_world_tick();
     }
 
     let carved_style_cube: Option<PlaceableCube> = match (&hovered, digging_terrain) {
@@ -153,9 +147,8 @@ pub fn hover_cursor_step() {
         (_, Some(o)) if matches!(o.kind(), EntryKind::Decor { .. }) => Some(o.corner().i),
         _ => None,
     };
-    // Placing back the decor an erase took from where the scatter stands it
-    // brings that one back, its own variant, turn and size; the ghost shows
-    // what the placement leaves.
+    // Placing back an erased scattered decor restores that instance; the ghost
+    // shows it.
     let restored = match (active_tool, &hovered) {
         (ActiveTool::Decor, Some(h)) => restores_scattered(h, DECOR_SIZE, ui.decor_id),
         _ => None,
@@ -164,14 +157,6 @@ pub fn hover_cursor_step() {
         (Some(_), _, Some(d)) => Some((d.variant, d.rotation, d.scale)),
         (Some(b), Some(i), None) => {
             let (variant, rotation) = user_decor_pick(i, b.variant_count());
-            Some((variant, rotation, 1.0))
-        }
-        _ => None,
-    };
-    let decor_pick = match (decor_bundle, decor_pick_i, restored) {
-        (Some(_), _, Some(d)) => Some((d.variant, d.rotation, d.scale)),
-        (Some(b), Some(i), None) => {
-            let (variant, rotation) = user_decor_pick(i, b.variants.len() as u32);
             Some((variant, rotation, 1.0))
         }
         _ => None,
@@ -190,23 +175,16 @@ pub fn hover_cursor_step() {
     // while the cursor is on it.
     let coplanar_with_terrain = !use_object_style;
 
-    // A scattered decor under the pointer or the eraser is previewed as
-    // itself, as a placed one is: its own model, where and as it is drawn.
-    let scattered_ghost = camera
-        .hovered_scattered
-        .filter(|_| matches!(active_tool, ActiveTool::Pointer | ActiveTool::Eraser))
-        .map(|s| Ghost::Decor {
-            at: s.at,
-            group: s.group,
-            rotation: s.rotation,
-            scale: s.scale,
-        });
+    let scattered_ghost = hover.scattered.filter(|_| matches!(active_tool, ActiveTool::Pointer | ActiveTool::Eraser)).map(|s| Ghost::Decor {
+        at: s.at,
+        group: s.group,
+        rotation: s.rotation,
+        scale: s.scale,
+    });
     let ghost = match (scattered_ghost, hovered, blocked) {
         (Some(g), _, _) => g,
         (None, Some(h), false) => {
-            let x = ivec::to_real(ivec::X(h.i)) + fvec::to_real(fvec::X(h.f));
-            let y = ivec::to_real(ivec::Y(h.i)) + fvec::to_real(fvec::Y(h.f));
-            let z = ivec::to_real(ivec::Z(h.i)) + fvec::to_real(fvec::Z(h.f));
+            let [x, y, z] = projection::unproject(h.i, h.f);
             match (decor_kind, decor_pick) {
                 (Some(kind), Some((variant, rotation, scale))) if is_decor_ghost => Ghost::Decor {
                     at: [x + preview_size / 2.0, y + preview_size / 2.0, z],
@@ -228,16 +206,13 @@ pub fn hover_cursor_step() {
         }
         _ => Ghost::None,
     };
-    if c.ghost != ghost {
-        let written = with_world(|world, sched| match &ghost {
-            Ghost::None => sched.ghost.clear(&mut sched.draw),
-            Ghost::Decor { at, group, rotation, scale } => sched.ghost.set_decor(&mut sched.draw, *at, *group, *rotation as f32, *scale as f32),
-            Ghost::Box { at, size, value, rgb, coplanar } => sched.ghost.set_box(world, &mut sched.draw, *at, *size, *value, *rgb, *coplanar),
-        });
-        if written.is_some() {
-            c.ghost = ghost;
-            request_world_tick();
-        }
+    let changed = with_world(|world, sched| match ghost {
+        Ghost::None => sched.ghost.clear(&mut sched.draw),
+        Ghost::Decor { at, group, rotation, scale } => sched.ghost.set_decor(&mut sched.draw, at, group, rotation as f32, scale as f32),
+        Ghost::Box { at, size, value, rgb, coplanar } => sched.ghost.set_box(world, &mut sched.draw, at, size, value, rgb, coplanar),
+    });
+    if changed == Some(true) {
+        request_world_tick();
     }
 }
 
@@ -265,9 +240,10 @@ pub struct GhostDraw {
 }
 
 impl GhostDraw {
-    /// Painted as `state` paints, or as untextured `rgb` where it paints nothing.
+    /// Painted as `state` paints, or as untextured `rgb` where it paints
+    /// nothing. Whether what is drawn changed.
     #[allow(clippy::too_many_arguments)]
-    pub fn set_box(&mut self, world: &mut World, draw: &mut DrawList, at: V3, size: f64, state: u32, rgb: u32, coplanar: bool) {
+    pub fn set_box(&mut self, world: &mut World, draw: &mut DrawList, at: V3, size: f64, state: u32, rgb: u32, coplanar: bool) -> bool {
         let (rgb, layer) = match world.painter.material_of(state) {
             Some((m, l)) => ([(m >> 16) as u8, (m >> 8) as u8, m as u8], l),
             None => ([(rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8], NO_LAYER as u8),
@@ -278,46 +254,47 @@ impl GhostDraw {
             layer,
             coplanar,
         };
-        self.at = at;
+        let moved = core::mem::replace(&mut self.at, at) != at;
         if self.held.as_ref().is_some_and(|h| h.shape == shape) {
-            return;
+            return moved;
         }
         let bytes = mesh_words(1, FINE_BOX_WORDS) * 4;
-        let Some(block) = self.replace(draw, shape, bytes) else { return };
+        let Some(block) = self.replace(draw, shape, bytes) else { return true };
         // SAFETY: a block of the words asked for, this ghost's until replaced.
         let m = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block), bytes as usize / 4) };
         let heights = write_lone_box(m, size, rgb, layer);
         self.held.as_mut().unwrap().heights = heights;
         self.upload(draw, 1, 0);
+        true
     }
 
-    /// One instance of decor group `group`, turned `rotation` about Z, at `at`.
-    pub fn set_decor(&mut self, draw: &mut DrawList, at: V3, group: u32, rotation: f32, scale: f32) {
+    pub fn set_decor(&mut self, draw: &mut DrawList, at: V3, group: u32, rotation: f32, scale: f32) -> bool {
         let shape = Shape::Decor {
             group,
             rotation_bits: rotation.to_bits(),
             scale_bits: scale.to_bits(),
         };
-        self.at = at;
+        let moved = core::mem::replace(&mut self.at, at) != at;
         if self.held.as_ref().is_some_and(|h| h.shape == shape) {
-            return;
+            return moved;
         }
-        // A group of one: five float lanes, the flags in a word, band, pos;
-        // and an index list naming it.
+        // One group of one: five float lanes, flags, band, pos, and the index list.
         let bytes = 9 * 4;
-        let Some(block) = self.replace(draw, shape, bytes) else { return };
+        let Some(block) = self.replace(draw, shape, bytes) else { return true };
         // SAFETY: as for the box.
         let m = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block), 9) };
         m.copy_from_slice(&[0f32.to_bits(), 0f32.to_bits(), 0f32.to_bits(), rotation.to_bits(), scale.to_bits(), 0, NO_ENTRY, 0, 0]);
         self.upload(draw, 0, 0);
+        true
     }
 
-    pub fn clear(&mut self, draw: &mut DrawList) {
-        if let Some(h) = self.held.take() {
-            draw.free(h.handle);
-            // SAFETY: the block the ghost took and has not given back.
-            unsafe { free((h.at, h.bytes)) };
-        }
+    /// Whether there was one.
+    pub fn clear(&mut self, draw: &mut DrawList) -> bool {
+        let Some(h) = self.held.take() else { return false };
+        draw.free(h.handle);
+        // SAFETY: the block the ghost took and has not given back.
+        unsafe { free((h.at, h.bytes)) };
+        true
     }
 
     fn replace(&mut self, draw: &mut DrawList, shape: Shape, bytes: u32) -> Option<usize> {

@@ -49,10 +49,10 @@ pub fn start_watching(supported: bool) {
     }
     let store = device_location_store();
     if !supported {
-        store.set_error(Message::GeolocationUnsupported);
+        store.pose = Pose::Failed(Message::GeolocationUnsupported);
         return;
     }
-    store.status = DevicePoseStatus::Loading;
+    store.pose = Pose::Loading;
     store.set_is_tracking_location(true);
     g.watching = true;
     g.commands.push(GeolocationCommand::Start);
@@ -76,7 +76,7 @@ pub fn geolocation_open(supported: bool) {
 pub fn geolocation_close() {
     geolocation().open = false;
     stop_watching();
-    device_location_store().status = DevicePoseStatus::Idle;
+    device_location_store().pose = Pose::Idle;
 }
 
 pub fn geolocation_visibility(visible: bool, supported: bool) {
@@ -94,8 +94,8 @@ pub fn geolocation_permission_granted(supported: bool) {
     }
 }
 
-pub fn geolocation_fix(longitude: f64, latitude: f64, altitude: Option<f64>, accuracy: f64, heading: Option<f64>) {
-    device_location_store().set_location([longitude, latitude, altitude.unwrap_or(0.0)], accuracy, heading);
+pub fn geolocation_fix(longitude: f64, latitude: f64, altitude: Option<f64>, accuracy: f64, course: Option<f64>) {
+    device_location_store().set_location([longitude, latitude, altitude.unwrap_or(0.0)], accuracy, course);
 }
 
 /// The shell stops the watch before this: a dead watch keeps calling back
@@ -105,7 +105,7 @@ pub fn geolocation_error(code: GeolocationErrorCode) {
     g.watching = false;
     let store = device_location_store();
     store.set_is_tracking_location(false);
-    store.set_error(match code {
+    store.pose = Pose::Failed(match code {
         GeolocationErrorCode::PermissionDenied => Message::GeolocationPermissionDenied,
         GeolocationErrorCode::PositionUnavailable => Message::GeolocationPositionUnavailable,
         GeolocationErrorCode::Timeout => Message::GeolocationTimeout,

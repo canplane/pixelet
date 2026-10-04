@@ -7,8 +7,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { u8 } from "@xpute/core/abi/word.ts";
 import { type ChannelName, decorKinds, decorName, type PlaceableCube, placeableCubeChannel, placeableCubeId, placeableCubes } from "@/catalog/cell/mod.ts";
 
-import type { BaseModalProps } from "@/app/type/ui.type.ts";
-import { useInHand, useUiStore } from "@/app/store/ui.ts";
+import { heldCube, useInHand, useUiStore } from "@/app/store/ui.ts";
+import { useKernel } from "@/kernel/shell.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { useSafeArea } from "@platform/safe-area.ts";
 import { Panel } from "@platform/panel.tsx";
@@ -95,10 +95,9 @@ export function DrawerModal(props: BaseModalProps) {
   const [tab, setTab] = useState<DrawerTab>(DrawerTab.Cube);
   const selectCube = useUiStore.getState().selectCube;
   const selectDecor = useUiStore.getState().selectDecor;
-  const activeTool = useUiStore((s) => s.activeTool);
-  const heldCube = useUiStore((s) => s.cube);
-  const heldDecor = useUiStore((s) => s.decor);
-  const heldSection = activeTool === ActiveTool.Object ? placeableCubeChannel(heldCube) : null;
+  const holding = useKernel((s) => s.holding);
+  const held = heldCube(holding);
+  const heldSection = holding.tool === ActiveTool.Object ? placeableCubeChannel(held) : null;
 
   function pickCube(cube: PlaceableCube): void {
     selectCube(cube);
@@ -132,7 +131,7 @@ export function DrawerModal(props: BaseModalProps) {
             if (!cubes) return null;
             return (
               <View key={section} style={styles.section}>
-                <SectionHead title={t(`drawer_modal.sections.${section}`)} held={section === heldSection ? cubeLabel(t, heldCube) : null} />
+                <SectionHead title={t(`drawer.sections.${section}`)} held={section === heldSection ? cubeLabel(t, held) : null} />
                 <View style={styles.grid}>
                   {cubes.map((cube) => <CubeSwatchButton key={placeableCubeId(cube)} cube={cube} onPick={pickCube} />)}
                 </View>
@@ -142,7 +141,7 @@ export function DrawerModal(props: BaseModalProps) {
 
           {tab === DrawerTab.Decor && (
             <View style={styles.section}>
-              <SectionHead held={activeTool === ActiveTool.Decor ? t(`decors.${decorName(heldDecor)}`) : null} />
+              <SectionHead held={holding.tool === ActiveTool.Decor ? decorLabel(t, holding.decor) : null} />
               <View style={styles.grid}>
                 {decorKinds.map((kind) => <DecorGridButton key={kind} kind={kind} onPick={pickDecor} />)}
               </View>

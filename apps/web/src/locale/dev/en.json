@@ -5,12 +5,6 @@
         "label": "Shadows",
         "description": "The sun casts shadows from the terrain, objects and characters onto the ground."
       }
-    },
-    "navigation": {
-      "center_support": {
-        "label": "Center support",
-        "description": "The map center moves along what supports it. Off, it keeps its height and passes through terrain and objects."
-      }
     }
   },
   "map": {

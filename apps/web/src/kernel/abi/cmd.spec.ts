@@ -27,7 +27,7 @@
 
 import type { BranchCursor, NodeCursor } from "@xpute/core/wire/xtp/mod.ts";
 import type { U32Array, U8Array } from "@xpute/core/abi/array.ts";
-import type { f64, i32, u32, u8 } from "@xpute/core/abi/word.ts";
+import type { f64, i32, u32, u64 } from "@xpute/core/abi/word.ts";
 import { packet } from "@xpute/runtime/ipc/doorbell.ts";
 import type { GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
 
@@ -65,6 +65,7 @@ export const enum InputMinor {
   GO_TO = 0x08,
   POSE = 0x09,
   POSE_END = 0x0a,
+  HOLD = 0x0b,
 }
 
 /** The device sensors' verbs. */
@@ -223,12 +224,8 @@ export const enum DevicePoseStatus {
  * something must never come to mean another thing. Retire one by leaving
  * the gap. */
 export const enum Message {
-  None = 0x0000,
-
   // ---- 0x02 where the device says it is ----
 
-  LocationChecking = 0x0201,
-  LocationWeakSignal = 0x0202,
   GeolocationUnsupported = 0x0203,
   GeolocationPermissionDenied = 0x0204,
   GeolocationPositionUnavailable = 0x0205,
@@ -292,10 +289,10 @@ export const enum Command {
   SENSOR_PERMISSION = 0x1206,
   /** The canvas's client rect. */
   INPUT_RECT = 0x1101,
-  /** A pointer event on the canvas, in client pixels, with what the pointer holds; the
-   * shell sends a move at the last position when the holding changes, as a browser
-   * synthesizes a mouse move. */
+  /** A pointer event on the canvas, in client pixels. */
   INPUT_POINTER = 0x1102,
+  /** What the pointer holds, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer. */
+  INPUT_HOLD = 0x110b,
   INPUT_WHEEL = 0x1103,
   /** A device answered; the kernel's renderer is made on it (crates/pxl/web/render/src/gpu/renderer.rs). */
   GPU_READY = 0x1401,
@@ -373,6 +370,7 @@ export interface Snapshot {
   map: MapState;
   location: LocationState;
   companion: CompanionState;
+  holding: HoldingState;
   orientation: OrientationState;
   /** The view's azimuth. */
   azimuth: f64;
@@ -388,8 +386,6 @@ export interface Snapshot {
   /** The place the map center is in, broad to narrow, every rung of it; empty where
    * the center is in none or the packets it is read out of have not arrived. */
   place: PlacePart[];
-  /** The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here. */
-  previews: u32[];
 }
 
 export function read_snapshot(b: BranchCursor): Snapshot {
@@ -397,15 +393,16 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     map: read_map_state(b.at_branch(0)),
     location: read_location_state(b.at_branch(1)),
     companion: read_companion_state(b.at_branch(2)),
-    orientation: read_orientation_state(b.at_branch(3)),
-    azimuth: b.at(4).get<f64>(),
-    is_follow_mode: b.at(5).get<boolean>(),
-    camera_busy: b.at(6).get<boolean>(),
-    zooming: b.at(7).get<boolean>(),
-    settings: Array.from(b.at(8).get<U32Array>()),
-    m_per_px: b.at(9).get<f64>(),
-    place: list(b.at_branch(10), read_place_part),
-    previews: Array.from(b.at(11).get<U32Array>()),
+    holding: read_holding_state(b.at_branch(3)),
+    orientation: read_orientation_state(b.at_branch(4)),
+    azimuth: b.at(5).get<f64>(),
+    is_follow_mode: b.at(6).get<boolean>(),
+    camera_busy: b.at(7).get<boolean>(),
+    zooming: b.at(8).get<boolean>(),
+    settings: Array.from(b.at(9).get<U32Array>()),
+    m_per_px: b.at(10).get<f64>(),
+    place: list(b.at_branch(11), read_place_part),
+    previews: Array.from(b.at(12).get<U32Array>()),
   };
 }
 
@@ -432,6 +429,7 @@ export function read_lon_lat(b: BranchCursor): LonLat {
 export interface LocationState {
   status: DevicePoseStatus;
   has_location: boolean;
+  /** Present exactly when status is Error: the failure the kernel chose. */
   error: Message | null;
 }
 
@@ -448,13 +446,29 @@ export function read_companion_state(b: BranchCursor): CompanionState {
   return { person_ready: b.at(0).get<boolean>(), pet_ready: b.at(1).get<boolean>() };
 }
 
+/** What the pointer holds, as INPUT_HOLD set it: the cube and the decor are each remembered whichever tool is held. */
+export interface HoldingState {
+  tool: ActiveTool;
+  /** The held cube's ground channel; absent for a flat color. */
+  channel: GroundChannelKey | null;
+  /** The held cube's type in its channel. */
+  cube: u32;
+  decor: u32;
+  tier: u32;
+}
+
+export function read_holding_state(b: BranchCursor): HoldingState {
+  return { tool: b.at(0).get<ActiveTool>(), channel: b.at(1).get<GroundChannelKey | null>(), cube: b.at(2).get<u32>(), decor: b.at(3).get<u32>(), tier: b.at(4).get<u32>() };
+}
+
 export interface OrientationState {
   status: DevicePoseStatus;
-  heading: f64 | null;
+  /** Present exactly when status is Error: the failure the kernel chose. */
+  error: Message | null;
 }
 
 export function read_orientation_state(b: BranchCursor): OrientationState {
-  return { status: b.at(0).get<DevicePoseStatus>(), heading: b.at(1).get<f64 | null>() };
+  return { status: b.at(0).get<DevicePoseStatus>(), error: b.at(1).get<Message | null>() };
 }
 
 /** One rung of the place, in every language the provider had rather than one resolved
@@ -543,11 +557,11 @@ export interface SensorPosition {
   lat: f64;
   altitude: f64 | null;
   accuracy: f64;
-  heading: f64 | null;
+  course: f64 | null;
 }
 
 export function encode_sensor_position(p: SensorPosition): U8Array {
-  return packet((b) => b.f64(p.lon).f64(p.lat).f64(p.altitude).f64(p.accuracy).f64(p.heading));
+  return packet((b) => b.f64(p.lon).f64(p.lat).f64(p.altitude).f64(p.accuracy).f64(p.course));
 }
 
 /** Command.SENSOR_ORIENTATION's packet. */
@@ -668,17 +682,25 @@ export interface InputPointer {
   button: i32;
   x: f64;
   y: f64;
+}
+
+export function encode_input_pointer(p: InputPointer): U8Array {
+  return packet((b) => b.u32(p.phase).u32(p.kind).i32(p.id).i32(p.button).f64(p.x).f64(p.y));
+}
+
+/** Command.INPUT_HOLD's packet. */
+export interface InputHold {
   tool: ActiveTool;
   /** The ground channel the held cube stands in for; absent for a flat color, a decor kind or nothing. */
   channel: GroundChannelKey | null;
   /** The held cube's type in its channel, or the decor kind, by the catalog's number; what the object store keeps is the kernel's to derive. */
   value: u32;
-  /** The object size, by its index in the snapshot's object_sizes. */
+  /** The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs). */
   tier: u32;
 }
 
-export function encode_input_pointer(p: InputPointer): U8Array {
-  return packet((b) => b.u32(p.phase).u32(p.kind).i32(p.id).i32(p.button).f64(p.x).f64(p.y).u32(p.tool).u32(p.channel).u32(p.value).u32(p.tier));
+export function encode_input_hold(p: InputHold): U8Array {
+  return packet((b) => b.u32(p.tool).u32(p.channel).u32(p.value).u32(p.tier));
 }
 
 /** Command.INPUT_WHEEL's packet. */

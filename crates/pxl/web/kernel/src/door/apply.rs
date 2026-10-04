@@ -24,7 +24,8 @@ fn applied(s: &mut State) -> Result<Option<i32>, MarshalError> {
 /// Applies one submission. None (replied as ENOSYS) for an unknown command
 /// or a signal submitted as one.
 pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>, MarshalError> {
-    use crate::control::camera::input::{camera_input_rect, camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, camera_wheel, Holding, Rect};
+    use crate::control::camera::input::{camera_input_rect, camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, camera_rehover, camera_wheel, Rect};
+    use crate::control::interaction::{hold, holding};
     use crate::control::sensor::{device_orientation, geolocation};
     use crate::sched::profiler::log::{profiler_set_logging, profiler_window_start, profiler_window_stop};
     use crate::sched::turn::world_platform;
@@ -89,14 +90,23 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             Ok(Some(0))
         }
         Command::INPUT_POINTER => {
+            let p = abi::InputPointer::read(packet(pkt)?)?;
+            match p.phase {
+                abi::PointerPhase::Down => camera_pointer_down(p.kind, p.id, p.button, p.x, p.y),
+                abi::PointerPhase::Move => camera_pointer_move(p.kind, p.id, p.x, p.y),
+                abi::PointerPhase::Up => camera_pointer_up(p.kind, p.id),
+                abi::PointerPhase::Out => camera_pointer_out(),
+            }
+            Ok(Some(0))
+        }
+        // A cube or decor that is not in the catalog leaves the one held.
+        Command::INPUT_HOLD => {
             use pxl_spec::cell::object::placeable_cube;
             use pxl_spec::cell::DecorId;
-            let p = abi::InputPointer::read(packet(pkt)?)?;
-            let mut holding = Holding {
-                active_tool: p.tool,
-                object_size: crate::layer::object::size::object_size_of(p.tier),
-                ..Holding::default()
-            };
+            let p = abi::InputHold::read(packet(pkt)?)?;
+            let mut holding = holding();
+            holding.active_tool = p.tool;
+            holding.object_tier = p.tier;
             match p.tool {
                 abi::ActiveTool::Object => {
                     if let Some(cube) = placeable_cube(p.channel, p.value) {
@@ -110,12 +120,8 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                 }
                 abi::ActiveTool::Pointer | abi::ActiveTool::Eraser => {}
             }
-            match p.phase {
-                abi::PointerPhase::Down => camera_pointer_down(p.kind, p.id, p.button, p.x, p.y, holding),
-                abi::PointerPhase::Move => camera_pointer_move(p.kind, p.id, p.x, p.y, holding),
-                abi::PointerPhase::Up => camera_pointer_up(p.kind, p.id, holding),
-                abi::PointerPhase::Out => camera_pointer_out(),
-            }
+            hold(holding);
+            camera_rehover();
             Ok(Some(0))
         }
         Command::INPUT_WHEEL => {
@@ -152,7 +158,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::SENSOR_POSITION => {
             let p = abi::SensorPosition::read(packet(pkt)?)?;
-            geolocation::geolocation_fix(p.lon, p.lat, p.altitude, p.accuracy, p.heading);
+            geolocation::geolocation_fix(p.lon, p.lat, p.altitude, p.accuracy, p.course);
             Ok(Some(0))
         }
         Command::SENSOR_ERROR => {

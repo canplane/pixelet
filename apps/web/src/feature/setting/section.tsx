@@ -15,7 +15,6 @@ const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {
   display: "eye",
   navigation: "location",
   camera: "move.3d",
-  editing: "hammer",
   lighting: "sun.max",
   quality: "gauge.medium",
   debug: "ladybug",

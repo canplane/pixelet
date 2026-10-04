@@ -40,7 +40,6 @@ use crate::host::turn;
 use crate::io::file::{self, Owner};
 use crate::kernel::kernel;
 use crate::layer::decor::build::{scatters_at, Draw};
-use crate::shell::setting::store::hidden_ground;
 use crate::world::access::{Access, FINEST};
 use crate::world::change::{bump_world, wake_at, world_changes, world_edge, OBJECT_COLUMN};
 use crate::world::chunk::source::{band_written, chunk_sources_changed};
@@ -251,31 +250,7 @@ pub fn objects_at(at: &Pvf3) -> Vec<Entry> {
     out
 }
 
-/// Whether any leaf is written in the cell `at` lies in, air included: what
-/// a scattered decor standing there yields to.
-pub fn holds_entry(at: &Pvf3) -> bool {
-    let [ix, iy, iz] = CELL.index_of(at);
-    cell_run(ix, iy, iz).is_some()
-}
-
-/// Every object claiming the cell `at` stands in.
-pub fn objects_at(at: &Pvf3) -> Vec<OccupiedEntry> {
-    let [ix, iy, iz] = CELL.index_of(at);
-    get_objects_in_cell(ix, iy, iz)
-}
-
-/// A cube as a node of the hierarchy: its side, and its index at that side,
-/// the corner lowered to its own lattice as the store files it (`At`). Two
-/// cubes share space exactly when one's node lies under the other's
-/// (hierarchy.rs `share`), since every cube sits on its own size's lattice.
-pub fn cube_node(corner: &Pvf3, size: f64) -> (Scale, [i64; 3]) {
-    let side = Scale::of_side(size);
-    (side, side.index_of(corner))
-}
-
-/// One object by its address, or None — the address says which cell it is
-/// in, so this reads one cell's entries, not every object's.
-pub fn get_placed_object(at: EntryAt) -> Option<OccupiedEntry> {
+pub fn get_placed_object(at: EntryAt) -> Option<Entry> {
     let [ix, iy, iz] = cursor_at(at).cell();
     let mut found = None;
     each_cell_entry(ix, iy, iz, &mut |entry| {
@@ -286,18 +261,7 @@ pub fn get_placed_object(at: EntryAt) -> Option<OccupiedEntry> {
     found
 }
 
-#[derive(Clone, Copy, Debug)]
-struct CarvePreview {
-    cell: [i64; 3],
-    at: EntryAt,
-}
-
 struct StoreState {
-    /// The one object hidden from the drawn build, and whether it is drawn
-    /// in tiers, decor, or (already gone) either.
-    virtual_hide: Option<EntryAt>,
-    hide_in: (bool, bool),
-    virtual_carve_preview: Option<CarvePreview>,
     save_due_ms: Option<f64>,
     /// The saved blob and the turn it was asked on: read on a later one.
     loading: Option<(Vec<u8>, u64)>,
@@ -309,69 +273,16 @@ fn store_state() -> &'static mut StoreState {
     STORE.get(|| StoreState { save_due_ms: None, loading: None })
 }
 
-/// Hides one placed object from the drawn build only, for the eraser's hover
-/// preview. The pick and the cell queries still see it: if the pick stopped
-/// seeing it, hover would clear, the hide would lift and the pick would hit
-/// it again, forever. No revision moves, so saves do not see the hover.
-pub fn set_virtual_hide(at: Option<EntryAt>) {
-    let st = store_state();
-    if st.virtual_hide == at {
-        return;
-    }
-    st.virtual_hide = at;
-    let kind = at.and_then(get_placed_object).map(|o| o.kind());
-    st.hide_in = (!matches!(kind, Some(EntryKind::Decor { .. })), !matches!(kind, Some(EntryKind::Solid { .. })));
-    send_render_edits();
-}
-
-/// Injects one never-written AIR entry into the drawn build, where the
-/// eraser hovers bare terrain and there is no leaf to hide. Render-only, as
-/// set_virtual_hide is.
-pub fn set_virtual_carve_preview(at: &Pvf3, size: f64) {
+/// The never-written AIR entry the eraser's preview injects into the drawn
+/// build where it hovers bare terrain: the cube of `size` holding `at`.
+pub fn carve_entry(at: &Pvf3, size: f64) -> EntryAt {
     let lowered = At::of_cube(at, Scale::of_side(size));
-    let cell = lowered.cell();
-    let st = store_state();
-    if st.virtual_carve_preview.as_ref().is_some_and(|c| c.cell == cell) {
-        return;
-    }
     let [x, y, z] = lowered.step;
-    let at = EntryAt {
+    EntryAt {
         col_idx: lowered.col_idx,
         band_idx: lowered.band,
         pos: pack_pos(x, y, z, Scale::of_side(size)),
-    };
-    st.virtual_carve_preview = Some(CarvePreview { cell, at });
-    send_render_edits();
-}
-
-pub fn clear_virtual_carve_preview() {
-    if store_state().virtual_carve_preview.take().is_some() {
-        send_render_edits();
     }
-}
-
-/// The drawn build's two edits, compared as part of a chunk's and a decor
-/// cell's sources.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct RenderEdits {
-    pub hide: Option<EntryAt>,
-    pub hide_in: (bool, bool),
-    pub carve: Option<EntryAt>,
-}
-
-pub fn render_edits() -> RenderEdits {
-    let st = store_state();
-    RenderEdits {
-        hide: st.virtual_hide,
-        hide_in: st.hide_in,
-        carve: st.virtual_carve_preview.map(|c| c.at),
-    }
-}
-
-fn send_render_edits() {
-    let st = store_state();
-    kernel().sched.builder.set_edits(st.virtual_hide, st.virtual_carve_preview.map(|c| c.at));
-    chunk_sources_changed();
 }
 
 /// Moves on every write to what the column stores, and on nothing else.
@@ -475,14 +386,11 @@ fn decode_objects(blob: &str) -> Result<(), MarshalError> {
     result
 }
 
-/// Opens the saved blob storage keeps, which the frame reads into the store
-/// once it is in (`flush_save_if_due`).
 pub fn load() {
     file::open(root::STORAGE, STORAGE_KEYS[storage::OBJECTS as usize], Owner::Objects);
 }
 
-/// The host's answer to the blob's open: read in, or none kept, which starts
-/// the world empty.
+/// A failed open means no blob was kept: the world starts empty.
 pub fn objects_opened(fd: u32, res: i32) {
     if res < 0 {
         file::close(fd);
@@ -498,8 +406,7 @@ fn keep(blob: String) {
     file::write_whole(root::STORAGE, STORAGE_KEYS[storage::OBJECTS as usize], blob.into_bytes());
 }
 
-/// Reads a saved blob that has come in. An unreadable blob starts the world
-/// empty, as a missing one does.
+/// An unreadable blob starts the world empty, as a missing one does.
 fn loaded() {
     let st = store_state();
     if !st.loading.as_ref().is_some_and(|(_, asked)| turn() > *asked) {
@@ -629,29 +536,15 @@ fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube) -> bool {
 
 /// A redundant re-paint of a carve writes VOID, as remove() does.
 pub fn place(at: &Pvf3, size: f64, cube: PlaceableCube) {
-    let val = if place_value_is_redundant(at, size, cube) {
-        VOID
-    } else {
-        placeable_cube_num_id(cube)
-    };
+    let val = if place_value_is_redundant(at, size, cube) { VOID } else { placeable_cube_num_id(cube) };
     write_object_value(at, size, val);
 }
 
-/// Same write path as place(), just tagged with a decor kind instead of a
-/// color — and the same law: placing the decor the scatter itself stands in
-/// a cell an erase emptied takes the erase back, VOID rather than a leaf
-/// repeating what is made there, so the scattered instance returns as it
-/// was, its own variant and turn.
+/// Placing the decor a scatter stands in a cell an erase emptied writes
+/// VOID, so the scattered instance returns as it was.
 pub fn place_decor(at: &Pvf3, size: f64, decor_id: DecorId) {
     let value = if restores_scattered(at, size, decor_id).is_some() { VOID } else { decor_num_id(decor_id) };
     write_object_value(at, size, value);
-}
-
-/// The scattered instance placing `decor_id` at `at` brings back, where it
-/// is one an erase took away (`place_decor`): what the placement's preview
-/// shows, since it is what the placement leaves.
-pub fn restores_scattered(at: &Pvf3, size: f64, decor_id: DecorId) -> Option<Draw> {
-    (size >= U_PER_CELL && object_value_is_air(read_state(at))).then(|| scatters_at(decor_num_id(decor_id), at))?
 }
 
 /// The scattered instance `place_decor` would bring back, for its preview.
@@ -914,9 +807,7 @@ impl Store {
         }
     }
 
-    /// The columns holding objects under a node, a column's or coarser, at
-    /// every height, added to `out`, sorted: found down the index, so the
-    /// cost is what is under the node and not what the store holds.
+    /// The columns under a node, sorted and deduplicated.
     pub fn cols_under(&self, (side, at): (Scale, [i64; 2]), out: &mut Vec<IVec>) -> Result<(), TryReserveError> {
         let first = out.len();
         let s = side.side();
@@ -1026,13 +917,8 @@ impl Store {
         changed
     }
 
-    /// The objects under the cells `from` to `to` of `target` on the ground,
-    /// at every height, as the objects' fold makes them (`fold_cell`): each
-    /// cell there and what it folds to, none that folds to nothing, into
-    /// `out`. Read at the cell from what
-    /// the store keeps folded, so what it costs is the cells there and not
-    /// what lies under them. `hide`, the one entry the eraser shows gone, is
-    /// left out as the fold leaves it out.
+    /// What the objects fold to in the ground cells `from..to` of `target`,
+    /// at every height, with `hide` left out.
     pub fn fold_at(&self, target: Scale, from: [i64; 2], to: [i64; 2], hide: Option<EntryAt>, out: &mut HashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
         out.clear();
         let mut refused = Ok(());
@@ -1098,26 +984,21 @@ impl Store {
         Ok(())
     }
 
-    /// Whether anything is kept in the band cell `at` (a `CELL`) lies in: false
-    /// says nothing is placed there, true only that something may be.
+    /// False says nothing is placed in that band cell; true only that something may be.
     pub fn may_hold(&self, at: [i64; 3]) -> bool {
-        let cells = CELL.count_in(BAND) as i64;
-        let col_idx = ivec::gather(at[0].div_euclid(cells), at[1].div_euclid(cells), 0);
-        self.columns.get(&col_idx).is_some_and(|c| c.bands.contains_key(&(at[2].div_euclid(cells) as BandZ)))
+        let [x, y, band] = ancestor_of(at, BAND.above(CELL) as u32);
+        self.columns.get(&ivec::gather(x, y, 0)).is_some_and(|c| c.bands.contains_key(&(band as BandZ)))
     }
 
-    /// The cell over the highest band anything is kept in, in the column of
-    /// cell `[x, y]` (a `CELL`): no cell at it or above holds an object.
+    /// The cell over the highest band in the column of cell `[x, y]`.
     pub fn ceiling(&self, [x, y]: [i64; 2]) -> Option<i64> {
-        let cells = CELL.count_in(BAND) as i64;
-        let col_idx = ivec::gather(x.div_euclid(cells), y.div_euclid(cells), 0);
-        let band = *self.columns.get(&col_idx)?.bands.keys().next_back()?;
-        Some((i64::from(band) + 1) * cells)
+        let levels = BAND.above(CELL) as u32;
+        let [cx, cy] = ancestor_of([x, y], levels);
+        let band = *self.columns.get(&ivec::gather(cx, cy, 0))?.bands.keys().next_back()?;
+        Some(first_descendant_of([i64::from(band) + 1], levels)[0])
     }
 
-    /// What the objects fold to at cell `at` of `scale` (`fold_cell`), VOID
-    /// where nothing: one read, wherever it is kept — a value that paints no
-    /// voxel as it is, for the reader to count as nothing.
+    /// VOID where nothing; a non-voxel value is returned as is.
     pub fn folded_value(&self, scale: Scale, at: [i64; 3]) -> u16 {
         if scale >= BAND {
             return self.folds.get(&(scale, at)).copied().unwrap_or(VOID as u16);
@@ -1131,19 +1012,9 @@ impl Store {
         tree.mem.data[mem::resolve::<Ivec, u16>(&tree.mem, &tree.layout, key, scale, 0) as usize]
     }
 
-    /// The cell of `target` the entry `hide` is in, and what it folds to with
-    /// the entry gone: the fold made again up the entry's one path, its
-    /// siblings read where they are kept. None where nothing is there.
-    /// Column `col_idx`'s voxel entries as a paint at `target` takes them:
-    /// a leaf finer than `target` folded to it (`fold_cell`), and one at
-    /// least as coarse kept whole, at its own size. `fold_at` answers which
-    /// cells are filled, so a coarse leaf is in every cell under it there;
-    /// painted cell by cell, a placed 1u cube would come out as a quarter
-    /// cell's sixty-four sub-cell entries, which the mesher draws a box each
-    /// and never merges — one block seen split 4 × 4. `visit` is handed the
-    /// band, the entry's corner in the band's finest steps, its scale and its
-    /// state; `hide`, the one entry the eraser shows gone, is left out as the
-    /// fold leaves it out.
+    /// Column `col_idx`'s voxel entries at `target`: a leaf finer than
+    /// `target` folded to it, a coarser one kept whole. Painted cell by cell, a
+    /// 1u cube came out as sixty-four sub-cell boxes the mesher never merges.
     pub fn fold_entries(&self, col_idx: IVec, target: Scale, hide: Option<EntryAt>, visit: &mut dyn FnMut(BandZ, [u32; 3], Scale, u32)) {
         let Some(column) = self.columns.get(&col_idx) else { return };
         let hidden = hide.filter(|h| h.col_idx == col_idx).and_then(|h| {
@@ -1266,8 +1137,7 @@ impl Store {
     }
 }
 
-/// `v` pushed where the heap has room for it: the vector grows by doubling,
-/// asked for only when full.
+/// Grows by doubling, asking the heap only when full.
 fn try_push<T>(out: &mut Vec<T>, v: T) -> Result<(), TryReserveError> {
     if out.len() == out.capacity() {
         out.try_reserve(out.len().max(16))?;
@@ -1276,8 +1146,6 @@ fn try_push<T>(out: &mut Vec<T>, v: T) -> Result<(), TryReserveError> {
     Ok(())
 }
 
-/// `v` put at `k` where the heap has room for it, growing the map as
-/// `try_push` grows a vector.
 fn try_insert(out: &mut HashMap<[i64; 3], u32>, k: [i64; 3], v: u32) -> Result<(), TryReserveError> {
     if out.len() == out.capacity() {
         out.try_reserve(out.len().max(16))?;

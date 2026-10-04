@@ -65,7 +65,6 @@ export function SettingsModal(props: BaseModalProps) {
               <SettingsSection section="display" />
               <SettingsSection section="navigation" />
               <SettingsSection section="camera" />
-              <SettingsSection section="editing" />
               <SettingsSection section="lighting" />
               <SettingsSection section="quality" />
               <SettingsSection section="debug" />

@@ -110,10 +110,11 @@ pub enum InputMinor {
     GO_TO = 0x08,
     POSE = 0x09,
     POSE_END = 0x0a,
+    HOLD = 0x0b,
 }
 
 impl InputMinor {
-    pub const ALL: [InputMinor; 9] = [
+    pub const ALL: [InputMinor; 10] = [
         InputMinor::RECT,
         InputMinor::POINTER,
         InputMinor::WHEEL,
@@ -123,6 +124,7 @@ impl InputMinor {
         InputMinor::GO_TO,
         InputMinor::POSE,
         InputMinor::POSE_END,
+        InputMinor::HOLD,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -512,11 +514,7 @@ impl DevicePoseStatus {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Message {
-    None = 0x0000,
-
     // ---- 0x02 where the device says it is ----
-    LocationChecking = 0x0201,
-    LocationWeakSignal = 0x0202,
     GeolocationUnsupported = 0x0203,
     GeolocationPermissionDenied = 0x0204,
     GeolocationPositionUnavailable = 0x0205,
@@ -530,10 +528,7 @@ pub enum Message {
 }
 
 impl Message {
-    pub const ALL: [Message; 11] = [
-        Message::None,
-        Message::LocationChecking,
-        Message::LocationWeakSignal,
+    pub const ALL: [Message; 8] = [
         Message::GeolocationUnsupported,
         Message::GeolocationPermissionDenied,
         Message::GeolocationPositionUnavailable,
@@ -599,10 +594,10 @@ pub enum Command {
     SENSOR_PERMISSION = 0x1206,
     /// The canvas's client rect.
     INPUT_RECT = 0x1101,
-    /// A pointer event on the canvas, in client pixels, with what the pointer holds; the
-    /// shell sends a move at the last position when the holding changes, as a browser
-    /// synthesizes a mouse move.
+    /// A pointer event on the canvas, in client pixels.
     INPUT_POINTER = 0x1102,
+    /// What the pointer holds, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer.
+    INPUT_HOLD = 0x110b,
     INPUT_WHEEL = 0x1103,
     /// A device answered; the kernel's renderer is made on it (crates/pxl/web/render/src/gpu/renderer.rs).
     GPU_READY = 0x1401,
@@ -664,7 +659,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 39] = [
+    pub const ALL: [Command; 40] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
         Command::LOAD_START,
@@ -682,6 +677,7 @@ impl Command {
         Command::SENSOR_PERMISSION,
         Command::INPUT_RECT,
         Command::INPUT_POINTER,
+        Command::INPUT_HOLD,
         Command::INPUT_WHEEL,
         Command::GPU_READY,
         Command::GPU_LOST,
@@ -720,6 +716,7 @@ pub struct Snapshot<'a> {
     pub map: MapState,
     pub location: LocationState,
     pub companion: CompanionState,
+    pub holding: HoldingState,
     pub orientation: OrientationState,
     /// The view's azimuth.
     pub azimuth: f64,
@@ -735,18 +732,17 @@ pub struct Snapshot<'a> {
     /// The place the map center is in, broad to narrow, every rung of it; empty where
     /// the center is in none or the packets it is read out of have not arrived.
     pub place: &'a dyn Fn(&mut dyn FnMut(&PlacePart<'_>)),
-    /// The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here.
-    pub previews: &'a [u32],
 }
 
 impl Snapshot<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 12;
+    pub const FIELDS: u32 = 13;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.branch(MapState::FIELDS, |w| self.map.write(w));
         w.branch(LocationState::FIELDS, |w| self.location.write(w));
         w.branch(CompanionState::FIELDS, |w| self.companion.write(w));
+        w.branch(HoldingState::FIELDS, |w| self.holding.write(w));
         w.branch(OrientationState::FIELDS, |w| self.orientation.write(w));
         w.f64(Some(self.azimuth));
         w.bool(Some(self.is_follow_mode));
@@ -762,7 +758,6 @@ impl Snapshot<'_> {
                 w.branch(PlacePart::FIELDS, |w| item.write(w));
             })
         });
-        w.u32_array(Some(self.previews));
     }
 }
 
@@ -805,6 +800,7 @@ impl LonLat {
 pub struct LocationState {
     pub status: DevicePoseStatus,
     pub has_location: bool,
+    /// Present exactly when status is Error: the failure the kernel chose.
     pub error: Option<Message>,
 }
 
@@ -834,9 +830,34 @@ impl CompanionState {
     }
 }
 
+/// What the pointer holds, as INPUT_HOLD set it: the cube and the decor are each remembered whichever tool is held.
+pub struct HoldingState {
+    pub tool: ActiveTool,
+    /// The held cube's ground channel; absent for a flat color.
+    pub channel: Option<pxl_spec::bake::format::GroundChannelKey>,
+    /// The held cube's type in its channel.
+    pub cube: u32,
+    pub decor: u32,
+    pub tier: u32,
+}
+
+impl HoldingState {
+    /// The children it is written as.
+    pub const FIELDS: u32 = 5;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.u32(Some(self.tool as u32));
+        w.u32(self.channel.map(|m| m as u32));
+        w.u32(Some(self.cube));
+        w.u32(Some(self.decor));
+        w.u32(Some(self.tier));
+    }
+}
+
 pub struct OrientationState {
     pub status: DevicePoseStatus,
-    pub heading: Option<f64>,
+    /// Present exactly when status is Error: the failure the kernel chose.
+    pub error: Option<Message>,
 }
 
 impl OrientationState {
@@ -845,7 +866,7 @@ impl OrientationState {
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.status as u32));
-        w.f64(self.heading);
+        w.u32(self.error.map(|m| m as u32));
     }
 }
 
@@ -987,7 +1008,7 @@ pub struct SensorPosition {
     pub lat: f64,
     pub altitude: Option<f64>,
     pub accuracy: f64,
-    pub heading: Option<f64>,
+    pub course: Option<f64>,
 }
 
 impl SensorPosition {
@@ -1001,7 +1022,7 @@ impl SensorPosition {
                 None => None,
             },
             accuracy: f.at(3)?.get_number()?,
-            heading: match f.at(4)?.opt() {
+            course: match f.at(4)?.opt() {
                 Some(c) => Some(c.get_number()?),
                 None => None,
             },
@@ -1208,13 +1229,6 @@ pub struct InputPointer {
     pub button: i32,
     pub x: f64,
     pub y: f64,
-    pub tool: ActiveTool,
-    /// The ground channel the held cube stands in for; absent for a flat color, a decor kind or nothing.
-    pub channel: Option<pxl_spec::bake::format::GroundChannelKey>,
-    /// The held cube's type in its channel, or the decor kind, by the catalog's number; what the object store keeps is the kernel's to derive.
-    pub value: u32,
-    /// The object size, by its index in the snapshot's object_sizes.
-    pub tier: u32,
 }
 
 impl InputPointer {
@@ -1227,8 +1241,28 @@ impl InputPointer {
             button: f.at(3)?.get_number()? as i32,
             x: f.at(4)?.get_number()?,
             y: f.at(5)?.get_number()?,
-            tool: ActiveTool::of(f.at(6)?.get_number()? as u32).ok_or_else(|| unknown())?,
-            channel: match f.at(7)?.opt() {
+        })
+    }
+}
+
+/// Command::INPUT_HOLD's packet.
+#[derive(Clone, Copy, Debug)]
+pub struct InputHold {
+    pub tool: ActiveTool,
+    /// The ground channel the held cube stands in for; absent for a flat color, a decor kind or nothing.
+    pub channel: Option<pxl_spec::bake::format::GroundChannelKey>,
+    /// The held cube's type in its channel, or the decor kind, by the catalog's number; what the object store keeps is the kernel's to derive.
+    pub value: u32,
+    /// The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs).
+    pub tier: u32,
+}
+
+impl InputHold {
+    pub fn read(pkt: &[u8]) -> Result<InputHold, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(InputHold {
+            tool: ActiveTool::of(f.at(0)?.get_number()? as u32).ok_or_else(|| unknown())?,
+            channel: match f.at(1)?.opt() {
                 Some(c) => Some(
                     u8::try_from(c.get_number()? as u32)
                         .ok()
@@ -1237,8 +1271,8 @@ impl InputPointer {
                 ),
                 None => None,
             },
-            value: f.at(8)?.get_number()? as u32,
-            tier: f.at(9)?.get_number()? as u32,
+            value: f.at(2)?.get_number()? as u32,
+            tier: f.at(3)?.get_number()? as u32,
         })
     }
 }
