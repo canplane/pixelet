@@ -1,6 +1,7 @@
 // The light a ray from radius `r` along `dir` gathers from a light toward
-// `toward`, both in the frame whose up is +z, per unit of that light: single
-// scattering marched, with Hillaire's table for the orders past it.
+// `toward` over its first `reach` km, both in the frame whose up is +z, per
+// unit of that light: single scattering marched, with Hillaire's table for the
+// orders past it.
 
 @group(0) @binding(12) var multiscatter_lut: texture_2d<f32>;
 
@@ -8,12 +9,12 @@ fn multiscatter(r: f32, mu_s: f32) -> vec3f {
   return textureSampleLevel(multiscatter_lut, atmos_sampler, multiscatter_uv(r, mu_s), 0.0).rgb;
 }
 
-fn sky_radiance(r: f32, dir: vec3f, toward: vec3f, steps: i32) -> vec3f {
+fn sky_radiance(r: f32, dir: vec3f, toward: vec3f, reach: f32, steps: i32) -> vec3f {
   let mu = dir.z;
   let c = dot(dir, toward);
   let phase_r = rayleigh_phase(c);
   let phase_m = mie_phase(c);
-  let d = select(to_top(r, mu), to_ground(r, mu), meets_ground(r, mu));
+  let d = min(air_path(r, mu), reach);
   // From above the atmosphere a ray starts where it enters the air, if it does.
   var start = 0.0;
   if (r > atmos_top_radius()) {
@@ -25,6 +26,9 @@ fn sky_radiance(r: f32, dir: vec3f, toward: vec3f, steps: i32) -> vec3f {
   }
   let origin = vec3f(0.0, 0.0, r) + dir * start;
   let span = d - start;
+  if (span <= 0.0) {
+    return vec3f(0.0);
+  }
   var through = vec3f(1.0);
   var light = vec3f(0.0);
   // Squared steps: the air is densest and the view changes most near the eye.

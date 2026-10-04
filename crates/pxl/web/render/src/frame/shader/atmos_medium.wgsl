@@ -150,6 +150,11 @@ fn to_ground(r: f32, mu: f32) -> f32 {
   return to_sphere(r, mu, atmos_bottom_radius());
 }
 
+// How far a ray runs through the air before the ground or the top ends it.
+fn air_path(r: f32, mu: f32) -> f32 {
+  return select(to_top(r, mu), to_ground(r, mu), meets_ground(r, mu));
+}
+
 // Raised to the ground under the map center for drawing only; the tables keep
 // the radius they were baked at.
 fn land_radius() -> f32 {
@@ -177,6 +182,9 @@ const TRANSMITTANCE_SIZE: vec2f = vec2f(256.0, 64.0);
 const MULTISCATTER_SIZE: vec2f = vec2f(32.0, 32.0);
 const SKY_VIEW_SIZE: vec2f = vec2f(192.0, 108.0);
 const IRRADIANCE_SIZE: vec2f = vec2f(64.0, 16.0);
+// Hillaire's aerial perspective, 32 across, 32 up, 32 slices along each ray,
+// the slices side by side in one picture.
+const AERIAL_SIZE: vec3f = vec3f(32.0, 32.0, 32.0);
 
 // Bruneton's parameterization, which spends rows where transmittance changes.
 fn transmittance_uv(r_in: f32, mu: f32) -> vec2f {

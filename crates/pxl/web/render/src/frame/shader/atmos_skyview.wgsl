@@ -31,5 +31,5 @@ fn fs(v: TableOut) -> @location(0) vec4f {
   let mu_s = clamp(dot(toward, frame_up()), -1.0, 1.0);
   let sun = vec3f(sqrt(max(1.0 - mu_s * mu_s, 0.0)), 0.0, mu_s);
 
-  return vec4f(sky_radiance(r, dir, sun, SKY_VIEW_STEPS), 1.0);
+  return vec4f(sky_radiance(r, dir, sun, air_path(r, dir.z), SKY_VIEW_STEPS), 1.0);
 }
