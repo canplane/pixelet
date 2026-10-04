@@ -15,12 +15,19 @@ fn cloud_lattice(point: vec3f) -> vec2f {
 
 // Read at the footprint's mip, so a pixel wider than a cloud is as opaque as its covered share.
 fn cloud_opacity(p: vec2f, footprint: f32) -> f32 {
-  let texels_per_unit = f32(CLOUD_TILE_TEXELS) / f32(CLOUD_TILE_UNITS);
-  let uv = (vec2f(atmos_cloud_base() % vec2u(CLOUD_TILE_UNITS)) + p) / f32(CLOUD_TILE_UNITS);
-  return textureSampleLevel(cloud_tile, cloud_tile_sampler, uv, log2(max(footprint * texels_per_unit, 1.0))).r;
+  return cloud_opacity_finer(p, footprint, 1u);
 }
 
-// Fades out above the layer: seen from above, flat noise reads as blots.
+// The tile `finer` times smaller over the lattice. The base's share is scaled
+// with the rest, so the pattern stays on its ground as the origin moves.
+fn cloud_opacity_finer(p: vec2f, footprint: f32, finer: u32) -> f32 {
+  let texels_per_unit = f32(CLOUD_TILE_TEXELS) / f32(CLOUD_TILE_UNITS);
+  let base = (atmos_cloud_base() % vec2u(CLOUD_TILE_UNITS)) * finer % vec2u(CLOUD_TILE_UNITS);
+  let uv = (vec2f(base) + p * f32(finer)) / f32(CLOUD_TILE_UNITS);
+  return textureSampleLevel(cloud_tile, cloud_tile_sampler, uv, log2(max(footprint * f32(finer) * texels_per_unit, 1.0))).r;
+}
+
+// Fades over the upper half of the climb to where the clouds are gone.
 fn cloud_shown() -> f32 {
-  return 1.0 - smoothstep(atmos_cloud_altitude_km(), atmos_cloud_gone_km(), atmos_camera_altitude());
+  return 1.0 - smoothstep(0.5 * atmos_cloud_gone_km(), atmos_cloud_gone_km(), atmos_camera_altitude());
 }

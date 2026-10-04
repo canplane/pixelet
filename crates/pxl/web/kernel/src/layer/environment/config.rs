@@ -16,8 +16,10 @@ pub mod render_cfg {
 /// Fresnel rim highlight, applied to everything lit since one shader lights
 /// it all; the linear scale on the shader's falloff.
 pub mod rim_cfg {
-    /// The share of the sky's light a rim gives back.
-    pub const INTENSITY: f64 = 0.7;
+    /// How much a rim brightens a face at its edge, as a share of its own light:
+    /// the day's rim of 0.7 of the sky's light, the sky a fifth of a day's light
+    /// on a face of albedo 0.3.
+    pub const INTENSITY: f64 = 0.5;
 }
 
 /// Edge shading on a cube's silhouette: its darkening and its width as a share of a face.
