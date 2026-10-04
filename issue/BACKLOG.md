@@ -25,16 +25,29 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   Kotlin bindings (`PlatformModule`, `PxlCore`); the Rust side is checked for
   both targets, the bindings only by a device build, at the next one.
 
-- **Decor and the badges on the drawn chunks, seen running.** `4da038fc`
-  and `98e4f790` moved them onto the chunks the terrain draws; checked by
-  the tests and the build only. Zoom and pan on the dev stack: decor and
-  badges change with the ground under them, and no tree is lost or doubled
-  at a chunk's top or edge. `e7893bdb` moved the badges' globe and viewport
-  onto the frame's uniform: they stand, size and bend over the planet as
-  before. The gizmos carry no labels now, forward, up and north told apart by color, in lines three pixels wide. `01215a04`
-  and the commit after it moved the up, the viewport and the fog onto the
-  frame's uniform: the stars, the screen-space AO, the sky and the clouds
-  look as before.
+## P2
+
+- **A bore's approach that stops short of a bridge.** At Uidong (37.2977,
+  127.0580) a Grade line leaving a tunnel ends 4 cells under the ground where
+  a deck starts at +5, a 9-cell step: the stretch's `across` lookup
+  (`geo-bake deck/approach.rs` `branches`) seems not to find the deck's end,
+  so neither reaches the ground nor meets the other.
+- **A bore's swept air against its cover.** The paint clears from the lowest
+  to the highest surface a column sweeps (`pxl-spec bake/deck.rs`
+  `occupies`); the solve's ceiling (`geo-bake deck.rs` `clear_m`) does not
+  know the sweep, so on a steep step the air eats into the 3 m cover.
+- **Clearance by the road's own grade.** `clear_cells` holds a clearance
+  across the road at `MAX_GRADE`'s secant for every way; the segment's own
+  grade would give each what it needs.
+- **A resumed terrain bake's flat count.** `leaf.json`'s
+  `flat_elevation_pages` counts the last run's pages only; terrain
+  v7.2026-10-04.1 says 7 for 5,984 of its 167,110 leaves.
+- **The XTP POI and geocode pages, read back.** POI v9.2026-10-04.1 and geocode
+  v5.2026-10-04.1 were baked on the new wire and never fetched and decoded
+  through the dev server.
+- **Subway bores.** Every tunnel flag is a bore now, so a subway's lines are
+  drawn underground and stretch each chunk's bounds down; whether that cost
+  stays is not decided.
 
 ## P3
 
@@ -58,12 +71,12 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## Parked, with the reason on file
 
-- **Coarse tiers: draw calls, a wider unit.** Not a bottleneck after the
-  direct path; not without a measurement —
-  [20260912-coarse-tiers-what-the-field-does.md](./20260912-coarse-tiers-what-the-field-does.md).
-- **Characters and the rest without a record format.** Not before the format.
 - **WASI, as a subsystem over the contract.** An adapter that offers a WASI
   program WASI's calls translated into the contract's requests, which is what
   would let an existing program in. Not without one to build it against;
   guests stay `wasm32-unknown-unknown` meanwhile —
   [20260930-wasi-and-the-boundary.md](./20260930-wasi-and-the-boundary.md).
+- **A region baked and published alone.** A partial snapshot over one full
+  bake, owning the pages under its quadkey prefixes and their ancestors. Not
+  before a region needs it —
+  [20261004-a-snapshot-of-a-subtree.md](./20261004-a-snapshot-of-a-subtree.md).
