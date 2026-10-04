@@ -11,16 +11,17 @@ pub const BOTTOM_RADIUS_KM: f64 = crate::look::globe::MERCATOR_RADIUS_KM;
 pub const TOP_RADIUS_KM: f64 = BOTTOM_RADIUS_KM + 100.0;
 pub const RAYLEIGH_SCATTERING: [f64; 3] = [5.802e-3, 13.558e-3, 33.1e-3];
 pub const RAYLEIGH_SCALE_HEIGHT_KM: f64 = 8.0;
-pub const MIE_SCATTERING: f64 = 3.996e-3;
-pub const MIE_EXTINCTION: f64 = 4.44e-3;
+/// The day's weather, not a constant: Koschmieder's visual range, 30-50 km on
+/// a clear day. The aerosol takes what Rayleigh leaves of its extinction at sea
+/// level; Unreal's own aerosol alone gives 179 km, and far ground stayed sharp.
+pub const VISUAL_RANGE_KM: f64 = 40.0;
+/// The share of what the aerosol takes that it scatters: Unreal's (3.996e-3 of
+/// 4.44e-3), and OPAC's continental haze at green (Hess, Koepke and Schult, 1998).
+pub const MIE_ALBEDO: f64 = 0.9;
+pub const MIE_EXTINCTION: f64 = 3.912 / VISUAL_RANGE_KM - RAYLEIGH_SCATTERING[1];
+pub const MIE_SCATTERING: f64 = MIE_ALBEDO * MIE_EXTINCTION;
 pub const MIE_SCALE_HEIGHT_KM: f64 = 1.2;
 pub const MIE_G: f64 = 0.8;
-/// Koschmieder's visual range: 30-50 km on a clear day. Bruneton's medium alone
-/// gives 179 km, so far ground stayed sharp against the sky.
-pub const HAZE_VISUAL_RANGE_KM: f64 = 40.0;
-/// Aerial perspective only: scaling the medium's own Mie this far would whiten the sky.
-pub const HAZE_EXTINCTION: f64 = 3.912 / HAZE_VISUAL_RANGE_KM - (RAYLEIGH_SCATTERING[1] + MIE_EXTINCTION);
-pub const HAZE_SCALE_HEIGHT_KM: f64 = 1.0;
 pub const OZONE_ABSORPTION: [f64; 3] = [0.650e-3, 1.881e-3, 0.085e-3];
 pub const OZONE_CENTER_KM: f64 = 25.0;
 pub const OZONE_HALF_WIDTH_KM: f64 = 15.0;
