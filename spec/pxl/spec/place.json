@@ -1,0 +1,18 @@
+{
+  "$doc": [
+    "Where a part of a place's name sits, broadest first (pxl-spec place.rs",
+    "`PlaceRank`). The numbers are stored, so a rung is appended, never",
+    "inserted; the gaps leave room for a provider's in-between levels."
+  ],
+  "PLACE_RANK": {
+    "$type": "u8",
+    "COUNTRY": 0,
+    "REGION": 10,
+    "COUNTY": 20,
+    "CITY": 30,
+    "DISTRICT": 40,
+    "NEIGHBORHOOD": 50,
+    "STREET": 60,
+    "BUILDING": 70
+  }
+}

@@ -10,9 +10,8 @@
 import { AppState } from "react-native";
 import * as Location from "expo-horizon-location";
 
-import { Command, encode_sensor_error, encode_sensor_orientation, encode_sensor_permission, encode_sensor_position, GeolocationErrorCode, PermissionAnswer, Sensor } from "@/kernel/abi/cmd.spec.ts";
-import { CORE_DOORBELL } from "@/kernel/mem.ts";
-import { request_frame, ring_now } from "@/kernel/sched.ts";
+import { GeolocationErrorCode, PermissionAnswer, Sensor } from "@/kernel/abi/cmd.spec.ts";
+import { kernel_orientation, kernel_orientation_lost, kernel_permission, kernel_position, kernel_position_error } from "@/kernel/control/sensor.ts";
 import { PLATFORM } from "./module.ts";
 
 export function geolocationSupported(): boolean {
@@ -33,11 +32,6 @@ export function orientationSilenceIsLoss(): boolean {
 
 export function orientationPermit(): Promise<boolean> {
   return Promise.resolve(true);
-}
-
-function sendPermission(sensor: Sensor, answer: PermissionAnswer): void {
-  CORE_DOORBELL.send(0, Command.SENSOR_PERMISSION, encode_sensor_permission({ sensor, answer }));
-  request_frame();
 }
 
 let granted: boolean | null = null;
@@ -64,8 +58,8 @@ function recheck(): void {
   void Location.getForegroundPermissionsAsync().then(({ status }) => {
     if (granted !== false || status !== Location.PermissionStatus.GRANTED) return;
     granted = true;
-    sendPermission(Sensor.Geolocation, PermissionAnswer.Granted);
-    sendPermission(Sensor.Orientation, PermissionAnswer.Granted);
+    kernel_permission({ sensor: Sensor.Geolocation, answer: PermissionAnswer.Granted });
+    kernel_permission({ sensor: Sensor.Orientation, answer: PermissionAnswer.Granted });
   });
 }
 
@@ -86,8 +80,7 @@ function geolocationFail(watch: Watch, code: GeolocationErrorCode): void {
   if (geolocation !== watch) return;
   watchEnd(watch);
   geolocation = null;
-  CORE_DOORBELL.send(0, Command.SENSOR_ERROR, encode_sensor_error({ code }));
-  request_frame();
+  kernel_position_error({ code });
 }
 
 export function geolocationStart(): void {
@@ -100,8 +93,7 @@ export function geolocationStart(): void {
       { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
       (pos) => {
         const { latitude, longitude, altitude, accuracy, heading } = pos.coords;
-        CORE_DOORBELL.send(0, Command.SENSOR_POSITION, encode_sensor_position({ lon: longitude, lat: latitude, altitude, accuracy: accuracy ?? Infinity, heading }));
-        request_frame();
+        kernel_position({ lon: longitude, lat: latitude, altitude, accuracy: accuracy ?? Infinity, heading });
       },
       () => geolocationFail(watch, GeolocationErrorCode.PositionUnavailable),
     );
@@ -122,8 +114,8 @@ function orientationFail(watch: Watch, refused: boolean): void {
   if (orientation !== watch) return;
   watchEnd(watch);
   orientation = null;
-  if (refused) sendPermission(Sensor.Orientation, PermissionAnswer.Denied);
-  else ring_now(Command.SENSOR_ORIENTATION_LOST);
+  if (refused) kernel_permission({ sensor: Sensor.Orientation, answer: PermissionAnswer.Denied });
+  else kernel_orientation_lost();
 }
 
 export function orientationListen(): void {
@@ -135,8 +127,7 @@ export function orientationListen(): void {
     const subscription = await Location.watchHeadingAsync(
       (h) => {
         const heading = h.trueHeading >= 0 ? h.trueHeading : h.magHeading;
-        CORE_DOORBELL.send(0, Command.SENSOR_ORIENTATION, encode_sensor_orientation({ webkit_compass_heading: heading, alpha: null, beta: null, gamma: null }));
-        request_frame();
+        kernel_orientation({ webkit_compass_heading: heading, alpha: null, beta: null, gamma: null });
       },
       (reason) => {
         console.error("[sensor] heading:", reason);

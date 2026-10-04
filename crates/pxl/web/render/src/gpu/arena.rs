@@ -5,6 +5,7 @@
 //! epoch moves and owners rebuild from the terrain records.
 
 use crate::gpu::api::{buffer_usage, gpu, object};
+use crate::gpu::renderer::device_ready;
 use xpute_runtime::global::Global;
 
 /// One buffer a group of levels.
@@ -45,7 +46,7 @@ pub fn arena_epoch() -> u32 {
 
 /// False when there is no device.
 pub fn arena_write(group: usize, offset: u32, bytes: &[u8]) -> bool {
-    let Some(g) = gpu().filter(|_| crate::gpu::renderer::device_ready()) else {
+    let Some(g) = gpu().filter(|_| device_ready()) else {
         return false;
     };
     let a = arena();

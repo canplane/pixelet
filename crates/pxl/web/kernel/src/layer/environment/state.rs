@@ -9,13 +9,12 @@ use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS, NIGHT,
 use pxl_render::look::globe::Globe;
 use pxl_spec::space::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::v3::{len3, V3};
 
 use crate::control::navigation::bootstrap::FALLBACK_G4326;
-use crate::global::Global;
-use crate::host::{now, wall_now};
+use crate::host::wall_now;
 use crate::kernel::kernel;
-use crate::layer::environment::celestial_position::{equatorial_to_local, moon_position, sun_position};
+use crate::layer::environment::celestial_position::{equatorial_to_local, j2000_days, moon_position, sun_position};
 use crate::layer::environment::config::light_cfg;
 use crate::layer::environment::fog::{band_at, eye_ground, eye_height, reach_at};
 use crate::layer::environment::theme::{themes, Theme};
@@ -23,6 +22,8 @@ use crate::layer::environment::theme_clock::theme_key;
 use crate::world::change::{request_world_tick, wake_at};
 use crate::world::chunk::table::Frame;
 use crate::world::frame::view::globe_anchor;
+use xpute_runtime::clock::now;
+use xpute_runtime::global::Global;
 
 // The sky moves with the wall clock and nothing else asks for a frame while
 // the view is still, so the clock asks for one this often.
@@ -91,14 +92,13 @@ pub fn map_environment_step() {
     if center != e.observed_center {
         e.observed_center = center;
         if let Some(c) = center {
-            let mut g = [0.0; 3];
-            epsg4326::unproject(&mut g, c.i, c.f);
+            let g = epsg4326::unproject(c.i, c.f);
             e.observed_lon = g[0];
             e.observed_lat = g[1];
         }
     }
     let unix_ms = wall_now();
-    sched.environment.observe(e.observed_lat, e.observed_lon, unix_ms);
+    sched.environment.observe(unix_ms);
 
     if unix_ms - e.clock_frame_at >= ENV_CLOCK_FRAME_MS {
         e.clock_frame_at = unix_ms;
@@ -118,8 +118,6 @@ pub struct EnvironmentDraw {
     current: [f32; THEME_FLOATS],
     has_theme: bool,
     started: bool,
-    lat: f64,
-    lon: f64,
     /// Days since J2000.0, from the host's wall clock.
     days: f64,
     sun: V3,
@@ -143,8 +141,6 @@ impl Default for EnvironmentDraw {
             current: [0.0; THEME_FLOATS],
             has_theme: false,
             started: false,
-            lat: 0.0,
-            lon: 0.0,
             days: 0.0,
             sun: [0.0; 3],
             moon: [0.0; 3],
@@ -168,11 +164,9 @@ impl EnvironmentDraw {
         }
     }
 
-    /// Degrees, and Unix milliseconds.
-    pub fn observe(&mut self, lat: f64, lon: f64, unix_ms: f64) {
-        self.lat = lat;
-        self.lon = lon;
-        self.days = unix_ms / 86_400_000.0 + 2_440_587.5 - 2_451_545.0;
+    /// Unix milliseconds.
+    pub fn observe(&mut self, unix_ms: f64) {
+        self.days = j2000_days(unix_ms);
         let first = *self.first_ms.get_or_insert(unix_ms);
         self.time = (unix_ms - first) / 1000.0;
     }
@@ -183,7 +177,7 @@ impl EnvironmentDraw {
     pub fn daylight(&mut self, lat: f64, lon: f64, day_start_ms: f64) {
         const SAMPLES: u32 = 288;
         let altitude = |hour: f64| {
-            let d = (day_start_ms + hour * 3_600_000.0) / 86_400_000.0 + 2_440_587.5 - 2_451_545.0;
+            let d = j2000_days(day_start_ms + hour * 3_600_000.0);
             let p = sun_position(d, lat, lon);
             p[2]
         };
@@ -210,8 +204,9 @@ impl EnvironmentDraw {
             return false;
         }
         let night = self.target[NIGHT] > 0.5;
-        let sun = sun_position(self.days, self.lat, self.lon);
-        let moon = moon_position(self.days, self.lat, self.lon);
+        let (lat, lon) = (environment().observed_lat, environment().observed_lon);
+        let sun = sun_position(self.days, lat, lon);
+        let moon = moon_position(self.days, lat, lon);
         let a = if self.started { (frame.delta_s * EASE_RATE).clamp(0.0, 1.0) } else { 1.0 };
         if !self.started {
             self.sun = sun;
@@ -234,8 +229,8 @@ impl EnvironmentDraw {
         // Height over the planet: the world is tangent to it at the camera center
         // and the planet falls away under a camera standing off it.
         let km_per_u = km_per_u();
-        let r = Globe::at(self.lat.to_radians()).radius_u();
-        let over = frame.camera[0].hypot(frame.camera[1]).hypot(frame.camera[2] + r) - r;
+        let r = globe().radius_u();
+        let over = len3(&[frame.camera[0], frame.camera[1], frame.camera[2] + r]) - r;
         let height = eye_height();
         // The ground pyramid's last observation, read rather than remade per frame.
         let drawn = crate::world::pyramid::domain::current().map(|d| d.observation().far);
@@ -253,8 +248,8 @@ impl EnvironmentDraw {
             altitude_km: (frame.center_z + over) * km_per_u,
             ground_km: eye_ground() * km_per_u,
             km_per_u,
-            latitude: self.lat.to_radians(),
-            star_frame: equatorial_to_local(self.days, self.lat, self.lon),
+            latitude: lat.to_radians(),
+            star_frame: equatorial_to_local(self.days, lat, lon),
         };
         write_environment(&mut self.out, &light);
         (self.stars - star_target).abs() > SETTLE_EPS

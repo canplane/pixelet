@@ -14,10 +14,15 @@ use pxl_spec::space::v3::V3;
 
 use crate::shell::setting::store::settings_store;
 use crate::world::access::{Access, Answer, Detail, Ray, FINEST};
-use crate::world::frame::coord::{canonical_to_local, local_world_origin, local_world_to_canonical};
+use crate::world::frame::coord::{canonical_to_local, local_world_to_canonical};
+use crate::world::frame::view::view;
 
 /// The Z lane's floor, under any ground.
 const UNKNOWN_Z: i64 = -(1 << (IVEC_Z_W - 1)) << FRAC_W;
+
+fn with_z(at: &Pvf3, z: i64) -> Pvf3 {
+    pvf3::gather(pvf3::X(at), pvf3::Y(at), z)
+}
 
 pub fn unknown_z(at: &Pvf3) -> Pvf3 {
     let mut out = Pvf3::default();
@@ -99,10 +104,10 @@ pub fn target(to: &mut Option<Pvf3>, held: V3, origin: IVec) -> V3 {
 pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, yaw: f64) -> Pvf3 {
     let (lx, ly) = (-dx * units_per_px, dy * units_per_px);
     let (s, c) = libm::sincos(yaw);
-    let origin = local_world_origin();
+    let origin = view().origin;
     let l = canonical_to_local(from, origin);
     let way = [lx * c + ly * s, -lx * s + ly * c];
-    let to = *local_world_to_canonical(&mut Pvf3::default(), &[l[0] + way[0], l[1] + way[1], l[2]], origin);
+    let to = local_world_to_canonical(&[l[0] + way[0], l[1] + way[1], l[2]], origin);
     if is_unknown(from) {
         return unknown_z(&to);
     }
@@ -157,8 +162,7 @@ pub fn passage(from: &Pvf3, way: [f64; 2], start: i64) -> Passage {
             Answer::Exact(None) => return Passage::Open(cz),
             Answer::Exact(Some(hit)) => {
                 let p = ray.at(hit.t + side / 2.0);
-                let mut cell = Pvf3::default();
-                pvf3::gather(&mut cell, pvf3::from_real(p[0]), pvf3::from_real(p[1]), pvf3::from_real(p[2]));
+                let cell = pvf3::gather(pvf3::from_real(p[0]), pvf3::from_real(p[1]), pvf3::from_real(p[2]));
                 match access.open_from(&cell).exact() {
                     Some(open) if open > cz => (cz, t) = (open, 0.0),
                     Some(_) => t += hit.t + side,

@@ -20,9 +20,7 @@ fn domain(o: Observation, world: &World) -> Domain {
 }
 
 fn point(p: V3) -> Pvf3 {
-    let mut at = Pvf3::default();
-    projection::project(&mut at, p[0], p[1], p[2]);
-    at
+    projection::project(p[0], p[1], p[2])
 }
 
 fn pieces_at(pieces: &[Chunk], p: V3) -> Vec<Chunk> {
@@ -179,12 +177,14 @@ fn remaking_a_moving_view_allocates_nothing_once_it_has_held_the_most() {
     };
     let mut sight = crate::world::observer::Sight::default();
     sight.observe(&path(0), &world, true, &[]);
-    let mut d = Domain::of(path(0), &ladder, 0, Box::new(world.clone()), sight.footprints());
+    let mut d = Domain::priced(path(0), &ladder, 0, Box::new(world.clone()), sight.footprints(), &Free);
     let walk = |d: &mut Domain, sight: &mut crate::world::observer::Sight| {
         for k in 0..24 {
             let o = path(k);
             sight.observe(&o, &world, false, &[]);
-            d.remake(o, &ladder, 0, sight.footprints());
+            d.begin(o, &ladder, sight.footprints(), core::iter::empty());
+            d.run(&Free, &|| false, &mut 0);
+            d.put(0);
             for step in 0..ladder.len() {
                 d.cut_at(step);
             }

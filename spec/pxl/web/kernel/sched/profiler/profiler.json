@@ -51,6 +51,7 @@
     "environment",
     "companion",
     "preview",
+    "view",
     "chunks",
     "debug_gizmos",
     "profiler"
@@ -63,8 +64,6 @@
     "follow",
     "destination",
     "view",
-    "tiles",
-    "poi",
     "geocode",
     "theme",
     "decor",
@@ -412,7 +411,7 @@
       "used_px": 3,
       "WORDS": 4
     },
-    "retain": {
+    "held": {
       "AT": 392,
       "run_sets": 0,
       "run_set_mb": 1,
@@ -467,7 +466,7 @@
       "admitted": 3,
       "evicted": 4,
       "refined": 5,
-      "recubed": 6,
+      "retiered": 6,
       "changes_peak": 7,
       "WORDS": 8
     },

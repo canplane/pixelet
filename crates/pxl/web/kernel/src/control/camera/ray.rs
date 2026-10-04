@@ -6,13 +6,14 @@
 
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::v3::{add3, V3};
 
-use crate::layer::object::geometry::Aabb;
-use crate::layer::object::store::{get_placed_object, OccupiedEntry};
+use crate::layer::object::store::{get_placed_object, Entry};
 use crate::world::access::{Access, Detail, Hit, Ray, Struck, FINEST};
-use crate::world::frame::coord::{local_world_origin, local_world_to_canonical};
+use crate::world::frame::coord::local_world_to_canonical;
+use crate::world::frame::view::view;
+use pxl_spec::space::v3::Aabb;
 
 /// A product number: what can be edited is a sphere about the observer.
 const PICK_REACH_U: f64 = 32.0 * U_PER_CELL;
@@ -33,13 +34,12 @@ fn grid_floor(v: f64, size: f64) -> f64 {
 
 /// The corner a new `new_size` cube takes flush against what `hit` struck,
 /// one rule per axis by the sign of that axis's normal: n > 0 starts at
-/// grid_ceil(box_max), n < 0 ends at grid_floor(box_min), n = 0 takes the
+/// grid_ceil(max), n < 0 ends at grid_floor(min), n = 0 takes the
 /// cell the hit point falls in. `precise_box` overrides the hit's box (a
 /// decor met in front of it).
 #[allow(clippy::needless_range_loop)]
 pub fn world_adjacent_corner(hit: &Hit, new_size: f64, map_origin: IVec, precise_box: Option<&Aabb>) -> Pvf3 {
-    let box_min = precise_box.map_or(hit.box_min, |b| b.min);
-    let box_max = precise_box.map_or(hit.box_max, |b| b.max);
+    let Aabb { min: box_min, max: box_max } = precise_box.copied().unwrap_or(hit.cube);
     let mut out: V3 = [0.0; 3];
 
     for axis in 0..3 {
@@ -53,9 +53,7 @@ pub fn world_adjacent_corner(hit: &Hit, new_size: f64, map_origin: IVec, precise
         };
     }
 
-    let mut p = Pvf3::default();
-    local_world_to_canonical(&mut p, &out, map_origin);
-    p
+    local_world_to_canonical(&out, map_origin)
 }
 
 /// The `size` voxel `hit` struck, for the eraser's terrain dig: as
@@ -66,20 +64,18 @@ pub fn world_struck_corner(hit: &Hit, size: f64, map_origin: IVec) -> Pvf3 {
     for axis in 0..3 {
         let n = hit.normal[axis];
         out[axis] = if n > 0.0 {
-            grid_ceil(hit.box_max[axis], size) - size
+            grid_ceil(hit.cube.max[axis], size) - size
         } else if n < 0.0 {
-            grid_floor(hit.box_min[axis], size)
+            grid_floor(hit.cube.min[axis], size)
         } else {
             grid_floor(hit.point[axis], size)
         };
     }
-    let mut p = Pvf3::default();
-    local_world_to_canonical(&mut p, &out, map_origin);
-    p
+    local_world_to_canonical(&out, map_origin)
 }
 
 /// Decor is never resolved here; it paints no voxel and has its own hit test.
-pub fn resolve_hit_object(hit: &Hit) -> Option<OccupiedEntry> {
+pub fn resolve_hit_object(hit: &Hit) -> Option<Entry> {
     match hit.struck {
         Struck::Object(at) => get_placed_object(at),
         Struck::Ground | Struck::Objects => None,
@@ -93,10 +89,9 @@ pub struct PickResult {
 
 /// In the root frame, from the eye.
 pub fn ray_pick(origin: V3, direction: V3) -> Option<PickResult> {
-    let map_origin = local_world_origin();
-    let frame: V3 = [ivec::to_real(ivec::X(map_origin)), ivec::to_real(ivec::Y(map_origin)), ivec::to_real(ivec::Z(map_origin))];
+    let frame = ivec::to_v3(view().origin);
     let ray = Ray {
-        origin: std::array::from_fn(|k| origin[k] + frame[k]),
+        origin: add3(&origin, &frame),
         direction,
         reach: PICK_REACH_U,
     };

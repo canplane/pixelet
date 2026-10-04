@@ -5,6 +5,7 @@ use pxl_spec::cell::cube_types::Block;
 use pxl_spec::space::pvf3::ivec;
 
 use super::*;
+use xpute_core::math::rng::SplitMix64;
 
 // Far-apart corners per test: the store is kernel-global across the binary.
 fn corner(x: i64, y: i64, z: i64) -> Pvf3 {
@@ -22,24 +23,23 @@ fn write(store: &mut Store, col_idx: IVec, band_idx: BandZ, at: [u32; 3], scale:
 
 #[test]
 fn a_write_is_read_back_and_its_entries_are_made_within_it() {
-    let mut store = Store::new();
+    let mut store = Store::default();
     assert_eq!(write(&mut store, 7, 0, [8, 16, 24], CELL, 3), BTreeSet::from([(7, 0)]));
     assert_eq!(store.read(7, 0, [8, 16, 24]), 3);
     assert_eq!(store.read(7, 0, [15, 23, 31]), 3, "a cell leaf covers its eight steps");
     assert_eq!(store.read(7, 0, [16, 16, 24]), VOID);
     assert_eq!(entries(&store, 7), vec![(0, pack_pos(8, 16, 24, CELL), 3)]);
     let cell = store.cell(7, 1, 2, 3).expect("the cell is found");
-    assert_eq!((cell.start, cell.count, cell.solid), (0, 1, 1));
+    assert_eq!((cell.start, cell.count), (0, 1));
     assert!(store.cell(7, 2, 2, 3).is_none());
 }
 
 #[test]
 fn a_void_write_prunes_the_band_and_the_chunk() {
-    let mut store = Store::new();
+    let mut store = Store::default();
     write(&mut store, 7, 2, [0, 0, 0], OBJECT_FINEST, AIR);
     assert_eq!(store.cols().count(), 1);
-    let cell = store.cell(7, 0, 0, 2 * BAND_CELLS as i32).expect("the cell is found");
-    assert_eq!(cell.solid, 0, "AIR does not occupy");
+    assert!(store.cell(7, 0, 0, 2 * BAND_CELLS as i32).is_some(), "AIR is an entry");
     assert_eq!(write(&mut store, 7, 2, [0, 0, 0], OBJECT_FINEST, VOID), BTreeSet::from([(7, 2)]));
     assert_eq!(store.cols().count(), 0);
     assert_eq!(entries(&store, 7), vec![]);
@@ -49,7 +49,7 @@ fn a_void_write_prunes_the_band_and_the_chunk() {
 
 #[test]
 fn a_merged_block_comes_back_as_its_cells_each_found_where_it_lies() {
-    let mut store = Store::new();
+    let mut store = Store::default();
     let writes = (0..64u32).map(|k| {
         let [x, y, z] = at_walk_order::<3>(k as u64, 2);
         Write {
@@ -75,7 +75,7 @@ fn a_merged_block_comes_back_as_its_cells_each_found_where_it_lies() {
 
 #[test]
 fn the_lanes_are_in_band_and_walk_order_so_a_cell_s_entries_are_one_run() {
-    let mut store = Store::new();
+    let mut store = Store::default();
     let finest = |x: u32, y: u32, z: u32| Write {
         col_idx: 3,
         band_idx: 0,
@@ -106,15 +106,12 @@ fn the_lanes_are_in_band_and_walk_order_so_a_cell_s_entries_are_one_run() {
     assert_eq!(store.cell(3, 1, 0, BAND_CELLS as i32).map(|c| c.count), Some(1));
 }
 
-/// xorshift64: the same edits on every run.
-struct Rng(u64);
+/// Deterministic edits on every run.
+struct Rng(SplitMix64);
 
 impl Rng {
     fn next(&mut self) -> u64 {
-        self.0 ^= self.0 << 13;
-        self.0 ^= self.0 >> 7;
-        self.0 ^= self.0 << 17;
-        self.0
+        u64::from(self.0.next_u32())
     }
 
     fn pick<T: Copy>(&mut self, of: &[T]) -> T {
@@ -122,82 +119,10 @@ impl Rng {
     }
 }
 
-/// The writes that set, of the block `cells` a side from `from` in band
-/// `band_idx` of column `col_idx`, five of every eight children down to a
-/// whole cell to `state`: the least that makes the block `state` at every
-/// level by a strict majority, whatever the ties.
-fn fill(col_idx: IVec, band_idx: BandZ, from: [u32; 3], cells: u32, state: u32) -> Vec<Write> {
-    fn go(corner: [u32; 3], side: u32, write: &mut dyn FnMut([u32; 3])) {
-        if side == 1 {
-            return write(corner);
-        }
-        for slot in 0..5 {
-            let c = child_of([0i64; 3], slot);
-            go([0, 1, 2].map(|a| corner[a] + c[a] as u32 * side / 2), side / 2, write);
-        }
-    }
-    let step = OBJECT_FINEST.count_in(CELL);
-    let mut out = Vec::new();
-    go(from, cells, &mut |c| {
-        out.push(Write {
-            col_idx,
-            band_idx,
-            at: c.map(|v| v * step),
-            scale: CELL,
-            state,
-        })
-    });
-    out
-}
-
-/// The objects' fold done the long way, as a chunk once did at every build:
-/// every entry of `columns` but `hide`, each at its own size, folded from
-/// the finest up a level at a time to `target` — what the store's folds
-/// are held to.
-fn fold_entries<'a>(columns: impl IntoIterator<Item = Entries<'a>>, target: Scale, hide: Option<EntryAt>) -> HashMap<[i64; 3], u32> {
-    let mut native: HashMap<Scale, Vec<([i64; 3], u32)>> = HashMap::new();
-    for e in columns {
-        let corner = FROM_L2_IDX(e.col_idx);
-        let (x0, y0) = (OBJECT_FINEST.index(ivec::X(corner)), OBJECT_FINEST.index(ivec::Y(corner)));
-        for k in 0..e.band.len() {
-            let (band, pos, state) = (e.band[k], e.pos[k], e.state[k]);
-            if !object_value_is_voxel(state) || hide == Some(e.at(k)) {
-                continue;
-            }
-            let (x, y, z, own) = unpack_pos(pos);
-            let (x, y) = (x0 + x as i64, y0 + y as i64);
-            let z = band as i64 * OBJECT_FINEST.count_in(BAND) as i64 + z as i64;
-            // An entry is a cell or finer, and a target a cell or coarser.
-            assert!(own <= target);
-            let at = |v: i64| v.div_euclid(OBJECT_FINEST.count_in(own) as i64);
-            native.entry(own).or_default().push(([at(x), at(y), at(z)], state));
-        }
-    }
-    let mut cells: HashMap<[i64; 3], u32> = HashMap::new();
-    let mut scale = OBJECT_FINEST;
-    loop {
-        cells.extend(native.remove(&scale).unwrap_or_default());
-        if scale >= target {
-            return cells;
-        }
-        let mut parents: HashMap<[i64; 3], [u32; 8]> = HashMap::new();
-        for (c, state) in cells.drain() {
-            parents.entry(parent_of(c)).or_insert([0; 8])[slot_of(c)] = state;
-        }
-        let parent = scale.up(1);
-        cells.extend(parents.into_iter().filter_map(|(p, v)| {
-            let m = majority(v, parent.above(CELL));
-            (m != 0).then_some((p, m))
-        }));
-        scale = parent;
-    }
-}
-
-/// `cells` — (x, y, z, value), a whole cell each in band 0 of one column —
-/// written into a store, and what it keeps folded at `level` over that
-/// column; with the column's corner in that level's cells.
+/// Whole cells in band 0 of one column, and what the store keeps folded at
+/// `level`, with the column's corner in that level's cells.
 fn folded(cells: &[(u32, u32, u32, u32)], level: u32) -> (HashMap<[i64; 3], u32>, [i64; 2]) {
-    let mut store = Store::new();
+    let mut store = Store::default();
     let col_idx = ivec::gather(1, -1, 0);
     let step = OBJECT_FINEST.count_in(CELL);
     store.write(cells.iter().map(|&(x, y, z, state)| Write {
@@ -276,8 +201,8 @@ fn cube_at(store: &mut Store, [x, y, z]: [i64; 3], state: u32) {
 /// is; checked after every edit, over boxes of every size across zero.
 #[test]
 fn where_the_objects_in_a_box_are_is_never_missed_and_never_past_it() {
-    let mut rng = Rng(0x5851_f42d_4c95_7f2d);
-    let mut store = Store::new();
+    let mut rng = Rng(SplitMix64::new(0x5851_f42d_4c95_7f2d));
+    let mut store = Store::default();
     let red = placeable_cube_num_id(PlaceableCube::Block(Block::red));
     let mut met = 0;
     for step in 0..200 {
@@ -292,9 +217,9 @@ fn where_the_objects_in_a_box_are_is_never_missed_and_never_past_it() {
             let given = store.bound_in(&query);
             met += truth.is_some() as u32;
             match (truth, given) {
-                (Some(t), Some(g)) => assert!(within(&t, &g) && within(&g, &query), "step {step}: {t:?} in {g:?} in {query:?}"),
+                (Some(t), Some(g)) => assert!(g.contains(t) && query.contains(g), "step {step}: {t:?} in {g:?} in {query:?}"),
                 (Some(t), None) => panic!("step {step}: {t:?} in {query:?} missed"),
-                (None, Some(g)) => assert!(within(&g, &query), "step {step}: {g:?} past {query:?}"),
+                (None, Some(g)) => assert!(query.contains(g), "step {step}: {g:?} past {query:?}"),
                 (None, None) => {}
             }
         }
@@ -304,14 +229,14 @@ fn where_the_objects_in_a_box_are_is_never_missed_and_never_past_it() {
 
 #[test]
 fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
-    let mut rng = Rng(0x2c1b_3c6d_a5b4_9f1e);
+    let mut rng = Rng(SplitMix64::new(0x2c1b_3c6d_a5b4_9f1e));
     let red = placeable_cube_num_id(PlaceableCube::Block(Block::red));
     let turn = |[x, y, z]: [i64; 3]| [y, z, x];
     let turn_box = |b: Aabb| Aabb {
         min: [b.min[1], b.min[2], b.min[0]],
         max: [b.max[1], b.max[2], b.max[0]],
     };
-    let mut stores = [Store::new(), Store::new(), Store::new()];
+    let mut stores = [Store::default(), Store::default(), Store::default()];
     for _ in 0..300 {
         let at = [0, 1, 2].map(|_| (rng.next() % 300) as i64 - 150);
         let state = rng.pick(&[red, red, AIR, VOID]);
@@ -326,5 +251,25 @@ fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
         let given = stores[0].bound_in(&query);
         assert_eq!(stores[1].bound_in(&turn_box(query)), given.map(turn_box), "{query:?}");
         assert_eq!(stores[2].bound_in(&turn_box(turn_box(query))), given.map(|b| turn_box(turn_box(b))), "{query:?}");
+    }
+}
+
+/// Painted as sub-cells, the mesher would draw a box each.
+#[test]
+fn a_paint_finer_than_a_cube_takes_it_whole() {
+    let mut store = Store::default();
+    let col_idx = ivec::gather(1, -1, 0);
+    let step = OBJECT_FINEST.count_in(CELL);
+    store.write([Write {
+        col_idx,
+        band_idx: 0,
+        at: [3 * step, 4 * step, 5 * step],
+        scale: CELL,
+        state: red(),
+    }]);
+    for target in [OBJECT_FINEST.up(1), CELL.down(1)] {
+        let mut out = Vec::new();
+        store.fold_entries(col_idx, target, None, &mut |band, at, scale, v| out.push((band, at, scale, v)));
+        assert_eq!(out, [(0, [3 * step, 4 * step, 5 * step], CELL, red())]);
     }
 }

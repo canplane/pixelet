@@ -16,9 +16,7 @@ use xpute_runtime::ipc::sys::Sys;
 use xpute_runtime::mem::base::ptr_at;
 
 use crate::abi::host::stream;
-use crate::global::Global;
-
-pub use xpute_runtime::clock::{now, set_clock};
+use xpute_runtime::global::Global;
 
 static SYS: Global<Option<Sys>> = Global::new();
 

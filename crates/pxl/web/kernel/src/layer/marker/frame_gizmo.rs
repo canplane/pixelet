@@ -11,20 +11,20 @@ use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::indexer::{L3_BASE, L3_CENTER};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::v3::{floor3n, V3};
+use pxl_spec::space::v3::{floor3n, len3, V3};
 use pxl_spec::space::xy::TO_XY;
 
-use crate::global::Global;
+use crate::control::camera::controller::{azimuth, dist};
 use crate::kernel::kernel;
 use crate::layer::billboard::field::BILLBOARD_FLOATS;
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::text::text_width;
-use crate::world::access::{Access, FINEST};
+use crate::world::access::Access;
+use crate::world::frame::coord::canonical_to_local;
 use crate::world::change::request_world_tick;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
+use xpute_runtime::global::Global;
 
 const COLOR: V3 = [0.0, 0.0, 0.0];
 const DASH: f64 = 0.3;
@@ -54,10 +54,6 @@ pub struct Sketch {
     pub labels: Vec<Label>,
 }
 
-fn hypot3(v: V3) -> f64 {
-    (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt()
-}
-
 impl Sketch {
     pub fn line(&mut self, from: V3, to: V3) {
         for p in [from, to] {
@@ -66,7 +62,7 @@ impl Sketch {
     }
 
     pub fn dashed(&mut self, from: V3, to: V3) {
-        let len = hypot3([to[0] - from[0], to[1] - from[1], to[2] - from[2]]);
+        let len = len3(&[to[0] - from[0], to[1] - from[1], to[2] - from[2]]);
         if len == 0.0 {
             return;
         }
@@ -155,7 +151,7 @@ impl Sketch {
     pub fn gyro(&mut self, to_local: &dyn Fn(V3) -> V3, vertex: V3, label: &str, show_radius: bool) {
         let horiz = (vertex[0] * vertex[0] + vertex[1] * vertex[1]).sqrt();
         let dir = if horiz > 1e-9 { [vertex[0] / horiz, vertex[1] / horiz, 0.0] } else { [1.0, 0.0, 0.0] };
-        let radius = hypot3(vertex);
+        let radius = len3(&vertex);
         let center = to_local([0.0, 0.0, 0.0]);
         let axis = |v: V3| {
             let p = to_local(v);
@@ -175,10 +171,16 @@ impl Sketch {
     }
 }
 
-/// About the orbit's pivot: the heading frame turns with the orbit, the world's never.
-fn sketch_frames(s: &mut Sketch) {
-    if crate::control::camera::controller::radius() == 0.0 {
-        return;
+fn sketch(map_center: &Pvf3, map_origin: IVec) -> Sketch {
+    let mut s = Sketch::default();
+    let center = canonical_to_local(map_center, map_origin);
+    let ground = Access::now().floor_under(map_center).value().map(|top| local_height(top, map_origin));
+    let cell = floor3n(&[center[0], center[1], ground.unwrap_or(0.0)], U_PER_CELL);
+    s.cube(cell, U_PER_CELL);
+    s.point(center, BLACK);
+    // First person the eye is the map center, and nothing about it is seen.
+    if dist() == 0.0 {
+        return s;
     }
     let Some(pivot) = crate::control::camera::controller::center_local() else { return };
     let (sin, cos) = (-crate::control::camera::controller::camera().yaw).sin_cos();
@@ -189,15 +191,11 @@ fn sketch_frames(s: &mut Sketch) {
     s.gyro(&world_frame, [0.0, RING_RADIUS, 0.0], "north (world)", true);
 }
 
-fn local_of(p: &Pvf3, map_origin: IVec) -> V3 {
-    crate::world::frame::coord::canonical_to_local(p, map_origin)
-}
-
 fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
     let mut s = Sketch::default();
 
-    let raw_v = local_of(map_center, map_origin);
-    let ground = |at: &Pvf3| Access::now().at(at, FINEST).value().map(|g| crate::world::frame::coord::local_height(g.top, map_origin));
+    let raw_v = canonical_to_local(map_center, map_origin);
+    let ground = |at: &Pvf3| Access::now().floor_under(at).value().map(|top| crate::world::frame::coord::local_height(top, map_origin));
     let gnd_v = [raw_v[0], raw_v[1], ground(map_center).unwrap_or(0.0)];
     let mut quant_v = [0.0; 3];
     floor3n(&gnd_v, U_PER_CELL, &mut quant_v);
@@ -217,7 +215,7 @@ fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
         if let Some(top) = ground(&at) {
             let mut grounded = at;
             pvf3::gather(&mut grounded, pvf3::X(&at), pvf3::Y(&at), pvf3::Z(&at) + pvf3::from_real(top));
-            s.r#box(local_of(&grounded, map_origin), 1.0, Some(label));
+            s.r#box(canonical_to_local(&grounded, map_origin), 1.0, Some(label));
         }
     }
     s.point(raw_v, Some("map_center"));
@@ -330,7 +328,7 @@ pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>, map_origin: IVec)
         }
         return;
     };
-    let key = (center, map_origin, Terrain::pyramid().revision(), crate::control::camera::controller::camera().yaw);
+    let key = (center, map_origin, Terrain::pyramid().paging().revision(), crate::control::camera::controller::heading());
     if g.built_for == Some(key) {
         write_labels(g);
         return;
@@ -338,7 +336,7 @@ pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>, map_origin: IVec)
     g.built_for = Some(key);
     let mut s = sketch_map(&center, map_origin);
     sketch_frames(&mut s);
-    let origin = [ivec::to_real(ivec::X(map_origin)), ivec::to_real(ivec::Y(map_origin)), ivec::to_real(ivec::Z(map_origin))];
+    let origin = ivec::to_v3(map_origin);
     set_lines(origin, &s.vertices);
     g.drawn = s;
     g.shown = true;

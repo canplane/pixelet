@@ -19,7 +19,7 @@ import { keepKeyboard } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
 import { alpha, chrome, color, material, shadow } from "@/shared/ui/theme.ts";
 import { useAppContext } from "@/app/provider/context.ts";
-import { useInHand, useUiStore } from "@/app/store/ui-store.ts";
+import { useInHand, useUiStore } from "@/app/store/ui.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { decorName, type PlaceableCube, placeableCubeId } from "@/catalog/cell/mod.ts";
 import { useKernel } from "@/kernel/shell.ts";
@@ -246,7 +246,7 @@ export function ModeBar() {
     }),
   ).current;
   const activeTool = useUiStore((s) => s.activeTool);
-  const set_activeTool = useUiStore.getState().set_activeTool;
+  const setActiveTool = useUiStore.getState().setActiveTool;
   const recentPicks = useUiStore((s) => s.recentPicks);
   const appendChatLine = useUiStore.getState().appendChatLine;
   const setObjectTier = useUiStore.getState().setObjectTier;
@@ -369,10 +369,10 @@ export function ModeBar() {
               style={[styles.strip, { maxWidth: room }, paletteExpanded ? styles.pass : styles.block]}
             >
               <View style={styles.group}>
-                <ToolButton label={t("map.mode_bar.pointer")} active={activeTool === ActiveTool.Pointer} onPress={() => set_activeTool(ActiveTool.Pointer)}>
+                <ToolButton label={t("map.mode_bar.pointer")} active={activeTool === ActiveTool.Pointer} onPress={() => setActiveTool(ActiveTool.Pointer)}>
                   <Glyph glyph="hand.point.up.left" size={chrome.glyph} color={activeTool === ActiveTool.Pointer ? STRIP.glyphOn : STRIP.glyph} />
                 </ToolButton>
-                <ToolButton label={t("map.mode_bar.eraser")} active={activeTool === ActiveTool.Eraser} onPress={() => set_activeTool(ActiveTool.Eraser)}>
+                <ToolButton label={t("map.mode_bar.eraser")} active={activeTool === ActiveTool.Eraser} onPress={() => setActiveTool(ActiveTool.Eraser)}>
                   <Glyph glyph="eraser" size={chrome.glyph} color={activeTool === ActiveTool.Eraser ? STRIP.glyphOn : STRIP.glyph} />
                 </ToolButton>
               </View>

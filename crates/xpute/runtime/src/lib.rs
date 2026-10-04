@@ -6,7 +6,6 @@
 pub mod abi;
 pub mod clock;
 pub mod global;
-pub mod io;
 pub mod ipc;
 pub mod mem;
 pub mod sched;

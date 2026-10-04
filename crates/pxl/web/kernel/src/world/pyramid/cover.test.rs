@@ -109,8 +109,8 @@ fn places() -> (Vec<IVec>, Vec<(LevelPage, PoiPage)>) {
 /// None where only a non-settling page over the chunk is resident: it draws
 /// the ground but does not say what stands there.
 fn count(pyramid: &Pyramid<PoiPage>, c: Chunk) -> Option<u32> {
-    let src = pyramid.source(c.page())?;
-    let page = pyramid.get(src).expect("a source is resident");
+    let src = pyramid.paging().source(c.page())?;
+    let page = pyramid.paging().get(src).expect("a source is resident");
     page.cells
         .iter()
         .filter(|x| {
@@ -194,7 +194,7 @@ fn ground_a_page_settles_is_drawn_from_it_and_never_asked_for() {
     assert!(cover.gaps.is_empty(), "{} gaps", cover.gaps.len());
     assert!(disjoint(&cover.drawn));
     for &c in &cover.drawn {
-        assert!(pyramid.source(c.page()).is_some_and(|s| s.level == TOP_LEVEL), "{c:?} is drawn from the page at the top");
+        assert!(pyramid.paging().source(c.page()).is_some_and(|s| s.level == TOP_LEVEL), "{c:?} is drawn from the page at the top");
     }
     for p in read_by_rule(&d).into_iter().filter(|p| p.level < TOP_LEVEL) {
         assert!(pyramid.paging().settled(p), "{p:?} is settled, so never asked for");
@@ -217,7 +217,7 @@ fn ground_whose_page_has_not_come_is_drawn_in_its_place_from_the_page_over_it() 
     drawn.sort_unstable();
     assert_eq!(drawn, wanted, "the chunks the rule wants, each in its own place");
     for &c in &cover.drawn {
-        let from = pyramid.drawn_from(c.page()).expect("drawn from a page");
+        let from = pyramid.paging().drawn_from(c.page()).expect("drawn from a page");
         assert!(from.level >= 5.max(c.level()), "{c:?} drawn from {from:?}");
     }
 }

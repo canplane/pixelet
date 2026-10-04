@@ -6,19 +6,22 @@
 //! candidate out at build time.
 
 use pxl_render::gpu::api::word_bytes;
-use pxl_render::look::lod::{LodStep, TARGET_CELL_PX};
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
 use pxl_render::mesh::voxel_scan::apron_col;
 use pxl_spec::bake::constant::{unpack_pos, U_PER_CELL};
 use pxl_spec::cell::object::decor_num_id;
 use pxl_spec::cell::DecorId;
-use pxl_spec::space::hierarchy::child_of;
+use pxl_spec::procedural::{scatter, scatter_at, Candidate, MASTER_SEED};
+use pxl_spec::space::lod::target_cell_px;
 use pxl_spec::space::pvf3::ivec::{gather, IVec};
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
 use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
 use std::collections::HashMap;
 
+use pxl_spec::cell::cube_types;
+
+use crate::global::Global;
 use crate::layer::decor::instance::{DecorScratch, GroupLanes, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
 use crate::layer::decor::kind::DecorKindDef;
 use crate::layer::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
@@ -80,22 +83,22 @@ pub struct DecorKindBundle {
     pub extent: f64,
 }
 
-/// NaN is kept rather than dropped.
+/// The largest of `values`, a NaN kept rather than dropped.
 fn largest(values: impl Iterator<Item = f64>) -> f64 {
     values.fold(0.0, |a: f64, b| if a.is_nan() || b.is_nan() { f64::NAN } else { a.max(b) })
 }
 
+/// The largest dimension of a variant's model, in world units: how large the
+/// variant is to the eye, which is what decides how an instance of it is
+/// drawn (layer/decor/cell.rs `present`).
 pub fn variant_extent(v: &DecorVariantAsset) -> f64 {
     largest(v.model.ingested().extent.unwrap_or([0.0; 3]).into_iter())
 }
 
+/// Binds a kind's seed and rules to its variants, and measures the kind's
+/// extent over all of them.
 pub fn bind_models(def: &DecorKindDef) -> DecorKindBundle {
-    // A NaN extent stays NaN rather than being dropped.
-    let extent = def
-        .variants
-        .iter()
-        .flat_map(|v| v.model.ingested().extent.unwrap_or([0.0; 3]))
-        .fold(0.0, |a: f64, b| if a.is_nan() || b.is_nan() { f64::NAN } else { a.max(b) });
+    let extent = largest(def.variants.iter().map(variant_extent));
     DecorKindBundle {
         seed: def.seed,
         rules: def.rules,
@@ -107,17 +110,19 @@ pub fn bind_models(def: &DecorKindDef) -> DecorKindBundle {
 
 static KINDS: Global<Vec<Kind>> = Global::new();
 
-/// In taught order, which is the order of the groups in every decor block.
+/// The decor kinds, in the order they were taught — the order of the groups
+/// in every decor block.
 pub fn kinds() -> &'static [Kind] {
     KINDS.get(Vec::new)
 }
 
-/// One group per variant, kinds in bundle order.
+/// Teaches every kind, in bundle order — the order of the groups in the
+/// decor blocks: each kind's variants in variant order, one group a variant.
 pub fn teach_decor_kinds(bundles: &[&DecorKindBundle]) {
-    let sched = &mut kernel().sched;
-    sched.decor_forget();
+    let kinds = KINDS.get(Vec::new);
+    kinds.clear();
     for bundle in bundles {
-        sched.decor_kind(Kind {
+        kinds.push(Kind {
             tag: bundle.seed.tag,
             density: bundle.seed.density,
             variant_count: bundle.variants.len() as u32,
@@ -264,7 +269,7 @@ pub fn draw(kind: &Kind, cells: &[GroundCell], lines: &Decks, level: u32, at: [i
 pub fn scatters_at(value: u32, at: &Pvf3) -> Option<Draw> {
     let kind = kinds().iter().find(|k| k.decor_value == Some(value))?;
     let z16 = GROUND.cell_of(0, at);
-    let page = Terrain::pyramid().get(z16.page())?;
+    let page = Terrain::pyramid().paging().get(z16.page())?;
     let ground = Access::now().at(at, FINEST).exact()?;
     let [ix, iy, iz] = CELL.index_of(at);
     (iz == (ground.top / CELL.side()).round() as i64).then(|| draw(kind, &page.ground.cells, &page.decks, 0, [ix, iy], z16.in_page()))?
@@ -454,7 +459,3 @@ impl<'s> DecorBuild<'s> {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "build.test.rs"]
-mod test;

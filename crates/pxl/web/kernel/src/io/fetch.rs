@@ -23,19 +23,16 @@
 use core::fmt;
 
 use xpute_core::status::errno::Errno;
-use xpute_runtime::abi::fetch::FetchFail;
 use xpute_runtime::ipc::sys::Fd;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free, Block};
 use xpute_runtime::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 
-use crate::global::Global;
-use crate::host::now;
 use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::io::file::{self, Owner};
 use crate::io::sched::{attempt_of, settle};
-use crate::layer::geocode::{repository as geocode_repository, store as geocode_store};
-use crate::layer::terrain::page::{adopt_ocean, OCEAN_KEY};
+use crate::layer::geocode::store as geocode_store;
+use crate::layer::terrain::page::OCEAN_KEY;
 use crate::sched::profiler::record::{Failure, Outcome};
 use crate::world::change::world_edge;
 use crate::world::pyramid::Layer;
@@ -44,6 +41,8 @@ use pxl_spec::bake::place_page::group_name;
 use pxl_spec::bake::poi_page::PoiPage;
 use pxl_spec::bake::quadkey::page_name;
 use pxl_spec::space::pyramid::LevelPage;
+use xpute_runtime::clock::now;
+use xpute_runtime::global::Global;
 
 /// A started attempt's object, named inside its bake — the path it is opened
 /// at. Which bake is `Category::bake`, the root it is opened below.
@@ -140,24 +139,20 @@ pub fn opened(fd: Fd, key: u64, at_ms: f64, res: i32, detail: u32) {
         Got::Read(Some(block))
     } else {
         file::close(fd);
-        Got::Failed(FetchFail::NoRoom.into())
+        Got::Failed(Errno::ENOMEM.into())
     };
     arrived().push(Arrival { key, got, net_ms: now() - at_ms });
     arrivals().notify();
 }
 
-/// Why an open did not give a file, as the profiler counts it.
+/// What an open that did not give a file says: an object that is not there,
+/// or the errno it failed with, as the profiler counts it.
 fn failure(res: i32, detail: u32) -> Got {
-    let fail = match res {
-        r if r == Errno::ENOENT as i32 => return Got::Absent,
-        r if r == Errno::EACCES as i32 => FetchFail::Refused,
-        r if r == Errno::ENETUNREACH as i32 || r == Errno::ECONNREFUSED as i32 => FetchFail::Network,
-        r if r == Errno::EBADMSG as i32 => FetchFail::Decode,
-        r if r == Errno::ENOMEM as i32 => FetchFail::NoRoom,
-        _ => FetchFail::Shell,
-    };
+    if res == Errno::ENOENT as i32 {
+        return Got::Absent;
+    }
     Got::Failed(Failure {
-        fail,
+        errno: res,
         detail: detail as u16,
         at: None,
     })
@@ -185,7 +180,7 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
         Got::Read(block) => block,
         _ => None,
     };
-    // A key the scheduler does not hold is one a reset forgot.
+    // A key the request scheduler does not hold is one a reset forgot.
     let Some((category, subject)) = attempt_of(key) else {
         release(block);
         return;
@@ -212,16 +207,20 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
     settle(key, outcome, Some(phases), fail);
 }
 
-/// Open water for a terrain page, no label for a geocode group. The ocean
-/// tile must exist, so its absence is a fault.
+/// There is no such object. What that means is the category's: open water
+/// for a terrain page, no label for a geocode group. POI snapshots must exist.
+/// The shared ocean tile and the dictionary are the two that must exist, so
+/// their absence is a fault.
 fn absent(category: Category, subject: u64) -> Result<(), Errno> {
     match category {
-        Category::terrain => Terrain::absent(LevelPage::of_subject(subject)),
-        Category::poi => PoiPage::absent(LevelPage::of_subject(subject)),
-        Category::geocode => geocode_store::set_group(subject, None),
+        Category::terrain => Terrain::pyramid().absent(LevelPage::of_subject(subject)),
+        Category::poi => PoiPage::pyramid().absent(LevelPage::of_subject(subject)),
+        Category::geocode => geocode_store::absent_group(subject),
         // A bake with no dictionary names nothing: an answer, so not asked again.
         Category::geocode_dict => geocode_store::set_dict(None),
         Category::ocean => return Err(Errno::ENOENT),
+        // An asset's read is settled where it is asked for (io/load.rs) and
+        // never arrives here.
         Category::asset => return Err(Errno::ENOTRECOVERABLE),
     };
     Ok(())
@@ -229,7 +228,8 @@ fn absent(category: Category, subject: u64) -> Result<(), Errno> {
 
 /// The block is released here unless the page keeps it.
 fn adopt(category: Category, subject: u64, block: Option<Block>, phases: &mut Phases) -> Result<(), Failure> {
-    // Only `absent` says there is none; an empty read is not an object.
+    // A read that answered with nothing is not an object; only `absent` says
+    // there is none, and it carries no body.
     let Some(b) = block else { return Err(Errno::EBADMSG.into()) };
     match category {
         Category::terrain => {
@@ -238,7 +238,7 @@ fn adopt(category: Category, subject: u64, block: Option<Block>, phases: &mut Ph
             result
         }
         Category::ocean => {
-            let result = adopt_ocean(view(b));
+            let result = Terrain::pyramid().adopt_shared(view(b), phases);
             release(block);
             result
         }
@@ -259,6 +259,7 @@ fn adopt(category: Category, subject: u64, block: Option<Block>, phases: &mut Ph
                 Err(err.into())
             }
         },
+        // As `absent`: an asset never arrives here.
         Category::asset => Err(Errno::ENOTRECOVERABLE.into()),
         Category::geocode_dict => match unsafe { geocode_repository::open_dict(b.0, b.1) } {
             Ok(resident) => {

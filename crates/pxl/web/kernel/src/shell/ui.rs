@@ -1,6 +1,6 @@
 // pxl-kernel/shell/ui.rs
 
-//! What the compass and the scale bar read of the kernel.
+//! The compass's press and the view's scale.
 
 pub mod compass;
-pub mod scale_bar;
+pub mod scale;

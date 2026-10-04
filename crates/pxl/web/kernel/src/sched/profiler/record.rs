@@ -10,18 +10,18 @@ use core::mem::{offset_of, size_of};
 use core::panic::Location;
 use std::collections::HashMap;
 
+use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
-use xpute_runtime::abi::fetch::FetchFail;
 use xpute_runtime::mem::base::off_of_slice;
 use xpute_runtime::mem::section::span_of;
 
-use crate::global::Global;
-use crate::host::now;
 use crate::io::demand::{DemandKey, Phases};
 use crate::mem::fixed::{lane, range, Range};
 use crate::sched::profiler::log::PENDING;
 use crate::sched::profiler::spec::{FRAME, GPU_SPAN_NAMES, LIMITS, PHASE_NAMES, SUMMARY, TASK, WORST};
-use crate::sched::tick::PHASES;
+use xpute_runtime::clock::now;
+use xpute_runtime::global::Global;
+use xpute_runtime::sched::tick::PHASES;
 
 pub use crate::sched::profiler::spec::OutcomeName as Outcome;
 pub use crate::sched::profiler::spec::CENSUS_TAGS;
@@ -39,21 +39,28 @@ pub struct TaskRecord {
     pub fail: Failure,
 }
 
-/// Why a task failed, as numbers the summary can count by. A kernel-made
-/// failure carries its source location: EBADMSG alone does not say which
-/// rule a body broke.
+/// Why a task failed: the errno it failed with — the host's, as an open's
+/// answer carries it, or the kernel's own — and whatever number the host
+/// refused with beside it. Two numbers, so a record is a row of plain values
+/// and the summary counts by them rather than by prose — the words for an
+/// errno are the shell's, as `strerror` is libc's. What `detail` means is
+/// the host's too: nothing here reads it, and it exists to be printed.
+///
+/// A failure the kernel made carries where it made it, which a decode fault
+/// needs: EBADMSG says a body was wrong and not which rule it broke.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Failure {
+    /// 0 where nothing failed.
     pub errno: i32,
     pub detail: u16,
     pub at: Option<&'static Location<'static>>,
 }
 
-impl From<FetchFail> for Failure {
+impl From<Errno> for Failure {
     #[track_caller]
-    fn from(fail: FetchFail) -> Failure {
+    fn from(errno: Errno) -> Failure {
         Failure {
-            fail,
+            errno: errno as i32,
             detail: 0,
             at: Some(Location::caller()),
         }
@@ -63,7 +70,7 @@ impl From<FetchFail> for Failure {
 impl From<MarshalError> for Failure {
     fn from(err: MarshalError) -> Failure {
         Failure {
-            fail: FetchFail::Decode,
+            errno: err.errno as i32,
             detail: 0,
             at: Some(err.at),
         }
@@ -71,11 +78,12 @@ impl From<MarshalError> for Failure {
 }
 
 impl fmt::Display for Failure {
+    /// `errno -13 503`: the numbers, as the record holds them.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.fail {
-            FetchFail::None => Ok(()),
-            FetchFail::Refused => write!(f, "refused {}", self.detail),
-            fail => f.write_str(fail.as_str()),
+        match (self.errno, self.detail) {
+            (0, _) => Ok(()),
+            (errno, 0) => write!(f, "errno {errno}"),
+            (errno, detail) => write!(f, "errno {errno} {detail}"),
         }
     }
 }
@@ -94,6 +102,7 @@ pub struct TaskRow {
     pub start_ms: f64,
     pub end_ms: f64,
     pub outcome: f64,
+    /// The errno, and the host's own number beside it.
     pub fail: f64,
     pub detail: f64,
     /// Failure location: file name address and length, and line. 0 when the host raised it.
@@ -115,7 +124,7 @@ impl TaskRow {
             start_ms: rec.start_ms.unwrap_or(f64::NAN),
             end_ms: rec.end_ms,
             outcome: rec.outcome as u32 as f64,
-            fail: rec.fail.fail as u32 as f64,
+            fail: rec.fail.errno as f64,
             detail: rec.fail.detail as f64,
             ..TaskRow::default()
         };
@@ -398,6 +407,7 @@ const _: () = assert!(PHASE_NAMES.len() == PHASES.len(), "profiler.json names th
 pub const GPU_SPANS: usize = GPU_SPAN_NAMES.len();
 pub const LEVELS: usize = LIMITS::LEVELS as usize;
 
+/// A mebibyte, which the samples count memory in.
 pub const MB: f64 = 1_048_576.0;
 const _: () = assert!(GPU_SPANS == pxl_render::gpu::renderer::GPU_SPANS.len(), "profiler.json names the renderer's spans");
 
@@ -559,14 +569,12 @@ fn profiler() -> &'static mut Profiler {
     })
 }
 
-pub fn profiler_truncated() -> bool {
-    profiler().truncated
-}
-
 pub fn profiler_set_sink(sink: Option<ProfilerSink>) {
     profiler().sink = sink.unwrap_or_default();
 }
 
+/// Whether a recording is open, which is the only time a frame sample is
+/// kept.
 pub fn profiler_recording() -> bool {
     profiler().recording
 }
@@ -689,10 +697,15 @@ pub fn profiler_record_frame(s: FrameSample) {
     }
 }
 
-/// The frame just recorded, so `task_ms`, known only after the turn, lands
-/// in the right frame. None once recording stopped.
+/// The frame sample just recorded, so a late-arriving measurement (task_ms,
+/// which is only known once the turn is over) can be written into the frame it
+/// belongs to instead of being attributed to the next one. None once
+/// recording has stopped, since a stopped recording is frozen for export.
 pub fn profiler_last_frame() -> Option<&'static mut FrameSample> {
     let l = profiler();
+    if !l.recording {
+        return None;
+    }
     l.frame_ring[..l.frame_len].last_mut()
 }
 

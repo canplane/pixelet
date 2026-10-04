@@ -4,12 +4,12 @@
 //! place by the panel and the report so both agree. Sections go only through
 //! `put`; indexing lanes by hand let sections drift out of order (2026-09-23).
 
-use crate::control::camera::controller;
+use xpute_runtime::global::Global;
+use xpute_runtime::clock::now;
 use crate::io::sched::{counts, credits};
 use crate::kernel::{kernel, with_world};
 use crate::layer::billboard::sheet::billboard_sheet;
-use crate::sched::profiler::block::TASK_PHASES;
-use crate::sched::profiler::block::{AtlasBlock, FetchBlock, FramesBlock, HeapBlock, HeldBlock, QualityBlock, RecBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
+use crate::sched::profiler::block::{AtlasBlock, FetchBlock, FramesBlock, QualityBlock, RecBlock, HeldBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock};
 use crate::sched::profiler::log::window_counters;
 use crate::sched::profiler::record::{fixed_lane, profiler_frame_peak, profiler_frames_since, profiler_recording_state, profiler_tasks_since, put, FrameSample, Lane, Outcome, TaskRow, SPREAD_LIMIT};
 use crate::sched::profiler::spec::{LIMITS, SUMMARY};
@@ -215,20 +215,18 @@ fn side(out: &mut [f64]) {
         },
     );
 
-    let retain = with_world(|_, sched| sched.retention()).unwrap_or_default();
-    let census = kernel().sched.census;
+    let held = with_world(|_, sched| sched.held()).unwrap_or_default();
+    let (decor_cells, decor_instances) = crate::layer::decor::cell::counts();
     put(
         out,
-        SUMMARY::retain::AT,
-        &RetainBlock {
-            run_sets: retain.run_sets as f64,
-            run_set_mb: retain.run_set_mb as f64,
-            tiers: retain.tiers as f64,
-            decor_steps: retain.decor_steps as f64,
-            decor_instances: retain.decor_instances as f64,
-            on_bytes: census.retained_on,
-            off_bytes: census.retained_off,
-            budget_bytes: RETAIN_BUDGET_BYTES(),
+        SUMMARY::held::AT,
+        &HeldBlock {
+            run_sets: held.run_sets as f64,
+            run_set_mb: held.run_set_mb as f64,
+            tiers: held.tiers as f64,
+            decor_cells: decor_cells as f64,
+            decor_instances: decor_instances as f64,
+            decor_bytes: crate::layer::decor::cell::bytes() as f64,
         },
     );
 
@@ -246,7 +244,7 @@ fn side(out: &mut [f64]) {
     let [step, star] = crate::world::quality::reading();
     let paging = Terrain::pyramid().paging();
     let [admitted, evicted] = paging.churn();
-    let [refined, recubed, changes_peak] = kernel().sched.pace();
+    let [refined, retiered, changes_peak] = kernel().sched.pace();
     put(
         out,
         SUMMARY::quality::AT,
@@ -257,7 +255,7 @@ fn side(out: &mut [f64]) {
             admitted: admitted as f64,
             evicted: evicted as f64,
             refined: refined as f64,
-            recubed: recubed as f64,
+            retiered: retiered as f64,
             changes_peak: changes_peak as f64,
         },
     );

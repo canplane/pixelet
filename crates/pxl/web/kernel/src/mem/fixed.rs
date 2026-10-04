@@ -52,15 +52,12 @@
 //!                    moment it is done (world/chunk/build.rs): a mesh has
 //!                    no home in the memory, since the device is where it
 //!                    is drawn from.
-//!   .fixed.surface   the surface each mesh slot's tier is drawn with, a lane
-//!                    a slot (world/chunk/mesh_slot.rs): what a thing standing
-//!                    on the drawn ground reads.
 //!   .fixed.mounts    the chunk table's own (world/chunk/table.rs): who holds
 //!                    each mesh slot and what each is chained to, which slot
 //!                    each mount's chunk is in, the mounts free and the chunks
 //!                    mounted in order, each sized by the slots.
-//!   .fixed.decor     where one chunk's decor is gathered before it is laid
-//!                    into its block (layer/decor/instance.rs).
+//!   .fixed.decor     where one decor cell's instances are gathered before
+//!                    they are laid into its block (layer/decor/instance.rs).
 //!
 //! The renderer's.
 //!
@@ -136,9 +133,8 @@ impl Range {
     }
 }
 
-/// Models registered at most: the companion's, the cases' and decor's, each
-/// bounded where it registers them. None is let go (layer/model/store.rs).
-pub const MODELS_MAX: usize = crate::layer::character::companion::MODELS_MAX + crate::layer::character::preview::MODELS_MAX + crate::layer::decor::asset_store::MODELS_MAX;
+/// None is let go.
+pub const MODELS_MAX: usize = crate::layer::character::variant::MODELS_MAX + crate::layer::decor::asset_store::MODELS_MAX;
 
 /// Actors at once at most: the companion's walkers and a case's on every
 /// surface.

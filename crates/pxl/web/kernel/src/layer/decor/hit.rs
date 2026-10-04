@@ -6,11 +6,11 @@
 
 use pxl_spec::space::indexer::L2_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::chunk_span_of;
-use pxl_spec::space::v3::{Aabb, V3};
+use pxl_spec::space::v3::{cross3, dot3, sub3, Aabb, V3};
 use xpute_runtime::mem::base::ptr_at;
 
 use crate::kernel::kernel;
+use crate::layer::decor::asset_store::decor_bundle_assets;
 use crate::layer::decor::instance::{decor_groups, GroupLanes, NO_ENTRY};
 use crate::layer::object::store::EntryAt;
 use crate::world::chunk::table::Scheduler;
@@ -75,13 +75,16 @@ struct DecorHit {
     pub t: f64,
 }
 
-/// None while it loads.
+/// The model each decor group is drawn with, in group order, none while it
+/// loads.
 fn group_models() -> impl Iterator<Item = Option<u32>> {
     decor_bundle_assets().iter().flat_map(|e| e.models.iter().copied())
 }
 
-/// The largest model's bounding radius at the largest decor size; only for
-/// skipping cells the ray never comes near.
+/// How far past a chunk's own square a placed instance standing in it can
+/// reach, in units: the largest decor model's bounding radius at the largest
+/// size decor is placed at — what the models are, and nothing guessed — only
+/// for skipping chunks the ray never comes near.
 fn decor_reach(sched: &Scheduler) -> f64 {
     let radius = group_models()
         .flatten()
@@ -107,12 +110,8 @@ fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: 
         if !ray_meets_square(&o, &d, tx - DECOR_REACH, ty - DECOR_REACH, tx + CHUNK_W + DECOR_REACH, ty + CHUNK_W + DECOR_REACH, limit) {
             continue;
         }
-        // SAFETY: the block the scheduler wrote at `at`, of the groups it
-        // recorded; every lane read is inside its group's run.
-        let words = unsafe { core::slice::from_raw_parts(ptr_at::<u32>(decor.at as usize), decor.bytes as usize / 4) };
-        for (g, (offset, count)) in decor_groups(words).enumerate() {
-            let Some(Some(model)) = sched.decor_models.get(g) else { continue };
-            let Some(mesh) = sched.models.mesh(*model) else { continue };
+        for ((offset, count), model) in decor_groups(words).zip(group_models()) {
+            let Some(mesh) = model.and_then(|m| sched.models.mesh(m)) else { continue };
             let lanes = GroupLanes {
                 first: offset as usize,
                 count: count as usize,
@@ -137,7 +136,7 @@ fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: 
                 let spin = lane(3, i);
                 let s = lane(4, i) * mesh.scale as f64;
                 let r = mesh.radius as f64 * s;
-                let p = [o[0] - c[0], o[1] - c[1], o[2] - c[2]];
+                let p = sub3(&o, &c);
                 if !ray_meets_sphere(&p, &d, r, limit) {
                     continue;
                 }
@@ -181,8 +180,8 @@ fn ray_meets_square(o: &V3, d: &[f64; 3], x0: f64, y0: f64, x1: f64, y1: f64, li
 
 /// `p` is relative to the sphere's center.
 fn ray_meets_sphere(p: &V3, d: &[f64; 3], r: f64, limit: f64) -> bool {
-    let b = p[0] * d[0] + p[1] * d[1] + p[2] * d[2];
-    let c = p[0] * p[0] + p[1] * p[1] + p[2] * p[2] - r * r;
+    let b = dot3(p, d);
+    let c = dot3(p, p) - r * r;
     if c <= 0.0 {
         return true;
     }
@@ -198,23 +197,23 @@ fn ray_meets_sphere(p: &V3, d: &[f64; 3], r: f64, limit: f64) -> bool {
 fn ray_triangle(o: &[f64; 3], d: &[f64; 3], a: &[f32], b: &[f32], c: &[f32]) -> Option<f64> {
     let e1 = [b[0] as f64 - a[0] as f64, b[1] as f64 - a[1] as f64, b[2] as f64 - a[2] as f64];
     let e2 = [c[0] as f64 - a[0] as f64, c[1] as f64 - a[1] as f64, c[2] as f64 - a[2] as f64];
-    let p = [d[1] * e2[2] - d[2] * e2[1], d[2] * e2[0] - d[0] * e2[2], d[0] * e2[1] - d[1] * e2[0]];
-    let det = e1[0] * p[0] + e1[1] * p[1] + e1[2] * p[2];
+    let p = cross3(d, &e2);
+    let det = dot3(&e1, &p);
     if det.abs() < 1e-12 {
         return None;
     }
     let inv = 1.0 / det;
     let s = [o[0] - a[0] as f64, o[1] - a[1] as f64, o[2] - a[2] as f64];
-    let u = (s[0] * p[0] + s[1] * p[1] + s[2] * p[2]) * inv;
+    let u = dot3(&s, &p) * inv;
     if !(0.0..=1.0).contains(&u) {
         return None;
     }
-    let q = [s[1] * e1[2] - s[2] * e1[1], s[2] * e1[0] - s[0] * e1[2], s[0] * e1[1] - s[1] * e1[0]];
-    let v = (d[0] * q[0] + d[1] * q[1] + d[2] * q[2]) * inv;
+    let q = cross3(&s, &e1);
+    let v = dot3(d, &q) * inv;
     if v < 0.0 || u + v > 1.0 {
         return None;
     }
-    let t = (e2[0] * q[0] + e2[1] * q[1] + e2[2] * q[2]) * inv;
+    let t = dot3(&e2, &q) * inv;
     (t > 0.0).then_some(t)
 }
 

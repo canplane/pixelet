@@ -1,8 +1,21 @@
 // pxl-render/gpu/shadow.rs
 
-//! The sun's shadow map: the world's depth from the sun each frame, orthographic
-//! and 400 units across, so a texel is a fifth of a unit at 2048; any wider and
-//! the shadow reads as blocks. 16 MB at 2048, 4 MB at 1024 on a phone.
+//! The sun's shadow map: the world drawn once more each frame from the sun,
+//! depth only, into a square map over the map center, which every lit pass
+//! then compares its fragments against (shader/shadow.wgsl). The light's frame
+//! is a second frame uniform whose view_proj is the light's, so each pass
+//! draws its depth with its own shader's depth-only vertex entry point, which
+//! places a vertex as the lit one does (frame/shader/record.rs's depth_only).
+//!
+//! Orthographic, 400 units across at the sun's angle, near enough for a texel
+//! to be a fifth of a unit on a 2048 map: further than that the map's texels
+//! grow past a cell and the shadow reads as blocks. What the map costs is its
+//! texels times four bytes, once: 16 MB at 2048, 4 MB at 1024, the phone's.
+//!
+//! The map and its sampler sit at group 0 bindings 1 and 2 in every pass that
+//! reads them. A pass with no shadow — a case, or the depth pass itself, which
+//! cannot read the map it writes — binds a blank map, where every fragment
+//! reads as lit.
 
 use pxl_spec::space::mat4::{mat4, mat4_look_at, mat4_mul, Mat4};
 use pxl_spec::space::v3::V3;
@@ -10,7 +23,7 @@ use pxl_spec::space::v3::V3;
 use crate::frame::shader::record::FRAME_FLOATS;
 use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, texture_usage, word_bytes, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
-use crate::gpu::renderer::{AIR_AT_VERTICES, CAMERA_POS, GLOBE, PLANET, VIEW_PROJ};
+use crate::gpu::renderer::{GLOBE, PLANET, VIEW_PROJ};
 
 const HALF_EXTENT: f64 = 200.0;
 const LIGHT_DISTANCE: f64 = 1200.0;
@@ -85,8 +98,11 @@ impl Shadow {
         [binding, resource::VIEW, self.blank_view, 0, 0, binding + 1, resource::SAMPLER, self.blank_sampler, 0, 0]
     }
 
-    /// The light's frame carries the globe, so a far caster shades the ground it
-    /// stands over on the planet.
+    /// Aims the light from `sun_dir` at `target`, both in the root frame, and
+    /// writes the light's frame — what a depth-only vertex reads of it, the
+    /// view and the frame's curve and globe: the map
+    /// drawn into the shadow is the one the eye sees laid on the planet, or a
+    /// far caster would shade the ground it no longer stands over.
     pub fn aim(&mut self, g: &Gpu, sun_dir: &[f32], target: V3, globe: [f32; 8]) {
         let eye = [
             target[0] + sun_dir[0] as f64 * LIGHT_DISTANCE,
@@ -100,12 +116,8 @@ impl Shadow {
         for (i, v) in self.light_view_proj.iter().enumerate() {
             self.light[VIEW_PROJ + i] = *v as f32;
         }
-        self.light[CAMERA_POS..CAMERA_POS + 3].copy_from_slice(&[eye[0] as f32, eye[1] as f32, eye[2] as f32]);
         self.light[PLANET..PLANET + 4].copy_from_slice(&globe[..4]);
         self.light[GLOBE..GLOBE + 4].copy_from_slice(&globe[4..]);
-        // Depth and nothing else: no vertex takes the air (frame.wgsl's
-        // air_at_vertices).
-        self.light[AIR_AT_VERTICES] = 0.0;
         g.write_buffer(self.light_frame, 0, bytes(&self.light));
     }
 

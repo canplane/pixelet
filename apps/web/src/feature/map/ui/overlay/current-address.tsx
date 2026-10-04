@@ -16,9 +16,9 @@ interface CurrentAddressProps {
 /** Coordinates stand in where the center is in no place (sea, or not yet arrived). */
 export function CurrentAddress(props: CurrentAddressProps) {
   const { label } = props;
-  const center = useKernel((s) => s.map.center);
+  const position = useKernel((s) => s.map.center && coordinates(s.map.center));
 
-  const text = label ?? (center && coordinates(center));
+  const text = label ?? position;
   if (!text) return null;
 
   return (

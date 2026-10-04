@@ -106,7 +106,6 @@ pub enum InputMinor {
     WHEEL = 0x03,
     TRACKING = 0x04,
     VIEW = 0x05,
-    RESET_DIST = 0x06,
     COMPASS_RESET = 0x07,
     GO_TO = 0x08,
     POSE = 0x09,
@@ -114,13 +113,12 @@ pub enum InputMinor {
 }
 
 impl InputMinor {
-    pub const ALL: [InputMinor; 10] = [
+    pub const ALL: [InputMinor; 9] = [
         InputMinor::RECT,
         InputMinor::POINTER,
         InputMinor::WHEEL,
         InputMinor::TRACKING,
         InputMinor::VIEW,
-        InputMinor::RESET_DIST,
         InputMinor::COMPASS_RESET,
         InputMinor::GO_TO,
         InputMinor::POSE,
@@ -228,11 +226,10 @@ impl SurfaceMinor {
 #[repr(u32)]
 pub enum SettingMinor {
     SET = 0x01,
-    TOGGLE = 0x02,
 }
 
 impl SettingMinor {
-    pub const ALL: [SettingMinor; 2] = [SettingMinor::SET, SettingMinor::TOGGLE];
+    pub const ALL: [SettingMinor; 1] = [SettingMinor::SET];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<SettingMinor> {
@@ -462,11 +459,10 @@ pub enum MapStatus {
     Idle = 0,
     Loading = 1,
     Success = 2,
-    Error = 3,
 }
 
 impl MapStatus {
-    pub const ALL: [MapStatus; 4] = [MapStatus::Idle, MapStatus::Loading, MapStatus::Success, MapStatus::Error];
+    pub const ALL: [MapStatus; 3] = [MapStatus::Idle, MapStatus::Loading, MapStatus::Success];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<MapStatus> {
@@ -518,12 +514,6 @@ impl DevicePoseStatus {
 pub enum Message {
     None = 0x0000,
 
-    // ---- 0x01 the world's own state ----
-    MapLoading = 0x0101,
-    MapLoadError = 0x0102,
-    CompanionLoading = 0x0103,
-    WorldReady = 0x0104,
-
     // ---- 0x02 where the device says it is ----
     LocationChecking = 0x0201,
     LocationWeakSignal = 0x0202,
@@ -540,12 +530,8 @@ pub enum Message {
 }
 
 impl Message {
-    pub const ALL: [Message; 15] = [
+    pub const ALL: [Message; 11] = [
         Message::None,
-        Message::MapLoading,
-        Message::MapLoadError,
-        Message::CompanionLoading,
-        Message::WorldReady,
         Message::LocationChecking,
         Message::LocationWeakSignal,
         Message::GeolocationUnsupported,
@@ -595,12 +581,11 @@ pub enum Command {
     SENSOR_ORIENTATION_LOST = 0x120a,
 
     // ---- the host tells the process: its start, its turn, its window, its devices and its input ----
-    /// The shell's boot: what the build is and what the device offers, and what the browser's
-    /// storage kept under host.json's keys.
+    /// The kernel's start: what the platform is, and what it was handed to start with.
     WORLD_BOOT = 0x1001,
     /// The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
     /// phases on what is left of the quota, the fetches within the credits. The turn leaves
-    /// its signals on the completion ring, drawn by the kernel, and last this command's own.
+    /// its signals on the completion ring, drawn by the kernel.
     WORLD_FRAME = 0x1002,
     /// The tab's visibility; the host rings the doorbell for it at once, since a hidden
     /// page gets no frame and hiding is the save's last sure moment.
@@ -636,8 +621,6 @@ pub enum Command {
     PREVIEW_CLOSE = 0x1802,
     /// A setting set from the sheet or the character picker.
     SETTING_SET = 0x1601,
-    /// A toggle's switch.
-    SETTING_TOGGLE = 0x1602,
     /// A line the player said, shown over the character.
     CHAT_SEND = 0x1701,
     /// The tracking button's press, as the button showed it.
@@ -645,8 +628,6 @@ pub enum Command {
     /// Where the camera stands, set outright rather than driven: what the kernel's own
     /// test puts a view at, and what an A/B reads two builds at the same view with.
     INPUT_VIEW = 0x1105,
-    /// The scale bar's press: the default zoom.
-    INPUT_RESET_DIST = 0x1106,
     /// The compass's press: north up.
     INPUT_COMPASS_RESET = 0x1107,
     /// A search result: the map center moved there.
@@ -683,7 +664,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 44] = [
+    pub const ALL: [Command; 39] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
         Command::LOAD_START,
@@ -710,11 +691,9 @@ impl Command {
         Command::PREVIEW_OPEN,
         Command::PREVIEW_CLOSE,
         Command::SETTING_SET,
-        Command::SETTING_TOGGLE,
         Command::CHAT_SEND,
         Command::INPUT_TRACKING,
         Command::INPUT_VIEW,
-        Command::INPUT_RESET_DIST,
         Command::INPUT_COMPASS_RESET,
         Command::INPUT_GO_TO,
         Command::INPUT_POSE,
@@ -751,18 +730,18 @@ pub struct Snapshot<'a> {
     pub compass: CompassState,
     /// Every setting's value by its SettingKey, as SETTING_SET carries one.
     pub settings: &'a [u32],
-    pub scale_bar: ScaleBar,
-    /// The place the map center is in, broad to narrow, already cut at the rung the
-    /// current zoom asks for; empty where the center is in none or the packets it is
-    /// read out of have not arrived.
+    /// The meters a logical pixel spans at the map center, at the camera's distance; 0 where the camera stands there. The scale bar and the place's depth are the shell's to make of it.
+    pub m_per_px: f64,
+    /// The place the map center is in, broad to narrow, every rung of it; empty where
+    /// the center is in none or the packets it is read out of have not arrived.
     pub place: &'a dyn Fn(&mut dyn FnMut(&PlacePart<'_>)),
-    /// The sizes an object places at, in units, coarsest first: the tiers the size flyout offers, one of which the shell holds by its index.
-    pub object_sizes: &'a [f64],
+    /// The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here.
+    pub previews: &'a [u32],
 }
 
 impl Snapshot<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 13;
+    pub const FIELDS: u32 = 12;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.branch(MapState::FIELDS, |w| self.map.write(w));
@@ -775,7 +754,7 @@ impl Snapshot<'_> {
         w.bool(Some(self.zooming));
         w.u32(Some(self.compass as u32));
         w.u32_array(Some(self.settings));
-        w.branch(ScaleBar::FIELDS, |w| self.scale_bar.write(w));
+        w.f64(Some(self.m_per_px));
         let mut n = 0;
         (self.place)(&mut |_| n += 1);
         w.branch(n, |w| {
@@ -783,7 +762,7 @@ impl Snapshot<'_> {
                 w.branch(PlacePart::FIELDS, |w| item.write(w));
             })
         });
-        w.f64_array(Some(self.object_sizes));
+        w.u32_array(Some(self.previews));
     }
 }
 
@@ -792,15 +771,11 @@ pub struct MapState {
     pub is_off_center: bool,
     /// The map center in degrees: what the search measures distance from.
     pub center: Option<LonLat>,
-    /// The L3 page the center falls in: what the area being looked at is announced per.
-    /// Sent because the shell would otherwise need a second implementation of the space
-    /// to reach it.
-    pub page: Option<u64>,
 }
 
 impl MapState {
     /// The children it is written as.
-    pub const FIELDS: u32 = 4;
+    pub const FIELDS: u32 = 3;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.status as u32));
@@ -809,7 +784,6 @@ impl MapState {
             Some(r) => w.branch(LonLat::FIELDS, |w| r.write(w)),
             None => w.no_branch(),
         };
-        w.u64(self.page);
     }
 }
 
@@ -875,34 +849,22 @@ impl OrientationState {
     }
 }
 
-pub struct ScaleBar {
-    pub total_meters: f64,
-    pub bar_width_px: f64,
-}
-
-impl ScaleBar {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 2;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.f64(Some(self.total_meters));
-        w.f64(Some(self.bar_width_px));
-    }
-}
-
 /// One rung of the place, in every language the provider had rather than one resolved
 /// name: the reader's language is the page's, and switching it re-reads a label already
 /// sent.
 pub struct PlacePart<'a> {
+    /// Where the part sits, broadest first (spec/pxl/spec/place.json).
+    pub rank: u8,
     pub name: &'a dyn Display,
     pub names: &'a dyn Fn(&mut dyn FnMut(&PlaceName<'_>)),
 }
 
 impl PlacePart<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 2;
+    pub const FIELDS: u32 = 3;
 
     pub fn write(&self, w: &mut PacketWriter) {
+        w.u8(Some(self.rank));
         w.str_display(self.name);
         let mut n = 0;
         (self.names)(&mut |_| n += 1);
@@ -1109,9 +1071,10 @@ pub struct WorldBoot<'a> {
     /// silence is the only sign of loss; a device's speaks only when the heading turns and
     /// reports a failure itself (SENSOR_ORIENTATION_LOST).
     pub orientation_silence_is_loss: bool,
-    /// The settings as storage kept them, a value a setting in SettingKey's order as the
-    /// snapshot carries them, 0xffffffff for one it kept nothing for.
-    pub settings: &'a [u32],
+    /// What storage keeps of the settings, as it keeps it, empty for none: the kernel's own file
+    /// (host.json's STORAGE_KEYS), handed over unread as a process is handed its environment,
+    /// which the kernel reads and from then on writes itself.
+    pub settings: &'a str,
 }
 
 impl<'a> WorldBoot<'a> {
@@ -1124,7 +1087,7 @@ impl<'a> WorldBoot<'a> {
             orientation: f.at(3)?.get_bool()?,
             orientation_permission: f.at(4)?.get_bool()?,
             orientation_silence_is_loss: f.at(5)?.get_bool()?,
-            settings: f.at(6)?.get_array::<u32>()?,
+            settings: f.at(6)?.get_str_ref()?,
         })
     }
 }
@@ -1166,20 +1129,6 @@ impl WorldFrame {
             seconds: f.at(10)?.get_number()?,
             day_start_ms: f.at(11)?.get_number()?,
         })
-    }
-}
-
-/// Command::WORLD_FRAME's signal.
-pub struct WorldFrameSignal {
-    pub draws: u32,
-}
-
-impl WorldFrameSignal {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 1;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.draws));
     }
 }
 
@@ -1425,21 +1374,6 @@ impl SettingSet {
         Ok(SettingSet {
             key: crate::shell::setting::schema_spec::SettingKey::of(f.at(0)?.get_number()? as u32).ok_or_else(|| unknown())?,
             value: f.at(1)?.get_number()? as u32,
-        })
-    }
-}
-
-/// Command::SETTING_TOGGLE's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct SettingToggle {
-    pub key: crate::shell::setting::schema_spec::SettingKey,
-}
-
-impl SettingToggle {
-    pub fn read(pkt: &[u8]) -> Result<SettingToggle, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(SettingToggle {
-            key: crate::shell::setting::schema_spec::SettingKey::of(f.at(0)?.get_number()? as u32).ok_or_else(|| unknown())?,
         })
     }
 }

@@ -50,32 +50,21 @@ pub fn Y_TO_LAT(y: f64) -> f64 {
 }
 
 /// Longitude wraps, latitude clamps, altitude passes through.
-pub fn to_mercator<'a>(dst: &'a mut G3857, src: &G4326) -> &'a mut G3857 {
-    dst[0] = LNG_TO_X(src[0]);
-    dst[1] = LAT_TO_Y(src[1]);
-    dst[2] = src[2];
-    dst
+pub fn to_mercator(src: &G4326) -> G3857 {
+    [LNG_TO_X(src[0]), LAT_TO_Y(src[1]), src[2]]
 }
 
-pub fn from_mercator<'a>(dst: &'a mut G4326, src: &G3857) -> &'a mut G4326 {
-    dst[0] = X_TO_LNG(src[0]);
-    dst[1] = Y_TO_LAT(src[1]);
-    dst[2] = src[2];
-    dst
+pub fn from_mercator(src: &G3857) -> G4326 {
+    [X_TO_LNG(src[0]), Y_TO_LAT(src[1]), src[2]]
 }
 
-pub fn project<'a>(dst: &'a mut Pvf3, src: &G4326) -> &'a mut Pvf3 {
-    let mut reg: G3857 = [0.0; 3];
-    to_mercator(&mut reg, src);
-    epsg3857::project(dst, reg[0], reg[1], reg[2]);
-    dst
+pub fn project(src: &G4326) -> Pvf3 {
+    let [x, y, z] = to_mercator(src);
+    epsg3857::project(x, y, z)
 }
 
-pub fn unproject(out: &mut G4326, i: IVec, f: FVec) -> &mut G4326 {
-    let mut reg: G3857 = [0.0; 3];
-    epsg3857::unproject(&mut reg, i, f);
-    from_mercator(out, &reg);
-    out
+pub fn unproject(i: IVec, f: FVec) -> G4326 {
+    from_mercator(&epsg3857::unproject(i, f))
 }
 
 /// Great-circle ground distance in metres (haversine), ignoring altitude.
@@ -96,10 +85,8 @@ pub type BBox4326 = [G4326; 2];
 pub fn get_page_bbox(page_idx: IVec) -> BBox4326 {
     let [min_m, max_m] = epsg3857::get_page_bbox(page_idx);
 
-    let mut min: G4326 = [0.0; 3];
-    let mut max: G4326 = [0.0; 3];
-    from_mercator(&mut min, &min_m);
-    from_mercator(&mut max, &max_m);
+    let min = from_mercator(&min_m);
+    let mut max = from_mercator(&max_m);
 
     // A bbox maximum is an exclusive endpoint, so keep +180° rather than
     // letting `from_mercator` turn it into -180°.

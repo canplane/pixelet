@@ -6,15 +6,12 @@
 use xpute_runtime::ipc::doorbell::{DoorLayout, RingLayout};
 use xpute_runtime::ipc::ring::{ring_bytes, slots_bytes};
 
+use crate::mem::section::page_up;
 use crate::mem::spec::{COMPLETION_CAPACITY, DIRECTORY_AT, GLOBAL_BASE, PAGE_BYTES, RING_DESC_AT, RING_SLOT_AT, STACK_BYTES, SUBMISSION_CAPACITY};
 
 /// A packet is at most a page; anything larger crosses by address. A page
 /// is also the buddy's smallest block.
 pub const RING_SLOT_BYTES: u32 = PAGE_BYTES;
-
-const fn page_up(bytes: u32) -> u32 {
-    bytes.div_ceil(PAGE_BYTES) * PAGE_BYTES
-}
 
 const SUBMISSION_DESC_AT: u32 = RING_DESC_AT;
 const COMPLETION_DESC_AT: u32 = SUBMISSION_DESC_AT + page_up(ring_bytes(SUBMISSION_CAPACITY));

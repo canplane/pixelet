@@ -1,4 +1,4 @@
-// @pxl/web/feature/map/ui/overlay/bottom-overlays.tsx
+// @pxl/web/feature/map/ui/overlay/bottom.tsx
 
 import { StyleSheet } from "react-native";
 

@@ -6,7 +6,7 @@
  */
 
 import type { U8Array } from "@xpute/core/abi/array.ts";
-import type { f64 } from "@xpute/core/abi/word.ts";
+import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { Strobe } from "@xpute/runtime/sched/strobe.ts";
 import { Command, encode_world_frame } from "@/kernel/abi/cmd.spec.ts";
 import { CORE, CORE_DOORBELL } from "@/kernel/mem.ts";
@@ -67,7 +67,20 @@ export function start_sched(): void {
     CORE_DOORBELL.send(
       0,
       Command.WORLD_FRAME,
-      encode_world_frame({ width, height, dpr, delta_s, frame_ms: grant.frame_ms, interactive: grant.interactive, credits: NET_CREDITS, ...local_time() }),
+      encode_world_frame({
+        width,
+        height,
+        dpr,
+        delta_s,
+        frame_ms: grant.frame_ms,
+        interactive: grant.interactive,
+        credits: NET_CREDITS,
+        unix_ms,
+        hours,
+        minutes,
+        seconds,
+        day_start_ms: now.getTime(),
+      }),
     );
   }, (run) => requestAnimationFrame(run));
 }

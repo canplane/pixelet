@@ -10,11 +10,11 @@ import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { EFFECT_NAMES } from "./profiler.spec.ts";
-import { n1, pct, tris, valueText } from "./lane.ts";
+import { levelsText, n1, pct, tris, valueText } from "./lane.ts";
 import { BOUND, failText } from "./report.ts";
 import type { FrameSummary, Gauge, Spread } from "./view.ts";
 import { loafSupported, type LongFrame } from "./long-frame.ts";
-import { CORE } from "@/kernel/mem.ts";
+import { kernel_memory } from "@/kernel/shell.ts";
 import { alpha, color, font } from "@/shared/ui/theme.ts";
 
 const CENSUS_ROWS = 5;
@@ -29,11 +29,6 @@ const INTERACTION_WARN_MS = 2;
  * exists to prevent. */
 const STARVED_MS = 10_000;
 
-function levelBits(mask: number): string {
-  const out: number[] = [];
-  for (let k = 0; mask >>> k; k++) if (mask & (1 << k)) out.push(k);
-  return out.length ? out.join("\u00b7") : "-";
-}
 const ATLAS_INITIAL = 1024;
 const ATLAS_SPARSE_PCT = 25;
 
@@ -113,7 +108,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           />
           <Row
             k="slot wait/chained"
-            v={`${round(f.last.slot_waits)}/${round(f.last.slot_chained)} L${levelBits(f.last.slot_wait_levels)}`}
+            v={`${round(f.last.slot_waits)}/${round(f.last.slot_chained)} L${levelsText(f.last.slot_wait_levels)}`}
             warn={f.last.slot_waits > 0}
           />
           {
@@ -162,7 +157,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
             k="pages"
             v={`${f.last.pages_total}${f.last.pages_total > 0 ? ` in L${f.last.pages_by_level.findIndex((n) => n > 0)}..L${f.last.pages_by_level.findLastIndex((n) => n > 0)}` : ""}`}
           />
-          <Row k="core MB" v={`${round(CORE.buffer.byteLength / 1048576)}MB`} />
+          <Row k="core MB" v={`${round(kernel_memory().byteLength / 1048576)}MB`} />
           <Row k="buffers / arena" v={`${f.last.buffers} ${valueText("_mb", f.last.buffer_mb)} / ${valueText("_mb", f.last.arena_mb)}`} />
           <Row k="targets MB" v={`d${f.last.tex_depth_mb} s${f.last.tex_shadow_mb} l${f.last.tex_layers_mb}`} />
           {g.atlas.entries > 0 && <Row k="atlas" v={`${g.atlas.size}px ${g.atlas.entries} ${atlasPct}%`} warn={g.atlas.size > ATLAS_INITIAL && atlasPct < ATLAS_SPARSE_PCT} />}

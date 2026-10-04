@@ -14,3 +14,17 @@ export const key = {
    * every turn's fall. */
   HEAP_ROW: 2147483651 as number,
 } as const;
+
+/** The heap row's words (pxl-kernel door.rs), each a HeapStat field, then its length. */
+export const heap_row = {
+  RANGE: 0 as number,
+  USED: 1 as number,
+  LIVE: 2 as number,
+  RUN: 3 as number,
+  SLOT: 4 as number,
+  LARGEST_FREE: 5 as number,
+  RELEASES: 6 as number,
+  REFUSALS: 7 as number,
+  REQUESTS: 8 as number,
+  WORDS: 9 as number,
+} as const;

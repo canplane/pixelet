@@ -8,8 +8,7 @@ mod apply;
 mod executor;
 pub mod layout;
 
-use crate::abi::cmd::{Command, LoadCancelSignal, LoadStartSignal, Sensor, SensorStartSignal, WorldFrameSignal, WorldSnapshotSignal};
-use crate::global::Global;
+use crate::abi::cmd::{Command, Sensor, SensorStartSignal, WorldSnapshotSignal};
 use crate::host::HeapStat;
 use crate::io::load::LoadKind;
 use crate::kernel::kernel;
@@ -19,6 +18,7 @@ use layout::DOOR_LAYOUT;
 use pxl_render::mesh::volume::Volumes;
 use xpute_core::status::errno::Errno;
 use xpute_core::wire::xtp::PacketWriter;
+use xpute_runtime::global::Global;
 use xpute_runtime::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
 use xpute_runtime::ipc::doorbell::Door;
 use xpute_runtime::ipc::ring::Ring;
@@ -113,7 +113,7 @@ fn host_attached(s: &mut State) {
 
 /// First turn: lays out memory and writes the directory at DIRECTORY_AT.
 fn boot(b: &Bracket) {
-    crate::host::set_clock(b.clock);
+    xpute_runtime::clock::set_clock(b.clock);
     crate::host::set_heap_stat(b.heap_stat);
     crate::host::set_last_words(b.last_words);
     executor::install();
@@ -187,7 +187,7 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
         xpute_runtime::sched::task::poll();
     }
     if take_world_drawn() {
-        post_turn(s);
+        post_shell(s);
     }
     pxl_render::gpu::api::gpu_publish();
     write_heap_row();
@@ -257,8 +257,8 @@ fn post_shell(s: &mut State) {
             None => {}
         },
     });
-    // Taken first: stopping a read settles it, which the scheduler's own
-    // walk over its stops must not be inside.
+    // Collected first: stopping a read settles it, which must not happen inside
+    // the request scheduler's own walk.
     let mut stops = Vec::new();
     take_stops(|key| stops.push(key));
     for key in stops {
@@ -266,14 +266,4 @@ fn post_shell(s: &mut State) {
             raise(Command::LOAD_CANCEL, LoadCancelSignal::FIELDS, |w| LoadCancelSignal { key }.write(w));
         }
     }
-}
-
-/// The end of a frame, the kernel having drawn it: what it asks of the shell,
-/// and last the draws it listed.
-fn post_turn(s: &mut State) {
-    post_shell(s);
-    let signal = WorldFrameSignal {
-        draws: kernel().sched.draw.draw_count(),
-    };
-    raise(Command::WORLD_FRAME, WorldFrameSignal::FIELDS, |w| signal.write(w));
 }

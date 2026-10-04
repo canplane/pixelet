@@ -12,8 +12,8 @@ use pxl_render::gpu::text::{raster_box, Font, Raster};
 use xpute_runtime::mem::base::off_of_slice;
 
 use crate::abi::host::op;
-use crate::global::Global;
 use crate::host::{host_record, turn};
+use xpute_runtime::global::Global;
 
 /// (weight, px bits, max width bits; 0 for one line, text).
 type LayoutKey = (u32, u32, u32, String);

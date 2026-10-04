@@ -4,14 +4,13 @@
 //! case of the variant picker draws one actor in a pass of its own, with a
 //! blank shadow map.
 
-use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED, UNIFORM_FLOATS};
+use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED};
 use crate::frame::shader::record::{PIPELINE_SKINNED_DEPTH, PIPELINE_SKINNED_PREPASS};
-use crate::gpu::api::{object, release, Gpu};
+use crate::gpu::api::{bytes, object, release, Gpu};
 use crate::gpu::api_spec::{address, compare, filter, format};
-use crate::gpu::atmosphere::AIR_WORDS;
-use crate::gpu::pass::model::{draw_model, DrawUniforms, FrameGroups};
+use crate::gpu::pass::model::{draw_models, uniform_of, DrawUniforms, ModelDraw, Stage};
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::{put_f32, skin_group, Blocks};
+use crate::gpu::renderer::{release_skin, skin_group, Blocks};
 
 /// Translation, turn about Z, opacity, scale, padding.
 const DRAW_UNIFORM_BYTES: u32 = 32;
@@ -29,7 +28,6 @@ pub struct SkinnedPass {
     lit: Built,
     depth: Built,
     prepass: Built,
-    groups: FrameGroups,
     sampler: u32,
     uniforms: DrawUniforms,
     skins: [Skin; SKINS],
@@ -37,19 +35,13 @@ pub struct SkinnedPass {
 }
 
 impl SkinnedPass {
-    /// Over `frame_buffer`, a shadow map's entries, the occlusion map's entry
-    /// `ao` and the air's entries; `light` the light's frame and its entries
-    /// where the pass draws into the shadow map too.
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, shadow: [u32; 10], light: Option<(u32, [u32; 10])>, ao: [u32; 5], air: [u32; AIR_WORDS], align: u32) -> SkinnedPass {
-        let lit = pipelines.build(g, PIPELINE_SKINNED, format::CANVAS);
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> SkinnedPass {
         let sampler = object();
         g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::REPEAT, compare::NONE, 1);
         SkinnedPass {
+            lit: pipelines.build(g, PIPELINE_SKINNED, format::CANVAS),
             depth: pipelines.build(g, PIPELINE_SKINNED_DEPTH, format::CANVAS),
             prepass: pipelines.build(g, PIPELINE_SKINNED_PREPASS, format::CANVAS),
-            groups: FrameGroups::new(g, lit.layouts[0], frame_buffer, shadow, light, ao, air),
-            lit,
             sampler,
             uniforms: DrawUniforms::new(DRAW_UNIFORM_BYTES, align),
             skins: [Skin::default(); SKINS],
@@ -57,7 +49,8 @@ impl SkinnedPass {
         }
     }
 
-    /// One not yet arrived is asked for again next frame.
+    /// Model `model`'s skin; the same image again changes nothing, and one not
+    /// yet arrived is asked for again next frame.
     pub fn set_skin(&mut self, g: &Gpu, model: u32, image: u32) {
         let at = self
             .skins
@@ -75,9 +68,7 @@ impl SkinnedPass {
             s.seq = seq;
             return;
         }
-        for id in s.ids.into_iter().rev() {
-            release(id);
-        }
+        release_skin(s.ids);
         let ids = skin_group(g, self.lit.layouts[2], self.sampler, image);
         *s = Skin { model, image, ids, seq };
     }
@@ -86,6 +77,8 @@ impl SkinnedPass {
         self.skins.iter().find(|s| s.model == model && s.ids[2] != 0).map(|s| s.ids[2])
     }
 
+    /// Writes every skinned draw's uniforms in one write: the first six of
+    /// the draw's floats, padded.
     pub fn prepare<'a>(&mut self, g: &Gpu, draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]>, uniforms: &[f32]) {
         self.uniforms.write(g, self.lit.layouts[1], draws.len() as u32, draws, |buf, d| {
             let u = uniform_of(uniforms, d);
@@ -94,6 +87,8 @@ impl SkinnedPass {
         });
     }
 
+    /// The actors into the open pass at `stage`, after `prepare`, under group
+    /// 0 `frame`; `bound` is the group 0 the pass has.
     pub fn draw<'a>(&self, g: &Gpu, pass: u32, draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>, blocks: &mut Blocks, stage: Stage, frame: (u32, &mut u32)) {
         let Some(slots) = self.uniforms.slots() else { return };
         let pipeline = match stage {
@@ -113,14 +108,12 @@ impl SkinnedPass {
         });
     }
 
+    /// Lets go of what the pass made on the device.
     pub fn release(mut self) {
         for s in self.skins {
-            for id in s.ids.into_iter().rev() {
-                release(id);
-            }
+            release_skin(s.ids);
         }
         self.uniforms.release();
-        self.groups.release();
         release(self.sampler);
     }
 }

@@ -7,13 +7,12 @@ pub mod badge;
 pub mod placement;
 
 use pxl_spec::bake::poi_page::{self, PoiPage};
-use pxl_spec::space::pyramid::{LevelPage, TOP_LEVEL};
 
-use crate::global::Global;
 use crate::io::demand::{Category, Phases};
 use crate::sched::profiler::record::Failure;
 use crate::shell::setting::store::settings_store;
 use crate::world::pyramid::{Layer, Pyramid};
+use xpute_runtime::global::Global;
 
 static POI: Global<Pyramid<PoiPage>> = Global::new();
 
@@ -29,13 +28,8 @@ impl Layer for PoiPage {
         Ok(poi_page::decode(pkt)?)
     }
 
-    /// At the top, a page with no places; under it, one the page above settles.
-    fn absent(p: LevelPage) {
-        if p.level < TOP_LEVEL {
-            PoiPage::pyramid().answer_above(p);
-        } else {
-            PoiPage::pyramid().set(p, PoiPage::default());
-        }
+    fn empty() -> Option<PoiPage> {
+        Some(PoiPage::default())
     }
 }
 

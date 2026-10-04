@@ -32,7 +32,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     out.extend(cmd::outputs()?);
     out.extend(setting::outputs()?);
     out.extend(xpute::errno_outputs()?);
-    out.extend(xpute::fetch_outputs()?);
     out.extend(cell::color_outputs()?);
     out.extend(cell::cube_type_outputs()?);
     out.extend(cell::decor_outputs()?);
@@ -43,8 +42,14 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     Ok(out)
 }
 
-/// A JSON value in file order, which numbers enums and orders tables;
-/// `serde_json::Value` sorts its keys.
+// ---- the JSON ----
+
+/// A JSON value with its objects in the order the file writes them, which is
+/// the order a generated enum numbers its members in and a table lists its
+/// rows in. `serde_json::Value` sorts its keys unless a feature every crate
+/// in the workspace would then share says otherwise. A spec whose objects
+/// are records rather than tables — cmd.json, errno.json — is
+/// read into types of its own instead (`read_as`).
 #[derive(Clone, Debug, PartialEq)]
 pub enum Node {
     Null,

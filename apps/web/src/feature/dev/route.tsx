@@ -1,4 +1,4 @@
-// @pxl/web/feature/dev/dev-route.tsx
+// @pxl/web/feature/dev/route.tsx
 
 import { Outlet } from "react-router-dom";
 import type { RouteObject } from "react-router-dom";

@@ -2,11 +2,11 @@
 
 use pxl_render::mesh::paint::object::adapter::Painter;
 use pxl_render::mesh::volume::Volumes;
-use xpute_runtime::ipc::change::{ChangeLog, ChangeLogOptions};
 
-use crate::global::Global;
 use crate::layer::object::store::Store;
+use crate::world::change::Revisions;
 use crate::world::chunk::table::Scheduler;
+use xpute_runtime::global::Global;
 
 pub struct Kernel {
     pub volumes: Option<Volumes>,
@@ -20,14 +20,10 @@ impl Kernel {
     fn new() -> Kernel {
         Kernel {
             volumes: None,
-            objects: Store::new(),
+            objects: Store::default(),
             painter: Painter::new(),
             sched: Scheduler::new(),
-            changes: ChangeLog::new(ChangeLogOptions {
-                topics: crate::world::change::WORLD_TOPICS,
-                capacity: crate::param::JOURNAL_CAPACITY,
-                keys_per_topic: None,
-            }),
+            changes: Revisions::default(),
         }
     }
 }

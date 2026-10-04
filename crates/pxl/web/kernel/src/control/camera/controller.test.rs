@@ -10,7 +10,8 @@
 
 use super::*;
 use crate::control::camera::config::camera_cfg;
-use crate::global::serial;
+use crate::serial;
+use crate::shell::setting::store::OrbitObstacleMode;
 use crate::world::fixture::place;
 
 struct Rng(u64);

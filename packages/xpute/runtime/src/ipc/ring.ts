@@ -5,7 +5,7 @@
 import type { i32, u32 } from "@xpute/core/abi/word.ts";
 import type { U8Array } from "@xpute/core/abi/array.ts";
 import { Errno } from "@xpute/core/status/errno.spec.ts";
-import { MarshalError } from "@xpute/core/status/error.ts";
+import { InvariantError, MarshalError } from "@xpute/core/status/error.ts";
 
 import * as frame from "./frame.ts";
 import { CAPACITY, HEAD, HEADER_WORDS, SLOT_BASE, SLOT_BYTES, TAIL } from "./ring.spec.ts";
@@ -134,10 +134,10 @@ export class Ring {
     const packet_at = this.words[at + frame.PACKET];
     if (packet_at === 0) return null;
     const off = packet_at - this.slot_base;
-    if (off < 0 || off % this.slot_bytes !== 0 || off + 16 > this.slots.byteLength || packet_bytes(this.slots, off) > this.slot_bytes) {
-      throw new MarshalError(Errno.EBADMSG);
-    }
-    return this.slots.subarray(off, off + packet_bytes(this.slots, off));
+    if (off < 0 || off % this.slot_bytes !== 0 || off + 16 > this.slots.byteLength) throw new MarshalError(Errno.EBADMSG);
+    const len = packet_bytes(this.slots, off);
+    if (len > this.slot_bytes) throw new MarshalError(Errno.EBADMSG);
+    return this.slots.subarray(off, off + len);
   }
 
   advance(): void {

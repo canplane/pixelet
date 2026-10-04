@@ -70,7 +70,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                     silence_is_loss: p.orientation_silence_is_loss,
                 },
             });
-            settings_load(p.settings.iter().copied());
+            settings_load(p.settings);
             crate::layer::object::store::load();
             Ok(Some(0))
         }
@@ -130,10 +130,6 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         Command::INPUT_VIEW => {
             let p = abi::InputView::read(packet(pkt)?)?;
             ui::set_view(p.dist, p.polar);
-            applied(s)
-        }
-        Command::INPUT_RESET_DIST => {
-            crate::control::camera::controller::reset_dist();
             applied(s)
         }
         Command::INPUT_COMPASS_RESET => {
@@ -250,10 +246,6 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             settings_store().set_setting(p.key, p.value);
             applied(s)
         }
-        Command::SETTING_TOGGLE => {
-            settings_store().toggle_setting(abi::SettingToggle::read(packet(pkt)?)?.key);
-            applied(s)
-        }
         Command::CHAT_SEND => {
             crate::layer::character::chat_bubble::append_chat_line(abi::ChatSend::read(packet(pkt)?)?.text);
             applied(s)
@@ -321,7 +313,7 @@ fn profiler_read(window_ms: f64) -> u32 {
     use crate::sched::profiler::record::{profiler_frames, profiler_tasks, profiler_worst};
     use crate::sched::profiler::spec::READ;
     // On the heap, not a static: a native build's statics are outside the shell-readable memory.
-    static WORDS: crate::global::Global<Box<[u32; READ::WORDS as usize]>> = crate::global::Global::new();
+    static WORDS: xpute_runtime::global::Global<Box<[u32; READ::WORDS as usize]>> = xpute_runtime::global::Global::new();
     let summary = crate::sched::profiler::summary::profiler_summarize(window_ms);
     let (frames, tasks, worst) = (profiler_frames(), profiler_tasks(), profiler_worst());
     let w = WORDS.get(|| Box::new([0; READ::WORDS as usize]));
@@ -341,7 +333,7 @@ fn profiler_read(window_ms: f64) -> u32 {
 fn profiler_take(s: &mut State) -> u32 {
     use crate::sched::profiler::spec::LOG;
     // On the heap, as READ's words are.
-    static WORDS: crate::global::Global<Box<[u32; LOG::WORDS as usize]>> = crate::global::Global::new();
+    static WORDS: xpute_runtime::global::Global<Box<[u32; LOG::WORDS as usize]>> = xpute_runtime::global::Global::new();
     let (tasks, frames) = crate::sched::profiler::log::profiler_log_rows();
     let w = WORDS.get(|| Box::new([0; LOG::WORDS as usize]));
     w[LOG::tasks_at as usize] = off_of_slice(&raw const *tasks) as u32;

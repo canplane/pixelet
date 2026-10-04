@@ -2,11 +2,11 @@
 
 //! The location puck: an instanced zone of unit boxes and an octahedron beacon.
 
-use crate::frame::draw::{DRAW_WORDS, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, UNIFORM_FLOATS};
+use crate::frame::draw::{PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, UNIFORM_FLOATS};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, Gpu};
 use crate::gpu::api_spec::format;
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::Blocks;
+use crate::gpu::renderer::{Blocks, Draws};
 use crate::look::color::linear_rgb;
 use crate::look::style::marker_colors;
 
@@ -126,6 +126,7 @@ impl PuckPass {
         g.write_buffer(buffer, 0, bytes(&[uniforms[at], uniforms[at + 1], uniforms[at + 2], uniforms[at + 3], c[0], c[1], c[2], night]));
     }
 
+    /// The beacon, opaque; before anything blended.
     pub fn draw_beacon(&self, g: &Gpu, pass: u32, draws: &Draws, uniforms: &[f32]) {
         for d in draws.of(PIPELINE_PUCK_BEACON) {
             self.write_uniform(g, self.beacon_uniform, uniforms, d[3] as usize * UNIFORM_FLOATS, d[1] as f32);
@@ -138,6 +139,7 @@ impl PuckPass {
         }
     }
 
+    /// The zone, blended; with the rest of what is blended.
     pub fn draw_zone(&self, g: &Gpu, pass: u32, draws: &Draws, uniforms: &[f32], blocks: &mut Blocks) {
         for d in draws.of(PIPELINE_PUCK_ZONE).filter(|d| d[1] > 0) {
             let Some(group) = blocks.group(g, d[0], self.zone.layouts[2]) else { continue };

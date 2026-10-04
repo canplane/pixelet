@@ -11,7 +11,7 @@ import { ActiveTool, Command, encode_input_pointer, encode_input_rect, encode_in
 import type { GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
 import { permissionFollow } from "@platform/sensor.ts";
 import { CORE_DOORBELL } from "@/kernel/mem.ts";
-import { request_frame, ring_now, set_driver, strobe, type Viewport } from "@/kernel/sched.ts";
+import { request_frame, ring_now, send_input, set_driver, strobe, type Viewport } from "@/kernel/sched.ts";
 
 interface Holding {
   tool: ActiveTool;
@@ -25,9 +25,7 @@ let last_hover: { kind: PointerKind; id: i32; button: i32; x: f64; y: f64 } | nu
 
 function send_pointer(phase: PointerPhase, kind: PointerKind, id: i32, button: i32, x: f64, y: f64): void {
   const { tool, channel, value, tier } = holding;
-  CORE_DOORBELL.send(0, Command.INPUT_POINTER, encode_input_pointer({ phase, kind, id, button, x, y, tool, channel, value, tier }));
-  strobe.input();
-  request_frame();
+  send_input(Command.INPUT_POINTER, encode_input_pointer({ phase, kind, id, button, x, y, tool, channel, value, tier }));
 }
 
 export function kernel_pointer(phase: PointerPhase, kind: PointerKind, id: i32, button: i32, x: f64, y: f64): void {
@@ -36,9 +34,7 @@ export function kernel_pointer(phase: PointerPhase, kind: PointerKind, id: i32, 
 }
 
 export function kernel_wheel(delta_y: f64): void {
-  CORE_DOORBELL.send(0, Command.INPUT_WHEEL, encode_input_wheel({ delta_y }));
-  strobe.input();
-  request_frame();
+  send_input(Command.INPUT_WHEEL, encode_input_wheel({ delta_y }));
 }
 
 export function kernel_rect(left: f64, top: f64, width: f64, height: f64): void {

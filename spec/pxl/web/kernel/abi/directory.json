@@ -19,5 +19,20 @@
         "every turn's fall."
       ]
     }
+  },
+
+  "heap_row": {
+    "$type": "u32",
+    "$doc": ["The heap row's words (pxl-kernel door.rs), each a HeapStat field, then its length."],
+    "RANGE": 0,
+    "USED": 1,
+    "LIVE": 2,
+    "RUN": 3,
+    "SLOT": 4,
+    "LARGEST_FREE": 5,
+    "RELEASES": 6,
+    "REFUSALS": 7,
+    "REQUESTS": 8,
+    "WORDS": 9
   }
 }

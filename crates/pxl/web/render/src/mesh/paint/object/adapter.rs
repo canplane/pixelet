@@ -6,7 +6,7 @@ use std::collections::HashSet;
 
 use pxl_spec::bake::constant::{band_cell_z, in_cell, unpack_pos, BandZ, CellZ, EntryAt, CELL, CELL_STEPS};
 use pxl_spec::cell::cube_types;
-use pxl_spec::cell::object::{decor_ids, decor_num_id, object_value_is_voxel, placeable_cube_num_id, placeable_cubes};
+use pxl_spec::cell::object::{decor_ids, decor_num_id, placeable_cube_num_id, placeable_cubes};
 
 use crate::mesh::paint::object::material::solid_material;
 use pxl_spec::space::pvf3::ivec::IVec;
@@ -117,10 +117,6 @@ impl Painter {
             Kind::Solid => Some((self.materials[state as usize], self.layers[state as usize])),
             _ => None,
         }
-    }
-
-    pub fn is_voxel(&self, state: u32) -> bool {
-        object_value_is_voxel(state)
     }
 
     fn kind(&self, state: u32) -> Kind {

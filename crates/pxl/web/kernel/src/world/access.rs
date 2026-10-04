@@ -10,23 +10,28 @@
 //! lane's bounds instead, since a coarse drawn surface can sit below a peak.
 
 use pxl_render::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
-use pxl_spec::bake::constant::{CellZ, CELL, U_PER_CELL};
-use pxl_spec::bake::format::Terrain;
-use pxl_spec::bake::pack::GroundCell;
+use pxl_spec::bake::constant::{CellZ, CELL, CELL_STEPS, OBJECT_FINEST, U_PER_CELL};
+use pxl_spec::bake::deck::Occupies;
+use pxl_spec::bake::fold::majority;
+use pxl_spec::bake::format::{drawn, Terrain};
+use pxl_spec::bake::ground::shown_ground;
+use pxl_spec::bake::pack::{channel_of, GroundCell};
 use pxl_spec::cell::object::{object_value_is_air, object_value_is_decor, object_value_is_voxel};
-use pxl_spec::space::hierarchy::Scale;
+use pxl_spec::procedural::{pier_stands, Frame};
+use pxl_spec::space::adapter::epsg3857::u_per_m;
+use pxl_spec::space::hierarchy::{ancestor_of, child_of, first_descendant_of, offset_in, Scale};
 use pxl_spec::space::indexer::{L2, L2_IDX, L3};
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::pyramid::{Cell, LevelPage, EXTENT, GROUND, TOP_LEVEL};
-use pxl_spec::space::v3::{Aabb, V3};
+use pxl_spec::space::v3::{add3, Aabb, V3};
 use pxl_spec::space::xy::TO_XY;
 
 use crate::io::demand::Category;
 use crate::kernel::kernel;
-use crate::layer::object::store::{EntryAt, EntryCursor, Store};
+use crate::layer::object::store::{Entry, EntryAt, Store};
 use crate::world::paging::Paging;
 use crate::world::pyramid::{Layer as _, Pyramid};
 
@@ -161,18 +166,16 @@ pub struct Hit {
     pub t: f64,
     pub point: V3,
     pub normal: V3,
-    pub box_min: V3,
-    pub box_max: V3,
+    /// The box struck.
+    pub cube: Aabb,
     pub struck: Struck,
 }
 
 impl Hit {
     pub fn moved(self, by: V3) -> Hit {
-        let add = |v: V3| std::array::from_fn(|k| v[k] + by[k]);
         Hit {
-            point: add(self.point),
-            box_min: add(self.box_min),
-            box_max: add(self.box_max),
+            point: add3(&self.point, &by),
+            cube: self.cube.moved(by),
             ..self
         }
     }
@@ -182,6 +185,9 @@ impl Hit {
 pub struct Access<'a> {
     terrain: &'a Paging<Terrain>,
     objects: &'a Store,
+    /// Where the rays cast through it count what they visit, where someone
+    /// counts: each region read and each cell walked — the cost `first_hit`
+    /// says a ray has, counted as it is paid.
     visits: Option<&'a std::cell::Cell<u64>>,
 }
 
@@ -202,10 +208,6 @@ struct Region {
     terrain: Option<((f64, f64), bool)>,
 }
 
-pub fn support_revision() -> [u32; 2] {
-    [Terrain::pyramid().revision(), objects_revision()]
-}
-
 /// Folds sub-cell fill to the cell by majority, a level at a time, with the
 /// objects' tie rule (`majority`).
 fn filled_cell(filled: impl Fn([i64; 3]) -> bool) -> bool {
@@ -219,8 +221,11 @@ fn filled_cell(filled: impl Fn([i64; 3]) -> bool) -> bool {
         scale = scale.up(1);
         let h = m / 2;
         for k in 0..h * h * h {
-            let [x, y, z] = [k % h, k / h % h, k / (h * h)].map(|c| c * 2);
-            let eight: [bool; 8] = core::array::from_fn(|c| v[((z + (c >> 2)) * m + y + (c >> 1 & 1)) * m + x + (c & 1)]);
+            let parent = [k % h, k / h % h, k / (h * h)].map(|c| c as i64);
+            let eight: [bool; 8] = core::array::from_fn(|slot| {
+                let [x, y, z] = child_of(parent, slot).map(|c| c as usize);
+                v[(z * m + y) * m + x]
+            });
             v[k] = majority(eight, scale.above(CELL));
         }
         m = h;
@@ -233,6 +238,8 @@ impl<'a> Access<'a> {
         Access { terrain, objects, visits: None }
     }
 
+    /// The same, counting into `visits` the regions and cells its rays
+    /// visit.
     pub fn counting(self, visits: &'a std::cell::Cell<u64>) -> Access<'a> {
         Access { visits: Some(visits), ..self }
     }
@@ -365,11 +372,8 @@ impl<'a> Access<'a> {
     /// `ChunkSample::read` samples a chunk drawn from a coarser page.
     fn ground(&self, cell: Cell) -> Answer<Ground> {
         let page = cell.page();
-        let lack = Lack { layer: Category::terrain, page };
-        let Some((src, body)) = self.drawn_from(page) else { return Answer::Nothing(lack) };
-        let n = GROUND.scale(page.level).count_in(GROUND.scale(src.level)) as f64;
-        let [ox, oy] = cell.in_page_above(src.level - page.level);
-        let (tx, ty) = ((ox as f64 + 0.5) / n, (oy as f64 + 0.5) / n);
+        let Some((src, body)) = self.drawn_from(page) else { return Answer::Nothing(lack(page)) };
+        let [tx, ty] = sample_in(cell, src);
         let top = ground_ele_at(&body.ele, Some(GroundLanes::of(&body.ground)), tx, ty) as f64 * U_PER_CELL;
         let cell = body.ground.cells[GROUND.cell_index(tx as u32, ty as u32) as usize];
         self.answer(page, Ground { top, cell })
@@ -393,7 +397,7 @@ impl<'a> Access<'a> {
     fn answer<T>(&self, page: LevelPage, v: T) -> Answer<T> {
         match self.terrain.source(page) {
             Some(_) => Answer::Exact(v),
-            None => Answer::Coarser(v, Lack { layer: Category::terrain, page }),
+            None => Answer::Coarser(v, lack(page)),
         }
     }
 
@@ -402,7 +406,7 @@ impl<'a> Access<'a> {
     /// what is drawn.
     pub fn relief(&self, page: LevelPage, (side, at): (Scale, [i64; 2])) -> Answer<Relief> {
         let Some((src, body)) = self.drawn_from(page) else {
-            return Answer::Nothing(Lack { layer: Category::terrain, page });
+            return Answer::Nothing(lack(page));
         };
         let index = EXTENT.scale(src.level);
         let first = EXTENT.cell_of(src.level, &side.base_of([at[0], at[1], 0]));
@@ -454,6 +458,7 @@ impl<'a> Access<'a> {
     fn ground_first(&self, ray: &Ray, (t0, t1): (f64, f64), level: u32, lack: &mut Option<Lack>, answered: &mut bool) -> Option<Hit> {
         let mut t = t0;
         while t < t1 {
+            self.visit();
             if let Some(out) = self.clear(ray, t, level, t1) {
                 *answered = true;
                 t = out;
@@ -467,17 +472,11 @@ impl<'a> Access<'a> {
                 Some((_, exact)) => {
                     *answered = true;
                     if under && !exact {
-                        lack.get_or_insert(Lack {
-                            layer: Category::terrain,
-                            page: r.page,
-                        });
+                        lack.get_or_insert(self::lack(r.page));
                     }
                 }
                 None => {
-                    lack.get_or_insert(Lack {
-                        layer: Category::terrain,
-                        page: r.page,
-                    });
+                    lack.get_or_insert(self::lack(r.page));
                 }
             }
             if under {
@@ -493,26 +492,19 @@ impl<'a> Access<'a> {
     /// Far edge of the largest resident index cell above `level` the ray passes
     /// over entirely, or none. Never past `until`, where another level applies.
     fn clear(&self, ray: &Ray, t: f64, level: u32, until: f64) -> Option<f64> {
-        let p = ray.at(t + NUDGE);
-        let mut at = Pvf3::default();
-        projection::project(&mut at, p[0], p[1], 0.0);
+        let at = on_ground(&ray.at(t + NUDGE));
         (level + 1..=TOP_LEVEL).rev().find_map(|lv| {
             let body = self.terrain.get(GROUND.cell_of(lv, &at).page())?;
             let e = EXTENT.cell_of(lv, &at);
-            let [_, hi] = body.index.extent()[e.index() as usize];
-            let scale = e.scale();
-            let [ix, iy, _] = scale.index_of(&at);
-            let base = scale.base_of([ix, iy, 0]);
-            let base = [pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base))];
-            let out = exit(ray, base, scale.side()).min(until).max(t + NUDGE);
+            let [_, hi] = drawn(body.index.extent()[e.index() as usize]);
+            let out = exit(ray, corner(e.scale(), &at), e.scale().side()).min(until).max(t + NUDGE);
             let (za, zb) = (ray.at(t)[2], ray.at(out)[2]);
             (za.min(zb) > hi as f64 * U_PER_CELL).then_some(out)
         })
     }
 
     fn region(&self, p: &V3, level: u32) -> Region {
-        let mut at = Pvf3::default();
-        projection::project(&mut at, p[0], p[1], 0.0);
+        let at = on_ground(p);
         let page = GROUND.cell_of(level, &at).page();
         let page_scale = L3.up(level as i32);
         let (scale, terrain) = match self.drawn_from(page) {
@@ -526,11 +518,8 @@ impl<'a> Access<'a> {
             }
             None => (page_scale, None),
         };
-        let [ix, iy, _] = scale.index_of(&at);
-        let base = scale.base_of([ix, iy, 0]);
-        let base = [pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base))];
         Region {
-            base,
+            base: corner(scale, &at),
             side: scale.side(),
             page,
             terrain,
@@ -559,6 +548,7 @@ impl<'a> Access<'a> {
         let (delta_y, mut next_y) = axis(dy, cell[1], ray.origin[1]);
         let mut from = t0;
         while from < t1 && inside(cell) {
+            self.visit();
             let to = next_x.min(next_y).min(t1);
             let hit = if level == 0 { self.column(ray, cell, from, to) } else { self.folded(ray, cell, from, to, level) };
             if hit.is_some() {
@@ -580,12 +570,16 @@ impl<'a> Access<'a> {
     fn lines_over(&self, cell: Cell, ground_top: f64) -> Lines {
         let mut lines = Lines::default();
         let Some((src, body)) = self.drawn_from(cell.page()) else { return lines };
-        let n = GROUND.scale(cell.level()).count_in(GROUND.scale(src.level)) as f64;
-        let [ox, oy] = cell.in_page_above(src.level - cell.level());
-        let ground = (ground_top / U_PER_CELL).round() as i32;
+        let at = sample_in(cell, src);
+        let ground = round(ground_top / U_PER_CELL) as i32;
         let units = |[lo, hi]: [i32; 2]| [f64::from(lo) * U_PER_CELL, f64::from(hi) * U_PER_CELL];
-        for o in body.decks.over_point([(ox as f64 + 0.5) / n, (oy as f64 + 0.5) / n]) {
-            match o.occupies(ground) {
+        let page = Frame::of(src);
+        let frame = Some(page);
+        let cell_per_m = u_per_m(page.corner[1]) / U_PER_CELL;
+        let [tx, ty] = at.map(|v| v as u32);
+        let shown = shown_ground(|k| u32::from(channel_of(body.ground.cells[GROUND.cell_index(tx, ty) as usize], k)), 0);
+        for o in body.decks.over_point(frame, at) {
+            match o.occupies(ground, cell_per_m) {
                 Occupies::Grade => {}
                 Occupies::Above { slab, pier } => lines.boxes.extend([Some(slab), pier].into_iter().flatten().map(units)),
                 Occupies::Through { air } => lines.air = Some(units(air)),
@@ -597,19 +591,15 @@ impl<'a> Access<'a> {
     fn with_decks(&self, ray: &Ray, boxes: &[[f64; 2]], (corner, side): ([f64; 2], f64), (t0, t1): (f64, f64), ground: Option<Hit>) -> Option<Hit> {
         let mut best = ground;
         for &[lo, hi] in boxes {
-            let (min, max) = ([corner[0], corner[1], lo], [corner[0] + side, corner[1] + side, hi]);
-            let Some((t, normal)) = ray_box(ray, &min, &max) else { continue };
+            let cube = Aabb {
+                min: [corner[0], corner[1], lo],
+                max: [corner[0] + side, corner[1] + side, hi],
+            };
+            let Some((t, normal)) = ray_box(ray, cube) else { continue };
             if t < t0 || t > t1 || best.is_some_and(|b| b.t <= t) {
                 continue;
             }
-            best = Some(Hit {
-                t,
-                point: ray.at(t),
-                normal,
-                box_min: min,
-                box_max: max,
-                struck: Struck::Ground,
-            });
+            best = Some(hit(ray, t, normal, cube, Struck::Ground));
         }
         best
     }
@@ -660,14 +650,7 @@ impl<'a> Access<'a> {
                     [0.0, 0.0, if dz > 0.0 { -1.0 } else { 1.0 }]
                 };
                 let min = [ix as f64 * side, iy as f64 * side, cz as f64 * side];
-                return Some(Hit {
-                    t: from,
-                    point: ray.at(from),
-                    normal,
-                    box_min: min,
-                    box_max: min.map(|v| v + side),
-                    struck: Struck::Ground,
-                });
+                return Some(hit(ray, from, normal, Aabb { min, max: min.map(|v| v + side) }, Struck::Ground));
             }
             if leave >= t1 {
                 return None;
@@ -700,17 +683,9 @@ impl<'a> Access<'a> {
         } else {
             return None;
         };
-        let p = ray.at(t);
-        let cz = ((p[2] - normal[2] * NUDGE) / side).floor();
-        let corner = [ix as f64 * side, iy as f64 * side];
-        Some(Hit {
-            t,
-            point: p,
-            normal,
-            box_min: [corner[0], corner[1], cz * side],
-            box_max: [corner[0] + side, corner[1] + side, (cz + 1.0) * side],
-            struck: Struck::Ground,
-        })
+        let cz = ((ray.at(t)[2] - normal[2] * NUDGE) / side).floor();
+        let min = [ix as f64 * side, iy as f64 * side, cz * side];
+        Some(hit(ray, t, normal, Aabb { min, max: min.map(|v| v + side) }, Struck::Ground))
     }
 
     /// First object the ray meets, nearest first (`Store::along_ray`). At z16
@@ -722,11 +697,12 @@ impl<'a> Access<'a> {
         let mut met = None;
         self.objects.along_ray(ray.origin, ray.direction, (t0, t1), scale, &mut |[x, y, z]| {
             met = if level == FINEST {
-                let across = cells_across();
-                let col_idx = pxl_spec::space::pvf3::ivec::gather(x.div_euclid(across), y.div_euclid(across), 0);
-                let entries = self.cell_entries(col_idx, [x.rem_euclid(across), y.rem_euclid(across)], z);
-                let corner = [(x.div_euclid(across) * across) as f64 * side, (y.div_euclid(across) * across) as f64 * side];
-                object_hit(ray, &entries, corner)
+                let levels = L2.above(CELL) as u32;
+                let [cx, cy] = ancestor_of([x, y], levels);
+                let col_idx = pxl_spec::space::pvf3::ivec::gather(cx, cy, 0);
+                let entries = self.cell_entries(col_idx, offset_in([x, y], levels), z);
+                let corner = first_descendant_of([cx, cy], levels).map(|v| v as f64 * side);
+                object_hit(ray, entries, corner)
             } else {
                 let v = u32::from(self.objects.folded_value(scale, [x, y, z]));
                 (object_value_is_voxel(v) && !object_value_is_air(v)).then(|| cell_hit(ray, [x, y, z], scale, t0)).flatten()
@@ -743,23 +719,22 @@ impl<'a> Access<'a> {
     }
 
     /// Decor paints no voxel, so a cell of decor alone is the ground's.
-    fn cell_entries(&self, col_idx: IVec, [cx, cy]: [i64; 2], cz: i64) -> impl Iterator<Item = EntryCursor> + '_ {
+    fn cell_entries(&self, col_idx: IVec, [cx, cy]: [i64; 2], cz: i64) -> impl Iterator<Item = Entry> + '_ {
         let run = self.objects.cell(col_idx, cx as u32, cy as u32, cz as CellZ);
         let e = run.and(self.objects.entries(col_idx));
         let ks = match (run, e) {
             (Some(run), Some(_)) => run.start as usize..(run.start + run.count) as usize,
             _ => 0..0,
         };
-        let Some(e) = self.objects.entries(col_idx) else { return Vec::new() };
-        (run.start as usize..(run.start + run.count) as usize)
-            .filter(|&k| !object_value_is_decor(e.state[k]))
-            .map(|k| {
-                let mut cursor = EntryCursor::default();
+        ks.filter_map(move |k| {
+            let e = e?;
+            (!object_value_is_decor(e.state[k])).then(|| {
+                let mut cursor = Entry::default();
                 cursor.at_column(col_idx);
                 cursor.load(e.band[k], e.pos[k], e.state[k]);
                 cursor
             })
-            .collect()
+        })
     }
 }
 
@@ -794,29 +769,23 @@ fn wall_normal(ray: &Ray, t: f64, side: f64) -> V3 {
     n
 }
 
-fn object_hit(ray: &Ray, entries: impl Iterator<Item = EntryCursor>, [x0, y0]: [f64; 2]) -> Option<Hit> {
+fn object_hit(ray: &Ray, entries: impl Iterator<Item = Entry>, [x0, y0]: [f64; 2]) -> Option<Hit> {
     let mut best: Option<Hit> = None;
-    for e in entries.iter().filter(|e| !object_value_is_air(e.state)) {
-        let min = [x0 + e.lx, y0 + e.ly, e.lz];
-        let max = min.map(|v| v + e.size);
-        let Some((t, normal)) = ray_box(ray, &min, &max) else { continue };
+    for e in entries.filter(|e| !object_value_is_air(e.state)) {
+        let [lx, ly, lz] = e.local();
+        let min = [x0 + lx, y0 + ly, lz];
+        let cube = Aabb { min, max: min.map(|v| v + e.size()) };
+        let Some((t, normal)) = ray_box(ray, cube) else { continue };
         if best.is_some_and(|b| b.t <= t) {
             continue;
         }
-        best = Some(Hit {
-            t,
-            point: ray.at(t),
-            normal,
-            box_min: min,
-            box_max: max,
-            struck: Struck::Object(e.at()),
-        });
+        best = Some(hit(ray, t, normal, cube, Struck::Object(e.at())));
     }
     best
 }
 
-fn ray_box(ray: &Ray, min: &V3, max: &V3) -> Option<(f64, V3)> {
-    let (enter, _, k) = Aabb { min: *min, max: *max }.span_along(ray.origin, ray.direction)?;
+fn ray_box(ray: &Ray, cube: Aabb) -> Option<(f64, V3)> {
+    let (enter, _, k) = cube.span_along(ray.origin, ray.direction)?;
     let mut normal = [0.0; 3];
     normal[k] = if ray.direction[k] > 0.0 { -1.0 } else { 1.0 };
     (enter >= 0.0 && enter <= ray.reach).then_some((enter, normal))
@@ -825,24 +794,44 @@ fn ray_box(ray: &Ray, min: &V3, max: &V3) -> Option<(f64, V3)> {
 /// Where the ray meets the whole cell; if already inside at `from`, there,
 /// through the nearest side. None if it starts inside.
 fn cell_hit(ray: &Ray, cell: [i64; 3], scale: Scale, from: f64) -> Option<Hit> {
-    let Aabb { min, max } = scale.cube(cell);
-    let side = scale.side();
-    let (t, normal) = match ray_box(ray, &min, &max) {
+    let cube = scale.cube(cell);
+    let (t, normal) = match ray_box(ray, cube) {
         Some((t, normal)) if t >= from => (t, normal),
-        _ => {
-            let p = ray.at(from);
-            let inside = (0..3).all(|k| p[k] >= min[k] && p[k] <= max[k]);
-            (inside && from > 0.0).then(|| (from, wall_normal(ray, from, side)))?
-        }
+        _ => (cube.holds(ray.at(from)) && from > 0.0).then(|| (from, wall_normal(ray, from, scale.side())))?,
     };
-    Some(Hit {
+    Some(hit(ray, t, normal, cube, Struck::Objects))
+}
+
+fn hit(ray: &Ray, t: f64, normal: V3, cube: Aabb, struck: Struck) -> Hit {
+    Hit {
         t,
         point: ray.at(t),
         normal,
-        box_min: min,
-        box_max: max,
-        struck: Struck::Objects,
-    })
+        cube,
+        struck,
+    }
+}
+
+fn lack(page: LevelPage) -> Lack {
+    Lack { layer: Category::terrain, page }
+}
+
+/// A point's place on the ground lattice, its height dropped.
+fn on_ground(p: &V3) -> Pvf3 {
+    projection::project(p[0], p[1], 0.0)
+}
+
+/// The corner of `scale`'s cell under `at`, in units.
+fn corner(scale: Scale, at: &Pvf3) -> [f64; 2] {
+    let [ix, iy, _] = scale.index_of(at);
+    let base = scale.base_of([ix, iy, 0]);
+    [pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base))]
+}
+
+/// Where `cell`'s center falls in the page `src` it is drawn from, in that page's cells.
+fn sample_in(cell: Cell, src: LevelPage) -> [f64; 2] {
+    let n = GROUND.scale(cell.level()).count_in(GROUND.scale(src.level)) as f64;
+    cell.in_page_above(src.level - cell.level()).map(|o| (o as f64 + 0.5) / n)
 }
 
 #[cfg(test)]

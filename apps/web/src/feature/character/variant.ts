@@ -5,7 +5,7 @@
  * their ingest content keys. Persons are split by gender for the picker.
  */
 
-import type { f64, u32 } from "@xpute/core/abi/word.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
 
 import { INGESTED } from "@/catalog/asset/ingested.spec.ts";
 import { assetUrl } from "@/config/route.ts";
@@ -18,7 +18,6 @@ export interface CharacterVariant {
   key: string;
   modelUrl: string;
   skinUrl: string;
-  height_u: f64;
 }
 
 function shippedAssetUrl(path: string): string {
@@ -28,16 +27,14 @@ function shippedAssetUrl(path: string): string {
 }
 
 interface GroupSpec {
-  readonly size: f64;
   readonly keys: Readonly<Record<string, number>>;
   readonly models: readonly string[];
   readonly skin: string;
 }
 
-// height_u is the on-screen height in world units: the group's `size`.
 function variantsOf(groupNumber: u32, group: GroupSpec): CharacterVariant[] {
   const skinUrl = shippedAssetUrl(group.skin);
-  return Object.entries(group.keys).map(([key, number], i) => ({ group: groupNumber, number, key, modelUrl: shippedAssetUrl(group.models[i]), skinUrl, height_u: group.size }));
+  return Object.entries(group.keys).map(([key, number], i) => ({ group: groupNumber, number, key, modelUrl: shippedAssetUrl(group.models[i]), skinUrl }));
 }
 
 const PERSON_VARIANTS = variantsOf(Group.person, groups.person);

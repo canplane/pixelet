@@ -6,6 +6,8 @@
 use pxl_spec::bake::format::{BaseRow, BuildingRow, SegmentRow};
 use pxl_spec::space::adapter::epsg3857::G3857;
 
+use crate::terrain::pipeline::overture::between::{flag_ranges, split};
+use crate::terrain::pipeline::overture::policy::{DECK_FLAGS, UNSEEN_FLAGS};
 use crate::wkb::{wkb_to_geometries, WkbGeometry};
 
 pub struct OvertureBuildingRawFeature {
@@ -18,14 +20,15 @@ pub struct OvertureBuildingRawFeature {
     pub center: G3857,
 }
 
-/// A part of a segment over which its unseen flags and bridge each hold or not.
+/// One piece of a segment: a part of its length over which its unseen
+/// flags and its bridge each hold or do not, which is the unit the surface
+/// is painted in.
 pub struct OvertureSegmentRawFeature {
     pub gers_id: String,
     pub subtype: String,
     pub class: Option<String>,
     pub is_unseen: bool,
     pub is_deck: bool,
-    pub shape: WayShape,
     pub geometry: WkbGeometry,
     pub center: G3857,
 }
@@ -86,32 +89,24 @@ pub fn from_building_row(row: &BuildingRow) -> Vec<OvertureRawFeature> {
         .collect()
 }
 
-trait Columns {
-    fn columns(&self) -> WayColumns<'_>;
-}
-
-impl Columns for SegmentRow {
-    fn columns(&self) -> WayColumns<'_> {
-        WayColumns {
-            flags: self.flags.as_deref(),
-            widths: self.widths.as_deref(),
-            access: self.access.as_deref(),
-            subclass: self.subclass.as_deref(),
-            subclasses: self.subclasses.as_deref(),
-        }
-    }
-}
-
-/// Connectors are skipped. Overture flags a range of a segment, so a segment
-/// is cut where an unseen flag or its bridge starts or stops.
+/// Transportation's segments only — a connector is routing topology and is
+/// skipped. A segment is cut where an unseen flag or its bridge starts or
+/// stops, since Overture puts a flag on a range of a segment's length rather
+/// than on the whole of it: one segment of a subway line runs over a bridge,
+/// along the surface and into a tunnel.
 pub fn from_segment_row(row: &SegmentRow) -> Vec<OvertureRawFeature> {
+    let flags = row.flags.as_deref();
+    let (unseen, deck) = (flag_ranges(flags, UNSEEN_FLAGS), flag_ranges(flags, DECK_FLAGS));
     wkb_to_geometries(&row.geom_wkb)
         .into_iter()
-        .map(|g| {
+        .flat_map(|g| split(g, [&unseen, &deck]))
+        .map(|([is_unseen, is_deck], g)| {
             OvertureRawFeature::Segment(OvertureSegmentRawFeature {
                 gers_id: row.gers_id.clone(),
                 subtype: row.subtype.clone(),
                 class: row.class.clone(),
+                is_unseen,
+                is_deck,
                 center: center_of(&g),
                 geometry: g,
             })

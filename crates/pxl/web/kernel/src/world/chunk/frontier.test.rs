@@ -12,19 +12,20 @@ use super::*;
 
 use crate::allocations;
 use crate::world::fixture::{self, eye, World};
+use crate::world::pyramid::domain::Domain;
 
-/// Objects go finer than the ground's cube only under z16's reach.
+/// Objects go finer than the ground's scale only under z16's reach.
 #[test]
 fn objects_draw_the_grounds_cube_and_go_finer_only_under_z16() {
     let z16 = GROUND.scale(0);
     for shamt in -6..=8 {
-        let cube = Scale::of(shamt);
-        let (ground, objects) = (drawn_cube(cube, 0, false, false), drawn_cube(cube, 0, false, true));
-        if cube >= z16 {
-            assert_eq!(objects, ground, "{cube:?}");
+        let scale = Scale::of(shamt);
+        let (ground, objects) = (drawn_scale(scale, 0, false, false), drawn_scale(scale, 0, false, true));
+        if scale >= z16 {
+            assert_eq!(objects, ground, "{scale:?}");
         } else {
-            assert_eq!(ground, z16, "{cube:?}");
-            assert_eq!(objects, cube.max(OBJECT_FINEST), "{cube:?}");
+            assert_eq!(ground, z16, "{scale:?}");
+            assert_eq!(objects, scale.max(OBJECT_FINEST), "{scale:?}");
         }
     }
 }
@@ -88,7 +89,7 @@ impl Env for Flat {
         let (x, y, side) = c.rect();
         Order {
             seen: true,
-            near: (x + side / 2.0).hypot(y + side / 2.0),
+            near: libm::hypot(x + side / 2.0, y + side / 2.0),
         }
     }
 }
@@ -139,7 +140,7 @@ impl Table {
             drawn: &drawn,
             building: &ready,
             recubing: 0,
-            recube: &[],
+            retier: &[],
             free,
         };
         let (allocated, plan) = allocations::during(|| self.frontier.plan(&now, &Flat));
@@ -204,7 +205,7 @@ fn a_piece_filling_several_slots_starts_only_with_all_of_them_free() {
             drawn: &drawn,
             building: &[],
             recubing: 0,
-            recube: &[],
+            retier: &[],
             free: [fine, 100, 0],
         };
         Frontier::default().plan(&now, &Heavy(3)).start.len() as u32
@@ -225,7 +226,7 @@ fn a_coarsening_waits_its_hold_unless_the_arena_is_short() {
             drawn,
             building: &[],
             recubing: 0,
-            recube: &[],
+            retier: &[],
             free,
         }
     }
@@ -278,7 +279,7 @@ fn a_coarsening_is_always_started_with_only_the_reserve_free() {
         drawn: &children,
         building: &[],
         recubing: 0,
-        recube: &[],
+        retier: &[],
         free: RESERVE,
     };
     let mut frontier = Frontier::default();
@@ -296,9 +297,6 @@ fn a_coarsening_is_always_started_with_only_the_reserve_free() {
     assert!(Frontier::default().plan(&fill, &Widest).start.is_empty(), "a fill took the reserve");
 }
 
-/// A step over a frontier no larger than one already planned allocates
-/// nothing: moving through goals it has moved through before, the frontier
-/// works in what it held from then.
 #[test]
 fn planning_a_frontier_it_has_held_allocates_nothing() {
     let mut t = Table::new([300, 200, 0]);
@@ -317,51 +315,12 @@ fn planning_a_frontier_it_has_held_allocates_nothing() {
     assert_eq!(pass(&mut t), 0, "a pass through goals already planned allocated");
 }
 
-// ---- the goal an eye observes ----
-
-/// The height of the fixture world's ground.
 const LAND: f64 = 10.5;
 const EYE: V3 = [1_000.5, 2_000.25, LAND + 2.0];
 const FAR: f64 = 20_000.0;
 
 impl Table {}
 
-/// Points of the ground all around the eye, within the reach.
-fn probes() -> Vec<V3> {
-    let mut out = Vec::new();
-    for ring in 1..=10 {
-        let r = FAR * 0.9 * ring as f64 / 10.0;
-        for k in 0..36 {
-            let a = k as f64 / 36.0 * std::f64::consts::TAU;
-            out.push([EYE[0] + r * a.cos(), EYE[1] + r * a.sin(), LAND]);
-        }
-    }
-    // And near the eye, where the goal is finest.
-    for k in 0..200 {
-        let (a, r) = (k as f64 * 2.399, 3.0 * k as f64);
-        out.push([EYE[0] + r * a.cos(), EYE[1] + r * a.sin(), LAND]);
-    }
-    out
-}
-
-impl Table {
-    /// How many drawn pieces each probe lies in: one each where the frontier
-    /// has no gap.
-    fn over(&self, probes: &[V3]) -> Vec<usize> {
-        probes
-            .iter()
-            .map(|p| {
-                let mut at = Pvf3::default();
-                projection::project(&mut at, p[0], p[1], p[2]);
-                (0..=TOP_LEVEL).filter(|&l| self.drawn.contains(&Chunk::of(l, &at))).count()
-            })
-            .collect()
-    }
-}
-
-// ---- the count ----
-
-/// A world with some relief, known as tightly or loosely as `slack`.
 fn relief(slack: f64) -> World {
     let mut w = World::flat(LAND);
     for k in 0..8 {
@@ -373,21 +332,17 @@ fn relief(slack: f64) -> World {
 }
 
 fn ladder() -> Vec<Tau> {
-    (0..8).map(|k| Tau::of(2f64.powf(k as f64 / 2.0))).collect()
+    (0..8).map(|k| Tau::of(libm::pow(2f64, k as f64 / 2.0))).collect()
 }
 
 fn domain_at(height: f64, world: &World) -> Domain {
     let at = [EYE[0], EYE[1], LAND + height];
-    fixture::domain(eye(at, Some([1.0, 0.05, -0.25]), FAR, LAND), &ladder(), world)
+    let price = Need { slots: |_, _| 1, admit: false };
+    fixture::domain_priced(eye(at, Some([1.0, 0.05, -0.25]), FAR, LAND), &ladder(), world, &price)
 }
 
 fn counts(d: &mut Domain) -> Vec<Slots> {
-    (0..d.ladder().len())
-        .map(|k| {
-            d.cut_at(k);
-            need(d, d.cut(k).expect("made above"), |_, _| 1)
-        })
-        .collect()
+    (0..d.ladder().len()).map(|k| d.need(k).expect("every step counted")).collect()
 }
 
 #[test]
@@ -403,7 +358,7 @@ fn the_count_is_never_less_at_a_finer_quality_nor_less_than_the_cut() {
             }
             let cut = d.cut_at(k);
             let (tau, pieces) = (cut.tau(), cut.pieces().to_vec());
-            let of = |pool: Pool| pieces.iter().filter(|&&c| pool_of(c, cube_of(c, d.outermost(c), d.nearest_to(c), tau)) == pool).count() as u32;
+            let of = |pool: Pool| pieces.iter().filter(|&&c| pool_of(c, scale_of(c, d.outermost(c), d.order_of(c).near, tau, false)) == pool).count() as u32;
             assert!(
                 n[k][Pool::Coarse as usize] + n[k][Pool::Cover as usize] >= pieces.len() as u32,
                 "height {height}, {tau:?}: coarse under the cut"
@@ -413,4 +368,3 @@ fn the_count_is_never_less_at_a_finer_quality_nor_less_than_the_cut() {
         }
     }
 }
-

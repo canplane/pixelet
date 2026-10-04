@@ -119,13 +119,19 @@ fn air_light(dir: vec3f, fill: vec3f) -> AirLight {
   return l;
 }
 
-// Past the terrain the ground is lit as shade.wgsl lights the terrain, so the
-// drawn edge is no seam.
+// What the eye sees along a ray to its end: the air's light, and where the
+// ray meets the planet, the ground's through the air. It is what lies past
+// the terrain's drawn edge, so a view from high up reads as ground in haze
+// there and not as sky under the horizon; and the ground is a flat face of
+// the land's color lit as shade.wgsl lights the terrain, by the frame's
+// lights, so the edge is no seam.
+// `fill` is sky_fill's, which a caller that reads it for more than this
+// takes once.
 fn beyond(air: Air, fill: vec3f) -> vec3f {
   var light = air.light;
   if (air.ground) {
     let n = air.normal;
-    let lit = frame_sun_color() * max(dot(frame_sun_dir(), n), 0.0) + frame_other_color() * max(dot(frame_other_dir(), n), 0.0) + frame_ambient() + sky_fill();
+    let lit = frame_sun_color() * max(dot(frame_sun_dir(), n), 0.0) + frame_other_color() * max(dot(frame_other_dir(), n), 0.0) + frame_ambient() + fill;
     light += air.end * atmos_land() * (lit / PI + frame_floor());
     // Haze reads as the air's own light along the ray.
     light = mix(air.light, light, haze_through(max(atmos_camera_altitude(), 0.0), 0.0, air.ground_km));
@@ -133,12 +139,16 @@ fn beyond(air: Air, fill: vec3f) -> vec3f {
   return light;
 }
 
+// Aerial perspective: what the air between the eye and `world_pos` does to
+// a color there — `through`, the segment's transmittance, dims it, and
+// `scattered`, the light the air along it takes and turns toward the eye,
+// fills it in (`air_light`), under the sky's fill `fill` (sky_fill).
 struct Veil {
   through: vec3f,
   scattered: vec3f,
 };
 
-fn veil(world_pos: vec3f) -> Veil {
+fn veil(world_pos: vec3f, fill: vec3f) -> Veil {
   var v: Veil;
   let du = length(world_pos - frame_camera_pos());
   if (du < 1e-4) {
@@ -156,14 +166,14 @@ fn veil(world_pos: vec3f) -> Veil {
   // Single scattering over a segment lit uniformly, short enough for that.
   let depth = rayleigh + vec3f(mie + haze);
   v.through = exp(-depth);
-  let lit = air_light((world_pos - frame_camera_pos()) / du, sky_fill());
+  let lit = air_light((world_pos - frame_camera_pos()) / du, fill);
   let turned = rayleigh * lit.rayleigh + (mie * atmos_mie_scattering() / atmos_mie_extinction() + haze * HAZE_ALBEDO) * lit.mie;
   v.scattered = (vec3f(1.0) - v.through) * turned / max(depth, vec3f(1e-6));
   return v;
 }
 
-fn aerial(color: vec3f, world_pos: vec3f) -> vec3f {
-  let v = veil(world_pos);
+fn aerial(color: vec3f, world_pos: vec3f, fill: vec3f) -> vec3f {
+  let v = veil(world_pos, fill);
   return color * v.through + v.scattered;
 }
 
@@ -176,25 +186,15 @@ struct Seen {
   fill: vec3f,
 };
 
-// `seen_from_eye` where the frame asks for it, and the air left out where
-// it does not: the shadow map's passes write depth alone, and a vertex there
-// would pay for the air and the sky's fill for nothing. A
-// branch on a uniform, which every vertex of the draw takes the same way.
-fn seen_at_vertex(world_pos: vec3f) -> Seen {
-  if (frame_air_at_vertices() > 0.5) {
-    return seen_from_eye(world_pos);
-  }
-  return Seen(vec3f(1.0), vec3f(0.0), vec3f(0.0), vec3f(0.0));
-}
-
 fn seen_from_eye(world_pos: vec3f) -> Seen {
+  let fill = sky_fill();
   let air = air_along(normalize(world_pos - frame_camera_pos()));
-  let v = veil(world_pos);
+  let v = veil(world_pos, fill);
   var s: Seen;
   s.through = v.through;
   s.scattered = v.scattered;
-  s.past = shoulder(beyond(air));
-  s.fill = sky_fill();
+  s.past = shoulder(beyond(air, fill));
+  s.fill = fill;
   return s;
 }
 

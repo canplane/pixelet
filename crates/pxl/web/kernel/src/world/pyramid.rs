@@ -13,6 +13,7 @@ pub mod chunk;
 pub mod cover;
 pub mod domain;
 
+use std::any::TypeId;
 use std::collections::HashMap;
 
 use pxl_spec::space::lod::Tau;
@@ -25,18 +26,36 @@ use crate::param;
 use crate::sched::profiler::record::Failure;
 use crate::world::observation::{heights_revision, observation, ByFootprints, Known, Order};
 use crate::world::paging::floor::{self, Fallback, Floor};
-use crate::world::paging::{Candidate, Paging, Victim, ASKS, DESTINATION_PAGES, FRAMES, LEVEL_DEMAND_PAGES};
+use crate::world::paging::{Candidate, Paging, Victim, ABSENT, ASKS, DESTINATION_PAGES, FRAMES, LEVEL_DEMAND_PAGES};
 use crate::world::prefetch::{NoPrefetch, Prefetch};
 use crate::world::quality;
 
+/// What answers a page the bucket has no object for.
+pub enum Absent {
+    /// The page over it, which settles it; at the top, `Layer::empty`.
+    Above,
+    /// The one body every such page shares, fetched under the category and
+    /// held in `ABSENT`.
+    Shared(Category),
+}
+
 pub trait Layer: Folds + Clone + 'static {
     const CATEGORY: Category;
+
+    const ON_ABSENT: Absent = Absent::Above;
+
+    /// The coarsest level the layer has pages at; past where that level
+    /// hands off, nothing of it is asked for.
+    const COARSEST: u32 = TOP_LEVEL;
 
     fn pyramid() -> &'static mut Pyramid<Self>;
 
     fn receive(record: u32, pkt: &[u8], phases: &mut Phases) -> Result<Self, Failure>;
 
-    fn absent(p: LevelPage);
+    /// A page with nothing in it, which answers an absent page at the top.
+    fn empty() -> Option<Self> {
+        None
+    }
 
     fn changed(_p: LevelPage, _present: bool) {}
 
@@ -47,7 +66,7 @@ pub trait Layer: Folds + Clone + 'static {
 
 /// Everything the asks depend on; two turns agreeing on all of it ask for
 /// the same pages, so the second decides nothing.
-type Seen = (Option<Observation>, Option<LevelPage>, u32, (u32, u32), Tau, u32);
+type Seen = (Option<Observation>, [Option<LevelPage>; Floor::PAGES as usize], Option<LevelPage>, u32, (u32, u32), Tau, u32);
 
 /// No speculation: the view converges to exact on faults alone, and
 /// speculation would only buy latency.
@@ -69,7 +88,11 @@ pub struct Pyramid<L: Layer> {
     demand: Vec<LevelPage>,
     wants: Vec<(u64, Ask)>,
     last: Option<Seen>,
+    /// What each consumer derived from this layer reads of it, as it last said.
+    required: Vec<(TypeId, Vec<LevelPage>)>,
+    /// Their union, as last observed with, and the one being made.
     readers: Vec<LevelPage>,
+    union: Vec<LevelPage>,
     /// Reused across observations so observing stops allocating once warm.
     asks: HashMap<LevelPage, Ask>,
     hints: Vec<(Order, LevelPage)>,
@@ -83,6 +106,9 @@ impl<L: Layer> Default for Pyramid<L> {
             demand: Vec::new(),
             wants: Vec::new(),
             last: None,
+            required: Vec::new(),
+            readers: Vec::new(),
+            union: Vec::new(),
             asks: HashMap::with_capacity(ASKS as usize),
             hints: Vec::new(),
         }
@@ -90,14 +116,6 @@ impl<L: Layer> Default for Pyramid<L> {
 }
 
 impl<L: Layer> Pyramid<L> {
-    pub fn get(&self, p: LevelPage) -> Option<&L> {
-        self.paging.get(p)
-    }
-
-    pub fn settled(&self, p: LevelPage) -> bool {
-        self.paging.settled(p)
-    }
-
     pub fn paging(&self) -> &Paging<L> {
         &self.paging
     }
@@ -106,24 +124,8 @@ impl<L: Layer> Pyramid<L> {
         self.paging.set(p, page);
     }
 
-    pub fn revision(&self) -> u32 {
-        self.paging.revision()
-    }
-
     pub fn answer_above(&mut self, p: LevelPage) {
         self.paging.answer_above(p);
-    }
-
-    pub fn source(&self, p: LevelPage) -> Option<LevelPage> {
-        self.paging.source(p)
-    }
-
-    pub fn drawn_from(&self, p: LevelPage) -> Option<LevelPage> {
-        self.paging.drawn_from(p)
-    }
-
-    pub fn asked(&self, p: LevelPage) -> bool {
-        self.paging.asked(p).is_some()
     }
 
     pub fn take_refusals(&mut self) -> u32 {
@@ -136,6 +138,27 @@ impl<L: Layer> Pyramid<L> {
 
     pub fn adopt(&mut self, p: LevelPage, pkt: &[u8], phases: &mut Phases) -> Result<(), Failure> {
         self.admit(p, |record| L::receive(record, pkt, phases))
+    }
+
+    /// The body every absent page shares, decoded once into `ABSENT`.
+    pub fn adopt_shared(&mut self, pkt: &[u8], phases: &mut Phases) -> Result<(), Failure> {
+        if self.paging.has_shared() {
+            return Ok(());
+        }
+        let body = L::receive(ABSENT, pkt, phases)?;
+        self.paging.adopt_shared(body);
+        Ok(())
+    }
+
+    /// The bucket has no object for `p`: answered as the layer says.
+    pub fn absent(&mut self, p: LevelPage) {
+        match L::ON_ABSENT {
+            Absent::Shared(_) => self.paging.absent(p),
+            Absent::Above => match L::empty() {
+                Some(empty) if p.level >= TOP_LEVEL => self.paging.set(p, empty),
+                _ => self.paging.answer_above(p),
+            },
+        }
     }
 
     pub fn admit(&mut self, p: LevelPage, receive: impl FnOnce(u32) -> Result<L, Failure>) -> Result<(), Failure> {
@@ -153,6 +176,8 @@ impl<L: Layer> Pyramid<L> {
     pub fn observe(
         &mut self,
         o: Option<&Observation>,
+        // the floor's eye, if not `o`'s
+        floor_at: Option<&Observation>,
         destination: impl Iterator<Item = LevelPage>,
         bounds: &impl Bounds,
         estimator: &impl DemandEstimator,
@@ -189,7 +214,8 @@ impl<L: Layer> Pyramid<L> {
             }
             xpute_core::ensure!(read.iter().all(|&n| n <= LEVEL_DEMAND_PAGES), ENOTRECOVERABLE, *read.iter().max().unwrap_or(&0));
             let mut floor = 0u32;
-            Floor::floor(o.top, o.eye, o.far, |p| {
+            let f = floor_at.unwrap_or(o);
+            Floor::floor(f.top, f.eye, f.far, |p| {
                 floor += 1;
                 ask(&mut asks, p, Ask { why: Why::Floor, order: order(o, p) });
             });
@@ -257,27 +283,91 @@ impl<L: Layer> Pyramid<L> {
     /// `destination` is asked for with its line even with no observation yet:
     /// at the first fix the camera waits for that ground. `far` cuts the
     /// observation where the layer stops being drawn.
-    pub fn step(&mut self, destination: Option<LevelPage>, readers: &[LevelPage], far: f64) {
+    /// The pages consumer `C` reads of this layer for what it derives from
+    /// them, in place of what it said before; the step asks for them.
+    pub fn require<C: 'static>(&mut self, pages: &[LevelPage]) {
+        let id = TypeId::of::<C>();
+        match self.required.iter_mut().find(|(k, _)| *k == id) {
+            Some((_, held)) => {
+                held.clear();
+                held.extend_from_slice(pages);
+            }
+            None => self.required.push((id, pages.to_vec())),
+        }
+    }
+
+    pub fn step(&mut self, destination: Option<LevelPage>) {
         let Some(top) = floor::level() else { return };
-        let o = observation();
-        if o.is_none() && destination.is_none() {
+        // demand follows the published goal
+        let published = domain::current();
+        let live = observation();
+        let seen_from = live.map(|live| published.map_or(live, |d| *d.observation()));
+        // the floor follows the live eye, so a jump asks for it at once
+        let mut floor_now = [None; Floor::PAGES as usize];
+        if let Some(l) = &live {
+            let mut n = 0;
+            Floor::floor(l.top, l.eye, l.far, |p| {
+                if n < floor_now.len() {
+                    floor_now[n] = Some(p);
+                }
+                n += 1;
+            });
+        }
+        if seen_from.is_none() && destination.is_none() {
             return;
         }
-        let tau = match o {
-            Some(_) => {
-                quality::step();
-                quality::effective().tau()
-            }
+        let tau = match seen_from {
+            Some(_) => quality::effective().tau(),
             None => Tau::FINEST,
         };
-        let seen = (o, destination, self.paging.revision(), heights_revision(), tau, domain::walks());
-        if self.last != Some(seen) {
+        let o = seen_from.map(|o| match L::COARSEST {
+            TOP_LEVEL => o,
+            coarsest => Observation {
+                far: o.far.min(tau.split_distance(coarsest as i32 + 1)),
+                ..o
+            },
+        });
+        let seen = (o, floor_now, destination, self.paging.revision(), heights_revision(), tau, domain::revision());
+        let readers_moved = {
+            let mut union = core::mem::take(&mut self.union);
+            union.clear();
+            union.extend(self.required.iter().flat_map(|(_, pages)| pages.iter().copied()));
+            union.sort_unstable();
+            union.dedup();
+            let moved = union != self.readers;
+            self.union = core::mem::replace(&mut self.readers, union);
+            moved
+        };
+        if self.last != Some(seen) || readers_moved {
             let line = destination.into_iter().flat_map(|p| std::iter::successors(Some(p), move |q| (q.level < top).then(|| q.parent())));
-            self.observe(o.as_ref(), line, readers, &Known, &ByFootprints { tau, sight: domain::sight() }, &PREFETCH, tau, param::HINT_ALLOWANCE);
+            let readers = core::mem::take(&mut self.readers);
+            self.observe(
+                o.as_ref(),
+                live.as_ref(),
+                line,
+                &readers,
+                &Known,
+                &ByFootprints {
+                    tau,
+                    footprints: published.map_or(&[], |d| d.footprints()),
+                    lacks: published.map_or(&[], |d| d.lacks()),
+                },
+                &PREFETCH,
+                tau,
+                param::HINT_ALLOWANCE,
+            );
+            self.readers = readers;
             // Observing can let pages go, moving the revision: record the state after it.
-            self.last = Some((o, destination, self.paging.revision(), heights_revision(), tau, domain::walks()));
+            self.last = Some((o, floor_now, destination, self.paging.revision(), heights_revision(), tau, domain::revision()));
         }
         declare(L::CATEGORY, &self.wants);
+        self.declare_shared();
+    }
+
+    fn declare_shared(&self) {
+        if let Absent::Shared(category) = L::ON_ABSENT {
+            declare(category, if self.paging.awaits_shared() { &[(0, Ask::PLAIN)] } else { &[] });
+        }
     }
 
     /// A layer the view does not show keeps what it holds and asks for nothing.
@@ -286,6 +376,7 @@ impl<L: Layer> Pyramid<L> {
         self.asks.clear();
         self.paging.ask(&self.asks);
         declare(L::CATEGORY, &[]);
+        self.declare_shared();
         self.last = None;
     }
 }

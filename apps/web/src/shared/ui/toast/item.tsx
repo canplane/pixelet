@@ -1,4 +1,4 @@
-// @pxl/web/shared/ui/toast/toast.tsx
+// @pxl/web/shared/ui/toast/item.tsx
 
 import { useEffect, useState } from "react";
 import { type GestureResponderHandlers, PixelRatio, StyleSheet, Text, View } from "react-native";

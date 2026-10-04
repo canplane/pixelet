@@ -6,20 +6,9 @@ fn counts() -> Vec<Slots> {
     vec![[300, 1_900, 0], [250, 1_400, 0], [180, 900, 0], [90, 500, 0], [30, 200, 0], [0, 60, 0]]
 }
 
-#[test]
-fn the_feasible_step_is_the_finest_that_fits_every_pool() {
-    let c = counts();
-    assert_eq!(feasible(&c, [400, 2_000, 10_000], [10; POOLS], [0; POOLS]), Some(0));
-    assert_eq!(feasible(&c, [400, 1_000, 10_000], [10; POOLS], [0; POOLS]), Some(2));
-    assert_eq!(feasible(&c, [100, 2_000, 10_000], [10; POOLS], [0; POOLS]), Some(3));
-    assert_eq!(feasible(&c, [100, 2_000, 10_000], [10; POOLS], [20, 0, 0]), Some(4));
-    assert_eq!(feasible(&c, [5, 50, 10_000], [10; POOLS], [0; POOLS]), None);
-    for arena in [[40, 300, 10_000], [200, 600, 10_000], [260, 1_500, 10_000], [1_000, 5_000, 10_000]] {
-        let Some(k) = feasible(&c, arena, [10; POOLS], [0; POOLS]) else { continue };
-        let fits = |k: usize| (0..POOLS).all(|p| c[k][p] + 10 <= arena[p]);
-        assert!((k..c.len()).all(fits), "{arena:?}: a step coarser than the feasible one does not fit");
-        assert!(k == 0 || !fits(k - 1), "{arena:?}: a finer step fits");
-    }
+/// The finest step that fits: what `around` answers asking only some.
+fn feasible(frontier: &[Slots], arena: Slots, headroom: Slots, spare: Slots) -> Option<usize> {
+    (0..frontier.len()).find(|&k| fits(frontier[k], arena, headroom, spare))
 }
 
 #[test]
@@ -113,7 +102,7 @@ fn asking_about_the_step_in_force_moves_as_the_whole_ladder_does() {
 /// twice as wide; finer is held at `SPLIT`.
 #[test]
 fn the_target_is_the_screens_cell_and_never_finer_than_the_criterion() {
-    let _g = crate::global::serial();
+    let _g = crate::serial();
     let v = view();
     let kept = (v.height, v.fov);
     v.fov = 50.0;
@@ -121,7 +110,7 @@ fn the_target_is_the_screens_cell_and_never_finer_than_the_criterion() {
         view().height = height;
         target().scale()
     };
-    let span = |height: f64| 2.0 * (param::CENTER_CELL_LOGICAL_PX * 25f64.to_radians().tan() / height).atan() * SPLIT;
+    let span = |height: f64| 2.0 * libm::atan(param::CENTER_CELL_LOGICAL_PX * libm::tan(25f64.to_radians()) / height) * SPLIT;
     assert!((span(1080.0) - 1.0).abs() < 0.01, "the reference view's cell is not the criterion's: {}", span(1080.0));
     assert_eq!(at(1080.0), 1.0);
     assert!((at(540.0) - span(540.0)).abs() < 1e-12, "not the angle half the height's cell spans: {}", at(540.0));

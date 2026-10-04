@@ -5,19 +5,20 @@
 //! controller makes the pose; nothing here knows which.
 
 use pxl_spec::space::mat4::{mat4, mat4_frustum_planes, mat4_invert, mat4_mul, mat4_perspective, mat4_transform_direction, mat4_transform_point, mat4_translation, Mat4};
+use pxl_spec::space::observation::Frustum;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::{projection, REACH};
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::v3::{add3, V3};
 
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::controller::{pose, rebase};
-use crate::global::Global;
 use crate::layer::environment::config::render_cfg;
 use crate::layer::environment::fog::{far_clip_at, height_at, near_clip_at};
 use crate::world::frame::coord::{local_world_to_canonical, origin_for};
 use pxl_spec::space::lod;
 use pxl_spec::space::pyramid::TOP_LEVEL;
+use xpute_runtime::global::Global;
 
 /// `rotation` turns the world's axes to the camera's (right, up, back), rotation alone.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -41,8 +42,7 @@ pub struct View {
     pub proj: Mat4,
     pub local_view_proj: Mat4,
     pub inv_local_view_proj: Mat4,
-    /// Normals in.
-    pub planes: [f64; 24],
+    pub frustum: Frustum,
 }
 
 impl View {
@@ -63,16 +63,15 @@ impl View {
             proj: mat4(),
             local_view_proj: mat4(),
             inv_local_view_proj: mat4(),
-            planes: [0.0; 24],
+            frustum: Frustum::default(),
         }
     }
 }
 
 impl View {
     pub fn eye_at(&self) -> V3 {
-        let o = self.origin;
-        let e = self.pose.eye;
-        [ivec::to_real(ivec::X(o)) + e[0], ivec::to_real(ivec::Y(o)) + e[1], ivec::to_real(ivec::Z(o)) + e[2]]
+        let (o, e) = (ivec::to_v3(self.origin), self.pose.eye);
+        add3(&o, &e)
     }
 
     /// Eye-relative matrices, as the GPU's points are (`DrawList::translation`):
@@ -107,8 +106,7 @@ pub fn globe_anchor_local() -> V3 {
 /// None before the camera stands somewhere.
 pub fn globe_anchor() -> Option<Pvf3> {
     crate::control::camera::controller::camera().eye?;
-    let mut out = Pvf3::default();
-    local_world_to_canonical(&mut out, &globe_anchor_local(), view().origin);
+    let out = local_world_to_canonical(&globe_anchor_local(), view().origin);
     Some(out)
 }
 
@@ -131,8 +129,7 @@ pub fn view_compose() {
     // The lattice only reaches so high: an eye above it is written against the
     // highest cell, the eye itself being doubles.
     let e = v.eye_at();
-    let mut at = Pvf3::default();
-    projection::project(&mut at, e[0], e[1], e[2].clamp(REACH.min[2], REACH.max[2] - 1.0));
+    let at = projection::project(e[0], e[1], e[2].clamp(REACH.min[2], REACH.max[2] - 1.0));
     let level = lod::level(height_at(v.eye_at())).clamp(0, TOP_LEVEL as i32) as u32;
     let want = origin_for(at.i, level);
     if want != v.origin {
@@ -155,7 +152,7 @@ pub fn view_compose() {
     mat4_mul(&mut v.local_view_proj, &proj, &vm);
     let lvp = v.local_view_proj;
     mat4_invert(&mut v.inv_local_view_proj, &lvp);
-    mat4_frustum_planes(&mut v.planes, &lvp);
+    mat4_frustum_planes(&mut v.frustum.planes, &lvp);
 }
 
 /// `ndc_x`/`ndc_y` in [−1, 1], x right and y up; `direction` is unit.
@@ -167,12 +164,8 @@ pub fn view_ray_local(ndc_x: f64, ndc_y: f64, origin: &mut V3, direction: &mut V
     mat4_transform_direction(direction, &mat4(), far[0] - origin[0], far[1] - origin[1], far[2] - origin[2]);
 }
 
-pub fn view_sees_sphere(x: f64, y: f64, z: f64, radius: f64) -> bool {
-    let p = &view().planes;
-    for k in (0..24).step_by(4) {
-        if p[k] * x + p[k + 1] * y + p[k + 2] * z + p[k + 3] < -radius {
-            return false;
-        }
-    }
-    true
+/// `ndc` in [−1, 1], y up, as logical pixels from the view's top left.
+pub fn ndc_to_px([x, y]: [f64; 2]) -> [f64; 2] {
+    let v = view();
+    [(x * 0.5 + 0.5) * v.width, (-y * 0.5 + 0.5) * v.height]
 }

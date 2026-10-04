@@ -21,7 +21,7 @@ const PAD_PX = LINE_PX + halo.reach + 1;
 const LABEL_GAP_PX = 8;
 const BAR_MAX_PX = 80;
 
-/** Nearest 1, 2 or 5 × 10ⁿ. */
+/** `m` to the nearest 1, 2 or 5 times a power of ten, a length a scale bar names. */
 function niceLength(m: f64): f64 {
   if (!(m > 0)) return 0;
   const base = 10 ** Math.floor(Math.log10(m));
@@ -31,17 +31,18 @@ function niceLength(m: f64): f64 {
 
 /** Line and ticks are one path, stroked as the halo's rings, so the halo is unbroken where they meet. */
 export function MapScaleBar({ show }: { show: boolean }) {
-  const total_meters = useKernel((s) => s.scale_bar.total_meters);
-  const bar_width_px = useKernel((s) => s.scale_bar.bar_width_px);
+  const mPerPx = useKernel((s) => s.m_per_px);
+  const totalMeters = niceLength(BAR_MAX_PX * mPerPx);
+  const barWidthPx = mPerPx > 0 ? totalMeters / mPerPx : 0;
   const veil = useVeil(1, SNAP);
 
   // SI units are case-sensitive: never upper-case the label.
-  const label: string = total_meters >= 1000 ? `${total_meters / 1000}km` : `${total_meters}m`;
+  const label: string = totalMeters >= 1000 ? `${totalMeters / 1000}km` : `${totalMeters}m`;
 
-  const width = bar_width_px + PAD_PX * 2;
+  const width = barWidthPx + PAD_PX * 2;
   const left = PAD_PX + 0.5;
   const right = left + barWidthPx - 1;
-  const at = (f: f64) => round(left + (right - left) * f - 0.5) + 0.5;
+  const at = (f: f64) => Math.round(left + (right - left) * f - 0.5) + 0.5;
   const tick = (f: f64, px: f64) => `M${at(f)} ${PAD_PX}V${PAD_PX + px}`;
   const d = `M${left} ${PAD_PX + TICK_PX}V${PAD_PX}H${right}V${PAD_PX + TICK_PX}` + tick(0.5, TICK_PX) + tick(0.25, QUARTER_TICK_PX) + tick(0.75, QUARTER_TICK_PX);
   const svgHeight = PAD_PX + TICK_PX + PAD_PX;

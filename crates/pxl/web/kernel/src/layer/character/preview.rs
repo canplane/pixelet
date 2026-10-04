@@ -5,18 +5,17 @@
 //! model is registered again at one unit tall, since the cases compare
 //! silhouettes, not scale.
 
-use pxl_spec::asset::ingested::Asset;
 use pxl_spec::space::pvf3::ivec;
 
-use crate::global::Global;
-use crate::io::load::{load_gltf, load_image, Load};
+use crate::io::load::{load_image, Load};
 use crate::kernel::{kernel, with_world};
-use crate::layer::character::variant::{character_variant, CharacterGroup, CharacterVariant};
+use crate::layer::character::variant::{character_variant, model_of, CharacterVariant, Group};
 use crate::layer::character::variant_spec::IDLE_CLIP;
-use crate::layer::model::asset::{register_model, ModelHandle};
+use crate::layer::model::asset::ModelHandle;
 use crate::sched::tick::TickContext;
 use crate::world::change::request_world_tick;
-use crate::world::frame::coord::local_world_origin;
+use crate::world::frame::view::view;
+use xpute_runtime::global::Global;
 
 const SPIN_RATE_RAD_S: f64 = 0.6;
 /// Past any terrain and the fog, so the world never draws it.
@@ -33,31 +32,21 @@ struct Case {
 
 struct Cases {
     cases: Vec<Case>,
-    /// One unit tall, by asset.
-    models: Vec<(Asset, Option<ModelHandle>)>,
 }
 
 static CASES: Global<Cases> = Global::new();
 
 fn cases() -> &'static mut Cases {
-    CASES.get(|| Cases {
-        cases: Vec::new(),
-        models: Vec::new(),
-    })
+    CASES.get(|| Cases { cases: Vec::new() })
 }
 
-/// Models the cases register at most: one an asset, and the assets are the
-/// character variants' (`Cases::models`).
-pub const MODELS_MAX: usize = crate::layer::character::variant::CHARACTER_VARIANTS;
-
-/// Cases open at most, and so actors: one a surface, since a case is named
-/// by the surface it draws on and opening one on a surface replaces it.
+/// One per surface: a case is named by the surface it draws on.
 pub const CASES_MAX: usize = pxl_render::gpu::surface::SURFACES;
 
-/// Opens case `id` over variant `number` of `group`; a case already open under
-/// `id` is replaced. False where `id` names no surface or no variant.
-pub fn preview_open(id: u32, group: CharacterGroup, number: u8) -> bool {
-    if id as usize >= CASES_MAX {
+/// Replaces a case already open under `id`. False where `id` names no
+/// surface or no variant.
+pub fn preview_open(id: u32, group: Group, number: u8) -> bool {
+    if pxl_render::gpu::surface::surface(id).is_none() {
         return false;
     }
     preview_close(id);
@@ -91,19 +80,12 @@ pub fn preview_step(ctx: &mut TickContext) {
     }
     // Under the map origin: the case reads the actor's place from an f32
     // uniform, which cannot resolve a unit-tall model millions of units out.
-    let origin = local_world_origin();
-    let at = [ivec::to_real(ivec::X(origin)), ivec::to_real(ivec::Y(origin)), ivec::to_real(ivec::Z(origin)) - CASE_DEPTH_U];
+    let origin = view().origin;
+    let mut at = ivec::to_v3(origin);
+    at[2] -= CASE_DEPTH_U;
     for case in &mut c.cases {
         if case.model.is_none() {
-            let asset = case.variant.model;
-            case.model = match c.models.iter().find(|(a, _)| *a == asset) {
-                Some((_, handle)) => handle.clone(),
-                None => load_gltf(Load::Asset(asset)).and_then(|gltf| {
-                    let handle = register_model(&gltf, Some(1.0));
-                    c.models.push((asset, handle.clone()));
-                    handle
-                }),
-            };
+            case.model = model_of(case.variant.model, 1.0);
         }
         if case.skin.is_none() {
             case.skin = load_image(Load::Asset(case.variant.skin));

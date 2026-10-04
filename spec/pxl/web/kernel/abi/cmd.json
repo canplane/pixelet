@@ -162,10 +162,6 @@
           "value": 5
         },
         {
-          "name": "RESET_DIST",
-          "value": 6
-        },
-        {
           "name": "COMPASS_RESET",
           "value": 7
         },
@@ -305,10 +301,6 @@
         {
           "name": "SET",
           "value": 1
-        },
-        {
-          "name": "TOGGLE",
-          "value": 2
         }
       ]
     },
@@ -596,10 +588,6 @@
         {
           "name": "Success",
           "value": 2
-        },
-        {
-          "name": "Error",
-          "value": 3
         }
       ]
     },
@@ -654,25 +642,6 @@
         {
           "name": "None",
           "value": 0
-        },
-        {
-          "section": "0x01 the world's own state"
-        },
-        {
-          "name": "MapLoading",
-          "value": 257
-        },
-        {
-          "name": "MapLoadError",
-          "value": 258
-        },
-        {
-          "name": "CompanionLoading",
-          "value": 259
-        },
-        {
-          "name": "WorldReady",
-          "value": 260
         },
         {
           "section": "0x02 where the device says it is"
@@ -911,8 +880,7 @@
           "name": "WORLD_BOOT",
           "value": 4097,
           "doc": [
-            "The shell's boot: what the build is and what the device offers, and what the browser's",
-            "storage kept under host.json's keys."
+            "The kernel's start: what the platform is, and what it was handed to start with."
           ],
           "packet": [
             {
@@ -952,11 +920,11 @@
             },
             {
               "name": "settings",
-              "type": "u32",
-              "list": true,
+              "type": "str",
               "doc": [
-                "The settings as storage kept them, a value a setting in SettingKey's order as the",
-                "snapshot carries them, 0xffffffff for one it kept nothing for."
+                "What storage keeps of the settings, as it keeps it, empty for none: the kernel's own file",
+                "(host.json's STORAGE_KEYS), handed over unread as a process is handed its environment,",
+                "which the kernel reads and from then on writes itself."
               ]
             }
           ]
@@ -967,7 +935,7 @@
           "doc": [
             "The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's",
             "phases on what is left of the quota, the fetches within the credits. The turn leaves",
-            "its signals on the completion ring, drawn by the kernel, and last this command's own."
+            "its signals on the completion ring, drawn by the kernel."
           ],
           "packet": [
             {
@@ -1026,12 +994,6 @@
             {
               "name": "day_start_ms",
               "type": "f64"
-            }
-          ],
-          "signal": [
-            {
-              "name": "draws",
-              "type": "u32"
             }
           ]
         },
@@ -1314,19 +1276,6 @@
           ]
         },
         {
-          "name": "SETTING_TOGGLE",
-          "value": 5634,
-          "doc": [
-            "A toggle's switch."
-          ],
-          "packet": [
-            {
-              "name": "key",
-              "type": "SettingKey"
-            }
-          ]
-        },
-        {
           "name": "CHAT_SEND",
           "value": 5889,
           "doc": [
@@ -1370,13 +1319,6 @@
               "type": "f64",
               "optional": true
             }
-          ]
-        },
-        {
-          "name": "INPUT_RESET_DIST",
-          "value": 4358,
-          "doc": [
-            "The scale bar's press: the default zoom."
           ]
         },
         {
@@ -1600,25 +1542,27 @@
           ]
         },
         {
-          "name": "scale_bar",
-          "type": "ScaleBar"
+          "name": "m_per_px",
+          "type": "f64",
+          "doc": [
+            "The meters a logical pixel spans at the map center, at the camera's distance; 0 where the camera stands there. The scale bar and the place's depth are the shell's to make of it."
+          ]
         },
         {
           "name": "place",
           "type": "PlacePart",
           "list": true,
           "doc": [
-            "The place the map center is in, broad to narrow, already cut at the rung the",
-            "current zoom asks for; empty where the center is in none or the packets it is",
-            "read out of have not arrived."
+            "The place the map center is in, broad to narrow, every rung of it; empty where",
+            "the center is in none or the packets it is read out of have not arrived."
           ]
         },
         {
-          "name": "object_sizes",
-          "type": "f64",
+          "name": "previews",
+          "type": "u32",
           "list": true,
           "doc": [
-            "The sizes an object places at, in units, coarsest first: the tiers the size flyout offers, one of which the shell holds by its index."
+            "The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here."
           ]
         }
       ]
@@ -1640,16 +1584,6 @@
           "optional": true,
           "doc": [
             "The map center in degrees: what the search measures distance from."
-          ]
-        },
-        {
-          "name": "page",
-          "type": "u64",
-          "optional": true,
-          "doc": [
-            "The L3 page the center falls in: what the area being looked at is announced per.",
-            "Sent because the shell would otherwise need a second implementation of the space",
-            "to reach it."
           ]
         }
       ]
@@ -1713,19 +1647,6 @@
       ]
     },
     {
-      "name": "ScaleBar",
-      "fields": [
-        {
-          "name": "total_meters",
-          "type": "f64"
-        },
-        {
-          "name": "bar_width_px",
-          "type": "f64"
-        }
-      ]
-    },
-    {
       "name": "PlacePart",
       "doc": [
         "One rung of the place, in every language the provider had rather than one resolved",
@@ -1733,6 +1654,13 @@
         "sent."
       ],
       "fields": [
+        {
+          "name": "rank",
+          "type": "u8",
+          "doc": [
+            "Where the part sits, broadest first (spec/pxl/spec/place.json)."
+          ]
+        },
         {
           "name": "name",
           "type": "str"

@@ -58,7 +58,7 @@ export const pct = (part: number, whole: number) => (whole > 0 ? round((part / w
 
 export const tris = (t: number) => (t >= 1000 ? `${round(t / 1000)}k` : String(round(t)));
 
-function levelsText(bits: f64): string {
+export function levelsText(bits: f64): string {
   const out: u32[] = [];
   for (let k = 0; k < 32; k++) if (bits & (1 << k)) out.push(k);
   return out.length > 0 ? out.join(",") : "-";

@@ -8,8 +8,8 @@ use std::cmp::Ordering;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::hierarchy::{ancestor_of, Scale};
 use pxl_spec::space::indexer::{L2, L3};
+use pxl_spec::space::lod::fault_radius;
 use pxl_spec::space::lod::Tau;
-use pxl_spec::space::lod::{self, fault_radius};
 use pxl_spec::space::observation::{band, Bounds, Contents, DemandEstimator, Frustum, Observation, Requirement};
 use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pvf3::REACH;
@@ -22,7 +22,7 @@ use crate::layer::environment::state::globe;
 use crate::layer::object::store::objects_revision;
 use crate::world::access::Access;
 use crate::world::frame::view::view;
-use crate::world::observer::Sight;
+use crate::world::observer::Footprint;
 use crate::world::paging::floor;
 use crate::world::pyramid::Layer as _;
 
@@ -39,12 +39,7 @@ pub fn ground_level() -> u32 {
 
 pub fn frustum_of_view() -> Frustum {
     let v = view();
-    let o = [ivec::to_real(ivec::X(v.origin)), ivec::to_real(ivec::Y(v.origin)), ivec::to_real(ivec::Z(v.origin))];
-    let mut planes = v.planes;
-    for p in planes.as_chunks_mut::<4>().0 {
-        p[3] -= p[0] * o[0] + p[1] * o[1] + p[2] * o[2];
-    }
-    Frustum { planes }
+    v.frustum.about(ivec::to_v3(v.origin).map(|c| -c))
 }
 
 /// Out to where the air ends the ground or the source's top ends, whichever
@@ -82,19 +77,16 @@ impl Bounds for Known {
                 known = false;
                 return;
             };
-            let mut hold = |(lo, hi): (f64, f64)| {
-                let b = Aabb {
+            let mut hold = |b: Aabb| bound = Some(bound.map_or(b, |a| a.join(b)));
+            if let Some((lo, hi)) = cut(n.ground) {
+                hold(Aabb {
                     min: [square.min[0], square.min[1], lo],
                     max: [square.max[0], square.max[1], hi],
-                };
-                bound = Some(bound.map_or(b, |a| a.join(b)));
-            };
-            if let Some(ground) = cut(n.ground) {
-                hold(ground);
+                });
                 rise = rise.max(n.slope * cell);
             }
             if let Some(objects) = kernel().objects.bound_in(&square) {
-                bound = Some(bound.map_or(objects, |a| a.join(objects)));
+                hold(objects);
                 rise = rise.max(objects.max[2] - objects.min[2]);
             }
         });
@@ -164,7 +156,8 @@ fn under(level: u32, region: Aabb, each: &mut dyn FnMut((Scale, [i64; 2]), Aabb)
 /// short of it.
 pub struct ByFootprints<'a> {
     pub tau: Tau,
-    pub sight: &'a Sight,
+    pub footprints: &'a [Footprint],
+    pub lacks: &'a [Requirement],
 }
 
 impl DemandEstimator for ByFootprints<'_> {
@@ -179,14 +172,14 @@ impl DemandEstimator for ByFootprints<'_> {
             let m = o.measure(&held);
             (m.seen && m.near < to && m.near <= o.far && m.far >= from).then_some(Requirement { level, region })
         };
-        for lack in self.sight.lacks() {
+        for lack in self.lacks {
             let r = lack.region;
             let region = column(r.min[0], r.min[1], r.max[0], r.max[1]);
             if let Some(r) = (lack.level..=o.top).find_map(|level| required(level, region)) {
                 each(r);
             }
         }
-        for f in self.sight.footprints() {
+        for f in self.footprints {
             let b = f.aabb();
             for level in 0..=o.top {
                 let Some((_, to)) = band(o, self.tau, level) else { break };
@@ -216,7 +209,7 @@ impl DemandEstimator for ByFootprints<'_> {
 
 /// Moves whenever a terrain page comes or goes or an object is written.
 pub fn heights_revision() -> (u32, u32) {
-    (Terrain::pyramid().revision(), objects_revision())
+    (Terrain::pyramid().paging().revision(), objects_revision())
 }
 
 /// Seen before unseen, then nearer first. Every layer's work is taken in

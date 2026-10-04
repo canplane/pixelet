@@ -87,6 +87,9 @@ struct Entry<L> {
     ask: Option<Ask>,
     /// The bucket has no object for it, so the page over it says its ground.
     answered: bool,
+    /// The bucket has no object for it, and it reads the body every such
+    /// page shares, once that has come.
+    absent: bool,
 }
 
 impl<L> Entry<L> {
@@ -94,6 +97,7 @@ impl<L> Entry<L> {
         held: None,
         ask: None,
         answered: false,
+        absent: false,
     };
 
     fn idle(&self) -> bool {
@@ -103,6 +107,8 @@ impl<L> Entry<L> {
 
 pub struct Paging<L: Layer> {
     pages: HashMap<LevelPage, Entry<L>>,
+    /// The body every absent page reads, decoded once into `ABSENT`.
+    shared: Option<L>,
     free: Vec<u32>,
     /// Kept so `ask` allocates nothing.
     going: Vec<LevelPage>,
@@ -117,6 +123,7 @@ impl<L: Layer> Default for Paging<L> {
     fn default() -> Self {
         Paging {
             pages: HashMap::with_capacity(ENTRIES as usize),
+            shared: None,
             // Lowest first, as the frames are taken.
             free: (ABSENT + 1..RECORDS).rev().collect(),
             going: Vec::with_capacity(ENTRIES as usize),
@@ -154,16 +161,17 @@ impl<L: Layer> Paging<L> {
         self.held_as(p).is_some()
     }
 
+    /// Held in a frame of its own, not the shared `ABSENT` record.
+    fn framed(&self, p: LevelPage) -> bool {
+        self.held_as(p).is_some_and(|h| h.record != ABSENT)
+    }
+
     pub fn get(&self, p: LevelPage) -> Option<&L> {
         self.held_as(p).map(|h| &h.body)
     }
 
     pub fn held(&self) -> impl Iterator<Item = (LevelPage, &L)> {
         self.pages.iter().filter_map(|(&p, e)| Some((p, &e.held.as_ref()?.body)))
-    }
-
-    pub fn level(&self, level: u32) -> impl Iterator<Item = (LevelPage, &L)> {
-        self.pages.iter().filter(move |(p, _)| p.level == level).filter_map(|(&p, e)| Some((p, &e.held.as_ref()?.body)))
     }
 
     pub fn frames_used(&self) -> u32 {
@@ -248,7 +256,7 @@ impl<L: Layer> Paging<L> {
 
     /// A page not yet held counts as taking one: whether it is empty is known only on arrival.
     pub fn takes_frame(&self, p: LevelPage) -> bool {
-        !self.settled(p) && self.held_as(p).is_none_or(|h| h.record != ABSENT)
+        !self.settled(p) && (self.framed(p) || !self.resident(p))
     }
 
     pub fn asked(&self, p: LevelPage) -> Option<Ask> {
@@ -273,7 +281,7 @@ impl<L: Layer> Paging<L> {
     /// only for a speculative page, counted; for anything stronger, none means
     /// the capacity bound is broken.
     fn frame_for(&mut self, p: LevelPage, victim: &impl Victim) -> Option<u32> {
-        if self.held_as(p).is_some_and(|h| h.record != ABSENT) {
+        if self.framed(p) {
             return self.remove(p);
         }
         if let Some(free) = self.free.pop() {
@@ -283,7 +291,7 @@ impl<L: Layer> Paging<L> {
         let mut candidates: Vec<Candidate> = self
             .pages
             .iter()
-            .filter(|&(&q, e)| e.held.as_ref().is_some_and(|h| h.record != ABSENT) && self.hold(q) == Hold::Cache)
+            .filter(|&(&q, _)| self.framed(q) && self.hold(q) == Hold::Cache)
             .map(|(&q, _)| Candidate { page: q, hinted: self.hinted(q) })
             .filter(|c| !(speculative && c.hinted))
             .collect();
@@ -334,6 +342,35 @@ impl<L: Layer> Paging<L> {
         self.put(p, page, ABSENT);
     }
 
+    /// `p` has no object: it reads the shared body, or waits for it.
+    pub fn absent(&mut self, p: LevelPage) {
+        if self.asked(p).is_none() {
+            return;
+        }
+        match &self.shared {
+            Some(body) => self.set(p, body.clone()),
+            None => self.entry_mut(p).absent = true,
+        }
+    }
+
+    /// Whether an asked page waits for the shared body.
+    pub fn awaits_shared(&self) -> bool {
+        self.shared.is_none() && self.pages.values().any(|e| e.absent && e.ask.is_some())
+    }
+
+    pub fn has_shared(&self) -> bool {
+        self.shared.is_some()
+    }
+
+    /// The shared body has come: every page waiting for it reads it.
+    pub fn adopt_shared(&mut self, body: L) {
+        let waiting: Vec<LevelPage> = self.pages.iter().filter(|(_, e)| e.absent && e.held.is_none()).map(|(&p, _)| p).collect();
+        for p in waiting {
+            self.set(p, body.clone());
+        }
+        self.shared = Some(body);
+    }
+
     pub fn answer_above(&mut self, p: LevelPage) {
         if self.asked(p).is_none() {
             return;
@@ -353,9 +390,10 @@ impl<L: Layer> Paging<L> {
 
     /// Returns the frame `p` was in, if any, for the caller to fill or free.
     fn remove(&mut self, p: LevelPage) -> Option<u32> {
-        let held = self.pages.get_mut(&p)?.held.take()?;
-        if self.pages[&p].idle() {
-            self.pages.remove(&p);
+        let std::collections::hash_map::Entry::Occupied(mut e) = self.pages.entry(p) else { return None };
+        let held = e.get_mut().held.take()?;
+        if e.get().idle() {
+            e.remove();
         }
         self.revision = self.revision.wrapping_add(1);
         L::changed(p, false);

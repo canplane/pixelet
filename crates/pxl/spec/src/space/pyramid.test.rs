@@ -15,9 +15,8 @@ fn a_cells_center_is_its_middle_and_half_its_side_above_the_ground() {
         assert_eq!(GROUND.cell_of(level, &cell.base()), cell, "a cell is found from its own corner");
         assert_eq!(cell.up(2), GROUND.cell_of(level + 2, &point), "a block is the cell over it");
         let side = cell.side();
-        let mut at = [0.0; 3];
         let c = cell.center(10.0);
-        projection::unproject(&mut at, c.i, c.f);
+        let at = projection::unproject(c.i, c.f);
         let base = cell.base();
         assert_eq!(at[2], 10.0 + side / 2.0);
         assert_eq!(at[0], pvf3::to_real(pvf3::X(&base)) + side / 2.0);
@@ -96,10 +95,10 @@ fn a_parent_cell_and_its_child_block_are_one_relation() {
             for (tx, ty) in [(0, 0), (1, 0), (n - 1, n - 1), (n / 2, 3), (7, n - 2)] {
                 let child = lattice.cell_index(tx, ty);
                 let parent = lattice.parent_cell(q, child);
-                let (slot, first) = lattice.child_block(parent);
+                let (slot, block) = lattice.child_block(parent);
                 assert_eq!(slot, q, "the block lies in the child page the cell does");
-                let block = [first, first + 1, first + n, first + n + 1];
-                assert!(block.contains(&child), "{child} folds from the block at {first}");
+                assert_eq!(block, [block[0], block[0] + 1, block[0] + n, block[0] + n + 1], "a 2×2 block, row by row");
+                assert!(block.contains(&child), "{child} folds from the block at {}", block[0]);
             }
         }
     }

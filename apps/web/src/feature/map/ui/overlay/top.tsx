@@ -1,4 +1,4 @@
-// @pxl/web/feature/map/ui/overlay/top-overlays.tsx
+// @pxl/web/feature/map/ui/overlay/top.tsx
 
 import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, View } from "react-native";

@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
-import { boot_kernel } from "@/kernel/kernel.ts";
+import { boot_kernel } from "@/kernel/boot.ts";
 import { bootstrapI18n } from "@/locale/i18n.ts";
 
 let booted = false;

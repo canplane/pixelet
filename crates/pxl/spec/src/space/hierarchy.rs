@@ -71,9 +71,7 @@ impl Scale {
     /// `index_of`'s inverse.
     pub fn base_of(self, index: [i64; 3]) -> Pvf3 {
         let shift = FRAC_W as i32 + self.0;
-        let mut out = Pvf3::default();
-        pvf3::gather(&mut out, index[0] << shift, index[1] << shift, index[2] << shift);
-        out
+        pvf3::gather(index[0] << shift, index[1] << shift, index[2] << shift)
     }
 
     pub fn cube(self, index: [i64; 3]) -> Aabb {
@@ -83,7 +81,7 @@ impl Scale {
     }
 
     pub fn of_side(units: f64) -> Scale {
-        Scale(round(units.log2()) as i32)
+        Scale(round(libm::log2(units)) as i32)
     }
 }
 
@@ -104,6 +102,12 @@ pub fn child_of<const D: usize>(at: [i64; D], slot: usize) -> [i64; D] {
 
 pub fn ancestor_of<const D: usize>(at: [i64; D], levels: u32) -> [i64; D] {
     at.map(|v| v >> levels)
+}
+
+/// Where `at` lies in its ancestor `levels` up, from that ancestor's first
+/// descendant.
+pub fn offset_in<const D: usize>(at: [i64; D], levels: u32) -> [i64; D] {
+    at.map(|v| v & ((1 << levels) - 1))
 }
 
 /// Every slot 0: `ancestor_of`'s inverse.

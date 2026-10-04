@@ -80,7 +80,7 @@ pub fn bake_ground(elements: &[Feature], has_coast_row: bool) -> Ground {
     }
 
     for feat in &other_feats {
-        if feat.extra.is_tunnel {
+        if feat.extra.is_unseen || feat.extra.is_deck {
             continue;
         }
         let Some(cfg) = feat.cell_cfg else { continue };

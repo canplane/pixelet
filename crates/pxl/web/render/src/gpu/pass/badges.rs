@@ -6,12 +6,12 @@
 //! the supersampled sheet crawls with every camera micro-movement.
 
 use crate::asset::atlas::{BillboardAtlas, DrawSpec};
-use crate::frame::draw::{DRAW_WORDS, PIPELINE_BADGE, UNIFORM_FLOATS};
+use crate::frame::draw::{PIPELINE_BADGE, UNIFORM_FLOATS};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::Blocks;
+use crate::gpu::renderer::{Blocks, Draws};
 use crate::gpu::sheet::{Align, SheetPainter, Sketch};
 use crate::gpu::text::{Font, TextOf};
 
@@ -131,6 +131,8 @@ pub struct BadgePass {
     levels: u32,
     generation: u32,
     sets: [Set; SETS],
+    /// The atlas's dirty entries as the last flush handed them over, kept to
+    /// be handed back to the next.
     dirty: Vec<u32>,
     uniform: [f32; BADGE_FLOATS],
     pub view: [f32; 16],
@@ -158,6 +160,7 @@ impl BadgePass {
             levels: 1,
             generation: u32::MAX,
             sets: [Set::default(); SETS],
+            dirty: Vec::new(),
             uniform: [0.0; BADGE_FLOATS],
             view: [0.0; 16],
             proj: [0.0; 16],
@@ -173,9 +176,10 @@ impl BadgePass {
 
     /// An entry whose text is not drawn yet is left for a later frame.
     pub fn sync_sheet(&mut self, g: &Gpu, mips: &Mips, atlas: &mut BillboardAtlas, text: TextOf) {
-        let flush = atlas.flush(self.generation);
+        let flush = atlas.flush(self.generation, &mut self.dirty);
         self.generation = flush.generation;
-        let slots = if flush.whole {
+        let live;
+        let slots: &[u32] = if flush.whole {
             if flush.size == 0 {
                 return;
             }
@@ -201,9 +205,10 @@ impl BadgePass {
                 self.built.layouts[1],
                 &[0, resource::VIEW, self.sheet_view, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0],
             );
-            atlas.live()
+            live = atlas.live();
+            &live
         } else {
-            flush.dirty
+            &self.dirty
         };
         if slots.is_empty() || self.sheet == 0 {
             return;
@@ -212,7 +217,7 @@ impl BadgePass {
         g.encoder(encoder);
         let mut made = Vec::new();
         let mut drawn = false;
-        for &slot in &slots {
+        for &slot in slots {
             let Some(spec) = atlas.slot_draw(slot) else { continue };
             let mut p = Sketch::default();
             match spec {
@@ -238,15 +243,16 @@ impl BadgePass {
         }
     }
 
+    /// Every billboard set's draw, in the order listed, in one pass of their
+    /// own over `color` reading `depth`, timed under `stamp`.
     #[allow(clippy::too_many_arguments)]
-    pub fn draw(&mut self, g: &Gpu, encoder: u32, color: u32, depth: u32, viewport: [u32; 2], draws: &[u32], uniforms: &[f32], blocks: &Blocks, stamp: &mut Stamp) -> u32 {
+    pub fn draw(&mut self, g: &Gpu, encoder: u32, color: u32, depth: u32, viewport: [u32; 2], draws: &Draws, uniforms: &[f32], blocks: &Blocks, stamp: &mut Stamp) {
         if self.sheet_group == 0 {
-            return 0;
+            return;
         }
         let mut pass = 0;
         let mut n = 0;
-        let mut drawn = 0;
-        for d in draws.as_chunks::<DRAW_WORDS>().0.iter().filter(|d| d[4] == PIPELINE_BADGE && d[1] > 0) {
+        for d in draws.of(PIPELINE_BADGE).filter(|d| d[1] > 0) {
             let Some((block, _, _)) = blocks.get(d[0]) else { continue };
             if n == SETS {
                 break;
@@ -286,12 +292,10 @@ impl BadgePass {
             }
             g.set_bind_group(pass, 0, set.group, &[]);
             g.draw(pass, 4, d[1], 0, 0);
-            drawn += d[1];
         }
         if pass != 0 {
             g.end(pass);
             release(pass);
         }
-        drawn
     }
 }

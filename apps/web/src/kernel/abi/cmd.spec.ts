@@ -26,8 +26,8 @@
  */
 
 import type { BranchCursor, NodeCursor } from "@xpute/core/wire/xtp/mod.ts";
-import type { F64Array, U32Array, U8Array } from "@xpute/core/abi/array.ts";
-import type { f64, i32, u32, u64 } from "@xpute/core/abi/word.ts";
+import type { U32Array, U8Array } from "@xpute/core/abi/array.ts";
+import type { f64, i32, u32, u8 } from "@xpute/core/abi/word.ts";
 import { packet } from "@xpute/runtime/ipc/doorbell.ts";
 import type { GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
 
@@ -61,7 +61,6 @@ export const enum InputMinor {
   WHEEL = 0x03,
   TRACKING = 0x04,
   VIEW = 0x05,
-  RESET_DIST = 0x06,
   COMPASS_RESET = 0x07,
   GO_TO = 0x08,
   POSE = 0x09,
@@ -106,7 +105,6 @@ export const enum SurfaceMinor {
 /** A setting's verbs. */
 export const enum SettingMinor {
   SET = 0x01,
-  TOGGLE = 0x02,
 }
 
 /** The chat's verbs. */
@@ -201,7 +199,6 @@ export const enum MapStatus {
   Idle = 0,
   Loading = 1,
   Success = 2,
-  Error = 3,
 }
 
 /** Where a sensor's reading is: none asked for, asked for, arriving, failed, or none to be had, the device having no such sensor. */
@@ -227,13 +224,6 @@ export const enum DevicePoseStatus {
  * the gap. */
 export const enum Message {
   None = 0x0000,
-
-  // ---- 0x01 the world's own state ----
-
-  MapLoading = 0x0101,
-  MapLoadError = 0x0102,
-  CompanionLoading = 0x0103,
-  WorldReady = 0x0104,
 
   // ---- 0x02 where the device says it is ----
 
@@ -284,12 +274,11 @@ export const enum Command {
 
   // ---- the host tells the process: its start, its turn, its window, its devices and its input ----
 
-  /** The shell's boot: what the build is and what the device offers, and what the browser's
-   * storage kept under host.json's keys. */
+  /** The kernel's start: what the platform is, and what it was handed to start with. */
   WORLD_BOOT = 0x1001,
   /** The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
    * phases on what is left of the quota, the fetches within the credits. The turn leaves
-   * its signals on the completion ring, drawn by the kernel, and last this command's own. */
+   * its signals on the completion ring, drawn by the kernel. */
   WORLD_FRAME = 0x1002,
   /** The tab's visibility; the host rings the doorbell for it at once, since a hidden
    * page gets no frame and hiding is the save's last sure moment. */
@@ -326,8 +315,6 @@ export const enum Command {
   PREVIEW_CLOSE = 0x1802,
   /** A setting set from the sheet or the character picker. */
   SETTING_SET = 0x1601,
-  /** A toggle's switch. */
-  SETTING_TOGGLE = 0x1602,
   /** A line the player said, shown over the character. */
   CHAT_SEND = 0x1701,
   /** The tracking button's press, as the button showed it. */
@@ -335,8 +322,6 @@ export const enum Command {
   /** Where the camera stands, set outright rather than driven: what the kernel's own
    * test puts a view at, and what an A/B reads two builds at the same view with. */
   INPUT_VIEW = 0x1105,
-  /** The scale bar's press: the default zoom. */
-  INPUT_RESET_DIST = 0x1106,
   /** The compass's press: north up. */
   INPUT_COMPASS_RESET = 0x1107,
   /** A search result: the map center moved there. */
@@ -398,13 +383,13 @@ export interface Snapshot {
   compass: CompassState;
   /** Every setting's value by its SettingKey, as SETTING_SET carries one. */
   settings: u32[];
-  scale_bar: ScaleBar;
-  /** The place the map center is in, broad to narrow, already cut at the rung the
-   * current zoom asks for; empty where the center is in none or the packets it is
-   * read out of have not arrived. */
+  /** The meters a logical pixel spans at the map center, at the camera's distance; 0 where the camera stands there. The scale bar and the place's depth are the shell's to make of it. */
+  m_per_px: f64;
+  /** The place the map center is in, broad to narrow, every rung of it; empty where
+   * the center is in none or the packets it is read out of have not arrived. */
   place: PlacePart[];
-  /** The sizes an object places at, in units, coarsest first: the tiers the size flyout offers, one of which the shell holds by its index. */
-  object_sizes: f64[];
+  /** The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here. */
+  previews: u32[];
 }
 
 export function read_snapshot(b: BranchCursor): Snapshot {
@@ -417,11 +402,10 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     is_follow_mode: b.at(5).get<boolean>(),
     camera_busy: b.at(6).get<boolean>(),
     zooming: b.at(7).get<boolean>(),
-    compass: b.at(8).get<CompassState>(),
-    settings: Array.from(b.at(9).get<U32Array>()),
-    scale_bar: read_scale_bar(b.at_branch(10)),
-    place: list(b.at_branch(11), read_place_part),
-    object_sizes: Array.from(b.at(12).get<F64Array>()),
+    settings: Array.from(b.at(8).get<U32Array>()),
+    m_per_px: b.at(9).get<f64>(),
+    place: list(b.at_branch(10), read_place_part),
+    previews: Array.from(b.at(11).get<U32Array>()),
   };
 }
 
@@ -430,14 +414,10 @@ export interface MapState {
   is_off_center: boolean;
   /** The map center in degrees: what the search measures distance from. */
   center: LonLat | null;
-  /** The L3 page the center falls in: what the area being looked at is announced per.
-   * Sent because the shell would otherwise need a second implementation of the space
-   * to reach it. */
-  page: u64 | null;
 }
 
 export function read_map_state(b: BranchCursor): MapState {
-  return { status: b.at(0).get<MapStatus>(), is_off_center: b.at(1).get<boolean>(), center: optional(b.at(2), read_lon_lat), page: b.at(3).get<u64 | null>() };
+  return { status: b.at(0).get<MapStatus>(), is_off_center: b.at(1).get<boolean>(), center: optional(b.at(2), read_lon_lat) };
 }
 
 export interface LonLat {
@@ -477,25 +457,18 @@ export function read_orientation_state(b: BranchCursor): OrientationState {
   return { status: b.at(0).get<DevicePoseStatus>(), heading: b.at(1).get<f64 | null>() };
 }
 
-export interface ScaleBar {
-  total_meters: f64;
-  bar_width_px: f64;
-}
-
-export function read_scale_bar(b: BranchCursor): ScaleBar {
-  return { total_meters: b.at(0).get<f64>(), bar_width_px: b.at(1).get<f64>() };
-}
-
 /** One rung of the place, in every language the provider had rather than one resolved
  * name: the reader's language is the page's, and switching it re-reads a label already
  * sent. */
 export interface PlacePart {
+  /** Where the part sits, broadest first (spec/pxl/spec/place.json). */
+  rank: u8;
   name: string;
   names: PlaceName[];
 }
 
 export function read_place_part(b: BranchCursor): PlacePart {
-  return { name: b.at(0).get<string>(), names: list(b.at_branch(1), read_place_name) };
+  return { rank: b.at(0).get<u8>(), name: b.at(1).get<string>(), names: list(b.at_branch(2), read_place_name) };
 }
 
 export interface PlaceName {
@@ -611,15 +584,14 @@ export interface WorldBoot {
    * silence is the only sign of loss; a device's speaks only when the heading turns and
    * reports a failure itself (SENSOR_ORIENTATION_LOST). */
   orientation_silence_is_loss: boolean;
-  /** The settings as storage kept them, a value a setting in SettingKey's order as the
-   * snapshot carries them, 0xffffffff for one it kept nothing for. */
-  settings: u32[];
+  /** What storage keeps of the settings, as it keeps it, empty for none: the kernel's own file
+   * (host.json's STORAGE_KEYS), handed over unread as a process is handed its environment,
+   * which the kernel reads and from then on writes itself. */
+  settings: string;
 }
 
 export function encode_world_boot(p: WorldBoot): U8Array {
-  return packet((b) =>
-    b.bool(p.development).bool(p.handheld).bool(p.geolocation).bool(p.orientation).bool(p.orientation_permission).bool(p.orientation_silence_is_loss).u32_array(Uint32Array.from(p.settings))
-  );
+  return packet((b) => b.bool(p.development).bool(p.handheld).bool(p.geolocation).bool(p.orientation).bool(p.orientation_permission).bool(p.orientation_silence_is_loss).str(p.settings));
 }
 
 /** Command.WORLD_FRAME's packet. */
@@ -645,15 +617,6 @@ export function encode_world_frame(p: WorldFrame): U8Array {
   return packet((b) =>
     b.f64(p.width).f64(p.height).f64(p.dpr).f64(p.delta_s).f64(p.frame_ms).bool(p.interactive).u32(p.credits).f64(p.unix_ms).f64(p.hours).f64(p.minutes).f64(p.seconds).f64(p.day_start_ms)
   );
-}
-
-/** Command.WORLD_FRAME's signal. */
-export interface WorldFrameSignal {
-  draws: u32;
-}
-
-export function read_world_frame(b: BranchCursor): WorldFrameSignal {
-  return { draws: b.at(0).get<u32>() };
 }
 
 /** Command.WORLD_VISIBILITY's packet. */
@@ -797,15 +760,6 @@ export interface SettingSet {
 
 export function encode_setting_set(p: SettingSet): U8Array {
   return packet((b) => b.u32(p.key).u32(p.value));
-}
-
-/** Command.SETTING_TOGGLE's packet. */
-export interface SettingToggle {
-  key: u32;
-}
-
-export function encode_setting_toggle(p: SettingToggle): U8Array {
-  return packet((b) => b.u32(p.key));
 }
 
 /** Command.CHAT_SEND's packet. */

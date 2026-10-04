@@ -15,19 +15,18 @@
 //! always possible. A coarsening waits `COARSEN_HOLD_MS` before it is made,
 //! unless the arena refused a move last step.
 
-use pxl_render::look::lod::COARSEST;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::lod::Tau;
-use pxl_spec::space::pyramid::{GROUND, TOP_LEVEL};
+use pxl_spec::space::pyramid::{chunk_scale, GROUND, TOP_LEVEL};
 
 use crate::param::REFINEMENTS_IN_FLIGHT;
 use crate::world::chunk::build::mesh_step;
+use pxl_spec::space::hierarchy::Scale;
 use crate::world::chunk::mesh_slot::{Pool, ARENA, COARSE_TIER_SLOTS, POOLS};
 use crate::world::observation::Order;
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::domain::Price;
 use crate::world::quality::fits;
-use pxl_spec::space::hierarchy::Scale;
 
 pub type Slots = [u32; POOLS];
 
@@ -39,25 +38,25 @@ pub const RESERVE: Slots = [0, COARSE_TIER_SLOTS, 0];
 /// for each refinement in flight holding the piece it replaces.
 pub const HEADROOM: Slots = [REFINEMENTS_IN_FLIGHT + RESERVE[0], REFINEMENTS_IN_FLIGHT + RESERVE[1], 0];
 
-/// The cube the rule wants at `near`: a level coarser than the LOD level,
+/// The scale the rule wants at `near`: a level coarser than the LOD level,
 /// since terrain draws a level's cells averaged 2 × 2. Below z16 it goes on
 /// to the objects' finest tier.
-pub fn wanted_cube(near: f64, tau: Tau) -> Cube {
+fn wanted_scale(near: f64, tau: Tau) -> Scale {
     let finest = OBJECT_FINEST.above(GROUND.scale(0));
     let level = tau.level(near).max(finest - 1) + 1;
-    GROUND.scale(0).up(level.min((COARSEST.trailing_zeros() + TOP_LEVEL) as i32))
+    GROUND.scale(0).up(level).min(chunk_scale(TOP_LEVEL))
 }
 
-/// A wanted cube as a chunk of `level` draws it: clamped to its own cells
+/// A wanted scale as a chunk of `level` draws it: clamped to its own cells
 /// averaged 2 × 2, and finer than its cells only at z16 where it holds
-/// objects. The outermost (cover) pieces always take the coarsest cube, one
+/// objects. The outermost (cover) pieces always take the coarsest scale, one
 /// slot each.
 ///
-/// A chunk read from a coarser page still uses its own cube: drawing it at
+/// A chunk read from a coarser page still uses its own scale: drawing it at
 /// that page's cells made blocks over the sea after a jump (2026-09-26).
-pub fn drawn_cube(cube: Cube, level: u32, outermost: bool, objects: bool) -> Cube {
+fn drawn_scale(scale: Scale, level: u32, outermost: bool, objects: bool) -> Scale {
     if outermost {
-        return coarsest(level);
+        return chunk_scale(level);
     }
     let own = GROUND.scale(level);
     let finest = match (level, objects) {
@@ -65,44 +64,49 @@ pub fn drawn_cube(cube: Cube, level: u32, outermost: bool, objects: bool) -> Cub
         (0, false) => own,
         _ => own.up(1),
     };
-    cube.clamp(finest, own.up(1))
+    scale.clamp(finest, own.up(1))
 }
 
-pub fn coarsest(level: u32) -> Cube {
-    GROUND.scale(level).up(COARSEST.trailing_zeros() as i32)
-}
-
-/// The quality alone moves the cube; a mesh too big for one slot fills more
+/// The quality alone moves the scale; a mesh too big for one slot fills more
 /// slots and is never drawn coarser for it.
-pub fn cube_of(c: Chunk, outermost: bool, near: f64, tau: Tau) -> Cube {
-    drawn_cube(wanted_cube(near, tau), c.level(), outermost, false)
+pub fn scale_of(c: Chunk, outermost: bool, near: f64, tau: Tau, objects: bool) -> Scale {
+    drawn_scale(wanted_scale(near, tau), c.level(), outermost, objects)
 }
 
-pub fn pool_of(c: Chunk, cube: Cube) -> Pool {
-    Pool::of(c.level(), mesh_step(cube, c.level()))
+pub fn pool_of(c: Chunk, scale: Scale) -> Pool {
+    Pool::of(c.level(), mesh_step(scale, c.level()))
 }
 
-/// Slots per pool the frontier needs at `cut`, counted before anything is
-/// allocated. Never less than what the frontier holds on its way there, and
-/// monotonic in quality: refinements pass through coarse ancestors, which
-/// never outnumber the goal's pieces above z16 plus z16 pieces' parents, so
-/// every z16 piece is counted once in the coarse pool too.
-pub fn need(d: &Domain, cut: &Cut, slots: impl Fn(Chunk, Cube) -> u32) -> Slots {
-    let mut n = [0; POOLS];
-    for &c in cut.pieces() {
-        let cube = cube_of(c, d.outermost(c), d.nearest_to(c), cut.tau());
-        let k = slots(c, cube);
-        match pool_of(c, cube) {
-            Pool::Coarse => n[Pool::Coarse as usize] += k,
-            Pool::Cover => n[Pool::Cover as usize] += k,
-            Pool::Fine => {
-                n[Pool::Fine as usize] += k;
-                n[Pool::Coarse as usize] += 1;
-            }
+/// Slots per pool, counted before allocation. A z16 piece also takes a coarse
+/// slot, for the ancestor it refines through.
+pub struct Need<F> {
+    pub slots: F,
+    /// stop counting a step past the arena
+    pub admit: bool,
+}
+
+impl<F: Fn(Chunk, Scale) -> u32> Price for Need<F> {
+    fn piece(&self, c: Chunk, outermost: bool, near: f64, tau: Tau) -> Slots {
+        let scale = scale_of(c, outermost, near, tau, false);
+        let k = (self.slots)(c, scale);
+        match pool_of(c, scale) {
+            Pool::Coarse => [0, k, 0],
+            Pool::Cover => [0, 0, k],
+            Pool::Fine => [k, 1, 0],
         }
     }
-    n[Pool::Coarse as usize] += cut.splits().filter(|c| c.level() == 1).count() as u32;
-    n
+
+    fn split(&self, c: Chunk) -> Slots {
+        if c.level() == 1 {
+            [0, 1, 0]
+        } else {
+            [0; POOLS]
+        }
+    }
+
+    fn over(&self, n: &Slots) -> bool {
+        self.admit && !fits(*n, ARENA, HEADROOM, [0; POOLS])
+    }
 }
 
 pub trait Env {
@@ -117,7 +121,7 @@ pub struct Now<'a> {
     pub drawn: &'a [Chunk],
     pub building: &'a [(Chunk, bool)],
     pub recubing: u32,
-    pub recube: &'a [(Chunk, (Pool, u32))],
+    pub retier: &'a [(Chunk, (Pool, u32))],
     /// Free slots after what started moves will take.
     pub free: Slots,
 }
@@ -127,7 +131,7 @@ pub struct Plan {
     pub start: Vec<Chunk>,
     pub cancel: Vec<Chunk>,
     pub drop: Vec<Chunk>,
-    pub recube: Vec<Chunk>,
+    pub retier: Vec<Chunk>,
     pub refused: u32,
     pub waiting: u32,
     /// Coarsenings waiting their hold; a turn is requested while any does, or
@@ -190,7 +194,7 @@ pub struct Frontier {
     over: Vec<(Chunk, Chunk)>,
     wanted: Vec<Chunk>,
     open: Vec<u32>,
-    recube: Vec<(Chunk, (Pool, u32))>,
+    retier: Vec<(Chunk, (Pool, u32))>,
 }
 
 impl Frontier {
@@ -208,13 +212,13 @@ impl Frontier {
             over,
             wanted,
             open,
-            recube,
+            retier,
         } = self;
         let Plan {
             start,
             cancel,
             drop,
-            recube: recubed,
+            retier: retiered,
             refused,
             waiting,
             held: held_n,
@@ -222,7 +226,7 @@ impl Frontier {
             swaps,
             chunks,
         } = plan;
-        for v in [&mut *start, &mut *cancel, &mut *drop, &mut *recubed, &mut *chunks] {
+        for v in [&mut *start, &mut *cancel, &mut *drop, &mut *retiered, &mut *chunks] {
             v.clear();
         }
         swaps.clear();
@@ -232,7 +236,7 @@ impl Frontier {
         over.clear();
         wanted.clear();
         open.clear();
-        recube.clear();
+        retier.clear();
 
         let in_goal = |c: &Chunk| now.goal.binary_search(c).is_ok();
         let drawn = |c: &Chunk| now.drawn.binary_search(c).is_ok();
@@ -386,10 +390,10 @@ impl Frontier {
             start.extend(missing());
         }
 
-        recube.extend_from_slice(now.recube);
+        retier.extend_from_slice(now.retier);
         // The chunk only makes the order total, so ties do not follow table history.
-        recube.sort_unstable_by_key(|&(c, _)| (env.order(c), c));
-        for &(c, (pool, k)) in recube.iter() {
+        retier.sort_unstable_by_key(|&(c, _)| (env.order(c), c));
+        for &(c, (pool, k)) in retier.iter() {
             let mut need = [0; POOLS];
             need[pool as usize] = k;
             let fits = take(&free, &need, RESERVE);
@@ -400,7 +404,7 @@ impl Frontier {
             }
             free[pool as usize] -= k;
             in_flight += 1;
-            recubed.push(c);
+            retiered.push(c);
         }
         *short = cramped;
         plan

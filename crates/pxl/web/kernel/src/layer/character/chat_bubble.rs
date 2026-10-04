@@ -7,10 +7,11 @@ use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::pass::badges::BUBBLE_FONT;
 use pxl_render::gpu::surface::DPR_MAX;
 
-use crate::global::Global;
-use crate::host::now;
+use crate::layer::billboard::field::billboard_instance;
 use crate::layer::billboard::sheet::{billboard_sheet, follow_billboard_set, new_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::text::text_lines;
+use xpute_runtime::clock::now;
+use xpute_runtime::global::Global;
 
 // `ts` lets the bubble time itself from when the line was said, so a
 // character swap cannot make a dismissed line look new.

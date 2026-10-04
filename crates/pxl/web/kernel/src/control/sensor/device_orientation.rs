@@ -6,10 +6,10 @@
 
 use crate::abi::cmd::Message;
 
-use crate::control::sensor::store::{device_orientation_store, DevicePoseStatus, PermissionAnswer};
-use crate::global::Global;
-use crate::host::now;
+use crate::control::sensor::store::{device_orientation_store, PermissionAnswer, Pose};
 use crate::world::change::wake_at;
+use xpute_runtime::clock::now;
+use xpute_runtime::global::Global;
 
 /// Orientation has no Permissions API, so revocation cannot be pushed; a long
 /// gap while tracking is taken as loss. Only valid where the sensor talks
@@ -122,10 +122,6 @@ pub fn orientation_lost() {
     let store = device_orientation_store();
     store.set_is_tracking_orientation(false);
     store.set_error(Message::OrientationSignalLost);
-}
-
-pub fn orientation_open(platform: OrientationPlatform) {
-    request_orientation(platform);
 }
 
 pub fn orientation_close() {

@@ -18,7 +18,7 @@ export const OUTCOME_NAMES = ["ok", "aborted", "error"] as const;
 
 export const TASK_PHASE_NAMES = ["net_ms", "bytes", "decode_ms", "adopt_ms"] as const;
 
-export const STEP_NAMES = ["controller", "input", "camera", "environment", "companion", "preview", "chunks", "debug_gizmos", "profiler"] as const;
+export const STEP_NAMES = ["controller", "input", "camera", "environment", "companion", "preview", "view", "chunks", "debug_gizmos", "profiler"] as const;
 
 export const EFFECT_NAMES = [
   "navigation",
@@ -28,8 +28,6 @@ export const EFFECT_NAMES = [
   "follow",
   "destination",
   "view",
-  "tiles",
-  "poi",
   "geocode",
   "theme",
   "decor",
@@ -275,7 +273,7 @@ export const SUMMARY = {
     used_px: 3 as number,
     WORDS: 4 as number,
   },
-  retain: {
+  held: {
     AT: 392 as number,
     run_sets: 0 as number,
     run_set_mb: 1 as number,
@@ -330,7 +328,7 @@ export const SUMMARY = {
     admitted: 3 as number,
     evicted: 4 as number,
     refined: 5 as number,
-    recubed: 6 as number,
+    retiered: 6 as number,
     changes_peak: 7 as number,
     WORDS: 8 as number,
   },

@@ -14,8 +14,7 @@ pub struct SparseTree<T: Copy + Default + PartialEq> {
 
 /// The leaf key at min resolution; the fraction is dropped.
 fn to_key(coord: &Pvf3, min: Scale) -> IVec {
-    let mut reg = Pvf3::default();
-    pvf3::sh(&mut reg, coord, -min.shamt()).i
+    pvf3::sh(coord, -min.shamt()).i
 }
 
 pub fn alloc<T: Copy + Default + PartialEq>(layout: SparseTreeLayout, cap: u32) -> SparseTree<T> {

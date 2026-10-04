@@ -1,18 +1,45 @@
 // pxl-spec/bake/format.rs
 
-//! A baked terrain page and its wire: `[ele, cells, extent, occupancy, decks]`.
-//! The raw wire from the DB is `[ele, buildings, segments, base, coasts, decks]`.
+//! Terrain format helpers for baked page payloads.
+//!
+//! The wire field order is defined here.
+//!
+//! Layer model:
+//! - L3 page = terrain transport / storage unit
+//! - terrain = static terrain layer carried by that page
+//! - ground  = categorical 2D terrain channels
+//! - ele     = elevation raster payload for that terrain layer
+//!
+//! In other words:
+//!   L3 page
+//!     -> terrain layer
+//!          -> ground
+//!          -> ele
+//!
+//! raw wire   = [ele, buildings, segments, base, coasts, decks]
+//!   buildings = [[gers_id, subtype, class, height, num_floors, geom_wkb], ...]
+//!   segments  = [[gers_id, subtype, class, flags, geom_wkb], ...]
+//!   base      = [[gers_id, source, subtype, class, geom_wkb], ...]  (source: land_use|water|land|infrastructure)
+//!   coasts    = [[id, geom_wkb, covers_page], ...]
+//!   decks     = [[gers_id, subtype, class, piers, geom_wkb], ...]  (LineStringZ, the top in m)
+//!
+//! baked wire = [ele, cells, extent, occupancy, decks]
+//!   cells     = one u16 a cell, the four ground channels packed into it
+//!               (bake/pack.rs), which is the shape the client holds too
+//!   extent    = the index lane's (lowest, highest) a cell, in `EXTENT`'s
+//!               cell order, flattened to i16 pairs (`Index`)
+//!   occupancy = one u8: which of the page and its four children are pages
+//!               (`Occupancy`)
+//!   decks     = the ways the page carries above its ground (bake/deck.rs)
 
-use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
 use std::borrow::Cow;
 
 use super::constant::ELE_PADDED_SPAN;
-use super::deck::{self, Decks};
-use super::ground::SHIFT_RANGE;
 use super::malformed;
+use super::deck::{self, Decks};
 use super::pack::{channel_of, GroundCell};
 use super::surface::extent_of;
 use crate::space::pyramid::{EXTENT, PAGE_CELLS};
@@ -65,6 +92,17 @@ pub struct DeckRow {
     pub geom_wkb: Box<[u8]>, // LineString Z
 }
 
+/// A deck as the offline solve left it (pxl-geo-bake deck/): its way's
+/// subtype and class, its line with the deck's top in metres as Z, and a
+/// byte a point, 1 where a pier stands under it.
+pub struct DeckRow {
+    pub gers_id: String,
+    pub subtype: String,
+    pub class: Option<String>,
+    pub piers: Box<[u8]>,
+    pub geom_wkb: Box<[u8]>, // WKB, LineString Z
+}
+
 pub struct CoastRow {
     pub id: String,
     pub geom_wkb: Box<[u8]>,
@@ -104,7 +142,7 @@ const _: () = {
 /// from the bake through the wire to the client.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Ground {
-    pub cells: std::borrow::Cow<'static, [GroundCell]>,
+    pub cells: Cow<'static, [GroundCell]>,
 }
 
 impl Ground {
@@ -185,6 +223,9 @@ pub struct Block {
     pub span: u16,
 }
 
+/// The object every page of open water resolves to.
+pub const OCEAN_KEY: &str = "_ocean";
+
 /// How far past the lane's facts the client draws a cell, down and up: the
 /// ground's shift and a bore's floor. Every read of the lane widens by it.
 pub const DRAWN_PAST: [i16; 2] = {
@@ -263,27 +304,24 @@ fn blocks_of(lane: &[[i16; 2]], blocks: &mut [Block]) {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Terrain {
-    pub ground: Ground,           // a class a cell: the source rasterized
-    pub decks: Decks,             // ways off the ground: source lines, tops solved offline
-    pub ele: Cow<'static, [i16]>, // padded height samples, in z16 cells: from the raster
-    pub index: Index,             // bounds over the page and all under it: no one page holds them
+    pub ground: Ground,                        // a class a cell: the source rasterized
+    pub decks: Decks,                          // ways off the ground: source lines, tops solved offline
+    pub ele: Cow<'static, [i16]>,              // padded height samples, in z16 cells: from the raster
+    pub index: Index,                          // bounds over the page and all under it: no one page holds them
 }
 
 impl Terrain {
-    /// A finest-level page, its index taken from its own surface and decks.
+    /// A baked page of the finest level: its index is its own surface's,
+    /// its decks' tops included.
     pub fn leaf(ele: Vec<i16>, ground: Ground, decks: Decks) -> Terrain {
-        let extent = extent_of(&ele, &decks);
+        let extent = extent_of(&ele, &ground.cells, &decks);
         Terrain {
             ground,
+            decks,
             ele: ele.into(),
             index: Index::new(extent, Occupancy::LEAF),
         }
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct Tile {
-    pub terrain: Terrain,
 }
 
 // Cells go out packed, as the client holds them, so decoding is a length check and a copy.
@@ -294,6 +332,7 @@ pub fn encode_terrain(page: &Terrain) -> Result<Vec<u8>, MarshalError> {
             .u16_array(Some(&page.ground.cells))
             .i16_array(Some(page.index.extent.as_flattened()))
             .u8(Some(page.index.occupancy.bits()));
+        deck::write_branch(&page.decks, b);
     }));
     encoder().encode(&t, TreeEncoderOptions::default())
 }
@@ -304,6 +343,7 @@ pub struct PageRoom {
     pub ele: &'static mut [i16],
     pub extent: &'static mut [[i16; 2]],
     pub blocks: &'static mut [Block],
+    pub decks: deck::Room,
 }
 
 struct Lanes<'a> {
@@ -311,6 +351,7 @@ struct Lanes<'a> {
     cells: &'a [GroundCell],
     extent: &'a [[i16; 2]],
     occupancy: Occupancy,
+    decks: deck::Lanes<'a>,
 }
 
 /// Refused unless every lane is a page's length.
@@ -320,26 +361,28 @@ fn read_page(pkt: &[u8]) -> Result<Lanes<'_>, MarshalError> {
     let cells = root.at(1)?.get_array::<GroundCell>()?;
     let extent = pairs(root.at(2)?.get_array::<i16>()?)?;
     let occupancy = occupancy_of(root.at(3)?.get_number()?)?;
+    let decks = deck::read_branch(root.at_branch(4)?)?;
     if ele.len() != ELE_LANE || cells.len() != GROUND_LANE || extent.len() != EXTENT_LANE {
-        return Err(MarshalError::new(Errno::EBADMSG));
+        return Err(malformed());
     }
-    Ok(Lanes { ele, cells, extent, occupancy })
+    Ok(Lanes { ele, cells, extent, occupancy, decks })
 }
 
 /// Decode straight into the page's resident room; the index's blocks are
 /// built there before the page is returned.
 pub fn decode_terrain_into(pkt: &[u8], room: PageRoom) -> Result<Terrain, MarshalError> {
-    let Lanes { ele, cells, extent, occupancy } = read_page(pkt)?;
+    let Lanes { ele, cells, extent, occupancy, decks } = read_page(pkt)?;
     if room.ele.len() != ELE_LANE || room.cells.len() != GROUND_LANE || room.extent.len() != EXTENT_LANE {
-        return Err(MarshalError::new(Errno::EBADMSG));
+        return Err(malformed());
     }
     room.ele.copy_from_slice(ele);
     room.cells.copy_from_slice(cells);
     room.extent.copy_from_slice(extent);
     blocks_of(room.extent, room.blocks);
-    let PageRoom { cells, ele, extent, blocks } = room;
+    let PageRoom { cells, ele, extent, blocks, decks: deck_room } = room;
     Ok(Terrain {
         ground: Ground { cells: (&*cells).into() },
+        decks: decks.into_room(deck_room),
         ele: (&*ele).into(),
         index: Index {
             extent: (&*extent).into(),
@@ -349,12 +392,17 @@ pub fn decode_terrain_into(pkt: &[u8], room: PageRoom) -> Result<Terrain, Marsha
     })
 }
 
-// Copied out, for a page that outlives its packet.
+// [ele, cells, extent, occupancy, decks] -> { ele, ground, index, decks }
+//
+// For whoever needs a page in hand rather than in a record: the bake's own
+// reads, the tests. Copied out, because a decoded page outlives the packet
+// it came from.
 pub fn decode_terrain(pkt: &[u8]) -> Result<Terrain, MarshalError> {
-    let Lanes { ele, cells, extent, occupancy } = read_page(pkt)?;
+    let Lanes { ele, cells, extent, occupancy, decks } = read_page(pkt)?;
     Ok(Terrain {
         ele: ele.to_vec().into(),
         ground: Ground { cells: cells.to_vec().into() },
+        decks: decks.to_decks(),
         index: Index::new(extent.to_vec(), occupancy),
     })
 }
@@ -362,12 +410,12 @@ pub fn decode_terrain(pkt: &[u8]) -> Result<Terrain, MarshalError> {
 fn pairs(flat: &[i16]) -> Result<&[[i16; 2]], MarshalError> {
     match flat.as_chunks::<2>() {
         (pairs, []) => Ok(pairs),
-        _ => Err(MarshalError::new(Errno::EBADMSG)),
+        _ => Err(malformed()),
     }
 }
 
 fn occupancy_of(number: f64) -> Result<Occupancy, MarshalError> {
-    u8::try_from(number as i64).ok().and_then(Occupancy::of_bits).ok_or(MarshalError::new(Errno::EBADMSG))
+    u8::try_from(number as i64).ok().and_then(Occupancy::of_bits).ok_or_else(malformed)
 }
 
 #[cfg(test)]

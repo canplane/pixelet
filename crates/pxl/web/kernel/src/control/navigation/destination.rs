@@ -8,10 +8,10 @@
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pyramid::{LevelPage, GROUND};
 
-use crate::control::camera::controller::put_center;
-use crate::global::Global;
-use crate::layer::terrain::ground_snap::pivot_over;
-use crate::world::access::{Access, FINEST};
+use crate::control::camera::controller::{put_center, Motion};
+use crate::control::navigation::support::{exact, unknown_z};
+use crate::world::access::FINEST;
+use xpute_runtime::global::Global;
 
 static DESTINATION: Global<Option<(Pvf3, Motion)>> = Global::new();
 

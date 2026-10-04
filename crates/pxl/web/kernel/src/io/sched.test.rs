@@ -1,13 +1,14 @@
 // pxl-kernel/io/sched.test.rs
 //
-// What the ledger keeps whatever its policy. The policy here orders by why
-// then distance, preempts for a better why, and waits 2 s after a failure.
+// What the request scheduler keeps whatever its policy. The policy here orders by why
+// then distance and waits 2 s after a failure.
 
 use super::*;
 use crate::io::demand::Why;
+use xpute_core::status::errno::Errno;
+
 use crate::sched::profiler::record::{Failure, Outcome};
 use crate::world::observation::Order;
-use xpute_runtime::abi::fetch::FetchFail;
 
 struct ByWhy;
 
@@ -19,10 +20,6 @@ impl Serve for ByWhy {
         }
     }
 
-    fn preempts(&self, waiting: Rank, running: Rank) -> bool {
-        waiting.class < running.class
-    }
-
     fn intake(&self) -> u32 {
         u32::MAX
     }
@@ -32,8 +29,8 @@ impl Serve for ByWhy {
     }
 }
 
-fn ledger() -> Ledger<ByWhy> {
-    let mut l = Ledger::new(ByWhy);
+fn scheduler() -> RequestScheduler<ByWhy> {
+    let mut l = RequestScheduler::new(ByWhy);
     l.set_credits(2);
     l
 }
@@ -45,25 +42,25 @@ fn ask(why: Why, near: f64) -> Ask {
     }
 }
 
-fn started<S: Serve>(l: &mut Ledger<S>) -> Vec<u64> {
+fn started<S: Serve>(l: &mut RequestScheduler<S>) -> Vec<u64> {
     let mut out = Vec::new();
     l.take_started(|key, _, _| out.push(key));
     out
 }
 
-fn stopped<S: Serve>(l: &mut Ledger<S>) -> Vec<u64> {
+fn stopped<S: Serve>(l: &mut RequestScheduler<S>) -> Vec<u64> {
     let mut out = Vec::new();
     l.take_stops(|key| out.push(key));
     out
 }
 
-fn ok<S: Serve>(l: &mut Ledger<S>, key: u64, at: f64) {
+fn ok<S: Serve>(l: &mut RequestScheduler<S>, key: u64, at: f64) {
     l.settle(key, Outcome::ok, None, Failure::default(), at);
 }
 
-fn failed<S: Serve>(l: &mut Ledger<S>, key: u64, at: f64) {
+fn failed<S: Serve>(l: &mut RequestScheduler<S>, key: u64, at: f64) {
     let fail = Failure {
-        fail: FetchFail::Network,
+        errno: Errno::ENETUNREACH as i32,
         ..Failure::default()
     };
     l.settle(key, Outcome::error, None, fail, at);
@@ -71,7 +68,7 @@ fn failed<S: Serve>(l: &mut Ledger<S>, key: u64, at: f64) {
 
 #[test]
 fn saying_the_same_set_again_changes_nothing() {
-    let mut l = ledger();
+    let mut l = scheduler();
     let want = [(1u64, ask(Why::Fault, 0.0))];
     l.declare(Category::terrain, &want, 0.0);
     l.pump(0.0);
@@ -84,24 +81,24 @@ fn saying_the_same_set_again_changes_nothing() {
 }
 
 #[test]
-fn an_attempt_ending_does_not_answer_the_demand() {
-    let mut l = ledger();
+fn an_answer_is_asked_once() {
+    let mut l = scheduler();
     l.declare(Category::terrain, &[(1, ask(Why::Fault, 0.0))], 0.0);
     l.pump(0.0);
     let key = started(&mut l)[0];
     ok(&mut l, key, 0.0);
-    // An attempt is not an answer; only the producer withdraws a demand.
-    assert_eq!(l.pending_count(Category::terrain), 1);
     l.pump(0.0);
-    assert_eq!(started(&mut l).len(), 1, "and it is tried again");
-    l.declare(Category::terrain, &[], 0.0);
-    assert_eq!(l.pending_count(Category::terrain), 1, "the attempt is still out");
-    assert_eq!(l.counts().0, 0, "but nothing is waiting");
+    assert!(started(&mut l).is_empty(), "an answered want was asked again");
+    assert!(stopped(&mut l).is_empty());
+    assert_eq!(l.pending_count(Category::terrain), 0);
+    l.declare(Category::terrain, &[(1, ask(Why::Fault, 0.0))], 1.0);
+    l.pump(1.0);
+    assert_eq!(started(&mut l).len(), 1);
 }
 
 #[test]
 fn a_failure_waits_rather_than_asking_straight_back() {
-    let mut l = ledger();
+    let mut l = scheduler();
     l.declare(Category::terrain, &[(1, ask(Why::Fault, 0.0))], 0.0);
     l.pump(0.0);
     let key = started(&mut l)[0];
@@ -119,7 +116,7 @@ fn a_failure_waits_rather_than_asking_straight_back() {
 
 #[test]
 fn a_current_demand_is_said_whatever_old_work_is_draining() {
-    let mut l = ledger();
+    let mut l = scheduler();
     l.declare(Category::terrain, &[(1, ask(Why::Hint, 0.0)), (2, ask(Why::Hint, 1.0))], 0.0);
     l.pump(0.0);
     let out = started(&mut l);
@@ -136,8 +133,8 @@ fn a_current_demand_is_said_whatever_old_work_is_draining() {
 }
 
 #[test]
-fn a_running_attempt_is_stopped_only_for_one_the_policy_ranks_ahead_and_asks_it() {
-    let mut l = ledger();
+fn a_running_attempt_is_never_stopped_for_a_better_want() {
+    let mut l = scheduler();
     l.set_credits(1);
     l.declare(Category::terrain, &[(1, ask(Why::Hint, 5.0))], 0.0);
     l.pump(0.0);
@@ -147,22 +144,16 @@ fn a_running_attempt_is_stopped_only_for_one_the_policy_ranks_ahead_and_asks_it(
     assert!(stopped(&mut l).is_empty(), "distance says which to start, not which to restart");
     l.declare(Category::terrain, &[(1, ask(Why::Hint, 5.0)), (3, ask(Why::Fault, 9.0))], 0.0);
     l.pump(0.0);
-    assert_eq!(stopped(&mut l).len(), 1, "a class better takes the credit");
-    assert_eq!(started(&mut l).len(), 1, "in the same turn");
-    assert_eq!(l.counts().0, 1, "and the one it took from is still wanted");
+    assert!(stopped(&mut l).is_empty(), "a class better waits for a free credit");
+    assert!(started(&mut l).is_empty(), "and starts nothing meanwhile");
 }
 
-/// Stops anything for anything; the ledger allows it only for a want
-/// strictly ahead, so at rest the stops end.
+/// Takes one want a pump, every want ranked alike.
 struct Restless;
 
 impl Serve for Restless {
     fn rank(&self, _category: Category, _subject: u64, ask: Ask, _enqueue_ms: f64) -> Rank {
         Rank { class: 0, distance: ask.order.near }
-    }
-
-    fn preempts(&self, _waiting: Rank, _running: Rank) -> bool {
-        true
     }
 
     fn intake(&self) -> u32 {
@@ -175,8 +166,8 @@ impl Serve for Restless {
 }
 
 #[test]
-fn a_policy_that_always_preempts_still_serves_every_want_at_rest() {
-    let mut l = Ledger::new(Restless);
+fn every_want_is_served_at_rest() {
+    let mut l = RequestScheduler::new(Restless);
     l.set_credits(2);
     let mut wanted: Vec<(u64, Ask)> = (0..12).map(|k| (k, ask(Why::Fault, (k * 7 % 12) as f64))).collect();
     let mut out: Vec<u64> = Vec::new();
@@ -202,7 +193,7 @@ fn a_policy_that_always_preempts_still_serves_every_want_at_rest() {
 
 #[test]
 fn an_asset_shares_the_credits_and_is_never_withdrawn() {
-    let mut l = ledger();
+    let mut l = scheduler();
     l.set_credits(1);
     l.declare(Category::terrain, &[(1, ask(Why::Fault, 0.0))], 0.0);
     l.declare(Category::asset, &[(7, Ask::PLAIN)], 0.0);

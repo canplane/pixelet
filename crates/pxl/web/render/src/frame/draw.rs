@@ -10,7 +10,9 @@ use xpute_runtime::mem::heap::{alloc, free};
 
 /// Upload record: handle, address, byte length, vertex count, index count.
 pub const UPLOAD_WORDS: usize = 5;
-/// Draw record: handle or arena group, two pipeline-specific words, uniform index, pipeline.
+/// Words a draw record holds: a block's handle or the arena group, two words
+/// its pipeline reads its own way (below), the index of its uniforms, and the
+/// pipeline.
 pub const DRAW_WORDS: usize = 5;
 /// Draw uniforms: eye-relative translation (3), a pipeline-specific float,
 /// opacity, padding to 32 bytes.
@@ -160,19 +162,6 @@ impl DrawList {
         let uniform = (self.uniforms.len() / UNIFORM_FLOATS) as u32;
         self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], offset as f32, 1.0, 0.0, 0.0, 0.0]);
         self.draws.extend_from_slice(&[handle, group, count, uniform, PIPELINE_DECOR]);
-    }
-
-    /// Group `group` of decor block `handle` as its sprites: `draw_decor`'s
-    /// words under the impostor's pipeline.
-    pub fn draw_impostor(&mut self, handle: u32, group: u32, count: u32, offset: u32, translation: [f32; 3]) {
-        let uniform = (self.uniforms.len() / UNIFORM_FLOATS) as u32;
-        self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], offset as f32, 1.0, 0.0, 0.0, 0.0]);
-        self.draws.extend_from_slice(&[handle, group, count, uniform, PIPELINE_IMPOSTOR]);
-    }
-
-    /// The draws the last frame listed.
-    pub fn draw_count(&self) -> u32 {
-        (self.draws.len() / DRAW_WORDS) as u32
     }
 
     /// Uploads, rewrites and frees start fresh; draws stay until the next frame.

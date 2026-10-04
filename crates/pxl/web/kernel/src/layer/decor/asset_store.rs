@@ -7,14 +7,13 @@
 use pxl_spec::asset::ingested::Asset;
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
-use crate::global::Global;
 use crate::host::heap_stat;
 use crate::io::load::{load_failed, load_gltf, load_image, Load};
-use crate::kernel::kernel;
 use crate::layer::decor::build::DecorKindBundle;
 use crate::layer::decor::registry::DECOR_BUNDLES;
 use crate::layer::model::asset::register_model;
 use crate::world::change::{request_world_tick, world_edge};
+use xpute_runtime::global::Global;
 
 /// kind.rs's largest kind has nine.
 const VARIANTS: usize = 16;
@@ -47,18 +46,13 @@ pub const MODELS_MAX: usize = pxl_spec::asset::ingested::Asset::ALL.len();
 /// kind: two kinds may name the same model or the same skin, and both should
 /// reach one object; and the frame that draws what arrived is asked for.
 fn settle(entries: &mut [DecorBundleAssets], asset: Asset, value: u32, skin: bool) {
-    let mut group = 0u32;
     for entry in entries {
         for (v, variant) in entry.bundle.variants.iter().enumerate() {
             match skin {
                 true if variant.skin == asset => entry.skins[v] = Some(value),
-                false if variant.model == asset => {
-                    entry.models[v] = Some(value);
-                    kernel().sched.decor_model(group, value);
-                }
+                false if variant.model == asset => entry.models[v] = Some(value),
                 _ => {}
             }
-            group += 1;
         }
     }
     request_world_tick();

@@ -19,9 +19,8 @@ use pxl_spec::cell::object::{
     decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, object_value_is_voxel, placeable_cube_num_id, placeable_cube_of, terrain_style_cube_source, PlaceableCube,
 };
 use pxl_spec::cell::{cube_types, DecorId};
-use pxl_spec::space::hierarchy::{at_walk_order, child_of, first_descendant_of, parent_of, walk_order, Scale};
+use pxl_spec::space::hierarchy::{ancestor_of, at_walk_order, child_of, first_descendant_of, offset_in, parent_of, walk_order, Scale};
 use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX, L3, L3_IDX};
-use pxl_spec::space::pvf3::fvec::FVec;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::pvf3::Ivec;
@@ -37,8 +36,7 @@ use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, T
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
 use crate::abi::host::{root, storage, STORAGE_KEYS};
-use crate::global::Global;
-use crate::host::{now, turn};
+use crate::host::turn;
 use crate::io::file::{self, Owner};
 use crate::kernel::kernel;
 use crate::shell::setting::store::hidden_ground;
@@ -47,27 +45,16 @@ use crate::world::change::{bump_world, wake_at, world_changes, world_edge, OBJEC
 use crate::world::chunk::source::{band_written, chunk_sources_changed};
 use crate::world::frame::coord::local_world_to_canonical;
 use xpute_core::status::bug::OrBug;
+use xpute_runtime::clock::now;
+use xpute_runtime::global::Global;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum EntryKind {
     Solid { cube: PlaceableCube },
     Decor { decor_id: DecorId },
-    Air,
 }
 
 pub use pxl_spec::bake::constant::EntryAt;
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct ObjectLayerEntry {
-    pub at: EntryAt,
-    pub i: IVec,
-    pub f: FVec,
-    pub size: f64,
-    pub kind: EntryKind,
-}
-
-/// Never `EntryKind::Air`, which is the eraser's marker, not a placed thing.
-pub type OccupiedEntry = ObjectLayerEntry;
 
 /// The L2 index of the cell's XY column, Z dropped: the renderer asks for a
 /// column with z = 0, so a key that kept Z left every object above 64u
@@ -113,9 +100,7 @@ impl At {
 
     pub fn corner(self) -> Pvf3 {
         let [x0, y0, _] = column_cell(self.col_idx);
-        let mut out = Pvf3::default();
-        pvf3::add(&mut out, &CELL.base_of([x0, y0, band_cell_z(self.band)]), &OBJECT_FINEST.base_of(self.step.map(i64::from)));
-        out
+        pvf3::add(&CELL.base_of([x0, y0, band_cell_z(self.band)]), &OBJECT_FINEST.base_of(self.step.map(i64::from)))
     }
 
     /// Exact, since a step is a binary fraction of a unit.
@@ -132,70 +117,63 @@ fn read_state(coord: &Pvf3) -> u32 {
 
 // A leaf larger than a cell is split into the cells it covers, since
 // collision and the pick assume an entry is at most a cell.
-#[derive(Clone, Debug, Default)]
-pub struct EntryCursor {
-    /// Corner relative to the column's base (z = 0).
-    pub lx: f64,
-    pub ly: f64,
-    pub lz: f64,
-    pub size: f64,
+/// An entry where it is filed and the value it holds.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Entry {
+    at: EntryAt,
     pub state: u32,
-
-    at: At,
-    pos: u32,
 }
 
-impl EntryCursor {
+impl Entry {
     pub fn at_column(&mut self, col_idx: IVec) {
         self.at.col_idx = col_idx;
     }
 
     pub fn load(&mut self, band_idx: BandZ, pos: u32, state: u32) {
-        let (x, y, z, scale) = unpack_pos(pos);
-        self.at.band = band_idx;
-        self.at.step = [x, y, z];
-        self.pos = pos;
-        [self.lx, self.ly, self.lz] = self.at.local();
-        self.size = scale.side();
-        self.state = state;
+        (self.at.band_idx, self.at.pos, self.state) = (band_idx, pos, state);
     }
 
-    pub fn cell(&self) -> [i64; 3] {
-        self.at.cell()
-    }
-
-    pub fn corner(&self) -> Pvf3 {
-        self.at.corner()
-    }
-
-    pub fn at(&self) -> EntryAt {
-        EntryAt {
+    fn filed(&self) -> At {
+        let (x, y, z, _) = unpack_pos(self.at.pos);
+        At {
             col_idx: self.at.col_idx,
-            band_idx: self.at.band,
-            pos: self.pos,
+            band: self.at.band_idx,
+            step: [x, y, z],
         }
     }
 
-    pub fn object(&self) -> ObjectLayerEntry {
-        let Pvf3 { i, f } = self.corner();
-        let kind = if object_value_is_decor(self.state) {
+    /// Corner relative to the column's base (z = 0).
+    pub fn local(&self) -> [f64; 3] {
+        self.filed().local()
+    }
+
+    pub fn size(&self) -> f64 {
+        unpack_pos(self.at.pos).3.side()
+    }
+
+    pub fn cell(&self) -> [i64; 3] {
+        self.filed().cell()
+    }
+
+    pub fn corner(&self) -> Pvf3 {
+        self.filed().corner()
+    }
+
+    pub fn at(&self) -> EntryAt {
+        self.at
+    }
+
+    /// Not for air, which is the eraser's marker.
+    pub fn kind(&self) -> EntryKind {
+        if object_value_is_decor(self.state) {
             EntryKind::Decor {
                 decor_id: decor_id_from_num(self.state),
             }
-        } else if object_value_is_air(self.state) {
-            EntryKind::Air
         } else {
             EntryKind::Solid {
                 // Every value the store writes is one the catalog gives out.
                 cube: placeable_cube_of(self.state).or_bug(Errno::ENOTRECOVERABLE),
             }
-        };
-        ObjectLayerEntry {
-            at: self.at(),
-            i,
-            f,
-            size: self.size,
-            kind,
         }
     }
 }
@@ -212,24 +190,29 @@ pub fn objects_revision() -> u32 {
 }
 
 fn apply(writes: impl IntoIterator<Item = Write>) {
-    for (col_idx, band_idx) in kernel().objects.write(writes) {
+    changed(kernel().objects.write(writes));
+}
+
+/// What reads a band hears it changed.
+fn changed(bands: impl IntoIterator<Item = (IVec, BandZ)>) {
+    for (col_idx, band_idx) in bands {
         chunk_sources_changed();
         bump_world(OBJECT_COLUMN, col_idx);
         band_written(col_idx, band_idx);
     }
 }
 
-fn cursor_at(at: EntryAt) -> EntryCursor {
-    let mut cursor = EntryCursor::default();
+fn cursor_at(at: EntryAt) -> Entry {
+    let mut cursor = Entry::default();
     cursor.at_column(at.col_idx);
     cursor.load(at.band_idx, at.pos, 0);
     cursor
 }
 
 /// Every entry a column stores, without the eraser's render-only edits.
-pub fn each_col_entry(col_idx: IVec, visit: &mut dyn FnMut(&EntryCursor)) {
+pub fn each_col_entry(col_idx: IVec, visit: &mut dyn FnMut(&Entry)) {
     let Some(e) = kernel().objects.entries(col_idx) else { return };
-    let mut cursor = EntryCursor::default();
+    let mut cursor = Entry::default();
     cursor.at_column(col_idx);
     for k in 0..e.band.len() {
         cursor.load(e.band[k], e.pos[k], e.state[k]);
@@ -237,30 +220,16 @@ pub fn each_col_entry(col_idx: IVec, visit: &mut dyn FnMut(&EntryCursor)) {
     }
 }
 
-fn each_cell_entry(ix: i64, iy: i64, iz: i64, visit: &mut dyn FnMut(&EntryCursor)) {
+fn each_cell_entry(ix: i64, iy: i64, iz: i64, visit: &mut dyn FnMut(&Entry)) {
     let Some(run) = cell_run(ix, iy, iz) else { return };
     let col_idx = column_of([ix, iy, iz]);
     let Some(e) = kernel().objects.entries(col_idx) else { return };
-    let mut cursor = EntryCursor::default();
+    let mut cursor = Entry::default();
     cursor.at_column(col_idx);
     for k in run.start as usize..(run.start + run.count) as usize {
         cursor.load(e.band[k], e.pos[k], e.state[k]);
         visit(&cursor);
     }
-}
-
-fn occupants(ix: i64, iy: i64, iz: i64, out: &mut Vec<OccupiedEntry>) {
-    each_cell_entry(ix, iy, iz, &mut |entry| {
-        if !object_value_is_air(entry.state) {
-            out.push(entry.object());
-        }
-    });
-}
-
-pub fn get_objects_in_cell(ix: i64, iy: i64, iz: i64) -> Vec<OccupiedEntry> {
-    let mut out = Vec::new();
-    occupants(ix, iy, iz, &mut out);
-    out
 }
 
 /// Whether any leaf, air included, is written in the cell `at` lies in.
@@ -269,24 +238,24 @@ pub fn holds_entry(at: &Pvf3) -> bool {
     cell_run(ix, iy, iz).is_some()
 }
 
-pub fn objects_at(at: &Pvf3) -> Vec<OccupiedEntry> {
+/// What stands in the cell `at` lies in, air left out.
+pub fn objects_at(at: &Pvf3) -> Vec<Entry> {
     let [ix, iy, iz] = CELL.index_of(at);
-    get_objects_in_cell(ix, iy, iz)
+    let mut out = Vec::new();
+    each_cell_entry(ix, iy, iz, &mut |entry| {
+        if !object_value_is_air(entry.state) {
+            out.push(*entry);
+        }
+    });
+    out
 }
 
-/// Two cubes share space exactly when one's node lies under the other's,
-/// since every cube sits on its own size's lattice.
-pub fn cube_node(corner: &Pvf3, size: f64) -> (Scale, [i64; 3]) {
-    let side = Scale::of_side(size);
-    (side, side.index_of(corner))
-}
-
-pub fn get_placed_object(at: EntryAt) -> Option<OccupiedEntry> {
+pub fn get_placed_object(at: EntryAt) -> Option<Entry> {
     let [ix, iy, iz] = cursor_at(at).cell();
     let mut found = None;
     each_cell_entry(ix, iy, iz, &mut |entry| {
         if found.is_none() && !object_value_is_air(entry.state) && entry.at() == at {
-            found = Some(entry.object());
+            found = Some(*entry);
         }
     });
     found
@@ -312,13 +281,7 @@ struct StoreState {
 static STORE: Global<StoreState> = Global::new();
 
 fn store_state() -> &'static mut StoreState {
-    STORE.get(|| StoreState {
-        virtual_hide: None,
-        hide_in: (false, false),
-        virtual_carve_preview: None,
-        save_due_ms: None,
-        loading: None,
-    })
+    STORE.get(|| StoreState { save_due_ms: None, loading: None })
 }
 
 /// Hides one placed object from the drawn build only, for the eraser's hover
@@ -331,7 +294,7 @@ pub fn set_virtual_hide(at: Option<EntryAt>) {
         return;
     }
     st.virtual_hide = at;
-    let kind = at.and_then(get_placed_object).map(|o| o.kind);
+    let kind = at.and_then(get_placed_object).map(|o| o.kind());
     st.hide_in = (!matches!(kind, Some(EntryKind::Decor { .. })), !matches!(kind, Some(EntryKind::Solid { .. })));
     send_render_edits();
 }
@@ -411,14 +374,6 @@ struct PageRows {
     value: Vec<u32>,
 }
 
-pub fn encode_objects() -> Result<String, MarshalError> {
-    let mut by_page: Vec<(IVec, PageRows)> = Vec::new();
-    for col_idx in object_cols() {
-        collect_col(&mut by_page, col_idx);
-    }
-    encode_pages(&by_page)
-}
-
 fn collect_col(by_page: &mut Vec<(IVec, PageRows)>, col_idx: IVec) {
     let page_idx = TO_XY(L3_IDX(FROM_L2_IDX(col_idx)));
     let page_base = FROM_L3_IDX(page_idx);
@@ -439,7 +394,7 @@ fn collect_col(by_page: &mut Vec<(IVec, PageRows)>, col_idx: IVec) {
         rows.x.push(pvf3::to_real(pvf3::X(&local)) as f32);
         rows.y.push(pvf3::to_real(pvf3::Y(&local)) as f32);
         rows.z.push(pvf3::to_real(pvf3::Z(&local)) as f32);
-        rows.size.push(entry.size as f32);
+        rows.size.push(entry.size() as f32);
         rows.value.push(entry.state);
     });
 }
@@ -472,7 +427,7 @@ fn encode_pages(by_page: &[(IVec, PageRows)]) -> Result<String, MarshalError> {
     Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&pkt))
 }
 
-pub fn decode_objects(blob: &str) -> Result<(), MarshalError> {
+fn decode_objects(blob: &str) -> Result<(), MarshalError> {
     let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(blob).map_err(|_| MarshalError::new(Errno::EINVAL))?;
     let root = TreeReader::new(&bytes)?.read_branch()?;
     // One batch, so each column's entries are rebuilt once.
@@ -485,8 +440,7 @@ pub fn decode_objects(blob: &str) -> Result<(), MarshalError> {
             let (size, value) = (page.at(4)?.get_array::<f32>()?, page.at(5)?.get_array::<u32>()?);
             for r in 0..value.len() {
                 let local = [x[r] as f64, y[r] as f64, z[r] as f64];
-                let mut corner = Pvf3::default();
-                local_world_to_canonical(&mut corner, &local, page_base);
+                let corner = local_world_to_canonical(&local, page_base);
                 writes.push(write_of(&corner, size[r] as f64, value[r]));
             }
         }
@@ -528,7 +482,8 @@ fn loaded() {
     }
     let (blob, _) = st.loading.take().or_bug(Errno::ENOTRECOVERABLE);
     if core::str::from_utf8(&blob).map_or(true, |raw| decode_objects(raw).is_err()) {
-        kernel().objects.clear();
+        // what decoded before the failure was already read
+        changed(kernel().objects.clear());
     }
 }
 
@@ -596,7 +551,11 @@ pub fn flush_save() {
     if store_state().save_due_ms.take().is_none() {
         return;
     }
-    if let Ok(blob) = encode_objects() {
+    let mut by_page: Vec<(IVec, PageRows)> = Vec::new();
+    for col_idx in object_cols() {
+        collect_col(&mut by_page, col_idx);
+    }
+    if let Ok(blob) = encode_pages(&by_page) {
         keep(blob);
     }
 }
@@ -644,12 +603,8 @@ fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube, structure
 }
 
 /// A redundant re-paint of a carve writes VOID, as remove() does.
-pub fn place(at: &Pvf3, size: f64, cube: PlaceableCube, structures: bool) {
-    let val = if place_value_is_redundant(at, size, cube, structures) {
-        VOID
-    } else {
-        placeable_cube_num_id(cube)
-    };
+pub fn place(at: &Pvf3, size: f64, cube: PlaceableCube) {
+    let val = if place_value_is_redundant(at, size, cube) { VOID } else { placeable_cube_num_id(cube) };
     write_object_value(at, size, val);
 }
 
@@ -673,7 +628,7 @@ pub fn place_air(at: &Pvf3, size: f64) {
 
 pub fn remove(at: EntryAt) {
     let cursor = cursor_at(at);
-    write_object_value(&cursor.corner(), cursor.size, VOID);
+    write_object_value(&cursor.corner(), cursor.size(), VOID);
 }
 
 fn partition_point(n: usize, before: impl Fn(usize) -> bool) -> usize {
@@ -742,7 +697,7 @@ impl Column {
                 }
                 // In walk order, so the lanes stay sorted.
                 let levels = scale.above(CELL) as u32;
-                for k in 0..1u64 << (3 * levels) {
+                for k in 0..u64::from(CELL.count_in(scale)).pow(3) {
                     let cell = at_walk_order::<3>(k, levels).map(i64::from);
                     let [dx, dy, dz] = first_descendant_of(cell, CELL.above(OBJECT_FINEST) as u32).map(|v| v as u32);
                     self.e_band.push(bz);
@@ -757,12 +712,11 @@ impl Column {
     }
 }
 
-/// A run of a column's entries in one cell; `solid` counts all but AIR.
+/// A run of a column's entries in one cell.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CellRun {
     pub start: u32,
     pub count: u32,
-    pub solid: u32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -774,6 +728,7 @@ pub struct Write {
     pub state: u32,
 }
 
+#[derive(Default)]
 pub struct Store {
     /// Only columns with a non-VOID leaf; an emptied band and column are dropped.
     columns: BTreeMap<IVec, Column>,
@@ -807,10 +762,6 @@ const INDEX_TOP: Scale = {
     s
 };
 
-fn within(inner: &Aabb, outer: &Aabb) -> bool {
-    (0..3).all(|k| inner.min[k] >= outer.min[k] && inner.max[k] <= outer.max[k])
-}
-
 /// Rebuilds the chain over one cube up to `top`; a cube reducing to nothing
 /// is removed.
 fn propagate_up<V: Copy>(map: &mut HashMap<(Scale, [i64; 3]), V>, (mut scale, mut at): (Scale, [i64; 3]), top: Scale, first: Option<V>, reduce: impl Fn(Scale, [Option<V>; 8]) -> Option<V>) {
@@ -828,11 +779,15 @@ fn propagate_up<V: Copy>(map: &mut HashMap<(Scale, [i64; 3]), V>, (mut scale, mu
     }
 }
 
-fn grown(b: &Aabb, side: f64) -> Aabb {
-    Aabb {
-        min: b.min.map(|v| (v / side).floor() * side),
-        max: b.max.map(|v| (v / side).ceil() * side),
-    }
+/// A band as a node of `BAND`'s lattice.
+fn band_node(col_idx: IVec, band_idx: BandZ) -> [i64; 3] {
+    [ivec::X(col_idx), ivec::Y(col_idx), i64::from(band_idx)]
+}
+
+/// The cell of `scale` holding the leaf at `step` in the band at `band`.
+fn leaf_cell(band: [i64; 3], step: [i64; 3], scale: Scale) -> [i64; 3] {
+    let (cells, per) = (scale.count_in(BAND) as i64, OBJECT_FINEST.count_in(scale) as i64);
+    core::array::from_fn(|k| band[k] * cells + step[k] / per)
 }
 
 fn slab((o, d): (V3, V3), b: &Aabb, (t0, t1): (f64, f64)) -> Option<(f64, f64)> {
@@ -871,21 +826,7 @@ fn cells_along((o, d): (V3, V3), (t0, t1): (f64, f64), side: f64, each: &mut dyn
     }
 }
 
-impl Default for Store {
-    fn default() -> Self {
-        Store::new()
-    }
-}
-
 impl Store {
-    pub fn new() -> Store {
-        Store {
-            columns: BTreeMap::new(),
-            bounds: HashMap::new(),
-            folds: HashMap::new(),
-        }
-    }
-
     pub fn cols(&self) -> impl Iterator<Item = IVec> + '_ {
         self.columns.keys().copied()
     }
@@ -895,7 +836,7 @@ impl Store {
     pub fn bound_in(&self, query: &Aabb) -> Option<Aabb> {
         let mut out: Option<Aabb> = None;
         self.descend(query, BAND, &mut |scale, at, bound| {
-            let whole = within(&scale.cube(at), query) || scale == BAND;
+            let whole = query.contains(scale.cube(at)) || scale == BAND;
             if let Some(b) = bound.meet(*query).filter(|_| whole) {
                 out = Some(out.map_or(b, |o| o.join(b)));
             }
@@ -973,7 +914,7 @@ impl Store {
 
     fn along_ray_from(&self, ray: (V3, V3), span: (f64, f64), scale: Scale, node: Scale, at: [i64; 3], each: &mut dyn FnMut([i64; 3]) -> bool) -> bool {
         let Some(bound) = self.bounds.get(&(node, at)) else { return false };
-        let Some(span) = slab(ray, &grown(bound, scale.side()), span) else { return false };
+        let Some(span) = slab(ray, &bound.snapped_out(scale.side()), span) else { return false };
         if node == scale {
             return each(at);
         }
@@ -985,7 +926,7 @@ impl Store {
         for k in 0..8 {
             let child = child_of(at, k);
             let Some(b) = self.bounds.get(&(node.down(1), child)) else { continue };
-            if let Some(s) = slab(ray, &grown(b, scale.side()), span) {
+            if let Some(s) = slab(ray, &b.snapped_out(scale.side()), span) {
                 kids[n] = (s.0, child, s);
                 n += 1;
             }
@@ -995,7 +936,7 @@ impl Store {
     }
 
     fn index_up(&mut self, col_idx: IVec, band_idx: BandZ) {
-        let at = [ivec::X(col_idx), ivec::Y(col_idx), i64::from(band_idx)];
+        let at = band_node(col_idx, band_idx);
         let corner = FROM_L2_IDX(col_idx);
         let (x0, y0) = (ivec::X(corner) as f64, ivec::Y(corner) as f64);
         let bound = self.columns.get(&col_idx).and_then(|c| c.bounds.get(&band_idx)).map(|b| Aabb {
@@ -1071,12 +1012,12 @@ impl Store {
                 }
             });
         } else {
-            let (cells, per) = (target.count_in(BAND) as i64, OBJECT_FINEST.count_in(target) as i64);
+            let cells = target.count_in(BAND) as i64;
             for cy in from[1].div_euclid(cells)..=(to[1] - 1).div_euclid(cells) {
                 for cx in from[0].div_euclid(cells)..=(to[0] - 1).div_euclid(cells) {
                     let Some(column) = self.columns.get(&ivec::gather(cx, cy, 0)) else { continue };
                     for (&band_idx, tree) in &column.bands {
-                        let corner = [cx * cells, cy * cells, i64::from(band_idx) * cells];
+                        let band = [cx, cy, i64::from(band_idx)];
                         mem::walk_to(
                             &tree.mem,
                             &tree.layout,
@@ -1086,11 +1027,11 @@ impl Store {
                                     return;
                                 }
                                 let n = target.count_in(s) as i64;
-                                let at = [x, y, z].map(|c| i64::from(c) / per);
+                                let at = leaf_cell(band, [x, y, z].map(i64::from), target);
                                 for dz in 0..n {
                                     for dy in 0..n {
                                         for dx in 0..n {
-                                            let cell = [corner[0] + at[0] + dx, corner[1] + at[1] + dy, corner[2] + at[2] + dz];
+                                            let cell = [at[0] + dx, at[1] + dy, at[2] + dz];
                                             if inside(cell[0], cell[1]) && refused.is_ok() {
                                                 refused = try_insert(out, cell, u32::from(v));
                                             }
@@ -1120,17 +1061,16 @@ impl Store {
 
     /// False says nothing is placed in that band cell; true only that something may be.
     pub fn may_hold(&self, at: [i64; 3]) -> bool {
-        let cells = CELL.count_in(BAND) as i64;
-        let col_idx = ivec::gather(at[0].div_euclid(cells), at[1].div_euclid(cells), 0);
-        self.columns.get(&col_idx).is_some_and(|c| c.bands.contains_key(&(at[2].div_euclid(cells) as BandZ)))
+        let [x, y, band] = ancestor_of(at, BAND.above(CELL) as u32);
+        self.columns.get(&ivec::gather(x, y, 0)).is_some_and(|c| c.bands.contains_key(&(band as BandZ)))
     }
 
     /// The cell over the highest band in the column of cell `[x, y]`.
     pub fn ceiling(&self, [x, y]: [i64; 2]) -> Option<i64> {
-        let cells = CELL.count_in(BAND) as i64;
-        let col_idx = ivec::gather(x.div_euclid(cells), y.div_euclid(cells), 0);
-        let band = *self.columns.get(&col_idx)?.bands.keys().next_back()?;
-        Some((i64::from(band) + 1) * cells)
+        let levels = BAND.above(CELL) as u32;
+        let [cx, cy] = ancestor_of([x, y], levels);
+        let band = *self.columns.get(&ivec::gather(cx, cy, 0))?.bands.keys().next_back()?;
+        Some(first_descendant_of([i64::from(band) + 1], levels)[0])
     }
 
     /// VOID where nothing; a non-voxel value is returned as is.
@@ -1138,19 +1078,28 @@ impl Store {
         if scale >= BAND {
             return self.folds.get(&(scale, at)).copied().unwrap_or(VOID as u16);
         }
-        let cells = scale.count_in(BAND) as i64;
-        let col_idx = ivec::gather(at[0].div_euclid(cells), at[1].div_euclid(cells), 0);
-        let Some(tree) = self.columns.get(&col_idx).and_then(|c| c.bands.get(&(at[2].div_euclid(cells) as BandZ))) else {
+        let levels = BAND.above(scale) as u32;
+        let [x, y, band] = ancestor_of(at, levels);
+        let Some(tree) = self.columns.get(&ivec::gather(x, y, 0)).and_then(|c| c.bands.get(&(band as BandZ))) else {
             return VOID as u16;
         };
-        let step = OBJECT_FINEST.count_in(scale) as i64;
-        let key = band_key(at.map(|c| (c.rem_euclid(cells) * step) as u32));
+        let key = band_key(first_descendant_of(offset_in(at, levels), scale.above(OBJECT_FINEST) as u32).map(|c| c as u32));
         tree.mem.data[mem::resolve::<Ivec, u16>(&tree.mem, &tree.layout, key, scale, 0) as usize]
     }
 
-    /// Column `col_idx`'s voxel entries at `target`: a leaf finer than
-    /// `target` folded to it, a coarser one kept whole. Painted cell by cell, a
-    /// 1u cube came out as sixty-four sub-cell boxes the mesher never merges.
+    /// The cell of `target` the entry `hide` is in, and what it folds to with
+    /// the entry gone: the fold made again up the entry's one path, its
+    /// siblings read where they are kept. None where nothing is there.
+    /// Column `col_idx`'s voxel entries as a paint at `target` takes them:
+    /// a leaf finer than `target` folded to it (`fold_cell`), and one at
+    /// least as coarse kept whole, at its own size. `fold_at` answers which
+    /// cells are filled, so a coarse leaf is in every cell under it there;
+    /// painted cell by cell, a placed 1u cube would come out as a quarter
+    /// cell's sixty-four sub-cell entries, which the mesher draws a box each
+    /// and never merges — one block seen split 4 × 4. `visit` is handed the
+    /// band, the entry's corner in the band's finest steps, its scale and its
+    /// state; `hide`, the one entry the eraser shows gone, is left out as the
+    /// fold leaves it out.
     pub fn fold_entries(&self, col_idx: IVec, target: Scale, hide: Option<EntryAt>, visit: &mut dyn FnMut(BandZ, [u32; 3], Scale, u32)) {
         let Some(column) = self.columns.get(&col_idx) else { return };
         let hidden = hide.filter(|h| h.col_idx == col_idx).and_then(|h| {
@@ -1159,17 +1108,15 @@ impl Store {
             Some((h.band_idx, at, if own > target { own } else { target }, u32::from(v)))
         });
         for (&band_idx, tree) in &column.bands {
-            let corner = [ivec::X(col_idx), ivec::Y(col_idx), i64::from(band_idx)];
+            let band = band_node(col_idx, band_idx);
             mem::walk_to(
                 &tree.mem,
                 &tree.layout,
                 target,
                 &mut |x, y, z, s, v| {
                     let mut v = u32::from(v);
-                    if let Some((band, at, scale, w)) = hidden {
-                        let (cells, per) = (s.count_in(BAND) as i64, OBJECT_FINEST.count_in(s) as i64);
-                        let cell: [i64; 3] = core::array::from_fn(|k| corner[k] * cells + i64::from([x, y, z][k]) / per);
-                        if band == band_idx && scale == s && cell == at {
+                    if let Some((hidden_band, at, scale, w)) = hidden {
+                        if hidden_band == band_idx && scale == s && leaf_cell(band, [x, y, z].map(i64::from), s) == at {
                             v = w;
                         }
                     }
@@ -1185,10 +1132,7 @@ impl Store {
     fn hidden(&self, hide: EntryAt, target: Scale) -> Option<([i64; 3], u16)> {
         self.columns.get(&hide.col_idx)?.bands.get(&hide.band_idx)?;
         let (x, y, z, own) = unpack_pos(hide.pos);
-        let per = OBJECT_FINEST.count_in(own) as i64;
-        let cells = own.count_in(BAND) as i64;
-        let corner = [ivec::X(hide.col_idx), ivec::Y(hide.col_idx), i64::from(hide.band_idx)].map(|c| c * cells);
-        let mut at: [i64; 3] = core::array::from_fn(|k| corner[k] + i64::from([x, y, z][k]) / per);
+        let mut at = leaf_cell(band_node(hide.col_idx, hide.band_idx), [x, y, z].map(i64::from), own);
         let (mut scale, mut v) = (own, VOID as u16);
         while scale < target {
             let (parent, up) = (parent_of(at), scale.up(1));
@@ -1206,7 +1150,7 @@ impl Store {
     }
 
     fn fold_up(&mut self, col_idx: IVec, band_idx: BandZ) {
-        let at = [ivec::X(col_idx), ivec::Y(col_idx), i64::from(band_idx)];
+        let at = band_node(col_idx, band_idx);
         let band = self.columns.get(&col_idx).and_then(|c| c.bands.get(&band_idx));
         let v = band.map(|t| fold_cell(&t.mem.data[..8], BAND)).filter(|&v| v != VOID as u16);
         propagate_up(&mut self.folds, (BAND, at), TOP_CELL, v, |scale, children| {
@@ -1265,14 +1209,16 @@ impl Store {
         (end > start).then(|| CellRun {
             start: start as u32,
             count: (end - start) as u32,
-            solid: (start..end).filter(|&k| column.e_state[k] != AIR).count() as u32,
         })
     }
 
-    pub fn clear(&mut self) {
+    /// Returns the bands held.
+    pub fn clear(&mut self) -> Vec<(IVec, BandZ)> {
+        let held = self.columns.iter().flat_map(|(&col, c)| c.bands.keys().map(move |&band| (col, band))).collect();
         self.columns.clear();
         self.bounds.clear();
         self.folds.clear();
+        held
     }
 }
 

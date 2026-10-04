@@ -158,5 +158,7 @@ fn bake(g: &Gpu, pipelines: &mut Pipelines, tile: u32, levels: u32) {
     }
     g.submit(encoder);
     release(encoder);
-    Mips::new(g, pipelines, format::R8).build(g, tile, levels, 0, 1);
+    let mips = Mips::new(g, pipelines, format::R8);
+    mips.build(g, tile, levels, 0, 1);
+    mips.release();
 }

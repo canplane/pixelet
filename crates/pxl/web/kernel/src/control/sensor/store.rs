@@ -7,8 +7,8 @@ use pxl_spec::space::adapter::epsg4326::G4326;
 
 use crate::abi::cmd::Message;
 pub use crate::abi::cmd::{DevicePoseStatus, PermissionAnswer};
-use crate::global::Global;
-use crate::host::now;
+use xpute_runtime::clock::now;
+use xpute_runtime::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DeviceLocation {

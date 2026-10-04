@@ -60,11 +60,6 @@ fn put(code: u32, args: &[u32]) {
 }
 
 impl Gpu {
-    /// Every object the host holds let go: the renderer starts over.
-    pub fn reset(&self) {
-        put(op::RESET, &[]);
-    }
-
     pub fn buffer(&self, id: u32, size: u32, usage: u32) {
         put(op::BUFFER, &[id, size, usage]);
     }

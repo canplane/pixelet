@@ -8,6 +8,7 @@
 
 import type { U32Array } from "@xpute/core/abi/array.ts";
 import type { u32 } from "@xpute/core/abi/word.ts";
+import { td } from "@xpute/core/codec/encoding.ts";
 
 export const END = 0;
 

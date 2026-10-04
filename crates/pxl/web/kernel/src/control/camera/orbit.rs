@@ -10,8 +10,8 @@ pub mod terrain_gate;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 
-use pxl_spec::space::v3::V3;
-use xpute_core::math::scalar::{clamp, wrap};
+use pxl_spec::space::v3::{add3, V3};
+use xpute_core::math::scalar::clamp;
 
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::config::camera_cfg::input::DOLLY_GAIN;
@@ -20,14 +20,12 @@ use crate::control::camera::config::camera_cfg::view::{MAX_DIST, MIN_DIST};
 use crate::control::camera::controller::{camera, center_local, damp_alpha, look_dir, look_domain, map_center, set_eye_local, spend_travel, units_per_px_at};
 use crate::control::camera::gesture::{spread, Anchor};
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
-use crate::global::Global;
-use crate::layer::terrain::ground_snap::ground_or_raw;
-use crate::shell::setting::store::{settings_store, CameraCollisionMode};
-use crate::world::change::request_world_tick;
-use crate::world::frame::coord::{canonical_to_local, local_world_to_canonical};
+use crate::control::navigation::support::target;
+use crate::shell::setting::store::{settings_store, OrbitObstacleMode};
 use crate::world::frame::view::{view, view_compose};
-use crate::world::pyramid::Layer as _;
-use terrain_gate::{allowed_pan, allowed_view, climb_polar, ViewTriple};
+use crate::world::observation::heights_revision;
+use terrain_gate::{allowed_view, climb_polar, ViewTriple};
+use xpute_runtime::global::Global;
 
 pub struct OrbitState {
     pub dist: f64,
@@ -62,13 +60,13 @@ const CLIMB_RISE_DAMP: f64 = 20.0;
 const CLIMB_RELAX_DAMP: f64 = 5.0;
 
 /// The climb samples terrain twice and was asked every ticked frame at rest;
-/// it changes only with the view, the map center or `support_revision`.
+/// it changes only with the view, the map center or `heights_revision`.
 struct ClimbMemo {
     dist: f64,
     polar: f64,
     azimuth: f64,
     center: Option<Pvf3>,
-    revision: u32,
+    revision: (u32, u32),
     polar_out: f64,
 }
 
@@ -80,11 +78,11 @@ fn climb_polar_memo(dist: f64, polar: f64, azimuth: f64) -> f64 {
         polar: f64::NAN,
         azimuth: f64::NAN,
         center: None,
-        revision: u32::MAX,
+        revision: (u32::MAX, u32::MAX),
         polar_out: f64::NAN,
     });
     let center = map_center();
-    let revision = Terrain::pyramid().revision();
+    let revision = heights_revision();
     if dist == memo.dist && polar == memo.polar && azimuth == memo.azimuth && center == memo.center && revision == memo.revision {
         return memo.polar_out;
     }
@@ -184,8 +182,9 @@ pub(crate) fn put(at: Pvf3, snap: bool) {
     if snap {
         let local = canonical_to_local(&at, view().origin);
         let (o, cam) = (orbit(), camera());
-        let e = orbit_eye_offset(o.dist, cam.pitch, cam.yaw);
-        set_eye_local(&std::array::from_fn(|k| local[k] + e[k]));
+        let local = target(&mut o.to, center_local().unwrap_or_default(), view().origin);
+        let e = orbit_eye_offset(o.dist, cam.polar, cam.azimuth);
+        set_eye_local(&add3(&local, &e));
     }
     let units_per_px = units_per_px_at(camera_store().intent.dist);
     let (lx, ly) = (-dx * units_per_px, dy * units_per_px);
@@ -233,9 +232,9 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
     moving |= (turn * (1.0 - a)).abs() > AZIMUTH_EPS;
 
     // Written only where something moved, so nothing is written back at rest.
-    if (center, o.dist, cam.pitch, cam.yaw) != was {
-        let e = orbit_eye_offset(o.dist, cam.pitch, cam.yaw);
-        set_eye_local(&std::array::from_fn(|k| center[k] + e[k]));
+    if (center, o.dist, cam.polar, cam.azimuth) != was {
+        let e = orbit_eye_offset(o.dist, cam.polar, cam.azimuth);
+        set_eye_local(&add3(&center, &e));
     }
     view_compose();
     Some(moving)

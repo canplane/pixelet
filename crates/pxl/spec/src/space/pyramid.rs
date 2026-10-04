@@ -16,15 +16,11 @@ use super::pvf3::pvf3::{self, Pvf3};
 use super::pvf3::REACH;
 use super::v3::Aabb;
 use super::xy::TO_XY;
-use crate::bake::constant::{CELL, EXTENT_CELL};
+use crate::bake::constant::{CELL, DECK_CELL, EXTENT_CELL};
 
 /// The coarsest folded level. At level 10 (zoom 5) a page spans about 9° of
 /// latitude and the page-constant vertical scale is already 12% off.
 pub const TOP_LEVEL: u32 = 10;
-
-/// The zoom the finest pages are named at, as 512-pixel tiles; level k's
-/// cells are z(16 − k) pixels and its pages are named at `PAGE_ZOOM − k`.
-pub const PAGE_ZOOM: u32 = IVEC_X_W - L3.shamt() as u32;
 
 // A lattice is a scale against the unit: its level-k cell is k levels above
 // its first. Pages and chunks are fixed in units (L3, L2).
@@ -48,8 +44,13 @@ impl Lattice {
     }
 
     /// `page_cells` as a shift.
-    const fn page_cell_shamt(self) -> u32 {
+    pub const fn page_cell_shamt(self) -> u32 {
         L3.above(self.cell) as u32
+    }
+
+    /// How many of its first level's cells stand across one at `level`.
+    pub const fn finest_in(self, level: u32) -> u32 {
+        self.scale(0).count_in(self.scale(level))
     }
 
     pub const fn page_cells(self) -> u32 {
@@ -95,11 +96,14 @@ impl Lattice {
         self.cell_index(x as u32, y as u32)
     }
 
-    /// The child slot and first of the 2×2 cells a parent cell folds from: `parent_cell`'s inverse.
-    pub fn child_block(self, index: u32) -> (usize, u32) {
+    /// The child slot and the 2×2 cells, in `slot_of`'s order, a parent cell
+    /// folds from: `parent_cell`'s inverse.
+    pub fn child_block(self, index: u32) -> (usize, [u32; 4]) {
         let n = self.page_cells() as i64;
         let [x, y] = child_of(self.in_page(index).map(i64::from), 0);
-        (slot_of([x / n, y / n]), self.cell_index((x % n) as u32, (y % n) as u32))
+        let [x0, y0] = [(x % n) as u32, (y % n) as u32];
+        let cells = std::array::from_fn(|q| self.cell_index(x0 + (q & 1) as u32, y0 + (q >> 1) as u32));
+        (slot_of([x / n, y / n]), cells)
     }
 
     /// The cells of this lattice under `outer`'s cell `index` of the same page, row by row.
@@ -153,17 +157,6 @@ pub const PAGE_CELLS: u32 = GROUND.page_cells();
 pub const CHUNK_CELLS: u32 = GROUND.chunk_cells();
 
 pub const PAGE_CHUNKS: u32 = PAGE_CELLS / CHUNK_CELLS;
-
-pub const fn zoom_of_level(level: u32) -> u32 {
-    PAGE_ZOOM - level
-}
-
-// These must agree with the web map's 512-pixel tiling; nothing derives one from the others.
-const _: () = {
-    assert!(L1.count_in(L3) == 512, "a page is one 512-pixel tile");
-    assert!(PAGE_ZOOM == 15, "z16 pages are zoom 15 at 512 pixels");
-    assert!(TOP_LEVEL <= PAGE_ZOOM, "no level coarser than one page across the world");
-};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct LevelPage {
@@ -243,8 +236,13 @@ pub const fn span_of(level: u32) -> f64 {
     L3.up(level as i32).side()
 }
 
+/// A level-`level` chunk's side.
+pub const fn chunk_scale(level: u32) -> Scale {
+    L2.up(level as i32)
+}
+
 pub const fn chunk_span_of(level: u32) -> f64 {
-    L2.up(level as i32).side()
+    chunk_scale(level).side()
 }
 
 /// A level-`level` anchor's side in units: the floating origin's cell.
@@ -252,14 +250,20 @@ pub const fn anchor_span_of(level: u32) -> i64 {
     L1.count_in(L4.up(level as i32)) as i64
 }
 
-/// The 4×4 pages a level down around a page's children, index
-/// (qx + 1) + 4·(qy + 1); X wraps and a page past Y's edge has no object.
+/// The 4×4 pages a level down around a page's children, each at
+/// `neighbor_index`; X wraps and a page past Y's edge has no object.
 pub fn neighborhood(p: LevelPage) -> [LevelPage; 16] {
     let [x, y] = child_of(p.at(), 0);
     std::array::from_fn(|k| {
         let (qx, qy) = ((k % 4) as i64 - 1, (k / 4) as i64 - 1);
         page_at(p.level - 1, [x + qx, y + qy])
     })
+}
+
+/// Where the page (qx, qy) from a parent's first child, each −1 to 2, lies in
+/// its `neighborhood`.
+pub const fn neighbor_index(qx: i64, qy: i64) -> usize {
+    ((qx + 1) + 4 * (qy + 1)) as usize
 }
 
 /// The level-`level` page at (x, y), X wrapped around the world.
@@ -314,9 +318,7 @@ impl Cell {
     pub fn mid(self) -> Pvf3 {
         let base = self.base();
         let half = 1i64 << (FRAC_W as i32 + self.scale().shamt() - 1);
-        let mut out = Pvf3::default();
-        pvf3::gather(&mut out, pvf3::X(&base) + half, pvf3::Y(&base) + half, 0);
-        out
+        pvf3::gather(pvf3::X(&base) + half, pvf3::Y(&base) + half, 0)
     }
 
     pub fn side(self) -> f64 {
@@ -348,8 +350,7 @@ impl Cell {
     pub fn inner_at(self, lattice: Lattice, level: u32, offset: [u32; 2]) -> Cell {
         let base = self.base();
         let shift = FRAC_W as i32 + lattice.scale(level).shamt();
-        let mut at = Pvf3::default();
-        pvf3::gather(&mut at, pvf3::X(&base) + ((offset[0] as i64) << shift), pvf3::Y(&base) + ((offset[1] as i64) << shift), 0);
+        let at = pvf3::gather(pvf3::X(&base) + ((offset[0] as i64) << shift), pvf3::Y(&base) + ((offset[1] as i64) << shift), 0);
         lattice.cell_of(level, &at)
     }
 
@@ -357,11 +358,8 @@ impl Cell {
     /// `ground`, since a level's cells are as tall as they are wide.
     pub fn center(self, ground: f64) -> Pvf3 {
         let flat = self.mid();
-        let mut at = [0.0; 3];
-        projection::unproject(&mut at, flat.i, flat.f);
-        let mut out = Pvf3::default();
-        projection::project(&mut out, at[0], at[1], ground + self.side() / 2.0);
-        out
+        let at = projection::unproject(flat.i, flat.f);
+        projection::project(at[0], at[1], ground + self.side() / 2.0)
     }
 }
 

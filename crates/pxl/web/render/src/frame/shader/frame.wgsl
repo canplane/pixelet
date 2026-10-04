@@ -22,10 +22,7 @@ struct Frame {
   vignette: f32,
   ao_strength: f32,
   screen_ao: f32,
-  // 1 where the lit passes' vertices take the air in front of them
-  // (atmos_view.wgsl's seen_at_vertex), 0 in the shadow map's frame, whose
-  // passes write depth and nothing the air would change.
-  air_at_vertices: f32,
+  _p8: f32,
   light_view_proj: mat4x4f,
   other_dir: vec3f,
   _p3: f32,
@@ -59,7 +56,6 @@ fn frame_shadow_texel() -> f32 { return frame_words[11].w; }
 fn frame_vignette() -> f32 { return frame_words[12].x; }
 fn frame_ao_strength() -> f32 { return frame_words[12].y; }
 fn frame_screen_ao() -> f32 { return frame_words[12].z; }
-fn frame_air_at_vertices() -> f32 { return frame_words[12].w; }
 fn frame_light_view_proj() -> mat4x4f { return mat4x4f(frame_words[13], frame_words[14], frame_words[15], frame_words[16]); }
 fn frame_other_dir() -> vec3f { return frame_words[17].xyz; }
 fn frame_other_color() -> vec3f { return frame_words[18].xyz; }

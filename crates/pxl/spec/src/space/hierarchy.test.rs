@@ -54,8 +54,7 @@ fn a_point_lies_in_the_side_whose_corner_is_under_it() {
     for s in [Scale::of(-3), Scale::of(0), Scale::of(6)] {
         for index in [[0i64, 0, 0], [5, -3, 2], [-1, -1, -1], [100, 7, -40]] {
             assert_eq!(s.index_of(&s.base_of(index)), index);
-            let mut inside = Pvf3::default();
-            pvf3::add(&mut inside, &s.base_of(index), &Scale::of(-8).base_of([1, 1, 1]));
+            let inside = pvf3::add(&s.base_of(index), &Scale::of(-8).base_of([1, 1, 1]));
             assert_eq!(s.index_of(&inside), index, "{s:?} {index:?}");
         }
     }

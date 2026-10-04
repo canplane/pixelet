@@ -4,13 +4,17 @@
 struct Draw {
   translation: vec3f,
   offset: u32,
-  count: u32,
+  stride: u32,
   opacity: f32,
-  _p: vec2u,
+  _p0: u32,
+  index: u32,
 };
 
-// Read field by field from vec4 words, never as a struct: a struct here lost
-// Safari's WebGPU its GPU process.
+// Held as vec4 words, each field read from its own by `draw_<field>()`:
+// what the host and a shader share has no room inside it for a driver to
+// lay out its own way (issue/20260927-a-matrix-the-driver-reads-its-own-way.md),
+// and nothing builds the struct back, with which Safari's WebGPU lost its
+// GPU process.
 @group(1) @binding(0) var<uniform> draw_words: array<vec4f, 2>;
 
 fn draw_translation() -> vec3f { return draw_words[0].xyz; }
@@ -34,17 +38,20 @@ struct VertexOut {
   @location(0) uv: vec2f,
   @location(1) normal: vec3f,
   @location(2) world_pos: vec3f,
+  // The air in front of the vertex (atmos_view.wgsl's Seen); the sky's fill
+  // is the frame's, flat.
   @location(3) through: vec3f,
   @location(4) scattered: vec3f,
   @location(5) past: vec3f,
-  @location(6) fill: vec3f,
+  @location(6) @interpolate(flat) fill: vec3f,
 };
 
 fn lane(k: u32, i: u32) -> f32 {
   return bitcast<f32>(block[draw_offset() + k * draw_stride() + i]);
 }
 
-// One function, so the depth passes place a vertex where the lit pass does.
+// Where an instance's vertex stands, and its spin: one function, so the
+// depth passes place it where the lit pass does.
 struct Placed {
   world: vec3f,
   spin: f32,
@@ -62,22 +69,13 @@ fn placed(v: VertexIn) -> Placed {
 
 @vertex
 fn vs(v: VertexIn) -> VertexOut {
-  let n = draw_count();
-  let flags = (block[draw_offset() + 5u * n + v.i / 4u] >> ((v.i % 4u) * 8u)) & 255u;
+  let p = placed(v);
   var o: VertexOut;
-  if ((flags & 1u) != 0u) {
-    o.clip = vec4f(0.0, 0.0, -2.0, 1.0);
-    return o;
-  }
-  let at = vec3f(lane(0u, v.i), lane(1u, v.i), lane(2u, v.i));
-  let spin = lane(3u, v.i);
-  let scale = lane(4u, v.i);
-  let world = on_globe(place_up(v.position * scale, spin) + at + draw_translation());
-  o.clip = frame_view_proj() * vec4f(world, 1.0);
+  o.clip = frame_view_proj() * vec4f(p.world, 1.0);
   o.uv = v.uv;
-  o.normal = place_up(v.normal, spin);
-  o.world_pos = world;
-  let seen = seen_at_vertex(world);
+  o.normal = place_up(v.normal, p.spin);
+  o.world_pos = p.world;
+  let seen = seen_from_eye(p.world);
   o.through = seen.through;
   o.scattered = seen.scattered;
   o.past = seen.past;
@@ -85,6 +83,7 @@ fn vs(v: VertexIn) -> VertexOut {
   return o;
 }
 
+// The position alone, for the passes that write depth and nothing else.
 @vertex
 fn vs_depth(v: VertexIn) -> @builtin(position) vec4f {
   return frame_view_proj() * vec4f(placed(v).world, 1.0);

@@ -3,16 +3,16 @@
 //! One page's raw source packet `[ele, buildings, segments, base, coasts]`
 //! baked into its surface. Rows are tuples read by position (pxl-spec bake/format.rs).
 
-use pxl_spec::bake::format::{BaseRow, BuildingRow, CoastRow, Ground, SegmentRow, Terrain};
+use pxl_spec::bake::format::{BaseRow, BuildingRow, CoastRow, DeckRow, Ground, SegmentRow, Terrain};
 use pxl_spec::bake::model::feature::Feature;
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
+use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{BranchCursor, SequenceType, TreeReader};
 
 use crate::terrain::pipeline::coast::adapter::from_coast_row;
 use crate::terrain::pipeline::coast::policy::CoastPolicy;
-use crate::terrain::pipeline::corridor::corridor_fills;
 use crate::terrain::pipeline::deck::bake_decks;
 use crate::terrain::pipeline::ground::bake_ground;
 use crate::terrain::pipeline::normalizer::normalize;
@@ -47,28 +47,63 @@ pub fn bake_surface(page_idx: IVec, ele: Vec<i16>, source: &PageSource, drawn: &
     let fills = corridor_fills(&features);
     features.extend(fills);
 
-    // no coast row is open sea; one whose land covers the page is dropped, all land
-    let shore: Vec<_> = source
-        .coast_rows
-        .iter()
-        .filter(|row| !row.covers_page)
-        .flat_map(|row| wkb_to_geometries(&row.geom_wkb))
-        .filter(|g| !g.points.is_empty())
-        .map(|g| {
-            (
-                g.points.iter().map(|&p| local(p, page_min)).collect(),
-                g.holes.iter().map(|ring| ring.iter().map(|&p| local(p, page_min)).collect()).collect(),
-            )
-        })
-        .collect();
-    let coast = match (source.coast_rows.is_empty(), shore.is_empty()) {
-        (true, _) => Coast::Sea,
-        (false, true) => Coast::Land,
-        (false, false) => Coast::Shore(shore),
-    };
-    Surface {
-        ele,
-        ground: bake_ground(&features, &coast),
+fn segment_row(row: &BranchCursor<'_>) -> Result<SegmentRow, MarshalError> {
+    Ok(SegmentRow {
+        gers_id: row.at(0)?.get_str()?,
+        subtype: row.at(1)?.get_str()?,
+        class: opt_str(row, 2)?,
+        flags: opt_str(row, 3)?,
+        geom_wkb: row.at(4)?.get_array::<u8>()?.into(),
+    })
+}
+
+fn deck_row(row: &BranchCursor<'_>) -> Result<DeckRow, MarshalError> {
+    Ok(DeckRow {
+        gers_id: row.at(0)?.get_str()?,
+        subtype: row.at(1)?.get_str()?,
+        class: opt_str(row, 2)?,
+        piers: row.at(3)?.get_array::<u8>()?.into(),
+        geom_wkb: row.at(4)?.get_array::<u8>()?.into(),
+    })
+}
+
+fn base_row(row: &BranchCursor<'_>) -> Result<BaseRow, MarshalError> {
+    Ok(BaseRow {
+        gers_id: row.at(0)?.get_str()?,
+        source: row.at(1)?.get_str()?,
+        subtype: opt_str(row, 2)?,
+        class: opt_str(row, 3)?,
+        geom_wkb: row.at(4)?.get_array::<u8>()?.into(),
+    })
+}
+
+fn coast_row(row: &BranchCursor<'_>) -> Result<CoastRow, MarshalError> {
+    Ok(CoastRow {
+        id: row.at(0)?.get_str()?,
+        geom_wkb: row.at(1)?.get_array::<u8>()?.into(),
+        covers_page: row.at(2)?.get_bool()?,
+    })
+}
+
+pub fn bake_terrain(page_idx: IVec, pkt: &[u8]) -> Result<Terrain, MarshalError> {
+    let page_bbox = epsg3857::get_page_bbox(page_idx);
+    let page_min = page_bbox[0];
+
+    let root = TreeReader::new(pkt)?.read_branch()?;
+
+    let ele: &[i16] = root.at(0)?.get_array::<i16>()?;
+    let buildings = root.at(1)?.as_branch()?;
+    let segments = root.at(2)?.as_branch()?;
+    let base = root.at(3)?.as_branch()?;
+    let coasts = root.at(4)?.as_branch()?;
+    let deck_rows = root.at(5)?.as_branch()?;
+
+    let mut feats: Vec<Feature> = Vec::new();
+
+    for i in 0..buildings.len {
+        for raw in from_building_row(&building_row(&buildings.at_branch(i)?)?) {
+            feats.extend(normalize(&raw, page_min, &OverturePolicy));
+        }
     }
     for i in 0..segments.len {
         for raw in from_segment_row(&segment_row(&segments.at_branch(i)?)?) {

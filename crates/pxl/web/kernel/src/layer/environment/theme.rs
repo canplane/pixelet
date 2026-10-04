@@ -60,11 +60,6 @@ pub enum Theme {
 
 impl Theme {
     pub const ALL: [Theme; 4] = [Theme::Morning, Theme::Day, Theme::Evening, Theme::Night];
-
-    /// None for a number the set does not give out.
-    pub fn of(value: u8) -> Option<Theme> {
-        Theme::ALL.into_iter().find(|member| *member as u8 == value)
-    }
 }
 
 /// 37.5% / 37.5% / 25% of today's daylight span.

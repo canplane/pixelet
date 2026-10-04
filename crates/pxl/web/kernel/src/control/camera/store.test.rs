@@ -1,7 +1,7 @@
 // pxl-kernel/control/camera/store.test.rs
 
 use super::*;
-use crate::global::serial;
+use crate::serial;
 
 #[test]
 fn the_tilt_stops_at_straight_down_and_straight_up() {

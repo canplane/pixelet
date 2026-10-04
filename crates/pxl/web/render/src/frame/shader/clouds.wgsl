@@ -87,13 +87,18 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
     sky += moon_view(atmos_up()) * moon_shown();
   }
   light *= self_shade;
-  // The terrain's fill too, so a cloud is never darker than the ground under
-  // it: without it night clouds were black blots.
+  // The sky above lights the layer as well: its zenith, half of it thrown
+  // back out the side the eye sees. And the fill the terrain is lit by —
+  // the themes' ambient and sky light and the floor, as shade.wgsl takes
+  // them for a face turned up — so a cloud is never darker than the ground
+  // it lies over: at night the air's light is all but gone, the ground is
+  // lit by the fill, and a cloud without it read as a black blot on it. By
+  // day the sun has already taken the layer past white.
   let sky_light = sky_fill();
   let fill = (frame_ambient() + sky_light) / PI + frame_floor();
   var color = CLOUD_ALBEDO * (light + sky * 0.5 + fill);
 
   let world = frame_camera_pos() + dir * du;
-  color = aerial(color, world);
+  color = aerial(color, world, sky_light);
   return vec4f(finish(shoulder(color), v.clip.xy), alpha);
 }

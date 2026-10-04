@@ -10,7 +10,7 @@ use pxl_spec::asset::texture::{shipped_texture_tile, CubeFace, TileOrigin, SHIPP
 use pxl_spec::cell::object::{block_cubes, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
 
 use crate::frame::shader::record::PIPELINE_MIPS;
-use crate::gpu::api::{buffer_usage, bytes, object, release, texture_usage, Gpu};
+use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, release, texture_usage, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::pipeline::Pipelines;
 use crate::mesh::paint::palette::shader_meta::GROUND_LAYER_META;
@@ -53,14 +53,14 @@ impl Mips {
                 let group = object();
                 g.bind_group(group, self.layout, &[0, resource::VIEW, above, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0]);
                 let pass = object();
-                g.pass(pass, encoder, &crate::gpu::api::pass_desc(target, load::CLEAR, 0, load::CLEAR, 0.0, crate::gpu::api::Stamp::UNTIMED));
+                g.pass(pass, encoder, &pass_desc(target, load::CLEAR, 0, load::CLEAR, 0.0, Stamp::UNTIMED));
                 g.set_pipeline(pass, self.pipeline);
                 g.set_bind_group(pass, 0, group, &[]);
                 g.draw(pass, 3, 1, 0, 0);
                 g.end(pass);
                 // The encoder keeps what it recorded; letting these go now only frees the handles.
                 for id in [pass, group, target, above] {
-                    crate::gpu::api::release(id);
+                    release(id);
                 }
             }
         }
@@ -68,6 +68,7 @@ impl Mips {
         release(encoder);
     }
 
+    /// Lets go of the builder's sampler, for one made for a single chain.
     pub fn release(self) {
         release(self.sampler);
     }

@@ -23,7 +23,7 @@ struct DataSpec {
     cpp: Option<(&'static str, &'static str)>,
 }
 
-const DATA_SPECS: [DataSpec; 13] = [
+const DATA_SPECS: [DataSpec; 11] = [
     DataSpec {
         json: "spec/pxl/spec/place.json",
         ts: Some("apps/web/src/feature/map/geocode/place.spec.ts"),
@@ -403,13 +403,18 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             let (crate_name, under_src) = [
                 ("crates/pxl/web/kernel/src/", "pxl-kernel"),
                 ("crates/pxl/web/render/src/", "pxl-render"),
+                ("crates/pxl/spec/src/", "pxl-spec"),
                 ("crates/xpute/runtime/src/", "xpute-runtime"),
                 ("crates/xpute/conformance/src/", "xpute-conformance"),
             ]
             .iter()
             .find_map(|(dir, name)| rs_path.strip_prefix(dir).map(|rest| (*name, rest)))
             .ok_or(format!("{rs_path}: not under pxl-kernel, pxl-render, pxl-spec, xpute-runtime or xpute-conformance"))?;
-            let mut rs = vec![format!("// {crate_name}/{under_src}"), "//".into(), super::generated(d.json, base)];
+            let mut rs = vec![
+                format!("// {crate_name}/{under_src}"),
+                "//".into(),
+                super::generated(d.json, base),
+            ];
             if let Some(doc) = &head_doc {
                 rs.push("//".into());
                 rs.extend(line_comments(doc, ""));

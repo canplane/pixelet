@@ -1,10 +1,8 @@
-// @pxl/web/kernel/kernel.test.ts
+// @pxl/web/kernel/boot.test.ts
 
 /**
- * The kernel driven the way kernel/kernel.ts drives it, without a page: the
- * boot, the world's turns rung, the files it opens answered by its host with
- * no bake or asset bound, so every object is absent and the ground open
- * water, and what comes back — the UI's snapshot and the heap's row.
+ * The kernel driven as boot.ts drives it, without a page and with no bake
+ * bound, so every object is absent and the ground is open water.
  */
 
 import type { U8Array } from "@xpute/core/abi/array.ts";
@@ -16,7 +14,6 @@ import {
   encode_gpu_ready,
   encode_load_failed,
   encode_setting_set,
-  encode_setting_toggle,
   encode_world_boot,
   encode_world_frame,
   encode_world_source,
@@ -29,7 +26,7 @@ import { PUBLISHED_SOURCE } from "@/config/published.spec.ts";
 import { SETTINGS } from "@/feature/setting/schema.spec.ts";
 
 import { CORE, CORE_DOORBELL, load_core } from "@/kernel/mem.ts";
-import { key as entry } from "@/kernel/abi/directory.spec.ts";
+import { heap_row, key as entry } from "@/kernel/abi/directory.spec.ts";
 import { bytes_at, directory } from "@/kernel/module.ts";
 import { start_sched } from "@/kernel/sched.ts";
 import { acquireDevice } from "@/platform/web/webgpu.ts";
@@ -49,12 +46,7 @@ CORE_DOORBELL.signal = (_tag, cmd, f) => {
   } else if (cmd === Command.LOAD_START) loads.push(read_load_start(f!).key);
 };
 
-/** The heap's row (crates/pxl/web/kernel/src/door.rs, written at every turn's
- * fall): range, used, live, run, slot, largest free, releases, refusals,
- * requests. `used` is the top the heap has reached. */
-const HEAP_TOP = 1;
-const HEAP_REQUESTS = 8;
-const heap_row = new Uint32Array(CORE.buffer, directory(CORE.buffer).get(entry.HEAP_ROW), 9);
+const heap = new Uint32Array(CORE.buffer, directory(CORE.buffer).get(entry.HEAP_ROW), heap_row.WORDS);
 
 /** A response as the driver reports one: the body held for the kernel. */
 function answer(f: Fetched, outcome: FetchOutcome, body: U8Array | null): void {
@@ -106,7 +98,7 @@ CORE_DOORBELL.call(
     orientation: false,
     orientation_permission: false,
     orientation_silence_is_loss: true,
-    settings: [],
+    settings: "",
   }),
   (r) => r,
 );
@@ -143,7 +135,7 @@ turn();
 Deno.test("kernel - the settings commands reach the snapshot", () => {
   const tilt = SETTINGS.tilt_lock.key;
   const before = (await turn()).settings[tilt];
-  command(Command.SETTING_TOGGLE, encode_setting_toggle({ key: tilt }));
+  command(Command.SETTING_SET, encode_setting_set({ key: tilt, value: 1 - before }));
   assertEquals((await turn()).settings[tilt], 1 - before);
   command(Command.SETTING_SET, encode_setting_set({ key: tilt, value: before }));
   assertEquals((await turn()).settings[tilt], before);
@@ -151,7 +143,7 @@ Deno.test("kernel - the settings commands reach the snapshot", () => {
 
 Deno.test("kernel - a settled turn asks the module heap for nothing", async () => {
   for (let i = 0; i < 200; i++) await turn();
-  const [top, requests] = [heap_row[HEAP_TOP], heap_row[HEAP_REQUESTS]];
+  const [top, requests] = [heap[heap_row.USED], heap[heap_row.REQUESTS]];
   for (let i = 0; i < 100; i++) await turn();
-  assertEquals([heap_row[HEAP_REQUESTS] - requests, heap_row[HEAP_TOP] - top], [0, 0], "a hundred settled turns: no request, and the heap's top where it was");
+  assertEquals([heap[heap_row.REQUESTS] - requests, heap[heap_row.USED] - top], [0, 0], "a hundred settled turns: no request, and the heap's top where it was");
 });

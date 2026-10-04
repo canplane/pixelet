@@ -10,10 +10,11 @@ use pxl_spec::cell::cube_types;
 use pxl_spec::cell::object::{placeable_cube_num_id, PlaceableCube};
 use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pyramid::{Folds, PAGE_CELLS};
+use xpute_core::math::rng::SplitMix64;
 
 use super::*;
-use crate::global::serial;
 use crate::layer::object::store::{At, Write};
+use crate::serial;
 use crate::world::paging::{Candidate, Victim};
 
 const PADDED: usize = ELE_PADDED_SPAN as usize;
@@ -28,14 +29,11 @@ impl Victim for Keep {
     }
 }
 
-struct Rng(u64);
+struct Rng(SplitMix64);
 
 impl Rng {
     fn below(&mut self, n: u64) -> i64 {
-        self.0 ^= self.0 << 13;
-        self.0 ^= self.0 >> 7;
-        self.0 ^= self.0 << 17;
-        (self.0 % n) as i64
+        (u64::from(self.0.next_u32()) % n) as i64
     }
 }
 
@@ -63,7 +61,7 @@ fn top() -> LevelPage {
 }
 
 fn pages() -> (Vec<(LevelPage, Terrain)>, Terrain) {
-    let mut rng = Rng(0x9e37_79b9_7f4a_7c15);
+    let mut rng = Rng(SplitMix64::new(0x9e37_79b9_7f4a_7c15));
     let leaves: Vec<(LevelPage, Terrain)> = top().children().iter().map(|&c| (c, rough_leaf(&mut rng))).collect();
     let zero = zero_page();
     let parent = Terrain::fold_page(top(), |p| Some(leaves.iter().find(|(q, _)| *q == p).map_or(&zero, |(_, t)| t))).unwrap();
@@ -79,9 +77,7 @@ fn resident(held: &[(LevelPage, Terrain)]) -> Paging<Terrain> {
 }
 
 fn point(x: f64, y: f64) -> Pvf3 {
-    let mut at = Pvf3::default();
-    projection::project(&mut at, x, y, 0.0);
-    at
+    projection::project(x, y, 0.0)
 }
 
 /// Points spread over the parent's ground.
@@ -112,8 +108,7 @@ fn src_level(n: u32) -> u32 {
 
 /// Writes `state` in a cube of `side` with its corner at `corner`.
 fn write(store: &mut Store, corner: V3, side: Scale, state: u32) {
-    let mut at = Pvf3::default();
-    projection::project(&mut at, corner[0], corner[1], corner[2]);
+    let at = projection::project(corner[0], corner[1], corner[2]);
     let a = At::of_cube(&at, side);
     store.write([Write {
         col_idx: a.col_idx,
@@ -138,11 +133,11 @@ fn a_level_s_ray_meets_the_objects_in_the_cells_the_level_draws_from() {
     let cell = GROUND.scale(level).side();
     let red = placeable_cube_num_id(PlaceableCube::Block(cube_types::Block::red));
     let (bx, by) = ((x0 / cell).floor() * cell + 4.0 * cell, (y0 / cell).floor() * cell + 4.0 * cell);
-    let bare = Access::new(&paging, &Store::new()).at(&point(bx, by), level).value().unwrap().top;
+    let bare = Access::new(&paging, &Store::default()).at(&point(bx, by), level).value().unwrap().top;
     let bz = ((bare / cell).floor() + 3.0) * cell;
 
     // Five of the cell's eight: the bottom four and one over them.
-    let mut store = Store::new();
+    let mut store = Store::default();
     for [dx, dy, dz] in [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1]] {
         write(&mut store, [bx + dx as f64, by + dy as f64, bz + dz as f64], CELL, red);
     }
@@ -156,12 +151,18 @@ fn a_level_s_ray_meets_the_objects_in_the_cells_the_level_draws_from() {
     assert_eq!(fine.point[2], bz + 1.0, "{fine:?}");
     let hit = access.first_hit(&down(at), Detail::Level(level)).value().flatten().unwrap();
     assert!(matches!(hit.struck, Struck::Objects), "{hit:?}");
-    assert_eq!((hit.box_min, hit.box_max), ([bx, by, bz], [bx + cell, by + cell, bz + cell]));
+    assert_eq!(
+        hit.cube,
+        Aabb {
+            min: [bx, by, bz],
+            max: [bx + cell, by + cell, bz + cell]
+        }
+    );
     assert_eq!(hit.point[2], bz + cell);
 
     let alone = [lx + 0.5, ly + 0.5];
     let hit = access.first_hit(&down(alone), Detail::Level(level)).value().flatten().unwrap();
-    let ground = Access::new(&paging, &Store::new()).first_hit(&down(alone), Detail::Level(level)).value().flatten().unwrap();
+    let ground = Access::new(&paging, &Store::default()).first_hit(&down(alone), Detail::Level(level)).value().flatten().unwrap();
     assert_eq!((hit.struck, hit.point), (Struck::Ground, ground.point));
 }
 

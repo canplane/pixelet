@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use postgres::Client;
-use pxl_spec::bake::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN, U_PER_CELL};
+use pxl_spec::bake::constant::{ele_index, CELL_PER_M, ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
 use pxl_spec::space::adapter::epsg3857::BBox3857;
 use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m};
 use xpute_core::math::scalar::round;
@@ -198,7 +198,7 @@ impl Raster {
                 let (px, py) = (s0.0 + dx * dist, s0.1 + dy * dist);
                 // PostgreSQL rounds half to even; no data is 0.
                 if let Some(v) = source.sample(px, py) {
-                    grid[(span - 1 - r) * span + c] = (f64::from(v) * cell_per_m).round_ties_even() as i16;
+                    grid[ele_index(c as u32, (span - 1 - r) as u32)] = (f64::from(v) * cell_per_m).round_ties_even() as i16;
                 }
             }
         }

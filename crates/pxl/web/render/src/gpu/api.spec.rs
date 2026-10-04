@@ -104,6 +104,12 @@ pub mod stream {
     pub const KEYS: &[&str] = &["GPU_MS", "HEAD", "BYTES", "RESERVE"];
 }
 
+/// A pass's timestamp write index (api.rs Stamp): NONE where the pass writes none.
+pub mod stamp {
+    pub const NONE: u32 = 4294967295;
+    pub const KEYS: &[&str] = &["NONE"];
+}
+
 /// A record's operation, then its arguments. Bytes go as their count, then the bytes padded to a word.
 pub mod op {
     /// every object the host holds let go
@@ -223,6 +229,8 @@ pub mod record {
     pub const ADD: u32 = 2;
     pub const VS: u32 = 0;
     pub const VS_COARSE: u32 = 1;
+    pub const VS_DEPTH: u32 = 2;
+    pub const VS_COARSE_DEPTH: u32 = 3;
     pub const PER_VERTEX: u32 = 0;
     pub const PER_INSTANCE: u32 = 1;
     pub const U32X2: u32 = 6;
@@ -262,6 +270,8 @@ pub mod record {
         "ADD",
         "VS",
         "VS_COARSE",
+        "VS_DEPTH",
+        "VS_COARSE_DEPTH",
         "PER_VERTEX",
         "PER_INSTANCE",
         "U32X2",

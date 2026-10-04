@@ -1,4 +1,4 @@
-// @pxl/web/page/map-page.tsx
+// @pxl/web/page/map.tsx
 
 import { StyleSheet, View } from "react-native";
 

@@ -13,7 +13,20 @@ use pxl_spec::space::pyramid::PAGE_CHUNKS;
 /// asking finer is held at `SPLIT`.
 pub const CENTER_CELL_LOGICAL_PX: f64 = 6.0;
 
-// ---- the view's reach ----
+// ---- the view's reach (layer/environment/fog.rs) ----
+
+/// The most doublings of distance a view draws past the ground under the
+/// eye, or z16's split distance where that is nearer: its far edge, where
+/// the fog closes. A level a doubling, so a view draws at most this many
+/// levels and one whatever its height — fewer where it looks across and the
+/// first ground it sees lies past what is under it — and what it asks of the
+/// arena is held by this rather than by how far the planet lets it see. On
+/// the ground the horizon is usually the nearer end; five puts the edge at
+/// about 12 km there and about 32 from a kilometre up. A product number, not
+/// a likeness of the air: the fog only hides where drawing stops.
+pub const VIEW_LEVELS: u32 = 5;
+
+// ---- what refinement observes (world/observer.rs) ----
 
 /// Most doublings of distance drawn past the ground under the eye: the fog's
 /// far edge, about 12 km on the ground and 32 km from 1 km up. Bounds the
@@ -86,7 +99,7 @@ pub const RUN_SET_BYTES: u32 = 1 << 20;
 /// sprites. Set by eye: below half a cell an instance is pixel noise.
 pub const IMPOSTOR_GONE_CELLS: f64 = 0.5;
 
-// ---- per-frame work caps ----
+// ---- per-frame work caps (world/chunk/table.rs, io/policy.rs) ----
 
 /// A page's chunks, so a page of flat ground starts building in the frame it arrives.
 pub const STARTS_PER_FRAME: u32 = PAGE_CHUNKS * PAGE_CHUNKS;
@@ -97,12 +110,6 @@ pub const COMMITS_PER_FRAME: u32 = 8;
 pub const INTAKE: u32 = u32::MAX;
 
 // ---- latency hiding ----
-
-/// Prefetch radius as a factor of each level's reach; 1 is the reach itself.
-pub const PREFETCH_SLACK: f64 = 1.0;
-
-/// Prefetch margin for the eye's motion, in units. Nothing measures speed yet.
-pub const MOTION_MARGIN: f64 = 0.0;
 
 /// Most speculative pages a layer asks for at once.
 pub const HINT_ALLOWANCE: u32 = 128;
@@ -130,6 +137,9 @@ pub const QUANTUM_SETTLE_MS: f64 = 150.0;
 
 /// How far a pass may overrun, so a step that reports nothing done cannot walk the whole list.
 pub const HARD_SLACK_MS: f64 = 4.0;
+
+/// The goal walk's share of the visible budget; half until measured.
+pub const VIEW_SHARE: f64 = 0.5;
 
 /// Share of the budget held back from the visible phase for content, which
 /// would otherwise starve while a load keeps the visible phase busy.

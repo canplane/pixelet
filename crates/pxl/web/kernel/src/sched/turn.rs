@@ -12,8 +12,6 @@ use crate::control::navigation::follow_mode::follow_mode_step;
 use crate::control::navigation::store::{map_navigation, map_navigation_step};
 use crate::control::sensor::device_orientation::{orientation_watchdog_step, OrientationPlatform};
 use crate::control::sensor::geolocation::geolocation_step;
-use crate::global::Global;
-use crate::host::now;
 use crate::io::sched::{pump, set_credits};
 use crate::layer::character::companion::{companion_step, CompanionProps};
 use crate::layer::decor::asset_store::decor_assets_wanted;
@@ -25,13 +23,16 @@ use crate::layer::marker::hover_cursor::hover_cursor_step;
 use crate::layer::marker::location_puck::location_puck_step;
 use crate::layer::terrain::page::terrain_step;
 use crate::sched::profiler::spec::EffectName;
-use crate::sched::tick::{on_tick, run_tick, StepName, TickContext, TickReport, TickState, COSMETIC, INTERACTION, REPORT, VISIBLE};
+use crate::sched::tick::{on_tick, run_tick, StepName, TickContext, TickState};
 use crate::shell::setting::store::settings_store;
 use crate::text::text_rise;
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::source::chunk_sources_step;
 use crate::world::chunk::stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms, set_turn_timing, take_draw};
-use crate::world::frame::coord::local_world_origin;
+use crate::world::frame::view::view;
+use xpute_runtime::clock::now;
+use xpute_runtime::global::Global;
+use xpute_runtime::sched::tick::{TickReport, COSMETIC, INTERACTION, REPORT, VISIBLE};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Platform {
@@ -45,14 +46,13 @@ fn companion_props() -> Option<CompanionProps> {
         return None;
     }
     let map_center = crate::control::camera::controller::map_center()?;
-    let map_origin = local_world_origin();
+    let map_origin = view().origin;
     let local = crate::world::frame::coord::canonical_to_local(&map_center, map_origin);
     Some(CompanionProps {
         map_origin,
         center_x: local[0],
         center_y: local[1],
-        // The map center stands half a cell over the floor; the character's feet are on it.
-        center_z: local[2] - pxl_spec::bake::constant::CELL.side() / 2.0 + pxl_spec::space::pvf3::ivec::to_real(pxl_spec::space::pvf3::ivec::Z(map_origin)),
+        floor: crate::control::navigation::walk::floor_of(&map_center),
     })
 }
 
@@ -63,7 +63,18 @@ fn companion_tick(ctx: &mut TickContext) {
 fn debug_gizmos_tick(_: &mut TickContext) {
     let map_center = crate::control::camera::controller::map_center();
     let show = settings_store().gizmos && map_center.is_some();
-    debug_gizmos_step(show, map_center, local_world_origin());
+    debug_gizmos_step(show, map_center, view().origin);
+}
+
+/// Goal walk, quality, then each pyramid layer. An unfinished walk asks for another turn.
+fn view_tick(ctx: &mut TickContext) {
+    let end = now() + ctx.budget.remaining() * crate::param::VIEW_SHARE;
+    crate::world::quality::step(&|| now() >= end);
+    terrain_step();
+    crate::layer::poi::poi_step();
+    if crate::world::pyramid::domain::walking() {
+        ctx.invalidate();
+    }
 }
 
 fn camera_input_tick(_: &mut TickContext) {
@@ -84,6 +95,7 @@ pub fn boot() {
     on_tick(INTERACTION, environment_tick, StepName::environment);
     on_tick(INTERACTION, companion_tick, StepName::companion);
     on_tick(INTERACTION, crate::layer::character::preview::preview_step, StepName::preview);
+    on_tick(VISIBLE, view_tick, StepName::view);
     on_tick(VISIBLE, core_tick_visible_step, StepName::chunks);
     on_tick(COSMETIC, debug_gizmos_tick, StepName::debug_gizmos);
     on_tick(REPORT, core_tick_report_step, StepName::profiler);
@@ -150,8 +162,6 @@ pub fn world_turn() -> f64 {
     effect!(worst, destination, crate::control::navigation::destination::destination_step());
     // After every writer of the map center, before anything observes the view.
     effect!(worst, view, crate::world::frame::view::view_compose());
-    effect!(worst, tiles, terrain_step());
-    effect!(worst, poi, crate::layer::poi::poi_step());
     effect!(worst, geocode, geocode_fetcher_step());
     effect!(worst, theme, theme_clock_step());
     effect!(worst, decor, decor_assets_wanted());

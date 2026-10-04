@@ -12,10 +12,10 @@ use std::collections::HashMap;
 use crate::bake::poi_badge::{DEFAULT_COLOR, DEFAULT_ICON, KIND_CATEGORIES, KIND_COLORS, KIND_ICONS};
 use crate::space::pvf3::pvf3::Pvf3;
 use crate::space::pyramid::{Folds, Lattice, LevelPage, GROUND, TOP_LEVEL};
-use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 
-const MAGIC: &[u8; 4] = b"PXP5";
+use crate::bake::malformed;
+use crate::bake::named::{NameLanes, NamesView};
 
 /// Places are counted in cells 2^6 ground cells wide, so no two cells'
 /// badges overlap: a level draws its ground cell at three pixels or more,
@@ -343,45 +343,23 @@ pub fn decode(bytes: &[u8]) -> Result<PoiPage, MarshalError> {
     if n > CELLS as usize || counts.len() != n || partial.len() != n || !runs_fit || at.len() != 2 * shown.len() || shown.len() > n * KINDS_MAX || ids.len() as usize != places {
         return Err(malformed());
     }
-    let word = |at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap());
-    let (n, shown, places, pool) = (word(4) as usize, word(8) as usize, word(12) as usize, word(16) as usize);
-        // Bounds are checked before anything is allocated.
-    let kinds = KIND_CATEGORIES.len() + 1;
-    if n > CELLS as usize || shown > n * kinds || places > shown || bytes.len() != 20 + n * CELL_BYTES + shown * SHOWN_BYTES + places * 13 + pool {
-        return Err(bad());
-    }
-    let cells = (0..n)
-        .map(|i| {
-            let (at, w) = (16 + i * CELL_BYTES, word(24 + i * CELL_BYTES));
-            PoiCell {
-                cell: word(at),
-                count: word(at + 4),
-                at: [w & 0xffff, w >> 16],
-                place: word(at + 12),
-            }
-        })
-        .collect();
-    let at = 16 + n * CELL_BYTES;
-    let ends: Vec<u32> = (0..places).map(|i| word(at + i * 4)).collect();
-    let kinds = bytes[at + places * 4..at + places * 5].to_vec();
-    let text = &bytes[at + places * 5..];
-    if ends.windows(2).any(|w| w[0] > w[1]) || ends.last().map_or(0, |&e| e as usize) != text.len() {
-        return Err(bad());
-    }
-    // Name by name: a pool valid as a whole could still split a character between names.
-    let mut start = 0;
-    for &end in &ends {
-        let name = std::str::from_utf8(&text[start..end as usize]).map_err(|_| bad())?;
-        if name.chars().nth(NAME_CHARS).is_some() {
-            return Err(bad());
+    let names = NamesView::read(&root, 8, places)?;
+    let mut pooled = Places::default();
+    for i in 0..places as u32 {
+        let name = names.name(i).ok_or_else(malformed)?;
+        if name.is_empty() || name.chars().nth(NAME_CHARS).is_some() {
+            return Err(malformed());
         }
-        start = end as usize;
+        pooled.push(name, names.languages(i), kind_of(kinds.get(i).ok_or_else(malformed)?), ids.get(i).ok_or_else(malformed)?);
     }
     let page = PoiPage {
         cells,
         places: Places { bytes: text.to_vec(), ends, kinds },
     };
-    validate(&page)?;
+    let cells_fit = page.cells.iter().all(|c| c.cell < CELLS && c.count > 0) && page.cells.windows(2).all(|w| w[0].cell < w[1].cell);
+    if !cells_fit || page.shown.iter().any(|s| s.place >= page.places.len()) {
+        return Err(malformed());
+    }
     Ok(page)
 }
 
@@ -389,19 +367,30 @@ pub fn decode(bytes: &[u8]) -> Result<PoiPage, MarshalError> {
 /// ascending; positions a half-word a lane; kinds in the badge table.
 fn validate(page: &PoiPage) -> Result<(), MarshalError> {
     if page.cells.iter().any(|c| c.cell >= CELLS || c.count == 0) || page.cells.windows(2).any(|w| w[0].cell >= w[1].cell) {
-        return Err(bad());
+        return Err(malformed());
     }
-    if page.cells.iter().any(|c| c.place != NO_PLACE && (c.count != 1 || c.place >= page.places.len())) {
-        return Err(bad());
+    let mut next = 0;
+    for c in &page.cells {
+        if c.first != next || (c.first + c.len) as usize > page.shown.len() {
+            return Err(malformed());
+        }
+        next = c.first + c.len;
+        let run = &page.shown[c.first as usize..next as usize];
+        if run.iter().any(|s| s.place >= page.places.len() || s.at.iter().any(|&l| l > 0xffff)) {
+            return Err(malformed());
+        }
+        if run.windows(2).any(|w| page.places.get(w[0].place).kind >= page.places.get(w[1].place).kind) {
+            return Err(malformed());
+        }
     }
-    if page.places.kinds.iter().any(|&k| k as usize > KIND_CATEGORIES.len()) {
-        return Err(bad());
-    }
-    if page.cells.iter().any(|c| c.at.iter().any(|&l| l > 0xffff)) {
-        return Err(bad());
+    let places = &page.places;
+    let bad_place = |i: u32| places.kinds[i as usize] as usize > KIND_CATEGORIES.len() || places.names.get(i).is_empty() || places.names.get(i).chars().nth(NAME_CHARS).is_some();
+    if next as usize != page.shown.len() || (0..places.len()).any(bad_place) {
+        return Err(malformed());
     }
     Ok(())
 }
+
 
 #[cfg(test)]
 #[path = "poi_page.test.rs"]

@@ -11,22 +11,21 @@
 //! τ* = the finest τ ≥ τ_target with frontier(O, K, τ) + headroom ≤ B
 //! ```
 //!
-//! `frontier` (frontier.rs `need`) never counts less at a finer τ, so only
-//! the steps the smoothing reads need counting (`around`). Smoothing moves
-//! `τ_eff` coarser to `τ*` in the same frame, and finer one step at a time
-//! after `QUALITY_WAIT_MS` with `QUALITY_MARGIN` to spare.
+//! Counts come from the goal's one walk (domain.rs, priced by frontier.rs
+//! `Need`). Smoothing coarsens at a publish, and refines one step after
+//! `QUALITY_WAIT_MS` with `QUALITY_MARGIN` to spare.
 
 use pxl_render::look::globe::MERCATOR_RADIUS_U;
 use pxl_spec::bake::published::PUBLISHED_TOP_LEVEL;
 use pxl_spec::space::lod::{Tau, SPLIT};
 
-use crate::global::Global;
 use crate::kernel::kernel;
 use crate::param;
-use crate::world::chunk::frontier::{need, Slots, HEADROOM};
+use crate::world::chunk::frontier::{Need, Slots, HEADROOM};
 use crate::world::chunk::mesh_slot::{Pool, ARENA, POOLS};
 use crate::world::frame::view::view;
 use crate::world::pyramid::domain::{self, cover_pieces};
+use xpute_runtime::global::Global;
 
 const _: () = assert!(param::QUALITY_WAIT_MS > 0.0, "a policy asked twice at one instant would step finer twice");
 const _: () = assert!(param::TAU_STEP > 1.0, "a step that is not coarser");
@@ -69,15 +68,10 @@ pub fn fits(count: Slots, arena: Slots, headroom: Slots, spare: Slots) -> bool {
     (0..POOLS).all(|p| count[p] + headroom[p] + spare[p] <= arena[p])
 }
 
-/// The finest step that fits; every coarser one fits too, since counts never
-/// grow coarser.
-pub fn feasible(frontier: &[Slots], arena: Slots, headroom: Slots, spare: Slots) -> Option<usize> {
-    (0..frontier.len()).find(|&k| fits(frontier[k], arena, headroom, spare))
-}
-
-/// `feasible` without and with the margin, asking only the steps the
-/// smoothing at `at` reads: the one in force, the one finer, and coarser ones
-/// until one fits.
+/// The finest step that fits without and with the margin, asking only the
+/// steps the smoothing at `at` reads: the one in force, the one finer, and
+/// coarser ones until one fits. Every coarser step fits too, since counts
+/// never grow coarser.
 pub fn around(at: usize, len: usize, mut fit: impl FnMut(usize, bool) -> bool) -> (usize, usize) {
     let last = len - 1;
     if !fit(at, false) {
@@ -127,14 +121,13 @@ impl Smooth {
 struct Quality {
     smooth: Smooth,
     star: usize,
-    counts: Vec<Option<Slots>>,
-    counted: Option<(u32, u32)>,
 }
 
 static QUALITY: Global<Quality> = Global::new();
 
+/// The goal in force's τ, not the live ladder's.
 pub fn effective() -> Effective {
-    Effective(ladder()[QUALITY.get(Quality::default).smooth.at()])
+    Effective(domain::current().map_or_else(|| ladder()[QUALITY.get(Quality::default).smooth.at()], |d| d.tau()))
 }
 
 pub fn reading() -> [usize; 2] {
@@ -142,29 +135,28 @@ pub fn reading() -> [usize; 2] {
     [q.smooth.at(), q.star]
 }
 
-/// The policy's turn, before anything reads the quality. Idempotent within
-/// an instant, so every reader may call it first.
-pub fn step() {
+/// Starts the next goal walk over the ladder.
+pub fn sight() {
+    domain::start(&ladder(), kernel().sched.needs_revision());
+}
+
+/// A slice of the goal walk, then the step that fits.
+pub fn step(stop: &dyn Fn() -> bool) {
     let q = QUALITY.get(Quality::default);
-    let ladder = ladder();
-    domain::step(&ladder, Effective(ladder[q.smooth.at()]));
-    if domain::current().is_none() {
-        return;
-    }
     let sched = &kernel().sched;
-    let key = Some((domain::walks(), sched.needs_revision()));
-    if q.counted != key {
-        q.counted = key;
-        q.counts.clear();
-        q.counts.resize(ladder.len(), None);
-    }
-    let counts = &mut q.counts;
-    let mut count = |k: usize| *counts[k].get_or_insert_with(|| domain::cut_at(k).map_or([0; POOLS], |(d, cut)| need(d, cut, |c, cube| sched.slots_of(c, cube))));
+    let price = Need {
+        slots: |c, cube| sched.slots_of(c, cube),
+        admit: true,
+    };
+    domain::advance(&ladder, q.smooth.at(), &price, stop, sched.needs_revision());
+    let Some(d) = domain::current() else { return };
     let spare = margin();
-    let (star, roomy) = around(q.smooth.at(), ladder.len(), |k, roomy| fits(count(k), ARENA, HEADROOM, if roomy { spare } else { [0; POOLS] }));
+    let (star, roomy) = around(q.smooth.at(), param::TAU_STEPS + 1, |k, roomy| {
+        d.need(k).is_some_and(|n| fits(n, ARENA, HEADROOM, if roomy { spare } else { [0; POOLS] }))
+    });
     q.star = star;
-    let at = q.smooth.follow(star, roomy, param::QUALITY_WAIT_MS, crate::host::now());
-    domain::step(&ladder, Effective(ladder[at]));
+    let at = q.smooth.follow(star, roomy, param::QUALITY_WAIT_MS, xpute_runtime::clock::now());
+    domain::put(at);
 }
 
 #[cfg(test)]

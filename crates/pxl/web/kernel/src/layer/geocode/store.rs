@@ -1,16 +1,49 @@
 // pxl-kernel/layer/geocode/store.rs
 
-//! The dictionary, and the one group the map center is in: a group spans
-//! sixteen pages a side, so holding more buys little. Every outcome, a 404
-//! or a failed fetch included, is an answer: a missing one was re-asked
-//! every turn (120 requests/s with the tile server down, which would exhaust
-//! the bucket's fail-closed budget in minutes). Only moving to another group
-//! asks again.
+//! The reverse-geocode bake's two packets, resident: the dictionary, and the
+//! one group the map center is in. A group spans sixteen pages a side, so
+//! holding more buys little. Each is a view over the heap block the shell
+//! fetched into, so names are never decoded into strings.
+//!
+//! A 404 is an answer: the bake wrote no object, so no page under it is in
+//! any place, and only moving to another group asks again. A failed fetch is
+//! not one; its want waits out the request scheduler's retry.
 
 use pxl_spec::space::pvf3::ivec::IVec;
 
-use crate::global::Global;
-use crate::layer::geocode::repository::{ResidentDict, ResidentGroup};
+use xpute_runtime::global::Global;
+
+/// The block goes back when the packet drops, since the `'static` view cannot
+/// keep its own lifetime.
+pub struct Resident<V> {
+    pub view: V,
+    block: Block,
+}
+
+impl<V> Drop for Resident<V> {
+    fn drop(&mut self) {
+        // SAFETY: the block `open` took for this packet alone, freed once; the
+        // view dies with it.
+        unsafe { free(self.block) }
+    }
+}
+
+/// Takes the block: it is freed with the packet, or at once if it does not open.
+///
+/// # Safety
+/// The block is a heap block held for this packet alone, until it is freed.
+unsafe fn open<V>(block: Block, view: impl FnOnce(&'static [u8]) -> Result<V, MarshalError>) -> Result<Resident<V>, MarshalError> {
+    // SAFETY: the caller's contract.
+    let pkt = unsafe { core::slice::from_raw_parts(ptr_at::<u8>(block.0), block.1 as usize) };
+    match view(pkt) {
+        Ok(view) => Ok(Resident { view, block }),
+        Err(err) => {
+            // SAFETY: as above, and nothing views it now.
+            unsafe { free(block) };
+            Err(err)
+        }
+    }
+}
 
 #[derive(Default)]
 struct GeocodeStore {

@@ -4,14 +4,16 @@
 
 use pxl_spec::asset::ingested::Asset;
 
-use crate::layer::character::variant_spec::groups::{person, pet};
-pub use crate::layer::character::variant_spec::{DEFAULT_PERSON_VARIANT_KEY, DEFAULT_PET_VARIANT_KEY};
+use crate::io::load::{load_gltf, Load};
+use crate::layer::model::asset::{register_model, ModelHandle};
+use xpute_runtime::global::Global;
 
-pub type CharacterGroup = crate::layer::character::variant_spec::Group;
+use crate::layer::character::variant_spec::groups::{person, pet};
+pub use crate::layer::character::variant_spec::Group;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CharacterVariant {
-    pub group: CharacterGroup,
+    pub group: Group,
     /// As the settings store holds it.
     pub number: u8,
     pub model: Asset,
@@ -28,13 +30,31 @@ pub struct CharacterVariant {
 /// registrations by variant holds at most (companion.rs, preview.rs).
 pub const CHARACTER_VARIANTS: usize = person::Key::ALL.len() + pet::Key::ALL.len();
 
-pub fn character_variant(group: CharacterGroup, number: u8) -> Option<CharacterVariant> {
+/// A variant at its own height, and at one unit in a display case.
+pub const MODELS_MAX: usize = 2 * CHARACTER_VARIANTS;
+
+/// None inside while registration failed.
+static MODELS: Global<Vec<(Asset, u64, Option<ModelHandle>)>> = Global::new();
+
+/// `asset` registered `height` units tall, once.
+pub fn model_of(asset: Asset, height: f64) -> Option<ModelHandle> {
+    let models = MODELS.get(Vec::new);
+    if let Some((_, _, entry)) = models.iter().find(|(a, h, _)| *a == asset && *h == height.to_bits()) {
+        return entry.clone();
+    }
+    let gltf = load_gltf(Load::Asset(asset))?;
+    let handle = register_model(&gltf, Some(height));
+    models.push((asset, height.to_bits(), handle.clone()));
+    handle
+}
+
+pub fn character_variant(group: Group, number: u8) -> Option<CharacterVariant> {
     let (model, skin, height_u, move_clip) = match group {
-        CharacterGroup::person => {
+        Group::person => {
             let row = person::Key::ALL.iter().position(|k| *k as u8 == number)?;
             (person::models[row], person::skin, person::size, person::move_clip)
         }
-        CharacterGroup::pet => {
+        Group::pet => {
             let row = pet::Key::ALL.iter().position(|k| *k as u8 == number)?;
             (pet::models[row], pet::skin, pet::size, pet::move_clip)
         }

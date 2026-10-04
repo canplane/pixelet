@@ -94,12 +94,13 @@ fn pack(size: u32, ws: &[u32], hs: &[u32]) -> Option<Plan> {
     Some(plan)
 }
 
+/// What a mirror has to upload: the whole sheet when `whole`, else the dirty
+/// slots' rectangles, which `flush` hands over in the vector it is given.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Flush {
     pub whole: bool,
     pub size: u32,
     pub generation: u32,
-    pub dirty: Vec<u32>,
 }
 
 #[derive(Default)]
@@ -208,22 +209,26 @@ impl BillboardAtlas {
         self.dirty.push(slot);
     }
 
-    /// The whole sheet if it was replaced since `generation`, else the dirty slots,
-    /// swapped into `dirty` rather than allocated.
+    /// What a mirror at `generation` has to take since it last looked: the
+    /// whole sheet when it was replaced, else the dirty entries' rectangles,
+    /// left in `dirty`. The atlas keeps the vector it is handed in their
+    /// place, so the two trade buffers rather than one being made a flush.
     pub fn flush(&mut self, generation: u32, dirty: &mut Vec<u32>) -> Flush {
         let whole = generation != self.generation;
-        let dirty = std::mem::take(&mut self.dirty);
-        for &slot in &dirty {
+        dirty.clear();
+        std::mem::swap(&mut self.dirty, dirty);
+        for &slot in dirty.iter() {
             self.is_dirty[slot as usize] = false;
         }
-        if !whole {
+        if whole {
+            dirty.clear();
+        } else {
             self.uploads += dirty.len() as u32;
         }
         Flush {
             whole,
             size: self.size,
             generation: self.generation,
-            dirty: if whole { Vec::new() } else { dirty },
         }
     }
 

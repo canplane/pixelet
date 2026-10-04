@@ -59,11 +59,11 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     let c = &light.theme;
     // Both lights are summed so the light does not snap from one direction to the
     // other where their intensities cross at dusk; the brighter casts the shadow.
-    let sun_dir = *norm3(&light.sun, &mut [0.0; 3]);
+    let sun_dir = norm3(&light.sun);
     let sun_color = sun_light(light.altitude_km, sun_dir[2], white());
     let moon_color = MOON_COLOR.map(|v| v as f64 * light.moon_intensity);
     let sun = (sun_dir, sun_color);
-    let moon_dir = *norm3(&light.moon, &mut [0.0; 3]);
+    let moon_dir = norm3(&light.moon);
     let moon = (moon_dir, moon_color);
     let (first, other) = if luminance(moon_color) > luminance(sun_color) { (moon, sun) } else { (sun, moon) };
     for (at, (d, color)) in [(0, first), (ENV_OTHER_LIGHT, other)] {

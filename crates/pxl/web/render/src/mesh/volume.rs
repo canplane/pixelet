@@ -5,7 +5,13 @@
 //! POOLED_BANDS band stores keep their lanes for reuse, since building them
 //! fresh was the heap's worst churn.
 
-use crate::mesh::{grow, try_push, Refused};
+// ---- the voxel ----
+//
+// What one voxel's bytes mean: its material class and color packed into a
+// word, its texture layer, and the inset of a box that fills only part of
+// its cell. Pure encoding, shared by the volume that stores voxels, the
+// scan that reads them into runs and the mesher that draws the runs.
+
 use pxl_spec::bake::constant::{band_of, BAND_CELLS};
 use xpute_core::math::scalar::round;
 use xpute_core::status::bug::OrBug;
@@ -16,7 +22,8 @@ use xpute_runtime::mem::heap::{alloc, free, Block, Guard};
 
 use crate::mesh::voxel_scan::{BandView, ExtraView};
 
-/// Exempt from hiding its neighbors' faces, and drawn with its bottom face.
+/// A run whose material is a placed object: exempt from hiding its
+/// neighbors' faces, and drawn with its bottom face.
 pub const MATERIAL_OBJECT: u8 = 5;
 pub const MATERIAL_LAND: u8 = 1;
 
@@ -476,17 +483,17 @@ impl Volumes {
 
     /// # Safety
     /// The views are valid until the volume is painted again or released.
-    pub unsafe fn band_view(&mut self, id: u32, i: usize) -> crate::mesh::voxel_scan::BandView<'static> {
+    pub unsafe fn band_view(&mut self, id: u32, i: usize) -> BandView<'static> {
         let row = *self.band_row(id, i);
         let at = |w: u32| ptr_at::<u8>(w as usize);
         let voxels = BAND_VOXELS;
         let n = row[4] as usize;
-        crate::mesh::voxel_scan::BandView {
+        BandView {
             band_z: row[0] as i32,
             material: core::slice::from_raw_parts(at(row[1]).cast::<u32>(), voxels),
             layer_idx: core::slice::from_raw_parts(at(row[2]).cast_const(), voxels),
             sub_cell: (row[3] != 0).then(|| core::slice::from_raw_parts(at(row[3]).cast_const(), voxels * 4)),
-            extra: crate::mesh::voxel_scan::ExtraView {
+            extra: ExtraView {
                 col: core::slice::from_raw_parts(at(row[5]).cast::<u32>(), n),
                 z: core::slice::from_raw_parts(at(row[6]).cast::<i32>(), n),
                 material: core::slice::from_raw_parts(at(row[7]).cast::<u32>(), n),
@@ -500,8 +507,7 @@ impl Volumes {
     ///
     /// # Safety
     /// As `band_view`: valid until the volume is painted again or released.
-    /// False, and `out` empty, where the heap refused it room.
-    pub unsafe fn band_views(&mut self, id: u32, out: &mut Vec<BandView<'static>>) -> bool {
+    pub unsafe fn band_views(&mut self, id: u32, out: &mut Vec<BandView<'static>>) {
         out.clear();
         let n = self.band_count(id);
         if grow(out, n).is_err() {

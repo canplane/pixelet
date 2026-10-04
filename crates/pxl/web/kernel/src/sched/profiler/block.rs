@@ -186,7 +186,7 @@ words!(AtlasBlock, SUMMARY::atlas::WORDS,
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct RetainBlock {
+pub struct HeldBlock {
     pub run_sets: f64,
     pub run_set_mb: f64,
     pub tiers: f64,
@@ -197,11 +197,10 @@ pub struct RetainBlock {
     pub budget_bytes: f64,
 }
 
-words!(RetainBlock, SUMMARY::retain::WORDS,
-    run_sets => SUMMARY::retain::run_sets, run_set_mb => SUMMARY::retain::run_set_mb,
-    tiers => SUMMARY::retain::tiers, decor_steps => SUMMARY::retain::decor_steps,
-    decor_instances => SUMMARY::retain::decor_instances, on_bytes => SUMMARY::retain::on_bytes,
-    off_bytes => SUMMARY::retain::off_bytes, budget_bytes => SUMMARY::retain::budget_bytes,
+words!(HeldBlock, SUMMARY::held::WORDS,
+    run_sets => SUMMARY::held::run_sets, run_set_mb => SUMMARY::held::run_set_mb,
+    tiers => SUMMARY::held::tiers, decor_cells => SUMMARY::held::decor_cells,
+    decor_instances => SUMMARY::held::decor_instances, decor_bytes => SUMMARY::held::decor_bytes,
 );
 
 #[repr(C)]
@@ -225,14 +224,14 @@ pub struct QualityBlock {
     pub admitted: f64,
     pub evicted: f64,
     pub refined: f64,
-    pub recubed: f64,
+    pub retiered: f64,
     pub changes_peak: f64,
 }
 
 words!(QualityBlock, SUMMARY::quality::WORDS,
     step => SUMMARY::quality::step, star => SUMMARY::quality::star, frames_held => SUMMARY::quality::frames_held,
     admitted => SUMMARY::quality::admitted, evicted => SUMMARY::quality::evicted,
-    refined => SUMMARY::quality::refined, recubed => SUMMARY::quality::recubed, changes_peak => SUMMARY::quality::changes_peak,
+    refined => SUMMARY::quality::refined, retiered => SUMMARY::quality::retiered, changes_peak => SUMMARY::quality::changes_peak,
 );
 
 #[repr(C)]

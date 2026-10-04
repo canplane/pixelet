@@ -12,7 +12,7 @@
 
 use pxl_spec::space::lod::{Tau, SPLIT};
 use pxl_spec::space::observation::{Observation, Requirement};
-use pxl_spec::space::v3::{Aabb, V3};
+use pxl_spec::space::v3::{dot3, len3, mul3n, sub3, Aabb, V3};
 
 use crate::param;
 use crate::world::access::{Access, Detail, Ray};
@@ -41,9 +41,9 @@ impl Lens {
         let planes = o.frustum?.planes;
         let n = |k: usize| -> V3 { [planes[k * 4], planes[k * 4 + 1], planes[k * 4 + 2]] };
         let forward = unit(n(4))?;
-        let right = unit(sub(n(0), n(1)))?;
-        let up = unit(sub(n(2), n(3)))?;
-        let tan = [dot(n(0), forward) / dot(n(0), right), dot(n(2), forward) / dot(n(2), up)];
+        let right = unit(sub3(&n(0), &n(1)))?;
+        let up = unit(sub3(&n(2), &n(3)))?;
+        let tan = [dot3(&n(0), &forward) / dot3(&n(0), &right), dot3(&n(2), &forward) / dot3(&n(2), &up)];
         tan.iter().all(|t| t.is_finite() && *t > 0.0).then_some(Lens { eye: o.eye, forward, right, up, tan })
     }
 
@@ -54,15 +54,15 @@ impl Lens {
     /// An overestimate: the extent is divided by the nearest depth the box
     /// allows, `r` less its diagonal. Unbounded where the box reaches the eye.
     pub fn error(&self, at: V3, error: V3) -> [f64; 2] {
-        let d = sub(at, self.eye);
-        let r = dot(d, d).sqrt();
-        let depth = r - dot(error, error).sqrt();
+        let d = sub3(&at, &self.eye);
+        let r = len3(&d);
+        let depth = r - len3(&error);
         if depth < INSIDE {
             return [f64::INFINITY; 2];
         }
-        let f = dot(d, self.forward);
+        let f = dot3(&d, &self.forward);
         let on = |axis: V3, k: usize| {
-            let t = dot(d, axis);
+            let t = dot3(&d, &axis);
             let t = if f > INSIDE { t / f } else { t.signum() * f64::INFINITY };
             if t.is_nan() {
                 0.0
@@ -73,7 +73,7 @@ impl Lens {
         let (tx, ty) = (on(self.right, 0), on(self.up, 1));
         let d = unit(std::array::from_fn(|k| self.forward[k] + tx * self.right[k] + ty * self.up[k])).unwrap_or(self.forward);
         [self.right, self.up].map(|a| {
-            let square = sub(a, d.map(|c| c * dot(a, d)));
+            let square = sub3(&a, &mul3n(&d, dot3(&a, &d)));
             let Some(a) = unit(square) else { return f64::INFINITY };
             (0..3).map(|k| error[k] * a[k].abs()).sum::<f64>() / depth
         })
@@ -92,7 +92,7 @@ impl Grid {
     pub fn of(lens: Lens) -> Grid {
         Grid {
             lens,
-            across: lens.tan.map(|t| ((2.0 * t.atan() / param::OBSERVED_TILE).ceil() as u32).max(1)),
+            across: lens.tan.map(|t| ((2.0 * libm::atan(t) / param::OBSERVED_TILE).ceil() as u32).max(1)),
         }
     }
 
@@ -111,8 +111,8 @@ impl Grid {
     pub fn corner(&self, [i, j]: [u32; 2]) -> V3 {
         let l = self.lens;
         let at = |k: usize, n: u32| {
-            let half = l.tan[k].atan();
-            (-half + 2.0 * half * n as f64 / self.across[k] as f64).tan()
+            let half = libm::atan(l.tan[k]);
+            libm::tan(-half + 2.0 * half * n as f64 / self.across[k] as f64)
         };
         let (tx, ty) = (at(0, i), at(1, j));
         unit(std::array::from_fn(|k| l.forward[k] + tx * l.right[k] + ty * l.up[k])).unwrap_or(l.forward)
@@ -135,16 +135,18 @@ impl Grid {
                 let mut seen = false;
                 let mut lacks: Lacks = [None; 4];
                 let points = [[i, j], [i + 1, j], [i, j + 1], [i + 1, j + 1]].map(|c| {
-                    let direction = self.corner(c);
                     let (hit, lack) = *met[(c[1] * (nx + 1) + c[0]) as usize].get_or_insert_with(|| {
                         rays += 1;
-                        meet(direction)
+                        meet(self.corner(c))
                     });
                     seen |= hit.is_some();
                     if let Some(l) = lack.filter(|l| !lacks.contains(&Some(*l))) {
                         lacks[lacks.iter().position(Option::is_none).unwrap_or(3)] = Some(l);
                     }
-                    hit.unwrap_or_else(|| (std::array::from_fn(|k| eye[k] + direction[k] * far), far))
+                    hit.unwrap_or_else(|| {
+                        let direction = self.corner(c);
+                        (std::array::from_fn(|k| eye[k] + direction[k] * far), far)
+                    })
                 });
                 each(tile, seen.then(|| Footprint::of(eye, points)), lacks);
             }
@@ -169,10 +171,10 @@ impl Footprint {
         let xy: [[f64; 2]; 4] = points.map(|(p, _)| [p[0], p[1]]);
         let z = points.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), (p, _)| (lo.min(p[2]), hi.max(p[2])));
         let near = points.iter().map(|&(_, t)| t).fold(f64::INFINITY, f64::min);
-        let reach = xy.iter().fold((eye[0], eye[1], eye[0], eye[1]), |b, p| (b.0.min(p[0]), b.1.min(p[1]), b.2.max(p[0]), b.3.max(p[1])));
         let bounds = xy.iter().fold((f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY), |b, p| {
             (b.0.min(p[0]), b.1.min(p[1]), b.2.max(p[0]), b.3.max(p[1]))
         });
+        let reach = (bounds.0.min(eye[0]), bounds.1.min(eye[1]), bounds.2.max(eye[0]), bounds.3.max(eye[1]));
         let (hull, sides) = hull(xy);
         Footprint { hull, sides, bounds, z, near, reach }
     }
@@ -300,7 +302,7 @@ impl Sight {
             || self.cast.is_none_or(|(was, across, far)| {
                 let turned = [(was.forward, lens.forward), (was.right, lens.right), (was.up, lens.up)]
                     .iter()
-                    .map(|&(a, b)| dot(a, b).clamp(-1.0, 1.0).acos())
+                    .map(|&(a, b)| libm::acos(dot3(&a, &b).clamp(-1.0, 1.0)))
                     .fold(0.0, f64::max);
                 let reshaped = (0..2).any(|k| (was.tan[k] - lens.tan[k]).abs() > 1e-9 * lens.tan[k]);
                 across != grid.across() || reshaped || turned > shift || (o.far - far).abs() > shift * far
@@ -316,7 +318,7 @@ impl Sight {
         }
         // A tile that met nothing is measured against the far edge.
         let stale = |k: usize| {
-            let moved_eye = dot(sub(lens.eye, self.eyes[k]), sub(lens.eye, self.eyes[k])).sqrt();
+            let moved_eye = len3(&sub3(&lens.eye, &self.eyes[k]));
             whole
                 || match &self.tiles[k] {
                     Some(f) => {
@@ -353,16 +355,8 @@ impl Sight {
     }
 }
 
-fn dot(a: V3, b: V3) -> f64 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
-
-fn sub(a: V3, b: V3) -> V3 {
-    std::array::from_fn(|k| a[k] - b[k])
-}
-
 fn unit(v: V3) -> Option<V3> {
-    let l = dot(v, v).sqrt();
+    let l = len3(&v);
     (l > 1e-12 && l.is_finite()).then(|| v.map(|c| c / l))
 }
 

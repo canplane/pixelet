@@ -1,4 +1,4 @@
-// @pxl/web/feature/dev/remote-console.ts
+// @pxl/web/platform/web/remote-console.ts
 
 /**
  * Forwards a device's console to the dev server's terminal, since a phone over

@@ -11,29 +11,17 @@ use super::ivec::IVec;
 use super::pvf3::Pvf3;
 use crate::space::v3::V3;
 
-fn project_comp(reg: &mut [i64; 6], axis: usize, comp: f64) {
-    reg[2 * axis] = ivec::from_real(comp);
-    reg[2 * axis + 1] = fvec::from_real(comp);
-}
-
-pub fn project(out: &mut Pvf3, x: f64, y: f64, z: f64) -> &mut Pvf3 {
-    // [x_i, x_f, y_i, y_f, z_i, z_f]
-    let mut reg = [0i64; 6];
-    project_comp(&mut reg, 0, x);
-    project_comp(&mut reg, 1, y);
-    project_comp(&mut reg, 2, z);
-    out.i = ivec::gather(reg[0], reg[2], reg[4]);
-    out.f = fvec::gather(reg[1], reg[3], reg[5]);
-    out
+pub fn project(x: f64, y: f64, z: f64) -> Pvf3 {
+    Pvf3 {
+        i: ivec::gather(ivec::from_real(x), ivec::from_real(y), ivec::from_real(z)),
+        f: fvec::gather(fvec::from_real(x), fvec::from_real(y), fvec::from_real(z)),
+    }
 }
 
 fn unproject_comp(i_comp: i64, f_comp: i64) -> f64 {
     ivec::to_real(i_comp) + fvec::to_real(f_comp)
 }
 
-pub fn unproject(out: &mut V3, i: IVec, f: FVec) -> &mut V3 {
-    out[0] = unproject_comp(ivec::X(i), fvec::X(f));
-    out[1] = unproject_comp(ivec::Y(i), fvec::Y(f));
-    out[2] = unproject_comp(ivec::Z(i), fvec::Z(f));
-    out
+pub fn unproject(i: IVec, f: FVec) -> V3 {
+    [unproject_comp(ivec::X(i), fvec::X(f)), unproject_comp(ivec::Y(i), fvec::Y(f)), unproject_comp(ivec::Z(i), fvec::Z(f))]
 }

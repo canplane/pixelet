@@ -10,7 +10,6 @@
 use crate::space::indexer::{FROM_L3_IDX, L3_RANGE};
 use crate::space::pvf3::core::{FRAC_W, IVEC_X_W, IVEC_Y_W};
 use crate::space::pvf3::{projection, FVec, IVec, Pvf3};
-use crate::space::v3::V3;
 
 use super::epsg4326;
 
@@ -52,56 +51,22 @@ pub fn Z_SCALE(y_m: f64) -> f64 {
     Z_SCALE_FINE(y_base_m)
 }
 
-pub fn project(out: &mut Pvf3, x: f64, y: f64, z: f64) -> &mut Pvf3 {
-    let mut x = ((((x + HALF_W_3857) % WORLD_WIDTH_3857) + WORLD_WIDTH_3857) % WORLD_WIDTH_3857) - HALF_W_3857;
-    // Coarse: this clamp only feeds the page-quantized `Z_SCALE`.
-    let y = Y_MIN_3857.max(Y_MAX_3857.min(y));
-    let mut z = z * Z_SCALE(y);
-
-    x *= U_PER_M;
-    // The exact clamp, in u.
-    let y = Y_MIN_U.max(Y_MAX_U.min(y * U_PER_M));
-    z *= U_PER_M;
-    projection::project(out, x, y, z);
-
-    out
+pub fn project(x: f64, y: f64, z: f64) -> Pvf3 {
+    let y = Y_MIN_U.max(Y_MAX_U.min(from_db(y)));
+    projection::project(wrap_x(from_db(x)), y, z * u_per_m(y))
 }
 
-pub fn unproject(out: &mut G3857, i: IVec, f: FVec) -> &mut G3857 {
-    let mut reg: V3 = [0.0; 3];
-    projection::unproject(&mut reg, i, f);
-
-    let x = reg[0] * M_PER_U;
-    let y = reg[1] * M_PER_U;
-    let z = reg[2] * M_PER_U;
-
-    out[0] = ((((x + HALF_W_3857) % WORLD_WIDTH_3857) + WORLD_WIDTH_3857) % WORLD_WIDTH_3857) - HALF_W_3857;
-    out[1] = y;
-    out[2] = z / Z_SCALE(y);
-
-    out
+pub fn unproject(i: IVec, f: FVec) -> G3857 {
+    let [x, y, z] = projection::unproject(i, f);
+    [to_db(wrap_x(x)), to_db(y), z / u_per_m(y)]
 }
 
 pub type BBox3857 = [G3857; 2];
 
 pub fn get_page_bbox(page_idx: IVec) -> BBox3857 {
-    let base: IVec = FROM_L3_IDX(page_idx);
-
-    let mut min: G3857 = [0.0; 3];
-    unproject(&mut min, base, 0);
-
-    // The exclusive +2^23u limit is not representable as an IVec (it wraps),
-    // so the maximum is built in metres.
-    let page_span_m = L3_RANGE as f64 * M_PER_U;
-    let max_x = min[0] + page_span_m;
-    let max_y = min[1] + page_span_m;
-    let max: G3857 = [
-        if max_x > HALF_W_3857 - M_PER_U { HALF_W_3857 } else { max_x },
-        if max_y > HALF_W_3857 - M_PER_U { HALF_W_3857 } else { max_y },
-        0.0,
-    ];
-
-    [min, max]
+    let min = projection::unproject(FROM_L3_IDX(page_idx), 0);
+    let span = L3_RANGE as f64;
+    [[to_db(min[0]), to_db(min[1]), 0.0], [to_db(min[0] + span), to_db(min[1] + span), 0.0]]
 }
 
 #[cfg(test)]

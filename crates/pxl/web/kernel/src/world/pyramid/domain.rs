@@ -1,8 +1,11 @@
 // pxl-kernel/world/pyramid/domain.rs
 
 //! The frontier's goal: the view's ground cut into pyramid chunks, the same
-//! for every layer. Made per frame from the observation and what is
-//! resident; paging never reads it.
+//! for every layer. Paging never reads it.
+//!
+//! One walk gives every quality step's cut: a chunk is a piece over an
+//! interval of steps. It runs a slice a turn on the observation it began
+//! with, and is published whole.
 //!
 //! Every top-level chunk within reach that holds anything is a piece (the
 //! cover), all around the eye, so ground turned to shows the cover and never
@@ -13,20 +16,21 @@
 
 use std::collections::{HashMap, HashSet};
 
+
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::lod::{cubes_meeting, fault_radius, Tau};
 use pxl_spec::space::observation::{Bounds, Contents, Observation};
 use pxl_spec::space::pvf3::REACH;
-use pxl_spec::space::pyramid::{chunk_span_of, LevelPage, TOP_LEVEL};
+use pxl_spec::space::pyramid::{chunk_span_of, LevelPage};
 use pxl_spec::space::v3::Aabb;
 
-use crate::global::Global;
 use crate::world::access::Access;
 use crate::world::observation::{heights_revision, observation, Known, Order};
 use crate::world::observer::{cell_angle, EdgeRays, Footprint, Lens, Sight};
-use crate::world::quality::Effective;
+use pxl_spec::space::observation::Requirement;
+use xpute_runtime::global::Global;
 
-use super::chunk::{Chunk, CHILDREN};
+use super::chunk::Chunk;
 use super::Layer as _;
 
 /// Most pieces the cover can be: every top-level chunk meeting the far
@@ -48,7 +52,7 @@ pub const fn cover_pieces(top: u32, planet: f64) -> u32 {
 
 /// How near a chunk of `level` must come for its error to cross a cell:
 /// the error is at most its diagonal over its distance less the diagonal.
-pub fn split_reach(level: u32, tau: Tau) -> f64 {
+fn split_reach(level: u32, tau: Tau) -> f64 {
     3f64.sqrt() * chunk_span_of(level) * (1.0 + 1.0 / cell_angle(tau))
 }
 
@@ -74,66 +78,120 @@ impl Cut {
     }
 }
 
+/// Mesh slots per pool.
+pub trait Price {
+    fn piece(&self, c: Chunk, outermost: bool, near: f64, tau: Tau) -> [u32; POOLS];
+    fn split(&self, c: Chunk) -> [u32; POOLS];
+    /// stop counting a step needing `n`
+    fn over(&self, n: &[u32; POOLS]) -> bool;
+}
+
+/// No cost, no limit.
+pub struct Free;
+
+impl Price for Free {
+    fn piece(&self, _: Chunk, _: bool, _: f64, _: Tau) -> [u32; POOLS] {
+        [0; POOLS]
+    }
+
+    fn split(&self, _: Chunk) -> [u32; POOLS] {
+        [0; POOLS]
+    }
+
+    fn over(&self, _: &[u32; POOLS]) -> bool {
+        false
+    }
+}
+
 #[derive(Clone, Copy)]
 struct Seen {
-    /// A span of the domain's shared `touching` list, so noting one allocates nothing.
-    touching: (u32, u32),
-    error: f64,
-    near: f64,
+    order: Order,
+    /// piece at `from..to`, split below both
+    from: u8,
+    to: u8,
+}
+
+struct Open {
+    c: Chunk,
+    /// steps the parent splits at
+    to: u8,
+    from: Option<(u32, u32)>,
+    /// taken by a child read unknown mid-walk
+    parent: Option<(Aabb, [f64; 3])>,
 }
 
 pub struct Domain {
     o: Observation,
     lens: Option<Lens>,
     footprints: Vec<Footprint>,
+    lacks: Vec<Requirement>,
     known: Box<dyn Bounds>,
     roots: Vec<Chunk>,
     unanswered: u32,
     seen: HashMap<Chunk, Seen>,
     touching: Vec<u32>,
-    open: Vec<Chunk>,
-    /// Measured once per cut chunk; whoever orders or draws a piece reads it here.
-    measured: HashMap<Chunk, Order>,
+    open: Vec<Open>,
     ladder: Vec<Tau>,
+    /// finest step still counted
+    tracked: usize,
+    need: Vec<[u32; POOLS]>,
+    counted: Vec<u32>,
     cuts: Vec<Cut>,
     at: usize,
+    done: bool,
 }
 
 impl Domain {
-    pub fn of<'a>(o: Observation, ladder: &[Tau], at: usize, known: Box<dyn Bounds>, footprints: impl IntoIterator<Item = &'a Footprint>) -> Domain {
-        let mut d = Domain {
+    pub fn priced<'a>(o: Observation, ladder: &[Tau], at: usize, known: Box<dyn Bounds>, footprints: impl IntoIterator<Item = &'a Footprint>, price: &dyn Price) -> Domain {
+        let mut d = Domain::empty(o, known);
+        d.begin(o, ladder, footprints, core::iter::empty());
+        d.run(price, &|| false);
+        d.put(at);
+        d
+    }
+
+    fn empty(o: Observation, known: Box<dyn Bounds>) -> Domain {
+        Domain {
             o,
             lens: None,
             footprints: Vec::new(),
+            lacks: Vec::new(),
             known,
             roots: Vec::new(),
             unanswered: 0,
             seen: HashMap::new(),
             touching: Vec::new(),
             open: Vec::new(),
-            measured: HashMap::new(),
             ladder: Vec::new(),
+            tracked: 0,
+            need: Vec::new(),
+            counted: Vec::new(),
             cuts: Vec::new(),
             at: 0,
-        };
-        d.remake(o, ladder, at, footprints);
-        d
+            done: false,
+        }
     }
 
-    /// Remade in place every frame the eye moves, allocating nothing once warm.
-    pub fn remake<'a>(&mut self, o: Observation, ladder: &[Tau], at: usize, footprints: impl IntoIterator<Item = &'a Footprint>) {
-        xpute_core::ensure!(at < ladder.len(), EINVAL);
+    fn begin<'a, 'b>(&mut self, o: Observation, ladder: &[Tau], footprints: impl IntoIterator<Item = &'a Footprint>, lacks: impl IntoIterator<Item = &'b Requirement>) {
+        xpute_core::ensure!(!ladder.is_empty() && ladder.len() < u8::MAX as usize, EINVAL);
         self.o = o;
         self.lens = Lens::of(&o);
         self.footprints.clear();
         self.footprints.extend(footprints.into_iter().cloned());
+        self.lacks.clear();
+        self.lacks.extend(lacks.into_iter().copied());
         self.roots.clear();
         self.unanswered = 0;
         self.seen.clear();
         self.touching.clear();
-        self.measured.clear();
+        self.open.clear();
         self.ladder.clear();
         self.ladder.extend_from_slice(ladder);
+        self.tracked = 0;
+        self.need.clear();
+        self.need.resize(ladder.len(), [0; POOLS]);
+        self.counted.clear();
+        self.counted.resize(ladder.len(), 0);
         for c in &mut self.cuts {
             c.made = false;
         }
@@ -145,26 +203,52 @@ impl Domain {
                 made: false,
             });
         }
-        self.at = at.min(ladder.len() - 1);
+        self.done = false;
         self.find_roots();
+        let top = ladder.len() as u8;
         for i in 0..self.roots.len() {
-            self.look(self.roots[i], None);
+            self.open.push(Open {
+                c: self.roots[i],
+                to: top,
+                from: None,
+                parent: None,
+            });
         }
-        self.cut_at(self.at);
     }
 
-    fn look(&mut self, c: Chunk, from: Option<(u32, u32)>) {
+    /// Whether done; counts what it takes off the stack into `n`.
+    fn run(&mut self, price: &dyn Price, stop: &dyn Fn() -> bool, n: &mut u32) -> bool {
+        // at least a slice a turn
+        const SLICE: u32 = 32;
+        let mut n = 0;
+        while let Some(open) = self.open.pop() {
+            if (open.to as usize) > self.tracked {
+                self.visit(open, price);
+            }
+            n += 1;
+            if n % SLICE == 0 && stop() {
+                return false;
+            }
+        }
+        self.done = true;
+        true
+    }
+
+    fn visit(&mut self, open: Open, price: &dyn Price) {
+        let Open { c, to, from, parent } = open;
         if self.seen.contains_key(&c) {
             return;
         }
-        let (bound, error) = match self.contents(c) {
-            // A cover piece is drawn one cell per chunk (`drawn_cube`) and measured
+        let (bound, error) = match (self.contents(c), parent) {
+            // A cover piece is drawn one cell per chunk (`drawn_scale`) and measured
             // as drawn: half that cell across, and the box's full height.
-            Contents::Holds { bound, .. } if self.outermost(c) => {
+            (Contents::Holds { bound, .. }, _) if self.outermost(c) => {
                 let half = chunk_span_of(c.level()) / 2.0;
                 (bound, [half, half, bound.extent()[2]])
             }
-            Contents::Holds { bound, error } => (bound, error),
+            (Contents::Holds { bound, error }, _) => (bound, error),
+            // evicted between slices: the parent's bound holds
+            (_, Some((bound, error))) => (bound.meet(c.region()).unwrap_or(c.region()), error),
             _ => (c.region(), [0.0; 3]),
         };
         let start = self.touching.len() as u32;
@@ -176,76 +260,87 @@ impl Domain {
             }
         }
         let touching = (start, self.touching.len() as u32 - start);
-        let e = self.o.eye;
-        let nearest = bound.nearest(e);
-        let near = (0..3).map(|k| (nearest[k] - e[k]).powi(2)).sum::<f64>().sqrt();
-        let error = self.lens.map_or(0.0, |l| l.error(nearest, error).into_iter().fold(0.0, f64::max));
-        self.seen.insert(c, Seen { touching, error, near });
+        let nearest = bound.nearest(self.o.eye);
+        let error_angle = self.lens.map_or(0.0, |l| l.error(nearest, error).into_iter().fold(0.0, f64::max));
+        let order = Order::of(&self.o, &bound);
+        let mut from_step = if c.level() > 0 && touching.1 > 0 { self.ladder.iter().take_while(|&&tau| error_angle > cell_angle(tau)).count() as u8 } else { 0 };
+        let splits_to = from_step.min(to);
+        if splits_to as usize > self.tracked {
+            let mut any = false;
+            for child in c.children() {
+                if self.contents(child) != Contents::Empty {
+                    any = true;
+                    self.open.push(Open {
+                        c: child,
+                        to: splits_to,
+                        from: Some(touching),
+                        parent: Some((bound, error)),
+                    });
+                }
+            }
+            if any {
+                // Past the rule's reach the derivation, and the quality policy's count, are broken.
+                xpute_core::ensure!(order.near < split_reach(c.level(), self.ladder[splits_to as usize - 1]), ENOTRECOVERABLE, c.level());
+            } else {
+                from_step = 0;
+            }
+        }
+        let splits_to = from_step.min(to);
+        self.seen.insert(c, Seen { order, from: from_step, to });
+        let outermost = self.outermost(c);
+        for k in self.tracked..self.ladder.len() {
+            let at = k as u8;
+            let add = if from_step <= at && at < to {
+                self.counted[k] += 1;
+                price.piece(c, outermost, order.near, self.ladder[k])
+            } else if at < splits_to {
+                price.split(c)
+            } else {
+                continue;
+            };
+            for (n, a) in self.need[k].iter_mut().zip(add) {
+                *n += a;
+            }
+        }
+        while self.tracked + 1 < self.ladder.len() && price.over(&self.need[self.tracked]) {
+            self.tracked += 1;
+        }
     }
 
-    /// Cuts from the cover down: a touched chunk whose error spans more than a
-    /// cell splits into its non-empty children. A chunk with no non-empty
-    /// children stays a piece, so a split never removes a piece and a finer
-    /// quality never counts less. Pieces with no answer are left out.
+    /// Empty for a step no longer counted.
     pub fn cut_at(&mut self, k: usize) -> &Cut {
         if !self.cuts[k].made {
-            let tau = self.ladder[k];
-            let cell = cell_angle(tau);
+            let at = k as u8;
             let mut splits = core::mem::take(&mut self.cuts[k].splits);
             let mut pieces = core::mem::take(&mut self.cuts[k].pieces);
-            let mut open = core::mem::take(&mut self.open);
             splits.clear();
             pieces.clear();
-            open.clear();
-            open.extend_from_slice(&self.roots);
-            while let Some(c) = open.pop() {
-                let s = self.seen[&c];
-                let leaks = c.level() > 0 && s.touching.1 > 0 && s.error > cell;
-                let (mut under, mut n) = ([c; CHILDREN], 0);
-                if leaks {
-                    for child in c.children() {
-                        if self.occupied(child).is_some() {
-                            (under[n], n) = (child, n + 1);
-                        }
-                    }
-                }
-                if n == 0 {
-                    if self.answered(c) {
+            if k >= self.tracked {
+                for (&c, s) in &self.seen {
+                    if s.from <= at && at < s.to {
                         pieces.push(c);
+                    } else if at < s.from.min(s.to) {
+                        splits.insert(c);
                     }
-                    continue;
                 }
-                // Past the rule's reach the derivation, and the quality policy's count, are broken.
-                xpute_core::ensure!(s.near < split_reach(c.level(), tau), ENOTRECOVERABLE, c.level());
-                for &child in &under[..n] {
-                    self.look(child, Some(s.touching));
-                }
-                splits.insert(c);
-                open.extend_from_slice(&under[..n]);
             }
             pieces.sort_unstable();
-            for &c in pieces.iter().chain(&splits) {
-                if !self.measured.contains_key(&c) {
-                    let m = self.measure(c);
-                    self.measured.insert(c, m);
-                }
-            }
-            self.open = open;
-            self.cuts[k] = Cut { tau, splits, pieces, made: true };
+            self.cuts[k] = Cut {
+                tau: self.ladder[k],
+                splits,
+                pieces,
+                made: true,
+            };
         }
         &self.cuts[k]
-    }
-
-    pub fn cut(&self, k: usize) -> Option<&Cut> {
-        self.cuts.get(k).filter(|c| c.made)
     }
 
     /// Returns whether the pieces changed.
     pub fn put(&mut self, k: usize) -> bool {
         xpute_core::ensure!(k < self.ladder.len(), EINVAL);
-        let k = k.min(self.ladder.len() - 1);
+        let k = k.min(self.ladder.len() - 1).max(self.tracked);
         self.cut_at(k);
-        let moved = self.cuts[k].pieces != self.cuts[self.at].pieces;
+        let moved = self.cuts[k].pieces != self.cuts[self.at].pieces || !self.cuts[self.at].made;
         self.at = k;
         moved
     }
@@ -261,75 +356,111 @@ impl Domain {
     pub fn unanswered(&self) -> u32 {
         self.unanswered
     }
+
+    /// None: past the arena.
+    pub fn need(&self, k: usize) -> Option<[u32; POOLS]> {
+        (k >= self.tracked).then(|| self.need[k])
+    }
+
+    /// None: past the arena.
+    pub fn counted(&self, k: usize) -> Option<u32> {
+        (k >= self.tracked).then(|| self.counted[k])
+    }
+
+    pub fn footprints(&self) -> &[Footprint] {
+        &self.footprints
+    }
+
+    pub fn lacks(&self) -> &[Requirement] {
+        &self.lacks
+    }
 }
 
 #[derive(Default)]
 struct Made {
-    key: Option<(Observation, (u32, u32), Tau)>,
-    domain: Option<Domain>,
+    /// whole
+    published: Option<Domain>,
+    /// sliced
+    job: Option<Domain>,
+    spare: Option<Domain>,
+    key: Option<(Observation, (u32, u32), Tau, u32)>,
     sight: Sight,
     resident: HashSet<LevelPage>,
-    objects: u32,
-    rays: u32,
     revision: u32,
-    walks: u32,
+    /// rays cast and nodes visited since `take_work`
+    work: [u32; 2],
 }
 
 static MADE: Global<Made> = Global::new();
 
-/// Remakes the domain when the observation or residency moved, cut at the
-/// effective quality; otherwise only puts that cut in force. Returns whether
-/// it was remade (all cut counts are stale). Only the quality policy calls it.
-pub fn step(ladder: &[Tau], q: Effective) -> bool {
-    let Some(o) = observation() else { return false };
-    let at = ladder.iter().position(|&t| t == q.tau()).unwrap_or(0);
+/// A slice of the next goal; publishes it whole. A job starts when the
+/// observation, residency, target or `extra` moved, and is never restarted.
+pub fn advance(ladder: &[Tau], at: usize, price: &dyn Price, stop: &dyn Fn() -> bool, extra: u32) -> bool {
     let made = MADE.get(Made::default);
-    let key = Some((o, heights_revision(), ladder[0]));
-    if made.key != key {
-        let retarget = made.key.is_none_or(|(_, _, target)| target != ladder[0]);
+    if made.job.is_none() {
+        let Some(o) = observation() else { return false };
+        let key = Some((o, heights_revision(), ladder[0], extra));
+        if made.key == key && made.published.is_some() {
+            return false;
+        }
         made.key = key;
+        let retarget = made.target != Some(ladder[0]);
+        made.target = Some(ladder[0]);
         let paging = Terrain::pyramid().paging();
-        let resident: HashSet<LevelPage> = (0..=TOP_LEVEL).flat_map(|level| paging.level(level).map(|(p, _)| p)).collect();
+        let resident: HashSet<LevelPage> = paging.held().map(|(p, _)| p).collect();
         let moved: Vec<(f64, f64, f64)> = resident.symmetric_difference(&made.resident).map(|p| p.rect()).collect();
         let objects = heights_revision().1;
-        made.rays = made.sight.observe(&o, &EdgeRays(Access::now(), ladder[0]), retarget || objects != made.objects, &moved);
+        made.sight.observe(&o, &EdgeRays(Access::now(), ladder[0]), retarget || objects != made.objects, &moved);
         made.resident = resident;
         made.objects = objects;
-        match made.domain.as_mut() {
-            Some(d) => d.remake(o, ladder, at, made.sight.footprints()),
-            None => made.domain = Some(Domain::of(o, ladder, at, Box::new(Known), made.sight.footprints())),
-        }
-        made.revision = made.revision.wrapping_add(1);
-        made.walks = made.walks.wrapping_add(1);
-        return true;
+        let mut job = made.spare.take().unwrap_or_else(|| Domain::empty(o, Box::new(Known)));
+        job.begin(o, ladder, made.sight.footprints(), made.sight.lacks());
+        made.job = Some(job);
     }
-    if made.domain.as_mut().is_some_and(|d| d.put(at)) {
-        made.revision = made.revision.wrapping_add(1);
+    let Some(o) = observation() else { return };
+    let key = (o, heights_revision(), ladder[0], extra);
+    if made.key == Some(key) && made.published.is_some() {
+        return;
     }
-    false
+    // a new target or moved objects recast every tile; moved pages the ones over them
+    let everything = made.key.is_none_or(|(_, (_, objects), tau, _)| tau != key.2 || objects != key.1 .1);
+    made.key = Some(key);
+    let resident: HashSet<LevelPage> = Terrain::pyramid().paging().held().map(|(p, _)| p).collect();
+    let moved: Vec<(f64, f64, f64)> = resident.symmetric_difference(&made.resident).map(|p| p.rect()).collect();
+    made.work[0] += made.sight.observe(&o, &EdgeRays(Access::now(), ladder[0]), everything, &moved);
+    made.resident = resident;
+    let mut job = made.spare.take().unwrap_or_else(|| Domain::empty(o, Box::new(Known)));
+    job.begin(o, ladder, made.sight.footprints(), made.sight.lacks());
+    made.job = Some(job);
 }
 
-pub fn sight() -> &'static Sight {
-    &MADE.get(Made::default).sight
+/// A slice of the started goal; publishes it whole.
+pub fn advance(at: usize, price: &dyn Price, stop: &dyn Fn() -> bool) -> bool {
+    let made = MADE.get(Made::default);
+    let Some(job) = made.job.as_mut() else { return false };
+    if !job.run(price, stop) {
+        return false;
+    }
+    let Some(mut done) = made.job.take() else { return false };
+    done.put(at);
+    made.spare = made.published.replace(done);
+    made.revision = made.revision.wrapping_add(1);
+    true
+}
+
+pub fn put(k: usize) {
+    let made = MADE.get(Made::default);
+    if made.published.as_mut().is_some_and(|d| d.put(k)) {
+        made.revision = made.revision.wrapping_add(1);
+    }
+}
+
+pub fn walking() -> bool {
+    MADE.get(Made::default).job.is_some()
 }
 
 pub fn current() -> Option<&'static Domain> {
-    MADE.get(Made::default).domain.as_ref()
-}
-
-pub fn cut_at(k: usize) -> Option<(&'static Domain, &'static Cut)> {
-    let d: &'static mut Domain = MADE.get(Made::default).domain.as_mut()?;
-    d.cut_at(k);
-    let d: &'static Domain = d;
-    Some((d, d.cut(k)?))
-}
-
-pub fn rays() -> u32 {
-    MADE.get(Made::default).rays
-}
-
-pub fn walks() -> u32 {
-    MADE.get(Made::default).walks
+    MADE.get(Made::default).published.as_ref()
 }
 
 pub fn revision() -> u32 {
@@ -341,33 +472,18 @@ impl Domain {
         self.known.contents(c.level(), c.region())
     }
 
-    /// Where in `c` anything stands. A bound, not the drawn surface: a coarse
-    /// page's surface averages a peak away, which would leave the chunk empty
-    /// until the finer page came. A bound errs nearer.
-    pub fn occupied(&self, c: Chunk) -> Option<Aabb> {
-        match self.contents(c) {
-            Contents::Holds { bound, .. } => Some(bound),
-            _ => None,
-        }
-    }
-
-    fn answered(&self, c: Chunk) -> bool {
-        self.contents(c) != Contents::Unknown
-    }
-
-    fn measure(&self, c: Chunk) -> Order {
-        if let Some(&m) = self.measured.get(&c) {
-            return m;
-        }
-        Order::of(&self.o, &self.occupied(c).unwrap_or(c.region()))
-    }
-
-    pub fn nearest_to(&self, c: Chunk) -> f64 {
-        self.measure(c).near
-    }
-
+    /// Measured from where in `c` anything stands: a bound, not the drawn
+    /// surface, which on a coarse page averages a peak away and would leave
+    /// the chunk empty until the finer page came. A bound errs nearer.
     pub fn order_of(&self, c: Chunk) -> Order {
-        self.measure(c)
+        if let Some(s) = self.seen.get(&c) {
+            return s.order;
+        }
+        let bound = match self.contents(c) {
+            Contents::Holds { bound, .. } => bound,
+            _ => c.region(),
+        };
+        Order::of(&self.o, &bound)
     }
 
     pub fn outermost(&self, c: Chunk) -> bool {
@@ -384,11 +500,6 @@ impl Domain {
 
     pub fn roots(&self) -> &[Chunk] {
         &self.roots
-    }
-
-    pub fn root_of(&self, c: Chunk) -> Option<Chunk> {
-        let top = core::iter::once(c).chain(c.ancestors()).find(|&a| self.outermost(a))?;
-        self.roots.binary_search(&top).is_ok().then_some(top)
     }
 
     pub fn ladder(&self) -> &[Tau] {
@@ -408,8 +519,8 @@ impl Domain {
             match self.contents(c) {
                 Contents::Unknown => self.unanswered += 1,
                 Contents::Empty => {}
-                Contents::Holds { .. } => {
-                    if self.nearest_to(c) < self.o.far {
+                Contents::Holds { bound, .. } => {
+                    if Order::of(&self.o, &bound).near < self.o.far {
                         roots.push(c);
                     }
                 }
@@ -417,10 +528,6 @@ impl Domain {
         }
         xpute_core::ensure!(roots.len() as u32 <= cover_pieces(top, self.o.planet), ENOTRECOVERABLE, roots.len());
         roots.sort_unstable();
-        for &c in &roots {
-            let m = self.measure(c);
-            self.measured.insert(c, m);
-        }
         self.roots = roots;
     }
 
@@ -430,8 +537,7 @@ impl Domain {
 
     /// The chunk over `c`'s ground at the level the view draws it, never above the top.
     pub fn wanted_over(&self, c: Chunk) -> Chunk {
-        let chain: Vec<Chunk> = std::iter::once(c).chain(c.ancestors()).filter(|k| k.level() <= self.o.top).collect();
-        chain.into_iter().rev().find(|&k| !self.splits(k)).unwrap_or(c)
+        std::iter::once(c).chain(c.ancestors()).filter(|k| k.level() <= self.o.top && !self.splits(*k)).last().unwrap_or(c)
     }
 }
 

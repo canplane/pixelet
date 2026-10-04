@@ -22,13 +22,6 @@ use crate::control::camera::gesture::{linear, Anchor};
 use crate::control::camera::ray::{ray_pick, resolve_hit_object, world_adjacent_corner, world_hover_pvf3, world_struck_corner};
 use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
 use crate::control::navigation::destination::cancel as cancel_destination;
-use crate::global::Global;
-use crate::layer::decor::hit::raycast_decor;
-use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
-use crate::layer::object::geometry::{anchor_center, object_aabb, object_center};
-use crate::layer::object::size::{DECOR_SIZE, DEFAULT_OBJECT_SIZE};
-use crate::layer::object::store::{get_placed_object, place, place_air, place_decor, remove, OccupiedEntry};
-use crate::layer::terrain::ground_snap::ground_or_raw;
 use crate::shell::setting::store::settings_store;
 use crate::world::access::Hit;
 use crate::world::change::request_world_tick;
@@ -36,6 +29,7 @@ use crate::world::frame::coord::local_world_origin;
 use crate::world::frame::view::{view, view_ray_local};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
+use xpute_runtime::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DragMode {

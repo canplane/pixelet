@@ -3,14 +3,14 @@
 import { Image, type StyleProp, View, type ViewStyle } from "react-native";
 
 import type { DecorId } from "@/catalog/cell/decor.spec.ts";
-import { type PlaceableCube, placeableCubeHex, placeableCubeId } from "@/catalog/cell/mod.ts";
+import { type PlaceableCube, placeableCubeChannel, placeableCubeHex, placeableCubeId, placeableCubeType } from "@/catalog/cell/mod.ts";
+import { shippedTopTextureKey } from "@/catalog/asset/texture.ts";
 import type { GlyphName } from "@platform/icon.tsx";
 import { ORIGIN } from "@platform/origin.ts";
 import { assetUrl } from "@/config/route.ts";
-import { textureKey } from "@/feature/map/object/tex.ts";
 
 function placeableCubeTextureUrl(cube: PlaceableCube): string | null {
-  const key = textureKey(cube);
+  const key = shippedTopTextureKey(placeableCubeChannel(cube), placeableCubeType(cube));
   return key ? `${ORIGIN}${assetUrl(key)}` : null;
 }
 

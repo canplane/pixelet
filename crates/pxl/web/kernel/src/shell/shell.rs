@@ -4,7 +4,6 @@
 //! only when changed) and the commands it applies to the stores.
 
 use pxl_spec::bake::place_page::leaf_slot;
-use pxl_spec::place::PlaceRank;
 use pxl_spec::space::adapter::epsg4326;
 use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -12,13 +11,13 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_core::wire::xtp::PacketWriter;
 
 pub use crate::abi::cmd::Tracking;
-use crate::abi::cmd::{CompanionState, LocationState, LonLat, MapState, OrientationState, PlaceName, PlacePart, ScaleBar, Snapshot};
-use crate::control::camera::controller::radius;
+use crate::abi::cmd::{CompanionState, LocationState, LonLat, MapState, OrientationState, PlaceName, PlacePart, Snapshot};
+use crate::control::camera::controller::Motion;
 use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
 use crate::control::interaction::holding;
 use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::store::map_navigation;
-use crate::control::sensor::device_orientation::{orientation_close, orientation_open, request_orientation};
+use crate::control::sensor::device_orientation::{orientation_close, request_orientation};
 use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
 use crate::control::sensor::store::{device_location_store, device_orientation_store};
 use crate::layer::character::preview::{preview_rows, CASES_MAX};
@@ -28,14 +27,12 @@ use crate::layer::geocode::store as geocode_store;
 use crate::sched::turn::world_platform;
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::{settings_store, SettingKey};
-use crate::shell::ui::compass::compass_state;
-use crate::shell::ui::scale_bar::{mercator_zoom, scale_bar};
+use crate::shell::ui::scale::m_per_px;
 use crate::world::frame::view::view;
 
-/// The center page's place, broad to narrow, cut at the zoom's rung. Every
-/// language is sent, so switching language re-reads rather than refetches.
-fn place_parts(page: Option<IVec>, zoom: f64, each: &mut dyn FnMut(&PlacePart<'_>)) {
-    let deepest = PlaceRank::at_zoom(zoom);
+/// The center page's place, broad to narrow. Every language is sent, so
+/// switching language re-reads rather than refetches.
+fn place_parts(page: Option<IVec>, each: &mut dyn FnMut(&PlacePart<'_>)) {
     let parts = page
         .zip(center_group())
         .zip(geocode_store::dict())
@@ -44,15 +41,18 @@ fn place_parts(page: Option<IVec>, zoom: f64, each: &mut dyn FnMut(&PlacePart<'_
             group.view.place_of(leaf_slot(ivec::X(page), ivec::Y(page)), &dict.view)
         })
         .into_iter()
-        .flatten()
-        .filter(|p| p.rank <= deepest);
+        .flatten();
     for part in parts {
         let names = |each: &mut dyn FnMut(&PlaceName<'_>)| {
             for (lang, name) in part.languages() {
                 each(&PlaceName { lang: &lang, name: &name });
             }
         };
-        each(&PlacePart { name: &part.name, names: &names });
+        each(&PlacePart {
+            rank: part.rank as u8,
+            name: &part.name,
+            names: &names,
+        });
     }
 }
 
@@ -64,22 +64,24 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     let camera = camera_store();
     let settings = settings_store();
     let companion = companion_load_store();
-    let bar = scale_bar(view().height.max(1.0));
-    let page = crate::control::camera::controller::map_center().map(|c| L3_IDX(c.i));
-    let center = crate::control::camera::controller::map_center().map(|c| {
-        let mut g = [0.0; 3];
-        epsg4326::unproject(&mut g, c.i, c.f);
+    let at = crate::control::camera::controller::map_center();
+    let page = at.map(|c| L3_IDX(c.i));
+    let center = at.map(|c| {
+        let g = epsg4326::unproject(c.i, c.f);
         LonLat { lon: g[0], lat: g[1] }
     });
     let values = SettingKey::ALL.map(|key| settings.get(key));
-    // Only an orbiting camera has a zoom; standing at the center, all parts are told.
-    let zoom = if radius() > 0.0 { mercator_zoom(view().height.max(1.0)) } else { f64::INFINITY };
+    let mut previews = [0u32; CASES_MAX];
+    let mut preview_cnt = 0;
+    for (slot, (surface, _, _)) in previews.iter_mut().zip(preview_rows()) {
+        *slot = surface;
+        preview_cnt += 1;
+    }
     let snapshot = Snapshot {
         map: MapState {
             status: map.map_status,
             is_off_center: map_navigation().is_off_center,
             center,
-            page,
         },
         location: LocationState {
             status: location.status,
@@ -90,22 +92,16 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
             person_ready: companion.person_ready,
             pet_ready: companion.pet_ready,
         },
-        orientation: OrientationState {
-            status: orientation.status,
-            heading: orientation.orientation.and_then(|o| o.heading),
-        },
+        orientation: OrientationState { status: orientation.pose.status() },
         azimuth: camera.intent.azimuth,
         is_follow_mode: camera.is_follow_mode,
         camera_busy: camera.camera_status != CameraStatus::Idle,
         zooming: crate::control::camera::controller::zooming(),
         compass: compass_state(),
         settings: &values,
-        scale_bar: ScaleBar {
-            total_meters: bar.total_meters,
-            bar_width_px: bar.bar_width_px,
-        },
-        place: &|each| place_parts(page, zoom, each),
-        object_sizes: &crate::layer::object::size::OBJECT_SIZES,
+        m_per_px: m_per_px(view().height.max(1.0)),
+        place: &|each| place_parts(page, each),
+        previews: &previews[..preview_cnt],
     };
     let mut w = PacketWriter::new(out, Snapshot::FIELDS);
     snapshot.write(&mut w);
@@ -147,9 +143,8 @@ pub fn go_to(target: Pvf3) {
 
 pub fn go_to_degrees(lon: f64, lat: f64) {
     camera_store().is_follow_mode = false;
-    let mut target = Pvf3::default();
-    epsg4326::project(&mut target, &[lon, lat, 0.0]);
-    go_to_ground(target);
+    let target = epsg4326::project(&[lon, lat, 0.0]);
+    go_to_ground(target, Motion::Snap);
 }
 
 /// Set outright, for kernel tests and A/B comparisons at the same view.
@@ -165,7 +160,7 @@ pub fn location_enable() {
 pub fn sensors_open() {
     let platform = world_platform();
     geolocation_open(platform.geolocation);
-    orientation_open(platform.orientation);
+    request_orientation(platform.orientation);
 }
 
 pub fn sensors_close() {

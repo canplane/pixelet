@@ -10,34 +10,33 @@ use std::collections::HashMap;
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, PageSource};
+use pxl_spec::procedural::Frame;
+use pxl_spec::space::hierarchy::{child_of, parent_of};
 use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::lod::fault_radius;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::{chunk_span_of, LevelPage, CHUNK_CELLS, GROUND, TOP_LEVEL};
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
+use pxl_spec::space::v3::{len3, sub3, V3};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::alloc;
 use xpute_runtime::sched::frame_budget::FrameBudget;
 
 use crate::control::camera::controller::units_per_px_at;
-use crate::global::Global;
-use crate::layer::decor::asset_store::decor_bundle_assets;
-use crate::layer::decor::build::{decor_gone_px, variant_extent, DecorBuild, DecorHide, Ground, Kind, Placed};
+use crate::layer::decor::build::{decor_gone_px, decor_sprite_px, variant_extent, DecorBuild, DecorHide, Ground, Placed};
 use crate::layer::decor::instance::{decor_groups, DecorScratch, GroupLanes};
 use crate::layer::decor::scatter::SCALE_JITTER;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::{object_col_revision, Store};
 use crate::param::IMPOSTOR_GONE_CELLS;
 use crate::shell::setting::store::{hidden_ground, settings_store};
-use crate::world::change::request_world_tick;
 use crate::world::chunk::build::Builder;
-use crate::world::observation::{eye, frustum_of_view};
+use crate::world::observation::{eye, observation};
 use crate::world::paging::floor;
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer;
 use crate::world::quality;
-use pxl_render::look::lod::TARGET_CELL_PX;
 use pxl_spec::bake::format::Terrain;
+use xpute_runtime::global::Global;
 use xpute_runtime::mem::heap::free;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -63,16 +62,14 @@ impl DecorCell {
     fn parent(self) -> DecorCell {
         DecorCell {
             level: self.level + 1,
-            at: self.at.map(|v| v.div_euclid(2)),
+            at: parent_of(self.at),
         }
     }
 
     fn children(self) -> [DecorCell; 4] {
-        let [x, y] = self.at;
-        let l = self.level - 1;
-        [[0, 0], [1, 0], [0, 1], [1, 1]].map(|[dx, dy]| DecorCell {
-            level: l,
-            at: [x * 2 + dx, y * 2 + dy],
+        core::array::from_fn(|slot| DecorCell {
+            level: self.level - 1,
+            at: child_of(self.at, slot),
         })
     }
 }
@@ -182,13 +179,13 @@ fn largest_possible(kinds: &[Kind]) -> f64 {
     extent * (1.0f64 + SCALE_JITTER).max(DECOR_SIZE)
 }
 
-/// The nearest a point of a cell's square comes to `eye`, the eye's height
-/// over the `ground` under it counted.
-fn nearest(cell: DecorCell, eye: V3, ground: f64) -> f64 {
-    let (x0, y0, side) = cell.rect();
-    let dx = (x0 - eye[0]).max(eye[0] - (x0 + side)).max(0.0);
-    let dy = (y0 - eye[1]).max(eye[1] - (y0 + side)).max(0.0);
-    dx.hypot(dy).hypot(eye[2] - ground)
+/// Whether anything a chunk could hold is in reach and over the sprite's floor.
+fn may_show(chunk: Chunk, largest: f64) -> bool {
+    let Some(o) = observation() else { return false };
+    let region = chunk.region();
+    let near = region.nearest(o.eye);
+    let d = len3(&sub3(&near, &o.eye)).max(1e-3);
+    d <= o.far && largest / units_per_px_at(d) >= decor_sprite_px()
 }
 
 /// The frontier for the eye: from the source's top level, a cell refined
@@ -198,18 +195,24 @@ fn nearest(cell: DecorCell, eye: V3, ground: f64) -> f64 {
 fn solve(kinds: &[Kind], stack: &mut Vec<DecorCell>, out: &mut Vec<DecorCell>) {
     out.clear();
     stack.clear();
-    let (Some(eye), Some(top)) = (eye(), floor::level()) else { return };
+    // The view the pyramids observe: its eye, reach, frustum and ground.
+    let Some(Observation {
+        eye,
+        frustum,
+        far: reach,
+        top,
+        ground,
+        ..
+    }) = observation()
+    else {
+        return;
+    };
     let tau = quality::effective().tau();
-    let frustum = frustum_of_view();
     let largest = largest_possible(kinds);
-    let floor_px = *pxl_render::look::lod::TARGET_CELL_PX * crate::param::IMPOSTOR_GONE_CELLS;
-    let view_reach = crate::layer::environment::fog::view_reach();
-    // Nothing past the view's reach is drawn, so the roots reach no further.
-    let reach = fault_radius(top).min(view_reach);
+    let floor_px = target_cell_px() * crate::param::IMPOSTOR_GONE_CELLS;
     let side = chunk_span_of(top);
     let (cx, cy) = ((eye[0] / side).floor() as i64, (eye[1] / side).floor() as i64);
     let n = (reach / side).ceil() as i64 + 1;
-    let ground = crate::layer::environment::fog::eye_ground();
     for y in cy - n..=cy + n {
         for x in cx - n..=cx + n {
             stack.push(DecorCell { level: top, at: [x, y] });
@@ -217,11 +220,11 @@ fn solve(kinds: &[Kind], stack: &mut Vec<DecorCell>, out: &mut Vec<DecorCell>) {
     }
     while let Some(cell) = stack.pop() {
         let d = nearest(cell, eye, ground).max(1e-3);
-        if largest / units_per_px_at(d) < floor_px {
+        if d > reach || largest / units_per_px_at(d) < floor_px {
             continue;
         }
         let (x0, y0, s) = cell.rect();
-        if !frustum.sees([x0 + s / 2.0, y0 + s / 2.0, ground], s * 0.75 + largest) {
+        if !frustum.is_none_or(|f| f.sees([x0 + s / 2.0, y0 + s / 2.0, ground], s * 0.75 + largest)) {
             continue;
         }
         if cell.level > 0 && (tau.level(d).max(0) as u32) < cell.level {
@@ -257,7 +260,7 @@ fn sources_of(cell: DecorCell, store: &Store, cols: &mut Vec<IVec>, hide: Option
 
 fn build(c: &mut Cells, cell: DecorCell, kinds: &[Kind], store: &Store, draw: &mut DrawList, sources: Sources) -> Option<Block> {
     let pages = Terrain::pyramid();
-    let page = pages.get(cell.page())?;
+    let page = pages.paging().get(cell.page())?;
     let level = cell.level;
     let (x0, y0, _) = cell.rect();
     let (x0, y0) = (x0 as i64, y0 as i64);
@@ -319,7 +322,8 @@ fn build(c: &mut Cells, cell: DecorCell, kinds: &[Kind], store: &Store, draw: &m
 
 fn release(block: Block, draw: &mut DrawList) {
     draw.free(block.handle);
-    // SAFETY: the cell's block, not given back yet; nothing reads it past this turn.
+    // SAFETY: the block the cell took and has not given back; nothing reads
+    // it past this turn.
     unsafe { free((block.at as usize, block.bytes)) };
 }
 
@@ -372,10 +376,7 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Ent
     }
 
     let wanted = |cell: &DecorCell| frontier.binary_search(cell).is_ok();
-    let ready = |cell: DecorCell, blocks: &HashMap<DecorCell, Block>| blocks.contains_key(&cell) || pages.settled(cell.page());
-    let ancestors = move |cell: DecorCell| core::iter::successors(Some(cell), move |a| (a.level < top).then(|| a.parent())).skip(1);
-    // Over every wanted cell, whether all the wanted cells under it are
-    // ready: a held cell there stays drawn until they are.
+    let ready = |cell: DecorCell, blocks: &HashMap<DecorCell, Block>| blocks.contains_key(&cell) || pages.paging().settled(cell.page());
     c.under.clear();
     for &cell in &frontier {
         let r = ready(cell, &c.blocks);
@@ -411,6 +412,8 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Ent
     c.pages.extend(frontier.iter().map(|c| c.page()));
     c.pages.sort_unstable();
     c.pages.dedup();
+    // Asked for by decor itself rather than left to what the terrain draws.
+    Terrain::pyramid().require::<DecorCell>(&c.pages);
     c.frontier = frontier;
     present(c, draw, frame_eye);
 }
@@ -421,7 +424,7 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Ent
 /// index list holds the instances drawn as models first and those drawn as
 /// sprites after them; the list goes to the device again only where it
 /// changed.
-fn present(c: &mut Cells, kinds: &[Kind], draw: &mut DrawList, frame_eye: V3) {
+fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
     let Some(eye) = eye() else { return };
     let model_px = decor_gone_px();
     let sprite_px = *TARGET_CELL_PX * IMPOSTOR_GONE_CELLS;
@@ -429,10 +432,15 @@ fn present(c: &mut Cells, kinds: &[Kind], draw: &mut DrawList, frame_eye: V3) {
     for (&cell, block) in c.blocks.iter().filter(|(_, b)| b.drawn) {
         let (x0, y0, _) = cell.rect();
         let translation = DrawList::translation([x0, y0, 0.0], frame_eye);
+        let [zlo, zhi] = block.heights.map(f64::from);
+        let gap = |lo: f64, hi: f64, v: f64| (lo - v).max(v - hi).max(0.0);
+        let reach = |lo: f64, hi: f64, v: f64| (v - lo).abs().max((hi - v).abs());
+        let nearest = len3(&[gap(x0, x0 + side, eye[0]), gap(y0, y0 + side, eye[1]), gap(zlo, zhi, eye[2])]).max(1e-3);
+        let farthest = len3(&[reach(x0, x0 + side, eye[0]), reach(y0, y0 + side, eye[1]), reach(zlo, zhi, eye[2])]).max(1e-3);
         // SAFETY: the cell's block, `bytes` long, its own to write past `index`.
         let words: &mut [u32] = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block.at as usize), block.bytes as usize / 4) };
         let (lanes_of, list) = words.split_at_mut(block.index as usize / 4);
-        let mut extents = kinds.iter().flat_map(|k| (0..k.variant_count).map(move |_| k.extent));
+        let mut extents = decor_bundle_assets().iter().flat_map(|e| e.bundle.variants.iter().map(variant_extent));
         let (mut at, mut changed) = (0usize, false);
         for (group, (offset, count)) in decor_groups(lanes_of).enumerate() {
             let extent = extents.next().unwrap_or(0.0);
@@ -444,7 +452,7 @@ fn present(c: &mut Cells, kinds: &[Kind], draw: &mut DrawList, frame_eye: V3) {
                     continue;
                 }
                 let f = |l: usize| f32::from_bits(lanes_of[lane.f32_at(l, i)]) as f64;
-                let d = (x0 + f(0) - eye[0]).hypot(y0 + f(1) - eye[1]).hypot(f(2) - eye[2]).max(1e-3);
+                let d = len3(&[x0 + f(0) - eye[0], y0 + f(1) - eye[1], f(2) - eye[2]]).max(1e-3);
                 let px = extent * f(4) / units_per_px_at(d);
                 if px >= model_px {
                     changed |= list[at] != i as u32;
@@ -505,11 +513,4 @@ pub fn counts() -> (u32, u32) {
         })
         .sum();
     (c.blocks.len() as u32, instances)
-}
-
-/// The terrain pages the frontier's cells scatter over, each once: what
-/// decor reads of the ground, asked for by decor (world/pyramid.rs
-/// `step`'s readers) rather than left to what the terrain draws.
-pub fn pages() -> &'static [LevelPage] {
-    &cells().pages
 }

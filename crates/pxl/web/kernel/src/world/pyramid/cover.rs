@@ -21,7 +21,7 @@ pub struct Cover {
 /// A page never waits for its siblings, so ground whose page has come is
 /// drawn the turn it lands (Cesium's upsampled tiles).
 pub fn cover_of<L: Layer>(d: &Domain, pyramid: &Pyramid<L>) -> Cover {
-    let (drawn, gaps) = d.pieces().iter().partition(|c| pyramid.drawn_from(c.page()).is_some());
+    let (drawn, gaps) = d.pieces().iter().partition(|c| pyramid.paging().drawn_from(c.page()).is_some());
     Cover { drawn, gaps }
 }
 
@@ -40,9 +40,8 @@ fn covered<L: Layer>() -> &'static mut Covered {
 
 /// Remade only when the pieces or `L`'s residency moved; most eye moves change neither.
 pub fn step<L: Layer>() {
-    crate::world::quality::step();
     let Some(d) = domain::current() else { return };
-    let key = Some((domain::revision(), L::pyramid().revision()));
+    let key = Some((domain::revision(), L::pyramid().paging().revision()));
     let c = covered::<L>();
     if c.key == key {
         return;

@@ -8,9 +8,10 @@
 
 import type { F64Array } from "@xpute/core/abi/array.ts";
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
+import { td } from "@xpute/core/codec/encoding.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
 import { Command, encode_profiler_read } from "@/kernel/abi/cmd.spec.ts";
-import { CORE, CORE_DOORBELL } from "@/kernel/mem.ts";
+import { kernel_call, kernel_memory } from "@/kernel/shell.ts";
 
 import {
   CATEGORY_NAMES,
@@ -36,9 +37,9 @@ import { type LongFrame, longFramesSince } from "./long-frame.ts";
 const WORD = 8;
 const RECENT_TASKS = 20;
 
-const words = (at: u32, n: u32) => new Float64Array(CORE.buffer, at, n);
-const u32s = (at: u32, n: u32) => new Uint32Array(CORE.buffer, at, n);
-const site = (file: u32, bytes: u32, line: u32) => file === 0 ? null : `${td.decode(new Uint8Array(CORE.buffer, file, bytes))}:${line}`;
+const words = (at: u32, n: u32) => new Float64Array(kernel_memory(), at, n);
+const u32s = (at: u32, n: u32) => new Uint32Array(kernel_memory(), at, n);
+const site = (file: u32, bytes: u32, line: u32) => file === 0 ? null : `${td.decode(new Uint8Array(kernel_memory(), file, bytes))}:${line}`;
 
 function framesAt(at: u32, count: u32): Frame[] {
   const w = words(at, count * FRAME.WORDS);
@@ -47,7 +48,7 @@ function framesAt(at: u32, count: u32): Frame[] {
 
 function tasksAt(at: u32, count: u32): TaskRecord[] {
   const w = words(at, count * TASK.WORDS);
-  const subjects = new BigUint64Array(CORE.buffer, at, count * TASK.WORDS);
+  const subjects = new BigUint64Array(kernel_memory(), at, count * TASK.WORDS);
   return Array.from({ length: count }, (_, i) => {
     const o = i * TASK.WORDS;
     const phaseCount = w[o + TASK.phase_count];
@@ -134,6 +135,7 @@ export interface ProfilerReport {
   t: f64;
   build: { number: string; id: string; time: string };
   frames: FrameSummary | null;
+  /** The summary's side sections, a field a number, as profiler.json names them. */
   sections: Record<"counters" | "atlas" | "held" | "fetch" | "quality", Record<string, f64>>;
   steps: { phase: string; name: string; ms: f64; count: f64; max_ms: f64 }[];
   peak: Record<string, f64> | null;
@@ -219,7 +221,7 @@ interface Read {
 }
 
 function read(windowMs: f64): Read {
-  const r = u32s(CORE_DOORBELL.call(Command.PROFILER_READ, encode_profiler_read({ window_ms: windowMs }), (at) => at >>> 0), READ.WORDS);
+  const r = u32s(kernel_call(Command.PROFILER_READ, encode_profiler_read({ window_ms: windowMs })), READ.WORDS);
   return {
     summary: words(r[READ.summary_at], r[READ.summary_words]),
     frames: [r[READ.frames_at], r[READ.frames_count]],
@@ -282,7 +284,7 @@ export function profilerReportRead(): ProfilerReport {
     sections: {
       counters: section(s, SUMMARY.counters),
       atlas: section(s, SUMMARY.atlas),
-      retain: section(s, SUMMARY.retain),
+      held: section(s, SUMMARY.held),
       fetch: section(s, SUMMARY.fetch),
       quality: section(s, SUMMARY.quality),
     },
@@ -313,6 +315,6 @@ export function profilerRingsRead(): { frames: Frame[]; tasks: TaskRecord[]; wor
 }
 
 export function profilerLogTake(): { tasks: TaskRecord[]; frames: Frame[] } {
-  const l = u32s(CORE_DOORBELL.call(Command.PROFILER_TAKE, null, (at) => at >>> 0), LOG.WORDS);
+  const l = u32s(kernel_call(Command.PROFILER_TAKE), LOG.WORDS);
   return { tasks: tasksAt(l[LOG.tasks_at], l[LOG.tasks_count]), frames: framesAt(l[LOG.frames_at], l[LOG.frames_count]) };
 }

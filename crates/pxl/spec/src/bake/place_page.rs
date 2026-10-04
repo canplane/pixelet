@@ -43,7 +43,10 @@ use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{BranchCursor, Strs};
 use xpute_core::wire::xtp::{encoder, BranchViewImpl, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
-use crate::bake::quadkey::{quadkey_of, Quadkey};
+use crate::bake::malformed;
+use crate::bake::named::{NameLanes, NamesView};
+
+use crate::bake::quadkey::{quadkey_of, Quadkey, PAGE_KEY_DEPTH};
 use crate::place::PlaceRank;
 use crate::space::pvf3::ivec::IVec;
 use crate::space::pyramid::PAGE_ZOOM;
@@ -242,10 +245,10 @@ pub fn open_place_group(pkt: &[u8]) -> Result<PlaceGroupView<'_>, MarshalError> 
         locals: read_places(&root, 3)?,
     };
     if view.pages.len() != GROUP_PAGES {
-        return Err(bad());
+        return Err(malformed());
     }
     if view.starts.is_empty() || view.starts.windows(2).any(|w| w[0] > w[1]) || *view.starts.last().or_bug(Errno::ENOTRECOVERABLE) as usize > view.flat.len() {
-        return Err(bad());
+        return Err(malformed());
     }
     Ok(view)
 }
@@ -272,6 +275,7 @@ impl<'a> PlaceGroupView<'a> {
         }))
     }
 }
+
 
 #[cfg(test)]
 #[path = "place_page.test.rs"]

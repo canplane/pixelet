@@ -2,26 +2,26 @@
 
 //! A place's name as ranked parts, for both the live geocoder and the bake.
 //! The rank lets a reader cut the name at the depth a zoom wants; the client
-//! picks the order and language. Providers map their own vocabulary onto
-//! this ladder in their adapters.
+//! picks the depth, the order and the language. Providers map their own
+//! vocabulary onto this ladder in their adapters.
 
 use std::collections::BTreeMap;
 
-/// Where a part sits, broadest first. The numbers are stored, so a rung is
-/// appended, never inserted; the gaps leave room for a provider's in-between
-/// levels.
+use crate::place_spec::PLACE_RANK;
+
+/// Where a part sits, broadest first: spec/pxl/spec/place.json's numbers.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum PlaceRank {
-    Country = 0,
-    Region = 10,
-    County = 20,
-    City = 30,
-    District = 40,
-    Neighborhood = 50,
-    Street = 60,
-    Building = 70,
+    Country = PLACE_RANK::COUNTRY,
+    Region = PLACE_RANK::REGION,
+    County = PLACE_RANK::COUNTY,
+    City = PLACE_RANK::CITY,
+    District = PLACE_RANK::DISTRICT,
+    Neighborhood = PLACE_RANK::NEIGHBORHOOD,
+    Street = PLACE_RANK::STREET,
+    Building = PLACE_RANK::BUILDING,
 }
 
 impl PlaceRank {
@@ -39,22 +39,6 @@ impl PlaceRank {
     /// None for a number no rung has.
     pub fn of(value: u8) -> Option<PlaceRank> {
         PlaceRank::ALL.into_iter().find(|r| *r as u8 == value)
-    }
-
-    /// The deepest rung a map at Web Mercator zoom `z` names: Nominatim's
-    /// zoom table read onto this ladder.
-    pub fn at_zoom(z: f64) -> PlaceRank {
-        const LADDER: [(f64, PlaceRank); 7] = [
-            (4.0, PlaceRank::Country),
-            (7.0, PlaceRank::Region),
-            (9.0, PlaceRank::County),
-            (11.0, PlaceRank::City),
-            (13.0, PlaceRank::District),
-            (15.0, PlaceRank::Neighborhood),
-            (17.0, PlaceRank::Street),
-        ];
-        // A NaN zoom gets the whole ladder: a label is better wrong than missing.
-        LADDER.iter().find(|(top, _)| z <= *top).map_or(PlaceRank::Building, |(_, rank)| *rank)
     }
 }
 

@@ -1,22 +1,19 @@
 // pxl-kernel/io/sched.rs
 
-//! The kernel's I/O ledger: what is wanted (`desired`, replaced whole per
-//! category each turn) and what is out (`attempt`). Ordering, preemption,
-//! intake and retry waits are the `Serve` policy's.
+//! The kernel's request scheduler: what is wanted (`desired`, replaced whole per
+//! category each turn) and what is out (`attempt`). Ordering, intake and
+//! retry waits are the `Serve` policy's.
 //!
-//! A completion ends an attempt and nothing else: a producer stops wanting
-//! something by not saying it again. A failure's wait lives on its want, so
-//! it is bounded by the wants and forgotten when the want is.
+//! An answer ends its want; a failure ends only its attempt and waits on the
+//! want. A running attempt is never preempted.
 //!
 //! Invariants: no more attempts than credits and no want past its category's
 //! bound; ties broken by category then subject so the order is total; a free
-//! credit and a ready want never both outlast a pump; preemption only for a
-//! strictly earlier want, so with ranks held still stops terminate.
+//! credit and a ready want never both outlast a pump; an attempt stops only
+//! when nobody wants it any more.
 
 use core::cmp::Ordering;
 
-use crate::global::Global;
-use crate::host::now;
 use crate::io::demand::{Ask, Category, DemandKey, Phases};
 use crate::io::load::LOADS;
 use crate::io::policy::Policy;
@@ -24,6 +21,8 @@ use crate::sched::profiler::record::{profiler_record, Failure, Outcome, TaskReco
 use crate::world::paging::FRAMES;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
+use xpute_runtime::clock::now;
+use xpute_runtime::global::Global;
 
 use crate::param::MAX_CREDITS;
 
@@ -37,9 +36,6 @@ pub struct Rank {
 pub trait Serve {
     /// Asked again every pump: the order is the view's now.
     fn rank(&self, category: Category, subject: u64, ask: Ask, enqueue_ms: f64) -> Rank;
-
-    /// Asked only where `waiting` already stands strictly before `running`.
-    fn preempts(&self, waiting: Rank, running: Rank) -> bool;
 
     fn intake(&self) -> u32;
 
@@ -56,7 +52,14 @@ const fn bound(category: Category) -> usize {
     }
 }
 
-const DESIRED: usize = bound(Category::terrain) + bound(Category::poi) + bound(Category::asset) + 3;
+const DESIRED: usize = {
+    let (mut n, mut k) = (0, 0);
+    while k < Category::ALL.len() {
+        n += bound(Category::ALL[k]);
+        k += 1;
+    }
+    n
+};
 
 #[derive(Clone, Copy, Debug)]
 struct Wanted {
@@ -95,7 +98,7 @@ impl Placed {
     }
 }
 
-pub struct Ledger<S> {
+pub struct RequestScheduler<S> {
     serve: S,
     desired: Box<[Option<Wanted>]>,
     /// A slot's index and generation are the key the host holds; a key is valid
@@ -112,9 +115,9 @@ const fn key_of(slot: usize, generation: u32) -> u64 {
     (slot as u64) << 32 | generation as u64
 }
 
-impl<S: Serve> Ledger<S> {
-    pub fn new(serve: S) -> Ledger<S> {
-        Ledger {
+impl<S: Serve> RequestScheduler<S> {
+    pub fn new(serve: S) -> RequestScheduler<S> {
+        RequestScheduler {
             serve,
             desired: vec![None; DESIRED].into_boxed_slice(),
             attempt: [None; MAX_CREDITS as usize],
@@ -153,11 +156,13 @@ impl<S: Serve> Ledger<S> {
                 None => *entry = None,
             }
         }
+        let mut held = self.desired.iter().flatten().filter(|w| w.category == category).count();
         for &(subject, ask) in wanted {
             if self.find(category, subject).is_some() {
                 continue;
             }
             xpute_core::ensure!(held < bound(category), ENOTRECOVERABLE, category as u32);
+            held += 1;
             let free = self.desired.iter().position(Option::is_none).or_bug(Errno::ENOTRECOVERABLE);
             self.desired[free] = Some(Wanted {
                 category,
@@ -199,7 +204,7 @@ impl<S: Serve> Ledger<S> {
     }
 
     /// Stops what nobody wants, then starts ready wants in order up to the
-    /// intake, preempting where allowed. One pump per turn after every producer
+    /// intake, into free credits only. One pump per turn after every producer
     /// has spoken, or the first producer would fill every slot.
     pub fn pump(&mut self, at: f64) {
         // Stop abandoned work in the turn it is abandoned: after a zoom out and
@@ -222,8 +227,7 @@ impl<S: Serve> Ledger<S> {
 
         let intake = self.serve.intake().max(1) as usize;
         for &(placed, i) in ready.iter().take(intake) {
-            // In order: if nothing makes room for this one, nothing does for the rest.
-            let Some(slot) = self.free_slot().or_else(|| self.preempt(placed, at)) else { break };
+            let Some(slot) = self.free_slot() else { break };
             let w = self.desired[i].or_bug(Errno::ENOTRECOVERABLE);
             self.start(slot, w, placed.rank, at);
         }
@@ -245,38 +249,18 @@ impl<S: Serve> Ledger<S> {
         self.started.push((key_of(slot, self.generation[slot]), w.category, w.subject));
     }
 
-    /// Frees the last-standing attempt's credit for `waiting`; its want stays
-    /// desired and restarts on a later pump.
-    fn preempt(&mut self, waiting: Placed, at: f64) -> Option<usize> {
-        let running = |k: usize| {
-            let a = self.attempt[k]?;
-            let w = self.desired[self.find(a.category, a.subject)?]?;
-            Some((self.placed(&w), k))
-        };
-        let (last, slot) = (0..self.credits as usize).filter_map(running).max_by(|a, b| a.0.cmp(&b.0))?;
-        if waiting.cmp(&last).is_ge() || !self.serve.preempts(waiting.rank, last.rank) {
-            return None;
-        }
-        self.stop(slot, at);
-        Some(slot)
+    /// Ends the slot's attempt; its key is spent, so whatever the host still
+    /// reports under it (an abort or a body that raced the stop) is dropped.
+    fn end(&mut self, slot: usize) -> Attempt {
+        let a = self.attempt[slot].take().or_bug(Errno::ENOTRECOVERABLE);
+        self.generation[slot] = self.generation[slot].wrapping_add(1);
+        a
     }
 
-    /// The key is spent, so whatever the host still reports under it (an abort
-    /// or a body that raced the stop) is dropped.
     fn stop(&mut self, slot: usize, at: f64) {
-        let a = self.attempt[slot].take().or_bug(Errno::ENOTRECOVERABLE);
         self.stops.push(key_of(slot, self.generation[slot]));
-        self.generation[slot] = self.generation[slot].wrapping_add(1);
-        profiler_record(TaskRecord {
-            key: DemandKey::new(a.category, a.subject),
-            priority: a.rank.class as f64 + a.rank.distance,
-            enqueue_ms: a.enqueue_ms,
-            start_ms: Some(a.start_ms),
-            end_ms: at,
-            phases: None,
-            outcome: Outcome::aborted,
-            fail: Failure::default(),
-        });
+        let a = self.end(slot);
+        record(&a, at, Outcome::aborted, None, Failure::default());
     }
 
     pub fn take_started(&mut self, mut each: impl FnMut(u64, Category, u64)) {
@@ -296,34 +280,25 @@ impl<S: Serve> Ledger<S> {
         self.attempt[slot].map(|a| (a.category, a.subject))
     }
 
-    /// The want is left alone; if the policy says the outcome waits, a still
-    /// standing want is held back that long.
+    /// An answer ends the want; a failure holds it back.
     pub fn settle(&mut self, key: u64, outcome: Outcome, phases: Option<Phases>, fail: Failure, at: f64) {
         let Some(slot) = self.slot_of(key) else { return };
-        let a = self.attempt[slot].take().or_bug(Errno::ENOTRECOVERABLE);
-        self.generation[slot] = self.generation[slot].wrapping_add(1);
-        if let (Some(wait), Some(i)) = (self.serve.retry_after(outcome), self.find(a.category, a.subject)) {
-            if let Some(w) = &mut self.desired[i] {
+        let a = self.end(slot);
+        if let Some(i) = self.find(a.category, a.subject) {
+            if outcome == Outcome::ok {
+                self.desired[i] = None;
+            } else if let (Some(wait), Some(w)) = (self.serve.retry_after(outcome), &mut self.desired[i]) {
                 w.until_ms = at + wait;
             }
         }
-        profiler_record(TaskRecord {
-            key: DemandKey::new(a.category, a.subject),
-            priority: a.rank.class as f64 + a.rank.distance,
-            enqueue_ms: a.enqueue_ms,
-            start_ms: Some(a.start_ms),
-            end_ms: at,
-            phases,
-            outcome,
-            fail,
-        });
+        record(&a, at, outcome, phases, fail);
     }
 
     /// The module is being reset under a host that will not answer what it was told to run.
     pub fn reset(&mut self) {
         for slot in 0..self.attempt.len() {
-            if self.attempt[slot].take().is_some() {
-                self.generation[slot] = self.generation[slot].wrapping_add(1);
+            if self.attempt[slot].is_some() {
+                self.end(slot);
             }
         }
         self.desired.fill(None);
@@ -332,10 +307,23 @@ impl<S: Serve> Ledger<S> {
     }
 }
 
-static SCHED: Global<Ledger<Policy>> = Global::new();
+fn record(a: &Attempt, at: f64, outcome: Outcome, phases: Option<Phases>, fail: Failure) {
+    profiler_record(TaskRecord {
+        key: DemandKey::new(a.category, a.subject),
+        priority: a.rank.class as f64 + a.rank.distance,
+        enqueue_ms: a.enqueue_ms,
+        start_ms: Some(a.start_ms),
+        end_ms: at,
+        phases,
+        outcome,
+        fail,
+    });
+}
 
-fn sched() -> &'static mut Ledger<Policy> {
-    SCHED.get(|| Ledger::new(Policy::standard()))
+static SCHED: Global<RequestScheduler<Policy>> = Global::new();
+
+fn sched() -> &'static mut RequestScheduler<Policy> {
+    SCHED.get(|| RequestScheduler::new(Policy::standard()))
 }
 
 pub fn declare(category: Category, wanted: &[(u64, Ask)]) {

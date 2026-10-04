@@ -7,7 +7,7 @@
 
 use pxl_spec::space::mat4::{mat4, mat4_mul, mat4_rotation_z, Mat4};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::v3::{add3, sub3, V3};
 
 use crate::control::camera::config::camera_cfg::projection::FOV;
 use crate::control::camera::config::camera_cfg::smooth::POS_DAMP;
@@ -15,14 +15,14 @@ use crate::control::camera::config::camera_cfg::view::{DEFAULT_AZIMUTH, DEFAULT_
 use crate::control::camera::free::{hold, look_point};
 use crate::control::camera::orbit::orbit;
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
-use crate::global::Global;
-use crate::layer::terrain::ground_snap::ground_or_raw;
+use crate::control::navigation::support::{is_unknown, pan_to, unknown_z};
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::{settings_store, CameraMode};
 use crate::world::change::request_world_tick;
-use crate::world::frame::coord::{canonical_to_local, local_world_to_canonical};
+use crate::world::frame::coord::{local_world_to_canonical, local_world_to_canonical_nearest};
 use crate::world::frame::view::{view, view_compose, ObserverPose};
 use xpute_core::math::scalar::wrap;
+use xpute_runtime::global::Global;
 
 // A look is (θ, φ) about the world's Z: θ from straight down, clamped to
 // [0, π]; φ the heading from north toward east, wrapped. At either pole φ
@@ -105,8 +105,7 @@ pub fn center_local() -> Option<V3> {
 
 pub fn map_center() -> Option<Pvf3> {
     let at = center_local()?;
-    let mut c = Pvf3::default();
-    local_world_to_canonical(&mut c, &at, view().origin);
+    let c = local_world_to_canonical(&at, view().origin);
     Some(c)
 }
 
@@ -204,7 +203,7 @@ pub fn pose() -> ObserverPose {
             mul3(&mut camera_to_world, &t.world_turn, &t.turn);
             let moved = apply3(&t.world_turn, t.at);
             ObserverPose {
-                eye: std::array::from_fn(|k| t.world_at[k] + moved[k]),
+                eye: add3(&t.world_at, &moved),
                 rotation: transpose3(&camera_to_world),
             }
         }
@@ -238,10 +237,10 @@ pub fn look_distance() -> f64 {
 
 pub fn rebase(by: V3) {
     if let Some(e) = &mut camera().eye {
-        *e = std::array::from_fn(|k| e[k] - by[k]);
+        *e = sub3(e, &by);
     }
     if let Some(t) = &mut controllers().tracked {
-        t.world_at = std::array::from_fn(|k| t.world_at[k] - by[k]);
+        t.world_at = sub3(&t.world_at, &by);
     }
 }
 
@@ -343,12 +342,16 @@ fn take_mode(want: CameraMode) -> bool {
     if c.base == want {
         return false;
     }
-    // Taken back to the nearest canonical point, or a few round trips walk the
-    // character away.
+    // The map center was a canonical point put through the camera's floats:
+    // it is taken back as that point, not the one under it, or a few round
+    // trips walk the character away (world/frame/coord.rs).
     let center = center_local().map(|local| {
-        let mut c = Pvf3::default();
-        local_world_to_canonical_nearest(&mut c, &local, view().origin);
-        c
+        let c = local_world_to_canonical_nearest(&local, view().origin);
+        if unknown {
+            unknown_z(&c)
+        } else {
+            c
+        }
     });
     c.base = want;
     let cam = camera();
@@ -379,7 +382,7 @@ pub fn tracked_pose(at: V3, q: [f64; 4]) {
         let moved = apply3(&world_turn, at);
         c.tracked = Some(Tracked {
             world_turn,
-            world_at: std::array::from_fn(|k| now.eye[k] - moved[k]),
+            world_at: sub3(&now.eye, &moved),
             turn,
             at,
         });

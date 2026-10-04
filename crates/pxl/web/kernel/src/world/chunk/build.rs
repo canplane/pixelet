@@ -1,7 +1,12 @@
 // pxl-kernel/world/chunk/build.rs
 
-//! A chunk's build: makes its tiers from its sources (source.rs). Every
-//! decision about a chunk is the table's (table.rs); this acts on what it asks.
+//! A chunk's build: the builder that makes its tiers from what it is made
+//! of (source.rs).
+//!
+//! Every decision about a chunk, and everything it holds — its tiers and the
+//! sources they were made from — is the scheduler's
+//! (crates/pxl/web/kernel/src/world/chunk/table.rs). What is here acts on
+//! what it asks.
 
 use pxl_spec::space::pyramid::{LevelPage, CHUNK_CELLS, GROUND};
 
@@ -13,12 +18,12 @@ use pxl_render::mesh::paint::object::adapter::{Claims, Entries, Painted, Painter
 use pxl_render::mesh::paint::terrain::adapter::{beside_index, Around, ChunkSample, PageSource, PageView};
 use pxl_render::mesh::volume::Volumes;
 use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
-use pxl_spec::bake::constant::{pack_pos, BandZ, EntryAt, BAND, CELL, OBJECT_FINEST};
-use pxl_spec::space::indexer::{FROM_L2_IDX, L2, L2_IDX};
+use pxl_spec::bake::constant::{pack_pos, BandZ, EntryAt, CELL, OBJECT_FINEST};
+use pxl_spec::space::indexer::L2_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use std::collections::{HashMap, TryReserveError};
 use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::heap::{free, Block};
+use xpute_runtime::mem::heap::Block;
 
 use crate::layer::object::store::{object_col_revision, Store};
 use crate::mem::fixed::{at, Range};
@@ -33,26 +38,18 @@ use pxl_spec::space::hierarchy::Scale;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
-/// The cube a chunk is drawn in. Terrain averages to it where it is coarser
-/// than the level's cell; objects fold to it down to their finest tier.
-pub type Cube = Scale;
-
-/// How many of a level's cells a cube spans along an axis (the mesher's step).
-pub fn mesh_step(cube: Cube, level: u32) -> u32 {
+/// How many of a level's cells a scale spans along an axis (the mesher's step).
+pub fn mesh_step(scale: Scale, level: u32) -> u32 {
     let own = GROUND.scale(level);
-    own.count_in(cube.max(own))
+    own.count_in(scale.max(own))
 }
 
-/// Objects fold to the cube, clamped between their finest tier and a cell;
+/// Objects fold to the scale, clamped between their finest tier and a cell;
 /// past a cell the mesher averages them with the ground.
-pub fn object_fold(cube: Cube) -> Scale {
-    cube.clamp(OBJECT_FINEST, CELL)
+pub fn object_fold(scale: Scale) -> Scale {
+    scale.clamp(OBJECT_FINEST, CELL)
 }
 
-// A chunk's runs live in a heap block exactly as large as its column needs,
-// held until all its tiers are baked. Not a `.fixed` range: a column's runs
-// are unbounded, and a range too small would leave a chunk undrawn; the heap
-// refuses only when memory is out, and then the build is `Blocked`.
 
 /// `.fixed.bake`: the open bake writes its mesh here one slot's worth at a
 /// time, so it is sized to the largest slot.
@@ -67,21 +64,32 @@ pub const RUN_SETS: usize = 2;
 pub enum BuildEvent {
     /// All slots for a tier are asked for at once, before any is written. If
     /// refused, the bake is thrown away and the need recorded (`Slot::need`).
-    Reserve { id: u32, generation: u32, cube: Cube, boxes: u32 },
+    Reserve {
+        id: u32,
+        generation: u32,
+        scale: Scale,
+        boxes: u32,
+    },
     /// One slot's worth of boxes (less for the last) at `at` in `.fixed.bake`.
     Part {
         id: u32,
         generation: u32,
-        cube: Cube,
+        scale: Scale,
         at: u32,
         first: u32,
         box_cnt: u32,
         heights: Heights,
     },
-    Tier { id: u32, generation: u32, cube: Cube, box_cnt: u32, heights: Heights },
+    Tier {
+        id: u32,
+        generation: u32,
+        scale: Scale,
+        box_cnt: u32,
+        heights: Heights,
+    },
 }
 
-/// A column split across cube boundaries is several chunks; its runs are
+/// A column split across scale boundaries is several chunks; its runs are
 /// made once and each chunk bakes its cut of them.
 struct RunHold {
     column: (Scale, [i64; 2]),
@@ -98,7 +106,7 @@ impl Drop for RunHold {
     }
 }
 
-/// `fold`: the scale objects were folded to, if any; only cubes that fold to
+/// `fold`: the scale objects were folded to, if any; only scales that fold to
 /// it may bake from these runs.
 #[derive(Clone, Copy)]
 struct Runs {
@@ -121,8 +129,8 @@ impl Source {
     /// Found by key, so a page that is gone never yields another page's bytes.
     fn of(p: LevelPage) -> Option<Source> {
         let pyramid = Terrain::pyramid();
-        let src = pyramid.drawn_from(p)?;
-        let page = pyramid.get(src)?;
+        let src = pyramid.paging().drawn_from(p)?;
+        let page = pyramid.paging().get(src)?;
         let corner = GROUND.cell_at(p, GROUND.cell_index(0, 0));
         Some(Source {
             page,
@@ -150,11 +158,6 @@ struct Read {
 }
 
 impl Read {
-    /// Whether it is the chunk's own page.
-    fn own(&self) -> bool {
-        self.own.n == 1
-    }
-
     fn around(&self) -> Around<'static> {
         Around {
             own: self.own.view(),
@@ -168,7 +171,7 @@ struct Chunk {
     at: PyramidChunk,
     structures: bool,
     generation: u32,
-    want: [Option<Cube>; 2],
+    want: [Option<Scale>; 2],
     /// Heap release count at the last refusal: until something is freed the same
     /// request would fail, so the chunk is skipped.
     refused: Option<u32>,
@@ -200,11 +203,11 @@ impl Chunk {
         })
     }
 
-    fn wants(&self, cube: Cube) -> bool {
-        self.want.contains(&Some(cube))
+    fn wants(&self, scale: Scale) -> bool {
+        self.want.contains(&Some(scale))
     }
 
-    fn wanted(&self) -> impl Iterator<Item = Cube> + '_ {
+    fn wanted(&self) -> impl Iterator<Item = Scale> + '_ {
         self.want.iter().copied().flatten()
     }
 }
@@ -233,7 +236,7 @@ const PAINT_VOXELS: usize = (BAND_CELLS * BAND_CELLS) as usize;
 
 struct BakeJob {
     id: u32,
-    cube: Cube,
+    scale: Scale,
     generation: u32,
     mesh: Option<Block>,
     handed: u32,
@@ -304,16 +307,19 @@ pub struct Builder {
     sample: ChunkSample,
     hide: Option<EntryAt>,
     carve: Option<EntryAt>,
+    /// The chunk holding each run set, whether it is being filled or baked
+    /// from.
     run_holds: [Option<RunHold>; RUN_SETS],
+    /// The scan job's bands, kept between the scan's steps.
     bands: Vec<BandView<'static>>,
     claimed: Claims,
+    /// Objects folded to a level chunk's cells, as the store keeps them
+    /// (layer/object/store.rs `Store::fold_at`), kept for its capacity.
     folded: HashMap<[i64; 3], u32>,
-    fold_cells: Vec<([i64; 3], u32)>,
     /// What stands in each column of a level chunk, by column and height
     /// (pxl-render mesh/paint/level.rs `write_level_runs`).
     stands: Vec<(u32, Stands)>,
-    /// A z16 chunk's objects folded to its cube, as entries: what its paint
-    /// reads where the cube is coarser than an object's finest tier.
+    /// A z16 chunk's objects folded to its scale, for scales coarser than an object's finest tier.
     fold_band: Vec<BandZ>,
     fold_pos: Vec<u32>,
     fold_state: Vec<u32>,
@@ -338,11 +344,10 @@ impl Builder {
             sample: ChunkSample::default(),
             hide: None,
             carve: None,
-            run_holders: [None; RUN_SETS],
+            run_holds: [const { None }; RUN_SETS],
             bands: Vec::new(),
             claimed: Claims::new(),
             folded: HashMap::new(),
-            fold_cells: Vec::new(),
             stands: Vec::new(),
             fold_band: Vec::new(),
             fold_pos: Vec::new(),
@@ -351,22 +356,13 @@ impl Builder {
         }
     }
 
-    /// Where chunk `id` starts in its page, the page's lanes and the
-    /// structure setting it is drawn under: the ground its decor is
-    /// scattered over, at any level. None while its own page has not come:
-    /// a chunk drawn from a page over it scatters nothing, since what it
-    /// scattered there would move when its own page came.
-    pub fn ground_of(&self, id: u32) -> Option<(u32, u32, &'static Terrain, bool)> {
-        let c = self.chunks.get(&id)?;
-        let read = c.read().filter(Read::own)?;
-        let (tx0, ty0) = c.at.in_page();
-        Some((tx0, ty0, read.own.page, c.structures))
-    }
 
     pub fn generation_of(&self, id: u32) -> Option<u32> {
         self.chunks.get(&id).map(|c| c.generation)
     }
 
+
+    /// The chunks holding the scan slot and the bake slot.
     pub fn holders(&self) -> [Option<u32>; 2] {
         [self.scan_job.as_ref().map(|j| j.id), self.bake_job.as_ref().map(|j| j.id)]
     }
@@ -383,14 +379,14 @@ impl Builder {
                 structures: false,
                 generation: 0,
                 want: [None; 2],
-                runs: None,
                 refused: None,
             },
         );
     }
 
     pub fn remove(&mut self, world: &mut World, id: u32) {
-        self.drop_work(world, id);
+        self.abort_work_of(world, id);
+        self.leave_runs(id);
         self.chunks.remove(&id);
     }
 
@@ -402,21 +398,21 @@ impl Builder {
         }
     }
 
-    pub fn baking(&self) -> Option<(u32, Cube, u32)> {
-        self.bake_job.as_ref().map(|j| (j.id, j.cube, j.generation))
+    pub fn baking(&self) -> Option<(u32, Scale, u32)> {
+        self.bake_job.as_ref().map(|j| (j.id, j.scale, j.generation))
     }
 
     /// A bake of a tier no longer wanted gives its slot back now.
-    pub fn want(&mut self, world: &mut World, id: u32, want: [Option<Cube>; 2]) {
+    pub fn want(&mut self, world: &mut World, id: u32, want: [Option<Scale>; 2]) {
         let Some(c) = self.chunks.get_mut(&id) else { return };
         c.want = want;
-        let stale = matches!(&self.bake_job, Some(j) if j.id == id && !c.wants(j.cube));
+        let stale = matches!(&self.bake_job, Some(j) if j.id == id && !c.wants(j.scale));
         if stale {
             self.abort_bake();
         }
         if want == [None, None] {
             self.abort_scan_of(world, id);
-            self.let_runs_go(id);
+            self.leave_runs(id);
         }
     }
 
@@ -425,43 +421,58 @@ impl Builder {
         self.carve = carve;
     }
 
-    /// The column's runs are shared by every chunk over it, so all of them rebuild.
+    /// The chunk's sources changed: its column's runs are stale for every
+    /// chunk over it, which share them.
     fn drop_work(&mut self, world: &mut World, id: u32) {
         self.abort_work_of(world, id);
         self.drop_runs(id);
     }
 
+    /// Aborts the scan and the bake chunk `id` holds, if it holds either.
     fn abort_work_of(&mut self, world: &mut World, id: u32) {
         self.abort_scan_of(world, id);
         if matches!(&self.bake_job, Some(j) if j.id == id) {
             self.abort_bake();
         }
-        self.let_runs_go(id);
     }
 
     fn abort_scan_of(&mut self, world: &mut World, id: u32) {
         if let Some(job) = self.scan_job.take_if(|j| j.id == id) {
             self.scan.abort();
             world.volumes.release(job.volume);
-            self.let_runs_go(id);
+            self.leave_runs(id);
         }
     }
 
+    /// The run set chunk `id`'s column holds, if one does.
     fn hold_of(&self, id: u32) -> Option<usize> {
         let column = self.chunks.get(&id)?.at.column();
         self.run_holds.iter().position(|h| h.as_ref().is_some_and(|h| h.column == column))
     }
 
+    /// The runs chunk `id`'s column holds, once made.
     fn runs_of(&self, id: u32) -> Option<Runs> {
         self.run_holds[self.hold_of(id)?].as_ref()?.runs
     }
 
+    /// A run set for chunk `id`: its column's, joined, or a free one its
+    /// column now holds. None while every set is another column's.
     fn run_set_for(&mut self, id: u32) -> Option<usize> {
-        let set = self.run_holders.iter().position(|&h| h == Some(id)).or_else(|| self.run_holders.iter().position(|h| h.is_none()))?;
-        self.run_holders[set] = Some(id);
+        if let Some(set) = self.hold_of(id) {
+            let users = &mut self.run_holds[set].as_mut()?.users;
+            if !users.contains(&id) {
+                users.push(id);
+            }
+            return Some(set);
+        }
+        let set = self.run_holds.iter().position(Option::is_none)?;
+        let column = self.chunks.get(&id)?.at.column();
+        self.run_holds[set] = Some(RunHold { column, users: vec![id], runs: None });
         Some(set)
     }
 
+    /// Chunk `id` uses its column's runs no more; the set is given back with
+    /// its last user.
     fn leave_runs(&mut self, id: u32) {
         for slot in self.run_holds.iter_mut() {
             if let Some(h) = slot {
@@ -473,15 +484,18 @@ impl Builder {
         }
     }
 
+    /// Chunk `id`'s column's runs are stale: the set is given back for every
+    /// chunk over the column, each of which makes them again, once.
     fn drop_runs(&mut self, id: u32) {
         if let Some(set) = self.hold_of(id) {
             self.run_holds[set] = None;
         }
+        self.leave_runs(id);
     }
 
     pub fn run_sets(&self) -> (u32, u32) {
-        let held = self.run_holders.iter().flatten();
-        let bytes = held.clone().filter_map(|id| self.chunks.get(id)?.runs.map(|r| r.bytes)).sum();
+        let held = self.run_holds.iter().flatten();
+        let bytes = held.clone().filter_map(|h| h.runs.map(|r| r.bytes)).sum();
         (held.count() as u32, bytes)
     }
 
@@ -489,20 +503,17 @@ impl Builder {
     /// chunk's wait, and skip the chunk until a release.
     fn refuse(&mut self, world: &mut World, id: u32) {
         self.stat.starved += 1;
-        self.abort_scan_of(world, id);
-        if matches!(&self.bake_job, Some(j) if j.id == id) {
-            self.abort_bake();
-        }
-        self.let_runs_go(id);
+        self.abort_work_of(world, id);
+        self.leave_runs(id);
         let releases = crate::host::heap_stat().releases;
         if let Some(c) = self.chunks.get_mut(&id) {
             c.refused = Some(releases);
         }
     }
 
-    fn unwant(&mut self, id: u32, cube: Cube) {
+    fn unwant(&mut self, id: u32, scale: Scale) {
         let Some(c) = self.chunks.get_mut(&id) else { return };
-        for w in c.want.iter_mut().filter(|w| **w == Some(cube)) {
+        for w in c.want.iter_mut().filter(|w| **w == Some(scale)) {
             *w = None;
         }
         if c.wanted().next().is_none() {
@@ -516,17 +527,22 @@ impl Builder {
         }
     }
 
-    /// Advances chunks under the budget, slot holders first. At least one step
-    /// is taken. A heap refusal ends the tick: the heap will not change within
-    /// it, and a refusal is not free (direct runs are written before their
-    /// block is asked for).
+    // ---- the tick ----
+
+    /// Advances the chunks in `order` under `budget_ms` of `now`, the
+    /// holders of the scan and the bake slot first: a slot held is every
+    /// other chunk's wait. At least one step is taken, whatever the budget.
+    /// A block refused ends the tick: the heap does not change within it, so
+    /// every later request would meet the same heap, and a refusal is not free — the direct runs are written whole
+    /// before their block is asked for. Whether any chunk did work.
     pub fn tick(&mut self, world: &mut World, order: &[u32], budget_ms: f64, now: &impl Fn() -> f64, emit: &mut impl FnMut(BuildEvent) -> bool) -> bool {
         let t0 = now();
         let starved = self.stat.starved;
         let mut stepped = false;
         let mut worked = false;
         let mut first = [None; 2 + RUN_SETS];
-        for (n, id) in self.holders().into_iter().chain(self.run_holders).enumerate() {
+        let users = self.run_holds.iter().flatten().flat_map(|h| h.users.first().copied());
+        for (n, id) in self.holders().into_iter().chain(users.map(Some)).enumerate() {
             if !first[..n].contains(&id) {
                 first[n] = id;
             }
@@ -561,15 +577,16 @@ impl Builder {
         if c.refused.is_some_and(|r| r == crate::host::heap_stat().releases) {
             return Progress::Blocked;
         }
-        // Runs folded for another cube draw the wrong objects: remake them.
+        // Runs folded for another scale draw the wrong objects: remake them.
         let next = c.wanted().next().or_bug(Errno::ENOTRECOVERABLE);
-        if c.runs.is_some_and(|r| r.fold.is_some_and(|f| f != object_fold(next))) && !matches!(&self.bake_job, Some(j) if j.id == id) {
-            self.let_runs_go(id);
+        if self.runs_of(id).is_some_and(|r| r.fold.is_some_and(|f| f != object_fold(next))) && !matches!(&self.bake_job, Some(j) if j.id == id) {
+            self.drop_runs(id);
         }
-        if self.chunks[&id].runs.is_none() {
+        if self.runs_of(id).is_none() {
             return self.advance_runs(world, id);
         }
-        // Another chunk of the column made the runs; this one bakes its cut too.
+        // Another chunk of the column made them: this one bakes its cut of
+        // them too, and holds the set while it does.
         self.run_set_for(id);
         self.advance_bake(world, id, emit)
     }
@@ -685,41 +702,32 @@ impl Builder {
         Some(volume)
     }
 
-    /// A column's voxel entries folded to `scale` by the fold every level
-    /// shares, as the store keeps it (layer/object/store.rs `fold_cell`), as
-    /// entries of that scale in the builder's fold lanes: what a z16 chunk
-    /// paints for a cube coarser than an object's finest tier. The hidden
-    /// entry is left out, as the paint would leave it out.
-    /// An error, and nothing folded, where the heap refused the fold room.
+    /// A column's voxel entries as a paint at `scale` takes them, in the
+    /// builder's fold lanes: those finer than `scale` folded to it, the rest
+    /// at their own size (layer/object/store.rs `Store::fold_entries`) —
+    /// what a z16 chunk paints for a cube coarser than an object's finest
+    /// tier. The hidden entry is left out, as the paint would leave it out.
+    /// An error where the heap refused the fold room.
     fn fold_objects(&mut self, world: &mut World, col_idx: IVec, scale: Scale) -> Result<(), TryReserveError> {
-        let o = FROM_L2_IDX(col_idx);
-        let (x0, y0) = (ivec::X(o), ivec::Y(o));
-        let cells = scale.count_in(L2) as i64;
-        let at = [ivec::X(col_idx) * cells, ivec::Y(col_idx) * cells];
-        world.store.fold_at(scale, at, [at[0] + cells, at[1] + cells], self.hide, &mut self.folded)?;
-        // A cell's corner in finest steps: absolute, then from the column's
-        // corner and its band's floor.
-        let n = OBJECT_FINEST.count_in(scale) as i64;
-        let band_steps = OBJECT_FINEST.count_in(BAND) as i64;
-        let (fx, fy) = (OBJECT_FINEST.index(x0), OBJECT_FINEST.index(y0));
-        let n_folded = self.folded.len();
-        self.fold_cells.clear();
-        self.fold_band.clear();
-        self.fold_pos.clear();
-        self.fold_state.clear();
-        self.fold_cells.try_reserve(n_folded)?;
-        self.fold_band.try_reserve(n_folded)?;
-        self.fold_pos.try_reserve(n_folded)?;
-        self.fold_state.try_reserve(n_folded)?;
-        self.fold_cells.extend(self.folded.iter().map(|(&c, &state)| (c, state)));
-        self.fold_cells.sort_unstable();
-        for &([cx, cy, cz], state) in &self.fold_cells {
-            let z = cz * n;
-            self.fold_band.push(z.div_euclid(band_steps) as BandZ);
-            self.fold_pos.push(pack_pos((cx * n - fx) as u32, (cy * n - fy) as u32, z.rem_euclid(band_steps) as u32, scale));
-            self.fold_state.push(state);
-        }
-        Ok(())
+        let (band, pos, state) = (&mut self.fold_band, &mut self.fold_pos, &mut self.fold_state);
+        band.clear();
+        pos.clear();
+        state.clear();
+        let mut refused = Ok(());
+        world.store.fold_entries(col_idx, scale, self.hide, &mut |b, [x, y, z], s, v| {
+            if refused.is_ok() {
+                refused = (|| {
+                    band.try_reserve(1)?;
+                    pos.try_reserve(1)?;
+                    state.try_reserve(1)?;
+                    band.push(b);
+                    pos.push(pack_pos(x, y, z, s));
+                    state.push(v);
+                    Ok(())
+                })();
+            }
+        });
+        refused
     }
 
     fn advance_paint(&mut self, world: &mut World, id: u32, volume: u32, mut paint: PaintJob) -> Progress {
@@ -787,18 +795,7 @@ impl Builder {
                 return Progress::Blocked;
             }
         }
-        let bytes = self.direct.close_direct();
-        let Some((set, at)) = self.set_of(id, bytes) else {
-            self.direct.abort();
-            self.refuse(world, id);
-            return Progress::Blocked;
-        };
-        // SAFETY: as for a scan's set.
-        unsafe { self.direct.provide_set(ptr_at::<u8>(at), bytes) };
-        let count = self.direct.finish();
-        self.stat.direct += 1;
-        self.keep_runs(id, Runs { set, bytes, count, fold: None });
-        Progress::Busy
+        self.close_direct(world, id)
     }
 
     /// A level chunk's runs, written directly from its page's ground and the
@@ -831,14 +828,11 @@ impl Builder {
             GROUND.scale(0).count_in(target),
             &mut self.stands,
         );
-        if written.is_err() {
-            self.direct.abort();
-            self.refuse(world, id);
-            return Progress::Blocked;
-        }
         self.close_direct(world, id)
     }
 
+    /// Closes the direct runs written for chunk `id` into its run set: kept
+    /// as its runs, or the chunk refused where the set has no room.
     fn close_direct(&mut self, world: &mut World, id: u32) -> Progress {
         let bytes = self.direct.close_direct();
         let Some((set, at)) = self.set_of(id, bytes) else {
@@ -854,21 +848,22 @@ impl Builder {
         Progress::Busy
     }
 
-    fn set_of(&mut self, id: u32, bytes: u32) -> Option<(usize, u32)> {
-        self.run_set_for(id)?;
-        let block = alloc(bytes);
-        if block.is_none() {
-            self.leave_runs(id);
+    /// The run set chunk `id` holds and where it lies, when `bytes` fit it.
+    /// A set past it is refused, and the set given back.
+    fn set_of(&mut self, id: u32, bytes: u32) -> Option<(usize, usize)> {
+        let set = self.run_set_for(id)?;
+        match at(Range::Run(set), 0, bytes) {
+            Some(at) => Some((set, at as usize)),
+            None => {
+                self.leave_runs(id);
+                None
+            }
         }
     }
 
     fn keep_runs(&mut self, id: u32, runs: Runs) {
         let set = self.hold_of(id).or_bug(Errno::ENOTRECOVERABLE);
-        let hold = self.run_holds[set].as_mut().or_bug(Errno::ENOTRECOVERABLE);
-        if let Some(old) = hold.runs.replace(runs) {
-            // SAFETY: the earlier runs' block, which nothing bakes from once replaced.
-            unsafe { free(old.block) };
-        }
+        self.run_holds[set].as_mut().or_bug(Errno::ENOTRECOVERABLE).runs = Some(runs);
     }
 
     fn run_set(runs: &Runs) -> RunSet<'static> {
@@ -881,22 +876,22 @@ impl Builder {
     fn advance_bake(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent) -> bool) -> Progress {
         let holding = matches!(&self.bake_job, Some(j) if j.id == id);
         let c = &self.chunks[&id];
-        let set = Self::run_set(c.runs.as_ref().unwrap());
+        let set = Self::run_set(&self.runs_of(id).or_bug(Errno::ENOTRECOVERABLE));
         if !holding {
             if self.bake_job.is_some() {
                 return Progress::Blocked;
             }
-            let cube = c.wanted().next().unwrap();
+            let scale = c.wanted().next().unwrap();
             // Runs span the whole column; this chunk bakes only its own heights.
             let (z0, z1) = c.at.z_range();
             let clip = Some((z0 as i32, z1 as i32));
-            if self.bake.begin(&set, mesh_step(cube, c.level()), 1 << c.level(), settings_store().textures, clip).is_err() {
+            if self.bake.begin(&set, mesh_step(scale, c.level()), GROUND.finest_in(c.level()), settings_store().textures, clip).is_err() {
                 self.refuse(world, id);
                 return Progress::Blocked;
             }
             self.bake_job = Some(BakeJob {
                 id,
-                cube,
+                scale,
                 generation: c.generation,
                 mesh: None,
                 handed: 0,
@@ -913,25 +908,19 @@ impl Builder {
                 // All slots are held at once or the bake is thrown away: a mesh is never
                 // cut, never baked coarser, and never waits while holding the one bake.
                 let job = self.bake_job.as_ref().unwrap();
-                let step = mesh_step(job.cube, c.level());
+                let step = mesh_step(job.scale, c.level());
                 let (words_a_box, room_a_slot) = (box_words(step), capacity(c.level(), step));
                 let boxes = words / words_a_box;
                 let asked = BuildEvent::Reserve {
                     id,
                     generation: job.generation,
-                    cube: job.cube,
+                    scale: job.scale,
                     boxes,
                 };
                 if !emit(asked) {
                     let job = self.bake_job.take().unwrap();
                     self.bake.abort();
-                    let c = self.chunks.get_mut(&id).unwrap();
-                    for w in c.want.iter_mut().filter(|w| **w == Some(job.cube)) {
-                        *w = None;
-                    }
-                    if c.wanted().next().is_none() {
-                        self.let_runs_go(id);
-                    }
+                    self.unwant(id, job.scale);
                     return Progress::Busy;
                 }
                 let block = boxes.min(room_a_slot) * words_a_box;
@@ -951,13 +940,13 @@ impl Builder {
                 if gpu().is_some() && device_ready() && !room(bytes) {
                     return Progress::Blocked;
                 }
-                let step = mesh_step(job.cube, c.level());
+                let step = mesh_step(job.scale, c.level());
                 let words_a_box = box_words(step);
                 let n = bytes / 4 / words_a_box;
                 emit(BuildEvent::Part {
                     id,
                     generation: job.generation,
-                    cube: job.cube,
+                    scale: job.scale,
                     at: at as u32,
                     first: job.handed,
                     box_cnt: n,
@@ -988,26 +977,18 @@ impl Builder {
                     emit(BuildEvent::Part {
                         id,
                         generation: job.generation,
-                        cube: job.cube,
+                        scale: job.scale,
                         at: at as u32,
                         first: job.handed,
                         box_cnt: mesh.box_cnt - job.handed,
                         heights: mesh.heights,
                     });
                 }
-                let c = self.chunks.get_mut(&id).unwrap();
-                for w in c.want.iter_mut() {
-                    if *w == Some(job.cube) {
-                        *w = None;
-                    }
-                }
-                if c.wanted().next().is_none() {
-                    self.let_runs_go(id);
-                }
+                self.unwant(id, job.scale);
                 emit(BuildEvent::Tier {
                     id,
                     generation: job.generation,
-                    cube: job.cube,
+                    scale: job.scale,
                     box_cnt: mesh.box_cnt,
                     heights: mesh.heights,
                 });

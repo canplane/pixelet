@@ -41,11 +41,37 @@ pub fn segment_type(subtype: &str, class: Option<&str>) -> u8 {
     }
 }
 
-/// One-way ways of these classes are carriageways, not one-way streets.
-const THROUGH_CLASSES: [&str; 5] = ["motorway", "trunk", "primary", "secondary", "tertiary"];
+/// A way's width in metres, the class's or a lane's where it has none: the
+/// one width a way is painted on the ground and carried on a deck at.
+pub fn segment_width_m(class: &str) -> f64 {
+    road_width_by_class(class).unwrap_or(3.5)
+}
 
-/// OpenMapTiles' path class: what is walked, cycled or ridden.
-const PEDESTRIAN_CLASSES: [&str; 6] = ["footway", "path", "steps", "cycleway", "pedestrian", "bridleway"];
+/// The transport type a way shows, on the ground or on a deck.
+pub fn segment_type(subtype: &str, class: Option<&str>) -> u8 {
+    let c = class.unwrap_or("");
+    if subtype == "rail" {
+        if c == "subway" || c == "light_rail" {
+            cube_types::transport::rail_subway
+        } else {
+            cube_types::transport::rail_main
+        }
+    } else if PEDESTRIAN_CLASSES.contains(&c) {
+        cube_types::transport::pedestrian
+    } else if MOTOR_CLASSES.contains(&c) {
+        cube_types::transport::road_motorway
+    } else if c == "primary" {
+        cube_types::transport::road_primary
+    } else if SECONDARY_CLASSES.contains(&c) {
+        cube_types::transport::road_secondary
+    } else {
+        cube_types::transport::road_default
+    }
+}
+
+const PEDESTRIAN_CLASSES: [&str; 6] = ["footway", "path", "steps", "cycleway", "pedestrian", "living_street"];
+const MOTOR_CLASSES: [&str; 2] = ["motorway", "trunk"];
+const SECONDARY_CLASSES: [&str; 2] = ["secondary", "tertiary"];
 
 const FLOWING_WATER_SUBTYPES: [&str; 3] = ["river", "stream", "canal"];
 const TREE_COVER_LAND_SUBTYPES: [&str; 4] = ["tree", "forest", "tree_row", "wood"];
@@ -70,12 +96,12 @@ const SPORTS_CLASSES: [&str; 2] = ["pitch", "playground"];
 /// remain) nor `is_covered` (the buildings paint over it).
 pub const UNSEEN_FLAGS: &[&str] = &["is_tunnel", "is_indoor", "is_under_construction", "is_abandoned"];
 
-pub const BORE_FLAGS: &[&str] = &["is_tunnel"];
-
-pub const LINK_FLAGS: &[&str] = &["is_link"];
-
-/// Drawn by the page's decks, not the ground.
+/// Segment flags under which a way is carried above the ground: a deck,
+/// which the page's decks draw (terrain/pipeline/deck.rs) and the ground
+/// does not.
 pub const DECK_FLAGS: &[&str] = &["is_bridge"];
+
+// ============ Policy logic ============
 
 fn building_type(feat: &OvertureRawFeature) -> &str {
     match feat {
@@ -135,26 +161,33 @@ fn determine_category(feat: &OvertureRawFeature) -> String {
     }
 }
 
-/// Water but a strait's label line, land under trees, parking and helipads,
-/// and every land use.
-pub fn bases(row: &BaseRow, page_min: G3857) -> Vec<Feature> {
-    use cube_types::{land as l, transport as t, water as w};
-    let (subtype, class) = (row.subtype.as_deref().unwrap_or(""), row.class.as_deref().unwrap_or(""));
-    let (key, value, rank) = match row.source.as_str() {
-        "water" if class == "strait" => return Vec::new(),
-        "water" => (GroundChannelKey::WATER, if FLOWING_WATER_SUBTYPES.contains(&subtype) { w::river } else { w::lake }, WATER_RANK),
-        "land" if TREE_COVER_LAND_SUBTYPES.contains(&subtype) => (GroundChannelKey::LAND, l::green_deep, AREA_RANK),
-        "land" => return Vec::new(),
-        "infrastructure" if class == "parking" => (GroundChannelKey::TRANSPORT, t::parking, AREA_RANK),
-        "infrastructure" if class == "helipad" => (GroundChannelKey::LAND, l::helipad, AREA_RANK),
-        "infrastructure" => return Vec::new(),
-        _ => (
-            GroundChannelKey::LAND,
-            land_use_cell(class),
-            AREA_RANK + if matches!(class, "school" | "hospital") { INSTITUTIONAL_RANK } else { 0 },
-        ),
-    };
-    wkb_to_geometries(&row.geom_wkb).iter().filter_map(|g| Feature::of(g, page_min, Cell { key, value }, rank)).collect()
+fn compute_metrics(feat: &OvertureRawFeature, _category: &str) -> FeatureComputed {
+    let mut height = 0.0;
+    let mut width = 0.0;
+
+    match feat {
+        OvertureRawFeature::Building(b) => {
+            // Real height/num_floors when Overture has them; missing both
+            // falls back to a single-level default.
+            height = match (b.height, b.num_floors) {
+                (Some(h), _) => h,
+                (None, Some(n)) => n * 3.5,
+                (None, None) => 3.5,
+            };
+        }
+        OvertureRawFeature::Segment(_) => {
+            width = segment_width_m(segment_class(feat));
+        }
+        OvertureRawFeature::Base(_) => {}
+    }
+
+    FeatureComputed {
+        height: height.max(0.0),
+        width: width.max(0.0),
+        // `level_rules` is in the table, but nothing places a feature off the
+        // surface yet: what is seen from above is painted on the ground.
+        layer: 0,
+    }
 }
 
 /// Later keeps the cell. OpenStreetMap Carto's `z` from `roads_info`
@@ -235,11 +268,8 @@ fn compute_extra(feat: &OvertureRawFeature, category: &str) -> FeatureExtra {
         is_parking: category == "parking",
         is_institutional: institutional,
         is_sports: SPORTS_CLASSES.contains(&building_type(feat)) || SPORTS_CLASSES.contains(&land_use_class(feat)),
-        // Overture's segment `road` JSONB likely carries a tunnel/bridge flag,
-        // but its real shape is not sample-confirmed, so this stays false
-        // until a live sample settles the field path — see the top comment on
-        // not guessing against unverified schema.
-        is_tunnel: false,
+        is_unseen: is_unseen(feat),
+        is_deck: matches!(feat, OvertureRawFeature::Segment(s) if s.is_deck),
     }
 }
 
@@ -300,26 +330,8 @@ fn determine_cell_cfg(feat: &OvertureRawFeature, category: &str, extra: &Feature
 
     if let OvertureRawFeature::Segment(s) = feat {
         if category == "road" {
-            let c = s.class.as_deref().unwrap_or("");
-            let cell_type = if s.subtype == "rail" {
-                if c == "subway" || c == "light_rail" {
-                    cube_types::transport::rail_subway
-                } else {
-                    cube_types::transport::rail_main
-                }
-            } else if PEDESTRIAN_CLASSES.contains(&c) {
-                cube_types::transport::pedestrian
-            } else if MOTOR_CLASSES.contains(&c) {
-                cube_types::transport::road_motorway
-            } else if c == "primary" {
-                cube_types::transport::road_primary
-            } else if SECONDARY_CLASSES.contains(&c) {
-                cube_types::transport::road_secondary
-            } else {
-                cube_types::transport::road_default
-            };
             return Some(CellConfig {
-                cell_type,
+                cell_type: segment_type(&s.subtype, s.class.as_deref()),
                 ch_key: GroundChannelKey::TRANSPORT,
             });
         }

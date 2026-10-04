@@ -8,18 +8,26 @@
 
 use super::lod::{cubes_meeting, fault_radius, Tau};
 use super::pyramid::{page_at, span_of, LevelPage, TOP_LEVEL};
-use super::v3::{Aabb, V3};
+use super::v3::{dot3, Aabb, V3};
 
 /// Six planes, normals in, `n · x + d ≥ 0` inside, in world units.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Frustum {
     pub planes: [f64; 24],
 }
 
 impl Frustum {
     /// Conservative: a sphere near a corner can pass every plane and still lie outside.
-    pub fn sees(&self, center: [f64; 3], radius: f64) -> bool {
-        self.planes.as_chunks::<4>().0.iter().all(|p| p[0] * center[0] + p[1] * center[1] + p[2] * center[2] + p[3] >= -radius)
+    pub fn sees(&self, center: V3, radius: f64) -> bool {
+        self.planes.as_chunks::<4>().0.iter().all(|p| dot3(&[p[0], p[1], p[2]], &center) + p[3] >= -radius)
+    }
+
+    /// The same planes for points measured from `at`.
+    pub fn about(mut self, at: V3) -> Frustum {
+        for p in self.planes.as_chunks_mut::<4>().0 {
+            p[3] += dot3(&[p[0], p[1], p[2]], &at);
+        }
+        self
     }
 }
 
@@ -55,7 +63,7 @@ impl Observation {
         let (along, reach_along) = (gap(b, 0).hypot(gap(b, 1)), reach(b, 0).hypot(reach(b, 1)));
         let mut drawn = *b;
         drawn.min[2] -= reach_along * reach_along / (2.0 * self.planet);
-        let seen = !drawn.bounded() || self.frustum.is_none_or(|f| f.sees(drawn.center(), norm(drawn.extent()) / 2.0));
+        let seen = !drawn.bounded() || self.frustum.is_none_or(|f| f.sees(drawn.center(), drawn.radius()));
         Measure {
             seen,
             near: along.hypot(gap(&drawn, 2)),
@@ -71,10 +79,6 @@ impl Observation {
             max: [e[0] + radius, e[1] + radius, e[2] + radius + radius * radius / (2.0 * self.planet)],
         }
     }
-}
-
-fn norm(v: V3) -> f64 {
-    (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt()
 }
 
 /// What stands in `region` known at `level`; z16 for anything finer.

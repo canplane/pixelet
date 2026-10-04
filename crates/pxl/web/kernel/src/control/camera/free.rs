@@ -6,10 +6,7 @@
 
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pvf3::REACH;
-use pxl_spec::space::pvf3::{ivec, projection};
-use pxl_spec::space::v3::V3;
-use xpute_core::math::scalar::wrap;
+use pxl_spec::space::v3::{add3, V3};
 
 use crate::control::camera::config::camera_cfg::free::EYE_HEIGHT_U;
 use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, ROT_DAMP};
@@ -17,17 +14,16 @@ use crate::control::camera::config::camera_cfg::view::DEFAULT_DIST;
 use crate::control::camera::controller::{camera, eye_local, set_eye_local};
 use crate::control::camera::controller::{damp_alpha, look_domain, spend_travel, units_per_px_at};
 use crate::control::camera::store::camera_store;
-use crate::world::access::{Access, Detail, Ray, FINEST};
-use crate::world::change::request_world_tick;
-use crate::world::frame::coord::local_height;
+use crate::control::navigation::support::target;
+use crate::world::access::{Access, Detail, Ray};
 use crate::world::frame::view::{view, view_compose};
+use xpute_runtime::global::Global;
 
 /// The first resident thing it meets, else the sea, else `fallback` along it.
 pub fn look_point(eye: V3, forward: V3, fallback: f64) -> V3 {
-    let o = view().origin;
-    let frame = [ivec::to_real(ivec::X(o)), ivec::to_real(ivec::Y(o)), ivec::to_real(ivec::Z(o))];
+    let frame = ivec::to_v3(view().origin);
     let ray = Ray {
-        origin: std::array::from_fn(|k| eye[k] + frame[k]),
+        origin: add3(&eye, &frame),
         direction: forward,
         reach: view().far,
     };

@@ -109,18 +109,6 @@ The format in full, and the API that writes it, is [the note beside the TypeScri
 
 ---
 
-## Changes, a guest's record of its own
-
-A guest often needs to know which units of its state changed since it last looked — what to build again, what to draw again. The runtime keeps that for it as data rather than as calls. A **change** (`ipc/change.rs`) is three numbers: a topic (`u16`, a kind of state the guest numbers), a key (`u64`, the one unit within that topic), and a revision (`u32`). A writer calls `bump`. The topic's counter advances, and its new value becomes the key's revision, written in two places: a table indexed by key, and one fixed-size journal ring.
-
-The two places exist because readers come in two kinds. A reader that cares about a handful of keys compares each key's revision against the one it remembers. A reader that cares about everything walks the journal forward from its own cursor — and if the journal has lapped that cursor, it gives up on the journal and re-reads the keys of the topics it follows.
-
-A change carries no value; the value is read where it lives. How a reader is woken — by polling on each turn, by a listener — is built on top of this and is not part of it.
-
-Nothing of it crosses to the host. It is a tool the runtime gives a guest, as the tick is, and the contract does not name it: a guest that keeps track of its changes another way is the same guest to its host.
-
----
-
 ## The turn
 
 The guest does not run continuously. It runs inside one call, `interrupt(quota_ms)`, and when that call returns the guest is not running at all.

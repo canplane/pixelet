@@ -267,6 +267,41 @@ impl SettingKey {
         }
     }
 
+    /// Its name, as storage keeps it.
+    pub fn name(self) -> &'static str {
+        match self {
+            SettingKey::textures => "textures",
+            SettingKey::structures => "structures",
+            SettingKey::decor => "decor",
+            SettingKey::poi => "poi",
+            SettingKey::tilt_lock => "tilt_lock",
+            SettingKey::camera_mode => "camera_mode",
+            SettingKey::camera_collision => "camera_collision",
+            SettingKey::ground_snap => "ground_snap",
+            SettingKey::terrain_carving => "terrain_carving",
+            SettingKey::edge_shade => "edge_shade",
+            SettingKey::rim_light => "rim_light",
+            SettingKey::ao => "ao",
+            SettingKey::shadows => "shadows",
+            SettingKey::resolution => "resolution",
+            SettingKey::profiler => "profiler",
+            SettingKey::gizmos => "gizmos",
+            SettingKey::person => "person",
+            SettingKey::pet => "pet",
+        }
+    }
+
+    /// A choice's options by name, in index order; none for any other kind.
+    pub fn options(self) -> &'static [&'static str] {
+        match self {
+            SettingKey::camera_mode => &["orbit", "free"],
+            SettingKey::camera_collision => &["through", "stop", "climb"],
+            SettingKey::ao => &["off", "corner", "screen"],
+            SettingKey::resolution => &["auto", "fixed", "low"],
+            _ => &[],
+        }
+    }
+
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
         matches!(self, SettingKey::camera_collision | SettingKey::ground_snap | SettingKey::terrain_carving | SettingKey::shadows)

@@ -17,9 +17,7 @@ use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 
-use crate::control::camera::input::{holding, ActiveTool};
-use crate::control::camera::store::camera_store;
-use crate::global::Global;
+use crate::control::interaction::{holding, hover, ActiveTool};
 use crate::kernel::with_world;
 use crate::layer::decor::asset_store::{decor_assets_for, decor_bundle_assets};
 use crate::layer::decor::build::user_decor_pick;
@@ -32,6 +30,8 @@ use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::access::{Access, FINEST};
 use crate::world::change::request_world_tick;
 use crate::world::chunk::build::World;
+use crate::world::chunk::source::chunk_sources_changed;
+use xpute_runtime::global::Global;
 
 #[derive(Clone, Debug, PartialEq)]
 enum Ghost {
@@ -75,7 +75,7 @@ pub fn hover_cursor_step() {
     // A terrain carve is a whole cell: the scan emits nothing for a zero
     // material whatever its sub-cell bytes, so the cell goes whole anyway.
     let preview_size = match (&hovered_object, active_tool) {
-        (Some(o), ActiveTool::Eraser | ActiveTool::Pointer) => o.size,
+        (Some(o), ActiveTool::Eraser | ActiveTool::Pointer) => o.size(),
         (_, ActiveTool::Decor) => DECOR_SIZE,
         _ if digging_terrain => U_PER_CELL,
         _ => ui.object_size,
@@ -97,7 +97,7 @@ pub fn hover_cursor_step() {
 
     // The real object's hide lands a tick or more after the ghost, accepted.
     let virtual_hide_target = match (&hovered_object, active_tool) {
-        (Some(o), ActiveTool::Eraser) => Some(o.at),
+        (Some(o), ActiveTool::Eraser) => Some(o.at()),
         _ => None,
     };
     if c.virtual_hide_target != virtual_hide_target {
@@ -126,16 +126,16 @@ pub fn hover_cursor_step() {
         _ => None,
     };
 
-    let cube: Option<PlaceableCube> = match (active_tool, hovered_object.as_ref().map(|o| &o.kind)) {
+    let cube: Option<PlaceableCube> = match (active_tool, hovered_object.map(|o| o.kind())) {
         (ActiveTool::Pointer | ActiveTool::Decor, _) => None,
-        (_, Some(EntryKind::Solid { cube })) => Some(*cube),
+        (_, Some(EntryKind::Solid { cube })) => Some(cube),
         (ActiveTool::Object, _) => Some(ui.object_cube),
         _ => carved_style_cube,
     };
 
-    let decor_id = match (active_tool, hovered_object.as_ref().map(|o| &o.kind)) {
+    let decor_id = match (active_tool, hovered_object.map(|o| o.kind())) {
         (ActiveTool::Decor, _) => Some(ui.decor_id),
-        (_, Some(EntryKind::Decor { decor_id })) => Some(*decor_id),
+        (_, Some(EntryKind::Decor { decor_id })) => Some(decor_id),
         _ => None,
     };
     let decor_bundle = decor_id.and_then(decor_bundle_for);
@@ -143,7 +143,7 @@ pub fn hover_cursor_step() {
 
     let decor_pick_i = match (active_tool, &hovered_object) {
         (ActiveTool::Decor, _) => hovered.map(|h| h.i),
-        (_, Some(o)) if matches!(o.kind, EntryKind::Decor { .. }) => Some(o.i),
+        (_, Some(o)) if matches!(o.kind(), EntryKind::Decor { .. }) => Some(o.corner().i),
         _ => None,
     };
     // Placing back an erased scattered decor restores that instance; the ghost
@@ -186,18 +186,14 @@ pub fn hover_cursor_step() {
     let ghost = match (scattered_ghost, hovered, blocked) {
         (Some(g), _, _) => g,
         (None, Some(h), false) => {
-            let x = ivec::to_real(ivec::X(h.i)) + fvec::to_real(fvec::X(h.f));
-            let y = ivec::to_real(ivec::Y(h.i)) + fvec::to_real(fvec::Y(h.f));
-            let z = ivec::to_real(ivec::Z(h.i)) + fvec::to_real(fvec::Z(h.f));
-            match (decor_bundle, decor_pick) {
-                (Some(bundle), Some((variant, rotation))) if is_decor_ghost => {
-                    let before: u32 = DECOR_BUNDLES().iter().take_while(|b| !core::ptr::eq(*b, bundle)).map(|b| b.variants.len() as u32).sum();
-                    Ghost::Decor {
-                        at: [x + preview_size / 2.0, y + preview_size / 2.0, z],
-                        group: before + variant,
-                        rotation,
-                    }
-                }
+            let [x, y, z] = projection::unproject(h.i, h.f);
+            match (decor_kind, decor_pick) {
+                (Some(kind), Some((variant, rotation, scale))) if is_decor_ghost => Ghost::Decor {
+                    at: [x + preview_size / 2.0, y + preview_size / 2.0, z],
+                    group: kind.first_group() + variant,
+                    rotation,
+                    scale,
+                },
                 _ => Ghost::Box {
                     at: [x, y, z],
                     size: current_scale,

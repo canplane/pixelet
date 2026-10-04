@@ -18,7 +18,7 @@ import type { U32Array, U8Array } from "@xpute/core/abi/array.ts";
 import type { i32, u32 } from "@xpute/core/abi/word.ts";
 import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { InvariantError } from "@xpute/core/status/error.ts";
-import { bytes_of, each_record } from "./stream.ts";
+import { each_record, text_of } from "./stream.ts";
 import { flag, HEAD, op } from "./sys.spec.ts";
 
 /** Why an open did not answer with a file: an errno, and whatever number the
@@ -29,6 +29,7 @@ export class FileError extends Error {
   }
 }
 
+/** A broken invariant the guest reported before it stopped. */
 interface Abort {
   errno: number;
   file: string;
@@ -64,65 +65,88 @@ interface File {
   written: U8Array[] | null;
 }
 
-const utf8 = new TextDecoder();
-
-/** The descriptors a guest holds open, by the handle it issued. */
-export class Files {
-  readonly open = new Map<u32, File>();
+/** Whether `path` walks down from its root and nowhere else, as 9P's walk
+ * does a name at a time: no name empty, `.` or `..`, so no path leaves the
+ * root it is opened below and the root is the whole of what it grants. */
+function walks_down(path: string): boolean {
+  return path.split("/").every((name) => name !== "" && name !== "." && name !== "..");
 }
 
-function open_file(files: Files, host: SysHost, fd: u32, root: u32, flags: u32, path: string): void {
+function open_file(files: Sys, host: SysHost, fd: u32, root: u32, flags: u32, path: string): void {
   const file: File = { root, path, controller: new AbortController(), bytes: null, written: null };
   files.open.set(fd, file);
+  const own = () => files.open.get(fd) === file;
+  const failed = (err: unknown) => {
+    if (!own()) return;
+    files.open.delete(fd);
+    const [errno, detail] = err instanceof FileError ? [err.errno, err.detail] : [Errno.EIO, 0];
+    if (!(err instanceof FileError)) console.warn(`[xpute/sys] open ${root}/${path}: ${err instanceof Error ? err.message : String(err)}`);
+    host.opened(fd, errno, detail);
+  };
+  const read = (bytes: U8Array) => {
+    if (!own()) return;
+    file.bytes = bytes;
+    host.opened(fd, bytes.byteLength, 0);
+  };
+  if (!walks_down(path)) return failed(new FileError(Errno.EACCES));
   if (flags === flag.O_WRONLY) {
     file.written = [];
-    host.opened(fd, 0, 0);
-    return;
+    return host.opened(fd, 0, 0);
   }
-  // Answered once the record run is over, so an answer at once and one a
-  // response later reach the guest the same way.
-  void (async () => {
-    await Promise.resolve();
-    try {
-      const bytes = await host.open(root, path, file.controller.signal);
-      if (files.open.get(fd) !== file) return;
-      file.bytes = bytes;
-      host.opened(fd, bytes.byteLength, 0);
-    } catch (err) {
-      if (files.open.get(fd) !== file) return;
-      files.open.delete(fd);
-      const [errno, detail] = err instanceof FileError ? [err.errno, err.detail] : [Errno.EIO, 0];
-      if (!(err instanceof FileError)) console.warn(`[xpute/sys] open ${root}/${path}: ${err instanceof Error ? err.message : String(err)}`);
-      host.opened(fd, errno, detail);
-    }
-  })();
+  // A file the host holds is answered now and one behind a transport when
+  // the transport is; either way the guest hears it on a later turn.
+  let got: U8Array | Promise<U8Array>;
+  try {
+    got = host.open(root, path, file.controller.signal);
+  } catch (err) {
+    return failed(err);
+  }
+  if (got instanceof Promise) got.then(read, failed);
+  else read(got);
 }
 
-/** Runs the calls the turn just returned left in the stream at `at`. */
-export function run_sys(memory: ArrayBuffer, at: u32, files: Files, host: SysHost): void {
-  each_record(memory, at, HEAD, (code, w, a) => {
+/** A guest's system calls as its host runs them: the descriptors it holds
+ * open, by the handle it issued, and the host that answers what only it can. */
+export class Sys {
+  readonly open = new Map<u32, File>();
+
+  constructor(private readonly host: SysHost) {}
+
+  /** The bytes of the file opened to read as `fd`, for a call of the
+   * program's own to consume where the host is, rather than copied into the
+   * guest by a READ: none where `fd` holds no such file. */
+  bytes(fd: u32): U8Array | null {
+    return this.open.get(fd)?.bytes ?? null;
+  }
+
+  /** Runs the calls the turn just returned left in the stream at `at`. */
+  run(memory: ArrayBuffer, at: u32): void {
+    each_record(memory, at, HEAD, this.record);
+  }
+
+  private readonly record = (code: u32, w: U32Array, a: u32): void => {
     switch (code) {
       case op.OPENAT:
-        open_file(files, host, w[a], w[a + 1], w[a + 2], utf8.decode(bytes_of(w, a + 3)));
+        open_file(this, this.host, w[a], w[a + 1], w[a + 2], text_of(w, a + 3));
         break;
       case op.READ: {
-        const bytes = files.open.get(w[a])?.bytes;
+        const bytes = this.open.get(w[a])?.bytes;
         if (!bytes) throw new InvariantError(Errno.EBADF);
         const len = Math.min(w[a + 2], bytes.byteLength);
-        new Uint8Array(memory, w[a + 1], len).set(bytes.subarray(0, len));
+        new Uint8Array(w.buffer, w[a + 1], len).set(bytes.subarray(0, len));
         break;
       }
       case op.WRITE: {
-        const written = files.open.get(w[a])?.written;
+        const written = this.open.get(w[a])?.written;
         if (!written) throw new InvariantError(Errno.EBADF);
         // A copy: the guest keeps the range only until its next turn.
-        written.push(new Uint8Array(memory, w[a + 1], w[a + 2]).slice());
+        written.push(new Uint8Array(w.buffer, w[a + 1], w[a + 2]).slice());
         break;
       }
       case op.CLOSE: {
-        const file = files.open.get(w[a]);
+        const file = this.open.get(w[a]);
         if (!file) break;
-        files.open.delete(w[a]);
+        this.open.delete(w[a]);
         file.controller.abort();
         if (file.written) {
           const whole = new Uint8Array(file.written.reduce((n, b) => n + b.byteLength, 0));
@@ -131,18 +155,18 @@ export function run_sys(memory: ArrayBuffer, at: u32, files: Files, host: SysHos
             whole.set(b, off);
             off += b.byteLength;
           }
-          host.commit(file.root, file.path, whole);
+          this.host.commit(file.root, file.path, whole);
         }
         break;
       }
       case op.ABORT: {
         const num = (i: u32) => BigInt(w[a + i]) | BigInt(w[a + i + 1]) << 32n;
-        host.abort({ errno: w[a] | 0, line: w[a + 1], column: w[a + 2], a: num(3), b: num(5), file: utf8.decode(bytes_of(w, a + 7)) });
+        this.host.abort({ errno: w[a] | 0, line: w[a + 1], column: w[a + 2], a: num(3), b: num(5), file: text_of(w, a + 7) });
         break;
       }
       default:
         if ((code & op.PROGRAM) === 0) throw new InvariantError(Errno.ENOSYS);
-        host.program(code, w, a);
+        this.host.program(code, w, a);
     }
-  });
+  };
 }

@@ -1,6 +1,8 @@
 // pxl-render/look/globe.test.rs
 
 use super::*;
+use pxl_spec::space::v3::sub3;
+use xpute_core::math::rng::{u32_to_unit, SplitMix64};
 
 const SEOUL: f64 = 37.5665 * core::f64::consts::PI / 180.0;
 
@@ -60,13 +62,8 @@ fn unplace_takes_a_placed_point_back_to_the_map() {
 fn the_sphere_is_one_whichever_point_it_is_laid_about() {
     let a = Globe::at(SEOUL);
     let meters_a = a.cos_lat / epsg3857::U_PER_M;
-    let mut seed = 0x2545_f491_4f6c_dd1du64;
-    let mut unit = move || {
-        seed ^= seed << 13;
-        seed ^= seed >> 7;
-        seed ^= seed << 17;
-        (seed >> 11) as f64 / (1u64 << 53) as f64 - 0.5
-    };
+    let mut rng = SplitMix64::new(0x2545_f491_4f6c_dd1d);
+    let mut unit = move || u32_to_unit(rng.next_u32()) - 0.5;
     for _ in 0..200 {
         let off = [unit() * 1.0e5, unit() * 1.0e5];
         let e = a.e0 * (off[1] / MERCATOR_RADIUS_U).exp();
@@ -77,7 +74,7 @@ fn the_sphere_is_one_whichever_point_it_is_laid_about() {
             let pts: [V3; 4] = core::array::from_fn(|_| [unit() * span, unit() * span, (unit() + 0.5) * 2.0e3]);
             let about_b = |v: V3| b.place([v[0] - off[0], v[1] - off[1], v[2]]);
             let (pa, pb): (Vec<V3>, Vec<V3>) = (pts.iter().map(|&p| a.place(p)).collect(), pts.iter().map(|&p| about_b(p)).collect());
-            let sub = |x: V3, y: V3| [x[0] - y[0], x[1] - y[1], x[2] - y[2]];
+            let sub = |x: V3, y: V3| sub3(&x, &y);
             let apart = |x: V3, y: V3| sub(x, y).iter().map(|v| v * v).sum::<f64>().sqrt();
             for (i, j) in [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)] {
                 let (da, db) = (apart(pa[i], pa[j]) * meters_a, apart(pb[i], pb[j]) * meters_b);

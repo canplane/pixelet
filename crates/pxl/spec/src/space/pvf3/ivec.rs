@@ -15,6 +15,8 @@
 
 use xpute_core::abi::word::{as_int_n64, field_mask64};
 
+use crate::space::v3::V3;
+
 use super::core::{ABS, EQ, GT, LT, MAX, MIN};
 use super::core::{IVEC_WORD_MASK as WORD_MASK, IVEC_X_W as X_W, IVEC_Y_W as Y_W, IVEC_Z_W as Z_W};
 
@@ -40,6 +42,9 @@ pub fn Z(v: IVec) -> i64 {
 
 pub fn to_real(comp: i64) -> f64 {
     comp as f64
+}
+pub fn to_v3(v: IVec) -> V3 {
+    [to_real(X(v)), to_real(Y(v)), to_real(Z(v))]
 }
 pub fn from_real(real: f64) -> i64 {
     real.floor() as i64

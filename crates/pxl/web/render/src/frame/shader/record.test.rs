@@ -443,6 +443,7 @@ fn every_block_reads_each_field_from_where_it_lies() {
         (SHADER_AO_SAMPLE, "ao", "Ao"),
         (SHADER_BADGE, "badge", "Badge"),
         (SHADER_DECOR, "draw", "Draw"),
+        (SHADER_IMPOSTOR, "draw", "Draw"),
         (SHADER_DEBUG, "draw", "Draw"),
         (SHADER_PUCK_ZONE, "draw", "Draw"),
         (SHADER_SKINNED, "draw", "Draw"),

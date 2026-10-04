@@ -6,7 +6,8 @@
 
 use xpute_core::math::scalar::round;
 
-use super::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
+use super::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
+use super::deck::Decks;
 use super::ground::cell_recess;
 use super::pack::GroundCell;
 use crate::space::pyramid::{EXTENT, GROUND, PAGE_CELLS};
@@ -18,6 +19,12 @@ fn sample_at(t: f64) -> f64 {
     t / CELL_STEP + ELE_PAD as f64 - 0.5
 }
 
+/// Catmull-Rom's four weights at `t` past the second sample.
+fn catmull_rom(t: f64) -> [f64; 4] {
+    let (t2, t3) = (t * t, t * t * t);
+    [-0.5 * t3 + t2 - 0.5 * t, 1.5 * t3 - 2.5 * t2 + 1.0, -1.5 * t3 + 2.0 * t2 + 0.5 * t, 0.5 * t3 - 0.5 * t2]
+}
+
 /// Catmull-Rom over the 4 × 4 padded samples about a texel point, in cells.
 pub fn bicubic(page_ele: &[i16], tx: f64, ty: f64) -> i16 {
     let sx = sample_at(tx);
@@ -26,24 +33,16 @@ pub fn bicubic(page_ele: &[i16], tx: f64, ty: f64) -> i16 {
     let sx0 = sx.floor() as i32;
     let sy0 = sy.floor() as i32;
 
-    let fdx = sx - sx0 as f64;
-    let fdy = sy - sy0 as f64;
-
-    let x2 = fdx * fdx;
-    let x3 = x2 * fdx;
-    let wx = [-0.5 * x3 + x2 - 0.5 * fdx, 1.5 * x3 - 2.5 * x2 + 1.0, -1.5 * x3 + 2.0 * x2 + 0.5 * fdx, 0.5 * x3 - 0.5 * x2];
-
-    let y2 = fdy * fdy;
-    let y3 = y2 * fdy;
-    let wy = [-0.5 * y3 + y2 - 0.5 * fdy, 1.5 * y3 - 2.5 * y2 + 1.0, -1.5 * y3 + 2.0 * y2 + 0.5 * fdy, 0.5 * y3 - 0.5 * y2];
+    let wx = catmull_rom(sx - sx0 as f64);
+    let wy = catmull_rom(sy - sy0 as f64);
 
     let span = ELE_PADDED_SPAN as i32;
-    let e = |idx: i32| page_ele[idx as usize] as f64;
+    let e = |idx: usize| page_ele[idx] as f64;
 
     if sx0 >= 1 && sx0 <= span - 3 && sy0 >= 1 && sy0 <= span - 3 {
         let row = |y: i32| {
-            let idx = y * span + sx0;
-            e(idx - 1) * wx[0] + e(idx) * wx[1] + e(idx + 1) * wx[2] + e(idx + 2) * wx[3]
+            let at = |x: i32| e(ele_index(x as u32, y as u32));
+            at(sx0 - 1) * wx[0] + at(sx0) * wx[1] + at(sx0 + 1) * wx[2] + at(sx0 + 2) * wx[3]
         };
         return round(row(sy0 - 1) * wy[0] + row(sy0) * wy[1] + row(sy0 + 1) * wy[2] + row(sy0 + 2) * wy[3]) as i16;
     }
@@ -54,7 +53,7 @@ pub fn bicubic(page_ele: &[i16], tx: f64, ty: f64) -> i16 {
         let mut row_out = 0.0;
         for (i, wxi) in wx.iter().enumerate() {
             let px = (sx0 - 1 + i as i32).clamp(0, span - 1);
-            row_out += e(py * span + px) * wxi;
+            row_out += e(ele_index(px as u32, py as u32)) * wxi;
         }
         out += row_out * wyj;
     }
@@ -73,7 +72,7 @@ pub fn bound(page_ele: &[i16], [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> [i32; 
             let (mut wlo, mut whi) = (i32::MAX, i32::MIN);
             for y in wy - 1..=wy + 2 {
                 for x in wx - 1..=wx + 2 {
-                    let e = page_ele[(y.clamp(0, span - 1) * span + x.clamp(0, span - 1)) as usize] as i32;
+                    let e = page_ele[ele_index(x.clamp(0, span - 1) as u32, y.clamp(0, span - 1) as u32)] as i32;
                     (wlo, whi) = (wlo.min(e), whi.max(e));
                 }
             }
@@ -85,9 +84,14 @@ pub fn bound(page_ele: &[i16], [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> [i32; 
     [lo, hi]
 }
 
-/// Per `EXTENT` cell, the lowest and highest of the surface (overshoot
-/// included), any deck top and any bore floor. Saturates at i16, about 78 km.
-pub fn extent_of(page_ele: &[i16], decks: &Decks) -> Vec<[i16; 2]> {
+/// A page's own surface's extent: for each of the index lattice's cells
+/// (`EXTENT`), the lowest and highest the ground drawn anywhere in it stands,
+/// in cells — the interpolation's overshoot and the cells' recess included,
+/// so a point anywhere over the cell, a cell's center or a finer cell read
+/// from this page, lies inside it — and the highest any deck over it is.
+/// Saturated at an i16's range, which is some 78 km at the equator and is
+/// never met.
+pub fn extent_of(page_ele: &[i16], cells: &[GroundCell], decks: &Decks) -> Vec<[i16; 2]> {
     let n = GROUND.scale(0).count_in(EXTENT.scale(0)) as f64;
     let side = EXTENT.page_cells();
     (0..side * side)
@@ -105,8 +109,9 @@ pub fn extent_of(page_ele: &[i16], decks: &Decks) -> Vec<[i16; 2]> {
                 let r = cell_recess(cell) as i32;
                 (rlo, rhi) = (rlo.min(r), rhi.max(r));
             }
+            let deck = decks.highest_in([ex, ex + n], [ey, ey + n]).map_or(i32::MIN, i32::from);
             let clamp = |v: i32| v.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
-            [clamp(lo - rhi), clamp(hi - rlo)]
+            [clamp(lo - rhi), clamp((hi - rlo).max(deck))]
         })
         .collect()
 }

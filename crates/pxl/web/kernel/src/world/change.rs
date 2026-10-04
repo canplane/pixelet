@@ -5,12 +5,14 @@
 //! holds (Bevy's change ticks). A wrap of u32 is not handled. A bump also
 //! asks for a frame, since the canvas renders on demand.
 
-use xpute_runtime::ipc::change::{ChangeLog, Revision, Topic};
+use std::collections::HashMap;
+
+use fnv::FnvBuildHasher;
 
 use xpute_runtime::sched::edge::Edge;
 
-use crate::global::Global;
 use crate::kernel::kernel;
+use xpute_runtime::global::Global;
 
 pub const OBJECT_COLUMN: WorldTopic = 0;
 /// Moved by a write to any column the chunk draws, so a chunk reads one
@@ -18,8 +20,8 @@ pub const OBJECT_COLUMN: WorldTopic = 0;
 pub const TIERS_CHUNK: WorldTopic = 1;
 pub const WORLD_TOPICS: WorldTopic = TIERS_CHUNK + 1;
 
-/// `WorldTopic`.
-pub type WorldTopic = Topic;
+pub type WorldTopic = u32;
+pub type Revision = u32;
 
 #[derive(Default)]
 pub struct Revisions {

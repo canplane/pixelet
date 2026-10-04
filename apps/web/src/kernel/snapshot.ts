@@ -7,7 +7,7 @@ import { TreeReader } from "@xpute/core/wire/xtp/mod.ts";
 import { CompassState, DevicePoseStatus, MapStatus, read_snapshot, type Snapshot } from "@/kernel/abi/cmd.spec.ts";
 
 const INITIAL: Snapshot = {
-  map: { status: MapStatus.Idle, is_off_center: false, center: null, page: null },
+  map: { status: MapStatus.Idle, is_off_center: false, center: null },
   location: { status: DevicePoseStatus.Idle, has_location: false, error: null },
   companion: { person_ready: false, pet_ready: false },
   orientation: { status: DevicePoseStatus.Idle, heading: null },
@@ -17,9 +17,9 @@ const INITIAL: Snapshot = {
   zooming: false,
   compass: CompassState.Hidden,
   settings: [],
-  scale_bar: { total_meters: 0, bar_width_px: 0 },
+  m_per_px: 0,
   place: [],
-  object_sizes: [],
+  previews: [],
 };
 
 let snapshot: Snapshot = INITIAL;
@@ -31,6 +31,7 @@ export function set_snapshot(bytes: U8Array): void {
   for (const listener of snapshot_listeners) listener();
 }
 
+/** Calls `listener` with every snapshot the kernel posts from now on. */
 function subscribe_snapshot(listener: () => void): () => void {
   snapshot_listeners.add(listener);
   return () => snapshot_listeners.delete(listener);
@@ -40,7 +41,10 @@ export function kernel_snapshot(): Snapshot {
   return snapshot;
 }
 
-/** `select` must return a primitive or an existing reference; a fresh object renders forever. */
+/** The part of the kernel's snapshot a component shows. A component
+ * re-renders only when what it selects changes, so `select` returns a
+ * primitive or a reference the snapshot already holds: one that builds a
+ * new array or object each call never compares equal and renders forever. */
 export function useKernel<T>(select: (s: Snapshot) => T): T {
-  return select(useSyncExternalStore(subscribe_snapshot, kernel_snapshot));
+  return useSyncExternalStore(subscribe_snapshot, () => select(snapshot));
 }

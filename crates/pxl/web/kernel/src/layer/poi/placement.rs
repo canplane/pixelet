@@ -4,19 +4,18 @@
 //! piece of the layer's cover, read from the page that settles that ground,
 //! standing at a z16 cell's center on the surface a ray down meets first.
 
-use crate::global::Global;
 use crate::layer::billboard::batch::BillboardBatch;
-use crate::layer::billboard::field::BILLBOARD_FLOATS;
 use crate::layer::billboard::selection::select_visible_billboards;
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::layer::poi::badge::{self, Label};
 use crate::layer::poi::enabled;
 use crate::sched::tick::TickContext;
-use crate::world::frame::coord::local_world_origin;
-use crate::world::frame::view::view;
+use crate::world::access::{Access, Detail, Ray};
+use crate::world::frame::view::{ndc_to_px, view};
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer;
 use pxl_render::asset::atlas::NO_SLOT;
+use xpute_runtime::global::Global;
 
 use pxl_spec::bake::poi_page::{PoiPage, POI_LATTICE};
 use pxl_spec::space::pvf3::ivec;
@@ -32,8 +31,9 @@ struct Placement {
     drawn: Vec<u32>,
     /// Nearest the eye first: screen box, label, and where it stands.
     hits: Vec<([f64; 4], Label, Pvf3)>,
-    /// Kept so a settled turn asks the heap for nothing.
-    found: Vec<(Cell, Label, Cell, f64)>,
+    /// What a turn works in, kept so a settled turn asks the heap for
+    /// nothing: each badge's label and where it stands, and the instances
+    /// written for the set.
     labeled: Vec<(Label, Pvf3)>,
     instances: Vec<f32>,
 }
@@ -41,8 +41,7 @@ static PLACEMENT: Global<Placement> = Global::new();
 
 /// None where nothing over it is known.
 fn top_at(at: &Pvf3, level: u32) -> Option<f64> {
-    let mut xy = [0.0; 3];
-    projection::unproject(&mut xy, at.i, at.f);
+    let xy = projection::unproject(at.i, at.f);
     let (high, low) = (REACH.max[2], REACH.min[2]);
     let ray = Ray {
         origin: [xy[0], xy[1], high],
@@ -64,8 +63,8 @@ pub fn step(ctx: &mut TickContext) {
         badge::retain(&HashSet::new());
         return;
     }
-    let origin = local_world_origin();
-    let base = [ivec::to_real(ivec::X(origin)), ivec::to_real(ivec::Y(origin)), ivec::to_real(ivec::Z(origin))];
+    let origin = view().origin;
+    let base = ivec::to_v3(origin);
     let pages = PoiPage::pyramid();
     if crate::world::pyramid::domain::current().is_none() {
         return;
@@ -78,8 +77,8 @@ pub fn step(ctx: &mut TickContext) {
             continue;
         }
         let major_only = chunk.level() > POI_ALL_LEVEL;
-        let Some(src) = pages.source(chunk.page()) else { continue };
-        let Some(poi) = pages.get(src) else { continue };
+        let Some(src) = pages.paging().source(chunk.page()) else { continue };
+        let Some(poi) = pages.paging().get(src) else { continue };
         // Where the source cell is wider than the chunk, its place counts only if it
         // stands on the chunk's ground.
         let (side, cell) = (chunk.column().0, POI_LATTICE.scale(src.level));
@@ -125,7 +124,8 @@ pub fn step(ctx: &mut TickContext) {
         }
     }
     p.batch.reset();
-    let mut labeled = Vec::new();
+    let mut labeled = core::mem::take(&mut p.labeled);
+    labeled.clear();
     for (cell, t) in cells {
         let label = match (t.count, t.place) {
             (1, Some((page, place))) => Label::Place { page, place },
@@ -159,7 +159,8 @@ pub fn step(ctx: &mut TickContext) {
     });
     p.hits.clear();
     p.hits.extend(p.drawn.iter().rev().map(|&i| (p.batch.screen[i as usize], labeled[i as usize].0, labeled[i as usize].1)));
-    let mut instances = Vec::with_capacity(p.drawn.len() * BILLBOARD_FLOATS);
+    let mut instances = core::mem::take(&mut p.instances);
+    instances.clear();
     for &i in &p.drawn {
         let i = i as usize;
         let (sheet, slot) = (billboard_sheet(), badge::slot(labeled[i].0) as u32);
@@ -176,13 +177,13 @@ pub fn step(ctx: &mut TickContext) {
             (badge::ANCHOR / badge::HEIGHT) as f32,
         ]);
     }
-    if p.set.is_none() && instances.is_empty() {
-        return;
+    if p.set.is_some() || !instances.is_empty() {
+        let set = *p.set.get_or_insert_with(|| new_billboard_set(BillboardOrder::Poi));
+        place_billboard_set(set, base);
+        write_billboard_set(set, &instances);
+        ctx.invalidate();
     }
-    let set = *p.set.get_or_insert_with(|| new_billboard_set(BillboardOrder::Poi));
-    place_billboard_set(set, base);
-    write_billboard_set(set, &instances);
-    ctx.invalidate();
+    (p.labeled, p.instances) = (labeled, instances);
 }
 
 /// `ndc` in [−1, 1], y up. A count is also zoomed into, so it comes apart

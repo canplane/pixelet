@@ -3,16 +3,17 @@
 //! How far the orbit gets toward what the controls ask before terrain is in
 //! the way. The controls keep what was asked; the drawn orbit stops short.
 
+use pxl_spec::bake::constant::CELL;
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::v3::{add3, V3};
 use xpute_core::math::scalar::wrap;
 
 use crate::control::camera::config::camera_cfg::view::EYE_CLEARANCE_U;
 use crate::control::camera::orbit::orbit_eye_offset;
 use crate::shell::setting::store::{settings_store, CameraCollisionMode};
-use crate::world::access::{Access, FINEST};
-use crate::world::frame::coord::{canonical_to_local, local_height, local_world_origin, local_world_to_canonical};
+use crate::world::access::{Access, Answer};
+use crate::world::frame::coord::{local_height, local_world_to_canonical};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewTriple {
@@ -40,8 +41,8 @@ pub fn pose(view: ViewTriple, center: Option<&Pvf3>) -> Option<ViewPose> {
     let at = center.copied().unwrap_or(map_center);
     let origin = local_world_origin();
     Some(ViewPose {
-        origin,
-        target: canonical_to_local(&at, origin),
+        origin: crate::world::frame::view::view().origin,
+        target: crate::control::camera::controller::center_local()?,
         dist: view.dist,
         polar: view.polar,
         azimuth: view.azimuth,
@@ -60,10 +61,8 @@ fn required_rise(at: &ViewPose) -> Option<f64> {
 
 /// Rise to the ground `passage` reaches under the eye; none where blocked.
 fn climb_rise(at: &ViewPose) -> Option<f64> {
-    let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
-    let (mut center, mut eye) = (Pvf3::default(), Pvf3::default());
-    local_world_to_canonical(&mut center, &at.target, at.origin);
-    local_world_to_canonical(&mut eye, &std::array::from_fn(|k| at.target[k] + offset[k]), at.origin);
+    let (local, eye) = eye(at);
+    let center = local_world_to_canonical(&at.target, at.origin);
     let access = Access::now();
     let ground = match passage(&center, [offset[0], offset[1]], CELL.index_of(&eye)[2]) {
         Passage::Open(cz) => {
@@ -83,7 +82,15 @@ fn climb_rise(at: &ViewPose) -> Option<f64> {
 
 /// Positive inside the terrain.
 fn penetration(at: &ViewPose) -> Option<f64> {
-    Some(required_rise(at)? - orbit_eye_offset(at.dist, at.polar, at.azimuth)[2])
+    Some(required_rise(at)? - (eye(at).0[2] - at.target[2]))
+}
+
+/// The eye, local and canonical.
+fn eye(at: &ViewPose) -> (V3, Pvf3) {
+    let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
+    let local: V3 = add3(&at.target, &offset);
+    let eye = local_world_to_canonical(&local, at.origin);
+    (local, eye)
 }
 
 /// Testing only where a step lands lets the camera tunnel, since the orbit's

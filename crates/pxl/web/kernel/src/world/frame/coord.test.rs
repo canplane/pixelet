@@ -4,11 +4,12 @@
 // the Z lane's half, where the lanes alone would wrap.
 
 use super::*;
+use pxl_spec::space::pvf3::pvf3;
+use xpute_core::math::rng::SplitMix64;
 
 #[test]
 fn a_height_over_the_ground_is_the_same_from_every_origin() {
-    let mut point = Pvf3::default();
-    projection::project(&mut point, 250_000.0, -90_000.0, 30.25);
+    let point = projection::project(250_000.0, -90_000.0, 30.25);
     let ground = 12.5;
     for origin_z in [0, 4096, 28_672, 32_768, -4096] {
         let origin = ivec::gather(249_856, -94_208, origin_z);
@@ -22,13 +23,8 @@ fn a_height_over_the_ground_is_the_same_from_every_origin() {
 #[test]
 fn a_canonical_point_comes_back_through_floats() {
     let one = pxl_spec::space::pvf3::core::ONE as i64;
-    let mut seed = 0x9e37_79b9_7f4a_7c15_u64;
-    let mut next = |span: i64| {
-        seed ^= seed << 13;
-        seed ^= seed >> 7;
-        seed ^= seed << 17;
-        (seed % (2 * span as u64 + 1)) as i64 - span
-    };
+    let mut rng = SplitMix64::new(0x9e37_79b9_7f4a_7c15);
+    let mut next = |span: i64| (u64::from(rng.next_u32()) % (2 * span as u64 + 1)) as i64 - span;
     let origins = [
         ivec::gather(0, 0, 0),
         ivec::gather(249_856, -94_208, 4096),
@@ -48,12 +44,10 @@ fn a_canonical_point_comes_back_through_floats() {
             let (u, f) = (unit(next(1 << 21)), fraction(next(1 << 21)));
             u * one + f
         });
-        let mut p = Pvf3::default();
-        pvf3::gather(&mut p, comps[0], comps[1], comps[2]);
+        let p = pvf3::gather(comps[0], comps[1], comps[2]);
         for &origin in &origins {
             let local = canonical_to_local(&p, origin);
-            let mut back = Pvf3::default();
-            local_world_to_canonical_nearest(&mut back, &local, origin);
+            let back = local_world_to_canonical_nearest(&local, origin);
             assert_eq!(back, p, "{n}: {comps:?} against {origin}");
         }
     }

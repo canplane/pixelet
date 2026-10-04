@@ -2,6 +2,7 @@
 
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { round } from "@xpute/core/math/scalar.ts";
+import { type Errno, strerror } from "@xpute/core/status/errno.spec.ts";
 import { copyText } from "@platform/save.ts";
 
 import { fieldText, type Frame, GROUPS, groupText, n1, pct, tris } from "./lane.ts";
@@ -14,21 +15,14 @@ const spread = (s: Spread) => `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.ma
 const STARVED_MS = 2000;
 const starved = (ms: number) => (ms >= STARVED_MS ? "  STARVED" : "");
 
+// ---- the words ----
+
+/** Why a task failed: its errno's name, and the number the host refused
+ * with beside it where there is one, which tells one refusal from another;
+ * what that number means is the host's, and nothing reads it. */
 export function failText(fail: u32, detail: u32): string {
-  switch (fail) {
-    case 0x0101:
-      return "network";
-    case 0x0102:
-      return "shell";
-    case 0x0201:
-      return `refused ${detail}`;
-    case 0x0202:
-      return "no_room";
-    case 0x0301:
-      return "decode";
-    default:
-      return "none";
-  }
+  const name = strerror(fail as Errno).split(":")[0];
+  return detail === 0 ? name : `${name} ${detail}`;
 }
 
 /** Set once from profiling, never fed back into scheduling. */

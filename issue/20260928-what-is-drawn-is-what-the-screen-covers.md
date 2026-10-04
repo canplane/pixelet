@@ -1310,3 +1310,78 @@ the one box's whole height from the layer's bound (world/pyramid/domain.rs
 stays as the floor. The size of the primitive drawn and the error it can
 make are not the same thing: a cube twelve pixels across whose error is
 held to six is inside the cell.
+
+## How the samples are drawn: the steps, measured (10-01)
+
+Before a shader is written, the query itself says how many steps a cast
+pays. `pxl-kernel examples/ray_steps.rs` counts what `first_hit` visits
+(world/access.rs `Access::counting`: each region read and each cell
+walked) over real terrain from the tile server, at Namsan, from the
+experiment's three views on an iPhone 13 mini's screen, one ray every three
+points:
+
+| view                      | steps a ray: mean / p50 / p90 / p99 / max | a frame at ratio 3 |
+| ------------------------- | ----------------------------------------- | ------------------ |
+| from above, 1,500 u up    | 18 / 17 / 26 / 35 / 46                    | 50 M               |
+| at 45°, 400 u up          | 27 / 27 / 36 / 44 / 55                    | 75 M               |
+| at street level, 1 u, −5° | 22 / 4 / 87 / 116 / 136                   | 60 M               |
+
+The mean is tens of steps whatever the view, so the walk over the max
+pyramid is not ruled out as a phone's cost. What a GPU pays is not the
+mean: rays run in groups that wait on their longest, so where on the
+screen the long rays lie decides it. Drawn as heatmaps
+(`crates/target/ray_steps/`):
+
+- The steps are near constant in blocks that are the index cells projected
+  onto the screen, and neighbours within a block differ by a few steps: a
+  group pays about what each of its rays pays, except along a block's
+  edge.
+- From above, a disc about the nadir costs more: the finer band of
+  distance, a level more under it.
+- At street level the near ground below the horizon is cheap, a few steps a
+  ray. What is dear is not a line at the horizon but all that lies above
+  the near ground — the far rays and the rays into the sky. Part of that is
+  the dev server's: it serves pages to level 3 only, so a ray past what
+  level 3 covers finds nothing over it resident, cannot be passed over, and
+  walks region by region to its reach. With the top resident, a ray over
+  the highest ground clears there in a few tests. And a ray rising above
+  the highest ground in its reach can meet nothing more, an exit the query
+  does not yet take.
+
+Two things this review corrected:
+
+- **A cell is an angular footprint, not a sample point.** One ray through a
+  cell's centre, its answer spread over the cell, is not the rule: a pole
+  thinner than the cell that the centre ray misses still covers part of
+  it. What the rule asks is a bounded amount of observation a cell — O(1)
+  work that stands conservatively for the cell's footprint — and how that
+  is done (a centre ray with the hierarchy's bounds, corner rays, adaptive
+  subdivision, a cone through the pyramid, reuse over time) is the
+  experiment's to choose. Fixing the primitive at one ray a cell too early
+  would fix the representation before the measurement.
+- **A raster is not bound to the world.** Frustum and occlusion culling,
+  levels of detail and clusters bound a good raster pipeline near the
+  screen too; Nanite is one. What differs is the direction of evaluation: a
+  raster materializes the world's visible geometry and then samples it, an
+  observation starts at the screen's samples and queries the world. This
+  tree already has the second's parts — storage, the query, demand,
+  residency and materialization apart, and a query (`first_hit`) that no
+  renderer owns.
+
+The prior art for drawing from the screen into a heightfield, beside Dick,
+Krüger and Westermann's terrain, Teardown and Aokana above: NovaLogic's
+Comanche (1992), whose Voxel Space engine walked a ray a screen column
+through a height map and drew the column from the nearest hit up, the
+first shipped renderer whose cost was the screen's and not the terrain's;
+and Nanite, which holds a frame's cost to its pixels through clusters
+chosen by their projected error — the same bound reached from the raster's
+side.
+
+So the experiment compares four, on the same pages and views:
+
+| shape                      | what it answers                                    |
+| -------------------------- | -------------------------------------------------- |
+| today's boxes, rasterized  | the baseline                                       |
+| the same as masked faces   | whether the vertices' output was the phone's cost  |
+| a ray a pixel              | the upper bound of observation done by brute force |
+| bounded observation a cell | what this architecture asks for                    |

@@ -8,16 +8,14 @@ use crate::control::camera::controller::map_center;
 use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::store::{device_location_store, DevicePoseStatus};
-use crate::global::Global;
+use xpute_runtime::global::Global;
 
 /// Where the map starts with no fix: Seoul City Hall. Also lights the first
 /// frames and decides day or night before `map_center` exists.
 pub const FALLBACK_G4326: G4326 = [126.978, 37.5665, 0.0];
 
 fn fallback_seed() -> Pvf3 {
-    let mut out = Pvf3::default();
-    epsg4326::project(&mut out, &FALLBACK_G4326);
-    out
+    epsg4326::project(&FALLBACK_G4326)
 }
 
 /// Within a cell: the map center comes back through the camera's floats, not

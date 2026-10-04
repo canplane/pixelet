@@ -3,24 +3,22 @@
 use xpute_core::golden::Golden;
 
 use super::*;
+use xpute_core::math::rng::SplitMix64;
 
 const GOLDEN: &str = include_str!("../../golden/bake/format.tsv");
 
-/// xorshift64, so a page's lanes are the same on every run.
-struct Rng(u64);
+/// So a page's lanes are the same on every run.
+struct Rng(SplitMix64);
 
 impl Rng {
     fn next(&mut self) -> u64 {
-        self.0 ^= self.0 << 13;
-        self.0 ^= self.0 >> 7;
-        self.0 ^= self.0 << 17;
-        self.0
+        u64::from(self.0.next_u32()) << 32 | u64::from(self.0.next_u32())
     }
 }
 
 /// Random lanes, each index cell's lowest under its highest.
 fn page(seed: u64) -> Terrain {
-    let mut rng = Rng(seed);
+    let mut rng = Rng(SplitMix64::new(seed));
     let ele: Vec<i16> = (0..ELE_LANE).map(|_| rng.next() as i16).collect();
     let cells: Vec<GroundCell> = (0..GROUND_LANE).map(|_| rng.next() as GroundCell).collect();
     let extent: Vec<[i16; 2]> = (0..EXTENT_LANE)
@@ -29,13 +27,20 @@ fn page(seed: u64) -> Terrain {
             [a.min(b), a.max(b)]
         })
         .collect();
+    let mut decks = deck::Builder::default();
+    for _ in 0..3 {
+        let points: Vec<([f64; 2], i16, u8)> = (0..4).map(|_| ([(rng.next() % 600) as f64, (rng.next() % 600) as f64], rng.next() as i16, (rng.next() % 2) as u8)).collect();
+        decks.push(points, 1 + (rng.next() % 200) as u8, rng.next() as u8);
+    }
     Terrain {
         ele: ele.into(),
         ground: Ground { cells: cells.into() },
+        decks: decks.finish(),
         index: Index::new(extent, Occupancy::of_bits(0b10101).unwrap()),
     }
 }
 
+/// A record's room, as the kernel's fixed range would give it.
 fn room() -> PageRoom {
     PageRoom {
         cells: vec![0; GROUND_LANE].leak(),
@@ -46,17 +51,19 @@ fn room() -> PageRoom {
             starts: vec![0; deck::MAX_DECKS + 1].leak(),
             points: vec![[0; 2]; deck::MAX_POINTS].leak(),
             tops: vec![0; deck::MAX_POINTS].leak(),
+            piers: vec![0; deck::MAX_POINTS].leak(),
             width: vec![0; deck::MAX_DECKS].leak(),
             kind: vec![0; deck::MAX_DECKS].leak(),
-            form: vec![0; deck::MAX_DECKS].leak(),
-            portal: vec![0; deck::MAX_POINTS].leak(),
         },
     }
 }
 
-/// FNV-1a 64 of a page's bytes, for the golden.
+/// FNV-1a over 64 bits: what the golden holds of a page's bytes, which are
+/// a megabyte.
 fn fnv(bytes: &[u8]) -> u64 {
-    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |h, &b| (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3))
+    let mut h = fnv::FnvHasher::default();
+    std::hash::Hasher::write(&mut h, bytes);
+    std::hash::Hasher::finish(&h)
 }
 
 /// A page round-trips as the golden holds it, in hand and into a record's room.
@@ -67,12 +74,7 @@ fn the_formats_write_and_read_what_the_record_holds() {
     let terrain = encode_terrain(&page).unwrap();
     assert_eq!(format!("{:016x}", fnv(&terrain)), v.s("terrain.fnv"), "the page's bytes");
     assert_eq!(decode_terrain(&terrain).unwrap(), page, "a page reads back as it was written");
-    let room = PageRoom {
-        cells: vec![0; GROUND_LANE].leak(),
-        ele: vec![0; ELE_LANE].leak(),
-        extent: vec![[0; 2]; EXTENT_LANE].leak(),
-        blocks: vec![Block::default(); BLOCK_LANE].leak(),
-    };
+    let room = room();
     assert_eq!(decode_terrain_into(&terrain, room).unwrap(), page, "a page reads into its room as it was written");
 }
 
@@ -81,12 +83,7 @@ fn a_packet_that_is_not_a_page_is_refused() {
     let v = Golden::load(GOLDEN);
     let small = hex::decode(v.s("not_a_page")).unwrap();
     assert!(decode_terrain(&small).is_err());
-    let room = PageRoom {
-        cells: vec![0; GROUND_LANE].leak(),
-        ele: vec![0; ELE_LANE].leak(),
-        extent: vec![[0; 2]; EXTENT_LANE].leak(),
-        blocks: vec![Block::default(); BLOCK_LANE].leak(),
-    };
+    let room = room();
     assert!(decode_terrain_into(&small, room).is_err());
 }
 

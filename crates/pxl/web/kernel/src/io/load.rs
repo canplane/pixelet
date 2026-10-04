@@ -1,7 +1,7 @@
 // pxl-kernel/io/load.rs
 
 //! Shared loading of models and images, so each asset is fetched and parsed
-//! at most once. An asset is a want in the I/O ledger like a page, sharing
+//! at most once. An asset is a want in the request scheduler like a page, sharing
 //! its credits, and stays wanted until it arrives.
 //!
 //! An asset asked for here for the first time becomes a want like any other
@@ -33,8 +33,8 @@ use pxl_render::asset::gltf::{parse_gltf, Gltf};
 use pxl_spec::asset::ingested::Asset;
 use xpute_runtime::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 
-use crate::abi::host::root;
-use crate::global::Global;
+use crate::abi::host::{op, root};
+use crate::host::host_record;
 use crate::io::demand::Ask;
 use crate::io::file::{self, Owner};
 use crate::io::sched::{attempt_of, settle};
@@ -44,6 +44,7 @@ use crate::world::change::{request_world_tick, world_edge};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::abi::handle::Slots;
+use xpute_runtime::global::Global;
 
 /// What an asset is read as.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -235,7 +236,7 @@ pub async fn gltf_task() {
     }
 }
 
-/// The transport failed, not the asset: it is wanted again, and the ledger
+/// The transport failed, not the asset: it is wanted again, and the request scheduler
 /// decides the wait.
 pub fn load_rejected(key: u64) {
     let Some((kind, load)) = ended(key, Outcome::error) else { return };

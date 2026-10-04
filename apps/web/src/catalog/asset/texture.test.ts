@@ -1,4 +1,4 @@
-// @pxl/web/catalog/asset/asset.test.ts
+// @pxl/web/catalog/asset/texture.test.ts
 
 import { assert } from "@std/assert";
 

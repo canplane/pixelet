@@ -4,13 +4,14 @@
 //! consumer reads the same value: asked on unrelated events, it went stale
 //! for hours and consumers could disagree.
 
-use pxl_spec::space::adapter::epsg4326::{self, G4326};
+use pxl_spec::space::adapter::epsg4326::{self};
 
-use crate::global::Global;
-use crate::host::{local_time, now};
+use crate::host::local_time;
 use crate::kernel::kernel;
 use crate::layer::environment::theme::{get_theme_key, Theme};
 use crate::world::change::wake_at;
+use xpute_runtime::clock::now;
+use xpute_runtime::global::Global;
 
 const THEME_CHECK_INTERVAL_MS: f64 = 60_000.0;
 
@@ -20,8 +21,7 @@ use crate::control::navigation::bootstrap::FALLBACK_G4326;
 fn compute_theme_key() -> Theme {
     let (lon, lat) = match crate::control::camera::controller::map_center() {
         Some(center) => {
-            let mut g: G4326 = [0.0; 3];
-            epsg4326::unproject(&mut g, center.i, center.f);
+            let g = epsg4326::unproject(center.i, center.f);
             (g[0], g[1])
         }
         None => (FALLBACK_G4326[0], FALLBACK_G4326[1]),

@@ -1,7 +1,7 @@
 // pxl-kernel/world/paging.test.rs
 //
-// Residency under hostile policies (arbitrary or LIFO serving, maximal
-// preemption, no or flooding speculation, newest-first answers): frames are
+// Residency under hostile policies (arbitrary, LIFO or nearest-first serving,
+// no or flooding speculation, newest-first answers): frames are
 // never exceeded, the floor and the view are never refused a frame, and
 // every demanded page ends up read exactly.
 
@@ -12,7 +12,7 @@ use pxl_spec::bake::poi_page::{Place, PoiPage, POI_LATTICE};
 use super::*;
 use crate::io::demand::Category;
 use crate::io::policy::Policy;
-use crate::io::sched::{Rank, RequestScheduler, Serve};
+use crate::io::sched::{RequestScheduler, Rank, Serve};
 use crate::layer::environment::fog::reach_at;
 use crate::sched::profiler::record::{Failure, Outcome};
 use crate::world::prefetch::{Prefetch, Reach};
@@ -85,7 +85,7 @@ fn mix(x: u64) -> u64 {
 enum Hostile {
     Random(u64),
     Lifo,
-    Preempt,
+    Nearest,
 }
 
 impl Serve for Hostile {
@@ -93,13 +93,9 @@ impl Serve for Hostile {
         let distance = match self {
             Hostile::Random(seed) => (mix(subject ^ seed) >> 11) as f64,
             Hostile::Lifo => -enqueue_ms,
-            Hostile::Preempt => ask.order.near,
+            Hostile::Nearest => ask.order.near,
         };
         Rank { class: 0, distance }
-    }
-
-    fn preempts(&self, _waiting: Rank, _running: Rank) -> bool {
-        matches!(self, Hostile::Preempt)
     }
 
     fn intake(&self) -> u32 {
@@ -112,7 +108,7 @@ impl Serve for Hostile {
 }
 
 fn exact(pyramid: &Pyramid<PoiPage>) -> bool {
-    pyramid.demand().iter().all(|&p| pyramid.source(p).is_some())
+    pyramid.demand().iter().all(|&p| pyramid.paging().source(p).is_some())
 }
 
 /// Holds the invariants every turn until the view is exact and nothing is asked for.
@@ -123,38 +119,44 @@ fn converge<S: Serve>(serve: S, prefetch: &impl Prefetch, allowance: u32) -> Pyr
 }
 
 fn converge_on<S: Serve>(pyramid: &mut Pyramid<PoiPage>, observation: fn() -> Observation, serve: S, prefetch: &impl Prefetch, allowance: u32) {
-    let mut ledger = Ledger::new(serve);
-    ledger.set_credits(4);
+    let mut sched = RequestScheduler::new(serve);
+    sched.set_credits(4);
     let mut out: Vec<u64> = Vec::new();
     let mut resident: HashSet<LevelPage> = HashSet::new();
     let floor = floor_of(&observation());
     for turn in 0..2_000 {
         let at = turn as f64 * 16.0;
-        pyramid.observe(Some(&observation()), core::iter::empty(), &Unknown, &ByBounds { tau: Tau::FINEST }, prefetch, Tau::FINEST, allowance);
+        pyramid.observe(
+            Some(&observation()),
+            None,
+            core::iter::empty(),
+            &[],
+            &Unknown,
+            &ByBounds { tau: Tau::FINEST },
+            prefetch,
+            Tau::FINEST,
+            allowance,
+        );
         if exact(pyramid) && pyramid.wants().is_empty() {
             assert!(floor.iter().all(|&p| pyramid.paging().resident(p)), "the floor is held");
             return;
         }
-        ledger.declare(Category::poi, pyramid.wants(), at);
-        ledger.pump(at);
+        sched.declare(Category::poi, pyramid.wants(), at);
+        sched.pump(at);
         let mut stops = Vec::new();
-        ledger.take_stops(|key| stops.push(key));
+        sched.take_stops(|key| stops.push(key));
         out.retain(|key| !stops.contains(key));
-        ledger.take_started(|key, _, _| out.push(key));
+        sched.take_started(|key, _, _| out.push(key));
         assert!(out.len() <= 4, "no more out than the credits");
         let answered = out.len().div_ceil(2);
         for key in out.split_off(out.len() - answered).into_iter().rev() {
-            let (_, subject) = ledger.attempt_of(key).expect("an attempt out");
+            let (_, subject) = sched.attempt_of(key).expect("an attempt out");
             let p = LevelPage::of_subject(subject);
             pyramid.admit(p, |_| Ok(crowded(p))).expect("a page is made");
-            ledger.settle(key, Outcome::ok, None, Failure::default(), at);
+            sched.settle(key, Outcome::ok, None, Failure::default(), at);
         }
         assert!(pyramid.paging().frames_used() <= FRAMES, "turn {turn}: past the frames");
-        for (p, _) in (0..=TOP_LEVEL).flat_map(|level| pyramid.paging().level(level)).collect::<Vec<_>>() {
-            if pyramid.paging().resident(p) {
-                resident.insert(p);
-            }
-        }
+        resident.extend(pyramid.paging().held().map(|(p, _)| p));
         for &p in floor.iter().filter(|p| resident.contains(p)) {
             assert!(pyramid.paging().resident(p), "turn {turn}: the floor's {p:?} given up");
         }
@@ -164,13 +166,36 @@ fn converge_on<S: Serve>(pyramid: &mut Pyramid<PoiPage>, observation: fn() -> Ob
 
 #[test]
 fn the_view_converges_exact_with_the_reach_prefetched_under_every_order() {
-    let _serial = crate::global::serial();
+    let _serial = crate::serial();
     let reach = Reach { slack: 1.0, margin: 0.0 };
     for allowance in [0, 16, u32::MAX] {
         converge(Policy::standard(), &reach, allowance);
         converge(Hostile::Random(11), &reach, allowance);
         converge(Hostile::Lifo, &reach, allowance);
-        converge(Hostile::Preempt, &reach, allowance);
+        converge(Hostile::Nearest, &reach, allowance);
     }
 }
 
+/// A page with no object reads the one body such pages share: held in
+/// `ABSENT` once it comes, never a frame, and kept only while asked.
+#[test]
+fn an_absent_page_reads_the_shared_body_once_it_comes() {
+    use crate::io::demand::Ask;
+    use pxl_spec::space::pvf3::ivec::gather;
+    let (p, q) = (LevelPage::new(0, gather(1, 2, 0)), LevelPage::new(0, gather(3, 4, 0)));
+    let asks = |pages: &[LevelPage]| pages.iter().map(|&k| (k, Ask::PLAIN)).collect::<HashMap<_, _>>();
+    let mut paging = Paging::<PoiPage>::default();
+    paging.ask(&asks(&[p, q]));
+    paging.absent(p);
+    paging.absent(q);
+    assert!(paging.awaits_shared());
+    assert!(paging.get(p).is_none());
+    paging.ask(&asks(&[p]));
+    paging.adopt_shared(PoiPage::default());
+    assert!(paging.get(p).is_some() && paging.get(q).is_none());
+    assert!(!paging.awaits_shared());
+    paging.ask(&asks(&[p, q]));
+    paging.absent(q);
+    assert!(paging.get(q).is_some());
+    assert_eq!(paging.frames_used(), 0);
+}

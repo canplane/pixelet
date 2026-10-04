@@ -5,16 +5,12 @@
 
 use std::collections::HashMap;
 
-use postgres::Client;
-use pxl_spec::bake::constant::{CELL_PER_M, ELE_PADDED_SPAN, XY_CELL_PER_M};
+use pxl_spec::bake::constant::{ELE_PADDED_SPAN, U_PER_CELL};
 use pxl_spec::bake::surface::bicubic;
 use pxl_spec::space::adapter::epsg3857;
+use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m};
 use pxl_spec::space::indexer::L3_IDX;
-use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::Pvf3;
-
-use crate::deck::source::fan;
-use crate::elevation::Raster;
+use pxl_spec::space::pvf3::ivec::IVec;
 
 /// Heights at points from the pages' surfaces, as the client's
 /// `ground_ele_at` reads them; a point's page must be held.

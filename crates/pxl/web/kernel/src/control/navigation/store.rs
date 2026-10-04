@@ -4,7 +4,7 @@ use pxl_spec::space::adapter::epsg4326;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 
 use crate::control::sensor::store::device_location_store;
-use crate::global::Global;
+use xpute_runtime::global::Global;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct MapNavigation {
@@ -15,11 +15,7 @@ pub struct MapNavigation {
 static OFF_CENTER: Global<bool> = Global::new();
 
 fn device_coord() -> Option<Pvf3> {
-    device_location_store().location.map(|location| {
-        let mut out = Pvf3::default();
-        epsg4326::project(&mut out, &location.coords);
-        out
-    })
+    device_location_store().location.map(|location| epsg4326::project(&location.coords))
 }
 
 /// Whether the map center has wandered off the device, as of this turn.
@@ -39,8 +35,7 @@ pub fn map_navigation_step() {
         (Some(center), Some(device)) => {
             // PVF3 X wraps a full world period, so the difference is short across the
             // antimeridian.
-            let mut delta = Pvf3::default();
-            pvf3::sub(&mut delta, &device, &center);
+            let delta = pvf3::sub(&device, &center);
             let dx = pvf3::to_real(pvf3::X(&delta));
             let dy = pvf3::to_real(pvf3::Y(&device) - pvf3::Y(&center));
             let dist = (dx * dx + dy * dy).sqrt();

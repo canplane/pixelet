@@ -2,8 +2,9 @@
 
 use std::collections::BTreeMap;
 
+use crate::coverage::Coverage;
 use postgres::Client;
-use pxl_geo_spec::overture::properties::category_named;
+use pxl_geo_spec::overture::properties::{category_named, CATEGORY_SQL};
 use pxl_spec::bake::poi_page::{self, kind_of, Place, PoiPage, POI_LATTICE};
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
@@ -34,8 +35,7 @@ pub fn leaves(client: &mut Client, within: Option<IVec>) -> Result<BTreeMap<IVec
     .map_err(|e| e.to_string())?;
     let mut places: BTreeMap<IVec, Vec<(Pvf3, String, u8)>> = BTreeMap::new();
     for row in rows {
-        let mut at = Pvf3::default();
-        epsg3857::project(&mut at, row.get(0), row.get(1), 0.0);
+        let at = epsg3857::project(row.get(0), row.get(1), 0.0);
         let leaf = POI_LATTICE.cell_of(0, &at).page();
         if within.is_some_and(|w| leaf.page != w) {
             continue;

@@ -5,18 +5,16 @@
 //! numbers to the profiler.
 
 use pxl_spec::space::pvf3::ivec;
+use pxl_spec::space::v3::sub3;
 use xpute_core::math::scalar::round;
 use xpute_runtime::sched::edge::{notified, yield_if_spent};
 
-use crate::global::Global;
-use crate::host::now;
 use crate::io::sched::pending_count;
 use crate::kernel::{kernel, with_world};
 use crate::layer::decor::build::DecorHide;
 use crate::layer::environment::state::globe;
 use crate::sched::profiler::record::{
-    profiler_record_frame, profiler_take_rings, CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample, TurnSample, WorkSample,
-    LEVELS,
+    profiler_record_frame, profiler_recording, profiler_take_rings, CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample, TurnSample, WorkSample, MB,
 };
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::world::change::{request_world_tick, world_edge};
@@ -26,12 +24,10 @@ use crate::world::frame::view::{globe_anchor_local, view, view_resize};
 use crate::world::pyramid::Layer;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_page::PoiPage;
-use pxl_spec::space::pyramid::TOP_LEVEL;
-
-const MB: f64 = 1_048_576.0;
+use xpute_runtime::clock::now;
+use xpute_runtime::global::Global;
 
 const BOX_TRIANGLES: f64 = 12.0;
-const _: () = assert!(LEVELS == crate::world::chunk::table::LEVELS, "a lane a level for every level the census counts");
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct HostFrameStat {
@@ -58,6 +54,7 @@ fn core_tick() -> &'static mut CoreTick {
     })
 }
 
+/// The shell's numbers for the frame just drawn.
 pub fn set_host_frame_stat(gpu: GpuSample, device: DeviceSample) {
     let host = &mut core_tick().host;
     (host.gpu, host.device) = (gpu, device);
@@ -124,25 +121,20 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     view_resize(ctx.state.width, ctx.state.height);
     let v = view();
 
-    let origin = [ivec::to_real(ivec::X(v.origin)), ivec::to_real(ivec::Y(v.origin)), ivec::to_real(ivec::Z(v.origin))];
+    let origin = ivec::to_v3(v.origin);
 
     let anchor = globe_anchor_local();
-    let mut planes = v.planes;
-    for p in planes.as_chunks_mut::<4>().0 {
-        p[3] += p[0] * anchor[0] + p[1] * anchor[1] + p[2] * anchor[2];
-    }
     let e = v.pose.eye;
     let frame = Frame {
         anchor,
         origin,
         eye: v.eye_at(),
-        planes,
-        camera: [e[0] - anchor[0], e[1] - anchor[1], e[2] - anchor[2]],
+        frustum: v.frustum.about(anchor),
+        camera: sub3(&e, &anchor),
         delta_s: ctx.delta,
         remaining_ms: ctx.budget.remaining(),
         hard_slack_ms: HARD_SLACK_MS,
-        retain_budget_bytes: RETAIN_BUDGET_BYTES(),
-        center_z: ivec::to_real(ivec::Z(v.origin)) + anchor[2],
+        center_z: origin[2] + anchor[2],
         globe: Some(globe()),
     };
 
@@ -152,11 +144,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     {
         let k = kernel();
         let edits = crate::layer::object::store::render_edits();
-        let hide = edits
-            .hide
-            .filter(|_| edits.hide_in.1)
-            .map(DecorHide::Placed)
-            .or(crate::layer::decor::cell::scattered_hide().map(DecorHide::Scattered));
+        let hide = edits.hide.filter(|_| edits.hide_in.1);
         crate::layer::decor::cell::step(crate::layer::decor::build::kinds(), &k.objects, &mut k.sched.draw, hide, frame.eye);
     }
     crate::layer::poi::placement::step(ctx);
@@ -193,21 +181,23 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     let Some(chunks_ms) = c.visible_pass else { return };
     let frame_t0 = ctx.budget.t0;
     let census = kernel().sched.census;
-    // Taken whether or not recording, so a recording starts from now.
+    // What is counted since the last sample is taken whether or not a
+    // recording keeps it, so a recording starts from now.
     let counts = kernel().sched.take_counts();
     let rings = profiler_take_rings();
     let work = work_sample(c, &census);
     let record_refused = Terrain::pyramid().take_refusals() as f64;
+    // The rest is measured only for a recording to keep.
     if !profiler_recording() {
         return;
     }
     let host = c.host.clone();
     let mut pages = PageSample::default();
-    for (level, n) in pages.by_level.iter_mut().enumerate() {
-        *n = Terrain::pyramid().paging().level(level as u32).count() as f64;
+    for (p, _) in Terrain::pyramid().paging().held() {
+        pages.by_level[p.level as usize] += 1.0;
     }
     pages.total = pages.by_level.iter().sum();
-    pages.poi = (0..=TOP_LEVEL).map(|level| PoiPage::pyramid().paging().level(level).count() as f64).sum();
+    pages.poi = PoiPage::pyramid().paging().held().count() as f64;
     let mut gpu = host.gpu;
     for (tris, boxes) in gpu.level_tris.iter_mut().zip(census.level_boxes) {
         *tris = boxes as f64 * BOX_TRIANGLES;
@@ -240,8 +230,8 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         },
         pages,
         heap: heap_sample(),
-        rings: profiler_take_rings(),
-        work: work_sample(c, &census),
+        rings,
+        work,
         q_terrain: pending_count(Terrain::CATEGORY) as f64,
         q_poi: pending_count(PoiPage::CATEGORY) as f64,
         stale: StaleSample {
@@ -255,9 +245,9 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         turn: TurnSample::default(),
         cover: {
             let (cover, _) = crate::world::pyramid::cover::cover::<Terrain>();
-            // Cutting the target here costs something only when the view is past its arena.
-            let rule = crate::world::pyramid::domain::cut_at(0).map_or(0.0, |(_, cut)| cut.pieces().len() as f64);
             let domain = crate::world::pyramid::domain::current();
+            // NaN: step 0 is past the arena
+            let rule = domain.map_or(0.0, |d| d.counted(0).map_or(f64::NAN, f64::from));
             CoverSample {
                 rule,
                 drawn: cover.drawn.len() as f64,
@@ -268,7 +258,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
             commit_left: census.commit_left as f64,
             mount_left: census.refused as f64,
             mount_full: (census.refused > 0) as u32 as f64,
-            record_refused: Terrain::pyramid().take_refusals() as f64,
+            record_refused,
         },
     });
 }

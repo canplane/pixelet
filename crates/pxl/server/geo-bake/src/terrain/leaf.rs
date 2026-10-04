@@ -23,8 +23,7 @@ use crate::util::{pack, Level};
 /// From `SELECT ST_Extent(ST_Transform(rast::geometry, 4326)) FROM elevation_raster`.
 pub const SW: [f64; 2] = [123.9998611, 33.000244913560735];
 pub const NE: [f64; 2] = [131.9997935265517, 39.000138899999996];
-
-pub const OCEAN_KEY: &str = "_ocean";
+pub use pxl_spec::bake::format::OCEAN_KEY;
 
 const HAS_LAND_SQL: &str = "
   SELECT t.ord, EXISTS (
