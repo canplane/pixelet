@@ -4,14 +4,14 @@
 //! drawn chunk, read from the page that settles that ground,
 //! standing at a z16 cell's center on the surface a ray down meets first.
 
+use crate::control::camera::controller::units_per_px_at;
 use crate::layer::billboard::batch::BillboardBatch;
 use crate::layer::billboard::field::billboard_instance;
 use crate::layer::billboard::selection::select_visible_billboards;
 use crate::layer::billboard::sheet::{new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::layer::poi::badge::{self, Label};
-use crate::control::camera::controller::units_per_px_at;
-use crate::layer::poi::{enabled, rank_of, units_at_zoom};
-use crate::param::{POI_ALL_ZOOM, POI_MAJOR_RANK, POI_MAJOR_ZOOM};
+use crate::layer::poi::{enabled, rank_of, ALL_UNITS_PER_PX, MAJOR_UNITS_PER_PX};
+use crate::param::POI_MAJOR_RANK;
 use crate::sched::tick::TickContext;
 use crate::world::access::{Access, Detail, Ray};
 use crate::world::frame::view::{ndc_to_px, view};
@@ -56,9 +56,9 @@ enum Shown {
 }
 
 fn shown_at(units_per_px: f64) -> Option<Shown> {
-    if units_per_px <= units_at_zoom(POI_ALL_ZOOM) {
+    if units_per_px <= ALL_UNITS_PER_PX {
         Some(Shown::All)
-    } else if units_per_px <= units_at_zoom(POI_MAJOR_ZOOM) {
+    } else if units_per_px <= MAJOR_UNITS_PER_PX {
         Some(Shown::Major)
     } else {
         None
@@ -131,7 +131,8 @@ pub fn step(ctx: &mut TickContext) {
                     .filter(|s| s.1 <= POI_MAJOR_RANK)
                     .min_by_key(|s| s.1)
                     .map(|(place, _, at)| (Label::Place { page: src, place }, cell.inner_at(GROUND, 0, at)));
-                let mid = projection::unproject(cell.mid().i, cell.mid().f);
+                let mid = cell.mid();
+                let mid = projection::unproject(mid.i, mid.f);
                 for (shown, (label, ground)) in [(Shown::All, all)].into_iter().chain(major.map(|m| (Shown::Major, m))) {
                     if m == 0 && Chunk::of(chunk.level(), &ground.mid()).column() != chunk.column() {
                         continue;

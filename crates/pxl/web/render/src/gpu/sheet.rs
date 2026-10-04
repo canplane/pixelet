@@ -6,7 +6,7 @@
 
 use crate::asset::atlas::PAD;
 use crate::frame::shader::record::PIPELINE_SHEET;
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, texture_usage, Gpu, Stamp};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, room, texture_usage, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::surface::DPR_MAX;
@@ -119,13 +119,19 @@ impl SheetPainter {
         }
     }
 
-    /// False, and nothing recorded, while a line of its text is not drawn yet.
+    /// False, and nothing recorded, while a line of its text is not drawn yet
+    /// or its pixels do not fit this turn's stream (`room`).
     #[allow(clippy::too_many_arguments)]
     pub fn paint(&self, g: &Gpu, encoder: u32, sheet: u32, rect: [u32; 4], sketch: &Sketch, text: TextOf, made: &mut Vec<u32>) -> bool {
         let mut rasters: Vec<Raster<'static>> = Vec::with_capacity(sketch.lines.len());
         for line in &sketch.lines {
             let Some(r) = text(line.font, line.color, &line.text) else { return false };
             rasters.push(r);
+        }
+        // The text's pixels and the shapes', which go into the stream whole.
+        let payload = rasters.iter().map(|r| r.pixels.len()).sum::<usize>() + (sketch.shapes.len() + rasters.len()) * SHAPE_FLOATS * 4;
+        if !room(payload as u32) {
+            return false;
         }
         let [x, y, w, h] = rect;
 

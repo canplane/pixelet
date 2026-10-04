@@ -84,6 +84,10 @@
           "description": "Adds detailed contact shadows to corners and crevices for greater depth. This is the most demanding option because it processes the entire screen."
         }
       },
+      "shadows": {
+        "label": "Shadows",
+        "description": "The sun casts shadows from the terrain, objects and characters onto the ground."
+      },
       "rim_light": {
         "label": "Rim Light",
         "description": "Adds a subtle highlight around the edges of blocks, decor and characters to make them stand out from the background."
@@ -185,7 +189,10 @@
     }
   },
   "decor": {
-    "tree": "Tree"
+    "tree": "Tree",
+    "boat": "Boat",
+    "car": "Car",
+    "train": "Train"
   },
   "drawer": {
     "title": "Drawer",
@@ -200,6 +207,10 @@
       "water": "Water",
       "structure": "Buildings",
       "transport": "Transport"
+    },
+    "decor_sections": {
+      "nature": "Nature",
+      "vehicle": "Vehicles"
     },
     "character": {
       "person_label": "Character",

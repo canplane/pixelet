@@ -1,14 +1,13 @@
 // @pxl/web/feature/drawer/modal.tsx
 
-import { useState } from "react";
+import { createContext, useContext, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from "react-native";
 
-import type { u8 } from "@xpute/core/abi/word.ts";
-import { type ChannelName, decorKinds, type PlaceableCube, placeableCubeChannel, placeableCubeId, placeableCubes } from "@/catalog/cell/mod.ts";
+import type { f64, u8 } from "@xpute/core/abi/word.ts";
+import { decorKinds, decorSection, type PlaceableCube, placeableCubeChannel, placeableCubeId, placeableCubes } from "@/catalog/cell/mod.ts";
 
-import { heldCube, useInHand, useUiStore } from "@/app/store/ui.ts";
-import { useKernel } from "@/kernel/shell.ts";
+import { useInHand, useUiStore } from "@/app/store/ui.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { Panel } from "@platform/panel.tsx";
 import { Glyph } from "@/shared/ui/glyph.tsx";
@@ -20,61 +19,116 @@ import { CharacterPicker } from "@/feature/character/picker.tsx";
 import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/catalog/cell/swatch.tsx";
 import { LABEL } from "@platform/palette.ts";
 
-/** In the catalog's order. */
-const SECTIONS = new Map<ChannelName, PlaceableCube[]>();
-for (const cube of placeableCubes) {
-  const section = placeableCubeChannel(cube);
-  SECTIONS.set(section, [...(SECTIONS.get(section) ?? []), cube]);
+/** Each section's items, in the catalog's order. */
+function sectioned<S, T>(items: readonly T[], sectionOf: (item: T) => S): Map<S, T[]> {
+  const sections = new Map<S, T[]>();
+  for (const item of items) sections.set(sectionOf(item), [...(sections.get(sectionOf(item)) ?? []), item]);
+  return sections;
 }
+const SECTIONS = sectioned(placeableCubes, placeableCubeChannel);
+const DECOR_SECTIONS = sectioned(decorKinds, decorSection);
 
-// A press lands on 44 (decision/20260928-three-sizes-of-a-control.md); a circle cut a block's texture away, so a rounded square.
+// A press lands on 44 at least (decision/20260928-three-sizes-of-a-control.md); a circle cut a block's texture away, so a rounded square.
 const GRID_GAP = 4;
 const LIT_SCALE = 1.05;
 const LIT_INK = 2;
-/** Lit, a tile reaches no further than halfway into the gap: 40. */
-const TILE = (chrome.target + GRID_GAP - 2 * (1 + LIT_INK)) / LIT_SCALE;
-const TILE_RADIUS = 12;
+const ITEM_RADIUS = 12;
 
-/** Pictures only: names under every tile read as a list. */
-function GridButton({ label, active, onPress, children }: { label: string; active: boolean; onPress: () => void; children: React.ReactNode }) {
+/** Lit, an item reaches no further than halfway into the gap: a cell's `ITEM_SLOPE` plus `ITEM_BASE`. */
+const ITEM_SLOPE = 1 / LIT_SCALE;
+const ITEM_BASE = (GRID_GAP - 2 * (1 + LIT_INK)) / LIT_SCALE;
+function itemOf(cell: f64): f64 {
+  return ITEM_SLOPE * cell + ITEM_BASE;
+}
+
+/**
+ * As many columns as fit a target each, the cells sized so the outer items'
+ * edges meet the row's, as the other tabs' content does: the cells overhang by
+ * the margin an item keeps inside its cell.
+ */
+function Grid({ head, children }: { head: React.ReactNode; children: (cell: f64) => React.ReactNode }) {
+  const [width, setWidth] = useState(0);
+  const columns = Math.max(1, Math.floor((width + GRID_GAP) / (chrome.target + GRID_GAP)));
+  const cell = width > 0 ? (width - (columns - 1) * GRID_GAP - ITEM_BASE) / (columns - 1 + ITEM_SLOPE) : chrome.target;
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} aria-selected={active} style={styles.cell}>
+    <View style={styles.section} onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}>
+      {head}
+      <View style={[styles.grid, { marginHorizontal: -(cell - itemOf(cell)) / 2 }]}>{children(cell)}</View>
+    </View>
+  );
+}
+
+const TIP_POINT = 5;
+/** Room for the longest name, centered on the item. */
+const TIP_SPAN = 240;
+const TIP_FILL = "rgba(0, 0, 0, 0.72)";
+const TIP_PAD_Y = 5;
+/** A pill: ends rounded by half its height. */
+const TIP_RADIUS = (textStyle.notice.lineHeight + 2 * TIP_PAD_Y) / 2;
+
+/** Where an item's name is drawn: the sheet's top layer, over its bar, which a name inside the scroll could not reach. */
+interface Naming {
+  show: (label: string, item: View) => void;
+  hide: () => void;
+}
+const NamingContext = createContext<Naming | null>(null);
+
+interface Named {
+  label: string;
+  x: f64;
+  y: f64;
+}
+
+/** Pictures only: names under every item read as a list. A press names it above the finger. */
+function Item({ label, active, cell, onPress, children }: { label: string; active: boolean; cell: f64; onPress: () => void; children: React.ReactNode }) {
+  const naming = useContext(NamingContext);
+  const ref = useRef<View>(null);
+  return (
+    <Pressable
+      ref={ref}
+      onPress={onPress}
+      onPressIn={() => ref.current && naming?.show(label, ref.current)}
+      onPressOut={() => naming?.hide()}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      aria-selected={active}
+      style={[styles.cell, { width: cell, height: cell }]}
+    >
       {children}
     </Pressable>
   );
 }
 
-function SectionHead({ title, held }: { title?: string; held: string | null }) {
-  if (title === undefined && held === null) return null;
+function NameTip({ named, sheetHeight }: { named: Named; sheetHeight: f64 }) {
   return (
-    <View style={styles.sectionHead}>
-      <SectionTitle>{title}</SectionTitle>
-      {held !== null && <Text numberOfLines={1} style={styles.held}>{held}</Text>}
+    <View pointerEvents="none" style={[styles.tipAnchor, { left: named.x - TIP_SPAN / 2, bottom: sheetHeight - named.y }]}>
+      <Text numberOfLines={1} style={styles.tip}>{named.label}</Text>
+      <View style={styles.tipPoint} />
     </View>
   );
 }
 
-function CubeSwatchButton({ cube, onPick }: { cube: PlaceableCube; onPick: (cube: PlaceableCube) => void }) {
+function CubeItem({ cube, cell, onPick }: { cube: PlaceableCube; cell: f64; onPick: (cube: PlaceableCube) => void }) {
   const { t } = useTranslation();
   const active = useInHand({ tool: ActiveTool.Object, cube });
 
   return (
-    <GridButton label={cubeLabel(t, cube)} active={active} onPress={() => onPick(cube)}>
-      <CubeSwatch cube={cube} size={TILE} radius={TILE_RADIUS} style={active ? styles.markOn : styles.markOff} />
-    </GridButton>
+    <Item label={cubeLabel(t, cube)} active={active} cell={cell} onPress={() => onPick(cube)}>
+      <CubeSwatch cube={cube} size={itemOf(cell)} radius={ITEM_RADIUS} style={active ? styles.markOn : styles.markOff} />
+    </Item>
   );
 }
 
-function DecorGridButton({ kind, onPick }: { kind: u8; onPick: (kind: u8) => void }) {
+function DecorItem({ kind, cell, onPick }: { kind: u8; cell: f64; onPick: (kind: u8) => void }) {
   const { t } = useTranslation();
   const active = useInHand({ tool: ActiveTool.Decor, kind });
 
   return (
-    <GridButton label={decorLabel(t, kind)} active={active} onPress={() => onPick(kind)}>
-      <View style={[styles.decor, active ? [styles.markOn, styles.decorOn] : styles.markOff]}>
+    <Item label={decorLabel(t, kind)} active={active} cell={cell} onPress={() => onPick(kind)}>
+      <View style={[styles.decor, { width: itemOf(cell), height: itemOf(cell) }, active ? [styles.markOn, styles.decorOn] : styles.markOff]}>
         <Glyph glyph={decorGlyph(kind)} size={chrome.glyph} color={LABEL.primary} />
       </View>
-    </GridButton>
+    </Item>
   );
 }
 
@@ -90,9 +144,15 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<DrawerTab>(DrawerTab.Cube);
   const selectCube = useUiStore.getState().selectCube;
   const selectDecor = useUiStore.getState().selectDecor;
-  const holding = useKernel((s) => s.holding);
-  const held = heldCube(holding);
-  const heldSection = holding.tool === ActiveTool.Object ? placeableCubeChannel(held) : null;
+  const sheet = useRef<View>(null);
+  const [sheetHeight, setSheetHeight] = useState(0);
+  const [named, setNamed] = useState<Named | null>(null);
+  const naming = useMemo<Naming>(() => ({
+    show: (label, item) => {
+      if (sheet.current) item.measureLayout(sheet.current, (x, y, w) => setNamed({ label, x: x + w / 2, y }));
+    },
+    hide: () => setNamed(null),
+  }), []);
 
   function pickCube(cube: PlaceableCube): void {
     selectCube(cube);
@@ -106,55 +166,75 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Panel label={t("drawer.title")} onClose={onClose} half>
-      <PanelBody
-        bar={
-          <PanelBar onClose={onClose}>
-            <Segmented
-              value={tab}
-              onChange={setTab}
-              segments={[
-                { value: DrawerTab.Cube, label: t("drawer.tabs.cube") },
-                { value: DrawerTab.Decor, label: t("drawer.tabs.decor") },
-                { value: DrawerTab.Character, label: t("drawer.tabs.character") },
-              ]}
-            />
-          </PanelBar>
-        }
-      >
-        <PanelScroll key={tab}>
-          {tab === DrawerTab.Cube && [...SECTIONS].map(([section, cubes]) => (
-            <View key={section} style={styles.section}>
-              <SectionHead title={t(`drawer.sections.${section}`)} held={section === heldSection ? cubeLabel(t, held) : null} />
-              <View style={styles.grid}>
-                {cubes.map((cube) => <CubeSwatchButton key={placeableCubeId(cube)} cube={cube} onPick={pickCube} />)}
-              </View>
-            </View>
-          ))}
+      <View ref={sheet} style={styles.sheet} onLayout={(e: LayoutChangeEvent) => setSheetHeight(e.nativeEvent.layout.height)}>
+        <NamingContext.Provider value={naming}>
+          <PanelBody
+            bar={
+              <PanelBar onClose={onClose}>
+                <Segmented
+                  value={tab}
+                  onChange={setTab}
+                  segments={[
+                    { value: DrawerTab.Cube, label: t("drawer.tabs.cube") },
+                    { value: DrawerTab.Decor, label: t("drawer.tabs.decor") },
+                    { value: DrawerTab.Character, label: t("drawer.tabs.character") },
+                  ]}
+                />
+              </PanelBar>
+            }
+          >
+            <PanelScroll key={tab}>
+              {tab === DrawerTab.Cube &&
+                [...SECTIONS].map(([section, cubes]) => (
+                  <Grid key={section} head={<SectionTitle>{t(`drawer.sections.${section}`)}</SectionTitle>}>
+                    {(cell) => cubes.map((cube) => <CubeItem key={placeableCubeId(cube)} cube={cube} cell={cell} onPick={pickCube} />)}
+                  </Grid>
+                ))}
 
-          {tab === DrawerTab.Decor && (
-            <View style={styles.section}>
-              <SectionHead held={holding.tool === ActiveTool.Decor ? decorLabel(t, holding.decor) : null} />
-              <View style={styles.grid}>
-                {decorKinds.map((kind) => <DecorGridButton key={kind} kind={kind} onPick={pickDecor} />)}
-              </View>
-            </View>
-          )}
+              {tab === DrawerTab.Decor &&
+                [...DECOR_SECTIONS].map(([section, kinds]) => (
+                  <Grid key={section} head={<SectionTitle>{t(`drawer.decor_sections.${section}`)}</SectionTitle>}>
+                    {(cell) => kinds.map((kind) => <DecorItem key={kind} kind={kind} cell={cell} onPick={pickDecor} />)}
+                  </Grid>
+                ))}
 
-          {tab === DrawerTab.Character && <CharacterPicker />}
-        </PanelScroll>
-      </PanelBody>
+              {tab === DrawerTab.Character && <CharacterPicker />}
+            </PanelScroll>
+          </PanelBody>
+        </NamingContext.Provider>
+        {named && <NameTip named={named} sheetHeight={sheetHeight} />}
+      </View>
     </Panel>
   );
 }
 
 const styles = StyleSheet.create({
   section: { gap: 8 },
-  sectionHead: { flexDirection: "row", alignItems: "baseline", gap: 8 },
-  held: { flex: 1, textAlign: "right", ...textStyle.caption, color: LABEL.primary },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: GRID_GAP },
-  cell: { width: chrome.target, height: chrome.target, alignItems: "center", justifyContent: "center" },
+  cell: { alignItems: "center", justifyContent: "center" },
+  sheet: { flex: 1 },
+  tipAnchor: { position: "absolute", width: TIP_SPAN, alignItems: "center", paddingBottom: 2 },
+  tip: {
+    ...textStyle.notice,
+    color: color.white,
+    backgroundColor: TIP_FILL,
+    borderRadius: TIP_RADIUS,
+    paddingHorizontal: 12,
+    paddingVertical: TIP_PAD_Y,
+    overflow: "hidden",
+  },
+  tipPoint: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: TIP_POINT,
+    borderRightWidth: TIP_POINT,
+    borderTopWidth: TIP_POINT,
+    borderLeftColor: "transparent",
+    borderRightColor: "transparent",
+    borderTopColor: TIP_FILL,
+  },
   markOff: { boxShadow: `0 0 0 1px ${hairline}` },
   markOn: { boxShadow: heldRing(color.ground, color.black, LIT_INK), transform: [{ scale: LIT_SCALE }] },
-  decor: { width: TILE, height: TILE, borderRadius: TILE_RADIUS, alignItems: "center", justifyContent: "center" },
+  decor: { borderRadius: ITEM_RADIUS, alignItems: "center", justifyContent: "center" },
   decorOn: { backgroundColor: color.faint },
 });

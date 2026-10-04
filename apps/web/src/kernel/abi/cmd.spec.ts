@@ -183,7 +183,8 @@ export const enum PermissionAnswer {
   Failed = 3,
 }
 
-/** The map's loading lifecycle. */
+/** Whether the view shows any ground: Loading while the screen has none,
+ * on a first load or after a jump, Idle before there is a view. */
 export const enum MapStatus {
   Idle = 0,
   Loading = 1,

@@ -141,7 +141,6 @@ export const SETTINGS = {
     kind: "toggle",
     default: false,
     section: "lighting",
-    dev: true,
     cost: "high",
   },
   /** The pixels the world is filled at, the GPU's largest cost: two to a
@@ -247,6 +246,16 @@ export const SETTINGS_SHIPPED = {
     options: ["off", "corner", "screen"],
     costs: ["", "low", "high"],
     section: "lighting",
+  },
+  /** The sun's shadow map (crates/pxl/web/render/src/gpu/shadow.rs): the world drawn once more
+   * from the sun each frame, depth only, and a 3x3 compare per fragment;
+   * 16 MB of map on a desktop, 4 on a phone. */
+  shadows: {
+    key: 10 as number,
+    kind: "toggle",
+    default: false,
+    section: "lighting",
+    cost: "high",
   },
   /** The pixels the world is filled at, the GPU's largest cost: two to a
    * CSS pixel is four times the fragments of one. RESOLUTION_MODES says each. */

@@ -575,6 +575,11 @@ impl Scheduler {
         ))
     }
 
+    /// Whether the last frame drew any ground on screen.
+    pub fn shows_ground(&self) -> bool {
+        self.zoom_boxes.iter().any(|&n| n > 0)
+    }
+
     pub fn drawn_revision(&self) -> u32 {
         self.drawn_revision
     }

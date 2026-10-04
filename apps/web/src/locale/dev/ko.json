@@ -1,11 +1,5 @@
 {
   "settings": {
-    "lighting": {
-      "shadows": {
-        "label": "그림자",
-        "description": "지형, 오브젝트, 캐릭터가 햇빛을 받아 땅에 그림자를 드리웁니다."
-      }
-    },
     "navigation": {
       "surface_follow": {
         "label": "표면 따라가기",

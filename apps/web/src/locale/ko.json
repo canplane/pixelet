@@ -84,6 +84,10 @@
           "description": "구석과 틈새까지 세밀한 음영을 더해 입체감을 높입니다. 화면 전체를 처리해 부담이 가장 큽니다."
         }
       },
+      "shadows": {
+        "label": "그림자",
+        "description": "지형, 오브젝트, 캐릭터가 햇빛을 받아 땅에 그림자를 드리웁니다."
+      },
       "rim_light": {
         "label": "림 라이트",
         "description": "블록과 데코, 캐릭터의 윤곽에 은은한 하이라이트를 더해 배경과 선명하게 구분합니다."
@@ -121,72 +125,6 @@
       "section_caption": "지도를 끌어 중심을 옮길 때의 동작을 설정합니다."
     }
   },
-  "cubes": {
-    "block": {
-      "white": "흰색",
-      "grey": "회색",
-      "dark_grey": "진회색",
-      "black": "검정",
-      "red": "빨강",
-      "orange": "주황",
-      "brown": "갈색",
-      "yellow": "노랑",
-      "green": "초록",
-      "dark_green": "진초록",
-      "cyan": "시안",
-      "blue": "파랑",
-      "violet": "보라",
-      "magenta": "마젠타",
-      "pink": "분홍"
-    },
-    "land": {
-      "bare": "맨땅",
-      "sea": "바다",
-      "green_deep": "숲",
-      "green_light": "잔디",
-      "sand": "모래",
-      "residential": "주거지역",
-      "commercial": "상업지역",
-      "industrial": "공업지역",
-      "sports": "체육시설",
-      "education": "교육시설",
-      "medical": "의료시설",
-      "public": "공공시설",
-      "apron": "계류장",
-      "helipad": "헬리패드"
-    },
-    "water": {
-      "river": "강",
-      "lake": "호수",
-      "wetland": "습지"
-    },
-    "structure": {
-      "building": "건물",
-      "building_station": "역사",
-      "building_education": "교육시설 건물",
-      "building_medical": "의료시설 건물",
-      "building_public": "공공시설 건물"
-    },
-    "transport": {
-      "road_default": "도로",
-      "road_motorway": "고속도로",
-      "road_trunk": "간선도로",
-      "road_primary": "주요도로",
-      "road_secondary": "보조도로",
-      "road_tertiary": "지선도로",
-      "road_service": "서비스 도로",
-      "track": "농로·임도",
-      "pedestrian": "보행로",
-      "parking": "주차장",
-      "rail_main": "철도",
-      "rail_subway": "지하철",
-      "runway": "활주로",
-      "taxiway": "유도로"
-    }
-  },
-  "decor": {
-    "tree": "나무"
-  },
   "drawer": {
     "title": "서랍",
     "tabs": {
@@ -195,11 +133,15 @@
       "character": "캐릭터"
     },
     "sections": {
-      "block": "색상",
-      "land": "육지",
-      "water": "수역",
+      "block": "색",
+      "land": "땅",
+      "water": "물",
       "structure": "건물",
       "transport": "교통"
+    },
+    "decor_sections": {
+      "nature": "자연",
+      "vehicle": "탈것"
     },
     "character": {
       "person_label": "캐릭터",

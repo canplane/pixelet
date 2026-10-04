@@ -12,7 +12,7 @@ use pxl_spec::space::adapter::epsg3857::side_at_zoom;
 
 use crate::control::camera::controller::units_per_px_at;
 use crate::io::demand::{Category, Phases};
-use crate::param::POI_MAJOR_ZOOM;
+use crate::param::{POI_ALL_ZOOM, POI_MAJOR_ZOOM};
 use crate::sched::profiler::record::Failure;
 use crate::shell::setting::store::settings_store;
 use crate::world::pyramid::{Layer, Pyramid};
@@ -23,7 +23,7 @@ static POI: Global<Pyramid<PoiPage>> = Global::new();
 impl Layer for PoiPage {
     const CATEGORY: Category = Category::poi;
     fn reach() -> f64 {
-        units_at_zoom(POI_MAJOR_ZOOM) / units_per_px_at(1.0)
+        MAJOR_UNITS_PER_PX / units_per_px_at(1.0)
     }
 
     fn pyramid() -> &'static mut Pyramid<PoiPage> {
@@ -40,10 +40,9 @@ impl Layer for PoiPage {
     }
 }
 
-/// The units a logical pixel spans where the view is `zoom`.
-pub fn units_at_zoom(zoom: i32) -> f64 {
-    side_at_zoom(zoom).side()
-}
+/// The units a logical pixel spans where the view is at each zoom.
+pub const ALL_UNITS_PER_PX: f64 = side_at_zoom(POI_ALL_ZOOM).side();
+pub const MAJOR_UNITS_PER_PX: f64 = side_at_zoom(POI_MAJOR_ZOOM).side();
 
 pub fn enabled() -> bool {
     settings_store().poi

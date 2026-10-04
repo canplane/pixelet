@@ -15,16 +15,22 @@
 #[allow(non_upper_case_globals, non_camel_case_types)]
 pub mod decor_types {
     pub const tree: u8 = 228;
+    pub const boat: u8 = 229;
+    pub const car: u8 = 230;
+    pub const train: u8 = 231;
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     #[repr(u8)]
     pub enum Decor {
         tree = 228,
+        boat = 229,
+        car = 230,
+        train = 231,
     }
 
     impl Decor {
         /// Every kind the catalog gives out, in the JSON's own order.
-        pub const ALL: [Decor; 1] = [Decor::tree];
+        pub const ALL: [Decor; 4] = [Decor::tree, Decor::boat, Decor::car, Decor::train];
 
         /// The kind a number names, or none for a number the catalog does not
         /// give out.

@@ -6,9 +6,11 @@
 //! The drawn pieces are an antichain of the chunk tree covering the goal with
 //! no gap. They move only by whole moves, made once everything they bring is
 //! ready: a refinement (a piece replaced by its children, a level at a time),
-//! a coarsening (pieces replaced by their goal parent), or a fill (a goal
-//! piece with nothing drawn near it). Until then the coarser piece stays
-//! drawn, so a full arena or a missing page is latency, never a hole.
+//! a coarsening (pieces replaced by their goal parent), or a fill (the
+//! coarsest piece that can be built over a goal piece with nothing drawn on
+//! its line, refined from there as any drawn piece is). Until then the coarser
+//! piece stays drawn, so a full arena or a missing page is latency, never a
+//! hole.
 //!
 //! The arena is never overrun: a move starts only when all its slots are
 //! free, and refinements and fills leave `RESERVE` free so one coarsening is
@@ -193,6 +195,9 @@ pub struct Frontier {
     under: Vec<(Chunk, Chunk)>,
     over: Vec<(Chunk, Chunk)>,
     wanted: Vec<Chunk>,
+    /// Every piece over a drawn one, which a fill must not take.
+    ancestry: Vec<Chunk>,
+    fills: Vec<Chunk>,
     open: Vec<u32>,
     retier: Vec<(Chunk, (Pool, u32))>,
 }
@@ -211,6 +216,8 @@ impl Frontier {
             under,
             over,
             wanted,
+            ancestry,
+            fills,
             open,
             retier,
         } = self;
@@ -235,6 +242,8 @@ impl Frontier {
         under.clear();
         over.clear();
         wanted.clear();
+        ancestry.clear();
+        fills.clear();
         open.clear();
         retier.clear();
 
@@ -264,6 +273,9 @@ impl Frontier {
                 enter,
             });
         }
+        ancestry.extend(now.drawn.iter().flat_map(|d| d.ancestors()));
+        ancestry.sort_unstable();
+        ancestry.dedup();
         for &g in now.goal {
             if drawn(&g) || under.binary_search_by_key(&g, |&(a, _)| a).is_ok() {
                 continue;
@@ -279,16 +291,27 @@ impl Frontier {
             }
             match above {
                 Some(d) => over.push((d, below)),
-                None => {
-                    let enter = push(chunks, [g]);
-                    moves.push(Move {
-                        kind: Kind::Fill,
-                        order: env.order(g),
-                        leave: Run::default(),
-                        enter,
-                    });
-                }
+                // The coarsest is the cheapest to build and comes first; the
+                // goal is reached by refining it.
+                None => fills.push(
+                    core::iter::once(g)
+                        .chain(g.ancestors())
+                        .filter(|a| ancestry.binary_search(a).is_err() && env.buildable(*a))
+                        .last()
+                        .unwrap_or(g),
+                ),
             }
+        }
+        fills.sort_unstable();
+        fills.dedup();
+        for &f in fills.iter() {
+            let enter = push(chunks, [f]);
+            moves.push(Move {
+                kind: Kind::Fill,
+                order: env.order(f),
+                leave: Run::default(),
+                enter,
+            });
         }
         over.sort_unstable();
         over.dedup();

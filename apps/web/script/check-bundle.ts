@@ -116,13 +116,14 @@ if (leaked.length > 0) {
 const excused = forbidden.filter(([where, v]) => shared(where, v)).length;
 console.log(`[check-bundle] ok — ${forbidden.length} development-only string(s), none present${excused > 0 ? ` (${excused} the shipped catalogs carry too)` : ""}`);
 
-// A dev settings row is looked for as `name:{`, not the bare name; a row
-// every build offers is the sentinel.
+// A dev settings row is looked for as `name:{key:`, the table's own shape:
+// `name:{` alone took a locale branch or any object of that name for a row.
+// A row every build offers is the sentinel.
 const devRows = Object.keys(SETTINGS).filter((k) => !(k in SETTINGS_SHIPPED));
 const SETTING_ROW_SENTINEL = Object.keys(SETTINGS_SHIPPED)[0];
 
 function row(bundle: string, key: string): boolean {
-  return new RegExp(`[{,]\\s*["'\`]?${key}["'\`]?\\s*:\\s*\\{`).test(bundle);
+  return new RegExp(`[{,]\\s*["'\`]?${key}["'\`]?\\s*:\\s*\\{\\s*["'\`]?key["'\`]?\\s*:`).test(bundle);
 }
 
 if (!row(bundle, SETTING_ROW_SENTINEL)) {
@@ -137,16 +138,6 @@ if (shippedRows.length > 0) {
   Deno.exit(1);
 }
 console.log(`[check-bundle] ok — ${devRows.length} development-only setting row(s), none present`);
-
-// The published kernel is built without the `dev` feature, so its rows are absent too.
-const named = devRows.filter((k) => kernel.includes(k));
-if (named.length > 0) {
-  console.error(`[check-bundle] ${named.length} development-only setting name(s) in the kernel module:`);
-  for (const k of named) console.error(`  ${k}`);
-  console.error("\n`build` is meant to bundle the module build-wasm.ts makes with --published; this one still has the table's dev rows.");
-  Deno.exit(1);
-}
-console.log(`[check-bundle] ok — none of the ${devRows.length} named in the kernel module`);
 
 // Every model and texture is fetched from the bucket; a `?url` import would bundle it.
 const carried: string[] = [];

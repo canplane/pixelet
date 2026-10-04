@@ -1,11 +1,12 @@
 #!/usr/bin/env -S deno run -A
-// Every cube and decor the catalogs give out has a name in every locale, and
-// every name is still given out. i18next renders a missing key as the key
-// itself, so this link is otherwise silent.
+// Every cube and decor the catalogs give out has its one English name, which
+// every locale shows, and every section a name in every locale; every name is
+// still given out. i18next renders a missing key as the key itself, so this
+// link is otherwise silent.
 
 import { dirname, join } from "@std/path";
 
-import { decorKinds, decorName, placeableCubeChannel, placeableCubeId, placeableCubes } from "../src/catalog/cell/mod.ts";
+import { decorKinds, decorName, decorSection, placeableCubeChannel, placeableCubeId, placeableCubes } from "../src/catalog/cell/mod.ts";
 
 const web = dirname(dirname(new URL(import.meta.url).pathname));
 const LOCALES = ["en", "ko"];
@@ -31,13 +32,15 @@ function branch(locale: string, doc: Catalog, name: string, want: string[]): voi
 
 const cubeIds = placeableCubes.map(placeableCubeId);
 const channels = [...new Set(placeableCubes.map(placeableCubeChannel))];
+const decorSections = [...new Set(decorKinds.map(decorSection))];
 
 for (const locale of LOCALES) {
   const doc: Catalog = JSON.parse(await Deno.readTextFile(join(web, `src/locale/${locale}.json`)));
-  branch(locale, doc, "cubes", cubeIds);
-  branch(locale, doc, "decor", decorKinds.map(decorName));
-  const sections = doc["drawer"];
-  branch(locale, typeof sections === "object" ? sections : {}, "sections", channels);
+  branch(locale, doc, "cubes", locale === "en" ? cubeIds : []);
+  branch(locale, doc, "decor", locale === "en" ? decorKinds.map(decorName) : []);
+  const drawer = doc["drawer"];
+  branch(locale, typeof drawer === "object" ? drawer : {}, "sections", channels);
+  branch(locale, typeof drawer === "object" ? drawer : {}, "decor_sections", decorSections);
 }
 
 if (problems.length > 0) {
@@ -45,4 +48,4 @@ if (problems.length > 0) {
   console.error(`locale: ${problems.length} problem${problems.length === 1 ? "" : "s"}`);
   Deno.exit(1);
 }
-console.log(`locale: every cube and decor is named in ${LOCALES.length} locales`);
+console.log(`locale: every cube and decor is named once, and every section in ${LOCALES.length} locales`);

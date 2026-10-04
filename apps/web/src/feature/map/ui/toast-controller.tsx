@@ -46,22 +46,31 @@ export function ToastController() {
     }
   }, [orientationError]);
 
-  // The first world only.
+  // An empty screen always says it is loading; the ready word is the first world's alone.
   const mapStatus = useKernel((s) => s.map.status);
   const companionLoading = useKernel((s) => !s.companion.person_ready || !s.companion.pet_ready);
   const announced = useRef(false);
+  const loadingShown = useRef(false);
+  const readyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
-    if (announced.current) return;
-    if (mapStatus === MapStatus.Loading || companionLoading) {
+    if (mapStatus === MapStatus.Loading || (!announced.current && companionLoading)) {
+      clearTimeout(readyTimer.current);
+      loadingShown.current = true;
       const key = mapStatus === MapStatus.Loading ? "toast.map_loading" : "toast.companion_loading";
       toastShow(Report.World, { message: tRef.current(key), tone: ToastTone.Loading });
-    } else if (mapStatus === MapStatus.Success) {
-      announced.current = true;
-      toastShow(Report.World, { message: tRef.current("toast.world_ready"), tone: ToastTone.Ready });
-      // Not the effect's cleanup: the next status would run it first.
-      setTimeout(() => toastDismiss(Report.World), READY_MS);
+      return;
     }
+    if (!loadingShown.current) return;
+    loadingShown.current = false;
+    if (announced.current) {
+      toastDismiss(Report.World);
+      return;
+    }
+    announced.current = true;
+    toastShow(Report.World, { message: tRef.current("toast.world_ready"), tone: ToastTone.Ready });
+    // Not the effect's cleanup: the next status would run it first.
+    readyTimer.current = setTimeout(() => toastDismiss(Report.World), READY_MS);
   }, [mapStatus, companionLoading]);
 
   return null;

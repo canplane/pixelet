@@ -54,3 +54,12 @@ export const decorKinds: readonly u8[] = Object.values(decor_types).sort((a, b) 
 export function decorName(kind: u8): DecorId {
   return DECOR_NAME[kind];
 }
+
+/** The drawer's grouping of decor, the shell's to choose. */
+const DECOR_SECTION = { tree: "nature", boat: "vehicle", car: "vehicle", train: "vehicle" } as const satisfies Record<DecorId, string>;
+
+export type DecorSection = (typeof DECOR_SECTION)[DecorId];
+
+export function decorSection(kind: u8): DecorSection {
+  return DECOR_SECTION[decorName(kind)];
+}
