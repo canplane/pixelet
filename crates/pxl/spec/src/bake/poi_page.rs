@@ -114,7 +114,11 @@ pub struct Langs<'a> {
 impl<'a> Langs<'a> {
     /// Every pair of `pool`, tag then name.
     pub fn all(pool: &'a Strings) -> Langs<'a> {
-        Langs { pool: Some(pool), from: 0, to: pool.len() / 2 }
+        Langs {
+            pool: Some(pool),
+            from: 0,
+            to: pool.len() / 2,
+        }
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&'a str, &'a str)> + 'a {
@@ -156,7 +160,11 @@ impl Places {
         let span = |k: u32| self.lang_starts.get(k as usize).copied().unwrap_or(0);
         Place {
             name: self.names.get(i),
-            langs: Langs { pool: Some(&self.langs), from: span(i), to: span(i + 1) },
+            langs: Langs {
+                pool: Some(&self.langs),
+                from: span(i),
+                to: span(i + 1),
+            },
             kind: self.kinds[i as usize],
             id: self.ids.get(i),
         }
@@ -340,7 +348,12 @@ pub fn encode(page: &PoiPage) -> Result<Vec<u8>, MarshalError> {
 /// newer table still opens.
 pub fn decode(bytes: &[u8]) -> Result<PoiPage, MarshalError> {
     let root = TreeReader::new(bytes)?.read_branch()?;
-    let (cells, counts, partial, starts) = (root.at(0)?.get_array::<u32>()?, root.at(1)?.get_array::<u32>()?, root.at(2)?.get_array::<u8>()?, root.at(3)?.get_array::<u32>()?);
+    let (cells, counts, partial, starts) = (
+        root.at(0)?.get_array::<u32>()?,
+        root.at(1)?.get_array::<u32>()?,
+        root.at(2)?.get_array::<u8>()?,
+        root.at(3)?.get_array::<u32>()?,
+    );
     let (shown, at, kinds, ids) = (root.at(4)?.get_array::<u32>()?, root.at(5)?.get_array::<u16>()?, root.at(6)?.get_strs()?, root.at(7)?.get_strs()?);
     let (n, places) = (cells.len(), kinds.len() as usize);
     let runs_fit = starts.len() == n + 1 && starts[0] == 0 && starts.windows(2).all(|w| w[0] <= w[1]) && starts[n] as usize == shown.len();
@@ -404,7 +417,6 @@ fn validate(page: &PoiPage) -> Result<(), MarshalError> {
     }
     Ok(())
 }
-
 
 #[cfg(test)]
 #[path = "poi_page.test.rs"]

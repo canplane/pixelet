@@ -131,7 +131,11 @@ pub fn land_pages(path: &Path, coverage: &Coverage, release: Option<&str>) -> Re
     let want = land_key(coverage, release.unwrap_or_default());
     for (k, want) in want.as_object().into_iter().flatten() {
         if (k != "release" || release.is_some()) && v.get(k) != Some(want) {
-            return Err(format!("{} was classified with {k} {}, and it is now {want} — {reclassify}.", path.display(), v.get(k).unwrap_or(&serde_json::Value::Null)));
+            return Err(format!(
+                "{} was classified with {k} {}, and it is now {want} — {reclassify}.",
+                path.display(),
+                v.get(k).unwrap_or(&serde_json::Value::Null)
+            ));
         }
     }
     let list = v.get("pages").and_then(|p| p.as_array()).ok_or_else(|| format!("{} has no page list", path.display()))?;

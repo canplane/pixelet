@@ -6,9 +6,9 @@
 
 use core::fmt;
 
-use crate::space::pvf3::ivec::{self, IVec};
 use crate::space::indexer::L3;
 use crate::space::pvf3::core::IVEC_X_W;
+use crate::space::pvf3::ivec::{self, IVec};
 use crate::space::pyramid::{LevelPage, TOP_LEVEL};
 
 /// A z16 page's name length: the bits of its page grid, which is one world

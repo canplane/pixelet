@@ -17,7 +17,15 @@ const NONE: f64 = f64::INFINITY;
 fn deck(floor: &[f64], halo: f64) -> Vec<f64> {
     let adj = chain(floor.len(), 5.0);
     let floor: Vec<f64> = floor.iter().map(|&f| if f > 0.0 { f } else { -NONE }).collect();
-    solve(&Problem { adj: &adj, ground: &vec![0.0; floor.len()], floor: &floor, ceiling: &vec![NONE; floor.len()], base: &vec![2.0; floor.len()], ends: &vec![false; floor.len()], halo: &vec![halo; floor.len()] })
+    solve(&Problem {
+        adj: &adj,
+        ground: &vec![0.0; floor.len()],
+        floor: &floor,
+        ceiling: &vec![NONE; floor.len()],
+        base: &vec![2.0; floor.len()],
+        ends: &vec![false; floor.len()],
+        halo: &vec![halo; floor.len()],
+    })
 }
 
 #[test]
@@ -60,7 +68,15 @@ fn a_structure_runs_straight_between_its_ends_and_bends_only_for_a_need() {
     (floor[0], floor[20], floor[10]) = (4.0, 2.0, 6.0);
     let mut ends = vec![false; 21];
     (ends[0], ends[20]) = (true, true);
-    let p = solve(&Problem { adj: &adj, ground: &[0.0; 21], floor: &floor, ceiling: &[NONE; 21], base: &[1.0; 21], ends: &ends, halo: &[1000.0; 21] });
+    let p = solve(&Problem {
+        adj: &adj,
+        ground: &[0.0; 21],
+        floor: &floor,
+        ceiling: &[NONE; 21],
+        base: &[1.0; 21],
+        ends: &ends,
+        halo: &[1000.0; 21],
+    });
     assert_eq!((p[0], p[20], p[10]), (4.0, 2.0, 6.0));
     // past the need's reach the line between the ends holds
     let chord = |i: usize| 4.0 - 2.0 * i as f64 / 20.0;

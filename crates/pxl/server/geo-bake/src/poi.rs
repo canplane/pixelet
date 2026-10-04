@@ -49,7 +49,25 @@ pub fn leaves(client: &mut Client, coverage: &Coverage, within: Option<IVec>) ->
     }
     Ok(places
         .into_iter()
-        .map(|(page, p)| (page, PoiPage::of_places(0, p.iter().map(|(at, name, kind, id)| (*at, Place { name, kind: *kind, id, ..Place::default() })), true)))
+        .map(|(page, p)| {
+            (
+                page,
+                PoiPage::of_places(
+                    0,
+                    p.iter().map(|(at, name, kind, id)| {
+                        (
+                            *at,
+                            Place {
+                                name,
+                                kind: *kind,
+                                id,
+                                ..Place::default()
+                            },
+                        )
+                    }),
+                    true,
+                ),
+            )
+        })
         .collect())
 }
-

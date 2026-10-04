@@ -773,7 +773,11 @@ impl Builder {
         let (x0, y0) = (ivec::X(base), ivec::Y(base));
         // One cell of apron, which a fold reads (`folds_into`).
         let (cx, cy, span) = (target.index(x0), target.index(y0), CHUNK_CELLS as i64);
-        if world.store.fold_at(target, [cx - 1, cy - 1], [cx + span + 1, cy + span + 1], render_edits().hide, &mut self.folded).is_err() {
+        if world
+            .store
+            .fold_at(target, [cx - 1, cy - 1], [cx + span + 1, cy + span + 1], render_edits().hide, &mut self.folded)
+            .is_err()
+        {
             self.refuse(world, id);
             return Progress::Blocked;
         }
@@ -847,7 +851,11 @@ impl Builder {
             // Runs span the whole column; this chunk bakes only its own heights.
             let (z0, z1) = c.at.z_range();
             let clip = Some((z0 as i32, z1 as i32));
-            if self.bake.begin(&set, mesh_step(scale, c.level()), GROUND.finest_in(c.level()), settings_store().textures, clip).is_err() {
+            if self
+                .bake
+                .begin(&set, mesh_step(scale, c.level()), GROUND.finest_in(c.level()), settings_store().textures, clip)
+                .is_err()
+            {
                 self.refuse(world, id);
                 return Progress::Blocked;
             }

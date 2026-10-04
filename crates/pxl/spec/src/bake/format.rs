@@ -8,9 +8,9 @@ use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, T
 use std::borrow::Cow;
 
 use super::constant::ELE_PADDED_SPAN;
-use super::malformed;
 use super::deck::{self, Decks};
 use super::ground::SHIFT_RANGE;
+use super::malformed;
 use super::pack::{channel_of, GroundCell};
 use super::surface::extent_of;
 use crate::space::pyramid::{EXTENT, PAGE_CELLS};
@@ -209,10 +209,10 @@ fn blocks_of(lane: &[[i16; 2]], blocks: &mut [Block]) {
 /// a slab, a bore, a pier — is not here.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Terrain {
-    pub ground: Ground,                        // a class a cell: the source rasterized
-    pub decks: Decks,                          // ways off the ground: source lines, tops solved offline
-    pub ele: Cow<'static, [i16]>,              // padded height samples, in z16 cells: from the raster
-    pub index: Index,                          // bounds over the page and all under it: no one page holds them
+    pub ground: Ground,           // a class a cell: the source rasterized
+    pub decks: Decks,             // ways off the ground: source lines, tops solved offline
+    pub ele: Cow<'static, [i16]>, // padded height samples, in z16 cells: from the raster
+    pub index: Index,             // bounds over the page and all under it: no one page holds them
 }
 
 impl Terrain {

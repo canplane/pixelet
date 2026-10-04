@@ -94,7 +94,10 @@ pub fn buildings(row: &BuildingRow, page_min: G3857) -> Vec<Feature> {
         _ if institutional => s::building_public,
         _ => s::building,
     };
-    let cell = Cell { key: GroundChannelKey::STRUCTURE, value };
+    let cell = Cell {
+        key: GroundChannelKey::STRUCTURE,
+        value,
+    };
     let rank = BUILDING_RANK + if institutional { INSTITUTIONAL_RANK } else { 0 };
     wkb_to_geometries(&row.geom_wkb).iter().filter_map(|g| Feature::of(g, page_min, cell, rank)).collect()
 }
@@ -150,7 +153,11 @@ pub fn bases(row: &BaseRow, page_min: G3857) -> Vec<Feature> {
         "infrastructure" if class == "parking" => (GroundChannelKey::TRANSPORT, t::parking, AREA_RANK),
         "infrastructure" if class == "helipad" => (GroundChannelKey::LAND, l::helipad, AREA_RANK),
         "infrastructure" => return Vec::new(),
-        _ => (GroundChannelKey::LAND, land_use_cell(class), AREA_RANK + if matches!(class, "school" | "hospital") { INSTITUTIONAL_RANK } else { 0 }),
+        _ => (
+            GroundChannelKey::LAND,
+            land_use_cell(class),
+            AREA_RANK + if matches!(class, "school" | "hospital") { INSTITUTIONAL_RANK } else { 0 },
+        ),
     };
     wkb_to_geometries(&row.geom_wkb).iter().filter_map(|g| Feature::of(g, page_min, Cell { key, value }, rank)).collect()
 }

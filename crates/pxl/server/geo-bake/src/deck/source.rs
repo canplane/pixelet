@@ -20,7 +20,11 @@ use crate::util::{pack, unpack, write_atomic, Level};
 /// The tables the solve's queries name, for the catalog.
 pub const READS: [&str; 2] = ["FROM overture_transportation", "FROM overture_base_water"];
 
-const SEGMENTS_SQL: &str = concat!("SELECT ", crate::segment_columns!(), " FROM overture_transportation t WHERE t.geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)");
+const SEGMENTS_SQL: &str = concat!(
+    "SELECT ",
+    crate::segment_columns!(),
+    " FROM overture_transportation t WHERE t.geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)"
+);
 
 /// Everything a solve reads of some pages: the bridge and tunnel rows, every
 /// way, the water, and the ground, as the client draws it, inside `bounds`.
@@ -56,7 +60,10 @@ fn page_rows(client: &mut Client, repo: &TerrainRepository, page: IVec) -> Resul
     let env: [&(dyn ToSql + Sync); 4] = [&min[0], &min[1], &max[0], &max[1]];
     let read = |client: &mut Client, sql: &str| client.query(sql, &env).map_err(|e| e.to_string());
     let ways = read(client, SEGMENTS_SQL)?;
-    let water = read(client, "SELECT subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_water WHERE subtype <> 'ocean' AND geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)")?;
+    let water = read(
+        client,
+        "SELECT subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_water WHERE subtype <> 'ocean' AND geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)",
+    )?;
     // the paint of its ways is no matter to the ground's height, so none is drawn
     let (surface, _) = fetch_surface(repo, client, page, &[])?;
     Ok(PageRows {

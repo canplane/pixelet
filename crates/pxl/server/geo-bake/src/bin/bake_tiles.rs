@@ -29,9 +29,9 @@ use pxl_spec::space::pyramid::LevelPage;
 
 use pxl_geo_bake::cli::Flags;
 use pxl_geo_bake::coverage::{self, Coverage, Overture};
+use pxl_geo_bake::deck;
 use pxl_geo_bake::elevation::Raster;
 use pxl_geo_bake::pyramid::{build, write_manifest, Layer, PageSet};
-use pxl_geo_bake::deck;
 use pxl_geo_bake::terrain::leaf::{self, bake_leaf, bake_ocean, has_ground, land_pages, ocean_samples, write_land_pages, OCEAN_KEY};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
 use pxl_geo_bake::util::{fmt_bytes, fmt_dur, git_sha, pack, refuse_mixed, unpack, Level};
@@ -250,7 +250,11 @@ fn run() -> Result<(), String> {
             candidates.len()
         );
 
-        let cached = if args.reclassify { Err("--reclassify".to_string()) } else { land_pages(&land_cache, &coverage, Some(&source.release)) };
+        let cached = if args.reclassify {
+            Err("--reclassify".to_string())
+        } else {
+            land_pages(&land_cache, &coverage, Some(&source.release))
+        };
         let land: Vec<IVec> = match cached {
             Ok(land) => {
                 println!("[bake/classify] reusing cached list: {} land pages ({})", land.len(), land_cache.display());
@@ -303,7 +307,15 @@ fn run() -> Result<(), String> {
                             if !args.force && leaves.path(at).exists() {
                                 return Ok(None);
                             }
-                            let (terrain, off_raster) = bake_leaf(&mut deck::Reader { client: &mut db.client, repo: &db.repo, store: &mut held, memo: structures }, page)?;
+                            let (terrain, off_raster) = bake_leaf(
+                                &mut deck::Reader {
+                                    client: &mut db.client,
+                                    repo: &db.repo,
+                                    store: &mut held,
+                                    memo: structures,
+                                },
+                                page,
+                            )?;
                             flat = off_raster;
                             let packed = pack(&encode_terrain(&terrain).map_err(|e| format!("{e:?}"))?, Level::Stored).map_err(|e| e.to_string())?;
                             leaves.write(at, &packed)?;

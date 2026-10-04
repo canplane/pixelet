@@ -12,40 +12,40 @@ use pxl_render::mesh::chunk_mesher::{box_bounds, Heights};
 use pxl_render::mesh::paint::terrain::adapter::beside_index;
 use pxl_render::mesh::voxel_scan::APRON;
 
-use pxl_spec::space::observation::Bounds as _;
-use pxl_spec::space::adapter::epsg3857::zoom_of;
-use pxl_spec::space::pyramid::{chunk_scale, GROUND};
 use crate::sched::profiler::record::ZOOMS;
+use pxl_spec::space::adapter::epsg3857::zoom_of;
+use pxl_spec::space::observation::Bounds as _;
 use pxl_spec::space::observation::Frustum;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::pyramid::{chunk_scale, GROUND};
 use pxl_spec::space::v3::{dot3, len3, Aabb, V3};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::section::span_of;
 use xpute_runtime::sched::edge::Notify;
 use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats};
 
-use xpute_runtime::global::Global;
 use crate::layer::billboard::field::Billboards;
 use crate::layer::environment::state::EnvironmentDraw;
 use crate::layer::marker::debug_lines::DebugLines;
 use crate::layer::marker::hover_cursor::GhostDraw;
+use crate::layer::marker::hover_cursor::{render_edits, RenderEdits};
 use crate::layer::marker::location_puck::Markers;
 use crate::layer::model::store::Models;
-use crate::layer::marker::hover_cursor::{render_edits, RenderEdits};
 use crate::layer::object::store::EntryAt;
 use crate::mem::fixed::{lane, range, Range};
 use crate::param;
 use crate::sched::profiler::record::MB;
 use crate::shell::setting::store::settings_store;
 use crate::world::chunk::build::{mesh_step, BuildEvent, Builder, World};
-use pxl_spec::space::hierarchy::Scale;
-use crate::world::chunk::frontier::{scale_of, pool_of, Env, Frontier, Now, Slots};
+use crate::world::chunk::frontier::{pool_of, scale_of, Env, Frontier, Now, Slots};
 use crate::world::chunk::mesh_slot::{capacity, group_box_words, group_bytes, group_is_fine, slot_at, MeshSlot, Pool, ARENA, COVER_SLOTS, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::source::{draws_band, objects_revision_of, tiers_draw};
 use crate::world::paging::LEVELS;
+use pxl_spec::space::hierarchy::Scale;
 use xpute_core::math::scalar::round;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
+use xpute_runtime::global::Global;
 
 use crate::world::observation::{Known, Order};
 use crate::world::pyramid::chunk::Chunk;
@@ -53,7 +53,6 @@ use crate::world::pyramid::domain::{self, Domain};
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::indexer::L2_IDX;
-
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Role {
@@ -566,7 +565,11 @@ impl Scheduler {
     /// and those of the page it is read from.
     pub fn drawn_at(&self, p: &Pvf3) -> Option<(i32, Option<i32>, Option<i32>)> {
         let s = (0..LEVELS).find_map(|level| self.slots.iter().find(|s| s.role == Role::Drawn && s.chunk == Chunk::of(level, p)))?;
-        Some((zoom_of(GROUND.scale(s.level())), s.layout.map(|(scale, _)| zoom_of(scale)), s.sources.read_from.map(|l| zoom_of(GROUND.scale(l)))))
+        Some((
+            zoom_of(GROUND.scale(s.level())),
+            s.layout.map(|(scale, _)| zoom_of(scale)),
+            s.sources.read_from.map(|l| zoom_of(GROUND.scale(l))),
+        ))
     }
 
     pub fn drawn_revision(&self) -> u32 {
@@ -1326,7 +1329,10 @@ fn part(slots: &[Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
     let mut bounds = meshes.landing.as_ref().and_then(|l| l.bounds);
     for r in words.chunks_exact(box_words as usize) {
         let (min, size) = box_bounds(r, unit, heights);
-        let b = Aabb { min, max: std::array::from_fn(|a| min[a] + size[a]) };
+        let b = Aabb {
+            min,
+            max: std::array::from_fn(|a| min[a] + size[a]),
+        };
         bounds = Some(bounds.map_or(b, |a| a.join(b)));
     }
     if box_cnt > 0 {

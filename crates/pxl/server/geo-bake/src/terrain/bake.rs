@@ -41,12 +41,20 @@ pub fn bake_surface(page_idx: IVec, ele: Vec<i16>, source: &PageSource, drawn: &
         .filter(|row| !row.covers_page)
         .flat_map(|row| wkb_to_geometries(&row.geom_wkb))
         .filter(|g| !g.points.is_empty())
-        .map(|g| (g.points.iter().map(|&p| local(p, page_min)).collect(), g.holes.iter().map(|ring| ring.iter().map(|&p| local(p, page_min)).collect()).collect()))
+        .map(|g| {
+            (
+                g.points.iter().map(|&p| local(p, page_min)).collect(),
+                g.holes.iter().map(|ring| ring.iter().map(|&p| local(p, page_min)).collect()).collect(),
+            )
+        })
         .collect();
     let coast = match (source.coast_rows.is_empty(), shore.is_empty()) {
         (true, _) => Coast::Sea,
         (false, true) => Coast::Land,
         (false, false) => Coast::Shore(shore),
     };
-    Surface { ele, ground: bake_ground(&features, &coast) }
+    Surface {
+        ele,
+        ground: bake_ground(&features, &coast),
+    }
 }

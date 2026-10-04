@@ -364,7 +364,11 @@ impl Deck<'_> {
 /// share of `d`; 0 when `d` is none.
 fn along(a: [f64; 2], d: [f64; 2], p: [f64; 2]) -> f64 {
     let len2 = d[0] * d[0] + d[1] * d[1];
-    if len2 > 0.0 { ((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / len2 } else { 0.0 }
+    if len2 > 0.0 {
+        ((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / len2
+    } else {
+        0.0
+    }
 }
 
 pub fn footprint(width: f64) -> f64 {

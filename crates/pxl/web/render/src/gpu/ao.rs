@@ -159,8 +159,14 @@ impl ScreenAo {
         };
         let g0 = group(self.downsample.layouts[0], true, &[view(1, self.depth_view)]);
         let g1 = group(self.sample.layouts[0], false, &[view(1, self.half_view), view(2, self.noise_view)]);
-        let blur = self.ping_view.map(|src| group(self.blur.layouts[0], false, &[view(1, self.half_view), view(2, self.noise_view), view(3, src), sampler, run]));
-        let g4 = group(self.upsample.layouts[0], true, &[view(1, self.depth_view), view(2, self.half_view), view(3, self.ping_view[0]), sampler]);
+        let blur = self
+            .ping_view
+            .map(|src| group(self.blur.layouts[0], false, &[view(1, self.half_view), view(2, self.noise_view), view(3, src), sampler, run]));
+        let g4 = group(
+            self.upsample.layouts[0],
+            true,
+            &[view(1, self.depth_view), view(2, self.half_view), view(3, self.ping_view[0]), sampler],
+        );
         self.groups = [g0, g1, blur[0], blur[1], g4];
         true
     }

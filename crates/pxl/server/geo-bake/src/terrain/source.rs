@@ -9,8 +9,8 @@ use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
 
 use crate::deck::Drawn;
-use crate::terrain::bake::Surface;
 use crate::terrain::bake::bake_surface;
+use crate::terrain::bake::Surface;
 use crate::terrain::repository::TerrainRepository;
 
 /// The page's surface, and whether it lies off the elevation raster and so

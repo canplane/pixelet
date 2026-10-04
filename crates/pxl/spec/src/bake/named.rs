@@ -18,7 +18,11 @@ pub struct NameLanes<'a> {
 impl<'a> NameLanes<'a> {
     /// Each place's name and its (tag, name) pairs.
     pub fn of<L: IntoIterator<Item = (&'a str, &'a str)>>(places: impl IntoIterator<Item = (&'a str, L)>) -> NameLanes<'a> {
-        let mut lanes = NameLanes { starts: vec![0], names: Vec::new(), langs: Vec::new() };
+        let mut lanes = NameLanes {
+            starts: vec![0],
+            names: Vec::new(),
+            langs: Vec::new(),
+        };
         for (name, names) in places {
             lanes.names.push(name);
             lanes.langs.extend(names.into_iter().flat_map(|(tag, name)| [tag, name]));

@@ -26,7 +26,12 @@ fn cells(page: &PoiPage) -> Vec<Cell<'_>> {
 
 #[test]
 fn a_page_and_its_places_come_back_as_they_went() {
-    let station = Place { name: "Seoul Station", kind: kind_of("subway"), id: "7", ..Place::default() };
+    let station = Place {
+        name: "Seoul Station",
+        kind: kind_of("subway"),
+        id: "7",
+        ..Place::default()
+    };
     let page = PoiPage::of_places(
         0,
         [
@@ -37,7 +42,12 @@ fn a_page_and_its_places_come_back_as_they_went() {
             (point(5, 1, 0, 3), station),
             (
                 point(6, 1, 0, 0),
-                Place { name: "Seoul Station", kind: 0, id: "8", ..Place::default() },
+                Place {
+                    name: "Seoul Station",
+                    kind: 0,
+                    id: "8",
+                    ..Place::default()
+                },
             ),
         ],
         true,
@@ -63,7 +73,12 @@ fn a_lone_place_folds_up_with_its_kind_and_its_ground_cell() {
     let at = point(5, 4, 3, 1);
     let ground = GROUND.cell_of(0, &at);
     let empty = PoiPage::default();
-    let tower = Place { name: "Namsan Tower", kind: kind_of("attraction"), id: "11", ..Place::default() };
+    let tower = Place {
+        name: "Namsan Tower",
+        kind: kind_of("attraction"),
+        id: "11",
+        ..Place::default()
+    };
     let mut below = (leaf(), PoiPage::of_places(0, [(at, tower)], true));
     for level in 1..=TOP_LEVEL {
         let p = LevelPage::over(level, below.0.page);
@@ -97,8 +112,18 @@ fn a_page_settles_every_child_but_one_under_a_crowd() {
 /// Folded from the leaves, a crowd matches a page built at that level.
 #[test]
 fn a_crowd_holds_one_place_of_each_kind() {
-    let station = Place { name: "Gangnam", kind: kind_of("subway"), id: "50", ..Place::default() };
-    let cafe = Place { name: "Cafe", kind: kind_of("cafe"), id: "20", ..Place::default() };
+    let station = Place {
+        name: "Gangnam",
+        kind: kind_of("subway"),
+        id: "50",
+        ..Place::default()
+    };
+    let cafe = Place {
+        name: "Cafe",
+        kind: kind_of("cafe"),
+        id: "20",
+        ..Place::default()
+    };
     let places = [(point(0, 0, 0, 0), cafe), (point(0, 0, 2, 0), Place { id: "10", ..cafe }), (point(1, 0, 5, 0), station)];
     let leaf_page = PoiPage::of_places(0, places, true);
     assert_eq!(cells(&leaf_page), [(2, vec![("Cafe", [2, 0])]), (1, vec![("Gangnam", [5, 0])])]);
@@ -124,11 +149,21 @@ fn a_page_that_names_no_place_or_splits_a_character_is_refused() {
         [
             (
                 point(3, 0, 0, 0),
-                Place { name: "A", kind: kind_of("cafe"), id: "1", ..Place::default() },
+                Place {
+                    name: "A",
+                    kind: kind_of("cafe"),
+                    id: "1",
+                    ..Place::default()
+                },
             ),
             (
                 point(3, 0, 1, 1),
-                Place { name: "B", kind: kind_of("subway"), id: "2", ..Place::default() },
+                Place {
+                    name: "B",
+                    kind: kind_of("subway"),
+                    id: "2",
+                    ..Place::default()
+                },
             ),
         ],
         true,
@@ -164,7 +199,12 @@ fn lanes(cells: &[u32], counts: &[u32], starts: &[u32], shown: &[u32], kinds: &[
 #[test]
 fn what_any_source_gives_comes_back() {
     let langs = Strings::of(["en", "Seoul Station", "ja", "ソウル駅"]);
-    let station = Place { name: "서울역", langs: Langs::all(&langs), kind: kind_of("subway"), id: "ChIJ3S-JXmauEmsRUcIaWtf4MzE" };
+    let station = Place {
+        name: "서울역",
+        langs: Langs::all(&langs),
+        kind: kind_of("subway"),
+        id: "ChIJ3S-JXmauEmsRUcIaWtf4MzE",
+    };
     let page = PoiPage::of_places(0, [(point(1, 0, 0, 0), station)], true);
     let back = decode(&encode(&page).unwrap()).unwrap();
     assert_eq!(back, page);

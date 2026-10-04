@@ -8,8 +8,8 @@
 
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
-use xpute_core::wire::xtp::{encoder, BranchViewImpl, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 use xpute_core::wire::xtp::BranchCursor;
+use xpute_core::wire::xtp::{encoder, BranchViewImpl, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
 use crate::bake::malformed;
 use crate::bake::named::{NameLanes, NamesView};
@@ -52,7 +52,10 @@ fn write_places<'a>(b: &mut BranchViewImpl<'a>, ranks: &'a [u8], names: &'a Name
 }
 
 fn place_lanes(places: &[Named]) -> (Vec<u8>, NameLanes<'_>) {
-    (places.iter().map(|d| d.rank as u8).collect(), NameLanes::of(places.iter().map(|d| (d.name.as_str(), d.names.iter().map(|(tag, name)| (tag.as_str(), name.as_str()))))))
+    (
+        places.iter().map(|d| d.rank as u8).collect(),
+        NameLanes::of(places.iter().map(|d| (d.name.as_str(), d.names.iter().map(|(tag, name)| (tag.as_str(), name.as_str()))))),
+    )
 }
 
 /// A run of places read where it lies: the dictionary or a group's locals.
@@ -205,7 +208,6 @@ impl<'a> PlaceGroupView<'a> {
         }))
     }
 }
-
 
 #[cfg(test)]
 #[path = "place_page.test.rs"]

@@ -952,8 +952,7 @@ impl Renderer {
         self.debug.draw(g, pass, &draws, uniforms, b);
         g.end(pass);
         release(pass);
-        self.badges
-            .draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, b, &mut stamps[SPAN_BADGES]);
+        self.badges.draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, b, &mut stamps[SPAN_BADGES]);
         self.draw_cases(g, encoder, &draws, uniforms, input.cases, &mut stamps[SPAN_CASES]);
         if q != 0 {
             let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);

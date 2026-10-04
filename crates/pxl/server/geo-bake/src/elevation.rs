@@ -10,8 +10,8 @@ use std::sync::{Arc, Mutex};
 
 use postgres::Client;
 use pxl_spec::bake::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN, U_PER_CELL};
-use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m};
 use pxl_spec::space::adapter::epsg3857::BBox3857;
+use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m};
 use xpute_core::math::scalar::round;
 
 const HELD: usize = 512;

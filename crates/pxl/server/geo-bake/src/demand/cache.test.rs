@@ -5,7 +5,14 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn cache() -> Arc<Cache> {
     static SERIAL: AtomicUsize = AtomicUsize::new(0);
-    Arc::new(Cache::new(std::env::temp_dir().join(format!("pxl-demand-{}-{}", std::process::id(), SERIAL.fetch_add(1, Ordering::Relaxed))), Arc::new(Semaphore::new(32)), std::time::Duration::from_secs(30)).unwrap())
+    Arc::new(
+        Cache::new(
+            std::env::temp_dir().join(format!("pxl-demand-{}-{}", std::process::id(), SERIAL.fetch_add(1, Ordering::Relaxed))),
+            Arc::new(Semaphore::new(32)),
+            std::time::Duration::from_secs(30),
+        )
+        .unwrap(),
+    )
 }
 
 #[tokio::test]

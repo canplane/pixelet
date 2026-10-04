@@ -129,7 +129,10 @@ pub fn solve_page(r: &mut Reader<impl Store>, page: IVec) -> Result<Solved, Stri
             for (p, run) in members.iter().zip(&profile.runs) {
                 let (first, last) = (run.points[0], run.points[run.points.len() - 1]);
                 let (a, b) = (p.on_way(first[0]), p.on_way(last[0]));
-                out.drawn.push(Drawn { gers_id: p.gers_id.clone(), range: [a.min(b), a.max(b)] });
+                out.drawn.push(Drawn {
+                    gers_id: p.gers_id.clone(),
+                    range: [a.min(b), a.max(b)],
+                });
                 out.lines.push(Line {
                     subtype: p.subtype.clone(),
                     class: p.class.clone(),
@@ -141,7 +144,12 @@ pub fn solve_page(r: &mut Reader<impl Store>, page: IVec) -> Result<Solved, Stri
             for (i, last) in free_ends(&members) {
                 let run = &profile.runs[i];
                 let top = run.points[if last { run.points.len() - 1 } else { 0 }][3];
-                free.push(Free { piece: members[i].clone(), last, top, sep: top - run.ground[usize::from(last)] });
+                free.push(Free {
+                    piece: members[i].clone(),
+                    last,
+                    top,
+                    sep: top - run.ground[usize::from(last)],
+                });
             }
         }
     }
@@ -173,7 +181,10 @@ pub fn solve_page(r: &mut Reader<impl Store>, page: IVec) -> Result<Solved, Stri
             continue;
         }
         let row = &way.row;
-        out.drawn.push(Drawn { gers_id: row.gers_id.clone(), range: [b.from.min(to), b.from.max(to)] });
+        out.drawn.push(Drawn {
+            gers_id: row.gers_id.clone(),
+            range: [b.from.min(to), b.from.max(to)],
+        });
         out.lines.push(Line {
             subtype: row.subtype.clone(),
             class: row.class.clone(),
@@ -192,7 +203,12 @@ fn approach_of(p: &Piece, last: bool) -> approach::Free<'_> {
         End::Vertex(..) => f64::from(u8::from(last)),
         End::Cut(_, bits) => f64::from_bits(*bits),
     };
-    approach::Free { end, gers_id: &p.gers_id, at, onward: last }
+    approach::Free {
+        end,
+        gers_id: &p.gers_id,
+        at,
+        onward: last,
+    }
 }
 
 /// The whole structures `seeds` are in: each free end at a segment's end asked
@@ -203,7 +219,11 @@ fn whole(client: &mut Client, mut pieces: Vec<Piece>, form: Form) -> Result<Vec<
     let mut have: HashSet<(String, u64)> = pieces.iter().map(id).collect();
     let mut asked: HashSet<End> = HashSet::new();
     loop {
-        let open: Vec<End> = free_ends(&pieces).into_iter().map(|(i, last)| pieces[i].end(last).clone()).filter(|e| matches!(e, End::Vertex(..)) && !asked.contains(e)).collect();
+        let open: Vec<End> = free_ends(&pieces)
+            .into_iter()
+            .map(|(i, last)| pieces[i].end(last).clone())
+            .filter(|e| matches!(e, End::Vertex(..)) && !asked.contains(e))
+            .collect();
         if open.is_empty() {
             break;
         }
@@ -325,7 +345,11 @@ fn crossings(r: &mut Reader<impl Store>, members: &[Piece], lines: &[Polyline], 
     let own: HashSet<(&str, u64)> = members.iter().map(Piece::id).collect();
     let others: Vec<Piece> = rows.iter().flat_map(|row| pieces_of(row, form)).filter(|p| !own.contains(&p.id())).collect();
     let pieces: Vec<&Piece> = members.iter().chain(&others).collect();
-    let all_lines: Vec<Polyline> = lines.iter().map(|l| Polyline::of(l.points.iter().copied())).chain(others.iter().map(|p| Polyline::of(p.points.iter().map(|q| [q[0], q[1]])))).collect();
+    let all_lines: Vec<Polyline> = lines
+        .iter()
+        .map(|l| Polyline::of(l.points.iter().copied()))
+        .chain(others.iter().map(|p| Polyline::of(p.points.iter().map(|q| [q[0], q[1]]))))
+        .collect();
     let mut out = Vec::new();
     // each structure crossed, as solved free of crossings
     let mut solved: Vec<(Vec<Piece>, Profile)> = Vec::new();

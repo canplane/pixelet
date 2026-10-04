@@ -43,7 +43,13 @@ impl Run {
 fn key(members: &[Piece], held: bool) -> String {
     let least = members.iter().map(|p| (p.gers_id.as_str(), p.start.to_bits())).min().expect("a structure has a piece");
     let form = members[0].form;
-    format!("{}-{}-{}-{:016x}", if form == Form::Deck { "deck" } else { "bore" }, if held { "held" } else { "free" }, least.0, least.1)
+    format!(
+        "{}-{}-{}-{:016x}",
+        if form == Form::Deck { "deck" } else { "bore" },
+        if held { "held" } else { "free" },
+        least.0,
+        least.1
+    )
 }
 
 fn same(members: &[Piece], profile: &Profile) -> bool {

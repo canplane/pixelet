@@ -29,7 +29,12 @@ fn main() {
     for page in pages {
         let idx = page.parse().expect("page_idx");
         assert!(coverage.contains(idx), "{page} is not a page of the coverage");
-        let reader = &mut deck::Reader { client: &mut client, repo: &repo, store: &mut Disk(&memo), memo: &memo.join("structure") };
+        let reader = &mut deck::Reader {
+            client: &mut client,
+            repo: &repo,
+            store: &mut Disk(&memo),
+            memo: &memo.join("structure"),
+        };
         let (terrain, off_raster) = bake_leaf(reader, idx).expect("bake");
         let tile = encode_terrain(&terrain).expect("encode");
         fs::write(format!("{dir}/{page}.db.tile"), &tile).expect("write");

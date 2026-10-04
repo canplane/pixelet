@@ -161,13 +161,7 @@ fn the_skys_layouts_match_their_structs() {
         SHADER_STARS,
         "Stars",
         s::STARS_FLOATS,
-        &[
-            ("view_proj", 0),
-            ("sky", s::SKY),
-            ("depth", s::DEPTH),
-            ("density", s::DENSITY),
-            ("intensity", s::INTENSITY),
-        ],
+        &[("view_proj", 0), ("sky", s::SKY), ("depth", s::DEPTH), ("density", s::DENSITY), ("intensity", s::INTENSITY)],
     );
     for (name, k) in [("TRANSMITTANCE_SIZE", a::TRANSMITTANCE), ("MULTISCATTER_SIZE", a::MULTISCATTER), ("SKY_VIEW_SIZE", a::SKY_VIEW)] {
         let (w, h) = a::SIZES[k];

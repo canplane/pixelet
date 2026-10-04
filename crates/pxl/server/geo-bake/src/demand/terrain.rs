@@ -30,7 +30,12 @@ pub(super) fn execute(p: LevelPage, cache: &std::path::Path, out: &std::path::Pa
             let raster = std::sync::Arc::new(crate::elevation::Raster::open(&mut client).map_err(|e| e.to_string())?);
             let repo = TerrainRepository::prepare(&mut client, raster).map_err(|e| e.to_string())?;
             let memo = cache.join(SOURCE);
-            let reader = &mut crate::deck::Reader { client: &mut client, repo: &repo, store: &mut crate::deck::source::Disk(&memo), memo: &memo.join("structure") };
+            let reader = &mut crate::deck::Reader {
+                client: &mut client,
+                repo: &repo,
+                store: &mut crate::deck::source::Disk(&memo),
+                memo: &memo.join("structure"),
+            };
             Ok(Some(leaf::bake_leaf(reader, p.page)?.0))
         },
         || decode_terrain(&unpack(&std::fs::read(cache.join(leaf::OCEAN_KEY)).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?).map_err(|e| format!("{e:?}")),

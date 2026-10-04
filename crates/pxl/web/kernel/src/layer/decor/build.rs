@@ -17,7 +17,6 @@ use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
 use std::collections::{HashMap, TryReserveError};
 
-
 use crate::layer::decor::instance::{DecorScratch, GroupLanes, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
 use crate::layer::decor::kind::{Kind, KINDS};
 use crate::layer::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
@@ -31,7 +30,6 @@ use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_core::math::scalar::round;
-
 
 /// A kind is drawn as a model while it covers at least two of a tier's cells
 /// on screen (twelve pixels at the reference viewport, by eye, where Google's
@@ -181,7 +179,17 @@ impl<'s> DecorBuild<'s> {
     #[allow(clippy::too_many_arguments)]
     /// Only what stands in `chunk`, the region of the chunk drawing it; the
     /// ground may be a coarser chunk's over it.
-    pub fn build(scratch: &'s mut DecorScratch, kinds: &[&Kind], ground: Option<&Ground>, placed: &[Placed], hide: Option<DecorHide>, store: &Store, step: u32, decor: bool, chunk: Aabb) -> Option<DecorBuild<'s>> {
+    pub fn build(
+        scratch: &'s mut DecorScratch,
+        kinds: &[&Kind],
+        ground: Option<&Ground>,
+        placed: &[Placed],
+        hide: Option<DecorHide>,
+        store: &Store,
+        step: u32,
+        decor: bool,
+        chunk: Aabb,
+    ) -> Option<DecorBuild<'s>> {
         scratch.clear();
         for kind in kinds {
             if kind.variant_count() == 0 {

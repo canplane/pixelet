@@ -185,7 +185,21 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     ]);
     for s in settings.iter().filter(|s| s.spec.get("dev_options").is_some()) {
         let names = options_of(s)?;
-        let dev: Vec<String> = s.spec.get("dev_options").and_then(Node::arr).unwrap_or_default().iter().filter_map(|n| n.str()).map(|n| names.iter().position(|o| o == n).map(|i| i.to_string()).ok_or(format!("{JSON}: {}'s dev option {n} is not one of its options", s.key))).collect::<Result<_, _>>()?;
+        let dev: Vec<String> = s
+            .spec
+            .get("dev_options")
+            .and_then(Node::arr)
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|n| n.str())
+            .map(|n| {
+                names
+                    .iter()
+                    .position(|o| o == n)
+                    .map(|i| i.to_string())
+                    .ok_or(format!("{JSON}: {}'s dev option {n} is not one of its options", s.key))
+            })
+            .collect::<Result<_, _>>()?;
         rs.push(format!("            SettingKey::{} => matches!(value, {}),", s.key, dev.join(" | ")));
     }
     rs.extend([
