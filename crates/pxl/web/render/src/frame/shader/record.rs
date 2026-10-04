@@ -95,7 +95,7 @@ pub fn source(kind: u32) -> &'static str {
             "skinned"
         ),
         SHADER_PUCK_ZONE => wgsl!("frame", "globe", "encode", "finish", "puck", "puck_zone"),
-        SHADER_PUCK_BEACON => wgsl!("frame", "globe", "encode", "finish", "place", "puck", "puck_beacon"),
+        SHADER_PUCK_BEACON => wgsl!("frame", "globe", "encode", "finish", "atmos_medium", "atmos_bind", "atmos_lut", "place", "puck", "puck_beacon"),
         SHADER_BADGE => wgsl!("frame", "globe", "encode", "depth", "badge_depth", "badge"),
         SHADER_SKY => wgsl!(
             "frame",
@@ -406,9 +406,9 @@ const fn air(stages: [u32; 9]) -> [[u32; 3]; 9] {
 
 const AIR: [[u32; 3]; 9] = air([FRAGMENT; 9]);
 const LIT_FRAME: [[u32; 3]; 13] = {
-    // Tables in the vertex stage too: a fragment reads the land's color for
-    // the ground bounce and the exposure its lights are shown through.
-    let a = air([BOTH, VERTEX, VERTEX, VERTEX, BOTH, VERTEX, VERTEX, VERTEX, VERTEX]);
+    // The air in the vertex stage, where each point's lights and veil are
+    // worked out; a fragment reads only its words.
+    let a = air([BOTH, VERTEX, VERTEX, VERTEX, VERTEX, VERTEX, VERTEX, VERTEX, VERTEX]);
     [
         [0, BOTH, UNIFORM],
         [1, FRAGMENT, DEPTH],
@@ -426,9 +426,9 @@ const LIT_FRAME: [[u32; 3]; 13] = {
     ]
 };
 const CLOUD_COMPOSITE_GROUP: [[u32; 3]; 2] = [[0, FRAGMENT, TEXTURE], [1, FRAGMENT, SAMPLER]];
-/// The transmittance, sky-view and moonlit-sky tables are laid out unread because the shader declares them.
+/// The sky-view and moonlit-sky tables are laid out unread because the shader declares them.
 const CLOUD_GROUP: [[u32; 3]; 13] = {
-    let a = air([FRAGMENT, NONE, NONE, FRAGMENT, FRAGMENT, NONE, NONE, NONE, FRAGMENT]);
+    let a = air([FRAGMENT, FRAGMENT, NONE, FRAGMENT, FRAGMENT, NONE, NONE, NONE, FRAGMENT]);
     [
         [0, FRAGMENT, UNIFORM],
         [1, FRAGMENT, UNIFORM],
@@ -493,7 +493,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         PIPELINE_PUCK_BEACON => record(
             lit(SHADER_PUCK_BEACON, CULL_BACK),
             &[lane(12, 0, F32X3), lane(12, 1, F32X3)],
-            &[frame(BOTH), group(&[[0, BOTH, UNIFORM]])],
+            &[group(&[[0, BOTH, UNIFORM], AIR[0], AIR[1], AIR[3]]), group(&[[0, BOTH, UNIFORM]])],
         ),
         PIPELINE_BADGE => record(
             Head {
