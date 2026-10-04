@@ -2,8 +2,8 @@
 
 use super::*;
 
-fn division(rank: PlaceRank, name: &str, en: &str) -> Division {
-    Division {
+fn named(rank: PlaceRank, name: &str, en: &str) -> Named {
+    Named {
         rank,
         name: name.to_string(),
         names: vec![("en".to_string(), en.to_string())],
@@ -13,9 +13,9 @@ fn division(rank: PlaceRank, name: &str, en: &str) -> Division {
 /// Dictionary places 경기도 → 성남시 → 수내동, and a group-local 백현동.
 fn dict() -> Vec<Named> {
     vec![
-        division(PlaceRank::Region, "경기도", "Gyeonggi-do"),
-        division(PlaceRank::County, "성남시", "Seongnam-si"),
-        division(PlaceRank::Neighborhood, "수내동", "Sunae-dong"),
+        named(PlaceRank::Region, "경기도", "Gyeonggi-do"),
+        named(PlaceRank::County, "성남시", "Seongnam-si"),
+        named(PlaceRank::Neighborhood, "수내동", "Sunae-dong"),
     ]
 }
 
@@ -24,7 +24,7 @@ fn group() -> PlaceGroup {
     pages[0] = 0;
     pages[GROUP_PAGES - 1] = 1;
     PlaceGroup {
-        labels: vec![vec![0, 1, 2], vec![0, 1, APPROX]],
+        labels: vec![vec![0, 1, 2], vec![0, 1, LOCAL | APPROX], vec![0, 1, LOCAL]],
         pages,
         locals: vec![named(PlaceRank::Neighborhood, "백현동", "Baekhyeon-dong")],
     }

@@ -6,7 +6,7 @@ use crate::geocode::provider::overture::{GeocodeProvider, READS};
 use crate::geocode::PlaceDict;
 use crate::util::{pack, Level};
 use pxl_spec::bake::place_page::{encode_place_group, Named, GROUP_PAGES};
-use pxl_spec::bake::place_page::{DICT_OBJECT, GROUP_KEY_DEPTH, GROUP_SHAMT};
+use pxl_spec::bake::place_page::{DICT_OBJECT, GROUP_SHAMT, GROUP_ZOOM};
 use pxl_spec::bake::quadkey::index_of;
 use pxl_spec::space::pvf3::ivec;
 use std::path::Path;
@@ -65,15 +65,16 @@ pub(super) fn dictionary(out: &Path, seconds: u64) -> Result<(), String> {
     let (_, mut client) = job::connect(&[&READS], seconds)?;
     let provider = GeocodeProvider::prepare(&mut client).map_err(|e| e.to_string())?;
     let rows = provider.dictionary(&mut client).map_err(|e| e.to_string())?;
-    std::fs::write(out.join("dictionary.json"), serde_json::to_vec(&rows).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    let backing: Dictionary = rows.iter().map(|(id, d)| (id.clone(), d.rank, d.name.clone(), d.names.clone())).collect();
+    std::fs::write(out.join("dictionary.json"), serde_json::to_vec(&backing).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     let packet = pack(&PlaceDict::of(rows).packet().map_err(|e| format!("{e:?}"))?, Level::Live).map_err(|e| e.to_string())?;
     job::write_packet(&out, Some(&packet))
 }
 
 pub(super) fn execute(group: u64, dictionary: &Path, out: &Path, seconds: u64) -> Result<(), String> {
     let rows: Dictionary = serde_json::from_slice(&std::fs::read(dictionary).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
-    let dict = PlaceDict::of(rows);
-    let (_, mut client) = job::connect(&[&READS], seconds)?;
+    let dict = PlaceDict::of(rows.into_iter().map(|(id, rank, name, names)| (id, Named { rank, name, names })).collect());
+    let mut client = job::connect(seconds)?;
     let provider = GeocodeProvider::prepare(&mut client).map_err(|e| e.to_string())?;
     let base = ivec::sh(group, GROUP_SHAMT as i32);
     let side = 1i64 << GROUP_SHAMT;

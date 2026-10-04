@@ -1,23 +1,6 @@
 // pxl-geo-bake/geocode.test.rs
 
-use super::*;
-
-#[test]
-fn a_providers_name_map_becomes_the_answers_own() {
-    let common = serde_json::json!({"en": "Bundang-gu", "ko": "분당구"});
-    let names = names_of(&Some(common));
-    assert_eq!(names.get("en").map(String::as_str), Some("Bundang-gu"));
-    assert_eq!(names.get("ko").map(String::as_str), Some("분당구"));
-}
-
-#[test]
-fn anything_that_is_not_a_name_a_reader_can_be_shown_is_nothing() {
-    assert!(names_of(&None).is_empty());
-    assert!(names_of(&Some(serde_json::json!("분당구"))).is_empty(), "a bare string names no language");
-    assert!(names_of(&Some(serde_json::json!([1, 2]))).is_empty());
-    let mixed = names_of(&Some(serde_json::json!({"en": "Bundang-gu", "ko": 3})));
-    assert_eq!(mixed.len(), 1, "the readable half is kept");
-}
+use std::collections::BTreeMap;
 
 #[test]
 fn a_place_survives_the_wire_and_says_nothing_it_need_not() {
@@ -31,7 +14,7 @@ fn a_place_survives_the_wire_and_says_nothing_it_need_not() {
 
     let place = Place {
         parts: vec![
-            PlacePart::new(PlaceRank::Region, "경기도".to_string(), names_of(&Some(serde_json::json!({"en": "Gyeonggi-do"})))),
+            PlacePart::new(PlaceRank::Region, "경기도".to_string(), BTreeMap::from([("en".to_string(), "Gyeonggi-do".to_string())])),
             plain,
         ],
     };

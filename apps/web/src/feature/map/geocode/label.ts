@@ -9,9 +9,9 @@ export interface PlacePart {
 // Languages that write addresses broad-to-narrow ("강남구 역삼1동").
 const BROAD_TO_NARROW_LANGS = new Set(["ko", "ja", "zh"]);
 
-// The provider's own name is always some real language's — Overture's is
-// the local one — so falling back to it means "show the Korean name"
-// rather than an empty part.
+// The source's own name is always some real language's, the local one in
+// practice, so falling back to it shows the place's own name rather than an
+// empty part.
 function displayPartName(part: PlacePart, lang: string): string {
   return part.names?.[lang] ?? part.name;
 }

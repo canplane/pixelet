@@ -9,9 +9,10 @@ path = "src/lib.rs"
 
 [features]
 # `serve_tiles` only; off by default so the bake tools skip axum.
-serve = ["dep:axum", "dep:tokio"]
+serve = ["dep:axum", "dep:tokio", "dep:pxl-server"]
 
 [dependencies]
+libm.workspace = true
 pxl-geo-spec = { path = "../geo-spec" }
 pxl-spec = { path = "../../spec", features = ["serde"] }
 xpute-core = { path = "../../../xpute/core" }
@@ -27,6 +28,7 @@ serde = { version = "1", features = ["derive"] }
 # 227 of 10,979 longitudes by an ULP.
 serde_json = { version = "1", features = ["float_roundtrip", "raw_value"] }
 axum = { version = "0.8", optional = true }
+pxl-server = { path = "..", optional = true }
 tokio = { version = "1", features = ["fs", "macros", "net", "rt-multi-thread", "sync", "process", "time"], optional = true }
 
 # Declared because a feature gates it; the other bins are found in src/bin/.

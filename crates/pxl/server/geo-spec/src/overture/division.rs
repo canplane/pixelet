@@ -21,10 +21,10 @@ pub fn rank_of(subtype: &str) -> Option<PlaceRank> {
     })
 }
 
-pub const BROAD_SUBTYPE_ORDER: [&str; 2] = ["region", "county"];
+const BROAD_SUBTYPE_ORDER: [&str; 2] = ["region", "county"];
 
 /// A formal 동 (`locality`) wins over an informal area at the same point.
-pub const FINE_SUBTYPE_PRIORITY: [&str; 4] = ["locality", "neighborhood", "microhood", "macrohood"];
+const FINE_SUBTYPE_PRIORITY: [&str; 4] = ["locality", "neighborhood", "microhood", "macrohood"];
 
 /// `names.common` in the UI's languages as a JSON object, NULL where none, of
 /// the row the given table or alias names.
@@ -36,42 +36,6 @@ macro_rules! division_names {
             $t,
             ".properties->'names'->'common') WHEN 'array' THEN ",
             $t,
-            ".properties->'names'->'common' END) e WHERE jsonb_typeof(e->0) = 'string' AND jsonb_typeof(e->1) = 'string' AND e->>0 IN ('en', 'ko') AND e->>1 <> '')"
-        )
-    };
-}
-
-/// The area subtypes a name is built from; `country` is above the label.
-#[macro_export]
-macro_rules! division_areas {
-    () => {
-        "('region', 'county', 'locality', 'neighborhood', 'microhood', 'macrohood')"
-    };
-}
-
-/// The point subtypes: a province or a city always has its polygon.
-#[macro_export]
-macro_rules! division_points {
-    () => {
-        "('locality', 'neighborhood', 'microhood', 'macrohood')"
-    };
-}
-
-/// How far [`NEAREST_POINT_SQL`] looks where no polygon covers a point.
-pub const NEAREST_REACH_M: f64 = 2048.0;
-
-/// [`NEAREST_REACH_M`] at the DB's `y`, in the DB's coordinates.
-pub fn reach_at(y: f64) -> f64 {
-    to_db(NEAREST_REACH_M * u_per_m(from_db(y)))
-}
-
-/// `names.common` in the UI's languages as a JSON object, NULL where none, of
-/// the row the given table or alias names.
-#[macro_export]
-macro_rules! division_names {
-    ($t:literal) => {
-        concat!(
-            "(SELECT jsonb_object_agg(e->>0, e->>1) FROM jsonb_array_elements(CASE jsonb_typeof(", $t, ".properties->'names'->'common') WHEN 'array' THEN ", $t,
             ".properties->'names'->'common' END) e WHERE jsonb_typeof(e->0) = 'string' AND jsonb_typeof(e->1) = 'string' AND e->>0 IN ('en', 'ko') AND e->>1 <> '')"
         )
     };

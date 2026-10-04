@@ -12,9 +12,6 @@ use crate::io::demand::{Ask, Category};
 use crate::io::sched::declare;
 use crate::layer::geocode::store;
 
-pub const CATEGORY: Category = Category::geocode;
-pub const DICT_CATEGORY: Category = Category::geocode_dict;
-
 const DICT_SUBJECT: u64 = 0;
 
 pub fn center_group() -> Option<IVec> {
@@ -25,10 +22,10 @@ pub fn center_group() -> Option<IVec> {
 /// remembered between turns.
 pub fn geocode_fetcher_step() {
     let dict = [(DICT_SUBJECT, Ask::PLAIN)];
-    declare(DICT_CATEGORY, if store::dict_answered() { &[] } else { &dict });
+    declare(Category::geocode_dict, if store::dict_answered() { &[] } else { &dict });
 
     match center_group() {
-        Some(idx) if store::answered() != Some(idx) => declare(CATEGORY, &[(idx, Ask::PLAIN)]),
-        _ => declare(CATEGORY, &[]),
+        Some(idx) if store::answered() != Some(idx) => declare(Category::geocode, &[(idx, Ask::PLAIN)]),
+        _ => declare(Category::geocode, &[]),
     }
 }

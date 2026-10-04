@@ -9,7 +9,11 @@
 //! any place, and only moving to another group asks again. A failed fetch is
 //! not one; its want waits out the request scheduler's retry.
 
+use pxl_spec::bake::place_page::{open_place_dict, open_place_group, PlaceGroupView, PlacesView};
 use pxl_spec::space::pvf3::ivec::IVec;
+use xpute_core::status::error::MarshalError;
+use xpute_runtime::mem::base::ptr_at;
+use xpute_runtime::mem::heap::{free, Block};
 
 use xpute_runtime::global::Global;
 
@@ -47,10 +51,10 @@ unsafe fn open<V>(block: Block, view: impl FnOnce(&'static [u8]) -> Result<V, Ma
 
 #[derive(Default)]
 struct GeocodeStore {
-    /// A 404 is an answer, not a hole to ask about again.
-    dict: Option<Option<ResidentDict>>,
+    /// None inside where the bake wrote no dictionary.
+    dict: Option<Option<Resident<PlacesView<'static>>>>,
     /// None inside where the bake wrote no object.
-    group: Option<(IVec, Option<ResidentGroup>)>,
+    group: Option<(IVec, Option<Resident<PlaceGroupView<'static>>>)>,
 }
 
 static STORE: Global<GeocodeStore> = Global::new();
@@ -59,7 +63,7 @@ fn store() -> &'static mut GeocodeStore {
     STORE.get(GeocodeStore::default)
 }
 
-pub fn dict() -> Option<&'static ResidentDict> {
+pub fn dict() -> Option<&'static Resident<PlacesView<'static>>> {
     store().dict.as_ref()?.as_ref()
 }
 
@@ -67,23 +71,38 @@ pub fn dict_answered() -> bool {
     store().dict.is_some()
 }
 
-/// Dropping what was held gives its block back.
-pub fn set_dict(dict: Option<ResidentDict>) {
-    store().dict = Some(dict);
-}
-
 pub fn answered() -> Option<IVec> {
     store().group.as_ref().map(|(idx, _)| *idx)
 }
 
 /// Only where it is the one held and has an object.
-pub fn group_of(group_idx: IVec) -> Option<&'static ResidentGroup> {
+pub fn group_of(group_idx: IVec) -> Option<&'static Resident<PlaceGroupView<'static>>> {
     match &store().group {
         Some((idx, held)) if *idx == group_idx => held.as_ref(),
         _ => None,
     }
 }
 
-pub fn set_group(group_idx: IVec, group: Option<ResidentGroup>) {
-    store().group = Some((group_idx, group));
+/// # Safety
+/// As `open`.
+pub unsafe fn adopt_dict(block: Block) -> Result<(), MarshalError> {
+    // SAFETY: the caller's contract. Dropping what was held gives its block back.
+    store().dict = Some(Some(unsafe { open(block, open_place_dict) }?));
+    Ok(())
+}
+
+/// # Safety
+/// As `open`.
+pub unsafe fn adopt_group(group_idx: IVec, block: Block) -> Result<(), MarshalError> {
+    // SAFETY: the caller's contract.
+    store().group = Some((group_idx, Some(unsafe { open(block, open_place_group) }?)));
+    Ok(())
+}
+
+pub fn absent_dict() {
+    store().dict = Some(None);
+}
+
+pub fn absent_group(group_idx: IVec) {
+    store().group = Some((group_idx, None));
 }

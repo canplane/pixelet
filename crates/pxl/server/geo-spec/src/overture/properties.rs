@@ -2,6 +2,9 @@
 
 use crate::overture::category;
 
+/// The path [`overture_category`] reads, for SQL that selects it.
+pub const CATEGORY_SQL: &str = "properties->'categories'->>'primary'";
+
 pub fn overture_category(properties: &serde_json::Value) -> Option<&str> {
     properties.get("categories")?.get("primary")?.as_str()
 }

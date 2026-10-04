@@ -122,7 +122,7 @@ ssh user@<vm-ip> 'docker exec -i pixelet-db-geo pg_restore --no-owner --no-privi
   -U <DB_GEO_USER> -d <DB_GEO_NAME> --clean --if-exists < ~/overture.dump'
 ```
 
-`--clean --if-exists` makes this safe to re-run for a monthly refresh.
+`--clean --if-exists` makes this safe to re-run.
 
 ### Updating
 
@@ -327,22 +327,9 @@ All of them set in GitHub's own settings and nowhere else:
 | `VM_HOST` / `VM_USER`   | the Hetzner box                                                                                                                 |
 | `VM_SSH_KEY`            | a deploy-only private key; its public half in that user's `authorized_keys`                                                     |
 | `VM_KNOWN_HOSTS`        | `ssh-keyscan <host>` run on the VM. Optional, and the deploy warns without it: the fallback accepts whatever answers on the day |
-| `R2_*`                  | the monthly refresh's own, already set — see below                                                                              |
 
 The VM key should be its own keypair rather than a personal one, so revoking
 it costs nothing else.
-
-### The monthly refresh
-
-`.github/workflows/overture-monthly-refresh.yml`, 03:00 UTC on the 1st. It
-ingests Overture Places and Divisions into a throwaway PostGIS service
-container, bakes POI and reverse geocode with `--force`, and syncs the two
-published prefixes in place. It needs both toolchains: the two ingests are
-Deno and staying that way, the two bakes have been Rust since 2026-09-18.
-
-It never rebuilds terrain's land/ocean classification — it fetches
-`_meta/land_pages.json` from the bucket. Re-upload that object by hand (the
-publish-bucket skill's terrain step) if the classification is ever rebuilt.
 
 ## 6. Licensing and attribution
 

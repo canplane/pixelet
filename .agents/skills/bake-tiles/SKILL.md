@@ -17,11 +17,11 @@ Read it before changing a pipeline's shape; this file is the procedure only.
 
 ## The three bakes
 
-| Kind    | Tool                     | Reads                                           | Output                                 | Empty page      |
-| ------- | ------------------------ | ----------------------------------------------- | -------------------------------------- | --------------- |
-| terrain | `deno task bake:tiles`   | Overture buildings/transportation/base, GEDTM30 | packed XTP, one per land page          | shared `_ocean` |
-| poi     | `deno task bake:poi`     | Overture places                                 | XTP counts, where a crowd splits       | no object       |
-| geocode | `deno task bake:geocode` | Overture divisions, terrain's `land_pages.json` | packed JSON, one per page with a label | no object       |
+| Kind    | Tool                     | Reads                                           | Output                                                             | Empty page      |
+| ------- | ------------------------ | ----------------------------------------------- | ------------------------------------------------------------------ | --------------- |
+| terrain | `deno task bake:tiles`   | Overture buildings/transportation/base, GEDTM30 | packed XTP, one per land page                                      | shared `_ocean` |
+| poi     | `deno task bake:poi`     | Overture places                                 | XTP counts, where a crowd splits                                   | no object       |
+| geocode | `deno task bake:geocode` | Overture divisions, terrain's `land_pages.json` | XTP: a dictionary, and one per group of 16 × 16 pages with a label | no object       |
 
 Every tool writes to `./out/<kind>/<version>`, where the version defaults to
 `PUBLISHED_VERSION.<kind>` in `spec/pxl/spec/bake/published.json`
@@ -250,8 +250,9 @@ It takes `--out`, `--land-cache <path>`, `--concurrency <n>`, `--limit <n>`
 and `--force` (re-fetch existing pages and `.empty` markers). It needs
 terrain's `land_pages.json`, not its tables.
 
-Verify `failed=` is zero and decompress a page to check its JSON. A group's
-name is a page's first eleven digits. The monthly workflow ingests Places
+Verify `failed=` is zero and that `_dict` and a group open
+(`place_page::open_place_dict`, `open_place_group`). A group's name is a
+page's first eleven digits. The monthly workflow ingests Places
 for forward search and Divisions for geocode, then refreshes geocode only.
 POI is baked separately and is immutable.
 
@@ -267,8 +268,8 @@ and means a full re-bake into a **new** version — not a partial one, because
 a mixed bucket serves tiles from two pipelines with no way to tell them
 apart.
 
-A **geocode** version names the page _format_, not the data: the
-monthly refresh rewrites the same prefix with newer Overture content. A
+A **geocode** version names the page _format_, not the data: a data
+refresh rewrites the same prefix with newer Overture content. A
 format change (a new field, a new encoding) is a new version and a re-bake; a
 data refresh is not.
 

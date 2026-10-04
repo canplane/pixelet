@@ -5,7 +5,6 @@ use std::collections::BTreeMap;
 use crate::coverage::Coverage;
 use postgres::Client;
 use pxl_geo_spec::overture::properties::{category_named, CATEGORY_SQL};
-use crate::coverage::Coverage;
 use pxl_spec::bake::poi_page::{self, kind_of, Place, PoiPage, POI_LATTICE};
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
@@ -33,12 +32,9 @@ pub fn leaves(client: &mut Client, coverage: &Coverage, within: Option<IVec>) ->
     let rows = match within {
         Some(p) => {
             let [[x0, y0, _], [x1, y1, _]] = epsg3857::get_page_bbox(p);
-            client.query(
-                "SELECT ST_X(geom), ST_Y(geom), name, properties->'categories'->>'primary', gers_id FROM overture_places WHERE geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)",
-                &[&x0, &y0, &x1, &y1],
-            )
+            client.query(&format!("{select} WHERE geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)"), &[&x0, &y0, &x1, &y1])
         }
-        None => client.query("SELECT ST_X(geom), ST_Y(geom), name, properties->'categories'->>'primary', gers_id FROM overture_places", &[]),
+        None => client.query(&select, &[]),
     }
     .map_err(|e| e.to_string())?;
     let mut places: BTreeMap<IVec, Vec<(Pvf3, String, u8, String)>> = BTreeMap::new();
@@ -53,7 +49,25 @@ pub fn leaves(client: &mut Client, coverage: &Coverage, within: Option<IVec>) ->
     }
     Ok(places
         .into_iter()
-        .map(|(page, p)| (page, PoiPage::of_places(0, p.iter().map(|(at, name, kind, id)| (*at, Place { name, kind: *kind, id, ..Place::default() })), true)))
+        .map(|(page, p)| {
+            (
+                page,
+                PoiPage::of_places(
+                    0,
+                    p.iter().map(|(at, name, kind, id)| {
+                        (
+                            *at,
+                            Place {
+                                name,
+                                kind: *kind,
+                                id,
+                                ..Place::default()
+                            },
+                        )
+                    }),
+                    true,
+                ),
+            )
+        })
         .collect())
 }
-
