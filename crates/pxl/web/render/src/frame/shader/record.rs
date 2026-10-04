@@ -110,7 +110,6 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_eye",
             "atmos_view",
             "atmos_ground",
-            "sky_words",
             "sky"
         ),
         SHADER_DEBUG => wgsl!("frame", "globe", "encode", "debug"),
@@ -153,7 +152,6 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_eye_unit",
             "atmos_view",
             "atmos_ground",
-            "sky_words",
             "atmos_pass",
             "atmos_exposure"
         ),
@@ -621,7 +619,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         PIPELINE_ATMOS_EXPOSURE => record(
             screen(SHADER_ATMOS_EXPOSURE),
             &[],
-            &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, UNIFORM], AIR[0], AIR[1], AIR[2], AIR[3], AIR[5], AIR[6], AIR[7], AIR[8]])],
+            &[group(&[[0, FRAGMENT, UNIFORM], AIR[0], AIR[1], AIR[2], AIR[3], AIR[5], AIR[6], AIR[7], AIR[8]])],
         ),
         PIPELINE_STARS => record(
             Head {
