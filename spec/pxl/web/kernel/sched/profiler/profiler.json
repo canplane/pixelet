@@ -114,60 +114,61 @@
     "census": 23,
     "zoom_tris": 43,
     "px": 67,
-    "buffers": 68,
-    "buffer_mb": 69,
-    "arena_mb": 70,
-    "tex_depth_mb": 71,
-    "tex_shadow_mb": 72,
-    "tex_layers_mb": 73,
-    "lod_chunks": 74,
-    "lod_in_frustum": 75,
-    "lod_pending": 76,
-    "lod_settling": 77,
-    "lod_offscreen_pending": 78,
-    "lod_oldest_release_ms": 79,
-    "lod_oldest_visible_ms": 80,
-    "mounts_added": 81,
-    "mounts_removed": 82,
-    "mounts_layouts": 83,
-    "pages_total": 84,
-    "zoom_pages": 85,
-    "pages_poi": 109,
-    "heap_used_mb": 110,
-    "heap_live_mb": 111,
-    "heap_run_mb": 112,
-    "heap_slot_mb": 113,
-    "heap_range_mb": 114,
-    "heap_refusals": 115,
-    "heap_largest_free_mb": 116,
-    "ring_cq_peak": 117,
-    "ring_held_peak": 118,
-    "work_scans": 119,
-    "work_bakes": 120,
-    "work_fine_peak": 121,
-    "work_coarse_peak": 122,
-    "q_terrain": 123,
-    "q_poi": 124,
-    "stale_hidden": 125,
-    "stale_uncovered": 126,
-    "stale_unready": 127,
-    "slot_waits": 128,
-    "slot_wait_zooms": 129,
-    "slot_chained": 130,
-    "cap_commit_left": 131,
-    "cap_mount_left": 132,
-    "cap_mount_full": 133,
-    "cap_record_refused": 134,
-    "turn_effects_ms": 135,
-    "turn_stage_ms": 136,
-    "turn_step_ms": 137,
-    "turn_step_name": 138,
-    "cover_rule": 139,
-    "cover_drawn": 140,
-    "cover_gaps": 141,
-    "view_rays": 142,
-    "view_visits": 143,
-    "WORDS": 144
+    "gpu_skipped": 68,
+    "buffers": 69,
+    "buffer_mb": 70,
+    "arena_mb": 71,
+    "tex_depth_mb": 72,
+    "tex_shadow_mb": 73,
+    "tex_layers_mb": 74,
+    "lod_chunks": 75,
+    "lod_in_frustum": 76,
+    "lod_pending": 77,
+    "lod_settling": 78,
+    "lod_offscreen_pending": 79,
+    "lod_oldest_release_ms": 80,
+    "lod_oldest_visible_ms": 81,
+    "mounts_added": 82,
+    "mounts_removed": 83,
+    "mounts_layouts": 84,
+    "pages_total": 85,
+    "zoom_pages": 86,
+    "pages_poi": 110,
+    "heap_used_mb": 111,
+    "heap_live_mb": 112,
+    "heap_run_mb": 113,
+    "heap_slot_mb": 114,
+    "heap_range_mb": 115,
+    "heap_refusals": 116,
+    "heap_largest_free_mb": 117,
+    "ring_cq_peak": 118,
+    "ring_held_peak": 119,
+    "work_scans": 120,
+    "work_bakes": 121,
+    "work_fine_peak": 122,
+    "work_coarse_peak": 123,
+    "q_terrain": 124,
+    "q_poi": 125,
+    "stale_hidden": 126,
+    "stale_uncovered": 127,
+    "stale_unready": 128,
+    "slot_waits": 129,
+    "slot_wait_zooms": 130,
+    "slot_chained": 131,
+    "cap_commit_left": 132,
+    "cap_mount_left": 133,
+    "cap_mount_full": 134,
+    "cap_record_refused": 135,
+    "turn_effects_ms": 136,
+    "turn_stage_ms": 137,
+    "turn_step_ms": 138,
+    "turn_step_name": 139,
+    "cover_rule": 140,
+    "cover_drawn": 141,
+    "cover_gaps": 142,
+    "view_rays": 143,
+    "view_visits": 144,
+    "WORDS": 145
   },
   "FRAME_GROUPS": {
     "$doc": [
@@ -197,7 +198,8 @@
       "triangles",
       "census",
       "zoom_tris",
-      "px"
+      "px",
+      "gpu_skipped"
     ],
     "lod": [
       "lod_chunks",
@@ -303,9 +305,9 @@
       "One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0."
     ],
     "sample": 0,
-    "has_prev": 144,
-    "prev": 145,
-    "WORDS": 289
+    "has_prev": 145,
+    "prev": 146,
+    "WORDS": 291
   },
   "SPREAD": {
     "$type": "u32",
@@ -384,15 +386,15 @@
       "census": 69,
       "zoom_tris": 89,
       "last": 113,
-      "WORDS": 257
+      "WORDS": 258
     },
     "tasks": {
-      "AT": 262,
+      "AT": 263,
       "slots": 0,
       "WORDS": 150
     },
     "counters": {
-      "AT": 412,
+      "AT": 413,
       "faces_kept": 0,
       "faces_possible": 1,
       "runs_culled": 2,
@@ -410,7 +412,7 @@
       "WORDS": 14
     },
     "atlas": {
-      "AT": 426,
+      "AT": 427,
       "size": 0,
       "entries": 1,
       "shelves": 2,
@@ -419,7 +421,7 @@
       "WORDS": 5
     },
     "held": {
-      "AT": 431,
+      "AT": 432,
       "run_sets": 0,
       "run_set_mb": 1,
       "tiers": 2,
@@ -429,14 +431,14 @@
       "WORDS": 6
     },
     "fetch": {
-      "AT": 437,
+      "AT": 438,
       "queued": 0,
       "running": 1,
       "credits": 2,
       "WORDS": 3
     },
     "peak": {
-      "AT": 440,
+      "AT": 441,
       "present": 0,
       "dt_ms": 1,
       "sched_ms": 2,
@@ -458,13 +460,13 @@
       "WORDS": 18
     },
     "steps": {
-      "AT": 458,
+      "AT": 459,
       "count": 0,
       "slots": 1,
       "WORDS": 161
     },
     "quality": {
-      "AT": 619,
+      "AT": 620,
       "step": 0,
       "star": 1,
       "frames_held": 2,
@@ -479,7 +481,7 @@
       "$doc": [
         "The heap as the read finds it, recording or not: `used_mb` its top, `requests` the pages it has ever asked for."
       ],
-      "AT": 627,
+      "AT": 628,
       "used_mb": 0,
       "requests": 1,
       "WORDS": 2
@@ -488,7 +490,7 @@
       "$doc": [
         "Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the page it is read from."
       ],
-      "AT": 629,
+      "AT": 630,
       "dist": 0,
       "polar": 1,
       "azimuth": 2,
@@ -507,7 +509,7 @@
       "read_zoom": 15,
       "WORDS": 16
     },
-    "WORDS": 645
+    "WORDS": 646
   },
   "READ": {
     "$type": "u32",

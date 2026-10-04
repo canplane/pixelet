@@ -336,6 +336,13 @@ pub fn room(_bytes: u32) -> bool {
     true
 }
 
+/// wgpu takes each call as it is made: there is no range to overrun.
+pub fn frame_begin() {}
+
+pub fn frame_commit() -> bool {
+    true
+}
+
 fn float(word: u32) -> f32 {
     f32::from_bits(word)
 }

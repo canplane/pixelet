@@ -232,32 +232,18 @@ impl BadgePass {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn draw(&mut self, g: &Gpu, encoder: u32, color: u32, depth: u32, draws: &Draws, uniforms: &[f32], blocks: &Blocks, stamp: &mut Stamp) {
+    /// Each set's uniform and group, made here so drawing makes nothing that
+    /// outlives its frame: a set's group holds its block and the depth it reads.
+    pub fn prepare(&mut self, g: &Gpu, depth: u32, draws: &Draws, blocks: &Blocks) {
         if self.sheet_group == 0 {
             return;
         }
-        let mut pass = 0;
-        let mut n = 0;
-        for d in draws.of(PIPELINE_BADGE).filter(|d| d[1] > 0) {
-            let Some((block, _, _)) = blocks.get(d[0]) else { continue };
-            if n == SETS {
-                break;
-            }
-            // A uniform buffer a set: every write to one buffer lands before the pass, so
-            // a shared one would place every set where the last is.
-            let set = &mut self.sets[n];
-            n += 1;
+        let placed = draws.of(PIPELINE_BADGE).filter(|d| d[1] > 0).filter_map(|d| blocks.get(d[0]));
+        for (set, (block, _, _)) in self.sets.iter_mut().zip(placed) {
             if set.uniform == 0 {
                 set.uniform = object();
                 g.buffer(set.uniform, word_bytes(BADGE_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
             }
-            let s = &mut self.uniform;
-            s[..16].copy_from_slice(&self.view);
-            s[16..32].copy_from_slice(&self.proj);
-            s[32..35].copy_from_slice(&uniform_of(uniforms, d)[..3]);
-            s[35..40].copy_from_slice(&[self.px_k, self.near, self.far, self.cell, 0.0]);
-            g.write_buffer(set.uniform, 0, bytes(s));
             if set.block != block || set.depth != depth || set.group == 0 {
                 release(set.group);
                 set.group = object();
@@ -269,6 +255,25 @@ impl BadgePass {
                 set.block = block;
                 set.depth = depth;
             }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw(&mut self, g: &Gpu, encoder: u32, color: u32, depth: u32, draws: &Draws, uniforms: &[f32], blocks: &Blocks, stamp: &mut Stamp) {
+        if self.sheet_group == 0 {
+            return;
+        }
+        let mut pass = 0;
+        let placed = draws.of(PIPELINE_BADGE).filter(|d| d[1] > 0).filter(|d| blocks.get(d[0]).is_some());
+        // A uniform buffer a set: every write to one buffer lands before the pass, so
+        // a shared one would place every set where the last is.
+        for (set, d) in self.sets.iter().zip(placed) {
+            let s = &mut self.uniform;
+            s[..16].copy_from_slice(&self.view);
+            s[16..32].copy_from_slice(&self.proj);
+            s[32..35].copy_from_slice(&uniform_of(uniforms, d)[..3]);
+            s[35..40].copy_from_slice(&[self.px_k, self.near, self.far, self.cell, 0.0]);
+            g.write_buffer(set.uniform, 0, bytes(s));
             if pass == 0 {
                 pass = object();
                 g.pass(pass, encoder, &pass_desc(color, load::LOAD, depth, load::READ_ONLY, 0.0, stamp.pass()));

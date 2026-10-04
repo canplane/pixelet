@@ -148,6 +148,7 @@ pub fn stage_render() {
             census,
             zoom_tris: Default::default(),
             px: stat.px,
+            skipped: stat.skipped,
         },
         DeviceSample {
             buffers: stat.buffers,
