@@ -193,21 +193,28 @@ pub fn frame_group(g: &Gpu, layout: u32, frame: u32, shadow: [u32; 10], ao: [u32
     id
 }
 
-/// Returns the texture, its view and the group.
-pub fn skin_group(g: &Gpu, layout: u32, sampler: u32, image: u32) -> [u32; 3] {
-    let texture = object();
+/// Each skin image as one texture's view, made the first time a skin binds it:
+/// the host lets a decoded image go as it uploads it (`Gpu::image_texture`), so
+/// a skin made again, or by another pass, binds what is here. As many as the
+/// skins the asset table names.
+static SKIN_VIEWS: Global<Vec<(u32, u32)>> = Global::new();
+
+fn skin_view(g: &Gpu, image: u32) -> u32 {
+    let views = SKIN_VIEWS.get(Vec::new);
+    if let Some(&(_, view)) = views.iter().find(|&&(i, _)| i == image) {
+        return view;
+    }
+    let (texture, view) = (object(), object());
     g.image_texture(texture, image);
-    let view = object();
     g.view(view, texture, dimension::D2, 0, 1, 0, 1);
-    let group = object();
-    g.bind_group(group, layout, &[0, resource::VIEW, view, 0, 0, 1, resource::SAMPLER, sampler, 0, 0]);
-    [texture, view, group]
+    views.push((image, view));
+    view
 }
 
-pub fn release_skin(ids: [u32; 3]) {
-    for id in ids.into_iter().rev() {
-        release(id);
-    }
+pub fn skin_group(g: &Gpu, layout: u32, sampler: u32, image: u32) -> u32 {
+    let group = object();
+    g.bind_group(group, layout, &[0, resource::VIEW, skin_view(g, image), 0, 0, 1, resource::SAMPLER, sampler, 0, 0]);
+    group
 }
 
 /// Records sorted by pipeline with a stable counting sort, so a pass walks
@@ -520,6 +527,7 @@ pub fn device_ready() -> bool {
 pub fn gpu_lost() {
     DEVICE.set(None);
     RENDERER.set(None);
+    SKIN_VIEWS.set(Vec::new());
     forget_objects();
     blocks().lose();
     arena_lose();

@@ -85,7 +85,8 @@ impl Gpu {
         put(op::TEXTURE, &[id, width, height, layers, format, mips, usage]);
     }
 
-    /// The host has the image before the kernel hears of it, so one the kernel names is there.
+    /// The host has the image before the kernel hears of it, so one the kernel
+    /// names is there; the texture takes it, so each image is uploaded once.
     pub fn image_texture(&self, id: u32, image: u32) {
         put(op::IMAGE_TEXTURE, &[id, image]);
     }
