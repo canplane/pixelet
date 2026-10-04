@@ -69,7 +69,6 @@ struct Air {
   light: vec3f,
   end: vec3f,
   ground: bool,
-  ground_km: f32,
   // The ground past the terrain is lit on its own slope of the sphere.
   normal: vec3f,
 };
@@ -86,7 +85,6 @@ fn air_along(dir: vec3f) -> Air {
   air.normal = frame_up();
   if (air.ground) {
     let d = to_land(r, mu);
-    air.ground_km = d;
     air.end = transmittance_along(r, mu, d, true);
     air.normal = normalize(frame_up() * r + dir * d);
   } else {
@@ -104,20 +102,6 @@ fn layer_depth(h0: f32, h1: f32, d: f32, scale: f32) -> f32 {
   }
   return d * scale * (exp(-h0 / scale) - exp(-h1 / scale)) / dh;
 }
-
-// The ground's haze, a near view's: it leaves as the view goes over to the
-// Earth's picture, which no veil seen from orbit covers.
-fn ground_haze() -> f32 {
-  return atmos_haze_extinction() * (1.0 - frame_earth_share());
-}
-
-fn haze_through(h0: f32, h1: f32, d: f32) -> f32 {
-  return exp(-ground_haze() * layer_depth(h0, h1, d, atmos_haze_scale_height()));
-}
-
-// Continental haze single-scattering albedo, near OPAC's continental types at
-// green (Hess, Koepke and Schult, 1998); nothing else fixes it.
-const HAZE_ALBEDO: f32 = 0.9;
 
 // Lit where the air is, not along the ray: a veil taken from the sky's ray
 // laid a bright line over the ground at the horizon toward a low sun.
@@ -201,8 +185,6 @@ fn beyond(air: Air) -> vec3f {
     let n = air.normal;
     let face = earth_face(n);
     light += air.end * (face.rgb * surface_light(n, 1.0, light_at(land_radius(), n)) + city_shown(face.a));
-    // Haze reads as the air's own light along the ray.
-    light = mix(air.light, light, haze_through(max(atmos_camera_altitude(), 0.0), 0.0, air.ground_km));
   }
   return light;
 }
@@ -225,16 +207,15 @@ fn veil(world_pos: vec3f, light: Light) -> Veil {
   let h1 = max(h0 + radius_of(world_pos) - camera_r(), 0.0);
   let rayleigh = atmos_rayleigh_scattering() * layer_depth(h0, h1, d, atmos_rayleigh_scale_height());
   let mie = atmos_mie_extinction() * layer_depth(h0, h1, d, atmos_mie_scale_height());
-  let haze = ground_haze() * layer_depth(h0, h1, d, atmos_haze_scale_height());
   // Single scattering over a segment lit uniformly, short enough for that.
-  let depth = rayleigh + vec3f(mie + haze);
+  let depth = rayleigh + vec3f(mie);
   let through = exp(-depth);
   // The palette is no reflectance: dimmed by wavelength, a light sea's blue went
   // and its green stayed. The air's own light keeps its color, and the Earth's
   // picture, which is reflectance, is dimmed as it is past the terrain.
   v.through = mix(vec3f(dot(through, LUMA)), through, frame_earth_share());
   let lit = air_light((world_pos - frame_camera_pos()) / du, light);
-  let turned = rayleigh * lit.rayleigh + (mie * atmos_mie_scattering() / atmos_mie_extinction() + haze * HAZE_ALBEDO) * lit.mie;
+  let turned = rayleigh * lit.rayleigh + mie * atmos_mie_scattering() / atmos_mie_extinction() * lit.mie;
   v.scattered = (vec3f(1.0) - through) * turned / max(depth, vec3f(1e-6));
   return v;
 }

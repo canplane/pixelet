@@ -23,7 +23,7 @@ use crate::look::atmosphere as model;
 use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_SKY, ENV_SUN};
 
 /// One past the last field: the device rounds the struct up to a 16-byte row.
-pub const ATMOS_FLOATS: usize = 64;
+pub const ATMOS_FLOATS: usize = 60;
 /// Offsets in floats; record.test.rs holds them to the struct.
 pub(crate) const RAYLEIGH_SCATTERING: usize = 0;
 pub(crate) const BOTTOM_RADIUS: usize = 3;
@@ -57,11 +57,9 @@ pub(crate) const CLOUD_TIME: usize = 44;
 pub(crate) const CLOUD_COUNT: usize = 45;
 pub(crate) const CLOUD_ALTITUDE: usize = 46;
 pub(crate) const CLOUD_GONE: usize = 47;
-pub(crate) const HAZE_EXTINCTION: usize = 48;
-pub(crate) const HAZE_SCALE_HEIGHT: usize = 49;
-pub(crate) const CITY_LIGHT: usize = 52;
-pub(crate) const EARTH_WINDOW: usize = 56;
-pub(crate) const EARTH_PAGES: usize = 60;
+pub(crate) const CITY_LIGHT: usize = 48;
+pub(crate) const EARTH_WINDOW: usize = 52;
+pub(crate) const EARTH_PAGES: usize = 56;
 
 /// Bindings 8 through 18, nine entries of five words.
 pub const AIR_WORDS: usize = 45;
@@ -130,8 +128,6 @@ impl Atmosphere {
             (RAYLEIGH_SCALE_HEIGHT, model::RAYLEIGH_SCALE_HEIGHT_KM),
             (MIE_SCATTERING, model::MIE_SCATTERING),
             (MIE_EXTINCTION, model::MIE_EXTINCTION),
-            (HAZE_EXTINCTION, model::HAZE_EXTINCTION),
-            (HAZE_SCALE_HEIGHT, model::HAZE_SCALE_HEIGHT_KM),
             (MIE_SCALE_HEIGHT, model::MIE_SCALE_HEIGHT_KM),
             (MIE_G, model::MIE_G),
             (OZONE_CENTER, model::OZONE_CENTER_KM),
