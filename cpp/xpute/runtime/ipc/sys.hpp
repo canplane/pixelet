@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <source_location>
 #include <span>
@@ -21,6 +22,19 @@
 namespace xpute {
 
 using Fd = std::uint32_t;
+
+// Each call's arguments, which its record takes as an array of this length.
+inline constexpr std::size_t OPENAT_ARGS = 3;
+inline constexpr std::size_t READ_ARGS = 3;
+inline constexpr std::size_t WRITE_ARGS = 3;
+inline constexpr std::size_t CLOSE_ARGS = 1;
+
+// The most one descriptor records in a turn, its name `path` bytes long: its
+// open, a read or a write, and its close, twice where it is stopped.
+constexpr std::uint64_t descriptor_turn_bytes(std::uint64_t path) noexcept {
+    std::uint64_t moved = READ_ARGS > WRITE_ARGS ? READ_ARGS : WRITE_ARGS;
+    return 4 * (record_words(OPENAT_ARGS, path) + record_words(moved, std::nullopt) + 2 * record_words(CLOSE_ARGS, std::nullopt));
+}
 
 class Sys {
   public:
@@ -45,6 +59,10 @@ class Sys {
 
     // `op` carries the PROGRAM bit.
     void call(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes) noexcept;
+
+    // `call` where it fits with `reserve` bytes left after it; false, and nothing
+    // recorded, where it does not, for the caller to ask again a later turn.
+    bool try_call(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes, std::uint32_t reserve) noexcept;
 
     // The one call of the turn, published at once; what was recorded before it is
     // dropped.

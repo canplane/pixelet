@@ -16,7 +16,7 @@ use xpute_runtime::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 
 use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::io::file::{self, Owner};
-use crate::io::sched::{attempt_of, settle};
+use crate::io::sched::{attempt_of, settle, Credit};
 use crate::layer::geocode::store as geocode_store;
 use crate::layer::terrain::page::OCEAN_KEY;
 use crate::sched::profiler::record::{Failure, Outcome};
@@ -47,10 +47,11 @@ impl fmt::Display for DemandName {
     }
 }
 
-pub fn start(key: u64, category: Category, subject: u64) {
+pub fn start(credit: Credit, category: Category, subject: u64) {
     let Some(bake) = category.bake() else { return };
     let name = DemandName(category, subject).to_string();
-    file::open(bake as u32, &name, Owner::Fetch { key, at_ms: now() });
+    let owner = Owner::Fetch { key: credit.key(), at_ms: now() };
+    file::open(credit, bake as u32, &name, owner);
 }
 
 /// Settled as stopped at once: nothing is reported for a closed descriptor.

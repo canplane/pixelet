@@ -12,7 +12,7 @@ use pxl_render::gpu::text::{raster_box, Font, Raster};
 use xpute_runtime::mem::base::off_of_slice;
 
 use crate::abi::host::op;
-use crate::host::{host_record, turn};
+use crate::host::{host_offer, turn};
 use xpute_runtime::global::Global;
 
 /// (weight, px bits, max width bits; 0 for one line, text).
@@ -68,8 +68,10 @@ pub fn text_lines(font: Font, max_width: f64, text_in: &str) -> Option<Vec<(&str
         let lines = text_in.chars().count().max(1) as u32;
         let mut at = vec![0u32; 1 + 2 * lines as usize].into_boxed_slice();
         let args = [font.weight, font.px.to_bits(), (max_width as f32).to_bits(), off_of_slice(&raw mut *at) as u32, lines];
-        if !host_record(op::TEXT_LAYOUT, &args, text_in.as_bytes()) {
-            return Some(vec![(text_in, text_in.chars().count() as f64 * 7.0)]);
+        match host_offer(op::TEXT_LAYOUT, &args, text_in.as_bytes()) {
+            None => return Some(vec![(text_in, text_in.chars().count() as f64 * 7.0)]),
+            Some(false) => return None,
+            Some(true) => {}
         }
         t.layouts.insert(key, Answer { asked: turn(), read: true, at });
         return None;
@@ -126,7 +128,7 @@ pub fn text_raster(font: Font, color: u32, text_in: &str) -> Option<Raster<'stat
         size[1],
         origin[0].to_bits(),
     ];
-    if !host_record(op::TEXT_RASTER, &args, text_in.as_bytes()) {
+    if host_offer(op::TEXT_RASTER, &args, text_in.as_bytes()) != Some(true) {
         return None;
     }
     let at = RasterAt {

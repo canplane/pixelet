@@ -51,8 +51,8 @@ pub fn frame_room() -> bool {
 
 /// Leaves `stream::RESERVE` for what cannot wait.
 pub fn room(bytes: u32) -> bool {
-    // A record's op, count and arguments, at most eight words.
-    STREAM.get(|| None).as_ref().is_some_and(|s| s.left() >= bytes as usize + 32 + stream::RESERVE as usize)
+    // An upload's record carries at most six arguments.
+    STREAM.get(|| None).as_ref().is_some_and(|s| s.fits(6, Some(bytes as usize), stream::RESERVE as usize))
 }
 
 fn put(code: u32, args: &[u32]) {

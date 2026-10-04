@@ -14,29 +14,35 @@ static std::span<const std::uint8_t> bytes_of(std::string_view s) noexcept {
 }
 
 void Sys::openat(Fd fd, std::uint32_t root, std::uint32_t flags, std::string_view path) noexcept {
-    const std::array<std::uint32_t, 3> args{fd, root, flags};
+    const std::array<std::uint32_t, OPENAT_ARGS> args{fd, root, flags};
     stream_.record(sys::op::OPENAT, args, {}, bytes_of(path));
 }
 
 void Sys::read(Fd fd, std::span<std::uint8_t> dst) noexcept {
-    const std::array<std::uint32_t, 3> args{fd, mem_.off_of(dst), static_cast<std::uint32_t>(dst.size())};
+    const std::array<std::uint32_t, READ_ARGS> args{fd, mem_.off_of(dst), static_cast<std::uint32_t>(dst.size())};
     stream_.record(sys::op::READ, args);
 }
 
 void Sys::write(Fd fd, std::vector<std::uint8_t> bytes) noexcept {
-    const std::array<std::uint32_t, 3> args{fd, mem_.off_of(std::span<const std::uint8_t>(bytes)), static_cast<std::uint32_t>(bytes.size())};
+    const std::array<std::uint32_t, WRITE_ARGS> args{fd, mem_.off_of(std::span<const std::uint8_t>(bytes)), static_cast<std::uint32_t>(bytes.size())};
     stream_.record(sys::op::WRITE, args);
     held_.push_back(std::move(bytes));
 }
 
 void Sys::close(Fd fd) noexcept {
-    const std::array<std::uint32_t, 1> args{fd};
+    const std::array<std::uint32_t, CLOSE_ARGS> args{fd};
     stream_.record(sys::op::CLOSE, args);
 }
 
 void Sys::call(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes) noexcept {
     ensure((op & sys::op::PROGRAM) != 0, Errno::einval, op);
     stream_.record(op, args, {}, bytes);
+}
+
+bool Sys::try_call(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes, std::uint32_t reserve) noexcept {
+    if (!stream_.fits(static_cast<std::uint32_t>(args.size()), static_cast<std::uint32_t>(bytes.size()), reserve)) return false;
+    call(op, args, bytes);
+    return true;
 }
 
 void Sys::abort(Errno code, const std::source_location &at, std::uint64_t a, std::uint64_t b) noexcept {

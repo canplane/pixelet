@@ -8,15 +8,20 @@
 use core::panic::Location;
 
 use xpute_core::status::errno::Errno;
-use xpute_runtime::ipc::sys::Sys;
+use xpute_runtime::ipc::stream::record_words;
+use xpute_runtime::ipc::sys::{descriptor_turn_bytes, Sys};
 use xpute_runtime::mem::base::ptr_at;
 
-use crate::abi::host::stream;
+use crate::abi::host::{op, stream};
+use crate::io::file::{Kept, PATH_BYTES};
+use crate::param::MAX_CREDITS;
 use xpute_runtime::global::Global;
 
 static SYS: Global<Option<Sys>> = Global::new();
 
-pub fn sys() -> Option<&'static mut Sys> {
+/// Only the file table records through it beside this module, and `RESERVE`
+/// counts both.
+pub(crate) fn sys() -> Option<&'static mut Sys> {
     SYS.get(|| None).as_mut()
 }
 
@@ -36,11 +41,30 @@ pub fn host_rise() {
     }
 }
 
-/// False where there is no host to run it.
-pub fn host_record(op: u32, args: &[u32], bytes: &[u8]) -> bool {
-    let Some(h) = sys() else { return false };
-    h.call(op, args, bytes);
-    true
+const DECODE_ARGS: usize = 2;
+
+/// The one program call that cannot wait, counted in `RESERVE`.
+pub fn decode_image(fd: u32, image: u32) {
+    if let Some(h) = sys() {
+        let args: [u32; DECODE_ARGS] = [fd, image];
+        h.call(op::IMAGE_DECODE, &args, &[]);
+    }
+}
+
+/// The most one file records in a turn: its descriptor's, and an image's decode.
+const FILE_TURN_BYTES: usize = descriptor_turn_bytes(PATH_BYTES) + 4 * record_words(DECODE_ARGS, Some(0));
+
+/// What the calls that cannot wait may record in one turn, all of them files:
+/// each credit's file answered and a new one opened on it, and each kept file
+/// read and written. Requests that can wait take the stream only past it.
+pub const RESERVE: usize = FILE_TURN_BYTES * (2 * MAX_CREDITS as usize + 2 * Kept::ALL.len());
+
+const _: () = assert!(RESERVE < stream::BYTES as usize, "the calls that cannot wait would not fit the host stream");
+
+/// A request that can wait a turn: None where there is no host, false where
+/// the turn's stream has no room for it past `RESERVE`.
+pub fn host_offer(op: u32, args: &[u32], bytes: &[u8]) -> Option<bool> {
+    Some(sys()?.try_call(op, args, bytes, RESERVE))
 }
 
 static TURN: Global<u64> = Global::new();

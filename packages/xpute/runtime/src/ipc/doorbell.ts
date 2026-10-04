@@ -38,6 +38,12 @@ export class Doorbell {
     this.cq = new Ring(mem, cq_at);
   }
 
+  /** Whether a command carrying `pkt` can be sent at all; one that cannot is
+   * the caller's input to refuse, at the boundary it came through. */
+  fits(pkt: U8Array): boolean {
+    return this.sq.fits(pkt);
+  }
+
   send(tag: u32, cmd: u32, pkt: U8Array | null = null): void {
     this.submit(tag, cmd, pkt, 0);
   }
@@ -52,9 +58,6 @@ export class Doorbell {
 
   /** Submitted with ACKREQ and rung with no quota until the reply returns; the reply is valid only inside `take`. */
   call<T>(cmd: u32, pkt: U8Array | null, take: (result: i32, reply: BranchCursor | null) => T): T {
-    // A call from inside a listener cannot be answered without a turn, and one
-    // left in the ring would be applied after the caller was told it failed.
-    if (this.reading) throw new InvariantError(Errno.EBUSY);
     const tag = this.next_call = (this.next_call + 1) >>> 0;
     let out: { value: T } | null = null;
     this.waiting.set(tag, (result, f) => out = { value: take(result, f) });
@@ -99,7 +102,9 @@ export class Doorbell {
     }
   }
 
+  /** Never from a listener: one could not wait for room, since that takes a turn. */
   private submit(tag: u32, cmd: u32, pkt: U8Array | null, flags: u32): void {
+    if (this.reading) throw new InvariantError(Errno.EBUSY);
     for (;;) {
       const errno = this.sq.push(tag, cmd, flags, pkt);
       if (errno === Errno.OK) return;

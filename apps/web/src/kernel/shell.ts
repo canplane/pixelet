@@ -24,6 +24,11 @@ export function kernel_setting(key: u32, value: u32): void {
   ring_now(Command.SETTING_SET, encode_setting_set({ key, value }));
 }
 
+/** Whether a command carrying `pkt` can be sent; the shell refuses input that cannot. */
+export function kernel_fits(pkt: U8Array): boolean {
+  return CORE_DOORBELL.fits(pkt);
+}
+
 export function kernel_enable_location(): void {
   ring_now(Command.SENSOR_ENABLE_LOCATION);
 }

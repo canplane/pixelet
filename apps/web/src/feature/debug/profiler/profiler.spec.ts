@@ -34,6 +34,7 @@ export const EFFECT_NAMES = [
   "hover",
   "puck",
   "objects",
+  "settings",
   "assets",
   "pump",
 ] as const;

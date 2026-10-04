@@ -341,6 +341,10 @@ art where one exists (Minecraft's chunk model for grid content, Cesium's
   shims in the same change (2026-09-03, the terrain/decor pipeline desync).
 - **One fact, one owner; the rest derived.** Before keeping a value, ask
   whether it follows from another; if it does, compute it where it is read.
+  Before adding a constant, a limit, a reserve or a policy, ask the same of
+  it: a bound derived down from the roots that fix it beats a tuned number,
+  and where none can be derived, what makes the quantity unbounded is fixed
+  first — a write per change folded into one per turn — not the number.
   Before a module reads a concept, ask whether it should know it or only
   the contract above it: a controller's words (a pivot, a radius, a zoom)
   stay in the controller, and what is generic reads the geometric fact
@@ -415,10 +419,15 @@ art where one exists (Minecraft's chunk model for grid content, Cesium's
     window: a capacity said as a product number, where full is ordinary
     and is met by its owner's policy — the producer waits, the oldest is
     dropped, or what does not fit is cut off and said to be. Full is never
-    a bug.
+    a bug. A reserve kept in one for what cannot wait is derived from what
+    that is, and the check for room reads the flow's own record size.
   - **A workspace that grows with what stands in the world** — the heap's,
     asked for room before it grows; a refusal is backpressure: the work
     waits and what is drawn stays drawn.
+
+  One item larger than any room is none of these: an input past its limit
+  is refused at the boundary it came through, and a record the program
+  made itself past its bound is a bug.
 
   Memory pressure slows progress or quality; it never opens a hole in what
   is shown, drops what someone placed or ends the module (2026-10-01, the

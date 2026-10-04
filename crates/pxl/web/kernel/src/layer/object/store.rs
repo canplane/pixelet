@@ -35,9 +35,8 @@ use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
-use crate::abi::host::{root, OBJECTS_PATH};
 use crate::host::turn;
-use crate::io::file::{self, Owner};
+use crate::io::file::{self, Kept, Owner};
 use crate::kernel::kernel;
 use crate::layer::decor::build::{scatters_at, Draw};
 use crate::world::access::{Access, FINEST};
@@ -387,7 +386,7 @@ fn decode_objects(blob: &str) -> Result<(), MarshalError> {
 }
 
 pub fn load() {
-    file::open(root::STORAGE, OBJECTS_PATH, Owner::Objects);
+    file::open_kept(Kept::Objects, Owner::Objects);
 }
 
 /// A failed open means no blob was kept: the world starts empty.
@@ -403,7 +402,7 @@ pub fn objects_opened(fd: u32, res: i32) {
 }
 
 fn keep(blob: String) {
-    file::write_whole(root::STORAGE, OBJECTS_PATH, blob.into_bytes());
+    file::write_kept(Kept::Objects, blob.into_bytes());
 }
 
 /// An unreadable blob starts the world empty, as a missing one does.

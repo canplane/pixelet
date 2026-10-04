@@ -7,8 +7,48 @@
 use xpute_runtime::ipc::file::Files;
 use xpute_runtime::ipc::sys::Fd;
 
+use pxl_spec::bake::format::OCEAN_KEY;
+use pxl_spec::bake::place_page::DICT_OBJECT;
+use pxl_spec::bake::quadkey::PAGE_KEY_DEPTH;
+
+use crate::abi::host::{root, OBJECTS_PATH, SETTINGS_PATH};
 use crate::host::sys;
+use crate::io::load::LOADS;
+use crate::io::sched::Credit;
 use xpute_runtime::global::Global;
+
+/// A file the kernel keeps in storage. Storage is opened and written only by
+/// one of these, so what a turn can record there follows from how many.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Kept {
+    Settings,
+    Objects,
+}
+
+impl Kept {
+    pub const ALL: [Kept; 2] = [Kept::Settings, Kept::Objects];
+
+    pub const fn path(self) -> &'static str {
+        match self {
+            Kept::Settings => SETTINGS_PATH,
+            Kept::Objects => OBJECTS_PATH,
+        }
+    }
+}
+
+/// The longest name the kernel opens: a page's quadkey, a shared object's
+/// name, an asset's number or a kept file's path. A longer one is a bug, so
+/// the host stream's reserve can count on it.
+pub const PATH_BYTES: usize = {
+    let mut most = PAGE_KEY_DEPTH as usize;
+    let names = [OCEAN_KEY.len(), DICT_OBJECT.len(), LOADS.ilog10() as usize + 1, Kept::ALL[0].path().len(), Kept::ALL[1].path().len()];
+    let mut i = 0;
+    while i < names.len() {
+        most = if names[i] > most { names[i] } else { most };
+        i += 1;
+    }
+    most
+};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Owner {
@@ -26,8 +66,12 @@ fn files() -> &'static mut Files<Owner> {
 }
 
 /// None where there is no host.
-pub fn open(root: u32, path: &str, owner: Owner) -> Option<Fd> {
-    Some(files().open(sys()?, root, path, owner))
+pub fn open(_: Credit, root: u32, path: &str, owner: Owner) -> Option<Fd> {
+    Some(files().open(sys()?, root, named(path), owner))
+}
+
+pub fn open_kept(kept: Kept, owner: Owner) -> Option<Fd> {
+    Some(files().open(sys()?, root::STORAGE, kept.path(), owner))
 }
 
 /// `dst` is filled from the next turn on.
@@ -43,13 +87,18 @@ pub fn close(fd: Fd) {
     }
 }
 
+fn named(path: &str) -> &str {
+    xpute_core::ensure!(path.len() <= PATH_BYTES, EMSGSIZE, path.len());
+    path
+}
+
 pub fn held_for(owner: impl Fn(&Owner) -> bool) -> Option<Fd> {
     files().held_for(owner)
 }
 
-pub fn write_whole(root: u32, path: &str, bytes: Vec<u8>) {
+pub fn write_kept(kept: Kept, bytes: Vec<u8>) {
     if let Some(sys) = sys() {
-        files().write_whole(sys, root, path, bytes, Owner::Write);
+        files().write_whole(sys, root::STORAGE, kept.path(), bytes, Owner::Write);
     }
 }
 

@@ -44,7 +44,7 @@ fn ask(why: Why, near: f64) -> Ask {
 
 fn started<S: Serve>(l: &mut RequestScheduler<S>) -> Vec<u64> {
     let mut out = Vec::new();
-    l.take_started(|key, _, _| out.push(key));
+    l.take_started(|credit, _, _| out.push(credit.key()));
     out
 }
 

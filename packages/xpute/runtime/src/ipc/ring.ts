@@ -87,12 +87,17 @@ export class Ring {
   }
 
   /** EAGAIN, writing nothing, when full; EMSGSIZE when the packet exceeds a slot. */
+  /** Whether `packet` fits a slot: one that does not is refused, never split. */
+  fits(packet: U8Array): boolean {
+    return padded(packet.byteLength) <= this.slot_bytes;
+  }
+
   push(tag: u32, cmd: u32, flags: u32 = 0, packet: U8Array | null = null, result: i32 = 0): Errno {
     if (this.len >= this.capacity) return Errno.EAGAIN;
     let packet_at = 0;
     if (packet !== null) {
+      if (!this.fits(packet)) return Errno.EMSGSIZE;
       const need = padded(packet.byteLength);
-      if (need > this.slot_bytes) return Errno.EMSGSIZE;
       const start = this.slot_at(this.tail);
       this.slots.set(packet, start);
       this.slots.fill(0, start + packet.byteLength, start + need);

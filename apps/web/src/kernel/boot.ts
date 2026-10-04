@@ -59,8 +59,7 @@ export async function boot_kernel(): Promise<void> {
   start_sched();
   CORE_DOORBELL.signal = on_signal;
   gpuBoot();
-  CORE_DOORBELL.call(
-    Command.WORLD_BOOT,
+  const boot = (settings: string) =>
     encode_world_boot({
       development: __IS_DEV__,
       handheld: HANDHELD,
@@ -68,10 +67,12 @@ export async function boot_kernel(): Promise<void> {
       orientation: orientationSupported(),
       orientation_permission: orientationNeedsPermission(),
       orientation_silence_is_loss: orientationSilenceIsLoss(),
-      settings: read_storage(SETTINGS_PATH) ?? "",
-    }),
-    (result) => result,
-  );
+      settings,
+    });
+  // Storage is the user's to edit: kept settings too large to send are no
+  // settings, and the kernel starts from the defaults.
+  const kept = boot(read_storage(SETTINGS_PATH) ?? "");
+  CORE_DOORBELL.call(Command.WORLD_BOOT, CORE_DOORBELL.fits(kept) ? kept : boot(""), (result) => result);
   // Not awaited: a dev tile server may answer late.
   void declare_source();
 }

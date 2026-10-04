@@ -7,9 +7,8 @@
 
 use xpute_core::codec::json::{read_json, JsonKind};
 
-use crate::abi::host::{root, SETTINGS_PATH};
 use crate::host::development;
-use crate::io::file;
+use crate::io::file::{self, Kept};
 use crate::sched::profiler::log::profiler_follow;
 pub use crate::shell::setting::schema_spec::{AoMode, CameraMode, OrbitObstacleMode, ResolutionMode, SettingKey, SettingKind, Settings};
 use crate::world::chunk::source::chunk_sources_changed;
@@ -35,11 +34,7 @@ impl Settings {
         if key == SettingKey::debug_overlay {
             profiler_follow(value == 1);
         }
-        self.keep();
-    }
-
-    fn keep(&self) {
-        file::write_whole(root::STORAGE, settings_path(), self.kept().into_bytes());
+        *UNKEPT.get(|| false) = true;
     }
 
     fn kept(&self) -> String {
@@ -66,8 +61,14 @@ impl Settings {
 
 static SETTINGS_STORE: Global<Settings> = Global::new();
 
-fn settings_path() -> &'static str {
-    SETTINGS_PATH
+/// The store differs from what storage holds. Written once a turn, so a turn
+/// of changes costs the host stream one file, whatever their number.
+static UNKEPT: Global<bool> = Global::new();
+
+pub fn settings_keep_step() {
+    if core::mem::take(UNKEPT.get(|| false)) {
+        file::write_kept(Kept::Settings, settings_store().kept().into_bytes());
+    }
 }
 
 /// What is not offered, unknown or invalid stays at the default.
