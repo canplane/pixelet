@@ -15,9 +15,16 @@
 
 namespace xpute {
 
+inline constexpr std::uint32_t WORD = sizeof(std::uint32_t);
+
 // A record's words: its op and count, `args`, and `bytes` as their count then words.
 constexpr std::uint64_t record_words(std::uint64_t args, std::optional<std::uint64_t> bytes) noexcept {
-    return 2 + args + (bytes ? 1 + (*bytes + 3) / 4 : 0);
+    return 2 + args + (bytes ? 1 + (*bytes + WORD - 1) / WORD : 0);
+}
+
+// A record's size as a stream's room is counted.
+constexpr std::uint64_t record_bytes(std::uint64_t args, std::optional<std::uint64_t> bytes) noexcept {
+    return record_words(args, bytes) * WORD;
 }
 
 class Stream {
@@ -28,12 +35,12 @@ class Stream {
 
     std::uint32_t head_at() const noexcept { return at_; }
 
-    std::uint32_t left() const noexcept { return (words_ - head_ - len_) * 4; }
+    std::uint32_t left() const noexcept { return (words_ - head_ - len_) * WORD; }
 
     // Whether a record of `args` words and `bytes` would fit whole with
     // `reserve` bytes still left after it.
     bool fits(std::uint32_t args, std::optional<std::uint32_t> bytes, std::uint32_t reserve) const noexcept {
-        return std::uint64_t{left()} >= record_words(args, bytes) * 4 + reserve;
+        return std::uint64_t{left()} >= record_bytes(args, bytes) + reserve;
     }
 
     // Answers where the `n` words begin. Past the range is a bug: the guest asked

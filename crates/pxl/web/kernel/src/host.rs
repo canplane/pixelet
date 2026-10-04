@@ -8,7 +8,7 @@
 use core::panic::Location;
 
 use xpute_core::status::errno::Errno;
-use xpute_runtime::ipc::stream::record_words;
+use xpute_runtime::ipc::stream::{record_bytes, WORD};
 use xpute_runtime::ipc::sys::{descriptor_turn_bytes, Sys};
 use xpute_runtime::mem::base::ptr_at;
 
@@ -30,7 +30,7 @@ pub(crate) fn sys() -> Option<&'static mut Sys> {
 /// long as the module runs.
 pub unsafe fn set_host_stream(at: u32) {
     // SAFETY: the caller's range.
-    let words = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(at as usize), (stream::BYTES / 4) as usize) };
+    let words = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(at as usize), stream::BYTES as usize / WORD) };
     SYS.set(Some(Sys::new(words)));
 }
 
@@ -52,7 +52,7 @@ pub fn decode_image(fd: u32, image: u32) {
 }
 
 /// The most one file records in a turn: its descriptor's, and an image's decode.
-const FILE_TURN_BYTES: usize = descriptor_turn_bytes(PATH_BYTES) + 4 * record_words(DECODE_ARGS, Some(0));
+const FILE_TURN_BYTES: usize = descriptor_turn_bytes(PATH_BYTES) + record_bytes(DECODE_ARGS, Some(0));
 
 /// What the calls that cannot wait may record in one turn, all of them files:
 /// each credit's file answered and a new one opened on it, and each kept file

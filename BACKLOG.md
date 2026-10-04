@@ -18,13 +18,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   ([20260928-what-is-drawn-is-what-the-screen-covers.md](./decision/20260928-what-is-drawn-is-what-the-screen-covers.md),
   "the steps, measured").
 
-## P1
-
-- **The device's image binding, built once.** `a59f64e4` changed
-  `pxl_image_hold` to take the kernel's handle, and with it the Swift and
-  Kotlin bindings (`PlatformModule`, `PxlCore`); the Rust side is checked for
-  both targets, the bindings only by a device build, at the next one.
-
 ## P2
 
 - **A bore's approach that stops short of a bridge.** At Uidong (37.2977,
@@ -39,10 +32,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 - **Clearance by the road's own grade.** `clear_cells` holds a clearance
   across the road at `MAX_GRADE`'s secant for every way; the segment's own
   grade would give each what it needs.
-- **A straight-edged shadow nothing casts.** With shadows on, a dark
-  rectangle lies on near ground under no object (2026-10-04, Uman-dong at
-  noon); the shadow pass draws the camera's draw list, coarse chunks included
-  (`pxl-render gpu/renderer.rs`, `Stage::Depth`).
 - **Subway bores.** Every tunnel flag is a bore now, so a subway's lines are
   drawn underground and stretch each chunk's bounds down; whether that cost
   stays is not decided.

@@ -43,10 +43,11 @@ impl Kept {
 /// the host stream's reserve can count on it.
 pub const PATH_BYTES: usize = {
     let mut most = PAGE_KEY_DEPTH as usize;
-    let names = [OCEAN_KEY.len(), DICT_OBJECT.len(), LOADS.ilog10() as usize + 1, Kept::ALL[0].path().len(), Kept::ALL[1].path().len()];
+    let names = [OCEAN_KEY.len(), DICT_OBJECT.len(), LOADS.ilog10() as usize + 1];
     let mut i = 0;
-    while i < names.len() {
-        most = if names[i] > most { names[i] } else { most };
+    while i < names.len() + Kept::ALL.len() {
+        let len = if i < names.len() { names[i] } else { Kept::ALL[i - names.len()].path().len() };
+        most = if len > most { len } else { most };
         i += 1;
     }
     most

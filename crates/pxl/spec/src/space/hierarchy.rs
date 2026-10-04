@@ -90,6 +90,11 @@ pub fn parent_of<const D: usize>(at: [i64; D]) -> [i64; D] {
     at.map(|v| v.div_euclid(2))
 }
 
+/// How many slots `slot_of` numbers in `axes` axes.
+pub const fn children(axes: usize) -> usize {
+    1 << axes
+}
+
 /// Axis i's low bit at bit i: `x + 2y + 4z`.
 pub fn slot_of<const D: usize>(at: [i64; D]) -> usize {
     (0..D).map(|i| (at[i].rem_euclid(2) as usize) << i).sum()

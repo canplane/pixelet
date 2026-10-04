@@ -17,7 +17,13 @@ pub fn category_named(taxonomy: Option<&serde_json::Value>) -> &str {
     let Some(primary) = taxonomy.and_then(|t| t.get("primary")).and_then(|p| p.as_str()) else {
         return "place";
     };
-    let up = taxonomy.and_then(|t| t.get("hierarchy")).and_then(|h| h.as_array()).into_iter().flatten().rev().filter_map(|c| c.as_str());
+    let up = taxonomy
+        .and_then(|t| t.get("hierarchy"))
+        .and_then(|h| h.as_array())
+        .into_iter()
+        .flatten()
+        .rev()
+        .filter_map(|c| c.as_str());
     std::iter::once(primary).chain(up).find_map(category::map).unwrap_or(primary)
 }
 
