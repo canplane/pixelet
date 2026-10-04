@@ -455,7 +455,7 @@ LOD work
 
 Both items under "Left open" are closed: the coarse scan by the heightmap
 direct path
-([20260912-coarse-tiers-what-the-field-does.md](./20260912-coarse-tiers-what-the-field-does.md)),
+([20260912-coarse-tiers-what-the-field-does.md](./closed/20260912-coarse-tiers-what-the-field-does.md)),
 and decor by the extent criterion
 ([20260911-decor-identity-orientation-and-one-cell-format.md](./20260911-decor-identity-orientation-and-one-cell-format.md),
 "Closed 2026-09-13").

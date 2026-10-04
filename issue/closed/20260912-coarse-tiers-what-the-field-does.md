@@ -119,7 +119,7 @@ What this preserves:
   step 4 moves to the direct path is a measurement, not a principle.
 - The scheduler, untouched. A chunk stays the unit of work at every tier;
   a coarse chunk is simply a cheap chunk. Every rule from
-  [20260912-what-to-render-when.md](./20260912-what-to-render-when.md)
+  [20260912-what-to-render-when.md](../20260912-what-to-render-when.md)
   — priority classes, aging, slot holders, request validity, release order,
   memory budget — keeps its premise.
 - The mesher's coarse path, reused. It already takes a `res × res` grid of
