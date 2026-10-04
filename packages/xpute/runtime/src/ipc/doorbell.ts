@@ -10,6 +10,7 @@ import type { f64, i32, u32 } from "@xpute/core/abi/word.ts";
 import type { U8Array } from "@xpute/core/abi/array.ts";
 import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { type BranchCursor, type BranchView, encoder, TreeReader, TreeView } from "@xpute/core/wire/xtp/mod.ts";
+import { NO_WAKE } from "../sched/quantum.ts";
 import * as frame from "./frame.ts";
 import { Ring } from "./ring.ts";
 import { InvariantError } from "@xpute/core/status/error.ts";
@@ -30,6 +31,9 @@ export class Doorbell {
   private readonly waiting = new Map<u32, (result: i32, f: BranchCursor | null) => void>();
   /** A listener runs inside it. */
   private reading = false;
+  /** A trapped guest is gone: its turn stopped partway, and the submission
+   * it was applying would trap it again on every ring. */
+  private trapped = false;
   signal: SignalListener | null = null;
   wake: ((wake_ms: f64) => void) | null = null;
 
@@ -50,7 +54,14 @@ export class Doorbell {
 
   ring(quota_ms: f64): f64 {
     if (this.reading) throw new InvariantError(Errno.EBUSY);
-    const wake = this.interrupt(quota_ms);
+    if (this.trapped) return NO_WAKE;
+    let wake: f64;
+    try {
+      wake = this.interrupt(quota_ms);
+    } catch (err) {
+      this.trapped = true;
+      throw err;
+    }
     this.read();
     this.wake?.(wake);
     return wake;
@@ -58,6 +69,7 @@ export class Doorbell {
 
   /** Submitted with ACKREQ and rung with no quota until the reply returns; the reply is valid only inside `take`. */
   call<T>(cmd: u32, pkt: U8Array | null, take: (result: i32, reply: BranchCursor | null) => T): T {
+    if (this.trapped) throw new InvariantError(Errno.ENOTRECOVERABLE);
     const tag = this.next_call = (this.next_call + 1) >>> 0;
     let out: { value: T } | null = null;
     this.waiting.set(tag, (result, f) => out = { value: take(result, f) });
@@ -105,6 +117,7 @@ export class Doorbell {
   /** Never from a listener: one could not wait for room, since that takes a turn. */
   private submit(tag: u32, cmd: u32, pkt: U8Array | null, flags: u32): void {
     if (this.reading) throw new InvariantError(Errno.EBUSY);
+    if (this.trapped) return;
     for (;;) {
       const errno = this.sq.push(tag, cmd, flags, pkt);
       if (errno === Errno.OK) return;

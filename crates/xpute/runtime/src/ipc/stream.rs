@@ -60,6 +60,8 @@ impl Stream {
         self.left() >= record_words(args, bytes) * 4 + reserve
     }
 
+    /// A bug past the range reports its caller, which names the stream and the record.
+    #[track_caller]
     pub fn open(&mut self, op: u32, n: usize) -> &mut [u32] {
         let at = self.head + self.len;
         xpute_core::ensure!(at + 2 + n <= self.words.len(), ENOSPC, self.words.len() * 4);
@@ -87,6 +89,7 @@ impl Stream {
         fit
     }
 
+    #[track_caller]
     pub fn record(&mut self, op: u32, args: &[u32], tail: &[u32], bytes: Option<&[u8]>) {
         if self.mark.is_some() && (self.spilled || !self.fits(args.len() + tail.len(), bytes.map(<[u8]>::len), 0)) {
             self.spilled = true;

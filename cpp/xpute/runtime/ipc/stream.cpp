@@ -13,9 +13,9 @@ Stream::Stream(Memory mem, std::uint32_t at, std::uint32_t words, std::uint32_t 
     mem_.set_word(at_ + 4 * END, 0);
 }
 
-std::uint32_t Stream::open(std::uint32_t op, std::uint32_t n) noexcept {
+std::uint32_t Stream::open(std::uint32_t op, std::uint32_t n, std::source_location from) noexcept {
     std::uint32_t at = head_ + len_;
-    ensure(std::uint64_t{at} + 2 + n <= words_, Errno::enospc, words_ * 4);
+    ensure(std::uint64_t{at} + 2 + n <= words_, Errno::enospc, words_ * 4, 0, from);
     len_ += 2 + n;
     std::uint32_t off = at_ + 4 * at;
     mem_.set_word(off, op);
@@ -24,14 +24,14 @@ std::uint32_t Stream::open(std::uint32_t op, std::uint32_t n) noexcept {
 }
 
 void Stream::record(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint32_t> tail,
-                    std::optional<std::span<const std::uint8_t>> bytes) noexcept {
+                    std::optional<std::span<const std::uint8_t>> bytes, std::source_location from) noexcept {
     auto a = static_cast<std::uint32_t>(args.size()), t = static_cast<std::uint32_t>(tail.size());
     if (mark_ && (spilled_ || !fits(a + t, bytes ? std::optional<std::uint32_t>{static_cast<std::uint32_t>(bytes->size())} : std::nullopt, 0))) {
         spilled_ = true;
         return;
     }
     std::uint32_t byte_words = static_cast<std::uint32_t>(record_words(0, bytes ? std::optional<std::uint64_t>{bytes->size()} : std::nullopt) - 2);
-    std::uint32_t w = open(op, a + t + byte_words);
+    std::uint32_t w = open(op, a + t + byte_words, from);
     for (std::uint32_t i = 0; i < a; i++) mem_.set_word(w + 4 * i, args[i]);
     for (std::uint32_t i = 0; i < t; i++) mem_.set_word(w + 4 * (a + i), tail[i]);
     if (bytes) {
