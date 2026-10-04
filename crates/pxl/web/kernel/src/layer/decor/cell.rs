@@ -17,6 +17,7 @@ use pxl_spec::space::pyramid::{chunk_span_of, LevelPage, CHUNK_CELLS, GROUND, TO
 use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::alloc;
+use xpute_runtime::sched::frame_budget::FrameBudget;
 
 use crate::control::camera::controller::units_per_px_at;
 use crate::global::Global;
@@ -98,6 +99,7 @@ struct Sources {
 #[derive(Default)]
 struct Cells {
     frontier: Vec<DecorCell>,
+    /// The terrain pages the frontier scatters over, each once, in order.
     pages: Vec<LevelPage>,
     blocks: HashMap<DecorCell, Block>,
     scratch: Option<DecorScratch>,
@@ -105,12 +107,14 @@ struct Cells {
     cols: Vec<IVec>,
     placed: Vec<Placed>,
     folded: HashMap<[i64; 3], u32>,
-    /// Kept so a settled turn asks the heap for nothing.
+    /// What a turn works in, kept so a settled turn asks the heap for
+    /// nothing: the solve's stack, the replacement's state over each wanted
+    /// cell's ancestors, the cells it gives back or that cover others, and a
+    /// group's sprites.
     stack: Vec<DecorCell>,
     under: HashMap<DecorCell, bool>,
     cells: Vec<DecorCell>,
     covers: Vec<DecorCell>,
-    over: Vec<DecorCell>,
     sprites: Vec<u32>,
 }
 
@@ -160,6 +164,8 @@ fn largest_possible(kinds: &[Kind]) -> f64 {
     extent * (1.0f64 + SCALE_JITTER).max(DECOR_SIZE)
 }
 
+/// The nearest a point of a cell's square comes to `eye`, the eye's height
+/// over the `ground` under it counted.
 fn nearest(cell: DecorCell, eye: V3, ground: f64) -> f64 {
     let (x0, y0, side) = cell.rect();
     let dx = (x0 - eye[0]).max(eye[0] - (x0 + side)).max(0.0);
@@ -167,8 +173,10 @@ fn nearest(cell: DecorCell, eye: V3, ground: f64) -> f64 {
     dx.hypot(dy).hypot(eye[2] - ground)
 }
 
-/// Kept within the view's reach, in the frustum, and where its largest
-/// possible instance covers the sprite's floor.
+/// The frontier for the eye: from the source's top level, a cell refined
+/// where the rule wants a finer level than its own at its nearest point,
+/// kept where it is seen and where its largest possible instance covers the
+/// sprite's floor; none of a cell's ancestors with it.
 fn solve(kinds: &[Kind], stack: &mut Vec<DecorCell>, out: &mut Vec<DecorCell>) {
     out.clear();
     stack.clear();
@@ -190,7 +198,7 @@ fn solve(kinds: &[Kind], stack: &mut Vec<DecorCell>, out: &mut Vec<DecorCell>) {
     }
     while let Some(cell) = stack.pop() {
         let d = nearest(cell, eye, ground).max(1e-3);
-        if d > view_reach || largest / units_per_px_at(d) < floor_px {
+        if largest / units_per_px_at(d) < floor_px {
             continue;
         }
         let (x0, y0, s) = cell.rect();
@@ -302,7 +310,6 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Dec
     let c = cells();
     let mut frontier = core::mem::take(&mut c.frontier);
     solve(kinds, &mut c.stack, &mut frontier);
-    xpute_core::ensure!(frontier.len() <= FRONTIER_MAX, ENOTRECOVERABLE, frontier.len());
     let top = floor::level().unwrap_or(0);
     let ancestors = move |cell: DecorCell| core::iter::successors(Some(cell), move |a| (a.level < top).then(|| a.parent())).skip(1);
     let pages = Terrain::pyramid();
@@ -315,34 +322,30 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Dec
     c.over.sort_unstable();
     c.over.dedup();
     let mut built = 0;
-    for coarsening in [true, false] {
-        for &cell in &frontier {
-            if built >= BUILDS_PER_FRAME {
-                break;
+    let mut cols = core::mem::take(&mut c.cols);
+    for &cell in &frontier {
+        let sources = sources_of(cell, store, &mut cols, hide);
+        if c.blocks.get(&cell).is_some_and(|b| b.sources == sources) {
+            continue;
+        }
+        if built >= BUILDS_PER_FRAME {
+            continue;
+        }
+        c.cols = core::mem::take(&mut cols);
+        if let Some(mut b) = build(c, cell, kinds, store, draw, sources) {
+            b.drawn = c.blocks.get(&cell).is_some_and(|old| old.drawn);
+            if let Some(old) = c.blocks.insert(cell, b) {
+                release(old, draw);
             }
-            if c.over.binary_search(&cell).is_ok() != coarsening {
-                continue;
-            }
-            let Some(sources) = sources_of(cell, store, &mut c.cols, hide) else { continue };
-            let held = c.blocks.get(&cell);
-            if held.is_some_and(|b| b.sources == sources) {
-                continue;
-            }
-            if held.is_none() && !coarsening && c.blocks.len() >= BLOCKS_MAX {
-                continue;
-            }
-            if let Some(mut b) = build(c, cell, kinds, store, draw, sources) {
-                b.drawn = c.blocks.get(&cell).is_some_and(|old| old.drawn);
-                if let Some(old) = c.blocks.insert(cell, b) {
-                    release(old, draw);
-                }
-                built += 1;
-            }
+            built += 1;
         }
     }
 
     let wanted = |cell: &DecorCell| frontier.binary_search(cell).is_ok();
     let ready = |cell: DecorCell, blocks: &HashMap<DecorCell, Block>| blocks.contains_key(&cell) || pages.settled(cell.page());
+    let ancestors = move |cell: DecorCell| core::iter::successors(Some(cell), move |a| (a.level < top).then(|| a.parent())).skip(1);
+    // Over every wanted cell, whether all the wanted cells under it are
+    // ready: a held cell there stays drawn until they are.
     c.under.clear();
     for &cell in &frontier {
         let r = ready(cell, &c.blocks);
@@ -351,10 +354,8 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Dec
         }
     }
     let under = &c.under;
-    // Kept where wanted, or drawn last turn and still standing in for wanted
-    // cells not ready.
     let kept = |cell: DecorCell, blocks: &HashMap<DecorCell, Block>| {
-        wanted(&cell) || blocks[&cell].drawn && (under.get(&cell) == Some(&false) || ancestors(cell).find(wanted).is_some_and(|a| !ready(a, blocks)))
+        wanted(&cell) || under.get(&cell) == Some(&false) || ancestors(cell).find(wanted).is_some_and(|a| !ready(a, blocks))
     };
     c.cells.clear();
     c.cells.extend(c.blocks.keys().copied().filter(|&k| !kept(k, &c.blocks)));
@@ -363,13 +364,14 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Dec
             release(b, draw);
         }
     }
+    // A held cell still waiting on what refines it covers its region, so
+    // nothing under it is drawn.
     c.covers.clear();
     c.covers.extend(c.blocks.keys().copied().filter(|k| under.get(k) == Some(&false) && !wanted(k)));
     c.covers.sort_unstable();
     for (&cell, b) in c.blocks.iter_mut() {
         b.drawn = !ancestors(cell).any(|a| c.covers.binary_search(&a).is_ok());
     }
-    xpute_core::ensure!(c.blocks.len() <= BLOCKS_MAX, ENOTRECOVERABLE, c.blocks.len());
     c.pages.clear();
     c.pages.extend(frontier.iter().map(|c| c.page()));
     c.pages.sort_unstable();
@@ -378,10 +380,13 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Dec
     present(c, draw, frame_eye);
 }
 
-/// Per frame, each instance as model, sprite or nothing by its projected
-/// size. Within a group, models come first in the index list, then sprites;
-/// the list is re-uploaded only where it changed.
-fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
+/// Each cell's instances listed to draw, each as its model, its sprite or
+/// not at all by how large it is where it stands: the presentation, a frame
+/// at a time, of a block that does not change. A group's slice of the
+/// index list holds the instances drawn as models first and those drawn as
+/// sprites after them; the list goes to the device again only where it
+/// changed.
+fn present(c: &mut Cells, kinds: &[Kind], draw: &mut DrawList, frame_eye: V3) {
     let Some(eye) = eye() else { return };
     let model_px = decor_gone_px();
     let sprite_px = *TARGET_CELL_PX * IMPOSTOR_GONE_CELLS;
@@ -392,7 +397,7 @@ fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
         // SAFETY: the cell's block, `bytes` long, its own to write past `index`.
         let words: &mut [u32] = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block.at as usize), block.bytes as usize / 4) };
         let (lanes_of, list) = words.split_at_mut(block.index as usize / 4);
-        let mut extents = decor_bundle_assets().iter().flat_map(|e| e.bundle.variants.iter().map(variant_extent));
+        let mut extents = kinds.iter().flat_map(|k| (0..k.variant_count).map(move |_| k.extent));
         let (mut at, mut changed) = (0usize, false);
         for (group, (offset, count)) in decor_groups(lanes_of).enumerate() {
             let extent = extents.next().unwrap_or(0.0);
@@ -467,7 +472,9 @@ pub fn counts() -> (u32, u32) {
     (c.blocks.len() as u32, instances)
 }
 
-/// Asked for by decor itself rather than left to what the terrain draws.
+/// The terrain pages the frontier's cells scatter over, each once: what
+/// decor reads of the ground, asked for by decor (world/pyramid.rs
+/// `step`'s readers) rather than left to what the terrain draws.
 pub fn pages() -> &'static [LevelPage] {
     &cells().pages
 }

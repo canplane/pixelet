@@ -8,6 +8,9 @@
 
 #include <cstdint>
 #include <cstring>
+#include <span>
+
+#include "../../core/status/bug.hpp"
 
 namespace xpute {
 
@@ -42,6 +45,7 @@ class Memory {
 
   private:
     std::uintptr_t base_;
+    std::uintptr_t bytes_;
 };
 
 } // namespace xpute

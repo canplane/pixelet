@@ -10,15 +10,7 @@
     "raises on the completion ring."
   ],
   "program_major": 16,
-  "extern": [
-    {
-      "name": "FetchFail",
-      "rs": "crate::abi::fetch::FetchFail",
-      "ts": "@xpute/runtime/abi/fetch.spec.ts",
-      "unknown": "Shell",
-      "doc": ["A code this build does not know reads as one the host raised rather than as none."]
-    }
-  ],
+  "extern": [],
   "enums": [
     {
       "name": "Major",
@@ -26,32 +18,15 @@
       "format": "hex2",
       "entries": [
         { "name": "NOP", "value": 0 },
-        { "name": "FETCH", "value": 1 }
+        { "name": "SYS", "value": 1 }
       ]
     },
     {
-      "name": "FetchMinor",
-      "doc": ["A fetch's verbs."],
+      "name": "SysMinor",
+      "doc": ["The system calls' answers (ipc/sys.json)."],
       "format": "hex2",
       "entries": [
-        { "name": "START", "value": 1 },
-        { "name": "CANCEL", "value": 2 },
-        { "name": "DONE", "value": 3 }
-      ]
-    },
-    {
-      "name": "FetchOutcome",
-      "doc": [
-        "What a read came to. **Absent is an outcome, not a code the guest reads.**",
-        "There is no such object, however the protocol spells that — an HTTP 404, a",
-        "missing file — and the host is the one that can tell."
-      ],
-      "format": "dec",
-      "entries": [
-        { "name": "Read", "value": 0 },
-        { "name": "Aborted", "value": 1 },
-        { "name": "Error", "value": 2 },
-        { "name": "Absent", "value": 3 }
+        { "name": "OPENED", "value": 1 }
       ]
     },
     {
@@ -66,38 +41,20 @@
           "packet": [{ "name": "value", "type": "u32" }]
         },
         {
-          "name": "FETCH_START",
+          "name": "SYS_OPENED",
           "value": 257,
           "doc": [
-            "An object the guest wants read, named in the guest's terms: a source, a number the",
-            "program gives each place it reads from, and a name inside it. The host is the one",
-            "that knows what address that is and what protocol reaches it. The key is the",
-            "guest's, handed back and never read into."
+            "An OPENAT answered: the file's size, or -errno — ENOENT where there is no such file.",
+            "Never sent for a descriptor already closed."
           ],
-          "signal": [
-            { "name": "key", "type": "u64" },
-            { "name": "source", "type": "u32" },
-            { "name": "name", "type": "str" }
-          ]
-        },
-        {
-          "name": "FETCH_CANCEL",
-          "value": 258,
-          "doc": ["Stop this read. The host settles it as aborted."],
-          "signal": [{ "name": "key", "type": "u64" }]
-        },
-        {
-          "name": "FETCH_DONE",
-          "value": 259,
-          "doc": ["A read the host finished, its body held as `body` until the guest reads it (ipc/sys's READ)."],
           "packet": [
-            { "name": "key", "type": "u64" },
-            { "name": "outcome", "type": "FetchOutcome" },
-            { "name": "body", "type": "u32" },
-            { "name": "body_bytes", "type": "u32", "doc": ["0 for none."] },
-            { "name": "fail", "type": "FetchFail" },
-            { "name": "detail", "type": "u32", "doc": ["Whatever number the host refused with, kept for a reader to print and for nothing to branch on."] },
-            { "name": "net_ms", "type": "f64" }
+            { "name": "fd", "type": "u32" },
+            { "name": "res", "type": "i32" },
+            {
+              "name": "detail",
+              "type": "u32",
+              "doc": ["Whatever number the host refused with — for HTTP its status — kept for a reader to print and for nothing to branch on."]
+            }
           ]
         }
       ]

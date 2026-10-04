@@ -1,12 +1,12 @@
 // pxl-spec/bake/model/feature.rs
 
-use xpute_core::codec::json::StrMap;
-
 use crate::bake::format::CellConfig;
 use crate::space::adapter::epsg3857::G3857;
 use crate::space::v3::V3;
 
-/// Synthetic tag set attached to coastline rows.
+/// Synthetic tag set attached to coastline rows (pipeline/coast/adapter.rs's
+/// from_coast_row) — coast/policy.rs's own IS_COAST check reads `natural`/
+/// `source` off this shape.
 pub type CoastTags = Vec<(String, Option<String>)>;
 
 /// A raw coastline row in EPSG:3857 metres, before page projection.
@@ -38,10 +38,9 @@ pub struct FeatureExtra {
     /// Nothing of it shows from above (underground, inside, unbuilt, or a
     /// route), so the ground does not paint it.
     pub is_unseen: bool,
-    /// Carried above the ground: drawn by the decks, not the ground.
+    /// True where the feature is carried above the ground: the page's decks
+    /// draw it (bake/deck.rs), and the ground does not.
     pub is_deck: bool,
-    /// The way beside it that it shares one paved strip with; the gap is paved too.
-    pub joins: Option<Joins>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

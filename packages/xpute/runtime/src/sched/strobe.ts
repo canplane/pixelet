@@ -1,9 +1,19 @@
 // @xpute/runtime/sched/strobe.ts
 
 /**
- * The host's clock for one guest: a turn runs on an animation frame only when
- * the host (`request`) or the guest's last falling edge asked for one, never on
- * a timer of the host's own.
+ * The host's clock for one guest: the turns, alternating
+ * between the host and the guest like a clock's two edges.
+ *
+ * A turn starts on an animation frame, and only when something asked for
+ * one: the host, for an input or an arrival (`request`), or the guest, on
+ * its last falling edge. The guest asks for the next frame, or for a time —
+ * a debounce, a retry — or for nothing, and a guest asking for nothing is
+ * rung for nothing: no turn runs on a timer of the host's own.
+ *
+ * On the frame the host takes the grant (quantum.ts), lets the caller submit
+ * what the frame carries, and rings the doorbell with the quota. The host
+ * never sees what the guest runs inside; what it learns is how long the turn
+ * took and what the guest asked for.
  */
 
 import type { f64 } from "@xpute/core/abi/word.ts";
@@ -52,6 +62,7 @@ export class Strobe {
   }
 
   private wake(wake_ms: f64): void {
+    if (!this.running) return;
     if (wake_ms === 0) return this.request();
     if (wake_ms < 0) return;
     const at = performance.now() + wake_ms;

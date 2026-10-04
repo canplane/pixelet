@@ -2,6 +2,8 @@
 
 #include "golden.hpp"
 
+#include <type_traits>
+
 #include <bit>
 #include <cstdio>
 #include <cstdlib>
@@ -43,9 +45,14 @@ const std::string &Golden::s(std::string_view key) const {
 
 // A number, the whole of the value or a bug.
 template <class T> static T parse(const std::string &text, T (*conv)(const char *, char **, int)) {
+    // Digits, a sign only where the type has one: strtoull would take a
+    // space and wrap a minus, where Rust's parse refuses both.
+    bool sign = !text.empty() && text[0] == '-' && std::is_signed_v<T>;
+    bool digits = text.size() > (sign ? 1u : 0u) && text.find_first_not_of("0123456789", sign ? 1 : 0) == std::string::npos;
+    ensure(digits, Errno::einval);
     char *end = nullptr;
     T v = conv(text.c_str(), &end, 10);
-    ensure(!text.empty() && *end == '\0', Errno::einval);
+    ensure(*end == '\0', Errno::einval);
     return v;
 }
 

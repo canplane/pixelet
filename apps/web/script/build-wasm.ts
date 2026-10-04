@@ -65,96 +65,19 @@ async function optimized(from: URL, out: URL): Promise<void> {
   if (!done.success) Deno.exit(done.code || 1);
 }
 
-const EXPORTS = new Set(["interrupt"]);
+/** embassy and critical-section export their `#[no_mangle]` symbols; only these stay. */
+const EXPORTS = ["interrupt"];
 
-/** embassy and critical-section export their `#[no_mangle]` symbols; only EXPORTS stays. */
-function exportedOnly(module: URL): void {
-  const bytes = Deno.readFileSync(module);
-  let at = 8;
-  const leb = (): number => {
-    let [n, shift] = [0, 0];
-    for (;;) {
-      const b = bytes[at++];
-      n |= (b & 0x7f) << shift;
-      if ((b & 0x80) === 0) return n >>> 0;
-      shift += 7;
-    }
-  };
-  const put = (n: number): number[] => {
-    const out: number[] = [];
-    do {
-      let b = n & 0x7f;
-      n >>>= 7;
-      if (n !== 0) b |= 0x80;
-      out.push(b);
-    } while (n !== 0);
-    return out;
-  };
-  const parts: Uint8Array[] = [bytes.subarray(0, 8)];
-  let kept = 0;
-  while (at < bytes.length) {
-    const start = at;
-    const id = bytes[at++];
-    const size = leb();
-    const end = at + size;
-    if (id !== 7) {
-      parts.push(bytes.subarray(start, end));
-      at = end;
-      continue;
-    }
-    const entries: number[] = [];
-    for (let n = leb(); n > 0; n--) {
-      const from = at;
-      const len = leb();
-      const name = new TextDecoder().decode(bytes.subarray(at, at + len));
-      at += len + 1;
-      leb();
-      if (!EXPORTS.has(name)) continue;
-      entries.push(...bytes.subarray(from, at));
-      kept++;
-    }
-    const body = [...put(kept), ...entries];
-    parts.push(new Uint8Array([7, ...put(body.length), ...body]));
-    at = end;
-  }
-  if (kept !== EXPORTS.size) throw new Error(`[build-wasm] the module exports ${kept} of ${[...EXPORTS].join(", ")}`);
-  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
-  let k = 0;
-  for (const p of parts) {
-    out.set(p, k);
-    k += p.length;
-  }
-  Deno.writeFileSync(module, out);
-}
-
-/** Rust embeds caller paths for `#[track_caller]` panics with no stable way
- * out. They are overwritten in place, same length, as `...#n`; a `&'static
- * str` keeps its length apart, so the module runs the same. */
-const SOURCE_ROOT = /(?:^|[^A-Za-z0-9_])(?:pxl|xpute)\/|\/library\/|\/registry\/|^\/rustc\/|^\/rust\/deps\/|\.rustup\//;
-
-function numbered(module: URL): number {
-  const bytes = Deno.readFileSync(module);
-  const text = new TextDecoder("latin1").decode(bytes);
-  const numbers = new Map<string, number>();
-  let n = 0;
-  for (const m of text.matchAll(/[A-Za-z0-9_/.-]*\.rs\b/g)) {
-    if (!m[0].includes("/")) continue;
-    if (!SOURCE_ROOT.test(m[0])) {
-      // Never overwrite on a guess: it could be a format string.
-      throw new Error(`[build-wasm] ${JSON.stringify(m[0])} ends in .rs but is under no source root — widen SOURCE_ROOT or leave it alone`);
-    }
-    if (!numbers.has(m[0])) numbers.set(m[0], numbers.size);
-    // The number goes last: the linker merges a string that is another's tail.
-    const tag = new TextEncoder().encode(`#${numbers.get(m[0])}`);
-    const end = m.index + m[0].length;
-    const at = Math.max(m.index, end - tag.length);
-    bytes.fill(0x2e, m.index, at);
-    bytes.set(tag.subarray(tag.length - (end - at)), at);
-    n++;
-  }
-  if (n > 0) Deno.writeFileSync(module, bytes);
-  Deno.writeTextFileSync(PATHS, JSON.stringify(Object.fromEntries([...numbers].map(([path, k]) => [`#${k}`, path])), null, 2) + "\n");
-  return n;
+/** The module is rewritten by pxl-tool's finish_wasm, which owns the binary. */
+async function finish(...args: string[]): Promise<string> {
+  const done = await new Deno.Command("cargo", {
+    args: ["run", "-q", "--package", "pxl-tool", "--bin", "finish_wasm", "--", ...args],
+    cwd: CRATES,
+    stdout: "piped",
+    stderr: "inherit",
+  }).output();
+  if (!done.success) Deno.exit(done.code || 1);
+  return new TextDecoder().decode(done.stdout).trim();
 }
 
 const modified = (url: URL) => Deno.statSync(url).mtime?.getTime() ?? NaN;
@@ -186,9 +109,9 @@ const linkedFile = staged("linked");
 const done = staged("done");
 await Deno.copyFile(BUILT, linkedFile);
 const linked = (await Deno.stat(linkedFile)).size;
-exportedOnly(linkedFile);
+await finish("exports", fileURLToPath(linkedFile), ...EXPORTS);
 await optimized(linkedFile, done);
-const paths = published ? numbered(done) : 0;
+const paths = published ? Number(await finish("number", fileURLToPath(done), fileURLToPath(PATHS))) : 0;
 await Deno.rename(done, OUT);
 const said = (published ? ", without the dev-only settings" : "") + (paths > 0 ? `, and ${paths} source paths numbered` : "");
 console.log(`[build-wasm] ${linked} -> ${(await Deno.stat(OUT)).size} bytes, stripped${said} -> src/kernel/kernel.wasm`);

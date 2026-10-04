@@ -1,14 +1,46 @@
 // pxl-spec/bake/place_page.rs
 
-//! The reverse-geocode bake's output: a dictionary of places named by many
-//! pages, fetched once, and one object per group of 16 × 16 leaf pages
-//! holding its labels, a label index per page and its own local places.
-//! Readers view the packet in place; names are XTP string leaves so a
-//! place is reached by index.
+//! What the reverse-geocode bake writes: a dictionary of the places a
+//! country has, and one object per group of pages saying which of them each
+//! page is in.
+//!
+//! A label is the same for every page of a district, so a page of its own is
+//! the wrong unit to store one in: the set was 167,495 objects naming 3,426
+//! distinct places, each name spelled out where it appeared
+//! (issue/20260923-a-place-name-is-a-rank-and-an-id.md). A **group** is the
+//! page `GROUP_SHAMT` levels up — 16 leaves on a side, 256 of them — and it
+//! holds the labels its leaves take and an index a leaf, so a reader crossing
+//! a district fetches once rather than once a page.
+//!
+//! The **dictionary** holds every place a polygon names — the provider's
+//! divisions — once: its rank, its own name, and that name by language. It is
+//! fetched once and held, so a group carries numbers rather than names.
+//!
+//! A part that came from a place *near* a page rather than one containing it
+//! is not among those: it comes from the provider's points, a different set
+//! and forty times the size, almost none of it ever named. A group carries
+//! the few it needs itself, and the bit that marks a part as an
+//! approximation is the bit that says where to look — the two are the same
+//! set, so one bit does both.
+//!
+//! ```text
+//!   dictionary   every place a polygon names, once
+//!   group        labels: [place, ...] each   what the pages under it are in
+//!                page[256] -> a label
+//!                the places no polygon named, this group's own
+//! ```
+//!
+//! The bake writes from the owned `Division` and `PlaceGroup`; a reader opens
+//! a view over the packet where it lies and reads a name out of it without
+//! decoding the rest. A run of places is stored as a rank a place, the place
+//! its language names start at, and the names themselves — each set of
+//! strings one leaf of offsets and UTF-8 (XTP's STRS) rather than a node a
+//! string — so reaching the thousandth place in the dictionary is an index
+//! rather than a walk.
 
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
-use xpute_core::wire::xtp::BranchCursor;
+use xpute_core::wire::xtp::{BranchCursor, Strs};
 use xpute_core::wire::xtp::{encoder, BranchViewImpl, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
 use crate::bake::quadkey::{quadkey_of, Quadkey};
@@ -43,38 +75,56 @@ pub struct Division {
     pub names: Vec<(String, String)>,
 }
 
+/// The lanes of a run of places, which the caller holds while the branch
+/// that borrows them is built.
 struct PlaceLanes<'a> {
     ranks: Vec<u8>,
     /// Where each place's language names start among the pairs; one longer than the places.
     starts: Vec<u32>,
     names: Vec<&'a str>,
+    /// `(tag, name)` pairs, flattened.
     langs: Vec<&'a str>,
 }
 
-fn place_lanes(places: &[Named]) -> (Vec<u8>, NameLanes<'_>) {
-    (
-        places.iter().map(|d| d.rank as u8).collect(),
-        NameLanes::of(places.iter().map(|d| (d.name.as_str(), d.names.iter().map(|(tag, name)| (tag.as_str(), name.as_str()))))),
-    )
+fn place_lanes(places: &[Division]) -> PlaceLanes<'_> {
+    let mut starts = Vec::with_capacity(places.len() + 1);
+    let mut at = 0u32;
+    for d in places {
+        starts.push(at);
+        at += d.names.len() as u32;
+    }
+    starts.push(at);
+    PlaceLanes {
+        ranks: places.iter().map(|d| d.rank as u8).collect(),
+        starts,
+        names: places.iter().map(|d| d.name.as_str()).collect(),
+        langs: places.iter().flat_map(|d| d.names.iter().flat_map(|(tag, name)| [tag.as_str(), name.as_str()])).collect(),
+    }
 }
 
-/// A run of places read where it lies: the dictionary or a group's locals.
+fn write_places<'a>(b: &mut BranchViewImpl<'a>, lanes: &'a PlaceLanes<'a>) {
+    b.u8_array(Some(&lanes.ranks)).u32_array(Some(&lanes.starts));
+    b.strs(Some(&lanes.names)).strs(Some(&lanes.langs));
+}
+
+/// A run of places read where it lies. The dictionary is one of these and a
+/// group's own places are another, so the two are written and read one way.
 #[derive(Clone)]
 pub struct PlacesView<'a> {
     ranks: &'a [u8],
     starts: &'a [u32],
-    names: BranchCursor<'a>,
-    langs: BranchCursor<'a>,
+    names: Strs<'a>,
+    langs: Strs<'a>,
 }
 
 fn read_places<'a>(root: &BranchCursor<'a>, at: u32) -> Result<PlacesView<'a>, MarshalError> {
     let view = PlacesView {
         ranks: root.at(at)?.get_array::<u8>()?,
         starts: root.at(at + 1)?.get_array::<u32>()?,
-        names: root.at(at + 2)?.as_branch()?,
-        langs: root.at(at + 3)?.as_branch()?,
+        names: root.at(at + 2)?.get_strs()?,
+        langs: root.at(at + 3)?.get_strs()?,
     };
-    if view.starts.len() != view.ranks.len() + 1 {
+    if view.starts.len() != view.ranks.len() + 1 || view.names.len() as usize != view.ranks.len() {
         return Err(bad());
     }
     if view.starts.windows(2).any(|w| w[0] > w[1]) {
@@ -95,9 +145,9 @@ impl<'a> PlacesView<'a> {
     pub fn at(&self, i: u32) -> Option<PlaceRef<'a>> {
         Some(PlaceRef {
             rank: PlaceRank::of(*self.ranks.get(i as usize)?)?,
-            name: self.names.at(i).ok()?.get_str_ref().ok()?,
+            name: self.names.get(i)?,
             approx: false,
-            langs: self.langs.clone(),
+            langs: self.langs,
             from: *self.starts.get(i as usize)?,
             to: *self.starts.get(i as usize + 1)?,
         })
@@ -111,31 +161,20 @@ pub struct PlaceRef<'a> {
     pub name: &'a str,
     /// From a place near the page rather than one containing it.
     pub approx: bool,
-    langs: BranchCursor<'a>,
+    langs: Strs<'a>,
     from: u32,
     to: u32,
 }
 
 impl<'a> PlaceRef<'a> {
     pub fn languages(&self) -> impl Iterator<Item = (&'a str, &'a str)> {
-        let langs = self.langs.clone();
-        (self.from..self.to).filter_map(move |i| {
-            let tag = langs.at(i * 2).and_then(|c| c.get_str_ref()).ok()?;
-            Some((tag, langs.at(i * 2 + 1).and_then(|c| c.get_str_ref()).ok()?))
-        })
+        let langs = self.langs;
+        (self.from..self.to).filter_map(move |i| Some((langs.get(i * 2)?, langs.get(i * 2 + 1)?)))
     }
 
     /// Falls back to the source's own name: an unreadable name beats none.
     pub fn in_language(&self, tag: &str) -> &'a str {
-        for i in self.from..self.to {
-            let Ok(stored) = self.langs.at(i * 2).and_then(|c| c.get_str_ref()) else { continue };
-            if stored == tag {
-                if let Ok(name) = self.langs.at(i * 2 + 1).and_then(|c| c.get_str_ref()) {
-                    return name;
-                }
-            }
-        }
-        self.name
+        self.languages().find(|&(stored, _)| stored == tag).map_or(self.name, |(_, name)| name)
     }
 }
 
@@ -143,7 +182,7 @@ impl<'a> PlaceRef<'a> {
 pub fn encode_place_dict(places: &[Named]) -> Result<Vec<u8>, MarshalError> {
     let lanes = place_lanes(places);
     let mut t: TreeView<'_> = TreeView::new();
-    t.branch(Some(&mut |b| write_places(b, divisions, &lanes)));
+    t.branch(Some(&mut |b| write_places(b, &lanes)));
     encoder().encode(&t, TreeEncoderOptions::default())
 }
 
@@ -181,7 +220,7 @@ pub fn encode_place_group(group: &PlaceGroup) -> Result<Vec<u8>, MarshalError> {
     let mut t: TreeView<'_> = TreeView::new();
     t.branch(Some(&mut |b| {
         b.u32_array(Some(&starts)).u32_array(Some(&flat)).u16_array(Some(&group.pages));
-        write_places(b, &group.locals, &lanes);
+        write_places(b, &lanes);
     }));
     encoder().encode(&t, TreeEncoderOptions::default())
 }

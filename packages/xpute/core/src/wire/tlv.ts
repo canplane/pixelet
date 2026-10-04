@@ -222,6 +222,7 @@ export type TlvEnd = "closed" | "unclosed";
 export class TlvReader implements Iterable<TlvValue> {
   private _stream: Stream;
   private _end: u32;
+  private _ended: TlvEnd | null = null;
 
   constructor(private readonly _buf: Bytes) {
     this._stream = scalar.stream(_buf);
@@ -241,9 +242,16 @@ export class TlvReader implements Iterable<TlvValue> {
   }
 
   *[Symbol.iterator](): Iterator<TlvValue> {
-    while (this._stream.off < this._end) {
+    while (this._ended === null) {
+      if (this._stream.off >= this._end) {
+        this._ended = "unclosed";
+        break;
+      }
       const tag: Tag = get_tag(this._stream);
-      if (tag === Tag.END) break;
+      if (tag === Tag.END) {
+        this._ended = "closed";
+        break;
+      }
 
       switch (tag) {
         case Tag.U8:

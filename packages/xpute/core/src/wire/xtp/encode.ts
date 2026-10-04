@@ -307,6 +307,24 @@ export class TreeEncoder {
         break;
       }
 
+      // `len` + 1 offsets into the UTF-8 after them, then that UTF-8.
+      case SequenceType.STRS: {
+        const items = (val as string[]).map((s) => encoding.te.encode(s));
+        len = items.length;
+        const lane: u32 = 4 * (len + 1);
+        payload_sz = lane + items.reduce((n, b) => n + b.byteLength, 0);
+        set_payload = (): void => {
+          let off: u32 = 0;
+          this.buf_view.setUint32(payload_start, 0, true);
+          items.forEach((b, i) => {
+            this.buf.set(b, payload_start + lane + off);
+            off += b.byteLength;
+            this.buf_view.setUint32(payload_start + 4 * (i + 1), off, true);
+          });
+        };
+        break;
+      }
+
       default:
         throw new MarshalError(Errno.EBADMSG);
     }

@@ -1,7 +1,7 @@
 // xpute-runtime/ipc/ring.test.rs
 
 use super::*;
-use crate::ipc::frame::FrameFlag;
+use crate::ipc::frame;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
 fn ring(capacity: u32, slot: u32) -> (Ring, Box<[u8]>) {
@@ -16,7 +16,7 @@ fn ring(capacity: u32, slot: u32) -> (Ring, Box<[u8]>) {
 #[test]
 fn ring_messages_come_out_in_order_across_the_wrap_and_a_full_ring_refuses() {
     let (r, _buf) = ring(4, 64);
-    let ack = FrameFlag::ACKREQ as u32;
+    let ack = frame::ACKREQ;
     for round in 0..3u32 {
         for k in 0..4 {
             assert_eq!(r.push(round * 4 + k, 7, ack, None, -((round * 4 + k) as i32)), Errno::OK);
@@ -107,6 +107,6 @@ fn ring_one_payload_a_slot_so_the_payloads_run_out_with_the_slots_and_never_befo
     assert_eq!(r.push(10, 0x0101, 0, Some(&[0u8; 72]), 0), Errno::EMSGSIZE);
     let at = r.entry_at(r.tail());
     r.push(11, 0, 0, None, 0);
-    r.words()[(at + FRAME_PACKET) as usize] = 4;
+    r.words()[(at + frame::PACKET) as usize] = 4;
     assert!(r.packet(at).is_err(), "outside a slot");
 }

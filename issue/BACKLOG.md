@@ -20,26 +20,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P1
 
-- **xpute's system calls as a guest's files.** `openat(root, path)`, `read`,
-  `write`, `close` on a descriptor the guest issues, Plan 9's structure with
-  POSIX's words; the body numbers, the fetch commands and the whole-file
-  write go
-  ([20261001-a-guest-s-files-as-plan-9-s.md](./20261001-a-guest-s-files-as-plan-9-s.md)).
-- **XTP: a string-sequence leaf.** A `str` sequence leaf — one UTF-8 blob
-  plus a u32 offsets lane — in place of one `str` node per string. A new
-  type code, so existing packets still read. Per string today is an 8-byte
-  header, a NUL and word padding (the POI repack: 60 MB gzipped against
-  51 MB of JSON) and one node object at encode.
-- **Strings out of the kernel's records.** A name in a record is numbers
-  now — the profiler's task row carries a category index and a subject,
-  and sits in a lane of a section. What is left is text that is data — a
-  chat line (layer/character/chat_bubble.rs), a place's name
-  (layer/poi/badge.rs) — held as `String`s on the module heap: as bytes in
-  a UTF-8 lane with an offset lane beside it, the shape of a
-  string-sequence leaf, it could sit in a section too. What is built to be
-  handed to the shell once (a report, a log line, the snapshot) stays on
-  the heap.
-
 - **Decor: the impostor tier.** Decided 2026-09-13
   ([20260911-decor-identity-orientation-and-one-cell-format.md](./20260911-decor-identity-orientation-and-one-cell-format.md),
   "Closed"): each variant rendered once to a sprite, far instances drawn
@@ -56,6 +36,12 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P3
 
+- **Strings out of the kernel's records.** Read 2026-10-01 and left on the
+  heap: a chat line is one string set when it arrives, and a badge's text is
+  built when the badge is, so neither touches the heap on a settled turn. A
+  section would need a bound on a chat line's length, which is a product
+  number not yet said; with one, the line and its laid-out lines fit the
+  string-sequence leaf's shape (XTP's STRS).
 - **The address label by the zoom.** Asked 2026-09-23, not now: it wants a
   rebake. The label is one baked answer a leaf page
   (`use-reverse-geocode.ts`, `geo-bake/geocode/provider/overture.rs`) — region,
@@ -94,6 +80,28 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   - The themes' remaining fill — ambient, hemisphere, the floor — from the
     sky's irradiance, the way the sunlight now comes from the air. The floor
     is there for a phone's night and would resist it.
+
+- **A changelog, when `xpute` is published and not before.** Asked 2026-09-19
+  and answered no: a changelog's reader is someone deciding whether to move
+  between versions, and its load-bearing lines are the ones that change what
+  that reader must do — removed, changed, deprecated, upgrade now. Continuous
+  deployment has no such reader, since nobody chooses a build. What was wanted
+  instead — which commits a build number carries — is a build log, and
+  `check-and-deploy.yml`'s `record` job appends one line per published build to
+  `_meta/build-log.jsonl`, subjects and all, which `./script/build-log.ts`
+  reads back. Subjects rather than tags or ids because main's history is
+  rewritten here routinely, and a name for a commit outlives the commit only if
+  it is not a reference to one. The trigger that
+  would make a real changelog earn its place is
+  [the spin-out](./20260708-vision-and-scope-pivot.md): the day `@xpute/core`
+  and `xpute-core` ship as packages, their consumers have neither this git log
+  nor `issue/`, and the changelog belongs inside the package with its semver —
+  generated from the commits at that point, not accumulated by hand until
+  then. An installable build through Capacitor
+  ([20260810-mobile-and-perf-targets.md](./20260810-mobile-and-perf-targets.md))
+  is the same trigger from the other side, since a store submission wants
+  release notes per version. Until one of those, `issue/` is the history and it
+  records why, which a changelog never does.
 
 ## Parked, with the reason on file
 

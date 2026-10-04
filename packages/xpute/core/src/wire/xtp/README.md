@@ -1,6 +1,6 @@
 # XTP: Xpute Tree Packet
 
-A small **relocatable binary tree packet** format, with two implementations held to each other: this directory in TypeScript and `crates/xpute/core/src/wire/xtp/` in Rust. The wire format is the contract between them; the walkthrough below is the TypeScript API, which the Rust mirrors.
+A small **relocatable binary tree packet** format, implemented in each of xpute's languages and held to each other: this directory in TypeScript, `crates/xpute/core/src/wire/xtp/` in Rust and `cpp/xpute/core/wire/xtp/` in C++. The wire format is the contract between them; the walkthrough below is the TypeScript API, which the others mirror in their own languages' shapes. The Rust and the C++ also write a packet in place, into bytes the caller holds, with no tree built first (`PacketWriter`), giving the bytes the tree encoder gives.
 
 It is designed to stay simple at the surface:
 
@@ -24,6 +24,7 @@ XTP stands for **Xpute Tree Packet**. In the rest of this document, it is descri
 - byte order is **little-endian**
 - branch child offsets are relative to the **enclosing branch base**
 - `str` stores UTF-8 bytes with a trailing NUL on wire, while its stored `len` excludes that terminator
+- `strs` stores many strings as one leaf: `len` + 1 u32 offsets, each no less than the one before, then the UTF-8 they index
 - root presence is encoded through `root_payload_sz`
 - branch-child presence is encoded through `child_rel_off`
 
@@ -133,7 +134,7 @@ Generic lowering does it for you.
 - `boolean` -> `bool`
 - `string` -> `str`
 - `TypedArray` / `BigTypedArray` -> matching packed sequence leaf
-- `Array` -> branch node
+- `Array` -> branch node, an array of strings among them; one leaf of many strings is `strs(items)`, written explicitly
 
 Notes:
 
@@ -390,38 +391,38 @@ A common real-world pattern is to build subtrees separately and then assemble th
 import { encoder, TreeView } from "@xpute/core/wire/xtp/mod.ts";
 import { to_tuple } from "@xpute/core/wire/lower.ts";
 
-const FEAT_ROW_KEYS = ["id", "name"] as const;
-const COAST_ROW_KEYS = ["id", "ring"] as const;
+const USER_KEYS = ["id", "name"] as const;
+const BLOB_KEYS = ["id", "body"] as const;
 
-const feat_rows = [
-  { id: 1, name: "road" },
-  { id: 2, name: "building" },
+const users = [
+  { id: 1, name: "ada" },
+  { id: 2, name: "grace" },
 ];
 
-const coast_rows = [
-  { id: 10, ring: new Uint8Array([1, 2, 3]) },
+const blobs = [
+  { id: 10, body: new Uint8Array([1, 2, 3]) },
 ];
 
-const ele = new Int16Array([10, 20, 30, 40]);
+const samples = new Int16Array([10, 20, 30, 40]);
 
-const feats_view = new TreeView().branch((b) => {
-  for (const row of feat_rows) {
-    b.put(to_tuple(row, FEAT_ROW_KEYS));
+const users_view = new TreeView().branch((b) => {
+  for (const row of users) {
+    b.put(to_tuple(row, USER_KEYS));
   }
 });
 
-const coasts_view = new TreeView().branch((b) => {
-  for (const row of coast_rows) {
-    b.put(to_tuple(row, COAST_ROW_KEYS));
+const blobs_view = new TreeView().branch((b) => {
+  for (const row of blobs) {
+    b.put(to_tuple(row, BLOB_KEYS));
   }
 });
 
 const packet = encoder.encode(
   new TreeView().branch((b) =>
     b
-      .i16_array(ele)
-      .subtree(feats_view)
-      .subtree(coasts_view)
+      .i16_array(samples)
+      .subtree(users_view)
+      .subtree(blobs_view)
   ),
 );
 ```
@@ -727,6 +728,14 @@ scalar node
 sequence node
 ├─ len slot
 └─ payload
+```
+
+For `strs`:
+
+```text
+strs node
+├─ len slot            // how many strings
+└─ payload             // len + 1 u32 offsets, then the UTF-8 they index
 ```
 
 For `str` specifically:

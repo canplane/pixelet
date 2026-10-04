@@ -316,6 +316,12 @@ impl TreeEncoder {
                 st.lim = payload_start + ALIGN(payload_sz, WORD_SZ)?;
                 self.ensure(st.lim)?;
             }
+
+            SequenceType::STRS => {
+                let SequenceVal::Strs(items) = val else { return Err(bad_type()) };
+                len = items.len() as u32;
+                self.strs_of(items, payload_start, st)?;
+            }
         }
 
         SET_WORD(&mut self.buf, st.base, len, RESERVED);
@@ -481,9 +487,13 @@ impl<'a> PacketWriter<'a> {
     /// Refuses exactly what `TreeEncoder` refuses at the same cap.
     pub fn str(&mut self, s: Option<&str>) -> &mut Self {
         match s {
-            Some(s) => self.seq(SequenceType::STR, s.len() as u32, s.len() as u32 + 1, |out| {
+            Some(s) if self.utf16_fits(s) => self.seq(SequenceType::STR, s.len() as u32, s.len() as u32 + 1, |out| {
                 out[..s.len()].copy_from_slice(s.as_bytes());
             }),
+            Some(_) => {
+                self.fits = false;
+                self.entry(None, SequenceType::STR as u8)
+            }
             None => self.entry(None, SequenceType::STR as u8),
         }
     }

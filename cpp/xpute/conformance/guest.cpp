@@ -3,19 +3,25 @@
 #include "guest.hpp"
 
 #include <array>
+#include <bit>
+#include <cstddef>
 #include <new>
 #include <optional>
 #include <span>
 
+#include "../core/alloc/slab.hpp"
 #include "../core/math/scalar.hpp"
 #include "../core/status/bug.hpp"
 #include "../core/status/errno.spec.hpp"
 #include "../core/wire/xtp/cursor.hpp"
+#include "../runtime/abi/cmd.spec.hpp"
 #include "../runtime/abi/handle.hpp"
 #include "../runtime/ipc/directory.hpp"
 #include "../runtime/ipc/door.hpp"
+#include "../runtime/ipc/file.hpp"
 #include "../runtime/ipc/ring.hpp"
 #include "../runtime/ipc/stream.hpp"
+#include "../runtime/ipc/sys.hpp"
 #include "guest.spec.hpp"
 
 #ifdef __wasm__
@@ -44,7 +50,8 @@ constexpr std::uint32_t COMPLETION_DESC_AT = STREAM_AT + page_up(STREAM_WORDS * 
 constexpr std::uint32_t SUBMISSION_DESC_AT = COMPLETION_DESC_AT + page_up(Ring::bytes(COMPLETION_CAPACITY));
 constexpr std::uint32_t COMPLETION_SLOT_AT = SUBMISSION_DESC_AT + page_up(Ring::bytes(SUBMISSION_CAPACITY));
 constexpr std::uint32_t SUBMISSION_SLOT_AT = COMPLETION_SLOT_AT + COMPLETION_CAPACITY * SLOT_BYTES;
-constexpr std::uint32_t STATE_AT = SUBMISSION_SLOT_AT + SUBMISSION_CAPACITY * SLOT_BYTES;
+constexpr std::uint32_t SYS_AT = SUBMISSION_SLOT_AT + SUBMISSION_CAPACITY * SLOT_BYTES;
+constexpr std::uint32_t STATE_AT = page_up(SYS_AT + SYS_WORDS * 4);
 
 struct State {
     Door door;
@@ -62,7 +69,7 @@ constexpr std::uint32_t HEAP_AT = page_up(STATE_AT + sizeof(State));
 
 static_assert(HEAP_AT + HEAP_BYTES <= MEMORY_BYTES, "the ranges run past the memory");
 static_assert(STATE_AT % alignof(State) == 0, "the state lies on its own alignment");
-static_assert(DIRECTORY_AT + directory_words(3) * 4 <= STREAM_AT, "the directory runs into the stream");
+static_assert(DIRECTORY_AT + directory_words(4) * 4 <= STREAM_AT, "the directory runs into the stream");
 
 State &state_of(Memory m, std::uint32_t range) {
     return *std::launder(reinterpret_cast<State *>(m.at(range + STATE_AT)));
@@ -83,7 +90,13 @@ std::optional<std::uint32_t> first_u32(std::span<const std::uint8_t> packet) {
 Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> packet) {
     // A command that takes a number fails with EBADMSG when its packet does not read.
     std::uint32_t arg = 0;
-    if (cmd == cmd::RAISE || cmd == cmd::RECORD || cmd == cmd::RELEASE || cmd == cmd::USE) {
+    if (cmd == static_cast<std::uint32_t>(abi::Command::SYS_OPENED)) {
+        Result<abi::SysOpened> answer = abi::SysOpened::read(packet);
+        if (!answer) return {.error = answer.error().code};
+        if (const std::uint32_t *owner = s.files.owner(answer->fd)) s.door.post(*owner, cmd::OPENED, 0, answer->res);
+        return {};
+    }
+    if (cmd == cmd::RAISE || cmd == cmd::RECORD || cmd == cmd::RELEASE || cmd == cmd::USE || cmd == cmd::OPEN || cmd == cmd::CLOSE) {
         std::optional<std::uint32_t> n = first_u32(packet);
         if (!n) return {.error = Errno::ebadmsg};
         arg = *n;
@@ -101,9 +114,9 @@ Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> packet)
         s.stream.record(arg, {});
         return {};
     case cmd::ISSUE: {
-        std::uint32_t h = s.handles.acquire();
-        if (h == 0) return {.error = Errno::enfile};
-        return {.value = static_cast<std::int32_t>(h)};
+        std::optional<std::uint32_t> h = s.handles.acquire();
+        if (!h) return {.error = Errno::enfile};
+        return {.value = static_cast<std::int32_t>(*h)};
     }
     case cmd::RELEASE:
         return s.handles.release(arg) ? Applied{} : Applied{.error = Errno::ebadf};
@@ -112,6 +125,10 @@ Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> packet)
     case cmd::MARK:
         s.mark = s.now();
         return {};
+    case cmd::OPEN:
+        return {.value = static_cast<std::int32_t>(s.files.open(s.sys, 1, "f", arg))};
+    case cmd::CLOSE:
+        return s.files.close(s.sys, arg) ? Applied{} : Applied{.error = Errno::ebadf};
     case cmd::SINCE: {
         double since = s.now() - s.mark;
         return {.value = static_cast<std::int32_t>(round(since))};
@@ -125,11 +142,13 @@ Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> packet)
 std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now) {
     Door door(Ring::init(m, range + SUBMISSION_DESC_AT, SUBMISSION_CAPACITY, range + SUBMISSION_SLOT_AT, SLOT_BYTES),
               Ring::init(m, range + COMPLETION_DESC_AT, COMPLETION_CAPACITY, range + COMPLETION_SLOT_AT, SLOT_BYTES), MOST_RAISE + 1);
-    new (m.at(range + STATE_AT)) State{.door = door, .stream = Stream(m, range + STREAM_AT, STREAM_WORDS), .handles = {}, .now = now};
-    const std::array<Entry, 3> entries{{
+    new (m.at(range + STATE_AT)) State{
+        .door = door, .stream = Stream(m, range + STREAM_AT, STREAM_WORDS), .sys = Sys(m, range + SYS_AT, SYS_WORDS), .files = {}, .handles = {}, .now = now};
+    const std::array<Entry, 4> entries{{
         {directory::key::SUBMISSION, range + SUBMISSION_DESC_AT},
         {directory::key::COMPLETION, range + COMPLETION_DESC_AT},
         {key::STREAM, range + STREAM_AT},
+        {directory::key::SYS, range + SYS_AT},
     }};
     write_directory(m, range + DIRECTORY_AT, entries);
     return range + DIRECTORY_AT;
@@ -137,8 +156,10 @@ std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now) {
 
 double interrupt(Memory m, std::uint32_t range) {
     State &s = state_of(m, range);
+    s.sys.rise();
     s.door.drain([&s](std::uint32_t cmd, std::span<const std::uint8_t> packet) { return apply(s, cmd, packet); });
     s.stream.publish();
+    s.sys.fall();
     return s.door.pending() ? 0.0 : -1.0;
 }
 
@@ -219,11 +240,11 @@ extern "C" double xpute_conformance_interrupt(double) {
 #else
 
 extern "C" std::uint32_t xpute_conformance_boot(std::uint8_t *mem, xpute_conformance_now now) {
-    return boot(Memory(reinterpret_cast<std::uintptr_t>(mem)), 0, now);
+    return boot(Memory(reinterpret_cast<std::uintptr_t>(mem), MEMORY_BYTES), 0, now);
 }
 
 extern "C" double xpute_conformance_interrupt(std::uint8_t *mem, double) {
-    return interrupt(Memory(reinterpret_cast<std::uintptr_t>(mem)), 0);
+    return interrupt(Memory(reinterpret_cast<std::uintptr_t>(mem), MEMORY_BYTES), 0);
 }
 
 #endif

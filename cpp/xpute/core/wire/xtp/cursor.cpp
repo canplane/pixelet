@@ -61,6 +61,47 @@ Result<std::string_view> Cursor::str() const noexcept {
     return std::string_view(reinterpret_cast<const char *>(pkt_.data() + payload), nbyte);
 }
 
+bool is_utf8(std::span<const std::uint8_t> bytes) noexcept {
+    bool ok = true;
+    Cursor::utf8_lossy(std::string_view(reinterpret_cast<const char *>(bytes.data()), bytes.size()), [&ok](std::string_view piece) {
+        if (piece == "\xef\xbf\xbd") ok = false;
+    });
+    return ok;
+}
+
+Result<std::string_view> Cursor::str_of_type() const noexcept {
+    if (is_null() || type_ != type_of(SequenceType::str)) return marshal_error(Errno::ebadmsg);
+    return str();
+}
+
+Result<std::string_view> Cursor::get_str_ref() const noexcept {
+    Result<std::string_view> s = str_of_type();
+    if (!s) return s;
+    if (!is_utf8({reinterpret_cast<const std::uint8_t *>(s->data()), s->size()})) return marshal_error(Errno::ebadmsg);
+    return s;
+}
+
+Result<Strs> Cursor::strs() const noexcept {
+    std::uint64_t payload = std::uint64_t{base_} + WORD_SZ;
+    if (payload > pkt_.size()) return marshal_error(Errno::ebadmsg);
+    std::uint32_t n = get_word(pkt_, base_)[0];
+    std::uint64_t blob = payload + 4 * (std::uint64_t{n} + 1);
+    if (blob > pkt_.size()) return marshal_error(Errno::ebadmsg);
+    auto off = [&](std::uint32_t i) { return load<std::uint32_t>(pkt_.data() + payload + 4 * i); };
+    std::uint32_t total = off(n);
+    if (total > pkt_.size() - blob) return marshal_error(Errno::ebadmsg);
+    for (std::uint32_t i = 0; i < n; i++) {
+        if (off(i) > off(i + 1) || off(i + 1) > total) return marshal_error(Errno::ebadmsg);
+        if (!is_utf8(pkt_.subspan(blob + off(i), off(i + 1) - off(i)))) return marshal_error(Errno::ebadmsg);
+    }
+    return Strs{pkt_.subspan(payload, 4 * (std::uint64_t{n} + 1)), pkt_.subspan(blob, total), n};
+}
+
+Result<Strs> Cursor::get_strs() const noexcept {
+    if (type_ != type_of(SequenceType::strs)) return marshal_error(Errno::ebadmsg);
+    return strs();
+}
+
 Result<Value> Cursor::get() const noexcept {
     if (is_null()) return Value(Null{});
     if (is_branch()) return Value(BranchCursor(*this));
@@ -111,6 +152,8 @@ Result<Value> Cursor::get() const noexcept {
         return seq(bitset());
     case SequenceType::str:
         return seq(str());
+    case SequenceType::strs:
+        return seq(strs());
     }
     return marshal_error(Errno::ebadmsg);
 }
@@ -123,9 +166,6 @@ Result<std::int64_t> Cursor::get_i64() const noexcept {
 }
 Result<bool> Cursor::get_bool() const noexcept {
     return get_as<bool>();
-}
-Result<std::string_view> Cursor::get_str() const noexcept {
-    return get_as<std::string_view>();
 }
 
 Result<double> Cursor::get_number() const noexcept {
@@ -167,6 +207,12 @@ Result<TreeReader> TreeReader::make(std::span<const std::uint8_t> pkt) noexcept 
     Result<Cursor> root = Cursor::at(pkt, HDR_SZ, type);
     if (!root) return root.error();
     return TreeReader(*root);
+}
+
+Result<Value> BranchCursor::get_at(std::uint32_t idx) const noexcept {
+    Result<Cursor> c = at(idx);
+    if (!c) return c.error();
+    return c->get();
 }
 
 } // namespace xpute::xtp

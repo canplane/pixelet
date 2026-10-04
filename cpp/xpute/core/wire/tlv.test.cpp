@@ -47,7 +47,7 @@ std::string show(const tlv::Value &v) {
 
 } // namespace
 
-// Across a protocol: the bytes are the other two languages', to the last one.
+// Across a protocol: the bytes are the other languages', to the last one.
 XPUTE_TEST(tlv_computes_what_the_other_languages_compute) {
     Golden v = Golden::load("spec/xpute/golden/wire/tlv.tsv");
     std::vector<std::uint8_t> buf;
@@ -87,6 +87,28 @@ XPUTE_TEST(tlv_computes_what_the_other_languages_compute) {
     XPUTE_CHECK(tlv::Reader(packet).read_all(read).ok());
     XPUTE_CHECK_EQ(read.size(), v.len("read"), "read back a different count");
     for (std::size_t j = 0; j < read.size(); j++) XPUTE_CHECK_EQ(show(read[j]), v.s("read." + std::to_string(j)), ("read." + std::to_string(j)).c_str());
+
+    // How a sequence stops: the values handed out before it did, then END
+    // read, the input run out at a boundary, or a fault.
+    v.each("end", [&](const std::string &k) {
+        std::vector<std::uint8_t> pkt = v.bytes(k + ".packet");
+        tlv::Reader r(pkt);
+        int n = 0;
+        std::string stop;
+        for (;;) {
+            Result<std::optional<tlv::Value>> got = r.next();
+            if (!got) {
+                stop = "errno:" + std::to_string(static_cast<int>(got.error().code));
+                break;
+            }
+            if (!*got) {
+                stop = r.end() == tlv::End::closed ? "closed" : "unclosed";
+                break;
+            }
+            n++;
+        }
+        XPUTE_CHECK_EQ(std::to_string(n) + ":" + stop, v.s(k + ".read"), k.c_str());
+    });
 
     const std::string &huge_hex = v.s("huge.packet");
     std::vector<std::uint8_t> huge(huge_hex.size() / 2);

@@ -209,6 +209,7 @@ impl TlvWriter {
 pub struct TlvReader<'a> {
     buf: &'a [u8],
     off: usize,
+    end: Option<TlvEnd>,
 }
 
 impl<'a> TlvReader<'a> {
@@ -236,12 +237,17 @@ impl<'a> TlvReader<'a> {
     }
 
     pub fn next_value(&mut self) -> Result<Option<TlvValue>, MarshalError> {
+        if self.end.is_some() {
+            return Ok(None);
+        }
         if self.off >= self.buf.len() {
+            self.end = Some(TlvEnd::Unclosed);
             return Ok(None);
         }
         let tag = self.buf[self.off];
         self.off += 1;
         if tag == Tag::END as u8 {
+            self.end = Some(TlvEnd::Closed);
             return Ok(None);
         }
 

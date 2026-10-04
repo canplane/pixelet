@@ -4,7 +4,7 @@ import { assert, assertEquals } from "@std/assert";
 
 import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { encoder, TreeView } from "@xpute/core/wire/xtp/mod.ts";
-import { FrameFlag } from "@xpute/runtime/ipc/frame.ts";
+import * as frame from "@xpute/runtime/ipc/frame.ts";
 import { key } from "@xpute/runtime/ipc/directory.spec.ts";
 import { Ring } from "@xpute/runtime/ipc/ring.ts";
 import { Command } from "@xpute/runtime/abi/cmd.spec.ts";
@@ -19,14 +19,14 @@ const UNNUMBERED = 0x0fff;
 
 function push_nops(sq: Ring, from: number, n: number): void {
   for (let k = from; k < from + n; k++) {
-    assertEquals(sq.push(k, Command.NOP, FrameFlag.ACKREQ, encoder.encode(new TreeView().branch((b) => b.u32(k * 3)))), Errno.OK);
+    assertEquals(sq.push(k, Command.NOP, frame.ACKREQ, encoder.encode(new TreeView().branch((b) => b.u32(k * 3)))), Errno.OK);
   }
 }
 
 function read_nops(cq: Ring, from: number): number {
   let k = from;
   for (let at = cq.peek(); at >= 0; at = cq.peek()) {
-    assertEquals([cq.tag(at), cq.cmd(at), cq.flags(at), cq.result(at)], [k, Command.NOP, FrameFlag.RES, k * 3]);
+    assertEquals([cq.tag(at), cq.cmd(at), cq.flags(at), cq.result(at)], [k, Command.NOP, frame.RES, k * 3]);
     cq.advance();
     k++;
   }
@@ -42,7 +42,7 @@ Deno.test("rings - one turn answers every submission in order, and the kernel ho
   assertEquals([sq.capacity, cq.capacity], [SUBMISSION_CAPACITY, COMPLETION_CAPACITY]);
 
   push_nops(sq, 0, sq.capacity);
-  assertEquals(sq.push(sq.capacity, Command.NOP, FrameFlag.ACKREQ), Errno.EAGAIN, "a full submission ring refuses");
+  assertEquals(sq.push(sq.capacity, Command.NOP, frame.ACKREQ), Errno.EAGAIN, "a full submission ring refuses");
   p.interrupt(0);
   assertEquals([sq.len, cq.len], [0, sq.capacity], "one turn applies everything sent");
 
@@ -65,6 +65,6 @@ Deno.test("rings - one turn answers every submission in order, and the kernel ho
   p.interrupt(0);
   assertEquals(cq.len, 5, "a command nobody numbers replies without being asked to");
   const at = cq.peek();
-  assertEquals([cq.tag(at), cq.cmd(at), cq.flags(at), cq.result(at)], [1000, UNNUMBERED, FrameFlag.RES, Errno.ENOSYS]);
+  assertEquals([cq.tag(at), cq.cmd(at), cq.flags(at), cq.result(at)], [1000, UNNUMBERED, frame.RES, Errno.ENOSYS]);
   while (cq.peek() >= 0) cq.advance();
 });

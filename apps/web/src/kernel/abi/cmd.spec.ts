@@ -85,7 +85,7 @@ export const enum SensorMinor {
 /** A load's verbs. */
 export const enum LoadMinor {
   START = 0x01,
-  DONE = 0x02,
+  CANCEL = 0x02,
   FAILED = 0x03,
   IMAGE = 0x04,
 }
@@ -196,12 +196,6 @@ export const enum PermissionAnswer {
   Failed = 3,
 }
 
-/** What an asset is read as. */
-export const enum LoadKind {
-  Gltf = 0,
-  Image = 1,
-}
-
 /** The map's loading lifecycle. */
 export const enum MapStatus {
   Idle = 0,
@@ -265,19 +259,19 @@ export const enum Command {
   SENSOR_START = 0x1201,
   /** Stop watching. */
   SENSOR_STOP = 0x1203,
-  /** An asset the scheduler wants read. It shares the credits with the pages, and so is
-   * started when one is free rather than all at once; what it is and where it lives is
-   * the host's, as a page's address is. */
+  /** An image the scheduler wants read and decoded. It shares the credits with the pages,
+   * and so is started when one is free rather than all at once; which file it is and
+   * where it lives is the host's. A model is read as a file (xpute's OPENAT, root ASSET). */
   LOAD_START = 0x1301,
+  /** Stop this image's read: the scheduler took its credit back. The host answers LOAD_FAILED. */
+  LOAD_CANCEL = 0x1302,
 
   // ---- the host answers: an I/O the process started, done ----
 
-  /** A model's bytes, held by the host as `body` until the kernel reads them (xpute's sys READ). */
-  LOAD_DONE = 0x1302,
   /** An image decoded and held by the shell. */
   LOAD_IMAGE = 0x1304,
-  /** A read of an asset failed. The guest wants it again, after whatever the scheduler
-   * makes it wait; a model whose *bytes* do not parse is a different thing and is not this. */
+  /** An image's read failed or was stopped. The guest wants it again, after whatever the
+   * scheduler makes it wait. */
   LOAD_FAILED = 0x1303,
   /** A GPS fix; a field is absent where the browser gave none. */
   SENSOR_POSITION = 0x1202,
@@ -534,24 +528,21 @@ export function read_sensor_stop(b: BranchCursor): SensorStopSignal {
 /** Command.LOAD_START's signal. */
 export interface LoadStartSignal {
   key: u64;
-  kind: LoadKind;
   /** asset/ingested's asset number, the texture pack's sheet one past the last. */
   load: u32;
 }
 
 export function read_load_start(b: BranchCursor): LoadStartSignal {
-  return { key: b.at(0).get<u64>(), kind: b.at(1).get<LoadKind>(), load: b.at(2).get<u32>() };
+  return { key: b.at(0).get<u64>(), load: b.at(1).get<u32>() };
 }
 
-/** Command.LOAD_DONE's packet. */
-export interface LoadDone {
+/** Command.LOAD_CANCEL's signal. */
+export interface LoadCancelSignal {
   key: u64;
-  body: u32;
-  bytes: u32;
 }
 
-export function encode_load_done(p: LoadDone): U8Array {
-  return packet((b) => b.u64(p.key).u32(p.body).u32(p.bytes));
+export function read_load_cancel(b: BranchCursor): LoadCancelSignal {
+  return { key: b.at(0).get<u64>() };
 }
 
 /** Command.LOAD_IMAGE's packet. */
@@ -623,16 +614,11 @@ export interface WorldBoot {
   /** The settings as storage kept them, a value a setting in SettingKey's order as the
    * snapshot carries them, 0xffffffff for one it kept nothing for. */
   settings: u32[];
-  /** The objects as stored, held as a body (xpute's sys READ), 0 for none. */
-  objects: u32;
-  objects_bytes: u32;
 }
 
 export function encode_world_boot(p: WorldBoot): U8Array {
   return packet((b) =>
-    b.bool(p.development).bool(p.handheld).bool(p.geolocation).bool(p.orientation).bool(p.orientation_permission).bool(p.orientation_silence_is_loss).u32_array(Uint32Array.from(p.settings)).u32(
-      p.objects,
-    ).u32(p.objects_bytes)
+    b.bool(p.development).bool(p.handheld).bool(p.geolocation).bool(p.orientation).bool(p.orientation_permission).bool(p.orientation_silence_is_loss).u32_array(Uint32Array.from(p.settings))
   );
 }
 

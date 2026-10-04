@@ -1,17 +1,18 @@
 // @pxl/web/kernel/kernel.ts
 
 /**
- * Hands the completion ring's signals to whoever runs them, and boots
- * everything. Nothing is decided here.
+ * The completion ring's signals, and the boot that starts everything.
+ *
+ * A turn leaves on the completion ring what the kernel asks of the host — the
+ * sensors' watches, the images to load and stop — and the
+ * shell's snapshot when it changed, which the host hands on; this is where
+ * each is handed to whoever runs it. Nothing is decided here: every branch is one line to the module that
+ * does the work.
  */
 
 import type { u32 } from "@xpute/core/abi/word.ts";
 import type { BranchCursor } from "@xpute/core/wire/xtp/mod.ts";
-import { Command, encode_world_boot, LoadKind, read_load_start, read_sensor_start, read_sensor_stop, read_world_snapshot, Sensor } from "@/kernel/abi/cmd.spec.ts";
-import { Command as XputeCommand, read_fetch_cancel, read_fetch_start } from "@xpute/runtime/abi/cmd.spec.ts";
-import { storage } from "@/kernel/abi/host.spec.ts";
-import { stored } from "@/kernel/host.ts";
-import { BODIES } from "@/kernel/module.ts";
+import { Command, encode_world_boot, read_load_cancel, read_load_start, read_sensor_start, read_sensor_stop, read_world_snapshot, Sensor } from "@/kernel/abi/cmd.spec.ts";
 import {
   geolocationStart,
   geolocationStop,
@@ -22,9 +23,12 @@ import {
   orientationSilenceIsLoss,
   orientationSupported,
 } from "@platform/sensor.ts";
-import { abort_fetch, run_fetch } from "@/kernel/io/fetch.ts";
 import { declare_source } from "@/kernel/io/source.ts";
-import { load_image, load_model } from "@/kernel/io/load.ts";
+import { cancel_load, load_image, read_model } from "@/kernel/io/load.ts";
+import { read_object } from "@/kernel/io/fetch.ts";
+import { bind_root } from "@/kernel/host.ts";
+import { root } from "@/kernel/abi/host.spec.ts";
+import { BAKE_KINDS } from "@/config/published.spec.ts";
 import { CORE, CORE_DOORBELL, load_core } from "@/kernel/mem.ts";
 import { bytes_at } from "@/kernel/module.ts";
 import { gpuBoot } from "@platform/gpu.ts";
@@ -33,7 +37,7 @@ import { start_sched } from "@/kernel/sched.ts";
 import { kernel_snapshot, set_snapshot, subscribe_snapshot } from "@/kernel/snapshot.ts";
 import { keepSettings, storedSettings } from "@/feature/setting/store.ts";
 
-function on_signal(_tag: u32, cmd: Command | XputeCommand, f: BranchCursor | null): void {
+function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
   switch (cmd) {
     case Command.WORLD_SNAPSHOT: {
       // Too large for a ring frame; valid until the kernel writes the next, a turn away.
@@ -51,28 +55,27 @@ function on_signal(_tag: u32, cmd: Command | XputeCommand, f: BranchCursor | nul
       if (read_sensor_stop(f!).sensor === Sensor.Geolocation) geolocationStop();
       else orientationRemove();
       return;
-    case XputeCommand.FETCH_START: {
-      const { key, source: bake, name } = read_fetch_start(f!);
-      void run_fetch(key, bake, name);
-      return;
-    }
-    case XputeCommand.FETCH_CANCEL:
-      abort_fetch(read_fetch_cancel(f!).key);
-      return;
     case Command.LOAD_START: {
-      const { key, kind, load } = read_load_start(f!);
-      void (kind === LoadKind.Gltf ? load_model(key, load) : load_image(key, load));
+      const { key, load } = read_load_start(f!);
+      void load_image(key, load);
       return;
     }
+    case Command.LOAD_CANCEL:
+      cancel_load(read_load_cancel(f!).key);
+      return;
   }
   console.warn(`[kernel] signal 0x${cmd.toString(16)} with no one to hear it`);
 }
 
-/** Called once from app/bootstrap.ts, so boot order is explicit, not import order. */
+/** Starts the kernel: the module, the turns it is given and who hears what
+ * a turn leaves, then a device to draw with and the world it draws. Called
+ * once by the app's boot (app/bootstrap.ts), so that what boots is ordered
+ * rather than whichever module happened to be imported first. */
 export async function boot_kernel(): Promise<void> {
   await load_core();
+  // A bake's root is its kind's number, below the roots of host.json's own.
   BAKE_KINDS.forEach((_, bake) => bind_root(bake, (name, signal) => read_object(bake, name, signal)));
-  bind_root(root.ASSET, (path, signal) => read_asset(Number(path), signal));
+  bind_root(root.ASSET, (path, signal) => read_model(Number(path), signal));
   start_sched();
   CORE_DOORBELL.signal = on_signal;
   gpuBoot();
@@ -85,7 +88,7 @@ export async function boot_kernel(): Promise<void> {
       orientation: orientationSupported(),
       orientation_permission: orientationNeedsPermission(),
       orientation_silence_is_loss: orientationSilenceIsLoss(),
-      settings: storageGet(STORAGE_KEYS[storage.SETTINGS]) ?? "",
+      settings: storedSettings(),
     }),
     (result) => result,
   );

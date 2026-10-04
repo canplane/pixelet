@@ -29,7 +29,7 @@ use crate::mem::section::{map, PAGE_BYTES};
 use crate::param::RUN_SET_BYTES;
 use crate::sched::profiler::record::PROFILER_BYTES;
 use crate::world::chunk::build::{BAKE_BYTES, RUN_SETS};
-use crate::world::chunk::mesh_slot::SURFACE_BYTES;
+use crate::world::chunk::table::MOUNTS_BYTES;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Range {
@@ -37,7 +37,7 @@ pub enum Range {
     /// Run set `n`, below RUN_SETS.
     Run(usize),
     Bake,
-    Surface,
+    Mounts,
     Decor,
     Blocks,
     Gpu,
@@ -60,7 +60,7 @@ impl Range {
                 1 + set
             }
             Range::Bake => 1 + RUN_SETS,
-            Range::Surface => 2 + RUN_SETS,
+            Range::Mounts => 2 + RUN_SETS,
             Range::Decor => 3 + RUN_SETS,
             Range::Blocks => 4 + RUN_SETS,
             Range::Gpu => 5 + RUN_SETS,
@@ -92,7 +92,7 @@ const RANGES: [u32; COUNT] = {
         set += 1;
     }
     r[Range::Bake.index()] = BAKE_BYTES;
-    r[Range::Surface.index()] = SURFACE_BYTES;
+    r[Range::Mounts.index()] = MOUNTS_BYTES;
     r[Range::Decor.index()] = DECOR_BYTES;
     r[Range::Blocks.index()] = BLOCKS_BYTES;
     r[Range::Gpu.index()] = stream::BYTES;

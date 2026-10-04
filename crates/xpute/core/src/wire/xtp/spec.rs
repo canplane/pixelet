@@ -203,6 +203,7 @@ pub struct ScalarNode {
 #[derive(Clone, Debug, PartialEq)]
 pub enum SequenceVal<'a> {
     Str(String),
+    Strs(Vec<String>),
     Array(Array<'a>),
 }
 
@@ -291,7 +292,7 @@ pub type AlignUnit = u32;
 
 /// `unit` is a power of two no larger than WORD_SZ.
 pub fn ALIGN(nbyte: u32, unit: AlignUnit) -> Result<u32, MarshalError> {
-    if (unit & unit.wrapping_sub(1)) != 0 || unit > WORD_SZ {
+    if unit == 0 || (unit & unit.wrapping_sub(1)) != 0 || unit > WORD_SZ {
         return Err(MarshalError::new(Errno::EINVAL));
     }
 
@@ -307,7 +308,7 @@ pub fn ELEM_SZ(type_: SequenceType) -> AlignUnit {
     match type_ {
         SequenceType::U8_ARRAY | SequenceType::I8_ARRAY | SequenceType::BITSET | SequenceType::STR => 1,
         SequenceType::U16_ARRAY | SequenceType::I16_ARRAY => 2,
-        SequenceType::U32_ARRAY | SequenceType::I32_ARRAY | SequenceType::F32_ARRAY => 4,
+        SequenceType::U32_ARRAY | SequenceType::I32_ARRAY | SequenceType::F32_ARRAY | SequenceType::STRS => 4,
         SequenceType::U64_ARRAY | SequenceType::I64_ARRAY | SequenceType::F64_ARRAY => 8,
     }
 }

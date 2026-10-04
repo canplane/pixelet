@@ -9,6 +9,11 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <utility>
+#include <vector>
+
+#include "../../core/status/bug.hpp"
 
 namespace xpute {
 
@@ -39,13 +44,20 @@ template <std::size_t N> class HandleTable {
         } else {
             return std::nullopt;
         }
-        return 0;
+        generation_[slot] = next_generation(generation_[slot]);
+        live_[slot] = true;
+        count_++;
+        return slot | std::uint32_t{generation_[slot]} << HANDLE_SLOT_BITS;
     }
 
     // False for a handle that is not live.
     bool release(std::uint32_t handle) noexcept {
         if (!live(handle)) return false;
-        live_[handle_slot(handle)] = false;
+        std::uint32_t slot = handle_slot(handle);
+        live_[slot] = false;
+        next_[slot] = free_;
+        free_ = slot;
+        count_--;
         return true;
     }
 

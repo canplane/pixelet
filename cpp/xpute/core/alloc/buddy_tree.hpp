@@ -45,6 +45,9 @@ concept Range = requires {
 
 template <Range R> class BuddyMalloc {
     static constexpr std::size_t BUCKET_COUNT = R::MAX_LOG2 - R::MIN_LOG2 + 1;
+    // A tree of fewer than four buckets has no split bit to keep, and one of
+    // more than 33 a bitmap past what a 32-bit range can address.
+    static_assert(BUCKET_COUNT >= 4 && BUCKET_COUNT <= 33, "a buddy tree's bucket count");
 
     struct List {
         List *prev;

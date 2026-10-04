@@ -24,7 +24,6 @@ use crate::layer::decor::kind::DecorKindDef;
 use crate::layer::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
 use crate::layer::decor::scatter::{DecorKindSeed, DecorOrientationMode, DecorRules};
 use crate::layer::object::store::{At, EntryAt, Store};
-use crate::world::chunk::table::Drawn;
 use pxl_spec::asset::ingested::Asset;
 
 /// A kind is drawn as a model while it covers at least two of a tier's cells
@@ -178,6 +177,8 @@ pub struct Ground<'a> {
     /// At z16, the column whose placed objects keep a candidate off their cell.
     /// Above z16 the objects are read folded instead.
     pub col_idx: Option<IVec>,
+    /// Above z16, the chunk's objects folded to its level's cell, as its
+    /// runs draw them: a candidate is kept off a cell they fill.
     pub folded: Option<&'a HashMap<[i64; 3], u32>>,
 }
 
@@ -393,7 +394,7 @@ impl<'s> DecorBuild<'s> {
                     continue;
                 }
                 let (x, y) = ((gx as f64 + 0.5) * atom.side() - ground.x0 as f64, (gy as f64 + 0.5) * atom.side() - ground.y0 as f64);
-                let z = ground.surface.and_then(|d| d.top_under(x, y)).unwrap_or(ele as f64);
+                let z = ele as f64;
                 scratch.push(
                     first + variant as usize,
                     Instance {

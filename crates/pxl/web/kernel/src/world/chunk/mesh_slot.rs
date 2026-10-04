@@ -84,6 +84,9 @@ impl Pool {
         }
     }
 
+
+    /// The first of its slots: the coarse pool's, then the leaves', then
+    /// the cover's.
     const fn first(self) -> usize {
         match self {
             Pool::Coarse => 0,
@@ -106,14 +109,6 @@ impl Pool {
         }
     }
 
-    /// Where its surface lanes begin in `.fixed.surface`, in words.
-    const fn surface_first(self) -> u32 {
-        match self {
-            Pool::Coarse => 0,
-            Pool::Fine => Pool::Coarse.slots() * Pool::Coarse.surface_words(),
-            Pool::Cover => Pool::Coarse.slots() * Pool::Coarse.surface_words() + Pool::Fine.slots() * Pool::Fine.surface_words(),
-        }
-    }
 }
 
 pub const ARENA: [u32; POOLS] = [Pool::Fine.slots(), Pool::Coarse.slots(), Pool::Cover.slots()];
@@ -177,6 +172,11 @@ pub struct MeshSlot {
     pub index: usize,
 }
 
+pub const SURFACE_BYTES: u32 = Pool::Cover.surface_first() * 4 + Pool::Cover.slots() * Pool::Cover.surface_words() * 4;
+
+
+/// The slot an index names: which group's arena it is in, where in it, and
+/// how many boxes it holds.
 pub fn slot_at(index: usize) -> MeshSlot {
     let pool = Pool::at(index);
     let n = (index - pool.first()) as u32;

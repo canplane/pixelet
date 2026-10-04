@@ -169,7 +169,7 @@ inline std::array<std::uint32_t, 2> get_word(std::span<const std::uint8_t> buf, 
 
 // `unit` is a power of two no wider than a word.
 inline Result<std::uint32_t> align(std::uint32_t nbyte, std::uint32_t unit) noexcept {
-    if ((unit & (unit - 1)) != 0 || unit > WORD_SZ) return marshal_error(Errno::einval);
+    if (unit == 0 || (unit & (unit - 1)) != 0 || unit > WORD_SZ) return marshal_error(Errno::einval);
     std::uint32_t mask = unit - 1;
     if (nbyte > UINT32_MAX - mask) return marshal_error(Errno::eoverflow);
     return (nbyte + mask) & ~mask;
@@ -200,6 +200,7 @@ inline Result<std::uint32_t> align_sz(NodeType t) noexcept {
 
 // A string sequence's element is its offsets' word.
 constexpr std::uint32_t elem_sz(SequenceType t) noexcept {
+    if (t == SequenceType::strs) return 4;
     return type_is_nonnum(type_of(t)) ? 1 : 1u << type_arg_of(type_of(t));
 }
 

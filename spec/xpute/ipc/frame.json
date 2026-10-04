@@ -1,0 +1,58 @@
+{
+  "$doc": [
+    "A message in a ring (ring.json): four words, a frame. The submitter's tag comes back on",
+    "the reply; the command shares its word with the flags; a reply carries a value or a",
+    "negative errno; and a packet, where there is one, lies in the ring's payload slot.",
+    "",
+    "Reserved for later, so taking them moves no word: the tag's high bits (a sender id for",
+    "routing), flag bits 2 and up, and the result word on a submission."
+  ],
+
+  "TAG": {
+    "$value": 0,
+    "$type": "u32",
+    "$doc": ["The submitter's, echoed on the reply; a signal's subject."]
+  },
+
+  "CMD": {
+    "$value": 1,
+    "$type": "u32",
+    "$doc": ["The command in the low FLAG_SHIFT bits, the flags above them."]
+  },
+
+  "RESULT": {
+    "$value": 2,
+    "$type": "u32",
+    "$doc": ["On a reply, a value or a negative errno; else 0."]
+  },
+
+  "PACKET": {
+    "$value": 3,
+    "$type": "u32",
+    "$doc": ["Where its XTP packet is, as the transport names it; 0 for none."]
+  },
+
+  "WORDS": {
+    "$value": 4,
+    "$type": "u32",
+    "$doc": ["Words a frame takes."]
+  },
+
+  "FLAG_SHIFT": {
+    "$value": 16,
+    "$type": "u32",
+    "$doc": ["Where the flags start in the CMD word."]
+  },
+
+  "RES": {
+    "$value": 1,
+    "$type": "u32",
+    "$doc": ["A flag: a reply, as against a signal. Set by the sender, never by a handler."]
+  },
+
+  "ACKREQ": {
+    "$value": 2,
+    "$type": "u32",
+    "$doc": ["A flag: always reply; without it, only a failure is replied to."]
+  }
+}

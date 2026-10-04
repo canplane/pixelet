@@ -58,7 +58,7 @@ pub struct ChangeLog {
     pub key: Box<[i64]>,
     pub revision: Box<[u32]>,
 
-    _head: Cursor,
+    head_of: Cursor,
     ticks: Box<[u32]>,
     /// Per topic: each live key's latest revision.
     revisions: Vec<HashMap<i64, u32, FnvBuildHasher>>,
@@ -88,7 +88,7 @@ impl ChangeLog {
             topic,
             key,
             revision,
-            _head: 0,
+            head_of: 0,
             ticks,
             revisions,
         }
@@ -107,11 +107,11 @@ impl ChangeLog {
 
         self.revisions[topic as usize].insert(key, tick);
 
-        let i = self.slot(self._head) as usize;
+        let i = self.slot(self.head_of) as usize;
         self.topic[i] = topic as u16;
         self.key[i] = key;
         self.revision[i] = tick;
-        self._head = self._head.wrapping_add(1);
+        self.head_of = self.head_of.wrapping_add(1);
         tick
     }
 
@@ -138,12 +138,12 @@ impl ChangeLog {
     /// The position the next change will be written at. A reader that has
     /// read up to here takes it as its cursor.
     pub fn head(&self) -> Cursor {
-        self._head
+        self.head_of
     }
 
     /// Whether every entry from `cursor` to the head is still in the ring.
     pub fn readable(&self, cursor: Cursor) -> bool {
-        cursor <= self._head && self._head - cursor <= self.capacity
+        cursor <= self.head_of && self.head_of - cursor <= self.capacity
     }
 
     /// Where the entry at a position lives in the lanes.

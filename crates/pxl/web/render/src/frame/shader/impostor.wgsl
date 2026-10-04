@@ -1,26 +1,24 @@
-// Decor instances too small on screen for their model, drawn as quads turned
-// to the eye about the world's up.
+// Decor's impostor tier: each instance of a decor block drawn as a quad
+// turned to the eye about the world's up, its variant's sprite on it
+// (impostor_bake.wgsl), where the variant is too small on the screen for its
+// model to be worth its triangles (kernel layer/decor/build.rs `decor_tier`).
+// The instances are decor.wgsl's, read the same way; a hidden one is sent
+// outside the clip volume.
 
-struct Draw {
-  translation: vec3f,
-  offset: u32,
-  stride: u32,
-  opacity: f32,
-  layer: u32,
-  index: u32,
-};
-
+// Held as vec4 words, as decor.wgsl's: translation, the group's first lane
+// word, the instance count, the opacity, the sprite's layer.
 @group(1) @binding(0) var<uniform> draw_words: array<vec4f, 2>;
 
 fn draw_translation() -> vec3f { return draw_words[0].xyz; }
 fn draw_offset() -> u32 { return bitcast<u32>(draw_words[0].w); }
-fn draw_stride() -> u32 { return bitcast<u32>(draw_words[1].x); }
+fn draw_count() -> u32 { return bitcast<u32>(draw_words[1].x); }
 fn draw_opacity() -> f32 { return draw_words[1].y; }
 fn draw_layer() -> u32 { return bitcast<u32>(draw_words[1].z); }
-fn draw_index() -> u32 { return bitcast<u32>(draw_words[1].w); }
 
 @group(2) @binding(0) var sprites: texture_2d_array<f32>;
 @group(2) @binding(1) var sprite_sampler: sampler;
+// Each layer's fit, as the bake drew it: the model's center across and up
+// and its half side, in the model's units.
 @group(2) @binding(2) var<uniform> fits: array<vec4f, 64>;
 @group(3) @binding(0) var<storage, read> block: array<u32>;
 
@@ -32,24 +30,29 @@ struct VertexIn {
 struct VertexOut {
   @builtin(position) clip: vec4f,
   @location(0) uv: vec2f,
-  @location(1) @interpolate(flat) normal: vec3f,
+  @location(1) normal: vec3f,
   @location(2) world_pos: vec3f,
   @location(3) through: vec3f,
   @location(4) scattered: vec3f,
   @location(5) past: vec3f,
-  @location(6) @interpolate(flat) fill: vec3f,
+  @location(6) fill: vec3f,
 };
 
 fn lane(k: u32, i: u32) -> f32 {
-  return bitcast<f32>(block[draw_offset() + k * draw_stride() + i]);
+  return bitcast<f32>(block[draw_offset() + k * draw_count() + i]);
 }
 
 @vertex
 fn vs(v: VertexIn) -> VertexOut {
-  let i = block[draw_index() + v.i];
+  let n = draw_count();
+  let flags = (block[draw_offset() + 5u * n + v.i / 4u] >> ((v.i % 4u) * 8u)) & 255u;
   var o: VertexOut;
-  let base = vec3f(lane(0u, i), lane(1u, i), lane(2u, i)) + draw_translation();
-  let scale = lane(4u, i);
+  if ((flags & 1u) != 0u) {
+    o.clip = vec4f(0.0, 0.0, -2.0, 1.0);
+    return o;
+  }
+  let base = vec3f(lane(0u, v.i), lane(1u, v.i), lane(2u, v.i)) + draw_translation();
+  let scale = lane(4u, v.i);
   let fit = fits[draw_layer()];
   let corner = vec2f(select(-1.0, 1.0, (v.k & 1u) != 0u), select(-1.0, 1.0, (v.k & 2u) != 0u));
   let up = vec3f(0.0, 0.0, 1.0);
@@ -63,7 +66,7 @@ fn vs(v: VertexIn) -> VertexOut {
   o.uv = vec2f(0.5 + 0.5 * corner.x, 0.5 - 0.5 * corner.y);
   o.normal = facing;
   o.world_pos = world;
-  let seen = seen_from_eye(world);
+  let seen = seen_at_vertex(world);
   o.through = seen.through;
   o.scattered = seen.scattered;
   o.past = seen.past;
@@ -78,6 +81,6 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
     discard;
   }
   let n = normalize(i.normal);
-  let color = screen_ao(shade(sprite.rgb, n, i.world_pos, sun_lit(i.world_pos, n), vec3f(1.0), Seen(i.through, i.scattered, i.past, i.fill)), i.clip.xy);
+  let color = shade(sprite.rgb, n, i.world_pos, sun_lit(i.world_pos, n), vec3f(1.0), Seen(i.through, i.scattered, i.past, i.fill));
   return vec4f(finish(color, i.clip.xy), draw_opacity());
 }

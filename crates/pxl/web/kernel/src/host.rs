@@ -1,9 +1,13 @@
 // pxl-kernel/host.rs
 //
-// What the kernel asks of the host, as xpute system calls recorded during a
-// turn and run by the host after it returns, so they are done before the
-// next turn rises. Only the clock is called directly, since a turn measures
-// its budget mid-turn.
+// What the kernel asks of the host that is not a command it answers, made as
+// xpute's system calls (xpute-runtime ipc/sys.rs): its files (io/file.rs),
+// and the kernel's own calls — a text laid out or drawn (text.rs,
+// abi/host.json). The host runs
+// them once the turn has returned, so what one asks is done by the time the
+// next turn rises — and what it names is kept that long. Only the clock is
+// still called: a turn measures its own budget mid-turn, when the host cannot
+// run. A native test has no stream, and storage keeps nothing there.
 
 use core::panic::Location;
 
@@ -18,6 +22,7 @@ pub use xpute_runtime::clock::{now, set_clock};
 
 static SYS: Global<Option<Sys>> = Global::new();
 
+/// The system calls, where there is a host to run them.
 pub fn sys() -> Option<&'static mut Sys> {
     SYS.get(|| None).as_mut()
 }
@@ -33,14 +38,14 @@ pub unsafe fn set_host_stream(at: u32) {
 
 pub fn host_rise() {
     *TURN.get(|| 0) += 1;
-    if let Some(h) = host() {
+    if let Some(h) = sys() {
         h.rise();
     }
 }
 
 /// False where there is no host to run it.
 pub fn host_record(op: u32, args: &[u32], bytes: &[u8]) -> bool {
-    let Some(h) = host() else { return false };
+    let Some(h) = sys() else { return false };
     h.call(op, args, bytes);
     true
 }
@@ -53,7 +58,7 @@ pub fn turn() -> u64 {
 }
 
 pub fn host_fall() {
-    if let Some(h) = host() {
+    if let Some(h) = sys() {
         h.fall();
     }
 }
@@ -64,7 +69,7 @@ pub fn host_fall() {
 pub fn host_bug(errno: Errno, at: &Location<'_>, a: u64, b: u64) {
     STOPPED.set(true);
     last_words(Stop::Bug { errno, at, a, b });
-    if let Some(h) = host() {
+    if let Some(h) = sys() {
         h.abort(errno, at, a, b);
     }
 }
@@ -75,21 +80,6 @@ static STOPPED: Global<bool> = Global::new();
 /// way out, not a second fault.
 pub fn stopped() -> bool {
     *STOPPED.get(|| false)
-}
-
-/// What the platform keeps under `storage`'s key (host.json): a file of the
-/// host's, numbered by `storage`.
-pub fn storage_set(storage: u32, value: String) {
-    let Some(h) = host() else { return };
-    h.write(storage, value.into_bytes());
-}
-
-/// Asks the host to copy body `body` into `dst`, which is its length, and let
-/// it go; an empty `dst` only lets it go. The bytes are there from the next
-/// turn on, and `dst` must be kept until then.
-pub fn body_read(body: u32, dst: &mut [u8]) {
-    let Some(h) = host() else { return };
-    h.read(body, dst);
 }
 
 static HANDHELD: Global<bool> = Global::new();

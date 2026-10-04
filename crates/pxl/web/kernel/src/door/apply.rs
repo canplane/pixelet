@@ -71,9 +71,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                 },
             });
             settings_load(p.settings.iter().copied());
-            if p.objects != 0 {
-                crate::layer::object::store::load(p.objects, p.objects_bytes);
-            }
+            crate::layer::object::store::load();
             Ok(Some(0))
         }
         Command::WORLD_SOURCE => {
@@ -208,13 +206,6 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             ui::sensors_close();
             applied(s)
         }
-        Command::LOAD_DONE => {
-            let p = abi::LoadDone::read(packet(pkt)?)?;
-            // A model's bytes are far past a slot: the host holds them, and
-            // the models' task reads them on a turn's quota.
-            crate::io::load::gltf_arrived(p.key, p.body, p.bytes);
-            Ok(Some(0))
-        }
         Command::LOAD_IMAGE => {
             let p = abi::LoadImage::read(packet(pkt)?)?;
             crate::io::load::image_arrived(p.key, p.handle);
@@ -299,10 +290,12 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         // Memory is at most 1 GiB, so an address fits an i32.
         Command::PROFILER_READ => Ok(Some(profiler_read(abi::ProfilerRead::read(packet(pkt)?)?.window_ms) as i32)),
         Command::PROFILER_TAKE => Ok(Some(profiler_take(s) as i32)),
-        Command::WORLD_SNAPSHOT | Command::SENSOR_START | Command::SENSOR_STOP | Command::LOAD_START => Ok(None),
+        Command::WORLD_SNAPSHOT | Command::SENSOR_START | Command::SENSOR_STOP | Command::LOAD_START | Command::LOAD_CANCEL => Ok(None),
     }
 }
 
+/// Every program's commands (xpute-runtime abi/cmd): the rings' own test, and
+/// an open the host answered.
 fn apply_xpute(cmd: xpute_cmd::Command, pkt: &Option<&[u8]>) -> Result<Option<i32>, MarshalError> {
     match cmd {
         xpute_cmd::Command::NOP => {
@@ -312,11 +305,11 @@ fn apply_xpute(cmd: xpute_cmd::Command, pkt: &Option<&[u8]>) -> Result<Option<i3
             };
             Ok(Some(value as i32))
         }
-        xpute_cmd::Command::FETCH_DONE => {
-            crate::io::fetch::fetch_queued(xpute_cmd::FetchDone::read(packet(pkt)?)?);
+        xpute_cmd::Command::SYS_OPENED => {
+            let p = xpute_cmd::SysOpened::read(packet(pkt)?)?;
+            crate::io::file::opened(p.fd, p.res, p.detail);
             Ok(Some(0))
         }
-        xpute_cmd::Command::FETCH_START | xpute_cmd::Command::FETCH_CANCEL => Ok(None),
     }
 }
 

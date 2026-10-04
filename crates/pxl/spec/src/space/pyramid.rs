@@ -144,8 +144,10 @@ pub const GROUND: Lattice = Lattice::new(CELL);
 /// The index lane's lattice (bake/format.rs `Index`).
 pub const EXTENT: Lattice = Lattice::new(EXTENT_CELL);
 
+/// The deck lane's lattice (bake/deck.rs): the ground's cell twice over.
 pub const DECK: Lattice = Lattice::new(DECK_CELL);
 
+/// Cells on a page's side in the ground's lattice.
 pub const PAGE_CELLS: u32 = GROUND.page_cells();
 
 pub const CHUNK_CELLS: u32 = GROUND.chunk_cells();

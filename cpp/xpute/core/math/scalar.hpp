@@ -5,10 +5,12 @@
 
 #pragma once
 
-// Rust never fuses a multiply and an add; held here, not only in the flags.
+// Bit for bit with Rust, which never fuses a multiply and an add: held here,
+// not only in the build's flags.
 #pragma STDC FP_CONTRACT OFF
 
 #include <cmath>
+#include <limits>
 
 namespace xpute {
 
@@ -40,11 +42,12 @@ inline double round_half_away(double x) noexcept {
 
 // 2.5 is 2, -2.5 is -2.
 inline double round_half_even(double x) noexcept {
-    // x - floor(x) is exact for every double, and 0 past 2^52, so the tie is told
-    // exactly whatever the rounding mode.
+    // x − floor(x) is exact for every double, and 0 past 2^52, where every
+    // double is whole: so the tie is told exactly, whatever the rounding mode.
     double f = std::floor(x), d = x - f;
     double r = d < 0.5 ? f : d > 0.5 ? f + 1 : std::fmod(f, 2.0) == 0 ? f : f + 1;
-    // -0.5 rounds to -0, as Rust's round_ties_even.
+    // A zero keeps the sign of what was rounded, as Rust's round_ties_even
+    // gives -0 for -0.5.
     return r == 0 ? std::copysign(0.0, x) : r;
 }
 
@@ -52,7 +55,8 @@ inline double round(double x) noexcept {
     return round_half_even(x);
 }
 
-// As Rust's `as`: toward zero, saturating, NaN as 0, where a plain cast is
+// `v` as an integer of type T, as Rust's `as` casts a float: toward zero,
+// held to T's range at either end, and NaN as 0 — where a plain cast is
 // undefined past the range.
 template <class T> constexpr T saturate_as(double v) noexcept {
     if (v != v) return 0;

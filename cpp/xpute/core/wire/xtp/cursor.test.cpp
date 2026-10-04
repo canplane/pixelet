@@ -63,7 +63,14 @@ std::string show(const Value &v) {
             else if constexpr (std::is_same_v<T, std::uint64_t> || std::is_same_v<T, std::int64_t>) return "bigint:" + std::to_string(x);
             else if constexpr (std::is_floating_point_v<T>) return "number:" + js_number(x);
             else if constexpr (std::is_same_v<T, std::string_view>) return "string:" + hex({reinterpret_cast<const std::uint8_t *>(x.data()), x.size()});
-            else if constexpr (std::is_same_v<T, Bitset>) {
+            else if constexpr (std::is_same_v<T, Strs>) {
+                std::string out = "[";
+                for (std::uint32_t i = 0; i < x.len; i++) {
+                    std::string_view s = x[i];
+                    out += (i ? ",string:" : "string:") + hex({reinterpret_cast<const std::uint8_t *>(s.data()), s.size()});
+                }
+                return out + "]";
+            } else if constexpr (std::is_same_v<T, Bitset>) {
                 std::string out = "Uint8Array(";
                 for (std::uint32_t i = 0; i < x.len; i++) out += (i ? " " : "") + std::to_string(x[i] ? 1 : 0);
                 return out + ")";

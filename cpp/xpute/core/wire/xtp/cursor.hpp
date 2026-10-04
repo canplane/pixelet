@@ -9,9 +9,16 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <cstring>
 #include <string_view>
+#include <memory>
+#include <optional>
+#include <string>
 #include <variant>
+#include <vector>
 
+#include "../../codec/encoding.hpp"
+#include "../../status/bug.hpp"
 #include "spec.hpp"
 
 namespace xpute::xtp {
@@ -83,9 +90,10 @@ struct Strs {
 };
 
 class BranchCursor;
+template <class Alloc> struct DeepValue;
 
 using Value = std::variant<Null, bool, std::uint8_t, std::int8_t, std::uint16_t, std::int16_t, std::uint32_t, std::int32_t, std::uint64_t, std::int64_t, float,
-                           double, std::string_view, Array, Bitset, BranchCursor>;
+                           double, std::string_view, Array, Bitset, Strs, BranchCursor>;
 
 class Cursor {
   public:
@@ -140,6 +148,8 @@ class Cursor {
     Result<Array> array(std::uint32_t elem) const noexcept;
     Result<Bitset> bitset() const noexcept;
     Result<std::string_view> str() const noexcept;
+    Result<std::string_view> str_of_type() const noexcept;
+    Result<Strs> strs() const noexcept;
 
     std::span<const std::uint8_t> pkt_;
     // 0 for an absent node; no node can start there.

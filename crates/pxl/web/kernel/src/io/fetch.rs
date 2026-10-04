@@ -1,21 +1,38 @@
 // pxl-kernel/io/fetch.rs
 
-//! The world's reads. The kernel names an object (its bake and its name in
-//! it, `DemandName`) and opens it as a file; the host alone knows the address
-//! and protocol. What an absent object means is decided here per category.
-//! Every body is a heap block released in the command that decodes it,
-//! unless a store keeps it.
+//! The world's reads at the shell's edge. What the kernel asks for is an
+//! **object it names** — which bake it belongs to and its name inside that
+//! bake (`DemandName`) — opened as a file below the bake's root (io/file.rs),
+//! and the host is the one that knows what address that is and what protocol
+//! reaches it. Nothing here spells a URL, a scheme or a status.
+//!
+//! What comes back is one of four: the bytes, no such object (ENOENT), the
+//! read was stopped (the kernel closed it), the read failed. The host decides
+//! which — a protocol's own way of saying "there is none" is the host's to
+//! read — and the open's answer takes a block, reads the file into it and
+//! closes it; `fetch_task`, on a turn's quota, decodes it once it is in. What
+//! an absent object *means* for its category is decided here, and that is
+//! world knowledge rather than transport.
+//!
+//! Every body is a heap block the kernel owns throughout. A body is decoded or
+//! read and released in the same command. A terrain body does not outlive its
+//! command — the page it carries is written into `.fixed.terrain`, whose
+//! record is the page's own coordinate. POI summary packets are decoded into
+//! bounded records and their bodies are released in the same command.
 
 use core::fmt;
 
+use xpute_core::status::errno::Errno;
 use xpute_runtime::abi::fetch::FetchFail;
+use xpute_runtime::ipc::sys::Fd;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free, Block};
 use xpute_runtime::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 
 use crate::global::Global;
-use crate::host::body_read;
+use crate::host::now;
 use crate::io::demand::{Category, Phases, TaskPhaseName};
+use crate::io::file::{self, Owner};
 use crate::io::sched::{attempt_of, settle};
 use crate::layer::geocode::{repository as geocode_repository, store as geocode_store};
 use crate::layer::terrain::page::{adopt_ocean, OCEAN_KEY};
@@ -27,8 +44,9 @@ use pxl_spec::bake::place_page::group_name;
 use pxl_spec::bake::poi_page::PoiPage;
 use pxl_spec::bake::quadkey::page_name;
 use pxl_spec::space::pyramid::LevelPage;
-use xpute_runtime::abi::cmd::{FetchDone, FetchOutcome};
 
+/// A started attempt's object, named inside its bake — the path it is opened
+/// at. Which bake is `Category::bake`, the root it is opened below.
 pub struct DemandName(pub Category, pub u64);
 
 impl fmt::Display for DemandName {
@@ -40,44 +58,49 @@ impl fmt::Display for DemandName {
             Category::poi => write!(f, "{}", page_name(LevelPage::of_subject(key.1))),
             Category::geocode => write!(f, "{}", group_name(key.1)),
             Category::geocode_dict => write!(f, "{}", geocode_repository::dict_name()),
-            // Assets are opened below the assets' root (io/load.rs), never here.
+            // An asset is named by its content and belongs to no bake, so it
+            // is opened below the assets' root (io/load.rs) and never here.
             Category::asset => Ok(()),
         }
     }
 }
 
+/// Opens the object the scheduler's attempt `key` is for.
 pub fn start(key: u64, category: Category, subject: u64) {
     let Some(bake) = category.bake() else { return };
     let name = DemandName(category, subject).to_string();
     file::open(bake as u32, &name, Owner::Fetch { key, at_ms: now() });
 }
 
-/// Settled as stopped at once: nothing is reported for a closed descriptor.
+/// Stops the read of attempt `key`, if one is open: closed, and settled as
+/// stopped at once, since nothing is said of a closed descriptor again.
 pub fn cancel(key: u64) -> bool {
     let Some(fd) = file::held_for(|o| matches!(o, Owner::Fetch { key: k, .. } if *k == key)) else {
         return false;
     };
-    // SAFETY: a block just acquired, `bytes` long, and no one else's.
-    body_read(body, unsafe { core::slice::from_raw_parts_mut(ptr_at::<u8>(block.0), bytes as usize) });
-    Ok(Some(block))
+    file::close(fd);
+    settle(key, Outcome::aborted, None, Failure::default());
+    true
 }
 
 fn release(block: Option<Block>) {
     if let Some(block) = block {
-        // SAFETY: a body's block, acquired by `receive` and released once.
+        // SAFETY: a body's block, acquired by `opened` and released once.
         unsafe { free(block) };
     }
 }
 
 fn view<'a>((at, bytes): Block) -> &'a [u8] {
-    // SAFETY: the block `opened` acquired for this body alone, `bytes` long,
-    // not released while the view is read.
+    // SAFETY: the block is one `opened` acquired for this body alone,
+    // `bytes` long, and it is not released while the view is read.
     unsafe { core::slice::from_raw_parts(ptr_at::<u8>(at), bytes as usize) }
 }
 
+/// What an open came to.
 enum Got {
-    /// None for an empty file.
+    /// The file, read into a block of its own; None for an empty one.
     Read(Option<Block>),
+    /// There is no such object.
     Absent,
     Failed(Failure),
 }
@@ -91,7 +114,7 @@ struct Arrival {
 static ARRIVED: Global<Vec<Arrival>> = Global::new();
 static ARRIVALS: Global<Notify> = Global::new();
 
-fn arrived() -> &'static mut Vec<FetchDone> {
+fn arrived() -> &'static mut Vec<Arrival> {
     ARRIVED.get(Vec::new)
 }
 
@@ -99,8 +122,10 @@ fn arrivals() -> &'static mut Notify {
     ARRIVALS.get(Notify::new)
 }
 
-/// `detail` is only printed by the profiler; nothing branches on it, which
-/// keeps the protocol out of here.
+/// The host's answer to a read's open: a block taken for the file and the
+/// file read into it, or why there is none. `detail` is whatever number the
+/// host refused with, kept for the profiler to print; nothing branches on it,
+/// which is what keeps a protocol out of here.
 pub fn opened(fd: Fd, key: u64, at_ms: f64, res: i32, detail: u32) {
     let got = if res < 0 {
         file::close(fd);
@@ -115,58 +140,52 @@ pub fn opened(fd: Fd, key: u64, at_ms: f64, res: i32, detail: u32) {
         Got::Read(Some(block))
     } else {
         file::close(fd);
-        Got::Failed(Errno::ENOMEM.into())
+        Got::Failed(FetchFail::NoRoom.into())
     };
     arrived().push(Arrival { key, got, net_ms: now() - at_ms });
     arrivals().notify();
 }
 
+/// Why an open did not give a file, as the profiler counts it.
 fn failure(res: i32, detail: u32) -> Got {
-    if res == Errno::ENOENT as i32 {
-        return Got::Absent;
-    }
+    let fail = match res {
+        r if r == Errno::ENOENT as i32 => return Got::Absent,
+        r if r == Errno::EACCES as i32 => FetchFail::Refused,
+        r if r == Errno::ENETUNREACH as i32 || r == Errno::ECONNREFUSED as i32 => FetchFail::Network,
+        r if r == Errno::EBADMSG as i32 => FetchFail::Decode,
+        r if r == Errno::ENOMEM as i32 => FetchFail::NoRoom,
+        _ => FetchFail::Shell,
+    };
     Got::Failed(Failure {
-        errno: res,
+        fail,
         detail: detail as u16,
         at: None,
     })
 }
 
-/// Arrivals are decoded on a later turn, once their bytes are in, as many
-/// as the quota allows and at least one.
+/// The fetches' task: the arrivals taken together, then each decoded and
+/// settled on a later turn, when their bytes are in, as many as the quota
+/// lets and one at least. A body is one unit.
 pub async fn fetch_task() {
     loop {
         notified(arrivals).await;
         while !arrived().is_empty() {
-            let received: Vec<_> = arrived().drain(..).map(|u| (receive((u.body, u.body_bytes)), u)).collect();
+            let received: Vec<_> = std::mem::take(arrived());
             next_turn(world_edge).await;
-            for (block, update) in received {
+            for arrival in received {
                 yield_if_spent(world_edge).await;
-                fetch_arrived(update, block);
+                fetch_arrived(arrival);
             }
         }
     }
 }
 
-fn fetch_arrived(
-    FetchDone {
-        key, outcome, fail, detail, net_ms, ..
-    }: FetchDone,
-    block: Result<Option<Block>, FetchFail>,
-) {
-    let (outcome, fail, block) = match block {
-        Ok(block) => (
-            outcome,
-            Failure {
-                fail,
-                detail: detail as u16,
-                at: None,
-            },
-            block,
-        ),
-        Err(no_room) => (FetchOutcome::Error, no_room.into(), None),
+fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
+    let block = match got {
+        Got::Read(block) => block,
+        _ => None,
     };
-    // A key the ledger does not hold is one a reset forgot.
+    // A key the scheduler does not hold is one a reset forgot.
     let Some((category, subject)) = attempt_of(key) else {
         release(block);
         return;
@@ -176,11 +195,14 @@ fn fetch_arrived(
     if let Some((_, bytes)) = block {
         phases.push(TaskPhaseName::bytes, bytes as f64);
     }
-    let (outcome, fail) = match outcome {
-        FetchOutcome::Read => match adopt(category, subject, block, &mut phases) {
+    let (outcome, fail) = match got {
+        Got::Read(_) => match adopt(category, subject, block, &mut phases) {
             Ok(()) => (Outcome::ok, Failure::default()),
             Err(fail) => (Outcome::error, fail),
         },
+        // There is no such object, and for most categories that is an answer
+        // rather than a fault — which of the two is the category's own and
+        // is the one piece of this the world decides.
         Got::Absent => match absent(category, subject) {
             Ok(()) => (Outcome::ok, Failure::default()),
             Err(fail) => (Outcome::error, fail.into()),

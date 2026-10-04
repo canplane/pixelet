@@ -8,7 +8,7 @@ use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::PacketWriter;
 
-use crate::ipc::frame::FrameFlag;
+use crate::ipc::frame;
 use crate::ipc::ring::Ring;
 
 pub struct RingLayout {
@@ -123,8 +123,8 @@ impl Door {
                 Err(e) => Err(e.errno as i32),
             };
             self.sq.advance();
-            if flags & FrameFlag::ACKREQ as u32 != 0 || result.is_err() {
-                self.post(tag, number, FrameFlag::RES as u32, result.unwrap_or_else(|errno| errno), None);
+            if flags & frame::ACKREQ != 0 || result.is_err() {
+                self.post(tag, number, frame::RES, result.unwrap_or_else(|errno| errno), None);
             }
         }
         (self.note)(self.cq.len(), self.sq.len());

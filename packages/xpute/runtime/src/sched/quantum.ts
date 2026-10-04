@@ -1,15 +1,48 @@
 // @xpute/runtime/sched/quantum.ts
 
 /**
- * The host's grant for a guest's turn. A turn may overrun its quota, and the
- * overrun comes off its next one. A turn is interactive after input within
- * `settle_ms` or when the guest asked for the next edge, and then gets what the
- * frame leaves after the margin; otherwise `batch_frames` frames.
+ * The host's grant: the outermost of the scheduler's three
+ * levels.
  *
- * The frame interval is a low percentile of gaps between interactive turns,
- * not 1000 / 60 and not the mean: the mean feeds an overrun back into a larger
- * slice, and the near-immediate frame after a late one once read a 170 Hz
- * display as 2.1 ms. Gaps past MAX_FRAME_GAP_MS are idle, not frames.
+ * The host runs guests the way an OS runs processes: it owns
+ * the clock and the resources, and the turn alternates like a clock's two
+ * edges. On the rising edge the host hands the guest one quota, the time it
+ * may take; the guest runs its own tasks cooperatively (xpute-runtime sched/tick.rs) and,
+ * on the falling edge, hands the turn back with when it wants the next one.
+ * The host knows nothing of what runs inside. Memory is granted once
+ * (mem/reserve.ts), and I/O is asked of the host in what a turn leaves.
+ *
+ * **One quota, sized from what the host sees.** Nothing is preempted, so a
+ * turn may run past its quota by the step that noticed; what it overran
+ * comes off its own next quota, down to nothing, and the host's share of
+ * the frame is left as it was (a constant bandwidth server's rule). Whether
+ * the turn is interactive is the host's call, as an OS scheduler's is, from
+ * behavior rather than from the guest's inside: input within `settle_ms`,
+ * or a guest that asked for the very next edge. An interactive turn gets
+ * what the frame leaves after the margin; otherwise that of `batch_frames`
+ * frames, past one on purpose — with nothing moving, a frame that takes two
+ * vsyncs shows the same image twice.
+ *
+ * **No number here is a measured cost.** The quota is a share of the frame
+ * the display sets; how much work fits in it is the guest's to find out by
+ * yielding, and an overrun corrects itself through the next quota. The floor
+ * is not a number of milliseconds either: a pass always takes its first step
+ * (xpute-runtime sched/frame_budget.rs), so a quota of nothing still makes progress.
+ *
+ * **The frame interval is measured, not assumed.** `1000 / 60` is wrong on
+ * any faster display: a 5.8 ms frame was once sized for 16.7, and a storm
+ * spent more than a whole frame scheduling. It is a low percentile of recent
+ * gaps, not their mean — the mean includes the frames the guest itself made
+ * long, which would feed an overrun back into a bigger slice. Only gaps
+ * between two interactive turns count, and the percentile is the 25th: a
+ * held-still turn runs long on purpose, and the host answers a late frame by
+ * firing the next one almost at once — gaps that once read as a "2.1 ms
+ * display" on a 170 Hz screen and pinned every moving frame to the floor.
+ * Gaps past MAX_FRAME_GAP_MS are not frames at all: an idle guest asks for
+ * none, and the gap before the next can be seconds.
+ *
+ * Every number that decides how much is the guest's policy (QuantumPolicy),
+ * declared to the host, not chosen here.
  */
 
 import type { f64 } from "@xpute/core/abi/word.ts";

@@ -4,7 +4,8 @@
 //! settle time, declared quantum and step table.
 
 use xpute_runtime::sched::quantum::QuantumPolicy;
-pub use xpute_runtime::sched::tick::{FrameBudget, Phase, StepStats, TickReport, CONTENT, COSMETIC, INTERACTION, PHASES, REPORT, VISIBLE};
+pub use xpute_runtime::sched::frame_budget::FrameBudget;
+pub use xpute_runtime::sched::tick::{Phase, StepStats, TickReport, CONTENT, COSMETIC, INTERACTION, PHASES, REPORT, VISIBLE};
 use xpute_runtime::sched::tick::{Tick, TickPolicy};
 
 use crate::global::Global;

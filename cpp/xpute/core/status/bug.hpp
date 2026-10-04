@@ -10,6 +10,7 @@
 #include <source_location>
 
 #include "errno.spec.hpp"
+#include "error.hpp"
 
 namespace xpute {
 

@@ -14,6 +14,15 @@ pub fn handle_slot(handle: u32) -> u32 {
     handle & SLOT_MASK
 }
 
+fn handle_of(slot: u32, generation: u16) -> u32 {
+    slot | ((generation as u32) << SLOT_BITS)
+}
+
+/// Never 0, so no handle is 0.
+fn next_generation(generation: u16) -> u16 {
+    generation.wrapping_add(1).max(1)
+}
+
 pub struct HandleTable<const N: usize> {
     generation: [u16; N],
     live: [bool; N],
@@ -55,10 +64,10 @@ impl<const N: usize> HandleTable<N> {
             return None;
         };
         let s = slot as usize;
-        self.generation[s] = self.generation[s].wrapping_add(1).max(1);
+        self.generation[s] = next_generation(self.generation[s]);
         self.live[s] = true;
         self.count += 1;
-        Some(slot | ((self.generation[s] as u32) << SLOT_BITS))
+        Some(handle_of(slot, self.generation[s]))
     }
 
     pub fn release(&mut self, handle: u32) -> bool {
@@ -114,9 +123,9 @@ impl<T> Slots<T> {
             (self.entries.len() - 1) as u32
         });
         let entry = &mut self.entries[slot as usize];
-        entry.0 = entry.0.wrapping_add(1).max(1);
+        entry.0 = next_generation(entry.0);
         entry.1 = Some(value);
-        slot | ((entry.0 as u32) << SLOT_BITS)
+        handle_of(slot, entry.0)
     }
 
     fn entry(&self, handle: u32) -> Option<&(u16, Option<T>)> {
@@ -145,7 +154,7 @@ impl<T> Slots<T> {
         self.entries
             .iter()
             .enumerate()
-            .filter_map(|(slot, (generation, value))| Some((slot as u32 | ((*generation as u32) << SLOT_BITS), value.as_ref()?)))
+            .filter_map(|(slot, (generation, value))| Some((handle_of(slot as u32, *generation), value.as_ref()?)))
     }
 
     pub fn values_mut(&mut self) -> impl Iterator<Item = &mut T> {

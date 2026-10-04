@@ -10,7 +10,9 @@
 #include <cstdint>
 #include <span>
 
+#include "../../core/status/bug.hpp"
 #include "../../core/status/errno.spec.hpp"
+#include "../../core/wire/xtp/encode.hpp"
 #include "frame.hpp"
 #include "ring.hpp"
 
@@ -27,7 +29,8 @@ using DoorNote = void (*)(std::uint32_t completions, std::uint32_t left);
 
 class Door {
   public:
-    Door(Ring submission, Ring completion, std::uint32_t reserve) noexcept : sq_(submission), cq_(completion), reserve_(reserve) {}
+    Door(Ring submission, Ring completion, std::uint32_t reserve, DoorNote note = nullptr) noexcept
+        : sq_(submission), cq_(completion), reserve_(reserve), note_(note) {}
 
     const Ring &submission() const noexcept { return sq_; }
     const Ring &completion() const noexcept { return cq_; }
@@ -54,9 +57,10 @@ class Door {
     template <class Apply> std::uint32_t drain(Apply &&apply) const noexcept {
         std::uint32_t tail = cq_.tail();
         while (has_room()) {
-            auto m = sq_.peek();
-            if (!m) return;
-            Applied a = apply(m->cmd, m->packet);
+            std::optional<Ring::Message> m = sq_.peek();
+            if (!m) break;
+            Result<std::span<const std::uint8_t>> pkt = sq_.packet(*m);
+            Applied a = pkt ? apply(m->cmd, *pkt) : Applied{.error = pkt.error().code};
             sq_.advance();
             if (a.error != Errno::ok) {
                 post(m->tag, m->cmd, frame::RES, static_cast<std::int32_t>(a.error));
@@ -64,6 +68,8 @@ class Door {
                 post(m->tag, m->cmd, frame::RES, a.value);
             }
         }
+        if (note_ != nullptr) note_(cq_.len(), sq_.len());
+        return cq_.tail() - tail;
     }
 
     bool pending() const noexcept { return !sq_.empty(); }
@@ -71,9 +77,15 @@ class Door {
   private:
     bool has_room() const noexcept { return cq_.len() + reserve_ <= cq_.capacity(); }
 
+    void posted(std::uint32_t cmd, Errno e) const noexcept {
+        if (note_ != nullptr) note_(cq_.len(), 0);
+        ensure(e == Errno::ok, Errno::enospc, cmd, static_cast<std::uint64_t>(static_cast<std::int64_t>(e)));
+    }
+
     Ring sq_;
     Ring cq_;
     std::uint32_t reserve_;
+    DoorNote note_;
 };
 
 } // namespace xpute

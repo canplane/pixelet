@@ -121,7 +121,7 @@ export interface ScalarNode {
 export interface SequenceNode {
   readonly type: SequenceType;
 
-  val: Nullable<string | TypedArray | BigTypedArray>;
+  val: Nullable<string | string[] | TypedArray | BigTypedArray>;
 }
 
 export type SpecialNode = NilNode | BranchNode | GraftNode;

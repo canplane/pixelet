@@ -8,7 +8,6 @@
 import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { Directory } from "@xpute/runtime/ipc/directory.ts";
-import { Bodies } from "@xpute/runtime/ipc/sys.ts";
 
 import { DIRECTORY_AT } from "@/kernel/mem/mem.spec.ts";
 
@@ -25,7 +24,10 @@ export function directory(memory: ArrayBuffer): Directory {
   return new Directory(memory, DIRECTORY_AT);
 }
 
-/** Valid until the kernel reuses the range; copy to keep. */
+const utf8_decoder = new TextDecoder();
+
+/** A range's bytes, where they lie. Valid until the kernel is given them back
+ * or writes them again, so a caller that keeps them copies them first. */
 export function bytes_at(memory: ArrayBuffer, at: u32, len: u32): U8Array {
   return new Uint8Array(memory, at, len);
 }

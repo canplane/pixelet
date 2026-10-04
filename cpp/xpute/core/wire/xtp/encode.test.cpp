@@ -65,6 +65,8 @@ XPUTE_TEST(xtp_the_writer_writes_the_bytes_the_other_languages_write) {
     check("typed f32", [&](PacketWriter &w) { w.f32_array(f32s); });
     const std::array<std::uint8_t, 9> bits{1, 0, 1, 1, 0, 0, 0, 0, 1};
     check("bitset", [&](PacketWriter &w) { w.bitset(bits); });
+    const std::array<std::string_view, 3> strs{"a", "héllo", ""};
+    check("strs", [&](PacketWriter &w) { w.strs(strs); });
     const std::array<std::int32_t, 1> seven{7};
     check("branch mixed", [&](PacketWriter &w) {
         w.branch(7, [&](PacketWriter &b) {
@@ -108,8 +110,8 @@ XPUTE_TEST(xtp_a_string_written_in_place_is_the_string_written_from_bytes_and_re
     XPUTE_CHECK_EQ(hex(pkt), encode([](PacketWriter &w) { w.branch(2, [](PacketWriter &b) { b.str("héllo-42").u32(7); }); }), "a string written in place");
     Result<BranchCursor> branch = TreeReader::make(pkt)->read_branch();
     XPUTE_CHECK(branch.ok());
-    XPUTE_CHECK(branch->at(0)->get_str().value() == "héllo-42");
-    XPUTE_CHECK(!branch->at(1)->get_str().ok());
+    XPUTE_CHECK(branch->at(0)->get_str_ref().value() == "héllo-42");
+    XPUTE_CHECK(!branch->at(1)->get_str_ref().ok());
 
     std::array<std::uint8_t, 40> small{};
     PacketWriter tight(small);

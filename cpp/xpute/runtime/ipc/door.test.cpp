@@ -82,7 +82,7 @@ XPUTE_TEST(door_a_signal_s_packet_is_written_in_place_and_a_packet_that_does_not
     d.completion().advance();
 
     XPUTE_CHECK(d.submission().push(5, 1, 0, 0) == Errno::ok);
-    std::uint32_t frame_at = 8 + 4 * (Ring::HEADER_WORDS + 0 * frame::WORDS);
+    std::uint32_t frame_at = 8 + 4 * (ring::HEADER_WORDS + 0 * frame::WORDS);
     Memory mem(reinterpret_cast<std::uintptr_t>(f.buf.data()), f.buf.size() * 8);
     mem.set_word(frame_at + 4 * frame::PACKET, 4);
     bool applied = false;

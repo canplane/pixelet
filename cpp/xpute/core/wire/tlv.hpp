@@ -16,6 +16,7 @@
 #include <string_view>
 #include <variant>
 
+#include "../codec/encoding.hpp"
 #include "../status/error.hpp"
 
 namespace xpute::tlv {
@@ -41,6 +42,7 @@ enum class Tag : std::uint8_t {
 struct Str {
     std::string_view text;
     bool operator==(const Str &) const = default;
+    template <class Put> void decode(Put &&put) const { utf8_lossy(text, std::forward<Put>(put)); }
 };
 
 struct Bytes {
@@ -155,6 +157,7 @@ class Reader {
 
     std::span<const std::uint8_t> buf_;
     std::size_t off_ = 0;
+    std::optional<End> end_;
 };
 
 } // namespace xpute::tlv

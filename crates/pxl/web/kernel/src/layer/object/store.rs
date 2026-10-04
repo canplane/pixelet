@@ -36,9 +36,10 @@ use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
-use crate::abi::host::storage;
+use crate::abi::host::{root, storage, STORAGE_KEYS};
 use crate::global::Global;
-use crate::host::{body_read, now, storage_set, turn};
+use crate::host::{now, turn};
+use crate::io::file::{self, Owner};
 use crate::kernel::kernel;
 use crate::shell::setting::store::hidden_ground;
 use crate::world::access::{Access, FINEST};
@@ -495,11 +496,14 @@ pub fn decode_objects(blob: &str) -> Result<(), MarshalError> {
     result
 }
 
+/// Opens the saved blob storage keeps, which the frame reads into the store
+/// once it is in (`flush_save_if_due`).
 pub fn load() {
     file::open(root::STORAGE, STORAGE_KEYS[storage::OBJECTS as usize], Owner::Objects);
 }
 
-/// A failed open means no blob was kept: the world starts empty.
+/// The host's answer to the blob's open: read in, or none kept, which starts
+/// the world empty.
 pub fn objects_opened(fd: u32, res: i32) {
     if res < 0 {
         file::close(fd);
@@ -515,7 +519,8 @@ fn keep(blob: String) {
     file::write_whole(root::STORAGE, STORAGE_KEYS[storage::OBJECTS as usize], blob.into_bytes());
 }
 
-/// An unreadable blob starts the world empty, as a missing one does.
+/// Reads a saved blob that has come in. An unreadable blob starts the world
+/// empty, as a missing one does.
 fn loaded() {
     let st = store_state();
     if !st.loading.as_ref().is_some_and(|(_, asked)| turn() > *asked) {
@@ -582,7 +587,7 @@ pub async fn save_task() {
             continue;
         }
         if let Ok(blob) = encode_pages(&by_page) {
-            storage_set(storage::OBJECTS, blob);
+            keep(blob);
         }
     }
 }
@@ -592,7 +597,7 @@ pub fn flush_save() {
         return;
     }
     if let Ok(blob) = encode_objects() {
-        storage_set(storage::OBJECTS, blob);
+        keep(blob);
     }
 }
 

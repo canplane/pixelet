@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use pxl_spec::asset::ingested::INGESTED;
+use regex::Regex;
 
 /// Every `.glb` and `.png` under `asset/`, sorted, less `cube/original/`.
 fn walked(root: &Path) -> Vec<(String, PathBuf)> {
@@ -26,25 +26,37 @@ fn walked(root: &Path) -> Vec<(String, PathBuf)> {
     out
 }
 
+/// The committed table's rows, path and extent, read from the TypeScript the
+/// ingest writes beside pxl-spec's: this crate links none it writes into.
+fn committed(root: &Path) -> Vec<(String, Option<[f64; 3]>)> {
+    let text = std::fs::read_to_string(root.join("apps/web/src/catalog/asset/ingested.spec.ts")).unwrap();
+    let row = Regex::new(r#"(?m)^  "([^"]+)": \{ key: "[^"]*", bytes: \d+(?:, extent: \[([^,\]]+), ([^,\]]+), ([^,\]]+)\])? \},$"#).unwrap();
+    row.captures_iter(&text)
+        .map(|c| {
+            let n = |i: usize| c.get(i).map(|m| m.as_str().parse::<f64>().unwrap());
+            (c[1].to_string(), n(2).map(|x| [x, n(3).unwrap(), n(4).unwrap()]))
+        })
+        .collect()
+}
+
 /// Every model measured against the committed table. The walk must order as
-/// the ingest does for the indices to line up.
+/// the ingest does for the rows to line up.
 #[test]
 fn every_shipped_model_measures_what_the_table_says() {
-    let root = crate::root().join("asset");
-    let files = walked(&root);
-    assert_eq!(files.len(), INGESTED.len(), "the walk found what the table holds");
+    let root = crate::root();
+    let files = walked(&root.join("asset"));
+    let table = committed(&root);
+    let paths: Vec<&str> = files.iter().map(|(rel, _)| rel.as_str()).collect();
+    let rows: Vec<&str> = table.iter().map(|(rel, _)| rel.as_str()).collect();
+    assert_eq!(paths, rows, "the walk found what the table holds");
 
-    let mut models = 0;
-    for (i, (rel, path)) in files.iter().enumerate() {
+    for ((rel, path), (_, want)) in files.iter().zip(&table) {
         if !rel.ends_with(".glb") {
-            assert!(INGESTED[i].extent.is_none(), "{rel}: an image has no extent");
+            assert!(want.is_none(), "{rel}: an image has no extent");
             continue;
         }
         let bytes = std::fs::read(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
         let got = super::extent(&bytes).unwrap_or_else(|e| panic!("{rel}: {e}"));
-        let want = INGESTED[i].extent.unwrap_or_else(|| panic!("{rel}: the table has no extent for a model"));
-        assert_eq!(got, want, "{rel}");
-        models += 1;
+        assert_eq!(Some(got), *want, "{rel}");
     }
-    assert_eq!(models, INGESTED.iter().filter(|r| r.extent.is_some()).count(), "every model with a row was measured");
 }
