@@ -24,11 +24,12 @@ Read it before changing a pipeline's shape; this file is the procedure only.
 | geocode | `deno task bake:geocode` | Overture divisions, terrain's `land_pages.json` | XTP: a dictionary, and one per group of 16 × 16 pages with a label | no object       |
 
 Every tool writes to `./out/<kind>/<version>`. The version is
-`v<format>.<release>`: the kind's `FORMAT` in
-`spec/pxl/spec/bake/published.json` and the Overture release the catalog
-says its tables were ingested from, `v7.2026-09-23.1`
-(`pxl-spec bake/published.spec.rs` `version_name`). The last path segment of
-`--out` overrides it.
+`v<format>.<day>.<n>`: the kind's `FORMAT` in
+`spec/pxl/spec/bake/published.json`, the day the bake ran (UTC) and that
+day's count of bakes of the kind, from 1 — `v7.2026-10-04.1`
+(`pxl-spec bake/published.spec.rs` `version_name`). What it was baked from
+is the manifest's: the Overture release its tables were ingested from and the
+commit it was built at. The last path segment of `--out` overrides it.
 
 The bucket names a page by its **quadkey** and nothing else (publish-bucket).
 Geocode writes that name straight out, so for it the filename _is_ the object
@@ -269,18 +270,16 @@ bake's folder name is the whole change on the client's side.
 
 A published version is immutable, for every kind: a page is never
 rewritten under a name a cache or an open client already holds, and going
-back is naming the version before. Two things make a new one, and they
-move different parts of the name:
+back is naming the version before. **Every bake is a new name**, whatever
+made it — a new Overture release, or a change to how a page is baked — and
+each kind is named on its own, since each is baked again on its own. A
+kind is baked again whole, never the pages that changed: a coarse page is
+folded from the ones under it, so a partial bake would leave the levels
+disagreeing, and a mixed folder would serve pages from two pipelines with no
+way to tell them apart.
 
-- **A new Overture release** is the same format baked again: a new
-  `<release>`, the format number unchanged. All of a kind is baked again,
-  not the pages that changed, since a coarse page is folded from the ones
-  under it — terrain's from their ground, POI's from their counts — and a
-  partial refresh would leave the levels disagreeing.
-- **A change to what a page holds or how it is baked** — anything under
-  `crates/pxl/server/geo-bake/src/` that reaches a page, or its format in
-  `pxl-spec bake/` — bumps the kind's `FORMAT`. A mixed bucket would serve
-  pages from two pipelines with no way to tell them apart.
+Only a change to **how the client reads a page** — its format in
+`pxl-spec bake/` — bumps the kind's `FORMAT`.
 
 The local tile server shares one demand path across terrain, POI and geocode
 (`geo-bake/src/demand/`). `--cache` is the parent directory, default `out/dev`;

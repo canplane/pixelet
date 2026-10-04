@@ -19,15 +19,9 @@ function envLabel(): string {
   return DEV_SOURCE === "remote" ? env : `${env}:${DEV_SOURCE}`;
 }
 
-/** The bakes by the Overture release each came from, one release said once: `v7.2026-09-23.1` is format 7 of that release. */
+/** Each bake by the name it is published as, since each is baked on its own. */
 function bakeLabel(): string {
-  const byRelease = new Map<string, string[]>();
-  for (const [kind, name] of Object.entries(PUBLISHED_VERSION)) {
-    const at = name.indexOf(".");
-    const release = name.slice(at + 1);
-    byRelease.set(release, [...(byRelease.get(release) ?? []), `${kind}/${name.slice(0, at)}`]);
-  }
-  return [...byRelease].map(([release, kinds]) => `${kinds.join(" · ")} (Overture ${release})`).join(" · ");
+  return Object.entries(PUBLISHED_VERSION).map(([kind, name]) => `${kind}/${name}`).join(" · ");
 }
 
 /** The objects one has placed, kept on the device: their store's format. */

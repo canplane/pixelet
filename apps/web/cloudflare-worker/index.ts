@@ -87,11 +87,11 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  *   them by path. No version segment and none wanted: a changed file is a new
  *   name, which is what makes `immutable` true of it.
  *
- * The version is `v<format>.<release>`, the Overture release as its catalog
- * names it, and this pattern does not read which one: the client asks for
+ * The version is `v<format>.<YYYY-MM-DD>.<n>`, a format and the day it was
+ * baked, and this pattern does not read which one: the client asks for
  * whatever `published.json` says, so a new one is a client change and never a
- * deploy of this file. A bare `v<format>` is a client from before releases
- * were named, still open in a tab.
+ * deploy of this file. A bare `v<format>` is a client from before bakes were
+ * named by day, still open in a tab.
  *
  * **This exists for cost, not correctness.** A miss is still a billed R2
  * class-B operation, so without it anyone can walk the tile root and charge
@@ -201,8 +201,8 @@ export default {
     }
 
     // Edge cache in front of R2. Sound without any invalidation story because
-    // every bake and asset is immutable and versioned by URL — a re-bake or a
-    // new release publishes a new prefix rather than replacing bytes. This is also the only real cost control: R2 has no
+    // every bake and asset is immutable and versioned by URL — a bake publishes
+    // a new prefix rather than replacing bytes. This is also the only real cost control: R2 has no
     // spend limit, and class-B reads are the one meter that scales with
     // traffic, so every edge hit is a read that never happens.
     //

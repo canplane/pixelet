@@ -19,11 +19,13 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
         }
         formats.push((k, n as u32));
     }
-    // `v<format>.<release>`, or a name the client would request and no bake writes.
+    // `v<format>.<YYYY-MM-DD>.<n>`, or a name the client would request and no bake writes.
     for (k, v) in &kinds {
-        let named = v.strip_prefix('v').and_then(|r| r.split_once('.')).is_some_and(|(n, release)| n.parse::<u32>().is_ok() && !release.is_empty());
+        let parts: Vec<&str> = v.strip_prefix('v').map(|r| r.split('.').collect()).unwrap_or_default();
+        let day = |d: &str| d.len() == 10 && d.split('-').map(str::len).eq([4, 2, 2]) && d.split('-').all(|p| p.parse::<u32>().is_ok());
+        let named = matches!(parts.as_slice(), [format, d, n] if format.parse::<u32>().is_ok() && day(d) && n.parse::<u32>().is_ok_and(|n| n >= 1));
         if !named {
-            return Err(format!("published.json: PUBLISHED_VERSION.{k} {v:?} is not v<format>.<release>"));
+            return Err(format!("published.json: PUBLISHED_VERSION.{k} {v:?} is not v<format>.<YYYY-MM-DD>.<n>"));
         }
     }
     let source = spec.get("SOURCE").ok_or("published.json: no SOURCE")?;
@@ -79,9 +81,10 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
         [
             "};",
             "",
-            "/// A bake's folder and published name: its format and the release it was baked from.",
-            "pub fn version_name(format: u32, release: &str) -> String {",
-            "    format!(\"v{format}.{release}\")",
+            "/// A bake's folder and published name: its format, the day it was baked",
+            "/// (`YYYY-MM-DD`, UTC) and that day's count of bakes of its kind, from 1.",
+            "pub fn version_name(format: u32, day: &str, n: u32) -> String {",
+            "    format!(\"v{format}.{day}.{n}\")",
             "}",
             "",
         ]
